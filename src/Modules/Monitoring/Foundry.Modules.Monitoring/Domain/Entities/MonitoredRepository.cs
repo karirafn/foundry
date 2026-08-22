@@ -37,6 +37,8 @@ public sealed class MonitoredRepository : AggregateRoot<MonitoredRepositoryId>
 
     public string? EligibilityStatus { get; private set; }
 
+    public WriteProbeVerdict WriteProbeVerdict { get; private set; } = new WriteProbeVerdict.Unknown();
+
     public static MonitoredRepository Create(
         RepositorySlug slug,
         string host,
@@ -52,6 +54,7 @@ public sealed class MonitoredRepository : AggregateRoot<MonitoredRepositoryId>
             Position = position,
             Eligibility = new RepositoryEligibility.Unreachable(),
             EligibilityStatus = UnreachableStatus,
+            WriteProbeVerdict = new WriteProbeVerdict.Unknown(),
         };
     }
 
@@ -97,6 +100,11 @@ public sealed class MonitoredRepository : AggregateRoot<MonitoredRepositoryId>
             RepositoryEligibility.Unreachable => UnreachableStatus,
             _ => throw new UnreachableException($"Unhandled eligibility variant: {eligibility.GetType().Name}"),
         };
+    }
+
+    public void SetWriteProbeVerdict(WriteProbeVerdict verdict)
+    {
+        WriteProbeVerdict = verdict;
     }
 
     public void RecordIntegrationEvent(IIntegrationEvent integrationEvent)
