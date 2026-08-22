@@ -76,7 +76,19 @@ internal sealed class TokenKeyedListingFakeHandler(Dictionary<string, string> to
 internal sealed class AssignedEligibilityEvaluator(
     Dictionary<string, RepositoryEligibility> assignments) : IRepositoryEligibilityEvaluator
 {
-    public Task EvaluateAndStoreAsync(
+    public Task EvaluateFullyAndStoreAsync(
+        MonitoredRepository repo,
+        CancellationToken cancellationToken)
+    {
+        if (assignments.TryGetValue(repo.Slug.FullPath, out RepositoryEligibility? eligibility))
+        {
+            repo.SetEligibility(eligibility);
+        }
+
+        return Task.CompletedTask;
+    }
+
+    public Task EvaluateBranchRulesAndStoreAsync(
         MonitoredRepository repo,
         CancellationToken cancellationToken)
     {
@@ -96,7 +108,15 @@ internal sealed class AssignedEligibilityEvaluator(
 /// </summary>
 internal sealed class UnreachableEligibilityEvaluator : IRepositoryEligibilityEvaluator
 {
-    public Task EvaluateAndStoreAsync(
+    public Task EvaluateFullyAndStoreAsync(
+        MonitoredRepository repo,
+        CancellationToken cancellationToken)
+    {
+        repo.SetEligibility(new RepositoryEligibility.Unreachable());
+        return Task.CompletedTask;
+    }
+
+    public Task EvaluateBranchRulesAndStoreAsync(
         MonitoredRepository repo,
         CancellationToken cancellationToken)
     {

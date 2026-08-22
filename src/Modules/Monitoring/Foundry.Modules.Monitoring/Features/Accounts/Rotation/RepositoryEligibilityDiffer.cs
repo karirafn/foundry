@@ -36,7 +36,7 @@ internal sealed class RepositoryEligibilityDiffer(
 
         foreach (MonitoredRepository repo in allReposById.Values)
         {
-            await eligibilityEvaluator.EvaluateAndStoreAsync(repo, cancellationToken);
+            await eligibilityEvaluator.EvaluateFullyAndStoreAsync(repo, cancellationToken);
         }
 
         await dbContext.SaveChangesAsync(cancellationToken);

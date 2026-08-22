@@ -141,7 +141,12 @@ public sealed class HandleAsync : IAsyncDisposable
 
     private sealed class NullEligibilityEvaluator : IRepositoryEligibilityEvaluator
     {
-        public Task EvaluateAndStoreAsync(
+        public Task EvaluateFullyAndStoreAsync(
+            MonitoredRepository repo,
+            CancellationToken cancellationToken) =>
+            Task.CompletedTask;
+
+        public Task EvaluateBranchRulesAndStoreAsync(
             MonitoredRepository repo,
             CancellationToken cancellationToken) =>
             Task.CompletedTask;

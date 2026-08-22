@@ -1531,7 +1531,16 @@ public sealed class PollAsync : IAsyncDisposable
 
         public int EvaluateCallCount { get; private set; }
 
-        public Task EvaluateAndStoreAsync(
+        public Task EvaluateFullyAndStoreAsync(
+            MonitoredRepository repo,
+            CancellationToken cancellationToken)
+        {
+            EvaluateCallCount++;
+            repo.SetEligibility(_eligibility);
+            return Task.CompletedTask;
+        }
+
+        public Task EvaluateBranchRulesAndStoreAsync(
             MonitoredRepository repo,
             CancellationToken cancellationToken)
         {

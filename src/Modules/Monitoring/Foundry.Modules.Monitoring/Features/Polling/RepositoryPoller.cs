@@ -25,7 +25,7 @@ internal sealed class RepositoryPoller(
         CancellationToken cancellationToken)
     {
         // Pass 0: evaluate repository-level eligibility unconditionally every poll cycle.
-        await eligibilityEvaluator.EvaluateAndStoreAsync(repository, cancellationToken);
+        await eligibilityEvaluator.EvaluateFullyAndStoreAsync(repository, cancellationToken);
 
         IReadOnlySet<int> knownNumbers = await issueQueries.GetKnownIssueNumbersAsync(
             repository.Id,

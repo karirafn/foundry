@@ -395,11 +395,14 @@ public sealed class ExecuteTickAsync : IAsyncDisposable
 
     private sealed class NullRepositoryEligibilityEvaluator : IRepositoryEligibilityEvaluator
     {
-        public Task EvaluateAndStoreAsync(
+        public Task EvaluateFullyAndStoreAsync(
             MonitoredRepository repo,
             CancellationToken cancellationToken)
-        {
-            return Task.CompletedTask;
-        }
+            => Task.CompletedTask;
+
+        public Task EvaluateBranchRulesAndStoreAsync(
+            MonitoredRepository repo,
+            CancellationToken cancellationToken)
+            => Task.CompletedTask;
     }
 }

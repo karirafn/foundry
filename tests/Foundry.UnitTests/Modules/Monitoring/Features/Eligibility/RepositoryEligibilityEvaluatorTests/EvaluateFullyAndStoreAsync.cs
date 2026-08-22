@@ -17,7 +17,7 @@ using Xunit;
 
 namespace Foundry.UnitTests.Modules.Monitoring.Features.Eligibility.RepositoryEligibilityEvaluatorTests;
 
-public sealed class EvaluateAndStoreAsync
+public sealed class EvaluateFullyAndStoreAsync
 {
     private static MonitoredRepository CreateRepo(string slug = "owner/repo")
     {
@@ -45,7 +45,7 @@ public sealed class EvaluateAndStoreAsync
         RepositoryEligibilityEvaluator sut = CreateSut(resolver: new NullCredentialResolver());
 
         // Act
-        await sut.EvaluateAndStoreAsync(repo, CancellationToken.None);
+        await sut.EvaluateFullyAndStoreAsync(repo, CancellationToken.None);
 
         // Assert
         RepositoryEligibility.Ineligible ineligible = repo.Eligibility.ShouldBeOfType<RepositoryEligibility.Ineligible>();
@@ -64,7 +64,7 @@ public sealed class EvaluateAndStoreAsync
             providerFactory: trackingFactory);
 
         // Act
-        await sut.EvaluateAndStoreAsync(repo, CancellationToken.None);
+        await sut.EvaluateFullyAndStoreAsync(repo, CancellationToken.None);
 
         // Assert
         trackingFactory.WasInvoked.ShouldBeFalse();
@@ -78,7 +78,7 @@ public sealed class EvaluateAndStoreAsync
         RepositoryEligibilityEvaluator sut = CreateSut(resolver: new NullCredentialResolver());
 
         // Act
-        await sut.EvaluateAndStoreAsync(repo, CancellationToken.None);
+        await sut.EvaluateFullyAndStoreAsync(repo, CancellationToken.None);
 
         // Assert
         RepositoryEligibility.Ineligible ineligible = repo.Eligibility.ShouldBeOfType<RepositoryEligibility.Ineligible>();
@@ -101,10 +101,11 @@ public sealed class EvaluateAndStoreAsync
             writeProber: new GrantedWriteProber());
 
         // Act
-        await sut.EvaluateAndStoreAsync(repo, CancellationToken.None);
+        await sut.EvaluateFullyAndStoreAsync(repo, CancellationToken.None);
 
         // Assert
         repo.Eligibility.ShouldBeOfType<RepositoryEligibility.Eligible>();
+        repo.WriteProbeVerdict.ShouldBeOfType<WriteProbeVerdict.Granted>();
     }
 
     [Fact]
@@ -124,13 +125,14 @@ public sealed class EvaluateAndStoreAsync
             writeProber: new MissingWriteProber(WritePermission.Contents));
 
         // Act
-        await sut.EvaluateAndStoreAsync(repo, CancellationToken.None);
+        await sut.EvaluateFullyAndStoreAsync(repo, CancellationToken.None);
 
         // Assert
         RepositoryEligibility.Ineligible ineligible = repo.Eligibility.ShouldBeOfType<RepositoryEligibility.Ineligible>();
         ineligible.Violations.ShouldHaveSingleItem();
         ineligible.Violations[0].Rule.ShouldBe("cannot-push:owner/repo");
         factory.CreatedProvider.ShouldBeNull();
+        repo.WriteProbeVerdict.ShouldBeOfType<WriteProbeVerdict.Denied>();
     }
 
     [Fact]
@@ -148,7 +150,7 @@ public sealed class EvaluateAndStoreAsync
             writeProber: new FailingWriteProber());
 
         // Act
-        await sut.EvaluateAndStoreAsync(repo, CancellationToken.None);
+        await sut.EvaluateFullyAndStoreAsync(repo, CancellationToken.None);
 
         // Assert
         repo.Eligibility.ShouldBeOfType<RepositoryEligibility.Unreachable>();
@@ -173,7 +175,7 @@ public sealed class EvaluateAndStoreAsync
             writeProber: new GrantedWriteProber());
 
         // Act
-        await sut.EvaluateAndStoreAsync(repo, CancellationToken.None);
+        await sut.EvaluateFullyAndStoreAsync(repo, CancellationToken.None);
 
         // Assert
         RepositoryEligibility.Ineligible ineligible = repo.Eligibility.ShouldBeOfType<RepositoryEligibility.Ineligible>();
@@ -181,6 +183,7 @@ public sealed class EvaluateAndStoreAsync
         ineligible.Violations[0].Rule.ShouldBe("cannot-push:owner/repo");
         factory.CreatedProvider.ShouldNotBeNull();
         factory.CreatedProvider!.BranchProtectionWasCalled.ShouldBeFalse();
+        repo.WriteProbeVerdict.ShouldBeOfType<WriteProbeVerdict.Denied>();
     }
 
     [Fact]
@@ -200,7 +203,7 @@ public sealed class EvaluateAndStoreAsync
                 canPushResult: Result<bool>.Fail(new Error("Provider.Error", "Upstream error"))));
 
         // Act
-        await sut.EvaluateAndStoreAsync(repo, CancellationToken.None);
+        await sut.EvaluateFullyAndStoreAsync(repo, CancellationToken.None);
 
         // Assert
         repo.Eligibility.ShouldBeOfType<RepositoryEligibility.Unreachable>();
@@ -220,7 +223,7 @@ public sealed class EvaluateAndStoreAsync
             providerFactory: new ThrowingCanPushProviderFactory());
 
         // Act
-        await sut.EvaluateAndStoreAsync(repo, CancellationToken.None);
+        await sut.EvaluateFullyAndStoreAsync(repo, CancellationToken.None);
 
         // Assert
         repo.Eligibility.ShouldBeOfType<RepositoryEligibility.Unreachable>();
@@ -244,12 +247,13 @@ public sealed class EvaluateAndStoreAsync
             providerFactory: factory);
 
         // Act
-        await sut.EvaluateAndStoreAsync(repo, CancellationToken.None);
+        await sut.EvaluateFullyAndStoreAsync(repo, CancellationToken.None);
 
         // Assert
         repo.Eligibility.ShouldBeOfType<RepositoryEligibility.Eligible>();
         factory.CreatedProvider.ShouldNotBeNull();
         factory.CreatedProvider!.BranchProtectionWasCalled.ShouldBeTrue();
+        repo.WriteProbeVerdict.ShouldBeOfType<WriteProbeVerdict.Granted>();
     }
 
     [Fact]
@@ -267,7 +271,7 @@ public sealed class EvaluateAndStoreAsync
             providerFactory: new StubProviderFactory(Result<BranchProtection>.Ok(protection)));
 
         // Act
-        await sut.EvaluateAndStoreAsync(repo, CancellationToken.None);
+        await sut.EvaluateFullyAndStoreAsync(repo, CancellationToken.None);
 
         // Assert
         RepositoryEligibility.Ineligible ineligible = repo.Eligibility.ShouldBeOfType<RepositoryEligibility.Ineligible>();
@@ -289,7 +293,7 @@ public sealed class EvaluateAndStoreAsync
             providerFactory: new StubProviderFactory(Result<BranchProtection>.Ok(protection)));
 
         // Act
-        await sut.EvaluateAndStoreAsync(repo, CancellationToken.None);
+        await sut.EvaluateFullyAndStoreAsync(repo, CancellationToken.None);
 
         // Assert
         RepositoryEligibility.Ineligible ineligible = repo.Eligibility.ShouldBeOfType<RepositoryEligibility.Ineligible>();
@@ -311,7 +315,7 @@ public sealed class EvaluateAndStoreAsync
             providerFactory: new StubProviderFactory(Result<BranchProtection>.Ok(protection)));
 
         // Act
-        await sut.EvaluateAndStoreAsync(repo, CancellationToken.None);
+        await sut.EvaluateFullyAndStoreAsync(repo, CancellationToken.None);
 
         // Assert
         RepositoryEligibility.Ineligible ineligible = repo.Eligibility.ShouldBeOfType<RepositoryEligibility.Ineligible>();
@@ -333,7 +337,7 @@ public sealed class EvaluateAndStoreAsync
                 Result<BranchProtection>.Fail(new Error("Provider.Error", "Unreachable"))));
 
         // Act
-        await sut.EvaluateAndStoreAsync(repo, CancellationToken.None);
+        await sut.EvaluateFullyAndStoreAsync(repo, CancellationToken.None);
 
         // Assert
         repo.Eligibility.ShouldBeOfType<RepositoryEligibility.Unreachable>();
@@ -353,7 +357,7 @@ public sealed class EvaluateAndStoreAsync
             providerFactory: new ThrowingBranchProtectionProviderFactory());
 
         // Act
-        await sut.EvaluateAndStoreAsync(repo, CancellationToken.None);
+        await sut.EvaluateFullyAndStoreAsync(repo, CancellationToken.None);
 
         // Assert
         repo.Eligibility.ShouldBeOfType<RepositoryEligibility.Unreachable>();

@@ -715,7 +715,12 @@ public sealed class HandleAsync : IAsyncDisposable
 
     private sealed class NoOpEligibilityEvaluator : IRepositoryEligibilityEvaluator
     {
-        public Task EvaluateAndStoreAsync(
+        public Task EvaluateFullyAndStoreAsync(
+            MonitoredRepository repo,
+            CancellationToken cancellationToken) =>
+            Task.CompletedTask;
+
+        public Task EvaluateBranchRulesAndStoreAsync(
             MonitoredRepository repo,
             CancellationToken cancellationToken) =>
             Task.CompletedTask;
@@ -724,7 +729,13 @@ public sealed class HandleAsync : IAsyncDisposable
     /// <summary>Marks every repo eligible — simulates a healthy credential that can reach all repos.</summary>
     private sealed class EligibleEvaluator : IRepositoryEligibilityEvaluator
     {
-        public Task EvaluateAndStoreAsync(MonitoredRepository repo, CancellationToken cancellationToken)
+        public Task EvaluateFullyAndStoreAsync(MonitoredRepository repo, CancellationToken cancellationToken)
+        {
+            repo.SetEligibility(new RepositoryEligibility.Eligible());
+            return Task.CompletedTask;
+        }
+
+        public Task EvaluateBranchRulesAndStoreAsync(MonitoredRepository repo, CancellationToken cancellationToken)
         {
             repo.SetEligibility(new RepositoryEligibility.Eligible());
             return Task.CompletedTask;
