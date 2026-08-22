@@ -282,9 +282,14 @@ Computed get-only members (`TierRank`, `DispatchBranchName`, `Context`) are not 
 
 ## Repository Eligibility
 
-Whether a Monitored Repository meets Foundry's processing preconditions (Branch Protection).
-Modeled as a value object with three variants: `Eligible`, `Ineligible` (carries a non-empty collection of `EligibilityViolation` values), and `Unreachable` (the provider API could not be reached to perform the check — transient, retried each poll).
-Stored on the Monitored Repository, evaluated synchronously at repository creation and re-evaluated on every poll cycle; a manual "re-check" action forces immediate re-evaluation.
+Whether a Monitored Repository meets Foundry's processing preconditions (Branch Protection and write permission).
+Modeled as a value object with three variants: `Eligible`, `Ineligible` (carries a non-empty collection of `EligibilityViolation` values), and `Unreachable` (the provider API could not be reached — transient, retried each poll).
+Stored on the Monitored Repository and composed from two checks of different cadence:
+
+- **Branch-rules GET (per-cycle)** — re-evaluated unconditionally on every poll cycle and synchronously at repository creation. A configuration change on the provider is reflected on the next poll without user action (auto-heal).
+- **Write probe (event-triggered)** — runs on repository add, manual re-check, and credential update/rotation. The last result is persisted on `MonitoredRepository` as a `WriteProbeVerdict` value object (`Granted` / `Denied` / `Unknown`) and composed with the fresh branch-rules result each cycle. `Unknown` maps to `Unreachable` so a repository that has never been probed is never dispatchable. See ADR 0054.
+
+A manual "re-check" action forces immediate re-evaluation of both checks.
 Only `Eligible` repositories have their queued issues dispatched — ineligibility gates dispatch only; detection, dependency reconciliation, and review polling continue regardless. Already-running workers are unaffected.
 Issue-level ineligibility is derived from the repository for display, never stored per issue.
 
