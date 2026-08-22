@@ -124,6 +124,26 @@ public sealed class HandleAsync : IAsyncDisposable
         stored.Namespaces.ShouldContain(n => n.Value == "existing-owner");
     }
 
+    [Fact]
+    public async Task WhenRepositoryAndAccountExist_CallsFullEvaluationNotCheapPath()
+    {
+        // Arrange — recheck must run the write probe (full path), never the cheap per-cycle path
+        (Guid accountId, Guid repositoryId) = await SeedAsync();
+        TrackingEligibilityEvaluator evaluator = new();
+        RecheckRepositoryEligibility.Handler handler = BuildHandler(eligibilityEvaluator: evaluator);
+        RecheckRepositoryEligibility.Command command = new(accountId, repositoryId);
+
+        // Act
+        Result<RepositorySummary> result = await handler.HandleAsync(
+            command,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        result.ShouldBeOfType<Result<RepositorySummary>.Success>();
+        evaluator.FullEvaluateCallCount.ShouldBe(1);
+        evaluator.CheapEvaluateCallCount.ShouldBe(0);
+    }
+
     private sealed class StubNamespaceDeriver(NamespaceDerivationOutcome outcome) : INamespaceDeriver
     {
         public Task<NamespaceDerivationOutcome> DeriveAsync(
@@ -150,5 +170,27 @@ public sealed class HandleAsync : IAsyncDisposable
             MonitoredRepository repo,
             CancellationToken cancellationToken) =>
             Task.CompletedTask;
+    }
+
+    private sealed class TrackingEligibilityEvaluator : IRepositoryEligibilityEvaluator
+    {
+        public int FullEvaluateCallCount { get; private set; }
+        public int CheapEvaluateCallCount { get; private set; }
+
+        public Task EvaluateFullyAndStoreAsync(
+            MonitoredRepository repo,
+            CancellationToken cancellationToken)
+        {
+            FullEvaluateCallCount++;
+            return Task.CompletedTask;
+        }
+
+        public Task EvaluateBranchRulesAndStoreAsync(
+            MonitoredRepository repo,
+            CancellationToken cancellationToken)
+        {
+            CheapEvaluateCallCount++;
+            return Task.CompletedTask;
+        }
     }
 }

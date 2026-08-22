@@ -24,8 +24,9 @@ internal sealed class RepositoryPoller(
         DateTimeOffset now,
         CancellationToken cancellationToken)
     {
-        // Pass 0: evaluate repository-level eligibility unconditionally every poll cycle.
-        await eligibilityEvaluator.EvaluateFullyAndStoreAsync(repository, cancellationToken);
+        // Pass 0: evaluate repository-level eligibility using stored write-probe verdict every poll cycle.
+        // Using the cheap branch-rules path avoids issuing a write probe on every poll cycle.
+        await eligibilityEvaluator.EvaluateBranchRulesAndStoreAsync(repository, cancellationToken);
 
         IReadOnlySet<int> knownNumbers = await issueQueries.GetKnownIssueNumbersAsync(
             repository.Id,

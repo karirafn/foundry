@@ -894,6 +894,22 @@ public sealed class PollAsync : IAsyncDisposable
     }
 
     [Fact]
+    public async Task WhenPolling_UsesCheapBranchRulesEvaluationNotWriteProbe()
+    {
+        // Arrange — poll cycle must use cheap path (no write probe issued)
+        MonitoredRepository repository = SeedRepository();
+        StubIssueProvider provider = new([]);
+
+        // Act
+        Result result = await _sut.PollAsync(repository, provider, Now, CancellationToken.None);
+
+        // Assert
+        result.IsSuccess.ShouldBeTrue();
+        _eligibilityEvaluator.CheapEvaluateCallCount.ShouldBe(1);
+        _eligibilityEvaluator.FullEvaluateCallCount.ShouldBe(0);
+    }
+
+    [Fact]
     public async Task WhenPollRunsTwice_EligibilityIsEvaluatedOnEachCycle()
     {
         // Arrange
@@ -1530,12 +1546,15 @@ public sealed class PollAsync : IAsyncDisposable
         private readonly RepositoryEligibility _eligibility = eligibility ?? new RepositoryEligibility.Eligible();
 
         public int EvaluateCallCount { get; private set; }
+        public int FullEvaluateCallCount { get; private set; }
+        public int CheapEvaluateCallCount { get; private set; }
 
         public Task EvaluateFullyAndStoreAsync(
             MonitoredRepository repo,
             CancellationToken cancellationToken)
         {
             EvaluateCallCount++;
+            FullEvaluateCallCount++;
             repo.SetEligibility(_eligibility);
             return Task.CompletedTask;
         }
@@ -1545,6 +1564,7 @@ public sealed class PollAsync : IAsyncDisposable
             CancellationToken cancellationToken)
         {
             EvaluateCallCount++;
+            CheapEvaluateCallCount++;
             repo.SetEligibility(_eligibility);
             return Task.CompletedTask;
         }
