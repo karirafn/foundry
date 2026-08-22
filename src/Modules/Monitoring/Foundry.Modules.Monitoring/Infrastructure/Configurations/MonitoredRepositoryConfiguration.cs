@@ -110,6 +110,7 @@ internal sealed class MonitoredRepositoryConfiguration : IEntityTypeConfiguratio
             .HasConversion(writeProbeVerdictConverter)
             .HasMaxLength(int.MaxValue)
             .HasColumnType("TEXT")
+            .IsRequired(false)
             .HasColumnName("write_probe_verdict");
 
         builder.HasIndex(r => new { r.Host, r.Slug })
