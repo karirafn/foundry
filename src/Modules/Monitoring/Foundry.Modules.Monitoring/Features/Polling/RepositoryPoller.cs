@@ -81,13 +81,13 @@ internal sealed class RepositoryPoller(
         await domainEventDispatcher.DispatchAsync(repository.DomainEvents, cancellationToken);
         repository.ClearDomainEvents();
 
-        // Pass 3: detect dependencies for all known non-terminal issues.
-        // Re-query known numbers so newly detected issues from pass 1 are included.
-        IReadOnlySet<int> knownNumbersForDependencies = await issueQueries.GetKnownIssueNumbersAsync(
+        // Pass 3: detect dependencies for the dispatch-candidate issues the dependency handler can act on.
+        // Re-query after the first save so issues newly detected in this cycle are included.
+        IReadOnlySet<int> candidateNumbers = await issueQueries.GetDispatchCandidateIssueNumbersAsync(
             repository.Id,
             cancellationToken);
 
-        await DetectDependenciesAsync(repository, provider, knownNumbersForDependencies, cancellationToken);
+        await DetectDependenciesAsync(repository, provider, candidateNumbers, cancellationToken);
 
         await integrationEventDispatcher.DispatchAsync(repository.IntegrationEvents, cancellationToken);
         repository.ClearIntegrationEvents();
