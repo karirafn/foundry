@@ -96,7 +96,7 @@ public sealed class MonitoredRepository : AggregateRoot<MonitoredRepositoryId>
     /// Marks untrack-pass suppression as active, recording when it first began.
     /// Returns true if this is the null→set transition (first suppression); false if already suppressed.
     /// </summary>
-    public bool SuppressUntracking(DateTimeOffset now)
+    internal bool SuppressUntracking(DateTimeOffset now)
     {
         if (UntrackSuppressedSince is not null)
         {
@@ -110,8 +110,13 @@ public sealed class MonitoredRepository : AggregateRoot<MonitoredRepositoryId>
     /// <summary>
     /// Clears untrack-pass suppression. Idempotent — no-op when not suppressed.
     /// </summary>
-    public void ClearUntrackSuppression()
+    internal void ClearUntrackSuppression()
     {
+        if (UntrackSuppressedSince is null)
+        {
+            return;
+        }
+
         UntrackSuppressedSince = null;
     }
 

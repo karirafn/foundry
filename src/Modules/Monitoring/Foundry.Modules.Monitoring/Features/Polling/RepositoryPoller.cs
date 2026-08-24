@@ -82,7 +82,7 @@ internal sealed class RepositoryPoller(
                     "Untrack pass suppressed for repository {Slug}: listing is incomplete. " +
                     "Suppressed since {SuppressedAt}.",
                     repository.Slug,
-                    repository.UntrackSuppressedSince);
+                    now);
             }
         }
 

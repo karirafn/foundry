@@ -1266,6 +1266,79 @@ public sealed class PollAsync : IAsyncDisposable
     }
 
     [Fact]
+    public async Task WhenCompleteListingFollowsIncompleteAndIssueStillAbsent_RaisesProviderIssueUntrackedForAbsentIssue()
+    {
+        // Arrange
+        MonitoredRepository repository = SeedRepository();
+        StubIssueQueries issueQueries = new(
+            knownNumbers: new HashSet<int> { 7 },
+            snapshots: new Dictionary<int, IssueSnapshot>(),
+            dispatchCandidateNumbers: null,
+            reviewIssues: null,
+            untrackableNumbers: new HashSet<int> { 7 });
+
+        RepositoryPoller sut = new(
+            issueQueries,
+            _dbContext,
+            new NullDomainEventDispatcher(),
+            _dispatcher,
+            _eligibilityEvaluator,
+            NullLogger<RepositoryPoller>.Instance);
+
+        StubIssueProvider incompleteProvider = new([], isComplete: false);
+
+        // Complete listing that does NOT include issue #7 — it is genuinely gone.
+        StubIssueProvider completeProvider = new([]);
+
+        // Act — poll 1 with incomplete listing: suppresses; poll 2 with complete listing: recovers and untracks
+        await sut.PollAsync(repository, incompleteProvider, Now, CancellationToken.None);
+        await sut.PollAsync(repository, completeProvider, Now.AddMinutes(5), CancellationToken.None);
+
+        // Assert — the untrack event fires for issue #7 on the recovery poll
+        ProviderIssueUntracked untracked = _dispatcher.DispatchedEvents
+            .OfType<ProviderIssueUntracked>()
+            .ShouldHaveSingleItem();
+        untracked.ShouldSatisfyAllConditions(
+            () => untracked.RepositoryId.ShouldBe(repository.Id),
+            () => untracked.IssueNumber.ShouldBe(7));
+    }
+
+    [Fact]
+    public async Task WhenCompleteListingFollowsIncompleteAndIssueStillAbsent_ClearsUntrackSuppression()
+    {
+        // Arrange
+        MonitoredRepository repository = SeedRepository();
+        StubIssueQueries issueQueries = new(
+            knownNumbers: new HashSet<int> { 7 },
+            snapshots: new Dictionary<int, IssueSnapshot>(),
+            dispatchCandidateNumbers: null,
+            reviewIssues: null,
+            untrackableNumbers: new HashSet<int> { 7 });
+
+        RepositoryPoller sut = new(
+            issueQueries,
+            _dbContext,
+            new NullDomainEventDispatcher(),
+            _dispatcher,
+            _eligibilityEvaluator,
+            NullLogger<RepositoryPoller>.Instance);
+
+        StubIssueProvider incompleteProvider = new([], isComplete: false);
+
+        // Complete listing that does NOT include issue #7 — it is genuinely gone.
+        StubIssueProvider completeProvider = new([]);
+
+        // Act — poll 1 with incomplete listing: suppresses; poll 2 with complete listing: recovers and untracks
+        await sut.PollAsync(repository, incompleteProvider, Now, CancellationToken.None);
+        repository.UntrackSuppressedSince.ShouldNotBeNull();
+
+        await sut.PollAsync(repository, completeProvider, Now.AddMinutes(5), CancellationToken.None);
+
+        // Assert — suppression is cleared after the recovery poll
+        repository.UntrackSuppressedSince.ShouldBeNull();
+    }
+
+    [Fact]
     public async Task WhenCompleteEmptyListingWithNoKnownIssues_SuppressionNeverEngaged()
     {
         // Arrange — genuine-zero repo: complete listing, no known issues

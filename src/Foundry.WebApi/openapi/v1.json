@@ -2406,10 +2406,7 @@
           "providerType",
           "pollIntervalSeconds",
           "isActive",
-          "lastPolledAt",
-          "eligibility",
-          "position",
-          "untrackSuppressedSince"
+          "position"
         ],
         "type": "object",
         "properties": {
@@ -2442,6 +2439,14 @@
           "isActive": {
             "type": "boolean"
           },
+          "position": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
           "lastPolledAt": {
             "type": [
               "null",
@@ -2458,14 +2463,6 @@
                 "$ref": "#/components/schemas/RepositoryEligibilityInfo"
               }
             ]
-          },
-          "position": {
-            "pattern": "^-?(?:0|[1-9]\\d*)$",
-            "type": [
-              "integer",
-              "string"
-            ],
-            "format": "int32"
           },
           "untrackSuppressedSince": {
             "type": [
