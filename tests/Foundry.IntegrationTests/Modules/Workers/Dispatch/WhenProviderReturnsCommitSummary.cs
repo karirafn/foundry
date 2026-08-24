@@ -83,7 +83,7 @@ public sealed class WhenProviderReturnsCommitSummary : IAsyncDisposable
         await SeedActiveRunAsync();
 
         IServiceScopeFactory scopeFactory = _factory.Services.GetRequiredService<IServiceScopeFactory>();
-        using WorkerDispatchService sut = new(scopeFactory, NullLogger<WorkerDispatchService>.Instance);
+        using WorkerDispatchService sut = new(scopeFactory, NullLogger<WorkerDispatchService>.Instance, TimeProvider.System);
 
         // Act — Tick 1: reconciliation (sets _reconciled = true, runs observation on running container)
         await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
@@ -109,7 +109,7 @@ public sealed class WhenProviderReturnsCommitSummary : IAsyncDisposable
         await SeedActiveRunAsync();
 
         IServiceScopeFactory scopeFactory = _factory.Services.GetRequiredService<IServiceScopeFactory>();
-        using WorkerDispatchService sut = new(scopeFactory, NullLogger<WorkerDispatchService>.Instance);
+        using WorkerDispatchService sut = new(scopeFactory, NullLogger<WorkerDispatchService>.Instance, TimeProvider.System);
 
         // Act — Tick 1: reconciliation
         await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);

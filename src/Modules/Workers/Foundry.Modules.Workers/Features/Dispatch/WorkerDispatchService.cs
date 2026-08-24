@@ -31,16 +31,13 @@ namespace Foundry.Modules.Workers.Features.Dispatch;
 
 internal sealed class WorkerDispatchService(
     IServiceScopeFactory scopeFactory,
-    ILogger<WorkerDispatchService> logger) : PeriodicBackgroundService(logger)
+    ILogger<WorkerDispatchService> logger,
+    TimeProvider timeProvider) : PeriodicBackgroundService(logger)
 {
     private static readonly TimeSpan Interval = TimeSpan.FromSeconds(10);
 
     // Safe without locking — PeriodicTimer loop is single-threaded
     private bool _reconciled;
-
-    // Per-run in-memory tick state for log-silence detection.
-    // Keyed by WorkerRunId; entries are added on first observation and removed on terminal transition.
-    private readonly Dictionary<WorkerRunId, int> _lastSeenLogLength = [];
 
     protected override TimeSpan TickInterval => Interval;
 
@@ -453,7 +450,6 @@ internal sealed class WorkerDispatchService(
 
                     await ObserveRunningWorkerAsync(
                         dbContext,
-                        orchestrator,
                         domainEventDispatcher,
                         postExitProviderQueries,
                         activeRun,
@@ -703,7 +699,6 @@ internal sealed class WorkerDispatchService(
                 throw new UnreachableException($"Unhandled outcome type {outcome.GetType().Name}");
         }
 
-        _lastSeenLogLength.Remove(activeRun.Id);
         await TryStopAndRemoveAsync(orchestrator, activeRun.ContainerId.Value, activeRun.Id.Value, cancellationToken);
     }
 
@@ -796,28 +791,16 @@ internal sealed class WorkerDispatchService(
 
     private async Task ObserveRunningWorkerAsync(
         DbContext dbContext,
-        IWorkerOrchestrator orchestrator,
         IDomainEventDispatcher domainEventDispatcher,
         IPostExitProviderQueries postExitProviderQueries,
         ActiveRun activeRun,
         CancellationToken cancellationToken)
     {
-        DateTimeOffset now = DateTimeOffset.UtcNow;
+        DateTimeOffset now = timeProvider.GetUtcNow();
 
-        string? currentLogs = await TryGetLogsAsync(
-            orchestrator,
-            activeRun.ContainerId.Value,
-            activeRun.Id.Value,
-            cancellationToken);
-
-        int currentLogLength = currentLogs?.Length ?? 0;
-        _lastSeenLogLength.TryGetValue(activeRun.Id, out int lastLogLength);
-
-        if (currentLogLength > lastLogLength)
-        {
-            _lastSeenLogLength[activeRun.Id] = currentLogLength;
-            activeRun.RecordActivity(now);
-        }
+        // Container is provably alive — the caller has already confirmed this via GetStatusAsync.
+        // Record activity unconditionally; do not gate on log growth (claude buffers all output until exit).
+        activeRun.RecordActivity(now);
 
         Result<BranchCommitSummary> commitResult = await postExitProviderQueries.GetBranchCommitSummaryAsync(
             activeRun.MonitoredRepositoryId,
@@ -835,9 +818,16 @@ internal sealed class WorkerDispatchService(
                 activeRun.RecordBranchCommitCount(0, null, now);
                 break;
 
-            // Any other failure (transient provider error): leave the persisted count unchanged.
-            // Do not call RecordBranchCommitCount — the aggregate must not raise a WorkerActivity
-            // broadcast for an error state, and the last known count remains accurate.
+            case Result<BranchCommitSummary>.Failure failure:
+                // Transient provider error: leave the persisted count unchanged.
+                // Do not call RecordBranchCommitCount — the aggregate must not raise a WorkerActivity
+                // broadcast for an error state, and the last known count remains accurate.
+                logger.LogWarning(
+                    "Provider returned a non-NotFound failure for run {WorkerRunId}: {Error}. "
+                    + "Leaving persisted commit count unchanged.",
+                    activeRun.Id,
+                    failure.Error);
+                break;
         }
 
         if (activeRun.DomainEvents.Count > 0)

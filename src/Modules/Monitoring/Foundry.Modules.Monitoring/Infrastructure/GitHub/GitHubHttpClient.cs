@@ -828,10 +828,9 @@ internal sealed partial class GitHubHttpClient(
         GitHubCompareDto? dto = JsonSerializer.Deserialize<GitHubCompareDto>(body, JsonOptions);
 
         int commitCount = dto?.AheadBy ?? 0;
-        // Use the top-level head_commit.sha field (not commits[^1].sha) — the commits[] array is
-        // capped at 250 entries, so commits[^1].sha would stop advancing beyond the 250th commit.
-        // head_commit always reflects the actual branch tip regardless of how far ahead it is.
-        string? latestSha = commitCount > 0 ? dto?.HeadCommit?.Sha : null;
+        IReadOnlyList<GitHubCommitRefDto> commits = dto?.Commits ?? [];
+        string? rawSha = commitCount > 0 && commits.Count > 0 ? commits[^1].Sha : null;
+        string? latestSha = rawSha is not null && GitObjectIdRegex().IsMatch(rawSha) ? rawSha : null;
 
         return Result<BranchCommitSummary>.Ok(new BranchCommitSummary(commitCount, latestSha));
     }
@@ -948,6 +947,16 @@ internal sealed partial class GitHubHttpClient(
 
         return missing;
     }
+
+    // Matches a SHA-1 hex object id (up to 40 hex chars), deliberately aligned with the
+    // HasMaxLength(40) column on ActiveRun.LastObservedCommitSha. The bound is intentionally
+    // NOT widened to {1,64} for SHA-256: a 64-char SHA-256 id would exceed the storage column
+    // and reintroduce the oversized-value persistence risk this guard was added to prevent.
+    // Supporting SHA-256 requires widening the storage column first (out of scope). Treating
+    // an out-of-range value (including a 64-char SHA-256 id) as absent is the safe behavior —
+    // the SHA is a change-detection key only, so a missing value causes a re-fetch, not data loss.
+    [GeneratedRegex(@"^[0-9a-fA-F]{1,40}$")]
+    private static partial Regex GitObjectIdRegex();
 
     [GeneratedRegex(@"/pull/(\d+)(?:[/?#]|$)")]
     private static partial Regex PrNumberRegex();
@@ -1158,8 +1167,7 @@ internal sealed partial class GitHubHttpClient(
 
     private sealed record GitHubCompareDto(
         int AheadBy,
-        IReadOnlyList<GitHubCommitRefDto> Commits,
-        GitHubCommitRefDto? HeadCommit);
+        IReadOnlyList<GitHubCommitRefDto> Commits);
 
     private sealed record GitHubCommitRefDto(string Sha);
 

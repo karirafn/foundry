@@ -26,7 +26,8 @@ namespace Foundry.IntegrationTests.Modules.Workers.Dispatch;
 
 /// <summary>
 /// Pre-ship integration test: when GetBranchCommitSummaryAsync returns a non-NotFound failure,
-/// ObserveRunningWorkerAsync leaves BranchCommitCount unchanged and emits no WorkerActivity broadcast,
+/// ObserveRunningWorkerAsync leaves BranchCommitCount unchanged (no commit-path broadcast),
+/// while still emitting a container-alive broadcast from RecordActivity,
 /// verified through the real module DI wiring.
 /// </summary>
 public sealed class WhenProviderReturnsTransientError : IAsyncDisposable
@@ -78,32 +79,40 @@ public sealed class WhenProviderReturnsTransientError : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenProviderReturnsTransientError_BranchCommitCountUnchangedAndNoBroadcastEmitted()
+    public async Task WhenProviderReturnsTransientError_BranchCommitCountUnchangedAndNoCommitBroadcastEmitted()
     {
         // Arrange
         await SeedActiveRunAsync();
 
         IServiceScopeFactory scopeFactory = _factory.Services.GetRequiredService<IServiceScopeFactory>();
-        using WorkerDispatchService sut = new(scopeFactory, NullLogger<WorkerDispatchService>.Instance);
+        using WorkerDispatchService sut = new(scopeFactory, NullLogger<WorkerDispatchService>.Instance, TimeProvider.System);
 
-        // Act — Tick 1: reconciliation; provider returns the initial commit summary (count = 2)
+        // Act — Tick 1: provider returns the initial commit summary (count = 2);
+        //       RecordActivity fires (container-alive) + RecordBranchCommitCount fires (new SHA).
         await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
 
-        // Capture broadcast count after tick 1 (one WorkerActivity should have been emitted for new SHA)
+        // Capture broadcast count after tick 1
         int broadcastsAfterTick1 = _broadcaster.Broadcasts.Count;
 
-        // Act — Tick 2: provider returns a transient (non-NotFound) error
+        // Act — Tick 2: provider returns a transient (non-NotFound) error;
+        //       RecordActivity fires (container-alive, 1 broadcast), RecordBranchCommitCount does NOT fire.
         await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
 
-        // Assert — count is unchanged from tick 1; no new broadcast for tick 2
+        // Assert — persisted count is unchanged from tick 1
         using IServiceScope assertScope = _factory.Services.CreateScope();
         DbContext db = assertScope.ServiceProvider.GetRequiredService<DbContext>();
         WorkerRun? run = await db.Set<WorkerRun>()
             .SingleOrDefaultAsync(TestContext.Current.CancellationToken);
         ActiveRun activeRun = run.ShouldBeOfType<ActiveRun>();
-
         activeRun.BranchCommitCount.ShouldBe(InitialCommitCount);
-        _broadcaster.Broadcasts.Count.ShouldBe(broadcastsAfterTick1);
+
+        // Assert — exactly one new broadcast on tick 2 (from RecordActivity/container-alive),
+        //          and that broadcast carries the unchanged commit count (not a commit-path event).
+        int broadcastsAfterTick2 = _broadcaster.Broadcasts.Count;
+        (broadcastsAfterTick2 - broadcastsAfterTick1).ShouldBe(
+            1, "container-alive fires exactly one broadcast per tick");
+        _broadcaster.Broadcasts[broadcastsAfterTick1].CommitCount.ShouldBe(
+            InitialCommitCount, "broadcast carries the unchanged commit count, not a new commit-path value");
     }
 
     /// <summary>

@@ -17,6 +17,7 @@ using Foundry.Modules.Workers.Features.ContainerSpec;
 using Foundry.Modules.Workers.Features.Dispatch;
 using Foundry.Shared;
 using Foundry.Shared.Infrastructure;
+using Foundry.Testing;
 using Foundry.WebApi.Persistence;
 
 using DomainWorkerRunFailed = Foundry.Modules.Workers.Domain.Events.WorkerRunFailed;
@@ -24,6 +25,7 @@ using DomainWorkerRunFailed = Foundry.Modules.Workers.Domain.Events.WorkerRunFai
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Foundry.UnitTests.Modules.Workers.Features.Dispatch.WorkerDispatchServiceTests;
@@ -86,8 +88,11 @@ public abstract class WorkerDispatchServiceTestBase : IAsyncDisposable
         IPostExitProviderQueries? postExitProviderQueries = null,
         IContainerOutputParser? containerOutputParser = null,
         ICredentialGate? credentialGate = null,
-        IDomainEventDispatcher? domainEventDispatcher = null)
+        IDomainEventDispatcher? domainEventDispatcher = null,
+        CapturingLogger? logger = null,
+        TimeProvider? timeProvider = null)
     {
+        TimeProvider resolvedTimeProvider = timeProvider ?? TimeProvider.System;
         SqliteConnection connection = _connection;
 
         ServiceCollection services = new();
@@ -136,9 +141,35 @@ public abstract class WorkerDispatchServiceTestBase : IAsyncDisposable
 
         ServiceProvider sp = services.BuildServiceProvider();
 
+        ILogger<WorkerDispatchService> serviceLogger = logger is not null
+            ? new CapturingLoggerAdapter<WorkerDispatchService>(logger)
+            : NullLogger<WorkerDispatchService>.Instance;
+
         return new WorkerDispatchService(
             sp.GetRequiredService<IServiceScopeFactory>(),
-            NullLogger<WorkerDispatchService>.Instance);
+            serviceLogger,
+            resolvedTimeProvider);
+    }
+
+    /// <summary>
+    /// Adapts a non-generic <see cref="CapturingLogger"/> to <see cref="ILogger{T}"/>
+    /// so services that depend on a typed logger can be constructed with a capturing logger.
+    /// </summary>
+    private sealed class CapturingLoggerAdapter<T>(CapturingLogger inner) : ILogger<T>
+    {
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+
+        public bool IsEnabled(LogLevel logLevel) => true;
+
+        public void Log<TState>(
+            LogLevel logLevel,
+            EventId eventId,
+            TState state,
+            Exception? exception,
+            Func<TState, Exception?, string> formatter)
+        {
+            ((ILogger)inner).Log(logLevel, eventId, state, exception, formatter);
+        }
     }
 
     /// <summary>

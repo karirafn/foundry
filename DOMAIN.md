@@ -499,7 +499,8 @@ GitLab: `GET /projects/{path}/repository/compare?from={default}&to={branch}` —
 
 **Change detection.**
 `ActiveRun.LastObservedCommitSha` stores the head SHA seen on the previous tick.
-`RecordBranchCommitCount(count, sha, observedAt)` updates `BranchCommitCount` unconditionally but only raises `WorkerActivityObserved` when `sha` differs from `LastObservedCommitSha` — an unchanged head SHA produces no broadcast and no unnecessary write.
+`RecordBranchCommitCount(count, sha, observedAt)` persists both `BranchCommitCount` and `LastObservedCommitSha` and raises `WorkerActivityObserved` whenever *either* the count *or* the SHA differs from the stored values; it returns early — no write, no broadcast — only when both match.
+Keying dedup on the count as well as the SHA means a genuine count change is never silently discarded, even on the first observation where both the incoming and stored SHA are null (the GitHub `commits` cap can also repeat a stale tip SHA while the count still advances).
 `LastObservedCommitSha` is persisted (not in-memory), so dedup survives a host restart.
 
 **Rebase behaviour.**
@@ -509,15 +510,16 @@ Any other provider error (transient network failure, etc.) leaves the persisted 
 
 ## Worker Activity Observation Loop
 
-On each ~10 s `WorkerDispatchService` tick, for every `ActiveRun` the service:
+This loop is reached only for a run whose container the tick has already confirmed alive (`status.IsRunning`). On each ~10 s `WorkerDispatchService` tick, for every such `ActiveRun` the service:
 
-1. Fetches the container's current log output and compares its length to the in-memory `_lastSeenLogLength` entry for the run.
-   If the log grew, `ActiveRun.RecordActivity(now)` is called — this updates `LastActivityAt` and raises `WorkerActivityObserved`.
+1. Calls `ActiveRun.RecordActivity(now)` unconditionally — the container is provably running, so `LastActivityAt` advances every tick and `WorkerActivityObserved` is raised (monotonic: an out-of-order timestamp is ignored). Liveness is derived from container-alive, not from log growth — the worker buffers its stdout until exit, so log length is not a progress signal.
 2. Calls `GetBranchCommitSummaryAsync` to project the current branch commit count from the provider:
-   - **Success** — calls `RecordBranchCommitCount(summary.CommitCount, summary.LatestSha, now)`; a `WorkerActivityObserved` event is raised only when the head SHA changed.
-   - **`NotFound`** — calls `RecordBranchCommitCount(0, null, now)`; always raises `WorkerActivityObserved` (the null SHA differs from any prior SHA).
-   - **Any other failure** — does nothing; the persisted count stays unchanged and no event is raised.
+   - **Success** — calls `RecordBranchCommitCount(summary.CommitCount, summary.LatestSha, now)`; a `WorkerActivityObserved` event is raised whenever the count or the head SHA changed.
+   - **`NotFound`** — calls `RecordBranchCommitCount(0, null, now)`; resets a previously non-zero count to 0 and raises `WorkerActivityObserved`.
+   - **Any other failure** — logs one structured warning and leaves the persisted count unchanged; `RecordBranchCommitCount` is not called for the error, so no count-change event is raised (the container-alive `RecordActivity` from step 1 still stands).
 3. If any domain events were raised, saves to the database (within the same scope transaction) and dispatches the events.
+
+`LastActivityAt` therefore means "last confirmed alive"; the branch commit count is the independent "did something" signal. A hung worker stays distinguishable from a healthy one — its `LastActivityAt` keeps ticking while its commit count stops advancing.
 
 `WorkerActivityObserved` is handled by `WorkerActivityObservedHandler`, which broadcasts a `WorkerActivity` payload (`WorkerRunId`, `IssueId`, `LastActivityAt`, `CommitCount`) to all connected dashboard clients via `WorkerHub`.
 

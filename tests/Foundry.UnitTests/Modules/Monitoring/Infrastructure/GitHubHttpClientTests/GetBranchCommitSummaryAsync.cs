@@ -32,9 +32,9 @@ public sealed class GetBranchCommitSummaryAsync
             new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))));
 
     [Fact]
-    public async Task WhenBranchHasCommits_ReturnsCommitCountAndHeadSha()
+    public async Task WhenBranchHasCommits_ReturnsCommitCountAndLastCommitSha()
     {
-        // Arrange
+        // Arrange — real GitHub compare payload has no head_commit key; SHA comes from commits[^1]
         string json = """
             {
                 "ahead_by": 3,
@@ -43,8 +43,7 @@ public sealed class GetBranchCommitSummaryAsync
                     { "sha": "aaa111" },
                     { "sha": "bbb222" },
                     { "sha": "ccc333" }
-                ],
-                "head_commit": { "sha": "ccc333" }
+                ]
             }
             """;
         FakeHandler handler = new(HttpStatusCode.OK, json);
@@ -67,39 +66,24 @@ public sealed class GetBranchCommitSummaryAsync
     }
 
     [Fact]
-    public async Task WhenAheadByExceeds250_UsesHeadCommitShaNotTruncatedArray()
+    public async Task WhenBranchHasCommits_ExactlyOneHttpRequestIsIssued()
     {
-        // Arrange — ahead_by=300 but commits[] only has 250 entries (GitHub caps the array).
-        // The head_commit.sha reflects the true branch tip.
-        const string lastInArraySha = "commit-250";
-        const string actualHeadSha = "commit-300";
-        System.Text.StringBuilder commitsJson = new();
-        for (int i = 1; i <= 250; i++)
-        {
-            if (commitsJson.Length > 0)
+        // Arrange
+        string json = """
             {
-                commitsJson.Append(',');
-            }
-
-            commitsJson.Append("{\"sha\":\"commit-");
-            commitsJson.Append(i.ToString(System.Globalization.CultureInfo.InvariantCulture));
-            commitsJson.Append("\"}");
-        }
-
-        string json = $$"""
-            {
-                "ahead_by": 300,
+                "ahead_by": 2,
                 "behind_by": 0,
-                "commits": [{{commitsJson}}],
-                "head_commit": { "sha": "{{actualHeadSha}}" }
+                "commits": [
+                    { "sha": "aaa111" },
+                    { "sha": "bbb222" }
+                ]
             }
             """;
-
         FakeHandler handler = new(HttpStatusCode.OK, json);
         GitHubHttpClient sut = CreateSut(handler);
 
         // Act
-        Result<BranchCommitSummary> result = await sut.GetBranchCommitSummaryAsync(
+        await sut.GetBranchCommitSummaryAsync(
             ValidBaseUrl,
             ValidSlug,
             "main",
@@ -107,12 +91,8 @@ public sealed class GetBranchCommitSummaryAsync
             "ghp_token",
             CancellationToken.None);
 
-        // Assert — commit count is accurate (ahead_by), and SHA comes from head_commit not commits[^1]
-        Result<BranchCommitSummary>.Success success = result.ShouldBeOfType<Result<BranchCommitSummary>.Success>();
-        success.Value.ShouldSatisfyAllConditions(
-            () => success.Value.CommitCount.ShouldBe(300),
-            () => success.Value.LatestSha.ShouldBe(actualHeadSha),
-            () => success.Value.LatestSha.ShouldNotBe(lastInArraySha));
+        // Assert
+        handler.AllRequests.Count.ShouldBe(1);
     }
 
     [Fact]
@@ -123,8 +103,7 @@ public sealed class GetBranchCommitSummaryAsync
             {
                 "ahead_by": 0,
                 "behind_by": 0,
-                "commits": [],
-                "head_commit": null
+                "commits": []
             }
             """;
         FakeHandler handler = new(HttpStatusCode.OK, json);
@@ -211,10 +190,107 @@ public sealed class GetBranchCommitSummaryAsync
     }
 
     [Fact]
+    public async Task WhenAheadByIsNonZeroButCommitsArrayIsEmpty_ReturnsCountWithNullSha()
+    {
+        // Arrange — ahead_by disagrees with commits[] length (e.g. paginated response or API quirk)
+        string json = """
+            {
+                "ahead_by": 1,
+                "behind_by": 0,
+                "commits": []
+            }
+            """;
+        FakeHandler handler = new(HttpStatusCode.OK, json);
+        GitHubHttpClient sut = CreateSut(handler);
+
+        // Act
+        Result<BranchCommitSummary> result = await sut.GetBranchCommitSummaryAsync(
+            ValidBaseUrl,
+            ValidSlug,
+            "main",
+            "feat/my-branch",
+            "ghp_token",
+            CancellationToken.None);
+
+        // Assert
+        Result<BranchCommitSummary>.Success success = result.ShouldBeOfType<Result<BranchCommitSummary>.Success>();
+        success.Value.ShouldSatisfyAllConditions(
+            () => success.Value.CommitCount.ShouldBe(1),
+            () => success.Value.LatestSha.ShouldBeNull());
+    }
+
+    [Fact]
+    public async Task WhenCommitShaIsMalformed_ReturnsCountWithNullSha()
+    {
+        // Arrange — provider returns a SHA that is not a valid git object id
+        string json = """
+            {
+                "ahead_by": 1,
+                "behind_by": 0,
+                "commits": [
+                    { "sha": "not-a-valid-sha!!" }
+                ]
+            }
+            """;
+        FakeHandler handler = new(HttpStatusCode.OK, json);
+        GitHubHttpClient sut = CreateSut(handler);
+
+        // Act
+        Result<BranchCommitSummary> result = await sut.GetBranchCommitSummaryAsync(
+            ValidBaseUrl,
+            ValidSlug,
+            "main",
+            "feat/my-branch",
+            "ghp_token",
+            CancellationToken.None);
+
+        // Assert — count comes from ahead_by; SHA rejected as malformed
+        Result<BranchCommitSummary>.Success success = result.ShouldBeOfType<Result<BranchCommitSummary>.Success>();
+        success.Value.ShouldSatisfyAllConditions(
+            () => success.Value.CommitCount.ShouldBe(1),
+            () => success.Value.LatestSha.ShouldBeNull());
+    }
+
+    [Fact]
+    public async Task WhenCommitShaIsSha256Length_ReturnsCountWithNullSha()
+    {
+        // Arrange — a 64-char SHA-256 hex id exceeds the {1,40} guard and must be treated as absent.
+        // The storage column HasMaxLength(40) cannot hold a SHA-256 value, so widening the regex
+        // would reintroduce an oversized-value persistence risk. Treating it as null is the safe path.
+        string sha256 = new string('a', 64);
+        string json = $$"""
+            {
+                "ahead_by": 1,
+                "behind_by": 0,
+                "commits": [
+                    { "sha": "{{sha256}}" }
+                ]
+            }
+            """;
+        FakeHandler handler = new(HttpStatusCode.OK, json);
+        GitHubHttpClient sut = CreateSut(handler);
+
+        // Act
+        Result<BranchCommitSummary> result = await sut.GetBranchCommitSummaryAsync(
+            ValidBaseUrl,
+            ValidSlug,
+            "main",
+            "feat/my-branch",
+            "ghp_token",
+            CancellationToken.None);
+
+        // Assert — SHA-256 id is out of range for the storage column; reject to null
+        Result<BranchCommitSummary>.Success success = result.ShouldBeOfType<Result<BranchCommitSummary>.Success>();
+        success.Value.ShouldSatisfyAllConditions(
+            () => success.Value.CommitCount.ShouldBe(1),
+            () => success.Value.LatestSha.ShouldBeNull());
+    }
+
+    [Fact]
     public async Task WhenBranchNameContainsSpecialCharacters_EncodesThemInUrl()
     {
         // Arrange
-        string json = """{ "ahead_by": 1, "behind_by": 0, "head_commit": { "sha": "abc" } }""";
+        string json = """{ "ahead_by": 1, "behind_by": 0, "commits": [ { "sha": "abc" } ] }""";
         FakeHandler handler = new(HttpStatusCode.OK, json);
         GitHubHttpClient sut = CreateSut(handler);
 
