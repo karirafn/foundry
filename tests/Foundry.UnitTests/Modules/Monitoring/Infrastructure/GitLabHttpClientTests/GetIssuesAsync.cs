@@ -170,4 +170,154 @@ public sealed class GetIssuesAsync
             result.ShouldBeOfType<Result<IssueListing>.Failure>();
         failure.Error.Message.ShouldContain("500");
     }
+
+    [Fact]
+    public async Task WhenCalled_RequestUrlIncludesExplicitPerPageAndPageParameters()
+    {
+        // Arrange
+        FakeHandler handler = new(HttpStatusCode.OK, "[]");
+        using HttpClient httpClient = new(handler);
+        GitLabHttpClient sut = new(httpClient, NullLogger<GitLabHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))));
+
+        // Act
+        Result<IssueListing> _ = await sut.GetIssuesAsync(ValidBaseUrl, ValidSlug, "glpat_token", CancellationToken.None);
+
+        // Assert
+        HttpRequestMessage request = handler.LastRequest.ShouldNotBeNull();
+        request.RequestUri.ShouldNotBeNull();
+        request.RequestUri.Query.ShouldContain("per_page=100");
+        request.RequestUri.Query.ShouldContain("page=1");
+    }
+
+    [Fact]
+    public async Task WhenSingleShortPageReturned_IssueListing_IsComplete()
+    {
+        // Arrange
+        string json = BuildIssuePageJson(3);
+        FakeHandler handler = new(HttpStatusCode.OK, json);
+        using HttpClient httpClient = new(handler);
+        GitLabHttpClient sut = new(httpClient, NullLogger<GitLabHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))));
+
+        // Act
+        Result<IssueListing> result = await sut.GetIssuesAsync(ValidBaseUrl, ValidSlug, "glpat_token", CancellationToken.None);
+
+        // Assert
+        Result<IssueListing>.Success success = result.ShouldBeOfType<Result<IssueListing>.Success>();
+        success.Value.ShouldSatisfyAllConditions(
+            () => success.Value.IsComplete.ShouldBeTrue(),
+            () => success.Value.Issues.Count.ShouldBe(3));
+    }
+
+    [Fact]
+    public async Task WhenOneFullPageThenEmptyPage_ReturnsAllIssuesAndIsComplete()
+    {
+        // Arrange — exactly one full page of 100, then an empty page
+        string fullPage = BuildIssuePageJson(100);
+        string emptyPage = "[]";
+
+        SequentialFakeHandler handler = new(
+        [
+            (HttpStatusCode.OK, fullPage),
+            (HttpStatusCode.OK, emptyPage),
+        ]);
+        using HttpClient httpClient = new(handler);
+        GitLabHttpClient sut = new(httpClient, NullLogger<GitLabHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))));
+
+        // Act
+        Result<IssueListing> result = await sut.GetIssuesAsync(ValidBaseUrl, ValidSlug, "glpat_token", CancellationToken.None);
+
+        // Assert
+        Result<IssueListing>.Success success = result.ShouldBeOfType<Result<IssueListing>.Success>();
+        success.Value.ShouldSatisfyAllConditions(
+            () => success.Value.IsComplete.ShouldBeTrue(),
+            () => success.Value.Issues.Count.ShouldBe(100));
+    }
+
+    [Fact]
+    public async Task WhenTwoFullPagesThenShortPage_ReturnsAllAccumulatedIssuesAndIsComplete()
+    {
+        // Arrange
+        string page1 = BuildIssuePageJson(100, startIndex: 0);
+        string page2 = BuildIssuePageJson(100, startIndex: 100);
+        string page3 = BuildIssuePageJson(42, startIndex: 200);
+
+        SequentialFakeHandler handler = new(
+        [
+            (HttpStatusCode.OK, page1),
+            (HttpStatusCode.OK, page2),
+            (HttpStatusCode.OK, page3),
+        ]);
+        using HttpClient httpClient = new(handler);
+        GitLabHttpClient sut = new(httpClient, NullLogger<GitLabHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))));
+
+        // Act
+        Result<IssueListing> result = await sut.GetIssuesAsync(ValidBaseUrl, ValidSlug, "glpat_token", CancellationToken.None);
+
+        // Assert
+        Result<IssueListing>.Success success = result.ShouldBeOfType<Result<IssueListing>.Success>();
+        success.Value.ShouldSatisfyAllConditions(
+            () => success.Value.IsComplete.ShouldBeTrue(),
+            () => success.Value.Issues.Count.ShouldBe(242));
+    }
+
+    [Fact]
+    public async Task WhenPageCapReachedWithoutShortPage_ReturnsAccumulatedIssuesWithIsCompleteFalse()
+    {
+        // Arrange — 20 full pages, all 100 items each — hits cap without short page
+        SequentialFakeHandler handler = new(
+            Enumerable.Range(0, 20).Select(i =>
+                (HttpStatusCode.OK, BuildIssuePageJson(100, startIndex: i * 100))));
+        using HttpClient httpClient = new(handler);
+        GitLabHttpClient sut = new(httpClient, NullLogger<GitLabHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))));
+
+        // Act
+        Result<IssueListing> result = await sut.GetIssuesAsync(ValidBaseUrl, ValidSlug, "glpat_token", CancellationToken.None);
+
+        // Assert
+        Result<IssueListing>.Success success = result.ShouldBeOfType<Result<IssueListing>.Success>();
+        success.Value.ShouldSatisfyAllConditions(
+            () => success.Value.IsComplete.ShouldBeFalse(),
+            () => success.Value.Issues.Count.ShouldBe(2000));
+    }
+
+    [Fact]
+    public async Task WhenPage2ReturnsFail_ReturnsFailureWithNoPartialValue()
+    {
+        // Arrange — first page succeeds, second returns 500
+        string page1 = BuildIssuePageJson(100, startIndex: 0);
+
+        SequentialFakeHandler handler = new(
+        [
+            (HttpStatusCode.OK, page1),
+            (HttpStatusCode.InternalServerError, string.Empty),
+        ]);
+        using HttpClient httpClient = new(handler);
+        GitLabHttpClient sut = new(httpClient, NullLogger<GitLabHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))));
+
+        // Act
+        Result<IssueListing> result = await sut.GetIssuesAsync(ValidBaseUrl, ValidSlug, "glpat_token", CancellationToken.None);
+
+        // Assert
+        Result<IssueListing>.Failure failure = result.ShouldBeOfType<Result<IssueListing>.Failure>();
+        failure.Error.Message.ShouldContain("500");
+    }
+
+    private static string BuildIssuePageJson(int count, int startIndex = 0)
+    {
+        string items = string.Join(
+            ",",
+            Enumerable
+                .Range(startIndex, count)
+                .Select(i => $$"""
+                    {
+                      "iid": {{i + 1}},
+                      "title": "Issue {{i + 1}}",
+                      "description": "Body {{i + 1}}",
+                      "author": { "username": "user{{i}}" },
+                      "web_url": "https://gitlab.com/group/project/-/issues/{{i + 1}}",
+                      "labels": [ "foundry" ]
+                    }
+                    """));
+        return $"[{items}]";
+    }
 }

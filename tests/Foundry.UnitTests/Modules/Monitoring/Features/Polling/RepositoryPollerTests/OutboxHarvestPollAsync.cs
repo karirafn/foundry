@@ -14,8 +14,6 @@ using Foundry.WebApi.Persistence;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging.Abstractions;
-
 using Shouldly;
 
 using Xunit;
@@ -95,8 +93,7 @@ public sealed class OutboxHarvestPollAsync : IAsyncDisposable
             dbContext,
             new NullDomainEventDispatcher(),
             integrationEventDispatcher,
-            new NullEligibilityEvaluator(),
-            NullLogger<RepositoryPoller>.Instance);
+            new NullEligibilityEvaluator());
 
         ProviderIssue newIssue = new(
             Number: 1,
@@ -146,8 +143,7 @@ public sealed class OutboxHarvestPollAsync : IAsyncDisposable
             dbContext,
             new NullDomainEventDispatcher(),
             integrationEventDispatcher,
-            new NullEligibilityEvaluator(),
-            NullLogger<RepositoryPoller>.Instance);
+            new NullEligibilityEvaluator());
 
         StubIssueProvider provider = new(
             [],
@@ -184,8 +180,7 @@ public sealed class OutboxHarvestPollAsync : IAsyncDisposable
             dbContext,
             new NullDomainEventDispatcher(),
             integrationEventDispatcher,
-            new NullEligibilityEvaluator(),
-            NullLogger<RepositoryPoller>.Instance);
+            new NullEligibilityEvaluator());
 
         StubIssueProvider provider = new([]);
 

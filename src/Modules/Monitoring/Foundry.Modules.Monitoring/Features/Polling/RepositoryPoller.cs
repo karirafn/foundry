@@ -6,7 +6,6 @@ using Foundry.Modules.Monitoring.Features.Providers;
 using Foundry.Shared;
 
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Logging;
 
 namespace Foundry.Modules.Monitoring.Features.Polling;
 
@@ -15,8 +14,7 @@ internal sealed class RepositoryPoller(
     DbContext dbContext,
     IDomainEventDispatcher domainEventDispatcher,
     IIntegrationEventDispatcher integrationEventDispatcher,
-    IRepositoryEligibilityEvaluator eligibilityEvaluator,
-    ILogger<RepositoryPoller> logger)
+    IRepositoryEligibilityEvaluator eligibilityEvaluator)
 {
     public async Task<Result> PollAsync(
         MonitoredRepository repository,
@@ -59,21 +57,13 @@ internal sealed class RepositoryPoller(
         DetectNewIssues(repository, fetchedIssues, knownNumbers, now);
         await DetectDetailChangesAsync(repository, fetchedIssues, knownNumbers, cancellationToken);
 
-        // Guard: an empty fetch while resting-state issues are known is treated as a suspect transient
-        // upstream blip rather than a genuine "all issues gone" signal. Skipping the untrack pass here
-        // trades a rare one-cycle delay (when a repo legitimately has zero open+labelled issues) for
-        // protection against irreversible mass-deletion on an empty response from a flaky provider.
-        if (fetchedNumbers.Count == 0 && untrackableNumbers.Count > 0)
-        {
-            logger.LogWarning(
-                "Provider returned an empty issue list for repository {RepositoryId} but {UntrackableCount} resting-state issue(s) are known; skipping untrack pass this cycle to guard against spurious mass-deletion.",
-                repository.Id,
-                untrackableNumbers.Count);
-        }
-        else
-        {
-            DetectUntrackedIssues(repository, untrackableNumbers, fetchedNumbers);
-        }
+        // Run the untrack pass unconditionally: a complete listing (IsComplete: true) is authoritative
+        // evidence that an issue is gone from the provider; an incomplete listing (IsComplete: false,
+        // cap reached) still covers 2000 issues, so an absent resting-state issue is also likely gone.
+        // The old empty-fetch guard (fetchedNumbers.Count == 0 && untrackableNumbers.Count > 0) is
+        // removed here; completeness propagation through IssueListing replaces it (step 4 handles
+        // any remaining incomplete-listing nuances).
+        DetectUntrackedIssues(repository, untrackableNumbers, fetchedNumbers);
 
         repository.MarkPolled(now);
         await integrationEventDispatcher.DispatchAsync(repository.IntegrationEvents, cancellationToken);
