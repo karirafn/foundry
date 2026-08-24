@@ -137,7 +137,7 @@ internal sealed partial class GitHubHttpClient(
         return Result<BranchRules>.Ok(new BranchRules(rejectDirectPushes, rejectForcePushes, rejectDeletion));
     }
 
-    public async Task<Result<IReadOnlyList<ProviderIssue>>> GetIssuesAsync(
+    public async Task<Result<IssueListing>> GetIssuesAsync(
         Uri apiBaseUrl,
         RepositorySlug slug,
         string token,
@@ -145,7 +145,7 @@ internal sealed partial class GitHubHttpClient(
     {
         if (apiBaseUrl.Scheme is not "https")
         {
-            return Result<IReadOnlyList<ProviderIssue>>.Fail(GitHubErrors.InvalidBaseUrl);
+            return Result<IssueListing>.Fail(GitHubErrors.InvalidBaseUrl);
         }
 
         string relativePath = $"repos/{Uri.EscapeDataString(slug.Owner)}/{Uri.EscapeDataString(slug.Name)}/issues?labels=foundry&state=open";
@@ -161,7 +161,7 @@ internal sealed partial class GitHubHttpClient(
 
         if (!response.IsSuccessStatusCode)
         {
-            return Result<IReadOnlyList<ProviderIssue>>.Fail(ErrorFromNonSuccess(response));
+            return Result<IssueListing>.Fail(ErrorFromNonSuccess(response));
         }
 
         string body = await response.Content.ReadAsStringAsync(cancellationToken);
@@ -184,7 +184,7 @@ internal sealed partial class GitHubHttpClient(
             })
             .ToList();
 
-        return Result<IReadOnlyList<ProviderIssue>>.Ok(issues);
+        return Result<IssueListing>.Ok(new IssueListing(issues, IsComplete: true));
     }
 
     public async Task<Result<IReadOnlyList<int>>> GetDependenciesAsync(

@@ -1143,11 +1143,11 @@ public sealed class PollAsync : IAsyncDisposable
         {
         }
 
-        public Task<Result<IReadOnlyList<ProviderIssue>>> GetIssuesAsync(
+        public Task<Result<IssueListing>> GetIssuesAsync(
             RepositorySlug slug,
             CancellationToken cancellationToken)
         {
-            return Task.FromResult(Result<IReadOnlyList<ProviderIssue>>.Ok(issues));
+            return Task.FromResult(Result<IssueListing>.Ok(new IssueListing(issues, IsComplete: true)));
         }
 
         public Task<Result<IReadOnlyList<int>>> GetDependenciesAsync(
@@ -1248,11 +1248,11 @@ public sealed class PollAsync : IAsyncDisposable
 
     private sealed class FailingIssueProvider(Error error) : IIssueProvider
     {
-        public Task<Result<IReadOnlyList<ProviderIssue>>> GetIssuesAsync(
+        public Task<Result<IssueListing>> GetIssuesAsync(
             RepositorySlug slug,
             CancellationToken cancellationToken)
         {
-            return Task.FromResult(Result<IReadOnlyList<ProviderIssue>>.Fail(error));
+            return Task.FromResult(Result<IssueListing>.Fail(error));
         }
 
         public Task<Result<IReadOnlyList<int>>> GetDependenciesAsync(
@@ -1329,11 +1329,11 @@ public sealed class PollAsync : IAsyncDisposable
     {
         public int GetDependenciesCallCount { get; private set; }
 
-        public Task<Result<IReadOnlyList<ProviderIssue>>> GetIssuesAsync(
+        public Task<Result<IssueListing>> GetIssuesAsync(
             RepositorySlug slug,
             CancellationToken cancellationToken)
         {
-            return Task.FromResult(Result<IReadOnlyList<ProviderIssue>>.Ok([]));
+            return Task.FromResult(Result<IssueListing>.Ok(new IssueListing([], IsComplete: true)));
         }
 
         public Task<Result<IReadOnlyList<int>>> GetDependenciesAsync(

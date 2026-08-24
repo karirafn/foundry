@@ -50,7 +50,7 @@ public sealed class GetIssuesAsync
         GitHubHttpClient sut = new(httpClient, NullLogger<GitHubHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))));
 
         // Act
-        Result<IReadOnlyList<ProviderIssue>> result = await sut.GetIssuesAsync(
+        Result<IssueListing> result = await sut.GetIssuesAsync(
             ValidBaseUrl,
             ValidSlug,
             "ghp_token123",
@@ -58,9 +58,9 @@ public sealed class GetIssuesAsync
 
         // Assert
         result.IsSuccess.ShouldBeTrue();
-        Result<IReadOnlyList<ProviderIssue>>.Success success =
-            result.ShouldBeOfType<Result<IReadOnlyList<ProviderIssue>>.Success>();
-        IReadOnlyList<ProviderIssue> issues = success.Value;
+        Result<IssueListing>.Success success =
+            result.ShouldBeOfType<Result<IssueListing>.Success>();
+        IReadOnlyList<ProviderIssue> issues = success.Value.Issues;
         issues.Count.ShouldBe(1);
         ProviderIssue issue = issues[0];
         issue.ShouldSatisfyAllConditions(
@@ -82,7 +82,7 @@ public sealed class GetIssuesAsync
         GitHubHttpClient sut = new(httpClient, NullLogger<GitHubHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))));
 
         // Act
-        await sut.GetIssuesAsync(ValidBaseUrl, ValidSlug, "ghp_mytoken", CancellationToken.None);
+        Result<IssueListing> _ = await sut.GetIssuesAsync(ValidBaseUrl, ValidSlug, "ghp_mytoken", CancellationToken.None);
 
         // Assert
         HttpRequestMessage request = handler.LastRequest.ShouldNotBeNull();
@@ -105,7 +105,7 @@ public sealed class GetIssuesAsync
         Uri baseUrl = new("https://api.github.com");
 
         // Act
-        await sut.GetIssuesAsync(baseUrl, ValidSlug, "token", CancellationToken.None);
+        Result<IssueListing> _ = await sut.GetIssuesAsync(baseUrl, ValidSlug, "token", CancellationToken.None);
 
         // Assert
         HttpRequestMessage request = handler.LastRequest.ShouldNotBeNull();
@@ -125,7 +125,7 @@ public sealed class GetIssuesAsync
         Uri invalidBaseUrl = new("ftp://api.github.com");
 
         // Act
-        Result<IReadOnlyList<ProviderIssue>> result = await sut.GetIssuesAsync(
+        Result<IssueListing> result = await sut.GetIssuesAsync(
             invalidBaseUrl,
             ValidSlug,
             "token",
@@ -133,8 +133,8 @@ public sealed class GetIssuesAsync
 
         // Assert
         result.IsFailure.ShouldBeTrue();
-        Result<IReadOnlyList<ProviderIssue>>.Failure failure =
-            result.ShouldBeOfType<Result<IReadOnlyList<ProviderIssue>>.Failure>();
+        Result<IssueListing>.Failure failure =
+            result.ShouldBeOfType<Result<IssueListing>.Failure>();
         failure.Error.Code.ShouldBe("GitHub.InvalidBaseUrl");
     }
 
@@ -147,7 +147,7 @@ public sealed class GetIssuesAsync
         GitHubHttpClient sut = new(httpClient, NullLogger<GitHubHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))));
 
         // Act
-        Result<IReadOnlyList<ProviderIssue>> result = await sut.GetIssuesAsync(
+        Result<IssueListing> result = await sut.GetIssuesAsync(
             ValidBaseUrl,
             ValidSlug,
             "ghp_token",
@@ -155,8 +155,8 @@ public sealed class GetIssuesAsync
 
         // Assert
         result.IsFailure.ShouldBeTrue();
-        Result<IReadOnlyList<ProviderIssue>>.Failure failure =
-            result.ShouldBeOfType<Result<IReadOnlyList<ProviderIssue>>.Failure>();
+        Result<IssueListing>.Failure failure =
+            result.ShouldBeOfType<Result<IssueListing>.Failure>();
         failure.Error.Message.ShouldContain("500");
     }
 
@@ -170,7 +170,7 @@ public sealed class GetIssuesAsync
         GitHubHttpClient sut = new(httpClient, NullLogger<GitHubHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))));
 
         // Act
-        Result<IReadOnlyList<ProviderIssue>> result = await sut.GetIssuesAsync(
+        Result<IssueListing> result = await sut.GetIssuesAsync(
             ValidBaseUrl,
             ValidSlug,
             "ghp_token",
@@ -178,8 +178,8 @@ public sealed class GetIssuesAsync
 
         // Assert
         result.IsFailure.ShouldBeTrue();
-        Result<IReadOnlyList<ProviderIssue>>.Failure failure =
-            result.ShouldBeOfType<Result<IReadOnlyList<ProviderIssue>>.Failure>();
+        Result<IssueListing>.Failure failure =
+            result.ShouldBeOfType<Result<IssueListing>.Failure>();
         failure.Error.Code.ShouldBe("GitHub.RateLimitExhausted");
     }
 
@@ -192,7 +192,7 @@ public sealed class GetIssuesAsync
         GitHubHttpClient sut = new(httpClient, NullLogger<GitHubHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))));
 
         // Act
-        Result<IReadOnlyList<ProviderIssue>> result = await sut.GetIssuesAsync(
+        Result<IssueListing> result = await sut.GetIssuesAsync(
             ValidBaseUrl,
             ValidSlug,
             "ghp_token",
@@ -200,8 +200,8 @@ public sealed class GetIssuesAsync
 
         // Assert
         result.IsFailure.ShouldBeTrue();
-        Result<IReadOnlyList<ProviderIssue>>.Failure failure =
-            result.ShouldBeOfType<Result<IReadOnlyList<ProviderIssue>>.Failure>();
+        Result<IssueListing>.Failure failure =
+            result.ShouldBeOfType<Result<IssueListing>.Failure>();
         failure.Error.Code.ShouldNotBe("GitHub.RateLimitExhausted");
     }
 }

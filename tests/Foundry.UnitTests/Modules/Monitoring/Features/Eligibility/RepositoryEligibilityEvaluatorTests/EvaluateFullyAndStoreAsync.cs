@@ -471,10 +471,10 @@ public sealed class EvaluateFullyAndStoreAsync
                 => Task.FromResult(Result<BranchProtection>.Ok(
                     new BranchProtection("main", true, true, true)));
 
-            public Task<Result<IReadOnlyList<ProviderIssue>>> GetIssuesAsync(
+            public Task<Result<IssueListing>> GetIssuesAsync(
                 RepositorySlug slug,
                 CancellationToken cancellationToken)
-                => Task.FromResult(Result<IReadOnlyList<ProviderIssue>>.Ok([]));
+                => Task.FromResult(Result<IssueListing>.Ok(new IssueListing([], IsComplete: true)));
 
             public Task<Result<IReadOnlyList<int>>> GetDependenciesAsync(
                 RepositorySlug slug,
@@ -558,10 +558,10 @@ public sealed class EvaluateFullyAndStoreAsync
 
         public bool BranchProtectionWasCalled { get; private set; }
 
-        public Task<Result<IReadOnlyList<ProviderIssue>>> GetIssuesAsync(
+        public Task<Result<IssueListing>> GetIssuesAsync(
             RepositorySlug slug,
             CancellationToken cancellationToken)
-            => Task.FromResult(Result<IReadOnlyList<ProviderIssue>>.Ok([]));
+            => Task.FromResult(Result<IssueListing>.Ok(new IssueListing([], IsComplete: true)));
 
         public Task<Result<IReadOnlyList<int>>> GetDependenciesAsync(
             RepositorySlug slug,
@@ -624,10 +624,10 @@ public sealed class EvaluateFullyAndStoreAsync
 
     private sealed class ThrowingBranchProtectionProvider : IIssueProvider
     {
-        public Task<Result<IReadOnlyList<ProviderIssue>>> GetIssuesAsync(
+        public Task<Result<IssueListing>> GetIssuesAsync(
             RepositorySlug slug,
             CancellationToken cancellationToken)
-            => Task.FromResult(Result<IReadOnlyList<ProviderIssue>>.Ok([]));
+            => Task.FromResult(Result<IssueListing>.Ok(new IssueListing([], IsComplete: true)));
 
         public Task<Result<IReadOnlyList<int>>> GetDependenciesAsync(
             RepositorySlug slug,
@@ -692,10 +692,10 @@ public sealed class EvaluateFullyAndStoreAsync
 
         private sealed class ThrowingCanPushProvider : IIssueProvider
         {
-            public Task<Result<IReadOnlyList<ProviderIssue>>> GetIssuesAsync(
+            public Task<Result<IssueListing>> GetIssuesAsync(
                 RepositorySlug slug,
                 CancellationToken cancellationToken)
-                => Task.FromResult(Result<IReadOnlyList<ProviderIssue>>.Ok([]));
+                => Task.FromResult(Result<IssueListing>.Ok(new IssueListing([], IsComplete: true)));
 
             public Task<Result<IReadOnlyList<int>>> GetDependenciesAsync(
                 RepositorySlug slug,

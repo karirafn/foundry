@@ -34,7 +34,7 @@ public sealed class RateLimitHandling
         GitLabHttpClient sut = new(httpClient, NullLogger<GitLabHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))));
 
         // Act
-        Result<IReadOnlyList<ProviderIssue>> result = await sut.GetIssuesAsync(
+        Result<IssueListing> result = await sut.GetIssuesAsync(
             ValidBaseUrl,
             ValidSlug,
             "glpat_token",
@@ -42,8 +42,8 @@ public sealed class RateLimitHandling
 
         // Assert
         result.IsFailure.ShouldBeTrue();
-        Result<IReadOnlyList<ProviderIssue>>.Failure failure =
-            result.ShouldBeOfType<Result<IReadOnlyList<ProviderIssue>>.Failure>();
+        Result<IssueListing>.Failure failure =
+            result.ShouldBeOfType<Result<IssueListing>.Failure>();
         failure.Error.Code.ShouldBe("GitLab.RateLimitExhausted");
     }
 
@@ -57,7 +57,7 @@ public sealed class RateLimitHandling
         GitLabHttpClient sut = new(httpClient, NullLogger<GitLabHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))));
 
         // Act
-        Result<IReadOnlyList<ProviderIssue>> result = await sut.GetIssuesAsync(
+        Result<IssueListing> result = await sut.GetIssuesAsync(
             ValidBaseUrl,
             ValidSlug,
             "glpat_token",
@@ -65,8 +65,8 @@ public sealed class RateLimitHandling
 
         // Assert
         result.IsFailure.ShouldBeTrue();
-        Result<IReadOnlyList<ProviderIssue>>.Failure failure =
-            result.ShouldBeOfType<Result<IReadOnlyList<ProviderIssue>>.Failure>();
+        Result<IssueListing>.Failure failure =
+            result.ShouldBeOfType<Result<IssueListing>.Failure>();
         failure.Error.Code.ShouldBe("GitLab.RateLimitExhausted");
     }
 
@@ -80,7 +80,7 @@ public sealed class RateLimitHandling
         GitLabHttpClient sut = new(httpClient, NullLogger<GitLabHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))));
 
         // Act
-        Result<IReadOnlyList<ProviderIssue>> result = await sut.GetIssuesAsync(
+        Result<IssueListing> result = await sut.GetIssuesAsync(
             ValidBaseUrl,
             ValidSlug,
             "glpat_token",
@@ -88,8 +88,8 @@ public sealed class RateLimitHandling
 
         // Assert
         result.IsFailure.ShouldBeTrue();
-        Result<IReadOnlyList<ProviderIssue>>.Failure failure =
-            result.ShouldBeOfType<Result<IReadOnlyList<ProviderIssue>>.Failure>();
+        Result<IssueListing>.Failure failure =
+            result.ShouldBeOfType<Result<IssueListing>.Failure>();
         failure.Error.Code.ShouldBe("GitLab.UnexpectedStatusCode");
         failure.Error.Message.ShouldContain("403");
     }
@@ -103,7 +103,7 @@ public sealed class RateLimitHandling
         GitLabHttpClient sut = new(httpClient, NullLogger<GitLabHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))));
 
         // Act
-        Result<IReadOnlyList<ProviderIssue>> result = await sut.GetIssuesAsync(
+        Result<IssueListing> result = await sut.GetIssuesAsync(
             ValidBaseUrl,
             ValidSlug,
             "glpat_token",
@@ -111,8 +111,8 @@ public sealed class RateLimitHandling
 
         // Assert
         result.IsFailure.ShouldBeTrue();
-        Result<IReadOnlyList<ProviderIssue>>.Failure failure =
-            result.ShouldBeOfType<Result<IReadOnlyList<ProviderIssue>>.Failure>();
+        Result<IssueListing>.Failure failure =
+            result.ShouldBeOfType<Result<IssueListing>.Failure>();
         failure.Error.Code.ShouldBe("GitLab.UnexpectedStatusCode");
         failure.Error.Message.ShouldContain("403");
     }

@@ -99,10 +99,10 @@ public sealed class WhenRepositoryExists : IAsyncDisposable
             CancellationToken cancellationToken) =>
             Task.FromResult(branchProtectionResult);
 
-        public Task<Result<IReadOnlyList<ProviderIssue>>> GetIssuesAsync(
+        public Task<Result<IssueListing>> GetIssuesAsync(
             RepositorySlug slug,
             CancellationToken cancellationToken) =>
-            Task.FromResult(Result<IReadOnlyList<ProviderIssue>>.Ok([]));
+            Task.FromResult(Result<IssueListing>.Ok(new IssueListing([], IsComplete: true)));
 
         public Task<Result<IReadOnlyList<int>>> GetDependenciesAsync(
             RepositorySlug slug,

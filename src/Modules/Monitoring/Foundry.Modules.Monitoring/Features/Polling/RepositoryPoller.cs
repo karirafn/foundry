@@ -32,13 +32,13 @@ internal sealed class RepositoryPoller(
             repository.Id,
             cancellationToken);
 
-        Result<IReadOnlyList<ProviderIssue>> providerResult = await provider.GetIssuesAsync(
+        Result<IssueListing> providerResult = await provider.GetIssuesAsync(
             repository.Slug,
             cancellationToken);
 
-        if (providerResult is not Result<IReadOnlyList<ProviderIssue>>.Success providerSuccess)
+        if (providerResult is not Result<IssueListing>.Success providerSuccess)
         {
-            if (providerResult is Result<IReadOnlyList<ProviderIssue>>.Failure f)
+            if (providerResult is Result<IssueListing>.Failure f)
             {
                 return f.Error;
             }
@@ -46,7 +46,7 @@ internal sealed class RepositoryPoller(
             return new Error("Monitoring.UnexpectedResult", "GetIssues returned an unexpected result type.");
         }
 
-        IReadOnlyList<ProviderIssue> fetchedIssues = providerSuccess.Value;
+        IReadOnlyList<ProviderIssue> fetchedIssues = providerSuccess.Value.Issues;
 
         HashSet<int> fetchedNumbers = fetchedIssues
             .Select(i => i.Number)

@@ -8,7 +8,7 @@ namespace Foundry.Modules.Monitoring.Infrastructure.GitLab;
 
 internal sealed class GitLabIssueProvider(GitLabHttpClient httpClient, string token, Uri apiBaseUrl) : IIssueProvider
 {
-    public Task<Result<IReadOnlyList<ProviderIssue>>> GetIssuesAsync(
+    public Task<Result<IssueListing>> GetIssuesAsync(
         RepositorySlug slug,
         CancellationToken cancellationToken)
     {

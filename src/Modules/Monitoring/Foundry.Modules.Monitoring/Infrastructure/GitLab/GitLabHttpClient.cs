@@ -131,7 +131,7 @@ internal sealed partial class GitLabHttpClient(
         return Result<TokenValidationOutcome>.Ok(TokenValidationOutcome.Authenticated(accountName, missing));
     }
 
-    public async Task<Result<IReadOnlyList<ProviderIssue>>> GetIssuesAsync(
+    public async Task<Result<IssueListing>> GetIssuesAsync(
         Uri apiBaseUrl,
         RepositorySlug slug,
         string token,
@@ -139,7 +139,7 @@ internal sealed partial class GitLabHttpClient(
     {
         if (apiBaseUrl.Scheme is not "https")
         {
-            return Result<IReadOnlyList<ProviderIssue>>.Fail(GitLabErrors.InvalidBaseUrl);
+            return Result<IssueListing>.Fail(GitLabErrors.InvalidBaseUrl);
         }
 
         string encodedPath = Uri.EscapeDataString(slug.FullPath);
@@ -153,7 +153,7 @@ internal sealed partial class GitLabHttpClient(
 
         if (!response.IsSuccessStatusCode)
         {
-            return Result<IReadOnlyList<ProviderIssue>>.Fail(ErrorFromNonSuccess(response));
+            return Result<IssueListing>.Fail(ErrorFromNonSuccess(response));
         }
 
         string body = await response.Content.ReadAsStringAsync(cancellationToken);
@@ -170,7 +170,7 @@ internal sealed partial class GitLabHttpClient(
                 IssueKindLabel: LabelClassifier.ClassifyKind(dto.Labels)))
             .ToList();
 
-        return Result<IReadOnlyList<ProviderIssue>>.Ok(issues);
+        return Result<IssueListing>.Ok(new IssueListing(issues, IsComplete: true));
     }
 
     public async Task<Result<IReadOnlyList<int>>> GetDependenciesAsync(

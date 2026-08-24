@@ -6,7 +6,7 @@ namespace Foundry.Modules.Monitoring.Features.Providers;
 
 internal interface IIssueProvider
 {
-    Task<Result<IReadOnlyList<ProviderIssue>>> GetIssuesAsync(
+    Task<Result<IssueListing>> GetIssuesAsync(
         RepositorySlug slug,
         CancellationToken cancellationToken);
 

@@ -283,10 +283,10 @@ public sealed class OutboxHarvestPollAsync : IAsyncDisposable
         IReadOnlyList<ProviderIssue> issues,
         IReadOnlyDictionary<int, Result<bool>>? isClosedResults = null) : IIssueProvider
     {
-        public Task<Result<IReadOnlyList<ProviderIssue>>> GetIssuesAsync(
+        public Task<Result<IssueListing>> GetIssuesAsync(
             RepositorySlug slug,
             CancellationToken cancellationToken)
-            => Task.FromResult(Result<IReadOnlyList<ProviderIssue>>.Ok(issues));
+            => Task.FromResult(Result<IssueListing>.Ok(new IssueListing(issues, IsComplete: true)));
 
         public Task<Result<IReadOnlyList<int>>> GetDependenciesAsync(
             RepositorySlug slug,
