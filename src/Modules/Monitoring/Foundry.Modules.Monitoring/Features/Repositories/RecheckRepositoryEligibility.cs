@@ -73,7 +73,8 @@ internal static class RecheckRepositoryEligibility
                 repository.IsActive,
                 repository.LastPolledAt,
                 RepositoryMappings.ToEligibilityInfo(repository.Eligibility),
-                repository.Position);
+                repository.Position,
+                repository.UntrackSuppressedSince);
 
             return Result<RepositorySummary>.Ok(summary);
         }

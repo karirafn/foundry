@@ -10,4 +10,5 @@ public sealed record RepositorySummary(
     bool IsActive,
     DateTimeOffset? LastPolledAt,
     RepositoryEligibilityInfo? Eligibility,
-    int Position);
+    int Position,
+    DateTimeOffset? UntrackSuppressedSince);

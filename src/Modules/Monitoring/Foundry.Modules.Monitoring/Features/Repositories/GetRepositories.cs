@@ -63,7 +63,8 @@ internal static class GetRepositories
                     r.IsActive,
                     r.LastPolledAt,
                     RepositoryMappings.ToEligibilityInfo(r.Eligibility),
-                    r.Position))
+                    r.Position,
+                    r.UntrackSuppressedSince))
                 .ToList();
 
             return Result<IReadOnlyList<RepositorySummary>>.Ok(repositories);
