@@ -283,7 +283,7 @@ Computed get-only members (`TierRank`, `DispatchBranchName`, `Context`) are not 
 ## Repository Eligibility
 
 Whether a Monitored Repository meets Foundry's processing preconditions (Branch Protection and write permission).
-Modeled as a value object with three variants: `Eligible`, `Ineligible` (carries a non-empty collection of `EligibilityViolation` values), and `Unreachable` (the provider API could not be reached — transient, retried each poll).
+Modeled as a value object with three variants: `Eligible`, `Ineligible` (carries a non-empty collection of `EligibilityViolation` values), and `Unreachable` (an eligibility input could not be established). The two causes of `Unreachable` recover differently: a failed branch-rules GET is retried on the next poll cycle, while an `Unknown` write-probe verdict is not retried at all — it persists until an operator or credential event triggers a fresh probe.
 Stored on the Monitored Repository and composed from two checks of different cadence:
 
 - **Branch-rules GET (per-cycle)** — re-evaluated unconditionally on every poll cycle and synchronously at repository creation. A configuration change on the provider is reflected on the next poll without user action (auto-heal).
