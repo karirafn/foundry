@@ -828,10 +828,8 @@ internal sealed partial class GitHubHttpClient(
         GitHubCompareDto? dto = JsonSerializer.Deserialize<GitHubCompareDto>(body, JsonOptions);
 
         int commitCount = dto?.AheadBy ?? 0;
-        // Use the top-level head_commit.sha field (not commits[^1].sha) — the commits[] array is
-        // capped at 250 entries, so commits[^1].sha would stop advancing beyond the 250th commit.
-        // head_commit always reflects the actual branch tip regardless of how far ahead it is.
-        string? latestSha = commitCount > 0 ? dto?.HeadCommit?.Sha : null;
+        IReadOnlyList<GitHubCommitRefDto> commits = dto?.Commits ?? [];
+        string? latestSha = commitCount > 0 && commits.Count > 0 ? commits[^1].Sha : null;
 
         return Result<BranchCommitSummary>.Ok(new BranchCommitSummary(commitCount, latestSha));
     }
@@ -1158,8 +1156,7 @@ internal sealed partial class GitHubHttpClient(
 
     private sealed record GitHubCompareDto(
         int AheadBy,
-        IReadOnlyList<GitHubCommitRefDto> Commits,
-        GitHubCommitRefDto? HeadCommit);
+        IReadOnlyList<GitHubCommitRefDto> Commits);
 
     private sealed record GitHubCommitRefDto(string Sha);
 
