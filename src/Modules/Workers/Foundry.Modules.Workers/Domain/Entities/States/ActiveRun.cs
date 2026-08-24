@@ -57,7 +57,7 @@ public sealed class ActiveRun : WorkerRun
 
     public void RecordBranchCommitCount(int count, string? sha, DateTimeOffset observedAt)
     {
-        if (sha == LastObservedCommitSha)
+        if (count == BranchCommitCount && sha == LastObservedCommitSha)
         {
             return;
         }
