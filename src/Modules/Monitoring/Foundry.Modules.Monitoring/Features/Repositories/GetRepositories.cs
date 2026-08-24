@@ -61,9 +61,10 @@ internal static class GetRepositories
                     providerType,
                     RepositoryMappings.ToSeconds(r.PollInterval),
                     r.IsActive,
+                    r.Position,
                     r.LastPolledAt,
                     RepositoryMappings.ToEligibilityInfo(r.Eligibility),
-                    r.Position))
+                    r.UntrackSuppressedSince))
                 .ToList();
 
             return Result<IReadOnlyList<RepositorySummary>>.Ok(repositories);

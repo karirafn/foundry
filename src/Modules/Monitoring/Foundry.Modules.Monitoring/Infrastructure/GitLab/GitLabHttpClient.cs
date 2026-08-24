@@ -28,6 +28,8 @@ internal sealed partial class GitLabHttpClient(
     private const string TruncatedSuffix = "[truncated]";
     private const int MaxRepositoryPages = 5;
     private const int RepositoriesPerPage = 100;
+    private const int MaxIssuePages = 20;
+    private const int IssuesPerPage = 100;
     private const int MaxReviewComments = 50;
     private const int MaxFilePathLength = 4096; // PATH_MAX
     private const int GitLabMinPushAccessLevel = 30; // Developer role
@@ -131,7 +133,7 @@ internal sealed partial class GitLabHttpClient(
         return Result<TokenValidationOutcome>.Ok(TokenValidationOutcome.Authenticated(accountName, missing));
     }
 
-    public async Task<Result<IReadOnlyList<ProviderIssue>>> GetIssuesAsync(
+    public async Task<Result<IssueListing>> GetIssuesAsync(
         Uri apiBaseUrl,
         RepositorySlug slug,
         string token,
@@ -139,38 +141,50 @@ internal sealed partial class GitLabHttpClient(
     {
         if (apiBaseUrl.Scheme is not "https")
         {
-            return Result<IReadOnlyList<ProviderIssue>>.Fail(GitLabErrors.InvalidBaseUrl);
+            return Result<IssueListing>.Fail(GitLabErrors.InvalidBaseUrl);
         }
 
         string encodedPath = Uri.EscapeDataString(slug.FullPath);
-        string relativePath = $"projects/{encodedPath}/issues?labels=foundry&state=opened";
-        Uri requestUri = new(EnsureTrailingSlash(apiBaseUrl), relativePath);
+        List<ProviderIssue> allIssues = [];
 
-        using HttpRequestMessage request = new(HttpMethod.Get, requestUri);
-        AddCommonHeaders(request, token);
-
-        using HttpResponseMessage response = await httpClient.SendAsync(request, cancellationToken);
-
-        if (!response.IsSuccessStatusCode)
+        for (int page = 1; page <= MaxIssuePages; page++)
         {
-            return Result<IReadOnlyList<ProviderIssue>>.Fail(ErrorFromNonSuccess(response));
+            string relativePath = $"projects/{encodedPath}/issues?labels=foundry&state=opened&per_page={IssuesPerPage}&page={page}";
+            Uri requestUri = new(EnsureTrailingSlash(apiBaseUrl), relativePath);
+
+            using HttpRequestMessage request = new(HttpMethod.Get, requestUri);
+            AddCommonHeaders(request, token);
+
+            using HttpResponseMessage response = await httpClient.SendAsync(request, cancellationToken);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                return Result<IssueListing>.Fail(ErrorFromNonSuccess(response));
+            }
+
+            string body = await response.Content.ReadAsStringAsync(cancellationToken);
+            List<GitLabIssueDto>? dtos = JsonSerializer.Deserialize<List<GitLabIssueDto>>(body, JsonOptions);
+
+            List<GitLabIssueDto> pageItems = dtos ?? [];
+            foreach (GitLabIssueDto dto in pageItems)
+            {
+                allIssues.Add(new ProviderIssue(
+                    Number: dto.Iid,
+                    Title: dto.Title,
+                    Body: dto.Description ?? string.Empty,
+                    Author: dto.Author.Username,
+                    Url: dto.WebUrl,
+                    Labels: dto.Labels,
+                    IssueKindLabel: LabelClassifier.ClassifyKind(dto.Labels)));
+            }
+
+            if (pageItems.Count < IssuesPerPage)
+            {
+                return Result<IssueListing>.Ok(new IssueListing(allIssues, IsComplete: true));
+            }
         }
 
-        string body = await response.Content.ReadAsStringAsync(cancellationToken);
-        List<GitLabIssueDto>? dtos = JsonSerializer.Deserialize<List<GitLabIssueDto>>(body, JsonOptions);
-
-        IReadOnlyList<ProviderIssue> issues = (dtos ?? [])
-            .Select(dto => new ProviderIssue(
-                Number: dto.Iid,
-                Title: dto.Title,
-                Body: dto.Description ?? string.Empty,
-                Author: dto.Author.Username,
-                Url: dto.WebUrl,
-                Labels: dto.Labels,
-                IssueKindLabel: LabelClassifier.ClassifyKind(dto.Labels)))
-            .ToList();
-
-        return Result<IReadOnlyList<ProviderIssue>>.Ok(issues);
+        return Result<IssueListing>.Ok(new IssueListing(allIssues, IsComplete: false));
     }
 
     public async Task<Result<IReadOnlyList<int>>> GetDependenciesAsync(

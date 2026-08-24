@@ -32,13 +32,13 @@ internal sealed class RepositoryPoller(
             repository.Id,
             cancellationToken);
 
-        Result<IReadOnlyList<ProviderIssue>> providerResult = await provider.GetIssuesAsync(
+        Result<IssueListing> providerResult = await provider.GetIssuesAsync(
             repository.Slug,
             cancellationToken);
 
-        if (providerResult is not Result<IReadOnlyList<ProviderIssue>>.Success providerSuccess)
+        if (providerResult is not Result<IssueListing>.Success providerSuccess)
         {
-            if (providerResult is Result<IReadOnlyList<ProviderIssue>>.Failure f)
+            if (providerResult is Result<IssueListing>.Failure f)
             {
                 return f.Error;
             }
@@ -46,33 +46,44 @@ internal sealed class RepositoryPoller(
             return new Error("Monitoring.UnexpectedResult", "GetIssues returned an unexpected result type.");
         }
 
-        IReadOnlyList<ProviderIssue> fetchedIssues = providerSuccess.Value;
+        IssueListing listing = providerSuccess.Value;
+        IReadOnlyList<ProviderIssue> fetchedIssues = listing.Issues;
 
         HashSet<int> fetchedNumbers = fetchedIssues
             .Select(i => i.Number)
             .ToHashSet();
 
-        IReadOnlySet<int> untrackableNumbers = await issueQueries.GetUntrackableIssueNumbersAsync(
-            repository.Id,
-            cancellationToken);
-
         DetectNewIssues(repository, fetchedIssues, knownNumbers, now);
         await DetectDetailChangesAsync(repository, fetchedIssues, knownNumbers, cancellationToken);
 
-        // Guard: an empty fetch while resting-state issues are known is treated as a suspect transient
-        // upstream blip rather than a genuine "all issues gone" signal. Skipping the untrack pass here
-        // trades a rare one-cycle delay (when a repo legitimately has zero open+labelled issues) for
-        // protection against irreversible mass-deletion on an empty response from a flaky provider.
-        if (fetchedNumbers.Count == 0 && untrackableNumbers.Count > 0)
+        // Only run the untrack pass when the listing is provably complete. An incomplete listing
+        // (IsComplete: false, pagination cap reached) cannot distinguish a missing issue from one
+        // that simply fell outside the fetched window, so skipping keeps the poll returning success
+        // while detection, detail-change, dependency, and review passes all continue normally.
+        if (listing.IsComplete)
         {
-            logger.LogWarning(
-                "Provider returned an empty issue list for repository {RepositoryId} but {UntrackableCount} resting-state issue(s) are known; skipping untrack pass this cycle to guard against spurious mass-deletion.",
+            // A previously-suppressed repo has recovered — clear suppression before the untrack pass.
+            repository.ClearUntrackSuppression();
+
+            IReadOnlySet<int> untrackableNumbers = await issueQueries.GetUntrackableIssueNumbersAsync(
                 repository.Id,
-                untrackableNumbers.Count);
+                cancellationToken);
+
+            DetectUntrackedIssues(repository, untrackableNumbers, fetchedNumbers);
         }
         else
         {
-            DetectUntrackedIssues(repository, untrackableNumbers, fetchedNumbers);
+            // Log a warning only on the first transition into suppression (null→set).
+            // Subsequent incomplete polls are steady-state suppressed and log nothing (AC4).
+            bool justSuppressed = repository.SuppressUntracking(now);
+            if (justSuppressed)
+            {
+                logger.LogWarning(
+                    "Untrack pass suppressed for repository {Slug}: listing is incomplete. " +
+                    "Suppressed since {SuppressedAt}.",
+                    repository.Slug,
+                    now);
+            }
         }
 
         repository.MarkPolled(now);

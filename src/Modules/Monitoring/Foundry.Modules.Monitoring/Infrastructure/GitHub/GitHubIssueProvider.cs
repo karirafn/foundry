@@ -7,7 +7,7 @@ namespace Foundry.Modules.Monitoring.Infrastructure.GitHub;
 
 internal sealed class GitHubIssueProvider(GitHubHttpClient httpClient, string token, Uri apiBaseUrl) : IIssueProvider
 {
-    public Task<Result<IReadOnlyList<ProviderIssue>>> GetIssuesAsync(
+    public Task<Result<IssueListing>> GetIssuesAsync(
         RepositorySlug slug,
         CancellationToken cancellationToken)
     {

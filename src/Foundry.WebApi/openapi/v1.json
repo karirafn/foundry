@@ -2406,8 +2406,6 @@
           "providerType",
           "pollIntervalSeconds",
           "isActive",
-          "lastPolledAt",
-          "eligibility",
           "position"
         ],
         "type": "object",
@@ -2441,6 +2439,14 @@
           "isActive": {
             "type": "boolean"
           },
+          "position": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
           "lastPolledAt": {
             "type": [
               "null",
@@ -2458,13 +2464,12 @@
               }
             ]
           },
-          "position": {
-            "pattern": "^-?(?:0|[1-9]\\d*)$",
+          "untrackSuppressedSince": {
             "type": [
-              "integer",
+              "null",
               "string"
             ],
-            "format": "int32"
+            "format": "date-time"
           }
         }
       },

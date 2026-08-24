@@ -11,6 +11,7 @@ using Foundry.WebApi.Persistence;
 
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
 using Shouldly;
@@ -1107,12 +1108,48 @@ public sealed class PollAsync : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenFetchReturnsEmptyListButRestingIssuesKnown_SkipsUntrackPassAndRaisesNoUntrackedEvents()
+    public async Task WhenListingIsIncomplete_SkipsUntrackPassAndPollSucceeds()
     {
         // Arrange
         MonitoredRepository repository = SeedRepository();
 
-        // Two resting-state issues are known; the provider returns an empty list (transient upstream blip).
+        // Issue 7 is a resting-state issue absent from the incomplete listing; it must NOT be untracked.
+        ProviderIssue newIssue = new(
+            Number: 99,
+            Title: "New",
+            Body: "Body",
+            Author: "octocat",
+            Url: "https://github.com/owner/repo/issues/99",
+            Labels: ["foundry"],
+            IssueKindLabel: "feature");
+        StubIssueQueries issueQueries = new(
+            knownNumbers: new HashSet<int> { 7 },
+            snapshots: new Dictionary<int, IssueSnapshot>(),
+            dispatchCandidateNumbers: null,
+            reviewIssues: null,
+            untrackableNumbers: new HashSet<int> { 7 });
+
+        RepositoryPoller sut = new(issueQueries, _dbContext, new NullDomainEventDispatcher(), _dispatcher, _eligibilityEvaluator, NullLogger<RepositoryPoller>.Instance);
+        StubIssueProvider provider = new([newIssue], isComplete: false);
+
+        // Act
+        Result result = await sut.PollAsync(repository, provider, Now, CancellationToken.None);
+
+        // Assert
+        result.IsSuccess.ShouldBeTrue();
+        _dispatcher.DispatchedEvents.OfType<ProviderIssueUntracked>().ShouldBeEmpty();
+        _dispatcher.DispatchedEvents.OfType<IssueDetected>().ShouldHaveSingleItem();
+    }
+
+    [Fact]
+    public async Task WhenFetchReturnsCompleteEmptyListAndRestingIssuesKnown_UntracksRestingIssues()
+    {
+        // Arrange
+        MonitoredRepository repository = SeedRepository();
+
+        // Two resting-state issues are known; the provider returns a complete empty listing —
+        // this is a genuine "all labelled issues gone" signal, not a transient blip.
+        // A complete empty listing must run the untrack pass (no suppression).
         StubIssueQueries issueQueries = new(
             knownNumbers: new HashSet<int> { 3, 4 },
             snapshots: new Dictionary<int, IssueSnapshot>(),
@@ -1128,7 +1165,202 @@ public sealed class PollAsync : IAsyncDisposable
 
         // Assert
         result.IsSuccess.ShouldBeTrue();
-        _dispatcher.DispatchedEvents.OfType<ProviderIssueUntracked>().ShouldBeEmpty();
+        IReadOnlyList<ProviderIssueUntracked> untrackedEvents = _dispatcher.DispatchedEvents
+            .OfType<ProviderIssueUntracked>()
+            .ToList();
+        untrackedEvents.Count.ShouldBe(2);
+        untrackedEvents.ShouldContain(e => e.IssueNumber == 3);
+        untrackedEvents.ShouldContain(e => e.IssueNumber == 4);
+    }
+
+    [Fact]
+    public async Task WhenListingIsIncomplete_SetsUntrackSuppressedSince()
+    {
+        // Arrange
+        MonitoredRepository repository = SeedRepository();
+        StubIssueQueries issueQueries = new(
+            knownNumbers: new HashSet<int> { 7 },
+            snapshots: new Dictionary<int, IssueSnapshot>(),
+            dispatchCandidateNumbers: null,
+            reviewIssues: null,
+            untrackableNumbers: new HashSet<int> { 7 });
+
+        RepositoryPoller sut = new(issueQueries, _dbContext, new NullDomainEventDispatcher(), _dispatcher, _eligibilityEvaluator, NullLogger<RepositoryPoller>.Instance);
+        StubIssueProvider provider = new([new ProviderIssue(
+            Number: 99, Title: "New", Body: "Body", Author: "octocat",
+            Url: "https://github.com/owner/repo/issues/99", Labels: [], IssueKindLabel: "feature")],
+            isComplete: false);
+
+        // Act
+        await sut.PollAsync(repository, provider, Now, CancellationToken.None);
+
+        // Assert
+        repository.UntrackSuppressedSince.ShouldBe(Now);
+    }
+
+    [Fact]
+    public async Task WhenListingIsIncomplete_LogsWarningOnlyOnFirstTransition()
+    {
+        // Arrange
+        MonitoredRepository repository = SeedRepository();
+        CapturingLogger<RepositoryPoller> capturingLogger = new();
+        StubIssueQueries issueQueries = new(
+            knownNumbers: new HashSet<int> { 7 },
+            snapshots: new Dictionary<int, IssueSnapshot>(),
+            dispatchCandidateNumbers: null,
+            reviewIssues: null,
+            untrackableNumbers: new HashSet<int> { 7 });
+
+        RepositoryPoller sut = new(
+            issueQueries,
+            _dbContext,
+            new NullDomainEventDispatcher(),
+            _dispatcher,
+            _eligibilityEvaluator,
+            capturingLogger);
+
+        StubIssueProvider incompleteProvider = new([], isComplete: false);
+
+        // Act — poll three times with incomplete listings
+        await sut.PollAsync(repository, incompleteProvider, Now, CancellationToken.None);
+        await sut.PollAsync(repository, incompleteProvider, Now.AddMinutes(1), CancellationToken.None);
+        await sut.PollAsync(repository, incompleteProvider, Now.AddMinutes(2), CancellationToken.None);
+
+        // Assert — warning logged exactly once (on null→set transition only)
+        capturingLogger.WarningCount.ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task WhenCompleteListingFollowsIncomplete_ClearsUntrackSuppression()
+    {
+        // Arrange
+        MonitoredRepository repository = SeedRepository();
+        StubIssueQueries issueQueries = new(
+            knownNumbers: new HashSet<int> { 7 },
+            snapshots: new Dictionary<int, IssueSnapshot>(),
+            dispatchCandidateNumbers: null,
+            reviewIssues: null,
+            untrackableNumbers: new HashSet<int> { 7 });
+
+        RepositoryPoller sut = new(
+            issueQueries,
+            _dbContext,
+            new NullDomainEventDispatcher(),
+            _dispatcher,
+            _eligibilityEvaluator,
+            NullLogger<RepositoryPoller>.Instance);
+
+        StubIssueProvider incompleteProvider = new([], isComplete: false);
+        StubIssueProvider completeProvider = new([new ProviderIssue(
+            Number: 7, Title: "Existing", Body: "Body", Author: "octocat",
+            Url: "https://github.com/owner/repo/issues/7", Labels: [], IssueKindLabel: "feature")]);
+
+        // Act — first poll suppresses; second poll with complete listing clears
+        await sut.PollAsync(repository, incompleteProvider, Now, CancellationToken.None);
+        repository.UntrackSuppressedSince.ShouldNotBeNull();
+
+        await sut.PollAsync(repository, completeProvider, Now.AddMinutes(5), CancellationToken.None);
+
+        // Assert
+        repository.UntrackSuppressedSince.ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task WhenCompleteListingFollowsIncompleteAndIssueStillAbsent_RaisesProviderIssueUntrackedForAbsentIssue()
+    {
+        // Arrange
+        MonitoredRepository repository = SeedRepository();
+        StubIssueQueries issueQueries = new(
+            knownNumbers: new HashSet<int> { 7 },
+            snapshots: new Dictionary<int, IssueSnapshot>(),
+            dispatchCandidateNumbers: null,
+            reviewIssues: null,
+            untrackableNumbers: new HashSet<int> { 7 });
+
+        RepositoryPoller sut = new(
+            issueQueries,
+            _dbContext,
+            new NullDomainEventDispatcher(),
+            _dispatcher,
+            _eligibilityEvaluator,
+            NullLogger<RepositoryPoller>.Instance);
+
+        StubIssueProvider incompleteProvider = new([], isComplete: false);
+
+        // Complete listing that does NOT include issue #7 — it is genuinely gone.
+        StubIssueProvider completeProvider = new([]);
+
+        // Act — poll 1 with incomplete listing: suppresses; poll 2 with complete listing: recovers and untracks
+        await sut.PollAsync(repository, incompleteProvider, Now, CancellationToken.None);
+        await sut.PollAsync(repository, completeProvider, Now.AddMinutes(5), CancellationToken.None);
+
+        // Assert — the untrack event fires for issue #7 on the recovery poll
+        ProviderIssueUntracked untracked = _dispatcher.DispatchedEvents
+            .OfType<ProviderIssueUntracked>()
+            .ShouldHaveSingleItem();
+        untracked.ShouldSatisfyAllConditions(
+            () => untracked.RepositoryId.ShouldBe(repository.Id),
+            () => untracked.IssueNumber.ShouldBe(7));
+    }
+
+    [Fact]
+    public async Task WhenCompleteListingFollowsIncompleteAndIssueStillAbsent_ClearsUntrackSuppression()
+    {
+        // Arrange
+        MonitoredRepository repository = SeedRepository();
+        StubIssueQueries issueQueries = new(
+            knownNumbers: new HashSet<int> { 7 },
+            snapshots: new Dictionary<int, IssueSnapshot>(),
+            dispatchCandidateNumbers: null,
+            reviewIssues: null,
+            untrackableNumbers: new HashSet<int> { 7 });
+
+        RepositoryPoller sut = new(
+            issueQueries,
+            _dbContext,
+            new NullDomainEventDispatcher(),
+            _dispatcher,
+            _eligibilityEvaluator,
+            NullLogger<RepositoryPoller>.Instance);
+
+        StubIssueProvider incompleteProvider = new([], isComplete: false);
+
+        // Complete listing that does NOT include issue #7 — it is genuinely gone.
+        StubIssueProvider completeProvider = new([]);
+
+        // Act — poll 1 with incomplete listing: suppresses; poll 2 with complete listing: recovers and untracks
+        await sut.PollAsync(repository, incompleteProvider, Now, CancellationToken.None);
+        repository.UntrackSuppressedSince.ShouldNotBeNull();
+
+        await sut.PollAsync(repository, completeProvider, Now.AddMinutes(5), CancellationToken.None);
+
+        // Assert — suppression is cleared after the recovery poll
+        repository.UntrackSuppressedSince.ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task WhenCompleteEmptyListingWithNoKnownIssues_SuppressionNeverEngaged()
+    {
+        // Arrange — genuine-zero repo: complete listing, no known issues
+        MonitoredRepository repository = SeedRepository();
+        CapturingLogger<RepositoryPoller> capturingLogger = new();
+
+        RepositoryPoller sut = new(
+            new StubIssueQueries(),
+            _dbContext,
+            new NullDomainEventDispatcher(),
+            _dispatcher,
+            _eligibilityEvaluator,
+            capturingLogger);
+
+        StubIssueProvider completeEmptyProvider = new([]);
+
+        // Act
+        await sut.PollAsync(repository, completeEmptyProvider, Now, CancellationToken.None);
+
+        // Assert — suppression never set, no warning ever logged
+        repository.UntrackSuppressedSince.ShouldBeNull();
+        capturingLogger.WarningCount.ShouldBe(0);
     }
 
     private sealed class StubIssueProvider(
@@ -1137,17 +1369,18 @@ public sealed class PollAsync : IAsyncDisposable
         IReadOnlyDictionary<int, Result<bool>>? isClosedResults = null,
         IReadOnlyDictionary<string, Result<PullRequestStatus>>? pullRequestStatusResults = null,
         IReadOnlyDictionary<string, Result<ReviewFeedback>>? reviewFeedbackResults = null,
-        Result<BranchProtection>? branchProtectionResult = null) : IIssueProvider
+        Result<BranchProtection>? branchProtectionResult = null,
+        bool isComplete = true) : IIssueProvider
     {
         public StubIssueProvider() : this([])
         {
         }
 
-        public Task<Result<IReadOnlyList<ProviderIssue>>> GetIssuesAsync(
+        public Task<Result<IssueListing>> GetIssuesAsync(
             RepositorySlug slug,
             CancellationToken cancellationToken)
         {
-            return Task.FromResult(Result<IReadOnlyList<ProviderIssue>>.Ok(issues));
+            return Task.FromResult(Result<IssueListing>.Ok(new IssueListing(issues, IsComplete: isComplete)));
         }
 
         public Task<Result<IReadOnlyList<int>>> GetDependenciesAsync(
@@ -1248,11 +1481,11 @@ public sealed class PollAsync : IAsyncDisposable
 
     private sealed class FailingIssueProvider(Error error) : IIssueProvider
     {
-        public Task<Result<IReadOnlyList<ProviderIssue>>> GetIssuesAsync(
+        public Task<Result<IssueListing>> GetIssuesAsync(
             RepositorySlug slug,
             CancellationToken cancellationToken)
         {
-            return Task.FromResult(Result<IReadOnlyList<ProviderIssue>>.Fail(error));
+            return Task.FromResult(Result<IssueListing>.Fail(error));
         }
 
         public Task<Result<IReadOnlyList<int>>> GetDependenciesAsync(
@@ -1329,11 +1562,11 @@ public sealed class PollAsync : IAsyncDisposable
     {
         public int GetDependenciesCallCount { get; private set; }
 
-        public Task<Result<IReadOnlyList<ProviderIssue>>> GetIssuesAsync(
+        public Task<Result<IssueListing>> GetIssuesAsync(
             RepositorySlug slug,
             CancellationToken cancellationToken)
         {
-            return Task.FromResult(Result<IReadOnlyList<ProviderIssue>>.Ok([]));
+            return Task.FromResult(Result<IssueListing>.Ok(new IssueListing([], IsComplete: true)));
         }
 
         public Task<Result<IReadOnlyList<int>>> GetDependenciesAsync(
@@ -1569,4 +1802,27 @@ public sealed class PollAsync : IAsyncDisposable
             return Task.CompletedTask;
         }
     }
+
+    private sealed class CapturingLogger<T> : ILogger<T>
+    {
+        public int WarningCount { get; private set; }
+
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+
+        public bool IsEnabled(LogLevel logLevel) => true;
+
+        public void Log<TState>(
+            LogLevel logLevel,
+            EventId eventId,
+            TState state,
+            Exception? exception,
+            Func<TState, Exception?, string> formatter)
+        {
+            if (logLevel == LogLevel.Warning)
+            {
+                WarningCount++;
+            }
+        }
+    }
 }
+

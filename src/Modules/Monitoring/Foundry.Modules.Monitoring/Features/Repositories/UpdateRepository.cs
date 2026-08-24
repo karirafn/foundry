@@ -90,9 +90,10 @@ internal static class UpdateRepository
                 },
                 RepositoryMappings.ToSeconds(repository.PollInterval),
                 repository.IsActive,
+                repository.Position,
                 repository.LastPolledAt,
                 RepositoryMappings.ToEligibilityInfo(repository.Eligibility),
-                repository.Position);
+                repository.UntrackSuppressedSince);
 
             return Result<RepositorySummary>.Ok(summary);
         }

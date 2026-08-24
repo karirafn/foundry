@@ -30,6 +30,8 @@ internal sealed partial class GitHubHttpClient(
     private const string TruncatedSuffix = "[truncated]";
     private const int MaxRepositoryPages = 5;
     private const int RepositoriesPerPage = 100;
+    private const int MaxIssuePages = 20;
+    private const int IssuesPerPage = 100;
     private const int MaxBranchErrorBodyLength = 500;
     private const int MaxPermissionsLength = 200;
     private const string Ellipsis = "...";
@@ -137,7 +139,7 @@ internal sealed partial class GitHubHttpClient(
         return Result<BranchRules>.Ok(new BranchRules(rejectDirectPushes, rejectForcePushes, rejectDeletion));
     }
 
-    public async Task<Result<IReadOnlyList<ProviderIssue>>> GetIssuesAsync(
+    public async Task<Result<IssueListing>> GetIssuesAsync(
         Uri apiBaseUrl,
         RepositorySlug slug,
         string token,
@@ -145,46 +147,57 @@ internal sealed partial class GitHubHttpClient(
     {
         if (apiBaseUrl.Scheme is not "https")
         {
-            return Result<IReadOnlyList<ProviderIssue>>.Fail(GitHubErrors.InvalidBaseUrl);
+            return Result<IssueListing>.Fail(GitHubErrors.InvalidBaseUrl);
         }
 
-        string relativePath = $"repos/{Uri.EscapeDataString(slug.Owner)}/{Uri.EscapeDataString(slug.Name)}/issues?labels=foundry&state=open";
-        Uri requestUri = new(EnsureTrailingSlash(apiBaseUrl), relativePath);
+        string owner = Uri.EscapeDataString(slug.Owner);
+        string repo = Uri.EscapeDataString(slug.Name);
+        List<ProviderIssue> allIssues = [];
 
-        using HttpRequestMessage request = new(HttpMethod.Get, requestUri);
-        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
-        request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/vnd.github+json"));
-        request.Headers.Add("X-GitHub-Api-Version", ApiVersion);
-        request.Headers.UserAgent.Add(new ProductInfoHeaderValue("Foundry", null));
-
-        using HttpResponseMessage response = await httpClient.SendAsync(request, cancellationToken);
-
-        if (!response.IsSuccessStatusCode)
+        for (int page = 1; page <= MaxIssuePages; page++)
         {
-            return Result<IReadOnlyList<ProviderIssue>>.Fail(ErrorFromNonSuccess(response));
-        }
+            string relativePath = $"repos/{owner}/{repo}/issues?labels=foundry&state=open&per_page={IssuesPerPage}&page={page}";
+            Uri requestUri = new(EnsureTrailingSlash(apiBaseUrl), relativePath);
 
-        string body = await response.Content.ReadAsStringAsync(cancellationToken);
-        List<GitHubIssueDto>? dtos = JsonSerializer.Deserialize<List<GitHubIssueDto>>(body, JsonOptions);
+            using HttpRequestMessage request = new(HttpMethod.Get, requestUri);
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+            request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/vnd.github+json"));
+            request.Headers.Add("X-GitHub-Api-Version", ApiVersion);
+            request.Headers.UserAgent.Add(new ProductInfoHeaderValue("Foundry", null));
 
-        IReadOnlyList<ProviderIssue> issues = (dtos ?? [])
-            .Select(dto =>
+            using HttpResponseMessage response = await httpClient.SendAsync(request, cancellationToken);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                return Result<IssueListing>.Fail(ErrorFromNonSuccess(response));
+            }
+
+            string body = await response.Content.ReadAsStringAsync(cancellationToken);
+            List<GitHubIssueDto>? dtos = JsonSerializer.Deserialize<List<GitHubIssueDto>>(body, JsonOptions);
+
+            List<GitHubIssueDto> pageItems = dtos ?? [];
+            foreach (GitHubIssueDto dto in pageItems)
             {
                 IReadOnlyList<string> labels = dto.Labels
                     .Select(l => l.Name)
                     .ToList();
-                return new ProviderIssue(
+                allIssues.Add(new ProviderIssue(
                     Number: dto.Number,
                     Title: dto.Title,
                     Body: dto.Body ?? string.Empty,
                     Author: dto.User.Login,
                     Url: dto.HtmlUrl,
                     Labels: labels,
-                    IssueKindLabel: LabelClassifier.ClassifyKind(labels));
-            })
-            .ToList();
+                    IssueKindLabel: LabelClassifier.ClassifyKind(labels)));
+            }
 
-        return Result<IReadOnlyList<ProviderIssue>>.Ok(issues);
+            if (pageItems.Count < IssuesPerPage)
+            {
+                return Result<IssueListing>.Ok(new IssueListing(allIssues, IsComplete: true));
+            }
+        }
+
+        return Result<IssueListing>.Ok(new IssueListing(allIssues, IsComplete: false));
     }
 
     public async Task<Result<IReadOnlyList<int>>> GetDependenciesAsync(

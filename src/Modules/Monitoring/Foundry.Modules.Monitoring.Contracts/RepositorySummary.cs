@@ -8,6 +8,7 @@ public sealed record RepositorySummary(
     string ProviderType,
     int? PollIntervalSeconds,
     bool IsActive,
-    DateTimeOffset? LastPolledAt,
-    RepositoryEligibilityInfo? Eligibility,
-    int Position);
+    int Position,
+    DateTimeOffset? LastPolledAt = null,
+    RepositoryEligibilityInfo? Eligibility = null,
+    DateTimeOffset? UntrackSuppressedSince = null);
