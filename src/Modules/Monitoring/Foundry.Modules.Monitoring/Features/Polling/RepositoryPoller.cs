@@ -6,6 +6,7 @@ using Foundry.Modules.Monitoring.Features.Providers;
 using Foundry.Shared;
 
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 
 namespace Foundry.Modules.Monitoring.Features.Polling;
 
@@ -14,7 +15,8 @@ internal sealed class RepositoryPoller(
     DbContext dbContext,
     IDomainEventDispatcher domainEventDispatcher,
     IIntegrationEventDispatcher integrationEventDispatcher,
-    IRepositoryEligibilityEvaluator eligibilityEvaluator)
+    IRepositoryEligibilityEvaluator eligibilityEvaluator,
+    ILogger<RepositoryPoller> logger)
 {
     public async Task<Result> PollAsync(
         MonitoredRepository repository,
@@ -60,11 +62,28 @@ internal sealed class RepositoryPoller(
         // while detection, detail-change, dependency, and review passes all continue normally.
         if (listing.IsComplete)
         {
+            // A previously-suppressed repo has recovered — clear suppression before the untrack pass.
+            repository.ClearUntrackSuppression();
+
             IReadOnlySet<int> untrackableNumbers = await issueQueries.GetUntrackableIssueNumbersAsync(
                 repository.Id,
                 cancellationToken);
 
             DetectUntrackedIssues(repository, untrackableNumbers, fetchedNumbers);
+        }
+        else
+        {
+            // Log a warning only on the first transition into suppression (null→set).
+            // Subsequent incomplete polls are steady-state suppressed and log nothing (AC4).
+            bool justSuppressed = repository.SuppressUntracking(now);
+            if (justSuppressed)
+            {
+                logger.LogWarning(
+                    "Untrack pass suppressed for repository {Slug}: listing is incomplete. " +
+                    "Suppressed since {SuppressedAt}.",
+                    repository.Slug,
+                    repository.UntrackSuppressedSince);
+            }
         }
 
         repository.MarkPolled(now);

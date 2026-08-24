@@ -86,6 +86,9 @@ internal sealed class MonitoredRepositoryConfiguration : IEntityTypeConfiguratio
         builder.Property(r => r.LastPolledAt)
             .HasColumnName("last_polled_at");
 
+        builder.Property(r => r.UntrackSuppressedSince)
+            .HasColumnName("untrack_suppressed_since");
+
         ValueConverter<RepositoryEligibility?, string?> eligibilityConverter = new(
             eligibility => eligibility == null
                 ? null

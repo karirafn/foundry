@@ -33,6 +33,8 @@ public sealed class MonitoredRepository : AggregateRoot<MonitoredRepositoryId>
 
     public DateTimeOffset? LastPolledAt { get; private set; }
 
+    public DateTimeOffset? UntrackSuppressedSince { get; private set; }
+
     public RepositoryEligibility? Eligibility { get; private set; }
 
     public string? EligibilityStatus { get; private set; }
@@ -88,6 +90,29 @@ public sealed class MonitoredRepository : AggregateRoot<MonitoredRepositoryId>
     public void MarkPolled(DateTimeOffset polledAt)
     {
         LastPolledAt = polledAt;
+    }
+
+    /// <summary>
+    /// Marks untrack-pass suppression as active, recording when it first began.
+    /// Returns true if this is the null→set transition (first suppression); false if already suppressed.
+    /// </summary>
+    public bool SuppressUntracking(DateTimeOffset now)
+    {
+        if (UntrackSuppressedSince is not null)
+        {
+            return false;
+        }
+
+        UntrackSuppressedSince = now;
+        return true;
+    }
+
+    /// <summary>
+    /// Clears untrack-pass suppression. Idempotent — no-op when not suppressed.
+    /// </summary>
+    public void ClearUntrackSuppression()
+    {
+        UntrackSuppressedSince = null;
     }
 
     public void SetEligibility(RepositoryEligibility eligibility)
