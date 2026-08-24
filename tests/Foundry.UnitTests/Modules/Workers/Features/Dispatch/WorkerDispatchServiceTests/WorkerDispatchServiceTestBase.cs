@@ -89,7 +89,8 @@ public abstract class WorkerDispatchServiceTestBase : IAsyncDisposable
         IContainerOutputParser? containerOutputParser = null,
         ICredentialGate? credentialGate = null,
         IDomainEventDispatcher? domainEventDispatcher = null,
-        CapturingLogger? logger = null)
+        CapturingLogger? logger = null,
+        TimeProvider? timeProvider = null)
     {
         SqliteConnection connection = _connection;
 
@@ -145,7 +146,8 @@ public abstract class WorkerDispatchServiceTestBase : IAsyncDisposable
 
         return new WorkerDispatchService(
             sp.GetRequiredService<IServiceScopeFactory>(),
-            serviceLogger);
+            serviceLogger,
+            timeProvider);
     }
 
     /// <summary>

@@ -31,13 +31,15 @@ public sealed class RunningWorkerActivityTracking : WorkerDispatchServiceTestBas
         IWorkerOrchestrator orchestrator,
         IPostExitProviderQueries? postExitProviderQueries = null,
         IDomainEventDispatcher? domainEventDispatcher = null,
-        CapturingLogger? logger = null)
+        CapturingLogger? logger = null,
+        TimeProvider? timeProvider = null)
     {
         return base.BuildService(
             orchestrator,
             postExitProviderQueries: postExitProviderQueries,
             domainEventDispatcher: domainEventDispatcher,
-            logger: logger);
+            logger: logger,
+            timeProvider: timeProvider);
     }
 
     [Fact]
@@ -88,11 +90,13 @@ public sealed class RunningWorkerActivityTracking : WorkerDispatchServiceTestBas
     [Fact]
     public async Task WhenContainerObservedMultipleTimes_LastActivityAtAdvancesEachTick()
     {
-        // Arrange — container alive on every tick (no log output needed)
+        // Arrange — container alive on every tick; stepping time ensures each tick gets a strictly
+        // greater timestamp so the assertion is deterministic regardless of wall-clock resolution.
         SeedActiveRun("running-activity-multi");
         WorkerStatus runningStatus = new(IsRunning: true, ExitCode: null, FinishedAt: null);
         ConstantStatusOrchestrator orchestrator = new(runningStatus);
-        WorkerDispatchService sut = BuildService(orchestrator);
+        SteppingTimeProvider timeProvider = new();
+        WorkerDispatchService sut = BuildService(orchestrator, timeProvider: timeProvider);
 
         // Tick 1: reconciliation
         await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
@@ -103,16 +107,17 @@ public sealed class RunningWorkerActivityTracking : WorkerDispatchServiceTestBas
         await using FoundryDbContext db2 = CreateDbContext();
         WorkerRun? run2 = await db2.Set<WorkerRun>().SingleOrDefaultAsync(TestContext.Current.CancellationToken);
         ActiveRun active2 = run2.ShouldBeOfType<ActiveRun>();
-        active2.LastActivityAt.ShouldNotBeNull();
+        DateTimeOffset activityAfterTick2 = active2.LastActivityAt.ShouldNotBeNull();
 
         // Act — Tick 3: second activity observation
         await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
 
-        // Assert — activity is still set (RecordActivity called again)
+        // Assert — LastActivityAt has strictly advanced compared to tick 2
         await using FoundryDbContext db3 = CreateDbContext();
         WorkerRun? run3 = await db3.Set<WorkerRun>().SingleOrDefaultAsync(TestContext.Current.CancellationToken);
         ActiveRun active3 = run3.ShouldBeOfType<ActiveRun>();
-        active3.LastActivityAt.ShouldNotBeNull();
+        DateTimeOffset activityAfterTick3 = active3.LastActivityAt.ShouldNotBeNull();
+        activityAfterTick3.ShouldBeGreaterThan(activityAfterTick2);
     }
 
     [Fact]
@@ -122,7 +127,7 @@ public sealed class RunningWorkerActivityTracking : WorkerDispatchServiceTestBas
         SeedActiveRun("running-commit-record");
         WorkerStatus runningStatus = new(IsRunning: true, ExitCode: null, FinishedAt: null);
         BranchCommitSummary commit = new(CommitCount: 1, LatestSha: "sha-abc123");
-        ScriptedLogsOrchestrator orchestrator = new(runningStatus, firstLogs: "log", secondLogs: "log");
+        ConstantStatusOrchestrator orchestrator = new(runningStatus);
         ScriptedCommitProviderQueries queries = new(firstSummary: null, secondSummary: commit);
         WorkerDispatchService sut = BuildService(orchestrator, queries);
 
@@ -148,7 +153,7 @@ public sealed class RunningWorkerActivityTracking : WorkerDispatchServiceTestBas
         WorkerStatus runningStatus = new(IsRunning: true, ExitCode: null, FinishedAt: null);
         BranchCommitSummary commit = new(CommitCount: 1, LatestSha: "sha-dedup");
         // Both ticks return the same commit
-        ScriptedLogsOrchestrator orchestrator = new(runningStatus, firstLogs: "log", secondLogs: "log");
+        ConstantStatusOrchestrator orchestrator = new(runningStatus);
         ConstantCommitProviderQueries queries = new(commit);
         WorkerDispatchService sut = BuildService(orchestrator, queries);
 
@@ -621,6 +626,22 @@ public sealed class RunningWorkerActivityTracking : WorkerDispatchServiceTestBas
             _callCount++;
             return Task.FromResult(
                 Result<BranchCommitSummary>.Fail(new Error("Provider.Unavailable", "provider down")));
+        }
+    }
+
+    /// <summary>
+    /// A <see cref="TimeProvider"/> that advances by one second on each call to
+    /// <see cref="GetUtcNow"/> — guarantees distinct, strictly-increasing timestamps across ticks.
+    /// </summary>
+    private sealed class SteppingTimeProvider : TimeProvider
+    {
+        private DateTimeOffset _current = new(2024, 1, 1, 0, 0, 0, TimeSpan.Zero);
+
+        public override DateTimeOffset GetUtcNow()
+        {
+            DateTimeOffset value = _current;
+            _current = _current.AddSeconds(1);
+            return value;
         }
     }
 

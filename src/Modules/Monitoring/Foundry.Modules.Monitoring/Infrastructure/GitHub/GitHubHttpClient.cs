@@ -829,7 +829,8 @@ internal sealed partial class GitHubHttpClient(
 
         int commitCount = dto?.AheadBy ?? 0;
         IReadOnlyList<GitHubCommitRefDto> commits = dto?.Commits ?? [];
-        string? latestSha = commitCount > 0 && commits.Count > 0 ? commits[^1].Sha : null;
+        string? rawSha = commitCount > 0 && commits.Count > 0 ? commits[^1].Sha : null;
+        string? latestSha = rawSha is not null && GitObjectIdRegex().IsMatch(rawSha) ? rawSha : null;
 
         return Result<BranchCommitSummary>.Ok(new BranchCommitSummary(commitCount, latestSha));
     }
@@ -946,6 +947,9 @@ internal sealed partial class GitHubHttpClient(
 
         return missing;
     }
+
+    [GeneratedRegex(@"^[0-9a-fA-F]{1,40}$")]
+    private static partial Regex GitObjectIdRegex();
 
     [GeneratedRegex(@"/pull/(\d+)(?:[/?#]|$)")]
     private static partial Regex PrNumberRegex();

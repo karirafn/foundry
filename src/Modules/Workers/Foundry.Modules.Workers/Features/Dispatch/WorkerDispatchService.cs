@@ -31,7 +31,8 @@ namespace Foundry.Modules.Workers.Features.Dispatch;
 
 internal sealed class WorkerDispatchService(
     IServiceScopeFactory scopeFactory,
-    ILogger<WorkerDispatchService> logger) : PeriodicBackgroundService(logger)
+    ILogger<WorkerDispatchService> logger,
+    TimeProvider? timeProvider = null) : PeriodicBackgroundService(logger)
 {
     private static readonly TimeSpan Interval = TimeSpan.FromSeconds(10);
 
@@ -795,7 +796,7 @@ internal sealed class WorkerDispatchService(
         ActiveRun activeRun,
         CancellationToken cancellationToken)
     {
-        DateTimeOffset now = DateTimeOffset.UtcNow;
+        DateTimeOffset now = (timeProvider ?? TimeProvider.System).GetUtcNow();
 
         // Container is provably alive — the caller has already confirmed this via GetStatusAsync.
         // Record activity unconditionally; do not gate on log growth (claude buffers all output until exit).

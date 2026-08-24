@@ -190,6 +190,68 @@ public sealed class GetBranchCommitSummaryAsync
     }
 
     [Fact]
+    public async Task WhenAheadByIsNonZeroButCommitsArrayIsEmpty_ReturnsCountWithNullSha()
+    {
+        // Arrange — ahead_by disagrees with commits[] length (e.g. paginated response or API quirk)
+        string json = """
+            {
+                "ahead_by": 1,
+                "behind_by": 0,
+                "commits": []
+            }
+            """;
+        FakeHandler handler = new(HttpStatusCode.OK, json);
+        GitHubHttpClient sut = CreateSut(handler);
+
+        // Act
+        Result<BranchCommitSummary> result = await sut.GetBranchCommitSummaryAsync(
+            ValidBaseUrl,
+            ValidSlug,
+            "main",
+            "feat/my-branch",
+            "ghp_token",
+            CancellationToken.None);
+
+        // Assert
+        Result<BranchCommitSummary>.Success success = result.ShouldBeOfType<Result<BranchCommitSummary>.Success>();
+        success.Value.ShouldSatisfyAllConditions(
+            () => success.Value.CommitCount.ShouldBe(1),
+            () => success.Value.LatestSha.ShouldBeNull());
+    }
+
+    [Fact]
+    public async Task WhenCommitShaIsMalformed_ReturnsCountWithNullSha()
+    {
+        // Arrange — provider returns a SHA that is not a valid git object id
+        string json = """
+            {
+                "ahead_by": 1,
+                "behind_by": 0,
+                "commits": [
+                    { "sha": "not-a-valid-sha!!" }
+                ]
+            }
+            """;
+        FakeHandler handler = new(HttpStatusCode.OK, json);
+        GitHubHttpClient sut = CreateSut(handler);
+
+        // Act
+        Result<BranchCommitSummary> result = await sut.GetBranchCommitSummaryAsync(
+            ValidBaseUrl,
+            ValidSlug,
+            "main",
+            "feat/my-branch",
+            "ghp_token",
+            CancellationToken.None);
+
+        // Assert — count comes from ahead_by; SHA rejected as malformed
+        Result<BranchCommitSummary>.Success success = result.ShouldBeOfType<Result<BranchCommitSummary>.Success>();
+        success.Value.ShouldSatisfyAllConditions(
+            () => success.Value.CommitCount.ShouldBe(1),
+            () => success.Value.LatestSha.ShouldBeNull());
+    }
+
+    [Fact]
     public async Task WhenBranchNameContainsSpecialCharacters_EncodesThemInUrl()
     {
         // Arrange
