@@ -1102,6 +1102,40 @@ public sealed class PollAsync : IAsyncDisposable
     }
 
     [Fact]
+    public async Task WhenListingIsIncomplete_SkipsUntrackPassAndPollSucceeds()
+    {
+        // Arrange
+        MonitoredRepository repository = SeedRepository();
+
+        // Issue 7 is a resting-state issue absent from the incomplete listing; it must NOT be untracked.
+        ProviderIssue newIssue = new(
+            Number: 99,
+            Title: "New",
+            Body: "Body",
+            Author: "octocat",
+            Url: "https://github.com/owner/repo/issues/99",
+            Labels: ["foundry"],
+            IssueKindLabel: "feature");
+        StubIssueQueries issueQueries = new(
+            knownNumbers: new HashSet<int> { 7 },
+            snapshots: new Dictionary<int, IssueSnapshot>(),
+            dispatchCandidateNumbers: null,
+            reviewIssues: null,
+            untrackableNumbers: new HashSet<int> { 7 });
+
+        RepositoryPoller sut = new(issueQueries, _dbContext, new NullDomainEventDispatcher(), _dispatcher, _eligibilityEvaluator);
+        StubIssueProvider provider = new([newIssue], isComplete: false);
+
+        // Act
+        Result result = await sut.PollAsync(repository, provider, Now, CancellationToken.None);
+
+        // Assert
+        result.IsSuccess.ShouldBeTrue();
+        _dispatcher.DispatchedEvents.OfType<ProviderIssueUntracked>().ShouldBeEmpty();
+        _dispatcher.DispatchedEvents.OfType<IssueDetected>().ShouldHaveSingleItem();
+    }
+
+    [Fact]
     public async Task WhenFetchReturnsCompleteEmptyListAndRestingIssuesKnown_UntracksRestingIssues()
     {
         // Arrange
@@ -1139,7 +1173,8 @@ public sealed class PollAsync : IAsyncDisposable
         IReadOnlyDictionary<int, Result<bool>>? isClosedResults = null,
         IReadOnlyDictionary<string, Result<PullRequestStatus>>? pullRequestStatusResults = null,
         IReadOnlyDictionary<string, Result<ReviewFeedback>>? reviewFeedbackResults = null,
-        Result<BranchProtection>? branchProtectionResult = null) : IIssueProvider
+        Result<BranchProtection>? branchProtectionResult = null,
+        bool isComplete = true) : IIssueProvider
     {
         public StubIssueProvider() : this([])
         {
@@ -1149,7 +1184,7 @@ public sealed class PollAsync : IAsyncDisposable
             RepositorySlug slug,
             CancellationToken cancellationToken)
         {
-            return Task.FromResult(Result<IssueListing>.Ok(new IssueListing(issues, IsComplete: true)));
+            return Task.FromResult(Result<IssueListing>.Ok(new IssueListing(issues, IsComplete: isComplete)));
         }
 
         public Task<Result<IReadOnlyList<int>>> GetDependenciesAsync(

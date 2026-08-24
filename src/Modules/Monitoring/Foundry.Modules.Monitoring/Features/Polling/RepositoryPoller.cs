@@ -44,26 +44,28 @@ internal sealed class RepositoryPoller(
             return new Error("Monitoring.UnexpectedResult", "GetIssues returned an unexpected result type.");
         }
 
-        IReadOnlyList<ProviderIssue> fetchedIssues = providerSuccess.Value.Issues;
+        IssueListing listing = providerSuccess.Value;
+        IReadOnlyList<ProviderIssue> fetchedIssues = listing.Issues;
 
         HashSet<int> fetchedNumbers = fetchedIssues
             .Select(i => i.Number)
             .ToHashSet();
 
-        IReadOnlySet<int> untrackableNumbers = await issueQueries.GetUntrackableIssueNumbersAsync(
-            repository.Id,
-            cancellationToken);
-
         DetectNewIssues(repository, fetchedIssues, knownNumbers, now);
         await DetectDetailChangesAsync(repository, fetchedIssues, knownNumbers, cancellationToken);
 
-        // Run the untrack pass unconditionally: a complete listing (IsComplete: true) is authoritative
-        // evidence that an issue is gone from the provider; an incomplete listing (IsComplete: false,
-        // cap reached) still covers 2000 issues, so an absent resting-state issue is also likely gone.
-        // The old empty-fetch guard (fetchedNumbers.Count == 0 && untrackableNumbers.Count > 0) is
-        // removed here; completeness propagation through IssueListing replaces it (step 4 handles
-        // any remaining incomplete-listing nuances).
-        DetectUntrackedIssues(repository, untrackableNumbers, fetchedNumbers);
+        // Only run the untrack pass when the listing is provably complete. An incomplete listing
+        // (IsComplete: false, pagination cap reached) cannot distinguish a missing issue from one
+        // that simply fell outside the fetched window, so skipping keeps the poll returning success
+        // while detection, detail-change, dependency, and review passes all continue normally.
+        if (listing.IsComplete)
+        {
+            IReadOnlySet<int> untrackableNumbers = await issueQueries.GetUntrackableIssueNumbersAsync(
+                repository.Id,
+                cancellationToken);
+
+            DetectUntrackedIssues(repository, untrackableNumbers, fetchedNumbers);
+        }
 
         repository.MarkPolled(now);
         await integrationEventDispatcher.DispatchAsync(repository.IntegrationEvents, cancellationToken);
