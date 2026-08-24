@@ -709,11 +709,13 @@ export interface components {
             /** Format: int32 */
             pollIntervalSeconds: null | number | string;
             isActive: boolean;
-            /** Format: date-time */
-            lastPolledAt: null | string;
-            eligibility: null | components["schemas"]["RepositoryEligibilityInfo"];
             /** Format: int32 */
             position: number | string;
+            /** Format: date-time */
+            lastPolledAt?: null | string;
+            eligibility?: null | components["schemas"]["RepositoryEligibilityInfo"];
+            /** Format: date-time */
+            untrackSuppressedSince?: null | string;
         };
         RunStats: {
             /** Format: int32 */
