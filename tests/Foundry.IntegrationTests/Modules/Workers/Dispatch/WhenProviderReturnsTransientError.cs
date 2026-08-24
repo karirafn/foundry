@@ -85,7 +85,7 @@ public sealed class WhenProviderReturnsTransientError : IAsyncDisposable
         await SeedActiveRunAsync();
 
         IServiceScopeFactory scopeFactory = _factory.Services.GetRequiredService<IServiceScopeFactory>();
-        using WorkerDispatchService sut = new(scopeFactory, NullLogger<WorkerDispatchService>.Instance);
+        using WorkerDispatchService sut = new(scopeFactory, NullLogger<WorkerDispatchService>.Instance, TimeProvider.System);
 
         // Act — Tick 1: provider returns the initial commit summary (count = 2);
         //       RecordActivity fires (container-alive) + RecordBranchCommitCount fires (new SHA).

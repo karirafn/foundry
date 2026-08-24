@@ -948,6 +948,13 @@ internal sealed partial class GitHubHttpClient(
         return missing;
     }
 
+    // Matches a SHA-1 hex object id (up to 40 hex chars), deliberately aligned with the
+    // HasMaxLength(40) column on ActiveRun.LastObservedCommitSha. The bound is intentionally
+    // NOT widened to {1,64} for SHA-256: a 64-char SHA-256 id would exceed the storage column
+    // and reintroduce the oversized-value persistence risk this guard was added to prevent.
+    // Supporting SHA-256 requires widening the storage column first (out of scope). Treating
+    // an out-of-range value (including a 64-char SHA-256 id) as absent is the safe behavior —
+    // the SHA is a change-detection key only, so a missing value causes a re-fetch, not data loss.
     [GeneratedRegex(@"^[0-9a-fA-F]{1,40}$")]
     private static partial Regex GitObjectIdRegex();
 

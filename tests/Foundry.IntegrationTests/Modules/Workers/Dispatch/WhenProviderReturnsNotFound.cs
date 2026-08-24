@@ -75,7 +75,7 @@ public sealed class WhenProviderReturnsNotFound : IAsyncDisposable
         await SeedActiveRunAsync();
 
         IServiceScopeFactory scopeFactory = _factory.Services.GetRequiredService<IServiceScopeFactory>();
-        using WorkerDispatchService sut = new(scopeFactory, NullLogger<WorkerDispatchService>.Instance);
+        using WorkerDispatchService sut = new(scopeFactory, NullLogger<WorkerDispatchService>.Instance, TimeProvider.System);
 
         // Act — Tick 1: reconciliation; provider returns success with count = 5
         await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);

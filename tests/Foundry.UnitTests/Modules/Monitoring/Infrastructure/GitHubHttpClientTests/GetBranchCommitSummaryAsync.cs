@@ -252,6 +252,41 @@ public sealed class GetBranchCommitSummaryAsync
     }
 
     [Fact]
+    public async Task WhenCommitShaIsSha256Length_ReturnsCountWithNullSha()
+    {
+        // Arrange — a 64-char SHA-256 hex id exceeds the {1,40} guard and must be treated as absent.
+        // The storage column HasMaxLength(40) cannot hold a SHA-256 value, so widening the regex
+        // would reintroduce an oversized-value persistence risk. Treating it as null is the safe path.
+        string sha256 = new string('a', 64);
+        string json = $$"""
+            {
+                "ahead_by": 1,
+                "behind_by": 0,
+                "commits": [
+                    { "sha": "{{sha256}}" }
+                ]
+            }
+            """;
+        FakeHandler handler = new(HttpStatusCode.OK, json);
+        GitHubHttpClient sut = CreateSut(handler);
+
+        // Act
+        Result<BranchCommitSummary> result = await sut.GetBranchCommitSummaryAsync(
+            ValidBaseUrl,
+            ValidSlug,
+            "main",
+            "feat/my-branch",
+            "ghp_token",
+            CancellationToken.None);
+
+        // Assert — SHA-256 id is out of range for the storage column; reject to null
+        Result<BranchCommitSummary>.Success success = result.ShouldBeOfType<Result<BranchCommitSummary>.Success>();
+        success.Value.ShouldSatisfyAllConditions(
+            () => success.Value.CommitCount.ShouldBe(1),
+            () => success.Value.LatestSha.ShouldBeNull());
+    }
+
+    [Fact]
     public async Task WhenBranchNameContainsSpecialCharacters_EncodesThemInUrl()
     {
         // Arrange

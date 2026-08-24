@@ -65,6 +65,7 @@ public static class WorkersModule
         services.AddDomainEventHandler<WorkerActivityObserved, WorkerActivityObservedHandler>();
         services.AddDomainEventHandler<Domain.Events.WorkerRunFailed, WorkerRunFailedBridgeHandler>();
 
+        services.AddSingleton(TimeProvider.System);
         services.AddScoped<WorkerOutcomeResolver>();
         services.AddHostedService<WorkerDispatchService>();
         services.AddHostedService<WorkerImageRebuildService>();

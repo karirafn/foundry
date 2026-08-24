@@ -277,7 +277,8 @@ public sealed class OutboxHarvestDispatch : IAsyncDisposable
         ServiceProvider sp = services.BuildServiceProvider();
         return new WorkerDispatchService(
             sp.GetRequiredService<IServiceScopeFactory>(),
-            NullLogger<WorkerDispatchService>.Instance);
+            NullLogger<WorkerDispatchService>.Instance,
+            TimeProvider.System);
     }
 
     private static ActiveRun SeedActiveRun(string containerId)

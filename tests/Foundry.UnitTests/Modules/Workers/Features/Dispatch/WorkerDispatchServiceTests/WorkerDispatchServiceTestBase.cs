@@ -92,6 +92,7 @@ public abstract class WorkerDispatchServiceTestBase : IAsyncDisposable
         CapturingLogger? logger = null,
         TimeProvider? timeProvider = null)
     {
+        TimeProvider resolvedTimeProvider = timeProvider ?? TimeProvider.System;
         SqliteConnection connection = _connection;
 
         ServiceCollection services = new();
@@ -147,7 +148,7 @@ public abstract class WorkerDispatchServiceTestBase : IAsyncDisposable
         return new WorkerDispatchService(
             sp.GetRequiredService<IServiceScopeFactory>(),
             serviceLogger,
-            timeProvider);
+            resolvedTimeProvider);
     }
 
     /// <summary>
