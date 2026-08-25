@@ -163,6 +163,7 @@ public sealed class HandleAsync : IAsyncDisposable
     {
         public Task EvaluateFullyAndStoreAsync(
             MonitoredRepository repo,
+            DateTimeOffset now,
             CancellationToken cancellationToken) =>
             Task.CompletedTask;
 
@@ -179,6 +180,7 @@ public sealed class HandleAsync : IAsyncDisposable
 
         public Task EvaluateFullyAndStoreAsync(
             MonitoredRepository repo,
+            DateTimeOffset now,
             CancellationToken cancellationToken)
         {
             FullEvaluateCallCount++;

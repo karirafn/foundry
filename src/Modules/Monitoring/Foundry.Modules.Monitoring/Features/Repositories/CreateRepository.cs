@@ -125,7 +125,7 @@ internal static class CreateRepository
                 return Result<RepositorySummary>.Fail(RepositoryErrors.ConflictOnCreate());
             }
 
-            await eligibilityEvaluator.EvaluateFullyAndStoreAsync(repository, cancellationToken);
+            await eligibilityEvaluator.EvaluateFullyAndStoreAsync(repository, DateTimeOffset.UtcNow, cancellationToken);
             await dbContext.SaveChangesAsync(cancellationToken);
 
             RepositorySummary summary = new(

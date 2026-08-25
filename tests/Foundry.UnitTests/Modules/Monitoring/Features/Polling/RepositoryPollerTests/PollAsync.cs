@@ -895,10 +895,11 @@ public sealed class PollAsync : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenPolling_UsesCheapBranchRulesEvaluationNotWriteProbe()
+    public async Task WhenPolling_AndVerdictIsGranted_UsesCheapBranchRulesEvaluationNotWriteProbe()
     {
-        // Arrange — poll cycle must use cheap path (no write probe issued)
+        // Arrange — Granted verdict is never due for re-probe; poll cycle must use the cheap path.
         MonitoredRepository repository = SeedRepository();
+        repository.SetWriteProbeVerdict(new WriteProbeVerdict.Granted());
         StubIssueProvider provider = new([]);
 
         // Act
@@ -908,6 +909,40 @@ public sealed class PollAsync : IAsyncDisposable
         result.IsSuccess.ShouldBeTrue();
         _eligibilityEvaluator.CheapEvaluateCallCount.ShouldBe(1);
         _eligibilityEvaluator.FullEvaluateCallCount.ShouldBe(0);
+    }
+
+    [Fact]
+    public async Task WhenPolling_AndVerdictIsUnknownWithinCooldown_UsesCheapEvaluation()
+    {
+        // Arrange — Unknown stamped within the 15-minute cooldown is not due; use cheap path.
+        MonitoredRepository repository = SeedRepository();
+        repository.SetWriteProbeVerdict(new WriteProbeVerdict.Unknown(Now.AddMinutes(-5)));
+        StubIssueProvider provider = new([]);
+
+        // Act
+        Result result = await _sut.PollAsync(repository, provider, Now, CancellationToken.None);
+
+        // Assert
+        result.IsSuccess.ShouldBeTrue();
+        _eligibilityEvaluator.CheapEvaluateCallCount.ShouldBe(1);
+        _eligibilityEvaluator.FullEvaluateCallCount.ShouldBe(0);
+    }
+
+    [Fact]
+    public async Task WhenPolling_AndVerdictIsUnknownWithNullTimestamp_UsesFullEvaluation()
+    {
+        // Arrange — Unknown with no prior attempt is always due; use the full write-probe path.
+        MonitoredRepository repository = SeedRepository();
+        // SeedRepository() creates an Unknown with null LastAttemptedAt — due immediately.
+        StubIssueProvider provider = new([]);
+
+        // Act
+        Result result = await _sut.PollAsync(repository, provider, Now, CancellationToken.None);
+
+        // Assert
+        result.IsSuccess.ShouldBeTrue();
+        _eligibilityEvaluator.FullEvaluateCallCount.ShouldBe(1);
+        _eligibilityEvaluator.CheapEvaluateCallCount.ShouldBe(0);
     }
 
     [Fact]
@@ -1784,6 +1819,7 @@ public sealed class PollAsync : IAsyncDisposable
 
         public Task EvaluateFullyAndStoreAsync(
             MonitoredRepository repo,
+            DateTimeOffset now,
             CancellationToken cancellationToken)
         {
             EvaluateCallCount++;

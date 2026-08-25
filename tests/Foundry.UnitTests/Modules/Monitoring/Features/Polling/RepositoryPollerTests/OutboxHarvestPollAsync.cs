@@ -203,7 +203,7 @@ public sealed class OutboxHarvestPollAsync : IAsyncDisposable
 
     private sealed class NullEligibilityEvaluator : IRepositoryEligibilityEvaluator
     {
-        public Task EvaluateFullyAndStoreAsync(MonitoredRepository repo, CancellationToken cancellationToken)
+        public Task EvaluateFullyAndStoreAsync(MonitoredRepository repo, DateTimeOffset now, CancellationToken cancellationToken)
             => Task.CompletedTask;
 
         public Task EvaluateBranchRulesAndStoreAsync(MonitoredRepository repo, CancellationToken cancellationToken)

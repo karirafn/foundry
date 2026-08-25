@@ -395,6 +395,7 @@ public sealed class ExecuteTickAsync : IAsyncDisposable
     {
         public Task EvaluateFullyAndStoreAsync(
             MonitoredRepository repo,
+            DateTimeOffset now,
             CancellationToken cancellationToken)
             => Task.CompletedTask;
 

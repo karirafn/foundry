@@ -186,6 +186,7 @@ public sealed class DiffAsync : IAsyncDisposable
     {
         public Task EvaluateFullyAndStoreAsync(
             MonitoredRepository repo,
+            DateTimeOffset now,
             CancellationToken cancellationToken) =>
             Task.CompletedTask;
 
@@ -202,6 +203,7 @@ public sealed class DiffAsync : IAsyncDisposable
 
         public Task EvaluateFullyAndStoreAsync(
             MonitoredRepository repo,
+            DateTimeOffset now,
             CancellationToken cancellationToken)
         {
             FullEvaluateCallCount++;
@@ -222,6 +224,7 @@ public sealed class DiffAsync : IAsyncDisposable
     {
         public Task EvaluateFullyAndStoreAsync(
             MonitoredRepository repo,
+            DateTimeOffset now,
             CancellationToken cancellationToken)
         {
             if (assignments.TryGetValue(repo.Slug.FullPath, out RepositoryEligibility? eligibility))
