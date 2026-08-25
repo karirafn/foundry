@@ -1,3 +1,5 @@
+using System.Net;
+
 using Foundry.Shared;
 
 namespace Foundry.Modules.Monitoring.Domain.ValueObjects;
@@ -25,6 +27,16 @@ public sealed record BaseUrl
         if (!string.IsNullOrEmpty(uri.UserInfo) || uri.AbsoluteUri.Contains('@', StringComparison.Ordinal))
         {
             return Result<BaseUrl>.Fail(BaseUrlErrors.ContainsCredentials);
+        }
+
+        // Provider base URLs are always DNS-named. A literal IP host — whether loopback, link-local,
+        // RFC-1918 private, or a public IP — is rejected unconditionally. This closes the SSRF
+        // literal-IP vector and removes a DNS-rebinding vector at the same time.
+        // uri.Host strips brackets from IPv6 literals (e.g. [::1] → ::1), so IPAddress.TryParse
+        // detects both IPv4 and IPv6 literal hosts.
+        if (IPAddress.TryParse(uri.Host, out _))
+        {
+            return Result<BaseUrl>.Fail(BaseUrlErrors.PrivateHost);
         }
 
         return new BaseUrl(uri);
