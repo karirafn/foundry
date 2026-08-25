@@ -11,7 +11,7 @@ namespace Foundry.UnitTests.Modules.Monitoring.Domain.MonitoredRepositoryTests;
 
 public sealed class IsDueForWriteProbe
 {
-    private static readonly TimeSpan Cooldown = TimeSpan.FromMinutes(15);
+    private static readonly TimeSpan Cooldown = MonitoredRepository.WriteProbeCooldown;
 
     private static readonly DateTimeOffset Now = new(2026, 8, 25, 12, 0, 0, TimeSpan.Zero);
 

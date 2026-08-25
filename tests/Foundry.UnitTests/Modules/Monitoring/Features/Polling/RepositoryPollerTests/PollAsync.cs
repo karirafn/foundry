@@ -914,9 +914,10 @@ public sealed class PollAsync : IAsyncDisposable
     [Fact]
     public async Task WhenPolling_AndVerdictIsUnknownWithinCooldown_UsesCheapEvaluation()
     {
-        // Arrange — Unknown stamped within the 15-minute cooldown is not due; use cheap path.
+        // Arrange — Unknown stamped within the cooldown is not due; use cheap path.
         MonitoredRepository repository = SeedRepository();
-        repository.SetWriteProbeVerdict(new WriteProbeVerdict.Unknown(Now.AddMinutes(-5)));
+        repository.SetWriteProbeVerdict(
+            new WriteProbeVerdict.Unknown(Now - (MonitoredRepository.WriteProbeCooldown / 2)));
         StubIssueProvider provider = new([]);
 
         // Act

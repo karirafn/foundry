@@ -323,6 +323,27 @@ public sealed class EvaluateFullyAndStoreAsync
     }
 
     [Fact]
+    public async Task WhenGitLabCanPushThrows_SetsWriteProbeVerdictToUnknownWithAttemptTimestamp()
+    {
+        // Arrange
+        MonitoredRepository repo = CreateRepo();
+        GitLabCredential credential = GitLabCredential.Create(
+            "test",
+            "token",
+            BaseUrl.Create("https://gitlab.com").ValueOrThrow());
+        RepositoryEligibilityEvaluator sut = CreateSut(
+            resolver: new StubCredentialResolver(credential),
+            providerFactory: new ThrowingCanPushProviderFactory());
+
+        // Act
+        await sut.EvaluateFullyAndStoreAsync(repo, Now, CancellationToken.None);
+
+        // Assert
+        WriteProbeVerdict.Unknown unknown = repo.WriteProbeVerdict.ShouldBeOfType<WriteProbeVerdict.Unknown>();
+        unknown.LastAttemptedAt.ShouldBe(Now);
+    }
+
+    [Fact]
     public async Task WhenGitLabCredentialCoversRepo_AndCanPushReturnsTrue_AndBranchProtectionPasses_SetsEligibilityToEligible()
     {
         // Arrange
