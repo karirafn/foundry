@@ -31,27 +31,6 @@ public sealed class WhenHostIsNotAllowed : IAsyncDisposable
     }
 
     [Fact]
-    public async Task ReturnsBadRequest()
-    {
-        // Arrange
-        object body = new
-        {
-            providerType = "github",
-            baseUrl = "https://attacker.example.com",
-            token = "ghp_test_token",
-        };
-
-        // Act
-        HttpResponseMessage response = await _client.PostAsJsonAsync(
-            new Uri("/api/accounts", UriKind.Relative),
-            body,
-            TestContext.Current.CancellationToken);
-
-        // Assert
-        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
-    }
-
-    [Fact]
     public async Task ReturnsHostNotAllowedMessage()
     {
         // Arrange

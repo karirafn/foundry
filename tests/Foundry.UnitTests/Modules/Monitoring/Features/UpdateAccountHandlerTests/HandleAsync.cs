@@ -667,6 +667,28 @@ public sealed class HandleAsync : IAsyncDisposable
     }
 
     [Fact]
+    public async Task WhenHostNotAllowed_RejectsBeforeDbLookup()
+    {
+        // Arrange — use a non-existent credential ID; if the guard runs after the DB fetch,
+        // the handler would return NotFound, not HostNotAllowed.
+        FakeHostAddressResolver resolver = new FakeHostAddressResolver()
+            .WithAddresses("attacker.example.com", System.Net.IPAddress.Parse("93.184.216.34"));
+        StubGlobalSettingsQueries settings = new(allowedHosts: []);
+        ProviderHostGuard guard = new(settings, resolver);
+
+        UpdateAccount.Handler handler = BuildHandler(hostGuard: guard);
+        CredentialId nonExistentId = CredentialId.New();
+        UpdateAccount.Command command = new(nonExistentId, "https://attacker.example.com", Token: null);
+
+        // Act
+        UpdateAccount.Outcome outcome = await handler.HandleAsync(command, TestContext.Current.CancellationToken);
+
+        // Assert — guard fires first; NotFound is never reached
+        UpdateAccount.Outcome.Rejected rejected = outcome.ShouldBeOfType<UpdateAccount.Outcome.Rejected>();
+        rejected.Error.Code.ShouldBe("ProviderHost.NotAllowed");
+    }
+
+    [Fact]
     public async Task WhenHostNotAllowed_WithToken_RejectsBeforeTokenResolution()
     {
         // Arrange — "attacker.example.com" not in implicit set; allowlist empty

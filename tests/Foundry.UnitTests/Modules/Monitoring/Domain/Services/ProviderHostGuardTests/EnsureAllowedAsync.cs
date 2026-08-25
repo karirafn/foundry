@@ -2,7 +2,6 @@ using System.Net;
 
 using Foundry.Modules.Monitoring.Domain.Services;
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
-using Foundry.Modules.Settings.Contracts;
 using Foundry.Modules.Settings.Contracts.Queries;
 using Foundry.Shared;
 using Foundry.Testing;
@@ -24,7 +23,7 @@ public sealed class EnsureAllowedAsync
         IGlobalSettingsQueries? settings = null)
     {
         return new ProviderHostGuard(
-            settings ?? new EmptyAllowlistSettings(),
+            settings ?? new StubGlobalSettingsQueries([]),
             resolver ?? new FakeHostAddressResolver());
     }
 
@@ -83,7 +82,7 @@ public sealed class EnsureAllowedAsync
         ProviderHostGuard sut = BuildGuard(
             resolver: new FakeHostAddressResolver()
                 .WithAddresses("self.hosted.example", IPAddress.Parse("203.0.113.50")),
-            settings: new SeededAllowlistSettings(["self.hosted.example"]));
+            settings: new StubGlobalSettingsQueries(["self.hosted.example"]));
         BaseUrl baseUrl = BaseUrl.Create("https://self.hosted.example").ValueOrThrow();
 
         // Act
@@ -293,7 +292,7 @@ public sealed class EnsureAllowedAsync
         ProviderHostGuard sut = BuildGuard(
             resolver: new FakeHostAddressResolver()
                 .WithAddresses("self.hosted.example", IPAddress.Parse("203.0.113.50")),
-            settings: new SeededAllowlistSettings(["SELF.HOSTED.EXAMPLE"]));
+            settings: new StubGlobalSettingsQueries(["SELF.HOSTED.EXAMPLE"]));
         BaseUrl baseUrl = BaseUrl.Create("https://self.hosted.example").ValueOrThrow();
 
         // Act
@@ -303,71 +302,4 @@ public sealed class EnsureAllowedAsync
         result.IsSuccess.ShouldBeTrue();
     }
 
-    private sealed class EmptyAllowlistSettings : IGlobalSettingsQueries
-    {
-        public Task<IReadOnlyList<string>> GetAllowedProviderHostsAsync(CancellationToken cancellationToken)
-            => Task.FromResult<IReadOnlyList<string>>([]);
-
-        public Task<GlobalSettingsSummary?> GetSettingsAsync(CancellationToken cancellationToken)
-            => Task.FromResult<GlobalSettingsSummary?>(null);
-
-        public Task<int> GetMaxConcurrentAsync(CancellationToken cancellationToken)
-            => Task.FromResult(0);
-
-        public Task<int> GetTimeoutMinutesAsync(CancellationToken cancellationToken)
-            => Task.FromResult(0);
-
-        public Task<int> GetProbeIntervalMinutesAsync(CancellationToken cancellationToken)
-            => Task.FromResult(0);
-
-        public Task<(string? SystemPromptTemplate, string? WorkerPromptTemplate)> GetPromptTemplatesAsync(
-            CancellationToken cancellationToken)
-            => Task.FromResult<(string?, string?)>((null, null));
-
-        public Task<DispatchPauseState> GetDispatchPauseStateAsync(CancellationToken cancellationToken)
-            => Task.FromResult(new DispatchPauseState(null, false, false));
-
-        public Task<ImageBuildStatus> GetImageBuildStatusAsync(CancellationToken cancellationToken)
-            => Task.FromResult(ImageBuildStatus.Idle);
-
-        public Task<bool> GetWorkerImageInstallsDockerAsync(CancellationToken cancellationToken)
-            => Task.FromResult(false);
-
-        public Task<IReadOnlyDictionary<string, string>> GetWorkerImageBuildArgsAsync(CancellationToken cancellationToken)
-            => Task.FromResult<IReadOnlyDictionary<string, string>>(new Dictionary<string, string>());
-    }
-
-    private sealed class SeededAllowlistSettings(IReadOnlyList<string> allowedHosts) : IGlobalSettingsQueries
-    {
-        public Task<IReadOnlyList<string>> GetAllowedProviderHostsAsync(CancellationToken cancellationToken)
-            => Task.FromResult(allowedHosts);
-
-        public Task<GlobalSettingsSummary?> GetSettingsAsync(CancellationToken cancellationToken)
-            => Task.FromResult<GlobalSettingsSummary?>(null);
-
-        public Task<int> GetMaxConcurrentAsync(CancellationToken cancellationToken)
-            => Task.FromResult(0);
-
-        public Task<int> GetTimeoutMinutesAsync(CancellationToken cancellationToken)
-            => Task.FromResult(0);
-
-        public Task<int> GetProbeIntervalMinutesAsync(CancellationToken cancellationToken)
-            => Task.FromResult(0);
-
-        public Task<(string? SystemPromptTemplate, string? WorkerPromptTemplate)> GetPromptTemplatesAsync(
-            CancellationToken cancellationToken)
-            => Task.FromResult<(string?, string?)>((null, null));
-
-        public Task<DispatchPauseState> GetDispatchPauseStateAsync(CancellationToken cancellationToken)
-            => Task.FromResult(new DispatchPauseState(null, false, false));
-
-        public Task<ImageBuildStatus> GetImageBuildStatusAsync(CancellationToken cancellationToken)
-            => Task.FromResult(ImageBuildStatus.Idle);
-
-        public Task<bool> GetWorkerImageInstallsDockerAsync(CancellationToken cancellationToken)
-            => Task.FromResult(false);
-
-        public Task<IReadOnlyDictionary<string, string>> GetWorkerImageBuildArgsAsync(CancellationToken cancellationToken)
-            => Task.FromResult<IReadOnlyDictionary<string, string>>(new Dictionary<string, string>());
-    }
 }

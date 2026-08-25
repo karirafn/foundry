@@ -216,6 +216,11 @@ public sealed class GlobalSettings : AggregateRoot<GlobalSettingsId>
                 return SettingsErrors.InvalidProviderHost(host);
             }
 
+            if (host.Contains(':', StringComparison.Ordinal))
+            {
+                return SettingsErrors.InvalidProviderHost(host);
+            }
+
             normalized.Add(host.Trim().ToLowerInvariant());
         }
 

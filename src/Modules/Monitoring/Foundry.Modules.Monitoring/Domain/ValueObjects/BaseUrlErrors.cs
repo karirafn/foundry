@@ -13,7 +13,7 @@ public static class BaseUrlErrors
         "Base URL must not contain user credentials.");
 
     public static readonly Error ContainsQueryOrFragment = new(
-        "BaseUrl.Invalid",
+        "BaseUrl.ContainsQueryOrFragment",
         "Base URL must not contain a query string or fragment.");
 
     public static readonly Error PrivateHost = new(

@@ -85,7 +85,7 @@ public sealed class Create
     }
 
     [Fact]
-    public void WhenUrlContainsQueryString_ReturnsInvalidError()
+    public void WhenUrlContainsQueryString_ReturnsContainsQueryOrFragmentError()
     {
         // Arrange
         string url = "https://gitlab.example.com/?x=1";
@@ -96,11 +96,11 @@ public sealed class Create
         // Assert
         result.IsFailure.ShouldBeTrue();
         Error error = ((Result<BaseUrl>.Failure)result).Error;
-        error.Code.ShouldBe("BaseUrl.Invalid");
+        error.ShouldBe(BaseUrlErrors.ContainsQueryOrFragment);
     }
 
     [Fact]
-    public void WhenUrlContainsFragment_ReturnsInvalidError()
+    public void WhenUrlContainsFragment_ReturnsContainsQueryOrFragmentError()
     {
         // Arrange
         string url = "https://gitlab.example.com/#section";
@@ -111,7 +111,7 @@ public sealed class Create
         // Assert
         result.IsFailure.ShouldBeTrue();
         Error error = ((Result<BaseUrl>.Failure)result).Error;
-        error.Code.ShouldBe("BaseUrl.Invalid");
+        error.ShouldBe(BaseUrlErrors.ContainsQueryOrFragment);
     }
 
     [Fact]

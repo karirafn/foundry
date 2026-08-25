@@ -95,14 +95,6 @@ internal static partial class UpdateAccount
             Command command,
             CancellationToken cancellationToken)
         {
-            if (await dbContext.Set<Credential>()
-                    .Include(c => c.Namespaces)
-                    .FirstOrDefaultAsync(a => a.Id == command.Id, cancellationToken)
-                is not Credential credential)
-            {
-                return new Outcome.Rejected(CredentialErrors.NotFound(command.Id));
-            }
-
             if (BaseUrlVo.Create(command.BaseUrl) is not Result<BaseUrlVo>.Success { Value: BaseUrlVo baseUrl })
             {
                 throw new UnreachableException("BaseUrl validated in the validator but failed in the handler.");
@@ -112,6 +104,14 @@ internal static partial class UpdateAccount
             if (hostGuardResult is Result.Failure hostGuardFailure)
             {
                 return new Outcome.Rejected(hostGuardFailure.Error);
+            }
+
+            if (await dbContext.Set<Credential>()
+                    .Include(c => c.Namespaces)
+                    .FirstOrDefaultAsync(a => a.Id == command.Id, cancellationToken)
+                is not Credential credential)
+            {
+                return new Outcome.Rejected(CredentialErrors.NotFound(command.Id));
             }
 
             bool isGitLab = credential is GitLabCredential;

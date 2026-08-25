@@ -106,6 +106,22 @@ public sealed class UpdateAllowedProviderHosts
     }
 
     [Theory]
+    [InlineData("git.example.com:8443")]
+    [InlineData("git.example.com:443")]
+    public void WhenHostContainsPort_ReturnsInvalidProviderHostError(string host)
+    {
+        // Arrange
+        GlobalSettings settings = GlobalSettings.Create();
+
+        // Act
+        Result result = settings.UpdateAllowedProviderHosts([host]);
+
+        // Assert
+        Result.Failure failure = result.ShouldBeOfType<Result.Failure>();
+        failure.Error.Code.ShouldBe("Settings.InvalidProviderHost");
+    }
+
+    [Theory]
     [InlineData("git.example.com/path")]
     [InlineData("git.example.com/org/repo")]
     public void WhenHostContainsPath_ReturnsInvalidProviderHostError(string host)
