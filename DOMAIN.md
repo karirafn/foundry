@@ -283,11 +283,23 @@ Computed get-only members (`TierRank`, `DispatchBranchName`, `Context`) are not 
 ## Repository Eligibility
 
 Whether a Monitored Repository meets Foundry's processing preconditions (Branch Protection and write permission).
-Modeled as a value object with three variants: `Eligible`, `Ineligible` (carries a non-empty collection of `EligibilityViolation` values), and `Unreachable` (an eligibility input could not be established). The two causes of `Unreachable` recover differently: a failed branch-rules GET is retried on the next poll cycle, while an `Unknown` write-probe verdict self-heals — it is automatically re-probed on the next poll cycle once a 15-minute cooldown has elapsed since the last attempt (or immediately if never attempted). `Granted` and `Denied` verdicts remain event-triggered.
+Modeled as a value object with three variants: `Eligible`, `Ineligible` (carries a non-empty collection of `EligibilityViolation` values), and `Unreachable` (an eligibility input could not be established).
+`Unreachable` carries an `UnreachableReason` that distinguishes three causes — each with a distinct operator-facing message:
+
+- **`NeverProbed`** — the write-probe result is `Unknown(Transport)`: no probe has succeeded yet, or the probe failed for a non-rate-limit reason.
+- **`RateLimited`** — the write-probe result is `Unknown(RateLimited)`: the probe returned a GitHub 403 classified as rate-limit exhaustion (see below). The repository self-heals automatically when the REST budget resets; no operator action is needed.
+- **`BranchRulesUnavailable`** — the branch-rules GET failed on the current poll cycle.
+
+The `NeverProbed` and `RateLimited` causes recover via the `Unknown` self-heal cadence — the repository is automatically re-probed on the next poll cycle once a 15-minute cooldown has elapsed since the last attempt. `BranchRulesUnavailable` is retried on the next poll cycle unconditionally. `Granted` and `Denied` verdicts remain event-triggered.
 Stored on the Monitored Repository and composed from two checks of different cadence:
 
-- **Branch-rules GET (per-cycle)** — re-evaluated unconditionally on every poll cycle and synchronously at repository creation. A configuration change on the provider is reflected on the next poll without user action (auto-heal).
-- **Write probe (event-triggered for Granted/Denied; self-healing for Unknown)** — runs on repository add, manual re-check, and credential update/rotation. The last result is persisted on `MonitoredRepository` as a `WriteProbeVerdict` value object (`Granted` / `Denied` / `Unknown`) and composed with the fresh branch-rules result each cycle. `Unknown` maps to `Unreachable` and is automatically re-probed on each poll cycle after a 15-minute cooldown; `Granted` and `Denied` are only re-probed by operator or credential events. A failed probe stamps `Unknown.LastAttemptedAt` so the next automatic retry is one cooldown away. See ADR 0054.
+- **Branch-rules GET (per-cycle)** — re-evaluated unconditionally on every poll cycle and synchronously at repository creation. A configuration change on the provider is reflected on the next poll without user action (auto-heal). A failed GET produces `Unreachable(BranchRulesUnavailable)`.
+- **Write probe (event-triggered for Granted/Denied; self-healing for Unknown)** — runs on repository add, manual re-check, and credential update/rotation. The last result is persisted on `MonitoredRepository` as a `WriteProbeVerdict` value object (`Granted` / `Denied` / `Unknown`), which carries an `UnknownReason` (`Transport` or `RateLimited`). The verdict is composed with the fresh branch-rules result each cycle. `Unknown(Transport)` maps to `Unreachable(NeverProbed)`; `Unknown(RateLimited)` maps to `Unreachable(RateLimited)`. Both are automatically re-probed after a 15-minute cooldown; `Granted` and `Denied` are only re-probed by operator or credential events. A failed probe stamps `Unknown.LastAttemptedAt` so the next automatic retry is one cooldown away. See ADR 0054 and ADR 0055.
+
+**GitHub 403 rate-limit classification.** A GitHub write-probe 403 is not always a missing-permission denial.
+Classification keys on explicit rate-limit response headers: a 403 with `X-RateLimit-Remaining: 0` or a present `Retry-After` header is treated as rate-limit exhaustion and produces `Result.Fail(RateLimitExhausted)` → `Unknown(RateLimited)`.
+A 403 with headroom or no rate-limit headers stays `Missing` → `Denied` → `CannotPush` (fail-closed for genuine permission denial).
+See ADR 0055 and ADR 0040.
 
 A manual "re-check" action forces immediate re-evaluation of both checks.
 Only `Eligible` repositories have their queued issues dispatched — ineligibility gates dispatch only; detection, dependency reconciliation, and review polling continue regardless. Already-running workers are unaffected.

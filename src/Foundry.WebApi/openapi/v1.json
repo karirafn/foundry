@@ -2382,7 +2382,8 @@
       "RepositoryEligibilityInfo": {
         "required": [
           "status",
-          "violations"
+          "violations",
+          "reason"
         ],
         "type": "object",
         "properties": {
@@ -2394,6 +2395,12 @@
             "items": {
               "$ref": "#/components/schemas/EligibilityViolationInfo"
             }
+          },
+          "reason": {
+            "type": [
+              "null",
+              "string"
+            ]
           }
         }
       },

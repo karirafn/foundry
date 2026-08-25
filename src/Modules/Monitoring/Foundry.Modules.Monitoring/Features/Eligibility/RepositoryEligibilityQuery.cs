@@ -2,6 +2,7 @@ using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Contracts.Queries;
 using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
+using Foundry.Modules.Monitoring.Features.Repositories;
 
 using Microsoft.EntityFrameworkCore;
 
@@ -75,16 +76,7 @@ internal sealed class RepositoryEligibilityQuery(DbContext db) : IRepositoryElig
         return statuses;
     }
 
-    private static RepositoryEligibilityInfo MapToInfo(MonitoredRepository repo)
-    {
-        IReadOnlyList<EligibilityViolationInfo> violations = repo.Eligibility switch
-        {
-            RepositoryEligibility.Ineligible ineligible => ineligible.Violations
-                .Select(v => new EligibilityViolationInfo(v.Rule, v.Description))
-                .ToList(),
-            _ => [],
-        };
-
-        return new RepositoryEligibilityInfo(repo.EligibilityStatus!, violations);
-    }
+    private static RepositoryEligibilityInfo MapToInfo(MonitoredRepository repo) =>
+        RepositoryMappings.ToEligibilityInfo(repo.Eligibility)
+        ?? new RepositoryEligibilityInfo(repo.EligibilityStatus!, [], null);
 }

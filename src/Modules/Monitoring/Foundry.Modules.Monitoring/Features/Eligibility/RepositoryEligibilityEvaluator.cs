@@ -66,7 +66,7 @@ internal sealed class RepositoryEligibilityEvaluator(
             // succeeding. Stamping LastAttemptedAt = now ensures the next automatic retry is
             // one cooldown away rather than immediate.
             repo.SetWriteProbeVerdict(new WriteProbeVerdict.Unknown(LastAttemptedAt: now));
-            repo.SetEligibility(new RepositoryEligibility.Unreachable());
+            repo.SetEligibility(new RepositoryEligibility.Unreachable(UnreachableReason.NeverProbed));
         }
     }
 
@@ -108,7 +108,7 @@ internal sealed class RepositoryEligibilityEvaluator(
                 ex,
                 "Failed to evaluate eligibility for repository {Slug}; marking as unreachable.",
                 repo.Slug);
-            repo.SetEligibility(new RepositoryEligibility.Unreachable());
+            repo.SetEligibility(new RepositoryEligibility.Unreachable(UnreachableReason.NeverProbed));
         }
     }
 
@@ -142,8 +142,15 @@ internal sealed class RepositoryEligibilityEvaluator(
 
         if (probeResult is not Result<WritePermissionProbeResult>.Success { Value: WritePermissionProbeResult probe })
         {
-            // Transport failure — stamp the attempt time so the next automatic retry is one cooldown away.
-            return new WriteProbeVerdict.Unknown(LastAttemptedAt: now);
+            // Stamp the attempt time so the next automatic retry is one cooldown away.
+            // Distinguish rate-limit exhaustion from other transport failures so the eligibility
+            // composer can surface the real cause (Unreachable vs. a transient network issue).
+            UnknownReason reason = probeResult is Result<WritePermissionProbeResult>.Failure failure
+                && failure.Error.Code == GitHubErrors.RateLimitExhausted.Code
+                    ? UnknownReason.RateLimited
+                    : UnknownReason.Transport;
+
+            return new WriteProbeVerdict.Unknown(LastAttemptedAt: now, Reason: reason);
         }
 
         return probe is WritePermissionProbeResult.Missing
