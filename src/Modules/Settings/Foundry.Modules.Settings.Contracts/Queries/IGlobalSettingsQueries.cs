@@ -25,4 +25,6 @@ public interface IGlobalSettingsQueries
     Task<bool> GetWorkerImageInstallsDockerAsync(CancellationToken cancellationToken);
 
     Task<IReadOnlyDictionary<string, string>> GetWorkerImageBuildArgsAsync(CancellationToken cancellationToken);
+
+    Task<IReadOnlyList<string>> GetAllowedProviderHostsAsync(CancellationToken cancellationToken);
 }

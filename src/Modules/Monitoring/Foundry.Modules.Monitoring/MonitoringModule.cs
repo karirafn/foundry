@@ -1,5 +1,6 @@
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Contracts.Queries;
+using Foundry.Modules.Monitoring.Domain.Services;
 using Foundry.Modules.Monitoring.Features.Accounts;
 using Foundry.Modules.Monitoring.Features.Accounts.Rotation;
 using Foundry.Modules.Monitoring.Features.Accounts.Tokens;
@@ -32,6 +33,8 @@ public static class MonitoringModule
 
         services.AddMemoryCache();
         services.TryAddSingleton<DefaultBranchCache>();
+        services.TryAddSingleton<IHostAddressResolver, SystemHostAddressResolver>();
+        services.AddScoped<ProviderHostGuard>();
 
         services.AddHttpClient<GitHubHttpClient>();
         services.AddTransient<IGitHubWriteProber>(sp => sp.GetRequiredService<GitHubHttpClient>());

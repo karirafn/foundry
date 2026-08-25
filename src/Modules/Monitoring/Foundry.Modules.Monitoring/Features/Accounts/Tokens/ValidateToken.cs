@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Text.Json.Serialization;
 
 using Foundry.Modules.Monitoring.Domain.Entities;
+using Foundry.Modules.Monitoring.Domain.Services;
 using Foundry.Modules.Monitoring.Infrastructure;
 using Foundry.Modules.Monitoring.Infrastructure.GitHub;
 using Foundry.Modules.Monitoring.Infrastructure.GitLab;
@@ -99,6 +100,7 @@ internal static class ValidateToken
             group.MapPost("/validate-token", static async (
                     RequestBody body,
                     IQueryHandler<Query, Response> handler,
+                    ProviderHostGuard providerHostGuard,
                     CancellationToken cancellationToken) =>
                 {
                     Result<BaseUrlVo> baseUrlResult = BaseUrlVo.Create(body.BaseUrl);
@@ -109,6 +111,12 @@ internal static class ValidateToken
                     }
 
                     BaseUrlVo parsedBaseUrl = ((Result<BaseUrlVo>.Success)baseUrlResult).Value;
+
+                    Result hostGuardResult = await providerHostGuard.EnsureAllowedAsync(parsedBaseUrl, cancellationToken);
+                    if (hostGuardResult is Result.Failure hostGuardFailure)
+                    {
+                        return TypedResults.BadRequest(hostGuardFailure.Error.Message);
+                    }
 
                     if (!ProviderTypes.IsKnown(body.ProviderType))
                     {

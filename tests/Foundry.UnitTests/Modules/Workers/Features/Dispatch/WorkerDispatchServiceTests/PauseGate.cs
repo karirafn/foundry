@@ -368,6 +368,9 @@ public sealed class PauseGate : WorkerDispatchServiceTestBase
 
         public Task<IReadOnlyDictionary<string, string>> GetWorkerImageBuildArgsAsync(CancellationToken cancellationToken)
             => Task.FromResult(WorkerImageConfiguration.Default.ToBuildArgs());
+
+        public Task<IReadOnlyList<string>> GetAllowedProviderHostsAsync(CancellationToken cancellationToken)
+            => Task.FromResult<IReadOnlyList<string>>([]);
     }
 
     private sealed class NullWorkerOrchestrator : IWorkerOrchestrator

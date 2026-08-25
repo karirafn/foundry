@@ -288,6 +288,33 @@ public sealed class ToSummary
     }
 
     [Fact]
+    public void WhenDefaultSettings_AllowedProviderHostsIsEmpty()
+    {
+        // Arrange
+        GlobalSettings settings = CreateDefaultSettings();
+
+        // Act
+        GlobalSettingsSummary result = GlobalSettingsMapper.ToSummary(settings);
+
+        // Assert
+        result.AllowedProviderHosts.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public void WhenAllowedProviderHostsSet_SummaryReflectsHosts()
+    {
+        // Arrange
+        GlobalSettings settings = CreateDefaultSettings();
+        settings.UpdateAllowedProviderHosts(["github.com", "gitlab.com"]);
+
+        // Act
+        GlobalSettingsSummary result = GlobalSettingsMapper.ToSummary(settings);
+
+        // Assert
+        result.AllowedProviderHosts.ShouldBe(["github.com", "gitlab.com"]);
+    }
+
+    [Fact]
     public void WhenDefaultSettings_ProbeIntervalMinutesIsDefault()
     {
         // Arrange

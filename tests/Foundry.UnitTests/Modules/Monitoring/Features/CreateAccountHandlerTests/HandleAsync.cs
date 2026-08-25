@@ -1,5 +1,6 @@
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Domain.Entities;
+using Foundry.Modules.Monitoring.Domain.Services;
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Features.Eligibility;
 using Foundry.Modules.Monitoring.Features.NamespaceDerivation;
@@ -11,6 +12,7 @@ using Foundry.Modules.Monitoring.Infrastructure;
 using Foundry.Modules.Monitoring.Infrastructure.GitHub;
 using Foundry.Shared;
 using Foundry.Testing;
+using Foundry.UnitTests.Fakes.Monitoring;
 using Foundry.WebApi.Persistence;
 
 using Microsoft.Data.Sqlite;
@@ -46,11 +48,21 @@ public sealed class HandleAsync : IAsyncDisposable
         await _connection.DisposeAsync();
     }
 
+    private static ProviderHostGuard BuildPassingGuard()
+    {
+        FakeHostAddressResolver resolver = new FakeHostAddressResolver()
+            .WithAddresses("github.com", System.Net.IPAddress.Parse("140.82.121.4"))
+            .WithAddresses("gitlab.com", System.Net.IPAddress.Parse("172.65.251.78"));
+        StubGlobalSettingsQueries settings = new(allowedHosts: []);
+        return new ProviderHostGuard(settings, resolver);
+    }
+
     private CreateAccount.Handler BuildHandler(
         INamespaceDeriver namespaceDeriver,
         IRepositoryEligibilityEvaluator? evaluator = null,
         IGitHubWriteProber? writeProber = null,
-        IQueryHandler<ValidateToken.Query, ValidateToken.Response>? validateToken = null)
+        IQueryHandler<ValidateToken.Query, ValidateToken.Response>? validateToken = null,
+        ProviderHostGuard? hostGuard = null)
     {
         RepositoryEligibilityDiffer differ = new(
             _dbContext,
@@ -61,7 +73,8 @@ public sealed class HandleAsync : IAsyncDisposable
             validateToken ?? new StubValidateTokenHandler(),
             namespaceDeriver,
             differ,
-            writeProber ?? new GrantedWriteProber());
+            writeProber ?? new GrantedWriteProber(),
+            hostGuard ?? BuildPassingGuard());
     }
 
     [Fact]
@@ -637,6 +650,32 @@ public sealed class HandleAsync : IAsyncDisposable
         failure.Error.Code.ShouldBe(CredentialErrors.UnresolvedIdentityCode);
     }
 
+    [Fact]
+    public async Task WhenHostNotAllowed_RejectsWithHostGuardError_AndValidateTokenNeverCalled()
+    {
+        // Arrange — "attacker.example.com" is not in the implicit set and the allowlist is empty
+        FakeHostAddressResolver resolver = new FakeHostAddressResolver()
+            .WithAddresses("attacker.example.com", System.Net.IPAddress.Parse("93.184.216.34"));
+        StubGlobalSettingsQueries settings = new(allowedHosts: []);
+        ProviderHostGuard guard = new(settings, resolver);
+
+        SpyValidateTokenHandler spy = new();
+        CreateAccount.Handler handler = BuildHandler(
+            new StubNamespaceDeriver(new NamespaceDerivationOutcome.Derived([], [])),
+            validateToken: spy,
+            hostGuard: guard);
+
+        CreateAccount.Command command = new("github", "https://attacker.example.com", "ghp_stolen");
+
+        // Act
+        CreateAccount.Outcome result = await handler.HandleAsync(command, TestContext.Current.CancellationToken);
+
+        // Assert
+        CreateAccount.Outcome.Failure failure = result.ShouldBeOfType<CreateAccount.Outcome.Failure>();
+        failure.Error.Code.ShouldBe("ProviderHost.NotAllowed");
+        spy.WasCalled.ShouldBeFalse();
+    }
+
     private sealed class StubValidateTokenHandler
         : IQueryHandler<ValidateToken.Query, ValidateToken.Response>
     {
@@ -644,6 +683,25 @@ public sealed class HandleAsync : IAsyncDisposable
             ValidateToken.Query query,
             CancellationToken cancellationToken)
         {
+            ValidateToken.Response response = new(
+                Kind: ValidateToken.Kinds.Authenticated,
+                AccountName: "octocat",
+                MissingScopes: [],
+                DetectedProvider: null);
+            return Task.FromResult(Result<ValidateToken.Response>.Ok(response));
+        }
+    }
+
+    private sealed class SpyValidateTokenHandler
+        : IQueryHandler<ValidateToken.Query, ValidateToken.Response>
+    {
+        public bool WasCalled { get; private set; }
+
+        public Task<Result<ValidateToken.Response>> HandleAsync(
+            ValidateToken.Query query,
+            CancellationToken cancellationToken)
+        {
+            WasCalled = true;
             ValidateToken.Response response = new(
                 Kind: ValidateToken.Kinds.Authenticated,
                 AccountName: "octocat",

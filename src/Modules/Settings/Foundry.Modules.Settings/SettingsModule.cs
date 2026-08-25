@@ -2,6 +2,7 @@ using Foundry.Modules.Settings.Contracts;
 using Foundry.Modules.Settings.Contracts.Queries;
 using Foundry.Modules.Settings.Features;
 using Foundry.Modules.Settings.Features.Dispatch;
+using Foundry.Modules.Settings.Features.ProviderHosts;
 using Foundry.Modules.Settings.Features.WorkerConfig;
 using Foundry.Modules.Workers.Contracts;
 using Foundry.Shared;
@@ -27,6 +28,7 @@ public static class SettingsModule
         services.AddCommandHandler<ResumeDispatch.Command, GlobalSettingsSummary, ResumeDispatch.Handler>();
         services.AddCommandHandler<UpdateWorkerImageConfiguration.Command, GlobalSettingsSummary, UpdateWorkerImageConfiguration.Handler>();
         services.AddCommandHandler<RetryImageBuild.Command, GlobalSettingsSummary, RetryImageBuild.Handler>();
+        services.AddCommandHandler<UpdateAllowedProviderHosts.Command, GlobalSettingsSummary, UpdateAllowedProviderHosts.Handler>();
 
         services.AddIntegrationEventHandler<ImageBuildRequested, ImageBuildRequestedHandler>();
         services.AddIntegrationEventHandler<ImageBuildSucceeded, ImageBuildSucceededHandler>();

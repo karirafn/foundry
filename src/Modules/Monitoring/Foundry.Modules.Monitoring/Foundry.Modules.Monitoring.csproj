@@ -12,6 +12,7 @@
     <ProjectReference Include="..\Foundry.Modules.Monitoring.Contracts\Foundry.Modules.Monitoring.Contracts.csproj" />
     <ProjectReference Include="..\..\..\Foundry.Shared.Infrastructure\Foundry.Shared.Infrastructure.csproj" />
     <ProjectReference Include="..\..\Issues\Foundry.Modules.Issues.Contracts\Foundry.Modules.Issues.Contracts.csproj" />
+    <ProjectReference Include="..\..\Settings\Foundry.Modules.Settings.Contracts\Foundry.Modules.Settings.Contracts.csproj" />
   </ItemGroup>
 
 </Project>
