@@ -3,6 +3,7 @@ using System.Text.RegularExpressions;
 
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Domain.Entities;
+using Foundry.Modules.Monitoring.Domain.Services;
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Features.Accounts.Rotation;
 using Foundry.Modules.Monitoring.Features.Accounts.Tokens;
@@ -120,7 +121,8 @@ internal static partial class CreateAccount
         IQueryHandler<ValidateToken.Query, ValidateToken.Response> validateToken,
         INamespaceDeriver namespaceDeriver,
         RepositoryEligibilityDiffer differ,
-        IGitHubWriteProber writeProber)
+        IGitHubWriteProber writeProber,
+        ProviderHostGuard hostGuard)
     {
         public async Task<Outcome> HandleAsync(
             Command command,
@@ -129,6 +131,12 @@ internal static partial class CreateAccount
             if (BaseUrlVo.Create(command.BaseUrl) is not Result<BaseUrlVo>.Success { Value: BaseUrlVo baseUrl })
             {
                 throw new UnreachableException("BaseUrl validated in the validator but failed in the handler.");
+            }
+
+            Result hostGuardResult = await hostGuard.EnsureAllowedAsync(baseUrl, cancellationToken);
+            if (hostGuardResult is Result.Failure hostGuardFailure)
+            {
+                return new Outcome.Failure(hostGuardFailure.Error);
             }
 
             bool isGitLab = string.Equals(command.ProviderType, ProviderTypes.GitLab, StringComparison.OrdinalIgnoreCase);
