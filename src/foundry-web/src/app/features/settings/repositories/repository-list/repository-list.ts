@@ -188,7 +188,7 @@ import { SpinnerComponent } from '../../../../shared/components/spinner/spinner'
                     type="button"
                     [attr.aria-expanded]="_expandedId() === repo.id ? 'true' : 'false'"
                     [attr.aria-controls]="'eligibility-detail-' + repo.id"
-                    [attr.aria-label]="'Branch protection details for ' + repo.slug"
+                    [attr.aria-label]="'Eligibility details for ' + repo.slug"
                     (click)="toggleExpand(repo.id)"
                     (keydown.enter)="onToggleKeydown($event, repo.id)"
                     (keydown.space)="onToggleKeydown($event, repo.id)"

@@ -193,8 +193,8 @@ describe('RepositoryEligibilityDetailsComponent', () => {
     expect(explanation?.textContent?.toLowerCase()).not.toContain('check');
   });
 
-  // Cycle 14: unreachable + reason=never-probed — heading and explanation convey not-yet-verified, not permission problem
-  it('should show not-yet-verified heading and explanation without "check access" when reason is never-probed', () => {
+  // Cycle 14: unreachable + reason=never-probed — heading and explanation convey not-yet-checked, not permission problem
+  it('should show not-yet-checked heading when reason is never-probed', () => {
     // Arrange
 
     // Act
@@ -202,10 +202,80 @@ describe('RepositoryEligibilityDetailsComponent', () => {
 
     // Assert
     const heading = el.querySelector('.repository-eligibility-details__heading');
-    expect(heading?.textContent?.trim()).toBe('Write access not yet verified');
+    expect(heading?.textContent?.trim()).toBe('Eligibility not yet checked');
+  });
+
+  it('should show not-yet-checked explanation without "check access" when reason is never-probed', () => {
+    // Arrange
+
+    // Act
+    const { el } = setup({ status: 'unreachable', reason: 'never-probed' });
+
+    // Assert
     const explanation = el.querySelector('.repository-eligibility-details__explanation');
-    expect(explanation?.textContent).toContain('not been verified');
-    expect(explanation?.textContent?.toLowerCase()).not.toContain('check');
+    expect(explanation?.textContent).toContain('not been checked');
+    expect(explanation?.textContent?.toLowerCase()).not.toContain('check the account');
+  });
+
+  // Cycle 17: unreachable + reason=rate-limited — Re-check button is disabled
+  it('should disable the Re-check button when reason is rate-limited', () => {
+    // Arrange
+
+    // Act
+    const { el } = setup({ status: 'unreachable', reason: 'rate-limited' });
+
+    // Assert
+    const recheckBtn = el.querySelector('.repository-eligibility-details__recheck-btn') as HTMLButtonElement;
+    expect(recheckBtn?.disabled).toBe(true);
+  });
+
+  // Cycle 18: unreachable + reason=rate-limited — Re-check button has explanatory title
+  it('should have an explanatory title on the Re-check button when reason is rate-limited', () => {
+    // Arrange
+
+    // Act
+    const { el } = setup({ status: 'unreachable', reason: 'rate-limited' });
+
+    // Assert
+    const recheckBtn = el.querySelector('.repository-eligibility-details__recheck-btn') as HTMLButtonElement;
+    expect(recheckBtn?.getAttribute('title')).toContain('rate limit');
+  });
+
+  // Cycle 19: unreachable + reason=never-probed — Re-check button is enabled
+  it('should keep the Re-check button enabled when reason is never-probed', () => {
+    // Arrange
+
+    // Act
+    const { el } = setup({ status: 'unreachable', reason: 'never-probed' });
+
+    // Assert
+    const recheckBtn = el.querySelector('.repository-eligibility-details__recheck-btn') as HTMLButtonElement;
+    expect(recheckBtn?.disabled).toBe(false);
+  });
+
+  // Cycle 20: unreachable + reason=branch-rules-unavailable — Re-check button is enabled
+  it('should keep the Re-check button enabled when reason is branch-rules-unavailable', () => {
+    // Arrange
+
+    // Act
+    const { el } = setup({ status: 'unreachable', reason: 'branch-rules-unavailable' });
+
+    // Assert
+    const recheckBtn = el.querySelector('.repository-eligibility-details__recheck-btn') as HTMLButtonElement;
+    expect(recheckBtn?.disabled).toBe(false);
+  });
+
+  // Cycle 21: recheckPending + reason=never-probed — button disabled and shows "Re-checking..." (pending composes with rate-limited)
+  it('should disable the Re-check button and show "Re-checking..." when pending even if reason is not rate-limited', () => {
+    // Arrange
+
+    // Act
+    const { el } = setup({ status: 'unreachable', reason: 'never-probed', recheckPending: true });
+
+    // Assert
+    const recheckBtn = el.querySelector('.repository-eligibility-details__recheck-btn') as HTMLButtonElement;
+    expect(recheckBtn?.disabled).toBe(true);
+    expect(recheckBtn?.textContent?.trim()).toBe('Re-checking...');
   });
 
   // Cycle 15: unreachable + reason=branch-rules-unavailable — shows the existing "check access" explanation

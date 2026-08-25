@@ -524,6 +524,18 @@ describe('RepositoryListComponent', () => {
     expect(srOnly?.textContent?.trim()).toBe('Eligible');
   });
 
+  // Finding 1: toggle aria-label is reason-neutral
+  it('should set aria-label to "Eligibility details for <slug>" on the disclosure toggle button', () => {
+    // Arrange
+
+    // Act
+    const { el } = setup({ repositories: [MOCK_REPO_INELIGIBLE] });
+
+    // Assert
+    const toggle = el.querySelector('.repository-list__toggle-btn');
+    expect(toggle?.getAttribute('aria-label')).toBe(`Eligibility details for ${MOCK_REPO_INELIGIBLE.slug}`);
+  });
+
   // Cycle 30: eligible repos do not show disclosure toggle
   it('should not render a disclosure toggle button for eligible repos', () => {
     // Arrange

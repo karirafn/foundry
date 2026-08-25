@@ -14,7 +14,8 @@ import { EligibilityReason, EligibilityStatus, EligibilityViolation } from '../r
           class="repository-eligibility-details__recheck-btn"
           [class.repository-eligibility-details__recheck-btn--unreachable]="status() === 'unreachable'"
           type="button"
-          [disabled]="recheckPending()"
+          [disabled]="recheckPending() || reason() === 'rate-limited'"
+          [attr.title]="reason() === 'rate-limited' ? 'GitHub rate limit active — Foundry retries automatically' : null"
           (click)="recheck.emit()"
         >{{ recheckPending() ? 'Re-checking...' : 'Re-check' }}</button>
       </div>
@@ -59,7 +60,9 @@ export class RepositoryEligibilityDetailsComponent {
       case 'rate-limited':
         return 'GitHub API rate limit reached';
       case 'never-probed':
-        return 'Write access not yet verified';
+        return 'Eligibility not yet checked';
+      case 'branch-rules-unavailable':
+        return 'Branch protection could not be verified';
       default:
         return 'Branch protection could not be verified';
     }
@@ -70,7 +73,9 @@ export class RepositoryEligibilityDetailsComponent {
       case 'rate-limited':
         return 'The GitHub API rate limit has been reached. Foundry will retry automatically.';
       case 'never-probed':
-        return 'Write access has not been verified yet. Foundry will probe automatically.';
+        return 'Eligibility has not been checked yet. Foundry will probe automatically.';
+      case 'branch-rules-unavailable':
+        return 'Foundry could not read branch-protection settings for this repository. Check the account\'s access, then re-check.';
       default:
         return 'Foundry could not read branch-protection settings for this repository. Check the account\'s access, then re-check.';
     }
