@@ -34,4 +34,9 @@ internal static class SettingsErrors
 
     internal static Error InvalidProbeInterval(int value) =>
         new(InvalidProbeIntervalCode, $"Probe interval must be between {GlobalSettings.MinProbeIntervalMinutes} and {GlobalSettings.MaxProbeIntervalMinutes} minutes, but was {value}.");
+
+    internal const string InvalidProviderHostCode = "Settings.InvalidProviderHost";
+
+    internal static Error InvalidProviderHost(string host) =>
+        new(InvalidProviderHostCode, $"'{host}' is not a valid provider host. Provide a bare hostname (e.g. git.example.com) with no scheme, port, or path.");
 }

@@ -108,4 +108,15 @@ internal sealed class GlobalSettingsQueries(DbContext dbContext) : IGlobalSettin
 
         return (settings?.WorkerImageConfiguration ?? WorkerImageConfiguration.Default).ToBuildArgs();
     }
+
+    public async Task<IReadOnlyList<string>> GetAllowedProviderHostsAsync(CancellationToken cancellationToken)
+    {
+        // AllowedProviderHosts is stored as a JSON blob and cannot be projected
+        // into a SQL column — the full entity must be loaded and the value read in memory.
+        GlobalSettings? settings = await dbContext.Set<GlobalSettings>()
+            .AsNoTracking()
+            .FirstOrDefaultAsync(cancellationToken);
+
+        return settings?.AllowedProviderHosts ?? [];
+    }
 }

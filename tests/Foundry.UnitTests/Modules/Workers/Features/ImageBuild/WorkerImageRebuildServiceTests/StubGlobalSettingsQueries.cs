@@ -65,4 +65,7 @@ internal sealed class StubGlobalSettingsQueries(
     public Task<IReadOnlyDictionary<string, string>> GetWorkerImageBuildArgsAsync(
         CancellationToken cancellationToken)
         => Task.FromResult(buildArgs ?? (IReadOnlyDictionary<string, string>)new Dictionary<string, string>());
+
+    public Task<IReadOnlyList<string>> GetAllowedProviderHostsAsync(CancellationToken cancellationToken)
+        => Task.FromResult<IReadOnlyList<string>>([]);
 }

@@ -196,6 +196,9 @@ public sealed class TryRunProbeAsync : IAsyncDisposable
             CancellationToken cancellationToken)
             => Task.FromResult<IReadOnlyDictionary<string, string>>(
                 new Dictionary<string, string>());
+
+        public Task<IReadOnlyList<string>> GetAllowedProviderHostsAsync(CancellationToken cancellationToken)
+            => Task.FromResult<IReadOnlyList<string>>([]);
     }
 
     internal sealed class CapturingIntegrationEventProcessor : IIntegrationEventProcessor
