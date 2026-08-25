@@ -24,9 +24,20 @@ internal sealed class RepositoryPoller(
         DateTimeOffset now,
         CancellationToken cancellationToken)
     {
-        // Pass 0: evaluate repository-level eligibility using stored write-probe verdict every poll cycle.
-        // Using the cheap branch-rules path avoids issuing a write probe on every poll cycle.
-        await eligibilityEvaluator.EvaluateBranchRulesAndStoreAsync(repository, cancellationToken);
+        // Pass 0: evaluate repository-level eligibility every poll cycle.
+        // Branch on whether a fresh write probe is due (verdict is Unknown and either never attempted
+        // or the 15-minute cooldown has elapsed). Repositories with no credential early-return
+        // Ineligible(NoCredential) inside both evaluation paths before any probe is issued, so a
+        // credential-less repo whose verdict is Unknown stays permanently due at zero API cost.
+        if (repository.IsDueForWriteProbe(MonitoredRepository.WriteProbeCooldown, now))
+        {
+            await eligibilityEvaluator.EvaluateFullyAndStoreAsync(repository, now, cancellationToken);
+        }
+        else
+        {
+            // Verdict is Granted, Denied, or Unknown within the cooldown — use the cheap path.
+            await eligibilityEvaluator.EvaluateBranchRulesAndStoreAsync(repository, cancellationToken);
+        }
 
         IReadOnlySet<int> knownNumbers = await issueQueries.GetKnownIssueNumbersAsync(
             repository.Id,

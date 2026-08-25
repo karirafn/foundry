@@ -55,7 +55,7 @@ internal static class RecheckRepositoryEligibility
             // newly-granted namespaces become covered before re-evaluating eligibility.
             await RefreshNamespacesAsync(credential, cancellationToken);
 
-            await eligibilityEvaluator.EvaluateFullyAndStoreAsync(repository, cancellationToken);
+            await eligibilityEvaluator.EvaluateFullyAndStoreAsync(repository, DateTimeOffset.UtcNow, cancellationToken);
             await dbContext.SaveChangesAsync(cancellationToken);
 
             RepositorySummary summary = new(

@@ -717,6 +717,7 @@ public sealed class HandleAsync : IAsyncDisposable
     {
         public Task EvaluateFullyAndStoreAsync(
             MonitoredRepository repo,
+            DateTimeOffset now,
             CancellationToken cancellationToken) =>
             Task.CompletedTask;
 
@@ -729,7 +730,7 @@ public sealed class HandleAsync : IAsyncDisposable
     /// <summary>Marks every repo eligible — simulates a healthy credential that can reach all repos.</summary>
     private sealed class EligibleEvaluator : IRepositoryEligibilityEvaluator
     {
-        public Task EvaluateFullyAndStoreAsync(MonitoredRepository repo, CancellationToken cancellationToken)
+        public Task EvaluateFullyAndStoreAsync(MonitoredRepository repo, DateTimeOffset now, CancellationToken cancellationToken)
         {
             repo.SetEligibility(new RepositoryEligibility.Eligible());
             return Task.CompletedTask;

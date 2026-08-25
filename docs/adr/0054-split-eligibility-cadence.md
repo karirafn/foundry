@@ -44,3 +44,22 @@ It realises the cadence stated in ADR 0041.
 - Auto-heal for branch rulesets is unchanged: a protection-rule change is reflected on the very
   next poll cycle.
 - Requires a migration adding a nullable `write_probe_verdict TEXT` column (`NULL` → `Unknown`).
+
+## Amendment (2026-08-25): Unknown self-heal cooldown
+
+`Unknown` was an absorbing state — the only exits were operator/credential events, so a
+migration-backfilled `NULL` verdict or a rate-limited probe parked a repository at `Unreachable`
+indefinitely, silently halting dispatch (#465).
+
+`Unknown` now self-heals: a repository whose stored verdict is `Unknown` is re-probed on the next
+poll cycle once a **15-minute cooldown** has elapsed since its last attempt. A failed automatic
+probe stamps the attempt time (`WriteProbeVerdict.Unknown.LastAttemptedAt`), so the next retry is
+one cooldown away rather than immediate. `Granted` and `Denied` remain strictly event-triggered —
+`Denied` is knowledge and self-healing it would reintroduce a permanent probe floor for
+read-only repositories (#463 owns the push-failure trigger).
+
+Sizing constraint: while failing, a repository issues 3 content-creation POSTs per probe, so worst
+case is `R × 3 × 60 / C` POSTs/hour for `R` repositories at a `C`-minute cooldown — 84/hour for 7
+repositories at 15 minutes, against a 500/hour GitHub secondary limit, and zero in steady state.
+Past roughly 40 repositories the 15-minute window exceeds the budget; a global request governor
+(#454) inherits this constraint rather than a second local throttle.

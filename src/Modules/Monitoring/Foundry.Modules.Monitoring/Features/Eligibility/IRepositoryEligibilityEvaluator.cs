@@ -7,9 +7,12 @@ internal interface IRepositoryEligibilityEvaluator
     /// <summary>
     /// Runs the write probe (expensive, event-triggered), persists the fresh verdict,
     /// then composes and stores eligibility from verdict + branch rules.
+    /// Stamps <see cref="WriteProbeVerdict.Unknown.LastAttemptedAt"/> with <paramref name="now"/>
+    /// when the probe fails, so the next automatic retry is one cooldown away rather than immediate.
     /// </summary>
     Task EvaluateFullyAndStoreAsync(
         MonitoredRepository repo,
+        DateTimeOffset now,
         CancellationToken cancellationToken);
 
     /// <summary>

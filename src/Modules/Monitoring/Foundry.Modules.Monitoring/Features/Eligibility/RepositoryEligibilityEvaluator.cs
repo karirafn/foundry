@@ -21,6 +21,7 @@ internal sealed class RepositoryEligibilityEvaluator(
     /// <inheritdoc/>
     public async Task EvaluateFullyAndStoreAsync(
         MonitoredRepository repo,
+        DateTimeOffset now,
         CancellationToken cancellationToken)
     {
         Credential? credential = await credentialResolver.ResolveAsync(
@@ -40,7 +41,7 @@ internal sealed class RepositoryEligibilityEvaluator(
 
         try
         {
-            WriteProbeVerdict verdict = await RunWriteProbeAsync(repo, credential, token, cancellationToken);
+            WriteProbeVerdict verdict = await RunWriteProbeAsync(repo, credential, token, now, cancellationToken);
             repo.SetWriteProbeVerdict(verdict);
 
             RepositoryEligibility eligibility = await _composer.ComposeAsync(
@@ -59,10 +60,12 @@ internal sealed class RepositoryEligibilityEvaluator(
                 ex,
                 "Failed to evaluate eligibility for repository {Slug}; marking as unreachable.",
                 repo.Slug);
-            // Reset verdict to Unknown so the cheap poll path (EvaluateBranchRulesAndStoreAsync) does
-            // not trust a stale Granted verdict from a previous cycle and re-open eligibility to Eligible
-            // without a fresh write probe succeeding.
-            repo.SetWriteProbeVerdict(new WriteProbeVerdict.Unknown());
+            // Reset verdict to Unknown (with attempt timestamp) so the cheap poll path
+            // (EvaluateBranchRulesAndStoreAsync) does not trust a stale Granted verdict from
+            // a previous cycle and re-open eligibility to Eligible without a fresh write probe
+            // succeeding. Stamping LastAttemptedAt = now ensures the next automatic retry is
+            // one cooldown away rather than immediate.
+            repo.SetWriteProbeVerdict(new WriteProbeVerdict.Unknown(LastAttemptedAt: now));
             repo.SetEligibility(new RepositoryEligibility.Unreachable());
         }
     }
@@ -113,20 +116,22 @@ internal sealed class RepositoryEligibilityEvaluator(
         MonitoredRepository repo,
         Credential credential,
         string token,
+        DateTimeOffset now,
         CancellationToken cancellationToken)
     {
         if (credential is GitHubCredential gitHubCredential)
         {
-            return await ProbeGitHubWriteAccessAsync(repo, gitHubCredential, token, cancellationToken);
+            return await ProbeGitHubWriteAccessAsync(repo, gitHubCredential, token, now, cancellationToken);
         }
 
-        return await ProbeProviderWriteAccessAsync(repo, credential, token, cancellationToken);
+        return await ProbeProviderWriteAccessAsync(repo, credential, token, now, cancellationToken);
     }
 
     private async Task<WriteProbeVerdict> ProbeGitHubWriteAccessAsync(
         MonitoredRepository repo,
         GitHubCredential credential,
         string token,
+        DateTimeOffset now,
         CancellationToken cancellationToken)
     {
         Result<WritePermissionProbeResult> probeResult = await gitHubWriteProber.ProbeWriteAccessAsync(
@@ -137,7 +142,8 @@ internal sealed class RepositoryEligibilityEvaluator(
 
         if (probeResult is not Result<WritePermissionProbeResult>.Success { Value: WritePermissionProbeResult probe })
         {
-            return new WriteProbeVerdict.Unknown();
+            // Transport failure — stamp the attempt time so the next automatic retry is one cooldown away.
+            return new WriteProbeVerdict.Unknown(LastAttemptedAt: now);
         }
 
         return probe is WritePermissionProbeResult.Missing
@@ -149,6 +155,7 @@ internal sealed class RepositoryEligibilityEvaluator(
         MonitoredRepository repo,
         Credential credential,
         string token,
+        DateTimeOffset now,
         CancellationToken cancellationToken)
     {
         IIssueProvider provider = providerFactory.CreateProvider(credential, token);
@@ -156,7 +163,8 @@ internal sealed class RepositoryEligibilityEvaluator(
 
         return canPushResult switch
         {
-            Result<bool>.Failure => new WriteProbeVerdict.Unknown(),
+            // Transport failure — stamp the attempt time so the next automatic retry is one cooldown away.
+            Result<bool>.Failure => new WriteProbeVerdict.Unknown(LastAttemptedAt: now),
             Result<bool>.Success { Value: false } => new WriteProbeVerdict.Denied(),
             _ => new WriteProbeVerdict.Granted(),
         };

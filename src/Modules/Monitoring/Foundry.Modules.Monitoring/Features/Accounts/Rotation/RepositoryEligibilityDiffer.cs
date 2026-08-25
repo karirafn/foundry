@@ -34,9 +34,11 @@ internal sealed class RepositoryEligibilityDiffer(
             .DistinctBy(r => r.Id.Value)
             .ToDictionary(r => r.Id.Value);
 
+        // Capture now once before the loop — all repos in a rotation share the same tick timestamp.
+        DateTimeOffset now = DateTimeOffset.UtcNow;
         foreach (MonitoredRepository repo in allReposById.Values)
         {
-            await eligibilityEvaluator.EvaluateFullyAndStoreAsync(repo, cancellationToken);
+            await eligibilityEvaluator.EvaluateFullyAndStoreAsync(repo, now, cancellationToken);
         }
 
         await dbContext.SaveChangesAsync(cancellationToken);

@@ -220,6 +220,7 @@ public sealed class RotateAsync : IAsyncDisposable
     {
         public Task EvaluateFullyAndStoreAsync(
             MonitoredRepository repo,
+            DateTimeOffset now,
             CancellationToken cancellationToken) =>
             Task.CompletedTask;
 
@@ -234,6 +235,7 @@ public sealed class RotateAsync : IAsyncDisposable
     {
         public Task EvaluateFullyAndStoreAsync(
             MonitoredRepository repo,
+            DateTimeOffset now,
             CancellationToken cancellationToken)
         {
             if (assignments.TryGetValue(repo.Slug.FullPath, out RepositoryEligibility? eligibility))
@@ -268,6 +270,7 @@ public sealed class RotateAsync : IAsyncDisposable
 
         public async Task EvaluateFullyAndStoreAsync(
             MonitoredRepository repo,
+            DateTimeOffset now,
             CancellationToken cancellationToken)
         {
             _current++;

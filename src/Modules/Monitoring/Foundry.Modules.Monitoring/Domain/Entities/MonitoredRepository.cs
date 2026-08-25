@@ -12,6 +12,14 @@ public sealed class MonitoredRepository : AggregateRoot<MonitoredRepositoryId>
     private const string IneligibleStatus = "ineligible";
     private const string UnreachableStatus = "unreachable";
 
+    /// <summary>
+    /// Minimum interval between automatic write-probe re-attempts for a repository parked at
+    /// <see cref="WriteProbeVerdict.Unknown"/>. Passed into <see cref="IsDueForWriteProbe"/> by
+    /// callers (mirroring how <see cref="IsDueForPoll"/> receives its interval) so the poller and
+    /// tests share one source of truth.
+    /// </summary>
+    internal static readonly TimeSpan WriteProbeCooldown = TimeSpan.FromMinutes(15);
+
     // Private parameterless constructor for EF Core materialization.
     private MonitoredRepository() : base(MonitoredRepositoryId.New())
     {
@@ -79,6 +87,29 @@ public sealed class MonitoredRepository : AggregateRoot<MonitoredRepositoryId>
 
         TimeSpan effectiveInterval = PollInterval ?? defaultInterval;
         return LastPolledAt.Value + effectiveInterval < now;
+    }
+
+    /// <summary>
+    /// Returns <see langword="true"/> when the repository should have its write probe re-run on the next
+    /// poll cycle: the stored verdict is <see cref="WriteProbeVerdict.Unknown"/> and either the probe
+    /// was never attempted (<see cref="WriteProbeVerdict.Unknown.LastAttemptedAt"/> is <see langword="null"/>)
+    /// or <paramref name="cooldown"/> has elapsed since the last attempt (strict &lt; boundary, mirroring
+    /// <see cref="IsDueForPoll"/>). Returns <see langword="false"/> for <see cref="WriteProbeVerdict.Granted"/>
+    /// and <see cref="WriteProbeVerdict.Denied"/> unconditionally — those verdicts are event-triggered.
+    /// </summary>
+    public bool IsDueForWriteProbe(TimeSpan cooldown, DateTimeOffset now)
+    {
+        if (WriteProbeVerdict is not WriteProbeVerdict.Unknown unknown)
+        {
+            return false;
+        }
+
+        if (unknown.LastAttemptedAt is null)
+        {
+            return true;
+        }
+
+        return unknown.LastAttemptedAt.Value + cooldown < now;
     }
 
     public void Update(TimeSpan? pollInterval, bool isActive)

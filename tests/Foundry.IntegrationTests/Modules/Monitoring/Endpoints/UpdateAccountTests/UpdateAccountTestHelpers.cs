@@ -78,6 +78,7 @@ internal sealed class AssignedEligibilityEvaluator(
 {
     public Task EvaluateFullyAndStoreAsync(
         MonitoredRepository repo,
+        DateTimeOffset now,
         CancellationToken cancellationToken)
     {
         if (assignments.TryGetValue(repo.Slug.FullPath, out RepositoryEligibility? eligibility))
@@ -110,6 +111,7 @@ internal sealed class UnreachableEligibilityEvaluator : IRepositoryEligibilityEv
 {
     public Task EvaluateFullyAndStoreAsync(
         MonitoredRepository repo,
+        DateTimeOffset now,
         CancellationToken cancellationToken)
     {
         repo.SetEligibility(new RepositoryEligibility.Unreachable());

@@ -94,6 +94,37 @@ public sealed class Serialization
     }
 
     [Fact]
+    public void WhenUnknownWithTimestampSerialized_RoundTripsTimestamp()
+    {
+        // Arrange
+        DateTimeOffset attempt = new(2026, 8, 25, 10, 0, 0, TimeSpan.Zero);
+        WriteProbeVerdict verdict = new WriteProbeVerdict.Unknown(attempt);
+
+        // Act
+        string json = JsonSerializer.Serialize(verdict, Options);
+        WriteProbeVerdict? deserialized = JsonSerializer.Deserialize<WriteProbeVerdict>(json, Options);
+
+        // Assert
+        WriteProbeVerdict.Unknown unknown = deserialized.ShouldBeOfType<WriteProbeVerdict.Unknown>();
+        unknown.LastAttemptedAt.ShouldBe(attempt);
+    }
+
+    [Fact]
+    public void WhenUnknownWithoutTimestampSerialized_RoundTripsNullTimestamp()
+    {
+        // Arrange
+        WriteProbeVerdict verdict = new WriteProbeVerdict.Unknown();
+
+        // Act
+        string json = JsonSerializer.Serialize(verdict, Options);
+        WriteProbeVerdict? deserialized = JsonSerializer.Deserialize<WriteProbeVerdict>(json, Options);
+
+        // Assert
+        WriteProbeVerdict.Unknown unknown = deserialized.ShouldBeOfType<WriteProbeVerdict.Unknown>();
+        unknown.LastAttemptedAt.ShouldBeNull();
+    }
+
+    [Fact]
     public void WhenMalformedJson_DeserializeThrowsJsonException()
     {
         // Arrange — documents WHY MonitoredRepositoryConfiguration wraps deserialization in try/catch
