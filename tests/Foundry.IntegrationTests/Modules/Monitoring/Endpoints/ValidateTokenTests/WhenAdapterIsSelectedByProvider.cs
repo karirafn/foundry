@@ -31,7 +31,7 @@ public sealed class WhenAdapterIsSelectedByProvider
         });
         using HttpClient client = factory.CreateClient();
 
-        object body = new { token = "ghp_test", baseUrl = "https://api.github.com", providerType = "GitHub" };
+        object body = new { token = "ghp_test", baseUrl = "https://github.com", providerType = "GitHub" };
 
         // Act
         HttpResponseMessage response = await client.PostAsJsonAsync(

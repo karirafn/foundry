@@ -44,7 +44,7 @@ public sealed class WhenTokenIsUnauthorized : IAsyncDisposable
     public async Task ReturnsOkWithAuthenticationFailedKind()
     {
         // Arrange
-        object body = new { token = "ghp_bad_token", baseUrl = "https://api.github.com", providerType = "github" };
+        object body = new { token = "ghp_bad_token", baseUrl = "https://github.com", providerType = "github" };
 
         // Act
         HttpResponseMessage response = await _client.PostAsJsonAsync(
