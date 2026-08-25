@@ -223,4 +223,93 @@ public sealed class ProbeContentsWriteAsync
         // Assert
         result.IsFailure.ShouldBeTrue();
     }
+
+    [Fact]
+    public async Task WhenGitHubReturns403WithRateLimitRemainingZero_ReturnsRateLimitExhaustedFailure()
+    {
+        // Arrange — X-RateLimit-Remaining: 0 means the primary rate limit is exhausted;
+        // this must not be misclassified as a missing permission.
+        FakeHandler handler = new(HttpStatusCode.Forbidden, string.Empty);
+        handler.ResponseHeaders["X-RateLimit-Remaining"] = "0";
+        using HttpClient httpClient = new(handler);
+        GitHubHttpClient sut = new(httpClient, NullLogger<GitHubHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))));
+
+        // Act
+        Result<WritePermissionProbeResult> result = await sut.ProbeContentsWriteAsync(
+            ValidBaseUrl,
+            ValidSlug,
+            "ghp_token",
+            CancellationToken.None);
+
+        // Assert
+        Result<WritePermissionProbeResult>.Failure failure = result.ShouldBeOfType<Result<WritePermissionProbeResult>.Failure>();
+        failure.Error.Code.ShouldBe("GitHub.RateLimitExhausted");
+    }
+
+    [Fact]
+    public async Task WhenGitHubReturns403WithRetryAfterHeader_ReturnsRateLimitExhaustedFailure()
+    {
+        // Arrange — Retry-After header indicates a secondary rate limit (abuse detection);
+        // X-RateLimit-Remaining may be absent in this case.
+        FakeHandler handler = new(HttpStatusCode.Forbidden, string.Empty);
+        handler.ResponseHeaders["Retry-After"] = "60";
+        using HttpClient httpClient = new(handler);
+        GitHubHttpClient sut = new(httpClient, NullLogger<GitHubHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))));
+
+        // Act
+        Result<WritePermissionProbeResult> result = await sut.ProbeContentsWriteAsync(
+            ValidBaseUrl,
+            ValidSlug,
+            "ghp_token",
+            CancellationToken.None);
+
+        // Assert
+        Result<WritePermissionProbeResult>.Failure failure = result.ShouldBeOfType<Result<WritePermissionProbeResult>.Failure>();
+        failure.Error.Code.ShouldBe("GitHub.RateLimitExhausted");
+    }
+
+    [Fact]
+    public async Task WhenGitHubReturns403WithRateLimitRemainingNonZero_ReturnsMissingPermission()
+    {
+        // Arrange — headroom remaining means the 403 is a genuine permission denial, not a rate limit.
+        FakeHandler handler = new(HttpStatusCode.Forbidden, string.Empty);
+        handler.ResponseHeaders["X-RateLimit-Remaining"] = "5";
+        using HttpClient httpClient = new(handler);
+        GitHubHttpClient sut = new(httpClient, NullLogger<GitHubHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))));
+
+        // Act
+        Result<WritePermissionProbeResult> result = await sut.ProbeContentsWriteAsync(
+            ValidBaseUrl,
+            ValidSlug,
+            "ghp_token",
+            CancellationToken.None);
+
+        // Assert — genuine permission denial; existing behavior must be preserved.
+        result.IsSuccess.ShouldBeTrue();
+        Result<WritePermissionProbeResult>.Success success =
+            result.ShouldBeOfType<Result<WritePermissionProbeResult>.Success>();
+        success.Value.ShouldBeOfType<WritePermissionProbeResult.Missing>();
+    }
+
+    [Fact]
+    public async Task WhenGitHubReturns403WithNoRateLimitHeaders_ReturnsMissingPermission()
+    {
+        // Arrange — no rate-limit headers → fail-closed: treat as a genuine permission denial.
+        FakeHandler handler = new(HttpStatusCode.Forbidden, string.Empty);
+        using HttpClient httpClient = new(handler);
+        GitHubHttpClient sut = new(httpClient, NullLogger<GitHubHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))));
+
+        // Act
+        Result<WritePermissionProbeResult> result = await sut.ProbeContentsWriteAsync(
+            ValidBaseUrl,
+            ValidSlug,
+            "ghp_token",
+            CancellationToken.None);
+
+        // Assert
+        result.IsSuccess.ShouldBeTrue();
+        Result<WritePermissionProbeResult>.Success success =
+            result.ShouldBeOfType<Result<WritePermissionProbeResult>.Success>();
+        success.Value.ShouldBeOfType<WritePermissionProbeResult.Missing>();
+    }
 }

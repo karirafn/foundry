@@ -899,6 +899,10 @@ internal sealed partial class GitHubHttpClient(
         {
             HttpStatusCode.UnprocessableEntity => Result<WritePermissionProbeResult>.Ok(new WritePermissionProbeResult.Granted()),
             HttpStatusCode.NotFound => Result<WritePermissionProbeResult>.Ok(new WritePermissionProbeResult.Granted()),
+            // A 403 carrying rate-limit headers is a transient exhaustion, not a permission denial.
+            // Returning Fail here prevents the caller from recording a spurious Denied verdict.
+            HttpStatusCode.Forbidden when IsRateLimited(response) =>
+                Result<WritePermissionProbeResult>.Fail(GitHubErrors.RateLimitExhausted),
             HttpStatusCode.Forbidden => Result<WritePermissionProbeResult>.Ok(new WritePermissionProbeResult.Missing(permission)),
             // Any other status — including 401 (token expired or revoked mid-probe) and any
             // unexpected 2xx (which would mean the probe actually created an object) — is
@@ -1036,8 +1040,15 @@ internal sealed partial class GitHubHttpClient(
 
     private static bool IsRateLimited(HttpResponseMessage response)
     {
-        return response.Headers.TryGetValues("X-RateLimit-Remaining", out IEnumerable<string>? remaining) &&
-            remaining.FirstOrDefault() == "0";
+        // Primary rate limit: X-RateLimit-Remaining == 0.
+        if (response.Headers.TryGetValues("X-RateLimit-Remaining", out IEnumerable<string>? remaining) &&
+            remaining.FirstOrDefault() == "0")
+        {
+            return true;
+        }
+
+        // Secondary rate limit (abuse detection): Retry-After is present regardless of remaining quota.
+        return response.Headers.Contains("Retry-After");
     }
 
     private static async Task<Error> ErrorFromBranchCreationFailureAsync(

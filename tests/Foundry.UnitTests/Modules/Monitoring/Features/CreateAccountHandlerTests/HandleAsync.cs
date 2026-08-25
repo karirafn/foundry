@@ -454,6 +454,29 @@ public sealed class HandleAsync : IAsyncDisposable
     }
 
     [Fact]
+    public async Task WhenGitHubProbeRateLimitFails_ReturnsRateLimitExhaustedFailure()
+    {
+        // Arrange — AC #7: rate-limit must surface as its own error, not as WriteAccessVerificationFailed
+        // and not as MissingWritePermission.
+        Namespace ns = Namespace.Create("octocat").ValueOrThrow();
+        ProviderRepository writableRepo = new("octocat/hello-world", IsPrivate: false, CanPush: true);
+        NamespaceDerivationOutcome outcome = new NamespaceDerivationOutcome.Derived([ns], [writableRepo]);
+        RateLimitedWriteProber rateLimitedProber = new();
+        CreateAccount.Handler handler = BuildHandler(new StubNamespaceDeriver(outcome), writeProber: rateLimitedProber);
+        CreateAccount.Command command = new("github", "https://github.com", "ghp_test");
+
+        // Act
+        CreateAccount.Outcome result = await handler.HandleAsync(command, TestContext.Current.CancellationToken);
+
+        // Assert
+        CreateAccount.Outcome.Failure failure = result.ShouldBeOfType<CreateAccount.Outcome.Failure>();
+        failure.Error.Code.ShouldBe(CredentialErrors.RateLimitExhaustedCode);
+        failure.Error.Message.ShouldContain("rate limit");
+        long credentialCount = await _dbContext.Set<Credential>().LongCountAsync(TestContext.Current.CancellationToken);
+        credentialCount.ShouldBe(0);
+    }
+
+    [Fact]
     public async Task WhenGitLabCredential_ProbeSkippedAndCredentialCreated()
     {
         // Arrange — GitLab skips the GitHub write probe entirely
@@ -696,6 +719,17 @@ public sealed class HandleAsync : IAsyncDisposable
             Task.FromResult(
                 Result<WritePermissionProbeResult>.Fail(
                     new Error("GitHub.UnexpectedStatusCode", "Simulated transport failure.")));
+    }
+
+    private sealed class RateLimitedWriteProber : IGitHubWriteProber
+    {
+        public Task<Result<WritePermissionProbeResult>> ProbeWriteAccessAsync(
+            Uri apiBaseUrl,
+            RepositorySlug slug,
+            string token,
+            CancellationToken cancellationToken) =>
+            Task.FromResult(
+                Result<WritePermissionProbeResult>.Fail(GitHubErrors.RateLimitExhausted));
     }
 
     private sealed class NeverCalledWriteProber : IGitHubWriteProber

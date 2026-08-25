@@ -358,7 +358,14 @@ internal static partial class CreateAccount
 
             if (probeResult is not Result<WritePermissionProbeResult>.Success probeSuccess)
             {
-                return new Outcome.Failure(CredentialErrors.WriteAccessVerificationFailed);
+                // Distinguish rate-limit exhaustion from generic transport failures so the operator
+                // knows to wait rather than assuming the token is misconfigured.
+                bool isRateLimit = probeResult is Result<WritePermissionProbeResult>.Failure probeFail
+                    && probeFail.Error.Code == GitHubErrors.RateLimitExhausted.Code;
+
+                return isRateLimit
+                    ? new Outcome.Failure(CredentialErrors.RateLimitExhausted)
+                    : new Outcome.Failure(CredentialErrors.WriteAccessVerificationFailed);
             }
 
             if (probeSuccess.Value is WritePermissionProbeResult.Missing missing)
