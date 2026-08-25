@@ -19,4 +19,5 @@ public sealed record GlobalSettingsSummary(
     string? LastImageBuildError,
     bool HasUsableImage,
     DateTimeOffset? NextRetryAt,
-    int Attempt);
+    int Attempt,
+    IReadOnlyList<string> AllowedProviderHosts);

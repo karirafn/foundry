@@ -33,7 +33,8 @@ internal sealed class StubGlobalSettingsQueries(
         LastImageBuildError: null,
         HasUsableImage: false,
         NextRetryAt: null,
-        Attempt: 0);
+        Attempt: 0,
+        AllowedProviderHosts: []);
 
     private readonly GlobalSettingsSummary _summary = DefaultSummary with { Attempt = attempt };
 

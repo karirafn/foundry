@@ -1,4 +1,5 @@
 using Foundry.Modules.Settings.Features.Dispatch;
+using Foundry.Modules.Settings.Features.ProviderHosts;
 using Foundry.Modules.Settings.Features.WorkerConfig;
 
 using Microsoft.AspNetCore.Builder;
@@ -22,6 +23,7 @@ internal static class SettingsEndpoints
         ResumeDispatch.Endpoint.Map(group);
         UpdateWorkerImageConfiguration.Endpoint.Map(group);
         RetryImageBuild.Endpoint.Map(group);
+        UpdateAllowedProviderHosts.Endpoint.Map(group);
 
         return routes;
     }
