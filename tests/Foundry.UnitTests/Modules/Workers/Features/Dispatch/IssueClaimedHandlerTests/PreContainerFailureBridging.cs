@@ -349,5 +349,8 @@ public sealed class PreContainerFailureBridging : IAsyncDisposable
 
         public Task<IReadOnlyDictionary<string, string>> GetWorkerImageBuildArgsAsync(CancellationToken cancellationToken)
             => Task.FromResult(WorkerImageConfiguration.Default.ToBuildArgs());
+
+        public Task<IReadOnlyList<string>> GetAllowedProviderHostsAsync(CancellationToken cancellationToken)
+            => Task.FromResult<IReadOnlyList<string>>([]);
     }
 }

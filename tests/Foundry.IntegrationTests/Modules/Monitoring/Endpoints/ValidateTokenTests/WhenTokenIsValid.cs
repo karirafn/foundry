@@ -44,7 +44,7 @@ public sealed class WhenTokenIsValid : IAsyncDisposable
     public async Task ReturnsOkWithAuthenticatedKind()
     {
         // Arrange
-        object body = new { token = "ghp_valid", baseUrl = "https://api.github.com", providerType = "github" };
+        object body = new { token = "ghp_valid", baseUrl = "https://github.com", providerType = "github" };
 
         // Act
         HttpResponseMessage response = await _client.PostAsJsonAsync(
@@ -79,7 +79,7 @@ public sealed class WhenTokenIsValid : IAsyncDisposable
                 _ => new StubHandler(Result<ValidateToken.Response>.Ok(responseWithAccount)));
         });
         using HttpClient client = factory.CreateClient();
-        object body = new { token = "ghp_valid", baseUrl = "https://api.github.com", providerType = "github" };
+        object body = new { token = "ghp_valid", baseUrl = "https://github.com", providerType = "github" };
 
         // Act
         HttpResponseMessage response = await client.PostAsJsonAsync(

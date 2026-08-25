@@ -3,6 +3,7 @@ using System.Text.RegularExpressions;
 
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Domain.Entities;
+using Foundry.Modules.Monitoring.Domain.Services;
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Features.Accounts.Rotation;
 using Foundry.Modules.Monitoring.Features.Accounts.Tokens;
@@ -87,23 +88,30 @@ internal static partial class UpdateAccount
     internal sealed class Handler(
         DbContext dbContext,
         TokenAccountResolver tokenAccountResolver,
-        CredentialRotationService rotationService)
+        CredentialRotationService rotationService,
+        ProviderHostGuard hostGuard)
     {
         public async Task<Outcome> HandleAsync(
             Command command,
             CancellationToken cancellationToken)
         {
+            if (BaseUrlVo.Create(command.BaseUrl) is not Result<BaseUrlVo>.Success { Value: BaseUrlVo baseUrl })
+            {
+                throw new UnreachableException("BaseUrl validated in the validator but failed in the handler.");
+            }
+
+            Result hostGuardResult = await hostGuard.EnsureAllowedAsync(baseUrl, cancellationToken);
+            if (hostGuardResult is Result.Failure hostGuardFailure)
+            {
+                return new Outcome.Rejected(hostGuardFailure.Error);
+            }
+
             if (await dbContext.Set<Credential>()
                     .Include(c => c.Namespaces)
                     .FirstOrDefaultAsync(a => a.Id == command.Id, cancellationToken)
                 is not Credential credential)
             {
                 return new Outcome.Rejected(CredentialErrors.NotFound(command.Id));
-            }
-
-            if (BaseUrlVo.Create(command.BaseUrl) is not Result<BaseUrlVo>.Success { Value: BaseUrlVo baseUrl })
-            {
-                throw new UnreachableException("BaseUrl validated in the validator but failed in the handler.");
             }
 
             bool isGitLab = credential is GitLabCredential;

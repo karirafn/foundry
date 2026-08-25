@@ -1618,6 +1618,57 @@
           }
         }
       }
+    },
+    "/api/settings/allowed-provider-hosts": {
+      "put": {
+        "tags": [
+          "Settings"
+        ],
+        "summary": "Updates the list of allowed provider hostnames",
+        "operationId": "UpdateAllowedProviderHosts",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateAllowedProviderHostsRequestBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GlobalSettingsSummary"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -1909,7 +1960,8 @@
           "lastImageBuildError",
           "hasUsableImage",
           "nextRetryAt",
-          "attempt"
+          "attempt",
+          "allowedProviderHosts"
         ],
         "type": "object",
         "properties": {
@@ -2006,6 +2058,12 @@
               "string"
             ],
             "format": "int32"
+          },
+          "allowedProviderHosts": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           }
         }
       },
@@ -2740,6 +2798,20 @@
               "null",
               "string"
             ]
+          }
+        }
+      },
+      "UpdateAllowedProviderHostsRequestBody": {
+        "required": [
+          "hosts"
+        ],
+        "type": "object",
+        "properties": {
+          "hosts": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           }
         }
       },

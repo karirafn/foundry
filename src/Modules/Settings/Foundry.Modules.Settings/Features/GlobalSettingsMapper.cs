@@ -36,6 +36,7 @@ internal static class GlobalSettingsMapper
             lastError,
             settings.LastImageBuiltAt is not null,
             nextRetryAt,
-            attempt);
+            attempt,
+            settings.AllowedProviderHosts);
     }
 }

@@ -52,6 +52,8 @@ public sealed class GlobalSettings : AggregateRoot<GlobalSettingsId>
 
     public WorkerImageConfiguration WorkerImageConfiguration { get; private set; } = null!;
 
+    public IReadOnlyList<string> AllowedProviderHosts { get; private set; } = [];
+
     internal ImageBuildState ImageBuildState { get; private set; } = null!;
 
     public DateTimeOffset? LastImageBuiltAt { get; private set; }
@@ -191,6 +193,40 @@ public sealed class GlobalSettings : AggregateRoot<GlobalSettingsId>
         ImageBuildState = new ImageBuildState.Failed(errorTail, nextRetryAt, attempt);
         UpdatedAt = DateTimeOffset.UtcNow;
         AddIntegrationEvent(new ImageBuildFailed(errorTail, nextRetryAt, attempt));
+    }
+
+    public Result UpdateAllowedProviderHosts(IReadOnlyList<string> hosts)
+    {
+        List<string> normalized = new(hosts.Count);
+
+        foreach (string host in hosts)
+        {
+            if (string.IsNullOrWhiteSpace(host))
+            {
+                return SettingsErrors.InvalidProviderHost(host);
+            }
+
+            if (host.Contains("://", StringComparison.Ordinal))
+            {
+                return SettingsErrors.InvalidProviderHost(host);
+            }
+
+            if (host.Contains('/', StringComparison.Ordinal))
+            {
+                return SettingsErrors.InvalidProviderHost(host);
+            }
+
+            if (host.Contains(':', StringComparison.Ordinal))
+            {
+                return SettingsErrors.InvalidProviderHost(host);
+            }
+
+            normalized.Add(host.Trim().ToLowerInvariant());
+        }
+
+        AllowedProviderHosts = normalized;
+        UpdatedAt = DateTimeOffset.UtcNow;
+        return Result.Ok();
     }
 
     public Result UpdateLimits(int maxConcurrent, int timeoutMinutes)

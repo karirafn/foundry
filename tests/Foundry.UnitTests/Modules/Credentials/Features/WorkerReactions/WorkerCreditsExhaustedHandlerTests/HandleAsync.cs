@@ -90,6 +90,9 @@ public sealed class HandleAsync : IAsyncDisposable
 
         public Task<IReadOnlyDictionary<string, string>> GetWorkerImageBuildArgsAsync(CancellationToken cancellationToken)
             => Task.FromResult<IReadOnlyDictionary<string, string>>(new Dictionary<string, string>());
+
+        public Task<IReadOnlyList<string>> GetAllowedProviderHostsAsync(CancellationToken cancellationToken)
+            => Task.FromResult<IReadOnlyList<string>>([]);
     }
 
     private static WorkerCreditsExhaustedHandler BuildSut(

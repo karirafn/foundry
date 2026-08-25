@@ -33,7 +33,8 @@ internal sealed class StubGlobalSettingsQueries(
         LastImageBuildError: null,
         HasUsableImage: false,
         NextRetryAt: null,
-        Attempt: 0);
+        Attempt: 0,
+        AllowedProviderHosts: []);
 
     private readonly GlobalSettingsSummary _summary = DefaultSummary with { Attempt = attempt };
 
@@ -65,4 +66,7 @@ internal sealed class StubGlobalSettingsQueries(
     public Task<IReadOnlyDictionary<string, string>> GetWorkerImageBuildArgsAsync(
         CancellationToken cancellationToken)
         => Task.FromResult(buildArgs ?? (IReadOnlyDictionary<string, string>)new Dictionary<string, string>());
+
+    public Task<IReadOnlyList<string>> GetAllowedProviderHostsAsync(CancellationToken cancellationToken)
+        => Task.FromResult<IReadOnlyList<string>>([]);
 }
