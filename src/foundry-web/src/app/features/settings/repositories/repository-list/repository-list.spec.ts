@@ -16,7 +16,7 @@ const MOCK_REPO: RepositorySummary = {
   pollIntervalSeconds: 300,
   isActive: true,
   lastPolledAt: '2026-06-14T12:00:00Z',
-  eligibility: { status: 'eligible', violations: [] },
+  eligibility: { status: 'eligible', violations: [], reason: null },
 };
 
 const MOCK_REPO_2: RepositorySummary = {
@@ -29,7 +29,7 @@ const MOCK_REPO_2: RepositorySummary = {
   pollIntervalSeconds: null,
   isActive: false,
   lastPolledAt: null,
-  eligibility: { status: 'ineligible', violations: [{ rule: 'AllowDirectPushes', description: 'Allow direct pushes is enabled' }] },
+  eligibility: { status: 'ineligible', violations: [{ rule: 'AllowDirectPushes', description: 'Allow direct pushes is enabled' }], reason: null },
 };
 
 const MOCK_REPO_INELIGIBLE: RepositorySummary = {
@@ -42,7 +42,7 @@ const MOCK_REPO_INELIGIBLE: RepositorySummary = {
   pollIntervalSeconds: 300,
   isActive: true,
   lastPolledAt: '2026-06-14T12:00:00Z',
-  eligibility: { status: 'ineligible', violations: [{ rule: 'AllowDirectPushes', description: 'Allow direct pushes is enabled' }] },
+  eligibility: { status: 'ineligible', violations: [{ rule: 'AllowDirectPushes', description: 'Allow direct pushes is enabled' }], reason: null },
 };
 
 const MOCK_REPO_NULL_ELIGIBILITY: RepositorySummary = {
@@ -68,7 +68,7 @@ const MOCK_REPO_UNREACHABLE: RepositorySummary = {
   pollIntervalSeconds: 300,
   isActive: true,
   lastPolledAt: '2026-06-14T12:00:00Z',
-  eligibility: { status: 'unreachable', violations: [] },
+  eligibility: { status: 'unreachable', violations: [], reason: null },
 };
 
 function setup(overrides: {
@@ -719,7 +719,7 @@ describe('RepositoryListComponent', () => {
     // Arrange
     const updatedRepo: RepositorySummary = {
       ...MOCK_REPO_INELIGIBLE,
-      eligibility: { status: 'eligible', violations: [] },
+      eligibility: { status: 'eligible', violations: [], reason: null },
     };
     const { el, fixture, httpMock } = setup({ repositories: [MOCK_REPO_INELIGIBLE] });
     const toggle = el.querySelector('.repository-list__toggle-btn') as HTMLButtonElement;

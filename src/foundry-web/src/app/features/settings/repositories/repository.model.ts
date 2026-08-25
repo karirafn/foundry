@@ -2,6 +2,8 @@ export const NO_WRITE_ACCESS_REASON = 'no write access — token lacks push or S
 
 export type EligibilityStatus = 'eligible' | 'ineligible' | 'unreachable';
 
+export type EligibilityReason = 'never-probed' | 'rate-limited' | 'branch-rules-unavailable';
+
 export function eligibilityStatusLabel(status: EligibilityStatus): string {
   switch (status) {
     case 'eligible':
@@ -21,6 +23,7 @@ export interface EligibilityViolation {
 export interface RepositoryEligibility {
   status: EligibilityStatus;
   violations: EligibilityViolation[];
+  reason: EligibilityReason | null;
 }
 
 export interface RepositorySummary {

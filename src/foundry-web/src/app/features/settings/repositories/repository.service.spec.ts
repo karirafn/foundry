@@ -18,7 +18,7 @@ const MOCK_REPOSITORY: RepositorySummary = {
   pollIntervalSeconds: 300,
   isActive: true,
   lastPolledAt: '2026-06-15T10:00:00Z',
-  eligibility: { status: 'eligible', violations: [] },
+  eligibility: { status: 'eligible', violations: [], reason: null },
 };
 
 const MOCK_REPOSITORY_2: RepositorySummary = {
@@ -31,7 +31,7 @@ const MOCK_REPOSITORY_2: RepositorySummary = {
   pollIntervalSeconds: null,
   isActive: false,
   lastPolledAt: null,
-  eligibility: { status: 'ineligible', violations: [{ rule: 'AllowDirectPushes', description: 'Allow direct pushes is enabled' }] },
+  eligibility: { status: 'ineligible', violations: [{ rule: 'AllowDirectPushes', description: 'Allow direct pushes is enabled' }], reason: null },
 };
 
 const MOCK_AVAILABLE: AvailableRepository = {
@@ -771,7 +771,7 @@ describe('RepositoryService', () => {
     service.loadRepositories(ACCOUNT_ID);
     httpMock.expectOne(`/api/accounts/${ACCOUNT_ID}/repositories`).flush([MOCK_REPOSITORY_2]);
 
-    const recheckedRepo: RepositorySummary = { ...MOCK_REPOSITORY_2, eligibility: { status: 'eligible', violations: [] } };
+    const recheckedRepo: RepositorySummary = { ...MOCK_REPOSITORY_2, eligibility: { status: 'eligible', violations: [], reason: null } };
 
     // Act
     service.recheckEligibility(ACCOUNT_ID, REPO_ID_2).subscribe();

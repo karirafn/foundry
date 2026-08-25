@@ -228,6 +228,7 @@ import { SpinnerComponent } from '../../../../shared/components/spinner/spinner'
                 [panelId]="'eligibility-detail-' + repo.id"
                 [status]="repo.eligibility.status"
                 [violations]="repo.eligibility.violations"
+                [reason]="repo.eligibility.reason"
                 [recheckPending]="_recheckingId() === repo.id"
                 [recheckError]="_recheckError()?.id === repo.id ? _recheckError()!.message : null"
                 (recheck)="onRecheck(repo)"
