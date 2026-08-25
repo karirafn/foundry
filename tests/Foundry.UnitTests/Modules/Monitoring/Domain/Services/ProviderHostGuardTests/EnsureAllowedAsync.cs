@@ -270,12 +270,12 @@ public sealed class EnsureAllowedAsync
     [Fact]
     public async Task WhenHostMatchIsCaseInsensitive_ReturnsOk()
     {
-        // Arrange — "GitHub.Com" should match the hard-coded "github.com"
+        // Arrange — Uri normalises "GitHub.Com" to lowercase "github.com"; the guard must
+        // pass that normalised key to the resolver and accept a public address returned for it.
         ProviderHostGuard sut = BuildGuard(
             resolver: new FakeHostAddressResolver()
-                .WithAddresses("GitHub.Com", IPAddress.Parse("140.82.112.4")));
+                .WithAddresses("github.com", IPAddress.Parse("140.82.112.4")));
 
-        // The URI normalises the host to lowercase; test with the URL to match real usage
         BaseUrl baseUrl = BaseUrl.Create("https://GitHub.Com").ValueOrThrow();
 
         // Act
