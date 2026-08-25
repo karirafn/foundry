@@ -697,6 +697,7 @@ export interface components {
         RepositoryEligibilityInfo: {
             status: string;
             violations: components["schemas"]["EligibilityViolationInfo"][];
+            reason: null | string;
         };
         RepositorySummary: {
             /** Format: uuid */
