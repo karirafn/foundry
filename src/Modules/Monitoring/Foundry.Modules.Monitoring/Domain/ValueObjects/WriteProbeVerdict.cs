@@ -13,5 +13,5 @@ internal abstract record WriteProbeVerdict
 
     internal sealed record Denied : WriteProbeVerdict;
 
-    internal sealed record Unknown : WriteProbeVerdict;
+    internal sealed record Unknown(DateTimeOffset? LastAttemptedAt = null) : WriteProbeVerdict;
 }
