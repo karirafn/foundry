@@ -312,4 +312,53 @@ public sealed class ProbeContentsWriteAsync
             result.ShouldBeOfType<Result<WritePermissionProbeResult>.Success>();
         success.Value.ShouldBeOfType<WritePermissionProbeResult.Missing>();
     }
+
+    [Fact]
+    public async Task WhenGitHubReturns403WithRetryAfterZero_ReturnsMissingPermission()
+    {
+        // Arrange — Retry-After: 0 is not a valid positive-integer rate-limit signal;
+        // a real GitHub secondary-rate-limit always sends a positive number of seconds.
+        // An intermediary or CDN may inject Retry-After: 0 on a genuine permission 403.
+        FakeHandler handler = new(HttpStatusCode.Forbidden, string.Empty);
+        handler.ResponseHeaders["Retry-After"] = "0";
+        using HttpClient httpClient = new(handler);
+        GitHubHttpClient sut = new(httpClient, NullLogger<GitHubHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))));
+
+        // Act
+        Result<WritePermissionProbeResult> result = await sut.ProbeContentsWriteAsync(
+            ValidBaseUrl,
+            ValidSlug,
+            "ghp_token",
+            CancellationToken.None);
+
+        // Assert
+        result.IsSuccess.ShouldBeTrue();
+        Result<WritePermissionProbeResult>.Success success =
+            result.ShouldBeOfType<Result<WritePermissionProbeResult>.Success>();
+        success.Value.ShouldBeOfType<WritePermissionProbeResult.Missing>();
+    }
+
+    [Fact]
+    public async Task WhenGitHubReturns403WithNonNumericRetryAfter_ReturnsMissingPermission()
+    {
+        // Arrange — a non-numeric Retry-After (e.g. injected by a CDN) is not a GitHub
+        // secondary-rate-limit signal; the 403 must be treated as a genuine permission denial.
+        FakeHandler handler = new(HttpStatusCode.Forbidden, string.Empty);
+        handler.ResponseHeaders["Retry-After"] = "soon";
+        using HttpClient httpClient = new(handler);
+        GitHubHttpClient sut = new(httpClient, NullLogger<GitHubHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))));
+
+        // Act
+        Result<WritePermissionProbeResult> result = await sut.ProbeContentsWriteAsync(
+            ValidBaseUrl,
+            ValidSlug,
+            "ghp_token",
+            CancellationToken.None);
+
+        // Assert
+        result.IsSuccess.ShouldBeTrue();
+        Result<WritePermissionProbeResult>.Success success =
+            result.ShouldBeOfType<Result<WritePermissionProbeResult>.Success>();
+        success.Value.ShouldBeOfType<WritePermissionProbeResult.Missing>();
+    }
 }

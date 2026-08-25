@@ -1047,8 +1047,18 @@ internal sealed partial class GitHubHttpClient(
             return true;
         }
 
-        // Secondary rate limit (abuse detection): Retry-After is present regardless of remaining quota.
-        return response.Headers.Contains("Retry-After");
+        // Secondary rate limit (abuse detection): Retry-After must be a positive integer (seconds).
+        // GitHub's documented secondary-rate-limit always sends a positive integer; a zero, negative,
+        // or non-numeric value (e.g. injected by a CDN on a genuine permission 403) is not a valid
+        // rate-limit signal and must not misclassify a real permission denial.
+        if (response.Headers.TryGetValues("Retry-After", out IEnumerable<string>? retryAfterValues) &&
+            int.TryParse(retryAfterValues.FirstOrDefault(), out int retryAfterSeconds) &&
+            retryAfterSeconds > 0)
+        {
+            return true;
+        }
+
+        return false;
     }
 
     private static async Task<Error> ErrorFromBranchCreationFailureAsync(

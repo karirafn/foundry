@@ -80,6 +80,26 @@ public sealed class ComposeAsync
     }
 
     [Fact]
+    public async Task WhenVerdictIsGranted_AndBranchFullyProtected_ReturnsEligible()
+    {
+        // Arrange — all three protection flags set: direct pushes, force pushes, and deletion all rejected.
+        (EligibilityComposer composer, GitHubCredential credential) = BuildSut(
+            Result<BranchProtection>.Ok(new BranchProtection(
+                DefaultBranch: "main",
+                RejectDirectPushes: true,
+                RejectForcePushes: true,
+                RejectDeletion: true)));
+        WriteProbeVerdict verdict = new WriteProbeVerdict.Granted();
+
+        // Act
+        RepositoryEligibility eligibility = await composer.ComposeAsync(
+            Slug, verdict, credential, "ghp_token", CancellationToken.None);
+
+        // Assert
+        eligibility.ShouldBeOfType<RepositoryEligibility.Eligible>();
+    }
+
+    [Fact]
     public async Task WhenVerdictIsGranted_AndBranchProtectionFails_ReturnsUnreachableBranchRulesUnavailable()
     {
         // Arrange
