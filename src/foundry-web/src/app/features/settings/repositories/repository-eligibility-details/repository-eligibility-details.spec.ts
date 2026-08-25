@@ -1,6 +1,6 @@
 import { TestBed } from '@angular/core/testing';
 import { RepositoryEligibilityDetailsComponent } from './repository-eligibility-details';
-import { EligibilityViolation } from '../repository.model';
+import { EligibilityReason, EligibilityViolation } from '../repository.model';
 
 const VIOLATIONS: EligibilityViolation[] = [
   { rule: 'AllowDirectPushes', description: 'Allow direct pushes is enabled' },
@@ -10,6 +10,7 @@ const VIOLATIONS: EligibilityViolation[] = [
 function setup(overrides: {
   status?: 'eligible' | 'ineligible' | 'unreachable';
   violations?: EligibilityViolation[];
+  reason?: EligibilityReason | null;
   recheckPending?: boolean;
   recheckError?: string | null;
   panelId?: string;
@@ -17,6 +18,7 @@ function setup(overrides: {
   const fixture = TestBed.createComponent(RepositoryEligibilityDetailsComponent);
   fixture.componentRef.setInput('status', overrides.status ?? 'ineligible');
   fixture.componentRef.setInput('violations', overrides.violations ?? []);
+  fixture.componentRef.setInput('reason', overrides.reason ?? null);
   fixture.componentRef.setInput('recheckPending', overrides.recheckPending ?? false);
   fixture.componentRef.setInput('recheckError', overrides.recheckError ?? null);
   fixture.componentRef.setInput('panelId', overrides.panelId ?? 'eligibility-detail-test');
@@ -174,5 +176,134 @@ describe('RepositoryEligibilityDetailsComponent', () => {
     // Assert
     const recheckBtn = el.querySelector('.repository-eligibility-details__recheck-btn');
     expect(recheckBtn?.hasAttribute('aria-label')).toBe(false);
+  });
+
+  // Cycle 13: unreachable + reason=rate-limited — heading and explanation convey rate limit, not permission problem
+  it('should show rate-limit heading and explanation without "check access" when reason is rate-limited', () => {
+    // Arrange
+
+    // Act
+    const { el } = setup({ status: 'unreachable', reason: 'rate-limited' });
+
+    // Assert
+    const heading = el.querySelector('.repository-eligibility-details__heading');
+    expect(heading?.textContent?.trim()).toBe('GitHub API rate limit reached');
+    const explanation = el.querySelector('.repository-eligibility-details__explanation');
+    expect(explanation?.textContent).toContain('rate limit');
+    expect(explanation?.textContent?.toLowerCase()).not.toContain('check');
+  });
+
+  // Cycle 14: unreachable + reason=never-probed — heading and explanation convey not-yet-checked, not permission problem
+  it('should show not-yet-checked heading when reason is never-probed', () => {
+    // Arrange
+
+    // Act
+    const { el } = setup({ status: 'unreachable', reason: 'never-probed' });
+
+    // Assert
+    const heading = el.querySelector('.repository-eligibility-details__heading');
+    expect(heading?.textContent?.trim()).toBe('Eligibility not yet checked');
+  });
+
+  it('should show not-yet-checked explanation without "check access" when reason is never-probed', () => {
+    // Arrange
+
+    // Act
+    const { el } = setup({ status: 'unreachable', reason: 'never-probed' });
+
+    // Assert
+    const explanation = el.querySelector('.repository-eligibility-details__explanation');
+    expect(explanation?.textContent).toContain('not been checked');
+    expect(explanation?.textContent?.toLowerCase()).not.toContain('check the account');
+  });
+
+  // Cycle 17: unreachable + reason=rate-limited — Re-check button is disabled
+  it('should disable the Re-check button when reason is rate-limited', () => {
+    // Arrange
+
+    // Act
+    const { el } = setup({ status: 'unreachable', reason: 'rate-limited' });
+
+    // Assert
+    const recheckBtn = el.querySelector('.repository-eligibility-details__recheck-btn') as HTMLButtonElement;
+    expect(recheckBtn?.disabled).toBe(true);
+  });
+
+  // Cycle 18: unreachable + reason=rate-limited — Re-check button has explanatory title
+  it('should have an explanatory title on the Re-check button when reason is rate-limited', () => {
+    // Arrange
+
+    // Act
+    const { el } = setup({ status: 'unreachable', reason: 'rate-limited' });
+
+    // Assert
+    const recheckBtn = el.querySelector('.repository-eligibility-details__recheck-btn') as HTMLButtonElement;
+    expect(recheckBtn?.getAttribute('title')).toContain('rate limit');
+  });
+
+  // Cycle 19: unreachable + reason=never-probed — Re-check button is enabled
+  it('should keep the Re-check button enabled when reason is never-probed', () => {
+    // Arrange
+
+    // Act
+    const { el } = setup({ status: 'unreachable', reason: 'never-probed' });
+
+    // Assert
+    const recheckBtn = el.querySelector('.repository-eligibility-details__recheck-btn') as HTMLButtonElement;
+    expect(recheckBtn?.disabled).toBe(false);
+  });
+
+  // Cycle 20: unreachable + reason=branch-rules-unavailable — Re-check button is enabled
+  it('should keep the Re-check button enabled when reason is branch-rules-unavailable', () => {
+    // Arrange
+
+    // Act
+    const { el } = setup({ status: 'unreachable', reason: 'branch-rules-unavailable' });
+
+    // Assert
+    const recheckBtn = el.querySelector('.repository-eligibility-details__recheck-btn') as HTMLButtonElement;
+    expect(recheckBtn?.disabled).toBe(false);
+  });
+
+  // Cycle 21: recheckPending + reason=never-probed — button disabled and shows "Re-checking..." (pending composes with rate-limited)
+  it('should disable the Re-check button and show "Re-checking..." when pending even if reason is not rate-limited', () => {
+    // Arrange
+
+    // Act
+    const { el } = setup({ status: 'unreachable', reason: 'never-probed', recheckPending: true });
+
+    // Assert
+    const recheckBtn = el.querySelector('.repository-eligibility-details__recheck-btn') as HTMLButtonElement;
+    expect(recheckBtn?.disabled).toBe(true);
+    expect(recheckBtn?.textContent?.trim()).toBe('Re-checking...');
+  });
+
+  // Cycle 15: unreachable + reason=branch-rules-unavailable — shows the existing "check access" explanation
+  it('should show branch-rules-unavailable explanation with "check access" when reason is branch-rules-unavailable', () => {
+    // Arrange
+
+    // Act
+    const { el } = setup({ status: 'unreachable', reason: 'branch-rules-unavailable' });
+
+    // Assert
+    const heading = el.querySelector('.repository-eligibility-details__heading');
+    expect(heading?.textContent?.trim()).toBe('Branch protection could not be verified');
+    const explanation = el.querySelector('.repository-eligibility-details__explanation');
+    expect(explanation?.textContent).toContain('branch-protection settings');
+    expect(explanation?.textContent?.toLowerCase()).toContain('check');
+  });
+
+  // Cycle 16: unreachable + reason=null (absent) — falls back to the existing "check access" explanation
+  it('should fall back to the existing explanation when reason is null', () => {
+    // Arrange
+
+    // Act
+    const { el } = setup({ status: 'unreachable', reason: null });
+
+    // Assert
+    const heading = el.querySelector('.repository-eligibility-details__heading');
+    expect(heading?.textContent?.trim()).toBe('Branch protection could not be verified');
+    const explanation = el.querySelector('.repository-eligibility-details__explanation');
+    expect(explanation?.textContent).toContain('branch-protection settings');
   });
 });
