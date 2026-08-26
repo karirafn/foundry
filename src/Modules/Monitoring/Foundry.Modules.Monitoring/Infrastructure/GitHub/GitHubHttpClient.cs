@@ -46,6 +46,11 @@ internal sealed partial class GitHubHttpClient(
         PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
     };
 
+    private static readonly JsonSerializerOptions GraphQlJsonOptions = new()
+    {
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+    };
+
     public Task<Result<string>> GetDefaultBranchAsync(
         Uri apiBaseUrl,
         RepositorySlug slug,
@@ -137,6 +142,82 @@ internal sealed partial class GitHubHttpClient(
         bool rejectDirectPushes = (dtos ?? []).Any(r => r.Type == "pull_request");
 
         return Result<BranchRules>.Ok(new BranchRules(rejectDirectPushes, rejectForcePushes, rejectDeletion));
+    }
+
+    internal async Task<Result<TData>> ExecuteGraphQlAsync<TData>(
+        Uri restBaseUrl,
+        string query,
+        object variables,
+        string token,
+        CancellationToken cancellationToken)
+        where TData : class
+    {
+        if (restBaseUrl.Scheme is not "https")
+        {
+            return Result<TData>.Fail(GitHubErrors.InvalidBaseUrl);
+        }
+
+        Uri graphQlEndpoint = DeriveGraphQlEndpoint(restBaseUrl);
+        string requestBody = JsonSerializer.Serialize(new { query, variables }, GraphQlJsonOptions);
+
+        using HttpRequestMessage request = new(HttpMethod.Post, graphQlEndpoint);
+        AddGitHubHeaders(request, token);
+        request.Content = new StringContent(requestBody, Encoding.UTF8, "application/json");
+
+        using HttpResponseMessage response = await httpClient.SendAsync(request, cancellationToken);
+
+        if (!response.IsSuccessStatusCode)
+        {
+            return Result<TData>.Fail(ErrorFromNonSuccess(response));
+        }
+
+        string responseBody = await response.Content.ReadAsStringAsync(cancellationToken);
+        GraphQlEnvelope<TData>? envelope =
+            JsonSerializer.Deserialize<GraphQlEnvelope<TData>>(responseBody, GraphQlJsonOptions);
+
+        if (envelope?.Errors is { Count: > 0 } errors)
+        {
+            bool hasRateLimit = errors.Any(
+                e => string.Equals(e.Type, "RATE_LIMITED", StringComparison.OrdinalIgnoreCase));
+
+            if (hasRateLimit)
+            {
+                return Result<TData>.Fail(GitHubErrors.RateLimitExhausted);
+            }
+
+            string rawMessage = string.Join("; ", errors.Select(e => e.Message));
+            string safeMessage = TruncateWithEllipsis(RedactSecrets(rawMessage), MaxBranchErrorBodyLength);
+            return Result<TData>.Fail(GitHubErrors.GraphQlError(safeMessage));
+        }
+
+        if (envelope?.Data is null)
+        {
+            return Result<TData>.Fail(
+                GitHubErrors.ProviderError("GraphQL response contained neither data nor errors."));
+        }
+
+        if (envelope.RateLimit is { } rateLimit)
+        {
+            logger.LogDebug(
+                "GitHub GraphQL cost={Cost} remaining={Remaining}",
+                rateLimit.Cost,
+                rateLimit.Remaining);
+        }
+
+        return Result<TData>.Ok(envelope.Data);
+    }
+
+    private static Uri DeriveGraphQlEndpoint(Uri restBaseUrl)
+    {
+        // github.com: https://api.github.com → https://api.github.com/graphql
+        if (string.Equals(restBaseUrl.Host, "api.github.com", StringComparison.OrdinalIgnoreCase))
+        {
+            return new Uri("https://api.github.com/graphql");
+        }
+
+        // GHES: https://<host>/api/v3/ → https://<host>/api/graphql
+        string origin = $"{restBaseUrl.Scheme}://{restBaseUrl.Authority}";
+        return new Uri($"{origin}/api/graphql");
     }
 
     public async Task<Result<IssueListing>> GetIssuesAsync(
@@ -1199,6 +1280,23 @@ internal sealed partial class GitHubHttpClient(
         DateTimeOffset UpdatedAt);
 
     private sealed record GitHubErrorBodyDto(string? Message);
+
+    // GraphQL envelope records — deserialized with GraphQlJsonOptions (camelCase).
+    // TData is unconstrained here so Data can be null when the GraphQL response omits or nulls it.
+    private sealed record GraphQlEnvelope<TData>(
+        TData? Data,
+        IReadOnlyList<GraphQlError>? Errors,
+        GraphQlRateLimit? RateLimit)
+        where TData : class;
+
+    private sealed record GraphQlError(
+        string Message,
+        IReadOnlyList<GraphQlErrorLocation>? Locations,
+        string? Type);
+
+    private sealed record GraphQlErrorLocation(int Line, int Column);
+
+    private sealed record GraphQlRateLimit(int Cost, int Remaining);
 }
 
 internal sealed record BranchRules(bool RejectDirectPushes, bool RejectForcePushes, bool RejectDeletion);
@@ -1222,4 +1320,7 @@ internal static class GitHubErrors
 
     public static Error ProviderError(string message) =>
         new("GitHub.ProviderError", message);
+
+    public static Error GraphQlError(string message) =>
+        new("GitHub.GraphQlError", message);
 }
