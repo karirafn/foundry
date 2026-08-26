@@ -90,6 +90,25 @@ internal sealed partial class GitHubHttpClient(
         }
         """;
 
+    private const string PrReviewFeedbackQuery = """
+        query PrReviewFeedback($owner: String!, $name: String!, $number: Int!) {
+          rateLimit { cost remaining }
+          repository(owner: $owner, name: $name) {
+            pullRequest(number: $number) {
+              reviews(first: 50, states: [CHANGES_REQUESTED]) {
+                nodes {
+                  body
+                  submittedAt
+                  comments(first: 100) {
+                    nodes { body path line originalLine }
+                  }
+                }
+              }
+            }
+          }
+        }
+        """;
+
     private const string BlockedByPageQuery = """
         query BlockedByPage($owner: String!, $name: String!, $number: Int!, $blockedByAfter: String) {
           rateLimit { cost remaining }
@@ -595,36 +614,32 @@ internal sealed partial class GitHubHttpClient(
         string token,
         CancellationToken cancellationToken)
     {
-        if (apiBaseUrl.Scheme is not "https")
-        {
-            return Result<ReviewFeedback>.Fail(GitHubErrors.InvalidBaseUrl);
-        }
-
         if (!TryParsePrNumber(pullRequestUrl, out int prNumber))
         {
             return Result<ReviewFeedback>.Fail(GitHubErrors.InvalidPullRequestUrl);
         }
 
-        string owner = Uri.EscapeDataString(slug.Owner);
-        string repo = Uri.EscapeDataString(slug.Name);
+        object variables = new { owner = slug.Owner, name = slug.Name, number = prNumber };
+        Result<PrReviewFeedbackData> dataResult = await ExecuteGraphQlAsync<PrReviewFeedbackData>(
+            apiBaseUrl, PrReviewFeedbackQuery, variables, token, cancellationToken);
 
-        Result<IReadOnlyList<GitHubPullRequestReviewDto>> reviewsResult = await FetchPullRequestReviewsAsync(
-            apiBaseUrl, owner, repo, prNumber, token, cancellationToken);
-
-        if (reviewsResult is not Result<IReadOnlyList<GitHubPullRequestReviewDto>>.Success reviewsSuccess)
+        if (dataResult is not Result<PrReviewFeedbackData>.Success dataSuccess)
         {
-            Error error = ((Result<IReadOnlyList<GitHubPullRequestReviewDto>>.Failure)reviewsResult).Error;
+            Error error = ((Result<PrReviewFeedbackData>.Failure)dataResult).Error;
             return Result<ReviewFeedback>.Fail(error);
         }
 
-        IReadOnlyList<GitHubPullRequestReviewDto> changesRequestedReviews = reviewsSuccess.Value
-            .Where(r => string.Equals(r.State, "CHANGES_REQUESTED", StringComparison.OrdinalIgnoreCase))
-            .Where(r => r.SubmittedAt > since)
-            .ToList();
+        IReadOnlyList<GraphQlReviewNode> reviewNodes =
+            dataSuccess.Value.Repository?.PullRequest?.Reviews?.Nodes ?? [];
 
         List<ReviewComment> comments = [];
-        foreach (GitHubPullRequestReviewDto review in changesRequestedReviews)
+        foreach (GraphQlReviewNode review in reviewNodes)
         {
+            if (review.SubmittedAt is null || review.SubmittedAt <= since)
+            {
+                continue;
+            }
+
             if (comments.Count >= MaxComments)
             {
                 break;
@@ -635,21 +650,10 @@ internal sealed partial class GitHubHttpClient(
                 comments.Add(new ReviewComment(TruncateBody(review.Body)));
             }
 
-            if (comments.Count >= MaxComments)
-            {
-                break;
-            }
+            IReadOnlyList<GraphQlReviewCommentNode> fileComments =
+                review.Comments?.Nodes ?? [];
 
-            Result<IReadOnlyList<GitHubPullRequestReviewCommentDto>> fileCommentsResult =
-                await FetchPullRequestReviewCommentsAsync(
-                    apiBaseUrl, owner, repo, prNumber, review.Id, token, cancellationToken);
-
-            if (fileCommentsResult is not Result<IReadOnlyList<GitHubPullRequestReviewCommentDto>>.Success fileCommentsSuccess)
-            {
-                continue;
-            }
-
-            foreach (GitHubPullRequestReviewCommentDto fileComment in fileCommentsSuccess.Value)
+            foreach (GraphQlReviewCommentNode fileComment in fileComments)
             {
                 if (comments.Count >= MaxComments)
                 {
@@ -663,69 +667,6 @@ internal sealed partial class GitHubHttpClient(
         }
 
         return Result<ReviewFeedback>.Ok(new ReviewFeedback(comments));
-    }
-
-    private async Task<Result<IReadOnlyList<GitHubPullRequestReviewDto>>> FetchPullRequestReviewsAsync(
-        Uri apiBaseUrl,
-        string owner,
-        string repo,
-        int prNumber,
-        string token,
-        CancellationToken cancellationToken)
-    {
-        string relativePath = $"repos/{owner}/{repo}/pulls/{prNumber}/reviews";
-        Uri requestUri = new(EnsureTrailingSlash(apiBaseUrl), relativePath);
-
-        using HttpRequestMessage request = new(HttpMethod.Get, requestUri);
-        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
-        request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/vnd.github+json"));
-        request.Headers.Add("X-GitHub-Api-Version", ApiVersion);
-        request.Headers.UserAgent.Add(new ProductInfoHeaderValue("Foundry", null));
-
-        using HttpResponseMessage response = await httpClient.SendAsync(request, cancellationToken);
-
-        if (!response.IsSuccessStatusCode)
-        {
-            return Result<IReadOnlyList<GitHubPullRequestReviewDto>>.Fail(ErrorFromNonSuccess(response));
-        }
-
-        string body = await response.Content.ReadAsStringAsync(cancellationToken);
-        List<GitHubPullRequestReviewDto>? dtos =
-            JsonSerializer.Deserialize<List<GitHubPullRequestReviewDto>>(body, JsonOptions);
-
-        return Result<IReadOnlyList<GitHubPullRequestReviewDto>>.Ok(dtos ?? []);
-    }
-
-    private async Task<Result<IReadOnlyList<GitHubPullRequestReviewCommentDto>>> FetchPullRequestReviewCommentsAsync(
-        Uri apiBaseUrl,
-        string owner,
-        string repo,
-        int prNumber,
-        long reviewId,
-        string token,
-        CancellationToken cancellationToken)
-    {
-        string relativePath = $"repos/{owner}/{repo}/pulls/{prNumber}/reviews/{reviewId}/comments";
-        Uri requestUri = new(EnsureTrailingSlash(apiBaseUrl), relativePath);
-
-        using HttpRequestMessage request = new(HttpMethod.Get, requestUri);
-        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
-        request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/vnd.github+json"));
-        request.Headers.Add("X-GitHub-Api-Version", ApiVersion);
-        request.Headers.UserAgent.Add(new ProductInfoHeaderValue("Foundry", null));
-
-        using HttpResponseMessage response = await httpClient.SendAsync(request, cancellationToken);
-
-        if (!response.IsSuccessStatusCode)
-        {
-            return Result<IReadOnlyList<GitHubPullRequestReviewCommentDto>>.Fail(ErrorFromNonSuccess(response));
-        }
-
-        string body = await response.Content.ReadAsStringAsync(cancellationToken);
-        List<GitHubPullRequestReviewCommentDto>? dtos =
-            JsonSerializer.Deserialize<List<GitHubPullRequestReviewCommentDto>>(body, JsonOptions);
-
-        return Result<IReadOnlyList<GitHubPullRequestReviewCommentDto>>.Ok(dtos ?? []);
     }
 
     public async Task<Result<TokenValidationOutcome>> ValidateTokenAsync(
@@ -1421,18 +1362,6 @@ internal sealed partial class GitHubHttpClient(
 
     private sealed record GitHubRepositoryDto(string FullName);
 
-    private sealed record GitHubPullRequestReviewDto(
-        long Id,
-        string State,
-        string Body,
-        DateTimeOffset SubmittedAt);
-
-    private sealed record GitHubPullRequestReviewCommentDto(
-        string Body,
-        string Path,
-        int? Line,
-        int? OriginalLine);
-
     private sealed record GitHubRepositoryListItemDto(
         string FullName,
         bool Private,
@@ -1540,6 +1469,28 @@ internal sealed partial class GitHubHttpClient(
     private sealed record PrStatusRepository(GraphQlPullRequestStatus? PullRequest);
 
     private sealed record GraphQlPullRequestStatus(string State, bool Merged);
+
+    // GraphQL PrReviewFeedback query DTOs — deserialized with GraphQlJsonOptions (camelCase).
+    private sealed record PrReviewFeedbackData(GraphQlRateLimit? RateLimit, PrReviewFeedbackRepository? Repository);
+
+    private sealed record PrReviewFeedbackRepository(PrReviewFeedbackPullRequest? PullRequest);
+
+    private sealed record PrReviewFeedbackPullRequest(GraphQlReviewConnection? Reviews);
+
+    private sealed record GraphQlReviewConnection(IReadOnlyList<GraphQlReviewNode> Nodes);
+
+    private sealed record GraphQlReviewNode(
+        string? Body,
+        DateTimeOffset? SubmittedAt,
+        GraphQlReviewCommentConnection? Comments);
+
+    private sealed record GraphQlReviewCommentConnection(IReadOnlyList<GraphQlReviewCommentNode> Nodes);
+
+    private sealed record GraphQlReviewCommentNode(
+        string Body,
+        string? Path,
+        int? Line,
+        int? OriginalLine);
 }
 
 internal sealed record BranchRules(bool RejectDirectPushes, bool RejectForcePushes, bool RejectDeletion);
