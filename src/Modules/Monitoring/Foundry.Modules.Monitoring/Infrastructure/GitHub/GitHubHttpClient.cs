@@ -59,12 +59,30 @@ internal sealed partial class GitHubHttpClient(
                 labels(first: 50) { nodes { name } }
                 blockedBy(first: 50) {
                   totalCount
-                  pageInfo { hasNextPage }
+                  pageInfo { hasNextPage endCursor }
                   nodes {
                     number
                     state
                     repository { nameWithOwner }
                   }
+                }
+              }
+            }
+          }
+        }
+        """;
+
+    private const string BlockedByPageQuery = """
+        query BlockedByPage($owner: String!, $name: String!, $number: Int!, $blockedByAfter: String) {
+          rateLimit { cost remaining }
+          repository(owner: $owner, name: $name) {
+            issue(number: $number) {
+              blockedBy(first: 50, after: $blockedByAfter) {
+                pageInfo { hasNextPage endCursor }
+                nodes {
+                  number
+                  state
+                  repository { nameWithOwner }
                 }
               }
             }
@@ -303,15 +321,16 @@ internal sealed partial class GitHubHttpClient(
                     Labels: labels,
                     IssueKindLabel: LabelClassifier.ClassifyKind(labels)));
 
-                List<int> blockers = (node.BlockedBy?.Nodes ?? [])
-                    .Where(b => string.Equals(
-                        b.Repository.NameWithOwner,
-                        expectedFullName,
-                        StringComparison.OrdinalIgnoreCase))
-                    .Where(b => !string.Equals(b.State, "CLOSED", StringComparison.OrdinalIgnoreCase))
-                    .Select(b => b.Number)
-                    .ToList();
+                Result<IReadOnlyList<int>> blockersResult = await CollectBlockersAsync(
+                    apiBaseUrl, slug, node, expectedFullName, token, cancellationToken);
 
+                if (blockersResult is not Result<IReadOnlyList<int>>.Success blockersSuccess)
+                {
+                    Error error = ((Result<IReadOnlyList<int>>.Failure)blockersResult).Error;
+                    return Result<IssueListingWithDependencies>.Fail(error);
+                }
+
+                IReadOnlyList<int> blockers = blockersSuccess.Value;
                 if (blockers.Count > 0)
                 {
                     blockedByMap[node.Number] = blockers;
@@ -334,6 +353,66 @@ internal sealed partial class GitHubHttpClient(
         IssueListing cappedListing = new(allIssues, IsComplete: false);
         return Result<IssueListingWithDependencies>.Ok(
             new IssueListingWithDependencies(cappedListing, blockedByMap));
+    }
+
+    private async Task<Result<IReadOnlyList<int>>> CollectBlockersAsync(
+        Uri apiBaseUrl,
+        RepositorySlug slug,
+        GraphQlIssueNode node,
+        string expectedFullName,
+        string token,
+        CancellationToken cancellationToken)
+    {
+        GraphQlBlockedByConnection? blockedByConnection = node.BlockedBy;
+        List<GraphQlBlockerNode> allBlockerNodes = [.. (blockedByConnection?.Nodes ?? [])];
+
+        if (blockedByConnection?.PageInfo.HasNextPage is true)
+        {
+            string? blockedByCursor = blockedByConnection.PageInfo.EndCursor;
+
+            while (true)
+            {
+                object bbVariables = new
+                {
+                    owner = slug.Owner,
+                    name = slug.Name,
+                    number = node.Number,
+                    blockedByAfter = blockedByCursor,
+                };
+
+                Result<BlockedByPageData> bbResult = await ExecuteGraphQlAsync<BlockedByPageData>(
+                    apiBaseUrl, BlockedByPageQuery, bbVariables, token, cancellationToken);
+
+                if (bbResult is not Result<BlockedByPageData>.Success bbSuccess)
+                {
+                    Error error = ((Result<BlockedByPageData>.Failure)bbResult).Error;
+                    return Result<IReadOnlyList<int>>.Fail(error);
+                }
+
+                GraphQlBlockedByConnection? bbConnection =
+                    bbSuccess.Value.Repository?.Issue?.BlockedBy;
+
+                allBlockerNodes.AddRange(bbConnection?.Nodes ?? []);
+
+                if (bbConnection?.PageInfo.HasNextPage is not true)
+                {
+                    break;
+                }
+
+                blockedByCursor = bbConnection.PageInfo.EndCursor;
+            }
+        }
+
+        List<int> blockers = allBlockerNodes
+            .Where(b => string.Equals(
+                b.Repository.NameWithOwner,
+                expectedFullName,
+                StringComparison.OrdinalIgnoreCase))
+            .Where(b => !string.Equals(b.State, "CLOSED", StringComparison.OrdinalIgnoreCase))
+            .Select(b => b.Number)
+            .ToList();
+
+        return Result<IReadOnlyList<int>>.Ok(blockers);
     }
 
     public async Task<Result<IssueListing>> GetIssuesAsync(
@@ -1456,6 +1535,13 @@ internal sealed partial class GitHubHttpClient(
         GraphQlBlockerRepo Repository);
 
     private sealed record GraphQlBlockerRepo(string NameWithOwner);
+
+    // GraphQL blockedBy follow-up page DTOs — deserialized with GraphQlJsonOptions (camelCase).
+    private sealed record BlockedByPageData(GraphQlRateLimit? RateLimit, GraphQlBlockedByPageRepository? Repository);
+
+    private sealed record GraphQlBlockedByPageRepository(GraphQlBlockedByPageIssue? Issue);
+
+    private sealed record GraphQlBlockedByPageIssue(GraphQlBlockedByConnection? BlockedBy);
 }
 
 internal sealed record BranchRules(bool RejectDirectPushes, bool RejectForcePushes, bool RejectDeletion);

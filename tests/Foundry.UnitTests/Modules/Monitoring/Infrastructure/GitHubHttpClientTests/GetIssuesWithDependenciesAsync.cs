@@ -742,7 +742,229 @@ public sealed class GetIssuesWithDependenciesAsync
             () => success.Value.Listing.Issues.Count.ShouldBe(3));
     }
 
+    // --- Pagination: multiple full pages then short/empty → IsComplete: true ---
+
+    [Fact]
+    public async Task WhenOneFullPageThenEmptyPage_ReturnsAllIssuesAndIsComplete()
+    {
+        // Arrange — 100-node page with hasNextPage:true, then empty page with hasNextPage:false
+        string page1 = BuildFullPageResponse(issueCount: 100, startIndex: 0, hasNextPage: true, cursor: "cursor1");
+        string page2 = BuildSinglePageResponse(issueCount: 0, startIndex: 100);
+
+        SequentialFakeHandler handler = new(
+        [
+            (HttpStatusCode.OK, page1),
+            (HttpStatusCode.OK, page2),
+        ]);
+        GitHubHttpClient sut = BuildSut(handler);
+
+        // Act
+        Result<IssueListingWithDependencies> result = await sut.GetIssuesWithDependenciesAsync(
+            ValidBaseUrl, ValidSlug, "ghp_token", CancellationToken.None);
+
+        // Assert
+        Result<IssueListingWithDependencies>.Success success =
+            result.ShouldBeOfType<Result<IssueListingWithDependencies>.Success>();
+        success.Value.Listing.ShouldSatisfyAllConditions(
+            () => success.Value.Listing.IsComplete.ShouldBeTrue(),
+            () => success.Value.Listing.Issues.Count.ShouldBe(100));
+    }
+
+    [Fact]
+    public async Task WhenTwoFullPagesThenShortPage_ReturnsAllAccumulatedIssuesAndIsComplete()
+    {
+        // Arrange
+        string page1 = BuildFullPageResponse(issueCount: 100, startIndex: 0, hasNextPage: true, cursor: "cursor1");
+        string page2 = BuildFullPageResponse(issueCount: 100, startIndex: 100, hasNextPage: true, cursor: "cursor2");
+        string page3 = BuildSinglePageResponse(issueCount: 42, startIndex: 200);
+
+        SequentialFakeHandler handler = new(
+        [
+            (HttpStatusCode.OK, page1),
+            (HttpStatusCode.OK, page2),
+            (HttpStatusCode.OK, page3),
+        ]);
+        GitHubHttpClient sut = BuildSut(handler);
+
+        // Act
+        Result<IssueListingWithDependencies> result = await sut.GetIssuesWithDependenciesAsync(
+            ValidBaseUrl, ValidSlug, "ghp_token", CancellationToken.None);
+
+        // Assert
+        Result<IssueListingWithDependencies>.Success success =
+            result.ShouldBeOfType<Result<IssueListingWithDependencies>.Success>();
+        success.Value.Listing.ShouldSatisfyAllConditions(
+            () => success.Value.Listing.IsComplete.ShouldBeTrue(),
+            () => success.Value.Listing.Issues.Count.ShouldBe(242));
+    }
+
+    [Fact]
+    public async Task WhenCursorIsPassedToSubsequentPage_SecondRequestBodyContainsCursor()
+    {
+        // Arrange
+        string page1 = BuildFullPageResponse(issueCount: 100, startIndex: 0, hasNextPage: true, cursor: "cursor-abc");
+        string page2 = BuildSinglePageResponse(issueCount: 5, startIndex: 100);
+
+        SequentialFakeHandler handler = new(
+        [
+            (HttpStatusCode.OK, page1),
+            (HttpStatusCode.OK, page2),
+        ]);
+        GitHubHttpClient sut = BuildSut(handler);
+
+        // Act
+        Result<IssueListingWithDependencies> _ = await sut.GetIssuesWithDependenciesAsync(
+            ValidBaseUrl, ValidSlug, "ghp_token", CancellationToken.None);
+
+        // Assert
+        handler.Requests.Count.ShouldBe(2);
+        string? secondRequestBody = handler.RequestBodies[1];
+        secondRequestBody.ShouldNotBeNull();
+        secondRequestBody.ShouldContain("cursor-abc");
+    }
+
+    // --- Page cap → IsComplete: false ---
+
+    [Fact]
+    public async Task WhenPageCapReachedWithoutShortPage_ReturnsAccumulatedIssuesWithIsCompleteFalse()
+    {
+        // Arrange — MaxIssuePages (20) full pages all with hasNextPage:true
+        List<(HttpStatusCode, string)> responses = Enumerable
+            .Range(0, 20)
+            .Select(i => (HttpStatusCode.OK, BuildFullPageResponse(
+                issueCount: 100,
+                startIndex: i * 100,
+                hasNextPage: true,
+                cursor: $"cursor{i}")))
+            .ToList();
+
+        SequentialFakeHandler handler = new(responses);
+        GitHubHttpClient sut = BuildSut(handler);
+
+        // Act
+        Result<IssueListingWithDependencies> result = await sut.GetIssuesWithDependenciesAsync(
+            ValidBaseUrl, ValidSlug, "ghp_token", CancellationToken.None);
+
+        // Assert
+        Result<IssueListingWithDependencies>.Success success =
+            result.ShouldBeOfType<Result<IssueListingWithDependencies>.Success>();
+        success.Value.Listing.ShouldSatisfyAllConditions(
+            () => success.Value.Listing.IsComplete.ShouldBeFalse(),
+            () => success.Value.Listing.Issues.Count.ShouldBe(2000));
+    }
+
+    // --- Envelope error on later page → whole result fails, no partial value ---
+
+    [Fact]
+    public async Task WhenPage2HasEnvelopeError_ReturnsFailureWithNoPartialValue()
+    {
+        // Arrange — page 1 succeeds, page 2 returns a GraphQL error envelope
+        string page1 = BuildFullPageResponse(issueCount: 100, startIndex: 0, hasNextPage: true, cursor: "cursor1");
+        string page2 = """
+            {
+              "data": null,
+              "errors": [{ "message": "Internal server error", "type": "INTERNAL" }]
+            }
+            """;
+
+        SequentialFakeHandler handler = new(
+        [
+            (HttpStatusCode.OK, page1),
+            (HttpStatusCode.OK, page2),
+        ]);
+        GitHubHttpClient sut = BuildSut(handler);
+
+        // Act
+        Result<IssueListingWithDependencies> result = await sut.GetIssuesWithDependenciesAsync(
+            ValidBaseUrl, ValidSlug, "ghp_token", CancellationToken.None);
+
+        // Assert
+        result.ShouldBeOfType<Result<IssueListingWithDependencies>.Failure>();
+    }
+
+    // --- blockedBy truncation guard: paginate when hasNextPage:true ---
+
+    [Fact]
+    public async Task WhenBlockedByHasNextPage_PaginatesBlockedByUntilExhausted()
+    {
+        // Arrange — issue list page with one issue whose blockedBy.hasNextPage is true,
+        // then a follow-up blockedBy page that exhausts the blockers.
+        string issuePage = BuildIssuePageWithTruncatedBlockedBy(
+            issueNumber: 42,
+            initialBlockerNumber: 10,
+            blockedByHasNextPage: true,
+            blockedByCursor: "bb-cursor-1");
+
+        string blockedByPage = BuildBlockedByFollowUpResponse(
+            issueNumber: 42,
+            blockerNumber: 11,
+            hasNextPage: false);
+
+        SequentialFakeHandler handler = new(
+        [
+            (HttpStatusCode.OK, issuePage),
+            (HttpStatusCode.OK, blockedByPage),
+        ]);
+        GitHubHttpClient sut = BuildSut(handler);
+
+        // Act
+        Result<IssueListingWithDependencies> result = await sut.GetIssuesWithDependenciesAsync(
+            ValidBaseUrl, ValidSlug, "ghp_token", CancellationToken.None);
+
+        // Assert
+        Result<IssueListingWithDependencies>.Success success =
+            result.ShouldBeOfType<Result<IssueListingWithDependencies>.Success>();
+        IReadOnlyDictionary<int, IReadOnlyList<int>> blockedBy = success.Value.BlockedBy;
+        blockedBy.ShouldContainKey(42);
+        blockedBy[42].ShouldBe([10, 11]);
+    }
+
+    [Fact]
+    public async Task WhenBlockedBySpansMultiplePages_AccumulatesAllBlockers()
+    {
+        // Arrange — issue list page with one issue whose blockedBy spans 3 pages
+        string issuePage = BuildIssuePageWithTruncatedBlockedBy(
+            issueNumber: 42,
+            initialBlockerNumber: 10,
+            blockedByHasNextPage: true,
+            blockedByCursor: "bb-cursor-1");
+
+        string blockedByPage2 = BuildBlockedByFollowUpResponse(
+            issueNumber: 42,
+            blockerNumber: 11,
+            hasNextPage: true,
+            cursor: "bb-cursor-2");
+
+        string blockedByPage3 = BuildBlockedByFollowUpResponse(
+            issueNumber: 42,
+            blockerNumber: 12,
+            hasNextPage: false);
+
+        SequentialFakeHandler handler = new(
+        [
+            (HttpStatusCode.OK, issuePage),
+            (HttpStatusCode.OK, blockedByPage2),
+            (HttpStatusCode.OK, blockedByPage3),
+        ]);
+        GitHubHttpClient sut = BuildSut(handler);
+
+        // Act
+        Result<IssueListingWithDependencies> result = await sut.GetIssuesWithDependenciesAsync(
+            ValidBaseUrl, ValidSlug, "ghp_token", CancellationToken.None);
+
+        // Assert
+        Result<IssueListingWithDependencies>.Success success =
+            result.ShouldBeOfType<Result<IssueListingWithDependencies>.Success>();
+        success.Value.BlockedBy[42].ShouldBe([10, 11, 12]);
+    }
+
     // --- Helpers ---
+
+    private static GitHubHttpClient BuildSut(SequentialFakeHandler handler) =>
+        new(
+            new HttpClient(handler),
+            NullLogger<GitHubHttpClient>.Instance,
+            new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))));
 
     private static string BuildSinglePageResponse(int issueCount, int startIndex = 0)
     {
@@ -767,6 +989,118 @@ public sealed class GetIssuesWithDependenciesAsync
                   "issues": {
                     "pageInfo": { "hasNextPage": false, "endCursor": null },
                     "nodes": [{{nodes}}]
+                  }
+                }
+              },
+              "errors": null
+            }
+            """;
+    }
+
+    private static string BuildFullPageResponse(int issueCount, int startIndex, bool hasNextPage, string cursor)
+    {
+        string nodes = string.Join(",", Enumerable.Range(startIndex, issueCount).Select(i => $$"""
+            {
+              "number": {{i + 1}},
+              "title": "Issue {{i + 1}}",
+              "body": "Body {{i + 1}}",
+              "url": "https://github.com/owner/repo/issues/{{i + 1}}",
+              "state": "OPEN",
+              "author": { "login": "user{{i}}" },
+              "labels": { "nodes": [ { "name": "foundry" } ] },
+              "blockedBy": { "totalCount": 0, "pageInfo": { "hasNextPage": false }, "nodes": [] }
+            }
+            """));
+
+        string hasNextPageValue = hasNextPage ? "true" : "false";
+        string cursorValue = hasNextPage ? $"\"{cursor}\"" : "null";
+
+        return $$"""
+            {
+              "data": {
+                "repository": {
+                  "defaultBranchRef": { "name": "main" },
+                  "issues": {
+                    "pageInfo": { "hasNextPage": {{hasNextPageValue}}, "endCursor": {{cursorValue}} },
+                    "nodes": [{{nodes}}]
+                  }
+                }
+              },
+              "errors": null
+            }
+            """;
+    }
+
+    private static string BuildIssuePageWithTruncatedBlockedBy(
+        int issueNumber,
+        int initialBlockerNumber,
+        bool blockedByHasNextPage,
+        string blockedByCursor)
+    {
+        string hasNextPageValue = blockedByHasNextPage ? "true" : "false";
+        string cursorValue = blockedByHasNextPage ? $"\"{blockedByCursor}\"" : "null";
+
+        return $$"""
+            {
+              "data": {
+                "repository": {
+                  "defaultBranchRef": { "name": "main" },
+                  "issues": {
+                    "pageInfo": { "hasNextPage": false, "endCursor": null },
+                    "nodes": [
+                      {
+                        "number": {{issueNumber}},
+                        "title": "Blocked issue",
+                        "body": "",
+                        "url": "https://github.com/owner/repo/issues/{{issueNumber}}",
+                        "state": "OPEN",
+                        "author": { "login": "dev" },
+                        "labels": { "nodes": [ { "name": "foundry" } ] },
+                        "blockedBy": {
+                          "totalCount": 51,
+                          "pageInfo": { "hasNextPage": {{hasNextPageValue}}, "endCursor": {{cursorValue}} },
+                          "nodes": [
+                            {
+                              "number": {{initialBlockerNumber}},
+                              "state": "OPEN",
+                              "repository": { "nameWithOwner": "owner/repo" }
+                            }
+                          ]
+                        }
+                      }
+                    ]
+                  }
+                }
+              },
+              "errors": null
+            }
+            """;
+    }
+
+    private static string BuildBlockedByFollowUpResponse(
+        int issueNumber,
+        int blockerNumber,
+        bool hasNextPage,
+        string? cursor = null)
+    {
+        string hasNextPageValue = hasNextPage ? "true" : "false";
+        string cursorValue = cursor is not null ? $"\"{cursor}\"" : "null";
+
+        return $$"""
+            {
+              "data": {
+                "repository": {
+                  "issue": {
+                    "blockedBy": {
+                      "pageInfo": { "hasNextPage": {{hasNextPageValue}}, "endCursor": {{cursorValue}} },
+                      "nodes": [
+                        {
+                          "number": {{blockerNumber}},
+                          "state": "OPEN",
+                          "repository": { "nameWithOwner": "owner/repo" }
+                        }
+                      ]
+                    }
                   }
                 }
               },
