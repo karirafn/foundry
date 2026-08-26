@@ -958,6 +958,75 @@ public sealed class GetIssuesWithDependenciesAsync
         success.Value.BlockedBy[42].ShouldBe([10, 11, 12]);
     }
 
+    // --- blockedBy page cap: fail loud when cap exceeded ---
+
+    [Fact]
+    public async Task WhenBlockedByPageCapExceeded_ReturnsFailureNotTruncatedSuccess()
+    {
+        // Arrange — issue page with truncated blockedBy, followed by MaxBlockerPages of follow-up
+        // responses that always report hasNextPage:true, exceeding the page cap.
+        string issuePage = BuildIssuePageWithTruncatedBlockedBy(
+            issueNumber: 42,
+            initialBlockerNumber: 10,
+            blockedByHasNextPage: true,
+            blockedByCursor: "bb-cursor-0");
+
+        // 20 follow-up pages (MaxBlockerPages value), all with hasNextPage:true
+        List<(HttpStatusCode, string)> responses = [(HttpStatusCode.OK, issuePage)];
+        for (int i = 1; i <= 20; i++)
+        {
+            responses.Add((HttpStatusCode.OK, BuildBlockedByFollowUpResponse(
+                issueNumber: 42,
+                blockerNumber: 100 + i,
+                hasNextPage: true,
+                cursor: $"bb-cursor-{i}")));
+        }
+
+        SequentialFakeHandler handler = new(responses);
+        GitHubHttpClient sut = BuildSut(handler);
+
+        // Act
+        Result<IssueListingWithDependencies> result = await sut.GetIssuesWithDependenciesAsync(
+            ValidBaseUrl, ValidSlug, "ghp_token", CancellationToken.None);
+
+        // Assert — must fail, never return a truncated success
+        result.ShouldBeOfType<Result<IssueListingWithDependencies>.Failure>();
+    }
+
+    // --- blockedBy follow-up page error propagation ---
+
+    [Fact]
+    public async Task WhenBlockedByFollowUpPageReturnsGraphQlError_ReturnsFailureWithNoPartialValue()
+    {
+        // Arrange — successful issue page with truncated blockedBy, then a 200 with errors on the follow-up
+        string issuePage = BuildIssuePageWithTruncatedBlockedBy(
+            issueNumber: 42,
+            initialBlockerNumber: 10,
+            blockedByHasNextPage: true,
+            blockedByCursor: "bb-cursor-1");
+
+        string errorPage = """
+            {
+              "data": null,
+              "errors": [{ "message": "Internal server error", "type": "INTERNAL" }]
+            }
+            """;
+
+        SequentialFakeHandler handler = new(
+        [
+            (HttpStatusCode.OK, issuePage),
+            (HttpStatusCode.OK, errorPage),
+        ]);
+        GitHubHttpClient sut = BuildSut(handler);
+
+        // Act
+        Result<IssueListingWithDependencies> result = await sut.GetIssuesWithDependenciesAsync(
+            ValidBaseUrl, ValidSlug, "ghp_token", CancellationToken.None);
+
+        // Assert
+        result.ShouldBeOfType<Result<IssueListingWithDependencies>.Failure>();
+    }
+
     // --- Helpers ---
 
     private static GitHubHttpClient BuildSut(SequentialFakeHandler handler) =>

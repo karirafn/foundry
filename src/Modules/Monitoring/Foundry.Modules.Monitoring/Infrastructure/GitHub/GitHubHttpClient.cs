@@ -31,6 +31,7 @@ internal sealed partial class GitHubHttpClient(
     private const int MaxRepositoryPages = 5;
     private const int RepositoriesPerPage = 100;
     private const int MaxIssuePages = 20;
+    private const int MaxBlockerPages = 20;
     private const int MaxBranchErrorBodyLength = 500;
     private const int MaxPermissionsLength = 200;
     private const string Ellipsis = "...";
@@ -53,9 +54,8 @@ internal sealed partial class GitHubHttpClient(
                 title
                 body
                 url
-                state
                 author { login }
-                labels(first: 50) { nodes { name } }
+                labels(first: 100) { nodes { name } }
                 blockedBy(first: 50) {
                   totalCount
                   pageInfo { hasNextPage endCursor }
@@ -406,7 +406,7 @@ internal sealed partial class GitHubHttpClient(
         {
             string? blockedByCursor = blockedByConnection.PageInfo.EndCursor;
 
-            while (true)
+            for (int bbPage = 1; bbPage <= MaxBlockerPages; bbPage++)
             {
                 object bbVariables = new
                 {
@@ -433,6 +433,13 @@ internal sealed partial class GitHubHttpClient(
                 if (bbConnection?.PageInfo.HasNextPage is not true)
                 {
                     break;
+                }
+
+                if (bbPage == MaxBlockerPages)
+                {
+                    return Result<IReadOnlyList<int>>.Fail(
+                        GitHubErrors.GraphQlError(
+                            $"blockedBy pagination for issue #{node.Number} exceeded the {MaxBlockerPages}-page cap."));
                 }
 
                 blockedByCursor = bbConnection.PageInfo.EndCursor;
@@ -501,6 +508,11 @@ internal sealed partial class GitHubHttpClient(
         string token,
         CancellationToken cancellationToken)
     {
+        if (apiBaseUrl.Scheme is not "https")
+        {
+            return Result<bool>.Fail(GitHubErrors.InvalidBaseUrl);
+        }
+
         object variables = new { owner = slug.Owner, name = slug.Name, number = issueNumber };
         Result<IssueStateData> dataResult = await ExecuteGraphQlAsync<IssueStateData>(
             apiBaseUrl, IssueStateQuery, variables, token, cancellationToken);
@@ -523,6 +535,11 @@ internal sealed partial class GitHubHttpClient(
         string token,
         CancellationToken cancellationToken)
     {
+        if (apiBaseUrl.Scheme is not "https")
+        {
+            return Result<PullRequestStatus>.Fail(GitHubErrors.InvalidBaseUrl);
+        }
+
         if (!TryParsePrNumber(pullRequestUrl, out int prNumber))
         {
             return Result<PullRequestStatus>.Fail(GitHubErrors.InvalidPullRequestUrl);
@@ -552,6 +569,11 @@ internal sealed partial class GitHubHttpClient(
         string token,
         CancellationToken cancellationToken)
     {
+        if (apiBaseUrl.Scheme is not "https")
+        {
+            return Result<ReviewFeedback>.Fail(GitHubErrors.InvalidBaseUrl);
+        }
+
         if (!TryParsePrNumber(pullRequestUrl, out int prNumber))
         {
             return Result<ReviewFeedback>.Fail(GitHubErrors.InvalidPullRequestUrl);
@@ -1354,7 +1376,6 @@ internal sealed partial class GitHubHttpClient(
         string Title,
         string? Body,
         string Url,
-        string State,
         GraphQlAuthor? Author,
         GraphQlLabelConnection Labels,
         GraphQlBlockedByConnection? BlockedBy);
