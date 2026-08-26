@@ -6,6 +6,7 @@ using Foundry.Modules.Monitoring.Infrastructure;
 using Foundry.Modules.Monitoring.Infrastructure.GitHub;
 using Foundry.Shared;
 using Foundry.Testing;
+using Foundry.UnitTests.Modules.Monitoring.Infrastructure;
 
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -40,19 +41,33 @@ public sealed class GetIssuesAsync
     {
         // Arrange
         string json = """
-            [
-              {
-                "number": 42,
-                "title": "Fix the bug",
-                "body": "Bug description",
-                "user": { "login": "octocat" },
-                "html_url": "https://github.com/owner/repo/issues/42",
-                "labels": [
-                  { "name": "bug" },
-                  { "name": "foundry" }
-                ]
-              }
-            ]
+            {
+              "data": {
+                "repository": {
+                  "defaultBranchRef": { "name": "main" },
+                  "issues": {
+                    "pageInfo": { "hasNextPage": false, "endCursor": null },
+                    "nodes": [
+                      {
+                        "number": 42,
+                        "title": "Fix the bug",
+                        "body": "Bug description",
+                        "url": "https://github.com/owner/repo/issues/42",
+                        "state": "OPEN",
+                        "author": { "login": "octocat" },
+                        "labels": { "nodes": [ { "name": "bug" }, { "name": "foundry" } ] },
+                        "blockedBy": {
+                          "totalCount": 0,
+                          "pageInfo": { "hasNextPage": false },
+                          "nodes": []
+                        }
+                      }
+                    ]
+                  }
+                }
+              },
+              "errors": null
+            }
             """;
 
         FakeHandler handler = new(HttpStatusCode.OK, json);
@@ -73,7 +88,22 @@ public sealed class GetIssuesAsync
     public async Task WhenProviderReturnsIssues_IsCompleteFlagIsTrue()
     {
         // Arrange
-        FakeHandler handler = new(HttpStatusCode.OK, "[]");
+        string json = """
+            {
+              "data": {
+                "repository": {
+                  "defaultBranchRef": { "name": "main" },
+                  "issues": {
+                    "pageInfo": { "hasNextPage": false, "endCursor": null },
+                    "nodes": []
+                  }
+                }
+              },
+              "errors": null
+            }
+            """;
+
+        FakeHandler handler = new(HttpStatusCode.OK, json);
         GitHubIssueProvider sut = BuildSut(handler);
 
         // Act

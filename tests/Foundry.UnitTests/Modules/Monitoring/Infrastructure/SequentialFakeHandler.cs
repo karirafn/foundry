@@ -25,17 +25,25 @@ internal sealed class SequentialFakeHandler : DelegatingHandler
 
     public List<HttpRequestMessage> Requests { get; } = [];
 
-    protected override Task<HttpResponseMessage> SendAsync(
+    public List<string?> RequestBodies { get; } = [];
+
+    protected override async Task<HttpResponseMessage> SendAsync(
         HttpRequestMessage request,
         CancellationToken cancellationToken)
     {
         Requests.Add(request);
 
-        (HttpStatusCode statusCode, string body, IReadOnlyDictionary<string, string> headers) = _responses.Dequeue();
+        string? body = request.Content is not null
+            ? await request.Content.ReadAsStringAsync(cancellationToken)
+            : null;
+
+        RequestBodies.Add(body);
+
+        (HttpStatusCode statusCode, string responseBody, IReadOnlyDictionary<string, string> headers) = _responses.Dequeue();
 
         HttpResponseMessage response = new(statusCode)
         {
-            Content = new StringContent(body, Encoding.UTF8, "application/json"),
+            Content = new StringContent(responseBody, Encoding.UTF8, "application/json"),
         };
 
         foreach (KeyValuePair<string, string> header in headers)
@@ -43,6 +51,6 @@ internal sealed class SequentialFakeHandler : DelegatingHandler
             response.Headers.TryAddWithoutValidation(header.Key, header.Value);
         }
 
-        return Task.FromResult(response);
+        return response;
     }
 }
