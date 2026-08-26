@@ -72,6 +72,24 @@ internal sealed partial class GitHubHttpClient(
         }
         """;
 
+    private const string IssueStateQuery = """
+        query IssueState($owner: String!, $name: String!, $number: Int!) {
+          rateLimit { cost remaining }
+          repository(owner: $owner, name: $name) {
+            issue(number: $number) { state }
+          }
+        }
+        """;
+
+    private const string PrStatusQuery = """
+        query PrStatus($owner: String!, $name: String!, $number: Int!) {
+          rateLimit { cost remaining }
+          repository(owner: $owner, name: $name) {
+            pullRequest(number: $number) { state merged }
+          }
+        }
+        """;
+
     private const string BlockedByPageQuery = """
         query BlockedByPage($owner: String!, $name: String!, $number: Int!, $blockedByAfter: String) {
           rateLimit { cost remaining }
@@ -526,33 +544,18 @@ internal sealed partial class GitHubHttpClient(
         string token,
         CancellationToken cancellationToken)
     {
-        if (apiBaseUrl.Scheme is not "https")
+        object variables = new { owner = slug.Owner, name = slug.Name, number = issueNumber };
+        Result<IssueStateData> dataResult = await ExecuteGraphQlAsync<IssueStateData>(
+            apiBaseUrl, IssueStateQuery, variables, token, cancellationToken);
+
+        if (dataResult is not Result<IssueStateData>.Success dataSuccess)
         {
-            return Result<bool>.Fail(GitHubErrors.InvalidBaseUrl);
+            Error error = ((Result<IssueStateData>.Failure)dataResult).Error;
+            return Result<bool>.Fail(error);
         }
 
-        string owner = Uri.EscapeDataString(slug.Owner);
-        string repo = Uri.EscapeDataString(slug.Name);
-        string relativePath = $"repos/{owner}/{repo}/issues/{issueNumber}";
-        Uri requestUri = new(EnsureTrailingSlash(apiBaseUrl), relativePath);
-
-        using HttpRequestMessage request = new(HttpMethod.Get, requestUri);
-        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
-        request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/vnd.github+json"));
-        request.Headers.Add("X-GitHub-Api-Version", ApiVersion);
-        request.Headers.UserAgent.Add(new ProductInfoHeaderValue("Foundry", null));
-
-        using HttpResponseMessage response = await httpClient.SendAsync(request, cancellationToken);
-
-        if (!response.IsSuccessStatusCode)
-        {
-            return Result<bool>.Fail(ErrorFromNonSuccess(response));
-        }
-
-        string body = await response.Content.ReadAsStringAsync(cancellationToken);
-        GitHubIssueStateDto? dto = JsonSerializer.Deserialize<GitHubIssueStateDto>(body, JsonOptions);
-
-        bool isClosed = string.Equals(dto?.State, "closed", StringComparison.OrdinalIgnoreCase);
+        string? state = dataSuccess.Value.Repository?.Issue?.State;
+        bool isClosed = string.Equals(state, "CLOSED", StringComparison.OrdinalIgnoreCase);
         return Result<bool>.Ok(isClosed);
     }
 
@@ -563,39 +566,24 @@ internal sealed partial class GitHubHttpClient(
         string token,
         CancellationToken cancellationToken)
     {
-        if (apiBaseUrl.Scheme is not "https")
-        {
-            return Result<PullRequestStatus>.Fail(GitHubErrors.InvalidBaseUrl);
-        }
-
         if (!TryParsePrNumber(pullRequestUrl, out int prNumber))
         {
             return Result<PullRequestStatus>.Fail(GitHubErrors.InvalidPullRequestUrl);
         }
 
-        string owner = Uri.EscapeDataString(slug.Owner);
-        string repo = Uri.EscapeDataString(slug.Name);
-        string relativePath = $"repos/{owner}/{repo}/pulls/{prNumber}";
-        Uri requestUri = new(EnsureTrailingSlash(apiBaseUrl), relativePath);
+        object variables = new { owner = slug.Owner, name = slug.Name, number = prNumber };
+        Result<PrStatusData> dataResult = await ExecuteGraphQlAsync<PrStatusData>(
+            apiBaseUrl, PrStatusQuery, variables, token, cancellationToken);
 
-        using HttpRequestMessage request = new(HttpMethod.Get, requestUri);
-        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
-        request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/vnd.github+json"));
-        request.Headers.Add("X-GitHub-Api-Version", ApiVersion);
-        request.Headers.UserAgent.Add(new ProductInfoHeaderValue("Foundry", null));
-
-        using HttpResponseMessage response = await httpClient.SendAsync(request, cancellationToken);
-
-        if (!response.IsSuccessStatusCode)
+        if (dataResult is not Result<PrStatusData>.Success dataSuccess)
         {
-            return Result<PullRequestStatus>.Fail(ErrorFromNonSuccess(response));
+            Error error = ((Result<PrStatusData>.Failure)dataResult).Error;
+            return Result<PullRequestStatus>.Fail(error);
         }
 
-        string body = await response.Content.ReadAsStringAsync(cancellationToken);
-        GitHubPullRequestDto? dto = JsonSerializer.Deserialize<GitHubPullRequestDto>(body, JsonOptions);
-
-        bool isClosed = string.Equals(dto?.State, "closed", StringComparison.OrdinalIgnoreCase);
-        bool isMerged = dto?.MergedAt is not null;
+        GraphQlPullRequestStatus? pr = dataSuccess.Value.Repository?.PullRequest;
+        bool isClosed = string.Equals(pr?.State, "CLOSED", StringComparison.OrdinalIgnoreCase);
+        bool isMerged = pr?.Merged ?? false;
         return Result<PullRequestStatus>.Ok(new PullRequestStatus(isClosed, isMerged));
     }
 
@@ -1433,10 +1421,6 @@ internal sealed partial class GitHubHttpClient(
 
     private sealed record GitHubRepositoryDto(string FullName);
 
-    private sealed record GitHubIssueStateDto(string State);
-
-    private sealed record GitHubPullRequestDto(string State, string? MergedAt);
-
     private sealed record GitHubPullRequestReviewDto(
         long Id,
         string State,
@@ -1542,6 +1526,20 @@ internal sealed partial class GitHubHttpClient(
     private sealed record GraphQlBlockedByPageRepository(GraphQlBlockedByPageIssue? Issue);
 
     private sealed record GraphQlBlockedByPageIssue(GraphQlBlockedByConnection? BlockedBy);
+
+    // GraphQL IssueState query DTOs — deserialized with GraphQlJsonOptions (camelCase).
+    private sealed record IssueStateData(GraphQlRateLimit? RateLimit, IssueStateRepository? Repository);
+
+    private sealed record IssueStateRepository(IssueStateNode? Issue);
+
+    private sealed record IssueStateNode(string State);
+
+    // GraphQL PrStatus query DTOs — deserialized with GraphQlJsonOptions (camelCase).
+    private sealed record PrStatusData(GraphQlRateLimit? RateLimit, PrStatusRepository? Repository);
+
+    private sealed record PrStatusRepository(GraphQlPullRequestStatus? PullRequest);
+
+    private sealed record GraphQlPullRequestStatus(string State, bool Merged);
 }
 
 internal sealed record BranchRules(bool RejectDirectPushes, bool RejectForcePushes, bool RejectDeletion);
