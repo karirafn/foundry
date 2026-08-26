@@ -36,6 +36,42 @@ internal sealed partial class GitHubHttpClient(
     private const int MaxPermissionsLength = 200;
     private const string Ellipsis = "...";
 
+    private const string IssueListQuery = """
+        query IssueList($owner: String!, $name: String!, $issuesAfter: String) {
+          rateLimit { cost remaining limit resetAt }
+          repository(owner: $owner, name: $name) {
+            defaultBranchRef { name }
+            issues(
+              first: 100
+              after: $issuesAfter
+              states: OPEN
+              labels: ["foundry"]
+              orderBy: { field: CREATED_AT, direction: ASC }
+            ) {
+              pageInfo { hasNextPage endCursor }
+              nodes {
+                number
+                title
+                body
+                url
+                state
+                author { login }
+                labels(first: 50) { nodes { name } }
+                blockedBy(first: 50) {
+                  totalCount
+                  pageInfo { hasNextPage }
+                  nodes {
+                    number
+                    state
+                    repository { nameWithOwner }
+                  }
+                }
+              }
+            }
+          }
+        }
+        """;
+
     // Classic PATs remain accepted by design (issue #333 keeps them valid, just no longer advertised in the UI).
     // This constant is intentionally decoupled from RequiredScopes.For(github), which now carries fine-grained
     // permission display labels for the UI and is not a validation source for OAuth scope token checks.
@@ -218,6 +254,86 @@ internal sealed partial class GitHubHttpClient(
         // GHES: https://<host>/api/v3/ → https://<host>/api/graphql
         string origin = $"{restBaseUrl.Scheme}://{restBaseUrl.Authority}";
         return new Uri($"{origin}/api/graphql");
+    }
+
+    public async Task<Result<IssueListingWithDependencies>> GetIssuesWithDependenciesAsync(
+        Uri apiBaseUrl,
+        RepositorySlug slug,
+        string token,
+        CancellationToken cancellationToken)
+    {
+        if (apiBaseUrl.Scheme is not "https")
+        {
+            return Result<IssueListingWithDependencies>.Fail(GitHubErrors.InvalidBaseUrl);
+        }
+
+        string expectedFullName = $"{slug.Owner}/{slug.Name}";
+        List<ProviderIssue> allIssues = [];
+        Dictionary<int, IReadOnlyList<int>> blockedByMap = [];
+        string? cursor = null;
+
+        for (int page = 1; page <= MaxIssuePages; page++)
+        {
+            object variables = new { owner = slug.Owner, name = slug.Name, issuesAfter = cursor };
+            Result<IssueListData> pageResult = await ExecuteGraphQlAsync<IssueListData>(
+                apiBaseUrl, IssueListQuery, variables, token, cancellationToken);
+
+            if (pageResult is not Result<IssueListData>.Success pageSuccess)
+            {
+                Error error = ((Result<IssueListData>.Failure)pageResult).Error;
+                return Result<IssueListingWithDependencies>.Fail(error);
+            }
+
+            IssueListData data = pageSuccess.Value;
+            GraphQlIssueConnection? connection = data.Repository?.Issues;
+            IReadOnlyList<GraphQlIssueNode> nodes = connection?.Nodes ?? [];
+
+            foreach (GraphQlIssueNode node in nodes)
+            {
+                IReadOnlyList<string> labels = node.Labels.Nodes
+                    .Select(l => l.Name)
+                    .ToList();
+
+                allIssues.Add(new ProviderIssue(
+                    Number: node.Number,
+                    Title: node.Title,
+                    Body: node.Body ?? string.Empty,
+                    Author: node.Author?.Login ?? string.Empty,
+                    Url: node.Url,
+                    Labels: labels,
+                    IssueKindLabel: LabelClassifier.ClassifyKind(labels)));
+
+                List<int> blockers = (node.BlockedBy?.Nodes ?? [])
+                    .Where(b => string.Equals(
+                        b.Repository.NameWithOwner,
+                        expectedFullName,
+                        StringComparison.OrdinalIgnoreCase))
+                    .Where(b => !string.Equals(b.State, "CLOSED", StringComparison.OrdinalIgnoreCase))
+                    .Select(b => b.Number)
+                    .ToList();
+
+                if (blockers.Count > 0)
+                {
+                    blockedByMap[node.Number] = blockers;
+                }
+            }
+
+            GraphQlPageInfo? pageInfo = connection?.PageInfo;
+            bool hasNextPage = pageInfo?.HasNextPage ?? false;
+
+            if (!hasNextPage)
+            {
+                IssueListing listing = new(allIssues, IsComplete: true);
+                return Result<IssueListingWithDependencies>.Ok(
+                    new IssueListingWithDependencies(listing, blockedByMap));
+            }
+
+            cursor = pageInfo?.EndCursor;
+        }
+
+        IssueListing cappedListing = new(allIssues, IsComplete: false);
+        return Result<IssueListingWithDependencies>.Ok(
+            new IssueListingWithDependencies(cappedListing, blockedByMap));
     }
 
     public async Task<Result<IssueListing>> GetIssuesAsync(
@@ -1297,6 +1413,49 @@ internal sealed partial class GitHubHttpClient(
     private sealed record GraphQlErrorLocation(int Line, int Column);
 
     private sealed record GraphQlRateLimit(int Cost, int Remaining);
+
+    // GraphQL issue-list DTOs — deserialized with GraphQlJsonOptions (camelCase).
+    private sealed record IssueListData(GraphQlRateLimit? RateLimit, GraphQlRepository? Repository);
+
+    private sealed record GraphQlRepository(
+        GraphQlRef? DefaultBranchRef,
+        GraphQlIssueConnection? Issues);
+
+    private sealed record GraphQlRef(string Name);
+
+    private sealed record GraphQlIssueConnection(
+        GraphQlPageInfo PageInfo,
+        IReadOnlyList<GraphQlIssueNode> Nodes);
+
+    private sealed record GraphQlPageInfo(bool HasNextPage, string? EndCursor);
+
+    private sealed record GraphQlIssueNode(
+        int Number,
+        string Title,
+        string? Body,
+        string Url,
+        string State,
+        GraphQlAuthor? Author,
+        GraphQlLabelConnection Labels,
+        GraphQlBlockedByConnection? BlockedBy);
+
+    private sealed record GraphQlAuthor(string? Login);
+
+    private sealed record GraphQlLabelConnection(IReadOnlyList<GraphQlLabelNode> Nodes);
+
+    private sealed record GraphQlLabelNode(string Name);
+
+    private sealed record GraphQlBlockedByConnection(
+        int TotalCount,
+        GraphQlPageInfo PageInfo,
+        IReadOnlyList<GraphQlBlockerNode> Nodes);
+
+    private sealed record GraphQlBlockerNode(
+        int Number,
+        string State,
+        GraphQlBlockerRepo Repository);
+
+    private sealed record GraphQlBlockerRepo(string NameWithOwner);
 }
 
 internal sealed record BranchRules(bool RejectDirectPushes, bool RejectForcePushes, bool RejectDeletion);
