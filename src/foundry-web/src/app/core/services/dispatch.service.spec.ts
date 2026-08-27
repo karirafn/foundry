@@ -25,6 +25,7 @@ function buildResponse(overrides: Partial<GlobalSettingsResponse> = {}): GlobalS
     hasUsableImage: false,
     nextRetryAt: null,
     attempt: 0,
+    allowedProviderHosts: [],
     ...overrides,
   };
 }
