@@ -69,6 +69,10 @@ internal sealed class GlobalSettingsConfiguration : IEntityTypeConfiguration<Glo
             hosts => hosts.Aggregate(0, (hash, h) => HashCode.Combine(hash, h.GetHashCode(StringComparison.Ordinal))),
             hosts => hosts.ToList());
 
+        // AllowedProviderHosts is serialized as a single JSON TEXT column. HasMaxLength is
+        // inapplicable here — it governs individual varchar/nvarchar column widths, not a
+        // JSON blob. Entry-length (255 chars) and list-count (50 entries) caps are enforced
+        // by domain logic in GlobalSettings.UpdateAllowedProviderHosts.
         builder.Property(s => s.AllowedProviderHosts)
             .HasConversion(allowedProviderHostsConverter, allowedProviderHostsComparer)
             .HasColumnType("TEXT")

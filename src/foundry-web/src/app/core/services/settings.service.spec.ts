@@ -63,6 +63,7 @@ function buildSettingsResponse(overrides: Record<string, unknown> = {}): Record<
     hasUsableImage: false,
     nextRetryAt: null,
     attempt: 0,
+    allowedProviderHosts: [],
     ...overrides,
   };
 }
@@ -1213,6 +1214,124 @@ describe('SettingsService', () => {
     httpMock.expectOne('/api/credentials/login/code').flush(null);
   });
 
+  // Cycle: updateAllowedProviderHosts — PUT body and success path
+  it('should PUT to /api/settings/allowed-provider-hosts with { hosts } body when updateAllowedProviderHosts is called', () => {
+    // Arrange
+    // (service initialized by test setup)
+
+    // Act
+    service.updateAllowedProviderHosts(['github.com', 'gitlab.com']);
+    const req = httpMock.expectOne('/api/settings/allowed-provider-hosts');
+
+    // Assert
+    expect(req.request.method).toBe('PUT');
+    expect(req.request.body).toEqual({ hosts: ['github.com', 'gitlab.com'] });
+    req.flush(buildSettingsResponse({ allowedProviderHosts: ['github.com', 'gitlab.com'] }));
+  });
+
+  it('should update allowedProviderHosts signal and set saveHostsSuccess to true after updateAllowedProviderHosts succeeds', () => {
+    // Arrange
+    service.updateAllowedProviderHosts(['github.com']);
+    httpMock.expectOne('/api/settings/allowed-provider-hosts').flush(
+      buildSettingsResponse({ allowedProviderHosts: ['github.com'] })
+    );
+
+    // Assert
+    expect(service.savingHosts()).toBe(false);
+    expect(service.saveHostsSuccess()).toBe(true);
+    expect(service.saveHostsError()).toBeNull();
+    expect(service.allowedProviderHosts()).toEqual(['github.com']);
+  });
+
+  it('should set savingHosts to true while updateAllowedProviderHosts is in flight', () => {
+    // Arrange / Act
+    service.updateAllowedProviderHosts(['github.com']);
+
+    // Assert — before flush
+    expect(service.savingHosts()).toBe(true);
+    httpMock.expectOne('/api/settings/allowed-provider-hosts').flush(
+      buildSettingsResponse({ allowedProviderHosts: ['github.com'] })
+    );
+  });
+
+  it('should surface the verbatim server message when updateAllowedProviderHosts fails with a non-empty string body', () => {
+    // Arrange
+    service.updateAllowedProviderHosts(['not-a-valid-host']);
+    httpMock.expectOne('/api/settings/allowed-provider-hosts').flush(
+      'Host "not-a-valid-host" is not an allowed domain',
+      { status: 400, statusText: 'Bad Request' }
+    );
+
+    // Assert
+    expect(service.saveHostsError()).toBe('Host "not-a-valid-host" is not an allowed domain');
+    expect(service.savingHosts()).toBe(false);
+    expect(service.saveHostsSuccess()).toBe(false);
+  });
+
+  it('should fall back to the generic constant when updateAllowedProviderHosts fails with a non-string error body', () => {
+    // Arrange
+    service.updateAllowedProviderHosts(['host.example']);
+    httpMock.expectOne('/api/settings/allowed-provider-hosts').flush(
+      { title: 'Bad Request' },
+      { status: 400, statusText: 'Bad Request' }
+    );
+
+    // Assert
+    expect(service.saveHostsError()).toBe('Failed to save provider hosts');
+  });
+
+  it('should fall back to the generic constant when updateAllowedProviderHosts fails with an empty string body', () => {
+    // Arrange
+    service.updateAllowedProviderHosts(['host.example']);
+    httpMock.expectOne('/api/settings/allowed-provider-hosts').flush(
+      '',
+      { status: 400, statusText: 'Bad Request' }
+    );
+
+    // Assert
+    expect(service.saveHostsError()).toBe('Failed to save provider hosts');
+  });
+
+  it('should reset hosts signals in loadSettings', () => {
+    // Arrange — put signals into dirty state
+    service.updateAllowedProviderHosts(['github.com']);
+    httpMock.expectOne('/api/settings/allowed-provider-hosts').flush(
+      buildSettingsResponse({ allowedProviderHosts: ['github.com'] })
+    );
+    expect(service.saveHostsSuccess()).toBe(true);
+
+    // Act
+    service.loadSettings();
+
+    // Assert — cleared before the response arrives
+    expect(service.saveHostsSuccess()).toBe(false);
+    expect(service.savingHosts()).toBe(false);
+    expect(service.saveHostsError()).toBeNull();
+
+    flushLoadSettings(httpMock, { allowedProviderHosts: ['github.com'] });
+  });
+
+  it('should seed allowedProviderHosts from the GET /api/settings response', () => {
+    // Arrange
+    service.loadSettings();
+
+    // Act
+    flushLoadSettings(httpMock, { allowedProviderHosts: ['github.com', 'gitlab.example.com'] });
+
+    // Assert
+    expect(service.allowedProviderHosts()).toEqual(['github.com', 'gitlab.example.com']);
+  });
+
+  it('should default allowedProviderHosts to empty array when GET /api/settings omits the field', () => {
+    // Arrange
+    service.loadSettings();
+
+    // Act
+    flushLoadSettings(httpMock, {});
+
+    // Assert
+    expect(service.allowedProviderHosts()).toEqual([]);
+  });
 
 });
 

@@ -78,6 +78,7 @@ export interface GlobalSettingsResponse {
   hasUsableImage: boolean;
   nextRetryAt: string | null;
   attempt: number;
+  allowedProviderHosts: string[];
 }
 
 export interface UpdatePromptTemplatesRequest {

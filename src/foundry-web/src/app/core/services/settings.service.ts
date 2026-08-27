@@ -27,6 +27,7 @@ const SAVE_LIMITS_ERROR = 'Failed to save worker limits';
 const SAVE_PROMPTS_ERROR = 'Failed to save prompt templates';
 const SAVE_DISPATCH_ERROR = 'Failed to save dispatch settings';
 const SAVE_IMAGE_FLAGS_ERROR = 'Failed to save worker image settings';
+const SAVE_HOSTS_ERROR = 'Failed to save provider hosts';
 const START_LOGIN_ERROR = 'Failed to start login';
 
 @Injectable({ providedIn: 'root' })
@@ -151,6 +152,18 @@ export class SettingsService {
   private readonly _saveImageFlagsErrorSignal: WritableSignal<string | null> = signal(null);
   readonly saveImageFlagsError: Signal<string | null> = this._saveImageFlagsErrorSignal.asReadonly();
 
+  private readonly _savingHostsSignal: WritableSignal<boolean> = signal(false);
+  readonly savingHosts: Signal<boolean> = this._savingHostsSignal.asReadonly();
+
+  private readonly _saveHostsSuccessSignal: WritableSignal<boolean> = signal(false);
+  readonly saveHostsSuccess: Signal<boolean> = this._saveHostsSuccessSignal.asReadonly();
+
+  private readonly _saveHostsErrorSignal: WritableSignal<string | null> = signal(null);
+  readonly saveHostsError: Signal<string | null> = this._saveHostsErrorSignal.asReadonly();
+
+  private readonly _allowedProviderHostsSignal: WritableSignal<readonly string[]> = signal([]);
+  readonly allowedProviderHosts: Signal<readonly string[]> = this._allowedProviderHostsSignal.asReadonly();
+
   private readonly _loginPhaseSignal: WritableSignal<LoginPhase | null> = signal(null);
   readonly loginPhase: Signal<LoginPhase | null> = this._loginPhaseSignal.asReadonly();
 
@@ -180,16 +193,19 @@ export class SettingsService {
     this._savePromptsErrorSignal.set(null);
     this._saveDispatchErrorSignal.set(null);
     this._saveImageFlagsErrorSignal.set(null);
+    this._saveHostsErrorSignal.set(null);
     this.saveSuccess.set(false);
     this._saveLimitsSuccessSignal.set(false);
     this._savePromptsSuccessSignal.set(false);
     this._saveDispatchSuccessSignal.set(false);
     this._saveImageFlagsSuccessSignal.set(false);
+    this._saveHostsSuccessSignal.set(false);
     this.saving.set(false);
     this._savingLimitsSignal.set(false);
     this._savingPromptsSignal.set(false);
     this._savingDispatchSignal.set(false);
     this._savingImageFlagsSignal.set(false);
+    this._savingHostsSignal.set(false);
     this.switching.set(false);
     this.loading.set(true);
 
@@ -204,6 +220,7 @@ export class SettingsService {
           this._workerLimitsSignal.set({ maxConcurrent: settings.maxConcurrent, timeoutMinutes: settings.timeoutMinutes });
           this._systemPromptTemplateSignal.set(settings.systemPromptTemplate);
           this._workerPromptTemplateSignal.set(settings.workerPromptTemplate);
+          this._allowedProviderHostsSignal.set(settings.allowedProviderHosts ?? []);
           this._dispatchService.updateFromSettings(settings);
           this._workerImageFlagsSignal.set(this._mapToWorkerImageFlags(settings));
           this._applyImageBuildResponse(settings);
@@ -344,6 +361,28 @@ export class SettingsService {
         console.error(err);
         this._savePromptsErrorSignal.set(SAVE_PROMPTS_ERROR);
         this._savingPromptsSignal.set(false);
+      },
+    });
+  }
+
+  updateAllowedProviderHosts(hosts: string[]): void {
+    this._saveHostsErrorSignal.set(null);
+    this._saveHostsSuccessSignal.set(false);
+    this._savingHostsSignal.set(true);
+
+    this._http.put<GlobalSettingsResponse>('/api/settings/allowed-provider-hosts', { hosts }).subscribe({
+      next: (response) => {
+        this._allowedProviderHostsSignal.set(response.allowedProviderHosts);
+        this._savingHostsSignal.set(false);
+        this._saveHostsSuccessSignal.set(true);
+      },
+      error: (err: HttpErrorResponse) => {
+        console.error(err);
+        const serverMessage = typeof err.error === 'string' && err.error.trim().length > 0
+          ? err.error
+          : SAVE_HOSTS_ERROR;
+        this._saveHostsErrorSignal.set(serverMessage);
+        this._savingHostsSignal.set(false);
       },
     });
   }

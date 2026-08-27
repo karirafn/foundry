@@ -56,6 +56,7 @@ const mockSettingsResponse: GlobalSettingsResponse = {
   hasUsableImage: false,
   nextRetryAt: null,
   attempt: 0,
+  allowedProviderHosts: [],
 };
 
 const mockCredentialsResponse = {
