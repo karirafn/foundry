@@ -21,6 +21,14 @@ updates:
       angular:
         patterns:
           - "@angular/*"
+    ignore:
+      # Angular 22 pins `typescript@">=6.0 <6.1"` on @angular/build and
+      # @angular/compiler-cli, so a TypeScript major cannot resolve. Drop this
+      # entry once `npm view @angular/build peerDependencies.typescript`
+      # admits the next major.
+      - dependency-name: typescript
+        update-types:
+          - version-update:semver-major
 
   - package-ecosystem: github-actions
     directory: /
