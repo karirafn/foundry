@@ -2122,7 +2122,7 @@ describe('SettingsGeneralComponent', () => {
       const el = fixture.nativeElement as HTMLElement;
       const errorEl = el.querySelector('#allowed-provider-hosts-error') as HTMLElement;
       expect(errorEl).toBeTruthy();
-      expect(errorEl.getAttribute('aria-live')).toBe('assertive');
+      expect(errorEl.getAttribute('role')).toBe('alert');
       expect(errorEl.textContent).toContain('bad host!');
     });
 
@@ -2139,10 +2139,10 @@ describe('SettingsGeneralComponent', () => {
       httpMock.expectOne('/api/settings/allowed-provider-hosts').flush({ ...API_KEY_RESPONSE, allowedProviderHosts: ['git.example.com'] });
       fixture.detectChanges();
 
-      // Assert — success region uses aria-live="polite" (not role="status") to avoid spurious announce on mount
+      // Assert — success region uses role="status" matching the established sibling pattern
       const el = fixture.nativeElement as HTMLElement;
       const hostsForm = el.querySelector('.general-settings__hosts-form') as HTMLElement;
-      const successEl = hostsForm.querySelector('[aria-live="polite"].general-settings__save-success') as HTMLElement;
+      const successEl = hostsForm.querySelector('[role="status"].general-settings__save-success') as HTMLElement;
       expect(successEl).toBeTruthy();
       expect(successEl.textContent).toContain('Provider hosts saved successfully');
     });
