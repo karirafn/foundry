@@ -44,7 +44,7 @@ public sealed class WhenTokenLacksScopes : IAsyncDisposable
     public async Task ReturnsOkWithAuthenticatedKindAndMissingScopes()
     {
         // Arrange
-        object body = new { token = "ghp_limited", baseUrl = "https://api.github.com", providerType = "github" };
+        object body = new { token = "ghp_limited", baseUrl = "https://github.com", providerType = "github" };
 
         // Act
         HttpResponseMessage response = await _client.PostAsJsonAsync(

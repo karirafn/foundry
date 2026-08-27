@@ -336,6 +336,11 @@ namespace Foundry.WebApi.Migrations
                         .HasColumnType("TEXT")
                         .HasColumnName("id");
 
+                    b.Property<string>("AllowedProviderHosts")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("allowed_provider_hosts");
+
                     b.Property<bool>("AutoResumeOnUsageReset")
                         .HasColumnType("INTEGER")
                         .HasColumnName("auto_resume_on_usage_reset");

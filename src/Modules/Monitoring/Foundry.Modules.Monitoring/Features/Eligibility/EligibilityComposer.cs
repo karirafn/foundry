@@ -30,7 +30,11 @@ internal sealed class EligibilityComposer(IIssueProviderFactory providerFactory)
         {
             WriteProbeVerdict.Denied => new RepositoryEligibility.Ineligible(
                 [EligibilityViolation.CannotPush(slug)]),
-            WriteProbeVerdict.Unknown => new RepositoryEligibility.Unreachable(),
+            // Map the probe reason to an eligibility reason so callers (and the API surface) can
+            // distinguish a transient transport failure from a GitHub rate-limit exhaustion.
+            WriteProbeVerdict.Unknown { Reason: UnknownReason.RateLimited } =>
+                new RepositoryEligibility.Unreachable(UnreachableReason.RateLimited),
+            WriteProbeVerdict.Unknown => new RepositoryEligibility.Unreachable(UnreachableReason.NeverProbed),
             WriteProbeVerdict.Granted => await EvaluateBranchRulesAsync(
                 slug,
                 credential,
@@ -55,7 +59,7 @@ internal sealed class EligibilityComposer(IIssueProviderFactory providerFactory)
     {
         if (result is not Result<BranchProtection>.Success success)
         {
-            return new RepositoryEligibility.Unreachable();
+            return new RepositoryEligibility.Unreachable(UnreachableReason.BranchRulesUnavailable);
         }
 
         BranchProtection protection = success.Value;

@@ -17,6 +17,8 @@ public sealed class GlobalSettings : AggregateRoot<GlobalSettingsId>
     internal const int MinProbeIntervalMinutes = 5;
     internal const int MaxProbeIntervalMinutes = 10080;
     internal const int DefaultProbeIntervalMinutes = 60;
+    internal const int MaxProviderHostLength = 255;
+    internal const int MaxAllowedProviderHostCount = 50;
 
     private GlobalSettings() : base(GlobalSettingsId.Default)
     {
@@ -51,6 +53,8 @@ public sealed class GlobalSettings : AggregateRoot<GlobalSettingsId>
     public bool AutoResumeOnUsageReset { get; private set; }
 
     public WorkerImageConfiguration WorkerImageConfiguration { get; private set; } = null!;
+
+    public IReadOnlyList<string> AllowedProviderHosts { get; private set; } = [];
 
     internal ImageBuildState ImageBuildState { get; private set; } = null!;
 
@@ -191,6 +195,62 @@ public sealed class GlobalSettings : AggregateRoot<GlobalSettingsId>
         ImageBuildState = new ImageBuildState.Failed(errorTail, nextRetryAt, attempt);
         UpdatedAt = DateTimeOffset.UtcNow;
         AddIntegrationEvent(new ImageBuildFailed(errorTail, nextRetryAt, attempt));
+    }
+
+    public Result UpdateAllowedProviderHosts(IReadOnlyList<string> hosts)
+    {
+        List<string> normalized = new(hosts.Count);
+
+        if (hosts.Count > MaxAllowedProviderHostCount)
+        {
+            return SettingsErrors.TooManyProviderHosts(hosts.Count);
+        }
+
+        foreach (string host in hosts)
+        {
+            string trimmed = (host ?? string.Empty).Trim();
+
+            if (string.IsNullOrWhiteSpace(trimmed))
+            {
+                return SettingsErrors.InvalidProviderHost(trimmed);
+            }
+
+            if (trimmed.EndsWith('.'))
+            {
+                return SettingsErrors.InvalidProviderHost(trimmed);
+            }
+
+            if (trimmed.Length > MaxProviderHostLength)
+            {
+                return SettingsErrors.ProviderHostTooLong(trimmed);
+            }
+
+            if (trimmed.Contains("://", StringComparison.Ordinal))
+            {
+                return SettingsErrors.InvalidProviderHost(trimmed);
+            }
+
+            if (trimmed.Contains('/', StringComparison.Ordinal))
+            {
+                return SettingsErrors.InvalidProviderHost(trimmed);
+            }
+
+            if (trimmed.Contains(':', StringComparison.Ordinal))
+            {
+                return SettingsErrors.InvalidProviderHost(trimmed);
+            }
+
+            if (trimmed.Any(char.IsWhiteSpace))
+            {
+                return SettingsErrors.InvalidProviderHost(trimmed);
+            }
+
+            normalized.Add(trimmed.ToLowerInvariant());
+        }
+
+        AllowedProviderHosts = normalized;
+        UpdatedAt = DateTimeOffset.UtcNow;
+        return Result.Ok();
     }
 
     public Result UpdateLimits(int maxConcurrent, int timeoutMinutes)

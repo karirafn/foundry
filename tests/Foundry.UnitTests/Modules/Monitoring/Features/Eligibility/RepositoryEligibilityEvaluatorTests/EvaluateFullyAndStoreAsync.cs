@@ -159,7 +159,7 @@ public sealed class EvaluateFullyAndStoreAsync
     }
 
     [Fact]
-    public async Task WhenGitHubProbeReturnsTransportFailure_SetsWriteProbeVerdictToUnknown()
+    public async Task WhenGitHubProbeReturnsTransportFailure_SetsWriteProbeVerdictToUnknownTransport()
     {
         // Arrange
         MonitoredRepository repo = CreateRepo();
@@ -178,6 +178,51 @@ public sealed class EvaluateFullyAndStoreAsync
         // Assert
         WriteProbeVerdict.Unknown unknown = repo.WriteProbeVerdict.ShouldBeOfType<WriteProbeVerdict.Unknown>();
         unknown.LastAttemptedAt.ShouldBe(Now);
+        unknown.Reason.ShouldBe(UnknownReason.Transport);
+    }
+
+    [Fact]
+    public async Task WhenGitHubProbeReturnsRateLimitFailure_SetsEligibilityToUnreachable()
+    {
+        // Arrange — AC #4: rate-limit failure must not produce Ineligible with cannot-push violation.
+        MonitoredRepository repo = CreateRepo();
+        GitHubCredential credential = GitHubCredential.Create(
+            "test",
+            "token",
+            BaseUrl.Create("https://github.com").ValueOrThrow());
+        RepositoryEligibilityEvaluator sut = CreateSut(
+            resolver: new StubCredentialResolver(credential),
+            providerFactory: new NullProviderFactory(),
+            writeProber: new RateLimitedWriteProber());
+
+        // Act
+        await sut.EvaluateFullyAndStoreAsync(repo, Now, CancellationToken.None);
+
+        // Assert
+        repo.Eligibility.ShouldBeOfType<RepositoryEligibility.Unreachable>();
+    }
+
+    [Fact]
+    public async Task WhenGitHubProbeReturnsRateLimitFailure_SetsWriteProbeVerdictToUnknownRateLimited()
+    {
+        // Arrange — AC #5: verdict stamps LastAttemptedAt so the self-heal cooldown applies.
+        MonitoredRepository repo = CreateRepo();
+        GitHubCredential credential = GitHubCredential.Create(
+            "test",
+            "token",
+            BaseUrl.Create("https://github.com").ValueOrThrow());
+        RepositoryEligibilityEvaluator sut = CreateSut(
+            resolver: new StubCredentialResolver(credential),
+            providerFactory: new NullProviderFactory(),
+            writeProber: new RateLimitedWriteProber());
+
+        // Act
+        await sut.EvaluateFullyAndStoreAsync(repo, Now, CancellationToken.None);
+
+        // Assert
+        WriteProbeVerdict.Unknown unknown = repo.WriteProbeVerdict.ShouldBeOfType<WriteProbeVerdict.Unknown>();
+        unknown.LastAttemptedAt.ShouldBe(Now);
+        unknown.Reason.ShouldBe(UnknownReason.RateLimited);
     }
 
     [Fact]
@@ -837,6 +882,18 @@ public sealed class EvaluateFullyAndStoreAsync
             CancellationToken cancellationToken)
             => Task.FromResult(
                 Result<WritePermissionProbeResult>.Fail(new Error("GitHub.Unreachable", "Transport failure")));
+    }
+
+    // Returns rate-limit exhaustion failure — simulates a 403 with X-RateLimit-Remaining: 0
+    private sealed class RateLimitedWriteProber : IGitHubWriteProber
+    {
+        public Task<Result<WritePermissionProbeResult>> ProbeWriteAccessAsync(
+            Uri apiBaseUrl,
+            RepositorySlug slug,
+            string token,
+            CancellationToken cancellationToken)
+            => Task.FromResult(
+                Result<WritePermissionProbeResult>.Fail(GitHubErrors.RateLimitExhausted));
     }
 
     // Throws — simulates a transient exception from the GitHub write probe

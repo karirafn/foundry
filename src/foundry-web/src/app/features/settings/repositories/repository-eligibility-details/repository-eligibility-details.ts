@@ -1,5 +1,5 @@
 import { ChangeDetectionStrategy, Component, InputSignal, OutputEmitterRef, input, output } from '@angular/core';
-import { EligibilityStatus, EligibilityViolation } from '../repository.model';
+import { EligibilityReason, EligibilityStatus, EligibilityViolation } from '../repository.model';
 
 @Component({
   selector: 'fd-repository-eligibility-details',
@@ -14,7 +14,8 @@ import { EligibilityStatus, EligibilityViolation } from '../repository.model';
           class="repository-eligibility-details__recheck-btn"
           [class.repository-eligibility-details__recheck-btn--unreachable]="status() === 'unreachable'"
           type="button"
-          [disabled]="recheckPending()"
+          [disabled]="recheckPending() || reason() === 'rate-limited'"
+          [attr.title]="reason() === 'rate-limited' ? 'GitHub rate limit active — Foundry retries automatically' : null"
           (click)="recheck.emit()"
         >{{ recheckPending() ? 'Re-checking...' : 'Re-check' }}</button>
       </div>
@@ -29,8 +30,7 @@ import { EligibilityStatus, EligibilityViolation } from '../repository.model';
 
       @if (status() === 'unreachable') {
         <p class="repository-eligibility-details__explanation">
-          Foundry could not read branch-protection settings for this repository.
-          Check the account's access, then re-check.
+          {{ _unreachableExplanation() }}
         </p>
       }
 
@@ -45,6 +45,7 @@ import { EligibilityStatus, EligibilityViolation } from '../repository.model';
 export class RepositoryEligibilityDetailsComponent {
   readonly status: InputSignal<EligibilityStatus> = input.required<EligibilityStatus>();
   readonly violations: InputSignal<EligibilityViolation[]> = input<EligibilityViolation[]>([]);
+  readonly reason: InputSignal<EligibilityReason | null> = input<EligibilityReason | null>(null);
   readonly recheckPending: InputSignal<boolean> = input<boolean>(false);
   readonly recheckError: InputSignal<string | null> = input<string | null>(null);
   readonly panelId: InputSignal<string> = input.required<string>();
@@ -52,8 +53,31 @@ export class RepositoryEligibilityDetailsComponent {
   readonly recheck: OutputEmitterRef<void> = output<void>();
 
   _heading(): string {
-    return this.status() === 'unreachable'
-      ? 'Branch protection could not be verified'
-      : 'Branch protection violations';
+    if (this.status() !== 'unreachable') {
+      return 'Branch protection violations';
+    }
+    switch (this.reason()) {
+      case 'rate-limited':
+        return 'GitHub API rate limit reached';
+      case 'never-probed':
+        return 'Eligibility not yet checked';
+      case 'branch-rules-unavailable':
+        return 'Branch protection could not be verified';
+      default:
+        return 'Branch protection could not be verified';
+    }
+  }
+
+  _unreachableExplanation(): string {
+    switch (this.reason()) {
+      case 'rate-limited':
+        return 'The GitHub API rate limit has been reached. Foundry will retry automatically.';
+      case 'never-probed':
+        return 'Eligibility has not been checked yet. Foundry will probe automatically.';
+      case 'branch-rules-unavailable':
+        return 'Foundry could not read branch-protection settings for this repository. Check the account\'s access, then re-check.';
+      default:
+        return 'Foundry could not read branch-protection settings for this repository. Check the account\'s access, then re-check.';
+    }
   }
 }

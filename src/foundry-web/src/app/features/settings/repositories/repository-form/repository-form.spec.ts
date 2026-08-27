@@ -31,7 +31,7 @@ const MOCK_REPOSITORY: RepositorySummary = {
   pollIntervalSeconds: 300,
   isActive: true,
   lastPolledAt: '2026-06-15T10:00:00Z',
-  eligibility: { status: 'eligible', violations: [] },
+  eligibility: { status: 'eligible', violations: [], reason: null },
 };
 
 const MOCK_AVAILABLE: AvailableRepository[] = [

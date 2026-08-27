@@ -34,4 +34,19 @@ internal static class SettingsErrors
 
     internal static Error InvalidProbeInterval(int value) =>
         new(InvalidProbeIntervalCode, $"Probe interval must be between {GlobalSettings.MinProbeIntervalMinutes} and {GlobalSettings.MaxProbeIntervalMinutes} minutes, but was {value}.");
+
+    internal const string InvalidProviderHostCode = "Settings.InvalidProviderHost";
+
+    internal static Error InvalidProviderHost(string host) =>
+        new(InvalidProviderHostCode, $"'{host}' is not a valid provider host. Provide a bare hostname (e.g. git.example.com) with no scheme, port, or path.");
+
+    internal const string TooManyProviderHostsCode = "Settings.TooManyProviderHosts";
+
+    internal static Error TooManyProviderHosts(int count) =>
+        new(TooManyProviderHostsCode, $"The allowed provider hosts list may not exceed {GlobalSettings.MaxAllowedProviderHostCount} entries, but {count} were provided.");
+
+    internal const string ProviderHostTooLongCode = "Settings.ProviderHostTooLong";
+
+    internal static Error ProviderHostTooLong(string host) =>
+        new(ProviderHostTooLongCode, $"'{host[..Math.Min(host.Length, 40)]}…' exceeds the maximum allowed host length of {GlobalSettings.MaxProviderHostLength} characters.");
 }

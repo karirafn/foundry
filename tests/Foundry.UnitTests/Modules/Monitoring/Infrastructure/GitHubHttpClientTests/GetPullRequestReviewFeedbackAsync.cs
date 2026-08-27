@@ -2,21 +2,21 @@ using System.Net;
 using System.Text;
 
 using Foundry.Modules.Monitoring.Contracts;
-using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
+using Foundry.Modules.Monitoring.Features.Providers;
 using Foundry.Modules.Monitoring.Infrastructure;
 using Foundry.Modules.Monitoring.Infrastructure.GitHub;
 using Foundry.Shared;
 using Foundry.Testing;
 using Foundry.UnitTests.Modules.Monitoring.Infrastructure;
 
-using Shouldly;
-
-using Xunit;
-using Foundry.Modules.Monitoring.Features.Providers;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
+
+using Shouldly;
+
+using Xunit;
 
 namespace Foundry.UnitTests.Modules.Monitoring.Infrastructure.GitHubHttpClientTests;
 
@@ -29,70 +29,145 @@ public sealed class GetPullRequestReviewFeedbackAsync
     private static RepositorySlug ValidSlug =>
         RepositorySlug.Create("owner/repo").ValueOrThrow();
 
-    private static string BuildReviewsJson(
-        long id = 1,
-        string state = "CHANGES_REQUESTED",
-        string body = "",
-        string submittedAt = "2026-06-01T00:00:00Z")
+    private static GitHubHttpClient BuildSut(FakeHandler handler) =>
+        new(
+            new HttpClient(handler),
+            NullLogger<GitHubHttpClient>.Instance,
+            new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))));
+
+    private static string BuildReviewFeedbackJson(
+        string reviewBody = "",
+        string submittedAt = "2026-06-01T00:00:00Z",
+        IReadOnlyList<(string Body, string? Path, int? Line, int? OriginalLine)>? comments = null)
     {
+        comments ??= [];
+        string commentsJson = string.Join(
+            ",",
+            comments.Select(c =>
+            {
+                string lineVal = c.Line.HasValue
+                    ? c.Line.Value.ToString(System.Globalization.CultureInfo.InvariantCulture)
+                    : "null";
+                string origLineVal = c.OriginalLine.HasValue
+                    ? c.OriginalLine.Value.ToString(System.Globalization.CultureInfo.InvariantCulture)
+                    : "null";
+                string pathVal = c.Path is not null ? $"\"{c.Path}\"" : "null";
+                return $$"""{"body":"{{c.Body}}","path":{{pathVal}},"line":{{lineVal}},"originalLine":{{origLineVal}}}""";
+            }));
+
         return $$"""
-            [
-              {
-                "id": {{id}},
-                "state": "{{state}}",
-                "body": "{{body}}",
-                "submitted_at": "{{submittedAt}}"
+            {
+              "data": {
+                "rateLimit": { "cost": 1, "remaining": 4999 },
+                "repository": {
+                  "pullRequest": {
+                    "reviews": {
+                      "nodes": [
+                        {
+                          "body": "{{reviewBody}}",
+                          "submittedAt": "{{submittedAt}}",
+                          "comments": {
+                            "nodes": [{{commentsJson}}]
+                          }
+                        }
+                      ]
+                    }
+                  }
+                }
               }
-            ]
+            }
             """;
     }
 
-    private static string BuildFileCommentsJson(
-        string commentBody = "Fix this",
-        string path = "src/Foo.cs",
-        int? line = null,
-        int? originalLine = 10)
+    [Fact]
+    public async Task WhenCalled_PostsToGraphQlEndpointWithSingleRequest()
     {
-        string lineValue = line.HasValue ? line.Value.ToString(System.Globalization.CultureInfo.InvariantCulture) : "null";
-        string originalLineValue = originalLine.HasValue
-            ? originalLine.Value.ToString(System.Globalization.CultureInfo.InvariantCulture)
-            : "null";
-        return $$"""
-            [
-              {
-                "body": "{{commentBody}}",
-                "path": "{{path}}",
-                "line": {{lineValue}},
-                "original_line": {{originalLineValue}}
-              }
-            ]
-            """;
+        // Arrange
+        string json = BuildReviewFeedbackJson();
+        FakeHandler handler = new(HttpStatusCode.OK, json);
+        GitHubHttpClient sut = BuildSut(handler);
+
+        // Act
+        await sut.GetPullRequestReviewFeedbackAsync(
+            ValidBaseUrl,
+            ValidSlug,
+            pullRequestUrl: ValidPrUrl,
+            since: Since,
+            token: "ghp_token",
+            CancellationToken.None);
+
+        // Assert
+        handler.AllRequests.Count.ShouldBe(1);
+        HttpRequestMessage request = handler.LastRequest.ShouldNotBeNull();
+        request.RequestUri.ShouldNotBeNull();
+        request.RequestUri.AbsolutePath.ShouldBe("/graphql");
+        request.Method.ShouldBe(HttpMethod.Post);
+    }
+
+    [Fact]
+    public async Task WhenCalled_RequestBodyContainsPrReviewFeedbackQuery()
+    {
+        // Arrange
+        string json = BuildReviewFeedbackJson();
+        FakeHandler handler = new(HttpStatusCode.OK, json);
+        GitHubHttpClient sut = BuildSut(handler);
+
+        // Act
+        await sut.GetPullRequestReviewFeedbackAsync(
+            ValidBaseUrl,
+            ValidSlug,
+            pullRequestUrl: ValidPrUrl,
+            since: Since,
+            token: "ghp_token",
+            CancellationToken.None);
+
+        // Assert
+        string body = handler.LastRequestBody.ShouldNotBeNull();
+        body.ShouldContain("rateLimit");
+        body.ShouldContain("CHANGES_REQUESTED");
+        body.ShouldContain("reviews");
+        body.ShouldContain("submittedAt");
+        body.ShouldContain("originalLine");
     }
 
     [Fact]
     public async Task WhenMoreThan50CommentsExist_ReturnsOnly50Comments()
     {
         // Arrange
-        // Build a reviews response with a single CHANGES_REQUESTED review
-        // and 51 inline comments — expect only 50 to be returned
-        string reviewsJson = BuildReviewsJson(id: 1);
-        StringBuilder commentsJsonBuilder = new("[");
+        // Build a GraphQL response with 51 comments in one review — expect only 50 returned
+        StringBuilder commentsBuilder = new("[");
         for (int i = 0; i < 51; i++)
         {
-            if (i > 0) { commentsJsonBuilder.Append(','); }
-            commentsJsonBuilder.Append(
+            if (i > 0) { commentsBuilder.Append(','); }
+            commentsBuilder.Append(
                 System.Globalization.CultureInfo.InvariantCulture,
-                $"{{\"body\":\"Comment {i}\",\"path\":\"src/Foo.cs\",\"line\":null,\"original_line\":{i + 1}}}");
+                $"{{\"body\":\"Comment {i}\",\"path\":\"src/Foo.cs\",\"line\":null,\"originalLine\":{i + 1}}}");
         }
-        commentsJsonBuilder.Append(']');
+        commentsBuilder.Append(']');
 
-        SequentialFakeHandler handler = new(
-        [
-            (HttpStatusCode.OK, reviewsJson),
-            (HttpStatusCode.OK, commentsJsonBuilder.ToString()),
-        ]);
-        using HttpClient httpClient = new(handler);
-        GitHubHttpClient sut = new(httpClient, NullLogger<GitHubHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))));
+        string json = $$"""
+            {
+              "data": {
+                "rateLimit": { "cost": 1, "remaining": 4999 },
+                "repository": {
+                  "pullRequest": {
+                    "reviews": {
+                      "nodes": [
+                        {
+                          "body": "",
+                          "submittedAt": "2026-06-01T00:00:00Z",
+                          "comments": { "nodes": {{commentsBuilder}} }
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+            """;
+
+        FakeHandler handler = new(HttpStatusCode.OK, json);
+        GitHubHttpClient sut = BuildSut(handler);
 
         // Act
         Result<ReviewFeedback> result = await sut.GetPullRequestReviewFeedbackAsync(
@@ -114,25 +189,33 @@ public sealed class GetPullRequestReviewFeedbackAsync
     {
         // Arrange
         string longBody = new('x', 4100);
-        string reviewsJson = BuildReviewsJson(id: 1);
-        string commentsJson = $$"""
-            [
-              {
-                "body": "{{longBody}}",
-                "path": "src/Foo.cs",
-                "line": null,
-                "original_line": 1
+        string json = $$"""
+            {
+              "data": {
+                "rateLimit": { "cost": 1, "remaining": 4999 },
+                "repository": {
+                  "pullRequest": {
+                    "reviews": {
+                      "nodes": [
+                        {
+                          "body": "",
+                          "submittedAt": "2026-06-01T00:00:00Z",
+                          "comments": {
+                            "nodes": [
+                              { "body": "{{longBody}}", "path": "src/Foo.cs", "line": null, "originalLine": 1 }
+                            ]
+                          }
+                        }
+                      ]
+                    }
+                  }
+                }
               }
-            ]
+            }
             """;
 
-        SequentialFakeHandler handler = new(
-        [
-            (HttpStatusCode.OK, reviewsJson),
-            (HttpStatusCode.OK, commentsJson),
-        ]);
-        using HttpClient httpClient = new(handler);
-        GitHubHttpClient sut = new(httpClient, NullLogger<GitHubHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))));
+        FakeHandler handler = new(HttpStatusCode.OK, json);
+        GitHubHttpClient sut = BuildSut(handler);
 
         // Act
         Result<ReviewFeedback> result = await sut.GetPullRequestReviewFeedbackAsync(
@@ -156,25 +239,33 @@ public sealed class GetPullRequestReviewFeedbackAsync
     {
         // Arrange
         string exactBody = new('x', 4000);
-        string reviewsJson = BuildReviewsJson(id: 1);
-        string commentsJson = $$"""
-            [
-              {
-                "body": "{{exactBody}}",
-                "path": "src/Foo.cs",
-                "line": null,
-                "original_line": 1
+        string json = $$"""
+            {
+              "data": {
+                "rateLimit": { "cost": 1, "remaining": 4999 },
+                "repository": {
+                  "pullRequest": {
+                    "reviews": {
+                      "nodes": [
+                        {
+                          "body": "",
+                          "submittedAt": "2026-06-01T00:00:00Z",
+                          "comments": {
+                            "nodes": [
+                              { "body": "{{exactBody}}", "path": "src/Foo.cs", "line": null, "originalLine": 1 }
+                            ]
+                          }
+                        }
+                      ]
+                    }
+                  }
+                }
               }
-            ]
+            }
             """;
 
-        SequentialFakeHandler handler = new(
-        [
-            (HttpStatusCode.OK, reviewsJson),
-            (HttpStatusCode.OK, commentsJson),
-        ]);
-        using HttpClient httpClient = new(handler);
-        GitHubHttpClient sut = new(httpClient, NullLogger<GitHubHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))));
+        FakeHandler handler = new(HttpStatusCode.OK, json);
+        GitHubHttpClient sut = BuildSut(handler);
 
         // Act
         Result<ReviewFeedback> result = await sut.GetPullRequestReviewFeedbackAsync(
@@ -196,24 +287,29 @@ public sealed class GetPullRequestReviewFeedbackAsync
     {
         // Arrange
         string longBody = new('y', 5000);
-        string reviewsJson = $$"""
-            [
-              {
-                "id": 1,
-                "state": "CHANGES_REQUESTED",
-                "body": "{{longBody}}",
-                "submitted_at": "2026-06-01T00:00:00Z"
+        string json = $$"""
+            {
+              "data": {
+                "rateLimit": { "cost": 1, "remaining": 4999 },
+                "repository": {
+                  "pullRequest": {
+                    "reviews": {
+                      "nodes": [
+                        {
+                          "body": "{{longBody}}",
+                          "submittedAt": "2026-06-01T00:00:00Z",
+                          "comments": { "nodes": [] }
+                        }
+                      ]
+                    }
+                  }
+                }
               }
-            ]
+            }
             """;
 
-        SequentialFakeHandler handler = new(
-        [
-            (HttpStatusCode.OK, reviewsJson),
-            (HttpStatusCode.OK, "[]"),
-        ]);
-        using HttpClient httpClient = new(handler);
-        GitHubHttpClient sut = new(httpClient, NullLogger<GitHubHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))));
+        FakeHandler handler = new(HttpStatusCode.OK, json);
+        GitHubHttpClient sut = BuildSut(handler);
 
         // Act
         Result<ReviewFeedback> result = await sut.GetPullRequestReviewFeedbackAsync(
@@ -234,25 +330,33 @@ public sealed class GetPullRequestReviewFeedbackAsync
     public async Task WhenFilePathContainsPathTraversal_SetsFilePathToNull()
     {
         // Arrange
-        string reviewsJson = BuildReviewsJson(id: 1);
-        string commentsJson = """
-            [
-              {
-                "body": "Fix this",
-                "path": "../../../etc/passwd",
-                "line": null,
-                "original_line": 1
+        string json = $$"""
+            {
+              "data": {
+                "rateLimit": { "cost": 1, "remaining": 4999 },
+                "repository": {
+                  "pullRequest": {
+                    "reviews": {
+                      "nodes": [
+                        {
+                          "body": "",
+                          "submittedAt": "2026-06-01T00:00:00Z",
+                          "comments": {
+                            "nodes": [
+                              { "body": "Fix this", "path": "../../../etc/passwd", "line": null, "originalLine": 1 }
+                            ]
+                          }
+                        }
+                      ]
+                    }
+                  }
+                }
               }
-            ]
+            }
             """;
 
-        SequentialFakeHandler handler = new(
-        [
-            (HttpStatusCode.OK, reviewsJson),
-            (HttpStatusCode.OK, commentsJson),
-        ]);
-        using HttpClient httpClient = new(handler);
-        GitHubHttpClient sut = new(httpClient, NullLogger<GitHubHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))));
+        FakeHandler handler = new(HttpStatusCode.OK, json);
+        GitHubHttpClient sut = BuildSut(handler);
 
         // Act
         Result<ReviewFeedback> result = await sut.GetPullRequestReviewFeedbackAsync(
@@ -273,25 +377,33 @@ public sealed class GetPullRequestReviewFeedbackAsync
     public async Task WhenFilePathIsAbsoluteUnixPath_SetsFilePathToNull()
     {
         // Arrange
-        string reviewsJson = BuildReviewsJson(id: 1);
-        string commentsJson = """
-            [
-              {
-                "body": "Fix this",
-                "path": "/absolute/path/to/file.cs",
-                "line": null,
-                "original_line": 1
+        string json = $$"""
+            {
+              "data": {
+                "rateLimit": { "cost": 1, "remaining": 4999 },
+                "repository": {
+                  "pullRequest": {
+                    "reviews": {
+                      "nodes": [
+                        {
+                          "body": "",
+                          "submittedAt": "2026-06-01T00:00:00Z",
+                          "comments": {
+                            "nodes": [
+                              { "body": "Fix this", "path": "/absolute/path/to/file.cs", "line": null, "originalLine": 1 }
+                            ]
+                          }
+                        }
+                      ]
+                    }
+                  }
+                }
               }
-            ]
+            }
             """;
 
-        SequentialFakeHandler handler = new(
-        [
-            (HttpStatusCode.OK, reviewsJson),
-            (HttpStatusCode.OK, commentsJson),
-        ]);
-        using HttpClient httpClient = new(handler);
-        GitHubHttpClient sut = new(httpClient, NullLogger<GitHubHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))));
+        FakeHandler handler = new(HttpStatusCode.OK, json);
+        GitHubHttpClient sut = BuildSut(handler);
 
         // Act
         Result<ReviewFeedback> result = await sut.GetPullRequestReviewFeedbackAsync(
@@ -312,25 +424,33 @@ public sealed class GetPullRequestReviewFeedbackAsync
     public async Task WhenFilePathContainsDriveLetterColon_SetsFilePathToNull()
     {
         // Arrange
-        string reviewsJson = BuildReviewsJson(id: 1);
-        string commentsJson = """
-            [
-              {
-                "body": "Fix this",
-                "path": "C:\\Windows\\System32\\file.cs",
-                "line": null,
-                "original_line": 1
+        string json = $$"""
+            {
+              "data": {
+                "rateLimit": { "cost": 1, "remaining": 4999 },
+                "repository": {
+                  "pullRequest": {
+                    "reviews": {
+                      "nodes": [
+                        {
+                          "body": "",
+                          "submittedAt": "2026-06-01T00:00:00Z",
+                          "comments": {
+                            "nodes": [
+                              { "body": "Fix this", "path": "C:\\Windows\\System32\\file.cs", "line": null, "originalLine": 1 }
+                            ]
+                          }
+                        }
+                      ]
+                    }
+                  }
+                }
               }
-            ]
+            }
             """;
 
-        SequentialFakeHandler handler = new(
-        [
-            (HttpStatusCode.OK, reviewsJson),
-            (HttpStatusCode.OK, commentsJson),
-        ]);
-        using HttpClient httpClient = new(handler);
-        GitHubHttpClient sut = new(httpClient, NullLogger<GitHubHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))));
+        FakeHandler handler = new(HttpStatusCode.OK, json);
+        GitHubHttpClient sut = BuildSut(handler);
 
         // Act
         Result<ReviewFeedback> result = await sut.GetPullRequestReviewFeedbackAsync(
@@ -351,25 +471,33 @@ public sealed class GetPullRequestReviewFeedbackAsync
     public async Task WhenFilePathIsValidRelativePath_PreservesFilePath()
     {
         // Arrange
-        string reviewsJson = BuildReviewsJson(id: 1);
-        string commentsJson = """
-            [
-              {
-                "body": "Fix this",
-                "path": "src/Modules/Workers/Features/SystemPromptBuilder.cs",
-                "line": null,
-                "original_line": 42
+        string json = $$"""
+            {
+              "data": {
+                "rateLimit": { "cost": 1, "remaining": 4999 },
+                "repository": {
+                  "pullRequest": {
+                    "reviews": {
+                      "nodes": [
+                        {
+                          "body": "",
+                          "submittedAt": "2026-06-01T00:00:00Z",
+                          "comments": {
+                            "nodes": [
+                              { "body": "Fix this", "path": "src/Modules/Workers/Features/SystemPromptBuilder.cs", "line": null, "originalLine": 42 }
+                            ]
+                          }
+                        }
+                      ]
+                    }
+                  }
+                }
               }
-            ]
+            }
             """;
 
-        SequentialFakeHandler handler = new(
-        [
-            (HttpStatusCode.OK, reviewsJson),
-            (HttpStatusCode.OK, commentsJson),
-        ]);
-        using HttpClient httpClient = new(handler);
-        GitHubHttpClient sut = new(httpClient, NullLogger<GitHubHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))));
+        FakeHandler handler = new(HttpStatusCode.OK, json);
+        GitHubHttpClient sut = BuildSut(handler);
 
         // Act
         Result<ReviewFeedback> result = await sut.GetPullRequestReviewFeedbackAsync(
@@ -387,12 +515,200 @@ public sealed class GetPullRequestReviewFeedbackAsync
     }
 
     [Fact]
+    public async Task WhenCommentLineIsNull_UsesOriginalLine()
+    {
+        // Arrange
+        string json = $$"""
+            {
+              "data": {
+                "rateLimit": { "cost": 1, "remaining": 4999 },
+                "repository": {
+                  "pullRequest": {
+                    "reviews": {
+                      "nodes": [
+                        {
+                          "body": "",
+                          "submittedAt": "2026-06-01T00:00:00Z",
+                          "comments": {
+                            "nodes": [
+                              { "body": "Fix this", "path": "src/Foo.cs", "line": null, "originalLine": 42 }
+                            ]
+                          }
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+            """;
+
+        FakeHandler handler = new(HttpStatusCode.OK, json);
+        GitHubHttpClient sut = BuildSut(handler);
+
+        // Act
+        Result<ReviewFeedback> result = await sut.GetPullRequestReviewFeedbackAsync(
+            ValidBaseUrl,
+            ValidSlug,
+            pullRequestUrl: ValidPrUrl,
+            since: Since,
+            token: "ghp_token",
+            CancellationToken.None);
+
+        // Assert
+        result.IsSuccess.ShouldBeTrue();
+        Result<ReviewFeedback>.Success success = result.ShouldBeOfType<Result<ReviewFeedback>.Success>();
+        success.Value.Comments[0].Line.ShouldBe(42);
+    }
+
+    [Fact]
+    public async Task WhenCommentLineIsSet_UsesLine()
+    {
+        // Arrange
+        string json = $$"""
+            {
+              "data": {
+                "rateLimit": { "cost": 1, "remaining": 4999 },
+                "repository": {
+                  "pullRequest": {
+                    "reviews": {
+                      "nodes": [
+                        {
+                          "body": "",
+                          "submittedAt": "2026-06-01T00:00:00Z",
+                          "comments": {
+                            "nodes": [
+                              { "body": "Fix this", "path": "src/Foo.cs", "line": 10, "originalLine": 42 }
+                            ]
+                          }
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+            """;
+
+        FakeHandler handler = new(HttpStatusCode.OK, json);
+        GitHubHttpClient sut = BuildSut(handler);
+
+        // Act
+        Result<ReviewFeedback> result = await sut.GetPullRequestReviewFeedbackAsync(
+            ValidBaseUrl,
+            ValidSlug,
+            pullRequestUrl: ValidPrUrl,
+            since: Since,
+            token: "ghp_token",
+            CancellationToken.None);
+
+        // Assert
+        result.IsSuccess.ShouldBeTrue();
+        Result<ReviewFeedback>.Success success = result.ShouldBeOfType<Result<ReviewFeedback>.Success>();
+        success.Value.Comments[0].Line.ShouldBe(10);
+    }
+
+    [Fact]
+    public async Task WhenReviewSubmittedAtIsAtOrBeforeSince_FiltersOutReview()
+    {
+        // Arrange — review submitted exactly at "since", must be filtered (need strictly after)
+        string json = $$"""
+            {
+              "data": {
+                "rateLimit": { "cost": 1, "remaining": 4999 },
+                "repository": {
+                  "pullRequest": {
+                    "reviews": {
+                      "nodes": [
+                        {
+                          "body": "Old review",
+                          "submittedAt": "2026-01-01T00:00:00Z",
+                          "comments": {
+                            "nodes": [
+                              { "body": "Old comment", "path": "src/Foo.cs", "line": null, "originalLine": 1 }
+                            ]
+                          }
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+            """;
+
+        FakeHandler handler = new(HttpStatusCode.OK, json);
+        GitHubHttpClient sut = BuildSut(handler);
+
+        // Act
+        Result<ReviewFeedback> result = await sut.GetPullRequestReviewFeedbackAsync(
+            ValidBaseUrl,
+            ValidSlug,
+            pullRequestUrl: ValidPrUrl,
+            since: Since,
+            token: "ghp_token",
+            CancellationToken.None);
+
+        // Assert
+        result.IsSuccess.ShouldBeTrue();
+        Result<ReviewFeedback>.Success success = result.ShouldBeOfType<Result<ReviewFeedback>.Success>();
+        success.Value.Comments.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task WhenReviewSubmittedAtIsAfterSince_IncludesReview()
+    {
+        // Arrange
+        string json = $$"""
+            {
+              "data": {
+                "rateLimit": { "cost": 1, "remaining": 4999 },
+                "repository": {
+                  "pullRequest": {
+                    "reviews": {
+                      "nodes": [
+                        {
+                          "body": "",
+                          "submittedAt": "2026-06-01T00:00:00Z",
+                          "comments": {
+                            "nodes": [
+                              { "body": "New comment", "path": "src/Foo.cs", "line": null, "originalLine": 1 }
+                            ]
+                          }
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+            """;
+
+        FakeHandler handler = new(HttpStatusCode.OK, json);
+        GitHubHttpClient sut = BuildSut(handler);
+
+        // Act
+        Result<ReviewFeedback> result = await sut.GetPullRequestReviewFeedbackAsync(
+            ValidBaseUrl,
+            ValidSlug,
+            pullRequestUrl: ValidPrUrl,
+            since: Since,
+            token: "ghp_token",
+            CancellationToken.None);
+
+        // Assert
+        result.IsSuccess.ShouldBeTrue();
+        Result<ReviewFeedback>.Success success = result.ShouldBeOfType<Result<ReviewFeedback>.Success>();
+        success.Value.Comments.Count.ShouldBe(1);
+        success.Value.Comments[0].Body.ShouldBe("New comment");
+    }
+
+    [Fact]
     public async Task WhenBaseUrlHasInvalidScheme_ReturnsInvalidBaseUrlError()
     {
         // Arrange
-        FakeHandler handler = new(HttpStatusCode.OK, "[]");
-        using HttpClient httpClient = new(handler);
-        GitHubHttpClient sut = new(httpClient, NullLogger<GitHubHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))));
+        FakeHandler handler = new(HttpStatusCode.OK, "{}");
+        GitHubHttpClient sut = BuildSut(handler);
         Uri invalidBaseUrl = new("ftp://api.github.com");
 
         // Act
@@ -414,9 +730,8 @@ public sealed class GetPullRequestReviewFeedbackAsync
     public async Task WhenPrUrlIsInvalid_ReturnsInvalidPullRequestUrlError()
     {
         // Arrange
-        FakeHandler handler = new(HttpStatusCode.OK, "[]");
-        using HttpClient httpClient = new(handler);
-        GitHubHttpClient sut = new(httpClient, NullLogger<GitHubHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))));
+        FakeHandler handler = new(HttpStatusCode.OK, "{}");
+        GitHubHttpClient sut = BuildSut(handler);
 
         // Act
         Result<ReviewFeedback> result = await sut.GetPullRequestReviewFeedbackAsync(

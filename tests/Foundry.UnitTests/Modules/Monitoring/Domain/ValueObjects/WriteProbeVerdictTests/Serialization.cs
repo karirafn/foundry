@@ -137,4 +137,59 @@ public sealed class Serialization
         // Assert
         ex.ShouldNotBeNull();
     }
+
+    [Fact]
+    public void WhenUnknownWithRateLimitedReason_RoundTripsReason()
+    {
+        // Arrange
+        WriteProbeVerdict verdict = new WriteProbeVerdict.Unknown(Reason: UnknownReason.RateLimited);
+
+        // Act
+        string json = JsonSerializer.Serialize(verdict, Options);
+        WriteProbeVerdict? deserialized = JsonSerializer.Deserialize<WriteProbeVerdict>(json, Options);
+
+        // Assert
+        WriteProbeVerdict.Unknown unknown = deserialized.ShouldBeOfType<WriteProbeVerdict.Unknown>();
+        unknown.Reason.ShouldBe(UnknownReason.RateLimited);
+    }
+
+    [Fact]
+    public void WhenUnknownWithTransportReason_RoundTripsReason()
+    {
+        // Arrange
+        WriteProbeVerdict verdict = new WriteProbeVerdict.Unknown(Reason: UnknownReason.Transport);
+
+        // Act
+        string json = JsonSerializer.Serialize(verdict, Options);
+        WriteProbeVerdict? deserialized = JsonSerializer.Deserialize<WriteProbeVerdict>(json, Options);
+
+        // Assert
+        WriteProbeVerdict.Unknown unknown = deserialized.ShouldBeOfType<WriteProbeVerdict.Unknown>();
+        unknown.Reason.ShouldBe(UnknownReason.Transport);
+    }
+
+    [Fact]
+    public void WhenUnknownLegacyJsonWithoutReasonField_DeserializesToTransport()
+    {
+        // Arrange — legacy rows persisted before the Reason field was added omit the property;
+        // they must round-trip to Transport (the default/safe value) for backward compatibility.
+        const string legacyJson = """{"$type":"unknown","LastAttemptedAt":"2026-08-01T00:00:00+00:00"}""";
+
+        // Act
+        WriteProbeVerdict? deserialized = JsonSerializer.Deserialize<WriteProbeVerdict>(legacyJson, Options);
+
+        // Assert
+        WriteProbeVerdict.Unknown unknown = deserialized.ShouldBeOfType<WriteProbeVerdict.Unknown>();
+        unknown.Reason.ShouldBe(UnknownReason.Transport);
+    }
+
+    [Fact]
+    public void WhenUnknownDefaultConstruct_ReasonIsTransport()
+    {
+        // Arrange / Act
+        WriteProbeVerdict.Unknown unknown = new WriteProbeVerdict.Unknown();
+
+        // Assert
+        unknown.Reason.ShouldBe(UnknownReason.Transport);
+    }
 }

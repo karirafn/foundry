@@ -518,6 +518,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/settings/allowed-provider-hosts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Updates the list of allowed provider hostnames */
+        put: operations["UpdateAllowedProviderHosts"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -612,6 +629,7 @@ export interface components {
             nextRetryAt: null | string;
             /** Format: int32 */
             attempt: number | string;
+            allowedProviderHosts: string[];
         };
         /** @enum {unknown} */
         ImageBuildStatus: "Idle" | "Building" | "Failed";
@@ -697,6 +715,7 @@ export interface components {
         RepositoryEligibilityInfo: {
             status: string;
             violations: components["schemas"]["EligibilityViolationInfo"][];
+            reason: null | string;
         };
         RepositorySummary: {
             /** Format: uuid */
@@ -777,6 +796,9 @@ export interface components {
         UpdateAccountRequestBody: {
             baseUrl: string;
             token: null | string;
+        };
+        UpdateAllowedProviderHostsRequestBody: {
+            hosts: string[];
         };
         UpdateAuthModeRequestBody: {
             mode: string;
@@ -2097,6 +2119,48 @@ export interface operations {
             cookie?: never;
         };
         requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GlobalSettingsSummary"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    UpdateAllowedProviderHosts: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateAllowedProviderHostsRequestBody"];
+            };
+        };
         responses: {
             /** @description OK */
             200: {

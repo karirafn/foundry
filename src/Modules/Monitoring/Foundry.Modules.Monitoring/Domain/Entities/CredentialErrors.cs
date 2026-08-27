@@ -15,6 +15,7 @@ internal static class CredentialErrors
     internal const string WriteAccessVerificationFailedCode = "Credential.WriteAccessVerificationFailed";
     internal const string DuplicateAccountCode = "Credential.DuplicateAccount";
     internal const string NamespaceDerivationUnavailableCode = "Credential.NamespaceDerivationUnavailable";
+    internal const string RateLimitExhaustedCode = "Credential.RateLimitExhausted";
 
     internal static Error NotFound(CredentialId id) =>
         new(NotFoundCode, $"Credential with ID '{id.Value}' was not found.");
@@ -52,4 +53,8 @@ internal static class CredentialErrors
     internal static Error DuplicateAccount(string holderName, string sharedOwner) =>
         new(DuplicateAccountCode,
             $"Your '{holderName}' account already covers '{sharedOwner}'. Rotate that account's token instead.");
+
+    internal static readonly Error RateLimitExhausted =
+        new(RateLimitExhaustedCode,
+            "GitHub API rate limit reached while verifying write access; wait and retry.");
 }

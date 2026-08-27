@@ -5,6 +5,7 @@ using Foundry.Modules.Settings.Domain.ValueObjects;
 using Foundry.Shared.Infrastructure;
 
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
@@ -59,6 +60,24 @@ internal sealed class GlobalSettingsConfiguration : IEntityTypeConfiguration<Glo
             .HasColumnType("TEXT")
             .HasColumnName("worker_image_configuration");
 
+        ValueConverter<IReadOnlyList<string>, string> allowedProviderHostsConverter = new(
+            hosts => SerializeAllowedProviderHosts(hosts),
+            json => DeserializeAllowedProviderHosts(json));
+
+        ValueComparer<IReadOnlyList<string>> allowedProviderHostsComparer = new(
+            (a, b) => a != null && b != null && a.SequenceEqual(b),
+            hosts => hosts.Aggregate(0, (hash, h) => HashCode.Combine(hash, h.GetHashCode(StringComparison.Ordinal))),
+            hosts => hosts.ToList());
+
+        // AllowedProviderHosts is serialized as a single JSON TEXT column. HasMaxLength is
+        // inapplicable here — it governs individual varchar/nvarchar column widths, not a
+        // JSON blob. Entry-length (255 chars) and list-count (50 entries) caps are enforced
+        // by domain logic in GlobalSettings.UpdateAllowedProviderHosts.
+        builder.Property(s => s.AllowedProviderHosts)
+            .HasConversion(allowedProviderHostsConverter, allowedProviderHostsComparer)
+            .HasColumnType("TEXT")
+            .HasColumnName("allowed_provider_hosts");
+
         ValueConverter<ImageBuildState, string> imageBuildStateConverter = new(
             state => SerializeImageBuildState(state),
             json => DeserializeImageBuildState(json));
@@ -77,6 +96,12 @@ internal sealed class GlobalSettingsConfiguration : IEntityTypeConfiguration<Glo
         builder.Property(s => s.UpdatedAt)
             .HasColumnName("updated_at");
     }
+
+    private static string SerializeAllowedProviderHosts(IReadOnlyList<string> hosts)
+        => JsonSerializer.Serialize(hosts);
+
+    private static List<string> DeserializeAllowedProviderHosts(string json)
+        => JsonSerializer.Deserialize<List<string>>(json) ?? [];
 
     private static string SerializeWorkerImageConfiguration(WorkerImageConfiguration config)
         => JsonSerializer.Serialize(config);
