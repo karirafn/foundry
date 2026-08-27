@@ -305,7 +305,8 @@
   &__oauth-section,
   &__prompts-form,
   &__image-form,
-  &__dispatch-form {
+  &__dispatch-form,
+  &__hosts-form {
     display: flex;
     flex-direction: column;
     gap: var(--fd-spacing-md);
