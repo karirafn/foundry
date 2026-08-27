@@ -80,4 +80,24 @@ public sealed class WhenHostsAreInvalid : IAsyncDisposable
         string responseBody = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
         responseBody.ShouldContain(InvalidHost);
     }
+
+    [Fact]
+    public async Task WhenHostHasTrailingDot_ReturnsBadRequest()
+    {
+        // Arrange
+        await SeedDefaultSettingsAsync();
+        const string InvalidHost = "git.example.com.";
+        object body = new { hosts = new[] { InvalidHost } };
+
+        // Act
+        HttpResponseMessage response = await _client.PutAsJsonAsync(
+            new Uri("/api/settings/allowed-provider-hosts", UriKind.Relative),
+            body,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        string responseBody = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+        responseBody.ShouldContain(InvalidHost);
+    }
 }
