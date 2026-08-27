@@ -9,6 +9,9 @@ using Foundry.Shared;
 
 namespace Foundry.Modules.Monitoring.Domain.Services;
 
+// NOTE: Guard placement accepted as-is — lives in Domain/Services despite depending on infrastructure
+// DNS resolution (IHostAddressResolver) and a cross-module query (IGlobalSettingsQueries). Moving it
+// to Infrastructure would lose the domain invariant co-location; the trade-off was accepted in #483.
 /// <summary>
 /// Domain service that validates whether a provider base URL host is allowed and
 /// does not resolve to a private/loopback/link-local address (SSRF DNS rebinding guard).
@@ -106,6 +109,42 @@ internal sealed class ProviderHostGuard(
 
         // 192.168.0.0/16 — RFC 1918
         if (bytes[0] == 192 && bytes[1] == 168)
+        {
+            return true;
+        }
+
+        // 100.64.0.0/10 — CGNAT (RFC 6598): 100.64.x.x through 100.127.x.x
+        if (bytes[0] == 100 && bytes[1] >= 64 && bytes[1] <= 127)
+        {
+            return true;
+        }
+
+        // 192.0.2.0/24 — TEST-NET-1 (RFC 5737)
+        if (bytes[0] == 192 && bytes[1] == 0 && bytes[2] == 2)
+        {
+            return true;
+        }
+
+        // 198.51.100.0/24 — TEST-NET-2 (RFC 5737)
+        if (bytes[0] == 198 && bytes[1] == 51 && bytes[2] == 100)
+        {
+            return true;
+        }
+
+        // 203.0.113.0/24 — TEST-NET-3 (RFC 5737)
+        if (bytes[0] == 203 && bytes[1] == 0 && bytes[2] == 113)
+        {
+            return true;
+        }
+
+        // 240.0.0.0/4 — reserved / former Class E (RFC 1112)
+        if (bytes[0] >= 240)
+        {
+            return true;
+        }
+
+        // 0.0.0.0/8 — "this host on this network" (RFC 1122)
+        if (bytes[0] == 0)
         {
             return true;
         }
