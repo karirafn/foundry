@@ -476,13 +476,14 @@ const PROBE_INTERVAL_MIN = 5;
               placeholder="git.example.com&#10;gitlab.internal.corp"
               [ngModel]="_allowedHostsValue()"
               (ngModelChange)="_allowedHostsValue.set($event)"
+              [attr.aria-invalid]="!!settingsService.saveHostsError() || null"
             ></textarea>
-            <span id="allowed-provider-hosts-hint" class="general-settings__field-hint">One bare hostname per line, e.g. git.example.com — no scheme, port, or path. Leave empty to allow only the public providers.</span>
+            <span id="allowed-provider-hosts-hint" class="general-settings__field-hint">One bare hostname per line or comma-separated, e.g. git.example.com — no scheme, port, or path. Maximum 50 hostnames. Leave empty to allow only the public providers.</span>
           </div>
 
-          <div id="allowed-provider-hosts-error" role="alert" class="general-settings__save-error">{{ settingsService.saveHostsError() ?? '' }}</div>
+          <div id="allowed-provider-hosts-error" aria-live="assertive" class="general-settings__save-error">{{ settingsService.saveHostsError() ?? '' }}</div>
 
-          <div role="status" class="general-settings__save-success">{{ settingsService.saveHostsSuccess() ? 'Provider hosts saved successfully' : '' }}</div>
+          <div aria-live="polite" class="general-settings__save-success">{{ settingsService.saveHostsSuccess() ? 'Provider hosts saved successfully' : '' }}</div>
 
           <button
             class="general-settings__save-btn"

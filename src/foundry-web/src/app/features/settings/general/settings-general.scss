@@ -150,6 +150,7 @@
   &__switch-error {
     color: var(--fd-text-error);
     font-size: 0.875rem;
+    overflow-wrap: break-word;
   }
 
   &__save-success {

@@ -2122,11 +2122,11 @@ describe('SettingsGeneralComponent', () => {
       const el = fixture.nativeElement as HTMLElement;
       const errorEl = el.querySelector('#allowed-provider-hosts-error') as HTMLElement;
       expect(errorEl).toBeTruthy();
-      expect(errorEl.getAttribute('role')).toBe('alert');
+      expect(errorEl.getAttribute('aria-live')).toBe('assertive');
       expect(errorEl.textContent).toContain('bad host!');
     });
 
-    it('should render success message in role="status" region after a successful hosts save', () => {
+    it('should render success message in aria-live="polite" region after a successful hosts save', () => {
       // Arrange
       const { httpMock, service } = setup();
       const fixture = TestBed.createComponent(SettingsGeneralComponent);
@@ -2139,11 +2139,66 @@ describe('SettingsGeneralComponent', () => {
       httpMock.expectOne('/api/settings/allowed-provider-hosts').flush({ ...API_KEY_RESPONSE, allowedProviderHosts: ['git.example.com'] });
       fixture.detectChanges();
 
+      // Assert — success region uses aria-live="polite" (not role="status") to avoid spurious announce on mount
+      const el = fixture.nativeElement as HTMLElement;
+      const hostsForm = el.querySelector('.general-settings__hosts-form') as HTMLElement;
+      const successEl = hostsForm.querySelector('[aria-live="polite"].general-settings__save-success') as HTMLElement;
+      expect(successEl).toBeTruthy();
+      expect(successEl.textContent).toContain('Provider hosts saved successfully');
+    });
+
+    it('should set aria-invalid on the allowedProviderHosts textarea when saveHostsError is present', () => {
+      // Arrange
+      const { httpMock, service } = setup();
+      const fixture = TestBed.createComponent(SettingsGeneralComponent);
+      fixture.detectChanges();
+      flushSettings(httpMock, { ...API_KEY_RESPONSE, allowedProviderHosts: [] });
+      fixture.detectChanges();
+
+      // Act — trigger a failed save
+      service.updateAllowedProviderHosts(['bad host!']);
+      httpMock.expectOne('/api/settings/allowed-provider-hosts').flush('Host "bad host!" is invalid', {
+        status: 400,
+        statusText: 'Bad Request',
+      });
+      fixture.detectChanges();
+
       // Assert
       const el = fixture.nativeElement as HTMLElement;
-      const successEls = Array.from(el.querySelectorAll('[role="status"]'));
-      const hostsSuccess = successEls.find(e => e.textContent?.includes('Provider hosts saved successfully'));
-      expect(hostsSuccess).toBeTruthy();
+      const textarea = el.querySelector('#allowedProviderHosts') as HTMLTextAreaElement;
+      expect(textarea.getAttribute('aria-invalid')).toBe('true');
+    });
+
+    it('should not set aria-invalid on the allowedProviderHosts textarea when there is no error', () => {
+      // Arrange
+      const { httpMock } = setup();
+      const fixture = TestBed.createComponent(SettingsGeneralComponent);
+      fixture.detectChanges();
+      flushSettings(httpMock, { ...API_KEY_RESPONSE, allowedProviderHosts: [] });
+      fixture.detectChanges();
+
+      // Assert — no error, attribute must be absent
+      const el = fixture.nativeElement as HTMLElement;
+      const textarea = el.querySelector('#allowedProviderHosts') as HTMLTextAreaElement;
+      expect(textarea.getAttribute('aria-invalid')).toBeNull();
+    });
+
+    it('should display hint text mentioning comma-separated input and 50-hostname cap', () => {
+      // Arrange
+      const { httpMock } = setup();
+      const fixture = TestBed.createComponent(SettingsGeneralComponent);
+      fixture.detectChanges();
+      flushSettings(httpMock);
+      fixture.detectChanges();
+
+      // Act
+      const el = fixture.nativeElement as HTMLElement;
+      const hint = el.querySelector('#allowed-provider-hosts-hint') as HTMLElement;
+
+      // Assert
+      expect(hint).toBeTruthy();
+      expect(hint.textContent).toContain('comma-separated');
+      expect(hint.textContent).toContain('Maximum 50 hostnames');
     });
   });
 });
