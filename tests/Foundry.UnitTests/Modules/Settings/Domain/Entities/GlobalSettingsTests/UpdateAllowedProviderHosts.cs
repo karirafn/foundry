@@ -176,4 +176,84 @@ public sealed class UpdateAllowedProviderHosts
         // Assert
         settings.AllowedProviderHosts.ShouldBe(["git.example.com", "gitlab.company.org"]);
     }
+
+    [Theory]
+    [InlineData(".")]
+    [InlineData("git.example.com.")]
+    public void WhenHostEndsWithDot_ReturnsInvalidProviderHostError(string host)
+    {
+        // Arrange
+        GlobalSettings settings = GlobalSettings.Create();
+
+        // Act
+        Result result = settings.UpdateAllowedProviderHosts([host]);
+
+        // Assert
+        Result.Failure failure = result.ShouldBeOfType<Result.Failure>();
+        failure.Error.Code.ShouldBe(SettingsErrors.InvalidProviderHostCode);
+    }
+
+    [Fact]
+    public void WhenListExceedsMaxCount_ReturnsTooManyProviderHostsError()
+    {
+        // Arrange
+        GlobalSettings settings = GlobalSettings.Create();
+        IReadOnlyList<string> hosts = Enumerable
+            .Range(1, GlobalSettings.MaxAllowedProviderHostCount + 1)
+            .Select(i => $"host{i}.example.com")
+            .ToList();
+
+        // Act
+        Result result = settings.UpdateAllowedProviderHosts(hosts);
+
+        // Assert
+        Result.Failure failure = result.ShouldBeOfType<Result.Failure>();
+        failure.Error.Code.ShouldBe(SettingsErrors.TooManyProviderHostsCode);
+    }
+
+    [Fact]
+    public void WhenListIsAtMaxCount_ReturnsOk()
+    {
+        // Arrange
+        GlobalSettings settings = GlobalSettings.Create();
+        IReadOnlyList<string> hosts = Enumerable
+            .Range(1, GlobalSettings.MaxAllowedProviderHostCount)
+            .Select(i => $"host{i}.example.com")
+            .ToList();
+
+        // Act
+        Result result = settings.UpdateAllowedProviderHosts(hosts);
+
+        // Assert
+        result.IsSuccess.ShouldBeTrue();
+    }
+
+    [Fact]
+    public void WhenHostExceedsMaxLength_ReturnsProviderHostTooLongError()
+    {
+        // Arrange
+        GlobalSettings settings = GlobalSettings.Create();
+        string host = new('a', GlobalSettings.MaxProviderHostLength + 1);
+
+        // Act
+        Result result = settings.UpdateAllowedProviderHosts([host]);
+
+        // Assert
+        Result.Failure failure = result.ShouldBeOfType<Result.Failure>();
+        failure.Error.Code.ShouldBe(SettingsErrors.ProviderHostTooLongCode);
+    }
+
+    [Fact]
+    public void WhenHostIsAtMaxLength_ReturnsOk()
+    {
+        // Arrange
+        GlobalSettings settings = GlobalSettings.Create();
+        string host = new('a', GlobalSettings.MaxProviderHostLength);
+
+        // Act
+        Result result = settings.UpdateAllowedProviderHosts([host]);
+
+        // Assert
+        result.IsSuccess.ShouldBeTrue();
+    }
 }

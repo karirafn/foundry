@@ -17,6 +17,8 @@ public sealed class GlobalSettings : AggregateRoot<GlobalSettingsId>
     internal const int MinProbeIntervalMinutes = 5;
     internal const int MaxProbeIntervalMinutes = 10080;
     internal const int DefaultProbeIntervalMinutes = 60;
+    internal const int MaxProviderHostLength = 255;
+    internal const int MaxAllowedProviderHostCount = 50;
 
     private GlobalSettings() : base(GlobalSettingsId.Default)
     {
@@ -199,6 +201,11 @@ public sealed class GlobalSettings : AggregateRoot<GlobalSettingsId>
     {
         List<string> normalized = new(hosts.Count);
 
+        if (hosts.Count > MaxAllowedProviderHostCount)
+        {
+            return SettingsErrors.TooManyProviderHosts(hosts.Count);
+        }
+
         foreach (string host in hosts)
         {
             if (string.IsNullOrWhiteSpace(host))
@@ -206,22 +213,34 @@ public sealed class GlobalSettings : AggregateRoot<GlobalSettingsId>
                 return SettingsErrors.InvalidProviderHost(host);
             }
 
-            if (host.Contains("://", StringComparison.Ordinal))
+            string trimmed = host.Trim();
+
+            if (trimmed.EndsWith('.'))
             {
-                return SettingsErrors.InvalidProviderHost(host);
+                return SettingsErrors.InvalidProviderHost(trimmed);
             }
 
-            if (host.Contains('/', StringComparison.Ordinal))
+            if (trimmed.Length > MaxProviderHostLength)
             {
-                return SettingsErrors.InvalidProviderHost(host);
+                return SettingsErrors.ProviderHostTooLong(trimmed);
             }
 
-            if (host.Contains(':', StringComparison.Ordinal))
+            if (trimmed.Contains("://", StringComparison.Ordinal))
             {
-                return SettingsErrors.InvalidProviderHost(host);
+                return SettingsErrors.InvalidProviderHost(trimmed);
             }
 
-            normalized.Add(host.Trim().ToLowerInvariant());
+            if (trimmed.Contains('/', StringComparison.Ordinal))
+            {
+                return SettingsErrors.InvalidProviderHost(trimmed);
+            }
+
+            if (trimmed.Contains(':', StringComparison.Ordinal))
+            {
+                return SettingsErrors.InvalidProviderHost(trimmed);
+            }
+
+            normalized.Add(trimmed.ToLowerInvariant());
         }
 
         AllowedProviderHosts = normalized;
