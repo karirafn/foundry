@@ -51,7 +51,7 @@ public sealed class HandleAsync : IAsyncDisposable
         FakeHostAddressResolver resolver = new FakeHostAddressResolver()
             .WithAddresses("github.com", System.Net.IPAddress.Parse("140.82.121.4"))
             .WithAddresses("gitlab.com", System.Net.IPAddress.Parse("172.65.251.78"))
-            .WithAddresses("github.enterprise.com", System.Net.IPAddress.Parse("198.51.100.10"));
+            .WithAddresses("github.enterprise.com", System.Net.IPAddress.Parse("140.82.121.10"));
         StubGlobalSettingsQueries settings = new(allowedHosts: ["github.enterprise.com"]);
         return new ProviderHostGuard(settings, resolver);
     }
