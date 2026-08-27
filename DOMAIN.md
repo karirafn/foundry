@@ -343,6 +343,7 @@ Transitions: `Revise()` → `RevisionQueuedIssue` (feedback detected); `Complete
 ## Unchanged Issue
 
 A lifecycle state for an issue whose worker completed successfully (exit code 0) but produced no code changes — no branch, no PR.
+Carries `WorkerRunId` — non-nullable.
 Requires manual resolution: the user can retry (disagreeing with the worker's assessment).
 Classified as Active / Needs attention (see [Issue Lifecycle Partition](#issue-lifecycle-partition)) — it cannot resolve itself.
 Transitions: `UnchangedIssue.Retry()` → `FreshQueuedIssue`.
@@ -367,7 +368,7 @@ Transitions: `Claim()` → `RevisionInProgressIssue`.
 ## Revision In-Progress Issue
 
 A lifecycle state for an issue whose worker is executing a revision cycle.
-Carries `WorkerRunId`, `BranchName`, and `PullRequestUrl` — all non-nullable.
+Carries `WorkerRunId`, `BranchName`, `PullRequestUrl`, and `ReviewComments` (`IReadOnlyList<ReviewComment>`) — all non-nullable.
 Created from `RevisionQueuedIssue.Claim()`.
 Transitions: `MarkInReview()` → `ReviewIssue` (worker pushed changes); `MarkUnchanged()` → `ReviewIssue` (worker made no changes but PR still exists); `MarkFailed()` → `RevisionFailedIssue`.
 
@@ -382,14 +383,14 @@ Preserved when the issue is subsequently untracked (completion wins over provide
 
 A lifecycle state for an issue whose fresh worker run failed without producing recoverable work (no branch pushed).
 Also used when a PR is closed without merge and the review had no prior branch context.
-Carries `WorkerRunId`, `FailureReason` (string description), and `FailedAt`.
+Carries `WorkerRunId`, `FailureReason` (string description), `FailureCategory`, and `FailedAt`.
 Can come from `InProgressIssue` (worker failed before pushing a branch) or `ReviewIssue` (PR closed without merge, no branch recovery needed).
 Transitions: `FailedIssue.Retry()` → `FreshQueuedIssue` (fresh run, no branch context).
 
 ## Continuable Failed Issue
 
 A lifecycle state for an issue whose worker run failed but left recoverable work on a pushed branch.
-Carries `WorkerRunId`, `BranchName`, `FailureReason`, and `FailedAt` — all non-nullable.
+Carries `WorkerRunId`, `BranchName`, `FailureReason`, `FailureCategory`, and `FailedAt` — all non-nullable.
 Optionally carries `PullRequestUrl` — present when created from `ReviewIssue.Fail()` (PR was closed without merge), absent when created from `InProgressIssue` (no PR existed).
 Created from `InProgressIssue` when the failed run left commits on the branch — Foundry checks via `GetBranchCommitSummaryAsync` against the provider after the container exits; commit count > 0 is the branch-has-commits boolean.
 Also created from `ReviewIssue.Fail()` since `ReviewIssue` always has a branch.
@@ -414,7 +415,7 @@ Semantically distinct from `RevisionContext` — continuation resumes interrupte
 ## Revision Failed Issue
 
 A lifecycle state for an issue whose revision worker run failed.
-Carries `WorkerRunId`, `BranchName`, `PullRequestUrl`, `FailureReason`, and `FailedAt` — all non-nullable.
+Carries `WorkerRunId`, `BranchName`, `PullRequestUrl`, `ReviewComments` (`IReadOnlyList<ReviewComment>`), `FailureReason`, `FailureCategory`, and `FailedAt` — all non-nullable.
 Created from `RevisionInProgressIssue.MarkFailed()`.
 Preserves branch context so retry re-enters the revision path.
 Transitions: `Retry()` → `RevisionQueuedIssue` (re-enters revision path with existing branch).
@@ -642,6 +643,14 @@ The wizard reuses the same form components as the settings page.
 
 A value object on FailedRun that classifies how the run failed.
 Variants: `NonZeroExit(exitCode)` (container exited with non-zero code), `TimedOut` (exceeded configured timeout), `ContainerError(message)` (Docker-level failure — image not found, daemon unavailable, etc.), `UsageLimited(resetsAt)` (worker hit a *time-based* Anthropic API usage limit — session, weekly, or Opus quota — carrying a parseable reset time; token `usage_limited`), `CreditsExhausted` (worker hit a *money-based* 429 — credit pool empty, org monthly spend limit reached, or the CLI ≥ 2.1.119 regression — carrying no reset time; token `credits_exhausted`; summary `"Credits exhausted"`, which deliberately shares no prefix with the usage-limit summary so the auto-resume `LIKE 'Usage limit reached%'` sweep cannot catch it; blocks the account's spend indefinitely until an operator resumes), `WorkerBootstrapFailed(detail)` (pre-task failure — the worker container died during entrypoint bootstrap, before `claude` ran; carries a short, secret-redacted diagnostic `Detail` with the failed stage and error tail), `AuthInvalid` (the worker's Claude credentials were rejected — `api_error_status == 401` or `error.type == "authentication_error"`; triggers the auth-invalid pause), `TransientApiError` (a transient Anthropic API fault the run neither caused nor can fix — `api_error_status` in the 5xx range, or `is_error: true` with `api_error_status: null` and a `result` matching a known transient phrase such as a mid-response connection drop or `529 Overloaded`; token `transient_api_error`; drives the bounded auto-retry described under Transient Retry), `ProviderError(message)` (a provider API call needed to start the run failed, e.g. branch pre-creation rejected with 403; raised before the worker task begins).
+
+## FailureCategory
+
+A stable token on the failed-issue states (`FailedIssue`, `ContinuableFailedIssue`, `RevisionFailedIssue`) naming *why* the run failed.
+Flattened from the Workers module's `FailureReason` variant via `CategoryToken` so it survives the outbox boundary as a plain `TEXT` column and stays SQL-filterable — `TransientRetryService` selects on it directly rather than rehydrating the value object.
+Drives category-conditional recovery: `transient_api_error` is the discriminator for the bounded auto-retry described under Transient Retry.
+Values are `FailureReason`'s nine category tokens, plus `pr_closed`, which the Issues module mints directly in `ProviderPullRequestClosedHandler` when a PR is closed without merge and is not a `FailureReason` variant. The vocabulary therefore has two producers and no single owning type.
+The `WorkerRunFailed` contract declares `Category` nullable, so `WorkerRunFailedHandler` coalesces a missing value to the empty string — no live producer emits null, but an empty category is representable.
 
 ## Usage Limit
 
