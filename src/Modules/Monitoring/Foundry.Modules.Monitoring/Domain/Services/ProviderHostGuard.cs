@@ -119,8 +119,20 @@ internal sealed class ProviderHostGuard(
             return true;
         }
 
+        // 192.0.0.0/24 — IETF protocol assignments (RFC 6890)
+        if (bytes[0] == 192 && bytes[1] == 0 && bytes[2] == 0)
+        {
+            return true;
+        }
+
         // 192.0.2.0/24 — TEST-NET-1 (RFC 5737)
         if (bytes[0] == 192 && bytes[1] == 0 && bytes[2] == 2)
+        {
+            return true;
+        }
+
+        // 198.18.0.0/15 — benchmarking (RFC 2544): 198.18.x.x through 198.19.x.x
+        if (bytes[0] == 198 && bytes[1] >= 18 && bytes[1] <= 19)
         {
             return true;
         }
@@ -166,6 +178,24 @@ internal sealed class ProviderHostGuard(
         // fc00::/7 — IPv6 unique-local (covers fc00:: through fdff::)
         // First byte has top 7 bits equal to 0b1111110 (0xfc or 0xfd)
         if ((bytes[0] & 0xfe) == 0xfc)
+        {
+            return true;
+        }
+
+        // 64:ff9b::/96 — NAT64 well-known prefix (RFC 6146/7050)
+        // First 12 bytes: 00 64 ff 9b 00 00 00 00 00 00 00 00
+        if (bytes[0] == 0x00 && bytes[1] == 0x64 &&
+            bytes[2] == 0xff && bytes[3] == 0x9b &&
+            bytes[4] == 0 && bytes[5] == 0 &&
+            bytes[6] == 0 && bytes[7] == 0 &&
+            bytes[8] == 0 && bytes[9] == 0 &&
+            bytes[10] == 0 && bytes[11] == 0)
+        {
+            return true;
+        }
+
+        // 2002::/16 — 6to4 (RFC 3056)
+        if (bytes[0] == 0x20 && bytes[1] == 0x02)
         {
             return true;
         }

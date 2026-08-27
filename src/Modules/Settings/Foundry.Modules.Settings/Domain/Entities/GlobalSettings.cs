@@ -208,12 +208,12 @@ public sealed class GlobalSettings : AggregateRoot<GlobalSettingsId>
 
         foreach (string host in hosts)
         {
-            if (string.IsNullOrWhiteSpace(host))
-            {
-                return SettingsErrors.InvalidProviderHost(host);
-            }
+            string trimmed = (host ?? string.Empty).Trim();
 
-            string trimmed = host.Trim();
+            if (string.IsNullOrWhiteSpace(trimmed))
+            {
+                return SettingsErrors.InvalidProviderHost(trimmed);
+            }
 
             if (trimmed.EndsWith('.'))
             {
@@ -236,6 +236,11 @@ public sealed class GlobalSettings : AggregateRoot<GlobalSettingsId>
             }
 
             if (trimmed.Contains(':', StringComparison.Ordinal))
+            {
+                return SettingsErrors.InvalidProviderHost(trimmed);
+            }
+
+            if (trimmed.Any(char.IsWhiteSpace))
             {
                 return SettingsErrors.InvalidProviderHost(trimmed);
             }

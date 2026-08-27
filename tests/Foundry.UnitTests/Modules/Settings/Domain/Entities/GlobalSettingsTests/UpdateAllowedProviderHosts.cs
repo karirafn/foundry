@@ -256,4 +256,51 @@ public sealed class UpdateAllowedProviderHosts
         // Assert
         result.IsSuccess.ShouldBeTrue();
     }
+
+    [Fact]
+    public void WhenListExceedsMaxCount_DoesNotUpdateState()
+    {
+        // Arrange
+        GlobalSettings settings = GlobalSettings.Create();
+        settings.UpdateAllowedProviderHosts(["git.example.com"]);
+        IReadOnlyList<string> hosts = Enumerable
+            .Range(1, GlobalSettings.MaxAllowedProviderHostCount + 1)
+            .Select(i => $"host{i}.example.com")
+            .ToList();
+
+        // Act
+        settings.UpdateAllowedProviderHosts(hosts);
+
+        // Assert
+        settings.AllowedProviderHosts.ShouldBe(["git.example.com"]);
+    }
+
+    [Fact]
+    public void WhenHostExceedsMaxLength_DoesNotUpdateState()
+    {
+        // Arrange
+        GlobalSettings settings = GlobalSettings.Create();
+        settings.UpdateAllowedProviderHosts(["git.example.com"]);
+        string overLongHost = new('a', GlobalSettings.MaxProviderHostLength + 1);
+
+        // Act
+        settings.UpdateAllowedProviderHosts([overLongHost]);
+
+        // Assert
+        settings.AllowedProviderHosts.ShouldBe(["git.example.com"]);
+    }
+
+    [Fact]
+    public void WhenHostContainsEmbeddedWhitespace_ReturnsInvalidProviderHostError()
+    {
+        // Arrange
+        GlobalSettings settings = GlobalSettings.Create();
+
+        // Act
+        Result result = settings.UpdateAllowedProviderHosts(["git.example .com"]);
+
+        // Assert
+        Result.Failure failure = result.ShouldBeOfType<Result.Failure>();
+        failure.Error.Code.ShouldBe(SettingsErrors.InvalidProviderHostCode);
+    }
 }

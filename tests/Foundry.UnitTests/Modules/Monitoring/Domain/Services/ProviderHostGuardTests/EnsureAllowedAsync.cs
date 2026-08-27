@@ -398,4 +398,98 @@ public sealed class EnsureAllowedAsync
         failure.Error.Code.ShouldBe("ProviderHost.ResolvesToPrivateAddress");
     }
 
+    [Fact]
+    public async Task WhenAllowedHostResolvesToCgnatLowerBoundary_100_63_255_255_ReturnsOk()
+    {
+        // Arrange — 100.63.255.255 is just BELOW CGNAT (100.64.0.0/10); must be allowed
+        ProviderHostGuard sut = BuildGuard(
+            resolver: new FakeHostAddressResolver()
+                .WithAddresses("github.com", IPAddress.Parse("100.63.255.255")));
+
+        // Act
+        Result result = await sut.EnsureAllowedAsync(GitHubBaseUrl(), TestContext.Current.CancellationToken);
+
+        // Assert
+        result.IsSuccess.ShouldBeTrue();
+    }
+
+    [Fact]
+    public async Task WhenAllowedHostResolvesToCgnatUpperBoundary_100_128_0_0_ReturnsOk()
+    {
+        // Arrange — 100.128.0.0 is just ABOVE CGNAT (100.64.0.0/10 ends at 100.127.255.255); must be allowed
+        ProviderHostGuard sut = BuildGuard(
+            resolver: new FakeHostAddressResolver()
+                .WithAddresses("github.com", IPAddress.Parse("100.128.0.0")));
+
+        // Act
+        Result result = await sut.EnsureAllowedAsync(GitHubBaseUrl(), TestContext.Current.CancellationToken);
+
+        // Assert
+        result.IsSuccess.ShouldBeTrue();
+    }
+
+    [Fact]
+    public async Task WhenAllowedHostResolvesToNat64_64_ff9b_x_ReturnsPrivateAddress()
+    {
+        // Arrange — 64:ff9b::0a00:0001 is the NAT64 translation of 10.0.0.1 (RFC 6146/7050)
+        ProviderHostGuard sut = BuildGuard(
+            resolver: new FakeHostAddressResolver()
+                .WithAddresses("github.com", IPAddress.Parse("64:ff9b::0a00:0001")));
+
+        // Act
+        Result result = await sut.EnsureAllowedAsync(GitHubBaseUrl(), TestContext.Current.CancellationToken);
+
+        // Assert
+        Result.Failure failure = result.ShouldBeOfType<Result.Failure>();
+        failure.Error.Code.ShouldBe("ProviderHost.ResolvesToPrivateAddress");
+    }
+
+    [Fact]
+    public async Task WhenAllowedHostResolvesToSixToFour_2002_x_ReturnsPrivateAddress()
+    {
+        // Arrange — 2002::1 is in the 6to4 prefix (2002::/16, RFC 3056)
+        ProviderHostGuard sut = BuildGuard(
+            resolver: new FakeHostAddressResolver()
+                .WithAddresses("github.com", IPAddress.Parse("2002::1")));
+
+        // Act
+        Result result = await sut.EnsureAllowedAsync(GitHubBaseUrl(), TestContext.Current.CancellationToken);
+
+        // Assert
+        Result.Failure failure = result.ShouldBeOfType<Result.Failure>();
+        failure.Error.Code.ShouldBe("ProviderHost.ResolvesToPrivateAddress");
+    }
+
+    [Fact]
+    public async Task WhenAllowedHostResolvesToRfc2544Benchmarking_198_18_x_ReturnsPrivateAddress()
+    {
+        // Arrange — 198.18.0.1 is in 198.18.0.0/15 (RFC 2544 benchmarking)
+        ProviderHostGuard sut = BuildGuard(
+            resolver: new FakeHostAddressResolver()
+                .WithAddresses("github.com", IPAddress.Parse("198.18.0.1")));
+
+        // Act
+        Result result = await sut.EnsureAllowedAsync(GitHubBaseUrl(), TestContext.Current.CancellationToken);
+
+        // Assert
+        Result.Failure failure = result.ShouldBeOfType<Result.Failure>();
+        failure.Error.Code.ShouldBe("ProviderHost.ResolvesToPrivateAddress");
+    }
+
+    [Fact]
+    public async Task WhenAllowedHostResolvesToRfc6890IetfProtocol_192_0_0_x_ReturnsPrivateAddress()
+    {
+        // Arrange — 192.0.0.1 is in 192.0.0.0/24 (RFC 6890 IETF protocol assignments)
+        ProviderHostGuard sut = BuildGuard(
+            resolver: new FakeHostAddressResolver()
+                .WithAddresses("github.com", IPAddress.Parse("192.0.0.1")));
+
+        // Act
+        Result result = await sut.EnsureAllowedAsync(GitHubBaseUrl(), TestContext.Current.CancellationToken);
+
+        // Assert
+        Result.Failure failure = result.ShouldBeOfType<Result.Failure>();
+        failure.Error.Code.ShouldBe("ProviderHost.ResolvesToPrivateAddress");
+    }
+
 }
