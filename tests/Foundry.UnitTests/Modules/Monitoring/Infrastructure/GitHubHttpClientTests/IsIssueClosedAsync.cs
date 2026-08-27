@@ -1,6 +1,5 @@
 using System.Net;
 
-using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Infrastructure;
 using Foundry.Modules.Monitoring.Infrastructure.GitHub;
@@ -8,12 +7,13 @@ using Foundry.Shared;
 using Foundry.Testing;
 using Foundry.UnitTests.Modules.Monitoring.Infrastructure;
 
-using Shouldly;
-
-using Xunit;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
+
+using Shouldly;
+
+using Xunit;
 
 namespace Foundry.UnitTests.Modules.Monitoring.Infrastructure.GitHubHttpClientTests;
 
@@ -24,14 +24,28 @@ public sealed class IsIssueClosedAsync
     private static RepositorySlug ValidSlug =>
         RepositorySlug.Create("owner/repo").ValueOrThrow();
 
+    private static GitHubHttpClient BuildSut(FakeHandler handler) =>
+        new(
+            new HttpClient(handler),
+            NullLogger<GitHubHttpClient>.Instance,
+            new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))));
+
     [Fact]
     public async Task WhenGitHubReturnsClosedState_ReturnsTrue()
     {
         // Arrange
-        string json = """{ "number": 42, "state": "closed" }""";
+        string json = """
+            {
+              "data": {
+                "rateLimit": { "cost": 1, "remaining": 4999 },
+                "repository": {
+                  "issue": { "state": "CLOSED" }
+                }
+              }
+            }
+            """;
         FakeHandler handler = new(HttpStatusCode.OK, json);
-        using HttpClient httpClient = new(handler);
-        GitHubHttpClient sut = new(httpClient, NullLogger<GitHubHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))));
+        GitHubHttpClient sut = BuildSut(handler);
 
         // Act
         Result<bool> result = await sut.IsIssueClosedAsync(
@@ -51,10 +65,18 @@ public sealed class IsIssueClosedAsync
     public async Task WhenGitHubReturnsOpenState_ReturnsFalse()
     {
         // Arrange
-        string json = """{ "number": 42, "state": "open" }""";
+        string json = """
+            {
+              "data": {
+                "rateLimit": { "cost": 1, "remaining": 4999 },
+                "repository": {
+                  "issue": { "state": "OPEN" }
+                }
+              }
+            }
+            """;
         FakeHandler handler = new(HttpStatusCode.OK, json);
-        using HttpClient httpClient = new(handler);
-        GitHubHttpClient sut = new(httpClient, NullLogger<GitHubHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))));
+        GitHubHttpClient sut = BuildSut(handler);
 
         // Act
         Result<bool> result = await sut.IsIssueClosedAsync(
@@ -76,8 +98,7 @@ public sealed class IsIssueClosedAsync
         // Arrange
         FakeHandler handler = new(HttpStatusCode.Forbidden, string.Empty);
         handler.ResponseHeaders["X-RateLimit-Remaining"] = "0";
-        using HttpClient httpClient = new(handler);
-        GitHubHttpClient sut = new(httpClient, NullLogger<GitHubHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))));
+        GitHubHttpClient sut = BuildSut(handler);
 
         // Act
         Result<bool> result = await sut.IsIssueClosedAsync(
@@ -94,12 +115,17 @@ public sealed class IsIssueClosedAsync
     }
 
     [Fact]
-    public async Task WhenGitHubReturns404_ReturnsUnexpectedStatusCodeError()
+    public async Task WhenGraphQlReturnsRateLimitedError_ReturnsRateLimitError()
     {
         // Arrange
-        FakeHandler handler = new(HttpStatusCode.NotFound, string.Empty);
-        using HttpClient httpClient = new(handler);
-        GitHubHttpClient sut = new(httpClient, NullLogger<GitHubHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))));
+        string json = """
+            {
+              "data": null,
+              "errors": [{ "message": "API rate limit exceeded", "type": "RATE_LIMITED" }]
+            }
+            """;
+        FakeHandler handler = new(HttpStatusCode.OK, json);
+        GitHubHttpClient sut = BuildSut(handler);
 
         // Act
         Result<bool> result = await sut.IsIssueClosedAsync(
@@ -112,7 +138,7 @@ public sealed class IsIssueClosedAsync
         // Assert
         result.IsFailure.ShouldBeTrue();
         Result<bool>.Failure failure = result.ShouldBeOfType<Result<bool>.Failure>();
-        failure.Error.Message.ShouldContain("404");
+        failure.Error.Code.ShouldBe("GitHub.RateLimitExhausted");
     }
 
     [Fact]
@@ -120,8 +146,7 @@ public sealed class IsIssueClosedAsync
     {
         // Arrange
         FakeHandler handler = new(HttpStatusCode.OK, "{}");
-        using HttpClient httpClient = new(handler);
-        GitHubHttpClient sut = new(httpClient, NullLogger<GitHubHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))));
+        GitHubHttpClient sut = BuildSut(handler);
         Uri invalidBaseUrl = new("ftp://api.github.com");
 
         // Act
@@ -139,13 +164,21 @@ public sealed class IsIssueClosedAsync
     }
 
     [Fact]
-    public async Task WhenCalled_UsesCorrectEndpointUrl()
+    public async Task WhenCalled_PostsToGraphQlEndpoint()
     {
         // Arrange
-        string json = """{ "number": 42, "state": "open" }""";
+        string json = """
+            {
+              "data": {
+                "rateLimit": { "cost": 1, "remaining": 4999 },
+                "repository": {
+                  "issue": { "state": "OPEN" }
+                }
+              }
+            }
+            """;
         FakeHandler handler = new(HttpStatusCode.OK, json);
-        using HttpClient httpClient = new(handler);
-        GitHubHttpClient sut = new(httpClient, NullLogger<GitHubHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))));
+        GitHubHttpClient sut = BuildSut(handler);
 
         // Act
         await sut.IsIssueClosedAsync(ValidBaseUrl, ValidSlug, issueNumber: 42, token: "ghp_token", CancellationToken.None);
@@ -153,6 +186,33 @@ public sealed class IsIssueClosedAsync
         // Assert
         HttpRequestMessage request = handler.LastRequest.ShouldNotBeNull();
         request.RequestUri.ShouldNotBeNull();
-        request.RequestUri.AbsolutePath.ShouldBe("/repos/owner/repo/issues/42");
+        request.RequestUri.AbsolutePath.ShouldBe("/graphql");
+        request.Method.ShouldBe(HttpMethod.Post);
+    }
+
+    [Fact]
+    public async Task WhenCalled_RequestBodyContainsIssueNumber()
+    {
+        // Arrange
+        string json = """
+            {
+              "data": {
+                "rateLimit": { "cost": 1, "remaining": 4999 },
+                "repository": {
+                  "issue": { "state": "OPEN" }
+                }
+              }
+            }
+            """;
+        FakeHandler handler = new(HttpStatusCode.OK, json);
+        GitHubHttpClient sut = BuildSut(handler);
+
+        // Act
+        await sut.IsIssueClosedAsync(ValidBaseUrl, ValidSlug, issueNumber: 42, token: "ghp_token", CancellationToken.None);
+
+        // Assert
+        string body = handler.LastRequestBody.ShouldNotBeNull();
+        body.ShouldContain("42");
+        body.ShouldContain("rateLimit");
     }
 }

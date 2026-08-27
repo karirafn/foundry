@@ -7,11 +7,25 @@ namespace Foundry.Modules.Monitoring.Infrastructure.GitHub;
 
 internal sealed class GitHubIssueProvider(GitHubHttpClient httpClient, string token, Uri apiBaseUrl) : IIssueProvider
 {
-    public Task<Result<IssueListing>> GetIssuesAsync(
+    // Per-poll cache: populated by GetIssuesAsync; null until the first call.
+    // Lives on the instance because GitHubIssueProvider is newed per poll cycle.
+    private Dictionary<int, IReadOnlyList<int>>? _blockedByByIssueNumber;
+
+    public async Task<Result<IssueListing>> GetIssuesAsync(
         RepositorySlug slug,
         CancellationToken cancellationToken)
     {
-        return httpClient.GetIssuesAsync(apiBaseUrl, slug, token, cancellationToken);
+        Result<IssueListingWithDependencies> result = await httpClient.GetIssuesWithDependenciesAsync(
+            apiBaseUrl, slug, token, cancellationToken);
+
+        if (result is not Result<IssueListingWithDependencies>.Success success)
+        {
+            Error error = ((Result<IssueListingWithDependencies>.Failure)result).Error;
+            return Result<IssueListing>.Fail(error);
+        }
+
+        _blockedByByIssueNumber = new Dictionary<int, IReadOnlyList<int>>(success.Value.BlockedBy);
+        return Result<IssueListing>.Ok(success.Value.Listing);
     }
 
     public Task<Result<IReadOnlyList<int>>> GetDependenciesAsync(
@@ -19,7 +33,19 @@ internal sealed class GitHubIssueProvider(GitHubHttpClient httpClient, string to
         int issueNumber,
         CancellationToken cancellationToken)
     {
-        return httpClient.GetDependenciesAsync(apiBaseUrl, slug, issueNumber, token, cancellationToken);
+        if (_blockedByByIssueNumber is null)
+        {
+            // No issue fetch this instance — fall back to REST for defensive correctness.
+            return httpClient.GetDependenciesAsync(apiBaseUrl, slug, issueNumber, token, cancellationToken);
+        }
+
+        if (_blockedByByIssueNumber.TryGetValue(issueNumber, out IReadOnlyList<int>? blockers))
+        {
+            return Task.FromResult(Result<IReadOnlyList<int>>.Ok(blockers));
+        }
+
+        // Issue was fetched but had no same-repo non-closed blockers.
+        return Task.FromResult(Result<IReadOnlyList<int>>.Ok((IReadOnlyList<int>)[]));
     }
 
     public Task<Result<bool>> IsIssueClosedAsync(

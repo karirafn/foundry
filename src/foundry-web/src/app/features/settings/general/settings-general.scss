@@ -150,6 +150,7 @@
   &__switch-error {
     color: var(--fd-text-error);
     font-size: 0.875rem;
+    overflow-wrap: break-word;
   }
 
   &__save-success {
@@ -305,7 +306,8 @@
   &__oauth-section,
   &__prompts-form,
   &__image-form,
-  &__dispatch-form {
+  &__dispatch-form,
+  &__hosts-form {
     display: flex;
     flex-direction: column;
     gap: var(--fd-spacing-md);
