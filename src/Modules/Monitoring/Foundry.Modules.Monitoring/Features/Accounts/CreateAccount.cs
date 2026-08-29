@@ -95,9 +95,9 @@ internal static partial class CreateAccount
             public CredentialCreationResult Value { get; } = value;
         }
 
-        internal sealed class Conflict(NamespaceConflictResponse conflicts) : Outcome
+        internal sealed class Conflict(IReadOnlyList<NamespaceConflict> conflicts) : Outcome
         {
-            public NamespaceConflictResponse Conflicts { get; } = conflicts;
+            public IReadOnlyList<NamespaceConflict> Conflicts { get; } = conflicts;
         }
 
         internal sealed class InvalidTakeover(TakeoverValidationResponse invalid) : Outcome
@@ -325,7 +325,7 @@ internal static partial class CreateAccount
             else if (conflicts.Count > 0)
             {
                 // Conflicts present and no takeover requested — return structured 409
-                return new Outcome.Conflict(new NamespaceConflictResponse(conflicts));
+                return new Outcome.Conflict(conflicts);
             }
             else
             {
@@ -491,9 +491,17 @@ internal static partial class CreateAccount
                                 $"/api/accounts/{created.Value.Credential.Id}",
                                 created.Value),
                         Outcome.Conflict conflict =>
-                            (IResult)TypedResults.Conflict(conflict.Conflicts),
+                            (IResult)TypedResults.Conflict(
+                                new CreateAccountConflictResponse(
+                                    CreateAccountConflictReason.NamespaceConflict,
+                                    "One or more derived namespaces are already claimed by other accounts.",
+                                    conflict.Conflicts)),
                         Outcome.Duplicate duplicate =>
-                            TypedResults.Conflict(duplicate.Error.Message),
+                            TypedResults.Conflict(
+                                new CreateAccountConflictResponse(
+                                    CreateAccountConflictReason.DuplicateAccount,
+                                    duplicate.Error.Message,
+                                    [])),
                         Outcome.InvalidTakeover invalid =>
                             TypedResults.UnprocessableEntity(invalid.Invalid),
                         Outcome.Failure failure => TypedResults.BadRequest(failure.Error.Message),
@@ -503,7 +511,7 @@ internal static partial class CreateAccount
                 .WithName("CreateAccount")
                 .WithSummary("Creates a new account")
                 .Produces<CredentialCreationResult>(StatusCodes.Status201Created)
-                .Produces<NamespaceConflictResponse>(StatusCodes.Status409Conflict)
+                .Produces<CreateAccountConflictResponse>(StatusCodes.Status409Conflict)
                 .Produces<TakeoverValidationResponse>(StatusCodes.Status422UnprocessableEntity)
                 .Produces<string>(StatusCodes.Status400BadRequest);
         }

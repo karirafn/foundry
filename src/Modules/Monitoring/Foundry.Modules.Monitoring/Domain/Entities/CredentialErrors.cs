@@ -57,4 +57,16 @@ internal static class CredentialErrors
     internal static readonly Error RateLimitExhausted =
         new(RateLimitExhaustedCode,
             "GitHub API rate limit reached while verifying write access; wait and retry.");
+
+    internal const string NamespaceClaimedElsewhereCode = "Credential.NamespaceClaimedElsewhere";
+
+    internal static Error NamespaceClaimedElsewhere(IReadOnlyList<NamespaceConflict> conflicts)
+    {
+        string holderList = string.Join(
+            ", ",
+            conflicts.Select(c => $"{c.Namespace} (held by {c.HolderName})"));
+        return new Error(
+            NamespaceClaimedElsewhereCode,
+            $"Cannot rotate token: all derived namespaces are claimed by other accounts — {holderList}.");
+    }
 }

@@ -2,7 +2,6 @@ using System.Net;
 using System.Net.Http.Json;
 
 using Foundry.Modules.Monitoring.Contracts;
-using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Modules.Monitoring.Features.Accounts.Tokens;
 using Foundry.Modules.Monitoring.Infrastructure;
 using Foundry.Modules.Monitoring.Infrastructure.GitHub;
@@ -21,19 +20,22 @@ using Xunit;
 namespace Foundry.IntegrationTests.Modules.Monitoring.Endpoints.CreateAccountTests;
 
 /// <summary>
-/// Verifies that submitting a second token whose resolved login matches an existing
-/// account's name, and whose derived namespace intersects that account's claims,
-/// returns a 409 with a CreateAccountConflictResponse body where reason is DuplicateAccount
-/// and Conflicts is empty (duplicate-wins precedence: no takeover offered).
+/// Verifies AC6: when a create request is simultaneously a duplicate-account AND a
+/// namespace-conflict (the namespace is also claimed by others), the duplicate-account
+/// check wins because it runs first in CreateAccount.Handler. The response reason is
+/// DuplicateAccount with an empty Conflicts list — no takeover panel is offered.
 /// </summary>
-public sealed class WhenTokenDuplicatesExistingAccount : IAsyncDisposable
+public sealed class WhenDuplicateAndNamespaceConflictBothApply : IAsyncDisposable
 {
-    // Both tokens resolve to the same account name (same login).
+    // Both tokens resolve to the same account name "octocat" (same login).
+    // Both tokens also derive the same "octocat" namespace — so the second request is:
+    //   - A duplicate account (same login, intersecting namespace)
+    //   - A namespace conflict (namespace already claimed by the first credential)
+    // The handler evaluates duplicate first → DuplicateAccount wins.
     private const string ResolvedAccountName = "octocat";
     private const string FirstToken = "ghp_first_token";
     private const string SecondToken = "ghp_second_token";
 
-    // Both tokens reach the same namespace ("octocat"), so the second is a duplicate.
     private static readonly Dictionary<string, string> TokenToListing = new()
     {
         [FirstToken] = """[{"full_name":"octocat/repo-a","private":false,"permissions":{"push":true}}]""",
@@ -43,7 +45,7 @@ public sealed class WhenTokenDuplicatesExistingAccount : IAsyncDisposable
     private readonly FoundryWebAppFactory _factory;
     private readonly HttpClient _client;
 
-    public WhenTokenDuplicatesExistingAccount()
+    public WhenDuplicateAndNamespaceConflictBothApply()
     {
         _factory = FoundryWebAppFactory.WithOverrides(services =>
         {
@@ -55,7 +57,6 @@ public sealed class WhenTokenDuplicatesExistingAccount : IAsyncDisposable
                     [SecondToken] = ResolvedAccountName,
                 }));
 
-            // Both tokens return listings under the same "octocat" namespace.
             services.RemoveAll<GitHubHttpClient>();
             services.AddSingleton(
                 new GitHubHttpClient(
@@ -73,9 +74,9 @@ public sealed class WhenTokenDuplicatesExistingAccount : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenSecondTokenDuplicatesExistingAccountLogin_Returns409WithDuplicateAccountReason()
+    public async Task WhenRequestIsBothDuplicateAndNamespaceConflict_Returns409WithDuplicateAccountReasonAndEmptyConflicts()
     {
-        // Arrange — create the first account; it claims "octocat".
+        // Arrange — create the first account; it claims "octocat" under account name "octocat".
         object firstBody = new
         {
             providerType = "github",
@@ -90,7 +91,9 @@ public sealed class WhenTokenDuplicatesExistingAccount : IAsyncDisposable
 
         firstResponse.StatusCode.ShouldBe(HttpStatusCode.Created);
 
-        // Act — submit a second token that resolves to the same login and namespace.
+        // Act — submit a second token that resolves to the SAME login ("octocat") and derives
+        // the SAME namespace ("octocat"). This is simultaneously a duplicate-account and
+        // a namespace-conflict. The duplicate check runs first → DuplicateAccount wins.
         object secondBody = new
         {
             providerType = "github",
@@ -103,7 +106,7 @@ public sealed class WhenTokenDuplicatesExistingAccount : IAsyncDisposable
             secondBody,
             TestContext.Current.CancellationToken);
 
-        // Assert — 409 with reason DuplicateAccount, empty Conflicts (duplicate wins; no takeover offered)
+        // Assert — reason is DuplicateAccount (duplicate wins), Conflicts is empty (no takeover offered)
         response.StatusCode.ShouldBe(HttpStatusCode.Conflict);
 
         CreateAccountConflictResponse? body = await response.Content

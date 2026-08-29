@@ -1,4 +1,3 @@
-using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Shared;
 
@@ -22,11 +21,11 @@ internal abstract class TokenResolution
 
     /// <summary>
     /// The token's entire derived namespace set is already fully claimed by other credentials.
-    /// The caller should surface a conflict response rather than proceeding with rotation.
+    /// The error carries the server-composed message naming each namespace and its holder.
     /// </summary>
-    internal sealed class ClaimedElsewhere(NamespaceClaimedElsewhereResponse response) : TokenResolution
+    internal sealed class ClaimedElsewhere(Error error) : TokenResolution
     {
-        public NamespaceClaimedElsewhereResponse Response { get; } = response;
+        public Error Error { get; } = error;
     }
 
     /// <summary>Token validation or namespace derivation failed; the error carries the reason.</summary>

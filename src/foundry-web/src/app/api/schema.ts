@@ -571,6 +571,13 @@ export interface components {
             /** Format: date-time */
             nextProbeAt: null | string;
         };
+        /** @enum {unknown} */
+        CreateAccountConflictReason: "DuplicateAccount" | "NamespaceConflict";
+        CreateAccountConflictResponse: {
+            reason: components["schemas"]["CreateAccountConflictReason"];
+            message: string;
+            conflicts: components["schemas"]["NamespaceConflict"][];
+        };
         CreateAccountRequestBody: {
             providerType: string;
             baseUrl: string;
@@ -688,17 +695,11 @@ export interface components {
             /** Format: int32 */
             position: number | string;
         };
-        NamespaceClaimedElsewhereResponse: {
-            claimedNamespaces: components["schemas"]["NamespaceConflict"][];
-        };
         NamespaceConflict: {
             namespace: string;
             /** Format: uuid */
             holderCredentialId: string;
             holderName: string;
-        };
-        NamespaceConflictResponse: {
-            conflicts: components["schemas"]["NamespaceConflict"][];
         };
         PagedIssues: {
             items: components["schemas"]["IssueSummary"][];
@@ -792,6 +793,12 @@ export interface components {
             isExhausted: boolean;
             /** Format: date-time */
             nextAttemptDueAt: null | string;
+        };
+        /** @enum {unknown} */
+        UpdateAccountConflictReason: "ClaimedElsewhere" | "DuplicateNamespace" | "DuplicateAccount";
+        UpdateAccountConflictResponse: {
+            reason: components["schemas"]["UpdateAccountConflictReason"];
+            message: string;
         };
         UpdateAccountRequestBody: {
             baseUrl: string;
@@ -1275,7 +1282,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["NamespaceConflictResponse"];
+                    "application/json": components["schemas"]["CreateAccountConflictResponse"];
                 };
             };
             /** @description Unprocessable Entity */
@@ -1337,7 +1344,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["NamespaceClaimedElsewhereResponse"];
+                    "application/json": components["schemas"]["UpdateAccountConflictResponse"];
                 };
             };
         };

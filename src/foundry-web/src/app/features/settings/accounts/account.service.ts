@@ -2,7 +2,7 @@ import { Injectable, Signal, WritableSignal, effect, inject, signal } from '@ang
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { TimeoutError, firstValueFrom } from 'rxjs';
 import { timeout } from 'rxjs/operators';
-import { AccountSummary, AffectedRepository, CreateAccountRequest, CredentialCreationResult, CredentialUpdateResult, NamespaceClaimedElsewhereResponse, NamespaceConflict, NamespaceConflictResponse, ProviderType, TakeoverValidationResponse, TokenRequirements, TokenValidationResult, UpdateAccountRequest, ValidateTokenRequest } from './account.model';
+import { AccountSummary, AffectedRepository, CreateAccountConflictResponse, CreateAccountRequest, CredentialCreationResult, CredentialUpdateResult, NamespaceConflict, ProviderType, TakeoverValidationResponse, TokenRequirements, TokenValidationResult, UpdateAccountConflictResponse, UpdateAccountRequest, ValidateTokenRequest } from './account.model';
 import { ToastService } from '../../../core/services/toast.service';
 import { AccountPresenceService } from '../../../core/services/account-presence.service';
 
@@ -117,16 +117,21 @@ export class AccountService {
         error: (err: HttpErrorResponse | TimeoutError) => {
           console.error(err);
           if (!(err instanceof TimeoutError)) {
-            // Guard is shape-based (not status-based) by design: a bare-string 409 (e.g. duplicate-account) returns
-            // false from _isNamespaceConflictResponse and falls through to _extractErrorMessage. Refactoring to branch
-            // on err.status === 409 alone would silently swallow that plain-string body.
-            if (err.status === 409 && this._isNamespaceConflictResponse(err.error)) {
-              const conflictBody = err.error as NamespaceConflictResponse;
-              this._conflictsSignal.set(conflictBody.conflicts);
-              this._srAnnouncementSignal.set(
-                `${conflictBody.conflicts.length} namespace conflict${conflictBody.conflicts.length === 1 ? '' : 's'} — select namespaces to transfer and retry.`
-              );
+            if (err.status === 409) {
+              const body = err.error as CreateAccountConflictResponse;
+              if (body?.reason === 'NamespaceConflict' && body?.conflicts?.length > 0) {
+                this._conflictsSignal.set(body.conflicts);
+                this._srAnnouncementSignal.set(
+                  `${body.conflicts.length} namespace conflict${body.conflicts.length === 1 ? '' : 's'} — select namespaces to transfer and retry.`
+                );
+                this._savingSignal.set(false);
+                return;
+              }
+              const message = body?.message ?? this._extractErrorMessage(err);
+              this._saveErrorSignal.set(message);
+              this._srAnnouncementSignal.set(`Could not add account: ${message}`);
               this._savingSignal.set(false);
+              this._saveSuccessSignal.set(false);
               return;
             }
             if (err.status === 422 && this._isTakeoverValidationResponse(err.error)) {
@@ -176,23 +181,14 @@ export class AccountService {
         },
         error: (err: HttpErrorResponse | TimeoutError) => {
           console.error(err);
-          if (!(err instanceof TimeoutError)) {
-            // Guard is shape-based (not status-based) by design: keeps this path
-            // separate from the create-path conflict (NamespaceConflictResponse) and
-            // plain-string 409s. Never sets _conflictsSignal — that would render the
-            // takeover panel, which must only appear on the create path.
-            if (err.status === 409 && this._isClaimedElsewhereResponse(err.error)) {
-              const body = err.error as NamespaceClaimedElsewhereResponse;
-              const holderList = body.claimedNamespaces
-                .map(c => `${c.namespace} (held by ${c.holderName})`)
-                .join(', ');
-              const message = `Cannot rotate token: all derived namespaces are claimed by other accounts — ${holderList}.`;
-              this._saveErrorSignal.set(message);
-              this._srAnnouncementSignal.set(`Could not update account: ${message}`);
-              this._savingSignal.set(false);
-              this._saveSuccessSignal.set(false);
-              return;
-            }
+          if (!(err instanceof TimeoutError) && err.status === 409) {
+            const body = err.error as UpdateAccountConflictResponse;
+            const message = body?.message ?? this._extractErrorMessage(err);
+            this._saveErrorSignal.set(message);
+            this._srAnnouncementSignal.set(`Could not update account: ${message}`);
+            this._savingSignal.set(false);
+            this._saveSuccessSignal.set(false);
+            return;
           }
           const message = this._extractErrorMessage(err);
           this._saveErrorSignal.set(message);
@@ -256,24 +252,6 @@ export class AccountService {
       return err.error;
     }
     return err.message;
-  }
-
-  private _isNamespaceConflictResponse(body: unknown): boolean {
-    return (
-      typeof body === 'object' &&
-      body !== null &&
-      'conflicts' in body &&
-      Array.isArray((body as NamespaceConflictResponse).conflicts)
-    );
-  }
-
-  private _isClaimedElsewhereResponse(body: unknown): boolean {
-    return (
-      typeof body === 'object' &&
-      body !== null &&
-      'claimedNamespaces' in body &&
-      Array.isArray((body as NamespaceClaimedElsewhereResponse).claimedNamespaces)
-    );
   }
 
   private _isTakeoverValidationResponse(body: unknown): boolean {

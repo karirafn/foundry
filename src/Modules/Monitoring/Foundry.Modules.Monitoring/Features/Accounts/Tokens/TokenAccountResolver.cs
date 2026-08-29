@@ -164,7 +164,8 @@ internal sealed class TokenAccountResolver(
                 })
                 .ToList();
 
-            return new TokenResolution.ClaimedElsewhere(new NamespaceClaimedElsewhereResponse(conflicts));
+            Error claimedError = CredentialErrors.NamespaceClaimedElsewhere(conflicts);
+            return new TokenResolution.ClaimedElsewhere(claimedError);
         }
 
         return new TokenResolution.Resolved(resolvedName, derivedNamespaces);

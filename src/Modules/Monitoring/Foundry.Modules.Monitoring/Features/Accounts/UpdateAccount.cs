@@ -74,9 +74,9 @@ internal static partial class UpdateAccount
             public CredentialUpdateResult Value { get; } = value;
         }
 
-        internal sealed class ClaimedElsewhere(NamespaceClaimedElsewhereResponse response) : Outcome
+        internal sealed class ClaimedElsewhere(Error error) : Outcome
         {
-            public NamespaceClaimedElsewhereResponse Response { get; } = response;
+            public Error Error { get; } = error;
         }
 
         internal sealed class Rejected(Error error) : Outcome
@@ -135,7 +135,7 @@ internal static partial class UpdateAccount
 
                 if (resolution is TokenResolution.ClaimedElsewhere claimed)
                 {
-                    return new Outcome.ClaimedElsewhere(claimed.Response);
+                    return new Outcome.ClaimedElsewhere(claimed.Error);
                 }
 
                 if (resolution is not TokenResolution.Resolved resolved)
@@ -231,13 +231,24 @@ internal static partial class UpdateAccount
                     {
                         Outcome.Updated updated =>
                             TypedResults.Ok(updated.Value),
-                        Outcome.ClaimedElsewhere claimedElsewhere =>
-                            (IResult)TypedResults.Conflict(claimedElsewhere.Response),
+                        Outcome.ClaimedElsewhere claimed =>
+                            (IResult)TypedResults.Conflict(
+                                new UpdateAccountConflictResponse(
+                                    UpdateAccountConflictReason.ClaimedElsewhere,
+                                    claimed.Error.Message)),
                         Outcome.Rejected rejected => rejected.Error.Code switch
                         {
                             CredentialErrors.NotFoundCode => (IResult)TypedResults.NotFound(),
-                            CredentialErrors.DuplicateNamespaceCode => TypedResults.Conflict(rejected.Error.Message),
-                            CredentialErrors.DuplicateAccountCode => TypedResults.Conflict(rejected.Error.Message),
+                            CredentialErrors.DuplicateNamespaceCode =>
+                                TypedResults.Conflict(
+                                    new UpdateAccountConflictResponse(
+                                        UpdateAccountConflictReason.DuplicateNamespace,
+                                        rejected.Error.Message)),
+                            CredentialErrors.DuplicateAccountCode =>
+                                TypedResults.Conflict(
+                                    new UpdateAccountConflictResponse(
+                                        UpdateAccountConflictReason.DuplicateAccount,
+                                        rejected.Error.Message)),
                             _ => TypedResults.BadRequest(rejected.Error.Message),
                         },
                         _ => throw new UnreachableException(
@@ -248,7 +259,7 @@ internal static partial class UpdateAccount
                 .WithSummary("Updates an existing account")
                 .Produces<CredentialUpdateResult>()
                 .ProducesProblem(StatusCodes.Status404NotFound)
-                .Produces<NamespaceClaimedElsewhereResponse>(StatusCodes.Status409Conflict)
+                .Produces<UpdateAccountConflictResponse>(StatusCodes.Status409Conflict)
                 .Produces<string>(StatusCodes.Status400BadRequest);
         }
     }

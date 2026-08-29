@@ -28,8 +28,9 @@ namespace Foundry.IntegrationTests.Modules.Monitoring.Endpoints.UpdateAccountTes
 /// <summary>
 /// Verifies the step-3 guard: when a token resolves to a login that is DIFFERENT from the
 /// holder of the claimed namespaces, DuplicateAccount.Find returns null (same-login guard
-/// does not fire) and the fully-claimed-by-others guard fires instead, returning 409 with a
-/// NamespaceClaimedElsewhereResponse body, leaving the rotated account's namespaces intact.
+/// does not fire) and the fully-claimed-by-others guard fires instead, returning 409 with an
+/// UpdateAccountConflictResponse body (reason: ClaimedElsewhere), leaving the rotated
+/// account's namespaces intact. The server composes the message naming the namespace and holder.
 ///
 /// Token routing:
 ///   ghp_first_token   → first-user  (create first account; derives namespace "first-user")
@@ -164,21 +165,17 @@ public sealed class WhenTokenClaimedElsewhereByOtherLogin : IAsyncDisposable
             updateBody,
             TestContext.Current.CancellationToken);
 
-        // Assert — 409 with structured NamespaceClaimedElsewhereResponse
+        // Assert — 409 with UpdateAccountConflictResponse (reason: ClaimedElsewhere)
         response.StatusCode.ShouldBe(HttpStatusCode.Conflict);
 
-        NamespaceClaimedElsewhereResponse? body = await response.Content
-            .ReadFromJsonAsync<NamespaceClaimedElsewhereResponse>(
+        UpdateAccountConflictResponse? body = await response.Content
+            .ReadFromJsonAsync<UpdateAccountConflictResponse>(
                 FoundryWebAppFactory.JsonOptions,
                 TestContext.Current.CancellationToken);
         body.ShouldNotBeNull();
-        body.ClaimedNamespaces.ShouldNotBeEmpty();
-        NamespaceConflict conflict = body.ClaimedNamespaces
-            .ShouldHaveSingleItem();
-        conflict.ShouldSatisfyAllConditions(
-            () => conflict.Namespace.ShouldBe(FirstAccountName),
-            () => conflict.HolderName.ShouldBe(FirstAccountName),
-            () => conflict.HolderCredentialId.ShouldBe(firstId));
+        body.Reason.ShouldBe(UpdateAccountConflictReason.ClaimedElsewhere);
+        // AC7: server composes the message naming namespace and holder — client no longer assembles it
+        body.Message.ShouldContain($"{FirstAccountName} (held by {FirstAccountName})");
 
         // Assert — second account's namespace is unchanged (not stranded on zero)
         using IServiceScope scope = _factory.Services.CreateScope();

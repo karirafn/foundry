@@ -154,8 +154,16 @@ public sealed class WhenDuplicateLoginIntersectsOwner : IAsyncDisposable
             updateBody,
             TestContext.Current.CancellationToken);
 
-        // Assert — same login + intersecting owner namespace → rejected as a duplicate
+        // Assert — same login + intersecting owner namespace → rejected as DuplicateAccount
         response.StatusCode.ShouldBe(HttpStatusCode.Conflict);
+
+        UpdateAccountConflictResponse? body = await response.Content
+            .ReadFromJsonAsync<UpdateAccountConflictResponse>(
+                FoundryWebAppFactory.JsonOptions,
+                TestContext.Current.CancellationToken);
+        body.ShouldNotBeNull();
+        body.Reason.ShouldBe(UpdateAccountConflictReason.DuplicateAccount);
+        body.Message.ShouldContain(FirstAccountName);
     }
 
     [Fact]
