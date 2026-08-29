@@ -3,7 +3,7 @@
 ## Context
 
 GitLab-provider workers install glab but it was never authenticated — `GIT_PAT` was set but no `GITLAB_TOKEN`, and the entrypoint resets `origin` to the PAT-stripped clone URL so `git push` and `glab mr create` could not authenticate.
-This mirrors the GitHub auth wiring introduced in ADR 0016 and issues #163 / #185.
+This mirrors the GitHub auth wiring introduced in [ADR 0016](0016-typed-worker-provider.md) and issues #163 / #185.
 
 ## Decision
 

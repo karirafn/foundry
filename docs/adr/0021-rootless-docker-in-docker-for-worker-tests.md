@@ -12,7 +12,7 @@ Workers run arbitrary repository code, including Testcontainers-based integratio
 Integration-first TDD requires the red-green-refactor loop to run inside the worker, so the daemon must be reachable locally rather than deferred to CI.
 A worker is itself a container running untrusted, model-driven code, so however it reaches a daemon becomes a host-escape surface that must be bounded.
 
-The worker image already gained a `INSTALL_DOCKER` build-arg (ADR 0019 flag plumbing) that installs the Docker engine binaries, but nothing started a daemon and no run-spec allowances existed for one to run nested.
+The worker image already gained a `INSTALL_DOCKER` build-arg ([ADR 0019](0019-worker-image-flags-in-settings.md) flag plumbing) that installs the Docker engine binaries, but nothing started a daemon and no run-spec allowances existed for one to run nested.
 
 ## Decision
 

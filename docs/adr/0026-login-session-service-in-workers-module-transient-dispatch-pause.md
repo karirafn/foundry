@@ -76,7 +76,7 @@ This is an accepted residual risk bounded by the Docker-socket trust boundary: a
 `Docker.DotNet`'s `MultiplexedStream.WriteAsync` does not land on the Windows npipe transport — bytes written to the exec's stdin stream never reach the container.
 The env-var approach was the spike-proven cross-platform design from the outset.
 
-Accepted residual risks (unchanged from ADR 0024):
+Accepted residual risks (unchanged from [ADR 0024](0024-delegate-claude-credential-lifecycle-to-claude-code.md)):
 
 - The seeded `.credentials.json` sits in plaintext inside the Docker-managed credential volume, consistent with how the Claude Code CLI stores credentials locally on the host.
 - Foundry operates within the Docker socket trust boundary; any process with access to the Docker socket can read the credential volume.

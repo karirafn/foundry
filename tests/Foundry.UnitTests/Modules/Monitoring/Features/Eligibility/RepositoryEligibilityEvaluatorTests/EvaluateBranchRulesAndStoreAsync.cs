@@ -167,7 +167,7 @@ public sealed class EvaluateBranchRulesAndStoreAsync
     [Fact]
     public async Task WhenVerdictIsGranted_AndBranchProtectionPasses_SetsEligibilityToEligible()
     {
-        // Arrange — auto-heal: stored Granted + passing ruleset → Eligible without any probe (ADR-0013)
+        // Arrange — auto-heal: stored Granted + passing ruleset → Eligible without any probe (ADR 0013)
         MonitoredRepository repo = CreateRepo(verdict: new WriteProbeVerdict.Granted());
         BranchProtection protection = new("main", RejectDirectPushes: true, RejectForcePushes: true, RejectDeletion: true);
         GitHubCredential credential = GitHubCredential.Create(

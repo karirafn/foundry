@@ -1,7 +1,7 @@
 # Repository-Level Eligibility Instead of Per-Issue Ineligible State
 
 > **Partially superseded.** The "branch-protection check runs every cycle" clause applies to the
-> branch-rules GET only. The write-probe half is superseded by ADR 0054, which makes write probes
+> branch-rules GET only. The write-probe half is superseded by [ADR 0054](0054-split-eligibility-cadence.md), which makes write probes
 > event-triggered (repository add, manual re-check, credential update) and persists the last
 > verdict as `WriteProbeVerdict` on `MonitoredRepository`.
 

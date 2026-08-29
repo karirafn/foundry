@@ -8,7 +8,7 @@ The dispatch seam — the `ClaimedIssueDispatch` payload carried through the `Is
 - `BranchName: string` on `ClaimedIssueDispatch`, re-parsed at each consumer.
 - `RevisionContext? Revision` and `ContinuationContext? Continuation` as a nullable pair, making it representable (and indistinguishable from code) to have both set simultaneously or neither set.
 
-The string discriminator on `RepositoryDispatchInfo` was justified in ADR 0016 with "EF cannot instantiate abstract records inside `Select`".
+The string discriminator on `RepositoryDispatchInfo` was justified in [ADR 0016](0016-typed-worker-provider.md) with "EF cannot instantiate abstract records inside `Select`".
 That rationale does not apply: `RepositoryDispatchQueries.GetDispatchInfoAsync` materialises its result with `FirstOrDefaultAsync` and constructs the `RepositoryDispatchInfo` record by hand — there is no `Select`.
 
 The nullable pair for dispatch context means the handler must defensively check both fields, and adding a third context kind (e.g., an amendment run) requires yet another nullable property and yet another guard.

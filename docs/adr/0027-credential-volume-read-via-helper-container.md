@@ -22,7 +22,7 @@ The Claude Code CLI writes `.credentials.json` to `$CLAUDE_CONFIG_DIR` (on the m
 The helper mounts the volume **read-only** — the auth-status read never writes, and least privilege on a long-lived token store is worth the one-line cost.
 This volume read is also the real confirmation that login persisted a valid credential.
 
-This is the single, cross-platform way Foundry touches the credential volume: through a container, via the Docker socket — never via host filesystem access to the daemon's volume mountpoint (see ADR 0029, which removes the host-FS reader for status display).
+This is the single, cross-platform way Foundry touches the credential volume: through a container, via the Docker socket — never via host filesystem access to the daemon's volume mountpoint (see [ADR 0029](0029-oauth-status-derived-from-persisted-state.md), which removes the host-FS reader for status display).
 
 ## Considered Options
 

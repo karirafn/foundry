@@ -176,6 +176,35 @@ jobs:
               echo "XDG_RUNTIME_DIR=${XDG_RUNTIME_DIR} — created, writable, mode 700"
             '
 
+  docs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+
+      - name: Detect changes
+        if: github.event_name == 'pull_request'
+        uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d  # v4.0.3
+        id: changes
+        with:
+          filters: |
+            docs:
+              - 'docs/adr/**'
+              - 'DOMAIN.md'
+              - 'scripts/**'
+
+      - name: Install bats
+        if: github.event_name == 'push' || steps.changes.outputs.docs == 'true'
+        # npm-registry pin is reproducible across runner-image updates; apt version pins are not
+        run: sudo npm install -g bats@1.11.1
+
+      - name: Run BATS suite
+        if: github.event_name == 'push' || steps.changes.outputs.docs == 'true'
+        run: bats scripts/tests/check-adr-numbering.bats
+
+      - name: Check ADR numbering contract
+        if: github.event_name == 'push' || steps.changes.outputs.docs == 'true'
+        run: bash scripts/check-adr-numbering.sh
+
   login-integration:
     runs-on: ubuntu-latest
     steps:

@@ -34,7 +34,7 @@ Computed get-only members (`TierRank`, `DispatchBranchName`, `Context`) are not 
 
 **In-memory sort.**
 `OrderBy(TierRank)` does not translate to SQL because `TierRank` is a computed, unmapped property.
-Sorting the bounded queued set stays in memory, consistent with the decision in ADR 0025 to keep the queued candidate list small enough that an in-memory sort is the correct call.
+Sorting the bounded queued set stays in memory, consistent with the decision in [ADR 0025](0025-shared-dispatch-order.md) to keep the queued candidate list small enough that an in-memory sort is the correct call.
 
 ## Consequences
 

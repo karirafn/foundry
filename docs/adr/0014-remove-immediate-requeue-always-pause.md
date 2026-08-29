@@ -13,7 +13,7 @@ Recovery is solely via auto-resume (`DispatchResumedHandler`) or manual resume, 
 
 `GlobalSettings.SetUsageLimitResetsAt` is extend-only and clamps to 7 days, so an unparseable or fallback reset time only ever extends an existing pause — it self-corrects on the next failure.
 
-> **Superseded in part by ADR 0046.** The `DefaultCooldownMinutes` fabricated-fallback path referenced here is removed: a 429 with no parseable reset time is now classified as `CreditsExhausted` (an indefinite spend block), not a fabricated timed pause. The always-pause, no-immediate-requeue decision above stands.
+> **Superseded in part by [ADR 0046](0046-parseable-reset-time-as-usage-limit-discriminator.md).** The `DefaultCooldownMinutes` fabricated-fallback path referenced here is removed: a 429 with no parseable reset time is now classified as `CreditsExhausted` (an indefinite spend block), not a fabricated timed pause. The always-pause, no-immediate-requeue decision above stands.
 
 ## Considered Options
 
