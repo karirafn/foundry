@@ -99,12 +99,16 @@ public sealed class WhenNamespaceAlreadyClaimed : IAsyncDisposable
             secondBody,
             TestContext.Current.CancellationToken);
 
-        // Assert — structured 409 with holder details
+        // Assert — structured 409 with reason NamespaceConflict and holder details
         response.StatusCode.ShouldBe(HttpStatusCode.Conflict);
 
-        NamespaceConflictResponse? conflictBody = await response.Content
-            .ReadFromJsonAsync<NamespaceConflictResponse>(TestContext.Current.CancellationToken);
+        CreateAccountConflictResponse? conflictBody = await response.Content
+            .ReadFromJsonAsync<CreateAccountConflictResponse>(
+                FoundryWebAppFactory.JsonOptions,
+                TestContext.Current.CancellationToken);
         conflictBody.ShouldNotBeNull();
+        conflictBody.Reason.ShouldBe(CreateAccountConflictReason.NamespaceConflict);
+        conflictBody.Message.ShouldNotBeNullOrEmpty();
         conflictBody.Conflicts.Count.ShouldBe(1);
 
         NamespaceConflict conflict = conflictBody.Conflicts[0];

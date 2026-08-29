@@ -373,15 +373,12 @@ public sealed class ResolveAsync : IAsyncDisposable
             subject, "ghp_new_subject", baseUrl, isGitLab: false,
             TestContext.Current.CancellationToken);
 
-        // Assert — ClaimedElsewhere with conflict details
+        // Assert — ClaimedElsewhere with server-composed error message (AC7)
         TokenResolution.ClaimedElsewhere claimedElsewhere =
             result.ShouldBeOfType<TokenResolution.ClaimedElsewhere>();
-        claimedElsewhere.Response.ClaimedNamespaces.Count.ShouldBe(1);
-        NamespaceConflict conflict = claimedElsewhere.Response.ClaimedNamespaces[0];
-        conflict.ShouldSatisfyAllConditions(
-            () => conflict.Namespace.ShouldBe("org-a"),
-            () => conflict.HolderCredentialId.ShouldBe(holder.Id.Value),
-            () => conflict.HolderName.ShouldBe("holder-user"));
+        claimedElsewhere.Error.Code.ShouldBe(CredentialErrors.NamespaceClaimedElsewhereCode);
+        claimedElsewhere.Error.Message.ShouldContain("org-a");
+        claimedElsewhere.Error.Message.ShouldContain("holder-user");
     }
 
     // ── Behavior 8: partial overlap (some claimed, some free) → Resolved ─────────────

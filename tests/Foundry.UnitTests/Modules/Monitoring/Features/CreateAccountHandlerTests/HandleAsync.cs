@@ -172,11 +172,11 @@ public sealed class HandleAsync : IAsyncDisposable
 
         // Assert
         CreateAccount.Outcome.Conflict conflict = result.ShouldBeOfType<CreateAccount.Outcome.Conflict>();
-        conflict.Conflicts.Conflicts.Count.ShouldBe(1);
-        conflict.Conflicts.Conflicts[0].ShouldSatisfyAllConditions(
-            () => conflict.Conflicts.Conflicts[0].Namespace.ShouldBe("octocat"),
-            () => conflict.Conflicts.Conflicts[0].HolderCredentialId.ShouldBe(existing.Id.Value),
-            () => conflict.Conflicts.Conflicts[0].HolderName.ShouldBe("other-user"));
+        conflict.Conflicts.Count.ShouldBe(1);
+        conflict.Conflicts[0].ShouldSatisfyAllConditions(
+            () => conflict.Conflicts[0].Namespace.ShouldBe("octocat"),
+            () => conflict.Conflicts[0].HolderCredentialId.ShouldBe(existing.Id.Value),
+            () => conflict.Conflicts[0].HolderName.ShouldBe("other-user"));
     }
 
     [Fact]

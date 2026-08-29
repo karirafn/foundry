@@ -493,7 +493,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/NamespaceConflictResponse"
+                  "$ref": "#/components/schemas/CreateAccountConflictResponse"
                 }
               }
             }
@@ -575,7 +575,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/NamespaceClaimedElsewhereResponse"
+                  "$ref": "#/components/schemas/UpdateAccountConflictResponse"
                 }
               }
             }
@@ -1805,6 +1805,34 @@
           }
         }
       },
+      "CreateAccountConflictReason": {
+        "enum": [
+          "DuplicateAccount",
+          "NamespaceConflict"
+        ]
+      },
+      "CreateAccountConflictResponse": {
+        "required": [
+          "reason",
+          "message",
+          "conflicts"
+        ],
+        "type": "object",
+        "properties": {
+          "reason": {
+            "$ref": "#/components/schemas/CreateAccountConflictReason"
+          },
+          "message": {
+            "type": "string"
+          },
+          "conflicts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/NamespaceConflict"
+            }
+          }
+        }
+      },
       "CreateAccountRequestBody": {
         "required": [
           "providerType",
@@ -2330,20 +2358,6 @@
           }
         }
       },
-      "NamespaceClaimedElsewhereResponse": {
-        "required": [
-          "claimedNamespaces"
-        ],
-        "type": "object",
-        "properties": {
-          "claimedNamespaces": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/NamespaceConflict"
-            }
-          }
-        }
-      },
       "NamespaceConflict": {
         "required": [
           "namespace",
@@ -2361,20 +2375,6 @@
           },
           "holderName": {
             "type": "string"
-          }
-        }
-      },
-      "NamespaceConflictResponse": {
-        "required": [
-          "conflicts"
-        ],
-        "type": "object",
-        "properties": {
-          "conflicts": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/NamespaceConflict"
-            }
           }
         }
       },
@@ -2780,6 +2780,28 @@
               "string"
             ],
             "format": "date-time"
+          }
+        }
+      },
+      "UpdateAccountConflictReason": {
+        "enum": [
+          "ClaimedElsewhere",
+          "DuplicateNamespace",
+          "DuplicateAccount"
+        ]
+      },
+      "UpdateAccountConflictResponse": {
+        "required": [
+          "reason",
+          "message"
+        ],
+        "type": "object",
+        "properties": {
+          "reason": {
+            "$ref": "#/components/schemas/UpdateAccountConflictReason"
+          },
+          "message": {
+            "type": "string"
           }
         }
       },

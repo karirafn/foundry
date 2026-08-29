@@ -419,15 +419,12 @@ public sealed class HandleAsync : IAsyncDisposable
             command,
             TestContext.Current.CancellationToken);
 
-        // Assert — returns ClaimedElsewhere with the conflict details
+        // Assert — returns ClaimedElsewhere with the server-composed error message
         UpdateAccount.Outcome.ClaimedElsewhere claimedElsewhere =
             outcome.ShouldBeOfType<UpdateAccount.Outcome.ClaimedElsewhere>();
-        claimedElsewhere.Response.ClaimedNamespaces.Count.ShouldBe(1);
-        NamespaceConflict conflict = claimedElsewhere.Response.ClaimedNamespaces[0];
-        conflict.ShouldSatisfyAllConditions(
-            () => conflict.Namespace.ShouldBe("org-a"),
-            () => conflict.HolderCredentialId.ShouldBe(holder.Id.Value),
-            () => conflict.HolderName.ShouldBe("holder-user"));
+        claimedElsewhere.Error.Code.ShouldBe(CredentialErrors.NamespaceClaimedElsewhereCode);
+        claimedElsewhere.Error.Message.ShouldContain("org-a");
+        claimedElsewhere.Error.Message.ShouldContain("holder-user");
 
         // Assert — subject's namespaces are unchanged (no strand)
         Credential? stored = await _dbContext.Set<Credential>()
