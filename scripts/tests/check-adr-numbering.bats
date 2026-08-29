@@ -120,16 +120,27 @@ EOF
 # ── 5. Link label number disagrees with target prefix ────────────────────────
 
 @test "link label number mismatching target prefix exits non-zero and names the file" {
+  # Add a valid 0013 ADR so the citation-resolution check (a) passes for 0013,
+  # isolating the label-mismatch check (b) as the sole source of failure.
+  cat > "${FIXTURE_ADR}/0013-valid-decision.md" <<'EOF'
+# Valid Decision
+
+## Decision
+
+Some decision with no citations.
+EOF
   cat > "${FIXTURE_ADR}/0003-mismatched-link.md" <<'EOF'
 # Mismatched Link
 
 ## Decision
 
-See [ADR 0013](0001-first-decision.md) — wrong label number for the target.
+See [ADR 0013](0001-first-decision.md) — label says 0013 but target prefix is 0001.
 EOF
   run run_check
   [ "$status" -ne 0 ]
   [[ "$output" == *"0003-mismatched-link.md"* ]]
+  # Confirm the label-mismatch message fired (not the resolution error).
+  [[ "$output" == *"label number"* ]] || [[ "$output" == *"does not match target prefix"* ]]
 }
 
 # ── 6. supersedes: pointer to a missing file ─────────────────────────────────
@@ -169,7 +180,7 @@ EOF
 
 # ── 8. Citation inside fenced code block is excluded ─────────────────────────
 
-@test "citation inside fenced code block is not checked for resolution" {
+@test "citation inside backtick fenced code block is not checked for resolution" {
   cat > "${FIXTURE_ADR}/0003-with-code-block.md" <<'EOF'
 # With Code Block
 
@@ -178,10 +189,40 @@ EOF
 Normal prose here.
 
 ```
-See ADR 9999 in a code fence — should be excluded from resolution check.
+See ADR 9999 in a backtick code fence — should be excluded from resolution check.
 ```
 
 Back to prose.
+EOF
+  run run_check
+  [ "$status" -eq 0 ]
+}
+
+@test "citation inside tilde fenced code block is not checked for resolution" {
+  cat > "${FIXTURE_ADR}/0003-with-tilde-block.md" <<'EOF'
+# With Tilde Block
+
+## Decision
+
+Normal prose here.
+
+~~~
+See ADR 9999 in a tilde code fence — should be excluded from resolution check.
+~~~
+
+Back to prose.
+EOF
+  run run_check
+  [ "$status" -eq 0 ]
+}
+
+@test "link with anchor fragment resolves the file and does not false-error" {
+  cat > "${FIXTURE_ADR}/0003-with-anchor.md" <<'EOF'
+# With Anchor
+
+## Decision
+
+See [ADR 0001](0001-first-decision.md#context) for background.
 EOF
   run run_check
   [ "$status" -eq 0 ]

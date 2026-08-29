@@ -46,11 +46,11 @@ fail() {
   errors=$((errors + 1))
 }
 
-# Strip fenced code blocks from stdin (``` ... ```) and print remaining lines.
+# Strip fenced code blocks from stdin (``` ... ``` or ~~~ ... ~~~) and print remaining lines.
 # Uses a simple state machine: inside a fence block, lines are suppressed.
 strip_fences() {
   awk '
-    /^```/ {
+    /^(```|~~~)/ {
       in_fence = !in_fence
       next
     }
@@ -61,7 +61,7 @@ strip_fences() {
 # Return the four-digit prefix of a filename, or empty string if it does not
 # match the expected NNNN-slug.md pattern.
 prefix_of() {
-  basename "$1" | command grep -oP '^\d{4}(?=-)'
+  basename "$1" | command grep -oP '^\d{4}(?=-)' || true
 }
 
 # Write the fence-stripped content of $1 to a temp file and return the path.
@@ -214,12 +214,14 @@ check_markdown_file() {
     local label_num target_path target_basename target_prefix resolved
     label_num=$(printf '%s\n' "$link" | command grep -oP '(?<=\[ADR )\d{4}')
     target_path=$(printf '%s\n' "$link" | command grep -oP '(?<=\()[^)]+(?=\))')
+    # Strip any anchor fragment (#section) before filesystem resolution.
+    local clean_target="${target_path%%#*}"
     # Resolve path relative to the citing file's directory.
-    resolved="${file_dir}/${target_path}"
+    resolved="${file_dir}/${clean_target}"
     if [[ ! -f "$resolved" ]]; then
       fail "Link target '$target_path' in $file does not resolve to an existing file (looked for $resolved)"
     fi
-    target_basename=$(basename "$target_path")
+    target_basename=$(basename "$clean_target")
     target_prefix=$(printf '%s\n' "$target_basename" | command grep -oP '^\d{4}')
     if [[ "$label_num" != "$target_prefix" ]]; then
       fail "Link [ADR $label_num]($target_path) in $file: label number $label_num does not match target prefix $target_prefix"
