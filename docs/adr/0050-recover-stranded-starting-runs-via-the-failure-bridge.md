@@ -30,7 +30,7 @@ Adoption would require persisting them on the `starting` row — a schema change
 ## Consequences
 
 Recovery surfaces as a visible `FailedIssue` under "Needs attention" with a `container_error` reason, not a silent requeue.
-The operator sees that something went wrong and chooses to retry, following the precedent set by ADR 0014 (*Remove Immediate Requeue, Always Pause on Usage Limit*).
+The operator sees that something went wrong and chooses to retry, following the precedent set by [ADR 0014](0014-remove-immediate-requeue-always-pause.md) (*Remove Immediate Requeue, Always Pause on Usage Limit*).
 Auto-retry does not apply: `TransientRetryService` filters on `transient_api_error`, so a `container_error` failure parks until the operator acts.
 
 Reversing this decision — adding the backward transition after all — costs more than adding it now would have, because the bridge path will by then be the documented and tested one.

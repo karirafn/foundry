@@ -29,7 +29,7 @@ Volume-file *presence* is a weak proxy that cannot even detect an expired-but-pr
 
 ### Read the volume via a helper container, with a TTL cache
 
-Read `.credentials.json` inside a short-lived helper container (cross-platform, like ADR 0027), plus a TTL cache + single-flight + event-driven invalidation so frequent `/api/settings` reads do not each spin a container.
+Read `.credentials.json` inside a short-lived helper container (cross-platform, like [ADR 0027](0027-credential-volume-read-via-helper-container.md)), plus a TTL cache + single-flight + event-driven invalidation so frequent `/api/settings` reads do not each spin a container.
 Rejected for now: it reflects live volume *presence* but still cannot judge validity, so it buys little over the DB-derived signals while adding a container spin per refresh, a caching layer, and its invalidation wiring.
 The one case it handles that the DB-derived approach does not — a credential seeded on the volume out-of-band with no in-app login committed — is not a supported path now that in-app login works.
 

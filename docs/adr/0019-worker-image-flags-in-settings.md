@@ -8,7 +8,7 @@ status: accepted
 
 The worker image preinstall flags (`INSTALL_DOTNET`, `INSTALL_ANGULAR`, `INSTALL_GLAB`, `INSTALL_GH`) were free-form entries in `Workers:ImageBuild:BuildArgs` (`IConfiguration`), deliberately excluded from the DB-backed `GlobalSettings` aggregate — DOMAIN.md records "infrastructure-only settings (Docker image, mounts, memory/CPU/PID limits) remain in `IConfiguration`".
 
-Changing which toolchains are baked into the worker image therefore required editing config and redeploying. The operator needs to pick toolchains from the dashboard and have the image rebuilt automatically. The image is built once at startup by `WorkerImageBuildService` (ADR 0009); there is no on-demand rebuild path.
+Changing which toolchains are baked into the worker image therefore required editing config and redeploying. The operator needs to pick toolchains from the dashboard and have the image rebuilt automatically. The image is built once at startup by `WorkerImageBuildService` ([ADR 0009](0009-worker-image-build-hosted-service.md)); there is no on-demand rebuild path.
 
 ## Decision
 

@@ -8,7 +8,7 @@ rate-limit exhaustion (primary via `X-RateLimit-Remaining: 0`, secondary via `Re
 repository `Ineligible` with a false `cannot-push` violation and halted dispatch. Separately,
 `RepositoryEligibility.Unreachable` carried no reason, so the UI showed a single
 branch-protection message that was wrong for both the rate-limit and never-probed cases — an
-`Unknown` verdict short-circuits to `Unreachable` before any branch-rules GET is issued. ADR 0054
+`Unknown` verdict short-circuits to `Unreachable` before any branch-rules GET is issued. [ADR 0054](0054-split-eligibility-cadence.md)
 established the split-cadence eligibility model and the `Unknown` self-heal cooldown; this decision
 refines the failure taxonomy on top of it.
 

@@ -7,7 +7,7 @@ supersedes: 0008-aspire-image-build-with-docker-orchestrator.md
 
 ## Context
 
-The MSBuild target approach (ADR 0008) only fires during Aspire orchestration.
+The MSBuild target approach ([ADR 0008](0008-aspire-image-build-with-docker-orchestrator.md)) only fires during Aspire orchestration.
 Direct WebApi launches skip the build entirely, leaving a stale or absent `foundry-worker:local` image.
 This caused a permissions failure: when mount-point directories do not exist inside the image, Docker daemon creates them at runtime as root, making them inaccessible to the non-root `node` user.
 

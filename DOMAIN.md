@@ -116,7 +116,7 @@ A partial overlap is not a duplicate — the never-steal subtraction already red
 Same login with disjoint owners is permitted — that is the normal shape, not an exception.
 A *different* login reaching an already-claimed owner is not a duplicate; it is a Namespace Claim conflict, resolved through takeover.
 Detection is server-side only, in the create and update handlers: the derived owner set requires a provider repository listing, so no client can compute it.
-On a token-bearing update, derivation runs and both guards evaluate *before* the credential is mutated, so a rejected rotation persists nothing; a derivation that returns `Unavailable` rejects the update rather than proceeding unguarded (see ADR 0051).
+On a token-bearing update, derivation runs and both guards evaluate *before* the credential is mutated, so a rejected rotation persists nothing; a derivation that returns `Unavailable` rejects the update rather than proceeding unguarded (see [ADR 0064](docs/adr/0064-account-identity-keyed-on-login-owner-set-and-host.md)).
 
 ### Token Validation Outcome
 
@@ -125,7 +125,7 @@ Five variants:
 
 - `Authenticated(AccountName, MissingScopes)` — the token authenticated and the PAT owner resolved; `MissingScopes` lists any required scopes absent from the token.
 - `AuthenticationFailed` — the token was rejected (401/unauthorized).
-- `ScopesUnverifiable(AccountName)` — the token authenticated and the owner resolved, but the token's scopes could not be read. Triggered by: GitLab group/project access tokens where `personal_access_tokens/self` returns non-2xx; and GitHub tokens served without an `X-OAuth-Scopes` response header that are **not** fine-grained PATs (e.g. GHES classic tokens, server configurations that suppress the header). GitHub fine-grained PATs (`github_pat_` prefix) are classified by prefix at validation time and, when served without `X-OAuth-Scopes`, return `Authenticated` with empty `MissingScopes` instead — no caution. Fine-grained permission enforcement is delegated to the provider and the create-time write probe (`IGitHubWriteProber`); see ADR 0053.
+- `ScopesUnverifiable(AccountName)` — the token authenticated and the owner resolved, but the token's scopes could not be read. Triggered by: GitLab group/project access tokens where `personal_access_tokens/self` returns non-2xx; and GitHub tokens served without an `X-OAuth-Scopes` response header that are **not** fine-grained PATs (e.g. GHES classic tokens, server configurations that suppress the header). GitHub fine-grained PATs (`github_pat_` prefix) are classified by prefix at validation time and, when served without `X-OAuth-Scopes`, return `Authenticated` with empty `MissingScopes` instead — no caution. Fine-grained permission enforcement is delegated to the provider and the create-time write probe (`IGitHubWriteProber`); see [ADR 0053](docs/adr/0053-github-token-type-by-prefix.md).
 - `IdentityUnresolved` — the response could not be parsed to an identity (neither provider's identity field present).
 - `ProviderMismatch(DetectedProvider)` — the response carried the *other* provider's identity shape (e.g. GitLab answered while GitHub was selected); names the detected provider.
 
@@ -243,7 +243,7 @@ Three variants:
 
 `DispatchContext` is assembled by the concrete `QueuedIssue` subtype overriding the abstract `Context` property — `FreshQueuedIssue` returns `Fresh`, `RevisionQueuedIssue` returns `Revision`, `ContinuationQueuedIssue` returns `Continuation`.
 The handler and claimer treat `Context` as an opaque value — they forward it into `ClaimedIssueDispatch` without switching on it.
-Survives the outbox round-trip via `[JsonPolymorphic]` / `[JsonDerivedType]` annotations (see ADR 0051).
+Survives the outbox round-trip via `[JsonPolymorphic]` / `[JsonDerivedType]` annotations (see [ADR 0051](docs/adr/0051-dispatch-context-union-and-typed-dispatch-seam.md)).
 
 ## Claim
 
@@ -278,7 +278,7 @@ Defined as `abstract QueuedIssue : Issue`, it carries the members shared by ever
 No `HasValue<T>()` discriminator entry is added — EF assigns an unused default and `HasDiscriminator(...).IsComplete(true)` remains valid through the concrete leaves.
 Computed get-only members (`TierRank`, `DispatchBranchName`, `Context`) are not mapped and require no `Ignore()`.
 
-`OrderBy(TierRank)` does not translate to SQL — it refers to a computed, unmapped property. Sorting over the bounded queued set stays in memory (see ADR 0025).
+`OrderBy(TierRank)` does not translate to SQL — it refers to a computed, unmapped property. Sorting over the bounded queued set stays in memory (see [ADR 0025](docs/adr/0025-shared-dispatch-order.md)).
 
 ## Repository Eligibility
 
@@ -294,12 +294,12 @@ The `NeverProbed` and `RateLimited` causes recover via the `Unknown` self-heal c
 Stored on the Monitored Repository and composed from two checks of different cadence:
 
 - **Branch-rules GET (per-cycle)** — re-evaluated unconditionally on every poll cycle and synchronously at repository creation. A configuration change on the provider is reflected on the next poll without user action (auto-heal). A failed GET produces `Unreachable(BranchRulesUnavailable)`.
-- **Write probe (event-triggered for Granted/Denied; self-healing for Unknown)** — runs on repository add, manual re-check, and credential update/rotation. The last result is persisted on `MonitoredRepository` as a `WriteProbeVerdict` value object (`Granted` / `Denied` / `Unknown`), which carries an `UnknownReason` (`Transport` or `RateLimited`). The verdict is composed with the fresh branch-rules result each cycle. `Unknown(Transport)` maps to `Unreachable(NeverProbed)`; `Unknown(RateLimited)` maps to `Unreachable(RateLimited)`. Both are automatically re-probed after a 15-minute cooldown; `Granted` and `Denied` are only re-probed by operator or credential events. A failed probe stamps `Unknown.LastAttemptedAt` so the next automatic retry is one cooldown away. See ADR 0054 and ADR 0055.
+- **Write probe (event-triggered for Granted/Denied; self-healing for Unknown)** — runs on repository add, manual re-check, and credential update/rotation. The last result is persisted on `MonitoredRepository` as a `WriteProbeVerdict` value object (`Granted` / `Denied` / `Unknown`), which carries an `UnknownReason` (`Transport` or `RateLimited`). The verdict is composed with the fresh branch-rules result each cycle. `Unknown(Transport)` maps to `Unreachable(NeverProbed)`; `Unknown(RateLimited)` maps to `Unreachable(RateLimited)`. Both are automatically re-probed after a 15-minute cooldown; `Granted` and `Denied` are only re-probed by operator or credential events. A failed probe stamps `Unknown.LastAttemptedAt` so the next automatic retry is one cooldown away. See [ADR 0054](docs/adr/0054-split-eligibility-cadence.md) and [ADR 0055](docs/adr/0055-distinguish-unreachable-eligibility-reason.md).
 
 **GitHub 403 rate-limit classification.** A GitHub write-probe 403 is not always a missing-permission denial.
 Classification keys on explicit rate-limit response headers: a 403 with `X-RateLimit-Remaining: 0` or a present `Retry-After` header is treated as rate-limit exhaustion and produces `Result.Fail(RateLimitExhausted)` → `Unknown(RateLimited)`.
 A 403 with headroom or no rate-limit headers stays `Missing` → `Denied` → `CannotPush` (fail-closed for genuine permission denial).
-See ADR 0055 and ADR 0040.
+See ADR 0055 and [ADR 0040](docs/adr/0040-probe-403-classification.md).
 
 A manual "re-check" action forces immediate re-evaluation of both checks.
 Only `Eligible` repositories have their queued issues dispatched — ineligibility gates dispatch only; detection, dependency reconciliation, and review polling continue regardless. Already-running workers are unaffected.
@@ -492,7 +492,7 @@ Foundry derives each run's outcome via `WorkerOutcomeResolver` — a pure functi
 `StartingRun` is the state a worker run occupies between row creation (in `IssueClaimedHandler`) and container start (`StartAsync`).
 This window exists because the row must be committed before the Docker API is called — a crash or daemon failure in that gap would otherwise leave the issue in `in_progress` with no recovery path.
 `StartingRun` rows are bounded to at most `StaleStartingRunThreshold` (10 minutes) by the periodic sweep (see Orphan Reconciliation).
-After that threshold, the sweep fails the run via `StartingRun.Fail(ContainerError)`, which raises `WorkerRunFailed`, which the Issues module's `WorkerRunFailedHandler` turns into `InProgressIssue → FailedIssue` — making the issue retryable from the dashboard (see ADR 0050).
+After that threshold, the sweep fails the run via `StartingRun.Fail(ContainerError)`, which raises `WorkerRunFailed`, which the Issues module's `WorkerRunFailedHandler` turns into `InProgressIssue → FailedIssue` — making the issue retryable from the dashboard (see [ADR 0050](docs/adr/0050-recover-stranded-starting-runs-via-the-failure-bridge.md)).
 
 ## Worker Slot Occupancy
 
@@ -613,7 +613,7 @@ For each stale run, the sweep:
 2. Calls `StartingRun.Fail(ContainerError("Container did not start within the allowed time."))`.
 3. The `WorkerRunFailed` domain event raised by `Fail` flows through `WorkerRunFailedHandler` → `InProgressIssue.MarkFailed()` → `FailedIssue` → the issue becomes retryable from the dashboard (see ADR 0050).
 
-A `container_error` failure does not auto-retry (`TransientRetryService` filters on `transient_api_error` only) — the issue parks under "Needs attention" for operator review, consistent with ADR 0014.
+A `container_error` failure does not auto-retry (`TransientRetryService` filters on `transient_api_error` only) — the issue parks under "Needs attention" for operator review, consistent with [ADR 0014](docs/adr/0014-remove-immediate-requeue-always-pause.md).
 A `WorkerRunFailed` event whose run ID does not match the issue's current `WorkerRunId` is silently ignored by `WorkerRunFailedHandler` (stale-run-ID guard), so a concurrent transition cannot produce a double failure.
 
 **Daemon-unreachable defer.**
@@ -657,7 +657,7 @@ The `WorkerRunFailed` contract declares `Category` nullable, so `WorkerRunFailed
 A *time-based* state where the Anthropic API quota (session, weekly, or Opus limit) is exhausted and self-heals at a known reset time.
 Detected by parsing the worker container's JSON output (`--output-format json`): the primary signal is `ResultMessage.api_error_status == 429`; the `terminal_reason` allowlist (`"blocking_limit"`, `"rapid_refill_breaker"`) is retained as a secondary signal for older output shapes. Note that a 429 can arrive with `subtype: "success"` and `terminal_reason: "completed"`, so neither field is reliable on its own.
 The reset time is extracted from the human-readable result text. Two wall-clock wording shapes are handled: `resets <time> (UTC)` (e.g. `"You've hit your limit · resets 12:10am (UTC)"`) and `reset at <time> (<IANA zone>)` (e.g. `"Your limit will reset at 3pm (America/New_York)."`). In both forms the time is 12-hour; a bare hour without minutes (e.g. `3pm`) defaults minutes to `00`. UTC times resolve to the next future UTC occurrence directly; IANA zone names are converted to UTC via the system timezone database, then the same roll-forward applies. ISO-8601 timestamps in the result text take precedence over wall-clock parsing.
-Whether a reset time parses is the discriminator between the two 429 classes (see ADR 0046): a 429 with a parseable reset time is a `UsageLimited` time-based limit; a 429 with no parseable reset time is a money-based block classified as `CreditsExhausted` (see FailureReason and Dispatch Pause). There is no fabricated-cooldown fallback — the former `DefaultCooldownMinutes` setting is removed.
+Whether a reset time parses is the discriminator between the two 429 classes (see [ADR 0046](docs/adr/0046-parseable-reset-time-as-usage-limit-discriminator.md)): a 429 with a parseable reset time is a `UsageLimited` time-based limit; a 429 with no parseable reset time is a money-based block classified as `CreditsExhausted` (see FailureReason and Dispatch Pause). There is no fabricated-cooldown fallback — the former `DefaultCooldownMinutes` setting is removed.
 A detected usage limit always triggers a global dispatch pause via `GlobalSettings.UsageLimitResetsAt` — there is no immediate-requeue path. `GlobalSettings.SetUsageLimitResetsAt` remains extend-only and clamps to 7 days, so a reset time already in the past only ever extends an existing pause.
 The triggering issue transitions to `FailedIssue` / `ContinuableFailedIssue` with `FailureReason.UsageLimited(resetsAt)`.
 On detection, `WorkerDispatchService` raises the `DispatchPaused` integration event, which is broadcast as a `dispatch` system notification (`isActive: true`) so the dashboard usage-limit banner updates live without a page refresh.
