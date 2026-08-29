@@ -2,7 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { AccountService } from './account.service';
-import { AccountSummary, AffectedRepository, CreateAccountRequest, CredentialCreationResult, CredentialUpdateResult, NamespaceClaimedElsewhereResponse, NamespaceConflict, TokenRequirements, UpdateAccountRequest } from './account.model';
+import { AccountSummary, AffectedRepository, CreateAccountConflictResponse, CreateAccountRequest, CredentialCreationResult, CredentialUpdateResult, NamespaceConflict, TokenRequirements, UpdateAccountConflictResponse, UpdateAccountRequest } from './account.model';
 import { ToastService } from '../../../core/services/toast.service';
 import { AccountPresenceService } from '../../../core/services/account-presence.service';
 
@@ -285,15 +285,20 @@ describe('AccountService', () => {
   });
 
   // Conflict (409) handling
-  it('should set conflicts signal when createAccount returns 409 with NamespaceConflictResponse', () => {
+  it('should set conflicts signal when createAccount returns 409 with reason NamespaceConflict', () => {
     // Arrange
     const conflicts: NamespaceConflict[] = [
       { namespace: 'myorg', holderCredentialId: 'cred-1', holderName: 'Old Account' },
     ];
+    const body: CreateAccountConflictResponse = {
+      reason: 'NamespaceConflict',
+      message: 'One or more derived namespaces are already claimed by other accounts.',
+      conflicts,
+    };
     service.createAccount({ providerType: 'github', baseUrl: 'https://api.github.com', token: 'ghp_test' });
 
     // Act
-    httpMock.expectOne('/api/accounts').flush({ conflicts }, { status: 409, statusText: 'Conflict' });
+    httpMock.expectOne('/api/accounts').flush(body, { status: 409, statusText: 'Conflict' });
 
     // Assert
     expect(service.conflicts()).toEqual(conflicts);
@@ -306,8 +311,13 @@ describe('AccountService', () => {
     const conflicts: NamespaceConflict[] = [
       { namespace: 'myorg', holderCredentialId: 'cred-1', holderName: 'Old Account' },
     ];
+    const conflictBody: CreateAccountConflictResponse = {
+      reason: 'NamespaceConflict',
+      message: 'One or more derived namespaces are already claimed by other accounts.',
+      conflicts,
+    };
     service.createAccount({ providerType: 'github', baseUrl: 'https://api.github.com', token: 'ghp_x' });
-    httpMock.expectOne('/api/accounts').flush({ conflicts }, { status: 409, statusText: 'Conflict' });
+    httpMock.expectOne('/api/accounts').flush(conflictBody, { status: 409, statusText: 'Conflict' });
     expect(service.conflicts().length).toBe(1);
 
     // Act — second call should clear conflicts immediately
@@ -398,13 +408,12 @@ describe('AccountService', () => {
     httpMock.expectOne(`/api/accounts/${MOCK_ACCOUNT.id}`).flush(makeUpdateResult(MOCK_ACCOUNT));
   });
 
-  // Claimed-elsewhere (409 with NamespaceClaimedElsewhereResponse) — update path
-  it('should set saveError naming holders when updateAccount returns 409 with NamespaceClaimedElsewhereResponse', () => {
-    // Arrange
-    const body: NamespaceClaimedElsewhereResponse = {
-      claimedNamespaces: [
-        { namespace: 'myorg', holderCredentialId: 'cred-1', holderName: 'Other Account' },
-      ],
+  // Claimed-elsewhere (409 with UpdateAccountConflictResponse, reason ClaimedElsewhere) — update path
+  it('should set saveError naming holders when updateAccount returns 409 with reason ClaimedElsewhere', () => {
+    // Arrange — server now composes the message
+    const body: UpdateAccountConflictResponse = {
+      reason: 'ClaimedElsewhere',
+      message: 'Cannot rotate token: all derived namespaces are claimed by other accounts — myorg (held by Other Account).',
     };
     service.updateAccount(MOCK_ACCOUNT.id, { baseUrl: 'https://api.github.com', token: 'ghp_new' });
 
@@ -414,21 +423,20 @@ describe('AccountService', () => {
       statusText: 'Conflict',
     });
 
-    // Assert — saveError names the holder
+    // Assert — saveError names the holder (rendered from server-composed message)
     expect(service.saveError()).toContain('Other Account');
     expect(service.saveSuccess()).toBe(false);
     expect(service.saving()).toBe(false);
   });
 
-  it('should not populate conflicts() when updateAccount returns 409 with NamespaceClaimedElsewhereResponse', () => {
+  it('should not populate conflicts() when updateAccount returns 409 with reason ClaimedElsewhere', () => {
     // Arrange — conflicts starts empty (fresh service)
     expect(service.conflicts()).toEqual([]);
 
     // Act — update-path 409 with claimed-elsewhere body
-    const body: NamespaceClaimedElsewhereResponse = {
-      claimedNamespaces: [
-        { namespace: 'myorg', holderCredentialId: 'cred-2', holderName: 'Other Account' },
-      ],
+    const body: UpdateAccountConflictResponse = {
+      reason: 'ClaimedElsewhere',
+      message: 'Cannot rotate token: all derived namespaces are claimed by other accounts — myorg (held by Other Account).',
     };
     service.updateAccount(MOCK_ACCOUNT.id, { baseUrl: 'https://api.github.com', token: 'ghp_new' });
     httpMock.expectOne(`/api/accounts/${MOCK_ACCOUNT.id}`).flush(body, {
@@ -440,13 +448,11 @@ describe('AccountService', () => {
     expect(service.conflicts()).toEqual([]);
   });
 
-  it('should set saveError naming all holders when multiple namespaces are claimed elsewhere', () => {
-    // Arrange
-    const body: NamespaceClaimedElsewhereResponse = {
-      claimedNamespaces: [
-        { namespace: 'org-a', holderCredentialId: 'cred-1', holderName: 'Account Alpha' },
-        { namespace: 'org-b', holderCredentialId: 'cred-2', holderName: 'Account Beta' },
-      ],
+  it('should set saveError rendering server-composed message naming all holders when multiple namespaces are claimed elsewhere', () => {
+    // Arrange — server composes the message listing all holders; client renders it without assembly
+    const body: UpdateAccountConflictResponse = {
+      reason: 'ClaimedElsewhere',
+      message: 'Cannot rotate token: all derived namespaces are claimed by other accounts — org-a (held by Account Alpha), org-b (held by Account Beta).',
     };
     service.updateAccount(MOCK_ACCOUNT.id, { baseUrl: 'https://api.github.com', token: 'ghp_new' });
 
@@ -456,10 +462,46 @@ describe('AccountService', () => {
       statusText: 'Conflict',
     });
 
-    // Assert — both holder names appear in the error message
+    // Assert — both holder names appear in saveError (client renders server message, does not assemble it)
     const error = service.saveError();
     expect(error).toContain('Account Alpha');
     expect(error).toContain('Account Beta');
+  });
+
+  it('should set saveError from message when createAccount returns 409 with unrecognised reason (AC5)', () => {
+    // Arrange — an unexpected reason value the client has not seen before
+    const body = {
+      reason: 'SomethingNew',
+      message: 'A new conflict type occurred.',
+      conflicts: [],
+    };
+    service.createAccount({ providerType: 'github', baseUrl: 'https://api.github.com', token: 'ghp_test' });
+
+    // Act
+    httpMock.expectOne('/api/accounts').flush(body, { status: 409, statusText: 'Conflict' });
+
+    // Assert — message surfaces, conflicts remain empty
+    expect(service.saveError()).toBe('A new conflict type occurred.');
+    expect(service.conflicts()).toEqual([]);
+    expect(service.saving()).toBe(false);
+  });
+
+  it('should set saveError from message when createAccount returns 409 with reason DuplicateAccount (AC6)', () => {
+    // Arrange — duplicate-account reason carries a message and empty conflicts; no takeover offered
+    const body: CreateAccountConflictResponse = {
+      reason: 'DuplicateAccount',
+      message: 'An account with this name already exists.',
+      conflicts: [],
+    };
+    service.createAccount({ providerType: 'github', baseUrl: 'https://api.github.com', token: 'ghp_test' });
+
+    // Act
+    httpMock.expectOne('/api/accounts').flush(body, { status: 409, statusText: 'Conflict' });
+
+    // Assert — saveError set from message; conflicts empty (no takeover panel)
+    expect(service.saveError()).toBe('An account with this name already exists.');
+    expect(service.conflicts()).toEqual([]);
+    expect(service.saving()).toBe(false);
   });
 
   // Cycle 6: updateAccount calls PUT /api/accounts/{id}

@@ -12,9 +12,9 @@ export type TokenValidationResult = Schemas['ValidateTokenResponse'];
 export type ValidateTokenRequest = Schemas['ValidateTokenRequestBody'];
 export type AffectedRepository = Schemas['AffectedRepository'];
 export type NamespaceConflict = Schemas['NamespaceConflict'];
-export type NamespaceConflictResponse = Schemas['NamespaceConflictResponse'];
+export type CreateAccountConflictResponse = Schemas['CreateAccountConflictResponse'];
+export type UpdateAccountConflictResponse = Schemas['UpdateAccountConflictResponse'];
 export type TakeoverValidationResponse = Schemas['TakeoverValidationResponse'];
-export type NamespaceClaimedElsewhereResponse = Schemas['NamespaceClaimedElsewhereResponse'];
 export type TokenRequirements = Schemas['TokenRequirements'];
 
 // Client-side refinements layered over the generated string wire type.
