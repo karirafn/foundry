@@ -119,7 +119,7 @@ export class AccountService {
           if (!(err instanceof TimeoutError)) {
             if (err.status === 409) {
               const body = err.error as CreateAccountConflictResponse;
-              if (body.reason === 'NamespaceConflict' && body.conflicts.length > 0) {
+              if (body?.reason === 'NamespaceConflict' && body?.conflicts?.length > 0) {
                 this._conflictsSignal.set(body.conflicts);
                 this._srAnnouncementSignal.set(
                   `${body.conflicts.length} namespace conflict${body.conflicts.length === 1 ? '' : 's'} — select namespaces to transfer and retry.`

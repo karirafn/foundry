@@ -175,7 +175,7 @@ public sealed class WhenTokenClaimedElsewhereByOtherLogin : IAsyncDisposable
         body.ShouldNotBeNull();
         body.Reason.ShouldBe(UpdateAccountConflictReason.ClaimedElsewhere);
         // AC7: server composes the message naming namespace and holder — client no longer assembles it
-        body.Message.ShouldContain(FirstAccountName);
+        body.Message.ShouldContain($"{FirstAccountName} (held by {FirstAccountName})");
 
         // Assert — second account's namespace is unchanged (not stranded on zero)
         using IServiceScope scope = _factory.Services.CreateScope();

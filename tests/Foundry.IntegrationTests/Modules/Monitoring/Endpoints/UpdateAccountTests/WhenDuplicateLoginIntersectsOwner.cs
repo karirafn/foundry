@@ -163,7 +163,7 @@ public sealed class WhenDuplicateLoginIntersectsOwner : IAsyncDisposable
                 TestContext.Current.CancellationToken);
         body.ShouldNotBeNull();
         body.Reason.ShouldBe(UpdateAccountConflictReason.DuplicateAccount);
-        body.Message.ShouldNotBeNullOrEmpty();
+        body.Message.ShouldContain(FirstAccountName);
     }
 
     [Fact]

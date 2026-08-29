@@ -484,6 +484,7 @@ describe('AccountService', () => {
     expect(service.saveError()).toBe('A new conflict type occurred.');
     expect(service.conflicts()).toEqual([]);
     expect(service.saving()).toBe(false);
+    expect(service.saveSuccess()).toBe(false);
   });
 
   it('should set saveError from message when createAccount returns 409 with reason DuplicateAccount (AC6)', () => {
@@ -502,6 +503,21 @@ describe('AccountService', () => {
     expect(service.saveError()).toBe('An account with this name already exists.');
     expect(service.conflicts()).toEqual([]);
     expect(service.saving()).toBe(false);
+    expect(service.saveSuccess()).toBe(false);
+  });
+
+  it('should set saveError from extracted message and not throw when createAccount returns 409 with null body', () => {
+    // Arrange — a null/empty body that cannot be cast to CreateAccountConflictResponse
+    service.createAccount({ providerType: 'github', baseUrl: 'https://api.github.com', token: 'ghp_test' });
+
+    // Act
+    httpMock.expectOne('/api/accounts').flush(null, { status: 409, statusText: 'Conflict' });
+
+    // Assert — falls through to extracted message; does not throw; conflicts stay empty
+    expect(service.saveError()).not.toBeNull();
+    expect(service.conflicts()).toEqual([]);
+    expect(service.saving()).toBe(false);
+    expect(service.saveSuccess()).toBe(false);
   });
 
   // Cycle 6: updateAccount calls PUT /api/accounts/{id}
