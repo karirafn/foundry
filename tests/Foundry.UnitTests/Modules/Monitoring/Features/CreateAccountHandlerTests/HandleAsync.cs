@@ -125,16 +125,16 @@ public sealed class HandleAsync : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenTokenResolvesToSameLoginAsExistingHolder_AndNamespacesIntersect_ReturnsDuplicate()
+    public async Task WhenTokenResolvesToSameLoginAsExistingHolder_AndEveryDerivedNamespaceIsCoveredBySiblings_ReturnsDuplicate()
     {
-        // Arrange — seed a credential named "octocat" that already claims the "octocat" namespace
+        // Arrange — seed a credential named "octocat" that already claims the "octocat" namespace.
+        // The incoming token derives only "octocat" — same-login sibling covers the entire derived set.
         BaseUrl baseUrl = BaseUrl.Create("https://github.com").ValueOrThrow();
         GitHubCredential existing = GitHubCredential.Create("octocat", "ghp_other", baseUrl);
         existing.SetNamespaces([Namespace.Create("octocat").ValueOrThrow()]);
         _dbContext.Set<Credential>().Add(existing);
         await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
 
-        // The incoming token also resolves to "octocat" and derives the "octocat" namespace
         Namespace ns = Namespace.Create("octocat").ValueOrThrow();
         ProviderRepository writableRepo = new("octocat/hello-world", IsPrivate: false, CanPush: true);
         NamespaceDerivationOutcome outcome = new NamespaceDerivationOutcome.Derived([ns], [writableRepo]);
@@ -149,6 +149,102 @@ public sealed class HandleAsync : IAsyncDisposable
         // Assert
         CreateAccount.Outcome.Duplicate duplicate = result.ShouldBeOfType<CreateAccount.Outcome.Duplicate>();
         duplicate.Error.Code.ShouldBe(CredentialErrors.DuplicateAccountCode);
+    }
+
+    [Fact]
+    public async Task WhenTokenResolvesToSameLoginAsExistingHolder_AndDerivedSetIncludesUnclaimedOwner_CreatesAccountClaimingOnlyUnclaimedOwner()
+    {
+        // Arrange — existing "octocat" credential claims "octocat". New token resolves to "octocat"
+        // and derives both "octocat" (claimed by sibling) and "octocat-org" (unclaimed).
+        // Criterion 1: account is created claiming only "octocat-org".
+        BaseUrl baseUrl = BaseUrl.Create("https://github.com").ValueOrThrow();
+        GitHubCredential existing = GitHubCredential.Create("octocat", "ghp_other", baseUrl);
+        existing.SetNamespaces([Namespace.Create("octocat").ValueOrThrow()]);
+        _dbContext.Set<Credential>().Add(existing);
+        await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        NamespaceDerivationOutcome outcome = new NamespaceDerivationOutcome.Derived(
+            [
+                Namespace.Create("octocat").ValueOrThrow(),
+                Namespace.Create("octocat-org").ValueOrThrow(),
+            ],
+            [
+                new ProviderRepository("octocat/hello-world", IsPrivate: false, CanPush: true),
+                new ProviderRepository("octocat-org/repo", IsPrivate: false, CanPush: true),
+            ]);
+        CreateAccount.Handler handler = BuildHandler(
+            new StubNamespaceDeriver(outcome),
+            validateToken: new StubValidateTokenHandler());  // resolves to "octocat"
+        CreateAccount.Command command = new("github", "https://github.com", "ghp_new_token");
+
+        // Act
+        CreateAccount.Outcome result = await handler.HandleAsync(command, TestContext.Current.CancellationToken);
+
+        // Assert — created, claiming only the unclaimed namespace
+        CreateAccount.Outcome.Created created = result.ShouldBeOfType<CreateAccount.Outcome.Created>();
+        created.Value.Credential.Namespaces.ShouldContain("octocat-org");
+        created.Value.Credential.Namespaces.ShouldNotContain("octocat");
+    }
+
+    [Fact]
+    public async Task WhenTokenResolvesToSameLoginAsExistingHolder_AndDerivedSetIncludesUnclaimedOwner_DoesNotReturnConflict()
+    {
+        // Arrange — same setup as the criterion-1 test; verifies criterion 2:
+        // no Outcome.Conflict returned for the same-login sibling's namespace.
+        BaseUrl baseUrl = BaseUrl.Create("https://github.com").ValueOrThrow();
+        GitHubCredential existing = GitHubCredential.Create("octocat", "ghp_other", baseUrl);
+        existing.SetNamespaces([Namespace.Create("octocat").ValueOrThrow()]);
+        _dbContext.Set<Credential>().Add(existing);
+        await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        NamespaceDerivationOutcome outcome = new NamespaceDerivationOutcome.Derived(
+            [
+                Namespace.Create("octocat").ValueOrThrow(),
+                Namespace.Create("octocat-org").ValueOrThrow(),
+            ],
+            [
+                new ProviderRepository("octocat/hello-world", IsPrivate: false, CanPush: true),
+                new ProviderRepository("octocat-org/repo", IsPrivate: false, CanPush: true),
+            ]);
+        CreateAccount.Handler handler = BuildHandler(
+            new StubNamespaceDeriver(outcome),
+            validateToken: new StubValidateTokenHandler());  // resolves to "octocat"
+        CreateAccount.Command command = new("github", "https://github.com", "ghp_new_token");
+
+        // Act
+        CreateAccount.Outcome result = await handler.HandleAsync(command, TestContext.Current.CancellationToken);
+
+        // Assert — must NOT be a namespace-conflict outcome
+        result.ShouldNotBeOfType<CreateAccount.Outcome.Conflict>();
+    }
+
+    [Fact]
+    public async Task WhenTokenDerivedOwnersIntersectDifferentLoginClaims_ReturnsConflict()
+    {
+        // Arrange — existing credential "other-user" claims "octocat"; incoming token resolves to
+        // "octocat" (different login than "other-user") and derives "octocat".
+        // Criterion 4: different-login overlap must still return Outcome.Conflict (unchanged).
+        BaseUrl baseUrl = BaseUrl.Create("https://github.com").ValueOrThrow();
+        GitHubCredential existing = GitHubCredential.Create("other-user", "ghp_other", baseUrl);
+        existing.SetNamespaces([Namespace.Create("octocat").ValueOrThrow()]);
+        _dbContext.Set<Credential>().Add(existing);
+        await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        NamespaceDerivationOutcome outcome = new NamespaceDerivationOutcome.Derived(
+            [Namespace.Create("octocat").ValueOrThrow()],
+            [new ProviderRepository("octocat/hello-world", IsPrivate: false, CanPush: true)]);
+        CreateAccount.Handler handler = BuildHandler(
+            new StubNamespaceDeriver(outcome),
+            validateToken: new StubValidateTokenHandler());  // resolves to "octocat", different from holder "other-user"
+        CreateAccount.Command command = new("github", "https://github.com", "ghp_new_token");
+
+        // Act
+        CreateAccount.Outcome result = await handler.HandleAsync(command, TestContext.Current.CancellationToken);
+
+        // Assert — namespace conflict, not duplicate (criteria 4)
+        CreateAccount.Outcome.Conflict conflict = result.ShouldBeOfType<CreateAccount.Outcome.Conflict>();
+        conflict.Conflicts.Count.ShouldBe(1);
+        conflict.Conflicts[0].Namespace.ShouldBe("octocat");
     }
 
     [Fact]
