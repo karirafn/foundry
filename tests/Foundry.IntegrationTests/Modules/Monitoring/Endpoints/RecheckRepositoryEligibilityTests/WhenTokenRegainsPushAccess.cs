@@ -10,6 +10,7 @@ using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Features.Providers;
 using Foundry.Modules.Monitoring.Infrastructure;
 using Foundry.Modules.Monitoring.Infrastructure.GitHub;
+using Foundry.Modules.Monitoring.Infrastructure.RateBudget;
 using Foundry.Shared;
 
 using Microsoft.Extensions.DependencyInjection;
@@ -51,7 +52,7 @@ public sealed class WhenTokenRegainsPushAccess : IAsyncDisposable
             // Use a configurable probe handler; state is toggled between initial seeding and recheck.
             services.RemoveAll<GitHubHttpClient>();
             services.AddSingleton(
-                new GitHubHttpClient(new HttpClient(_probeHandler), NullLogger<GitHubHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions())))));
+                new GitHubHttpClient(new HttpClient(_probeHandler), NullLogger<GitHubHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))), new InMemoryProviderRateBudget(), TimeProvider.System));
         });
 
         _client = _factory.CreateClient();

@@ -7,6 +7,7 @@ using Foundry.IntegrationTests.Modules.Monitoring.Endpoints;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Infrastructure;
 using Foundry.Modules.Monitoring.Infrastructure.GitHub;
+using Foundry.Modules.Monitoring.Infrastructure.RateBudget;
 
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -36,7 +37,7 @@ public sealed class WhenTokenCannotPush : IAsyncDisposable
             services.AddSingleton(
                 new GitHubHttpClient(
                     new HttpClient(new ProbeBlockedFakeHandler()),
-                    NullLogger<GitHubHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions())))));
+                    NullLogger<GitHubHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))), new InMemoryProviderRateBudget(), TimeProvider.System));
         });
 
         _client = _factory.CreateClient();

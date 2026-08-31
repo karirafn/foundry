@@ -4,6 +4,7 @@ using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Infrastructure;
 using Foundry.Modules.Monitoring.Infrastructure.GitLab;
+using Foundry.Modules.Monitoring.Infrastructure.RateBudget;
 using Foundry.Shared;
 using Foundry.Testing;
 using Foundry.UnitTests.Modules.Monitoring.Infrastructure;
@@ -31,7 +32,7 @@ public sealed class RateLimitHandling
         // Arrange
         FakeHandler handler = new(HttpStatusCode.TooManyRequests, string.Empty);
         using HttpClient httpClient = new(handler);
-        GitLabHttpClient sut = new(httpClient, NullLogger<GitLabHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))));
+        GitLabHttpClient sut = new(httpClient, NullLogger<GitLabHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))), new InMemoryProviderRateBudget(), TimeProvider.System);
 
         // Act
         Result<IssueListing> result = await sut.GetIssuesAsync(
@@ -54,7 +55,7 @@ public sealed class RateLimitHandling
         FakeHandler handler = new(HttpStatusCode.Forbidden, string.Empty);
         handler.ResponseHeaders.Add("RateLimit-Remaining", "0");
         using HttpClient httpClient = new(handler);
-        GitLabHttpClient sut = new(httpClient, NullLogger<GitLabHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))));
+        GitLabHttpClient sut = new(httpClient, NullLogger<GitLabHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))), new InMemoryProviderRateBudget(), TimeProvider.System);
 
         // Act
         Result<IssueListing> result = await sut.GetIssuesAsync(
@@ -77,7 +78,7 @@ public sealed class RateLimitHandling
         FakeHandler handler = new(HttpStatusCode.Forbidden, string.Empty);
         handler.ResponseHeaders.Add("RateLimit-Remaining", "10");
         using HttpClient httpClient = new(handler);
-        GitLabHttpClient sut = new(httpClient, NullLogger<GitLabHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))));
+        GitLabHttpClient sut = new(httpClient, NullLogger<GitLabHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))), new InMemoryProviderRateBudget(), TimeProvider.System);
 
         // Act
         Result<IssueListing> result = await sut.GetIssuesAsync(
@@ -100,7 +101,7 @@ public sealed class RateLimitHandling
         // Arrange
         FakeHandler handler = new(HttpStatusCode.Forbidden, string.Empty);
         using HttpClient httpClient = new(handler);
-        GitLabHttpClient sut = new(httpClient, NullLogger<GitLabHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))));
+        GitLabHttpClient sut = new(httpClient, NullLogger<GitLabHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))), new InMemoryProviderRateBudget(), TimeProvider.System);
 
         // Act
         Result<IssueListing> result = await sut.GetIssuesAsync(

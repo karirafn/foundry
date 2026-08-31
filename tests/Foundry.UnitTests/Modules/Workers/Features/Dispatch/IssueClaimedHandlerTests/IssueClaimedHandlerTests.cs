@@ -1113,6 +1113,9 @@ public sealed class HandleAsync : IAsyncDisposable
         public Task<int> GetProbeIntervalMinutesAsync(CancellationToken cancellationToken)
             => Task.FromResult(60);
 
+        public Task<int> GetPollIntervalSecondsAsync(CancellationToken cancellationToken)
+            => Task.FromResult(30);
+
         public Task<(string? SystemPromptTemplate, string? WorkerPromptTemplate)> GetPromptTemplatesAsync(
             CancellationToken cancellationToken)
             => Task.FromResult((systemPromptTemplate, workerPromptTemplate));

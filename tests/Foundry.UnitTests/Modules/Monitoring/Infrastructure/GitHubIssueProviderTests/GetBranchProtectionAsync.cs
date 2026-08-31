@@ -4,6 +4,7 @@ using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Infrastructure;
 using Foundry.Modules.Monitoring.Infrastructure.GitHub;
+using Foundry.Modules.Monitoring.Infrastructure.RateBudget;
 using Foundry.Shared;
 using Foundry.Testing;
 using Foundry.UnitTests.Modules.Monitoring.Infrastructure;
@@ -29,7 +30,7 @@ public sealed class GetBranchProtectionAsync
     private static GitHubIssueProvider BuildSut(SequentialFakeHandler handler)
     {
         HttpClient httpClient = new(handler);
-        GitHubHttpClient gitHubHttpClient = new(httpClient, NullLogger<GitHubHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))));
+        GitHubHttpClient gitHubHttpClient = new(httpClient, NullLogger<GitHubHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))), new InMemoryProviderRateBudget(), TimeProvider.System);
         return new GitHubIssueProvider(gitHubHttpClient, ValidToken, ValidBaseUrl);
     }
 

@@ -10,6 +10,7 @@ using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Features.Providers;
 using Foundry.Modules.Monitoring.Infrastructure;
 using Foundry.Modules.Monitoring.Infrastructure.GitHub;
+using Foundry.Modules.Monitoring.Infrastructure.RateBudget;
 using Foundry.Shared;
 
 using Microsoft.Extensions.DependencyInjection;
@@ -49,7 +50,7 @@ public sealed class WhenRepositoryExists : IAsyncDisposable
             services.AddSingleton(
                 new GitHubHttpClient(
                     new HttpClient(new ProbeGrantedFakeHandler()),
-                    NullLogger<GitHubHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions())))));
+                    NullLogger<GitHubHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))), new InMemoryProviderRateBudget(), TimeProvider.System));
         });
 
         _client = _factory.CreateClient();

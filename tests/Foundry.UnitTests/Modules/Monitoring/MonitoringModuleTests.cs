@@ -7,10 +7,8 @@ using Foundry.WebApi.Persistence;
 
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
-using Microsoft.Extensions.Options;
 
 using Shouldly;
 
@@ -20,42 +18,15 @@ namespace Foundry.UnitTests.Modules.Monitoring;
 
 public sealed class MonitoringModuleTests
 {
-    private static IConfiguration BuildConfiguration(Dictionary<string, string?> values)
-    {
-        return new ConfigurationBuilder()
-            .AddInMemoryCollection(values)
-            .Build();
-    }
-
-    [Fact]
-    public void AddMonitoringModule_RegistersMonitoringOptions()
-    {
-        // Arrange
-        IConfiguration configuration = BuildConfiguration(new Dictionary<string, string?>
-        {
-            ["Monitoring:DefaultPollIntervalSeconds"] = "60",
-        });
-        ServiceCollection services = new();
-
-        // Act
-        services.AddMonitoringModule(configuration);
-        ServiceProvider provider = services.BuildServiceProvider();
-
-        // Assert
-        IOptions<MonitoringOptions> options = provider.GetRequiredService<IOptions<MonitoringOptions>>();
-        options.Value.DefaultPollIntervalSeconds.ShouldBe(60);
-    }
-
     [Fact]
     public void AddMonitoringModule_RegistersIIssueProviderFactory()
     {
         // Arrange
-        IConfiguration configuration = BuildConfiguration(new Dictionary<string, string?>());
         ServiceCollection services = new();
         services.AddHttpClient();
 
         // Act
-        services.AddMonitoringModule(configuration);
+        services.AddMonitoringModule();
         ServiceProvider provider = services.BuildServiceProvider();
 
         // Assert — can resolve the factory
@@ -68,14 +39,13 @@ public sealed class MonitoringModuleTests
     public void AddMonitoringModule_RegistersICredentialResolver()
     {
         // Arrange
-        IConfiguration configuration = BuildConfiguration(new Dictionary<string, string?>());
         ServiceCollection services = new();
         services.AddHttpClient();
         services.AddDbContext<DbContext, FoundryDbContext>(opts =>
             opts.UseSqlite(new SqliteConnectionStringBuilder { DataSource = ":memory:" }.ToString()));
 
         // Act
-        services.AddMonitoringModule(configuration);
+        services.AddMonitoringModule();
         ServiceProvider provider = services.BuildServiceProvider();
 
         // Assert
@@ -88,14 +58,13 @@ public sealed class MonitoringModuleTests
     public void AddMonitoringModule_RegistersIRepositorySlugQueries()
     {
         // Arrange
-        IConfiguration configuration = BuildConfiguration(new Dictionary<string, string?>());
         ServiceCollection services = new();
         services.AddHttpClient();
         services.AddDbContext<DbContext, FoundryDbContext>(opts =>
             opts.UseSqlite(new SqliteConnectionStringBuilder { DataSource = ":memory:" }.ToString()));
 
         // Act
-        services.AddMonitoringModule(configuration);
+        services.AddMonitoringModule();
         ServiceProvider provider = services.BuildServiceProvider();
 
         // Assert
@@ -108,14 +77,13 @@ public sealed class MonitoringModuleTests
     public void AddMonitoringModule_RegistersIPostExitProviderQueries()
     {
         // Arrange
-        IConfiguration configuration = BuildConfiguration(new Dictionary<string, string?>());
         ServiceCollection services = new();
         services.AddHttpClient();
         services.AddDbContext<DbContext, FoundryDbContext>(opts =>
             opts.UseSqlite(new SqliteConnectionStringBuilder { DataSource = ":memory:" }.ToString()));
 
         // Act
-        services.AddMonitoringModule(configuration);
+        services.AddMonitoringModule();
         ServiceProvider provider = services.BuildServiceProvider();
 
         // Assert
@@ -129,13 +97,12 @@ public sealed class MonitoringModuleTests
     public void AddMonitoringModule_RegistersMonitoringServiceAsHostedService()
     {
         // Arrange
-        IConfiguration configuration = BuildConfiguration(new Dictionary<string, string?>());
         ServiceCollection services = new();
         services.AddHttpClient();
         services.AddLogging();
 
         // Act
-        services.AddMonitoringModule(configuration);
+        services.AddMonitoringModule();
         ServiceProvider provider = services.BuildServiceProvider();
 
         // Assert — MonitoringService is registered as a hosted service

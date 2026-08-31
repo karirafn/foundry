@@ -8,9 +8,11 @@ import { NEVER } from 'rxjs';
 import { SettingsLayoutComponent } from './settings-layout';
 import { SettingsService } from '../../../core/services/settings.service';
 import { SystemSignalRService } from '../../../core/services/system-signalr.service';
+import { RateBudgetService } from '../../../core/services/rate-budget.service';
 import { SETTINGS_ROUTES } from '../settings.routes';
 
 const mockSystemSignalR = { reconnected: NEVER, reloadTrigger: NEVER, loginSessionUpdate: NEVER, notifications: signal([]).asReadonly() };
+const mockRateBudgetService = { snapshot: signal(null).asReadonly() };
 
 const SETTINGS_RESPONSE = {
   maxConcurrent: 3,
@@ -291,6 +293,7 @@ describe('SettingsLayoutComponent', () => {
           { path: 'settings', children: SETTINGS_ROUTES },
         ]),
         { provide: SystemSignalRService, useValue: mockSystemSignalR },
+        { provide: RateBudgetService, useValue: mockRateBudgetService },
       ],
     });
     const router = TestBed.inject(Router);
@@ -318,6 +321,7 @@ describe('SettingsLayoutComponent', () => {
           { path: 'settings', children: SETTINGS_ROUTES },
         ]),
         { provide: SystemSignalRService, useValue: mockSystemSignalR },
+        { provide: RateBudgetService, useValue: mockRateBudgetService },
       ],
     });
     const httpMock = TestBed.inject(HttpTestingController);

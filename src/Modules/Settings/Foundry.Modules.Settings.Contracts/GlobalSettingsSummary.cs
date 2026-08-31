@@ -4,6 +4,7 @@ public sealed record GlobalSettingsSummary(
     int MaxConcurrent,
     int TimeoutMinutes,
     int ProbeIntervalMinutes,
+    int PollIntervalSeconds,
     string? SystemPromptTemplate,
     string? WorkerPromptTemplate,
     DateTimeOffset? UsageLimitResetsAt,

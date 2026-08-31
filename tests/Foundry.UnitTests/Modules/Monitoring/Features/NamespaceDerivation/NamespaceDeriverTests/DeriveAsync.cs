@@ -7,6 +7,7 @@ using Foundry.Modules.Monitoring.Features.NamespaceDerivation;
 using Foundry.Modules.Monitoring.Infrastructure;
 using Foundry.Modules.Monitoring.Infrastructure.GitLab;
 using Foundry.Modules.Monitoring.Infrastructure.GitHub;
+using Foundry.Modules.Monitoring.Infrastructure.RateBudget;
 using Foundry.Shared;
 using Foundry.Testing;
 
@@ -37,8 +38,8 @@ public sealed class DeriveAsync
 
     private static NamespaceDeriver BuildSut(HttpClient gitHubClient, HttpClient? gitLabClient = null)
     {
-        GitHubHttpClient gh = new(gitHubClient, NullLogger<GitHubHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))));
-        GitLabHttpClient gl = new(gitLabClient ?? new HttpClient(new NotCalledHandler()), NullLogger<GitLabHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))));
+        GitHubHttpClient gh = new(gitHubClient, NullLogger<GitHubHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))), new InMemoryProviderRateBudget(), TimeProvider.System);
+        GitLabHttpClient gl = new(gitLabClient ?? new HttpClient(new NotCalledHandler()), NullLogger<GitLabHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))), new InMemoryProviderRateBudget(), TimeProvider.System);
         return new NamespaceDeriver(gh, gl, NullLogger<NamespaceDeriver>.Instance);
     }
 

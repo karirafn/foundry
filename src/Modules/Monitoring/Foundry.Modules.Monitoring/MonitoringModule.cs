@@ -9,15 +9,16 @@ using Foundry.Modules.Monitoring.Features.Eligibility;
 using Foundry.Modules.Monitoring.Features.NamespaceDerivation;
 using Foundry.Modules.Monitoring.Features.Polling;
 using Foundry.Modules.Monitoring.Features.Providers;
+using Foundry.Modules.Monitoring.Features.RateBudget;
 using Foundry.Modules.Monitoring.Features.Repositories;
 using Foundry.Modules.Monitoring.Infrastructure;
 using Foundry.Modules.Monitoring.Infrastructure.GitHub;
 using Foundry.Modules.Monitoring.Infrastructure.GitLab;
+using Foundry.Modules.Monitoring.Infrastructure.RateBudget;
 using Foundry.Shared;
 using Foundry.Shared.Infrastructure;
 
 using Microsoft.AspNetCore.Routing;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
@@ -25,15 +26,13 @@ namespace Foundry.Modules.Monitoring;
 
 public static class MonitoringModule
 {
-    public static IServiceCollection AddMonitoringModule(
-        this IServiceCollection services,
-        IConfiguration configuration)
+    public static IServiceCollection AddMonitoringModule(this IServiceCollection services)
     {
-        services.Configure<MonitoringOptions>(configuration.GetSection("Monitoring"));
-
         services.AddMemoryCache();
         services.TryAddSingleton<DefaultBranchCache>();
         services.TryAddSingleton<IHostAddressResolver, SystemHostAddressResolver>();
+        services.TryAddSingleton<IProviderRateBudget, InMemoryProviderRateBudget>();
+        services.TryAddSingleton<TimeProvider>(_ => TimeProvider.System);
         services.AddScoped<ProviderHostGuard>();
 
         services.AddHttpClient<GitHubHttpClient>();
@@ -79,6 +78,7 @@ public static class MonitoringModule
     {
         app.MapAccountEndpoints();
         app.MapProviderEndpoints();
+        app.MapRateBudgetEndpoints();
         app.MapRepositoryEndpoints();
         return app;
     }

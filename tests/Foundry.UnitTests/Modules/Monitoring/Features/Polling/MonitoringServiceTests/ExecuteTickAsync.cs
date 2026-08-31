@@ -6,6 +6,7 @@ using Foundry.Modules.Monitoring.Features.CredentialResolution;
 using Foundry.Modules.Monitoring.Features.Eligibility;
 using Foundry.Modules.Monitoring.Features.Providers;
 using Foundry.Modules.Monitoring.Features.Polling;
+using Foundry.Modules.Settings.Contracts.Queries;
 using Foundry.Shared;
 using Foundry.Testing;
 using Foundry.WebApi.Persistence;
@@ -14,7 +15,6 @@ using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
-using Microsoft.Extensions.Options;
 
 using Shouldly;
 
@@ -54,24 +54,18 @@ public sealed class ExecuteTickAsync : IAsyncDisposable
         return new FoundryDbContext(options);
     }
 
-    private static MonitoringService BuildService(
-        ServiceProvider serviceProvider,
-        int defaultPollIntervalSeconds = 30)
+    private static MonitoringService BuildService(ServiceProvider serviceProvider)
     {
-        MonitoringOptions monitoringOptions = new()
-        {
-            DefaultPollIntervalSeconds = defaultPollIntervalSeconds,
-        };
-
         IServiceScopeFactory scopeFactory = serviceProvider.GetRequiredService<IServiceScopeFactory>();
 
         return new MonitoringService(
             scopeFactory,
-            Options.Create(monitoringOptions),
             NullLogger<MonitoringService>.Instance);
     }
 
-    private ServiceProvider BuildServiceProvider(IIssueProviderFactory providerFactory)
+    private ServiceProvider BuildServiceProvider(
+        IIssueProviderFactory providerFactory,
+        IGlobalSettingsQueries? settingsQueries = null)
     {
         SqliteConnection connection = _connection;
 
@@ -96,6 +90,11 @@ public sealed class ExecuteTickAsync : IAsyncDisposable
         services.AddScoped<IIssueProviderFactory>(_ => providerFactory);
         services.AddScoped<ICredentialResolver, CredentialResolver>();
         services.AddScoped<RepositoryPoller>();
+
+        // Default: poll interval of 30 seconds (mirrors GlobalSettings default).
+        IGlobalSettingsQueries queries = settingsQueries ?? new StubSettingsQueries(30);
+        services.AddScoped<IGlobalSettingsQueries>(_ => queries);
+
         return services.BuildServiceProvider();
     }
 
@@ -199,6 +198,110 @@ public sealed class ExecuteTickAsync : IAsyncDisposable
 
         // Assert
         exception.ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task WhenPollIntervalQueriedPerTick_DueNessReflectsQueryValue()
+    {
+        // Arrange — seed a repo, mark it polled at Now
+        MonitoredRepositoryId repoId = await SeedActiveRepoAsync();
+
+        await using (FoundryDbContext db = CreateDbContext())
+        {
+            MonitoredRepository? repo = await db.Set<MonitoredRepository>()
+                .FindAsync([repoId], TestContext.Current.CancellationToken);
+            repo.ShouldNotBeNull();
+            repo.MarkPolled(Now);
+            await db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        }
+
+        // Act — tick 5 seconds later with a 3-second interval returned by queries
+        // (interval < elapsed time, so due for poll)
+        StubSettingsQueries queriesReturningShortInterval = new(pollIntervalSeconds: 3);
+        using ServiceProvider sp = BuildServiceProvider(
+            new EmptyIssueProviderFactory(),
+            settingsQueries: queriesReturningShortInterval);
+        MonitoringService sut = BuildService(sp);
+        await sut.ExecuteTickAsync(Now.AddSeconds(5), TestContext.Current.CancellationToken);
+
+        // Assert — repo was polled because the per-tick interval (3s) elapsed
+        await using FoundryDbContext assertDb = CreateDbContext();
+        MonitoredRepository? assertRepo = await assertDb.Set<MonitoredRepository>()
+            .FindAsync([repoId], TestContext.Current.CancellationToken);
+        assertRepo.ShouldNotBeNull();
+        assertRepo.LastPolledAt.ShouldBe(Now.AddSeconds(5));
+    }
+
+    [Fact]
+    public async Task WhenPollIntervalQueriedPerTick_LongIntervalPreventsEarlyPoll()
+    {
+        // Arrange — seed a repo, mark it polled at Now
+        MonitoredRepositoryId repoId = await SeedActiveRepoAsync();
+
+        await using (FoundryDbContext db = CreateDbContext())
+        {
+            MonitoredRepository? repo = await db.Set<MonitoredRepository>()
+                .FindAsync([repoId], TestContext.Current.CancellationToken);
+            repo.ShouldNotBeNull();
+            repo.MarkPolled(Now);
+            await db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        }
+
+        // Act — tick 5 seconds later with a 60-second interval (not due)
+        StubSettingsQueries queriesReturningLongInterval = new(pollIntervalSeconds: 60);
+        using ServiceProvider sp = BuildServiceProvider(
+            new EmptyIssueProviderFactory(),
+            settingsQueries: queriesReturningLongInterval);
+        MonitoringService sut = BuildService(sp);
+        await sut.ExecuteTickAsync(Now.AddSeconds(5), TestContext.Current.CancellationToken);
+
+        // Assert — repo was NOT polled because interval (60s) has not elapsed
+        await using FoundryDbContext assertDb = CreateDbContext();
+        MonitoredRepository? assertRepo = await assertDb.Set<MonitoredRepository>()
+            .FindAsync([repoId], TestContext.Current.CancellationToken);
+        assertRepo.ShouldNotBeNull();
+        assertRepo.LastPolledAt.ShouldBe(Now);
+    }
+
+    private sealed class StubSettingsQueries(int pollIntervalSeconds) : IGlobalSettingsQueries
+    {
+        public Task<int> GetPollIntervalSecondsAsync(CancellationToken cancellationToken)
+            => Task.FromResult(pollIntervalSeconds);
+
+        public Task<Foundry.Modules.Settings.Contracts.GlobalSettingsSummary?> GetSettingsAsync(
+            CancellationToken cancellationToken)
+            => Task.FromResult<Foundry.Modules.Settings.Contracts.GlobalSettingsSummary?>(null);
+
+        public Task<int> GetMaxConcurrentAsync(CancellationToken cancellationToken)
+            => Task.FromResult(1);
+
+        public Task<int> GetTimeoutMinutesAsync(CancellationToken cancellationToken)
+            => Task.FromResult(120);
+
+        public Task<int> GetProbeIntervalMinutesAsync(CancellationToken cancellationToken)
+            => Task.FromResult(60);
+
+        public Task<(string? SystemPromptTemplate, string? WorkerPromptTemplate)> GetPromptTemplatesAsync(
+            CancellationToken cancellationToken)
+            => Task.FromResult<(string?, string?)>((null, null));
+
+        public Task<Foundry.Modules.Settings.Contracts.Queries.DispatchPauseState> GetDispatchPauseStateAsync(
+            CancellationToken cancellationToken)
+            => Task.FromResult(new Foundry.Modules.Settings.Contracts.Queries.DispatchPauseState(null, false, true));
+
+        public Task<Foundry.Modules.Settings.Contracts.ImageBuildStatus> GetImageBuildStatusAsync(
+            CancellationToken cancellationToken)
+            => Task.FromResult(Foundry.Modules.Settings.Contracts.ImageBuildStatus.Idle);
+
+        public Task<bool> GetWorkerImageInstallsDockerAsync(CancellationToken cancellationToken)
+            => Task.FromResult(false);
+
+        public Task<IReadOnlyDictionary<string, string>> GetWorkerImageBuildArgsAsync(
+            CancellationToken cancellationToken)
+            => Task.FromResult<IReadOnlyDictionary<string, string>>(new Dictionary<string, string>());
+
+        public Task<IReadOnlyList<string>> GetAllowedProviderHostsAsync(CancellationToken cancellationToken)
+            => Task.FromResult<IReadOnlyList<string>>([]);
     }
 
     private sealed class EmptyIssueProviderFactory : IIssueProviderFactory

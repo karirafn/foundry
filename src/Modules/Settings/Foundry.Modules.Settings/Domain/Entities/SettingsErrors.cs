@@ -35,6 +35,11 @@ internal static class SettingsErrors
     internal static Error InvalidProbeInterval(int value) =>
         new(InvalidProbeIntervalCode, $"Probe interval must be between {GlobalSettings.MinProbeIntervalMinutes} and {GlobalSettings.MaxProbeIntervalMinutes} minutes, but was {value}.");
 
+    internal const string InvalidPollIntervalCode = "Settings.InvalidPollInterval";
+
+    internal static Error InvalidPollInterval(int value) =>
+        new(InvalidPollIntervalCode, $"Poll interval must be between {GlobalSettings.MinPollIntervalSeconds} and {GlobalSettings.MaxPollIntervalSeconds} seconds, but was {value}.");
+
     internal const string InvalidProviderHostCode = "Settings.InvalidProviderHost";
 
     internal static Error InvalidProviderHost(string host) =>

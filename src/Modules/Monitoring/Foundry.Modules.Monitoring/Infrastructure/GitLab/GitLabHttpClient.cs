@@ -13,6 +13,7 @@ using Foundry.Modules.Monitoring.Features.Polling;
 using Foundry.Modules.Monitoring.Features.Providers;
 using Foundry.Modules.Monitoring.Infrastructure;
 using Foundry.Modules.Monitoring.Infrastructure.GitHub;
+using Foundry.Modules.Monitoring.Infrastructure.RateBudget;
 using Foundry.Shared;
 
 using Microsoft.Extensions.Logging;
@@ -22,7 +23,9 @@ namespace Foundry.Modules.Monitoring.Infrastructure.GitLab;
 internal sealed partial class GitLabHttpClient(
     HttpClient httpClient,
     ILogger<GitLabHttpClient> logger,
-    DefaultBranchCache defaultBranchCache)
+    DefaultBranchCache defaultBranchCache,
+    IProviderRateBudget rateBudget,
+    TimeProvider timeProvider)
 {
     private const int MaxCommentBodyLength = 4000;
     private const string TruncatedSuffix = "[truncated]";
@@ -68,6 +71,8 @@ internal sealed partial class GitLabHttpClient(
             return Result<TokenValidationOutcome>.Fail(GitLabErrors.UnexpectedStatusCode((int)response.StatusCode));
         }
 
+        RecordRestHeadroom(response);
+
         string responseBody = await response.Content.ReadAsStringAsync(cancellationToken);
         GitLabUserDto? userDto = DeserializeUserDto(responseBody, apiBaseUrl, (int)response.StatusCode);
 
@@ -108,6 +113,8 @@ internal sealed partial class GitLabHttpClient(
         {
             return Result<TokenValidationOutcome>.Ok(TokenValidationOutcome.ScopesUnverifiable(accountName));
         }
+
+        RecordRestHeadroom(selfResponse);
 
         string selfBody = await selfResponse.Content.ReadAsStringAsync(cancellationToken);
         GitLabTokenSelfDto? dto;
@@ -161,6 +168,8 @@ internal sealed partial class GitLabHttpClient(
             {
                 return Result<IssueListing>.Fail(ErrorFromNonSuccess(response));
             }
+
+            RecordRestHeadroom(response);
 
             string body = await response.Content.ReadAsStringAsync(cancellationToken);
             List<GitLabIssueDto>? dtos = JsonSerializer.Deserialize<List<GitLabIssueDto>>(body, JsonOptions);
@@ -220,6 +229,7 @@ internal sealed partial class GitLabHttpClient(
 
         if (response.StatusCode is HttpStatusCode.Forbidden or HttpStatusCode.NotFound)
         {
+            RecordRestHeadroom(response);
             return Result<IReadOnlyList<int>>.Ok([]);
         }
 
@@ -227,6 +237,8 @@ internal sealed partial class GitLabHttpClient(
         {
             return Result<IReadOnlyList<int>>.Fail(ErrorFromNonSuccess(response));
         }
+
+        RecordRestHeadroom(response);
 
         string body = await response.Content.ReadAsStringAsync(cancellationToken);
         List<GitLabIssueLinkDto>? dtos = JsonSerializer.Deserialize<List<GitLabIssueLinkDto>>(body, JsonOptions);
@@ -279,6 +291,8 @@ internal sealed partial class GitLabHttpClient(
             return Result<GitLabProjectInfoDto>.Fail(ErrorFromNonSuccess(response));
         }
 
+        RecordRestHeadroom(response);
+
         string body = await response.Content.ReadAsStringAsync(cancellationToken);
         GitLabProjectInfoDto? dto = JsonSerializer.Deserialize<GitLabProjectInfoDto>(body, JsonOptions);
 
@@ -317,6 +331,8 @@ internal sealed partial class GitLabHttpClient(
             return Result<bool>.Fail(ErrorFromNonSuccess(response));
         }
 
+        RecordRestHeadroom(response);
+
         string body = await response.Content.ReadAsStringAsync(cancellationToken);
         GitLabIssueStateDto? dto = JsonSerializer.Deserialize<GitLabIssueStateDto>(body, JsonOptions);
 
@@ -354,6 +370,8 @@ internal sealed partial class GitLabHttpClient(
         {
             return Result<PullRequestStatus>.Fail(ErrorFromNonSuccess(response));
         }
+
+        RecordRestHeadroom(response);
 
         string body = await response.Content.ReadAsStringAsync(cancellationToken);
         GitLabMergeRequestDto? dto = JsonSerializer.Deserialize<GitLabMergeRequestDto>(body, JsonOptions);
@@ -396,6 +414,8 @@ internal sealed partial class GitLabHttpClient(
         {
             return Result<ReviewFeedback>.Fail(ErrorFromNonSuccess(response));
         }
+
+        RecordRestHeadroom(response);
 
         string body = await response.Content.ReadAsStringAsync(cancellationToken);
         List<GitLabDiscussionDto>? dtos = JsonSerializer.Deserialize<List<GitLabDiscussionDto>>(body, JsonOptions);
@@ -462,6 +482,8 @@ internal sealed partial class GitLabHttpClient(
                 return Result<IReadOnlyList<ProviderRepository>>.Fail(ErrorFromNonSuccess(response));
             }
 
+            RecordRestHeadroom(response);
+
             string body = await response.Content.ReadAsStringAsync(cancellationToken);
             List<GitLabProjectListItemDto>? dtos =
                 JsonSerializer.Deserialize<List<GitLabProjectListItemDto>>(body, JsonOptions);
@@ -524,6 +546,7 @@ internal sealed partial class GitLabHttpClient(
 
         if (createResponse.StatusCode == HttpStatusCode.BadRequest)
         {
+            RecordRestHeadroom(createResponse);
             return Result<bool>.Ok(false);
         }
 
@@ -532,6 +555,7 @@ internal sealed partial class GitLabHttpClient(
             return Result<bool>.Fail(ErrorFromNonSuccess(createResponse));
         }
 
+        RecordRestHeadroom(createResponse);
         return Result<bool>.Ok(true);
     }
 
@@ -563,6 +587,8 @@ internal sealed partial class GitLabHttpClient(
         {
             return Result<MergeRequestByBranch>.Fail(ErrorFromNonSuccess(response));
         }
+
+        RecordRestHeadroom(response);
 
         string body = await response.Content.ReadAsStringAsync(cancellationToken);
         List<GitLabMergeRequestStateDto>? dtos =
@@ -625,6 +651,8 @@ internal sealed partial class GitLabHttpClient(
         {
             return Result<BranchCommitSummary>.Fail(ErrorFromNonSuccess(response));
         }
+
+        RecordRestHeadroom(response);
 
         string body = await response.Content.ReadAsStringAsync(cancellationToken);
         GitLabCompareDto? dto = JsonSerializer.Deserialize<GitLabCompareDto>(body, JsonOptions);
@@ -696,6 +724,8 @@ internal sealed partial class GitLabHttpClient(
             return Result<bool>.Fail(ErrorFromNonSuccess(response));
         }
 
+        RecordRestHeadroom(response);
+
         string body = await response.Content.ReadAsStringAsync(cancellationToken);
         GitLabProjectWithPermissionsDto? dto =
             JsonSerializer.Deserialize<GitLabProjectWithPermissionsDto>(body, JsonOptions);
@@ -731,6 +761,7 @@ internal sealed partial class GitLabHttpClient(
 
         if (response.StatusCode == HttpStatusCode.NotFound)
         {
+            RecordRestHeadroom(response);
             return Result<BranchRules>.Ok(new BranchRules(false, false, false));
         }
 
@@ -738,6 +769,8 @@ internal sealed partial class GitLabHttpClient(
         {
             return Result<BranchRules>.Fail(ErrorFromNonSuccess(response));
         }
+
+        RecordRestHeadroom(response);
 
         string body = await response.Content.ReadAsStringAsync(cancellationToken);
         GitLabProtectedBranchDto? dto = JsonSerializer.Deserialize<GitLabProtectedBranchDto>(body, JsonOptions);
@@ -828,6 +861,37 @@ internal sealed partial class GitLabHttpClient(
         }
 
         return path;
+    }
+
+    private void RecordRestHeadroom(HttpResponseMessage response)
+    {
+        if (!response.Headers.TryGetValues("RateLimit-Remaining", out IEnumerable<string>? remainingValues))
+        {
+            return;
+        }
+
+        if (!int.TryParse(remainingValues.FirstOrDefault(), out int remaining))
+        {
+            return;
+        }
+
+        int? limit = null;
+        if (response.Headers.TryGetValues("RateLimit-Limit", out IEnumerable<string>? limitValues) &&
+            int.TryParse(limitValues.FirstOrDefault(), out int parsedLimit))
+        {
+            limit = parsedLimit;
+        }
+
+        DateTimeOffset? resetAt = null;
+        if (response.Headers.TryGetValues("RateLimit-Reset", out IEnumerable<string>? resetValues) &&
+            long.TryParse(resetValues.FirstOrDefault(), out long epochSeconds))
+        {
+            resetAt = DateTimeOffset.FromUnixTimeSeconds(epochSeconds);
+        }
+
+        rateBudget.Record(
+            ProviderBudgetKey.GitLabRest,
+            new RateBudgetReading(remaining, limit, resetAt, timeProvider.GetUtcNow()));
     }
 
     private static Error ErrorFromNonSuccess(HttpResponseMessage response)

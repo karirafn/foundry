@@ -62,6 +62,7 @@ export interface GlobalSettingsResponse {
   maxConcurrent: number;
   timeoutMinutes: number;
   probeIntervalMinutes: number;
+  pollIntervalSeconds: number;
   systemPromptTemplate: string | null;
   workerPromptTemplate: string | null;
   usageLimitResetsAt: string | null;

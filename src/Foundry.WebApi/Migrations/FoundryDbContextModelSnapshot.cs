@@ -366,6 +366,12 @@ namespace Foundry.WebApi.Migrations
                         .HasColumnType("INTEGER")
                         .HasColumnName("max_concurrent");
 
+                    b.Property<int>("PollIntervalSeconds")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasDefaultValue(30)
+                        .HasColumnName("poll_interval_seconds");
+
                     b.Property<int>("ProbeIntervalMinutes")
                         .HasColumnType("INTEGER")
                         .HasColumnName("probe_interval_minutes");

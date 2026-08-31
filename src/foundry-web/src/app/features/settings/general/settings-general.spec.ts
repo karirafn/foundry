@@ -9,8 +9,10 @@ import { vi } from 'vitest';
 import { SettingsGeneralComponent } from './settings-general';
 import { SettingsService } from '../../../core/services/settings.service';
 import { SystemSignalRService } from '../../../core/services/system-signalr.service';
+import { RateBudgetService } from '../../../core/services/rate-budget.service';
 
 const mockSystemSignalR = { reconnected: NEVER, reloadTrigger: NEVER, loginSessionUpdate: NEVER, notifications: signal([]).asReadonly() };
+const mockRateBudgetService = { snapshot: signal(null).asReadonly() };
 
 const IMAGE_FLAGS_DEFAULTS = {
   installDotnet: false,
@@ -39,6 +41,7 @@ const API_KEY_RESPONSE = {
   maxConcurrent: 3,
   timeoutMinutes: 60,
   probeIntervalMinutes: 60,
+  pollIntervalSeconds: 30,
   ...BASE_RESPONSE,
 };
 
@@ -91,6 +94,7 @@ function setup() {
       provideHttpClient(),
       provideHttpClientTesting(),
       { provide: SystemSignalRService, useValue: mockSystemSignalR },
+      { provide: RateBudgetService, useValue: mockRateBudgetService },
     ],
   });
 
@@ -1147,7 +1151,7 @@ describe('SettingsGeneralComponent', () => {
     // Assert
     const req = httpMock.expectOne('/api/settings/dispatch');
     expect(req.request.method).toBe('PUT');
-    expect(req.request.body).toEqual({ autoResumeOnUsageReset: true, probeIntervalMinutes: 60 });
+    expect(req.request.body).toEqual({ autoResumeOnUsageReset: true, probeIntervalMinutes: 60, pollIntervalSeconds: 30 });
     req.flush(API_KEY_RESPONSE);
   });
 
@@ -1205,7 +1209,7 @@ describe('SettingsGeneralComponent', () => {
 
     // Act — trigger a dispatch save error
     const service = TestBed.inject(SettingsService);
-    service.updateDispatchSettings(true, 60);
+    service.updateDispatchSettings(true, 60, 30);
     httpMock.expectOne('/api/settings/dispatch').flush('Bad Request', { status: 400, statusText: 'Bad Request' });
     fixture.detectChanges();
 
@@ -1294,7 +1298,7 @@ describe('SettingsGeneralComponent', () => {
     const { httpMock } = setup();
     const fixture = TestBed.createComponent(SettingsGeneralComponent);
     fixture.detectChanges();
-    flushSettings(httpMock, { ...API_KEY_RESPONSE, probeIntervalMinutes: 45, autoResumeOnUsageReset: false });
+    flushSettings(httpMock, { ...API_KEY_RESPONSE, probeIntervalMinutes: 45, pollIntervalSeconds: 90, autoResumeOnUsageReset: false });
     fixture.detectChanges();
 
     // Act
@@ -1305,7 +1309,7 @@ describe('SettingsGeneralComponent', () => {
 
     // Assert
     const req = httpMock.expectOne('/api/settings/dispatch');
-    expect(req.request.body).toEqual({ autoResumeOnUsageReset: false, probeIntervalMinutes: 45 });
+    expect(req.request.body).toEqual({ autoResumeOnUsageReset: false, probeIntervalMinutes: 45, pollIntervalSeconds: 90 });
     req.flush(API_KEY_RESPONSE);
   });
 
@@ -1319,7 +1323,7 @@ describe('SettingsGeneralComponent', () => {
 
     // Act
     const service = TestBed.inject(SettingsService);
-    service.updateDispatchSettings(true, 60);
+    service.updateDispatchSettings(true, 60, 30);
     fixture.detectChanges();
 
     // Assert
@@ -1342,7 +1346,7 @@ describe('SettingsGeneralComponent', () => {
 
     // Act
     const service = TestBed.inject(SettingsService);
-    service.updateDispatchSettings(true, 60);
+    service.updateDispatchSettings(true, 60, 30);
     httpMock.expectOne('/api/settings/dispatch').flush(API_KEY_RESPONSE);
     fixture.detectChanges();
 
@@ -1363,7 +1367,7 @@ describe('SettingsGeneralComponent', () => {
 
     // Act
     const service = TestBed.inject(SettingsService);
-    service.updateDispatchSettings(true, 60);
+    service.updateDispatchSettings(true, 60, 30);
     httpMock.expectOne('/api/settings/dispatch').flush('Bad Request', {
       status: 400,
       statusText: 'Bad Request',
@@ -2199,6 +2203,41 @@ describe('SettingsGeneralComponent', () => {
       expect(hint).toBeTruthy();
       expect(hint.textContent).toContain('comma-separated');
       expect(hint.textContent).toContain('Maximum 50 hostnames');
+    });
+  });
+
+  describe('Provider Rate Budget section', () => {
+    it('should render the "Provider Rate Budget" section title', () => {
+      // Arrange
+      const { httpMock } = setup();
+      const fixture = TestBed.createComponent(SettingsGeneralComponent);
+      fixture.detectChanges();
+      flushSettings(httpMock);
+      fixture.detectChanges();
+
+      // Act
+      const el = fixture.nativeElement as HTMLElement;
+      const titles = Array.from(el.querySelectorAll('.general-settings__section-title'));
+      const rateBudgetTitle = titles.find((t) => t.textContent?.includes('Provider Rate Budget'));
+
+      // Assert
+      expect(rateBudgetTitle).toBeTruthy();
+    });
+
+    it('should render the fd-rate-budget-panel component', () => {
+      // Arrange
+      const { httpMock } = setup();
+      const fixture = TestBed.createComponent(SettingsGeneralComponent);
+      fixture.detectChanges();
+      flushSettings(httpMock);
+      fixture.detectChanges();
+
+      // Act
+      const el = fixture.nativeElement as HTMLElement;
+      const panel = el.querySelector('fd-rate-budget-panel');
+
+      // Assert
+      expect(panel).toBeTruthy();
     });
   });
 });

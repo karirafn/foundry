@@ -2,6 +2,7 @@ using System.Net;
 
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Infrastructure;
+using Foundry.Modules.Monitoring.Infrastructure.RateBudget;
 using Foundry.Modules.Monitoring.Infrastructure.GitLab;
 using Foundry.Shared;
 using Foundry.Testing;
@@ -38,7 +39,7 @@ public sealed class GetDefaultBranchAsyncGitLab
         using HttpClient httpClient = new(handler);
         using IMemoryCache memoryCache = CreateMemoryCache();
         DefaultBranchCache cache = new(memoryCache);
-        GitLabHttpClient sut = new(httpClient, NullLogger<GitLabHttpClient>.Instance, cache);
+        GitLabHttpClient sut = new(httpClient, NullLogger<GitLabHttpClient>.Instance, cache, new InMemoryProviderRateBudget(), TimeProvider.System);
 
         // Act
         Result<string> first = await sut.GetDefaultBranchAsync(
@@ -61,7 +62,7 @@ public sealed class GetDefaultBranchAsyncGitLab
         using HttpClient httpClient = new(handler);
         using IMemoryCache memoryCache = CreateMemoryCache();
         DefaultBranchCache cache = new(memoryCache);
-        GitLabHttpClient sut = new(httpClient, NullLogger<GitLabHttpClient>.Instance, cache);
+        GitLabHttpClient sut = new(httpClient, NullLogger<GitLabHttpClient>.Instance, cache, new InMemoryProviderRateBudget(), TimeProvider.System);
         RepositorySlug otherSlug = RepositorySlug.Create("group/other-project").ValueOrThrow();
 
         // Act

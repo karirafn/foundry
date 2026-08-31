@@ -56,7 +56,10 @@ public sealed class HandleAsync : IAsyncLifetime
 
         await using FoundryDbContext dbContext = CreateDbContext();
         UpdateDispatchSettings.Handler sut = new(dbContext);
-        UpdateDispatchSettings.Command command = new(AutoResumeOnUsageReset: false, ProbeIntervalMinutes: 30);
+        UpdateDispatchSettings.Command command = new(
+            AutoResumeOnUsageReset: false,
+            ProbeIntervalMinutes: 30,
+            PollIntervalSeconds: 30);
 
         // Act
         Result<GlobalSettingsSummary> result = await sut.HandleAsync(
@@ -82,7 +85,10 @@ public sealed class HandleAsync : IAsyncLifetime
 
         await using FoundryDbContext dbContext = CreateDbContext();
         UpdateDispatchSettings.Handler sut = new(dbContext);
-        UpdateDispatchSettings.Command command = new(AutoResumeOnUsageReset: true, ProbeIntervalMinutes: 30);
+        UpdateDispatchSettings.Command command = new(
+            AutoResumeOnUsageReset: true,
+            ProbeIntervalMinutes: 30,
+            PollIntervalSeconds: 30);
 
         // Act
         Result<GlobalSettingsSummary> result = await sut.HandleAsync(
@@ -109,7 +115,10 @@ public sealed class HandleAsync : IAsyncLifetime
         await using (FoundryDbContext dbContext = CreateDbContext())
         {
             UpdateDispatchSettings.Handler sut = new(dbContext);
-            UpdateDispatchSettings.Command command = new(AutoResumeOnUsageReset: false, ProbeIntervalMinutes: 45);
+            UpdateDispatchSettings.Command command = new(
+                AutoResumeOnUsageReset: false,
+                ProbeIntervalMinutes: 45,
+                PollIntervalSeconds: 60);
             await sut.HandleAsync(command, TestContext.Current.CancellationToken);
         }
 
@@ -120,7 +129,8 @@ public sealed class HandleAsync : IAsyncLifetime
         stored.ShouldNotBeNull();
         stored.ShouldSatisfyAllConditions(
             () => stored.AutoResumeOnUsageReset.ShouldBeFalse(),
-            () => stored.ProbeIntervalMinutes.ShouldBe(45));
+            () => stored.ProbeIntervalMinutes.ShouldBe(45),
+            () => stored.PollIntervalSeconds.ShouldBe(60));
     }
 
     [Fact]
@@ -129,7 +139,10 @@ public sealed class HandleAsync : IAsyncLifetime
         // Arrange
         await using FoundryDbContext dbContext = CreateDbContext();
         UpdateDispatchSettings.Handler sut = new(dbContext);
-        UpdateDispatchSettings.Command command = new(AutoResumeOnUsageReset: true, ProbeIntervalMinutes: 30);
+        UpdateDispatchSettings.Command command = new(
+            AutoResumeOnUsageReset: true,
+            ProbeIntervalMinutes: 30,
+            PollIntervalSeconds: 30);
 
         // Act
         Result<GlobalSettingsSummary> result = await sut.HandleAsync(
@@ -155,7 +168,10 @@ public sealed class HandleAsync : IAsyncLifetime
 
         await using FoundryDbContext dbContext = CreateDbContext();
         UpdateDispatchSettings.Handler sut = new(dbContext);
-        UpdateDispatchSettings.Command command = new(AutoResumeOnUsageReset: true, ProbeIntervalMinutes: 1);
+        UpdateDispatchSettings.Command command = new(
+            AutoResumeOnUsageReset: true,
+            ProbeIntervalMinutes: 1,
+            PollIntervalSeconds: 30);
 
         // Act
         Result<GlobalSettingsSummary> result = await sut.HandleAsync(
@@ -166,5 +182,63 @@ public sealed class HandleAsync : IAsyncLifetime
         Result<GlobalSettingsSummary>.Failure failure =
             result.ShouldBeOfType<Result<GlobalSettingsSummary>.Failure>();
         failure.Error.Code.ShouldBe(SettingsErrors.InvalidProbeIntervalCode);
+    }
+
+    [Fact]
+    public async Task WhenSettingsExist_UpdatesPollIntervalAndReturnsSummary()
+    {
+        // Arrange
+        await using (FoundryDbContext seedDb = CreateDbContext())
+        {
+            GlobalSettings settings = GlobalSettings.Create();
+            seedDb.Set<GlobalSettings>().Add(settings);
+            await seedDb.SaveChangesAsync(TestContext.Current.CancellationToken);
+        }
+
+        await using FoundryDbContext dbContext = CreateDbContext();
+        UpdateDispatchSettings.Handler sut = new(dbContext);
+        UpdateDispatchSettings.Command command = new(
+            AutoResumeOnUsageReset: true,
+            ProbeIntervalMinutes: 30,
+            PollIntervalSeconds: 120);
+
+        // Act
+        Result<GlobalSettingsSummary> result = await sut.HandleAsync(
+            command,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        Result<GlobalSettingsSummary>.Success success =
+            result.ShouldBeOfType<Result<GlobalSettingsSummary>.Success>();
+        success.Value.PollIntervalSeconds.ShouldBe(120);
+    }
+
+    [Fact]
+    public async Task WhenPollIntervalIsBelowMin_ReturnsInvalidPollIntervalError()
+    {
+        // Arrange
+        await using (FoundryDbContext seedDb = CreateDbContext())
+        {
+            GlobalSettings settings = GlobalSettings.Create();
+            seedDb.Set<GlobalSettings>().Add(settings);
+            await seedDb.SaveChangesAsync(TestContext.Current.CancellationToken);
+        }
+
+        await using FoundryDbContext dbContext = CreateDbContext();
+        UpdateDispatchSettings.Handler sut = new(dbContext);
+        UpdateDispatchSettings.Command command = new(
+            AutoResumeOnUsageReset: true,
+            ProbeIntervalMinutes: 30,
+            PollIntervalSeconds: 1);
+
+        // Act
+        Result<GlobalSettingsSummary> result = await sut.HandleAsync(
+            command,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        Result<GlobalSettingsSummary>.Failure failure =
+            result.ShouldBeOfType<Result<GlobalSettingsSummary>.Failure>();
+        failure.Error.Code.ShouldBe(SettingsErrors.InvalidPollIntervalCode);
     }
 }

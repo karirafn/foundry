@@ -8,6 +8,7 @@ using Foundry.Modules.Monitoring.Features.Accounts;
 using Foundry.Modules.Monitoring.Features.Accounts.Tokens;
 using Foundry.Modules.Monitoring.Infrastructure;
 using Foundry.Modules.Monitoring.Infrastructure.GitHub;
+using Foundry.Modules.Monitoring.Infrastructure.RateBudget;
 using Foundry.Shared;
 
 using Microsoft.Extensions.DependencyInjection;
@@ -88,7 +89,7 @@ public sealed class WhenDuplicateLoginIntersectsOwner : IAsyncDisposable
             services.AddSingleton(
                 new GitHubHttpClient(
                     new HttpClient(new TokenKeyedListingFakeHandler(TokenToListing)),
-                    NullLogger<GitHubHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions())))));
+                    NullLogger<GitHubHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))), new InMemoryProviderRateBudget(), TimeProvider.System));
         });
         _client = _factory.CreateClient();
     }
@@ -245,7 +246,7 @@ public sealed class WhenDuplicateLoginIntersectsOwner : IAsyncDisposable
                     new HttpClient(new StaticListingFakeHandler(
                         System.Net.HttpStatusCode.OK,
                         """[{"full_name":"octocat/repo","private":false,"permissions":{"push":true}}]""")),
-                    NullLogger<GitHubHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions())))));
+                    NullLogger<GitHubHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))), new InMemoryProviderRateBudget(), TimeProvider.System));
         });
         using HttpClient client = factory.CreateClient();
 

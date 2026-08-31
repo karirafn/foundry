@@ -3,6 +3,7 @@ using System.Text.Json;
 
 using Foundry.Modules.Monitoring.Infrastructure;
 using Foundry.Modules.Monitoring.Infrastructure.GitHub;
+using Foundry.Modules.Monitoring.Infrastructure.RateBudget;
 using Foundry.Shared;
 using Foundry.Testing;
 using Foundry.UnitTests.Modules.Monitoring.Infrastructure;
@@ -34,7 +35,7 @@ public sealed class ExecuteGraphQlAsync
         GitHubHttpClient sut = new(
             httpClient,
             NullLogger<GitHubHttpClient>.Instance,
-            new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))));
+            new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))), new InMemoryProviderRateBudget(), TimeProvider.System);
 
         // Act
         Result<TestData> result = await sut.ExecuteGraphQlAsync<TestData>(
@@ -61,7 +62,7 @@ public sealed class ExecuteGraphQlAsync
         GitHubHttpClient sut = new(
             httpClient,
             NullLogger<GitHubHttpClient>.Instance,
-            new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))));
+            new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))), new InMemoryProviderRateBudget(), TimeProvider.System);
 
         // Act
         Result<TestData> result = await sut.ExecuteGraphQlAsync<TestData>(
@@ -87,7 +88,7 @@ public sealed class ExecuteGraphQlAsync
         GitHubHttpClient sut = new(
             httpClient,
             NullLogger<GitHubHttpClient>.Instance,
-            new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))));
+            new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))), new InMemoryProviderRateBudget(), TimeProvider.System);
 
         // Act
         Result<TestData> result = await sut.ExecuteGraphQlAsync<TestData>(
@@ -114,7 +115,7 @@ public sealed class ExecuteGraphQlAsync
         GitHubHttpClient sut = new(
             httpClient,
             NullLogger<GitHubHttpClient>.Instance,
-            new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))));
+            new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))), new InMemoryProviderRateBudget(), TimeProvider.System);
         Uri nonHttpsUrl = new("http://api.github.com");
 
         // Act
@@ -140,7 +141,7 @@ public sealed class ExecuteGraphQlAsync
         GitHubHttpClient sut = new(
             httpClient,
             NullLogger<GitHubHttpClient>.Instance,
-            new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))));
+            new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))), new InMemoryProviderRateBudget(), TimeProvider.System);
         Uri ftpUrl = new("ftp://api.github.com");
 
         // Act
@@ -176,7 +177,7 @@ public sealed class ExecuteGraphQlAsync
         GitHubHttpClient sut = new(
             httpClient,
             NullLogger<GitHubHttpClient>.Instance,
-            new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))));
+            new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))), new InMemoryProviderRateBudget(), TimeProvider.System);
 
         // Act
         Result<TestData> result = await sut.ExecuteGraphQlAsync<TestData>(
@@ -210,7 +211,7 @@ public sealed class ExecuteGraphQlAsync
         GitHubHttpClient sut = new(
             httpClient,
             NullLogger<GitHubHttpClient>.Instance,
-            new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))));
+            new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))), new InMemoryProviderRateBudget(), TimeProvider.System);
 
         // Act
         Result<TestData> result = await sut.ExecuteGraphQlAsync<TestData>(
@@ -236,7 +237,7 @@ public sealed class ExecuteGraphQlAsync
         GitHubHttpClient sut = new(
             httpClient,
             NullLogger<GitHubHttpClient>.Instance,
-            new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))));
+            new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))), new InMemoryProviderRateBudget(), TimeProvider.System);
 
         // Act
         Result<TestData> result = await sut.ExecuteGraphQlAsync<TestData>(
@@ -264,7 +265,7 @@ public sealed class ExecuteGraphQlAsync
         GitHubHttpClient sut = new(
             httpClient,
             NullLogger<GitHubHttpClient>.Instance,
-            new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))));
+            new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))), new InMemoryProviderRateBudget(), TimeProvider.System);
 
         // Act
         Result<TestData> result = await sut.ExecuteGraphQlAsync<TestData>(
@@ -289,7 +290,7 @@ public sealed class ExecuteGraphQlAsync
         GitHubHttpClient sut = new(
             httpClient,
             NullLogger<GitHubHttpClient>.Instance,
-            new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))));
+            new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))), new InMemoryProviderRateBudget(), TimeProvider.System);
 
         // Act
         Result<TestData> result = await sut.ExecuteGraphQlAsync<TestData>(
@@ -318,7 +319,7 @@ public sealed class ExecuteGraphQlAsync
         GitHubHttpClient sut = new(
             httpClient,
             NullLogger<GitHubHttpClient>.Instance,
-            new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))));
+            new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))), new InMemoryProviderRateBudget(), TimeProvider.System);
 
         // Act
         Result<TestData> _ = await sut.ExecuteGraphQlAsync<TestData>(
@@ -349,7 +350,7 @@ public sealed class ExecuteGraphQlAsync
         GitHubHttpClient sut = new(
             httpClient,
             NullLogger<GitHubHttpClient>.Instance,
-            new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))));
+            new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))), new InMemoryProviderRateBudget(), TimeProvider.System);
         string graphQlQuery = "query IssueState($owner: String!) { repository(owner: $owner) { id } }";
         object variables = new { owner = "my-org" };
 
@@ -388,7 +389,7 @@ public sealed class ExecuteGraphQlAsync
         GitHubHttpClient sut = new(
             httpClient,
             NullLogger<GitHubHttpClient>.Instance,
-            new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))));
+            new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))), new InMemoryProviderRateBudget(), TimeProvider.System);
 
         // Act
         Result<TestData> result = await sut.ExecuteGraphQlAsync<TestData>(

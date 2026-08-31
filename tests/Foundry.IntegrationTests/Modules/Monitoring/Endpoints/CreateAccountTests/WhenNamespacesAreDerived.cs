@@ -8,6 +8,7 @@ using Foundry.Modules.Monitoring.Features.Accounts;
 using Foundry.Modules.Monitoring.Features.Accounts.Tokens;
 using Foundry.Modules.Monitoring.Infrastructure;
 using Foundry.Modules.Monitoring.Infrastructure.GitHub;
+using Foundry.Modules.Monitoring.Infrastructure.RateBudget;
 using Foundry.Shared;
 
 using Microsoft.EntityFrameworkCore;
@@ -59,7 +60,7 @@ public sealed class WhenNamespacesAreDerived : IAsyncDisposable
             // Replace the named HttpClient registrations with a fake that returns the listing.
             services.RemoveAll<GitHubHttpClient>();
             services.AddSingleton(
-                new GitHubHttpClient(new HttpClient(new ListingFakeHandler(HttpStatusCode.OK, GitHubListingJson)), NullLogger<GitHubHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions())))));
+                new GitHubHttpClient(new HttpClient(new ListingFakeHandler(HttpStatusCode.OK, GitHubListingJson)), NullLogger<GitHubHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))), new InMemoryProviderRateBudget(), TimeProvider.System));
         });
         _client = _factory.CreateClient();
     }

@@ -166,6 +166,9 @@ public sealed class TryRunProbeAsync : IAsyncDisposable
         public Task<int> GetProbeIntervalMinutesAsync(CancellationToken cancellationToken)
             => Task.FromResult(probeIntervalMinutes);
 
+        public Task<int> GetPollIntervalSecondsAsync(CancellationToken cancellationToken)
+            => Task.FromResult(30);
+
         // Remaining members not exercised by these tests
         public Task<Foundry.Modules.Settings.Contracts.GlobalSettingsSummary?> GetSettingsAsync(
             CancellationToken cancellationToken)

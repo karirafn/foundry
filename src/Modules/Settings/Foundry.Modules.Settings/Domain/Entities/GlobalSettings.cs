@@ -17,6 +17,9 @@ public sealed class GlobalSettings : AggregateRoot<GlobalSettingsId>
     internal const int MinProbeIntervalMinutes = 5;
     internal const int MaxProbeIntervalMinutes = 10080;
     internal const int DefaultProbeIntervalMinutes = 60;
+    internal const int MinPollIntervalSeconds = 5;
+    internal const int MaxPollIntervalSeconds = 3600;
+    internal const int DefaultPollIntervalSeconds = 30;
     internal const int MaxProviderHostLength = 255;
     internal const int MaxAllowedProviderHostCount = 50;
 
@@ -29,6 +32,7 @@ public sealed class GlobalSettings : AggregateRoot<GlobalSettingsId>
         MaxConcurrent = DefaultMaxConcurrent;
         TimeoutMinutes = DefaultTimeoutMinutes;
         ProbeIntervalMinutes = DefaultProbeIntervalMinutes;
+        PollIntervalSeconds = DefaultPollIntervalSeconds;
         AutoResumeOnUsageReset = true;
         WorkerImageConfiguration = WorkerImageConfiguration.Default;
         ImageBuildState = new ImageBuildState.Idle();
@@ -41,6 +45,8 @@ public sealed class GlobalSettings : AggregateRoot<GlobalSettingsId>
     public int TimeoutMinutes { get; private set; }
 
     public int ProbeIntervalMinutes { get; private set; }
+
+    public int PollIntervalSeconds { get; private set; }
 
     public string? SystemPromptTemplate { get; private set; }
 
@@ -131,6 +137,18 @@ public sealed class GlobalSettings : AggregateRoot<GlobalSettingsId>
         }
 
         ProbeIntervalMinutes = probeIntervalMinutes;
+        UpdatedAt = DateTimeOffset.UtcNow;
+        return Result.Ok();
+    }
+
+    public Result UpdatePollInterval(int pollIntervalSeconds)
+    {
+        if (pollIntervalSeconds < MinPollIntervalSeconds || pollIntervalSeconds > MaxPollIntervalSeconds)
+        {
+            return SettingsErrors.InvalidPollInterval(pollIntervalSeconds);
+        }
+
+        PollIntervalSeconds = pollIntervalSeconds;
         UpdatedAt = DateTimeOffset.UtcNow;
         return Result.Ok();
     }

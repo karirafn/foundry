@@ -4,6 +4,7 @@ using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Infrastructure;
 using Foundry.Modules.Monitoring.Infrastructure.GitLab;
+using Foundry.Modules.Monitoring.Infrastructure.RateBudget;
 using Foundry.Shared;
 using Foundry.Testing;
 using Foundry.UnitTests.Modules.Monitoring.Infrastructure;
@@ -44,7 +45,7 @@ public sealed class GetIssuesAsync
 
         FakeHandler handler = new(HttpStatusCode.OK, json);
         using HttpClient httpClient = new(handler);
-        GitLabHttpClient sut = new(httpClient, NullLogger<GitLabHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))));
+        GitLabHttpClient sut = new(httpClient, NullLogger<GitLabHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))), new InMemoryProviderRateBudget(), TimeProvider.System);
 
         // Act
         Result<IssueListing> result = await sut.GetIssuesAsync(
@@ -76,7 +77,7 @@ public sealed class GetIssuesAsync
         // Arrange
         FakeHandler handler = new(HttpStatusCode.OK, "[]");
         using HttpClient httpClient = new(handler);
-        GitLabHttpClient sut = new(httpClient, NullLogger<GitLabHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))));
+        GitLabHttpClient sut = new(httpClient, NullLogger<GitLabHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))), new InMemoryProviderRateBudget(), TimeProvider.System);
 
         // Act
         Result<IssueListing> _ = await sut.GetIssuesAsync(ValidBaseUrl, ValidSlug, "glpat_mytoken", CancellationToken.None);
@@ -95,7 +96,7 @@ public sealed class GetIssuesAsync
         RepositorySlug nestedSlug = RepositorySlug.Create("group/subgroup/project").ValueOrThrow();
         FakeHandler handler = new(HttpStatusCode.OK, "[]");
         using HttpClient httpClient = new(handler);
-        GitLabHttpClient sut = new(httpClient, NullLogger<GitLabHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))));
+        GitLabHttpClient sut = new(httpClient, NullLogger<GitLabHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))), new InMemoryProviderRateBudget(), TimeProvider.System);
 
         // Act
         Result<IssueListing> _ = await sut.GetIssuesAsync(ValidBaseUrl, nestedSlug, "glpat_token", CancellationToken.None);
@@ -112,7 +113,7 @@ public sealed class GetIssuesAsync
         // Arrange
         FakeHandler handler = new(HttpStatusCode.OK, "[]");
         using HttpClient httpClient = new(handler);
-        GitLabHttpClient sut = new(httpClient, NullLogger<GitLabHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))));
+        GitLabHttpClient sut = new(httpClient, NullLogger<GitLabHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))), new InMemoryProviderRateBudget(), TimeProvider.System);
 
         // Act
         Result<IssueListing> _ = await sut.GetIssuesAsync(ValidBaseUrl, ValidSlug, "glpat_token", CancellationToken.None);
@@ -132,7 +133,7 @@ public sealed class GetIssuesAsync
         // Arrange
         FakeHandler handler = new(HttpStatusCode.OK, "[]");
         using HttpClient httpClient = new(handler);
-        GitLabHttpClient sut = new(httpClient, NullLogger<GitLabHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))));
+        GitLabHttpClient sut = new(httpClient, NullLogger<GitLabHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))), new InMemoryProviderRateBudget(), TimeProvider.System);
         Uri invalidBaseUrl = new("ftp://gitlab.com/api/v4");
 
         // Act
@@ -155,7 +156,7 @@ public sealed class GetIssuesAsync
         // Arrange
         FakeHandler handler = new(HttpStatusCode.InternalServerError, string.Empty);
         using HttpClient httpClient = new(handler);
-        GitLabHttpClient sut = new(httpClient, NullLogger<GitLabHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))));
+        GitLabHttpClient sut = new(httpClient, NullLogger<GitLabHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))), new InMemoryProviderRateBudget(), TimeProvider.System);
 
         // Act
         Result<IssueListing> result = await sut.GetIssuesAsync(
@@ -177,7 +178,7 @@ public sealed class GetIssuesAsync
         // Arrange
         FakeHandler handler = new(HttpStatusCode.OK, "[]");
         using HttpClient httpClient = new(handler);
-        GitLabHttpClient sut = new(httpClient, NullLogger<GitLabHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))));
+        GitLabHttpClient sut = new(httpClient, NullLogger<GitLabHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))), new InMemoryProviderRateBudget(), TimeProvider.System);
 
         // Act
         Result<IssueListing> _ = await sut.GetIssuesAsync(ValidBaseUrl, ValidSlug, "glpat_token", CancellationToken.None);
@@ -196,7 +197,7 @@ public sealed class GetIssuesAsync
         string json = BuildIssuePageJson(3);
         FakeHandler handler = new(HttpStatusCode.OK, json);
         using HttpClient httpClient = new(handler);
-        GitLabHttpClient sut = new(httpClient, NullLogger<GitLabHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))));
+        GitLabHttpClient sut = new(httpClient, NullLogger<GitLabHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))), new InMemoryProviderRateBudget(), TimeProvider.System);
 
         // Act
         Result<IssueListing> result = await sut.GetIssuesAsync(ValidBaseUrl, ValidSlug, "glpat_token", CancellationToken.None);
@@ -221,7 +222,7 @@ public sealed class GetIssuesAsync
             (HttpStatusCode.OK, emptyPage),
         ]);
         using HttpClient httpClient = new(handler);
-        GitLabHttpClient sut = new(httpClient, NullLogger<GitLabHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))));
+        GitLabHttpClient sut = new(httpClient, NullLogger<GitLabHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))), new InMemoryProviderRateBudget(), TimeProvider.System);
 
         // Act
         Result<IssueListing> result = await sut.GetIssuesAsync(ValidBaseUrl, ValidSlug, "glpat_token", CancellationToken.None);
@@ -248,7 +249,7 @@ public sealed class GetIssuesAsync
             (HttpStatusCode.OK, page3),
         ]);
         using HttpClient httpClient = new(handler);
-        GitLabHttpClient sut = new(httpClient, NullLogger<GitLabHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))));
+        GitLabHttpClient sut = new(httpClient, NullLogger<GitLabHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))), new InMemoryProviderRateBudget(), TimeProvider.System);
 
         // Act
         Result<IssueListing> result = await sut.GetIssuesAsync(ValidBaseUrl, ValidSlug, "glpat_token", CancellationToken.None);
@@ -268,7 +269,7 @@ public sealed class GetIssuesAsync
             Enumerable.Range(0, 20).Select(i =>
                 (HttpStatusCode.OK, BuildIssuePageJson(100, startIndex: i * 100))));
         using HttpClient httpClient = new(handler);
-        GitLabHttpClient sut = new(httpClient, NullLogger<GitLabHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))));
+        GitLabHttpClient sut = new(httpClient, NullLogger<GitLabHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))), new InMemoryProviderRateBudget(), TimeProvider.System);
 
         // Act
         Result<IssueListing> result = await sut.GetIssuesAsync(ValidBaseUrl, ValidSlug, "glpat_token", CancellationToken.None);
@@ -292,7 +293,7 @@ public sealed class GetIssuesAsync
             (HttpStatusCode.InternalServerError, string.Empty),
         ]);
         using HttpClient httpClient = new(handler);
-        GitLabHttpClient sut = new(httpClient, NullLogger<GitLabHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))));
+        GitLabHttpClient sut = new(httpClient, NullLogger<GitLabHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))), new InMemoryProviderRateBudget(), TimeProvider.System);
 
         // Act
         Result<IssueListing> result = await sut.GetIssuesAsync(ValidBaseUrl, ValidSlug, "glpat_token", CancellationToken.None);

@@ -9,6 +9,7 @@ function buildResponse(overrides: Partial<GlobalSettingsResponse> = {}): GlobalS
     maxConcurrent: 3,
     timeoutMinutes: 60,
     probeIntervalMinutes: 60,
+    pollIntervalSeconds: 30,
     systemPromptTemplate: null,
     workerPromptTemplate: null,
     usageLimitResetsAt: null,

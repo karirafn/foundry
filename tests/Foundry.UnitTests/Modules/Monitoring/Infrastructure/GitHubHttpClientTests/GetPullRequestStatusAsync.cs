@@ -4,6 +4,7 @@ using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Features.Providers;
 using Foundry.Modules.Monitoring.Infrastructure;
 using Foundry.Modules.Monitoring.Infrastructure.GitHub;
+using Foundry.Modules.Monitoring.Infrastructure.RateBudget;
 using Foundry.Shared;
 using Foundry.Testing;
 using Foundry.UnitTests.Modules.Monitoring.Infrastructure;
@@ -29,7 +30,7 @@ public sealed class GetPullRequestStatusAsync
         new(
             new HttpClient(handler),
             NullLogger<GitHubHttpClient>.Instance,
-            new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))));
+            new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))), new InMemoryProviderRateBudget(), TimeProvider.System);
 
     [Fact]
     public async Task WhenPrIsMerged_ReturnsMergedAndClosedStatus()

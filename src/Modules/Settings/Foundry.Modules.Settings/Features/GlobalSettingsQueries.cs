@@ -48,6 +48,16 @@ internal sealed class GlobalSettingsQueries(DbContext dbContext) : IGlobalSettin
         return value ?? GlobalSettings.DefaultProbeIntervalMinutes;
     }
 
+    public async Task<int> GetPollIntervalSecondsAsync(CancellationToken cancellationToken)
+    {
+        int? value = await dbContext.Set<GlobalSettings>()
+            .AsNoTracking()
+            .Select(s => (int?)s.PollIntervalSeconds)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        return value ?? GlobalSettings.DefaultPollIntervalSeconds;
+    }
+
     public async Task<(string? SystemPromptTemplate, string? WorkerPromptTemplate)> GetPromptTemplatesAsync(
         CancellationToken cancellationToken)
     {

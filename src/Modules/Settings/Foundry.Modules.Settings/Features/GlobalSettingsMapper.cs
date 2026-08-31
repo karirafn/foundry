@@ -21,6 +21,7 @@ internal static class GlobalSettingsMapper
             settings.MaxConcurrent,
             settings.TimeoutMinutes,
             settings.ProbeIntervalMinutes,
+            settings.PollIntervalSeconds,
             settings.SystemPromptTemplate,
             settings.WorkerPromptTemplate,
             settings.UsageLimitResetsAt,

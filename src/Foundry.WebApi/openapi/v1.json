@@ -708,6 +708,37 @@
         }
       }
     },
+    "/api/rate-budget": {
+      "get": {
+        "tags": [
+          "RateBudget"
+        ],
+        "summary": "Returns current provider rate-limit headroom for all tracked budget keys",
+        "operationId": "GetRateBudget",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RateBudgetSnapshot"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/accounts/{accountId}/repositories": {
       "get": {
         "tags": [
@@ -1973,6 +2004,7 @@
           "maxConcurrent",
           "timeoutMinutes",
           "probeIntervalMinutes",
+          "pollIntervalSeconds",
           "systemPromptTemplate",
           "workerPromptTemplate",
           "usageLimitResetsAt",
@@ -2010,6 +2042,14 @@
             "format": "int32"
           },
           "probeIntervalMinutes": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "pollIntervalSeconds": {
             "pattern": "^-?(?:0|[1-9]\\d*)$",
             "type": [
               "integer",
@@ -2437,6 +2477,88 @@
           }
         }
       },
+      "ProviderBudgetHeadroom": {
+        "required": [
+          "budget",
+          "displayName",
+          "remaining",
+          "limit",
+          "resetAt",
+          "observedAt",
+          "floor",
+          "health"
+        ],
+        "type": "object",
+        "properties": {
+          "budget": {
+            "type": "string"
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "remaining": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "limit": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "resetAt": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
+          },
+          "observedAt": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
+          },
+          "floor": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "health": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "RateBudgetSnapshot": {
+        "required": [
+          "budgets"
+        ],
+        "type": "object",
+        "properties": {
+          "budgets": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ProviderBudgetHeadroom"
+            }
+          }
+        }
+      },
       "RepositoryEligibilityInfo": {
         "required": [
           "status",
@@ -2858,7 +2980,8 @@
       "UpdateDispatchSettingsRequestBody": {
         "required": [
           "autoResumeOnUsageReset",
-          "probeIntervalMinutes"
+          "probeIntervalMinutes",
+          "pollIntervalSeconds"
         ],
         "type": "object",
         "properties": {
@@ -2866,6 +2989,14 @@
             "type": "boolean"
           },
           "probeIntervalMinutes": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "pollIntervalSeconds": {
             "pattern": "^-?(?:0|[1-9]\\d*)$",
             "type": [
               "integer",
@@ -3159,6 +3290,9 @@
     },
     {
       "name": "Providers"
+    },
+    {
+      "name": "RateBudget"
     },
     {
       "name": "Repositories"

@@ -4,6 +4,7 @@ using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Features.Providers;
 using Foundry.Modules.Monitoring.Infrastructure;
 using Foundry.Modules.Monitoring.Infrastructure.GitLab;
+using Foundry.Modules.Monitoring.Infrastructure.RateBudget;
 using Foundry.Shared;
 using Foundry.Testing;
 
@@ -31,7 +32,7 @@ public sealed class GetIssuesAsync
         GitLabHttpClient gitLabHttpClient = new(
             httpClient,
             NullLogger<GitLabHttpClient>.Instance,
-            new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))));
+            new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))), new InMemoryProviderRateBudget(), TimeProvider.System);
         return new GitLabIssueProvider(gitLabHttpClient, ValidToken, ValidBaseUrl);
     }
 
