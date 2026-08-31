@@ -86,6 +86,48 @@ The provider is carried on `ClaimedIssueDispatch` so the worker dispatch knows w
 Inside the worker, the provider CLI is registered as git's credential helper (e.g. `gh auth setup-git`), authenticated by the Account PAT injected as the provider-specific token env var (`GH_TOKEN` for GitHub, `GITLAB_TOKEN` for GitLab) — this authenticates both `git push` and PR/MR creation without embedding the PAT in the repo's git config.
 The provider CLI is baked into the worker image at build time via per-provider build-arg flags (`INSTALL_GH`, `INSTALL_GLAB`); when the flag is off the entrypoint warns rather than failing silently.
 
+## Provider Rate Budget
+
+The finite pool of API requests a provider grants per window.
+A per-provider, per-budget concept tracked independently for each budget key.
+
+| Budget | Limit |
+|---|---|
+| GitHub REST, authenticated user | 5,000 req/hour |
+| GitHub GraphQL, authenticated user | 5,000 points/hour (separate budget; cost = requests/100, min 1) |
+| GitHub content creation (secondary) | 80/min and 500/hour |
+| GitHub per-endpoint points (secondary) | 900/min REST, 2,000/min GraphQL; GET = 1, POST/PATCH/PUT/DELETE = 5 |
+| GitHub concurrency (secondary) | 100 in flight |
+| gitlab.com authenticated API | 2,000 req/min |
+| Conditional GET returning 304 | does not count against the GitHub primary limit |
+
+### Rate Budget Reading
+
+The last observed `remaining` for one budget, together with its `limit`, `resetAt`, and `ObservedAt` (the wall-clock time Foundry recorded the reading).
+Readings are in-memory only — they are not persisted across restarts.
+A reading whose `ObservedAt` age exceeds the staleness window is treated as stale.
+
+### Provider Budget Health
+
+A three-valued verdict produced by the Provider Budget Policy from a reading and a floor:
+
+- **`Healthy`** — a fresh reading with `remaining >= floor`.
+- **`Low`** — a fresh reading with `remaining < floor`. Logged once on transition; surfaced on the dashboard. Polling continues — the governor does not block.
+- **`Unknown`** — the reading is absent or stale. Never treated as exhaustion (fail open).
+
+GitHub REST and GitHub GraphQL produce independent verdicts; a `Low` on one does not gate the other.
+GitLab headroom is recorded for visibility but produces no verdict (not evaluated against a floor).
+
+### Fixed Per-Cycle Cost
+
+The count of provider API calls a poll cycle issues that does **not** scale with issue count.
+Bounded by `RepositoryPoller.MaxFixedPollCallsPerCycle`.
+ADR 0066 and this glossary reference this constant by name rather than restating its value — there is one place to change it and the change is reviewed at the constant.
+A compile-time invariance test asserts that driving `RepositoryPoller.PollAsync` with 5 issues and with 200 issues produces identical total provider-call counts, and that the fixed-cost scenario stays within `MaxFixedPollCallsPerCycle`.
+
+The governor's enforcement is observability and early warning; the compile-time invariance test is the actual enforcement layer.
+See [ADR 0066](docs/adr/0066-provider-api-request-budget-governor.md).
+
 ## Branch Protection
 
 A provider-agnostic set of preconditions Foundry requires on a repository's default branch before processing issues.
@@ -156,6 +198,7 @@ Infrastructure-only settings (Docker image, mounts, memory/CPU/PID limits) remai
 
 The background process that polls configured repositories for issues labeled `foundry`.
 Runs on a fixed tick interval (30s default) and checks whether each repo is due for polling based on its configured poll interval and `LastPolledAt` timestamp.
+The per-cycle provider call cost is bounded by `RepositoryPoller.MaxFixedPollCallsPerCycle` (see [Provider Rate Budget](#provider-rate-budget)) and enforced by the poll-call invariance test.
 
 ## Issue
 
@@ -286,6 +329,7 @@ Computed get-only members (`TierRank`, `DispatchBranchName`, `Context`) are not 
 
 Whether a Monitored Repository meets Foundry's processing preconditions (Branch Protection and write permission).
 Modeled as a value object with three variants: `Eligible`, `Ineligible` (carries a non-empty collection of `EligibilityViolation` values), and `Unreachable` (an eligibility input could not be established).
+The write-probe sizing constraint (see [Provider Rate Budget](#provider-rate-budget) and [ADR 0054](docs/adr/0054-split-eligibility-cadence.md)) limits the number of repositories that can self-heal concurrently within the GitHub secondary rate limit.
 `Unreachable` carries an `UnreachableReason` that distinguishes three causes — each with a distinct operator-facing message:
 
 - **`NeverProbed`** — the write-probe result is `Unknown(Transport)`: no probe has succeeded yet, or the probe failed for a non-rate-limit reason.
