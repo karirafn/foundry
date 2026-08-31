@@ -1,25 +1,21 @@
 using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Modules.Monitoring.Features.CredentialResolution;
 using Foundry.Modules.Monitoring.Features.Providers;
+using Foundry.Modules.Settings.Contracts.Queries;
 using Foundry.Shared;
 using Foundry.Shared.Infrastructure;
 
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
 
 namespace Foundry.Modules.Monitoring.Features.Polling;
 
 internal sealed class MonitoringService(
     IServiceScopeFactory scopeFactory,
-    IOptions<MonitoringOptions> optionsAccessor,
     ILogger<MonitoringService> logger) : PeriodicBackgroundService(logger)
 {
     private static readonly TimeSpan Interval = TimeSpan.FromSeconds(30);
-
-    private readonly TimeSpan _defaultPollInterval =
-        TimeSpan.FromSeconds(optionsAccessor.Value.DefaultPollIntervalSeconds);
 
     protected override TimeSpan TickInterval => Interval;
 
@@ -34,12 +30,16 @@ internal sealed class MonitoringService(
         IIssueProviderFactory providerFactory = scope.ServiceProvider.GetRequiredService<IIssueProviderFactory>();
         ICredentialResolver credentialResolver = scope.ServiceProvider.GetRequiredService<ICredentialResolver>();
         RepositoryPoller poller = scope.ServiceProvider.GetRequiredService<RepositoryPoller>();
+        IGlobalSettingsQueries settingsQueries = scope.ServiceProvider.GetRequiredService<IGlobalSettingsQueries>();
+
+        int pollIntervalSeconds = await settingsQueries.GetPollIntervalSecondsAsync(cancellationToken);
+        TimeSpan pollInterval = TimeSpan.FromSeconds(pollIntervalSeconds);
 
         List<MonitoredRepository> repos = await LoadActiveReposAsync(dbContext, cancellationToken);
 
         foreach (MonitoredRepository repo in repos)
         {
-            if (!repo.IsDueForPoll(_defaultPollInterval, now))
+            if (!repo.IsDueForPoll(pollInterval, now))
             {
                 continue;
             }

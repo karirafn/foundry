@@ -18,7 +18,6 @@ using Foundry.Shared;
 using Foundry.Shared.Infrastructure;
 
 using Microsoft.AspNetCore.Routing;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
@@ -26,12 +25,8 @@ namespace Foundry.Modules.Monitoring;
 
 public static class MonitoringModule
 {
-    public static IServiceCollection AddMonitoringModule(
-        this IServiceCollection services,
-        IConfiguration configuration)
+    public static IServiceCollection AddMonitoringModule(this IServiceCollection services)
     {
-        services.Configure<MonitoringOptions>(configuration.GetSection("Monitoring"));
-
         services.AddMemoryCache();
         services.TryAddSingleton<DefaultBranchCache>();
         services.TryAddSingleton<IHostAddressResolver, SystemHostAddressResolver>();

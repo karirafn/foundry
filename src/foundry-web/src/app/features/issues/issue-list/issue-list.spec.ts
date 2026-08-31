@@ -40,6 +40,7 @@ const mockSettingsResponse: GlobalSettingsResponse = {
   maxConcurrent: 3,
   timeoutMinutes: 30,
   probeIntervalMinutes: 60,
+  pollIntervalSeconds: 30,
   systemPromptTemplate: null,
   workerPromptTemplate: null,
   usageLimitResetsAt: null,

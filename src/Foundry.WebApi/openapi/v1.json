@@ -1973,6 +1973,7 @@
           "maxConcurrent",
           "timeoutMinutes",
           "probeIntervalMinutes",
+          "pollIntervalSeconds",
           "systemPromptTemplate",
           "workerPromptTemplate",
           "usageLimitResetsAt",
@@ -2010,6 +2011,14 @@
             "format": "int32"
           },
           "probeIntervalMinutes": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "pollIntervalSeconds": {
             "pattern": "^-?(?:0|[1-9]\\d*)$",
             "type": [
               "integer",
@@ -2858,7 +2867,8 @@
       "UpdateDispatchSettingsRequestBody": {
         "required": [
           "autoResumeOnUsageReset",
-          "probeIntervalMinutes"
+          "probeIntervalMinutes",
+          "pollIntervalSeconds"
         ],
         "type": "object",
         "properties": {
@@ -2866,6 +2876,14 @@
             "type": "boolean"
           },
           "probeIntervalMinutes": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "pollIntervalSeconds": {
             "pattern": "^-?(?:0|[1-9]\\d*)$",
             "type": [
               "integer",

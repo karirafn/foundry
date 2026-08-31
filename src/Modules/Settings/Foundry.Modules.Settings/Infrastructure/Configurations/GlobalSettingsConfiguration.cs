@@ -34,6 +34,10 @@ internal sealed class GlobalSettingsConfiguration : IEntityTypeConfiguration<Glo
         builder.Property(s => s.ProbeIntervalMinutes)
             .HasColumnName("probe_interval_minutes");
 
+        builder.Property(s => s.PollIntervalSeconds)
+            .HasColumnName("poll_interval_seconds")
+            .HasDefaultValue(GlobalSettings.DefaultPollIntervalSeconds);
+
         builder.Property(s => s.SystemPromptTemplate)
             .HasMaxLength(GlobalSettings.MaxPromptTemplateLength)
             .HasColumnName("system_prompt_template");

@@ -15,6 +15,8 @@ public interface IGlobalSettingsQueries
 
     Task<int> GetProbeIntervalMinutesAsync(CancellationToken cancellationToken);
 
+    Task<int> GetPollIntervalSecondsAsync(CancellationToken cancellationToken);
+
     Task<(string? SystemPromptTemplate, string? WorkerPromptTemplate)> GetPromptTemplatesAsync(
         CancellationToken cancellationToken);
 

@@ -340,4 +340,31 @@ public sealed class ToSummary
         // Assert
         result.ProbeIntervalMinutes.ShouldBe(15);
     }
+
+    [Fact]
+    public void WhenDefaultSettings_PollIntervalSecondsIsDefault()
+    {
+        // Arrange
+        GlobalSettings settings = CreateDefaultSettings();
+
+        // Act
+        GlobalSettingsSummary result = GlobalSettingsMapper.ToSummary(settings);
+
+        // Assert
+        result.PollIntervalSeconds.ShouldBe(GlobalSettings.DefaultPollIntervalSeconds);
+    }
+
+    [Fact]
+    public void WhenPollIntervalUpdated_SummaryReflectsNewValue()
+    {
+        // Arrange
+        GlobalSettings settings = CreateDefaultSettings();
+        settings.UpdatePollInterval(120);
+
+        // Act
+        GlobalSettingsSummary result = GlobalSettingsMapper.ToSummary(settings);
+
+        // Assert
+        result.PollIntervalSeconds.ShouldBe(120);
+    }
 }

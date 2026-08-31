@@ -63,7 +63,8 @@ public sealed class WhenSettingsExist : IAsyncDisposable
         summary.ShouldNotBeNull();
         summary.ShouldSatisfyAllConditions(
             () => summary.MaxConcurrent.ShouldBe(1),
-            () => summary.TimeoutMinutes.ShouldBe(120));
+            () => summary.TimeoutMinutes.ShouldBe(120),
+            () => summary.PollIntervalSeconds.ShouldBe(30));
     }
 
     [Fact]

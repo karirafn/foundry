@@ -47,7 +47,7 @@ public sealed class WhenValuesAreValid : IAsyncDisposable
     {
         // Arrange
         await SeedDefaultSettingsAsync();
-        object body = new { autoResumeOnUsageReset = false, probeIntervalMinutes = 30 };
+        object body = new { autoResumeOnUsageReset = false, probeIntervalMinutes = 30, pollIntervalSeconds = 60 };
 
         // Act
         HttpResponseMessage response = await _client.PutAsJsonAsync(
@@ -64,7 +64,8 @@ public sealed class WhenValuesAreValid : IAsyncDisposable
         summary.ShouldNotBeNull();
         summary.ShouldSatisfyAllConditions(
             () => summary.AutoResumeOnUsageReset.ShouldBeFalse(),
-            () => summary.ProbeIntervalMinutes.ShouldBe(30));
+            () => summary.ProbeIntervalMinutes.ShouldBe(30),
+            () => summary.PollIntervalSeconds.ShouldBe(60));
     }
 
     [Fact]
@@ -72,7 +73,7 @@ public sealed class WhenValuesAreValid : IAsyncDisposable
     {
         // Arrange
         await SeedDefaultSettingsAsync();
-        object body = new { autoResumeOnUsageReset = false, probeIntervalMinutes = 45 };
+        object body = new { autoResumeOnUsageReset = false, probeIntervalMinutes = 45, pollIntervalSeconds = 120 };
 
         await _client.PutAsJsonAsync(
             new Uri("/api/settings/dispatch", UriKind.Relative),
@@ -93,6 +94,7 @@ public sealed class WhenValuesAreValid : IAsyncDisposable
         summary.ShouldNotBeNull();
         summary.ShouldSatisfyAllConditions(
             () => summary.AutoResumeOnUsageReset.ShouldBeFalse(),
-            () => summary.ProbeIntervalMinutes.ShouldBe(45));
+            () => summary.ProbeIntervalMinutes.ShouldBe(45),
+            () => summary.PollIntervalSeconds.ShouldBe(120));
     }
 }
