@@ -8,7 +8,7 @@ import { components } from '../../api/schema';
 export type RateBudgetSnapshot = components['schemas']['RateBudgetSnapshot'];
 export type ProviderBudgetHeadroom = components['schemas']['ProviderBudgetHeadroom'];
 
-const REFRESH_INTERVAL_MS = 30_000;
+export const REFRESH_INTERVAL_MS = 30_000;
 
 @Injectable({ providedIn: 'root' })
 export class RateBudgetService {

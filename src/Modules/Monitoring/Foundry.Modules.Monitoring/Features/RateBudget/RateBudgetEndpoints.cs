@@ -8,6 +8,9 @@ internal static class RateBudgetEndpoints
 {
     internal static IEndpointRouteBuilder MapRateBudgetEndpoints(this IEndpointRouteBuilder routes)
     {
+        // /api/rate-budget intentionally serves public, unauthenticated budget headroom —
+        // the dashboard must show rate-limit status before a session is established.
+        // Revisit when an auth layer is introduced.
         RouteGroupBuilder group = routes.MapGroup("/api/rate-budget")
             .WithTags("RateBudget");
 

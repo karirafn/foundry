@@ -19,7 +19,8 @@ internal static class UpdateDispatchSettings
     {
         public Result Validate(Command command)
         {
-            if (command.ProbeIntervalMinutes < GlobalSettings.MinProbeIntervalMinutes)
+            if (command.ProbeIntervalMinutes < GlobalSettings.MinProbeIntervalMinutes
+                || command.ProbeIntervalMinutes > GlobalSettings.MaxProbeIntervalMinutes)
             {
                 return SettingsErrors.InvalidProbeInterval(command.ProbeIntervalMinutes);
             }

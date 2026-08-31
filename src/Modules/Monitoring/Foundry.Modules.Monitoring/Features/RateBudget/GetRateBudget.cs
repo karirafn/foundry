@@ -91,7 +91,8 @@ internal static class GetRateBudget
                     TypedResults.Ok(GetRateBudgetMapper.Map(store, timeProvider.GetUtcNow())))
                 .WithName("GetRateBudget")
                 .WithSummary("Returns current provider rate-limit headroom for all tracked budget keys")
-                .Produces<RateBudgetSnapshot>();
+                .Produces<RateBudgetSnapshot>()
+                .ProducesProblem(StatusCodes.Status500InternalServerError);
         }
     }
 }

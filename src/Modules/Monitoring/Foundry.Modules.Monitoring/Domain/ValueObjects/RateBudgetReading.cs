@@ -10,7 +10,7 @@ namespace Foundry.Modules.Monitoring.Domain.ValueObjects;
 /// <see cref="ObservedAt"/>, never on this value, to avoid timestamp-vs-duration confusion).
 /// </param>
 /// <param name="ObservedAt">When this reading was recorded.</param>
-public sealed record RateBudgetReading(
+internal sealed record RateBudgetReading(
     int Remaining,
     int? Limit,
     DateTimeOffset? ResetAt,

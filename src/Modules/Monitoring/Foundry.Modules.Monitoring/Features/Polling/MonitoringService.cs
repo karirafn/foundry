@@ -15,6 +15,9 @@ internal sealed class MonitoringService(
     IServiceScopeFactory scopeFactory,
     ILogger<MonitoringService> logger) : PeriodicBackgroundService(logger)
 {
+    // Fixed scheduler heartbeat/resolution — the effective per-repository poll cadence is the
+    // operator-configured value read each tick via IGlobalSettingsQueries.GetPollIntervalSecondsAsync
+    // and applied through repo.IsDueForPoll(...). The 30 s heartbeat is intentional by design.
     private static readonly TimeSpan Interval = TimeSpan.FromSeconds(30);
 
     protected override TimeSpan TickInterval => Interval;

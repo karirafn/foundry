@@ -37,6 +37,6 @@ public sealed class RateBudgetReadingBuilder
         return this;
     }
 
-    public RateBudgetReading Build() =>
+    internal RateBudgetReading Build() =>
         new(_remaining, _limit, _resetAt, _observedAt);
 }

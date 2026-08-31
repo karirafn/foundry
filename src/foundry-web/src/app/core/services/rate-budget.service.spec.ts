@@ -1,7 +1,8 @@
 import { TestBed } from '@angular/core/testing';
 import { provideHttpClient } from '@angular/common/http';
 import { provideHttpClientTesting, HttpTestingController } from '@angular/common/http/testing';
-import { RateBudgetService, RateBudgetSnapshot } from './rate-budget.service';
+import { vi } from 'vitest';
+import { RateBudgetService, RateBudgetSnapshot, REFRESH_INTERVAL_MS } from './rate-budget.service';
 
 const SNAPSHOT_FIXTURE: RateBudgetSnapshot = {
   budgets: [
@@ -75,22 +76,28 @@ describe('RateBudgetService', () => {
 
   it('should keep prior snapshot when HTTP request fails', () => {
     // Arrange
-    const { svc, http } = setup();
+    vi.useFakeTimers();
+    try {
+      const { svc, http } = setup();
 
-    // Seed a successful response first
-    const firstReq = http.expectOne('/api/rate-budget');
-    firstReq.flush(SNAPSHOT_FIXTURE);
+      // Seed a successful initial response
+      const firstReq = http.expectOne('/api/rate-budget');
+      firstReq.flush(SNAPSHOT_FIXTURE);
 
-    // At this point snapshot has data
-    const snapshotAfterSuccess = svc.snapshot();
-    expect(snapshotAfterSuccess).not.toBeNull();
+      const snapshotAfterSuccess = svc.snapshot();
+      expect(snapshotAfterSuccess).not.toBeNull();
 
-    // Act — trigger interval tick but return an error
-    // The interval fires on its own so we just verify verify() passes with no pending requests
-    // (the service does not make another request synchronously — that is driven by the timer)
+      // Act — advance time to fire the interval, then flush with an error
+      vi.advanceTimersByTime(REFRESH_INTERVAL_MS);
 
-    // Assert — snapshot retained
-    expect(svc.snapshot()).toBe(snapshotAfterSuccess);
+      const secondReq = http.expectOne('/api/rate-budget');
+      secondReq.flush('Server error', { status: 500, statusText: 'Internal Server Error' });
+
+      // Assert — prior successful snapshot is retained (catchError keeps the old value)
+      expect(svc.snapshot()).toBe(snapshotAfterSuccess);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('should map null snapshot when initial fetch fails', () => {

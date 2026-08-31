@@ -68,6 +68,25 @@ public sealed class ValidateCommand
     }
 
     [Theory]
+    [InlineData(10081)]
+    [InlineData(99999)]
+    public void WhenProbeIntervalExceedsMax_ReturnsInvalidProbeIntervalError(int probeIntervalMinutes)
+    {
+        // Arrange
+        UpdateDispatchSettings.Command command = new(
+            AutoResumeOnUsageReset: true,
+            ProbeIntervalMinutes: probeIntervalMinutes,
+            PollIntervalSeconds: 30);
+
+        // Act
+        Result result = _sut.Validate(command);
+
+        // Assert
+        Result.Failure failure = result.ShouldBeOfType<Result.Failure>();
+        failure.Error.Code.ShouldBe(SettingsErrors.InvalidProbeIntervalCode);
+    }
+
+    [Theory]
     [InlineData(5)]
     [InlineData(30)]
     [InlineData(3600)]

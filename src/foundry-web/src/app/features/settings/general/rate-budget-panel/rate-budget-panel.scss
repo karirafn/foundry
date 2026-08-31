@@ -27,7 +27,7 @@
     &--healthy {
       background: rgba(35, 134, 54, 0.12);
       border: 1px solid rgba(35, 134, 54, 0.3);
-      color: var(--fd-state-completed);
+      color: var(--fd-text-completed);
     }
     &--low {
       background: var(--fd-bg-warning-subtle);
@@ -37,7 +37,7 @@
     &--unknown {
       background: var(--fd-bg-page);
       border: 1px solid var(--fd-border-muted);
-      color: var(--fd-text-tertiary);
+      color: var(--fd-text-secondary);
     }
   }
   &__loading { color: var(--fd-text-secondary); font-size: 0.875rem; margin: 0; }
