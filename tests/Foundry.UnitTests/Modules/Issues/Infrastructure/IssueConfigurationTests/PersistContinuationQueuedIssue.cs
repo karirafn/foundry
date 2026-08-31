@@ -1,9 +1,6 @@
 using Foundry.Modules.Issues.Domain.Entities;
 using Foundry.Modules.Issues.Domain.Entities.States;
-using Foundry.Modules.Issues.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Contracts;
-using Foundry.Shared;
-using Foundry.Shared.Infrastructure;
 using Foundry.Testing;
 using Foundry.WebApi.Persistence;
 
@@ -40,48 +37,25 @@ public sealed class PersistContinuationQueuedIssue : IAsyncDisposable
         await _connection.DisposeAsync();
     }
 
-    private static IssueAuthor ValidAuthor =>
-        IssueAuthor.Create("octocat").ValueOrThrow();
-
-    private static ProviderUrl ValidUrl =>
-        ProviderUrl.Create("https://github.com/owner/repo/issues/1").ValueOrThrow();
-
     [Fact]
     public async Task WhenContinuableFailedRetried_CanBeReloadedAsContinuationQueuedWithAllFields()
     {
         // Arrange
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
-        DateTimeOffset failedAt = new DateTimeOffset(2026, 6, 9, 11, 0, 0, TimeSpan.Zero);
-        DetectedIssue detected = DetectedIssue.Detect(
-            repositoryId,
-            issueNumber: 72,
-            title: "Continuation queued issue",
-            body: "Issue body",
-            author: ValidAuthor,
-            url: ValidUrl,
-            labels: [],
-            detectedAt: DateTimeOffset.UtcNow);
+        ContinuationQueuedIssue continuationQueued = new IssueBuilder()
+            .WithMonitoredRepositoryId(repositoryId)
+            .WithIssueNumber(72)
+            .WithTitle("Continuation queued issue")
+            .WithBody("Issue body")
+            .WithLabels([])
+            .WithBranchName("feat/issue-72")
+            .WithFailureReason("Container OOM")
+            .WithFailureCategory("generic_failure")
+            .ContinuableFailed()
+            .Retry();
 
-        _dbContext.Set<Issue>().Add(detected);
+        _dbContext.Set<Issue>().Add(continuationQueued);
         await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
-
-        FreshQueuedIssue queued = detected.Enqueue();
-        await _dbContext.TransitionAsync(detected, queued, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
-
-        Guid workerRunId = Guid.NewGuid();
-        InProgressIssue inProgress = queued.Claim(workerRunId);
-        await _dbContext.TransitionAsync(queued, inProgress, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
-
-        ContinuableFailedIssue continuableFailed = inProgress.MarkContinuableFailed(
-            workerRunId,
-            "feat/issue-72",
-            "Container OOM",
-            "generic_failure",
-            failedAt);
-        await _dbContext.TransitionAsync(inProgress, continuableFailed, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
-
-        ContinuationQueuedIssue continuationQueued = continuableFailed.Retry();
-        await _dbContext.TransitionAsync(continuableFailed, continuationQueued, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
         _dbContext.ChangeTracker.Clear();
 
         // Act
@@ -93,7 +67,7 @@ public sealed class PersistContinuationQueuedIssue : IAsyncDisposable
         ContinuationQueuedIssue reloaded = result.ShouldBeOfType<ContinuationQueuedIssue>();
         reloaded.ShouldSatisfyAllConditions(
             () => reloaded.BranchName.ShouldBe("feat/issue-72"),
-            () => reloaded.Author.Value.ShouldBe(ValidAuthor.Value),
+            () => reloaded.Author.Value.ShouldBe("octocat"),
             () => reloaded.MonitoredRepositoryId.ShouldBe(repositoryId));
     }
 }

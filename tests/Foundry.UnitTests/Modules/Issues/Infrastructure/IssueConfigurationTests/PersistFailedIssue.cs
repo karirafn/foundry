@@ -1,9 +1,5 @@
 using Foundry.Modules.Issues.Domain.Entities;
 using Foundry.Modules.Issues.Domain.Entities.States;
-using Foundry.Modules.Issues.Domain.ValueObjects;
-using Foundry.Modules.Monitoring.Contracts;
-using Foundry.Shared;
-using Foundry.Shared.Infrastructure;
 using Foundry.Testing;
 using Foundry.WebApi.Persistence;
 
@@ -41,12 +37,6 @@ public sealed class PersistFailedIssue : IAsyncDisposable
         await _connection.DisposeAsync();
     }
 
-    private static IssueAuthor ValidAuthor =>
-        IssueAuthor.Create("octocat").ValueOrThrow();
-
-    private static ProviderUrl ValidUrl =>
-        ProviderUrl.Create("https://github.com/owner/repo/issues/1").ValueOrThrow();
-
     [Fact]
     public void FailureReason_HasMaxLength500AndIsNotUnicode()
     {
@@ -64,31 +54,21 @@ public sealed class PersistFailedIssue : IAsyncDisposable
     public async Task WhenFailedIssueTransitioned_CanBeReloadedAsFailedIssueWithAllFields()
     {
         // Arrange
-        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
-        DateTimeOffset failedAt = new DateTimeOffset(2026, 5, 30, 12, 0, 0, TimeSpan.Zero);
-        DetectedIssue detected = DetectedIssue.Detect(
-            repositoryId,
-            issueNumber: 44,
-            title: "Failed issue",
-            body: "Failed body",
-            author: ValidAuthor,
-            url: ValidUrl,
-            labels: [],
-            detectedAt: DateTimeOffset.UtcNow);
-
-        _dbContext.Set<Issue>().Add(detected);
-        await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
-
-        FreshQueuedIssue queued = detected.Enqueue();
-        await _dbContext.TransitionAsync(detected, queued, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
-
-        Guid workerRunId = Guid.NewGuid();
-        InProgressIssue inProgress = queued.Claim(workerRunId);
-        await _dbContext.TransitionAsync(queued, inProgress, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
-
         Guid failedWorkerRunId = Guid.NewGuid();
-        FailedIssue failed = inProgress.MarkFailed(failedWorkerRunId, "Container exited with code 1", failedAt, "generic_failure");
-        await _dbContext.TransitionAsync(inProgress, failed, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
+        DateTimeOffset failedAt = new DateTimeOffset(2026, 5, 30, 12, 0, 0, TimeSpan.Zero);
+        FailedIssue failed = new IssueBuilder()
+            .WithIssueNumber(44)
+            .WithTitle("Failed issue")
+            .WithBody("Failed body")
+            .WithLabels([])
+            .WithWorkerRunId(failedWorkerRunId)
+            .WithFailureReason("Container exited with code 1")
+            .WithFailedAt(failedAt)
+            .WithFailureCategory("generic_failure")
+            .Failed();
+
+        _dbContext.Set<Issue>().Add(failed);
+        await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
         _dbContext.ChangeTracker.Clear();
 
         // Act
@@ -102,7 +82,7 @@ public sealed class PersistFailedIssue : IAsyncDisposable
             () => reloaded.WorkerRunId.ShouldBe(failedWorkerRunId),
             () => reloaded.FailureReason.ShouldBe("Container exited with code 1"),
             () => reloaded.FailedAt.ShouldBe(failedAt),
-            () => reloaded.Author.Value.ShouldBe(ValidAuthor.Value),
-            () => reloaded.Url.Value.ShouldBe(ValidUrl.Value));
+            () => reloaded.Author.Value.ShouldBe("octocat"),
+            () => reloaded.Url.Value.ShouldBe(new Uri("https://github.com/owner/repo/issues/1")));
     }
 }
