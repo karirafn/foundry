@@ -50,7 +50,7 @@ the headroom-recording path.
 
 The fixed per-cycle provider call cost — the count of API calls a poll cycle issues that does
 **not** scale with issue count — is bounded by `RepositoryPoller.MaxFixedPollCallsPerCycle`.
-ADR 0066 and DOMAIN.md point at this constant by name rather than restating its numeric value,
+This ADR and DOMAIN.md point at this constant by name rather than restating its numeric value,
 so there is exactly one place to change and the change is reviewed at the constant.
 
 The invariance test asserts that driving `RepositoryPoller.PollAsync` with 5 issues and with 200

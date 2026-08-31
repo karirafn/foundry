@@ -1499,6 +1499,15 @@ export interface operations {
                     "application/json": components["schemas"]["RateBudgetSnapshot"];
                 };
             };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
         };
     };
     GetRepositories: {
