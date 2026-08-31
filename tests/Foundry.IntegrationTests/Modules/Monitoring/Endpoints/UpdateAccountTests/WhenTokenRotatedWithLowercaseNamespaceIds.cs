@@ -11,6 +11,7 @@ using Foundry.Modules.Monitoring.Features.Accounts.Rotation;
 using Foundry.Modules.Monitoring.Features.Accounts.Tokens;
 using Foundry.Modules.Monitoring.Infrastructure;
 using Foundry.Modules.Monitoring.Infrastructure.GitHub;
+using Foundry.Modules.Monitoring.Infrastructure.RateBudget;
 using Foundry.Shared;
 using Foundry.WebApi.Persistence;
 
@@ -67,7 +68,7 @@ public sealed class WhenTokenRotatedWithLowercaseNamespaceIds : IAsyncDisposable
 
             services.RemoveAll<GitHubHttpClient>();
             services.AddSingleton(
-                new GitHubHttpClient(new HttpClient(new TokenKeyedListingFakeHandler(tokenToListing)), NullLogger<GitHubHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions())))));
+                new GitHubHttpClient(new HttpClient(new TokenKeyedListingFakeHandler(tokenToListing)), NullLogger<GitHubHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))), new InMemoryProviderRateBudget(), TimeProvider.System));
 
             services.RemoveAll<IRepositoryEligibilityEvaluator>();
             services.AddScoped<IRepositoryEligibilityEvaluator>(_ =>

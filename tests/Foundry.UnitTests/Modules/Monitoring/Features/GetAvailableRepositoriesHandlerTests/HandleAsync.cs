@@ -7,6 +7,7 @@ using Foundry.Modules.Monitoring.Features.Repositories;
 using Foundry.Modules.Monitoring.Infrastructure;
 using Foundry.Modules.Monitoring.Infrastructure.GitLab;
 using Foundry.Modules.Monitoring.Infrastructure.GitHub;
+using Foundry.Modules.Monitoring.Infrastructure.RateBudget;
 using Foundry.Shared;
 using Foundry.Testing;
 using Foundry.UnitTests.Modules.Monitoring.Infrastructure;
@@ -103,8 +104,8 @@ public sealed class HandleAsync : IAsyncDisposable
         HttpClient gitLabHttpClient = new(gitLabFake);
         return new GetAvailableRepositories.Handler(
             _dbContext,
-            new GitHubHttpClient(gitHubHttpClient, NullLogger<GitHubHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions())))),
-            new GitLabHttpClient(gitLabHttpClient, NullLogger<GitLabHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions())))));
+            new GitHubHttpClient(gitHubHttpClient, NullLogger<GitHubHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))), new InMemoryProviderRateBudget(), TimeProvider.System),
+            new GitLabHttpClient(gitLabHttpClient, NullLogger<GitLabHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))), new InMemoryProviderRateBudget(), TimeProvider.System));
     }
 
     [Fact]

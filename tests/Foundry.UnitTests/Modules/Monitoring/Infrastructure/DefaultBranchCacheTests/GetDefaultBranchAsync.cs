@@ -2,6 +2,7 @@ using System.Net;
 
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Infrastructure;
+using Foundry.Modules.Monitoring.Infrastructure.RateBudget;
 using Foundry.Modules.Monitoring.Infrastructure.GitHub;
 using Foundry.Shared;
 using Foundry.Testing;
@@ -38,7 +39,7 @@ public sealed class GetDefaultBranchAsync
         using HttpClient httpClient = new(handler);
         using IMemoryCache memoryCache = CreateMemoryCache();
         DefaultBranchCache cache = new(memoryCache);
-        GitHubHttpClient sut = new(httpClient, NullLogger<GitHubHttpClient>.Instance, cache);
+        GitHubHttpClient sut = new(httpClient, NullLogger<GitHubHttpClient>.Instance, cache, new InMemoryProviderRateBudget(), TimeProvider.System);
 
         // Act
         Result<string> first = await sut.GetDefaultBranchAsync(
@@ -61,7 +62,7 @@ public sealed class GetDefaultBranchAsync
         using HttpClient httpClient = new(handler);
         using IMemoryCache memoryCache = CreateMemoryCache();
         DefaultBranchCache cache = new(memoryCache);
-        GitHubHttpClient sut = new(httpClient, NullLogger<GitHubHttpClient>.Instance, cache);
+        GitHubHttpClient sut = new(httpClient, NullLogger<GitHubHttpClient>.Instance, cache, new InMemoryProviderRateBudget(), TimeProvider.System);
         RepositorySlug otherSlug = RepositorySlug.Create("owner/other-repo").ValueOrThrow();
 
         // Act
@@ -85,7 +86,7 @@ public sealed class GetDefaultBranchAsync
         using HttpClient httpClient = new(handler);
         using IMemoryCache memoryCache = CreateMemoryCache();
         DefaultBranchCache cache = new(memoryCache);
-        GitHubHttpClient sut = new(httpClient, NullLogger<GitHubHttpClient>.Instance, cache);
+        GitHubHttpClient sut = new(httpClient, NullLogger<GitHubHttpClient>.Instance, cache, new InMemoryProviderRateBudget(), TimeProvider.System);
         Uri otherBaseUrl = new("https://github.example.com");
 
         // Act
@@ -109,7 +110,7 @@ public sealed class GetDefaultBranchAsync
         using HttpClient httpClient = new(handler);
         using IMemoryCache memoryCache = CreateMemoryCache();
         DefaultBranchCache cache = new(memoryCache);
-        GitHubHttpClient sut = new(httpClient, NullLogger<GitHubHttpClient>.Instance, cache);
+        GitHubHttpClient sut = new(httpClient, NullLogger<GitHubHttpClient>.Instance, cache, new InMemoryProviderRateBudget(), TimeProvider.System);
 
         // Act
         await sut.GetDefaultBranchAsync(ValidBaseUrl, ValidSlug, "ghp_token", CancellationToken.None);

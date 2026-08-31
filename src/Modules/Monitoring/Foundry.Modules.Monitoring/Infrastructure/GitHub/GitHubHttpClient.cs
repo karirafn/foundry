@@ -11,6 +11,7 @@ using Foundry.Modules.Monitoring.Features.Accounts;
 using Foundry.Modules.Monitoring.Features.Polling;
 using Foundry.Modules.Monitoring.Features.Providers;
 using Foundry.Modules.Monitoring.Infrastructure;
+using Foundry.Modules.Monitoring.Infrastructure.RateBudget;
 using Foundry.Shared;
 
 using Microsoft.Extensions.Logging;
@@ -20,7 +21,9 @@ namespace Foundry.Modules.Monitoring.Infrastructure.GitHub;
 internal sealed partial class GitHubHttpClient(
     HttpClient httpClient,
     ILogger<GitHubHttpClient> logger,
-    DefaultBranchCache defaultBranchCache) : IGitHubWriteProber
+    DefaultBranchCache defaultBranchCache,
+    IProviderRateBudget rateBudget,
+    TimeProvider timeProvider) : IGitHubWriteProber
 {
     private const string ApiVersion = "2026-03-10";
     private const string AllZerosSha = "0000000000000000000000000000000000000000";
@@ -182,6 +185,8 @@ internal sealed partial class GitHubHttpClient(
             return Result<string>.Fail(ErrorFromNonSuccess(response));
         }
 
+        RecordRestHeadroom(response);
+
         string body = await response.Content.ReadAsStringAsync(cancellationToken);
         GitHubRepositoryInfoDto? dto = JsonSerializer.Deserialize<GitHubRepositoryInfoDto>(body, JsonOptions);
 
@@ -216,6 +221,7 @@ internal sealed partial class GitHubHttpClient(
 
         if (response.StatusCode == HttpStatusCode.NotFound)
         {
+            RecordRestHeadroom(response);
             return Result<BranchRules>.Ok(new BranchRules(false, false, false));
         }
 
@@ -223,6 +229,8 @@ internal sealed partial class GitHubHttpClient(
         {
             return Result<BranchRules>.Fail(ErrorFromNonSuccess(response));
         }
+
+        RecordRestHeadroom(response);
 
         string body = await response.Content.ReadAsStringAsync(cancellationToken);
         List<GitHubBranchRuleDto>? dtos = JsonSerializer.Deserialize<List<GitHubBranchRuleDto>>(body, JsonOptions);
@@ -292,6 +300,10 @@ internal sealed partial class GitHubHttpClient(
                 "GitHub GraphQL cost={Cost} remaining={Remaining}",
                 rateLimit.Cost,
                 rateLimit.Remaining);
+
+            rateBudget.Record(
+                ProviderBudgetKey.GitHubGraphQl,
+                new RateBudgetReading(rateLimit.Remaining, rateLimit.Limit, rateLimit.ResetAt, timeProvider.GetUtcNow()));
         }
 
         return Result<TData>.Ok(envelope.Data);
@@ -488,6 +500,8 @@ internal sealed partial class GitHubHttpClient(
             return Result<IReadOnlyList<int>>.Fail(ErrorFromNonSuccess(response));
         }
 
+        RecordRestHeadroom(response);
+
         string body = await response.Content.ReadAsStringAsync(cancellationToken);
         List<GitHubDependencyDto>? dtos = JsonSerializer.Deserialize<List<GitHubDependencyDto>>(body, JsonOptions);
 
@@ -659,6 +673,8 @@ internal sealed partial class GitHubHttpClient(
             return Result<TokenValidationOutcome>.Fail(ErrorFromNonSuccess(response));
         }
 
+        RecordRestHeadroom(response);
+
         string responseBody = await response.Content.ReadAsStringAsync(cancellationToken);
         GitHubUserDto? userDto = DeserializeUserDto(responseBody, apiBaseUrl, (int)response.StatusCode);
 
@@ -718,6 +734,7 @@ internal sealed partial class GitHubHttpClient(
 
         using HttpResponseMessage response = await httpClient.SendAsync(request, cancellationToken);
 
+        RecordRestHeadroom(response);
         return ClassifyProbeResponse(response, WritePermission.Contents);
     }
 
@@ -743,6 +760,7 @@ internal sealed partial class GitHubHttpClient(
 
         using HttpResponseMessage response = await httpClient.SendAsync(request, cancellationToken);
 
+        RecordRestHeadroom(response);
         return ClassifyProbeResponse(response, WritePermission.Issues);
     }
 
@@ -768,6 +786,7 @@ internal sealed partial class GitHubHttpClient(
 
         using HttpResponseMessage response = await httpClient.SendAsync(request, cancellationToken);
 
+        RecordRestHeadroom(response);
         return ClassifyProbeResponse(response, WritePermission.PullRequests);
     }
 
@@ -833,6 +852,8 @@ internal sealed partial class GitHubHttpClient(
             return Result<bool>.Fail(ErrorFromNonSuccess(response));
         }
 
+        RecordRestHeadroom(response);
+
         string body = await response.Content.ReadAsStringAsync(cancellationToken);
         GitHubRepoPermissionsResponseDto? dto =
             JsonSerializer.Deserialize<GitHubRepoPermissionsResponseDto>(body, JsonOptions);
@@ -869,6 +890,8 @@ internal sealed partial class GitHubHttpClient(
             {
                 return Result<IReadOnlyList<ProviderRepository>>.Fail(ErrorFromNonSuccess(response));
             }
+
+            RecordRestHeadroom(response);
 
             string body = await response.Content.ReadAsStringAsync(cancellationToken);
             List<GitHubRepositoryListItemDto>? dtos =
@@ -922,6 +945,8 @@ internal sealed partial class GitHubHttpClient(
             return Result<bool>.Fail(ErrorFromNonSuccess(getRefResponse));
         }
 
+        RecordRestHeadroom(getRefResponse);
+
         string getRefBody = await getRefResponse.Content.ReadAsStringAsync(cancellationToken);
         GitHubGitRefDto? gitRef = JsonSerializer.Deserialize<GitHubGitRefDto>(getRefBody, JsonOptions);
         string sha = gitRef?.Object?.Sha ?? string.Empty;
@@ -944,6 +969,7 @@ internal sealed partial class GitHubHttpClient(
 
         if (createRefResponse.StatusCode == HttpStatusCode.UnprocessableEntity)
         {
+            RecordRestHeadroom(createRefResponse);
             return Result<bool>.Ok(false);
         }
 
@@ -953,6 +979,7 @@ internal sealed partial class GitHubHttpClient(
             return Result<bool>.Fail(branchError);
         }
 
+        RecordRestHeadroom(createRefResponse);
         return Result<bool>.Ok(true);
     }
 
@@ -988,6 +1015,8 @@ internal sealed partial class GitHubHttpClient(
         {
             return Result<BranchCommitSummary>.Fail(ErrorFromNonSuccess(response));
         }
+
+        RecordRestHeadroom(response);
 
         string body = await response.Content.ReadAsStringAsync(cancellationToken);
         GitHubCompareDto? dto = JsonSerializer.Deserialize<GitHubCompareDto>(body, JsonOptions);
@@ -1030,6 +1059,8 @@ internal sealed partial class GitHubHttpClient(
         {
             return Result<MergeRequestByBranch>.Fail(ErrorFromNonSuccess(response));
         }
+
+        RecordRestHeadroom(response);
 
         string body = await response.Content.ReadAsStringAsync(cancellationToken);
         List<GitHubPullRequestStateDto>? dtos =
@@ -1203,6 +1234,37 @@ internal sealed partial class GitHubHttpClient(
         return path;
     }
 
+    private void RecordRestHeadroom(HttpResponseMessage response)
+    {
+        if (!response.Headers.TryGetValues("X-RateLimit-Remaining", out IEnumerable<string>? remainingValues))
+        {
+            return;
+        }
+
+        if (!int.TryParse(remainingValues.FirstOrDefault(), out int remaining))
+        {
+            return;
+        }
+
+        int? limit = null;
+        if (response.Headers.TryGetValues("X-RateLimit-Limit", out IEnumerable<string>? limitValues) &&
+            int.TryParse(limitValues.FirstOrDefault(), out int parsedLimit))
+        {
+            limit = parsedLimit;
+        }
+
+        DateTimeOffset? resetAt = null;
+        if (response.Headers.TryGetValues("X-RateLimit-Reset", out IEnumerable<string>? resetValues) &&
+            long.TryParse(resetValues.FirstOrDefault(), out long epochSeconds))
+        {
+            resetAt = DateTimeOffset.FromUnixTimeSeconds(epochSeconds);
+        }
+
+        rateBudget.Record(
+            ProviderBudgetKey.GitHubRest,
+            new RateBudgetReading(remaining, limit, resetAt, timeProvider.GetUtcNow()));
+    }
+
     private static bool IsRateLimited(HttpResponseMessage response)
     {
         // Primary rate limit: X-RateLimit-Remaining == 0.
@@ -1354,7 +1416,7 @@ internal sealed partial class GitHubHttpClient(
 
     private sealed record GraphQlErrorLocation(int Line, int Column);
 
-    private sealed record GraphQlRateLimit(int Cost, int Remaining);
+    private sealed record GraphQlRateLimit(int Cost, int Remaining, int? Limit, DateTimeOffset? ResetAt);
 
     // GraphQL issue-list DTOs — deserialized with GraphQlJsonOptions (camelCase).
     private sealed record IssueListData(GraphQlRateLimit? RateLimit, GraphQlRepository? Repository);

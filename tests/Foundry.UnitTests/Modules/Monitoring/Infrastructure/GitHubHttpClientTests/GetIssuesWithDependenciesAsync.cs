@@ -5,6 +5,7 @@ using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Features.Providers;
 using Foundry.Modules.Monitoring.Infrastructure;
 using Foundry.Modules.Monitoring.Infrastructure.GitHub;
+using Foundry.Modules.Monitoring.Infrastructure.RateBudget;
 using Foundry.Shared;
 using Foundry.Testing;
 using Foundry.UnitTests.Modules.Monitoring.Infrastructure;
@@ -30,7 +31,7 @@ public sealed class GetIssuesWithDependenciesAsync
         new(
             new HttpClient(handler),
             NullLogger<GitHubHttpClient>.Instance,
-            new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))));
+            new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))), new InMemoryProviderRateBudget(), TimeProvider.System);
 
     // --- Issue field mapping ---
 
@@ -1033,7 +1034,7 @@ public sealed class GetIssuesWithDependenciesAsync
         new(
             new HttpClient(handler),
             NullLogger<GitHubHttpClient>.Instance,
-            new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))));
+            new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))), new InMemoryProviderRateBudget(), TimeProvider.System);
 
     private static string BuildSinglePageResponse(int issueCount, int startIndex = 0)
     {

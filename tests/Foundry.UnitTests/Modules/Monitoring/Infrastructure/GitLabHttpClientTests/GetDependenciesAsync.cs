@@ -4,6 +4,7 @@ using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Infrastructure;
 using Foundry.Modules.Monitoring.Infrastructure.GitLab;
+using Foundry.Modules.Monitoring.Infrastructure.RateBudget;
 using Foundry.Shared;
 using Foundry.Testing;
 using Foundry.UnitTests.Modules.Monitoring.Infrastructure;
@@ -57,7 +58,7 @@ public sealed class GetDependenciesAsync
 
         FakeHandler handler = MakeHandler(HttpStatusCode.OK, linksJson);
         using HttpClient httpClient = new(handler);
-        GitLabHttpClient sut = new(httpClient, NullLogger<GitLabHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))));
+        GitLabHttpClient sut = new(httpClient, NullLogger<GitLabHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))), new InMemoryProviderRateBudget(), TimeProvider.System);
 
         // Act
         Result<IReadOnlyList<int>> result = await sut.GetDependenciesAsync(
@@ -97,7 +98,7 @@ public sealed class GetDependenciesAsync
 
         FakeHandler handler = MakeHandler(HttpStatusCode.OK, linksJson);
         using HttpClient httpClient = new(handler);
-        GitLabHttpClient sut = new(httpClient, NullLogger<GitLabHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))));
+        GitLabHttpClient sut = new(httpClient, NullLogger<GitLabHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))), new InMemoryProviderRateBudget(), TimeProvider.System);
 
         // Act
         Result<IReadOnlyList<int>> result = await sut.GetDependenciesAsync(
@@ -120,7 +121,7 @@ public sealed class GetDependenciesAsync
         // Arrange
         FakeHandler handler = MakeHandler(HttpStatusCode.Forbidden, string.Empty);
         using HttpClient httpClient = new(handler);
-        GitLabHttpClient sut = new(httpClient, NullLogger<GitLabHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))));
+        GitLabHttpClient sut = new(httpClient, NullLogger<GitLabHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))), new InMemoryProviderRateBudget(), TimeProvider.System);
 
         // Act
         Result<IReadOnlyList<int>> result = await sut.GetDependenciesAsync(
@@ -143,7 +144,7 @@ public sealed class GetDependenciesAsync
         // Arrange
         FakeHandler handler = MakeHandler(HttpStatusCode.NotFound, string.Empty);
         using HttpClient httpClient = new(handler);
-        GitLabHttpClient sut = new(httpClient, NullLogger<GitLabHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))));
+        GitLabHttpClient sut = new(httpClient, NullLogger<GitLabHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))), new InMemoryProviderRateBudget(), TimeProvider.System);
 
         // Act
         Result<IReadOnlyList<int>> result = await sut.GetDependenciesAsync(
@@ -166,7 +167,7 @@ public sealed class GetDependenciesAsync
         // Arrange
         FakeHandler handler = MakeHandler(HttpStatusCode.InternalServerError, string.Empty);
         using HttpClient httpClient = new(handler);
-        GitLabHttpClient sut = new(httpClient, NullLogger<GitLabHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))));
+        GitLabHttpClient sut = new(httpClient, NullLogger<GitLabHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))), new InMemoryProviderRateBudget(), TimeProvider.System);
 
         // Act
         Result<IReadOnlyList<int>> result = await sut.GetDependenciesAsync(
@@ -189,7 +190,7 @@ public sealed class GetDependenciesAsync
         // Arrange — https guard fires before any HTTP call; no routing needed
         FakeHandler handler = new(HttpStatusCode.OK, "[]");
         using HttpClient httpClient = new(handler);
-        GitLabHttpClient sut = new(httpClient, NullLogger<GitLabHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))));
+        GitLabHttpClient sut = new(httpClient, NullLogger<GitLabHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))), new InMemoryProviderRateBudget(), TimeProvider.System);
         Uri invalidBaseUrl = new("ftp://gitlab.com/api/v4");
 
         // Act
@@ -213,7 +214,7 @@ public sealed class GetDependenciesAsync
         // Arrange
         FakeHandler handler = MakeHandler(HttpStatusCode.OK, "[]");
         using HttpClient httpClient = new(handler);
-        GitLabHttpClient sut = new(httpClient, NullLogger<GitLabHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))));
+        GitLabHttpClient sut = new(httpClient, NullLogger<GitLabHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))), new InMemoryProviderRateBudget(), TimeProvider.System);
 
         // Act
         await sut.GetDependenciesAsync(
@@ -254,7 +255,7 @@ public sealed class GetDependenciesAsync
 
         FakeHandler handler = MakeHandler(HttpStatusCode.OK, linksJson);
         using HttpClient httpClient = new(handler);
-        GitLabHttpClient sut = new(httpClient, NullLogger<GitLabHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))));
+        GitLabHttpClient sut = new(httpClient, NullLogger<GitLabHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))), new InMemoryProviderRateBudget(), TimeProvider.System);
 
         // Act
         Result<IReadOnlyList<int>> result = await sut.GetDependenciesAsync(
@@ -289,7 +290,7 @@ public sealed class GetDependenciesAsync
 
         FakeHandler handler = MakeHandler(HttpStatusCode.OK, linksJson);
         using HttpClient httpClient = new(handler);
-        GitLabHttpClient sut = new(httpClient, NullLogger<GitLabHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))));
+        GitLabHttpClient sut = new(httpClient, NullLogger<GitLabHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))), new InMemoryProviderRateBudget(), TimeProvider.System);
 
         // Act
         Result<IReadOnlyList<int>> result = await sut.GetDependenciesAsync(
@@ -323,7 +324,7 @@ public sealed class GetDependenciesAsync
 
         FakeHandler handler = MakeHandler(HttpStatusCode.OK, linksJson);
         using HttpClient httpClient = new(handler);
-        GitLabHttpClient sut = new(httpClient, NullLogger<GitLabHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))));
+        GitLabHttpClient sut = new(httpClient, NullLogger<GitLabHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))), new InMemoryProviderRateBudget(), TimeProvider.System);
 
         // Act
         Result<IReadOnlyList<int>> result = await sut.GetDependenciesAsync(
@@ -346,7 +347,7 @@ public sealed class GetDependenciesAsync
         // Arrange — project lookup returns 200 but body deserializes to null
         FakeHandler handler = new(HttpStatusCode.OK, "null");
         using HttpClient httpClient = new(handler);
-        GitLabHttpClient sut = new(httpClient, NullLogger<GitLabHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))));
+        GitLabHttpClient sut = new(httpClient, NullLogger<GitLabHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))), new InMemoryProviderRateBudget(), TimeProvider.System);
 
         // Act
         Result<IReadOnlyList<int>> result = await sut.GetDependenciesAsync(
@@ -378,7 +379,7 @@ public sealed class GetDependenciesAsync
 
         FakeHandler handler = MakeHandler(HttpStatusCode.OK, linksJson);
         using HttpClient httpClient = new(handler);
-        GitLabHttpClient sut = new(httpClient, NullLogger<GitLabHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))));
+        GitLabHttpClient sut = new(httpClient, NullLogger<GitLabHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))), new InMemoryProviderRateBudget(), TimeProvider.System);
 
         // Act
         Result<IReadOnlyList<int>> result = await sut.GetDependenciesAsync(
@@ -420,7 +421,7 @@ public sealed class GetDependenciesAsync
 
         FakeHandler handler = MakeHandler(HttpStatusCode.OK, linksJson);
         using HttpClient httpClient = new(handler);
-        GitLabHttpClient sut = new(httpClient, NullLogger<GitLabHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))));
+        GitLabHttpClient sut = new(httpClient, NullLogger<GitLabHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))), new InMemoryProviderRateBudget(), TimeProvider.System);
 
         // Act
         Result<IReadOnlyList<int>> result = await sut.GetDependenciesAsync(
@@ -455,7 +456,7 @@ public sealed class GetDependenciesAsync
 
         FakeHandler handler = MakeHandler(HttpStatusCode.OK, linksJson);
         using HttpClient httpClient = new(handler);
-        GitLabHttpClient sut = new(httpClient, NullLogger<GitLabHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))));
+        GitLabHttpClient sut = new(httpClient, NullLogger<GitLabHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))), new InMemoryProviderRateBudget(), TimeProvider.System);
 
         // Act
         Result<IReadOnlyList<int>> result = await sut.GetDependenciesAsync(
@@ -504,7 +505,7 @@ public sealed class GetDependenciesAsync
 
         FakeHandler handler = MakeHandler(HttpStatusCode.OK, linksJson);
         using HttpClient httpClient = new(handler);
-        GitLabHttpClient sut = new(httpClient, NullLogger<GitLabHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))));
+        GitLabHttpClient sut = new(httpClient, NullLogger<GitLabHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))), new InMemoryProviderRateBudget(), TimeProvider.System);
 
         // Act
         Result<IReadOnlyList<int>> result = await sut.GetDependenciesAsync(
@@ -538,7 +539,7 @@ public sealed class GetDependenciesAsync
 
         FakeHandler handler = MakeHandler(HttpStatusCode.OK, linksJson);
         using HttpClient httpClient = new(handler);
-        GitLabHttpClient sut = new(httpClient, NullLogger<GitLabHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))));
+        GitLabHttpClient sut = new(httpClient, NullLogger<GitLabHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))), new InMemoryProviderRateBudget(), TimeProvider.System);
 
         // Act
         Result<IReadOnlyList<int>> result = await sut.GetDependenciesAsync(
@@ -561,7 +562,7 @@ public sealed class GetDependenciesAsync
         // Arrange — project lookup fails with 500 → Result.Fail so poll retries
         FakeHandler handler = new(HttpStatusCode.InternalServerError, string.Empty);
         using HttpClient httpClient = new(handler);
-        GitLabHttpClient sut = new(httpClient, NullLogger<GitLabHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))));
+        GitLabHttpClient sut = new(httpClient, NullLogger<GitLabHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))), new InMemoryProviderRateBudget(), TimeProvider.System);
 
         // Act
         Result<IReadOnlyList<int>> result = await sut.GetDependenciesAsync(
@@ -596,7 +597,7 @@ public sealed class GetDependenciesAsync
 
         FakeHandler handler = MakeHandler(HttpStatusCode.OK, linksJson);
         using HttpClient httpClient = new(handler);
-        GitLabHttpClient sut = new(httpClient, NullLogger<GitLabHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))));
+        GitLabHttpClient sut = new(httpClient, NullLogger<GitLabHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))), new InMemoryProviderRateBudget(), TimeProvider.System);
 
         // Act
         Result<IReadOnlyList<int>> result = await sut.GetDependenciesAsync(

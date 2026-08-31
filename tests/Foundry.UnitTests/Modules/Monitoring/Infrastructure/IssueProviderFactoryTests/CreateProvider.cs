@@ -4,6 +4,7 @@ using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Features.Providers;
 using Foundry.Modules.Monitoring.Infrastructure;
+using Foundry.Modules.Monitoring.Infrastructure.RateBudget;
 using Foundry.Modules.Monitoring.Infrastructure.GitLab;
 using Foundry.Modules.Monitoring.Infrastructure.GitHub;
 using Foundry.Testing;
@@ -26,8 +27,8 @@ public sealed class CreateProvider
         FakeHandler handler = new(HttpStatusCode.OK, "[]");
         HttpClient httpClient = new(handler);
         DefaultBranchCache cache = new(new MemoryCache(Options.Create(new MemoryCacheOptions())));
-        GitHubHttpClient gitHubHttpClient = new(httpClient, NullLogger<GitHubHttpClient>.Instance, cache);
-        GitLabHttpClient gitLabHttpClient = new(httpClient, NullLogger<GitLabHttpClient>.Instance, cache);
+        GitHubHttpClient gitHubHttpClient = new(httpClient, NullLogger<GitHubHttpClient>.Instance, cache, new InMemoryProviderRateBudget(), TimeProvider.System);
+        GitLabHttpClient gitLabHttpClient = new(httpClient, NullLogger<GitLabHttpClient>.Instance, cache, new InMemoryProviderRateBudget(), TimeProvider.System);
         return new IssueProviderFactory(gitHubHttpClient, gitLabHttpClient);
     }
 

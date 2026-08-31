@@ -36,6 +36,7 @@ public static class MonitoringModule
         services.TryAddSingleton<DefaultBranchCache>();
         services.TryAddSingleton<IHostAddressResolver, SystemHostAddressResolver>();
         services.TryAddSingleton<IProviderRateBudget, InMemoryProviderRateBudget>();
+        services.TryAddSingleton<TimeProvider>(_ => TimeProvider.System);
         services.AddScoped<ProviderHostGuard>();
 
         services.AddHttpClient<GitHubHttpClient>();

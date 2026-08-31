@@ -10,6 +10,7 @@ using Foundry.Modules.Monitoring.Features.Accounts;
 using Foundry.Modules.Monitoring.Features.Accounts.Tokens;
 using Foundry.Modules.Monitoring.Infrastructure;
 using Foundry.Modules.Monitoring.Infrastructure.GitHub;
+using Foundry.Modules.Monitoring.Infrastructure.RateBudget;
 using Foundry.Shared;
 
 using Microsoft.EntityFrameworkCore;
@@ -69,7 +70,7 @@ public sealed class WhenTokenRotatedToNarrowerScope : IAsyncDisposable
             services.RemoveAll<GitHubHttpClient>();
             // The HttpClient takes ownership of the handler, so no separate disposal needed here.
             services.AddSingleton(
-                new GitHubHttpClient(new HttpClient(new TokenKeyedListingFakeHandler(tokenToListing)), NullLogger<GitHubHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions())))));
+                new GitHubHttpClient(new HttpClient(new TokenKeyedListingFakeHandler(tokenToListing)), NullLogger<GitHubHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))), new InMemoryProviderRateBudget(), TimeProvider.System));
 
             // The real RepositoryEligibilityEvaluator resolves the credential via ICredentialResolver.
             // After dropping bob's namespace, bob/repo-b has no credential → ineligible (no-credential).

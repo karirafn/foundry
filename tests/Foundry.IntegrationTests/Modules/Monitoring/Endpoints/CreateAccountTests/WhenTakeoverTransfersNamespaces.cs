@@ -7,6 +7,7 @@ using Foundry.Modules.Monitoring.Features.Accounts;
 using Foundry.Modules.Monitoring.Features.Accounts.Tokens;
 using Foundry.Modules.Monitoring.Infrastructure;
 using Foundry.Modules.Monitoring.Infrastructure.GitHub;
+using Foundry.Modules.Monitoring.Infrastructure.RateBudget;
 using Foundry.Shared;
 
 using Microsoft.EntityFrameworkCore;
@@ -56,7 +57,7 @@ public sealed class WhenTakeoverTransfersNamespaces : IAsyncDisposable
             services.AddSingleton(
                 new GitHubHttpClient(
                     new HttpClient(new StaticListingFakeHandler(HttpStatusCode.OK, OctocatListingJson)),
-                    NullLogger<GitHubHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions())))));
+                    NullLogger<GitHubHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))), new InMemoryProviderRateBudget(), TimeProvider.System));
         });
         _client = _factory.CreateClient();
     }

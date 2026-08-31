@@ -4,6 +4,7 @@ using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Infrastructure;
 using Foundry.Modules.Monitoring.Infrastructure.GitHub;
+using Foundry.Modules.Monitoring.Infrastructure.RateBudget;
 using Foundry.Shared;
 using Foundry.Testing;
 using Foundry.UnitTests.Modules.Monitoring.Infrastructure;
@@ -31,7 +32,7 @@ public sealed class ProbeContentsWriteAsync
         string json = """{ "message": "Object does not exist" }""";
         FakeHandler handler = new(HttpStatusCode.UnprocessableEntity, json);
         using HttpClient httpClient = new(handler);
-        GitHubHttpClient sut = new(httpClient, NullLogger<GitHubHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))));
+        GitHubHttpClient sut = new(httpClient, NullLogger<GitHubHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))), new InMemoryProviderRateBudget(), TimeProvider.System);
 
         // Act
         await sut.ProbeContentsWriteAsync(
@@ -52,7 +53,7 @@ public sealed class ProbeContentsWriteAsync
         string json = """{ "message": "Object does not exist" }""";
         FakeHandler handler = new(HttpStatusCode.UnprocessableEntity, json);
         using HttpClient httpClient = new(handler);
-        GitHubHttpClient sut = new(httpClient, NullLogger<GitHubHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))));
+        GitHubHttpClient sut = new(httpClient, NullLogger<GitHubHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))), new InMemoryProviderRateBudget(), TimeProvider.System);
 
         // Act
         await sut.ProbeContentsWriteAsync(
@@ -74,7 +75,7 @@ public sealed class ProbeContentsWriteAsync
         // Arrange
         FakeHandler handler = new(HttpStatusCode.Forbidden, string.Empty);
         using HttpClient httpClient = new(handler);
-        GitHubHttpClient sut = new(httpClient, NullLogger<GitHubHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))));
+        GitHubHttpClient sut = new(httpClient, NullLogger<GitHubHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))), new InMemoryProviderRateBudget(), TimeProvider.System);
 
         // Act
         Result<WritePermissionProbeResult> result = await sut.ProbeContentsWriteAsync(
@@ -99,7 +100,7 @@ public sealed class ProbeContentsWriteAsync
         string json = """{ "message": "Object does not exist" }""";
         FakeHandler handler = new(HttpStatusCode.UnprocessableEntity, json);
         using HttpClient httpClient = new(handler);
-        GitHubHttpClient sut = new(httpClient, NullLogger<GitHubHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))));
+        GitHubHttpClient sut = new(httpClient, NullLogger<GitHubHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))), new InMemoryProviderRateBudget(), TimeProvider.System);
 
         // Act
         await sut.ProbeContentsWriteAsync(
@@ -120,7 +121,7 @@ public sealed class ProbeContentsWriteAsync
         // Arrange
         FakeHandler handler = new(HttpStatusCode.UnprocessableEntity, string.Empty);
         using HttpClient httpClient = new(handler);
-        GitHubHttpClient sut = new(httpClient, NullLogger<GitHubHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))));
+        GitHubHttpClient sut = new(httpClient, NullLogger<GitHubHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))), new InMemoryProviderRateBudget(), TimeProvider.System);
         Uri nonHttpsUrl = new("http://api.github.com");
 
         // Act
@@ -143,7 +144,7 @@ public sealed class ProbeContentsWriteAsync
         // Arrange
         FakeHandler handler = new(HttpStatusCode.InternalServerError, string.Empty);
         using HttpClient httpClient = new(handler);
-        GitHubHttpClient sut = new(httpClient, NullLogger<GitHubHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))));
+        GitHubHttpClient sut = new(httpClient, NullLogger<GitHubHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))), new InMemoryProviderRateBudget(), TimeProvider.System);
 
         // Act
         Result<WritePermissionProbeResult> result = await sut.ProbeContentsWriteAsync(
@@ -165,7 +166,7 @@ public sealed class ProbeContentsWriteAsync
         // Arrange
         FakeHandler handler = new(HttpStatusCode.NotFound, string.Empty);
         using HttpClient httpClient = new(handler);
-        GitHubHttpClient sut = new(httpClient, NullLogger<GitHubHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))));
+        GitHubHttpClient sut = new(httpClient, NullLogger<GitHubHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))), new InMemoryProviderRateBudget(), TimeProvider.System);
 
         // Act
         Result<WritePermissionProbeResult> result = await sut.ProbeContentsWriteAsync(
@@ -188,7 +189,7 @@ public sealed class ProbeContentsWriteAsync
         string json = """{ "message": "Object does not exist" }""";
         FakeHandler handler = new(HttpStatusCode.UnprocessableEntity, json);
         using HttpClient httpClient = new(handler);
-        GitHubHttpClient sut = new(httpClient, NullLogger<GitHubHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))));
+        GitHubHttpClient sut = new(httpClient, NullLogger<GitHubHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))), new InMemoryProviderRateBudget(), TimeProvider.System);
 
         // Act
         Result<WritePermissionProbeResult> result = await sut.ProbeContentsWriteAsync(
@@ -211,7 +212,7 @@ public sealed class ProbeContentsWriteAsync
         // indeterminate, so the probe must fail closed rather than returning Granted.
         FakeHandler handler = new(HttpStatusCode.Unauthorized, string.Empty);
         using HttpClient httpClient = new(handler);
-        GitHubHttpClient sut = new(httpClient, NullLogger<GitHubHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))));
+        GitHubHttpClient sut = new(httpClient, NullLogger<GitHubHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))), new InMemoryProviderRateBudget(), TimeProvider.System);
 
         // Act
         Result<WritePermissionProbeResult> result = await sut.ProbeContentsWriteAsync(
@@ -232,7 +233,7 @@ public sealed class ProbeContentsWriteAsync
         FakeHandler handler = new(HttpStatusCode.Forbidden, string.Empty);
         handler.ResponseHeaders["X-RateLimit-Remaining"] = "0";
         using HttpClient httpClient = new(handler);
-        GitHubHttpClient sut = new(httpClient, NullLogger<GitHubHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))));
+        GitHubHttpClient sut = new(httpClient, NullLogger<GitHubHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))), new InMemoryProviderRateBudget(), TimeProvider.System);
 
         // Act
         Result<WritePermissionProbeResult> result = await sut.ProbeContentsWriteAsync(
@@ -254,7 +255,7 @@ public sealed class ProbeContentsWriteAsync
         FakeHandler handler = new(HttpStatusCode.Forbidden, string.Empty);
         handler.ResponseHeaders["Retry-After"] = "60";
         using HttpClient httpClient = new(handler);
-        GitHubHttpClient sut = new(httpClient, NullLogger<GitHubHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))));
+        GitHubHttpClient sut = new(httpClient, NullLogger<GitHubHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))), new InMemoryProviderRateBudget(), TimeProvider.System);
 
         // Act
         Result<WritePermissionProbeResult> result = await sut.ProbeContentsWriteAsync(
@@ -275,7 +276,7 @@ public sealed class ProbeContentsWriteAsync
         FakeHandler handler = new(HttpStatusCode.Forbidden, string.Empty);
         handler.ResponseHeaders["X-RateLimit-Remaining"] = "5";
         using HttpClient httpClient = new(handler);
-        GitHubHttpClient sut = new(httpClient, NullLogger<GitHubHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))));
+        GitHubHttpClient sut = new(httpClient, NullLogger<GitHubHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))), new InMemoryProviderRateBudget(), TimeProvider.System);
 
         // Act
         Result<WritePermissionProbeResult> result = await sut.ProbeContentsWriteAsync(
@@ -297,7 +298,7 @@ public sealed class ProbeContentsWriteAsync
         // Arrange — no rate-limit headers → fail-closed: treat as a genuine permission denial.
         FakeHandler handler = new(HttpStatusCode.Forbidden, string.Empty);
         using HttpClient httpClient = new(handler);
-        GitHubHttpClient sut = new(httpClient, NullLogger<GitHubHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))));
+        GitHubHttpClient sut = new(httpClient, NullLogger<GitHubHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))), new InMemoryProviderRateBudget(), TimeProvider.System);
 
         // Act
         Result<WritePermissionProbeResult> result = await sut.ProbeContentsWriteAsync(
@@ -322,7 +323,7 @@ public sealed class ProbeContentsWriteAsync
         FakeHandler handler = new(HttpStatusCode.Forbidden, string.Empty);
         handler.ResponseHeaders["Retry-After"] = "0";
         using HttpClient httpClient = new(handler);
-        GitHubHttpClient sut = new(httpClient, NullLogger<GitHubHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))));
+        GitHubHttpClient sut = new(httpClient, NullLogger<GitHubHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))), new InMemoryProviderRateBudget(), TimeProvider.System);
 
         // Act
         Result<WritePermissionProbeResult> result = await sut.ProbeContentsWriteAsync(
@@ -346,7 +347,7 @@ public sealed class ProbeContentsWriteAsync
         FakeHandler handler = new(HttpStatusCode.Forbidden, string.Empty);
         handler.ResponseHeaders["Retry-After"] = "soon";
         using HttpClient httpClient = new(handler);
-        GitHubHttpClient sut = new(httpClient, NullLogger<GitHubHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))));
+        GitHubHttpClient sut = new(httpClient, NullLogger<GitHubHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))), new InMemoryProviderRateBudget(), TimeProvider.System);
 
         // Act
         Result<WritePermissionProbeResult> result = await sut.ProbeContentsWriteAsync(
