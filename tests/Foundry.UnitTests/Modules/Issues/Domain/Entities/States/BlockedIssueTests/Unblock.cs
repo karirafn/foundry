@@ -1,9 +1,6 @@
-using Foundry.Modules.Issues.Domain.Entities;
 using Foundry.Modules.Issues.Domain.Entities.States;
-using Foundry.Modules.Issues.Domain.ValueObjects;
 using Foundry.Modules.Issues.Domain.Events;
 using Foundry.Modules.Monitoring.Contracts;
-using Foundry.Shared;
 using Foundry.Testing;
 
 using Shouldly;
@@ -14,32 +11,12 @@ namespace Foundry.UnitTests.Modules.Issues.Domain.Entities.States.BlockedIssueTe
 
 public sealed class Unblock
 {
-    private static IssueAuthor ValidAuthor =>
-        IssueAuthor.Create("octocat").ValueOrThrow();
-
-    private static ProviderUrl ValidUrl =>
-        ProviderUrl.Create("https://github.com/owner/repo/issues/1").ValueOrThrow();
-
-    private static BlockedIssue CreateBlockedIssue(MonitoredRepositoryId repositoryId)
-    {
-        DetectedIssue detected = DetectedIssue.Detect(
-            repositoryId,
-            issueNumber: 1,
-            title: "Test Issue",
-            body: "Test body",
-            author: ValidAuthor,
-            url: ValidUrl,
-            labels: ["foundry"],
-            detectedAt: DateTimeOffset.UtcNow);
-        return BlockedIssue.FromDetected(detected, [5]);
-    }
-
     [Fact]
     public void WhenUnblocked_ReturnsQueuedIssueWithSameId()
     {
         // Arrange
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
-        BlockedIssue blocked = CreateBlockedIssue(repositoryId);
+        BlockedIssue blocked = new IssueBuilder().WithMonitoredRepositoryId(repositoryId).Detected().Block([5]);
 
         // Act
         FreshQueuedIssue queued = blocked.Unblock();
@@ -53,7 +30,7 @@ public sealed class Unblock
     {
         // Arrange
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
-        BlockedIssue blocked = CreateBlockedIssue(repositoryId);
+        BlockedIssue blocked = new IssueBuilder().WithMonitoredRepositoryId(repositoryId).Detected().Block([5]);
 
         // Act
         blocked.Unblock();
@@ -70,7 +47,7 @@ public sealed class Unblock
     {
         // Arrange
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
-        BlockedIssue blocked = CreateBlockedIssue(repositoryId);
+        BlockedIssue blocked = new IssueBuilder().WithMonitoredRepositoryId(repositoryId).Detected().Block([5]);
 
         // Act
         FreshQueuedIssue queued = blocked.Unblock();

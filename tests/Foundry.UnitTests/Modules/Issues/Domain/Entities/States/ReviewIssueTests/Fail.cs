@@ -1,9 +1,6 @@
-using Foundry.Modules.Issues.Domain.Entities;
 using Foundry.Modules.Issues.Domain.Entities.States;
-using Foundry.Modules.Issues.Domain.ValueObjects;
 using Foundry.Modules.Issues.Domain.Events;
 using Foundry.Modules.Monitoring.Contracts;
-using Foundry.Shared;
 using Foundry.Testing;
 
 using Shouldly;
@@ -14,34 +11,12 @@ namespace Foundry.UnitTests.Modules.Issues.Domain.Entities.States.ReviewIssueTes
 
 public sealed class Fail
 {
-    private static IssueAuthor ValidAuthor =>
-        IssueAuthor.Create("octocat").ValueOrThrow();
-
-    private static ProviderUrl ValidUrl =>
-        ProviderUrl.Create("https://github.com/owner/repo/issues/1").ValueOrThrow();
-
-    private static ReviewIssue CreateReviewIssue(MonitoredRepositoryId repositoryId)
-    {
-        DetectedIssue detected = DetectedIssue.Detect(
-            repositoryId,
-            issueNumber: 1,
-            title: "Test Issue",
-            body: "Test body",
-            author: ValidAuthor,
-            url: ValidUrl,
-            labels: ["foundry"],
-            detectedAt: DateTimeOffset.UtcNow);
-        FreshQueuedIssue queued = detected.Enqueue();
-        InProgressIssue inProgress = queued.Claim(Guid.NewGuid());
-        return inProgress.MarkInReview(Guid.NewGuid(), "foundry/1/add-feature", "https://github.com/owner/repo/pull/5", DateTimeOffset.UtcNow);
-    }
-
     [Fact]
     public void WhenFailed_ReturnsContinuableFailedIssueWithSameId()
     {
         // Arrange
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
-        ReviewIssue review = CreateReviewIssue(repositoryId);
+        ReviewIssue review = new IssueBuilder().WithMonitoredRepositoryId(repositoryId).Review();
         DateTimeOffset failedAt = DateTimeOffset.UtcNow;
 
         // Act
@@ -56,7 +31,7 @@ public sealed class Fail
     {
         // Arrange
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
-        ReviewIssue review = CreateReviewIssue(repositoryId);
+        ReviewIssue review = new IssueBuilder().WithMonitoredRepositoryId(repositoryId).Review();
         DateTimeOffset failedAt = DateTimeOffset.UtcNow;
 
         // Act
@@ -71,7 +46,7 @@ public sealed class Fail
     {
         // Arrange
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
-        ReviewIssue review = CreateReviewIssue(repositoryId);
+        ReviewIssue review = new IssueBuilder().WithMonitoredRepositoryId(repositoryId).Review();
         DateTimeOffset failedAt = new DateTimeOffset(2026, 5, 30, 12, 0, 0, TimeSpan.Zero);
         string failureReason = "PR was closed without merge";
 
@@ -92,7 +67,7 @@ public sealed class Fail
     {
         // Arrange
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
-        ReviewIssue review = CreateReviewIssue(repositoryId);
+        ReviewIssue review = new IssueBuilder().WithMonitoredRepositoryId(repositoryId).Review();
         DateTimeOffset failedAt = DateTimeOffset.UtcNow;
 
         // Act

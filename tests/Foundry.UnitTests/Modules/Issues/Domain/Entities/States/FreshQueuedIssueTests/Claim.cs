@@ -1,9 +1,6 @@
-using Foundry.Modules.Issues.Domain.Entities;
 using Foundry.Modules.Issues.Domain.Entities.States;
-using Foundry.Modules.Issues.Domain.ValueObjects;
 using Foundry.Modules.Issues.Domain.Events;
 using Foundry.Modules.Monitoring.Contracts;
-using Foundry.Shared;
 using Foundry.Testing;
 
 using Shouldly;
@@ -14,32 +11,12 @@ namespace Foundry.UnitTests.Modules.Issues.Domain.Entities.States.FreshQueuedIss
 
 public sealed class Claim
 {
-    private static IssueAuthor ValidAuthor =>
-        IssueAuthor.Create("octocat").ValueOrThrow();
-
-    private static ProviderUrl ValidUrl =>
-        ProviderUrl.Create("https://github.com/owner/repo/issues/1").ValueOrThrow();
-
-    private static FreshQueuedIssue CreateFreshQueuedIssue(MonitoredRepositoryId repositoryId)
-    {
-        DetectedIssue detected = DetectedIssue.Detect(
-            repositoryId,
-            issueNumber: 1,
-            title: "Test Issue",
-            body: "Test body",
-            author: ValidAuthor,
-            url: ValidUrl,
-            labels: ["foundry"],
-            detectedAt: DateTimeOffset.UtcNow);
-        return detected.Enqueue();
-    }
-
     [Fact]
     public void WhenClaimed_ReturnsInProgressIssueWithSameId()
     {
         // Arrange
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
-        FreshQueuedIssue queued = CreateFreshQueuedIssue(repositoryId);
+        FreshQueuedIssue queued = new IssueBuilder().WithMonitoredRepositoryId(repositoryId).FreshQueued();
         Guid workerRunId = Guid.NewGuid();
 
         // Act
@@ -54,7 +31,7 @@ public sealed class Claim
     {
         // Arrange
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
-        FreshQueuedIssue queued = CreateFreshQueuedIssue(repositoryId);
+        FreshQueuedIssue queued = new IssueBuilder().WithMonitoredRepositoryId(repositoryId).FreshQueued();
 
         // Act
         queued.Claim(Guid.NewGuid());
@@ -71,7 +48,7 @@ public sealed class Claim
     {
         // Arrange
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
-        FreshQueuedIssue queued = CreateFreshQueuedIssue(repositoryId);
+        FreshQueuedIssue queued = new IssueBuilder().WithMonitoredRepositoryId(repositoryId).FreshQueued();
 
         // Act
         InProgressIssue inProgress = queued.Claim(Guid.NewGuid());
@@ -90,7 +67,7 @@ public sealed class Claim
     {
         // Arrange
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
-        FreshQueuedIssue queued = CreateFreshQueuedIssue(repositoryId);
+        FreshQueuedIssue queued = new IssueBuilder().WithMonitoredRepositoryId(repositoryId).FreshQueued();
         Guid workerRunId = Guid.NewGuid();
 
         // Act
