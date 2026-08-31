@@ -2,9 +2,11 @@ using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
+using Foundry.Modules.Monitoring.Features.CredentialResolution;
 using Foundry.Modules.Monitoring.Features.Eligibility;
 using Foundry.Modules.Monitoring.Features.Polling;
 using Foundry.Modules.Monitoring.Features.Providers;
+using Foundry.Modules.Monitoring.Infrastructure.GitHub;
 using Foundry.Shared;
 using Foundry.Testing;
 using Foundry.WebApi.Persistence;
@@ -23,6 +25,13 @@ namespace Foundry.UnitTests.Modules.Monitoring.Features.Polling.RepositoryPoller
 /// Invariance tests asserting that the number of <see cref="IIssueProvider"/> calls made by
 /// <see cref="RepositoryPoller.PollAsync"/> does NOT scale with issue count (AC1),
 /// and does NOT exceed the declared fixed cap (AC2).
+///
+/// The real <see cref="RepositoryEligibilityEvaluator"/> is wired with a stub
+/// <see cref="ICredentialResolver"/> and a <see cref="FixedCountingProviderFactory"/> that
+/// always returns the same <see cref="CountingIssueProvider"/> instance. This ensures the
+/// eligibility branch-rules GET (<c>GetBranchProtectionAsync</c>) is counted in
+/// <c>TotalCalls</c>, so the cap has zero slack: adding one unconditional provider call
+/// to <c>PollAsync</c> pushes <c>TotalCalls</c> from 2 to 3 and breaks AC2.
 /// </summary>
 public sealed class PollCallInvariance : IAsyncDisposable
 {
@@ -51,9 +60,10 @@ public sealed class PollCallInvariance : IAsyncDisposable
     }
 
     /// <summary>
-    /// Seeds a repository with the Granted write-probe verdict so PollAsync takes the cheap
-    /// eligibility path (branch-rules only, no write probe). This makes the provider call count
-    /// deterministic and independent of eligibility state.
+    /// Seeds a repository with the Granted write-probe verdict so <c>PollAsync</c> takes the
+    /// cheap eligibility path (branch-rules only, no write probe). The Granted verdict makes
+    /// <c>IsDueForWriteProbe</c> return false, so <c>EvaluateBranchRulesAndStoreAsync</c>
+    /// is called — exactly one <c>GetBranchProtectionAsync</c> provider call.
     /// </summary>
     private MonitoredRepository SeedRepositoryWithGrantedVerdict(string slug = "owner/repo", int position = 0)
     {
@@ -65,20 +75,38 @@ public sealed class PollCallInvariance : IAsyncDisposable
         return repository;
     }
 
-    private RepositoryPoller BuildPoller(IIssueQueries issueQueries)
+    /// <summary>
+    /// Builds a <see cref="RepositoryPoller"/> wired with the real
+    /// <see cref="RepositoryEligibilityEvaluator"/> backed by the given
+    /// <paramref name="countingProvider"/>. The factory always returns the same
+    /// counting provider instance, so every call the evaluator or poll cycle makes
+    /// is counted in <c>TotalCalls</c>.
+    /// </summary>
+    private RepositoryPoller BuildPoller(CountingIssueProvider countingProvider, IIssueQueries issueQueries)
     {
+        GitHubCredential credential = GitHubCredential.Create(
+            "test",
+            "token",
+            BaseUrl.Create("https://github.com").ValueOrThrow());
+
+        IRepositoryEligibilityEvaluator eligibilityEvaluator = new RepositoryEligibilityEvaluator(
+            new StubCredentialResolver(credential),
+            new FixedCountingProviderFactory(countingProvider),
+            new NeverCalledWriteProber(),
+            NullLogger<RepositoryEligibilityEvaluator>.Instance);
+
         return new RepositoryPoller(
             issueQueries,
             _dbContext,
             new NullDomainEventDispatcher(),
             new NullIntegrationEventDispatcher(),
-            new GrantedEligibilityEvaluator(),
+            eligibilityEvaluator,
             NullLogger<RepositoryPoller>.Instance);
     }
 
     /// <summary>
-    /// Builds a list of N non-triggering provider issues — all brand new (not in known numbers),
-    /// but since dispatch candidates are empty they produce zero dependency calls.
+    /// Builds a list of N non-triggering provider issues. All are brand new (not in known
+    /// numbers), but since dispatch candidates are empty they produce zero dependency calls.
     /// </summary>
     private static IReadOnlyList<ProviderIssue> BuildIssues(int count)
     {
@@ -95,20 +123,22 @@ public sealed class PollCallInvariance : IAsyncDisposable
     }
 
     // AC1: poll-call count does not scale with total issue count.
+    // Both 5-issue and 200-issue polls issue exactly MaxFixedPollCallsPerCycle (2) provider calls:
+    //   1. GetBranchProtectionAsync (eligibility branch-rules GET via real evaluator)
+    //   2. GetIssuesAsync (listing)
     [Fact]
     public async Task WhenIssueCounts5And200_TotalProviderCallsAreEqual()
     {
         // Arrange
-        // Empty dispatch candidates and review issues so only GetIssuesAsync is called.
         IIssueQueries issueQueries = new EmptyIssueQueries();
 
         MonitoredRepository repo5 = SeedRepositoryWithGrantedVerdict("owner/repo-a", position: 0);
         CountingIssueProvider provider5 = new(BuildIssues(5));
-        RepositoryPoller poller5 = BuildPoller(issueQueries);
+        RepositoryPoller poller5 = BuildPoller(provider5, issueQueries);
 
         MonitoredRepository repo200 = SeedRepositoryWithGrantedVerdict("owner/repo-b", position: 1);
         CountingIssueProvider provider200 = new(BuildIssues(200));
-        RepositoryPoller poller200 = BuildPoller(issueQueries);
+        RepositoryPoller poller200 = BuildPoller(provider200, issueQueries);
 
         // Act
         await poller5.PollAsync(repo5, provider5, Now, CancellationToken.None);
@@ -118,63 +148,79 @@ public sealed class PollCallInvariance : IAsyncDisposable
         provider5.TotalCalls.ShouldBe(provider200.TotalCalls);
     }
 
-    // AC2: fixed-cost scenario stays within the declared cap.
+    // AC2: fixed-cost scenario equals the declared cap — zero slack.
+    // TotalCalls must be exactly MaxFixedPollCallsPerCycle (2):
+    //   1. GetBranchProtectionAsync (real evaluator → FixedCountingProviderFactory)
+    //   2. GetIssuesAsync (listing)
+    // Adding any one unconditional provider call to PollAsync pushes TotalCalls to 3, failing this test.
     [Fact]
-    public async Task WhenGrantedVerdictAndNoWorkItems_TotalProviderCallsAtMostMaxFixedPollCallsPerCycle()
+    public async Task WhenGrantedVerdictAndNoWorkItems_TotalProviderCallsEqualMaxFixedPollCallsPerCycle()
     {
         // Arrange
-        // Granted verdict → cheap eligibility path (no write probe).
-        // Empty dispatch candidates → no GetDependenciesAsync calls.
-        // Empty review issues → no IsIssueClosedAsync / GetPullRequestStatusAsync / GetReviewFeedbackAsync calls.
+        // Granted verdict → cheap eligibility path → 1 GetBranchProtectionAsync.
+        // Empty dispatch candidates → no GetDependenciesAsync.
+        // Empty review issues → no IsIssueClosedAsync / GetPullRequestStatusAsync / GetReviewFeedbackAsync.
         MonitoredRepository repository = SeedRepositoryWithGrantedVerdict();
         CountingIssueProvider provider = new();
-        RepositoryPoller poller = BuildPoller(new EmptyIssueQueries());
+        RepositoryPoller poller = BuildPoller(provider, new EmptyIssueQueries());
 
         // Act
         await poller.PollAsync(repository, provider, Now, CancellationToken.None);
 
-        // Assert
-        provider.TotalCalls.ShouldBeLessThanOrEqualTo(RepositoryPoller.MaxFixedPollCallsPerCycle);
+        // Assert — equality, not <=, so adding any unconditional provider call breaks this test.
+        provider.TotalCalls.ShouldBe(RepositoryPoller.MaxFixedPollCallsPerCycle);
     }
 
-    // AC2 zero-issues case: the invariant holds with zero issues (no division by issue count).
+    // AC2 zero-issues edge case: invariant holds when the listing is empty.
     [Fact]
-    public async Task WhenZeroIssues_TotalProviderCallsAtMostMaxFixedPollCallsPerCycle()
+    public async Task WhenZeroIssues_TotalProviderCallsEqualMaxFixedPollCallsPerCycle()
     {
         // Arrange
         MonitoredRepository repository = SeedRepositoryWithGrantedVerdict();
         CountingIssueProvider provider = new([]);
-        RepositoryPoller poller = BuildPoller(new EmptyIssueQueries());
+        RepositoryPoller poller = BuildPoller(provider, new EmptyIssueQueries());
 
         // Act
         await poller.PollAsync(repository, provider, Now, CancellationToken.None);
 
         // Assert
-        provider.TotalCalls.ShouldBeLessThanOrEqualTo(RepositoryPoller.MaxFixedPollCallsPerCycle);
+        provider.TotalCalls.ShouldBe(RepositoryPoller.MaxFixedPollCallsPerCycle);
     }
 
     /// <summary>
-    /// Eligibility evaluator that always records a Granted verdict on the cheap path.
-    /// Guarantees the fixed-cost path is exercised (no write probe).
+    /// Returns the configured credential for any host/slug, simulating a repo that has credentials.
     /// </summary>
-    private sealed class GrantedEligibilityEvaluator : IRepositoryEligibilityEvaluator
+    private sealed class StubCredentialResolver(Credential credential) : ICredentialResolver
     {
-        public Task EvaluateFullyAndStoreAsync(
-            MonitoredRepository repo,
-            DateTimeOffset now,
+        public Task<Credential?> ResolveAsync(
+            string host,
+            RepositorySlug slug,
             CancellationToken cancellationToken)
-        {
-            repo.SetEligibility(new RepositoryEligibility.Eligible());
-            return Task.CompletedTask;
-        }
+            => Task.FromResult<Credential?>(credential);
+    }
 
-        public Task EvaluateBranchRulesAndStoreAsync(
-            MonitoredRepository repo,
+    /// <summary>
+    /// Always returns the same <see cref="CountingIssueProvider"/> regardless of credential,
+    /// so every provider call — from the eligibility evaluator and from the poll cycle — is counted.
+    /// </summary>
+    private sealed class FixedCountingProviderFactory(CountingIssueProvider provider) : IIssueProviderFactory
+    {
+        public IIssueProvider CreateProvider(Credential credential, string token) => provider;
+    }
+
+    /// <summary>
+    /// Write prober that throws if called — the cheap eligibility path (Granted verdict) must
+    /// never invoke the write probe. A call here signals a broken test setup.
+    /// </summary>
+    private sealed class NeverCalledWriteProber : IGitHubWriteProber
+    {
+        public Task<Result<WritePermissionProbeResult>> ProbeWriteAccessAsync(
+            Uri apiBaseUrl,
+            RepositorySlug slug,
+            string token,
             CancellationToken cancellationToken)
-        {
-            repo.SetEligibility(new RepositoryEligibility.Eligible());
-            return Task.CompletedTask;
-        }
+            => throw new InvalidOperationException(
+                "Write prober must not be called on the cheap eligibility path (Granted verdict).");
     }
 
     private sealed class NullDomainEventDispatcher : IDomainEventDispatcher
@@ -191,7 +237,7 @@ public sealed class PollCallInvariance : IAsyncDisposable
 
     /// <summary>
     /// Returns empty results for all queries — ensures the poll sees no dispatch candidates
-    /// and no review issues, so the fixed-cost path is deterministic.
+    /// and no review issues, so the fixed-cost path is fully deterministic.
     /// </summary>
     private sealed class EmptyIssueQueries : IIssueQueries
     {
