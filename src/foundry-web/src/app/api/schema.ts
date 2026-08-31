@@ -227,6 +227,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/rate-budget": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Returns current provider rate-limit headroom for all tracked budget keys */
+        get: operations["GetRateBudget"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/accounts/{accountId}/repositories": {
         parameters: {
             query?: never;
@@ -617,6 +634,8 @@ export interface components {
             timeoutMinutes: number | string;
             /** Format: int32 */
             probeIntervalMinutes: number | string;
+            /** Format: int32 */
+            pollIntervalSeconds: number | string;
             systemPromptTemplate: null | string;
             workerPromptTemplate: null | string;
             /** Format: date-time */
@@ -712,6 +731,24 @@ export interface components {
             status?: null | number | string;
             detail?: null | string;
             instance?: null | string;
+        };
+        ProviderBudgetHeadroom: {
+            budget: string;
+            displayName: string;
+            /** Format: int32 */
+            remaining: null | number | string;
+            /** Format: int32 */
+            limit: null | number | string;
+            /** Format: date-time */
+            resetAt: null | string;
+            /** Format: date-time */
+            observedAt: null | string;
+            /** Format: int32 */
+            floor: null | number | string;
+            health: null | string;
+        };
+        RateBudgetSnapshot: {
+            budgets: components["schemas"]["ProviderBudgetHeadroom"][];
         };
         RepositoryEligibilityInfo: {
             status: string;
@@ -815,6 +852,8 @@ export interface components {
             autoResumeOnUsageReset: boolean;
             /** Format: int32 */
             probeIntervalMinutes: number | string;
+            /** Format: int32 */
+            pollIntervalSeconds: number | string;
         };
         UpdatePromptTemplatesRequestBody: {
             systemPromptTemplate: null | string;
@@ -1438,6 +1477,26 @@ export interface operations {
                 };
                 content: {
                     "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    GetRateBudget: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RateBudgetSnapshot"];
                 };
             };
         };

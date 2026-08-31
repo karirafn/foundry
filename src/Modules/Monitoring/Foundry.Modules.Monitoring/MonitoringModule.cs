@@ -9,6 +9,7 @@ using Foundry.Modules.Monitoring.Features.Eligibility;
 using Foundry.Modules.Monitoring.Features.NamespaceDerivation;
 using Foundry.Modules.Monitoring.Features.Polling;
 using Foundry.Modules.Monitoring.Features.Providers;
+using Foundry.Modules.Monitoring.Features.RateBudget;
 using Foundry.Modules.Monitoring.Features.Repositories;
 using Foundry.Modules.Monitoring.Infrastructure;
 using Foundry.Modules.Monitoring.Infrastructure.GitHub;
@@ -77,6 +78,7 @@ public static class MonitoringModule
     {
         app.MapAccountEndpoints();
         app.MapProviderEndpoints();
+        app.MapRateBudgetEndpoints();
         app.MapRepositoryEndpoints();
         return app;
     }

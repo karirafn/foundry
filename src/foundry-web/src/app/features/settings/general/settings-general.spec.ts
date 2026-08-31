@@ -9,8 +9,10 @@ import { vi } from 'vitest';
 import { SettingsGeneralComponent } from './settings-general';
 import { SettingsService } from '../../../core/services/settings.service';
 import { SystemSignalRService } from '../../../core/services/system-signalr.service';
+import { RateBudgetService } from '../../../core/services/rate-budget.service';
 
 const mockSystemSignalR = { reconnected: NEVER, reloadTrigger: NEVER, loginSessionUpdate: NEVER, notifications: signal([]).asReadonly() };
+const mockRateBudgetService = { snapshot: signal(null).asReadonly() };
 
 const IMAGE_FLAGS_DEFAULTS = {
   installDotnet: false,
@@ -92,6 +94,7 @@ function setup() {
       provideHttpClient(),
       provideHttpClientTesting(),
       { provide: SystemSignalRService, useValue: mockSystemSignalR },
+      { provide: RateBudgetService, useValue: mockRateBudgetService },
     ],
   });
 
@@ -2200,6 +2203,41 @@ describe('SettingsGeneralComponent', () => {
       expect(hint).toBeTruthy();
       expect(hint.textContent).toContain('comma-separated');
       expect(hint.textContent).toContain('Maximum 50 hostnames');
+    });
+  });
+
+  describe('Provider Rate Budget section', () => {
+    it('should render the "Provider Rate Budget" section title', () => {
+      // Arrange
+      const { httpMock } = setup();
+      const fixture = TestBed.createComponent(SettingsGeneralComponent);
+      fixture.detectChanges();
+      flushSettings(httpMock);
+      fixture.detectChanges();
+
+      // Act
+      const el = fixture.nativeElement as HTMLElement;
+      const titles = Array.from(el.querySelectorAll('.general-settings__section-title'));
+      const rateBudgetTitle = titles.find((t) => t.textContent?.includes('Provider Rate Budget'));
+
+      // Assert
+      expect(rateBudgetTitle).toBeTruthy();
+    });
+
+    it('should render the fd-rate-budget-panel component', () => {
+      // Arrange
+      const { httpMock } = setup();
+      const fixture = TestBed.createComponent(SettingsGeneralComponent);
+      fixture.detectChanges();
+      flushSettings(httpMock);
+      fixture.detectChanges();
+
+      // Act
+      const el = fixture.nativeElement as HTMLElement;
+      const panel = el.querySelector('fd-rate-budget-panel');
+
+      // Assert
+      expect(panel).toBeTruthy();
     });
   });
 });

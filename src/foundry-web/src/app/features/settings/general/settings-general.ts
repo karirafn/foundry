@@ -17,6 +17,7 @@ import { DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { SettingsService } from '../../../core/services/settings.service';
 import { DispatchService } from '../../../core/services/dispatch.service';
+import { RateBudgetPanelComponent } from './rate-budget-panel/rate-budget-panel';
 import { AuthMode, ImageBuildStatus, OAuthStatus, UpdatePromptTemplatesRequest, WorkerImageFlags } from '../../../core/models/settings.model';
 import { OAuthPanelComponent } from '../oauth-panel/oauth-panel';
 
@@ -27,11 +28,12 @@ const TIMEOUT_MINUTES_MAX = 1440;
 const PROBE_INTERVAL_MIN = 5;
 const POLL_INTERVAL_MIN = 5;
 const POLL_INTERVAL_MAX = 3600;
+const RATE_BUDGET_FLOOR = 500;
 
 @Component({
   selector: 'fd-settings-general',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [FormsModule, OAuthPanelComponent],
+  imports: [FormsModule, OAuthPanelComponent, RateBudgetPanelComponent],
   providers: [DatePipe],
   template: `
     <div class="general-settings">
@@ -477,6 +479,15 @@ const POLL_INTERVAL_MAX = 3600;
       </section>
 
       <section class="general-settings__section">
+        <h2 class="general-settings__section-title">Provider Rate Budget</h2>
+        <p class="general-settings__section-description">
+          Current provider API request headroom. GitHub budgets show a health status relative to the
+          configured floor ({{ RATE_BUDGET_FLOOR }} remaining). GitLab is recorded for visibility only — no floor is enforced.
+        </p>
+        <fd-rate-budget-panel />
+      </section>
+
+      <section class="general-settings__section">
         <h2 class="general-settings__section-title">Provider Hosts</h2>
         <p class="general-settings__section-description">
           Allowlist of self-hosted GitHub Enterprise and GitLab hostnames that workers may reach. Repositories on any other host are rejected before a token is sent.
@@ -534,6 +545,7 @@ export class SettingsGeneralComponent {
   protected readonly PROBE_INTERVAL_MIN = PROBE_INTERVAL_MIN;
   protected readonly POLL_INTERVAL_MIN = POLL_INTERVAL_MIN;
   protected readonly POLL_INTERVAL_MAX = POLL_INTERVAL_MAX;
+  protected readonly RATE_BUDGET_FLOOR = RATE_BUDGET_FLOOR;
 
   protected readonly _selectedMode: WritableSignal<AuthMode> = signal('api_key');
   protected readonly _showApiKey: WritableSignal<boolean> = signal(false);
