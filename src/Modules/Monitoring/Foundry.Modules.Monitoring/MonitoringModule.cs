@@ -13,6 +13,7 @@ using Foundry.Modules.Monitoring.Features.Repositories;
 using Foundry.Modules.Monitoring.Infrastructure;
 using Foundry.Modules.Monitoring.Infrastructure.GitHub;
 using Foundry.Modules.Monitoring.Infrastructure.GitLab;
+using Foundry.Modules.Monitoring.Infrastructure.RateBudget;
 using Foundry.Shared;
 using Foundry.Shared.Infrastructure;
 
@@ -34,6 +35,7 @@ public static class MonitoringModule
         services.AddMemoryCache();
         services.TryAddSingleton<DefaultBranchCache>();
         services.TryAddSingleton<IHostAddressResolver, SystemHostAddressResolver>();
+        services.TryAddSingleton<IProviderRateBudget, InMemoryProviderRateBudget>();
         services.AddScoped<ProviderHostGuard>();
 
         services.AddHttpClient<GitHubHttpClient>();
