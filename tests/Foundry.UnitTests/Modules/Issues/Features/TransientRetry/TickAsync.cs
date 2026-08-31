@@ -1,6 +1,5 @@
 using Foundry.Modules.Issues.Domain.Entities;
 using Foundry.Modules.Issues.Domain.Entities.States;
-using Foundry.Modules.Issues.Domain.ValueObjects;
 using Foundry.Modules.Issues.Domain.Events;
 using Foundry.Modules.Issues.Features.TransientRetry;
 using Foundry.Modules.Monitoring.Contracts;
@@ -27,12 +26,6 @@ public sealed class TickAsync : IAsyncDisposable
     private readonly FoundryDbContext _dbContext;
     private readonly CapturingDomainEventDispatcher _dispatcher;
 
-    private static IssueAuthor ValidAuthor =>
-        IssueAuthor.Create("octocat").ValueOrThrow();
-
-    private static ProviderUrl ValidUrl =>
-        ProviderUrl.Create("https://github.com/owner/repo/issues/1").ValueOrThrow();
-
     public TickAsync()
     {
         _connection = new SqliteConnection("Data Source=:memory:");
@@ -55,23 +48,12 @@ public sealed class TickAsync : IAsyncDisposable
 
     private FailedIssue SeedTransientFailedIssue(DateTimeOffset failedAt, int issueNumber = 1)
     {
-        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
-        DetectedIssue detected = DetectedIssue.Detect(
-            repositoryId,
-            issueNumber: issueNumber,
-            title: "Test Issue",
-            body: "Test body",
-            author: ValidAuthor,
-            url: ValidUrl,
-            labels: ["foundry"],
-            detectedAt: DateTimeOffset.UtcNow.AddHours(-2));
-        FreshQueuedIssue queued = FreshQueuedIssue.FromDetected(detected);
-        InProgressIssue inProgress = queued.Claim(Guid.NewGuid());
-        FailedIssue failed = inProgress.MarkFailed(
-            Guid.NewGuid(),
-            "Transient Anthropic API fault",
-            failedAt,
-            "transient_api_error");
+        FailedIssue failed = new IssueBuilder()
+            .WithIssueNumber(issueNumber)
+            .WithDetectedAt(DateTimeOffset.UtcNow.AddHours(-2))
+            .WithFailureCategory("transient_api_error")
+            .WithFailedAt(failedAt)
+            .Failed();
         _dbContext.Set<Issue>().Add(failed);
         _dbContext.SaveChanges();
         _dbContext.ChangeTracker.Clear();
@@ -80,24 +62,14 @@ public sealed class TickAsync : IAsyncDisposable
 
     private ContinuableFailedIssue SeedTransientContinuableFailedIssue(DateTimeOffset failedAt)
     {
-        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
-        DetectedIssue detected = DetectedIssue.Detect(
-            repositoryId,
-            issueNumber: 10,
-            title: "Test Issue With Branch",
-            body: "Test body",
-            author: ValidAuthor,
-            url: ValidUrl,
-            labels: ["foundry"],
-            detectedAt: DateTimeOffset.UtcNow.AddHours(-2));
-        FreshQueuedIssue queued = FreshQueuedIssue.FromDetected(detected);
-        InProgressIssue inProgress = queued.Claim(Guid.NewGuid());
-        ContinuableFailedIssue continuableFailed = inProgress.MarkContinuableFailed(
-            Guid.NewGuid(),
-            "feat/10-fix",
-            "Transient Anthropic API fault",
-            "transient_api_error",
-            failedAt);
+        ContinuableFailedIssue continuableFailed = new IssueBuilder()
+            .WithIssueNumber(10)
+            .WithTitle("Test Issue With Branch")
+            .WithDetectedAt(DateTimeOffset.UtcNow.AddHours(-2))
+            .WithBranchName("feat/10-fix")
+            .WithFailureCategory("transient_api_error")
+            .WithFailedAt(failedAt)
+            .ContinuableFailed();
         _dbContext.Set<Issue>().Add(continuableFailed);
         _dbContext.SaveChanges();
         _dbContext.ChangeTracker.Clear();

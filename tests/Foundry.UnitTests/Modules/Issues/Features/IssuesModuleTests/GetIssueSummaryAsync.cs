@@ -1,7 +1,6 @@
 using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Issues.Domain.Entities;
 using Foundry.Modules.Issues.Domain.Entities.States;
-using Foundry.Modules.Issues.Domain.ValueObjects;
 using Foundry.Modules.Issues.Features;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Workers.Contracts;
@@ -25,12 +24,6 @@ public sealed class GetIssueSummaryAsync : IAsyncDisposable
     private readonly FoundryDbContext _dbContext;
     private readonly StubWorkerRunQueries _workerRunQueries;
     private readonly IIssueQueries _sut;
-
-    private static IssueAuthor ValidAuthor =>
-        IssueAuthor.Create("octocat").ValueOrThrow();
-
-    private static ProviderUrl ValidUrl =>
-        ProviderUrl.Create("https://github.com/owner/repo/issues/1").ValueOrThrow();
 
     public GetIssueSummaryAsync()
     {
@@ -59,15 +52,9 @@ public sealed class GetIssueSummaryAsync : IAsyncDisposable
 
     private async Task<DetectedIssue> CreateAndPersistDetectedIssueAsync(MonitoredRepositoryId repositoryId)
     {
-        DetectedIssue issue = DetectedIssue.Detect(
-            repositoryId,
-            issueNumber: 1,
-            title: "Test Issue",
-            body: "Body",
-            author: ValidAuthor,
-            url: ValidUrl,
-            labels: [],
-            detectedAt: DateTimeOffset.UtcNow);
+        DetectedIssue issue = new IssueBuilder()
+            .WithMonitoredRepositoryId(repositoryId)
+            .Detected();
 
         _dbContext.Set<Issue>().Add(issue);
         await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);

@@ -1,7 +1,6 @@
 using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Issues.Domain.Entities;
 using Foundry.Modules.Issues.Domain.Entities.States;
-using Foundry.Modules.Issues.Domain.ValueObjects;
 using Foundry.Modules.Issues.Features;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Contracts.Queries;
@@ -47,26 +46,17 @@ public sealed class GetIssueSummariesAsync : IAsyncDisposable
         await _connection.DisposeAsync();
     }
 
-    private static IssueAuthor ValidAuthor =>
-        IssueAuthor.Create("octocat").ValueOrThrow();
-
-    private static ProviderUrl ValidUrl =>
-        ProviderUrl.Create("https://github.com/owner/repo/issues/1").ValueOrThrow();
-
     private async Task<DetectedIssue> CreateAndPersistDetectedIssueAsync(
         MonitoredRepositoryId repositoryId,
         int issueNumber,
         DateTimeOffset detectedAt)
     {
-        DetectedIssue issue = DetectedIssue.Detect(
-            repositoryId,
-            issueNumber: issueNumber,
-            title: $"Issue {issueNumber}",
-            body: "Body",
-            author: ValidAuthor,
-            url: ValidUrl,
-            labels: [],
-            detectedAt: detectedAt);
+        DetectedIssue issue = new IssueBuilder()
+            .WithMonitoredRepositoryId(repositoryId)
+            .WithIssueNumber(issueNumber)
+            .WithTitle($"Issue {issueNumber}")
+            .WithDetectedAt(detectedAt)
+            .Detected();
 
         _dbContext.Set<Issue>().Add(issue);
         await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
@@ -111,7 +101,7 @@ public sealed class GetIssueSummariesAsync : IAsyncDisposable
             () => summary.State.ShouldBe("detected"),
             () => summary.Id.ShouldBe(issue.Id.Value),
             () => summary.DetectedAt.ShouldBe(detectedAt, tolerance: TimeSpan.FromSeconds(1)),
-            () => summary.Url.ShouldBe(ValidUrl.Value.ToString()));
+            () => summary.Url.ShouldBe("https://github.com/owner/repo/issues/1"));
     }
 
     [Fact]

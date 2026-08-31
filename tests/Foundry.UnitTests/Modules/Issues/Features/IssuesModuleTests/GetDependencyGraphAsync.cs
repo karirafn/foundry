@@ -2,9 +2,7 @@ using Foundry.Modules.Issues.Features;
 using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Issues.Domain.Entities;
 using Foundry.Modules.Issues.Domain.Entities.States;
-using Foundry.Modules.Issues.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Contracts;
-using Foundry.Shared;
 using Foundry.Testing;
 using Foundry.WebApi.Persistence;
 
@@ -43,27 +41,17 @@ public sealed class GetDependencyGraphAsync : IAsyncDisposable
         await _connection.DisposeAsync();
     }
 
-    private static IssueAuthor ValidAuthor =>
-        IssueAuthor.Create("octocat").ValueOrThrow();
-
-    private static ProviderUrl ValidUrl =>
-        ProviderUrl.Create("https://github.com/owner/repo/issues/1").ValueOrThrow();
-
     [Fact]
     public async Task WhenNoIssuesHaveBlockers_ReturnsEmptyList()
     {
         // Arrange
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
 
-        DetectedIssue issue = DetectedIssue.Detect(
-            repositoryId,
-            issueNumber: 1,
-            title: "Issue 1",
-            body: "Body",
-            author: ValidAuthor,
-            url: ValidUrl,
-            labels: [],
-            detectedAt: DateTimeOffset.UtcNow);
+        DetectedIssue issue = new IssueBuilder()
+            .WithMonitoredRepositoryId(repositoryId)
+            .WithIssueNumber(1)
+            .WithTitle("Issue 1")
+            .Detected();
 
         _dbContext.Set<Issue>().Add(issue);
         await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
@@ -83,17 +71,12 @@ public sealed class GetDependencyGraphAsync : IAsyncDisposable
         // Arrange
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
 
-        DetectedIssue detected = DetectedIssue.Detect(
-            repositoryId,
-            issueNumber: 5,
-            title: "Issue 5",
-            body: "Body",
-            author: ValidAuthor,
-            url: ValidUrl,
-            labels: [],
-            detectedAt: DateTimeOffset.UtcNow);
-
-        BlockedIssue blocked = detected.Block([10, 20]);
+        BlockedIssue blocked = new IssueBuilder()
+            .WithMonitoredRepositoryId(repositoryId)
+            .WithIssueNumber(5)
+            .WithTitle("Issue 5")
+            .Detected()
+            .Block([10, 20]);
 
         _dbContext.Set<Issue>().Add(blocked);
         await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
@@ -116,29 +99,19 @@ public sealed class GetDependencyGraphAsync : IAsyncDisposable
         MonitoredRepositoryId targetRepo = MonitoredRepositoryId.New();
         MonitoredRepositoryId otherRepo = MonitoredRepositoryId.New();
 
-        DetectedIssue detected1 = DetectedIssue.Detect(
-            targetRepo,
-            issueNumber: 1,
-            title: "Issue 1",
-            body: "Body",
-            author: ValidAuthor,
-            url: ValidUrl,
-            labels: [],
-            detectedAt: DateTimeOffset.UtcNow);
+        BlockedIssue blockedInTarget = new IssueBuilder()
+            .WithMonitoredRepositoryId(targetRepo)
+            .WithIssueNumber(1)
+            .WithTitle("Issue 1")
+            .Detected()
+            .Block([99]);
 
-        BlockedIssue blockedInTarget = detected1.Block([99]);
-
-        DetectedIssue detected2 = DetectedIssue.Detect(
-            otherRepo,
-            issueNumber: 2,
-            title: "Issue 2",
-            body: "Body",
-            author: ValidAuthor,
-            url: ValidUrl,
-            labels: [],
-            detectedAt: DateTimeOffset.UtcNow);
-
-        BlockedIssue blockedInOther = detected2.Block([88]);
+        BlockedIssue blockedInOther = new IssueBuilder()
+            .WithMonitoredRepositoryId(otherRepo)
+            .WithIssueNumber(2)
+            .WithTitle("Issue 2")
+            .Detected()
+            .Block([88]);
 
         _dbContext.Set<Issue>().AddRange(blockedInTarget, blockedInOther);
         await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);

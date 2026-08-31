@@ -1,7 +1,6 @@
 using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Issues.Domain.Entities;
 using Foundry.Modules.Issues.Domain.Entities.States;
-using Foundry.Modules.Issues.Domain.ValueObjects;
 using Foundry.Modules.Issues.Domain.Events;
 using Foundry.Modules.Issues.Features;
 using Foundry.Modules.Issues.Features.ProviderReactions;
@@ -26,12 +25,6 @@ public sealed class HandleAsync : IAsyncDisposable
     private readonly FoundryDbContext _dbContext;
     private readonly CapturingDomainEventDispatcher _dispatcher;
     private readonly IIntegrationEventHandler<IssueDependenciesDetected> _sut;
-
-    private static IssueAuthor ValidAuthor =>
-        IssueAuthor.Create("octocat").ValueOrThrow();
-
-    private static ProviderUrl ValidUrl =>
-        ProviderUrl.Create("https://github.com/owner/repo/issues/1").ValueOrThrow();
 
     public HandleAsync()
     {
@@ -60,15 +53,10 @@ public sealed class HandleAsync : IAsyncDisposable
 
     private DetectedIssue SeedDetectedIssue(MonitoredRepositoryId repositoryId, int issueNumber)
     {
-        DetectedIssue issue = DetectedIssue.Detect(
-            repositoryId,
-            issueNumber,
-            title: $"Issue {issueNumber}",
-            body: "Body",
-            author: ValidAuthor,
-            url: ValidUrl,
-            labels: [],
-            detectedAt: DateTimeOffset.UtcNow);
+        DetectedIssue issue = new IssueBuilder()
+            .WithMonitoredRepositoryId(repositoryId)
+            .WithIssueNumber(issueNumber)
+            .Detected();
         _dbContext.Set<Issue>().Add(issue);
         _dbContext.SaveChanges();
         _dbContext.ChangeTracker.Clear();
@@ -77,16 +65,10 @@ public sealed class HandleAsync : IAsyncDisposable
 
     private FreshQueuedIssue SeedQueuedIssue(MonitoredRepositoryId repositoryId, int issueNumber)
     {
-        DetectedIssue detected = DetectedIssue.Detect(
-            repositoryId,
-            issueNumber,
-            title: $"Issue {issueNumber}",
-            body: "Body",
-            author: ValidAuthor,
-            url: ValidUrl,
-            labels: [],
-            detectedAt: DateTimeOffset.UtcNow);
-        FreshQueuedIssue queued = FreshQueuedIssue.FromDetected(detected);
+        FreshQueuedIssue queued = new IssueBuilder()
+            .WithMonitoredRepositoryId(repositoryId)
+            .WithIssueNumber(issueNumber)
+            .FreshQueued();
         _dbContext.Set<Issue>().Add(queued);
         _dbContext.SaveChanges();
         _dbContext.ChangeTracker.Clear();
@@ -98,16 +80,11 @@ public sealed class HandleAsync : IAsyncDisposable
         int issueNumber,
         IReadOnlyList<int> blockedBy)
     {
-        DetectedIssue detected = DetectedIssue.Detect(
-            repositoryId,
-            issueNumber,
-            title: $"Issue {issueNumber}",
-            body: "Body",
-            author: ValidAuthor,
-            url: ValidUrl,
-            labels: [],
-            detectedAt: DateTimeOffset.UtcNow);
-        BlockedIssue blocked = detected.Block(blockedBy);
+        BlockedIssue blocked = new IssueBuilder()
+            .WithMonitoredRepositoryId(repositoryId)
+            .WithIssueNumber(issueNumber)
+            .Detected()
+            .Block(blockedBy);
         _dbContext.Set<Issue>().Add(blocked);
         _dbContext.SaveChanges();
         _dbContext.ChangeTracker.Clear();
@@ -496,5 +473,4 @@ public sealed class HandleAsync : IAsyncDisposable
         // BlockedBy should still be updated though
         reloaded.BlockedBy.ShouldBe([1]);
     }
-
 }

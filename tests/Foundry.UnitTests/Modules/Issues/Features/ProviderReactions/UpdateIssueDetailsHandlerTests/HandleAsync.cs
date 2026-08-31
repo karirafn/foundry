@@ -1,6 +1,5 @@
 using Foundry.Modules.Issues.Domain.Entities;
 using Foundry.Modules.Issues.Domain.Entities.States;
-using Foundry.Modules.Issues.Domain.ValueObjects;
 using Foundry.Modules.Issues.Features.ProviderReactions;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Shared;
@@ -42,26 +41,18 @@ public sealed class HandleAsync : IAsyncDisposable
         await _connection.DisposeAsync();
     }
 
-    private static IssueAuthor ValidAuthor =>
-        IssueAuthor.Create("octocat").ValueOrThrow();
-
-    private static ProviderUrl ValidUrl =>
-        ProviderUrl.Create("https://github.com/owner/repo/issues/1").ValueOrThrow();
-
     [Fact]
     public async Task WhenIssueExists_UpdatesTitleBodyAndLabels()
     {
         // Arrange
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
-        DetectedIssue issue = DetectedIssue.Detect(
-            repositoryId,
-            issueNumber: 5,
-            title: "Original title",
-            body: "Original body",
-            author: ValidAuthor,
-            url: ValidUrl,
-            labels: ["old-label"],
-            detectedAt: DateTimeOffset.UtcNow);
+        DetectedIssue issue = new IssueBuilder()
+            .WithMonitoredRepositoryId(repositoryId)
+            .WithIssueNumber(5)
+            .WithTitle("Original title")
+            .WithBody("Original body")
+            .WithLabels(["old-label"])
+            .Detected();
 
         _dbContext.Set<Issue>().Add(issue);
         await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
@@ -117,15 +108,12 @@ public sealed class HandleAsync : IAsyncDisposable
         MonitoredRepositoryId targetRepo = MonitoredRepositoryId.New();
         MonitoredRepositoryId otherRepo = MonitoredRepositoryId.New();
 
-        DetectedIssue issue = DetectedIssue.Detect(
-            otherRepo,
-            issueNumber: 5,
-            title: "Original title",
-            body: "Original body",
-            author: ValidAuthor,
-            url: ValidUrl,
-            labels: [],
-            detectedAt: DateTimeOffset.UtcNow);
+        DetectedIssue issue = new IssueBuilder()
+            .WithMonitoredRepositoryId(otherRepo)
+            .WithIssueNumber(5)
+            .WithTitle("Original title")
+            .WithBody("Original body")
+            .Detected();
 
         _dbContext.Set<Issue>().Add(issue);
         await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);

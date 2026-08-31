@@ -1,6 +1,5 @@
 using Foundry.Modules.Issues.Domain.Entities;
 using Foundry.Modules.Issues.Domain.Entities.States;
-using Foundry.Modules.Issues.Domain.ValueObjects;
 using Foundry.Modules.Issues.Features.ProviderReactions;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Shared;
@@ -24,12 +23,6 @@ public sealed class HandleAsync : IAsyncDisposable
     private readonly IIntegrationEventHandler<ProviderIssueUntracked> _sut;
 
     private static readonly DateTimeOffset Now = new(2026, 5, 27, 12, 0, 0, TimeSpan.Zero);
-
-    private static IssueAuthor ValidAuthor =>
-        IssueAuthor.Create("octocat").ValueOrThrow();
-
-    private static ProviderUrl ValidUrl =>
-        ProviderUrl.Create("https://github.com/owner/repo/issues/1").ValueOrThrow();
 
     public HandleAsync()
     {
@@ -55,15 +48,11 @@ public sealed class HandleAsync : IAsyncDisposable
 
     private DetectedIssue SeedDetectedIssue(MonitoredRepositoryId repositoryId, int issueNumber)
     {
-        DetectedIssue detected = DetectedIssue.Detect(
-            repositoryId,
-            issueNumber: issueNumber,
-            title: "Issue title",
-            body: "Body",
-            author: ValidAuthor,
-            url: ValidUrl,
-            labels: [],
-            detectedAt: Now);
+        DetectedIssue detected = new IssueBuilder()
+            .WithMonitoredRepositoryId(repositoryId)
+            .WithIssueNumber(issueNumber)
+            .WithDetectedAt(Now)
+            .Detected();
         _dbContext.Set<Issue>().Add(detected);
         _dbContext.SaveChanges();
         _dbContext.ChangeTracker.Clear();
@@ -72,16 +61,11 @@ public sealed class HandleAsync : IAsyncDisposable
 
     private FreshQueuedIssue SeedQueuedIssue(MonitoredRepositoryId repositoryId, int issueNumber)
     {
-        DetectedIssue detected = DetectedIssue.Detect(
-            repositoryId,
-            issueNumber: issueNumber,
-            title: "Issue title",
-            body: "Body",
-            author: ValidAuthor,
-            url: ValidUrl,
-            labels: [],
-            detectedAt: Now);
-        FreshQueuedIssue queued = FreshQueuedIssue.FromDetected(detected);
+        FreshQueuedIssue queued = new IssueBuilder()
+            .WithMonitoredRepositoryId(repositoryId)
+            .WithIssueNumber(issueNumber)
+            .WithDetectedAt(Now)
+            .FreshQueued();
         _dbContext.Set<Issue>().Add(queued);
         _dbContext.SaveChanges();
         _dbContext.ChangeTracker.Clear();
@@ -90,16 +74,12 @@ public sealed class HandleAsync : IAsyncDisposable
 
     private BlockedIssue SeedBlockedIssue(MonitoredRepositoryId repositoryId, int issueNumber)
     {
-        DetectedIssue detected = DetectedIssue.Detect(
-            repositoryId,
-            issueNumber: issueNumber,
-            title: "Issue title",
-            body: "Body",
-            author: ValidAuthor,
-            url: ValidUrl,
-            labels: [],
-            detectedAt: Now);
-        BlockedIssue blocked = detected.Block([99]);
+        BlockedIssue blocked = new IssueBuilder()
+            .WithMonitoredRepositoryId(repositoryId)
+            .WithIssueNumber(issueNumber)
+            .WithDetectedAt(Now)
+            .Detected()
+            .Block([99]);
         _dbContext.Set<Issue>().Add(blocked);
         _dbContext.SaveChanges();
         _dbContext.ChangeTracker.Clear();
@@ -108,18 +88,12 @@ public sealed class HandleAsync : IAsyncDisposable
 
     private FailedIssue SeedFailedIssue(MonitoredRepositoryId repositoryId, int issueNumber)
     {
-        DetectedIssue detected = DetectedIssue.Detect(
-            repositoryId,
-            issueNumber: issueNumber,
-            title: "Issue title",
-            body: "Body",
-            author: ValidAuthor,
-            url: ValidUrl,
-            labels: [],
-            detectedAt: Now);
-        FreshQueuedIssue queued = FreshQueuedIssue.FromDetected(detected);
-        InProgressIssue inProgress = queued.Claim(Guid.NewGuid());
-        FailedIssue failed = inProgress.MarkFailed(Guid.NewGuid(), "Worker exited with code 1", Now, "generic_failure");
+        FailedIssue failed = new IssueBuilder()
+            .WithMonitoredRepositoryId(repositoryId)
+            .WithIssueNumber(issueNumber)
+            .WithDetectedAt(Now)
+            .WithFailedAt(Now)
+            .Failed();
         _dbContext.Set<Issue>().Add(failed);
         _dbContext.SaveChanges();
         _dbContext.ChangeTracker.Clear();
@@ -128,49 +102,26 @@ public sealed class HandleAsync : IAsyncDisposable
 
     private ContinuableFailedIssue SeedContinuableFailedIssue(MonitoredRepositoryId repositoryId, int issueNumber)
     {
-        DetectedIssue detected = DetectedIssue.Detect(
-            repositoryId,
-            issueNumber: issueNumber,
-            title: "Issue title",
-            body: "Body",
-            author: ValidAuthor,
-            url: ValidUrl,
-            labels: [],
-            detectedAt: Now);
-        FreshQueuedIssue queued = FreshQueuedIssue.FromDetected(detected);
-        InProgressIssue inProgress = queued.Claim(Guid.NewGuid());
-        ContinuableFailedIssue failed = inProgress.MarkContinuableFailed(
-            Guid.NewGuid(),
-            "feat/1-fix",
-            "Continuable failure",
-            "generic_failure",
-            Now);
-        _dbContext.Set<Issue>().Add(failed);
+        ContinuableFailedIssue continuableFailed = new IssueBuilder()
+            .WithMonitoredRepositoryId(repositoryId)
+            .WithIssueNumber(issueNumber)
+            .WithDetectedAt(Now)
+            .WithFailedAt(Now)
+            .ContinuableFailed();
+        _dbContext.Set<Issue>().Add(continuableFailed);
         _dbContext.SaveChanges();
         _dbContext.ChangeTracker.Clear();
-        return failed;
+        return continuableFailed;
     }
 
     private ContinuationQueuedIssue SeedContinuationQueuedIssue(MonitoredRepositoryId repositoryId, int issueNumber)
     {
-        DetectedIssue detected = DetectedIssue.Detect(
-            repositoryId,
-            issueNumber: issueNumber,
-            title: "Issue title",
-            body: "Body",
-            author: ValidAuthor,
-            url: ValidUrl,
-            labels: [],
-            detectedAt: Now);
-        FreshQueuedIssue queued = FreshQueuedIssue.FromDetected(detected);
-        InProgressIssue inProgress = queued.Claim(Guid.NewGuid());
-        ContinuableFailedIssue failed = inProgress.MarkContinuableFailed(
-            Guid.NewGuid(),
-            "feat/1-fix",
-            "Failure",
-            "generic_failure",
-            Now);
-        ContinuationQueuedIssue continuationQueued = failed.Retry();
+        ContinuationQueuedIssue continuationQueued = new IssueBuilder()
+            .WithMonitoredRepositoryId(repositoryId)
+            .WithIssueNumber(issueNumber)
+            .WithDetectedAt(Now)
+            .ContinuableFailed()
+            .Retry();
         _dbContext.Set<Issue>().Add(continuationQueued);
         _dbContext.SaveChanges();
         _dbContext.ChangeTracker.Clear();
@@ -179,23 +130,11 @@ public sealed class HandleAsync : IAsyncDisposable
 
     private RevisionQueuedIssue SeedRevisionQueuedIssue(MonitoredRepositoryId repositoryId, int issueNumber)
     {
-        DetectedIssue detected = DetectedIssue.Detect(
-            repositoryId,
-            issueNumber: issueNumber,
-            title: "Issue title",
-            body: "Body",
-            author: ValidAuthor,
-            url: ValidUrl,
-            labels: [],
-            detectedAt: Now);
-        FreshQueuedIssue queued = FreshQueuedIssue.FromDetected(detected);
-        InProgressIssue inProgress = queued.Claim(Guid.NewGuid());
-        ReviewIssue review = inProgress.MarkInReview(
-            inProgress.WorkerRunId,
-            "feat/1-fix",
-            "https://github.com/owner/repo/pull/10",
-            Now);
-        RevisionQueuedIssue revisionQueued = review.Revise([new ReviewComment("Please fix")]);
+        RevisionQueuedIssue revisionQueued = new IssueBuilder()
+            .WithMonitoredRepositoryId(repositoryId)
+            .WithIssueNumber(issueNumber)
+            .WithDetectedAt(Now)
+            .RevisionQueued();
         _dbContext.Set<Issue>().Add(revisionQueued);
         _dbContext.SaveChanges();
         _dbContext.ChangeTracker.Clear();
@@ -204,29 +143,12 @@ public sealed class HandleAsync : IAsyncDisposable
 
     private RevisionFailedIssue SeedRevisionFailedIssue(MonitoredRepositoryId repositoryId, int issueNumber)
     {
-        DetectedIssue detected = DetectedIssue.Detect(
-            repositoryId,
-            issueNumber: issueNumber,
-            title: "Issue title",
-            body: "Body",
-            author: ValidAuthor,
-            url: ValidUrl,
-            labels: [],
-            detectedAt: Now);
-        FreshQueuedIssue queued = FreshQueuedIssue.FromDetected(detected);
-        InProgressIssue inProgress = queued.Claim(Guid.NewGuid());
-        ReviewIssue review = inProgress.MarkInReview(
-            inProgress.WorkerRunId,
-            "feat/1-fix",
-            "https://github.com/owner/repo/pull/10",
-            Now);
-        RevisionQueuedIssue revisionQueued = review.Revise([new ReviewComment("Please fix")]);
-        RevisionInProgressIssue revisionInProgress = revisionQueued.Claim(Guid.NewGuid());
-        RevisionFailedIssue revisionFailed = revisionInProgress.MarkFailed(
-            Guid.NewGuid(),
-            "Revision failed",
-            "generic_failure",
-            Now);
+        RevisionFailedIssue revisionFailed = new IssueBuilder()
+            .WithMonitoredRepositoryId(repositoryId)
+            .WithIssueNumber(issueNumber)
+            .WithDetectedAt(Now)
+            .WithFailedAt(Now)
+            .RevisionFailed();
         _dbContext.Set<Issue>().Add(revisionFailed);
         _dbContext.SaveChanges();
         _dbContext.ChangeTracker.Clear();
@@ -235,17 +157,11 @@ public sealed class HandleAsync : IAsyncDisposable
 
     private InProgressIssue SeedInProgressIssue(MonitoredRepositoryId repositoryId, int issueNumber)
     {
-        DetectedIssue detected = DetectedIssue.Detect(
-            repositoryId,
-            issueNumber: issueNumber,
-            title: "Issue title",
-            body: "Body",
-            author: ValidAuthor,
-            url: ValidUrl,
-            labels: [],
-            detectedAt: Now);
-        FreshQueuedIssue queued = FreshQueuedIssue.FromDetected(detected);
-        InProgressIssue inProgress = queued.Claim(Guid.NewGuid());
+        InProgressIssue inProgress = new IssueBuilder()
+            .WithMonitoredRepositoryId(repositoryId)
+            .WithIssueNumber(issueNumber)
+            .WithDetectedAt(Now)
+            .InProgress();
         _dbContext.Set<Issue>().Add(inProgress);
         _dbContext.SaveChanges();
         _dbContext.ChangeTracker.Clear();
@@ -254,24 +170,11 @@ public sealed class HandleAsync : IAsyncDisposable
 
     private RevisionInProgressIssue SeedRevisionInProgressIssue(MonitoredRepositoryId repositoryId, int issueNumber)
     {
-        DetectedIssue detected = DetectedIssue.Detect(
-            repositoryId,
-            issueNumber: issueNumber,
-            title: "Issue title",
-            body: "Body",
-            author: ValidAuthor,
-            url: ValidUrl,
-            labels: [],
-            detectedAt: Now);
-        FreshQueuedIssue queued = FreshQueuedIssue.FromDetected(detected);
-        InProgressIssue inProgress = queued.Claim(Guid.NewGuid());
-        ReviewIssue review = inProgress.MarkInReview(
-            inProgress.WorkerRunId,
-            "feat/1-fix",
-            "https://github.com/owner/repo/pull/10",
-            Now);
-        RevisionQueuedIssue revisionQueued = review.Revise([new ReviewComment("Please fix")]);
-        RevisionInProgressIssue revisionInProgress = revisionQueued.Claim(Guid.NewGuid());
+        RevisionInProgressIssue revisionInProgress = new IssueBuilder()
+            .WithMonitoredRepositoryId(repositoryId)
+            .WithIssueNumber(issueNumber)
+            .WithDetectedAt(Now)
+            .RevisionInProgress();
         _dbContext.Set<Issue>().Add(revisionInProgress);
         _dbContext.SaveChanges();
         _dbContext.ChangeTracker.Clear();
@@ -280,22 +183,11 @@ public sealed class HandleAsync : IAsyncDisposable
 
     private ReviewIssue SeedReviewIssue(MonitoredRepositoryId repositoryId, int issueNumber)
     {
-        DetectedIssue detected = DetectedIssue.Detect(
-            repositoryId,
-            issueNumber: issueNumber,
-            title: "Issue title",
-            body: "Body",
-            author: ValidAuthor,
-            url: ValidUrl,
-            labels: [],
-            detectedAt: Now);
-        FreshQueuedIssue queued = FreshQueuedIssue.FromDetected(detected);
-        InProgressIssue inProgress = queued.Claim(Guid.NewGuid());
-        ReviewIssue review = inProgress.MarkInReview(
-            inProgress.WorkerRunId,
-            "feat/1-fix",
-            "https://github.com/owner/repo/pull/10",
-            Now);
+        ReviewIssue review = new IssueBuilder()
+            .WithMonitoredRepositoryId(repositoryId)
+            .WithIssueNumber(issueNumber)
+            .WithDetectedAt(Now)
+            .Review();
         _dbContext.Set<Issue>().Add(review);
         _dbContext.SaveChanges();
         _dbContext.ChangeTracker.Clear();
@@ -304,23 +196,13 @@ public sealed class HandleAsync : IAsyncDisposable
 
     private CompletedIssue SeedCompletedIssue(MonitoredRepositoryId repositoryId, int issueNumber)
     {
-        DetectedIssue detected = DetectedIssue.Detect(
-            repositoryId,
-            issueNumber: issueNumber,
-            title: "Issue title",
-            body: "Body",
-            author: ValidAuthor,
-            url: ValidUrl,
-            labels: [],
-            detectedAt: Now);
-        FreshQueuedIssue queued = FreshQueuedIssue.FromDetected(detected);
-        InProgressIssue inProgress = queued.Claim(Guid.NewGuid());
-        ReviewIssue review = inProgress.MarkInReview(
-            inProgress.WorkerRunId,
-            "feat/1-fix",
-            "https://github.com/owner/repo/pull/10",
-            Now);
-        CompletedIssue completed = review.Complete(Now);
+        CompletedIssue completed = new IssueBuilder()
+            .WithMonitoredRepositoryId(repositoryId)
+            .WithIssueNumber(issueNumber)
+            .WithDetectedAt(Now)
+            .WithFeedbackCutoffAt(Now)
+            .WithCompletedAt(Now)
+            .Completed();
         _dbContext.Set<Issue>().Add(completed);
         _dbContext.SaveChanges();
         _dbContext.ChangeTracker.Clear();
@@ -329,18 +211,11 @@ public sealed class HandleAsync : IAsyncDisposable
 
     private UnchangedIssue SeedUnchangedIssue(MonitoredRepositoryId repositoryId, int issueNumber)
     {
-        DetectedIssue detected = DetectedIssue.Detect(
-            repositoryId,
-            issueNumber: issueNumber,
-            title: "Issue title",
-            body: "Body",
-            author: ValidAuthor,
-            url: ValidUrl,
-            labels: [],
-            detectedAt: Now);
-        FreshQueuedIssue queued = FreshQueuedIssue.FromDetected(detected);
-        InProgressIssue inProgress = queued.Claim(Guid.NewGuid());
-        UnchangedIssue unchanged = inProgress.MarkUnchanged(Guid.NewGuid());
+        UnchangedIssue unchanged = new IssueBuilder()
+            .WithMonitoredRepositoryId(repositoryId)
+            .WithIssueNumber(issueNumber)
+            .WithDetectedAt(Now)
+            .Unchanged();
         _dbContext.Set<Issue>().Add(unchanged);
         _dbContext.SaveChanges();
         _dbContext.ChangeTracker.Clear();

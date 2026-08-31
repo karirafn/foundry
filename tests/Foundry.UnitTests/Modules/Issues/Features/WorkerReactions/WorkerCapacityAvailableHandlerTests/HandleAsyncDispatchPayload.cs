@@ -1,7 +1,6 @@
 using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Issues.Domain.Entities;
 using Foundry.Modules.Issues.Domain.Entities.States;
-using Foundry.Modules.Issues.Domain.ValueObjects;
 using Foundry.Modules.Issues.Features.Claiming;
 using Foundry.Modules.Issues.Features.WorkerReactions;
 using Foundry.Modules.Monitoring.Contracts;
@@ -65,12 +64,6 @@ public sealed class HandleAsyncDispatchPayload : IAsyncDisposable
         await _connection.DisposeAsync();
     }
 
-    private static IssueAuthor ValidAuthor =>
-        IssueAuthor.Create("octocat").ShouldBeOfType<Result<IssueAuthor>.Success>().Value;
-
-    private static ProviderUrl ValidUrl =>
-        ProviderUrl.Create("https://github.com/owner/repo/issues/1").ShouldBeOfType<Result<ProviderUrl>.Success>().Value;
-
     private async Task<(MonitoredRepository, GitHubCredential)> SeedRepositoryAsync(
         string slug = "owner/repo",
         string? token = "ghp_test_token")
@@ -101,15 +94,12 @@ public sealed class HandleAsyncDispatchPayload : IAsyncDisposable
         string title = "Test Issue",
         string body = "Test body")
     {
-        DetectedIssue detected = DetectedIssue.Detect(
-            repositoryId,
-            issueNumber,
-            title,
-            body,
-            ValidAuthor,
-            ValidUrl,
-            labels: [],
-            detectedAt: DateTimeOffset.UtcNow);
+        DetectedIssue detected = new IssueBuilder()
+            .WithMonitoredRepositoryId(repositoryId)
+            .WithIssueNumber(issueNumber)
+            .WithTitle(title)
+            .WithBody(body)
+            .Detected();
 
         _dbContext.Set<Issue>().Add(detected);
         await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);

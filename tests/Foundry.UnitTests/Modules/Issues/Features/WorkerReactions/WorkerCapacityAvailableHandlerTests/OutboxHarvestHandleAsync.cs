@@ -1,7 +1,6 @@
 using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Issues.Domain.Entities;
 using Foundry.Modules.Issues.Domain.Entities.States;
-using Foundry.Modules.Issues.Domain.ValueObjects;
 using Foundry.Modules.Issues.Features.Claiming;
 using Foundry.Modules.Issues.Features.WorkerReactions;
 using Foundry.Modules.Monitoring.Contracts;
@@ -32,12 +31,6 @@ public sealed class OutboxHarvestHandleAsync : IAsyncDisposable
 {
     private readonly SqliteConnection _connection;
     private readonly ServiceProvider _serviceProvider;
-
-    private static IssueAuthor ValidAuthor =>
-        IssueAuthor.Create("octocat").ShouldBeOfType<Result<IssueAuthor>.Success>().Value;
-
-    private static ProviderUrl ValidUrl =>
-        ProviderUrl.Create("https://github.com/owner/repo/issues/1").ShouldBeOfType<Result<ProviderUrl>.Success>().Value;
 
     public OutboxHarvestHandleAsync()
     {
@@ -76,16 +69,10 @@ public sealed class OutboxHarvestHandleAsync : IAsyncDisposable
 
     private static FreshQueuedIssue SeedQueuedIssue(FoundryDbContext dbContext, MonitoredRepositoryId repositoryId)
     {
-        DetectedIssue detected = DetectedIssue.Detect(
-            repositoryId,
-            issueNumber: 1,
-            title: "Issue 1",
-            body: "Body",
-            author: ValidAuthor,
-            url: ValidUrl,
-            labels: [],
-            detectedAt: DateTimeOffset.UtcNow);
-        FreshQueuedIssue queued = FreshQueuedIssue.FromDetected(detected);
+        FreshQueuedIssue queued = new IssueBuilder()
+            .WithMonitoredRepositoryId(repositoryId)
+            .WithIssueNumber(1)
+            .FreshQueued();
         dbContext.Set<Issue>().Add(queued);
         dbContext.SaveChanges();
         dbContext.ChangeTracker.Clear();
@@ -267,24 +254,10 @@ public sealed class OutboxHarvestHandleAsync : IAsyncDisposable
 
     private static void SeedRevisionQueuedIssue(FoundryDbContext dbContext, MonitoredRepositoryId repositoryId)
     {
-        DetectedIssue detected = DetectedIssue.Detect(
-            repositoryId,
-            issueNumber: 20,
-            title: "Issue 20",
-            body: "Body",
-            author: ValidAuthor,
-            url: ValidUrl,
-            labels: [],
-            detectedAt: DateTimeOffset.UtcNow);
-        FreshQueuedIssue queued = FreshQueuedIssue.FromDetected(detected);
-        InProgressIssue inProgress = queued.Claim(Guid.NewGuid());
-        ReviewIssue review = inProgress.MarkInReview(
-            Guid.NewGuid(),
-            "feat/issue-20",
-            "https://github.com/owner/repo/pull/20",
-            DateTimeOffset.UtcNow);
-        IReadOnlyList<ReviewComment> comments = [new ReviewComment("Please fix this.")];
-        RevisionQueuedIssue revisionQueued = review.Revise(comments);
+        RevisionQueuedIssue revisionQueued = new IssueBuilder()
+            .WithMonitoredRepositoryId(repositoryId)
+            .WithIssueNumber(20)
+            .RevisionQueued();
         dbContext.Set<Issue>().Add(revisionQueued);
         dbContext.SaveChanges();
         dbContext.ChangeTracker.Clear();
@@ -292,24 +265,11 @@ public sealed class OutboxHarvestHandleAsync : IAsyncDisposable
 
     private static void SeedContinuationQueuedIssue(FoundryDbContext dbContext, MonitoredRepositoryId repositoryId)
     {
-        DetectedIssue detected = DetectedIssue.Detect(
-            repositoryId,
-            issueNumber: 10,
-            title: "Issue 10",
-            body: "Body",
-            author: ValidAuthor,
-            url: ValidUrl,
-            labels: [],
-            detectedAt: DateTimeOffset.UtcNow);
-        FreshQueuedIssue queued = FreshQueuedIssue.FromDetected(detected);
-        InProgressIssue inProgress = queued.Claim(Guid.NewGuid());
-        ContinuableFailedIssue continuableFailed = inProgress.MarkContinuableFailed(
-            Guid.NewGuid(),
-            "feat/10-issue",
-            "Non-zero exit code: 1",
-            "generic_failure",
-            DateTimeOffset.UtcNow);
-        ContinuationQueuedIssue continuationQueued = continuableFailed.Retry();
+        ContinuationQueuedIssue continuationQueued = new IssueBuilder()
+            .WithMonitoredRepositoryId(repositoryId)
+            .WithIssueNumber(10)
+            .ContinuableFailed()
+            .Retry();
         dbContext.Set<Issue>().Add(continuationQueued);
         dbContext.SaveChanges();
         dbContext.ChangeTracker.Clear();
