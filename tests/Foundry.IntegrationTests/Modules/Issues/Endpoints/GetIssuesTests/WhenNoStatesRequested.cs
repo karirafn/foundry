@@ -4,8 +4,8 @@ using System.Net.Http.Json;
 using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Issues.Domain.Entities;
 using Foundry.Modules.Issues.Domain.Entities.States;
-using Foundry.Modules.Issues.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Contracts;
+using Foundry.Testing;
 using Foundry.WebApi.Persistence;
 
 using Microsoft.EntityFrameworkCore;
@@ -23,12 +23,6 @@ public sealed class WhenNoStatesRequested : IAsyncDisposable
     private readonly HttpClient _client;
 
     private static readonly MonitoredRepositoryId RepositoryId = MonitoredRepositoryId.New();
-
-    private static IssueAuthor ValidAuthor =>
-        IssueAuthor.Create("octocat").ValueOrThrow();
-
-    private static ProviderUrl ValidUrl =>
-        ProviderUrl.Create("https://github.com/owner/repo/issues/1").ValueOrThrow();
 
     public WhenNoStatesRequested()
     {
@@ -48,15 +42,13 @@ public sealed class WhenNoStatesRequested : IAsyncDisposable
         using IServiceScope scope = _factory.Services.CreateScope();
         DbContext dbContext = scope.ServiceProvider.GetRequiredService<DbContext>();
 
-        DetectedIssue issue = DetectedIssue.Detect(
-            RepositoryId,
-            issueNumber: issueNumber,
-            title: $"Active Issue {issueNumber}",
-            body: "Body",
-            author: ValidAuthor,
-            url: ValidUrl,
-            labels: [],
-            detectedAt: DateTimeOffset.UtcNow);
+        DetectedIssue issue = new IssueBuilder()
+            .WithMonitoredRepositoryId(RepositoryId)
+            .WithIssueNumber(issueNumber)
+            .WithTitle($"Active Issue {issueNumber}")
+            .WithBody("Body")
+            .WithLabels([])
+            .Detected();
 
         dbContext.Set<Issue>().Add(issue);
         await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
@@ -68,24 +60,17 @@ public sealed class WhenNoStatesRequested : IAsyncDisposable
         using IServiceScope scope = _factory.Services.CreateScope();
         DbContext dbContext = scope.ServiceProvider.GetRequiredService<DbContext>();
 
-        DetectedIssue detected = DetectedIssue.Detect(
-            RepositoryId,
-            issueNumber: issueNumber,
-            title: $"Resolved Issue {issueNumber}",
-            body: "Body",
-            author: ValidAuthor,
-            url: ValidUrl,
-            labels: [],
-            detectedAt: DateTimeOffset.UtcNow.AddHours(-2));
-
-        FreshQueuedIssue queued = FreshQueuedIssue.FromDetected(detected);
-        InProgressIssue inProgress = queued.Claim(Guid.NewGuid());
-        ReviewIssue review = inProgress.MarkInReview(
-            inProgress.WorkerRunId,
-            "feat/1-fix",
-            "https://github.com/owner/repo/pull/10",
-            DateTimeOffset.UtcNow.AddHours(-1));
-        CompletedIssue completed = review.Complete(DateTimeOffset.UtcNow);
+        CompletedIssue completed = new IssueBuilder()
+            .WithMonitoredRepositoryId(RepositoryId)
+            .WithIssueNumber(issueNumber)
+            .WithTitle($"Resolved Issue {issueNumber}")
+            .WithBody("Body")
+            .WithLabels([])
+            .WithDetectedAt(DateTimeOffset.UtcNow.AddHours(-2))
+            .WithBranchName("feat/1-fix")
+            .WithPullRequestUrl("https://github.com/owner/repo/pull/10")
+            .WithFeedbackCutoffAt(DateTimeOffset.UtcNow.AddHours(-1))
+            .Completed();
 
         dbContext.Set<Issue>().Add(completed);
         await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);

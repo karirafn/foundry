@@ -4,8 +4,8 @@ using System.Net.Http.Json;
 using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Issues.Domain.Entities;
 using Foundry.Modules.Issues.Domain.Entities.States;
-using Foundry.Modules.Issues.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Contracts;
+using Foundry.Testing;
 using Foundry.WebApi.Persistence;
 
 using Microsoft.EntityFrameworkCore;
@@ -21,12 +21,6 @@ public sealed class WhenIssueIsInFailedState : IAsyncDisposable
 {
     private readonly FoundryWebAppFactory _factory;
     private readonly HttpClient _client;
-
-    private static IssueAuthor ValidAuthor =>
-        IssueAuthor.Create("octocat").ValueOrThrow();
-
-    private static ProviderUrl ValidUrl =>
-        ProviderUrl.Create("https://github.com/owner/repo/issues/1").ValueOrThrow();
 
     public WhenIssueIsInFailedState()
     {
@@ -49,24 +43,15 @@ public sealed class WhenIssueIsInFailedState : IAsyncDisposable
         using IServiceScope scope = _factory.Services.CreateScope();
         DbContext dbContext = scope.ServiceProvider.GetRequiredService<DbContext>();
 
-        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
-
-        DetectedIssue detected = DetectedIssue.Detect(
-            repositoryId,
-            issueNumber: 1,
-            title: "A failed issue",
-            body: "Issue body text",
-            author: ValidAuthor,
-            url: ValidUrl,
-            labels: ["bug"],
-            detectedAt: DateTimeOffset.UtcNow);
-        FreshQueuedIssue queued = FreshQueuedIssue.FromDetected(detected);
-        InProgressIssue inProgress = queued.Claim(Guid.NewGuid());
-        FailedIssue failed = inProgress.MarkFailed(
-            Guid.NewGuid(),
-            "Container exited with non-zero code: 1",
-            DateTimeOffset.UtcNow,
-            "generic_failure");
+        FailedIssue failed = new IssueBuilder()
+            .WithMonitoredRepositoryId(MonitoredRepositoryId.New())
+            .WithIssueNumber(1)
+            .WithTitle("A failed issue")
+            .WithBody("Issue body text")
+            .WithLabels(["bug"])
+            .WithFailureReason("Container exited with non-zero code: 1")
+            .WithFailureCategory("generic_failure")
+            .Failed();
 
         dbContext.Set<Issue>().Add(failed);
         await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);

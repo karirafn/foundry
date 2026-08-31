@@ -4,12 +4,12 @@ using System.Net.Http.Json;
 using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Issues.Domain.Entities;
 using Foundry.Modules.Issues.Domain.Entities.States;
-using Foundry.Modules.Issues.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Workers.Domain.Entities;
 using Foundry.Modules.Workers.Domain.Entities.States;
 using Foundry.Modules.Workers.Domain.ValueObjects;
 using Foundry.Shared;
+using Foundry.Testing;
 using Foundry.WebApi.Persistence;
 
 using Microsoft.EntityFrameworkCore;
@@ -27,12 +27,6 @@ public sealed class WhenIssueHasWorkerRuns : IAsyncDisposable
     private readonly HttpClient _client;
 
     private static readonly MonitoredRepositoryId RepositoryId = MonitoredRepositoryId.New();
-
-    private static IssueAuthor ValidAuthor =>
-        IssueAuthor.Create("octocat").ValueOrThrow();
-
-    private static ProviderUrl ValidUrl =>
-        ProviderUrl.Create("https://github.com/owner/repo/issues/1").ValueOrThrow();
 
     public WhenIssueHasWorkerRuns()
     {
@@ -52,17 +46,13 @@ public sealed class WhenIssueHasWorkerRuns : IAsyncDisposable
         using IServiceScope scope = _factory.Services.CreateScope();
         DbContext dbContext = scope.ServiceProvider.GetRequiredService<DbContext>();
 
-        DetectedIssue detected = DetectedIssue.Detect(
-            RepositoryId,
-            issueNumber: issueNumber,
-            title: $"Issue {issueNumber}",
-            body: "Body",
-            author: ValidAuthor,
-            url: ValidUrl,
-            labels: [],
-            detectedAt: DateTimeOffset.UtcNow);
-
-        FreshQueuedIssue queued = FreshQueuedIssue.FromDetected(detected);
+        FreshQueuedIssue queued = new IssueBuilder()
+            .WithMonitoredRepositoryId(RepositoryId)
+            .WithIssueNumber(issueNumber)
+            .WithTitle($"Issue {issueNumber}")
+            .WithBody("Body")
+            .WithLabels([])
+            .FreshQueued();
 
         dbContext.Set<Issue>().Add(queued);
         await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
@@ -157,24 +147,18 @@ public sealed class WhenIssueHasWorkerRuns : IAsyncDisposable
         using IServiceScope seedScope = _factory.Services.CreateScope();
         DbContext seedDb = seedScope.ServiceProvider.GetRequiredService<DbContext>();
 
-        DetectedIssue detected = DetectedIssue.Detect(
-            RepositoryId,
-            issueNumber: 3,
-            title: "Resolved Issue",
-            body: "Body",
-            author: ValidAuthor,
-            url: ValidUrl,
-            labels: [],
-            detectedAt: DateTimeOffset.UtcNow);
+        IssueBuilder builder = new IssueBuilder()
+            .WithMonitoredRepositoryId(RepositoryId)
+            .WithIssueNumber(3)
+            .WithTitle("Resolved Issue")
+            .WithBody("Body")
+            .WithLabels([])
+            .WithBranchName("feat/3-fix")
+            .WithPullRequestUrl("https://github.com/owner/repo/pull/3")
+            .WithFeedbackCutoffAt(DateTimeOffset.UtcNow.AddHours(1))
+            .WithCompletedAt(DateTimeOffset.UtcNow.AddHours(2));
 
-        FreshQueuedIssue queued = FreshQueuedIssue.FromDetected(detected);
-        InProgressIssue inProgress = queued.Claim(Guid.NewGuid());
-        ReviewIssue review = inProgress.MarkInReview(
-            inProgress.WorkerRunId,
-            "feat/3-fix",
-            "https://github.com/owner/repo/pull/3",
-            DateTimeOffset.UtcNow.AddHours(1));
-        CompletedIssue completedIssue = review.Complete(DateTimeOffset.UtcNow.AddHours(2));
+        CompletedIssue completedIssue = builder.Completed();
 
         seedDb.Set<Issue>().Add(completedIssue);
         await seedDb.SaveChangesAsync(TestContext.Current.CancellationToken);

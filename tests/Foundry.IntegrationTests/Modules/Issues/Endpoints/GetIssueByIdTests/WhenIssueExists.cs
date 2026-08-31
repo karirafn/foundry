@@ -7,6 +7,7 @@ using Foundry.Modules.Issues.Domain.Entities;
 using Foundry.Modules.Issues.Domain.Entities.States;
 using Foundry.Modules.Issues.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Contracts;
+using Foundry.Testing;
 using Foundry.WebApi.Persistence;
 
 using Microsoft.EntityFrameworkCore;
@@ -24,12 +25,6 @@ public sealed class WhenIssueExists : IAsyncDisposable
     private readonly HttpClient _client;
 
     private static readonly MonitoredRepositoryId RepositoryId = MonitoredRepositoryId.New();
-
-    private static IssueAuthor ValidAuthor =>
-        IssueAuthor.Create("octocat").ValueOrThrow();
-
-    private static ProviderUrl ValidUrl =>
-        ProviderUrl.Create("https://github.com/owner/repo/issues/7").ValueOrThrow();
 
     public WhenIssueExists()
     {
@@ -52,15 +47,15 @@ public sealed class WhenIssueExists : IAsyncDisposable
         using IServiceScope scope = _factory.Services.CreateScope();
         DbContext dbContext = scope.ServiceProvider.GetRequiredService<DbContext>();
 
-        DetectedIssue issue = DetectedIssue.Detect(
-            repositoryId ?? RepositoryId,
-            issueNumber: 7,
-            title: "A detected issue",
-            body: "Issue body text",
-            author: ValidAuthor,
-            url: ValidUrl,
-            labels: ["bug"],
-            detectedAt: DateTimeOffset.UtcNow);
+        DetectedIssue issue = new IssueBuilder()
+            .WithMonitoredRepositoryId(repositoryId ?? RepositoryId)
+            .WithIssueNumber(7)
+            .WithTitle("A detected issue")
+            .WithBody("Issue body text")
+            .WithAuthor(IssueAuthor.Create("octocat").ValueOrThrow())
+            .WithUrl(ProviderUrl.Create("https://github.com/owner/repo/issues/7").ValueOrThrow())
+            .WithLabels(["bug"])
+            .Detected();
 
         dbContext.Set<Issue>().Add(issue);
         await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
@@ -132,25 +127,21 @@ public sealed class WhenIssueExists : IAsyncDisposable
         // Seed namespace so the resolver can match "owner/gitlab-repo".
         // No endpoint exposes namespace seeding directly; seed via DbContext to simulate resolver state.
         await AccountSeeder.SetOwnerNamespacesAsync(_factory, accountId, "owner");
-        ProviderUrl gitlabUrl =
-            ProviderUrl.Create("https://gitlab.com/owner/gitlab-repo/issues/7").ValueOrThrow();
 
         // No POST endpoint exists for issues — seed directly via DbContext.
         IssueId issueId;
         using (IServiceScope scope = _factory.Services.CreateScope())
         {
             DbContext dbContext = scope.ServiceProvider.GetRequiredService<DbContext>();
-            IssueAuthor author = IssueAuthor.Create("octocat").ValueOrThrow();
 
-            DetectedIssue issue = DetectedIssue.Detect(
-                repoId,
-                issueNumber: 7,
-                title: "A GitLab issue",
-                body: "Issue body",
-                author: author,
-                url: gitlabUrl,
-                labels: [],
-                detectedAt: DateTimeOffset.UtcNow);
+            DetectedIssue issue = new IssueBuilder()
+                .WithMonitoredRepositoryId(repoId)
+                .WithIssueNumber(7)
+                .WithTitle("A GitLab issue")
+                .WithBody("Issue body")
+                .WithUrl(ProviderUrl.Create("https://gitlab.com/owner/gitlab-repo/issues/7").ValueOrThrow())
+                .WithLabels([])
+                .Detected();
 
             dbContext.Set<Issue>().Add(issue);
             await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);

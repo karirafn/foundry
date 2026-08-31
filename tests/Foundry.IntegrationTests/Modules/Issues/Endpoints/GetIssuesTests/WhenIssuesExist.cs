@@ -4,8 +4,8 @@ using System.Net.Http.Json;
 using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Issues.Domain.Entities;
 using Foundry.Modules.Issues.Domain.Entities.States;
-using Foundry.Modules.Issues.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Contracts;
+using Foundry.Testing;
 using Foundry.WebApi.Persistence;
 
 using Microsoft.EntityFrameworkCore;
@@ -23,12 +23,6 @@ public sealed class WhenIssuesExist : IAsyncDisposable
     private readonly HttpClient _client;
 
     private static readonly MonitoredRepositoryId RepositoryId = MonitoredRepositoryId.New();
-
-    private static IssueAuthor ValidAuthor =>
-        IssueAuthor.Create("octocat").ValueOrThrow();
-
-    private static ProviderUrl ValidUrl =>
-        ProviderUrl.Create("https://github.com/owner/repo/issues/1").ValueOrThrow();
 
     public WhenIssuesExist()
     {
@@ -49,15 +43,13 @@ public sealed class WhenIssuesExist : IAsyncDisposable
         using IServiceScope scope = _factory.Services.CreateScope();
         DbContext dbContext = scope.ServiceProvider.GetRequiredService<DbContext>();
 
-        DetectedIssue issue = DetectedIssue.Detect(
-            RepositoryId,
-            issueNumber: issueNumber,
-            title: title,
-            body: "Body",
-            author: ValidAuthor,
-            url: ValidUrl,
-            labels: [],
-            detectedAt: DateTimeOffset.UtcNow);
+        DetectedIssue issue = new IssueBuilder()
+            .WithMonitoredRepositoryId(RepositoryId)
+            .WithIssueNumber(issueNumber)
+            .WithTitle(title)
+            .WithBody("Body")
+            .WithLabels([])
+            .Detected();
 
         dbContext.Set<Issue>().Add(issue);
         await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);

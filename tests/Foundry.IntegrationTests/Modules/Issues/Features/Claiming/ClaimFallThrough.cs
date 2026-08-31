@@ -1,12 +1,12 @@
 using Foundry.IntegrationTests.Modules.Monitoring;
 using Foundry.Modules.Issues.Domain.Entities;
 using Foundry.Modules.Issues.Domain.Entities.States;
-using Foundry.Modules.Issues.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Modules.Workers.Contracts;
 using Foundry.Shared;
+using Foundry.Testing;
 using Foundry.WebApi.Persistence;
 
 using Microsoft.EntityFrameworkCore;
@@ -26,12 +26,6 @@ namespace Foundry.IntegrationTests.Modules.Issues.Features.Claiming;
 public sealed class ClaimFallThrough : IAsyncDisposable
 {
     private readonly FoundryWebAppFactory _factory;
-
-    private static IssueAuthor ValidAuthor =>
-        IssueAuthor.Create("octocat").ValueOrThrow();
-
-    private static ProviderUrl ValidUrl =>
-        ProviderUrl.Create("https://github.com/owner/repo/issues/1").ValueOrThrow();
 
     public ClaimFallThrough()
     {
@@ -111,16 +105,14 @@ public sealed class ClaimFallThrough : IAsyncDisposable
         using IServiceScope scope = _factory.Services.CreateScope();
         DbContext dbContext = scope.ServiceProvider.GetRequiredService<DbContext>();
 
-        DetectedIssue detected = DetectedIssue.Detect(
-            repositoryId,
-            issueNumber: issueNumber,
-            title: $"Fall-through integration test issue {issueNumber}",
-            body: "Test body",
-            author: ValidAuthor,
-            url: ValidUrl,
-            labels: ["foundry"],
-            detectedAt: detectedAt);
-        FreshQueuedIssue queued = FreshQueuedIssue.FromDetected(detected);
+        FreshQueuedIssue queued = new IssueBuilder()
+            .WithMonitoredRepositoryId(repositoryId)
+            .WithIssueNumber(issueNumber)
+            .WithTitle($"Fall-through integration test issue {issueNumber}")
+            .WithBody("Test body")
+            .WithLabels(["foundry"])
+            .WithDetectedAt(detectedAt)
+            .FreshQueued();
 
         dbContext.Set<Issue>().Add(queued);
         await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
