@@ -59,6 +59,9 @@ This decision adds no invariant; it surfaces the existing one as a specific 409 
 The guard is deliberately qualified on the login, which leaves one case open: a token for a *different* login whose reachable owners are all already claimed still routes into the namespace-filtering path and can strand the account on zero claims.
 That defect is tracked separately as issue #439.
 
-The empty-retained-set qualifier applies to the update path only, so create and update no longer share one predicate.
-Create keeps rejecting on bare intersection, because relaxing it there would route a same-login overlap into the takeover flow and offer to transfer a namespace away from the operator's own account — the outcome this decision set out to remove.
-Reaching the same never-steal semantics on create means subtracting same-login siblings from the conflict set rather than reusing the update-path check.
+Create and update now share the same never-steal semantics, though they differ in mechanism.
+On the update path, `CredentialRotationService.RotateAsync` subtracts namespaces held by others; the empty-retained-set guard catches the case where that subtraction leaves nothing.
+On the create path, the handler subtracts same-login siblings from the conflict set so they are never offered for transfer, and the duplicate guard fires only when the same-login siblings cover the entire derived set — leaving the retained set empty.
+A bare intersection with an unclaimed owner creates the account claiming only the unclaimed owner; the sibling's namespace is never touched.
+Same-login sibling namespaces are excluded from the conflicts list on create, so no takeover is offered for a namespace the operator already holds on another account.
+The diverging-predicates description in the original decision no longer applies.

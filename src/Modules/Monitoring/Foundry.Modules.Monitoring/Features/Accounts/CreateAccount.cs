@@ -236,31 +236,55 @@ internal static partial class CreateAccount
                 .Select(n => n.Value)
                 .ToHashSet(StringComparer.Ordinal);
 
-            (string HolderName, string SharedOwner)? duplicate =
-                DuplicateAccount.Find(accountName, derivedNamespaces, claimedByOthers);
+            // Split claimed namespaces into same-login and different-login sets.
+            // A same-login sibling's namespace is never offered for transfer (never-steal semantics).
+            HashSet<string> sameLoginClaimed = claimedByOthers
+                .Where(e => derivedValues.Contains(e.Key))
+                .Where(e => string.Equals(e.Value.HolderName, accountName, StringComparison.Ordinal))
+                .Select(e => e.Key)
+                .ToHashSet(StringComparer.Ordinal);
 
-            if (duplicate is not null)
+            // Duplicate guard: reject only when the same-login siblings cover the ENTIRE derived set
+            // (i.e. there is no unclaimed owner the new account could exclusively hold).
+            bool retainedSetIsEmpty = derivedValues.Count > 0
+                && derivedValues.All(v => sameLoginClaimed.Contains(v));
+
+            if (retainedSetIsEmpty)
             {
+                (string HolderName, string SharedOwner)? duplicate =
+                    DuplicateAccount.Find(accountName, derivedNamespaces, claimedByOthers);
+
+                // Guaranteed non-null: sameLoginClaimed is non-empty (retainedSetIsEmpty implies
+                // at least one derived value in sameLoginClaimed, which Find will return).
                 Error duplicateError = CredentialErrors.DuplicateAccount(
-                    duplicate.Value.HolderName,
+                    duplicate!.Value.HolderName,
                     duplicate.Value.SharedOwner);
                 return new Outcome.Duplicate(duplicateError);
             }
 
+            // Conflicts only include different-login claims — same-login siblings are never offered for transfer.
             List<NamespaceConflict> conflicts = [];
             foreach (KeyValuePair<string, (Guid HolderCredentialId, string HolderName)> entry in claimedByOthers)
             {
-                if (derivedValues.Contains(entry.Key))
+                if (!derivedValues.Contains(entry.Key))
                 {
-                    conflicts.Add(new NamespaceConflict(entry.Key, entry.Value.HolderCredentialId, entry.Value.HolderName));
+                    continue;
                 }
+
+                if (string.Equals(entry.Value.HolderName, accountName, StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                conflicts.Add(new NamespaceConflict(entry.Key, entry.Value.HolderCredentialId, entry.Value.HolderName));
             }
 
             if (command.TakeoverNamespaces is { Count: > 0 } takeoverList)
             {
-                // Validate: every requested takeover namespace must be in the derived set
+                // Validate: every requested takeover namespace must be in the derived set,
+                // and must not be held by a same-login sibling (never-steal invariant).
                 List<string> invalidNamespaces = takeoverList
-                    .Where(ns => !derivedValues.Contains(ns))
+                    .Where(ns => !derivedValues.Contains(ns) || sameLoginClaimed.Contains(ns))
                     .ToList();
 
                 if (invalidNamespaces.Count > 0)
@@ -329,8 +353,10 @@ internal static partial class CreateAccount
             }
             else
             {
-                // No conflicts — use single implicit SaveChanges
-                credential.SetNamespaces(derivedNamespaces);
+                // No different-login conflicts — subtract all claimed namespaces (same-login siblings included)
+                // so the new account never takes a namespace already held by another credential.
+                HashSet<string> allClaimed = claimedByOthers.Keys.ToHashSet(StringComparer.Ordinal);
+                credential.SetNamespaces(derivedNamespaces, allClaimed);
                 dbContext.Set<Credential>().Add(credential);
                 await dbContext.SaveChangesAsync(cancellationToken);
             }
