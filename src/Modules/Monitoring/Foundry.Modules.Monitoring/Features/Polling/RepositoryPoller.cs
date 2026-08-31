@@ -18,6 +18,15 @@ internal sealed class RepositoryPoller(
     IRepositoryEligibilityEvaluator eligibilityEvaluator,
     ILogger<RepositoryPoller> logger)
 {
+    /// <summary>
+    /// The fixed per-cycle provider call budget that does NOT scale with issue count:
+    /// one eligibility branch-rules GET plus one <see cref="IIssueProvider.GetIssuesAsync"/> listing call.
+    /// This applies when the repository's write-probe verdict is Granted (the cheap eligibility path),
+    /// there are zero review issues, and zero dependency candidates.
+    /// Referenced by ADR 0066 and DOMAIN.md; asserted by the poll-call invariance test.
+    /// </summary>
+    internal const int MaxFixedPollCallsPerCycle = 2;
+
     public async Task<Result> PollAsync(
         MonitoredRepository repository,
         IIssueProvider provider,
