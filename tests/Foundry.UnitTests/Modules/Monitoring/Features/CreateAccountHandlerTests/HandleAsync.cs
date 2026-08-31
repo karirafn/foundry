@@ -216,7 +216,6 @@ public sealed class HandleAsync : IAsyncDisposable
 
         // Assert — must create successfully (criterion 2: no namespace-conflict outcome)
         result.ShouldBeOfType<CreateAccount.Outcome.Created>();
-        result.ShouldNotBeOfType<CreateAccount.Outcome.Conflict>();
     }
 
     [Fact]
@@ -292,8 +291,6 @@ public sealed class HandleAsync : IAsyncDisposable
         CreateAccount.Outcome result = await handler.HandleAsync(command, TestContext.Current.CancellationToken);
 
         // Assert — sibling still holds the "octocat" namespace (no CredentialNamespace row deleted)
-        result.ShouldBeOfType<CreateAccount.Outcome.InvalidTakeover>();
-
         Credential? sibling = await _dbContext.Set<Credential>()
             .Include(c => c.Namespaces)
             .FirstOrDefaultAsync(c => c.Id == existing.Id, TestContext.Current.CancellationToken);

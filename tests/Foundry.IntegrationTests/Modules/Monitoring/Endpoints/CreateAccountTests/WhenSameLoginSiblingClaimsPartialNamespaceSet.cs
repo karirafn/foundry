@@ -150,7 +150,7 @@ public sealed class WhenSameLoginSiblingClaimsPartialNamespaceSet : IAsyncDispos
             secondBody,
             TestContext.Current.CancellationToken);
 
-        // Assert — criterion 2: no 409 conflict response; the same-login sibling namespace is never offered for transfer
-        response.StatusCode.ShouldNotBe(HttpStatusCode.Conflict);
+        // Assert — criterion 2: created (not a 409 conflict); the same-login sibling namespace is never offered for transfer
+        response.StatusCode.ShouldBe(HttpStatusCode.Created);
     }
 }
