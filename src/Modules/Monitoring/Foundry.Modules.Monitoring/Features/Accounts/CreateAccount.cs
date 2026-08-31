@@ -281,9 +281,10 @@ internal static partial class CreateAccount
 
             if (command.TakeoverNamespaces is { Count: > 0 } takeoverList)
             {
-                // Validate: every requested takeover namespace must be in the derived set
+                // Validate: every requested takeover namespace must be in the derived set,
+                // and must not be held by a same-login sibling (never-steal invariant).
                 List<string> invalidNamespaces = takeoverList
-                    .Where(ns => !derivedValues.Contains(ns))
+                    .Where(ns => !derivedValues.Contains(ns) || sameLoginClaimed.Contains(ns))
                     .ToList();
 
                 if (invalidNamespaces.Count > 0)

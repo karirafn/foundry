@@ -20,18 +20,17 @@ using Xunit;
 namespace Foundry.IntegrationTests.Modules.Monitoring.Endpoints.CreateAccountTests;
 
 /// <summary>
-/// Verifies AC6: when a create request is simultaneously a duplicate-account AND a
-/// namespace-conflict (the namespace is also claimed by others), the duplicate-account
-/// check wins because it runs first in CreateAccount.Handler. The response reason is
-/// DuplicateAccount with an empty Conflicts list — no takeover panel is offered.
+/// Verifies AC6: when a create request is a duplicate-account (same login, same-login sibling
+/// covers the entire derived set), the response reason is DuplicateAccount with an empty
+/// Conflicts list — no takeover panel is offered. Under never-steal semantics the same-login
+/// sibling's namespace is excluded from the conflict set, so the request is a duplicate only.
 /// </summary>
 public sealed class WhenDuplicateAndNamespaceConflictBothApply : IAsyncDisposable
 {
     // Both tokens resolve to the same account name "octocat" (same login).
-    // Both tokens also derive the same "octocat" namespace — so the second request is:
-    //   - A duplicate account (same login, intersecting namespace)
-    //   - A namespace conflict (namespace already claimed by the first credential)
-    // The handler evaluates duplicate first → DuplicateAccount wins.
+    // Both tokens also derive the same "octocat" namespace — the second request is a
+    // duplicate account (same login, sibling covers the entire derived set).
+    // The handler's duplicate guard fires → DuplicateAccount is returned.
     private const string ResolvedAccountName = "octocat";
     private const string FirstToken = "ghp_first_token";
     private const string SecondToken = "ghp_second_token";
@@ -92,8 +91,9 @@ public sealed class WhenDuplicateAndNamespaceConflictBothApply : IAsyncDisposabl
         firstResponse.StatusCode.ShouldBe(HttpStatusCode.Created);
 
         // Act — submit a second token that resolves to the SAME login ("octocat") and derives
-        // the SAME namespace ("octocat"). This is simultaneously a duplicate-account and
-        // a namespace-conflict. The duplicate check runs first → DuplicateAccount wins.
+        // the SAME namespace ("octocat"). Under never-steal semantics the same-login sibling's
+        // namespace is excluded from the conflict set, making this a duplicate only.
+        // The duplicate guard fires → DuplicateAccount is returned.
         object secondBody = new
         {
             providerType = "github",

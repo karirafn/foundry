@@ -27,8 +27,7 @@ namespace Foundry.IntegrationTests.Modules.Monitoring.Endpoints.CreateAccountTes
 /// Verifies the never-steal semantics on the create path when a same-login sibling already
 /// claims some — but not all — of the incoming token's derived namespaces.
 /// Criterion 1: account is created claiming only the unclaimed namespace.
-/// Criterion 3: token whose every derived namespace is already claimed by same-login siblings
-///              is rejected with 409 DuplicateAccount.
+/// Criterion 2: the response is not a namespace-conflict for the same-login sibling's namespace.
 /// </summary>
 public sealed class WhenSameLoginSiblingClaimsPartialNamespaceSet : IAsyncDisposable
 {

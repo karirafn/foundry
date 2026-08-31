@@ -214,8 +214,91 @@ public sealed class HandleAsync : IAsyncDisposable
         // Act
         CreateAccount.Outcome result = await handler.HandleAsync(command, TestContext.Current.CancellationToken);
 
-        // Assert — must NOT be a namespace-conflict outcome
+        // Assert — must create successfully (criterion 2: no namespace-conflict outcome)
+        result.ShouldBeOfType<CreateAccount.Outcome.Created>();
         result.ShouldNotBeOfType<CreateAccount.Outcome.Conflict>();
+    }
+
+    [Fact]
+    public async Task WhenTakeoverRequestsNamespaceHeldBySameLoginSibling_RejectsWithInvalidTakeover()
+    {
+        // Arrange — existing "octocat" credential claims "octocat". New token resolves to "octocat"
+        // and derives both "octocat" (claimed by sibling) and "octocat-org" (unclaimed).
+        // Requesting a takeover of "octocat" (same-login sibling's namespace) must be rejected.
+        BaseUrl baseUrl = BaseUrl.Create("https://github.com").ValueOrThrow();
+        GitHubCredential existing = GitHubCredential.Create("octocat", "ghp_other", baseUrl);
+        existing.SetNamespaces([Namespace.Create("octocat").ValueOrThrow()]);
+        _dbContext.Set<Credential>().Add(existing);
+        await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        NamespaceDerivationOutcome outcome = new NamespaceDerivationOutcome.Derived(
+            [
+                Namespace.Create("octocat").ValueOrThrow(),
+                Namespace.Create("octocat-org").ValueOrThrow(),
+            ],
+            [
+                new ProviderRepository("octocat/hello-world", IsPrivate: false, CanPush: true),
+                new ProviderRepository("octocat-org/repo", IsPrivate: false, CanPush: true),
+            ]);
+        CreateAccount.Handler handler = BuildHandler(
+            new StubNamespaceDeriver(outcome),
+            validateToken: new StubValidateTokenHandler());  // resolves to "octocat"
+        CreateAccount.Command command = new(
+            "github",
+            "https://github.com",
+            "ghp_new_token",
+            TakeoverNamespaces: ["octocat"]);
+
+        // Act
+        CreateAccount.Outcome result = await handler.HandleAsync(command, TestContext.Current.CancellationToken);
+
+        // Assert — never-steal: same-login sibling's namespace cannot be taken over
+        CreateAccount.Outcome.InvalidTakeover invalid = result.ShouldBeOfType<CreateAccount.Outcome.InvalidTakeover>();
+        invalid.Invalid.InvalidNamespaces.ShouldContain("octocat");
+    }
+
+    [Fact]
+    public async Task WhenTakeoverRequestsNamespaceHeldBySameLoginSibling_SiblingRetainsNamespace()
+    {
+        // Arrange — existing "octocat" credential claims "octocat". New token resolves to "octocat"
+        // and derives both "octocat" (claimed by sibling) and "octocat-org" (unclaimed).
+        // Requesting a takeover of "octocat" (same-login sibling's namespace) must be rejected
+        // and the sibling must retain its namespace claim.
+        BaseUrl baseUrl = BaseUrl.Create("https://github.com").ValueOrThrow();
+        GitHubCredential existing = GitHubCredential.Create("octocat", "ghp_other", baseUrl);
+        existing.SetNamespaces([Namespace.Create("octocat").ValueOrThrow()]);
+        _dbContext.Set<Credential>().Add(existing);
+        await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        NamespaceDerivationOutcome outcome = new NamespaceDerivationOutcome.Derived(
+            [
+                Namespace.Create("octocat").ValueOrThrow(),
+                Namespace.Create("octocat-org").ValueOrThrow(),
+            ],
+            [
+                new ProviderRepository("octocat/hello-world", IsPrivate: false, CanPush: true),
+                new ProviderRepository("octocat-org/repo", IsPrivate: false, CanPush: true),
+            ]);
+        CreateAccount.Handler handler = BuildHandler(
+            new StubNamespaceDeriver(outcome),
+            validateToken: new StubValidateTokenHandler());  // resolves to "octocat"
+        CreateAccount.Command command = new(
+            "github",
+            "https://github.com",
+            "ghp_new_token",
+            TakeoverNamespaces: ["octocat"]);
+
+        // Act
+        CreateAccount.Outcome result = await handler.HandleAsync(command, TestContext.Current.CancellationToken);
+
+        // Assert — sibling still holds the "octocat" namespace (no CredentialNamespace row deleted)
+        result.ShouldBeOfType<CreateAccount.Outcome.InvalidTakeover>();
+
+        Credential? sibling = await _dbContext.Set<Credential>()
+            .Include(c => c.Namespaces)
+            .FirstOrDefaultAsync(c => c.Id == existing.Id, TestContext.Current.CancellationToken);
+        sibling.ShouldNotBeNull();
+        sibling.Namespaces.ShouldContain(n => n.Value == "octocat");
     }
 
     [Fact]
