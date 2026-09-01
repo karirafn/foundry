@@ -10,10 +10,11 @@ namespace Foundry.Testing;
 /// (DetectedIssue.Detect → Enqueue → Claim → …). Intent-named terminals
 /// replay the domain transitions rather than stamping properties directly.
 ///
-/// Domain-events note: terminals do not clear domain events. Each transition
-/// returns a fresh aggregate carrying only the events raised by that transition,
-/// so tests asserting ShouldHaveSingleItem() on the returned aggregate's events
-/// are unaffected by the construction chain.
+/// Domain-events note: each production transition raises its domain event on the
+/// <em>source</em> aggregate (the object the method is called on), not on the
+/// returned aggregate. Every terminal therefore yields a fresh aggregate with an
+/// empty domain-events list, so tests can call one more transition and assert
+/// ShouldHaveSingleItem() without noise from the construction chain.
 /// </summary>
 public sealed class IssueBuilder
 {
@@ -58,6 +59,11 @@ public sealed class IssueBuilder
 
     public IssueBuilder WithDetectedAt(DateTimeOffset value) { _detectedAt = value; return this; }
 
+    /// <remarks>
+    /// Only affects <see cref="Detected"/>. Production sets <c>IssueKind</c> at detection
+    /// alone (<c>SetSharedProperties</c> does not carry it), so terminals beyond
+    /// <see cref="Detected"/> reset it to <see cref="IssueKind.Feature"/>.
+    /// </remarks>
     public IssueBuilder WithIssueKind(IssueKind value) { _issueKind = value; return this; }
 
     public IssueBuilder WithWorkerRunId(Guid value) { _workerRunId = value; return this; }
