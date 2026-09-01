@@ -2,7 +2,6 @@ using Foundry.Modules.Issues.Domain.Entities;
 using Foundry.Modules.Issues.Domain.Entities.States;
 using Foundry.Modules.Issues.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Contracts;
-using Foundry.Shared;
 using Foundry.Testing;
 using Foundry.WebApi.Persistence;
 
@@ -39,26 +38,20 @@ public sealed class PersistDetectedIssue : IAsyncDisposable
         await _connection.DisposeAsync();
     }
 
-    private static IssueAuthor ValidAuthor =>
-        IssueAuthor.Create("octocat").ValueOrThrow();
-
-    private static ProviderUrl ValidUrl =>
-        ProviderUrl.Create("https://github.com/owner/repo/issues/1").ValueOrThrow();
-
     [Fact]
     public async Task WhenDetectedIssuePersisted_CanBeReloadedAsDetectedIssue()
     {
         // Arrange
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
-        DetectedIssue issue = DetectedIssue.Detect(
-            repositoryId,
-            issueNumber: 42,
-            title: "Fix the bug",
-            body: "Body text",
-            author: ValidAuthor,
-            url: ValidUrl,
-            labels: ["foundry", "bug"],
-            detectedAt: DateTimeOffset.UtcNow);
+        DetectedIssue issue = new IssueBuilder()
+            .WithMonitoredRepositoryId(repositoryId)
+            .WithIssueNumber(42)
+            .WithTitle("Fix the bug")
+            .WithBody("Body text")
+            .WithAuthor(IssueAuthor.Create("octocat").ValueOrThrow())
+            .WithUrl(ProviderUrl.Create("https://github.com/owner/repo/issues/1").ValueOrThrow())
+            .WithLabels(["foundry", "bug"])
+            .Detected();
 
         _dbContext.Set<Issue>().Add(issue);
         await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
@@ -86,16 +79,14 @@ public sealed class PersistDetectedIssue : IAsyncDisposable
     {
         // Arrange
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
-        DetectedIssue issue = DetectedIssue.Detect(
-            repositoryId,
-            issueNumber: 77,
-            title: "Fix the crash",
-            body: "Body text",
-            author: ValidAuthor,
-            url: ValidUrl,
-            labels: ["foundry", "bug"],
-            detectedAt: DateTimeOffset.UtcNow,
-            issueKind: IssueKind.Bug);
+        DetectedIssue issue = new IssueBuilder()
+            .WithMonitoredRepositoryId(repositoryId)
+            .WithIssueNumber(77)
+            .WithTitle("Fix the crash")
+            .WithBody("Body text")
+            .WithLabels(["foundry", "bug"])
+            .WithIssueKind(IssueKind.Bug)
+            .Detected();
 
         _dbContext.Set<Issue>().Add(issue);
         await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
@@ -116,15 +107,14 @@ public sealed class PersistDetectedIssue : IAsyncDisposable
     {
         // Arrange
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
-        DetectedIssue issue = DetectedIssue.Detect(
-            repositoryId,
-            issueNumber: 78,
-            title: "Add a feature",
-            body: "Body text",
-            author: ValidAuthor,
-            url: ValidUrl,
-            labels: ["foundry"],
-            detectedAt: DateTimeOffset.UtcNow);
+        DetectedIssue issue = new IssueBuilder()
+            .WithMonitoredRepositoryId(repositoryId)
+            .WithIssueNumber(78)
+            .WithTitle("Add a feature")
+            .WithBody("Body text")
+            .WithLabels(["foundry"])
+            .WithIssueKind(IssueKind.Feature)
+            .Detected();
 
         _dbContext.Set<Issue>().Add(issue);
         await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
@@ -145,15 +135,13 @@ public sealed class PersistDetectedIssue : IAsyncDisposable
     {
         // Arrange
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
-        DetectedIssue issue = DetectedIssue.Detect(
-            repositoryId,
-            issueNumber: 99,
-            title: "No blockers",
-            body: "Body",
-            author: ValidAuthor,
-            url: ValidUrl,
-            labels: [],
-            detectedAt: DateTimeOffset.UtcNow);
+        DetectedIssue issue = new IssueBuilder()
+            .WithMonitoredRepositoryId(repositoryId)
+            .WithIssueNumber(99)
+            .WithTitle("No blockers")
+            .WithBody("Body")
+            .WithLabels([])
+            .Detected();
 
         _dbContext.Set<Issue>().Add(issue);
         await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);

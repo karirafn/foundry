@@ -1,10 +1,8 @@
 using Foundry.Modules.Issues.Domain.Entities;
 using Foundry.Modules.Issues.Domain.Entities.States;
-using Foundry.Modules.Issues.Domain.ValueObjects;
 using Foundry.Modules.Issues.Features.Claiming;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Contracts.Queries;
-using Foundry.Shared;
 using Foundry.Testing;
 using Foundry.WebApi.Persistence;
 
@@ -21,12 +19,6 @@ public sealed class SelectAsync : IAsyncDisposable
 {
     private readonly SqliteConnection _connection;
     private readonly FoundryDbContext _dbContext;
-
-    private static IssueAuthor ValidAuthor =>
-        IssueAuthor.Create("octocat").ShouldBeOfType<Result<IssueAuthor>.Success>().Value;
-
-    private static ProviderUrl ValidUrl =>
-        ProviderUrl.Create("https://github.com/owner/repo/issues/1").ShouldBeOfType<Result<ProviderUrl>.Success>().Value;
 
     private static readonly RepositoryDispatchInfo DefaultDispatchInfo = new(
         "owner/repo",
@@ -65,16 +57,11 @@ public sealed class SelectAsync : IAsyncDisposable
 
     private FreshQueuedIssue SeedQueuedIssue(MonitoredRepositoryId repositoryId, int issueNumber = 1)
     {
-        DetectedIssue detected = DetectedIssue.Detect(
-            repositoryId,
-            issueNumber,
-            title: $"Issue {issueNumber}",
-            body: "Body",
-            author: ValidAuthor,
-            url: ValidUrl,
-            labels: [],
-            detectedAt: DateTimeOffset.UtcNow);
-        FreshQueuedIssue queued = FreshQueuedIssue.FromDetected(detected);
+        FreshQueuedIssue queued = new IssueBuilder()
+            .WithMonitoredRepositoryId(repositoryId)
+            .WithIssueNumber(issueNumber)
+            .WithTitle($"Issue {issueNumber}")
+            .FreshQueued();
         _dbContext.Set<Issue>().Add(queued);
         _dbContext.SaveChanges();
         _dbContext.ChangeTracker.Clear();
@@ -86,16 +73,12 @@ public sealed class SelectAsync : IAsyncDisposable
         int issueNumber,
         DateTimeOffset detectedAt)
     {
-        DetectedIssue detected = DetectedIssue.Detect(
-            repositoryId,
-            issueNumber,
-            title: $"Issue {issueNumber}",
-            body: "Body",
-            author: ValidAuthor,
-            url: ValidUrl,
-            labels: [],
-            detectedAt: detectedAt);
-        FreshQueuedIssue queued = FreshQueuedIssue.FromDetected(detected);
+        FreshQueuedIssue queued = new IssueBuilder()
+            .WithMonitoredRepositoryId(repositoryId)
+            .WithIssueNumber(issueNumber)
+            .WithTitle($"Issue {issueNumber}")
+            .WithDetectedAt(detectedAt)
+            .FreshQueued();
         _dbContext.Set<Issue>().Add(queued);
         _dbContext.SaveChanges();
         _dbContext.ChangeTracker.Clear();

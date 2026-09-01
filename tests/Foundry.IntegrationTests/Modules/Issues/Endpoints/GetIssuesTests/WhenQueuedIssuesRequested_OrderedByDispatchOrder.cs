@@ -4,10 +4,10 @@ using System.Net.Http.Json;
 using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Issues.Domain.Entities;
 using Foundry.Modules.Issues.Domain.Entities.States;
-using Foundry.Modules.Issues.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
+using Foundry.Testing;
 using Foundry.WebApi.Persistence;
 
 using Microsoft.EntityFrameworkCore;
@@ -30,12 +30,6 @@ public sealed class WhenQueuedIssuesRequested_OrderedByDispatchOrder : IAsyncDis
     private readonly HttpClient _client;
 
     private static readonly DateTimeOffset Now = new(2026, 6, 26, 12, 0, 0, TimeSpan.Zero);
-
-    private static IssueAuthor ValidAuthor =>
-        IssueAuthor.Create("octocat").ValueOrThrow();
-
-    private static ProviderUrl ValidUrl =>
-        ProviderUrl.Create("https://github.com/owner/repo/issues/1").ValueOrThrow();
 
     public WhenQueuedIssuesRequested_OrderedByDispatchOrder()
     {
@@ -105,16 +99,14 @@ public sealed class WhenQueuedIssuesRequested_OrderedByDispatchOrder : IAsyncDis
         using IServiceScope scope = _factory.Services.CreateScope();
         DbContext dbContext = scope.ServiceProvider.GetRequiredService<DbContext>();
 
-        DetectedIssue detected = DetectedIssue.Detect(
-            repositoryId,
-            issueNumber: issueNumber,
-            title: $"Issue {issueNumber}",
-            body: "Body",
-            author: ValidAuthor,
-            url: ValidUrl,
-            labels: [],
-            detectedAt: detectedAt);
-        FreshQueuedIssue queued = FreshQueuedIssue.FromDetected(detected);
+        FreshQueuedIssue queued = new IssueBuilder()
+            .WithMonitoredRepositoryId(repositoryId)
+            .WithIssueNumber(issueNumber)
+            .WithTitle($"Issue {issueNumber}")
+            .WithBody("Body")
+            .WithLabels([])
+            .WithDetectedAt(detectedAt)
+            .FreshQueued();
 
         dbContext.Set<Issue>().Add(queued);
         await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
@@ -130,23 +122,18 @@ public sealed class WhenQueuedIssuesRequested_OrderedByDispatchOrder : IAsyncDis
         using IServiceScope scope = _factory.Services.CreateScope();
         DbContext dbContext = scope.ServiceProvider.GetRequiredService<DbContext>();
 
-        DetectedIssue detected = DetectedIssue.Detect(
-            repositoryId,
-            issueNumber: issueNumber,
-            title: $"Issue {issueNumber}",
-            body: "Body",
-            author: ValidAuthor,
-            url: ValidUrl,
-            labels: [],
-            detectedAt: detectedAt);
-        FreshQueuedIssue queued = FreshQueuedIssue.FromDetected(detected);
-        InProgressIssue inProgress = queued.Claim(Guid.NewGuid());
-        ReviewIssue review = inProgress.MarkInReview(
-            Guid.NewGuid(),
-            $"feat/issue-{issueNumber}",
-            $"https://github.com/owner/repo/pull/{issueNumber}",
-            detectedAt.AddHours(1));
-        RevisionQueuedIssue revisionQueued = review.Revise([new ReviewComment("Please revise.")]);
+        RevisionQueuedIssue revisionQueued = new IssueBuilder()
+            .WithMonitoredRepositoryId(repositoryId)
+            .WithIssueNumber(issueNumber)
+            .WithTitle($"Issue {issueNumber}")
+            .WithBody("Body")
+            .WithLabels([])
+            .WithDetectedAt(detectedAt)
+            .WithBranchName($"feat/issue-{issueNumber}")
+            .WithPullRequestUrl($"https://github.com/owner/repo/pull/{issueNumber}")
+            .WithFeedbackCutoffAt(detectedAt.AddHours(1))
+            .WithReviewComments([new ReviewComment("Please revise.")])
+            .RevisionQueued();
 
         dbContext.Set<Issue>().Add(revisionQueued);
         await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
@@ -162,23 +149,19 @@ public sealed class WhenQueuedIssuesRequested_OrderedByDispatchOrder : IAsyncDis
         using IServiceScope scope = _factory.Services.CreateScope();
         DbContext dbContext = scope.ServiceProvider.GetRequiredService<DbContext>();
 
-        DetectedIssue detected = DetectedIssue.Detect(
-            repositoryId,
-            issueNumber: issueNumber,
-            title: $"Issue {issueNumber}",
-            body: "Body",
-            author: ValidAuthor,
-            url: ValidUrl,
-            labels: [],
-            detectedAt: detectedAt);
-        FreshQueuedIssue queued = FreshQueuedIssue.FromDetected(detected);
-        InProgressIssue inProgress = queued.Claim(Guid.NewGuid());
-        ContinuableFailedIssue continuableFailed = inProgress.MarkContinuableFailed(
-            Guid.NewGuid(),
-            $"feat/issue-{issueNumber}",
-            "Non-zero exit code: 1",
-            "generic_failure",
-            detectedAt.AddHours(1));
+        ContinuableFailedIssue continuableFailed = new IssueBuilder()
+            .WithMonitoredRepositoryId(repositoryId)
+            .WithIssueNumber(issueNumber)
+            .WithTitle($"Issue {issueNumber}")
+            .WithBody("Body")
+            .WithLabels([])
+            .WithDetectedAt(detectedAt)
+            .WithBranchName($"feat/issue-{issueNumber}")
+            .WithFailureReason("Non-zero exit code: 1")
+            .WithFailureCategory("generic_failure")
+            .WithFailedAt(detectedAt.AddHours(1))
+            .ContinuableFailed();
+
         ContinuationQueuedIssue continuationQueued = continuableFailed.Retry();
 
         dbContext.Set<Issue>().Add(continuationQueued);
@@ -191,15 +174,14 @@ public sealed class WhenQueuedIssuesRequested_OrderedByDispatchOrder : IAsyncDis
         using IServiceScope scope = _factory.Services.CreateScope();
         DbContext dbContext = scope.ServiceProvider.GetRequiredService<DbContext>();
 
-        DetectedIssue detected = DetectedIssue.Detect(
-            repositoryId,
-            issueNumber: issueNumber,
-            title: $"Issue {issueNumber}",
-            body: "Body",
-            author: ValidAuthor,
-            url: ValidUrl,
-            labels: [],
-            detectedAt: Now.AddHours(-5));
+        DetectedIssue detected = new IssueBuilder()
+            .WithMonitoredRepositoryId(repositoryId)
+            .WithIssueNumber(issueNumber)
+            .WithTitle($"Issue {issueNumber}")
+            .WithBody("Body")
+            .WithLabels([])
+            .WithDetectedAt(Now.AddHours(-5))
+            .Detected();
 
         dbContext.Set<Issue>().Add(detected);
         await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);

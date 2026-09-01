@@ -1,7 +1,6 @@
 using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Issues.Domain.Entities;
 using Foundry.Modules.Issues.Domain.Entities.States;
-using Foundry.Modules.Issues.Domain.ValueObjects;
 using Foundry.Modules.Issues.Features.WorkerReactions;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Workers.Contracts;
@@ -25,12 +24,6 @@ public sealed class RevisionRunIdMismatch : IAsyncDisposable
     private readonly FoundryDbContext _dbContext;
     private readonly CapturingDomainEventDispatcher _dispatcher;
     private readonly IIntegrationEventHandler<WorkerRunFailed> _sut;
-
-    private static IssueAuthor ValidAuthor =>
-        IssueAuthor.Create("octocat").ValueOrThrow();
-
-    private static ProviderUrl ValidUrl =>
-        ProviderUrl.Create("https://github.com/owner/repo/issues/1").ValueOrThrow();
 
     public RevisionRunIdMismatch()
     {
@@ -58,25 +51,12 @@ public sealed class RevisionRunIdMismatch : IAsyncDisposable
 
     private RevisionInProgressIssue SeedRevisionInProgressIssue(MonitoredRepositoryId repositoryId)
     {
-        DetectedIssue detected = DetectedIssue.Detect(
-            repositoryId,
-            issueNumber: 1,
-            title: "Issue 1",
-            body: "Body",
-            author: ValidAuthor,
-            url: ValidUrl,
-            labels: [],
-            detectedAt: DateTimeOffset.UtcNow);
-        FreshQueuedIssue queued = FreshQueuedIssue.FromDetected(detected);
-        InProgressIssue inProgress = queued.Claim(Guid.NewGuid());
-        ReviewIssue review = inProgress.MarkInReview(
-            Guid.NewGuid(),
-            "feat/issue-1",
-            "https://github.com/owner/repo/pull/1",
-            DateTimeOffset.UtcNow);
-        IReadOnlyList<ReviewComment> comments = [new ReviewComment("Please fix this.")];
-        RevisionQueuedIssue revisionQueued = review.Revise(comments);
-        RevisionInProgressIssue revisionInProgress = revisionQueued.Claim(Guid.NewGuid());
+        RevisionInProgressIssue revisionInProgress = new IssueBuilder()
+            .WithMonitoredRepositoryId(repositoryId)
+            .WithIssueNumber(1)
+            .WithBranchName("feat/issue-1")
+            .WithPullRequestUrl("https://github.com/owner/repo/pull/1")
+            .RevisionInProgress();
         _dbContext.Set<Issue>().Add(revisionInProgress);
         _dbContext.SaveChanges();
         _dbContext.ChangeTracker.Clear();

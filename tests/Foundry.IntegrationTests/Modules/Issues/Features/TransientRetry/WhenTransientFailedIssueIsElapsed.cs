@@ -4,7 +4,6 @@ using System.Net.Http.Json;
 using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Issues.Domain.Entities;
 using Foundry.Modules.Issues.Domain.Entities.States;
-using Foundry.Modules.Issues.Domain.ValueObjects;
 using Foundry.Modules.Issues.Features.TransientRetry;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Workers.Contracts.Queries;
@@ -12,6 +11,7 @@ using Foundry.Modules.Workers.Domain.Entities;
 using Foundry.Modules.Workers.Domain.Entities.States;
 using Foundry.Modules.Workers.Domain.ValueObjects;
 using Foundry.Shared;
+using Foundry.Testing;
 using Foundry.WebApi.Persistence;
 
 using Microsoft.EntityFrameworkCore;
@@ -37,12 +37,6 @@ public sealed class WhenTransientFailedIssueIsElapsed : IAsyncDisposable
 
     private readonly FoundryWebAppFactory _factory;
     private readonly HttpClient _client;
-
-    private static IssueAuthor ValidAuthor =>
-        IssueAuthor.Create("octocat").ValueOrThrow();
-
-    private static ProviderUrl ValidUrl =>
-        ProviderUrl.Create("https://github.com/owner/repo/issues/1").ValueOrThrow();
 
     public WhenTransientFailedIssueIsElapsed()
     {
@@ -73,23 +67,17 @@ public sealed class WhenTransientFailedIssueIsElapsed : IAsyncDisposable
         using IServiceScope scope = _factory.Services.CreateScope();
         DbContext dbContext = scope.ServiceProvider.GetRequiredService<DbContext>();
 
-        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
-        DetectedIssue detected = DetectedIssue.Detect(
-            repositoryId,
-            issueNumber: issueNumber,
-            title: "Transient test issue",
-            body: "Test body",
-            author: ValidAuthor,
-            url: ValidUrl,
-            labels: ["foundry"],
-            detectedAt: failedAt.AddHours(-2));
-        FreshQueuedIssue queued = FreshQueuedIssue.FromDetected(detected);
-        InProgressIssue inProgress = queued.Claim(Guid.NewGuid());
-        FailedIssue failed = inProgress.MarkFailed(
-            Guid.NewGuid(),
-            "Transient Anthropic API fault",
-            failedAt,
-            "transient_api_error");
+        FailedIssue failed = new IssueBuilder()
+            .WithMonitoredRepositoryId(MonitoredRepositoryId.New())
+            .WithIssueNumber(issueNumber)
+            .WithTitle("Transient test issue")
+            .WithBody("Test body")
+            .WithLabels(["foundry"])
+            .WithDetectedAt(failedAt.AddHours(-2))
+            .WithFailureReason("Transient Anthropic API fault")
+            .WithFailureCategory("transient_api_error")
+            .WithFailedAt(failedAt)
+            .Failed();
 
         dbContext.Set<Issue>().Add(failed);
         await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);

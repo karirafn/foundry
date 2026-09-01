@@ -4,6 +4,7 @@ using Foundry.Modules.Issues.Domain.Entities;
 using Foundry.Modules.Issues.Domain.Entities.States;
 using Foundry.Modules.Issues.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Contracts;
+using Foundry.Testing;
 using Foundry.WebApi.Persistence;
 
 using Microsoft.EntityFrameworkCore;
@@ -19,12 +20,6 @@ public sealed class WhenIssueIsInNonRetryableState : IAsyncDisposable
 {
     private readonly FoundryWebAppFactory _factory;
     private readonly HttpClient _client;
-
-    private static IssueAuthor ValidAuthor =>
-        IssueAuthor.Create("octocat").ValueOrThrow();
-
-    private static ProviderUrl ValidUrl =>
-        ProviderUrl.Create("https://github.com/owner/repo/issues/2").ValueOrThrow();
 
     public WhenIssueIsInNonRetryableState()
     {
@@ -47,19 +42,14 @@ public sealed class WhenIssueIsInNonRetryableState : IAsyncDisposable
         using IServiceScope scope = _factory.Services.CreateScope();
         DbContext dbContext = scope.ServiceProvider.GetRequiredService<DbContext>();
 
-        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
-
-        DetectedIssue detected = DetectedIssue.Detect(
-            repositoryId,
-            issueNumber: 2,
-            title: "An in-progress issue",
-            body: "Issue body text",
-            author: ValidAuthor,
-            url: ValidUrl,
-            labels: [],
-            detectedAt: DateTimeOffset.UtcNow);
-        FreshQueuedIssue queued = FreshQueuedIssue.FromDetected(detected);
-        InProgressIssue inProgress = queued.Claim(Guid.NewGuid());
+        InProgressIssue inProgress = new IssueBuilder()
+            .WithMonitoredRepositoryId(MonitoredRepositoryId.New())
+            .WithIssueNumber(2)
+            .WithTitle("An in-progress issue")
+            .WithBody("Issue body text")
+            .WithUrl(ProviderUrl.Create("https://github.com/owner/repo/issues/2").ValueOrThrow())
+            .WithLabels([])
+            .InProgress();
 
         dbContext.Set<Issue>().Add(inProgress);
         await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);

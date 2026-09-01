@@ -1,7 +1,6 @@
 using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Issues.Domain.Entities;
 using Foundry.Modules.Issues.Domain.Entities.States;
-using Foundry.Modules.Issues.Domain.ValueObjects;
 using Foundry.Modules.Issues.Features;
 using Foundry.Modules.Issues.Features.StateChanges;
 using Foundry.Modules.Monitoring.Contracts;
@@ -25,12 +24,6 @@ public sealed class GetIssueStateCountsAsync : IAsyncDisposable
 
     private static readonly DateTimeOffset Now = new(2026, 6, 26, 12, 0, 0, TimeSpan.Zero);
 
-    private static IssueAuthor ValidAuthor =>
-        IssueAuthor.Create("octocat").ValueOrThrow();
-
-    private static ProviderUrl ValidUrl =>
-        ProviderUrl.Create("https://github.com/owner/repo/issues/1").ValueOrThrow();
-
     public GetIssueStateCountsAsync()
     {
         _connection = new SqliteConnection("Data Source=:memory:");
@@ -53,15 +46,11 @@ public sealed class GetIssueStateCountsAsync : IAsyncDisposable
 
     private DetectedIssue SeedDetectedIssue(MonitoredRepositoryId repositoryId, int issueNumber)
     {
-        DetectedIssue detected = DetectedIssue.Detect(
-            repositoryId,
-            issueNumber: issueNumber,
-            title: $"Issue {issueNumber}",
-            body: "Body",
-            author: ValidAuthor,
-            url: ValidUrl,
-            labels: [],
-            detectedAt: Now);
+        DetectedIssue detected = new IssueBuilder()
+            .WithMonitoredRepositoryId(repositoryId)
+            .WithIssueNumber(issueNumber)
+            .WithDetectedAt(Now)
+            .Detected();
         _dbContext.Set<Issue>().Add(detected);
         _dbContext.SaveChanges();
         return detected;
@@ -69,23 +58,13 @@ public sealed class GetIssueStateCountsAsync : IAsyncDisposable
 
     private CompletedIssue SeedCompletedIssue(MonitoredRepositoryId repositoryId, int issueNumber)
     {
-        DetectedIssue detected = DetectedIssue.Detect(
-            repositoryId,
-            issueNumber: issueNumber,
-            title: $"Issue {issueNumber}",
-            body: "Body",
-            author: ValidAuthor,
-            url: ValidUrl,
-            labels: [],
-            detectedAt: Now);
-        FreshQueuedIssue queued = FreshQueuedIssue.FromDetected(detected);
-        InProgressIssue inProgress = queued.Claim(Guid.NewGuid());
-        ReviewIssue review = inProgress.MarkInReview(
-            inProgress.WorkerRunId,
-            "feat/1-fix",
-            "https://github.com/owner/repo/pull/10",
-            Now);
-        CompletedIssue completed = review.Complete(Now);
+        CompletedIssue completed = new IssueBuilder()
+            .WithMonitoredRepositoryId(repositoryId)
+            .WithIssueNumber(issueNumber)
+            .WithDetectedAt(Now)
+            .WithFeedbackCutoffAt(Now)
+            .WithCompletedAt(Now)
+            .Completed();
         _dbContext.Set<Issue>().Add(completed);
         _dbContext.SaveChanges();
         return completed;
@@ -93,18 +72,11 @@ public sealed class GetIssueStateCountsAsync : IAsyncDisposable
 
     private UnchangedIssue SeedUnchangedIssue(MonitoredRepositoryId repositoryId, int issueNumber)
     {
-        DetectedIssue detected = DetectedIssue.Detect(
-            repositoryId,
-            issueNumber: issueNumber,
-            title: $"Issue {issueNumber}",
-            body: "Body",
-            author: ValidAuthor,
-            url: ValidUrl,
-            labels: [],
-            detectedAt: Now);
-        FreshQueuedIssue queued = FreshQueuedIssue.FromDetected(detected);
-        InProgressIssue inProgress = queued.Claim(Guid.NewGuid());
-        UnchangedIssue unchanged = inProgress.MarkUnchanged(Guid.NewGuid());
+        UnchangedIssue unchanged = new IssueBuilder()
+            .WithMonitoredRepositoryId(repositoryId)
+            .WithIssueNumber(issueNumber)
+            .WithDetectedAt(Now)
+            .Unchanged();
         _dbContext.Set<Issue>().Add(unchanged);
         _dbContext.SaveChanges();
         return unchanged;

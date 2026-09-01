@@ -1,9 +1,5 @@
 using Foundry.Modules.Issues.Domain.Entities;
 using Foundry.Modules.Issues.Domain.Entities.States;
-using Foundry.Modules.Issues.Domain.ValueObjects;
-using Foundry.Modules.Monitoring.Contracts;
-using Foundry.Shared;
-using Foundry.Shared.Infrastructure;
 using Foundry.Testing;
 using Foundry.WebApi.Persistence;
 
@@ -40,41 +36,25 @@ public sealed class PersistReviewIssue : IAsyncDisposable
         await _connection.DisposeAsync();
     }
 
-    private static IssueAuthor ValidAuthor =>
-        IssueAuthor.Create("octocat").ValueOrThrow();
-
-    private static ProviderUrl ValidUrl =>
-        ProviderUrl.Create("https://github.com/owner/repo/issues/1").ValueOrThrow();
-
     [Fact]
     public async Task WhenReviewIssueTransitioned_CanBeReloadedAsReviewIssueWithAllFields()
     {
         // Arrange
-        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
-        DetectedIssue detected = DetectedIssue.Detect(
-            repositoryId,
-            issueNumber: 42,
-            title: "Review issue",
-            body: "Review body",
-            author: ValidAuthor,
-            url: ValidUrl,
-            labels: [],
-            detectedAt: DateTimeOffset.UtcNow);
-
-        _dbContext.Set<Issue>().Add(detected);
-        await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
-
-        FreshQueuedIssue queued = detected.Enqueue();
-        await _dbContext.TransitionAsync(detected, queued, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
-
-        Guid workerRunId = Guid.NewGuid();
-        InProgressIssue inProgress = queued.Claim(workerRunId);
-        await _dbContext.TransitionAsync(queued, inProgress, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
-
         Guid reviewWorkerRunId = Guid.NewGuid();
         DateTimeOffset feedbackCutoffAt = new DateTimeOffset(2026, 5, 31, 12, 0, 0, TimeSpan.Zero);
-        ReviewIssue review = inProgress.MarkInReview(reviewWorkerRunId, "feat/issue-42", "https://github.com/owner/repo/pull/1", feedbackCutoffAt);
-        await _dbContext.TransitionAsync(inProgress, review, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
+        ReviewIssue review = new IssueBuilder()
+            .WithIssueNumber(42)
+            .WithTitle("Review issue")
+            .WithBody("Review body")
+            .WithLabels([])
+            .WithWorkerRunId(reviewWorkerRunId)
+            .WithBranchName("feat/issue-42")
+            .WithPullRequestUrl("https://github.com/owner/repo/pull/1")
+            .WithFeedbackCutoffAt(feedbackCutoffAt)
+            .Review();
+
+        _dbContext.Set<Issue>().Add(review);
+        await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
         _dbContext.ChangeTracker.Clear();
 
         // Act
@@ -88,7 +68,7 @@ public sealed class PersistReviewIssue : IAsyncDisposable
             () => reloaded.WorkerRunId.ShouldBe(reviewWorkerRunId),
             () => reloaded.BranchName.ShouldBe("feat/issue-42"),
             () => reloaded.PullRequestUrl.ShouldBe("https://github.com/owner/repo/pull/1"),
-            () => reloaded.Author.Value.ShouldBe(ValidAuthor.Value),
-            () => reloaded.Url.Value.ShouldBe(ValidUrl.Value));
+            () => reloaded.Author.Value.ShouldBe("octocat"),
+            () => reloaded.Url.Value.ShouldBe(new Uri("https://github.com/owner/repo/issues/1")));
     }
 }

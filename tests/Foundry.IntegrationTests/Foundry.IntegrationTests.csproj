@@ -21,6 +21,7 @@
     <ProjectReference Include="..\..\src\Modules\Settings\Foundry.Modules.Settings.Contracts\Foundry.Modules.Settings.Contracts.csproj" />
     <ProjectReference Include="..\..\src\Modules\Workers\Foundry.Modules.Workers\Foundry.Modules.Workers.csproj" />
     <ProjectReference Include="..\..\src\Modules\Workers\Foundry.Modules.Workers.Contracts\Foundry.Modules.Workers.Contracts.csproj" />
+    <ProjectReference Include="..\Foundry.Testing\Foundry.Testing.csproj" />
   </ItemGroup>
 
 </Project>

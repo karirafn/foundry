@@ -1,8 +1,5 @@
-using Foundry.Modules.Issues.Domain.Entities;
 using Foundry.Modules.Issues.Domain.Entities.States;
-using Foundry.Modules.Issues.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Contracts;
-using Foundry.Shared;
 using Foundry.Testing;
 
 using Shouldly;
@@ -13,29 +10,12 @@ namespace Foundry.UnitTests.Modules.Issues.Domain.Entities.States.BlockedIssueTe
 
 public sealed class FromDetected
 {
-    private static IssueAuthor ValidAuthor =>
-        IssueAuthor.Create("octocat").ValueOrThrow();
-
-    private static ProviderUrl ValidUrl =>
-        ProviderUrl.Create("https://github.com/owner/repo/issues/1").ValueOrThrow();
-
-    private static DetectedIssue CreateDetectedIssue(MonitoredRepositoryId repositoryId) =>
-        DetectedIssue.Detect(
-            repositoryId,
-            issueNumber: 1,
-            title: "Test Issue",
-            body: "Test body",
-            author: ValidAuthor,
-            url: ValidUrl,
-            labels: ["foundry"],
-            detectedAt: DateTimeOffset.UtcNow);
-
     [Fact]
     public void WhenCalled_ReturnedBlockedIssueHasSameId()
     {
         // Arrange
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
-        DetectedIssue detected = CreateDetectedIssue(repositoryId);
+        DetectedIssue detected = new IssueBuilder().WithMonitoredRepositoryId(repositoryId).Detected();
         IReadOnlyList<int> blockers = [42, 99];
 
         // Act
@@ -50,7 +30,7 @@ public sealed class FromDetected
     {
         // Arrange
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
-        DetectedIssue detected = CreateDetectedIssue(repositoryId);
+        DetectedIssue detected = new IssueBuilder().WithMonitoredRepositoryId(repositoryId).Detected();
         IReadOnlyList<int> blockers = [42];
 
         // Act
@@ -73,7 +53,7 @@ public sealed class FromDetected
     {
         // Arrange
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
-        DetectedIssue detected = CreateDetectedIssue(repositoryId);
+        DetectedIssue detected = new IssueBuilder().WithMonitoredRepositoryId(repositoryId).Detected();
         IReadOnlyList<int> blockers = [42, 99];
 
         // Act

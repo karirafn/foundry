@@ -1,9 +1,7 @@
+using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Issues.Domain.Entities;
 using Foundry.Modules.Issues.Domain.Entities.States;
-using Foundry.Modules.Issues.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Contracts;
-using Foundry.Shared;
-using Foundry.Shared.Infrastructure;
 using Foundry.Testing;
 using Foundry.WebApi.Persistence;
 
@@ -40,81 +38,49 @@ public sealed class OfTypeQueuedIssue : IAsyncDisposable
         await _connection.DisposeAsync();
     }
 
-    private static IssueAuthor ValidAuthor =>
-        IssueAuthor.Create("octocat").ValueOrThrow();
-
-    private static ProviderUrl ValidUrl =>
-        ProviderUrl.Create("https://github.com/owner/repo/issues/1").ValueOrThrow();
-
-    private DetectedIssue SeedDetected(int issueNumber, string title)
-    {
-        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
-        DetectedIssue detected = DetectedIssue.Detect(
-            repositoryId,
-            issueNumber,
-            title,
-            body: "Body",
-            author: ValidAuthor,
-            url: ValidUrl,
-            labels: [],
-            detectedAt: DateTimeOffset.UtcNow);
-
-        _dbContext.Set<Issue>().Add(detected);
-        return detected;
-    }
-
     [Fact]
     public async Task WhenMixedStatesExist_OfTypeQueuedIssueReturnsAllThreeQueuedTiersAndExcludesNonClaimable()
     {
         // Arrange
         CancellationToken cancellationToken = TestContext.Current.CancellationToken;
-        NullDomainEventDispatcher dispatcher = new();
-
-        DetectedIssue detected1 = SeedDetected(issueNumber: 1, title: "Queued issue");
-        DetectedIssue detected2 = SeedDetected(issueNumber: 2, title: "Revision queued issue");
-        DetectedIssue detected3 = SeedDetected(issueNumber: 3, title: "Continuation queued issue");
-        DetectedIssue detected4 = SeedDetected(issueNumber: 4, title: "In-progress issue — non-claimable");
-        await _dbContext.SaveChangesAsync(cancellationToken);
 
         // Seed FreshQueuedIssue
-        FreshQueuedIssue queued = detected1.Enqueue();
-        await _dbContext.TransitionAsync(detected1, queued, dispatcher, cancellationToken);
+        FreshQueuedIssue queued = new IssueBuilder()
+            .WithIssueNumber(1)
+            .WithTitle("Queued issue")
+            .FreshQueued();
+        _dbContext.Set<Issue>().Add(queued);
 
         // Seed RevisionQueuedIssue
-        FreshQueuedIssue queued2 = detected2.Enqueue();
-        await _dbContext.TransitionAsync(detected2, queued2, dispatcher, cancellationToken);
-        InProgressIssue inProgress2 = queued2.Claim(Guid.NewGuid());
-        await _dbContext.TransitionAsync(queued2, inProgress2, dispatcher, cancellationToken);
-        ReviewIssue review2 = inProgress2.MarkInReview(
-            Guid.NewGuid(),
-            "feat/issue-2",
-            "https://github.com/owner/repo/pull/2",
-            feedbackCutoffAt: DateTimeOffset.UtcNow.AddDays(7));
-        await _dbContext.TransitionAsync(inProgress2, review2, dispatcher, cancellationToken);
-        RevisionQueuedIssue revisionQueued = review2.Revise([new ReviewComment("Fix this.")]);
-        await _dbContext.TransitionAsync(review2, revisionQueued, dispatcher, cancellationToken);
+        RevisionQueuedIssue revisionQueued = new IssueBuilder()
+            .WithIssueNumber(2)
+            .WithTitle("Revision queued issue")
+            .WithBranchName("feat/issue-2")
+            .WithPullRequestUrl("https://github.com/owner/repo/pull/2")
+            .WithFeedbackCutoffAt(DateTimeOffset.UtcNow.AddDays(7))
+            .WithReviewComments([new ReviewComment("Fix this.")])
+            .RevisionQueued();
+        _dbContext.Set<Issue>().Add(revisionQueued);
 
         // Seed ContinuationQueuedIssue
-        FreshQueuedIssue queued3 = detected3.Enqueue();
-        await _dbContext.TransitionAsync(detected3, queued3, dispatcher, cancellationToken);
-        InProgressIssue inProgress3 = queued3.Claim(Guid.NewGuid());
-        await _dbContext.TransitionAsync(queued3, inProgress3, dispatcher, cancellationToken);
-        ContinuableFailedIssue continuableFailed = inProgress3.MarkContinuableFailed(
-            Guid.NewGuid(),
-            "feat/issue-3",
-            "Container OOM",
-            "generic_failure",
-            failedAt: DateTimeOffset.UtcNow);
-        await _dbContext.TransitionAsync(inProgress3, continuableFailed, dispatcher, cancellationToken);
-        ContinuationQueuedIssue continuationQueued = continuableFailed.Retry();
-        await _dbContext.TransitionAsync(continuableFailed, continuationQueued, dispatcher, cancellationToken);
+        ContinuationQueuedIssue continuationQueued = new IssueBuilder()
+            .WithIssueNumber(3)
+            .WithTitle("Continuation queued issue")
+            .WithBranchName("feat/issue-3")
+            .WithFailureReason("Container OOM")
+            .WithFailureCategory("generic_failure")
+            .ContinuableFailed()
+            .Retry();
+        _dbContext.Set<Issue>().Add(continuationQueued);
 
         // Seed InProgressIssue (non-claimable)
-        FreshQueuedIssue queued4 = detected4.Enqueue();
-        await _dbContext.TransitionAsync(detected4, queued4, dispatcher, cancellationToken);
-        InProgressIssue inProgress4 = queued4.Claim(Guid.NewGuid());
-        await _dbContext.TransitionAsync(queued4, inProgress4, dispatcher, cancellationToken);
+        InProgressIssue inProgress4 = new IssueBuilder()
+            .WithIssueNumber(4)
+            .WithTitle("In-progress issue — non-claimable")
+            .InProgress();
+        _dbContext.Set<Issue>().Add(inProgress4);
 
+        await _dbContext.SaveChangesAsync(cancellationToken);
         _dbContext.ChangeTracker.Clear();
 
         // Act

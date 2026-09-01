@@ -1,8 +1,6 @@
 using Foundry.Modules.Issues.Domain.Entities;
 using Foundry.Modules.Issues.Domain.Entities.States;
-using Foundry.Modules.Issues.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Contracts;
-using Foundry.Shared;
 using Foundry.Testing;
 using Foundry.WebApi.Persistence;
 
@@ -39,36 +37,26 @@ public sealed class UniqueIndex : IAsyncDisposable
         await _connection.DisposeAsync();
     }
 
-    private static IssueAuthor ValidAuthor =>
-        IssueAuthor.Create("octocat").ValueOrThrow();
-
-    private static ProviderUrl ValidUrl =>
-        ProviderUrl.Create("https://github.com/owner/repo/issues/1").ValueOrThrow();
-
     [Fact]
     public async Task WhenDuplicateRepositoryAndIssueNumber_ThrowsOnSave()
     {
         // Arrange
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
-        DetectedIssue first = DetectedIssue.Detect(
-            repositoryId,
-            issueNumber: 1,
-            title: "First",
-            body: "Body",
-            author: ValidAuthor,
-            url: ValidUrl,
-            labels: [],
-            detectedAt: DateTimeOffset.UtcNow);
+        DetectedIssue first = new IssueBuilder()
+            .WithMonitoredRepositoryId(repositoryId)
+            .WithIssueNumber(1)
+            .WithTitle("First")
+            .WithBody("Body")
+            .WithLabels([])
+            .Detected();
 
-        DetectedIssue duplicate = DetectedIssue.Detect(
-            repositoryId,
-            issueNumber: 1,
-            title: "Duplicate",
-            body: "Body",
-            author: ValidAuthor,
-            url: ValidUrl,
-            labels: [],
-            detectedAt: DateTimeOffset.UtcNow);
+        DetectedIssue duplicate = new IssueBuilder()
+            .WithMonitoredRepositoryId(repositoryId)
+            .WithIssueNumber(1)
+            .WithTitle("Duplicate")
+            .WithBody("Body")
+            .WithLabels([])
+            .Detected();
 
         _dbContext.Set<Issue>().Add(first);
         await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);

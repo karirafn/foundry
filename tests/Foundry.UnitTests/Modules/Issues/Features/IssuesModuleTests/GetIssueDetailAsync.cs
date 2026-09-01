@@ -1,7 +1,6 @@
 using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Issues.Domain.Entities;
 using Foundry.Modules.Issues.Domain.Entities.States;
-using Foundry.Modules.Issues.Domain.ValueObjects;
 using Foundry.Modules.Issues.Features;
 using Foundry.Modules.Issues.Features.TransientRetry;
 using Foundry.Modules.Monitoring.Contracts;
@@ -32,12 +31,6 @@ public sealed class GetIssueDetailAsync : IAsyncDisposable
     private readonly IIssueQueries _sut;
     private readonly StubRepositorySlugQueries _slugQueries;
 
-    private static IssueAuthor ValidAuthor =>
-        IssueAuthor.Create("octocat").ValueOrThrow();
-
-    private static ProviderUrl ValidUrl =>
-        ProviderUrl.Create("https://github.com/owner/repo/issues/1").ValueOrThrow();
-
     public GetIssueDetailAsync()
     {
         _connection = new SqliteConnection("Data Source=:memory:");
@@ -65,15 +58,13 @@ public sealed class GetIssueDetailAsync : IAsyncDisposable
         string title = "Issue title",
         IReadOnlyList<string>? labels = null)
     {
-        DetectedIssue issue = DetectedIssue.Detect(
-            RepositoryId,
-            issueNumber: issueNumber,
-            title: title,
-            body: DefaultBody,
-            author: ValidAuthor,
-            url: ValidUrl,
-            labels: labels ?? [],
-            detectedAt: DateTimeOffset.UtcNow);
+        DetectedIssue issue = new IssueBuilder()
+            .WithMonitoredRepositoryId(RepositoryId)
+            .WithIssueNumber(issueNumber)
+            .WithTitle(title)
+            .WithBody(DefaultBody)
+            .WithLabels(labels ?? [])
+            .Detected();
 
         _dbContext.Set<Issue>().Add(issue);
         await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
@@ -104,15 +95,14 @@ public sealed class GetIssueDetailAsync : IAsyncDisposable
     {
         // Arrange
         DateTimeOffset detectedAt = DateTimeOffset.UtcNow;
-        DetectedIssue issue = DetectedIssue.Detect(
-            RepositoryId,
-            issueNumber: 7,
-            title: "A detected issue",
-            body: DefaultBody,
-            author: ValidAuthor,
-            url: ValidUrl,
-            labels: ["bug", "foundry"],
-            detectedAt: detectedAt);
+        DetectedIssue issue = new IssueBuilder()
+            .WithMonitoredRepositoryId(RepositoryId)
+            .WithIssueNumber(7)
+            .WithTitle("A detected issue")
+            .WithBody(DefaultBody)
+            .WithLabels(["bug", "foundry"])
+            .WithDetectedAt(detectedAt)
+            .Detected();
 
         _dbContext.Set<Issue>().Add(issue);
         await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
@@ -132,7 +122,7 @@ public sealed class GetIssueDetailAsync : IAsyncDisposable
             () => detail.State.ShouldBe("detected"),
             () => detail.RepositorySlug.ShouldBe(RepositorySlug),
             () => detail.DetectedAt.ShouldBe(detectedAt, tolerance: TimeSpan.FromSeconds(1)),
-            () => detail.Url.ShouldBe(ValidUrl.Value.ToString()),
+            () => detail.Url.ShouldBe("https://github.com/owner/repo/issues/1"),
             () => detail.Author.ShouldBe("octocat"),
             () => detail.Labels.ShouldBe(["bug", "foundry"]),
             () => detail.StateDetails.ShouldBeNull());

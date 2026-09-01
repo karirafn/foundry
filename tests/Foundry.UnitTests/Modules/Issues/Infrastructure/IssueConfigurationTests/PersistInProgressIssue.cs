@@ -1,9 +1,5 @@
 using Foundry.Modules.Issues.Domain.Entities;
 using Foundry.Modules.Issues.Domain.Entities.States;
-using Foundry.Modules.Issues.Domain.ValueObjects;
-using Foundry.Modules.Monitoring.Contracts;
-using Foundry.Shared;
-using Foundry.Shared.Infrastructure;
 using Foundry.Testing;
 using Foundry.WebApi.Persistence;
 
@@ -40,35 +36,19 @@ public sealed class PersistInProgressIssue : IAsyncDisposable
         await _connection.DisposeAsync();
     }
 
-    private static IssueAuthor ValidAuthor =>
-        IssueAuthor.Create("octocat").ValueOrThrow();
-
-    private static ProviderUrl ValidUrl =>
-        ProviderUrl.Create("https://github.com/owner/repo/issues/1").ValueOrThrow();
-
     [Fact]
     public async Task WhenInProgressIssueTransitioned_CanBeReloadedAsInProgressIssueWithWorkerRunId()
     {
         // Arrange
-        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
-        DetectedIssue detected = DetectedIssue.Detect(
-            repositoryId,
-            issueNumber: 42,
-            title: "In-progress issue",
-            body: "In-progress body",
-            author: ValidAuthor,
-            url: ValidUrl,
-            labels: [],
-            detectedAt: DateTimeOffset.UtcNow);
+        IssueBuilder builder = new IssueBuilder()
+            .WithIssueNumber(42)
+            .WithTitle("In-progress issue")
+            .WithBody("In-progress body")
+            .WithLabels([]);
+        InProgressIssue inProgress = builder.InProgress();
 
-        _dbContext.Set<Issue>().Add(detected);
+        _dbContext.Set<Issue>().Add(inProgress);
         await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
-
-        FreshQueuedIssue queued = detected.Enqueue();
-        await _dbContext.TransitionAsync(detected, queued, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
-
-        InProgressIssue inProgress = queued.Claim(Guid.NewGuid());
-        await _dbContext.TransitionAsync(queued, inProgress, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
         _dbContext.ChangeTracker.Clear();
 
         // Act

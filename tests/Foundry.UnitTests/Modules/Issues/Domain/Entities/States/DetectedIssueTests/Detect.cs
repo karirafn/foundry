@@ -1,4 +1,3 @@
-using Foundry.Modules.Issues.Domain.Entities;
 using Foundry.Modules.Issues.Domain.Entities.States;
 using Foundry.Modules.Issues.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Contracts;
@@ -13,12 +12,6 @@ namespace Foundry.UnitTests.Modules.Issues.Domain.Entities.States.DetectedIssueT
 
 public sealed class Detect
 {
-    private static IssueAuthor ValidAuthor =>
-        IssueAuthor.Create("octocat").ValueOrThrow();
-
-    private static ProviderUrl ValidUrl =>
-        ProviderUrl.Create("https://github.com/owner/repo/issues/1").ValueOrThrow();
-
     [Fact]
     public void WhenAllParametersAreValid_ReturnsDetectedIssueWithCorrectProperties()
     {
@@ -27,8 +20,8 @@ public sealed class Detect
         int issueNumber = 42;
         string title = "Implement feature X";
         string body = "Details about feature X.";
-        IssueAuthor author = ValidAuthor;
-        ProviderUrl url = ValidUrl;
+        IssueAuthor author = IssueAuthor.Create("octocat").ValueOrThrow();
+        ProviderUrl url = ProviderUrl.Create("https://github.com/owner/repo/issues/1").ValueOrThrow();
         IReadOnlyList<string> labels = ["foundry", "enhancement"];
         DateTimeOffset detectedAt = DateTimeOffset.UtcNow;
 
@@ -60,8 +53,8 @@ public sealed class Detect
     {
         // Arrange
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
-        IssueAuthor author = ValidAuthor;
-        ProviderUrl url = ValidUrl;
+        IssueAuthor author = IssueAuthor.Create("octocat").ValueOrThrow();
+        ProviderUrl url = ProviderUrl.Create("https://github.com/owner/repo/issues/1").ValueOrThrow();
 
         // Act
         DetectedIssue a = DetectedIssue.Detect(
@@ -78,10 +71,12 @@ public sealed class Detect
     {
         // Arrange
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
+        IssueAuthor author = IssueAuthor.Create("octocat").ValueOrThrow();
+        ProviderUrl url = ProviderUrl.Create("https://github.com/owner/repo/issues/1").ValueOrThrow();
 
         // Act
         DetectedIssue issue = DetectedIssue.Detect(
-            repositoryId, 1, "Title", "Body", ValidAuthor, ValidUrl, [], DateTimeOffset.UtcNow);
+            repositoryId, 1, "Title", "Body", author, url, [], DateTimeOffset.UtcNow);
 
         // Assert
         issue.BlockedBy.ShouldBeEmpty();
@@ -92,6 +87,8 @@ public sealed class Detect
     {
         // Arrange
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
+        IssueAuthor author = IssueAuthor.Create("octocat").ValueOrThrow();
+        ProviderUrl url = ProviderUrl.Create("https://github.com/owner/repo/issues/1").ValueOrThrow();
 
         // Act
         DetectedIssue issue = DetectedIssue.Detect(
@@ -99,8 +96,8 @@ public sealed class Detect
             issueNumber: 1,
             title: "Title",
             body: "Body",
-            author: ValidAuthor,
-            url: ValidUrl,
+            author: author,
+            url: url,
             labels: [],
             detectedAt: DateTimeOffset.UtcNow,
             issueKind: IssueKind.Bug);
@@ -114,10 +111,12 @@ public sealed class Detect
     {
         // Arrange
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
+        IssueAuthor author = IssueAuthor.Create("octocat").ValueOrThrow();
+        ProviderUrl url = ProviderUrl.Create("https://github.com/owner/repo/issues/1").ValueOrThrow();
 
         // Act
         DetectedIssue issue = DetectedIssue.Detect(
-            repositoryId, 1, "Title", "Body", ValidAuthor, ValidUrl, [], DateTimeOffset.UtcNow);
+            repositoryId, 1, "Title", "Body", author, url, [], DateTimeOffset.UtcNow);
 
         // Assert
         issue.IssueKind.ShouldBe(IssueKind.Feature);

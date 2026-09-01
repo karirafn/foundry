@@ -1,8 +1,5 @@
-using Foundry.Modules.Issues.Domain.Entities;
 using Foundry.Modules.Issues.Domain.Entities.States;
-using Foundry.Modules.Issues.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Contracts;
-using Foundry.Shared;
 using Foundry.Testing;
 
 using Shouldly;
@@ -13,28 +10,11 @@ namespace Foundry.UnitTests.Modules.Issues.Domain.Entities.IssueTests;
 
 public sealed class SetBlockedBy
 {
-    private static IssueAuthor ValidAuthor =>
-        IssueAuthor.Create("octocat").ValueOrThrow();
-
-    private static ProviderUrl ValidUrl =>
-        ProviderUrl.Create("https://github.com/owner/repo/issues/1").ValueOrThrow();
-
-    private static DetectedIssue CreateDetectedIssue() =>
-        DetectedIssue.Detect(
-            MonitoredRepositoryId.New(),
-            issueNumber: 1,
-            title: "Issue",
-            body: "Body",
-            author: ValidAuthor,
-            url: ValidUrl,
-            labels: [],
-            detectedAt: DateTimeOffset.UtcNow);
-
     [Fact]
     public void WhenBlockerListExceedsCap_TruncatesTo50()
     {
         // Arrange
-        DetectedIssue issue = CreateDetectedIssue();
+        DetectedIssue issue = new IssueBuilder().Detected();
         IReadOnlyList<int> blockers = Enumerable.Range(1, 60).ToList();
 
         // Act
@@ -48,7 +28,7 @@ public sealed class SetBlockedBy
     public void WhenBlockerListExceedsCap_KeepsFirstFiftyItems()
     {
         // Arrange
-        DetectedIssue issue = CreateDetectedIssue();
+        DetectedIssue issue = new IssueBuilder().Detected();
         IReadOnlyList<int> blockers = Enumerable.Range(1, 60).ToList();
 
         // Act

@@ -1,10 +1,8 @@
 using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Issues.Domain.Entities;
 using Foundry.Modules.Issues.Domain.Entities.States;
-using Foundry.Modules.Issues.Domain.ValueObjects;
 using Foundry.Modules.Issues.Features;
 using Foundry.Modules.Monitoring.Contracts;
-using Foundry.Shared;
 using Foundry.Shared.Infrastructure;
 using Foundry.Testing;
 using Foundry.WebApi.Persistence;
@@ -44,26 +42,16 @@ public sealed class GetReviewIssuesAsync : IAsyncDisposable
         await _connection.DisposeAsync();
     }
 
-    private static IssueAuthor ValidAuthor =>
-        IssueAuthor.Create("octocat").ValueOrThrow();
-
-    private static ProviderUrl ValidUrl =>
-        ProviderUrl.Create("https://github.com/owner/repo/issues/1").ValueOrThrow();
-
     private async Task<ReviewIssue> CreateAndPersistReviewIssueAsync(
         MonitoredRepositoryId repositoryId,
         int issueNumber,
         string pullRequestUrl)
     {
-        DetectedIssue detected = DetectedIssue.Detect(
-            repositoryId,
-            issueNumber: issueNumber,
-            title: $"Issue {issueNumber}",
-            body: "Body",
-            author: ValidAuthor,
-            url: ValidUrl,
-            labels: [],
-            detectedAt: DateTimeOffset.UtcNow);
+        DetectedIssue detected = new IssueBuilder()
+            .WithMonitoredRepositoryId(repositoryId)
+            .WithIssueNumber(issueNumber)
+            .WithTitle($"Issue {issueNumber}")
+            .Detected();
 
         _dbContext.Set<Issue>().Add(detected);
         await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
@@ -161,15 +149,11 @@ public sealed class GetReviewIssuesAsync : IAsyncDisposable
         // Arrange
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
 
-        DetectedIssue detected = DetectedIssue.Detect(
-            repositoryId,
-            issueNumber: 5,
-            title: "Detected Issue",
-            body: "Body",
-            author: ValidAuthor,
-            url: ValidUrl,
-            labels: [],
-            detectedAt: DateTimeOffset.UtcNow);
+        DetectedIssue detected = new IssueBuilder()
+            .WithMonitoredRepositoryId(repositoryId)
+            .WithIssueNumber(5)
+            .WithTitle("Detected Issue")
+            .Detected();
 
         _dbContext.Set<Issue>().Add(detected);
         await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
@@ -182,5 +166,4 @@ public sealed class GetReviewIssuesAsync : IAsyncDisposable
         // Assert
         result.ShouldBeEmpty();
     }
-
 }

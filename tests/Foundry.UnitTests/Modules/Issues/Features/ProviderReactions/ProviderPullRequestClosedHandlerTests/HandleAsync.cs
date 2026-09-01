@@ -1,7 +1,6 @@
 using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Issues.Domain.Entities;
 using Foundry.Modules.Issues.Domain.Entities.States;
-using Foundry.Modules.Issues.Domain.ValueObjects;
 using Foundry.Modules.Issues.Domain.Events;
 using Foundry.Modules.Issues.Features.ProviderReactions;
 using Foundry.Modules.Monitoring.Contracts;
@@ -25,12 +24,6 @@ public sealed class HandleAsync : IAsyncDisposable
     private readonly FoundryDbContext _dbContext;
     private readonly CapturingDomainEventDispatcher _dispatcher;
     private readonly IIntegrationEventHandler<ProviderPullRequestClosed> _sut;
-
-    private static IssueAuthor ValidAuthor =>
-        IssueAuthor.Create("octocat").ValueOrThrow();
-
-    private static ProviderUrl ValidUrl =>
-        ProviderUrl.Create("https://github.com/owner/repo/issues/1").ValueOrThrow();
 
     public HandleAsync()
     {
@@ -58,22 +51,10 @@ public sealed class HandleAsync : IAsyncDisposable
 
     private ReviewIssue SeedReviewIssue(MonitoredRepositoryId repositoryId, int issueNumber = 1)
     {
-        DetectedIssue detected = DetectedIssue.Detect(
-            repositoryId,
-            issueNumber: issueNumber,
-            title: "Issue title",
-            body: "Body",
-            author: ValidAuthor,
-            url: ValidUrl,
-            labels: [],
-            detectedAt: DateTimeOffset.UtcNow);
-        FreshQueuedIssue queued = FreshQueuedIssue.FromDetected(detected);
-        InProgressIssue inProgress = queued.Claim(Guid.NewGuid());
-        ReviewIssue review = inProgress.MarkInReview(
-            inProgress.WorkerRunId,
-            "feat/issue-1-fix",
-            "https://github.com/owner/repo/pull/10",
-            DateTimeOffset.UtcNow);
+        ReviewIssue review = new IssueBuilder()
+            .WithMonitoredRepositoryId(repositoryId)
+            .WithIssueNumber(issueNumber)
+            .Review();
         _dbContext.Set<Issue>().Add(review);
         _dbContext.SaveChanges();
         _dbContext.ChangeTracker.Clear();
@@ -82,16 +63,10 @@ public sealed class HandleAsync : IAsyncDisposable
 
     private FreshQueuedIssue SeedQueuedIssue(MonitoredRepositoryId repositoryId, int issueNumber = 2)
     {
-        DetectedIssue detected = DetectedIssue.Detect(
-            repositoryId,
-            issueNumber: issueNumber,
-            title: "Issue title",
-            body: "Body",
-            author: ValidAuthor,
-            url: ValidUrl,
-            labels: [],
-            detectedAt: DateTimeOffset.UtcNow);
-        FreshQueuedIssue queued = FreshQueuedIssue.FromDetected(detected);
+        FreshQueuedIssue queued = new IssueBuilder()
+            .WithMonitoredRepositoryId(repositoryId)
+            .WithIssueNumber(issueNumber)
+            .FreshQueued();
         _dbContext.Set<Issue>().Add(queued);
         _dbContext.SaveChanges();
         _dbContext.ChangeTracker.Clear();
@@ -103,7 +78,7 @@ public sealed class HandleAsync : IAsyncDisposable
     {
         // Arrange
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
-        ReviewIssue review = SeedReviewIssue(repositoryId, issueNumber: 1);
+        SeedReviewIssue(repositoryId, issueNumber: 1);
 
         ProviderPullRequestClosed @event = new(
             RepositoryId: repositoryId,
@@ -127,7 +102,7 @@ public sealed class HandleAsync : IAsyncDisposable
     {
         // Arrange
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
-        FreshQueuedIssue queued = SeedQueuedIssue(repositoryId, issueNumber: 2);
+        SeedQueuedIssue(repositoryId, issueNumber: 2);
 
         ProviderPullRequestClosed @event = new(
             RepositoryId: repositoryId,

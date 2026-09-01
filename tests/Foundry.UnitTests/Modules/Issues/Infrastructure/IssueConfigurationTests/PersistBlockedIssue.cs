@@ -1,9 +1,5 @@
 using Foundry.Modules.Issues.Domain.Entities;
 using Foundry.Modules.Issues.Domain.Entities.States;
-using Foundry.Modules.Issues.Domain.ValueObjects;
-using Foundry.Modules.Monitoring.Contracts;
-using Foundry.Shared;
-using Foundry.Shared.Infrastructure;
 using Foundry.Testing;
 using Foundry.WebApi.Persistence;
 
@@ -40,33 +36,21 @@ public sealed class PersistBlockedIssue : IAsyncDisposable
         await _connection.DisposeAsync();
     }
 
-    private static IssueAuthor ValidAuthor =>
-        IssueAuthor.Create("octocat").ValueOrThrow();
-
-    private static ProviderUrl ValidUrl =>
-        ProviderUrl.Create("https://github.com/owner/repo/issues/1").ValueOrThrow();
-
     [Fact]
     public async Task WhenBlockedIssueTransitioned_CanBeReloadedAsBlockedIssueWithBlockedBy()
     {
         // Arrange
-        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
-        DetectedIssue detected = DetectedIssue.Detect(
-            repositoryId,
-            issueNumber: 3,
-            title: "Blocked issue",
-            body: "Blocked body",
-            author: ValidAuthor,
-            url: ValidUrl,
-            labels: [],
-            detectedAt: DateTimeOffset.UtcNow);
-
-        _dbContext.Set<Issue>().Add(detected);
-        await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
-
         IReadOnlyList<int> blockers = [7, 13];
-        BlockedIssue blocked = detected.Block(blockers);
-        await _dbContext.TransitionAsync(detected, blocked, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
+        BlockedIssue blocked = new IssueBuilder()
+            .WithIssueNumber(3)
+            .WithTitle("Blocked issue")
+            .WithBody("Blocked body")
+            .WithLabels([])
+            .Detected()
+            .Block(blockers);
+
+        _dbContext.Set<Issue>().Add(blocked);
+        await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
         _dbContext.ChangeTracker.Clear();
 
         // Act

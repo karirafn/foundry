@@ -1,9 +1,7 @@
+using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Issues.Domain.Entities;
 using Foundry.Modules.Issues.Domain.Entities.States;
-using Foundry.Modules.Issues.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Contracts;
-using Foundry.Shared;
-using Foundry.Shared.Infrastructure;
 using Foundry.Testing;
 using Foundry.WebApi.Persistence;
 
@@ -40,62 +38,35 @@ public sealed class PersistRevisionFailedIssue : IAsyncDisposable
         await _connection.DisposeAsync();
     }
 
-    private static IssueAuthor ValidAuthor =>
-        IssueAuthor.Create("octocat").ValueOrThrow();
-
-    private static ProviderUrl ValidUrl =>
-        ProviderUrl.Create("https://github.com/owner/repo/issues/1").ValueOrThrow();
-
     [Fact]
     public async Task WhenRevisionFailed_CanBeReloadedWithAllFields()
     {
         // Arrange
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
-        DetectedIssue detected = DetectedIssue.Detect(
-            repositoryId,
-            issueNumber: 61,
-            title: "Revision failed issue",
-            body: "Body",
-            author: ValidAuthor,
-            url: ValidUrl,
-            labels: [],
-            detectedAt: DateTimeOffset.UtcNow);
-
-        _dbContext.Set<Issue>().Add(detected);
-        await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
-
-        FreshQueuedIssue queued = detected.Enqueue();
-        await _dbContext.TransitionAsync(detected, queued, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
-
-        InProgressIssue inProgress = queued.Claim(Guid.NewGuid());
-        await _dbContext.TransitionAsync(queued, inProgress, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
-
-        ReviewIssue review = inProgress.MarkInReview(
-            Guid.NewGuid(),
-            "feat/issue-61",
-            "https://github.com/owner/repo/pull/21",
-            DateTimeOffset.UtcNow);
-        await _dbContext.TransitionAsync(inProgress, review, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
-
+        Guid workerRunId = Guid.NewGuid();
+        DateTimeOffset failedAt = new DateTimeOffset(2026, 6, 1, 15, 0, 0, TimeSpan.Zero);
         IReadOnlyList<ReviewComment> comments =
         [
             new ReviewComment("Please fix the formatting."),
             new ReviewComment("Rename this variable.", "src/Foo.cs", 42),
         ];
-        RevisionQueuedIssue revisionQueued = review.Revise(comments);
-        await _dbContext.TransitionAsync(review, revisionQueued, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
+        RevisionFailedIssue revisionFailed = new IssueBuilder()
+            .WithMonitoredRepositoryId(repositoryId)
+            .WithIssueNumber(61)
+            .WithTitle("Revision failed issue")
+            .WithBody("Body")
+            .WithLabels([])
+            .WithWorkerRunId(workerRunId)
+            .WithBranchName("feat/issue-61")
+            .WithPullRequestUrl("https://github.com/owner/repo/pull/21")
+            .WithReviewComments(comments)
+            .WithFailureReason("Container exited with code 1")
+            .WithFailureCategory("generic_failure")
+            .WithFailedAt(failedAt)
+            .RevisionFailed();
 
-        Guid workerRunId = Guid.NewGuid();
-        RevisionInProgressIssue revisionInProgress = revisionQueued.Claim(workerRunId);
-        await _dbContext.TransitionAsync(revisionQueued, revisionInProgress, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
-
-        DateTimeOffset failedAt = new DateTimeOffset(2026, 6, 1, 15, 0, 0, TimeSpan.Zero);
-        RevisionFailedIssue revisionFailed = revisionInProgress.MarkFailed(
-            workerRunId,
-            "Container exited with code 1",
-            "generic_failure",
-            failedAt);
-        await _dbContext.TransitionAsync(revisionInProgress, revisionFailed, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
+        _dbContext.Set<Issue>().Add(revisionFailed);
+        await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
         _dbContext.ChangeTracker.Clear();
 
         // Act
@@ -116,7 +87,7 @@ public sealed class PersistRevisionFailedIssue : IAsyncDisposable
             () => reloaded.ReviewComments[1].Line.ShouldBe(42),
             () => reloaded.FailureReason.ShouldBe("Container exited with code 1"),
             () => reloaded.FailedAt.ShouldBe(failedAt),
-            () => reloaded.Author.Value.ShouldBe(ValidAuthor.Value),
+            () => reloaded.Author.Value.ShouldBe("octocat"),
             () => reloaded.MonitoredRepositoryId.ShouldBe(repositoryId));
     }
 }

@@ -1,7 +1,6 @@
 using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Issues.Domain.Entities;
 using Foundry.Modules.Issues.Domain.Entities.States;
-using Foundry.Modules.Issues.Domain.ValueObjects;
 using Foundry.Modules.Issues.Domain.Events;
 using Foundry.Modules.Issues.Features.WorkerReactions;
 using Foundry.Modules.Monitoring.Contracts;
@@ -26,12 +25,6 @@ public sealed class HandleAsync : IAsyncDisposable
     private readonly FoundryDbContext _dbContext;
     private readonly CapturingDomainEventDispatcher _dispatcher;
     private readonly IIntegrationEventHandler<WorkerRunCompleted> _sut;
-
-    private static IssueAuthor ValidAuthor =>
-        IssueAuthor.Create("octocat").ValueOrThrow();
-
-    private static ProviderUrl ValidUrl =>
-        ProviderUrl.Create("https://github.com/owner/repo/issues/1").ValueOrThrow();
 
     public HandleAsync()
     {
@@ -59,18 +52,10 @@ public sealed class HandleAsync : IAsyncDisposable
 
     private InProgressIssue SeedInProgressIssue(MonitoredRepositoryId repositoryId)
     {
-        DetectedIssue detected = DetectedIssue.Detect(
-            repositoryId,
-            issueNumber: 1,
-            title: "Issue 1",
-            body: "Body",
-            author: ValidAuthor,
-            url: ValidUrl,
-            labels: [],
-            detectedAt: DateTimeOffset.UtcNow);
-        FreshQueuedIssue queued = FreshQueuedIssue.FromDetected(detected);
-        Guid workerRunId = Guid.NewGuid();
-        InProgressIssue inProgress = queued.Claim(workerRunId);
+        IssueBuilder builder = new IssueBuilder()
+            .WithMonitoredRepositoryId(repositoryId)
+            .WithIssueNumber(1);
+        InProgressIssue inProgress = builder.InProgress();
         _dbContext.Set<Issue>().Add(inProgress);
         _dbContext.SaveChanges();
         _dbContext.ChangeTracker.Clear();
@@ -216,16 +201,10 @@ public sealed class HandleAsync : IAsyncDisposable
 
     private FreshQueuedIssue SeedQueuedIssue(MonitoredRepositoryId repositoryId)
     {
-        DetectedIssue detected = DetectedIssue.Detect(
-            repositoryId,
-            issueNumber: 2,
-            title: "Issue 2",
-            body: "Body",
-            author: ValidAuthor,
-            url: ValidUrl,
-            labels: [],
-            detectedAt: DateTimeOffset.UtcNow);
-        FreshQueuedIssue queued = FreshQueuedIssue.FromDetected(detected);
+        FreshQueuedIssue queued = new IssueBuilder()
+            .WithMonitoredRepositoryId(repositoryId)
+            .WithIssueNumber(2)
+            .FreshQueued();
         _dbContext.Set<Issue>().Add(queued);
         _dbContext.SaveChanges();
         _dbContext.ChangeTracker.Clear();
@@ -234,25 +213,12 @@ public sealed class HandleAsync : IAsyncDisposable
 
     private RevisionInProgressIssue SeedRevisionInProgressIssue(MonitoredRepositoryId repositoryId)
     {
-        DetectedIssue detected = DetectedIssue.Detect(
-            repositoryId,
-            issueNumber: 3,
-            title: "Issue 3",
-            body: "Body",
-            author: ValidAuthor,
-            url: ValidUrl,
-            labels: [],
-            detectedAt: DateTimeOffset.UtcNow);
-        FreshQueuedIssue queued = FreshQueuedIssue.FromDetected(detected);
-        InProgressIssue inProgress = queued.Claim(Guid.NewGuid());
-        ReviewIssue review = inProgress.MarkInReview(
-            Guid.NewGuid(),
-            "feat/issue-3",
-            "https://github.com/owner/repo/pull/3",
-            DateTimeOffset.UtcNow);
-        IReadOnlyList<ReviewComment> comments = [new ReviewComment("Please fix this.")];
-        RevisionQueuedIssue revisionQueued = review.Revise(comments);
-        RevisionInProgressIssue revisionInProgress = revisionQueued.Claim(Guid.NewGuid());
+        RevisionInProgressIssue revisionInProgress = new IssueBuilder()
+            .WithMonitoredRepositoryId(repositoryId)
+            .WithIssueNumber(3)
+            .WithBranchName("feat/issue-3")
+            .WithPullRequestUrl("https://github.com/owner/repo/pull/3")
+            .RevisionInProgress();
         _dbContext.Set<Issue>().Add(revisionInProgress);
         _dbContext.SaveChanges();
         _dbContext.ChangeTracker.Clear();

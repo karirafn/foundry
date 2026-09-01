@@ -1,8 +1,4 @@
-using Foundry.Modules.Issues.Domain.Entities;
 using Foundry.Modules.Issues.Domain.Entities.States;
-using Foundry.Modules.Issues.Domain.ValueObjects;
-using Foundry.Modules.Monitoring.Contracts;
-using Foundry.Shared;
 using Foundry.Testing;
 
 using Shouldly;
@@ -13,28 +9,11 @@ namespace Foundry.UnitTests.Modules.Issues.Domain.Entities.IssueTests;
 
 public sealed class UpdateDetails
 {
-    private static IssueAuthor ValidAuthor =>
-        IssueAuthor.Create("octocat").ValueOrThrow();
-
-    private static ProviderUrl ValidUrl =>
-        ProviderUrl.Create("https://github.com/owner/repo/issues/1").ValueOrThrow();
-
-    private static DetectedIssue CreateDetectedIssue() =>
-        DetectedIssue.Detect(
-            MonitoredRepositoryId.New(),
-            issueNumber: 1,
-            title: "Original Title",
-            body: "Original body",
-            author: ValidAuthor,
-            url: ValidUrl,
-            labels: ["original-label"],
-            detectedAt: DateTimeOffset.UtcNow);
-
     [Fact]
     public void WhenCalledOnDetectedIssue_UpdatesTitleBodyAndLabels()
     {
         // Arrange
-        DetectedIssue issue = CreateDetectedIssue();
+        DetectedIssue issue = new IssueBuilder().Detected();
         string newTitle = "Updated Title";
         string newBody = "Updated body";
         IReadOnlyList<string> newLabels = ["foundry", "bug"];
@@ -53,8 +32,7 @@ public sealed class UpdateDetails
     public void WhenCalledOnQueuedIssue_UpdatesTitleBodyAndLabels()
     {
         // Arrange
-        DetectedIssue detected = CreateDetectedIssue();
-        FreshQueuedIssue issue = detected.Enqueue();
+        FreshQueuedIssue issue = new IssueBuilder().FreshQueued();
         string newTitle = "Updated Title";
         string newBody = "Updated body";
         IReadOnlyList<string> newLabels = ["foundry", "bug"];
@@ -73,8 +51,7 @@ public sealed class UpdateDetails
     public void WhenCalledOnBlockedIssue_UpdatesTitleBodyAndLabels()
     {
         // Arrange
-        DetectedIssue detected = CreateDetectedIssue();
-        BlockedIssue issue = detected.Block([42]);
+        BlockedIssue issue = new IssueBuilder().Detected().Block([42]);
         string newTitle = "Updated Title";
         string newBody = "Updated body";
         IReadOnlyList<string> newLabels = ["foundry", "bug"];

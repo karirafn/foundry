@@ -1,7 +1,6 @@
 using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Issues.Domain.Entities;
 using Foundry.Modules.Issues.Domain.Entities.States;
-using Foundry.Modules.Issues.Domain.ValueObjects;
 using Foundry.Modules.Issues.Features.DispatchReactions;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Workers.Contracts;
@@ -25,12 +24,6 @@ public sealed class HandleAsync : IAsyncDisposable
     private readonly FoundryDbContext _dbContext;
     private readonly CapturingDomainEventDispatcher _dispatcher;
     private readonly IIntegrationEventHandler<DispatchResumed> _sut;
-
-    private static IssueAuthor ValidAuthor =>
-        IssueAuthor.Create("octocat").ValueOrThrow();
-
-    private static ProviderUrl ValidUrl =>
-        ProviderUrl.Create("https://github.com/owner/repo/issues/1").ValueOrThrow();
 
     public HandleAsync()
     {
@@ -58,22 +51,13 @@ public sealed class HandleAsync : IAsyncDisposable
 
     private FailedIssue SeedFailedIssue(MonitoredRepositoryId repositoryId, string failureReason, int issueNumber = 1)
     {
-        DetectedIssue detected = DetectedIssue.Detect(
-            repositoryId,
-            issueNumber: issueNumber,
-            title: $"Issue {issueNumber}",
-            body: "Body",
-            author: ValidAuthor,
-            url: ValidUrl,
-            labels: [],
-            detectedAt: DateTimeOffset.UtcNow);
-        FreshQueuedIssue queued = FreshQueuedIssue.FromDetected(detected);
-        InProgressIssue inProgress = queued.Claim(Guid.NewGuid());
-        FailedIssue failed = inProgress.MarkFailed(
-            inProgress.WorkerRunId,
-            failureReason,
-            DateTimeOffset.UtcNow,
-            "generic_failure");
+        FailedIssue failed = new IssueBuilder()
+            .WithMonitoredRepositoryId(repositoryId)
+            .WithIssueNumber(issueNumber)
+            .WithTitle($"Issue {issueNumber}")
+            .WithFailureReason(failureReason)
+            .WithFailureCategory("generic_failure")
+            .Failed();
         _dbContext.Set<Issue>().Add(failed);
         _dbContext.SaveChanges();
         _dbContext.ChangeTracker.Clear();
@@ -85,23 +69,14 @@ public sealed class HandleAsync : IAsyncDisposable
         string failureReason,
         int issueNumber = 1)
     {
-        DetectedIssue detected = DetectedIssue.Detect(
-            repositoryId,
-            issueNumber: issueNumber,
-            title: $"Issue {issueNumber}",
-            body: "Body",
-            author: ValidAuthor,
-            url: ValidUrl,
-            labels: [],
-            detectedAt: DateTimeOffset.UtcNow);
-        FreshQueuedIssue queued = FreshQueuedIssue.FromDetected(detected);
-        InProgressIssue inProgress = queued.Claim(Guid.NewGuid());
-        ContinuableFailedIssue continuableFailed = inProgress.MarkContinuableFailed(
-            inProgress.WorkerRunId,
-            "feat/issue-branch",
-            failureReason,
-            "generic_failure",
-            DateTimeOffset.UtcNow);
+        ContinuableFailedIssue continuableFailed = new IssueBuilder()
+            .WithMonitoredRepositoryId(repositoryId)
+            .WithIssueNumber(issueNumber)
+            .WithTitle($"Issue {issueNumber}")
+            .WithBranchName("feat/issue-branch")
+            .WithFailureReason(failureReason)
+            .WithFailureCategory("generic_failure")
+            .ContinuableFailed();
         _dbContext.Set<Issue>().Add(continuableFailed);
         _dbContext.SaveChanges();
         _dbContext.ChangeTracker.Clear();

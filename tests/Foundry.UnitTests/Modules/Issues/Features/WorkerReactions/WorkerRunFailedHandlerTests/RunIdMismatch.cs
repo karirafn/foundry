@@ -1,6 +1,5 @@
 using Foundry.Modules.Issues.Domain.Entities;
 using Foundry.Modules.Issues.Domain.Entities.States;
-using Foundry.Modules.Issues.Domain.ValueObjects;
 using Foundry.Modules.Issues.Features.WorkerReactions;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Workers.Contracts;
@@ -24,12 +23,6 @@ public sealed class RunIdMismatch : IAsyncDisposable
     private readonly FoundryDbContext _dbContext;
     private readonly CapturingDomainEventDispatcher _dispatcher;
     private readonly IIntegrationEventHandler<WorkerRunFailed> _sut;
-
-    private static IssueAuthor ValidAuthor =>
-        IssueAuthor.Create("octocat").ValueOrThrow();
-
-    private static ProviderUrl ValidUrl =>
-        ProviderUrl.Create("https://github.com/owner/repo/issues/1").ValueOrThrow();
 
     public RunIdMismatch()
     {
@@ -57,18 +50,10 @@ public sealed class RunIdMismatch : IAsyncDisposable
 
     private InProgressIssue SeedInProgressIssue(MonitoredRepositoryId repositoryId)
     {
-        DetectedIssue detected = DetectedIssue.Detect(
-            repositoryId,
-            issueNumber: 1,
-            title: "Issue 1",
-            body: "Body",
-            author: ValidAuthor,
-            url: ValidUrl,
-            labels: [],
-            detectedAt: DateTimeOffset.UtcNow);
-        FreshQueuedIssue queued = FreshQueuedIssue.FromDetected(detected);
-        Guid workerRunId = Guid.NewGuid();
-        InProgressIssue inProgress = queued.Claim(workerRunId);
+        InProgressIssue inProgress = new IssueBuilder()
+            .WithMonitoredRepositoryId(repositoryId)
+            .WithIssueNumber(1)
+            .InProgress();
         _dbContext.Set<Issue>().Add(inProgress);
         _dbContext.SaveChanges();
         _dbContext.ChangeTracker.Clear();

@@ -4,8 +4,8 @@ using System.Net.Http.Json;
 using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Issues.Domain.Entities;
 using Foundry.Modules.Issues.Domain.Entities.States;
-using Foundry.Modules.Issues.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Contracts;
+using Foundry.Testing;
 using Foundry.WebApi.Persistence;
 
 using Microsoft.EntityFrameworkCore;
@@ -25,12 +25,6 @@ public sealed class WhenFollowingResolvedCursor : IAsyncDisposable
     private static readonly MonitoredRepositoryId RepositoryId = MonitoredRepositoryId.New();
     private static readonly DateTimeOffset BaseTime = new(2026, 6, 26, 12, 0, 0, TimeSpan.Zero);
 
-    private static IssueAuthor ValidAuthor =>
-        IssueAuthor.Create("octocat").ValueOrThrow();
-
-    private static ProviderUrl ValidUrl =>
-        ProviderUrl.Create("https://github.com/owner/repo/issues/1").ValueOrThrow();
-
     public WhenFollowingResolvedCursor()
     {
         _factory = new FoundryWebAppFactory();
@@ -49,24 +43,19 @@ public sealed class WhenFollowingResolvedCursor : IAsyncDisposable
         using IServiceScope scope = _factory.Services.CreateScope();
         DbContext dbContext = scope.ServiceProvider.GetRequiredService<DbContext>();
 
-        DetectedIssue detected = DetectedIssue.Detect(
-            RepositoryId,
-            issueNumber: issueNumber,
-            title: $"Completed Issue {issueNumber}",
-            body: "Body",
-            author: ValidAuthor,
-            url: ValidUrl,
-            labels: [],
-            detectedAt: detectedAt);
+        IssueBuilder builder = new IssueBuilder()
+            .WithMonitoredRepositoryId(RepositoryId)
+            .WithIssueNumber(issueNumber)
+            .WithTitle($"Completed Issue {issueNumber}")
+            .WithBody("Body")
+            .WithLabels([])
+            .WithDetectedAt(detectedAt)
+            .WithBranchName($"feat/{issueNumber}-fix")
+            .WithPullRequestUrl($"https://github.com/owner/repo/pull/{issueNumber}")
+            .WithFeedbackCutoffAt(detectedAt.AddHours(1))
+            .WithCompletedAt(detectedAt.AddHours(2));
 
-        FreshQueuedIssue queued = FreshQueuedIssue.FromDetected(detected);
-        InProgressIssue inProgress = queued.Claim(Guid.NewGuid());
-        ReviewIssue review = inProgress.MarkInReview(
-            inProgress.WorkerRunId,
-            $"feat/{issueNumber}-fix",
-            $"https://github.com/owner/repo/pull/{issueNumber}",
-            detectedAt.AddHours(1));
-        CompletedIssue completed = review.Complete(detectedAt.AddHours(2));
+        CompletedIssue completed = builder.Completed();
 
         dbContext.Set<Issue>().Add(completed);
         await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);

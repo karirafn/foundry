@@ -1,8 +1,7 @@
-using Foundry.Modules.Issues.Domain.Entities;
+using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Issues.Domain.Entities.States;
 using Foundry.Modules.Issues.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Contracts;
-using Foundry.Shared;
 using Foundry.Testing;
 
 using Shouldly;
@@ -13,65 +12,12 @@ namespace Foundry.UnitTests.Modules.Issues.Domain.ValueObjects.DispatchOrderKeyT
 
 public sealed class FactoryTests
 {
-    private static IssueAuthor ValidAuthor =>
-        IssueAuthor.Create("octocat").ValueOrThrow();
-
-    private static ProviderUrl ValidUrl =>
-        ProviderUrl.Create("https://github.com/owner/repo/issues/1").ValueOrThrow();
-
-    private static DetectedIssue CreateDetected(MonitoredRepositoryId repositoryId, DateTimeOffset detectedAt) =>
-        DetectedIssue.Detect(
-            repositoryId,
-            issueNumber: 1,
-            title: "Test Issue",
-            body: "Test body",
-            author: ValidAuthor,
-            url: ValidUrl,
-            labels: ["foundry"],
-            detectedAt: detectedAt);
-
-    private static FreshQueuedIssue CreateFreshQueued(DateTimeOffset detectedAt)
-    {
-        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
-        DetectedIssue detected = CreateDetected(repositoryId, detectedAt);
-        return detected.Enqueue();
-    }
-
-    private static RevisionQueuedIssue CreateRevisionQueued(DateTimeOffset detectedAt)
-    {
-        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
-        DetectedIssue detected = CreateDetected(repositoryId, detectedAt);
-        FreshQueuedIssue queued = detected.Enqueue();
-        InProgressIssue inProgress = queued.Claim(Guid.NewGuid());
-        ReviewIssue review = inProgress.MarkInReview(
-            Guid.NewGuid(),
-            "foundry/1/add-feature",
-            "https://github.com/owner/repo/pull/5",
-            DateTimeOffset.UtcNow);
-        return review.Revise([new ReviewComment("Please fix the formatting.")]);
-    }
-
-    private static ContinuationQueuedIssue CreateContinuationQueued(DateTimeOffset detectedAt)
-    {
-        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
-        DetectedIssue detected = CreateDetected(repositoryId, detectedAt);
-        FreshQueuedIssue queued = detected.Enqueue();
-        InProgressIssue inProgress = queued.Claim(Guid.NewGuid());
-        ContinuableFailedIssue failed = inProgress.MarkContinuableFailed(
-            Guid.NewGuid(),
-            "foundry/1/add-feature",
-            "Container exited with code 1",
-            "generic_failure",
-            DateTimeOffset.UtcNow);
-        return failed.Retry();
-    }
-
     [Fact]
     public void WhenFreshQueued_BuildsKeyWithTierRankTwo()
     {
         // Arrange
         DateTimeOffset detectedAt = new(2025, 6, 1, 0, 0, 0, TimeSpan.Zero);
-        FreshQueuedIssue freshQueued = CreateFreshQueued(detectedAt);
+        FreshQueuedIssue freshQueued = new IssueBuilder().WithDetectedAt(detectedAt).FreshQueued();
         int position = 3;
 
         // Act
@@ -90,7 +36,10 @@ public sealed class FactoryTests
     {
         // Arrange
         DateTimeOffset detectedAt = new(2025, 6, 1, 0, 0, 0, TimeSpan.Zero);
-        RevisionQueuedIssue revisionQueued = CreateRevisionQueued(detectedAt);
+        RevisionQueuedIssue revisionQueued = new IssueBuilder()
+            .WithDetectedAt(detectedAt)
+            .WithReviewComments([new ReviewComment("Please fix the formatting.")])
+            .RevisionQueued();
         int position = 1;
 
         // Act
@@ -109,7 +58,10 @@ public sealed class FactoryTests
     {
         // Arrange
         DateTimeOffset detectedAt = new(2025, 6, 1, 0, 0, 0, TimeSpan.Zero);
-        ContinuationQueuedIssue continuationQueued = CreateContinuationQueued(detectedAt);
+        ContinuationQueuedIssue continuationQueued = new IssueBuilder()
+            .WithDetectedAt(detectedAt)
+            .ContinuableFailed()
+            .Retry();
         int position = 2;
 
         // Act
@@ -122,5 +74,4 @@ public sealed class FactoryTests
             () => key.DetectedAt.ShouldBe(detectedAt),
             () => key.Id.ShouldBe(continuationQueued.Id));
     }
-
 }

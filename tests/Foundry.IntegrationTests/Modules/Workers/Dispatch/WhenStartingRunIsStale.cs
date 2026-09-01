@@ -5,7 +5,6 @@ using System.Runtime.CompilerServices;
 using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Issues.Domain.Entities;
 using Foundry.Modules.Issues.Domain.Entities.States;
-using Foundry.Modules.Issues.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Workers.Domain.Entities;
 using Foundry.Modules.Workers.Domain.Entities.States;
@@ -15,6 +14,7 @@ using Foundry.Modules.Workers.Features.Dispatch;
 using Foundry.Modules.Workers.Features.Orchestration;
 using Foundry.Shared;
 using Foundry.Shared.Infrastructure.Outbox;
+using Foundry.Testing;
 using Foundry.WebApi.Persistence;
 
 using Microsoft.EntityFrameworkCore;
@@ -35,12 +35,6 @@ public sealed class WhenStartingRunIsStale : IAsyncDisposable
 {
     // Seed CreatedAt old enough to exceed the 10-minute staleness threshold.
     private static readonly TimeSpan StaleAge = TimeSpan.FromMinutes(15);
-
-    private static IssueAuthor ValidAuthor =>
-        IssueAuthor.Create("octocat").ValueOrThrow();
-
-    private static ProviderUrl ValidUrl =>
-        ProviderUrl.Create("https://github.com/owner/repo/issues/1").ValueOrThrow();
 
     private readonly FoundryWebAppFactory _factory;
     private readonly HttpClient _client;
@@ -85,17 +79,15 @@ public sealed class WhenStartingRunIsStale : IAsyncDisposable
 
         // Seed InProgressIssue with the same WorkerRunId as the StartingRun.
         // WorkerRunFailedHandler checks @event.WorkerRunId == inProgress.WorkerRunId, so they must match.
-        DetectedIssue detected = DetectedIssue.Detect(
-            repositoryId,
-            issueNumber: 1,
-            title: "Stale starting-run integration test issue",
-            body: "Test body",
-            author: ValidAuthor,
-            url: ValidUrl,
-            labels: ["foundry"],
-            detectedAt: DateTimeOffset.UtcNow.AddHours(-1));
-        FreshQueuedIssue queued = FreshQueuedIssue.FromDetected(detected);
-        InProgressIssue inProgress = queued.Claim(workerRunId.Value);
+        InProgressIssue inProgress = new IssueBuilder()
+            .WithMonitoredRepositoryId(repositoryId)
+            .WithIssueNumber(1)
+            .WithTitle("Stale starting-run integration test issue")
+            .WithBody("Test body")
+            .WithLabels(["foundry"])
+            .WithDetectedAt(DateTimeOffset.UtcNow.AddHours(-1))
+            .WithWorkerRunId(workerRunId.Value)
+            .InProgress();
 
         dbContext.Set<Issue>().Add(inProgress);
 

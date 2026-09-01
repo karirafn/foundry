@@ -4,8 +4,8 @@ using System.Net.Http.Json;
 using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Issues.Domain.Entities;
 using Foundry.Modules.Issues.Domain.Entities.States;
-using Foundry.Modules.Issues.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Contracts;
+using Foundry.Testing;
 using Foundry.WebApi.Persistence;
 
 using Microsoft.EntityFrameworkCore;
@@ -23,12 +23,6 @@ public sealed class WhenMixedStatesSeeded : IAsyncDisposable
     private readonly HttpClient _client;
 
     private static readonly MonitoredRepositoryId RepositoryId = MonitoredRepositoryId.New();
-
-    private static IssueAuthor ValidAuthor =>
-        IssueAuthor.Create("octocat").ValueOrThrow();
-
-    private static ProviderUrl ValidUrl =>
-        ProviderUrl.Create("https://github.com/owner/repo/issues/1").ValueOrThrow();
 
     public WhenMixedStatesSeeded()
     {
@@ -48,15 +42,13 @@ public sealed class WhenMixedStatesSeeded : IAsyncDisposable
         using IServiceScope scope = _factory.Services.CreateScope();
         DbContext dbContext = scope.ServiceProvider.GetRequiredService<DbContext>();
 
-        DetectedIssue issue = DetectedIssue.Detect(
-            RepositoryId,
-            issueNumber: issueNumber,
-            title: $"Issue {issueNumber}",
-            body: "Body",
-            author: ValidAuthor,
-            url: ValidUrl,
-            labels: [],
-            detectedAt: DateTimeOffset.UtcNow);
+        DetectedIssue issue = new IssueBuilder()
+            .WithMonitoredRepositoryId(RepositoryId)
+            .WithIssueNumber(issueNumber)
+            .WithTitle($"Issue {issueNumber}")
+            .WithBody("Body")
+            .WithLabels([])
+            .Detected();
 
         dbContext.Set<Issue>().Add(issue);
         await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
@@ -69,24 +61,16 @@ public sealed class WhenMixedStatesSeeded : IAsyncDisposable
         using IServiceScope scope = _factory.Services.CreateScope();
         DbContext dbContext = scope.ServiceProvider.GetRequiredService<DbContext>();
 
-        DetectedIssue detected = DetectedIssue.Detect(
-            RepositoryId,
-            issueNumber: issueNumber,
-            title: $"Issue {issueNumber}",
-            body: "Body",
-            author: ValidAuthor,
-            url: ValidUrl,
-            labels: [],
-            detectedAt: DateTimeOffset.UtcNow);
-
-        FreshQueuedIssue queued = FreshQueuedIssue.FromDetected(detected);
-        InProgressIssue inProgress = queued.Claim(Guid.NewGuid());
-        ReviewIssue review = inProgress.MarkInReview(
-            Guid.NewGuid(),
-            "feat/42-thing",
-            "https://github.com/owner/repo/pull/1",
-            DateTimeOffset.UtcNow.AddDays(1));
-        CompletedIssue completed = review.Complete(DateTimeOffset.UtcNow);
+        CompletedIssue completed = new IssueBuilder()
+            .WithMonitoredRepositoryId(RepositoryId)
+            .WithIssueNumber(issueNumber)
+            .WithTitle($"Issue {issueNumber}")
+            .WithBody("Body")
+            .WithLabels([])
+            .WithBranchName("feat/42-thing")
+            .WithPullRequestUrl("https://github.com/owner/repo/pull/1")
+            .WithFeedbackCutoffAt(DateTimeOffset.UtcNow.AddDays(1))
+            .Completed();
 
         dbContext.Set<Issue>().Add(completed);
         await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
@@ -99,19 +83,13 @@ public sealed class WhenMixedStatesSeeded : IAsyncDisposable
         using IServiceScope scope = _factory.Services.CreateScope();
         DbContext dbContext = scope.ServiceProvider.GetRequiredService<DbContext>();
 
-        DetectedIssue detected = DetectedIssue.Detect(
-            RepositoryId,
-            issueNumber: issueNumber,
-            title: $"Issue {issueNumber}",
-            body: "Body",
-            author: ValidAuthor,
-            url: ValidUrl,
-            labels: [],
-            detectedAt: DateTimeOffset.UtcNow);
-
-        FreshQueuedIssue queued = FreshQueuedIssue.FromDetected(detected);
-        InProgressIssue inProgress = queued.Claim(Guid.NewGuid());
-        UnchangedIssue unchanged = inProgress.MarkUnchanged(Guid.NewGuid());
+        UnchangedIssue unchanged = new IssueBuilder()
+            .WithMonitoredRepositoryId(RepositoryId)
+            .WithIssueNumber(issueNumber)
+            .WithTitle($"Issue {issueNumber}")
+            .WithBody("Body")
+            .WithLabels([])
+            .Unchanged();
 
         dbContext.Set<Issue>().Add(unchanged);
         await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);

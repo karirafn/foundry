@@ -1,9 +1,7 @@
+using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Issues.Domain.Entities;
 using Foundry.Modules.Issues.Domain.Entities.States;
-using Foundry.Modules.Issues.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Contracts;
-using Foundry.Shared;
-using Foundry.Shared.Infrastructure;
 using Foundry.Testing;
 using Foundry.WebApi.Persistence;
 
@@ -40,51 +38,29 @@ public sealed class PersistRevisionQueuedIssue : IAsyncDisposable
         await _connection.DisposeAsync();
     }
 
-    private static IssueAuthor ValidAuthor =>
-        IssueAuthor.Create("octocat").ValueOrThrow();
-
-    private static ProviderUrl ValidUrl =>
-        ProviderUrl.Create("https://github.com/owner/repo/issues/1").ValueOrThrow();
-
     [Fact]
     public async Task WhenRevisionQueuedFromReview_CanBeReloadedAsRevisionQueuedIssueWithAllFields()
     {
         // Arrange
-        DateTimeOffset feedbackCutoffAt = new DateTimeOffset(2026, 5, 31, 10, 0, 0, TimeSpan.Zero);
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
-        DetectedIssue detected = DetectedIssue.Detect(
-            repositoryId,
-            issueNumber: 55,
-            title: "Revision queued issue",
-            body: "Body",
-            author: ValidAuthor,
-            url: ValidUrl,
-            labels: [],
-            detectedAt: DateTimeOffset.UtcNow);
-
-        _dbContext.Set<Issue>().Add(detected);
-        await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
-
-        FreshQueuedIssue queued = detected.Enqueue();
-        await _dbContext.TransitionAsync(detected, queued, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
-
-        InProgressIssue inProgress = queued.Claim(Guid.NewGuid());
-        await _dbContext.TransitionAsync(queued, inProgress, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
-
-        ReviewIssue review = inProgress.MarkInReview(
-            Guid.NewGuid(),
-            "feat/issue-55",
-            "https://github.com/owner/repo/pull/10",
-            feedbackCutoffAt);
-        await _dbContext.TransitionAsync(inProgress, review, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
-
         IReadOnlyList<ReviewComment> comments =
         [
             new ReviewComment("Please fix the formatting."),
             new ReviewComment("Rename this variable.", "src/Foo.cs", 42),
         ];
-        RevisionQueuedIssue revisionQueued = review.Revise(comments);
-        await _dbContext.TransitionAsync(review, revisionQueued, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
+        RevisionQueuedIssue revisionQueued = new IssueBuilder()
+            .WithMonitoredRepositoryId(repositoryId)
+            .WithIssueNumber(55)
+            .WithTitle("Revision queued issue")
+            .WithBody("Body")
+            .WithLabels([])
+            .WithBranchName("feat/issue-55")
+            .WithPullRequestUrl("https://github.com/owner/repo/pull/10")
+            .WithReviewComments(comments)
+            .RevisionQueued();
+
+        _dbContext.Set<Issue>().Add(revisionQueued);
+        await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
         _dbContext.ChangeTracker.Clear();
 
         // Act
@@ -102,7 +78,7 @@ public sealed class PersistRevisionQueuedIssue : IAsyncDisposable
             () => reloaded.ReviewComments[1].Body.ShouldBe("Rename this variable."),
             () => reloaded.ReviewComments[1].FilePath.ShouldBe("src/Foo.cs"),
             () => reloaded.ReviewComments[1].Line.ShouldBe(42),
-            () => reloaded.Author.Value.ShouldBe(ValidAuthor.Value),
+            () => reloaded.Author.Value.ShouldBe("octocat"),
             () => reloaded.MonitoredRepositoryId.ShouldBe(repositoryId));
     }
 
@@ -111,32 +87,18 @@ public sealed class PersistRevisionQueuedIssue : IAsyncDisposable
     {
         // Arrange
         DateTimeOffset feedbackCutoffAt = new DateTimeOffset(2026, 5, 31, 10, 0, 0, TimeSpan.Zero);
-        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
-        DetectedIssue detected = DetectedIssue.Detect(
-            repositoryId,
-            issueNumber: 56,
-            title: "Review issue with cutoff",
-            body: "Body",
-            author: ValidAuthor,
-            url: ValidUrl,
-            labels: [],
-            detectedAt: DateTimeOffset.UtcNow);
+        ReviewIssue review = new IssueBuilder()
+            .WithIssueNumber(56)
+            .WithTitle("Review issue with cutoff")
+            .WithBody("Body")
+            .WithLabels([])
+            .WithBranchName("feat/issue-56")
+            .WithPullRequestUrl("https://github.com/owner/repo/pull/11")
+            .WithFeedbackCutoffAt(feedbackCutoffAt)
+            .Review();
 
-        _dbContext.Set<Issue>().Add(detected);
+        _dbContext.Set<Issue>().Add(review);
         await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
-
-        FreshQueuedIssue queued = detected.Enqueue();
-        await _dbContext.TransitionAsync(detected, queued, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
-
-        InProgressIssue inProgress = queued.Claim(Guid.NewGuid());
-        await _dbContext.TransitionAsync(queued, inProgress, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
-
-        ReviewIssue review = inProgress.MarkInReview(
-            Guid.NewGuid(),
-            "feat/issue-56",
-            "https://github.com/owner/repo/pull/11",
-            feedbackCutoffAt);
-        await _dbContext.TransitionAsync(inProgress, review, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
         _dbContext.ChangeTracker.Clear();
 
         // Act

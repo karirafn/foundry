@@ -2,9 +2,7 @@ using Foundry.Modules.Issues.Features;
 using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Issues.Domain.Entities;
 using Foundry.Modules.Issues.Domain.Entities.States;
-using Foundry.Modules.Issues.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Contracts;
-using Foundry.Shared;
 using Foundry.Testing;
 using Foundry.WebApi.Persistence;
 
@@ -43,12 +41,6 @@ public sealed class GetIssueSnapshotsAsync : IAsyncDisposable
         await _connection.DisposeAsync();
     }
 
-    private static IssueAuthor ValidAuthor =>
-        IssueAuthor.Create("octocat").ValueOrThrow();
-
-    private static ProviderUrl ValidUrl =>
-        ProviderUrl.Create("https://github.com/owner/repo/issues/1").ValueOrThrow();
-
     [Fact]
     public async Task WhenNoIssuesMatch_ReturnsEmptyDictionary()
     {
@@ -71,15 +63,13 @@ public sealed class GetIssueSnapshotsAsync : IAsyncDisposable
         // Arrange
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
 
-        DetectedIssue issue = DetectedIssue.Detect(
-            repositoryId,
-            issueNumber: 5,
-            title: "My Issue",
-            body: "Issue body",
-            author: ValidAuthor,
-            url: ValidUrl,
-            labels: ["bug", "foundry"],
-            detectedAt: DateTimeOffset.UtcNow);
+        DetectedIssue issue = new IssueBuilder()
+            .WithMonitoredRepositoryId(repositoryId)
+            .WithIssueNumber(5)
+            .WithTitle("My Issue")
+            .WithBody("Issue body")
+            .WithLabels(["bug", "foundry"])
+            .Detected();
 
         _dbContext.Set<Issue>().Add(issue);
         await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
@@ -105,15 +95,11 @@ public sealed class GetIssueSnapshotsAsync : IAsyncDisposable
         // Arrange
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
 
-        DetectedIssue issue = DetectedIssue.Detect(
-            repositoryId,
-            issueNumber: 3,
-            title: "Issue 3",
-            body: "Body",
-            author: ValidAuthor,
-            url: ValidUrl,
-            labels: [],
-            detectedAt: DateTimeOffset.UtcNow);
+        DetectedIssue issue = new IssueBuilder()
+            .WithMonitoredRepositoryId(repositoryId)
+            .WithIssueNumber(3)
+            .WithTitle("Issue 3")
+            .Detected();
 
         _dbContext.Set<Issue>().Add(issue);
         await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
@@ -137,25 +123,17 @@ public sealed class GetIssueSnapshotsAsync : IAsyncDisposable
         MonitoredRepositoryId targetRepo = MonitoredRepositoryId.New();
         MonitoredRepositoryId otherRepo = MonitoredRepositoryId.New();
 
-        DetectedIssue targetIssue = DetectedIssue.Detect(
-            targetRepo,
-            issueNumber: 1,
-            title: "Target",
-            body: "Body",
-            author: ValidAuthor,
-            url: ValidUrl,
-            labels: [],
-            detectedAt: DateTimeOffset.UtcNow);
+        DetectedIssue targetIssue = new IssueBuilder()
+            .WithMonitoredRepositoryId(targetRepo)
+            .WithIssueNumber(1)
+            .WithTitle("Target")
+            .Detected();
 
-        DetectedIssue otherIssue = DetectedIssue.Detect(
-            otherRepo,
-            issueNumber: 1,
-            title: "Other",
-            body: "Body",
-            author: ValidAuthor,
-            url: ValidUrl,
-            labels: [],
-            detectedAt: DateTimeOffset.UtcNow);
+        DetectedIssue otherIssue = new IssueBuilder()
+            .WithMonitoredRepositoryId(otherRepo)
+            .WithIssueNumber(1)
+            .WithTitle("Other")
+            .Detected();
 
         _dbContext.Set<Issue>().AddRange(targetIssue, otherIssue);
         await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);

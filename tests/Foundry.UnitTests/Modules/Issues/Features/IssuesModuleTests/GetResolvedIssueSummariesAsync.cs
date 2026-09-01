@@ -1,11 +1,9 @@
 using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Issues.Domain.Entities;
 using Foundry.Modules.Issues.Domain.Entities.States;
-using Foundry.Modules.Issues.Domain.ValueObjects;
 using Foundry.Modules.Issues.Features;
 using Foundry.Modules.Issues.Features.StateChanges;
 using Foundry.Modules.Monitoring.Contracts;
-using Foundry.Shared;
 using Foundry.Testing;
 using Foundry.WebApi.Persistence;
 
@@ -25,12 +23,6 @@ public sealed class GetResolvedIssueSummariesAsync : IAsyncDisposable
     private readonly IIssueQueries _sut;
 
     private static readonly DateTimeOffset BaseTime = new(2026, 6, 26, 12, 0, 0, TimeSpan.Zero);
-
-    private static IssueAuthor ValidAuthor =>
-        IssueAuthor.Create("octocat").ValueOrThrow();
-
-    private static ProviderUrl ValidUrl =>
-        ProviderUrl.Create("https://github.com/owner/repo/issues/1").ValueOrThrow();
 
     public GetResolvedIssueSummariesAsync()
     {
@@ -57,23 +49,13 @@ public sealed class GetResolvedIssueSummariesAsync : IAsyncDisposable
         int issueNumber,
         DateTimeOffset detectedAt)
     {
-        DetectedIssue detected = DetectedIssue.Detect(
-            repositoryId,
-            issueNumber: issueNumber,
-            title: $"Issue {issueNumber}",
-            body: "Body",
-            author: ValidAuthor,
-            url: ValidUrl,
-            labels: [],
-            detectedAt: detectedAt);
-        FreshQueuedIssue queued = FreshQueuedIssue.FromDetected(detected);
-        InProgressIssue inProgress = queued.Claim(Guid.NewGuid());
-        ReviewIssue review = inProgress.MarkInReview(
-            inProgress.WorkerRunId,
-            "feat/1-fix",
-            "https://github.com/owner/repo/pull/10",
-            detectedAt.AddHours(1));
-        CompletedIssue completed = review.Complete(detectedAt.AddHours(2));
+        CompletedIssue completed = new IssueBuilder()
+            .WithMonitoredRepositoryId(repositoryId)
+            .WithIssueNumber(issueNumber)
+            .WithDetectedAt(detectedAt)
+            .WithFeedbackCutoffAt(detectedAt.AddHours(1))
+            .WithCompletedAt(detectedAt.AddHours(2))
+            .Completed();
         _dbContext.Set<Issue>().Add(completed);
         _dbContext.SaveChanges();
         return completed;
@@ -84,18 +66,11 @@ public sealed class GetResolvedIssueSummariesAsync : IAsyncDisposable
         int issueNumber,
         DateTimeOffset detectedAt)
     {
-        DetectedIssue detected = DetectedIssue.Detect(
-            repositoryId,
-            issueNumber: issueNumber,
-            title: $"Issue {issueNumber}",
-            body: "Body",
-            author: ValidAuthor,
-            url: ValidUrl,
-            labels: [],
-            detectedAt: detectedAt);
-        FreshQueuedIssue queued = FreshQueuedIssue.FromDetected(detected);
-        InProgressIssue inProgress = queued.Claim(Guid.NewGuid());
-        UnchangedIssue unchanged = inProgress.MarkUnchanged(Guid.NewGuid());
+        UnchangedIssue unchanged = new IssueBuilder()
+            .WithMonitoredRepositoryId(repositoryId)
+            .WithIssueNumber(issueNumber)
+            .WithDetectedAt(detectedAt)
+            .Unchanged();
         _dbContext.Set<Issue>().Add(unchanged);
         _dbContext.SaveChanges();
         return unchanged;
@@ -103,15 +78,11 @@ public sealed class GetResolvedIssueSummariesAsync : IAsyncDisposable
 
     private DetectedIssue SeedActiveIssue(MonitoredRepositoryId repositoryId, int issueNumber)
     {
-        DetectedIssue detected = DetectedIssue.Detect(
-            repositoryId,
-            issueNumber: issueNumber,
-            title: $"Issue {issueNumber}",
-            body: "Body",
-            author: ValidAuthor,
-            url: ValidUrl,
-            labels: [],
-            detectedAt: BaseTime);
+        DetectedIssue detected = new IssueBuilder()
+            .WithMonitoredRepositoryId(repositoryId)
+            .WithIssueNumber(issueNumber)
+            .WithDetectedAt(BaseTime)
+            .Detected();
         _dbContext.Set<Issue>().Add(detected);
         _dbContext.SaveChanges();
         return detected;

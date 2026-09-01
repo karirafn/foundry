@@ -1,7 +1,6 @@
 using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Issues.Domain.Entities;
 using Foundry.Modules.Issues.Domain.Entities.States;
-using Foundry.Modules.Issues.Domain.ValueObjects;
 using Foundry.Modules.Issues.Domain.Events;
 using Foundry.Modules.Issues.Features;
 using Foundry.Modules.Monitoring.Contracts;
@@ -25,12 +24,6 @@ public sealed class HandleAsync : IAsyncDisposable
     private readonly CapturingDomainEventDispatcher _dispatcher;
     private readonly StubIssueQueries _issueQueries;
     private readonly RetryIssue.Handler _sut;
-
-    private static IssueAuthor ValidAuthor =>
-        IssueAuthor.Create("octocat").ValueOrThrow();
-
-    private static ProviderUrl ValidUrl =>
-        ProviderUrl.Create("https://github.com/owner/repo/issues/1").ValueOrThrow();
 
     public HandleAsync()
     {
@@ -58,18 +51,10 @@ public sealed class HandleAsync : IAsyncDisposable
         MonitoredRepositoryId repositoryId,
         CancellationToken cancellationToken = default)
     {
-        DetectedIssue detected = DetectedIssue.Detect(
-            repositoryId,
-            issueNumber: 1,
-            title: "Issue 1",
-            body: "Body",
-            author: ValidAuthor,
-            url: ValidUrl,
-            labels: [],
-            detectedAt: DateTimeOffset.UtcNow);
-        FreshQueuedIssue queued = FreshQueuedIssue.FromDetected(detected);
-        InProgressIssue inProgress = queued.Claim(Guid.NewGuid());
-        FailedIssue failed = inProgress.MarkFailed(Guid.NewGuid(), "Non-zero exit code: 1", DateTimeOffset.UtcNow, "generic_failure");
+        FailedIssue failed = new IssueBuilder()
+            .WithMonitoredRepositoryId(repositoryId)
+            .WithIssueNumber(1)
+            .Failed();
         _dbContext.Set<Issue>().Add(failed);
         await _dbContext.SaveChangesAsync(cancellationToken);
         _dbContext.ChangeTracker.Clear();
@@ -80,23 +65,11 @@ public sealed class HandleAsync : IAsyncDisposable
         MonitoredRepositoryId repositoryId,
         CancellationToken cancellationToken = default)
     {
-        DetectedIssue detected = DetectedIssue.Detect(
-            repositoryId,
-            issueNumber: 2,
-            title: "Issue 2",
-            body: "Body",
-            author: ValidAuthor,
-            url: ValidUrl,
-            labels: [],
-            detectedAt: DateTimeOffset.UtcNow);
-        FreshQueuedIssue queued = FreshQueuedIssue.FromDetected(detected);
-        InProgressIssue inProgress = queued.Claim(Guid.NewGuid());
-        ContinuableFailedIssue failed = inProgress.MarkContinuableFailed(
-            Guid.NewGuid(),
-            "feat/2-issue-2",
-            "Non-zero exit code: 1",
-            "generic_failure",
-            DateTimeOffset.UtcNow);
+        ContinuableFailedIssue failed = new IssueBuilder()
+            .WithMonitoredRepositoryId(repositoryId)
+            .WithIssueNumber(2)
+            .WithBranchName("feat/2-issue-2")
+            .ContinuableFailed();
         _dbContext.Set<Issue>().Add(failed);
         await _dbContext.SaveChangesAsync(cancellationToken);
         _dbContext.ChangeTracker.Clear();
@@ -107,30 +80,10 @@ public sealed class HandleAsync : IAsyncDisposable
         MonitoredRepositoryId repositoryId,
         CancellationToken cancellationToken = default)
     {
-        DetectedIssue detected = DetectedIssue.Detect(
-            repositoryId,
-            issueNumber: 3,
-            title: "Issue 3",
-            body: "Body",
-            author: ValidAuthor,
-            url: ValidUrl,
-            labels: [],
-            detectedAt: DateTimeOffset.UtcNow);
-        FreshQueuedIssue queued = FreshQueuedIssue.FromDetected(detected);
-        InProgressIssue inProgress = queued.Claim(Guid.NewGuid());
-        ReviewIssue review = inProgress.MarkInReview(
-            Guid.NewGuid(),
-            "feat/3-issue-3",
-            "https://github.com/owner/repo/pull/3",
-            DateTimeOffset.UtcNow);
-        IReadOnlyList<ReviewComment> comments = [new ReviewComment("Please fix this.")];
-        RevisionQueuedIssue revisionQueued = review.Revise(comments);
-        RevisionInProgressIssue revisionInProgress = revisionQueued.Claim(Guid.NewGuid());
-        RevisionFailedIssue revisionFailed = revisionInProgress.MarkFailed(
-            revisionInProgress.WorkerRunId,
-            "Non-zero exit code: 2",
-            "generic_failure",
-            DateTimeOffset.UtcNow);
+        RevisionFailedIssue revisionFailed = new IssueBuilder()
+            .WithMonitoredRepositoryId(repositoryId)
+            .WithIssueNumber(3)
+            .RevisionFailed();
         _dbContext.Set<Issue>().Add(revisionFailed);
         await _dbContext.SaveChangesAsync(cancellationToken);
         _dbContext.ChangeTracker.Clear();
@@ -141,18 +94,10 @@ public sealed class HandleAsync : IAsyncDisposable
         MonitoredRepositoryId repositoryId,
         CancellationToken cancellationToken = default)
     {
-        DetectedIssue detected = DetectedIssue.Detect(
-            repositoryId,
-            issueNumber: 5,
-            title: "Issue 5",
-            body: "Body",
-            author: ValidAuthor,
-            url: ValidUrl,
-            labels: [],
-            detectedAt: DateTimeOffset.UtcNow);
-        FreshQueuedIssue queued = FreshQueuedIssue.FromDetected(detected);
-        InProgressIssue inProgress = queued.Claim(Guid.NewGuid());
-        UnchangedIssue unchanged = inProgress.MarkUnchanged(Guid.NewGuid());
+        UnchangedIssue unchanged = new IssueBuilder()
+            .WithMonitoredRepositoryId(repositoryId)
+            .WithIssueNumber(5)
+            .Unchanged();
         _dbContext.Set<Issue>().Add(unchanged);
         await _dbContext.SaveChangesAsync(cancellationToken);
         _dbContext.ChangeTracker.Clear();
@@ -163,16 +108,10 @@ public sealed class HandleAsync : IAsyncDisposable
         MonitoredRepositoryId repositoryId,
         CancellationToken cancellationToken = default)
     {
-        DetectedIssue detected = DetectedIssue.Detect(
-            repositoryId,
-            issueNumber: 4,
-            title: "Issue 4",
-            body: "Body",
-            author: ValidAuthor,
-            url: ValidUrl,
-            labels: [],
-            detectedAt: DateTimeOffset.UtcNow);
-        FreshQueuedIssue queued = FreshQueuedIssue.FromDetected(detected);
+        FreshQueuedIssue queued = new IssueBuilder()
+            .WithMonitoredRepositoryId(repositoryId)
+            .WithIssueNumber(4)
+            .FreshQueued();
         _dbContext.Set<Issue>().Add(queued);
         await _dbContext.SaveChangesAsync(cancellationToken);
         _dbContext.ChangeTracker.Clear();
