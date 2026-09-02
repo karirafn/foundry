@@ -19,12 +19,10 @@ public sealed class MarkFailed
         RevisionInProgressIssue revisionInProgress = new IssueBuilder()
             .WithMonitoredRepositoryId(repositoryId)
             .RevisionInProgress();
-        Guid workerRunId = Guid.NewGuid();
         DateTimeOffset failedAt = DateTimeOffset.UtcNow;
 
         // Act
         RevisionFailedIssue failed = revisionInProgress.MarkFailed(
-            workerRunId,
             "Container exited with code 1",
             "generic_failure",
             failedAt);
@@ -41,11 +39,10 @@ public sealed class MarkFailed
         RevisionInProgressIssue revisionInProgress = new IssueBuilder()
             .WithMonitoredRepositoryId(repositoryId)
             .RevisionInProgress();
-        Guid workerRunId = Guid.NewGuid();
         DateTimeOffset failedAt = DateTimeOffset.UtcNow;
 
         // Act
-        revisionInProgress.MarkFailed(workerRunId, "Container exited with code 1", "generic_failure", failedAt);
+        revisionInProgress.MarkFailed("Container exited with code 1", "generic_failure", failedAt);
 
         // Assert
         IssueRevisionFailed domainEvent = revisionInProgress.DomainEvents.ShouldHaveSingleItem().ShouldBeOfType<IssueRevisionFailed>();
@@ -63,13 +60,11 @@ public sealed class MarkFailed
             .WithMonitoredRepositoryId(repositoryId)
             .WithReviewComments([new ReviewComment("Please fix.")])
             .RevisionInProgress();
-        Guid workerRunId = Guid.NewGuid();
         string failureReason = "Container exited with code 1";
         DateTimeOffset failedAt = new DateTimeOffset(2026, 6, 1, 14, 30, 0, TimeSpan.Zero);
 
         // Act
         RevisionFailedIssue failed = revisionInProgress.MarkFailed(
-            workerRunId,
             failureReason,
             "generic_failure",
             failedAt);

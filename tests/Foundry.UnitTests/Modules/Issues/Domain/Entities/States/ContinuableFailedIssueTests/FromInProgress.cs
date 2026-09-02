@@ -17,11 +17,9 @@ public sealed class FromInProgress
         // Arrange
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
         InProgressIssue inProgress = new IssueBuilder().WithMonitoredRepositoryId(repositoryId).InProgress();
-        Guid workerRunId = Guid.NewGuid();
 
         // Act
         ContinuableFailedIssue failed = inProgress.MarkContinuableFailed(
-            workerRunId,
             "foundry/1/add-feature",
             "Container exited with code 1",
             "generic_failure",
@@ -45,14 +43,12 @@ public sealed class FromInProgress
         // Arrange
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
         InProgressIssue inProgress = new IssueBuilder().WithMonitoredRepositoryId(repositoryId).InProgress();
-        Guid workerRunId = Guid.NewGuid();
         string branchName = "foundry/1/add-feature";
         string failureReason = "Container exited with code 1";
         DateTimeOffset failedAt = new DateTimeOffset(2026, 6, 9, 10, 0, 0, TimeSpan.Zero);
 
         // Act
         ContinuableFailedIssue failed = inProgress.MarkContinuableFailed(
-            workerRunId,
             branchName,
             failureReason,
             "generic_failure",
@@ -60,7 +56,7 @@ public sealed class FromInProgress
 
         // Assert
         failed.ShouldSatisfyAllConditions(
-            () => failed.WorkerRunId.ShouldBe(workerRunId),
+            () => failed.WorkerRunId.ShouldBe(inProgress.WorkerRunId),
             () => failed.BranchName.ShouldBe(branchName),
             () => failed.FailureReason.ShouldBe(failureReason),
             () => failed.FailedAt.ShouldBe(failedAt));
@@ -75,7 +71,6 @@ public sealed class FromInProgress
 
         // Act
         ContinuableFailedIssue failed = inProgress.MarkContinuableFailed(
-            Guid.NewGuid(),
             "foundry/1/add-feature",
             "Container exited with code 1",
             "generic_failure",

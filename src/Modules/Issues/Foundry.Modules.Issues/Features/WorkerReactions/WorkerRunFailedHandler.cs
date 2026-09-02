@@ -40,7 +40,6 @@ internal sealed class WorkerRunFailedHandler(
             if (@event.BranchName is not null)
             {
                 ContinuableFailedIssue continuableFailed = inProgress.MarkContinuableFailed(
-                    @event.WorkerRunId,
                     @event.BranchName,
                     @event.ReasonDescription,
                     category,
@@ -50,7 +49,6 @@ internal sealed class WorkerRunFailedHandler(
             else
             {
                 FailedIssue failed = inProgress.MarkFailed(
-                    @event.WorkerRunId,
                     @event.ReasonDescription,
                     failedAt,
                     category);
@@ -74,7 +72,6 @@ internal sealed class WorkerRunFailedHandler(
             }
 
             RevisionFailedIssue revisionFailed = revisionInProgress.MarkFailed(
-                @event.WorkerRunId,
                 @event.ReasonDescription,
                 category,
                 failedAt);

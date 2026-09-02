@@ -17,10 +17,9 @@ public sealed class MarkUnchanged
         // Arrange
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
         InProgressIssue inProgress = new IssueBuilder().WithMonitoredRepositoryId(repositoryId).InProgress();
-        Guid workerRunId = Guid.NewGuid();
 
         // Act
-        UnchangedIssue unchanged = inProgress.MarkUnchanged(workerRunId);
+        UnchangedIssue unchanged = inProgress.MarkUnchanged();
 
         // Assert
         unchanged.Id.ShouldBe(inProgress.Id);
@@ -32,10 +31,9 @@ public sealed class MarkUnchanged
         // Arrange
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
         InProgressIssue inProgress = new IssueBuilder().WithMonitoredRepositoryId(repositoryId).InProgress();
-        Guid workerRunId = Guid.NewGuid();
 
         // Act
-        inProgress.MarkUnchanged(workerRunId);
+        inProgress.MarkUnchanged();
 
         // Assert
         IssueUnchanged domainEvent = inProgress.DomainEvents.ShouldHaveSingleItem().ShouldBeOfType<IssueUnchanged>();
@@ -50,14 +48,13 @@ public sealed class MarkUnchanged
         // Arrange
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
         InProgressIssue inProgress = new IssueBuilder().WithMonitoredRepositoryId(repositoryId).InProgress();
-        Guid workerRunId = Guid.NewGuid();
 
         // Act
-        UnchangedIssue unchanged = inProgress.MarkUnchanged(workerRunId);
+        UnchangedIssue unchanged = inProgress.MarkUnchanged();
 
         // Assert
         unchanged.ShouldSatisfyAllConditions(
-            () => unchanged.WorkerRunId.ShouldBe(workerRunId),
+            () => unchanged.WorkerRunId.ShouldBe(inProgress.WorkerRunId),
             () => unchanged.MonitoredRepositoryId.ShouldBe(repositoryId),
             () => unchanged.IssueNumber.ShouldBe(inProgress.IssueNumber),
             () => unchanged.Title.ShouldBe(inProgress.Title),

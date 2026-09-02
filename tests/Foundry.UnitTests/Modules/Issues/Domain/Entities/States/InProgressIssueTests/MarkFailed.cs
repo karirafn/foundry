@@ -17,11 +17,10 @@ public sealed class MarkFailed
         // Arrange
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
         InProgressIssue inProgress = new IssueBuilder().WithMonitoredRepositoryId(repositoryId).InProgress();
-        Guid workerRunId = Guid.NewGuid();
         DateTimeOffset failedAt = DateTimeOffset.UtcNow;
 
         // Act
-        FailedIssue failed = inProgress.MarkFailed(workerRunId, "Container exited with code 1", failedAt, "generic_failure");
+        FailedIssue failed = inProgress.MarkFailed("Container exited with code 1", failedAt, "generic_failure");
 
         // Assert
         failed.Id.ShouldBe(inProgress.Id);
@@ -33,11 +32,10 @@ public sealed class MarkFailed
         // Arrange
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
         InProgressIssue inProgress = new IssueBuilder().WithMonitoredRepositoryId(repositoryId).InProgress();
-        Guid workerRunId = Guid.NewGuid();
         DateTimeOffset failedAt = DateTimeOffset.UtcNow;
 
         // Act
-        inProgress.MarkFailed(workerRunId, "Container exited with code 1", failedAt, "generic_failure");
+        inProgress.MarkFailed("Container exited with code 1", failedAt, "generic_failure");
 
         // Assert
         IssueFailed domainEvent = inProgress.DomainEvents.ShouldHaveSingleItem().ShouldBeOfType<IssueFailed>();
@@ -52,16 +50,15 @@ public sealed class MarkFailed
         // Arrange
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
         InProgressIssue inProgress = new IssueBuilder().WithMonitoredRepositoryId(repositoryId).InProgress();
-        Guid workerRunId = Guid.NewGuid();
         string failureReason = "Container exited with code 1";
         DateTimeOffset failedAt = DateTimeOffset.UtcNow;
 
         // Act
-        FailedIssue failed = inProgress.MarkFailed(workerRunId, failureReason, failedAt, "generic_failure");
+        FailedIssue failed = inProgress.MarkFailed(failureReason, failedAt, "generic_failure");
 
         // Assert
         failed.ShouldSatisfyAllConditions(
-            () => failed.WorkerRunId.ShouldBe(workerRunId),
+            () => failed.WorkerRunId.ShouldBe(inProgress.WorkerRunId),
             () => failed.FailureReason.ShouldBe(failureReason),
             () => failed.FailedAt.ShouldBe(failedAt),
             () => failed.MonitoredRepositoryId.ShouldBe(repositoryId),
@@ -76,11 +73,10 @@ public sealed class MarkFailed
         // Arrange
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
         InProgressIssue inProgress = new IssueBuilder().WithMonitoredRepositoryId(repositoryId).InProgress();
-        Guid workerRunId = Guid.NewGuid();
         DateTimeOffset failedAt = DateTimeOffset.UtcNow;
 
         // Act
-        FailedIssue failed = inProgress.MarkFailed(workerRunId, "Usage limit reached", failedAt, "usage_limited");
+        FailedIssue failed = inProgress.MarkFailed("Usage limit reached", failedAt, "usage_limited");
 
         // Assert
         failed.FailureCategory.ShouldBe("usage_limited");

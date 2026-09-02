@@ -17,11 +17,9 @@ public sealed class MarkInReview
         // Arrange
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
         InProgressIssue inProgress = new IssueBuilder().WithMonitoredRepositoryId(repositoryId).InProgress();
-        Guid workerRunId = Guid.NewGuid();
 
         // Act
         ReviewIssue review = inProgress.MarkInReview(
-            workerRunId,
             "foundry/1/add-feature",
             "https://github.com/owner/repo/pull/5",
             DateTimeOffset.UtcNow);
@@ -36,11 +34,9 @@ public sealed class MarkInReview
         // Arrange
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
         InProgressIssue inProgress = new IssueBuilder().WithMonitoredRepositoryId(repositoryId).InProgress();
-        Guid workerRunId = Guid.NewGuid();
 
         // Act
         inProgress.MarkInReview(
-            workerRunId,
             "foundry/1/add-feature",
             "https://github.com/owner/repo/pull/5",
             DateTimeOffset.UtcNow);
@@ -58,16 +54,15 @@ public sealed class MarkInReview
         // Arrange
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
         InProgressIssue inProgress = new IssueBuilder().WithMonitoredRepositoryId(repositoryId).InProgress();
-        Guid workerRunId = Guid.NewGuid();
         string branchName = "foundry/1/add-feature";
         string pullRequestUrl = "https://github.com/owner/repo/pull/5";
 
         // Act
-        ReviewIssue review = inProgress.MarkInReview(workerRunId, branchName, pullRequestUrl, DateTimeOffset.UtcNow);
+        ReviewIssue review = inProgress.MarkInReview(branchName, pullRequestUrl, DateTimeOffset.UtcNow);
 
         // Assert
         review.ShouldSatisfyAllConditions(
-            () => review.WorkerRunId.ShouldBe(workerRunId),
+            () => review.WorkerRunId.ShouldBe(inProgress.WorkerRunId),
             () => review.BranchName.ShouldBe(branchName),
             () => review.PullRequestUrl.ShouldBe(pullRequestUrl),
             () => review.MonitoredRepositoryId.ShouldBe(repositoryId),

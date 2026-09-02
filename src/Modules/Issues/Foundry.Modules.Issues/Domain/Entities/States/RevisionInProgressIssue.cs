@@ -57,7 +57,6 @@ public sealed class RevisionInProgressIssue : Issue
     }
 
     public RevisionFailedIssue MarkFailed(
-        Guid workerRunId,
         string failureReason,
         string failureCategory,
         DateTimeOffset failedAt)

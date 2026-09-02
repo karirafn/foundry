@@ -101,25 +101,25 @@ public sealed class IssueBuilder
     public InProgressIssue InProgress() => FreshQueued().Claim(_workerRunId);
 
     public ReviewIssue Review() =>
-        InProgress().MarkInReview(_workerRunId, _branchName, _pullRequestUrl, _feedbackCutoffAt);
+        InProgress().MarkInReview(_branchName, _pullRequestUrl, _feedbackCutoffAt);
 
     public RevisionQueuedIssue RevisionQueued() => Review().Revise(_reviewComments);
 
     public RevisionInProgressIssue RevisionInProgress() => RevisionQueued().Claim(_workerRunId);
 
     public FailedIssue Failed() =>
-        InProgress().MarkFailed(_workerRunId, _failureReason, _failedAt, _failureCategory);
+        InProgress().MarkFailed(_failureReason, _failedAt, _failureCategory);
 
     public ContinuableFailedIssue ContinuableFailed() =>
-        InProgress().MarkContinuableFailed(_workerRunId, _branchName, _failureReason, _failureCategory, _failedAt);
+        InProgress().MarkContinuableFailed(_branchName, _failureReason, _failureCategory, _failedAt);
 
     public ContinuableFailedIssue ContinuableFailedFromReview() =>
         Review().Fail(_failureReason, _failureCategory, _failedAt);
 
     public RevisionFailedIssue RevisionFailed() =>
-        RevisionInProgress().MarkFailed(_workerRunId, _failureReason, _failureCategory, _failedAt);
+        RevisionInProgress().MarkFailed(_failureReason, _failureCategory, _failedAt);
 
-    public UnchangedIssue Unchanged() => InProgress().MarkUnchanged(_workerRunId);
+    public UnchangedIssue Unchanged() => InProgress().MarkUnchanged();
 
     public CompletedIssue Completed() => Review().Complete(_completedAt);
 }

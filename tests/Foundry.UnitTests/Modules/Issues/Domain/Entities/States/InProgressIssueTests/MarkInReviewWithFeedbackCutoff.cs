@@ -20,7 +20,6 @@ public sealed class MarkInReviewWithFeedbackCutoff
 
         // Act
         ReviewIssue review = inProgress.MarkInReview(
-            Guid.NewGuid(),
             "foundry/1/add-feature",
             "https://github.com/owner/repo/pull/5",
             feedbackCutoffAt);
