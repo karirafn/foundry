@@ -87,7 +87,7 @@ public sealed class WhenStartingRunIsStale : IAsyncDisposable
             .WithBody("Test body")
             .WithLabels(["foundry"])
             .WithDetectedAt(DateTimeOffset.UtcNow.AddHours(-1))
-            .WithWorkerRunId(workerRunId.Value)
+            .WithWorkerRunId(workerRunId)
             .InProgress();
 
         dbContext.Set<Issue>().Add(inProgress);

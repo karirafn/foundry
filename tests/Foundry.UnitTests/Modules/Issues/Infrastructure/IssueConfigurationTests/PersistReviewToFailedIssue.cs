@@ -1,6 +1,7 @@
 using Foundry.Modules.Issues.Domain.Entities;
 using Foundry.Modules.Issues.Domain.Entities.States;
 using Foundry.Modules.Monitoring.Contracts;
+using Foundry.Modules.Workers.Contracts;
 using Foundry.Testing;
 using Foundry.WebApi.Persistence;
 
@@ -42,7 +43,7 @@ public sealed class PersistReviewToFailedIssue : IAsyncDisposable
     {
         // Arrange
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
-        Guid reviewWorkerRunId = Guid.NewGuid();
+        WorkerRunId reviewWorkerRunId = WorkerRunId.New();
         DateTimeOffset failedAt = new DateTimeOffset(2026, 5, 30, 12, 0, 0, TimeSpan.Zero);
         ContinuableFailedIssue failed = new IssueBuilder()
             .WithMonitoredRepositoryId(repositoryId)

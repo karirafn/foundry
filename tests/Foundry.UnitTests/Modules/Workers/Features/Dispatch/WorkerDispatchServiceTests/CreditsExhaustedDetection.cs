@@ -91,7 +91,7 @@ public sealed class CreditsExhaustedDetection : WorkerDispatchServiceTestBase
             .OfType<WorkerCreditsExhausted>()
             .ShouldHaveSingleItem();
         creditsExhaustedEvent.ShouldSatisfyAllConditions(
-            () => creditsExhaustedEvent.WorkerRunId.ShouldBe(activeRun.Id.Value),
+            () => creditsExhaustedEvent.WorkerRunId.ShouldBe(activeRun.Id),
             () => creditsExhaustedEvent.IssueId.ShouldBe(activeRun.IssueId.Value));
     }
 
@@ -140,7 +140,7 @@ public sealed class CreditsExhaustedDetection : WorkerDispatchServiceTestBase
         WorkerCreditsExhausted creditsExhaustedEvent = dispatcher.Captured
             .OfType<WorkerCreditsExhausted>()
             .ShouldHaveSingleItem();
-        creditsExhaustedEvent.WorkerRunId.ShouldBe(activeRun.Id.Value);
+        creditsExhaustedEvent.WorkerRunId.ShouldBe(activeRun.Id);
         creditsExhaustedEvent.IssueId.ShouldBe(activeRun.IssueId.Value);
     }
 

@@ -11,7 +11,7 @@ internal sealed class WorkerRunFailedBridgeHandler(IIntegrationEventDispatcher i
     public Task HandleAsync(WorkerRunFailed @event, CancellationToken cancellationToken)
     {
         WorkerRunFailedIntegration integrationEvent = new(
-            @event.WorkerRunId.Value,
+            @event.WorkerRunId,
             @event.IssueId.Value,
             @event.ReasonDescription,
             @event.Category,

@@ -98,7 +98,7 @@ public sealed class HandleAsync : IAsyncDisposable
             repositoryEligibilityQuery: new StubRepositoryEligibilityQuery(
                 eligibleRepositories: [new EligibleRepository(repositoryId.Value, Position: 0)]));
 
-        WorkerCapacityAvailable @event = new(WorkerRunId: Guid.NewGuid());
+        WorkerCapacityAvailable @event = new(WorkerRunId: WorkerRunId.New());
 
         // Act
         await sut.HandleAsync(@event, CancellationToken.None);
@@ -123,7 +123,7 @@ public sealed class HandleAsync : IAsyncDisposable
         WorkerCapacityAvailableHandler sut = BuildHandler(
             repositoryEligibilityQuery: new StubRepositoryEligibilityQuery(eligibleRepositories: []));
 
-        WorkerCapacityAvailable @event = new(WorkerRunId: Guid.NewGuid());
+        WorkerCapacityAvailable @event = new(WorkerRunId: WorkerRunId.New());
 
         // Act
         await sut.HandleAsync(@event, CancellationToken.None);
@@ -149,7 +149,7 @@ public sealed class HandleAsync : IAsyncDisposable
         WorkerCapacityAvailableHandler sut = BuildHandler(
             repositoryEligibilityQuery: new StubRepositoryEligibilityQuery(eligibleRepositories: []));
 
-        WorkerCapacityAvailable @event = new(WorkerRunId: Guid.NewGuid());
+        WorkerCapacityAvailable @event = new(WorkerRunId: WorkerRunId.New());
 
         // Act
         await sut.HandleAsync(@event, CancellationToken.None);
@@ -177,7 +177,7 @@ public sealed class HandleAsync : IAsyncDisposable
             repositoryEligibilityQuery: new StubRepositoryEligibilityQuery(
                 eligibleRepositories: [new EligibleRepository(eligibleRepoId.Value, Position: 0)]));
 
-        WorkerCapacityAvailable @event = new(WorkerRunId: Guid.NewGuid());
+        WorkerCapacityAvailable @event = new(WorkerRunId: WorkerRunId.New());
 
         // Act
         await sut.HandleAsync(@event, CancellationToken.None);
@@ -226,7 +226,7 @@ public sealed class HandleAsync : IAsyncDisposable
             repositoryEligibilityQuery: new StubRepositoryEligibilityQuery(
                 eligibleRepositories: [new EligibleRepository(eligibleRepoId.Value, Position: 0)]));
 
-        WorkerCapacityAvailable @event = new(WorkerRunId: Guid.NewGuid());
+        WorkerCapacityAvailable @event = new(WorkerRunId: WorkerRunId.New());
 
         // Act
         await sut.HandleAsync(@event, CancellationToken.None);
@@ -261,7 +261,7 @@ public sealed class HandleAsync : IAsyncDisposable
             repositoryEligibilityQuery: new StubRepositoryEligibilityQuery(
                 eligibleRepositories: [new EligibleRepository(eligibleRepoId.Value, Position: 0)]));
 
-        WorkerCapacityAvailable @event = new(WorkerRunId: Guid.NewGuid());
+        WorkerCapacityAvailable @event = new(WorkerRunId: WorkerRunId.New());
 
         // Act
         await sut.HandleAsync(@event, CancellationToken.None);
@@ -296,7 +296,7 @@ public sealed class HandleAsync : IAsyncDisposable
             repositoryEligibilityQuery: new StubRepositoryEligibilityQuery(
                 eligibleRepositories: [new EligibleRepository(eligibleRepoId.Value, Position: 0)]));
 
-        WorkerCapacityAvailable @event = new(WorkerRunId: Guid.NewGuid());
+        WorkerCapacityAvailable @event = new(WorkerRunId: WorkerRunId.New());
 
         // Act
         await sut.HandleAsync(@event, CancellationToken.None);
@@ -330,7 +330,7 @@ public sealed class HandleAsync : IAsyncDisposable
             repositoryEligibilityQuery: new StubRepositoryEligibilityQuery(
                 eligibleRepositories: [new EligibleRepository(continuationRepoId.Value, Position: 0)]));
 
-        WorkerCapacityAvailable @event = new(WorkerRunId: Guid.NewGuid());
+        WorkerCapacityAvailable @event = new(WorkerRunId: WorkerRunId.New());
 
         // Act
         await sut.HandleAsync(@event, CancellationToken.None);
@@ -362,7 +362,7 @@ public sealed class HandleAsync : IAsyncDisposable
         WorkerCapacityAvailableHandler sut = BuildHandler(
             repositoryEligibilityQuery: new StubRepositoryEligibilityQuery(eligibleRepositories: []));
 
-        WorkerCapacityAvailable @event = new(WorkerRunId: Guid.NewGuid());
+        WorkerCapacityAvailable @event = new(WorkerRunId: WorkerRunId.New());
 
         // Act — should not throw
         await sut.HandleAsync(@event, CancellationToken.None);
@@ -391,7 +391,7 @@ public sealed class HandleAsync : IAsyncDisposable
         WorkerCapacityAvailableHandler sut = BuildHandler(
             repositoryEligibilityQuery: new AllEligibleRepositoryEligibilityQuery());
 
-        WorkerCapacityAvailable @event = new(WorkerRunId: Guid.NewGuid());
+        WorkerCapacityAvailable @event = new(WorkerRunId: WorkerRunId.New());
 
         // Act
         await sut.HandleAsync(@event, CancellationToken.None);
@@ -423,7 +423,7 @@ public sealed class HandleAsync : IAsyncDisposable
         WorkerCapacityAvailableHandler sut = BuildHandler(
             repositoryEligibilityQuery: new AllEligibleRepositoryEligibilityQuery());
 
-        WorkerCapacityAvailable @event = new(WorkerRunId: Guid.NewGuid());
+        WorkerCapacityAvailable @event = new(WorkerRunId: WorkerRunId.New());
 
         // Act
         await sut.HandleAsync(@event, CancellationToken.None);
@@ -455,7 +455,7 @@ public sealed class HandleAsync : IAsyncDisposable
         WorkerCapacityAvailableHandler sut = BuildHandler(
             repositoryEligibilityQuery: new AllEligibleRepositoryEligibilityQuery());
 
-        WorkerCapacityAvailable @event = new(WorkerRunId: Guid.NewGuid());
+        WorkerCapacityAvailable @event = new(WorkerRunId: WorkerRunId.New());
 
         // Act
         await sut.HandleAsync(@event, CancellationToken.None);
@@ -485,7 +485,7 @@ public sealed class HandleAsync : IAsyncDisposable
         WorkerCapacityAvailableHandler sut = BuildHandler(
             repositoryEligibilityQuery: new StubRepositoryEligibilityQuery(eligibleRepositories: []));
 
-        WorkerCapacityAvailable @event = new(WorkerRunId: Guid.NewGuid());
+        WorkerCapacityAvailable @event = new(WorkerRunId: WorkerRunId.New());
 
         // Act
         await sut.HandleAsync(@event, CancellationToken.None);
@@ -510,7 +510,7 @@ public sealed class HandleAsync : IAsyncDisposable
         WorkerCapacityAvailableHandler sut = BuildHandler(
             repositoryEligibilityQuery: new StubRepositoryEligibilityQuery(eligibleRepositories: []));
 
-        WorkerCapacityAvailable @event = new(WorkerRunId: Guid.NewGuid());
+        WorkerCapacityAvailable @event = new(WorkerRunId: WorkerRunId.New());
 
         // Act
         await sut.HandleAsync(@event, CancellationToken.None);
@@ -547,7 +547,7 @@ public sealed class HandleAsync : IAsyncDisposable
                 new WorkerProvider.GitHub())),
             integrationEventDispatcher: capturingDispatcher);
 
-        WorkerCapacityAvailable @event = new(WorkerRunId: Guid.NewGuid());
+        WorkerCapacityAvailable @event = new(WorkerRunId: WorkerRunId.New());
 
         // Act
         await sut.HandleAsync(@event, TestContext.Current.CancellationToken);
@@ -582,7 +582,7 @@ public sealed class HandleAsync : IAsyncDisposable
                 new WorkerProvider.GitLab())),
             integrationEventDispatcher: capturingDispatcher);
 
-        WorkerCapacityAvailable @event = new(WorkerRunId: Guid.NewGuid());
+        WorkerCapacityAvailable @event = new(WorkerRunId: WorkerRunId.New());
 
         // Act
         await sut.HandleAsync(@event, TestContext.Current.CancellationToken);
@@ -610,7 +610,7 @@ public sealed class HandleAsync : IAsyncDisposable
                 new WorkerProvider.GitHub())),
             integrationEventDispatcher: capturingDispatcher);
 
-        WorkerCapacityAvailable @event = new(WorkerRunId: Guid.NewGuid());
+        WorkerCapacityAvailable @event = new(WorkerRunId: WorkerRunId.New());
 
         // Act
         await sut.HandleAsync(@event, TestContext.Current.CancellationToken);
@@ -638,7 +638,7 @@ public sealed class HandleAsync : IAsyncDisposable
                 new WorkerProvider.GitHub())),
             integrationEventDispatcher: capturingDispatcher);
 
-        WorkerCapacityAvailable @event = new(WorkerRunId: Guid.NewGuid());
+        WorkerCapacityAvailable @event = new(WorkerRunId: WorkerRunId.New());
 
         // Act
         await sut.HandleAsync(@event, TestContext.Current.CancellationToken);
@@ -666,7 +666,7 @@ public sealed class HandleAsync : IAsyncDisposable
                 new WorkerProvider.GitLab())),
             integrationEventDispatcher: capturingDispatcher);
 
-        WorkerCapacityAvailable @event = new(WorkerRunId: Guid.NewGuid());
+        WorkerCapacityAvailable @event = new(WorkerRunId: WorkerRunId.New());
 
         // Act
         await sut.HandleAsync(@event, TestContext.Current.CancellationToken);
@@ -694,7 +694,7 @@ public sealed class HandleAsync : IAsyncDisposable
                 new WorkerProvider.GitLab())),
             integrationEventDispatcher: capturingDispatcher);
 
-        WorkerCapacityAvailable @event = new(WorkerRunId: Guid.NewGuid());
+        WorkerCapacityAvailable @event = new(WorkerRunId: WorkerRunId.New());
 
         // Act
         await sut.HandleAsync(@event, TestContext.Current.CancellationToken);
@@ -724,7 +724,7 @@ public sealed class HandleAsync : IAsyncDisposable
         WorkerCapacityAvailableHandler sut = BuildHandler(
             integrationEventDispatcher: capturingDispatcher);
 
-        WorkerCapacityAvailable @event = new(WorkerRunId: Guid.NewGuid());
+        WorkerCapacityAvailable @event = new(WorkerRunId: WorkerRunId.New());
 
         // Act
         await sut.HandleAsync(@event, TestContext.Current.CancellationToken);
@@ -747,7 +747,7 @@ public sealed class HandleAsync : IAsyncDisposable
         WorkerCapacityAvailableHandler sut = BuildHandler(
             integrationEventDispatcher: capturingDispatcher);
 
-        WorkerCapacityAvailable @event = new(WorkerRunId: Guid.NewGuid());
+        WorkerCapacityAvailable @event = new(WorkerRunId: WorkerRunId.New());
 
         // Act
         await sut.HandleAsync(@event, CancellationToken.None);
@@ -788,7 +788,7 @@ public sealed class HandleAsync : IAsyncDisposable
                     new EligibleRepository(lowPriorityRepoId.Value, Position: 1),
                 ]));
 
-        WorkerCapacityAvailable @event = new(WorkerRunId: Guid.NewGuid());
+        WorkerCapacityAvailable @event = new(WorkerRunId: WorkerRunId.New());
 
         // Act
         await sut.HandleAsync(@event, CancellationToken.None);
@@ -829,7 +829,7 @@ public sealed class HandleAsync : IAsyncDisposable
                     new EligibleRepository(repoBId.Value, Position: 0),
                 ]));
 
-        WorkerCapacityAvailable @event = new(WorkerRunId: Guid.NewGuid());
+        WorkerCapacityAvailable @event = new(WorkerRunId: WorkerRunId.New());
 
         // Act
         await sut.HandleAsync(@event, CancellationToken.None);
@@ -867,7 +867,7 @@ public sealed class HandleAsync : IAsyncDisposable
                     new EligibleRepository(revisionRepoId.Value, Position: 1),
                 ]));
 
-        WorkerCapacityAvailable @event = new(WorkerRunId: Guid.NewGuid());
+        WorkerCapacityAvailable @event = new(WorkerRunId: WorkerRunId.New());
 
         // Act
         await sut.HandleAsync(@event, CancellationToken.None);
@@ -906,7 +906,7 @@ public sealed class HandleAsync : IAsyncDisposable
                     new EligibleRepository(lowPriorityRepoId.Value, Position: 1),
                 ]));
 
-        WorkerCapacityAvailable @event = new(WorkerRunId: Guid.NewGuid());
+        WorkerCapacityAvailable @event = new(WorkerRunId: WorkerRunId.New());
 
         // Act
         await sut.HandleAsync(@event, CancellationToken.None);
@@ -945,7 +945,7 @@ public sealed class HandleAsync : IAsyncDisposable
                     new EligibleRepository(lowPriorityRepoId.Value, Position: 1),
                 ]));
 
-        WorkerCapacityAvailable @event = new(WorkerRunId: Guid.NewGuid());
+        WorkerCapacityAvailable @event = new(WorkerRunId: WorkerRunId.New());
 
         // Act
         await sut.HandleAsync(@event, CancellationToken.None);
@@ -991,7 +991,7 @@ public sealed class HandleAsync : IAsyncDisposable
                     new EligibleRepository(repoBId.Value, Position: 0),
                 ]));
 
-        WorkerCapacityAvailable @event = new(WorkerRunId: Guid.NewGuid());
+        WorkerCapacityAvailable @event = new(WorkerRunId: WorkerRunId.New());
 
         // Act
         await sut.HandleAsync(@event, CancellationToken.None);
@@ -1029,7 +1029,7 @@ public sealed class HandleAsync : IAsyncDisposable
             repositoryEligibilityQuery: new StubRepositoryEligibilityQuery(
                 eligibleRepositories: [new EligibleRepository(eligibleRepoId.Value, Position: 0)]));
 
-        WorkerCapacityAvailable @event = new(WorkerRunId: Guid.NewGuid());
+        WorkerCapacityAvailable @event = new(WorkerRunId: WorkerRunId.New());
 
         // Act — must not throw a KeyNotFoundException
         await sut.HandleAsync(@event, CancellationToken.None);
@@ -1054,7 +1054,7 @@ public sealed class HandleAsync : IAsyncDisposable
         // Arrange
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
         SeedQueuedIssue(repositoryId);
-        Guid workerRunId = Guid.NewGuid();
+        WorkerRunId workerRunId = WorkerRunId.New();
 
         WorkerCapacityAvailableHandler sut = BuildHandler();
         WorkerCapacityAvailable @event = new(workerRunId);
@@ -1079,7 +1079,7 @@ public sealed class HandleAsync : IAsyncDisposable
         WorkerCapacityAvailableHandler sut = BuildHandler(
             integrationEventDispatcher: capturingDispatcher);
 
-        WorkerCapacityAvailable @event = new(WorkerRunId: Guid.NewGuid());
+        WorkerCapacityAvailable @event = new(WorkerRunId: WorkerRunId.New());
 
         // Act
         await sut.HandleAsync(@event, CancellationToken.None);

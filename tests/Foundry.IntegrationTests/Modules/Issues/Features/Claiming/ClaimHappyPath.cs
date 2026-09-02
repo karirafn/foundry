@@ -89,7 +89,7 @@ public sealed class ClaimHappyPath : IAsyncDisposable
         // Arrange — seed a repository with real credentials and eligibility, plus a queued issue.
         MonitoredRepositoryId repositoryId = await SeedEligibleRepositoryWithDispatchInfoAsync();
         FreshQueuedIssue queued = await SeedQueuedIssueAsync(repositoryId);
-        WorkerCapacityAvailable @event = new(WorkerRunId: Guid.NewGuid());
+        WorkerCapacityAvailable @event = new(WorkerRunId: WorkerRunId.New());
 
         // Act — resolve the real handler from DI and invoke it directly (no HTTP endpoint exists).
         using IServiceScope scope = _factory.Services.CreateScope();
@@ -111,7 +111,7 @@ public sealed class ClaimHappyPath : IAsyncDisposable
         // Arrange — seed a repository with real credentials and eligibility, plus a queued issue.
         MonitoredRepositoryId repositoryId = await SeedEligibleRepositoryWithDispatchInfoAsync();
         await SeedQueuedIssueAsync(repositoryId, issueNumber: 2);
-        WorkerCapacityAvailable @event = new(WorkerRunId: Guid.NewGuid());
+        WorkerCapacityAvailable @event = new(WorkerRunId: WorkerRunId.New());
 
         // Act — resolve the real handler from DI and invoke it directly.
         using IServiceScope scope = _factory.Services.CreateScope();

@@ -41,7 +41,7 @@ internal sealed class IssueClaimedHandler(
     {
         ClaimedIssueDispatch claimed = @event.Dispatch;
 
-        StartingRun startingRun = StartingRun.Begin(claimed.IssueId, WorkerRunId.From(claimed.WorkerRunId));
+        StartingRun startingRun = StartingRun.Begin(claimed.IssueId, claimed.WorkerRunId);
         dbContext.Set<WorkerRun>().Add(startingRun);
         await dbContext.SaveChangesAsync(cancellationToken);
 

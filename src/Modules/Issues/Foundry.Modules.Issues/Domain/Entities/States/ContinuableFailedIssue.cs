@@ -1,5 +1,6 @@
 using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Issues.Domain.Entities;
+using Foundry.Modules.Workers.Contracts;
 
 namespace Foundry.Modules.Issues.Domain.Entities.States;
 
@@ -14,7 +15,7 @@ public sealed class ContinuableFailedIssue : Issue
     {
     }
 
-    public Guid WorkerRunId { get; private set; }
+    public WorkerRunId WorkerRunId { get; private set; }
 
     public string BranchName { get; private set; } = string.Empty;
 

@@ -141,7 +141,7 @@ public sealed class GetActiveRunActivityAsync : IAsyncDisposable
         // Assert
         WorkerActivity activity = result.ShouldHaveSingleItem();
         activity.ShouldSatisfyAllConditions(
-            () => activity.WorkerRunId.ShouldBe(run.Id.Value),
+            () => activity.WorkerRunId.ShouldBe(run.Id),
             () => activity.IssueId.ShouldBe(issueId.Value));
     }
 
@@ -176,7 +176,7 @@ public sealed class GetActiveRunActivityAsync : IAsyncDisposable
 
         // Assert
         result.Count.ShouldBe(1);
-        result.ShouldContain(a => a.WorkerRunId == activeRun.Id.Value);
+        result.ShouldContain(a => a.WorkerRunId == activeRun.Id);
     }
 
     [Fact]
@@ -193,7 +193,7 @@ public sealed class GetActiveRunActivityAsync : IAsyncDisposable
 
         // Assert
         result.Count.ShouldBe(2);
-        result.ShouldContain(a => a.WorkerRunId == run1.Id.Value);
-        result.ShouldContain(a => a.WorkerRunId == run2.Id.Value);
+        result.ShouldContain(a => a.WorkerRunId == run1.Id);
+        result.ShouldContain(a => a.WorkerRunId == run2.Id);
     }
 }

@@ -397,7 +397,7 @@ public sealed class HandleAsync : IAsyncDisposable
         FreshQueuedIssue queued = SeedQueuedIssue(repositoryId);
 
         WorkerRunCompleted @event = new(
-            WorkerRunId: Guid.NewGuid(),
+            WorkerRunId: WorkerRunId.New(),
             IssueId: queued.Id.Value,
             BranchName: "feat/something",
             PullRequestUrl: "https://github.com/owner/repo/pull/5",

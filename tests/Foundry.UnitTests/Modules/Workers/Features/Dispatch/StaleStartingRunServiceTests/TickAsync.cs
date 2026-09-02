@@ -64,7 +64,7 @@ public sealed class TickAsync : StaleStartingRunServiceTestBase
         // Assert
         eventDispatcher.Captured
             .OfType<Foundry.Modules.Workers.Contracts.WorkerRunFailed>()
-            .ShouldContain(e => e.WorkerRunId == starting.Id.Value);
+            .ShouldContain(e => e.WorkerRunId == starting.Id);
     }
 
     [Fact]

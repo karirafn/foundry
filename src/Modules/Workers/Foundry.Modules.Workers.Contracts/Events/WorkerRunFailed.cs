@@ -3,7 +3,7 @@ using Foundry.Shared;
 namespace Foundry.Modules.Workers.Contracts;
 
 public sealed record WorkerRunFailed(
-    Guid WorkerRunId,
+    WorkerRunId WorkerRunId,
     Guid IssueId,
     string ReasonDescription,
     string? Category = null,

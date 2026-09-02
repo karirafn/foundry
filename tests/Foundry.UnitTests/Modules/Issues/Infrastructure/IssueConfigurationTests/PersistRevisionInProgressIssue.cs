@@ -2,6 +2,7 @@ using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Issues.Domain.Entities;
 using Foundry.Modules.Issues.Domain.Entities.States;
 using Foundry.Modules.Monitoring.Contracts;
+using Foundry.Modules.Workers.Contracts;
 using Foundry.Testing;
 using Foundry.WebApi.Persistence;
 
@@ -43,7 +44,7 @@ public sealed class PersistRevisionInProgressIssue : IAsyncDisposable
     {
         // Arrange
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
-        Guid workerRunId = Guid.NewGuid();
+        WorkerRunId workerRunId = WorkerRunId.New();
         IReadOnlyList<ReviewComment> comments =
         [
             new ReviewComment("Please fix the formatting."),

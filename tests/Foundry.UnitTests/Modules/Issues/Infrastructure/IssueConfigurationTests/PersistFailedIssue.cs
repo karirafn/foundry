@@ -1,5 +1,6 @@
 using Foundry.Modules.Issues.Domain.Entities;
 using Foundry.Modules.Issues.Domain.Entities.States;
+using Foundry.Modules.Workers.Contracts;
 using Foundry.Testing;
 using Foundry.WebApi.Persistence;
 
@@ -54,7 +55,7 @@ public sealed class PersistFailedIssue : IAsyncDisposable
     public async Task WhenFailedIssueTransitioned_CanBeReloadedAsFailedIssueWithAllFields()
     {
         // Arrange
-        Guid failedWorkerRunId = Guid.NewGuid();
+        WorkerRunId failedWorkerRunId = WorkerRunId.New();
         DateTimeOffset failedAt = new DateTimeOffset(2026, 5, 30, 12, 0, 0, TimeSpan.Zero);
         FailedIssue failed = new IssueBuilder()
             .WithIssueNumber(44)

@@ -80,7 +80,7 @@ public sealed class HandleAsync : IAsyncDisposable
 
     private static IssueClaimed BuildEvent(
         IssueId? issueId = null,
-        Guid? workerRunId = null,
+        WorkerRunId? workerRunId = null,
         int issueNumber = 42,
         string title = "Test Issue",
         string body = "Test body",
@@ -94,7 +94,7 @@ public sealed class HandleAsync : IAsyncDisposable
     {
         ClaimedIssueDispatch dispatch = new(
             issueId ?? IssueId.New(),
-            workerRunId ?? Guid.NewGuid(),
+            workerRunId ?? WorkerRunId.New(),
             issueNumber,
             title,
             body,

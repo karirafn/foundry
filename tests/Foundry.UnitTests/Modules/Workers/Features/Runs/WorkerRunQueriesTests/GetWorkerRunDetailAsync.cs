@@ -157,7 +157,7 @@ public sealed class GetWorkerRunDetailAsync : IAsyncDisposable
         // Assert
         WorkerRunDetail detail = result.ShouldBeOfType<Result<WorkerRunDetail>.Success>().Value;
         detail.ShouldSatisfyAllConditions(
-            () => detail.WorkerRunId.ShouldBe(run.Id.Value),
+            () => detail.WorkerRunId.ShouldBe(run.Id),
             () => detail.IssueId.ShouldBe(run.IssueId.Value),
             () => detail.HasStoredLog.ShouldBeFalse());
     }

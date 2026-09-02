@@ -13,7 +13,7 @@ public sealed class Create
     public void WhenCreated_ImplementsIIntegrationEvent()
     {
         // Arrange
-        Guid workerRunId = Guid.NewGuid();
+        WorkerRunId workerRunId = WorkerRunId.New();
 
         // Act
         WorkerCapacityAvailable @event = new(workerRunId);
