@@ -12,10 +12,11 @@ namespace Foundry.UnitTests.Shared.Infrastructure.Outbox.WorkerEventOutboxRoundT
 /// <summary>
 /// Pre-ship integration guard (D4, AC #6): proves each of the 5 retyped worker
 /// integration events serializes and deserializes symmetrically through the outbox
-/// path (OutboxMessage.Create → OutboxSerializerOptions.Default). The outbox uses
-/// its own serializer options that do NOT include WorkerRunIdJsonConverter — so
-/// WorkerRunId is stored as a nested { "Value": "..." } object. The round-trip
-/// must be internally consistent: what goes in must come out equal.
+/// path (OutboxMessage.Create → OutboxSerializerOptions.Default). The type-level
+/// [JsonConverter] attribute on WorkerRunId applies WorkerRunIdJsonConverter
+/// universally, so WorkerRunId is stored as a flat UUID string — identical to the
+/// pre-refactor bare-Guid wire shape, keeping in-flight outbox rows backward-compatible.
+/// The round-trip is flat and self-consistent: what goes in must come out equal.
 /// </summary>
 public sealed class RoundTrip
 {
