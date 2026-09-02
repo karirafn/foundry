@@ -19,20 +19,6 @@ public sealed record FailureCategory
     public const string CreditsExhaustedToken = "credits_exhausted";
     public const string PrClosedToken = "pr_closed";
 
-    private static readonly FrozenSet<string> KnownTokens = new[]
-    {
-        NonZeroExitToken,
-        TimedOutToken,
-        ContainerErrorToken,
-        UsageLimitedToken,
-        WorkerBootstrapFailedToken,
-        AuthInvalidToken,
-        ProviderErrorToken,
-        TransientApiErrorToken,
-        CreditsExhaustedToken,
-        PrClosedToken,
-    }.ToFrozenSet(StringComparer.Ordinal);
-
     public static readonly FailureCategory NonZeroExit = new(NonZeroExitToken);
     public static readonly FailureCategory TimedOut = new(TimedOutToken);
     public static readonly FailureCategory ContainerError = new(ContainerErrorToken);
@@ -44,13 +30,28 @@ public sealed record FailureCategory
     public static readonly FailureCategory CreditsExhausted = new(CreditsExhaustedToken);
     public static readonly FailureCategory PrClosed = new(PrClosedToken);
 
+    private static readonly FrozenDictionary<string, FailureCategory> KnownCategories =
+        new Dictionary<string, FailureCategory>(StringComparer.Ordinal)
+        {
+            { NonZeroExitToken, NonZeroExit },
+            { TimedOutToken, TimedOut },
+            { ContainerErrorToken, ContainerError },
+            { UsageLimitedToken, UsageLimited },
+            { WorkerBootstrapFailedToken, WorkerBootstrapFailed },
+            { AuthInvalidToken, AuthInvalid },
+            { ProviderErrorToken, ProviderError },
+            { TransientApiErrorToken, TransientApiError },
+            { CreditsExhaustedToken, CreditsExhausted },
+            { PrClosedToken, PrClosed },
+        }.ToFrozenDictionary(StringComparer.Ordinal);
+
     public string Value { get; }
 
     private FailureCategory(string value) => Value = value;
 
     public static Result<FailureCategory> Create(string token) =>
-        KnownTokens.Contains(token)
-            ? new FailureCategory(token)
+        KnownCategories.TryGetValue(token, out FailureCategory? category)
+            ? category
             : Result<FailureCategory>.Fail(
                 new Error("FailureCategory.Unknown", $"Unknown failure category token '{token}'."));
 

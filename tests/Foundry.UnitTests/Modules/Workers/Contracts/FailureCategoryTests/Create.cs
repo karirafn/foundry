@@ -83,4 +83,28 @@ public sealed class Create
         Result<FailureCategory>.Failure failure = result.ShouldBeOfType<Result<FailureCategory>.Failure>();
         failure.Error.Code.ShouldBe("FailureCategory.Unknown");
     }
+
+    [Theory]
+    [InlineData(FailureCategory.NonZeroExitToken)]
+    [InlineData(FailureCategory.TimedOutToken)]
+    [InlineData(FailureCategory.ContainerErrorToken)]
+    [InlineData(FailureCategory.UsageLimitedToken)]
+    [InlineData(FailureCategory.WorkerBootstrapFailedToken)]
+    [InlineData(FailureCategory.AuthInvalidToken)]
+    [InlineData(FailureCategory.ProviderErrorToken)]
+    [InlineData(FailureCategory.TransientApiErrorToken)]
+    [InlineData(FailureCategory.CreditsExhaustedToken)]
+    [InlineData(FailureCategory.PrClosedToken)]
+    public void WhenKnownToken_ReturnsCanonicalStaticMember(string token)
+    {
+        // Arrange
+        FailureCategory canonical = FailureCategory.FromToken(token);
+
+        // Act
+        Result<FailureCategory> result = FailureCategory.Create(token);
+
+        // Assert
+        Result<FailureCategory>.Success success = result.ShouldBeOfType<Result<FailureCategory>.Success>();
+        ReferenceEquals(success.Value, canonical).ShouldBeTrue();
+    }
 }

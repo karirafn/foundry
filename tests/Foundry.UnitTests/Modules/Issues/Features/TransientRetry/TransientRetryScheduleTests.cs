@@ -64,9 +64,11 @@ public sealed class TransientRetryScheduleTests
     [Fact]
     public void WhenTransientApiError_FailureCategoryTokenOwnsTheValue()
     {
-        // Arrange / Act / Assert
-        // TransientApiErrorCategory was removed from TransientRetrySchedule;
-        // the owning type is FailureCategory.TransientApiErrorToken.
+        // Arrange
+
+        // Act
+
+        // Assert
         FailureCategory.TransientApiErrorToken.ShouldBe("transient_api_error");
     }
 
