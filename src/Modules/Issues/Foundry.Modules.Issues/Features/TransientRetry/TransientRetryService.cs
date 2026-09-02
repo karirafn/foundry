@@ -2,6 +2,7 @@ using System.Diagnostics;
 
 using Foundry.Modules.Issues.Domain.Entities;
 using Foundry.Modules.Issues.Domain.Entities.States;
+using Foundry.Modules.Workers.Contracts;
 using Foundry.Modules.Workers.Contracts.Queries;
 using Foundry.Shared;
 using Foundry.Shared.Infrastructure;
@@ -71,22 +72,24 @@ internal sealed class TransientRetryService : PeriodicBackgroundService
         DateTimeOffset now,
         CancellationToken cancellationToken)
     {
-        // FailureCategory is SQL-filterable (stored as a plain TEXT column).
-        // FailedAt is applied as a coarse in-memory cutoff — the SQLite EF provider cannot
-        // translate DateTimeOffset comparisons server-side (stored as ISO 8601 TEXT).
-        // Exact per-candidate backoff computation happens in memory via CountConsecutiveTransientRunsAsync.
+        // FailureCategory is SQL-translatable via the EF value converter: EF applies the converter to the
+        // constant on the right side and emits WHERE failure_category = 'transient_api_error'. Do not
+        // replace this with a string comparison — keeping the typed member preserves SQL translatability.
+        // FailedAt is applied as a coarse in-memory cutoff — the SQLite EF provider cannot translate
+        // DateTimeOffset comparisons server-side (stored as ISO 8601 TEXT). Exact per-candidate backoff
+        // computation happens in memory via CountConsecutiveTransientRunsAsync.
         DateTimeOffset coarseCutoff = now - InitialBackoff;
 
         // SQLite stores DateTimeOffset as TEXT; the comparison is evaluated in memory after ToListAsync.
         // Load transient FailedIssue and ContinuableFailedIssue candidates separately by typed set.
         List<FailedIssue> failedCandidates = await db.Set<FailedIssue>()
             .AsNoTracking()
-            .Where(i => i.FailureCategory == TransientRetrySchedule.TransientApiErrorCategory)
+            .Where(i => i.FailureCategory == FailureCategory.TransientApiError)
             .ToListAsync(cancellationToken);
 
         List<ContinuableFailedIssue> continuableCandidates = await db.Set<ContinuableFailedIssue>()
             .AsNoTracking()
-            .Where(i => i.FailureCategory == TransientRetrySchedule.TransientApiErrorCategory)
+            .Where(i => i.FailureCategory == FailureCategory.TransientApiError)
             .ToListAsync(cancellationToken);
 
         // Apply coarse cutoff in memory (SQLite DateTimeOffset translation limitation).

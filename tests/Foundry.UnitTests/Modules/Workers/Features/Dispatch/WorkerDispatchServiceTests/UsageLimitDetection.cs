@@ -204,7 +204,7 @@ public sealed class UsageLimitDetection : WorkerDispatchServiceTestBase
         WorkerRunFailed failedEvent = dispatcher.Captured
             .OfType<WorkerRunFailed>()
             .ShouldHaveSingleItem();
-        failedEvent.Category.ShouldBe("usage_limited");
+        failedEvent.Category.ShouldBe(FailureCategory.UsageLimitedToken);
     }
 
     [Fact]

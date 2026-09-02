@@ -62,7 +62,7 @@ public sealed class PersistRevisionFailedIssue : IAsyncDisposable
             .WithPullRequestUrl("https://github.com/owner/repo/pull/21")
             .WithReviewComments(comments)
             .WithFailureReason("Container exited with code 1")
-            .WithFailureCategory("generic_failure")
+            .WithFailureCategory(FailureCategory.NonZeroExit)
             .WithFailedAt(failedAt)
             .RevisionFailed();
 
@@ -87,6 +87,7 @@ public sealed class PersistRevisionFailedIssue : IAsyncDisposable
             () => reloaded.ReviewComments[1].FilePath.ShouldBe("src/Foo.cs"),
             () => reloaded.ReviewComments[1].Line.ShouldBe(42),
             () => reloaded.FailureReason.ShouldBe("Container exited with code 1"),
+            () => reloaded.FailureCategory.ShouldBe(FailureCategory.NonZeroExit),
             () => reloaded.FailedAt.ShouldBe(failedAt),
             () => reloaded.Author.Value.ShouldBe("octocat"),
             () => reloaded.MonitoredRepositoryId.ShouldBe(repositoryId));

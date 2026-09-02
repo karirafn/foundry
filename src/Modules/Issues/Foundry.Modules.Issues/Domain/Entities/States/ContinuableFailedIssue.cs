@@ -2,6 +2,8 @@ using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Issues.Domain.Entities;
 using Foundry.Modules.Workers.Contracts;
 
+using FailureCategoryVO = Foundry.Modules.Workers.Contracts.FailureCategory;
+
 namespace Foundry.Modules.Issues.Domain.Entities.States;
 
 public sealed class ContinuableFailedIssue : Issue
@@ -23,7 +25,7 @@ public sealed class ContinuableFailedIssue : Issue
 
     public string FailureReason { get; private set; } = string.Empty;
 
-    public string FailureCategory { get; private set; } = string.Empty;
+    public FailureCategoryVO FailureCategory { get; private set; } = FailureCategoryVO.NonZeroExit;
 
     public DateTimeOffset FailedAt { get; private set; }
 
@@ -31,7 +33,7 @@ public sealed class ContinuableFailedIssue : Issue
         InProgressIssue source,
         string branchName,
         string failureReason,
-        string failureCategory,
+        FailureCategoryVO failureCategory,
         DateTimeOffset failedAt)
     {
         ContinuableFailedIssue failed = new(source.Id);
@@ -55,7 +57,7 @@ public sealed class ContinuableFailedIssue : Issue
     internal static ContinuableFailedIssue FromReview(
         ReviewIssue source,
         string failureReason,
-        string failureCategory,
+        FailureCategoryVO failureCategory,
         DateTimeOffset failedAt)
     {
         ContinuableFailedIssue failed = new(source.Id);

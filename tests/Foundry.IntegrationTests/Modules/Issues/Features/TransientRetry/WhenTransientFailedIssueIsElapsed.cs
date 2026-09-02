@@ -76,7 +76,7 @@ public sealed class WhenTransientFailedIssueIsElapsed : IAsyncDisposable
             .WithLabels(["foundry"])
             .WithDetectedAt(failedAt.AddHours(-2))
             .WithFailureReason("Transient Anthropic API fault")
-            .WithFailureCategory("transient_api_error")
+            .WithFailureCategory(FailureCategory.TransientApiError)
             .WithFailedAt(failedAt)
             .Failed();
 

@@ -82,7 +82,7 @@ public sealed class ReviewIssue : Issue
         return completed;
     }
 
-    public ContinuableFailedIssue Fail(string failureReason, string failureCategory, DateTimeOffset failedAt)
+    public ContinuableFailedIssue Fail(string failureReason, FailureCategory failureCategory, DateTimeOffset failedAt)
     {
         ContinuableFailedIssue failed = ContinuableFailedIssue.FromReview(
             this,

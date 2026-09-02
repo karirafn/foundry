@@ -63,7 +63,7 @@ public sealed class InProgressIssue : Issue
     public FailedIssue MarkFailed(
         string failureReason,
         DateTimeOffset failedAt,
-        string failureCategory)
+        FailureCategory failureCategory)
     {
         FailedIssue failed = FailedIssue.FromInProgress(this, failureReason, failureCategory, failedAt);
         AddDomainEvent(new Events.IssueFailed(Id, MonitoredRepositoryId));
@@ -73,7 +73,7 @@ public sealed class InProgressIssue : Issue
     public ContinuableFailedIssue MarkContinuableFailed(
         string branchName,
         string failureReason,
-        string failureCategory,
+        FailureCategory failureCategory,
         DateTimeOffset failedAt)
     {
         ContinuableFailedIssue failed = ContinuableFailedIssue.FromInProgress(

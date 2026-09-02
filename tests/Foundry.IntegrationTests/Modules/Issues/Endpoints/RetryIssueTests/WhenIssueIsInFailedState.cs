@@ -5,6 +5,7 @@ using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Issues.Domain.Entities;
 using Foundry.Modules.Issues.Domain.Entities.States;
 using Foundry.Modules.Monitoring.Contracts;
+using Foundry.Modules.Workers.Contracts;
 using Foundry.Testing;
 using Foundry.WebApi.Persistence;
 
@@ -50,7 +51,7 @@ public sealed class WhenIssueIsInFailedState : IAsyncDisposable
             .WithBody("Issue body text")
             .WithLabels(["bug"])
             .WithFailureReason("Container exited with non-zero code: 1")
-            .WithFailureCategory("generic_failure")
+            .WithFailureCategory(FailureCategory.NonZeroExit)
             .Failed();
 
         dbContext.Set<Issue>().Add(failed);

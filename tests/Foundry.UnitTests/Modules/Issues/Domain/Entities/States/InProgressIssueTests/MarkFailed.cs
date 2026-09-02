@@ -1,6 +1,7 @@
 using Foundry.Modules.Issues.Domain.Entities.States;
 using Foundry.Modules.Issues.Domain.Events;
 using Foundry.Modules.Monitoring.Contracts;
+using Foundry.Modules.Workers.Contracts;
 using Foundry.Testing;
 
 using Shouldly;
@@ -20,7 +21,7 @@ public sealed class MarkFailed
         DateTimeOffset failedAt = DateTimeOffset.UtcNow;
 
         // Act
-        FailedIssue failed = inProgress.MarkFailed("Container exited with code 1", failedAt, "generic_failure");
+        FailedIssue failed = inProgress.MarkFailed("Container exited with code 1", failedAt, FailureCategory.NonZeroExit);
 
         // Assert
         failed.Id.ShouldBe(inProgress.Id);
@@ -35,7 +36,7 @@ public sealed class MarkFailed
         DateTimeOffset failedAt = DateTimeOffset.UtcNow;
 
         // Act
-        inProgress.MarkFailed("Container exited with code 1", failedAt, "generic_failure");
+        inProgress.MarkFailed("Container exited with code 1", failedAt, FailureCategory.NonZeroExit);
 
         // Assert
         IssueFailed domainEvent = inProgress.DomainEvents.ShouldHaveSingleItem().ShouldBeOfType<IssueFailed>();
@@ -54,7 +55,7 @@ public sealed class MarkFailed
         DateTimeOffset failedAt = DateTimeOffset.UtcNow;
 
         // Act
-        FailedIssue failed = inProgress.MarkFailed(failureReason, failedAt, "generic_failure");
+        FailedIssue failed = inProgress.MarkFailed(failureReason, failedAt, FailureCategory.NonZeroExit);
 
         // Assert
         failed.ShouldSatisfyAllConditions(
@@ -76,9 +77,9 @@ public sealed class MarkFailed
         DateTimeOffset failedAt = DateTimeOffset.UtcNow;
 
         // Act
-        FailedIssue failed = inProgress.MarkFailed("Usage limit reached", failedAt, "usage_limited");
+        FailedIssue failed = inProgress.MarkFailed("Usage limit reached", failedAt, FailureCategory.UsageLimited);
 
         // Assert
-        failed.FailureCategory.ShouldBe("usage_limited");
+        failed.FailureCategory.ShouldBe(FailureCategory.UsageLimited);
     }
 }

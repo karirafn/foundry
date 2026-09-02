@@ -82,7 +82,7 @@ public sealed class RoundTrip
             workerRunId,
             Guid.NewGuid(),
             "Container exited with code 1",
-            "generic_failure");
+            FailureCategory.NonZeroExitToken);
 
         // Act
         OutboxMessage message = OutboxMessage.Create(original, Now);

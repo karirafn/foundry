@@ -1,6 +1,7 @@
 using Foundry.Modules.Issues.Domain.Entities.States;
 using Foundry.Modules.Issues.Domain.Events;
 using Foundry.Modules.Monitoring.Contracts;
+using Foundry.Modules.Workers.Contracts;
 using Foundry.Testing;
 
 using Shouldly;
@@ -22,7 +23,7 @@ public sealed class MarkContinuableFailed
         ContinuableFailedIssue failed = inProgress.MarkContinuableFailed(
             "foundry/1/add-feature",
             "Container exited with code 1",
-            "generic_failure",
+            FailureCategory.NonZeroExit,
             DateTimeOffset.UtcNow);
 
         // Assert
@@ -40,7 +41,7 @@ public sealed class MarkContinuableFailed
         inProgress.MarkContinuableFailed(
             "foundry/1/add-feature",
             "Container exited with code 1",
-            "generic_failure",
+            FailureCategory.NonZeroExit,
             DateTimeOffset.UtcNow);
 
         // Assert
@@ -64,7 +65,7 @@ public sealed class MarkContinuableFailed
         ContinuableFailedIssue failed = inProgress.MarkContinuableFailed(
             branchName,
             failureReason,
-            "generic_failure",
+            FailureCategory.NonZeroExit,
             failedAt);
 
         // Assert

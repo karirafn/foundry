@@ -181,7 +181,7 @@ public sealed class GetIssueSummariesAsync : IAsyncDisposable
         await _dbContext.TransitionAsync(detected, queued, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
         InProgressIssue inProgress = queued.Claim(WorkerRunId.New());
         await _dbContext.TransitionAsync(queued, inProgress, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
-        FailedIssue failed = inProgress.MarkFailed("Usage limit reached", DateTimeOffset.UtcNow, "usage_limited");
+        FailedIssue failed = inProgress.MarkFailed("Usage limit reached", DateTimeOffset.UtcNow, FailureCategory.UsageLimited);
         await _dbContext.TransitionAsync(inProgress, failed, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
 
         // Act
@@ -191,7 +191,7 @@ public sealed class GetIssueSummariesAsync : IAsyncDisposable
 
         // Assert
         IssueSummary summary = result.ShouldHaveSingleItem();
-        summary.FailureClassification.ShouldBe("usage_limited");
+        summary.FailureClassification.ShouldBe(FailureCategory.UsageLimitedToken);
     }
 
     [Fact]
@@ -210,7 +210,7 @@ public sealed class GetIssueSummariesAsync : IAsyncDisposable
         ContinuableFailedIssue continuableFailed = inProgress.MarkContinuableFailed(
             branchName: "feat/issue-1",
             failureReason: "Usage limit reached",
-            failureCategory: "usage_limited",
+            failureCategory: FailureCategory.UsageLimited,
             failedAt: DateTimeOffset.UtcNow);
         await _dbContext.TransitionAsync(inProgress, continuableFailed, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
 
@@ -221,7 +221,7 @@ public sealed class GetIssueSummariesAsync : IAsyncDisposable
 
         // Assert
         IssueSummary summary = result.ShouldHaveSingleItem();
-        summary.FailureClassification.ShouldBe("usage_limited");
+        summary.FailureClassification.ShouldBe(FailureCategory.UsageLimitedToken);
     }
 
     [Fact]
@@ -236,7 +236,7 @@ public sealed class GetIssueSummariesAsync : IAsyncDisposable
         await _dbContext.TransitionAsync(detected, queued, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
         InProgressIssue inProgress = queued.Claim(WorkerRunId.New());
         await _dbContext.TransitionAsync(queued, inProgress, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
-        FailedIssue failed = inProgress.MarkFailed("Non-zero exit code: 1", DateTimeOffset.UtcNow, "generic_failure");
+        FailedIssue failed = inProgress.MarkFailed("Non-zero exit code: 1", DateTimeOffset.UtcNow, FailureCategory.NonZeroExit);
         await _dbContext.TransitionAsync(inProgress, failed, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
 
         // Act
@@ -246,7 +246,7 @@ public sealed class GetIssueSummariesAsync : IAsyncDisposable
 
         // Assert
         IssueSummary summary = result.ShouldHaveSingleItem();
-        summary.FailureClassification.ShouldBe("generic_failure");
+        summary.FailureClassification.ShouldBe(FailureCategory.NonZeroExitToken);
     }
 
     private sealed class StubRepositorySlugQueries : IRepositorySlugQueries

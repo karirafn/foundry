@@ -2,6 +2,7 @@ using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Issues.Domain.Entities;
 using Foundry.Modules.Issues.Domain.Entities.States;
 using Foundry.Modules.Monitoring.Contracts;
+using Foundry.Modules.Workers.Contracts;
 using Foundry.Testing;
 using Foundry.WebApi.Persistence;
 
@@ -68,7 +69,7 @@ public sealed class OfTypeQueuedIssue : IAsyncDisposable
             .WithTitle("Continuation queued issue")
             .WithBranchName("feat/issue-3")
             .WithFailureReason("Container OOM")
-            .WithFailureCategory("generic_failure")
+            .WithFailureCategory(FailureCategory.NonZeroExit)
             .ContinuableFailed()
             .Retry();
         _dbContext.Set<Issue>().Add(continuationQueued);

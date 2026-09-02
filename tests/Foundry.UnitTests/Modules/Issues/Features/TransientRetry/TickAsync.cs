@@ -51,7 +51,7 @@ public sealed class TickAsync : IAsyncDisposable
         FailedIssue failed = new IssueBuilder()
             .WithIssueNumber(issueNumber)
             .WithDetectedAt(DateTimeOffset.UtcNow.AddHours(-2))
-            .WithFailureCategory("transient_api_error")
+            .WithFailureCategory(FailureCategory.TransientApiError)
             .WithFailedAt(failedAt)
             .Failed();
         _dbContext.Set<Issue>().Add(failed);
@@ -67,7 +67,7 @@ public sealed class TickAsync : IAsyncDisposable
             .WithTitle("Test Issue With Branch")
             .WithDetectedAt(DateTimeOffset.UtcNow.AddHours(-2))
             .WithBranchName("feat/10-fix")
-            .WithFailureCategory("transient_api_error")
+            .WithFailureCategory(FailureCategory.TransientApiError)
             .WithFailedAt(failedAt)
             .ContinuableFailed();
         _dbContext.Set<Issue>().Add(continuableFailed);

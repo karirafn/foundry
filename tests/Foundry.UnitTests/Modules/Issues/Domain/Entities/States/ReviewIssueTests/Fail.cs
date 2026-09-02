@@ -1,6 +1,7 @@
 using Foundry.Modules.Issues.Domain.Entities.States;
 using Foundry.Modules.Issues.Domain.Events;
 using Foundry.Modules.Monitoring.Contracts;
+using Foundry.Modules.Workers.Contracts;
 using Foundry.Testing;
 
 using Shouldly;
@@ -20,7 +21,7 @@ public sealed class Fail
         DateTimeOffset failedAt = DateTimeOffset.UtcNow;
 
         // Act
-        ContinuableFailedIssue failed = review.Fail("PR was closed without merge", "pr_closed", failedAt);
+        ContinuableFailedIssue failed = review.Fail("PR was closed without merge", FailureCategory.PrClosed, failedAt);
 
         // Assert
         failed.Id.ShouldBe(review.Id);
@@ -35,7 +36,7 @@ public sealed class Fail
         DateTimeOffset failedAt = DateTimeOffset.UtcNow;
 
         // Act
-        ContinuableFailedIssue failed = review.Fail("PR was closed without merge", "pr_closed", failedAt);
+        ContinuableFailedIssue failed = review.Fail("PR was closed without merge", FailureCategory.PrClosed, failedAt);
 
         // Assert
         failed.WorkerRunId.ShouldBe(review.WorkerRunId);
@@ -51,7 +52,7 @@ public sealed class Fail
         string failureReason = "PR was closed without merge";
 
         // Act
-        ContinuableFailedIssue failed = review.Fail(failureReason, "pr_closed", failedAt);
+        ContinuableFailedIssue failed = review.Fail(failureReason, FailureCategory.PrClosed, failedAt);
 
         // Assert
         failed.ShouldSatisfyAllConditions(
@@ -71,7 +72,7 @@ public sealed class Fail
         DateTimeOffset failedAt = DateTimeOffset.UtcNow;
 
         // Act
-        review.Fail("PR was closed without merge", "pr_closed", failedAt);
+        review.Fail("PR was closed without merge", FailureCategory.PrClosed, failedAt);
 
         // Assert
         IssueContinuableFailed domainEvent = review.DomainEvents.ShouldHaveSingleItem().ShouldBeOfType<IssueContinuableFailed>();

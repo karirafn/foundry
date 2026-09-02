@@ -59,7 +59,7 @@ public sealed class RevisionInProgressIssue : Issue
 
     public RevisionFailedIssue MarkFailed(
         string failureReason,
-        string failureCategory,
+        FailureCategory failureCategory,
         DateTimeOffset failedAt)
     {
         RevisionFailedIssue failed = RevisionFailedIssue.FromRevisionInProgress(

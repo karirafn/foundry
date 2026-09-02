@@ -56,7 +56,7 @@ public sealed class HandleAsync : IAsyncDisposable
             .WithIssueNumber(issueNumber)
             .WithTitle($"Issue {issueNumber}")
             .WithFailureReason(failureReason)
-            .WithFailureCategory("generic_failure")
+            .WithFailureCategory(FailureCategory.NonZeroExit)
             .Failed();
         _dbContext.Set<Issue>().Add(failed);
         _dbContext.SaveChanges();
@@ -75,7 +75,7 @@ public sealed class HandleAsync : IAsyncDisposable
             .WithTitle($"Issue {issueNumber}")
             .WithBranchName("feat/issue-branch")
             .WithFailureReason(failureReason)
-            .WithFailureCategory("generic_failure")
+            .WithFailureCategory(FailureCategory.NonZeroExit)
             .ContinuableFailed();
         _dbContext.Set<Issue>().Add(continuableFailed);
         _dbContext.SaveChanges();
