@@ -254,7 +254,7 @@ public sealed class HandleAsync : IAsyncDisposable
             WorkerRunId: inProgress.WorkerRunId,
             IssueId: inProgress.Id.Value,
             ReasonDescription: WorkerRunFailed.UsageLimitedReason,
-            Category: "usage_limited",
+            Category: FailureCategory.UsageLimitedToken,
             BranchName: "feat/123-fix");
 
         // Act

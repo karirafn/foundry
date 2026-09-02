@@ -74,6 +74,7 @@ public sealed class PersistContinuableFailedIssue : IAsyncDisposable
             () => reloaded.BranchName.ShouldBe("feat/issue-71"),
             () => reloaded.PullRequestUrl.ShouldBe(string.Empty),
             () => reloaded.FailureReason.ShouldBe("Tests timed out"),
+            () => reloaded.FailureCategory.ShouldBe(FailureCategory.NonZeroExit),
             () => reloaded.FailedAt.ShouldBe(failedAt),
             () => reloaded.Author.Value.ShouldBe("octocat"),
             () => reloaded.MonitoredRepositoryId.ShouldBe(repositoryId));

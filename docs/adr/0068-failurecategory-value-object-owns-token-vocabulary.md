@@ -36,6 +36,11 @@ converts and falls back to `FailureCategory.NonZeroExit` with a logged warning o
 The vocabulary has a single owner; invalid categories are unrepresentable on entities; the SQL predicate
 stays translatable via the converter-vs-constant pattern.
 Storage and outbox wire shape are unchanged — no migration, back-compatible rows.
+The EF `ValueConverter` read direction uses `FailureCategory.Create` and coalesces unknown stored tokens
+to `FailureCategory.NonZeroExit` without throwing — a stale or legacy row can never make every query throw
+and permanently disable `TransientRetryService`'s auto-retry tick (an absorbing-state hazard). In the
+current closed system all writers are typed, so an unknown token cannot occur through normal operation.
+The fallback sentinel is a defence against future rogue writers, not a routine code path.
 Cost: `FailureReason` and `FailureCategory` share token strings by `const` reference — a token rename must
 touch the Contracts owner, and the `[JsonDerivedType]` constraint permanently forbids making the tokens
 runtime values.

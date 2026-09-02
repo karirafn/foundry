@@ -32,10 +32,13 @@ internal sealed class WorkerRunFailedHandler(
         }
         else
         {
+            string? sanitizedCategory = @event.Category
+                ?.Replace("\r", string.Empty, StringComparison.Ordinal)
+                .Replace("\n", string.Empty, StringComparison.Ordinal);
             logger.LogWarning(
                 "WorkerRunFailed for issue {IssueId} carried an unrecognised or missing category '{Category}'; defaulting to {Fallback}.",
                 @event.IssueId,
-                @event.Category,
+                sanitizedCategory,
                 FailureCategory.NonZeroExitToken);
             category = FailureCategory.NonZeroExit;
         }

@@ -9,9 +9,6 @@ namespace Foundry.Modules.Issues.Infrastructure.Configurations;
 
 public sealed class FailedIssueConfiguration : IEntityTypeConfiguration<FailedIssue>
 {
-    private const int FailureReasonMaxLength = 500;
-    private const int FailureCategoryMaxLength = 100;
-
     public void Configure(EntityTypeBuilder<FailedIssue> builder)
     {
         builder.Property(i => i.WorkerRunId)
@@ -19,13 +16,13 @@ public sealed class FailedIssueConfiguration : IEntityTypeConfiguration<FailedIs
             .HasColumnName("worker_run_id");
 
         builder.Property(i => i.FailureReason)
-            .HasMaxLength(FailureReasonMaxLength)
+            .HasMaxLength(IssueColumnLimits.FailureReasonMaxLength)
             .IsUnicode(false)
             .HasColumnName("failure_reason");
 
         builder.Property(i => i.FailureCategory)
             .HasConversion(FailureCategoryValueConverter.Converter)
-            .HasMaxLength(FailureCategoryMaxLength)
+            .HasMaxLength(IssueColumnLimits.FailureCategoryMaxLength)
             .IsUnicode(false)
             .HasColumnName("failure_category");
 

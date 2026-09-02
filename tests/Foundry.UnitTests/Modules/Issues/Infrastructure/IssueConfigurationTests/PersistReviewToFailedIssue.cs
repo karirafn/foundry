@@ -73,6 +73,7 @@ public sealed class PersistReviewToFailedIssue : IAsyncDisposable
         reloaded.ShouldSatisfyAllConditions(
             () => reloaded.WorkerRunId.ShouldBe(reviewWorkerRunId),
             () => reloaded.FailureReason.ShouldBe("PR was closed without merge"),
+            () => reloaded.FailureCategory.ShouldBe(FailureCategory.PrClosed),
             () => reloaded.FailedAt.ShouldBe(failedAt),
             () => reloaded.BranchName.ShouldBe("feat/issue-55"),
             () => reloaded.PullRequestUrl.ShouldBe("https://github.com/owner/repo/pull/7"),
