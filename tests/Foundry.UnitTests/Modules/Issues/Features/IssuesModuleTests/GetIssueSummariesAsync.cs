@@ -180,7 +180,7 @@ public sealed class GetIssueSummariesAsync : IAsyncDisposable
         await _dbContext.TransitionAsync(detected, queued, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
         InProgressIssue inProgress = queued.Claim(Guid.NewGuid());
         await _dbContext.TransitionAsync(queued, inProgress, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
-        FailedIssue failed = inProgress.MarkFailed(Guid.NewGuid(), "Usage limit reached", DateTimeOffset.UtcNow, "usage_limited");
+        FailedIssue failed = inProgress.MarkFailed("Usage limit reached", DateTimeOffset.UtcNow, "usage_limited");
         await _dbContext.TransitionAsync(inProgress, failed, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
 
         // Act
@@ -207,7 +207,6 @@ public sealed class GetIssueSummariesAsync : IAsyncDisposable
         InProgressIssue inProgress = queued.Claim(workerRunId);
         await _dbContext.TransitionAsync(queued, inProgress, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
         ContinuableFailedIssue continuableFailed = inProgress.MarkContinuableFailed(
-            workerRunId,
             branchName: "feat/issue-1",
             failureReason: "Usage limit reached",
             failureCategory: "usage_limited",
@@ -236,7 +235,7 @@ public sealed class GetIssueSummariesAsync : IAsyncDisposable
         await _dbContext.TransitionAsync(detected, queued, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
         InProgressIssue inProgress = queued.Claim(Guid.NewGuid());
         await _dbContext.TransitionAsync(queued, inProgress, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
-        FailedIssue failed = inProgress.MarkFailed(Guid.NewGuid(), "Non-zero exit code: 1", DateTimeOffset.UtcNow, "generic_failure");
+        FailedIssue failed = inProgress.MarkFailed("Non-zero exit code: 1", DateTimeOffset.UtcNow, "generic_failure");
         await _dbContext.TransitionAsync(inProgress, failed, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
 
         // Act

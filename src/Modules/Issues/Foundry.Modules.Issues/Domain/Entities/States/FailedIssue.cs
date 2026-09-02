@@ -24,7 +24,6 @@ public sealed class FailedIssue : Issue
 
     internal static FailedIssue FromInProgress(
         InProgressIssue source,
-        Guid workerRunId,
         string failureReason,
         string failureCategory,
         DateTimeOffset failedAt)
@@ -39,7 +38,7 @@ public sealed class FailedIssue : Issue
             source.Url,
             source.Labels,
             source.DetectedAt);
-        failed.WorkerRunId = workerRunId;
+        failed.WorkerRunId = source.WorkerRunId;
         failed.FailureReason = failureReason;
         failed.FailureCategory = failureCategory;
         failed.FailedAt = failedAt;

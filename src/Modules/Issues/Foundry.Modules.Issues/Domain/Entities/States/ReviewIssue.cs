@@ -25,7 +25,6 @@ public sealed class ReviewIssue : Issue
 
     internal static ReviewIssue FromInProgress(
         InProgressIssue source,
-        Guid workerRunId,
         string branchName,
         string pullRequestUrl,
         DateTimeOffset feedbackCutoffAt)
@@ -40,7 +39,7 @@ public sealed class ReviewIssue : Issue
             source.Url,
             source.Labels,
             source.DetectedAt);
-        review.WorkerRunId = workerRunId;
+        review.WorkerRunId = source.WorkerRunId;
         review.BranchName = branchName;
         review.PullRequestUrl = pullRequestUrl;
         review.FeedbackCutoffAt = feedbackCutoffAt;

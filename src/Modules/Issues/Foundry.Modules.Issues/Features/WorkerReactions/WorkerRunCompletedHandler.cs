@@ -51,8 +51,8 @@ internal sealed class WorkerRunCompletedHandler(
                         return;
                     }
 
+                    // @event.WorkerRunId is intentionally unread in this branch — #494 will add the stale-run guard here.
                     ReviewIssue review = inProgress.MarkInReview(
-                        @event.WorkerRunId,
                         @event.BranchName,
                         @event.PullRequestUrl,
                         DateTimeOffset.UtcNow);
@@ -60,7 +60,7 @@ internal sealed class WorkerRunCompletedHandler(
                     break;
 
                 default:
-                    UnchangedIssue unchanged = inProgress.MarkUnchanged(@event.WorkerRunId);
+                    UnchangedIssue unchanged = inProgress.MarkUnchanged();
                     await db.TransitionAsync(inProgress, unchanged, domainEventDispatcher, cancellationToken);
                     break;
             }

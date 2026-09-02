@@ -28,7 +28,6 @@ public sealed class ContinuableFailedIssue : Issue
 
     internal static ContinuableFailedIssue FromInProgress(
         InProgressIssue source,
-        Guid workerRunId,
         string branchName,
         string failureReason,
         string failureCategory,
@@ -44,7 +43,7 @@ public sealed class ContinuableFailedIssue : Issue
             source.Url,
             source.Labels,
             source.DetectedAt);
-        failed.WorkerRunId = workerRunId;
+        failed.WorkerRunId = source.WorkerRunId;
         failed.BranchName = branchName;
         failed.FailureReason = failureReason;
         failed.FailureCategory = failureCategory;

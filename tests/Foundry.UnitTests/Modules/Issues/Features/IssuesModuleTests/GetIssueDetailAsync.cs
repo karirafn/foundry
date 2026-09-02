@@ -196,7 +196,6 @@ public sealed class GetIssueDetailAsync : IAsyncDisposable
 
         DateTimeOffset feedbackCutoffAt = DateTimeOffset.UtcNow.AddDays(1);
         ReviewIssue review = inProgress.MarkInReview(
-            workerRunId: workerRunId,
             branchName: "feat/issue-1",
             pullRequestUrl: "https://github.com/owner/repo/pull/42",
             feedbackCutoffAt: feedbackCutoffAt);
@@ -233,7 +232,7 @@ public sealed class GetIssueDetailAsync : IAsyncDisposable
         await _dbContext.TransitionAsync(queued, inProgress, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
 
         DateTimeOffset failedAt = DateTimeOffset.UtcNow;
-        FailedIssue failed = inProgress.MarkFailed(workerRunId, "Container exited non-zero", failedAt, "generic_failure");
+        FailedIssue failed = inProgress.MarkFailed("Container exited non-zero", failedAt, "generic_failure");
         await _dbContext.TransitionAsync(inProgress, failed, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
         _dbContext.ChangeTracker.Clear();
 
@@ -266,7 +265,6 @@ public sealed class GetIssueDetailAsync : IAsyncDisposable
         await _dbContext.TransitionAsync(queued, inProgress, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
 
         ReviewIssue review = inProgress.MarkInReview(
-            workerRunId: workerRunId,
             branchName: "feat/issue-1",
             pullRequestUrl: "https://github.com/owner/repo/pull/42",
             feedbackCutoffAt: DateTimeOffset.UtcNow.AddDays(1));
@@ -307,7 +305,6 @@ public sealed class GetIssueDetailAsync : IAsyncDisposable
 
         DateTimeOffset failedAt = DateTimeOffset.UtcNow;
         ContinuableFailedIssue continuableFailed = inProgress.MarkContinuableFailed(
-            workerRunId,
             branchName: "feat/issue-1",
             failureReason: "Container timeout",
             failureCategory: "generic_failure",
@@ -345,7 +342,6 @@ public sealed class GetIssueDetailAsync : IAsyncDisposable
         await _dbContext.TransitionAsync(queued, inProgress, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
 
         ContinuableFailedIssue continuableFailed = inProgress.MarkContinuableFailed(
-            workerRunId,
             branchName: "feat/issue-1",
             failureReason: "Container timeout",
             failureCategory: "generic_failure",
@@ -382,7 +378,6 @@ public sealed class GetIssueDetailAsync : IAsyncDisposable
 
         DateTimeOffset failedAt = DateTimeOffset.UtcNow;
         FailedIssue failed = inProgress.MarkFailed(
-            workerRunId,
             "Transient API error",
             failedAt,
             TransientRetrySchedule.TransientApiErrorCategory);
@@ -423,7 +418,6 @@ public sealed class GetIssueDetailAsync : IAsyncDisposable
         await _dbContext.TransitionAsync(queued, inProgress, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
 
         FailedIssue failed = inProgress.MarkFailed(
-            workerRunId,
             "Transient API error",
             DateTimeOffset.UtcNow,
             TransientRetrySchedule.TransientApiErrorCategory);
@@ -463,7 +457,6 @@ public sealed class GetIssueDetailAsync : IAsyncDisposable
         await _dbContext.TransitionAsync(queued, inProgress, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
 
         FailedIssue failed = inProgress.MarkFailed(
-            workerRunId,
             "Container exited non-zero",
             DateTimeOffset.UtcNow,
             "generic_failure");
@@ -498,7 +491,6 @@ public sealed class GetIssueDetailAsync : IAsyncDisposable
 
         DateTimeOffset failedAt = DateTimeOffset.UtcNow;
         ContinuableFailedIssue continuableFailed = inProgress.MarkContinuableFailed(
-            workerRunId,
             branchName: "feat/issue-1",
             failureReason: "Transient API error",
             failureCategory: TransientRetrySchedule.TransientApiErrorCategory,
@@ -541,7 +533,6 @@ public sealed class GetIssueDetailAsync : IAsyncDisposable
         await _dbContext.TransitionAsync(queued, inProgress, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
 
         FailedIssue failed = inProgress.MarkFailed(
-            workerRunId,
             "Transient API error",
             DateTimeOffset.UtcNow,
             TransientRetrySchedule.TransientApiErrorCategory);
@@ -575,7 +566,6 @@ public sealed class GetIssueDetailAsync : IAsyncDisposable
         await _dbContext.TransitionAsync(queued, inProgress, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
 
         ContinuableFailedIssue continuableFailed = inProgress.MarkContinuableFailed(
-            workerRunId,
             branchName: "feat/issue-1",
             failureReason: "Transient API error",
             failureCategory: TransientRetrySchedule.TransientApiErrorCategory,

@@ -17,11 +17,9 @@ public sealed class MarkContinuableFailed
         // Arrange
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
         InProgressIssue inProgress = new IssueBuilder().WithMonitoredRepositoryId(repositoryId).InProgress();
-        Guid workerRunId = Guid.NewGuid();
 
         // Act
         ContinuableFailedIssue failed = inProgress.MarkContinuableFailed(
-            workerRunId,
             "foundry/1/add-feature",
             "Container exited with code 1",
             "generic_failure",
@@ -37,11 +35,9 @@ public sealed class MarkContinuableFailed
         // Arrange
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
         InProgressIssue inProgress = new IssueBuilder().WithMonitoredRepositoryId(repositoryId).InProgress();
-        Guid workerRunId = Guid.NewGuid();
 
         // Act
         inProgress.MarkContinuableFailed(
-            workerRunId,
             "foundry/1/add-feature",
             "Container exited with code 1",
             "generic_failure",
@@ -60,14 +56,12 @@ public sealed class MarkContinuableFailed
         // Arrange
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
         InProgressIssue inProgress = new IssueBuilder().WithMonitoredRepositoryId(repositoryId).InProgress();
-        Guid workerRunId = Guid.NewGuid();
         string branchName = "foundry/1/add-feature";
         string failureReason = "Container exited with code 1";
         DateTimeOffset failedAt = DateTimeOffset.UtcNow;
 
         // Act
         ContinuableFailedIssue failed = inProgress.MarkContinuableFailed(
-            workerRunId,
             branchName,
             failureReason,
             "generic_failure",
@@ -75,7 +69,7 @@ public sealed class MarkContinuableFailed
 
         // Assert
         failed.ShouldSatisfyAllConditions(
-            () => failed.WorkerRunId.ShouldBe(workerRunId),
+            () => failed.WorkerRunId.ShouldBe(inProgress.WorkerRunId),
             () => failed.BranchName.ShouldBe(branchName),
             () => failed.FailureReason.ShouldBe(failureReason),
             () => failed.FailedAt.ShouldBe(failedAt),
