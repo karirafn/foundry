@@ -1,3 +1,4 @@
+using Foundry.Modules.Workers.Contracts;
 using Foundry.Modules.Workers.Domain.ValueObjects;
 
 using Shouldly;
@@ -97,7 +98,7 @@ public sealed class CategoryToken
         string token = reason.CategoryToken;
 
         // Assert
-        token.ShouldBe("transient_api_error");
+        token.ShouldBe(FailureCategory.TransientApiErrorToken);
     }
 
     [Fact]
