@@ -1,5 +1,6 @@
 using Foundry.Modules.Issues.Domain.Entities;
 using Foundry.Modules.Issues.Domain.Entities.States;
+using Foundry.Modules.Workers.Contracts;
 using Foundry.Testing;
 using Foundry.WebApi.Persistence;
 
@@ -40,7 +41,7 @@ public sealed class PersistReviewIssue : IAsyncDisposable
     public async Task WhenReviewIssueTransitioned_CanBeReloadedAsReviewIssueWithAllFields()
     {
         // Arrange
-        Guid reviewWorkerRunId = Guid.NewGuid();
+        WorkerRunId reviewWorkerRunId = WorkerRunId.New();
         DateTimeOffset feedbackCutoffAt = new DateTimeOffset(2026, 5, 31, 12, 0, 0, TimeSpan.Zero);
         ReviewIssue review = new IssueBuilder()
             .WithIssueNumber(42)

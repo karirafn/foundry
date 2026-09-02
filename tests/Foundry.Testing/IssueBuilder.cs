@@ -2,6 +2,7 @@ using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Issues.Domain.Entities.States;
 using Foundry.Modules.Issues.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Contracts;
+using Foundry.Modules.Workers.Contracts;
 
 namespace Foundry.Testing;
 
@@ -28,7 +29,7 @@ public sealed class IssueBuilder
     private DateTimeOffset _detectedAt = DateTimeOffset.UtcNow;
     private IssueKind _issueKind = IssueKind.Feature;
 
-    private Guid _workerRunId = Guid.NewGuid();
+    private WorkerRunId _workerRunId = WorkerRunId.New();
     private string _branchName = "feat/1-test";
     private string _pullRequestUrl = "https://github.com/owner/repo/pull/1";
     private DateTimeOffset _feedbackCutoffAt = DateTimeOffset.UtcNow;
@@ -41,7 +42,7 @@ public sealed class IssueBuilder
     /// <summary>
     /// Exposes the configured worker run id so assertions can anchor to the aggregate's id. (AC #3)
     /// </summary>
-    public Guid WorkerRunId => _workerRunId;
+    public WorkerRunId WorkerRunId => _workerRunId;
 
     public IssueBuilder WithMonitoredRepositoryId(MonitoredRepositoryId value) { _monitoredRepositoryId = value; return this; }
 
@@ -66,7 +67,7 @@ public sealed class IssueBuilder
     /// </remarks>
     public IssueBuilder WithIssueKind(IssueKind value) { _issueKind = value; return this; }
 
-    public IssueBuilder WithWorkerRunId(Guid value) { _workerRunId = value; return this; }
+    public IssueBuilder WithWorkerRunId(WorkerRunId value) { _workerRunId = value; return this; }
 
     public IssueBuilder WithBranchName(string value) { _branchName = value; return this; }
 

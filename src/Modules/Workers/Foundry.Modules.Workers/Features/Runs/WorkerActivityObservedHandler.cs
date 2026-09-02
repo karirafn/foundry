@@ -10,7 +10,7 @@ internal sealed class WorkerActivityObservedHandler(IWorkerActivityBroadcaster b
     public Task HandleAsync(WorkerActivityObserved @event, CancellationToken cancellationToken)
     {
         WorkerActivity activity = new(
-            WorkerRunId: @event.WorkerRunId.Value,
+            WorkerRunId: @event.WorkerRunId,
             IssueId: @event.IssueId.Value,
             LastActivityAt: @event.LastActivityAt,
             CommitCount: @event.CommitCount);

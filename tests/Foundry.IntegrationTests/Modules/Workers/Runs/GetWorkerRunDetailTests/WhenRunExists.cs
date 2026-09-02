@@ -77,7 +77,7 @@ public sealed class WhenRunExists : IAsyncDisposable
             TestContext.Current.CancellationToken);
         detail.ShouldNotBeNull();
         detail.ShouldSatisfyAllConditions(
-            () => detail.WorkerRunId.ShouldBe(run.Id.Value),
+            () => detail.WorkerRunId.ShouldBe(run.Id),
             () => detail.State.ShouldBe("failed"),
             () => detail.FailureCategory.ShouldBe("non_zero_exit"),
             () => detail.HasStoredLog.ShouldBeFalse());

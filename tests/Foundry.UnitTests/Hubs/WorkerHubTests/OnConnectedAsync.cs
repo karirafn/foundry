@@ -35,13 +35,13 @@ public sealed class OnConnectedAsync
     {
         // Arrange
         WorkerActivity activity1 = new(
-            WorkerRunId: Guid.NewGuid(),
+            WorkerRunId: WorkerRunId.New(),
             IssueId: Guid.NewGuid(),
             LastActivityAt: DateTimeOffset.UtcNow,
             CommitCount: 2);
 
         WorkerActivity activity2 = new(
-            WorkerRunId: Guid.NewGuid(),
+            WorkerRunId: WorkerRunId.New(),
             IssueId: Guid.NewGuid(),
             LastActivityAt: DateTimeOffset.UtcNow,
             CommitCount: 5);
@@ -65,7 +65,7 @@ public sealed class OnConnectedAsync
     {
         // Arrange
         WorkerActivity activity = new(
-            WorkerRunId: Guid.NewGuid(),
+            WorkerRunId: WorkerRunId.New(),
             IssueId: Guid.NewGuid(),
             LastActivityAt: DateTimeOffset.UtcNow,
             CommitCount: 1);
@@ -87,7 +87,7 @@ public sealed class OnConnectedAsync
     {
         // Arrange
         WorkerActivity activity = new(
-            WorkerRunId: Guid.NewGuid(),
+            WorkerRunId: WorkerRunId.New(),
             IssueId: Guid.NewGuid(),
             LastActivityAt: DateTimeOffset.UtcNow,
             CommitCount: 3);

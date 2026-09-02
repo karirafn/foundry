@@ -2,6 +2,7 @@ using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Issues.Domain.Entities.States;
 using Foundry.Modules.Issues.Domain.Events;
 using Foundry.Modules.Monitoring.Contracts;
+using Foundry.Modules.Workers.Contracts;
 using Foundry.Testing;
 
 using Shouldly;
@@ -21,7 +22,7 @@ public sealed class FromRevisionQueued
             .WithMonitoredRepositoryId(repositoryId)
             .WithReviewComments([new ReviewComment("Please fix the formatting.")])
             .RevisionQueued();
-        Guid workerRunId = Guid.NewGuid();
+        WorkerRunId workerRunId = WorkerRunId.New();
 
         // Act
         RevisionInProgressIssue revisionInProgress = revisionQueued.Claim(workerRunId);
@@ -39,7 +40,7 @@ public sealed class FromRevisionQueued
             .WithMonitoredRepositoryId(repositoryId)
             .WithReviewComments([new ReviewComment("Please fix the formatting.")])
             .RevisionQueued();
-        Guid workerRunId = Guid.NewGuid();
+        WorkerRunId workerRunId = WorkerRunId.New();
 
         // Act
         RevisionInProgressIssue revisionInProgress = revisionQueued.Claim(workerRunId);
@@ -69,7 +70,7 @@ public sealed class FromRevisionQueued
             .RevisionQueued();
 
         // Act
-        revisionQueued.Claim(Guid.NewGuid());
+        revisionQueued.Claim(WorkerRunId.New());
 
         // Assert
         IssueRevisionInProgress domainEvent = revisionQueued.DomainEvents.ShouldHaveSingleItem().ShouldBeOfType<IssueRevisionInProgress>();

@@ -85,7 +85,7 @@ public sealed class OutboxHarvestHandleAsync : IAsyncDisposable
             NullLogger<WorkerAuthenticationFailedHandler>.Instance);
 
         WorkerAuthenticationFailed @event = new(
-            Guid.NewGuid(),
+            WorkerRunId.New(),
             Guid.NewGuid(),
             WorkerRunFailed.AuthInvalidReason);
 
@@ -130,7 +130,7 @@ public sealed class OutboxHarvestHandleAsync : IAsyncDisposable
             NullLogger<WorkerAuthenticationFailedHandler>.Instance);
 
         WorkerAuthenticationFailed @event = new(
-            Guid.NewGuid(),
+            WorkerRunId.New(),
             Guid.NewGuid(),
             WorkerRunFailed.AuthInvalidReason);
 

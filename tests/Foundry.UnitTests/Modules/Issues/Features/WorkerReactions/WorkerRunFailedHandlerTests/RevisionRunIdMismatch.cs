@@ -69,7 +69,7 @@ public sealed class RevisionRunIdMismatch : IAsyncDisposable
         // Arrange
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
         RevisionInProgressIssue revisionInProgress = SeedRevisionInProgressIssue(repositoryId);
-        Guid staleRunId = Guid.NewGuid();
+        WorkerRunId staleRunId = WorkerRunId.New();
 
         WorkerRunFailed @event = new(
             WorkerRunId: staleRunId,

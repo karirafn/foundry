@@ -62,7 +62,7 @@ public sealed class HandleAsync
 
         // Assert
         WorkerActivity activity = broadcaster.Broadcasts.ShouldHaveSingleItem();
-        activity.WorkerRunId.ShouldBe(workerRunId.Value);
+        activity.WorkerRunId.ShouldBe(workerRunId);
     }
 
     [Fact]

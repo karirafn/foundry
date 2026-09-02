@@ -152,7 +152,7 @@ internal sealed class WorkerDispatchService(
             return;
         }
 
-        Guid workerRunId = Guid.NewGuid();
+        WorkerRunId workerRunId = WorkerRunId.New();
         await TryDispatchAsync(
             integrationEventDispatcher,
             [new WorkerCapacityAvailable(workerRunId)],
@@ -413,13 +413,13 @@ internal sealed class WorkerDispatchService(
                         await TryStopContainerAsync(
                             orchestrator,
                             activeRun.ContainerId.Value,
-                            activeRun.Id.Value,
+                            activeRun.Id,
                             cancellationToken);
 
                         string? containerOutput = await TryGetLogsAsync(
                             orchestrator,
                             activeRun.ContainerId.Value,
-                            activeRun.Id.Value,
+                            activeRun.Id,
                             cancellationToken);
 
                         RunResultSummary? timeoutSummary = containerOutputParser.ParseRunResultSummary(containerOutput);
@@ -462,7 +462,7 @@ internal sealed class WorkerDispatchService(
                 string? exitContainerOutput = await TryGetLogsAsync(
                     orchestrator,
                     activeRun.ContainerId.Value,
-                    activeRun.Id.Value,
+                    activeRun.Id,
                     cancellationToken);
 
                 WorkerOutcome exitOutcome = await resolver.ResolveAsync(
@@ -558,12 +558,12 @@ internal sealed class WorkerDispatchService(
                 await TryDispatchAsync(
                     integrationEventDispatcher,
                     [new WorkerRunCompletedEvent(
-                        activeRun.Id.Value,
+                        activeRun.Id,
                         activeRun.IssueId.Value,
                         completed.BranchName.Value,
                         completed.PullRequestUrl.Value,
                         WorkerRunMergeState.Merged)],
-                    activeRun.Id.Value,
+                    activeRun.Id,
                     cancellationToken);
                 await dbContext.TransitionAsync(activeRun, completedRun, domainEventDispatcher, cancellationToken);
                 logger.LogInformation(
@@ -584,12 +584,12 @@ internal sealed class WorkerDispatchService(
                 await TryDispatchAsync(
                     integrationEventDispatcher,
                     [new WorkerRunCompletedEvent(
-                        activeRun.Id.Value,
+                        activeRun.Id,
                         activeRun.IssueId.Value,
                         review.BranchName.Value,
                         review.PullRequestUrl.Value,
                         WorkerRunMergeState.Open)],
-                    activeRun.Id.Value,
+                    activeRun.Id,
                     cancellationToken);
                 await dbContext.TransitionAsync(activeRun, reviewRun, domainEventDispatcher, cancellationToken);
                 logger.LogInformation(
@@ -610,12 +610,12 @@ internal sealed class WorkerDispatchService(
                 await TryDispatchAsync(
                     integrationEventDispatcher,
                     [new WorkerRunCompletedEvent(
-                        activeRun.Id.Value,
+                        activeRun.Id,
                         activeRun.IssueId.Value,
                         unchanged.BranchName.Value,
                         null,
                         WorkerRunMergeState.None)],
-                    activeRun.Id.Value,
+                    activeRun.Id,
                     cancellationToken);
                 await dbContext.TransitionAsync(activeRun, unchangedRun, domainEventDispatcher, cancellationToken);
                 logger.LogInformation(
@@ -699,7 +699,7 @@ internal sealed class WorkerDispatchService(
                 throw new UnreachableException($"Unhandled outcome type {outcome.GetType().Name}");
         }
 
-        await TryStopAndRemoveAsync(orchestrator, activeRun.ContainerId.Value, activeRun.Id.Value, cancellationToken);
+        await TryStopAndRemoveAsync(orchestrator, activeRun.ContainerId.Value, activeRun.Id, cancellationToken);
     }
 
     /// <summary>
@@ -861,7 +861,7 @@ internal sealed class WorkerDispatchService(
         await TryDispatchAsync(
             integrationEventDispatcher,
             new WorkerAuthenticationFailedEvent(
-                activeRun.Id.Value,
+                activeRun.Id,
                 activeRun.IssueId.Value,
                 failureReason.Summary),
             cancellationToken);
@@ -894,7 +894,7 @@ internal sealed class WorkerDispatchService(
         await TryDispatchAsync(
             integrationEventDispatcher,
             new WorkerCreditsExhaustedEvent(
-                activeRun.Id.Value,
+                activeRun.Id,
                 activeRun.IssueId.Value),
             cancellationToken);
 
@@ -957,7 +957,7 @@ internal sealed class WorkerDispatchService(
     private async Task TryDispatchAsync(
         IIntegrationEventDispatcher integrationEventDispatcher,
         IEnumerable<IIntegrationEvent> events,
-        Guid workerRunId,
+        WorkerRunId workerRunId,
         CancellationToken cancellationToken)
     {
         try
@@ -1025,7 +1025,7 @@ internal sealed class WorkerDispatchService(
     private async Task TryStopAndRemoveAsync(
         IWorkerOrchestrator orchestrator,
         string containerId,
-        Guid workerRunId,
+        WorkerRunId workerRunId,
         CancellationToken cancellationToken)
     {
         try
@@ -1047,7 +1047,7 @@ internal sealed class WorkerDispatchService(
     private async Task TryStopContainerAsync(
         IWorkerOrchestrator orchestrator,
         string containerId,
-        Guid workerRunId,
+        WorkerRunId workerRunId,
         CancellationToken cancellationToken)
     {
         try
@@ -1069,7 +1069,7 @@ internal sealed class WorkerDispatchService(
     private async Task<string?> TryGetLogsAsync(
         IWorkerOrchestrator orchestrator,
         string containerId,
-        Guid workerRunId,
+        WorkerRunId workerRunId,
         CancellationToken cancellationToken)
     {
         try

@@ -115,7 +115,7 @@ public sealed class ClaimAsync : IAsyncDisposable
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
         FreshQueuedIssue queued = SeedQueuedIssue(repositoryId);
         DispatchCandidate candidate = new(queued, DefaultDispatchInfo);
-        Guid workerRunId = Guid.NewGuid();
+        WorkerRunId workerRunId = WorkerRunId.New();
         IssueClaimer sut = BuildClaimer();
 
         // Act
@@ -138,7 +138,7 @@ public sealed class ClaimAsync : IAsyncDisposable
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
         FreshQueuedIssue queued = SeedQueuedIssue(repositoryId);
         DispatchCandidate candidate = new(queued, DefaultDispatchInfo);
-        Guid workerRunId = Guid.NewGuid();
+        WorkerRunId workerRunId = WorkerRunId.New();
         IssueClaimer sut = BuildClaimer();
 
         // Act
@@ -158,7 +158,7 @@ public sealed class ClaimAsync : IAsyncDisposable
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
         FreshQueuedIssue queued = SeedQueuedIssue(repositoryId, issueNumber: 42, title: "Add Health Check");
         DispatchCandidate candidate = new(queued, DefaultDispatchInfo);
-        Guid workerRunId = Guid.NewGuid();
+        WorkerRunId workerRunId = WorkerRunId.New();
         IssueClaimer sut = BuildClaimer();
 
         // Act
@@ -179,7 +179,7 @@ public sealed class ClaimAsync : IAsyncDisposable
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
         FreshQueuedIssue queued = SeedQueuedIssue(repositoryId, issueNumber: 42, title: "Add Health Check");
         DispatchCandidate candidate = new(queued, DefaultDispatchInfo);
-        Guid workerRunId = Guid.NewGuid();
+        WorkerRunId workerRunId = WorkerRunId.New();
         IssueClaimer sut = BuildClaimer();
 
         // Act
@@ -205,7 +205,7 @@ public sealed class ClaimAsync : IAsyncDisposable
             "GITLAB_PAT",
             new WorkerProvider.GitLab());
         DispatchCandidate candidate = new(queued, gitLabInfo);
-        Guid workerRunId = Guid.NewGuid();
+        WorkerRunId workerRunId = WorkerRunId.New();
         IssueClaimer sut = BuildClaimer();
 
         // Act
@@ -226,7 +226,7 @@ public sealed class ClaimAsync : IAsyncDisposable
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
         RevisionQueuedIssue revisionQueued = SeedRevisionQueuedIssue(repositoryId);
         DispatchCandidate candidate = new(revisionQueued, DefaultDispatchInfo);
-        Guid workerRunId = Guid.NewGuid();
+        WorkerRunId workerRunId = WorkerRunId.New();
         IssueClaimer sut = BuildClaimer();
 
         // Act
@@ -249,7 +249,7 @@ public sealed class ClaimAsync : IAsyncDisposable
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
         RevisionQueuedIssue revisionQueued = SeedRevisionQueuedIssue(repositoryId, issueNumber: 20);
         DispatchCandidate candidate = new(revisionQueued, DefaultDispatchInfo);
-        Guid workerRunId = Guid.NewGuid();
+        WorkerRunId workerRunId = WorkerRunId.New();
         IssueClaimer sut = BuildClaimer();
 
         // Act
@@ -270,7 +270,7 @@ public sealed class ClaimAsync : IAsyncDisposable
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
         RevisionQueuedIssue revisionQueued = SeedRevisionQueuedIssue(repositoryId, issueNumber: 20);
         DispatchCandidate candidate = new(revisionQueued, DefaultDispatchInfo);
-        Guid workerRunId = Guid.NewGuid();
+        WorkerRunId workerRunId = WorkerRunId.New();
         IssueClaimer sut = BuildClaimer();
 
         // Act
@@ -291,7 +291,7 @@ public sealed class ClaimAsync : IAsyncDisposable
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
         ContinuationQueuedIssue continuationQueued = SeedContinuationQueuedIssue(repositoryId, branchName: "feat/10-fix");
         DispatchCandidate candidate = new(continuationQueued, DefaultDispatchInfo);
-        Guid workerRunId = Guid.NewGuid();
+        WorkerRunId workerRunId = WorkerRunId.New();
         IssueClaimer sut = BuildClaimer();
 
         // Act
@@ -314,7 +314,7 @@ public sealed class ClaimAsync : IAsyncDisposable
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
         ContinuationQueuedIssue continuationQueued = SeedContinuationQueuedIssue(repositoryId, branchName: "feat/103-fix");
         DispatchCandidate candidate = new(continuationQueued, DefaultDispatchInfo);
-        Guid workerRunId = Guid.NewGuid();
+        WorkerRunId workerRunId = WorkerRunId.New();
         IssueClaimer sut = BuildClaimer();
 
         // Act
@@ -336,7 +336,7 @@ public sealed class ClaimAsync : IAsyncDisposable
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
         ContinuationQueuedIssue continuationQueued = SeedContinuationQueuedIssue(repositoryId, branchName: "feat/103-fix");
         DispatchCandidate candidate = new(continuationQueued, DefaultDispatchInfo);
-        Guid workerRunId = Guid.NewGuid();
+        WorkerRunId workerRunId = WorkerRunId.New();
         IssueClaimer sut = BuildClaimer();
 
         // Act

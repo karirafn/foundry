@@ -1,6 +1,7 @@
 using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Issues.Domain.Entities;
 using Foundry.Modules.Monitoring.Contracts;
+using Foundry.Modules.Workers.Contracts;
 using Foundry.Shared;
 
 using BranchNameValue = Foundry.Shared.BranchName;
@@ -69,7 +70,7 @@ public sealed class RevisionQueuedIssue : QueuedIssue
         return revisionQueued;
     }
 
-    public override RevisionInProgressIssue Claim(Guid workerRunId)
+    public override RevisionInProgressIssue Claim(WorkerRunId workerRunId)
     {
         RevisionInProgressIssue revisionInProgress = RevisionInProgressIssue.FromRevisionQueued(this, workerRunId);
         AddDomainEvent(new Events.IssueRevisionInProgress(Id, MonitoredRepositoryId));

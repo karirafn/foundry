@@ -1,5 +1,6 @@
 using Foundry.Modules.Issues.Domain.Entities;
 using Foundry.Modules.Issues.Domain.Entities.States;
+using Foundry.Modules.Workers.Contracts;
 using Foundry.Testing;
 using Foundry.WebApi.Persistence;
 
@@ -40,7 +41,7 @@ public sealed class PersistUnchangedIssue : IAsyncDisposable
     public async Task WhenUnchangedIssueTransitioned_CanBeReloadedAsUnchangedIssueWithWorkerRunId()
     {
         // Arrange
-        Guid unchangedWorkerRunId = Guid.NewGuid();
+        WorkerRunId unchangedWorkerRunId = WorkerRunId.New();
         UnchangedIssue unchanged = new IssueBuilder()
             .WithIssueNumber(43)
             .WithTitle("Unchanged issue")

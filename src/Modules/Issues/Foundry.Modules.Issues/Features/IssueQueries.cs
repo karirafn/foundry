@@ -379,7 +379,7 @@ internal sealed class IssueQueries(
                 TransientRetry: null),
 
             InProgressIssue inProgress => new IssueStateDetails(
-                WorkerRunId: inProgress.WorkerRunId,
+                WorkerRunId: inProgress.WorkerRunId.Value,
                 BranchName: null,
                 PullRequestUrl: null,
                 FeedbackCutoffAt: null,
@@ -390,7 +390,7 @@ internal sealed class IssueQueries(
                 TransientRetry: null),
 
             ReviewIssue review => new IssueStateDetails(
-                WorkerRunId: review.WorkerRunId,
+                WorkerRunId: review.WorkerRunId.Value,
                 BranchName: review.BranchName,
                 PullRequestUrl: review.PullRequestUrl,
                 FeedbackCutoffAt: review.FeedbackCutoffAt,
@@ -401,7 +401,7 @@ internal sealed class IssueQueries(
                 TransientRetry: null),
 
             UnchangedIssue unchanged => new IssueStateDetails(
-                WorkerRunId: unchanged.WorkerRunId,
+                WorkerRunId: unchanged.WorkerRunId.Value,
                 BranchName: null,
                 PullRequestUrl: null,
                 FeedbackCutoffAt: null,
@@ -412,7 +412,7 @@ internal sealed class IssueQueries(
                 TransientRetry: null),
 
             FailedIssue failed => new IssueStateDetails(
-                WorkerRunId: failed.WorkerRunId,
+                WorkerRunId: failed.WorkerRunId.Value,
                 BranchName: null,
                 PullRequestUrl: null,
                 FeedbackCutoffAt: null,
@@ -445,7 +445,7 @@ internal sealed class IssueQueries(
                 TransientRetry: null),
 
             RevisionInProgressIssue revisionInProgress => new IssueStateDetails(
-                WorkerRunId: revisionInProgress.WorkerRunId,
+                WorkerRunId: revisionInProgress.WorkerRunId.Value,
                 BranchName: revisionInProgress.BranchName,
                 PullRequestUrl: revisionInProgress.PullRequestUrl,
                 FeedbackCutoffAt: null,
@@ -456,7 +456,7 @@ internal sealed class IssueQueries(
                 TransientRetry: null),
 
             RevisionFailedIssue revisionFailed => new IssueStateDetails(
-                WorkerRunId: revisionFailed.WorkerRunId,
+                WorkerRunId: revisionFailed.WorkerRunId.Value,
                 BranchName: revisionFailed.BranchName,
                 PullRequestUrl: revisionFailed.PullRequestUrl,
                 FeedbackCutoffAt: null,
@@ -467,7 +467,7 @@ internal sealed class IssueQueries(
                 TransientRetry: null),
 
             ContinuableFailedIssue continuableFailed => new IssueStateDetails(
-                WorkerRunId: continuableFailed.WorkerRunId,
+                WorkerRunId: continuableFailed.WorkerRunId.Value,
                 BranchName: continuableFailed.BranchName,
                 PullRequestUrl: continuableFailed.PullRequestUrl.Length > 0 ? continuableFailed.PullRequestUrl : null,
                 FeedbackCutoffAt: null,

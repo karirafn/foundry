@@ -5,6 +5,7 @@ using Foundry.Modules.Issues.Features;
 using Foundry.Modules.Issues.Features.TransientRetry;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Contracts.Queries;
+using Foundry.Modules.Workers.Contracts;
 using Foundry.Shared;
 using Foundry.Shared.Infrastructure;
 using Foundry.Testing;
@@ -190,7 +191,7 @@ public sealed class GetIssueDetailAsync : IAsyncDisposable
         FreshQueuedIssue queued = detected.Enqueue();
         await _dbContext.TransitionAsync(detected, queued, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
 
-        Guid workerRunId = Guid.NewGuid();
+        WorkerRunId workerRunId = WorkerRunId.New();
         InProgressIssue inProgress = queued.Claim(workerRunId);
         await _dbContext.TransitionAsync(queued, inProgress, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
 
@@ -212,7 +213,7 @@ public sealed class GetIssueDetailAsync : IAsyncDisposable
         detail.State.ShouldBe("review");
         IssueStateDetails stateDetails = detail.StateDetails.ShouldNotBeNull();
         stateDetails.ShouldSatisfyAllConditions(
-            () => stateDetails.WorkerRunId.ShouldBe(workerRunId),
+            () => stateDetails.WorkerRunId.ShouldBe(workerRunId.Value),
             () => stateDetails.BranchName.ShouldBe("feat/issue-1"),
             () => stateDetails.PullRequestUrl.ShouldBe("https://github.com/owner/repo/pull/42"),
             () => stateDetails.FeedbackCutoffAt.ShouldNotBeNull()
@@ -227,7 +228,7 @@ public sealed class GetIssueDetailAsync : IAsyncDisposable
         FreshQueuedIssue queued = detected.Enqueue();
         await _dbContext.TransitionAsync(detected, queued, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
 
-        Guid workerRunId = Guid.NewGuid();
+        WorkerRunId workerRunId = WorkerRunId.New();
         InProgressIssue inProgress = queued.Claim(workerRunId);
         await _dbContext.TransitionAsync(queued, inProgress, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
 
@@ -246,7 +247,7 @@ public sealed class GetIssueDetailAsync : IAsyncDisposable
         detail.State.ShouldBe("failed");
         IssueStateDetails stateDetails = detail.StateDetails.ShouldNotBeNull();
         stateDetails.ShouldSatisfyAllConditions(
-            () => stateDetails.WorkerRunId.ShouldBe(workerRunId),
+            () => stateDetails.WorkerRunId.ShouldBe(workerRunId.Value),
             () => stateDetails.FailureReason.ShouldBe("Container exited non-zero"),
             () => stateDetails.FailedAt.ShouldNotBeNull()
                 .ShouldBe(failedAt, tolerance: TimeSpan.FromSeconds(1)));
@@ -260,7 +261,7 @@ public sealed class GetIssueDetailAsync : IAsyncDisposable
         FreshQueuedIssue queued = detected.Enqueue();
         await _dbContext.TransitionAsync(detected, queued, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
 
-        Guid workerRunId = Guid.NewGuid();
+        WorkerRunId workerRunId = WorkerRunId.New();
         InProgressIssue inProgress = queued.Claim(workerRunId);
         await _dbContext.TransitionAsync(queued, inProgress, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
 
@@ -299,7 +300,7 @@ public sealed class GetIssueDetailAsync : IAsyncDisposable
         FreshQueuedIssue queued = detected.Enqueue();
         await _dbContext.TransitionAsync(detected, queued, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
 
-        Guid workerRunId = Guid.NewGuid();
+        WorkerRunId workerRunId = WorkerRunId.New();
         InProgressIssue inProgress = queued.Claim(workerRunId);
         await _dbContext.TransitionAsync(queued, inProgress, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
 
@@ -322,7 +323,7 @@ public sealed class GetIssueDetailAsync : IAsyncDisposable
         detail.State.ShouldBe("continuable_failed");
         IssueStateDetails stateDetails = detail.StateDetails.ShouldNotBeNull();
         stateDetails.ShouldSatisfyAllConditions(
-            () => stateDetails.WorkerRunId.ShouldBe(workerRunId),
+            () => stateDetails.WorkerRunId.ShouldBe(workerRunId.Value),
             () => stateDetails.BranchName.ShouldBe("feat/issue-1"),
             () => stateDetails.FailureReason.ShouldBe("Container timeout"),
             () => stateDetails.FailedAt.ShouldNotBeNull()
@@ -337,7 +338,7 @@ public sealed class GetIssueDetailAsync : IAsyncDisposable
         FreshQueuedIssue queued = detected.Enqueue();
         await _dbContext.TransitionAsync(detected, queued, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
 
-        Guid workerRunId = Guid.NewGuid();
+        WorkerRunId workerRunId = WorkerRunId.New();
         InProgressIssue inProgress = queued.Claim(workerRunId);
         await _dbContext.TransitionAsync(queued, inProgress, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
 
@@ -372,7 +373,7 @@ public sealed class GetIssueDetailAsync : IAsyncDisposable
         FreshQueuedIssue queued = detected.Enqueue();
         await _dbContext.TransitionAsync(detected, queued, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
 
-        Guid workerRunId = Guid.NewGuid();
+        WorkerRunId workerRunId = WorkerRunId.New();
         InProgressIssue inProgress = queued.Claim(workerRunId);
         await _dbContext.TransitionAsync(queued, inProgress, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
 
@@ -413,7 +414,7 @@ public sealed class GetIssueDetailAsync : IAsyncDisposable
         FreshQueuedIssue queued = detected.Enqueue();
         await _dbContext.TransitionAsync(detected, queued, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
 
-        Guid workerRunId = Guid.NewGuid();
+        WorkerRunId workerRunId = WorkerRunId.New();
         InProgressIssue inProgress = queued.Claim(workerRunId);
         await _dbContext.TransitionAsync(queued, inProgress, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
 
@@ -452,7 +453,7 @@ public sealed class GetIssueDetailAsync : IAsyncDisposable
         FreshQueuedIssue queued = detected.Enqueue();
         await _dbContext.TransitionAsync(detected, queued, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
 
-        Guid workerRunId = Guid.NewGuid();
+        WorkerRunId workerRunId = WorkerRunId.New();
         InProgressIssue inProgress = queued.Claim(workerRunId);
         await _dbContext.TransitionAsync(queued, inProgress, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
 
@@ -485,7 +486,7 @@ public sealed class GetIssueDetailAsync : IAsyncDisposable
         FreshQueuedIssue queued = detected.Enqueue();
         await _dbContext.TransitionAsync(detected, queued, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
 
-        Guid workerRunId = Guid.NewGuid();
+        WorkerRunId workerRunId = WorkerRunId.New();
         InProgressIssue inProgress = queued.Claim(workerRunId);
         await _dbContext.TransitionAsync(queued, inProgress, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
 
@@ -528,7 +529,7 @@ public sealed class GetIssueDetailAsync : IAsyncDisposable
         FreshQueuedIssue queued = detected.Enqueue();
         await _dbContext.TransitionAsync(detected, queued, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
 
-        Guid workerRunId = Guid.NewGuid();
+        WorkerRunId workerRunId = WorkerRunId.New();
         InProgressIssue inProgress = queued.Claim(workerRunId);
         await _dbContext.TransitionAsync(queued, inProgress, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
 
@@ -561,7 +562,7 @@ public sealed class GetIssueDetailAsync : IAsyncDisposable
         FreshQueuedIssue queued = detected.Enqueue();
         await _dbContext.TransitionAsync(detected, queued, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
 
-        Guid workerRunId = Guid.NewGuid();
+        WorkerRunId workerRunId = WorkerRunId.New();
         InProgressIssue inProgress = queued.Claim(workerRunId);
         await _dbContext.TransitionAsync(queued, inProgress, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
 

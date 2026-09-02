@@ -4,6 +4,7 @@ using Foundry.Modules.Issues.Domain.Entities.States;
 using Foundry.Modules.Issues.Domain.Events;
 using Foundry.Modules.Issues.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Contracts;
+using Foundry.Modules.Workers.Contracts;
 using Foundry.Shared;
 using Foundry.Testing;
 
@@ -188,7 +189,7 @@ public sealed class PolymorphicMembers
         // Arrange
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
         FreshQueuedIssue queued = new IssueBuilder().WithMonitoredRepositoryId(repositoryId).FreshQueued();
-        Guid workerRunId = Guid.NewGuid();
+        WorkerRunId workerRunId = WorkerRunId.New();
 
         // Act
         Issue claimed = queued.Claim(workerRunId);
@@ -205,7 +206,7 @@ public sealed class PolymorphicMembers
         FreshQueuedIssue queued = new IssueBuilder().WithMonitoredRepositoryId(repositoryId).FreshQueued();
 
         // Act
-        queued.Claim(Guid.NewGuid());
+        queued.Claim(WorkerRunId.New());
 
         // Assert
         queued.DomainEvents.ShouldContain(e => e is IssueInProgress);
@@ -219,7 +220,7 @@ public sealed class PolymorphicMembers
         RevisionQueuedIssue revisionQueued = new IssueBuilder()
             .WithMonitoredRepositoryId(repositoryId)
             .RevisionQueued();
-        Guid workerRunId = Guid.NewGuid();
+        WorkerRunId workerRunId = WorkerRunId.New();
 
         // Act
         Issue claimed = revisionQueued.Claim(workerRunId);
@@ -238,7 +239,7 @@ public sealed class PolymorphicMembers
             .RevisionQueued();
 
         // Act
-        revisionQueued.Claim(Guid.NewGuid());
+        revisionQueued.Claim(WorkerRunId.New());
 
         // Assert
         revisionQueued.DomainEvents.ShouldContain(e => e is IssueRevisionInProgress);
@@ -253,7 +254,7 @@ public sealed class PolymorphicMembers
             .WithMonitoredRepositoryId(repositoryId)
             .ContinuableFailed()
             .Retry();
-        Guid workerRunId = Guid.NewGuid();
+        WorkerRunId workerRunId = WorkerRunId.New();
 
         // Act
         Issue claimed = continuationQueued.Claim(workerRunId);
@@ -273,7 +274,7 @@ public sealed class PolymorphicMembers
             .Retry();
 
         // Act
-        continuationQueued.Claim(Guid.NewGuid());
+        continuationQueued.Claim(WorkerRunId.New());
 
         // Assert
         continuationQueued.DomainEvents.ShouldContain(e => e is IssueInProgress);

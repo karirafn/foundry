@@ -117,7 +117,7 @@ public sealed class PreContainerFailureBridging : IAsyncDisposable
     {
         ClaimedIssueDispatch dispatch = new(
             issueId ?? IssueId.New(),
-            Guid.NewGuid(),
+            WorkerRunId.New(),
             1,
             "Test",
             "Test body",

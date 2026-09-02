@@ -87,7 +87,7 @@ public sealed class HandleAsync : IAsyncDisposable
             new CapturingLoggerAdapter<WorkerAuthenticationFailedHandler>(logger));
 
         WorkerAuthenticationFailed @event = new(
-            Guid.NewGuid(),
+            WorkerRunId.New(),
             Guid.NewGuid(),
             WorkerRunFailed.AuthInvalidReason);
 
@@ -119,7 +119,7 @@ public sealed class HandleAsync : IAsyncDisposable
             NullLogger<WorkerAuthenticationFailedHandler>.Instance);
 
         WorkerAuthenticationFailed @event = new(
-            Guid.NewGuid(),
+            WorkerRunId.New(),
             Guid.NewGuid(),
             WorkerRunFailed.AuthInvalidReason);
 
@@ -149,7 +149,7 @@ public sealed class HandleAsync : IAsyncDisposable
             NullLogger<WorkerAuthenticationFailedHandler>.Instance);
 
         WorkerAuthenticationFailed @event = new(
-            Guid.NewGuid(),
+            WorkerRunId.New(),
             Guid.NewGuid(),
             WorkerRunFailed.AuthInvalidReason);
 
@@ -181,7 +181,7 @@ public sealed class HandleAsync : IAsyncDisposable
                 NullLogger<WorkerAuthenticationFailedHandler>.Instance);
 
             await sut.HandleAsync(
-                new WorkerAuthenticationFailed(Guid.NewGuid(), Guid.NewGuid(), WorkerRunFailed.AuthInvalidReason),
+                new WorkerAuthenticationFailed(WorkerRunId.New(), Guid.NewGuid(), WorkerRunFailed.AuthInvalidReason),
                 TestContext.Current.CancellationToken);
         }
 

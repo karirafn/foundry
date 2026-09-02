@@ -151,7 +151,7 @@ public sealed class HandleAsync : IAsyncDisposable
         FreshQueuedIssue queued = SeedQueuedIssue(repositoryId);
 
         WorkerRunFailed @event = new(
-            WorkerRunId: Guid.NewGuid(),
+            WorkerRunId: WorkerRunId.New(),
             IssueId: queued.Id.Value,
             ReasonDescription: "Something went wrong");
 

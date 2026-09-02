@@ -2,6 +2,7 @@ using System.Text.Json;
 
 using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Monitoring.Contracts;
+using Foundry.Modules.Workers.Contracts;
 using Foundry.Shared;
 using Foundry.Shared.Infrastructure.Outbox;
 
@@ -54,7 +55,7 @@ public sealed class PayloadRoundTrip
         MonitoredRepositoryId repoId = MonitoredRepositoryId.From(Guid.NewGuid());
         ClaimedIssueDispatch dispatch = new(
             issueId,
-            Guid.NewGuid(),
+            WorkerRunId.New(),
             7,
             "Implement feature",
             "Add support for X",
@@ -94,7 +95,7 @@ public sealed class PayloadRoundTrip
         DispatchContext.Fresh context = new("feat/7-implement-feature");
         ClaimedIssueDispatch dispatch = new(
             issueId,
-            Guid.NewGuid(),
+            WorkerRunId.New(),
             7,
             "Implement feature",
             "Body",
@@ -132,7 +133,7 @@ public sealed class PayloadRoundTrip
             [new ReviewComment("Please add tests.", "src/Service.cs", Line: 42)]);
         ClaimedIssueDispatch dispatch = new(
             issueId,
-            Guid.NewGuid(),
+            WorkerRunId.New(),
             7,
             "Implement feature",
             "Body",
@@ -173,7 +174,7 @@ public sealed class PayloadRoundTrip
         DispatchContext.Continuation context = new("feat/7-implement-feature", "Build failed: missing semicolon");
         ClaimedIssueDispatch dispatch = new(
             issueId,
-            Guid.NewGuid(),
+            WorkerRunId.New(),
             7,
             "Implement feature",
             "Body",

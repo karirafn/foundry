@@ -1,4 +1,5 @@
 using Foundry.Modules.Monitoring.Contracts;
+using Foundry.Modules.Workers.Contracts;
 
 using Foundry.Shared;
 
@@ -6,7 +7,7 @@ namespace Foundry.Modules.Issues.Contracts;
 
 public sealed record ClaimedIssueDispatch(
     IssueId IssueId,
-    Guid WorkerRunId,
+    WorkerRunId WorkerRunId,
     int IssueNumber,
     string Title,
     string Body,

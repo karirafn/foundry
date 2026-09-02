@@ -1,3 +1,4 @@
+using Foundry.Modules.Workers.Contracts;
 using Foundry.Modules.Workers.Domain.Entities;
 using Foundry.Modules.Workers.Domain.Entities.States;
 using Foundry.Modules.Workers.Domain.ValueObjects;
@@ -63,7 +64,7 @@ public sealed class TickAsync : StaleStartingRunServiceTestBase
         // Assert
         eventDispatcher.Captured
             .OfType<Foundry.Modules.Workers.Contracts.WorkerRunFailed>()
-            .ShouldContain(e => e.WorkerRunId == starting.Id.Value);
+            .ShouldContain(e => e.WorkerRunId == starting.Id);
     }
 
     [Fact]

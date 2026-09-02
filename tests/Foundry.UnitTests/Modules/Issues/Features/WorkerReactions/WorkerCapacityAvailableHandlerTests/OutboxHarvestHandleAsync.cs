@@ -105,7 +105,7 @@ public sealed class OutboxHarvestHandleAsync : IAsyncDisposable
             claimer,
             NullLogger<WorkerCapacityAvailableHandler>.Instance);
 
-        WorkerCapacityAvailable @event = new(WorkerRunId: Guid.NewGuid());
+        WorkerCapacityAvailable @event = new(WorkerRunId: WorkerRunId.New());
 
         // Act
         await sut.HandleAsync(@event, TestContext.Current.CancellationToken);
@@ -151,7 +151,7 @@ public sealed class OutboxHarvestHandleAsync : IAsyncDisposable
             claimer,
             NullLogger<WorkerCapacityAvailableHandler>.Instance);
 
-        WorkerCapacityAvailable @event = new(WorkerRunId: Guid.NewGuid());
+        WorkerCapacityAvailable @event = new(WorkerRunId: WorkerRunId.New());
 
         // Act
         await sut.HandleAsync(@event, TestContext.Current.CancellationToken);
@@ -197,7 +197,7 @@ public sealed class OutboxHarvestHandleAsync : IAsyncDisposable
             claimer,
             NullLogger<WorkerCapacityAvailableHandler>.Instance);
 
-        WorkerCapacityAvailable @event = new(WorkerRunId: Guid.NewGuid());
+        WorkerCapacityAvailable @event = new(WorkerRunId: WorkerRunId.New());
 
         // Act
         await sut.HandleAsync(@event, TestContext.Current.CancellationToken);
@@ -239,7 +239,7 @@ public sealed class OutboxHarvestHandleAsync : IAsyncDisposable
             claimer,
             NullLogger<WorkerCapacityAvailableHandler>.Instance);
 
-        WorkerCapacityAvailable @event = new(WorkerRunId: Guid.NewGuid());
+        WorkerCapacityAvailable @event = new(WorkerRunId: WorkerRunId.New());
 
         // Act
         await sut.HandleAsync(@event, TestContext.Current.CancellationToken);

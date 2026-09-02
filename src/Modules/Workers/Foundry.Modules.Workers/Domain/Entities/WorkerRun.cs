@@ -1,6 +1,7 @@
 using Foundry.Modules.Issues.Contracts;
-using Foundry.Shared;
+using Foundry.Modules.Workers.Contracts;
 using Foundry.Modules.Workers.Domain.ValueObjects;
+using Foundry.Shared;
 
 namespace Foundry.Modules.Workers.Domain.Entities;
 

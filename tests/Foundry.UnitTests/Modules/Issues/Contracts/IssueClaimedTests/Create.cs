@@ -1,5 +1,6 @@
 using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Monitoring.Contracts;
+using Foundry.Modules.Workers.Contracts;
 using Foundry.Shared;
 
 using Shouldly;
@@ -18,7 +19,7 @@ public sealed class Create
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
         ClaimedIssueDispatch dispatch = new(
             issueId,
-            WorkerRunId: Guid.NewGuid(),
+            WorkerRunId: WorkerRunId.New(),
             IssueNumber: 42,
             Title: "Fix the bug",
             Body: "Bug details",

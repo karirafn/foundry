@@ -1,3 +1,4 @@
+using Foundry.Modules.Workers.Contracts;
 using Foundry.Modules.Workers.Domain.Entities;
 using Foundry.Modules.Workers.Domain.Entities.States;
 using Foundry.Modules.Workers.Domain.ValueObjects;
@@ -88,7 +89,7 @@ internal sealed class StaleStartingRunService : PeriodicBackgroundService
                 continue;
             }
 
-            await TryStopAndRemoveAsync(orchestrator, containerId.Value, workerRunId.Value, cancellationToken);
+            await TryStopAndRemoveAsync(orchestrator, containerId.Value, workerRunId, cancellationToken);
         }
 
         // Load StartingRuns for staleness filtering (applied in memory — SQLite cannot translate DateTimeOffset).
@@ -141,7 +142,7 @@ internal sealed class StaleStartingRunService : PeriodicBackgroundService
             // When the stale run has a labelled container, stop+remove it before failing the run.
             if (containerByRunId.TryGetValue(live.Id, out ContainerId containerId))
             {
-                await TryStopAndRemoveAsync(orchestrator, containerId.Value, live.Id.Value, cancellationToken);
+                await TryStopAndRemoveAsync(orchestrator, containerId.Value, live.Id, cancellationToken);
             }
 
             FailedRun failed = live.Fail(new FailureReason.ContainerError("Container did not start within the allowed time."));
@@ -163,14 +164,14 @@ internal sealed class StaleStartingRunService : PeriodicBackgroundService
             _log.LogWarning(
                 ex,
                 "Stale starting-run sweep failed for run {WorkerRunId}.",
-                startingRun.Id.Value);
+                startingRun.Id);
         }
     }
 
     private async Task TryStopAndRemoveAsync(
         IWorkerOrchestrator orchestrator,
         string containerId,
-        Guid workerRunId,
+        WorkerRunId workerRunId,
         CancellationToken cancellationToken)
     {
         try

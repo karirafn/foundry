@@ -1,5 +1,6 @@
 using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Issues.Domain.Entities;
+using Foundry.Modules.Workers.Contracts;
 using Foundry.Shared;
 
 using BranchNameValue = Foundry.Shared.BranchName;
@@ -49,7 +50,7 @@ public sealed class ContinuationQueuedIssue : QueuedIssue
         return queued;
     }
 
-    public override InProgressIssue Claim(Guid workerRunId)
+    public override InProgressIssue Claim(WorkerRunId workerRunId)
     {
         InProgressIssue inProgress = InProgressIssue.FromContinuationQueued(this, workerRunId);
         AddDomainEvent(new Events.IssueInProgress(Id, MonitoredRepositoryId));
