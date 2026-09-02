@@ -3176,7 +3176,8 @@
         "type": "object",
         "properties": {
           "workerRunId": {
-            "$ref": "#/components/schemas/WorkerRunId"
+            "type": "string",
+            "format": "uuid"
           },
           "issueId": {
             "type": "string",
@@ -3269,15 +3270,6 @@
           },
           "hasStoredLog": {
             "type": "boolean"
-          }
-        }
-      },
-      "WorkerRunId": {
-        "type": "object",
-        "properties": {
-          "value": {
-            "type": "string",
-            "format": "uuid"
           }
         }
       }
