@@ -34,6 +34,7 @@ public sealed class ContinuableFailedIssueConfiguration : IEntityTypeConfigurati
             .HasColumnName("failure_reason");
 
         builder.Property(i => i.FailureCategory)
+            .HasConversion(FailureCategoryValueConverter.Converter)
             .HasMaxLength(FailureCategoryMaxLength)
             .IsUnicode(false)
             .HasColumnName("failure_category");

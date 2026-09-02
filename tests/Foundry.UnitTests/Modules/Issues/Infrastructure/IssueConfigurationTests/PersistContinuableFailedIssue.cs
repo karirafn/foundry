@@ -54,7 +54,7 @@ public sealed class PersistContinuableFailedIssue : IAsyncDisposable
             .WithWorkerRunId(workerRunId)
             .WithBranchName("feat/issue-71")
             .WithFailureReason("Tests timed out")
-            .WithFailureCategory("generic_failure")
+            .WithFailureCategory(FailureCategory.NonZeroExit)
             .WithFailedAt(failedAt)
             .ContinuableFailed();
 

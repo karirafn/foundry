@@ -98,7 +98,7 @@ public sealed class ClaimAsync : IAsyncDisposable
             .WithTitle("Issue 10")
             .WithBranchName(branchName)
             .WithFailureReason("Non-zero exit code: 1")
-            .WithFailureCategory("generic_failure")
+            .WithFailureCategory(FailureCategory.NonZeroExit)
             .ContinuableFailed();
         ContinuationQueuedIssue continuationQueued = continuableFailed.Retry();
         _dbContext.Set<Issue>().Add(continuationQueued);

@@ -36,7 +36,7 @@ public sealed class IssueBuilder
     private DateTimeOffset _completedAt = DateTimeOffset.UtcNow;
     private DateTimeOffset _failedAt = DateTimeOffset.UtcNow;
     private string _failureReason = "Container exited with code 1";
-    private string _failureCategory = "generic_failure";
+    private FailureCategory _failureCategory = FailureCategory.NonZeroExit;
     private IReadOnlyList<ReviewComment> _reviewComments = [new ReviewComment("Please fix.")];
 
     /// <summary>
@@ -81,7 +81,7 @@ public sealed class IssueBuilder
 
     public IssueBuilder WithFailureReason(string value) { _failureReason = value; return this; }
 
-    public IssueBuilder WithFailureCategory(string value) { _failureCategory = value; return this; }
+    public IssueBuilder WithFailureCategory(FailureCategory value) { _failureCategory = value; return this; }
 
     public IssueBuilder WithReviewComments(IEnumerable<ReviewComment> value) { _reviewComments = [.. value]; return this; }
 

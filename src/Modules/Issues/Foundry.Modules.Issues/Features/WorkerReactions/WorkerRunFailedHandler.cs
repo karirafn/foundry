@@ -23,7 +23,22 @@ internal sealed class WorkerRunFailedHandler(
         Issue? issue = await db.Set<Issue>()
             .FirstOrDefaultAsync(i => i.Id == issueId, cancellationToken);
 
-        string category = @event.Category ?? string.Empty;
+        // Convert the string? category from the contract to the typed FailureCategory at the domain boundary.
+        // Unknown or missing tokens fall back to NonZeroExit (the neutral generic terminal) and are logged.
+        FailureCategory category;
+        if (@event.Category is { } token && FailureCategory.Create(token) is Result<FailureCategory>.Success ok)
+        {
+            category = ok.Value;
+        }
+        else
+        {
+            logger.LogWarning(
+                "WorkerRunFailed for issue {IssueId} carried an unrecognised or missing category '{Category}'; defaulting to {Fallback}.",
+                @event.IssueId,
+                @event.Category,
+                FailureCategory.NonZeroExitToken);
+            category = FailureCategory.NonZeroExit;
+        }
 
         if (issue is InProgressIssue inProgress)
         {

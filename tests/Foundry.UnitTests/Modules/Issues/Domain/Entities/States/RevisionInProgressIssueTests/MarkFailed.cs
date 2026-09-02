@@ -1,6 +1,7 @@
 using Foundry.Modules.Issues.Domain.Entities.States;
 using Foundry.Modules.Issues.Domain.Events;
 using Foundry.Modules.Monitoring.Contracts;
+using Foundry.Modules.Workers.Contracts;
 using Foundry.Testing;
 
 using Shouldly;
@@ -24,7 +25,7 @@ public sealed class MarkFailed
         // Act
         RevisionFailedIssue failed = revisionInProgress.MarkFailed(
             "Container exited with code 1",
-            "generic_failure",
+            FailureCategory.NonZeroExit,
             failedAt);
 
         // Assert
@@ -42,7 +43,7 @@ public sealed class MarkFailed
         DateTimeOffset failedAt = DateTimeOffset.UtcNow;
 
         // Act
-        revisionInProgress.MarkFailed("Container exited with code 1", "generic_failure", failedAt);
+        revisionInProgress.MarkFailed("Container exited with code 1", FailureCategory.NonZeroExit, failedAt);
 
         // Assert
         IssueRevisionFailed domainEvent = revisionInProgress.DomainEvents.ShouldHaveSingleItem().ShouldBeOfType<IssueRevisionFailed>();
@@ -66,7 +67,7 @@ public sealed class MarkFailed
         // Act
         RevisionFailedIssue failed = revisionInProgress.MarkFailed(
             failureReason,
-            "generic_failure",
+            FailureCategory.NonZeroExit,
             failedAt);
 
         // Assert

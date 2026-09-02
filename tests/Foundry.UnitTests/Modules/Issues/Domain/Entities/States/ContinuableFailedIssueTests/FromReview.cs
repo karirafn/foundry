@@ -1,5 +1,6 @@
 using Foundry.Modules.Issues.Domain.Entities.States;
 using Foundry.Modules.Monitoring.Contracts;
+using Foundry.Modules.Workers.Contracts;
 using Foundry.Testing;
 
 using Shouldly;
@@ -19,7 +20,7 @@ public sealed class FromReview
         DateTimeOffset failedAt = DateTimeOffset.UtcNow;
 
         // Act
-        ContinuableFailedIssue failed = ContinuableFailedIssue.FromReview(review, "PR was closed", "pr_closed", failedAt);
+        ContinuableFailedIssue failed = ContinuableFailedIssue.FromReview(review, "PR was closed", FailureCategory.PrClosed, failedAt);
 
         // Assert
         failed.ShouldSatisfyAllConditions(
@@ -40,7 +41,7 @@ public sealed class FromReview
         ReviewIssue review = new IssueBuilder().WithMonitoredRepositoryId(repositoryId).Review();
 
         // Act
-        ContinuableFailedIssue failed = ContinuableFailedIssue.FromReview(review, "PR was closed", "pr_closed", DateTimeOffset.UtcNow);
+        ContinuableFailedIssue failed = ContinuableFailedIssue.FromReview(review, "PR was closed", FailureCategory.PrClosed, DateTimeOffset.UtcNow);
 
         // Assert
         failed.ShouldSatisfyAllConditions(

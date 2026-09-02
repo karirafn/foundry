@@ -65,7 +65,7 @@ public sealed class PersistFailedIssue : IAsyncDisposable
             .WithWorkerRunId(failedWorkerRunId)
             .WithFailureReason("Container exited with code 1")
             .WithFailedAt(failedAt)
-            .WithFailureCategory("generic_failure")
+            .WithFailureCategory(FailureCategory.NonZeroExit)
             .Failed();
 
         _dbContext.Set<Issue>().Add(failed);

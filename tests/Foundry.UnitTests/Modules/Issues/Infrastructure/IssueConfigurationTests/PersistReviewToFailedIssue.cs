@@ -55,7 +55,7 @@ public sealed class PersistReviewToFailedIssue : IAsyncDisposable
             .WithBranchName("feat/issue-55")
             .WithPullRequestUrl("https://github.com/owner/repo/pull/7")
             .WithFailureReason("PR was closed without merge")
-            .WithFailureCategory("pr_closed")
+            .WithFailureCategory(FailureCategory.PrClosed)
             .WithFailedAt(failedAt)
             .ContinuableFailedFromReview();
 

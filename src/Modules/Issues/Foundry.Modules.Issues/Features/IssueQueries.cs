@@ -245,9 +245,9 @@ internal sealed class IssueQueries(
     private static string? GetFailureCategory(Issue issue) =>
         issue switch
         {
-            FailedIssue failed => failed.FailureCategory.Length > 0 ? failed.FailureCategory : null,
-            ContinuableFailedIssue continuableFailed => continuableFailed.FailureCategory.Length > 0 ? continuableFailed.FailureCategory : null,
-            RevisionFailedIssue revisionFailed => revisionFailed.FailureCategory.Length > 0 ? revisionFailed.FailureCategory : null,
+            FailedIssue failed => failed.FailureCategory.Value,
+            ContinuableFailedIssue continuableFailed => continuableFailed.FailureCategory.Value,
+            RevisionFailedIssue revisionFailed => revisionFailed.FailureCategory.Value,
             _ => null,
         };
 
@@ -321,14 +321,14 @@ internal sealed class IssueQueries(
         Issue issue,
         CancellationToken cancellationToken)
     {
-        string? failureCategory = issue switch
+        FailureCategory? failureCategory = issue switch
         {
             FailedIssue failed => failed.FailureCategory,
             ContinuableFailedIssue continuableFailed => continuableFailed.FailureCategory,
             _ => null
         };
 
-        if (failureCategory != TransientRetrySchedule.TransientApiErrorCategory)
+        if (failureCategory != FailureCategory.TransientApiError)
         {
             return null;
         }

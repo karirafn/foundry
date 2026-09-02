@@ -4,6 +4,7 @@ using Foundry.Modules.Issues.Domain.Entities.States;
 using Foundry.Modules.Issues.Features;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Contracts.Queries;
+using Foundry.Modules.Workers.Contracts;
 using Foundry.Testing;
 using Foundry.WebApi.Persistence;
 
@@ -100,7 +101,7 @@ public sealed class GetActiveIssueSummariesAsync_QueueOrdering : IAsyncDisposabl
             .WithDetectedAt(detectedAt ?? Now)
             .WithBranchName($"feat/issue-{issueNumber}")
             .WithFailureReason("Non-zero exit code: 1")
-            .WithFailureCategory("generic_failure")
+            .WithFailureCategory(FailureCategory.NonZeroExit)
             .WithFailedAt(Now)
             .ContinuableFailed();
         ContinuationQueuedIssue continuationQueued = continuableFailed.Retry();
