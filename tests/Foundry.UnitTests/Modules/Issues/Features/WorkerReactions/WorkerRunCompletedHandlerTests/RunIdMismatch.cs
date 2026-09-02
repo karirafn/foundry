@@ -85,28 +85,8 @@ public sealed class RunIdMismatch : IAsyncDisposable
                 i => i.MonitoredRepositoryId == repositoryId,
                 TestContext.Current.CancellationToken);
         InProgressIssue stillInProgress = issue.ShouldBeOfType<InProgressIssue>();
-        stillInProgress.WorkerRunId.ShouldBe(inProgress.WorkerRunId);
-    }
-
-    [Fact]
-    public async Task WhenRunIdDiffersFromIssueRunId_NothingIsDispatched()
-    {
-        // Arrange
-        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
-        InProgressIssue inProgress = SeedInProgressIssue(repositoryId);
-        Guid staleRunId = Guid.NewGuid();
-
-        WorkerRunCompleted @event = new(
-            WorkerRunId: staleRunId,
-            IssueId: inProgress.Id.Value,
-            BranchName: "feat/issue-1-fix",
-            PullRequestUrl: "https://github.com/owner/repo/pull/10",
-            MergeState: WorkerRunMergeState.Open);
-
-        // Act
-        await _sut.HandleAsync(@event, CancellationToken.None);
-
-        // Assert
-        _dispatcher.DispatchedEvents.ShouldBeEmpty();
+        stillInProgress.ShouldSatisfyAllConditions(
+            () => stillInProgress.WorkerRunId.ShouldBe(inProgress.WorkerRunId),
+            () => _dispatcher.DispatchedEvents.ShouldBeEmpty());
     }
 }

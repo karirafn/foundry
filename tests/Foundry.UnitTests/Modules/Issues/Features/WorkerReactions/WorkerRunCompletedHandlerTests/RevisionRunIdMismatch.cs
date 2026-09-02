@@ -87,28 +87,8 @@ public sealed class RevisionRunIdMismatch : IAsyncDisposable
                 i => i.MonitoredRepositoryId == repositoryId,
                 TestContext.Current.CancellationToken);
         RevisionInProgressIssue stillRevisionInProgress = issue.ShouldBeOfType<RevisionInProgressIssue>();
-        stillRevisionInProgress.WorkerRunId.ShouldBe(revisionInProgress.WorkerRunId);
-    }
-
-    [Fact]
-    public async Task WhenRunIdDiffersFromRevisionInProgressRunId_NothingIsDispatched()
-    {
-        // Arrange
-        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
-        RevisionInProgressIssue revisionInProgress = SeedRevisionInProgressIssue(repositoryId);
-        Guid staleRunId = Guid.NewGuid();
-
-        WorkerRunCompleted @event = new(
-            WorkerRunId: staleRunId,
-            IssueId: revisionInProgress.Id.Value,
-            BranchName: revisionInProgress.BranchName,
-            PullRequestUrl: revisionInProgress.PullRequestUrl,
-            MergeState: WorkerRunMergeState.Open);
-
-        // Act
-        await _sut.HandleAsync(@event, CancellationToken.None);
-
-        // Assert
-        _dispatcher.DispatchedEvents.ShouldBeEmpty();
+        stillRevisionInProgress.ShouldSatisfyAllConditions(
+            () => stillRevisionInProgress.WorkerRunId.ShouldBe(revisionInProgress.WorkerRunId),
+            () => _dispatcher.DispatchedEvents.ShouldBeEmpty());
     }
 }
