@@ -259,21 +259,27 @@ Accepted asymmetry: a repo visible to account A but namespace-claimed by account
 ## Repository Priority
 
 The relative ordering of monitored repositories, expressed as a 0-based, contiguous, unique `Position` integer on each Monitored Repository — lower value means higher priority.
-`Position` is one component of Dispatch Order and therefore affects both dispatch and the dashboard's queued-issue list.
+`Position` is one component of Dispatch Order and therefore affects both dispatch and the order the dashboard's queued-issue list is served in.
+Changing a repository's `Position` raises no notification, so a dashboard already open keeps rendering the pre-move order until it is reloaded.
 New repositories append at the end (highest existing Position + 1); deleting a repository renumbers survivors contiguously.
 Polling is independent of position.
 
 ## Dispatch Order
 
-The total order that governs which queued issue is claimed next and how queued issues are ranked in the dashboard.
-Defined as the four-tuple `(TierRank, Position, DetectedAt, Id)`, evaluated in that precedence — the issue with the lexicographically smallest key is claimed first (and displayed first).
+The total order that governs which queued issue is claimed next and the order the dashboard list query serves queued issues in.
+Defined as the four-tuple `(TierRank, Position, DetectedAt, Id)`, evaluated in that precedence — the issue with the lexicographically smallest key is claimed first, and is served first by the dashboard list query.
 
 - **TierRank** — a property of the queued state variant that encodes dispatch-priority class: revision (0) < continuation (1) < fresh (2). Lower rank is claimed first; this is the primary ordering criterion.
 - **Position** — the `EligibleRepository.Position` of the repository that owns the issue, supplied externally into the key. Lower position is preferred within a tier.
 - **DetectedAt** — oldest first within the same repository and tier.
 - **Id** — guarantees a deterministic total order when all other fields are equal.
 
-A single shared definition (`DispatchOrderKey`) governs both the dispatcher (`WorkerCapacityAvailableHandler`, min-by-key claim selection) and the dashboard list query (`GetActiveIssueSummariesAsync`, in-memory sort of the queued subset), so display order and dispatch order cannot drift.
+A single shared definition (`DispatchOrderKey`) governs both the dispatcher (`WorkerCapacityAvailableHandler`, min-by-key claim selection) and the dashboard list query (`GetActiveIssueSummariesAsync`, in-memory sort of the queued subset), so the two cannot disagree about the order at the moment the list is served.
+
+The guarantee ends at the response boundary.
+`Dispatch Order` is a function of every queued row plus repository state, but the dashboard receives it only as the array order of one response and thereafter patches that array per-issue from `IssueUpdated` events — replacing an issue at its existing index, or appending an unknown one at the tail.
+Neither patch consults the key, and no event reports that another issue's rank moved, so the rendered queue order diverges from Dispatch Order after any live queue transition and stays diverged until a full reload (page load or SignalR reconnect).
+The `Next up` badge is derived from that same patched array and therefore names the wrong issue under the same conditions.
 
 The dashboard partitions queued issues into two groups before applying the key: eligible-repository issues (real `Position`) rank above ineligible-repository issues (sentinel `int.MaxValue` position), each retaining its `RepositoryEligibilityStatus` for display.
 
