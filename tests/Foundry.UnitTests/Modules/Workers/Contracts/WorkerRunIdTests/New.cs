@@ -1,10 +1,10 @@
-using Foundry.Modules.Workers.Domain.ValueObjects;
+using Foundry.Modules.Workers.Contracts;
 
 using Shouldly;
 
 using Xunit;
 
-namespace Foundry.UnitTests.Modules.Workers.Domain.ValueObjects.WorkerRunIdTests;
+namespace Foundry.UnitTests.Modules.Workers.Contracts.WorkerRunIdTests;
 
 public sealed class New
 {
