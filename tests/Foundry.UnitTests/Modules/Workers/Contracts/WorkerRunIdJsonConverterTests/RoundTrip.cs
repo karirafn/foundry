@@ -29,7 +29,7 @@ public sealed class RoundTrip
     }
 
     [Fact]
-    public void WhenDeserialized_RoundTripsToBareGuidString()
+    public void WhenDeserializedFromGuidString_ProducesEqualWorkerRunId()
     {
         // Arrange
         WorkerRunId original = WorkerRunId.New();

@@ -10,6 +10,11 @@ public sealed class WorkerRunIdJsonConverter : JsonConverter<WorkerRunId>
         Type typeToConvert,
         JsonSerializerOptions options)
     {
+        if (reader.TokenType != JsonTokenType.String)
+        {
+            throw new JsonException($"Expected a JSON string for WorkerRunId but got {reader.TokenType}.");
+        }
+
         string? value = reader.GetString();
 
         if (value is null || !Guid.TryParse(value, out Guid guid))
