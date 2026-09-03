@@ -14,7 +14,7 @@ const mockIssue: IssueSummary = {
   url: 'https://github.com/owner/repo/issues/42',
 };
 
-function createComponent(issue: IssueSummary = mockIssue, expanded = false, lastActivityAt: string | null = null, commitCount: number | null = null, isNextUp = false) {
+function createComponent(issue: IssueSummary = mockIssue, expanded = false, lastActivityAt: string | null = null, commitCount: number | null = null, isNextUp = false, queuePosition: number | null = null) {
   TestBed.configureTestingModule({
     imports: [IssueCardComponent],
     providers: [
@@ -33,6 +33,7 @@ function createComponent(issue: IssueSummary = mockIssue, expanded = false, last
   if (isNextUp) {
     fixture.componentRef.setInput('isNextUp', true);
   }
+  fixture.componentRef.setInput('queuePosition', queuePosition);
   fixture.detectChanges();
   return fixture;
 }
@@ -1542,9 +1543,7 @@ describe('IssueCardComponent', () => {
     const queuedIssue: IssueSummary = { ...mockIssue, state: 'queued' };
 
     // Act
-    const fixture = createComponent(queuedIssue);
-    fixture.componentRef.setInput('queuePosition', 3);
-    fixture.detectChanges();
+    const fixture = createComponent(queuedIssue, false, null, null, false, 3);
     const el = fixture.nativeElement as HTMLElement;
 
     // Assert
@@ -1558,9 +1557,7 @@ describe('IssueCardComponent', () => {
     const queuedIssue: IssueSummary = { ...mockIssue, state: 'queued' };
 
     // Act
-    const fixture = createComponent(queuedIssue);
-    fixture.componentRef.setInput('queuePosition', 5);
-    fixture.detectChanges();
+    const fixture = createComponent(queuedIssue, false, null, null, false, 5);
     const el = fixture.nativeElement as HTMLElement;
 
     // Assert
@@ -1597,9 +1594,7 @@ describe('IssueCardComponent', () => {
     const queuedIssue: IssueSummary = { ...mockIssue, state: 'queued' };
 
     // Act
-    const fixture = createComponent(queuedIssue);
-    fixture.componentRef.setInput('queuePosition', 2);
-    fixture.detectChanges();
+    const fixture = createComponent(queuedIssue, false, null, null, false, 2);
     const el = fixture.nativeElement as HTMLElement;
 
     // Assert
@@ -1616,10 +1611,8 @@ describe('IssueCardComponent', () => {
       repositoryEligibilityStatus: 'ineligible',
     };
 
-    // Act
+    // Act — queuePosition defaults to null; the gutter still renders for queued-tier cards
     const fixture = createComponent(queuedIssue);
-    fixture.componentRef.setInput('queuePosition', null);
-    fixture.detectChanges();
     const el = fixture.nativeElement as HTMLElement;
 
     // Assert
@@ -1634,9 +1627,7 @@ describe('IssueCardComponent', () => {
     const inProgressIssue: IssueSummary = { ...mockIssue, state: 'in_progress' };
 
     // Act
-    const fixture = createComponent(inProgressIssue);
-    fixture.componentRef.setInput('queuePosition', 1);
-    fixture.detectChanges();
+    const fixture = createComponent(inProgressIssue, false, null, null, false, 1);
     const el = fixture.nativeElement as HTMLElement;
 
     // Assert
@@ -1680,9 +1671,7 @@ describe('IssueCardComponent', () => {
     const queuedIssue: IssueSummary = { ...mockIssue, state: 'queued' };
 
     // Act
-    const fixture = createComponent(queuedIssue);
-    fixture.componentRef.setInput('queuePosition', 2);
-    fixture.detectChanges();
+    const fixture = createComponent(queuedIssue, false, null, null, false, 2);
     const el = fixture.nativeElement as HTMLElement;
 
     // Assert
@@ -1696,9 +1685,7 @@ describe('IssueCardComponent', () => {
     const queuedIssue: IssueSummary = { ...mockIssue, state: 'queued' };
 
     // Act
-    const fixture = createComponent(queuedIssue);
-    fixture.componentRef.setInput('queuePosition', 2);
-    fixture.detectChanges();
+    const fixture = createComponent(queuedIssue, false, null, null, false, 2);
     const el = fixture.nativeElement as HTMLElement;
 
     // Assert
@@ -1740,10 +1727,8 @@ describe('IssueCardComponent', () => {
       repositoryEligibilityStatus: 'ineligible',
     };
 
-    // Act
+    // Act — queuePosition defaults to null in the helper
     const fixture = createComponent(queuedIssue);
-    fixture.componentRef.setInput('queuePosition', null);
-    fixture.detectChanges();
     const el = fixture.nativeElement as HTMLElement;
 
     // Assert

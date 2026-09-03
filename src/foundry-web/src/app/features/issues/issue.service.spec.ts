@@ -2900,6 +2900,30 @@ describe('IssueService (queuePositions)', () => {
     expect(positions.get('q2')).toBe(1);
     expect(positions.get('q1')).toBe(2);
   });
+
+  // Cycle QP6: deselecting a queued-tier state hides those cards and renumbers remaining ordinals
+  // from 1 (ADR 0067 — positions index the rendered activeBandIssues() array, not the unfiltered
+  // eligibleQueuedIssues(), so the on-screen topmost card always shows "1")
+  it('should exclude hidden issues and renumber visible dispatchable issues from 1 after a state is deselected', () => {
+    // Arrange — load one queued and one revision_queued issue, both dispatchable
+    const q1: IssueSummary = { ...baseQueued, id: 'q1', state: 'queued', repositoryEligibilityStatus: null };
+    const rv1: IssueSummary = { ...baseQueued, id: 'rv1', state: 'revision_queued', repositoryEligibilityStatus: null };
+
+    // Act — load both, then deselect the 'queued' state so q1 is hidden
+    loadIssues([q1, rv1]);
+
+    // Before toggle: q1 → 1, rv1 → 2
+    expect(service.queuePositions().get('q1')).toBe(1);
+    expect(service.queuePositions().get('rv1')).toBe(2);
+
+    service.toggleState('queued');
+
+    // Assert — q1 is now hidden; rv1 is the only visible dispatchable issue and gets position 1
+    const positions = service.queuePositions();
+    expect(positions.has('q1')).toBe(false);
+    expect(positions.get('rv1')).toBe(1);
+    expect(positions.size).toBe(1);
+  });
 });
 
 // Step 12 — nextUpAnnouncement computed (issue #507)

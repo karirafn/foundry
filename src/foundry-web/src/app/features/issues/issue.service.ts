@@ -139,19 +139,12 @@ export class IssueService {
   // sortedIssues() would still expose correct relative queue order within Waiting, but
   // issues() is canonical because it is unaffected by any future group reclassifications.
   readonly eligibleQueuedIssues: Signal<IssueSummary[]> = computed(() =>
-    this.issues().filter(i =>
-      QUEUED_TIER_STATES.has(i.state) &&
-      i.repositoryEligibilityStatus !== 'ineligible' &&
-      i.repositoryEligibilityStatus !== 'unreachable'
-    )
+    this.issues().filter(isDispatchableQueued)
   );
 
   // Same rationale: filter issues() to preserve server dispatch order.
   readonly ineligibleQueuedIssues: Signal<IssueSummary[]> = computed(() =>
-    this.issues().filter(i =>
-      QUEUED_TIER_STATES.has(i.state) &&
-      (i.repositoryEligibilityStatus === 'ineligible' || i.repositoryEligibilityStatus === 'unreachable')
-    )
+    this.issues().filter(i => QUEUED_TIER_STATES.has(i.state) && !isDispatchableQueued(i))
   );
 
   readonly nextUpIssueId: Signal<string | null> = computed(() => {
@@ -163,6 +156,11 @@ export class IssueService {
     this.sortedIssues().filter(i => this.selectedActiveStates().has(i.state))
   );
 
+  // Positions index the rendered activeBandIssues() array so the ordinal always matches the
+  // on-screen order (ADR 0067). Consequently, deselecting a queued-tier state renumbers the
+  // visible ordinals contiguously rather than preserving absolute dispatch position — this is
+  // intended: the topmost visible card must always show "1", never a non-1 number when cards
+  // above it are hidden by a filter.
   readonly queuePositions: Signal<ReadonlyMap<string, number>> = computed(() => {
     const positions = new Map<string, number>();
     let position = 1;
