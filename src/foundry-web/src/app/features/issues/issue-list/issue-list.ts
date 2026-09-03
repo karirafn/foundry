@@ -17,6 +17,7 @@ import { WorkerRunTotalsService } from '../../workers/run-totals.service';
 const SKELETON_COUNT = 4;
 const EMPTY_ACTIVE_MESSAGE = 'No active issues match the current filters. Check the Resolved counts to see closed work.';
 const EMPTY_RESOLVED_MESSAGE = 'No resolved issues match the selected filters';
+const STALE_MESSAGE = 'Queue order may be out of date';
 const RESOLVED_HEADING_ID = 'resolved-band-heading';
 const INELIGIBLE_QUEUE_HEADING_ID = 'ineligible-queue-heading';
 
@@ -73,6 +74,38 @@ const INELIGIBLE_QUEUE_HEADING_ID = 'ineligible-queue-heading';
                 type="button"
                 (click)="retryActiveLoad()"
               >Retry</button>
+            </div>
+          }
+
+          <!-- Persistent live-region announcer for stale queue-order state (always mounted).
+               Text swaps in/out so NVDA+Firefox reliably announces the change.
+               The visible strip below is @if-gated for appearance only and carries no role. -->
+          <span
+            role="status"
+            class="issue-list__stale-announcer sr-only"
+          >{{ staleAnnouncement() }}</span>
+
+          @if (issueService.queueOrderStale()) {
+            <div class="issue-list__stale-marker">
+              <svg
+                class="issue-list__stale-marker-icon"
+                xmlns="http://www.w3.org/2000/svg"
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+                focusable="false"
+              >
+                <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+                <path d="M3 3v5h5" />
+                <path d="M12 7v5l4 2" />
+              </svg>
+              <span class="issue-list__stale-marker-text">Queue order may be out of date</span>
             </div>
           }
 
@@ -262,6 +295,10 @@ export class IssueListComponent implements OnInit {
   });
 
   private _preLoadResolvedCount = 0;
+
+  protected readonly staleAnnouncement = computed(() =>
+    this.issueService.queueOrderStale() ? STALE_MESSAGE : ''
+  );
 
   protected readonly emptyActiveMessage = computed(() => {
     if (

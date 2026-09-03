@@ -134,6 +134,29 @@
     }
   }
 
+  &__stale-marker {
+    display: flex;
+    align-items: center;
+    gap: var(--fd-spacing-sm);
+    margin-block: var(--fd-spacing-sm);
+    padding: var(--fd-spacing-xs) var(--fd-spacing-md);
+    background: var(--fd-bg-warning-subtle);
+    border: 1px solid var(--fd-border-warning);
+    border-radius: var(--fd-radius-sm);
+    color: var(--fd-text-warning);
+    font-size: 0.8125rem;
+    line-height: 1.4;
+  }
+
+  &__stale-marker-icon {
+    flex-shrink: 0;
+    color: var(--fd-text-warning);
+  }
+
+  &__stale-marker-text {
+    flex: 1;
+  }
+
   &__empty-active-announcer {
     // sr-only handles visibility; this class is an anchor for tests
   }

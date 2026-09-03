@@ -260,7 +260,6 @@ Accepted asymmetry: a repo visible to account A but namespace-claimed by account
 
 The relative ordering of monitored repositories, expressed as a 0-based, contiguous, unique `Position` integer on each Monitored Repository — lower value means higher priority.
 `Position` is one component of Dispatch Order and therefore affects both dispatch and the order the dashboard's queued-issue list is served in.
-Changing a repository's `Position` raises no notification, so a dashboard already open keeps rendering the pre-move order until it is reloaded.
 New repositories append at the end (highest existing Position + 1); deleting a repository renumbers survivors contiguously.
 Polling is independent of position.
 
@@ -276,10 +275,12 @@ Defined as the four-tuple `(TierRank, Position, DetectedAt, Id)`, evaluated in t
 
 A single shared definition (`DispatchOrderKey`) governs both the dispatcher (`WorkerCapacityAvailableHandler`, min-by-key claim selection) and the dashboard list query (`GetActiveIssueSummariesAsync`, in-memory sort of the queued subset), so the two cannot disagree about the order at the moment the list is served.
 
-The guarantee ends at the response boundary.
-`Dispatch Order` is a function of every queued row plus repository state, but the dashboard receives it only as the array order of one response and thereafter patches that array per-issue from `IssueUpdated` events — replacing an issue at its existing index, or appending an unknown one at the tail.
-Neither patch consults the key, and no event reports that another issue's rank moved, so the rendered queue order diverges from Dispatch Order after any live queue transition and stays diverged until a full reload (page load or SignalR reconnect).
-The `Next up` badge is derived from that same patched array and therefore names the wrong issue under the same conditions.
+The dashboard treats the server array order as the only source of queue order and reconciles it by refetching `GET /api/issues`, rather than deriving order locally or receiving a pushed order (see [ADR 0067](docs/adr/0067-dashboard-reconciles-queue-order-rather-than-deriving-it.md)).
+Every `IssueUpdated` event schedules a debounced reconcile (300 ms) alongside the counts refetch that already runs on that path, collapsing a burst of events into one request.
+A low-frequency safety-net timer (30 s) schedules the same reconcile, covering order inputs that raise no issue event — including a repository `Position` change in Settings.
+The reconcile fetch carries a latest-wins request token, so a late response cannot install a stale order.
+A failed reconcile sets a `queueOrderStale` signal to disclose bounded staleness without showing the blocking load-error banner; the next successful reconcile clears it.
+The automatic exit from the possibly-stale state is the next event-driven or timer-driven reconcile, plus the full reload on SignalR reconnect.
 
 The dashboard partitions queued issues into two groups before applying the key: eligible-repository issues (real `Position`) rank above ineligible-repository issues (sentinel `int.MaxValue` position), each retaining its `RepositoryEligibilityStatus` for display.
 
