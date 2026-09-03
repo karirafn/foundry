@@ -2480,6 +2480,51 @@ describe('IssueService (queue-order reconcile)', () => {
     http.verify({ ignoreCancelled: true });
   });
 
+  // Finding 2 — reconcile failure during initial load must NOT set queueOrderStale
+  it('should NOT set queueOrderStale when reconcile fails while initialLoading is still true', () => {
+    // Arrange — fake timers so the safety-net setInterval fires
+    vi.useFakeTimers();
+    const { svc, http } = setup();
+    // Do NOT call loadIssues so initialLoading remains true; the safety-net fires after 30 s
+    expect(svc.initialLoading()).toBe(true);
+
+    // Act — advance past the safety-net interval to trigger a reconcile
+    vi.advanceTimersByTime(30_100);
+    const reconcileReq = http.expectOne(r => r.url === '/api/issues' && !r.params.has('states'));
+
+    // Reconcile fails while initialLoading is still true
+    reconcileReq.flush('Server Error', { status: 500, statusText: 'Internal Server Error' });
+
+    // Assert — queueOrderStale must NOT be set because we are still in the initial loading phase
+    expect(svc.queueOrderStale()).toBe(false);
+    expect(svc.initialLoading()).toBe(true); // still loading — no loadIssues call yet
+
+    http.verify({ ignoreCancelled: true });
+  });
+
+  it('should set queueOrderStale when reconcile fails after initial load has completed', () => {
+    // Arrange — fake timers BEFORE service construction so setInterval is intercepted
+    vi.useFakeTimers();
+    const { svc, http } = setup();
+    svc.loadIssues();
+    http.expectOne('/api/issues').flush([low]);
+    expect(svc.initialLoading()).toBe(false); // initial load done
+
+    // Advance past the safety-net interval
+    vi.advanceTimersByTime(30_100);
+
+    // Act — reconcile fails after initial load is complete
+    http.expectOne(r => r.url === '/api/issues' && !r.params.has('states')).flush('Server Error', {
+      status: 500,
+      statusText: 'Internal Server Error',
+    });
+
+    // Assert — stale marker is set because initial load is done
+    expect(svc.queueOrderStale()).toBe(true);
+
+    http.verify({ ignoreCancelled: true });
+  });
+
   // Step 9 (criterion 9): reconcile does not re-show loading skeletons
   it('should not set initialLoading to true during or after a reconcile', () => {
     // Arrange

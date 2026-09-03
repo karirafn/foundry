@@ -17,6 +17,7 @@ import { WorkerRunTotalsService } from '../../workers/run-totals.service';
 const SKELETON_COUNT = 4;
 const EMPTY_ACTIVE_MESSAGE = 'No active issues match the current filters. Check the Resolved counts to see closed work.';
 const EMPTY_RESOLVED_MESSAGE = 'No resolved issues match the selected filters';
+const STALE_MESSAGE = 'Queue order may be out of date';
 const RESOLVED_HEADING_ID = 'resolved-band-heading';
 const INELIGIBLE_QUEUE_HEADING_ID = 'ineligible-queue-heading';
 
@@ -76,8 +77,16 @@ const INELIGIBLE_QUEUE_HEADING_ID = 'ineligible-queue-heading';
             </div>
           }
 
+          <!-- Persistent live-region announcer for stale queue-order state (always mounted).
+               Text swaps in/out so NVDA+Firefox reliably announces the change.
+               The visible strip below is @if-gated for appearance only and carries no role. -->
+          <span
+            role="status"
+            class="issue-list__stale-announcer sr-only"
+          >{{ staleAnnouncement() }}</span>
+
           @if (issueService.queueOrderStale()) {
-            <div class="issue-list__stale-marker" role="status" aria-atomic="true">
+            <div class="issue-list__stale-marker">
               <svg
                 class="issue-list__stale-marker-icon"
                 xmlns="http://www.w3.org/2000/svg"
@@ -286,6 +295,10 @@ export class IssueListComponent implements OnInit {
   });
 
   private _preLoadResolvedCount = 0;
+
+  protected readonly staleAnnouncement = computed(() =>
+    this.issueService.queueOrderStale() ? STALE_MESSAGE : ''
+  );
 
   protected readonly emptyActiveMessage = computed(() => {
     if (

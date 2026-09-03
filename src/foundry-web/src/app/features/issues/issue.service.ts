@@ -422,8 +422,10 @@ export class IssueService {
         if (token !== this._reconcileRequestToken) {
           return;
         }
-        console.error(err);
-        this._queueOrderStaleSignal.set(true);
+        if (!this.initialLoading()) {
+          console.error(err);
+          this._queueOrderStaleSignal.set(true);
+        }
       },
     });
   }
