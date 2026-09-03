@@ -1,6 +1,6 @@
 import { Component, InputSignal, OutputEmitterRef, computed, inject, input, output } from '@angular/core';
 import { DecimalPipe, NgClass } from '@angular/common';
-import { IssueSummary, RunStats, LIVE_STATES } from '../issue.model';
+import { IssueSummary, RunStats, LIVE_STATES, QUEUED_TIER_STATES } from '../issue.model';
 import { STATE_ARIA_LABELS, cardAccentFor } from '../../../shared/utils/state-display';
 import { StateBadgeComponent } from '../../../shared/components/state-badge/state-badge';
 import { SafeHrefPipe } from '../../../shared/pipes/safe-href.pipe';
@@ -8,6 +8,7 @@ import { TickerService } from '../../../core/services/ticker.service';
 import { formatCost as _formatCostImpl, formatDuration as _formatDurationImpl } from '../run-stats.format';
 
 const REPO_WARNING_STATES = new Set<string>(['queued', 'detected', 'revision_queued', 'continuation_queued']);
+const EM_DASH = '—';
 const SILENCE_THRESHOLD_MINUTES = 5;
 
 // Re-export shared helpers so existing imports from this module continue to work.
@@ -92,14 +93,19 @@ function hasVisiblePills(stats: RunStats): boolean {
       (click)="onCardClick()"
       (keydown)="onKeydown($event)"
     >
-      <div class="issue-card__meta">
+      @if (_isQueuedTier()) {
+        <div
+          class="issue-card__queue-position"
+          [ngClass]="{ 'issue-card__queue-position--next': isNextUp() }"
+          aria-hidden="true"
+        >{{ _queuePositionDisplay() }}</div>
+      }
+      <div class="issue-card__body">
+        <div class="issue-card__meta">
         <span class="issue-card__number">#{{ issue().issueNumber }}</span>
         <span class="issue-card__separator" aria-hidden="true">·</span>
         <span class="issue-card__slug">{{ issue().repositorySlug }}</span>
         <div class="issue-card__badge">
-          @if (isNextUp()) {
-            <span class="issue-card__next-up" aria-hidden="true">Next up</span>
-          }
           <fd-state-badge [state]="issue().state" [failureClassification]="issue().failureClassification" />
           @if (repoWarningLabel()) {
             <span
@@ -228,6 +234,7 @@ function hasVisiblePills(stats: RunStats): boolean {
           </a>
         }
       </div>
+      </div>
     </button>
   `,
   styleUrl: './issue-card.scss',
@@ -238,13 +245,23 @@ export class IssueCardComponent {
   readonly lastActivityAt: InputSignal<string | null> = input<string | null>(null);
   readonly commitCount: InputSignal<number | null> = input<number | null>(null);
   readonly isNextUp: InputSignal<boolean> = input<boolean>(false);
+  readonly queuePosition: InputSignal<number | null> = input<number | null>(null);
   readonly toggle: OutputEmitterRef<void> = output<void>();
 
   private readonly _ticker = inject(TickerService);
 
+  readonly _isQueuedTier = computed(() => QUEUED_TIER_STATES.has(this.issue().state));
+
+  readonly _queuePositionDisplay = computed((): string => {
+    const pos = this.queuePosition();
+    return typeof pos === 'number' ? String(pos) : EM_DASH;
+  });
+
   readonly _accentClass = computed(() => {
     const accent = cardAccentFor(this.issue().state);
-    return accent === 'working' ? 'issue-card--working' : accent === 'ready' ? 'issue-card--ready' : '';
+    const hasGutter = this._isQueuedTier() ? 'issue-card--has-gutter' : '';
+    const accentClass = accent === 'working' ? 'issue-card--working' : accent === 'ready' ? 'issue-card--ready' : '';
+    return [accentClass, hasGutter].filter(Boolean).join(' ');
   });
 
   readonly _activityLine = computed(() => {
@@ -292,13 +309,27 @@ export class IssueCardComponent {
     const issue = this.issue();
     const stateLabel = STATE_ARIA_LABELS[issue.state] ?? issue.state;
     const nextUp = this.isNextUp() ? 'Next up. ' : '';
-    const base = `${nextUp}Issue #${issue.issueNumber}: ${issue.title}. State: ${stateLabel}`;
+    const queuePositionPart = this._buildQueuePositionAriaClause();
+    const base = `${nextUp}${queuePositionPart}Issue #${issue.issueNumber}: ${issue.title}. State: ${stateLabel}`;
     const warning = this.repoWarningLabel();
     const warningPart = warning ? ` ${warning}` : '';
     const runStatsPart = this._buildRunStatsAriaText();
     const activityPart = this._buildActivityAriaText();
     return `${base}${warningPart}${runStatsPart}${activityPart}`;
   });
+
+  private _buildQueuePositionAriaClause(): string {
+    // Skip clause for rank-1 (isNextUp covers it) and for non-queued-tier cards.
+    // Also skip when queuePosition is null (not-dispatchable).
+    if (this.isNextUp() || !this._isQueuedTier()) {
+      return '';
+    }
+    const pos = this.queuePosition();
+    if (typeof pos !== 'number') {
+      return '';
+    }
+    return `Queue position ${pos}. `;
+  }
 
   private _buildActivityAriaText(): string {
     const at = this.lastActivityAt();

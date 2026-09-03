@@ -1748,7 +1748,7 @@ describe('IssueListComponent', () => {
 
   // Dispatch-order queue grouping tests (issue #261)
 
-  // QueueGroup-1: "Next up" marker on first eligible queued issue
+  // QueueGroup-1: rank-1 gutter (--next modifier) on first eligible queued issue; pill removed
   it('should render "Next up" marker on the first eligible queued issue', () => {
     // Arrange
     const queuedEligible: IssueSummary = {
@@ -1764,10 +1764,11 @@ describe('IssueListComponent', () => {
     // Act
     fixture.detectChanges();
 
-    // Assert
+    // Assert — .issue-card__next-up pill removed; rank-1 is now the --next gutter modifier
     const el = fixture.nativeElement as HTMLElement;
-    const nextUp = el.querySelector('.issue-card__next-up');
-    expect(nextUp?.textContent?.trim()).toContain('Next up');
+    expect(el.querySelector('.issue-card__next-up')).toBeFalsy();
+    const gutterNext = el.querySelector('.issue-card__queue-position--next');
+    expect(gutterNext).toBeTruthy();
   });
 
   // QueueGroup-2: No "Next up" when all queued issues are ineligible
