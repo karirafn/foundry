@@ -22,6 +22,11 @@ const RETRY_ERROR = 'Failed to retry issue.';
 const RETRY_SUCCESS = 'Retry queued. Issue status is updating.';
 const SAFE_ID_RE = /^[\w-]+$/;
 const COUNTS_DEBOUNCE_MS = 300;
+// Safety-net interval for queue-order reconcile — covers order inputs that raise no IssueUpdated
+// event (e.g. repository Position changes in Settings). ADR 0067: bounded staleness is acceptable
+// for these infrequent operator actions; 30 s is low enough to reflect a Position reorder within
+// one interval and high enough that idle traffic is one GET /api/issues per 30 s.
+const RECONCILE_SAFETY_NET_MS = 30_000;
 
 @Injectable({ providedIn: 'root' })
 export class IssueService {
@@ -72,9 +77,14 @@ export class IssueService {
   readonly resolvedLoading: WritableSignal<boolean> = signal(false);
   readonly resolvedLoadingMore: WritableSignal<boolean> = signal(false);
 
+  private readonly _queueOrderStaleSignal: WritableSignal<boolean> = signal(false);
+  readonly queueOrderStale: Signal<boolean> = this._queueOrderStaleSignal.asReadonly();
+
   private _detailSub: Subscription | null = null;
   private _countsDebounceHandle: ReturnType<typeof setTimeout> | null = null;
+  private _reconcileIntervalHandle: ReturnType<typeof setInterval> | null = null;
   private _resolvedRequestToken = 0;
+  private _reconcileRequestToken = 0;
 
   readonly sortedIssues: Signal<IssueSummary[]> = computed(() => {
     const all = this.issues();
@@ -158,9 +168,15 @@ export class IssueService {
   constructor() {
     this._signalR.on<IssueSummary>('IssueUpdated', (updated) => this._upsertIssue(updated));
     this._signalR.onReconnected(() => this.loadIssues());
+    this._reconcileIntervalHandle = setInterval(() => {
+      this._reconcileQueueOrder();
+    }, RECONCILE_SAFETY_NET_MS);
     this._destroyRef.onDestroy(() => {
       if (this._countsDebounceHandle !== null) {
         clearTimeout(this._countsDebounceHandle);
+      }
+      if (this._reconcileIntervalHandle !== null) {
+        clearInterval(this._reconcileIntervalHandle);
       }
     });
   }
@@ -175,7 +191,7 @@ export class IssueService {
 
     this._http.get<IssueSummary[]>('/api/issues', { params }).subscribe({
       next: (issues) => {
-        this.issues.set(issues.filter(i => SAFE_ID_RE.test(i.id) && isKnownState(i.state) && !isResolvedState(i.state)));
+        this.issues.set(this._activeIssuesOnly(issues));
         this._loadErrorSignal.set(null);
         this.initialLoading.set(false);
       },
@@ -373,7 +389,43 @@ export class IssueService {
     this._countsDebounceHandle = setTimeout(() => {
       this._countsDebounceHandle = null;
       this.loadCounts();
+      this._reconcileQueueOrder();
     }, COUNTS_DEBOUNCE_MS);
+  }
+
+  // Filters the server response to only active (non-resolved) issues with valid IDs and known
+  // states — the same invariant enforced by loadIssues so that resolved states never enter
+  // issues() and _reconcileQueueOrder cannot drift from loadIssues behaviour.
+  private _activeIssuesOnly(issues: IssueSummary[]): IssueSummary[] {
+    return issues.filter(i => SAFE_ID_RE.test(i.id) && isKnownState(i.state) && !isResolvedState(i.state));
+  }
+
+  // Refetches GET /api/issues and replaces issues() with the server's array order, treating that
+  // order as authoritative for dispatch priority (ADR 0067). Does NOT touch initialLoading or
+  // _loadErrorSignal — those are owned by the initial-load path (loadIssues). A failed reconcile
+  // sets _queueOrderStaleSignal to disclose bounded staleness; a successful reconcile clears it.
+  // A latest-wins _reconcileRequestToken guards against a stale late response installing a wrong
+  // order — the one defect that would silently recreate the drift bug this method was added to fix.
+  private _reconcileQueueOrder(): void {
+    this._reconcileRequestToken += 1;
+    const token = this._reconcileRequestToken;
+
+    this._http.get<IssueSummary[]>('/api/issues').subscribe({
+      next: (issues) => {
+        if (token !== this._reconcileRequestToken) {
+          return;
+        }
+        this.issues.set(this._activeIssuesOnly(issues));
+        this._queueOrderStaleSignal.set(false);
+      },
+      error: (err: HttpErrorResponse) => {
+        if (token !== this._reconcileRequestToken) {
+          return;
+        }
+        console.error(err);
+        this._queueOrderStaleSignal.set(true);
+      },
+    });
   }
 
   private _onResolvedSelectionChanged(states: ReadonlySet<IssueState>): void {

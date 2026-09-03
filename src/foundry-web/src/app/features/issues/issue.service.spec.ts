@@ -1276,9 +1276,11 @@ describe('IssueService (band transitions + counts debounce)', () => {
     // Act — trigger an IssueUpdated event for the expanded issue
     callbacks['IssueUpdated']({ ...activeSummary, state: 'in_progress' });
 
-    // Advance past the debounce window so the counts request fires
+    // Advance past the debounce window so the counts + reconcile requests fire
     vi.advanceTimersByTime(400);
     httpMock.expectOne('/api/issues/counts').flush({ counts: {} });
+    // The debounce now also schedules a reconcile alongside the counts refetch (ADR 0067).
+    httpMock.expectOne(r => r.url === '/api/issues' && !r.params.has('states')).flush([activeSummary]);
 
     // Assert — detail refetch triggered
     const detailReq = httpMock.expectOne('/api/issues/issue-1');
@@ -1318,6 +1320,8 @@ describe('IssueService (band transitions + counts debounce)', () => {
       const req = httpMock.expectOne('/api/issues/counts');
       expect(req.request.method).toBe('GET');
       req.flush({ counts: { failed: 1 } });
+      // The debounce also fires exactly one reconcile alongside the counts refetch (ADR 0067).
+      httpMock.expectOne(r => r.url === '/api/issues' && !r.params.has('states')).flush([activeSummary]);
     });
   });
 });
@@ -2061,6 +2065,443 @@ describe('IssueService (dispatch-order vs visual-sort regression)', () => {
     expect(ineligible[0].id).toBe('cq-inelig-first');
     expect(ineligible[1].id).toBe('q-inelig-second');
     expect(ineligible.length).toBe(2);
+  });
+});
+
+// Step 10 — Queue-order reconcile (#506)
+describe('IssueService (queue-order reconcile)', () => {
+  let callbacks: Record<string, (data: IssueSummary) => void>;
+  let httpMockRef: HttpTestingController;
+
+  const low: IssueSummary = {
+    id: 'low-prio',
+    issueNumber: 1,
+    title: 'Low prio queued',
+    state: 'queued',
+    repositorySlug: 'owner/low-repo',
+    detectedAt: '2026-01-01T00:00:00Z',
+    url: 'https://github.com/owner/low-repo/issues/1',
+    repositoryEligibilityStatus: null,
+  };
+
+  const rev: IssueSummary = {
+    id: 'revision-high',
+    issueNumber: 2,
+    title: 'Revision queued',
+    state: 'revision_queued',
+    repositorySlug: 'owner/high-repo',
+    detectedAt: '2026-06-01T00:00:00Z',
+    url: 'https://github.com/owner/high-repo/issues/2',
+    repositoryEligibilityStatus: null,
+  };
+
+  function setup() {
+    callbacks = {};
+    const capturingSignalR = {
+      on: (method: string, cb: (data: IssueSummary) => void) => { callbacks[method] = cb; },
+      onReconnected: () => {},
+    };
+
+    TestBed.resetTestingModule();
+    TestBed.configureTestingModule({
+      providers: [
+        IssueService,
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        { provide: IssueSignalRService, useValue: capturingSignalR },
+      ],
+    });
+
+    const svc = TestBed.inject(IssueService);
+    const http = TestBed.inject(HttpTestingController);
+    httpMockRef = http;
+    return { svc, http };
+  }
+
+  afterEach(() => {
+    vi.useRealTimers();
+    // Reset so subsequent describe blocks can call configureTestingModule cleanly.
+    TestBed.resetTestingModule();
+  });
+
+  // Step 1 — Tracer bullet: direct reconcile installs server order
+  it('should replace issues() with server order on reconcile success, without setting initialLoading', () => {
+    // Arrange
+    const { svc, http } = setup();
+    svc.loadIssues();
+    http.expectOne('/api/issues').flush([low]);
+    expect(svc.issues()[0].id).toBe('low-prio');
+    expect(svc.initialLoading()).toBe(false);
+
+    // Act — fire an IssueUpdated event to trigger the debounced reconcile
+    vi.useFakeTimers();
+    callbacks['IssueUpdated']({ ...low, state: 'queued' });
+    vi.advanceTimersByTime(400);
+
+    // The debounce fires — expect one counts request and one reconcile request
+    http.expectOne('/api/issues/counts').flush({ counts: {} });
+    const reconcileReq = http.expectOne(r => r.url === '/api/issues' && !r.params.has('states'));
+    reconcileReq.flush([rev, low]); // server returns revision-high first now
+
+    // Assert — issues() reflects the new server order
+    expect(svc.issues()[0].id).toBe('revision-high');
+    expect(svc.issues()[1].id).toBe('low-prio');
+    // initialLoading must not be re-set
+    expect(svc.initialLoading()).toBe(false);
+    http.verify({ ignoreCancelled: true });
+  });
+
+  // Step 1 — reconcile excludes resolved-state items (same filter as loadIssues)
+  it('should filter resolved-state items from reconcile response, same as loadIssues', () => {
+    // Arrange
+    const { svc, http } = setup();
+    svc.loadIssues();
+    http.expectOne('/api/issues').flush([low]);
+
+    vi.useFakeTimers();
+    callbacks['IssueUpdated']({ ...low, state: 'queued' });
+    vi.advanceTimersByTime(400);
+    http.expectOne('/api/issues/counts').flush({ counts: {} });
+
+    const completed: IssueSummary = { ...low, id: 'done', state: 'completed' };
+
+    // Act — reconcile returns active + completed
+    http.expectOne(r => r.url === '/api/issues' && !r.params.has('states')).flush([low, completed]);
+
+    // Assert — completed is excluded from issues()
+    expect(svc.issues().some(i => i.id === 'done')).toBe(false);
+    expect(svc.issues().some(i => i.id === 'low-prio')).toBe(true);
+    http.verify({ ignoreCancelled: true });
+  });
+
+  // Step 1 — token: later response discards earlier
+  it('should discard an earlier reconcile response when a later one has already resolved', () => {
+    // Arrange
+    const { svc, http } = setup();
+    svc.loadIssues();
+    http.expectOne('/api/issues').flush([low]);
+
+    vi.useFakeTimers();
+
+    // First IssueUpdated — debounce window 1
+    callbacks['IssueUpdated']({ ...low, state: 'queued' });
+    vi.advanceTimersByTime(400);
+    http.expectOne('/api/issues/counts').flush({ counts: {} });
+    const firstReconcile = http.expectOne(r => r.url === '/api/issues' && !r.params.has('states'));
+
+    // Second IssueUpdated — debounce window 2
+    callbacks['IssueUpdated']({ ...low, state: 'queued' });
+    vi.advanceTimersByTime(400);
+    http.expectOne('/api/issues/counts').flush({ counts: {} });
+    const secondReconcile = http.expectOne(r => r.url === '/api/issues' && !r.params.has('states'));
+
+    // Flush the LATER one first — its order should win
+    secondReconcile.flush([rev, low]); // revision-high first
+    expect(svc.issues()[0].id).toBe('revision-high');
+
+    // Now flush the EARLIER one — its order must be discarded
+    firstReconcile.flush([low, rev]); // stale order: low first
+    expect(svc.issues()[0].id).toBe('revision-high'); // still revision-high
+
+    http.verify({ ignoreCancelled: true });
+  });
+
+  // Step 2 — Event-driven: IssueUpdated triggers debounced reconcile alongside counts
+  it('should issue exactly one GET /api/issues reconcile per debounce window for a burst of IssueUpdated events', () => {
+    // Arrange
+    const { svc, http } = setup();
+    svc.loadIssues();
+    http.expectOne('/api/issues').flush([low]);
+
+    vi.useFakeTimers();
+
+    // Act — fire three events inside one debounce window
+    callbacks['IssueUpdated']({ ...low, state: 'in_progress' });
+    callbacks['IssueUpdated']({ ...low, state: 'review' });
+    callbacks['IssueUpdated']({ ...low, state: 'failed' });
+
+    // Before debounce elapses — no reconcile yet
+    http.expectNone(r => r.url === '/api/issues' && !r.params.has('states'));
+
+    // Advance past debounce
+    vi.advanceTimersByTime(400);
+
+    // Assert — exactly one counts + exactly one reconcile
+    http.expectOne('/api/issues/counts').flush({ counts: {} });
+    const reconcileReq = http.expectOne(r => r.url === '/api/issues' && !r.params.has('states'));
+    reconcileReq.flush([low]);
+
+    http.verify({ ignoreCancelled: true });
+  });
+
+  // Step 2 — Criterion 3: revision_queued arrival + reconcile renders it above low-prio,
+  // and nextUpIssueId returns the revision id
+  it('should render revision-tier issue above low-prio queued issue after reconcile and set nextUpIssueId correctly', () => {
+    // Arrange — initial load: only low-prio queued
+    const { svc, http } = setup();
+    svc.loadIssues();
+    http.expectOne('/api/issues').flush([low]);
+    expect(svc.issues()[0].id).toBe('low-prio');
+    expect(svc.nextUpIssueId()).toBe('low-prio');
+
+    vi.useFakeTimers();
+
+    // Act — a revision_queued issue arrives via IssueUpdated (upsert appends it)
+    callbacks['IssueUpdated'](rev);
+    // upsert appends rev at tail: [low, rev] — wrong order for dispatch priority
+    expect(svc.issues()[0].id).toBe('low-prio'); // still wrong before reconcile
+
+    // Debounce fires
+    vi.advanceTimersByTime(400);
+    http.expectOne('/api/issues/counts').flush({ counts: {} });
+
+    // Server returns correct dispatch order: revision first
+    http.expectOne(r => r.url === '/api/issues' && !r.params.has('states')).flush([rev, low]);
+
+    // Assert — reconcile fixed the order
+    const eligible = svc.eligibleQueuedIssues();
+    expect(eligible[0].id).toBe('revision-high');
+    expect(eligible[1].id).toBe('low-prio');
+    expect(svc.nextUpIssueId()).toBe('revision-high');
+
+    http.verify({ ignoreCancelled: true });
+  });
+
+  // Step 3 — Token-race regression: earlier response flushed after later is discarded
+  it('should keep later response order when an earlier response arrives out-of-order', () => {
+    // Arrange — two reconcile windows in flight
+    const { svc, http } = setup();
+    svc.loadIssues();
+    http.expectOne('/api/issues').flush([low]);
+
+    vi.useFakeTimers();
+
+    // Window 1
+    callbacks['IssueUpdated']({ ...low, state: 'queued' });
+    vi.advanceTimersByTime(400);
+    http.expectOne('/api/issues/counts').flush({ counts: {} });
+    const earlyReq = http.expectOne(r => r.url === '/api/issues' && !r.params.has('states'));
+
+    // Window 2
+    callbacks['IssueUpdated']({ ...low, state: 'queued' });
+    vi.advanceTimersByTime(400);
+    http.expectOne('/api/issues/counts').flush({ counts: {} });
+    const lateReq = http.expectOne(r => r.url === '/api/issues' && !r.params.has('states'));
+
+    // Flush LATER first with [rev, low] order
+    lateReq.flush([rev, low]);
+    expect(svc.issues()[0].id).toBe('revision-high');
+
+    // Now flush EARLIER with reversed (stale) order
+    earlyReq.flush([low, rev]);
+
+    // Assert — stale early response did NOT overwrite later order
+    expect(svc.issues()[0].id).toBe('revision-high');
+
+    http.verify({ ignoreCancelled: true });
+  });
+
+  // Step 4 — Safety-net interval fires reconcile with no IssueUpdated event.
+  // The interval must be registered with fake timers, so vi.useFakeTimers() is called
+  // before setup() so that setInterval in the constructor is intercepted.
+  it('should issue a reconcile after the safety-net interval elapses with no IssueUpdated events', () => {
+    // Arrange — fake timers BEFORE service construction so setInterval is captured
+    vi.useFakeTimers();
+    const { svc, http } = setup();
+    svc.loadIssues();
+    http.expectOne('/api/issues').flush([low]);
+
+    // Act — advance past safety-net interval (30 000 ms) with no events
+    vi.advanceTimersByTime(30_100);
+
+    // Assert — reconcile fires
+    const reconcileReq = http.expectOne(r => r.url === '/api/issues' && !r.params.has('states'));
+    reconcileReq.flush([rev, low]);
+
+    expect(svc.issues()[0].id).toBe('revision-high');
+
+    http.verify({ ignoreCancelled: true });
+  });
+
+  // Step 4 — Criterion 6: Position change reflected on next safety-net reconcile
+  it('should reflect a repository Position change (no event) on the next safety-net reconcile', () => {
+    // Arrange — fake timers BEFORE service construction so setInterval is captured
+    vi.useFakeTimers();
+    const { svc, http } = setup();
+    svc.loadIssues();
+    http.expectOne('/api/issues').flush([low, rev]);
+    expect(svc.issues()[0].id).toBe('low-prio');
+
+    // Act — safety-net fires; server now returns rev first (Position changed in Settings)
+    vi.advanceTimersByTime(30_100);
+    http.expectOne(r => r.url === '/api/issues' && !r.params.has('states')).flush([rev, low]);
+
+    // Assert — new order rendered without page reload
+    expect(svc.issues()[0].id).toBe('revision-high');
+
+    http.verify({ ignoreCancelled: true });
+  });
+
+  // Step 4 — Destroy cleanup: no reconcile fires after destroy
+  it('should not fire the safety-net reconcile after the service is destroyed', () => {
+    // Arrange — fake timers BEFORE service construction so setInterval is captured
+    vi.useFakeTimers();
+    const { svc, http } = setup();
+    svc.loadIssues();
+    http.expectOne('/api/issues').flush([low]);
+
+    // TestBed.resetTestingModule() triggers Angular's ApplicationRef.destroy() which invokes
+    // DestroyRef callbacks — this clears the safety-net interval.
+    TestBed.resetTestingModule();
+
+    // Act — advance past safety-net interval; the interval was cleared on destroy
+    vi.advanceTimersByTime(30_100);
+
+    // Assert — no reconcile request because the interval was cleared
+    // (verify on the captured http mock from before the reset)
+    httpMockRef.expectNone(r => r.url === '/api/issues' && !r.params.has('states'));
+
+    // afterEach calls resetTestingModule again — that is safe (resets an already-reset module)
+  });
+
+  // Step 5 — Failed reconcile: sets queueOrderStale, retains list, no loadError
+  it('should set queueOrderStale and retain issues() when reconcile fails, without setting loadError', () => {
+    // Arrange
+    const { svc, http } = setup();
+    svc.loadIssues();
+    http.expectOne('/api/issues').flush([low]);
+    expect(svc.queueOrderStale()).toBe(false);
+
+    vi.useFakeTimers();
+    callbacks['IssueUpdated']({ ...low, state: 'queued' });
+    vi.advanceTimersByTime(400);
+    http.expectOne('/api/issues/counts').flush({ counts: {} });
+
+    // Act — reconcile fails
+    http.expectOne(r => r.url === '/api/issues' && !r.params.has('states')).flush('Server Error', {
+      status: 500,
+      statusText: 'Internal Server Error',
+    });
+
+    // Assert — stale marker set; list preserved; no blocking banner
+    expect(svc.queueOrderStale()).toBe(true);
+    expect(svc.issues()[0].id).toBe('low-prio');
+    expect(svc.loadError()).toBeNull();
+
+    http.verify({ ignoreCancelled: true });
+  });
+
+  // Step 5 — Successful reconcile after failure clears queueOrderStale
+  it('should clear queueOrderStale after a successful reconcile follows a failed one', () => {
+    // Arrange — cause a failure first
+    const { svc, http } = setup();
+    svc.loadIssues();
+    http.expectOne('/api/issues').flush([low]);
+
+    vi.useFakeTimers();
+    callbacks['IssueUpdated']({ ...low, state: 'queued' });
+    vi.advanceTimersByTime(400);
+    http.expectOne('/api/issues/counts').flush({ counts: {} });
+    http.expectOne(r => r.url === '/api/issues' && !r.params.has('states')).flush('Server Error', {
+      status: 500,
+      statusText: 'Internal Server Error',
+    });
+    expect(svc.queueOrderStale()).toBe(true);
+
+    // Act — next reconcile succeeds
+    callbacks['IssueUpdated']({ ...low, state: 'queued' });
+    vi.advanceTimersByTime(400);
+    http.expectOne('/api/issues/counts').flush({ counts: {} });
+    http.expectOne(r => r.url === '/api/issues' && !r.params.has('states')).flush([low]);
+
+    // Assert — stale cleared
+    expect(svc.queueOrderStale()).toBe(false);
+
+    http.verify({ ignoreCancelled: true });
+  });
+
+  // Step 5 — Stale failure from superseded request must not overwrite a fresher success
+  it('should not set queueOrderStale from a stale error response when a later reconcile already succeeded', () => {
+    // Arrange
+    const { svc, http } = setup();
+    svc.loadIssues();
+    http.expectOne('/api/issues').flush([low]);
+
+    vi.useFakeTimers();
+
+    // Window 1
+    callbacks['IssueUpdated']({ ...low, state: 'queued' });
+    vi.advanceTimersByTime(400);
+    http.expectOne('/api/issues/counts').flush({ counts: {} });
+    const earlyReq = http.expectOne(r => r.url === '/api/issues' && !r.params.has('states'));
+
+    // Window 2
+    callbacks['IssueUpdated']({ ...low, state: 'queued' });
+    vi.advanceTimersByTime(400);
+    http.expectOne('/api/issues/counts').flush({ counts: {} });
+    const lateReq = http.expectOne(r => r.url === '/api/issues' && !r.params.has('states'));
+
+    // Later succeeds first
+    lateReq.flush([low]);
+    expect(svc.queueOrderStale()).toBe(false);
+
+    // Earlier fails — must be ignored because token is stale
+    earlyReq.flush('Server Error', { status: 500, statusText: 'Internal Server Error' });
+
+    // Assert — stale error did not set queueOrderStale
+    expect(svc.queueOrderStale()).toBe(false);
+
+    http.verify({ ignoreCancelled: true });
+  });
+
+  // Step 6 — Existing append-on-unknown-id test accounts for reconcile
+  // (regression guard: _upsertIssue tail-append still works, reconcile fires within debounce)
+  it('should append a brand-new issue via upsert and fire a debounced reconcile that can correct order', () => {
+    // Arrange
+    const { svc, http } = setup();
+    svc.loadIssues();
+    http.expectOne('/api/issues').flush([]);
+
+    vi.useFakeTimers();
+
+    // Act — unknown id appended by upsert
+    const newIssue: IssueSummary = { ...low, id: 'brand-new' };
+    callbacks['IssueUpdated'](newIssue);
+    expect(svc.issues().some(i => i.id === 'brand-new')).toBe(true);
+
+    // Advance past debounce — reconcile fires
+    vi.advanceTimersByTime(400);
+    http.expectOne('/api/issues/counts').flush({ counts: {} });
+    const reconcileReq = http.expectOne(r => r.url === '/api/issues' && !r.params.has('states'));
+    reconcileReq.flush([newIssue]); // server confirms the order
+
+    expect(svc.issues().some(i => i.id === 'brand-new')).toBe(true);
+
+    http.verify({ ignoreCancelled: true });
+  });
+
+  // Step 9 (criterion 9): reconcile does not re-show loading skeletons
+  it('should not set initialLoading to true during or after a reconcile', () => {
+    // Arrange
+    const { svc, http } = setup();
+    svc.loadIssues();
+    http.expectOne('/api/issues').flush([low]);
+    expect(svc.initialLoading()).toBe(false);
+
+    vi.useFakeTimers();
+    callbacks['IssueUpdated']({ ...low, state: 'queued' });
+    vi.advanceTimersByTime(400);
+
+    // Assert — still false before reconcile response
+    expect(svc.initialLoading()).toBe(false);
+
+    http.expectOne('/api/issues/counts').flush({ counts: {} });
+    http.expectOne(r => r.url === '/api/issues' && !r.params.has('states')).flush([low]);
+
+    // Assert — still false after reconcile
+    expect(svc.initialLoading()).toBe(false);
+
+    http.verify({ ignoreCancelled: true });
   });
 });
 
