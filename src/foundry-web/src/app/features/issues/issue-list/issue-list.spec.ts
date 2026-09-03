@@ -2080,4 +2080,65 @@ describe('IssueListComponent', () => {
     const items = grid.querySelectorAll('.issue-list__item');
     expect(items.length).toBe(1);
   });
+
+  // Step 8: queue-order stale marker
+  it('should NOT render the stale marker when queueOrderStale() is false', () => {
+    // Arrange
+    const { fixture, httpMock } = setupComponent();
+    fixture.detectChanges();
+    flushInit(httpMock, [mockSummary]);
+
+    // Act
+    fixture.detectChanges();
+
+    // Assert — stale marker must be absent when the signal is false (default)
+    const el = fixture.nativeElement as HTMLElement;
+    const marker = el.querySelector('.issue-list__stale-marker');
+    expect(marker).toBeFalsy();
+  });
+
+  it('should render the stale marker with role="status" and the exact copy when queueOrderStale() is true', () => {
+    // Arrange
+    const { fixture, httpMock } = setupComponent();
+    fixture.detectChanges();
+    flushInit(httpMock, [mockSummary]);
+    fixture.detectChanges();
+
+    // Act — drive the signal true by writing to the private backing WritableSignal
+    const issueService = TestBed.inject(IssueService);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (issueService as any)._queueOrderStaleSignal.set(true);
+    fixture.detectChanges();
+
+    // Assert
+    const el = fixture.nativeElement as HTMLElement;
+    const marker = el.querySelector('.issue-list__stale-marker') as HTMLElement | null;
+    expect(marker).toBeTruthy();
+    expect(marker?.getAttribute('role')).toBe('status');
+    expect(marker?.textContent?.trim()).toContain('Queue order may be out of date');
+  });
+
+  it('should render the stale marker alongside a non-empty grid without hiding any cards', () => {
+    // Arrange
+    const second: IssueSummary = { ...mockSummary, id: 'def456', issueNumber: 43, title: 'Fix bug' };
+    const { fixture, httpMock } = setupComponent();
+    fixture.detectChanges();
+    flushInit(httpMock, [mockSummary, second]);
+    fixture.detectChanges();
+
+    // Act — drive queueOrderStale to true via the private backing WritableSignal
+    const issueService = TestBed.inject(IssueService);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (issueService as any)._queueOrderStaleSignal.set(true);
+    fixture.detectChanges();
+
+    // Assert — marker present
+    const el = fixture.nativeElement as HTMLElement;
+    const marker = el.querySelector('.issue-list__stale-marker');
+    expect(marker).toBeTruthy();
+
+    // Assert — both cards still rendered (marker does not gate the grid)
+    const cards = el.querySelectorAll('fd-issue-card');
+    expect(cards.length).toBe(2);
+  });
 });
