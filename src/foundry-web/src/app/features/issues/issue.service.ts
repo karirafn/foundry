@@ -28,6 +28,14 @@ const COUNTS_DEBOUNCE_MS = 300;
 // one interval and high enough that idle traffic is one GET /api/issues per 30 s.
 const RECONCILE_SAFETY_NET_MS = 30_000;
 
+function isDispatchableQueued(issue: IssueSummary): boolean {
+  return (
+    QUEUED_TIER_STATES.has(issue.state) &&
+    issue.repositoryEligibilityStatus !== 'ineligible' &&
+    issue.repositoryEligibilityStatus !== 'unreachable'
+  );
+}
+
 @Injectable({ providedIn: 'root' })
 export class IssueService {
   private readonly _http = inject(HttpClient);
@@ -131,19 +139,12 @@ export class IssueService {
   // sortedIssues() would still expose correct relative queue order within Waiting, but
   // issues() is canonical because it is unaffected by any future group reclassifications.
   readonly eligibleQueuedIssues: Signal<IssueSummary[]> = computed(() =>
-    this.issues().filter(i =>
-      QUEUED_TIER_STATES.has(i.state) &&
-      i.repositoryEligibilityStatus !== 'ineligible' &&
-      i.repositoryEligibilityStatus !== 'unreachable'
-    )
+    this.issues().filter(isDispatchableQueued)
   );
 
   // Same rationale: filter issues() to preserve server dispatch order.
   readonly ineligibleQueuedIssues: Signal<IssueSummary[]> = computed(() =>
-    this.issues().filter(i =>
-      QUEUED_TIER_STATES.has(i.state) &&
-      (i.repositoryEligibilityStatus === 'ineligible' || i.repositoryEligibilityStatus === 'unreachable')
-    )
+    this.issues().filter(i => QUEUED_TIER_STATES.has(i.state) && !isDispatchableQueued(i))
   );
 
   readonly nextUpIssueId: Signal<string | null> = computed(() => {
@@ -154,6 +155,34 @@ export class IssueService {
   readonly activeBandIssues: Signal<IssueSummary[]> = computed(() =>
     this.sortedIssues().filter(i => this.selectedActiveStates().has(i.state))
   );
+
+  // Positions index the rendered activeBandIssues() array so the ordinal always matches the
+  // on-screen order (ADR 0067). Consequently, deselecting a queued-tier state renumbers the
+  // visible ordinals contiguously rather than preserving absolute dispatch position — this is
+  // intended: the topmost visible card must always show "1", never a non-1 number when cards
+  // above it are hidden by a filter.
+  readonly queuePositions: Signal<ReadonlyMap<string, number>> = computed(() => {
+    const positions = new Map<string, number>();
+    let position = 1;
+    for (const issue of this.activeBandIssues()) {
+      if (isDispatchableQueued(issue)) {
+        positions.set(issue.id, position++);
+      }
+    }
+    return positions;
+  });
+
+  readonly nextUpAnnouncement: Signal<string> = computed(() => {
+    const nextUpId = this.nextUpIssueId();
+    if (nextUpId === null) {
+      return '';
+    }
+    const nextUpIssue = this.issues().find(i => i.id === nextUpId);
+    if (nextUpIssue === undefined) {
+      return '';
+    }
+    return `Next up: issue #${nextUpIssue.issueNumber} — ${nextUpIssue.title}`;
+  });
 
   readonly isEmpty: Signal<boolean> = computed(() => this.issues().length === 0);
 

@@ -79,7 +79,7 @@
   }
 
   &__separator {
-    color: var(--fd-text-tertiary);
+    color: var(--fd-text-secondary);
     font-size: 0.8125rem;
   }
 
@@ -92,27 +92,42 @@
     white-space: nowrap;
   }
 
+  &--has-gutter {
+    display: grid;
+    grid-template-columns: var(--fd-card-gutter-width) 1fr;
+  }
+
+  &__queue-position {
+    align-items: center;
+    align-self: center;
+    display: flex;
+    font-family: var(--fd-font-mono);
+    font-variant-numeric: tabular-nums;
+    justify-content: center;
+    line-height: 1;
+    overflow: hidden;
+    padding-inline-start: var(--fd-spacing-xs);
+    user-select: none;
+    color: var(--fd-text-secondary);
+    font-size: 0.875rem;
+    font-weight: 600;
+
+    &--next {
+      color: var(--fd-text-success);
+      font-size: 1rem;
+      font-weight: 700;
+    }
+  }
+
+  &__body {
+    // Pure structural grouping — no padding/margin; the outer card padding owns spacing
+  }
+
   &__badge {
     align-items: center;
     display: flex;
     flex-shrink: 0;
     gap: var(--fd-spacing-xs);
-  }
-
-  &__next-up {
-    align-items: center;
-    background: color-mix(in srgb, var(--fd-state-completed) 12%, var(--fd-bg-card));
-    // H1: border mixed with card bg (not transparent) → ≥3:1 vs #161b22 (3.25:1 at 90%)
-    border: 1px solid color-mix(in srgb, var(--fd-state-completed) 90%, var(--fd-bg-card));
-    border-radius: 9999px;
-    color: var(--fd-text-success);
-    display: inline-flex;
-    // H2: rem instead of px so text scales with user font-size preference
-    font-size: 0.625rem;
-    font-weight: 600;
-    letter-spacing: 0.03em;
-    padding: 2px 7px;
-    white-space: nowrap;
   }
 
   &__repo-warning {
