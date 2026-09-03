@@ -28,6 +28,14 @@ const COUNTS_DEBOUNCE_MS = 300;
 // one interval and high enough that idle traffic is one GET /api/issues per 30 s.
 const RECONCILE_SAFETY_NET_MS = 30_000;
 
+function isDispatchableQueued(issue: IssueSummary): boolean {
+  return (
+    QUEUED_TIER_STATES.has(issue.state) &&
+    issue.repositoryEligibilityStatus !== 'ineligible' &&
+    issue.repositoryEligibilityStatus !== 'unreachable'
+  );
+}
+
 @Injectable({ providedIn: 'root' })
 export class IssueService {
   private readonly _http = inject(HttpClient);
@@ -154,6 +162,29 @@ export class IssueService {
   readonly activeBandIssues: Signal<IssueSummary[]> = computed(() =>
     this.sortedIssues().filter(i => this.selectedActiveStates().has(i.state))
   );
+
+  readonly queuePositions: Signal<ReadonlyMap<string, number>> = computed(() => {
+    const positions = new Map<string, number>();
+    let position = 1;
+    for (const issue of this.activeBandIssues()) {
+      if (isDispatchableQueued(issue)) {
+        positions.set(issue.id, position++);
+      }
+    }
+    return positions;
+  });
+
+  readonly nextUpAnnouncement: Signal<string> = computed(() => {
+    const nextUpId = this.nextUpIssueId();
+    if (nextUpId === null) {
+      return '';
+    }
+    const nextUpIssue = this.issues().find(i => i.id === nextUpId);
+    if (nextUpIssue === undefined) {
+      return '';
+    }
+    return `Next up: issue #${nextUpIssue.issueNumber} — ${nextUpIssue.title}`;
+  });
 
   readonly isEmpty: Signal<boolean> = computed(() => this.issues().length === 0);
 

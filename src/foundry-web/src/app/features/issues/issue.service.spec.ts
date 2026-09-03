@@ -2748,3 +2748,271 @@ describe('IssueService (group-rank multi-key sort)', () => {
     expect(waitingQueued[1].id).toBe('cq-b'); // server pos 3 → second (newest date does not override server order)
   });
 });
+
+// Step 11 — queuePositions computed (issue #507)
+describe('IssueService (queuePositions)', () => {
+  let service: IssueService;
+  let httpMock: HttpTestingController;
+
+  const baseQueued: IssueSummary = {
+    id: 'q1',
+    issueNumber: 1,
+    title: 'Queue issue 1',
+    state: 'queued',
+    repositorySlug: 'owner/repo',
+    detectedAt: '2026-01-01T00:00:00Z',
+    url: 'https://github.com/owner/repo/issues/1',
+    repositoryEligibilityStatus: null,
+  };
+
+  function loadIssues(issues: IssueSummary[]): void {
+    service.loadIssues();
+    httpMock.expectOne('/api/issues').flush(issues);
+  }
+
+  beforeEach(() => {
+    TestBed.configureTestingModule({
+      providers: [
+        IssueService,
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        { provide: IssueSignalRService, useValue: mockIssueSignalRService },
+      ],
+    });
+    service = TestBed.inject(IssueService);
+    httpMock = TestBed.inject(HttpTestingController);
+  });
+
+  afterEach(() => httpMock.verify({ ignoreCancelled: true }));
+
+  // Cycle QP1: single dispatchable queued issue → { id → 1 }
+  it('should map a single dispatchable queued issue to position 1', () => {
+    // Arrange
+    const issue: IssueSummary = { ...baseQueued, id: 'q1' };
+
+    // Act
+    loadIssues([issue]);
+
+    // Assert
+    const positions = service.queuePositions();
+    expect(positions.size).toBe(1);
+    expect(positions.get('q1')).toBe(1);
+  });
+
+  // Cycle QP2: three dispatchable queued issues in server order → 1-based positions
+  it('should assign 1-based positions matching rendered order for three dispatchable queued issues', () => {
+    // Arrange — server delivers: queued, revision_queued, continuation_queued (all eligible)
+    const q1: IssueSummary = { ...baseQueued, id: 'q1', state: 'queued' };
+    const q2: IssueSummary = { ...baseQueued, id: 'q2', state: 'revision_queued' };
+    const q3: IssueSummary = { ...baseQueued, id: 'q3', state: 'continuation_queued' };
+
+    // Act
+    loadIssues([q1, q2, q3]);
+
+    // Assert
+    const positions = service.queuePositions();
+    expect(positions.size).toBe(3);
+    expect(positions.get('q1')).toBe(1);
+    expect(positions.get('q2')).toBe(2);
+    expect(positions.get('q3')).toBe(3);
+  });
+
+  // Cycle QP3: ineligible and unreachable queued issues are absent; dispatchable ones are numbered 1..n
+  it('should exclude ineligible and unreachable queued issues and assign contiguous positions to dispatchable ones', () => {
+    // Arrange — mixed: eligible, ineligible, unreachable
+    const dispatchable1: IssueSummary = { ...baseQueued, id: 'disp-1', state: 'queued', repositoryEligibilityStatus: null };
+    const ineligible: IssueSummary = { ...baseQueued, id: 'inelig', state: 'queued', repositoryEligibilityStatus: 'ineligible' };
+    const unreachable: IssueSummary = { ...baseQueued, id: 'unreach', state: 'revision_queued', repositoryEligibilityStatus: 'unreachable' };
+    const dispatchable2: IssueSummary = { ...baseQueued, id: 'disp-2', state: 'continuation_queued', repositoryEligibilityStatus: 'eligible' };
+
+    // Act — server order: disp-1, inelig, unreach, disp-2
+    loadIssues([dispatchable1, ineligible, unreachable, dispatchable2]);
+
+    // Assert — only dispatchable issues present, positions contiguous
+    const positions = service.queuePositions();
+    expect(positions.size).toBe(2);
+    expect(positions.get('disp-1')).toBe(1);
+    expect(positions.get('disp-2')).toBe(2);
+    expect(positions.has('inelig')).toBe(false);
+    expect(positions.has('unreach')).toBe(false);
+  });
+
+  // Cycle QP4a: non-queued issues (live, detected, blocked) are absent from the map
+  it('should not include non-queued-tier issues in queuePositions', () => {
+    // Arrange — live, detected, and blocked issues mixed with a queued one
+    const inProgress: IssueSummary = { ...baseQueued, id: 'live', state: 'in_progress', repositoryEligibilityStatus: null };
+    const detected: IssueSummary = { ...baseQueued, id: 'detected', state: 'detected', repositoryEligibilityStatus: null };
+    const blocked: IssueSummary = { ...baseQueued, id: 'blocked', state: 'blocked', repositoryEligibilityStatus: null };
+    const queued: IssueSummary = { ...baseQueued, id: 'q1', state: 'queued', repositoryEligibilityStatus: null };
+
+    // Act
+    loadIssues([inProgress, detected, blocked, queued]);
+
+    // Assert — only the queued issue appears; live/detected/blocked absent
+    const positions = service.queuePositions();
+    expect(positions.size).toBe(1);
+    expect(positions.get('q1')).toBe(1);
+    expect(positions.has('live')).toBe(false);
+    expect(positions.has('detected')).toBe(false);
+    expect(positions.has('blocked')).toBe(false);
+  });
+
+  // Cycle QP4b: empty queue → empty map
+  it('should return an empty map when there are no queued issues', () => {
+    // Arrange
+    const detected: IssueSummary = { ...baseQueued, id: 'det', state: 'detected', repositoryEligibilityStatus: null };
+
+    // Act
+    loadIssues([detected]);
+
+    // Assert
+    expect(service.queuePositions().size).toBe(0);
+  });
+
+  // Cycle QP4c: all-ineligible queue → empty map
+  it('should return an empty map when all queued issues are ineligible or unreachable', () => {
+    // Arrange
+    const inelig: IssueSummary = { ...baseQueued, id: 'inelig', state: 'queued', repositoryEligibilityStatus: 'ineligible' };
+    const unreach: IssueSummary = { ...baseQueued, id: 'unreach', state: 'revision_queued', repositoryEligibilityStatus: 'unreachable' };
+
+    // Act
+    loadIssues([inelig, unreach]);
+
+    // Assert
+    expect(service.queuePositions().size).toBe(0);
+  });
+
+  // Cycle QP5: reload with reordered server order → map renumbers to new dispatchable sequence
+  it('should renumber positions to match the new server order after reload', () => {
+    // Arrange — initial load: q1 first, q2 second
+    const q1: IssueSummary = { ...baseQueued, id: 'q1', state: 'queued', repositoryEligibilityStatus: null };
+    const q2: IssueSummary = { ...baseQueued, id: 'q2', state: 'revision_queued', repositoryEligibilityStatus: null };
+    loadIssues([q1, q2]);
+    expect(service.queuePositions().get('q1')).toBe(1);
+    expect(service.queuePositions().get('q2')).toBe(2);
+
+    // Act — reload with reversed order: q2 first, q1 second
+    service.loadIssues();
+    httpMock.expectOne('/api/issues').flush([q2, q1]);
+
+    // Assert — positions renumber to match new order
+    const positions = service.queuePositions();
+    expect(positions.get('q2')).toBe(1);
+    expect(positions.get('q1')).toBe(2);
+  });
+});
+
+// Step 12 — nextUpAnnouncement computed (issue #507)
+describe('IssueService (nextUpAnnouncement)', () => {
+  let service: IssueService;
+  let httpMock: HttpTestingController;
+
+  const baseIssue: IssueSummary = {
+    id: 'q1',
+    issueNumber: 42,
+    title: 'Enable dark mode',
+    state: 'queued',
+    repositorySlug: 'owner/repo',
+    detectedAt: '2026-01-01T00:00:00Z',
+    url: 'https://github.com/owner/repo/issues/42',
+    repositoryEligibilityStatus: null,
+  };
+
+  function loadIssues(issues: IssueSummary[]): void {
+    service.loadIssues();
+    httpMock.expectOne('/api/issues').flush(issues);
+  }
+
+  beforeEach(() => {
+    TestBed.configureTestingModule({
+      providers: [
+        IssueService,
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        { provide: IssueSignalRService, useValue: mockIssueSignalRService },
+      ],
+    });
+    service = TestBed.inject(IssueService);
+    httpMock = TestBed.inject(HttpTestingController);
+  });
+
+  afterEach(() => httpMock.verify({ ignoreCancelled: true }));
+
+  // Cycle NA1: dispatchable queued head → non-empty string naming the issue
+  it('should return a non-empty announcement string naming the next-up issue number and title', () => {
+    // Arrange
+    const nextUp: IssueSummary = { ...baseIssue, id: 'q1', issueNumber: 42, title: 'Enable dark mode' };
+
+    // Act
+    loadIssues([nextUp]);
+
+    // Assert — string must include issue number and title
+    const announcement = service.nextUpAnnouncement();
+    expect(announcement).toContain('42');
+    expect(announcement).toContain('Enable dark mode');
+    expect(announcement.length).toBeGreaterThan(0);
+  });
+
+  // Cycle NA2: empty queue → ''
+  it('should return empty string when there are no queued issues', () => {
+    // Arrange — only a non-queued issue
+    const detected: IssueSummary = { ...baseIssue, id: 'det', state: 'detected' };
+
+    // Act
+    loadIssues([detected]);
+
+    // Assert
+    expect(service.nextUpAnnouncement()).toBe('');
+  });
+
+  // Cycle NA2b: all-ineligible queue → ''
+  it('should return empty string when all queued issues are ineligible or unreachable', () => {
+    // Arrange
+    const inelig: IssueSummary = { ...baseIssue, id: 'inelig', state: 'queued', repositoryEligibilityStatus: 'ineligible' };
+    const unreach: IssueSummary = { ...baseIssue, id: 'unreach', state: 'revision_queued', repositoryEligibilityStatus: 'unreachable' };
+
+    // Act
+    loadIssues([inelig, unreach]);
+
+    // Assert
+    expect(service.nextUpAnnouncement()).toBe('');
+  });
+
+  // Cycle NA3a: reorder that does NOT change the head → announcement string is identical (no re-announcement)
+  it('should return an identical announcement string when positions shuffle but the next-up issue stays the same', () => {
+    // Arrange — q1 is head; q2 and q3 are behind it
+    const q1: IssueSummary = { ...baseIssue, id: 'q1', issueNumber: 42, title: 'Enable dark mode', state: 'queued' };
+    const q2: IssueSummary = { ...baseIssue, id: 'q2', issueNumber: 10, title: 'Other issue', state: 'revision_queued' };
+    const q3: IssueSummary = { ...baseIssue, id: 'q3', issueNumber: 11, title: 'Another issue', state: 'continuation_queued' };
+    loadIssues([q1, q2, q3]);
+    const before = service.nextUpAnnouncement();
+    expect(before).toContain('42');
+
+    // Act — reload with q2 and q3 swapped but q1 still at head
+    service.loadIssues();
+    httpMock.expectOne('/api/issues').flush([q1, q3, q2]);
+
+    // Assert — nextUpIssueId unchanged, so announcement is identical
+    expect(service.nextUpAnnouncement()).toBe(before);
+  });
+
+  // Cycle NA3b: reorder that changes the head → announcement string changes
+  it('should return a different announcement string when the next-up issue changes after a reload', () => {
+    // Arrange — q1 is initially next-up
+    const q1: IssueSummary = { ...baseIssue, id: 'q1', issueNumber: 42, title: 'Enable dark mode', state: 'queued' };
+    const q2: IssueSummary = { ...baseIssue, id: 'q2', issueNumber: 99, title: 'Add retry', state: 'revision_queued' };
+    loadIssues([q1, q2]);
+    const before = service.nextUpAnnouncement();
+    expect(before).toContain('42');
+
+    // Act — reload with q2 now at head
+    service.loadIssues();
+    httpMock.expectOne('/api/issues').flush([q2, q1]);
+
+    // Assert — announcement reflects new head
+    const after = service.nextUpAnnouncement();
+    expect(after).toContain('99');
+    expect(after).toContain('Add retry');
+    expect(after).not.toBe(before);
+  });
+});
