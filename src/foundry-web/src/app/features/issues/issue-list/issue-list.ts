@@ -152,6 +152,7 @@ const INELIGIBLE_QUEUE_HEADING_ID = 'ineligible-queue-heading';
                   [lastActivityAt]="isLiveIssue(issue.state) ? workerSignalR.activityForIssue(issue.id) : null"
                   [commitCount]="isLiveIssue(issue.state) ? workerSignalR.commitCountForIssue(issue.id) : null"
                   [isNextUp]="issueService.nextUpIssueId() === issue.id"
+                  [queuePosition]="issueService.queuePositions().get(issue.id) ?? null"
                   (toggle)="issueService.toggleExpand(issue.id)"
                 />
 
@@ -258,6 +259,14 @@ const INELIGIBLE_QUEUE_HEADING_ID = 'ineligible-queue-heading';
             aria-live="polite"
             class="issue-list__resolved-announcer sr-only"
           >{{ resolvedAnnouncement() }}</span>
+
+          <!-- Persistent live-region announcer for next-up queue position (always mounted).
+               Text is stable when the head is unchanged, so a reorder that doesn't change
+               next-up produces no announcement; a next-up change updates the text → announces. -->
+          <span
+            role="status"
+            class="issue-list__next-up-announcer sr-only"
+          >{{ issueService.nextUpAnnouncement() }}</span>
         </div>
       </div>
 

@@ -2130,6 +2130,8 @@ interface StubIssueService {
   isEmpty: WritableSignal<boolean>;
   activeFilterCount: WritableSignal<number>;
   eligibleQueuedIssues: WritableSignal<IssueSummary[]>;
+  queuePositions: WritableSignal<ReadonlyMap<string, number>>;
+  nextUpAnnouncement: WritableSignal<string>;
   loadIssues: () => void;
   loadCounts: () => void;
   toggleExpand: (id: string) => void;
@@ -2171,6 +2173,8 @@ function makeStubIssueService(issues: IssueSummary[] = []): StubIssueService {
     isEmpty: signal(issues.length === 0),
     activeFilterCount: signal(0),
     eligibleQueuedIssues: signal([]),
+    queuePositions: signal(new Map<string, number>()),
+    nextUpAnnouncement: signal(''),
     loadIssues: () => {},
     loadCounts: () => {},
     toggleExpand: () => {},
@@ -2381,5 +2385,151 @@ describe('IssueListComponent (stale marker)', () => {
     const el = fixture.nativeElement as HTMLElement;
     const cards = el.querySelectorAll('fd-issue-card');
     expect(cards.length).toBe(2);
+  });
+});
+
+describe('IssueListComponent (ordinal binding + next-up announcer)', () => {
+  beforeEach(() => {
+    TestBed.resetTestingModule();
+  });
+
+  afterEach(() => {
+    TestBed.inject(HttpTestingController).verify();
+  });
+
+  // Cycle a-i: fourth always-mounted sr-only role="status" announcer is present
+  it('should have a fourth always-mounted sr-only role="status" next-up announcer in the DOM', () => {
+    // Arrange
+    const stub = makeStubIssueService();
+    const { fixture } = setupStubComponent(stub);
+
+    // Act
+    fixture.detectChanges();
+
+    // Assert — announcer node is always mounted regardless of content
+    const el = fixture.nativeElement as HTMLElement;
+    const announcer = el.querySelector('.issue-list__next-up-announcer');
+    expect(announcer).toBeTruthy();
+    expect(announcer?.getAttribute('role')).toBe('status');
+    expect(announcer?.classList).toContain('sr-only');
+  });
+
+  // Cycle a-ii: announcer carries nextUpAnnouncement() text when a queued issue exists
+  it('should populate the next-up announcer with nextUpAnnouncement() text when non-empty', () => {
+    // Arrange
+    const stub = makeStubIssueService();
+    stub.nextUpAnnouncement.set('Next up: issue #42 — Enable dark mode');
+    const { fixture } = setupStubComponent(stub);
+
+    // Act
+    fixture.detectChanges();
+
+    // Assert
+    const el = fixture.nativeElement as HTMLElement;
+    const announcer = el.querySelector('.issue-list__next-up-announcer') as HTMLElement;
+    expect(announcer?.textContent?.trim()).toBe('Next up: issue #42 — Enable dark mode');
+  });
+
+  // Cycle a-iii: announcer is empty string when nextUpAnnouncement() is ''
+  it('should leave the next-up announcer empty when nextUpAnnouncement() is empty', () => {
+    // Arrange
+    const stub = makeStubIssueService();
+    stub.nextUpAnnouncement.set('');
+    const { fixture } = setupStubComponent(stub);
+
+    // Act
+    fixture.detectChanges();
+
+    // Assert
+    const el = fixture.nativeElement as HTMLElement;
+    const announcer = el.querySelector('.issue-list__next-up-announcer') as HTMLElement;
+    expect(announcer?.textContent?.trim()).toBe('');
+  });
+
+  // Cycle a-iv: announcer is always mounted (never behind @if)
+  it('should keep the next-up announcer mounted even when there are no issues', () => {
+    // Arrange — empty issue list, no next-up
+    const stub = makeStubIssueService([]);
+    const { fixture } = setupStubComponent(stub);
+
+    // Act
+    fixture.detectChanges();
+
+    // Assert — node is present even with nothing loaded
+    const el = fixture.nativeElement as HTMLElement;
+    const announcer = el.querySelector('.issue-list__next-up-announcer');
+    expect(announcer).toBeTruthy();
+  });
+
+  // Cycle b-i: dispatchable queued card receives its ordinal from queuePositions()
+  it('should pass the correct queuePosition ordinal to a dispatchable queued issue card', () => {
+    // Arrange
+    const queuedIssue: IssueSummary = {
+      ...mockSummary,
+      id: 'q1',
+      state: 'queued',
+      repositoryEligibilityStatus: null,
+    };
+    const stub = makeStubIssueService([queuedIssue]);
+    stub.queuePositions.set(new Map([['q1', 1]]));
+    stub.nextUpIssueId.set('q1');
+    const { fixture } = setupStubComponent(stub);
+
+    // Act
+    fixture.detectChanges();
+
+    // Assert — the gutter shows the ordinal (position 1 renders as "1")
+    const el = fixture.nativeElement as HTMLElement;
+    const gutter = el.querySelector('.issue-card__queue-position') as HTMLElement;
+    expect(gutter).toBeTruthy();
+    expect(gutter?.textContent?.trim()).toBe('1');
+  });
+
+  // Cycle b-ii: ineligible queued card shows em dash (null queuePosition → "—")
+  it('should pass null queuePosition to an ineligible queued issue card, rendering an em dash', () => {
+    // Arrange — ineligible queued issue: not in queuePositions
+    const ineligibleIssue: IssueSummary = {
+      ...mockSummary,
+      id: 'inelig1',
+      state: 'queued',
+      repositoryEligibilityStatus: 'ineligible',
+    };
+    const stub = makeStubIssueService([ineligibleIssue]);
+    stub.queuePositions.set(new Map()); // not in the map → null → "—"
+    stub.ineligibleQueuedIssues.set([ineligibleIssue]);
+    const { fixture } = setupStubComponent(stub);
+
+    // Act
+    fixture.detectChanges();
+
+    // Assert — gutter shows em dash for null position
+    const el = fixture.nativeElement as HTMLElement;
+    const gutter = el.querySelector('.issue-card__queue-position') as HTMLElement;
+    expect(gutter).toBeTruthy();
+    expect(gutter?.textContent?.trim()).toBe('—');
+  });
+
+  // Cycle b-iii: resolved band cards do NOT receive a queuePosition (they are not queued-tier)
+  it('should NOT show a queue-position gutter on a resolved-band issue card', () => {
+    // Arrange — resolved issue is not in queuePositions (no gutter shown for non-queued state)
+    const resolvedIssue: IssueSummary = { ...mockSummary, id: 'done1', state: 'completed' };
+    const stub = makeStubIssueService([]);
+    stub.resolvedIssues.set([resolvedIssue]);
+    stub.selectedResolvedStates.set(new Set<IssueState>(['completed']));
+    const { fixture } = setupStubComponent(stub);
+
+    // Act
+    fixture.detectChanges();
+
+    // Assert — the resolved band card has no gutter (queuePosition defaults to null → no element rendered for non-queued)
+    const el = fixture.nativeElement as HTMLElement;
+    const resolvedBand = el.querySelector('.issue-list__resolved-band');
+    expect(resolvedBand).toBeTruthy();
+    const gutter = resolvedBand?.querySelector('.issue-card__queue-position');
+    // Gutter element exists in card markup but with null input it renders as "—" only for queued-tier states.
+    // For non-queued-tier states (completed) the card hides the gutter entirely.
+    // We assert the resolved band card does not show any numeric ordinal text.
+    const gutterText = (gutter as HTMLElement | null)?.textContent?.trim() ?? '';
+    expect(gutterText).not.toMatch(/^\d+$/);
   });
 });
