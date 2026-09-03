@@ -284,6 +284,18 @@ The automatic exit from the possibly-stale state is the next event-driven or tim
 
 The dashboard partitions queued issues into two groups before applying the key: eligible-repository issues (real `Position`) rank above ineligible-repository issues (sentinel `int.MaxValue` position), each retaining its `RepositoryEligibilityStatus` for display.
 
+## Queue Position
+
+A queued issue's 1-based index in Dispatch Order, counted over **dispatchable queued issues only** — queued-tier issues whose repository is eligible (not `ineligible` or `unreachable`).
+
+Queue Position is derived from the rendered dispatchable-queued array on the dashboard (see [ADR 0067](docs/adr/0067-dashboard-reconciles-queue-order-rather-than-deriving-it.md)).
+It is never persisted and never transported from the server; the ordinal indexes the very array the cards are rendered from, so it cannot disagree with the on-screen sequence.
+
+Not-dispatchable queued issues — those whose repository is ineligible or unreachable — have no Queue Position.
+Their card gutter shows `—` in place of an ordinal.
+
+Queue Position 1 identifies the **Next up** issue: the one the dispatcher claims next when a worker slot becomes available.
+
 ## Dispatch Context
 
 The sealed union describing the nature of the work being dispatched to a worker — assembled on the aggregate, not in the handler.
