@@ -1,5 +1,6 @@
 using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Issues.Domain.Entities;
+using Foundry.Modules.Workers.Contracts;
 
 namespace Foundry.Modules.Issues.Domain.Entities.States;
 
@@ -14,9 +15,9 @@ public sealed class InProgressIssue : Issue
     {
     }
 
-    public Guid WorkerRunId { get; private set; }
+    public WorkerRunId WorkerRunId { get; private set; }
 
-    internal static InProgressIssue FromQueued(FreshQueuedIssue queued, Guid workerRunId)
+    internal static InProgressIssue FromQueued(FreshQueuedIssue queued, WorkerRunId workerRunId)
     {
         InProgressIssue inProgress = new(queued.Id);
         inProgress.SetSharedProperties(
@@ -33,24 +34,18 @@ public sealed class InProgressIssue : Issue
     }
 
     public ReviewIssue MarkInReview(
-        Guid workerRunId,
         string branchName,
         string pullRequestUrl,
         DateTimeOffset feedbackCutoffAt)
     {
-        ReviewIssue review = ReviewIssue.FromInProgress(
-            this,
-            workerRunId,
-            branchName,
-            pullRequestUrl,
-            feedbackCutoffAt);
+        ReviewIssue review = ReviewIssue.FromInProgress(this, branchName, pullRequestUrl, feedbackCutoffAt);
         AddDomainEvent(new Events.IssueInReview(Id, MonitoredRepositoryId));
         return review;
     }
 
-    public UnchangedIssue MarkUnchanged(Guid workerRunId)
+    public UnchangedIssue MarkUnchanged()
     {
-        UnchangedIssue unchanged = UnchangedIssue.FromInProgress(this, workerRunId);
+        UnchangedIssue unchanged = UnchangedIssue.FromInProgress(this);
         AddDomainEvent(new Events.IssueUnchanged(Id, MonitoredRepositoryId));
         return unchanged;
     }
@@ -66,26 +61,23 @@ public sealed class InProgressIssue : Issue
     }
 
     public FailedIssue MarkFailed(
-        Guid workerRunId,
         string failureReason,
         DateTimeOffset failedAt,
-        string failureCategory)
+        FailureCategory failureCategory)
     {
-        FailedIssue failed = FailedIssue.FromInProgress(this, workerRunId, failureReason, failureCategory, failedAt);
+        FailedIssue failed = FailedIssue.FromInProgress(this, failureReason, failureCategory, failedAt);
         AddDomainEvent(new Events.IssueFailed(Id, MonitoredRepositoryId));
         return failed;
     }
 
     public ContinuableFailedIssue MarkContinuableFailed(
-        Guid workerRunId,
         string branchName,
         string failureReason,
-        string failureCategory,
+        FailureCategory failureCategory,
         DateTimeOffset failedAt)
     {
         ContinuableFailedIssue failed = ContinuableFailedIssue.FromInProgress(
             this,
-            workerRunId,
             branchName,
             failureReason,
             failureCategory,
@@ -94,7 +86,7 @@ public sealed class InProgressIssue : Issue
         return failed;
     }
 
-    internal static InProgressIssue FromContinuationQueued(ContinuationQueuedIssue source, Guid workerRunId)
+    internal static InProgressIssue FromContinuationQueued(ContinuationQueuedIssue source, WorkerRunId workerRunId)
     {
         InProgressIssue inProgress = new(source.Id);
         inProgress.SetSharedProperties(

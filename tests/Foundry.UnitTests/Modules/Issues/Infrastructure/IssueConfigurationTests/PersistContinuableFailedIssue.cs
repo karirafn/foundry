@@ -1,6 +1,7 @@
 using Foundry.Modules.Issues.Domain.Entities;
 using Foundry.Modules.Issues.Domain.Entities.States;
 using Foundry.Modules.Monitoring.Contracts;
+using Foundry.Modules.Workers.Contracts;
 using Foundry.Testing;
 using Foundry.WebApi.Persistence;
 
@@ -42,7 +43,7 @@ public sealed class PersistContinuableFailedIssue : IAsyncDisposable
     {
         // Arrange
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
-        Guid workerRunId = Guid.NewGuid();
+        WorkerRunId workerRunId = WorkerRunId.New();
         DateTimeOffset failedAt = new DateTimeOffset(2026, 6, 9, 10, 0, 0, TimeSpan.Zero);
         ContinuableFailedIssue continuableFailed = new IssueBuilder()
             .WithMonitoredRepositoryId(repositoryId)
@@ -53,7 +54,7 @@ public sealed class PersistContinuableFailedIssue : IAsyncDisposable
             .WithWorkerRunId(workerRunId)
             .WithBranchName("feat/issue-71")
             .WithFailureReason("Tests timed out")
-            .WithFailureCategory("generic_failure")
+            .WithFailureCategory(FailureCategory.NonZeroExit)
             .WithFailedAt(failedAt)
             .ContinuableFailed();
 
@@ -73,6 +74,7 @@ public sealed class PersistContinuableFailedIssue : IAsyncDisposable
             () => reloaded.BranchName.ShouldBe("feat/issue-71"),
             () => reloaded.PullRequestUrl.ShouldBe(string.Empty),
             () => reloaded.FailureReason.ShouldBe("Tests timed out"),
+            () => reloaded.FailureCategory.ShouldBe(FailureCategory.NonZeroExit),
             () => reloaded.FailedAt.ShouldBe(failedAt),
             () => reloaded.Author.Value.ShouldBe("octocat"),
             () => reloaded.MonitoredRepositoryId.ShouldBe(repositoryId));

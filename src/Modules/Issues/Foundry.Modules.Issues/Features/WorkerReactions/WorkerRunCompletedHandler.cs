@@ -24,6 +24,16 @@ internal sealed class WorkerRunCompletedHandler(
 
         if (issue is InProgressIssue inProgress)
         {
+            if (@event.WorkerRunId != inProgress.WorkerRunId)
+            {
+                logger.LogWarning(
+                    "WorkerRunCompleted for issue {IssueId} has run id {EventRunId} which does not match current run id {CurrentRunId}; ignoring stale event.",
+                    @event.IssueId,
+                    @event.WorkerRunId,
+                    inProgress.WorkerRunId);
+                return;
+            }
+
             switch (@event.MergeState)
             {
                 case WorkerRunMergeState.Merged:
@@ -52,7 +62,6 @@ internal sealed class WorkerRunCompletedHandler(
                     }
 
                     ReviewIssue review = inProgress.MarkInReview(
-                        @event.WorkerRunId,
                         @event.BranchName,
                         @event.PullRequestUrl,
                         DateTimeOffset.UtcNow);
@@ -60,7 +69,7 @@ internal sealed class WorkerRunCompletedHandler(
                     break;
 
                 default:
-                    UnchangedIssue unchanged = inProgress.MarkUnchanged(@event.WorkerRunId);
+                    UnchangedIssue unchanged = inProgress.MarkUnchanged();
                     await db.TransitionAsync(inProgress, unchanged, domainEventDispatcher, cancellationToken);
                     break;
             }
@@ -70,6 +79,16 @@ internal sealed class WorkerRunCompletedHandler(
 
         if (issue is RevisionInProgressIssue revisionInProgress)
         {
+            if (@event.WorkerRunId != revisionInProgress.WorkerRunId)
+            {
+                logger.LogWarning(
+                    "WorkerRunCompleted for issue {IssueId} has run id {EventRunId} which does not match current run id {CurrentRunId}; ignoring stale event.",
+                    @event.IssueId,
+                    @event.WorkerRunId,
+                    revisionInProgress.WorkerRunId);
+                return;
+            }
+
             if (@event.BranchName is not null && @event.PullRequestUrl is not null)
             {
                 ReviewIssue review = revisionInProgress.MarkInReview(DateTimeOffset.UtcNow);

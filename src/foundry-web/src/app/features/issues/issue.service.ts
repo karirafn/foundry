@@ -22,6 +22,19 @@ const RETRY_ERROR = 'Failed to retry issue.';
 const RETRY_SUCCESS = 'Retry queued. Issue status is updating.';
 const SAFE_ID_RE = /^[\w-]+$/;
 const COUNTS_DEBOUNCE_MS = 300;
+// Safety-net interval for queue-order reconcile — covers order inputs that raise no IssueUpdated
+// event (e.g. repository Position changes in Settings). ADR 0067: bounded staleness is acceptable
+// for these infrequent operator actions; 30 s is low enough to reflect a Position reorder within
+// one interval and high enough that idle traffic is one GET /api/issues per 30 s.
+const RECONCILE_SAFETY_NET_MS = 30_000;
+
+function isDispatchableQueued(issue: IssueSummary): boolean {
+  return (
+    QUEUED_TIER_STATES.has(issue.state) &&
+    issue.repositoryEligibilityStatus !== 'ineligible' &&
+    issue.repositoryEligibilityStatus !== 'unreachable'
+  );
+}
 
 @Injectable({ providedIn: 'root' })
 export class IssueService {
@@ -72,9 +85,14 @@ export class IssueService {
   readonly resolvedLoading: WritableSignal<boolean> = signal(false);
   readonly resolvedLoadingMore: WritableSignal<boolean> = signal(false);
 
+  private readonly _queueOrderStaleSignal: WritableSignal<boolean> = signal(false);
+  readonly queueOrderStale: Signal<boolean> = this._queueOrderStaleSignal.asReadonly();
+
   private _detailSub: Subscription | null = null;
   private _countsDebounceHandle: ReturnType<typeof setTimeout> | null = null;
+  private _reconcileIntervalHandle: ReturnType<typeof setInterval> | null = null;
   private _resolvedRequestToken = 0;
+  private _reconcileRequestToken = 0;
 
   readonly sortedIssues: Signal<IssueSummary[]> = computed(() => {
     const all = this.issues();
@@ -121,19 +139,12 @@ export class IssueService {
   // sortedIssues() would still expose correct relative queue order within Waiting, but
   // issues() is canonical because it is unaffected by any future group reclassifications.
   readonly eligibleQueuedIssues: Signal<IssueSummary[]> = computed(() =>
-    this.issues().filter(i =>
-      QUEUED_TIER_STATES.has(i.state) &&
-      i.repositoryEligibilityStatus !== 'ineligible' &&
-      i.repositoryEligibilityStatus !== 'unreachable'
-    )
+    this.issues().filter(isDispatchableQueued)
   );
 
   // Same rationale: filter issues() to preserve server dispatch order.
   readonly ineligibleQueuedIssues: Signal<IssueSummary[]> = computed(() =>
-    this.issues().filter(i =>
-      QUEUED_TIER_STATES.has(i.state) &&
-      (i.repositoryEligibilityStatus === 'ineligible' || i.repositoryEligibilityStatus === 'unreachable')
-    )
+    this.issues().filter(i => QUEUED_TIER_STATES.has(i.state) && !isDispatchableQueued(i))
   );
 
   readonly nextUpIssueId: Signal<string | null> = computed(() => {
@@ -144,6 +155,34 @@ export class IssueService {
   readonly activeBandIssues: Signal<IssueSummary[]> = computed(() =>
     this.sortedIssues().filter(i => this.selectedActiveStates().has(i.state))
   );
+
+  // Positions index the rendered activeBandIssues() array so the ordinal always matches the
+  // on-screen order (ADR 0067). Consequently, deselecting a queued-tier state renumbers the
+  // visible ordinals contiguously rather than preserving absolute dispatch position — this is
+  // intended: the topmost visible card must always show "1", never a non-1 number when cards
+  // above it are hidden by a filter.
+  readonly queuePositions: Signal<ReadonlyMap<string, number>> = computed(() => {
+    const positions = new Map<string, number>();
+    let position = 1;
+    for (const issue of this.activeBandIssues()) {
+      if (isDispatchableQueued(issue)) {
+        positions.set(issue.id, position++);
+      }
+    }
+    return positions;
+  });
+
+  readonly nextUpAnnouncement: Signal<string> = computed(() => {
+    const nextUpId = this.nextUpIssueId();
+    if (nextUpId === null) {
+      return '';
+    }
+    const nextUpIssue = this.issues().find(i => i.id === nextUpId);
+    if (nextUpIssue === undefined) {
+      return '';
+    }
+    return `Next up: issue #${nextUpIssue.issueNumber} — ${nextUpIssue.title}`;
+  });
 
   readonly isEmpty: Signal<boolean> = computed(() => this.issues().length === 0);
 
@@ -158,9 +197,15 @@ export class IssueService {
   constructor() {
     this._signalR.on<IssueSummary>('IssueUpdated', (updated) => this._upsertIssue(updated));
     this._signalR.onReconnected(() => this.loadIssues());
+    this._reconcileIntervalHandle = setInterval(() => {
+      this._reconcileQueueOrder();
+    }, RECONCILE_SAFETY_NET_MS);
     this._destroyRef.onDestroy(() => {
       if (this._countsDebounceHandle !== null) {
         clearTimeout(this._countsDebounceHandle);
+      }
+      if (this._reconcileIntervalHandle !== null) {
+        clearInterval(this._reconcileIntervalHandle);
       }
     });
   }
@@ -175,7 +220,7 @@ export class IssueService {
 
     this._http.get<IssueSummary[]>('/api/issues', { params }).subscribe({
       next: (issues) => {
-        this.issues.set(issues.filter(i => SAFE_ID_RE.test(i.id) && isKnownState(i.state) && !isResolvedState(i.state)));
+        this.issues.set(this._activeIssuesOnly(issues));
         this._loadErrorSignal.set(null);
         this.initialLoading.set(false);
       },
@@ -373,7 +418,45 @@ export class IssueService {
     this._countsDebounceHandle = setTimeout(() => {
       this._countsDebounceHandle = null;
       this.loadCounts();
+      this._reconcileQueueOrder();
     }, COUNTS_DEBOUNCE_MS);
+  }
+
+  // Filters the server response to only active (non-resolved) issues with valid IDs and known
+  // states — the same invariant enforced by loadIssues so that resolved states never enter
+  // issues() and _reconcileQueueOrder cannot drift from loadIssues behaviour.
+  private _activeIssuesOnly(issues: IssueSummary[]): IssueSummary[] {
+    return issues.filter(i => SAFE_ID_RE.test(i.id) && isKnownState(i.state) && !isResolvedState(i.state));
+  }
+
+  // Refetches GET /api/issues and replaces issues() with the server's array order, treating that
+  // order as authoritative for dispatch priority (ADR 0067). Does NOT touch initialLoading or
+  // _loadErrorSignal — those are owned by the initial-load path (loadIssues). A failed reconcile
+  // sets _queueOrderStaleSignal to disclose bounded staleness; a successful reconcile clears it.
+  // A latest-wins _reconcileRequestToken guards against a stale late response installing a wrong
+  // order — the one defect that would silently recreate the drift bug this method was added to fix.
+  private _reconcileQueueOrder(): void {
+    this._reconcileRequestToken += 1;
+    const token = this._reconcileRequestToken;
+
+    this._http.get<IssueSummary[]>('/api/issues').subscribe({
+      next: (issues) => {
+        if (token !== this._reconcileRequestToken) {
+          return;
+        }
+        this.issues.set(this._activeIssuesOnly(issues));
+        this._queueOrderStaleSignal.set(false);
+      },
+      error: (err: HttpErrorResponse) => {
+        if (token !== this._reconcileRequestToken) {
+          return;
+        }
+        if (!this.initialLoading()) {
+          console.error(err);
+          this._queueOrderStaleSignal.set(true);
+        }
+      },
+    });
   }
 
   private _onResolvedSelectionChanged(states: ReadonlySet<IssueState>): void {

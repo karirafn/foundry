@@ -1,6 +1,7 @@
 using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Issues.Domain.Entities;
 using Foundry.Modules.Monitoring.Contracts;
+using Foundry.Modules.Workers.Contracts;
 
 namespace Foundry.Modules.Issues.Domain.Entities.States;
 
@@ -15,7 +16,7 @@ public sealed class RevisionInProgressIssue : Issue
     {
     }
 
-    public Guid WorkerRunId { get; private set; }
+    public WorkerRunId WorkerRunId { get; private set; }
 
     public string BranchName { get; private set; } = string.Empty;
 
@@ -23,7 +24,7 @@ public sealed class RevisionInProgressIssue : Issue
 
     public IReadOnlyList<ReviewComment> ReviewComments { get; private set; } = [];
 
-    internal static RevisionInProgressIssue FromRevisionQueued(RevisionQueuedIssue source, Guid workerRunId)
+    internal static RevisionInProgressIssue FromRevisionQueued(RevisionQueuedIssue source, WorkerRunId workerRunId)
     {
         RevisionInProgressIssue revisionInProgress = new(source.Id);
         revisionInProgress.SetSharedProperties(
@@ -57,9 +58,8 @@ public sealed class RevisionInProgressIssue : Issue
     }
 
     public RevisionFailedIssue MarkFailed(
-        Guid workerRunId,
         string failureReason,
-        string failureCategory,
+        FailureCategory failureCategory,
         DateTimeOffset failedAt)
     {
         RevisionFailedIssue failed = RevisionFailedIssue.FromRevisionInProgress(

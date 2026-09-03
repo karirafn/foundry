@@ -20,6 +20,7 @@ using Foundry.WebApi.Persistence;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.OpenApi;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.OpenApi;
 
 const string AngularDevServerPolicy = "AngularDevServer";
 const string DocGenerationEntryAssemblyName = "GetDocument.Insider";
@@ -32,7 +33,10 @@ WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
 
 builder.AddServiceDefaults();
 builder.Services.ConfigureHttpJsonOptions(options =>
-    options.SerializerOptions.Converters.Add(new JsonStringEnumConverter()));
+{
+    options.SerializerOptions.Converters.Add(new JsonStringEnumConverter());
+    options.SerializerOptions.Converters.Add(new WorkerRunIdJsonConverter());
+});
 
 if (!isDocGeneration)
 {
@@ -72,6 +76,15 @@ builder.Services.AddOpenApi(options =>
     // in the regenerated v1.json diff caught by CI.
     options.CreateSchemaReferenceId = (JsonTypeInfo jsonTypeInfo) =>
     {
+        // WorkerRunIdJsonConverter flattens WorkerRunId to a bare UUID string on the wire.
+        // Returning null here forces the schema to be inlined at each use site
+        // as { type: "string", format: "uuid" } via the schema transformer below,
+        // so the generated schema.ts keeps workerRunId: string (matching the wire shape).
+        if (jsonTypeInfo.Type == typeof(WorkerRunId))
+        {
+            return null;
+        }
+
         string? defaultId = OpenApiOptions.CreateDefaultSchemaReferenceId(jsonTypeInfo);
         if (defaultId is null)
         {
@@ -88,9 +101,26 @@ builder.Services.AddOpenApi(options =>
             ? defaultId
             : outermost.Name + defaultId;
     };
+
+    // WorkerRunIdJsonConverter flattens WorkerRunId to a bare UUID string on the wire.
+    // This transformer ensures the inlined schema appears as { type: "string", format: "uuid" }
+    // at every workerRunId field, preserving the wire shape visible to the Angular client.
+    options.AddSchemaTransformer((OpenApiSchema schema, OpenApiSchemaTransformerContext context, CancellationToken ct) =>
+    {
+        if (context.JsonTypeInfo.Type == typeof(WorkerRunId))
+        {
+            schema.Type = JsonSchemaType.String;
+            schema.Format = "uuid";
+            schema.Properties?.Clear();
+        }
+
+        return Task.CompletedTask;
+    });
 });
 
-builder.Services.AddSignalR();
+builder.Services.AddSignalR()
+    .AddJsonProtocol(options =>
+        options.PayloadSerializerOptions.Converters.Add(new WorkerRunIdJsonConverter()));
 builder.Services.AddScoped<IIssueBroadcaster, SignalRIssueBroadcaster>();
 builder.Services.AddSingleton<ISystemNotificationBroadcaster, SignalRSystemNotificationBroadcaster>();
 builder.Services.AddSingleton<ILoginSessionBroadcaster, SignalRLoginSessionBroadcaster>();

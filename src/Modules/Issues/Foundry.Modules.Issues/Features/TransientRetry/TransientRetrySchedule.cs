@@ -5,7 +5,6 @@ namespace Foundry.Modules.Issues.Features.TransientRetry;
 /// </summary>
 internal static class TransientRetrySchedule
 {
-    internal const string TransientApiErrorCategory = "transient_api_error";
     internal const int MaxTransientRetries = 2;
     internal static readonly TimeSpan InitialBackoff = TimeSpan.FromMinutes(1);
 

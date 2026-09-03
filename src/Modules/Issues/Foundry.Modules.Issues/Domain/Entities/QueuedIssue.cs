@@ -1,4 +1,5 @@
 using Foundry.Modules.Issues.Contracts;
+using Foundry.Modules.Workers.Contracts;
 using Foundry.Shared;
 
 namespace Foundry.Modules.Issues.Domain.Entities;
@@ -36,5 +37,5 @@ public abstract class QueuedIssue : Issue
     /// <summary>
     /// Transitions the issue to its in-progress state, assigning the given worker run.
     /// </summary>
-    public abstract Issue Claim(Guid workerRunId);
+    public abstract Issue Claim(WorkerRunId workerRunId);
 }

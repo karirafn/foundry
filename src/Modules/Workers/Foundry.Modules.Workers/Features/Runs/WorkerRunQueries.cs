@@ -115,7 +115,7 @@ internal sealed class WorkerRunQueries(DbContext db) : IWorkerRunQueries
 
     private static WorkerRunDetail MapActive(ActiveRun run) =>
         new(
-            WorkerRunId: run.Id.Value,
+            WorkerRunId: run.Id,
             IssueId: run.IssueId.Value,
             State: "running",
             FailureCategory: null,
@@ -133,7 +133,7 @@ internal sealed class WorkerRunQueries(DbContext db) : IWorkerRunQueries
 
     private static WorkerRunDetail MapCompleted(CompletedRun run) =>
         new(
-            WorkerRunId: run.Id.Value,
+            WorkerRunId: run.Id,
             IssueId: run.IssueId.Value,
             State: "completed",
             FailureCategory: null,
@@ -151,7 +151,7 @@ internal sealed class WorkerRunQueries(DbContext db) : IWorkerRunQueries
 
     private static WorkerRunDetail MapFailed(FailedRun run) =>
         new(
-            WorkerRunId: run.Id.Value,
+            WorkerRunId: run.Id,
             IssueId: run.IssueId.Value,
             State: "failed",
             FailureCategory: run.Reason.CategoryToken,
@@ -169,7 +169,7 @@ internal sealed class WorkerRunQueries(DbContext db) : IWorkerRunQueries
 
     private static WorkerRunDetail MapStarting(StartingRun run) =>
         new(
-            WorkerRunId: run.Id.Value,
+            WorkerRunId: run.Id,
             IssueId: run.IssueId.Value,
             State: "starting",
             FailureCategory: null,
@@ -191,7 +191,7 @@ internal sealed class WorkerRunQueries(DbContext db) : IWorkerRunQueries
         List<WorkerActivity> activities = await db.Set<ActiveRun>()
             .AsNoTracking()
             .Select(r => new WorkerActivity(
-                r.Id.Value,
+                r.Id,
                 r.IssueId.Value,
                 r.LastActivityAt ?? r.StartedAt,
                 r.BranchCommitCount))

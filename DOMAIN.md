@@ -259,23 +259,42 @@ Accepted asymmetry: a repo visible to account A but namespace-claimed by account
 ## Repository Priority
 
 The relative ordering of monitored repositories, expressed as a 0-based, contiguous, unique `Position` integer on each Monitored Repository — lower value means higher priority.
-`Position` is one component of Dispatch Order and therefore affects both dispatch and the dashboard's queued-issue list.
+`Position` is one component of Dispatch Order and therefore affects both dispatch and the order the dashboard's queued-issue list is served in.
 New repositories append at the end (highest existing Position + 1); deleting a repository renumbers survivors contiguously.
 Polling is independent of position.
 
 ## Dispatch Order
 
-The total order that governs which queued issue is claimed next and how queued issues are ranked in the dashboard.
-Defined as the four-tuple `(TierRank, Position, DetectedAt, Id)`, evaluated in that precedence — the issue with the lexicographically smallest key is claimed first (and displayed first).
+The total order that governs which queued issue is claimed next and the order the dashboard list query serves queued issues in.
+Defined as the four-tuple `(TierRank, Position, DetectedAt, Id)`, evaluated in that precedence — the issue with the lexicographically smallest key is claimed first, and is served first by the dashboard list query.
 
 - **TierRank** — a property of the queued state variant that encodes dispatch-priority class: revision (0) < continuation (1) < fresh (2). Lower rank is claimed first; this is the primary ordering criterion.
 - **Position** — the `EligibleRepository.Position` of the repository that owns the issue, supplied externally into the key. Lower position is preferred within a tier.
 - **DetectedAt** — oldest first within the same repository and tier.
 - **Id** — guarantees a deterministic total order when all other fields are equal.
 
-A single shared definition (`DispatchOrderKey`) governs both the dispatcher (`WorkerCapacityAvailableHandler`, min-by-key claim selection) and the dashboard list query (`GetActiveIssueSummariesAsync`, in-memory sort of the queued subset), so display order and dispatch order cannot drift.
+A single shared definition (`DispatchOrderKey`) governs both the dispatcher (`WorkerCapacityAvailableHandler`, min-by-key claim selection) and the dashboard list query (`GetActiveIssueSummariesAsync`, in-memory sort of the queued subset), so the two cannot disagree about the order at the moment the list is served.
+
+The dashboard treats the server array order as the only source of queue order and reconciles it by refetching `GET /api/issues`, rather than deriving order locally or receiving a pushed order (see [ADR 0067](docs/adr/0067-dashboard-reconciles-queue-order-rather-than-deriving-it.md)).
+Every `IssueUpdated` event schedules a debounced reconcile (300 ms) alongside the counts refetch that already runs on that path, collapsing a burst of events into one request.
+A low-frequency safety-net timer (30 s) schedules the same reconcile, covering order inputs that raise no issue event — including a repository `Position` change in Settings.
+The reconcile fetch carries a latest-wins request token, so a late response cannot install a stale order.
+A failed reconcile sets a `queueOrderStale` signal to disclose bounded staleness without showing the blocking load-error banner; the next successful reconcile clears it.
+The automatic exit from the possibly-stale state is the next event-driven or timer-driven reconcile, plus the full reload on SignalR reconnect.
 
 The dashboard partitions queued issues into two groups before applying the key: eligible-repository issues (real `Position`) rank above ineligible-repository issues (sentinel `int.MaxValue` position), each retaining its `RepositoryEligibilityStatus` for display.
+
+## Queue Position
+
+A queued issue's 1-based index in Dispatch Order, counted over **dispatchable queued issues only** — queued-tier issues whose repository is eligible (not `ineligible` or `unreachable`).
+
+Queue Position is derived from the rendered dispatchable-queued array on the dashboard (see [ADR 0067](docs/adr/0067-dashboard-reconciles-queue-order-rather-than-deriving-it.md)).
+It is never persisted and never transported from the server; the ordinal indexes the very array the cards are rendered from, so it cannot disagree with the on-screen sequence.
+
+Not-dispatchable queued issues — those whose repository is ineligible or unreachable — have no Queue Position.
+Their card gutter shows `—` in place of an ordinal.
+
+Queue Position 1 identifies the **Next up** issue: the one the dispatcher claims next when a worker slot becomes available.
 
 ## Dispatch Context
 
@@ -661,6 +680,7 @@ For each stale run, the sweep:
 
 A `container_error` failure does not auto-retry (`TransientRetryService` filters on `transient_api_error` only) — the issue parks under "Needs attention" for operator review, consistent with [ADR 0014](docs/adr/0014-remove-immediate-requeue-always-pause.md).
 A `WorkerRunFailed` event whose run ID does not match the issue's current `WorkerRunId` is silently ignored by `WorkerRunFailedHandler` (stale-run-ID guard), so a concurrent transition cannot produce a double failure.
+The same guard applies to `WorkerRunCompletedHandler`: a `WorkerRunCompleted` event whose run ID does not match is rejected as stale, so a superseded run cannot drive a completed transition on an issue that has already moved on.
 
 **Daemon-unreachable defer.**
 When `ListByLabelAsync` fails with a daemon connectivity error (detected by `DockerDaemonConnectivity.IsUnreachable`), the sweep logs a warning and returns without reaping or failing anything — both phases are skipped for that tick.
@@ -689,14 +709,17 @@ The wizard reuses the same form components as the settings page.
 
 A value object on FailedRun that classifies how the run failed.
 Variants: `NonZeroExit(exitCode)` (container exited with non-zero code), `TimedOut` (exceeded configured timeout), `ContainerError(message)` (Docker-level failure — image not found, daemon unavailable, etc.), `UsageLimited(resetsAt)` (worker hit a *time-based* Anthropic API usage limit — session, weekly, or Opus quota — carrying a parseable reset time; token `usage_limited`), `CreditsExhausted` (worker hit a *money-based* 429 — credit pool empty, org monthly spend limit reached, or the CLI ≥ 2.1.119 regression — carrying no reset time; token `credits_exhausted`; summary `"Credits exhausted"`, which deliberately shares no prefix with the usage-limit summary so the auto-resume `LIKE 'Usage limit reached%'` sweep cannot catch it; blocks the account's spend indefinitely until an operator resumes), `WorkerBootstrapFailed(detail)` (pre-task failure — the worker container died during entrypoint bootstrap, before `claude` ran; carries a short, secret-redacted diagnostic `Detail` with the failed stage and error tail), `AuthInvalid` (the worker's Claude credentials were rejected — `api_error_status == 401` or `error.type == "authentication_error"`; triggers the auth-invalid pause), `TransientApiError` (a transient Anthropic API fault the run neither caused nor can fix — `api_error_status` in the 5xx range, or `is_error: true` with `api_error_status: null` and a `result` matching a known transient phrase such as a mid-response connection drop or `529 Overloaded`; token `transient_api_error`; drives the bounded auto-retry described under Transient Retry), `ProviderError(message)` (a provider API call needed to start the run failed, e.g. branch pre-creation rejected with 403; raised before the worker task begins).
+Each variant's `CategoryToken` value flows from the matching `FailureCategory` const (see FailureCategory below), making `FailureCategory` the single source of truth for the token vocabulary.
 
 ## FailureCategory
 
-A stable token on the failed-issue states (`FailedIssue`, `ContinuableFailedIssue`, `RevisionFailedIssue`) naming *why* the run failed.
-Flattened from the Workers module's `FailureReason` variant via `CategoryToken` so it survives the outbox boundary as a plain `TEXT` column and stays SQL-filterable — `TransientRetryService` selects on it directly rather than rehydrating the value object.
+A value object in `Foundry.Modules.Workers.Contracts` owning the ten-token vocabulary that names *why* a run failed, and the single owning type for that vocabulary (see [ADR 0068](docs/adr/0068-failurecategory-value-object-owns-token-vocabulary.md)).
+The ten tokens are the nine `FailureReason` category tokens plus `pr_closed`.
+`FailureReason`'s nine `CategoryToken` values derive from the matching `FailureCategory` const fields, so both producers obtain their value from the owning type: `WorkerRunFailedHandler` converts `FailureReason.CategoryToken` at the domain boundary, and `ProviderPullRequestClosedHandler` uses `FailureCategory.PrClosed` directly.
+The entity property on `FailedIssue`, `ContinuableFailedIssue`, and `RevisionFailedIssue` is typed `FailureCategory` and persisted via an EF `ValueConverter` to the unchanged `TEXT` column (`failure_category`) — no migration needed, and the `TransientRetryService` predicate stays SQL-translatable by comparing against `FailureCategory.TransientApiError`.
+The converter's read direction is lenient: unknown stored tokens coalesce defensively to `FailureCategory.NonZeroExit` without throwing, so a stale or legacy row never disables auto-retry. The domain-boundary conversion in `WorkerRunFailedHandler` remains the point that rejects and logs unknown tokens from incoming events.
+The `WorkerRunFailed` contract `Category` field remains `string?`; rejection of unknown or null values happens at the domain boundary in `WorkerRunFailedHandler`, which falls back to `FailureCategory.NonZeroExit` (logging a warning) so the issue always transitions to failed.
 Drives category-conditional recovery: `transient_api_error` is the discriminator for the bounded auto-retry described under Transient Retry.
-Values are `FailureReason`'s nine category tokens, plus `pr_closed`, which the Issues module mints directly in `ProviderPullRequestClosedHandler` when a PR is closed without merge and is not a `FailureReason` variant. The vocabulary therefore has two producers and no single owning type.
-The `WorkerRunFailed` contract declares `Category` nullable, so `WorkerRunFailedHandler` coalesces a missing value to the empty string — no live producer emits null, but an empty category is representable.
 
 ## Usage Limit
 

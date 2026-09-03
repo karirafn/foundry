@@ -115,7 +115,7 @@ public sealed class AuthInvalidDetection : WorkerDispatchServiceTestBase
         WorkerAuthenticationFailed authFailedEvent = dispatcher.Captured
             .OfType<WorkerAuthenticationFailed>()
             .ShouldHaveSingleItem();
-        authFailedEvent.WorkerRunId.ShouldBe(activeRun.Id.Value);
+        authFailedEvent.WorkerRunId.ShouldBe(activeRun.Id);
         authFailedEvent.IssueId.ShouldBe(activeRun.IssueId.Value);
     }
 

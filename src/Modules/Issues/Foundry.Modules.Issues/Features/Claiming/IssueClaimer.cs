@@ -1,5 +1,6 @@
 using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Issues.Domain.Entities;
+using Foundry.Modules.Workers.Contracts;
 using Foundry.Shared;
 using Foundry.Shared.Infrastructure;
 
@@ -19,7 +20,7 @@ internal sealed class IssueClaimer(
 {
     public async Task ClaimAsync(
         DispatchCandidate candidate,
-        Guid workerRunId,
+        WorkerRunId workerRunId,
         CancellationToken cancellationToken)
     {
         QueuedIssue issue = candidate.Issue;

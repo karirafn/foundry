@@ -1,6 +1,7 @@
 using Foundry.Modules.Issues.Domain.Entities.States;
 using Foundry.Modules.Issues.Domain.Events;
 using Foundry.Modules.Monitoring.Contracts;
+using Foundry.Modules.Workers.Contracts;
 using Foundry.Testing;
 
 using Shouldly;
@@ -17,7 +18,7 @@ public sealed class Claim
         // Arrange
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
         ContinuationQueuedIssue continuationQueued = new IssueBuilder().WithMonitoredRepositoryId(repositoryId).ContinuableFailed().Retry();
-        Guid workerRunId = Guid.NewGuid();
+        WorkerRunId workerRunId = WorkerRunId.New();
 
         // Act
         InProgressIssue inProgress = continuationQueued.Claim(workerRunId);
@@ -35,7 +36,7 @@ public sealed class Claim
         // Arrange
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
         ContinuationQueuedIssue continuationQueued = new IssueBuilder().WithMonitoredRepositoryId(repositoryId).ContinuableFailed().Retry();
-        Guid workerRunId = Guid.NewGuid();
+        WorkerRunId workerRunId = WorkerRunId.New();
 
         // Act
         continuationQueued.Claim(workerRunId);

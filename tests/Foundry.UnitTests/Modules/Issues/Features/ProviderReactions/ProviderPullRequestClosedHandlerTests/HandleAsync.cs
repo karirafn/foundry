@@ -4,6 +4,7 @@ using Foundry.Modules.Issues.Domain.Entities.States;
 using Foundry.Modules.Issues.Domain.Events;
 using Foundry.Modules.Issues.Features.ProviderReactions;
 using Foundry.Modules.Monitoring.Contracts;
+using Foundry.Modules.Workers.Contracts;
 using Foundry.Shared;
 using Foundry.Testing;
 using Foundry.WebApi.Persistence;
@@ -139,5 +140,29 @@ public sealed class HandleAsync : IAsyncDisposable
         _dispatcher.DispatchedEvents
             .OfType<IssueContinuableFailed>()
             .ShouldHaveSingleItem();
+    }
+
+    [Fact]
+    public async Task WhenReviewIssueTransitioned_FailureCategoryIsPrClosed()
+    {
+        // Arrange — AC #2: ProviderPullRequestClosedHandler obtains pr_closed from FailureCategory.PrClosed
+        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
+        SeedReviewIssue(repositoryId, issueNumber: 4);
+
+        ProviderPullRequestClosed @event = new(
+            RepositoryId: repositoryId,
+            IssueNumber: 4);
+
+        // Act
+        await _sut.HandleAsync(@event, CancellationToken.None);
+
+        // Assert
+        _dbContext.ChangeTracker.Clear();
+        Issue? issue = await _dbContext.Set<Issue>()
+            .FirstOrDefaultAsync(
+                i => i.MonitoredRepositoryId == repositoryId,
+                TestContext.Current.CancellationToken);
+        ContinuableFailedIssue failed = issue.ShouldBeOfType<ContinuableFailedIssue>();
+        failed.FailureCategory.ShouldBe(FailureCategory.PrClosed);
     }
 }

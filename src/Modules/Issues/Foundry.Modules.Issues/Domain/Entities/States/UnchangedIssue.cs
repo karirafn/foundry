@@ -1,5 +1,6 @@
 using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Issues.Domain.Entities;
+using Foundry.Modules.Workers.Contracts;
 
 namespace Foundry.Modules.Issues.Domain.Entities.States;
 
@@ -14,9 +15,9 @@ public sealed class UnchangedIssue : Issue
     {
     }
 
-    public Guid WorkerRunId { get; private set; }
+    public WorkerRunId WorkerRunId { get; private set; }
 
-    internal static UnchangedIssue FromInProgress(InProgressIssue source, Guid workerRunId)
+    internal static UnchangedIssue FromInProgress(InProgressIssue source)
     {
         UnchangedIssue unchanged = new(source.Id);
         unchanged.SetSharedProperties(
@@ -28,7 +29,7 @@ public sealed class UnchangedIssue : Issue
             source.Url,
             source.Labels,
             source.DetectedAt);
-        unchanged.WorkerRunId = workerRunId;
+        unchanged.WorkerRunId = source.WorkerRunId;
         return unchanged;
     }
 

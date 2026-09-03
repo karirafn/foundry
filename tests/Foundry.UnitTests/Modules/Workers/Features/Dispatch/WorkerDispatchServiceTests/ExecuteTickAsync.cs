@@ -67,7 +67,7 @@ public sealed class ExecuteTickAsync : WorkerDispatchServiceTestBase
         WorkerCapacityAvailable @event = dispatcher.Captured
             .OfType<WorkerCapacityAvailable>()
             .ShouldHaveSingleItem();
-        @event.WorkerRunId.ShouldNotBe(Guid.Empty);
+        @event.WorkerRunId.ShouldNotBe(default(WorkerRunId));
     }
 
     [Fact]

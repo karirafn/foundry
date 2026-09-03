@@ -1,7 +1,7 @@
 namespace Foundry.Modules.Workers.Contracts;
 
 public sealed record WorkerRunDetail(
-    Guid WorkerRunId,
+    WorkerRunId WorkerRunId,
     Guid IssueId,
     string State,
     string? FailureCategory,

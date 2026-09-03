@@ -75,6 +75,19 @@ public sealed class CategoryToken
     }
 
     [Fact]
+    public void WhenAuthInvalid_CategoryTokenIsAuthInvalid()
+    {
+        // Arrange
+        FailureReason reason = new FailureReason.AuthInvalid();
+
+        // Act
+        string token = reason.CategoryToken;
+
+        // Assert
+        token.ShouldBe("auth_invalid");
+    }
+
+    [Fact]
     public void WhenProviderError_CategoryTokenIsProviderError()
     {
         // Arrange

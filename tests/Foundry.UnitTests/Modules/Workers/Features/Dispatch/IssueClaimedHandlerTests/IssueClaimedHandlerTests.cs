@@ -8,6 +8,7 @@ using Foundry.Modules.Monitoring.Contracts.Queries;
 using Foundry.Modules.Settings.Contracts;
 using Foundry.Modules.Settings.Contracts.Queries;
 using Foundry.Modules.Settings.Domain.ValueObjects;
+using Foundry.Modules.Workers.Contracts;
 using Foundry.Modules.Workers.Domain.Entities;
 using Foundry.Modules.Workers.Domain.Entities.States;
 using Foundry.Modules.Workers.Domain.ValueObjects;
@@ -79,7 +80,7 @@ public sealed class HandleAsync : IAsyncDisposable
 
     private static IssueClaimed BuildEvent(
         IssueId? issueId = null,
-        Guid? workerRunId = null,
+        WorkerRunId? workerRunId = null,
         int issueNumber = 42,
         string title = "Test Issue",
         string body = "Test body",
@@ -93,7 +94,7 @@ public sealed class HandleAsync : IAsyncDisposable
     {
         ClaimedIssueDispatch dispatch = new(
             issueId ?? IssueId.New(),
-            workerRunId ?? Guid.NewGuid(),
+            workerRunId ?? WorkerRunId.New(),
             issueNumber,
             title,
             body,

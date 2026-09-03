@@ -5,6 +5,7 @@ using Foundry.Modules.Issues.Features;
 using Foundry.Modules.Issues.Features.TransientRetry;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Contracts.Queries;
+using Foundry.Modules.Workers.Contracts;
 using Foundry.Shared;
 using Foundry.Shared.Infrastructure;
 using Foundry.Testing;
@@ -190,13 +191,12 @@ public sealed class GetIssueDetailAsync : IAsyncDisposable
         FreshQueuedIssue queued = detected.Enqueue();
         await _dbContext.TransitionAsync(detected, queued, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
 
-        Guid workerRunId = Guid.NewGuid();
+        WorkerRunId workerRunId = WorkerRunId.New();
         InProgressIssue inProgress = queued.Claim(workerRunId);
         await _dbContext.TransitionAsync(queued, inProgress, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
 
         DateTimeOffset feedbackCutoffAt = DateTimeOffset.UtcNow.AddDays(1);
         ReviewIssue review = inProgress.MarkInReview(
-            workerRunId: workerRunId,
             branchName: "feat/issue-1",
             pullRequestUrl: "https://github.com/owner/repo/pull/42",
             feedbackCutoffAt: feedbackCutoffAt);
@@ -213,7 +213,7 @@ public sealed class GetIssueDetailAsync : IAsyncDisposable
         detail.State.ShouldBe("review");
         IssueStateDetails stateDetails = detail.StateDetails.ShouldNotBeNull();
         stateDetails.ShouldSatisfyAllConditions(
-            () => stateDetails.WorkerRunId.ShouldBe(workerRunId),
+            () => stateDetails.WorkerRunId.ShouldBe(workerRunId.Value),
             () => stateDetails.BranchName.ShouldBe("feat/issue-1"),
             () => stateDetails.PullRequestUrl.ShouldBe("https://github.com/owner/repo/pull/42"),
             () => stateDetails.FeedbackCutoffAt.ShouldNotBeNull()
@@ -228,12 +228,12 @@ public sealed class GetIssueDetailAsync : IAsyncDisposable
         FreshQueuedIssue queued = detected.Enqueue();
         await _dbContext.TransitionAsync(detected, queued, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
 
-        Guid workerRunId = Guid.NewGuid();
+        WorkerRunId workerRunId = WorkerRunId.New();
         InProgressIssue inProgress = queued.Claim(workerRunId);
         await _dbContext.TransitionAsync(queued, inProgress, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
 
         DateTimeOffset failedAt = DateTimeOffset.UtcNow;
-        FailedIssue failed = inProgress.MarkFailed(workerRunId, "Container exited non-zero", failedAt, "generic_failure");
+        FailedIssue failed = inProgress.MarkFailed("Container exited non-zero", failedAt, FailureCategory.NonZeroExit);
         await _dbContext.TransitionAsync(inProgress, failed, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
         _dbContext.ChangeTracker.Clear();
 
@@ -247,7 +247,7 @@ public sealed class GetIssueDetailAsync : IAsyncDisposable
         detail.State.ShouldBe("failed");
         IssueStateDetails stateDetails = detail.StateDetails.ShouldNotBeNull();
         stateDetails.ShouldSatisfyAllConditions(
-            () => stateDetails.WorkerRunId.ShouldBe(workerRunId),
+            () => stateDetails.WorkerRunId.ShouldBe(workerRunId.Value),
             () => stateDetails.FailureReason.ShouldBe("Container exited non-zero"),
             () => stateDetails.FailedAt.ShouldNotBeNull()
                 .ShouldBe(failedAt, tolerance: TimeSpan.FromSeconds(1)));
@@ -261,12 +261,11 @@ public sealed class GetIssueDetailAsync : IAsyncDisposable
         FreshQueuedIssue queued = detected.Enqueue();
         await _dbContext.TransitionAsync(detected, queued, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
 
-        Guid workerRunId = Guid.NewGuid();
+        WorkerRunId workerRunId = WorkerRunId.New();
         InProgressIssue inProgress = queued.Claim(workerRunId);
         await _dbContext.TransitionAsync(queued, inProgress, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
 
         ReviewIssue review = inProgress.MarkInReview(
-            workerRunId: workerRunId,
             branchName: "feat/issue-1",
             pullRequestUrl: "https://github.com/owner/repo/pull/42",
             feedbackCutoffAt: DateTimeOffset.UtcNow.AddDays(1));
@@ -301,16 +300,15 @@ public sealed class GetIssueDetailAsync : IAsyncDisposable
         FreshQueuedIssue queued = detected.Enqueue();
         await _dbContext.TransitionAsync(detected, queued, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
 
-        Guid workerRunId = Guid.NewGuid();
+        WorkerRunId workerRunId = WorkerRunId.New();
         InProgressIssue inProgress = queued.Claim(workerRunId);
         await _dbContext.TransitionAsync(queued, inProgress, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
 
         DateTimeOffset failedAt = DateTimeOffset.UtcNow;
         ContinuableFailedIssue continuableFailed = inProgress.MarkContinuableFailed(
-            workerRunId,
             branchName: "feat/issue-1",
             failureReason: "Container timeout",
-            failureCategory: "generic_failure",
+            failureCategory: FailureCategory.NonZeroExit,
             failedAt: failedAt);
         await _dbContext.TransitionAsync(inProgress, continuableFailed, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
         _dbContext.ChangeTracker.Clear();
@@ -325,7 +323,7 @@ public sealed class GetIssueDetailAsync : IAsyncDisposable
         detail.State.ShouldBe("continuable_failed");
         IssueStateDetails stateDetails = detail.StateDetails.ShouldNotBeNull();
         stateDetails.ShouldSatisfyAllConditions(
-            () => stateDetails.WorkerRunId.ShouldBe(workerRunId),
+            () => stateDetails.WorkerRunId.ShouldBe(workerRunId.Value),
             () => stateDetails.BranchName.ShouldBe("feat/issue-1"),
             () => stateDetails.FailureReason.ShouldBe("Container timeout"),
             () => stateDetails.FailedAt.ShouldNotBeNull()
@@ -340,15 +338,14 @@ public sealed class GetIssueDetailAsync : IAsyncDisposable
         FreshQueuedIssue queued = detected.Enqueue();
         await _dbContext.TransitionAsync(detected, queued, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
 
-        Guid workerRunId = Guid.NewGuid();
+        WorkerRunId workerRunId = WorkerRunId.New();
         InProgressIssue inProgress = queued.Claim(workerRunId);
         await _dbContext.TransitionAsync(queued, inProgress, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
 
         ContinuableFailedIssue continuableFailed = inProgress.MarkContinuableFailed(
-            workerRunId,
             branchName: "feat/issue-1",
             failureReason: "Container timeout",
-            failureCategory: "generic_failure",
+            failureCategory: FailureCategory.NonZeroExit,
             failedAt: DateTimeOffset.UtcNow);
         await _dbContext.TransitionAsync(inProgress, continuableFailed, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
 
@@ -376,16 +373,15 @@ public sealed class GetIssueDetailAsync : IAsyncDisposable
         FreshQueuedIssue queued = detected.Enqueue();
         await _dbContext.TransitionAsync(detected, queued, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
 
-        Guid workerRunId = Guid.NewGuid();
+        WorkerRunId workerRunId = WorkerRunId.New();
         InProgressIssue inProgress = queued.Claim(workerRunId);
         await _dbContext.TransitionAsync(queued, inProgress, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
 
         DateTimeOffset failedAt = DateTimeOffset.UtcNow;
         FailedIssue failed = inProgress.MarkFailed(
-            workerRunId,
             "Transient API error",
             failedAt,
-            TransientRetrySchedule.TransientApiErrorCategory);
+            FailureCategory.TransientApiError);
         await _dbContext.TransitionAsync(inProgress, failed, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
         _dbContext.ChangeTracker.Clear();
 
@@ -418,15 +414,14 @@ public sealed class GetIssueDetailAsync : IAsyncDisposable
         FreshQueuedIssue queued = detected.Enqueue();
         await _dbContext.TransitionAsync(detected, queued, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
 
-        Guid workerRunId = Guid.NewGuid();
+        WorkerRunId workerRunId = WorkerRunId.New();
         InProgressIssue inProgress = queued.Claim(workerRunId);
         await _dbContext.TransitionAsync(queued, inProgress, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
 
         FailedIssue failed = inProgress.MarkFailed(
-            workerRunId,
             "Transient API error",
             DateTimeOffset.UtcNow,
-            TransientRetrySchedule.TransientApiErrorCategory);
+            FailureCategory.TransientApiError);
         await _dbContext.TransitionAsync(inProgress, failed, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
         _dbContext.ChangeTracker.Clear();
 
@@ -458,15 +453,14 @@ public sealed class GetIssueDetailAsync : IAsyncDisposable
         FreshQueuedIssue queued = detected.Enqueue();
         await _dbContext.TransitionAsync(detected, queued, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
 
-        Guid workerRunId = Guid.NewGuid();
+        WorkerRunId workerRunId = WorkerRunId.New();
         InProgressIssue inProgress = queued.Claim(workerRunId);
         await _dbContext.TransitionAsync(queued, inProgress, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
 
         FailedIssue failed = inProgress.MarkFailed(
-            workerRunId,
             "Container exited non-zero",
             DateTimeOffset.UtcNow,
-            "generic_failure");
+            FailureCategory.NonZeroExit);
         await _dbContext.TransitionAsync(inProgress, failed, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
         _dbContext.ChangeTracker.Clear();
 
@@ -492,16 +486,15 @@ public sealed class GetIssueDetailAsync : IAsyncDisposable
         FreshQueuedIssue queued = detected.Enqueue();
         await _dbContext.TransitionAsync(detected, queued, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
 
-        Guid workerRunId = Guid.NewGuid();
+        WorkerRunId workerRunId = WorkerRunId.New();
         InProgressIssue inProgress = queued.Claim(workerRunId);
         await _dbContext.TransitionAsync(queued, inProgress, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
 
         DateTimeOffset failedAt = DateTimeOffset.UtcNow;
         ContinuableFailedIssue continuableFailed = inProgress.MarkContinuableFailed(
-            workerRunId,
             branchName: "feat/issue-1",
             failureReason: "Transient API error",
-            failureCategory: TransientRetrySchedule.TransientApiErrorCategory,
+            failureCategory: FailureCategory.TransientApiError,
             failedAt: failedAt);
         await _dbContext.TransitionAsync(inProgress, continuableFailed, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
         _dbContext.ChangeTracker.Clear();
@@ -536,15 +529,14 @@ public sealed class GetIssueDetailAsync : IAsyncDisposable
         FreshQueuedIssue queued = detected.Enqueue();
         await _dbContext.TransitionAsync(detected, queued, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
 
-        Guid workerRunId = Guid.NewGuid();
+        WorkerRunId workerRunId = WorkerRunId.New();
         InProgressIssue inProgress = queued.Claim(workerRunId);
         await _dbContext.TransitionAsync(queued, inProgress, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
 
         FailedIssue failed = inProgress.MarkFailed(
-            workerRunId,
             "Transient API error",
             DateTimeOffset.UtcNow,
-            TransientRetrySchedule.TransientApiErrorCategory);
+            FailureCategory.TransientApiError);
         await _dbContext.TransitionAsync(inProgress, failed, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
         _dbContext.ChangeTracker.Clear();
 
@@ -570,15 +562,14 @@ public sealed class GetIssueDetailAsync : IAsyncDisposable
         FreshQueuedIssue queued = detected.Enqueue();
         await _dbContext.TransitionAsync(detected, queued, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
 
-        Guid workerRunId = Guid.NewGuid();
+        WorkerRunId workerRunId = WorkerRunId.New();
         InProgressIssue inProgress = queued.Claim(workerRunId);
         await _dbContext.TransitionAsync(queued, inProgress, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
 
         ContinuableFailedIssue continuableFailed = inProgress.MarkContinuableFailed(
-            workerRunId,
             branchName: "feat/issue-1",
             failureReason: "Transient API error",
-            failureCategory: TransientRetrySchedule.TransientApiErrorCategory,
+            failureCategory: FailureCategory.TransientApiError,
             failedAt: DateTimeOffset.UtcNow);
         await _dbContext.TransitionAsync(inProgress, continuableFailed, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
         _dbContext.ChangeTracker.Clear();

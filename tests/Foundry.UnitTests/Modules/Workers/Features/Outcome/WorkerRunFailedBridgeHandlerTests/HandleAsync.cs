@@ -71,7 +71,7 @@ public sealed class HandleAsync
         IntegrationWorkerRunFailed integrationEvent =
             dispatcher.Captured.ShouldHaveSingleItem()
                 .ShouldBeOfType<IntegrationWorkerRunFailed>();
-        integrationEvent.WorkerRunId.ShouldBe(workerRunId.Value);
+        integrationEvent.WorkerRunId.ShouldBe(workerRunId);
     }
 
     [Fact]

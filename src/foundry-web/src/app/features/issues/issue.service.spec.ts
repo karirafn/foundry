@@ -1276,9 +1276,11 @@ describe('IssueService (band transitions + counts debounce)', () => {
     // Act — trigger an IssueUpdated event for the expanded issue
     callbacks['IssueUpdated']({ ...activeSummary, state: 'in_progress' });
 
-    // Advance past the debounce window so the counts request fires
+    // Advance past the debounce window so the counts + reconcile requests fire
     vi.advanceTimersByTime(400);
     httpMock.expectOne('/api/issues/counts').flush({ counts: {} });
+    // The debounce now also schedules a reconcile alongside the counts refetch (ADR 0067).
+    httpMock.expectOne(r => r.url === '/api/issues' && !r.params.has('states')).flush([activeSummary]);
 
     // Assert — detail refetch triggered
     const detailReq = httpMock.expectOne('/api/issues/issue-1');
@@ -1318,6 +1320,8 @@ describe('IssueService (band transitions + counts debounce)', () => {
       const req = httpMock.expectOne('/api/issues/counts');
       expect(req.request.method).toBe('GET');
       req.flush({ counts: { failed: 1 } });
+      // The debounce also fires exactly one reconcile alongside the counts refetch (ADR 0067).
+      httpMock.expectOne(r => r.url === '/api/issues' && !r.params.has('states')).flush([activeSummary]);
     });
   });
 });
@@ -2064,6 +2068,488 @@ describe('IssueService (dispatch-order vs visual-sort regression)', () => {
   });
 });
 
+// Step 10 — Queue-order reconcile (#506)
+describe('IssueService (queue-order reconcile)', () => {
+  let callbacks: Record<string, (data: IssueSummary) => void>;
+  let httpMockRef: HttpTestingController;
+
+  const low: IssueSummary = {
+    id: 'low-prio',
+    issueNumber: 1,
+    title: 'Low prio queued',
+    state: 'queued',
+    repositorySlug: 'owner/low-repo',
+    detectedAt: '2026-01-01T00:00:00Z',
+    url: 'https://github.com/owner/low-repo/issues/1',
+    repositoryEligibilityStatus: null,
+  };
+
+  const rev: IssueSummary = {
+    id: 'revision-high',
+    issueNumber: 2,
+    title: 'Revision queued',
+    state: 'revision_queued',
+    repositorySlug: 'owner/high-repo',
+    detectedAt: '2026-06-01T00:00:00Z',
+    url: 'https://github.com/owner/high-repo/issues/2',
+    repositoryEligibilityStatus: null,
+  };
+
+  function setup() {
+    callbacks = {};
+    const capturingSignalR = {
+      on: (method: string, cb: (data: IssueSummary) => void) => { callbacks[method] = cb; },
+      onReconnected: () => {},
+    };
+
+    TestBed.resetTestingModule();
+    TestBed.configureTestingModule({
+      providers: [
+        IssueService,
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        { provide: IssueSignalRService, useValue: capturingSignalR },
+      ],
+    });
+
+    const svc = TestBed.inject(IssueService);
+    const http = TestBed.inject(HttpTestingController);
+    httpMockRef = http;
+    return { svc, http };
+  }
+
+  afterEach(() => {
+    vi.useRealTimers();
+    // Reset so subsequent describe blocks can call configureTestingModule cleanly.
+    TestBed.resetTestingModule();
+  });
+
+  // Step 1 — Tracer bullet: direct reconcile installs server order
+  it('should replace issues() with server order on reconcile success, without setting initialLoading', () => {
+    // Arrange
+    const { svc, http } = setup();
+    svc.loadIssues();
+    http.expectOne('/api/issues').flush([low]);
+    expect(svc.issues()[0].id).toBe('low-prio');
+    expect(svc.initialLoading()).toBe(false);
+
+    // Act — fire an IssueUpdated event to trigger the debounced reconcile
+    vi.useFakeTimers();
+    callbacks['IssueUpdated']({ ...low, state: 'queued' });
+    vi.advanceTimersByTime(400);
+
+    // The debounce fires — expect one counts request and one reconcile request
+    http.expectOne('/api/issues/counts').flush({ counts: {} });
+    const reconcileReq = http.expectOne(r => r.url === '/api/issues' && !r.params.has('states'));
+    reconcileReq.flush([rev, low]); // server returns revision-high first now
+
+    // Assert — issues() reflects the new server order
+    expect(svc.issues()[0].id).toBe('revision-high');
+    expect(svc.issues()[1].id).toBe('low-prio');
+    // initialLoading must not be re-set
+    expect(svc.initialLoading()).toBe(false);
+    http.verify({ ignoreCancelled: true });
+  });
+
+  // Step 1 — reconcile excludes resolved-state items (same filter as loadIssues)
+  it('should filter resolved-state items from reconcile response, same as loadIssues', () => {
+    // Arrange
+    const { svc, http } = setup();
+    svc.loadIssues();
+    http.expectOne('/api/issues').flush([low]);
+
+    vi.useFakeTimers();
+    callbacks['IssueUpdated']({ ...low, state: 'queued' });
+    vi.advanceTimersByTime(400);
+    http.expectOne('/api/issues/counts').flush({ counts: {} });
+
+    const completed: IssueSummary = { ...low, id: 'done', state: 'completed' };
+
+    // Act — reconcile returns active + completed
+    http.expectOne(r => r.url === '/api/issues' && !r.params.has('states')).flush([low, completed]);
+
+    // Assert — completed is excluded from issues()
+    expect(svc.issues().some(i => i.id === 'done')).toBe(false);
+    expect(svc.issues().some(i => i.id === 'low-prio')).toBe(true);
+    http.verify({ ignoreCancelled: true });
+  });
+
+  // Step 1 — token: later response discards earlier
+  it('should discard an earlier reconcile response when a later one has already resolved', () => {
+    // Arrange
+    const { svc, http } = setup();
+    svc.loadIssues();
+    http.expectOne('/api/issues').flush([low]);
+
+    vi.useFakeTimers();
+
+    // First IssueUpdated — debounce window 1
+    callbacks['IssueUpdated']({ ...low, state: 'queued' });
+    vi.advanceTimersByTime(400);
+    http.expectOne('/api/issues/counts').flush({ counts: {} });
+    const firstReconcile = http.expectOne(r => r.url === '/api/issues' && !r.params.has('states'));
+
+    // Second IssueUpdated — debounce window 2
+    callbacks['IssueUpdated']({ ...low, state: 'queued' });
+    vi.advanceTimersByTime(400);
+    http.expectOne('/api/issues/counts').flush({ counts: {} });
+    const secondReconcile = http.expectOne(r => r.url === '/api/issues' && !r.params.has('states'));
+
+    // Flush the LATER one first — its order should win
+    secondReconcile.flush([rev, low]); // revision-high first
+    expect(svc.issues()[0].id).toBe('revision-high');
+
+    // Now flush the EARLIER one — its order must be discarded
+    firstReconcile.flush([low, rev]); // stale order: low first
+    expect(svc.issues()[0].id).toBe('revision-high'); // still revision-high
+
+    http.verify({ ignoreCancelled: true });
+  });
+
+  // Step 2 — Event-driven: IssueUpdated triggers debounced reconcile alongside counts
+  it('should issue exactly one GET /api/issues reconcile per debounce window for a burst of IssueUpdated events', () => {
+    // Arrange
+    const { svc, http } = setup();
+    svc.loadIssues();
+    http.expectOne('/api/issues').flush([low]);
+
+    vi.useFakeTimers();
+
+    // Act — fire three events inside one debounce window
+    callbacks['IssueUpdated']({ ...low, state: 'in_progress' });
+    callbacks['IssueUpdated']({ ...low, state: 'review' });
+    callbacks['IssueUpdated']({ ...low, state: 'failed' });
+
+    // Before debounce elapses — no reconcile yet
+    http.expectNone(r => r.url === '/api/issues' && !r.params.has('states'));
+
+    // Advance past debounce
+    vi.advanceTimersByTime(400);
+
+    // Assert — exactly one counts + exactly one reconcile
+    http.expectOne('/api/issues/counts').flush({ counts: {} });
+    const reconcileReq = http.expectOne(r => r.url === '/api/issues' && !r.params.has('states'));
+    reconcileReq.flush([low]);
+
+    http.verify({ ignoreCancelled: true });
+  });
+
+  // Step 2 — Criterion 3: revision_queued arrival + reconcile renders it above low-prio,
+  // and nextUpIssueId returns the revision id
+  it('should render revision-tier issue above low-prio queued issue after reconcile and set nextUpIssueId correctly', () => {
+    // Arrange — initial load: only low-prio queued
+    const { svc, http } = setup();
+    svc.loadIssues();
+    http.expectOne('/api/issues').flush([low]);
+    expect(svc.issues()[0].id).toBe('low-prio');
+    expect(svc.nextUpIssueId()).toBe('low-prio');
+
+    vi.useFakeTimers();
+
+    // Act — a revision_queued issue arrives via IssueUpdated (upsert appends it)
+    callbacks['IssueUpdated'](rev);
+    // upsert appends rev at tail: [low, rev] — wrong order for dispatch priority
+    expect(svc.issues()[0].id).toBe('low-prio'); // still wrong before reconcile
+
+    // Debounce fires
+    vi.advanceTimersByTime(400);
+    http.expectOne('/api/issues/counts').flush({ counts: {} });
+
+    // Server returns correct dispatch order: revision first
+    http.expectOne(r => r.url === '/api/issues' && !r.params.has('states')).flush([rev, low]);
+
+    // Assert — reconcile fixed the order
+    const eligible = svc.eligibleQueuedIssues();
+    expect(eligible[0].id).toBe('revision-high');
+    expect(eligible[1].id).toBe('low-prio');
+    expect(svc.nextUpIssueId()).toBe('revision-high');
+
+    http.verify({ ignoreCancelled: true });
+  });
+
+  // Step 3 — Token-race regression: earlier response flushed after later is discarded
+  it('should keep later response order when an earlier response arrives out-of-order', () => {
+    // Arrange — two reconcile windows in flight
+    const { svc, http } = setup();
+    svc.loadIssues();
+    http.expectOne('/api/issues').flush([low]);
+
+    vi.useFakeTimers();
+
+    // Window 1
+    callbacks['IssueUpdated']({ ...low, state: 'queued' });
+    vi.advanceTimersByTime(400);
+    http.expectOne('/api/issues/counts').flush({ counts: {} });
+    const earlyReq = http.expectOne(r => r.url === '/api/issues' && !r.params.has('states'));
+
+    // Window 2
+    callbacks['IssueUpdated']({ ...low, state: 'queued' });
+    vi.advanceTimersByTime(400);
+    http.expectOne('/api/issues/counts').flush({ counts: {} });
+    const lateReq = http.expectOne(r => r.url === '/api/issues' && !r.params.has('states'));
+
+    // Flush LATER first with [rev, low] order
+    lateReq.flush([rev, low]);
+    expect(svc.issues()[0].id).toBe('revision-high');
+
+    // Now flush EARLIER with reversed (stale) order
+    earlyReq.flush([low, rev]);
+
+    // Assert — stale early response did NOT overwrite later order
+    expect(svc.issues()[0].id).toBe('revision-high');
+
+    http.verify({ ignoreCancelled: true });
+  });
+
+  // Step 4 — Safety-net interval fires reconcile with no IssueUpdated event.
+  // The interval must be registered with fake timers, so vi.useFakeTimers() is called
+  // before setup() so that setInterval in the constructor is intercepted.
+  it('should issue a reconcile after the safety-net interval elapses with no IssueUpdated events', () => {
+    // Arrange — fake timers BEFORE service construction so setInterval is captured
+    vi.useFakeTimers();
+    const { svc, http } = setup();
+    svc.loadIssues();
+    http.expectOne('/api/issues').flush([low]);
+
+    // Act — advance past safety-net interval (30 000 ms) with no events
+    vi.advanceTimersByTime(30_100);
+
+    // Assert — reconcile fires
+    const reconcileReq = http.expectOne(r => r.url === '/api/issues' && !r.params.has('states'));
+    reconcileReq.flush([rev, low]);
+
+    expect(svc.issues()[0].id).toBe('revision-high');
+
+    http.verify({ ignoreCancelled: true });
+  });
+
+  // Step 4 — Criterion 6: Position change reflected on next safety-net reconcile
+  it('should reflect a repository Position change (no event) on the next safety-net reconcile', () => {
+    // Arrange — fake timers BEFORE service construction so setInterval is captured
+    vi.useFakeTimers();
+    const { svc, http } = setup();
+    svc.loadIssues();
+    http.expectOne('/api/issues').flush([low, rev]);
+    expect(svc.issues()[0].id).toBe('low-prio');
+
+    // Act — safety-net fires; server now returns rev first (Position changed in Settings)
+    vi.advanceTimersByTime(30_100);
+    http.expectOne(r => r.url === '/api/issues' && !r.params.has('states')).flush([rev, low]);
+
+    // Assert — new order rendered without page reload
+    expect(svc.issues()[0].id).toBe('revision-high');
+
+    http.verify({ ignoreCancelled: true });
+  });
+
+  // Step 4 — Destroy cleanup: no reconcile fires after destroy
+  it('should not fire the safety-net reconcile after the service is destroyed', () => {
+    // Arrange — fake timers BEFORE service construction so setInterval is captured
+    vi.useFakeTimers();
+    const { svc, http } = setup();
+    svc.loadIssues();
+    http.expectOne('/api/issues').flush([low]);
+
+    // TestBed.resetTestingModule() triggers Angular's ApplicationRef.destroy() which invokes
+    // DestroyRef callbacks — this clears the safety-net interval.
+    TestBed.resetTestingModule();
+
+    // Act — advance past safety-net interval; the interval was cleared on destroy
+    vi.advanceTimersByTime(30_100);
+
+    // Assert — no reconcile request because the interval was cleared
+    // (verify on the captured http mock from before the reset)
+    httpMockRef.expectNone(r => r.url === '/api/issues' && !r.params.has('states'));
+
+    // afterEach calls resetTestingModule again — that is safe (resets an already-reset module)
+  });
+
+  // Step 5 — Failed reconcile: sets queueOrderStale, retains list, no loadError
+  it('should set queueOrderStale and retain issues() when reconcile fails, without setting loadError', () => {
+    // Arrange
+    const { svc, http } = setup();
+    svc.loadIssues();
+    http.expectOne('/api/issues').flush([low]);
+    expect(svc.queueOrderStale()).toBe(false);
+
+    vi.useFakeTimers();
+    callbacks['IssueUpdated']({ ...low, state: 'queued' });
+    vi.advanceTimersByTime(400);
+    http.expectOne('/api/issues/counts').flush({ counts: {} });
+
+    // Act — reconcile fails
+    http.expectOne(r => r.url === '/api/issues' && !r.params.has('states')).flush('Server Error', {
+      status: 500,
+      statusText: 'Internal Server Error',
+    });
+
+    // Assert — stale marker set; list preserved; no blocking banner
+    expect(svc.queueOrderStale()).toBe(true);
+    expect(svc.issues()[0].id).toBe('low-prio');
+    expect(svc.loadError()).toBeNull();
+
+    http.verify({ ignoreCancelled: true });
+  });
+
+  // Step 5 — Successful reconcile after failure clears queueOrderStale
+  it('should clear queueOrderStale after a successful reconcile follows a failed one', () => {
+    // Arrange — cause a failure first
+    const { svc, http } = setup();
+    svc.loadIssues();
+    http.expectOne('/api/issues').flush([low]);
+
+    vi.useFakeTimers();
+    callbacks['IssueUpdated']({ ...low, state: 'queued' });
+    vi.advanceTimersByTime(400);
+    http.expectOne('/api/issues/counts').flush({ counts: {} });
+    http.expectOne(r => r.url === '/api/issues' && !r.params.has('states')).flush('Server Error', {
+      status: 500,
+      statusText: 'Internal Server Error',
+    });
+    expect(svc.queueOrderStale()).toBe(true);
+
+    // Act — next reconcile succeeds
+    callbacks['IssueUpdated']({ ...low, state: 'queued' });
+    vi.advanceTimersByTime(400);
+    http.expectOne('/api/issues/counts').flush({ counts: {} });
+    http.expectOne(r => r.url === '/api/issues' && !r.params.has('states')).flush([low]);
+
+    // Assert — stale cleared
+    expect(svc.queueOrderStale()).toBe(false);
+
+    http.verify({ ignoreCancelled: true });
+  });
+
+  // Step 5 — Stale failure from superseded request must not overwrite a fresher success
+  it('should not set queueOrderStale from a stale error response when a later reconcile already succeeded', () => {
+    // Arrange
+    const { svc, http } = setup();
+    svc.loadIssues();
+    http.expectOne('/api/issues').flush([low]);
+
+    vi.useFakeTimers();
+
+    // Window 1
+    callbacks['IssueUpdated']({ ...low, state: 'queued' });
+    vi.advanceTimersByTime(400);
+    http.expectOne('/api/issues/counts').flush({ counts: {} });
+    const earlyReq = http.expectOne(r => r.url === '/api/issues' && !r.params.has('states'));
+
+    // Window 2
+    callbacks['IssueUpdated']({ ...low, state: 'queued' });
+    vi.advanceTimersByTime(400);
+    http.expectOne('/api/issues/counts').flush({ counts: {} });
+    const lateReq = http.expectOne(r => r.url === '/api/issues' && !r.params.has('states'));
+
+    // Later succeeds first
+    lateReq.flush([low]);
+    expect(svc.queueOrderStale()).toBe(false);
+
+    // Earlier fails — must be ignored because token is stale
+    earlyReq.flush('Server Error', { status: 500, statusText: 'Internal Server Error' });
+
+    // Assert — stale error did not set queueOrderStale
+    expect(svc.queueOrderStale()).toBe(false);
+
+    http.verify({ ignoreCancelled: true });
+  });
+
+  // Step 6 — Existing append-on-unknown-id test accounts for reconcile
+  // (regression guard: _upsertIssue tail-append still works, reconcile fires within debounce)
+  it('should append a brand-new issue via upsert and fire a debounced reconcile that can correct order', () => {
+    // Arrange
+    const { svc, http } = setup();
+    svc.loadIssues();
+    http.expectOne('/api/issues').flush([]);
+
+    vi.useFakeTimers();
+
+    // Act — unknown id appended by upsert
+    const newIssue: IssueSummary = { ...low, id: 'brand-new' };
+    callbacks['IssueUpdated'](newIssue);
+    expect(svc.issues().some(i => i.id === 'brand-new')).toBe(true);
+
+    // Advance past debounce — reconcile fires
+    vi.advanceTimersByTime(400);
+    http.expectOne('/api/issues/counts').flush({ counts: {} });
+    const reconcileReq = http.expectOne(r => r.url === '/api/issues' && !r.params.has('states'));
+    reconcileReq.flush([newIssue]); // server confirms the order
+
+    expect(svc.issues().some(i => i.id === 'brand-new')).toBe(true);
+
+    http.verify({ ignoreCancelled: true });
+  });
+
+  // Finding 2 — reconcile failure during initial load must NOT set queueOrderStale
+  it('should NOT set queueOrderStale when reconcile fails while initialLoading is still true', () => {
+    // Arrange — fake timers so the safety-net setInterval fires
+    vi.useFakeTimers();
+    const { svc, http } = setup();
+    // Do NOT call loadIssues so initialLoading remains true; the safety-net fires after 30 s
+    expect(svc.initialLoading()).toBe(true);
+
+    // Act — advance past the safety-net interval to trigger a reconcile
+    vi.advanceTimersByTime(30_100);
+    const reconcileReq = http.expectOne(r => r.url === '/api/issues' && !r.params.has('states'));
+
+    // Reconcile fails while initialLoading is still true
+    reconcileReq.flush('Server Error', { status: 500, statusText: 'Internal Server Error' });
+
+    // Assert — queueOrderStale must NOT be set because we are still in the initial loading phase
+    expect(svc.queueOrderStale()).toBe(false);
+    expect(svc.initialLoading()).toBe(true); // still loading — no loadIssues call yet
+
+    http.verify({ ignoreCancelled: true });
+  });
+
+  it('should set queueOrderStale when reconcile fails after initial load has completed', () => {
+    // Arrange — fake timers BEFORE service construction so setInterval is intercepted
+    vi.useFakeTimers();
+    const { svc, http } = setup();
+    svc.loadIssues();
+    http.expectOne('/api/issues').flush([low]);
+    expect(svc.initialLoading()).toBe(false); // initial load done
+
+    // Advance past the safety-net interval
+    vi.advanceTimersByTime(30_100);
+
+    // Act — reconcile fails after initial load is complete
+    http.expectOne(r => r.url === '/api/issues' && !r.params.has('states')).flush('Server Error', {
+      status: 500,
+      statusText: 'Internal Server Error',
+    });
+
+    // Assert — stale marker is set because initial load is done
+    expect(svc.queueOrderStale()).toBe(true);
+
+    http.verify({ ignoreCancelled: true });
+  });
+
+  // Step 9 (criterion 9): reconcile does not re-show loading skeletons
+  it('should not set initialLoading to true during or after a reconcile', () => {
+    // Arrange
+    const { svc, http } = setup();
+    svc.loadIssues();
+    http.expectOne('/api/issues').flush([low]);
+    expect(svc.initialLoading()).toBe(false);
+
+    vi.useFakeTimers();
+    callbacks['IssueUpdated']({ ...low, state: 'queued' });
+    vi.advanceTimersByTime(400);
+
+    // Assert — still false before reconcile response
+    expect(svc.initialLoading()).toBe(false);
+
+    http.expectOne('/api/issues/counts').flush({ counts: {} });
+    http.expectOne(r => r.url === '/api/issues' && !r.params.has('states')).flush([low]);
+
+    // Assert — still false after reconcile
+    expect(svc.initialLoading()).toBe(false);
+
+    http.verify({ ignoreCancelled: true });
+  });
+});
+
 // Step 8 — Group-rank multi-key sort (issue #275)
 describe('IssueService (group-rank multi-key sort)', () => {
   let service: IssueService;
@@ -2260,5 +2746,297 @@ describe('IssueService (group-rank multi-key sort)', () => {
     expect(waitingQueued.length).toBe(2);
     expect(waitingQueued[0].id).toBe('cq-a'); // server pos 2 → first in queued tier
     expect(waitingQueued[1].id).toBe('cq-b'); // server pos 3 → second (newest date does not override server order)
+  });
+});
+
+// Step 11 — queuePositions computed (issue #507)
+describe('IssueService (queuePositions)', () => {
+  let service: IssueService;
+  let httpMock: HttpTestingController;
+
+  const baseQueued: IssueSummary = {
+    id: 'q1',
+    issueNumber: 1,
+    title: 'Queue issue 1',
+    state: 'queued',
+    repositorySlug: 'owner/repo',
+    detectedAt: '2026-01-01T00:00:00Z',
+    url: 'https://github.com/owner/repo/issues/1',
+    repositoryEligibilityStatus: null,
+  };
+
+  function loadIssues(issues: IssueSummary[]): void {
+    service.loadIssues();
+    httpMock.expectOne('/api/issues').flush(issues);
+  }
+
+  beforeEach(() => {
+    TestBed.configureTestingModule({
+      providers: [
+        IssueService,
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        { provide: IssueSignalRService, useValue: mockIssueSignalRService },
+      ],
+    });
+    service = TestBed.inject(IssueService);
+    httpMock = TestBed.inject(HttpTestingController);
+  });
+
+  afterEach(() => httpMock.verify({ ignoreCancelled: true }));
+
+  // Cycle QP1: single dispatchable queued issue → { id → 1 }
+  it('should map a single dispatchable queued issue to position 1', () => {
+    // Arrange
+    const issue: IssueSummary = { ...baseQueued, id: 'q1' };
+
+    // Act
+    loadIssues([issue]);
+
+    // Assert
+    const positions = service.queuePositions();
+    expect(positions.size).toBe(1);
+    expect(positions.get('q1')).toBe(1);
+  });
+
+  // Cycle QP2: three dispatchable queued issues in server order → 1-based positions
+  it('should assign 1-based positions matching rendered order for three dispatchable queued issues', () => {
+    // Arrange — server delivers: queued, revision_queued, continuation_queued (all eligible)
+    const q1: IssueSummary = { ...baseQueued, id: 'q1', state: 'queued' };
+    const q2: IssueSummary = { ...baseQueued, id: 'q2', state: 'revision_queued' };
+    const q3: IssueSummary = { ...baseQueued, id: 'q3', state: 'continuation_queued' };
+
+    // Act
+    loadIssues([q1, q2, q3]);
+
+    // Assert
+    const positions = service.queuePositions();
+    expect(positions.size).toBe(3);
+    expect(positions.get('q1')).toBe(1);
+    expect(positions.get('q2')).toBe(2);
+    expect(positions.get('q3')).toBe(3);
+  });
+
+  // Cycle QP3: ineligible and unreachable queued issues are absent; dispatchable ones are numbered 1..n
+  it('should exclude ineligible and unreachable queued issues and assign contiguous positions to dispatchable ones', () => {
+    // Arrange — mixed: eligible, ineligible, unreachable
+    const dispatchable1: IssueSummary = { ...baseQueued, id: 'disp-1', state: 'queued', repositoryEligibilityStatus: null };
+    const ineligible: IssueSummary = { ...baseQueued, id: 'inelig', state: 'queued', repositoryEligibilityStatus: 'ineligible' };
+    const unreachable: IssueSummary = { ...baseQueued, id: 'unreach', state: 'revision_queued', repositoryEligibilityStatus: 'unreachable' };
+    const dispatchable2: IssueSummary = { ...baseQueued, id: 'disp-2', state: 'continuation_queued', repositoryEligibilityStatus: 'eligible' };
+
+    // Act — server order: disp-1, inelig, unreach, disp-2
+    loadIssues([dispatchable1, ineligible, unreachable, dispatchable2]);
+
+    // Assert — only dispatchable issues present, positions contiguous
+    const positions = service.queuePositions();
+    expect(positions.size).toBe(2);
+    expect(positions.get('disp-1')).toBe(1);
+    expect(positions.get('disp-2')).toBe(2);
+    expect(positions.has('inelig')).toBe(false);
+    expect(positions.has('unreach')).toBe(false);
+  });
+
+  // Cycle QP4a: non-queued issues (live, detected, blocked) are absent from the map
+  it('should not include non-queued-tier issues in queuePositions', () => {
+    // Arrange — live, detected, and blocked issues mixed with a queued one
+    const inProgress: IssueSummary = { ...baseQueued, id: 'live', state: 'in_progress', repositoryEligibilityStatus: null };
+    const detected: IssueSummary = { ...baseQueued, id: 'detected', state: 'detected', repositoryEligibilityStatus: null };
+    const blocked: IssueSummary = { ...baseQueued, id: 'blocked', state: 'blocked', repositoryEligibilityStatus: null };
+    const queued: IssueSummary = { ...baseQueued, id: 'q1', state: 'queued', repositoryEligibilityStatus: null };
+
+    // Act
+    loadIssues([inProgress, detected, blocked, queued]);
+
+    // Assert — only the queued issue appears; live/detected/blocked absent
+    const positions = service.queuePositions();
+    expect(positions.size).toBe(1);
+    expect(positions.get('q1')).toBe(1);
+    expect(positions.has('live')).toBe(false);
+    expect(positions.has('detected')).toBe(false);
+    expect(positions.has('blocked')).toBe(false);
+  });
+
+  // Cycle QP4b: empty queue → empty map
+  it('should return an empty map when there are no queued issues', () => {
+    // Arrange
+    const detected: IssueSummary = { ...baseQueued, id: 'det', state: 'detected', repositoryEligibilityStatus: null };
+
+    // Act
+    loadIssues([detected]);
+
+    // Assert
+    expect(service.queuePositions().size).toBe(0);
+  });
+
+  // Cycle QP4c: all-ineligible queue → empty map
+  it('should return an empty map when all queued issues are ineligible or unreachable', () => {
+    // Arrange
+    const inelig: IssueSummary = { ...baseQueued, id: 'inelig', state: 'queued', repositoryEligibilityStatus: 'ineligible' };
+    const unreach: IssueSummary = { ...baseQueued, id: 'unreach', state: 'revision_queued', repositoryEligibilityStatus: 'unreachable' };
+
+    // Act
+    loadIssues([inelig, unreach]);
+
+    // Assert
+    expect(service.queuePositions().size).toBe(0);
+  });
+
+  // Cycle QP5: reload with reordered server order → map renumbers to new dispatchable sequence
+  it('should renumber positions to match the new server order after reload', () => {
+    // Arrange — initial load: q1 first, q2 second
+    const q1: IssueSummary = { ...baseQueued, id: 'q1', state: 'queued', repositoryEligibilityStatus: null };
+    const q2: IssueSummary = { ...baseQueued, id: 'q2', state: 'revision_queued', repositoryEligibilityStatus: null };
+    loadIssues([q1, q2]);
+    expect(service.queuePositions().get('q1')).toBe(1);
+    expect(service.queuePositions().get('q2')).toBe(2);
+
+    // Act — reload with reversed order: q2 first, q1 second
+    service.loadIssues();
+    httpMock.expectOne('/api/issues').flush([q2, q1]);
+
+    // Assert — positions renumber to match new order
+    const positions = service.queuePositions();
+    expect(positions.get('q2')).toBe(1);
+    expect(positions.get('q1')).toBe(2);
+  });
+
+  // Cycle QP6: deselecting a queued-tier state hides those cards and renumbers remaining ordinals
+  // from 1 (ADR 0067 — positions index the rendered activeBandIssues() array, not the unfiltered
+  // eligibleQueuedIssues(), so the on-screen topmost card always shows "1")
+  it('should exclude hidden issues and renumber visible dispatchable issues from 1 after a state is deselected', () => {
+    // Arrange — load one queued and one revision_queued issue, both dispatchable
+    const q1: IssueSummary = { ...baseQueued, id: 'q1', state: 'queued', repositoryEligibilityStatus: null };
+    const rv1: IssueSummary = { ...baseQueued, id: 'rv1', state: 'revision_queued', repositoryEligibilityStatus: null };
+
+    // Act — load both, then deselect the 'queued' state so q1 is hidden
+    loadIssues([q1, rv1]);
+
+    // Before toggle: q1 → 1, rv1 → 2
+    expect(service.queuePositions().get('q1')).toBe(1);
+    expect(service.queuePositions().get('rv1')).toBe(2);
+
+    service.toggleState('queued');
+
+    // Assert — q1 is now hidden; rv1 is the only visible dispatchable issue and gets position 1
+    const positions = service.queuePositions();
+    expect(positions.has('q1')).toBe(false);
+    expect(positions.get('rv1')).toBe(1);
+    expect(positions.size).toBe(1);
+  });
+});
+
+// Step 12 — nextUpAnnouncement computed (issue #507)
+describe('IssueService (nextUpAnnouncement)', () => {
+  let service: IssueService;
+  let httpMock: HttpTestingController;
+
+  const baseIssue: IssueSummary = {
+    id: 'q1',
+    issueNumber: 42,
+    title: 'Enable dark mode',
+    state: 'queued',
+    repositorySlug: 'owner/repo',
+    detectedAt: '2026-01-01T00:00:00Z',
+    url: 'https://github.com/owner/repo/issues/42',
+    repositoryEligibilityStatus: null,
+  };
+
+  function loadIssues(issues: IssueSummary[]): void {
+    service.loadIssues();
+    httpMock.expectOne('/api/issues').flush(issues);
+  }
+
+  beforeEach(() => {
+    TestBed.configureTestingModule({
+      providers: [
+        IssueService,
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        { provide: IssueSignalRService, useValue: mockIssueSignalRService },
+      ],
+    });
+    service = TestBed.inject(IssueService);
+    httpMock = TestBed.inject(HttpTestingController);
+  });
+
+  afterEach(() => httpMock.verify({ ignoreCancelled: true }));
+
+  // Cycle NA1: dispatchable queued head → non-empty string naming the issue
+  it('should return a non-empty announcement string naming the next-up issue number and title', () => {
+    // Arrange
+    const nextUp: IssueSummary = { ...baseIssue, id: 'q1', issueNumber: 42, title: 'Enable dark mode' };
+
+    // Act
+    loadIssues([nextUp]);
+
+    // Assert — string must include issue number and title
+    const announcement = service.nextUpAnnouncement();
+    expect(announcement).toContain('42');
+    expect(announcement).toContain('Enable dark mode');
+    expect(announcement.length).toBeGreaterThan(0);
+  });
+
+  // Cycle NA2: empty queue → ''
+  it('should return empty string when there are no queued issues', () => {
+    // Arrange — only a non-queued issue
+    const detected: IssueSummary = { ...baseIssue, id: 'det', state: 'detected' };
+
+    // Act
+    loadIssues([detected]);
+
+    // Assert
+    expect(service.nextUpAnnouncement()).toBe('');
+  });
+
+  // Cycle NA2b: all-ineligible queue → ''
+  it('should return empty string when all queued issues are ineligible or unreachable', () => {
+    // Arrange
+    const inelig: IssueSummary = { ...baseIssue, id: 'inelig', state: 'queued', repositoryEligibilityStatus: 'ineligible' };
+    const unreach: IssueSummary = { ...baseIssue, id: 'unreach', state: 'revision_queued', repositoryEligibilityStatus: 'unreachable' };
+
+    // Act
+    loadIssues([inelig, unreach]);
+
+    // Assert
+    expect(service.nextUpAnnouncement()).toBe('');
+  });
+
+  // Cycle NA3a: reorder that does NOT change the head → announcement string is identical (no re-announcement)
+  it('should return an identical announcement string when positions shuffle but the next-up issue stays the same', () => {
+    // Arrange — q1 is head; q2 and q3 are behind it
+    const q1: IssueSummary = { ...baseIssue, id: 'q1', issueNumber: 42, title: 'Enable dark mode', state: 'queued' };
+    const q2: IssueSummary = { ...baseIssue, id: 'q2', issueNumber: 10, title: 'Other issue', state: 'revision_queued' };
+    const q3: IssueSummary = { ...baseIssue, id: 'q3', issueNumber: 11, title: 'Another issue', state: 'continuation_queued' };
+    loadIssues([q1, q2, q3]);
+    const before = service.nextUpAnnouncement();
+    expect(before).toContain('42');
+
+    // Act — reload with q2 and q3 swapped but q1 still at head
+    service.loadIssues();
+    httpMock.expectOne('/api/issues').flush([q1, q3, q2]);
+
+    // Assert — nextUpIssueId unchanged, so announcement is identical
+    expect(service.nextUpAnnouncement()).toBe(before);
+  });
+
+  // Cycle NA3b: reorder that changes the head → announcement string changes
+  it('should return a different announcement string when the next-up issue changes after a reload', () => {
+    // Arrange — q1 is initially next-up
+    const q1: IssueSummary = { ...baseIssue, id: 'q1', issueNumber: 42, title: 'Enable dark mode', state: 'queued' };
+    const q2: IssueSummary = { ...baseIssue, id: 'q2', issueNumber: 99, title: 'Add retry', state: 'revision_queued' };
+    loadIssues([q1, q2]);
+    const before = service.nextUpAnnouncement();
+    expect(before).toContain('42');
+
+    // Act — reload with q2 now at head
+    service.loadIssues();
+    httpMock.expectOne('/api/issues').flush([q2, q1]);
+
+    // Assert — announcement reflects new head
+    const after = service.nextUpAnnouncement();
+    expect(after).toContain('99');
+    expect(after).toContain('Add retry');
+    expect(after).not.toBe(before);
   });
 });

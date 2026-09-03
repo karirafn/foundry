@@ -2,6 +2,7 @@ using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Issues.Domain.Entities.States;
 using Foundry.Modules.Issues.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Contracts;
+using Foundry.Modules.Workers.Contracts;
 
 namespace Foundry.Testing;
 
@@ -28,20 +29,20 @@ public sealed class IssueBuilder
     private DateTimeOffset _detectedAt = DateTimeOffset.UtcNow;
     private IssueKind _issueKind = IssueKind.Feature;
 
-    private Guid _workerRunId = Guid.NewGuid();
+    private WorkerRunId _workerRunId = WorkerRunId.New();
     private string _branchName = "feat/1-test";
     private string _pullRequestUrl = "https://github.com/owner/repo/pull/1";
     private DateTimeOffset _feedbackCutoffAt = DateTimeOffset.UtcNow;
     private DateTimeOffset _completedAt = DateTimeOffset.UtcNow;
     private DateTimeOffset _failedAt = DateTimeOffset.UtcNow;
     private string _failureReason = "Container exited with code 1";
-    private string _failureCategory = "generic_failure";
+    private FailureCategory _failureCategory = FailureCategory.NonZeroExit;
     private IReadOnlyList<ReviewComment> _reviewComments = [new ReviewComment("Please fix.")];
 
     /// <summary>
     /// Exposes the configured worker run id so assertions can anchor to the aggregate's id. (AC #3)
     /// </summary>
-    public Guid WorkerRunId => _workerRunId;
+    public WorkerRunId WorkerRunId => _workerRunId;
 
     public IssueBuilder WithMonitoredRepositoryId(MonitoredRepositoryId value) { _monitoredRepositoryId = value; return this; }
 
@@ -66,7 +67,7 @@ public sealed class IssueBuilder
     /// </remarks>
     public IssueBuilder WithIssueKind(IssueKind value) { _issueKind = value; return this; }
 
-    public IssueBuilder WithWorkerRunId(Guid value) { _workerRunId = value; return this; }
+    public IssueBuilder WithWorkerRunId(WorkerRunId value) { _workerRunId = value; return this; }
 
     public IssueBuilder WithBranchName(string value) { _branchName = value; return this; }
 
@@ -80,7 +81,7 @@ public sealed class IssueBuilder
 
     public IssueBuilder WithFailureReason(string value) { _failureReason = value; return this; }
 
-    public IssueBuilder WithFailureCategory(string value) { _failureCategory = value; return this; }
+    public IssueBuilder WithFailureCategory(FailureCategory value) { _failureCategory = value; return this; }
 
     public IssueBuilder WithReviewComments(IEnumerable<ReviewComment> value) { _reviewComments = [.. value]; return this; }
 
@@ -101,25 +102,25 @@ public sealed class IssueBuilder
     public InProgressIssue InProgress() => FreshQueued().Claim(_workerRunId);
 
     public ReviewIssue Review() =>
-        InProgress().MarkInReview(_workerRunId, _branchName, _pullRequestUrl, _feedbackCutoffAt);
+        InProgress().MarkInReview(_branchName, _pullRequestUrl, _feedbackCutoffAt);
 
     public RevisionQueuedIssue RevisionQueued() => Review().Revise(_reviewComments);
 
     public RevisionInProgressIssue RevisionInProgress() => RevisionQueued().Claim(_workerRunId);
 
     public FailedIssue Failed() =>
-        InProgress().MarkFailed(_workerRunId, _failureReason, _failedAt, _failureCategory);
+        InProgress().MarkFailed(_failureReason, _failedAt, _failureCategory);
 
     public ContinuableFailedIssue ContinuableFailed() =>
-        InProgress().MarkContinuableFailed(_workerRunId, _branchName, _failureReason, _failureCategory, _failedAt);
+        InProgress().MarkContinuableFailed(_branchName, _failureReason, _failureCategory, _failedAt);
 
     public ContinuableFailedIssue ContinuableFailedFromReview() =>
         Review().Fail(_failureReason, _failureCategory, _failedAt);
 
     public RevisionFailedIssue RevisionFailed() =>
-        RevisionInProgress().MarkFailed(_workerRunId, _failureReason, _failureCategory, _failedAt);
+        RevisionInProgress().MarkFailed(_failureReason, _failureCategory, _failedAt);
 
-    public UnchangedIssue Unchanged() => InProgress().MarkUnchanged(_workerRunId);
+    public UnchangedIssue Unchanged() => InProgress().MarkUnchanged();
 
     public CompletedIssue Completed() => Review().Complete(_completedAt);
 }

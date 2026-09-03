@@ -1,4 +1,5 @@
 using Foundry.Modules.Issues.Features.TransientRetry;
+using Foundry.Modules.Workers.Contracts;
 
 using Shouldly;
 
@@ -61,10 +62,14 @@ public sealed class TransientRetryScheduleTests
     }
 
     [Fact]
-    public void TransientApiErrorCategory_IsCorrectLiteralValue()
+    public void WhenTransientApiError_FailureCategoryTokenOwnsTheValue()
     {
-        // Arrange / Act / Assert
-        TransientRetrySchedule.TransientApiErrorCategory.ShouldBe("transient_api_error");
+        // Arrange
+
+        // Act
+
+        // Assert
+        FailureCategory.TransientApiErrorToken.ShouldBe("transient_api_error");
     }
 
     [Fact]

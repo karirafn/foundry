@@ -7,6 +7,7 @@ using Foundry.Modules.Issues.Domain.Entities.States;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
+using Foundry.Modules.Workers.Contracts;
 using Foundry.Testing;
 using Foundry.WebApi.Persistence;
 
@@ -158,7 +159,7 @@ public sealed class WhenQueuedIssuesRequested_OrderedByDispatchOrder : IAsyncDis
             .WithDetectedAt(detectedAt)
             .WithBranchName($"feat/issue-{issueNumber}")
             .WithFailureReason("Non-zero exit code: 1")
-            .WithFailureCategory("generic_failure")
+            .WithFailureCategory(FailureCategory.NonZeroExit)
             .WithFailedAt(detectedAt.AddHours(1))
             .ContinuableFailed();
 

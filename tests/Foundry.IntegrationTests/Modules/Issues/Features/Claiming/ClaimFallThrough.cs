@@ -139,7 +139,7 @@ public sealed class ClaimFallThrough : IAsyncDisposable
         FreshQueuedIssue unresolvableIssue = await SeedQueuedIssueAsync(unresolvableRepoId, issueNumber: 1, detectedAt: sameTime);
         FreshQueuedIssue resolvableIssue = await SeedQueuedIssueAsync(resolvableRepoId, issueNumber: 2, detectedAt: sameTime);
 
-        WorkerCapacityAvailable @event = new(WorkerRunId: Guid.NewGuid());
+        WorkerCapacityAvailable @event = new(WorkerRunId: WorkerRunId.New());
 
         // Act — resolve the real handler from DI and invoke it directly.
         using IServiceScope scope = _factory.Services.CreateScope();
@@ -177,7 +177,7 @@ public sealed class ClaimFallThrough : IAsyncDisposable
         await SeedQueuedIssueAsync(unresolvableRepoId, issueNumber: 10, detectedAt: sameTime);
         FreshQueuedIssue resolvableIssue = await SeedQueuedIssueAsync(resolvableRepoId, issueNumber: 11, detectedAt: sameTime);
 
-        WorkerCapacityAvailable @event = new(WorkerRunId: Guid.NewGuid());
+        WorkerCapacityAvailable @event = new(WorkerRunId: WorkerRunId.New());
 
         // Act — must not throw even when the best candidate is unresolvable.
         using IServiceScope scope = _factory.Services.CreateScope();

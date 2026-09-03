@@ -151,7 +151,7 @@ public sealed class HandleAsync : IAsyncDisposable
         FreshQueuedIssue queued = SeedQueuedIssue(repositoryId);
 
         WorkerRunFailed @event = new(
-            WorkerRunId: Guid.NewGuid(),
+            WorkerRunId: WorkerRunId.New(),
             IssueId: queued.Id.Value,
             ReasonDescription: "Something went wrong");
 
@@ -228,7 +228,7 @@ public sealed class HandleAsync : IAsyncDisposable
             WorkerRunId: inProgress.WorkerRunId,
             IssueId: inProgress.Id.Value,
             ReasonDescription: WorkerRunFailed.UsageLimitedReason,
-            Category: "usage_limited");
+            Category: FailureCategory.UsageLimitedToken);
 
         // Act
         await _sut.HandleAsync(@event, CancellationToken.None);
@@ -240,7 +240,7 @@ public sealed class HandleAsync : IAsyncDisposable
                 i => i.MonitoredRepositoryId == repositoryId,
                 TestContext.Current.CancellationToken);
         FailedIssue failed = issue.ShouldBeOfType<FailedIssue>();
-        failed.FailureCategory.ShouldBe("usage_limited");
+        failed.FailureCategory.ShouldBe(FailureCategory.UsageLimited);
     }
 
     [Fact]
@@ -254,7 +254,7 @@ public sealed class HandleAsync : IAsyncDisposable
             WorkerRunId: inProgress.WorkerRunId,
             IssueId: inProgress.Id.Value,
             ReasonDescription: WorkerRunFailed.UsageLimitedReason,
-            Category: "usage_limited",
+            Category: FailureCategory.UsageLimitedToken,
             BranchName: "feat/123-fix");
 
         // Act
@@ -267,6 +267,58 @@ public sealed class HandleAsync : IAsyncDisposable
                 i => i.MonitoredRepositoryId == repositoryId,
                 TestContext.Current.CancellationToken);
         ContinuableFailedIssue continuableFailed = issue.ShouldBeOfType<ContinuableFailedIssue>();
-        continuableFailed.FailureCategory.ShouldBe("usage_limited");
+        continuableFailed.FailureCategory.ShouldBe(FailureCategory.UsageLimited);
+    }
+
+    [Fact]
+    public async Task WhenUnknownCategoryReceived_FallsBackToNonZeroExitAndStillTransitionsToFailed()
+    {
+        // Arrange
+        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
+        InProgressIssue inProgress = SeedInProgressIssue(repositoryId);
+
+        WorkerRunFailed @event = new(
+            WorkerRunId: inProgress.WorkerRunId,
+            IssueId: inProgress.Id.Value,
+            ReasonDescription: "Something unexpected",
+            Category: "bogus_unknown_token");
+
+        // Act — unknown token must not throw; issue must still transition to failed
+        await _sut.HandleAsync(@event, CancellationToken.None);
+
+        // Assert
+        _dbContext.ChangeTracker.Clear();
+        Issue? issue = await _dbContext.Set<Issue>()
+            .FirstOrDefaultAsync(
+                i => i.MonitoredRepositoryId == repositoryId,
+                TestContext.Current.CancellationToken);
+        FailedIssue failed = issue.ShouldBeOfType<FailedIssue>();
+        failed.FailureCategory.ShouldBe(FailureCategory.NonZeroExit);
+    }
+
+    [Fact]
+    public async Task WhenNullCategoryReceived_FallsBackToNonZeroExitAndStillTransitionsToFailed()
+    {
+        // Arrange
+        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
+        InProgressIssue inProgress = SeedInProgressIssue(repositoryId);
+
+        WorkerRunFailed @event = new(
+            WorkerRunId: inProgress.WorkerRunId,
+            IssueId: inProgress.Id.Value,
+            ReasonDescription: "Something unexpected",
+            Category: null);
+
+        // Act — null category must not throw; issue must still transition to failed
+        await _sut.HandleAsync(@event, CancellationToken.None);
+
+        // Assert
+        _dbContext.ChangeTracker.Clear();
+        Issue? issue = await _dbContext.Set<Issue>()
+            .FirstOrDefaultAsync(
+                i => i.MonitoredRepositoryId == repositoryId,
+                TestContext.Current.CancellationToken);
+        FailedIssue failed = issue.ShouldBeOfType<FailedIssue>();
+        failed.FailureCategory.ShouldBe(FailureCategory.NonZeroExit);
     }
 }

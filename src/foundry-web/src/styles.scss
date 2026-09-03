@@ -72,6 +72,9 @@
   /* Gutter — fixed leading cell width for listbox option rows */
   --fd-gutter: 1rem;
 
+  /* Card queue-position gutter — fixed track width so 1–2 digit ordinals never reflow the body */
+  --fd-card-gutter-width: 1.75rem;
+
   /* Mobile filter bar height — shared between the bar and issue-list body padding */
   /* Composed height: padding-top 8 + button 44 + padding-bottom 8 + border 1 ≈ 61px; round to 64px */
   --fd-filter-bar-height: 64px;

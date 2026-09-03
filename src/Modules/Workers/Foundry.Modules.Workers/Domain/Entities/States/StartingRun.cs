@@ -1,9 +1,12 @@
 using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Monitoring.Contracts;
+using Foundry.Modules.Workers.Contracts;
 using Foundry.Modules.Workers.Domain.Entities;
-using Foundry.Modules.Workers.Domain.Events;
 using Foundry.Modules.Workers.Domain.ValueObjects;
 using Foundry.Shared;
+
+using WorkerRunFailedEvent = Foundry.Modules.Workers.Domain.Events.WorkerRunFailed;
+using WorkerRunStartedEvent = Foundry.Modules.Workers.Domain.Events.WorkerRunStarted;
 
 namespace Foundry.Modules.Workers.Domain.Entities.States;
 
@@ -30,14 +33,14 @@ public sealed class StartingRun : WorkerRun
         MonitoredRepositoryId monitoredRepositoryId)
     {
         ActiveRun active = ActiveRun.FromStarting(this, containerId, branchName, monitoredRepositoryId);
-        AddDomainEvent(new WorkerRunStarted(Id, IssueId));
+        AddDomainEvent(new WorkerRunStartedEvent(Id, IssueId));
         return active;
     }
 
     public FailedRun Fail(FailureReason reason)
     {
         FailedRun failed = FailedRun.FromStarting(this, reason);
-        AddDomainEvent(new WorkerRunFailed(Id, IssueId, reason.Summary, reason.CategoryToken, BranchName: null));
+        AddDomainEvent(new WorkerRunFailedEvent(Id, IssueId, reason.Summary, reason.CategoryToken, BranchName: null));
         return failed;
     }
 }

@@ -1,6 +1,7 @@
 using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Issues.Domain.Entities;
 using Foundry.Modules.Monitoring.Contracts;
+using Foundry.Modules.Workers.Contracts;
 
 namespace Foundry.Modules.Issues.Domain.Entities.States;
 
@@ -15,7 +16,7 @@ public sealed class ReviewIssue : Issue
     {
     }
 
-    public Guid WorkerRunId { get; private set; }
+    public WorkerRunId WorkerRunId { get; private set; }
 
     public string BranchName { get; private set; } = string.Empty;
 
@@ -25,7 +26,6 @@ public sealed class ReviewIssue : Issue
 
     internal static ReviewIssue FromInProgress(
         InProgressIssue source,
-        Guid workerRunId,
         string branchName,
         string pullRequestUrl,
         DateTimeOffset feedbackCutoffAt)
@@ -40,7 +40,7 @@ public sealed class ReviewIssue : Issue
             source.Url,
             source.Labels,
             source.DetectedAt);
-        review.WorkerRunId = workerRunId;
+        review.WorkerRunId = source.WorkerRunId;
         review.BranchName = branchName;
         review.PullRequestUrl = pullRequestUrl;
         review.FeedbackCutoffAt = feedbackCutoffAt;
@@ -82,7 +82,7 @@ public sealed class ReviewIssue : Issue
         return completed;
     }
 
-    public ContinuableFailedIssue Fail(string failureReason, string failureCategory, DateTimeOffset failedAt)
+    public ContinuableFailedIssue Fail(string failureReason, FailureCategory failureCategory, DateTimeOffset failedAt)
     {
         ContinuableFailedIssue failed = ContinuableFailedIssue.FromReview(
             this,

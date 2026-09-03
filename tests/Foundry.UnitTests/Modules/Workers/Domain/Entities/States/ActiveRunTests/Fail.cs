@@ -2,13 +2,15 @@ using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Workers.Domain.Entities;
 using Foundry.Modules.Workers.Domain.Entities.States;
-using Foundry.Modules.Workers.Domain.ValueObjects;
 using Foundry.Modules.Workers.Domain.Events;
+using Foundry.Modules.Workers.Domain.ValueObjects;
 using Foundry.Shared;
 
 using Shouldly;
 
 using Xunit;
+
+using WorkerRunId = Foundry.Modules.Workers.Contracts.WorkerRunId;
 
 namespace Foundry.UnitTests.Modules.Workers.Domain.Entities.States.ActiveRunTests;
 

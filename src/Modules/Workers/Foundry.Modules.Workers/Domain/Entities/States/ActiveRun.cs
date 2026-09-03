@@ -1,9 +1,13 @@
 using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Monitoring.Contracts;
+using Foundry.Modules.Workers.Contracts;
 using Foundry.Modules.Workers.Domain.Entities;
-using Foundry.Modules.Workers.Domain.Events;
 using Foundry.Modules.Workers.Domain.ValueObjects;
 using Foundry.Shared;
+
+using WorkerActivityObservedEvent = Foundry.Modules.Workers.Domain.Events.WorkerActivityObserved;
+using WorkerRunCompletedEvent = Foundry.Modules.Workers.Domain.Events.WorkerRunCompleted;
+using WorkerRunFailedEvent = Foundry.Modules.Workers.Domain.Events.WorkerRunFailed;
 
 namespace Foundry.Modules.Workers.Domain.Entities.States;
 
@@ -52,7 +56,7 @@ public sealed class ActiveRun : WorkerRun
         }
 
         LastActivityAt = observedAt;
-        AddDomainEvent(new WorkerActivityObserved(Id, IssueId, observedAt, BranchCommitCount));
+        AddDomainEvent(new WorkerActivityObservedEvent(Id, IssueId, observedAt, BranchCommitCount));
     }
 
     public void RecordBranchCommitCount(int count, string? sha, DateTimeOffset observedAt)
@@ -64,7 +68,7 @@ public sealed class ActiveRun : WorkerRun
 
         BranchCommitCount = count;
         LastObservedCommitSha = sha;
-        AddDomainEvent(new WorkerActivityObserved(Id, IssueId, observedAt, count));
+        AddDomainEvent(new WorkerActivityObservedEvent(Id, IssueId, observedAt, count));
     }
 
     internal static ActiveRun FromStarting(
@@ -90,7 +94,7 @@ public sealed class ActiveRun : WorkerRun
         RunResultSummary? resultSummary = null)
     {
         CompletedRun completed = CompletedRun.FromActive(this, exitCode, branchName, pullRequestUrl, resultSummary);
-        AddDomainEvent(new WorkerRunCompleted(Id, IssueId, branchName?.Value, pullRequestUrl?.Value));
+        AddDomainEvent(new WorkerRunCompletedEvent(Id, IssueId, branchName?.Value, pullRequestUrl?.Value));
         return completed;
     }
 
@@ -101,7 +105,7 @@ public sealed class ActiveRun : WorkerRun
         RunResultSummary? resultSummary = null)
     {
         FailedRun failed = FailedRun.FromActive(this, reason, containerOutput, resultSummary);
-        AddDomainEvent(new WorkerRunFailed(Id, IssueId, reason.Summary, reason.CategoryToken, branchNameOrNull?.Value));
+        AddDomainEvent(new WorkerRunFailedEvent(Id, IssueId, reason.Summary, reason.CategoryToken, branchNameOrNull?.Value));
         return failed;
     }
 }

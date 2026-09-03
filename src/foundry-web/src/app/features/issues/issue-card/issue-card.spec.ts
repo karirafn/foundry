@@ -14,7 +14,7 @@ const mockIssue: IssueSummary = {
   url: 'https://github.com/owner/repo/issues/42',
 };
 
-function createComponent(issue: IssueSummary = mockIssue, expanded = false, lastActivityAt: string | null = null, commitCount: number | null = null, isNextUp = false) {
+function createComponent(issue: IssueSummary = mockIssue, expanded = false, lastActivityAt: string | null = null, commitCount: number | null = null, isNextUp = false, queuePosition: number | null = null) {
   TestBed.configureTestingModule({
     imports: [IssueCardComponent],
     providers: [
@@ -33,6 +33,7 @@ function createComponent(issue: IssueSummary = mockIssue, expanded = false, last
   if (isNextUp) {
     fixture.componentRef.setInput('isNextUp', true);
   }
+  fixture.componentRef.setInput('queuePosition', queuePosition);
   fixture.detectChanges();
   return fixture;
 }
@@ -909,12 +910,12 @@ describe('IssueCardComponent', () => {
     });
   });
 
-  // Cycle 13: "Next up" marker visible when isNextUp input is true
-  it('should render "Next up" marker when isNextUp input is true', () => {
+  // Cycle 13: "Next up" pill REMOVED — gutter ordinal replaces it; .issue-card__next-up must never render
+  it('should NEVER render .issue-card__next-up even when isNextUp is true', () => {
     // Arrange
     const queuedIssue: IssueSummary = { ...mockIssue, state: 'queued' };
 
-    // Act — create with isNextUp = true
+    // Act
     TestBed.configureTestingModule({
       imports: [IssueCardComponent],
       providers: [
@@ -928,24 +929,24 @@ describe('IssueCardComponent', () => {
     fixture.detectChanges();
     const el = fixture.nativeElement as HTMLElement;
 
-    // Assert
-    const marker = el.querySelector('.issue-card__next-up');
-    expect(marker?.textContent?.trim()).toContain('Next up');
+    // Assert — pill removed; ordinal gutter replaces it
+    const pill = el.querySelector('.issue-card__next-up');
+    expect(pill).toBeFalsy();
   });
 
-  // Cycle 13b: "Next up" marker absent when isNextUp is false (default)
-  it('should NOT render "Next up" marker when isNextUp is false', () => {
+  // Cycle 13b: .issue-card__next-up never renders regardless of isNextUp being false
+  it('should NOT render .issue-card__next-up when isNextUp is false', () => {
     // Arrange / Act
     const fixture = createComponent();
     const el = fixture.nativeElement as HTMLElement;
 
     // Assert
-    const marker = el.querySelector('.issue-card__next-up');
-    expect(marker).toBeFalsy();
+    const pill = el.querySelector('.issue-card__next-up');
+    expect(pill).toBeFalsy();
   });
 
-  // Cycle 13d: WCAG H2 — "Next up" pill uses rem, not px (scales with user font-size pref)
-  it('should have a "Next up" marker element that exists in the DOM when isNextUp is true (rem font-size verified via CSS)', () => {
+  // Cycle 13d: queued-tier card renders the gutter ordinal; ordinal uses rem (no inline px font-size)
+  it('should render .issue-card__queue-position gutter for a queued-tier card with isNextUp=true (rem font-size enforced via stylesheet)', () => {
     // Arrange
     const queuedIssue: IssueSummary = { ...mockIssue, state: 'queued' };
     TestBed.configureTestingModule({
@@ -958,16 +959,14 @@ describe('IssueCardComponent', () => {
     fixture.componentRef.setInput('issue', queuedIssue);
     fixture.componentRef.setInput('expanded', false);
     fixture.componentRef.setInput('isNextUp', true);
+    fixture.componentRef.setInput('queuePosition', 1);
     fixture.detectChanges();
     const el = fixture.nativeElement as HTMLElement;
 
-    // Assert — element exists; the font-size must be in rem (not px). JSDOM does not
-    // compute CSS custom properties, so we verify the element renders at all.
-    // The rem constraint is enforced structurally via the stylesheet check below.
-    const marker = el.querySelector('.issue-card__next-up') as HTMLElement;
-    expect(marker).toBeTruthy();
-    // Inline style must not set a px font-size; rem is applied by the stylesheet.
-    expect(marker?.style?.fontSize).not.toMatch(/px$/);
+    // Assert — gutter element renders; no inline px font-size (rem applied by stylesheet)
+    const gutter = el.querySelector('.issue-card__queue-position') as HTMLElement;
+    expect(gutter).toBeTruthy();
+    expect(gutter?.style?.fontSize).not.toMatch(/px$/);
   });
 
   // Cycle 13c: "Next up" included in aria-label when isNextUp is true
@@ -1534,5 +1533,206 @@ describe('IssueCardComponent', () => {
     // plain method lives on the prototype. If issueAriaLabel is a computed, it will
     // be an own property of the component instance.
     expect(descriptor).toBeDefined();
+  });
+
+  // --- Cycle 30: queue-position gutter ---
+
+  // Behaviour: queued-tier card with queuePosition renders the gutter
+  it('should render .issue-card__queue-position gutter for a queued-tier card with a position', () => {
+    // Arrange
+    const queuedIssue: IssueSummary = { ...mockIssue, state: 'queued' };
+
+    // Act
+    const fixture = createComponent(queuedIssue, false, null, null, false, 3);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    const gutter = el.querySelector('.issue-card__queue-position');
+    expect(gutter).toBeTruthy();
+  });
+
+  // Behaviour: gutter shows the ordinal number for a dispatchable queued card
+  it('should show the queue position number in the gutter for a dispatchable queued card', () => {
+    // Arrange
+    const queuedIssue: IssueSummary = { ...mockIssue, state: 'queued' };
+
+    // Act
+    const fixture = createComponent(queuedIssue, false, null, null, false, 5);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    const gutter = el.querySelector('.issue-card__queue-position') as HTMLElement;
+    expect(gutter?.textContent?.trim()).toBe('5');
+  });
+
+  // Behaviour: rank-1 card (isNextUp + position 1) carries the --next modifier class
+  it('should apply --next modifier on the gutter when isNextUp is true and queuePosition is 1', () => {
+    // Arrange
+    const queuedIssue: IssueSummary = { ...mockIssue, state: 'queued' };
+    TestBed.configureTestingModule({
+      imports: [IssueCardComponent],
+      providers: [
+        { provide: TickerService, useValue: { tick: signal(0) } },
+      ],
+    });
+    const fixture = TestBed.createComponent(IssueCardComponent);
+    fixture.componentRef.setInput('issue', queuedIssue);
+    fixture.componentRef.setInput('expanded', false);
+    fixture.componentRef.setInput('isNextUp', true);
+    fixture.componentRef.setInput('queuePosition', 1);
+    fixture.detectChanges();
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    const gutter = el.querySelector('.issue-card__queue-position') as HTMLElement;
+    expect(gutter?.classList.contains('issue-card__queue-position--next')).toBe(true);
+  });
+
+  // Behaviour: rank-2+ card does NOT carry --next modifier
+  it('should NOT apply --next modifier on the gutter when queuePosition is > 1', () => {
+    // Arrange
+    const queuedIssue: IssueSummary = { ...mockIssue, state: 'queued' };
+
+    // Act
+    const fixture = createComponent(queuedIssue, false, null, null, false, 2);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    const gutter = el.querySelector('.issue-card__queue-position') as HTMLElement;
+    expect(gutter?.classList.contains('issue-card__queue-position--next')).toBe(false);
+  });
+
+  // Behaviour: ineligible/unreachable queued card (queuePosition null) → gutter shows em dash
+  it('should show em dash in gutter when queuePosition is null for a queued-tier card', () => {
+    // Arrange
+    const queuedIssue: IssueSummary = {
+      ...mockIssue,
+      state: 'queued',
+      repositoryEligibilityStatus: 'ineligible',
+    };
+
+    // Act — queuePosition defaults to null; the gutter still renders for queued-tier cards
+    const fixture = createComponent(queuedIssue);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    const gutter = el.querySelector('.issue-card__queue-position') as HTMLElement;
+    expect(gutter).toBeTruthy();
+    expect(gutter?.textContent?.trim()).toBe('—'); // em dash U+2014
+  });
+
+  // Behaviour: non-queued-tier card renders NO gutter
+  it('should NOT render .issue-card__queue-position gutter for a non-queued-tier card', () => {
+    // Arrange — in_progress is not in QUEUED_TIER_STATES
+    const inProgressIssue: IssueSummary = { ...mockIssue, state: 'in_progress' };
+
+    // Act
+    const fixture = createComponent(inProgressIssue, false, null, null, false, 1);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    const gutter = el.querySelector('.issue-card__queue-position');
+    expect(gutter).toBeFalsy();
+  });
+
+  // Behaviour: card gets --has-gutter modifier when queued-tier
+  it('should apply issue-card--has-gutter class for a queued-tier card', () => {
+    // Arrange
+    const queuedIssue: IssueSummary = { ...mockIssue, state: 'queued' };
+
+    // Act
+    const fixture = createComponent(queuedIssue);
+    fixture.detectChanges();
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    const card = el.querySelector('.issue-card') as HTMLElement;
+    expect(card?.classList.contains('issue-card--has-gutter')).toBe(true);
+  });
+
+  // Behaviour: non-queued-tier card does NOT get --has-gutter modifier
+  it('should NOT apply issue-card--has-gutter class for a non-queued-tier card', () => {
+    // Arrange
+    const inProgressIssue: IssueSummary = { ...mockIssue, state: 'in_progress' };
+
+    // Act
+    const fixture = createComponent(inProgressIssue);
+    fixture.detectChanges();
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    const card = el.querySelector('.issue-card') as HTMLElement;
+    expect(card?.classList.contains('issue-card--has-gutter')).toBe(false);
+  });
+
+  // Behaviour: gutter element carries aria-hidden="true"
+  it('should have aria-hidden="true" on the gutter element', () => {
+    // Arrange
+    const queuedIssue: IssueSummary = { ...mockIssue, state: 'queued' };
+
+    // Act
+    const fixture = createComponent(queuedIssue, false, null, null, false, 2);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    const gutter = el.querySelector('.issue-card__queue-position') as HTMLElement;
+    expect(gutter?.getAttribute('aria-hidden')).toBe('true');
+  });
+
+  // Behaviour: queued card at position >= 2 — aria-label includes "Queue position N"
+  it('should include "Queue position 2" in aria-label for a dispatchable queued card at position 2', () => {
+    // Arrange
+    const queuedIssue: IssueSummary = { ...mockIssue, state: 'queued' };
+
+    // Act
+    const fixture = createComponent(queuedIssue, false, null, null, false, 2);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    const card = el.querySelector('.issue-card') as HTMLElement;
+    expect(card?.getAttribute('aria-label')).toContain('Queue position 2');
+  });
+
+  // Behaviour: rank-1 (isNextUp) — aria-label begins "Next up." but does NOT include "Queue position 1"
+  it('should begin aria-label with "Next up." for rank-1 card and NOT include "Queue position 1"', () => {
+    // Arrange
+    const queuedIssue: IssueSummary = { ...mockIssue, state: 'queued' };
+    TestBed.configureTestingModule({
+      imports: [IssueCardComponent],
+      providers: [
+        { provide: TickerService, useValue: { tick: signal(0) } },
+      ],
+    });
+    const fixture = TestBed.createComponent(IssueCardComponent);
+    fixture.componentRef.setInput('issue', queuedIssue);
+    fixture.componentRef.setInput('expanded', false);
+    fixture.componentRef.setInput('isNextUp', true);
+    fixture.componentRef.setInput('queuePosition', 1);
+    fixture.detectChanges();
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    const card = el.querySelector('.issue-card') as HTMLElement;
+    const label = card?.getAttribute('aria-label') ?? '';
+    expect(label.startsWith('Next up. ')).toBe(true);
+    expect(label).not.toContain('Queue position 1');
+  });
+
+  // Behaviour: non-dispatchable card (null position, queued-tier) — no queue-position clause in aria-label
+  it('should NOT include queue-position clause in aria-label when queuePosition is null', () => {
+    // Arrange
+    const queuedIssue: IssueSummary = {
+      ...mockIssue,
+      state: 'queued',
+      repositoryEligibilityStatus: 'ineligible',
+    };
+
+    // Act — queuePosition defaults to null in the helper
+    const fixture = createComponent(queuedIssue);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    const card = el.querySelector('.issue-card') as HTMLElement;
+    expect(card?.getAttribute('aria-label')).not.toContain('Queue position');
   });
 });

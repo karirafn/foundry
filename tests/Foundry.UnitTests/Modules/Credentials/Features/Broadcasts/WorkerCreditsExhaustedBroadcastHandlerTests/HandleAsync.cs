@@ -32,7 +32,7 @@ public sealed class HandleAsync
         // Arrange
         CapturingSystemNotificationBroadcaster broadcaster = new();
         WorkerCreditsExhaustedBroadcastHandler sut = new(broadcaster);
-        WorkerCreditsExhausted @event = new(Guid.NewGuid(), Guid.NewGuid());
+        WorkerCreditsExhausted @event = new(WorkerRunId.New(), Guid.NewGuid());
 
         // Act
         await sut.HandleAsync(@event, CancellationToken.None);
@@ -48,7 +48,7 @@ public sealed class HandleAsync
         // Arrange
         CapturingSystemNotificationBroadcaster broadcaster = new();
         WorkerCreditsExhaustedBroadcastHandler sut = new(broadcaster);
-        WorkerCreditsExhausted @event = new(Guid.NewGuid(), Guid.NewGuid());
+        WorkerCreditsExhausted @event = new(WorkerRunId.New(), Guid.NewGuid());
 
         // Act
         await sut.HandleAsync(@event, CancellationToken.None);
@@ -64,7 +64,7 @@ public sealed class HandleAsync
         // Arrange
         CapturingSystemNotificationBroadcaster broadcaster = new();
         WorkerCreditsExhaustedBroadcastHandler sut = new(broadcaster);
-        WorkerCreditsExhausted @event = new(Guid.NewGuid(), Guid.NewGuid());
+        WorkerCreditsExhausted @event = new(WorkerRunId.New(), Guid.NewGuid());
 
         // Act
         await sut.HandleAsync(@event, CancellationToken.None);
@@ -80,7 +80,7 @@ public sealed class HandleAsync
         // Arrange
         CapturingSystemNotificationBroadcaster broadcaster = new();
         WorkerCreditsExhaustedBroadcastHandler sut = new(broadcaster);
-        WorkerCreditsExhausted @event = new(Guid.NewGuid(), Guid.NewGuid());
+        WorkerCreditsExhausted @event = new(WorkerRunId.New(), Guid.NewGuid());
         using CancellationTokenSource cts = new();
         CancellationToken token = cts.Token;
 

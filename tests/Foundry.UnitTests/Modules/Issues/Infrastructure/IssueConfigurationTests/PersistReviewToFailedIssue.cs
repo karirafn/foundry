@@ -1,6 +1,7 @@
 using Foundry.Modules.Issues.Domain.Entities;
 using Foundry.Modules.Issues.Domain.Entities.States;
 using Foundry.Modules.Monitoring.Contracts;
+using Foundry.Modules.Workers.Contracts;
 using Foundry.Testing;
 using Foundry.WebApi.Persistence;
 
@@ -42,7 +43,7 @@ public sealed class PersistReviewToFailedIssue : IAsyncDisposable
     {
         // Arrange
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
-        Guid reviewWorkerRunId = Guid.NewGuid();
+        WorkerRunId reviewWorkerRunId = WorkerRunId.New();
         DateTimeOffset failedAt = new DateTimeOffset(2026, 5, 30, 12, 0, 0, TimeSpan.Zero);
         ContinuableFailedIssue failed = new IssueBuilder()
             .WithMonitoredRepositoryId(repositoryId)
@@ -54,7 +55,7 @@ public sealed class PersistReviewToFailedIssue : IAsyncDisposable
             .WithBranchName("feat/issue-55")
             .WithPullRequestUrl("https://github.com/owner/repo/pull/7")
             .WithFailureReason("PR was closed without merge")
-            .WithFailureCategory("pr_closed")
+            .WithFailureCategory(FailureCategory.PrClosed)
             .WithFailedAt(failedAt)
             .ContinuableFailedFromReview();
 
@@ -72,6 +73,7 @@ public sealed class PersistReviewToFailedIssue : IAsyncDisposable
         reloaded.ShouldSatisfyAllConditions(
             () => reloaded.WorkerRunId.ShouldBe(reviewWorkerRunId),
             () => reloaded.FailureReason.ShouldBe("PR was closed without merge"),
+            () => reloaded.FailureCategory.ShouldBe(FailureCategory.PrClosed),
             () => reloaded.FailedAt.ShouldBe(failedAt),
             () => reloaded.BranchName.ShouldBe("feat/issue-55"),
             () => reloaded.PullRequestUrl.ShouldBe("https://github.com/owner/repo/pull/7"),

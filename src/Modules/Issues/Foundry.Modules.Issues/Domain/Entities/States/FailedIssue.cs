@@ -1,5 +1,8 @@
 using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Issues.Domain.Entities;
+using Foundry.Modules.Workers.Contracts;
+
+using FailureCategoryVO = Foundry.Modules.Workers.Contracts.FailureCategory;
 
 namespace Foundry.Modules.Issues.Domain.Entities.States;
 
@@ -14,19 +17,18 @@ public sealed class FailedIssue : Issue
     {
     }
 
-    public Guid WorkerRunId { get; private set; }
+    public WorkerRunId WorkerRunId { get; private set; }
 
     public string FailureReason { get; private set; } = string.Empty;
 
-    public string FailureCategory { get; private set; } = string.Empty;
+    public FailureCategoryVO FailureCategory { get; private set; } = FailureCategoryVO.NonZeroExit;
 
     public DateTimeOffset FailedAt { get; private set; }
 
     internal static FailedIssue FromInProgress(
         InProgressIssue source,
-        Guid workerRunId,
         string failureReason,
-        string failureCategory,
+        FailureCategoryVO failureCategory,
         DateTimeOffset failedAt)
     {
         FailedIssue failed = new(source.Id);
@@ -39,7 +41,7 @@ public sealed class FailedIssue : Issue
             source.Url,
             source.Labels,
             source.DetectedAt);
-        failed.WorkerRunId = workerRunId;
+        failed.WorkerRunId = source.WorkerRunId;
         failed.FailureReason = failureReason;
         failed.FailureCategory = failureCategory;
         failed.FailedAt = failedAt;
@@ -49,7 +51,7 @@ public sealed class FailedIssue : Issue
     internal static FailedIssue FromReview(
         ReviewIssue source,
         string failureReason,
-        string failureCategory,
+        FailureCategoryVO failureCategory,
         DateTimeOffset failedAt)
     {
         FailedIssue failed = new(source.Id);

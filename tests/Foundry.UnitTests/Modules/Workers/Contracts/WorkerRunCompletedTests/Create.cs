@@ -13,7 +13,7 @@ public sealed class Create
     public void WhenCreated_ImplementsIIntegrationEvent()
     {
         // Arrange
-        Guid workerRunId = Guid.NewGuid();
+        WorkerRunId workerRunId = WorkerRunId.New();
         Guid issueId = Guid.NewGuid();
         string branchName = "foundry/42/add-feature";
         string pullRequestUrl = "https://github.com/owner/repo/pull/7";
@@ -35,7 +35,7 @@ public sealed class Create
     public void WhenCreatedWithNullBranchAndPullRequest_StoresNulls()
     {
         // Arrange
-        Guid workerRunId = Guid.NewGuid();
+        WorkerRunId workerRunId = WorkerRunId.New();
         Guid issueId = Guid.NewGuid();
 
         // Act

@@ -1,5 +1,6 @@
 using Foundry.Modules.Issues.Domain.Entities;
 using Foundry.Modules.Issues.Domain.Entities.States;
+using Foundry.Modules.Workers.Contracts;
 using Foundry.Testing;
 using Foundry.WebApi.Persistence;
 
@@ -54,7 +55,7 @@ public sealed class PersistFailedIssue : IAsyncDisposable
     public async Task WhenFailedIssueTransitioned_CanBeReloadedAsFailedIssueWithAllFields()
     {
         // Arrange
-        Guid failedWorkerRunId = Guid.NewGuid();
+        WorkerRunId failedWorkerRunId = WorkerRunId.New();
         DateTimeOffset failedAt = new DateTimeOffset(2026, 5, 30, 12, 0, 0, TimeSpan.Zero);
         FailedIssue failed = new IssueBuilder()
             .WithIssueNumber(44)
@@ -64,7 +65,7 @@ public sealed class PersistFailedIssue : IAsyncDisposable
             .WithWorkerRunId(failedWorkerRunId)
             .WithFailureReason("Container exited with code 1")
             .WithFailedAt(failedAt)
-            .WithFailureCategory("generic_failure")
+            .WithFailureCategory(FailureCategory.NonZeroExit)
             .Failed();
 
         _dbContext.Set<Issue>().Add(failed);
@@ -82,7 +83,37 @@ public sealed class PersistFailedIssue : IAsyncDisposable
             () => reloaded.WorkerRunId.ShouldBe(failedWorkerRunId),
             () => reloaded.FailureReason.ShouldBe("Container exited with code 1"),
             () => reloaded.FailedAt.ShouldBe(failedAt),
+            () => reloaded.FailureCategory.ShouldBe(FailureCategory.NonZeroExit),
             () => reloaded.Author.Value.ShouldBe("octocat"),
             () => reloaded.Url.Value.ShouldBe(new Uri("https://github.com/owner/repo/issues/1")));
+    }
+
+    [Fact]
+    public async Task WhenStoredTokenIsUnknown_MaterializesToNonZeroExitWithoutThrowing()
+    {
+        // Arrange — seed a FailedIssue with a known token, then overwrite the column with an unknown value
+        //           to simulate a legacy or rogue row. All current writers are typed so this cannot
+        //           occur normally, but the converter coalesces defensively to keep the retry loop alive.
+        FailedIssue failed = new IssueBuilder()
+            .WithIssueNumber(99)
+            .WithFailureCategory(FailureCategory.NonZeroExit)
+            .Failed();
+
+        _dbContext.Set<Issue>().Add(failed);
+        await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+        _dbContext.ChangeTracker.Clear();
+
+        await _dbContext.Database.ExecuteSqlRawAsync(
+            "UPDATE issues SET failure_category = 'completely_unknown_token' WHERE id = {0}",
+            failed.Id.Value);
+
+        // Act
+        Issue? result = await _dbContext
+            .Set<Issue>()
+            .FindAsync([failed.Id], TestContext.Current.CancellationToken);
+
+        // Assert — unknown stored token coalesces to the sentinel; no throw
+        FailedIssue reloaded = result.ShouldBeOfType<FailedIssue>();
+        reloaded.FailureCategory.ShouldBe(FailureCategory.NonZeroExit);
     }
 }

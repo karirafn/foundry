@@ -120,7 +120,7 @@ public sealed class HandleAsync : IAsyncDisposable
         await using FoundryDbContext actDb = CreateDbContext();
         WorkerCreditsExhaustedHandler sut = BuildSut(actDb);
 
-        WorkerCreditsExhausted @event = new(Guid.NewGuid(), Guid.NewGuid());
+        WorkerCreditsExhausted @event = new(WorkerRunId.New(), Guid.NewGuid());
 
         // Act
         await sut.HandleAsync(@event, TestContext.Current.CancellationToken);
@@ -150,7 +150,7 @@ public sealed class HandleAsync : IAsyncDisposable
         await using FoundryDbContext actDb = CreateDbContext();
         WorkerCreditsExhaustedHandler sut = BuildSut(actDb, probeIntervalMinutes: configuredIntervalMinutes);
 
-        WorkerCreditsExhausted @event = new(Guid.NewGuid(), Guid.NewGuid());
+        WorkerCreditsExhausted @event = new(WorkerRunId.New(), Guid.NewGuid());
 
         // Act
         await sut.HandleAsync(@event, TestContext.Current.CancellationToken);
@@ -177,7 +177,7 @@ public sealed class HandleAsync : IAsyncDisposable
             new StubGlobalSettingsQueries(60),
             new CapturingLoggerAdapter<WorkerCreditsExhaustedHandler>(logger));
 
-        WorkerCreditsExhausted @event = new(Guid.NewGuid(), Guid.NewGuid());
+        WorkerCreditsExhausted @event = new(WorkerRunId.New(), Guid.NewGuid());
 
         // Act
         await Should.NotThrowAsync(() => sut.HandleAsync(@event, TestContext.Current.CancellationToken));
@@ -201,7 +201,7 @@ public sealed class HandleAsync : IAsyncDisposable
         await using FoundryDbContext actDb = CreateDbContext();
         WorkerCreditsExhaustedHandler sut = BuildSut(actDb);
 
-        WorkerCreditsExhausted @event = new(Guid.NewGuid(), Guid.NewGuid());
+        WorkerCreditsExhausted @event = new(WorkerRunId.New(), Guid.NewGuid());
 
         // Act
         await Should.NotThrowAsync(() => sut.HandleAsync(@event, TestContext.Current.CancellationToken));
@@ -229,7 +229,7 @@ public sealed class HandleAsync : IAsyncDisposable
         await using FoundryDbContext actDb = CreateDbContext();
         WorkerCreditsExhaustedHandler sut = BuildSut(actDb);
 
-        WorkerCreditsExhausted @event = new(Guid.NewGuid(), Guid.NewGuid());
+        WorkerCreditsExhausted @event = new(WorkerRunId.New(), Guid.NewGuid());
 
         // Act
         await sut.HandleAsync(@event, TestContext.Current.CancellationToken);
@@ -252,7 +252,7 @@ public sealed class HandleAsync : IAsyncDisposable
         await using FoundryDbContext actDb = CreateDbContext();
         WorkerCreditsExhaustedHandler sut = BuildSut(actDb);
 
-        WorkerCreditsExhausted @event = new(Guid.NewGuid(), Guid.NewGuid());
+        WorkerCreditsExhausted @event = new(WorkerRunId.New(), Guid.NewGuid());
 
         // Act
         await sut.HandleAsync(@event, TestContext.Current.CancellationToken);

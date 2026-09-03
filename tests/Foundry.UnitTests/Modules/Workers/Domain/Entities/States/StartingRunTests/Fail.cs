@@ -1,8 +1,10 @@
 using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Workers.Domain.Entities;
 using Foundry.Modules.Workers.Domain.Entities.States;
-using Foundry.Modules.Workers.Domain.ValueObjects;
 using Foundry.Modules.Workers.Domain.Events;
+using Foundry.Modules.Workers.Domain.ValueObjects;
+
+using WorkerRunId = Foundry.Modules.Workers.Contracts.WorkerRunId;
 
 using Shouldly;
 

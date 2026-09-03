@@ -1,4 +1,6 @@
 using Foundry.Modules.Issues.Domain.Entities.States;
+using Foundry.Modules.Workers.Contracts;
+using Foundry.Shared.Infrastructure;
 
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
@@ -10,6 +12,7 @@ public sealed class ReviewIssueConfiguration : IEntityTypeConfiguration<ReviewIs
     public void Configure(EntityTypeBuilder<ReviewIssue> builder)
     {
         builder.Property(i => i.WorkerRunId)
+            .HasConversion(new StronglyTypedIdValueConverter<WorkerRunId>())
             .HasColumnName("worker_run_id");
 
         builder.Property(i => i.BranchName)

@@ -3,6 +3,7 @@ using Foundry.Modules.Issues.Domain.Entities;
 using Foundry.Modules.Issues.Domain.Entities.States;
 using Foundry.Modules.Issues.Features;
 using Foundry.Modules.Monitoring.Contracts;
+using Foundry.Modules.Workers.Contracts;
 using Foundry.Shared.Infrastructure;
 using Foundry.Testing;
 using Foundry.WebApi.Persistence;
@@ -59,10 +60,10 @@ public sealed class GetReviewIssuesAsync : IAsyncDisposable
         FreshQueuedIssue queued = detected.Enqueue();
         await _dbContext.TransitionAsync(detected, queued, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
 
-        InProgressIssue inProgress = queued.Claim(Guid.NewGuid());
+        InProgressIssue inProgress = queued.Claim(WorkerRunId.New());
         await _dbContext.TransitionAsync(queued, inProgress, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
 
-        ReviewIssue review = inProgress.MarkInReview(Guid.NewGuid(), $"feat/issue-{issueNumber}", pullRequestUrl, DateTimeOffset.UtcNow);
+        ReviewIssue review = inProgress.MarkInReview($"feat/issue-{issueNumber}", pullRequestUrl, DateTimeOffset.UtcNow);
         await _dbContext.TransitionAsync(inProgress, review, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
 
         return review;

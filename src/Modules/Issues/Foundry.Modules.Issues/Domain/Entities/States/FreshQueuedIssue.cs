@@ -1,5 +1,6 @@
 using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Issues.Domain.Entities;
+using Foundry.Modules.Workers.Contracts;
 using Foundry.Shared;
 
 namespace Foundry.Modules.Issues.Domain.Entities.States;
@@ -80,7 +81,7 @@ public sealed class FreshQueuedIssue : QueuedIssue
         return blocked;
     }
 
-    public override InProgressIssue Claim(Guid workerRunId)
+    public override InProgressIssue Claim(WorkerRunId workerRunId)
     {
         InProgressIssue inProgress = InProgressIssue.FromQueued(this, workerRunId);
         AddDomainEvent(new Events.IssueInProgress(Id, MonitoredRepositoryId));

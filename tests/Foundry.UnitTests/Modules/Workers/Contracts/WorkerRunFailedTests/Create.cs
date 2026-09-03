@@ -14,7 +14,7 @@ public sealed class Create
     public void WhenCreated_ImplementsIIntegrationEvent()
     {
         // Arrange
-        Guid workerRunId = Guid.NewGuid();
+        WorkerRunId workerRunId = WorkerRunId.New();
         Guid issueId = Guid.NewGuid();
         string reasonDescription = "Container exited with code 1";
 
@@ -33,7 +33,7 @@ public sealed class Create
     public void WhenCreatedWithBranchName_SetsBranchName()
     {
         // Arrange
-        Guid workerRunId = Guid.NewGuid();
+        WorkerRunId workerRunId = WorkerRunId.New();
         Guid issueId = Guid.NewGuid();
         string reasonDescription = "Non-zero exit code: 1";
 
@@ -52,7 +52,7 @@ public sealed class Create
     public void WhenCreatedWithoutBranchName_BranchNameIsNull()
     {
         // Arrange
-        Guid workerRunId = Guid.NewGuid();
+        WorkerRunId workerRunId = WorkerRunId.New();
         Guid issueId = Guid.NewGuid();
 
         // Act
@@ -66,7 +66,7 @@ public sealed class Create
     public void WhenCreatedWithCategory_SetsCategory()
     {
         // Arrange
-        Guid workerRunId = Guid.NewGuid();
+        WorkerRunId workerRunId = WorkerRunId.New();
         Guid issueId = Guid.NewGuid();
 
         // Act
@@ -80,7 +80,7 @@ public sealed class Create
     public void WhenCreatedWithoutCategory_CategoryIsNull()
     {
         // Arrange
-        Guid workerRunId = Guid.NewGuid();
+        WorkerRunId workerRunId = WorkerRunId.New();
         Guid issueId = Guid.NewGuid();
 
         // Act

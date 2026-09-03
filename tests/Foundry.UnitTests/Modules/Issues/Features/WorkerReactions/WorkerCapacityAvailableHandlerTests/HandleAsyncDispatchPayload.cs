@@ -124,7 +124,7 @@ public sealed class HandleAsyncDispatchPayload : IAsyncDisposable
             title: "Fix the bug",
             body: "Detailed description");
 
-        Guid workerRunId = Guid.NewGuid();
+        WorkerRunId workerRunId = WorkerRunId.New();
         WorkerCapacityAvailable @event = new(workerRunId);
 
         // Act

@@ -1,6 +1,7 @@
 using Foundry.Modules.Issues.Domain.Entities;
 using Foundry.Modules.Issues.Domain.Entities.States;
 using Foundry.Modules.Monitoring.Contracts;
+using Foundry.Modules.Workers.Contracts;
 using Foundry.Shared;
 using Foundry.Shared.Infrastructure;
 
@@ -15,7 +16,6 @@ internal sealed class ProviderPullRequestClosedHandler(
     ILogger<ProviderPullRequestClosedHandler> logger) : IIntegrationEventHandler<ProviderPullRequestClosed>
 {
     private const string FailureReason = "Pull request closed without merge";
-    private const string FailureCategory = "pr_closed";
 
     public async Task HandleAsync(ProviderPullRequestClosed @event, CancellationToken cancellationToken)
     {
@@ -33,7 +33,7 @@ internal sealed class ProviderPullRequestClosedHandler(
             return;
         }
 
-        ContinuableFailedIssue failed = reviewIssue.Fail(FailureReason, FailureCategory, DateTimeOffset.UtcNow);
+        ContinuableFailedIssue failed = reviewIssue.Fail(FailureReason, FailureCategory.PrClosed, DateTimeOffset.UtcNow);
         await db.TransitionAsync(reviewIssue, failed, domainEventDispatcher, cancellationToken);
     }
 }

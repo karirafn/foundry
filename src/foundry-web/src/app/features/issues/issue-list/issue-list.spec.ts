@@ -1,14 +1,16 @@
 import { TestBed } from '@angular/core/testing';
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
-import { signal } from '@angular/core';
+import { WritableSignal, signal } from '@angular/core';
 import { NEVER } from 'rxjs';
 import { IssueListComponent } from './issue-list';
 import { IssueService } from '../issue.service';
 import { IssueSignalRService } from '../../../core/services/issue-signalr.service';
 import { SystemSignalRService } from '../../../core/services/system-signalr.service';
 import { WorkerSignalRService, WORKER_HUB_FACTORY } from '../../../core/services/worker-signalr.service';
-import { IssueSummary } from '../issue.model';
+import { SettingsService } from '../../../core/services/settings.service';
+import { WorkerRunTotalsService } from '../../workers/run-totals.service';
+import { IssueSummary, IssueState } from '../issue.model';
 import { GlobalSettingsResponse } from '../../../core/models/settings.model';
 
 const mockSystemSignalR = { reconnected: NEVER, reloadTrigger: NEVER, loginSessionUpdate: NEVER, notifications: signal([]).asReadonly() };
@@ -1746,7 +1748,7 @@ describe('IssueListComponent', () => {
 
   // Dispatch-order queue grouping tests (issue #261)
 
-  // QueueGroup-1: "Next up" marker on first eligible queued issue
+  // QueueGroup-1: rank-1 gutter (--next modifier) on first eligible queued issue; pill removed
   it('should render "Next up" marker on the first eligible queued issue', () => {
     // Arrange
     const queuedEligible: IssueSummary = {
@@ -1762,10 +1764,11 @@ describe('IssueListComponent', () => {
     // Act
     fixture.detectChanges();
 
-    // Assert
+    // Assert — .issue-card__next-up pill removed; rank-1 is now the --next gutter modifier
     const el = fixture.nativeElement as HTMLElement;
-    const nextUp = el.querySelector('.issue-card__next-up');
-    expect(nextUp?.textContent?.trim()).toContain('Next up');
+    expect(el.querySelector('.issue-card__next-up')).toBeFalsy();
+    const gutterNext = el.querySelector('.issue-card__queue-position--next');
+    expect(gutterNext).toBeTruthy();
   });
 
   // QueueGroup-2: No "Next up" when all queued issues are ineligible
@@ -2079,5 +2082,454 @@ describe('IssueListComponent', () => {
     const grid = el.querySelector('.issue-list__grid') as HTMLElement;
     const items = grid.querySelectorAll('.issue-list__item');
     expect(items.length).toBe(1);
+  });
+
+  // Step 8: queue-order stale marker — absence (no any cast; driven via real HTTP)
+  it('should NOT render the stale marker when queueOrderStale() is false', () => {
+    // Arrange
+    const { fixture, httpMock } = setupComponent();
+    fixture.detectChanges();
+    flushInit(httpMock, [mockSummary]);
+
+    // Act
+    fixture.detectChanges();
+
+    // Assert — stale marker must be absent when the signal is false (default)
+    const el = fixture.nativeElement as HTMLElement;
+    const marker = el.querySelector('.issue-list__stale-marker');
+    expect(marker).toBeFalsy();
+  });
+});
+
+// Stale-marker tests: use a typed stub IssueService so no private-field any-cast is needed
+interface StubIssueService {
+  queueOrderStale: WritableSignal<boolean>;
+  initialLoading: WritableSignal<boolean>;
+  issues: WritableSignal<IssueSummary[]>;
+  activeBandIssues: WritableSignal<IssueSummary[]>;
+  liveIssueCount: WritableSignal<number>;
+  loadError: WritableSignal<string | null>;
+  expandedIssueId: WritableSignal<string | null>;
+  issueDetail: WritableSignal<null>;
+  detailLoading: WritableSignal<boolean>;
+  detailError: WritableSignal<null>;
+  resolvedIssues: WritableSignal<IssueSummary[]>;
+  resolvedLoading: WritableSignal<boolean>;
+  resolvedError: WritableSignal<null>;
+  resolvedLoadMoreError: WritableSignal<null>;
+  resolvedLoadingMore: WritableSignal<boolean>;
+  hasMoreResolved: WritableSignal<boolean>;
+  selectedResolvedStates: WritableSignal<ReadonlySet<IssueState>>;
+  selectedActiveStates: WritableSignal<ReadonlySet<IssueState>>;
+  counts: WritableSignal<Record<string, number>>;
+  retrying: WritableSignal<boolean>;
+  retryError: WritableSignal<null>;
+  retrySuccess: WritableSignal<null>;
+  ineligibleQueuedIssues: WritableSignal<IssueSummary[]>;
+  nextUpIssueId: WritableSignal<string | null>;
+  isEmpty: WritableSignal<boolean>;
+  activeFilterCount: WritableSignal<number>;
+  eligibleQueuedIssues: WritableSignal<IssueSummary[]>;
+  queuePositions: WritableSignal<ReadonlyMap<string, number>>;
+  nextUpAnnouncement: WritableSignal<string>;
+  loadIssues: () => void;
+  loadCounts: () => void;
+  toggleExpand: (id: string) => void;
+  toggleState: (state: IssueState) => void;
+  loadMoreResolved: () => void;
+  retryResolvedFetch: () => void;
+  loadDetail: (id: string) => void;
+  retryIssue: (id: string) => void;
+  countFor: (state: IssueState) => number;
+  isStateSelected: (state: IssueState) => boolean;
+}
+
+function makeStubIssueService(issues: IssueSummary[] = []): StubIssueService {
+  return {
+    queueOrderStale: signal(false),
+    initialLoading: signal(false),
+    issues: signal(issues),
+    activeBandIssues: signal(issues),
+    liveIssueCount: signal(0),
+    loadError: signal(null),
+    expandedIssueId: signal(null),
+    issueDetail: signal(null),
+    detailLoading: signal(false),
+    detailError: signal(null),
+    resolvedIssues: signal([]),
+    resolvedLoading: signal(false),
+    resolvedError: signal(null),
+    resolvedLoadMoreError: signal(null),
+    resolvedLoadingMore: signal(false),
+    hasMoreResolved: signal(false),
+    selectedResolvedStates: signal(new Set<IssueState>()),
+    selectedActiveStates: signal(new Set<IssueState>()),
+    counts: signal({}),
+    retrying: signal(false),
+    retryError: signal(null),
+    retrySuccess: signal(null),
+    ineligibleQueuedIssues: signal([]),
+    nextUpIssueId: signal(null),
+    isEmpty: signal(issues.length === 0),
+    activeFilterCount: signal(0),
+    eligibleQueuedIssues: signal([]),
+    queuePositions: signal(new Map<string, number>()),
+    nextUpAnnouncement: signal(''),
+    loadIssues: () => {},
+    loadCounts: () => {},
+    toggleExpand: () => {},
+    toggleState: () => {},
+    loadMoreResolved: () => {},
+    retryResolvedFetch: () => {},
+    loadDetail: () => {},
+    retryIssue: () => {},
+    countFor: () => 0,
+    isStateSelected: () => false,
+  };
+}
+
+const mockSettingsService = { loadSettings: () => {} };
+const mockRunTotalsService = {
+  fetch: () => {},
+  scope: signal<'month' | 'all'>('month').asReadonly(),
+  totals: signal(null).asReadonly(),
+  loading: signal(false).asReadonly(),
+  error: signal(null).asReadonly(),
+  setScope: () => {},
+};
+
+function setupStubComponent(stub: StubIssueService) {
+  TestBed.configureTestingModule({
+    imports: [IssueListComponent],
+    providers: [
+      { provide: IssueService, useValue: stub },
+      { provide: SettingsService, useValue: mockSettingsService },
+      { provide: WorkerRunTotalsService, useValue: mockRunTotalsService },
+      provideHttpClient(),
+      provideHttpClientTesting(),
+      { provide: IssueSignalRService, useValue: mockIssueSignalRService },
+      { provide: SystemSignalRService, useValue: mockSystemSignalR },
+      { provide: WORKER_HUB_FACTORY, useValue: () => mockWorkerHub },
+    ],
+  });
+  const fixture = TestBed.createComponent(IssueListComponent);
+  const httpMock = TestBed.inject(HttpTestingController);
+  return { fixture, httpMock };
+}
+
+describe('IssueListComponent (stale marker)', () => {
+  beforeEach(() => {
+    TestBed.resetTestingModule();
+  });
+
+  afterEach(() => {
+    TestBed.inject(HttpTestingController).verify();
+  });
+
+  // Finding 1 — sr-only announcer is always mounted
+  it('should have a persistent sr-only role="status" stale announcer always in the DOM', () => {
+    // Arrange
+    const stub = makeStubIssueService();
+    const { fixture } = setupStubComponent(stub);
+
+    // Act
+    fixture.detectChanges();
+
+    // Assert — announcer is always mounted regardless of stale state
+    const el = fixture.nativeElement as HTMLElement;
+    const announcer = el.querySelector('[role="status"].issue-list__stale-announcer');
+    expect(announcer).toBeTruthy();
+    expect(announcer?.classList).toContain('sr-only');
+  });
+
+  it('should have empty sr-only stale announcer text when queueOrderStale is false', () => {
+    // Arrange
+    const stub = makeStubIssueService();
+    stub.queueOrderStale.set(false);
+    const { fixture } = setupStubComponent(stub);
+
+    // Act
+    fixture.detectChanges();
+
+    // Assert
+    const el = fixture.nativeElement as HTMLElement;
+    const announcer = el.querySelector('[role="status"].issue-list__stale-announcer') as HTMLElement;
+    expect(announcer?.textContent?.trim()).toBe('');
+  });
+
+  it('should populate the sr-only stale announcer text when queueOrderStale becomes true', () => {
+    // Arrange
+    const stub = makeStubIssueService();
+    const { fixture } = setupStubComponent(stub);
+    fixture.detectChanges();
+
+    // Act — drive stale state via the public signal
+    stub.queueOrderStale.set(true);
+    fixture.detectChanges();
+
+    // Assert — sr-only announcer text is populated
+    const el = fixture.nativeElement as HTMLElement;
+    const announcer = el.querySelector('[role="status"].issue-list__stale-announcer') as HTMLElement;
+    expect(announcer?.textContent?.trim()).toBe('Queue order may be out of date');
+  });
+
+  // Finding 3 — visible strip driven via typed public signal (no any cast)
+  it('should NOT render the visible stale marker strip when queueOrderStale is false', () => {
+    // Arrange
+    const stub = makeStubIssueService();
+    stub.queueOrderStale.set(false);
+    const { fixture } = setupStubComponent(stub);
+
+    // Act
+    fixture.detectChanges();
+
+    // Assert
+    const el = fixture.nativeElement as HTMLElement;
+    expect(el.querySelector('.issue-list__stale-marker')).toBeFalsy();
+  });
+
+  it('should render the visible stale marker strip with the exact copy when queueOrderStale is true', () => {
+    // Arrange
+    const stub = makeStubIssueService();
+    const { fixture } = setupStubComponent(stub);
+    fixture.detectChanges();
+
+    // Act — drive stale state via typed public signal
+    stub.queueOrderStale.set(true);
+    fixture.detectChanges();
+
+    // Assert — visible strip present with correct text
+    const el = fixture.nativeElement as HTMLElement;
+    const marker = el.querySelector('.issue-list__stale-marker') as HTMLElement | null;
+    expect(marker).toBeTruthy();
+    expect(marker?.textContent?.trim()).toContain('Queue order may be out of date');
+  });
+
+  // Finding 4 — visible strip must NOT carry role="status" (only the sr-only announcer is the live region)
+  it('should NOT have role="status" on the visible stale marker strip', () => {
+    // Arrange
+    const stub = makeStubIssueService();
+    const { fixture } = setupStubComponent(stub);
+    fixture.detectChanges();
+
+    stub.queueOrderStale.set(true);
+    fixture.detectChanges();
+
+    // Assert — role="status" is on the sr-only announcer, not the visible strip
+    const el = fixture.nativeElement as HTMLElement;
+    const marker = el.querySelector('.issue-list__stale-marker') as HTMLElement | null;
+    expect(marker?.getAttribute('role')).not.toBe('status');
+  });
+
+  it('should NOT have aria-atomic on the visible stale marker strip', () => {
+    // Arrange
+    const stub = makeStubIssueService();
+    const { fixture } = setupStubComponent(stub);
+    fixture.detectChanges();
+
+    stub.queueOrderStale.set(true);
+    fixture.detectChanges();
+
+    // Assert — aria-atomic removed from visible strip (implied by role="status" on sr-only span)
+    const el = fixture.nativeElement as HTMLElement;
+    const marker = el.querySelector('.issue-list__stale-marker') as HTMLElement | null;
+    expect(marker?.hasAttribute('aria-atomic')).toBe(false);
+  });
+
+  // Finding 2 — marker absent while initialLoading is true (even if somehow stale were set)
+  it('should NOT render the visible stale marker strip while initialLoading is true', () => {
+    // Arrange — initialLoading true means the service would not set queueOrderStale during load,
+    // but we confirm the template does not show it even if the signal could have been set
+    const stub = makeStubIssueService();
+    stub.initialLoading.set(true);
+    stub.queueOrderStale.set(false); // service guarantees this, but verify template too
+    const { fixture } = setupStubComponent(stub);
+
+    // Act
+    fixture.detectChanges();
+
+    // Assert — no visible strip, no confusion with loading skeletons
+    const el = fixture.nativeElement as HTMLElement;
+    expect(el.querySelector('.issue-list__stale-marker')).toBeFalsy();
+  });
+
+  // Finding 5 — split: marker render and grid independence are separate tests
+  it('should render the visible stale marker strip alongside a non-empty grid', () => {
+    // Arrange
+    const second: IssueSummary = { ...mockSummary, id: 'def456', issueNumber: 43, title: 'Fix bug' };
+    const stub = makeStubIssueService([mockSummary, second]);
+    const { fixture } = setupStubComponent(stub);
+    fixture.detectChanges();
+
+    // Act
+    stub.queueOrderStale.set(true);
+    fixture.detectChanges();
+
+    // Assert — marker present
+    const el = fixture.nativeElement as HTMLElement;
+    expect(el.querySelector('.issue-list__stale-marker')).toBeTruthy();
+  });
+
+  it('should not hide any cards when the stale marker strip is rendered', () => {
+    // Arrange
+    const second: IssueSummary = { ...mockSummary, id: 'def456', issueNumber: 43, title: 'Fix bug' };
+    const stub = makeStubIssueService([mockSummary, second]);
+    const { fixture } = setupStubComponent(stub);
+    fixture.detectChanges();
+
+    // Act
+    stub.queueOrderStale.set(true);
+    fixture.detectChanges();
+
+    // Assert — both cards still rendered (marker does not gate the grid)
+    const el = fixture.nativeElement as HTMLElement;
+    const cards = el.querySelectorAll('fd-issue-card');
+    expect(cards.length).toBe(2);
+  });
+});
+
+describe('IssueListComponent (ordinal binding + next-up announcer)', () => {
+  beforeEach(() => {
+    TestBed.resetTestingModule();
+  });
+
+  afterEach(() => {
+    TestBed.inject(HttpTestingController).verify();
+  });
+
+  // Cycle a-i: fourth always-mounted sr-only role="status" announcer is present
+  it('should have a fourth always-mounted sr-only role="status" next-up announcer in the DOM', () => {
+    // Arrange
+    const stub = makeStubIssueService();
+    const { fixture } = setupStubComponent(stub);
+
+    // Act
+    fixture.detectChanges();
+
+    // Assert — announcer node is always mounted regardless of content
+    const el = fixture.nativeElement as HTMLElement;
+    const announcer = el.querySelector('.issue-list__next-up-announcer');
+    expect(announcer).toBeTruthy();
+    expect(announcer?.getAttribute('role')).toBe('status');
+    expect(announcer?.classList).toContain('sr-only');
+  });
+
+  // Cycle a-ii: announcer carries nextUpAnnouncement() text when a queued issue exists
+  it('should populate the next-up announcer with nextUpAnnouncement() text when non-empty', () => {
+    // Arrange
+    const stub = makeStubIssueService();
+    stub.nextUpAnnouncement.set('Next up: issue #42 — Enable dark mode');
+    const { fixture } = setupStubComponent(stub);
+
+    // Act
+    fixture.detectChanges();
+
+    // Assert
+    const el = fixture.nativeElement as HTMLElement;
+    const announcer = el.querySelector('.issue-list__next-up-announcer') as HTMLElement;
+    expect(announcer?.textContent?.trim()).toBe('Next up: issue #42 — Enable dark mode');
+  });
+
+  // Cycle a-iii: announcer is empty string when nextUpAnnouncement() is ''
+  it('should leave the next-up announcer empty when nextUpAnnouncement() is empty', () => {
+    // Arrange
+    const stub = makeStubIssueService();
+    stub.nextUpAnnouncement.set('');
+    const { fixture } = setupStubComponent(stub);
+
+    // Act
+    fixture.detectChanges();
+
+    // Assert
+    const el = fixture.nativeElement as HTMLElement;
+    const announcer = el.querySelector('.issue-list__next-up-announcer') as HTMLElement;
+    expect(announcer?.textContent?.trim()).toBe('');
+  });
+
+  // Cycle a-iv: announcer is always mounted (never behind @if)
+  it('should keep the next-up announcer mounted even when there are no issues', () => {
+    // Arrange — empty issue list, no next-up
+    const stub = makeStubIssueService([]);
+    const { fixture } = setupStubComponent(stub);
+
+    // Act
+    fixture.detectChanges();
+
+    // Assert — node is present even with nothing loaded
+    const el = fixture.nativeElement as HTMLElement;
+    const announcer = el.querySelector('.issue-list__next-up-announcer');
+    expect(announcer).toBeTruthy();
+  });
+
+  // Cycle b-i: dispatchable queued card receives its ordinal from queuePositions()
+  it('should pass the correct queuePosition ordinal to a dispatchable queued issue card', () => {
+    // Arrange
+    const queuedIssue: IssueSummary = {
+      ...mockSummary,
+      id: 'q1',
+      state: 'queued',
+      repositoryEligibilityStatus: null,
+    };
+    const stub = makeStubIssueService([queuedIssue]);
+    stub.queuePositions.set(new Map([['q1', 1]]));
+    stub.nextUpIssueId.set('q1');
+    const { fixture } = setupStubComponent(stub);
+
+    // Act
+    fixture.detectChanges();
+
+    // Assert — the gutter shows the ordinal (position 1 renders as "1")
+    const el = fixture.nativeElement as HTMLElement;
+    const gutter = el.querySelector('.issue-card__queue-position') as HTMLElement;
+    expect(gutter).toBeTruthy();
+    expect(gutter?.textContent?.trim()).toBe('1');
+  });
+
+  // Cycle b-ii: ineligible queued card shows em dash (null queuePosition → "—")
+  it('should pass null queuePosition to an ineligible queued issue card, rendering an em dash', () => {
+    // Arrange — ineligible queued issue: not in queuePositions
+    const ineligibleIssue: IssueSummary = {
+      ...mockSummary,
+      id: 'inelig1',
+      state: 'queued',
+      repositoryEligibilityStatus: 'ineligible',
+    };
+    const stub = makeStubIssueService([ineligibleIssue]);
+    stub.queuePositions.set(new Map()); // not in the map → null → "—"
+    stub.ineligibleQueuedIssues.set([ineligibleIssue]);
+    const { fixture } = setupStubComponent(stub);
+
+    // Act
+    fixture.detectChanges();
+
+    // Assert — gutter shows em dash for null position
+    const el = fixture.nativeElement as HTMLElement;
+    const gutter = el.querySelector('.issue-card__queue-position') as HTMLElement;
+    expect(gutter).toBeTruthy();
+    expect(gutter?.textContent?.trim()).toBe('—');
+  });
+
+  // Cycle b-iii: resolved band cards do NOT receive a queuePosition (they are not queued-tier)
+  it('should NOT show a queue-position gutter on a resolved-band issue card', () => {
+    // Arrange — resolved issue is not in queuePositions (no gutter shown for non-queued state)
+    const resolvedIssue: IssueSummary = { ...mockSummary, id: 'done1', state: 'completed' };
+    const stub = makeStubIssueService([]);
+    stub.resolvedIssues.set([resolvedIssue]);
+    stub.selectedResolvedStates.set(new Set<IssueState>(['completed']));
+    const { fixture } = setupStubComponent(stub);
+
+    // Act
+    fixture.detectChanges();
+
+    // Assert — the resolved band card has no gutter (queuePosition defaults to null → no element rendered for non-queued)
+    const el = fixture.nativeElement as HTMLElement;
+    const resolvedBand = el.querySelector('.issue-list__resolved-band');
+    expect(resolvedBand).toBeTruthy();
+    const gutter = resolvedBand?.querySelector('.issue-card__queue-position');
+    // Gutter element exists in card markup but with null input it renders as "—" only for queued-tier states.
+    // For non-queued-tier states (completed) the card hides the gutter entirely.
+    // We assert the resolved band card does not show any numeric ordinal text.
+    const gutterText = (gutter as HTMLElement | null)?.textContent?.trim() ?? '';
+    expect(gutterText).not.toMatch(/^\d+$/);
   });
 });
