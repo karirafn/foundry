@@ -528,7 +528,11 @@ All lifecycle state is tracked internally in the database.
 
 The provider is the authoritative signal for issue closure.
 When an issue's trigger label is removed or the issue is closed on the provider, it disappears from the `?labels=foundry&state=open` fetch.
-On each poll cycle, the poller emits a `ProviderIssueUntracked` integration event for any tracked issue absent from that fetch.
+On each poll cycle, the poller emits a `ProviderIssueUntracked` integration event for any tracked issue absent from that fetch — but only when that fetch is provably complete.
+The provider clients stop paginating at a fixed page cap and return `IssueListing.IsComplete: false` when the cap is reached with pages still outstanding.
+An incomplete listing cannot distinguish an issue closed on the provider from one that simply fell outside the fetched window, so the untrack pass is skipped entirely and the repository enters **untrack suppression**, logged once on entry rather than every cycle.
+Detection, detail-change, dependency, and review passes all continue normally and the poll still succeeds — only deletion is withheld.
+Suppression clears automatically on the first later cycle whose listing is complete; no operator action is involved.
 The `ProviderIssueUntrackedHandler` hard-deletes tracked records in resting states: `detected`, `queued`, `blocked`, `failed`, `continuable_failed`, `revision_failed`, `revision_queued`, `continuation_queued`, and `unchanged`.
 `completed` is preserved — completion wins over provider closure.
 `in_progress`, `revision_in_progress`, and `review` are preserved — a live worker is running or the issue is under active review; worker cancellation is out of scope.
