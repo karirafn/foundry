@@ -844,6 +844,61 @@ public sealed class PollAsync : IAsyncDisposable
     }
 
     [Fact]
+    public async Task WhenFeedbackHasOmittedCountAndNewestCommentAt_EventCarriesBothFields()
+    {
+        // Arrange
+        MonitoredRepository repository = SeedRepository();
+        string prUrl = "https://github.com/owner/repo/pull/99";
+        DateTimeOffset cutoff = Now.AddHours(-1);
+        DateTimeOffset newestCommentAt = Now.AddMinutes(-5);
+        ReviewIssueInfo reviewIssue = new(IssueNumber: 42, PullRequestUrl: prUrl, FeedbackCutoffAt: cutoff);
+        StubIssueQueries issueQueries = new(
+            new HashSet<int>(),
+            new Dictionary<int, IssueSnapshot>(),
+            dispatchCandidateNumbers: null,
+            reviewIssues: [reviewIssue]);
+
+        Dictionary<int, Result<bool>> isClosedResults = new()
+        {
+            [42] = Result<bool>.Ok(false),
+        };
+        Dictionary<string, Result<PullRequestStatus>> prStatusResults = new()
+        {
+            [prUrl] = Result<PullRequestStatus>.Ok(new PullRequestStatus(IsClosed: false, IsMerged: false)),
+        };
+        ReviewComment comment = new("Fix this");
+        ReviewFeedback feedback = new([comment], OmittedCommentCount: 12, NewestCommentAt: newestCommentAt);
+        Dictionary<string, Result<ReviewFeedback>> feedbackResults = new()
+        {
+            [prUrl] = Result<ReviewFeedback>.Ok(feedback),
+        };
+        StubIssueProvider provider = new(
+            [],
+            isClosedResults: isClosedResults,
+            pullRequestStatusResults: prStatusResults,
+            reviewFeedbackResults: feedbackResults);
+        RepositoryPoller sut = new(
+            issueQueries,
+            _dbContext,
+            new NullDomainEventDispatcher(),
+            _dispatcher,
+            _eligibilityEvaluator,
+            NullLogger<RepositoryPoller>.Instance);
+
+        // Act
+        Result result = await sut.PollAsync(repository, provider, Now, CancellationToken.None);
+
+        // Assert
+        result.IsSuccess.ShouldBeTrue();
+        PullRequestChangesRequested changesRequested = _dispatcher.DispatchedEvents
+            .OfType<PullRequestChangesRequested>()
+            .ShouldHaveSingleItem();
+        changesRequested.ShouldSatisfyAllConditions(
+            () => changesRequested.OmittedCommentCount.ShouldBe(12),
+            () => changesRequested.NewestCommentAt.ShouldBe(newestCommentAt));
+    }
+
+    [Fact]
     public async Task WhenReviewIssuePrIsClosedAndMerged_DoesNotCallGetReviewFeedback()
     {
         // Arrange

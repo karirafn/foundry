@@ -3,6 +3,7 @@ using System.Net;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
+using Foundry.Modules.Monitoring.Features.Providers.Feedback;
 using Foundry.Modules.Monitoring.Infrastructure;
 using Foundry.Modules.Monitoring.Infrastructure.GitHub;
 using Foundry.Modules.Monitoring.Infrastructure.RateBudget;
@@ -45,7 +46,8 @@ public sealed class GetMergeRequestByBranchAsync
         FakeHandler handler = new(HttpStatusCode.OK, prJson);
         using HttpClient httpClient = new(handler);
         GitHubHttpClient gitHubHttpClient = new(httpClient, NullLogger<GitHubHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))), new InMemoryProviderRateBudget(), TimeProvider.System);
-        GitHubIssueProvider sut = new(gitHubHttpClient, ValidToken, ValidBaseUrl);
+        GitHubIssueProvider sut = new(
+            gitHubHttpClient, new ActionableFeedbackPolicy(TimeProvider.System), ValidToken, ValidBaseUrl);
 
         // Act
         Result<MergeRequestByBranch> result = await sut.GetMergeRequestByBranchAsync(
@@ -66,7 +68,8 @@ public sealed class GetMergeRequestByBranchAsync
         FakeHandler handler = new(HttpStatusCode.OK, "[]");
         using HttpClient httpClient = new(handler);
         GitHubHttpClient gitHubHttpClient = new(httpClient, NullLogger<GitHubHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))), new InMemoryProviderRateBudget(), TimeProvider.System);
-        GitHubIssueProvider sut = new(gitHubHttpClient, ValidToken, ValidBaseUrl);
+        GitHubIssueProvider sut = new(
+            gitHubHttpClient, new ActionableFeedbackPolicy(TimeProvider.System), ValidToken, ValidBaseUrl);
 
         // Act
         Result<MergeRequestByBranch> result = await sut.GetMergeRequestByBranchAsync(
@@ -87,7 +90,8 @@ public sealed class GetMergeRequestByBranchAsync
         FakeHandler handler = new(HttpStatusCode.InternalServerError, string.Empty);
         using HttpClient httpClient = new(handler);
         GitHubHttpClient gitHubHttpClient = new(httpClient, NullLogger<GitHubHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))), new InMemoryProviderRateBudget(), TimeProvider.System);
-        GitHubIssueProvider sut = new(gitHubHttpClient, ValidToken, ValidBaseUrl);
+        GitHubIssueProvider sut = new(
+            gitHubHttpClient, new ActionableFeedbackPolicy(TimeProvider.System), ValidToken, ValidBaseUrl);
 
         // Act
         Result<MergeRequestByBranch> result = await sut.GetMergeRequestByBranchAsync(

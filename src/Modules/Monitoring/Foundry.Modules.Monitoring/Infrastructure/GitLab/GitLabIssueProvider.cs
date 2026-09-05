@@ -7,7 +7,11 @@ using Foundry.Shared;
 
 namespace Foundry.Modules.Monitoring.Infrastructure.GitLab;
 
-internal sealed class GitLabIssueProvider(GitLabHttpClient httpClient, string token, Uri apiBaseUrl) : IIssueProvider
+internal sealed class GitLabIssueProvider(
+    GitLabHttpClient httpClient,
+    ActionableFeedbackPolicy feedbackPolicy,
+    string token,
+    Uri apiBaseUrl) : IIssueProvider
 {
     public Task<Result<IssueListing>> GetIssuesAsync(
         RepositorySlug slug,
@@ -46,7 +50,6 @@ internal sealed class GitLabIssueProvider(GitLabHttpClient httpClient, string to
         DateTimeOffset since,
         CancellationToken cancellationToken)
     {
-        // TODO(#497 Step 4): invoke ActionableFeedbackPolicy here instead of the inline bridge below.
         Result<IReadOnlyList<ProviderComment>> rawResult = await httpClient.GetPullRequestReviewFeedbackAsync(
             apiBaseUrl, slug, pullRequestUrl, token, cancellationToken);
 
@@ -56,12 +59,7 @@ internal sealed class GitLabIssueProvider(GitLabHttpClient httpClient, string to
             return Result<ReviewFeedback>.Fail(error);
         }
 
-        IReadOnlyList<ReviewComment> comments = rawSuccess.Value
-            .Where(c => c.CreatedAt > since)
-            .Select(c => new ReviewComment(c.Body, c.FilePath, c.Line))
-            .ToList();
-
-        return Result<ReviewFeedback>.Ok(new ReviewFeedback(comments, OmittedCommentCount: 0, NewestCommentAt: null));
+        return Result<ReviewFeedback>.Ok(feedbackPolicy.Apply(rawSuccess.Value, since));
     }
 
     public async Task<Result<BranchProtection>> GetBranchProtectionAsync(

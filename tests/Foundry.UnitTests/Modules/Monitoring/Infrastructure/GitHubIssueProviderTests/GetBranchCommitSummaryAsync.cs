@@ -2,6 +2,7 @@ using System.Net;
 
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
+using Foundry.Modules.Monitoring.Features.Providers.Feedback;
 using Foundry.Modules.Monitoring.Infrastructure;
 using Foundry.Modules.Monitoring.Infrastructure.GitHub;
 using Foundry.Modules.Monitoring.Infrastructure.RateBudget;
@@ -34,7 +35,8 @@ public sealed class GetBranchCommitSummaryAsync
             httpClient,
             NullLogger<GitHubHttpClient>.Instance,
             new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))), new InMemoryProviderRateBudget(), TimeProvider.System);
-        return new GitHubIssueProvider(gitHubHttpClient, ValidToken, ValidBaseUrl);
+        return new GitHubIssueProvider(
+            gitHubHttpClient, new ActionableFeedbackPolicy(TimeProvider.System), ValidToken, ValidBaseUrl);
     }
 
     [Fact]

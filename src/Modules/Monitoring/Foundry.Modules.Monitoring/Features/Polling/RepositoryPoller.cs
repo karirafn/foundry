@@ -289,10 +289,13 @@ internal sealed class RepositoryPoller(
 
             if (feedbackSuccess.Value.Comments.Count > 0)
             {
+                ReviewFeedback feedback = feedbackSuccess.Value;
                 repository.RecordIntegrationEvent(new PullRequestChangesRequested(
                     repository.Id,
                     reviewIssue.IssueNumber,
-                    feedbackSuccess.Value.Comments));
+                    feedback.Comments,
+                    feedback.OmittedCommentCount,
+                    feedback.NewestCommentAt));
             }
         }
     }

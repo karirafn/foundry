@@ -6,7 +6,11 @@ using Foundry.Shared;
 
 namespace Foundry.Modules.Monitoring.Infrastructure.GitHub;
 
-internal sealed class GitHubIssueProvider(GitHubHttpClient httpClient, string token, Uri apiBaseUrl) : IIssueProvider
+internal sealed class GitHubIssueProvider(
+    GitHubHttpClient httpClient,
+    ActionableFeedbackPolicy feedbackPolicy,
+    string token,
+    Uri apiBaseUrl) : IIssueProvider
 {
     // Per-poll cache: populated by GetIssuesAsync; null until the first call.
     // Lives on the instance because GitHubIssueProvider is newed per poll cycle.
@@ -71,7 +75,6 @@ internal sealed class GitHubIssueProvider(GitHubHttpClient httpClient, string to
         DateTimeOffset since,
         CancellationToken cancellationToken)
     {
-        // TODO(#497 Step 4): invoke ActionableFeedbackPolicy here instead of the inline bridge below.
         Result<IReadOnlyList<ProviderComment>> rawResult = await httpClient.GetPullRequestReviewFeedbackAsync(
             apiBaseUrl, slug, pullRequestUrl, token, cancellationToken);
 
@@ -81,12 +84,7 @@ internal sealed class GitHubIssueProvider(GitHubHttpClient httpClient, string to
             return Result<ReviewFeedback>.Fail(error);
         }
 
-        IReadOnlyList<ReviewComment> comments = rawSuccess.Value
-            .Where(c => c.CreatedAt > since)
-            .Select(c => new ReviewComment(c.Body, c.FilePath, c.Line))
-            .ToList();
-
-        return Result<ReviewFeedback>.Ok(new ReviewFeedback(comments, OmittedCommentCount: 0, NewestCommentAt: null));
+        return Result<ReviewFeedback>.Ok(feedbackPolicy.Apply(rawSuccess.Value, since));
     }
 
     public async Task<Result<BranchProtection>> GetBranchProtectionAsync(

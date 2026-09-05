@@ -35,7 +35,8 @@ public sealed class GetReviewFeedbackAsync
     {
         HttpClient httpClient = new(handler);
         GitLabHttpClient gitLabHttpClient = new(httpClient, NullLogger<GitLabHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))), new InMemoryProviderRateBudget(), TimeProvider.System);
-        return new GitLabIssueProvider(gitLabHttpClient, ValidToken, ValidBaseUrl);
+        return new GitLabIssueProvider(
+            gitLabHttpClient, new ActionableFeedbackPolicy(TimeProvider.System), ValidToken, ValidBaseUrl);
     }
 
     [Fact]
@@ -113,5 +114,94 @@ public sealed class GetReviewFeedbackAsync
         result.IsSuccess.ShouldBeTrue();
         Result<ReviewFeedback>.Success success = result.ShouldBeOfType<Result<ReviewFeedback>.Success>();
         success.Value.Comments.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task WhenSystemNoteIsAfterSince_PolicyExcludesItFromFeedback()
+    {
+        // Arrange — system:true note must be excluded by the policy even though created_at > since.
+        string json = """
+            [
+              {
+                "notes": [
+                  {
+                    "body": "assigned to @alice",
+                    "resolvable": false,
+                    "resolved": false,
+                    "system": true,
+                    "created_at": "2026-06-01T00:00:00Z",
+                    "updated_at": "2026-06-01T00:00:00Z",
+                    "author": { "username": "gitlab" },
+                    "position": null
+                  }
+                ]
+              }
+            ]
+            """;
+        FakeHandler handler = new(HttpStatusCode.OK, json);
+        GitLabIssueProvider sut = BuildSut(handler);
+
+        // Act
+        Result<ReviewFeedback> result = await sut.GetReviewFeedbackAsync(
+            ValidSlug,
+            ValidMrUrl,
+            Since,
+            CancellationToken.None);
+
+        // Assert
+        result.IsSuccess.ShouldBeTrue();
+        Result<ReviewFeedback>.Success success = result.ShouldBeOfType<Result<ReviewFeedback>.Success>();
+        success.Value.Comments.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task WhenFeedbackHasComments_NewestCommentAtAndOmittedCountArePopulated()
+    {
+        // Arrange — two notes after since, both pass policy. The newer one is returned last (chronological).
+        string json = """
+            [
+              {
+                "notes": [
+                  {
+                    "body": "First comment",
+                    "resolvable": false,
+                    "resolved": false,
+                    "system": false,
+                    "created_at": "2026-06-01T10:00:00Z",
+                    "updated_at": "2026-06-01T10:00:00Z",
+                    "author": { "username": "alice" },
+                    "position": null
+                  },
+                  {
+                    "body": "Second comment",
+                    "resolvable": false,
+                    "resolved": false,
+                    "system": false,
+                    "created_at": "2026-06-01T11:00:00Z",
+                    "updated_at": "2026-06-01T11:00:00Z",
+                    "author": { "username": "bob" },
+                    "position": null
+                  }
+                ]
+              }
+            ]
+            """;
+        FakeHandler handler = new(HttpStatusCode.OK, json);
+        GitLabIssueProvider sut = BuildSut(handler);
+
+        // Act
+        Result<ReviewFeedback> result = await sut.GetReviewFeedbackAsync(
+            ValidSlug,
+            ValidMrUrl,
+            Since,
+            CancellationToken.None);
+
+        // Assert
+        result.IsSuccess.ShouldBeTrue();
+        Result<ReviewFeedback>.Success success = result.ShouldBeOfType<Result<ReviewFeedback>.Success>();
+        success.Value.ShouldSatisfyAllConditions(
+            () => success.Value.Comments.Count.ShouldBe(2),
+            () => success.Value.OmittedCommentCount.ShouldBe(0),
+            () => success.Value.NewestCommentAt.ShouldBe(new DateTimeOffset(2026, 6, 1, 11, 0, 0, TimeSpan.Zero)));
     }
 }
