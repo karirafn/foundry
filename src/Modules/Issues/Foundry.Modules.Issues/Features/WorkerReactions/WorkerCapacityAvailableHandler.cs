@@ -1,5 +1,6 @@
 using System.Diagnostics;
 
+using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Issues.Domain.Entities.States;
 using Foundry.Modules.Issues.Features.Claiming;
 using Foundry.Modules.Workers.Contracts;
@@ -14,6 +15,7 @@ internal sealed class WorkerCapacityAvailableHandler(
     DbContext dbContext,
     DispatchCandidateSelector selector,
     IssueClaimer claimer,
+    IIntegrationEventDispatcher integrationEventDispatcher,
     ILogger<WorkerCapacityAvailableHandler> logger) : IIntegrationEventHandler<WorkerCapacityAvailable>
 {
     public async Task HandleAsync(WorkerCapacityAvailable @event, CancellationToken cancellationToken)
@@ -44,16 +46,25 @@ internal sealed class WorkerCapacityAvailableHandler(
 
             case SelectionOutcome.NoEligibleRepositories:
                 logger.LogDebug("No eligible repositories found; skipping dispatch.");
+                await integrationEventDispatcher.DispatchAsync(
+                    [new ClaimSkipped(@event.WorkerRunId)],
+                    cancellationToken);
                 break;
 
             case SelectionOutcome.NoCandidates:
                 logger.LogDebug("No claimable candidates found; skipping dispatch.");
+                await integrationEventDispatcher.DispatchAsync(
+                    [new ClaimSkipped(@event.WorkerRunId)],
+                    cancellationToken);
                 break;
 
             case SelectionOutcome.AllCandidatesUnresolvable(int skipped):
                 logger.LogWarning(
                     "All {Skipped} candidate(s) skipped because their repository dispatch info could not be resolved.",
                     skipped);
+                await integrationEventDispatcher.DispatchAsync(
+                    [new ClaimSkipped(@event.WorkerRunId)],
+                    cancellationToken);
                 break;
 
             default:

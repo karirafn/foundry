@@ -56,6 +56,7 @@ public sealed class HandleAsyncDispatchPayload : IAsyncDisposable
             _dbContext,
             selector,
             claimer,
+            _dispatcher,
             NullLogger<WorkerCapacityAvailableHandler>.Instance);
     }
 

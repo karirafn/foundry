@@ -71,6 +71,7 @@ public sealed class HandleAsync : IAsyncDisposable
             _dbContext,
             selector,
             claimer,
+            integrationEventDispatcher ?? new NullIntegrationEventDispatcher(),
             NullLogger<WorkerCapacityAvailableHandler>.Instance);
     }
 

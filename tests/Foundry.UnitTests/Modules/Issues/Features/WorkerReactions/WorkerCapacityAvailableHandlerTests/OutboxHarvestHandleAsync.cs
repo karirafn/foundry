@@ -104,6 +104,7 @@ public sealed class OutboxHarvestHandleAsync : IAsyncDisposable
             dbContext,
             selector,
             claimer,
+            integrationEventDispatcher,
             NullLogger<WorkerCapacityAvailableHandler>.Instance);
 
         WorkerCapacityAvailable @event = new(WorkerRunId: WorkerRunId.New());
@@ -151,6 +152,7 @@ public sealed class OutboxHarvestHandleAsync : IAsyncDisposable
             dbContext,
             selector,
             claimer,
+            integrationEventDispatcher,
             NullLogger<WorkerCapacityAvailableHandler>.Instance);
 
         WorkerCapacityAvailable @event = new(WorkerRunId: WorkerRunId.New());
@@ -198,6 +200,7 @@ public sealed class OutboxHarvestHandleAsync : IAsyncDisposable
             dbContext,
             selector,
             claimer,
+            integrationEventDispatcher,
             NullLogger<WorkerCapacityAvailableHandler>.Instance);
 
         WorkerCapacityAvailable @event = new(WorkerRunId: WorkerRunId.New());
@@ -241,6 +244,7 @@ public sealed class OutboxHarvestHandleAsync : IAsyncDisposable
             dbContext,
             selector,
             claimer,
+            integrationEventDispatcher,
             NullLogger<WorkerCapacityAvailableHandler>.Instance);
 
         WorkerCapacityAvailable @event = new(WorkerRunId: WorkerRunId.New());
