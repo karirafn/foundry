@@ -23,7 +23,6 @@ namespace Foundry.UnitTests.Modules.Issues.Features.IssuesModuleTests;
 public sealed class GetIssueDetailAsync : IAsyncDisposable
 {
     private const string RepositorySlug = "owner/repo";
-    private const string DefaultBody = "Issue body";
 
     private static readonly MonitoredRepositoryId RepositoryId = MonitoredRepositoryId.New();
 
@@ -63,7 +62,6 @@ public sealed class GetIssueDetailAsync : IAsyncDisposable
             .WithMonitoredRepositoryId(RepositoryId)
             .WithIssueNumber(issueNumber)
             .WithTitle(title)
-            .WithBody(DefaultBody)
             .WithLabels(labels ?? [])
             .Detected();
 
@@ -100,7 +98,6 @@ public sealed class GetIssueDetailAsync : IAsyncDisposable
             .WithMonitoredRepositoryId(RepositoryId)
             .WithIssueNumber(7)
             .WithTitle("A detected issue")
-            .WithBody(DefaultBody)
             .WithLabels(["bug", "foundry"])
             .WithDetectedAt(detectedAt)
             .Detected();

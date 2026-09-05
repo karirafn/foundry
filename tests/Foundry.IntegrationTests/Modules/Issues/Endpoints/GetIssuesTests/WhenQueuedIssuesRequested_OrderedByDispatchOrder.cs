@@ -104,7 +104,6 @@ public sealed class WhenQueuedIssuesRequested_OrderedByDispatchOrder : IAsyncDis
             .WithMonitoredRepositoryId(repositoryId)
             .WithIssueNumber(issueNumber)
             .WithTitle($"Issue {issueNumber}")
-            .WithBody("Body")
             .WithLabels([])
             .WithDetectedAt(detectedAt)
             .FreshQueued();
@@ -127,7 +126,6 @@ public sealed class WhenQueuedIssuesRequested_OrderedByDispatchOrder : IAsyncDis
             .WithMonitoredRepositoryId(repositoryId)
             .WithIssueNumber(issueNumber)
             .WithTitle($"Issue {issueNumber}")
-            .WithBody("Body")
             .WithLabels([])
             .WithDetectedAt(detectedAt)
             .WithBranchName($"feat/issue-{issueNumber}")
@@ -154,7 +152,6 @@ public sealed class WhenQueuedIssuesRequested_OrderedByDispatchOrder : IAsyncDis
             .WithMonitoredRepositoryId(repositoryId)
             .WithIssueNumber(issueNumber)
             .WithTitle($"Issue {issueNumber}")
-            .WithBody("Body")
             .WithLabels([])
             .WithDetectedAt(detectedAt)
             .WithBranchName($"feat/issue-{issueNumber}")
@@ -179,7 +176,6 @@ public sealed class WhenQueuedIssuesRequested_OrderedByDispatchOrder : IAsyncDis
             .WithMonitoredRepositoryId(repositoryId)
             .WithIssueNumber(issueNumber)
             .WithTitle($"Issue {issueNumber}")
-            .WithBody("Body")
             .WithLabels([])
             .WithDetectedAt(Now.AddHours(-5))
             .Detected();

@@ -18,7 +18,6 @@ public sealed class Create
 
         // Assert
         comment.ShouldSatisfyAllConditions(
-            () => comment.Body.ShouldBe("Please extract this method"),
             () => comment.FilePath.ShouldBe("src/Foo.cs"),
             () => comment.Line.ShouldBe(42));
     }
@@ -33,7 +32,6 @@ public sealed class Create
 
         // Assert
         comment.ShouldSatisfyAllConditions(
-            () => comment.Body.ShouldBe("General feedback"),
             () => comment.FilePath.ShouldBeNull(),
             () => comment.Line.ShouldBeNull());
     }

@@ -143,7 +143,6 @@ internal sealed class IssueClaimedHandler(
         string systemPrompt = SystemPromptBuilder.Build(
             claimed.IssueNumber,
             claimed.Title,
-            claimed.Body,
             _options,
             effectiveSystemPromptTemplate,
             claimed.Context,

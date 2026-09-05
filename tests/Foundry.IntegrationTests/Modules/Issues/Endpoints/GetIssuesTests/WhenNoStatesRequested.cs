@@ -46,7 +46,6 @@ public sealed class WhenNoStatesRequested : IAsyncDisposable
             .WithMonitoredRepositoryId(RepositoryId)
             .WithIssueNumber(issueNumber)
             .WithTitle($"Active Issue {issueNumber}")
-            .WithBody("Body")
             .WithLabels([])
             .Detected();
 
@@ -64,7 +63,6 @@ public sealed class WhenNoStatesRequested : IAsyncDisposable
             .WithMonitoredRepositoryId(RepositoryId)
             .WithIssueNumber(issueNumber)
             .WithTitle($"Resolved Issue {issueNumber}")
-            .WithBody("Body")
             .WithLabels([])
             .WithDetectedAt(DateTimeOffset.UtcNow.AddHours(-2))
             .WithBranchName("feat/1-fix")

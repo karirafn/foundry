@@ -120,7 +120,7 @@ public sealed class PreContainerFailureBridging : IAsyncDisposable
             WorkerRunId.New(),
             1,
             "Test",
-            "Test body",
+            
             "owner/repo",
             new Uri("https://github.com/owner/repo.git"),
             "ghp_test",

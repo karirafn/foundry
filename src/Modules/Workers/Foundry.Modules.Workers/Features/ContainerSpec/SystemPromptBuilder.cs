@@ -21,7 +21,6 @@ internal static class SystemPromptBuilder
     public static string Build(
         int issueNumber,
         string title,
-        string body,
         WorkerOptions options,
         string systemPromptTemplate,
         DispatchContext context,

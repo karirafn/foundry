@@ -26,7 +26,6 @@ public sealed class FromContinuableFailed
             () => queued.MonitoredRepositoryId.ShouldBe(failed.MonitoredRepositoryId),
             () => queued.IssueNumber.ShouldBe(failed.IssueNumber),
             () => queued.Title.ShouldBe(failed.Title),
-            () => queued.Body.ShouldBe(failed.Body),
             () => queued.Author.ShouldBe(failed.Author),
             () => queued.DetectedAt.ShouldBe(failed.DetectedAt),
             () => queued.BranchName.ShouldBe(failed.BranchName));

@@ -47,7 +47,6 @@ public sealed class WhenResolvedStatesRequested : IAsyncDisposable
             .WithMonitoredRepositoryId(RepositoryId)
             .WithIssueNumber(issueNumber)
             .WithTitle($"Completed Issue {issueNumber}")
-            .WithBody("Body")
             .WithLabels([])
             .WithDetectedAt(detectedAt)
             .WithBranchName($"feat/{issueNumber}-fix")
@@ -70,7 +69,6 @@ public sealed class WhenResolvedStatesRequested : IAsyncDisposable
             .WithMonitoredRepositoryId(RepositoryId)
             .WithIssueNumber(issueNumber)
             .WithTitle($"Unchanged Issue {issueNumber}")
-            .WithBody("Body")
             .WithLabels([])
             .WithDetectedAt(detectedAt)
             .Unchanged();

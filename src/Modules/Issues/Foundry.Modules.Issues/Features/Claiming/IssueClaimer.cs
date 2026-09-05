@@ -37,7 +37,6 @@ internal sealed class IssueClaimer(
             workerRunId,
             claimed.IssueNumber,
             claimed.Title,
-            claimed.Body,
             candidate.DispatchInfo.RepositorySlug,
             candidate.DispatchInfo.CloneUrl,
             candidate.DispatchInfo.AccountToken,

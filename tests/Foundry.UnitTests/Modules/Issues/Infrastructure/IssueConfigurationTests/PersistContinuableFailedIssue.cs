@@ -49,7 +49,6 @@ public sealed class PersistContinuableFailedIssue : IAsyncDisposable
             .WithMonitoredRepositoryId(repositoryId)
             .WithIssueNumber(71)
             .WithTitle("Continuable failed issue")
-            .WithBody("Issue body")
             .WithLabels([])
             .WithWorkerRunId(workerRunId)
             .WithBranchName("feat/issue-71")

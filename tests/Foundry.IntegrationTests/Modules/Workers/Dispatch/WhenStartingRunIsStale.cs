@@ -84,7 +84,6 @@ public sealed class WhenStartingRunIsStale : IAsyncDisposable
             .WithMonitoredRepositoryId(repositoryId)
             .WithIssueNumber(1)
             .WithTitle("Stale starting-run integration test issue")
-            .WithBody("Test body")
             .WithLabels(["foundry"])
             .WithDetectedAt(DateTimeOffset.UtcNow.AddHours(-1))
             .WithWorkerRunId(workerRunId)

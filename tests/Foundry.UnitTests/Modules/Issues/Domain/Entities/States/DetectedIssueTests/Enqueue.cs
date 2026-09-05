@@ -57,7 +57,6 @@ public sealed class Enqueue
             () => queued.MonitoredRepositoryId.ShouldBe(detected.MonitoredRepositoryId),
             () => queued.IssueNumber.ShouldBe(detected.IssueNumber),
             () => queued.Title.ShouldBe(detected.Title),
-            () => queued.Body.ShouldBe(detected.Body),
             () => queued.Author.ShouldBe(detected.Author),
             () => queued.Url.ShouldBe(detected.Url),
             () => queued.Labels.ShouldBe(detected.Labels),

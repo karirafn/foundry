@@ -46,7 +46,6 @@ public sealed class WhenMixedStatesSeeded : IAsyncDisposable
             .WithMonitoredRepositoryId(RepositoryId)
             .WithIssueNumber(issueNumber)
             .WithTitle($"Issue {issueNumber}")
-            .WithBody("Body")
             .WithLabels([])
             .Detected();
 
@@ -65,7 +64,6 @@ public sealed class WhenMixedStatesSeeded : IAsyncDisposable
             .WithMonitoredRepositoryId(RepositoryId)
             .WithIssueNumber(issueNumber)
             .WithTitle($"Issue {issueNumber}")
-            .WithBody("Body")
             .WithLabels([])
             .WithBranchName("feat/42-thing")
             .WithPullRequestUrl("https://github.com/owner/repo/pull/1")
@@ -87,7 +85,6 @@ public sealed class WhenMixedStatesSeeded : IAsyncDisposable
             .WithMonitoredRepositoryId(RepositoryId)
             .WithIssueNumber(issueNumber)
             .WithTitle($"Issue {issueNumber}")
-            .WithBody("Body")
             .WithLabels([])
             .Unchanged();
 

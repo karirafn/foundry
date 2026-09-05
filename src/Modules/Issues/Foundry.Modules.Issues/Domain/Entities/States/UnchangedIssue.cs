@@ -24,7 +24,6 @@ public sealed class UnchangedIssue : Issue
             source.MonitoredRepositoryId,
             source.IssueNumber,
             source.Title,
-            source.Body,
             source.Author,
             source.Url,
             source.Labels,

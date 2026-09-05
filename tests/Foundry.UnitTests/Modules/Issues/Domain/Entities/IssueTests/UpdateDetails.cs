@@ -10,59 +10,53 @@ namespace Foundry.UnitTests.Modules.Issues.Domain.Entities.IssueTests;
 public sealed class UpdateDetails
 {
     [Fact]
-    public void WhenCalledOnDetectedIssue_UpdatesTitleBodyAndLabels()
+    public void WhenCalledOnDetectedIssue_UpdatesTitleAndLabels()
     {
         // Arrange
         DetectedIssue issue = new IssueBuilder().Detected();
         string newTitle = "Updated Title";
-        string newBody = "Updated body";
         IReadOnlyList<string> newLabels = ["foundry", "bug"];
 
         // Act
-        issue.UpdateDetails(newTitle, newBody, newLabels);
+        issue.UpdateDetails(newTitle, newLabels);
 
         // Assert
         issue.ShouldSatisfyAllConditions(
             () => issue.Title.ShouldBe(newTitle),
-            () => issue.Body.ShouldBe(newBody),
             () => issue.Labels.ShouldBe(newLabels));
     }
 
     [Fact]
-    public void WhenCalledOnQueuedIssue_UpdatesTitleBodyAndLabels()
+    public void WhenCalledOnQueuedIssue_UpdatesTitleAndLabels()
     {
         // Arrange
         FreshQueuedIssue issue = new IssueBuilder().FreshQueued();
         string newTitle = "Updated Title";
-        string newBody = "Updated body";
         IReadOnlyList<string> newLabels = ["foundry", "bug"];
 
         // Act
-        issue.UpdateDetails(newTitle, newBody, newLabels);
+        issue.UpdateDetails(newTitle, newLabels);
 
         // Assert
         issue.ShouldSatisfyAllConditions(
             () => issue.Title.ShouldBe(newTitle),
-            () => issue.Body.ShouldBe(newBody),
             () => issue.Labels.ShouldBe(newLabels));
     }
 
     [Fact]
-    public void WhenCalledOnBlockedIssue_UpdatesTitleBodyAndLabels()
+    public void WhenCalledOnBlockedIssue_UpdatesTitleAndLabels()
     {
         // Arrange
         BlockedIssue issue = new IssueBuilder().Detected().Block([42]);
         string newTitle = "Updated Title";
-        string newBody = "Updated body";
         IReadOnlyList<string> newLabels = ["foundry", "bug"];
 
         // Act
-        issue.UpdateDetails(newTitle, newBody, newLabels);
+        issue.UpdateDetails(newTitle, newLabels);
 
         // Assert
         issue.ShouldSatisfyAllConditions(
             () => issue.Title.ShouldBe(newTitle),
-            () => issue.Body.ShouldBe(newBody),
             () => issue.Labels.ShouldBe(newLabels));
     }
 }

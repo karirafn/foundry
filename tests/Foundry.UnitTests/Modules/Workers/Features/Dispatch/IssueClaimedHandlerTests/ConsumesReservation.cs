@@ -77,7 +77,7 @@ public sealed class ConsumesReservation : IAsyncDisposable
             workerRunId,
             42,
             "Test Issue",
-            "Test body",
+            
             "owner/repo",
             new Uri("https://github.com/owner/repo.git"),
             "ghp_test_token",

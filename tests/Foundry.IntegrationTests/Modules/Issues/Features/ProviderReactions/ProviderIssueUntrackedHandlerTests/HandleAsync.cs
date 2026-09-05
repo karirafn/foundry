@@ -40,7 +40,6 @@ public sealed class HandleAsync : IAsyncDisposable
             .WithMonitoredRepositoryId(repositoryId)
             .WithIssueNumber(issueNumber)
             .WithTitle("Issue title")
-            .WithBody("Body")
             .WithLabels([])
             .Detected();
 
@@ -58,7 +57,6 @@ public sealed class HandleAsync : IAsyncDisposable
             .WithMonitoredRepositoryId(repositoryId)
             .WithIssueNumber(issueNumber)
             .WithTitle("Issue title")
-            .WithBody("Body")
             .WithLabels([])
             .WithBranchName("feat/1-fix")
             .WithPullRequestUrl("https://github.com/owner/repo/pull/10")

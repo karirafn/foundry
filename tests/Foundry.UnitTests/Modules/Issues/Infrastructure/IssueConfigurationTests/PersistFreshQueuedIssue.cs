@@ -43,7 +43,6 @@ public sealed class PersistFreshQueuedIssue : IAsyncDisposable
         FreshQueuedIssue queued = new IssueBuilder()
             .WithIssueNumber(7)
             .WithTitle("Queue me")
-            .WithBody("Queue body")
             .WithLabels([])
             .FreshQueued();
 

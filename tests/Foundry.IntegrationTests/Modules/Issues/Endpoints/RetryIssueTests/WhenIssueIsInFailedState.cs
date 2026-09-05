@@ -48,7 +48,6 @@ public sealed class WhenIssueIsInFailedState : IAsyncDisposable
             .WithMonitoredRepositoryId(MonitoredRepositoryId.New())
             .WithIssueNumber(1)
             .WithTitle("A failed issue")
-            .WithBody("Issue body text")
             .WithLabels(["bug"])
             .WithFailureReason("Container exited with non-zero code: 1")
             .WithFailureCategory(FailureCategory.NonZeroExit)

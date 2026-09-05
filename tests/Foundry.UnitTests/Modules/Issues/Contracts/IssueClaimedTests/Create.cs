@@ -22,7 +22,6 @@ public sealed class Create
             WorkerRunId: WorkerRunId.New(),
             IssueNumber: 42,
             Title: "Fix the bug",
-            Body: "Bug details",
             RepositorySlug: "org/repo",
             CloneUrl: new Uri("https://github.com/org/repo.git"),
             AccountToken: "ghp_test_token",

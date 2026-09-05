@@ -46,7 +46,6 @@ public sealed class PersistReviewIssue : IAsyncDisposable
         ReviewIssue review = new IssueBuilder()
             .WithIssueNumber(42)
             .WithTitle("Review issue")
-            .WithBody("Review body")
             .WithLabels([])
             .WithWorkerRunId(reviewWorkerRunId)
             .WithBranchName("feat/issue-42")

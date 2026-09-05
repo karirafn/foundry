@@ -55,7 +55,6 @@ public sealed class PersistRevisionFailedIssue : IAsyncDisposable
             .WithMonitoredRepositoryId(repositoryId)
             .WithIssueNumber(61)
             .WithTitle("Revision failed issue")
-            .WithBody("Body")
             .WithLabels([])
             .WithWorkerRunId(workerRunId)
             .WithBranchName("feat/issue-61")

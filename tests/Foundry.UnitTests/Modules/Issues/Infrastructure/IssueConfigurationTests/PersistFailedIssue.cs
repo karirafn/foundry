@@ -60,7 +60,6 @@ public sealed class PersistFailedIssue : IAsyncDisposable
         FailedIssue failed = new IssueBuilder()
             .WithIssueNumber(44)
             .WithTitle("Failed issue")
-            .WithBody("Failed body")
             .WithLabels([])
             .WithWorkerRunId(failedWorkerRunId)
             .WithFailureReason("Container exited with code 1")

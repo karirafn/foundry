@@ -52,7 +52,6 @@ public sealed class TransitionAsync : IAsyncDisposable
             repositoryId,
             issueNumber: 1,
             title: "Test Issue",
-            body: "Test body",
             author: ValidAuthor,
             url: ValidUrl,
             labels: ["foundry"],

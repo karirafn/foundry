@@ -83,7 +83,6 @@ public sealed class HandleAsync : IAsyncDisposable
         WorkerRunId? workerRunId = null,
         int issueNumber = 42,
         string title = "Test Issue",
-        string body = "Test body",
         string repositorySlug = "owner/repo",
         string? accountToken = "ghp_test_token",
         string branchName = "feat/42-test-issue",
@@ -98,7 +97,6 @@ public sealed class HandleAsync : IAsyncDisposable
             workerRunId ?? WorkerRunId.New(),
             issueNumber,
             title,
-            body,
             repositorySlug,
             new Uri(cloneUrl ?? $"https://github.com/{repositorySlug}.git"),
             accountToken,
@@ -176,7 +174,6 @@ public sealed class HandleAsync : IAsyncDisposable
         IssueClaimed @event = BuildEvent(
             issueNumber: 7,
             title: "My Issue",
-            body: "Issue details",
             repositorySlug: "org/repo",
             accountToken: "ghp_my_token");
 

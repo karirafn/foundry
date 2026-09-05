@@ -47,7 +47,6 @@ public sealed class PersistContinuationQueuedIssue : IAsyncDisposable
             .WithMonitoredRepositoryId(repositoryId)
             .WithIssueNumber(72)
             .WithTitle("Continuation queued issue")
-            .WithBody("Issue body")
             .WithLabels([])
             .WithBranchName("feat/issue-72")
             .WithFailureReason("Container OOM")

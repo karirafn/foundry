@@ -32,7 +32,6 @@ public sealed class FromInProgress
             () => failed.MonitoredRepositoryId.ShouldBe(repositoryId),
             () => failed.IssueNumber.ShouldBe(inProgress.IssueNumber),
             () => failed.Title.ShouldBe(inProgress.Title),
-            () => failed.Body.ShouldBe(inProgress.Body),
             () => failed.Author.ShouldBe(inProgress.Author),
             () => failed.Url.ShouldBe(inProgress.Url),
             () => failed.DetectedAt.ShouldBe(inProgress.DetectedAt));

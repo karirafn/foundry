@@ -109,7 +109,6 @@ public sealed class ClaimFallThrough : IAsyncDisposable
             .WithMonitoredRepositoryId(repositoryId)
             .WithIssueNumber(issueNumber)
             .WithTitle($"Fall-through integration test issue {issueNumber}")
-            .WithBody("Test body")
             .WithLabels(["foundry"])
             .WithDetectedAt(detectedAt)
             .FreshQueued();

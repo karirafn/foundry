@@ -55,7 +55,6 @@ public sealed class FromRevisionQueued
             () => revisionInProgress.MonitoredRepositoryId.ShouldBe(repositoryId),
             () => revisionInProgress.IssueNumber.ShouldBe(revisionQueued.IssueNumber),
             () => revisionInProgress.Title.ShouldBe(revisionQueued.Title),
-            () => revisionInProgress.Body.ShouldBe(revisionQueued.Body),
             () => revisionInProgress.DetectedAt.ShouldBe(revisionQueued.DetectedAt));
     }
 

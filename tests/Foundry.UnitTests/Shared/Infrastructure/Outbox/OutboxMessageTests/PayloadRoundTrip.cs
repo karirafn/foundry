@@ -57,7 +57,7 @@ public sealed class PayloadRoundTrip
             WorkerRunId.New(),
             7,
             "Implement feature",
-            "Add support for X",
+            
             "org/repo",
             new Uri("https://github.com/org/repo.git"),
             null,
@@ -98,7 +98,7 @@ public sealed class PayloadRoundTrip
             WorkerRunId.New(),
             7,
             "Implement feature",
-            "Body",
+            
             "org/repo",
             new Uri("https://github.com/org/repo.git"),
             null,
@@ -137,7 +137,7 @@ public sealed class PayloadRoundTrip
             WorkerRunId.New(),
             7,
             "Implement feature",
-            "Body",
+            
             "org/repo",
             new Uri("https://github.com/org/repo.git"),
             null,
@@ -179,7 +179,7 @@ public sealed class PayloadRoundTrip
             WorkerRunId.New(),
             7,
             "Implement feature",
-            "Body",
+            
             "org/repo",
             new Uri("https://github.com/org/repo.git"),
             null,
@@ -203,5 +203,73 @@ public sealed class PayloadRoundTrip
         continuation.ShouldSatisfyAllConditions(
             () => continuation.BranchName.ShouldBe("feat/7-implement-feature"),
             () => continuation.FailureReason.ShouldBe("Build failed: missing semicolon"));
+    }
+
+    [Fact]
+    public void WhenLegacyIssueDetectedPayloadContainsBodyField_DeserializesWithoutErrorAndSurvivingFieldsIntact()
+    {
+        // Arrange — simulate a pre-migration outbox_messages row that carried a "Body" field.
+        // MonitoredRepositoryId serializes as {"Value":"<guid>"} by STJ (struct with a Guid property).
+        // STJ ignores unknown members ("Body") by default; this test asserts that guarantee
+        // holds for the exact path the relay uses (OutboxSerializerOptions.Default).
+        MonitoredRepositoryId repoId = MonitoredRepositoryId.From(Guid.NewGuid());
+        string legacyJson = $$"""
+            {
+                "MonitoredRepositoryId": {"Value": "{{repoId.Value}}"},
+                "IssueNumber": 99,
+                "Title": "Fix the bug",
+                "Body": "Legacy body text that no longer belongs here",
+                "Author": "octocat",
+                "Url": "https://github.com/org/repo/issues/99",
+                "Labels": ["bug", "claude"],
+                "IssueKindLabel": "claude",
+                "DetectedAt": "2025-06-01T10:00:00+00:00"
+            }
+            """;
+
+        // Act
+        IssueDetected? deserialized = JsonSerializer.Deserialize<IssueDetected>(
+            legacyJson,
+            OutboxSerializerOptions.Default);
+
+        // Assert
+        deserialized.ShouldNotBeNull();
+        deserialized.ShouldSatisfyAllConditions(
+            () => deserialized.MonitoredRepositoryId.ShouldBe(repoId),
+            () => deserialized.IssueNumber.ShouldBe(99),
+            () => deserialized.Title.ShouldBe("Fix the bug"),
+            () => deserialized.Author.ShouldBe("octocat"),
+            () => deserialized.Labels.Count.ShouldBe(2));
+    }
+
+    [Fact]
+    public void WhenLegacyIssueDetailsChangedPayloadContainsBodyField_DeserializesWithoutErrorAndSurvivingFieldsIntact()
+    {
+        // Arrange — simulate a pre-migration outbox_messages row for IssueDetailsChanged with a "Body" field.
+        // MonitoredRepositoryId serializes as {"Value":"<guid>"} by STJ (struct with a Guid property).
+        // STJ ignores the unknown "Body" property and deserializes the remaining fields intact.
+        MonitoredRepositoryId repoId = MonitoredRepositoryId.From(Guid.NewGuid());
+        string legacyJson = $$"""
+            {
+                "MonitoredRepositoryId": {"Value": "{{repoId.Value}}"},
+                "IssueNumber": 42,
+                "Title": "Updated title",
+                "Body": "Old body text that is no longer stored",
+                "Labels": ["foundry", "bug"]
+            }
+            """;
+
+        // Act
+        IssueDetailsChanged? deserialized = JsonSerializer.Deserialize<IssueDetailsChanged>(
+            legacyJson,
+            OutboxSerializerOptions.Default);
+
+        // Assert
+        deserialized.ShouldNotBeNull();
+        deserialized.ShouldSatisfyAllConditions(
+            () => deserialized.MonitoredRepositoryId.ShouldBe(repoId),
+            () => deserialized.IssueNumber.ShouldBe(42),
+            () => deserialized.Title.ShouldBe("Updated title"),
+            () => deserialized.Labels.Count.ShouldBe(2));
     }
 }

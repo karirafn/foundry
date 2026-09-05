@@ -46,7 +46,6 @@ public sealed class WhenResolvedFilteredByRepositoryId : IAsyncDisposable
             .WithMonitoredRepositoryId(repositoryId)
             .WithIssueNumber(issueNumber)
             .WithTitle($"Completed Issue {issueNumber}")
-            .WithBody("Body")
             .WithLabels([])
             .WithDetectedAt(BaseTime)
             .WithBranchName($"feat/{issueNumber}-fix")

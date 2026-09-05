@@ -82,7 +82,6 @@ public sealed class MarkFailed
             () => failed.MonitoredRepositoryId.ShouldBe(repositoryId),
             () => failed.IssueNumber.ShouldBe(revisionInProgress.IssueNumber),
             () => failed.Title.ShouldBe(revisionInProgress.Title),
-            () => failed.Body.ShouldBe(revisionInProgress.Body),
             () => failed.DetectedAt.ShouldBe(revisionInProgress.DetectedAt));
     }
 }

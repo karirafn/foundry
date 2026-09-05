@@ -50,7 +50,6 @@ public sealed class HandleAsync : IAsyncDisposable
             .WithMonitoredRepositoryId(repositoryId)
             .WithIssueNumber(5)
             .WithTitle("Original title")
-            .WithBody("Original body")
             .WithLabels(["old-label"])
             .Detected();
 
@@ -109,7 +108,6 @@ public sealed class HandleAsync : IAsyncDisposable
             .WithMonitoredRepositoryId(otherRepo)
             .WithIssueNumber(5)
             .WithTitle("Original title")
-            .WithBody("Original body")
             .Detected();
 
         _dbContext.Set<Issue>().Add(issue);

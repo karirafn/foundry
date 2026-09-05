@@ -28,7 +28,6 @@ public sealed class FromReview
             () => failed.MonitoredRepositoryId.ShouldBe(repositoryId),
             () => failed.IssueNumber.ShouldBe(review.IssueNumber),
             () => failed.Title.ShouldBe(review.Title),
-            () => failed.Body.ShouldBe(review.Body),
             () => failed.Author.ShouldBe(review.Author),
             () => failed.DetectedAt.ShouldBe(review.DetectedAt));
     }

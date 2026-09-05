@@ -45,7 +45,6 @@ public sealed class PersistUnchangedIssue : IAsyncDisposable
         UnchangedIssue unchanged = new IssueBuilder()
             .WithIssueNumber(43)
             .WithTitle("Unchanged issue")
-            .WithBody("Unchanged body")
             .WithLabels([])
             .WithWorkerRunId(unchangedWorkerRunId)
             .Unchanged();

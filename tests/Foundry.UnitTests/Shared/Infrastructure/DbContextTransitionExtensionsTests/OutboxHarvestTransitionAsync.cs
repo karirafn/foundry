@@ -80,7 +80,6 @@ public sealed class OutboxHarvestTransitionAsync : IAsyncDisposable
             repositoryId,
             issueNumber: 1,
             title: "Test Issue",
-            body: "Test body",
             author: author,
             url: url,
             labels: ["foundry"],

@@ -46,7 +46,6 @@ public sealed class WhenIssueIsInNonRetryableState : IAsyncDisposable
             .WithMonitoredRepositoryId(MonitoredRepositoryId.New())
             .WithIssueNumber(2)
             .WithTitle("An in-progress issue")
-            .WithBody("Issue body text")
             .WithUrl(ProviderUrl.Create("https://github.com/owner/repo/issues/2").ValueOrThrow())
             .WithLabels([])
             .InProgress();
