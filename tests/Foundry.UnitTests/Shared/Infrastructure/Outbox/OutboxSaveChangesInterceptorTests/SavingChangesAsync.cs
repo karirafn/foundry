@@ -128,7 +128,6 @@ public sealed class SavingChangesAsync : IAsyncDisposable
             MonitoredRepositoryId.From(Guid.NewGuid()),
             42,
             "Fix the bug",
-            "Some body",
             "user",
             "https://github.com/org/repo/issues/42",
             ["bug", "claude"],

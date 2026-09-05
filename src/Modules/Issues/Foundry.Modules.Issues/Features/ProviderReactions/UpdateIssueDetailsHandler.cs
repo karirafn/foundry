@@ -20,7 +20,8 @@ internal sealed class UpdateIssueDetailsHandler(
             return;
         }
 
-        issue.UpdateDetails(@event.Title, @event.Body, @event.Labels);
+        // TODO: body removed from IssueDetailsChanged in this commit; aggregate Body is removed in the next commit.
+        issue.UpdateDetails(@event.Title, string.Empty, @event.Labels);
         await db.SaveChangesAsync(cancellationToken);
     }
 }

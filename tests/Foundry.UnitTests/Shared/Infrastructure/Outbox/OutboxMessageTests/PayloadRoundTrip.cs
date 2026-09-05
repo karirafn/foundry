@@ -23,7 +23,6 @@ public sealed class PayloadRoundTrip
             repoId,
             42,
             "Fix the bug",
-            "Some body text",
             "octocat",
             "https://github.com/org/repo/issues/42",
             ["bug", "claude"],

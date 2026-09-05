@@ -46,7 +46,7 @@ internal sealed class IssueQueries(
             .AsNoTracking()
             .Where(i => i.MonitoredRepositoryId == repositoryId)
             .Where(i => numberList.Contains(i.IssueNumber))
-            .Select(i => new { i.IssueNumber, Snapshot = new IssueSnapshot(i.Title, i.Body, i.Labels) })
+            .Select(i => new { i.IssueNumber, Snapshot = new IssueSnapshot(i.Title, i.Labels) })
             .ToDictionaryAsync(x => x.IssueNumber, x => x.Snapshot, cancellationToken);
 
         return snapshots;

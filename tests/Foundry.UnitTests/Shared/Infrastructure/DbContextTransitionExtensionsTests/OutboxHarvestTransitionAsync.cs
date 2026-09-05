@@ -205,7 +205,6 @@ public sealed class OutboxHarvestTransitionAsync : IAsyncDisposable
                 @event.MonitoredRepositoryId,
                 IssueNumber: 1,
                 Title: "bridged",
-                Body: "body",
                 Author: "user",
                 Url: "https://github.com/org/repo/issues/1",
                 Labels: [],

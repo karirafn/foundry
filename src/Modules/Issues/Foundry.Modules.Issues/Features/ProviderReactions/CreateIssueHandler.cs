@@ -45,11 +45,12 @@ internal sealed class CreateIssueHandler(
 
         IssueKind issueKind = IssueKind.FromLabel(@event.IssueKindLabel);
 
+        // TODO: body removed from IssueDetected in this commit; aggregate Body is removed in the next commit.
         DetectedIssue detected = DetectedIssue.Detect(
             @event.MonitoredRepositoryId,
             @event.IssueNumber,
             @event.Title,
-            @event.Body,
+            string.Empty,
             authorSuccess.Value,
             urlSuccess.Value,
             @event.Labels,

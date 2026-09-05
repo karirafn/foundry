@@ -111,7 +111,6 @@ public sealed class RecordFailure
             MonitoredRepositoryId.From(Guid.NewGuid()),
             1,
             "Title",
-            "Body",
             "user",
             "https://github.com/org/repo/issues/1",
             ["bug"],

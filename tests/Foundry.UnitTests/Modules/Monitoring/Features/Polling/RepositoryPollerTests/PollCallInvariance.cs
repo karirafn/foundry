@@ -114,7 +114,6 @@ public sealed class PollCallInvariance : IAsyncDisposable
             .Select(n => new ProviderIssue(
                 Number: n,
                 Title: $"Issue {n}",
-                Body: "Body",
                 Author: "user",
                 Url: $"https://github.com/owner/repo/issues/{n}",
                 Labels: [],

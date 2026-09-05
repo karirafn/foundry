@@ -77,7 +77,6 @@ public sealed class PollAsync : IAsyncDisposable
         ProviderIssue newIssue = new(
             Number: 1,
             Title: "Fix bug",
-            Body: "Bug description",
             Author: "octocat",
             Url: "https://github.com/owner/repo/issues/1",
             Labels: ["bug"],
@@ -96,7 +95,6 @@ public sealed class PollAsync : IAsyncDisposable
             () => detected.MonitoredRepositoryId.ShouldBe(repository.Id),
             () => detected.IssueNumber.ShouldBe(1),
             () => detected.Title.ShouldBe("Fix bug"),
-            () => detected.Body.ShouldBe("Bug description"),
             () => detected.Author.ShouldBe("octocat"),
             () => detected.Url.ShouldBe("https://github.com/owner/repo/issues/1"),
             () => detected.Labels.ShouldBe(["bug"]),
@@ -111,13 +109,12 @@ public sealed class PollAsync : IAsyncDisposable
         ProviderIssue existingIssue = new(
             Number: 5,
             Title: "Existing",
-            Body: "Body",
             Author: "octocat",
             Url: "https://github.com/owner/repo/issues/5",
             Labels: ["bug"],
             IssueKindLabel: "bug");
 
-        IssueSnapshot snapshot = new("Existing", "Body", ["bug"]);
+        IssueSnapshot snapshot = new("Existing", ["bug"]);
         StubIssueQueries issueQueries = new(
             new HashSet<int> { 5 },
             new Dictionary<int, IssueSnapshot> { [5] = snapshot });
@@ -135,6 +132,36 @@ public sealed class PollAsync : IAsyncDisposable
     }
 
     [Fact]
+    public async Task WhenKnownIssueHasBodyOnlyChange_RaisesNoIssueDetailsChangedEvent()
+    {
+        // Arrange — only the body changed; title and labels are identical.
+        // After removing body from HasDetailsChanged, this must produce no IssueDetailsChanged event.
+        MonitoredRepository repository = SeedRepository();
+        ProviderIssue updatedIssue = new(
+            Number: 7,
+            Title: "Same Title",
+            Author: "octocat",
+            Url: "https://github.com/owner/repo/issues/7",
+            Labels: ["bug"],
+            IssueKindLabel: "bug");
+
+        IssueSnapshot oldSnapshot = new("Same Title", ["bug"]);
+        StubIssueQueries issueQueries = new(
+            new HashSet<int> { 7 },
+            new Dictionary<int, IssueSnapshot> { [7] = oldSnapshot });
+
+        RepositoryPoller sut = new(issueQueries, _dbContext, new NullDomainEventDispatcher(), _dispatcher, _eligibilityEvaluator, NullLogger<RepositoryPoller>.Instance);
+        StubIssueProvider provider = new([updatedIssue]);
+
+        // Act
+        Result result = await sut.PollAsync(repository, provider, Now, CancellationToken.None);
+
+        // Assert
+        result.IsSuccess.ShouldBeTrue();
+        _dispatcher.DispatchedEvents.OfType<IssueDetailsChanged>().ShouldBeEmpty();
+    }
+
+    [Fact]
     public async Task WhenKnownIssueHasChangedTitle_RaisesIssueDetailsChangedEvent()
     {
         // Arrange
@@ -142,13 +169,12 @@ public sealed class PollAsync : IAsyncDisposable
         ProviderIssue updatedIssue = new(
             Number: 7,
             Title: "Updated Title",
-            Body: "Same body",
             Author: "octocat",
             Url: "https://github.com/owner/repo/issues/7",
             Labels: ["bug"],
             IssueKindLabel: "bug");
 
-        IssueSnapshot oldSnapshot = new("Old Title", "Same body", ["bug"]);
+        IssueSnapshot oldSnapshot = new("Old Title", ["bug"]);
         StubIssueQueries issueQueries = new(
             new HashSet<int> { 7 },
             new Dictionary<int, IssueSnapshot> { [7] = oldSnapshot });
@@ -168,7 +194,6 @@ public sealed class PollAsync : IAsyncDisposable
             () => changed.MonitoredRepositoryId.ShouldBe(repository.Id),
             () => changed.IssueNumber.ShouldBe(7),
             () => changed.Title.ShouldBe("Updated Title"),
-            () => changed.Body.ShouldBe("Same body"),
             () => changed.Labels.ShouldBe(["bug"]));
     }
 
@@ -180,13 +205,12 @@ public sealed class PollAsync : IAsyncDisposable
         ProviderIssue issue = new(
             Number: 3,
             Title: "Same",
-            Body: "Same",
             Author: "octocat",
             Url: "https://github.com/owner/repo/issues/3",
             Labels: ["feature", "bug"],
             IssueKindLabel: "bug");
 
-        IssueSnapshot snapshot = new("Same", "Same", ["bug", "feature"]);
+        IssueSnapshot snapshot = new("Same", ["bug", "feature"]);
         StubIssueQueries issueQueries = new(
             new HashSet<int> { 3 },
             new Dictionary<int, IssueSnapshot> { [3] = snapshot });
@@ -211,13 +235,12 @@ public sealed class PollAsync : IAsyncDisposable
         ProviderIssue issue = new(
             Number: 9,
             Title: "Same",
-            Body: "Same",
             Author: "octocat",
             Url: "https://github.com/owner/repo/issues/9",
             Labels: ["bug", "priority"],
             IssueKindLabel: "bug");
 
-        IssueSnapshot snapshot = new("Same", "Same", ["bug"]);
+        IssueSnapshot snapshot = new("Same", ["bug"]);
         StubIssueQueries issueQueries = new(
             new HashSet<int> { 9 },
             new Dictionary<int, IssueSnapshot> { [9] = snapshot });
@@ -261,7 +284,6 @@ public sealed class PollAsync : IAsyncDisposable
         ProviderIssue issue1 = new(
             Number: 10,
             Title: "Issue Ten",
-            Body: "Body",
             Author: "user",
             Url: "https://github.com/owner/repo/issues/10",
             Labels: [],
@@ -269,7 +291,6 @@ public sealed class PollAsync : IAsyncDisposable
         ProviderIssue issue2 = new(
             Number: 11,
             Title: "Issue Eleven",
-            Body: "Body",
             Author: "user",
             Url: "https://github.com/owner/repo/issues/11",
             Labels: [],
@@ -408,7 +429,6 @@ public sealed class PollAsync : IAsyncDisposable
         ProviderIssue newIssue = new(
             Number: 15,
             Title: "New issue",
-            Body: "Body",
             Author: "octocat",
             Url: "https://github.com/owner/repo/issues/15",
             Labels: [],
@@ -1020,7 +1040,6 @@ public sealed class PollAsync : IAsyncDisposable
         ProviderIssue otherIssue = new(
             Number: 8,
             Title: "Other",
-            Body: "Body",
             Author: "octocat",
             Url: "https://github.com/owner/repo/issues/8",
             Labels: ["foundry"],
@@ -1056,12 +1075,11 @@ public sealed class PollAsync : IAsyncDisposable
         ProviderIssue existingIssue = new(
             Number: 7,
             Title: "Existing",
-            Body: "Body",
             Author: "octocat",
             Url: "https://github.com/owner/repo/issues/7",
             Labels: ["bug"],
             IssueKindLabel: "bug");
-        IssueSnapshot snapshot = new("Existing", "Body", ["bug"]);
+        IssueSnapshot snapshot = new("Existing", ["bug"]);
         StubIssueQueries issueQueries = new(
             knownNumbers: new HashSet<int> { 7 },
             snapshots: new Dictionary<int, IssueSnapshot> { [7] = snapshot },
@@ -1115,7 +1133,6 @@ public sealed class PollAsync : IAsyncDisposable
         ProviderIssue otherIssue = new(
             Number: 99,
             Title: "Still here",
-            Body: "Body",
             Author: "octocat",
             Url: "https://github.com/owner/repo/issues/99",
             Labels: ["foundry"],
@@ -1153,7 +1170,6 @@ public sealed class PollAsync : IAsyncDisposable
         ProviderIssue newIssue = new(
             Number: 99,
             Title: "New",
-            Body: "Body",
             Author: "octocat",
             Url: "https://github.com/owner/repo/issues/99",
             Labels: ["foundry"],
@@ -1223,7 +1239,7 @@ public sealed class PollAsync : IAsyncDisposable
 
         RepositoryPoller sut = new(issueQueries, _dbContext, new NullDomainEventDispatcher(), _dispatcher, _eligibilityEvaluator, NullLogger<RepositoryPoller>.Instance);
         StubIssueProvider provider = new([new ProviderIssue(
-            Number: 99, Title: "New", Body: "Body", Author: "octocat",
+            Number: 99, Title: "New", Author: "octocat",
             Url: "https://github.com/owner/repo/issues/99", Labels: [], IssueKindLabel: "feature")],
             isComplete: false);
 
@@ -1288,7 +1304,7 @@ public sealed class PollAsync : IAsyncDisposable
 
         StubIssueProvider incompleteProvider = new([], isComplete: false);
         StubIssueProvider completeProvider = new([new ProviderIssue(
-            Number: 7, Title: "Existing", Body: "Body", Author: "octocat",
+            Number: 7, Title: "Existing", Author: "octocat",
             Url: "https://github.com/owner/repo/issues/7", Labels: [], IssueKindLabel: "feature")]);
 
         // Act — first poll suppresses; second poll with complete listing clears

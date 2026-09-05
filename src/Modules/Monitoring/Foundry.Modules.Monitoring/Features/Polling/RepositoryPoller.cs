@@ -178,7 +178,6 @@ internal sealed class RepositoryPoller(
                     repository.Id,
                     issue.Number,
                     issue.Title,
-                    issue.Body,
                     issue.Author,
                     issue.Url,
                     issue.Labels,
@@ -221,7 +220,6 @@ internal sealed class RepositoryPoller(
                     repository.Id,
                     issue.Number,
                     issue.Title,
-                    issue.Body,
                     issue.Labels));
             }
         }
@@ -315,11 +313,6 @@ internal sealed class RepositoryPoller(
     private static bool HasDetailsChanged(IssueSnapshot snapshot, ProviderIssue issue)
     {
         if (snapshot.Title != issue.Title)
-        {
-            return true;
-        }
-
-        if (snapshot.Body != issue.Body)
         {
             return true;
         }
