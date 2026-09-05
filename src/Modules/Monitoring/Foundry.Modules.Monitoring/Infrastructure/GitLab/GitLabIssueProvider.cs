@@ -1,12 +1,17 @@
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Features.Providers;
+using Foundry.Modules.Monitoring.Features.Providers.Feedback;
 using Foundry.Modules.Monitoring.Infrastructure.GitHub;
 using Foundry.Shared;
 
 namespace Foundry.Modules.Monitoring.Infrastructure.GitLab;
 
-internal sealed class GitLabIssueProvider(GitLabHttpClient httpClient, string token, Uri apiBaseUrl) : IIssueProvider
+internal sealed class GitLabIssueProvider(
+    GitLabHttpClient httpClient,
+    ActionableFeedbackPolicy feedbackPolicy,
+    string token,
+    Uri apiBaseUrl) : IIssueProvider
 {
     public Task<Result<IssueListing>> GetIssuesAsync(
         RepositorySlug slug,
@@ -39,14 +44,22 @@ internal sealed class GitLabIssueProvider(GitLabHttpClient httpClient, string to
         return httpClient.GetPullRequestStatusAsync(apiBaseUrl, slug, pullRequestUrl, token, cancellationToken);
     }
 
-    public Task<Result<ReviewFeedback>> GetReviewFeedbackAsync(
+    public async Task<Result<ReviewFeedback>> GetReviewFeedbackAsync(
         RepositorySlug slug,
         string pullRequestUrl,
         DateTimeOffset since,
         CancellationToken cancellationToken)
     {
-        return httpClient.GetPullRequestReviewFeedbackAsync(
-            apiBaseUrl, slug, pullRequestUrl, since, token, cancellationToken);
+        Result<IReadOnlyList<ProviderComment>> rawResult = await httpClient.GetPullRequestReviewFeedbackAsync(
+            apiBaseUrl, slug, pullRequestUrl, token, cancellationToken);
+
+        if (rawResult is not Result<IReadOnlyList<ProviderComment>>.Success rawSuccess)
+        {
+            Error error = ((Result<IReadOnlyList<ProviderComment>>.Failure)rawResult).Error;
+            return Result<ReviewFeedback>.Fail(error);
+        }
+
+        return Result<ReviewFeedback>.Ok(feedbackPolicy.Apply(rawSuccess.Value, since));
     }
 
     public async Task<Result<BranchProtection>> GetBranchProtectionAsync(

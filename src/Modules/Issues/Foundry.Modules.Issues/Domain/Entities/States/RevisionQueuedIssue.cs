@@ -24,7 +24,7 @@ public sealed class RevisionQueuedIssue : QueuedIssue
     public override BranchNameValue DispatchBranchName => BranchNameValue.From(BranchName);
 
     public override DispatchContext Context =>
-        new DispatchContext.Revision(BranchName, PullRequestUrl, ReviewComments);
+        new DispatchContext.Revision(BranchName, PullRequestUrl, ReviewComments, OmittedCommentCount);
 
     public string BranchName { get; private set; } = string.Empty;
 
@@ -32,9 +32,15 @@ public sealed class RevisionQueuedIssue : QueuedIssue
 
     public IReadOnlyList<ReviewComment> ReviewComments { get; private set; } = [];
 
+    public int OmittedCommentCount { get; private set; }
+
+    public DateTimeOffset? NewestConsumedCommentAt { get; private set; }
+
     internal static RevisionQueuedIssue FromReview(
         ReviewIssue source,
-        IReadOnlyList<ReviewComment> comments)
+        IReadOnlyList<ReviewComment> comments,
+        int omittedCommentCount = 0,
+        DateTimeOffset? newestCommentAt = null)
     {
         RevisionQueuedIssue revisionQueued = new(source.Id);
         revisionQueued.SetSharedProperties(
@@ -48,6 +54,8 @@ public sealed class RevisionQueuedIssue : QueuedIssue
         revisionQueued.BranchName = source.BranchName;
         revisionQueued.PullRequestUrl = source.PullRequestUrl;
         revisionQueued.ReviewComments = comments;
+        revisionQueued.OmittedCommentCount = omittedCommentCount;
+        revisionQueued.NewestConsumedCommentAt = newestCommentAt;
         return revisionQueued;
     }
 
@@ -65,6 +73,8 @@ public sealed class RevisionQueuedIssue : QueuedIssue
         revisionQueued.BranchName = source.BranchName;
         revisionQueued.PullRequestUrl = source.PullRequestUrl;
         revisionQueued.ReviewComments = source.ReviewComments;
+        revisionQueued.OmittedCommentCount = source.OmittedCommentCount;
+        revisionQueued.NewestConsumedCommentAt = source.NewestConsumedCommentAt;
         return revisionQueued;
     }
 

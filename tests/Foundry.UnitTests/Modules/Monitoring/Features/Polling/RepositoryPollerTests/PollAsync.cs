@@ -4,6 +4,7 @@ using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Features.Eligibility;
 using Foundry.Modules.Monitoring.Features.Providers;
+using Foundry.Modules.Monitoring.Features.Providers.Feedback;
 using Foundry.Modules.Monitoring.Features.Polling;
 using Foundry.Shared;
 using Foundry.Testing;
@@ -726,7 +727,7 @@ public sealed class PollAsync : IAsyncDisposable
         ReviewComment comment = new("Please fix the indentation", "src/Foo.cs", 42);
         Dictionary<string, Result<ReviewFeedback>> feedbackResults = new()
         {
-            [prUrl] = Result<ReviewFeedback>.Ok(new ReviewFeedback([comment])),
+            [prUrl] = Result<ReviewFeedback>.Ok(new ReviewFeedback([comment], OmittedCommentCount: 0, NewestCommentAt: null)),
         };
         StubIssueProvider provider = new(
             [],
@@ -773,7 +774,7 @@ public sealed class PollAsync : IAsyncDisposable
         };
         Dictionary<string, Result<ReviewFeedback>> feedbackResults = new()
         {
-            [prUrl] = Result<ReviewFeedback>.Ok(new ReviewFeedback([])),
+            [prUrl] = Result<ReviewFeedback>.Ok(new ReviewFeedback([], OmittedCommentCount: 0, NewestCommentAt: null)),
         };
         StubIssueProvider provider = new(
             [],
@@ -820,7 +821,7 @@ public sealed class PollAsync : IAsyncDisposable
         Dictionary<string, Result<ReviewFeedback>> feedbackResults = new()
         {
             [prUrl1] = Result<ReviewFeedback>.Fail(feedbackError),
-            [prUrl2] = Result<ReviewFeedback>.Ok(new ReviewFeedback([comment])),
+            [prUrl2] = Result<ReviewFeedback>.Ok(new ReviewFeedback([comment], OmittedCommentCount: 0, NewestCommentAt: null)),
         };
         StubIssueProvider provider = new(
             [],
@@ -840,6 +841,61 @@ public sealed class PollAsync : IAsyncDisposable
         events.Count.ShouldBe(1);
         events.ShouldContain(e => e.IssueNumber == 20);
         events.ShouldNotContain(e => e.IssueNumber == 10);
+    }
+
+    [Fact]
+    public async Task WhenFeedbackHasOmittedCountAndNewestCommentAt_EventCarriesBothFields()
+    {
+        // Arrange
+        MonitoredRepository repository = SeedRepository();
+        string prUrl = "https://github.com/owner/repo/pull/99";
+        DateTimeOffset cutoff = Now.AddHours(-1);
+        DateTimeOffset newestCommentAt = Now.AddMinutes(-5);
+        ReviewIssueInfo reviewIssue = new(IssueNumber: 42, PullRequestUrl: prUrl, FeedbackCutoffAt: cutoff);
+        StubIssueQueries issueQueries = new(
+            new HashSet<int>(),
+            new Dictionary<int, IssueSnapshot>(),
+            dispatchCandidateNumbers: null,
+            reviewIssues: [reviewIssue]);
+
+        Dictionary<int, Result<bool>> isClosedResults = new()
+        {
+            [42] = Result<bool>.Ok(false),
+        };
+        Dictionary<string, Result<PullRequestStatus>> prStatusResults = new()
+        {
+            [prUrl] = Result<PullRequestStatus>.Ok(new PullRequestStatus(IsClosed: false, IsMerged: false)),
+        };
+        ReviewComment comment = new("Fix this");
+        ReviewFeedback feedback = new([comment], OmittedCommentCount: 12, NewestCommentAt: newestCommentAt);
+        Dictionary<string, Result<ReviewFeedback>> feedbackResults = new()
+        {
+            [prUrl] = Result<ReviewFeedback>.Ok(feedback),
+        };
+        StubIssueProvider provider = new(
+            [],
+            isClosedResults: isClosedResults,
+            pullRequestStatusResults: prStatusResults,
+            reviewFeedbackResults: feedbackResults);
+        RepositoryPoller sut = new(
+            issueQueries,
+            _dbContext,
+            new NullDomainEventDispatcher(),
+            _dispatcher,
+            _eligibilityEvaluator,
+            NullLogger<RepositoryPoller>.Instance);
+
+        // Act
+        Result result = await sut.PollAsync(repository, provider, Now, CancellationToken.None);
+
+        // Assert
+        result.IsSuccess.ShouldBeTrue();
+        PullRequestChangesRequested changesRequested = _dispatcher.DispatchedEvents
+            .OfType<PullRequestChangesRequested>()
+            .ShouldHaveSingleItem();
+        changesRequested.ShouldSatisfyAllConditions(
+            () => changesRequested.OmittedCommentCount.ShouldBe(12),
+            () => changesRequested.NewestCommentAt.ShouldBe(newestCommentAt));
     }
 
     [Fact]
@@ -1487,7 +1543,7 @@ public sealed class PollAsync : IAsyncDisposable
                 return Task.FromResult(result);
             }
 
-            return Task.FromResult(Result<ReviewFeedback>.Ok(new ReviewFeedback([])));
+            return Task.FromResult(Result<ReviewFeedback>.Ok(new ReviewFeedback([], OmittedCommentCount: 0, NewestCommentAt: null)));
         }
 
         public Task<Result<BranchProtection>> GetBranchProtectionAsync(

@@ -66,9 +66,16 @@ public sealed class ReviewIssue : Issue
         return review;
     }
 
-    public RevisionQueuedIssue Revise(IReadOnlyList<ReviewComment> comments)
+    public RevisionQueuedIssue Revise(
+        IReadOnlyList<ReviewComment> comments,
+        int omittedCommentCount = 0,
+        DateTimeOffset? newestCommentAt = null)
     {
-        RevisionQueuedIssue revisionQueued = RevisionQueuedIssue.FromReview(this, comments);
+        RevisionQueuedIssue revisionQueued = RevisionQueuedIssue.FromReview(
+            this,
+            comments,
+            omittedCommentCount,
+            newestCommentAt);
         AddDomainEvent(new Events.IssueRevisionQueued(Id, MonitoredRepositoryId));
         return revisionQueued;
     }

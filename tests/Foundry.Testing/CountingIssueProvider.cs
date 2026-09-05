@@ -1,6 +1,7 @@
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Features.Providers;
+using Foundry.Modules.Monitoring.Features.Providers.Feedback;
 using Foundry.Shared;
 
 namespace Foundry.Testing;
@@ -79,7 +80,7 @@ internal sealed class CountingIssueProvider : IIssueProvider
     {
         TotalCalls++;
         GetReviewFeedbackCallCount++;
-        return Task.FromResult(Result<ReviewFeedback>.Ok(new ReviewFeedback([])));
+        return Task.FromResult(Result<ReviewFeedback>.Ok(new ReviewFeedback([], OmittedCommentCount: 0, NewestCommentAt: null)));
     }
 
     public Task<Result<BranchProtection>> GetBranchProtectionAsync(

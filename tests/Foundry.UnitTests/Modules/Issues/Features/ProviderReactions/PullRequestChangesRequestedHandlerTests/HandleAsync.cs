@@ -171,4 +171,57 @@ public sealed class HandleAsync : IAsyncDisposable
             .OfType<IssueRevisionQueued>()
             .ShouldHaveSingleItem();
     }
+
+    [Fact]
+    public async Task WhenEventHasOmittedCommentCount_PropagatesItToRevisionQueuedIssue()
+    {
+        // Arrange
+        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
+        SeedReviewIssue(repositoryId, issueNumber: 4);
+
+        PullRequestChangesRequested @event = new(
+            RepositoryId: repositoryId,
+            IssueNumber: 4,
+            Comments: [new ReviewComment("Fix this.", "src/A.cs", Line: 5)],
+            OmittedCommentCount: 7);
+
+        // Act
+        await _sut.HandleAsync(@event, CancellationToken.None);
+
+        // Assert
+        _dbContext.ChangeTracker.Clear();
+        Issue? issue = await _dbContext.Set<Issue>()
+            .FirstOrDefaultAsync(
+                i => i.MonitoredRepositoryId == repositoryId,
+                TestContext.Current.CancellationToken);
+        RevisionQueuedIssue revisionQueued = issue.ShouldBeOfType<RevisionQueuedIssue>();
+        revisionQueued.OmittedCommentCount.ShouldBe(7);
+    }
+
+    [Fact]
+    public async Task WhenEventHasNewestCommentAt_PropagatesItToRevisionQueuedIssue()
+    {
+        // Arrange
+        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
+        SeedReviewIssue(repositoryId, issueNumber: 5);
+
+        DateTimeOffset newestCommentAt = new DateTimeOffset(2026, 9, 1, 10, 0, 0, TimeSpan.Zero);
+        PullRequestChangesRequested @event = new(
+            RepositoryId: repositoryId,
+            IssueNumber: 5,
+            Comments: [new ReviewComment("Fix this.", "src/A.cs", Line: 5)],
+            NewestCommentAt: newestCommentAt);
+
+        // Act
+        await _sut.HandleAsync(@event, CancellationToken.None);
+
+        // Assert
+        _dbContext.ChangeTracker.Clear();
+        Issue? issue = await _dbContext.Set<Issue>()
+            .FirstOrDefaultAsync(
+                i => i.MonitoredRepositoryId == repositoryId,
+                TestContext.Current.CancellationToken);
+        RevisionQueuedIssue revisionQueued = issue.ShouldBeOfType<RevisionQueuedIssue>();
+        revisionQueued.NewestConsumedCommentAt.ShouldBe(newestCommentAt);
+    }
 }

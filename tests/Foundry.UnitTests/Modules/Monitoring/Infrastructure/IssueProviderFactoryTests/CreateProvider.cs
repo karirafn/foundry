@@ -3,6 +3,7 @@ using System.Net;
 using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Features.Providers;
+using Foundry.Modules.Monitoring.Features.Providers.Feedback;
 using Foundry.Modules.Monitoring.Infrastructure;
 using Foundry.Modules.Monitoring.Infrastructure.RateBudget;
 using Foundry.Modules.Monitoring.Infrastructure.GitLab;
@@ -29,7 +30,8 @@ public sealed class CreateProvider
         DefaultBranchCache cache = new(new MemoryCache(Options.Create(new MemoryCacheOptions())));
         GitHubHttpClient gitHubHttpClient = new(httpClient, NullLogger<GitHubHttpClient>.Instance, cache, new InMemoryProviderRateBudget(), TimeProvider.System);
         GitLabHttpClient gitLabHttpClient = new(httpClient, NullLogger<GitLabHttpClient>.Instance, cache, new InMemoryProviderRateBudget(), TimeProvider.System);
-        return new IssueProviderFactory(gitHubHttpClient, gitLabHttpClient);
+        return new IssueProviderFactory(
+            gitHubHttpClient, gitLabHttpClient, new ActionableFeedbackPolicy(TimeProvider.System));
     }
 
     [Fact]

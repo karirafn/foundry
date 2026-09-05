@@ -13,6 +13,7 @@ using Shouldly;
 
 using Xunit;
 using Foundry.Modules.Monitoring.Features.Providers;
+using Foundry.Modules.Monitoring.Features.Providers.Feedback;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
@@ -31,7 +32,8 @@ public sealed class GetBranchProtectionAsync
     {
         HttpClient httpClient = new(handler);
         GitLabHttpClient gitLabHttpClient = new(httpClient, NullLogger<GitLabHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))), new InMemoryProviderRateBudget(), TimeProvider.System);
-        return new GitLabIssueProvider(gitLabHttpClient, ValidToken, ValidBaseUrl);
+        return new GitLabIssueProvider(
+            gitLabHttpClient, new ActionableFeedbackPolicy(TimeProvider.System), ValidToken, ValidBaseUrl);
     }
 
     [Fact]

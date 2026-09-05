@@ -82,6 +82,39 @@ public sealed class PersistRevisionQueuedIssue : IAsyncDisposable
     }
 
     [Fact]
+    public async Task WhenRevisionQueuedFromReviewWithOmittedCount_OmittedCommentCountIsPersisted()
+    {
+        // Arrange
+        ReviewIssue review = new IssueBuilder()
+            .WithIssueNumber(57)
+            .WithTitle("Revision with omitted comments")
+            .WithLabels([])
+            .WithBranchName("feat/issue-57")
+            .WithPullRequestUrl("https://github.com/owner/repo/pull/12")
+            .Review();
+
+        RevisionQueuedIssue revisionQueued = review.Revise(
+            [new ReviewComment("Fix this.")],
+            omittedCommentCount: 5,
+            newestCommentAt: new DateTimeOffset(2026, 9, 1, 8, 0, 0, TimeSpan.Zero));
+
+        _dbContext.Set<Issue>().Add(revisionQueued);
+        await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+        _dbContext.ChangeTracker.Clear();
+
+        // Act
+        Issue? result = await _dbContext
+            .Set<Issue>()
+            .FindAsync([revisionQueued.Id], TestContext.Current.CancellationToken);
+
+        // Assert
+        RevisionQueuedIssue reloaded = result.ShouldBeOfType<RevisionQueuedIssue>();
+        reloaded.ShouldSatisfyAllConditions(
+            () => reloaded.OmittedCommentCount.ShouldBe(5),
+            () => reloaded.NewestConsumedCommentAt.ShouldBe(new DateTimeOffset(2026, 9, 1, 8, 0, 0, TimeSpan.Zero)));
+    }
+
+    [Fact]
     public async Task WhenReviewIssueTransitioned_FeedbackCutoffAtIsPersisted()
     {
         // Arrange

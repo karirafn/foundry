@@ -3,6 +3,7 @@ using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Modules.Monitoring.Features.Eligibility;
 using Foundry.Modules.Monitoring.Features.Providers;
+using Foundry.Modules.Monitoring.Features.Providers.Feedback;
 using Foundry.Shared;
 
 using Microsoft.EntityFrameworkCore;
@@ -288,10 +289,13 @@ internal sealed class RepositoryPoller(
 
             if (feedbackSuccess.Value.Comments.Count > 0)
             {
+                ReviewFeedback feedback = feedbackSuccess.Value;
                 repository.RecordIntegrationEvent(new PullRequestChangesRequested(
                     repository.Id,
                     reviewIssue.IssueNumber,
-                    feedbackSuccess.Value.Comments));
+                    feedback.Comments,
+                    feedback.OmittedCommentCount,
+                    feedback.NewestCommentAt));
             }
         }
     }

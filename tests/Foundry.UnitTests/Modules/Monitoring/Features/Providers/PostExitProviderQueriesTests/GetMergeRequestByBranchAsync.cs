@@ -4,6 +4,7 @@ using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Features.CredentialResolution;
 using Foundry.Modules.Monitoring.Features.Providers;
+using Foundry.Modules.Monitoring.Features.Providers.Feedback;
 using Foundry.Shared;
 using Foundry.Testing;
 using Foundry.WebApi.Persistence;
@@ -172,7 +173,7 @@ public sealed class GetMergeRequestByBranchAsync : IAsyncDisposable
             DateTimeOffset since,
             CancellationToken cancellationToken)
         {
-            return Task.FromResult(Result<ReviewFeedback>.Ok(new ReviewFeedback([])));
+            return Task.FromResult(Result<ReviewFeedback>.Ok(new ReviewFeedback([], OmittedCommentCount: 0, NewestCommentAt: null)));
         }
 
         public Task<Result<BranchProtection>> GetBranchProtectionAsync(

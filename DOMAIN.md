@@ -436,7 +436,7 @@ When all blockers are resolved — that is, closed in the provider — a `Blocke
 A lifecycle state for an issue whose worker completed successfully and produced a PR.
 Carries `WorkerRunId`, `BranchName`, `PullRequestUrl`, and `FeedbackCutoffAt` — all non-nullable.
 Awaits human review of the PR. The monitoring service polls the provider for PR/issue status and review feedback.
-`FeedbackCutoffAt` filters stale feedback — only review comments submitted after this timestamp are considered actionable. Set to the worker run's completion time on first entry; updated on re-entry after a revision cycle.
+`FeedbackCutoffAt` filters stale feedback — only review comments created after this timestamp are considered actionable. Set to the worker run's completion time on first entry; updated on re-entry after a revision cycle.
 Transitions: `Revise()` → `RevisionQueuedIssue` (feedback detected); `Complete()` → `CompletedIssue` (issue closed); `Fail()` → `ContinuableFailedIssue` (PR closed without merge — branch exists).
 
 ## Unchanged Issue
@@ -460,7 +460,7 @@ Transitions: `Claim()` → `InProgressIssue` (worker assigned); `Block()` → `B
 
 A lifecycle state for an issue queued for revision after receiving review feedback.
 Carries `BranchName`, `PullRequestUrl`, and `ReviewComments` (`IReadOnlyList<ReviewComment>`) — all non-nullable.
-Created from `ReviewIssue.Revise()` when the monitoring service detects a "changes requested" review.
+Created from `ReviewIssue.Revise()` when the monitoring service detects actionable review feedback.
 Claimed with priority over regular `FreshQueuedIssue` to minimize open issue count.
 Transitions: `Claim()` → `RevisionInProgressIssue`.
 
@@ -542,8 +542,33 @@ Lives in Issues contracts — produced by the monitoring provider, consumed by t
 ## Review Feedback
 
 A provider-agnostic result from `IIssueProvider.GetReviewFeedbackAsync()`.
-Carries an `IReadOnlyList<ReviewComment>`.
-Each provider implementation decides what constitutes actionable feedback — GitHub uses `CHANGES_REQUESTED` reviews; GitLab uses unresolved discussion threads (tier-independent, unlike the Premium-only "Request changes" reviewer state).
+Carries an `IReadOnlyList<ReviewComment>`, an `OmittedCommentCount`, and the `NewestCommentAt` timestamp of the newest kept comment.
+The actionability rule is provider-agnostic and lives entirely in `ActionableFeedbackPolicy` (see [ADR 0070](docs/adr/0070-any-human-comment-is-actionable-feedback.md)): every human-authored, non-system comment created after `FeedbackCutoffAt` is actionable — regardless of review state, thread-resolution state, or provider.
+HTTP clients (`GitHubHttpClient`, `GitLabHttpClient`) are pure mappers; they project provider JSON to `ProviderComment` lists and return all available comments without filtering.
+
+## Actionable Feedback
+
+A `ProviderComment` that survives all `ActionableFeedbackPolicy` filters and is included in the `ReviewFeedback` delivered to the worker.
+A comment is actionable when it is human-authored (not a bot, not a system note), created after `FeedbackCutoffAt`, older than the quiet-period boundary (`now - 2 minutes`), and belongs to the newest 50 by `createdAt`.
+The policy is provider-agnostic; provider-specific mapping concerns (body truncation, file-path sanitisation) remain in the HTTP clients.
+
+## Conversation Comment
+
+A PR-level (non-inline) comment posted directly on the pull request — not attached to a specific file line or review thread.
+On GitHub, sourced from `pullRequest.comments`; on GitLab, sourced from discussion notes on non-resolvable discussions.
+Mapped to `ProviderComment` with `Origin = CommentOrigin.Conversation`.
+
+## Provider Comment
+
+The internal raw mapping type (`ProviderComment`) produced by each HTTP client before policy filtering.
+Carries `Body`, `AuthorLogin`, `AuthorIsBot`, `IsSystem`, `CreatedAt`, `FilePath`, `Line`, `Origin`, and `ThreadResolved`.
+Never crosses a module boundary — only the already-public `ReviewComment` does.
+
+## Review Summary
+
+A PR review object with a non-empty body, independent of its approval state.
+On GitHub, sourced from `pullRequest.reviews { body submittedAt }` with no state filter — `APPROVED`, `COMMENTED`, and `CHANGES_REQUESTED` reviews are all eligible when they carry a body.
+Mapped to `ProviderComment` with `Origin = CommentOrigin.ReviewSummary`; `submittedAt` is used as `CreatedAt`.
 
 ## Revision Context
 

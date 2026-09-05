@@ -10,6 +10,7 @@ using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Features.Accounts;
 using Foundry.Modules.Monitoring.Features.Polling;
 using Foundry.Modules.Monitoring.Features.Providers;
+using Foundry.Modules.Monitoring.Features.Providers.Feedback;
 using Foundry.Modules.Monitoring.Infrastructure;
 using Foundry.Modules.Monitoring.Infrastructure.RateBudget;
 using Foundry.Shared;
@@ -28,7 +29,6 @@ internal sealed partial class GitHubHttpClient(
     private const string ApiVersion = "2026-03-10";
     private const string AllZerosSha = "0000000000000000000000000000000000000000";
     private const string FineGrainedPatPrefix = "github_pat_";
-    private const int MaxComments = 50;
     private const int MaxCommentBodyLength = 4000;
     private const string TruncatedSuffix = "[truncated]";
     private const int MaxRepositoryPages = 5;
@@ -96,13 +96,35 @@ internal sealed partial class GitHubHttpClient(
           rateLimit { cost remaining }
           repository(owner: $owner, name: $name) {
             pullRequest(number: $number) {
-              reviews(first: 50, states: [CHANGES_REQUESTED]) {
+              comments(first: 100) {
+                nodes {
+                  databaseId
+                  body
+                  createdAt
+                  author { login __typename }
+                }
+              }
+              reviewThreads(first: 100) {
+                nodes {
+                  isResolved
+                  comments(first: 100) {
+                    nodes {
+                      databaseId
+                      body
+                      path
+                      line
+                      originalLine
+                      createdAt
+                      author { login __typename }
+                    }
+                  }
+                }
+              }
+              reviews(first: 50) {
                 nodes {
                   body
                   submittedAt
-                  comments(first: 100) {
-                    nodes { body path line originalLine }
-                  }
+                  author { login __typename }
                 }
               }
             }
@@ -573,22 +595,21 @@ internal sealed partial class GitHubHttpClient(
         return Result<PullRequestStatus>.Ok(new PullRequestStatus(isClosed, isMerged));
     }
 
-    public async Task<Result<ReviewFeedback>> GetPullRequestReviewFeedbackAsync(
+    public async Task<Result<IReadOnlyList<ProviderComment>>> GetPullRequestReviewFeedbackAsync(
         Uri apiBaseUrl,
         RepositorySlug slug,
         string pullRequestUrl,
-        DateTimeOffset since,
         string token,
         CancellationToken cancellationToken)
     {
         if (apiBaseUrl.Scheme is not "https")
         {
-            return Result<ReviewFeedback>.Fail(GitHubErrors.InvalidBaseUrl);
+            return Result<IReadOnlyList<ProviderComment>>.Fail(GitHubErrors.InvalidBaseUrl);
         }
 
         if (!TryParsePrNumber(pullRequestUrl, out int prNumber))
         {
-            return Result<ReviewFeedback>.Fail(GitHubErrors.InvalidPullRequestUrl);
+            return Result<IReadOnlyList<ProviderComment>>.Fail(GitHubErrors.InvalidPullRequestUrl);
         }
 
         object variables = new { owner = slug.Owner, name = slug.Name, number = prNumber };
@@ -598,47 +619,132 @@ internal sealed partial class GitHubHttpClient(
         if (dataResult is not Result<PrReviewFeedbackData>.Success dataSuccess)
         {
             Error error = ((Result<PrReviewFeedbackData>.Failure)dataResult).Error;
-            return Result<ReviewFeedback>.Fail(error);
+            return Result<IReadOnlyList<ProviderComment>>.Fail(error);
         }
 
-        IReadOnlyList<GraphQlReviewNode> reviewNodes =
-            dataSuccess.Value.Repository?.PullRequest?.Reviews?.Nodes ?? [];
+        PrReviewFeedbackPullRequest? pullRequest = dataSuccess.Value.Repository?.PullRequest;
+        List<ProviderComment> providerComments = [];
 
-        List<ReviewComment> comments = [];
-        foreach (GraphQlReviewNode review in reviewNodes)
+        // Review-thread (inline) comments are processed first so their richer context
+        // (FilePath, Line) wins when the same comment also appears in the top-level
+        // conversation surface. The de-dup key uses the stable databaseId when available;
+        // it falls back to (Body, CreatedAt, AuthorLogin) for nodes that omit the id.
+        HashSet<long> deduplicatedIds = [];
+        HashSet<(string Body, DateTimeOffset CreatedAt, string AuthorLogin)> deduplicatedKeys = [];
+
+        IReadOnlyList<GraphQlReviewThreadNode> reviewThreadNodes =
+            pullRequest?.ReviewThreads?.Nodes ?? [];
+
+        foreach (GraphQlReviewThreadNode thread in reviewThreadNodes)
         {
-            if (review.SubmittedAt is null || review.SubmittedAt <= since)
+            bool threadResolved = thread.IsResolved;
+            IReadOnlyList<GraphQlReviewThreadCommentNode> threadComments =
+                thread.Comments?.Nodes ?? [];
+
+            foreach (GraphQlReviewThreadCommentNode comment in threadComments)
+            {
+                string authorLogin = comment.Author?.Login ?? string.Empty;
+                bool authorIsBot = string.Equals(comment.Author?.Typename, "Bot", StringComparison.Ordinal);
+                string body = TruncateBody(comment.Body);
+                int? line = comment.Line ?? comment.OriginalLine;
+                string? sanitizedPath = SanitizeFilePath(comment.Path);
+
+                if (comment.DatabaseId.HasValue)
+                {
+                    if (!deduplicatedIds.Add(comment.DatabaseId.Value))
+                    {
+                        continue;
+                    }
+
+                    // Seed the content-key set so a later conversation-surface copy with a null
+                    // databaseId (which falls through to the key-based branch) is still de-duped.
+                    deduplicatedKeys.Add((comment.Body, comment.CreatedAt, authorLogin));
+                }
+                else if (!deduplicatedKeys.Add((comment.Body, comment.CreatedAt, authorLogin)))
+                {
+                    continue;
+                }
+
+                providerComments.Add(new ProviderComment(
+                    Body: body,
+                    AuthorLogin: authorLogin,
+                    AuthorIsBot: authorIsBot,
+                    IsSystem: false,
+                    CreatedAt: comment.CreatedAt,
+                    FilePath: sanitizedPath,
+                    Line: line,
+                    Origin: CommentOrigin.ReviewThread,
+                    ThreadResolved: threadResolved));
+            }
+        }
+
+        IReadOnlyList<GraphQlConversationCommentNode> conversationNodes =
+            pullRequest?.Comments?.Nodes ?? [];
+
+        foreach (GraphQlConversationCommentNode node in conversationNodes)
+        {
+            string authorLogin = node.Author?.Login ?? string.Empty;
+            bool authorIsBot = string.Equals(node.Author?.Typename, "Bot", StringComparison.Ordinal);
+            string body = TruncateBody(node.Body);
+
+            // Skip the conversation-surface copy when the inline copy (with FilePath/Line) was
+            // already collected from reviewThreads. The id-based check is authoritative; the
+            // key-based check is the fallback for nodes without a databaseId.
+            if (node.DatabaseId.HasValue)
+            {
+                if (!deduplicatedIds.Add(node.DatabaseId.Value))
+                {
+                    continue;
+                }
+
+                // Seed the content-key set so a later null-databaseId copy of this comment
+                // (on any remaining surface) is still de-duped by content key.
+                deduplicatedKeys.Add((node.Body, node.CreatedAt, authorLogin));
+            }
+            else if (!deduplicatedKeys.Add((node.Body, node.CreatedAt, authorLogin)))
             {
                 continue;
             }
 
-            if (comments.Count >= MaxComments)
-            {
-                break;
-            }
-
-            if (!string.IsNullOrWhiteSpace(review.Body))
-            {
-                comments.Add(new ReviewComment(TruncateBody(review.Body)));
-            }
-
-            IReadOnlyList<GraphQlReviewCommentNode> fileComments =
-                review.Comments?.Nodes ?? [];
-
-            foreach (GraphQlReviewCommentNode fileComment in fileComments)
-            {
-                if (comments.Count >= MaxComments)
-                {
-                    break;
-                }
-
-                int? line = fileComment.Line ?? fileComment.OriginalLine;
-                string? sanitizedPath = SanitizeFilePath(fileComment.Path);
-                comments.Add(new ReviewComment(TruncateBody(fileComment.Body), sanitizedPath, line));
-            }
+            providerComments.Add(new ProviderComment(
+                Body: body,
+                AuthorLogin: authorLogin,
+                AuthorIsBot: authorIsBot,
+                IsSystem: false,
+                CreatedAt: node.CreatedAt,
+                FilePath: null,
+                Line: null,
+                Origin: CommentOrigin.Conversation,
+                ThreadResolved: false));
         }
 
-        return Result<ReviewFeedback>.Ok(new ReviewFeedback(comments));
+        IReadOnlyList<GraphQlReviewNode> reviewNodes =
+            pullRequest?.Reviews?.Nodes ?? [];
+
+        foreach (GraphQlReviewNode review in reviewNodes)
+        {
+            if (string.IsNullOrWhiteSpace(review.Body) || review.SubmittedAt is null)
+            {
+                continue;
+            }
+
+            string authorLogin = review.Author?.Login ?? string.Empty;
+            bool authorIsBot = string.Equals(review.Author?.Typename, "Bot", StringComparison.Ordinal);
+            string body = TruncateBody(review.Body);
+
+            providerComments.Add(new ProviderComment(
+                Body: body,
+                AuthorLogin: authorLogin,
+                AuthorIsBot: authorIsBot,
+                IsSystem: false,
+                CreatedAt: review.SubmittedAt.Value,
+                FilePath: null,
+                Line: null,
+                Origin: CommentOrigin.ReviewSummary,
+                ThreadResolved: false));
+        }
+
+        return Result<IReadOnlyList<ProviderComment>>.Ok(providerComments);
     }
 
     public async Task<Result<TokenValidationOutcome>> ValidateTokenAsync(
@@ -1483,22 +1589,46 @@ internal sealed partial class GitHubHttpClient(
 
     private sealed record PrReviewFeedbackRepository(PrReviewFeedbackPullRequest? PullRequest);
 
-    private sealed record PrReviewFeedbackPullRequest(GraphQlReviewConnection? Reviews);
+    private sealed record PrReviewFeedbackPullRequest(
+        GraphQlConversationCommentConnection? Comments,
+        GraphQlReviewThreadConnection? ReviewThreads,
+        GraphQlReviewConnection? Reviews);
+
+    private sealed record GraphQlConversationCommentConnection(IReadOnlyList<GraphQlConversationCommentNode> Nodes);
+
+    private sealed record GraphQlConversationCommentNode(
+        long? DatabaseId,
+        string Body,
+        DateTimeOffset CreatedAt,
+        GraphQlCommentAuthor? Author);
+
+    private sealed record GraphQlCommentAuthor(
+        string? Login,
+        [property: JsonPropertyName("__typename")] string? Typename);
+
+    private sealed record GraphQlReviewThreadConnection(IReadOnlyList<GraphQlReviewThreadNode> Nodes);
+
+    private sealed record GraphQlReviewThreadNode(
+        bool IsResolved,
+        GraphQlReviewThreadCommentConnection? Comments);
+
+    private sealed record GraphQlReviewThreadCommentConnection(IReadOnlyList<GraphQlReviewThreadCommentNode> Nodes);
+
+    private sealed record GraphQlReviewThreadCommentNode(
+        long? DatabaseId,
+        string Body,
+        string? Path,
+        int? Line,
+        int? OriginalLine,
+        DateTimeOffset CreatedAt,
+        GraphQlCommentAuthor? Author);
 
     private sealed record GraphQlReviewConnection(IReadOnlyList<GraphQlReviewNode> Nodes);
 
     private sealed record GraphQlReviewNode(
         string? Body,
         DateTimeOffset? SubmittedAt,
-        GraphQlReviewCommentConnection? Comments);
-
-    private sealed record GraphQlReviewCommentConnection(IReadOnlyList<GraphQlReviewCommentNode> Nodes);
-
-    private sealed record GraphQlReviewCommentNode(
-        string Body,
-        string? Path,
-        int? Line,
-        int? OriginalLine);
+        GraphQlCommentAuthor? Author);
 }
 
 internal sealed record BranchRules(bool RejectDirectPushes, bool RejectForcePushes, bool RejectDeletion);

@@ -1,11 +1,16 @@
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Features.Providers;
+using Foundry.Modules.Monitoring.Features.Providers.Feedback;
 using Foundry.Shared;
 
 namespace Foundry.Modules.Monitoring.Infrastructure.GitHub;
 
-internal sealed class GitHubIssueProvider(GitHubHttpClient httpClient, string token, Uri apiBaseUrl) : IIssueProvider
+internal sealed class GitHubIssueProvider(
+    GitHubHttpClient httpClient,
+    ActionableFeedbackPolicy feedbackPolicy,
+    string token,
+    Uri apiBaseUrl) : IIssueProvider
 {
     // Per-poll cache: populated by GetIssuesAsync; null until the first call.
     // Lives on the instance because GitHubIssueProvider is newed per poll cycle.
@@ -64,13 +69,22 @@ internal sealed class GitHubIssueProvider(GitHubHttpClient httpClient, string to
         return httpClient.GetPullRequestStatusAsync(apiBaseUrl, slug, pullRequestUrl, token, cancellationToken);
     }
 
-    public Task<Result<ReviewFeedback>> GetReviewFeedbackAsync(
+    public async Task<Result<ReviewFeedback>> GetReviewFeedbackAsync(
         RepositorySlug slug,
         string pullRequestUrl,
         DateTimeOffset since,
         CancellationToken cancellationToken)
     {
-        return httpClient.GetPullRequestReviewFeedbackAsync(apiBaseUrl, slug, pullRequestUrl, since, token, cancellationToken);
+        Result<IReadOnlyList<ProviderComment>> rawResult = await httpClient.GetPullRequestReviewFeedbackAsync(
+            apiBaseUrl, slug, pullRequestUrl, token, cancellationToken);
+
+        if (rawResult is not Result<IReadOnlyList<ProviderComment>>.Success rawSuccess)
+        {
+            Error error = ((Result<IReadOnlyList<ProviderComment>>.Failure)rawResult).Error;
+            return Result<ReviewFeedback>.Fail(error);
+        }
+
+        return Result<ReviewFeedback>.Ok(feedbackPolicy.Apply(rawSuccess.Value, since));
     }
 
     public async Task<Result<BranchProtection>> GetBranchProtectionAsync(

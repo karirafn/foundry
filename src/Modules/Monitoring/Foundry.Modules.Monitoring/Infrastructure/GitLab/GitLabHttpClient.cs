@@ -11,6 +11,7 @@ using Foundry.Modules.Monitoring.Features.Accounts;
 using Foundry.Modules.Monitoring.Features.Accounts.Tokens;
 using Foundry.Modules.Monitoring.Features.Polling;
 using Foundry.Modules.Monitoring.Features.Providers;
+using Foundry.Modules.Monitoring.Features.Providers.Feedback;
 using Foundry.Modules.Monitoring.Infrastructure;
 using Foundry.Modules.Monitoring.Infrastructure.GitHub;
 using Foundry.Modules.Monitoring.Infrastructure.RateBudget;
@@ -33,7 +34,8 @@ internal sealed partial class GitLabHttpClient(
     private const int RepositoriesPerPage = 100;
     private const int MaxIssuePages = 20;
     private const int IssuesPerPage = 100;
-    private const int MaxReviewComments = 50;
+    private const int MaxDiscussionPages = 20;
+    private const int DiscussionsPerPage = 100;
     private const int MaxFilePathLength = 4096; // PATH_MAX
     private const int GitLabMinPushAccessLevel = 30; // Developer role
 
@@ -382,73 +384,77 @@ internal sealed partial class GitLabHttpClient(
         return Result<PullRequestStatus>.Ok(new PullRequestStatus(isClosed, isMerged));
     }
 
-    public async Task<Result<ReviewFeedback>> GetPullRequestReviewFeedbackAsync(
+    public async Task<Result<IReadOnlyList<ProviderComment>>> GetPullRequestReviewFeedbackAsync(
         Uri apiBaseUrl,
         RepositorySlug slug,
         string pullRequestUrl,
-        DateTimeOffset since,
         string token,
         CancellationToken cancellationToken)
     {
         if (apiBaseUrl.Scheme is not "https")
         {
-            return Result<ReviewFeedback>.Fail(GitLabErrors.InvalidBaseUrl);
+            return Result<IReadOnlyList<ProviderComment>>.Fail(GitLabErrors.InvalidBaseUrl);
         }
 
         if (!TryParseMrIid(pullRequestUrl, out int mrIid))
         {
-            return Result<ReviewFeedback>.Fail(GitLabErrors.InvalidMergeRequestUrl);
+            return Result<IReadOnlyList<ProviderComment>>.Fail(GitLabErrors.InvalidMergeRequestUrl);
         }
 
         string encodedPath = Uri.EscapeDataString(slug.FullPath);
-        string relativePath = $"projects/{encodedPath}/merge_requests/{mrIid}/discussions";
-        Uri requestUri = new(EnsureTrailingSlash(apiBaseUrl), relativePath);
+        List<ProviderComment> providerComments = [];
 
-        using HttpRequestMessage request = new(HttpMethod.Get, requestUri);
-        AddCommonHeaders(request, token);
-
-        using HttpResponseMessage response = await httpClient.SendAsync(request, cancellationToken);
-
-        if (!response.IsSuccessStatusCode)
+        for (int page = 1; page <= MaxDiscussionPages; page++)
         {
-            return Result<ReviewFeedback>.Fail(ErrorFromNonSuccess(response));
-        }
+            string relativePath =
+                $"projects/{encodedPath}/merge_requests/{mrIid}/discussions?per_page={DiscussionsPerPage}&page={page}";
+            Uri requestUri = new(EnsureTrailingSlash(apiBaseUrl), relativePath);
 
-        RecordRestHeadroom(response);
+            using HttpRequestMessage request = new(HttpMethod.Get, requestUri);
+            AddCommonHeaders(request, token);
 
-        string body = await response.Content.ReadAsStringAsync(cancellationToken);
-        List<GitLabDiscussionDto>? dtos = JsonSerializer.Deserialize<List<GitLabDiscussionDto>>(body, JsonOptions);
+            using HttpResponseMessage response = await httpClient.SendAsync(request, cancellationToken);
 
-        List<ReviewComment> comments = [];
+            if (!response.IsSuccessStatusCode)
+            {
+                return Result<IReadOnlyList<ProviderComment>>.Fail(ErrorFromNonSuccess(response));
+            }
 
-        foreach (GitLabDiscussionDto discussion in dtos ?? [])
-        {
-            if (comments.Count >= MaxReviewComments)
+            RecordRestHeadroom(response);
+
+            string body = await response.Content.ReadAsStringAsync(cancellationToken);
+            List<GitLabDiscussionDto>? dtos = JsonSerializer.Deserialize<List<GitLabDiscussionDto>>(body, JsonOptions);
+            List<GitLabDiscussionDto> pageDiscussions = dtos ?? [];
+
+            foreach (GitLabDiscussionDto discussion in pageDiscussions)
+            {
+                foreach (GitLabNoteDto note in discussion.Notes)
+                {
+                    string? sanitizedPath = SanitizeFilePath(note.Position?.NewPath);
+                    int? line = note.Position?.NewLine;
+                    CommentOrigin origin = note.Resolvable ? CommentOrigin.ReviewThread : CommentOrigin.Conversation;
+                    bool threadResolved = note.Resolvable && note.Resolved;
+
+                    providerComments.Add(new ProviderComment(
+                        Body: TruncateBody(note.Body),
+                        AuthorLogin: note.Author?.Username ?? string.Empty,
+                        AuthorIsBot: false,
+                        IsSystem: note.System,
+                        CreatedAt: note.CreatedAt,
+                        FilePath: sanitizedPath,
+                        Line: line,
+                        Origin: origin,
+                        ThreadResolved: threadResolved));
+                }
+            }
+
+            if (pageDiscussions.Count < DiscussionsPerPage)
             {
                 break;
             }
-
-            if (discussion.Notes.Count == 0)
-            {
-                continue;
-            }
-
-            GitLabNoteDto firstNote = discussion.Notes[0];
-            if (!firstNote.Resolvable || firstNote.Resolved)
-            {
-                continue;
-            }
-
-            if (firstNote.UpdatedAt <= since)
-            {
-                continue;
-            }
-
-            string? sanitizedPath = SanitizeFilePath(firstNote.Position?.NewPath);
-            comments.Add(new ReviewComment(TruncateBody(firstNote.Body), sanitizedPath));
         }
 
-        return Result<ReviewFeedback>.Ok(new ReviewFeedback(comments));
+        return Result<IReadOnlyList<ProviderComment>>.Ok(providerComments);
     }
 
     public async Task<Result<IReadOnlyList<ProviderRepository>>> ListRepositoriesAsync(
@@ -953,10 +959,13 @@ internal sealed partial class GitLabHttpClient(
         string Body,
         bool Resolvable,
         bool Resolved,
+        bool System,
+        DateTimeOffset CreatedAt,
         DateTimeOffset UpdatedAt,
+        GitLabAuthorDto? Author,
         GitLabNotePositionDto? Position);
 
-    private sealed record GitLabNotePositionDto(string? NewPath);
+    private sealed record GitLabNotePositionDto(string? NewPath, int? NewLine);
 
     private sealed record GitLabProjectPermissionsDto(
         GitLabAccessLevelDto? ProjectAccess,

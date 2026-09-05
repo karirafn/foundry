@@ -4,6 +4,7 @@ using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Features.CredentialResolution;
 using Foundry.Modules.Monitoring.Features.Eligibility;
 using Foundry.Modules.Monitoring.Features.Providers;
+using Foundry.Modules.Monitoring.Features.Providers.Feedback;
 using Foundry.Modules.Monitoring.Infrastructure;
 using Foundry.Modules.Monitoring.Infrastructure.GitHub;
 using Foundry.Shared;
@@ -364,7 +365,7 @@ public sealed class EvaluateBranchRulesAndStoreAsync
                 string pullRequestUrl,
                 DateTimeOffset since,
                 CancellationToken cancellationToken)
-                => Task.FromResult(Result<ReviewFeedback>.Ok(new ReviewFeedback([])));
+                => Task.FromResult(Result<ReviewFeedback>.Ok(new ReviewFeedback([], OmittedCommentCount: 0, NewestCommentAt: null)));
 
             public Task<Result<bool>> CreateBranchAsync(
                 RepositorySlug slug,
@@ -443,7 +444,7 @@ public sealed class EvaluateBranchRulesAndStoreAsync
             string pullRequestUrl,
             DateTimeOffset since,
             CancellationToken cancellationToken)
-            => Task.FromResult(Result<ReviewFeedback>.Ok(new ReviewFeedback([])));
+            => Task.FromResult(Result<ReviewFeedback>.Ok(new ReviewFeedback([], OmittedCommentCount: 0, NewestCommentAt: null)));
 
         public Task<Result<BranchProtection>> GetBranchProtectionAsync(
             RepositorySlug slug,
@@ -506,7 +507,7 @@ public sealed class EvaluateBranchRulesAndStoreAsync
             string pullRequestUrl,
             DateTimeOffset since,
             CancellationToken cancellationToken)
-            => Task.FromResult(Result<ReviewFeedback>.Ok(new ReviewFeedback([])));
+            => Task.FromResult(Result<ReviewFeedback>.Ok(new ReviewFeedback([], OmittedCommentCount: 0, NewestCommentAt: null)));
 
         public Task<Result<BranchProtection>> GetBranchProtectionAsync(
             RepositorySlug slug,

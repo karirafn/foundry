@@ -4,6 +4,7 @@ using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Features.Eligibility;
 using Foundry.Modules.Monitoring.Features.Polling;
 using Foundry.Modules.Monitoring.Features.Providers;
+using Foundry.Modules.Monitoring.Features.Providers.Feedback;
 using Foundry.Shared;
 using Foundry.WebApi.Persistence;
 
@@ -177,7 +178,7 @@ public sealed class WhenWriteProbeVerdictIsNull : IAsyncDisposable
             string pullRequestUrl,
             DateTimeOffset since,
             CancellationToken cancellationToken) =>
-            Task.FromResult(Result<ReviewFeedback>.Ok(new ReviewFeedback([])));
+            Task.FromResult(Result<ReviewFeedback>.Ok(new ReviewFeedback([], OmittedCommentCount: 0, NewestCommentAt: null)));
 
         public Task<Result<BranchProtection>> GetBranchProtectionAsync(
             RepositorySlug slug,

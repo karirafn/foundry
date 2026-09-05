@@ -69,4 +69,49 @@ public sealed class Revise
             () => revisionQueued.ReviewComments[1].Body.ShouldBe("Rename this variable."),
             () => revisionQueued.MonitoredRepositoryId.ShouldBe(repositoryId));
     }
+
+    [Fact]
+    public void WhenRevisedWithOmittedCount_OmittedCommentCountIsStored()
+    {
+        // Arrange
+        ReviewIssue review = new IssueBuilder().Review();
+        IReadOnlyList<ReviewComment> comments = [new ReviewComment("Fix this.")];
+
+        // Act
+        RevisionQueuedIssue revisionQueued = review.Revise(comments, omittedCommentCount: 3);
+
+        // Assert
+        revisionQueued.OmittedCommentCount.ShouldBe(3);
+    }
+
+    [Fact]
+    public void WhenRevisedWithNewestCommentAt_NewestConsumedCommentAtIsStored()
+    {
+        // Arrange
+        ReviewIssue review = new IssueBuilder().Review();
+        IReadOnlyList<ReviewComment> comments = [new ReviewComment("Fix this.")];
+        DateTimeOffset newestCommentAt = new DateTimeOffset(2026, 9, 1, 12, 0, 0, TimeSpan.Zero);
+
+        // Act
+        RevisionQueuedIssue revisionQueued = review.Revise(comments, newestCommentAt: newestCommentAt);
+
+        // Assert
+        revisionQueued.NewestConsumedCommentAt.ShouldBe(newestCommentAt);
+    }
+
+    [Fact]
+    public void WhenRevisedWithoutOptionalParams_DefaultsAreUsed()
+    {
+        // Arrange
+        ReviewIssue review = new IssueBuilder().Review();
+        IReadOnlyList<ReviewComment> comments = [new ReviewComment("Fix this.")];
+
+        // Act
+        RevisionQueuedIssue revisionQueued = review.Revise(comments);
+
+        // Assert
+        revisionQueued.ShouldSatisfyAllConditions(
+            () => revisionQueued.OmittedCommentCount.ShouldBe(0),
+            () => revisionQueued.NewestConsumedCommentAt.ShouldBeNull());
+    }
 }

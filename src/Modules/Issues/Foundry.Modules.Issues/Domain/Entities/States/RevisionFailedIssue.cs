@@ -26,6 +26,10 @@ public sealed class RevisionFailedIssue : Issue
 
     public IReadOnlyList<ReviewComment> ReviewComments { get; private set; } = [];
 
+    public int OmittedCommentCount { get; private set; }
+
+    public DateTimeOffset? NewestConsumedCommentAt { get; private set; }
+
     public string FailureReason { get; private set; } = string.Empty;
 
     public FailureCategoryVO FailureCategory { get; private set; } = FailureCategoryVO.NonZeroExit;
@@ -51,6 +55,8 @@ public sealed class RevisionFailedIssue : Issue
         failed.BranchName = source.BranchName;
         failed.PullRequestUrl = source.PullRequestUrl;
         failed.ReviewComments = source.ReviewComments;
+        failed.OmittedCommentCount = source.OmittedCommentCount;
+        failed.NewestConsumedCommentAt = source.NewestConsumedCommentAt;
         failed.FailureReason = failureReason;
         failed.FailureCategory = failureCategory;
         failed.FailedAt = failedAt;
