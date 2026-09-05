@@ -575,7 +575,7 @@ An issue closed on the provider and later reopened with the trigger label is re-
 ## Provider Issue
 
 A DTO representing an issue as returned by a provider's API.
-Carries raw data (number, title, body, author username, URL, labels) that the domain maps into value objects and aggregates during detection.
+Carries raw data (number, title, author username, URL, labels) that the domain maps into value objects and aggregates during detection.
 
 ## Repository Slug
 
