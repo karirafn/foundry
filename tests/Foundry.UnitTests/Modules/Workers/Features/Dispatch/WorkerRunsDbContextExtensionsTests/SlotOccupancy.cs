@@ -6,6 +6,7 @@ using Foundry.Modules.Workers.Domain.Entities.States;
 using Foundry.Modules.Workers.Domain.ValueObjects;
 using Foundry.Modules.Workers.Features.Dispatch;
 using Foundry.Shared;
+using Foundry.Testing;
 using Foundry.WebApi.Persistence;
 
 using Microsoft.Data.Sqlite;
@@ -192,5 +193,90 @@ public sealed class SlotOccupancy : IAsyncDisposable
 
         // Assert
         ids.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task GetSlotOccupancyCountAsync_WhenOnlyReservation_CountsReservation()
+    {
+        // Arrange
+        DispatchReservation reservation = new DispatchReservationBuilder()
+            .Build();
+        _dbContext.Set<DispatchReservation>().Add(reservation);
+        await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+        _dbContext.ChangeTracker.Clear();
+
+        // Act
+        int count = await _dbContext.GetSlotOccupancyCountAsync(TestContext.Current.CancellationToken);
+
+        // Assert
+        count.ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task GetSlotOccupancyRunIdsAsync_WhenOnlyReservation_IncludesReservationId()
+    {
+        // Arrange
+        WorkerRunId reservationId = WorkerRunId.New();
+        DispatchReservation reservation = new DispatchReservationBuilder()
+            .WithWorkerRunId(reservationId)
+            .Build();
+        _dbContext.Set<DispatchReservation>().Add(reservation);
+        await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+        _dbContext.ChangeTracker.Clear();
+
+        // Act
+        IReadOnlySet<WorkerRunId> ids = await _dbContext.GetSlotOccupancyRunIdsAsync(TestContext.Current.CancellationToken);
+
+        // Assert
+        ids.ShouldSatisfyAllConditions(
+            () => ids.Count.ShouldBe(1),
+            () => ids.ShouldContain(reservationId));
+    }
+
+    [Fact]
+    public async Task GetSlotOccupancyCountAsync_WhenReservationAndStartingAndActive_SumsAll()
+    {
+        // Arrange
+        DispatchReservation reservation = new DispatchReservationBuilder()
+            .Build();
+        _dbContext.Set<DispatchReservation>().Add(reservation);
+        await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+        _dbContext.ChangeTracker.Clear();
+
+        await SeedStartingRunAsync();
+        await SeedActiveRunAsync();
+        await SeedCompletedRunAsync();
+
+        // Act
+        int count = await _dbContext.GetSlotOccupancyCountAsync(TestContext.Current.CancellationToken);
+
+        // Assert
+        count.ShouldBe(3);
+    }
+
+    [Fact]
+    public async Task GetSlotOccupancyRunIdsAsync_WhenReservationAndStartingAndActive_IncludesAllIds()
+    {
+        // Arrange
+        WorkerRunId reservationId = WorkerRunId.New();
+        DispatchReservation reservation = new DispatchReservationBuilder()
+            .WithWorkerRunId(reservationId)
+            .Build();
+        _dbContext.Set<DispatchReservation>().Add(reservation);
+        await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+        _dbContext.ChangeTracker.Clear();
+
+        StartingRun starting = await SeedStartingRunAsync();
+        ActiveRun active = await SeedActiveRunAsync();
+
+        // Act
+        IReadOnlySet<WorkerRunId> ids = await _dbContext.GetSlotOccupancyRunIdsAsync(TestContext.Current.CancellationToken);
+
+        // Assert
+        ids.ShouldSatisfyAllConditions(
+            () => ids.Count.ShouldBe(3),
+            () => ids.ShouldContain(reservationId),
+            () => ids.ShouldContain(starting.Id),
+            () => ids.ShouldContain(active.Id));
     }
 }
