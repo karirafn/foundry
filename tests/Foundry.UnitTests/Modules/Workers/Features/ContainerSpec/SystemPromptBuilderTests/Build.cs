@@ -935,4 +935,60 @@ public sealed class Build
             () => result.ShouldNotContain("src/Foo<bar>.cs"),
             () => result.ShouldContain("src/Foo&lt;bar&gt;.cs"));
     }
+
+    [Fact]
+    public void WhenBuilt_SafetyPreambleContainsSelfCommentInstruction()
+    {
+        // Arrange
+        WorkerOptions options = new()
+        {
+            SystemPromptTemplate = "Template content.",
+            BranchNamingInstruction = "Use conventional branch naming",
+        };
+
+        // Act
+        string result = SystemPromptBuilder.Build(
+            1, options, options.SystemPromptTemplate,
+            new DispatchContext.Fresh("feat/1-title"),
+            "https://api.github.com/repos/owner/repo/issues/1");
+
+        // Assert
+        result.ShouldContain("Do not post comments, reviews, or replies on your own pull request.");
+    }
+
+    [Fact]
+    public void WhenRevisionOmittedCommentCountIsGreaterThanZero_RendersOmittedCountLine()
+    {
+        // Arrange
+        WorkerOptions options = new();
+        DispatchContext.Revision revision = new(
+            "feat/10-fix",
+            "https://github.com/org/repo/pull/10",
+            [new ReviewComment("Please add tests.")],
+            OmittedCommentCount: 7);
+
+        // Act
+        string result = SystemPromptBuilder.Build(10, options, options.SystemPromptTemplate, revision, "https://api.github.com/repos/owner/repo/issues/10");
+
+        // Assert
+        result.ShouldContain("Note: 7 earlier comment(s) were omitted; only the 50 most recent are shown.");
+    }
+
+    [Fact]
+    public void WhenRevisionOmittedCommentCountIsZero_OmitsOmittedCountLine()
+    {
+        // Arrange
+        WorkerOptions options = new();
+        DispatchContext.Revision revision = new(
+            "feat/10-fix",
+            "https://github.com/org/repo/pull/10",
+            [new ReviewComment("Please add tests.")],
+            OmittedCommentCount: 0);
+
+        // Act
+        string result = SystemPromptBuilder.Build(10, options, options.SystemPromptTemplate, revision, "https://api.github.com/repos/owner/repo/issues/10");
+
+        // Assert
+        result.ShouldNotContain("earlier comment(s) were omitted");
+    }
 }

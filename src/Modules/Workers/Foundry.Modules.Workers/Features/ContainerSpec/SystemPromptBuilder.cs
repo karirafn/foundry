@@ -16,6 +16,7 @@ internal static class SystemPromptBuilder
         - Branch restriction: {branchNamingInstruction}. Do not push to main, master, or any protected branch.
         - Scope restriction: Only modify files relevant to the issue. Do not modify CI/CD configuration files (.github/workflows/*, .gitlab-ci.yml, Dockerfile, docker-compose*.yml) unless the issue explicitly requires it.
         - Do not delete branches, force push, or rewrite git history.
+        - Do not post comments, reviews, or replies on your own pull request.
         """;
 
     public static string Build(
@@ -113,6 +114,12 @@ internal static class SystemPromptBuilder
         foreach (ReviewComment comment in revision.Comments)
         {
             sb.AppendLine(FormatComment(comment));
+        }
+
+        if (revision.OmittedCommentCount > 0)
+        {
+            sb.AppendLine(CultureInfo.InvariantCulture,
+                $"Note: {revision.OmittedCommentCount} earlier comment(s) were omitted; only the 50 most recent are shown.");
         }
 
         sb.AppendLine("</review-feedback>");
