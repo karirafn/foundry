@@ -158,7 +158,28 @@ public sealed class PolymorphicMembers
         revision.ShouldSatisfyAllConditions(
             () => revision.BranchName.ShouldBe(revisionQueued.BranchName),
             () => revision.PullRequestUrl.ShouldBe(revisionQueued.PullRequestUrl),
-            () => revision.Comments.ShouldBe(revisionQueued.ReviewComments));
+            () => revision.Comments.ShouldBe(revisionQueued.ReviewComments),
+            () => revision.OmittedCommentCount.ShouldBe(0));
+    }
+
+    [Fact]
+    public void WhenRevisionQueuedIssueHasOmittedComments_ContextCarriesOmittedCommentCount()
+    {
+        // Arrange
+        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
+        ReviewIssue review = new IssueBuilder()
+            .WithMonitoredRepositoryId(repositoryId)
+            .Review();
+        RevisionQueuedIssue revisionQueued = review.Revise(
+            [new ReviewComment("Fix this.")],
+            omittedCommentCount: 12);
+
+        // Act
+        DispatchContext context = revisionQueued.Context;
+
+        // Assert
+        DispatchContext.Revision revision = context.ShouldBeOfType<DispatchContext.Revision>();
+        revision.OmittedCommentCount.ShouldBe(12);
     }
 
     [Fact]

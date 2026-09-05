@@ -24,6 +24,10 @@ public sealed class RevisionInProgressIssue : Issue
 
     public IReadOnlyList<ReviewComment> ReviewComments { get; private set; } = [];
 
+    public int OmittedCommentCount { get; private set; }
+
+    public DateTimeOffset? NewestConsumedCommentAt { get; private set; }
+
     internal static RevisionInProgressIssue FromRevisionQueued(RevisionQueuedIssue source, WorkerRunId workerRunId)
     {
         RevisionInProgressIssue revisionInProgress = new(source.Id);
@@ -39,6 +43,8 @@ public sealed class RevisionInProgressIssue : Issue
         revisionInProgress.BranchName = source.BranchName;
         revisionInProgress.PullRequestUrl = source.PullRequestUrl;
         revisionInProgress.ReviewComments = source.ReviewComments;
+        revisionInProgress.OmittedCommentCount = source.OmittedCommentCount;
+        revisionInProgress.NewestConsumedCommentAt = source.NewestConsumedCommentAt;
         return revisionInProgress;
     }
 

@@ -31,5 +31,12 @@ public sealed class RevisionInProgressIssueConfiguration : IEntityTypeConfigurat
             .IsUnicode(true)
             .HasColumnType("TEXT")
             .HasColumnName("review_comments");
+
+        builder.Property(i => i.OmittedCommentCount)
+            .HasDefaultValue(0)
+            .HasColumnName("omitted_comment_count");
+
+        builder.Property(i => i.NewestConsumedCommentAt)
+            .HasColumnName("newest_consumed_comment_at");
     }
 }

@@ -37,6 +37,8 @@ public sealed class IssueBuilder
     private string _failureReason = "Container exited with code 1";
     private FailureCategory _failureCategory = FailureCategory.NonZeroExit;
     private IReadOnlyList<ReviewComment> _reviewComments = [new ReviewComment("Please fix.")];
+    private int _omittedCommentCount;
+    private DateTimeOffset? _newestCommentAt;
 
     /// <summary>
     /// Exposes the configured worker run id so assertions can anchor to the aggregate's id. (AC #3)
@@ -82,6 +84,10 @@ public sealed class IssueBuilder
 
     public IssueBuilder WithReviewComments(IEnumerable<ReviewComment> value) { _reviewComments = [.. value]; return this; }
 
+    public IssueBuilder WithOmittedCommentCount(int value) { _omittedCommentCount = value; return this; }
+
+    public IssueBuilder WithNewestCommentAt(DateTimeOffset value) { _newestCommentAt = value; return this; }
+
     public DetectedIssue Detected() =>
         DetectedIssue.Detect(
             _monitoredRepositoryId,
@@ -100,7 +106,8 @@ public sealed class IssueBuilder
     public ReviewIssue Review() =>
         InProgress().MarkInReview(_branchName, _pullRequestUrl, _feedbackCutoffAt);
 
-    public RevisionQueuedIssue RevisionQueued() => Review().Revise(_reviewComments);
+    public RevisionQueuedIssue RevisionQueued() =>
+        Review().Revise(_reviewComments, _omittedCommentCount, _newestCommentAt);
 
     public RevisionInProgressIssue RevisionInProgress() => RevisionQueued().Claim(_workerRunId);
 

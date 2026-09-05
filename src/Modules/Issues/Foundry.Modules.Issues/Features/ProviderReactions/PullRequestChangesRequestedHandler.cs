@@ -30,7 +30,10 @@ internal sealed class PullRequestChangesRequestedHandler(
             return;
         }
 
-        RevisionQueuedIssue revisionQueued = reviewIssue.Revise(@event.Comments);
+        RevisionQueuedIssue revisionQueued = reviewIssue.Revise(
+            @event.Comments,
+            @event.OmittedCommentCount,
+            @event.NewestCommentAt);
         await db.TransitionAsync(reviewIssue, revisionQueued, domainEventDispatcher, cancellationToken);
     }
 }

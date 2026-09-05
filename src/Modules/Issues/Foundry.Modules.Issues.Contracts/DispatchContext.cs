@@ -19,7 +19,8 @@ public abstract record DispatchContext
     public sealed record Revision(
         string BranchName,
         string PullRequestUrl,
-        IReadOnlyList<ReviewComment> Comments) : DispatchContext;
+        IReadOnlyList<ReviewComment> Comments,
+        int OmittedCommentCount = 0) : DispatchContext;
 
     public sealed record Continuation(string BranchName, string? FailureReason = null) : DispatchContext;
 }
