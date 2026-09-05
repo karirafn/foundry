@@ -98,6 +98,7 @@ internal sealed partial class GitHubHttpClient(
             pullRequest(number: $number) {
               comments(first: 100) {
                 nodes {
+                  databaseId
                   body
                   createdAt
                   author { login __typename }
@@ -108,6 +109,7 @@ internal sealed partial class GitHubHttpClient(
                   isResolved
                   comments(first: 100) {
                     nodes {
+                      databaseId
                       body
                       path
                       line
@@ -622,30 +624,13 @@ internal sealed partial class GitHubHttpClient(
 
         PrReviewFeedbackPullRequest? pullRequest = dataSuccess.Value.Repository?.PullRequest;
         List<ProviderComment> providerComments = [];
+
+        // Review-thread (inline) comments are processed first so their richer context
+        // (FilePath, Line) wins when the same comment also appears in the top-level
+        // conversation surface. The de-dup key uses the stable databaseId when available;
+        // it falls back to (Body, CreatedAt, AuthorLogin) for nodes that omit the id.
+        HashSet<long> deduplicatedIds = [];
         HashSet<(string Body, DateTimeOffset CreatedAt, string AuthorLogin)> deduplicatedKeys = [];
-
-        IReadOnlyList<GraphQlConversationCommentNode> conversationNodes =
-            pullRequest?.Comments?.Nodes ?? [];
-
-        foreach (GraphQlConversationCommentNode node in conversationNodes)
-        {
-            string authorLogin = node.Author?.Login ?? string.Empty;
-            bool authorIsBot = string.Equals(node.Author?.Typename, "Bot", StringComparison.Ordinal);
-            string body = TruncateBody(node.Body);
-
-            deduplicatedKeys.Add((node.Body, node.CreatedAt, authorLogin));
-
-            providerComments.Add(new ProviderComment(
-                Body: body,
-                AuthorLogin: authorLogin,
-                AuthorIsBot: authorIsBot,
-                IsSystem: false,
-                CreatedAt: node.CreatedAt,
-                FilePath: null,
-                Line: null,
-                Origin: CommentOrigin.Conversation,
-                ThreadResolved: false));
-        }
 
         IReadOnlyList<GraphQlReviewThreadNode> reviewThreadNodes =
             pullRequest?.ReviewThreads?.Nodes ?? [];
@@ -664,7 +649,14 @@ internal sealed partial class GitHubHttpClient(
                 int? line = comment.Line ?? comment.OriginalLine;
                 string? sanitizedPath = SanitizeFilePath(comment.Path);
 
-                if (!deduplicatedKeys.Add((comment.Body, comment.CreatedAt, authorLogin)))
+                if (comment.DatabaseId.HasValue)
+                {
+                    if (!deduplicatedIds.Add(comment.DatabaseId.Value))
+                    {
+                        continue;
+                    }
+                }
+                else if (!deduplicatedKeys.Add((comment.Body, comment.CreatedAt, authorLogin)))
                 {
                     continue;
                 }
@@ -680,6 +672,42 @@ internal sealed partial class GitHubHttpClient(
                     Origin: CommentOrigin.ReviewThread,
                     ThreadResolved: threadResolved));
             }
+        }
+
+        IReadOnlyList<GraphQlConversationCommentNode> conversationNodes =
+            pullRequest?.Comments?.Nodes ?? [];
+
+        foreach (GraphQlConversationCommentNode node in conversationNodes)
+        {
+            string authorLogin = node.Author?.Login ?? string.Empty;
+            bool authorIsBot = string.Equals(node.Author?.Typename, "Bot", StringComparison.Ordinal);
+            string body = TruncateBody(node.Body);
+
+            // Skip the conversation-surface copy when the inline copy (with FilePath/Line) was
+            // already collected from reviewThreads. The id-based check is authoritative; the
+            // key-based check is the fallback for nodes without a databaseId.
+            if (node.DatabaseId.HasValue)
+            {
+                if (!deduplicatedIds.Add(node.DatabaseId.Value))
+                {
+                    continue;
+                }
+            }
+            else if (!deduplicatedKeys.Add((node.Body, node.CreatedAt, authorLogin)))
+            {
+                continue;
+            }
+
+            providerComments.Add(new ProviderComment(
+                Body: body,
+                AuthorLogin: authorLogin,
+                AuthorIsBot: authorIsBot,
+                IsSystem: false,
+                CreatedAt: node.CreatedAt,
+                FilePath: null,
+                Line: null,
+                Origin: CommentOrigin.Conversation,
+                ThreadResolved: false));
         }
 
         IReadOnlyList<GraphQlReviewNode> reviewNodes =
@@ -1561,6 +1589,7 @@ internal sealed partial class GitHubHttpClient(
     private sealed record GraphQlConversationCommentConnection(IReadOnlyList<GraphQlConversationCommentNode> Nodes);
 
     private sealed record GraphQlConversationCommentNode(
+        long? DatabaseId,
         string Body,
         DateTimeOffset CreatedAt,
         GraphQlCommentAuthor? Author);
@@ -1578,6 +1607,7 @@ internal sealed partial class GitHubHttpClient(
     private sealed record GraphQlReviewThreadCommentConnection(IReadOnlyList<GraphQlReviewThreadCommentNode> Nodes);
 
     private sealed record GraphQlReviewThreadCommentNode(
+        long? DatabaseId,
         string Body,
         string? Path,
         int? Line,

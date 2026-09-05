@@ -40,11 +40,13 @@ public sealed class GetPullRequestReviewFeedbackAsync
         string conversationCommentCreatedAt = "2026-06-01T10:00:00Z",
         string conversationCommentAuthorLogin = "alice",
         string conversationCommentAuthorTypename = "User",
+        long? conversationCommentDatabaseId = 1001,
         bool reviewThreadIsResolved = false,
         string threadCommentBody = "thread comment",
         string threadCommentCreatedAt = "2026-06-01T11:00:00Z",
         string threadCommentAuthorLogin = "bob",
         string threadCommentAuthorTypename = "User",
+        long? threadCommentDatabaseId = 2001,
         string? threadCommentPath = "src/Foo.cs",
         int? threadCommentLine = 42,
         int? threadCommentOriginalLine = null,
@@ -60,6 +62,12 @@ public sealed class GetPullRequestReviewFeedbackAsync
         string origLineJson = threadCommentOriginalLine.HasValue
             ? threadCommentOriginalLine.Value.ToString(System.Globalization.CultureInfo.InvariantCulture)
             : "null";
+        string convDatabaseIdJson = conversationCommentDatabaseId.HasValue
+            ? conversationCommentDatabaseId.Value.ToString(System.Globalization.CultureInfo.InvariantCulture)
+            : "null";
+        string threadDatabaseIdJson = threadCommentDatabaseId.HasValue
+            ? threadCommentDatabaseId.Value.ToString(System.Globalization.CultureInfo.InvariantCulture)
+            : "null";
 
         return $$"""
             {
@@ -70,6 +78,7 @@ public sealed class GetPullRequestReviewFeedbackAsync
                     "comments": {
                       "nodes": [
                         {
+                          "databaseId": {{convDatabaseIdJson}},
                           "body": "{{conversationCommentBody}}",
                           "createdAt": "{{conversationCommentCreatedAt}}",
                           "author": { "login": "{{conversationCommentAuthorLogin}}", "__typename": "{{conversationCommentAuthorTypename}}" }
@@ -83,6 +92,7 @@ public sealed class GetPullRequestReviewFeedbackAsync
                           "comments": {
                             "nodes": [
                               {
+                                "databaseId": {{threadDatabaseIdJson}},
                                 "body": "{{threadCommentBody}}",
                                 "path": {{pathJson}},
                                 "line": {{lineJson}},
@@ -395,8 +405,8 @@ public sealed class GetPullRequestReviewFeedbackAsync
     [Fact]
     public async Task WhenSameCommentAppearsTwice_DeduplicatesIt()
     {
-        // Arrange — same comment appears in both conversation comments and review threads
-        // (defensive de-dup guard: reviewThreads is authoritative for inline comments)
+        // Arrange — same comment appears in both conversation comments and review threads.
+        // The review-thread copy (with FilePath/Line) must be the one kept.
         string json = """
             {
               "data": {
@@ -406,6 +416,7 @@ public sealed class GetPullRequestReviewFeedbackAsync
                     "comments": {
                       "nodes": [
                         {
+                          "databaseId": 999,
                           "body": "duplicate comment",
                           "createdAt": "2026-06-01T10:00:00Z",
                           "author": { "login": "alice", "__typename": "User" }
@@ -419,6 +430,7 @@ public sealed class GetPullRequestReviewFeedbackAsync
                           "comments": {
                             "nodes": [
                               {
+                                "databaseId": 999,
                                 "body": "duplicate comment",
                                 "path": "src/Foo.cs",
                                 "line": 1,
@@ -454,8 +466,64 @@ public sealed class GetPullRequestReviewFeedbackAsync
         // Assert
         result.IsSuccess.ShouldBeTrue();
         IReadOnlyList<ProviderComment> comments = result.ShouldBeOfType<Result<IReadOnlyList<ProviderComment>>.Success>().Value;
-        int duplicateCount = comments.Count(c => c.Body == "duplicate comment");
-        duplicateCount.ShouldBe(1);
+        comments.Count(c => c.Body == "duplicate comment").ShouldBe(1);
+        ProviderComment kept = comments.Single(c => c.Body == "duplicate comment");
+        kept.ShouldSatisfyAllConditions(
+            () => kept.FilePath.ShouldBe("src/Foo.cs"),
+            () => kept.Line.ShouldBe(1),
+            () => kept.Origin.ShouldBe(CommentOrigin.ReviewThread));
+    }
+
+    [Fact]
+    public async Task WhenTwoDistinctCommentsShareBodyTimeAndAuthor_BothAreKept()
+    {
+        // Arrange — two separate comments happen to have identical body, timestamp, and author.
+        // Distinct databaseIds must prevent them from colliding in the de-dup set.
+        string json = """
+            {
+              "data": {
+                "rateLimit": { "cost": 1, "remaining": 4999 },
+                "repository": {
+                  "pullRequest": {
+                    "comments": {
+                      "nodes": [
+                        {
+                          "databaseId": 101,
+                          "body": "same body",
+                          "createdAt": "2026-06-01T10:00:00Z",
+                          "author": { "login": "alice", "__typename": "User" }
+                        },
+                        {
+                          "databaseId": 102,
+                          "body": "same body",
+                          "createdAt": "2026-06-01T10:00:00Z",
+                          "author": { "login": "alice", "__typename": "User" }
+                        }
+                      ]
+                    },
+                    "reviewThreads": { "nodes": [] },
+                    "reviews": { "nodes": [] }
+                  }
+                }
+              }
+            }
+            """;
+
+        FakeHandler handler = new(HttpStatusCode.OK, json);
+        GitHubHttpClient sut = BuildSut(handler);
+
+        // Act
+        Result<IReadOnlyList<ProviderComment>> result = await sut.GetPullRequestReviewFeedbackAsync(
+            ValidBaseUrl,
+            ValidSlug,
+            pullRequestUrl: ValidPrUrl,
+            token: "ghp_token",
+            CancellationToken.None);
+
+        // Assert
+        result.IsSuccess.ShouldBeTrue();
+        IReadOnlyList<ProviderComment> comments = result.ShouldBeOfType<Result<IReadOnlyList<ProviderComment>>.Success>().Value;
+        comments.Count(c => c.Body == "same body").ShouldBe(2);
     }
 
     [Fact]
@@ -600,6 +668,106 @@ public sealed class GetPullRequestReviewFeedbackAsync
         ProviderComment comment = comments[0];
         comment.AuthorLogin.ShouldBe(string.Empty);
         comment.AuthorIsBot.ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task WhenThreadCommentBodyIsExactly4000Chars_BodyIsNotTruncated()
+    {
+        // Arrange — exactly 4000 characters should pass through unchanged
+        string exactBody = new('x', 4000);
+        string json = BuildThreeSurfaceJson(threadCommentBody: exactBody);
+        FakeHandler handler = new(HttpStatusCode.OK, json);
+        GitHubHttpClient sut = BuildSut(handler);
+
+        // Act
+        Result<IReadOnlyList<ProviderComment>> result = await sut.GetPullRequestReviewFeedbackAsync(
+            ValidBaseUrl,
+            ValidSlug,
+            pullRequestUrl: ValidPrUrl,
+            token: "ghp_token",
+            CancellationToken.None);
+
+        // Assert
+        result.IsSuccess.ShouldBeTrue();
+        IReadOnlyList<ProviderComment> comments = result.ShouldBeOfType<Result<IReadOnlyList<ProviderComment>>.Success>().Value;
+        ProviderComment threadComment = comments.Single(c => c.Origin == CommentOrigin.ReviewThread);
+        threadComment.Body.Length.ShouldBe(4000);
+        threadComment.Body.ShouldNotEndWith("[truncated]");
+    }
+
+    [Fact]
+    public async Task WhenReviewBodyIsExactly4000Chars_BodyIsNotTruncated()
+    {
+        // Arrange — review-summary body at exactly 4000 characters should not be truncated
+        string exactBody = new('x', 4000);
+        string json = BuildThreeSurfaceJson(reviewBody: exactBody);
+        FakeHandler handler = new(HttpStatusCode.OK, json);
+        GitHubHttpClient sut = BuildSut(handler);
+
+        // Act
+        Result<IReadOnlyList<ProviderComment>> result = await sut.GetPullRequestReviewFeedbackAsync(
+            ValidBaseUrl,
+            ValidSlug,
+            pullRequestUrl: ValidPrUrl,
+            token: "ghp_token",
+            CancellationToken.None);
+
+        // Assert
+        result.IsSuccess.ShouldBeTrue();
+        IReadOnlyList<ProviderComment> comments = result.ShouldBeOfType<Result<IReadOnlyList<ProviderComment>>.Success>().Value;
+        ProviderComment reviewSummary = comments.Single(c => c.Origin == CommentOrigin.ReviewSummary);
+        reviewSummary.Body.Length.ShouldBe(4000);
+        reviewSummary.Body.ShouldNotEndWith("[truncated]");
+    }
+
+    [Fact]
+    public async Task WhenThreadCommentPathIsAbsoluteUnixPath_SetsFilePathToNull()
+    {
+        // Arrange — a path starting with "/" is an absolute Unix path and must be sanitized to null
+        string json = BuildThreeSurfaceJson(
+            threadCommentPath: "/etc/passwd",
+            threadCommentLine: 1);
+        FakeHandler handler = new(HttpStatusCode.OK, json);
+        GitHubHttpClient sut = BuildSut(handler);
+
+        // Act
+        Result<IReadOnlyList<ProviderComment>> result = await sut.GetPullRequestReviewFeedbackAsync(
+            ValidBaseUrl,
+            ValidSlug,
+            pullRequestUrl: ValidPrUrl,
+            token: "ghp_token",
+            CancellationToken.None);
+
+        // Assert
+        result.IsSuccess.ShouldBeTrue();
+        IReadOnlyList<ProviderComment> comments = result.ShouldBeOfType<Result<IReadOnlyList<ProviderComment>>.Success>().Value;
+        ProviderComment threadComment = comments.Single(c => c.Origin == CommentOrigin.ReviewThread);
+        threadComment.FilePath.ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task WhenThreadCommentPathContainsDriveLetter_SetsFilePathToNull()
+    {
+        // Arrange — a Windows-style path with a drive-letter colon (C:/...) must be sanitized to null
+        string json = BuildThreeSurfaceJson(
+            threadCommentPath: "C:/windows/system32",
+            threadCommentLine: 1);
+        FakeHandler handler = new(HttpStatusCode.OK, json);
+        GitHubHttpClient sut = BuildSut(handler);
+
+        // Act
+        Result<IReadOnlyList<ProviderComment>> result = await sut.GetPullRequestReviewFeedbackAsync(
+            ValidBaseUrl,
+            ValidSlug,
+            pullRequestUrl: ValidPrUrl,
+            token: "ghp_token",
+            CancellationToken.None);
+
+        // Assert
+        result.IsSuccess.ShouldBeTrue();
+        IReadOnlyList<ProviderComment> comments = result.ShouldBeOfType<Result<IReadOnlyList<ProviderComment>>.Success>().Value;
+        ProviderComment threadComment = comments.Single(c => c.Origin == CommentOrigin.ReviewThread);
+        threadComment.FilePath.ShouldBeNull();
     }
 
     [Fact]
