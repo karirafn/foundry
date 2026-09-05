@@ -655,6 +655,10 @@ internal sealed partial class GitHubHttpClient(
                     {
                         continue;
                     }
+
+                    // Seed the content-key set so a later conversation-surface copy with a null
+                    // databaseId (which falls through to the key-based branch) is still de-duped.
+                    deduplicatedKeys.Add((comment.Body, comment.CreatedAt, authorLogin));
                 }
                 else if (!deduplicatedKeys.Add((comment.Body, comment.CreatedAt, authorLogin)))
                 {
@@ -692,6 +696,10 @@ internal sealed partial class GitHubHttpClient(
                 {
                     continue;
                 }
+
+                // Seed the content-key set so a later null-databaseId copy of this comment
+                // (on any remaining surface) is still de-duped by content key.
+                deduplicatedKeys.Add((node.Body, node.CreatedAt, authorLogin));
             }
             else if (!deduplicatedKeys.Add((node.Body, node.CreatedAt, authorLogin)))
             {

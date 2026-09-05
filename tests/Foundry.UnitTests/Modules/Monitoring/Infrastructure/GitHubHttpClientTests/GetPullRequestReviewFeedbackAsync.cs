@@ -771,6 +771,148 @@ public sealed class GetPullRequestReviewFeedbackAsync
     }
 
     [Fact]
+    public async Task WhenBothSurfacesHaveNullDatabaseIdAndSameContent_DeduplicatesByContentKey()
+    {
+        // Arrange — both the review-thread copy and the conversation copy have databaseId=null
+        // but share the same body, createdAt, and author. The inline copy (with FilePath/Line)
+        // must win, and only one entry must be emitted.
+        string json = """
+            {
+              "data": {
+                "rateLimit": { "cost": 1, "remaining": 4999 },
+                "repository": {
+                  "pullRequest": {
+                    "comments": {
+                      "nodes": [
+                        {
+                          "databaseId": null,
+                          "body": "shared comment",
+                          "createdAt": "2026-06-01T10:00:00Z",
+                          "author": { "login": "alice", "__typename": "User" }
+                        }
+                      ]
+                    },
+                    "reviewThreads": {
+                      "nodes": [
+                        {
+                          "isResolved": false,
+                          "comments": {
+                            "nodes": [
+                              {
+                                "databaseId": null,
+                                "body": "shared comment",
+                                "path": "src/Foo.cs",
+                                "line": 5,
+                                "originalLine": null,
+                                "createdAt": "2026-06-01T10:00:00Z",
+                                "author": { "login": "alice", "__typename": "User" }
+                              }
+                            ]
+                          }
+                        }
+                      ]
+                    },
+                    "reviews": { "nodes": [] }
+                  }
+                }
+              }
+            }
+            """;
+
+        FakeHandler handler = new(HttpStatusCode.OK, json);
+        GitHubHttpClient sut = BuildSut(handler);
+
+        // Act
+        Result<IReadOnlyList<ProviderComment>> result = await sut.GetPullRequestReviewFeedbackAsync(
+            ValidBaseUrl,
+            ValidSlug,
+            pullRequestUrl: ValidPrUrl,
+            token: "ghp_token",
+            CancellationToken.None);
+
+        // Assert
+        result.IsSuccess.ShouldBeTrue();
+        IReadOnlyList<ProviderComment> comments = result.ShouldBeOfType<Result<IReadOnlyList<ProviderComment>>.Success>().Value;
+        comments.Count(c => c.Body == "shared comment").ShouldBe(1);
+        ProviderComment kept = comments.Single(c => c.Body == "shared comment");
+        kept.ShouldSatisfyAllConditions(
+            () => kept.FilePath.ShouldBe("src/Foo.cs"),
+            () => kept.Line.ShouldBe(5),
+            () => kept.Origin.ShouldBe(CommentOrigin.ReviewThread));
+    }
+
+    [Fact]
+    public async Task WhenThreadCommentHasDatabaseIdAndConversationCopyHasNullDatabaseId_DeduplicatesByContentKey()
+    {
+        // Arrange — the review-thread copy has databaseId=888 (seeds deduplicatedIds and
+        // deduplicatedKeys cross-surface guard), while the conversation copy has databaseId=null
+        // and must be suppressed by the content-key fallback. Only the inline copy must survive.
+        string json = """
+            {
+              "data": {
+                "rateLimit": { "cost": 1, "remaining": 4999 },
+                "repository": {
+                  "pullRequest": {
+                    "comments": {
+                      "nodes": [
+                        {
+                          "databaseId": null,
+                          "body": "mixed dedup comment",
+                          "createdAt": "2026-06-01T10:00:00Z",
+                          "author": { "login": "bob", "__typename": "User" }
+                        }
+                      ]
+                    },
+                    "reviewThreads": {
+                      "nodes": [
+                        {
+                          "isResolved": false,
+                          "comments": {
+                            "nodes": [
+                              {
+                                "databaseId": 888,
+                                "body": "mixed dedup comment",
+                                "path": "src/Bar.cs",
+                                "line": 12,
+                                "originalLine": null,
+                                "createdAt": "2026-06-01T10:00:00Z",
+                                "author": { "login": "bob", "__typename": "User" }
+                              }
+                            ]
+                          }
+                        }
+                      ]
+                    },
+                    "reviews": { "nodes": [] }
+                  }
+                }
+              }
+            }
+            """;
+
+        FakeHandler handler = new(HttpStatusCode.OK, json);
+        GitHubHttpClient sut = BuildSut(handler);
+
+        // Act
+        Result<IReadOnlyList<ProviderComment>> result = await sut.GetPullRequestReviewFeedbackAsync(
+            ValidBaseUrl,
+            ValidSlug,
+            pullRequestUrl: ValidPrUrl,
+            token: "ghp_token",
+            CancellationToken.None);
+
+        // Assert
+        result.IsSuccess.ShouldBeTrue();
+        IReadOnlyList<ProviderComment> comments = result.ShouldBeOfType<Result<IReadOnlyList<ProviderComment>>.Success>().Value;
+        comments.Count(c => c.Body == "mixed dedup comment").ShouldBe(1);
+        ProviderComment kept = comments.Single(c => c.Body == "mixed dedup comment");
+        kept.ShouldSatisfyAllConditions(
+            () => kept.FilePath.ShouldBe("src/Bar.cs"),
+            () => kept.Line.ShouldBe(12),
+            () => kept.Origin.ShouldBe(CommentOrigin.ReviewThread));
+    }
+
+    [Fact]
     public async Task WhenBaseUrlHasInvalidScheme_ReturnsInvalidBaseUrlError()
     {
         // Arrange
