@@ -68,8 +68,10 @@ public sealed class HandleAsync : IAsyncDisposable
             _domainEventDispatcher);
 
         return new WorkerCapacityAvailableHandler(
+            _dbContext,
             selector,
             claimer,
+            integrationEventDispatcher ?? new NullIntegrationEventDispatcher(),
             NullLogger<WorkerCapacityAvailableHandler>.Instance);
     }
 
@@ -1086,6 +1088,89 @@ public sealed class HandleAsync : IAsyncDisposable
 
         // Assert
         capturingDispatcher.DispatchedEvents.OfType<IssueClaimed>().ShouldBeEmpty();
+    }
+
+    // Guard: if an issue already carries the incoming WorkerRunId, no transition occurs
+    // even when other queued issues are available for claiming.
+    [Fact]
+    public async Task WhenIssueAlreadyCarriesWorkerRunId_DoesNotTransitionAnyIssue()
+    {
+        // Arrange
+        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
+        WorkerRunId workerRunId = WorkerRunId.New();
+        InProgressIssue inProgress = SeedInProgressIssue(repositoryId, workerRunId);
+
+        // Also seed a queued issue so the guard must actively stop the selection.
+        MonitoredRepositoryId queuedRepoId = MonitoredRepositoryId.New();
+        SeedQueuedIssue(queuedRepoId, issueNumber: 77);
+
+        CapturingIntegrationEventDispatcher capturingDispatcher = new();
+        WorkerCapacityAvailableHandler sut = BuildHandler(
+            repositoryEligibilityQuery: new AllEligibleRepositoryEligibilityQuery(),
+            integrationEventDispatcher: capturingDispatcher);
+
+        WorkerCapacityAvailable @event = new(workerRunId);
+
+        // Act
+        await sut.HandleAsync(@event, CancellationToken.None);
+
+        // Assert — the existing in-progress issue is untouched; no IssueClaimed published;
+        // the queued issue remains queued.
+        _dbContext.ChangeTracker.Clear();
+        Issue? issue = await _dbContext.Set<Issue>()
+            .FirstOrDefaultAsync(
+                i => i.Id == inProgress.Id,
+                TestContext.Current.CancellationToken);
+        issue.ShouldBeOfType<InProgressIssue>();
+        capturingDispatcher.DispatchedEvents.OfType<IssueClaimed>().ShouldBeEmpty();
+        Issue? queuedIssue = await _dbContext.Set<Issue>()
+            .FirstOrDefaultAsync(
+                i => i.MonitoredRepositoryId == queuedRepoId,
+                TestContext.Current.CancellationToken);
+        queuedIssue.ShouldBeOfType<FreshQueuedIssue>();
+    }
+
+    // Guard redelivery: replaying the same WorkerCapacityAvailable after a claim committed
+    // yields exactly one issue holding that WorkerRunId.
+    [Fact]
+    public async Task WhenClaimAlreadyCommittedAndEventRedelivered_ExactlyOneIssueHoldsWorkerRunId()
+    {
+        // Arrange — seed the issue already in-progress with the run id (simulates crash after claim committed).
+        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
+        WorkerRunId workerRunId = WorkerRunId.New();
+        SeedInProgressIssue(repositoryId, workerRunId);
+
+        // Also seed a second queued issue to prove the guard stops selection entirely.
+        SeedQueuedIssue(MonitoredRepositoryId.New(), issueNumber: 99);
+
+        WorkerCapacityAvailableHandler sut = BuildHandler(
+            repositoryEligibilityQuery: new AllEligibleRepositoryEligibilityQuery());
+
+        WorkerCapacityAvailable @event = new(workerRunId);
+
+        // Act — redelivery
+        await sut.HandleAsync(@event, CancellationToken.None);
+
+        // Assert — exactly one issue holds this WorkerRunId; no in-progress issue is left without a run.
+        _dbContext.ChangeTracker.Clear();
+        List<Issue> allIssues = await _dbContext.Set<Issue>()
+            .ToListAsync(TestContext.Current.CancellationToken);
+        List<InProgressIssue> inProgressIssues = allIssues.OfType<InProgressIssue>().ToList();
+        inProgressIssues.Count(i => i.WorkerRunId == workerRunId).ShouldBe(1);
+    }
+
+    private InProgressIssue SeedInProgressIssue(MonitoredRepositoryId repositoryId, WorkerRunId workerRunId)
+    {
+        InProgressIssue inProgress = new IssueBuilder()
+            .WithMonitoredRepositoryId(repositoryId)
+            .WithIssueNumber(50)
+            .WithTitle("In Progress Issue")
+            .WithWorkerRunId(workerRunId)
+            .InProgress();
+        _dbContext.Set<Issue>().Add(inProgress);
+        _dbContext.SaveChanges();
+        _dbContext.ChangeTracker.Clear();
+        return inProgress;
     }
 
     private FreshQueuedIssue SeedQueuedIssueAtTime(

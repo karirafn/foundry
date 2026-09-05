@@ -41,6 +41,17 @@ internal sealed class IssueClaimedHandler(
     {
         ClaimedIssueDispatch claimed = @event.Dispatch;
 
+        // A3: load-then-remove so an absent reservation is a clean no-op (redelivery / swept).
+        // The remove stages into the same first SaveChangesAsync as the StartingRun add,
+        // so reservation delete and run insert commit in one transaction.
+        DispatchReservation? reservation = await dbContext.Set<DispatchReservation>()
+            .FindAsync([claimed.WorkerRunId], cancellationToken);
+
+        if (reservation is not null)
+        {
+            dbContext.Set<DispatchReservation>().Remove(reservation);
+        }
+
         StartingRun startingRun = StartingRun.Begin(claimed.IssueId, claimed.WorkerRunId);
         dbContext.Set<WorkerRun>().Add(startingRun);
         await dbContext.SaveChangesAsync(cancellationToken);

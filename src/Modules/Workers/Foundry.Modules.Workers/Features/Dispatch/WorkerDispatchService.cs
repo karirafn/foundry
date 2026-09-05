@@ -153,6 +153,13 @@ internal sealed class WorkerDispatchService(
         }
 
         WorkerRunId workerRunId = WorkerRunId.New();
+
+        // Persist the reservation before dispatching so the slot is durably held as soon as
+        // the authorization is published. The reservation and the outbox row are written in
+        // one SaveChangesAsync call, making the promise atomic (D5, ADR 0069).
+        dbContext.Set<DispatchReservation>().Add(
+            DispatchReservation.Reserve(workerRunId, timeProvider.GetUtcNow()));
+
         await TryDispatchAsync(
             integrationEventDispatcher,
             [new WorkerCapacityAvailable(workerRunId)],
@@ -160,8 +167,9 @@ internal sealed class WorkerDispatchService(
             cancellationToken);
 
         // Harvest: enqueue-before-save ensures WorkerCapacityAvailable is written atomically
-        // to outbox_messages. Without this save the scoped collector holds the event but it is
-        // never drained and the IssueClaimed downstream transition is silently lost.
+        // to outbox_messages alongside the reservation row. Without this save the scoped
+        // collector holds the event but it is never drained and the IssueClaimed downstream
+        // transition is silently lost.
         await dbContext.SaveChangesAsync(cancellationToken);
     }
 

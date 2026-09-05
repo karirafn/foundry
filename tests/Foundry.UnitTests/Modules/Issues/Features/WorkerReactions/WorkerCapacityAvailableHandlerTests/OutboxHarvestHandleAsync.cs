@@ -101,8 +101,10 @@ public sealed class OutboxHarvestHandleAsync : IAsyncDisposable
             new AllEligibleRepositoryEligibilityQuery());
         IssueClaimer claimer = new(dbContext, integrationEventDispatcher, new CapturingDomainEventDispatcher());
         WorkerCapacityAvailableHandler sut = new(
+            dbContext,
             selector,
             claimer,
+            integrationEventDispatcher,
             NullLogger<WorkerCapacityAvailableHandler>.Instance);
 
         WorkerCapacityAvailable @event = new(WorkerRunId: WorkerRunId.New());
@@ -147,8 +149,10 @@ public sealed class OutboxHarvestHandleAsync : IAsyncDisposable
             new AllEligibleRepositoryEligibilityQuery());
         IssueClaimer claimer = new(dbContext, integrationEventDispatcher, new CapturingDomainEventDispatcher());
         WorkerCapacityAvailableHandler sut = new(
+            dbContext,
             selector,
             claimer,
+            integrationEventDispatcher,
             NullLogger<WorkerCapacityAvailableHandler>.Instance);
 
         WorkerCapacityAvailable @event = new(WorkerRunId: WorkerRunId.New());
@@ -193,8 +197,10 @@ public sealed class OutboxHarvestHandleAsync : IAsyncDisposable
             new AllEligibleRepositoryEligibilityQuery());
         IssueClaimer claimer = new(dbContext, integrationEventDispatcher, new CapturingDomainEventDispatcher());
         WorkerCapacityAvailableHandler sut = new(
+            dbContext,
             selector,
             claimer,
+            integrationEventDispatcher,
             NullLogger<WorkerCapacityAvailableHandler>.Instance);
 
         WorkerCapacityAvailable @event = new(WorkerRunId: WorkerRunId.New());
@@ -218,7 +224,7 @@ public sealed class OutboxHarvestHandleAsync : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenNoEligibleRepository_NoOutboxRowWritten()
+    public async Task WhenNoEligibleRepository_HarvestsClaimSkippedButNotIssueClaimed()
     {
         // Arrange
         await using AsyncServiceScope scope = _serviceProvider.CreateAsyncScope();
@@ -229,27 +235,36 @@ public sealed class OutboxHarvestHandleAsync : IAsyncDisposable
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
         SeedQueuedIssue(dbContext, repositoryId);
 
+        WorkerRunId workerRunId = WorkerRunId.New();
+
         DispatchCandidateSelector selector = new(
             dbContext,
             new StubRepositoryDispatchQueries(null),
             new NoEligibleRepositoryEligibilityQuery());
         IssueClaimer claimer = new(dbContext, integrationEventDispatcher, new CapturingDomainEventDispatcher());
         WorkerCapacityAvailableHandler sut = new(
+            dbContext,
             selector,
             claimer,
+            integrationEventDispatcher,
             NullLogger<WorkerCapacityAvailableHandler>.Instance);
 
-        WorkerCapacityAvailable @event = new(WorkerRunId: WorkerRunId.New());
+        WorkerCapacityAvailable @event = new(WorkerRunId: workerRunId);
 
-        // Act
+        // Act — mirror the production path: HandleAsync enqueues ClaimSkipped into the
+        // IntegrationEventCollector; the trailing SaveChangesAsync (normally issued by
+        // IntegrationEventProcessor after the handler returns) drains the collector via
+        // OutboxSaveChangesInterceptor into the outbox_messages table.
         await sut.HandleAsync(@event, TestContext.Current.CancellationToken);
+        await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
 
-        // Assert — no claim, no outbox row
+        // Assert — ClaimSkipped harvested; no IssueClaimed (no claim was made)
         dbContext.ChangeTracker.Clear();
         List<OutboxMessage> messages = await dbContext
             .Set<OutboxMessage>()
             .ToListAsync(TestContext.Current.CancellationToken);
-        messages.ShouldBeEmpty();
+        messages.ShouldContain(m => m.Type.Contains(nameof(ClaimSkipped)));
+        messages.ShouldNotContain(m => m.Type.Contains(nameof(IssueClaimed)));
     }
 
     private static void SeedRevisionQueuedIssue(FoundryDbContext dbContext, MonitoredRepositoryId repositoryId)

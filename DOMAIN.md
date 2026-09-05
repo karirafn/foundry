@@ -313,7 +313,10 @@ Survives the outbox round-trip via `[JsonPolymorphic]` / `[JsonDerivedType]` ann
 
 The act of assigning a queued issue to a specific worker run — the transition from a queued state variant to an in-progress one, paired with the `IssueClaimed` integration event that tells the Workers module to start a container.
 
-A claim is authorized by exactly one `WorkerCapacityAvailable` event. That event carries only a `WorkerRunId` and is delivered durably through the outbox, so it is a one-shot authorization token with no expiry: each delivered event claims at most one issue, and an event that finds nothing to claim is consumed without effect.
+A claim is authorized by exactly one `WorkerCapacityAvailable` event, which carries only a `WorkerRunId`.
+Each event is backed by a durable [Dispatch Reservation](#dispatch-reservation) created atomically with the event; the reservation counts against slot occupancy from the moment it is written, preventing additional events from being published until the slot is consumed or released.
+Before selecting a candidate, the handler checks whether any issue already carries the event's `WorkerRunId` — if so, the claim is skipped without selecting, preventing double-claims on redelivery (the at-least-once outbox guarantee means the same event may arrive more than once after a crash between claim and inbox commit).
+An event that finds no candidate publishes `Claim Skipped`, which releases the reservation.
 
 Claiming proceeds in three steps:
 
@@ -324,6 +327,37 @@ Claiming proceeds in three steps:
 Claiming is the only path from a queued state to an in-progress one; nothing else in the system claims an issue. Claims are never concurrent — the outbox relay is a single host-level service that delivers sequentially.
 
 **Terminal outcomes** are logged once at the handler: `Debug` when no eligible repositories exist or no candidates remain after eligibility filtering, `Warning` when every candidate was skipped because its repository's dispatch info could not be resolved (`AllCandidatesUnresolvable`). The "no covering credential" race is narrow — ineligibility already filters out repositories with no account in step 1, so an unresolvable dispatch info arises only when a credential is deleted or its token cleared between the last poll cycle and the claim.
+
+## Dispatch Reservation
+
+A durable record that holds a dispatch slot from the moment `WorkerCapacityAvailable` is published until the slot is consumed by a successful claim or released by a skip or sweep.
+Stored in `dispatch_reservations` as an aggregate with `Id = WorkerRunId` and `ReservedAt`.
+Created atomically with the `WorkerCapacityAvailable` outbox row inside `WorkerDispatchService`; the two writes share one transaction so the reservation can never exist without its corresponding event, and vice versa.
+
+**Lifecycle:**
+
+- **Reserve** — `WorkerDispatchService` creates one `DispatchReservation` per `WorkerCapacityAvailable` event it publishes.
+- **Consume** — `IssueClaimedHandler` deletes the reservation for the claimed `WorkerRunId` in the same save as the new `StartingRun` row — one atomic transaction.
+- **Release on skip** — `ClaimSkippedHandler` deletes the reservation when the Issues module publishes `Claim Skipped` (no eligible candidate found).
+- **Release on sweep** — `StaleReservationService` deletes reservations whose `ReservedAt` is older than the stale threshold (2 minutes).
+
+The sweep runs independently of `StaleStartingRunService` and has no Docker dependency, so a Docker outage cannot prevent stale reservations from being cleared (see [ADR 0069](docs/adr/0069-dispatch-capacity-held-by-a-durable-slot-reservation.md)).
+
+A reservation counts against [Worker Slot Occupancy](#worker-slot-occupancy) from the moment it is persisted, so the dispatch gate sees a full slot even before the worker container starts.
+
+## Claim Skipped
+
+An integration event published by the Issues module (`WorkerCapacityAvailableHandler`) when a `WorkerCapacityAvailable` event is delivered but no eligible candidate can be claimed.
+Carries `WorkerRunId` — the same id that was reserved and is now free to reuse.
+
+Three non-`Selected` outcomes trigger `Claim Skipped`:
+
+- `NoEligibleRepositories` — no repository that owns a queued issue passes eligibility checks.
+- `NoCandidates` — repositories are eligible but no queued issue exists among them.
+- `AllCandidatesUnresolvable` — every candidate's repository lacks resolvable dispatch info.
+
+`ClaimSkippedHandler` (Workers module) deletes the matching `DispatchReservation` on receipt, freeing the slot for the next dispatch tick.
+Redelivery is idempotent — if the reservation was already deleted (by the sweep or a prior delivery), the handler is a no-op.
 
 ## Queued Issue
 
@@ -565,9 +599,11 @@ After that threshold, the sweep fails the run via `StartingRun.Fail(ContainerErr
 
 ## Worker Slot Occupancy
 
-The count of worker runs that hold a dispatch slot at any moment — the figure checked against `MaxConcurrent` before a new run is dispatched.
-Slot occupancy is the union of `starting` and `active` runs (`starting ∪ active`): both states count against the limit.
-Including `StartingRun` in the count prevents over-dispatch during the window between row creation and container start; a `StartingRun` that never progresses holds its slot for at most `StaleStartingRunThreshold` (10 minutes) before the periodic sweep fails it (see Orphan Reconciliation).
+The count of dispatch slots held at any moment — the figure checked against `MaxConcurrent` before a new run is dispatched.
+Slot occupancy is the union of reservations, starting runs, and active runs (`reservations ∪ starting ∪ active`): all three states count against the limit.
+Including `DispatchReservation` in the count prevents over-dispatch during the window between the `WorkerCapacityAvailable` event being published and the claim being processed; including `StartingRun` prevents over-dispatch during the window between row creation and container start.
+An unresolved `DispatchReservation` holds its slot for at most `StaleReservationThreshold` (2 minutes) before `StaleReservationService` deletes it.
+An unresolved `StartingRun` holds its slot for at most `StaleStartingRunThreshold` (10 minutes) before `StaleStartingRunService` fails it (see Orphan Reconciliation).
 The query is implemented by `DbContext.GetSlotOccupancyCountAsync` and `DbContext.GetSlotOccupancyRunIdsAsync` extension methods, used by both `WorkerDispatchService` (dispatch gate) and `StaleStartingRunService` (orphan reaping).
 
 ## Branch Commit Count

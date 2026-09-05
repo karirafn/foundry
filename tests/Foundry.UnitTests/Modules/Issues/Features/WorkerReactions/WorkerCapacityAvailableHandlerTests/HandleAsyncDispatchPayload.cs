@@ -53,8 +53,10 @@ public sealed class HandleAsyncDispatchPayload : IAsyncDisposable
             new AllEligibleRepositoryEligibilityQuery());
         IssueClaimer claimer = new(_dbContext, _dispatcher, new NullDomainEventDispatcher());
         _sut = new WorkerCapacityAvailableHandler(
+            _dbContext,
             selector,
             claimer,
+            _dispatcher,
             NullLogger<WorkerCapacityAvailableHandler>.Instance);
     }
 

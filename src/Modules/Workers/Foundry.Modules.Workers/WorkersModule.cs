@@ -56,6 +56,7 @@ public static class WorkersModule
         services.AddSingleton<IWorkerImageRebuildQueue, WorkerImageRebuildQueue>();
 
         services.AddIntegrationEventHandler<IssueClaimed, IssueClaimedHandler>();
+        services.AddIntegrationEventHandler<ClaimSkipped, ClaimSkippedHandler>();
         services.AddIntegrationEventHandler<WorkerImageConfigurationChanged, WorkerImageConfigurationChangedHandler>();
         services.AddIntegrationEventHandler<DispatchPaused, DispatchPausedBroadcastHandler>();
         services.AddIntegrationEventHandler<DispatchResumed, DispatchResumedBroadcastHandler>();
@@ -70,6 +71,7 @@ public static class WorkersModule
         services.AddHostedService<WorkerDispatchService>();
         services.AddHostedService<WorkerImageRebuildService>();
         services.AddHostedService<StaleStartingRunService>();
+        services.AddHostedService<StaleReservationService>();
 
         return services;
     }
