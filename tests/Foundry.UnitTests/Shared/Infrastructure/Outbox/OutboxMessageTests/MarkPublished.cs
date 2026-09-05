@@ -42,7 +42,6 @@ public sealed class MarkPublished
             MonitoredRepositoryId.From(Guid.NewGuid()),
             1,
             "Title",
-            "Body",
             "user",
             "https://github.com/org/repo/issues/1",
             ["bug"],

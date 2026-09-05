@@ -120,14 +120,14 @@ public sealed class PreContainerFailureBridging : IAsyncDisposable
             WorkerRunId.New(),
             1,
             "Test",
-            "Test body",
             "owner/repo",
             new Uri("https://github.com/owner/repo.git"),
             "ghp_test",
             BranchName.From("feat/1-test"),
             MonitoredRepositoryId.New(),
             new WorkerProvider.GitHub(),
-            new DispatchContext.Fresh("feat/1-test"));
+            new DispatchContext.Fresh("feat/1-test"),
+            "https://api.github.com/repos/owner/repo/issues/1");
         return new IssueClaimed(dispatch);
     }
 

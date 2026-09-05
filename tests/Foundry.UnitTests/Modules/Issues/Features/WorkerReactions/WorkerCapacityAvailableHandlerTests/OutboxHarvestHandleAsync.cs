@@ -97,7 +97,8 @@ public sealed class OutboxHarvestHandleAsync : IAsyncDisposable
                 "owner/repo",
                 new Uri("https://github.com/owner/repo.git"),
                 "GITHUB_PAT",
-                new WorkerProvider.GitHub())),
+                new WorkerProvider.GitHub(),
+                "https://api.github.com/repos/owner/repo/issues")),
             new AllEligibleRepositoryEligibilityQuery());
         IssueClaimer claimer = new(dbContext, integrationEventDispatcher, new CapturingDomainEventDispatcher());
         WorkerCapacityAvailableHandler sut = new(
@@ -145,7 +146,8 @@ public sealed class OutboxHarvestHandleAsync : IAsyncDisposable
                 "owner/repo",
                 new Uri("https://github.com/owner/repo.git"),
                 "GITHUB_PAT",
-                new WorkerProvider.GitHub())),
+                new WorkerProvider.GitHub(),
+                "https://api.github.com/repos/owner/repo/issues")),
             new AllEligibleRepositoryEligibilityQuery());
         IssueClaimer claimer = new(dbContext, integrationEventDispatcher, new CapturingDomainEventDispatcher());
         WorkerCapacityAvailableHandler sut = new(
@@ -193,7 +195,8 @@ public sealed class OutboxHarvestHandleAsync : IAsyncDisposable
                 "owner/repo",
                 new Uri("https://github.com/owner/repo.git"),
                 "GITHUB_PAT",
-                new WorkerProvider.GitHub())),
+                new WorkerProvider.GitHub(),
+                "https://api.github.com/repos/owner/repo/issues")),
             new AllEligibleRepositoryEligibilityQuery());
         IssueClaimer claimer = new(dbContext, integrationEventDispatcher, new CapturingDomainEventDispatcher());
         WorkerCapacityAvailableHandler sut = new(

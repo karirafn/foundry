@@ -46,7 +46,6 @@ public sealed class UniqueIndex : IAsyncDisposable
             .WithMonitoredRepositoryId(repositoryId)
             .WithIssueNumber(1)
             .WithTitle("First")
-            .WithBody("Body")
             .WithLabels([])
             .Detected();
 
@@ -54,7 +53,6 @@ public sealed class UniqueIndex : IAsyncDisposable
             .WithMonitoredRepositoryId(repositoryId)
             .WithIssueNumber(1)
             .WithTitle("Duplicate")
-            .WithBody("Body")
             .WithLabels([])
             .Detected();
 

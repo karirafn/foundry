@@ -68,7 +68,6 @@ public sealed class MarkInReview
             () => review.MonitoredRepositoryId.ShouldBe(repositoryId),
             () => review.IssueNumber.ShouldBe(inProgress.IssueNumber),
             () => review.Title.ShouldBe(inProgress.Title),
-            () => review.Body.ShouldBe(inProgress.Body),
             () => review.DetectedAt.ShouldBe(inProgress.DetectedAt));
     }
 }

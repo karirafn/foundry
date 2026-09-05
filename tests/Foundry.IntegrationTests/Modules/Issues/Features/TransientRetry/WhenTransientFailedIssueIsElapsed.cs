@@ -72,7 +72,6 @@ public sealed class WhenTransientFailedIssueIsElapsed : IAsyncDisposable
             .WithMonitoredRepositoryId(MonitoredRepositoryId.New())
             .WithIssueNumber(issueNumber)
             .WithTitle("Transient test issue")
-            .WithBody("Test body")
             .WithLabels(["foundry"])
             .WithDetectedAt(failedAt.AddHours(-2))
             .WithFailureReason("Transient Anthropic API fault")

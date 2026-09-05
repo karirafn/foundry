@@ -47,10 +47,13 @@ internal sealed class RepositoryDispatchQueries(
             _ => throw new UnreachableException($"Unknown credential type: {credential.GetType().Name}"),
         };
 
+        string issueApiUrlBase = IssueApiUrlBuilder.BuildBase(credential, repo.Slug);
+
         return new RepositoryDispatchInfo(
             repo.Slug.ToString(),
             new Uri(credential.BaseUrl.Value, $"{repo.Slug}.git"),
             credential.Token,
-            provider);
+            provider,
+            issueApiUrlBase);
     }
 }

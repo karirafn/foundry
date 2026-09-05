@@ -70,7 +70,6 @@ public sealed class WhenIssuesExistWithIneligibleRepo : IAsyncDisposable
             .WithMonitoredRepositoryId(repositoryId)
             .WithIssueNumber(issueNumber)
             .WithTitle($"Issue {issueNumber}")
-            .WithBody("Body")
             .WithLabels([])
             .Detected();
 

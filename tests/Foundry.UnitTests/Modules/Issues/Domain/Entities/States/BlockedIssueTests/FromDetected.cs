@@ -41,7 +41,6 @@ public sealed class FromDetected
             () => blocked.MonitoredRepositoryId.ShouldBe(detected.MonitoredRepositoryId),
             () => blocked.IssueNumber.ShouldBe(detected.IssueNumber),
             () => blocked.Title.ShouldBe(detected.Title),
-            () => blocked.Body.ShouldBe(detected.Body),
             () => blocked.Author.ShouldBe(detected.Author),
             () => blocked.Url.ShouldBe(detected.Url),
             () => blocked.Labels.ShouldBe(detected.Labels),

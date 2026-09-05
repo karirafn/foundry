@@ -89,12 +89,6 @@ public sealed class IssueConfiguration : IEntityTypeConfiguration<Issue>
             .IsRequired()
             .HasColumnName("title");
 
-        builder.Property(i => i.Body)
-            .HasMaxLength(int.MaxValue)
-            .IsUnicode(true)
-            .IsRequired()
-            .HasColumnName("body");
-
         builder.Property(i => i.Author)
             .HasConversion(
                 author => author.Value,

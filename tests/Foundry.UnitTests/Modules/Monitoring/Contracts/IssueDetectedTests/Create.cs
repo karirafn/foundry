@@ -20,7 +20,6 @@ public sealed class Create
             repositoryId,
             IssueNumber: 42,
             Title: "Test issue",
-            Body: "Test body",
             Author: "alice",
             Url: "https://github.com/org/repo/issues/42",
             Labels: ["bug"],

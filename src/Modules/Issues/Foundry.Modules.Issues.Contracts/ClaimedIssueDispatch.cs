@@ -10,11 +10,11 @@ public sealed record ClaimedIssueDispatch(
     WorkerRunId WorkerRunId,
     int IssueNumber,
     string Title,
-    string Body,
     string RepositorySlug,
     Uri CloneUrl,
     string? AccountToken,
     BranchName BranchName,
     MonitoredRepositoryId MonitoredRepositoryId,
     WorkerProvider Provider,
-    DispatchContext Context);
+    DispatchContext Context,
+    string IssueApiUrl);

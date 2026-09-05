@@ -22,14 +22,14 @@ public sealed class Create
             WorkerRunId: WorkerRunId.New(),
             IssueNumber: 42,
             Title: "Fix the bug",
-            Body: "Bug details",
             RepositorySlug: "org/repo",
             CloneUrl: new Uri("https://github.com/org/repo.git"),
             AccountToken: "ghp_test_token",
             BranchName: BranchName.From("feat/42"),
             MonitoredRepositoryId: repositoryId,
             Provider: new WorkerProvider.GitHub(),
-            Context: new DispatchContext.Fresh("feat/42"));
+            Context: new DispatchContext.Fresh("feat/42"),
+            IssueApiUrl: "https://api.github.com/repos/org/repo/issues/42");
 
         // Act
         IssueClaimed @event = new(dispatch);

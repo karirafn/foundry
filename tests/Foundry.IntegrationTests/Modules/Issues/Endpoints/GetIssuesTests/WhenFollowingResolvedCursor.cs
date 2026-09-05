@@ -47,7 +47,6 @@ public sealed class WhenFollowingResolvedCursor : IAsyncDisposable
             .WithMonitoredRepositoryId(RepositoryId)
             .WithIssueNumber(issueNumber)
             .WithTitle($"Completed Issue {issueNumber}")
-            .WithBody("Body")
             .WithLabels([])
             .WithDetectedAt(detectedAt)
             .WithBranchName($"feat/{issueNumber}-fix")

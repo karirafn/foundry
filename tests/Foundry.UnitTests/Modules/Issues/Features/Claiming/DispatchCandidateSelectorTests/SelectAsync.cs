@@ -24,7 +24,8 @@ public sealed class SelectAsync : IAsyncDisposable
         "owner/repo",
         new Uri("https://github.com/owner/repo.git"),
         "GITHUB_PAT",
-        new WorkerProvider.GitHub());
+        new WorkerProvider.GitHub(),
+        "https://api.github.com/repos/owner/repo/issues");
 
     public SelectAsync()
     {

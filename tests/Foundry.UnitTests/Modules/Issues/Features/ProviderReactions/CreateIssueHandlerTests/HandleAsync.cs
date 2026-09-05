@@ -49,7 +49,6 @@ public sealed class HandleAsync : IAsyncDisposable
             MonitoredRepositoryId: repositoryId,
             IssueNumber: 42,
             Title: "Fix the bug",
-            Body: "Bug body",
             Author: "octocat",
             Url: "https://github.com/owner/repo/issues/42",
             Labels: ["bug"],
@@ -69,7 +68,6 @@ public sealed class HandleAsync : IAsyncDisposable
             () => detected.MonitoredRepositoryId.ShouldBe(repositoryId),
             () => detected.IssueNumber.ShouldBe(42),
             () => detected.Title.ShouldBe("Fix the bug"),
-            () => detected.Body.ShouldBe("Bug body"),
             () => detected.Labels.ShouldBe(["bug"]));
     }
 
@@ -82,7 +80,6 @@ public sealed class HandleAsync : IAsyncDisposable
             MonitoredRepositoryId: repositoryId,
             IssueNumber: 1,
             Title: "Bug fix",
-            Body: "Body",
             Author: "octocat",
             Url: "https://github.com/owner/repo/issues/1",
             Labels: ["bug"],
@@ -110,7 +107,6 @@ public sealed class HandleAsync : IAsyncDisposable
             MonitoredRepositoryId: repositoryId,
             IssueNumber: 7,
             Title: "New issue",
-            Body: "Body",
             Author: "user",
             Url: "https://github.com/owner/repo/issues/7",
             Labels: [],

@@ -49,7 +49,6 @@ public sealed class PersistReviewToFailedIssue : IAsyncDisposable
             .WithMonitoredRepositoryId(repositoryId)
             .WithIssueNumber(55)
             .WithTitle("Review to failed issue")
-            .WithBody("PR rejected body")
             .WithLabels([])
             .WithWorkerRunId(reviewWorkerRunId)
             .WithBranchName("feat/issue-55")

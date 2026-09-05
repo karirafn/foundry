@@ -43,7 +43,6 @@ public sealed class PersistInProgressIssue : IAsyncDisposable
         IssueBuilder builder = new IssueBuilder()
             .WithIssueNumber(42)
             .WithTitle("In-progress issue")
-            .WithBody("In-progress body")
             .WithLabels([]);
         InProgressIssue inProgress = builder.InProgress();
 

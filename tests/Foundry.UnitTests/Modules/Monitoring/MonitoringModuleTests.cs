@@ -3,6 +3,8 @@ using Foundry.Modules.Monitoring.Contracts.Queries;
 using Foundry.Modules.Monitoring.Features.CredentialResolution;
 using Foundry.Modules.Monitoring.Features.Polling;
 using Foundry.Modules.Monitoring.Features.Providers;
+using Foundry.Modules.Monitoring.Infrastructure.GitHub;
+using Foundry.Modules.Monitoring.Infrastructure.GitLab;
 using Foundry.WebApi.Persistence;
 
 using Microsoft.Data.Sqlite;
@@ -122,6 +124,46 @@ public sealed class MonitoringModuleTests
 
         // Assert
         result.ShouldBeSameAs(app);
+    }
+
+    [Fact]
+    public void AddMonitoringModule_GitHubHttpClient_HasMaxResponseContentBufferSize()
+    {
+        // Arrange
+        ServiceCollection services = new();
+        services.AddHttpClient();
+        services.AddLogging();
+        services.AddMemoryCache();
+        services.AddMonitoringModule();
+        ServiceProvider provider = services.BuildServiceProvider();
+
+        // Act
+        HttpClient client = provider
+            .GetRequiredService<IHttpClientFactory>()
+            .CreateClient(typeof(GitHubHttpClient).Name);
+
+        // Assert
+        client.MaxResponseContentBufferSize.ShouldBe(MonitoringModule.MaxResponseContentBufferSize);
+    }
+
+    [Fact]
+    public void AddMonitoringModule_GitLabHttpClient_HasMaxResponseContentBufferSize()
+    {
+        // Arrange
+        ServiceCollection services = new();
+        services.AddHttpClient();
+        services.AddLogging();
+        services.AddMemoryCache();
+        services.AddMonitoringModule();
+        ServiceProvider provider = services.BuildServiceProvider();
+
+        // Act
+        HttpClient client = provider
+            .GetRequiredService<IHttpClientFactory>()
+            .CreateClient(typeof(GitLabHttpClient).Name);
+
+        // Assert
+        client.MaxResponseContentBufferSize.ShouldBe(MonitoringModule.MaxResponseContentBufferSize);
     }
 
     private sealed class FakeEndpointRouteBuilder : Microsoft.AspNetCore.Routing.IEndpointRouteBuilder

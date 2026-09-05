@@ -55,7 +55,6 @@ internal sealed partial class GitHubHttpClient(
               nodes {
                 number
                 title
-                body
                 url
                 author { login }
                 labels(first: 100) { nodes { name } }
@@ -363,7 +362,6 @@ internal sealed partial class GitHubHttpClient(
                 allIssues.Add(new ProviderIssue(
                     Number: node.Number,
                     Title: node.Title,
-                    Body: node.Body ?? string.Empty,
                     Author: node.Author?.Login ?? string.Empty,
                     Url: node.Url,
                     Labels: labels,
@@ -1436,7 +1434,6 @@ internal sealed partial class GitHubHttpClient(
     private sealed record GraphQlIssueNode(
         int Number,
         string Title,
-        string? Body,
         string Url,
         GraphQlAuthor? Author,
         GraphQlLabelConnection Labels,

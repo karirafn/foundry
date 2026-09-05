@@ -64,7 +64,6 @@ public sealed class GetIssuesAsync
         issue.ShouldSatisfyAllConditions(
             () => issue.Number.ShouldBe(42),
             () => issue.Title.ShouldBe("Fix the bug"),
-            () => issue.Body.ShouldBe("Bug description"),
             () => issue.Author.ShouldBe("alice"),
             () => issue.Url.ShouldBe("https://gitlab.com/group/project/-/issues/42"),
             () => issue.Labels.ShouldBe(["bug", "foundry"]),

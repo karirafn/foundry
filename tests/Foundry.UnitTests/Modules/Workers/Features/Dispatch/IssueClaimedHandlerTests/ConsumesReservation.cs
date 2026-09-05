@@ -77,14 +77,14 @@ public sealed class ConsumesReservation : IAsyncDisposable
             workerRunId,
             42,
             "Test Issue",
-            "Test body",
             "owner/repo",
             new Uri("https://github.com/owner/repo.git"),
             "ghp_test_token",
             BranchName.From("feat/42-test-issue"),
             MonitoredRepositoryId.New(),
             new WorkerProvider.GitHub(),
-            new DispatchContext.Fresh("feat/42-test-issue"));
+            new DispatchContext.Fresh("feat/42-test-issue"),
+            "https://api.github.com/repos/owner/repo/issues/42");
         return new IssueClaimed(dispatch);
     }
 

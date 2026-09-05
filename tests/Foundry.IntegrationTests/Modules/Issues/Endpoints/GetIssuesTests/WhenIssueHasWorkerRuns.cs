@@ -51,7 +51,6 @@ public sealed class WhenIssueHasWorkerRuns : IAsyncDisposable
             .WithMonitoredRepositoryId(RepositoryId)
             .WithIssueNumber(issueNumber)
             .WithTitle($"Issue {issueNumber}")
-            .WithBody("Body")
             .WithLabels([])
             .FreshQueued();
 
@@ -152,7 +151,6 @@ public sealed class WhenIssueHasWorkerRuns : IAsyncDisposable
             .WithMonitoredRepositoryId(RepositoryId)
             .WithIssueNumber(3)
             .WithTitle("Resolved Issue")
-            .WithBody("Body")
             .WithLabels([])
             .WithBranchName("feat/3-fix")
             .WithPullRequestUrl("https://github.com/owner/repo/pull/3")

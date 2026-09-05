@@ -59,7 +59,6 @@ public sealed class Claim
             () => inProgress.MonitoredRepositoryId.ShouldBe(repositoryId),
             () => inProgress.IssueNumber.ShouldBe(1),
             () => inProgress.Title.ShouldBe("Test Issue"),
-            () => inProgress.Body.ShouldBe("Test body"),
             () => inProgress.Labels.ShouldBe(["foundry"]));
     }
 

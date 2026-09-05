@@ -26,6 +26,12 @@ namespace Foundry.Modules.Monitoring;
 
 public static class MonitoringModule
 {
+    // GitLab's REST issues API has no field selection and returns the full issue description
+    // regardless of what Foundry requests. Cap at 50 MiB to stop only catastrophic payloads
+    // (e.g. a description containing megabytes of base64-encoded content) while clearing any
+    // legitimate issue page.
+    internal const long MaxResponseContentBufferSize = 50 * 1024 * 1024;
+
     public static IServiceCollection AddMonitoringModule(this IServiceCollection services)
     {
         services.AddMemoryCache();
@@ -35,9 +41,11 @@ public static class MonitoringModule
         services.TryAddSingleton<TimeProvider>(_ => TimeProvider.System);
         services.AddScoped<ProviderHostGuard>();
 
-        services.AddHttpClient<GitHubHttpClient>();
+        services.AddHttpClient<GitHubHttpClient>(client =>
+            client.MaxResponseContentBufferSize = MaxResponseContentBufferSize);
         services.AddTransient<IGitHubWriteProber>(sp => sp.GetRequiredService<GitHubHttpClient>());
-        services.AddHttpClient<GitLabHttpClient>();
+        services.AddHttpClient<GitLabHttpClient>(client =>
+            client.MaxResponseContentBufferSize = MaxResponseContentBufferSize);
 
         services.AddScoped<INamespaceDeriver, NamespaceDeriver>();
         services.AddScoped<RepositoryEligibilityDiffer>();

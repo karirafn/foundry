@@ -132,6 +132,13 @@ internal sealed class IssueClaimedHandler(
                 new Error("Worker.EmptyGitPat", "No Git PAT configured for this account. Set the account token in Settings."));
         }
 
+        if (!Uri.TryCreate(claimed.IssueApiUrl, UriKind.Absolute, out Uri? issueApiUri)
+            || issueApiUri.Scheme != Uri.UriSchemeHttps)
+        {
+            return Result<WorkerContainerSpec>.Fail(
+                new Error("Worker.InvalidIssueApiUrl", "ISSUE_API_URL must be an absolute https URI."));
+        }
+
         string gitPat = claimed.AccountToken;
 
         (string? dbSystemPromptTemplate, string? dbWorkerPromptTemplate) =
@@ -142,11 +149,10 @@ internal sealed class IssueClaimedHandler(
 
         string systemPrompt = SystemPromptBuilder.Build(
             claimed.IssueNumber,
-            claimed.Title,
-            claimed.Body,
             _options,
             effectiveSystemPromptTemplate,
-            claimed.Context);
+            claimed.Context,
+            claimed.IssueApiUrl);
 
         string workerPrompt = effectiveWorkerPromptTemplate
             .Replace("{issueNumber}", claimed.IssueNumber.ToString(CultureInfo.InvariantCulture), StringComparison.Ordinal);
@@ -176,6 +182,7 @@ internal sealed class IssueClaimedHandler(
             ["GIT_PAT"] = gitPat,
             ["CLONE_URL"] = claimed.CloneUrl.ToString(),
             ["ISSUE_NUMBER"] = claimed.IssueNumber.ToString(CultureInfo.InvariantCulture),
+            ["ISSUE_API_URL"] = claimed.IssueApiUrl,
             ["BRANCH_NAME"] = claimed.BranchName.Value,
             ["SYSTEM_PROMPT"] = systemPrompt,
             ["WORKER_PROMPT"] = workerPrompt,

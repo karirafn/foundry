@@ -180,7 +180,6 @@ internal sealed partial class GitLabHttpClient(
                 allIssues.Add(new ProviderIssue(
                     Number: dto.Iid,
                     Title: dto.Title,
-                    Body: dto.Description ?? string.Empty,
                     Author: dto.Author.Username,
                     Url: dto.WebUrl,
                     Labels: dto.Labels,
@@ -932,7 +931,6 @@ internal sealed partial class GitLabHttpClient(
     private sealed record GitLabIssueDto(
         int Iid,
         string Title,
-        string? Description,
         GitLabAuthorDto Author,
         string WebUrl,
         IReadOnlyList<string> Labels);

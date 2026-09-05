@@ -93,14 +93,12 @@ public sealed class HandleAsyncDispatchPayload : IAsyncDisposable
     private async Task<FreshQueuedIssue> SeedQueuedIssueAsync(
         MonitoredRepositoryId repositoryId,
         int issueNumber = 1,
-        string title = "Test Issue",
-        string body = "Test body")
+        string title = "Test Issue")
     {
         DetectedIssue detected = new IssueBuilder()
             .WithMonitoredRepositoryId(repositoryId)
             .WithIssueNumber(issueNumber)
             .WithTitle(title)
-            .WithBody(body)
             .Detected();
 
         _dbContext.Set<Issue>().Add(detected);
@@ -123,8 +121,7 @@ public sealed class HandleAsyncDispatchPayload : IAsyncDisposable
         FreshQueuedIssue queued = await SeedQueuedIssueAsync(
             repository.Id,
             issueNumber: 7,
-            title: "Fix the bug",
-            body: "Detailed description");
+            title: "Fix the bug");
 
         WorkerRunId workerRunId = WorkerRunId.New();
         WorkerCapacityAvailable @event = new(workerRunId);
@@ -142,7 +139,6 @@ public sealed class HandleAsyncDispatchPayload : IAsyncDisposable
             () => dispatch.WorkerRunId.ShouldBe(workerRunId),
             () => dispatch.IssueNumber.ShouldBe(7),
             () => dispatch.Title.ShouldBe("Fix the bug"),
-            () => dispatch.Body.ShouldBe("Detailed description"),
             () => dispatch.RepositorySlug.ShouldBe("myorg/myrepo"),
             () => dispatch.AccountToken.ShouldBe("ghp_my_github_token"),
             () => dispatch.CloneUrl.ToString().ShouldBe("https://github.com/myorg/myrepo.git"));

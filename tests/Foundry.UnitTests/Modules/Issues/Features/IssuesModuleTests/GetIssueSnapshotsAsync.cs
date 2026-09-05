@@ -67,7 +67,6 @@ public sealed class GetIssueSnapshotsAsync : IAsyncDisposable
             .WithMonitoredRepositoryId(repositoryId)
             .WithIssueNumber(5)
             .WithTitle("My Issue")
-            .WithBody("Issue body")
             .WithLabels(["bug", "foundry"])
             .Detected();
 
@@ -85,7 +84,6 @@ public sealed class GetIssueSnapshotsAsync : IAsyncDisposable
         IssueSnapshot snapshot = result[5];
         snapshot.ShouldSatisfyAllConditions(
             () => snapshot.Title.ShouldBe("My Issue"),
-            () => snapshot.Body.ShouldBe("Issue body"),
             () => snapshot.Labels.ShouldBe(["bug", "foundry"]));
     }
 

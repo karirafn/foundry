@@ -42,7 +42,7 @@ public sealed class HandleAsync : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenIssueExists_UpdatesTitleBodyAndLabels()
+    public async Task WhenIssueExists_UpdatesTitleAndLabels()
     {
         // Arrange
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
@@ -50,7 +50,6 @@ public sealed class HandleAsync : IAsyncDisposable
             .WithMonitoredRepositoryId(repositoryId)
             .WithIssueNumber(5)
             .WithTitle("Original title")
-            .WithBody("Original body")
             .WithLabels(["old-label"])
             .Detected();
 
@@ -62,7 +61,6 @@ public sealed class HandleAsync : IAsyncDisposable
             MonitoredRepositoryId: repositoryId,
             IssueNumber: 5,
             Title: "Updated title",
-            Body: "Updated body",
             Labels: ["new-label"]);
 
         // Act
@@ -78,7 +76,6 @@ public sealed class HandleAsync : IAsyncDisposable
         Issue loadedIssue = updated.ShouldNotBeNull();
         loadedIssue.ShouldSatisfyAllConditions(
             () => loadedIssue.Title.ShouldBe("Updated title"),
-            () => loadedIssue.Body.ShouldBe("Updated body"),
             () => loadedIssue.Labels.ShouldBe(["new-label"]));
     }
 
@@ -91,7 +88,6 @@ public sealed class HandleAsync : IAsyncDisposable
             MonitoredRepositoryId: repositoryId,
             IssueNumber: 999,
             Title: "Title",
-            Body: "Body",
             Labels: []);
 
         // Act
@@ -112,7 +108,6 @@ public sealed class HandleAsync : IAsyncDisposable
             .WithMonitoredRepositoryId(otherRepo)
             .WithIssueNumber(5)
             .WithTitle("Original title")
-            .WithBody("Original body")
             .Detected();
 
         _dbContext.Set<Issue>().Add(issue);
@@ -123,7 +118,6 @@ public sealed class HandleAsync : IAsyncDisposable
             MonitoredRepositoryId: targetRepo,
             IssueNumber: 5,
             Title: "Updated title",
-            Body: "Updated body",
             Labels: []);
 
         // Act

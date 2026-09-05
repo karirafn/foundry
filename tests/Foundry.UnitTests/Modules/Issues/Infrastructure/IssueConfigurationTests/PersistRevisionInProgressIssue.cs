@@ -54,7 +54,6 @@ public sealed class PersistRevisionInProgressIssue : IAsyncDisposable
             .WithMonitoredRepositoryId(repositoryId)
             .WithIssueNumber(60)
             .WithTitle("Revision in progress issue")
-            .WithBody("Body")
             .WithLabels([])
             .WithWorkerRunId(workerRunId)
             .WithBranchName("feat/issue-60")

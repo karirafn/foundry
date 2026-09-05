@@ -22,7 +22,6 @@ public sealed class IssueBuilder
     private MonitoredRepositoryId _monitoredRepositoryId = MonitoredRepositoryId.New();
     private int _issueNumber = 1;
     private string _title = "Test Issue";
-    private string _body = "Test body";
     private IssueAuthor _author = IssueAuthor.Create("octocat").ValueOrThrow();
     private ProviderUrl _url = ProviderUrl.Create("https://github.com/owner/repo/issues/1").ValueOrThrow();
     private IReadOnlyList<string> _labels = ["foundry"];
@@ -49,8 +48,6 @@ public sealed class IssueBuilder
     public IssueBuilder WithIssueNumber(int value) { _issueNumber = value; return this; }
 
     public IssueBuilder WithTitle(string value) { _title = value; return this; }
-
-    public IssueBuilder WithBody(string value) { _body = value; return this; }
 
     public IssueBuilder WithAuthor(IssueAuthor value) { _author = value; return this; }
 
@@ -90,7 +87,6 @@ public sealed class IssueBuilder
             _monitoredRepositoryId,
             _issueNumber,
             _title,
-            _body,
             _author,
             _url,
             _labels,

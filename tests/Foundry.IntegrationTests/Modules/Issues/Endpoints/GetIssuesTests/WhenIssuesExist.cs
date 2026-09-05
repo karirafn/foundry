@@ -47,7 +47,6 @@ public sealed class WhenIssuesExist : IAsyncDisposable
             .WithMonitoredRepositoryId(RepositoryId)
             .WithIssueNumber(issueNumber)
             .WithTitle(title)
-            .WithBody("Body")
             .WithLabels([])
             .Detected();
 

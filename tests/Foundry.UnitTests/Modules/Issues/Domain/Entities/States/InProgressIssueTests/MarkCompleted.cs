@@ -49,7 +49,6 @@ public sealed class MarkCompleted
             () => completed.MonitoredRepositoryId.ShouldBe(repositoryId),
             () => completed.IssueNumber.ShouldBe(inProgress.IssueNumber),
             () => completed.Title.ShouldBe(inProgress.Title),
-            () => completed.Body.ShouldBe(inProgress.Body),
             () => completed.DetectedAt.ShouldBe(inProgress.DetectedAt));
     }
 

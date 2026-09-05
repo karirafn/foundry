@@ -41,7 +41,6 @@ public sealed class FromQueued
             () => blocked.MonitoredRepositoryId.ShouldBe(queued.MonitoredRepositoryId),
             () => blocked.IssueNumber.ShouldBe(queued.IssueNumber),
             () => blocked.Title.ShouldBe(queued.Title),
-            () => blocked.Body.ShouldBe(queued.Body),
             () => blocked.Author.ShouldBe(queued.Author),
             () => blocked.Url.ShouldBe(queued.Url),
             () => blocked.Labels.ShouldBe(queued.Labels),

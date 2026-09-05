@@ -6,7 +6,6 @@ public sealed record IssueDetected(
     MonitoredRepositoryId MonitoredRepositoryId,
     int IssueNumber,
     string Title,
-    string Body,
     string Author,
     string Url,
     IReadOnlyList<string> Labels,

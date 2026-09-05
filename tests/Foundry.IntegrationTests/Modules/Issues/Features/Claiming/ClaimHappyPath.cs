@@ -74,7 +74,6 @@ public sealed class ClaimHappyPath : IAsyncDisposable
             .WithMonitoredRepositoryId(repositoryId)
             .WithIssueNumber(issueNumber)
             .WithTitle("Claim integration test issue")
-            .WithBody("Test body")
             .WithLabels(["foundry"])
             .FreshQueued();
 

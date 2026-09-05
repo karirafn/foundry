@@ -49,7 +49,6 @@ internal sealed class CreateIssueHandler(
             @event.MonitoredRepositoryId,
             @event.IssueNumber,
             @event.Title,
-            @event.Body,
             authorSuccess.Value,
             urlSuccess.Value,
             @event.Labels,

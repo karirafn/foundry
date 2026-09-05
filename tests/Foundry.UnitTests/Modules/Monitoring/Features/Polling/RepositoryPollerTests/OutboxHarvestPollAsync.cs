@@ -101,7 +101,6 @@ public sealed class OutboxHarvestPollAsync : IAsyncDisposable
         ProviderIssue newIssue = new(
             Number: 1,
             Title: "Fix bug",
-            Body: "Body",
             Author: "octocat",
             Url: "https://github.com/owner/repo/issues/1",
             Labels: ["foundry"],

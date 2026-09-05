@@ -57,7 +57,6 @@ public sealed class Retry
             () => queued.MonitoredRepositoryId.ShouldBe(unchanged.MonitoredRepositoryId),
             () => queued.IssueNumber.ShouldBe(unchanged.IssueNumber),
             () => queued.Title.ShouldBe(unchanged.Title),
-            () => queued.Body.ShouldBe(unchanged.Body),
             () => queued.DetectedAt.ShouldBe(unchanged.DetectedAt));
     }
 }

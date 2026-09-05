@@ -19,7 +19,6 @@ public sealed class Detect
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
         int issueNumber = 42;
         string title = "Implement feature X";
-        string body = "Details about feature X.";
         IssueAuthor author = IssueAuthor.Create("octocat").ValueOrThrow();
         ProviderUrl url = ProviderUrl.Create("https://github.com/owner/repo/issues/1").ValueOrThrow();
         IReadOnlyList<string> labels = ["foundry", "enhancement"];
@@ -30,7 +29,6 @@ public sealed class Detect
             repositoryId,
             issueNumber,
             title,
-            body,
             author,
             url,
             labels,
@@ -41,7 +39,6 @@ public sealed class Detect
             () => issue.MonitoredRepositoryId.ShouldBe(repositoryId),
             () => issue.IssueNumber.ShouldBe(issueNumber),
             () => issue.Title.ShouldBe(title),
-            () => issue.Body.ShouldBe(body),
             () => issue.Author.ShouldBe(author),
             () => issue.Url.ShouldBe(url),
             () => issue.Labels.ShouldBe(labels),
@@ -58,9 +55,9 @@ public sealed class Detect
 
         // Act
         DetectedIssue a = DetectedIssue.Detect(
-            repositoryId, 1, "Title", "Body", author, url, [], DateTimeOffset.UtcNow);
+            repositoryId, 1, "Title", author, url, [], DateTimeOffset.UtcNow);
         DetectedIssue b = DetectedIssue.Detect(
-            repositoryId, 2, "Title", "Body", author, url, [], DateTimeOffset.UtcNow);
+            repositoryId, 2, "Title", author, url, [], DateTimeOffset.UtcNow);
 
         // Assert
         a.Id.ShouldNotBe(b.Id);
@@ -76,7 +73,7 @@ public sealed class Detect
 
         // Act
         DetectedIssue issue = DetectedIssue.Detect(
-            repositoryId, 1, "Title", "Body", author, url, [], DateTimeOffset.UtcNow);
+            repositoryId, 1, "Title", author, url, [], DateTimeOffset.UtcNow);
 
         // Assert
         issue.BlockedBy.ShouldBeEmpty();
@@ -95,7 +92,6 @@ public sealed class Detect
             repositoryId,
             issueNumber: 1,
             title: "Title",
-            body: "Body",
             author: author,
             url: url,
             labels: [],
@@ -116,7 +112,7 @@ public sealed class Detect
 
         // Act
         DetectedIssue issue = DetectedIssue.Detect(
-            repositoryId, 1, "Title", "Body", author, url, [], DateTimeOffset.UtcNow);
+            repositoryId, 1, "Title", author, url, [], DateTimeOffset.UtcNow);
 
         // Assert
         issue.IssueKind.ShouldBe(IssueKind.Feature);

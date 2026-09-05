@@ -44,7 +44,6 @@ public sealed class PersistBlockedIssue : IAsyncDisposable
         BlockedIssue blocked = new IssueBuilder()
             .WithIssueNumber(3)
             .WithTitle("Blocked issue")
-            .WithBody("Blocked body")
             .WithLabels([])
             .Detected()
             .Block(blockers);

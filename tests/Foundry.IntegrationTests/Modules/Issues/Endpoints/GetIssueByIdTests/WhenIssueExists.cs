@@ -51,7 +51,6 @@ public sealed class WhenIssueExists : IAsyncDisposable
             .WithMonitoredRepositoryId(repositoryId ?? RepositoryId)
             .WithIssueNumber(7)
             .WithTitle("A detected issue")
-            .WithBody("Issue body text")
             .WithAuthor(IssueAuthor.Create("octocat").ValueOrThrow())
             .WithUrl(ProviderUrl.Create("https://github.com/owner/repo/issues/7").ValueOrThrow())
             .WithLabels(["bug"])
@@ -138,7 +137,6 @@ public sealed class WhenIssueExists : IAsyncDisposable
                 .WithMonitoredRepositoryId(repoId)
                 .WithIssueNumber(7)
                 .WithTitle("A GitLab issue")
-                .WithBody("Issue body")
                 .WithUrl(ProviderUrl.Create("https://gitlab.com/owner/gitlab-repo/issues/7").ValueOrThrow())
                 .WithLabels([])
                 .Detected();

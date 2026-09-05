@@ -20,7 +20,6 @@ public sealed class Create
             repositoryId,
             IssueNumber: 42,
             Title: "Updated title",
-            Body: "Updated body",
             Labels: ["enhancement"]);
 
         // Assert

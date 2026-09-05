@@ -4,4 +4,5 @@ public sealed record RepositoryDispatchInfo(
     string RepositorySlug,
     Uri CloneUrl,
     string? AccountToken,
-    WorkerProvider Provider);
+    WorkerProvider Provider,
+    string IssueApiUrlBase);

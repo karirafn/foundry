@@ -28,7 +28,8 @@ public sealed class ClaimAsync : IAsyncDisposable
         "owner/repo",
         new Uri("https://github.com/owner/repo.git"),
         "GITHUB_PAT",
-        new WorkerProvider.GitHub());
+        new WorkerProvider.GitHub(),
+        "https://api.github.com/repos/owner/repo/issues");
 
     public ClaimAsync()
     {
@@ -203,7 +204,8 @@ public sealed class ClaimAsync : IAsyncDisposable
             "owner/repo",
             new Uri("https://gitlab.com/owner/repo.git"),
             "GITLAB_PAT",
-            new WorkerProvider.GitLab());
+            new WorkerProvider.GitLab(),
+            "https://gitlab.com/api/v4/projects/owner%2Frepo/issues");
         DispatchCandidate candidate = new(queued, gitLabInfo);
         WorkerRunId workerRunId = WorkerRunId.New();
         IssueClaimer sut = BuildClaimer();
@@ -347,6 +349,27 @@ public sealed class ClaimAsync : IAsyncDisposable
             .OfType<IssueClaimed>()
             .ShouldHaveSingleItem();
         claimed.Dispatch.BranchName.ShouldBe(BranchName.From("feat/103-fix"));
+    }
+
+    // Cycle 12: FreshQueuedIssue — IssueClaimed dispatch has IssueApiUrl built from base + issue number
+    [Fact]
+    public async Task WhenQueuedIssue_IssueClaimed_IssueApiUrlIsBaseJoinedWithIssueNumber()
+    {
+        // Arrange
+        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
+        FreshQueuedIssue queued = SeedQueuedIssue(repositoryId, issueNumber: 42, title: "Add Health Check");
+        DispatchCandidate candidate = new(queued, DefaultDispatchInfo);
+        WorkerRunId workerRunId = WorkerRunId.New();
+        IssueClaimer sut = BuildClaimer();
+
+        // Act
+        await sut.ClaimAsync(candidate, workerRunId, CancellationToken.None);
+
+        // Assert
+        IssueClaimed claimed = _integrationEventDispatcher.DispatchedEvents
+            .OfType<IssueClaimed>()
+            .ShouldHaveSingleItem();
+        claimed.Dispatch.IssueApiUrl.ShouldBe(DefaultDispatchInfo.IssueApiUrlBase + "/42");
     }
 
     private sealed class CapturingIntegrationEventDispatcher : IIntegrationEventDispatcher

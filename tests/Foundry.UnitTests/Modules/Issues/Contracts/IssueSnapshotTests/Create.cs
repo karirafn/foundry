@@ -14,12 +14,11 @@ public sealed class Create
         // Arrange
 
         // Act
-        IssueSnapshot snapshot = new("Fix bug", "Bug body", ["bug"]);
+        IssueSnapshot snapshot = new("Fix bug", ["bug"]);
 
         // Assert
         snapshot.ShouldSatisfyAllConditions(
             () => snapshot.Title.ShouldBe("Fix bug"),
-            () => snapshot.Body.ShouldBe("Bug body"),
             () => snapshot.Labels.Count.ShouldBe(1));
     }
 }

@@ -48,7 +48,6 @@ public sealed class WhenIssueIsInUnchangedState : IAsyncDisposable
             .WithMonitoredRepositoryId(MonitoredRepositoryId.New())
             .WithIssueNumber(5)
             .WithTitle("An unchanged issue")
-            .WithBody("Issue body text")
             .WithUrl(ProviderUrl.Create("https://github.com/owner/repo/issues/5").ValueOrThrow())
             .WithLabels([])
             .Unchanged();

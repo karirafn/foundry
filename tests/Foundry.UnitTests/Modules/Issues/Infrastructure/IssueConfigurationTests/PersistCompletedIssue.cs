@@ -44,7 +44,6 @@ public sealed class PersistCompletedIssue : IAsyncDisposable
         CompletedIssue completed = new IssueBuilder()
             .WithIssueNumber(46)
             .WithTitle("Issue 46")
-            .WithBody("Body")
             .WithLabels([])
             .WithBranchName("feat/issue-46")
             .WithPullRequestUrl("https://github.com/owner/repo/pull/2")

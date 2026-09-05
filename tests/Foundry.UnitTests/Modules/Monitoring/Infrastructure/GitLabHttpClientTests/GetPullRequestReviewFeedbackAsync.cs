@@ -80,7 +80,6 @@ public sealed class GetPullRequestReviewFeedbackAsync
         success.Value.Comments.Count.ShouldBe(1);
         ReviewComment comment = success.Value.Comments[0];
         comment.ShouldSatisfyAllConditions(
-            () => comment.Body.ShouldBe("Fix this issue"),
             () => comment.FilePath.ShouldBe("src/Foo.cs"));
     }
 

@@ -20,7 +20,7 @@ internal sealed class UpdateIssueDetailsHandler(
             return;
         }
 
-        issue.UpdateDetails(@event.Title, @event.Body, @event.Labels);
+        issue.UpdateDetails(@event.Title, @event.Labels);
         await db.SaveChangesAsync(cancellationToken);
     }
 }

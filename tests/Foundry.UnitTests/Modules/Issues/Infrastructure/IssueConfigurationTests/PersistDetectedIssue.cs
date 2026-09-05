@@ -47,7 +47,6 @@ public sealed class PersistDetectedIssue : IAsyncDisposable
             .WithMonitoredRepositoryId(repositoryId)
             .WithIssueNumber(42)
             .WithTitle("Fix the bug")
-            .WithBody("Body text")
             .WithAuthor(IssueAuthor.Create("octocat").ValueOrThrow())
             .WithUrl(ProviderUrl.Create("https://github.com/owner/repo/issues/1").ValueOrThrow())
             .WithLabels(["foundry", "bug"])
@@ -83,7 +82,6 @@ public sealed class PersistDetectedIssue : IAsyncDisposable
             .WithMonitoredRepositoryId(repositoryId)
             .WithIssueNumber(77)
             .WithTitle("Fix the crash")
-            .WithBody("Body text")
             .WithLabels(["foundry", "bug"])
             .WithIssueKind(IssueKind.Bug)
             .Detected();
@@ -111,7 +109,6 @@ public sealed class PersistDetectedIssue : IAsyncDisposable
             .WithMonitoredRepositoryId(repositoryId)
             .WithIssueNumber(78)
             .WithTitle("Add a feature")
-            .WithBody("Body text")
             .WithLabels(["foundry"])
             .WithIssueKind(IssueKind.Feature)
             .Detected();
@@ -139,7 +136,6 @@ public sealed class PersistDetectedIssue : IAsyncDisposable
             .WithMonitoredRepositoryId(repositoryId)
             .WithIssueNumber(99)
             .WithTitle("No blockers")
-            .WithBody("Body")
             .WithLabels([])
             .Detected();
 

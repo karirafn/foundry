@@ -90,7 +90,6 @@ public sealed class GetIssuesWithDependenciesAsync
         issue.ShouldSatisfyAllConditions(
             () => issue.Number.ShouldBe(42),
             () => issue.Title.ShouldBe("Fix the bug"),
-            () => issue.Body.ShouldBe("Bug description"),
             () => issue.Author.ShouldBe("octocat"),
             () => issue.Url.ShouldBe("https://github.com/owner/repo/issues/42"),
             () => issue.Labels.ShouldBe(["bug", "foundry"]),
@@ -145,56 +144,6 @@ public sealed class GetIssuesWithDependenciesAsync
         Result<IssueListingWithDependencies>.Success success =
             result.ShouldBeOfType<Result<IssueListingWithDependencies>.Success>();
         success.Value.Listing.Issues[0].Author.ShouldBe(string.Empty);
-    }
-
-    [Fact]
-    public async Task WhenBodyIsNull_MapsToEmptyString()
-    {
-        // Arrange
-        string json = """
-            {
-              "data": {
-                "repository": {
-                  "defaultBranchRef": { "name": "main" },
-                  "issues": {
-                    "pageInfo": { "hasNextPage": false, "endCursor": null },
-                    "nodes": [
-                      {
-                        "number": 5,
-                        "title": "No body",
-                        "body": null,
-                        "url": "https://github.com/owner/repo/issues/5",
-                        "state": "OPEN",
-                        "author": { "login": "dev" },
-                        "labels": { "nodes": [] },
-                        "blockedBy": {
-                          "totalCount": 0,
-                          "pageInfo": { "hasNextPage": false },
-                          "nodes": []
-                        }
-                      }
-                    ]
-                  }
-                }
-              },
-              "errors": null
-            }
-            """;
-
-        FakeHandler handler = new(HttpStatusCode.OK, json);
-        GitHubHttpClient sut = BuildSut(handler);
-
-        // Act
-        Result<IssueListingWithDependencies> result = await sut.GetIssuesWithDependenciesAsync(
-            ValidBaseUrl,
-            ValidSlug,
-            "ghp_token",
-            CancellationToken.None);
-
-        // Assert
-        Result<IssueListingWithDependencies>.Success success =
-            result.ShouldBeOfType<Result<IssueListingWithDependencies>.Success>();
-        success.Value.Listing.Issues[0].Body.ShouldBe(string.Empty);
     }
 
     // --- Empty node list → success with zero issues (distinct from envelope failure) ---
@@ -283,7 +232,8 @@ public sealed class GetIssuesWithDependenciesAsync
             () => requestBody.ShouldContain("defaultBranchRef"),
             () => requestBody.ShouldContain("rateLimit"),
             () => requestBody.ShouldContain("OPEN"),
-            () => requestBody.ShouldContain("foundry"));
+            () => requestBody.ShouldContain("foundry"),
+            () => requestBody.ShouldNotContain("\"body\""));
     }
 
     // --- blockedBy filter: same-repo open included, cross-repo excluded, closed excluded ---

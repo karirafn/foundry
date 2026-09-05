@@ -25,8 +25,6 @@ public abstract class Issue : AggregateRoot<IssueId>, IStateMachine<Issue>
 
     public string Title { get; private set; } = string.Empty;
 
-    public string Body { get; private set; } = string.Empty;
-
     public IssueAuthor Author { get; private set; } = null!;
 
     public ProviderUrl Url { get; private set; } = null!;
@@ -64,10 +62,9 @@ public abstract class Issue : AggregateRoot<IssueId>, IStateMachine<Issue>
             : blockers.Take(MaxBlockers).ToList();
     }
 
-    public void UpdateDetails(string title, string body, IReadOnlyList<string> labels)
+    public void UpdateDetails(string title, IReadOnlyList<string> labels)
     {
         Title = title;
-        Body = body;
         Labels = labels;
     }
 
@@ -75,7 +72,6 @@ public abstract class Issue : AggregateRoot<IssueId>, IStateMachine<Issue>
         MonitoredRepositoryId monitoredRepositoryId,
         int issueNumber,
         string title,
-        string body,
         IssueAuthor author,
         ProviderUrl url,
         IReadOnlyList<string> labels,
@@ -84,7 +80,6 @@ public abstract class Issue : AggregateRoot<IssueId>, IStateMachine<Issue>
         MonitoredRepositoryId = monitoredRepositoryId;
         IssueNumber = issueNumber;
         Title = title;
-        Body = body;
         Author = author;
         Url = url;
         Labels = labels;

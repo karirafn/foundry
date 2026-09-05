@@ -31,7 +31,6 @@ public sealed class RevisionInProgressIssue : Issue
             source.MonitoredRepositoryId,
             source.IssueNumber,
             source.Title,
-            source.Body,
             source.Author,
             source.Url,
             source.Labels,
