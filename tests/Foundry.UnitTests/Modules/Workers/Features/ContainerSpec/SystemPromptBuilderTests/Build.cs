@@ -118,8 +118,9 @@ public sealed class Build
             new DispatchContext.Fresh("feat/5-my-title"),
             "https://api.github.com/repos/owner/repo/issues/5");
 
-        // Assert
-        result.ShouldNotContain("SECRET_BODY_CONTENT");
+        // Assert — the old block tag that carried the body must not appear in the output;
+        // its presence would indicate a regression where the body was re-embedded.
+        result.ShouldNotContain("<issue-content>");
     }
 
     [Fact]

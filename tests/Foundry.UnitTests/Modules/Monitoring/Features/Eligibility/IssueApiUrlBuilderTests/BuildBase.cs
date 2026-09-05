@@ -10,7 +10,7 @@ using Xunit;
 
 namespace Foundry.UnitTests.Modules.Monitoring.Features.Eligibility.IssueApiUrlBuilderTests;
 
-public sealed class Build
+public sealed class BuildBase
 {
     [Fact]
     public void WhenGitHubCom_ReturnsApiGitHubComReposUrl()
@@ -21,10 +21,10 @@ public sealed class Build
         RepositorySlug slug = RepositorySlug.Create("owner/repo").ValueOrThrow();
 
         // Act
-        string result = IssueApiUrlBuilder.Build(credential, slug, 42);
+        string result = IssueApiUrlBuilder.BuildBase(credential, slug);
 
         // Assert
-        result.ShouldBe("https://api.github.com/repos/owner/repo/issues/42");
+        result.ShouldBe("https://api.github.com/repos/owner/repo/issues");
     }
 
     [Fact]
@@ -36,10 +36,10 @@ public sealed class Build
         RepositorySlug slug = RepositorySlug.Create("org/project").ValueOrThrow();
 
         // Act
-        string result = IssueApiUrlBuilder.Build(credential, slug, 99);
+        string result = IssueApiUrlBuilder.BuildBase(credential, slug);
 
         // Assert
-        result.ShouldBe("https://ghe.example.com/api/v3/repos/org/project/issues/99");
+        result.ShouldBe("https://ghe.example.com/api/v3/repos/org/project/issues");
     }
 
     [Fact]
@@ -51,10 +51,10 @@ public sealed class Build
         RepositorySlug slug = RepositorySlug.Create("owner/repo").ValueOrThrow();
 
         // Act
-        string result = IssueApiUrlBuilder.Build(credential, slug, 7);
+        string result = IssueApiUrlBuilder.BuildBase(credential, slug);
 
         // Assert
-        result.ShouldBe("https://gitlab.com/api/v4/projects/owner%2Frepo/issues/7");
+        result.ShouldBe("https://gitlab.com/api/v4/projects/owner%2Frepo/issues");
     }
 
     [Fact]
@@ -66,9 +66,9 @@ public sealed class Build
         RepositorySlug slug = RepositorySlug.Create("group/sub/project").ValueOrThrow();
 
         // Act
-        string result = IssueApiUrlBuilder.Build(credential, slug, 1);
+        string result = IssueApiUrlBuilder.BuildBase(credential, slug);
 
         // Assert
-        result.ShouldBe("https://gitlab.com/api/v4/projects/group%2Fsub%2Fproject/issues/1");
+        result.ShouldBe("https://gitlab.com/api/v4/projects/group%2Fsub%2Fproject/issues");
     }
 }
