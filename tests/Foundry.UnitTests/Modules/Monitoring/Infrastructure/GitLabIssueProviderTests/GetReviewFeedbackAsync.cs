@@ -50,7 +50,10 @@ public sealed class GetReviewFeedbackAsync
                     "body": "Review comment after cutoff",
                     "resolvable": true,
                     "resolved": false,
+                    "system": false,
+                    "created_at": "2026-06-01T00:00:00Z",
                     "updated_at": "2026-06-01T00:00:00Z",
+                    "author": { "username": "alice" },
                     "position": null
                   }
                 ]
@@ -86,7 +89,10 @@ public sealed class GetReviewFeedbackAsync
                     "body": "Old comment",
                     "resolvable": true,
                     "resolved": false,
+                    "system": false,
+                    "created_at": "2025-12-31T23:59:59Z",
                     "updated_at": "2025-12-31T23:59:59Z",
+                    "author": { "username": "alice" },
                     "position": null
                   }
                 ]
