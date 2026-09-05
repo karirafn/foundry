@@ -146,7 +146,8 @@ internal sealed class IssueClaimedHandler(
             claimed.Body,
             _options,
             effectiveSystemPromptTemplate,
-            claimed.Context);
+            claimed.Context,
+            claimed.IssueApiUrl);
 
         string workerPrompt = effectiveWorkerPromptTemplate
             .Replace("{issueNumber}", claimed.IssueNumber.ToString(CultureInfo.InvariantCulture), StringComparison.Ordinal);
@@ -176,6 +177,7 @@ internal sealed class IssueClaimedHandler(
             ["GIT_PAT"] = gitPat,
             ["CLONE_URL"] = claimed.CloneUrl.ToString(),
             ["ISSUE_NUMBER"] = claimed.IssueNumber.ToString(CultureInfo.InvariantCulture),
+            ["ISSUE_API_URL"] = claimed.IssueApiUrl,
             ["BRANCH_NAME"] = claimed.BranchName.Value,
             ["SYSTEM_PROMPT"] = systemPrompt,
             ["WORKER_PROMPT"] = workerPrompt,

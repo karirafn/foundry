@@ -1,3 +1,5 @@
+using System.Globalization;
+
 using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Issues.Domain.Entities;
 using Foundry.Modules.Workers.Contracts;
@@ -27,6 +29,9 @@ internal sealed class IssueClaimer(
         BranchName branchName = issue.DispatchBranchName;
         Issue claimed = issue.Claim(workerRunId);
 
+        string issueApiUrl = candidate.DispatchInfo.IssueApiUrlBase
+            + "/" + claimed.IssueNumber.ToString(CultureInfo.InvariantCulture);
+
         ClaimedIssueDispatch dispatch = new(
             claimed.Id,
             workerRunId,
@@ -39,7 +44,8 @@ internal sealed class IssueClaimer(
             branchName,
             issue.MonitoredRepositoryId,
             candidate.DispatchInfo.Provider,
-            issue.Context);
+            issue.Context,
+            issueApiUrl);
 
         await integrationEventDispatcher.DispatchAsync([new IssueClaimed(dispatch)], cancellationToken);
 

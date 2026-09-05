@@ -17,4 +17,5 @@ public sealed record ClaimedIssueDispatch(
     BranchName BranchName,
     MonitoredRepositoryId MonitoredRepositoryId,
     WorkerProvider Provider,
-    DispatchContext Context);
+    DispatchContext Context,
+    string IssueApiUrl);

@@ -29,7 +29,8 @@ public sealed class Create
             BranchName: BranchName.From("feat/42"),
             MonitoredRepositoryId: repositoryId,
             Provider: new WorkerProvider.GitHub(),
-            Context: new DispatchContext.Fresh("feat/42"));
+            Context: new DispatchContext.Fresh("feat/42"),
+            IssueApiUrl: "https://api.github.com/repos/org/repo/issues/42");
 
         // Act
         IssueClaimed @event = new(dispatch);

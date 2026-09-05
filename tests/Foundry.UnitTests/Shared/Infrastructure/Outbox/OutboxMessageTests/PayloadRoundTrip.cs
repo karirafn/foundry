@@ -65,7 +65,8 @@ public sealed class PayloadRoundTrip
             BranchName.From("feat/7-implement-feature"),
             repoId,
             new WorkerProvider.GitHub(),
-            new DispatchContext.Fresh("feat/7-implement-feature"));
+            new DispatchContext.Fresh("feat/7-implement-feature"),
+            "https://api.github.com/repos/org/repo/issues/7");
         IssueClaimed original = new(dispatch);
         DateTimeOffset now = DateTimeOffset.UtcNow;
 
@@ -105,7 +106,8 @@ public sealed class PayloadRoundTrip
             BranchName.From("feat/7-implement-feature"),
             repoId,
             new WorkerProvider.GitHub(),
-            context);
+            context,
+            "https://api.github.com/repos/org/repo/issues/7");
         IssueClaimed original = new(dispatch);
         DateTimeOffset now = DateTimeOffset.UtcNow;
 
@@ -143,7 +145,8 @@ public sealed class PayloadRoundTrip
             BranchName.From("feat/7-implement-feature"),
             repoId,
             new WorkerProvider.GitHub(),
-            context);
+            context,
+            "https://api.github.com/repos/org/repo/issues/7");
         IssueClaimed original = new(dispatch);
         DateTimeOffset now = DateTimeOffset.UtcNow;
 
@@ -184,7 +187,8 @@ public sealed class PayloadRoundTrip
             BranchName.From("feat/7-implement-feature"),
             repoId,
             new WorkerProvider.GitHub(),
-            context);
+            context,
+            "https://api.github.com/repos/org/repo/issues/7");
         IssueClaimed original = new(dispatch);
         DateTimeOffset now = DateTimeOffset.UtcNow;
 

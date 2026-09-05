@@ -84,7 +84,8 @@ public sealed class ConsumesReservation : IAsyncDisposable
             BranchName.From("feat/42-test-issue"),
             MonitoredRepositoryId.New(),
             new WorkerProvider.GitHub(),
-            new DispatchContext.Fresh("feat/42-test-issue"));
+            new DispatchContext.Fresh("feat/42-test-issue"),
+            "https://api.github.com/repos/owner/repo/issues/42");
         return new IssueClaimed(dispatch);
     }
 

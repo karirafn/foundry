@@ -28,7 +28,8 @@ public sealed class ClaimAsync : IAsyncDisposable
         "owner/repo",
         new Uri("https://github.com/owner/repo.git"),
         "GITHUB_PAT",
-        new WorkerProvider.GitHub());
+        new WorkerProvider.GitHub(),
+        "https://api.github.com/repos/owner/repo/issues");
 
     public ClaimAsync()
     {
@@ -203,7 +204,8 @@ public sealed class ClaimAsync : IAsyncDisposable
             "owner/repo",
             new Uri("https://gitlab.com/owner/repo.git"),
             "GITLAB_PAT",
-            new WorkerProvider.GitLab());
+            new WorkerProvider.GitLab(),
+            "https://gitlab.com/api/v4/projects/owner%2Frepo/issues");
         DispatchCandidate candidate = new(queued, gitLabInfo);
         WorkerRunId workerRunId = WorkerRunId.New();
         IssueClaimer sut = BuildClaimer();

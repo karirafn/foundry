@@ -90,7 +90,8 @@ public sealed class HandleAsync : IAsyncDisposable
         MonitoredRepositoryId? monitoredRepositoryId = null,
         DispatchContext? context = null,
         WorkerProvider? provider = null,
-        string? cloneUrl = null)
+        string? cloneUrl = null,
+        string? issueApiUrl = null)
     {
         ClaimedIssueDispatch dispatch = new(
             issueId ?? IssueId.New(),
@@ -104,7 +105,8 @@ public sealed class HandleAsync : IAsyncDisposable
             BranchName.From(branchName),
             monitoredRepositoryId ?? MonitoredRepositoryId.New(),
             provider ?? new WorkerProvider.GitHub(),
-            context ?? new DispatchContext.Fresh(branchName));
+            context ?? new DispatchContext.Fresh(branchName),
+            issueApiUrl ?? $"https://api.github.com/repos/{repositorySlug}/issues/{issueNumber}");
         return new IssueClaimed(dispatch);
     }
 
@@ -948,6 +950,24 @@ public sealed class HandleAsync : IAsyncDisposable
         spec.ShouldSatisfyAllConditions(
             () => spec.SecurityOptions.ShouldBe(["seccomp=unconfined", "apparmor=unconfined"]),
             () => spec.Devices.ShouldBe(["/dev/fuse"]));
+    }
+
+    [Fact]
+    public async Task WhenDispatched_ContainerSpecHasIssueApiUrlEnvVar()
+    {
+        // Arrange
+        StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c-issue-api-url");
+        IssueClaimedHandler sut = BuildHandler(orchestrator: orchestrator);
+        string issueApiUrl = "https://api.github.com/repos/owner/repo/issues/42";
+        IssueClaimed @event = BuildEvent(issueApiUrl: issueApiUrl);
+
+        // Act
+        await sut.HandleAsync(@event, TestContext.Current.CancellationToken);
+
+        // Assert
+        WorkerContainerSpec? spec = orchestrator.LastSpec;
+        spec.ShouldNotBeNull();
+        spec.EnvironmentVariables["ISSUE_API_URL"].ShouldBe(issueApiUrl);
     }
 
     [Fact]
