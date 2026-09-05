@@ -9,6 +9,7 @@ using Foundry.Modules.Monitoring.Features.Eligibility;
 using Foundry.Modules.Monitoring.Features.NamespaceDerivation;
 using Foundry.Modules.Monitoring.Features.Polling;
 using Foundry.Modules.Monitoring.Features.Providers;
+using Foundry.Modules.Monitoring.Features.Providers.Feedback;
 using Foundry.Modules.Monitoring.Features.RateBudget;
 using Foundry.Modules.Monitoring.Features.Repositories;
 using Foundry.Modules.Monitoring.Infrastructure;
@@ -39,6 +40,7 @@ public static class MonitoringModule
         services.TryAddSingleton<IHostAddressResolver, SystemHostAddressResolver>();
         services.TryAddSingleton<IProviderRateBudget, InMemoryProviderRateBudget>();
         services.TryAddSingleton<TimeProvider>(_ => TimeProvider.System);
+        services.TryAddSingleton<ActionableFeedbackPolicy>();
         services.AddScoped<ProviderHostGuard>();
 
         services.AddHttpClient<GitHubHttpClient>(client =>

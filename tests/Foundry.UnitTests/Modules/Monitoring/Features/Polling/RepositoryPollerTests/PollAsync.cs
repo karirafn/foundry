@@ -4,6 +4,7 @@ using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Features.Eligibility;
 using Foundry.Modules.Monitoring.Features.Providers;
+using Foundry.Modules.Monitoring.Features.Providers.Feedback;
 using Foundry.Modules.Monitoring.Features.Polling;
 using Foundry.Shared;
 using Foundry.Testing;
@@ -726,7 +727,7 @@ public sealed class PollAsync : IAsyncDisposable
         ReviewComment comment = new("Please fix the indentation", "src/Foo.cs", 42);
         Dictionary<string, Result<ReviewFeedback>> feedbackResults = new()
         {
-            [prUrl] = Result<ReviewFeedback>.Ok(new ReviewFeedback([comment])),
+            [prUrl] = Result<ReviewFeedback>.Ok(new ReviewFeedback([comment], OmittedCommentCount: 0, NewestCommentAt: null)),
         };
         StubIssueProvider provider = new(
             [],
@@ -773,7 +774,7 @@ public sealed class PollAsync : IAsyncDisposable
         };
         Dictionary<string, Result<ReviewFeedback>> feedbackResults = new()
         {
-            [prUrl] = Result<ReviewFeedback>.Ok(new ReviewFeedback([])),
+            [prUrl] = Result<ReviewFeedback>.Ok(new ReviewFeedback([], OmittedCommentCount: 0, NewestCommentAt: null)),
         };
         StubIssueProvider provider = new(
             [],
@@ -820,7 +821,7 @@ public sealed class PollAsync : IAsyncDisposable
         Dictionary<string, Result<ReviewFeedback>> feedbackResults = new()
         {
             [prUrl1] = Result<ReviewFeedback>.Fail(feedbackError),
-            [prUrl2] = Result<ReviewFeedback>.Ok(new ReviewFeedback([comment])),
+            [prUrl2] = Result<ReviewFeedback>.Ok(new ReviewFeedback([comment], OmittedCommentCount: 0, NewestCommentAt: null)),
         };
         StubIssueProvider provider = new(
             [],
@@ -1487,7 +1488,7 @@ public sealed class PollAsync : IAsyncDisposable
                 return Task.FromResult(result);
             }
 
-            return Task.FromResult(Result<ReviewFeedback>.Ok(new ReviewFeedback([])));
+            return Task.FromResult(Result<ReviewFeedback>.Ok(new ReviewFeedback([], OmittedCommentCount: 0, NewestCommentAt: null)));
         }
 
         public Task<Result<BranchProtection>> GetBranchProtectionAsync(

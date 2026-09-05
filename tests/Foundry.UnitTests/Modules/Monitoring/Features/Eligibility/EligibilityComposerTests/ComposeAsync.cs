@@ -3,6 +3,7 @@ using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Features.Eligibility;
 using Foundry.Modules.Monitoring.Features.Providers;
+using Foundry.Modules.Monitoring.Features.Providers.Feedback;
 using Foundry.Shared;
 using Foundry.Testing;
 
@@ -146,7 +147,7 @@ public sealed class ComposeAsync
 
         public Task<Result<ReviewFeedback>> GetReviewFeedbackAsync(
             RepositorySlug slug, string pullRequestUrl, DateTimeOffset since, CancellationToken cancellationToken)
-            => Task.FromResult(Result<ReviewFeedback>.Ok(new ReviewFeedback([])));
+            => Task.FromResult(Result<ReviewFeedback>.Ok(new ReviewFeedback([], OmittedCommentCount: 0, NewestCommentAt: null)));
 
         public Task<Result<bool>> CreateBranchAsync(
             RepositorySlug slug, string branchName, CancellationToken cancellationToken)

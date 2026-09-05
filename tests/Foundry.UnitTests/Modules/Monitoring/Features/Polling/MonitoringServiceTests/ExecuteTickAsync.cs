@@ -5,6 +5,7 @@ using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Features.CredentialResolution;
 using Foundry.Modules.Monitoring.Features.Eligibility;
 using Foundry.Modules.Monitoring.Features.Providers;
+using Foundry.Modules.Monitoring.Features.Providers.Feedback;
 using Foundry.Modules.Monitoring.Features.Polling;
 using Foundry.Modules.Settings.Contracts.Queries;
 using Foundry.Shared;
@@ -351,7 +352,7 @@ public sealed class ExecuteTickAsync : IAsyncDisposable
                 DateTimeOffset since,
                 CancellationToken cancellationToken)
             {
-                return Task.FromResult(Result<ReviewFeedback>.Ok(new ReviewFeedback([])));
+                return Task.FromResult(Result<ReviewFeedback>.Ok(new ReviewFeedback([], OmittedCommentCount: 0, NewestCommentAt: null)));
             }
 
             public Task<Result<BranchProtection>> GetBranchProtectionAsync(

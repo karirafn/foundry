@@ -11,6 +11,7 @@ using Foundry.Modules.Monitoring.Features.Accounts;
 using Foundry.Modules.Monitoring.Features.Accounts.Tokens;
 using Foundry.Modules.Monitoring.Features.Polling;
 using Foundry.Modules.Monitoring.Features.Providers;
+using Foundry.Modules.Monitoring.Features.Providers.Feedback;
 using Foundry.Modules.Monitoring.Infrastructure;
 using Foundry.Modules.Monitoring.Infrastructure.GitHub;
 using Foundry.Modules.Monitoring.Infrastructure.RateBudget;
@@ -448,7 +449,7 @@ internal sealed partial class GitLabHttpClient(
             comments.Add(new ReviewComment(TruncateBody(firstNote.Body), sanitizedPath));
         }
 
-        return Result<ReviewFeedback>.Ok(new ReviewFeedback(comments));
+        return Result<ReviewFeedback>.Ok(new ReviewFeedback(comments, OmittedCommentCount: 0, NewestCommentAt: null));
     }
 
     public async Task<Result<IReadOnlyList<ProviderRepository>>> ListRepositoriesAsync(

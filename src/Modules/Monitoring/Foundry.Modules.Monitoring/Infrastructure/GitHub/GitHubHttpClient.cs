@@ -10,6 +10,7 @@ using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Features.Accounts;
 using Foundry.Modules.Monitoring.Features.Polling;
 using Foundry.Modules.Monitoring.Features.Providers;
+using Foundry.Modules.Monitoring.Features.Providers.Feedback;
 using Foundry.Modules.Monitoring.Infrastructure;
 using Foundry.Modules.Monitoring.Infrastructure.RateBudget;
 using Foundry.Shared;
@@ -638,7 +639,7 @@ internal sealed partial class GitHubHttpClient(
             }
         }
 
-        return Result<ReviewFeedback>.Ok(new ReviewFeedback(comments));
+        return Result<ReviewFeedback>.Ok(new ReviewFeedback(comments, OmittedCommentCount: 0, NewestCommentAt: null));
     }
 
     public async Task<Result<TokenValidationOutcome>> ValidateTokenAsync(
