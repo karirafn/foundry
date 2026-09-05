@@ -1,20 +1,33 @@
 using System.Diagnostics;
 
+using Foundry.Modules.Issues.Domain.Entities.States;
 using Foundry.Modules.Issues.Features.Claiming;
 using Foundry.Modules.Workers.Contracts;
 using Foundry.Shared;
 
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 
 namespace Foundry.Modules.Issues.Features.WorkerReactions;
 
 internal sealed class WorkerCapacityAvailableHandler(
+    DbContext dbContext,
     DispatchCandidateSelector selector,
     IssueClaimer claimer,
     ILogger<WorkerCapacityAvailableHandler> logger) : IIntegrationEventHandler<WorkerCapacityAvailable>
 {
     public async Task HandleAsync(WorkerCapacityAvailable @event, CancellationToken cancellationToken)
     {
+        bool alreadyClaimed = await WorkerRunIdExistsAsync(@event.WorkerRunId, cancellationToken);
+
+        if (alreadyClaimed)
+        {
+            logger.LogDebug(
+                "Worker run {WorkerRunId} is already recorded on an issue; skipping dispatch.",
+                @event.WorkerRunId);
+            return;
+        }
+
         SelectionOutcome outcome = await selector.SelectAsync(cancellationToken);
 
         switch (outcome)
@@ -46,5 +59,56 @@ internal sealed class WorkerCapacityAvailableHandler(
             default:
                 throw new UnreachableException($"Unhandled SelectionOutcome: {outcome.GetType().Name}");
         }
+    }
+
+    /// <summary>
+    /// Returns true when any issue already carries the given <paramref name="workerRunId"/>.
+    /// Queries each concrete TPH state that maps the <c>worker_run_id</c> column individually,
+    /// because <see cref="Microsoft.EntityFrameworkCore.EF.Property{TProperty}"/> cannot access
+    /// a property that is not declared on the queried base type (<c>Issue</c>).
+    /// Short-circuits on the first match.
+    /// </summary>
+    private async Task<bool> WorkerRunIdExistsAsync(
+        WorkerRunId workerRunId,
+        CancellationToken cancellationToken)
+    {
+        if (await dbContext.Set<InProgressIssue>()
+                .AnyAsync(i => i.WorkerRunId == workerRunId, cancellationToken))
+        {
+            return true;
+        }
+
+        if (await dbContext.Set<RevisionInProgressIssue>()
+                .AnyAsync(i => i.WorkerRunId == workerRunId, cancellationToken))
+        {
+            return true;
+        }
+
+        if (await dbContext.Set<ReviewIssue>()
+                .AnyAsync(i => i.WorkerRunId == workerRunId, cancellationToken))
+        {
+            return true;
+        }
+
+        if (await dbContext.Set<UnchangedIssue>()
+                .AnyAsync(i => i.WorkerRunId == workerRunId, cancellationToken))
+        {
+            return true;
+        }
+
+        if (await dbContext.Set<FailedIssue>()
+                .AnyAsync(i => i.WorkerRunId == workerRunId, cancellationToken))
+        {
+            return true;
+        }
+
+        if (await dbContext.Set<ContinuableFailedIssue>()
+                .AnyAsync(i => i.WorkerRunId == workerRunId, cancellationToken))
+        {
+            return true;
+        }
+
+        return await dbContext.Set<RevisionFailedIssue>()
+            .AnyAsync(i => i.WorkerRunId == workerRunId, cancellationToken);
     }
 }

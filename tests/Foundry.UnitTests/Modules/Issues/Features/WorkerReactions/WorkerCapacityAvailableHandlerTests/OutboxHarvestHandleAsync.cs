@@ -101,6 +101,7 @@ public sealed class OutboxHarvestHandleAsync : IAsyncDisposable
             new AllEligibleRepositoryEligibilityQuery());
         IssueClaimer claimer = new(dbContext, integrationEventDispatcher, new CapturingDomainEventDispatcher());
         WorkerCapacityAvailableHandler sut = new(
+            dbContext,
             selector,
             claimer,
             NullLogger<WorkerCapacityAvailableHandler>.Instance);
@@ -147,6 +148,7 @@ public sealed class OutboxHarvestHandleAsync : IAsyncDisposable
             new AllEligibleRepositoryEligibilityQuery());
         IssueClaimer claimer = new(dbContext, integrationEventDispatcher, new CapturingDomainEventDispatcher());
         WorkerCapacityAvailableHandler sut = new(
+            dbContext,
             selector,
             claimer,
             NullLogger<WorkerCapacityAvailableHandler>.Instance);
@@ -193,6 +195,7 @@ public sealed class OutboxHarvestHandleAsync : IAsyncDisposable
             new AllEligibleRepositoryEligibilityQuery());
         IssueClaimer claimer = new(dbContext, integrationEventDispatcher, new CapturingDomainEventDispatcher());
         WorkerCapacityAvailableHandler sut = new(
+            dbContext,
             selector,
             claimer,
             NullLogger<WorkerCapacityAvailableHandler>.Instance);
@@ -235,6 +238,7 @@ public sealed class OutboxHarvestHandleAsync : IAsyncDisposable
             new NoEligibleRepositoryEligibilityQuery());
         IssueClaimer claimer = new(dbContext, integrationEventDispatcher, new CapturingDomainEventDispatcher());
         WorkerCapacityAvailableHandler sut = new(
+            dbContext,
             selector,
             claimer,
             NullLogger<WorkerCapacityAvailableHandler>.Instance);
