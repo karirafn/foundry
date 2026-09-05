@@ -239,6 +239,56 @@ public sealed class PayloadRoundTrip
     }
 
     [Fact]
+    public void WhenLegacyDispatchContextRevisionOmitsOmittedCommentCount_DeserializesWithDefaultZero()
+    {
+        // Arrange — simulate an IssueClaimed outbox row serialized BEFORE OmittedCommentCount was added
+        // to DispatchContext.Revision. The field must default to 0 rather than causing deserialization
+        // to throw, proving in-flight rows survive the schema evolution.
+        IssueId issueId = IssueId.From(Guid.NewGuid());
+        MonitoredRepositoryId repoId = MonitoredRepositoryId.From(Guid.NewGuid());
+        WorkerRunId workerRunId = WorkerRunId.New();
+        // WorkerRunId has a custom [JsonConverter] that serializes as a plain GUID string.
+        // IssueId and MonitoredRepositoryId are structs serialized as {"Value":"<guid>"}.
+        // BranchName is a value object — serialize it the same way as the relay would.
+        string legacyJson = $$"""
+            {
+                "Dispatch": {
+                    "IssueId": {"Value": "{{issueId.Value}}"},
+                    "WorkerRunId": "{{workerRunId.Value}}",
+                    "IssueNumber": 7,
+                    "Title": "Fix the bug",
+                    "RepositorySlug": "org/repo",
+                    "CloneUrl": "https://github.com/org/repo.git",
+                    "AccountToken": null,
+                    "BranchName": {"Value": "feat/7-fix"},
+                    "MonitoredRepositoryId": {"Value": "{{repoId.Value}}"},
+                    "Provider": {"$type": "github"},
+                    "Context": {
+                        "$type": "revision",
+                        "BranchName": "feat/7-fix",
+                        "PullRequestUrl": "https://github.com/org/repo/pull/7",
+                        "Comments": [{"Body": "Please add tests.", "FilePath": null, "Line": null}]
+                    },
+                    "IssueApiUrl": "https://api.github.com/repos/org/repo/issues/7"
+                }
+            }
+            """;
+
+        // Act
+        IssueClaimed? deserialized = JsonSerializer.Deserialize<IssueClaimed>(
+            legacyJson,
+            OutboxSerializerOptions.Default);
+
+        // Assert
+        deserialized.ShouldNotBeNull();
+        DispatchContext.Revision revision = deserialized.Dispatch.Context.ShouldBeOfType<DispatchContext.Revision>();
+        revision.ShouldSatisfyAllConditions(
+            () => revision.BranchName.ShouldBe("feat/7-fix"),
+            () => revision.Comments.Count.ShouldBe(1),
+            () => revision.OmittedCommentCount.ShouldBe(0));
+    }
+
+    [Fact]
     public void WhenLegacyIssueDetailsChangedPayloadContainsBodyField_DeserializesWithoutErrorAndSurvivingFieldsIntact()
     {
         // Arrange — simulate a pre-migration outbox_messages row for IssueDetailsChanged with a "Body" field.
