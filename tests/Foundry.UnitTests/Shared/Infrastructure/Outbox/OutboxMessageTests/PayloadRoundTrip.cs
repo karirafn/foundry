@@ -57,7 +57,6 @@ public sealed class PayloadRoundTrip
             WorkerRunId.New(),
             7,
             "Implement feature",
-            
             "org/repo",
             new Uri("https://github.com/org/repo.git"),
             null,
@@ -98,7 +97,6 @@ public sealed class PayloadRoundTrip
             WorkerRunId.New(),
             7,
             "Implement feature",
-            
             "org/repo",
             new Uri("https://github.com/org/repo.git"),
             null,
@@ -137,7 +135,6 @@ public sealed class PayloadRoundTrip
             WorkerRunId.New(),
             7,
             "Implement feature",
-            
             "org/repo",
             new Uri("https://github.com/org/repo.git"),
             null,
@@ -179,7 +176,6 @@ public sealed class PayloadRoundTrip
             WorkerRunId.New(),
             7,
             "Implement feature",
-            
             "org/repo",
             new Uri("https://github.com/org/repo.git"),
             null,

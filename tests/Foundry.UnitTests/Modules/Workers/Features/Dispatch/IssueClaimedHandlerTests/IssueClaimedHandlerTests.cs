@@ -968,6 +968,40 @@ public sealed class HandleAsync : IAsyncDisposable
     }
 
     [Fact]
+    public async Task WhenIssueApiUrlIsNotHttps_CreatesFailedRunWithContainerError()
+    {
+        // Arrange
+        IssueClaimedHandler sut = BuildHandler();
+        IssueClaimed @event = BuildEvent(issueApiUrl: "http://api.github.com/repos/owner/repo/issues/42");
+
+        // Act
+        await sut.HandleAsync(@event, TestContext.Current.CancellationToken);
+        _dbContext.ChangeTracker.Clear();
+
+        // Assert
+        WorkerRun? run = await _dbContext.Set<WorkerRun>().SingleOrDefaultAsync(TestContext.Current.CancellationToken);
+        FailedRun failedRun = run.ShouldBeOfType<FailedRun>();
+        failedRun.Reason.ShouldBeOfType<FailureReason.ContainerError>();
+    }
+
+    [Fact]
+    public async Task WhenIssueApiUrlIsNotAbsolute_CreatesFailedRunWithContainerError()
+    {
+        // Arrange
+        IssueClaimedHandler sut = BuildHandler();
+        IssueClaimed @event = BuildEvent(issueApiUrl: "not-a-url");
+
+        // Act
+        await sut.HandleAsync(@event, TestContext.Current.CancellationToken);
+        _dbContext.ChangeTracker.Clear();
+
+        // Assert
+        WorkerRun? run = await _dbContext.Set<WorkerRun>().SingleOrDefaultAsync(TestContext.Current.CancellationToken);
+        FailedRun failedRun = run.ShouldBeOfType<FailedRun>();
+        failedRun.Reason.ShouldBeOfType<FailureReason.ContainerError>();
+    }
+
+    [Fact]
     public async Task WhenDockerDisabled_SecurityOptionsAndDevicesAreEmpty()
     {
         // Arrange

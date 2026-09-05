@@ -132,6 +132,13 @@ internal sealed class IssueClaimedHandler(
                 new Error("Worker.EmptyGitPat", "No Git PAT configured for this account. Set the account token in Settings."));
         }
 
+        if (!Uri.TryCreate(claimed.IssueApiUrl, UriKind.Absolute, out Uri? issueApiUri)
+            || issueApiUri.Scheme != Uri.UriSchemeHttps)
+        {
+            return Result<WorkerContainerSpec>.Fail(
+                new Error("Worker.InvalidIssueApiUrl", "ISSUE_API_URL must be an absolute https URI."));
+        }
+
         string gitPat = claimed.AccountToken;
 
         (string? dbSystemPromptTemplate, string? dbWorkerPromptTemplate) =
@@ -142,7 +149,6 @@ internal sealed class IssueClaimedHandler(
 
         string systemPrompt = SystemPromptBuilder.Build(
             claimed.IssueNumber,
-            claimed.Title,
             _options,
             effectiveSystemPromptTemplate,
             claimed.Context,

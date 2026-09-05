@@ -351,6 +351,27 @@ public sealed class ClaimAsync : IAsyncDisposable
         claimed.Dispatch.BranchName.ShouldBe(BranchName.From("feat/103-fix"));
     }
 
+    // Cycle 12: FreshQueuedIssue — IssueClaimed dispatch has IssueApiUrl built from base + issue number
+    [Fact]
+    public async Task WhenQueuedIssue_IssueClaimed_IssueApiUrlIsBaseJoinedWithIssueNumber()
+    {
+        // Arrange
+        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
+        FreshQueuedIssue queued = SeedQueuedIssue(repositoryId, issueNumber: 42, title: "Add Health Check");
+        DispatchCandidate candidate = new(queued, DefaultDispatchInfo);
+        WorkerRunId workerRunId = WorkerRunId.New();
+        IssueClaimer sut = BuildClaimer();
+
+        // Act
+        await sut.ClaimAsync(candidate, workerRunId, CancellationToken.None);
+
+        // Assert
+        IssueClaimed claimed = _integrationEventDispatcher.DispatchedEvents
+            .OfType<IssueClaimed>()
+            .ShouldHaveSingleItem();
+        claimed.Dispatch.IssueApiUrl.ShouldBe(DefaultDispatchInfo.IssueApiUrlBase + "/42");
+    }
+
     private sealed class CapturingIntegrationEventDispatcher : IIntegrationEventDispatcher
     {
         private readonly List<IIntegrationEvent> _events = [];

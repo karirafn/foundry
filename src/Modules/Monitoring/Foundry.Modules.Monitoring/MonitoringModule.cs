@@ -30,7 +30,7 @@ public static class MonitoringModule
     // regardless of what Foundry requests. Cap at 50 MiB to stop only catastrophic payloads
     // (e.g. a description containing megabytes of base64-encoded content) while clearing any
     // legitimate issue page.
-    public const long MaxResponseContentBufferSize = 50 * 1024 * 1024;
+    internal const long MaxResponseContentBufferSize = 50 * 1024 * 1024;
 
     public static IServiceCollection AddMonitoringModule(this IServiceCollection services)
     {
