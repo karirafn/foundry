@@ -65,13 +65,28 @@ internal sealed class GitHubIssueProvider(GitHubHttpClient httpClient, string to
         return httpClient.GetPullRequestStatusAsync(apiBaseUrl, slug, pullRequestUrl, token, cancellationToken);
     }
 
-    public Task<Result<ReviewFeedback>> GetReviewFeedbackAsync(
+    public async Task<Result<ReviewFeedback>> GetReviewFeedbackAsync(
         RepositorySlug slug,
         string pullRequestUrl,
         DateTimeOffset since,
         CancellationToken cancellationToken)
     {
-        return httpClient.GetPullRequestReviewFeedbackAsync(apiBaseUrl, slug, pullRequestUrl, since, token, cancellationToken);
+        // TODO(#497 Step 4): invoke ActionableFeedbackPolicy here instead of the inline bridge below.
+        Result<IReadOnlyList<ProviderComment>> rawResult = await httpClient.GetPullRequestReviewFeedbackAsync(
+            apiBaseUrl, slug, pullRequestUrl, token, cancellationToken);
+
+        if (rawResult is not Result<IReadOnlyList<ProviderComment>>.Success rawSuccess)
+        {
+            Error error = ((Result<IReadOnlyList<ProviderComment>>.Failure)rawResult).Error;
+            return Result<ReviewFeedback>.Fail(error);
+        }
+
+        IReadOnlyList<ReviewComment> comments = rawSuccess.Value
+            .Where(c => c.CreatedAt > since)
+            .Select(c => new ReviewComment(c.Body, c.FilePath, c.Line))
+            .ToList();
+
+        return Result<ReviewFeedback>.Ok(new ReviewFeedback(comments, OmittedCommentCount: 0, NewestCommentAt: null));
     }
 
     public async Task<Result<BranchProtection>> GetBranchProtectionAsync(

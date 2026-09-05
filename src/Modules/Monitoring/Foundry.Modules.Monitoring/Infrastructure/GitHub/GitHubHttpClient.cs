@@ -29,7 +29,6 @@ internal sealed partial class GitHubHttpClient(
     private const string ApiVersion = "2026-03-10";
     private const string AllZerosSha = "0000000000000000000000000000000000000000";
     private const string FineGrainedPatPrefix = "github_pat_";
-    private const int MaxComments = 50;
     private const int MaxCommentBodyLength = 4000;
     private const string TruncatedSuffix = "[truncated]";
     private const int MaxRepositoryPages = 5;
@@ -97,13 +96,33 @@ internal sealed partial class GitHubHttpClient(
           rateLimit { cost remaining }
           repository(owner: $owner, name: $name) {
             pullRequest(number: $number) {
-              reviews(first: 50, states: [CHANGES_REQUESTED]) {
+              comments(first: 100) {
+                nodes {
+                  body
+                  createdAt
+                  author { login __typename }
+                }
+              }
+              reviewThreads(first: 100) {
+                nodes {
+                  isResolved
+                  comments(first: 100) {
+                    nodes {
+                      body
+                      path
+                      line
+                      originalLine
+                      createdAt
+                      author { login __typename }
+                    }
+                  }
+                }
+              }
+              reviews(first: 50) {
                 nodes {
                   body
                   submittedAt
-                  comments(first: 100) {
-                    nodes { body path line originalLine }
-                  }
+                  author { login __typename }
                 }
               }
             }
@@ -574,22 +593,21 @@ internal sealed partial class GitHubHttpClient(
         return Result<PullRequestStatus>.Ok(new PullRequestStatus(isClosed, isMerged));
     }
 
-    public async Task<Result<ReviewFeedback>> GetPullRequestReviewFeedbackAsync(
+    public async Task<Result<IReadOnlyList<ProviderComment>>> GetPullRequestReviewFeedbackAsync(
         Uri apiBaseUrl,
         RepositorySlug slug,
         string pullRequestUrl,
-        DateTimeOffset since,
         string token,
         CancellationToken cancellationToken)
     {
         if (apiBaseUrl.Scheme is not "https")
         {
-            return Result<ReviewFeedback>.Fail(GitHubErrors.InvalidBaseUrl);
+            return Result<IReadOnlyList<ProviderComment>>.Fail(GitHubErrors.InvalidBaseUrl);
         }
 
         if (!TryParsePrNumber(pullRequestUrl, out int prNumber))
         {
-            return Result<ReviewFeedback>.Fail(GitHubErrors.InvalidPullRequestUrl);
+            return Result<IReadOnlyList<ProviderComment>>.Fail(GitHubErrors.InvalidPullRequestUrl);
         }
 
         object variables = new { owner = slug.Owner, name = slug.Name, number = prNumber };
@@ -599,47 +617,98 @@ internal sealed partial class GitHubHttpClient(
         if (dataResult is not Result<PrReviewFeedbackData>.Success dataSuccess)
         {
             Error error = ((Result<PrReviewFeedbackData>.Failure)dataResult).Error;
-            return Result<ReviewFeedback>.Fail(error);
+            return Result<IReadOnlyList<ProviderComment>>.Fail(error);
+        }
+
+        PrReviewFeedbackPullRequest? pullRequest = dataSuccess.Value.Repository?.PullRequest;
+        List<ProviderComment> providerComments = [];
+        HashSet<(string Body, DateTimeOffset CreatedAt, string AuthorLogin)> deduplicatedKeys = [];
+
+        IReadOnlyList<GraphQlConversationCommentNode> conversationNodes =
+            pullRequest?.Comments?.Nodes ?? [];
+
+        foreach (GraphQlConversationCommentNode node in conversationNodes)
+        {
+            string authorLogin = node.Author?.Login ?? string.Empty;
+            bool authorIsBot = string.Equals(node.Author?.Typename, "Bot", StringComparison.Ordinal);
+            string body = TruncateBody(node.Body);
+
+            deduplicatedKeys.Add((node.Body, node.CreatedAt, authorLogin));
+
+            providerComments.Add(new ProviderComment(
+                Body: body,
+                AuthorLogin: authorLogin,
+                AuthorIsBot: authorIsBot,
+                IsSystem: false,
+                CreatedAt: node.CreatedAt,
+                FilePath: null,
+                Line: null,
+                Origin: CommentOrigin.Conversation,
+                ThreadResolved: false));
+        }
+
+        IReadOnlyList<GraphQlReviewThreadNode> reviewThreadNodes =
+            pullRequest?.ReviewThreads?.Nodes ?? [];
+
+        foreach (GraphQlReviewThreadNode thread in reviewThreadNodes)
+        {
+            bool threadResolved = thread.IsResolved;
+            IReadOnlyList<GraphQlReviewThreadCommentNode> threadComments =
+                thread.Comments?.Nodes ?? [];
+
+            foreach (GraphQlReviewThreadCommentNode comment in threadComments)
+            {
+                string authorLogin = comment.Author?.Login ?? string.Empty;
+                bool authorIsBot = string.Equals(comment.Author?.Typename, "Bot", StringComparison.Ordinal);
+                string body = TruncateBody(comment.Body);
+                int? line = comment.Line ?? comment.OriginalLine;
+                string? sanitizedPath = SanitizeFilePath(comment.Path);
+
+                if (!deduplicatedKeys.Add((comment.Body, comment.CreatedAt, authorLogin)))
+                {
+                    continue;
+                }
+
+                providerComments.Add(new ProviderComment(
+                    Body: body,
+                    AuthorLogin: authorLogin,
+                    AuthorIsBot: authorIsBot,
+                    IsSystem: false,
+                    CreatedAt: comment.CreatedAt,
+                    FilePath: sanitizedPath,
+                    Line: line,
+                    Origin: CommentOrigin.ReviewThread,
+                    ThreadResolved: threadResolved));
+            }
         }
 
         IReadOnlyList<GraphQlReviewNode> reviewNodes =
-            dataSuccess.Value.Repository?.PullRequest?.Reviews?.Nodes ?? [];
+            pullRequest?.Reviews?.Nodes ?? [];
 
-        List<ReviewComment> comments = [];
         foreach (GraphQlReviewNode review in reviewNodes)
         {
-            if (review.SubmittedAt is null || review.SubmittedAt <= since)
+            if (string.IsNullOrWhiteSpace(review.Body) || review.SubmittedAt is null)
             {
                 continue;
             }
 
-            if (comments.Count >= MaxComments)
-            {
-                break;
-            }
+            string authorLogin = review.Author?.Login ?? string.Empty;
+            bool authorIsBot = string.Equals(review.Author?.Typename, "Bot", StringComparison.Ordinal);
+            string body = TruncateBody(review.Body);
 
-            if (!string.IsNullOrWhiteSpace(review.Body))
-            {
-                comments.Add(new ReviewComment(TruncateBody(review.Body)));
-            }
-
-            IReadOnlyList<GraphQlReviewCommentNode> fileComments =
-                review.Comments?.Nodes ?? [];
-
-            foreach (GraphQlReviewCommentNode fileComment in fileComments)
-            {
-                if (comments.Count >= MaxComments)
-                {
-                    break;
-                }
-
-                int? line = fileComment.Line ?? fileComment.OriginalLine;
-                string? sanitizedPath = SanitizeFilePath(fileComment.Path);
-                comments.Add(new ReviewComment(TruncateBody(fileComment.Body), sanitizedPath, line));
-            }
+            providerComments.Add(new ProviderComment(
+                Body: body,
+                AuthorLogin: authorLogin,
+                AuthorIsBot: authorIsBot,
+                IsSystem: false,
+                CreatedAt: review.SubmittedAt.Value,
+                FilePath: null,
+                Line: null,
+                Origin: CommentOrigin.ReviewSummary,
+                ThreadResolved: false));
         }
 
-        return Result<ReviewFeedback>.Ok(new ReviewFeedback(comments, OmittedCommentCount: 0, NewestCommentAt: null));
+        return Result<IReadOnlyList<ProviderComment>>.Ok(providerComments);
     }
 
     public async Task<Result<TokenValidationOutcome>> ValidateTokenAsync(
@@ -1484,22 +1553,44 @@ internal sealed partial class GitHubHttpClient(
 
     private sealed record PrReviewFeedbackRepository(PrReviewFeedbackPullRequest? PullRequest);
 
-    private sealed record PrReviewFeedbackPullRequest(GraphQlReviewConnection? Reviews);
+    private sealed record PrReviewFeedbackPullRequest(
+        GraphQlConversationCommentConnection? Comments,
+        GraphQlReviewThreadConnection? ReviewThreads,
+        GraphQlReviewConnection? Reviews);
+
+    private sealed record GraphQlConversationCommentConnection(IReadOnlyList<GraphQlConversationCommentNode> Nodes);
+
+    private sealed record GraphQlConversationCommentNode(
+        string Body,
+        DateTimeOffset CreatedAt,
+        GraphQlCommentAuthor? Author);
+
+    private sealed record GraphQlCommentAuthor(
+        string? Login,
+        [property: JsonPropertyName("__typename")] string? Typename);
+
+    private sealed record GraphQlReviewThreadConnection(IReadOnlyList<GraphQlReviewThreadNode> Nodes);
+
+    private sealed record GraphQlReviewThreadNode(
+        bool IsResolved,
+        GraphQlReviewThreadCommentConnection? Comments);
+
+    private sealed record GraphQlReviewThreadCommentConnection(IReadOnlyList<GraphQlReviewThreadCommentNode> Nodes);
+
+    private sealed record GraphQlReviewThreadCommentNode(
+        string Body,
+        string? Path,
+        int? Line,
+        int? OriginalLine,
+        DateTimeOffset CreatedAt,
+        GraphQlCommentAuthor? Author);
 
     private sealed record GraphQlReviewConnection(IReadOnlyList<GraphQlReviewNode> Nodes);
 
     private sealed record GraphQlReviewNode(
         string? Body,
         DateTimeOffset? SubmittedAt,
-        GraphQlReviewCommentConnection? Comments);
-
-    private sealed record GraphQlReviewCommentConnection(IReadOnlyList<GraphQlReviewCommentNode> Nodes);
-
-    private sealed record GraphQlReviewCommentNode(
-        string Body,
-        string? Path,
-        int? Line,
-        int? OriginalLine);
+        GraphQlCommentAuthor? Author);
 }
 
 internal sealed record BranchRules(bool RejectDirectPushes, bool RejectForcePushes, bool RejectDeletion);

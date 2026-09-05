@@ -1,9 +1,6 @@
 using System.Net;
-using System.Text;
 
-using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
-using Foundry.Modules.Monitoring.Features.Providers;
 using Foundry.Modules.Monitoring.Features.Providers.Feedback;
 using Foundry.Modules.Monitoring.Infrastructure;
 using Foundry.Modules.Monitoring.Infrastructure.GitHub;
@@ -25,7 +22,6 @@ namespace Foundry.UnitTests.Modules.Monitoring.Infrastructure.GitHubHttpClientTe
 public sealed class GetPullRequestReviewFeedbackAsync
 {
     private static readonly Uri ValidBaseUrl = new("https://api.github.com");
-    private static readonly DateTimeOffset Since = new(2026, 1, 1, 0, 0, 0, TimeSpan.Zero);
     private const string ValidPrUrl = "https://github.com/owner/repo/pull/1";
 
     private static RepositorySlug ValidSlug =>
@@ -35,27 +31,35 @@ public sealed class GetPullRequestReviewFeedbackAsync
         new(
             new HttpClient(handler),
             NullLogger<GitHubHttpClient>.Instance,
-            new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))), new InMemoryProviderRateBudget(), TimeProvider.System);
+            new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))),
+            new InMemoryProviderRateBudget(),
+            TimeProvider.System);
 
-    private static string BuildReviewFeedbackJson(
-        string reviewBody = "",
-        string submittedAt = "2026-06-01T00:00:00Z",
-        IReadOnlyList<(string Body, string? Path, int? Line, int? OriginalLine)>? comments = null)
+    private static string BuildThreeSurfaceJson(
+        string conversationCommentBody = "conversation comment",
+        string conversationCommentCreatedAt = "2026-06-01T10:00:00Z",
+        string conversationCommentAuthorLogin = "alice",
+        string conversationCommentAuthorTypename = "User",
+        bool reviewThreadIsResolved = false,
+        string threadCommentBody = "thread comment",
+        string threadCommentCreatedAt = "2026-06-01T11:00:00Z",
+        string threadCommentAuthorLogin = "bob",
+        string threadCommentAuthorTypename = "User",
+        string? threadCommentPath = "src/Foo.cs",
+        int? threadCommentLine = 42,
+        int? threadCommentOriginalLine = null,
+        string reviewBody = "review summary",
+        string reviewSubmittedAt = "2026-06-01T12:00:00Z",
+        string reviewAuthorLogin = "carol",
+        string reviewAuthorTypename = "User")
     {
-        comments ??= [];
-        string commentsJson = string.Join(
-            ",",
-            comments.Select(c =>
-            {
-                string lineVal = c.Line.HasValue
-                    ? c.Line.Value.ToString(System.Globalization.CultureInfo.InvariantCulture)
-                    : "null";
-                string origLineVal = c.OriginalLine.HasValue
-                    ? c.OriginalLine.Value.ToString(System.Globalization.CultureInfo.InvariantCulture)
-                    : "null";
-                string pathVal = c.Path is not null ? $"\"{c.Path}\"" : "null";
-                return $$"""{"body":"{{c.Body}}","path":{{pathVal}},"line":{{lineVal}},"originalLine":{{origLineVal}}}""";
-            }));
+        string pathJson = threadCommentPath is not null ? $"\"{threadCommentPath}\"" : "null";
+        string lineJson = threadCommentLine.HasValue
+            ? threadCommentLine.Value.ToString(System.Globalization.CultureInfo.InvariantCulture)
+            : "null";
+        string origLineJson = threadCommentOriginalLine.HasValue
+            ? threadCommentOriginalLine.Value.ToString(System.Globalization.CultureInfo.InvariantCulture)
+            : "null";
 
         return $$"""
             {
@@ -63,14 +67,40 @@ public sealed class GetPullRequestReviewFeedbackAsync
                 "rateLimit": { "cost": 1, "remaining": 4999 },
                 "repository": {
                   "pullRequest": {
+                    "comments": {
+                      "nodes": [
+                        {
+                          "body": "{{conversationCommentBody}}",
+                          "createdAt": "{{conversationCommentCreatedAt}}",
+                          "author": { "login": "{{conversationCommentAuthorLogin}}", "__typename": "{{conversationCommentAuthorTypename}}" }
+                        }
+                      ]
+                    },
+                    "reviewThreads": {
+                      "nodes": [
+                        {
+                          "isResolved": {{(reviewThreadIsResolved ? "true" : "false")}},
+                          "comments": {
+                            "nodes": [
+                              {
+                                "body": "{{threadCommentBody}}",
+                                "path": {{pathJson}},
+                                "line": {{lineJson}},
+                                "originalLine": {{origLineJson}},
+                                "createdAt": "{{threadCommentCreatedAt}}",
+                                "author": { "login": "{{threadCommentAuthorLogin}}", "__typename": "{{threadCommentAuthorTypename}}" }
+                              }
+                            ]
+                          }
+                        }
+                      ]
+                    },
                     "reviews": {
                       "nodes": [
                         {
                           "body": "{{reviewBody}}",
-                          "submittedAt": "{{submittedAt}}",
-                          "comments": {
-                            "nodes": [{{commentsJson}}]
-                          }
+                          "submittedAt": "{{reviewSubmittedAt}}",
+                          "author": { "login": "{{reviewAuthorLogin}}", "__typename": "{{reviewAuthorTypename}}" }
                         }
                       ]
                     }
@@ -85,7 +115,7 @@ public sealed class GetPullRequestReviewFeedbackAsync
     public async Task WhenCalled_PostsToGraphQlEndpointWithSingleRequest()
     {
         // Arrange
-        string json = BuildReviewFeedbackJson();
+        string json = BuildThreeSurfaceJson();
         FakeHandler handler = new(HttpStatusCode.OK, json);
         GitHubHttpClient sut = BuildSut(handler);
 
@@ -94,7 +124,6 @@ public sealed class GetPullRequestReviewFeedbackAsync
             ValidBaseUrl,
             ValidSlug,
             pullRequestUrl: ValidPrUrl,
-            since: Since,
             token: "ghp_token",
             CancellationToken.None);
 
@@ -107,10 +136,10 @@ public sealed class GetPullRequestReviewFeedbackAsync
     }
 
     [Fact]
-    public async Task WhenCalled_RequestBodyContainsPrReviewFeedbackQuery()
+    public async Task WhenCalled_RequestBodyContainsAllThreeSurfaces()
     {
         // Arrange
-        string json = BuildReviewFeedbackJson();
+        string json = BuildThreeSurfaceJson();
         FakeHandler handler = new(HttpStatusCode.OK, json);
         GitHubHttpClient sut = BuildSut(handler);
 
@@ -119,48 +148,291 @@ public sealed class GetPullRequestReviewFeedbackAsync
             ValidBaseUrl,
             ValidSlug,
             pullRequestUrl: ValidPrUrl,
-            since: Since,
             token: "ghp_token",
             CancellationToken.None);
 
         // Assert
         string body = handler.LastRequestBody.ShouldNotBeNull();
-        body.ShouldContain("rateLimit");
-        body.ShouldContain("CHANGES_REQUESTED");
+        body.ShouldContain("comments");
+        body.ShouldContain("reviewThreads");
         body.ShouldContain("reviews");
         body.ShouldContain("submittedAt");
-        body.ShouldContain("originalLine");
+        body.ShouldContain("__typename");
+        body.ShouldNotContain("CHANGES_REQUESTED");
     }
 
     [Fact]
-    public async Task WhenMoreThan50CommentsExist_ReturnsOnly50Comments()
+    public async Task WhenReviewThreadIsResolved_MapsThreadResolvedTrue()
     {
         // Arrange
-        // Build a GraphQL response with 51 comments in one review — expect only 50 returned
-        StringBuilder commentsBuilder = new("[");
-        for (int i = 0; i < 51; i++)
-        {
-            if (i > 0) { commentsBuilder.Append(','); }
-            commentsBuilder.Append(
-                System.Globalization.CultureInfo.InvariantCulture,
-                $"{{\"body\":\"Comment {i}\",\"path\":\"src/Foo.cs\",\"line\":null,\"originalLine\":{i + 1}}}");
-        }
-        commentsBuilder.Append(']');
+        string json = BuildThreeSurfaceJson(reviewThreadIsResolved: true);
+        FakeHandler handler = new(HttpStatusCode.OK, json);
+        GitHubHttpClient sut = BuildSut(handler);
 
-        string json = $$"""
+        // Act
+        Result<IReadOnlyList<ProviderComment>> result = await sut.GetPullRequestReviewFeedbackAsync(
+            ValidBaseUrl,
+            ValidSlug,
+            pullRequestUrl: ValidPrUrl,
+            token: "ghp_token",
+            CancellationToken.None);
+
+        // Assert
+        result.IsSuccess.ShouldBeTrue();
+        IReadOnlyList<ProviderComment> comments = result.ShouldBeOfType<Result<IReadOnlyList<ProviderComment>>.Success>().Value;
+        comments.ShouldContain(c => c.Origin == CommentOrigin.ReviewThread);
+        ProviderComment threadComment = comments.Single(c => c.Origin == CommentOrigin.ReviewThread);
+        threadComment.ThreadResolved.ShouldBeTrue();
+    }
+
+    [Fact]
+    public async Task WhenReviewThreadIsNotResolved_MapsThreadResolvedFalse()
+    {
+        // Arrange
+        string json = BuildThreeSurfaceJson(reviewThreadIsResolved: false);
+        FakeHandler handler = new(HttpStatusCode.OK, json);
+        GitHubHttpClient sut = BuildSut(handler);
+
+        // Act
+        Result<IReadOnlyList<ProviderComment>> result = await sut.GetPullRequestReviewFeedbackAsync(
+            ValidBaseUrl,
+            ValidSlug,
+            pullRequestUrl: ValidPrUrl,
+            token: "ghp_token",
+            CancellationToken.None);
+
+        // Assert
+        result.IsSuccess.ShouldBeTrue();
+        IReadOnlyList<ProviderComment> comments = result.ShouldBeOfType<Result<IReadOnlyList<ProviderComment>>.Success>().Value;
+        comments.ShouldContain(c => c.Origin == CommentOrigin.ReviewThread);
+        ProviderComment threadComment = comments.Single(c => c.Origin == CommentOrigin.ReviewThread);
+        threadComment.ThreadResolved.ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task WhenAuthorTypenameIsBot_MapsAuthorIsBotTrue()
+    {
+        // Arrange
+        string json = BuildThreeSurfaceJson(conversationCommentAuthorTypename: "Bot");
+        FakeHandler handler = new(HttpStatusCode.OK, json);
+        GitHubHttpClient sut = BuildSut(handler);
+
+        // Act
+        Result<IReadOnlyList<ProviderComment>> result = await sut.GetPullRequestReviewFeedbackAsync(
+            ValidBaseUrl,
+            ValidSlug,
+            pullRequestUrl: ValidPrUrl,
+            token: "ghp_token",
+            CancellationToken.None);
+
+        // Assert
+        result.IsSuccess.ShouldBeTrue();
+        IReadOnlyList<ProviderComment> comments = result.ShouldBeOfType<Result<IReadOnlyList<ProviderComment>>.Success>().Value;
+        comments.ShouldContain(c => c.Origin == CommentOrigin.Conversation);
+        ProviderComment conversationComment = comments.Single(c => c.Origin == CommentOrigin.Conversation);
+        conversationComment.AuthorIsBot.ShouldBeTrue();
+    }
+
+    [Fact]
+    public async Task WhenAuthorTypenameIsUser_MapsAuthorIsBotFalse()
+    {
+        // Arrange
+        string json = BuildThreeSurfaceJson(conversationCommentAuthorTypename: "User");
+        FakeHandler handler = new(HttpStatusCode.OK, json);
+        GitHubHttpClient sut = BuildSut(handler);
+
+        // Act
+        Result<IReadOnlyList<ProviderComment>> result = await sut.GetPullRequestReviewFeedbackAsync(
+            ValidBaseUrl,
+            ValidSlug,
+            pullRequestUrl: ValidPrUrl,
+            token: "ghp_token",
+            CancellationToken.None);
+
+        // Assert
+        result.IsSuccess.ShouldBeTrue();
+        IReadOnlyList<ProviderComment> comments = result.ShouldBeOfType<Result<IReadOnlyList<ProviderComment>>.Success>().Value;
+        comments.ShouldContain(c => c.Origin == CommentOrigin.Conversation);
+        ProviderComment conversationComment = comments.Single(c => c.Origin == CommentOrigin.Conversation);
+        conversationComment.AuthorIsBot.ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task WhenReviewBodyIsNonEmpty_MapsToReviewSummaryWithSubmittedAtAsCreatedAt()
+    {
+        // Arrange
+        string json = BuildThreeSurfaceJson(reviewBody: "Please fix this", reviewSubmittedAt: "2026-06-01T12:00:00Z");
+        FakeHandler handler = new(HttpStatusCode.OK, json);
+        GitHubHttpClient sut = BuildSut(handler);
+
+        // Act
+        Result<IReadOnlyList<ProviderComment>> result = await sut.GetPullRequestReviewFeedbackAsync(
+            ValidBaseUrl,
+            ValidSlug,
+            pullRequestUrl: ValidPrUrl,
+            token: "ghp_token",
+            CancellationToken.None);
+
+        // Assert
+        result.IsSuccess.ShouldBeTrue();
+        IReadOnlyList<ProviderComment> comments = result.ShouldBeOfType<Result<IReadOnlyList<ProviderComment>>.Success>().Value;
+        comments.ShouldContain(c => c.Origin == CommentOrigin.ReviewSummary);
+        ProviderComment reviewSummary = comments.Single(c => c.Origin == CommentOrigin.ReviewSummary);
+        reviewSummary.Body.ShouldBe("Please fix this");
+        reviewSummary.CreatedAt.ShouldBe(new DateTimeOffset(2026, 6, 1, 12, 0, 0, TimeSpan.Zero));
+        reviewSummary.FilePath.ShouldBeNull();
+        reviewSummary.Line.ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task WhenReviewBodyIsEmpty_DoesNotEmitReviewSummary()
+    {
+        // Arrange
+        string json = BuildThreeSurfaceJson(reviewBody: "");
+        FakeHandler handler = new(HttpStatusCode.OK, json);
+        GitHubHttpClient sut = BuildSut(handler);
+
+        // Act
+        Result<IReadOnlyList<ProviderComment>> result = await sut.GetPullRequestReviewFeedbackAsync(
+            ValidBaseUrl,
+            ValidSlug,
+            pullRequestUrl: ValidPrUrl,
+            token: "ghp_token",
+            CancellationToken.None);
+
+        // Assert
+        result.IsSuccess.ShouldBeTrue();
+        IReadOnlyList<ProviderComment> comments = result.ShouldBeOfType<Result<IReadOnlyList<ProviderComment>>.Success>().Value;
+        comments.ShouldNotContain(c => c.Origin == CommentOrigin.ReviewSummary);
+    }
+
+    [Fact]
+    public async Task WhenConversationCommentExists_MapsToConversationOriginWithNoFilePath()
+    {
+        // Arrange
+        string json = BuildThreeSurfaceJson(
+            conversationCommentBody: "general comment",
+            conversationCommentAuthorLogin: "alice");
+        FakeHandler handler = new(HttpStatusCode.OK, json);
+        GitHubHttpClient sut = BuildSut(handler);
+
+        // Act
+        Result<IReadOnlyList<ProviderComment>> result = await sut.GetPullRequestReviewFeedbackAsync(
+            ValidBaseUrl,
+            ValidSlug,
+            pullRequestUrl: ValidPrUrl,
+            token: "ghp_token",
+            CancellationToken.None);
+
+        // Assert
+        result.IsSuccess.ShouldBeTrue();
+        IReadOnlyList<ProviderComment> comments = result.ShouldBeOfType<Result<IReadOnlyList<ProviderComment>>.Success>().Value;
+        comments.ShouldContain(c => c.Origin == CommentOrigin.Conversation);
+        ProviderComment conversationComment = comments.Single(c => c.Origin == CommentOrigin.Conversation);
+        conversationComment.Body.ShouldBe("general comment");
+        conversationComment.AuthorLogin.ShouldBe("alice");
+        conversationComment.FilePath.ShouldBeNull();
+        conversationComment.Line.ShouldBeNull();
+        conversationComment.ThreadResolved.ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task WhenThreadCommentExists_MapsFilePathAndLine()
+    {
+        // Arrange
+        string json = BuildThreeSurfaceJson(
+            threadCommentBody: "inline comment",
+            threadCommentPath: "src/Modules/Foo.cs",
+            threadCommentLine: 10,
+            threadCommentOriginalLine: 20);
+        FakeHandler handler = new(HttpStatusCode.OK, json);
+        GitHubHttpClient sut = BuildSut(handler);
+
+        // Act
+        Result<IReadOnlyList<ProviderComment>> result = await sut.GetPullRequestReviewFeedbackAsync(
+            ValidBaseUrl,
+            ValidSlug,
+            pullRequestUrl: ValidPrUrl,
+            token: "ghp_token",
+            CancellationToken.None);
+
+        // Assert
+        result.IsSuccess.ShouldBeTrue();
+        IReadOnlyList<ProviderComment> comments = result.ShouldBeOfType<Result<IReadOnlyList<ProviderComment>>.Success>().Value;
+        comments.ShouldContain(c => c.Origin == CommentOrigin.ReviewThread);
+        ProviderComment threadComment = comments.Single(c => c.Origin == CommentOrigin.ReviewThread);
+        threadComment.FilePath.ShouldBe("src/Modules/Foo.cs");
+        threadComment.Line.ShouldBe(10);
+    }
+
+    [Fact]
+    public async Task WhenThreadCommentLineIsNull_UsesOriginalLine()
+    {
+        // Arrange
+        string json = BuildThreeSurfaceJson(
+            threadCommentPath: "src/Foo.cs",
+            threadCommentLine: null,
+            threadCommentOriginalLine: 42);
+        FakeHandler handler = new(HttpStatusCode.OK, json);
+        GitHubHttpClient sut = BuildSut(handler);
+
+        // Act
+        Result<IReadOnlyList<ProviderComment>> result = await sut.GetPullRequestReviewFeedbackAsync(
+            ValidBaseUrl,
+            ValidSlug,
+            pullRequestUrl: ValidPrUrl,
+            token: "ghp_token",
+            CancellationToken.None);
+
+        // Assert
+        result.IsSuccess.ShouldBeTrue();
+        IReadOnlyList<ProviderComment> comments = result.ShouldBeOfType<Result<IReadOnlyList<ProviderComment>>.Success>().Value;
+        comments.ShouldContain(c => c.Origin == CommentOrigin.ReviewThread);
+        ProviderComment threadComment = comments.Single(c => c.Origin == CommentOrigin.ReviewThread);
+        threadComment.Line.ShouldBe(42);
+    }
+
+    [Fact]
+    public async Task WhenSameCommentAppearsTwice_DeduplicatesIt()
+    {
+        // Arrange — same comment appears in both conversation comments and review threads
+        // (defensive de-dup guard: reviewThreads is authoritative for inline comments)
+        string json = """
             {
               "data": {
                 "rateLimit": { "cost": 1, "remaining": 4999 },
                 "repository": {
                   "pullRequest": {
-                    "reviews": {
+                    "comments": {
                       "nodes": [
                         {
-                          "body": "",
-                          "submittedAt": "2026-06-01T00:00:00Z",
-                          "comments": { "nodes": {{commentsBuilder}} }
+                          "body": "duplicate comment",
+                          "createdAt": "2026-06-01T10:00:00Z",
+                          "author": { "login": "alice", "__typename": "User" }
                         }
                       ]
+                    },
+                    "reviewThreads": {
+                      "nodes": [
+                        {
+                          "isResolved": false,
+                          "comments": {
+                            "nodes": [
+                              {
+                                "body": "duplicate comment",
+                                "path": "src/Foo.cs",
+                                "line": 1,
+                                "originalLine": null,
+                                "createdAt": "2026-06-01T10:00:00Z",
+                                "author": { "login": "alice", "__typename": "User" }
+                              }
+                            ]
+                          }
+                        }
+                      ]
+                    },
+                    "reviews": {
+                      "nodes": []
                     }
                   }
                 }
@@ -172,18 +444,18 @@ public sealed class GetPullRequestReviewFeedbackAsync
         GitHubHttpClient sut = BuildSut(handler);
 
         // Act
-        Result<ReviewFeedback> result = await sut.GetPullRequestReviewFeedbackAsync(
+        Result<IReadOnlyList<ProviderComment>> result = await sut.GetPullRequestReviewFeedbackAsync(
             ValidBaseUrl,
             ValidSlug,
             pullRequestUrl: ValidPrUrl,
-            since: Since,
             token: "ghp_token",
             CancellationToken.None);
 
         // Assert
         result.IsSuccess.ShouldBeTrue();
-        Result<ReviewFeedback>.Success success = result.ShouldBeOfType<Result<ReviewFeedback>.Success>();
-        success.Value.Comments.Count.ShouldBe(50);
+        IReadOnlyList<ProviderComment> comments = result.ShouldBeOfType<Result<IReadOnlyList<ProviderComment>>.Success>().Value;
+        int duplicateCount = comments.Count(c => c.Body == "duplicate comment");
+        duplicateCount.ShouldBe(1);
     }
 
     [Fact]
@@ -197,113 +469,17 @@ public sealed class GetPullRequestReviewFeedbackAsync
                 "rateLimit": { "cost": 1, "remaining": 4999 },
                 "repository": {
                   "pullRequest": {
-                    "reviews": {
-                      "nodes": [
-                        {
-                          "body": "",
-                          "submittedAt": "2026-06-01T00:00:00Z",
-                          "comments": {
-                            "nodes": [
-                              { "body": "{{longBody}}", "path": "src/Foo.cs", "line": null, "originalLine": 1 }
-                            ]
-                          }
-                        }
-                      ]
-                    }
-                  }
-                }
-              }
-            }
-            """;
-
-        FakeHandler handler = new(HttpStatusCode.OK, json);
-        GitHubHttpClient sut = BuildSut(handler);
-
-        // Act
-        Result<ReviewFeedback> result = await sut.GetPullRequestReviewFeedbackAsync(
-            ValidBaseUrl,
-            ValidSlug,
-            pullRequestUrl: ValidPrUrl,
-            since: Since,
-            token: "ghp_token",
-            CancellationToken.None);
-
-        // Assert
-        result.IsSuccess.ShouldBeTrue();
-        Result<ReviewFeedback>.Success success = result.ShouldBeOfType<Result<ReviewFeedback>.Success>();
-        ReviewComment comment = success.Value.Comments[0];
-        comment.Body.ShouldEndWith("[truncated]");
-        comment.Body.Length.ShouldBeLessThanOrEqualTo(4000 + "[truncated]".Length);
-    }
-
-    [Fact]
-    public async Task WhenCommentBodyIsExactly4000Chars_DoesNotTruncate()
-    {
-        // Arrange
-        string exactBody = new('x', 4000);
-        string json = $$"""
-            {
-              "data": {
-                "rateLimit": { "cost": 1, "remaining": 4999 },
-                "repository": {
-                  "pullRequest": {
-                    "reviews": {
-                      "nodes": [
-                        {
-                          "body": "",
-                          "submittedAt": "2026-06-01T00:00:00Z",
-                          "comments": {
-                            "nodes": [
-                              { "body": "{{exactBody}}", "path": "src/Foo.cs", "line": null, "originalLine": 1 }
-                            ]
-                          }
-                        }
-                      ]
-                    }
-                  }
-                }
-              }
-            }
-            """;
-
-        FakeHandler handler = new(HttpStatusCode.OK, json);
-        GitHubHttpClient sut = BuildSut(handler);
-
-        // Act
-        Result<ReviewFeedback> result = await sut.GetPullRequestReviewFeedbackAsync(
-            ValidBaseUrl,
-            ValidSlug,
-            pullRequestUrl: ValidPrUrl,
-            since: Since,
-            token: "ghp_token",
-            CancellationToken.None);
-
-        // Assert
-        result.IsSuccess.ShouldBeTrue();
-        Result<ReviewFeedback>.Success success = result.ShouldBeOfType<Result<ReviewFeedback>.Success>();
-        success.Value.Comments[0].Body.ShouldBe(exactBody);
-    }
-
-    [Fact]
-    public async Task WhenReviewBodyExceeds4000Chars_TruncatesReviewBodyWithSuffix()
-    {
-        // Arrange
-        string longBody = new('y', 5000);
-        string json = $$"""
-            {
-              "data": {
-                "rateLimit": { "cost": 1, "remaining": 4999 },
-                "repository": {
-                  "pullRequest": {
-                    "reviews": {
+                    "comments": {
                       "nodes": [
                         {
                           "body": "{{longBody}}",
-                          "submittedAt": "2026-06-01T00:00:00Z",
-                          "comments": { "nodes": [] }
+                          "createdAt": "2026-06-01T10:00:00Z",
+                          "author": { "login": "alice", "__typename": "User" }
                         }
                       ]
-                    }
+                    },
+                    "reviewThreads": { "nodes": [] },
+                    "reviews": { "nodes": [] }
                   }
                 }
               }
@@ -314,137 +490,93 @@ public sealed class GetPullRequestReviewFeedbackAsync
         GitHubHttpClient sut = BuildSut(handler);
 
         // Act
-        Result<ReviewFeedback> result = await sut.GetPullRequestReviewFeedbackAsync(
+        Result<IReadOnlyList<ProviderComment>> result = await sut.GetPullRequestReviewFeedbackAsync(
             ValidBaseUrl,
             ValidSlug,
             pullRequestUrl: ValidPrUrl,
-            since: Since,
             token: "ghp_token",
             CancellationToken.None);
 
         // Assert
         result.IsSuccess.ShouldBeTrue();
-        Result<ReviewFeedback>.Success success = result.ShouldBeOfType<Result<ReviewFeedback>.Success>();
-        success.Value.Comments[0].Body.ShouldEndWith("[truncated]");
+        IReadOnlyList<ProviderComment> comments = result.ShouldBeOfType<Result<IReadOnlyList<ProviderComment>>.Success>().Value;
+        ProviderComment comment = comments[0];
+        comment.Body.ShouldEndWith("[truncated]");
+        comment.Body.Length.ShouldBeLessThanOrEqualTo(4000 + "[truncated]".Length);
     }
 
     [Fact]
     public async Task WhenFilePathContainsPathTraversal_SetsFilePathToNull()
     {
         // Arrange
-        string json = $$"""
-            {
-              "data": {
-                "rateLimit": { "cost": 1, "remaining": 4999 },
-                "repository": {
-                  "pullRequest": {
-                    "reviews": {
-                      "nodes": [
-                        {
-                          "body": "",
-                          "submittedAt": "2026-06-01T00:00:00Z",
-                          "comments": {
-                            "nodes": [
-                              { "body": "Fix this", "path": "../../../etc/passwd", "line": null, "originalLine": 1 }
-                            ]
-                          }
-                        }
-                      ]
-                    }
-                  }
-                }
-              }
-            }
-            """;
-
+        string json = BuildThreeSurfaceJson(
+            threadCommentPath: "../../../etc/passwd",
+            threadCommentLine: 1);
         FakeHandler handler = new(HttpStatusCode.OK, json);
         GitHubHttpClient sut = BuildSut(handler);
 
         // Act
-        Result<ReviewFeedback> result = await sut.GetPullRequestReviewFeedbackAsync(
+        Result<IReadOnlyList<ProviderComment>> result = await sut.GetPullRequestReviewFeedbackAsync(
             ValidBaseUrl,
             ValidSlug,
             pullRequestUrl: ValidPrUrl,
-            since: Since,
             token: "ghp_token",
             CancellationToken.None);
 
         // Assert
         result.IsSuccess.ShouldBeTrue();
-        Result<ReviewFeedback>.Success success = result.ShouldBeOfType<Result<ReviewFeedback>.Success>();
-        success.Value.Comments[0].FilePath.ShouldBeNull();
+        IReadOnlyList<ProviderComment> comments = result.ShouldBeOfType<Result<IReadOnlyList<ProviderComment>>.Success>().Value;
+        comments.ShouldContain(c => c.Origin == CommentOrigin.ReviewThread);
+        ProviderComment threadComment = comments.Single(c => c.Origin == CommentOrigin.ReviewThread);
+        threadComment.FilePath.ShouldBeNull();
     }
 
     [Fact]
-    public async Task WhenFilePathIsAbsoluteUnixPath_SetsFilePathToNull()
+    public async Task WhenThreadCommentHasOwnCreatedAt_MapsCreatedAtFromComment()
     {
         // Arrange
-        string json = $$"""
-            {
-              "data": {
-                "rateLimit": { "cost": 1, "remaining": 4999 },
-                "repository": {
-                  "pullRequest": {
-                    "reviews": {
-                      "nodes": [
-                        {
-                          "body": "",
-                          "submittedAt": "2026-06-01T00:00:00Z",
-                          "comments": {
-                            "nodes": [
-                              { "body": "Fix this", "path": "/absolute/path/to/file.cs", "line": null, "originalLine": 1 }
-                            ]
-                          }
-                        }
-                      ]
-                    }
-                  }
-                }
-              }
-            }
-            """;
-
+        string json = BuildThreeSurfaceJson(
+            threadCommentCreatedAt: "2026-06-15T09:30:00Z");
         FakeHandler handler = new(HttpStatusCode.OK, json);
         GitHubHttpClient sut = BuildSut(handler);
 
         // Act
-        Result<ReviewFeedback> result = await sut.GetPullRequestReviewFeedbackAsync(
+        Result<IReadOnlyList<ProviderComment>> result = await sut.GetPullRequestReviewFeedbackAsync(
             ValidBaseUrl,
             ValidSlug,
             pullRequestUrl: ValidPrUrl,
-            since: Since,
             token: "ghp_token",
             CancellationToken.None);
 
         // Assert
         result.IsSuccess.ShouldBeTrue();
-        Result<ReviewFeedback>.Success success = result.ShouldBeOfType<Result<ReviewFeedback>.Success>();
-        success.Value.Comments[0].FilePath.ShouldBeNull();
+        IReadOnlyList<ProviderComment> comments = result.ShouldBeOfType<Result<IReadOnlyList<ProviderComment>>.Success>().Value;
+        comments.ShouldContain(c => c.Origin == CommentOrigin.ReviewThread);
+        ProviderComment threadComment = comments.Single(c => c.Origin == CommentOrigin.ReviewThread);
+        threadComment.CreatedAt.ShouldBe(new DateTimeOffset(2026, 6, 15, 9, 30, 0, TimeSpan.Zero));
     }
 
     [Fact]
-    public async Task WhenFilePathContainsDriveLetterColon_SetsFilePathToNull()
+    public async Task WhenNullAuthor_MapsAuthorLoginAsEmptyAndIsNotBot()
     {
-        // Arrange
-        string json = $$"""
+        // Arrange — null author represents deleted users
+        string json = """
             {
               "data": {
                 "rateLimit": { "cost": 1, "remaining": 4999 },
                 "repository": {
                   "pullRequest": {
-                    "reviews": {
+                    "comments": {
                       "nodes": [
                         {
-                          "body": "",
-                          "submittedAt": "2026-06-01T00:00:00Z",
-                          "comments": {
-                            "nodes": [
-                              { "body": "Fix this", "path": "C:\\Windows\\System32\\file.cs", "line": null, "originalLine": 1 }
-                            ]
-                          }
+                          "body": "orphan comment",
+                          "createdAt": "2026-06-01T10:00:00Z",
+                          "author": null
                         }
                       ]
-                    }
+                    },
+                    "reviewThreads": { "nodes": [] },
+                    "reviews": { "nodes": [] }
                   }
                 }
               }
@@ -455,254 +587,19 @@ public sealed class GetPullRequestReviewFeedbackAsync
         GitHubHttpClient sut = BuildSut(handler);
 
         // Act
-        Result<ReviewFeedback> result = await sut.GetPullRequestReviewFeedbackAsync(
+        Result<IReadOnlyList<ProviderComment>> result = await sut.GetPullRequestReviewFeedbackAsync(
             ValidBaseUrl,
             ValidSlug,
             pullRequestUrl: ValidPrUrl,
-            since: Since,
             token: "ghp_token",
             CancellationToken.None);
 
         // Assert
         result.IsSuccess.ShouldBeTrue();
-        Result<ReviewFeedback>.Success success = result.ShouldBeOfType<Result<ReviewFeedback>.Success>();
-        success.Value.Comments[0].FilePath.ShouldBeNull();
-    }
-
-    [Fact]
-    public async Task WhenFilePathIsValidRelativePath_PreservesFilePath()
-    {
-        // Arrange
-        string json = $$"""
-            {
-              "data": {
-                "rateLimit": { "cost": 1, "remaining": 4999 },
-                "repository": {
-                  "pullRequest": {
-                    "reviews": {
-                      "nodes": [
-                        {
-                          "body": "",
-                          "submittedAt": "2026-06-01T00:00:00Z",
-                          "comments": {
-                            "nodes": [
-                              { "body": "Fix this", "path": "src/Modules/Workers/Features/SystemPromptBuilder.cs", "line": null, "originalLine": 42 }
-                            ]
-                          }
-                        }
-                      ]
-                    }
-                  }
-                }
-              }
-            }
-            """;
-
-        FakeHandler handler = new(HttpStatusCode.OK, json);
-        GitHubHttpClient sut = BuildSut(handler);
-
-        // Act
-        Result<ReviewFeedback> result = await sut.GetPullRequestReviewFeedbackAsync(
-            ValidBaseUrl,
-            ValidSlug,
-            pullRequestUrl: ValidPrUrl,
-            since: Since,
-            token: "ghp_token",
-            CancellationToken.None);
-
-        // Assert
-        result.IsSuccess.ShouldBeTrue();
-        Result<ReviewFeedback>.Success success = result.ShouldBeOfType<Result<ReviewFeedback>.Success>();
-        success.Value.Comments[0].FilePath.ShouldBe("src/Modules/Workers/Features/SystemPromptBuilder.cs");
-    }
-
-    [Fact]
-    public async Task WhenCommentLineIsNull_UsesOriginalLine()
-    {
-        // Arrange
-        string json = $$"""
-            {
-              "data": {
-                "rateLimit": { "cost": 1, "remaining": 4999 },
-                "repository": {
-                  "pullRequest": {
-                    "reviews": {
-                      "nodes": [
-                        {
-                          "body": "",
-                          "submittedAt": "2026-06-01T00:00:00Z",
-                          "comments": {
-                            "nodes": [
-                              { "body": "Fix this", "path": "src/Foo.cs", "line": null, "originalLine": 42 }
-                            ]
-                          }
-                        }
-                      ]
-                    }
-                  }
-                }
-              }
-            }
-            """;
-
-        FakeHandler handler = new(HttpStatusCode.OK, json);
-        GitHubHttpClient sut = BuildSut(handler);
-
-        // Act
-        Result<ReviewFeedback> result = await sut.GetPullRequestReviewFeedbackAsync(
-            ValidBaseUrl,
-            ValidSlug,
-            pullRequestUrl: ValidPrUrl,
-            since: Since,
-            token: "ghp_token",
-            CancellationToken.None);
-
-        // Assert
-        result.IsSuccess.ShouldBeTrue();
-        Result<ReviewFeedback>.Success success = result.ShouldBeOfType<Result<ReviewFeedback>.Success>();
-        success.Value.Comments[0].Line.ShouldBe(42);
-    }
-
-    [Fact]
-    public async Task WhenCommentLineIsSet_UsesLine()
-    {
-        // Arrange
-        string json = $$"""
-            {
-              "data": {
-                "rateLimit": { "cost": 1, "remaining": 4999 },
-                "repository": {
-                  "pullRequest": {
-                    "reviews": {
-                      "nodes": [
-                        {
-                          "body": "",
-                          "submittedAt": "2026-06-01T00:00:00Z",
-                          "comments": {
-                            "nodes": [
-                              { "body": "Fix this", "path": "src/Foo.cs", "line": 10, "originalLine": 42 }
-                            ]
-                          }
-                        }
-                      ]
-                    }
-                  }
-                }
-              }
-            }
-            """;
-
-        FakeHandler handler = new(HttpStatusCode.OK, json);
-        GitHubHttpClient sut = BuildSut(handler);
-
-        // Act
-        Result<ReviewFeedback> result = await sut.GetPullRequestReviewFeedbackAsync(
-            ValidBaseUrl,
-            ValidSlug,
-            pullRequestUrl: ValidPrUrl,
-            since: Since,
-            token: "ghp_token",
-            CancellationToken.None);
-
-        // Assert
-        result.IsSuccess.ShouldBeTrue();
-        Result<ReviewFeedback>.Success success = result.ShouldBeOfType<Result<ReviewFeedback>.Success>();
-        success.Value.Comments[0].Line.ShouldBe(10);
-    }
-
-    [Fact]
-    public async Task WhenReviewSubmittedAtIsAtOrBeforeSince_FiltersOutReview()
-    {
-        // Arrange — review submitted exactly at "since", must be filtered (need strictly after)
-        string json = $$"""
-            {
-              "data": {
-                "rateLimit": { "cost": 1, "remaining": 4999 },
-                "repository": {
-                  "pullRequest": {
-                    "reviews": {
-                      "nodes": [
-                        {
-                          "body": "Old review",
-                          "submittedAt": "2026-01-01T00:00:00Z",
-                          "comments": {
-                            "nodes": [
-                              { "body": "Old comment", "path": "src/Foo.cs", "line": null, "originalLine": 1 }
-                            ]
-                          }
-                        }
-                      ]
-                    }
-                  }
-                }
-              }
-            }
-            """;
-
-        FakeHandler handler = new(HttpStatusCode.OK, json);
-        GitHubHttpClient sut = BuildSut(handler);
-
-        // Act
-        Result<ReviewFeedback> result = await sut.GetPullRequestReviewFeedbackAsync(
-            ValidBaseUrl,
-            ValidSlug,
-            pullRequestUrl: ValidPrUrl,
-            since: Since,
-            token: "ghp_token",
-            CancellationToken.None);
-
-        // Assert
-        result.IsSuccess.ShouldBeTrue();
-        Result<ReviewFeedback>.Success success = result.ShouldBeOfType<Result<ReviewFeedback>.Success>();
-        success.Value.Comments.ShouldBeEmpty();
-    }
-
-    [Fact]
-    public async Task WhenReviewSubmittedAtIsAfterSince_IncludesReview()
-    {
-        // Arrange
-        string json = $$"""
-            {
-              "data": {
-                "rateLimit": { "cost": 1, "remaining": 4999 },
-                "repository": {
-                  "pullRequest": {
-                    "reviews": {
-                      "nodes": [
-                        {
-                          "body": "",
-                          "submittedAt": "2026-06-01T00:00:00Z",
-                          "comments": {
-                            "nodes": [
-                              { "body": "New comment", "path": "src/Foo.cs", "line": null, "originalLine": 1 }
-                            ]
-                          }
-                        }
-                      ]
-                    }
-                  }
-                }
-              }
-            }
-            """;
-
-        FakeHandler handler = new(HttpStatusCode.OK, json);
-        GitHubHttpClient sut = BuildSut(handler);
-
-        // Act
-        Result<ReviewFeedback> result = await sut.GetPullRequestReviewFeedbackAsync(
-            ValidBaseUrl,
-            ValidSlug,
-            pullRequestUrl: ValidPrUrl,
-            since: Since,
-            token: "ghp_token",
-            CancellationToken.None);
-
-        // Assert
-        result.IsSuccess.ShouldBeTrue();
-        Result<ReviewFeedback>.Success success = result.ShouldBeOfType<Result<ReviewFeedback>.Success>();
-        success.Value.Comments.Count.ShouldBe(1);
-        success.Value.Comments[0].Body.ShouldBe("New comment");
+        IReadOnlyList<ProviderComment> comments = result.ShouldBeOfType<Result<IReadOnlyList<ProviderComment>>.Success>().Value;
+        ProviderComment comment = comments[0];
+        comment.AuthorLogin.ShouldBe(string.Empty);
+        comment.AuthorIsBot.ShouldBeFalse();
     }
 
     [Fact]
@@ -714,17 +611,16 @@ public sealed class GetPullRequestReviewFeedbackAsync
         Uri invalidBaseUrl = new("ftp://api.github.com");
 
         // Act
-        Result<ReviewFeedback> result = await sut.GetPullRequestReviewFeedbackAsync(
+        Result<IReadOnlyList<ProviderComment>> result = await sut.GetPullRequestReviewFeedbackAsync(
             invalidBaseUrl,
             ValidSlug,
             pullRequestUrl: ValidPrUrl,
-            since: Since,
             token: "ghp_token",
             CancellationToken.None);
 
         // Assert
         result.IsFailure.ShouldBeTrue();
-        Result<ReviewFeedback>.Failure failure = result.ShouldBeOfType<Result<ReviewFeedback>.Failure>();
+        Result<IReadOnlyList<ProviderComment>>.Failure failure = result.ShouldBeOfType<Result<IReadOnlyList<ProviderComment>>.Failure>();
         failure.Error.Code.ShouldBe("GitHub.InvalidBaseUrl");
     }
 
@@ -736,17 +632,16 @@ public sealed class GetPullRequestReviewFeedbackAsync
         GitHubHttpClient sut = BuildSut(handler);
 
         // Act
-        Result<ReviewFeedback> result = await sut.GetPullRequestReviewFeedbackAsync(
+        Result<IReadOnlyList<ProviderComment>> result = await sut.GetPullRequestReviewFeedbackAsync(
             ValidBaseUrl,
             ValidSlug,
             pullRequestUrl: "https://github.com/owner/repo/issues/1",
-            since: Since,
             token: "ghp_token",
             CancellationToken.None);
 
         // Assert
         result.IsFailure.ShouldBeTrue();
-        Result<ReviewFeedback>.Failure failure = result.ShouldBeOfType<Result<ReviewFeedback>.Failure>();
+        Result<IReadOnlyList<ProviderComment>>.Failure failure = result.ShouldBeOfType<Result<IReadOnlyList<ProviderComment>>.Failure>();
         failure.Error.Code.ShouldBe("GitHub.InvalidPullRequestUrl");
     }
 }
