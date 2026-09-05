@@ -45,17 +45,19 @@ npx ng serve
 | `WebApi.IntegrationTests` | Integration tests (Testcontainers + SQLite) |
 | `Testing` | Shared test infrastructure |
 
-### Vertical Slices (WebApi)
+### Vertical Slices
 
 ```
-WebApi/
-├── Modules/
-│   ├── Monitoring/         # Repo polling, issue detection
-│   ├── Workers/            # Container orchestration, lifecycle
-│   └── Issues/             # Issue state machine, lifecycle labels
-├── Shared/Abstractions/    # Result, Error, AggregateRoot
-├── Infrastructure/         # Cross-cutting (EF, Docker API client)
-└── Program.cs
+src/Modules/
+├── Monitoring/
+│   ├── Foundry.Modules.Monitoring/          # Repo polling, issue detection
+│   └── Foundry.Modules.Monitoring.Contracts/
+├── Workers/
+│   ├── Foundry.Modules.Workers/             # Container orchestration, lifecycle
+│   └── Foundry.Modules.Workers.Contracts/
+└── Issues/
+    ├── Foundry.Modules.Issues/              # Issue state machine, lifecycle labels
+    └── Foundry.Modules.Issues.Contracts/
 ```
 
 ### Key Patterns
