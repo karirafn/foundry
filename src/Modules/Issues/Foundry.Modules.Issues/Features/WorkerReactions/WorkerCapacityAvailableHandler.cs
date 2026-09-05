@@ -78,6 +78,15 @@ internal sealed class WorkerCapacityAvailableHandler(
     /// because <see cref="Microsoft.EntityFrameworkCore.EF.Property{TProperty}"/> cannot access
     /// a property that is not declared on the queried base type (<c>Issue</c>).
     /// Short-circuits on the first match.
+    ///
+    /// Run-carrying states (those that declare <c>WorkerRunId</c>):
+    ///   <see cref="States.InProgressIssue"/>, <see cref="States.RevisionInProgressIssue"/>,
+    ///   <see cref="States.ReviewIssue"/>, <see cref="States.UnchangedIssue"/>,
+    ///   <see cref="States.FailedIssue"/>, <see cref="States.ContinuableFailedIssue"/>,
+    ///   <see cref="States.RevisionFailedIssue"/>.
+    /// When adding a new <see cref="Domain.Entities.Issue"/> subtype that carries <c>WorkerRunId</c>,
+    /// add a corresponding <c>AnyAsync</c> check here and update
+    /// <c>WorkerRunIdGuardExhaustivenessTests.GuardedTypes</c> in the unit-test project.
     /// </summary>
     private async Task<bool> WorkerRunIdExistsAsync(
         WorkerRunId workerRunId,
