@@ -91,12 +91,12 @@ internal sealed class WorkerRunCompletedHandler(
 
             if (@event.BranchName is not null && @event.PullRequestUrl is not null)
             {
-                ReviewIssue review = revisionInProgress.MarkInReview(DateTimeOffset.UtcNow);
+                ReviewIssue review = revisionInProgress.MarkInReview();
                 await db.TransitionAsync(revisionInProgress, review, domainEventDispatcher, cancellationToken);
             }
             else
             {
-                ReviewIssue review = revisionInProgress.MarkUnchanged(DateTimeOffset.UtcNow);
+                ReviewIssue review = revisionInProgress.MarkUnchanged();
                 await db.TransitionAsync(revisionInProgress, review, domainEventDispatcher, cancellationToken);
             }
 

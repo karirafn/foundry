@@ -19,10 +19,9 @@ public sealed class MarkInReview
         RevisionInProgressIssue revisionInProgress = new IssueBuilder()
             .WithMonitoredRepositoryId(repositoryId)
             .RevisionInProgress();
-        DateTimeOffset feedbackCutoffAt = DateTimeOffset.UtcNow;
 
         // Act
-        ReviewIssue review = revisionInProgress.MarkInReview(feedbackCutoffAt);
+        ReviewIssue review = revisionInProgress.MarkInReview();
 
         // Assert
         review.Id.ShouldBe(revisionInProgress.Id);
@@ -36,10 +35,9 @@ public sealed class MarkInReview
         RevisionInProgressIssue revisionInProgress = new IssueBuilder()
             .WithMonitoredRepositoryId(repositoryId)
             .RevisionInProgress();
-        DateTimeOffset feedbackCutoffAt = DateTimeOffset.UtcNow;
 
         // Act
-        revisionInProgress.MarkInReview(feedbackCutoffAt);
+        revisionInProgress.MarkInReview();
 
         // Assert
         IssueInReview domainEvent = revisionInProgress.DomainEvents.ShouldHaveSingleItem().ShouldBeOfType<IssueInReview>();
@@ -49,27 +47,47 @@ public sealed class MarkInReview
     }
 
     [Fact]
-    public void WhenMarkedInReview_ReviewIssueHasCorrectProperties()
+    public void WhenMarkedInReview_WithNewestConsumedComment_UsesThatTimestampAsFeedbackCutoff()
     {
         // Arrange
+        DateTimeOffset newestConsumedCommentAt = new DateTimeOffset(2026, 6, 1, 12, 0, 0, TimeSpan.Zero);
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
         RevisionInProgressIssue revisionInProgress = new IssueBuilder()
             .WithMonitoredRepositoryId(repositoryId)
+            .WithNewestCommentAt(newestConsumedCommentAt)
             .RevisionInProgress();
-        DateTimeOffset feedbackCutoffAt = new DateTimeOffset(2026, 6, 1, 12, 0, 0, TimeSpan.Zero);
 
         // Act
-        ReviewIssue review = revisionInProgress.MarkInReview(feedbackCutoffAt);
+        ReviewIssue review = revisionInProgress.MarkInReview();
 
         // Assert
         review.ShouldSatisfyAllConditions(
             () => review.WorkerRunId.ShouldBe(revisionInProgress.WorkerRunId),
             () => review.BranchName.ShouldBe(revisionInProgress.BranchName),
             () => review.PullRequestUrl.ShouldBe(revisionInProgress.PullRequestUrl),
-            () => review.FeedbackCutoffAt.ShouldBe(feedbackCutoffAt),
+            () => review.FeedbackCutoffAt.ShouldBe(revisionInProgress.NewestConsumedCommentAt!.Value),
             () => review.MonitoredRepositoryId.ShouldBe(repositoryId),
             () => review.IssueNumber.ShouldBe(revisionInProgress.IssueNumber),
             () => review.Title.ShouldBe(revisionInProgress.Title),
             () => review.DetectedAt.ShouldBe(revisionInProgress.DetectedAt));
+    }
+
+    [Fact]
+    public void WhenMarkedInReview_WithNullNewestConsumedComment_ReturnsReviewIssueWithUtcNowFallback()
+    {
+        // Arrange
+        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
+        RevisionInProgressIssue revisionInProgress = new IssueBuilder()
+            .WithMonitoredRepositoryId(repositoryId)
+            .RevisionInProgress();
+        DateTimeOffset before = DateTimeOffset.UtcNow;
+
+        // Act
+        ReviewIssue review = revisionInProgress.MarkInReview();
+
+        // Assert
+        DateTimeOffset after = DateTimeOffset.UtcNow;
+        review.ShouldNotBeNull();
+        review.FeedbackCutoffAt.ShouldBeInRange(before, after);
     }
 }

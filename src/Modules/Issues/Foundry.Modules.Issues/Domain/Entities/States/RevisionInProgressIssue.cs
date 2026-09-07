@@ -48,15 +48,17 @@ public sealed class RevisionInProgressIssue : Issue
         return revisionInProgress;
     }
 
-    public ReviewIssue MarkInReview(DateTimeOffset feedbackCutoffAt)
+    public ReviewIssue MarkInReview()
     {
+        DateTimeOffset feedbackCutoffAt = NewestConsumedCommentAt ?? DateTimeOffset.UtcNow;
         ReviewIssue review = ReviewIssue.FromRevisionInProgress(this, feedbackCutoffAt);
         AddDomainEvent(new Events.IssueInReview(Id, MonitoredRepositoryId));
         return review;
     }
 
-    public ReviewIssue MarkUnchanged(DateTimeOffset feedbackCutoffAt)
+    public ReviewIssue MarkUnchanged()
     {
+        DateTimeOffset feedbackCutoffAt = NewestConsumedCommentAt ?? DateTimeOffset.UtcNow;
         ReviewIssue review = ReviewIssue.FromRevisionInProgress(this, feedbackCutoffAt);
         AddDomainEvent(new Events.IssueInReview(Id, MonitoredRepositoryId));
         return review;
