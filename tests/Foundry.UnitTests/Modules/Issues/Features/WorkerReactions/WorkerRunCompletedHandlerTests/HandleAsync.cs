@@ -438,4 +438,62 @@ public sealed class HandleAsync : IAsyncDisposable
             .OfType<IssueInReview>()
             .ShouldHaveSingleItem();
     }
+
+    [Fact]
+    public async Task WhenInProgressIssueWithOpenStateAndRunStartedAt_SetsFeedbackCutoffToRunStartedAt()
+    {
+        // Arrange
+        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
+        InProgressIssue inProgress = SeedInProgressIssue(repositoryId);
+        DateTimeOffset runStartedAt = new DateTimeOffset(2024, 3, 10, 8, 30, 0, TimeSpan.Zero);
+
+        WorkerRunCompleted @event = new(
+            WorkerRunId: inProgress.WorkerRunId,
+            IssueId: inProgress.Id.Value,
+            BranchName: "feat/issue-1-fix",
+            PullRequestUrl: "https://github.com/owner/repo/pull/10",
+            MergeState: WorkerRunMergeState.Open,
+            RunStartedAt: runStartedAt);
+
+        // Act
+        await _sut.HandleAsync(@event, CancellationToken.None);
+
+        // Assert
+        _dbContext.ChangeTracker.Clear();
+        Issue? issue = await _dbContext.Set<Issue>()
+            .FirstOrDefaultAsync(
+                i => i.MonitoredRepositoryId == repositoryId,
+                TestContext.Current.CancellationToken);
+        ReviewIssue review = issue.ShouldBeOfType<ReviewIssue>();
+        review.FeedbackCutoffAt.ShouldBe(runStartedAt);
+    }
+
+    [Fact]
+    public async Task WhenInProgressIssueWithOpenStateAndNoRunStartedAt_SetsFeedbackCutoffToUtcNow()
+    {
+        // Arrange
+        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
+        InProgressIssue inProgress = SeedInProgressIssue(repositoryId);
+        DateTimeOffset before = DateTimeOffset.UtcNow;
+
+        WorkerRunCompleted @event = new(
+            WorkerRunId: inProgress.WorkerRunId,
+            IssueId: inProgress.Id.Value,
+            BranchName: "feat/issue-1-fix",
+            PullRequestUrl: "https://github.com/owner/repo/pull/10",
+            MergeState: WorkerRunMergeState.Open,
+            RunStartedAt: null);
+
+        // Act
+        await _sut.HandleAsync(@event, CancellationToken.None);
+
+        // Assert
+        _dbContext.ChangeTracker.Clear();
+        Issue? issue = await _dbContext.Set<Issue>()
+            .FirstOrDefaultAsync(
+                i => i.MonitoredRepositoryId == repositoryId,
+                TestContext.Current.CancellationToken);
+        ReviewIssue review = issue.ShouldBeOfType<ReviewIssue>();
+        review.FeedbackCutoffAt.ShouldBeGreaterThanOrEqualTo(before);
+    }
 }

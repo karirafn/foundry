@@ -64,7 +64,7 @@ internal sealed class WorkerRunCompletedHandler(
                     ReviewIssue review = inProgress.MarkInReview(
                         @event.BranchName,
                         @event.PullRequestUrl,
-                        DateTimeOffset.UtcNow);
+                        @event.RunStartedAt ?? DateTimeOffset.UtcNow);
                     await db.TransitionAsync(inProgress, review, domainEventDispatcher, cancellationToken);
                     break;
 
