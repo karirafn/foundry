@@ -211,6 +211,9 @@ public sealed class HandleAsync : IAsyncDisposable
         return queued;
     }
 
+    private static readonly DateTimeOffset SeededNewestCommentAt =
+        new(2024, 6, 1, 10, 0, 0, TimeSpan.Zero);
+
     private RevisionInProgressIssue SeedRevisionInProgressIssue(MonitoredRepositoryId repositoryId)
     {
         RevisionInProgressIssue revisionInProgress = new IssueBuilder()
@@ -218,6 +221,7 @@ public sealed class HandleAsync : IAsyncDisposable
             .WithIssueNumber(3)
             .WithBranchName("feat/issue-3")
             .WithPullRequestUrl("https://github.com/owner/repo/pull/3")
+            .WithNewestCommentAt(SeededNewestCommentAt)
             .RevisionInProgress();
         _dbContext.Set<Issue>().Add(revisionInProgress);
         _dbContext.SaveChanges();
@@ -252,7 +256,7 @@ public sealed class HandleAsync : IAsyncDisposable
         review.ShouldSatisfyAllConditions(
             () => review.BranchName.ShouldBe(revisionInProgress.BranchName),
             () => review.PullRequestUrl.ShouldBe(revisionInProgress.PullRequestUrl),
-            () => review.FeedbackCutoffAt.ShouldBeGreaterThan(DateTimeOffset.MinValue));
+            () => review.FeedbackCutoffAt.ShouldBe(SeededNewestCommentAt));
     }
 
     [Fact]
@@ -282,7 +286,65 @@ public sealed class HandleAsync : IAsyncDisposable
         review.ShouldSatisfyAllConditions(
             () => review.BranchName.ShouldBe(revisionInProgress.BranchName),
             () => review.PullRequestUrl.ShouldBe(revisionInProgress.PullRequestUrl),
-            () => review.FeedbackCutoffAt.ShouldBeGreaterThan(DateTimeOffset.MinValue));
+            () => review.FeedbackCutoffAt.ShouldBe(SeededNewestCommentAt));
+    }
+
+    [Fact]
+    public async Task WhenRevisionInProgressWithPrUrlAndLaterComment_FeedbackCutoffBelowLaterComment()
+    {
+        // Arrange — comment written AFTER the newest consumed comment (simulates mid-run feedback)
+        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
+        RevisionInProgressIssue revisionInProgress = SeedRevisionInProgressIssue(repositoryId);
+        DateTimeOffset laterCommentCreatedAt = SeededNewestCommentAt.AddMinutes(5);
+
+        WorkerRunCompleted @event = new(
+            WorkerRunId: revisionInProgress.WorkerRunId,
+            IssueId: revisionInProgress.Id.Value,
+            BranchName: revisionInProgress.BranchName,
+            PullRequestUrl: revisionInProgress.PullRequestUrl,
+            MergeState: WorkerRunMergeState.Open);
+
+        // Act
+        await _sut.HandleAsync(@event, CancellationToken.None);
+
+        // Assert — the cutoff is anchored to NewestConsumedCommentAt, so the later comment
+        // falls after the cutoff and the next poll will treat it as actionable feedback
+        _dbContext.ChangeTracker.Clear();
+        Issue? issue = await _dbContext.Set<Issue>()
+            .FirstOrDefaultAsync(
+                i => i.MonitoredRepositoryId == repositoryId,
+                TestContext.Current.CancellationToken);
+        ReviewIssue review = issue.ShouldBeOfType<ReviewIssue>();
+        review.FeedbackCutoffAt.ShouldBeLessThan(laterCommentCreatedAt);
+    }
+
+    [Fact]
+    public async Task WhenRevisionInProgressWithoutPrUrlAndLaterComment_FeedbackCutoffBelowLaterComment()
+    {
+        // Arrange — comment written AFTER the newest consumed comment (simulates mid-run feedback)
+        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
+        RevisionInProgressIssue revisionInProgress = SeedRevisionInProgressIssue(repositoryId);
+        DateTimeOffset laterCommentCreatedAt = SeededNewestCommentAt.AddMinutes(5);
+
+        WorkerRunCompleted @event = new(
+            WorkerRunId: revisionInProgress.WorkerRunId,
+            IssueId: revisionInProgress.Id.Value,
+            BranchName: null,
+            PullRequestUrl: null,
+            MergeState: WorkerRunMergeState.None);
+
+        // Act
+        await _sut.HandleAsync(@event, CancellationToken.None);
+
+        // Assert — the cutoff is anchored to NewestConsumedCommentAt, so the later comment
+        // falls after the cutoff and the next poll will treat it as actionable feedback
+        _dbContext.ChangeTracker.Clear();
+        Issue? issue = await _dbContext.Set<Issue>()
+            .FirstOrDefaultAsync(
+                i => i.MonitoredRepositoryId == repositoryId,
+                TestContext.Current.CancellationToken);
+        ReviewIssue review = issue.ShouldBeOfType<ReviewIssue>();
+        review.FeedbackCutoffAt.ShouldBeLessThan(laterCommentCreatedAt);
     }
 
     [Fact]
