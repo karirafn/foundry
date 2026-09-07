@@ -2,6 +2,7 @@ using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Issues.Domain.Entities.States;
 using Foundry.Modules.Issues.Domain.Events;
 using Foundry.Modules.Monitoring.Contracts;
+using Foundry.Modules.Workers.Contracts;
 using Foundry.Testing;
 
 using Shouldly;
@@ -79,5 +80,23 @@ public sealed class Retry
             () => revisionQueued.IssueNumber.ShouldBe(failed.IssueNumber),
             () => revisionQueued.Title.ShouldBe(failed.Title),
             () => revisionQueued.DetectedAt.ShouldBe(failed.DetectedAt));
+    }
+
+    [Fact]
+    public void WhenRetriedAndClaimed_NewestConsumedCommentAtSurvivesFailurePath()
+    {
+        // Arrange
+        DateTimeOffset newestCommentAt = new DateTimeOffset(2026, 9, 1, 10, 0, 0, TimeSpan.Zero);
+        WorkerRunId runId = WorkerRunId.New();
+        RevisionFailedIssue failed = new IssueBuilder()
+            .WithNewestCommentAt(newestCommentAt)
+            .WithReviewComments(ReviewComments)
+            .RevisionFailed();
+
+        // Act
+        RevisionInProgressIssue revisionInProgress = failed.Retry().Claim(runId);
+
+        // Assert
+        revisionInProgress.NewestConsumedCommentAt.ShouldBe(failed.NewestConsumedCommentAt);
     }
 }

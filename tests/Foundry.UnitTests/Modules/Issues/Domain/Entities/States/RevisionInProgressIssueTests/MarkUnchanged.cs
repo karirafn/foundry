@@ -19,10 +19,9 @@ public sealed class MarkUnchanged
         RevisionInProgressIssue revisionInProgress = new IssueBuilder()
             .WithMonitoredRepositoryId(repositoryId)
             .RevisionInProgress();
-        DateTimeOffset feedbackCutoffAt = DateTimeOffset.UtcNow;
 
         // Act
-        ReviewIssue review = revisionInProgress.MarkUnchanged(feedbackCutoffAt);
+        ReviewIssue review = revisionInProgress.MarkUnchanged();
 
         // Assert
         review.Id.ShouldBe(revisionInProgress.Id);
@@ -36,10 +35,9 @@ public sealed class MarkUnchanged
         RevisionInProgressIssue revisionInProgress = new IssueBuilder()
             .WithMonitoredRepositoryId(repositoryId)
             .RevisionInProgress();
-        DateTimeOffset feedbackCutoffAt = DateTimeOffset.UtcNow;
 
         // Act
-        revisionInProgress.MarkUnchanged(feedbackCutoffAt);
+        revisionInProgress.MarkUnchanged();
 
         // Assert
         IssueInReview domainEvent = revisionInProgress.DomainEvents.ShouldHaveSingleItem().ShouldBeOfType<IssueInReview>();
@@ -49,23 +47,42 @@ public sealed class MarkUnchanged
     }
 
     [Fact]
-    public void WhenMarkedUnchanged_ReturnsReviewIssueNotUnchangedIssue()
+    public void WhenMarkedUnchanged_WithNewestConsumedComment_UsesThatTimestampAsFeedbackCutoff()
+    {
+        // Arrange
+        DateTimeOffset newestConsumedCommentAt = new DateTimeOffset(2026, 6, 1, 12, 0, 0, TimeSpan.Zero);
+        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
+        RevisionInProgressIssue revisionInProgress = new IssueBuilder()
+            .WithMonitoredRepositoryId(repositoryId)
+            .WithNewestCommentAt(newestConsumedCommentAt)
+            .RevisionInProgress();
+
+        // Act
+        ReviewIssue review = revisionInProgress.MarkUnchanged();
+
+        // Assert — PR still exists, so returns to ReviewIssue (not UnchangedIssue)
+        review.ShouldSatisfyAllConditions(
+            () => review.BranchName.ShouldBe(revisionInProgress.BranchName),
+            () => review.PullRequestUrl.ShouldBe(revisionInProgress.PullRequestUrl),
+            () => review.FeedbackCutoffAt.ShouldBe(revisionInProgress.NewestConsumedCommentAt!.Value),
+            () => review.MonitoredRepositoryId.ShouldBe(repositoryId));
+    }
+
+    [Fact]
+    public void WhenMarkedUnchanged_WithNullNewestConsumedComment_ReturnsReviewIssueWithUtcNowFallback()
     {
         // Arrange
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
         RevisionInProgressIssue revisionInProgress = new IssueBuilder()
             .WithMonitoredRepositoryId(repositoryId)
             .RevisionInProgress();
-        DateTimeOffset feedbackCutoffAt = DateTimeOffset.UtcNow;
+        DateTimeOffset before = DateTimeOffset.UtcNow;
 
         // Act
-        ReviewIssue review = revisionInProgress.MarkUnchanged(feedbackCutoffAt);
+        ReviewIssue review = revisionInProgress.MarkUnchanged();
 
-        // Assert — PR still exists, so returns to ReviewIssue (not UnchangedIssue)
-        review.ShouldSatisfyAllConditions(
-            () => review.BranchName.ShouldBe(revisionInProgress.BranchName),
-            () => review.PullRequestUrl.ShouldBe(revisionInProgress.PullRequestUrl),
-            () => review.FeedbackCutoffAt.ShouldBe(feedbackCutoffAt),
-            () => review.MonitoredRepositoryId.ShouldBe(repositoryId));
+        // Assert
+        DateTimeOffset after = DateTimeOffset.UtcNow;
+        review.FeedbackCutoffAt.ShouldBeInRange(before, after);
     }
 }
