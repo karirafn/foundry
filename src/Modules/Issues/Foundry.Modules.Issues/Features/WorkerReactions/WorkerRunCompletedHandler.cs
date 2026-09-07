@@ -61,6 +61,10 @@ internal sealed class WorkerRunCompletedHandler(
                         return;
                     }
 
+                    // RunStartedAt is always set in normal operation (from ActiveRun.StartedAt, which is non-nullable).
+                    // The ?? UtcNow fallback exists only for back-compat with WorkerRunCompleted events that were
+                    // serialized before this field was added and are drained across the deploy boundary, reproducing
+                    // the old completion-time cutoff for exactly that bounded window.
                     ReviewIssue review = inProgress.MarkInReview(
                         @event.BranchName,
                         @event.PullRequestUrl,
@@ -89,6 +93,10 @@ internal sealed class WorkerRunCompletedHandler(
                 return;
             }
 
+            // The revision path derives the cutoff from NewestConsumedCommentAt (set when comments were consumed)
+            // rather than RunStartedAt. This is intentional: a first run has no consumed comments and anchors to
+            // run start; a revision run has already consumed comments, so it anchors to those instead, ensuring
+            // any new feedback posted after the consumed batch is not silently dropped.
             if (@event.BranchName is not null && @event.PullRequestUrl is not null)
             {
                 ReviewIssue review = revisionInProgress.MarkInReview();

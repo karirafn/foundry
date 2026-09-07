@@ -83,7 +83,6 @@ public sealed class MarkUnchanged
 
         // Assert
         DateTimeOffset after = DateTimeOffset.UtcNow;
-        review.ShouldNotBeNull();
         review.FeedbackCutoffAt.ShouldBeInRange(before, after);
     }
 }

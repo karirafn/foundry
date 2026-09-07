@@ -48,6 +48,13 @@ public sealed class RevisionInProgressIssue : Issue
         return revisionInProgress;
     }
 
+    // MarkInReview and MarkUnchanged perform the same state transition — both return the issue to ReviewIssue
+    // carrying the existing BranchName and PullRequestUrl forward. The two-name distinction is intentional:
+    // MarkInReview signals that the revision produced (or updated) a PR; MarkUnchanged signals that the worker
+    // found nothing to change but the PR still stands. Callers pick the name that matches what the worker
+    // reported, which preserves the semantic distinction in logs and domain events without diverging the cutoff
+    // logic. Do NOT merge them into one method.
+
     public ReviewIssue MarkInReview()
     {
         DateTimeOffset feedbackCutoffAt = NewestConsumedCommentAt ?? DateTimeOffset.UtcNow;

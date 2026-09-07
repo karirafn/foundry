@@ -548,6 +548,7 @@ public sealed class HandleAsync : IAsyncDisposable
 
         // Act
         await _sut.HandleAsync(@event, CancellationToken.None);
+        DateTimeOffset after = DateTimeOffset.UtcNow;
 
         // Assert
         _dbContext.ChangeTracker.Clear();
@@ -556,6 +557,6 @@ public sealed class HandleAsync : IAsyncDisposable
                 i => i.MonitoredRepositoryId == repositoryId,
                 TestContext.Current.CancellationToken);
         ReviewIssue review = issue.ShouldBeOfType<ReviewIssue>();
-        review.FeedbackCutoffAt.ShouldBeGreaterThanOrEqualTo(before);
+        review.FeedbackCutoffAt.ShouldBeInRange(before, after);
     }
 }
