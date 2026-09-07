@@ -436,7 +436,7 @@ When all blockers are resolved — that is, closed in the provider — a `Blocke
 A lifecycle state for an issue whose worker completed successfully and produced a PR.
 Carries `WorkerRunId`, `BranchName`, `PullRequestUrl`, and `FeedbackCutoffAt` — all non-nullable.
 Awaits human review of the PR. The monitoring service polls the provider for PR/issue status and review feedback.
-`FeedbackCutoffAt` filters stale feedback — only review comments created after this timestamp are considered actionable. Set to the worker run's completion time on first entry; updated on re-entry after a revision cycle.
+`FeedbackCutoffAt` filters stale feedback — only review comments created after this timestamp are considered actionable. Tracks consumed feedback: set to the worker run's start time on first entry to review; updated to the newest consumed comment's timestamp on re-entry after a revision cycle. The cutoff never uses the worker run's completion time.
 Transitions: `Revise()` → `RevisionQueuedIssue` (feedback detected); `Complete()` → `CompletedIssue` (issue closed); `Fail()` → `ContinuableFailedIssue` (PR closed without merge — branch exists).
 
 ## Unchanged Issue
