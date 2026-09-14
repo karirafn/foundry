@@ -53,7 +53,7 @@ internal static class SystemPromptBuilder
 
         string contextSection = context switch
         {
-            DispatchContext.Revision revision => BuildRevisionSection(prompt, revision, out _),
+            DispatchContext.Revision revision => BuildRevisionSection(prompt, revision),
             DispatchContext.Continuation continuation => BuildContinuationSection(continuation),
             DispatchContext.Fresh fresh => BuildCheckoutInstruction(fresh.BranchName),
             _ => throw new UnreachableException($"Unhandled DispatchContext variant: {context.GetType().Name}"),
@@ -88,7 +88,7 @@ internal static class SystemPromptBuilder
         return Result<string>.Ok(normalised);
     }
 
-    private static string BuildRevisionSection(string promptFloor, DispatchContext.Revision revision, out int sizeOmittedCount)
+    private static string BuildRevisionSection(string promptFloor, DispatchContext.Revision revision)
     {
         // Measure the fixed floor so we know how many bytes we can spend on comments.
         // Normalise now (same as the main Build normalisation pass) for accurate measurement.
@@ -114,37 +114,39 @@ internal static class SystemPromptBuilder
 
         int budgetForComments = MaxSystemPromptBytes - fixedFloorBytes;
 
-        // Append comments oldest-first within the budget.
+        // Accumulate from the tail (newest-first) so the newest comments are kept when
+        // the budget is exhausted — drop-oldest-first semantics.
         int runningCommentBytes = 0;
-        sizeOmittedCount = 0;
-        List<string> appendedComments = [];
-        List<string> droppedComments = [];
+        int sizeOmittedCount = 0;
+        List<string> candidateComments = [];
 
-        foreach (ReviewComment comment in revision.Comments)
+        for (int i = revision.Comments.Count - 1; i >= 0; i--)
         {
-            string formatted = FormatComment(comment);
+            string formatted = FormatComment(revision.Comments[i]);
             // Normalise separators for accurate byte counting.
             string normalisedLine = formatted.Replace("\r\n", "\n", StringComparison.Ordinal) + "\n";
             int lineBytes = Encoding.UTF8.GetByteCount(normalisedLine);
 
             if (runningCommentBytes + lineBytes <= budgetForComments)
             {
-                appendedComments.Add(formatted);
+                candidateComments.Add(formatted);
                 runningCommentBytes += lineBytes;
             }
             else
             {
-                droppedComments.Add(formatted);
                 sizeOmittedCount++;
             }
         }
 
-        // If no comments fit but at least one exists, truncate the newest comment's body
-        // to fit within the remaining quota and append it with a [truncated] marker.
-        if (appendedComments.Count == 0 && revision.Comments.Count > 0)
+        // Restore chronological order for the admitted comments.
+        candidateComments.Reverse();
+
+        // If no comments fit but at least one exists, truncate the newest comment's raw body
+        // on a rune boundary, then XML-encode the truncated result, and append a [truncated] marker.
+        // Encoding after truncation ensures no partial entity (e.g. '&am') can appear in the output.
+        if (candidateComments.Count == 0 && revision.Comments.Count > 0)
         {
             ReviewComment newestComment = revision.Comments[^1];
-            string encodedBody = EncodeForXmlData(newestComment.Body);
             string marker = " [truncated]";
             string prefix = newestComment.FilePath is not null && newestComment.Line is not null
                 ? $"- {EncodeForXmlData(newestComment.FilePath)}:{newestComment.Line} — "
@@ -157,23 +159,27 @@ internal static class SystemPromptBuilder
 
             if (quotaForBody > 0)
             {
-                string truncatedBody = TruncateToUtf8Bytes(encodedBody, quotaForBody);
-                appendedComments.Add(prefix + truncatedBody + marker);
+                // Truncate the raw body first (rune-boundary safe), then encode.
+                // Encoding only expands characters, so the final encoded form may exceed quotaForBody
+                // by at most a constant factor, which the Build() byte-count backstop already catches.
+                string truncatedRawBody = TruncateToUtf8Bytes(newestComment.Body, quotaForBody);
+                string encodedTruncatedBody = EncodeForXmlData(truncatedRawBody);
+                candidateComments.Add(prefix + encodedTruncatedBody + marker);
             }
             else if (quotaForBody >= 0)
             {
-                appendedComments.Add(prefix + marker);
+                candidateComments.Add(prefix + marker);
             }
 
-            // The newest comment was already in droppedComments if it was the only one that didn't fit;
-            // remove it from the sizeOmittedCount since we're showing a truncated version.
+            // The newest comment was counted in sizeOmittedCount since no comment fit;
+            // remove it because we are now showing a truncated version.
             if (sizeOmittedCount > 0)
             {
                 sizeOmittedCount--;
             }
         }
 
-        foreach (string comment in appendedComments)
+        foreach (string comment in candidateComments)
         {
             sb.AppendLine(comment);
         }

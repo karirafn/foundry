@@ -154,12 +154,12 @@ internal sealed class IssueClaimedHandler(
             claimed.Context,
             claimed.IssueApiUrl);
 
-        if (systemPromptResult is Result<string>.Failure systemPromptFailure)
+        if (systemPromptResult is not Result<string>.Success systemPromptSuccess)
         {
-            return Result<WorkerContainerSpec>.Fail(systemPromptFailure.Error);
+            return Result<WorkerContainerSpec>.Fail(((Result<string>.Failure)systemPromptResult).Error);
         }
 
-        string systemPrompt = ((Result<string>.Success)systemPromptResult).Value;
+        string systemPrompt = systemPromptSuccess.Value;
 
         string workerPrompt = effectiveWorkerPromptTemplate
             .Replace("{issueNumber}", claimed.IssueNumber.ToString(CultureInfo.InvariantCulture), StringComparison.Ordinal);

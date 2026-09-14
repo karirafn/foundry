@@ -1073,7 +1073,8 @@ public sealed class Build
     {
         // Arrange — each '&' encodes to '&amp;' (5 bytes), so 4000 '&' chars → 20_000 bytes per comment
         // 50 comments × 20_000 bytes = 1_000_000 bytes, far beyond the budget.
-        // The builder must drop oldest-first so the prompt stays under MaxSystemPromptBytes.
+        // The builder must drop oldest-first (keep newest tail) so the prompt stays under MaxSystemPromptBytes.
+        // Each comment has an index marker so newest/oldest can be asserted.
         WorkerOptions options = new();
         string body = new string('&', 4000);
         List<ReviewComment> comments = Enumerable.Range(1, 50)
@@ -1090,14 +1091,16 @@ public sealed class Build
             "https://api.github.com/repos/owner/repo/issues/1");
         string result = buildResult.ShouldBeOfType<Result<string>.Success>().Value;
 
-        // Assert
+        // Assert — prompt under ceiling, feedback section non-empty, newest kept, oldest dropped
         Encoding.UTF8.GetByteCount(result).ShouldBeLessThan(SystemPromptBuilder.MaxSystemPromptBytes);
         result.ShouldContain("<review-feedback>");
         result.ShouldContain("</review-feedback>");
-        // At least the </review-feedback> close tag exists with content between the tags
         int openTagIdx = result.IndexOf("<review-feedback>", StringComparison.Ordinal);
         int closeTagIdx = result.IndexOf("</review-feedback>", StringComparison.Ordinal);
         (closeTagIdx - openTagIdx).ShouldBeGreaterThan("<review-feedback>".Length);
+        // Drop-oldest semantics: newest comment (index 50) must be present; oldest (index 1) must be absent.
+        result.ShouldContain("Comment 50:");
+        result.ShouldNotContain("Comment 1:");
     }
 
     [Fact]
@@ -1134,10 +1137,11 @@ public sealed class Build
     [Fact]
     public void WhenSingleOversizedComment_FeedbackNonEmptyBodyTruncatedWithMarkerTotalUnderCeiling()
     {
-        // Arrange — one comment so large its encoded body alone exceeds MaxSystemPromptBytes
+        // Arrange — one comment whose ASCII body alone exceeds MaxSystemPromptBytes.
+        // ASCII encodes 1:1 so the truncated raw body also fits within the byte ceiling after encoding.
         WorkerOptions options = new();
-        // 200_000 '&' chars → each encodes to 5 bytes = 1_000_000 bytes when XML-encoded
-        string hugeBody = new string('&', 200_000);
+        // 200_000 'a' chars → 200_000 bytes ASCII, far above the ~116_000-byte body quota.
+        string hugeBody = new string('a', 200_000);
         DispatchContext.Revision revision = new(
             "feat/1-fix",
             "https://github.com/org/repo/pull/1",
@@ -1159,25 +1163,68 @@ public sealed class Build
     }
 
     [Fact]
-    public void WhenTruncationAtMultibyteRuneBoundary_NoSplitSequenceAndNoReplacementChar()
+    public void TruncateToUtf8Bytes_WhenCutLandsBetweenAsciiAndTwoBytRune_StopsBeforeRune()
     {
-        // Arrange — build a comment body whose XML-encoded form forces a cut mid-multibyte sequence.
-        // U+00E9 (é) is 2 bytes in UTF-8: 0xC3 0xA9.
-        // U+1F600 (emoji) is encoded as surrogate pair in UTF-16: 4 bytes in UTF-8.
-        // We pad with ASCII to force the cut to land at a multibyte rune.
+        // Arrange — U+00E9 LATIN SMALL LETTER E WITH ACUTE is 2 UTF-8 bytes (0xC3 0xA9).
+        // Written as \uXXXX ASCII escape to avoid raw multibyte bytes in the source file.
+        // Input: 3 ASCII bytes ('a','b','c') + 1 two-byte rune = 5 bytes total.
+        // Cut at 4 bytes — must stop before the rune (result = "abc", not "abc\xC3").
+        string accented = "\u00E9"; // U+00E9 LATIN SMALL LETTER E WITH ACUTE — 2 UTF-8 bytes
+        string input = "abc" + accented; // 5 UTF-8 bytes total
+
+        // Act
+        string result = SystemPromptBuilder.TruncateToUtf8Bytes(input, 4);
+
+        // Assert — result is the 3 ASCII chars; no partial sequence, no replacement char
+        result.ShouldBe("abc");
+        result.ShouldNotContain("�");
+        int runeCount = 0;
+        foreach (Rune _ in result.EnumerateRunes())
+        {
+            runeCount++;
+        }
+
+        runeCount.ShouldBe(3);
+    }
+
+    [Fact]
+    public void TruncateToUtf8Bytes_WhenCutLandsBetweenAsciiAndFourByteRune_StopsBeforeRune()
+    {
+        // Arrange — U+1F600 GRINNING FACE is 4 UTF-8 bytes (surrogate pair in UTF-16).
+        // Written as \uXXXX surrogate-pair escapes to avoid raw multibyte bytes in the source file.
+        // Input: 3 ASCII bytes + 1 four-byte rune = 7 bytes total.
+        // Cut at 5 bytes — must stop before the rune (result = "abc", not "abc\xF0\x9F").
+        string emoji = "\uD83D\uDE00"; // U+1F600 GRINNING FACE — 4 UTF-8 bytes, 2 UTF-16 code units
+        string input = "abc" + emoji; // 7 UTF-8 bytes total
+
+        // Act
+        string result = SystemPromptBuilder.TruncateToUtf8Bytes(input, 5);
+
+        // Assert — result is the 3 ASCII chars; no partial sequence, no replacement char
+        result.ShouldBe("abc");
+        result.ShouldNotContain("�");
+        int runeCount = 0;
+        foreach (Rune _ in result.EnumerateRunes())
+        {
+            runeCount++;
+        }
+
+        runeCount.ShouldBe(3);
+    }
+
+    [Fact]
+    public void WhenSingleOversizedCommentContainsMultibyteRunes_TruncatedBodyHasNoPartialSequence()
+    {
+        // Arrange — end-to-end: a comment body that forces single-oversized truncation and contains
+        // multibyte runes near the truncation point.
+        // Pad with enough ASCII to reach budget, then append a multibyte rune.
+        // The budget for body is roughly MaxBytes - floor - prefix - marker - newline ≈ 116_000 bytes.
+        // 115_990 ASCII + U+00E9 (2 bytes) = 115_992 total; body exceeds floor so truncation fires.
         WorkerOptions options = new();
-
-        // Build a body: ASCII padding + multibyte runes.
-        // Use raw escape sequences — verified safe literals that produce the intended code points.
-        // U+00E9 LATIN SMALL LETTER E WITH ACUTE (2 UTF-8 bytes)
-        string accented = "é";
-        // U+1F600 GRINNING FACE (4 UTF-8 bytes, surrogate pair in UTF-16: 😀)
-        string emoji = "😀";
-
-        // Build a body with enough ASCII to fill budget, ending with multibyte runes,
-        // so TruncateToUtf8Bytes must stop before splitting them.
-        // The encoded body will be the raw string (no XML special chars here).
-        string body = new string('a', 1000) + accented + emoji;
+        // U+00E9 as ASCII escape — must not appear as raw bytes in source
+        string accented = "\u00E9";
+        // Make the comment body large enough to be the "oversized" case
+        string body = new string('a', 119_000) + accented;
         DispatchContext.Revision revision = new(
             "feat/1-fix",
             "https://github.com/org/repo/pull/1",
@@ -1189,17 +1236,51 @@ public sealed class Build
             "https://api.github.com/repos/owner/repo/issues/1");
         string result = buildResult.ShouldBeOfType<Result<string>.Success>().Value;
 
-        // Assert — result must be valid UTF-16 with no replacement chars and no split sequences
+        // Assert — no replacement char, all runes enumerate cleanly
         result.ShouldNotContain("�");
-        // Verify every rune in the result enumerates cleanly (no exception = no split surrogates).
-        // EnumerateRunes() already yields only valid runes — if it throws, there's a split sequence.
-        // We assert the count > 0 so the loop body is exercised.
         int runeCount = 0;
         foreach (Rune _ in result.EnumerateRunes())
         {
             runeCount++;
         }
+
         runeCount.ShouldBeGreaterThan(0);
+    }
+
+    [Fact]
+    public void WhenSingleOversizedCommentBodyContainsAmpersand_TruncatedOutputContainsOnlyCompleteEntities()
+    {
+        // Arrange — Sec-1: truncation must not split '&amp;' into '&am' or similar.
+        // Build a body: enough ASCII to fill most of the body quota, then a few '&' chars.
+        // With raw-first truncation the cut lands after the last ASCII byte and before any '&'
+        // (or includes whole '&' chars that encode to complete '&amp;' entities).
+        // Keep the '&' count small enough that encoding the truncated result still fits in the ceiling.
+        WorkerOptions options = new();
+        // ~115_000 ASCII bytes + 10 '&' chars = ~115_010 raw bytes.
+        // Encoded: 115_000 ASCII + 10 × 5 = 115_050 bytes — well under the ceiling.
+        // The body (115_010 chars) exceeds the floor budget, so truncation fires.
+        string body = new string('a', 115_000) + new string('&', 10);
+        DispatchContext.Revision revision = new(
+            "feat/1-fix",
+            "https://github.com/org/repo/pull/1",
+            [new ReviewComment(body)]);
+
+        // Act
+        Result<string> buildResult = SystemPromptBuilder.Build(
+            1, options, options.SystemPromptTemplate, revision,
+            "https://api.github.com/repos/owner/repo/issues/1");
+        string result = buildResult.ShouldBeOfType<Result<string>.Success>().Value;
+
+        // Assert — every '&' in the output is a complete entity (no partial '&am', '&l', '&g').
+        int pos = 0;
+        while ((pos = result.IndexOf('&', pos)) >= 0)
+        {
+            bool isAmp = result.IndexOf("&amp;", pos, StringComparison.Ordinal) == pos;
+            bool isLt = result.IndexOf("&lt;", pos, StringComparison.Ordinal) == pos;
+            bool isGt = result.IndexOf("&gt;", pos, StringComparison.Ordinal) == pos;
+            (isAmp || isLt || isGt).ShouldBeTrue($"Partial XML entity at position {pos}: '{result.Substring(pos, Math.Min(10, result.Length - pos))}'");
+            pos++;
+        }
     }
 
     [Fact]
