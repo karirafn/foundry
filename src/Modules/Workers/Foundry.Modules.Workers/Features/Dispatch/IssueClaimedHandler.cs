@@ -147,12 +147,19 @@ internal sealed class IssueClaimedHandler(
         string effectiveSystemPromptTemplate = dbSystemPromptTemplate ?? _options.SystemPromptTemplate;
         string effectiveWorkerPromptTemplate = dbWorkerPromptTemplate ?? _options.WorkerPromptTemplate;
 
-        string systemPrompt = SystemPromptBuilder.Build(
+        Result<string> systemPromptResult = SystemPromptBuilder.Build(
             claimed.IssueNumber,
             _options,
             effectiveSystemPromptTemplate,
             claimed.Context,
             claimed.IssueApiUrl);
+
+        if (systemPromptResult is Result<string>.Failure systemPromptFailure)
+        {
+            return Result<WorkerContainerSpec>.Fail(systemPromptFailure.Error);
+        }
+
+        string systemPrompt = ((Result<string>.Success)systemPromptResult).Value;
 
         string workerPrompt = effectiveWorkerPromptTemplate
             .Replace("{issueNumber}", claimed.IssueNumber.ToString(CultureInfo.InvariantCulture), StringComparison.Ordinal);
