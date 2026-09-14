@@ -577,6 +577,18 @@ Carries `BranchName`, `PullRequestUrl`, and `IReadOnlyList<ReviewComment>`.
 Present on `ClaimedIssueDispatch` when the claimed issue was a `RevisionQueuedIssue`; absent for fresh attempts.
 The worker uses this to check out the existing branch and address the specific review comments.
 
+## System Prompt Budget
+
+The assembled `SYSTEM_PROMPT` is delivered to the worker container as a single environment variable and as a single `--append-system-prompt` argv. Linux caps any single argv or env string at `MAX_ARG_STRLEN` = 131,071 bytes, so an oversized prompt fails at `execve` with an opaque `E2BIG` before `claude` starts (see [ADR 0071](docs/adr/0071-bound-assembled-system-prompt-under-max-arg-strlen.md)).
+
+`SystemPromptBuilder` bounds the fully assembled prompt to a design ceiling of **120,000 UTF-8 bytes**, measured after XML encoding and after newline normalisation (`\r\n` → `\n`) — i.e. on exactly the bytes delivered, never on character counts. `entrypoint.sh` guards defensively at **131,071 bytes** (the kernel `MAX_ARG_STRLEN`) as a last line of defence against drift or a caller that bypasses the builder. The two numbers are a coupled pair and must move together: the C# ceiling leaves headroom below the kernel limit, and the shell guard only ever fires on drift.
+
+Fixed contributors — the safety preamble, the base template, and the section scaffolding — are assembled first and are non-negotiable. Only the variable revision-comment list consumes the remaining quota:
+
+- Comments over budget are dropped **oldest-first**, and the prompt states the size-omission count distinctly from the upstream 50-cap omission count (`OmittedCommentCount`), so the worker knows feedback was withheld rather than silently receiving a partial set.
+- A single comment larger than the whole remaining budget is **truncated on a UTF-8 character boundary** and marked, never dropped — the feedback section is never rendered empty, and a multi-byte sequence or surrogate pair is never split.
+- When the fixed floor alone exceeds the budget (e.g. an operator sets a very large `SystemPromptTemplate`), the dispatch **fails explicitly** with a `Worker.SystemPromptTooLarge` error rather than truncating the safety rules or overflowing at `execve`.
+
 ## Trigger Label
 
 The constant label `foundry` applied to a provider-side issue to flag it for Foundry processing.
