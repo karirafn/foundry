@@ -1022,6 +1022,26 @@ public sealed class HandleAsync : IAsyncDisposable
             () => spec.Devices.ShouldBeEmpty());
     }
 
+    [Fact]
+    public async Task WhenSystemPromptTooLarge_CreatesFailedRunWithContainerError()
+    {
+        // Arrange — a DB system prompt template large enough to exceed the 120_000-byte ceiling
+        string hugeTemplate = new string('X', 200_000);
+        IssueClaimedHandler sut = BuildHandler(
+            settingsQueries: new StubGlobalSettingsQueries(systemPromptTemplate: hugeTemplate));
+        IssueClaimed @event = BuildEvent();
+
+        // Act
+        await sut.HandleAsync(@event, TestContext.Current.CancellationToken);
+        _dbContext.ChangeTracker.Clear();
+
+        // Assert
+        WorkerRun? run = await _dbContext.Set<WorkerRun>().SingleOrDefaultAsync(TestContext.Current.CancellationToken);
+        FailedRun failedRun = run.ShouldBeOfType<FailedRun>();
+        FailureReason.ContainerError containerError = failedRun.Reason.ShouldBeOfType<FailureReason.ContainerError>();
+        containerError.Message.ShouldContain("120000");
+    }
+
     private sealed class StubPostExitProviderQueries(bool branchCreationSucceeds) : IPostExitProviderQueries
     {
         public Task<Result<bool>> CreateBranchAsync(

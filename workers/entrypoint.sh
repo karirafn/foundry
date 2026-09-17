@@ -153,6 +153,20 @@ unset _cred_file
 : "${SYSTEM_PROMPT:?SYSTEM_PROMPT is required}"
 : "${ISSUE_NUMBER:?ISSUE_NUMBER is required}"
 
+# Guard: SYSTEM_PROMPT must not exceed the Linux kernel MAX_ARG_STRLEN limit.
+# A single argv/env string above this ceiling makes execve fail with E2BIG,
+# producing an opaque "Argument list too long" error before claude starts.
+# The C# builder caps at 120 000 bytes (design ceiling); this shell guard is
+# the last-line-of-defence at the true kernel limit so any drift or caller
+# bypass is caught with an explicit diagnostic before any clone/auth work.
+readonly MAX_SYSTEM_PROMPT_BYTES=131071
+sys_prompt_bytes=$(printf '%s' "$SYSTEM_PROMPT" | wc -c)
+if [[ "$sys_prompt_bytes" -ge "$MAX_SYSTEM_PROMPT_BYTES" ]]; then
+    echo "ERROR: SYSTEM_PROMPT exceeds the kernel MAX_ARG_STRLEN ceiling of ${MAX_SYSTEM_PROMPT_BYTES} bytes (actual: ${sys_prompt_bytes} bytes). Reduce the prompt before dispatching." >&2
+    exit 1
+fi
+unset sys_prompt_bytes
+
 if [[ -n "${CLAUDE_SETTINGS_JSON:-}" ]]; then
     if [[ ! -w ~/.claude ]]; then
         echo "ERROR: ~/.claude is not writable by $(whoami). Rebuild the worker image: docker build -t foundry-worker:local workers/" >&2

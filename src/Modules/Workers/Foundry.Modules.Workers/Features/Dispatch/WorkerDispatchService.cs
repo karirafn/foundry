@@ -570,7 +570,8 @@ internal sealed class WorkerDispatchService(
                         activeRun.IssueId.Value,
                         completed.BranchName.Value,
                         completed.PullRequestUrl.Value,
-                        WorkerRunMergeState.Merged)],
+                        WorkerRunMergeState.Merged,
+                        RunStartedAt: activeRun.StartedAt)],
                     activeRun.Id,
                     cancellationToken);
                 await dbContext.TransitionAsync(activeRun, completedRun, domainEventDispatcher, cancellationToken);
@@ -596,7 +597,8 @@ internal sealed class WorkerDispatchService(
                         activeRun.IssueId.Value,
                         review.BranchName.Value,
                         review.PullRequestUrl.Value,
-                        WorkerRunMergeState.Open)],
+                        WorkerRunMergeState.Open,
+                        RunStartedAt: activeRun.StartedAt)],
                     activeRun.Id,
                     cancellationToken);
                 await dbContext.TransitionAsync(activeRun, reviewRun, domainEventDispatcher, cancellationToken);
@@ -622,7 +624,8 @@ internal sealed class WorkerDispatchService(
                         activeRun.IssueId.Value,
                         unchanged.BranchName.Value,
                         null,
-                        WorkerRunMergeState.None)],
+                        WorkerRunMergeState.None,
+                        RunStartedAt: activeRun.StartedAt)],
                     activeRun.Id,
                     cancellationToken);
                 await dbContext.TransitionAsync(activeRun, unchangedRun, domainEventDispatcher, cancellationToken);
