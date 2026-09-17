@@ -15,6 +15,18 @@ internal static class OutboxDbContextExtensions
             .ExecuteDeleteAsync(cancellationToken);
     }
 
+    internal static Task<int> PruneProcessedEventsAsync(
+        this DbContext dbContext,
+        DateTimeOffset olderThan,
+        int batchSize,
+        CancellationToken cancellationToken)
+    {
+        return dbContext.Set<ProcessedEvent>()
+            .Where(p => p.ProcessedAt < olderThan)
+            .Take(batchSize)
+            .ExecuteDeleteAsync(cancellationToken);
+    }
+
     internal static Task<List<OutboxMessage>> FindUnpublishedBatchAsync(
         this DbContext dbContext,
         int batchSize,

@@ -55,14 +55,31 @@ public sealed class OutboxRelayService(
         }
 
         DateTimeOffset olderThan = now - _options.RetentionWindow;
-        int deleted = await dbContext.PrunePublishedAsync(olderThan, cancellationToken);
-        _lastPruneAt = now;
 
-        if (deleted > 0)
+        int outboxDeleted = await dbContext.PrunePublishedAsync(olderThan, cancellationToken);
+        int inboxDeleted = await dbContext.PruneProcessedEventsAsync(olderThan, _options.InboxPruneBatchSize, cancellationToken);
+
+        // Rearm-while-full: when the inbox batch is full there may be more rows — leave
+        // _lastPruneAt unadvanced so the next tick sweeps again immediately.
+        // An underfull (or zero) batch means the backlog is drained — restore the throttle.
+        if (inboxDeleted < _options.InboxPruneBatchSize)
+        {
+            _lastPruneAt = now;
+        }
+
+        if (outboxDeleted > 0)
         {
             logger.LogInformation(
                 "Outbox retention sweep deleted {Count} published message(s) older than {OlderThan:O}.",
-                deleted,
+                outboxDeleted,
+                olderThan);
+        }
+
+        if (inboxDeleted > 0)
+        {
+            logger.LogInformation(
+                "Inbox retention sweep deleted {Count} processed event(s) older than {OlderThan:O}.",
+                inboxDeleted,
                 olderThan);
         }
     }
