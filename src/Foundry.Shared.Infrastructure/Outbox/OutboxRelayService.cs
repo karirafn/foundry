@@ -55,14 +55,35 @@ public sealed class OutboxRelayService(
         }
 
         DateTimeOffset olderThan = now - _options.RetentionWindow;
-        int deleted = await dbContext.PrunePublishedAsync(olderThan, cancellationToken);
-        _lastPruneAt = now;
 
-        if (deleted > 0)
+        int outboxDeleted = await dbContext.PrunePublishedAsync(olderThan, cancellationToken);
+        int inboxDeleted = await dbContext.PruneProcessedEventsAsync(olderThan, _options.InboxPruneBatchSize, cancellationToken);
+
+        // The outbox prune is unbounded: its volume is bounded above by the delivery batch size
+        // and the retention window, so it always drains in one pass and needs no batching.
+        // The inbox prune is the batched one — processed_events accumulates independently of
+        // delivery and can grow without bound. The rearm keys on the inbox fill alone: a full
+        // inbox batch leaves _lastPruneAt unadvanced so the next tick drains the next batch
+        // immediately; an underfull batch means the backlog is exhausted and the throttle is
+        // restored.
+        if (inboxDeleted < _options.InboxPruneBatchSize)
+        {
+            _lastPruneAt = now;
+        }
+
+        if (outboxDeleted > 0)
         {
             logger.LogInformation(
                 "Outbox retention sweep deleted {Count} published message(s) older than {OlderThan:O}.",
-                deleted,
+                outboxDeleted,
+                olderThan);
+        }
+
+        if (inboxDeleted > 0)
+        {
+            logger.LogInformation(
+                "Inbox retention sweep deleted {Count} processed event(s) older than {OlderThan:O}.",
+                inboxDeleted,
                 olderThan);
         }
     }

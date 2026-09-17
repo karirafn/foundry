@@ -11,4 +11,6 @@ public sealed class OutboxOptions
     public TimeSpan RetentionWindow { get; set; } = TimeSpan.FromDays(7);
 
     public TimeSpan RetentionSweepInterval { get; set; } = TimeSpan.FromHours(1);
+
+    public int InboxPruneBatchSize { get; set; } = 5000;
 }
