@@ -1,5 +1,6 @@
 using Foundry.Shared;
 using Foundry.Shared.Infrastructure.Outbox;
+using Foundry.WebApi.Migrations;
 using Foundry.WebApi.Persistence;
 
 using Microsoft.Data.Sqlite;
@@ -150,26 +151,6 @@ public sealed class ProcessedAtEncoding : IAsyncDisposable
         reloaded.ProcessedAt.ShouldBe(processedAt);
     }
 
-    // The rewrite SQL below must stay identical to the body of
-    // RewriteLegacyProcessedEventTimestamps.Up() in the migration.
-    // Legacy encoding: "2026-07-26 13:05:41.098579+00:00" (space at index 10, variable fractional, +00:00 suffix)
-    // Canonical "O":   "2026-07-26T13:05:41.0985790Z"     (T at index 10, exactly 7 fractional digits, trailing Z)
-    private const string RewriteLegacyProcessedAtSql = """
-        UPDATE processed_events
-        SET processed_at =
-            substr(processed_at, 1, 10)
-            || 'T'
-            || substr(processed_at, 12, 8)
-            || '.'
-            || substr(
-                   substr(processed_at, 21, instr(processed_at, '+') - 21) || '0000000',
-                   1, 7)
-            || 'Z'
-        WHERE processed_at LIKE '%+00:00'
-          AND processed_at >= '2026-09-07 00:00:00'
-          AND instr(processed_at, '.') > 0
-        """;
-
     private async Task SeedLegacyRowAsync(Guid eventId, string handler, string legacyProcessedAt)
     {
         await using SqliteCommand cmd = _connection.CreateCommand();
@@ -186,7 +167,7 @@ public sealed class ProcessedAtEncoding : IAsyncDisposable
     private async Task RunRewriteSqlAsync()
     {
         await using SqliteCommand cmd = _connection.CreateCommand();
-        cmd.CommandText = RewriteLegacyProcessedAtSql;
+        cmd.CommandText = RewriteLegacyProcessedEventTimestamps.RewriteSql;
         await cmd.ExecuteNonQueryAsync(TestContext.Current.CancellationToken);
     }
 

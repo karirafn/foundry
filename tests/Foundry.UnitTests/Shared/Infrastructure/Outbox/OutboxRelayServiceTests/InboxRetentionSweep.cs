@@ -199,7 +199,7 @@ public sealed class InboxRetentionSweep : IAsyncDisposable
 
         // Assert — the in-window processed_events row still exists
         int inboxCount = await outboxContext.Set<ProcessedEvent>().CountAsync(TestContext.Current.CancellationToken);
-        inboxCount.ShouldBeGreaterThanOrEqualTo(1);
+        inboxCount.ShouldBe(1);
 
         // Assert — handler was NOT reinvoked (dedup worked)
         recordingHandler.ReceivedEvents.ShouldBeEmpty();
@@ -277,9 +277,11 @@ public sealed class InboxRetentionSweep : IAsyncDisposable
     [Fact]
     public async Task WhenLegacyRowsAreOlderThanWindow_SweepDeletesThem()
     {
-        // Arrange — seed a legacy-encoded row with "+00:00" suffix dated older than the window
-        // Legacy rows used "+00:00" instead of the canonical "Z" produced by the "O" formatter.
-        string legacyTimestamp = DateTimeOffset.UtcNow.AddDays(-8).ToString("yyyy-MM-ddTHH:mm:ss.fffffff+00:00", System.Globalization.CultureInfo.InvariantCulture);
+        // Arrange — seed a legacy-encoded row using the real space-separated encoding produced by
+        // EF Core's default DateTimeOffset→string on SQLite (space at index 10, "+00:00" suffix).
+        // Space (0x20) sorts below canonical "T" (0x54), so out-of-window legacy rows are always
+        // older than any cutoff the sweep computes — the ordering invariant this test anchors.
+        string legacyTimestamp = DateTimeOffset.UtcNow.AddDays(-8).ToString("yyyy-MM-dd HH:mm:ss.fffffff+00:00", System.Globalization.CultureInfo.InvariantCulture);
         await SeedLegacyProcessedEventAsync(legacyTimestamp);
 
         OutboxRelayService sut = CreateSut();

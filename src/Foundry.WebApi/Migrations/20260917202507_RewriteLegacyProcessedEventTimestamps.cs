@@ -21,9 +21,7 @@ namespace Foundry.WebApi.Migrations
         // (canonical rows end with "Z"), so re-running this migration is a no-op on already-
         // rewritten rows.
         //
-        // NOTE: This constant must stay identical to RewriteLegacyProcessedAtSql in
-        //       ProcessedAtEncoding test class (ProcessedEventTests/ProcessedAtEncoding.cs).
-        private const string RewriteSql = """
+        internal const string RewriteSql = """
             UPDATE processed_events
             SET processed_at =
                 substr(processed_at, 1, 10)

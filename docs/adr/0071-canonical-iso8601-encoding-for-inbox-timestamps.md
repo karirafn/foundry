@@ -30,5 +30,6 @@ age sweep without rewriting.
   and post-migration canonical rows are indistinguishable from rewritten ones), so `Down()` is a
   no-op; the canonical form is forward-compatible.
 - The rewrite migration runs in Development only (matching the existing `Database.Migrate()`
-  policy), so production legacy rows drain via the age sweep rather than being rewritten — safe
-  because no code compares `processed_at` for equality (dedup keys on `(EventId, Handler)`).
+  policy — `src/Foundry.WebApi/Program.cs:151`, guarded by `IsDevelopment()`), so production
+  legacy rows drain via the age sweep rather than being rewritten — safe because no code
+  compares `processed_at` for equality (dedup keys on `(EventId, Handler)`).
