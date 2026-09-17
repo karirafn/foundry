@@ -149,6 +149,103 @@ public sealed class ProcessedAtEncoding : IAsyncDisposable
         reloaded.ShouldNotBeNull();
         reloaded.ProcessedAt.ShouldBe(processedAt);
     }
+
+    // The rewrite SQL below must stay identical to the body of
+    // RewriteLegacyProcessedEventTimestamps.Up() in the migration.
+    // Legacy encoding: "2026-07-26 13:05:41.098579+00:00" (space at index 10, variable fractional, +00:00 suffix)
+    // Canonical "O":   "2026-07-26T13:05:41.0985790Z"     (T at index 10, exactly 7 fractional digits, trailing Z)
+    private const string RewriteLegacyProcessedAtSql = """
+        UPDATE processed_events
+        SET processed_at =
+            substr(processed_at, 1, 10)
+            || 'T'
+            || substr(processed_at, 12, 8)
+            || '.'
+            || substr(
+                   substr(processed_at, 21, instr(processed_at, '+') - 21) || '0000000',
+                   1, 7)
+            || 'Z'
+        WHERE processed_at LIKE '%+00:00'
+          AND processed_at >= '2026-09-07 00:00:00'
+          AND instr(processed_at, '.') > 0
+        """;
+
+    private async Task SeedLegacyRowAsync(Guid eventId, string handler, string legacyProcessedAt)
+    {
+        await using SqliteCommand cmd = _connection.CreateCommand();
+        cmd.CommandText = """
+            INSERT INTO processed_events (event_id, handler, processed_at)
+            VALUES ($eventId, $handler, $processedAt)
+            """;
+        cmd.Parameters.AddWithValue("$eventId", eventId.ToString("D"));
+        cmd.Parameters.AddWithValue("$handler", handler);
+        cmd.Parameters.AddWithValue("$processedAt", legacyProcessedAt);
+        await cmd.ExecuteNonQueryAsync(TestContext.Current.CancellationToken);
+    }
+
+    private async Task RunRewriteSqlAsync()
+    {
+        await using SqliteCommand cmd = _connection.CreateCommand();
+        cmd.CommandText = RewriteLegacyProcessedAtSql;
+        await cmd.ExecuteNonQueryAsync(TestContext.Current.CancellationToken);
+    }
+
+    [Theory]
+    [InlineData("2026-09-10 22:33:02.9+00:00", "2026-09-10T22:33:02.9000000Z")]    // 1-digit fractional
+    [InlineData("2026-09-11 14:20:13.733+00:00", "2026-09-11T14:20:13.7330000Z")]  // 3-digit fractional
+    [InlineData("2026-09-12 13:05:41.098579+00:00", "2026-09-12T13:05:41.0985790Z")] // 6-digit fractional
+    [InlineData("2026-09-13 13:05:01.5014169+00:00", "2026-09-13T13:05:01.5014169Z")] // 7-digit fractional
+    public async Task WhenLegacyEncodedInWindowRow_MigrationRewritesToCanonicalForm(
+        string legacyValue,
+        string expectedCanonical)
+    {
+        // Arrange — seed a legacy-encoded row directly via raw SQL (bypassing the "O" converter)
+        Guid eventId = Guid.NewGuid();
+        await SeedLegacyRowAsync(eventId, "Foundry.RewriteTestHandler", legacyValue);
+
+        // Act — run the migration UPDATE statement directly
+        await RunRewriteSqlAsync();
+
+        // Assert — the raw stored value is now the exact canonical 28-char form
+        string? rawValue = await ReadProcessedAtRawAsync(eventId);
+        rawValue.ShouldNotBeNull();
+        rawValue.ShouldBe(expectedCanonical);
+        rawValue.Length.ShouldBe(28);
+        rawValue.ShouldEndWith("Z");
+        rawValue[10].ShouldBe('T');
+    }
+
+    [Fact]
+    public async Task WhenCanonicalRowExists_MigrationLeavesItUntouched()
+    {
+        // Arrange — seed an already-canonical row
+        Guid eventId = Guid.NewGuid();
+        string canonical = "2026-09-14T13:05:41.0985790Z";
+        await SeedLegacyRowAsync(eventId, "Foundry.IdempotencyTestHandler", canonical);
+
+        // Act
+        await RunRewriteSqlAsync();
+
+        // Assert — idempotent: canonical row is untouched
+        string? rawValue = await ReadProcessedAtRawAsync(eventId);
+        rawValue.ShouldBe(canonical);
+    }
+
+    [Fact]
+    public async Task WhenFractionlessLegacyRowExists_MigrationLeavesItUntouched()
+    {
+        // Arrange — a fraction-less legacy row has no '.' so instr returns 0; the guard skips it
+        Guid eventId = Guid.NewGuid();
+        string fractionless = "2026-09-15 13:05:41+00:00";
+        await SeedLegacyRowAsync(eventId, "Foundry.FractionlessTestHandler", fractionless);
+
+        // Act
+        await RunRewriteSqlAsync();
+
+        // Assert — edge case: fraction-less row is untouched (would corrupt if processed)
+        string? rawValue = await ReadProcessedAtRawAsync(eventId);
+        rawValue.ShouldBe(fractionless);
+    }
 }
 
 internal sealed record EncodingTestEvent(string Name) : IIntegrationEvent;
