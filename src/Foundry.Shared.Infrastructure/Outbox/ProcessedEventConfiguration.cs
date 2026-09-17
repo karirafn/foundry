@@ -1,3 +1,5 @@
+using System.Globalization;
+
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
@@ -20,8 +22,14 @@ public sealed class ProcessedEventConfiguration : IEntityTypeConfiguration<Proce
             .HasMaxLength(500)
             .HasColumnName("handler");
 
+        // Stored as ISO 8601 TEXT so that SQLite can sort and compare by it lexicographically,
+        // matching OutboxMessage.OccurredAt's encoding for consistent cross-table prune comparisons.
         builder.Property(e => e.ProcessedAt)
             .IsRequired()
+            .HasConversion(
+                dto => dto.UtcDateTime.ToString("O"),
+                s => DateTimeOffset.Parse(s, null, DateTimeStyles.RoundtripKind))
+            .HasColumnType("TEXT")
             .HasColumnName("processed_at");
     }
 }
