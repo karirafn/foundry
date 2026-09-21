@@ -997,3 +997,83 @@ EOF
     written_content="$(cat "$cred_dir/settings.json")"
     [[ "$written_content" == *'"new"'* ]]
 }
+
+# ---------------------------------------------------------------------------
+# SYSTEM_PROMPT byte-size guard tests
+# ---------------------------------------------------------------------------
+#
+# The kernel MAX_ARG_STRLEN (131071 bytes) limits individual env/argv strings
+# passed via execve. Env vars at or above this size cannot be passed to a child
+# process, so tests must fake `wc` to simulate oversized counts without needing
+# to export a physically oversized string.
+
+# Helper: write a fake `wc` that returns a controlled byte count for stdin.
+# The fake responds to `wc -c` by printing the value from WC_FAKE_BYTES.
+# All other wc invocations fall through to the real binary.
+make_fake_wc_bytes() {
+    local fake_count="$1"
+    cat > "$FAKE_BIN_DIR/wc" <<EOF
+#!/bin/bash
+if [[ "\${1:-}" == "-c" ]]; then
+    printf '%s\n' "${fake_count}"
+else
+    exec /usr/bin/wc "\$@"
+fi
+EOF
+    chmod +x "$FAKE_BIN_DIR/wc"
+}
+
+@test "oversized SYSTEM_PROMPT exits non-zero before reaching claude" {
+    make_fake_claude
+    make_fake_git
+    # Fake wc -c to report 131071 bytes — at the ceiling
+    make_fake_wc_bytes 131071
+    set_required_env
+
+    run bash "$ENTRYPOINT"
+
+    [ "$status" -ne 0 ]
+    [ ! -f "$BATS_TEST_TMPDIR/claude_called" ]
+}
+
+@test "oversized SYSTEM_PROMPT emits diagnostic naming the ceiling and actual size" {
+    make_fake_claude
+    make_fake_git
+    # Fake wc -c to report 145000 bytes — clearly over the ceiling
+    make_fake_wc_bytes 145000
+    set_required_env
+
+    run bash "$ENTRYPOINT"
+
+    # Diagnostic must name both the ceiling (131071) and the actual byte size
+    [[ "$output" == *"131071"* ]]
+    [[ "$output" == *"145000"* ]]
+}
+
+@test "SYSTEM_PROMPT byte-count uses bytes not chars: wc -c called even in UTF-8 locale" {
+    make_fake_claude
+    make_fake_git
+    # Fake wc -c to report 196608 bytes — 65536 three-byte '€' chars.
+    # In a UTF-8 locale ${#SYSTEM_PROMPT} would return 65536 (chars, under the limit)
+    # while wc -c returns 196608 (bytes, over the limit).
+    # The guard must use the byte count to reject this.
+    make_fake_wc_bytes 196608
+    set_required_env
+
+    run env LC_ALL=C.utf8 bash "$ENTRYPOINT"
+
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"131071"* ]]
+}
+
+@test "SYSTEM_PROMPT at one byte under the limit passes the guard and reaches claude" {
+    make_fake_claude
+    make_fake_git
+    # Fake wc -c to report 131070 bytes — one below the 131071 ceiling
+    make_fake_wc_bytes 131070
+    set_required_env
+
+    run bash "$ENTRYPOINT"
+
+    [ -f "$BATS_TEST_TMPDIR/claude_called" ]
+}

@@ -91,6 +91,45 @@ public sealed class Validate
     }
 
     [Fact]
+    public void WhenInboxPruneBatchSizeIsZero_ReturnsFailure()
+    {
+        // Arrange
+        OutboxOptions options = new() { InboxPruneBatchSize = 0 };
+
+        // Act
+        ValidateOptionsResult result = _sut.Validate(null, options);
+
+        // Assert
+        result.Failed.ShouldBeTrue();
+    }
+
+    [Fact]
+    public void WhenInboxPruneBatchSizeIsNegative_ReturnsFailure()
+    {
+        // Arrange
+        OutboxOptions options = new() { InboxPruneBatchSize = -1 };
+
+        // Act
+        ValidateOptionsResult result = _sut.Validate(null, options);
+
+        // Assert
+        result.Failed.ShouldBeTrue();
+    }
+
+    [Fact]
+    public void WhenInboxPruneBatchSizeIsPositive_ReturnsSuccess()
+    {
+        // Arrange
+        OutboxOptions options = new() { InboxPruneBatchSize = 1 };
+
+        // Act
+        ValidateOptionsResult result = _sut.Validate(null, options);
+
+        // Assert
+        result.Succeeded.ShouldBeTrue();
+    }
+
+    [Fact]
     public void WhenDefaultOptions_ReturnsSuccess()
     {
         // Arrange

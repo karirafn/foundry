@@ -28,6 +28,11 @@ internal sealed class OutboxOptionsValidator : IValidateOptions<OutboxOptions>
             failures.Add("Outbox:RetentionWindow must be greater than zero.");
         }
 
+        if (options.InboxPruneBatchSize <= 0)
+        {
+            failures.Add("Outbox:InboxPruneBatchSize must be greater than zero.");
+        }
+
         return failures.Count > 0
             ? ValidateOptionsResult.Fail(failures)
             : ValidateOptionsResult.Success;
