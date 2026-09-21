@@ -142,15 +142,15 @@ WebApplication app = builder.Build();
 
 GlobalExceptionLogging.Install(app.Services.GetRequiredService<ILoggerFactory>());
 
+if (!isDocGeneration)
+{
+    await using AsyncServiceScope scope = app.Services.CreateAsyncScope();
+    FoundryDbContext dbContext = scope.ServiceProvider.GetRequiredService<FoundryDbContext>();
+    await dbContext.Database.MigrateAsync();
+}
+
 if (app.Environment.IsDevelopment())
 {
-    if (!isDocGeneration)
-    {
-        using AsyncServiceScope scope = app.Services.CreateAsyncScope();
-        FoundryDbContext dbContext = scope.ServiceProvider.GetRequiredService<FoundryDbContext>();
-        dbContext.Database.Migrate();
-    }
-
     app.UseCors(AngularDevServerPolicy);
     app.MapOpenApi();
 }
@@ -167,4 +167,4 @@ app.MapHub<IssueHub>("/hubs/issues");
 app.MapHub<SystemNotificationHub>("/hubs/system");
 app.MapHub<WorkerHub>("/hubs/workers");
 
-app.Run();
+await app.RunAsync();

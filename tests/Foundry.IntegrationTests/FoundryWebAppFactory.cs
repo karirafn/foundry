@@ -73,7 +73,7 @@ public sealed class FoundryWebAppFactory : WebApplicationFactory<Program>, IAsyn
             using ServiceProvider sp = services.BuildServiceProvider();
             using IServiceScope scope = sp.CreateScope();
             FoundryDbContext dbContext = scope.ServiceProvider.GetRequiredService<FoundryDbContext>();
-            dbContext.Database.EnsureCreated();
+            dbContext.Database.Migrate();
         });
 
         builder.UseEnvironment("Testing");
