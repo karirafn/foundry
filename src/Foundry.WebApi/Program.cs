@@ -26,7 +26,8 @@ const string AngularDevServerPolicy = "AngularDevServer";
 const string DocGenerationEntryAssemblyName = "GetDocument.Insider";
 
 // GetDocument.Insider is the build-time OpenAPI doc generation tool entry point.
-// When running under it, skip non-essential startup logic that requires a live database or filesystem.
+// When running under it, skip startup logic that requires a live database or filesystem:
+// DataProtection key persistence, the OutboxRelayService background job, and startup migrations.
 bool isDocGeneration = Assembly.GetEntryAssembly()?.GetName().Name == DocGenerationEntryAssemblyName;
 
 WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
@@ -146,7 +147,7 @@ if (!isDocGeneration)
 {
     await using AsyncServiceScope scope = app.Services.CreateAsyncScope();
     FoundryDbContext dbContext = scope.ServiceProvider.GetRequiredService<FoundryDbContext>();
-    await dbContext.Database.MigrateAsync();
+    await dbContext.Database.MigrateAsync(app.Lifetime.ApplicationStopping);
 }
 
 if (app.Environment.IsDevelopment())

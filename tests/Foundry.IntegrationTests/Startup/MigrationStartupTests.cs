@@ -1,6 +1,5 @@
 using Foundry.WebApi.Persistence;
 
-using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -17,6 +16,9 @@ namespace Foundry.IntegrationTests.Startup;
 public sealed class MigrationStartupTests : IAsyncDisposable
 {
     private readonly FoundryWebAppFactory _factory;
+
+    // Creating the HttpClient triggers WebApplicationFactory to boot the host,
+    // which exercises the Program.cs startup migration path under test.
     private readonly HttpClient _client;
 
     public MigrationStartupTests()
@@ -32,35 +34,17 @@ public sealed class MigrationStartupTests : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenAppStarts_MigrationsAreApplied()
-    {
-        // Arrange — factory starts a fresh in-memory SQLite database via Migrate(), not EnsureCreated()
-
-        // Act — resolve a DbContext and query the EF migrations history table
-        using IServiceScope scope = _factory.Services.CreateScope();
-        FoundryDbContext dbContext = scope.ServiceProvider.GetRequiredService<FoundryDbContext>();
-
-        IEnumerable<string> appliedMigrations = await dbContext.Database
-            .GetAppliedMigrationsAsync(TestContext.Current.CancellationToken);
-
-        // Assert — at least one migration must be applied (the initial migration)
-        appliedMigrations.ShouldNotBeEmpty(
-            "migrations must be applied at startup in all environments, not only in Development");
-    }
-
-    [Fact]
     public async Task WhenAppStarts_AllMigrationsAreApplied()
     {
-        // Arrange — factory starts a fresh in-memory SQLite database via Migrate(), not EnsureCreated()
-
-        // Act
+        // Arrange
         using IServiceScope scope = _factory.Services.CreateScope();
         FoundryDbContext dbContext = scope.ServiceProvider.GetRequiredService<FoundryDbContext>();
 
+        // Act
         IEnumerable<string> pendingMigrations = await dbContext.Database
             .GetPendingMigrationsAsync(TestContext.Current.CancellationToken);
 
-        // Assert — no pending migrations remain after startup
+        // Assert
         pendingMigrations.ShouldBeEmpty(
             "all pending migrations must be applied before hosted services start");
     }

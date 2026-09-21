@@ -69,11 +69,6 @@ public sealed class FoundryWebAppFactory : WebApplicationFactory<Program>, IAsyn
                 .UseEphemeralDataProtectionProvider();
 
             _serviceOverrides?.Invoke(services);
-
-            using ServiceProvider sp = services.BuildServiceProvider();
-            using IServiceScope scope = sp.CreateScope();
-            FoundryDbContext dbContext = scope.ServiceProvider.GetRequiredService<FoundryDbContext>();
-            dbContext.Database.Migrate();
         });
 
         builder.UseEnvironment("Testing");
