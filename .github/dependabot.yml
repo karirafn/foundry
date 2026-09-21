@@ -29,6 +29,13 @@ updates:
       - dependency-name: typescript
         update-types:
           - version-update:semver-major
+      # @angular/build 22.1.x declares `peerOptional vitest@"^4.0.8"`, so a
+      # vitest major cannot resolve under `npm ci`. Drop this entry once
+      # `npm view @angular/build peerDependencies.vitest` admits ^5.0.0 on a
+      # stable release (widened in 22.2.0, prerelease at the time of writing).
+      - dependency-name: vitest
+        update-types:
+          - version-update:semver-major
 
   - package-ecosystem: github-actions
     directory: /
