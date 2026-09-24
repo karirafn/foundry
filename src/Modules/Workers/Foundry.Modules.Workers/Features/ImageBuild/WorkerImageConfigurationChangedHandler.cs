@@ -3,6 +3,7 @@ using Foundry.Shared;
 
 namespace Foundry.Modules.Workers.Features.ImageBuild;
 
+[IntegrationEventHandlerIdentity("Workers.WorkerImageConfigurationChanged")]
 internal sealed class WorkerImageConfigurationChangedHandler(
     IWorkerImageRebuildQueue rebuildQueue)
     : IIntegrationEventHandler<WorkerImageConfigurationChanged>

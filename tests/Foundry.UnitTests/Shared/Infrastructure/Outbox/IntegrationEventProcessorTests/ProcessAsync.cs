@@ -12,6 +12,21 @@ using Xunit;
 
 namespace Foundry.UnitTests.Shared.Infrastructure.Outbox.IntegrationEventProcessorTests;
 
+// Registry shared by tests in this class — both test handler types are registered eagerly.
+// The registry is constructed once so each direct-construction site receives the same instance.
+file static class TestProcessorRegistry
+{
+    internal static readonly HandlerDedupIdentityRegistry Instance = BuildRegistry();
+
+    private static HandlerDedupIdentityRegistry BuildRegistry()
+    {
+        HandlerDedupIdentityRegistry r = new();
+        r.Register(typeof(RecordingProcessorEventHandler));
+        r.Register(typeof(SecondRecordingProcessorEventHandler));
+        return r;
+    }
+}
+
 public sealed class ProcessAsync : IDisposable
 {
     private readonly SqliteConnection _connection;
@@ -45,7 +60,7 @@ public sealed class ProcessAsync : IDisposable
         services.AddSingleton<IIntegrationEventHandler<TestProcessorEvent>>(handler);
         IServiceProvider provider = services.BuildServiceProvider();
 
-        IIntegrationEventProcessor sut = new IntegrationEventProcessor(provider, _dbContext);
+        IIntegrationEventProcessor sut = new IntegrationEventProcessor(provider, _dbContext, TestProcessorRegistry.Instance);
         TestProcessorEvent @event = new("SomethingHappened");
 
         // Act
@@ -66,7 +81,7 @@ public sealed class ProcessAsync : IDisposable
         services.AddSingleton<IIntegrationEventHandler<TestProcessorEvent>>(handlerB);
         IServiceProvider provider = services.BuildServiceProvider();
 
-        IIntegrationEventProcessor sut = new IntegrationEventProcessor(provider, _dbContext);
+        IIntegrationEventProcessor sut = new IntegrationEventProcessor(provider, _dbContext, TestProcessorRegistry.Instance);
         TestProcessorEvent @event = new("SomethingHappened");
 
         // Act
@@ -83,7 +98,7 @@ public sealed class ProcessAsync : IDisposable
         // Arrange — a provider that returns an enumerable containing null, simulating a non-conforming DI registration
         IServiceProvider provider = new NullItemServiceProvider();
 
-        IIntegrationEventProcessor sut = new IntegrationEventProcessor(provider, _dbContext);
+        IIntegrationEventProcessor sut = new IntegrationEventProcessor(provider, _dbContext, TestProcessorRegistry.Instance);
         TestProcessorEvent @event = new("SomethingHappened");
 
         // Act

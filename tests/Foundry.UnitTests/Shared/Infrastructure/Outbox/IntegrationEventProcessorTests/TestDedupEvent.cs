@@ -4,6 +4,7 @@ namespace Foundry.UnitTests.Shared.Infrastructure.Outbox.IntegrationEventProcess
 
 internal sealed record TestDedupEvent(string Name) : IIntegrationEvent;
 
+[IntegrationEventHandlerIdentity("Test.RecordingDedup")]
 internal sealed class RecordingDedupEventHandler : IIntegrationEventHandler<TestDedupEvent>
 {
     public int InvokeCount { get; private set; }
@@ -16,9 +17,10 @@ internal sealed class RecordingDedupEventHandler : IIntegrationEventHandler<Test
 }
 
 /// <summary>
-/// A distinct second handler type so its <see cref="Type.FullName"/> differs from
-/// <see cref="RecordingDedupEventHandler"/> — dedup keys on the handler's full type name.
+/// A distinct second handler type with its own stable dedup identity — verifies that
+/// two handlers for the same event each produce a distinct <c>processed_events</c> row.
 /// </summary>
+[IntegrationEventHandlerIdentity("Test.SecondRecordingDedup")]
 internal sealed class SecondRecordingDedupEventHandler : IIntegrationEventHandler<TestDedupEvent>
 {
     public int InvokeCount { get; private set; }
@@ -30,6 +32,7 @@ internal sealed class SecondRecordingDedupEventHandler : IIntegrationEventHandle
     }
 }
 
+[IntegrationEventHandlerIdentity("Test.ThrowingDedup")]
 internal sealed class ThrowingDedupEventHandler : IIntegrationEventHandler<TestDedupEvent>
 {
     public bool ShouldSucceedOnNextCall { get; set; }

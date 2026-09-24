@@ -6,6 +6,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Foundry.Modules.Settings.Features.WorkerConfig;
 
+[IntegrationEventHandlerIdentity("Settings.ImageBuildOutcomeFailed")]
 internal sealed class ImageBuildOutcomeFailedHandler(
     DbContext dbContext,
     IIntegrationEventProcessor integrationEventProcessor)

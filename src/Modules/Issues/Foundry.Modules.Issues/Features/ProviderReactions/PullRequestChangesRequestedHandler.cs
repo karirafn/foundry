@@ -9,6 +9,7 @@ using Microsoft.Extensions.Logging;
 
 namespace Foundry.Modules.Issues.Features.ProviderReactions;
 
+[IntegrationEventHandlerIdentity("Issues.PullRequestChangesRequested")]
 internal sealed class PullRequestChangesRequestedHandler(
     DbContext db,
     IDomainEventDispatcher domainEventDispatcher,

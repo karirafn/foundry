@@ -10,6 +10,7 @@ namespace Foundry.Modules.Credentials.Features.WorkerReactions;
 
 // Concurrency note: SpendState.Blocked is persisted state.
 // BlockSpend() is a no-op when already blocked, so duplicate credits-exhausted events are idempotent.
+[IntegrationEventHandlerIdentity("Credentials.WorkerCreditsExhausted")]
 internal sealed class WorkerCreditsExhaustedHandler(
     DbContext dbContext,
     IGlobalSettingsQueries settingsQueries,

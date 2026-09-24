@@ -3,6 +3,7 @@ using Foundry.Shared;
 
 namespace Foundry.Modules.Workers.Features.Dispatch;
 
+[IntegrationEventHandlerIdentity("Workers.DispatchResumedBroadcast")]
 internal sealed class DispatchResumedBroadcastHandler(
     ISystemNotificationBroadcaster broadcaster) : IIntegrationEventHandler<DispatchResumed>
 {

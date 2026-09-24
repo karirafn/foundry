@@ -6,6 +6,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Foundry.Modules.Settings.Features.WorkerConfig;
 
+[IntegrationEventHandlerIdentity("Settings.ImageBuildSucceeded")]
 internal sealed class ImageBuildSucceededHandler(
     DbContext dbContext,
     IIntegrationEventProcessor integrationEventProcessor)

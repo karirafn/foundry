@@ -3,6 +3,7 @@ using Foundry.Shared;
 
 namespace Foundry.Modules.Workers.Features.ImageBuild;
 
+[IntegrationEventHandlerIdentity("Workers.ImageBuildFailedBroadcast")]
 internal sealed class ImageBuildFailedBroadcastHandler(
     ISystemNotificationBroadcaster broadcaster) : IIntegrationEventHandler<ImageBuildFailed>
 {

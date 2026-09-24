@@ -9,6 +9,7 @@ using Microsoft.Extensions.Logging;
 
 namespace Foundry.Modules.Issues.Features.CredentialReactions;
 
+[IntegrationEventHandlerIdentity("Issues.CredentialsValidated")]
 internal sealed class CredentialsValidatedHandler(
     DbContext db,
     IDomainEventDispatcher domainEventDispatcher,

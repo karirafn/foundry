@@ -52,6 +52,10 @@ public sealed class ProcessAsyncWithDedup : IAsyncDisposable
 
         ServiceCollection services = new();
 
+        HandlerDedupIdentityRegistry registry = new();
+        registry.Register(typeof(RecordingDedupEventHandler));
+        services.AddSingleton(registry);
+
         services.AddScoped<IntegrationEventCollector>();
         services.AddScoped<OutboxSaveChangesInterceptor>();
 
@@ -96,6 +100,9 @@ public sealed class ProcessAsyncWithDedup : IAsyncDisposable
             .ToListAsync(TestContext.Current.CancellationToken);
         rows.Count.ShouldBe(1);
         rows[0].EventId.ShouldBe(eventId);
+
+        // Assert — persisted handler column equals the declared identity string, not FullName
+        rows[0].Handler.ShouldBe("Test.RecordingDedup");
     }
 
     // ---------------------------------------------------------------------------
@@ -144,6 +151,12 @@ public sealed class ProcessAsyncWithDedup : IAsyncDisposable
         SecondRecordingDedupEventHandler handlerB = new();
 
         ServiceCollection services = new();
+
+        HandlerDedupIdentityRegistry twoHandlerRegistry = new();
+        twoHandlerRegistry.Register(typeof(RecordingDedupEventHandler));
+        twoHandlerRegistry.Register(typeof(SecondRecordingDedupEventHandler));
+        services.AddSingleton(twoHandlerRegistry);
+
         services.AddScoped<IntegrationEventCollector>();
         services.AddScoped<OutboxSaveChangesInterceptor>();
         services.AddDbContext<FoundryDbContext>((sp, options) =>
@@ -205,6 +218,12 @@ public sealed class ProcessAsyncWithDedup : IAsyncDisposable
         ThrowingDedupEventHandler handlerB = new();
 
         ServiceCollection services = new();
+
+        HandlerDedupIdentityRegistry partialFanOutRegistry = new();
+        partialFanOutRegistry.Register(typeof(RecordingDedupEventHandler));
+        partialFanOutRegistry.Register(typeof(ThrowingDedupEventHandler));
+        services.AddSingleton(partialFanOutRegistry);
+
         services.AddScoped<IntegrationEventCollector>();
         services.AddScoped<OutboxSaveChangesInterceptor>();
         services.AddDbContext<FoundryDbContext>((sp, options) =>
@@ -280,7 +299,7 @@ public sealed class ProcessAsyncWithDedup : IAsyncDisposable
         Guid eventId = Guid.NewGuid();
         TestDedupEvent @event = new("Race");
 
-        string handlerName = typeof(RecordingDedupEventHandler).FullName!;
+        string handlerName = "Test.RecordingDedup";
 
         // Pre-seed the row to simulate a race where another instance already committed it
         await using (AsyncServiceScope seedScope = provider.CreateAsyncScope())

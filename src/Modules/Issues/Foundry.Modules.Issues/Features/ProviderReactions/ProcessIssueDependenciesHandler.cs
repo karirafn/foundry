@@ -12,6 +12,7 @@ using Microsoft.Extensions.Logging;
 
 namespace Foundry.Modules.Issues.Features.ProviderReactions;
 
+[IntegrationEventHandlerIdentity("Issues.ProcessIssueDependencies")]
 internal sealed class ProcessIssueDependenciesHandler(
     DbContext db,
     IIssueQueries issueQueries,

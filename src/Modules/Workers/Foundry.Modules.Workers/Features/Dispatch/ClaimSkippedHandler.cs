@@ -13,6 +13,7 @@ namespace Foundry.Modules.Workers.Features.Dispatch;
 /// Idempotent: when no reservation exists the handler is a no-op, covering redelivery
 /// and the case where the sweep already released it.
 /// </summary>
+[IntegrationEventHandlerIdentity("Workers.ClaimSkipped")]
 internal sealed class ClaimSkippedHandler(
     DbContext dbContext,
     ILogger<ClaimSkippedHandler> logger) : IIntegrationEventHandler<ClaimSkipped>

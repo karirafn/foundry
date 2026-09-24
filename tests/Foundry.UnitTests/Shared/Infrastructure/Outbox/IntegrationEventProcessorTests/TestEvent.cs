@@ -4,6 +4,7 @@ namespace Foundry.UnitTests.Shared.Infrastructure.Outbox.IntegrationEventProcess
 
 internal sealed record TestProcessorEvent(string Name) : IIntegrationEvent;
 
+[IntegrationEventHandlerIdentity("Test.RecordingProcessor")]
 internal sealed class RecordingProcessorEventHandler : IIntegrationEventHandler<TestProcessorEvent>
 {
     public List<TestProcessorEvent> ReceivedEvents { get; } = [];
@@ -15,6 +16,7 @@ internal sealed class RecordingProcessorEventHandler : IIntegrationEventHandler<
     }
 }
 
+[IntegrationEventHandlerIdentity("Test.SecondRecordingProcessor")]
 internal sealed class SecondRecordingProcessorEventHandler : IIntegrationEventHandler<TestProcessorEvent>
 {
     public List<TestProcessorEvent> ReceivedEvents { get; } = [];

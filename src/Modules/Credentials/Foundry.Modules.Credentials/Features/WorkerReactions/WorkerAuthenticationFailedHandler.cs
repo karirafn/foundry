@@ -12,6 +12,7 @@ namespace Foundry.Modules.Credentials.Features.WorkerReactions;
 // Invalidate() is a no-op when already invalid, so duplicate auth-fail events are idempotent.
 // A later successful login authoritatively sets Valid (last-writer-wins), so the ordering of
 // an auth-invalid event racing an active login is safe — the login's RecordSuccessfulLogin wins.
+[IntegrationEventHandlerIdentity("Credentials.WorkerAuthenticationFailed")]
 internal sealed class WorkerAuthenticationFailedHandler(
     DbContext dbContext,
     IIntegrationEventDispatcher integrationEventDispatcher,

@@ -6,6 +6,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Foundry.Modules.Issues.Features.ProviderReactions;
 
+[IntegrationEventHandlerIdentity("Issues.UpdateIssueDetails")]
 internal sealed class UpdateIssueDetailsHandler(
     DbContext db) : IIntegrationEventHandler<IssueDetailsChanged>
 {

@@ -3,6 +3,7 @@ using Foundry.Shared;
 
 namespace Foundry.Modules.Workers.Features.DockerAvailability;
 
+[IntegrationEventHandlerIdentity("Workers.DockerAvailabilityChangedBroadcast")]
 internal sealed class DockerAvailabilityChangedBroadcastHandler(
     IDockerAvailabilityStateMutator state,
     ISystemNotificationBroadcaster broadcaster) : IIntegrationEventHandler<DockerAvailabilityChanged>

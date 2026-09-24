@@ -2,6 +2,7 @@ using Foundry.Shared;
 using Foundry.Shared.Infrastructure.Outbox;
 
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
 
 namespace Foundry.Shared.Infrastructure;
@@ -58,6 +59,18 @@ public static class ServiceCollectionExtensions
         where TEvent : IIntegrationEvent
         where THandler : class, IIntegrationEventHandler<TEvent>
     {
+        // Retrieve the already-registered singleton registry, or seed a new one.
+        // All AddIntegrationEventHandler calls share one instance so every handler type
+        // is visible to IntegrationEventProcessor when it resolves the registry from DI.
+        HandlerDedupIdentityRegistry registry = services
+            .Where(d => d.ServiceType == typeof(HandlerDedupIdentityRegistry))
+            .Select(d => d.ImplementationInstance as HandlerDedupIdentityRegistry)
+            .FirstOrDefault(r => r is not null)
+            ?? new HandlerDedupIdentityRegistry();
+
+        registry.Register(typeof(THandler));
+        services.TryAddSingleton(registry);
+
         services.AddScoped<IIntegrationEventHandler<TEvent>, THandler>();
         return services;
     }

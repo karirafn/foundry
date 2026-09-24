@@ -3,6 +3,7 @@ using Foundry.Shared;
 
 namespace Foundry.Modules.Credentials.Features.Broadcasts;
 
+[IntegrationEventHandlerIdentity("Credentials.CreditsRestoredBroadcast")]
 internal sealed class CreditsRestoredBroadcastHandler(
     ISystemNotificationBroadcaster broadcaster) : IIntegrationEventHandler<CreditsRestored>
 {

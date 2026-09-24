@@ -3,6 +3,7 @@ using Foundry.Shared;
 
 namespace Foundry.Modules.Credentials.Features.Broadcasts;
 
+[IntegrationEventHandlerIdentity("Credentials.CredentialsValidatedBroadcast")]
 internal sealed class CredentialsValidatedBroadcastHandler(
     ISystemNotificationBroadcaster broadcaster) : IIntegrationEventHandler<CredentialsValidated>
 {
