@@ -145,6 +145,8 @@ GlobalExceptionLogging.Install(app.Services.GetRequiredService<ILoggerFactory>()
 
 if (!isDocGeneration)
 {
+    app.Services.GetRequiredService<HandlerDedupIdentityRegistry>().Validate();
+
     await using AsyncServiceScope scope = app.Services.CreateAsyncScope();
     FoundryDbContext dbContext = scope.ServiceProvider.GetRequiredService<FoundryDbContext>();
     await dbContext.Database.MigrateAsync(app.Lifetime.ApplicationStopping);
