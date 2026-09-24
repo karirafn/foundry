@@ -8,7 +8,7 @@ public sealed class HandlerDedupIdentityRegistry
 {
     private readonly Dictionary<Type, string> _identities = [];
 
-    public void Register(Type handlerType)
+    internal void Register(Type handlerType)
     {
         if (_identities.ContainsKey(handlerType))
         {
@@ -25,7 +25,7 @@ public sealed class HandlerDedupIdentityRegistry
                 "Every registered handler must declare a stable dedup identity.");
         }
 
-        _identities[handlerType] = attribute.Identity;
+        _identities.TryAdd(handlerType, attribute.Identity);
     }
 
     public string IdentityFor(Type handlerType)
@@ -42,17 +42,17 @@ public sealed class HandlerDedupIdentityRegistry
 
     public void Validate()
     {
-        IEnumerable<IGrouping<string, KeyValuePair<Type, string>>> duplicates = _identities
-            .GroupBy(kvp => kvp.Value)
-            .Where(g => g.Count() > 1);
+        List<string> collisions = _identities
+            .GroupBy(pair => pair.Value)
+            .Where(group => group.Count() > 1)
+            .Select(group =>
+                $"Duplicate handler dedup identity '{group.Key}' declared by: " +
+                string.Join(", ", group.Select(pair => pair.Key.FullName)))
+            .ToList();
 
-        foreach (IGrouping<string, KeyValuePair<Type, string>> group in duplicates)
+        if (collisions.Count > 0)
         {
-            string identity = group.Key;
-            string typeNames = string.Join(", ", group.Select(kvp => kvp.Key.FullName));
-
-            throw new InvalidOperationException(
-                $"Duplicate handler dedup identity '{identity}' declared by: {typeNames}.");
+            throw new InvalidOperationException(string.Join(Environment.NewLine, collisions));
         }
     }
 }

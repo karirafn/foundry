@@ -1,3 +1,5 @@
+using System.Reflection;
+
 using Foundry.Shared;
 using Foundry.Shared.Infrastructure.Outbox;
 using Foundry.WebApi.Persistence;
@@ -102,7 +104,10 @@ public sealed class ProcessAsyncWithDedup : IAsyncDisposable
         rows[0].EventId.ShouldBe(eventId);
 
         // Assert — persisted handler column equals the declared identity string, not FullName
-        rows[0].Handler.ShouldBe("Test.RecordingDedup");
+        string expectedIdentity = typeof(RecordingDedupEventHandler)
+            .GetCustomAttribute<IntegrationEventHandlerIdentityAttribute>()!
+            .Identity;
+        rows[0].Handler.ShouldBe(expectedIdentity);
     }
 
     // ---------------------------------------------------------------------------
@@ -299,7 +304,9 @@ public sealed class ProcessAsyncWithDedup : IAsyncDisposable
         Guid eventId = Guid.NewGuid();
         TestDedupEvent @event = new("Race");
 
-        string handlerName = "Test.RecordingDedup";
+        string handlerName = typeof(RecordingDedupEventHandler)
+            .GetCustomAttribute<IntegrationEventHandlerIdentityAttribute>()!
+            .Identity;
 
         // Pre-seed the row to simulate a race where another instance already committed it
         await using (AsyncServiceScope seedScope = provider.CreateAsyncScope())

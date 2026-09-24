@@ -8,7 +8,8 @@ replay protection for every message still eligible for redelivery to it — no
 compiler error, no test failure, no log line. The live database already showed
 one handler under two different `FullName` strings after a namespace move that
 `rules/vertical-slices.md` itself prescribes for source-named reaction folders.
-The redelivery horizon is bounded at `TickInterval (2s) × MaxAttempts (10) = 20s`,
+The redelivery horizon is bounded at `TickInterval (2s) × MaxAttempts (10) = 20s`
+(defaults from `OutboxOptions` in `src/Foundry.Shared.Infrastructure/Outbox/OutboxOptions.cs`),
 so the blast radius is small, but the failure is silent — that is the defect.
 
 ## Decision

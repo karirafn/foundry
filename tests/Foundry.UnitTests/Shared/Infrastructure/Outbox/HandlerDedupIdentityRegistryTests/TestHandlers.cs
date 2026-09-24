@@ -12,3 +12,12 @@ internal sealed class AnnotatedHandlerBeta;
 internal sealed class CollidingHandler;
 
 internal sealed class UnannotatedHandler;
+
+[IntegrationEventHandlerIdentity("handler-beta")]
+internal sealed class CollidingHandlerBeta;
+
+[IntegrationEventHandlerIdentity("handler-gamma")]
+internal sealed class AnnotatedHandlerGamma;
+
+[IntegrationEventHandlerIdentity("handler-gamma")]
+internal sealed class CollidingHandlerGamma;
