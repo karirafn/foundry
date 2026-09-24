@@ -9,6 +9,7 @@ using Microsoft.Extensions.Logging;
 
 namespace Foundry.Modules.Issues.Features.CredentialReactions;
 
+[IntegrationEventHandlerIdentity("Issues.CreditsRestored")]
 internal sealed class CreditsRestoredHandler(
     DbContext db,
     IDomainEventDispatcher domainEventDispatcher,

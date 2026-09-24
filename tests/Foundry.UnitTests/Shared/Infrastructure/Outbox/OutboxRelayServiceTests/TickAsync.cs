@@ -56,6 +56,9 @@ public sealed class TickAsync : IAsyncDisposable
         }
         else
         {
+            HandlerDedupIdentityRegistry registry = new();
+            registry.Register(typeof(RecordingRelayEventHandler));
+            services.AddSingleton(registry);
             services.AddScoped<IIntegrationEventProcessor, IntegrationEventProcessor>();
         }
 

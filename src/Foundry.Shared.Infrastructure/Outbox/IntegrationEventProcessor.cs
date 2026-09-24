@@ -5,7 +5,10 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Foundry.Shared.Infrastructure.Outbox;
 
-public sealed class IntegrationEventProcessor(IServiceProvider services, DbContext dbContext) : IIntegrationEventProcessor
+public sealed class IntegrationEventProcessor(
+    IServiceProvider services,
+    DbContext dbContext,
+    HandlerDedupIdentityRegistry registry) : IIntegrationEventProcessor
 {
     public async Task ProcessAsync(Guid eventId, IIntegrationEvent @event, CancellationToken cancellationToken)
     {
@@ -19,7 +22,7 @@ public sealed class IntegrationEventProcessor(IServiceProvider services, DbConte
                 continue;
             }
 
-            string handlerName = handler.GetType().FullName!;
+            string handlerName = registry.IdentityFor(handler.GetType());
 
             bool alreadyProcessed = await dbContext.IsProcessedAsync(eventId, handlerName, cancellationToken);
 

@@ -21,6 +21,7 @@ using Microsoft.Extensions.Options;
 
 namespace Foundry.Modules.Workers.Features.Dispatch;
 
+[IntegrationEventHandlerIdentity("Workers.IssueClaimed")]
 internal sealed class IssueClaimedHandler(
     DbContext dbContext,
     IWorkerOrchestrator orchestrator,

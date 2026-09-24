@@ -9,6 +9,7 @@ using Microsoft.Extensions.Logging;
 
 namespace Foundry.Modules.Issues.Features.ProviderReactions;
 
+[IntegrationEventHandlerIdentity("Issues.ProviderIssueClosed")]
 internal sealed class ProviderIssueClosedHandler(
     DbContext db,
     IDomainEventDispatcher domainEventDispatcher,

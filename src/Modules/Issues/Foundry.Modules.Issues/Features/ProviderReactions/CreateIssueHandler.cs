@@ -9,6 +9,7 @@ using Microsoft.Extensions.Logging;
 
 namespace Foundry.Modules.Issues.Features.ProviderReactions;
 
+[IntegrationEventHandlerIdentity("Issues.CreateIssue")]
 internal sealed class CreateIssueHandler(
     DbContext db,
     ILogger<CreateIssueHandler> logger) : IIntegrationEventHandler<IssueDetected>

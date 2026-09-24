@@ -148,7 +148,9 @@ public sealed class InboxRetentionSweep : IAsyncDisposable
         // Arrange — seed a canonical in-window processed_events entry
         DateTimeOffset inWindow = DateTimeOffset.UtcNow.AddDays(-1);
         Guid eventId = Guid.NewGuid();
-        string handlerName = typeof(RecordingRelayEventHandler).FullName!;
+
+        // Use the declared identity string so the dedup lookup matches what IntegrationEventProcessor writes.
+        const string handlerName = "Test.RecordingRelay";
 
         await using AsyncServiceScope seedScope = _serviceProvider.CreateAsyncScope();
         FoundryDbContext seedContext = seedScope.ServiceProvider.GetRequiredService<FoundryDbContext>();
@@ -159,6 +161,11 @@ public sealed class InboxRetentionSweep : IAsyncDisposable
         // Build a service provider that wires the recording handler so redelivery can be observed
         RecordingRelayEventHandler recordingHandler = new();
         ServiceCollection services = new();
+
+        HandlerDedupIdentityRegistry inWindowRegistry = new();
+        inWindowRegistry.Register(typeof(RecordingRelayEventHandler));
+        services.AddSingleton(inWindowRegistry);
+
         services.AddScoped<IntegrationEventCollector>();
         services.AddScoped<OutboxSaveChangesInterceptor>();
         services.AddScoped<IIntegrationEventProcessor, IntegrationEventProcessor>();

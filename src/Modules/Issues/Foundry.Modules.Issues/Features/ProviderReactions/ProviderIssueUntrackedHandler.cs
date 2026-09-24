@@ -7,6 +7,7 @@ using Microsoft.Extensions.Logging;
 
 namespace Foundry.Modules.Issues.Features.ProviderReactions;
 
+[IntegrationEventHandlerIdentity("Issues.ProviderIssueUntracked")]
 internal sealed class ProviderIssueUntrackedHandler(
     DbContext db,
     ILogger<ProviderIssueUntrackedHandler> logger) : IIntegrationEventHandler<ProviderIssueUntracked>

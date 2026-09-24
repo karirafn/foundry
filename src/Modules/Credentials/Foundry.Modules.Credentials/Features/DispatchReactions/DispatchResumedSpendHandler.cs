@@ -8,6 +8,7 @@ using Microsoft.Extensions.Logging;
 
 namespace Foundry.Modules.Credentials.Features.DispatchReactions;
 
+[IntegrationEventHandlerIdentity("Credentials.DispatchResumedSpend")]
 internal sealed class DispatchResumedSpendHandler(
     DbContext dbContext,
     IIntegrationEventDispatcher integrationEventDispatcher,

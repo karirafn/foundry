@@ -10,6 +10,7 @@ using Microsoft.Extensions.Logging;
 
 namespace Foundry.Modules.Issues.Features.WorkerReactions;
 
+[IntegrationEventHandlerIdentity("Issues.WorkerRunCompleted")]
 internal sealed class WorkerRunCompletedHandler(
     DbContext db,
     IDomainEventDispatcher domainEventDispatcher,

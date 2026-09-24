@@ -8,6 +8,7 @@ using Microsoft.Extensions.Logging;
 
 namespace Foundry.Modules.Issues.Features.DispatchReactions;
 
+[IntegrationEventHandlerIdentity("Issues.DispatchResumed")]
 internal sealed class DispatchResumedHandler(
     DbContext db,
     IDomainEventDispatcher domainEventDispatcher,

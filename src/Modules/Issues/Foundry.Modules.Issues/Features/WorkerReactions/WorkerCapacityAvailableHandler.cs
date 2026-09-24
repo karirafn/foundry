@@ -11,6 +11,7 @@ using Microsoft.Extensions.Logging;
 
 namespace Foundry.Modules.Issues.Features.WorkerReactions;
 
+[IntegrationEventHandlerIdentity("Issues.WorkerCapacityAvailable")]
 internal sealed class WorkerCapacityAvailableHandler(
     DbContext dbContext,
     DispatchCandidateSelector selector,

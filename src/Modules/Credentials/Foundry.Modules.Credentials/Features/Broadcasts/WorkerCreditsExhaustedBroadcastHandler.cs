@@ -3,6 +3,7 @@ using Foundry.Shared;
 
 namespace Foundry.Modules.Credentials.Features.Broadcasts;
 
+[IntegrationEventHandlerIdentity("Credentials.WorkerCreditsExhaustedBroadcast")]
 internal sealed class WorkerCreditsExhaustedBroadcastHandler(
     ISystemNotificationBroadcaster broadcaster) : IIntegrationEventHandler<WorkerCreditsExhausted>
 {
