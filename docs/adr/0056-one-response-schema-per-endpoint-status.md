@@ -38,3 +38,11 @@ Adding an outcome to an existing status code now means extending that status's c
 CI already catches the failure mode this decision prevents, from two directions: `npm run generate:api` fails on a dangling `$ref`, and `ng build` fails with `TS2339` when a schema a client type indexes disappears. Both were verified against the degraded spec. The residual uncovered case is deleting a schema no client type references, which is inert while the Angular app is the only consumer.
 
 409 now carries a typed envelope on the account endpoints while 400 still returns bare strings elsewhere in the API, so the error surface is temporarily heterogeneous. A separate migration to RFC 9457 `ProblemDetails` covers the remaining bare-string bodies. It will not subsume this decision: `ProducesProblem` emits the untyped `ProblemDetails` schema, whose extension members reach TypeScript as `unknown`, which would lose the typed conflict list the takeover flow depends on.
+
+## Amendment — 2026-09-29
+
+The final sentence above understates the effect it describes. Extension members do not reach TypeScript as `unknown`; they do not reach it at all.
+
+The framework's `ProblemDetails` schema is emitted without `additionalProperties` (`src/Foundry.WebApi/openapi/v1.json`, `components.schemas.ProblemDetails`), so `openapi-typescript` generates a **closed** object type carrying only `type`, `title`, `status`, `detail` and `instance` (`src/foundry-web/src/app/api/schema.ts`, the `ProblemDetails` member). Reading an extension member off that type is a `TS2339` error, not an `unknown` to narrow.
+
+The Decision is unaffected — the real behaviour supports it more strongly than the stated one, since an extension member cannot carry the typed conflict list even awkwardly. The correction matters because the claim was inherited by later design work as a reason to prefer extension members over the `type` URI, which it does not support. See [ADR 0075](0075-error-code-carried-in-the-problemdetails-type-uri.md).
