@@ -239,6 +239,7 @@ Resolves its serving Account through the Namespace Claim on its owner (no stored
 Uniquely identified by the pair (Host, Repository Slug) — the same repo on the same host cannot be monitored twice (prevents duplicate issue detection), while the same path on different hosts (e.g. github.com vs gitlab.com, or self-hosted instances) refers to distinct repositories.
 Tracks `LastPolledAt` for per-repo poll timing.
 Carries a Repository Eligibility status, re-evaluated on each poll cycle.
+Carries `MaxConcurrentWorkers` (non-nullable `int`, range 1..20, default 1) — see [Repository Worker Limit](#repository-worker-limit).
 
 ## Available Repository
 
@@ -263,17 +264,30 @@ The relative ordering of monitored repositories, expressed as a 0-based, contigu
 New repositories append at the end (highest existing Position + 1); deleting a repository renumbers survivors contiguously.
 Polling is independent of position.
 
+## Repository Worker Limit
+
+The maximum number of workers that may run concurrently for a single monitored repository.
+Modeled as `MaxConcurrentWorkers` — a non-nullable `int` on `MonitoredRepository`, constrained to the range 1..20, defaulting to 1 (see [ADR 0074](docs/adr/0074-per-repository-capacity-in-candidate-selection.md)).
+Enforced in `DispatchCandidateSelector` (Issues module) — not at the Workers-side dispatch gate — because the gate receives an anonymous capacity token and cannot see which repository will spend it; see ADR 0074 for the architectural rationale.
+The in-flight count against this limit is `count(InProgressIssue) + count(RevisionInProgressIssue)` grouped by repository, computed Issues-side as its own query.
+Issues in review (`ReviewIssue`) do not count; both fresh and revision in-progress workers count.
+This count is independent of the global `MaxConcurrent` gate and of the Workers-side [Worker Slot Occupancy](#worker-slot-occupancy) (which counts reservations, starting runs, and active runs but carries no repository identity).
+Lowering the limit below the current in-flight count does not preempt running workers — the repository drains to the new limit as its workers finish.
+
 ## Dispatch Order
 
 The total order that governs which queued issue is claimed next and the order the dashboard list query serves queued issues in.
-Defined as the four-tuple `(TierRank, Position, DetectedAt, Id)`, evaluated in that precedence — the issue with the lexicographically smallest key is claimed first, and is served first by the dashboard list query.
+The comparison primitive is the four-tuple `DispatchOrderKey` — `(TierRank, Position, DetectedAt, Id)`, evaluated in that precedence:
 
 - **TierRank** — a property of the queued state variant that encodes dispatch-priority class: revision (0) < continuation (1) < fresh (2). Lower rank is claimed first; this is the primary ordering criterion.
 - **Position** — the `EligibleRepository.Position` of the repository that owns the issue, supplied externally into the key. Lower position is preferred within a tier.
 - **DetectedAt** — oldest first within the same repository and tier.
 - **Id** — guarantees a deterministic total order when all other fields are equal.
 
-A single shared definition (`DispatchOrderKey`) governs both the dispatcher (`WorkerCapacityAvailableHandler`, min-by-key claim selection) and the dashboard list query (`GetActiveIssueSummariesAsync`, in-memory sort of the queued subset), so the two cannot disagree about the order at the moment the list is served.
+The single shared artifact consumed by both the dispatcher and the dashboard is a **capacity-aware ordering** over this key (`CapacityAwareDispatchOrder`): a multi-pass walk over the `DispatchOrderKey`-sorted sequence that carries each repository's remaining headroom (`headroom = max(0, MaxConcurrentWorkers − inFlightCount)`).
+An issue whose repository has remaining headroom takes the next place and decrements the headroom; an issue whose repository is at its [Repository Worker Limit](#repository-worker-limit) defers to a subsequent pass.
+The selector (`DispatchCandidateSelector`) takes the claimable head of this sequence; the dashboard query renders the sequence and derives Queue Position by index.
+The two cannot disagree about order at the moment the list is served — the same function produces both results.
 
 The dashboard treats the server array order as the only source of queue order and reconciles it by refetching `GET /api/issues`, rather than deriving order locally or receiving a pushed order (see [ADR 0067](docs/adr/0067-dashboard-reconciles-queue-order-rather-than-deriving-it.md)).
 Every `IssueUpdated` event schedules a debounced reconcile (300 ms) alongside the counts refetch that already runs on that path, collapsing a burst of events into one request.
@@ -286,13 +300,14 @@ The dashboard partitions queued issues into two groups before applying the key: 
 
 ## Queue Position
 
-A queued issue's 1-based index in Dispatch Order, counted over **dispatchable queued issues only** — queued-tier issues whose repository is eligible (not `ineligible` or `unreachable`).
+A queued issue's 1-based index in the capacity-aware ordering (see [Dispatch Order](#dispatch-order)), counted over **dispatchable queued issues only** — queued-tier issues whose repository is eligible (not `ineligible` or `unreachable`).
 
 Queue Position is derived from the rendered dispatchable-queued array on the dashboard (see [ADR 0067](docs/adr/0067-dashboard-reconciles-queue-order-rather-than-deriving-it.md)).
 It is never persisted and never transported from the server; the ordinal indexes the very array the cards are rendered from, so it cannot disagree with the on-screen sequence.
+Because the capacity-aware ordering is the shared artifact, Queue Position reflects what the dispatcher will actually claim next under saturation — a queued issue that belongs to a saturated repository defers in the ordering (and therefore in position) until headroom opens, even though its repository is eligible.
 
-Not-dispatchable queued issues — those whose repository is ineligible or unreachable — have no Queue Position.
-Their card gutter shows `—` in place of an ordinal.
+Not-dispatchable queued issues — those whose repository is ineligible or unreachable — have no Queue Position and their card gutter shows `—`.
+A queued issue belonging to a repository at its [Repository Worker Limit](#repository-worker-limit) still has a Queue Position — its repository is eligible; only the position reflects the deferral.
 
 Queue Position 1 identifies the **Next up** issue: the one the dispatcher claims next when a worker slot becomes available.
 
@@ -642,6 +657,9 @@ Including `DispatchReservation` in the count prevents over-dispatch during the w
 An unresolved `DispatchReservation` holds its slot for at most `StaleReservationThreshold` (2 minutes) before `StaleReservationService` deletes it.
 An unresolved `StartingRun` holds its slot for at most `StaleStartingRunThreshold` (10 minutes) before `StaleStartingRunService` fails it (see Orphan Reconciliation).
 The query is implemented by `DbContext.GetSlotOccupancyCountAsync` and `DbContext.GetSlotOccupancyRunIdsAsync` extension methods, used by both `WorkerDispatchService` (dispatch gate) and `StaleStartingRunService` (orphan reaping).
+
+This occupancy count is **distinct from the per-repository cap**: `MaxConcurrent` is a global ceiling enforced Workers-side via this count; the [Repository Worker Limit](#repository-worker-limit) is a per-repository ceiling enforced Issues-side from `count(InProgressIssue) + count(RevisionInProgressIssue)` grouped by repository.
+Neither count subsumes the other — `DispatchReservation` and `StartingRun` carry no repository identity and are therefore invisible to the per-repository count; `InProgressIssue` and `RevisionInProgressIssue` are not reservation types and are not included in slot occupancy.
 
 ## Branch Commit Count
 

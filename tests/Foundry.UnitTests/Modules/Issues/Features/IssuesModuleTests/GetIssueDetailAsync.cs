@@ -2,6 +2,7 @@ using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Issues.Domain.Entities;
 using Foundry.Modules.Issues.Domain.Entities.States;
 using Foundry.Modules.Issues.Features;
+using Foundry.Modules.Issues.Features.Claiming;
 using Foundry.Modules.Issues.Features.TransientRetry;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Contracts.Queries;
@@ -44,7 +45,12 @@ public sealed class GetIssueDetailAsync : IAsyncDisposable
         _dbContext.Database.EnsureCreated();
         _slugQueries = new StubRepositorySlugQueries();
         _slugQueries.AddSlug(RepositoryId, RepositorySlug);
-        _sut = new IssueQueries(_dbContext, _slugQueries, new NullRepositoryEligibilityQuery(), new NullWorkerRunQueries());
+        _sut = new IssueQueries(
+            _dbContext,
+            _slugQueries,
+            new NullRepositoryEligibilityQuery(),
+            new NullWorkerRunQueries(),
+            new InFlightWorkerCountQuery(_dbContext));
     }
 
     async ValueTask IAsyncDisposable.DisposeAsync()
@@ -384,7 +390,12 @@ public sealed class GetIssueDetailAsync : IAsyncDisposable
 
         // 1 consecutive transient run = attempt number 1 out of max 2, attempts remaining
         NullWorkerRunQueries stubRunQueries = new(consecutiveTransientRuns: 1);
-        IIssueQueries sut = new IssueQueries(_dbContext, _slugQueries, new NullRepositoryEligibilityQuery(), stubRunQueries);
+        IIssueQueries sut = new IssueQueries(
+            _dbContext,
+            _slugQueries,
+            new NullRepositoryEligibilityQuery(),
+            stubRunQueries,
+            new InFlightWorkerCountQuery(_dbContext));
 
         // Act
         Result<IssueDetail> result = await sut.GetIssueDetailAsync(
@@ -424,7 +435,12 @@ public sealed class GetIssueDetailAsync : IAsyncDisposable
 
         // consecutiveRuns at cap — exhausted
         NullWorkerRunQueries stubRunQueries = new(consecutiveTransientRuns: TransientRetrySchedule.MaxTransientRetries);
-        IIssueQueries sut = new IssueQueries(_dbContext, _slugQueries, new NullRepositoryEligibilityQuery(), stubRunQueries);
+        IIssueQueries sut = new IssueQueries(
+            _dbContext,
+            _slugQueries,
+            new NullRepositoryEligibilityQuery(),
+            stubRunQueries,
+            new InFlightWorkerCountQuery(_dbContext));
 
         // Act
         Result<IssueDetail> result = await sut.GetIssueDetailAsync(
@@ -462,7 +478,12 @@ public sealed class GetIssueDetailAsync : IAsyncDisposable
         _dbContext.ChangeTracker.Clear();
 
         NullWorkerRunQueries stubRunQueries = new(consecutiveTransientRuns: 1);
-        IIssueQueries sut = new IssueQueries(_dbContext, _slugQueries, new NullRepositoryEligibilityQuery(), stubRunQueries);
+        IIssueQueries sut = new IssueQueries(
+            _dbContext,
+            _slugQueries,
+            new NullRepositoryEligibilityQuery(),
+            stubRunQueries,
+            new InFlightWorkerCountQuery(_dbContext));
 
         // Act
         Result<IssueDetail> result = await sut.GetIssueDetailAsync(
@@ -498,7 +519,12 @@ public sealed class GetIssueDetailAsync : IAsyncDisposable
 
         // 1 consecutive transient run = attempt number 1, attempts remaining
         NullWorkerRunQueries stubRunQueries = new(consecutiveTransientRuns: 1);
-        IIssueQueries sut = new IssueQueries(_dbContext, _slugQueries, new NullRepositoryEligibilityQuery(), stubRunQueries);
+        IIssueQueries sut = new IssueQueries(
+            _dbContext,
+            _slugQueries,
+            new NullRepositoryEligibilityQuery(),
+            stubRunQueries,
+            new InFlightWorkerCountQuery(_dbContext));
 
         // Act
         Result<IssueDetail> result = await sut.GetIssueDetailAsync(
@@ -538,7 +564,12 @@ public sealed class GetIssueDetailAsync : IAsyncDisposable
         _dbContext.ChangeTracker.Clear();
 
         // Worker-run row not yet visible — consecutive run count is 0
-        IIssueQueries sut = new IssueQueries(_dbContext, _slugQueries, new NullRepositoryEligibilityQuery(), new NullWorkerRunQueries(consecutiveTransientRuns: 0));
+        IIssueQueries sut = new IssueQueries(
+            _dbContext,
+            _slugQueries,
+            new NullRepositoryEligibilityQuery(),
+            new NullWorkerRunQueries(consecutiveTransientRuns: 0),
+            new InFlightWorkerCountQuery(_dbContext));
 
         // Act
         Result<IssueDetail> result = await sut.GetIssueDetailAsync(
@@ -573,7 +604,12 @@ public sealed class GetIssueDetailAsync : IAsyncDisposable
 
         // consecutiveRuns at cap — exhausted
         NullWorkerRunQueries stubRunQueries = new(consecutiveTransientRuns: TransientRetrySchedule.MaxTransientRetries);
-        IIssueQueries sut = new IssueQueries(_dbContext, _slugQueries, new NullRepositoryEligibilityQuery(), stubRunQueries);
+        IIssueQueries sut = new IssueQueries(
+            _dbContext,
+            _slugQueries,
+            new NullRepositoryEligibilityQuery(),
+            stubRunQueries,
+            new InFlightWorkerCountQuery(_dbContext));
 
         // Act
         Result<IssueDetail> result = await sut.GetIssueDetailAsync(

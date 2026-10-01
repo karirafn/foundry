@@ -20,7 +20,7 @@ public sealed class SuppressUntracking
     public void WhenCalledOnUnsuppressedRepository_SetsUntrackSuppressedSince()
     {
         // Arrange
-        MonitoredRepository repository = MonitoredRepository.Create(ValidSlug, "github.com", null);
+        MonitoredRepository repository = MonitoredRepository.Create(ValidSlug, "github.com", null).ValueOrThrow();
 
         // Act
         repository.SuppressUntracking(FirstSuppressedAt);
@@ -33,7 +33,7 @@ public sealed class SuppressUntracking
     public void WhenCalledOnUnsuppressedRepository_ReturnsTrue()
     {
         // Arrange
-        MonitoredRepository repository = MonitoredRepository.Create(ValidSlug, "github.com", null);
+        MonitoredRepository repository = MonitoredRepository.Create(ValidSlug, "github.com", null).ValueOrThrow();
 
         // Act
         bool transitioned = repository.SuppressUntracking(FirstSuppressedAt);
@@ -46,7 +46,7 @@ public sealed class SuppressUntracking
     public void WhenCalledAgainWithLaterTime_DoesNotChangeOriginalTimestamp()
     {
         // Arrange
-        MonitoredRepository repository = MonitoredRepository.Create(ValidSlug, "github.com", null);
+        MonitoredRepository repository = MonitoredRepository.Create(ValidSlug, "github.com", null).ValueOrThrow();
         repository.SuppressUntracking(FirstSuppressedAt);
 
         // Act
@@ -60,7 +60,7 @@ public sealed class SuppressUntracking
     public void WhenCalledAgainWhenAlreadySuppressed_ReturnsFalse()
     {
         // Arrange
-        MonitoredRepository repository = MonitoredRepository.Create(ValidSlug, "github.com", null);
+        MonitoredRepository repository = MonitoredRepository.Create(ValidSlug, "github.com", null).ValueOrThrow();
         repository.SuppressUntracking(FirstSuppressedAt);
 
         // Act
@@ -74,7 +74,7 @@ public sealed class SuppressUntracking
     public void WhenClearUntrackSuppressionCalled_ResetsToNull()
     {
         // Arrange
-        MonitoredRepository repository = MonitoredRepository.Create(ValidSlug, "github.com", null);
+        MonitoredRepository repository = MonitoredRepository.Create(ValidSlug, "github.com", null).ValueOrThrow();
         repository.SuppressUntracking(FirstSuppressedAt);
 
         // Act
@@ -88,7 +88,7 @@ public sealed class SuppressUntracking
     public void WhenClearUntrackSuppressionCalledOnUnsuppressedRepository_RemainsNull()
     {
         // Arrange
-        MonitoredRepository repository = MonitoredRepository.Create(ValidSlug, "github.com", null);
+        MonitoredRepository repository = MonitoredRepository.Create(ValidSlug, "github.com", null).ValueOrThrow();
 
         // Act
         repository.ClearUntrackSuppression();
@@ -101,7 +101,7 @@ public sealed class SuppressUntracking
     public void WhenClearedAndSuppressedAgain_SetsNewTimestamp()
     {
         // Arrange
-        MonitoredRepository repository = MonitoredRepository.Create(ValidSlug, "github.com", null);
+        MonitoredRepository repository = MonitoredRepository.Create(ValidSlug, "github.com", null).ValueOrThrow();
         repository.SuppressUntracking(FirstSuppressedAt);
         repository.ClearUntrackSuppression();
 

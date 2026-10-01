@@ -62,6 +62,7 @@ internal static class GetRepositories
                     RepositoryMappings.ToSeconds(r.PollInterval),
                     r.IsActive,
                     r.Position,
+                    r.MaxConcurrentWorkers,
                     r.LastPolledAt,
                     RepositoryMappings.ToEligibilityInfo(r.Eligibility),
                     r.UntrackSuppressedSince))

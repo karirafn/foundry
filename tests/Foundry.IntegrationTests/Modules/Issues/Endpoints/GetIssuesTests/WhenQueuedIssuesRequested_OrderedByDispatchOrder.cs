@@ -59,7 +59,7 @@ public sealed class WhenQueuedIssuesRequested_OrderedByDispatchOrder : IAsyncDis
         dbContext.Set<Credential>().Add(credential);
 
         RepositorySlug repoSlug = RepositorySlug.Create(slug).ValueOrThrow();
-        MonitoredRepository repo = MonitoredRepository.Create(repoSlug, "github.com", null, position);
+        MonitoredRepository repo = MonitoredRepository.Create(repoSlug, "github.com", null, position).ValueOrThrow();
         repo.SetEligibility(new RepositoryEligibility.Eligible());
         dbContext.Set<MonitoredRepository>().Add(repo);
 
@@ -83,7 +83,7 @@ public sealed class WhenQueuedIssuesRequested_OrderedByDispatchOrder : IAsyncDis
 
         RepositorySlug repoSlug = RepositorySlug.Create(slug).ValueOrThrow();
         RepositoryEligibility.Ineligible ineligible = new([EligibilityViolation.AllowDirectPushes()]);
-        MonitoredRepository repo = MonitoredRepository.Create(repoSlug, "github.com", null);
+        MonitoredRepository repo = MonitoredRepository.Create(repoSlug, "github.com", null).ValueOrThrow();
         repo.SetEligibility(ineligible);
         dbContext.Set<MonitoredRepository>().Add(repo);
 
@@ -220,23 +220,38 @@ public sealed class WhenQueuedIssuesRequested_OrderedByDispatchOrder : IAsyncDis
         result.ShouldNotBeNull();
         result.Items.Count.ShouldBe(5);
 
-        // Eligible queued first, ordered by Dispatch Order (TierRank → Position → DetectedAt → Id):
-        //   [0] issue 2: revision_queued on repoB (tier 0, position 1) — wins on tier rank
-        //   [1] issue 3: continuation_queued on repoB (tier 1, position 1) — tier 1 beats tier 2
-        //   [2] issue 1: queued on repoA (tier 2, position 2) — tier 2, higher position
+        // Eligible queued are ordered by the capacity-aware multi-pass walk (CapacityAwareDispatchOrder.Order).
+        // Each repo defaults to MaxConcurrentWorkers=1. No issues are in-flight, so headroom=1 per repo.
+        //
+        // DispatchOrderKey sort (TierRank → Position → DetectedAt → Id) gives this input order:
+        //   issue 2 — revision_queued, repoB (tier 0, pos 1)
+        //   issue 3 — continuation_queued, repoB (tier 1, pos 1)
+        //   issue 1 — queued, repoA (tier 2, pos 2)
+        //
+        // Pass 1 walk (all headrooms = 1):
+        //   issue 2 (repoB): placed[0]; repoB headroom → 0
+        //   issue 3 (repoB): deferred — repoB saturated
+        //   issue 1 (repoA): placed[1]; repoA headroom → 0
+        // Pass 2: issue 3 (repoB, headroom=0) — all remaining repos saturated → stop
+        // capacityDeferred = [issue 3], appended in key order after placed issues.
+        //
+        // Final eligible order: [issue 2, issue 1, issue 3]
         result.Items[0].ShouldSatisfyAllConditions(
             () => result.Items[0].IssueNumber.ShouldBe(2),
             () => result.Items[0].State.ShouldBe("revision_queued"),
             () => result.Items[0].RepositoryEligibilityStatus.ShouldBe("eligible"));
 
         result.Items[1].ShouldSatisfyAllConditions(
-            () => result.Items[1].IssueNumber.ShouldBe(3),
-            () => result.Items[1].State.ShouldBe("continuation_queued"),
+            () => result.Items[1].IssueNumber.ShouldBe(1),
+            () => result.Items[1].State.ShouldBe("queued"),
             () => result.Items[1].RepositoryEligibilityStatus.ShouldBe("eligible"));
 
+        // Issue 3 was deferred by the capacity walk (repoB already saturated in pass 1) and
+        // is appended in key order after the placed issues — this is the intended Queue Position
+        // semantics: it reflects the real claim order under the per-repo cap.
         result.Items[2].ShouldSatisfyAllConditions(
-            () => result.Items[2].IssueNumber.ShouldBe(1),
-            () => result.Items[2].State.ShouldBe("queued"),
+            () => result.Items[2].IssueNumber.ShouldBe(3),
+            () => result.Items[2].State.ShouldBe("continuation_queued"),
             () => result.Items[2].RepositoryEligibilityStatus.ShouldBe("eligible"));
 
         // Ineligible-repo queued last in the queued partition

@@ -59,7 +59,7 @@ public sealed class RenumberAsync : IAsyncDisposable
             RepositorySlug.Create($"{owner}/repo").ValueOrThrow(),
             "github.com",
             null,
-            position);
+            position).ValueOrThrow();
         _dbContext.Set<MonitoredRepository>().Add(repo);
         _dbContext.SaveChanges();
         return repo;

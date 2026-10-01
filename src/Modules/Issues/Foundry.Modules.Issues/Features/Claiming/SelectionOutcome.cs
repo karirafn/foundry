@@ -23,4 +23,11 @@ internal abstract record SelectionOutcome
     /// </summary>
     /// <param name="Skipped">The number of candidates that were skipped.</param>
     internal sealed record AllCandidatesUnresolvable(int Skipped) : SelectionOutcome;
+
+    /// <summary>
+    /// Candidates exist and their repositories are eligible, but every repository with queued
+    /// work is at or above its <c>MaxConcurrentWorkers</c> limit. No issue can be claimed on
+    /// this tick; the dispatched capacity token will be released via <c>ClaimSkipped</c>.
+    /// </summary>
+    internal sealed record AllRepositoriesSaturated : SelectionOutcome;
 }

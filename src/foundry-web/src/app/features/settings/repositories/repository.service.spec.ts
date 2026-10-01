@@ -17,6 +17,7 @@ const MOCK_REPOSITORY: RepositorySummary = {
   position: 0,
   pollIntervalSeconds: 300,
   isActive: true,
+  maxConcurrentWorkers: 1,
   lastPolledAt: '2026-06-15T10:00:00Z',
   eligibility: { status: 'eligible', violations: [], reason: null },
 };
@@ -30,6 +31,7 @@ const MOCK_REPOSITORY_2: RepositorySummary = {
   position: 1,
   pollIntervalSeconds: null,
   isActive: false,
+  maxConcurrentWorkers: 1,
   lastPolledAt: null,
   eligibility: { status: 'ineligible', violations: [{ rule: 'AllowDirectPushes', description: 'Allow direct pushes is enabled' }], reason: null },
 };
@@ -309,6 +311,7 @@ describe('RepositoryService', () => {
     const request: CreateRepositoryRequest = {
       slug: 'my-org/my-repo',
       pollIntervalSeconds: 300,
+      maxConcurrentWorkers: null,
     };
 
     // Act
@@ -323,7 +326,7 @@ describe('RepositoryService', () => {
 
   it('should set saving to true while createRepository is in flight', () => {
     // Arrange
-    const request: CreateRepositoryRequest = { slug: 'my-org/my-repo', pollIntervalSeconds: null };
+    const request: CreateRepositoryRequest = { slug: 'my-org/my-repo', pollIntervalSeconds: null, maxConcurrentWorkers: null };
 
     // Act
     service.createRepository(ACCOUNT_ID, request).subscribe();
@@ -338,7 +341,7 @@ describe('RepositoryService', () => {
 
   it('should set saving to false and saveSuccess to true after createRepository succeeds', () => {
     // Arrange
-    const request: CreateRepositoryRequest = { slug: 'my-org/my-repo', pollIntervalSeconds: null };
+    const request: CreateRepositoryRequest = { slug: 'my-org/my-repo', pollIntervalSeconds: null, maxConcurrentWorkers: null };
     service.createRepository(ACCOUNT_ID, request).subscribe();
     httpMock
       .expectOne(`/api/accounts/${ACCOUNT_ID}/repositories`)
@@ -354,7 +357,7 @@ describe('RepositoryService', () => {
     service.loadRepositories(ACCOUNT_ID);
     httpMock.expectOne(`/api/accounts/${ACCOUNT_ID}/repositories`).flush([]);
 
-    const request: CreateRepositoryRequest = { slug: 'my-org/my-repo', pollIntervalSeconds: 300 };
+    const request: CreateRepositoryRequest = { slug: 'my-org/my-repo', pollIntervalSeconds: 300, maxConcurrentWorkers: null };
 
     // Act
     service.createRepository(ACCOUNT_ID, request).subscribe();
@@ -368,7 +371,7 @@ describe('RepositoryService', () => {
 
   it('should set saving to false and saveSuccess to false when createRepository fails', () => {
     // Arrange
-    const request: CreateRepositoryRequest = { slug: 'my-org/my-repo', pollIntervalSeconds: null };
+    const request: CreateRepositoryRequest = { slug: 'my-org/my-repo', pollIntervalSeconds: null, maxConcurrentWorkers: null };
     service.createRepository(ACCOUNT_ID, request).subscribe({ error: () => {} });
     httpMock.expectOne(`/api/accounts/${ACCOUNT_ID}/repositories`).flush('Bad Request', {
       status: 400,
@@ -382,7 +385,7 @@ describe('RepositoryService', () => {
 
   it('should set saveError when createRepository fails with a string body', () => {
     // Arrange
-    const request: CreateRepositoryRequest = { slug: 'my-org/duplicate', pollIntervalSeconds: null };
+    const request: CreateRepositoryRequest = { slug: 'my-org/duplicate', pollIntervalSeconds: null, maxConcurrentWorkers: null };
     service.createRepository(ACCOUNT_ID, request).subscribe({ error: () => {} });
 
     // Act
@@ -397,14 +400,14 @@ describe('RepositoryService', () => {
 
   it('should clear saveError at start of createRepository', () => {
     // Arrange — first call that fails
-    service.createRepository(ACCOUNT_ID, { slug: 'x', pollIntervalSeconds: null }).subscribe({ error: () => {} });
+    service.createRepository(ACCOUNT_ID, { slug: 'x', pollIntervalSeconds: null, maxConcurrentWorkers: null }).subscribe({ error: () => {} });
     httpMock.expectOne(`/api/accounts/${ACCOUNT_ID}/repositories`).flush('Conflict', {
       status: 409,
       statusText: 'Conflict',
     });
 
     // Act — second call clears error immediately
-    service.createRepository(ACCOUNT_ID, { slug: 'y', pollIntervalSeconds: null }).subscribe();
+    service.createRepository(ACCOUNT_ID, { slug: 'y', pollIntervalSeconds: null, maxConcurrentWorkers: null }).subscribe();
 
     // Assert — error is cleared before response
     expect(service.saveError()).toBeNull();
@@ -416,7 +419,7 @@ describe('RepositoryService', () => {
   // Cycle 5: updateRepository calls PUT
   it('should PUT to /api/accounts/{accountId}/repositories/{id} when updateRepository is called', () => {
     // Arrange
-    const request: UpdateRepositoryRequest = { pollIntervalSeconds: 600, isActive: true };
+    const request: UpdateRepositoryRequest = { pollIntervalSeconds: 600, isActive: true, maxConcurrentWorkers: 1 };
 
     // Act
     service.updateRepository(ACCOUNT_ID, REPO_ID, request).subscribe();
@@ -430,7 +433,7 @@ describe('RepositoryService', () => {
 
   it('should set saving to true while updateRepository is in flight', () => {
     // Arrange
-    const request: UpdateRepositoryRequest = { pollIntervalSeconds: 600, isActive: true };
+    const request: UpdateRepositoryRequest = { pollIntervalSeconds: 600, isActive: true, maxConcurrentWorkers: 1 };
 
     // Act
     service.updateRepository(ACCOUNT_ID, REPO_ID, request).subscribe();
@@ -442,7 +445,7 @@ describe('RepositoryService', () => {
 
   it('should set saving to false and saveSuccess to true after updateRepository succeeds', () => {
     // Arrange
-    const request: UpdateRepositoryRequest = { pollIntervalSeconds: 600, isActive: true };
+    const request: UpdateRepositoryRequest = { pollIntervalSeconds: 600, isActive: true, maxConcurrentWorkers: 1 };
     service.updateRepository(ACCOUNT_ID, REPO_ID, request).subscribe();
     httpMock
       .expectOne(`/api/accounts/${ACCOUNT_ID}/repositories/${REPO_ID}`)
@@ -459,7 +462,7 @@ describe('RepositoryService', () => {
     httpMock.expectOne(`/api/accounts/${ACCOUNT_ID}/repositories`).flush([MOCK_REPOSITORY, MOCK_REPOSITORY_2]);
 
     const updatedRepo: RepositorySummary = { ...MOCK_REPOSITORY, pollIntervalSeconds: 600 };
-    const request: UpdateRepositoryRequest = { pollIntervalSeconds: 600, isActive: true };
+    const request: UpdateRepositoryRequest = { pollIntervalSeconds: 600, isActive: true, maxConcurrentWorkers: 1 };
 
     // Act
     service.updateRepository(ACCOUNT_ID, REPO_ID, request).subscribe();
@@ -474,7 +477,7 @@ describe('RepositoryService', () => {
 
   it('should set saveError when updateRepository fails with a string body', () => {
     // Arrange
-    const request: UpdateRepositoryRequest = { pollIntervalSeconds: -1, isActive: true };
+    const request: UpdateRepositoryRequest = { pollIntervalSeconds: -1, isActive: true, maxConcurrentWorkers: 1 };
     service.updateRepository(ACCOUNT_ID, REPO_ID, request).subscribe({ error: () => {} });
 
     // Act
@@ -489,14 +492,14 @@ describe('RepositoryService', () => {
 
   it('should clear saveError at start of updateRepository', () => {
     // Arrange — first call that fails
-    service.updateRepository(ACCOUNT_ID, REPO_ID, { pollIntervalSeconds: -1, isActive: true }).subscribe({ error: () => {} });
+    service.updateRepository(ACCOUNT_ID, REPO_ID, { pollIntervalSeconds: -1, isActive: true, maxConcurrentWorkers: 1 }).subscribe({ error: () => {} });
     httpMock.expectOne(`/api/accounts/${ACCOUNT_ID}/repositories/${REPO_ID}`).flush('Bad Request', {
       status: 400,
       statusText: 'Bad Request',
     });
 
     // Act — second call clears error immediately
-    service.updateRepository(ACCOUNT_ID, REPO_ID, { pollIntervalSeconds: 600, isActive: true }).subscribe();
+    service.updateRepository(ACCOUNT_ID, REPO_ID, { pollIntervalSeconds: 600, isActive: true, maxConcurrentWorkers: 1 }).subscribe();
 
     // Assert — error is cleared before response
     expect(service.saveError()).toBeNull();

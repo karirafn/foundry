@@ -57,7 +57,7 @@ public sealed class ClaimFallThrough : IAsyncDisposable
             repositorySlug,
             host: "github.com",
             pollInterval: null,
-            position: position);
+            position: position).ValueOrThrow();
 
         repo.SetEligibility(new RepositoryEligibility.Eligible());
 

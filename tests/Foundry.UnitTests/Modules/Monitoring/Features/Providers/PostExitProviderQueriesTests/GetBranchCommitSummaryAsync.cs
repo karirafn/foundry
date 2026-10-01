@@ -58,7 +58,7 @@ public sealed class GetBranchCommitSummaryAsync : IAsyncDisposable
 
         RepositorySlug slug = RepositorySlug.Create("owner/repo").ValueOrThrow();
 
-        MonitoredRepository repo = MonitoredRepository.Create(slug, "github.com", null);
+        MonitoredRepository repo = MonitoredRepository.Create(slug, "github.com", null).ValueOrThrow();
         _dbContext.Set<MonitoredRepository>().Add(repo);
         await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
 

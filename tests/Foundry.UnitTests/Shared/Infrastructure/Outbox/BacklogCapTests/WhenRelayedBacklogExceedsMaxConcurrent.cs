@@ -224,7 +224,7 @@ public sealed class WhenRelayedBacklogExceedsMaxConcurrent : IAsyncDisposable
             CancellationToken cancellationToken)
         {
             IReadOnlyList<EligibleRepository> eligible = repositoryIds
-                .Select(id => new EligibleRepository(id, Position: 0))
+                .Select(id => new EligibleRepository(id, Position: 0, MaxConcurrentWorkers: 1))
                 .ToList();
             return Task.FromResult(eligible);
         }

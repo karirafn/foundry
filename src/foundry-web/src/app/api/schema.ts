@@ -605,6 +605,8 @@ export interface components {
             slug: string;
             /** Format: int32 */
             pollIntervalSeconds: null | number | string;
+            /** Format: int32 */
+            maxConcurrentWorkers?: null | number | string;
         };
         CredentialCreationResult: {
             credential: components["schemas"]["CredentialSummary"];
@@ -768,6 +770,8 @@ export interface components {
             isActive: boolean;
             /** Format: int32 */
             position: number | string;
+            /** Format: int32 */
+            maxConcurrentWorkers: number | string;
             /** Format: date-time */
             lastPolledAt?: null | string;
             eligibility?: null | components["schemas"]["RepositoryEligibilityInfo"];
@@ -863,6 +867,8 @@ export interface components {
             /** Format: int32 */
             pollIntervalSeconds: null | number | string;
             isActive: boolean;
+            /** Format: int32 */
+            maxConcurrentWorkers: number | string;
         };
         UpdateWorkerImageConfigurationRequestBody: {
             installDotnet: boolean;

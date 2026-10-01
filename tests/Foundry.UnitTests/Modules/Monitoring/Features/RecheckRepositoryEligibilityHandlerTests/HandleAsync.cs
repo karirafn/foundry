@@ -63,7 +63,7 @@ public sealed class HandleAsync : IAsyncDisposable
         _dbContext.Set<Credential>().Add(credential);
 
         RepositorySlug slug = RepositorySlug.Create($"{owner}/repo").ValueOrThrow();
-        MonitoredRepository repo = MonitoredRepository.Create(slug, "github.com", pollInterval: null);
+        MonitoredRepository repo = MonitoredRepository.Create(slug, "github.com", pollInterval: null).ValueOrThrow();
         _dbContext.Set<MonitoredRepository>().Add(repo);
 
         await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);

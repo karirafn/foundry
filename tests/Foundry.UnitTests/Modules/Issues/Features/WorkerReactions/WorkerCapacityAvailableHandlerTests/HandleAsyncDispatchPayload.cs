@@ -50,7 +50,8 @@ public sealed class HandleAsyncDispatchPayload : IAsyncDisposable
         DispatchCandidateSelector selector = new(
             _dbContext,
             repositoryDispatchQueries,
-            new AllEligibleRepositoryEligibilityQuery());
+            new AllEligibleRepositoryEligibilityQuery(),
+            new InFlightWorkerCountQuery(_dbContext));
         IssueClaimer claimer = new(_dbContext, _dispatcher, new NullDomainEventDispatcher());
         _sut = new WorkerCapacityAvailableHandler(
             _dbContext,
@@ -81,7 +82,7 @@ public sealed class HandleAsyncDispatchPayload : IAsyncDisposable
         MonitoredRepository repository = MonitoredRepository.Create(
             repositorySlug,
             "github.com",
-            pollInterval: null);
+            pollInterval: null).ValueOrThrow();
 
         _dbContext.Set<GitHubCredential>().Add(credential);
         _dbContext.Set<MonitoredRepository>().Add(repository);
@@ -169,7 +170,7 @@ public sealed class HandleAsyncDispatchPayload : IAsyncDisposable
             CancellationToken cancellationToken)
         {
             IReadOnlyList<EligibleRepository> eligible = repositoryIds
-                .Select(id => new EligibleRepository(id, Position: 0))
+                .Select(id => new EligibleRepository(id, Position: 0, MaxConcurrentWorkers: 1))
                 .ToList();
             return Task.FromResult(eligible);
         }

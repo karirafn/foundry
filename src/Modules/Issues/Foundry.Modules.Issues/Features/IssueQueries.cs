@@ -4,6 +4,7 @@ using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Issues.Domain.Entities;
 using Foundry.Modules.Issues.Domain.Entities.States;
 using Foundry.Modules.Issues.Domain.ValueObjects;
+using Foundry.Modules.Issues.Features.Claiming;
 using Foundry.Modules.Issues.Features.StateChanges;
 using Foundry.Modules.Issues.Features.TransientRetry;
 using Foundry.Modules.Monitoring.Contracts;
@@ -20,7 +21,8 @@ internal sealed class IssueQueries(
     DbContext db,
     IRepositorySlugQueries slugQueries,
     IRepositoryEligibilityQuery eligibilityQuery,
-    IWorkerRunQueries workerRunQueries) : IIssueQueries
+    IWorkerRunQueries workerRunQueries,
+    InFlightWorkerCountQuery inFlightWorkerCountQuery) : IIssueQueries
 {
     public async Task<IReadOnlySet<int>> GetKnownIssueNumbersAsync(
         MonitoredRepositoryId repositoryId,
@@ -561,6 +563,11 @@ internal sealed class IssueQueries(
         Dictionary<Guid, int> positionByRepo = eligibleRepositories
             .ToDictionary(r => r.Id, r => r.Position);
 
+        // Fetch in-flight counts across ALL repositories — unfiltered so that a repo
+        // at capacity on a per-repo dashboard view still has its real in-flight count.
+        IReadOnlyDictionary<MonitoredRepositoryId, int> inFlightCounts =
+            await inFlightWorkerCountQuery.GetCountsAsync(cancellationToken);
+
         List<QueuedIssue> queuedIssues = issues
             .OfType<QueuedIssue>()
             .ToList();
@@ -582,12 +589,46 @@ internal sealed class IssueQueries(
                 Position: pos))
             .ToList();
 
-        // Eligible-repo queued issues (real position from eligibility query).
-        List<Issue> eligibleQueued = queuedWithPosition
+        // Build headroom map: headroom = max(0, MaxConcurrentWorkers − inFlightCount).
+        // Repositories absent from the eligibility list (ineligible) contribute no headroom
+        // and are excluded — their issues go into the ineligibleQueued partition.
+        Dictionary<MonitoredRepositoryId, int> headroomByRepo = eligibleRepositories
+            .Select(r => (Id: MonitoredRepositoryId.From(r.Id), r.MaxConcurrentWorkers))
+            .ToDictionary(
+                t => t.Id,
+                t =>
+                {
+                    inFlightCounts.TryGetValue(t.Id, out int inFlight);
+                    return Math.Max(0, t.MaxConcurrentWorkers - inFlight);
+                });
+
+        // Eligible-repo queued issues: capacity-aware order via the shared helper so the
+        // dashboard sequence matches the dispatcher exactly (ADR 0074, 0025, 0067).
+        // The walk places issues whose repo has remaining headroom first, deferring saturated
+        // repos to later passes. Issues that never fit (all remaining repos saturated after
+        // every pass) are appended in key order after the placed issues so that they still
+        // render in the dispatchable array and receive a Queue Position (ADR 0067, 0074).
+        List<(QueuedIssue Issue, DispatchOrderKey Key)> eligibleKeyedIssues = queuedWithPosition
             .Where(t => t.IsEligible)
-            .OrderBy(t => DispatchOrderKey.For(t.Issue, t.Position))
-            .Select(t => (Issue)t.Issue)
+            .Select(t => (t.Issue, DispatchOrderKey.For(t.Issue, t.Position)))
             .ToList();
+
+        IReadOnlyList<QueuedIssue> placed = CapacityAwareDispatchOrder.Order(eligibleKeyedIssues, headroomByRepo);
+
+        HashSet<IssueId> placedIds = placed
+            .Select(i => i.Id)
+            .ToHashSet();
+
+        // Issues beyond current capacity are appended in key order so the dashboard
+        // always shows the full eligible-queued set. The Queue Position ordinal is the
+        // 1-based index over the complete rendered array (ADR 0067).
+        List<QueuedIssue> capacityDeferred = eligibleKeyedIssues
+            .Where(t => !placedIds.Contains(t.Issue.Id))
+            .OrderBy(t => t.Key)
+            .Select(t => t.Issue)
+            .ToList();
+
+        List<Issue> eligibleQueued = [..placed.Select(i => (Issue)i), ..capacityDeferred.Select(i => (Issue)i)];
 
         // Ineligible-repo queued issues: sentinel position so they sort among themselves
         // by DetectedAt then Id, consistently after all eligible queued issues.

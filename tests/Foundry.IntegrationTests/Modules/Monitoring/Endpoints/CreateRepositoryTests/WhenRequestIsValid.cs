@@ -53,7 +53,33 @@ public sealed class WhenRequestIsValid : IAsyncDisposable
             () => repository.AccountId.ShouldBe(accountId),
             () => repository.AccountName.ShouldBe("My GitHub"),
             () => repository.PollIntervalSeconds.ShouldBe(300),
-            () => repository.IsActive.ShouldBeTrue());
+            () => repository.IsActive.ShouldBeTrue(),
+            () => repository.MaxConcurrentWorkers.ShouldBe(1));
+    }
+
+    [Fact]
+    public async Task WhenMaxConcurrentWorkersIsProvided_PersistsAndRoundTrips()
+    {
+        // Arrange
+        Guid accountId = await AccountSeeder.SeedGitHubAccountAsync(_factory, name: "My GitHub 3");
+        object body = new
+        {
+            slug = "owner/repo-with-limit",
+            maxConcurrentWorkers = 5,
+        };
+
+        // Act
+        HttpResponseMessage response = await _client.PostAsJsonAsync(
+            new Uri($"/api/accounts/{accountId}/repositories", UriKind.Relative),
+            body,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        response.StatusCode.ShouldBe(HttpStatusCode.Created);
+        RepositorySummary? repository = await response.Content
+            .ReadFromJsonAsync<RepositorySummary>(TestContext.Current.CancellationToken);
+        repository.ShouldNotBeNull();
+        repository.MaxConcurrentWorkers.ShouldBe(5);
     }
 
     [Fact]
@@ -79,6 +105,7 @@ public sealed class WhenRequestIsValid : IAsyncDisposable
         repository.ShouldNotBeNull();
         repository.ShouldSatisfyAllConditions(
             () => repository.IsActive.ShouldBeTrue(),
-            () => repository.PollIntervalSeconds.ShouldBeNull());
+            () => repository.PollIntervalSeconds.ShouldBeNull(),
+            () => repository.MaxConcurrentWorkers.ShouldBe(1));
     }
 }

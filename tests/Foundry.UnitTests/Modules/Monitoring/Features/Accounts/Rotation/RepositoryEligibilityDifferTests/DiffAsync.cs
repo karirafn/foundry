@@ -53,7 +53,7 @@ public sealed class DiffAsync : IAsyncDisposable
             repositorySlug,
             "github.com",
             pollInterval: null,
-            position: 0);
+            position: 0).ValueOrThrow();
 
         if (eligibility is not null)
         {

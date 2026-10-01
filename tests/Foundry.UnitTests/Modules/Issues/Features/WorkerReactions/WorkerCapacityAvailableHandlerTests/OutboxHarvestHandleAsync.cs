@@ -99,7 +99,8 @@ public sealed class OutboxHarvestHandleAsync : IAsyncDisposable
                 "GITHUB_PAT",
                 new WorkerProvider.GitHub(),
                 "https://api.github.com/repos/owner/repo/issues")),
-            new AllEligibleRepositoryEligibilityQuery());
+            new AllEligibleRepositoryEligibilityQuery(),
+            new InFlightWorkerCountQuery(dbContext));
         IssueClaimer claimer = new(dbContext, integrationEventDispatcher, new CapturingDomainEventDispatcher());
         WorkerCapacityAvailableHandler sut = new(
             dbContext,
@@ -148,7 +149,8 @@ public sealed class OutboxHarvestHandleAsync : IAsyncDisposable
                 "GITHUB_PAT",
                 new WorkerProvider.GitHub(),
                 "https://api.github.com/repos/owner/repo/issues")),
-            new AllEligibleRepositoryEligibilityQuery());
+            new AllEligibleRepositoryEligibilityQuery(),
+            new InFlightWorkerCountQuery(dbContext));
         IssueClaimer claimer = new(dbContext, integrationEventDispatcher, new CapturingDomainEventDispatcher());
         WorkerCapacityAvailableHandler sut = new(
             dbContext,
@@ -197,7 +199,8 @@ public sealed class OutboxHarvestHandleAsync : IAsyncDisposable
                 "GITHUB_PAT",
                 new WorkerProvider.GitHub(),
                 "https://api.github.com/repos/owner/repo/issues")),
-            new AllEligibleRepositoryEligibilityQuery());
+            new AllEligibleRepositoryEligibilityQuery(),
+            new InFlightWorkerCountQuery(dbContext));
         IssueClaimer claimer = new(dbContext, integrationEventDispatcher, new CapturingDomainEventDispatcher());
         WorkerCapacityAvailableHandler sut = new(
             dbContext,
@@ -243,7 +246,8 @@ public sealed class OutboxHarvestHandleAsync : IAsyncDisposable
         DispatchCandidateSelector selector = new(
             dbContext,
             new StubRepositoryDispatchQueries(null),
-            new NoEligibleRepositoryEligibilityQuery());
+            new NoEligibleRepositoryEligibilityQuery(),
+            new InFlightWorkerCountQuery(dbContext));
         IssueClaimer claimer = new(dbContext, integrationEventDispatcher, new CapturingDomainEventDispatcher());
         WorkerCapacityAvailableHandler sut = new(
             dbContext,
@@ -305,7 +309,7 @@ public sealed class OutboxHarvestHandleAsync : IAsyncDisposable
             CancellationToken cancellationToken)
         {
             IReadOnlyList<EligibleRepository> eligible = repositoryIds
-                .Select(id => new EligibleRepository(id, Position: 0))
+                .Select(id => new EligibleRepository(id, Position: 0, MaxConcurrentWorkers: 1))
                 .ToList();
             return Task.FromResult(eligible);
         }

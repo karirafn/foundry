@@ -9,12 +9,14 @@ namespace Foundry.Modules.Issues.Features.Claiming;
 
 /// <summary>
 /// Selects the best <see cref="DispatchCandidate"/> from all claimable issues across eligible
-/// repositories, applying dispatch-order ordering and per-repository dispatch-info memoization.
+/// repositories, applying capacity-aware ordering (ADR 0074) and per-repository dispatch-info
+/// memoization.
 /// </summary>
 internal sealed class DispatchCandidateSelector(
     DbContext db,
     IRepositoryDispatchQueries repositoryDispatchQueries,
-    IRepositoryEligibilityQuery repositoryEligibilityQuery)
+    IRepositoryEligibilityQuery repositoryEligibilityQuery,
+    InFlightWorkerCountQuery inFlightWorkerCountQuery)
 {
     public async Task<SelectionOutcome> SelectAsync(CancellationToken cancellationToken)
     {
@@ -28,25 +30,50 @@ internal sealed class DispatchCandidateSelector(
             return new SelectionOutcome.NoCandidates();
         }
 
-        Dictionary<MonitoredRepositoryId, int> positionByRepoId =
-            await ResolveEligibleRepositoryPositionsAsync(
+        IReadOnlyList<EligibleRepository> eligibleRepos = await repositoryEligibilityQuery
+            .GetEligibleRepositoriesAsync(
                 claimableRepoIds.Select(id => id.Value).ToList(),
                 cancellationToken);
 
-        if (positionByRepoId.Count == 0)
+        if (eligibleRepos.Count == 0)
         {
             return new SelectionOutcome.NoEligibleRepositories();
         }
 
-        List<MonitoredRepositoryId> eligibleIds = positionByRepoId.Keys.ToList();
+        List<MonitoredRepositoryId> eligibleIds = eligibleRepos
+            .Select(r => MonitoredRepositoryId.From(r.Id))
+            .ToList();
 
         List<QueuedIssue> candidates = await db.Set<QueuedIssue>()
             .Where(c => eligibleIds.Contains(c.MonitoredRepositoryId))
             .ToListAsync(cancellationToken);
 
-        List<QueuedIssue> ordered = candidates
-            .OrderBy(c => DispatchOrderKey.For(c, positionByRepoId[c.MonitoredRepositoryId]))
+        IReadOnlyDictionary<MonitoredRepositoryId, int> inFlightCounts =
+            await inFlightWorkerCountQuery.GetCountsAsync(cancellationToken);
+
+        Dictionary<MonitoredRepositoryId, int> headroomByRepo = eligibleRepos
+            .Select(r =>
+            {
+                MonitoredRepositoryId id = MonitoredRepositoryId.From(r.Id);
+                inFlightCounts.TryGetValue(id, out int inFlight);
+                int headroom = Math.Max(0, r.MaxConcurrentWorkers - inFlight);
+                return (Id: id, Headroom: headroom);
+            })
+            .ToDictionary(r => r.Id, r => r.Headroom);
+
+        Dictionary<MonitoredRepositoryId, int> positionByRepo = eligibleRepos
+            .ToDictionary(r => MonitoredRepositoryId.From(r.Id), r => r.Position);
+
+        List<(QueuedIssue Issue, DispatchOrderKey Key)> keyedCandidates = candidates
+            .Select(c => (c, DispatchOrderKey.For(c, positionByRepo[c.MonitoredRepositoryId])))
             .ToList();
+
+        IReadOnlyList<QueuedIssue> ordered = CapacityAwareDispatchOrder.Order(keyedCandidates, headroomByRepo);
+
+        if (ordered.Count == 0)
+        {
+            return new SelectionOutcome.AllRepositoriesSaturated();
+        }
 
         Dictionary<MonitoredRepositoryId, RepositoryDispatchInfo?> dispatchInfoCache = [];
         int skipped = 0;
@@ -71,17 +98,5 @@ internal sealed class DispatchCandidateSelector(
         }
 
         return new SelectionOutcome.AllCandidatesUnresolvable(skipped);
-    }
-
-    private async Task<Dictionary<MonitoredRepositoryId, int>> ResolveEligibleRepositoryPositionsAsync(
-        List<Guid> claimableRepoIds,
-        CancellationToken cancellationToken)
-    {
-        IReadOnlyList<EligibleRepository> eligibleRepos = await repositoryEligibilityQuery
-            .GetEligibleRepositoriesAsync(claimableRepoIds, cancellationToken);
-
-        return eligibleRepos
-            .Select(r => (Id: MonitoredRepositoryId.From(r.Id), r.Position))
-            .ToDictionary(r => r.Id, r => r.Position);
     }
 }

@@ -15,7 +15,7 @@ public sealed class SetPosition
         RepositorySlug.Create("octocat/hello-world").ValueOrThrow();
 
     private static MonitoredRepository CreateRepository() =>
-        MonitoredRepository.Create(ValidSlug, "github.com", null);
+        MonitoredRepository.Create(ValidSlug, "github.com", null).ValueOrThrow();
 
     [Fact]
     public void WhenPositionIsNegative_ThrowsArgumentOutOfRangeException()

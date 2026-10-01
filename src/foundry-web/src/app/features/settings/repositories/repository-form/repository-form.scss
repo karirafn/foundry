@@ -49,6 +49,13 @@
     font-weight: 500;
   }
 
+  &__field-hint {
+    color: var(--fd-text-secondary);
+    display: block;
+    font-size: 0.8125rem;
+    margin-top: var(--fd-spacing-xs);
+  }
+
   &__read-only-slug,
   &__read-only-account {
     color: var(--fd-text-primary);
