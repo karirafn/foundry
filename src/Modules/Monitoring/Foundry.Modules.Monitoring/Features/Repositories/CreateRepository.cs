@@ -6,6 +6,7 @@ using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Features.Accounts;
 using Foundry.Modules.Monitoring.Features.Eligibility;
 using Foundry.Shared;
+using Foundry.Shared.Infrastructure.Http;
 
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
@@ -55,15 +56,17 @@ internal static class CreateRepository
         DbContext dbContext,
         IRepositoryEligibilityEvaluator eligibilityEvaluator) : ICommandHandler<Command, RepositorySummary>
     {
-        // The slug unique index name, used to identify slug-collision DbUpdateExceptions
-        // and distinguish them from position-collision exceptions.
+        // SQLite emits the column-reference form ("monitored_repositories.slug") rather than the
+        // index name on unique-constraint violations, so both forms must be checked.
         private const string SlugIndexName = "ix_monitored_repositories_host_slug";
+        private const string SlugColumnReference = "monitored_repositories.slug";
 
         private static bool IsSlugConstraintViolation(DbUpdateException ex, RepositorySlug slug)
         {
             string slugValue = slug.ToString();
             string message = ex.InnerException?.Message ?? ex.Message;
             return message.Contains(SlugIndexName, StringComparison.OrdinalIgnoreCase)
+                || message.Contains(SlugColumnReference, StringComparison.OrdinalIgnoreCase)
                 || message.Contains(slugValue, StringComparison.OrdinalIgnoreCase);
         }
 
@@ -165,16 +168,16 @@ internal static class CreateRepository
                     Command command = new(accountId, body.Slug, body.PollIntervalSeconds);
                     Result<RepositorySummary> result = await handler.HandleAsync(command, cancellationToken);
 
-                    return result.Match<Results<Created<RepositorySummary>, NotFound<string>, Conflict<string>, BadRequest<string>>>(
+                    return result.Match<Results<Created<RepositorySummary>, ProblemHttpResult>>(
                         repository => TypedResults.Created(
                             $"/api/accounts/{accountId}/repositories/{repository.Id}",
                             repository),
                         error => error.Code switch
                         {
-                            RepositoryErrors.AccountNotFoundCode => TypedResults.NotFound(error.Message),
-                            RepositoryErrors.DuplicateSlugCode => TypedResults.Conflict(error.Message),
-                            RepositoryErrors.ConflictOnCreateCode => TypedResults.Conflict(error.Message),
-                            _ => TypedResults.BadRequest(error.Message),
+                            RepositoryErrors.AccountNotFoundCode => error.ToProblem(StatusCodes.Status404NotFound),
+                            RepositoryErrors.DuplicateSlugCode => error.ToProblem(StatusCodes.Status409Conflict),
+                            RepositoryErrors.ConflictOnCreateCode => error.ToProblem(StatusCodes.Status409Conflict),
+                            _ => error.ToProblem(StatusCodes.Status400BadRequest),
                         });
                 })
                 .WithName("CreateRepository")

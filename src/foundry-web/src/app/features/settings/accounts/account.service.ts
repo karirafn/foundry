@@ -2,6 +2,7 @@ import { Injectable, Signal, WritableSignal, effect, inject, signal } from '@ang
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { TimeoutError, firstValueFrom } from 'rxjs';
 import { timeout } from 'rxjs/operators';
+import { extractErrorMessage } from '../../../core/http/extract-error-message';
 import { AccountSummary, AffectedRepository, CreateAccountConflictResponse, CreateAccountRequest, CredentialCreationResult, CredentialUpdateResult, NamespaceConflict, ProviderType, TakeoverValidationResponse, TokenRequirements, TokenValidationResult, UpdateAccountConflictResponse, UpdateAccountRequest, ValidateTokenRequest } from './account.model';
 import { ToastService } from '../../../core/services/toast.service';
 import { AccountPresenceService } from '../../../core/services/account-presence.service';
@@ -82,7 +83,7 @@ export class AccountService {
         },
         error: (err: HttpErrorResponse) => {
           console.error(err);
-          this._loadErrorSignal.set(this._extractErrorMessage(err));
+          this._loadErrorSignal.set(extractErrorMessage(err) ?? err.message);
           this._loadingSignal.set(false);
           resolve();
         },
@@ -127,7 +128,7 @@ export class AccountService {
                 this._savingSignal.set(false);
                 return;
               }
-              const message = body?.message ?? this._extractErrorMessage(err);
+              const message = body?.message ?? extractErrorMessage(err) ?? err.message;
               this._saveErrorSignal.set(message);
               this._srAnnouncementSignal.set(`Could not add account: ${message}`);
               this._savingSignal.set(false);
@@ -144,7 +145,7 @@ export class AccountService {
               return;
             }
           }
-          const message = this._extractErrorMessage(err);
+          const message = extractErrorMessage(err) ?? err.message;
           this._saveErrorSignal.set(message);
           this._srAnnouncementSignal.set(`Could not add account: ${message}`);
           this._savingSignal.set(false);
@@ -183,14 +184,14 @@ export class AccountService {
           console.error(err);
           if (!(err instanceof TimeoutError) && err.status === 409) {
             const body = err.error as UpdateAccountConflictResponse;
-            const message = body?.message ?? this._extractErrorMessage(err);
+            const message = body?.message ?? extractErrorMessage(err) ?? err.message;
             this._saveErrorSignal.set(message);
             this._srAnnouncementSignal.set(`Could not update account: ${message}`);
             this._savingSignal.set(false);
             this._saveSuccessSignal.set(false);
             return;
           }
-          const message = this._extractErrorMessage(err);
+          const message = extractErrorMessage(err) ?? err.message;
           this._saveErrorSignal.set(message);
           this._srAnnouncementSignal.set(`Could not update account: ${message}`);
           this._savingSignal.set(false);
@@ -219,7 +220,7 @@ export class AccountService {
         },
         error: (err: HttpErrorResponse | TimeoutError) => {
           console.error(err);
-          const message = this._extractErrorMessage(err);
+          const message = extractErrorMessage(err) ?? err.message;
           this._deleteErrorSignal.set(message);
           this._srAnnouncementSignal.set(`Could not delete account: ${message}`);
           this._deletingAccountIdSignal.set(null);
@@ -244,16 +245,6 @@ export class AccountService {
     return request;
   }
 
-  private _extractErrorMessage(err: HttpErrorResponse | TimeoutError): string {
-    if (err instanceof TimeoutError) {
-      return 'The request timed out. Please try again.';
-    }
-    if (typeof err.error === 'string' && err.error) {
-      return err.error;
-    }
-    return err.message;
-  }
-
   private _isTakeoverValidationResponse(body: unknown): boolean {
     return (
       typeof body === 'object' &&
@@ -275,7 +266,7 @@ export class AccountService {
       },
       error: (err: HttpErrorResponse) => {
         console.error(err);
-        this._validationErrorSignal.set(this._extractErrorMessage(err));
+        this._validationErrorSignal.set(extractErrorMessage(err) ?? err.message);
         this._validatingSignal.set(false);
       },
     });

@@ -1,5 +1,8 @@
 using System.Net;
+using System.Net.Http.Headers;
+using System.Text.Json.Nodes;
 
+using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Issues.Domain.Entities;
 using Foundry.Modules.Issues.Domain.Entities.States;
 using Foundry.Modules.Issues.Domain.ValueObjects;
@@ -70,6 +73,22 @@ public sealed class WhenIssueIsInNonRetryableState : IAsyncDisposable
 
         // Assert
         response.StatusCode.ShouldBe(HttpStatusCode.Conflict);
+
+        MediaTypeHeaderValue? contentType = response.Content.Headers.ContentType;
+        contentType.ShouldNotBeNull();
+        contentType.MediaType.ShouldBe("application/problem+json");
+
+        string body = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+        JsonNode? node = JsonNode.Parse(body);
+        node.ShouldNotBeNull();
+
+        string? type = node["type"]?.GetValue<string>();
+        type.ShouldNotBeNull();
+        type.ShouldEndWith(IssueErrors.WrongStateCode);
+
+        string? detail = node["detail"]?.GetValue<string>();
+        detail.ShouldNotBeNull();
+        detail.ShouldBe(IssueErrors.WrongState(inProgress.Id, "failed, continuable_failed, revision_failed, or unchanged").Message);
     }
 
     [Fact]

@@ -3,6 +3,7 @@ using Foundry.Modules.Issues.Domain.Entities;
 using Foundry.Modules.Issues.Domain.Entities.States;
 using Foundry.Shared;
 using Foundry.Shared.Infrastructure;
+using Foundry.Shared.Infrastructure.Http;
 
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
@@ -66,23 +67,13 @@ internal static class RetryIssue
                     IssueId issueId = IssueId.From(id);
                     Result<IssueDetail> result = await handler.HandleAsync(new Command(issueId), cancellationToken);
 
-                    return result.Match<Results<Ok<IssueDetail>, NotFound, Conflict, ProblemHttpResult>>(
+                    return result.Match<Results<Ok<IssueDetail>, ProblemHttpResult>>(
                         detail => TypedResults.Ok(detail),
-                        error =>
+                        error => error.Code switch
                         {
-                            if (error.Code == IssueErrors.NotFoundCode)
-                            {
-                                return TypedResults.NotFound();
-                            }
-
-                            if (error.Code == IssueErrors.WrongStateCode)
-                            {
-                                return TypedResults.Conflict();
-                            }
-
-                            return TypedResults.Problem(
-                                title: "An unexpected error occurred.",
-                                statusCode: StatusCodes.Status500InternalServerError);
+                            IssueErrors.NotFoundCode => error.ToProblem(StatusCodes.Status404NotFound),
+                            IssueErrors.WrongStateCode => error.ToProblem(StatusCodes.Status409Conflict),
+                            _ => TypedResults.Problem(title: "An unexpected error occurred.", statusCode: StatusCodes.Status500InternalServerError),
                         });
                 })
                 .WithName("RetryIssue")
