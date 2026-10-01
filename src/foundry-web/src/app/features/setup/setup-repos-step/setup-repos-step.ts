@@ -13,6 +13,7 @@ import {
 } from '@angular/core';
 import { HttpErrorResponse } from '@angular/common/http';
 import { from } from 'rxjs';
+import { extractErrorMessage } from '../../../core/http/extract-error-message';
 import { concatMap } from 'rxjs/operators';
 import { RepositoryService } from '../../settings/repositories/repository.service';
 import { AvailableRepository, NO_WRITE_ACCESS_REASON } from '../../settings/repositories/repository.model';
@@ -249,9 +250,7 @@ export class SetupReposStepComponent implements OnInit {
       },
       error: (err: HttpErrorResponse) => {
         this._saving.set(false);
-        const rawMessage = typeof err.error === 'string' && err.error
-          ? err.error.slice(0, ERROR_TRUNCATE_LENGTH)
-          : (err.message ?? 'Failed to create repositories').slice(0, ERROR_TRUNCATE_LENGTH);
+        const rawMessage = (extractErrorMessage(err) ?? 'Failed to create repositories').slice(0, ERROR_TRUNCATE_LENGTH);
         this._saveError.set(`Created ${successCount} of ${total} repositories. Error: ${rawMessage}`);
       },
     });

@@ -2,6 +2,7 @@ import { Injectable, Signal, WritableSignal, inject, signal } from '@angular/cor
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { Observable, forkJoin } from 'rxjs';
 import { catchError, tap } from 'rxjs/operators';
+import { extractErrorMessage } from '../../../core/http/extract-error-message';
 import { AvailableRepositoriesResponse, AvailableRepository, CreateRepositoryRequest, RepositorySummary, UpdateRepositoryRequest } from './repository.model';
 
 @Injectable({ providedIn: 'root' })
@@ -55,7 +56,7 @@ export class RepositoryService {
       },
       error: (err: HttpErrorResponse) => {
         console.error(err);
-        this._loadErrorSignal.set(this._extractErrorMessage(err));
+        this._loadErrorSignal.set(extractErrorMessage(err) ?? err.message);
         this._loadingSignal.set(false);
       },
     });
@@ -83,7 +84,7 @@ export class RepositoryService {
       },
       error: (err: HttpErrorResponse) => {
         console.error(err);
-        this._loadErrorSignal.set(this._extractErrorMessage(err));
+        this._loadErrorSignal.set(extractErrorMessage(err) ?? err.message);
         this._loadingSignal.set(false);
       },
     });
@@ -103,7 +104,7 @@ export class RepositoryService {
       error: (err: HttpErrorResponse) => {
         console.error(err);
         this._availableHasClaimsSignal.set(false);
-        this._loadAvailableErrorSignal.set(this._extractErrorMessage(err));
+        this._loadAvailableErrorSignal.set(extractErrorMessage(err) ?? err.message);
         this._loadingAvailableSignal.set(false);
       },
     });
@@ -122,7 +123,7 @@ export class RepositoryService {
       }),
       catchError((err: HttpErrorResponse) => {
         console.error(err);
-        this._saveErrorSignal.set(this._extractErrorMessage(err));
+        this._saveErrorSignal.set(extractErrorMessage(err) ?? err.message);
         this._savingSignal.set(false);
         this._saveSuccessSignal.set(false);
         throw err;
@@ -145,7 +146,7 @@ export class RepositoryService {
       }),
       catchError((err: HttpErrorResponse) => {
         console.error(err);
-        this._saveErrorSignal.set(this._extractErrorMessage(err));
+        this._saveErrorSignal.set(extractErrorMessage(err) ?? err.message);
         this._savingSignal.set(false);
         this._saveSuccessSignal.set(false);
         throw err;
@@ -199,7 +200,7 @@ export class RepositoryService {
       }),
       catchError((err: HttpErrorResponse) => {
         console.error(err);
-        this._deleteErrorSignal.set(this._extractErrorMessage(err));
+        this._deleteErrorSignal.set(extractErrorMessage(err) ?? err.message);
         this._deletingSignal.set(false);
         throw err;
       }),
@@ -210,10 +211,4 @@ export class RepositoryService {
     return `/api/accounts/${accountId}/repositories`;
   }
 
-  private _extractErrorMessage(err: HttpErrorResponse): string {
-    if (typeof err.error === 'string' && err.error) {
-      return err.error;
-    }
-    return err.message;
-  }
 }
