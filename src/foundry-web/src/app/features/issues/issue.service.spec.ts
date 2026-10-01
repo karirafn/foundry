@@ -73,8 +73,8 @@ describe('IssueService', () => {
     const req = httpMock.expectOne('/api/issues');
     req.flush({ items: mockIssues, nextCursor: null });
 
-    // Assert
-    expect(service.issues()).toEqual(mockIssues);
+    // Assert — mapper adds missing optional fields; use toMatchObject to check the data we care about
+    expect(service.issues()).toMatchObject(mockIssues);
   });
 
   // Cycle 2: loadIssues with repositoryId appends query param
@@ -1367,7 +1367,8 @@ describe('IssueService (resolved paging)', () => {
 
     req.flush({ items: [resolvedSummary], nextCursor: null });
 
-    expect(service.resolvedIssues()).toEqual([resolvedSummary]);
+    // Mapper adds missing optional fields; use toMatchObject to check the data we care about
+    expect(service.resolvedIssues()).toMatchObject([resolvedSummary]);
     expect(service.hasMoreResolved()).toBe(false);
   });
 
@@ -2900,6 +2901,161 @@ describe('IssueService (queuePositions)', () => {
     expect(positions.has('q1')).toBe(false);
     expect(positions.get('rv1')).toBe(1);
     expect(positions.size).toBe(1);
+  });
+});
+
+// Code-review findings — numeric coercion, dead branch, null-coalesce robustness
+describe('IssueService (code-review findings)', () => {
+  let service: IssueService;
+  let httpMock: HttpTestingController;
+
+  const baseSchema = {
+    id: 'abc123',
+    issueNumber: 42 as number | string,
+    title: 'Fix the bug',
+    state: 'detected',
+    repositorySlug: 'owner/repo',
+    detectedAt: '2026-01-01T00:00:00Z',
+    url: 'https://github.com/owner/repo/issues/42',
+    failureClassification: null as null | string,
+    repositoryEligibilityStatus: null as null | string,
+    runStats: null as null | {
+      runCount: number | string;
+      durationMs: null | number | string;
+      numTurns: null | number | string;
+      totalCostUsd: null | number | string;
+      inputTokens: null | number | string;
+      outputTokens: null | number | string;
+    },
+  };
+
+  beforeEach(() => {
+    TestBed.configureTestingModule({
+      providers: [
+        IssueService,
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        { provide: IssueSignalRService, useValue: mockIssueSignalRService },
+      ],
+    });
+    service = TestBed.inject(IssueService);
+    httpMock = TestBed.inject(HttpTestingController);
+  });
+
+  afterEach(() => httpMock.verify({ ignoreCancelled: true }));
+
+  // Finding 4 — issueNumber coercion: numeric string arrives as number on domain object
+  it('should coerce issueNumber from numeric string "42" to the number 42', () => {
+    // Arrange
+    const schemaItem = { ...baseSchema, issueNumber: '42' as number | string };
+
+    // Act
+    service.loadIssues();
+    httpMock.expectOne('/api/issues').flush({ items: [schemaItem], nextCursor: null });
+
+    // Assert — domain object carries number 42, not string '42'
+    const issue = service.issues()[0];
+    expect(issue.issueNumber).toBe(42);
+    expect(typeof issue.issueNumber).toBe('number');
+  });
+
+  // Finding 4 — issueNumber coercion: non-numeric string degrades to 0
+  it('should degrade issueNumber to 0 when a non-numeric value arrives', () => {
+    // Arrange
+    const schemaItem = { ...baseSchema, issueNumber: 'not-a-number' as number | string };
+
+    // Act
+    service.loadIssues();
+    httpMock.expectOne('/api/issues').flush({ items: [schemaItem], nextCursor: null });
+
+    // Assert — fallback prevents NaN from entering domain state
+    const issue = service.issues()[0];
+    expect(issue.issueNumber).toBe(0);
+    expect(Number.isFinite(issue.issueNumber)).toBe(true);
+  });
+
+  // Finding 1 — runStats null branch: null runStats maps to null on domain object
+  it('should map null runStats to null on the domain object', () => {
+    // Arrange
+    const schemaItem = { ...baseSchema, runStats: null };
+
+    // Act
+    service.loadIssues();
+    httpMock.expectOne('/api/issues').flush({ items: [schemaItem], nextCursor: null });
+
+    // Assert
+    expect(service.issues()[0].runStats).toBeNull();
+  });
+
+  // Finding 1 + Finding 4 — runStats non-null branch: numeric fields coerced to finite numbers
+  it('should coerce numeric-string runStats fields to finite numbers', () => {
+    // Arrange
+    const schemaItem = {
+      ...baseSchema,
+      runStats: {
+        runCount: '3' as number | string,
+        durationMs: '1500' as null | number | string,
+        numTurns: '10' as null | number | string,
+        totalCostUsd: '0.05' as null | number | string,
+        inputTokens: '1000' as null | number | string,
+        outputTokens: '500' as null | number | string,
+      },
+    };
+
+    // Act
+    service.loadIssues();
+    httpMock.expectOne('/api/issues').flush({ items: [schemaItem], nextCursor: null });
+
+    // Assert — all numeric fields arrive as numbers, not strings
+    const stats = service.issues()[0].runStats!;
+    expect(stats.runCount).toBe(3);
+    expect(stats.durationMs).toBe(1500);
+    expect(stats.numTurns).toBe(10);
+    expect(stats.totalCostUsd).toBeCloseTo(0.05);
+    expect(stats.inputTokens).toBe(1000);
+    expect(stats.outputTokens).toBe(500);
+  });
+
+  // Finding 1 + Finding 4 — nullable runStats numeric fields coerced: null stays null, bad value degrades to 0
+  it('should keep nullable runStats numeric fields null when null, and degrade non-finite values to 0', () => {
+    // Arrange
+    const schemaItem = {
+      ...baseSchema,
+      runStats: {
+        runCount: 2 as number | string,
+        durationMs: null as null | number | string,
+        numTurns: 'bad' as null | number | string,
+        totalCostUsd: null as null | number | string,
+        inputTokens: null as null | number | string,
+        outputTokens: null as null | number | string,
+      },
+    };
+
+    // Act
+    service.loadIssues();
+    httpMock.expectOne('/api/issues').flush({ items: [schemaItem], nextCursor: null });
+
+    // Assert — null stays null; 'bad' degrades to 0
+    const stats = service.issues()[0].runStats!;
+    expect(stats.runCount).toBe(2);
+    expect(stats.durationMs).toBeNull();
+    expect(stats.numTurns).toBe(0);
+    expect(stats.totalCostUsd).toBeNull();
+    expect(stats.inputTokens).toBeNull();
+    expect(stats.outputTokens).toBeNull();
+  });
+
+  // Finding 5 — _fetchResolvedPage null-coalesce: null items body degrades to empty page
+  it('should degrade to an empty resolved page when the server returns null items', () => {
+    // Arrange — select completed to trigger _fetchResolvedPage
+    service.toggleState('completed');
+
+    // Act — server returns null items (malformed body)
+    httpMock.expectOne(r => r.url === '/api/issues').flush({ items: null, nextCursor: null });
+
+    // Assert — no crash; resolvedIssues is empty
+    expect(service.resolvedIssues().length).toBe(0);
+    expect(service.resolvedLoading()).toBe(false);
   });
 });
 

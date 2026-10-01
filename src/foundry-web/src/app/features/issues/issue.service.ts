@@ -440,27 +440,36 @@ export class IssueService {
   // Maps a generated schema IssueSummary to the domain IssueSummary. Callers must pass the state
   // already narrowed to IssueState (via isKnownState type guard) to avoid an unsafe cast.
   // The generated schema uses number | string for numeric fields (openapi-typescript widens integer
-  // formats); Number() normalizes them to the domain's stricter number type.
+  // formats); _toFiniteNumber normalizes them to the domain's stricter number type.
   private _toDomainIssueSummary(i: GeneratedIssueSummary, state: IssueState): IssueSummary {
     return {
       id: i.id,
-      issueNumber: Number(i.issueNumber),
+      issueNumber: this._toFiniteNumber(i.issueNumber),
       title: i.title,
       state,
       repositorySlug: i.repositorySlug,
       detectedAt: i.detectedAt,
       url: i.url,
       failureClassification: i.failureClassification ?? undefined,
+      // null is a valid domain value here (unknown eligibility), passed through intentionally;
+      // unlike failureClassification, null is NOT coerced to undefined.
       repositoryEligibilityStatus: i.repositoryEligibilityStatus,
-      runStats: i.runStats === null ? null : i.runStats === undefined ? undefined : {
-        runCount: Number(i.runStats.runCount),
-        durationMs: i.runStats.durationMs === null ? null : Number(i.runStats.durationMs),
-        numTurns: i.runStats.numTurns === null ? null : Number(i.runStats.numTurns),
-        totalCostUsd: i.runStats.totalCostUsd === null ? null : Number(i.runStats.totalCostUsd),
-        inputTokens: i.runStats.inputTokens === null ? null : Number(i.runStats.inputTokens),
-        outputTokens: i.runStats.outputTokens === null ? null : Number(i.runStats.outputTokens),
+      runStats: i.runStats == null ? null : {
+        runCount: this._toFiniteNumber(i.runStats.runCount),
+        durationMs: i.runStats.durationMs === null ? null : this._toFiniteNumber(i.runStats.durationMs),
+        numTurns: i.runStats.numTurns === null ? null : this._toFiniteNumber(i.runStats.numTurns),
+        totalCostUsd: i.runStats.totalCostUsd === null ? null : this._toFiniteNumber(i.runStats.totalCostUsd),
+        inputTokens: i.runStats.inputTokens === null ? null : this._toFiniteNumber(i.runStats.inputTokens),
+        outputTokens: i.runStats.outputTokens === null ? null : this._toFiniteNumber(i.runStats.outputTokens),
       },
     };
+  }
+
+  // Coerces a number | string to a finite number. Non-finite results (NaN, Infinity) degrade to 0
+  // so that domain state never contains NaN — which is typed as number but renders as "NaN" in the UI.
+  private _toFiniteNumber(value: number | string): number {
+    const n = Number(value);
+    return Number.isFinite(n) ? n : 0;
   }
 
   // Filters generated schema items to those with valid IDs and known states, then maps to domain
@@ -544,7 +553,8 @@ export class IssueService {
         if (requestToken !== this._resolvedRequestToken) {
           return;
         }
-        const safeItems = this._toSafeDomainItems(page.items);
+        const items = page.items ?? [];
+        const safeItems = this._toSafeDomainItems(items);
         if (isFirstPage) {
           this._resolvedIssuesSignal.set(safeItems);
         } else {
