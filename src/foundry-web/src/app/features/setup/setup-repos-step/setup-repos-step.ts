@@ -239,7 +239,7 @@ export class SetupReposStepComponent implements OnInit {
     this._saveError.set(null);
 
     from(slugs).pipe(
-      concatMap(slug => this._repositoryService.createRepository(accountId, { slug, pollIntervalSeconds: null })),
+      concatMap(slug => this._repositoryService.createRepository(accountId, { slug, pollIntervalSeconds: null, maxConcurrentWorkers: null })),
     ).subscribe({
       next: () => {
         successCount++;

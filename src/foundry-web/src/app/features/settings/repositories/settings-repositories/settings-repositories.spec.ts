@@ -34,6 +34,7 @@ const REPO_1: RepositorySummary = {
   position: 0,
   pollIntervalSeconds: 300,
   isActive: true,
+  maxConcurrentWorkers: 1,
   lastPolledAt: '2026-06-15T10:00:00Z',
   eligibility: { status: 'eligible', violations: [], reason: null },
 };
@@ -47,6 +48,7 @@ const REPO_2: RepositorySummary = {
   position: 1,
   pollIntervalSeconds: null,
   isActive: false,
+  maxConcurrentWorkers: 1,
   lastPolledAt: null,
   eligibility: { status: 'ineligible', violations: [{ rule: 'AllowDirectPushes', description: 'Allow direct pushes is enabled' }], reason: null },
 };
@@ -210,12 +212,12 @@ describe('SettingsRepositoriesComponent', () => {
     httpMock.expectOne(`/api/accounts/${ACCOUNT_1.id}/repositories/available-repositories`).flush({ hasClaims: false, repositories: [] });
 
     // Act
-    fixture.componentInstance.onSave({ slug: 'my-org/new-repo', pollIntervalSeconds: 300 });
+    fixture.componentInstance.onSave({ slug: 'my-org/new-repo', pollIntervalSeconds: 300, maxConcurrentWorkers: null });
 
     // Assert
     const req = httpMock.expectOne(`/api/accounts/${ACCOUNT_1.id}/repositories`);
     expect(req.request.method).toBe('POST');
-    expect(req.request.body).toEqual({ slug: 'my-org/new-repo', pollIntervalSeconds: 300 });
+    expect(req.request.body).toEqual({ slug: 'my-org/new-repo', pollIntervalSeconds: 300, maxConcurrentWorkers: null });
     req.flush(REPO_1, { status: 201, statusText: 'Created' });
 
     // Flush reload
@@ -233,12 +235,12 @@ describe('SettingsRepositoriesComponent', () => {
     fixture.detectChanges();
 
     // Act
-    fixture.componentInstance.onSave({ pollIntervalSeconds: 600, isActive: false });
+    fixture.componentInstance.onSave({ pollIntervalSeconds: 600, isActive: false, maxConcurrentWorkers: 1 });
 
     // Assert
     const req = httpMock.expectOne(`/api/accounts/${ACCOUNT_1.id}/repositories/${REPO_1.id}`);
     expect(req.request.method).toBe('PUT');
-    expect(req.request.body).toEqual({ pollIntervalSeconds: 600, isActive: false });
+    expect(req.request.body).toEqual({ pollIntervalSeconds: 600, isActive: false, maxConcurrentWorkers: 1 });
     req.flush({ ...REPO_1, pollIntervalSeconds: 600, isActive: false });
 
     // Flush reload
@@ -258,7 +260,7 @@ describe('SettingsRepositoriesComponent', () => {
     httpMock.expectOne(`/api/accounts/${ACCOUNT_1.id}/repositories/available-repositories`).flush({ hasClaims: false, repositories: [] });
 
     // Act
-    fixture.componentInstance.onSave({ slug: 'my-org/new-repo', pollIntervalSeconds: 300 });
+    fixture.componentInstance.onSave({ slug: 'my-org/new-repo', pollIntervalSeconds: 300, maxConcurrentWorkers: null });
     httpMock.expectOne(`/api/accounts/${ACCOUNT_1.id}/repositories`).flush(REPO_1, { status: 201, statusText: 'Created' });
     fixture.detectChanges();
 

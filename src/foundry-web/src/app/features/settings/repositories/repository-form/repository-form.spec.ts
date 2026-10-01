@@ -30,6 +30,7 @@ const MOCK_REPOSITORY: RepositorySummary = {
   position: 0,
   pollIntervalSeconds: 300,
   isActive: true,
+  maxConcurrentWorkers: 1,
   lastPolledAt: '2026-06-15T10:00:00Z',
   eligibility: { status: 'eligible', violations: [], reason: null },
 };
@@ -633,6 +634,7 @@ describe('RepositoryFormComponent', () => {
     expect(emitted).toEqual({
       slug: 'my-org/my-repo',
       pollIntervalSeconds: 300, // 5 min * 60 sec
+      maxConcurrentWorkers: null,
     });
   });
 
@@ -657,6 +659,7 @@ describe('RepositoryFormComponent', () => {
     expect(emitted).toEqual({
       pollIntervalSeconds: 600, // 10 min * 60 sec
       isActive: true,
+      maxConcurrentWorkers: 1,
     });
   });
 

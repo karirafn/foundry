@@ -72,6 +72,7 @@ internal static class RecheckRepositoryEligibility
                 RepositoryMappings.ToSeconds(repository.PollInterval),
                 repository.IsActive,
                 repository.Position,
+                repository.MaxConcurrentWorkers,
                 repository.LastPolledAt,
                 RepositoryMappings.ToEligibilityInfo(repository.Eligibility),
                 repository.UntrackSuppressedSince);

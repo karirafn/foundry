@@ -55,6 +55,28 @@ public sealed class HandleAsync : IAsyncDisposable
     }
 
     [Fact]
+    public async Task WhenMaxConcurrentWorkersIsUpdated_RoundTripsInSummary()
+    {
+        // Arrange
+        (Guid accountId, Guid repositoryId) = await SeedRepositoryAsync();
+        UpdateRepository.Handler sut = BuildHandler();
+        UpdateRepository.Command command = new(
+            accountId,
+            repositoryId,
+            PollIntervalSeconds: null,
+            IsActive: true,
+            MaxConcurrentWorkers: 3);
+
+        // Act
+        Result<RepositorySummary> result = await sut.HandleAsync(command, CancellationToken.None);
+
+        // Assert
+        result.IsSuccess.ShouldBeTrue();
+        RepositorySummary summary = ((Result<RepositorySummary>.Success)result).Value;
+        summary.MaxConcurrentWorkers.ShouldBe(3);
+    }
+
+    [Fact]
     public async Task WhenPollIntervalIsZero_ReturnsFailure()
     {
         // Arrange

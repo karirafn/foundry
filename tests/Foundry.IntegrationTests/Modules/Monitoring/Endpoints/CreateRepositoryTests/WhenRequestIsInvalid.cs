@@ -1,6 +1,8 @@
 using System.Net;
 using System.Net.Http.Json;
 
+using Foundry.Modules.Monitoring.Contracts;
+
 using Shouldly;
 
 using Xunit;
@@ -24,6 +26,56 @@ public sealed class WhenRequestIsInvalid : IAsyncDisposable
     {
         _client.Dispose();
         await _factory.DisposeAsync();
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(21)]
+    public async Task WhenMaxConcurrentWorkersIsOutOfRange_ReturnsBadRequest(int maxConcurrentWorkers)
+    {
+        // Arrange
+        Guid accountId = await AccountSeeder.SeedGitHubAccountAsync(_factory, name: $"My GitHub {maxConcurrentWorkers}");
+        object body = new { slug = "owner/repo", maxConcurrentWorkers };
+
+        // Act
+        HttpResponseMessage response = await _client.PostAsJsonAsync(
+            new Uri($"/api/accounts/{accountId}/repositories", UriKind.Relative),
+            body,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(21)]
+    public async Task WhenMaxConcurrentWorkersIsOutOfRange_AggregateUnchanged(int maxConcurrentWorkers)
+    {
+        // Arrange
+        Guid accountId = await AccountSeeder.SeedGitHubAccountAsync(
+            _factory,
+            name: $"My GitHub recheck {maxConcurrentWorkers}");
+        object body = new { slug = "owner/repo", maxConcurrentWorkers };
+
+        // Act
+        HttpResponseMessage response = await _client.PostAsJsonAsync(
+            new Uri($"/api/accounts/{accountId}/repositories", UriKind.Relative),
+            body,
+            TestContext.Current.CancellationToken);
+
+        // Assert — aggregate unchanged means no repository was created
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+
+        HttpResponseMessage listResponse = await _client.GetAsync(
+            new Uri($"/api/accounts/{accountId}/repositories", UriKind.Relative),
+            TestContext.Current.CancellationToken);
+        listResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+        IReadOnlyList<RepositorySummary>? repositories =
+            await listResponse.Content.ReadFromJsonAsync<IReadOnlyList<RepositorySummary>>(
+                TestContext.Current.CancellationToken);
+        repositories.ShouldNotBeNull();
+        repositories.ShouldBeEmpty();
     }
 
     [Fact]

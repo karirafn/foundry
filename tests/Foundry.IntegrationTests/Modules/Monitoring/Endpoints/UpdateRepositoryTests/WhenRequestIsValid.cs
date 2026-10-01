@@ -41,6 +41,7 @@ public sealed class WhenRequestIsValid : IAsyncDisposable
         {
             pollIntervalSeconds = 600,
             isActive = false,
+            maxConcurrentWorkers = 3,
         };
 
         // Act
@@ -59,6 +60,7 @@ public sealed class WhenRequestIsValid : IAsyncDisposable
             () => repository.AccountId.ShouldBe(accountId),
             () => repository.AccountName.ShouldBe("My GitHub"),
             () => repository.PollIntervalSeconds.ShouldBe(600),
-            () => repository.IsActive.ShouldBeFalse());
+            () => repository.IsActive.ShouldBeFalse(),
+            () => repository.MaxConcurrentWorkers.ShouldBe(3));
     }
 }

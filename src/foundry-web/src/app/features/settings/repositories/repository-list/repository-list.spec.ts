@@ -15,6 +15,7 @@ const MOCK_REPO: RepositorySummary = {
   position: 0,
   pollIntervalSeconds: 300,
   isActive: true,
+  maxConcurrentWorkers: 1,
   lastPolledAt: '2026-06-14T12:00:00Z',
   eligibility: { status: 'eligible', violations: [], reason: null },
 };
@@ -28,6 +29,7 @@ const MOCK_REPO_2: RepositorySummary = {
   position: 1,
   pollIntervalSeconds: null,
   isActive: false,
+  maxConcurrentWorkers: 1,
   lastPolledAt: null,
   eligibility: { status: 'ineligible', violations: [{ rule: 'AllowDirectPushes', description: 'Allow direct pushes is enabled' }], reason: null },
 };
@@ -41,6 +43,7 @@ const MOCK_REPO_INELIGIBLE: RepositorySummary = {
   position: 2,
   pollIntervalSeconds: 300,
   isActive: true,
+  maxConcurrentWorkers: 1,
   lastPolledAt: '2026-06-14T12:00:00Z',
   eligibility: { status: 'ineligible', violations: [{ rule: 'AllowDirectPushes', description: 'Allow direct pushes is enabled' }], reason: null },
 };
@@ -54,6 +57,7 @@ const MOCK_REPO_NULL_ELIGIBILITY: RepositorySummary = {
   position: 4,
   pollIntervalSeconds: 300,
   isActive: true,
+  maxConcurrentWorkers: 1,
   lastPolledAt: null,
   eligibility: null,
 };
@@ -67,6 +71,7 @@ const MOCK_REPO_UNREACHABLE: RepositorySummary = {
   position: 3,
   pollIntervalSeconds: 300,
   isActive: true,
+  maxConcurrentWorkers: 1,
   lastPolledAt: '2026-06-14T12:00:00Z',
   eligibility: { status: 'unreachable', violations: [], reason: null },
 };

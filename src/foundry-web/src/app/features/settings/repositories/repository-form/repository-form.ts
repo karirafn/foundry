@@ -394,12 +394,14 @@ export class RepositoryFormComponent implements OnInit {
       const request: UpdateRepositoryRequest = {
         pollIntervalSeconds,
         isActive: this._isActive(),
+        maxConcurrentWorkers: this.repository()?.maxConcurrentWorkers ?? 1,
       };
       this.save.emit(request);
     } else {
       const request: CreateRepositoryRequest = {
         slug: this._repoSlug(),
         pollIntervalSeconds,
+        maxConcurrentWorkers: null,
       };
       this.save.emit(request);
     }

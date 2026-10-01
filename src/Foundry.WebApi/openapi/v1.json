@@ -1910,6 +1910,15 @@
               "string"
             ],
             "format": "int32"
+          },
+          "maxConcurrentWorkers": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int32"
           }
         }
       },
@@ -2593,7 +2602,8 @@
           "providerType",
           "pollIntervalSeconds",
           "isActive",
-          "position"
+          "position",
+          "maxConcurrentWorkers"
         ],
         "type": "object",
         "properties": {
@@ -2627,6 +2637,14 @@
             "type": "boolean"
           },
           "position": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "maxConcurrentWorkers": {
             "pattern": "^-?(?:0|[1-9]\\d*)$",
             "type": [
               "integer",

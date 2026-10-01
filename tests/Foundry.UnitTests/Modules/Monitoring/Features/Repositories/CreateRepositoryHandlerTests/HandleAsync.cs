@@ -53,6 +53,58 @@ public sealed class HandleAsync : IAsyncDisposable
     }
 
     [Fact]
+    public async Task WhenMaxConcurrentWorkersIsNull_DefaultsToOne()
+    {
+        // Arrange
+        Guid accountId = await SeedCredentialAsync();
+        CreateRepository.Handler sut = BuildHandler();
+        CreateRepository.Command command = new(accountId, "owner/repo", PollIntervalSeconds: null, MaxConcurrentWorkers: null);
+
+        // Act
+        Result<RepositorySummary> result = await sut.HandleAsync(command, CancellationToken.None);
+
+        // Assert
+        result.IsSuccess.ShouldBeTrue();
+        RepositorySummary summary = ((Result<RepositorySummary>.Success)result).Value;
+        summary.MaxConcurrentWorkers.ShouldBe(1);
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(21)]
+    public async Task WhenMaxConcurrentWorkersIsOutOfRange_ReturnsFailure(int maxConcurrentWorkers)
+    {
+        // Arrange
+        Guid accountId = await SeedCredentialAsync();
+        CreateRepository.Handler sut = BuildHandler();
+        CreateRepository.Command command = new(accountId, "owner/repo", PollIntervalSeconds: null, MaxConcurrentWorkers: maxConcurrentWorkers);
+
+        // Act
+        Result<RepositorySummary> result = await sut.HandleAsync(command, CancellationToken.None);
+
+        // Assert
+        result.IsFailure.ShouldBeTrue();
+        ((Result<RepositorySummary>.Failure)result).Error.Code.ShouldBe(MonitoredRepositoryErrors.InvalidMaxConcurrentWorkersCode);
+    }
+
+    [Fact]
+    public async Task WhenMaxConcurrentWorkersIsProvided_RoundTripsInSummary()
+    {
+        // Arrange
+        Guid accountId = await SeedCredentialAsync();
+        CreateRepository.Handler sut = BuildHandler();
+        CreateRepository.Command command = new(accountId, "owner/repo", PollIntervalSeconds: null, MaxConcurrentWorkers: 5);
+
+        // Act
+        Result<RepositorySummary> result = await sut.HandleAsync(command, CancellationToken.None);
+
+        // Assert
+        result.IsSuccess.ShouldBeTrue();
+        RepositorySummary summary = ((Result<RepositorySummary>.Success)result).Value;
+        summary.MaxConcurrentWorkers.ShouldBe(5);
+    }
+
+    [Fact]
     public async Task WhenPollIntervalIsZero_ReturnsFailure()
     {
         // Arrange
