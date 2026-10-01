@@ -68,7 +68,7 @@ public sealed class PollCallInvariance : IAsyncDisposable
     private MonitoredRepository SeedRepositoryWithGrantedVerdict(string slug = "owner/repo", int position = 0)
     {
         RepositorySlug repoSlug = RepositorySlug.Create(slug).ValueOrThrow();
-        MonitoredRepository repository = MonitoredRepository.Create(repoSlug, "github.com", null, position);
+        MonitoredRepository repository = MonitoredRepository.Create(repoSlug, "github.com", null, position).ValueOrThrow();
         repository.SetWriteProbeVerdict(new WriteProbeVerdict.Granted());
         _dbContext.Set<MonitoredRepository>().Add(repository);
         _dbContext.SaveChanges();

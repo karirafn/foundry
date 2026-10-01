@@ -44,7 +44,7 @@ public sealed class UniquePositionIndex : IAsyncDisposable
     public async Task WhenRepositoryPersisted_PositionRoundTrips()
     {
         // Arrange
-        MonitoredRepository repository = MonitoredRepository.Create(SlugFor("owner1"), "github.com", null, position: 7);
+        MonitoredRepository repository = MonitoredRepository.Create(SlugFor("owner1"), "github.com", null, position: 7).ValueOrThrow();
         _dbContext.Set<MonitoredRepository>().Add(repository);
         await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
         _dbContext.ChangeTracker.Clear();
@@ -63,8 +63,8 @@ public sealed class UniquePositionIndex : IAsyncDisposable
     public async Task WhenDuplicatePosition_ThrowsOnSave()
     {
         // Arrange
-        MonitoredRepository first = MonitoredRepository.Create(SlugFor("owner-a"), "github.com", null, position: 0);
-        MonitoredRepository second = MonitoredRepository.Create(SlugFor("owner-b"), "github.com", null, position: 0);
+        MonitoredRepository first = MonitoredRepository.Create(SlugFor("owner-a"), "github.com", null, position: 0).ValueOrThrow();
+        MonitoredRepository second = MonitoredRepository.Create(SlugFor("owner-b"), "github.com", null, position: 0).ValueOrThrow();
 
         _dbContext.Set<MonitoredRepository>().Add(first);
         await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);

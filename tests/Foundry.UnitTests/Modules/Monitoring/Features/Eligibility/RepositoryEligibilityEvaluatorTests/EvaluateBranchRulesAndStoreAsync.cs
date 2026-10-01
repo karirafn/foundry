@@ -25,7 +25,7 @@ public sealed class EvaluateBranchRulesAndStoreAsync
         WriteProbeVerdict? verdict = null)
     {
         RepositorySlug repositorySlug = RepositorySlug.Create(slug).ValueOrThrow();
-        MonitoredRepository repo = MonitoredRepository.Create(repositorySlug, "github.com", pollInterval: null);
+        MonitoredRepository repo = MonitoredRepository.Create(repositorySlug, "github.com", pollInterval: null).ValueOrThrow();
 
         if (verdict is not null)
         {

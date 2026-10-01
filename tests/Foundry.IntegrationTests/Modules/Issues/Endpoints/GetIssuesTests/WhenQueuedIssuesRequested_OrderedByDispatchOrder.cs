@@ -59,7 +59,7 @@ public sealed class WhenQueuedIssuesRequested_OrderedByDispatchOrder : IAsyncDis
         dbContext.Set<Credential>().Add(credential);
 
         RepositorySlug repoSlug = RepositorySlug.Create(slug).ValueOrThrow();
-        MonitoredRepository repo = MonitoredRepository.Create(repoSlug, "github.com", null, position);
+        MonitoredRepository repo = MonitoredRepository.Create(repoSlug, "github.com", null, position).ValueOrThrow();
         repo.SetEligibility(new RepositoryEligibility.Eligible());
         dbContext.Set<MonitoredRepository>().Add(repo);
 
@@ -83,7 +83,7 @@ public sealed class WhenQueuedIssuesRequested_OrderedByDispatchOrder : IAsyncDis
 
         RepositorySlug repoSlug = RepositorySlug.Create(slug).ValueOrThrow();
         RepositoryEligibility.Ineligible ineligible = new([EligibilityViolation.AllowDirectPushes()]);
-        MonitoredRepository repo = MonitoredRepository.Create(repoSlug, "github.com", null);
+        MonitoredRepository repo = MonitoredRepository.Create(repoSlug, "github.com", null).ValueOrThrow();
         repo.SetEligibility(ineligible);
         dbContext.Set<MonitoredRepository>().Add(repo);
 

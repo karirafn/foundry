@@ -19,7 +19,8 @@ internal static class UpdateRepository
         Guid AccountId,
         Guid Id,
         int? PollIntervalSeconds,
-        bool IsActive) : ICommand<RepositorySummary>;
+        bool IsActive,
+        int MaxConcurrentWorkers) : ICommand<RepositorySummary>;
 
     internal sealed class Validator : ICommandValidator<Command>
     {
@@ -73,7 +74,11 @@ internal static class UpdateRepository
                 ? TimeSpan.FromSeconds(command.PollIntervalSeconds.Value)
                 : null;
 
-            repository.Update(pollInterval, command.IsActive);
+            Result updateResult = repository.Update(pollInterval, command.IsActive, command.MaxConcurrentWorkers);
+            if (updateResult is Result.Failure updateFailure)
+            {
+                return Result<RepositorySummary>.Fail(updateFailure.Error);
+            }
 
             await dbContext.SaveChangesAsync(cancellationToken);
 
@@ -101,7 +106,7 @@ internal static class UpdateRepository
 
     internal static class Endpoint
     {
-        private sealed record RequestBody(int? PollIntervalSeconds, bool IsActive);
+        private sealed record RequestBody(int? PollIntervalSeconds, bool IsActive, int MaxConcurrentWorkers);
 
         public static void Map(RouteGroupBuilder group)
         {
@@ -112,7 +117,7 @@ internal static class UpdateRepository
                     ICommandHandler<Command, RepositorySummary> handler,
                     CancellationToken cancellationToken) =>
                 {
-                    Command command = new(accountId, id, body.PollIntervalSeconds, body.IsActive);
+                    Command command = new(accountId, id, body.PollIntervalSeconds, body.IsActive, body.MaxConcurrentWorkers);
                     Result<RepositorySummary> result = await handler.HandleAsync(command, cancellationToken);
 
                     return result.Match<Results<Ok<RepositorySummary>, NotFound, BadRequest<string>>>(

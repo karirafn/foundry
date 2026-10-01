@@ -104,7 +104,7 @@ public sealed class WhenRepositoryIsSuppressed : IAsyncDisposable
         MonitoredRepository repository = MonitoredRepository.Create(
             repositorySlug,
             "github.com",
-            pollInterval: null);
+            pollInterval: null).ValueOrThrow();
 
         repository.SuppressUntracking(suppressedAt);
 

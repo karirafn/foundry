@@ -90,7 +90,7 @@ public sealed class HandleAsync : IAsyncDisposable
     private async Task SeedMonitoredRepositoryAsync(string slug, string host)
     {
         RepositorySlug repositorySlug = RepositorySlug.Create(slug).ValueOrThrow();
-        MonitoredRepository repo = MonitoredRepository.Create(repositorySlug, host, null);
+        MonitoredRepository repo = MonitoredRepository.Create(repositorySlug, host, null).ValueOrThrow();
         _dbContext.Set<MonitoredRepository>().Add(repo);
         await _dbContext.SaveChangesAsync(CancellationToken.None);
     }

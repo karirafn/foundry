@@ -863,6 +863,8 @@ export interface components {
             /** Format: int32 */
             pollIntervalSeconds: null | number | string;
             isActive: boolean;
+            /** Format: int32 */
+            maxConcurrentWorkers: number | string;
         };
         UpdateWorkerImageConfigurationRequestBody: {
             installDotnet: boolean;

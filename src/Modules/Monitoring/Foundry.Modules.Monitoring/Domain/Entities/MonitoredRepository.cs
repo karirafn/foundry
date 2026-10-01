@@ -12,6 +12,14 @@ public sealed class MonitoredRepository : AggregateRoot<MonitoredRepositoryId>
     private const string IneligibleStatus = "ineligible";
     private const string UnreachableStatus = "unreachable";
 
+    public const int MinMaxConcurrentWorkers = 1;
+    public const int MaxMaxConcurrentWorkers = 20;
+    public const int DefaultMaxConcurrentWorkers = 1;
+
+    // The validators in CreateRepository and UpdateRepository carry their own copy until step 3
+    // consolidates them here. This constant governs aggregate-level validation only.
+    public const int MaxPollIntervalSeconds = 86400;
+
     /// <summary>
     /// Minimum interval between automatic write-probe re-attempts for a repository parked at
     /// <see cref="WriteProbeVerdict.Unknown"/>. Passed into <see cref="IsDueForWriteProbe"/> by
@@ -37,6 +45,8 @@ public sealed class MonitoredRepository : AggregateRoot<MonitoredRepositoryId>
 
     public bool IsActive { get; private set; }
 
+    public int MaxConcurrentWorkers { get; private set; } = DefaultMaxConcurrentWorkers;
+
     public int Position { get; private set; }
 
     public DateTimeOffset? LastPolledAt { get; private set; }
@@ -49,18 +59,25 @@ public sealed class MonitoredRepository : AggregateRoot<MonitoredRepositoryId>
 
     internal WriteProbeVerdict WriteProbeVerdict { get; private set; } = new WriteProbeVerdict.Unknown();
 
-    public static MonitoredRepository Create(
+    public static Result<MonitoredRepository> Create(
         RepositorySlug slug,
         string host,
         TimeSpan? pollInterval,
-        int position = 0)
+        int position = 0,
+        int maxConcurrentWorkers = DefaultMaxConcurrentWorkers)
     {
+        if (maxConcurrentWorkers < MinMaxConcurrentWorkers || maxConcurrentWorkers > MaxMaxConcurrentWorkers)
+        {
+            return Result<MonitoredRepository>.Fail(MonitoredRepositoryErrors.InvalidMaxConcurrentWorkers(maxConcurrentWorkers));
+        }
+
         return new MonitoredRepository(MonitoredRepositoryId.New())
         {
             Slug = slug,
             Host = host,
             PollInterval = pollInterval,
             IsActive = true,
+            MaxConcurrentWorkers = maxConcurrentWorkers,
             Position = position,
             Eligibility = new RepositoryEligibility.Unreachable(),
             EligibilityStatus = UnreachableStatus,
@@ -112,10 +129,27 @@ public sealed class MonitoredRepository : AggregateRoot<MonitoredRepositoryId>
         return unknown.LastAttemptedAt.Value + cooldown < now;
     }
 
-    public void Update(TimeSpan? pollInterval, bool isActive)
+    public Result Update(TimeSpan? pollInterval, bool isActive, int maxConcurrentWorkers)
     {
+        if (maxConcurrentWorkers < MinMaxConcurrentWorkers || maxConcurrentWorkers > MaxMaxConcurrentWorkers)
+        {
+            return MonitoredRepositoryErrors.InvalidMaxConcurrentWorkers(maxConcurrentWorkers);
+        }
+
+        if (pollInterval.HasValue && pollInterval.Value.TotalSeconds <= 0)
+        {
+            return MonitoredRepositoryErrors.PollIntervalNotPositive();
+        }
+
+        if (pollInterval.HasValue && pollInterval.Value.TotalSeconds > MaxPollIntervalSeconds)
+        {
+            return MonitoredRepositoryErrors.PollIntervalTooLarge(MaxPollIntervalSeconds);
+        }
+
         PollInterval = pollInterval;
         IsActive = isActive;
+        MaxConcurrentWorkers = maxConcurrentWorkers;
+        return Result.Ok();
     }
 
     public void MarkPolled(DateTimeOffset polledAt)

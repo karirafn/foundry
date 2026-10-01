@@ -94,7 +94,7 @@ public sealed class WhenAccountHasClaimsAndMonitoredRepos : IAsyncDisposable
         FoundryDbContext dbContext = scope.ServiceProvider.GetRequiredService<FoundryDbContext>();
 
         RepositorySlug repositorySlug = RepositorySlug.Create(slug).ValueOrThrow();
-        MonitoredRepository repository = MonitoredRepository.Create(repositorySlug, host, pollInterval: null);
+        MonitoredRepository repository = MonitoredRepository.Create(repositorySlug, host, pollInterval: null).ValueOrThrow();
         dbContext.Set<MonitoredRepository>().Add(repository);
         await dbContext.SaveChangesAsync(CancellationToken.None);
     }

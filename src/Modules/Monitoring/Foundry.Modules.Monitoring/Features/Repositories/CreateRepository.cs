@@ -106,11 +106,18 @@ internal static class CreateRepository
 
             int position = await dbContext.Set<MonitoredRepository>().CountAsync(cancellationToken);
 
-            MonitoredRepository repository = MonitoredRepository.Create(
+            Result<MonitoredRepository> createResult = MonitoredRepository.Create(
                 repositorySlug,
                 credential.BaseUrl.Value.Host,
                 pollInterval,
                 position);
+
+            if (createResult is Result<MonitoredRepository>.Failure createFailure)
+            {
+                return Result<RepositorySummary>.Fail(createFailure.Error);
+            }
+
+            MonitoredRepository repository = ((Result<MonitoredRepository>.Success)createResult).Value;
 
             dbContext.Set<MonitoredRepository>().Add(repository);
 

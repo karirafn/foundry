@@ -124,7 +124,7 @@ public sealed class GetEligibleRepositoriesAsync : IAsyncDisposable
             repositorySlug,
             "github.com",
             pollInterval: null,
-            position);
+            position).ValueOrThrow();
 
         if (eligibility is not null)
         {

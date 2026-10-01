@@ -84,8 +84,8 @@ public sealed class GetSlugsAsync : IAsyncDisposable
     public async Task WhenIdsMatchRepositories_ReturnsSlugStringsKeyedById()
     {
         // Arrange
-        MonitoredRepository repoA = MonitoredRepository.Create(ValidSlug("owner/repo-a"), "github.com", null, position: 0);
-        MonitoredRepository repoB = MonitoredRepository.Create(ValidSlug("owner/repo-b"), "github.com", null, position: 1);
+        MonitoredRepository repoA = MonitoredRepository.Create(ValidSlug("owner/repo-a"), "github.com", null, position: 0).ValueOrThrow();
+        MonitoredRepository repoB = MonitoredRepository.Create(ValidSlug("owner/repo-b"), "github.com", null, position: 1).ValueOrThrow();
         _dbContext.Set<MonitoredRepository>().AddRange(repoA, repoB);
         await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
 

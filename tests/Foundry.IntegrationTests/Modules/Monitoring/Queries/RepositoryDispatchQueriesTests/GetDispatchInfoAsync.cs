@@ -112,7 +112,7 @@ public sealed class GetDispatchInfoAsync : IAsyncDisposable
             credential.SetNamespaces([Namespace.Create(repositorySlug.Owner).ValueOrThrow()]);
         }
 
-        MonitoredRepository repository = MonitoredRepository.Create(repositorySlug, "gitlab.com", pollInterval: null);
+        MonitoredRepository repository = MonitoredRepository.Create(repositorySlug, "gitlab.com", pollInterval: null).ValueOrThrow();
 
         dbContext.Set<MonitoredRepository>().Add(repository);
         await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);

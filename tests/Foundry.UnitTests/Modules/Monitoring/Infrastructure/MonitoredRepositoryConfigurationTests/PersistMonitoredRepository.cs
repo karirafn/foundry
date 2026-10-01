@@ -50,7 +50,7 @@ public sealed class PersistMonitoredRepository : IAsyncDisposable
         MonitoredRepository repository = MonitoredRepository.Create(
             ValidSlug,
             "github.com",
-            pollInterval: TimeSpan.FromMinutes(5));
+            pollInterval: TimeSpan.FromMinutes(5)).ValueOrThrow();
 
         _dbContext.Set<MonitoredRepository>().Add(repository);
         await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);

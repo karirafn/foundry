@@ -54,7 +54,7 @@ public sealed class GetProviderTypeAsync : IAsyncDisposable
         credential.SetNamespaces([Namespace.Create("owner").ValueOrThrow()]);
         _dbContext.Set<Credential>().Add(credential);
 
-        MonitoredRepository repo = MonitoredRepository.Create(ValidSlug("owner/repo"), "github.com", null);
+        MonitoredRepository repo = MonitoredRepository.Create(ValidSlug("owner/repo"), "github.com", null).ValueOrThrow();
         _dbContext.Set<MonitoredRepository>().Add(repo);
         await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
 
@@ -73,7 +73,7 @@ public sealed class GetProviderTypeAsync : IAsyncDisposable
         credential.SetNamespaces([Namespace.Create("owner").ValueOrThrow()]);
         _dbContext.Set<Credential>().Add(credential);
 
-        MonitoredRepository repo = MonitoredRepository.Create(ValidSlug("owner/repo"), "gitlab.com", null);
+        MonitoredRepository repo = MonitoredRepository.Create(ValidSlug("owner/repo"), "gitlab.com", null).ValueOrThrow();
         _dbContext.Set<MonitoredRepository>().Add(repo);
         await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
 
@@ -101,7 +101,7 @@ public sealed class GetProviderTypeAsync : IAsyncDisposable
     public async Task WhenNoCoveringCredential_ReturnsNull()
     {
         // Arrange
-        MonitoredRepository repo = MonitoredRepository.Create(ValidSlug("uncovered/repo"), "github.com", null);
+        MonitoredRepository repo = MonitoredRepository.Create(ValidSlug("uncovered/repo"), "github.com", null).ValueOrThrow();
         _dbContext.Set<MonitoredRepository>().Add(repo);
         await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
 

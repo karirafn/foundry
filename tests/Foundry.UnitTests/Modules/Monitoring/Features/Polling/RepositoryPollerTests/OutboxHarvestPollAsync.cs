@@ -74,7 +74,7 @@ public sealed class OutboxHarvestPollAsync : IAsyncDisposable
 
     private static MonitoredRepository CreateRepository()
     {
-        return MonitoredRepository.Create(ValidSlug, "github.com", null);
+        return MonitoredRepository.Create(ValidSlug, "github.com", null).ValueOrThrow();
     }
 
     [Fact]

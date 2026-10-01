@@ -81,7 +81,7 @@ public sealed class HandleAsyncDispatchPayload : IAsyncDisposable
         MonitoredRepository repository = MonitoredRepository.Create(
             repositorySlug,
             "github.com",
-            pollInterval: null);
+            pollInterval: null).ValueOrThrow();
 
         _dbContext.Set<GitHubCredential>().Add(credential);
         _dbContext.Set<MonitoredRepository>().Add(repository);
