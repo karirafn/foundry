@@ -56,9 +56,8 @@ internal static class CreateRepository
         DbContext dbContext,
         IRepositoryEligibilityEvaluator eligibilityEvaluator) : ICommandHandler<Command, RepositorySummary>
     {
-        // Matches the unique index name used in production (SQL Server / PostgreSQL) and the
-        // column-reference form emitted by SQLite ("monitored_repositories.slug") — both
-        // distinguish a slug collision from the position-collision index.
+        // SQLite emits the column-reference form ("monitored_repositories.slug") rather than the
+        // index name on unique-constraint violations, so both forms must be checked.
         private const string SlugIndexName = "ix_monitored_repositories_host_slug";
         private const string SlugColumnReference = "monitored_repositories.slug";
 

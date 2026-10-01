@@ -72,10 +72,11 @@ public sealed class WhenSlugIsDuplicate : IAsyncDisposable
         response.Content.Headers.ContentType?.MediaType.ShouldBe("application/problem+json");
 
         string responseBody = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
-        JsonDocument doc = JsonDocument.Parse(responseBody);
+        using JsonDocument doc = JsonDocument.Parse(responseBody);
         JsonElement root = doc.RootElement;
 
-        root.GetProperty("type").GetString().ShouldEndWith("Repository.DuplicateSlug");
-        root.GetProperty("detail").GetString().ShouldBe(expectedDetail);
+        root.ShouldSatisfyAllConditions(
+            () => root.GetProperty("type").GetString().ShouldEndWith("Repository.DuplicateSlug"),
+            () => root.GetProperty("detail").GetString().ShouldBe(expectedDetail));
     }
 }

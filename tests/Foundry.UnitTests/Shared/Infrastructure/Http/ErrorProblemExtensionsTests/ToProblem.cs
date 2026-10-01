@@ -14,7 +14,7 @@ public sealed class ToProblem
     private static readonly Error TestError = new("TestCode", "Something went wrong.");
 
     [Fact]
-    public void WhenCalled_TypeIsTagUriWithCodeAppended()
+    public void WhenErrorHasCode_TypeUriEncodesTheCode()
     {
         // Arrange
         Error error = new("my.code", "detail text");
@@ -27,7 +27,7 @@ public sealed class ToProblem
     }
 
     [Fact]
-    public void WhenCalled_DetailIsErrorMessage()
+    public void WhenErrorHasMessage_DetailMatchesErrorMessage()
     {
         // Arrange
         Error error = new("SomeCode", "A human-readable message.");
@@ -40,13 +40,12 @@ public sealed class ToProblem
     }
 
     [Fact]
-    public void WhenCalled_StatusCodeMatchesSuppliedValue()
+    public void WhenStatusCodeIsSupplied_ResultStatusMatchesIt()
     {
         // Arrange
-        Error error = TestError;
 
         // Act
-        ProblemHttpResult result = error.ToProblem(409);
+        ProblemHttpResult result = TestError.ToProblem(409);
 
         // Assert
         result.StatusCode.ShouldBe(409);

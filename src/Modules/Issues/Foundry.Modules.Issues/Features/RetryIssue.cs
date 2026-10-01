@@ -73,7 +73,7 @@ internal static class RetryIssue
                         {
                             IssueErrors.NotFoundCode => error.ToProblem(StatusCodes.Status404NotFound),
                             IssueErrors.WrongStateCode => error.ToProblem(StatusCodes.Status409Conflict),
-                            _ => error.ToProblem(StatusCodes.Status500InternalServerError),
+                            _ => TypedResults.Problem(title: "An unexpected error occurred.", statusCode: StatusCodes.Status500InternalServerError),
                         });
                 })
                 .WithName("RetryIssue")

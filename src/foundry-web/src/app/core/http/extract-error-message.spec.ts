@@ -40,7 +40,7 @@ describe('extractErrorMessage', () => {
     expect(result).toBe('Repository not found');
   });
 
-  it('returns the string body, not detail, when both string and ProblemDetails paths would match (ordering guard)', () => {
+  it('returns the string body when err.error is a string (string branch precedes detail branch)', () => {
     // Arrange — a string error body has no .detail property, proving string branch fires before detail check
     const err = new HttpErrorResponse({ error: 'Bare string from unmigrated endpoint', status: 422 });
 
