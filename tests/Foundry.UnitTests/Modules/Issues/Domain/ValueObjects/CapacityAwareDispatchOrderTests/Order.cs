@@ -15,7 +15,7 @@ namespace Foundry.UnitTests.Modules.Issues.Domain.ValueObjects.CapacityAwareDisp
 /// Tests for <see cref="CapacityAwareDispatchOrder.Order"/>.
 /// All tests use in-memory issue objects — no database.
 /// </summary>
-public sealed class OrderAsync
+public sealed class Order
 {
     private static readonly MonitoredRepositoryId RepoA = MonitoredRepositoryId.New();
     private static readonly MonitoredRepositoryId RepoB = MonitoredRepositoryId.New();

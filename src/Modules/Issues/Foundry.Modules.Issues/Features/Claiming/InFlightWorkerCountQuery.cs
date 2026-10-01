@@ -24,10 +24,12 @@ internal sealed class InFlightWorkerCountQuery(DbContext db)
         // Select repository IDs as raw Guids — grouping on a value-converted composite
         // property is not translatable by SQLite EF Core; project to primitives first.
         List<Guid> freshInProgress = await db.Set<InProgressIssue>()
+            .AsNoTracking()
             .Select(i => i.MonitoredRepositoryId.Value)
             .ToListAsync(cancellationToken);
 
         List<Guid> revisionInProgress = await db.Set<RevisionInProgressIssue>()
+            .AsNoTracking()
             .Select(i => i.MonitoredRepositoryId.Value)
             .ToListAsync(cancellationToken);
 

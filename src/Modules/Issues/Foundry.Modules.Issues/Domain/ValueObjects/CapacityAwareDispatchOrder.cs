@@ -48,7 +48,7 @@ internal static class CapacityAwareDispatchOrder
     /// <returns>
     /// Issues in placement order. Issues whose repository is saturated everywhere are excluded.
     /// </returns>
-    public static IReadOnlyList<QueuedIssue> Order(
+    internal static IReadOnlyList<QueuedIssue> Order(
         IReadOnlyList<(QueuedIssue Issue, DispatchOrderKey Key)> keyedIssues,
         IReadOnlyDictionary<MonitoredRepositoryId, int> headroomByRepo)
     {

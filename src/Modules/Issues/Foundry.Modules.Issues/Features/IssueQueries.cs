@@ -593,13 +593,13 @@ internal sealed class IssueQueries(
         // Repositories absent from the eligibility list (ineligible) contribute no headroom
         // and are excluded — their issues go into the ineligibleQueued partition.
         Dictionary<MonitoredRepositoryId, int> headroomByRepo = eligibleRepositories
+            .Select(r => (Id: MonitoredRepositoryId.From(r.Id), r.MaxConcurrentWorkers))
             .ToDictionary(
-                r => MonitoredRepositoryId.From(r.Id),
-                r =>
+                t => t.Id,
+                t =>
                 {
-                    MonitoredRepositoryId repoId = MonitoredRepositoryId.From(r.Id);
-                    int inFlight = inFlightCounts.TryGetValue(repoId, out int count) ? count : 0;
-                    return Math.Max(0, r.MaxConcurrentWorkers - inFlight);
+                    inFlightCounts.TryGetValue(t.Id, out int inFlight);
+                    return Math.Max(0, t.MaxConcurrentWorkers - inFlight);
                 });
 
         // Eligible-repo queued issues: capacity-aware order via the shared helper so the
