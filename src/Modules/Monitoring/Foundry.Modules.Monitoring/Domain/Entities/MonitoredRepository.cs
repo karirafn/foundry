@@ -16,8 +16,6 @@ public sealed class MonitoredRepository : AggregateRoot<MonitoredRepositoryId>
     public const int MaxMaxConcurrentWorkers = 20;
     public const int DefaultMaxConcurrentWorkers = 1;
 
-    // The validators in CreateRepository and UpdateRepository carry their own copy until step 3
-    // consolidates them here. This constant governs aggregate-level validation only.
     public const int MaxPollIntervalSeconds = 86400;
 
     /// <summary>
@@ -69,6 +67,16 @@ public sealed class MonitoredRepository : AggregateRoot<MonitoredRepositoryId>
         if (maxConcurrentWorkers < MinMaxConcurrentWorkers || maxConcurrentWorkers > MaxMaxConcurrentWorkers)
         {
             return Result<MonitoredRepository>.Fail(MonitoredRepositoryErrors.InvalidMaxConcurrentWorkers(maxConcurrentWorkers));
+        }
+
+        if (pollInterval.HasValue && pollInterval.Value.TotalSeconds <= 0)
+        {
+            return Result<MonitoredRepository>.Fail(MonitoredRepositoryErrors.PollIntervalNotPositive());
+        }
+
+        if (pollInterval.HasValue && pollInterval.Value.TotalSeconds > MaxPollIntervalSeconds)
+        {
+            return Result<MonitoredRepository>.Fail(MonitoredRepositoryErrors.PollIntervalTooLarge(MaxPollIntervalSeconds));
         }
 
         return new MonitoredRepository(MonitoredRepositoryId.New())

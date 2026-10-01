@@ -22,28 +22,6 @@ internal static class UpdateRepository
         bool IsActive,
         int MaxConcurrentWorkers) : ICommand<RepositorySummary>;
 
-    internal sealed class Validator : ICommandValidator<Command>
-    {
-        internal const string PollIntervalNotPositiveCode = "UpdateRepository.PollIntervalNotPositive";
-        internal const string PollIntervalTooLargeCode = "UpdateRepository.PollIntervalTooLarge";
-        internal const int MaxPollIntervalSeconds = 86400;
-
-        public Result Validate(Command command)
-        {
-            if (command.PollIntervalSeconds.HasValue && command.PollIntervalSeconds.Value <= 0)
-            {
-                return new Error(PollIntervalNotPositiveCode, "Poll interval must be a positive number of seconds.");
-            }
-
-            if (command.PollIntervalSeconds.HasValue && command.PollIntervalSeconds.Value > MaxPollIntervalSeconds)
-            {
-                return new Error(PollIntervalTooLargeCode, $"Poll interval must not exceed {MaxPollIntervalSeconds} seconds.");
-            }
-
-            return Result.Ok();
-        }
-    }
-
     internal sealed class Handler(DbContext dbContext) : ICommandHandler<Command, RepositorySummary>
     {
         public async Task<Result<RepositorySummary>> HandleAsync(

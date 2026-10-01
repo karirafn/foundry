@@ -27,25 +27,12 @@ internal static class CreateRepository
     internal sealed class Validator : ICommandValidator<Command>
     {
         internal const string SlugEmptyCode = "CreateRepository.SlugEmpty";
-        internal const string PollIntervalNotPositiveCode = "CreateRepository.PollIntervalNotPositive";
-        internal const string PollIntervalTooLargeCode = "CreateRepository.PollIntervalTooLarge";
-        internal const int MaxPollIntervalSeconds = 86400;
 
         public Result Validate(Command command)
         {
             if (string.IsNullOrWhiteSpace(command.Slug))
             {
                 return new Error(SlugEmptyCode, "Repository slug must not be empty.");
-            }
-
-            if (command.PollIntervalSeconds.HasValue && command.PollIntervalSeconds.Value <= 0)
-            {
-                return new Error(PollIntervalNotPositiveCode, "Poll interval must be a positive number of seconds.");
-            }
-
-            if (command.PollIntervalSeconds.HasValue && command.PollIntervalSeconds.Value > MaxPollIntervalSeconds)
-            {
-                return new Error(PollIntervalTooLargeCode, $"Poll interval must not exceed {MaxPollIntervalSeconds} seconds.");
             }
 
             return Result.Ok();

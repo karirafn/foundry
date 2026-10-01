@@ -105,4 +105,49 @@ public sealed class Create
         MonitoredRepository repository = result.ValueOrThrow();
         repository.MaxConcurrentWorkers.ShouldBe(validLimit);
     }
+
+    [Fact]
+    public void WhenPollIntervalExceedsMaximum_ReturnsFailure()
+    {
+        // Arrange
+        RepositorySlug slug = ValidSlug;
+        TimeSpan tooLarge = TimeSpan.FromSeconds(MonitoredRepository.MaxPollIntervalSeconds + 1);
+
+        // Act
+        Result<MonitoredRepository> result = MonitoredRepository.Create(slug, "github.com", tooLarge);
+
+        // Assert
+        result.IsFailure.ShouldBeTrue();
+        ((Result<MonitoredRepository>.Failure)result).Error.Code.ShouldBe(MonitoredRepositoryErrors.PollIntervalTooLargeCode);
+    }
+
+    [Fact]
+    public void WhenPollIntervalIsZero_ReturnsFailure()
+    {
+        // Arrange
+        RepositorySlug slug = ValidSlug;
+        TimeSpan zero = TimeSpan.FromSeconds(0);
+
+        // Act
+        Result<MonitoredRepository> result = MonitoredRepository.Create(slug, "github.com", zero);
+
+        // Assert
+        result.IsFailure.ShouldBeTrue();
+        ((Result<MonitoredRepository>.Failure)result).Error.Code.ShouldBe(MonitoredRepositoryErrors.PollIntervalNotPositiveCode);
+    }
+
+    [Fact]
+    public void WhenPollIntervalIsNegative_ReturnsFailure()
+    {
+        // Arrange
+        RepositorySlug slug = ValidSlug;
+        TimeSpan negative = TimeSpan.FromSeconds(-1);
+
+        // Act
+        Result<MonitoredRepository> result = MonitoredRepository.Create(slug, "github.com", negative);
+
+        // Assert
+        result.IsFailure.ShouldBeTrue();
+        ((Result<MonitoredRepository>.Failure)result).Error.Code.ShouldBe(MonitoredRepositoryErrors.PollIntervalNotPositiveCode);
+    }
 }
