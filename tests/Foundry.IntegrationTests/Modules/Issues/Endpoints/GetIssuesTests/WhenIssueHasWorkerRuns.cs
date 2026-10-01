@@ -106,10 +106,10 @@ public sealed class WhenIssueHasWorkerRuns : IAsyncDisposable
 
         // Assert
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
-        IReadOnlyList<IssueSummary>? summaries = await response.Content.ReadFromJsonAsync<IReadOnlyList<IssueSummary>>(
+        PagedIssues? result = await response.Content.ReadFromJsonAsync<PagedIssues>(
             TestContext.Current.CancellationToken);
-        summaries.ShouldNotBeNull();
-        IssueSummary summary = summaries.ShouldHaveSingleItem();
+        result.ShouldNotBeNull();
+        IssueSummary summary = result.Items.ShouldHaveSingleItem();
         RunStats runStats = summary.RunStats.ShouldNotBeNull();
         runStats.ShouldSatisfyAllConditions(
             () => runStats.RunCount.ShouldBe(2),
@@ -133,10 +133,10 @@ public sealed class WhenIssueHasWorkerRuns : IAsyncDisposable
 
         // Assert
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
-        IReadOnlyList<IssueSummary>? summaries = await response.Content.ReadFromJsonAsync<IReadOnlyList<IssueSummary>>(
+        PagedIssues? result = await response.Content.ReadFromJsonAsync<PagedIssues>(
             TestContext.Current.CancellationToken);
-        summaries.ShouldNotBeNull();
-        IssueSummary summary = summaries.ShouldHaveSingleItem();
+        result.ShouldNotBeNull();
+        IssueSummary summary = result.Items.ShouldHaveSingleItem();
         summary.RunStats.ShouldBeNull();
     }
 

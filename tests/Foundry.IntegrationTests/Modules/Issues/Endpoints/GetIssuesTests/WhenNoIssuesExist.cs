@@ -36,9 +36,10 @@ public sealed class WhenNoIssuesExist : IAsyncDisposable
 
         // Assert
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
-        IReadOnlyList<IssueSummary>? summaries = await response.Content.ReadFromJsonAsync<IReadOnlyList<IssueSummary>>(
+        PagedIssues? result = await response.Content.ReadFromJsonAsync<PagedIssues>(
             TestContext.Current.CancellationToken);
-        summaries.ShouldNotBeNull();
-        summaries.ShouldBeEmpty();
+        result.ShouldNotBeNull();
+        result.Items.ShouldBeEmpty();
+        result.NextCursor.ShouldBeNull();
     }
 }
