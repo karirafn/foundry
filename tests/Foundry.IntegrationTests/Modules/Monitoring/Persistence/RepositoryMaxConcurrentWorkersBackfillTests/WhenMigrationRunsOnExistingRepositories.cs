@@ -63,10 +63,11 @@ public sealed class WhenMigrationRunsOnExistingRepositories : IAsyncLifetime, IA
         // Arrange — insert three repositories without the max_concurrent_workers column (it does not exist yet).
         // Assign unique positions to satisfy the ix_monitored_repositories_position unique index (added by
         // the AddRepositoryPosition migration, which runs before this one).
-        Guid accountId = await InsertAccountAsync();
-        await InsertRepositoryAsync(accountId, "owner/repo-a", position: 0);
-        await InsertRepositoryAsync(accountId, "owner/repo-b", position: 1);
-        await InsertRepositoryAsync(accountId, "owner/repo-c", position: 2);
+        // account_id was dropped from monitored_repositories by 20260718213128_DropMonitoredRepositoryAccountIdFk,
+        // which runs before this migration — no FK column is present in the pre-migration schema.
+        await InsertRepositoryAsync("owner/repo-a", position: 0);
+        await InsertRepositoryAsync("owner/repo-b", position: 1);
+        await InsertRepositoryAsync("owner/repo-c", position: 2);
 
         // Act — apply AddRepositoryMaxConcurrentWorkers, which runs the real Up() backfill SQL.
         await _dbContext.Database.MigrateAsync(TargetMigrationId, TestContext.Current.CancellationToken);
@@ -82,9 +83,8 @@ public sealed class WhenMigrationRunsOnExistingRepositories : IAsyncLifetime, IA
     public async Task BackfilledMaxConcurrentWorkers_AreOneForEveryRow()
     {
         // Arrange — insert two repositories without the new column, with unique positions.
-        Guid accountId = await InsertAccountAsync();
-        await InsertRepositoryAsync(accountId, "org/service-one", position: 0);
-        await InsertRepositoryAsync(accountId, "org/service-two", position: 1);
+        await InsertRepositoryAsync("org/service-one", position: 0);
+        await InsertRepositoryAsync("org/service-two", position: 1);
 
         // Act — apply the real migration.
         await _dbContext.Database.MigrateAsync(TargetMigrationId, TestContext.Current.CancellationToken);
@@ -97,36 +97,21 @@ public sealed class WhenMigrationRunsOnExistingRepositories : IAsyncLifetime, IA
     }
 
     /// <summary>
-    /// Inserts an account row via a raw ADO.NET command, bypassing EF's model shape
-    /// and EF1002 SQL injection analysis (test data only — all values are constants).
-    /// </summary>
-    private async Task<Guid> InsertAccountAsync()
-    {
-        Guid id = Guid.NewGuid();
-        using SqliteCommand command = _connection.CreateCommand();
-        command.CommandText =
-            "INSERT INTO accounts (id, name, token, base_url, type) " +
-            "VALUES ($id, 'Test Account', NULL, 'https://github.com', 'github');";
-        command.Parameters.AddWithValue("$id", id.ToString());
-        await command.ExecuteNonQueryAsync(TestContext.Current.CancellationToken);
-        return id;
-    }
-
-    /// <summary>
     /// Inserts a monitored_repository row via raw ADO.NET using only the pre-migration columns
     /// (no max_concurrent_workers — the column does not exist yet at the point of insertion).
+    /// The account_id column was dropped by 20260718213128_DropMonitoredRepositoryAccountIdFk, which
+    /// runs before this migration, so it must not appear in this INSERT.
     /// A unique <paramref name="position"/> is required because the AddRepositoryPosition migration,
     /// which runs before this one, adds a unique index on the position column.
     /// </summary>
-    private async Task<Guid> InsertRepositoryAsync(Guid accountId, string slug, int position)
+    private async Task<Guid> InsertRepositoryAsync(string slug, int position)
     {
         Guid id = Guid.NewGuid();
         using SqliteCommand command = _connection.CreateCommand();
         command.CommandText =
-            "INSERT INTO monitored_repositories (id, account_id, slug, host, is_active, eligibility_status, position) " +
-            "VALUES ($id, $accountId, $slug, 'github.com', 1, 'unreachable', $position);";
+            "INSERT INTO monitored_repositories (id, slug, host, is_active, position) " +
+            "VALUES ($id, $slug, 'github.com', 1, $position);";
         command.Parameters.AddWithValue("$id", id.ToString());
-        command.Parameters.AddWithValue("$accountId", accountId.ToString());
         command.Parameters.AddWithValue("$slug", slug);
         command.Parameters.AddWithValue("$position", position);
         await command.ExecuteNonQueryAsync(TestContext.Current.CancellationToken);

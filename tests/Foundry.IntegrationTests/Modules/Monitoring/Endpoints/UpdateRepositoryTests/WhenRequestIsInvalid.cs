@@ -59,6 +59,11 @@ public sealed class WhenRequestIsInvalid : IAsyncDisposable
             _factory,
             accountId,
             slug: "owner/repo");
+
+        // GetRepositories filters by namespace coverage — seed the "owner" namespace so the
+        // re-GET returns the seeded repository rather than an empty list.
+        await AccountSeeder.SetOwnerNamespacesAsync(_factory, accountId, "owner");
+
         object body = new { pollIntervalSeconds = 300, isActive = true, maxConcurrentWorkers };
 
         // Act

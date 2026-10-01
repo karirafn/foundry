@@ -113,32 +113,38 @@ public sealed class WhenRequestIsInvalid : IAsyncDisposable
     [Fact]
     public async Task WhenPollIntervalIsZero_ReturnsBadRequest()
     {
-        // Arrange
+        // Arrange — poll-interval validation runs inside the handler after the account lookup,
+        // so a real account must exist to reach it (a non-existent account returns 404 first).
+        Guid accountId = await AccountSeeder.SeedGitHubAccountAsync(_factory, name: "My GitHub poll-zero");
         object body = new { slug = "owner/repo", pollIntervalSeconds = 0 };
 
         // Act
         HttpResponseMessage response = await _client.PostAsJsonAsync(
-            new Uri($"/api/accounts/{_accountId}/repositories", UriKind.Relative),
+            new Uri($"/api/accounts/{accountId}/repositories", UriKind.Relative),
             body,
             TestContext.Current.CancellationToken);
 
         // Assert
         response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        response.Content.Headers.ContentType?.MediaType.ShouldBe("application/problem+json");
     }
 
     [Fact]
     public async Task WhenPollIntervalIsNegative_ReturnsBadRequest()
     {
-        // Arrange
+        // Arrange — poll-interval validation runs inside the handler after the account lookup,
+        // so a real account must exist to reach it (a non-existent account returns 404 first).
+        Guid accountId = await AccountSeeder.SeedGitHubAccountAsync(_factory, name: "My GitHub poll-negative");
         object body = new { slug = "owner/repo", pollIntervalSeconds = -1 };
 
         // Act
         HttpResponseMessage response = await _client.PostAsJsonAsync(
-            new Uri($"/api/accounts/{_accountId}/repositories", UriKind.Relative),
+            new Uri($"/api/accounts/{accountId}/repositories", UriKind.Relative),
             body,
             TestContext.Current.CancellationToken);
 
         // Assert
         response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        response.Content.Headers.ContentType?.MediaType.ShouldBe("application/problem+json");
     }
 }
