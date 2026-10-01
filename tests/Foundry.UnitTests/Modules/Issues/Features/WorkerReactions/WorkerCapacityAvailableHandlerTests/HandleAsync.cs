@@ -99,7 +99,7 @@ public sealed class HandleAsync : IAsyncDisposable
 
         WorkerCapacityAvailableHandler sut = BuildHandler(
             repositoryEligibilityQuery: new StubRepositoryEligibilityQuery(
-                eligibleRepositories: [new EligibleRepository(repositoryId.Value, Position: 0)]));
+                eligibleRepositories: [new EligibleRepository(repositoryId.Value, Position: 0, MaxConcurrentWorkers: 1)]));
 
         WorkerCapacityAvailable @event = new(WorkerRunId: WorkerRunId.New());
 
@@ -178,7 +178,7 @@ public sealed class HandleAsync : IAsyncDisposable
 
         WorkerCapacityAvailableHandler sut = BuildHandler(
             repositoryEligibilityQuery: new StubRepositoryEligibilityQuery(
-                eligibleRepositories: [new EligibleRepository(eligibleRepoId.Value, Position: 0)]));
+                eligibleRepositories: [new EligibleRepository(eligibleRepoId.Value, Position: 0, MaxConcurrentWorkers: 1)]));
 
         WorkerCapacityAvailable @event = new(WorkerRunId: WorkerRunId.New());
 
@@ -227,7 +227,7 @@ public sealed class HandleAsync : IAsyncDisposable
 
         WorkerCapacityAvailableHandler sut = BuildHandler(
             repositoryEligibilityQuery: new StubRepositoryEligibilityQuery(
-                eligibleRepositories: [new EligibleRepository(eligibleRepoId.Value, Position: 0)]));
+                eligibleRepositories: [new EligibleRepository(eligibleRepoId.Value, Position: 0, MaxConcurrentWorkers: 1)]));
 
         WorkerCapacityAvailable @event = new(WorkerRunId: WorkerRunId.New());
 
@@ -262,7 +262,7 @@ public sealed class HandleAsync : IAsyncDisposable
 
         WorkerCapacityAvailableHandler sut = BuildHandler(
             repositoryEligibilityQuery: new StubRepositoryEligibilityQuery(
-                eligibleRepositories: [new EligibleRepository(eligibleRepoId.Value, Position: 0)]));
+                eligibleRepositories: [new EligibleRepository(eligibleRepoId.Value, Position: 0, MaxConcurrentWorkers: 1)]));
 
         WorkerCapacityAvailable @event = new(WorkerRunId: WorkerRunId.New());
 
@@ -297,7 +297,7 @@ public sealed class HandleAsync : IAsyncDisposable
 
         WorkerCapacityAvailableHandler sut = BuildHandler(
             repositoryEligibilityQuery: new StubRepositoryEligibilityQuery(
-                eligibleRepositories: [new EligibleRepository(eligibleRepoId.Value, Position: 0)]));
+                eligibleRepositories: [new EligibleRepository(eligibleRepoId.Value, Position: 0, MaxConcurrentWorkers: 1)]));
 
         WorkerCapacityAvailable @event = new(WorkerRunId: WorkerRunId.New());
 
@@ -331,7 +331,7 @@ public sealed class HandleAsync : IAsyncDisposable
 
         WorkerCapacityAvailableHandler sut = BuildHandler(
             repositoryEligibilityQuery: new StubRepositoryEligibilityQuery(
-                eligibleRepositories: [new EligibleRepository(continuationRepoId.Value, Position: 0)]));
+                eligibleRepositories: [new EligibleRepository(continuationRepoId.Value, Position: 0, MaxConcurrentWorkers: 1)]));
 
         WorkerCapacityAvailable @event = new(WorkerRunId: WorkerRunId.New());
 
@@ -793,8 +793,8 @@ public sealed class HandleAsync : IAsyncDisposable
             repositoryEligibilityQuery: new StubRepositoryEligibilityQuery(
                 eligibleRepositories:
                 [
-                    new EligibleRepository(highPriorityRepoId.Value, Position: 0),
-                    new EligibleRepository(lowPriorityRepoId.Value, Position: 1),
+                    new EligibleRepository(highPriorityRepoId.Value, Position: 0, MaxConcurrentWorkers: 1),
+                    new EligibleRepository(lowPriorityRepoId.Value, Position: 1, MaxConcurrentWorkers: 1),
                 ]));
 
         WorkerCapacityAvailable @event = new(WorkerRunId: WorkerRunId.New());
@@ -834,8 +834,8 @@ public sealed class HandleAsync : IAsyncDisposable
             repositoryEligibilityQuery: new StubRepositoryEligibilityQuery(
                 eligibleRepositories:
                 [
-                    new EligibleRepository(repoAId.Value, Position: 0),
-                    new EligibleRepository(repoBId.Value, Position: 0),
+                    new EligibleRepository(repoAId.Value, Position: 0, MaxConcurrentWorkers: 1),
+                    new EligibleRepository(repoBId.Value, Position: 0, MaxConcurrentWorkers: 1),
                 ]));
 
         WorkerCapacityAvailable @event = new(WorkerRunId: WorkerRunId.New());
@@ -872,8 +872,8 @@ public sealed class HandleAsync : IAsyncDisposable
             repositoryEligibilityQuery: new StubRepositoryEligibilityQuery(
                 eligibleRepositories:
                 [
-                    new EligibleRepository(freshRepoId.Value, Position: 0),
-                    new EligibleRepository(revisionRepoId.Value, Position: 1),
+                    new EligibleRepository(freshRepoId.Value, Position: 0, MaxConcurrentWorkers: 1),
+                    new EligibleRepository(revisionRepoId.Value, Position: 1, MaxConcurrentWorkers: 1),
                 ]));
 
         WorkerCapacityAvailable @event = new(WorkerRunId: WorkerRunId.New());
@@ -911,8 +911,8 @@ public sealed class HandleAsync : IAsyncDisposable
             repositoryEligibilityQuery: new StubRepositoryEligibilityQuery(
                 eligibleRepositories:
                 [
-                    new EligibleRepository(highPriorityRepoId.Value, Position: 0),
-                    new EligibleRepository(lowPriorityRepoId.Value, Position: 1),
+                    new EligibleRepository(highPriorityRepoId.Value, Position: 0, MaxConcurrentWorkers: 1),
+                    new EligibleRepository(lowPriorityRepoId.Value, Position: 1, MaxConcurrentWorkers: 1),
                 ]));
 
         WorkerCapacityAvailable @event = new(WorkerRunId: WorkerRunId.New());
@@ -950,8 +950,8 @@ public sealed class HandleAsync : IAsyncDisposable
             repositoryEligibilityQuery: new StubRepositoryEligibilityQuery(
                 eligibleRepositories:
                 [
-                    new EligibleRepository(highPriorityRepoId.Value, Position: 0),
-                    new EligibleRepository(lowPriorityRepoId.Value, Position: 1),
+                    new EligibleRepository(highPriorityRepoId.Value, Position: 0, MaxConcurrentWorkers: 1),
+                    new EligibleRepository(lowPriorityRepoId.Value, Position: 1, MaxConcurrentWorkers: 1),
                 ]));
 
         WorkerCapacityAvailable @event = new(WorkerRunId: WorkerRunId.New());
@@ -996,8 +996,8 @@ public sealed class HandleAsync : IAsyncDisposable
             repositoryEligibilityQuery: new StubRepositoryEligibilityQuery(
                 eligibleRepositories:
                 [
-                    new EligibleRepository(repoAId.Value, Position: 0),
-                    new EligibleRepository(repoBId.Value, Position: 0),
+                    new EligibleRepository(repoAId.Value, Position: 0, MaxConcurrentWorkers: 1),
+                    new EligibleRepository(repoBId.Value, Position: 0, MaxConcurrentWorkers: 1),
                 ]));
 
         WorkerCapacityAvailable @event = new(WorkerRunId: WorkerRunId.New());
@@ -1036,7 +1036,7 @@ public sealed class HandleAsync : IAsyncDisposable
         // absentRepoId has a queued issue but no position entry in the dictionary.
         WorkerCapacityAvailableHandler sut = BuildHandler(
             repositoryEligibilityQuery: new StubRepositoryEligibilityQuery(
-                eligibleRepositories: [new EligibleRepository(eligibleRepoId.Value, Position: 0)]));
+                eligibleRepositories: [new EligibleRepository(eligibleRepoId.Value, Position: 0, MaxConcurrentWorkers: 1)]));
 
         WorkerCapacityAvailable @event = new(WorkerRunId: WorkerRunId.New());
 
@@ -1307,7 +1307,7 @@ public sealed class HandleAsync : IAsyncDisposable
             CancellationToken cancellationToken)
         {
             IReadOnlyList<EligibleRepository> eligible = repositoryIds
-                .Select(id => new EligibleRepository(id, Position: 0))
+                .Select(id => new EligibleRepository(id, Position: 0, MaxConcurrentWorkers: 1))
                 .ToList();
             return Task.FromResult(eligible);
         }

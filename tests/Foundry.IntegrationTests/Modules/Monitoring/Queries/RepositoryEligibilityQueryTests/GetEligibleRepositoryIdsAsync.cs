@@ -100,6 +100,25 @@ public sealed class GetEligibleRepositoriesAsync : IAsyncDisposable
         firstPosition.ShouldBeLessThan(secondPosition);
     }
 
+    [Fact]
+    public async Task WhenEligibleRepositoryExists_IncludesMaxConcurrentWorkers()
+    {
+        // Arrange
+        Guid accountId = await AccountSeeder.SeedGitHubAccountAsync(_factory, name: "Org 4");
+        Guid repoId = await SeedRepositoryAsync(
+            accountId,
+            "owner/concurrent",
+            new RepositoryEligibility.Eligible(),
+            maxConcurrentWorkers: 5);
+
+        // Act
+        IReadOnlyList<EligibleRepository> result = await QueryEligibleRepositoriesAsync([repoId]);
+
+        // Assert
+        EligibleRepository repo = result.ShouldHaveSingleItem();
+        repo.MaxConcurrentWorkers.ShouldBe(5);
+    }
+
     private async Task<IReadOnlyList<EligibleRepository>> QueryEligibleRepositoriesAsync(
         IReadOnlyCollection<Guid> repositoryIds)
     {
@@ -112,7 +131,8 @@ public sealed class GetEligibleRepositoriesAsync : IAsyncDisposable
     private async Task<Guid> SeedRepositoryAsync(
         Guid accountId,
         string slug,
-        RepositoryEligibility? eligibility)
+        RepositoryEligibility? eligibility,
+        int maxConcurrentWorkers = MonitoredRepository.DefaultMaxConcurrentWorkers)
     {
         // No endpoint exists to set eligibility — seed directly through DbContext.
         using IServiceScope scope = _factory.Services.CreateScope();
@@ -124,7 +144,8 @@ public sealed class GetEligibleRepositoriesAsync : IAsyncDisposable
             repositorySlug,
             "github.com",
             pollInterval: null,
-            position).ValueOrThrow();
+            position,
+            maxConcurrentWorkers).ValueOrThrow();
 
         if (eligibility is not null)
         {

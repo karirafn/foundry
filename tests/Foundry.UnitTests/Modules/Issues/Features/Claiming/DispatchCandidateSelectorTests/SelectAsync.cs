@@ -96,7 +96,7 @@ public sealed class SelectAsync : IAsyncDisposable
 
         DispatchCandidateSelector sut = BuildSelector(
             repositoryEligibilityQuery: new StubRepositoryEligibilityQuery(
-                [new EligibleRepository(repositoryId.Value, Position: 0)]));
+                [new EligibleRepository(repositoryId.Value, Position: 0, MaxConcurrentWorkers: 1)]));
 
         // Act
         SelectionOutcome outcome = await sut.SelectAsync(CancellationToken.None);
@@ -151,7 +151,7 @@ public sealed class SelectAsync : IAsyncDisposable
 
         DispatchCandidateSelector sut = BuildSelector(
             repositoryEligibilityQuery: new StubRepositoryEligibilityQuery(
-                [new EligibleRepository(repoId.Value, Position: 0)]),
+                [new EligibleRepository(repoId.Value, Position: 0, MaxConcurrentWorkers: 1)]),
             repositoryDispatchQueries: new StubRepositoryDispatchQueries(null));
 
         // Act
@@ -181,8 +181,8 @@ public sealed class SelectAsync : IAsyncDisposable
         DispatchCandidateSelector sut = BuildSelector(
             repositoryEligibilityQuery: new StubRepositoryEligibilityQuery(
             [
-                new EligibleRepository(unresolvableRepoId.Value, Position: 0),
-                new EligibleRepository(resolvableRepoId.Value, Position: 0),
+                new EligibleRepository(unresolvableRepoId.Value, Position: 0, MaxConcurrentWorkers: 1),
+                new EligibleRepository(resolvableRepoId.Value, Position: 0, MaxConcurrentWorkers: 1),
             ]),
             repositoryDispatchQueries: new SelectiveDispatchQueries(
                 resolvable: resolvableRepoId,
@@ -212,7 +212,7 @@ public sealed class SelectAsync : IAsyncDisposable
 
         DispatchCandidateSelector sut = BuildSelector(
             repositoryEligibilityQuery: new StubRepositoryEligibilityQuery(
-                [new EligibleRepository(unresolvableRepoId.Value, Position: 0)]),
+                [new EligibleRepository(unresolvableRepoId.Value, Position: 0, MaxConcurrentWorkers: 1)]),
             repositoryDispatchQueries: countingQueries);
 
         // Act
@@ -260,7 +260,7 @@ public sealed class SelectAsync : IAsyncDisposable
             CancellationToken cancellationToken)
         {
             IReadOnlyList<EligibleRepository> eligible = repositoryIds
-                .Select(id => new EligibleRepository(id, Position: 0))
+                .Select(id => new EligibleRepository(id, Position: 0, MaxConcurrentWorkers: 1))
                 .ToList();
             return Task.FromResult(eligible);
         }
