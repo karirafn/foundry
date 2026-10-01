@@ -88,17 +88,18 @@ public sealed class WhenNoStatesRequested : IAsyncDisposable
 
         // Assert
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
-        IReadOnlyList<IssueSummary>? summaries = await response.Content
-            .ReadFromJsonAsync<IReadOnlyList<IssueSummary>>(TestContext.Current.CancellationToken);
-        summaries.ShouldNotBeNull();
-        IssueSummary summary = summaries.ShouldHaveSingleItem();
+        PagedIssues? result = await response.Content
+            .ReadFromJsonAsync<PagedIssues>(TestContext.Current.CancellationToken);
+        result.ShouldNotBeNull();
+        IssueSummary summary = result.Items.ShouldHaveSingleItem();
         summary.ShouldSatisfyAllConditions(
             () => summary.IssueNumber.ShouldBe(1),
             () => summary.State.ShouldBe("detected"));
+        result.NextCursor.ShouldBeNull();
     }
 
     [Fact]
-    public async Task ReturnsBareList()
+    public async Task ReturnsSinglePageWithNullCursor()
     {
         // Arrange
         await SeedActiveIssueAsync(issueNumber: 1);
@@ -110,9 +111,10 @@ public sealed class WhenNoStatesRequested : IAsyncDisposable
 
         // Assert
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
-        IReadOnlyList<IssueSummary>? summaries = await response.Content
-            .ReadFromJsonAsync<IReadOnlyList<IssueSummary>>(TestContext.Current.CancellationToken);
-        summaries.ShouldNotBeNull();
-        summaries.ShouldHaveSingleItem();
+        PagedIssues? result = await response.Content
+            .ReadFromJsonAsync<PagedIssues>(TestContext.Current.CancellationToken);
+        result.ShouldNotBeNull();
+        result.Items.ShouldHaveSingleItem();
+        result.NextCursor.ShouldBeNull();
     }
 }

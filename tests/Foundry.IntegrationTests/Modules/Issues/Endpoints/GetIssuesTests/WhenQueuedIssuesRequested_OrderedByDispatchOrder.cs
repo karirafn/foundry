@@ -215,40 +215,40 @@ public sealed class WhenQueuedIssuesRequested_OrderedByDispatchOrder : IAsyncDis
 
         // Assert
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
-        IReadOnlyList<IssueSummary>? summaries = await response.Content
-            .ReadFromJsonAsync<IReadOnlyList<IssueSummary>>(TestContext.Current.CancellationToken);
-        summaries.ShouldNotBeNull();
-        summaries.Count.ShouldBe(5);
+        PagedIssues? result = await response.Content
+            .ReadFromJsonAsync<PagedIssues>(TestContext.Current.CancellationToken);
+        result.ShouldNotBeNull();
+        result.Items.Count.ShouldBe(5);
 
         // Eligible queued first, ordered by Dispatch Order (TierRank → Position → DetectedAt → Id):
         //   [0] issue 2: revision_queued on repoB (tier 0, position 1) — wins on tier rank
         //   [1] issue 3: continuation_queued on repoB (tier 1, position 1) — tier 1 beats tier 2
         //   [2] issue 1: queued on repoA (tier 2, position 2) — tier 2, higher position
-        summaries[0].ShouldSatisfyAllConditions(
-            () => summaries[0].IssueNumber.ShouldBe(2),
-            () => summaries[0].State.ShouldBe("revision_queued"),
-            () => summaries[0].RepositoryEligibilityStatus.ShouldBe("eligible"));
+        result.Items[0].ShouldSatisfyAllConditions(
+            () => result.Items[0].IssueNumber.ShouldBe(2),
+            () => result.Items[0].State.ShouldBe("revision_queued"),
+            () => result.Items[0].RepositoryEligibilityStatus.ShouldBe("eligible"));
 
-        summaries[1].ShouldSatisfyAllConditions(
-            () => summaries[1].IssueNumber.ShouldBe(3),
-            () => summaries[1].State.ShouldBe("continuation_queued"),
-            () => summaries[1].RepositoryEligibilityStatus.ShouldBe("eligible"));
+        result.Items[1].ShouldSatisfyAllConditions(
+            () => result.Items[1].IssueNumber.ShouldBe(3),
+            () => result.Items[1].State.ShouldBe("continuation_queued"),
+            () => result.Items[1].RepositoryEligibilityStatus.ShouldBe("eligible"));
 
-        summaries[2].ShouldSatisfyAllConditions(
-            () => summaries[2].IssueNumber.ShouldBe(1),
-            () => summaries[2].State.ShouldBe("queued"),
-            () => summaries[2].RepositoryEligibilityStatus.ShouldBe("eligible"));
+        result.Items[2].ShouldSatisfyAllConditions(
+            () => result.Items[2].IssueNumber.ShouldBe(1),
+            () => result.Items[2].State.ShouldBe("queued"),
+            () => result.Items[2].RepositoryEligibilityStatus.ShouldBe("eligible"));
 
         // Ineligible-repo queued last in the queued partition
-        summaries[3].ShouldSatisfyAllConditions(
-            () => summaries[3].IssueNumber.ShouldBe(4),
-            () => summaries[3].State.ShouldBe("queued"),
-            () => summaries[3].RepositoryEligibilityStatus.ShouldBe("ineligible"));
+        result.Items[3].ShouldSatisfyAllConditions(
+            () => result.Items[3].IssueNumber.ShouldBe(4),
+            () => result.Items[3].State.ShouldBe("queued"),
+            () => result.Items[3].RepositoryEligibilityStatus.ShouldBe("ineligible"));
 
         // Non-queued active state last
-        summaries[4].ShouldSatisfyAllConditions(
-            () => summaries[4].IssueNumber.ShouldBe(5),
-            () => summaries[4].State.ShouldBe("detected"));
+        result.Items[4].ShouldSatisfyAllConditions(
+            () => result.Items[4].IssueNumber.ShouldBe(5),
+            () => result.Items[4].State.ShouldBe("detected"));
     }
 
     [Fact]
@@ -269,13 +269,13 @@ public sealed class WhenQueuedIssuesRequested_OrderedByDispatchOrder : IAsyncDis
 
         // Assert
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
-        IReadOnlyList<IssueSummary>? summaries = await response.Content
-            .ReadFromJsonAsync<IReadOnlyList<IssueSummary>>(TestContext.Current.CancellationToken);
-        summaries.ShouldNotBeNull();
-        summaries.Count.ShouldBe(2);
+        PagedIssues? result = await response.Content
+            .ReadFromJsonAsync<PagedIssues>(TestContext.Current.CancellationToken);
+        result.ShouldNotBeNull();
+        result.Items.Count.ShouldBe(2);
 
         // Issue on repo at position 1 (issue 20) dispatched before issue on repo at position 2 (issue 10).
-        summaries[0].IssueNumber.ShouldBe(20);
-        summaries[1].IssueNumber.ShouldBe(10);
+        result.Items[0].IssueNumber.ShouldBe(20);
+        result.Items[1].IssueNumber.ShouldBe(10);
     }
 }

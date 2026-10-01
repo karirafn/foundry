@@ -85,10 +85,10 @@ public sealed class WhenIssuesExistWithEligibleRepo : IAsyncDisposable
 
         // Assert
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
-        IReadOnlyList<IssueSummary>? summaries = await response.Content
-            .ReadFromJsonAsync<IReadOnlyList<IssueSummary>>(TestContext.Current.CancellationToken);
-        summaries.ShouldNotBeNull();
-        IssueSummary summary = summaries.ShouldHaveSingleItem();
+        PagedIssues? result = await response.Content
+            .ReadFromJsonAsync<PagedIssues>(TestContext.Current.CancellationToken);
+        result.ShouldNotBeNull();
+        IssueSummary summary = result.Items.ShouldHaveSingleItem();
         summary.RepositoryEligibilityStatus.ShouldBe("eligible");
     }
 }

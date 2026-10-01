@@ -4,14 +4,13 @@ import { Subscription } from 'rxjs';
 import { IssueSignalRService } from '../../core/services/issue-signalr.service';
 import { IssueDetail, IssueState, IssueSummary, LIVE_STATES, QUEUED_TIER_STATES } from './issue.model';
 import { ACTIVE_STATES, RESOLVED_STATES, groupRankFor, isKnownState, isResolvedState, withinGroupRankFor } from './issue-lifecycle.model';
+import { components } from '../../api/schema';
+
+type PagedIssues = components['schemas']['PagedIssues'];
+type GeneratedIssueSummary = components['schemas']['IssueSummary'];
 
 interface IssueCountsResponse {
   counts: Record<string, number>;
-}
-
-interface PagedIssues {
-  items: IssueSummary[];
-  nextCursor: string | null;
 }
 
 const LOAD_ISSUES_ERROR = 'Failed to load issues';
@@ -218,9 +217,9 @@ export class IssueService {
       params = params.set('repositoryId', repositoryId);
     }
 
-    this._http.get<IssueSummary[]>('/api/issues', { params }).subscribe({
-      next: (issues) => {
-        this.issues.set(this._activeIssuesOnly(issues));
+    this._http.get<PagedIssues>('/api/issues', { params }).subscribe({
+      next: (response) => {
+        this.issues.set(this._activeIssuesOnly(response.items));
         this._loadErrorSignal.set(null);
         this.initialLoading.set(false);
       },
@@ -422,11 +421,68 @@ export class IssueService {
     }, COUNTS_DEBOUNCE_MS);
   }
 
-  // Filters the server response to only active (non-resolved) issues with valid IDs and known
-  // states — the same invariant enforced by loadIssues so that resolved states never enter
-  // issues() and _reconcileQueueOrder cannot drift from loadIssues behaviour.
-  private _activeIssuesOnly(issues: IssueSummary[]): IssueSummary[] {
-    return issues.filter(i => SAFE_ID_RE.test(i.id) && isKnownState(i.state) && !isResolvedState(i.state));
+  // Filters and narrows the server response to active (non-resolved) issues with valid IDs and
+  // known states — the same invariant enforced by loadIssues so that resolved states never enter
+  // issues() and _reconcileQueueOrder cannot drift from loadIssues behaviour. Narrows the generated
+  // schema type to the domain IssueSummary without a cast; the isKnownState type guard provides the
+  // IssueState narrowing within the loop body.
+  private _activeIssuesOnly(items: GeneratedIssueSummary[]): IssueSummary[] {
+    const result: IssueSummary[] = [];
+    for (const i of items) {
+      if (!SAFE_ID_RE.test(i.id) || !isKnownState(i.state) || isResolvedState(i.state)) {
+        continue;
+      }
+      result.push(this._toDomainIssueSummary(i, i.state));
+    }
+    return result;
+  }
+
+  // Maps a generated schema IssueSummary to the domain IssueSummary. Callers must pass the state
+  // already narrowed to IssueState (via isKnownState type guard) to avoid an unsafe cast.
+  // The generated schema uses number | string for numeric fields (openapi-typescript widens integer
+  // formats); _toFiniteNumber normalizes them to the domain's stricter number type.
+  private _toDomainIssueSummary(i: GeneratedIssueSummary, state: IssueState): IssueSummary {
+    return {
+      id: i.id,
+      issueNumber: this._toFiniteNumber(i.issueNumber),
+      title: i.title,
+      state,
+      repositorySlug: i.repositorySlug,
+      detectedAt: i.detectedAt,
+      url: i.url,
+      failureClassification: i.failureClassification ?? undefined,
+      // null is a valid domain value here (unknown eligibility), passed through intentionally;
+      // unlike failureClassification, null is NOT coerced to undefined.
+      repositoryEligibilityStatus: i.repositoryEligibilityStatus,
+      runStats: i.runStats == null ? null : {
+        runCount: this._toFiniteNumber(i.runStats.runCount),
+        durationMs: i.runStats.durationMs === null ? null : this._toFiniteNumber(i.runStats.durationMs),
+        numTurns: i.runStats.numTurns === null ? null : this._toFiniteNumber(i.runStats.numTurns),
+        totalCostUsd: i.runStats.totalCostUsd === null ? null : this._toFiniteNumber(i.runStats.totalCostUsd),
+        inputTokens: i.runStats.inputTokens === null ? null : this._toFiniteNumber(i.runStats.inputTokens),
+        outputTokens: i.runStats.outputTokens === null ? null : this._toFiniteNumber(i.runStats.outputTokens),
+      },
+    };
+  }
+
+  // Coerces a number | string to a finite number. Non-finite results (NaN, Infinity) degrade to 0
+  // so that domain state never contains NaN — which is typed as number but renders as "NaN" in the UI.
+  private _toFiniteNumber(value: number | string): number {
+    const n = Number(value);
+    return Number.isFinite(n) ? n : 0;
+  }
+
+  // Filters generated schema items to those with valid IDs and known states, then maps to domain
+  // IssueSummary. Used by the resolved page path where state may be resolved (unlike _activeIssuesOnly).
+  private _toSafeDomainItems(items: GeneratedIssueSummary[]): IssueSummary[] {
+    const result: IssueSummary[] = [];
+    for (const i of items) {
+      if (!SAFE_ID_RE.test(i.id) || !isKnownState(i.state)) {
+        continue;
+      }
+      result.push(this._toDomainIssueSummary(i, i.state));
+    }
+    return result;
   }
 
   // Refetches GET /api/issues and replaces issues() with the server's array order, treating that
@@ -439,12 +495,12 @@ export class IssueService {
     this._reconcileRequestToken += 1;
     const token = this._reconcileRequestToken;
 
-    this._http.get<IssueSummary[]>('/api/issues').subscribe({
-      next: (issues) => {
+    this._http.get<PagedIssues>('/api/issues').subscribe({
+      next: (response) => {
         if (token !== this._reconcileRequestToken) {
           return;
         }
-        this.issues.set(this._activeIssuesOnly(issues));
+        this.issues.set(this._activeIssuesOnly(response.items));
         this._queueOrderStaleSignal.set(false);
       },
       error: (err: HttpErrorResponse) => {
@@ -497,17 +553,8 @@ export class IssueService {
         if (requestToken !== this._resolvedRequestToken) {
           return;
         }
-        if (!Array.isArray(page?.items)) {
-          if (isFirstPage) {
-            this._resolvedErrorSignal.set(LOAD_RESOLVED_ERROR);
-            this.resolvedLoading.set(false);
-          } else {
-            this._resolvedLoadMoreErrorSignal.set(LOAD_MORE_RESOLVED_ERROR);
-            this.resolvedLoadingMore.set(false);
-          }
-          return;
-        }
-        const safeItems = page.items.filter(i => SAFE_ID_RE.test(i.id) && isKnownState(i.state));
+        const items = page.items ?? [];
+        const safeItems = this._toSafeDomainItems(items);
         if (isFirstPage) {
           this._resolvedIssuesSignal.set(safeItems);
         } else {
