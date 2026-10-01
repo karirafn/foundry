@@ -105,6 +105,7 @@ internal static class UpdateRepository
                         error => error.Code switch
                         {
                             RepositoryErrors.NotFoundCode => error.ToProblem(StatusCodes.Status404NotFound),
+                            RepositoryErrors.AccountNotFoundCode => error.ToProblem(StatusCodes.Status404NotFound),
                             _ => error.ToProblem(StatusCodes.Status400BadRequest),
                         });
                 })

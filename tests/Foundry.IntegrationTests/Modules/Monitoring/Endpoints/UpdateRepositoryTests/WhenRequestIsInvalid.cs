@@ -80,6 +80,6 @@ public sealed class WhenRequestIsInvalid : IAsyncDisposable
         repositories.ShouldNotBeNull();
         RepositorySummary repository = repositories.ShouldHaveSingleItem();
         repository.Id.ShouldBe(repositoryId);
-        repository.MaxConcurrentWorkers.ShouldNotBe(maxConcurrentWorkers);
+        repository.MaxConcurrentWorkers.ShouldBe(1);
     }
 }
