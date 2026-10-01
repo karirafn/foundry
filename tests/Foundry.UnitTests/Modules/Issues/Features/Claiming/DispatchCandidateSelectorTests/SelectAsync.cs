@@ -53,7 +53,8 @@ public sealed class SelectAsync : IAsyncDisposable
         return new DispatchCandidateSelector(
             _dbContext,
             repositoryDispatchQueries ?? new StubRepositoryDispatchQueries(DefaultDispatchInfo),
-            repositoryEligibilityQuery ?? new AllEligibleRepositoryEligibilityQuery());
+            repositoryEligibilityQuery ?? new AllEligibleRepositoryEligibilityQuery(),
+            new InFlightWorkerCountQuery(_dbContext));
     }
 
     private FreshQueuedIssue SeedQueuedIssue(MonitoredRepositoryId repositoryId, int issueNumber = 1)
@@ -140,7 +141,9 @@ public sealed class SelectAsync : IAsyncDisposable
         outcome.ShouldBeOfType<SelectionOutcome.NoCandidates>();
     }
 
-    // Cycle 4: all candidates' repos are unresolvable — returns AllCandidatesUnresolvable with count
+    // Cycle 4: all candidates' repos are unresolvable — returns AllCandidatesUnresolvable with count.
+    // MaxConcurrentWorkers: 2 so both issues enter the capacity-aware ordered set; both are skipped
+    // when dispatch info is null.
     [Fact]
     public async Task WhenAllCandidatesUnresolvable_ReturnsAllCandidatesUnresolvableWithSkipCount()
     {
@@ -151,7 +154,7 @@ public sealed class SelectAsync : IAsyncDisposable
 
         DispatchCandidateSelector sut = BuildSelector(
             repositoryEligibilityQuery: new StubRepositoryEligibilityQuery(
-                [new EligibleRepository(repoId.Value, Position: 0, MaxConcurrentWorkers: 1)]),
+                [new EligibleRepository(repoId.Value, Position: 0, MaxConcurrentWorkers: 2)]),
             repositoryDispatchQueries: new StubRepositoryDispatchQueries(null));
 
         // Act
@@ -220,6 +223,37 @@ public sealed class SelectAsync : IAsyncDisposable
 
         // Assert — dispatch info for the unresolvable repo queried exactly once (memoized)
         countingQueries.CallCount(unresolvableRepoId).ShouldBe(1);
+    }
+
+    // Cycle 7: all repositories saturated — queued issue exists but the repo is at capacity
+    //          (MaxConcurrentWorkers=1, InProgress issue already running) → AllRepositoriesSaturated
+    [Fact]
+    public async Task WhenAllRepositoriesSaturated_ReturnsAllRepositoriesSaturated()
+    {
+        // Arrange
+        MonitoredRepositoryId repoId = MonitoredRepositoryId.New();
+
+        // Seed queued issue
+        SeedQueuedIssue(repoId, issueNumber: 1);
+
+        // Seed in-progress issue for same repo — consumes the single slot
+        InProgressIssue inProgress = new IssueBuilder()
+            .WithMonitoredRepositoryId(repoId)
+            .WithIssueNumber(10)
+            .InProgress();
+        _dbContext.Set<Issue>().Add(inProgress);
+        await _dbContext.SaveChangesAsync(CancellationToken.None);
+        _dbContext.ChangeTracker.Clear();
+
+        DispatchCandidateSelector sut = BuildSelector(
+            repositoryEligibilityQuery: new StubRepositoryEligibilityQuery(
+                [new EligibleRepository(repoId.Value, Position: 0, MaxConcurrentWorkers: 1)]));
+
+        // Act
+        SelectionOutcome outcome = await sut.SelectAsync(CancellationToken.None);
+
+        // Assert
+        outcome.ShouldBeOfType<SelectionOutcome.AllRepositoriesSaturated>();
     }
 
     // Stub that returns exactly the provided eligible repositories (with positions).

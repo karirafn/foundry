@@ -410,7 +410,8 @@ public sealed class WorkerRunIdGuardExhaustivenessTests : IAsyncDisposable
                 "GITHUB_PAT",
                 new WorkerProvider.GitHub(),
                 "https://api.github.com/repos/owner/repo/issues")),
-            repositoryEligibilityQuery ?? new AllEligibleRepositoryEligibilityQuery());
+            repositoryEligibilityQuery ?? new AllEligibleRepositoryEligibilityQuery(),
+            new InFlightWorkerCountQuery(_dbContext));
 
         IssueClaimer claimer = new(
             _dbContext,

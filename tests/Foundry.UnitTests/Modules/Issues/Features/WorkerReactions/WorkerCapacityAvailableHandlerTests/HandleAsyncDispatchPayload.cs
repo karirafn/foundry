@@ -50,7 +50,8 @@ public sealed class HandleAsyncDispatchPayload : IAsyncDisposable
         DispatchCandidateSelector selector = new(
             _dbContext,
             repositoryDispatchQueries,
-            new AllEligibleRepositoryEligibilityQuery());
+            new AllEligibleRepositoryEligibilityQuery(),
+            new InFlightWorkerCountQuery(_dbContext));
         IssueClaimer claimer = new(_dbContext, _dispatcher, new NullDomainEventDispatcher());
         _sut = new WorkerCapacityAvailableHandler(
             _dbContext,
