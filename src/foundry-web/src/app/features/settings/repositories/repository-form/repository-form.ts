@@ -31,6 +31,10 @@ const SECONDS_PER_MINUTE = 60;
 const MIN_POLL_INTERVAL_MINUTES = 1;
 const MAX_POLL_INTERVAL_MINUTES = 1440;
 
+const DEFAULT_MAX_CONCURRENT_WORKERS = 1;
+const MIN_WORKER_LIMIT = 1;
+const MAX_WORKER_LIMIT = 20;
+
 @Component({
   selector: 'fd-repository-form',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -184,6 +188,26 @@ const MAX_POLL_INTERVAL_MINUTES = 1440;
         />
       </div>
 
+      <div class="repository-form__field">
+        <label class="repository-form__field-label" for="repository-max-workers">
+          Max concurrent workers
+        </label>
+        <input
+          class="repository-form__input repository-form__input--narrow"
+          type="number"
+          id="repository-max-workers"
+          min="1"
+          max="20"
+          step="1"
+          aria-describedby="repository-max-workers-hint"
+          [value]="_maxConcurrentWorkers()"
+          (input)="onMaxConcurrentWorkersInput($any($event.target).value)"
+        />
+        <span class="repository-form__field-hint" id="repository-max-workers-hint">
+          How many workers may run at once for this repository (1–20). Default 1 — one worker at a time.
+        </span>
+      </div>
+
       @if (_isEditMode()) {
         <div class="repository-form__field repository-form__field--inline">
           <label class="repository-form__field-label" for="repository-active">Active</label>
@@ -238,6 +262,7 @@ export class RepositoryFormComponent implements OnInit {
   protected readonly _selectedAccountId: WritableSignal<string> = signal('');
   protected readonly _repoSlug: WritableSignal<string> = signal('');
   protected readonly _pollIntervalMinutes: WritableSignal<number | ''> = signal(DEFAULT_POLL_INTERVAL_MINUTES);
+  protected readonly _maxConcurrentWorkers: WritableSignal<number | ''> = signal(DEFAULT_MAX_CONCURRENT_WORKERS);
   protected readonly _isActive: WritableSignal<boolean> = signal(true);
   protected readonly _pickerOpen: WritableSignal<boolean> = signal(false);
   protected readonly _activeOptionIndex: WritableSignal<number> = signal(-1);
@@ -284,6 +309,10 @@ export class RepositoryFormComponent implements OnInit {
     if (interval !== '' && (interval < MIN_POLL_INTERVAL_MINUTES || interval > MAX_POLL_INTERVAL_MINUTES)) {
       return false;
     }
+    const workers = this._maxConcurrentWorkers();
+    if (workers !== '' && (workers < MIN_WORKER_LIMIT || workers > MAX_WORKER_LIMIT)) {
+      return false;
+    }
     if (this._isEditMode()) {
       return true;
     }
@@ -308,6 +337,7 @@ export class RepositoryFormComponent implements OnInit {
         ? repo.pollIntervalSeconds / SECONDS_PER_MINUTE
         : '';
       this._pollIntervalMinutes.set(minutes);
+      this._maxConcurrentWorkers.set(repo.maxConcurrentWorkers ?? DEFAULT_MAX_CONCURRENT_WORKERS);
       this._isActive.set(repo.isActive);
     }
   }
@@ -386,22 +416,32 @@ export class RepositoryFormComponent implements OnInit {
     }
   }
 
+  onMaxConcurrentWorkersInput(value: string): void {
+    if (value === '') {
+      this._maxConcurrentWorkers.set('');
+    } else {
+      this._maxConcurrentWorkers.set(Number(value));
+    }
+  }
+
   onSave(): void {
     const minutes = this._pollIntervalMinutes();
     const pollIntervalSeconds = minutes === '' ? null : minutes * SECONDS_PER_MINUTE;
+    const workers = this._maxConcurrentWorkers();
+    const maxConcurrentWorkers = workers === '' ? DEFAULT_MAX_CONCURRENT_WORKERS : Math.trunc(workers);
 
     if (this._isEditMode()) {
       const request: UpdateRepositoryRequest = {
         pollIntervalSeconds,
         isActive: this._isActive(),
-        maxConcurrentWorkers: this.repository()?.maxConcurrentWorkers ?? 1,
+        maxConcurrentWorkers,
       };
       this.save.emit(request);
     } else {
       const request: CreateRepositoryRequest = {
         slug: this._repoSlug(),
         pollIntervalSeconds,
-        maxConcurrentWorkers: null,
+        maxConcurrentWorkers,
       };
       this.save.emit(request);
     }
