@@ -1,4 +1,5 @@
 using System.Net;
+using System.Net.Http.Json;
 
 using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Monitoring.Contracts;
@@ -9,6 +10,7 @@ using Foundry.Modules.Workers.Domain.ValueObjects;
 using Foundry.Shared;
 using Foundry.WebApi.Persistence;
 
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -20,6 +22,7 @@ namespace Foundry.IntegrationTests.Modules.Workers.Runs.GetWorkerRunLogTests;
 
 public sealed class WhenRunLogRequested : IAsyncDisposable
 {
+    private const int NotFoundStatus = 404;
     private readonly FoundryWebAppFactory _factory;
     private readonly HttpClient _client;
 
@@ -79,7 +82,7 @@ public sealed class WhenRunLogRequested : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenRunDoesNotExist_Returns404()
+    public async Task WhenRunDoesNotExist_Returns404AsProblemDetails()
     {
         // Arrange
         Guid unknownId = Guid.NewGuid();
@@ -91,6 +94,14 @@ public sealed class WhenRunLogRequested : IAsyncDisposable
 
         // Assert
         response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        response.Content.Headers.ContentType?.MediaType.ShouldBe("application/problem+json");
+        ProblemDetails problem = (await response.Content
+            .ReadFromJsonAsync<ProblemDetails>(TestContext.Current.CancellationToken))
+            .ShouldNotBeNull();
+        problem.ShouldSatisfyAllConditions(
+            () => problem.Status.ShouldBe(NotFoundStatus),
+            () => problem.Type.ShouldEndWith("WorkerRun.NotFound"),
+            () => problem.Detail.ShouldNotBeNullOrEmpty());
     }
 
     [Fact]
