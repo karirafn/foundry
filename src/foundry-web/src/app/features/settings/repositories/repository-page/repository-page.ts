@@ -3,15 +3,18 @@ import {
   Component,
   ElementRef,
   Injector,
+  OnInit,
   Signal,
   ViewChild,
+  WritableSignal,
   afterNextRender,
   computed,
   effect,
   inject,
   runInInjectionContext,
+  signal,
 } from '@angular/core';
-import { ActivatedRoute, RouterLink } from '@angular/router';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { map } from 'rxjs/operators';
 import { RepositoryService } from '../repository.service';
@@ -115,10 +118,11 @@ type ViewState = 'loading' | 'load-error' | 'not-found' | 'loaded';
   `,
   styleUrl: './repository-page.scss',
 })
-export class RepositoryPageComponent {
+export class RepositoryPageComponent implements OnInit {
   protected readonly repositoryService = inject(RepositoryService);
   protected readonly accountService = inject(AccountService);
   private readonly _route = inject(ActivatedRoute);
+  private readonly _router = inject(Router);
   private readonly _injector = inject(Injector);
 
   @ViewChild('notFoundHeading') private readonly _notFoundHeading?: ElementRef<HTMLElement>;
@@ -129,6 +133,15 @@ export class RepositoryPageComponent {
     { initialValue: null }
   );
 
+  // Tracks whether a load has been attempted — prevents not-found flash on cold/deep-link load.
+  private readonly _loadAttempted: WritableSignal<boolean> = signal(false);
+
+  // Mirrors the account-keyed dedup from settings-repositories to avoid re-triggering on unchanged accounts.
+  private readonly _accountIdsKey: Signal<string> = computed(() =>
+    this.accountService.accounts().map(a => a.id).sort().join(',')
+  );
+  private readonly _lastLoadedAccountIdsKey: WritableSignal<string> = signal('');
+
   protected readonly _repository: Signal<RepositorySummary | undefined> = computed(() => {
     const id = this._repositoryId();
     if (!id) {
@@ -138,7 +151,7 @@ export class RepositoryPageComponent {
   });
 
   protected readonly _viewState: Signal<ViewState> = computed(() => {
-    if (this.repositoryService.loading()) {
+    if (!this._loadAttempted() || this.repositoryService.loading()) {
       return 'loading';
     }
     if (this.repositoryService.loadError()) {
@@ -168,10 +181,25 @@ export class RepositoryPageComponent {
     }
   });
 
-  protected readonly _recheckPending: Signal<boolean> = computed(() => false);
-  protected readonly _recheckError: Signal<string | null> = computed(() => null);
+  private readonly _recheckPendingSignal: WritableSignal<boolean> = signal(false);
+  private readonly _recheckErrorSignal: WritableSignal<string | null> = signal(null);
+
+  protected readonly _recheckPending: Signal<boolean> = this._recheckPendingSignal.asReadonly();
+  protected readonly _recheckError: Signal<string | null> = this._recheckErrorSignal.asReadonly();
 
   constructor() {
+    // Account-keyed effect: triggers loadAllRepositories whenever the set of accounts changes.
+    // Mirrors the pattern from settings-repositories.ts to avoid redundant loads.
+    effect(() => {
+      const key = this._accountIdsKey();
+      if (key !== this._lastLoadedAccountIdsKey()) {
+        this._lastLoadedAccountIdsKey.set(key);
+        const accountIds = this.accountService.accounts().map(a => a.id);
+        this._loadAttempted.set(true);
+        this.repositoryService.loadAllRepositories(accountIds);
+      }
+    });
+
     effect(() => {
       const state = this._viewState();
       if (state === 'not-found' || state === 'load-error') {
@@ -188,6 +216,12 @@ export class RepositoryPageComponent {
     });
   }
 
+  ngOnInit(): void {
+    if (this.accountService.accounts().length === 0) {
+      this.accountService.loadAccounts();
+    }
+  }
+
   onSave(request: CreateRepositoryRequest | UpdateRepositoryRequest): void {
     const repo = this._repository();
     if (!repo) {
@@ -200,9 +234,7 @@ export class RepositoryPageComponent {
   }
 
   onBack(): void {
-    // Navigation handled via routerLink in templates for non-loaded states.
-    // In loaded state, the form's Cancel button calls this.
-    // Router injection deferred to later step when navigation is wired end-to-end.
+    this._router.navigate(['/settings/repositories']);
   }
 
   onRetry(): void {
@@ -215,8 +247,16 @@ export class RepositoryPageComponent {
     if (!repo) {
       return;
     }
+    this._recheckErrorSignal.set(null);
+    this._recheckPendingSignal.set(true);
     this.repositoryService.recheckEligibility(repo.accountId, repo.id).subscribe({
-      error: () => { /* no-op — service handles errors */ },
+      next: () => {
+        this._recheckPendingSignal.set(false);
+      },
+      error: () => {
+        this._recheckPendingSignal.set(false);
+        this._recheckErrorSignal.set('Re-check failed. Please try again.');
+      },
     });
   }
 
