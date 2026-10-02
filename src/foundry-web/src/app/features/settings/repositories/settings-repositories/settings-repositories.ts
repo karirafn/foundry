@@ -20,7 +20,7 @@ import { RepositoryListComponent } from '../repository-list/repository-list';
 import { RepositoryFormComponent } from '../repository-form/repository-form';
 import { RepositorySummary, CreateRepositoryRequest, UpdateRepositoryRequest } from '../repository.model';
 
-type RepositoryView = { kind: 'list' } | { kind: 'add' } | { kind: 'edit'; repository: RepositorySummary };
+type RepositoryView = { kind: 'list' } | { kind: 'add' };
 
 @Component({
   selector: 'fd-settings-repositories',
@@ -64,21 +64,6 @@ type RepositoryView = { kind: 'list' } | { kind: 'add' } | { kind: 'edit'; repos
               (accountSelected)="onAccountSelected($event)"
             />
           }
-          @case ('edit') {
-            <fd-repository-form
-              [repository]="_editRepository"
-              [accounts]="accountService.accounts()"
-              [availableRepositories]="repositoryService.availableRepositories()"
-              [hasClaims]="repositoryService.availableHasClaims()"
-              [loadingAvailable]="repositoryService.loadingAvailable()"
-              [loadAvailableError]="repositoryService.loadAvailableError()"
-              [saving]="repositoryService.saving()"
-              [saveError]="repositoryService.saveError()"
-              (save)="onSave($event)"
-              (cancel)="onCancel()"
-              (accountSelected)="onAccountSelected($event)"
-            />
-          }
         }
       </section>
     </div>
@@ -98,10 +83,6 @@ export class SettingsRepositoriesComponent implements OnInit {
     this.accountService.accounts().map(a => a.id).sort().join(',')
   );
   private readonly _lastLoadedAccountIdsKey: WritableSignal<string> = signal('');
-
-  protected get _editRepository(): RepositorySummary {
-    return (this._repositoryView() as { kind: 'edit'; repository: RepositorySummary }).repository;
-  }
 
   constructor() {
     effect(() => {
@@ -127,10 +108,6 @@ export class SettingsRepositoriesComponent implements OnInit {
     this._repositoryView.set({ kind: 'add' });
   }
 
-  onEdit(repository: RepositorySummary): void {
-    this._repositoryView.set({ kind: 'edit', repository });
-  }
-
   onCancel(): void {
     this._repositoryView.set({ kind: 'list' });
     runInInjectionContext(this._injector, () => {
@@ -141,21 +118,11 @@ export class SettingsRepositoriesComponent implements OnInit {
   }
 
   onSave(request: CreateRepositoryRequest | UpdateRepositoryRequest): void {
-    const view = this._repositoryView();
-    if (view.kind === 'add') {
-      this.repositoryService.createRepository(this._selectedAccountId(), request as CreateRepositoryRequest)
-        .subscribe({
-          next: () => this._afterSave(),
-          error: () => { /* handled via saveError signal */ },
-        });
-    } else if (view.kind === 'edit') {
-      const repo = view.repository;
-      this.repositoryService.updateRepository(repo.accountId, repo.id, request as UpdateRepositoryRequest)
-        .subscribe({
-          next: () => this._afterSave(),
-          error: () => { /* handled via saveError signal */ },
-        });
-    }
+    this.repositoryService.createRepository(this._selectedAccountId(), request as CreateRepositoryRequest)
+      .subscribe({
+        next: () => this._afterSave(),
+        error: () => { /* handled via saveError signal */ },
+      });
   }
 
   onDelete(repository: RepositorySummary): void {

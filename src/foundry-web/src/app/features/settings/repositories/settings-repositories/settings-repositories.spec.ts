@@ -159,23 +159,23 @@ describe('SettingsRepositoriesComponent', () => {
     expect(list).toBeFalsy();
   });
 
-  it('should render fd-repository-form with repository data when Edit is clicked', () => {
+  it('should remain in list view after repositories load (edit no longer swaps the view)', () => {
     // Arrange
     const { fixture, httpMock } = setup();
     fixture.detectChanges();
-    flushAccounts(httpMock);
+    flushAccounts(httpMock, [ACCOUNT_1]);
     fixture.detectChanges();
+    flushRepositories(httpMock, ACCOUNT_1.id, [REPO_1]);
 
     // Act
-    fixture.componentInstance.onEdit(REPO_1);
     fixture.detectChanges();
 
-    // Assert
+    // Assert — the list is shown; no form (edit arm is gone; navigation is now handled by the list)
     const el = fixture.nativeElement as HTMLElement;
-    const form = el.querySelector('fd-repository-form');
-    expect(form).toBeTruthy();
     const list = el.querySelector('fd-repository-list');
-    expect(list).toBeFalsy();
+    expect(list).toBeTruthy();
+    const form = el.querySelector('fd-repository-form');
+    expect(form).toBeFalsy();
   });
 
   it('should return to list view after cancel', () => {
@@ -219,29 +219,6 @@ describe('SettingsRepositoriesComponent', () => {
     expect(req.request.method).toBe('POST');
     expect(req.request.body).toEqual({ slug: 'my-org/new-repo', pollIntervalSeconds: 300, maxConcurrentWorkers: null });
     req.flush(REPO_1, { status: 201, statusText: 'Created' });
-
-    // Flush reload
-    flushRepositories(httpMock, ACCOUNT_1.id, [REPO_1]);
-  });
-
-  it('should call updateRepository when saving from edit view', () => {
-    // Arrange
-    const { fixture, httpMock } = setup();
-    fixture.detectChanges();
-    flushAccounts(httpMock, [ACCOUNT_1]);
-    fixture.detectChanges();
-    flushRepositories(httpMock, ACCOUNT_1.id, [REPO_1]);
-    fixture.componentInstance.onEdit(REPO_1);
-    fixture.detectChanges();
-
-    // Act
-    fixture.componentInstance.onSave({ pollIntervalSeconds: 600, isActive: false, maxConcurrentWorkers: 1 });
-
-    // Assert
-    const req = httpMock.expectOne(`/api/accounts/${ACCOUNT_1.id}/repositories/${REPO_1.id}`);
-    expect(req.request.method).toBe('PUT');
-    expect(req.request.body).toEqual({ pollIntervalSeconds: 600, isActive: false, maxConcurrentWorkers: 1 });
-    req.flush({ ...REPO_1, pollIntervalSeconds: 600, isActive: false });
 
     // Flush reload
     flushRepositories(httpMock, ACCOUNT_1.id, [REPO_1]);
