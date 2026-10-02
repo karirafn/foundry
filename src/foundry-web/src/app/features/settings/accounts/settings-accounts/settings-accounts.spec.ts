@@ -150,10 +150,10 @@ describe('SettingsAccountsComponent', () => {
     // Act
     const accountService = TestBed.inject(AccountService);
     accountService.deleteAccount(account.id);
-    httpMock.expectOne(`/api/accounts/${account.id}`).flush('Account is in use.', {
-      status: 409,
-      statusText: 'Conflict',
-    });
+    httpMock.expectOne(`/api/accounts/${account.id}`).flush(
+      { type: 'tag:foundry,2026:problems/Account.InUse', title: 'Conflict', status: 409, detail: 'Account is in use.' },
+      { status: 409, statusText: 'Conflict' }
+    );
     fixture.detectChanges();
 
     // Assert

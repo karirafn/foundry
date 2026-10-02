@@ -2116,10 +2116,10 @@ describe('SettingsGeneralComponent', () => {
 
       // Act — trigger a failed save
       service.updateAllowedProviderHosts(['bad host!']);
-      httpMock.expectOne('/api/settings/allowed-provider-hosts').flush('Host "bad host!" is invalid', {
-        status: 400,
-        statusText: 'Bad Request',
-      });
+      httpMock.expectOne('/api/settings/allowed-provider-hosts').flush(
+        { type: 'tag:foundry,2026:problems/Settings.InvalidHost', title: 'Bad Request', status: 400, detail: 'Host "bad host!" is invalid' },
+        { status: 400, statusText: 'Bad Request' }
+      );
       fixture.detectChanges();
 
       // Assert

@@ -15,15 +15,15 @@ describe('extractErrorMessage', () => {
     expect(result).toBe('The request timed out. Please try again.');
   });
 
-  it('returns the bare string body when err.error is a non-empty string', () => {
+  it('returns null when err.error is a non-empty string (bare-string branch removed)', () => {
     // Arrange
     const err = new HttpErrorResponse({ error: 'Something went wrong on the server', status: 400 });
 
     // Act
     const result = extractErrorMessage(err);
 
-    // Assert
-    expect(result).toBe('Something went wrong on the server');
+    // Assert — bare-string branch is gone; all endpoints now return ProblemDetails
+    expect(result).toBeNull();
   });
 
   it('returns err.error.detail when body is ProblemDetails-shaped with a non-empty detail', () => {
@@ -40,16 +40,15 @@ describe('extractErrorMessage', () => {
     expect(result).toBe('Repository not found');
   });
 
-  it('returns the string body when err.error is a string (string branch precedes detail branch)', () => {
-    // Arrange — a string error body has no .detail property, proving string branch fires before detail check
+  it('returns null when err.error is a string with no detail property (bare-string branch gone)', () => {
+    // Arrange — all endpoints now return ProblemDetails; bare string bodies no longer produced
     const err = new HttpErrorResponse({ error: 'Bare string from unmigrated endpoint', status: 422 });
 
     // Act
     const result = extractErrorMessage(err);
 
-    // Assert — string branch wins; detail branch is not reached
-    expect(result).toBe('Bare string from unmigrated endpoint');
-    expect(result).not.toBeNull();
+    // Assert — string body falls through to null; only detail branch is live
+    expect(result).toBeNull();
   });
 
   it('returns null when err.error is an empty string', () => {
