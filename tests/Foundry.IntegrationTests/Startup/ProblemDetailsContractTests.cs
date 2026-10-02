@@ -25,9 +25,11 @@ public sealed class ProblemDetailsContractTests : IAsyncDisposable
     private static readonly Type IResultType = typeof(IResult);
 
     // Success arms are allowed alongside ProblemHttpResult in any union.
-    // Conflict<T> is in here because CreateAccount/UpdateAccount use it with
-    // application/json typed envelopes (ADR 0056), not application/problem+json —
-    // so it never appears in the problem+json filtered set, but listing it here
+    // Conflict<T> and UnprocessableEntity<T> are in here because CreateAccount/UpdateAccount
+    // use them with application/json typed envelopes (ADR 0056), not application/problem+json:
+    //   - Conflict<AccountSummary>     — duplicate-account 409 on CreateAccount/UpdateAccount
+    //   - UnprocessableEntity<TakeoverValidationResponse> — 422 on CreateAccount
+    // Neither ever appears in the problem+json filtered set, but listing them here
     // makes the allow-list explicit.
     private static readonly HashSet<Type> SuccessArmOpenTypes =
     [
@@ -108,6 +110,44 @@ public sealed class ProblemDetailsContractTests : IAsyncDisposable
         violations.ShouldContain(
             v => v.Contains("BadRequest`1"),
             "the violation message must name the offending arm type 'BadRequest`1'");
+    }
+
+    /// <summary>
+    /// Reflection-seam guard: confirms that the GetIssues endpoint (block-body lambda returning
+    /// Results&lt;Ok&lt;PagedIssues&gt;, ProblemHttpResult&gt; via explicit cast) has its MethodInfo
+    /// stamped by ASP.NET Core and its return type correctly resolved as a closed Results&lt;...&gt;
+    /// generic. If either check fails, the main contract test silently skips enforcement for
+    /// this endpoint.
+    /// </summary>
+    [Fact]
+    public void WhenGetIssuesEndpointIsInspected_MethodInfoIsNonNullAndReturnTypeIsClosedResultsGeneric()
+    {
+        // Arrange
+        EndpointDataSource dataSource =
+            _factory.Services.GetRequiredService<EndpointDataSource>();
+
+        RouteEndpoint getIssuesEndpoint = dataSource.Endpoints
+            .OfType<RouteEndpoint>()
+            .Where(e => e.Metadata.GetMetadata<IEndpointNameMetadata>()?.EndpointName == "GetIssues")
+            .ShouldHaveSingleItem(
+                "exactly one endpoint named 'GetIssues' must be registered; " +
+                "if the endpoint was renamed, update this guard test accordingly");
+
+        // Act
+        MethodInfo? methodInfo = getIssuesEndpoint.Metadata.OfType<MethodInfo>().FirstOrDefault();
+        Type returnType = methodInfo is not null
+            ? UnwrapAsyncReturnType(methodInfo.ReturnType)
+            : typeof(void);
+
+        // Assert
+        methodInfo.ShouldNotBeNull(
+            "GetIssues uses a block-body lambda and ASP.NET Core must stamp its MethodInfo into " +
+            "endpoint metadata; without it the contract test silently skips enforcement for this endpoint");
+
+        IsClosedResultsGeneric(returnType).ShouldBeTrue(
+            $"GetIssues must return a closed Results<...> generic so the contract test can enumerate " +
+            $"its arms; actual unwrapped return type was '{returnType.Name}'. " +
+            "If the lambda was changed to return IResult, narrow it back to Results<Ok<PagedIssues>, ProblemHttpResult>.");
     }
 
     // Deliberately non-compliant handler: returns BadRequest<string> but the endpoint

@@ -55,11 +55,7 @@ internal static class ResumeDispatch
 
                     return result.Match<Results<Ok<GlobalSettingsSummary>, ProblemHttpResult>>(
                         summary => TypedResults.Ok(summary),
-                        error => error.Code switch
-                        {
-                            SettingsErrors.NotFoundCode => error.ToProblem(StatusCodes.Status404NotFound),
-                            _ => error.ToProblem(StatusCodes.Status404NotFound),
-                        });
+                        error => error.ToProblem(StatusCodes.Status404NotFound));
                 })
                 .WithName("ResumeDispatch")
                 .WithSummary("Resumes worker dispatch")
