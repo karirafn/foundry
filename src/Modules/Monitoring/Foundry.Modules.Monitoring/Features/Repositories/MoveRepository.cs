@@ -1,6 +1,7 @@
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Shared;
+using Foundry.Shared.Infrastructure.Http;
 
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
@@ -88,12 +89,12 @@ internal static class MoveRepository
                     Command command = new(id, body.Position);
                     Result<bool> result = await handler.HandleAsync(command, cancellationToken);
 
-                    return result.Match<Results<NoContent, NotFound, BadRequest<string>>>(
+                    return result.Match<Results<NoContent, ProblemHttpResult>>(
                         _ => TypedResults.NoContent(),
                         error => error.Code switch
                         {
-                            RepositoryErrors.NotFoundCode => TypedResults.NotFound(),
-                            _ => TypedResults.BadRequest(error.Message),
+                            RepositoryErrors.NotFoundCode => error.ToProblem(StatusCodes.Status404NotFound),
+                            _ => error.ToProblem(StatusCodes.Status400BadRequest),
                         });
                 })
                 .WithName("MoveRepository")
