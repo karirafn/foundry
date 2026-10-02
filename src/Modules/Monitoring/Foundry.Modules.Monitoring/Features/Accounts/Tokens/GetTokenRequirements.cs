@@ -1,5 +1,6 @@
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Shared;
+using Foundry.Shared.Infrastructure.Http;
 
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
@@ -45,9 +46,9 @@ internal static class GetTokenRequirements
                         new Query(provider),
                         cancellationToken);
 
-                    return result.Match<Results<Ok<TokenRequirements>, NotFound>>(
+                    return result.Match<Results<Ok<TokenRequirements>, ProblemHttpResult>>(
                         requirements => TypedResults.Ok(requirements),
-                        _ => TypedResults.NotFound());
+                        error => error.ToProblem(StatusCodes.Status404NotFound));
                 })
                 .WithName("GetTokenRequirements")
                 .WithSummary("Gets the PAT requirements for a provider")

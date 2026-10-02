@@ -7,6 +7,7 @@ using Foundry.Modules.Monitoring.Infrastructure;
 using Foundry.Modules.Monitoring.Infrastructure.GitHub;
 using Foundry.Modules.Monitoring.Infrastructure.GitLab;
 using Foundry.Shared;
+using Foundry.Shared.Infrastructure.Http;
 
 using BaseUrlVo = Foundry.Modules.Monitoring.Domain.ValueObjects.BaseUrl;
 
@@ -106,8 +107,8 @@ internal static class ValidateToken
                     Result<BaseUrlVo> baseUrlResult = BaseUrlVo.Create(body.BaseUrl);
                     if (baseUrlResult is Result<BaseUrlVo>.Failure baseUrlFailure)
                     {
-                        return (Results<Ok<Response>, BadRequest<string>>)TypedResults.BadRequest(
-                            baseUrlFailure.Error.Message);
+                        return (Results<Ok<Response>, ProblemHttpResult>)
+                            baseUrlFailure.Error.ToProblem(StatusCodes.Status400BadRequest);
                     }
 
                     BaseUrlVo parsedBaseUrl = ((Result<BaseUrlVo>.Success)baseUrlResult).Value;
@@ -115,13 +116,15 @@ internal static class ValidateToken
                     Result hostGuardResult = await providerHostGuard.EnsureAllowedAsync(parsedBaseUrl, cancellationToken);
                     if (hostGuardResult is Result.Failure hostGuardFailure)
                     {
-                        return TypedResults.BadRequest(hostGuardFailure.Error.Message);
+                        return hostGuardFailure.Error.ToProblem(StatusCodes.Status400BadRequest);
                     }
 
                     if (!ProviderTypes.IsKnown(body.ProviderType))
                     {
-                        return TypedResults.BadRequest(
+                        Error unknownProvider = new(
+                            "ProviderType.Unknown",
                             $"Provider type '{body.ProviderType}' is not supported. Only 'github' and 'gitlab' are supported.");
+                        return unknownProvider.ToProblem(StatusCodes.Status400BadRequest);
                     }
 
                     Uri apiBaseUrl = string.Equals(body.ProviderType, ProviderTypes.GitLab, StringComparison.OrdinalIgnoreCase)
@@ -132,9 +135,9 @@ internal static class ValidateToken
                         new Query(body.Token, apiBaseUrl, body.ProviderType),
                         cancellationToken);
 
-                    return result.Match<Results<Ok<Response>, BadRequest<string>>>(
+                    return result.Match<Results<Ok<Response>, ProblemHttpResult>>(
                         response => TypedResults.Ok(response),
-                        error => TypedResults.BadRequest(error.Message));
+                        error => error.ToProblem(StatusCodes.Status400BadRequest));
                 })
                 .WithName("ValidateToken")
                 .WithSummary("Validates a personal access token for the given provider")
