@@ -40,7 +40,7 @@ type ViewState = 'loading' | 'load-error' | 'not-found' | 'loaded';
       {{ _statusAnnouncement() }}
     </span>
 
-    <section class="repository-page__section">
+    <section class="repository-page__section" aria-labelledby="repository-page-heading">
       @switch (_viewState()) {
         @case ('loading') {
           <div class="repository-page__loading" role="status" aria-label="Loading repository">

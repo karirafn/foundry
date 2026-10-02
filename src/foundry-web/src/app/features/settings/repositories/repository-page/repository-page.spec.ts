@@ -1,7 +1,8 @@
 import { TestBed } from '@angular/core/testing';
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
-import { ActivatedRoute, Router, convertToParamMap } from '@angular/router';
+import { ActivatedRoute, Router, convertToParamMap, provideRouter } from '@angular/router';
+import { RouterTestingHarness } from '@angular/router/testing';
 import { of } from 'rxjs';
 import { RepositoryPageComponent } from './repository-page';
 import { RepositoryService } from '../repository.service';
@@ -615,6 +616,83 @@ describe('RepositoryPageComponent', () => {
 
       // Assert
       expect(component['_recheckError']()).toBeNull();
+    });
+  });
+
+  describe('routed smoke (RouterTestingHarness — pre-ship integration layer)', () => {
+    function setupRoutedHarness() {
+      TestBed.resetTestingModule();
+      TestBed.configureTestingModule({
+        providers: [
+          AccountService,
+          RepositoryService,
+          provideHttpClient(),
+          provideHttpClientTesting(),
+          provideRouter([
+            {
+              path: 'repositories/:repositoryId',
+              component: RepositoryPageComponent,
+            },
+          ]),
+        ],
+      });
+    }
+
+    it('should render fd-repository-form when navigating to a known repository id', async () => {
+      // Arrange
+      setupRoutedHarness();
+      const httpMock = TestBed.inject(HttpTestingController);
+
+      // Act — navigate to the known repository id via the real router
+      const harness = await RouterTestingHarness.create(`/repositories/${REPO_1.id}`);
+      // Flush accounts first; this triggers the account-keyed effect in the page
+      httpMock.expectOne('/api/accounts').flush([ACCOUNT_1]);
+      harness.detectChanges();
+      await harness.fixture.whenStable();
+      // Now flush repositories — accounts resolved, loadAllRepositories fired
+      httpMock.expectOne(`/api/accounts/${ACCOUNT_1.id}/repositories`).flush([REPO_1]);
+      harness.detectChanges();
+      await harness.fixture.whenStable();
+      harness.detectChanges();
+
+      // Assert — form is rendered for the found repository
+      const el = harness.fixture.nativeElement as HTMLElement;
+      const form = el.querySelector('fd-repository-form');
+      expect(form).toBeTruthy();
+      const heading = el.querySelector('.repository-page__heading');
+      expect(heading?.textContent?.trim()).toBe(REPO_1.slug);
+
+      httpMock.verify();
+    });
+
+    it('should render the not-found state when navigating to an unknown repository id', async () => {
+      // Arrange
+      setupRoutedHarness();
+      const httpMock = TestBed.inject(HttpTestingController);
+      const unknownId = '00000000-0000-0000-0000-000000000999';
+
+      // Act — navigate to an id that does not exist in the service cache
+      const harness = await RouterTestingHarness.create(`/repositories/${unknownId}`);
+      // Flush accounts first; this triggers the account-keyed effect in the page
+      httpMock.expectOne('/api/accounts').flush([ACCOUNT_1]);
+      harness.detectChanges();
+      await harness.fixture.whenStable();
+      // Flush repositories — the requested id is absent, yielding not-found
+      httpMock.expectOne(`/api/accounts/${ACCOUNT_1.id}/repositories`).flush([REPO_1]);
+      harness.detectChanges();
+      await harness.fixture.whenStable();
+      harness.detectChanges();
+
+      // Assert — not-found state renders with a back link; no form
+      const el = harness.fixture.nativeElement as HTMLElement;
+      const notFound = el.querySelector('.repository-page__not-found');
+      expect(notFound).toBeTruthy();
+      const form = el.querySelector('fd-repository-form');
+      expect(form).toBeFalsy();
+      const backLink = el.querySelector('.repository-page__back-link');
+      expect(backLink).toBeTruthy();
+
+      httpMock.verify();
     });
   });
 });
