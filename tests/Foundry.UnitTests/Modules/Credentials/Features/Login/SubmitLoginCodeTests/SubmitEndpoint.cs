@@ -1,7 +1,9 @@
+using Foundry.Modules.Credentials.Domain.Entities;
 using Foundry.Modules.Credentials.Features.Login;
 using Foundry.UnitTests.Fakes.Credentials;
 using Foundry.UnitTests.Fakes.Workers;
 
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.HttpResults;
 
 using Shouldly;
@@ -13,43 +15,51 @@ namespace Foundry.UnitTests.Modules.Credentials.Features.Login.SubmitLoginCodeTe
 public sealed class SubmitEndpoint
 {
     [Fact]
-    public async Task WhenCodeIsEmpty_Returns400()
+    public async Task WhenCodeIsEmpty_Returns400WithLoginCodeEmptyCode()
     {
         // Arrange
         FakeCredentialsOrchestrator orchestrator = new([]);
         LoginSessionService service = new(orchestrator, new FakeLoginSuccessCommitter(), NullLoginSessionBroadcaster.Instance);
 
         // Act
-        Results<Ok, BadRequest<string>, UnprocessableEntity<string>> result =
+        Results<Ok, ProblemHttpResult> result =
             await SubmitLoginCode.Endpoint.HandleAsync(
                 new SubmitLoginCode.Request(Code: string.Empty),
                 service,
                 TestContext.Current.CancellationToken);
 
         // Assert
-        result.Result.ShouldBeOfType<BadRequest<string>>();
+        ProblemHttpResult problem = result.Result.ShouldBeOfType<ProblemHttpResult>();
+        problem.ShouldSatisfyAllConditions(
+            () => problem.StatusCode.ShouldBe(StatusCodes.Status400BadRequest),
+            () => problem.ProblemDetails.Type.ShouldEndWith(CredentialsErrors.LoginCodeEmptyCode),
+            () => problem.ProblemDetails.Detail.ShouldNotBeNullOrEmpty());
     }
 
     [Fact]
-    public async Task WhenCodeIsWhitespace_Returns400()
+    public async Task WhenCodeIsWhitespace_Returns400WithLoginCodeEmptyCode()
     {
         // Arrange
         FakeCredentialsOrchestrator orchestrator = new([]);
         LoginSessionService service = new(orchestrator, new FakeLoginSuccessCommitter(), NullLoginSessionBroadcaster.Instance);
 
         // Act
-        Results<Ok, BadRequest<string>, UnprocessableEntity<string>> result =
+        Results<Ok, ProblemHttpResult> result =
             await SubmitLoginCode.Endpoint.HandleAsync(
                 new SubmitLoginCode.Request(Code: "   "),
                 service,
                 TestContext.Current.CancellationToken);
 
         // Assert
-        result.Result.ShouldBeOfType<BadRequest<string>>();
+        ProblemHttpResult problem = result.Result.ShouldBeOfType<ProblemHttpResult>();
+        problem.ShouldSatisfyAllConditions(
+            () => problem.StatusCode.ShouldBe(StatusCodes.Status400BadRequest),
+            () => problem.ProblemDetails.Type.ShouldEndWith(CredentialsErrors.LoginCodeEmptyCode),
+            () => problem.ProblemDetails.Detail.ShouldNotBeNullOrEmpty());
     }
 
     [Fact]
-    public async Task WhenCodeExceedsMaxLength_Returns400()
+    public async Task WhenCodeExceedsMaxLength_Returns400WithLoginCodeTooLongCode()
     {
         // Arrange
         FakeCredentialsOrchestrator orchestrator = new([]);
@@ -57,14 +67,18 @@ public sealed class SubmitEndpoint
         string overLongCode = new string('x', 513);
 
         // Act
-        Results<Ok, BadRequest<string>, UnprocessableEntity<string>> result =
+        Results<Ok, ProblemHttpResult> result =
             await SubmitLoginCode.Endpoint.HandleAsync(
                 new SubmitLoginCode.Request(Code: overLongCode),
                 service,
                 TestContext.Current.CancellationToken);
 
         // Assert
-        result.Result.ShouldBeOfType<BadRequest<string>>();
+        ProblemHttpResult problem = result.Result.ShouldBeOfType<ProblemHttpResult>();
+        problem.ShouldSatisfyAllConditions(
+            () => problem.StatusCode.ShouldBe(StatusCodes.Status400BadRequest),
+            () => problem.ProblemDetails.Type.ShouldEndWith(CredentialsErrors.LoginCodeTooLongCode),
+            () => problem.ProblemDetails.Detail.ShouldNotBeNullOrEmpty());
     }
 
     [Fact]
@@ -76,14 +90,15 @@ public sealed class SubmitEndpoint
         string realisticCode = new string('x', 130);
 
         // Act
-        Results<Ok, BadRequest<string>, UnprocessableEntity<string>> result =
+        Results<Ok, ProblemHttpResult> result =
             await SubmitLoginCode.Endpoint.HandleAsync(
                 new SubmitLoginCode.Request(Code: realisticCode),
                 service,
                 TestContext.Current.CancellationToken);
 
         // Assert
-        result.Result.ShouldBeOfType<UnprocessableEntity<string>>();
+        result.Result.ShouldBeOfType<ProblemHttpResult>()
+            .StatusCode.ShouldBe(StatusCodes.Status422UnprocessableEntity);
     }
 
     [Fact]
@@ -94,14 +109,15 @@ public sealed class SubmitEndpoint
         LoginSessionService service = new(orchestrator, new FakeLoginSuccessCommitter(), NullLoginSessionBroadcaster.Instance);
 
         // Act — no session started; code is non-empty
-        Results<Ok, BadRequest<string>, UnprocessableEntity<string>> result =
+        Results<Ok, ProblemHttpResult> result =
             await SubmitLoginCode.Endpoint.HandleAsync(
                 new SubmitLoginCode.Request(Code: "valid-code"),
                 service,
                 TestContext.Current.CancellationToken);
 
         // Assert
-        result.Result.ShouldBeOfType<UnprocessableEntity<string>>();
+        ProblemHttpResult problem = result.Result.ShouldBeOfType<ProblemHttpResult>();
+        problem.StatusCode.ShouldBe(StatusCodes.Status422UnprocessableEntity);
     }
 
     [Fact]
@@ -119,7 +135,7 @@ public sealed class SubmitEndpoint
         await service.WaitForStartCompletedAsync();
 
         // Act
-        Results<Ok, BadRequest<string>, UnprocessableEntity<string>> result =
+        Results<Ok, ProblemHttpResult> result =
             await SubmitLoginCode.Endpoint.HandleAsync(
                 new SubmitLoginCode.Request(Code: "abc123"),
                 service,
