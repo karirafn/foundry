@@ -35,6 +35,51 @@
     gap: var(--fd-spacing-sm);
   }
 
+  &__load-error {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--fd-spacing-md);
+    padding: var(--fd-spacing-2xl);
+    text-align: center;
+  }
+
+  &__load-error-message {
+    color: var(--fd-state-failed);
+    font-size: 0.875rem;
+    margin: 0;
+  }
+
+  &__load-error-actions {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--fd-spacing-sm);
+  }
+
+  &__retry-btn {
+    align-items: center;
+    background: transparent;
+    border: 1px solid var(--fd-border-default);
+    border-radius: var(--fd-radius-sm);
+    color: var(--fd-text-primary);
+    cursor: pointer;
+    display: inline-flex;
+    font-size: 0.875rem;
+    min-height: 44px;
+    padding: var(--fd-spacing-xs) var(--fd-spacing-lg);
+
+    &:hover {
+      background: var(--fd-bg-card-hover);
+      border-color: var(--fd-text-secondary);
+    }
+
+    &:focus-visible {
+      @include focus-ring;
+      border-radius: var(--fd-radius-sm);
+    }
+  }
+
   &__not-found {
     display: flex;
     flex-direction: column;

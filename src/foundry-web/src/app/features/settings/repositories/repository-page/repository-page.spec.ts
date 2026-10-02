@@ -177,6 +177,147 @@ describe('RepositoryPageComponent', () => {
     });
   });
 
+  describe('load-error state', () => {
+    function seedLoadError(repositoryService: RepositoryService, message: string): void {
+      (repositoryService as unknown as { _loadErrorSignal: { set: (v: string | null) => void } })
+        ._loadErrorSignal.set(message);
+      (repositoryService as unknown as { _loadingSignal: { set: (v: boolean) => void } })
+        ._loadingSignal.set(false);
+    }
+
+    it('should render load-error block when loadError signal is set', () => {
+      // Arrange
+      const { fixture, repositoryService } = setup(REPO_1.id);
+      fixture.detectChanges();
+      seedLoadError(repositoryService, 'Network error');
+
+      // Act
+      fixture.detectChanges();
+
+      // Assert
+      const el = fixture.nativeElement as HTMLElement;
+      const errorBlock = el.querySelector('.repository-page__load-error');
+      expect(errorBlock).toBeTruthy();
+      const form = el.querySelector('fd-repository-form');
+      expect(form).toBeFalsy();
+    });
+
+    it('should have role="alert" on the load-error block', () => {
+      // Arrange
+      const { fixture, repositoryService } = setup(REPO_1.id);
+      fixture.detectChanges();
+      seedLoadError(repositoryService, 'Network error');
+
+      // Act
+      fixture.detectChanges();
+
+      // Assert
+      const el = fixture.nativeElement as HTMLElement;
+      const errorBlock = el.querySelector('.repository-page__load-error');
+      expect(errorBlock?.getAttribute('role')).toBe('alert');
+    });
+
+    it('should render the error message in the load-error block', () => {
+      // Arrange
+      const { fixture, repositoryService } = setup(REPO_1.id);
+      fixture.detectChanges();
+      seedLoadError(repositoryService, "Couldn't load repositories. Check your connection and try again.");
+
+      // Act
+      fixture.detectChanges();
+
+      // Assert
+      const el = fixture.nativeElement as HTMLElement;
+      const message = el.querySelector('.repository-page__load-error-message');
+      expect(message?.textContent?.trim()).toBe("Couldn't load repositories. Check your connection and try again.");
+    });
+
+    it('should render a Retry button in the load-error block', () => {
+      // Arrange
+      const { fixture, repositoryService } = setup(REPO_1.id);
+      fixture.detectChanges();
+      seedLoadError(repositoryService, 'Network error');
+
+      // Act
+      fixture.detectChanges();
+
+      // Assert
+      const el = fixture.nativeElement as HTMLElement;
+      const retryBtn = el.querySelector('.repository-page__retry-btn');
+      expect(retryBtn).toBeTruthy();
+      expect(retryBtn?.tagName.toLowerCase()).toBe('button');
+      expect(retryBtn?.textContent?.trim()).toBe('Retry');
+    });
+
+    it('should render a back-to-repositories link in the load-error block', () => {
+      // Arrange
+      const { fixture, repositoryService } = setup(REPO_1.id);
+      fixture.detectChanges();
+      seedLoadError(repositoryService, 'Network error');
+
+      // Act
+      fixture.detectChanges();
+
+      // Assert
+      const el = fixture.nativeElement as HTMLElement;
+      const backLink = el.querySelector('.repository-page__load-error .repository-page__back-link');
+      expect(backLink).toBeTruthy();
+      expect(backLink?.textContent?.trim()).toBe('Back to repositories');
+    });
+
+    it('should announce "Could not load repositories" in the status live region on load-error', () => {
+      // Arrange
+      const { fixture, repositoryService } = setup(REPO_1.id);
+      fixture.detectChanges();
+      seedLoadError(repositoryService, 'Network error');
+
+      // Act
+      fixture.detectChanges();
+
+      // Assert
+      const el = fixture.nativeElement as HTMLElement;
+      const announcer = el.querySelector('[role="status"][aria-live="polite"]');
+      expect(announcer?.textContent?.trim()).toBe('Could not load repositories');
+    });
+  });
+
+  describe('focus-on-load', () => {
+    it('should move focus to the not-found heading when not-found state is reached', async () => {
+      // Arrange
+      const { fixture, repositoryService } = setup('00000000-0000-0000-0000-000000000999');
+      fixture.detectChanges();
+      seedRepositories(repositoryService, [REPO_1]);
+
+      // Act
+      fixture.detectChanges();
+      await fixture.whenStable();
+
+      // Assert
+      const el = fixture.nativeElement as HTMLElement;
+      const heading = el.querySelector('.repository-page__not-found-heading') as HTMLElement;
+      expect(document.activeElement).toBe(heading);
+    });
+
+    it('should move focus to the load-error message when load-error state is reached', async () => {
+      // Arrange
+      const { fixture, repositoryService } = setup(REPO_1.id);
+      fixture.detectChanges();
+      (repositoryService as unknown as { _loadErrorSignal: { set: (v: string | null) => void } })
+        ._loadErrorSignal.set('Network error');
+      (repositoryService as unknown as { _loadingSignal: { set: (v: boolean) => void } })
+        ._loadingSignal.set(false);
+
+      // Act
+      fixture.detectChanges();
+      await fixture.whenStable();
+
+      // Assert
+      const el = fixture.nativeElement as HTMLElement;
+      const message = el.querySelector('.repository-page__load-error-message') as HTMLElement;
+      expect(document.activeElement).toBe(message);
+    });
+  });
+
   describe('loading state', () => {
     it('should render loading indicator while repositories are loading', () => {
       // Arrange

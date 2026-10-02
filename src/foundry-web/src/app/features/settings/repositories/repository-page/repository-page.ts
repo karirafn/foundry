@@ -1,9 +1,15 @@
 import {
   ChangeDetectionStrategy,
   Component,
+  ElementRef,
+  Injector,
   Signal,
+  ViewChild,
+  afterNextRender,
   computed,
+  effect,
   inject,
+  runInInjectionContext,
 } from '@angular/core';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { toSignal } from '@angular/core/rxjs-interop';
@@ -15,7 +21,7 @@ import { RepositoryEligibilityDetailsComponent } from '../repository-eligibility
 import { SpinnerComponent } from '../../../../shared/components/spinner/spinner';
 import { RepositorySummary, UpdateRepositoryRequest, CreateRepositoryRequest } from '../repository.model';
 
-type ViewState = 'loading' | 'not-found' | 'loaded';
+type ViewState = 'loading' | 'load-error' | 'not-found' | 'loaded';
 
 @Component({
   selector: 'fd-repository-page',
@@ -39,9 +45,27 @@ type ViewState = 'loading' | 'not-found' | 'loaded';
             <span class="sr-only">Loading repository</span>
           </div>
         }
+        @case ('load-error') {
+          <div class="repository-page__load-error" role="alert">
+            <p #loadErrorMessage class="repository-page__load-error-message" tabindex="-1">
+              {{ _loadErrorText() }}
+            </p>
+            <div class="repository-page__load-error-actions">
+              <button
+                type="button"
+                class="repository-page__retry-btn"
+                (click)="onRetry()"
+              >Retry</button>
+              <a
+                class="repository-page__back-link"
+                routerLink="/settings/repositories"
+              >Back to repositories</a>
+            </div>
+          </div>
+        }
         @case ('not-found') {
           <div class="repository-page__not-found">
-            <p class="repository-page__not-found-heading">Repository not found</p>
+            <p class="repository-page__not-found-heading" #notFoundHeading tabindex="-1">Repository not found</p>
             <p class="repository-page__not-found-description">
               This repository is no longer monitored, or the link is out of date.
               It may have been removed from your settings.
@@ -95,6 +119,10 @@ export class RepositoryPageComponent {
   protected readonly repositoryService = inject(RepositoryService);
   protected readonly accountService = inject(AccountService);
   private readonly _route = inject(ActivatedRoute);
+  private readonly _injector = inject(Injector);
+
+  @ViewChild('notFoundHeading') private readonly _notFoundHeading?: ElementRef<HTMLElement>;
+  @ViewChild('loadErrorMessage') private readonly _loadErrorMessage?: ElementRef<HTMLElement>;
 
   private readonly _repositoryId: Signal<string | null> = toSignal(
     this._route.paramMap.pipe(map(params => params.get('repositoryId'))),
@@ -113,16 +141,26 @@ export class RepositoryPageComponent {
     if (this.repositoryService.loading()) {
       return 'loading';
     }
+    if (this.repositoryService.loadError()) {
+      return 'load-error';
+    }
     if (this._repository() !== undefined) {
       return 'loaded';
     }
     return 'not-found';
   });
 
+  protected readonly _loadErrorText: Signal<string> = computed(() =>
+    this.repositoryService.loadError()
+    ?? "Couldn't load repositories. Check your connection and try again."
+  );
+
   protected readonly _statusAnnouncement: Signal<string> = computed(() => {
     switch (this._viewState()) {
       case 'loading':
         return 'Loading repository';
+      case 'load-error':
+        return 'Could not load repositories';
       case 'not-found':
         return 'Repository not found';
       case 'loaded':
@@ -132,6 +170,23 @@ export class RepositoryPageComponent {
 
   protected readonly _recheckPending: Signal<boolean> = computed(() => false);
   protected readonly _recheckError: Signal<string | null> = computed(() => null);
+
+  constructor() {
+    effect(() => {
+      const state = this._viewState();
+      if (state === 'not-found' || state === 'load-error') {
+        runInInjectionContext(this._injector, () => {
+          afterNextRender(() => {
+            if (state === 'not-found') {
+              this._notFoundHeading?.nativeElement.focus();
+            } else {
+              this._loadErrorMessage?.nativeElement.focus();
+            }
+          });
+        });
+      }
+    });
+  }
 
   onSave(request: CreateRepositoryRequest | UpdateRepositoryRequest): void {
     const repo = this._repository();
@@ -148,6 +203,11 @@ export class RepositoryPageComponent {
     // Navigation handled via routerLink in templates for non-loaded states.
     // In loaded state, the form's Cancel button calls this.
     // Router injection deferred to later step when navigation is wired end-to-end.
+  }
+
+  onRetry(): void {
+    const accountIds = this.accountService.accounts().map(a => a.id);
+    this.repositoryService.loadAllRepositories(accountIds);
   }
 
   onRecheck(): void {
