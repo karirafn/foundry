@@ -4,6 +4,7 @@ using System.Net.Http.Json;
 using Foundry.Modules.Settings.Domain.Entities;
 using Foundry.WebApi.Persistence;
 
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -15,6 +16,9 @@ namespace Foundry.IntegrationTests.Modules.Settings.Endpoints.UpdateAllowedProvi
 
 public sealed class WhenHostsAreInvalid : IAsyncDisposable
 {
+    private const int BadRequestStatus = 400;
+    private const int NotFoundStatus = 404;
+
     private readonly FoundryWebAppFactory _factory;
     private readonly HttpClient _client;
 
@@ -42,7 +46,7 @@ public sealed class WhenHostsAreInvalid : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenHostCarriesScheme_ReturnsBadRequest()
+    public async Task WhenHostCarriesScheme_ReturnsBadRequestAsProblemDetails()
     {
         // Arrange
         await SeedDefaultSettingsAsync();
@@ -57,12 +61,18 @@ public sealed class WhenHostsAreInvalid : IAsyncDisposable
 
         // Assert
         response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
-        string responseBody = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
-        responseBody.ShouldContain(InvalidHost);
+        response.Content.Headers.ContentType?.MediaType.ShouldBe("application/problem+json");
+        ProblemDetails problem = (await response.Content
+            .ReadFromJsonAsync<ProblemDetails>(TestContext.Current.CancellationToken))
+            .ShouldNotBeNull();
+        problem.ShouldSatisfyAllConditions(
+            () => problem.Status.ShouldBe(BadRequestStatus),
+            () => problem.Type.ShouldEndWith("Settings.InvalidProviderHost"),
+            () => problem.Detail.ShouldNotBeNullOrEmpty());
     }
 
     [Fact]
-    public async Task WhenHostCarriesPort_ReturnsBadRequest()
+    public async Task WhenHostCarriesPort_ReturnsBadRequestAsProblemDetails()
     {
         // Arrange
         await SeedDefaultSettingsAsync();
@@ -77,12 +87,18 @@ public sealed class WhenHostsAreInvalid : IAsyncDisposable
 
         // Assert
         response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
-        string responseBody = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
-        responseBody.ShouldContain(InvalidHost);
+        response.Content.Headers.ContentType?.MediaType.ShouldBe("application/problem+json");
+        ProblemDetails problem = (await response.Content
+            .ReadFromJsonAsync<ProblemDetails>(TestContext.Current.CancellationToken))
+            .ShouldNotBeNull();
+        problem.ShouldSatisfyAllConditions(
+            () => problem.Status.ShouldBe(BadRequestStatus),
+            () => problem.Type.ShouldEndWith("Settings.InvalidProviderHost"),
+            () => problem.Detail.ShouldNotBeNullOrEmpty());
     }
 
     [Fact]
-    public async Task WhenHostHasTrailingDot_ReturnsBadRequest()
+    public async Task WhenHostHasTrailingDot_ReturnsBadRequestAsProblemDetails()
     {
         // Arrange
         await SeedDefaultSettingsAsync();
@@ -97,7 +113,37 @@ public sealed class WhenHostsAreInvalid : IAsyncDisposable
 
         // Assert
         response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
-        string responseBody = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
-        responseBody.ShouldContain(InvalidHost);
+        response.Content.Headers.ContentType?.MediaType.ShouldBe("application/problem+json");
+        ProblemDetails problem = (await response.Content
+            .ReadFromJsonAsync<ProblemDetails>(TestContext.Current.CancellationToken))
+            .ShouldNotBeNull();
+        problem.ShouldSatisfyAllConditions(
+            () => problem.Status.ShouldBe(BadRequestStatus),
+            () => problem.Type.ShouldEndWith("Settings.InvalidProviderHost"),
+            () => problem.Detail.ShouldNotBeNullOrEmpty());
+    }
+
+    [Fact]
+    public async Task WhenSettingsDoNotExist_ReturnsNotFoundAsProblemDetails()
+    {
+        // Arrange — no settings seeded; SettingsSeeder is a hosted service and is removed in tests
+        object body = new { hosts = new[] { "git.example.com" } };
+
+        // Act
+        HttpResponseMessage response = await _client.PutAsJsonAsync(
+            new Uri("/api/settings/allowed-provider-hosts", UriKind.Relative),
+            body,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        response.Content.Headers.ContentType?.MediaType.ShouldBe("application/problem+json");
+        ProblemDetails problem = (await response.Content
+            .ReadFromJsonAsync<ProblemDetails>(TestContext.Current.CancellationToken))
+            .ShouldNotBeNull();
+        problem.ShouldSatisfyAllConditions(
+            () => problem.Status.ShouldBe(NotFoundStatus),
+            () => problem.Type.ShouldEndWith("Settings.NotFound"),
+            () => problem.Detail.ShouldNotBeNullOrEmpty());
     }
 }
