@@ -1,6 +1,7 @@
 using Foundry.Modules.Credentials.Contracts;
 using Foundry.Modules.Credentials.Domain.Entities;
 using Foundry.Shared;
+using Foundry.Shared.Infrastructure.Http;
 
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
@@ -45,9 +46,9 @@ internal static class GetCredentials
                         new Query(),
                         cancellationToken);
 
-                    return result.Match<Results<Ok<ClaudeAccountSummary>, NotFound>>(
+                    return result.Match<Results<Ok<ClaudeAccountSummary>, ProblemHttpResult>>(
                         summary => TypedResults.Ok(summary),
-                        _ => TypedResults.NotFound());
+                        error => error.ToProblem(StatusCodes.Status404NotFound));
                 })
                 .WithName("GetCredentials")
                 .WithSummary("Gets the current Claude account credentials summary")
