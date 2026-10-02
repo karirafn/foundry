@@ -114,7 +114,7 @@ public sealed class WhenRequestIsInvalid(FoundryWebAppFactory factory) : IClassF
             .ShouldNotBeNull();
         problem.ShouldSatisfyAllConditions(
             () => problem.Status.ShouldBe(UnprocessableEntityStatus),
-            () => problem.Type.ShouldNotBeNullOrEmpty(),
+            () => problem.Type.ShouldEndWith("Login.NoActiveSession"),
             () => problem.Detail.ShouldNotBeNullOrEmpty());
     }
 }

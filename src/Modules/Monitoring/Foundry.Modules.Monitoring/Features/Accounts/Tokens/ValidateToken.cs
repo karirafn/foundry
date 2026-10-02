@@ -121,10 +121,8 @@ internal static class ValidateToken
 
                     if (!ProviderTypes.IsKnown(body.ProviderType))
                     {
-                        Error unknownProvider = new(
-                            "ProviderType.Unknown",
-                            $"Provider type '{body.ProviderType}' is not supported. Only 'github' and 'gitlab' are supported.");
-                        return unknownProvider.ToProblem(StatusCodes.Status400BadRequest);
+                        return ProviderTypeErrors.UnknownProviderType(body.ProviderType)
+                            .ToProblem(StatusCodes.Status400BadRequest);
                     }
 
                     Uri apiBaseUrl = string.Equals(body.ProviderType, ProviderTypes.GitLab, StringComparison.OrdinalIgnoreCase)

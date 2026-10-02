@@ -87,12 +87,12 @@ public sealed class WhenTokenSeesNoNamespaceRepositories : IAsyncDisposable
         ProblemDetails problem = (await response.Content
             .ReadFromJsonAsync<ProblemDetails>(TestContext.Current.CancellationToken))
             .ShouldNotBeNull();
+        string detail = problem.Detail.ShouldNotBeNull();
         problem.ShouldSatisfyAllConditions(
             () => problem.Status.ShouldBe(BadRequestStatus),
             () => problem.Type.ShouldEndWith("Credential.NoNamespaceRepositories"),
-            () => problem.Detail.ShouldNotBeNullOrEmpty());
-        problem.Detail.ShouldNotBeNull();
-        problem.Detail.ShouldContain("namespace");
+            () => detail.ShouldNotBeNullOrEmpty());
+        detail.ShouldContain("namespace");
     }
 
     private sealed class StubValidateTokenHandler(Result<ValidateToken.Response> result)

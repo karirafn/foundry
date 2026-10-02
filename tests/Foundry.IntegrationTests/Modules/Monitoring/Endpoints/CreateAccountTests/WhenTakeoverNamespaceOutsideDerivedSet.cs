@@ -139,7 +139,7 @@ public sealed class WhenTakeoverNamespaceOutsideDerivedSet : IAsyncDisposable
         ProblemDetails problem = (await response.Content
             .ReadFromJsonAsync<ProblemDetails>(TestContext.Current.CancellationToken))
             .ShouldNotBeNull();
-        problem.Detail.ShouldNotBeNull();
-        problem.Detail.ShouldContain("namespace");
+        string detail = problem.Detail.ShouldNotBeNull();
+        detail.ShouldContain("namespace");
     }
 }

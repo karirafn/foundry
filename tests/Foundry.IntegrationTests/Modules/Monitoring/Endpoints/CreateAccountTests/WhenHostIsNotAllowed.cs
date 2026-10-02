@@ -57,11 +57,11 @@ public sealed class WhenHostIsNotAllowed : IAsyncDisposable
         ProblemDetails problem = (await response.Content
             .ReadFromJsonAsync<ProblemDetails>(TestContext.Current.CancellationToken))
             .ShouldNotBeNull();
+        string detail = problem.Detail.ShouldNotBeNull();
         problem.ShouldSatisfyAllConditions(
             () => problem.Status.ShouldBe(BadRequestStatus),
             () => problem.Type.ShouldEndWith("ProviderHost.NotAllowed"),
-            () => problem.Detail.ShouldNotBeNullOrEmpty());
-        problem.Detail.ShouldNotBeNull();
-        problem.Detail.ShouldContain("attacker.example.com");
+            () => detail.ShouldNotBeNullOrEmpty());
+        detail.ShouldContain("attacker.example.com");
     }
 }

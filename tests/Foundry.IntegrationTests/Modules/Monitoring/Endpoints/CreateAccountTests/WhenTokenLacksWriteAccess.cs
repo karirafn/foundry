@@ -95,12 +95,12 @@ public sealed class WhenTokenLacksWriteAccess : IAsyncDisposable
         ProblemDetails problem = (await response.Content
             .ReadFromJsonAsync<ProblemDetails>(TestContext.Current.CancellationToken))
             .ShouldNotBeNull();
+        string detail = problem.Detail.ShouldNotBeNull();
         problem.ShouldSatisfyAllConditions(
             () => problem.Status.ShouldBe(BadRequestStatus),
             () => problem.Type.ShouldEndWith("Credential.MissingWritePermission"),
-            () => problem.Detail.ShouldNotBeNullOrEmpty());
-        problem.Detail.ShouldNotBeNull();
-        problem.Detail.ShouldContain("Contents");
+            () => detail.ShouldNotBeNullOrEmpty());
+        detail.ShouldContain("Contents");
     }
 
     /// <summary>
