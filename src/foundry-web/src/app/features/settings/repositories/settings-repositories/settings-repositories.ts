@@ -41,7 +41,6 @@ type RepositoryView = { kind: 'list' } | { kind: 'add' } | { kind: 'edit'; repos
               [loading]="repositoryService.loading()"
               [error]="repositoryService.loadError()"
               (add)="onAdd()"
-              (edit)="onEdit($event)"
               (delete)="onDelete($event)"
               (retry)="reloadRepositories()"
             />
