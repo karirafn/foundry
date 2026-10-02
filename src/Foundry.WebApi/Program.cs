@@ -119,6 +119,8 @@ builder.Services.AddOpenApi(options =>
     });
 });
 
+builder.Services.AddProblemDetails();
+
 builder.Services.AddSignalR()
     .AddJsonProtocol(options =>
         options.PayloadSerializerOptions.Converters.Add(new WorkerRunIdJsonConverter()));
@@ -159,6 +161,7 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
+app.UseStatusCodePages();
 
 app.MapDefaultEndpoints();
 app.MapCredentialsEndpoints();
