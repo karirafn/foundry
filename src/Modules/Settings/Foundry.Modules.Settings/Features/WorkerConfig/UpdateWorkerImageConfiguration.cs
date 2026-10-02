@@ -2,6 +2,7 @@ using Foundry.Modules.Settings.Contracts;
 using Foundry.Modules.Settings.Domain.Entities;
 using Foundry.Modules.Settings.Domain.ValueObjects;
 using Foundry.Shared;
+using Foundry.Shared.Infrastructure.Http;
 
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
@@ -88,12 +89,12 @@ internal static class UpdateWorkerImageConfiguration
 
                     Result<GlobalSettingsSummary> result = await handler.HandleAsync(command, cancellationToken);
 
-                    return result.Match<Results<Ok<GlobalSettingsSummary>, NotFound, ProblemHttpResult>>(
+                    return result.Match<Results<Ok<GlobalSettingsSummary>, ProblemHttpResult>>(
                         summary => TypedResults.Ok(summary),
                         error => error.Code switch
                         {
-                            SettingsErrors.NotFoundCode => TypedResults.NotFound(),
-                            _ => TypedResults.Problem(error.Message, statusCode: StatusCodes.Status400BadRequest),
+                            SettingsErrors.NotFoundCode => error.ToProblem(StatusCodes.Status404NotFound),
+                            _ => error.ToProblem(StatusCodes.Status400BadRequest),
                         });
                 })
                 .WithName("UpdateWorkerImageConfiguration")
