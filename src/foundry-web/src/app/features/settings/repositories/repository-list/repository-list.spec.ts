@@ -1,8 +1,8 @@
 import { TestBed } from '@angular/core/testing';
+import { provideRouter, Router } from '@angular/router';
 import { RepositoryListComponent } from './repository-list';
 import { RepositorySummary } from '../repository.model';
 import { RepositoryService } from '../repository.service';
-import { ProviderIconComponent } from '../../../../shared/components/provider-icon/provider-icon';
 import { provideHttpClient } from '@angular/common/http';
 import { provideHttpClientTesting, HttpTestingController } from '@angular/common/http/testing';
 
@@ -92,6 +92,7 @@ function setup(overrides: {
     el: fixture.nativeElement as HTMLElement,
     httpMock: TestBed.inject(HttpTestingController),
     repositoryService: TestBed.inject(RepositoryService),
+    router: TestBed.inject(Router),
   };
 }
 
@@ -105,6 +106,7 @@ describe('RepositoryListComponent', () => {
         RepositoryService,
         provideHttpClient(),
         provideHttpClientTesting(),
+        provideRouter([]),
       ],
     }).compileComponents();
   });
@@ -422,19 +424,18 @@ describe('RepositoryListComponent', () => {
     expect(emitted).toBe(true);
   });
 
-  // Cycle 16: edit event emitted
-  it('should emit the repository when edit is clicked', () => {
+  // Cycle 16: clicking edit navigates to the repository page
+  it('should navigate to /settings/repositories/:id when edit is clicked', () => {
     // Arrange
-    const { el, component } = setup({ repositories: [MOCK_REPO] });
-    let emittedRepo: RepositorySummary | undefined;
-    component.edit.subscribe((r: RepositorySummary) => { emittedRepo = r; });
+    const { el, router } = setup({ repositories: [MOCK_REPO] });
+    const navigateSpy = vi.spyOn(router, 'navigate');
 
     // Act
     const editBtn = el.querySelector('[aria-label="Edit repository my-org/my-repo"]') as HTMLButtonElement;
     editBtn.click();
 
     // Assert
-    expect(emittedRepo).toEqual(MOCK_REPO);
+    expect(navigateSpy).toHaveBeenCalledWith(['/settings/repositories', MOCK_REPO.id]);
   });
 
   // Cycle 17: delete event emitted
