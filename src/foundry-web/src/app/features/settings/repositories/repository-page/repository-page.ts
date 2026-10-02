@@ -40,10 +40,10 @@ type ViewState = 'loading' | 'load-error' | 'not-found' | 'loaded';
       {{ _statusAnnouncement() }}
     </span>
 
-    <section class="repository-page__section" aria-labelledby="repository-page-heading">
+    <section class="repository-page__section" [attr.aria-labelledby]="_viewState() === 'loaded' ? 'repository-page-heading' : null">
       @switch (_viewState()) {
         @case ('loading') {
-          <div class="repository-page__loading" role="status" aria-label="Loading repository">
+          <div class="repository-page__loading">
             <fd-spinner [size]="24" />
             <span class="sr-only">Loading repository</span>
           </div>
@@ -68,7 +68,7 @@ type ViewState = 'loading' | 'load-error' | 'not-found' | 'loaded';
         }
         @case ('not-found') {
           <div class="repository-page__not-found">
-            <p class="repository-page__not-found-heading" #notFoundHeading tabindex="-1">Repository not found</p>
+            <h1 class="repository-page__not-found-heading" #notFoundHeading tabindex="-1">Repository not found</h1>
             <p class="repository-page__not-found-description">
               This repository is no longer monitored, or the link is out of date.
               It may have been removed from your settings.
@@ -164,8 +164,7 @@ export class RepositoryPageComponent implements OnInit {
   });
 
   protected readonly _loadErrorText: Signal<string> = computed(() =>
-    this.repositoryService.loadError()
-    ?? "Couldn't load repositories. Check your connection and try again."
+    "Couldn't load repositories. Check your connection and try again."
   );
 
   protected readonly _statusAnnouncement: Signal<string> = computed(() => {
@@ -227,6 +226,8 @@ export class RepositoryPageComponent implements OnInit {
     if (!repo) {
       return;
     }
+    // The form's (save) output emits CreateRepositoryRequest | UpdateRepositoryRequest;
+    // this page is always in edit mode so the request is always an update.
     this.repositoryService.updateRepository(repo.accountId, repo.id, request as UpdateRepositoryRequest)
       .subscribe({
         error: () => { /* handled via saveError signal */ },

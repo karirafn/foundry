@@ -155,7 +155,95 @@ describe('RepositoryPageComponent', () => {
     });
   });
 
+  describe('aria-labelledby', () => {
+    it('should set aria-labelledby to "repository-page-heading" in loaded state', () => {
+      // Arrange
+      const { fixture, repositoryService, component, httpMock } = setup(REPO_1.id);
+      fixture.detectChanges();
+      flushAccounts(httpMock);
+      seedRepositories(repositoryService, [REPO_1], component);
+
+      // Act
+      fixture.detectChanges();
+
+      // Assert
+      const el = fixture.nativeElement as HTMLElement;
+      const section = el.querySelector('.repository-page__section');
+      expect(section?.getAttribute('aria-labelledby')).toBe('repository-page-heading');
+    });
+
+    it('should omit aria-labelledby in loading state', () => {
+      // Arrange
+      const { fixture, httpMock } = setup(REPO_1.id);
+
+      // Act
+      fixture.detectChanges();
+
+      // Assert — loading state: no aria-labelledby
+      const el = fixture.nativeElement as HTMLElement;
+      const section = el.querySelector('.repository-page__section');
+      expect(section?.getAttribute('aria-labelledby')).toBeNull();
+
+      // Cleanup
+      flushAccounts(httpMock);
+    });
+
+    it('should omit aria-labelledby in load-error state', () => {
+      // Arrange
+      const { fixture, repositoryService, component, httpMock } = setup(REPO_1.id);
+      fixture.detectChanges();
+      flushAccounts(httpMock);
+      (repositoryService as unknown as { _loadErrorSignal: { set: (v: string | null) => void } })
+        ._loadErrorSignal.set('Network error');
+      (repositoryService as unknown as { _loadingSignal: { set: (v: boolean) => void } })
+        ._loadingSignal.set(false);
+      (component as unknown as { _loadAttempted: { set: (v: boolean) => void } })
+        ._loadAttempted.set(true);
+
+      // Act
+      fixture.detectChanges();
+
+      // Assert
+      const el = fixture.nativeElement as HTMLElement;
+      const section = el.querySelector('.repository-page__section');
+      expect(section?.getAttribute('aria-labelledby')).toBeNull();
+    });
+
+    it('should omit aria-labelledby in not-found state', () => {
+      // Arrange
+      const { fixture, repositoryService, component, httpMock } = setup('00000000-0000-0000-0000-000000000999');
+      fixture.detectChanges();
+      flushAccounts(httpMock);
+      seedRepositories(repositoryService, [REPO_1], component);
+
+      // Act
+      fixture.detectChanges();
+
+      // Assert
+      const el = fixture.nativeElement as HTMLElement;
+      const section = el.querySelector('.repository-page__section');
+      expect(section?.getAttribute('aria-labelledby')).toBeNull();
+    });
+  });
+
   describe('not-found state', () => {
+    it('should render not-found heading as an h1 element', () => {
+      // Arrange
+      const { fixture, repositoryService, component, httpMock } = setup('00000000-0000-0000-0000-000000000999');
+      fixture.detectChanges();
+      flushAccounts(httpMock);
+      seedRepositories(repositoryService, [REPO_1], component);
+
+      // Act
+      fixture.detectChanges();
+
+      // Assert
+      const el = fixture.nativeElement as HTMLElement;
+      const heading = el.querySelector('.repository-page__not-found-heading');
+      expect(heading?.tagName.toLowerCase()).toBe('h1');
+      expect(heading?.textContent?.trim()).toBe('Repository not found');
+    });
+
     it('should render not-found message when load settled and id absent', () => {
       // Arrange
       const { fixture, repositoryService, component, httpMock } = setup('00000000-0000-0000-0000-000000000999');
@@ -235,17 +323,17 @@ describe('RepositoryPageComponent', () => {
       expect(errorBlock?.getAttribute('role')).toBe('alert');
     });
 
-    it('should render the error message in the load-error block', () => {
-      // Arrange
+    it('should always render the friendly error copy regardless of raw service message', () => {
+      // Arrange — seed a raw service error (e.g. HTTP status string) that must not be exposed
       const { fixture, repositoryService, component, httpMock } = setup(REPO_1.id);
       fixture.detectChanges();
       flushAccounts(httpMock);
-      seedLoadError(repositoryService, "Couldn't load repositories. Check your connection and try again.", component);
+      seedLoadError(repositoryService, 'Http failure response for https://api.example.com/: 500 Internal Server Error', component);
 
       // Act
       fixture.detectChanges();
 
-      // Assert
+      // Assert — friendly copy is shown, not the raw service message
       const el = fixture.nativeElement as HTMLElement;
       const message = el.querySelector('.repository-page__load-error-message');
       expect(message?.textContent?.trim()).toBe("Couldn't load repositories. Check your connection and try again.");
@@ -284,6 +372,28 @@ describe('RepositoryPageComponent', () => {
       const backLink = el.querySelector('.repository-page__load-error .repository-page__back-link');
       expect(backLink).toBeTruthy();
       expect(backLink?.textContent?.trim()).toBe('Back to repositories');
+    });
+
+    it('should re-trigger loadAllRepositories when Retry button is clicked', () => {
+      // Arrange
+      const { fixture, repositoryService, component, httpMock } = setup(REPO_1.id);
+      fixture.detectChanges();
+      httpMock.expectOne('/api/accounts').flush([ACCOUNT_1]);
+      fixture.detectChanges();
+      // The account-keyed effect fires the first load; flush it
+      httpMock.expectOne(`/api/accounts/${ACCOUNT_1.id}/repositories`).flush([], { status: 500, statusText: 'Server Error' });
+      fixture.detectChanges();
+
+      // Act — click Retry
+      const el = fixture.nativeElement as HTMLElement;
+      const retryBtn = el.querySelector<HTMLButtonElement>('.repository-page__retry-btn');
+      retryBtn?.click();
+      fixture.detectChanges();
+
+      // Assert — a new repositories request fires
+      const req = httpMock.expectOne(`/api/accounts/${ACCOUNT_1.id}/repositories`);
+      expect(req.request.method).toBe('GET');
+      req.flush([REPO_1]);
     });
 
     it('should announce "Could not load repositories" in the status live region on load-error', () => {

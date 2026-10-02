@@ -45,7 +45,7 @@
   }
 
   &__load-error-message {
-    color: var(--fd-state-failed);
+    color: var(--fd-text-error);
     font-size: 0.875rem;
     margin: 0;
   }
@@ -103,9 +103,13 @@
   }
 
   &__back-link {
+    align-items: center;
     color: var(--fd-text-link);
-    text-decoration: none;
+    display: inline-flex;
     font-size: 0.875rem;
+    min-height: 44px;
+    padding: var(--fd-spacing-xs) 0;
+    text-decoration: none;
 
     &:hover {
       text-decoration: underline;

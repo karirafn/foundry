@@ -2,7 +2,7 @@
 
 ## Context
 
-The routed repository page (#536) needs the repository identified by its URL `:repositoryId`. Foundry exposes no single-repository GET endpoint — only the per-account list `GET /api/accounts/{accountId}/repositories` (`RepositoryEndpoints.cs`) — and #536 forbids backend changes.
+The routed repository page (#536) needs the repository identified by its URL `:repositoryId`. Foundry exposes no single-repository GET endpoint — only the per-account list `GET /api/accounts/{accountId}/repositories` (`src/Modules/Monitoring/Foundry.Modules.Monitoring/Features/Repositories/RepositoryEndpoints.cs`) — and #536 forbids backend changes.
 
 ## Decision
 
