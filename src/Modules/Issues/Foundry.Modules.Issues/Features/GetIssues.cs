@@ -75,8 +75,7 @@ internal static class GetIssues
                 .WithName("GetIssues")
                 .WithSummary("Gets issue summaries, optionally filtered by repository and state")
                 .Produces<PagedIssues>()
-                .ProducesProblem(StatusCodes.Status400BadRequest)
-                .ProducesProblem(StatusCodes.Status500InternalServerError);
+                .ProducesProblem(StatusCodes.Status400BadRequest);
         }
 
         private static async Task<IResult> HandleResolvedAsync(
