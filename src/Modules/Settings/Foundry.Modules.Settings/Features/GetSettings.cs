@@ -1,6 +1,7 @@
 using Foundry.Modules.Settings.Contracts;
 using Foundry.Modules.Settings.Domain.Entities;
 using Foundry.Shared;
+using Foundry.Shared.Infrastructure.Http;
 
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
@@ -45,9 +46,9 @@ internal static class GetSettings
                         new Query(),
                         cancellationToken);
 
-                    return result.Match<Results<Ok<GlobalSettingsSummary>, NotFound>>(
+                    return result.Match<Results<Ok<GlobalSettingsSummary>, ProblemHttpResult>>(
                         summary => TypedResults.Ok(summary),
-                        _ => TypedResults.NotFound());
+                        error => error.ToProblem(StatusCodes.Status404NotFound));
                 })
                 .WithName("GetSettings")
                 .WithSummary("Gets the current global settings")

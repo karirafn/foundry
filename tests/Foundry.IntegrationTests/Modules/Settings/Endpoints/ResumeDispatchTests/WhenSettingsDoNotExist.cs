@@ -7,7 +7,7 @@ using Shouldly;
 
 using Xunit;
 
-namespace Foundry.IntegrationTests.Modules.Settings.Endpoints.GetSettingsTests;
+namespace Foundry.IntegrationTests.Modules.Settings.Endpoints.ResumeDispatchTests;
 
 public sealed class WhenSettingsDoNotExist : IAsyncDisposable
 {
@@ -34,8 +34,9 @@ public sealed class WhenSettingsDoNotExist : IAsyncDisposable
         // Arrange — no settings seeded; SettingsSeeder is a hosted service and is removed in tests
 
         // Act
-        HttpResponseMessage response = await _client.GetAsync(
-            new Uri("/api/settings", UriKind.Relative),
+        HttpResponseMessage response = await _client.PostAsync(
+            new Uri("/api/settings/dispatch/resume", UriKind.Relative),
+            content: null,
             TestContext.Current.CancellationToken);
 
         // Assert
