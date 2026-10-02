@@ -44,7 +44,10 @@ public sealed class WhenUnknownStateRequested : IAsyncDisposable
         ProblemDetails problem = (await response.Content
             .ReadFromJsonAsync<ProblemDetails>(TestContext.Current.CancellationToken))
             .ShouldNotBeNull();
-        problem.Status.ShouldBe(BadRequestStatus);
+        problem.ShouldSatisfyAllConditions(
+            () => problem.Status.ShouldBe(BadRequestStatus),
+            () => problem.Type.ShouldEndWith("Issue.InvalidStates"),
+            () => problem.Detail.ShouldNotBeNullOrEmpty());
     }
 
     [Fact]
@@ -69,7 +72,9 @@ public sealed class WhenUnknownStateRequested : IAsyncDisposable
         ProblemDetails problem = (await response.Content
             .ReadFromJsonAsync<ProblemDetails>(TestContext.Current.CancellationToken))
             .ShouldNotBeNull();
-        problem.Status.ShouldBe(BadRequestStatus);
-        problem.Detail.ShouldNotBeNull();
+        problem.ShouldSatisfyAllConditions(
+            () => problem.Status.ShouldBe(BadRequestStatus),
+            () => problem.Type.ShouldEndWith("Issue.InvalidStates"),
+            () => problem.Detail.ShouldNotBeNullOrEmpty());
     }
 }

@@ -44,6 +44,9 @@ public sealed class WhenMixedStatesRequested : IAsyncDisposable
         ProblemDetails problem = (await response.Content
             .ReadFromJsonAsync<ProblemDetails>(TestContext.Current.CancellationToken))
             .ShouldNotBeNull();
-        problem.Status.ShouldBe(BadRequestStatus);
+        problem.ShouldSatisfyAllConditions(
+            () => problem.Status.ShouldBe(BadRequestStatus),
+            () => problem.Type.ShouldEndWith("Issue.MixedStates"),
+            () => problem.Detail.ShouldNotBeNullOrEmpty());
     }
 }
