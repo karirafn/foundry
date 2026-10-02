@@ -8,6 +8,8 @@ using Foundry.Modules.Settings.Domain.Entities;
 using Foundry.Shared;
 using Foundry.WebApi.Persistence;
 
+using Microsoft.AspNetCore.Mvc;
+
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -166,8 +168,12 @@ public sealed class WhenGitLabAccountIsValid : IAsyncDisposable
 
         // Assert
         response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
-        string content = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
-        content.ShouldContain("gitlab.example.com");
+        response.Content.Headers.ContentType?.MediaType.ShouldBe("application/problem+json");
+        ProblemDetails problem = (await response.Content
+            .ReadFromJsonAsync<ProblemDetails>(TestContext.Current.CancellationToken))
+            .ShouldNotBeNull();
+        problem.Detail.ShouldNotBeNull();
+        problem.Detail.ShouldContain("gitlab.example.com");
     }
 
     private sealed class StubValidateTokenHandler(Result<ValidateToken.Response> result)

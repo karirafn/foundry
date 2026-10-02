@@ -471,9 +471,9 @@
           "400": {
             "description": "Bad Request",
             "content": {
-              "application/json": {
+              "application/problem+json": {
                 "schema": {
-                  "type": "string"
+                  "$ref": "#/components/schemas/ProblemDetails"
                 }
               }
             }
@@ -520,16 +520,6 @@
               }
             }
           },
-          "404": {
-            "description": "Not Found",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          },
           "409": {
             "description": "Conflict",
             "content": {
@@ -540,12 +530,22 @@
               }
             }
           },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
           "400": {
             "description": "Bad Request",
             "content": {
-              "application/json": {
+              "application/problem+json": {
                 "schema": {
-                  "type": "string"
+                  "$ref": "#/components/schemas/ProblemDetails"
                 }
               }
             }

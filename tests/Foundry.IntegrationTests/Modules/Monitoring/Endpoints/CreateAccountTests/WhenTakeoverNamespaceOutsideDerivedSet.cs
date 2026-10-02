@@ -9,6 +9,8 @@ using Foundry.Modules.Monitoring.Infrastructure.GitHub;
 using Foundry.Modules.Monitoring.Infrastructure.RateBudget;
 using Foundry.Shared;
 
+using Microsoft.AspNetCore.Mvc;
+
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Caching.Memory;
@@ -133,7 +135,11 @@ public sealed class WhenTakeoverNamespaceOutsideDerivedSet : IAsyncDisposable
         // Assert — the probe finds no target (no derived namespace repos) before the
         // takeover validation can run, so the response is a 400 with the no-repos message.
         response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
-        string responseBody = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
-        responseBody.ShouldContain("namespace");
+        response.Content.Headers.ContentType?.MediaType.ShouldBe("application/problem+json");
+        ProblemDetails problem = (await response.Content
+            .ReadFromJsonAsync<ProblemDetails>(TestContext.Current.CancellationToken))
+            .ShouldNotBeNull();
+        problem.Detail.ShouldNotBeNull();
+        problem.Detail.ShouldContain("namespace");
     }
 }

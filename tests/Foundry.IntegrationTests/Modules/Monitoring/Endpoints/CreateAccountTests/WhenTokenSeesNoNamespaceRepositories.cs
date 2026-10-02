@@ -1,6 +1,5 @@
 using System.Net;
 using System.Net.Http.Json;
-using System.Text;
 
 using Foundry.Modules.Monitoring.Features.Accounts;
 using Foundry.Modules.Monitoring.Features.Accounts.Tokens;
@@ -9,6 +8,7 @@ using Foundry.Modules.Monitoring.Infrastructure.GitHub;
 using Foundry.Modules.Monitoring.Infrastructure.RateBudget;
 using Foundry.Shared;
 
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Caching.Memory;
@@ -27,6 +27,7 @@ namespace Foundry.IntegrationTests.Modules.Monitoring.Endpoints.CreateAccountTes
 /// </summary>
 public sealed class WhenTokenSeesNoNamespaceRepositories : IAsyncDisposable
 {
+    private const int BadRequestStatus = 400;
     private const string ResolvedAccountName = "octocat";
     private const string Token = "ghp_empty_listing_token";
 
@@ -64,7 +65,7 @@ public sealed class WhenTokenSeesNoNamespaceRepositories : IAsyncDisposable
     }
 
     [Fact]
-    public async Task ReturnsBadRequestWithDualCauseMessage()
+    public async Task ReturnsBadRequestAsProblemDetailsWithDualCauseMessage()
     {
         // Arrange
         object body = new
@@ -82,8 +83,16 @@ public sealed class WhenTokenSeesNoNamespaceRepositories : IAsyncDisposable
 
         // Assert — 400 because no repos were found under the derived namespace
         response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
-        string responseBody = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
-        responseBody.ShouldContain("namespace");
+        response.Content.Headers.ContentType?.MediaType.ShouldBe("application/problem+json");
+        ProblemDetails problem = (await response.Content
+            .ReadFromJsonAsync<ProblemDetails>(TestContext.Current.CancellationToken))
+            .ShouldNotBeNull();
+        problem.ShouldSatisfyAllConditions(
+            () => problem.Status.ShouldBe(BadRequestStatus),
+            () => problem.Type.ShouldEndWith("Credential.NoNamespaceRepositories"),
+            () => problem.Detail.ShouldNotBeNullOrEmpty());
+        problem.Detail.ShouldNotBeNull();
+        problem.Detail.ShouldContain("namespace");
     }
 
     private sealed class StubValidateTokenHandler(Result<ValidateToken.Response> result)

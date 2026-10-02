@@ -1,6 +1,8 @@
 using System.Net;
 using System.Net.Http.Json;
 
+using Microsoft.AspNetCore.Mvc;
+
 using Shouldly;
 
 using Xunit;
@@ -15,6 +17,8 @@ namespace Foundry.IntegrationTests.Modules.Monitoring.Endpoints.CreateAccountTes
 /// </summary>
 public sealed class WhenHostIsNotAllowed : IAsyncDisposable
 {
+    private const int BadRequestStatus = 400;
+
     private readonly FoundryWebAppFactory _factory;
     private readonly HttpClient _client;
 
@@ -31,7 +35,7 @@ public sealed class WhenHostIsNotAllowed : IAsyncDisposable
     }
 
     [Fact]
-    public async Task ReturnsHostNotAllowedMessage()
+    public async Task ReturnsHostNotAllowedAsProblemDetails()
     {
         // Arrange
         object body = new
@@ -49,7 +53,15 @@ public sealed class WhenHostIsNotAllowed : IAsyncDisposable
 
         // Assert
         response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
-        string content = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
-        content.ShouldContain("attacker.example.com");
+        response.Content.Headers.ContentType?.MediaType.ShouldBe("application/problem+json");
+        ProblemDetails problem = (await response.Content
+            .ReadFromJsonAsync<ProblemDetails>(TestContext.Current.CancellationToken))
+            .ShouldNotBeNull();
+        problem.ShouldSatisfyAllConditions(
+            () => problem.Status.ShouldBe(BadRequestStatus),
+            () => problem.Type.ShouldEndWith("ProviderHost.NotAllowed"),
+            () => problem.Detail.ShouldNotBeNullOrEmpty());
+        problem.Detail.ShouldNotBeNull();
+        problem.Detail.ShouldContain("attacker.example.com");
     }
 }

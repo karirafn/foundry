@@ -12,6 +12,7 @@ using Foundry.Modules.Monitoring.Features.Providers;
 using Foundry.Modules.Monitoring.Infrastructure;
 using Foundry.Modules.Monitoring.Infrastructure.GitHub;
 using Foundry.Shared;
+using Foundry.Shared.Infrastructure.Http;
 
 using BaseUrlVo = Foundry.Modules.Monitoring.Domain.ValueObjects.BaseUrl;
 
@@ -505,7 +506,8 @@ internal static partial class CreateAccount
                     Result validation = validator.Validate(command);
                     if (validation is Result.Failure validationFailure)
                     {
-                        return (IResult)TypedResults.BadRequest(validationFailure.Error.Message);
+                        return (Results<Created<CredentialCreationResult>, Conflict<CreateAccountConflictResponse>, UnprocessableEntity<TakeoverValidationResponse>, ProblemHttpResult>)
+                            validationFailure.Error.ToProblem(StatusCodes.Status400BadRequest);
                     }
 
                     Outcome outcome = await handler.HandleAsync(command, cancellationToken);
@@ -513,11 +515,12 @@ internal static partial class CreateAccount
                     return outcome switch
                     {
                         Outcome.Created created =>
+                            (Results<Created<CredentialCreationResult>, Conflict<CreateAccountConflictResponse>, UnprocessableEntity<TakeoverValidationResponse>, ProblemHttpResult>)
                             TypedResults.Created(
                                 $"/api/accounts/{created.Value.Credential.Id}",
                                 created.Value),
                         Outcome.Conflict conflict =>
-                            (IResult)TypedResults.Conflict(
+                            TypedResults.Conflict(
                                 new CreateAccountConflictResponse(
                                     CreateAccountConflictReason.NamespaceConflict,
                                     "One or more derived namespaces are already claimed by other accounts.",
@@ -530,7 +533,8 @@ internal static partial class CreateAccount
                                     [])),
                         Outcome.InvalidTakeover invalid =>
                             TypedResults.UnprocessableEntity(invalid.Invalid),
-                        Outcome.Failure failure => TypedResults.BadRequest(failure.Error.Message),
+                        Outcome.Failure failure =>
+                            failure.Error.ToProblem(StatusCodes.Status400BadRequest),
                         _ => throw new UnreachableException($"Unhandled CreateAccount.Outcome: {outcome.GetType().Name}"),
                     };
                 })
@@ -539,7 +543,7 @@ internal static partial class CreateAccount
                 .Produces<CredentialCreationResult>(StatusCodes.Status201Created)
                 .Produces<CreateAccountConflictResponse>(StatusCodes.Status409Conflict)
                 .Produces<TakeoverValidationResponse>(StatusCodes.Status422UnprocessableEntity)
-                .Produces<string>(StatusCodes.Status400BadRequest);
+                .ProducesProblem(StatusCodes.Status400BadRequest);
         }
     }
 }

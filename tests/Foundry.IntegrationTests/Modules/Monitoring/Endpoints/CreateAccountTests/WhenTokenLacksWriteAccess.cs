@@ -9,6 +9,7 @@ using Foundry.Modules.Monitoring.Infrastructure.GitHub;
 using Foundry.Modules.Monitoring.Infrastructure.RateBudget;
 using Foundry.Shared;
 
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Caching.Memory;
@@ -27,6 +28,7 @@ namespace Foundry.IntegrationTests.Modules.Monitoring.Endpoints.CreateAccountTes
 /// </summary>
 public sealed class WhenTokenLacksWriteAccess : IAsyncDisposable
 {
+    private const int BadRequestStatus = 400;
     private const string ResolvedAccountName = "octocat";
     private const string Token = "ghp_missing_contents_token";
 
@@ -71,7 +73,7 @@ public sealed class WhenTokenLacksWriteAccess : IAsyncDisposable
     }
 
     [Fact]
-    public async Task ReturnsBadRequestNamingTheMissingPermission()
+    public async Task ReturnsBadRequestAsProblemDetailsNamingTheMissingPermission()
     {
         // Arrange
         object body = new
@@ -89,8 +91,16 @@ public sealed class WhenTokenLacksWriteAccess : IAsyncDisposable
 
         // Assert
         response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
-        string responseBody = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
-        responseBody.ShouldContain("Contents");
+        response.Content.Headers.ContentType?.MediaType.ShouldBe("application/problem+json");
+        ProblemDetails problem = (await response.Content
+            .ReadFromJsonAsync<ProblemDetails>(TestContext.Current.CancellationToken))
+            .ShouldNotBeNull();
+        problem.ShouldSatisfyAllConditions(
+            () => problem.Status.ShouldBe(BadRequestStatus),
+            () => problem.Type.ShouldEndWith("Credential.MissingWritePermission"),
+            () => problem.Detail.ShouldNotBeNullOrEmpty());
+        problem.Detail.ShouldNotBeNull();
+        problem.Detail.ShouldContain("Contents");
     }
 
     /// <summary>
