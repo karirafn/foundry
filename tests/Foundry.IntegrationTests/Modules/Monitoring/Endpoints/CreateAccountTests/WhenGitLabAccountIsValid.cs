@@ -1,4 +1,5 @@
 using System.Net;
+using System.Net.Http.Headers;
 using System.Net.Http.Json;
 
 using Foundry.Modules.Monitoring.Contracts;
@@ -7,6 +8,8 @@ using Foundry.Modules.Monitoring.Features.Accounts.Tokens;
 using Foundry.Modules.Settings.Domain.Entities;
 using Foundry.Shared;
 using Foundry.WebApi.Persistence;
+
+using Microsoft.AspNetCore.Mvc;
 
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -166,8 +169,16 @@ public sealed class WhenGitLabAccountIsValid : IAsyncDisposable
 
         // Assert
         response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
-        string content = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
-        content.ShouldContain("gitlab.example.com");
+        MediaTypeHeaderValue contentType = response.Content.Headers.ContentType.ShouldNotBeNull();
+        contentType.MediaType.ShouldBe("application/problem+json");
+        ProblemDetails problem = (await response.Content
+            .ReadFromJsonAsync<ProblemDetails>(TestContext.Current.CancellationToken))
+            .ShouldNotBeNull();
+        string detail = problem.Detail.ShouldNotBeNull();
+        problem.ShouldSatisfyAllConditions(
+            () => problem.Type.ShouldEndWith("ProviderHost.NotAllowed"),
+            () => detail.ShouldNotBeNullOrEmpty());
+        detail.ShouldContain("gitlab.example.com");
     }
 
     private sealed class StubValidateTokenHandler(Result<ValidateToken.Response> result)

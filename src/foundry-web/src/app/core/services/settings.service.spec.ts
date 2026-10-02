@@ -1255,11 +1255,11 @@ describe('SettingsService', () => {
     );
   });
 
-  it('should surface the verbatim server message when updateAllowedProviderHosts fails with a non-empty string body', () => {
+  it('should surface the server message when updateAllowedProviderHosts fails with a ProblemDetails body', () => {
     // Arrange
     service.updateAllowedProviderHosts(['not-a-valid-host']);
     httpMock.expectOne('/api/settings/allowed-provider-hosts').flush(
-      'Host "not-a-valid-host" is not an allowed domain',
+      { type: 'tag:foundry,2026:problems/Settings.InvalidHost', title: 'Bad Request', status: 400, detail: 'Host "not-a-valid-host" is not an allowed domain' },
       { status: 400, statusText: 'Bad Request' }
     );
 

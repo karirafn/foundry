@@ -29,8 +29,7 @@ internal static class GetIssueCounts
                 })
                 .WithName("GetIssueCounts")
                 .WithSummary("Gets issue counts grouped by state, optionally filtered by repository")
-                .Produces<IssueStateCounts>()
-                .ProducesProblem(StatusCodes.Status500InternalServerError);
+                .Produces<IssueStateCounts>();
         }
     }
 }

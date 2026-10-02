@@ -1,13 +1,15 @@
 using System.Net;
+using System.Net.Http.Json;
 using System.Text;
 
 using Foundry.Modules.Monitoring.Infrastructure;
 using Foundry.Modules.Monitoring.Infrastructure.GitHub;
 using Foundry.Modules.Monitoring.Infrastructure.RateBudget;
 
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
-using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 
@@ -17,12 +19,12 @@ using Xunit;
 
 namespace Foundry.IntegrationTests.Modules.Monitoring.Endpoints.GetAvailableRepositoriesTests;
 
-/// <summary>
-/// Verifies that a provider listing error is mapped to a 400 Bad Request response.
-/// The endpoint error map routes non-NotFound errors (including provider failures) to BadRequest.
-/// </summary>
+// Verifies that a provider listing error is mapped to a 400 Bad Request ProblemDetails response.
+// The endpoint error map routes non-NotFound errors (including provider failures) to BadRequest.
 public sealed class WhenProviderListingFails : IAsyncDisposable
 {
+    private const int BadRequestStatus = 400;
+
     private readonly FoundryWebAppFactory _factory;
     private readonly HttpClient _client;
 
@@ -45,7 +47,7 @@ public sealed class WhenProviderListingFails : IAsyncDisposable
     }
 
     [Fact]
-    public async Task ReturnsBadRequest()
+    public async Task ReturnsBadRequestAsProblemDetails()
     {
         // Arrange
         Guid accountId = await AccountSeeder.SeedGitHubAccountAsync(_factory);
@@ -58,6 +60,14 @@ public sealed class WhenProviderListingFails : IAsyncDisposable
 
         // Assert
         response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        response.Content.Headers.ContentType?.MediaType.ShouldBe("application/problem+json");
+        ProblemDetails problem = (await response.Content
+            .ReadFromJsonAsync<ProblemDetails>(TestContext.Current.CancellationToken))
+            .ShouldNotBeNull();
+        problem.ShouldSatisfyAllConditions(
+            () => problem.Status.ShouldBe(BadRequestStatus),
+            () => problem.Type.ShouldNotBeNullOrEmpty(),
+            () => problem.Detail.ShouldNotBeNullOrEmpty());
     }
 
     // Returns a non-success status code so that GitHubHttpClient.ListRepositoriesAsync returns a Failure result.

@@ -338,10 +338,10 @@ describe('SettingsRepositoriesComponent', () => {
     // Act
     const repositoryService = TestBed.inject(RepositoryService);
     repositoryService.deleteRepository(ACCOUNT_1.id, REPO_1.id).subscribe({ error: () => {} });
-    httpMock.expectOne(`/api/accounts/${ACCOUNT_1.id}/repositories/${REPO_1.id}`).flush('Repository is in use.', {
-      status: 409,
-      statusText: 'Conflict',
-    });
+    httpMock.expectOne(`/api/accounts/${ACCOUNT_1.id}/repositories/${REPO_1.id}`).flush(
+      { type: 'tag:foundry,2026:problems/Repository.InUse', title: 'Conflict', status: 409, detail: 'Repository is in use.' },
+      { status: 409, statusText: 'Conflict' }
+    );
     fixture.detectChanges();
 
     // Assert

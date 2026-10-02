@@ -2,6 +2,7 @@ using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Issues.Features.StateChanges;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Shared;
+using Foundry.Shared.Infrastructure.Http;
 
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
@@ -38,9 +39,8 @@ internal static class GetIssues
 
                         if (unknownNames.Count > 0)
                         {
-                            return (IResult)TypedResults.Problem(
-                                detail: IssueErrors.InvalidStates(unknownNames).Message,
-                                statusCode: StatusCodes.Status400BadRequest);
+                            return IssueErrors.InvalidStates(unknownNames)
+                                .ToProblem(StatusCodes.Status400BadRequest);
                         }
 
                         bool hasActive = normalizedStates.Any(IssueStateRegistry.Active.Contains);
@@ -48,9 +48,8 @@ internal static class GetIssues
 
                         if (hasActive && hasResolved)
                         {
-                            return (IResult)TypedResults.Problem(
-                                detail: IssueErrors.MixedStates().Message,
-                                statusCode: StatusCodes.Status400BadRequest);
+                            return IssueErrors.MixedStates()
+                                .ToProblem(StatusCodes.Status400BadRequest);
                         }
 
                         if (hasResolved)
@@ -70,16 +69,16 @@ internal static class GetIssues
                         normalizedStates.Count > 0 ? normalizedStates : null,
                         cancellationToken);
 
-                    return TypedResults.Ok(new PagedIssues(summaries, null)) as IResult;
+                    return (Results<Ok<PagedIssues>, ProblemHttpResult>)TypedResults.Ok(
+                        new PagedIssues(summaries, null));
                 })
                 .WithName("GetIssues")
                 .WithSummary("Gets issue summaries, optionally filtered by repository and state")
                 .Produces<PagedIssues>()
-                .ProducesProblem(StatusCodes.Status400BadRequest)
-                .ProducesProblem(StatusCodes.Status500InternalServerError);
+                .ProducesProblem(StatusCodes.Status400BadRequest);
         }
 
-        private static async Task<IResult> HandleResolvedAsync(
+        private static async Task<Results<Ok<PagedIssues>, ProblemHttpResult>> HandleResolvedAsync(
             MonitoredRepositoryId? repoId,
             List<string> states,
             string? cursor,
@@ -92,9 +91,8 @@ internal static class GetIssues
                 Result<(DateTimeOffset DetectedAt, IssueId Id)> decoded = IssueCursor.Decode(cursor);
                 if (decoded.IsFailure)
                 {
-                    return TypedResults.Problem(
-                        detail: IssueErrors.InvalidCursor().Message,
-                        statusCode: StatusCodes.Status400BadRequest);
+                    return IssueErrors.InvalidCursor()
+                        .ToProblem(StatusCodes.Status400BadRequest);
                 }
             }
 

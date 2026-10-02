@@ -4,6 +4,7 @@ using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Modules.Monitoring.Features.Accounts;
 using Foundry.Shared;
+using Foundry.Shared.Infrastructure.Http;
 
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
@@ -85,9 +86,9 @@ internal static class GetRepositories
                         new Query(accountId),
                         cancellationToken);
 
-                    return result.Match<Results<Ok<IReadOnlyList<RepositorySummary>>, BadRequest<string>>>(
+                    return result.Match<Results<Ok<IReadOnlyList<RepositorySummary>>, ProblemHttpResult>>(
                         repositories => TypedResults.Ok(repositories),
-                        error => TypedResults.BadRequest(error.Message));
+                        error => error.ToProblem(StatusCodes.Status400BadRequest));
                 })
                 .WithName("GetRepositories")
                 .WithSummary("Gets all monitored repositories for an account")

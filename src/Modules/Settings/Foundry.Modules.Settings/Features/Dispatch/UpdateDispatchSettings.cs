@@ -1,6 +1,7 @@
 using Foundry.Modules.Settings.Contracts;
 using Foundry.Modules.Settings.Domain.Entities;
 using Foundry.Shared;
+using Foundry.Shared.Infrastructure.Http;
 
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
@@ -89,12 +90,12 @@ internal static class UpdateDispatchSettings
                         body.PollIntervalSeconds);
                     Result<GlobalSettingsSummary> result = await handler.HandleAsync(command, cancellationToken);
 
-                    return result.Match<Results<Ok<GlobalSettingsSummary>, NotFound, BadRequest<string>>>(
+                    return result.Match<Results<Ok<GlobalSettingsSummary>, ProblemHttpResult>>(
                         summary => TypedResults.Ok(summary),
                         error => error.Code switch
                         {
-                            SettingsErrors.NotFoundCode => TypedResults.NotFound(),
-                            _ => TypedResults.BadRequest(error.Message),
+                            SettingsErrors.NotFoundCode => error.ToProblem(StatusCodes.Status404NotFound),
+                            _ => error.ToProblem(StatusCodes.Status400BadRequest),
                         });
                 })
                 .WithName("UpdateDispatchSettings")

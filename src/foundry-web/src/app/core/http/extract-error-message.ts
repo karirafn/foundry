@@ -8,10 +8,6 @@ export function extractErrorMessage(err: HttpErrorResponse | TimeoutError): stri
     return TIMEOUT_MESSAGE;
   }
 
-  if (typeof err.error === 'string' && err.error) {
-    return err.error;
-  }
-
   if (
     err.error !== null &&
     typeof err.error === 'object' &&

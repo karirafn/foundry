@@ -11,6 +11,7 @@ using Foundry.Modules.Monitoring.Infrastructure.GitHub;
 using Foundry.Modules.Monitoring.Infrastructure.RateBudget;
 using Foundry.Shared;
 
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Caching.Memory;
@@ -25,6 +26,8 @@ namespace Foundry.IntegrationTests.Modules.Monitoring.Endpoints.UpdateAccountTes
 
 public sealed class WhenRequestIsInvalid : IAsyncDisposable
 {
+    private const int BadRequestStatus = 400;
+
     // One writable repo under "octocat" so namespace derivation and probing succeed during seeding.
     private const string OctocatListingJson = """
         [{"full_name":"octocat/repo","private":false,"permissions":{"push":true}}]
@@ -83,7 +86,7 @@ public sealed class WhenRequestIsInvalid : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenBaseUrlIsNotHttps_ReturnsBadRequest()
+    public async Task WhenBaseUrlIsNotHttps_ReturnsBadRequestAsProblemDetails()
     {
         // Arrange
         Guid id = await SeedAccountAsync();
@@ -97,10 +100,18 @@ public sealed class WhenRequestIsInvalid : IAsyncDisposable
 
         // Assert
         response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        response.Content.Headers.ContentType?.MediaType.ShouldBe("application/problem+json");
+        ProblemDetails problem = (await response.Content
+            .ReadFromJsonAsync<ProblemDetails>(TestContext.Current.CancellationToken))
+            .ShouldNotBeNull();
+        problem.ShouldSatisfyAllConditions(
+            () => problem.Status.ShouldBe(BadRequestStatus),
+            () => problem.Type.ShouldEndWith("BaseUrl.Invalid"),
+            () => problem.Detail.ShouldNotBeNullOrEmpty());
     }
 
     [Fact]
-    public async Task WhenBaseUrlContainsCredentials_ReturnsBadRequest()
+    public async Task WhenBaseUrlContainsCredentials_ReturnsBadRequestAsProblemDetails()
     {
         // Arrange
         Guid id = await SeedAccountAsync();
@@ -114,10 +125,18 @@ public sealed class WhenRequestIsInvalid : IAsyncDisposable
 
         // Assert
         response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        response.Content.Headers.ContentType?.MediaType.ShouldBe("application/problem+json");
+        ProblemDetails problem = (await response.Content
+            .ReadFromJsonAsync<ProblemDetails>(TestContext.Current.CancellationToken))
+            .ShouldNotBeNull();
+        problem.ShouldSatisfyAllConditions(
+            () => problem.Status.ShouldBe(BadRequestStatus),
+            () => problem.Type.ShouldEndWith("BaseUrl.ContainsCredentials"),
+            () => problem.Detail.ShouldNotBeNullOrEmpty());
     }
 
     [Fact]
-    public async Task WhenBaseUrlIsNotAUrl_ReturnsBadRequest()
+    public async Task WhenBaseUrlIsNotAUrl_ReturnsBadRequestAsProblemDetails()
     {
         // Arrange
         Guid id = await SeedAccountAsync();
@@ -131,6 +150,14 @@ public sealed class WhenRequestIsInvalid : IAsyncDisposable
 
         // Assert
         response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        response.Content.Headers.ContentType?.MediaType.ShouldBe("application/problem+json");
+        ProblemDetails problem = (await response.Content
+            .ReadFromJsonAsync<ProblemDetails>(TestContext.Current.CancellationToken))
+            .ShouldNotBeNull();
+        problem.ShouldSatisfyAllConditions(
+            () => problem.Status.ShouldBe(BadRequestStatus),
+            () => problem.Type.ShouldEndWith("BaseUrl.Invalid"),
+            () => problem.Detail.ShouldNotBeNullOrEmpty());
     }
 
     private sealed class StubValidateTokenHandler(Result<ValidateToken.Response> result)

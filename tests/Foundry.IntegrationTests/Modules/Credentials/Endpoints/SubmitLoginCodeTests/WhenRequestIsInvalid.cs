@@ -7,23 +7,30 @@ using Shouldly;
 
 using Xunit;
 
-namespace Foundry.IntegrationTests.Modules.Settings.Endpoints.UpdateWorkerLimitsTests;
+namespace Foundry.IntegrationTests.Modules.Credentials.Endpoints.SubmitLoginCodeTests;
 
-public sealed class WhenValuesAreInvalid(FoundryWebAppFactory factory) : IClassFixture<FoundryWebAppFactory>
+/// <summary>
+/// Integration tests for POST /api/credentials/login/code — validation error paths.
+/// The inline guards (empty code, too-long code) do not touch the database, so these
+/// tests use a shared factory fixture. The 422 path (no active session) also requires no
+/// database state beyond the default factory setup.
+/// </summary>
+public sealed class WhenRequestIsInvalid(FoundryWebAppFactory factory) : IClassFixture<FoundryWebAppFactory>
 {
     private const int BadRequestStatus = 400;
+    private const int UnprocessableEntityStatus = 422;
 
     private readonly HttpClient _client = factory.CreateClient();
 
     [Fact]
-    public async Task WhenMaxConcurrentIsZero_ReturnsBadRequestAsProblemDetails()
+    public async Task WhenCodeIsEmpty_ReturnsBadRequestAsProblemDetails()
     {
         // Arrange
-        object body = new { maxConcurrent = 0, timeoutMinutes = 60 };
+        object body = new { code = string.Empty };
 
         // Act
-        HttpResponseMessage response = await _client.PutAsJsonAsync(
-            new Uri("/api/settings/limits", UriKind.Relative),
+        HttpResponseMessage response = await _client.PostAsJsonAsync(
+            new Uri("/api/credentials/login/code", UriKind.Relative),
             body,
             TestContext.Current.CancellationToken);
 
@@ -35,19 +42,19 @@ public sealed class WhenValuesAreInvalid(FoundryWebAppFactory factory) : IClassF
             .ShouldNotBeNull();
         problem.ShouldSatisfyAllConditions(
             () => problem.Status.ShouldBe(BadRequestStatus),
-            () => problem.Type.ShouldEndWith("Settings.InvalidMaxConcurrent"),
+            () => problem.Type.ShouldEndWith("Credentials.LoginCodeEmpty"),
             () => problem.Detail.ShouldNotBeNullOrEmpty());
     }
 
     [Fact]
-    public async Task WhenMaxConcurrentExceedsMaximum_ReturnsBadRequestAsProblemDetails()
+    public async Task WhenCodeIsWhitespace_ReturnsBadRequestAsProblemDetails()
     {
         // Arrange
-        object body = new { maxConcurrent = 21, timeoutMinutes = 60 };
+        object body = new { code = "   " };
 
         // Act
-        HttpResponseMessage response = await _client.PutAsJsonAsync(
-            new Uri("/api/settings/limits", UriKind.Relative),
+        HttpResponseMessage response = await _client.PostAsJsonAsync(
+            new Uri("/api/credentials/login/code", UriKind.Relative),
             body,
             TestContext.Current.CancellationToken);
 
@@ -59,19 +66,19 @@ public sealed class WhenValuesAreInvalid(FoundryWebAppFactory factory) : IClassF
             .ShouldNotBeNull();
         problem.ShouldSatisfyAllConditions(
             () => problem.Status.ShouldBe(BadRequestStatus),
-            () => problem.Type.ShouldEndWith("Settings.InvalidMaxConcurrent"),
+            () => problem.Type.ShouldEndWith("Credentials.LoginCodeEmpty"),
             () => problem.Detail.ShouldNotBeNullOrEmpty());
     }
 
     [Fact]
-    public async Task WhenTimeoutMinutesIsZero_ReturnsBadRequestAsProblemDetails()
+    public async Task WhenCodeExceedsMaxLength_ReturnsBadRequestAsProblemDetails()
     {
         // Arrange
-        object body = new { maxConcurrent = 5, timeoutMinutes = 0 };
+        object body = new { code = new string('x', 513) };
 
         // Act
-        HttpResponseMessage response = await _client.PutAsJsonAsync(
-            new Uri("/api/settings/limits", UriKind.Relative),
+        HttpResponseMessage response = await _client.PostAsJsonAsync(
+            new Uri("/api/credentials/login/code", UriKind.Relative),
             body,
             TestContext.Current.CancellationToken);
 
@@ -83,31 +90,31 @@ public sealed class WhenValuesAreInvalid(FoundryWebAppFactory factory) : IClassF
             .ShouldNotBeNull();
         problem.ShouldSatisfyAllConditions(
             () => problem.Status.ShouldBe(BadRequestStatus),
-            () => problem.Type.ShouldEndWith("Settings.InvalidTimeout"),
+            () => problem.Type.ShouldEndWith("Credentials.LoginCodeTooLong"),
             () => problem.Detail.ShouldNotBeNullOrEmpty());
     }
 
     [Fact]
-    public async Task WhenTimeoutMinutesExceedsMaximum_ReturnsBadRequestAsProblemDetails()
+    public async Task WhenNoActiveLoginSession_ReturnsUnprocessableEntityAsProblemDetails()
     {
-        // Arrange
-        object body = new { maxConcurrent = 5, timeoutMinutes = 1441 };
+        // Arrange — no login session started; code is valid-shaped
+        object body = new { code = "valid-looking-code" };
 
         // Act
-        HttpResponseMessage response = await _client.PutAsJsonAsync(
-            new Uri("/api/settings/limits", UriKind.Relative),
+        HttpResponseMessage response = await _client.PostAsJsonAsync(
+            new Uri("/api/credentials/login/code", UriKind.Relative),
             body,
             TestContext.Current.CancellationToken);
 
         // Assert
-        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        response.StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
         response.Content.Headers.ContentType?.MediaType.ShouldBe("application/problem+json");
         ProblemDetails problem = (await response.Content
             .ReadFromJsonAsync<ProblemDetails>(TestContext.Current.CancellationToken))
             .ShouldNotBeNull();
         problem.ShouldSatisfyAllConditions(
-            () => problem.Status.ShouldBe(BadRequestStatus),
-            () => problem.Type.ShouldEndWith("Settings.InvalidTimeout"),
+            () => problem.Status.ShouldBe(UnprocessableEntityStatus),
+            () => problem.Type.ShouldEndWith("Login.NoActiveSession"),
             () => problem.Detail.ShouldNotBeNullOrEmpty());
     }
 }

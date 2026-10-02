@@ -7,16 +7,16 @@ using Shouldly;
 
 using Xunit;
 
-namespace Foundry.IntegrationTests.Modules.Monitoring.Endpoints.MoveRepositoryTests;
+namespace Foundry.IntegrationTests.Modules.Settings.Endpoints.UpdateWorkerImageConfigurationTests;
 
-public sealed class WhenRepositoryDoesNotExist : IAsyncDisposable
+public sealed class WhenSettingsDoNotExist : IAsyncDisposable
 {
     private const int NotFoundStatus = 404;
 
     private readonly FoundryWebAppFactory _factory;
     private readonly HttpClient _client;
 
-    public WhenRepositoryDoesNotExist()
+    public WhenSettingsDoNotExist()
     {
         _factory = new FoundryWebAppFactory();
         _client = _factory.CreateClient();
@@ -31,13 +31,21 @@ public sealed class WhenRepositoryDoesNotExist : IAsyncDisposable
     [Fact]
     public async Task ReturnsNotFoundAsProblemDetails()
     {
-        // Arrange
-        Guid nonExistentId = Guid.NewGuid();
+        // Arrange — no settings seeded; SettingsSeeder is a hosted service and is removed in tests
+        object body = new
+        {
+            installDotnet = false,
+            installAngular = false,
+            installGlab = false,
+            installGh = false,
+            installChromium = false,
+            installDocker = false,
+        };
 
         // Act
-        HttpResponseMessage response = await _client.PatchAsJsonAsync(
-            new Uri($"/api/repositories/{nonExistentId}/position", UriKind.Relative),
-            new { position = 0 },
+        HttpResponseMessage response = await _client.PutAsJsonAsync(
+            new Uri("/api/settings/worker-image", UriKind.Relative),
+            body,
             TestContext.Current.CancellationToken);
 
         // Assert
@@ -48,7 +56,7 @@ public sealed class WhenRepositoryDoesNotExist : IAsyncDisposable
             .ShouldNotBeNull();
         problem.ShouldSatisfyAllConditions(
             () => problem.Status.ShouldBe(NotFoundStatus),
-            () => problem.Type.ShouldEndWith("Repository.NotFound"),
+            () => problem.Type.ShouldEndWith("Settings.NotFound"),
             () => problem.Detail.ShouldNotBeNullOrEmpty());
     }
 }

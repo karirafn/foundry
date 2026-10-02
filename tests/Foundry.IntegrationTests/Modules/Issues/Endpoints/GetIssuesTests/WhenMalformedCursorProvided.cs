@@ -45,7 +45,10 @@ public sealed class WhenMalformedCursorProvided : IAsyncDisposable
         ProblemDetails problem = (await response.Content
             .ReadFromJsonAsync<ProblemDetails>(TestContext.Current.CancellationToken))
             .ShouldNotBeNull();
-        problem.Status.ShouldBe(BadRequestStatus);
+        problem.ShouldSatisfyAllConditions(
+            () => problem.Status.ShouldBe(BadRequestStatus),
+            () => problem.Type.ShouldEndWith("Issue.InvalidCursor"),
+            () => problem.Detail.ShouldNotBeNullOrEmpty());
     }
 
     [Fact]
