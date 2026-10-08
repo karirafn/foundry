@@ -566,6 +566,7 @@ export interface components {
         AvailableRepositoriesResponse: {
             hasClaims: boolean;
             repositories: components["schemas"]["AvailableRepository"][];
+            noPushAccessExplanation: string;
         };
         AvailableRepository: {
             slug: string;
