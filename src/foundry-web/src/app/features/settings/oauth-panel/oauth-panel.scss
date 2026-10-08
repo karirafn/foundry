@@ -1,7 +1,4 @@
-@mixin focus-ring {
-  outline: 2px solid var(--fd-text-link);
-  outline-offset: 2px;
-}
+@use '../../../../styles/controls' as *;
 
 .oauth-panel {
   display: flex;
