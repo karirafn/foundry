@@ -182,6 +182,7 @@ internal static partial class UpdateAccount
                 providerType,
                 credential.BaseUrl.Value.ToString(),
                 credential.Token is not null,
+                AccountsDatabaseHelpers.ToTokenStatus(credential.Token),
                 credential.Namespaces.Select(n => n.Value).ToList());
 
             return new Outcome.Updated(new CredentialUpdateResult(summary, affectedRepositories));

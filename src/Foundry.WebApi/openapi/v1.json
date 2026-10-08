@@ -1885,6 +1885,7 @@
           "providerType",
           "baseUrl",
           "hasToken",
+          "tokenStatus",
           "namespaces"
         ],
         "type": "object",
@@ -1904,6 +1905,9 @@
           },
           "hasToken": {
             "type": "boolean"
+          },
+          "tokenStatus": {
+            "type": "string"
           },
           "namespaces": {
             "type": "array",

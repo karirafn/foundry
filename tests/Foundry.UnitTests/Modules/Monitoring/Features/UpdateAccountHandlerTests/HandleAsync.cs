@@ -770,6 +770,24 @@ public sealed class HandleAsync : IAsyncDisposable
         rejected.Error.Code.ShouldBe("ProviderHost.NotAllowed");
     }
 
+    [Fact]
+    public async Task WhenTokenSupplied_ReturnsTokenStatusPresent()
+    {
+        // Arrange
+        GitHubCredential credential = await SeedCredentialAsync();
+        UpdateAccount.Handler handler = BuildHandler();
+        UpdateAccount.Command command = new(credential.Id, "https://github.com", "ghp_newtoken");
+
+        // Act
+        UpdateAccount.Outcome outcome = await handler.HandleAsync(
+            command,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        UpdateAccount.Outcome.Updated updated = outcome.ShouldBeOfType<UpdateAccount.Outcome.Updated>();
+        updated.Value.Credential.TokenStatus.ShouldBe("present");
+    }
+
     // Stubs and fakes
 
     private sealed class StubValidateTokenHandler(string accountName)

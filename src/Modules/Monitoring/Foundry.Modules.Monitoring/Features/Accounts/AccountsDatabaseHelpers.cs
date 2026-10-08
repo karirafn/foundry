@@ -1,3 +1,5 @@
+using Foundry.Modules.Monitoring.Domain.ValueObjects;
+
 using Microsoft.EntityFrameworkCore;
 
 namespace Foundry.Modules.Monitoring.Features.Accounts;
@@ -9,6 +11,20 @@ internal static class AccountsDatabaseHelpers
     // Real GitHub/GitLab tokens are under 200 characters; 500 gives ample headroom
     // while preventing oversized values from bloating the encrypted column (max 2000 chars ciphertext).
     internal const int TokenMaxLength = 500;
+
+    /// <summary>
+    /// Maps a <see cref="ProviderToken"/> to its wire string.
+    /// Materialization via <see cref="Infrastructure.Configurations.ProviderTokenConverter"/>
+    /// is required before calling this — a SQL-projected <c>Token != null</c> check cannot
+    /// distinguish <see cref="ProviderToken.Present"/> from <see cref="ProviderToken.Unreadable"/>.
+    /// </summary>
+    internal static string ToTokenStatus(ProviderToken? token) =>
+        token switch
+        {
+            ProviderToken.Present => TokenStatuses.Present,
+            ProviderToken.Unreadable => TokenStatuses.Unreadable,
+            _ => TokenStatuses.Absent,
+        };
 
     // SQLite error code 19 is SQLITE_CONSTRAINT (unique constraint violation).
     // The monitoring module does not reference the SQLite provider directly,

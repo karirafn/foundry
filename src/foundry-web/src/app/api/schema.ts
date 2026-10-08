@@ -621,6 +621,7 @@ export interface components {
             providerType: string;
             baseUrl: string;
             hasToken: boolean;
+            tokenStatus: string;
             namespaces: string[];
         };
         CredentialUpdateResult: {
