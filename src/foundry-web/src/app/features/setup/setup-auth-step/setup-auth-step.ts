@@ -70,7 +70,7 @@ import { OAuthPanelComponent } from '../../settings/oauth-panel/oauth-panel';
               [ngModel]="_apiKeyValue()"
               (ngModelChange)="_apiKeyValue.set($event)"
               [attr.aria-invalid]="!!_settingsService.saveError() || null"
-              aria-describedby="api-key-error"
+              aria-describedby="api-key-error api-key-unreadable-note"
             />
           </div>
 
@@ -80,8 +80,11 @@ import { OAuthPanelComponent } from '../../settings/oauth-panel/oauth-panel';
                on page load when the operator arrives in the Unreadable state.
                role="status" (polite) avoids a double assertive announcement alongside
                the existing #api-key-error role="alert". The --hidden modifier suppresses
-               the visible box when no Unreadable content is active. -->
+               the visible box when no Unreadable content is active.
+               id="api-key-unreadable-note" is referenced by aria-describedby on the API key
+               input so screen-reader users hear the recovery guidance when focusing the field. -->
           <div
+            id="api-key-unreadable-note"
             class="setup-auth-step__oauth-note setup-auth-step__note--warning"
             [class.setup-auth-step__note--warning-hidden]="_apiKeyStatus() !== 'Unreadable'"
             role="status"

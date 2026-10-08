@@ -658,6 +658,28 @@ describe('SetupAuthStepComponent', () => {
     });
   });
 
+  // Fix 1: aria-describedby on API key input includes the Unreadable note id
+  it('should include api-key-unreadable-note in the API key input aria-describedby', () => {
+    // Arrange
+    const { fixture } = setup();
+    fixture.detectChanges();
+
+    const el = fixture.nativeElement as HTMLElement;
+    const radios = el.querySelectorAll<HTMLInputElement>('input[type="radio"]');
+    radios[0].click();
+    fixture.detectChanges();
+
+    // Act
+    const input = el.querySelector<HTMLInputElement>('input[type="password"]');
+    const describedBy = input?.getAttribute('aria-describedby') ?? '';
+
+    // Assert — the input references both the error region and the unreadable note
+    expect(describedBy).toContain('api-key-unreadable-note');
+    expect(describedBy).toContain('api-key-error');
+    // The referenced element must exist in the DOM (persistent live-region pattern)
+    expect(el.querySelector('#api-key-unreadable-note')).toBeTruthy();
+  });
+
   // Finding 9: startLoginError rendered in OAuth section
   it('should show startLoginError when loginPhase is null and error is non-null in OAuth mode', () => {
     // Arrange
