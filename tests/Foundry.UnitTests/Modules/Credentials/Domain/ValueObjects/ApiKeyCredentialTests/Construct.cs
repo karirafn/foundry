@@ -23,6 +23,34 @@ public sealed class Construct
     }
 
     [Fact]
+    public void WhenPresentCreatedWithNull_ThrowsArgumentException()
+    {
+        // Arrange / Act / Assert
+        Should.Throw<ArgumentException>(() => new ApiKeyCredential.Present(null!));
+    }
+
+    [Fact]
+    public void WhenPresentCreatedWithWhitespace_ThrowsArgumentException()
+    {
+        // Arrange / Act / Assert
+        Should.Throw<ArgumentException>(() => new ApiKeyCredential.Present("   "));
+    }
+
+    [Fact]
+    public void WhenPresentToStringCalled_DoesNotContainKeyValue()
+    {
+        // Arrange
+        const string key = "sk-ant-api03-secret-key";
+        ApiKeyCredential.Present present = new(key);
+
+        // Act
+        string text = present.ToString();
+
+        // Assert
+        text.ShouldNotContain(key);
+    }
+
+    [Fact]
     public void WhenNotConfiguredCreated_IsNotConfiguredVariant()
     {
         // Arrange / Act
@@ -126,23 +154,42 @@ public sealed class Construct
         result.ShouldBeFalse();
     }
 
-    [Theory]
-    [InlineData("sk-ant-api03-test")]
-    public void WhenIsPatternMatched_SelectsCorrectVariant(string key)
+    [Fact]
+    public void WhenPresentPatternMatched_ExtractsValue()
     {
         // Arrange
-        ApiKeyCredential present = new ApiKeyCredential.Present(key);
+        ApiKeyCredential present = new ApiKeyCredential.Present("sk-ant-api03-test");
+
+        // Act
+        string result = present is ApiKeyCredential.Present p ? p.Value : "wrong";
+
+        // Assert
+        result.ShouldBe("sk-ant-api03-test");
+    }
+
+    [Fact]
+    public void WhenNotConfiguredPatternMatched_MatchesNotConfiguredVariant()
+    {
+        // Arrange
         ApiKeyCredential notConfigured = new ApiKeyCredential.NotConfigured();
+
+        // Act
+        bool matched = notConfigured is ApiKeyCredential.NotConfigured;
+
+        // Assert
+        matched.ShouldBeTrue();
+    }
+
+    [Fact]
+    public void WhenUnreadablePatternMatched_MatchesUnreadableVariant()
+    {
+        // Arrange
         ApiKeyCredential unreadable = new ApiKeyCredential.Unreadable();
 
         // Act
-        string presentResult = present is ApiKeyCredential.Present p ? p.Value : "wrong";
-        string notConfiguredResult = notConfigured is ApiKeyCredential.NotConfigured ? "not-configured" : "wrong";
-        string unreadableResult = unreadable is ApiKeyCredential.Unreadable ? "unreadable" : "wrong";
+        bool matched = unreadable is ApiKeyCredential.Unreadable;
 
         // Assert
-        presentResult.ShouldBe(key);
-        notConfiguredResult.ShouldBe("not-configured");
-        unreadableResult.ShouldBe("unreadable");
+        matched.ShouldBeTrue();
     }
 }

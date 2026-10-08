@@ -105,17 +105,27 @@ public sealed class GetSummaryAsync : IAsyncDisposable
     }
 
     [Fact]
-    public void WhenApiKeyAccountWithUnreadableCredential_ApiKeyStatusIsUnreadable()
+    public async Task WhenApiKeyAccountWithUnreadableCredential_ApiKeyStatusIsUnreadable()
     {
-        // Arrange — Unreadable is produced in-memory when the converter cannot decrypt the stored
-        // api_key column (key rotation or corrupt base-64). It cannot be round-tripped through the
-        // DB converter (the Encrypt path stores NULL, which reads back as NotConfigured), so this
-        // test exercises ToSummary directly with an in-memory account.
-        ClaudeAccount account = ClaudeAccount.Create();
-        account.SetAuthMode(new AuthMode.ApiKey(new ApiKeyCredential.Unreadable()));
+        // Arrange — Unreadable is produced when EF cannot decrypt the stored api_key column
+        // (key rotation or corrupt base-64). Inject an undecryptable value via raw SQL so the
+        // loaded account truly has an Unreadable credential and ToSummary maps it correctly.
+        await using (FoundryDbContext seedDb = CreateDbContext())
+        {
+            ClaudeAccount seed = ClaudeAccount.Create();
+            seedDb.Set<ClaudeAccount>().Add(seed);
+            await seedDb.SaveChangesAsync(TestContext.Current.CancellationToken);
+            await seedDb.Database.ExecuteSqlRawAsync(
+                "UPDATE claude_account SET api_key = {0}",
+                Convert.ToBase64String([0x00, 0x01, 0x02, 0x03, 0xFF, 0xFE]));
+        }
+
+        await using FoundryDbContext dbContext = CreateDbContext();
+        ClaudeAccount? account = await dbContext.Set<ClaudeAccount>()
+            .FirstOrDefaultAsync(TestContext.Current.CancellationToken);
 
         // Act
-        ClaudeAccountSummary summary = CredentialQueries.ToSummary(account);
+        ClaudeAccountSummary summary = CredentialQueries.ToSummary(account.ShouldNotBeNull());
 
         // Assert
         summary.ApiKeyStatus.ShouldBe(CredentialQueries.ApiKeyStatusUnreadable);

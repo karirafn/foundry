@@ -78,6 +78,10 @@ public sealed class ClaudeAccount : AggregateRoot<ClaudeAccountId>
                 return false;
             }
 
+            // Reads backing fields directly rather than the assembled AuthMode property because
+            // _apiKeyCredential is always set for ApiKey rows (NotConfigured / Present / Unreadable),
+            // and for OAuth rows a NULL api_key column decrypts to NotConfigured — the
+            // _authModeRecord is AuthMode.ApiKey guard is what prevents an OAuth row failing this check.
             if (_authModeRecord is AuthMode.ApiKey && _apiKeyCredential is not ApiKeyCredential.Present)
             {
                 return false;
@@ -98,8 +102,22 @@ public sealed class ClaudeAccount : AggregateRoot<ClaudeAccountId>
     /// fields, sets validity to <see cref="CredentialValidity.Valid"/>, and stores the credential.
     /// Switching to OAuth clears the stored API key credential.
     /// </summary>
+    /// <exception cref="ArgumentException">
+    /// Thrown when <paramref name="mode"/> is <see cref="AuthMode.ApiKey"/> with an
+    /// <see cref="ApiKeyCredential.Unreadable"/> credential. <see cref="ApiKeyCredential.Unreadable"/>
+    /// only arises on read (a failed decrypt) and cannot be persisted — it would write NULL and read
+    /// back as <see cref="ApiKeyCredential.NotConfigured"/>.
+    /// </exception>
     public void SetAuthMode(AuthMode mode)
     {
+        if (mode is AuthMode.ApiKey { Credential: ApiKeyCredential.Unreadable })
+        {
+            throw new ArgumentException(
+                "Cannot persist an Unreadable credential. Unreadable only arises on read (a failed decrypt) " +
+                "and would silently write NULL and read back as NotConfigured.",
+                nameof(mode));
+        }
+
         switch (mode)
         {
             case AuthMode.ApiKey apiKey:
@@ -127,7 +145,6 @@ public sealed class ClaudeAccount : AggregateRoot<ClaudeAccountId>
     /// Marks the credentials as invalid with the given reason.
     /// Idempotent: when already <see cref="CredentialValidity.Invalid"/>, does nothing and returns
     /// <c>false</c> so callers can avoid double-publishing an event.
-    /// Does not affect <see cref="Validity"/>.
     /// </summary>
     /// <returns><c>true</c> if the state changed; <c>false</c> if already invalid.</returns>
     public bool Invalidate(string reason)

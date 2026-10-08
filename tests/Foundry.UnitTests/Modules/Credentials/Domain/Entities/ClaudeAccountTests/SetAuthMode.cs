@@ -105,4 +105,15 @@ public sealed class SetAuthMode
         // Assert
         account.CreatedAt.ShouldBe(createdAt);
     }
+
+    [Fact]
+    public void WhenSetToApiKeyWithUnreadableCredential_ThrowsArgumentException()
+    {
+        // Arrange
+        ClaudeAccount account = ClaudeAccount.Create();
+
+        // Act / Assert
+        Should.Throw<ArgumentException>(
+            () => account.SetAuthMode(new AuthMode.ApiKey(new ApiKeyCredential.Unreadable())));
+    }
 }
