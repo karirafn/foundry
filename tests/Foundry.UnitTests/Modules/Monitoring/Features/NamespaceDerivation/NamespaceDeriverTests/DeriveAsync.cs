@@ -188,6 +188,21 @@ public sealed class DeriveAsync
         outcome.ShouldBeOfType<NamespaceDerivationOutcome.Unavailable>();
     }
 
+    [Fact]
+    public async Task WhenCredentialTokenIsUnreadable_ReturnsUnavailableWithoutCallingHttpClient()
+    {
+        // Arrange
+        BaseUrl baseUrl = BaseUrl.Create("https://github.com").ValueOrThrow();
+        GitHubCredential credential = GitHubCredential.CreateWithUnreadableToken("octocat", baseUrl);
+        NamespaceDeriver sut = BuildSut(new HttpClient(new NotCalledHandler()));
+
+        // Act
+        NamespaceDerivationOutcome outcome = await sut.DeriveAsync(credential, CancellationToken.None);
+
+        // Assert — unreadable token short-circuits before any HTTP call
+        outcome.ShouldBeOfType<NamespaceDerivationOutcome.Unavailable>();
+    }
+
     private sealed class StaticJsonHandler(HttpStatusCode statusCode, string json) : DelegatingHandler
     {
         protected override Task<HttpResponseMessage> SendAsync(

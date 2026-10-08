@@ -66,7 +66,8 @@ public sealed class ExecuteTickAsync : IAsyncDisposable
 
     private ServiceProvider BuildServiceProvider(
         IIssueProviderFactory providerFactory,
-        IGlobalSettingsQueries? settingsQueries = null)
+        IGlobalSettingsQueries? settingsQueries = null,
+        ICredentialResolver? credentialResolver = null)
     {
         SqliteConnection connection = _connection;
 
@@ -89,7 +90,16 @@ public sealed class ExecuteTickAsync : IAsyncDisposable
         services.AddScoped<IIntegrationEventDispatcher, NullIntegrationEventDispatcher>();
         services.AddScoped<IRepositoryEligibilityEvaluator, NullRepositoryEligibilityEvaluator>();
         services.AddScoped<IIssueProviderFactory>(_ => providerFactory);
-        services.AddScoped<ICredentialResolver, CredentialResolver>();
+
+        if (credentialResolver is not null)
+        {
+            services.AddScoped<ICredentialResolver>(_ => credentialResolver);
+        }
+        else
+        {
+            services.AddScoped<ICredentialResolver, CredentialResolver>();
+        }
+
         services.AddScoped<RepositoryPoller>();
 
         // Default: poll interval of 30 seconds (mirrors GlobalSettings default).
@@ -114,6 +124,33 @@ public sealed class ExecuteTickAsync : IAsyncDisposable
         await db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         return repo.Id;
+    }
+
+    private async Task<(MonitoredRepositoryId RepoId, GitHubCredential Credential)> SeedActiveRepoAndBuildUnreadableCredentialAsync(
+        string slug = "owner/repo")
+    {
+        await using FoundryDbContext db = CreateDbContext();
+
+        RepositorySlug repoSlug = ValidSlug(slug);
+
+        // Seed a regular credential in the DB so the repo can be saved with a covered host.
+        // The ICredentialResolver will be replaced in the service provider with a stub that
+        // returns an Unreadable credential — the Unreadable state is only reachable at EF
+        // materialization time (failed decryption) and cannot be written back to the store.
+        GitHubCredential account = GitHubCredential.Create("my-org", "ghp_placeholder", BaseUrl.Create("https://github.com").ValueOrThrow());
+        account.SetNamespaces([Namespace.Create(repoSlug.Owner).ValueOrThrow()]);
+        db.Set<Credential>().Add(account);
+        await db.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        MonitoredRepository repo = MonitoredRepository.Create(repoSlug, "github.com", null).ValueOrThrow();
+        db.Set<MonitoredRepository>().Add(repo);
+        await db.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        GitHubCredential unreadableCredential = GitHubCredential.CreateWithUnreadableToken(
+            "my-org",
+            BaseUrl.Create("https://github.com").ValueOrThrow());
+
+        return (repo.Id, unreadableCredential);
     }
 
     [Fact]
@@ -149,6 +186,33 @@ public sealed class ExecuteTickAsync : IAsyncDisposable
         await sut.ExecuteTickAsync(Now, TestContext.Current.CancellationToken);
 
         // Assert — poll was skipped, LastPolledAt not updated
+        await using FoundryDbContext assertDb = CreateDbContext();
+        MonitoredRepository? repo = await assertDb.Set<MonitoredRepository>()
+            .FindAsync([repoId], TestContext.Current.CancellationToken);
+        repo.ShouldNotBeNull();
+        repo.LastPolledAt.ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task WhenAccountHasUnreadableToken_RepoLastPolledAtIsNotUpdatedAndProviderIsNotConstructed()
+    {
+        // Arrange — the Unreadable state is produced only at EF materialization time (failed decryption)
+        // and cannot be written back to SQLite. Seed a real repo, then inject a stub resolver that
+        // returns a credential with an Unreadable token, simulating post-materialization state.
+        (MonitoredRepositoryId repoId, GitHubCredential unreadableCredential) =
+            await SeedActiveRepoAndBuildUnreadableCredentialAsync();
+
+        StubCredentialResolverWithFixedCredential resolver = new(unreadableCredential);
+
+        using ServiceProvider sp = BuildServiceProvider(
+            new ThrowingIssueProviderFactory(),
+            credentialResolver: resolver);
+        MonitoringService sut = BuildService(sp);
+
+        // Act
+        await sut.ExecuteTickAsync(Now, TestContext.Current.CancellationToken);
+
+        // Assert — poll was skipped; LastPolledAt not updated and factory not invoked
         await using FoundryDbContext assertDb = CreateDbContext();
         MonitoredRepository? repo = await assertDb.Set<MonitoredRepository>()
             .FindAsync([repoId], TestContext.Current.CancellationToken);
@@ -394,6 +458,21 @@ public sealed class ExecuteTickAsync : IAsyncDisposable
                 CancellationToken cancellationToken)
                 => Task.FromResult(Result<bool>.Ok(true));
         }
+    }
+
+    private sealed class ThrowingIssueProviderFactory : IIssueProviderFactory
+    {
+        public IIssueProvider CreateProvider(Credential credential, string token)
+        {
+            throw new InvalidOperationException(
+                "IIssueProviderFactory.CreateProvider must not be called when the token is unreadable.");
+        }
+    }
+
+    private sealed class StubCredentialResolverWithFixedCredential(Credential credential) : ICredentialResolver
+    {
+        public Task<Credential?> ResolveAsync(string host, RepositorySlug slug, CancellationToken cancellationToken)
+            => Task.FromResult<Credential?>(credential);
     }
 
     private sealed class StubIssueQueries : IIssueQueries

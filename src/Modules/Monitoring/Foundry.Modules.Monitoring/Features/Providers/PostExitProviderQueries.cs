@@ -1,6 +1,7 @@
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Contracts.Queries;
 using Foundry.Modules.Monitoring.Domain.Entities;
+using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Features.CredentialResolution;
 using Foundry.Shared;
 
@@ -92,13 +93,19 @@ internal sealed class PostExitProviderQueries(
                 PostExitProviderQueriesErrors.CredentialNotFound(repositoryId));
         }
 
-        if (string.IsNullOrEmpty(credential.ReadableTokenValue))
+        if (credential.Token is ProviderToken.Unreadable)
+        {
+            return Result<(IIssueProvider, MonitoredRepository)>.Fail(
+                PostExitProviderQueriesErrors.CredentialTokenUnreadable(credential.Id));
+        }
+
+        if (credential.Token is not ProviderToken.Present present)
         {
             return Result<(IIssueProvider, MonitoredRepository)>.Fail(
                 PostExitProviderQueriesErrors.CredentialTokenNotConfigured(credential.Id));
         }
 
-        IIssueProvider provider = providerFactory.CreateProvider(credential, credential.ReadableTokenValue);
+        IIssueProvider provider = providerFactory.CreateProvider(credential, present.Value);
         return Result<(IIssueProvider, MonitoredRepository)>.Ok((provider, repo));
     }
 }
@@ -116,4 +123,8 @@ internal static class PostExitProviderQueriesErrors
     public static Error CredentialTokenNotConfigured(CredentialId id) =>
         new("PostExitProviderQueries.CredentialTokenNotConfigured",
             $"Credential with id '{id.Value}' has no token configured.");
+
+    public static Error CredentialTokenUnreadable(CredentialId id) =>
+        new("PostExitProviderQueries.CredentialTokenUnreadable",
+            $"Credential with id '{id.Value}' has an unreadable token — the stored ciphertext could not be decrypted.");
 }

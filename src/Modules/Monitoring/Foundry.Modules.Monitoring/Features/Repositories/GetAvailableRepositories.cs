@@ -45,7 +45,13 @@ internal static class GetAvailableRepositories
                     RepositoryErrors.AccountNotFound(credentialId));
             }
 
-            if (credential.ReadableTokenValue is null)
+            if (credential.Token is ProviderToken.Unreadable)
+            {
+                return Result<AvailableRepositoriesResponse>.Fail(
+                    RepositoryErrors.AccountTokenUnreadable(credentialId));
+            }
+
+            if (credential.Token is not ProviderToken.Present present)
             {
                 return Result<AvailableRepositoriesResponse>.Fail(
                     RepositoryErrors.AccountHasNoToken(credentialId));
@@ -62,11 +68,11 @@ internal static class GetAvailableRepositories
             {
                 GitLabCredential => await gitLabHttpClient.ListRepositoriesAsync(
                     credential.ApiBaseUrl,
-                    credential.ReadableTokenValue,
+                    present.Value,
                     cancellationToken),
                 _ => await gitHubHttpClient.ListRepositoriesAsync(
                     credential.ApiBaseUrl,
-                    credential.ReadableTokenValue,
+                    present.Value,
                     cancellationToken),
             };
 

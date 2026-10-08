@@ -2,6 +2,7 @@ using System.Diagnostics;
 
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Domain.Entities;
+using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Features.CredentialResolution;
 
 using Microsoft.EntityFrameworkCore;
@@ -35,7 +36,12 @@ internal sealed class RepositoryDispatchQueries(
             return null;
         }
 
-        if (string.IsNullOrEmpty(credential.ReadableTokenValue))
+        if (credential.Token is ProviderToken.Unreadable)
+        {
+            return null;
+        }
+
+        if (credential.Token is not ProviderToken.Present present)
         {
             return null;
         }
@@ -52,7 +58,7 @@ internal sealed class RepositoryDispatchQueries(
         return new RepositoryDispatchInfo(
             repo.Slug.ToString(),
             new Uri(credential.BaseUrl.Value, $"{repo.Slug}.git"),
-            credential.ReadableTokenValue,
+            present.Value,
             provider,
             issueApiUrlBase);
     }

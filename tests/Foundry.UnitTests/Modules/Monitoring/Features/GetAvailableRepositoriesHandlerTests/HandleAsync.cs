@@ -422,6 +422,29 @@ public sealed class HandleAsync : IAsyncDisposable
     }
 
     [Fact]
+    public async Task WhenAccountHasNoToken_ReturnsFailureWithoutCallingHttpClient()
+    {
+        // Arrange
+        (Guid accountId, _) = await SeedGitHubAccountAsync(token: null, namespaces: ["owner"]);
+        FakeHandler gitHubFake = new(System.Net.HttpStatusCode.OK, "[]");
+        FakeHandler gitLabFake = new(System.Net.HttpStatusCode.OK, "[]");
+        GetAvailableRepositories.Handler sut = BuildHandler(gitHubFake, gitLabFake);
+
+        // Act
+        Result<AvailableRepositoriesResponse> result = await sut.HandleAsync(
+            new GetAvailableRepositories.Query(accountId),
+            CancellationToken.None);
+
+        // Assert — fails with AccountHasNoToken; no HTTP call sent
+        result.IsSuccess.ShouldBeFalse();
+        Result<AvailableRepositoriesResponse>.Failure failure =
+            result.ShouldBeOfType<Result<AvailableRepositoriesResponse>.Failure>();
+        failure.Error.Code.ShouldBe("Repository.AccountHasNoToken");
+        gitHubFake.LastRequest.ShouldBeNull();
+        gitLabFake.LastRequest.ShouldBeNull();
+    }
+
+    [Fact]
     public async Task WhenProviderReturnsError_HandlerReturnsFailure()
     {
         // Arrange

@@ -123,6 +123,33 @@ public sealed class CreateBranchAsync : IAsyncDisposable
     }
 
     [Fact]
+    public async Task WhenCredentialTokenIsUnreadable_ReturnsFailureWithoutCallingProvider()
+    {
+        // Arrange — seed a real repo so the repo lookup succeeds; inject a stub resolver
+        // returning an Unreadable credential (state only reachable at EF materialization time).
+        MonitoredRepositoryId repoId = await SeedRepoAsync();
+        GitHubCredential unreadableCredential = GitHubCredential.CreateWithUnreadableToken(
+            "my-org",
+            BaseUrl.Create("https://github.com").ValueOrThrow());
+
+        IPostExitProviderQueries sut = new PostExitProviderQueries(
+            _dbContext,
+            new ThrowingProviderFactory(),
+            new StubCredentialResolver(unreadableCredential));
+
+        // Act
+        Result<bool> result = await sut.CreateBranchAsync(
+            repoId,
+            "feat/my-branch",
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        result.IsFailure.ShouldBeTrue();
+        Result<bool>.Failure failure = result.ShouldBeOfType<Result<bool>.Failure>();
+        failure.Error.Code.ShouldBe("PostExitProviderQueries.CredentialTokenUnreadable");
+    }
+
+    [Fact]
     public async Task WhenBranchCreatedSuccessfully_ReturnsTrue()
     {
         // Arrange
@@ -180,9 +207,32 @@ public sealed class CreateBranchAsync : IAsyncDisposable
         failure.Error.Code.ShouldBe("Provider.Error");
     }
 
+    private IPostExitProviderQueries BuildSutWithResolver(ICredentialResolver resolver)
+    {
+        return new PostExitProviderQueries(
+            _dbContext,
+            new StubProviderFactory(() => _stubProvider),
+            resolver);
+    }
+
     private sealed class StubProviderFactory(Func<StubIssueProvider> providerFactory) : IIssueProviderFactory
     {
         public IIssueProvider CreateProvider(Credential credential, string token) => providerFactory();
+    }
+
+    private sealed class ThrowingProviderFactory : IIssueProviderFactory
+    {
+        public IIssueProvider CreateProvider(Credential credential, string token)
+        {
+            throw new InvalidOperationException(
+                "IIssueProviderFactory.CreateProvider must not be called when the token is unreadable.");
+        }
+    }
+
+    private sealed class StubCredentialResolver(Credential? credential) : ICredentialResolver
+    {
+        public Task<Credential?> ResolveAsync(string host, RepositorySlug slug, CancellationToken cancellationToken)
+            => Task.FromResult(credential);
     }
 
     private sealed class StubIssueProvider(

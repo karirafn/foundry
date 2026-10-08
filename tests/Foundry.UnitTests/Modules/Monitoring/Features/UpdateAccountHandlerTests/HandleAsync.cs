@@ -513,6 +513,41 @@ public sealed class HandleAsync : IAsyncDisposable
     }
 
     [Fact]
+    public async Task WhenTokenSupplied_AndExistingTokenIsAbsent_AcceptsAndPersistsPresentToken()
+    {
+        // Arrange — seed a credential with no token (Token is null), analogous to the Unreadable
+        // state for the handler's purposes. The handler must NOT read the current token during
+        // re-entry — it only uses command.Token to write a new Present token.
+        // (The Unreadable state is produced at EF materialization time via failed decryption and
+        // cannot be round-tripped through the SQLite test DB; the handler's code path is identical
+        // for both absent and unreadable because neither is accessed during the update.)
+        BaseUrl baseUrl = BaseUrl.Create("https://github.com").ValueOrThrow();
+        GitHubCredential credential = GitHubCredential.Create("my-org", token: null, baseUrl);
+        _dbContext.Set<Credential>().Add(credential);
+        await _dbContext.SaveChangesAsync(CancellationToken.None);
+
+        UpdateAccount.Handler handler = BuildHandler(
+            validateToken: new StubValidateTokenHandler("my-org"),
+            deriver: new StubNamespaceDeriver(new NamespaceDerivationOutcome.Derived([], [])));
+
+        UpdateAccount.Command command = new(credential.Id, "https://github.com", "ghp_newtoken");
+
+        // Act
+        UpdateAccount.Outcome outcome = await handler.HandleAsync(command, TestContext.Current.CancellationToken);
+
+        // Assert — re-entry succeeds
+        UpdateAccount.Outcome.Updated updated = outcome.ShouldBeOfType<UpdateAccount.Outcome.Updated>();
+        updated.Value.Credential.Id.ShouldBe(credential.Id.Value);
+
+        // Assert — persisted token is now a fresh Present
+        Credential? stored = await _dbContext.Set<Credential>()
+            .FirstOrDefaultAsync(c => c.Id == credential.Id, TestContext.Current.CancellationToken);
+        stored.ShouldNotBeNull();
+        stored.Token.ShouldBeOfType<ProviderToken.Present>()
+            .Value.ShouldBe("ghp_newtoken");
+    }
+
+    [Fact]
     public async Task WhenCredentialNotFound_ReturnsNotFoundError()
     {
         // Arrange
