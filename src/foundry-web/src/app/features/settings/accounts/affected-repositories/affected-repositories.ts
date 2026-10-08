@@ -38,7 +38,7 @@ function isLostAccess(status: AffectedRepositoryStatus): boolean {
 
       <ul class="affected-repositories__list" aria-label="Affected repositories">
         @for (repo of _sortedRepositories(); track repo.id) {
-          @let reason = reasonFor($any(repo.newStatus));
+          @let reason = reasonFor(repo.newStatus);
           <li
             class="affected-repositories__row"
             [attr.aria-label]="repo.slug + ': was ' + _labelFor(repo.previousStatus) + ', now ' + _labelFor(repo.newStatus) + (reason ? '. ' + reason : '')"
@@ -90,8 +90,8 @@ export class AffectedRepositoriesComponent {
     return affectedStatusLabel(status as AffectedRepositoryStatus);
   }
 
-  protected reasonFor(status: AffectedRepositoryStatus): string | null {
-    if (status === 'credential-unreadable') {
+  protected reasonFor(status: string): string | null {
+    if ((status as AffectedRepositoryStatus) === 'credential-unreadable') {
       return CREDENTIAL_UNREADABLE_REASON;
     }
     return null;
