@@ -47,6 +47,7 @@ public sealed class Construct
         string text = present.ToString();
 
         // Assert
+        text.ShouldBe("Present { Value = *** }");
         text.ShouldNotContain(key);
     }
 
