@@ -33,6 +33,8 @@ public sealed class ConsumesReservation : IAsyncDisposable
 {
     private readonly SqliteConnection _connection;
     private readonly FoundryDbContext _dbContext;
+    private readonly StubWorkerOrchestrator _orchestrator = new(succeeds: true, containerId: "container-default");
+    private readonly StubPostExitProviderQueries _providerQueries = new();
 
     public ConsumesReservation()
     {
@@ -61,12 +63,12 @@ public sealed class ConsumesReservation : IAsyncDisposable
         };
         return new IssueClaimedHandler(
             _dbContext,
-            new StubWorkerOrchestrator(succeeds: true, containerId: "container-default"),
+            _orchestrator,
             new NullDomainEventDispatcher(),
             Options.Create(options),
             new StubGlobalSettingsQueries(),
             new StubCredentialQueries(("ANTHROPIC_API_KEY", "test-api-key")),
-            new StubPostExitProviderQueries(),
+            _providerQueries,
             NullLogger<IssueClaimedHandler>.Instance);
     }
 
@@ -139,10 +141,35 @@ public sealed class ConsumesReservation : IAsyncDisposable
                 .ShouldBeTrue());
     }
 
+    [Fact]
+    public async Task WhenRunAlreadyExists_DoesNotCreateBranchOrStartContainer()
+    {
+        // Arrange — a prior delivery committed the StartingRun but never recorded completion
+        WorkerRunId workerRunId = WorkerRunId.New();
+        IssueClaimed @event = BuildEvent(workerRunId);
+        IssueClaimedHandler sut = BuildHandler();
+        await sut.HandleAsync(@event, TestContext.Current.CancellationToken);
+        _dbContext.ChangeTracker.Clear();
+
+        int branchCallsAfterFirstDelivery = _providerQueries.CreateBranchCalls;
+        int startCallsAfterFirstDelivery = _orchestrator.StartCalls;
+
+        // Act
+        await sut.HandleAsync(@event, TestContext.Current.CancellationToken);
+
+        // Assert
+        _dbContext.ShouldSatisfyAllConditions(
+            () => _providerQueries.CreateBranchCalls.ShouldBe(branchCallsAfterFirstDelivery),
+            () => _orchestrator.StartCalls.ShouldBe(startCallsAfterFirstDelivery));
+    }
+
     private sealed class StubWorkerOrchestrator(bool succeeds, string? containerId = null) : IWorkerOrchestrator
     {
+        public int StartCalls { get; private set; }
+
         public Task<Result<ContainerId>> StartAsync(WorkerContainerSpec spec, CancellationToken cancellationToken)
         {
+            StartCalls++;
             Result<ContainerId> result = succeeds
                 ? Result<ContainerId>.Ok(ContainerId.From(containerId ?? "default-container"))
                 : Result<ContainerId>.Fail(new Error("Orchestrator.StartFailed", "Start failed"));
@@ -245,11 +272,16 @@ public sealed class ConsumesReservation : IAsyncDisposable
 
     private sealed class StubPostExitProviderQueries : IPostExitProviderQueries
     {
+        public int CreateBranchCalls { get; private set; }
+
         public Task<Result<bool>> CreateBranchAsync(
             MonitoredRepositoryId repositoryId,
             string branchName,
             CancellationToken cancellationToken)
-            => Task.FromResult(Result<bool>.Ok(true));
+        {
+            CreateBranchCalls++;
+            return Task.FromResult(Result<bool>.Ok(true));
+        }
 
         public Task<Result<MergeRequestByBranch>> GetMergeRequestByBranchAsync(
             MonitoredRepositoryId repositoryId,

@@ -42,6 +42,21 @@ internal sealed class IssueClaimedHandler(
     {
         ClaimedIssueDispatch claimed = @event.Dispatch;
 
+        // The first save commits the StartingRun before the handler finishes, so a crash in between
+        // redelivers this event with the run already persisted (in any state). Re-adding it would
+        // violate the primary key on every redelivery.
+        bool runAlreadyExists = await dbContext.Set<WorkerRun>()
+            .AnyAsync(run => run.Id == claimed.WorkerRunId, cancellationToken);
+
+        if (runAlreadyExists)
+        {
+            logger.LogInformation(
+                "Worker run {WorkerRunId} for issue #{IssueNumber} already exists; skipping redelivered claim.",
+                claimed.WorkerRunId,
+                claimed.IssueNumber);
+            return;
+        }
+
         // A3: load-then-remove so an absent reservation is a clean no-op (redelivery / swept).
         // The remove stages into the same first SaveChangesAsync as the StartingRun add,
         // so reservation delete and run insert commit in one transaction.
