@@ -60,6 +60,23 @@ public abstract class Credential : AggregateRoot<CredentialId>
         }
     }
 
+    /// <summary>
+    /// Configures an already-constructed <paramref name="credential"/> to carry an
+    /// <see cref="ProviderToken.Unreadable"/> token. Intended for unit-test construction of the
+    /// <c>Unreadable</c> state only — the production path to <see cref="ProviderToken.Unreadable"/>
+    /// is EF materialization of garbage ciphertext, exercised by the integration test
+    /// <c>WhenAccountHasGarbageCiphertext</c> in
+    /// <c>tests/Foundry.IntegrationTests/Modules/Monitoring/Endpoints/GetAccountsTests/</c>.
+    /// </summary>
+    [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
+    protected static void ApplyUnreadableToken(Credential credential, string name, BaseUrl baseUrl)
+    {
+        credential.Name = name;
+        credential.Token = new ProviderToken.Unreadable();
+        credential.BaseUrl = baseUrl;
+        credential.Host = baseUrl.Value.Host;
+    }
+
     internal bool Covers(RepositorySlug slug) => ResolveCoveringNamespace(slug) is not null;
 
     internal Namespace? ResolveCoveringNamespace(RepositorySlug slug)

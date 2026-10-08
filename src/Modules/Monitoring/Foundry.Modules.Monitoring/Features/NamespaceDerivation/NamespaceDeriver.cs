@@ -18,12 +18,10 @@ internal sealed class NamespaceDeriver(
         Credential credential,
         CancellationToken cancellationToken)
     {
-        if (credential.Token is ProviderToken.Unreadable or null)
+        if (credential.Token is not ProviderToken.Present present)
         {
             return Task.FromResult<NamespaceDerivationOutcome>(new NamespaceDerivationOutcome.Unavailable());
         }
-
-        ProviderToken.Present present = (ProviderToken.Present)credential.Token;
 
         return DeriveAsync(
             credential.ApiBaseUrl,

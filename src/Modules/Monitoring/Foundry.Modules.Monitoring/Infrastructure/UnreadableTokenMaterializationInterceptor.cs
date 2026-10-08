@@ -21,8 +21,8 @@ public sealed class UnreadableTokenMaterializationInterceptor(
         if (instance is Credential { Token: ProviderToken.Unreadable } credential)
         {
             logger.LogWarning(
-                "Credential {CredentialId} was loaded with an unreadable accounts.token — " +
-                "the stored ciphertext could not be decrypted. The credential will fall back to anonymous access.",
+                "Credential {CredentialId} loaded with an unreadable accounts.token — " +
+                "the stored ciphertext could not be decrypted. The credential is treated as ineligible until the token is re-entered.",
                 credential.Id.Value);
         }
     }

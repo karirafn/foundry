@@ -462,6 +462,73 @@ public sealed class HandleAsync : IAsyncDisposable
         result.IsSuccess.ShouldBeFalse();
     }
 
+    [Fact]
+    public async Task WhenCredentialTokenIsUnreadable_ReturnsAccountTokenUnreadableErrorWithoutCallingProvider()
+    {
+        // Arrange — seed a row with garbage ciphertext so EF materializes it as ProviderToken.Unreadable.
+        // The ProviderTokenConverter write leg throws on Unreadable, so we insert via raw SQL
+        // using a value that fails Convert.FromBase64String (FormatException → Unreadable).
+        Guid accountId = await SeedGitHubAccountWithGarbageTokenAsync();
+        FakeHandler gitHubFake = new(HttpStatusCode.OK, "[]");
+        FakeHandler gitLabFake = new(HttpStatusCode.OK, "[]");
+
+        // Use a fresh DbContext on the same connection to avoid first-level-cache interference
+        // from the seeding context that still tracks the credential with its original token.
+        await using FoundryDbContext freshContext = new(
+            new DbContextOptionsBuilder<FoundryDbContext>()
+                .UseSqlite(_connection)
+                .Options);
+
+        HttpClient gitHubHttpClient = new(gitHubFake);
+        HttpClient gitLabHttpClient = new(gitLabFake);
+        GetAvailableRepositories.Handler sut = new(
+            freshContext,
+            new GitHubHttpClient(
+                gitHubHttpClient,
+                NullLogger<GitHubHttpClient>.Instance,
+                new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))),
+                new InMemoryProviderRateBudget(),
+                TimeProvider.System),
+            new GitLabHttpClient(
+                gitLabHttpClient,
+                NullLogger<GitLabHttpClient>.Instance,
+                new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))),
+                new InMemoryProviderRateBudget(),
+                TimeProvider.System));
+
+        // Act
+        Result<AvailableRepositoriesResponse> result = await sut.HandleAsync(
+            new GetAvailableRepositories.Query(accountId),
+            CancellationToken.None);
+
+        // Assert — fails with AccountTokenUnreadable; no HTTP call sent
+        result.IsSuccess.ShouldBeFalse();
+        Result<AvailableRepositoriesResponse>.Failure failure =
+            result.ShouldBeOfType<Result<AvailableRepositoriesResponse>.Failure>();
+        failure.Error.Code.ShouldBe("Repository.AccountTokenUnreadable");
+        gitHubFake.LastRequest.ShouldBeNull();
+        gitLabFake.LastRequest.ShouldBeNull();
+    }
+
+    // Seeds a GitHub account with a real token via EF, then overwrites the token column with
+    // garbage ciphertext via raw SQL UPDATE. The non-base64 value triggers FormatException in
+    // Convert.FromBase64String, which ProviderTokenConverter maps to ProviderToken.Unreadable.
+    private async Task<Guid> SeedGitHubAccountWithGarbageTokenAsync()
+    {
+        (Guid accountId, _) = await SeedGitHubAccountAsync(
+            token: "ghp_placeholder",
+            namespaces: null);
+
+        // Update all rows — at this point in the test there is exactly one credential row.
+        // No WHERE clause avoids Guid TEXT format mismatches between the EF-stored value
+        // and the parameterized query comparison.
+        await _dbContext.Database.ExecuteSqlRawAsync(
+            "UPDATE accounts SET token = {0}",
+            "not-valid-base64!!!");
+
+        return accountId;
+    }
+
     private static string BuildGitHubRepoJson(IReadOnlyList<string> fullNames) =>
         "[" + string.Join(",", fullNames.Select(n =>
             $@"{{""full_name"":""{n}"",""private"":false,""permissions"":{{""push"":true}}}}")) + "]";

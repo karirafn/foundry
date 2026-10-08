@@ -44,7 +44,15 @@ internal sealed class RepositoryEligibilityEvaluator(
             return;
         }
 
-        string token = credential.Token is ProviderToken.Present present ? present.Value : string.Empty;
+        if (credential.Token is not ProviderToken.Present present)
+        {
+            string topLevelNamespace = Namespace.PrefixesOf(repo.Slug)[^1].Value;
+            repo.SetEligibility(new RepositoryEligibility.Ineligible(
+                [EligibilityViolation.NoCredential(topLevelNamespace)]));
+            return;
+        }
+
+        string token = present.Value;
 
         try
         {
@@ -102,7 +110,15 @@ internal sealed class RepositoryEligibilityEvaluator(
             return;
         }
 
-        string token = credential.Token is ProviderToken.Present present ? present.Value : string.Empty;
+        if (credential.Token is not ProviderToken.Present present)
+        {
+            string topLevelNamespace = Namespace.PrefixesOf(repo.Slug)[^1].Value;
+            repo.SetEligibility(new RepositoryEligibility.Ineligible(
+                [EligibilityViolation.NoCredential(topLevelNamespace)]));
+            return;
+        }
+
+        string token = present.Value;
 
         try
         {

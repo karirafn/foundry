@@ -1,5 +1,3 @@
-using System.Reflection;
-
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
@@ -24,8 +22,7 @@ public sealed class InitializedInstance
         UnreadableTokenMaterializationInterceptor sut = new(new CapturingLoggerAdapter(logger));
 
         BaseUrl baseUrl = BaseUrl.Create("https://github.com").ValueOrThrow();
-        GitHubCredential credential = GitHubCredential.Create("my-org", "ghp_abc", baseUrl);
-        SetTokenUnreadable(credential);
+        GitHubCredential credential = GitHubCredential.CreateWithUnreadableToken("my-org", baseUrl);
 
         // Act
         sut.CheckAndWarn(credential);
@@ -84,19 +81,6 @@ public sealed class InitializedInstance
 
         // Assert
         logger.Entries.ShouldBeEmpty();
-    }
-
-    private static void SetTokenUnreadable(Credential credential)
-    {
-        // Token's setter is private protected — use reflection to reach it for test setup.
-        // The Unreadable state is only reachable in production via a failed EF decryption;
-        // reflection is the only test-safe way to reach it without an EF round-trip.
-        PropertyInfo? property = typeof(Credential).GetProperty(
-            nameof(Credential.Token),
-            BindingFlags.Public | BindingFlags.Instance);
-
-        property.ShouldNotBeNull();
-        property.SetValue(credential, new ProviderToken.Unreadable());
     }
 
     /// <summary>
