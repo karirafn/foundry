@@ -11,6 +11,7 @@ using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.Extensions.Logging;
 
 using CredentialsInfrastructure = Foundry.Modules.Credentials.Infrastructure.Configurations;
+using DataProtectionProviderFactory = Microsoft.AspNetCore.DataProtection.DataProtectionProvider;
 using MonitoringInfrastructure = Foundry.Modules.Monitoring.Infrastructure.Configurations;
 
 namespace Foundry.WebApi.Persistence;
@@ -24,7 +25,7 @@ public sealed class FoundryDbContext(
     // Using a static ensures all contexts without an explicit provider share the same key ring,
     // so a model cached under one context can be reused by another default context.
     private static readonly IDataProtectionProvider SharedDefaultProvider =
-        Microsoft.AspNetCore.DataProtection.DataProtectionProvider.Create("Foundry");
+        DataProtectionProviderFactory.Create("Foundry");
 
     private readonly IDataProtectionProvider _dataProtectionProvider =
         dataProtectionProvider ?? SharedDefaultProvider;
@@ -36,6 +37,7 @@ public sealed class FoundryDbContext(
 
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
     {
+        base.OnConfiguring(optionsBuilder);
         optionsBuilder.ReplaceService<IModelCacheKeyFactory, FoundryDbContextModelCacheKeyFactory>();
     }
 

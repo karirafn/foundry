@@ -1,3 +1,5 @@
+using System.Text.Json;
+
 using Foundry.Modules.Credentials.Domain.Entities;
 using Foundry.Modules.Credentials.Domain.ValueObjects;
 using Foundry.WebApi.Persistence;
@@ -26,9 +28,8 @@ public sealed class ModelCacheIsolation
             .Options;
 
     /// <summary>
-    /// Regression guard for the CommitAsync flake (#449):
-    /// two contexts constructed without a provider must share the same default provider,
-    /// so seed via direct path and read via DI path succeeds.
+    /// Regression guard: two contexts constructed without an explicit provider must share the
+    /// same default key ring, so a row seeded through the direct path decrypts through the DI path.
     /// </summary>
     [Fact]
     public async Task WhenTwoDefaultContextsShareSameProvider_ReadSucceeds()
@@ -141,7 +142,7 @@ public sealed class ModelCacheIsolation
         // P1 cannot decrypt P0's ciphertext → CryptographicException → warning logged → returns ""
         // → DeserializeAuthMode("") throws JsonException from EF materialization.
         await using FoundryDbContext readContext = new(BuildOptions(connection), p1, capturingFactory);
-        await Should.ThrowAsync<Exception>(async () =>
+        await Should.ThrowAsync<JsonException>(async () =>
             await readContext
                 .Set<ClaudeAccount>()
                 .FirstOrDefaultAsync(TestContext.Current.CancellationToken));
