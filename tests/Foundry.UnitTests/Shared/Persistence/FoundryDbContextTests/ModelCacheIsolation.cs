@@ -46,7 +46,7 @@ public sealed class ModelCacheIsolation
         // Seed via direct (no-provider) context.
         await using FoundryDbContext seedContext = new(options);
         ClaudeAccount seeded = ClaudeAccount.Create();
-        seeded.SetAuthMode(new AuthMode.ApiKey("sk-test-key"));
+        seeded.SetAuthMode(new AuthMode.ApiKey(new ApiKeyCredential.Present("sk-test-key")));
         seedContext.Set<ClaudeAccount>().Add(seeded);
         await seedContext.SaveChangesAsync(TestContext.Current.CancellationToken);
 
@@ -65,7 +65,8 @@ public sealed class ModelCacheIsolation
         // Assert — decrypt must succeed and the auth mode must round-trip.
         ClaudeAccount read = result.ShouldNotBeNull();
         AuthMode.ApiKey apiKey = read.AuthMode.ShouldBeOfType<AuthMode.ApiKey>();
-        apiKey.Key.ShouldBe("sk-test-key");
+        ApiKeyCredential.Present present = apiKey.Credential.ShouldBeOfType<ApiKeyCredential.Present>();
+        present.Value.ShouldBe("sk-test-key");
     }
 
     /// <summary>
@@ -91,7 +92,7 @@ public sealed class ModelCacheIsolation
         // Seed through a context with P1.
         await using FoundryDbContext seedContext = new(BuildOptions(connection), p1);
         ClaudeAccount seeded = ClaudeAccount.Create();
-        seeded.SetAuthMode(new AuthMode.ApiKey("p1-secret-key"));
+        seeded.SetAuthMode(new AuthMode.ApiKey(new ApiKeyCredential.Present("p1-secret-key")));
         seedContext.Set<ClaudeAccount>().Add(seeded);
         await seedContext.SaveChangesAsync(TestContext.Current.CancellationToken);
 
@@ -104,7 +105,8 @@ public sealed class ModelCacheIsolation
         // Assert — P1 must be able to decrypt what P1 encrypted.
         ClaudeAccount read = result.ShouldNotBeNull();
         AuthMode.ApiKey apiKey = read.AuthMode.ShouldBeOfType<AuthMode.ApiKey>();
-        apiKey.Key.ShouldBe("p1-secret-key");
+        ApiKeyCredential.Present present = apiKey.Credential.ShouldBeOfType<ApiKeyCredential.Present>();
+        present.Value.ShouldBe("p1-secret-key");
     }
 
     /// <summary>
@@ -131,7 +133,7 @@ public sealed class ModelCacheIsolation
 
         // Seed a valid row encrypted by P0.
         ClaudeAccount seeded = ClaudeAccount.Create();
-        seeded.SetAuthMode(new AuthMode.ApiKey("orig-key"));
+        seeded.SetAuthMode(new AuthMode.ApiKey(new ApiKeyCredential.Present("orig-key")));
         primeContext.Set<ClaudeAccount>().Add(seeded);
         await primeContext.SaveChangesAsync(TestContext.Current.CancellationToken);
 

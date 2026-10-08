@@ -207,9 +207,9 @@ internal sealed class CredentialsOrchestrator(IDockerContainerRuntime runtime) :
                     ReadOnly = true,
                 });
             }
-            else if (spec.AuthMode is AuthMode.ApiKey apiKey)
+            else if (spec.AuthMode is AuthMode.ApiKey { Credential: ApiKeyCredential.Present apiKeyPresent })
             {
-                env.Add($"ANTHROPIC_API_KEY={apiKey.Key}");
+                env.Add($"ANTHROPIC_API_KEY={apiKeyPresent.Value}");
             }
 
             CreateContainerParameters createParams = new()

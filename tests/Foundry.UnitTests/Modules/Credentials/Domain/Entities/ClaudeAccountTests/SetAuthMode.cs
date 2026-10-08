@@ -14,7 +14,7 @@ public sealed class SetAuthMode
     {
         // Arrange
         ClaudeAccount account = ClaudeAccount.Create();
-        AuthMode.ApiKey apiKey = new("encrypted-key");
+        AuthMode.ApiKey apiKey = new(new ApiKeyCredential.Present("encrypted-key"));
 
         // Act
         account.SetAuthMode(apiKey);
@@ -30,7 +30,7 @@ public sealed class SetAuthMode
         ClaudeAccount account = ClaudeAccount.Create();
 
         // Act
-        account.SetAuthMode(new AuthMode.ApiKey("encrypted-key"));
+        account.SetAuthMode(new AuthMode.ApiKey(new ApiKeyCredential.Present("encrypted-key")));
 
         // Assert
         account.Validity.ShouldBeOfType<CredentialValidity.Valid>();
@@ -44,7 +44,7 @@ public sealed class SetAuthMode
         account.RecordSuccessfulLogin("user@example.com", "MyOrg", "pro");
 
         // Act
-        account.SetAuthMode(new AuthMode.ApiKey("encrypted-key"));
+        account.SetAuthMode(new AuthMode.ApiKey(new ApiKeyCredential.Present("encrypted-key")));
 
         // Assert
         account.OAuthAccountEmail.ShouldBeNull();
@@ -58,7 +58,7 @@ public sealed class SetAuthMode
         account.RecordSuccessfulLogin("user@example.com", "MyOrg", "pro");
 
         // Act
-        account.SetAuthMode(new AuthMode.ApiKey("encrypted-key"));
+        account.SetAuthMode(new AuthMode.ApiKey(new ApiKeyCredential.Present("encrypted-key")));
 
         // Assert
         account.OAuthAccountOrgName.ShouldBeNull();
@@ -86,7 +86,7 @@ public sealed class SetAuthMode
         DateTimeOffset before = account.UpdatedAt;
 
         // Act
-        account.SetAuthMode(new AuthMode.ApiKey("new-key"));
+        account.SetAuthMode(new AuthMode.ApiKey(new ApiKeyCredential.Present("new-key")));
 
         // Assert
         account.UpdatedAt.ShouldBeGreaterThanOrEqualTo(before);
@@ -100,7 +100,7 @@ public sealed class SetAuthMode
         DateTimeOffset createdAt = account.CreatedAt;
 
         // Act
-        account.SetAuthMode(new AuthMode.ApiKey("new-key"));
+        account.SetAuthMode(new AuthMode.ApiKey(new ApiKeyCredential.Present("new-key")));
 
         // Assert
         account.CreatedAt.ShouldBe(createdAt);

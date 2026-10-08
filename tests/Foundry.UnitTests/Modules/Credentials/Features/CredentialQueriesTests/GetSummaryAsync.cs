@@ -60,7 +60,7 @@ public sealed class GetSummaryAsync : IAsyncDisposable
         await using (FoundryDbContext seedDb = CreateDbContext())
         {
             ClaudeAccount account = ClaudeAccount.Create();
-            account.SetAuthMode(new AuthMode.ApiKey("encrypted-key"));
+            account.SetAuthMode(new AuthMode.ApiKey(new ApiKeyCredential.Present("encrypted-key")));
             seedDb.Set<ClaudeAccount>().Add(account);
             await seedDb.SaveChangesAsync(TestContext.Current.CancellationToken);
         }

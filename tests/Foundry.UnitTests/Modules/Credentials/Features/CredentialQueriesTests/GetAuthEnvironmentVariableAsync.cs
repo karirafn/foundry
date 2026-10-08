@@ -60,7 +60,7 @@ public sealed class GetAuthEnvironmentVariableAsync : IAsyncDisposable
         await using (FoundryDbContext seedDb = CreateDbContext())
         {
             ClaudeAccount account = ClaudeAccount.Create();
-            account.SetAuthMode(new AuthMode.ApiKey("my-api-key"));
+            account.SetAuthMode(new AuthMode.ApiKey(new ApiKeyCredential.Present("my-api-key")));
             seedDb.Set<ClaudeAccount>().Add(account);
             await seedDb.SaveChangesAsync(TestContext.Current.CancellationToken);
         }

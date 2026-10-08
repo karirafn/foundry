@@ -48,10 +48,10 @@ internal sealed class CredentialQueries(DbContext dbContext) : ICredentialQuerie
             return null;
         }
 
+        // TODO(step-3): use CanDispatch and handle non-Present credential; this shim keeps the build green.
         return account.AuthMode switch
         {
-            AuthMode.ApiKey apiKey => ("ANTHROPIC_API_KEY", apiKey.Key),
-            AuthMode.OAuth => null,
+            AuthMode.ApiKey { Credential: ApiKeyCredential.Present p } => ("ANTHROPIC_API_KEY", p.Value),
             _ => null,
         };
     }

@@ -137,7 +137,7 @@ public sealed class PersistClaudeAccount : IAsyncDisposable
     {
         // Arrange
         ClaudeAccount account = ClaudeAccount.Create();
-        account.SetAuthMode(new AuthMode.ApiKey("my-plaintext-key"));
+        account.SetAuthMode(new AuthMode.ApiKey(new ApiKeyCredential.Present("my-plaintext-key")));
 
         _dbContext.Set<ClaudeAccount>().Add(account);
         await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);

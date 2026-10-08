@@ -41,9 +41,13 @@ internal sealed class AuthModeJsonConverter : JsonConverter<AuthMode>
 
         switch (value)
         {
+            // TODO(step-5): rework to write the full ApiKeyCredential variant; shim keeps build green.
             case AuthMode.ApiKey apiKey:
                 writer.WriteString(TypeProperty, ApiKeyType);
-                writer.WriteString(KeyProperty, apiKey.Key);
+                if (apiKey.Credential is ApiKeyCredential.Present p)
+                {
+                    writer.WriteString(KeyProperty, p.Value);
+                }
                 break;
 
             case AuthMode.OAuth oauth:
@@ -60,9 +64,17 @@ internal sealed class AuthModeJsonConverter : JsonConverter<AuthMode>
 
     private static AuthMode.ApiKey ReadApiKey(JsonElement root)
     {
-        string key = root.GetProperty(KeyProperty).GetString()
-            ?? string.Empty;
-        return new AuthMode.ApiKey(key);
+        // TODO(step-5): rework to read full ApiKeyCredential variant; shim keeps build green.
+        if (!root.TryGetProperty(KeyProperty, out JsonElement keyElement))
+        {
+            return new AuthMode.ApiKey(new ApiKeyCredential.NotConfigured());
+        }
+
+        string? key = keyElement.GetString();
+        ApiKeyCredential credential = string.IsNullOrEmpty(key)
+            ? new ApiKeyCredential.NotConfigured()
+            : new ApiKeyCredential.Present(key);
+        return new AuthMode.ApiKey(credential);
     }
 
     private static AuthMode.OAuth ReadOAuth(JsonElement root)

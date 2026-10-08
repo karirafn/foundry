@@ -58,8 +58,10 @@ internal static class UpdateAuthMode
                 return Result<ClaudeAccountSummary>.Fail(CredentialsErrors.NotFound);
             }
 
+            // TODO(step-3): rework handler to call SetAuthMode with the correct credential variant;
+            // this shim keeps the build green while Step 2 lands.
             AuthMode mode = command.Mode == ApiKeyMode
-                ? new AuthMode.ApiKey(command.ApiKey!)
+                ? new AuthMode.ApiKey(new ApiKeyCredential.Present(command.ApiKey!))
                 : new AuthMode.OAuth(SubscriptionType: null);
 
             account.SetAuthMode(mode);

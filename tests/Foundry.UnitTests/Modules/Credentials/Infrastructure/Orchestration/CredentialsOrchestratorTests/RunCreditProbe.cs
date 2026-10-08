@@ -27,7 +27,7 @@ public sealed class RunCreditProbe
 
     private static CreditProbeSpec ApiKeySpec(string key = "sk-ant-test") =>
         new(
-            AuthMode: new AuthMode.ApiKey(key),
+            AuthMode: new AuthMode.ApiKey(new ApiKeyCredential.Present(key)),
             Prompt: CreditProbeSpec.DefaultPrompt,
             TimeoutSeconds: CreditProbeSpec.DefaultTimeoutSeconds);
 

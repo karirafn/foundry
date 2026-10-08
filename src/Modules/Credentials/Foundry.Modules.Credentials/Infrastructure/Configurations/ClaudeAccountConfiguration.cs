@@ -39,7 +39,11 @@ internal sealed class ClaudeAccountConfiguration(
             mode => encrypt(SerializeAuthMode(mode)),
             encrypted => DeserializeAuthMode(decrypt(encrypted)));
 
+        // _authModeRecord is the persistence-only backing field; AuthMode assembles the full
+        // value at read time. Step 3 will add the _apiKeyCredential column.
         builder.Property(a => a.AuthMode)
+            .HasField("_authModeRecord")
+            .UsePropertyAccessMode(PropertyAccessMode.Field)
             .HasConversion(authModeConverter)
             .HasColumnType("TEXT")
             .HasColumnName("auth_mode");
