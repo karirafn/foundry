@@ -102,7 +102,7 @@ const mockRunTotals = {
 };
 
 function flushInit(httpMock: HttpTestingController, issues: IssueSummary[] = []) {
-  httpMock.expectOne('/api/issues').flush(issues);
+  httpMock.expectOne('/api/issues').flush({ items: issues, nextCursor: null });
   httpMock.expectOne('/api/settings').flush(mockSettingsResponse);
   httpMock.expectOne('/api/credentials').flush(mockCredentialsResponse);
   httpMock.expectOne('/api/issues/counts').flush(mockCountsResponse);
@@ -149,7 +149,7 @@ describe('IssueListComponent', () => {
     fixture.detectChanges();
 
     // Assert — the HTTP calls prove loadIssues and loadCounts were called
-    httpMock.expectOne('/api/issues').flush([]);
+    httpMock.expectOne('/api/issues').flush({ items: [], nextCursor: null });
     httpMock.expectOne('/api/settings').flush(mockSettingsResponse);
   httpMock.expectOne('/api/credentials').flush(mockCredentialsResponse);
     httpMock.expectOne('/api/issues/counts').flush(mockCountsResponse);
@@ -164,7 +164,7 @@ describe('IssueListComponent', () => {
     fixture.detectChanges();
 
     // Assert — counts request is made on init
-    httpMock.expectOne('/api/issues').flush([]);
+    httpMock.expectOne('/api/issues').flush({ items: [], nextCursor: null });
     httpMock.expectOne('/api/settings').flush(mockSettingsResponse);
   httpMock.expectOne('/api/credentials').flush(mockCredentialsResponse);
     const countsReq = httpMock.expectOne('/api/issues/counts');
@@ -490,7 +490,7 @@ describe('IssueListComponent', () => {
 
     // Assert — a second HTTP request was made
     const req = httpMock.expectOne('/api/issues');
-    req.flush([]);
+    req.flush({ items: [], nextCursor: null });
   });
 
   it('should not show error block when loadIssues succeeds', () => {
@@ -1582,7 +1582,7 @@ describe('IssueListComponent', () => {
     const el = fixture.nativeElement as HTMLElement;
     const retryBtn = el.querySelector('.issue-list__error-retry') as HTMLElement;
     retryBtn.click();
-    httpMock.expectOne('/api/issues').flush([]);
+    httpMock.expectOne('/api/issues').flush({ items: [], nextCursor: null });
     fixture.detectChanges();
 
     // Assert

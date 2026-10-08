@@ -1,4 +1,5 @@
 import { ChangeDetectionStrategy, Component, InputSignal, OutputEmitterRef, WritableSignal, computed, inject, input, output, signal } from '@angular/core';
+import { Router } from '@angular/router';
 import { CdkDragDrop, CdkDropList, CdkDrag, CdkDragHandle } from '@angular/cdk/drag-drop';
 import { RepositorySummary, eligibilityStatusLabel } from '../repository.model';
 import { RepositoryEligibilityComponent } from '../repository-eligibility/repository-eligibility';
@@ -217,7 +218,7 @@ import { SpinnerComponent } from '../../../../shared/components/spinner/spinner'
               <fd-row-actions
                 [editLabel]="'Edit repository ' + repo.slug"
                 [deleteLabel]="'Delete repository ' + repo.slug"
-                (edit)="edit.emit(repo)"
+                (edit)="onEdit(repo)"
                 (delete)="delete.emit(repo)"
               />
             </div>
@@ -243,13 +244,13 @@ import { SpinnerComponent } from '../../../../shared/components/spinner/spinner'
 })
 export class RepositoryListComponent {
   private readonly _repositoryService = inject(RepositoryService);
+  private readonly _router = inject(Router);
 
   readonly repositories: InputSignal<RepositorySummary[]> = input<RepositorySummary[]>([]);
   readonly loading: InputSignal<boolean> = input<boolean>(false);
   readonly error: InputSignal<string | null> = input<string | null>(null);
 
   readonly add: OutputEmitterRef<void> = output<void>();
-  readonly edit: OutputEmitterRef<RepositorySummary> = output<RepositorySummary>();
   readonly delete: OutputEmitterRef<RepositorySummary> = output<RepositorySummary>();
   readonly retry: OutputEmitterRef<void> = output<void>();
 
@@ -261,6 +262,10 @@ export class RepositoryListComponent {
   protected readonly _multipleRepos = computed(() => this.repositories().length > 1);
 
   readonly eligibilityStatusLabel = eligibilityStatusLabel;
+
+  onEdit(repo: RepositorySummary): void {
+    this._router.navigate(['/settings/repositories', repo.id]);
+  }
 
   toggleExpand(id: string): void {
     if (this._expandedId() === id) {

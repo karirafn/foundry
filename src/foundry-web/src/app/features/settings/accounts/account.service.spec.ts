@@ -119,15 +119,15 @@ describe('AccountService', () => {
     expect(service.loading()).toBe(false);
   });
 
-  it('should set loadError when loadAccounts fails with a string body', () => {
+  it('should set loadError when loadAccounts fails with a ProblemDetails body', () => {
     // Arrange
     service.loadAccounts();
 
     // Act
-    httpMock.expectOne('/api/accounts').flush('Forbidden', {
-      status: 403,
-      statusText: 'Forbidden',
-    });
+    httpMock.expectOne('/api/accounts').flush(
+      { type: 'tag:foundry,2026:problems/Account.NotFound', title: 'Forbidden', status: 403, detail: 'Forbidden' },
+      { status: 403, statusText: 'Forbidden' }
+    );
 
     // Assert
     expect(service.loadError()).toBe('Forbidden');
@@ -252,7 +252,7 @@ describe('AccountService', () => {
     expect(service.saveSuccess()).toBe(false);
   });
 
-  it('should set saveError when createAccount fails with a string body', () => {
+  it('should set saveError when createAccount fails with a ProblemDetails body', () => {
     // Arrange
     const request: CreateAccountRequest = {
       providerType: 'github',
@@ -262,10 +262,10 @@ describe('AccountService', () => {
     service.createAccount(request);
 
     // Act
-    httpMock.expectOne('/api/accounts').flush('An account with this name already exists.', {
-      status: 400,
-      statusText: 'Bad Request',
-    });
+    httpMock.expectOne('/api/accounts').flush(
+      { type: 'tag:foundry,2026:problems/Account.DuplicateName', title: 'Bad Request', status: 400, detail: 'An account with this name already exists.' },
+      { status: 400, statusText: 'Bad Request' }
+    );
 
     // Assert
     expect(service.saveError()).toBe('An account with this name already exists.');
@@ -373,7 +373,7 @@ describe('AccountService', () => {
     req.flush(makeCreationResult(MOCK_ACCOUNT), { status: 201, statusText: 'Created' });
   });
 
-  it('should set saveError when updateAccount fails with a string body', () => {
+  it('should set saveError when updateAccount fails with a ProblemDetails body', () => {
     // Arrange
     const id = MOCK_ACCOUNT.id;
     const request: UpdateAccountRequest = {
@@ -383,10 +383,10 @@ describe('AccountService', () => {
     service.updateAccount(id, request);
 
     // Act
-    httpMock.expectOne(`/api/accounts/${id}`).flush('An account with this name already exists.', {
-      status: 409,
-      statusText: 'Conflict',
-    });
+    httpMock.expectOne(`/api/accounts/${id}`).flush(
+      { type: 'tag:foundry,2026:problems/Account.DuplicateName', title: 'Conflict', status: 409, detail: 'An account with this name already exists.' },
+      { status: 409, statusText: 'Conflict' }
+    );
 
     // Assert
     expect(service.saveError()).toBe('An account with this name already exists.');
@@ -634,17 +634,17 @@ describe('AccountService', () => {
     expect(service.deletingAccountId()).toBeNull();
   });
 
-  it('should set deleteError when deleteAccount fails with a string body', () => {
+  it('should set deleteError when deleteAccount fails with a ProblemDetails body', () => {
     // Arrange
     service.loadAccounts();
     httpMock.expectOne('/api/accounts').flush([MOCK_ACCOUNT]);
     service.deleteAccount(MOCK_ACCOUNT.id);
 
     // Act
-    httpMock.expectOne(`/api/accounts/${MOCK_ACCOUNT.id}`).flush('Account is in use.', {
-      status: 409,
-      statusText: 'Conflict',
-    });
+    httpMock.expectOne(`/api/accounts/${MOCK_ACCOUNT.id}`).flush(
+      { type: 'tag:foundry,2026:problems/Account.InUse', title: 'Conflict', status: 409, detail: 'Account is in use.' },
+      { status: 409, statusText: 'Conflict' }
+    );
 
     // Assert
     expect(service.deleteError()).toBe('Account is in use.');
@@ -1147,7 +1147,10 @@ describe('AccountService', () => {
     service.createAccount({ providerType: 'github', baseUrl: 'https://api.github.com', token: 'ghp_test' });
 
     // Act
-    httpMock.expectOne('/api/accounts').flush('Unauthorized.', { status: 401, statusText: 'Unauthorized' });
+    httpMock.expectOne('/api/accounts').flush(
+      { type: 'tag:foundry,2026:problems/Account.Unauthorized', title: 'Unauthorized', status: 401, detail: 'Unauthorized.' },
+      { status: 401, statusText: 'Unauthorized' }
+    );
 
     // Assert
     expect(service.srAnnouncement()).toBe('Could not add account: Unauthorized.');
@@ -1159,10 +1162,10 @@ describe('AccountService', () => {
     service.updateAccount(MOCK_ACCOUNT.id, { baseUrl: 'https://api.github.com', token: null });
 
     // Act
-    httpMock.expectOne(`/api/accounts/${MOCK_ACCOUNT.id}`).flush('Token is invalid.', {
-      status: 422,
-      statusText: 'Unprocessable Entity',
-    });
+    httpMock.expectOne(`/api/accounts/${MOCK_ACCOUNT.id}`).flush(
+      { type: 'tag:foundry,2026:problems/Account.InvalidToken', title: 'Unprocessable Entity', status: 422, detail: 'Token is invalid.' },
+      { status: 422, statusText: 'Unprocessable Entity' }
+    );
 
     // Assert
     expect(service.srAnnouncement()).toBe('Could not update account: Token is invalid.');
@@ -1174,10 +1177,10 @@ describe('AccountService', () => {
     service.deleteAccount(MOCK_ACCOUNT.id);
 
     // Act
-    httpMock.expectOne(`/api/accounts/${MOCK_ACCOUNT.id}`).flush('Account is in use.', {
-      status: 409,
-      statusText: 'Conflict',
-    });
+    httpMock.expectOne(`/api/accounts/${MOCK_ACCOUNT.id}`).flush(
+      { type: 'tag:foundry,2026:problems/Account.InUse', title: 'Conflict', status: 409, detail: 'Account is in use.' },
+      { status: 409, statusText: 'Conflict' }
+    );
 
     // Assert
     expect(service.srAnnouncement()).toBe('Could not delete account: Account is in use.');

@@ -26,8 +26,7 @@ internal static class CheckCreditsNow
                 .WithName("CheckCreditsNow")
                 .WithSummary("Forces an immediate credit probe; returns 202 when already in flight")
                 .Produces<Response>(StatusCodes.Status200OK)
-                .Produces<Response>(StatusCodes.Status202Accepted)
-                .ProducesProblem(StatusCodes.Status500InternalServerError);
+                .Produces<Response>(StatusCodes.Status202Accepted);
         }
 
         internal static async Task<IResult> HandleAsync(

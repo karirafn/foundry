@@ -9,6 +9,7 @@ public sealed record RepositorySummary(
     int? PollIntervalSeconds,
     bool IsActive,
     int Position,
+    int MaxConcurrentWorkers,
     DateTimeOffset? LastPolledAt = null,
     RepositoryEligibilityInfo? Eligibility = null,
     DateTimeOffset? UntrackSuppressedSince = null);

@@ -1,4 +1,7 @@
 using System.Net;
+using System.Net.Http.Json;
+
+using Microsoft.AspNetCore.Mvc;
 
 using Shouldly;
 
@@ -8,6 +11,8 @@ namespace Foundry.IntegrationTests.Modules.Monitoring.Endpoints.RecheckRepositor
 
 public sealed class WhenRepositoryDoesNotExist : IAsyncDisposable
 {
+    private const int NotFoundStatus = 404;
+
     private readonly FoundryWebAppFactory _factory;
     private readonly HttpClient _client;
 
@@ -24,7 +29,7 @@ public sealed class WhenRepositoryDoesNotExist : IAsyncDisposable
     }
 
     [Fact]
-    public async Task Returns404()
+    public async Task ReturnsNotFoundAsProblemDetails()
     {
         // Arrange
         Guid accountId = Guid.NewGuid();
@@ -38,5 +43,13 @@ public sealed class WhenRepositoryDoesNotExist : IAsyncDisposable
 
         // Assert
         response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        response.Content.Headers.ContentType?.MediaType.ShouldBe("application/problem+json");
+        ProblemDetails problem = (await response.Content
+            .ReadFromJsonAsync<ProblemDetails>(TestContext.Current.CancellationToken))
+            .ShouldNotBeNull();
+        problem.ShouldSatisfyAllConditions(
+            () => problem.Status.ShouldBe(NotFoundStatus),
+            () => problem.Type.ShouldEndWith("Repository.NotFound"),
+            () => problem.Detail.ShouldNotBeNullOrEmpty());
     }
 }

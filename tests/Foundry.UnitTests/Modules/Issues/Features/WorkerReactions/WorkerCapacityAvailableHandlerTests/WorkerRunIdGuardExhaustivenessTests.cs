@@ -410,7 +410,8 @@ public sealed class WorkerRunIdGuardExhaustivenessTests : IAsyncDisposable
                 "GITHUB_PAT",
                 new WorkerProvider.GitHub(),
                 "https://api.github.com/repos/owner/repo/issues")),
-            repositoryEligibilityQuery ?? new AllEligibleRepositoryEligibilityQuery());
+            repositoryEligibilityQuery ?? new AllEligibleRepositoryEligibilityQuery(),
+            new InFlightWorkerCountQuery(_dbContext));
 
         IssueClaimer claimer = new(
             _dbContext,
@@ -437,7 +438,7 @@ public sealed class WorkerRunIdGuardExhaustivenessTests : IAsyncDisposable
             CancellationToken cancellationToken)
         {
             IReadOnlyList<EligibleRepository> eligible = repositoryIds
-                .Select(id => new EligibleRepository(id, Position: 0))
+                .Select(id => new EligibleRepository(id, Position: 0, MaxConcurrentWorkers: 1))
                 .ToList();
             return Task.FromResult(eligible);
         }

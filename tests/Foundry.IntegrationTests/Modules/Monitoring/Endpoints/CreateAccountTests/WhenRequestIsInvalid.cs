@@ -1,6 +1,8 @@
 using System.Net;
 using System.Net.Http.Json;
 
+using Microsoft.AspNetCore.Mvc;
+
 using Shouldly;
 
 using Xunit;
@@ -9,6 +11,8 @@ namespace Foundry.IntegrationTests.Modules.Monitoring.Endpoints.CreateAccountTes
 
 public sealed class WhenRequestIsInvalid : IAsyncDisposable
 {
+    private const int BadRequestStatus = 400;
+
     private readonly FoundryWebAppFactory _factory;
     private readonly HttpClient _client;
 
@@ -25,7 +29,7 @@ public sealed class WhenRequestIsInvalid : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenBaseUrlIsNotHttps_ReturnsBadRequest()
+    public async Task WhenBaseUrlIsNotHttps_ReturnsBadRequestAsProblemDetails()
     {
         // Arrange
         object body = new { providerType = "github", baseUrl = "http://github.com", token = "ghp_test" };
@@ -38,10 +42,18 @@ public sealed class WhenRequestIsInvalid : IAsyncDisposable
 
         // Assert
         response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        response.Content.Headers.ContentType?.MediaType.ShouldBe("application/problem+json");
+        ProblemDetails problem = (await response.Content
+            .ReadFromJsonAsync<ProblemDetails>(TestContext.Current.CancellationToken))
+            .ShouldNotBeNull();
+        problem.ShouldSatisfyAllConditions(
+            () => problem.Status.ShouldBe(BadRequestStatus),
+            () => problem.Type.ShouldEndWith("BaseUrl.Invalid"),
+            () => problem.Detail.ShouldNotBeNullOrEmpty());
     }
 
     [Fact]
-    public async Task WhenBaseUrlContainsCredentials_ReturnsBadRequest()
+    public async Task WhenBaseUrlContainsCredentials_ReturnsBadRequestAsProblemDetails()
     {
         // Arrange
         object body = new { providerType = "github", baseUrl = "https://attacker@github.com", token = "ghp_test" };
@@ -54,10 +66,18 @@ public sealed class WhenRequestIsInvalid : IAsyncDisposable
 
         // Assert
         response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        response.Content.Headers.ContentType?.MediaType.ShouldBe("application/problem+json");
+        ProblemDetails problem = (await response.Content
+            .ReadFromJsonAsync<ProblemDetails>(TestContext.Current.CancellationToken))
+            .ShouldNotBeNull();
+        problem.ShouldSatisfyAllConditions(
+            () => problem.Status.ShouldBe(BadRequestStatus),
+            () => problem.Type.ShouldEndWith("BaseUrl.ContainsCredentials"),
+            () => problem.Detail.ShouldNotBeNullOrEmpty());
     }
 
     [Fact]
-    public async Task WhenBaseUrlIsNotAbsolute_ReturnsBadRequest()
+    public async Task WhenBaseUrlIsNotAbsolute_ReturnsBadRequestAsProblemDetails()
     {
         // Arrange
         object body = new { providerType = "github", baseUrl = "not-a-url", token = "ghp_test" };
@@ -70,10 +90,18 @@ public sealed class WhenRequestIsInvalid : IAsyncDisposable
 
         // Assert
         response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        response.Content.Headers.ContentType?.MediaType.ShouldBe("application/problem+json");
+        ProblemDetails problem = (await response.Content
+            .ReadFromJsonAsync<ProblemDetails>(TestContext.Current.CancellationToken))
+            .ShouldNotBeNull();
+        problem.ShouldSatisfyAllConditions(
+            () => problem.Status.ShouldBe(BadRequestStatus),
+            () => problem.Type.ShouldEndWith("BaseUrl.Invalid"),
+            () => problem.Detail.ShouldNotBeNullOrEmpty());
     }
 
     [Fact]
-    public async Task WhenTokenIsEmpty_ReturnsBadRequest()
+    public async Task WhenTokenIsEmpty_ReturnsBadRequestAsProblemDetails()
     {
         // Arrange
         object body = new { providerType = "github", baseUrl = "https://github.com", token = string.Empty };
@@ -86,10 +114,18 @@ public sealed class WhenRequestIsInvalid : IAsyncDisposable
 
         // Assert
         response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        response.Content.Headers.ContentType?.MediaType.ShouldBe("application/problem+json");
+        ProblemDetails problem = (await response.Content
+            .ReadFromJsonAsync<ProblemDetails>(TestContext.Current.CancellationToken))
+            .ShouldNotBeNull();
+        problem.ShouldSatisfyAllConditions(
+            () => problem.Status.ShouldBe(BadRequestStatus),
+            () => problem.Type.ShouldEndWith("CreateAccount.TokenEmpty"),
+            () => problem.Detail.ShouldNotBeNullOrEmpty());
     }
 
     [Fact]
-    public async Task WhenTokenIsWhitespace_ReturnsBadRequest()
+    public async Task WhenTokenIsWhitespace_ReturnsBadRequestAsProblemDetails()
     {
         // Arrange
         object body = new { providerType = "github", baseUrl = "https://github.com", token = "   " };
@@ -102,10 +138,18 @@ public sealed class WhenRequestIsInvalid : IAsyncDisposable
 
         // Assert
         response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        response.Content.Headers.ContentType?.MediaType.ShouldBe("application/problem+json");
+        ProblemDetails problem = (await response.Content
+            .ReadFromJsonAsync<ProblemDetails>(TestContext.Current.CancellationToken))
+            .ShouldNotBeNull();
+        problem.ShouldSatisfyAllConditions(
+            () => problem.Status.ShouldBe(BadRequestStatus),
+            () => problem.Type.ShouldEndWith("CreateAccount.TokenEmpty"),
+            () => problem.Detail.ShouldNotBeNullOrEmpty());
     }
 
     [Fact]
-    public async Task WhenProviderTypeIsUnsupported_ReturnsBadRequest()
+    public async Task WhenProviderTypeIsUnsupported_ReturnsBadRequestAsProblemDetails()
     {
         // Arrange
         object body = new { providerType = "bitbucket", baseUrl = "https://bitbucket.org", token = "abc_test" };
@@ -118,5 +162,13 @@ public sealed class WhenRequestIsInvalid : IAsyncDisposable
 
         // Assert
         response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        response.Content.Headers.ContentType?.MediaType.ShouldBe("application/problem+json");
+        ProblemDetails problem = (await response.Content
+            .ReadFromJsonAsync<ProblemDetails>(TestContext.Current.CancellationToken))
+            .ShouldNotBeNull();
+        problem.ShouldSatisfyAllConditions(
+            () => problem.Status.ShouldBe(BadRequestStatus),
+            () => problem.Type.ShouldEndWith("CreateAccount.InvalidProviderType"),
+            () => problem.Detail.ShouldNotBeNullOrEmpty());
     }
 }

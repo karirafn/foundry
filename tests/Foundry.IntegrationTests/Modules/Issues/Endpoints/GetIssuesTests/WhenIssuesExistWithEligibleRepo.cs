@@ -47,7 +47,7 @@ public sealed class WhenIssuesExistWithEligibleRepo : IAsyncDisposable
         GitHubCredential credential = GitHubCredential.Create("my-org", "TOKEN", BaseUrl.Create("https://github.com").ValueOrThrow());
         dbContext.Set<Credential>().Add(credential);
 
-        MonitoredRepository repo = MonitoredRepository.Create(ValidSlug, "github.com", null);
+        MonitoredRepository repo = MonitoredRepository.Create(ValidSlug, "github.com", null).ValueOrThrow();
         repo.SetEligibility(new RepositoryEligibility.Eligible());
         dbContext.Set<MonitoredRepository>().Add(repo);
 
@@ -85,10 +85,10 @@ public sealed class WhenIssuesExistWithEligibleRepo : IAsyncDisposable
 
         // Assert
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
-        IReadOnlyList<IssueSummary>? summaries = await response.Content
-            .ReadFromJsonAsync<IReadOnlyList<IssueSummary>>(TestContext.Current.CancellationToken);
-        summaries.ShouldNotBeNull();
-        IssueSummary summary = summaries.ShouldHaveSingleItem();
+        PagedIssues? result = await response.Content
+            .ReadFromJsonAsync<PagedIssues>(TestContext.Current.CancellationToken);
+        result.ShouldNotBeNull();
+        IssueSummary summary = result.Items.ShouldHaveSingleItem();
         summary.RepositoryEligibilityStatus.ShouldBe("eligible");
     }
 }

@@ -110,7 +110,7 @@ public sealed class WhenWriteProbeVerdictIsNull : IAsyncDisposable
         DbContext dbContext = scope.ServiceProvider.GetRequiredService<DbContext>();
 
         RepositorySlug slug = RepositorySlug.Create("owner/null-verdict-repo").ValueOrThrow();
-        MonitoredRepository repository = MonitoredRepository.Create(slug, "github.com", pollInterval: null);
+        MonitoredRepository repository = MonitoredRepository.Create(slug, "github.com", pollInterval: null).ValueOrThrow();
 
         dbContext.Set<MonitoredRepository>().Add(repository);
         await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);

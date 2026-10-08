@@ -34,6 +34,7 @@ const REPO_1: RepositorySummary = {
   position: 0,
   pollIntervalSeconds: 300,
   isActive: true,
+  maxConcurrentWorkers: 1,
   lastPolledAt: '2026-06-15T10:00:00Z',
   eligibility: { status: 'eligible', violations: [], reason: null },
 };
@@ -47,6 +48,7 @@ const REPO_2: RepositorySummary = {
   position: 1,
   pollIntervalSeconds: null,
   isActive: false,
+  maxConcurrentWorkers: 1,
   lastPolledAt: null,
   eligibility: { status: 'ineligible', violations: [{ rule: 'AllowDirectPushes', description: 'Allow direct pushes is enabled' }], reason: null },
 };
@@ -157,23 +159,23 @@ describe('SettingsRepositoriesComponent', () => {
     expect(list).toBeFalsy();
   });
 
-  it('should render fd-repository-form with repository data when Edit is clicked', () => {
+  it('should remain in list view after repositories load (edit no longer swaps the view)', () => {
     // Arrange
     const { fixture, httpMock } = setup();
     fixture.detectChanges();
-    flushAccounts(httpMock);
+    flushAccounts(httpMock, [ACCOUNT_1]);
     fixture.detectChanges();
+    flushRepositories(httpMock, ACCOUNT_1.id, [REPO_1]);
 
     // Act
-    fixture.componentInstance.onEdit(REPO_1);
     fixture.detectChanges();
 
-    // Assert
+    // Assert — the list is shown; no form (edit arm is gone; navigation is now handled by the list)
     const el = fixture.nativeElement as HTMLElement;
-    const form = el.querySelector('fd-repository-form');
-    expect(form).toBeTruthy();
     const list = el.querySelector('fd-repository-list');
-    expect(list).toBeFalsy();
+    expect(list).toBeTruthy();
+    const form = el.querySelector('fd-repository-form');
+    expect(form).toBeFalsy();
   });
 
   it('should return to list view after cancel', () => {
@@ -210,36 +212,13 @@ describe('SettingsRepositoriesComponent', () => {
     httpMock.expectOne(`/api/accounts/${ACCOUNT_1.id}/repositories/available-repositories`).flush({ hasClaims: false, repositories: [] });
 
     // Act
-    fixture.componentInstance.onSave({ slug: 'my-org/new-repo', pollIntervalSeconds: 300 });
+    fixture.componentInstance.onSave({ slug: 'my-org/new-repo', pollIntervalSeconds: 300, maxConcurrentWorkers: null });
 
     // Assert
     const req = httpMock.expectOne(`/api/accounts/${ACCOUNT_1.id}/repositories`);
     expect(req.request.method).toBe('POST');
-    expect(req.request.body).toEqual({ slug: 'my-org/new-repo', pollIntervalSeconds: 300 });
+    expect(req.request.body).toEqual({ slug: 'my-org/new-repo', pollIntervalSeconds: 300, maxConcurrentWorkers: null });
     req.flush(REPO_1, { status: 201, statusText: 'Created' });
-
-    // Flush reload
-    flushRepositories(httpMock, ACCOUNT_1.id, [REPO_1]);
-  });
-
-  it('should call updateRepository when saving from edit view', () => {
-    // Arrange
-    const { fixture, httpMock } = setup();
-    fixture.detectChanges();
-    flushAccounts(httpMock, [ACCOUNT_1]);
-    fixture.detectChanges();
-    flushRepositories(httpMock, ACCOUNT_1.id, [REPO_1]);
-    fixture.componentInstance.onEdit(REPO_1);
-    fixture.detectChanges();
-
-    // Act
-    fixture.componentInstance.onSave({ pollIntervalSeconds: 600, isActive: false });
-
-    // Assert
-    const req = httpMock.expectOne(`/api/accounts/${ACCOUNT_1.id}/repositories/${REPO_1.id}`);
-    expect(req.request.method).toBe('PUT');
-    expect(req.request.body).toEqual({ pollIntervalSeconds: 600, isActive: false });
-    req.flush({ ...REPO_1, pollIntervalSeconds: 600, isActive: false });
 
     // Flush reload
     flushRepositories(httpMock, ACCOUNT_1.id, [REPO_1]);
@@ -258,7 +237,7 @@ describe('SettingsRepositoriesComponent', () => {
     httpMock.expectOne(`/api/accounts/${ACCOUNT_1.id}/repositories/available-repositories`).flush({ hasClaims: false, repositories: [] });
 
     // Act
-    fixture.componentInstance.onSave({ slug: 'my-org/new-repo', pollIntervalSeconds: 300 });
+    fixture.componentInstance.onSave({ slug: 'my-org/new-repo', pollIntervalSeconds: 300, maxConcurrentWorkers: null });
     httpMock.expectOne(`/api/accounts/${ACCOUNT_1.id}/repositories`).flush(REPO_1, { status: 201, statusText: 'Created' });
     fixture.detectChanges();
 
@@ -359,10 +338,10 @@ describe('SettingsRepositoriesComponent', () => {
     // Act
     const repositoryService = TestBed.inject(RepositoryService);
     repositoryService.deleteRepository(ACCOUNT_1.id, REPO_1.id).subscribe({ error: () => {} });
-    httpMock.expectOne(`/api/accounts/${ACCOUNT_1.id}/repositories/${REPO_1.id}`).flush('Repository is in use.', {
-      status: 409,
-      statusText: 'Conflict',
-    });
+    httpMock.expectOne(`/api/accounts/${ACCOUNT_1.id}/repositories/${REPO_1.id}`).flush(
+      { type: 'tag:foundry,2026:problems/Repository.InUse', title: 'Conflict', status: 409, detail: 'Repository is in use.' },
+      { status: 409, statusText: 'Conflict' }
+    );
     fixture.detectChanges();
 
     // Assert

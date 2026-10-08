@@ -1,6 +1,7 @@
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Shared;
+using Foundry.Shared.Infrastructure.Http;
 
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
@@ -61,9 +62,9 @@ internal static class DeleteRepository
                     Command command = new(accountId, id);
                     Result<bool> result = await handler.HandleAsync(command, cancellationToken);
 
-                    return result.Match<Results<NoContent, NotFound>>(
+                    return result.Match<Results<NoContent, ProblemHttpResult>>(
                         _ => TypedResults.NoContent(),
-                        _ => TypedResults.NotFound());
+                        error => error.ToProblem(StatusCodes.Status404NotFound));
                 })
                 .WithName("DeleteRepository")
                 .WithSummary("Deletes a monitored repository")

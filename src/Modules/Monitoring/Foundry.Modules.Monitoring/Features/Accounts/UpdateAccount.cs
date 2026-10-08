@@ -9,6 +9,7 @@ using Foundry.Modules.Monitoring.Features.Accounts.Rotation;
 using Foundry.Modules.Monitoring.Features.Accounts.Tokens;
 using Foundry.Modules.Monitoring.Infrastructure;
 using Foundry.Shared;
+using Foundry.Shared.Infrastructure.Http;
 
 using BaseUrlVo = Foundry.Modules.Monitoring.Domain.ValueObjects.BaseUrl;
 
@@ -222,7 +223,8 @@ internal static partial class UpdateAccount
                     Result validation = validator.Validate(command);
                     if (validation is Result.Failure validationFailure)
                     {
-                        return (IResult)TypedResults.BadRequest(validationFailure.Error.Message);
+                        return (Results<Ok<CredentialUpdateResult>, Conflict<UpdateAccountConflictResponse>, ProblemHttpResult>)
+                            validationFailure.Error.ToProblem(StatusCodes.Status400BadRequest);
                     }
 
                     Outcome outcome = await handler.HandleAsync(command, cancellationToken);
@@ -230,15 +232,18 @@ internal static partial class UpdateAccount
                     return outcome switch
                     {
                         Outcome.Updated updated =>
+                            (Results<Ok<CredentialUpdateResult>, Conflict<UpdateAccountConflictResponse>, ProblemHttpResult>)
                             TypedResults.Ok(updated.Value),
                         Outcome.ClaimedElsewhere claimed =>
-                            (IResult)TypedResults.Conflict(
+                            TypedResults.Conflict(
                                 new UpdateAccountConflictResponse(
                                     UpdateAccountConflictReason.ClaimedElsewhere,
                                     claimed.Error.Message)),
                         Outcome.Rejected rejected => rejected.Error.Code switch
                         {
-                            CredentialErrors.NotFoundCode => (IResult)TypedResults.NotFound(),
+                            CredentialErrors.NotFoundCode =>
+                                (Results<Ok<CredentialUpdateResult>, Conflict<UpdateAccountConflictResponse>, ProblemHttpResult>)
+                                rejected.Error.ToProblem(StatusCodes.Status404NotFound),
                             CredentialErrors.DuplicateNamespaceCode =>
                                 TypedResults.Conflict(
                                     new UpdateAccountConflictResponse(
@@ -249,7 +254,7 @@ internal static partial class UpdateAccount
                                     new UpdateAccountConflictResponse(
                                         UpdateAccountConflictReason.DuplicateAccount,
                                         rejected.Error.Message)),
-                            _ => TypedResults.BadRequest(rejected.Error.Message),
+                            _ => rejected.Error.ToProblem(StatusCodes.Status400BadRequest),
                         },
                         _ => throw new UnreachableException(
                             $"Unhandled UpdateAccount.Outcome: {outcome.GetType().Name}"),
@@ -260,7 +265,7 @@ internal static partial class UpdateAccount
                 .Produces<CredentialUpdateResult>()
                 .ProducesProblem(StatusCodes.Status404NotFound)
                 .Produces<UpdateAccountConflictResponse>(StatusCodes.Status409Conflict)
-                .Produces<string>(StatusCodes.Status400BadRequest);
+                .ProducesProblem(StatusCodes.Status400BadRequest);
         }
     }
 }

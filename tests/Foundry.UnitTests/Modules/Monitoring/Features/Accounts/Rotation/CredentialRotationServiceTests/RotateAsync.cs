@@ -61,12 +61,12 @@ public sealed class RotateAsync : IAsyncDisposable
         _dbContext.Set<Credential>().Add(credential);
 
         RepositorySlug aliceSlug = RepositorySlug.Create("alice/repo-a").ValueOrThrow();
-        MonitoredRepository repoA = MonitoredRepository.Create(aliceSlug, "github.com", pollInterval: null, position: 0);
+        MonitoredRepository repoA = MonitoredRepository.Create(aliceSlug, "github.com", pollInterval: null, position: 0).ValueOrThrow();
         repoA.SetEligibility(new RepositoryEligibility.Eligible());
         _dbContext.Set<MonitoredRepository>().Add(repoA);
 
         RepositorySlug bobSlug = RepositorySlug.Create("bob/repo-b").ValueOrThrow();
-        MonitoredRepository repoB = MonitoredRepository.Create(bobSlug, "github.com", pollInterval: null, position: 1);
+        MonitoredRepository repoB = MonitoredRepository.Create(bobSlug, "github.com", pollInterval: null, position: 1).ValueOrThrow();
         repoB.SetEligibility(new RepositoryEligibility.Eligible());
         _dbContext.Set<MonitoredRepository>().Add(repoB);
 
@@ -197,7 +197,7 @@ public sealed class RotateAsync : IAsyncDisposable
         for (int i = 0; i < 8; i++)
         {
             RepositorySlug slug = RepositorySlug.Create($"owner/repo-{i}").ValueOrThrow();
-            MonitoredRepository repo = MonitoredRepository.Create(slug, "github.com", pollInterval: null, position: i);
+            MonitoredRepository repo = MonitoredRepository.Create(slug, "github.com", pollInterval: null, position: i).ValueOrThrow();
             _dbContext.Set<MonitoredRepository>().Add(repo);
             repos.Add(repo);
         }

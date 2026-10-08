@@ -15,7 +15,7 @@ namespace Foundry.WebApi.Migrations
         protected override void BuildModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
-            modelBuilder.HasAnnotation("ProductVersion", "10.0.11");
+            modelBuilder.HasAnnotation("ProductVersion", "10.0.12");
 
             modelBuilder.Entity("Foundry.Modules.Credentials.Domain.Entities.ClaudeAccount", b =>
                 {
@@ -280,6 +280,12 @@ namespace Foundry.WebApi.Migrations
                     b.Property<DateTimeOffset?>("LastPolledAt")
                         .HasColumnType("TEXT")
                         .HasColumnName("last_polled_at");
+
+                    b.Property<int>("MaxConcurrentWorkers")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasDefaultValue(1)
+                        .HasColumnName("max_concurrent_workers");
 
                     b.Property<TimeSpan?>("PollInterval")
                         .HasColumnType("TEXT")

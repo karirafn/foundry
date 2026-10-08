@@ -21,7 +21,7 @@ public sealed class Position
         RepositorySlug slug = ValidSlug;
 
         // Act
-        MonitoredRepository repository = MonitoredRepository.Create(slug, "github.com", null, position: 3);
+        MonitoredRepository repository = MonitoredRepository.Create(slug, "github.com", null, position: 3).ValueOrThrow();
 
         // Assert
         repository.Position.ShouldBe(3);
@@ -34,7 +34,7 @@ public sealed class Position
         RepositorySlug slug = ValidSlug;
 
         // Act
-        MonitoredRepository repository = MonitoredRepository.Create(slug, "github.com", null, position: 0);
+        MonitoredRepository repository = MonitoredRepository.Create(slug, "github.com", null, position: 0).ValueOrThrow();
 
         // Assert
         repository.Position.ShouldBe(0);
@@ -44,7 +44,7 @@ public sealed class Position
     public void WhenSetPositionCalled_UpdatesPosition()
     {
         // Arrange
-        MonitoredRepository repository = MonitoredRepository.Create(ValidSlug, "github.com", null, position: 0);
+        MonitoredRepository repository = MonitoredRepository.Create(ValidSlug, "github.com", null, position: 0).ValueOrThrow();
 
         // Act
         repository.SetPosition(5);

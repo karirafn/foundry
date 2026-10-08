@@ -62,7 +62,8 @@ public sealed class ClaimSkippedHandleAsync : IAsyncDisposable
                 "GITHUB_PAT",
                 new WorkerProvider.GitHub(),
                 "https://api.github.com/repos/owner/repo/issues")),
-            repositoryEligibilityQuery ?? new AllEligibleRepositoryEligibilityQuery());
+            repositoryEligibilityQuery ?? new AllEligibleRepositoryEligibilityQuery(),
+            new InFlightWorkerCountQuery(_dbContext));
 
         IssueClaimer claimer = new(
             _dbContext,
@@ -164,6 +165,41 @@ public sealed class ClaimSkippedHandleAsync : IAsyncDisposable
         skipped.WorkerRunId.ShouldBe(workerRunId);
     }
 
+    // AllRepositoriesSaturated → ClaimSkipped published
+    [Fact]
+    public async Task WhenAllRepositoriesSaturated_PublishesClaimSkipped()
+    {
+        // Arrange — repo has MaxConcurrentWorkers=1, one InProgress issue already consuming the slot
+        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
+        await SeedQueuedIssueAsync(repositoryId, issueNumber: 1);
+
+        InProgressIssue inProgress = new IssueBuilder()
+            .WithMonitoredRepositoryId(repositoryId)
+            .WithIssueNumber(10)
+            .InProgress();
+        _dbContext.Set<Issue>().Add(inProgress);
+        await _dbContext.SaveChangesAsync(CancellationToken.None);
+        _dbContext.ChangeTracker.Clear();
+
+        CapturingIntegrationEventDispatcher capturingDispatcher = new();
+        WorkerCapacityAvailableHandler sut = BuildHandler(
+            repositoryEligibilityQuery: new StubRepositoryEligibilityQuery(
+                [new EligibleRepository(repositoryId.Value, Position: 0, MaxConcurrentWorkers: 1)]),
+            integrationEventDispatcher: capturingDispatcher);
+
+        WorkerRunId workerRunId = WorkerRunId.New();
+        WorkerCapacityAvailable @event = new(workerRunId);
+
+        // Act
+        await sut.HandleAsync(@event, TestContext.Current.CancellationToken);
+
+        // Assert
+        ClaimSkipped skipped = capturingDispatcher.DispatchedEvents
+            .OfType<ClaimSkipped>()
+            .ShouldHaveSingleItem();
+        skipped.WorkerRunId.ShouldBe(workerRunId);
+    }
+
     // Selected → ClaimSkipped NOT published
     [Fact]
     public async Task WhenSelected_DoesNotPublishClaimSkipped()
@@ -248,7 +284,7 @@ public sealed class ClaimSkippedHandleAsync : IAsyncDisposable
             CancellationToken cancellationToken)
         {
             IReadOnlyList<EligibleRepository> eligible = repositoryIds
-                .Select(id => new EligibleRepository(id, Position: 0))
+                .Select(id => new EligibleRepository(id, Position: 0, MaxConcurrentWorkers: 1))
                 .ToList();
             return Task.FromResult(eligible);
         }
@@ -271,6 +307,30 @@ public sealed class ClaimSkippedHandleAsync : IAsyncDisposable
     {
         public Task DispatchAsync(IEnumerable<IIntegrationEvent> events, CancellationToken cancellationToken)
             => Task.CompletedTask;
+    }
+
+    private sealed class StubRepositoryEligibilityQuery(IReadOnlyCollection<EligibleRepository> eligibleRepositories)
+        : IRepositoryEligibilityQuery
+    {
+        public Task<RepositoryEligibilityInfo?> GetEligibilityAsync(
+            Guid repositoryId,
+            CancellationToken cancellationToken)
+            => Task.FromResult<RepositoryEligibilityInfo?>(null);
+
+        public Task<IReadOnlyList<EligibleRepository>> GetEligibleRepositoriesAsync(
+            IReadOnlyCollection<Guid> repositoryIds,
+            CancellationToken cancellationToken)
+        {
+            IReadOnlyList<EligibleRepository> eligible = eligibleRepositories
+                .Where(r => repositoryIds.Contains(r.Id))
+                .ToList();
+            return Task.FromResult(eligible);
+        }
+
+        public Task<IReadOnlyDictionary<Guid, string>> GetEligibilityStatusesAsync(
+            IReadOnlyCollection<Guid> repositoryIds,
+            CancellationToken cancellationToken)
+            => Task.FromResult<IReadOnlyDictionary<Guid, string>>(new Dictionary<Guid, string>());
     }
 
     private sealed class CapturingIntegrationEventDispatcher : IIntegrationEventDispatcher

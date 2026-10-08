@@ -1,6 +1,8 @@
 using System.Net;
 using System.Net.Http.Json;
 
+using Microsoft.AspNetCore.Mvc;
+
 using Shouldly;
 
 using Xunit;
@@ -9,10 +11,12 @@ namespace Foundry.IntegrationTests.Modules.Settings.Endpoints.UpdatePromptTempla
 
 public sealed class WhenPayloadIsInvalid(FoundryWebAppFactory factory) : IClassFixture<FoundryWebAppFactory>
 {
+    private const int BadRequestStatus = 400;
+
     private readonly HttpClient _client = factory.CreateClient();
 
     [Fact]
-    public async Task WhenSystemPromptTemplateIsEmpty_ReturnsBadRequest()
+    public async Task WhenSystemPromptTemplateIsEmpty_ReturnsBadRequestAsProblemDetails()
     {
         // Arrange
         object body = new
@@ -29,10 +33,18 @@ public sealed class WhenPayloadIsInvalid(FoundryWebAppFactory factory) : IClassF
 
         // Assert
         response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        response.Content.Headers.ContentType?.MediaType.ShouldBe("application/problem+json");
+        ProblemDetails problem = (await response.Content
+            .ReadFromJsonAsync<ProblemDetails>(TestContext.Current.CancellationToken))
+            .ShouldNotBeNull();
+        problem.ShouldSatisfyAllConditions(
+            () => problem.Status.ShouldBe(BadRequestStatus),
+            () => problem.Type.ShouldEndWith("Settings.InvalidPromptTemplate"),
+            () => problem.Detail.ShouldNotBeNullOrEmpty());
     }
 
     [Fact]
-    public async Task WhenWorkerPromptTemplateIsEmpty_ReturnsBadRequest()
+    public async Task WhenWorkerPromptTemplateIsEmpty_ReturnsBadRequestAsProblemDetails()
     {
         // Arrange
         object body = new
@@ -49,5 +61,13 @@ public sealed class WhenPayloadIsInvalid(FoundryWebAppFactory factory) : IClassF
 
         // Assert
         response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        response.Content.Headers.ContentType?.MediaType.ShouldBe("application/problem+json");
+        ProblemDetails problem = (await response.Content
+            .ReadFromJsonAsync<ProblemDetails>(TestContext.Current.CancellationToken))
+            .ShouldNotBeNull();
+        problem.ShouldSatisfyAllConditions(
+            () => problem.Status.ShouldBe(BadRequestStatus),
+            () => problem.Type.ShouldEndWith("Settings.InvalidPromptTemplate"),
+            () => problem.Detail.ShouldNotBeNullOrEmpty());
     }
 }

@@ -35,6 +35,7 @@ export interface RepositorySummary {
   position: number;
   pollIntervalSeconds: number | null;
   isActive: boolean;
+  maxConcurrentWorkers: number;
   lastPolledAt: string | null;
   eligibility: RepositoryEligibility | null;
 }
@@ -54,9 +55,11 @@ export interface AvailableRepositoriesResponse {
 export interface CreateRepositoryRequest {
   slug: string;
   pollIntervalSeconds: number | null;
+  maxConcurrentWorkers: number | null;
 }
 
 export interface UpdateRepositoryRequest {
   pollIntervalSeconds: number | null;
   isActive: boolean;
+  maxConcurrentWorkers: number;
 }

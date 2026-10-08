@@ -24,6 +24,7 @@ public static class IssuesModule
     public static IServiceCollection AddIssuesModule(this IServiceCollection services)
     {
         services.AddScoped<IIssueQueries, IssueQueries>();
+        services.AddScoped<InFlightWorkerCountQuery>();
         services.AddScoped<DispatchCandidateSelector>();
         services.AddScoped<IssueClaimer>();
         services.AddHostedService<TransientRetryService>();

@@ -2,6 +2,7 @@ using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Issues.Domain.Entities;
 using Foundry.Modules.Issues.Domain.Entities.States;
 using Foundry.Modules.Issues.Features;
+using Foundry.Modules.Issues.Features.Claiming;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Contracts.Queries;
 using Foundry.Modules.Workers.Contracts;
@@ -49,7 +50,12 @@ public sealed class GetActiveIssueSummariesAsync_QueueOrdering : IAsyncDisposabl
     }
 
     private IIssueQueries BuildSut(IRepositoryEligibilityQuery eligibilityQuery) =>
-        new IssueQueries(_dbContext, new NullRepositorySlugQueries(), eligibilityQuery, new NullWorkerRunQueries());
+        new IssueQueries(
+            _dbContext,
+            new NullRepositorySlugQueries(),
+            eligibilityQuery,
+            new NullWorkerRunQueries(),
+            new InFlightWorkerCountQuery(_dbContext));
 
     private FreshQueuedIssue SeedQueuedIssue(
         MonitoredRepositoryId repositoryId,
@@ -140,7 +146,7 @@ public sealed class GetActiveIssueSummariesAsync_QueueOrdering : IAsyncDisposabl
         SeedRevisionQueuedIssue(repoA, issueNumber: 3, detectedAt: Now.AddHours(-1));
 
         StubEligibilityQuery eligibilityQuery = new(
-            [new EligibleRepository(repoA.Value, Position: 1)],
+            [new EligibleRepository(repoA.Value, Position: 1, MaxConcurrentWorkers: 1)],
             new Dictionary<Guid, string>());
 
         IIssueQueries sut = BuildSut(eligibilityQuery);
@@ -171,8 +177,8 @@ public sealed class GetActiveIssueSummariesAsync_QueueOrdering : IAsyncDisposabl
 
         StubEligibilityQuery eligibilityQuery = new(
             [
-                new EligibleRepository(repoAtPosition2.Value, Position: 2),
-                new EligibleRepository(repoAtPosition1.Value, Position: 1),
+                new EligibleRepository(repoAtPosition2.Value, Position: 2, MaxConcurrentWorkers: 1),
+                new EligibleRepository(repoAtPosition1.Value, Position: 1, MaxConcurrentWorkers: 1),
             ],
             new Dictionary<Guid, string>());
 
@@ -202,7 +208,7 @@ public sealed class GetActiveIssueSummariesAsync_QueueOrdering : IAsyncDisposabl
         SeedQueuedIssue(repo, issueNumber: 2, detectedAt: older);
 
         StubEligibilityQuery eligibilityQuery = new(
-            [new EligibleRepository(repo.Value, Position: 1)],
+            [new EligibleRepository(repo.Value, Position: 1, MaxConcurrentWorkers: 1)],
             new Dictionary<Guid, string>());
 
         IIssueQueries sut = BuildSut(eligibilityQuery);
@@ -231,7 +237,7 @@ public sealed class GetActiveIssueSummariesAsync_QueueOrdering : IAsyncDisposabl
         SeedQueuedIssue(eligibleRepo, issueNumber: 2, detectedAt: Now.AddHours(-1));
 
         StubEligibilityQuery eligibilityQuery = new(
-            [new EligibleRepository(eligibleRepo.Value, Position: 1)],
+            [new EligibleRepository(eligibleRepo.Value, Position: 1, MaxConcurrentWorkers: 1)],
             new Dictionary<Guid, string>
             {
                 [ineligibleRepo.Value] = "ineligible",
@@ -322,7 +328,7 @@ public sealed class GetActiveIssueSummariesAsync_QueueOrdering : IAsyncDisposabl
         SeedQueuedIssue(repo, issueNumber: 2, detectedAt: Now.AddHours(-1));
 
         StubEligibilityQuery eligibilityQuery = new(
-            [new EligibleRepository(repo.Value, Position: 1)],
+            [new EligibleRepository(repo.Value, Position: 1, MaxConcurrentWorkers: 1)],
             new Dictionary<Guid, string>());
 
         IIssueQueries sut = BuildSut(eligibilityQuery);
@@ -362,6 +368,134 @@ public sealed class GetActiveIssueSummariesAsync_QueueOrdering : IAsyncDisposabl
         result.Count.ShouldBe(2);
         result[0].IssueNumber.ShouldBe(2);
         result[1].IssueNumber.ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task WhenEligibleRepoSaturatedAndBothIssuesQueued_BothRenderInKeyOrder()
+    {
+        // Arrange: repo R (limit 1) has 1 in-flight + 2 queued issues B (older) and D (newer).
+        // Both B and D must render — capacity-deferred issues still have Queue Positions.
+        MonitoredRepositoryId repoR = MonitoredRepositoryId.New();
+
+        InProgressIssue inFlight = new IssueBuilder()
+            .WithMonitoredRepositoryId(repoR)
+            .WithIssueNumber(99)
+            .InProgress();
+        _dbContext.Set<Issue>().Add(inFlight);
+
+        // B detected earlier → lower DispatchOrderKey → should render at Position 1.
+        SeedQueuedIssue(repoR, issueNumber: 2, detectedAt: Now.AddHours(-3));
+        // D detected later → higher DispatchOrderKey → should render at Position 2.
+        SeedQueuedIssue(repoR, issueNumber: 4, detectedAt: Now.AddHours(-1));
+
+        StubEligibilityQuery eligibilityQuery = new(
+            [new EligibleRepository(repoR.Value, Position: 1, MaxConcurrentWorkers: 1)],
+            new Dictionary<Guid, string>());
+
+        IIssueQueries sut = BuildSut(eligibilityQuery);
+
+        // Act
+        IReadOnlyList<IssueSummary> result = await sut.GetActiveIssueSummariesAsync(
+            repositoryId: null,
+            states: null,
+            TestContext.Current.CancellationToken);
+
+        // Assert — B (older, issue 2) before D (newer, issue 4); both visible despite saturation.
+        IReadOnlyList<IssueSummary> queued = result.Where(s => s.State == "queued").ToList();
+        queued.Count.ShouldBe(2);
+        queued[0].IssueNumber.ShouldBe(2);
+        queued[1].IssueNumber.ShouldBe(4);
+    }
+
+    [Fact]
+    public async Task WhenRepositoryIdFiltered_InFlightCountsStillUnfiltered()
+    {
+        // Arrange: repo R (limit 1) has 1 in-flight + 1 queued B.
+        //          Repo S (limit 1) has 0 in-flight + 1 queued C.
+        // Dashboard is filtered to repo R only (repositoryId = R).
+        // Even though the view only shows repo R, B must still reflect R's real in-flight count
+        // (headroom = 0), so B renders in the capacity-deferred section (still visible, Queue Position 1).
+        MonitoredRepositoryId repoR = MonitoredRepositoryId.New();
+        MonitoredRepositoryId repoS = MonitoredRepositoryId.New();
+
+        // Seed in-flight for repo R.
+        InProgressIssue inFlight = new IssueBuilder()
+            .WithMonitoredRepositoryId(repoR)
+            .WithIssueNumber(99)
+            .InProgress();
+        _dbContext.Set<Issue>().Add(inFlight);
+
+        // Seed queued B on repo R.
+        SeedQueuedIssue(repoR, issueNumber: 2, detectedAt: Now.AddHours(-2));
+
+        // Seed queued C on repo S — not visible in this filtered view.
+        SeedQueuedIssue(repoS, issueNumber: 3, detectedAt: Now.AddHours(-1));
+
+        StubEligibilityQuery eligibilityQuery = new(
+            [
+                new EligibleRepository(repoR.Value, Position: 1, MaxConcurrentWorkers: 1),
+                new EligibleRepository(repoS.Value, Position: 2, MaxConcurrentWorkers: 1),
+            ],
+            new Dictionary<Guid, string>());
+
+        IIssueQueries sut = BuildSut(eligibilityQuery);
+
+        // Act — filter to repo R only.
+        IReadOnlyList<IssueSummary> result = await sut.GetActiveIssueSummariesAsync(
+            repositoryId: repoR,
+            states: null,
+            TestContext.Current.CancellationToken);
+
+        // Assert — only repo R's issues appear; B is present (capacity-deferred but rendered).
+        // If in-flight count were filtered to repo R only, headroom would also be wrong context —
+        // but the count IS correct because it is fetched unfiltered.
+        IReadOnlyList<IssueSummary> queued = result.Where(s => s.State == "queued").ToList();
+        queued.ShouldHaveSingleItem();
+        queued[0].IssueNumber.ShouldBe(2);
+    }
+
+    [Fact]
+    public async Task WhenEligibleRepoAtCapacityAndIdleRepoQueued_IdleRepoComeFirst()
+    {
+        // Arrange: repo R (limit 1) has 1 in-flight worker + 1 queued issue B.
+        //          repo S (limit 1) has 0 in-flight + 1 queued issue C.
+        // Expected: C at position 1, B at position 2 (R is saturated on the first pass).
+        MonitoredRepositoryId repoR = MonitoredRepositoryId.New();
+        MonitoredRepositoryId repoS = MonitoredRepositoryId.New();
+
+        // Seed in-flight for repo R.
+        InProgressIssue inFlight = new IssueBuilder()
+            .WithMonitoredRepositoryId(repoR)
+            .WithIssueNumber(99)
+            .InProgress();
+        _dbContext.Set<Issue>().Add(inFlight);
+
+        // Seed queued issue B on repo R (detected earlier but repo is saturated).
+        SeedQueuedIssue(repoR, issueNumber: 2, detectedAt: Now.AddHours(-2));
+
+        // Seed queued issue C on idle repo S (detected later).
+        SeedQueuedIssue(repoS, issueNumber: 3, detectedAt: Now.AddHours(-1));
+
+        StubEligibilityQuery eligibilityQuery = new(
+            [
+                new EligibleRepository(repoR.Value, Position: 1, MaxConcurrentWorkers: 1),
+                new EligibleRepository(repoS.Value, Position: 2, MaxConcurrentWorkers: 1),
+            ],
+            new Dictionary<Guid, string>());
+
+        IIssueQueries sut = BuildSut(eligibilityQuery);
+
+        // Act
+        IReadOnlyList<IssueSummary> result = await sut.GetActiveIssueSummariesAsync(
+            repositoryId: null,
+            states: null,
+            TestContext.Current.CancellationToken);
+
+        // Assert — C (repoS, idle) precedes B (repoR, saturated); in-flight not in results.
+        IReadOnlyList<IssueSummary> queued = result.Where(s => s.State == "queued").ToList();
+        queued.Count.ShouldBe(2);
+        queued[0].IssueNumber.ShouldBe(3);
+        queued[1].IssueNumber.ShouldBe(2);
     }
 
     /// <summary>

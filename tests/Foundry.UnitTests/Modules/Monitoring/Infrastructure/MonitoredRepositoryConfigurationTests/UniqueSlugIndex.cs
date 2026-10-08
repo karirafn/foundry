@@ -44,8 +44,8 @@ public sealed class UniqueSlugIndex : IAsyncDisposable
     public async Task WhenDuplicateSlugOnSameHost_ThrowsOnSave()
     {
         // Arrange
-        MonitoredRepository first = MonitoredRepository.Create(ValidSlug, "github.com", pollInterval: null);
-        MonitoredRepository duplicate = MonitoredRepository.Create(ValidSlug, "github.com", pollInterval: null);
+        MonitoredRepository first = MonitoredRepository.Create(ValidSlug, "github.com", pollInterval: null).ValueOrThrow();
+        MonitoredRepository duplicate = MonitoredRepository.Create(ValidSlug, "github.com", pollInterval: null).ValueOrThrow();
 
         _dbContext.Set<MonitoredRepository>().Add(first);
         await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
@@ -63,8 +63,8 @@ public sealed class UniqueSlugIndex : IAsyncDisposable
     public async Task WhenSameSlugOnDifferentHosts_SavesSuccessfully()
     {
         // Arrange
-        MonitoredRepository github = MonitoredRepository.Create(ValidSlug, "github.com", pollInterval: null, position: 0);
-        MonitoredRepository gitlab = MonitoredRepository.Create(ValidSlug, "gitlab.com", pollInterval: null, position: 1);
+        MonitoredRepository github = MonitoredRepository.Create(ValidSlug, "github.com", pollInterval: null, position: 0).ValueOrThrow();
+        MonitoredRepository gitlab = MonitoredRepository.Create(ValidSlug, "gitlab.com", pollInterval: null, position: 1).ValueOrThrow();
 
         _dbContext.Set<MonitoredRepository>().Add(github);
         await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);

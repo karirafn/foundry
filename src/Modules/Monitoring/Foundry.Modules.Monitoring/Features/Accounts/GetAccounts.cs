@@ -1,6 +1,7 @@
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Shared;
+using Foundry.Shared.Infrastructure.Http;
 
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
@@ -50,9 +51,9 @@ internal static class GetAccounts
                         new Query(),
                         cancellationToken);
 
-                    return result.Match<Results<Ok<IReadOnlyList<CredentialSummary>>, BadRequest<string>>>(
+                    return result.Match<Results<Ok<IReadOnlyList<CredentialSummary>>, ProblemHttpResult>>(
                         credentials => TypedResults.Ok(credentials),
-                        error => TypedResults.BadRequest(error.Message));
+                        error => error.ToProblem(StatusCodes.Status400BadRequest));
                 })
                 .WithName("GetAccounts")
                 .WithSummary("Gets all configured accounts")

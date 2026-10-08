@@ -5,6 +5,7 @@ using Foundry.Modules.Monitoring.Infrastructure;
 using Foundry.Modules.Monitoring.Infrastructure.GitHub;
 using Foundry.Modules.Monitoring.Infrastructure.GitLab;
 using Foundry.Shared;
+using Foundry.Shared.Infrastructure.Http;
 
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
@@ -132,12 +133,12 @@ internal static class GetAvailableRepositories
                         new Query(accountId),
                         cancellationToken);
 
-                    return result.Match<Results<Ok<AvailableRepositoriesResponse>, NotFound<string>, BadRequest<string>>>(
+                    return result.Match<Results<Ok<AvailableRepositoriesResponse>, ProblemHttpResult>>(
                         response => TypedResults.Ok(response),
                         error => error.Code switch
                         {
-                            RepositoryErrors.AccountNotFoundCode => TypedResults.NotFound(error.Message),
-                            _ => TypedResults.BadRequest(error.Message),
+                            RepositoryErrors.AccountNotFoundCode => error.ToProblem(StatusCodes.Status404NotFound),
+                            _ => error.ToProblem(StatusCodes.Status400BadRequest),
                         });
                 })
                 .WithName("GetAvailableRepositories")

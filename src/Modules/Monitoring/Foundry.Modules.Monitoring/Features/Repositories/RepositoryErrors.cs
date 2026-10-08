@@ -1,4 +1,5 @@
 using Foundry.Modules.Monitoring.Contracts;
+using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Shared;
 
 namespace Foundry.Modules.Monitoring.Features.Repositories;
@@ -11,6 +12,15 @@ internal static class RepositoryErrors
     internal const string AccountHasNoTokenCode = "Repository.AccountHasNoToken";
     internal const string NoTokenCode = "Repository.NoToken";
     internal const string ConflictOnCreateCode = "Repository.ConflictOnCreate";
+
+    internal const string InvalidMaxConcurrentWorkersCode =
+        MonitoredRepositoryErrors.InvalidMaxConcurrentWorkersCode;
+
+    internal const string PollIntervalNotPositiveCode =
+        MonitoredRepositoryErrors.PollIntervalNotPositiveCode;
+
+    internal const string PollIntervalTooLargeCode =
+        MonitoredRepositoryErrors.PollIntervalTooLargeCode;
 
     internal static Error NotFound(MonitoredRepositoryId id) =>
         new(NotFoundCode, $"Repository with ID '{id.Value}' was not found.");

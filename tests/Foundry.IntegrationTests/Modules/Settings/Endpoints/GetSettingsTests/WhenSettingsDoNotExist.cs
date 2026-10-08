@@ -1,4 +1,7 @@
 using System.Net;
+using System.Net.Http.Json;
+
+using Microsoft.AspNetCore.Mvc;
 
 using Shouldly;
 
@@ -8,6 +11,8 @@ namespace Foundry.IntegrationTests.Modules.Settings.Endpoints.GetSettingsTests;
 
 public sealed class WhenSettingsDoNotExist : IAsyncDisposable
 {
+    private const int NotFoundStatus = 404;
+
     private readonly FoundryWebAppFactory _factory;
     private readonly HttpClient _client;
 
@@ -24,7 +29,7 @@ public sealed class WhenSettingsDoNotExist : IAsyncDisposable
     }
 
     [Fact]
-    public async Task ReturnsNotFound()
+    public async Task ReturnsNotFoundAsProblemDetails()
     {
         // Arrange — no settings seeded; SettingsSeeder is a hosted service and is removed in tests
 
@@ -35,5 +40,13 @@ public sealed class WhenSettingsDoNotExist : IAsyncDisposable
 
         // Assert
         response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        response.Content.Headers.ContentType?.MediaType.ShouldBe("application/problem+json");
+        ProblemDetails problem = (await response.Content
+            .ReadFromJsonAsync<ProblemDetails>(TestContext.Current.CancellationToken))
+            .ShouldNotBeNull();
+        problem.ShouldSatisfyAllConditions(
+            () => problem.Status.ShouldBe(NotFoundStatus),
+            () => problem.Type.ShouldEndWith("Settings.NotFound"),
+            () => problem.Detail.ShouldNotBeNullOrEmpty());
     }
 }

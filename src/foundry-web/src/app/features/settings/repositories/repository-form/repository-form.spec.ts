@@ -30,6 +30,7 @@ const MOCK_REPOSITORY: RepositorySummary = {
   position: 0,
   pollIntervalSeconds: 300,
   isActive: true,
+  maxConcurrentWorkers: 1,
   lastPolledAt: '2026-06-15T10:00:00Z',
   eligibility: { status: 'eligible', violations: [], reason: null },
 };
@@ -629,10 +630,11 @@ describe('RepositoryFormComponent', () => {
     const saveBtn = el.querySelector('.repository-form__save-btn') as HTMLButtonElement;
     saveBtn.click();
 
-    // Assert
+    // Assert — maxConcurrentWorkers defaults to 1 (signal default, not null)
     expect(emitted).toEqual({
       slug: 'my-org/my-repo',
       pollIntervalSeconds: 300, // 5 min * 60 sec
+      maxConcurrentWorkers: 1,
     });
   });
 
@@ -657,6 +659,7 @@ describe('RepositoryFormComponent', () => {
     expect(emitted).toEqual({
       pollIntervalSeconds: 600, // 10 min * 60 sec
       isActive: true,
+      maxConcurrentWorkers: 1,
     });
   });
 
@@ -1496,6 +1499,211 @@ describe('RepositoryFormComponent', () => {
     const srTexts = Array.from(options[0].querySelectorAll('.sr-only'));
     const hasMonitoredSr = srTexts.some(el => el.textContent?.includes('already monitored'));
     expect(hasMonitoredSr).toBe(false);
+  });
+
+  // Cycle 39: max concurrent workers field renders with label and number input
+  it('should render max concurrent workers field with label and number input', () => {
+    // Arrange
+
+    // Act
+    const { el } = setup();
+
+    // Assert
+    const label = el.querySelector('label[for="repository-max-workers"]');
+    expect(label).toBeTruthy();
+    expect(label?.textContent?.trim()).toBe('Max concurrent workers');
+    const input = el.querySelector('#repository-max-workers') as HTMLInputElement;
+    expect(input).toBeTruthy();
+    expect(input.type).toBe('number');
+    expect(input.min).toBe('1');
+    expect(input.max).toBe('20');
+    expect(input.step).toBe('1');
+  });
+
+  it('should default max concurrent workers to 1 in add mode', () => {
+    // Arrange
+
+    // Act
+    const { el } = setup({ repository: null });
+
+    // Assert
+    const input = el.querySelector('#repository-max-workers') as HTMLInputElement;
+    expect(input.value).toBe('1');
+  });
+
+  it('should render hint with aria-describedby on max concurrent workers input', () => {
+    // Arrange
+
+    // Act
+    const { el } = setup();
+
+    // Assert
+    const input = el.querySelector('#repository-max-workers') as HTMLInputElement;
+    expect(input.getAttribute('aria-describedby')).toBe('repository-max-workers-hint');
+    const hint = el.querySelector('#repository-max-workers-hint');
+    expect(hint).toBeTruthy();
+    expect(hint?.textContent?.trim()).toBe(
+      'How many workers may run at once for this repository (1–20). Default 1 — one worker at a time.'
+    );
+  });
+
+  it('should pre-populate max concurrent workers from repository in edit mode', () => {
+    // Arrange
+
+    // Act
+    const { el } = setup({ repository: { ...MOCK_REPOSITORY, maxConcurrentWorkers: 3 } });
+
+    // Assert
+    const input = el.querySelector('#repository-max-workers') as HTMLInputElement;
+    expect(input.value).toBe('3');
+  });
+
+  it('should update max concurrent workers signal on input', () => {
+    // Arrange
+    const { el, component, fixture } = setup({ repository: MOCK_REPOSITORY });
+
+    // Act
+    const input = el.querySelector('#repository-max-workers') as HTMLInputElement;
+    input.value = '5';
+    input.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+
+    // Assert — the input reflects the new value
+    expect(input.value).toBe('5');
+    expect((component as unknown as { _maxConcurrentWorkers: { (): number | '' } })._maxConcurrentWorkers()).toBe(5);
+  });
+
+  it('should disable save when max concurrent workers is below minimum (0)', () => {
+    // Arrange
+    const { el, fixture } = setup({ repository: MOCK_REPOSITORY });
+
+    // Act
+    const input = el.querySelector('#repository-max-workers') as HTMLInputElement;
+    input.value = '0';
+    input.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+
+    // Assert
+    const btn = el.querySelector('.repository-form__save-btn') as HTMLButtonElement;
+    expect(btn.disabled).toBe(true);
+  });
+
+  it('should disable save when max concurrent workers exceeds maximum (21)', () => {
+    // Arrange
+    const { el, fixture } = setup({ repository: MOCK_REPOSITORY });
+
+    // Act
+    const input = el.querySelector('#repository-max-workers') as HTMLInputElement;
+    input.value = '21';
+    input.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+
+    // Assert
+    const btn = el.querySelector('.repository-form__save-btn') as HTMLButtonElement;
+    expect(btn.disabled).toBe(true);
+  });
+
+  it('should show max concurrent workers field in add mode (not edit-mode-only)', () => {
+    // Arrange
+
+    // Act
+    const { el } = setup({ repository: null });
+
+    // Assert
+    const input = el.querySelector('#repository-max-workers');
+    expect(input).toBeTruthy();
+  });
+
+  it('should emit maxConcurrentWorkers from signal in UpdateRepositoryRequest', () => {
+    // Arrange
+    const { el, component, fixture } = setup({ repository: MOCK_REPOSITORY });
+    let emitted: CreateRepositoryRequest | UpdateRepositoryRequest | undefined;
+    component.save.subscribe((v: CreateRepositoryRequest | UpdateRepositoryRequest) => { emitted = v; });
+
+    // Act — change workers to 4
+    const input = el.querySelector('#repository-max-workers') as HTMLInputElement;
+    input.value = '4';
+    input.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    const saveBtn = el.querySelector('.repository-form__save-btn') as HTMLButtonElement;
+    saveBtn.click();
+
+    // Assert
+    expect((emitted as UpdateRepositoryRequest).maxConcurrentWorkers).toBe(4);
+  });
+
+  it('should emit maxConcurrentWorkers from signal (not null) in CreateRepositoryRequest', () => {
+    // Arrange
+    const { el, component, fixture } = setup({
+      repository: null,
+      accounts: [MOCK_ACCOUNT],
+      availableRepositories: MOCK_AVAILABLE,
+    });
+    let emitted: CreateRepositoryRequest | UpdateRepositoryRequest | undefined;
+    component.save.subscribe((v: CreateRepositoryRequest | UpdateRepositoryRequest) => { emitted = v; });
+
+    // Select account and pick repo
+    const select = el.querySelector('#repository-account') as HTMLSelectElement;
+    select.value = MOCK_ACCOUNT.id;
+    select.dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+
+    const combobox = el.querySelector('[role="combobox"]') as HTMLInputElement;
+    combobox.click();
+    fixture.detectChanges();
+    const option = el.querySelector('[role="option"]') as HTMLElement;
+    option.click();
+    fixture.detectChanges();
+
+    // Change workers to 3
+    const workersInput = el.querySelector('#repository-max-workers') as HTMLInputElement;
+    workersInput.value = '3';
+    workersInput.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+
+    // Act
+    const saveBtn = el.querySelector('.repository-form__save-btn') as HTMLButtonElement;
+    saveBtn.click();
+
+    // Assert — creates with the editable value, not null
+    expect((emitted as CreateRepositoryRequest).maxConcurrentWorkers).toBe(3);
+  });
+
+  it('should emit default maxConcurrentWorkers (1) when field is cleared in create mode', () => {
+    // Arrange
+    const { el, component, fixture } = setup({
+      repository: null,
+      accounts: [MOCK_ACCOUNT],
+      availableRepositories: MOCK_AVAILABLE,
+    });
+    let emitted: CreateRepositoryRequest | UpdateRepositoryRequest | undefined;
+    component.save.subscribe((v: CreateRepositoryRequest | UpdateRepositoryRequest) => { emitted = v; });
+
+    // Select account and pick repo
+    const select = el.querySelector('#repository-account') as HTMLSelectElement;
+    select.value = MOCK_ACCOUNT.id;
+    select.dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+
+    const combobox = el.querySelector('[role="combobox"]') as HTMLInputElement;
+    combobox.click();
+    fixture.detectChanges();
+    const option = el.querySelector('[role="option"]') as HTMLElement;
+    option.click();
+    fixture.detectChanges();
+
+    // Clear workers field
+    const workersInput = el.querySelector('#repository-max-workers') as HTMLInputElement;
+    workersInput.value = '';
+    workersInput.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+
+    // Act
+    const saveBtn = el.querySelector('.repository-form__save-btn') as HTMLButtonElement;
+    saveBtn.click();
+
+    // Assert — empty emits default of 1
+    expect((emitted as CreateRepositoryRequest).maxConcurrentWorkers).toBe(1);
   });
 
   // Cycle 38: aria-selected is always a boolean on every role="option" (WCAG 4.1.2)

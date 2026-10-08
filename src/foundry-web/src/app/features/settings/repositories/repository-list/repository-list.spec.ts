@@ -1,8 +1,8 @@
 import { TestBed } from '@angular/core/testing';
+import { provideRouter, Router } from '@angular/router';
 import { RepositoryListComponent } from './repository-list';
 import { RepositorySummary } from '../repository.model';
 import { RepositoryService } from '../repository.service';
-import { ProviderIconComponent } from '../../../../shared/components/provider-icon/provider-icon';
 import { provideHttpClient } from '@angular/common/http';
 import { provideHttpClientTesting, HttpTestingController } from '@angular/common/http/testing';
 
@@ -15,6 +15,7 @@ const MOCK_REPO: RepositorySummary = {
   position: 0,
   pollIntervalSeconds: 300,
   isActive: true,
+  maxConcurrentWorkers: 1,
   lastPolledAt: '2026-06-14T12:00:00Z',
   eligibility: { status: 'eligible', violations: [], reason: null },
 };
@@ -28,6 +29,7 @@ const MOCK_REPO_2: RepositorySummary = {
   position: 1,
   pollIntervalSeconds: null,
   isActive: false,
+  maxConcurrentWorkers: 1,
   lastPolledAt: null,
   eligibility: { status: 'ineligible', violations: [{ rule: 'AllowDirectPushes', description: 'Allow direct pushes is enabled' }], reason: null },
 };
@@ -41,6 +43,7 @@ const MOCK_REPO_INELIGIBLE: RepositorySummary = {
   position: 2,
   pollIntervalSeconds: 300,
   isActive: true,
+  maxConcurrentWorkers: 1,
   lastPolledAt: '2026-06-14T12:00:00Z',
   eligibility: { status: 'ineligible', violations: [{ rule: 'AllowDirectPushes', description: 'Allow direct pushes is enabled' }], reason: null },
 };
@@ -54,6 +57,7 @@ const MOCK_REPO_NULL_ELIGIBILITY: RepositorySummary = {
   position: 4,
   pollIntervalSeconds: 300,
   isActive: true,
+  maxConcurrentWorkers: 1,
   lastPolledAt: null,
   eligibility: null,
 };
@@ -67,6 +71,7 @@ const MOCK_REPO_UNREACHABLE: RepositorySummary = {
   position: 3,
   pollIntervalSeconds: 300,
   isActive: true,
+  maxConcurrentWorkers: 1,
   lastPolledAt: '2026-06-14T12:00:00Z',
   eligibility: { status: 'unreachable', violations: [], reason: null },
 };
@@ -87,6 +92,7 @@ function setup(overrides: {
     el: fixture.nativeElement as HTMLElement,
     httpMock: TestBed.inject(HttpTestingController),
     repositoryService: TestBed.inject(RepositoryService),
+    router: TestBed.inject(Router),
   };
 }
 
@@ -100,6 +106,7 @@ describe('RepositoryListComponent', () => {
         RepositoryService,
         provideHttpClient(),
         provideHttpClientTesting(),
+        provideRouter([]),
       ],
     }).compileComponents();
   });
@@ -417,19 +424,18 @@ describe('RepositoryListComponent', () => {
     expect(emitted).toBe(true);
   });
 
-  // Cycle 16: edit event emitted
-  it('should emit the repository when edit is clicked', () => {
+  // Cycle 16: clicking edit navigates to the repository page
+  it('should navigate to /settings/repositories/:id when edit is clicked', () => {
     // Arrange
-    const { el, component } = setup({ repositories: [MOCK_REPO] });
-    let emittedRepo: RepositorySummary | undefined;
-    component.edit.subscribe((r: RepositorySummary) => { emittedRepo = r; });
+    const { el, router } = setup({ repositories: [MOCK_REPO] });
+    const navigateSpy = vi.spyOn(router, 'navigate');
 
     // Act
     const editBtn = el.querySelector('[aria-label="Edit repository my-org/my-repo"]') as HTMLButtonElement;
     editBtn.click();
 
     // Assert
-    expect(emittedRepo).toEqual(MOCK_REPO);
+    expect(navigateSpy).toHaveBeenCalledWith(['/settings/repositories', MOCK_REPO.id]);
   });
 
   // Cycle 17: delete event emitted

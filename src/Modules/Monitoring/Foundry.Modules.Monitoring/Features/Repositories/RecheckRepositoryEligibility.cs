@@ -7,6 +7,7 @@ using Foundry.Modules.Monitoring.Features.Accounts;
 using Foundry.Modules.Monitoring.Features.Eligibility;
 using Foundry.Modules.Monitoring.Features.NamespaceDerivation;
 using Foundry.Shared;
+using Foundry.Shared.Infrastructure.Http;
 
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
@@ -72,6 +73,7 @@ internal static class RecheckRepositoryEligibility
                 RepositoryMappings.ToSeconds(repository.PollInterval),
                 repository.IsActive,
                 repository.Position,
+                repository.MaxConcurrentWorkers,
                 repository.LastPolledAt,
                 RepositoryMappings.ToEligibilityInfo(repository.Eligibility),
                 repository.UntrackSuppressedSince);
@@ -115,22 +117,21 @@ internal static class RecheckRepositoryEligibility
                     Command command = new(accountId, id);
                     Result<RepositorySummary> result = await handler.HandleAsync(command, cancellationToken);
 
-                    return result.Match<Results<Ok<RepositorySummary>, NotFound<string>, UnprocessableEntity<string>, ProblemHttpResult>>(
+                    return result.Match<Results<Ok<RepositorySummary>, ProblemHttpResult>>(
                         repository => TypedResults.Ok(repository),
                         error => error.Code switch
                         {
-                            RepositoryErrors.NotFoundCode => TypedResults.NotFound(error.Message),
-                            RepositoryErrors.AccountNotFoundCode => TypedResults.NotFound(error.Message),
-                            RepositoryErrors.NoTokenCode => TypedResults.UnprocessableEntity(error.Message),
-                            _ => TypedResults.Problem(error.Message),
+                            RepositoryErrors.NotFoundCode => error.ToProblem(StatusCodes.Status404NotFound),
+                            RepositoryErrors.AccountNotFoundCode => error.ToProblem(StatusCodes.Status404NotFound),
+                            RepositoryErrors.NoTokenCode => error.ToProblem(StatusCodes.Status422UnprocessableEntity),
+                            _ => error.ToProblem(StatusCodes.Status400BadRequest),
                         });
                 })
                 .WithName("RecheckRepositoryEligibility")
                 .WithSummary("Re-evaluates branch protection eligibility for a monitored repository")
                 .Produces<RepositorySummary>(StatusCodes.Status200OK)
                 .ProducesProblem(StatusCodes.Status404NotFound)
-                .ProducesProblem(StatusCodes.Status422UnprocessableEntity)
-                .ProducesProblem(StatusCodes.Status500InternalServerError);
+                .ProducesProblem(StatusCodes.Status422UnprocessableEntity);
         }
     }
 }

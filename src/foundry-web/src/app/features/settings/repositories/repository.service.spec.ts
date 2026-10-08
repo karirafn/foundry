@@ -17,6 +17,7 @@ const MOCK_REPOSITORY: RepositorySummary = {
   position: 0,
   pollIntervalSeconds: 300,
   isActive: true,
+  maxConcurrentWorkers: 1,
   lastPolledAt: '2026-06-15T10:00:00Z',
   eligibility: { status: 'eligible', violations: [], reason: null },
 };
@@ -30,6 +31,7 @@ const MOCK_REPOSITORY_2: RepositorySummary = {
   position: 1,
   pollIntervalSeconds: null,
   isActive: false,
+  maxConcurrentWorkers: 1,
   lastPolledAt: null,
   eligibility: { status: 'ineligible', violations: [{ rule: 'AllowDirectPushes', description: 'Allow direct pushes is enabled' }], reason: null },
 };
@@ -147,15 +149,15 @@ describe('RepositoryService', () => {
     expect(service.loading()).toBe(false);
   });
 
-  it('should set loadError when loadRepositories fails with a string body', () => {
+  it('should set loadError when loadRepositories fails with a ProblemDetails body', () => {
     // Arrange
     service.loadRepositories(ACCOUNT_ID);
 
     // Act
-    httpMock.expectOne(`/api/accounts/${ACCOUNT_ID}/repositories`).flush('Forbidden', {
-      status: 403,
-      statusText: 'Forbidden',
-    });
+    httpMock.expectOne(`/api/accounts/${ACCOUNT_ID}/repositories`).flush(
+      { type: 'tag:foundry,2026:problems/Account.NotFound', title: 'Forbidden', status: 403, detail: 'Forbidden' },
+      { status: 403, statusText: 'Forbidden' }
+    );
 
     // Assert
     expect(service.loadError()).toBe('Forbidden');
@@ -258,14 +260,17 @@ describe('RepositoryService', () => {
       .flush({ hasClaims: false, repositories: [] });
   });
 
-  it('should set loadAvailableError when loadAvailableRepositories fails with a string body', () => {
+  it('should set loadAvailableError when loadAvailableRepositories fails with a ProblemDetails body', () => {
     // Arrange
     service.loadAvailableRepositories(ACCOUNT_ID);
 
     // Act
     httpMock
       .expectOne(`/api/accounts/${ACCOUNT_ID}/repositories/available-repositories`)
-      .flush('Forbidden', { status: 403, statusText: 'Forbidden' });
+      .flush(
+        { type: 'tag:foundry,2026:problems/Account.NotFound', title: 'Forbidden', status: 403, detail: 'Forbidden' },
+        { status: 403, statusText: 'Forbidden' }
+      );
 
     // Assert
     expect(service.loadAvailableError()).toBe('Forbidden');
@@ -309,6 +314,7 @@ describe('RepositoryService', () => {
     const request: CreateRepositoryRequest = {
       slug: 'my-org/my-repo',
       pollIntervalSeconds: 300,
+      maxConcurrentWorkers: null,
     };
 
     // Act
@@ -323,7 +329,7 @@ describe('RepositoryService', () => {
 
   it('should set saving to true while createRepository is in flight', () => {
     // Arrange
-    const request: CreateRepositoryRequest = { slug: 'my-org/my-repo', pollIntervalSeconds: null };
+    const request: CreateRepositoryRequest = { slug: 'my-org/my-repo', pollIntervalSeconds: null, maxConcurrentWorkers: null };
 
     // Act
     service.createRepository(ACCOUNT_ID, request).subscribe();
@@ -338,7 +344,7 @@ describe('RepositoryService', () => {
 
   it('should set saving to false and saveSuccess to true after createRepository succeeds', () => {
     // Arrange
-    const request: CreateRepositoryRequest = { slug: 'my-org/my-repo', pollIntervalSeconds: null };
+    const request: CreateRepositoryRequest = { slug: 'my-org/my-repo', pollIntervalSeconds: null, maxConcurrentWorkers: null };
     service.createRepository(ACCOUNT_ID, request).subscribe();
     httpMock
       .expectOne(`/api/accounts/${ACCOUNT_ID}/repositories`)
@@ -354,7 +360,7 @@ describe('RepositoryService', () => {
     service.loadRepositories(ACCOUNT_ID);
     httpMock.expectOne(`/api/accounts/${ACCOUNT_ID}/repositories`).flush([]);
 
-    const request: CreateRepositoryRequest = { slug: 'my-org/my-repo', pollIntervalSeconds: 300 };
+    const request: CreateRepositoryRequest = { slug: 'my-org/my-repo', pollIntervalSeconds: 300, maxConcurrentWorkers: null };
 
     // Act
     service.createRepository(ACCOUNT_ID, request).subscribe();
@@ -368,7 +374,7 @@ describe('RepositoryService', () => {
 
   it('should set saving to false and saveSuccess to false when createRepository fails', () => {
     // Arrange
-    const request: CreateRepositoryRequest = { slug: 'my-org/my-repo', pollIntervalSeconds: null };
+    const request: CreateRepositoryRequest = { slug: 'my-org/my-repo', pollIntervalSeconds: null, maxConcurrentWorkers: null };
     service.createRepository(ACCOUNT_ID, request).subscribe({ error: () => {} });
     httpMock.expectOne(`/api/accounts/${ACCOUNT_ID}/repositories`).flush('Bad Request', {
       status: 400,
@@ -380,16 +386,16 @@ describe('RepositoryService', () => {
     expect(service.saveSuccess()).toBe(false);
   });
 
-  it('should set saveError when createRepository fails with a string body', () => {
+  it('should set saveError when createRepository fails with a ProblemDetails body', () => {
     // Arrange
-    const request: CreateRepositoryRequest = { slug: 'my-org/duplicate', pollIntervalSeconds: null };
+    const request: CreateRepositoryRequest = { slug: 'my-org/duplicate', pollIntervalSeconds: null, maxConcurrentWorkers: null };
     service.createRepository(ACCOUNT_ID, request).subscribe({ error: () => {} });
 
     // Act
-    httpMock.expectOne(`/api/accounts/${ACCOUNT_ID}/repositories`).flush('Repository already exists.', {
-      status: 409,
-      statusText: 'Conflict',
-    });
+    httpMock.expectOne(`/api/accounts/${ACCOUNT_ID}/repositories`).flush(
+      { type: 'tag:foundry,2026:problems/Repository.AlreadyExists', title: 'Conflict', status: 409, detail: 'Repository already exists.' },
+      { status: 409, statusText: 'Conflict' }
+    );
 
     // Assert
     expect(service.saveError()).toBe('Repository already exists.');
@@ -397,14 +403,14 @@ describe('RepositoryService', () => {
 
   it('should clear saveError at start of createRepository', () => {
     // Arrange — first call that fails
-    service.createRepository(ACCOUNT_ID, { slug: 'x', pollIntervalSeconds: null }).subscribe({ error: () => {} });
+    service.createRepository(ACCOUNT_ID, { slug: 'x', pollIntervalSeconds: null, maxConcurrentWorkers: null }).subscribe({ error: () => {} });
     httpMock.expectOne(`/api/accounts/${ACCOUNT_ID}/repositories`).flush('Conflict', {
       status: 409,
       statusText: 'Conflict',
     });
 
     // Act — second call clears error immediately
-    service.createRepository(ACCOUNT_ID, { slug: 'y', pollIntervalSeconds: null }).subscribe();
+    service.createRepository(ACCOUNT_ID, { slug: 'y', pollIntervalSeconds: null, maxConcurrentWorkers: null }).subscribe();
 
     // Assert — error is cleared before response
     expect(service.saveError()).toBeNull();
@@ -416,7 +422,7 @@ describe('RepositoryService', () => {
   // Cycle 5: updateRepository calls PUT
   it('should PUT to /api/accounts/{accountId}/repositories/{id} when updateRepository is called', () => {
     // Arrange
-    const request: UpdateRepositoryRequest = { pollIntervalSeconds: 600, isActive: true };
+    const request: UpdateRepositoryRequest = { pollIntervalSeconds: 600, isActive: true, maxConcurrentWorkers: 1 };
 
     // Act
     service.updateRepository(ACCOUNT_ID, REPO_ID, request).subscribe();
@@ -430,7 +436,7 @@ describe('RepositoryService', () => {
 
   it('should set saving to true while updateRepository is in flight', () => {
     // Arrange
-    const request: UpdateRepositoryRequest = { pollIntervalSeconds: 600, isActive: true };
+    const request: UpdateRepositoryRequest = { pollIntervalSeconds: 600, isActive: true, maxConcurrentWorkers: 1 };
 
     // Act
     service.updateRepository(ACCOUNT_ID, REPO_ID, request).subscribe();
@@ -442,7 +448,7 @@ describe('RepositoryService', () => {
 
   it('should set saving to false and saveSuccess to true after updateRepository succeeds', () => {
     // Arrange
-    const request: UpdateRepositoryRequest = { pollIntervalSeconds: 600, isActive: true };
+    const request: UpdateRepositoryRequest = { pollIntervalSeconds: 600, isActive: true, maxConcurrentWorkers: 1 };
     service.updateRepository(ACCOUNT_ID, REPO_ID, request).subscribe();
     httpMock
       .expectOne(`/api/accounts/${ACCOUNT_ID}/repositories/${REPO_ID}`)
@@ -459,7 +465,7 @@ describe('RepositoryService', () => {
     httpMock.expectOne(`/api/accounts/${ACCOUNT_ID}/repositories`).flush([MOCK_REPOSITORY, MOCK_REPOSITORY_2]);
 
     const updatedRepo: RepositorySummary = { ...MOCK_REPOSITORY, pollIntervalSeconds: 600 };
-    const request: UpdateRepositoryRequest = { pollIntervalSeconds: 600, isActive: true };
+    const request: UpdateRepositoryRequest = { pollIntervalSeconds: 600, isActive: true, maxConcurrentWorkers: 1 };
 
     // Act
     service.updateRepository(ACCOUNT_ID, REPO_ID, request).subscribe();
@@ -472,16 +478,16 @@ describe('RepositoryService', () => {
     expect(repos.find(r => r.id === REPO_ID_2)?.slug).toBe('my-org/another-repo');
   });
 
-  it('should set saveError when updateRepository fails with a string body', () => {
+  it('should set saveError when updateRepository fails with a ProblemDetails body', () => {
     // Arrange
-    const request: UpdateRepositoryRequest = { pollIntervalSeconds: -1, isActive: true };
+    const request: UpdateRepositoryRequest = { pollIntervalSeconds: -1, isActive: true, maxConcurrentWorkers: 1 };
     service.updateRepository(ACCOUNT_ID, REPO_ID, request).subscribe({ error: () => {} });
 
     // Act
-    httpMock.expectOne(`/api/accounts/${ACCOUNT_ID}/repositories/${REPO_ID}`).flush('Invalid interval.', {
-      status: 400,
-      statusText: 'Bad Request',
-    });
+    httpMock.expectOne(`/api/accounts/${ACCOUNT_ID}/repositories/${REPO_ID}`).flush(
+      { type: 'tag:foundry,2026:problems/Repository.InvalidInterval', title: 'Bad Request', status: 400, detail: 'Invalid interval.' },
+      { status: 400, statusText: 'Bad Request' }
+    );
 
     // Assert
     expect(service.saveError()).toBe('Invalid interval.');
@@ -489,14 +495,14 @@ describe('RepositoryService', () => {
 
   it('should clear saveError at start of updateRepository', () => {
     // Arrange — first call that fails
-    service.updateRepository(ACCOUNT_ID, REPO_ID, { pollIntervalSeconds: -1, isActive: true }).subscribe({ error: () => {} });
+    service.updateRepository(ACCOUNT_ID, REPO_ID, { pollIntervalSeconds: -1, isActive: true, maxConcurrentWorkers: 1 }).subscribe({ error: () => {} });
     httpMock.expectOne(`/api/accounts/${ACCOUNT_ID}/repositories/${REPO_ID}`).flush('Bad Request', {
       status: 400,
       statusText: 'Bad Request',
     });
 
     // Act — second call clears error immediately
-    service.updateRepository(ACCOUNT_ID, REPO_ID, { pollIntervalSeconds: 600, isActive: true }).subscribe();
+    service.updateRepository(ACCOUNT_ID, REPO_ID, { pollIntervalSeconds: 600, isActive: true, maxConcurrentWorkers: 1 }).subscribe();
 
     // Assert — error is cleared before response
     expect(service.saveError()).toBeNull();
@@ -557,15 +563,15 @@ describe('RepositoryService', () => {
     expect(repos[0].id).toBe(REPO_ID_2);
   });
 
-  it('should set deleteError when deleteRepository fails with a string body', () => {
+  it('should set deleteError when deleteRepository fails with a ProblemDetails body', () => {
     // Arrange
     service.deleteRepository(ACCOUNT_ID, REPO_ID).subscribe({ error: () => {} });
 
     // Act
-    httpMock.expectOne(`/api/accounts/${ACCOUNT_ID}/repositories/${REPO_ID}`).flush('Repository is in use.', {
-      status: 409,
-      statusText: 'Conflict',
-    });
+    httpMock.expectOne(`/api/accounts/${ACCOUNT_ID}/repositories/${REPO_ID}`).flush(
+      { type: 'tag:foundry,2026:problems/Repository.InUse', title: 'Conflict', status: 409, detail: 'Repository is in use.' },
+      { status: 409, statusText: 'Conflict' }
+    );
 
     // Assert
     expect(service.deleteError()).toBe('Repository is in use.');
@@ -666,10 +672,10 @@ describe('RepositoryService', () => {
 
     // Act
     httpMock.expectOne(`/api/accounts/${ACCOUNT_ID}/repositories`).flush([MOCK_REPOSITORY]);
-    httpMock.expectOne(`/api/accounts/${ACCOUNT_ID_2}/repositories`).flush('Forbidden', {
-      status: 403,
-      statusText: 'Forbidden',
-    });
+    httpMock.expectOne(`/api/accounts/${ACCOUNT_ID_2}/repositories`).flush(
+      { type: 'tag:foundry,2026:problems/Account.NotFound', title: 'Forbidden', status: 403, detail: 'Forbidden' },
+      { status: 403, statusText: 'Forbidden' }
+    );
 
     // Assert
     expect(service.loadError()).toBe('Forbidden');

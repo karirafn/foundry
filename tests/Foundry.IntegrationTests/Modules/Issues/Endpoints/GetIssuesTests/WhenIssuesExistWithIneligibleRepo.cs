@@ -53,7 +53,7 @@ public sealed class WhenIssuesExistWithIneligibleRepo : IAsyncDisposable
 
         RepositorySlug repoSlug = RepositorySlug.Create(slug).ValueOrThrow();
         int position = await dbContext.Set<MonitoredRepository>().CountAsync(TestContext.Current.CancellationToken);
-        MonitoredRepository repo = MonitoredRepository.Create(repoSlug, "github.com", null, position);
+        MonitoredRepository repo = MonitoredRepository.Create(repoSlug, "github.com", null, position).ValueOrThrow();
         repo.SetEligibility(eligibility);
         dbContext.Set<MonitoredRepository>().Add(repo);
 
@@ -92,10 +92,10 @@ public sealed class WhenIssuesExistWithIneligibleRepo : IAsyncDisposable
 
         // Assert
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
-        IReadOnlyList<IssueSummary>? summaries = await response.Content
-            .ReadFromJsonAsync<IReadOnlyList<IssueSummary>>(TestContext.Current.CancellationToken);
-        summaries.ShouldNotBeNull();
-        IssueSummary summary = summaries.ShouldHaveSingleItem();
+        PagedIssues? result = await response.Content
+            .ReadFromJsonAsync<PagedIssues>(TestContext.Current.CancellationToken);
+        result.ShouldNotBeNull();
+        IssueSummary summary = result.Items.ShouldHaveSingleItem();
         summary.RepositoryEligibilityStatus.ShouldBe("ineligible");
     }
 
@@ -113,10 +113,10 @@ public sealed class WhenIssuesExistWithIneligibleRepo : IAsyncDisposable
 
         // Assert
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
-        IReadOnlyList<IssueSummary>? summaries = await response.Content
-            .ReadFromJsonAsync<IReadOnlyList<IssueSummary>>(TestContext.Current.CancellationToken);
-        summaries.ShouldNotBeNull();
-        IssueSummary summary = summaries.ShouldHaveSingleItem();
+        PagedIssues? result = await response.Content
+            .ReadFromJsonAsync<PagedIssues>(TestContext.Current.CancellationToken);
+        result.ShouldNotBeNull();
+        IssueSummary summary = result.Items.ShouldHaveSingleItem();
         summary.RepositoryEligibilityStatus.ShouldBe("unreachable");
     }
 
@@ -131,7 +131,7 @@ public sealed class WhenIssuesExistWithIneligibleRepo : IAsyncDisposable
         dbContext.Set<Credential>().Add(credential);
 
         RepositorySlug slug = RepositorySlug.Create("owner/repo").ValueOrThrow();
-        MonitoredRepository repo = MonitoredRepository.Create(slug, "github.com", null);
+        MonitoredRepository repo = MonitoredRepository.Create(slug, "github.com", null).ValueOrThrow();
         dbContext.Set<MonitoredRepository>().Add(repo);
         await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
 
@@ -144,10 +144,10 @@ public sealed class WhenIssuesExistWithIneligibleRepo : IAsyncDisposable
 
         // Assert
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
-        IReadOnlyList<IssueSummary>? summaries = await response.Content
-            .ReadFromJsonAsync<IReadOnlyList<IssueSummary>>(TestContext.Current.CancellationToken);
-        summaries.ShouldNotBeNull();
-        IssueSummary summary = summaries.ShouldHaveSingleItem();
+        PagedIssues? result = await response.Content
+            .ReadFromJsonAsync<PagedIssues>(TestContext.Current.CancellationToken);
+        result.ShouldNotBeNull();
+        IssueSummary summary = result.Items.ShouldHaveSingleItem();
         summary.RepositoryEligibilityStatus.ShouldBe("unreachable");
     }
 
@@ -173,13 +173,13 @@ public sealed class WhenIssuesExistWithIneligibleRepo : IAsyncDisposable
 
         // Assert
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
-        IReadOnlyList<IssueSummary>? summaries = await response.Content
-            .ReadFromJsonAsync<IReadOnlyList<IssueSummary>>(TestContext.Current.CancellationToken);
-        summaries.ShouldNotBeNull();
-        summaries.Count.ShouldBe(2);
+        PagedIssues? result = await response.Content
+            .ReadFromJsonAsync<PagedIssues>(TestContext.Current.CancellationToken);
+        result.ShouldNotBeNull();
+        result.Items.Count.ShouldBe(2);
 
-        IssueSummary? issue1 = summaries.FirstOrDefault(s => s.IssueNumber == 1);
-        IssueSummary? issue2 = summaries.FirstOrDefault(s => s.IssueNumber == 2);
+        IssueSummary? issue1 = result.Items.FirstOrDefault(s => s.IssueNumber == 1);
+        IssueSummary? issue2 = result.Items.FirstOrDefault(s => s.IssueNumber == 2);
 
         issue1.ShouldNotBeNull();
         issue2.ShouldNotBeNull();

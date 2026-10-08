@@ -22,6 +22,11 @@ export const SETTINGS_ROUTES: Routes = [
         loadComponent: () =>
           import('./repositories/settings-repositories/settings-repositories').then((m) => m.SettingsRepositoriesComponent),
       },
+      {
+        path: 'repositories/:repositoryId',
+        loadComponent: () =>
+          import('./repositories/repository-page/repository-page').then((m) => m.RepositoryPageComponent),
+      },
     ],
   },
 ];

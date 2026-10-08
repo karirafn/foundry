@@ -1,4 +1,8 @@
 using System.Net;
+using System.Net.Http.Headers;
+using System.Text.Json.Nodes;
+
+using Foundry.Modules.Issues.Contracts;
 
 using Shouldly;
 
@@ -37,5 +41,20 @@ public sealed class WhenIssueDoesNotExist : IAsyncDisposable
 
         // Assert
         response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+
+        MediaTypeHeaderValue? contentType = response.Content.Headers.ContentType;
+        contentType.ShouldNotBeNull();
+        contentType.MediaType.ShouldBe("application/problem+json");
+
+        string body = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+        JsonNode? node = JsonNode.Parse(body);
+        node.ShouldNotBeNull();
+
+        string? type = node["type"]?.GetValue<string>();
+        type.ShouldNotBeNull();
+        type.ShouldEndWith(IssueErrors.NotFoundCode);
+
+        string? detail = node["detail"]?.GetValue<string>();
+        detail.ShouldNotBeNull();
     }
 }

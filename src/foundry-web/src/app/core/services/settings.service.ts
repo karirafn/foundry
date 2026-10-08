@@ -1,6 +1,7 @@
 import { Injectable, Signal, WritableSignal, computed, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
+import { extractErrorMessage } from '../http/extract-error-message';
 import { Observable, forkJoin, merge } from 'rxjs';
 import { debounceTime, switchMap } from 'rxjs/operators';
 import {
@@ -378,10 +379,7 @@ export class SettingsService {
       },
       error: (err: HttpErrorResponse) => {
         console.error(err);
-        const serverMessage = typeof err.error === 'string' && err.error.trim().length > 0
-          ? err.error
-          : SAVE_HOSTS_ERROR;
-        this._saveHostsErrorSignal.set(serverMessage);
+        this._saveHostsErrorSignal.set(extractErrorMessage(err) ?? SAVE_HOSTS_ERROR);
         this._savingHostsSignal.set(false);
       },
     });

@@ -1,6 +1,8 @@
 using System.Net;
 using System.Net.Http.Json;
 
+using Microsoft.AspNetCore.Mvc;
+
 using Shouldly;
 
 using Xunit;
@@ -9,6 +11,8 @@ namespace Foundry.IntegrationTests.Modules.Credentials.Endpoints.UpdateAuthModeT
 
 public sealed class WhenAccountDoesNotExist : IAsyncDisposable
 {
+    private const int NotFoundStatus = 404;
+
     private readonly FoundryWebAppFactory _factory;
     private readonly HttpClient _client;
 
@@ -25,7 +29,7 @@ public sealed class WhenAccountDoesNotExist : IAsyncDisposable
     }
 
     [Fact]
-    public async Task ReturnsNotFound()
+    public async Task ReturnsNotFoundAsProblemDetails()
     {
         // Arrange — no ClaudeAccount row seeded; ClaudeAccountSeeder is removed in FoundryWebAppFactory
         object body = new { mode = "api_key", apiKey = "sk-ant-test-key-abc123" };
@@ -38,5 +42,13 @@ public sealed class WhenAccountDoesNotExist : IAsyncDisposable
 
         // Assert
         response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        response.Content.Headers.ContentType?.MediaType.ShouldBe("application/problem+json");
+        ProblemDetails problem = (await response.Content
+            .ReadFromJsonAsync<ProblemDetails>(TestContext.Current.CancellationToken))
+            .ShouldNotBeNull();
+        problem.ShouldSatisfyAllConditions(
+            () => problem.Status.ShouldBe(NotFoundStatus),
+            () => problem.Type.ShouldEndWith("Credentials.NotFound"),
+            () => problem.Detail.ShouldNotBeNullOrEmpty());
     }
 }

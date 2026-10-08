@@ -69,10 +69,10 @@ public sealed class WhenFilteredByRepositoryId : IAsyncDisposable
 
         // Assert
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
-        IReadOnlyList<IssueSummary>? summaries = await response.Content.ReadFromJsonAsync<IReadOnlyList<IssueSummary>>(
+        PagedIssues? result = await response.Content.ReadFromJsonAsync<PagedIssues>(
             TestContext.Current.CancellationToken);
-        summaries.ShouldNotBeNull();
-        IssueSummary summary = summaries.ShouldHaveSingleItem();
+        result.ShouldNotBeNull();
+        IssueSummary summary = result.Items.ShouldHaveSingleItem();
         summary.IssueNumber.ShouldBe(1);
     }
 }

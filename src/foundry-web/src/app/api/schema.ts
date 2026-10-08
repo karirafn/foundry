@@ -605,6 +605,8 @@ export interface components {
             slug: string;
             /** Format: int32 */
             pollIntervalSeconds: null | number | string;
+            /** Format: int32 */
+            maxConcurrentWorkers?: null | number | string;
         };
         CredentialCreationResult: {
             credential: components["schemas"]["CredentialSummary"];
@@ -768,6 +770,8 @@ export interface components {
             isActive: boolean;
             /** Format: int32 */
             position: number | string;
+            /** Format: int32 */
+            maxConcurrentWorkers: number | string;
             /** Format: date-time */
             lastPolledAt?: null | string;
             eligibility?: null | components["schemas"]["RepositoryEligibilityInfo"];
@@ -863,6 +867,8 @@ export interface components {
             /** Format: int32 */
             pollIntervalSeconds: null | number | string;
             isActive: boolean;
+            /** Format: int32 */
+            maxConcurrentWorkers: number | string;
         };
         UpdateWorkerImageConfigurationRequestBody: {
             installDotnet: boolean;
@@ -1021,15 +1027,6 @@ export interface operations {
                     "application/json": components["schemas"]["CheckCreditsNowResponse"];
                 };
             };
-            /** @description Internal Server Error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetails"];
-                };
-            };
         };
     };
     StartOAuthLogin: {
@@ -1048,15 +1045,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["StartLoginResponse"];
-                };
-            };
-            /** @description Internal Server Error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
             };
         };
@@ -1133,15 +1121,6 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
             };
-            /** @description Internal Server Error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetails"];
-                };
-            };
         };
     };
     GetIssueCounts: {
@@ -1162,15 +1141,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["IssueStateCounts"];
-                };
-            };
-            /** @description Internal Server Error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
             };
         };
@@ -1312,7 +1282,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": string;
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
             };
             /** @description Conflict */
@@ -1365,7 +1335,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": string;
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
             };
             /** @description Not Found */
@@ -1497,15 +1467,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RateBudgetSnapshot"];
-                };
-            };
-            /** @description Internal Server Error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
             };
         };
@@ -1748,15 +1709,6 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
             };
-            /** @description Internal Server Error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetails"];
-                };
-            };
         };
     };
     MoveRepository: {
@@ -1918,15 +1870,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SystemStatus"];
-                };
-            };
-            /** @description Internal Server Error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
             };
         };

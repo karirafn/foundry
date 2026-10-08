@@ -5,6 +5,7 @@ using Foundry.Modules.Monitoring.Features.Accounts;
 using Foundry.Modules.Monitoring.Features.Accounts.Tokens;
 using Foundry.Shared;
 
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
@@ -16,6 +17,8 @@ namespace Foundry.IntegrationTests.Modules.Monitoring.Endpoints.CreateAccountTes
 
 public sealed class WhenTokenIsInvalid : IAsyncDisposable
 {
+    private const int BadRequestStatus = 400;
+
     private readonly FoundryWebAppFactory _factory;
     private readonly HttpClient _client;
 
@@ -42,7 +45,7 @@ public sealed class WhenTokenIsInvalid : IAsyncDisposable
     }
 
     [Fact]
-    public async Task ReturnsBadRequest()
+    public async Task ReturnsBadRequestAsProblemDetails()
     {
         // Arrange
         object body = new
@@ -60,10 +63,18 @@ public sealed class WhenTokenIsInvalid : IAsyncDisposable
 
         // Assert
         response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        response.Content.Headers.ContentType?.MediaType.ShouldBe("application/problem+json");
+        ProblemDetails problem = (await response.Content
+            .ReadFromJsonAsync<ProblemDetails>(TestContext.Current.CancellationToken))
+            .ShouldNotBeNull();
+        problem.ShouldSatisfyAllConditions(
+            () => problem.Status.ShouldBe(BadRequestStatus),
+            () => problem.Type.ShouldEndWith("Credential.InvalidToken"),
+            () => problem.Detail.ShouldNotBeNullOrEmpty());
     }
 
     [Fact]
-    public async Task WhenTokenMissesScopes_ReturnsBadRequest()
+    public async Task WhenTokenMissesScopes_ReturnsBadRequestAsProblemDetails()
     {
         // Arrange — token is valid auth but missing required scopes, so IsValid == false
         ValidateToken.Response missingScopes = new(
@@ -94,6 +105,14 @@ public sealed class WhenTokenIsInvalid : IAsyncDisposable
 
         // Assert
         response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        response.Content.Headers.ContentType?.MediaType.ShouldBe("application/problem+json");
+        ProblemDetails problem = (await response.Content
+            .ReadFromJsonAsync<ProblemDetails>(TestContext.Current.CancellationToken))
+            .ShouldNotBeNull();
+        problem.ShouldSatisfyAllConditions(
+            () => problem.Status.ShouldBe(BadRequestStatus),
+            () => problem.Type.ShouldEndWith("Credential.InvalidToken"),
+            () => problem.Detail.ShouldNotBeNullOrEmpty());
     }
 
     private sealed class StubValidateTokenHandler(Result<ValidateToken.Response> result)

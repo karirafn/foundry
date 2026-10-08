@@ -7,11 +7,6 @@ import { IssueSummary, IssueDetail } from './issue.model';
 import { ACTIVE_STATES } from './issue-lifecycle.model';
 import { vi } from 'vitest';
 
-interface PagedIssues {
-  items: IssueSummary[];
-  nextCursor: string | null;
-}
-
 const mockIssueSignalRService = {
   on: () => {},
   onReconnected: () => {},
@@ -76,10 +71,10 @@ describe('IssueService', () => {
     // Act
     service.loadIssues();
     const req = httpMock.expectOne('/api/issues');
-    req.flush(mockIssues);
+    req.flush({ items: mockIssues, nextCursor: null });
 
-    // Assert
-    expect(service.issues()).toEqual(mockIssues);
+    // Assert — mapper adds missing optional fields; use toMatchObject to check the data we care about
+    expect(service.issues()).toMatchObject(mockIssues);
   });
 
   // Cycle 2: loadIssues with repositoryId appends query param
@@ -89,7 +84,7 @@ describe('IssueService', () => {
     // Act
     service.loadIssues('repo-id-1');
     const req = httpMock.expectOne('/api/issues?repositoryId=repo-id-1');
-    req.flush([]);
+    req.flush({ items: [], nextCursor: null });
 
     // Assert
     expect(req.request.method).toBe('GET');
@@ -103,7 +98,7 @@ describe('IssueService', () => {
 
     // Act
     service.loadIssues();
-    httpMock.expectOne('/api/issues').flush([older, newer]);
+    httpMock.expectOne('/api/issues').flush({ items: [older, newer], nextCursor: null });
 
     // Assert
     expect(service.sortedIssues()[0].id).toBe('newer');
@@ -118,7 +113,7 @@ describe('IssueService', () => {
 
     // Act
     service.loadIssues();
-    httpMock.expectOne('/api/issues').flush([waiting, inProgress]);
+    httpMock.expectOne('/api/issues').flush({ items: [waiting, inProgress], nextCursor: null });
 
     // Assert — In progress (rank 0) appears first even though it has an older detectedAt
     expect(service.sortedIssues()[0].id).toBe('live');
@@ -133,7 +128,7 @@ describe('IssueService', () => {
 
     // Act
     service.loadIssues();
-    httpMock.expectOne('/api/issues').flush([needsAttn, revision]);
+    httpMock.expectOne('/api/issues').flush({ items: [needsAttn, revision], nextCursor: null });
 
     // Assert — revision_in_progress (In progress, rank 0) appears first even with an older detectedAt
     expect(service.sortedIssues()[0].id).toBe('revision');
@@ -148,7 +143,7 @@ describe('IssueService', () => {
 
     // Act
     service.loadIssues();
-    httpMock.expectOne('/api/issues').flush([inProgOlder, inProgNewer]);
+    httpMock.expectOne('/api/issues').flush({ items: [inProgOlder, inProgNewer], nextCursor: null });
 
     // Assert — newer detectedAt sorts first within the same group rank
     expect(service.sortedIssues()[0].id).toBe('live-newer');
@@ -162,7 +157,7 @@ describe('IssueService', () => {
 
     // Act
     service.loadIssues();
-    httpMock.expectOne('/api/issues').flush([nonLive]);
+    httpMock.expectOne('/api/issues').flush({ items: [nonLive], nextCursor: null });
 
     // Assert
     expect(service.liveIssueCount()).toBe(0);
@@ -176,7 +171,7 @@ describe('IssueService', () => {
 
     // Act
     service.loadIssues();
-    httpMock.expectOne('/api/issues').flush([live1, live2]);
+    httpMock.expectOne('/api/issues').flush({ items: [live1, live2], nextCursor: null });
 
     // Assert
     expect(service.liveIssueCount()).toBe(2);
@@ -191,7 +186,7 @@ describe('IssueService', () => {
 
     // Act
     service.loadIssues();
-    httpMock.expectOne('/api/issues').flush([live, nonLive1, nonLive2]);
+    httpMock.expectOne('/api/issues').flush({ items: [live, nonLive1, nonLive2], nextCursor: null });
 
     // Assert
     expect(service.liveIssueCount()).toBe(1);
@@ -212,7 +207,7 @@ describe('IssueService', () => {
 
     // Act
     service.loadIssues();
-    httpMock.expectOne('/api/issues').flush([mockSummary]);
+    httpMock.expectOne('/api/issues').flush({ items: [mockSummary], nextCursor: null });
 
     // Assert
     expect(service.isEmpty()).toBe(false);
@@ -396,7 +391,7 @@ describe('IssueService', () => {
     const { svc, http } = setupWithCapturingSignalR(callbacks, []);
 
     svc.loadIssues();
-    http.expectOne('/api/issues').flush([mockSummary]);
+    http.expectOne('/api/issues').flush({ items: [mockSummary], nextCursor: null });
 
     const updated: IssueSummary = { ...mockSummary, state: 'in_progress' };
 
@@ -415,7 +410,7 @@ describe('IssueService', () => {
     const { svc, http } = setupWithCapturingSignalR(callbacks, []);
 
     svc.loadIssues();
-    http.expectOne('/api/issues').flush([]);
+    http.expectOne('/api/issues').flush({ items: [], nextCursor: null });
 
     const newIssue: IssueSummary = { ...mockSummary, id: 'brand-new' };
 
@@ -454,7 +449,7 @@ describe('IssueService', () => {
 
     // Assert — before the response, still loading
     expect(service.initialLoading()).toBe(true);
-    httpMock.expectOne('/api/issues').flush([]);
+    httpMock.expectOne('/api/issues').flush({ items: [], nextCursor: null });
   });
 
   it('should set initialLoading to false after loadIssues succeeds', () => {
@@ -462,7 +457,7 @@ describe('IssueService', () => {
 
     // Act
     service.loadIssues();
-    httpMock.expectOne('/api/issues').flush([]);
+    httpMock.expectOne('/api/issues').flush({ items: [], nextCursor: null });
 
     // Assert
     expect(service.initialLoading()).toBe(false);
@@ -485,7 +480,7 @@ describe('IssueService', () => {
   it('should preserve existing issues when loadIssues fails', () => {
     // Arrange — load initial issues
     service.loadIssues();
-    httpMock.expectOne('/api/issues').flush([mockSummary]);
+    httpMock.expectOne('/api/issues').flush({ items: [mockSummary], nextCursor: null });
     expect(service.issues().length).toBe(1);
 
     // Act — reload with error
@@ -552,7 +547,7 @@ describe('IssueService', () => {
 
     // Act — successful reload
     service.loadIssues();
-    httpMock.expectOne('/api/issues').flush([mockSummary]);
+    httpMock.expectOne('/api/issues').flush({ items: [mockSummary], nextCursor: null });
 
     // Assert
     expect(service.loadError()).toBeNull();
@@ -594,7 +589,7 @@ describe('IssueService', () => {
     const { svc, http } = setupWithCapturingSignalR(callbacks, []);
 
     svc.loadIssues();
-    http.expectOne('/api/issues').flush([]);
+    http.expectOne('/api/issues').flush({ items: [], nextCursor: null });
     expect(svc.issues().length).toBe(0);
 
     const malicious: IssueSummary = { ...mockSummary, id: '../../admin' };
@@ -615,7 +610,7 @@ describe('IssueService', () => {
 
     // Act
     service.loadIssues();
-    httpMock.expectOne('/api/issues').flush([valid, unknown]);
+    httpMock.expectOne('/api/issues').flush({ items: [valid, unknown], nextCursor: null });
 
     // Assert — only valid issue is retained
     expect(service.issues().length).toBe(1);
@@ -629,7 +624,7 @@ describe('IssueService', () => {
     const { svc, http } = setupWithCapturingSignalR(callbacks, []);
 
     svc.loadIssues();
-    http.expectOne('/api/issues').flush([]);
+    http.expectOne('/api/issues').flush({ items: [], nextCursor: null });
     expect(svc.issues().length).toBe(0);
 
     const unknown = { ...mockSummary, id: 'ghost-id', state: 'ghost_state' as never };
@@ -650,7 +645,7 @@ describe('IssueService', () => {
 
     // Act
     service.loadIssues();
-    httpMock.expectOne('/api/issues').flush([valid, invalid]);
+    httpMock.expectOne('/api/issues').flush({ items: [valid, invalid], nextCursor: null });
 
     // Assert — only the valid issue is stored
     expect(service.issues().length).toBe(1);
@@ -668,7 +663,7 @@ describe('IssueService', () => {
 
     // Assert — loadIssues was triggered (HTTP request sent)
     const req = http.expectOne('/api/issues');
-    req.flush([]);
+    req.flush({ items: [], nextCursor: null });
     expect(svc.issues()).toEqual([]);
     http.verify();
   });
@@ -870,7 +865,7 @@ describe('IssueService', () => {
     const { svc, http } = setupWithCapturingSignalR(callbacks, []);
 
     svc.loadIssues();
-    http.expectOne('/api/issues').flush([mockSummary]);
+    http.expectOne('/api/issues').flush({ items: [mockSummary], nextCursor: null });
     expect(svc.issues().length).toBe(1);
 
     const resolved: IssueSummary = { ...mockSummary, state: 'completed' };
@@ -889,7 +884,7 @@ describe('IssueService', () => {
     const { svc, http } = setupWithCapturingSignalR(callbacks, []);
 
     svc.loadIssues();
-    http.expectOne('/api/issues').flush([mockSummary]);
+    http.expectOne('/api/issues').flush({ items: [mockSummary], nextCursor: null });
     expect(svc.issues().length).toBe(1);
 
     const updatedToUnchanged: IssueSummary = { ...mockSummary, state: 'unchanged' };
@@ -909,7 +904,7 @@ describe('IssueService', () => {
     const { svc, http } = setupWithCapturingSignalR(callbacks, []);
 
     svc.loadIssues();
-    http.expectOne('/api/issues').flush([]);
+    http.expectOne('/api/issues').flush({ items: [], nextCursor: null });
 
     const newResolved: IssueSummary = { ...mockSummary, id: 'brand-new-resolved', state: 'completed' };
 
@@ -931,7 +926,7 @@ describe('IssueService', () => {
 
     // Act
     service.loadIssues();
-    httpMock.expectOne('/api/issues').flush([active, completed, unchanged]);
+    httpMock.expectOne('/api/issues').flush({ items: [active, completed, unchanged], nextCursor: null });
 
     // Assert — completed is excluded (resolved); detected and unchanged are both retained (active)
     expect(service.issues().length).toBe(2);
@@ -1079,7 +1074,7 @@ describe('IssueService', () => {
 
     // Act
     service.loadIssues();
-    httpMock.expectOne('/api/issues').flush([nonLive, live]);
+    httpMock.expectOne('/api/issues').flush({ items: [nonLive, live], nextCursor: null });
 
     // Assert — live appears first even though it has an older detectedAt
     expect(service.activeBandIssues()[0].id).toBe('live');
@@ -1108,7 +1103,7 @@ describe('IssueService', () => {
     const failedIssue: IssueSummary = { ...mockSummary, id: 'failed-1', state: 'failed' };
 
     service.loadIssues();
-    httpMock.expectOne('/api/issues').flush([detectedIssue, failedIssue]);
+    httpMock.expectOne('/api/issues').flush({ items: [detectedIssue, failedIssue], nextCursor: null });
     expect(service.activeBandIssues().length).toBe(2);
 
     // Act — deselect 'detected'
@@ -1176,7 +1171,7 @@ describe('IssueService (band transitions + counts debounce)', () => {
   it('should remove issue from issues and prepend to resolvedIssues when transitioning to a selected resolved state', () => {
     // Arrange — load an active issue, select 'completed' resolved state
     service.loadIssues();
-    httpMock.expectOne('/api/issues').flush([activeSummary]);
+    httpMock.expectOne('/api/issues').flush({ items: [activeSummary], nextCursor: null });
     service.toggleState('completed');
     httpMock.expectOne(r => r.url === '/api/issues').flush({ items: [], nextCursor: null });
 
@@ -1195,7 +1190,7 @@ describe('IssueService (band transitions + counts debounce)', () => {
   it('should remove issue from issues and not add to resolvedIssues when transitioning to a non-selected resolved state', () => {
     // Arrange — load an active issue, do NOT select any resolved states
     service.loadIssues();
-    httpMock.expectOne('/api/issues').flush([activeSummary]);
+    httpMock.expectOne('/api/issues').flush({ items: [activeSummary], nextCursor: null });
 
     const transitioned: IssueSummary = { ...activeSummary, state: 'completed' };
 
@@ -1280,7 +1275,7 @@ describe('IssueService (band transitions + counts debounce)', () => {
     vi.advanceTimersByTime(400);
     httpMock.expectOne('/api/issues/counts').flush({ counts: {} });
     // The debounce now also schedules a reconcile alongside the counts refetch (ADR 0067).
-    httpMock.expectOne(r => r.url === '/api/issues' && !r.params.has('states')).flush([activeSummary]);
+    httpMock.expectOne(r => r.url === '/api/issues' && !r.params.has('states')).flush({ items: [activeSummary], nextCursor: null });
 
     // Assert — detail refetch triggered
     const detailReq = httpMock.expectOne('/api/issues/issue-1');
@@ -1303,7 +1298,7 @@ describe('IssueService (band transitions + counts debounce)', () => {
     it('should debounce counts refetch so that a burst of IssueUpdated events triggers exactly one GET /api/issues/counts', () => {
       // Arrange
       service.loadIssues();
-      httpMock.expectOne('/api/issues').flush([activeSummary]);
+      httpMock.expectOne('/api/issues').flush({ items: [activeSummary], nextCursor: null });
 
       // Act — fire three IssueUpdated events in rapid succession
       callbacks['IssueUpdated']({ ...activeSummary, state: 'in_progress' });
@@ -1321,7 +1316,7 @@ describe('IssueService (band transitions + counts debounce)', () => {
       expect(req.request.method).toBe('GET');
       req.flush({ counts: { failed: 1 } });
       // The debounce also fires exactly one reconcile alongside the counts refetch (ADR 0067).
-      httpMock.expectOne(r => r.url === '/api/issues' && !r.params.has('states')).flush([activeSummary]);
+      httpMock.expectOne(r => r.url === '/api/issues' && !r.params.has('states')).flush({ items: [activeSummary], nextCursor: null });
     });
   });
 });
@@ -1370,10 +1365,10 @@ describe('IssueService (resolved paging)', () => {
     expect(req.request.method).toBe('GET');
     expect(req.request.params.has('cursor')).toBe(false);
 
-    const page: PagedIssues = { items: [resolvedSummary], nextCursor: null };
-    req.flush(page);
+    req.flush({ items: [resolvedSummary], nextCursor: null });
 
-    expect(service.resolvedIssues()).toEqual([resolvedSummary]);
+    // Mapper adds missing optional fields; use toMatchObject to check the data we care about
+    expect(service.resolvedIssues()).toMatchObject([resolvedSummary]);
     expect(service.hasMoreResolved()).toBe(false);
   });
 
@@ -1586,23 +1581,6 @@ describe('IssueService (resolved paging)', () => {
     // loadMoreResolved with no cursor is a no-op
     service.loadMoreResolved();
     httpMock.expectNone(r => r.url === '/api/issues');
-  });
-
-  // New: bad-shape guard — bare array response sets resolvedError, does not throw
-  it('should set resolvedError when the resolved-page response is a bare array (bad shape)', () => {
-    // Arrange
-    service.toggleState('completed');
-
-    // Act — flush a bare array instead of PagedIssues
-    const req = httpMock.expectOne(r =>
-      r.url === '/api/issues' && r.params.getAll('states')?.includes('completed') === true
-    );
-    req.flush([resolvedSummary]); // bare array, not { items: [...], nextCursor: ... }
-
-    // Assert
-    expect(service.resolvedError()).toBe('Failed to load resolved issues');
-    expect(service.resolvedIssues().length).toBe(0);
-    expect(service.resolvedLoading()).toBe(false);
   });
 
   // New: first-page HTTP failure sets resolvedError, not loadError
@@ -1872,7 +1850,7 @@ describe('IssueService (dispatch-order queue grouping)', () => {
 
     // Act
     service.loadIssues();
-    httpMock.expectOne('/api/issues').flush([continuationIssue]);
+    httpMock.expectOne('/api/issues').flush({ items: [continuationIssue], nextCursor: null });
 
     // Assert — continuation_queued must not inflate live count
     expect(service.liveIssueCount()).toBe(0);
@@ -1886,7 +1864,7 @@ describe('IssueService (dispatch-order queue grouping)', () => {
 
     // Act
     service.loadIssues();
-    httpMock.expectOne('/api/issues').flush([firstInQueue, secondInQueue]);
+    httpMock.expectOne('/api/issues').flush({ items: [firstInQueue, secondInQueue], nextCursor: null });
 
     // Assert — server order preserved (first stays first despite older date)
     const queueIssues = service.sortedIssues().filter(i =>
@@ -1905,7 +1883,7 @@ describe('IssueService (dispatch-order queue grouping)', () => {
 
     // Act
     service.loadIssues();
-    httpMock.expectOne('/api/issues').flush([eligible1, eligible2, ineligible]);
+    httpMock.expectOne('/api/issues').flush({ items: [eligible1, eligible2, ineligible], nextCursor: null });
 
     // Assert — only eligible issues, in server order
     expect(service.eligibleQueuedIssues()[0].id).toBe('elig-1');
@@ -1922,7 +1900,7 @@ describe('IssueService (dispatch-order queue grouping)', () => {
 
     // Act
     service.loadIssues();
-    httpMock.expectOne('/api/issues').flush([eligible, ineligible, unreachable]);
+    httpMock.expectOne('/api/issues').flush({ items: [eligible, ineligible, unreachable], nextCursor: null });
 
     // Assert — only ineligible/unreachable queued issues
     expect(service.ineligibleQueuedIssues().length).toBe(2);
@@ -1938,7 +1916,7 @@ describe('IssueService (dispatch-order queue grouping)', () => {
 
     // Act
     service.loadIssues();
-    httpMock.expectOne('/api/issues').flush([eligible1, eligible2]);
+    httpMock.expectOne('/api/issues').flush({ items: [eligible1, eligible2], nextCursor: null });
 
     // Assert
     expect(service.nextUpIssueId()).toBe('first-elig');
@@ -1951,7 +1929,7 @@ describe('IssueService (dispatch-order queue grouping)', () => {
 
     // Act
     service.loadIssues();
-    httpMock.expectOne('/api/issues').flush([ineligible]);
+    httpMock.expectOne('/api/issues').flush({ items: [ineligible], nextCursor: null });
 
     // Assert
     expect(service.nextUpIssueId()).toBeNull();
@@ -1964,7 +1942,7 @@ describe('IssueService (dispatch-order queue grouping)', () => {
 
     // Act
     service.loadIssues();
-    httpMock.expectOne('/api/issues').flush([live]);
+    httpMock.expectOne('/api/issues').flush({ items: [live], nextCursor: null });
 
     // Assert
     expect(service.nextUpIssueId()).toBeNull();
@@ -1977,7 +1955,7 @@ describe('IssueService (dispatch-order queue grouping)', () => {
 
     // Act
     service.loadIssues();
-    httpMock.expectOne('/api/issues').flush([contQueued]);
+    httpMock.expectOne('/api/issues').flush({ items: [contQueued], nextCursor: null });
 
     // Assert
     expect(service.eligibleQueuedIssues().some(i => i.id === 'cont-1')).toBe(true);
@@ -2017,7 +1995,7 @@ describe('IssueService (dispatch-order vs visual-sort regression)', () => {
 
     // Act
     service.loadIssues();
-    httpMock.expectOne('/api/issues').flush([eligibleQueued, contQueued]);
+    httpMock.expectOne('/api/issues').flush({ items: [eligibleQueued, contQueued], nextCursor: null });
 
     // Assert — the whole queued chain is contiguous in Waiting; server-first queued issue is next up
     expect(service.nextUpIssueId()).toBe('server-first-queued');
@@ -2039,7 +2017,7 @@ describe('IssueService (dispatch-order vs visual-sort regression)', () => {
 
     // Act
     service.loadIssues();
-    httpMock.expectOne('/api/issues').flush([queuedFirst, revQueuedSecond, contQueuedThird]);
+    httpMock.expectOne('/api/issues').flush({ items: [queuedFirst, revQueuedSecond, contQueuedThird], nextCursor: null });
 
     // Assert — server order preserved in eligibleQueuedIssues (dispatched revision_queued > continuation_queued > queued)
     const eligible = service.eligibleQueuedIssues();
@@ -2058,7 +2036,7 @@ describe('IssueService (dispatch-order vs visual-sort regression)', () => {
 
     // Act
     service.loadIssues();
-    httpMock.expectOne('/api/issues').flush([contQueuedFirst, queuedSecond]);
+    httpMock.expectOne('/api/issues').flush({ items: [contQueuedFirst, queuedSecond], nextCursor: null });
 
     // Assert — server order preserved
     const ineligible = service.ineligibleQueuedIssues();
@@ -2129,7 +2107,7 @@ describe('IssueService (queue-order reconcile)', () => {
     // Arrange
     const { svc, http } = setup();
     svc.loadIssues();
-    http.expectOne('/api/issues').flush([low]);
+    http.expectOne('/api/issues').flush({ items: [low], nextCursor: null });
     expect(svc.issues()[0].id).toBe('low-prio');
     expect(svc.initialLoading()).toBe(false);
 
@@ -2141,7 +2119,7 @@ describe('IssueService (queue-order reconcile)', () => {
     // The debounce fires — expect one counts request and one reconcile request
     http.expectOne('/api/issues/counts').flush({ counts: {} });
     const reconcileReq = http.expectOne(r => r.url === '/api/issues' && !r.params.has('states'));
-    reconcileReq.flush([rev, low]); // server returns revision-high first now
+    reconcileReq.flush({ items: [rev, low], nextCursor: null }); // server returns revision-high first now
 
     // Assert — issues() reflects the new server order
     expect(svc.issues()[0].id).toBe('revision-high');
@@ -2156,7 +2134,7 @@ describe('IssueService (queue-order reconcile)', () => {
     // Arrange
     const { svc, http } = setup();
     svc.loadIssues();
-    http.expectOne('/api/issues').flush([low]);
+    http.expectOne('/api/issues').flush({ items: [low], nextCursor: null });
 
     vi.useFakeTimers();
     callbacks['IssueUpdated']({ ...low, state: 'queued' });
@@ -2166,7 +2144,7 @@ describe('IssueService (queue-order reconcile)', () => {
     const completed: IssueSummary = { ...low, id: 'done', state: 'completed' };
 
     // Act — reconcile returns active + completed
-    http.expectOne(r => r.url === '/api/issues' && !r.params.has('states')).flush([low, completed]);
+    http.expectOne(r => r.url === '/api/issues' && !r.params.has('states')).flush({ items: [low, completed], nextCursor: null });
 
     // Assert — completed is excluded from issues()
     expect(svc.issues().some(i => i.id === 'done')).toBe(false);
@@ -2179,7 +2157,7 @@ describe('IssueService (queue-order reconcile)', () => {
     // Arrange
     const { svc, http } = setup();
     svc.loadIssues();
-    http.expectOne('/api/issues').flush([low]);
+    http.expectOne('/api/issues').flush({ items: [low], nextCursor: null });
 
     vi.useFakeTimers();
 
@@ -2196,11 +2174,11 @@ describe('IssueService (queue-order reconcile)', () => {
     const secondReconcile = http.expectOne(r => r.url === '/api/issues' && !r.params.has('states'));
 
     // Flush the LATER one first — its order should win
-    secondReconcile.flush([rev, low]); // revision-high first
+    secondReconcile.flush({ items: [rev, low], nextCursor: null }); // revision-high first
     expect(svc.issues()[0].id).toBe('revision-high');
 
     // Now flush the EARLIER one — its order must be discarded
-    firstReconcile.flush([low, rev]); // stale order: low first
+    firstReconcile.flush({ items: [low, rev], nextCursor: null }); // stale order: low first
     expect(svc.issues()[0].id).toBe('revision-high'); // still revision-high
 
     http.verify({ ignoreCancelled: true });
@@ -2211,7 +2189,7 @@ describe('IssueService (queue-order reconcile)', () => {
     // Arrange
     const { svc, http } = setup();
     svc.loadIssues();
-    http.expectOne('/api/issues').flush([low]);
+    http.expectOne('/api/issues').flush({ items: [low], nextCursor: null });
 
     vi.useFakeTimers();
 
@@ -2229,7 +2207,7 @@ describe('IssueService (queue-order reconcile)', () => {
     // Assert — exactly one counts + exactly one reconcile
     http.expectOne('/api/issues/counts').flush({ counts: {} });
     const reconcileReq = http.expectOne(r => r.url === '/api/issues' && !r.params.has('states'));
-    reconcileReq.flush([low]);
+    reconcileReq.flush({ items: [low], nextCursor: null });
 
     http.verify({ ignoreCancelled: true });
   });
@@ -2240,7 +2218,7 @@ describe('IssueService (queue-order reconcile)', () => {
     // Arrange — initial load: only low-prio queued
     const { svc, http } = setup();
     svc.loadIssues();
-    http.expectOne('/api/issues').flush([low]);
+    http.expectOne('/api/issues').flush({ items: [low], nextCursor: null });
     expect(svc.issues()[0].id).toBe('low-prio');
     expect(svc.nextUpIssueId()).toBe('low-prio');
 
@@ -2256,7 +2234,7 @@ describe('IssueService (queue-order reconcile)', () => {
     http.expectOne('/api/issues/counts').flush({ counts: {} });
 
     // Server returns correct dispatch order: revision first
-    http.expectOne(r => r.url === '/api/issues' && !r.params.has('states')).flush([rev, low]);
+    http.expectOne(r => r.url === '/api/issues' && !r.params.has('states')).flush({ items: [rev, low], nextCursor: null });
 
     // Assert — reconcile fixed the order
     const eligible = svc.eligibleQueuedIssues();
@@ -2272,7 +2250,7 @@ describe('IssueService (queue-order reconcile)', () => {
     // Arrange — two reconcile windows in flight
     const { svc, http } = setup();
     svc.loadIssues();
-    http.expectOne('/api/issues').flush([low]);
+    http.expectOne('/api/issues').flush({ items: [low], nextCursor: null });
 
     vi.useFakeTimers();
 
@@ -2289,11 +2267,11 @@ describe('IssueService (queue-order reconcile)', () => {
     const lateReq = http.expectOne(r => r.url === '/api/issues' && !r.params.has('states'));
 
     // Flush LATER first with [rev, low] order
-    lateReq.flush([rev, low]);
+    lateReq.flush({ items: [rev, low], nextCursor: null });
     expect(svc.issues()[0].id).toBe('revision-high');
 
     // Now flush EARLIER with reversed (stale) order
-    earlyReq.flush([low, rev]);
+    earlyReq.flush({ items: [low, rev], nextCursor: null });
 
     // Assert — stale early response did NOT overwrite later order
     expect(svc.issues()[0].id).toBe('revision-high');
@@ -2309,14 +2287,14 @@ describe('IssueService (queue-order reconcile)', () => {
     vi.useFakeTimers();
     const { svc, http } = setup();
     svc.loadIssues();
-    http.expectOne('/api/issues').flush([low]);
+    http.expectOne('/api/issues').flush({ items: [low], nextCursor: null });
 
     // Act — advance past safety-net interval (30 000 ms) with no events
     vi.advanceTimersByTime(30_100);
 
     // Assert — reconcile fires
     const reconcileReq = http.expectOne(r => r.url === '/api/issues' && !r.params.has('states'));
-    reconcileReq.flush([rev, low]);
+    reconcileReq.flush({ items: [rev, low], nextCursor: null });
 
     expect(svc.issues()[0].id).toBe('revision-high');
 
@@ -2329,12 +2307,12 @@ describe('IssueService (queue-order reconcile)', () => {
     vi.useFakeTimers();
     const { svc, http } = setup();
     svc.loadIssues();
-    http.expectOne('/api/issues').flush([low, rev]);
+    http.expectOne('/api/issues').flush({ items: [low, rev], nextCursor: null });
     expect(svc.issues()[0].id).toBe('low-prio');
 
     // Act — safety-net fires; server now returns rev first (Position changed in Settings)
     vi.advanceTimersByTime(30_100);
-    http.expectOne(r => r.url === '/api/issues' && !r.params.has('states')).flush([rev, low]);
+    http.expectOne(r => r.url === '/api/issues' && !r.params.has('states')).flush({ items: [rev, low], nextCursor: null });
 
     // Assert — new order rendered without page reload
     expect(svc.issues()[0].id).toBe('revision-high');
@@ -2348,7 +2326,7 @@ describe('IssueService (queue-order reconcile)', () => {
     vi.useFakeTimers();
     const { svc, http } = setup();
     svc.loadIssues();
-    http.expectOne('/api/issues').flush([low]);
+    http.expectOne('/api/issues').flush({ items: [low], nextCursor: null });
 
     // TestBed.resetTestingModule() triggers Angular's ApplicationRef.destroy() which invokes
     // DestroyRef callbacks — this clears the safety-net interval.
@@ -2369,7 +2347,7 @@ describe('IssueService (queue-order reconcile)', () => {
     // Arrange
     const { svc, http } = setup();
     svc.loadIssues();
-    http.expectOne('/api/issues').flush([low]);
+    http.expectOne('/api/issues').flush({ items: [low], nextCursor: null });
     expect(svc.queueOrderStale()).toBe(false);
 
     vi.useFakeTimers();
@@ -2396,7 +2374,7 @@ describe('IssueService (queue-order reconcile)', () => {
     // Arrange — cause a failure first
     const { svc, http } = setup();
     svc.loadIssues();
-    http.expectOne('/api/issues').flush([low]);
+    http.expectOne('/api/issues').flush({ items: [low], nextCursor: null });
 
     vi.useFakeTimers();
     callbacks['IssueUpdated']({ ...low, state: 'queued' });
@@ -2412,7 +2390,7 @@ describe('IssueService (queue-order reconcile)', () => {
     callbacks['IssueUpdated']({ ...low, state: 'queued' });
     vi.advanceTimersByTime(400);
     http.expectOne('/api/issues/counts').flush({ counts: {} });
-    http.expectOne(r => r.url === '/api/issues' && !r.params.has('states')).flush([low]);
+    http.expectOne(r => r.url === '/api/issues' && !r.params.has('states')).flush({ items: [low], nextCursor: null });
 
     // Assert — stale cleared
     expect(svc.queueOrderStale()).toBe(false);
@@ -2425,7 +2403,7 @@ describe('IssueService (queue-order reconcile)', () => {
     // Arrange
     const { svc, http } = setup();
     svc.loadIssues();
-    http.expectOne('/api/issues').flush([low]);
+    http.expectOne('/api/issues').flush({ items: [low], nextCursor: null });
 
     vi.useFakeTimers();
 
@@ -2442,7 +2420,7 @@ describe('IssueService (queue-order reconcile)', () => {
     const lateReq = http.expectOne(r => r.url === '/api/issues' && !r.params.has('states'));
 
     // Later succeeds first
-    lateReq.flush([low]);
+    lateReq.flush({ items: [low], nextCursor: null });
     expect(svc.queueOrderStale()).toBe(false);
 
     // Earlier fails — must be ignored because token is stale
@@ -2460,7 +2438,7 @@ describe('IssueService (queue-order reconcile)', () => {
     // Arrange
     const { svc, http } = setup();
     svc.loadIssues();
-    http.expectOne('/api/issues').flush([]);
+    http.expectOne('/api/issues').flush({ items: [], nextCursor: null });
 
     vi.useFakeTimers();
 
@@ -2473,7 +2451,7 @@ describe('IssueService (queue-order reconcile)', () => {
     vi.advanceTimersByTime(400);
     http.expectOne('/api/issues/counts').flush({ counts: {} });
     const reconcileReq = http.expectOne(r => r.url === '/api/issues' && !r.params.has('states'));
-    reconcileReq.flush([newIssue]); // server confirms the order
+    reconcileReq.flush({ items: [newIssue], nextCursor: null }); // server confirms the order
 
     expect(svc.issues().some(i => i.id === 'brand-new')).toBe(true);
 
@@ -2507,7 +2485,7 @@ describe('IssueService (queue-order reconcile)', () => {
     vi.useFakeTimers();
     const { svc, http } = setup();
     svc.loadIssues();
-    http.expectOne('/api/issues').flush([low]);
+    http.expectOne('/api/issues').flush({ items: [low], nextCursor: null });
     expect(svc.initialLoading()).toBe(false); // initial load done
 
     // Advance past the safety-net interval
@@ -2530,7 +2508,7 @@ describe('IssueService (queue-order reconcile)', () => {
     // Arrange
     const { svc, http } = setup();
     svc.loadIssues();
-    http.expectOne('/api/issues').flush([low]);
+    http.expectOne('/api/issues').flush({ items: [low], nextCursor: null });
     expect(svc.initialLoading()).toBe(false);
 
     vi.useFakeTimers();
@@ -2541,7 +2519,7 @@ describe('IssueService (queue-order reconcile)', () => {
     expect(svc.initialLoading()).toBe(false);
 
     http.expectOne('/api/issues/counts').flush({ counts: {} });
-    http.expectOne(r => r.url === '/api/issues' && !r.params.has('states')).flush([low]);
+    http.expectOne(r => r.url === '/api/issues' && !r.params.has('states')).flush({ items: [low], nextCursor: null });
 
     // Assert — still false after reconcile
     expect(svc.initialLoading()).toBe(false);
@@ -2578,7 +2556,7 @@ describe('IssueService (group-rank multi-key sort)', () => {
 
     // Act
     service.loadIssues();
-    httpMock.expectOne('/api/issues').flush([waiting, needsAttn]);
+    httpMock.expectOne('/api/issues').flush({ items: [waiting, needsAttn], nextCursor: null });
 
     // Assert — failed (Needs attention, rank 1) precedes detected (Waiting, rank 2)
     expect(service.sortedIssues()[0].id).toBe('needs-attn');
@@ -2595,7 +2573,7 @@ describe('IssueService (group-rank multi-key sort)', () => {
 
     // Act — server delivers: queued-first, rev-queued-second, detected-new, blocked-old
     service.loadIssues();
-    httpMock.expectOne('/api/issues').flush([queuedFirst, revQueuedSecond, detectedNew, blockedOld]);
+    httpMock.expectOne('/api/issues').flush({ items: [queuedFirst, revQueuedSecond, detectedNew, blockedOld], nextCursor: null });
 
     // Assert — Waiting order: queued-tier in server order, then detected by date desc, then blocked by date desc
     const waiting = service.sortedIssues().filter(i =>
@@ -2615,7 +2593,7 @@ describe('IssueService (group-rank multi-key sort)', () => {
 
     // Act
     service.loadIssues();
-    httpMock.expectOne('/api/issues').flush([blockedNewest, queuedOldest]);
+    httpMock.expectOne('/api/issues').flush({ items: [blockedNewest, queuedOldest], nextCursor: null });
 
     // Assert — queued precedes blocked despite its older detectedAt
     const waiting = service.sortedIssues().filter(i => i.state === 'queued' || i.state === 'blocked');
@@ -2631,7 +2609,7 @@ describe('IssueService (group-rank multi-key sort)', () => {
 
     // Act
     service.loadIssues();
-    httpMock.expectOne('/api/issues').flush([queuedNewerFirst, queuedOlderSecond]);
+    httpMock.expectOne('/api/issues').flush({ items: [queuedNewerFirst, queuedOlderSecond], nextCursor: null });
 
     // Assert — server order preserved even though q-older has an older date (would sort first by date desc)
     const queued = service.sortedIssues().filter(i => i.state === 'queued');
@@ -2647,7 +2625,7 @@ describe('IssueService (group-rank multi-key sort)', () => {
 
     // Act
     service.loadIssues();
-    httpMock.expectOne('/api/issues').flush([needsAttn, inProgress]);
+    httpMock.expectOne('/api/issues').flush({ items: [needsAttn, inProgress], nextCursor: null });
 
     // Assert — in_progress (rank 0) before review (rank 1), despite older date
     expect(service.sortedIssues()[0].id).toBe('in-prog');
@@ -2664,7 +2642,7 @@ describe('IssueService (group-rank multi-key sort)', () => {
 
     // Act
     service.loadIssues();
-    httpMock.expectOne('/api/issues').flush([queuedFirst, revQueuedSecond, contQueuedThird]);
+    httpMock.expectOne('/api/issues').flush({ items: [queuedFirst, revQueuedSecond, contQueuedThird], nextCursor: null });
 
     // Assert — all three in the Waiting bucket, queued-tier sub-group, in server order
     const waitingTier = service.sortedIssues().filter(i =>
@@ -2700,7 +2678,7 @@ describe('IssueService (group-rank multi-key sort)', () => {
 
     // Act
     service.loadIssues();
-    httpMock.expectOne('/api/issues').flush([reviewCard, failedCard, continuableCard, revFailedCard]);
+    httpMock.expectOne('/api/issues').flush({ items: [reviewCard, failedCard, continuableCard, revFailedCard], nextCursor: null });
 
     // Assert — Needs-attention cards in strict detectedAt desc order, not clustered by state
     const needsAttnGroup = service.sortedIssues().filter(i =>
@@ -2731,7 +2709,7 @@ describe('IssueService (group-rank multi-key sort)', () => {
 
     // Act
     service.loadIssues();
-    httpMock.expectOne('/api/issues').flush([revInProg, inProg, contQueuedA, contQueuedB]);
+    httpMock.expectOne('/api/issues').flush({ items: [revInProg, inProg, contQueuedA, contQueuedB], nextCursor: null });
 
     // Assert — In progress group contains only the two non-queued cards, sorted by detectedAt desc
     const inProgressGroup = service.sortedIssues().filter(i =>
@@ -2767,7 +2745,7 @@ describe('IssueService (queuePositions)', () => {
 
   function loadIssues(issues: IssueSummary[]): void {
     service.loadIssues();
-    httpMock.expectOne('/api/issues').flush(issues);
+    httpMock.expectOne('/api/issues').flush({ items: issues, nextCursor: null });
   }
 
   beforeEach(() => {
@@ -2893,7 +2871,7 @@ describe('IssueService (queuePositions)', () => {
 
     // Act — reload with reversed order: q2 first, q1 second
     service.loadIssues();
-    httpMock.expectOne('/api/issues').flush([q2, q1]);
+    httpMock.expectOne('/api/issues').flush({ items: [q2, q1], nextCursor: null });
 
     // Assert — positions renumber to match new order
     const positions = service.queuePositions();
@@ -2926,6 +2904,161 @@ describe('IssueService (queuePositions)', () => {
   });
 });
 
+// Code-review findings — numeric coercion, dead branch, null-coalesce robustness
+describe('IssueService (code-review findings)', () => {
+  let service: IssueService;
+  let httpMock: HttpTestingController;
+
+  const baseSchema = {
+    id: 'abc123',
+    issueNumber: 42 as number | string,
+    title: 'Fix the bug',
+    state: 'detected',
+    repositorySlug: 'owner/repo',
+    detectedAt: '2026-01-01T00:00:00Z',
+    url: 'https://github.com/owner/repo/issues/42',
+    failureClassification: null as null | string,
+    repositoryEligibilityStatus: null as null | string,
+    runStats: null as null | {
+      runCount: number | string;
+      durationMs: null | number | string;
+      numTurns: null | number | string;
+      totalCostUsd: null | number | string;
+      inputTokens: null | number | string;
+      outputTokens: null | number | string;
+    },
+  };
+
+  beforeEach(() => {
+    TestBed.configureTestingModule({
+      providers: [
+        IssueService,
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        { provide: IssueSignalRService, useValue: mockIssueSignalRService },
+      ],
+    });
+    service = TestBed.inject(IssueService);
+    httpMock = TestBed.inject(HttpTestingController);
+  });
+
+  afterEach(() => httpMock.verify({ ignoreCancelled: true }));
+
+  // Finding 4 — issueNumber coercion: numeric string arrives as number on domain object
+  it('should coerce issueNumber from numeric string "42" to the number 42', () => {
+    // Arrange
+    const schemaItem = { ...baseSchema, issueNumber: '42' as number | string };
+
+    // Act
+    service.loadIssues();
+    httpMock.expectOne('/api/issues').flush({ items: [schemaItem], nextCursor: null });
+
+    // Assert — domain object carries number 42, not string '42'
+    const issue = service.issues()[0];
+    expect(issue.issueNumber).toBe(42);
+    expect(typeof issue.issueNumber).toBe('number');
+  });
+
+  // Finding 4 — issueNumber coercion: non-numeric string degrades to 0
+  it('should degrade issueNumber to 0 when a non-numeric value arrives', () => {
+    // Arrange
+    const schemaItem = { ...baseSchema, issueNumber: 'not-a-number' as number | string };
+
+    // Act
+    service.loadIssues();
+    httpMock.expectOne('/api/issues').flush({ items: [schemaItem], nextCursor: null });
+
+    // Assert — fallback prevents NaN from entering domain state
+    const issue = service.issues()[0];
+    expect(issue.issueNumber).toBe(0);
+    expect(Number.isFinite(issue.issueNumber)).toBe(true);
+  });
+
+  // Finding 1 — runStats null branch: null runStats maps to null on domain object
+  it('should map null runStats to null on the domain object', () => {
+    // Arrange
+    const schemaItem = { ...baseSchema, runStats: null };
+
+    // Act
+    service.loadIssues();
+    httpMock.expectOne('/api/issues').flush({ items: [schemaItem], nextCursor: null });
+
+    // Assert
+    expect(service.issues()[0].runStats).toBeNull();
+  });
+
+  // Finding 1 + Finding 4 — runStats non-null branch: numeric fields coerced to finite numbers
+  it('should coerce numeric-string runStats fields to finite numbers', () => {
+    // Arrange
+    const schemaItem = {
+      ...baseSchema,
+      runStats: {
+        runCount: '3' as number | string,
+        durationMs: '1500' as null | number | string,
+        numTurns: '10' as null | number | string,
+        totalCostUsd: '0.05' as null | number | string,
+        inputTokens: '1000' as null | number | string,
+        outputTokens: '500' as null | number | string,
+      },
+    };
+
+    // Act
+    service.loadIssues();
+    httpMock.expectOne('/api/issues').flush({ items: [schemaItem], nextCursor: null });
+
+    // Assert — all numeric fields arrive as numbers, not strings
+    const stats = service.issues()[0].runStats!;
+    expect(stats.runCount).toBe(3);
+    expect(stats.durationMs).toBe(1500);
+    expect(stats.numTurns).toBe(10);
+    expect(stats.totalCostUsd).toBeCloseTo(0.05);
+    expect(stats.inputTokens).toBe(1000);
+    expect(stats.outputTokens).toBe(500);
+  });
+
+  // Finding 1 + Finding 4 — nullable runStats numeric fields coerced: null stays null, bad value degrades to 0
+  it('should keep nullable runStats numeric fields null when null, and degrade non-finite values to 0', () => {
+    // Arrange
+    const schemaItem = {
+      ...baseSchema,
+      runStats: {
+        runCount: 2 as number | string,
+        durationMs: null as null | number | string,
+        numTurns: 'bad' as null | number | string,
+        totalCostUsd: null as null | number | string,
+        inputTokens: null as null | number | string,
+        outputTokens: null as null | number | string,
+      },
+    };
+
+    // Act
+    service.loadIssues();
+    httpMock.expectOne('/api/issues').flush({ items: [schemaItem], nextCursor: null });
+
+    // Assert — null stays null; 'bad' degrades to 0
+    const stats = service.issues()[0].runStats!;
+    expect(stats.runCount).toBe(2);
+    expect(stats.durationMs).toBeNull();
+    expect(stats.numTurns).toBe(0);
+    expect(stats.totalCostUsd).toBeNull();
+    expect(stats.inputTokens).toBeNull();
+    expect(stats.outputTokens).toBeNull();
+  });
+
+  // Finding 5 — _fetchResolvedPage null-coalesce: null items body degrades to empty page
+  it('should degrade to an empty resolved page when the server returns null items', () => {
+    // Arrange — select completed to trigger _fetchResolvedPage
+    service.toggleState('completed');
+
+    // Act — server returns null items (malformed body)
+    httpMock.expectOne(r => r.url === '/api/issues').flush({ items: null, nextCursor: null });
+
+    // Assert — no crash; resolvedIssues is empty
+    expect(service.resolvedIssues().length).toBe(0);
+    expect(service.resolvedLoading()).toBe(false);
+  });
+});
+
 // Step 12 — nextUpAnnouncement computed (issue #507)
 describe('IssueService (nextUpAnnouncement)', () => {
   let service: IssueService;
@@ -2944,7 +3077,7 @@ describe('IssueService (nextUpAnnouncement)', () => {
 
   function loadIssues(issues: IssueSummary[]): void {
     service.loadIssues();
-    httpMock.expectOne('/api/issues').flush(issues);
+    httpMock.expectOne('/api/issues').flush({ items: issues, nextCursor: null });
   }
 
   beforeEach(() => {
@@ -3014,7 +3147,7 @@ describe('IssueService (nextUpAnnouncement)', () => {
 
     // Act — reload with q2 and q3 swapped but q1 still at head
     service.loadIssues();
-    httpMock.expectOne('/api/issues').flush([q1, q3, q2]);
+    httpMock.expectOne('/api/issues').flush({ items: [q1, q3, q2], nextCursor: null });
 
     // Assert — nextUpIssueId unchanged, so announcement is identical
     expect(service.nextUpAnnouncement()).toBe(before);
@@ -3031,7 +3164,7 @@ describe('IssueService (nextUpAnnouncement)', () => {
 
     // Act — reload with q2 now at head
     service.loadIssues();
-    httpMock.expectOne('/api/issues').flush([q2, q1]);
+    httpMock.expectOne('/api/issues').flush({ items: [q2, q1], nextCursor: null });
 
     // Assert — announcement reflects new head
     const after = service.nextUpAnnouncement();

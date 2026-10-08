@@ -2,6 +2,7 @@ using Foundry.Modules.Settings.Contracts;
 using Foundry.Modules.Settings.Domain.Entities;
 using Foundry.Modules.Workers.Contracts;
 using Foundry.Shared;
+using Foundry.Shared.Infrastructure.Http;
 
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
@@ -52,13 +53,9 @@ internal static class ResumeDispatch
                 {
                     Result<GlobalSettingsSummary> result = await handler.HandleAsync(new Command(), cancellationToken);
 
-                    return result.Match<Results<Ok<GlobalSettingsSummary>, NotFound>>(
+                    return result.Match<Results<Ok<GlobalSettingsSummary>, ProblemHttpResult>>(
                         summary => TypedResults.Ok(summary),
-                        error => error.Code switch
-                        {
-                            SettingsErrors.NotFoundCode => TypedResults.NotFound(),
-                            _ => TypedResults.NotFound(),
-                        });
+                        error => error.ToProblem(StatusCodes.Status404NotFound));
                 })
                 .WithName("ResumeDispatch")
                 .WithSummary("Resumes worker dispatch")

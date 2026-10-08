@@ -6,6 +6,7 @@ using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Features.Accounts;
 using Foundry.Modules.Monitoring.Features.Eligibility;
 using Foundry.Shared;
+using Foundry.Shared.Infrastructure.Http;
 
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
@@ -21,30 +22,18 @@ internal static class CreateRepository
     internal sealed record Command(
         Guid AccountId,
         string Slug,
-        int? PollIntervalSeconds) : ICommand<RepositorySummary>;
+        int? PollIntervalSeconds,
+        int? MaxConcurrentWorkers = null) : ICommand<RepositorySummary>;
 
     internal sealed class Validator : ICommandValidator<Command>
     {
         internal const string SlugEmptyCode = "CreateRepository.SlugEmpty";
-        internal const string PollIntervalNotPositiveCode = "CreateRepository.PollIntervalNotPositive";
-        internal const string PollIntervalTooLargeCode = "CreateRepository.PollIntervalTooLarge";
-        internal const int MaxPollIntervalSeconds = 86400;
 
         public Result Validate(Command command)
         {
             if (string.IsNullOrWhiteSpace(command.Slug))
             {
                 return new Error(SlugEmptyCode, "Repository slug must not be empty.");
-            }
-
-            if (command.PollIntervalSeconds.HasValue && command.PollIntervalSeconds.Value <= 0)
-            {
-                return new Error(PollIntervalNotPositiveCode, "Poll interval must be a positive number of seconds.");
-            }
-
-            if (command.PollIntervalSeconds.HasValue && command.PollIntervalSeconds.Value > MaxPollIntervalSeconds)
-            {
-                return new Error(PollIntervalTooLargeCode, $"Poll interval must not exceed {MaxPollIntervalSeconds} seconds.");
             }
 
             return Result.Ok();
@@ -55,15 +44,17 @@ internal static class CreateRepository
         DbContext dbContext,
         IRepositoryEligibilityEvaluator eligibilityEvaluator) : ICommandHandler<Command, RepositorySummary>
     {
-        // The slug unique index name, used to identify slug-collision DbUpdateExceptions
-        // and distinguish them from position-collision exceptions.
+        // SQLite emits the column-reference form ("monitored_repositories.slug") rather than the
+        // index name on unique-constraint violations, so both forms must be checked.
         private const string SlugIndexName = "ix_monitored_repositories_host_slug";
+        private const string SlugColumnReference = "monitored_repositories.slug";
 
         private static bool IsSlugConstraintViolation(DbUpdateException ex, RepositorySlug slug)
         {
             string slugValue = slug.ToString();
             string message = ex.InnerException?.Message ?? ex.Message;
             return message.Contains(SlugIndexName, StringComparison.OrdinalIgnoreCase)
+                || message.Contains(SlugColumnReference, StringComparison.OrdinalIgnoreCase)
                 || message.Contains(slugValue, StringComparison.OrdinalIgnoreCase);
         }
 
@@ -103,11 +94,21 @@ internal static class CreateRepository
 
             int position = await dbContext.Set<MonitoredRepository>().CountAsync(cancellationToken);
 
-            MonitoredRepository repository = MonitoredRepository.Create(
+            int maxConcurrentWorkers = command.MaxConcurrentWorkers ?? MonitoredRepository.DefaultMaxConcurrentWorkers;
+
+            Result<MonitoredRepository> createResult = MonitoredRepository.Create(
                 repositorySlug,
                 credential.BaseUrl.Value.Host,
                 pollInterval,
-                position);
+                position,
+                maxConcurrentWorkers);
+
+            if (createResult is Result<MonitoredRepository>.Failure createFailure)
+            {
+                return Result<RepositorySummary>.Fail(createFailure.Error);
+            }
+
+            MonitoredRepository repository = ((Result<MonitoredRepository>.Success)createResult).Value;
 
             dbContext.Set<MonitoredRepository>().Add(repository);
 
@@ -142,6 +143,7 @@ internal static class CreateRepository
                 RepositoryMappings.ToSeconds(repository.PollInterval),
                 repository.IsActive,
                 repository.Position,
+                repository.MaxConcurrentWorkers,
                 repository.LastPolledAt,
                 RepositoryMappings.ToEligibilityInfo(repository.Eligibility),
                 repository.UntrackSuppressedSince);
@@ -152,7 +154,7 @@ internal static class CreateRepository
 
     internal static class Endpoint
     {
-        private sealed record RequestBody(string Slug, int? PollIntervalSeconds);
+        private sealed record RequestBody(string Slug, int? PollIntervalSeconds, int? MaxConcurrentWorkers = null);
 
         public static void Map(RouteGroupBuilder group)
         {
@@ -162,19 +164,19 @@ internal static class CreateRepository
                     ICommandHandler<Command, RepositorySummary> handler,
                     CancellationToken cancellationToken) =>
                 {
-                    Command command = new(accountId, body.Slug, body.PollIntervalSeconds);
+                    Command command = new(accountId, body.Slug, body.PollIntervalSeconds, body.MaxConcurrentWorkers);
                     Result<RepositorySummary> result = await handler.HandleAsync(command, cancellationToken);
 
-                    return result.Match<Results<Created<RepositorySummary>, NotFound<string>, Conflict<string>, BadRequest<string>>>(
+                    return result.Match<Results<Created<RepositorySummary>, ProblemHttpResult>>(
                         repository => TypedResults.Created(
                             $"/api/accounts/{accountId}/repositories/{repository.Id}",
                             repository),
                         error => error.Code switch
                         {
-                            RepositoryErrors.AccountNotFoundCode => TypedResults.NotFound(error.Message),
-                            RepositoryErrors.DuplicateSlugCode => TypedResults.Conflict(error.Message),
-                            RepositoryErrors.ConflictOnCreateCode => TypedResults.Conflict(error.Message),
-                            _ => TypedResults.BadRequest(error.Message),
+                            RepositoryErrors.AccountNotFoundCode => error.ToProblem(StatusCodes.Status404NotFound),
+                            RepositoryErrors.DuplicateSlugCode => error.ToProblem(StatusCodes.Status409Conflict),
+                            RepositoryErrors.ConflictOnCreateCode => error.ToProblem(StatusCodes.Status409Conflict),
+                            _ => error.ToProblem(StatusCodes.Status400BadRequest),
                         });
                 })
                 .WithName("CreateRepository")

@@ -68,6 +68,13 @@ internal sealed class WorkerCapacityAvailableHandler(
                     cancellationToken);
                 break;
 
+            case SelectionOutcome.AllRepositoriesSaturated:
+                logger.LogDebug("All repositories with queued work are at capacity; skipping dispatch.");
+                await integrationEventDispatcher.DispatchAsync(
+                    [new ClaimSkipped(@event.WorkerRunId)],
+                    cancellationToken);
+                break;
+
             default:
                 throw new UnreachableException($"Unhandled SelectionOutcome: {outcome.GetType().Name}");
         }

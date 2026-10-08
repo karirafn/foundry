@@ -4,6 +4,7 @@ using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Modules.Monitoring.Features.Accounts;
 using Foundry.Shared;
+using Foundry.Shared.Infrastructure.Http;
 
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
@@ -19,29 +20,8 @@ internal static class UpdateRepository
         Guid AccountId,
         Guid Id,
         int? PollIntervalSeconds,
-        bool IsActive) : ICommand<RepositorySummary>;
-
-    internal sealed class Validator : ICommandValidator<Command>
-    {
-        internal const string PollIntervalNotPositiveCode = "UpdateRepository.PollIntervalNotPositive";
-        internal const string PollIntervalTooLargeCode = "UpdateRepository.PollIntervalTooLarge";
-        internal const int MaxPollIntervalSeconds = 86400;
-
-        public Result Validate(Command command)
-        {
-            if (command.PollIntervalSeconds.HasValue && command.PollIntervalSeconds.Value <= 0)
-            {
-                return new Error(PollIntervalNotPositiveCode, "Poll interval must be a positive number of seconds.");
-            }
-
-            if (command.PollIntervalSeconds.HasValue && command.PollIntervalSeconds.Value > MaxPollIntervalSeconds)
-            {
-                return new Error(PollIntervalTooLargeCode, $"Poll interval must not exceed {MaxPollIntervalSeconds} seconds.");
-            }
-
-            return Result.Ok();
-        }
-    }
+        bool IsActive,
+        int MaxConcurrentWorkers) : ICommand<RepositorySummary>;
 
     internal sealed class Handler(DbContext dbContext) : ICommandHandler<Command, RepositorySummary>
     {
@@ -73,7 +53,11 @@ internal static class UpdateRepository
                 ? TimeSpan.FromSeconds(command.PollIntervalSeconds.Value)
                 : null;
 
-            repository.Update(pollInterval, command.IsActive);
+            Result updateResult = repository.Update(pollInterval, command.IsActive, command.MaxConcurrentWorkers);
+            if (updateResult is Result.Failure updateFailure)
+            {
+                return Result<RepositorySummary>.Fail(updateFailure.Error);
+            }
 
             await dbContext.SaveChangesAsync(cancellationToken);
 
@@ -91,6 +75,7 @@ internal static class UpdateRepository
                 RepositoryMappings.ToSeconds(repository.PollInterval),
                 repository.IsActive,
                 repository.Position,
+                repository.MaxConcurrentWorkers,
                 repository.LastPolledAt,
                 RepositoryMappings.ToEligibilityInfo(repository.Eligibility),
                 repository.UntrackSuppressedSince);
@@ -101,7 +86,7 @@ internal static class UpdateRepository
 
     internal static class Endpoint
     {
-        private sealed record RequestBody(int? PollIntervalSeconds, bool IsActive);
+        private sealed record RequestBody(int? PollIntervalSeconds, bool IsActive, int MaxConcurrentWorkers);
 
         public static void Map(RouteGroupBuilder group)
         {
@@ -112,22 +97,23 @@ internal static class UpdateRepository
                     ICommandHandler<Command, RepositorySummary> handler,
                     CancellationToken cancellationToken) =>
                 {
-                    Command command = new(accountId, id, body.PollIntervalSeconds, body.IsActive);
+                    Command command = new(accountId, id, body.PollIntervalSeconds, body.IsActive, body.MaxConcurrentWorkers);
                     Result<RepositorySummary> result = await handler.HandleAsync(command, cancellationToken);
 
-                    return result.Match<Results<Ok<RepositorySummary>, NotFound, BadRequest<string>>>(
+                    return result.Match<Results<Ok<RepositorySummary>, ProblemHttpResult>>(
                         repository => TypedResults.Ok(repository),
                         error => error.Code switch
                         {
-                            RepositoryErrors.NotFoundCode => TypedResults.NotFound(),
-                            _ => TypedResults.BadRequest(error.Message),
+                            RepositoryErrors.NotFoundCode => error.ToProblem(StatusCodes.Status404NotFound),
+                            RepositoryErrors.AccountNotFoundCode => error.ToProblem(StatusCodes.Status404NotFound),
+                            _ => error.ToProblem(StatusCodes.Status400BadRequest),
                         });
                 })
                 .WithName("UpdateRepository")
                 .WithSummary("Updates an existing monitored repository")
                 .Produces<RepositorySummary>()
-                .ProducesProblem(StatusCodes.Status404NotFound)
-                .ProducesProblem(StatusCodes.Status400BadRequest);
+                .ProducesProblem(StatusCodes.Status400BadRequest)
+                .ProducesProblem(StatusCodes.Status404NotFound);
         }
     }
 }

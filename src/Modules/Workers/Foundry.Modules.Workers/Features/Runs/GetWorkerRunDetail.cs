@@ -1,6 +1,7 @@
 using Foundry.Modules.Workers.Contracts;
 using Foundry.Modules.Workers.Contracts.Queries;
 using Foundry.Shared;
+using Foundry.Shared.Infrastructure.Http;
 
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
@@ -24,9 +25,9 @@ internal static class GetWorkerRunDetail
                         workerRunId,
                         cancellationToken);
 
-                    return result.Match<Results<Ok<WorkerRunDetail>, NotFound>>(
+                    return result.Match<Results<Ok<WorkerRunDetail>, ProblemHttpResult>>(
                         detail => TypedResults.Ok(detail),
-                        _ => TypedResults.NotFound());
+                        error => error.ToProblem(StatusCodes.Status404NotFound));
                 })
                 .WithName("GetWorkerRunDetail")
                 .WithSummary("Gets worker run detail by ID")

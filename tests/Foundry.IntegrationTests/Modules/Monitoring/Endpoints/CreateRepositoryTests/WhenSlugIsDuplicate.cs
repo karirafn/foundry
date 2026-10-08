@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Http.Json;
+using System.Text.Json;
 
 using Shouldly;
 
@@ -44,5 +45,38 @@ public sealed class WhenSlugIsDuplicate : IAsyncDisposable
 
         // Assert
         response.StatusCode.ShouldBe(HttpStatusCode.Conflict);
+    }
+
+    [Fact]
+    public async Task ReturnsProblemDetailsBody()
+    {
+        // Arrange
+        Guid accountId = await AccountSeeder.SeedGitHubAccountAsync(_factory, name: "My GitHub Dup");
+        string slug = "owner/repo-dup";
+        string expectedDetail = $"A repository with slug '{slug}' already exists.";
+        object body = new { slug };
+
+        await _client.PostAsJsonAsync(
+            new Uri($"/api/accounts/{accountId}/repositories", UriKind.Relative),
+            body,
+            TestContext.Current.CancellationToken);
+
+        // Act — create a second repository with the same slug
+        HttpResponseMessage response = await _client.PostAsJsonAsync(
+            new Uri($"/api/accounts/{accountId}/repositories", UriKind.Relative),
+            body,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        response.StatusCode.ShouldBe(HttpStatusCode.Conflict);
+        response.Content.Headers.ContentType?.MediaType.ShouldBe("application/problem+json");
+
+        string responseBody = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+        using JsonDocument doc = JsonDocument.Parse(responseBody);
+        JsonElement root = doc.RootElement;
+
+        root.ShouldSatisfyAllConditions(
+            () => root.GetProperty("type").GetString().ShouldEndWith("Repository.DuplicateSlug"),
+            () => root.GetProperty("detail").GetString().ShouldBe(expectedDetail));
     }
 }

@@ -1,4 +1,5 @@
 using Foundry.Modules.Issues.Features;
+using Foundry.Modules.Issues.Features.Claiming;
 using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Issues.Domain.Entities;
 using Foundry.Modules.Issues.Domain.Entities.States;
@@ -32,7 +33,12 @@ public sealed class GetKnownIssueNumbersAsync : IAsyncDisposable
 
         _dbContext = new FoundryDbContext(options);
         _dbContext.Database.EnsureCreated();
-        _sut = new IssueQueries(_dbContext, new NullRepositorySlugQueries(), new NullRepositoryEligibilityQuery(), new NullWorkerRunQueries());
+        _sut = new IssueQueries(
+            _dbContext,
+            new NullRepositorySlugQueries(),
+            new NullRepositoryEligibilityQuery(),
+            new NullWorkerRunQueries(),
+            new InFlightWorkerCountQuery(_dbContext));
     }
 
     async ValueTask IAsyncDisposable.DisposeAsync()
