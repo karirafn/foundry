@@ -11,6 +11,27 @@ const mockSystemSignalR = { reconnected: NEVER, reloadTrigger: NEVER, loginSessi
 const CREDENTIALS_API_KEY_RESPONSE = {
   accountId: '00000000-0000-0000-0000-000000000001',
   authMode: 'ApiKey',
+  apiKeyStatus: 'Present',
+  oAuthStatus: 'NotConfigured',
+  subscriptionType: null,
+  oAuthAccountEmail: null,
+  oAuthAccountOrgName: null,
+};
+
+const CREDENTIALS_API_KEY_NOT_CONFIGURED = {
+  accountId: '00000000-0000-0000-0000-000000000001',
+  authMode: 'ApiKey',
+  apiKeyStatus: 'NotConfigured',
+  oAuthStatus: 'NotConfigured',
+  subscriptionType: null,
+  oAuthAccountEmail: null,
+  oAuthAccountOrgName: null,
+};
+
+const CREDENTIALS_API_KEY_UNREADABLE = {
+  accountId: '00000000-0000-0000-0000-000000000001',
+  authMode: 'ApiKey',
+  apiKeyStatus: 'Unreadable',
   oAuthStatus: 'NotConfigured',
   subscriptionType: null,
   oAuthAccountEmail: null,
@@ -335,6 +356,7 @@ describe('SetupAuthStepComponent', () => {
     const service = component['_settingsService'];
     service.authSettings.set({
       mode: 'oauth',
+      apiKeyStatus: 'NotConfigured',
       apiKeyConfigured: false,
       oauth: { status: 'Present', subscriptionType: null },
       accountEmail: null,
@@ -436,6 +458,226 @@ describe('SetupAuthStepComponent', () => {
     expect(document.activeElement).toBe(loginBtn);
 
     document.body.removeChild(fixture.nativeElement);
+  });
+
+  describe('API-key status notes', () => {
+    it('should render a muted note when apiKeyStatus is NotConfigured and API key mode is selected', () => {
+      // Arrange
+      const { fixture, httpMock } = setup();
+      fixture.detectChanges();
+
+      const el = fixture.nativeElement as HTMLElement;
+      const radios = el.querySelectorAll<HTMLInputElement>('input[type="radio"]');
+      radios[0].click();
+      fixture.detectChanges();
+
+      // Simulate service loading NotConfigured credentials
+      const service = fixture.componentInstance['_settingsService'];
+      service.loadSettings();
+      httpMock.expectOne('/api/settings').flush({
+        maxConcurrent: 3, timeoutMinutes: 60, probeIntervalMinutes: 60, pollIntervalSeconds: 30,
+        usageLimitResetsAt: null, isDispatchPaused: false, autoResumeOnUsageReset: true,
+        installDotnet: false, installAngular: false, installGlab: false, installGh: false,
+        installChromium: false, installDocker: false, imageBuildStatus: 'Idle',
+        lastImageBuildError: null, hasUsableImage: false, nextRetryAt: null, attempt: 0,
+        systemPromptTemplate: null, workerPromptTemplate: null,
+      });
+      httpMock.expectOne('/api/credentials').flush(CREDENTIALS_API_KEY_NOT_CONFIGURED);
+      fixture.detectChanges();
+
+      // Act
+      const note = el.querySelector('.setup-auth-step__oauth-note:not(.setup-auth-step__note--warning)');
+
+      // Assert
+      expect(note).toBeTruthy();
+      expect(note?.textContent).toContain('No API key is set yet');
+    });
+
+    it('should render a warning note with role="status" when apiKeyStatus is Unreadable and API key mode is selected', () => {
+      // Arrange
+      const { fixture, httpMock } = setup();
+      fixture.detectChanges();
+
+      const el = fixture.nativeElement as HTMLElement;
+      const radios = el.querySelectorAll<HTMLInputElement>('input[type="radio"]');
+      radios[0].click();
+      fixture.detectChanges();
+
+      // Simulate service loading Unreadable credentials
+      const service = fixture.componentInstance['_settingsService'];
+      service.loadSettings();
+      httpMock.expectOne('/api/settings').flush({
+        maxConcurrent: 3, timeoutMinutes: 60, probeIntervalMinutes: 60, pollIntervalSeconds: 30,
+        usageLimitResetsAt: null, isDispatchPaused: false, autoResumeOnUsageReset: true,
+        installDotnet: false, installAngular: false, installGlab: false, installGh: false,
+        installChromium: false, installDocker: false, imageBuildStatus: 'Idle',
+        lastImageBuildError: null, hasUsableImage: false, nextRetryAt: null, attempt: 0,
+        systemPromptTemplate: null, workerPromptTemplate: null,
+      });
+      httpMock.expectOne('/api/credentials').flush(CREDENTIALS_API_KEY_UNREADABLE);
+      fixture.detectChanges();
+
+      // Act — the Unreadable note region is always present; check content is shown
+      const warningRegion = el.querySelector('.setup-auth-step__note--warning');
+
+      // Assert — role="status" (polite) because this is steady-state, not action-triggered;
+      // role="alert" remains only on the #api-key-error region for action-triggered errors.
+      expect(warningRegion).toBeTruthy();
+      expect(warningRegion?.getAttribute('role')).toBe('status');
+      expect(warningRegion?.textContent).toContain("can't be read");
+    });
+
+    it('should render the alert SVG icon inside the Unreadable warning note', () => {
+      // Arrange
+      const { fixture, httpMock } = setup();
+      fixture.detectChanges();
+
+      const el = fixture.nativeElement as HTMLElement;
+      const radios = el.querySelectorAll<HTMLInputElement>('input[type="radio"]');
+      radios[0].click();
+      fixture.detectChanges();
+
+      const service = fixture.componentInstance['_settingsService'];
+      service.loadSettings();
+      httpMock.expectOne('/api/settings').flush({
+        maxConcurrent: 3, timeoutMinutes: 60, probeIntervalMinutes: 60, pollIntervalSeconds: 30,
+        usageLimitResetsAt: null, isDispatchPaused: false, autoResumeOnUsageReset: true,
+        installDotnet: false, installAngular: false, installGlab: false, installGh: false,
+        installChromium: false, installDocker: false, imageBuildStatus: 'Idle',
+        lastImageBuildError: null, hasUsableImage: false, nextRetryAt: null, attempt: 0,
+        systemPromptTemplate: null, workerPromptTemplate: null,
+      });
+      httpMock.expectOne('/api/credentials').flush(CREDENTIALS_API_KEY_UNREADABLE);
+      fixture.detectChanges();
+
+      // Act
+      const warningRegion = el.querySelector('.setup-auth-step__note--warning');
+      const svg = warningRegion?.querySelector('svg[aria-hidden="true"]');
+
+      // Assert — alert-triangle SVG is present and hidden from AT (decorative)
+      expect(svg).toBeTruthy();
+    });
+
+    it('should keep the Unreadable live-region wrapper in the DOM even when apiKeyStatus is NotConfigured (persistent pattern)', () => {
+      // Arrange
+      const { fixture, httpMock } = setup();
+      fixture.detectChanges();
+
+      const el = fixture.nativeElement as HTMLElement;
+      const radios = el.querySelectorAll<HTMLInputElement>('input[type="radio"]');
+      radios[0].click();
+      fixture.detectChanges();
+
+      const service = fixture.componentInstance['_settingsService'];
+      service.loadSettings();
+      httpMock.expectOne('/api/settings').flush({
+        maxConcurrent: 3, timeoutMinutes: 60, probeIntervalMinutes: 60, pollIntervalSeconds: 30,
+        usageLimitResetsAt: null, isDispatchPaused: false, autoResumeOnUsageReset: true,
+        installDotnet: false, installAngular: false, installGlab: false, installGh: false,
+        installChromium: false, installDocker: false, imageBuildStatus: 'Idle',
+        lastImageBuildError: null, hasUsableImage: false, nextRetryAt: null, attempt: 0,
+        systemPromptTemplate: null, workerPromptTemplate: null,
+      });
+      httpMock.expectOne('/api/credentials').flush(CREDENTIALS_API_KEY_NOT_CONFIGURED);
+      fixture.detectChanges();
+
+      // Act
+      const warningRegion = el.querySelector('.setup-auth-step__note--warning');
+
+      // Assert — wrapper always in DOM; empty content when status is not Unreadable
+      expect(warningRegion).toBeTruthy();
+      expect(warningRegion?.textContent?.trim()).toBe('');
+    });
+
+    it('should not have more than one role="alert" near the API key input (no double assertive announcement)', () => {
+      // Arrange
+      const { fixture, httpMock } = setup();
+      fixture.detectChanges();
+
+      const el = fixture.nativeElement as HTMLElement;
+      const radios = el.querySelectorAll<HTMLInputElement>('input[type="radio"]');
+      radios[0].click();
+      fixture.detectChanges();
+
+      const service = fixture.componentInstance['_settingsService'];
+      service.loadSettings();
+      httpMock.expectOne('/api/settings').flush({
+        maxConcurrent: 3, timeoutMinutes: 60, probeIntervalMinutes: 60, pollIntervalSeconds: 30,
+        usageLimitResetsAt: null, isDispatchPaused: false, autoResumeOnUsageReset: true,
+        installDotnet: false, installAngular: false, installGlab: false, installGh: false,
+        installChromium: false, installDocker: false, imageBuildStatus: 'Idle',
+        lastImageBuildError: null, hasUsableImage: false, nextRetryAt: null, attempt: 0,
+        systemPromptTemplate: null, workerPromptTemplate: null,
+      });
+      httpMock.expectOne('/api/credentials').flush(CREDENTIALS_API_KEY_UNREADABLE);
+      fixture.detectChanges();
+
+      // Act — count role="alert" elements in the API key section
+      const apiKeySection = el.querySelector('.setup-auth-step__form') as HTMLElement;
+      const alertEls = Array.from(apiKeySection.querySelectorAll('[role="alert"]'));
+
+      // Assert — exactly one assertive alert region (#api-key-error); the Unreadable note uses role="status"
+      expect(alertEls.length).toBe(1);
+      expect(alertEls[0].id).toBe('api-key-error');
+    });
+
+    it('should not render any note when apiKeyStatus is Present and API key mode is selected', () => {
+      // Arrange
+      const { fixture, httpMock } = setup();
+      fixture.detectChanges();
+
+      const el = fixture.nativeElement as HTMLElement;
+      const radios = el.querySelectorAll<HTMLInputElement>('input[type="radio"]');
+      radios[0].click();
+      fixture.detectChanges();
+
+      // Simulate service loading Present credentials
+      const service = fixture.componentInstance['_settingsService'];
+      service.loadSettings();
+      httpMock.expectOne('/api/settings').flush({
+        maxConcurrent: 3, timeoutMinutes: 60, probeIntervalMinutes: 60, pollIntervalSeconds: 30,
+        usageLimitResetsAt: null, isDispatchPaused: false, autoResumeOnUsageReset: true,
+        installDotnet: false, installAngular: false, installGlab: false, installGh: false,
+        installChromium: false, installDocker: false, imageBuildStatus: 'Idle',
+        lastImageBuildError: null, hasUsableImage: false, nextRetryAt: null, attempt: 0,
+        systemPromptTemplate: null, workerPromptTemplate: null,
+      });
+      httpMock.expectOne('/api/credentials').flush(CREDENTIALS_API_KEY_RESPONSE);
+      fixture.detectChanges();
+
+      // Act — Present should show no warning content in the persistent wrapper
+      const warningRegion = el.querySelector('.setup-auth-step__note--warning');
+      // The wrapper is always in the DOM (persistent live-region) but should have no inner content
+      const svg = warningRegion?.querySelector('svg');
+      const span = warningRegion?.querySelector('span');
+
+      // Assert — wrapper present but inner content absent (hidden state)
+      expect(warningRegion).toBeTruthy();
+      expect(svg).toBeFalsy();
+      expect(span).toBeFalsy();
+    });
+  });
+
+  // Fix 1: aria-describedby on API key input includes the Unreadable note id
+  it('should include api-key-unreadable-note in the API key input aria-describedby', () => {
+    // Arrange
+    const { fixture } = setup();
+    fixture.detectChanges();
+
+    const el = fixture.nativeElement as HTMLElement;
+    const radios = el.querySelectorAll<HTMLInputElement>('input[type="radio"]');
+    radios[0].click();
+    fixture.detectChanges();
+
+    // Act
+    const input = el.querySelector<HTMLInputElement>('input[type="password"]');
+    const describedBy = input?.getAttribute('aria-describedby') ?? '';
+
+    // Assert — the input references both the error region and the unreadable note
+    expect(describedBy).toContain('api-key-unreadable-note');
+    expect(describedBy).toContain('api-key-error');
+    // The referenced element must exist in the DOM (persistent live-region pattern)
+    expect(el.querySelector('#api-key-unreadable-note')).toBeTruthy();
   });
 
   // Finding 9: startLoginError rendered in OAuth section

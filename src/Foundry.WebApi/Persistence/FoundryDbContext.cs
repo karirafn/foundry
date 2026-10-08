@@ -52,8 +52,8 @@ public sealed class FoundryDbContext(
         ILogger<MonitoringInfrastructure.EncryptedStringConverter>? monitoringConverterLogger =
             loggerFactory?.CreateLogger<MonitoringInfrastructure.EncryptedStringConverter>();
 
-        ILogger<CredentialsInfrastructure.EncryptedStringConverter>? credentialsConverterLogger =
-            loggerFactory?.CreateLogger<CredentialsInfrastructure.EncryptedStringConverter>();
+        ILogger<CredentialsInfrastructure.ApiKeyCredentialConverter>? credentialsConverterLogger =
+            loggerFactory?.CreateLogger<CredentialsInfrastructure.ApiKeyCredentialConverter>();
 
         modelBuilder.ApplyConfiguration(new MonitoredRepositoryConfiguration());
         modelBuilder.ApplyConfiguration(

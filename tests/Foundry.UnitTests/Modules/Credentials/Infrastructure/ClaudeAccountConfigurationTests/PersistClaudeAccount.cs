@@ -133,25 +133,56 @@ public sealed class PersistClaudeAccount : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenApiKeyAuthModePersisted_AuthModeColumnIsEncrypted()
+    public async Task WhenPresentApiKeyPersisted_CanBeReloadedWithPresentCredential()
     {
         // Arrange
         ClaudeAccount account = ClaudeAccount.Create();
-        account.SetAuthMode(new AuthMode.ApiKey("my-plaintext-key"));
+        account.SetAuthMode(new AuthMode.ApiKey(new ApiKeyCredential.Present("sk-ant-test-key")));
 
         _dbContext.Set<ClaudeAccount>().Add(account);
         await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
         _dbContext.ChangeTracker.Clear();
 
-        // Act — query raw column value to verify encryption
-        await using SqliteCommand command = _connection.CreateCommand();
-        command.CommandText = "SELECT auth_mode FROM claude_account LIMIT 1";
-        string? rawValue = (string?)await command.ExecuteScalarAsync(TestContext.Current.CancellationToken);
+        // Act
+        ClaudeAccount? result = await _dbContext
+            .Set<ClaudeAccount>()
+            .FindAsync([account.Id], TestContext.Current.CancellationToken);
 
-        // Assert — the raw stored value should not contain plaintext JSON
-        string nonNull = rawValue.ShouldNotBeNull();
-        nonNull.ShouldNotContain("api_key");
-        nonNull.ShouldNotContain("my-plaintext-key");
+        // Assert
+        ClaudeAccount reloaded = result.ShouldNotBeNull();
+        AuthMode.ApiKey apiKey = reloaded.AuthMode.ShouldBeOfType<AuthMode.ApiKey>();
+        ApiKeyCredential.Present present = apiKey.Credential.ShouldBeOfType<ApiKeyCredential.Present>();
+        present.Value.ShouldBe("sk-ant-test-key");
+    }
+
+    [Fact]
+    public async Task WhenApiKeyAuthModePersisted_ApiKeyColumnIsEncryptedAndAuthModeIsPlaintext()
+    {
+        // Arrange
+        ClaudeAccount account = ClaudeAccount.Create();
+        account.SetAuthMode(new AuthMode.ApiKey(new ApiKeyCredential.Present("my-plaintext-key")));
+
+        _dbContext.Set<ClaudeAccount>().Add(account);
+        await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+        _dbContext.ChangeTracker.Clear();
+
+        // Act — query raw column values to verify encryption split
+        await using SqliteCommand command = _connection.CreateCommand();
+        command.CommandText = "SELECT auth_mode, api_key FROM claude_account LIMIT 1";
+        await using SqliteDataReader reader = await command.ExecuteReaderAsync(TestContext.Current.CancellationToken);
+        await reader.ReadAsync(TestContext.Current.CancellationToken);
+        string? rawAuthMode = reader.GetString(0);
+        string? rawApiKey = await reader.IsDBNullAsync(1, TestContext.Current.CancellationToken)
+            ? null
+            : reader.GetString(1);
+
+        // Assert — auth_mode is plaintext JSON containing the mode type only;
+        //           api_key column is encrypted (does not contain the raw key)
+        rawAuthMode.ShouldNotBeNull();
+        rawAuthMode.ShouldContain("api_key");
+        rawAuthMode.ShouldNotContain("my-plaintext-key");
+        rawApiKey.ShouldNotBeNull();
+        rawApiKey.ShouldNotContain("my-plaintext-key");
     }
 
     [Fact]

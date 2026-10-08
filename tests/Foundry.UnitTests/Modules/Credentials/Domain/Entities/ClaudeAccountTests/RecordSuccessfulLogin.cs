@@ -54,7 +54,7 @@ public sealed class RecordSuccessfulLogin
     {
         // Arrange
         ClaudeAccount account = ClaudeAccount.Create();
-        account.SetAuthMode(new AuthMode.ApiKey("key"));
+        account.SetAuthMode(new AuthMode.ApiKey(new ApiKeyCredential.Present("key")));
         account.Invalidate("some_reason");
 
         // Act

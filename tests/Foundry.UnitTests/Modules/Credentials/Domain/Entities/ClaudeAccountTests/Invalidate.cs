@@ -14,7 +14,7 @@ public sealed class Invalidate
     {
         // Arrange
         ClaudeAccount account = ClaudeAccount.Create();
-        account.SetAuthMode(new AuthMode.ApiKey("key"));
+        account.SetAuthMode(new AuthMode.ApiKey(new ApiKeyCredential.Present("key")));
 
         // Act
         account.Invalidate("worker_auth_failed");
@@ -29,7 +29,7 @@ public sealed class Invalidate
     {
         // Arrange
         ClaudeAccount account = ClaudeAccount.Create();
-        account.SetAuthMode(new AuthMode.ApiKey("key"));
+        account.SetAuthMode(new AuthMode.ApiKey(new ApiKeyCredential.Present("key")));
 
         // Act
         bool changed = account.Invalidate("worker_auth_failed");
@@ -43,7 +43,7 @@ public sealed class Invalidate
     {
         // Arrange
         ClaudeAccount account = ClaudeAccount.Create();
-        account.SetAuthMode(new AuthMode.ApiKey("key"));
+        account.SetAuthMode(new AuthMode.ApiKey(new ApiKeyCredential.Present("key")));
         account.Invalidate("first_failure");
 
         // Act
@@ -58,7 +58,7 @@ public sealed class Invalidate
     {
         // Arrange
         ClaudeAccount account = ClaudeAccount.Create();
-        account.SetAuthMode(new AuthMode.ApiKey("key"));
+        account.SetAuthMode(new AuthMode.ApiKey(new ApiKeyCredential.Present("key")));
         account.Invalidate("original_reason");
 
         // Act
@@ -74,7 +74,7 @@ public sealed class Invalidate
     {
         // Arrange
         ClaudeAccount account = ClaudeAccount.Create();
-        account.SetAuthMode(new AuthMode.ApiKey("key"));
+        account.SetAuthMode(new AuthMode.ApiKey(new ApiKeyCredential.Present("key")));
         DateTimeOffset before = account.UpdatedAt;
 
         // Act
@@ -89,7 +89,7 @@ public sealed class Invalidate
     {
         // Arrange
         ClaudeAccount account = ClaudeAccount.Create();
-        account.SetAuthMode(new AuthMode.ApiKey("key"));
+        account.SetAuthMode(new AuthMode.ApiKey(new ApiKeyCredential.Present("key")));
         account.Invalidate("first_reason");
         DateTimeOffset updatedAt = account.UpdatedAt;
 

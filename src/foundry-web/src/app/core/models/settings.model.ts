@@ -2,6 +2,8 @@ export type AuthMode = 'api_key' | 'oauth';
 
 export type OAuthStatus = 'NotConfigured' | 'Present' | 'ReLoginNeeded';
 
+export type ApiKeyStatus = 'NotConfigured' | 'Present' | 'Unreadable';
+
 export type ImageBuildStatus = 'Idle' | 'Building' | 'Failed';
 
 export type LoginPhase = 'Starting' | 'WaitingForAuthorization' | 'SigningIn' | 'Succeeded' | 'Failed';
@@ -32,6 +34,9 @@ export interface OAuthCredentialInfo {
 
 export interface AuthSettings {
   mode: AuthMode;
+  apiKeyStatus: ApiKeyStatus;
+  /** @deprecated Derive as `apiKeyStatus === 'Present'` instead — `apiKeyConfigured` is a boolean
+   *  projection of `apiKeyStatus` that predates the three-state model. */
   apiKeyConfigured: boolean;
   oauth: OAuthCredentialInfo | null;
   accountEmail: string | null;
@@ -52,6 +57,7 @@ export interface ClaudeAccountSummary {
   accountId: string;
   authMode: string;
   oAuthStatus: OAuthStatus;
+  apiKeyStatus: ApiKeyStatus;
   subscriptionType: string | null;
   oAuthAccountEmail: string | null;
   oAuthAccountOrgName: string | null;

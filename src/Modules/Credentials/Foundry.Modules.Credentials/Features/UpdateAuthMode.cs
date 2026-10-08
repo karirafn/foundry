@@ -58,8 +58,10 @@ internal static class UpdateAuthMode
                 return Result<ClaudeAccountSummary>.Fail(CredentialsErrors.NotFound);
             }
 
+            // Validator ensures ApiKey mode always has a non-null, non-empty ApiKey, so the
+            // null-forgiveness on command.ApiKey! is safe here.
             AuthMode mode = command.Mode == ApiKeyMode
-                ? new AuthMode.ApiKey(command.ApiKey!)
+                ? new AuthMode.ApiKey(new ApiKeyCredential.Present(command.ApiKey!))
                 : new AuthMode.OAuth(SubscriptionType: null);
 
             account.SetAuthMode(mode);

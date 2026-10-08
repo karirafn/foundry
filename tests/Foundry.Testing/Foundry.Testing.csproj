@@ -19,6 +19,8 @@
     <ProjectReference Include="..\..\src\Modules\Monitoring\Foundry.Modules.Monitoring.Contracts\Foundry.Modules.Monitoring.Contracts.csproj" />
     <ProjectReference Include="..\..\src\Modules\Workers\Foundry.Modules.Workers\Foundry.Modules.Workers.csproj" />
     <ProjectReference Include="..\..\src\Modules\Workers\Foundry.Modules.Workers.Contracts\Foundry.Modules.Workers.Contracts.csproj" />
+    <ProjectReference Include="..\..\src\Modules\Credentials\Foundry.Modules.Credentials\Foundry.Modules.Credentials.csproj" />
+    <ProjectReference Include="..\..\src\Modules\Credentials\Foundry.Modules.Credentials.Contracts\Foundry.Modules.Credentials.Contracts.csproj" />
   </ItemGroup>
 
 </Project>

@@ -7,7 +7,7 @@ public abstract record AuthMode
 {
     private AuthMode() { }
 
-    public sealed record ApiKey(string Key) : AuthMode;
+    public sealed record ApiKey(ApiKeyCredential Credential) : AuthMode;
 
 #pragma warning disable CA1724
     public sealed record OAuth(string? SubscriptionType) : AuthMode;

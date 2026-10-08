@@ -48,6 +48,27 @@ const API_KEY_RESPONSE = {
 const CREDENTIALS_API_KEY = {
   accountId: '00000000-0000-0000-0000-000000000001',
   authMode: 'ApiKey',
+  apiKeyStatus: 'Present',
+  oAuthStatus: 'NotConfigured',
+  subscriptionType: null,
+  oAuthAccountEmail: null,
+  oAuthAccountOrgName: null,
+};
+
+const CREDENTIALS_API_KEY_NOT_CONFIGURED = {
+  accountId: '00000000-0000-0000-0000-000000000001',
+  authMode: 'ApiKey',
+  apiKeyStatus: 'NotConfigured',
+  oAuthStatus: 'NotConfigured',
+  subscriptionType: null,
+  oAuthAccountEmail: null,
+  oAuthAccountOrgName: null,
+};
+
+const CREDENTIALS_API_KEY_UNREADABLE = {
+  accountId: '00000000-0000-0000-0000-000000000001',
+  authMode: 'ApiKey',
+  apiKeyStatus: 'Unreadable',
   oAuthStatus: 'NotConfigured',
   subscriptionType: null,
   oAuthAccountEmail: null,
@@ -2203,6 +2224,161 @@ describe('SettingsGeneralComponent', () => {
       expect(hint).toBeTruthy();
       expect(hint.textContent).toContain('comma-separated');
       expect(hint.textContent).toContain('Maximum 50 hostnames');
+    });
+  });
+
+  describe('API-key status indicator', () => {
+    it('should render the configured-indicator when apiKeyStatus is Present', () => {
+      // Arrange
+      const { httpMock } = setup();
+      const fixture = TestBed.createComponent(SettingsGeneralComponent);
+      fixture.detectChanges();
+      flushSettings(httpMock, API_KEY_RESPONSE, CREDENTIALS_API_KEY);
+      fixture.detectChanges();
+
+      // Act
+      const el = fixture.nativeElement as HTMLElement;
+      const indicator = el.querySelector('#api-key-configured .general-settings__configured-indicator');
+
+      // Assert
+      expect(indicator).toBeTruthy();
+      expect(indicator?.textContent).toContain('API key is configured');
+    });
+
+    it('should render the muted hint when apiKeyStatus is NotConfigured', () => {
+      // Arrange
+      const { httpMock } = setup();
+      const fixture = TestBed.createComponent(SettingsGeneralComponent);
+      fixture.detectChanges();
+      flushSettings(httpMock, API_KEY_RESPONSE, CREDENTIALS_API_KEY_NOT_CONFIGURED);
+      fixture.detectChanges();
+
+      // Act
+      const el = fixture.nativeElement as HTMLElement;
+      const hint = el.querySelector('#api-key-configured .general-settings__field-hint--credential-status');
+
+      // Assert
+      expect(hint).toBeTruthy();
+      expect(hint?.textContent).toContain('No API key is set');
+    });
+
+    it('should render the warning box with role="alert" when apiKeyStatus is Unreadable', () => {
+      // Arrange
+      const { httpMock } = setup();
+      const fixture = TestBed.createComponent(SettingsGeneralComponent);
+      fixture.detectChanges();
+      flushSettings(httpMock, API_KEY_RESPONSE, CREDENTIALS_API_KEY_UNREADABLE);
+      fixture.detectChanges();
+
+      // Act
+      const el = fixture.nativeElement as HTMLElement;
+      const warningRegion = el.querySelector('#api-key-configured[role="alert"]');
+      const warning = el.querySelector('.general-settings__api-key-warning');
+
+      // Assert — the persistent wrapper carries role="alert" and contains the warning content
+      expect(warningRegion).toBeTruthy();
+      expect(warning).toBeTruthy();
+      expect(warning?.textContent).toContain('can no longer be read');
+      expect(warning?.textContent).toContain('Re-enter');
+    });
+
+    it('should keep id="api-key-configured" always in the DOM so the input aria-describedby never dangles', () => {
+      // Arrange
+      const { httpMock } = setup();
+      const fixture = TestBed.createComponent(SettingsGeneralComponent);
+      fixture.detectChanges();
+      flushSettings(httpMock, API_KEY_RESPONSE, CREDENTIALS_API_KEY_NOT_CONFIGURED);
+      fixture.detectChanges();
+
+      // Act
+      const el = fixture.nativeElement as HTMLElement;
+      const statusEl = el.querySelector('#api-key-configured');
+      const input = el.querySelector('.general-settings__api-key-input');
+
+      // Assert — element with id="api-key-configured" is always present and input references it
+      expect(statusEl).toBeTruthy();
+      expect(input?.getAttribute('aria-describedby')).toContain('api-key-configured');
+    });
+
+    it('should keep id="api-key-configured" in the DOM even when apiKeyStatus is Present', () => {
+      // Arrange
+      const { httpMock } = setup();
+      const fixture = TestBed.createComponent(SettingsGeneralComponent);
+      fixture.detectChanges();
+      flushSettings(httpMock, API_KEY_RESPONSE, CREDENTIALS_API_KEY);
+      fixture.detectChanges();
+
+      // Act
+      const el = fixture.nativeElement as HTMLElement;
+      const statusEl = el.querySelector('#api-key-configured');
+
+      // Assert — persistent wrapper always in the DOM, not created/destroyed per status
+      expect(statusEl).toBeTruthy();
+    });
+
+    it('should keep id="api-key-configured" in the DOM when apiKeyStatus is Unreadable', () => {
+      // Arrange
+      const { httpMock } = setup();
+      const fixture = TestBed.createComponent(SettingsGeneralComponent);
+      fixture.detectChanges();
+      flushSettings(httpMock, API_KEY_RESPONSE, CREDENTIALS_API_KEY_UNREADABLE);
+      fixture.detectChanges();
+
+      // Act
+      const el = fixture.nativeElement as HTMLElement;
+      const statusEl = el.querySelector('#api-key-configured');
+
+      // Assert
+      expect(statusEl).toBeTruthy();
+    });
+
+    it('should set role="alert" on the persistent wrapper only when apiKeyStatus is Unreadable', () => {
+      // Arrange — Present state: no role="alert" on the wrapper
+      const { httpMock } = setup();
+      const fixture = TestBed.createComponent(SettingsGeneralComponent);
+      fixture.detectChanges();
+      flushSettings(httpMock, API_KEY_RESPONSE, CREDENTIALS_API_KEY);
+      fixture.detectChanges();
+
+      // Act
+      const el = fixture.nativeElement as HTMLElement;
+      const wrapper = el.querySelector('#api-key-configured');
+
+      // Assert — no alert role when not Unreadable
+      expect(wrapper?.getAttribute('role')).not.toBe('alert');
+    });
+
+    it('should not render the configured-indicator when apiKeyStatus is NotConfigured', () => {
+      // Arrange
+      const { httpMock } = setup();
+      const fixture = TestBed.createComponent(SettingsGeneralComponent);
+      fixture.detectChanges();
+      flushSettings(httpMock, API_KEY_RESPONSE, CREDENTIALS_API_KEY_NOT_CONFIGURED);
+      fixture.detectChanges();
+
+      // Act
+      const el = fixture.nativeElement as HTMLElement;
+      const indicator = el.querySelector('.general-settings__configured-indicator');
+
+      // Assert
+      expect(indicator).toBeFalsy();
+    });
+
+    it('should render the NotConfigured hint with the credential-status class (not the shared field-hint class alone)', () => {
+      // Arrange
+      const { httpMock } = setup();
+      const fixture = TestBed.createComponent(SettingsGeneralComponent);
+      fixture.detectChanges();
+      flushSettings(httpMock, API_KEY_RESPONSE, CREDENTIALS_API_KEY_NOT_CONFIGURED);
+      fixture.detectChanges();
+
+      // Act
+      const el = fixture.nativeElement as HTMLElement;
+      const hint = el.querySelector('.general-settings__field-hint--credential-status');
+
+      // Assert — the dedicated class exists so it can receive higher-contrast styling
+      expect(hint).toBeTruthy();
+      expect(hint?.textContent).toContain('No API key is set');
     });
   });
 

@@ -9,9 +9,9 @@ namespace Foundry.Modules.Credentials.Infrastructure.Configurations;
 
 internal sealed class EncryptedStringConverter : ValueConverter<string, string>
 {
-    // Must match Foundry.Modules.Settings.Infrastructure.EncryptedStringConverter.ProtectorPurpose
-    // so that the migration can copy ciphertext from global_settings verbatim without a decrypt
-    // round-trip — both converters share the same Data Protection purpose string.
+    // This purpose string must remain stable — changing it renders every existing encrypted
+    // api_key row unreadable, because Data Protection binds the key material to the purpose
+    // at encryption time and rejects decryption attempts under any other value.
     internal const string ProtectorPurpose = "Foundry.Settings.Encryption";
 
     internal EncryptedStringConverter(IDataProtectionProvider provider, ILogger<EncryptedStringConverter>? logger = null)

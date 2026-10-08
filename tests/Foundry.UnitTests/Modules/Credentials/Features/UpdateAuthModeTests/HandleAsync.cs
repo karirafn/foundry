@@ -73,7 +73,7 @@ public sealed class HandleAsync : IAsyncDisposable
         await using (FoundryDbContext seedDb = CreateDbContext())
         {
             ClaudeAccount account = ClaudeAccount.Create();
-            account.SetAuthMode(new AuthMode.ApiKey("old-key"));
+            account.SetAuthMode(new AuthMode.ApiKey(new ApiKeyCredential.Present("old-key")));
             seedDb.Set<ClaudeAccount>().Add(account);
             await seedDb.SaveChangesAsync(TestContext.Current.CancellationToken);
         }

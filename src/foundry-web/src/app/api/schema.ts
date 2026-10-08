@@ -583,6 +583,7 @@ export interface components {
             accountId: string;
             authMode: string;
             oAuthStatus: string;
+            apiKeyStatus: string;
             subscriptionType: null | string;
             oAuthAccountEmail: null | string;
             oAuthAccountOrgName: null | string;

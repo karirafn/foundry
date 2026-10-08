@@ -12,6 +12,7 @@ function buildSummary(overrides: Partial<ClaudeAccountSummary> = {}): ClaudeAcco
     accountId: '00000000-0000-0000-0000-000000000001',
     authMode: 'ApiKey',
     oAuthStatus: 'NotConfigured',
+    apiKeyStatus: 'NotConfigured',
     subscriptionType: null,
     oAuthAccountEmail: null,
     oAuthAccountOrgName: null,

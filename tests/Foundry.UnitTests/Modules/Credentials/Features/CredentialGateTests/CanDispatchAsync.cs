@@ -1,4 +1,5 @@
 using Foundry.Modules.Credentials.Domain.Entities;
+using Foundry.Modules.Credentials.Domain.ValueObjects;
 using Foundry.Modules.Credentials.Features;
 using Foundry.Modules.Credentials.Features.Login;
 using Foundry.WebApi.Persistence;
@@ -39,12 +40,13 @@ public sealed class CanDispatchAsync : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenValidAndLoginNotActive_ReturnsTrue()
+    public async Task WhenOAuthAndLoginNotActive_ReturnsTrue()
     {
-        // Arrange
+        // Arrange — OAuth mode is the canonical dispatchable state after a successful login.
         await using (FoundryDbContext seedDb = CreateDbContext())
         {
             ClaudeAccount account = ClaudeAccount.Create();
+            account.RecordSuccessfulLogin("user@example.com", "My Org", "pro");
             seedDb.Set<ClaudeAccount>().Add(account);
             await seedDb.SaveChangesAsync(TestContext.Current.CancellationToken);
         }
@@ -159,6 +161,77 @@ public sealed class CanDispatchAsync : IAsyncDisposable
 
         // Assert
         result.ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task WhenApiKeyModeWithUnreadableCredential_ReturnsFalse()
+    {
+        // Arrange — Unreadable is produced when EF cannot decrypt the stored api_key column.
+        // Inject an undecryptable value via raw SQL so the gate truly sees an Unreadable credential
+        // (SetAuthMode rejects Unreadable as a write-time guard — it would persist as NULL and
+        // read back as NotConfigured, testing the wrong branch).
+        await using (FoundryDbContext seedDb = CreateDbContext())
+        {
+            ClaudeAccount account = ClaudeAccount.Create();
+            seedDb.Set<ClaudeAccount>().Add(account);
+            await seedDb.SaveChangesAsync(TestContext.Current.CancellationToken);
+            await seedDb.Database.ExecuteSqlRawAsync(
+                "UPDATE claude_account SET api_key = {0}",
+                Convert.ToBase64String([0x00, 0x01, 0x02, 0x03, 0xFF, 0xFE]));
+        }
+
+        await using FoundryDbContext dbContext = CreateDbContext();
+        CredentialGate sut = new(dbContext, new FakeLoginSessionState(isActive: false));
+
+        // Act
+        bool result = await sut.CanDispatchAsync(TestContext.Current.CancellationToken);
+
+        // Assert
+        result.ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task WhenApiKeyModeWithNotConfiguredCredential_ReturnsFalse()
+    {
+        // Arrange
+        await using (FoundryDbContext seedDb = CreateDbContext())
+        {
+            ClaudeAccount account = ClaudeAccount.Create();
+            account.SetAuthMode(new AuthMode.ApiKey(new ApiKeyCredential.NotConfigured()));
+            seedDb.Set<ClaudeAccount>().Add(account);
+            await seedDb.SaveChangesAsync(TestContext.Current.CancellationToken);
+        }
+
+        await using FoundryDbContext dbContext = CreateDbContext();
+        CredentialGate sut = new(dbContext, new FakeLoginSessionState(isActive: false));
+
+        // Act
+        bool result = await sut.CanDispatchAsync(TestContext.Current.CancellationToken);
+
+        // Assert
+        result.ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task WhenApiKeyModeWithPresentCredential_ReturnsTrue()
+    {
+        // Arrange
+        await using (FoundryDbContext seedDb = CreateDbContext())
+        {
+            ClaudeAccount account = ClaudeAccount.Create();
+            account.SetAuthMode(new AuthMode.ApiKey(new ApiKeyCredential.Present("sk-ant-test")));
+            seedDb.Set<ClaudeAccount>().Add(account);
+            await seedDb.SaveChangesAsync(TestContext.Current.CancellationToken);
+        }
+
+        await using FoundryDbContext dbContext = CreateDbContext();
+        CredentialGate sut = new(dbContext, new FakeLoginSessionState(isActive: false));
+
+        // Act
+        bool result = await sut.CanDispatchAsync(TestContext.Current.CancellationToken);
+
+        // Assert
+        result.ShouldBeTrue();
     }
 
     private sealed class FakeLoginSessionState(bool isActive) : ILoginSessionState

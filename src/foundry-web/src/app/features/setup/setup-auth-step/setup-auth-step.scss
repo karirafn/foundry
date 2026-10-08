@@ -96,6 +96,38 @@
     min-height: 1.25rem;
   }
 
+  &__oauth-note {
+    color: var(--fd-text-secondary);
+    font-size: 0.8125rem;
+    line-height: var(--fd-line-height-base, 1.5);
+  }
+
+  &__note--warning {
+    align-items: flex-start;
+    display: flex;
+    gap: var(--fd-spacing-sm);
+    overflow-wrap: break-word;
+    padding: var(--fd-spacing-sm) var(--fd-spacing-md);
+    border: 1px solid var(--fd-border-warning);
+    border-radius: var(--fd-radius-sm);
+    background: var(--fd-bg-warning-subtle);
+    color: var(--fd-text-warning);
+
+    // The wrapper stays in the DOM (persistent live-region) but must not render
+    // a visible box when no Unreadable content is active.
+    &-hidden {
+      padding: 0;
+      border: 0;
+      background: transparent;
+      color: inherit;
+    }
+  }
+
+  &__note-warning-icon {
+    flex-shrink: 0;
+    margin-block-start: 0.0625rem;
+  }
+
   &__oauth-section {
     display: flex;
     flex-direction: column;

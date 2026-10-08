@@ -60,7 +60,7 @@ public sealed class GetSummaryAsync : IAsyncDisposable
         await using (FoundryDbContext seedDb = CreateDbContext())
         {
             ClaudeAccount account = ClaudeAccount.Create();
-            account.SetAuthMode(new AuthMode.ApiKey("encrypted-key"));
+            account.SetAuthMode(new AuthMode.ApiKey(new ApiKeyCredential.Present("encrypted-key")));
             seedDb.Set<ClaudeAccount>().Add(account);
             await seedDb.SaveChangesAsync(TestContext.Current.CancellationToken);
         }
@@ -76,9 +76,82 @@ public sealed class GetSummaryAsync : IAsyncDisposable
         summary.ShouldSatisfyAllConditions(
             () => summary.AuthMode.ShouldBe("ApiKey"),
             () => summary.OAuthStatus.ShouldBe(CredentialQueries.OAuthStatusNotConfigured),
+            () => summary.ApiKeyStatus.ShouldBe(CredentialQueries.ApiKeyStatusPresent),
             () => summary.SubscriptionType.ShouldBeNull(),
             () => summary.OAuthAccountEmail.ShouldBeNull(),
             () => summary.OAuthAccountOrgName.ShouldBeNull());
+    }
+
+    [Fact]
+    public async Task WhenApiKeyAccountWithNotConfiguredCredential_ApiKeyStatusIsNotConfigured()
+    {
+        // Arrange — a freshly-created account starts with NotConfigured credential.
+        await using (FoundryDbContext seedDb = CreateDbContext())
+        {
+            ClaudeAccount account = ClaudeAccount.Create();
+            seedDb.Set<ClaudeAccount>().Add(account);
+            await seedDb.SaveChangesAsync(TestContext.Current.CancellationToken);
+        }
+
+        await using FoundryDbContext dbContext = CreateDbContext();
+        CredentialQueries sut = new(dbContext);
+
+        // Act
+        ClaudeAccountSummary? result = await sut.GetSummaryAsync(TestContext.Current.CancellationToken);
+
+        // Assert
+        ClaudeAccountSummary summary = result.ShouldNotBeNull();
+        summary.ApiKeyStatus.ShouldBe(CredentialQueries.ApiKeyStatusNotConfigured);
+    }
+
+    [Fact]
+    public async Task WhenApiKeyAccountWithUnreadableCredential_ApiKeyStatusIsUnreadable()
+    {
+        // Arrange — Unreadable is produced when EF cannot decrypt the stored api_key column
+        // (key rotation or corrupt base-64). Inject an undecryptable value via raw SQL so the
+        // loaded account truly has an Unreadable credential and ToSummary maps it correctly.
+        await using (FoundryDbContext seedDb = CreateDbContext())
+        {
+            ClaudeAccount seed = ClaudeAccount.Create();
+            seedDb.Set<ClaudeAccount>().Add(seed);
+            await seedDb.SaveChangesAsync(TestContext.Current.CancellationToken);
+            await seedDb.Database.ExecuteSqlRawAsync(
+                "UPDATE claude_account SET api_key = {0}",
+                Convert.ToBase64String([0x00, 0x01, 0x02, 0x03, 0xFF, 0xFE]));
+        }
+
+        await using FoundryDbContext dbContext = CreateDbContext();
+        ClaudeAccount? account = await dbContext.Set<ClaudeAccount>()
+            .FirstOrDefaultAsync(TestContext.Current.CancellationToken);
+
+        // Act
+        ClaudeAccountSummary summary = CredentialQueries.ToSummary(account.ShouldNotBeNull());
+
+        // Assert
+        summary.ApiKeyStatus.ShouldBe(CredentialQueries.ApiKeyStatusUnreadable);
+    }
+
+    [Fact]
+    public async Task WhenOAuthAccount_ApiKeyStatusIsNotConfigured()
+    {
+        // Arrange — OAuth mode has no API key credential; the status derives as NotConfigured.
+        await using (FoundryDbContext seedDb = CreateDbContext())
+        {
+            ClaudeAccount account = ClaudeAccount.Create();
+            account.RecordSuccessfulLogin("user@example.com", "MyOrg", "pro");
+            seedDb.Set<ClaudeAccount>().Add(account);
+            await seedDb.SaveChangesAsync(TestContext.Current.CancellationToken);
+        }
+
+        await using FoundryDbContext dbContext = CreateDbContext();
+        CredentialQueries sut = new(dbContext);
+
+        // Act
+        ClaudeAccountSummary? result = await sut.GetSummaryAsync(TestContext.Current.CancellationToken);
+
+        // Assert
+        ClaudeAccountSummary summary = result.ShouldNotBeNull();
+        summary.ApiKeyStatus.ShouldBe(CredentialQueries.ApiKeyStatusNotConfigured);
     }
 
     [Fact]

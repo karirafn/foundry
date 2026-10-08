@@ -8,20 +8,45 @@ public sealed class ClaudeAccount : AggregateRoot<ClaudeAccountId>
     internal const int MaxOAuthAccountEmailLength = 254;
     internal const int MaxOAuthAccountOrgNameLength = 200;
 
+    private AuthMode _authModeRecord = null!;
+    private ApiKeyCredential? _apiKeyCredential;
+
     private ClaudeAccount() : base(ClaudeAccountId.Default)
     {
     }
 
     private ClaudeAccount(ClaudeAccountId id, DateTimeOffset createdAt) : base(id)
     {
-        AuthMode = new AuthMode.ApiKey(string.Empty);
+        _authModeRecord = new AuthMode.ApiKey(new ApiKeyCredential.NotConfigured());
+        _apiKeyCredential = new ApiKeyCredential.NotConfigured();
         Validity = new CredentialValidity.Valid();
         SpendState = new SpendState.Available();
         CreatedAt = createdAt;
         UpdatedAt = createdAt;
     }
 
-    public AuthMode AuthMode { get; private set; } = null!;
+    /// <summary>
+    /// Assembles the current auth mode from the private mode record and the separately-stored
+    /// API key credential. <c>_authModeRecord</c> carries the discriminator (ApiKey or OAuth);
+    /// <c>_apiKeyCredential</c> carries the key credential loaded from the separate
+    /// <c>api_key</c> column. For non-EF-loaded instances (e.g. freshly created), the credential
+    /// in <c>apiKeyRecord</c> is used as a fallback.
+    /// </summary>
+    public AuthMode AuthMode
+    {
+        get
+        {
+            if (_authModeRecord is not AuthMode.ApiKey apiKeyRecord)
+            {
+                return _authModeRecord;
+            }
+
+            // Prefer the separately-loaded credential field; fall back to the credential embedded
+            // in the mode record for in-memory instances not yet persisted.
+            ApiKeyCredential credential = _apiKeyCredential ?? apiKeyRecord.Credential;
+            return new AuthMode.ApiKey(credential);
+        }
+    }
 
     public CredentialValidity Validity { get; private set; } = null!;
 
@@ -35,6 +60,37 @@ public sealed class ClaudeAccount : AggregateRoot<ClaudeAccountId>
 
     public DateTimeOffset UpdatedAt { get; private set; }
 
+    /// <summary>
+    /// Returns false when validity is Invalid, spend is Blocked, or mode is API-key
+    /// with a non-Present credential. Returns true otherwise. No DB access.
+    /// </summary>
+    public bool CanDispatch
+    {
+        get
+        {
+            if (Validity is CredentialValidity.Invalid)
+            {
+                return false;
+            }
+
+            if (SpendState is SpendState.Blocked)
+            {
+                return false;
+            }
+
+            // Reads backing fields directly rather than the assembled AuthMode property because
+            // _apiKeyCredential is always set for ApiKey rows (NotConfigured / Present / Unreadable),
+            // and for OAuth rows a NULL api_key column decrypts to NotConfigured — the
+            // _authModeRecord is AuthMode.ApiKey guard is what prevents an OAuth row failing this check.
+            if (_authModeRecord is AuthMode.ApiKey && _apiKeyCredential is not ApiKeyCredential.Present)
+            {
+                return false;
+            }
+
+            return true;
+        }
+    }
+
     public static ClaudeAccount Create()
     {
         DateTimeOffset now = DateTimeOffset.UtcNow;
@@ -43,17 +99,43 @@ public sealed class ClaudeAccount : AggregateRoot<ClaudeAccountId>
 
     /// <summary>
     /// Sets the auth mode. When switching to <see cref="AuthMode.ApiKey"/>, clears OAuth identity
-    /// fields and sets validity to <see cref="CredentialValidity.Valid"/>.
+    /// fields, sets validity to <see cref="CredentialValidity.Valid"/>, and stores the credential.
+    /// Switching to OAuth clears the stored API key credential.
     /// </summary>
+    /// <exception cref="ArgumentException">
+    /// Thrown when <paramref name="mode"/> is <see cref="AuthMode.ApiKey"/> with an
+    /// <see cref="ApiKeyCredential.Unreadable"/> credential. <see cref="ApiKeyCredential.Unreadable"/>
+    /// only arises on read (a failed decrypt) and cannot be persisted — it would write NULL and read
+    /// back as <see cref="ApiKeyCredential.NotConfigured"/>.
+    /// </exception>
     public void SetAuthMode(AuthMode mode)
     {
-        AuthMode = mode;
-
-        if (mode is AuthMode.ApiKey)
+        if (mode is AuthMode.ApiKey { Credential: ApiKeyCredential.Unreadable })
         {
-            OAuthAccountEmail = null;
-            OAuthAccountOrgName = null;
-            Validity = new CredentialValidity.Valid();
+            throw new ArgumentException(
+                "Cannot persist an Unreadable credential. Unreadable only arises on read (a failed decrypt) " +
+                "and would silently write NULL and read back as NotConfigured.",
+                nameof(mode));
+        }
+
+        switch (mode)
+        {
+            case AuthMode.ApiKey apiKey:
+                _apiKeyCredential = apiKey.Credential;
+                _authModeRecord = new AuthMode.ApiKey(apiKey.Credential);
+                OAuthAccountEmail = null;
+                OAuthAccountOrgName = null;
+                Validity = new CredentialValidity.Valid();
+                break;
+
+            case AuthMode.OAuth:
+                _authModeRecord = mode;
+                _apiKeyCredential = null;
+                break;
+
+            default:
+                _authModeRecord = mode;
+                break;
         }
 
         UpdatedAt = DateTimeOffset.UtcNow;
@@ -63,7 +145,6 @@ public sealed class ClaudeAccount : AggregateRoot<ClaudeAccountId>
     /// Marks the credentials as invalid with the given reason.
     /// Idempotent: when already <see cref="CredentialValidity.Invalid"/>, does nothing and returns
     /// <c>false</c> so callers can avoid double-publishing an event.
-    /// Does not affect <see cref="Validity"/>.
     /// </summary>
     /// <returns><c>true</c> if the state changed; <c>false</c> if already invalid.</returns>
     public bool Invalidate(string reason)
@@ -80,7 +161,7 @@ public sealed class ClaudeAccount : AggregateRoot<ClaudeAccountId>
 
     /// <summary>
     /// Records a successful OAuth login: sets the OAuth auth mode, writes the identity (clamped to
-    /// length caps), and sets validity to <see cref="CredentialValidity.Valid"/>.
+    /// length caps), clears the API key credential, and sets validity to <see cref="CredentialValidity.Valid"/>.
     /// </summary>
     public void RecordSuccessfulLogin(string? email, string? orgName, string? subscriptionType)
     {
@@ -93,7 +174,8 @@ public sealed class ClaudeAccount : AggregateRoot<ClaudeAccountId>
         OAuthAccountOrgName = orgName is not null && orgName.Length > MaxOAuthAccountOrgNameLength
             ? orgName[..MaxOAuthAccountOrgNameLength]
             : orgName;
-        AuthMode = new AuthMode.OAuth(subscriptionType);
+        _authModeRecord = new AuthMode.OAuth(subscriptionType);
+        _apiKeyCredential = null;
         Validity = new CredentialValidity.Valid();
         UpdatedAt = DateTimeOffset.UtcNow;
     }

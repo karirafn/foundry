@@ -10,7 +10,6 @@ internal sealed class AuthModeJsonConverter : JsonConverter<AuthMode>
     private const string TypeProperty = "type";
     private const string ApiKeyType = "api_key";
     private const string OAuthType = "oauth";
-    private const string KeyProperty = "encrypted_key";
     private const string SubscriptionTypeProperty = "subscription_type";
 
     public override AuthMode Read(
@@ -41,9 +40,8 @@ internal sealed class AuthModeJsonConverter : JsonConverter<AuthMode>
 
         switch (value)
         {
-            case AuthMode.ApiKey apiKey:
+            case AuthMode.ApiKey:
                 writer.WriteString(TypeProperty, ApiKeyType);
-                writer.WriteString(KeyProperty, apiKey.Key);
                 break;
 
             case AuthMode.OAuth oauth:
@@ -60,9 +58,11 @@ internal sealed class AuthModeJsonConverter : JsonConverter<AuthMode>
 
     private static AuthMode.ApiKey ReadApiKey(JsonElement root)
     {
-        string key = root.GetProperty(KeyProperty).GetString()
-            ?? string.Empty;
-        return new AuthMode.ApiKey(key);
+        // The credential is stored in the separate api_key column and assembled by the entity.
+        // Legacy blobs may contain an encrypted_key property — ignore it here; the entity
+        // will read NotConfigured from the null api_key column for those rows.
+        _ = root;
+        return new AuthMode.ApiKey(new ApiKeyCredential.NotConfigured());
     }
 
     private static AuthMode.OAuth ReadOAuth(JsonElement root)

@@ -59,7 +59,7 @@ public sealed class GetAuthModeAsync : IAsyncDisposable
         await using (FoundryDbContext seedDb = CreateDbContext())
         {
             ClaudeAccount account = ClaudeAccount.Create();
-            account.SetAuthMode(new AuthMode.ApiKey("my-key"));
+            account.SetAuthMode(new AuthMode.ApiKey(new ApiKeyCredential.Present("my-key")));
             seedDb.Set<ClaudeAccount>().Add(account);
             await seedDb.SaveChangesAsync(TestContext.Current.CancellationToken);
         }

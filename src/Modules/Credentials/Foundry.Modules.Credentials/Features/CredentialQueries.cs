@@ -13,6 +13,10 @@ internal sealed class CredentialQueries(DbContext dbContext) : ICredentialQuerie
     internal const string OAuthStatusPresent = "Present";
     internal const string OAuthStatusReLoginNeeded = "ReLoginNeeded";
 
+    internal const string ApiKeyStatusNotConfigured = "NotConfigured";
+    internal const string ApiKeyStatusPresent = "Present";
+    internal const string ApiKeyStatusUnreadable = "Unreadable";
+
     public async Task<string?> GetAuthModeAsync(CancellationToken cancellationToken)
     {
         // AuthMode uses a ValueConverter (decrypt + JSON) that cannot be projected into SQL.
@@ -48,10 +52,11 @@ internal sealed class CredentialQueries(DbContext dbContext) : ICredentialQuerie
             return null;
         }
 
+        // Only inject ANTHROPIC_API_KEY when the credential is present and readable.
+        // Unreadable and NotConfigured credentials do not produce an env var.
         return account.AuthMode switch
         {
-            AuthMode.ApiKey apiKey => ("ANTHROPIC_API_KEY", apiKey.Key),
-            AuthMode.OAuth => null,
+            AuthMode.ApiKey { Credential: ApiKeyCredential.Present p } => ("ANTHROPIC_API_KEY", p.Value),
             _ => null,
         };
     }
@@ -84,6 +89,7 @@ internal sealed class CredentialQueries(DbContext dbContext) : ICredentialQuerie
         };
 
         string oauthStatus = ComputeOAuthStatus(account);
+        string apiKeyStatus = ComputeApiKeyStatus(account);
         string? subscriptionType = account.AuthMode is AuthMode.OAuth oauth ? oauth.SubscriptionType : null;
         DateTimeOffset? nextProbeAt = account.SpendState is SpendState.Blocked blocked ? blocked.NextProbeAt : null;
 
@@ -91,6 +97,7 @@ internal sealed class CredentialQueries(DbContext dbContext) : ICredentialQuerie
             account.Id.Value,
             authModeName,
             oauthStatus,
+            apiKeyStatus,
             subscriptionType,
             account.OAuthAccountEmail,
             account.OAuthAccountOrgName,
@@ -112,5 +119,15 @@ internal sealed class CredentialQueries(DbContext dbContext) : ICredentialQuerie
         return string.IsNullOrEmpty(account.OAuthAccountEmail)
             ? OAuthStatusReLoginNeeded
             : OAuthStatusPresent;
+    }
+
+    private static string ComputeApiKeyStatus(ClaudeAccount account)
+    {
+        return account.AuthMode switch
+        {
+            AuthMode.ApiKey { Credential: ApiKeyCredential.Present } => ApiKeyStatusPresent,
+            AuthMode.ApiKey { Credential: ApiKeyCredential.Unreadable } => ApiKeyStatusUnreadable,
+            _ => ApiKeyStatusNotConfigured,
+        };
     }
 }
