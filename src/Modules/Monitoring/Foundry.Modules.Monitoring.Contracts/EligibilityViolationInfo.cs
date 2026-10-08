@@ -5,11 +5,9 @@ public sealed record EligibilityViolationInfo(string Rule, string Description)
     public static readonly string AllowDirectPushesRule = "branch-protection:allow-direct-pushes";
     public static readonly string AllowForcePushesRule = "branch-protection:allow-force-pushes";
     public static readonly string AllowDeletionRule = "branch-protection:allow-deletion";
-    public static readonly string UnreachableRule = "branch-protection:unreachable";
     public static readonly string AllowDirectPushesDescription = "Allows direct pushes to the protected branch.";
     public static readonly string AllowForcePushesDescription = "Allows force pushes to the protected branch.";
     public static readonly string AllowDeletionDescription = "Allows deletion of the protected branch.";
-    public static readonly string UnreachableDescription = "Branch protection could not be verified.";
 
     public const string NoCredentialRulePrefix = "no-credential";
 
@@ -17,13 +15,41 @@ public sealed record EligibilityViolationInfo(string Rule, string Description)
         $"{NoCredentialRulePrefix}:{namespaceName}";
 
     public static string NoCredentialDescription(string namespaceName) =>
-        $"no credential for namespace {namespaceName}";
+        $"No credential for namespace {namespaceName}.";
 
     public const string CannotPushRulePrefix = "cannot-push";
 
     public static string CannotPushRule(string slug) =>
         $"{CannotPushRulePrefix}:{slug}";
 
-    public static string CannotPushDescription(string slug) =>
-        $"token cannot push to {slug}";
+    /// <summary>
+    /// Returns the provider-aware sentence-case description for a cannot-push violation.
+    /// The provider token must be one of the ProviderTypes constants ("github" / "gitlab").
+    /// </summary>
+    public static string CannotPushDescription(string slug, string providerType) =>
+        NoPushAccessPreamble(providerType) + $" for {slug}.";
+
+    /// <summary>
+    /// Returns the provider-aware sentence-case no-push access explanation used in the
+    /// available-repositories response and as the picker group explanation on the frontend.
+    /// </summary>
+    public static string NoPushAccessExplanation(string providerType) =>
+        $"Your {NoPushAccessPreamble(providerType, lowercase: true)}.";
+
+    private static string NoPushAccessPreamble(string providerType, bool lowercase = false)
+    {
+        string github = lowercase ? "token lacks push permission or SSO isn't authorized"
+                                  : "Token lacks push permission or SSO isn't authorized";
+        string gitlab = lowercase ? "token's role is below Developer"
+                                  : "Token's role is below Developer";
+        string generic = lowercase ? "token cannot push"
+                                   : "Token cannot push";
+
+        return providerType switch
+        {
+            "github" => github,
+            "gitlab" => gitlab,
+            _ => generic,
+        };
+    }
 }
