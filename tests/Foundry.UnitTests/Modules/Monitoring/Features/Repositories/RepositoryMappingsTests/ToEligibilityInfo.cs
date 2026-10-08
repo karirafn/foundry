@@ -140,6 +140,21 @@ public sealed class ToEligibilityInfo
     }
 
     [Fact]
+    public void WhenEligibilityIsIneligibleWithUnknownRule_ReturnsNeutralDescription()
+    {
+        // Arrange
+        RepositoryEligibility.Ineligible ineligible = new([new EligibilityViolation("unknown-rule:xyz")]);
+
+        // Act
+        RepositoryEligibilityInfo? result = RepositoryMappings.ToEligibilityInfo(ineligible, "github");
+
+        // Assert
+        RepositoryEligibilityInfo info = result.ShouldNotBeNull();
+        info.Violations.ShouldHaveSingleItem();
+        info.Violations[0].Description.ShouldBe("This repository is ineligible for an unknown reason.");
+    }
+
+    [Fact]
     public void WhenEligibilityIsUnreachableWithBranchRulesUnavailableReason_ReturnsBranchRulesUnavailableToken()
     {
         // Arrange

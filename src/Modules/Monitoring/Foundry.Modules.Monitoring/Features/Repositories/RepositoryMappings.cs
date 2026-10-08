@@ -52,7 +52,7 @@ internal static class RepositoryMappings
                 => EligibilityViolationInfo.AllowForcePushesDescription,
             var r when r == EligibilityViolationInfo.AllowDeletionRule
                 => EligibilityViolationInfo.AllowDeletionDescription,
-            _ => rule,
+            _ => "This repository is ineligible for an unknown reason.",
         };
     }
 

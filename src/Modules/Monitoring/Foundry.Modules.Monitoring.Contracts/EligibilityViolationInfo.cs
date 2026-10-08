@@ -38,18 +38,13 @@ public sealed record EligibilityViolationInfo(string Rule, string Description)
 
     private static string NoPushAccessPreamble(string providerType, bool lowercase = false)
     {
-        string github = lowercase ? "token lacks push permission or SSO isn't authorized"
-                                  : "Token lacks push permission or SSO isn't authorized";
-        string gitlab = lowercase ? "token's role is below Developer"
-                                  : "Token's role is below Developer";
-        string generic = lowercase ? "token cannot push"
-                                   : "Token cannot push";
-
-        return providerType switch
+        string preamble = providerType switch
         {
-            "github" => github,
-            "gitlab" => gitlab,
-            _ => generic,
+            "github" => "Token lacks push permission or SSO isn't authorized",
+            "gitlab" => "Token's role is below Developer",
+            _ => "Token cannot push",
         };
+
+        return lowercase ? char.ToLowerInvariant(preamble[0]) + preamble[1..] : preamble;
     }
 }

@@ -1,3 +1,5 @@
+using System.Diagnostics;
+
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
@@ -51,8 +53,9 @@ internal static class GetAvailableRepositories
 
             string providerType = credential switch
             {
+                GitHubCredential => ProviderTypes.GitHub,
                 GitLabCredential => ProviderTypes.GitLab,
-                _ => ProviderTypes.GitHub,
+                _ => throw new UnreachableException(),
             };
 
             Result<IReadOnlyList<ProviderRepository>> providerResult = credential switch

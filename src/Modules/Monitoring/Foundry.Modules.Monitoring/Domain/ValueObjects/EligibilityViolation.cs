@@ -82,7 +82,12 @@ internal sealed class EligibilityViolationConverter : JsonConverter<EligibilityV
             }
         }
 
-        return rule is null ? null : new EligibilityViolation(rule);
+        if (rule is null)
+        {
+            throw new JsonException("EligibilityViolation missing required 'rule' property.");
+        }
+
+        return new EligibilityViolation(rule);
     }
 
     public override void Write(

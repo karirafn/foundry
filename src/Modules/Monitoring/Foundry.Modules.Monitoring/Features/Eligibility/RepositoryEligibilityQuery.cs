@@ -95,7 +95,9 @@ internal sealed class RepositoryEligibilityQuery(DbContext db) : IRepositoryElig
         {
             GitHubCredential => ProviderTypes.GitHub,
             GitLabCredential => ProviderTypes.GitLab,
-            _ => ProviderTypes.GitHub,
+            // Null (no credential for host) or unknown subtype: return a neutral value so
+            // NoPushAccessPreamble's generic `_` arm is hit instead of GitHub-specific wording.
+            _ => string.Empty,
         };
     }
 

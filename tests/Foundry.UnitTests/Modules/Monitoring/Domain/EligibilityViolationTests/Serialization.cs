@@ -43,6 +43,33 @@ public sealed class Serialization
     }
 
     [Fact]
+    public void WhenPascalCaseJsonProvided_DeserializesRuleCorrectly()
+    {
+        // Arrange — PascalCase property names exercise OrdinalIgnoreCase matching in the converter.
+        const string json = """{"Rule":"branch-protection:allow-direct-pushes","Description":"Some description."}""";
+
+        // Act
+        EligibilityViolation? deserialized = JsonSerializer.Deserialize<EligibilityViolation>(json, Options);
+
+        // Assert
+        deserialized.ShouldNotBeNull();
+        deserialized.Rule.ShouldBe(EligibilityViolation.AllowDirectPushesRule);
+    }
+
+    [Fact]
+    public void WhenRulePropertyMissing_ThrowsJsonException()
+    {
+        // Arrange — JSON object with no "rule" property at all.
+        const string json = """{"description":"Some description without a rule."}""";
+
+        // Act
+        Action act = () => JsonSerializer.Deserialize<EligibilityViolation>(json, Options);
+
+        // Assert
+        Should.Throw<JsonException>(act).Message.ShouldContain("missing required 'rule'");
+    }
+
+    [Fact]
     public void WhenCurrentJsonSerialized_DoesNotIncludeDescriptionField()
     {
         // Arrange
