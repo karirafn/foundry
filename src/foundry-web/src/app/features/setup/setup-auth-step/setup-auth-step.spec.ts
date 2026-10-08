@@ -335,6 +335,7 @@ describe('SetupAuthStepComponent', () => {
     const service = component['_settingsService'];
     service.authSettings.set({
       mode: 'oauth',
+      apiKeyStatus: 'NotConfigured',
       apiKeyConfigured: false,
       oauth: { status: 'Present', subscriptionType: null },
       accountEmail: null,

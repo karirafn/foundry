@@ -74,6 +74,7 @@ function buildCredentialsResponse(overrides: Record<string, unknown> = {}): Reco
     accountId: '00000000-0000-0000-0000-000000000001',
     authMode: 'ApiKey',
     oAuthStatus: 'NotConfigured',
+    apiKeyStatus: 'NotConfigured',
     subscriptionType: null,
     oAuthAccountEmail: null,
     oAuthAccountOrgName: null,
@@ -122,12 +123,57 @@ describe('SettingsService', () => {
 
     // Act
     service.loadSettings();
-    flushLoadSettings(httpMock, {}, { authMode: 'ApiKey', oAuthStatus: 'NotConfigured' });
+    flushLoadSettings(httpMock, {}, { authMode: 'ApiKey', oAuthStatus: 'NotConfigured', apiKeyStatus: 'NotConfigured' });
 
     // Assert
     const settings = service.authSettings();
     expect(settings).not.toBeNull();
     expect(settings!.mode).toBe('api_key');
+    expect(settings!.apiKeyStatus).toBe('NotConfigured');
+  });
+
+  // Cycle 2a: apiKeyStatus NotConfigured maps through and derives apiKeyConfigured=false
+  it('should map apiKeyStatus NotConfigured and derive apiKeyConfigured false', () => {
+    // Arrange
+    // (service initialized by test setup)
+
+    // Act
+    service.loadSettings();
+    flushLoadSettings(httpMock, {}, { authMode: 'ApiKey', apiKeyStatus: 'NotConfigured' });
+
+    // Assert
+    const settings = service.authSettings();
+    expect(settings!.apiKeyStatus).toBe('NotConfigured');
+    expect(settings!.apiKeyConfigured).toBe(false);
+  });
+
+  // Cycle 2b: apiKeyStatus Present maps through and derives apiKeyConfigured=true
+  it('should map apiKeyStatus Present and derive apiKeyConfigured true', () => {
+    // Arrange
+    // (service initialized by test setup)
+
+    // Act
+    service.loadSettings();
+    flushLoadSettings(httpMock, {}, { authMode: 'ApiKey', apiKeyStatus: 'Present' });
+
+    // Assert
+    const settings = service.authSettings();
+    expect(settings!.apiKeyStatus).toBe('Present');
+    expect(settings!.apiKeyConfigured).toBe(true);
+  });
+
+  // Cycle 2c: apiKeyStatus Unreadable maps through and derives apiKeyConfigured=false
+  it('should map apiKeyStatus Unreadable and derive apiKeyConfigured false', () => {
+    // Arrange
+    // (service initialized by test setup)
+
+    // Act
+    service.loadSettings();
+    flushLoadSettings(httpMock, {}, { authMode: 'ApiKey', apiKeyStatus: 'Unreadable' });
+
+    // Assert
+    const settings = service.authSettings();
+    expect(settings!.apiKeyStatus).toBe('Unreadable');
     expect(settings!.apiKeyConfigured).toBe(false);
   });
 

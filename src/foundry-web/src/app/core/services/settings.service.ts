@@ -5,6 +5,7 @@ import { extractErrorMessage } from '../http/extract-error-message';
 import { Observable, forkJoin, merge } from 'rxjs';
 import { debounceTime, switchMap } from 'rxjs/operators';
 import {
+  ApiKeyStatus,
   AuthMode,
   AuthSettings,
   ClaudeAccountSummary,
@@ -479,9 +480,12 @@ export class SettingsService {
       };
     }
 
+    const apiKeyStatus: ApiKeyStatus = summary.apiKeyStatus;
+
     return {
       mode,
-      apiKeyConfigured: false,
+      apiKeyStatus,
+      apiKeyConfigured: apiKeyStatus === 'Present',
       oauth,
       accountEmail: summary.oAuthAccountEmail,
       accountOrgName: summary.oAuthAccountOrgName,

@@ -42,6 +42,7 @@ describe('AccountChipComponent', () => {
     // Arrange
     const authSettings: AuthSettings = {
       mode: 'oauth',
+      apiKeyStatus: 'NotConfigured',
       apiKeyConfigured: false,
       oauth: { status: 'Present', subscriptionType: 'Pro' },
       accountEmail: 'user@example.com',
@@ -63,6 +64,7 @@ describe('AccountChipComponent', () => {
     // Arrange
     const authSettings: AuthSettings = {
       mode: 'oauth',
+      apiKeyStatus: 'NotConfigured',
       apiKeyConfigured: false,
       oauth: { status: 'Present', subscriptionType: 'Pro' },
       accountEmail: 'user@example.com',
@@ -83,6 +85,7 @@ describe('AccountChipComponent', () => {
     // Arrange
     const authSettings: AuthSettings = {
       mode: 'oauth',
+      apiKeyStatus: 'NotConfigured',
       apiKeyConfigured: false,
       oauth: { status: 'ReLoginNeeded', subscriptionType: null },
       accountEmail: 'user@example.com',
@@ -105,6 +108,7 @@ describe('AccountChipComponent', () => {
     // Arrange
     const authSettings: AuthSettings = {
       mode: 'api_key',
+      apiKeyStatus: 'Present',
       apiKeyConfigured: true,
       oauth: null,
       accountEmail: null,
@@ -127,6 +131,7 @@ describe('AccountChipComponent', () => {
     // Arrange
     const authSettings: AuthSettings = {
       mode: 'oauth',
+      apiKeyStatus: 'NotConfigured',
       apiKeyConfigured: false,
       oauth: { status: 'NotConfigured', subscriptionType: null },
       accountEmail: null,
@@ -146,6 +151,7 @@ describe('AccountChipComponent', () => {
     // Arrange
     const authSettings: AuthSettings = {
       mode: 'oauth',
+      apiKeyStatus: 'NotConfigured',
       apiKeyConfigured: false,
       oauth: { status: 'Present', subscriptionType: null },
       accountEmail: 'user@example.com',
@@ -166,6 +172,7 @@ describe('AccountChipComponent', () => {
     // Arrange
     const authSettings: AuthSettings = {
       mode: 'oauth',
+      apiKeyStatus: 'NotConfigured',
       apiKeyConfigured: false,
       oauth: { status: 'Present', subscriptionType: null },
       accountEmail: 'jane@example.com',
