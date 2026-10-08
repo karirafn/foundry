@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 function parseHex(css: string, token: string): string {
-  const match = css.match(new RegExp(`${token}:\\s*(#[0-9a-fA-F]{6})`));
+  const match = css.match(new RegExp(`${token}(?![\\w-]):\\s*(#[0-9a-fA-F]{6})`));
   if (!match) {
     throw new Error(`Token ${token} not found in stylesheet`);
   }
@@ -15,7 +15,7 @@ function relativeLuminance(hex: string): number {
   const b = parseInt(hex.slice(5, 7), 16) / 255;
 
   const toLinear = (c: number): number =>
-    c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+    c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
 
   return 0.2126 * toLinear(r) + 0.7152 * toLinear(g) + 0.0722 * toLinear(b);
 }
@@ -61,6 +61,9 @@ describe('WCAG 1.4.11 Non-text Contrast — --fd-border-control token', () => {
   });
 
   it('--fd-border-control meets 3:1 contrast against --fd-bg-page', () => {
+    // Validates the border against the input's interior fill (the inward face).
+    // The --fd-bg-card and --fd-bg-card-hover assertions above are the normative
+    // WCAG 1.4.11 adjacent-surface checks against the surrounding card surface.
     // Act
     const ratio = contrastRatio(borderControl, bgPage);
 
