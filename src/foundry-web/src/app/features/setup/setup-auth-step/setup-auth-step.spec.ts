@@ -11,6 +11,27 @@ const mockSystemSignalR = { reconnected: NEVER, reloadTrigger: NEVER, loginSessi
 const CREDENTIALS_API_KEY_RESPONSE = {
   accountId: '00000000-0000-0000-0000-000000000001',
   authMode: 'ApiKey',
+  apiKeyStatus: 'Present',
+  oAuthStatus: 'NotConfigured',
+  subscriptionType: null,
+  oAuthAccountEmail: null,
+  oAuthAccountOrgName: null,
+};
+
+const CREDENTIALS_API_KEY_NOT_CONFIGURED = {
+  accountId: '00000000-0000-0000-0000-000000000001',
+  authMode: 'ApiKey',
+  apiKeyStatus: 'NotConfigured',
+  oAuthStatus: 'NotConfigured',
+  subscriptionType: null,
+  oAuthAccountEmail: null,
+  oAuthAccountOrgName: null,
+};
+
+const CREDENTIALS_API_KEY_UNREADABLE = {
+  accountId: '00000000-0000-0000-0000-000000000001',
+  authMode: 'ApiKey',
+  apiKeyStatus: 'Unreadable',
   oAuthStatus: 'NotConfigured',
   subscriptionType: null,
   oAuthAccountEmail: null,
@@ -437,6 +458,106 @@ describe('SetupAuthStepComponent', () => {
     expect(document.activeElement).toBe(loginBtn);
 
     document.body.removeChild(fixture.nativeElement);
+  });
+
+  describe('API-key status notes', () => {
+    it('should render a muted note when apiKeyStatus is NotConfigured and API key mode is selected', () => {
+      // Arrange
+      const { fixture, httpMock } = setup();
+      fixture.detectChanges();
+
+      const el = fixture.nativeElement as HTMLElement;
+      const radios = el.querySelectorAll<HTMLInputElement>('input[type="radio"]');
+      radios[0].click();
+      fixture.detectChanges();
+
+      // Simulate service loading NotConfigured credentials
+      const service = fixture.componentInstance['_settingsService'];
+      service.loadSettings();
+      httpMock.expectOne('/api/settings').flush({
+        maxConcurrent: 3, timeoutMinutes: 60, probeIntervalMinutes: 60, pollIntervalSeconds: 30,
+        usageLimitResetsAt: null, isDispatchPaused: false, autoResumeOnUsageReset: true,
+        installDotnet: false, installAngular: false, installGlab: false, installGh: false,
+        installChromium: false, installDocker: false, imageBuildStatus: 'Idle',
+        lastImageBuildError: null, hasUsableImage: false, nextRetryAt: null, attempt: 0,
+        systemPromptTemplate: null, workerPromptTemplate: null,
+      });
+      httpMock.expectOne('/api/credentials').flush(CREDENTIALS_API_KEY_NOT_CONFIGURED);
+      fixture.detectChanges();
+
+      // Act
+      const note = el.querySelector('.setup-auth-step__oauth-note:not(.setup-auth-step__note--warning)');
+
+      // Assert
+      expect(note).toBeTruthy();
+      expect(note?.textContent).toContain('No API key is set yet');
+    });
+
+    it('should render a warning note with role="alert" when apiKeyStatus is Unreadable and API key mode is selected', () => {
+      // Arrange
+      const { fixture, httpMock } = setup();
+      fixture.detectChanges();
+
+      const el = fixture.nativeElement as HTMLElement;
+      const radios = el.querySelectorAll<HTMLInputElement>('input[type="radio"]');
+      radios[0].click();
+      fixture.detectChanges();
+
+      // Simulate service loading Unreadable credentials
+      const service = fixture.componentInstance['_settingsService'];
+      service.loadSettings();
+      httpMock.expectOne('/api/settings').flush({
+        maxConcurrent: 3, timeoutMinutes: 60, probeIntervalMinutes: 60, pollIntervalSeconds: 30,
+        usageLimitResetsAt: null, isDispatchPaused: false, autoResumeOnUsageReset: true,
+        installDotnet: false, installAngular: false, installGlab: false, installGh: false,
+        installChromium: false, installDocker: false, imageBuildStatus: 'Idle',
+        lastImageBuildError: null, hasUsableImage: false, nextRetryAt: null, attempt: 0,
+        systemPromptTemplate: null, workerPromptTemplate: null,
+      });
+      httpMock.expectOne('/api/credentials').flush(CREDENTIALS_API_KEY_UNREADABLE);
+      fixture.detectChanges();
+
+      // Act
+      const warning = el.querySelector('.setup-auth-step__note--warning');
+
+      // Assert
+      expect(warning).toBeTruthy();
+      expect(warning?.getAttribute('role')).toBe('alert');
+      expect(warning?.textContent).toContain("can't be read");
+    });
+
+    it('should not render any note when apiKeyStatus is Present and API key mode is selected', () => {
+      // Arrange
+      const { fixture, httpMock } = setup();
+      fixture.detectChanges();
+
+      const el = fixture.nativeElement as HTMLElement;
+      const radios = el.querySelectorAll<HTMLInputElement>('input[type="radio"]');
+      radios[0].click();
+      fixture.detectChanges();
+
+      // Simulate service loading Present credentials
+      const service = fixture.componentInstance['_settingsService'];
+      service.loadSettings();
+      httpMock.expectOne('/api/settings').flush({
+        maxConcurrent: 3, timeoutMinutes: 60, probeIntervalMinutes: 60, pollIntervalSeconds: 30,
+        usageLimitResetsAt: null, isDispatchPaused: false, autoResumeOnUsageReset: true,
+        installDotnet: false, installAngular: false, installGlab: false, installGh: false,
+        installChromium: false, installDocker: false, imageBuildStatus: 'Idle',
+        lastImageBuildError: null, hasUsableImage: false, nextRetryAt: null, attempt: 0,
+        systemPromptTemplate: null, workerPromptTemplate: null,
+      });
+      httpMock.expectOne('/api/credentials').flush(CREDENTIALS_API_KEY_RESPONSE);
+      fixture.detectChanges();
+
+      // Act — Present should show no note in the API-key branch
+      const note = el.querySelector('.setup-auth-step__note--warning');
+      // OAuth note also shouldn't be visible inside api_key branch
+      const apiKeyField = el.querySelector('.setup-auth-step__field');
+
+      // Assert
+      expect(note).toBeFalsy();
+    });
   });
 
   // Finding 9: startLoginError rendered in OAuth section

@@ -96,6 +96,22 @@
     min-height: 1.25rem;
   }
 
+  &__oauth-note {
+    color: var(--fd-text-secondary);
+    font-size: 0.8125rem;
+    line-height: var(--fd-line-height-base, 1.5);
+  }
+
+  &__note--warning {
+    display: flex;
+    gap: var(--fd-spacing-sm);
+    padding: var(--fd-spacing-sm) var(--fd-spacing-md);
+    border: 1px solid var(--fd-border-warning);
+    border-radius: var(--fd-radius-sm);
+    background: var(--fd-bg-warning-subtle);
+    color: var(--fd-text-warning);
+  }
+
   &__oauth-section {
     display: flex;
     flex-direction: column;

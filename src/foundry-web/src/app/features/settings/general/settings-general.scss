@@ -141,6 +141,24 @@
     font-size: 0.8125rem;
   }
 
+  &__api-key-warning {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--fd-spacing-sm);
+    padding: var(--fd-spacing-sm) var(--fd-spacing-md);
+    border: 1px solid var(--fd-border-warning);
+    border-radius: var(--fd-radius-sm);
+    background: var(--fd-bg-warning-subtle);
+    color: var(--fd-text-warning);
+    font-size: 0.8125rem;
+    overflow-wrap: break-word;
+  }
+
+  &__api-key-warning-icon {
+    flex-shrink: 0;
+    margin-top: 0.0625rem;
+  }
+
   &__save-error,
   &__switch-error {
     color: var(--fd-text-error);

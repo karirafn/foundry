@@ -48,6 +48,27 @@ const API_KEY_RESPONSE = {
 const CREDENTIALS_API_KEY = {
   accountId: '00000000-0000-0000-0000-000000000001',
   authMode: 'ApiKey',
+  apiKeyStatus: 'Present',
+  oAuthStatus: 'NotConfigured',
+  subscriptionType: null,
+  oAuthAccountEmail: null,
+  oAuthAccountOrgName: null,
+};
+
+const CREDENTIALS_API_KEY_NOT_CONFIGURED = {
+  accountId: '00000000-0000-0000-0000-000000000001',
+  authMode: 'ApiKey',
+  apiKeyStatus: 'NotConfigured',
+  oAuthStatus: 'NotConfigured',
+  subscriptionType: null,
+  oAuthAccountEmail: null,
+  oAuthAccountOrgName: null,
+};
+
+const CREDENTIALS_API_KEY_UNREADABLE = {
+  accountId: '00000000-0000-0000-0000-000000000001',
+  authMode: 'ApiKey',
+  apiKeyStatus: 'Unreadable',
   oAuthStatus: 'NotConfigured',
   subscriptionType: null,
   oAuthAccountEmail: null,
@@ -2203,6 +2224,95 @@ describe('SettingsGeneralComponent', () => {
       expect(hint).toBeTruthy();
       expect(hint.textContent).toContain('comma-separated');
       expect(hint.textContent).toContain('Maximum 50 hostnames');
+    });
+  });
+
+  describe('API-key status indicator', () => {
+    it('should render the configured-indicator when apiKeyStatus is Present', () => {
+      // Arrange
+      const { httpMock } = setup();
+      const fixture = TestBed.createComponent(SettingsGeneralComponent);
+      fixture.detectChanges();
+      flushSettings(httpMock, API_KEY_RESPONSE, CREDENTIALS_API_KEY);
+      fixture.detectChanges();
+
+      // Act
+      const el = fixture.nativeElement as HTMLElement;
+      const indicator = el.querySelector('#api-key-configured.general-settings__configured-indicator');
+
+      // Assert
+      expect(indicator).toBeTruthy();
+      expect(indicator?.textContent).toContain('API key is configured');
+    });
+
+    it('should render the muted hint when apiKeyStatus is NotConfigured', () => {
+      // Arrange
+      const { httpMock } = setup();
+      const fixture = TestBed.createComponent(SettingsGeneralComponent);
+      fixture.detectChanges();
+      flushSettings(httpMock, API_KEY_RESPONSE, CREDENTIALS_API_KEY_NOT_CONFIGURED);
+      fixture.detectChanges();
+
+      // Act
+      const el = fixture.nativeElement as HTMLElement;
+      const hint = el.querySelector('#api-key-configured.general-settings__field-hint');
+
+      // Assert
+      expect(hint).toBeTruthy();
+      expect(hint?.textContent).toContain('No API key is set');
+    });
+
+    it('should render the warning box with role="alert" when apiKeyStatus is Unreadable', () => {
+      // Arrange
+      const { httpMock } = setup();
+      const fixture = TestBed.createComponent(SettingsGeneralComponent);
+      fixture.detectChanges();
+      flushSettings(httpMock, API_KEY_RESPONSE, CREDENTIALS_API_KEY_UNREADABLE);
+      fixture.detectChanges();
+
+      // Act
+      const el = fixture.nativeElement as HTMLElement;
+      const warning = el.querySelector('#api-key-configured.general-settings__api-key-warning');
+
+      // Assert
+      expect(warning).toBeTruthy();
+      expect(warning?.getAttribute('role')).toBe('alert');
+      expect(warning?.textContent).toContain('can no longer be read');
+      expect(warning?.textContent).toContain('Re-enter');
+    });
+
+    it('should keep id="api-key-configured" on the element so the input aria-describedby association holds', () => {
+      // Arrange
+      const { httpMock } = setup();
+      const fixture = TestBed.createComponent(SettingsGeneralComponent);
+      fixture.detectChanges();
+      flushSettings(httpMock, API_KEY_RESPONSE, CREDENTIALS_API_KEY_NOT_CONFIGURED);
+      fixture.detectChanges();
+
+      // Act
+      const el = fixture.nativeElement as HTMLElement;
+      const statusEl = el.querySelector('#api-key-configured');
+      const input = el.querySelector('.general-settings__api-key-input');
+
+      // Assert — element with id="api-key-configured" exists and input references it
+      expect(statusEl).toBeTruthy();
+      expect(input?.getAttribute('aria-describedby')).toContain('api-key-configured');
+    });
+
+    it('should not render the configured-indicator when apiKeyStatus is NotConfigured', () => {
+      // Arrange
+      const { httpMock } = setup();
+      const fixture = TestBed.createComponent(SettingsGeneralComponent);
+      fixture.detectChanges();
+      flushSettings(httpMock, API_KEY_RESPONSE, CREDENTIALS_API_KEY_NOT_CONFIGURED);
+      fixture.detectChanges();
+
+      // Act
+      const el = fixture.nativeElement as HTMLElement;
+      const indicator = el.querySelector('.general-settings__configured-indicator');
+
+      // Assert
+      expect(indicator).toBeFalsy();
     });
   });
 

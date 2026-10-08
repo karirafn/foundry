@@ -3,6 +3,7 @@ import {
   ChangeDetectionStrategy,
   ElementRef,
   Injector,
+  Signal,
   ViewChild,
   WritableSignal,
   afterNextRender,
@@ -15,7 +16,7 @@ import {
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { SettingsService } from '../../../core/services/settings.service';
-import { AuthMode } from '../../../core/models/settings.model';
+import { ApiKeyStatus, AuthMode } from '../../../core/models/settings.model';
 import { OAuthPanelComponent } from '../../settings/oauth-panel/oauth-panel';
 
 @Component({
@@ -74,6 +75,17 @@ import { OAuthPanelComponent } from '../../settings/oauth-panel/oauth-panel';
           </div>
 
           <div id="api-key-error" class="setup-auth-step__error" role="alert">{{ _settingsService.saveError() ?? '' }}</div>
+
+          @if (_apiKeyStatus() === 'Unreadable') {
+            <div class="setup-auth-step__oauth-note setup-auth-step__note--warning" role="alert">
+              The saved API key can't be read (its encryption key was lost). Enter a new
+              API key above, or choose OAuth and sign in.
+            </div>
+          } @else if (_apiKeyStatus() === 'NotConfigured') {
+            <div class="setup-auth-step__oauth-note">
+              No API key is set yet. Enter one above to let workers run.
+            </div>
+          }
         }
 
         @if (_selectedMode() === 'oauth') {
@@ -128,6 +140,10 @@ export class SetupAuthStepComponent {
 
   protected readonly _oauthStatus = computed(
     () => this._settingsService.authSettings()?.oauth?.status ?? 'NotConfigured' as const
+  );
+
+  protected readonly _apiKeyStatus: Signal<ApiKeyStatus> = computed(
+    () => this._settingsService.authSettings()?.apiKeyStatus ?? 'NotConfigured'
   );
 
   protected readonly _isNextDisabled = computed(() => {

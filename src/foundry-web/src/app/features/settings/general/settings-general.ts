@@ -18,7 +18,7 @@ import { FormsModule } from '@angular/forms';
 import { SettingsService } from '../../../core/services/settings.service';
 import { DispatchService } from '../../../core/services/dispatch.service';
 import { RateBudgetPanelComponent } from './rate-budget-panel/rate-budget-panel';
-import { AuthMode, ImageBuildStatus, OAuthStatus, UpdatePromptTemplatesRequest, WorkerImageFlags } from '../../../core/models/settings.model';
+import { ApiKeyStatus, AuthMode, ImageBuildStatus, OAuthStatus, UpdatePromptTemplatesRequest, WorkerImageFlags } from '../../../core/models/settings.model';
 import { OAuthPanelComponent } from '../oauth-panel/oauth-panel';
 
 const MAX_CONCURRENT_MIN = 1;
@@ -105,10 +105,34 @@ const RATE_BUDGET_FLOOR = 500;
                 </button>
               </div>
 
-              @if (settingsService.authSettings()?.apiKeyConfigured) {
-                <span id="api-key-configured" class="general-settings__configured-indicator">
-                  API key is configured
-                </span>
+              @switch (_apiKeyStatus()) {
+                @case ('Present') {
+                  <span id="api-key-configured" class="general-settings__configured-indicator">
+                    API key is configured
+                  </span>
+                }
+                @case ('NotConfigured') {
+                  <span id="api-key-configured" class="general-settings__field-hint">
+                    No API key is set. Workers stay paused until you enter one.
+                  </span>
+                }
+                @case ('Unreadable') {
+                  <div
+                    id="api-key-configured"
+                    class="general-settings__api-key-warning"
+                    role="alert"
+                  >
+                    <svg class="general-settings__api-key-warning-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                      <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+                      <line x1="12" y1="9" x2="12" y2="13"></line>
+                      <line x1="12" y1="17" x2="12.01" y2="17"></line>
+                    </svg>
+                    <span>
+                      The saved API key can no longer be read (the encryption key was lost).
+                      Re-enter your API key below and save, or switch to OAuth and log in.
+                    </span>
+                  </div>
+                }
               }
             </div>
 
@@ -558,6 +582,10 @@ export class SettingsGeneralComponent {
 
   protected readonly _oauthStatus: Signal<OAuthStatus> = computed(
     () => this.settingsService.authSettings()?.oauth?.status ?? 'NotConfigured'
+  );
+
+  protected readonly _apiKeyStatus: Signal<ApiKeyStatus> = computed(
+    () => this.settingsService.authSettings()?.apiKeyStatus ?? 'NotConfigured'
   );
 
   protected readonly _maxConcurrentValue: WritableSignal<number> = signal(MAX_CONCURRENT_MIN);
