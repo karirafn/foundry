@@ -76,9 +76,72 @@ public sealed class GetSummaryAsync : IAsyncDisposable
         summary.ShouldSatisfyAllConditions(
             () => summary.AuthMode.ShouldBe("ApiKey"),
             () => summary.OAuthStatus.ShouldBe(CredentialQueries.OAuthStatusNotConfigured),
+            () => summary.ApiKeyStatus.ShouldBe(CredentialQueries.ApiKeyStatusPresent),
             () => summary.SubscriptionType.ShouldBeNull(),
             () => summary.OAuthAccountEmail.ShouldBeNull(),
             () => summary.OAuthAccountOrgName.ShouldBeNull());
+    }
+
+    [Fact]
+    public async Task WhenApiKeyAccountWithNotConfiguredCredential_ApiKeyStatusIsNotConfigured()
+    {
+        // Arrange — a freshly-created account starts with NotConfigured credential.
+        await using (FoundryDbContext seedDb = CreateDbContext())
+        {
+            ClaudeAccount account = ClaudeAccount.Create();
+            seedDb.Set<ClaudeAccount>().Add(account);
+            await seedDb.SaveChangesAsync(TestContext.Current.CancellationToken);
+        }
+
+        await using FoundryDbContext dbContext = CreateDbContext();
+        CredentialQueries sut = new(dbContext);
+
+        // Act
+        ClaudeAccountSummary? result = await sut.GetSummaryAsync(TestContext.Current.CancellationToken);
+
+        // Assert
+        ClaudeAccountSummary summary = result.ShouldNotBeNull();
+        summary.ApiKeyStatus.ShouldBe(CredentialQueries.ApiKeyStatusNotConfigured);
+    }
+
+    [Fact]
+    public void WhenApiKeyAccountWithUnreadableCredential_ApiKeyStatusIsUnreadable()
+    {
+        // Arrange — Unreadable is produced in-memory when the converter cannot decrypt the stored
+        // api_key column (key rotation or corrupt base-64). It cannot be round-tripped through the
+        // DB converter (the Encrypt path stores NULL, which reads back as NotConfigured), so this
+        // test exercises ToSummary directly with an in-memory account.
+        ClaudeAccount account = ClaudeAccount.Create();
+        account.SetAuthMode(new AuthMode.ApiKey(new ApiKeyCredential.Unreadable()));
+
+        // Act
+        ClaudeAccountSummary summary = CredentialQueries.ToSummary(account);
+
+        // Assert
+        summary.ApiKeyStatus.ShouldBe(CredentialQueries.ApiKeyStatusUnreadable);
+    }
+
+    [Fact]
+    public async Task WhenOAuthAccount_ApiKeyStatusIsNotConfigured()
+    {
+        // Arrange — OAuth mode has no API key credential; the status derives as NotConfigured.
+        await using (FoundryDbContext seedDb = CreateDbContext())
+        {
+            ClaudeAccount account = ClaudeAccount.Create();
+            account.RecordSuccessfulLogin("user@example.com", "MyOrg", "pro");
+            seedDb.Set<ClaudeAccount>().Add(account);
+            await seedDb.SaveChangesAsync(TestContext.Current.CancellationToken);
+        }
+
+        await using FoundryDbContext dbContext = CreateDbContext();
+        CredentialQueries sut = new(dbContext);
+
+        // Act
+        ClaudeAccountSummary? result = await sut.GetSummaryAsync(TestContext.Current.CancellationToken);
+
+        // Assert
+        ClaudeAccountSummary summary = result.ShouldNotBeNull();
+        summary.ApiKeyStatus.ShouldBe(CredentialQueries.ApiKeyStatusNotConfigured);
     }
 
     [Fact]

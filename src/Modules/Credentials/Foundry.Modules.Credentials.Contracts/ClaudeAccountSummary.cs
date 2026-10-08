@@ -4,6 +4,7 @@ public sealed record ClaudeAccountSummary(
     Guid AccountId,
     string AuthMode,
     string OAuthStatus,
+    string ApiKeyStatus,
     string? SubscriptionType,
     string? OAuthAccountEmail,
     string? OAuthAccountOrgName,
