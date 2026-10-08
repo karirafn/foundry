@@ -92,6 +92,7 @@ type ViewState = 'loading' | 'load-error' | 'not-found' | 'loaded';
             [accounts]="accountService.accounts()"
             [availableRepositories]="repositoryService.availableRepositories()"
             [hasClaims]="repositoryService.availableHasClaims()"
+            [noPushAccessExplanation]="repositoryService.availableNoPushAccessExplanation()"
             [loadingAvailable]="repositoryService.loadingAvailable()"
             [loadAvailableError]="repositoryService.loadAvailableError()"
             [saving]="repositoryService.saving()"
@@ -102,15 +103,19 @@ type ViewState = 'loading' | 'load-error' | 'not-found' | 'loaded';
           />
 
           @if (_repository()!.eligibility && _repository()!.eligibility!.status !== 'eligible') {
-            <fd-repository-eligibility-details
-              [panelId]="'repository-page-eligibility'"
-              [status]="_repository()!.eligibility!.status"
-              [violations]="_repository()!.eligibility!.violations"
-              [reason]="_repository()!.eligibility!.reason"
-              [recheckPending]="_recheckPending()"
-              [recheckError]="_recheckError()"
-              (recheck)="onRecheck()"
-            />
+            <section class="repository-page__eligibility" aria-labelledby="repository-page-eligibility-heading">
+              <h2 id="repository-page-eligibility-heading" class="repository-page__eligibility-heading">Eligibility</h2>
+              <fd-repository-eligibility-details
+                [panelId]="'repository-page-eligibility'"
+                [status]="_repository()!.eligibility!.status"
+                [violations]="_repository()!.eligibility!.violations"
+                [reason]="_repository()!.eligibility!.reason"
+                [providerType]="_repository()!.providerType"
+                [recheckPending]="_recheckPending()"
+                [recheckError]="_recheckError()"
+                (recheck)="onRecheck()"
+              />
+            </section>
           }
         }
       }

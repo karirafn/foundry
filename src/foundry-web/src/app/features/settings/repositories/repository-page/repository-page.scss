@@ -99,6 +99,21 @@
     margin: 0;
   }
 
+  &__eligibility {
+    display: flex;
+    flex-direction: column;
+    gap: var(--fd-spacing-sm);
+  }
+
+  &__eligibility-heading {
+    color: var(--fd-text-secondary);
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    margin: 0;
+    text-transform: uppercase;
+  }
+
   &__back-link {
     align-items: center;
     color: var(--fd-text-link);
