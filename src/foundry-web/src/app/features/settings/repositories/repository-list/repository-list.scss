@@ -1,3 +1,5 @@
+@use '../../../../../styles/controls' as *;
+
 :host {
   --repo-row-columns:
     auto              /* reorder (drag handle + stacked ▲▼) */
@@ -104,8 +106,7 @@
     }
 
     &:focus-visible {
-      outline: 2px solid var(--fd-text-link);
-      outline-offset: 2px;
+      @include focus-ring;
     }
   }
 
@@ -283,8 +284,7 @@
     }
 
     &:focus-visible {
-      outline: 2px solid var(--fd-text-link);
-      outline-offset: 2px;
+      @include focus-ring;
     }
   }
 
@@ -335,8 +335,7 @@
     }
 
     &:focus-visible {
-      outline: 2px solid var(--fd-text-link);
-      outline-offset: 2px;
+      @include focus-ring;
     }
 
     &:active {
@@ -364,8 +363,7 @@
     }
 
     &:focus-visible {
-      outline: 2px solid var(--fd-text-link);
-      outline-offset: 2px;
+      @include focus-ring;
     }
 
     &[disabled] {

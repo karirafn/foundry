@@ -20,9 +20,8 @@
     }
 
     &:focus-visible {
+      @include focus-ring;
       border-radius: var(--fd-radius-sm);
-      outline: 2px solid var(--fd-text-link);
-      outline-offset: 2px;
     }
   }
 
@@ -79,8 +78,7 @@
     width: 100%;
 
     &:focus-visible {
-      outline: 2px solid var(--fd-text-link);
-      outline-offset: 2px;
+      @include focus-ring;
     }
   }
 
@@ -101,8 +99,7 @@
     }
 
     &:focus-visible {
-      outline: 2px solid var(--fd-text-link);
-      outline-offset: 2px;
+      @include focus-ring;
     }
   }
 
@@ -302,8 +299,7 @@
     }
 
     &:focus-visible {
-      outline: 2px solid var(--fd-text-link);
-      outline-offset: 2px;
+      @include focus-ring;
     }
   }
 }

@@ -1838,6 +1838,64 @@ describe('RepositoryFormComponent', () => {
     expect(groupHeader).toBeNull();
   });
 
+  // Cycle 45: unpushable options carry aria-describedby pointing to the group note id (Finding J)
+  it('should render aria-describedby pointing to the group note on unpushable options', () => {
+    // Arrange
+    const { el, fixture } = setup({
+      repository: null,
+      accounts: [MOCK_ACCOUNT],
+      availableRepositories: MOCK_AVAILABLE_MIXED,
+      hasClaims: true,
+      noPushAccessExplanation: GITHUB_EXPLANATION,
+    });
+
+    const select = el.querySelector('#repository-account') as HTMLSelectElement;
+    select.value = MOCK_ACCOUNT.id;
+    select.dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+
+    const combobox = el.querySelector('[role="combobox"]') as HTMLInputElement;
+    combobox.click();
+    fixture.detectChanges();
+
+    // Act
+    const options = el.querySelectorAll('[role="option"]') as NodeListOf<HTMLElement>;
+    const groupNote = el.querySelector('.repository-form__picker-group-note');
+
+    // Assert — pushable option has no aria-describedby; unpushable option points to the note
+    expect(options[0].getAttribute('aria-describedby')).toBeNull(); // writable
+    expect(options[1].getAttribute('aria-describedby')).toBe('repo-nopush-note'); // read-only
+    expect(groupNote?.id).toBe('repo-nopush-note');
+  });
+
+  it('should not render aria-describedby on a pushable option', () => {
+    // Arrange
+    const allPushable: AvailableRepository[] = [
+      { slug: 'my-org/repo-a', isPrivate: false, canPush: true, isMonitored: false },
+    ];
+    const { el, fixture } = setup({
+      repository: null,
+      accounts: [MOCK_ACCOUNT],
+      availableRepositories: allPushable,
+      hasClaims: true,
+    });
+
+    const select = el.querySelector('#repository-account') as HTMLSelectElement;
+    select.value = MOCK_ACCOUNT.id;
+    select.dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+
+    const combobox = el.querySelector('[role="combobox"]') as HTMLInputElement;
+    combobox.click();
+    fixture.detectChanges();
+
+    // Act
+    const options = el.querySelectorAll('[role="option"]') as NodeListOf<HTMLElement>;
+
+    // Assert — pushable option has no aria-describedby
+    expect(options[0].getAttribute('aria-describedby')).toBeNull();
+  });
+
   // Cycle 38: aria-selected is always a boolean on every role="option" (WCAG 4.1.2)
   it('should render aria-selected as "false" (not absent) on disabled and monitored options', () => {
     // Arrange — list: [monitored@0, selectable@1, readonly@2]

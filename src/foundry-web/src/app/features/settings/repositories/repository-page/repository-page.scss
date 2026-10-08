@@ -106,12 +106,10 @@
   }
 
   &__eligibility-heading {
-    color: var(--fd-text-secondary);
-    font-size: 0.75rem;
+    color: var(--fd-text-primary);
+    font-size: 1rem;
     font-weight: 600;
-    letter-spacing: 0.05em;
     margin: 0;
-    text-transform: uppercase;
   }
 
   &__back-link {

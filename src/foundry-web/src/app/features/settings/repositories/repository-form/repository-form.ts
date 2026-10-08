@@ -142,8 +142,8 @@ const MAX_WORKER_LIMIT = 20;
                       <li class="repository-form__picker-group-header" role="presentation" aria-hidden="true">
                         No push access ({{ _unpushableCount() }})
                       </li>
-                      <li class="repository-form__picker-group-note" role="presentation" aria-hidden="true">
-                        {{ _noPushAccessExplanation() }}
+                      <li class="repository-form__picker-group-note" role="presentation" aria-hidden="true" id="repo-nopush-note">
+                        {{ noPushAccessExplanation() }}
                       </li>
                     }
                     <li
@@ -155,6 +155,7 @@ const MAX_WORKER_LIMIT = 20;
                       role="option"
                       [attr.aria-selected]="(!repo.isMonitored && repo.canPush) && (_repoSlug() === repo.slug)"
                       [attr.aria-disabled]="(repo.isMonitored || !repo.canPush) ? 'true' : null"
+                      [attr.aria-describedby]="(!repo.isMonitored && !repo.canPush) ? 'repo-nopush-note' : null"
                       (click)="selectRepo(repo)"
                       (mousedown)="$event.preventDefault()"
                     >
@@ -296,10 +297,6 @@ export class RepositoryFormComponent implements OnInit {
 
   protected readonly _firstUnpushableIndex: Signal<number> = computed(() =>
     this._pushableCount()
-  );
-
-  protected readonly _noPushAccessExplanation: Signal<string> = computed(() =>
-    this.noPushAccessExplanation()
   );
 
   protected readonly _showNoClaims: Signal<boolean> = computed(
