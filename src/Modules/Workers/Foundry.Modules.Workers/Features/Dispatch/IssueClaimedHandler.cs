@@ -44,14 +44,16 @@ internal sealed class IssueClaimedHandler(
 
         // The first save commits the StartingRun before the handler finishes, so a crash in between
         // redelivers this event with the run already persisted (in any state). Re-adding it would
-        // violate the primary key on every redelivery.
+        // violate the primary key on every redelivery. A run stranded in Starting is failed by
+        // StaleStartingRunService, which gives the issue its way out.
         bool runAlreadyExists = await dbContext.Set<WorkerRun>()
             .AnyAsync(run => run.Id == claimed.WorkerRunId, cancellationToken);
 
         if (runAlreadyExists)
         {
             logger.LogInformation(
-                "Worker run {WorkerRunId} for issue #{IssueNumber} already exists; skipping redelivered claim.",
+                "Worker run {WorkerRunId} for issue #{IssueNumber} already exists; skipping redelivered claim. "
+                + "StaleStartingRunService reconciles a stranded starting run.",
                 claimed.WorkerRunId,
                 claimed.IssueNumber);
             return;
