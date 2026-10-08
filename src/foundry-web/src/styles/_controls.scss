@@ -1,0 +1,10 @@
+@mixin focus-ring {
+  outline: 2px solid var(--fd-text-link);
+  outline-offset: 2px;
+}
+
+@mixin input-control {
+  background: var(--fd-bg-page);
+  border: 1px solid var(--fd-border-control);
+  border-radius: var(--fd-radius-sm);
+}

@@ -1,7 +1,4 @@
-@mixin focus-ring {
-  outline: 2px solid var(--fd-text-link);
-  outline-offset: 2px;
-}
+@use '../../../../styles/controls' as *;
 
 .general-settings {
   display: flex;
@@ -88,9 +85,7 @@
 
   &__api-key-input,
   &__number-input {
-    background: var(--fd-bg-page);
-    border: 1px solid var(--fd-border-default);
-    border-radius: var(--fd-radius-sm);
+    @include input-control;
     color: var(--fd-text-primary);
     font-size: 0.875rem;
     min-height: 40px;
@@ -324,9 +319,7 @@
   }
 
   &__textarea {
-    background: var(--fd-bg-page);
-    border: 1px solid var(--fd-border-default);
-    border-radius: var(--fd-radius-sm);
+    @include input-control;
     color: var(--fd-text-primary);
     font-family: var(--fd-font-mono);
     font-size: 0.875rem;

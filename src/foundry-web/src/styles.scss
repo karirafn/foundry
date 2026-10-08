@@ -14,6 +14,7 @@
 
   /* Borders */
   --fd-border-default: #30363d;
+  --fd-border-control: #6e7681; /* deliberate separate literal — control boundary ≠ text colour; currently equals --fd-text-tertiary but must be updated independently */
   --fd-border-muted: #21262d;
 
   /* State badge colors (WCAG AA compliant, white text) */

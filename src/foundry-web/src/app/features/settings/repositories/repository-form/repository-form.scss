@@ -1,3 +1,5 @@
+@use '../../../../../styles/controls' as *;
+
 .repository-form {
   display: flex;
   flex-direction: column;
@@ -68,10 +70,8 @@
   }
 
   &__select {
+    @include input-control;
     appearance: auto;
-    background: var(--fd-bg-page);
-    border: 1px solid var(--fd-border-default);
-    border-radius: var(--fd-radius-sm);
     color: var(--fd-text-primary);
     font-size: 0.875rem;
     min-height: 40px;
@@ -85,9 +85,7 @@
   }
 
   &__input {
-    background: var(--fd-bg-page);
-    border: 1px solid var(--fd-border-default);
-    border-radius: var(--fd-radius-sm);
+    @include input-control;
     color: var(--fd-text-primary);
     font-size: 0.875rem;
     min-height: 40px;

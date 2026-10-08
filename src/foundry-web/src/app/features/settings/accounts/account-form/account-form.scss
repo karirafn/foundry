@@ -1,3 +1,5 @@
+@use '../../../../../styles/controls' as *;
+
 // Local text variants for status colors — lighter shades for AA contrast on dark backgrounds
 $text-success: #3fb950;
 $text-warning: #d29922;
@@ -63,9 +65,7 @@ $text-warning: #d29922;
   }
 
   &__input {
-    background: var(--fd-bg-page);
-    border: 1px solid var(--fd-border-default);
-    border-radius: var(--fd-radius-sm);
+    @include input-control;
     color: var(--fd-text-primary);
     font-family: var(--fd-font-mono);
     font-size: 0.875rem;
