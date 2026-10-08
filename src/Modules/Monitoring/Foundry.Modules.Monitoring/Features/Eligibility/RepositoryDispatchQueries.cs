@@ -35,7 +35,7 @@ internal sealed class RepositoryDispatchQueries(
             return null;
         }
 
-        if (string.IsNullOrEmpty(credential.Token))
+        if (string.IsNullOrEmpty(credential.ReadableTokenValue))
         {
             return null;
         }
@@ -52,7 +52,7 @@ internal sealed class RepositoryDispatchQueries(
         return new RepositoryDispatchInfo(
             repo.Slug.ToString(),
             new Uri(credential.BaseUrl.Value, $"{repo.Slug}.git"),
-            credential.Token,
+            credential.ReadableTokenValue,
             provider,
             issueApiUrlBase);
     }

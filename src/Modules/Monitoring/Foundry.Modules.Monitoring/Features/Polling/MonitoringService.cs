@@ -89,7 +89,7 @@ internal sealed class MonitoringService(
             return;
         }
 
-        if (string.IsNullOrEmpty(credential.Token))
+        if (string.IsNullOrEmpty(credential.ReadableTokenValue))
         {
             logger.LogWarning(
                 "Credential '{CredentialName}' has no token configured; skipping repo '{Slug}'.",
@@ -98,7 +98,7 @@ internal sealed class MonitoringService(
             return;
         }
 
-        IIssueProvider provider = providerFactory.CreateProvider(credential, credential.Token);
+        IIssueProvider provider = providerFactory.CreateProvider(credential, credential.ReadableTokenValue);
 
         Result pollResult = await poller.PollAsync(repo, provider, now, cancellationToken);
 

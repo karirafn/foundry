@@ -37,7 +37,7 @@ internal sealed class RepositoryEligibilityEvaluator(
             return;
         }
 
-        string token = credential.Token ?? string.Empty;
+        string token = credential.ReadableTokenValue ?? string.Empty;
 
         try
         {
@@ -88,7 +88,7 @@ internal sealed class RepositoryEligibilityEvaluator(
             return;
         }
 
-        string token = credential.Token ?? string.Empty;
+        string token = credential.ReadableTokenValue ?? string.Empty;
 
         try
         {

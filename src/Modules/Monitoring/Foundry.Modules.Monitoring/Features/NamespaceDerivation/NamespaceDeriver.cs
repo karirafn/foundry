@@ -17,14 +17,14 @@ internal sealed class NamespaceDeriver(
         Credential credential,
         CancellationToken cancellationToken)
     {
-        if (credential.Token is null)
+        if (credential.ReadableTokenValue is null)
         {
             return Task.FromResult<NamespaceDerivationOutcome>(new NamespaceDerivationOutcome.Unavailable());
         }
 
         return DeriveAsync(
             credential.ApiBaseUrl,
-            credential.Token,
+            credential.ReadableTokenValue,
             credential is GitLabCredential,
             cancellationToken);
     }

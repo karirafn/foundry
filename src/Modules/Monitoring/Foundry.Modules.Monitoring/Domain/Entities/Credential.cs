@@ -14,7 +14,13 @@ public abstract class Credential : AggregateRoot<CredentialId>
 
     public string Name { get; private protected set; } = string.Empty;
 
-    public string? Token { get; private protected set; }
+    public ProviderToken? Token { get; private protected set; }
+
+    /// <summary>
+    /// Returns the raw decrypted token string when <see cref="Token"/> is <see cref="ProviderToken.Present"/>;
+    /// returns <see langword="null"/> when the token is absent or unreadable.
+    /// </summary>
+    internal string? ReadableTokenValue => Token is ProviderToken.Present present ? present.Value : null;
 
     public BaseUrl BaseUrl { get; private protected set; } = null!;
 

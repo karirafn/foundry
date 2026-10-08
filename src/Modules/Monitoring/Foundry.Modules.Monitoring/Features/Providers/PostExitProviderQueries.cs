@@ -92,13 +92,13 @@ internal sealed class PostExitProviderQueries(
                 PostExitProviderQueriesErrors.CredentialNotFound(repositoryId));
         }
 
-        if (string.IsNullOrEmpty(credential.Token))
+        if (string.IsNullOrEmpty(credential.ReadableTokenValue))
         {
             return Result<(IIssueProvider, MonitoredRepository)>.Fail(
                 PostExitProviderQueriesErrors.CredentialTokenNotConfigured(credential.Id));
         }
 
-        IIssueProvider provider = providerFactory.CreateProvider(credential, credential.Token);
+        IIssueProvider provider = providerFactory.CreateProvider(credential, credential.ReadableTokenValue);
         return Result<(IIssueProvider, MonitoredRepository)>.Ok((provider, repo));
     }
 }

@@ -12,7 +12,6 @@ using Microsoft.Extensions.Logging;
 
 using CredentialsInfrastructure = Foundry.Modules.Credentials.Infrastructure.Configurations;
 using DataProtectionProviderFactory = Microsoft.AspNetCore.DataProtection.DataProtectionProvider;
-using MonitoringInfrastructure = Foundry.Modules.Monitoring.Infrastructure.Configurations;
 
 namespace Foundry.WebApi.Persistence;
 
@@ -49,15 +48,11 @@ public sealed class FoundryDbContext(
         modelBuilder.ApplyConfiguration(new OutboxMessageConfiguration());
         modelBuilder.ApplyConfiguration(new ProcessedEventConfiguration());
 
-        ILogger<MonitoringInfrastructure.EncryptedStringConverter>? monitoringConverterLogger =
-            loggerFactory?.CreateLogger<MonitoringInfrastructure.EncryptedStringConverter>();
-
         ILogger<CredentialsInfrastructure.ApiKeyCredentialConverter>? credentialsConverterLogger =
             loggerFactory?.CreateLogger<CredentialsInfrastructure.ApiKeyCredentialConverter>();
 
         modelBuilder.ApplyConfiguration(new MonitoredRepositoryConfiguration());
-        modelBuilder.ApplyConfiguration(
-            new CredentialConfiguration(_dataProtectionProvider, monitoringConverterLogger));
+        modelBuilder.ApplyConfiguration(new CredentialConfiguration(_dataProtectionProvider));
         modelBuilder.ApplyConfiguration(new CredentialNamespaceConfiguration());
 
         modelBuilder.ApplyConfiguration(new GlobalSettingsConfiguration());

@@ -2,6 +2,8 @@ using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Testing;
 
+using ProviderToken = Foundry.Modules.Monitoring.Domain.ValueObjects.ProviderToken;
+
 using Shouldly;
 
 using Xunit;
@@ -25,7 +27,7 @@ public sealed class Update
         // Assert
         credential.ShouldSatisfyAllConditions(
             () => credential.Name.ShouldBe("updated-name"),
-            () => credential.Token.ShouldBe("new-token"),
+            () => credential.Token.ShouldBe(new ProviderToken.Present("new-token")),
             () => credential.BaseUrl.Value.ShouldBe(new Uri("https://github.example.com")),
             () => credential.Host.ShouldBe("github.example.com"));
     }
@@ -45,6 +47,6 @@ public sealed class Update
         // Assert
         credential.ShouldSatisfyAllConditions(
             () => credential.Name.ShouldBe("updated-name"),
-            () => credential.Token.ShouldBe("existing-token"));
+            () => credential.Token.ShouldBe(new ProviderToken.Present("existing-token")));
     }
 }

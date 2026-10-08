@@ -12,6 +12,8 @@ using Foundry.Testing;
 using Foundry.UnitTests.Fakes.Monitoring;
 using Foundry.WebApi.Persistence;
 
+using ProviderToken = Foundry.Modules.Monitoring.Domain.ValueObjects.ProviderToken;
+
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -220,7 +222,7 @@ public sealed class HandleAsync : IAsyncDisposable
             .FirstOrDefaultAsync(c => c.Id == credential.Id, TestContext.Current.CancellationToken);
         stored.ShouldNotBeNull();
         stored.ShouldSatisfyAllConditions(
-            () => stored.Token.ShouldBe("ghp_original"),
+            () => stored.Token.ShouldBe(new ProviderToken.Present("ghp_original")),
             () => stored.Name.ShouldBe("original-user"),
             () => stored.BaseUrl.Value.Host.ShouldBe("github.com"));
     }
@@ -263,7 +265,7 @@ public sealed class HandleAsync : IAsyncDisposable
             .FirstOrDefaultAsync(c => c.Id == second.Id, TestContext.Current.CancellationToken);
         stored.ShouldNotBeNull();
         stored.ShouldSatisfyAllConditions(
-            () => stored.Token.ShouldBe("ghp_second"),
+            () => stored.Token.ShouldBe(new ProviderToken.Present("ghp_second")),
             () => stored.Name.ShouldBe("second-user"),
             () => stored.BaseUrl.Value.Host.ShouldBe("github.com"));
     }
@@ -378,7 +380,7 @@ public sealed class HandleAsync : IAsyncDisposable
             .FirstOrDefaultAsync(c => c.Id == credentialA.Id, CancellationToken.None);
         storedA.ShouldNotBeNull();
         storedA.ShouldSatisfyAllConditions(
-            () => storedA.Token.ShouldBe("ghp_new_a"),
+            () => storedA.Token.ShouldBe(new ProviderToken.Present("ghp_new_a")),
             () => storedA.Namespaces.Count.ShouldBe(1),
             () => storedA.Namespaces.ShouldContain(n => n.Value == "karirafn"));
 
