@@ -38,9 +38,9 @@ internal sealed class CredentialResolver(DbContext db, ILogger<CredentialResolve
             }
         }
 
-        if (best is not null)
+        if (best is not null && best.IsTokenUnreadable)
         {
-            best.WarnIfTokenUnreadable(logger);
+            logger.LogWarning(CredentialWarnings.UnreadableToken, best.Id.Value);
         }
 
         return best;

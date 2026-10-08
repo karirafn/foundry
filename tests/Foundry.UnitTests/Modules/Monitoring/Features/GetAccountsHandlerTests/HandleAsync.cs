@@ -8,6 +8,7 @@ using Foundry.WebApi.Persistence;
 
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
 using Shouldly;
@@ -41,6 +42,8 @@ public sealed class HandleAsync : IAsyncDisposable
     }
 
     private GetAccounts.Handler BuildHandler() => new(_dbContext, NullLogger<GetAccounts.Handler>.Instance);
+
+    private GetAccounts.Handler BuildHandler(CapturingLogger<GetAccounts.Handler> logger) => new(_dbContext, logger);
 
     [Fact]
     public async Task WhenCredentialHasToken_ReturnsHasTokenTrue()
@@ -176,6 +179,24 @@ public sealed class HandleAsync : IAsyncDisposable
         await _dbContext.Database.ExecuteSqlAsync(
             $"INSERT INTO accounts (id, name, token, base_url, host, type) VALUES ({id}, {name}, {"not-valid-base64!!!"}, {"https://github.com/"}, {"github.com"}, {"github"})",
             TestContext.Current.CancellationToken);
+    }
+
+    [Fact]
+    public async Task WhenCredentialHasUnreadableToken_LogsWarningContainingCredentialIdAndAccountsToken()
+    {
+        // Arrange — garbage token ciphertext forces ProviderToken.Unreadable on EF materialization.
+        await SeedCredentialWithGarbageTokenAsync("my-org");
+
+        CapturingLogger<GetAccounts.Handler> capturingLogger = new();
+        GetAccounts.Handler handler = BuildHandler(capturingLogger);
+
+        // Act
+        await handler.HandleAsync(new GetAccounts.Query(), TestContext.Current.CancellationToken);
+
+        // Assert
+        (LogLevel Level, string Message, Exception? Exception) entry = capturingLogger.Entries.ShouldHaveSingleItem();
+        entry.Level.ShouldBe(LogLevel.Warning);
+        entry.Message.ShouldContain("accounts.token");
     }
 
     [Fact]

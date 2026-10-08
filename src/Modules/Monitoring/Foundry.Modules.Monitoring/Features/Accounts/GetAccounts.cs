@@ -1,5 +1,6 @@
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Domain.Entities;
+using Foundry.Modules.Monitoring.Features.CredentialResolution;
 using Foundry.Shared;
 using Foundry.Shared.Infrastructure.Http;
 
@@ -33,7 +34,10 @@ internal static class GetAccounts
 
             foreach (Credential credential in credentials)
             {
-                credential.WarnIfTokenUnreadable(logger);
+                if (credential.IsTokenUnreadable)
+                {
+                    logger.LogWarning(CredentialWarnings.UnreadableToken, credential.Id.Value);
+                }
             }
 
             List<CredentialSummary> summaries = credentials
