@@ -124,9 +124,31 @@ public sealed class HandleAsync : IAsyncDisposable
 
         // Assert
         result.IsSuccess.ShouldBeTrue();
-        result.ShouldBeOfType<Result<AvailableRepositoriesResponse>.Success>()
-            .Value.Repositories.ShouldContain(r => r.Slug == "owner/github-repo");
+        AvailableRepositoriesResponse response =
+            result.ShouldBeOfType<Result<AvailableRepositoriesResponse>.Success>().Value;
+        response.Repositories.ShouldContain(r => r.Slug == "owner/github-repo");
         gitLabFake.LastRequest.ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task WhenAccountIsGitHub_NoPushAccessExplanationMentionsTokenPermissionAndSso()
+    {
+        // Arrange
+        (Guid accountId, _) = await SeedGitHubAccountAsync(namespaces: ["owner"]);
+        FakeHandler gitHubFake = new(HttpStatusCode.OK, BuildGitHubRepoJson(["owner/github-repo"]));
+        FakeHandler gitLabFake = new(HttpStatusCode.OK, "[]");
+        GetAvailableRepositories.Handler sut = BuildHandler(gitHubFake, gitLabFake);
+
+        // Act
+        Result<AvailableRepositoriesResponse> result = await sut.HandleAsync(
+            new GetAvailableRepositories.Query(accountId),
+            CancellationToken.None);
+
+        // Assert
+        AvailableRepositoriesResponse response =
+            result.ShouldBeOfType<Result<AvailableRepositoriesResponse>.Success>().Value;
+        response.NoPushAccessExplanation.ShouldBe(
+            "Your token lacks push permission or SSO isn't authorized.");
     }
 
     [Fact]
@@ -145,9 +167,31 @@ public sealed class HandleAsync : IAsyncDisposable
 
         // Assert
         result.IsSuccess.ShouldBeTrue();
-        result.ShouldBeOfType<Result<AvailableRepositoriesResponse>.Success>()
-            .Value.Repositories.ShouldContain(r => r.Slug == "owner/gitlab-repo");
+        AvailableRepositoriesResponse response =
+            result.ShouldBeOfType<Result<AvailableRepositoriesResponse>.Success>().Value;
+        response.Repositories.ShouldContain(r => r.Slug == "owner/gitlab-repo");
         gitHubFake.LastRequest.ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task WhenAccountIsGitLab_NoPushAccessExplanationMentionsDeveloperRole()
+    {
+        // Arrange
+        (Guid accountId, _) = await SeedGitLabAccountAsync(namespaces: ["owner"]);
+        FakeHandler gitHubFake = new(HttpStatusCode.OK, "[]");
+        FakeHandler gitLabFake = new(HttpStatusCode.OK, BuildGitLabRepoJson(["owner/gitlab-repo"]));
+        GetAvailableRepositories.Handler sut = BuildHandler(gitHubFake, gitLabFake);
+
+        // Act
+        Result<AvailableRepositoriesResponse> result = await sut.HandleAsync(
+            new GetAvailableRepositories.Query(accountId),
+            CancellationToken.None);
+
+        // Assert
+        AvailableRepositoriesResponse response =
+            result.ShouldBeOfType<Result<AvailableRepositoriesResponse>.Success>().Value;
+        response.NoPushAccessExplanation.ShouldBe(
+            "Your token's role is below Developer.");
     }
 
     [Fact]

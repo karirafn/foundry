@@ -1,6 +1,7 @@
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
+using Foundry.Modules.Monitoring.Features.Accounts;
 using Foundry.Modules.Monitoring.Infrastructure;
 using Foundry.Modules.Monitoring.Infrastructure.GitHub;
 using Foundry.Modules.Monitoring.Infrastructure.GitLab;
@@ -47,6 +48,12 @@ internal static class GetAvailableRepositories
                 return Result<AvailableRepositoriesResponse>.Fail(
                     RepositoryErrors.AccountHasNoToken(credentialId));
             }
+
+            string providerType = credential switch
+            {
+                GitLabCredential => ProviderTypes.GitLab,
+                _ => ProviderTypes.GitHub,
+            };
 
             Result<IReadOnlyList<ProviderRepository>> providerResult = credential switch
             {
@@ -105,7 +112,10 @@ internal static class GetAvailableRepositories
                     isMonitored));
             }
 
-            return Result<AvailableRepositoriesResponse>.Ok(new AvailableRepositoriesResponse(hasClaims, repositories));
+            string noPushAccessExplanation = EligibilityViolationInfo.NoPushAccessExplanation(providerType);
+
+            return Result<AvailableRepositoriesResponse>.Ok(
+                new AvailableRepositoriesResponse(hasClaims, repositories, noPushAccessExplanation));
         }
 
         private async Task<HashSet<string>> LoadMonitoredSlugsAsync(string host, CancellationToken cancellationToken)

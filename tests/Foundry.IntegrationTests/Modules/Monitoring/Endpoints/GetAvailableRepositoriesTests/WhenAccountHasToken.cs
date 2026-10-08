@@ -26,7 +26,8 @@ public sealed class WhenAccountHasToken : IAsyncDisposable
             [
                 new AvailableRepository("owner/repo-a", IsPrivate: false, CanPush: true, IsMonitored: false),
                 new AvailableRepository("owner/repo-b", IsPrivate: true, CanPush: false, IsMonitored: false),
-            ]);
+            ],
+            NoPushAccessExplanation: "Your token lacks push permission or SSO isn't authorized.");
 
         _factory = FoundryWebAppFactory.WithOverrides(services =>
         {

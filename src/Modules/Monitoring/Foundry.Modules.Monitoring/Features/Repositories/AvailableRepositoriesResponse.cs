@@ -5,4 +5,5 @@ namespace Foundry.Modules.Monitoring.Features.Repositories;
 /// </summary>
 internal sealed record AvailableRepositoriesResponse(
     bool HasClaims,
-    IReadOnlyList<AvailableRepository> Repositories);
+    IReadOnlyList<AvailableRepository> Repositories,
+    string NoPushAccessExplanation);
