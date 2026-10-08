@@ -171,6 +171,23 @@ public sealed class FailedHandlerCleanup : IAsyncDisposable
     }
 
     [Fact]
+    public async Task WhenHandlerClearsChangeTrackerAndSucceeds_RowIsStillMarkedPublished()
+    {
+        // Arrange
+        OutboxMessage message = OutboxMessage.Create(new TestRelayEvent("ClearThenSucceed"), DateTimeOffset.UtcNow);
+        await SeedAsync(message);
+
+        OutboxRelayService sut = CreateSut();
+
+        // Act
+        await sut.TickForTest(TestContext.Current.CancellationToken);
+
+        // Assert
+        List<OutboxMessage> rows = await LoadOutboxAsync();
+        rows.ShouldHaveSingleItem().ProcessedAt.ShouldNotBeNull();
+    }
+
+    [Fact]
     public async Task WhenHandlerThrowsWithPendingEvents_PendingEventsAreNotCommitted()
     {
         // Arrange
@@ -189,7 +206,7 @@ public sealed class FailedHandlerCleanup : IAsyncDisposable
 
     /// <summary>
     /// "Conflict" enqueues an event then saves a row that violates a unique constraint;
-    /// "EnqueueThenThrow" enqueues an event and throws; any other event succeeds.
+    /// "EnqueueThenThrow" enqueues an event and throws; "ClearThenSucceed" clears the change tracker and returns; any other event succeeds.
     /// </summary>
     private sealed class ConflictingSaveProcessor(
         FoundryDbContext dbContext,
@@ -201,6 +218,12 @@ public sealed class FailedHandlerCleanup : IAsyncDisposable
             {
                 collector.Enqueue(new TestRelayEvent("Pending"));
                 throw new InvalidOperationException("Handler failed after enqueuing.");
+            }
+
+            if (@event is TestRelayEvent { Name: "ClearThenSucceed" })
+            {
+                dbContext.ChangeTracker.Clear();
+                return;
             }
 
             if (@event is not TestRelayEvent { Name: "Conflict" })

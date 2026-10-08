@@ -153,6 +153,10 @@ public sealed class OutboxRelayService(
         try
         {
             await processor.ProcessAsync(message.Id, @event, cancellationToken);
+
+            // The processor may clear the shared change tracker (e.g. after a handled save conflict),
+            // which detaches the message; marking a detached entity published saves nothing.
+            AttachIfDetached(dbContext, message);
             message.MarkPublished(DateTimeOffset.UtcNow);
             await dbContext.SaveChangesAsync(cancellationToken);
         }
