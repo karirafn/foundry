@@ -77,7 +77,8 @@ public sealed class WhenTokenCannotPush : IAsyncDisposable
             () => repository.Eligibility.Status.ShouldBe("ineligible"),
             () => repository.Eligibility.Violations.ShouldHaveSingleItem(),
             () => repository.Eligibility.Violations[0].Rule.ShouldBe("cannot-push:owner/no-push-repo"),
-            () => repository.Eligibility.Violations[0].Description.ShouldBe("token cannot push to owner/no-push-repo"));
+            () => repository.Eligibility.Violations[0].Description.ShouldBe(
+                EligibilityViolationInfo.CannotPushDescription("owner/no-push-repo", "github")));
     }
 
 }
