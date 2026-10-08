@@ -7,9 +7,11 @@ using Foundry.Shared.Infrastructure.Outbox;
 
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.Extensions.Logging;
 
 using CredentialsInfrastructure = Foundry.Modules.Credentials.Infrastructure.Configurations;
+using DataProtectionProviderFactory = Microsoft.AspNetCore.DataProtection.DataProtectionProvider;
 using MonitoringInfrastructure = Foundry.Modules.Monitoring.Infrastructure.Configurations;
 
 namespace Foundry.WebApi.Persistence;
@@ -19,8 +21,25 @@ public sealed class FoundryDbContext(
     IDataProtectionProvider? dataProtectionProvider = null,
     ILoggerFactory? loggerFactory = null) : DbContext(options)
 {
+    // Shared default provider: created once per process when no provider is injected.
+    // Using a static ensures all contexts without an explicit provider share the same key ring,
+    // so a model cached under one context can be reused by another default context.
+    private static readonly IDataProtectionProvider SharedDefaultProvider =
+        DataProtectionProviderFactory.Create("Foundry");
+
     private readonly IDataProtectionProvider _dataProtectionProvider =
-        dataProtectionProvider ?? DataProtectionProvider.Create("Foundry");
+        dataProtectionProvider ?? SharedDefaultProvider;
+
+    // Exposed as internal so FoundryDbContextModelCacheKeyFactory can read them for cache-key computation.
+    internal IDataProtectionProvider DataProtectionProvider => _dataProtectionProvider;
+
+    internal ILoggerFactory? ContextLoggerFactory => loggerFactory;
+
+    protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
+    {
+        base.OnConfiguring(optionsBuilder);
+        optionsBuilder.ReplaceService<IModelCacheKeyFactory, FoundryDbContextModelCacheKeyFactory>();
+    }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
