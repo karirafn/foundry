@@ -55,7 +55,7 @@ const CONFLICT_PANEL_HEADING_ID = 'account-form-conflict-heading';
       </button>
 
       <h2 class="account-form__heading" #formHeading tabindex="-1">
-        {{ _isEditMode() ? 'Edit Account' : 'Add Account' }}
+        {{ _isEditMode() ? (_tokenUnreadable() ? 'Re-enter token for ' + account()!.name : 'Edit Account') : 'Add Account' }}
       </h2>
 
       @if (_isEditMode()) {
@@ -129,7 +129,6 @@ const CONFLICT_PANEL_HEADING_ID = 'account-form-conflict-heading';
           <div
             id="account-form-token-unreadable"
             class="account-form__token-unreadable"
-            role="alert"
           >
             <span class="account-form__token-unreadable-icon" aria-hidden="true">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">

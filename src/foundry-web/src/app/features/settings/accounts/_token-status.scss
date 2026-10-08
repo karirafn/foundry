@@ -1,0 +1,7 @@
+// Shared token-status severity palette.
+// Provides SCSS variables for token-status colours used across the accounts
+// feature (account-form and account-list). These are lighter shades calibrated
+// for AA contrast on the dark-surface backgrounds this feature uses.
+
+$token-status-success: #3fb950;
+$token-status-warning: #d29922;

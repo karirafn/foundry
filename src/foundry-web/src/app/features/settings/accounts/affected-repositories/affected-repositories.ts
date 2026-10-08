@@ -4,7 +4,7 @@ import { AffectedRepository, AffectedRepositoryStatus, affectedStatusLabel } fro
 const PANEL_HEADING_ID = 'affected-repos-heading';
 const CREDENTIAL_UNREADABLE_REASON = "Skipped — the account token can't be decrypted. Re-enter it on the account to resume.";
 
-function isLostAccess(status: string): boolean {
+function isLostAccess(status: AffectedRepositoryStatus): boolean {
   return status === 'ineligible' || status === 'unreachable' || status === 'credential-unreadable';
 }
 
@@ -38,7 +38,7 @@ function isLostAccess(status: string): boolean {
 
       <ul class="affected-repositories__list" aria-label="Affected repositories">
         @for (repo of _sortedRepositories(); track repo.id) {
-          @let reason = reasonFor(repo.newStatus);
+          @let reason = reasonFor($any(repo.newStatus));
           <li
             class="affected-repositories__row"
             [attr.aria-label]="repo.slug + ': was ' + _labelFor(repo.previousStatus) + ', now ' + _labelFor(repo.newStatus) + (reason ? '. ' + reason : '')"
@@ -70,18 +70,18 @@ export class AffectedRepositoriesComponent {
   protected readonly headingId = PANEL_HEADING_ID;
 
   protected readonly _hasLostAccess = computed(() =>
-    this.repositories().some(r => isLostAccess(r.newStatus))
+    this.repositories().some(r => isLostAccess(r.newStatus as AffectedRepositoryStatus))
   );
 
   protected readonly _lostAccessCount = computed(() =>
-    this.repositories().filter(r => isLostAccess(r.newStatus)).length
+    this.repositories().filter(r => isLostAccess(r.newStatus as AffectedRepositoryStatus)).length
   );
 
   protected readonly _sortedRepositories = computed(() => {
     const repos = [...this.repositories()];
     return repos.sort((a, b) => {
-      const aLost = isLostAccess(a.newStatus) ? 0 : 1;
-      const bLost = isLostAccess(b.newStatus) ? 0 : 1;
+      const aLost = isLostAccess(a.newStatus as AffectedRepositoryStatus) ? 0 : 1;
+      const bLost = isLostAccess(b.newStatus as AffectedRepositoryStatus) ? 0 : 1;
       return aLost - bLost;
     });
   });
@@ -90,7 +90,7 @@ export class AffectedRepositoriesComponent {
     return affectedStatusLabel(status as AffectedRepositoryStatus);
   }
 
-  protected reasonFor(status: string): string | null {
+  protected reasonFor(status: AffectedRepositoryStatus): string | null {
     if (status === 'credential-unreadable') {
       return CREDENTIAL_UNREADABLE_REASON;
     }

@@ -75,18 +75,18 @@ const MAX_VISIBLE_NAMESPACES = 4;
                 </div>
               }
             </div>
-            <div class="account-list__token-status">
+            <div class="account-list__token-status"
+                 role="group"
+                 [attr.aria-label]="'Token status for ' + account.name">
               @let status = statusOf(account);
               @switch (status) {
                 @case ('present') {
                   <span class="account-list__token-dot account-list__token-dot--present" aria-hidden="true"></span>
-                  <span class="account-list__token-label account-list__token-label--present"
-                        role="status" aria-label="Token configured">Configured</span>
+                  <span class="account-list__token-label account-list__token-label--present">Configured</span>
                 }
                 @case ('absent') {
                   <span class="account-list__token-dot account-list__token-dot--absent" aria-hidden="true"></span>
-                  <span class="account-list__token-label account-list__token-label--absent"
-                        role="status" aria-label="No token configured">Not configured</span>
+                  <span class="account-list__token-label account-list__token-label--absent">Not configured</span>
                 }
                 @case ('unreadable') {
                   <svg class="account-list__token-icon" width="16" height="16" viewBox="0 0 24 24"
@@ -96,8 +96,7 @@ const MAX_VISIBLE_NAMESPACES = 4;
                     <line x1="12" y1="9" x2="12" y2="13"></line>
                     <line x1="12" y1="17" x2="12.01" y2="17"></line>
                   </svg>
-                  <span class="account-list__token-label account-list__token-label--unreadable"
-                        role="status" aria-label="Token unreadable — re-enter it to resume monitoring">
+                  <span class="account-list__token-label account-list__token-label--unreadable">
                     Token unreadable
                   </span>
                   <button type="button"

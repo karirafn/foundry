@@ -1,8 +1,8 @@
 @use '../../../../../styles/controls' as *;
+@use '../token-status' as token;
 
-// Local text variants for status colors — lighter shades for AA contrast on dark backgrounds
-$text-success: #3fb950;
-$text-warning: #d29922;
+$text-success: token.$token-status-success;
+$text-warning: token.$token-status-warning;
 
 .account-form {
   display: flex;

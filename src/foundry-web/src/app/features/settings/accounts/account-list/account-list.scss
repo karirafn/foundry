@@ -1,3 +1,5 @@
+@use '../token-status' as token;
+
 .account-list {
   &__empty {
     display: flex;

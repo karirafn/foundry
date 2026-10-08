@@ -2017,15 +2017,36 @@ describe('AccountFormComponent', () => {
     namespaces: [],
   };
 
-  // U-1: unreadable band renders with role="alert" in edit mode when tokenStatus is 'unreadable'
-  it('should render the token-unreadable band with role="alert" when editing an unreadable account', () => {
+  // U-1: unreadable band renders as a plain div (not role="alert") referenced via aria-describedby
+  it('should render the token-unreadable band without role="alert" when editing an unreadable account', () => {
+    // Arrange / Act
+    const { el } = setup({ account: MOCK_UNREADABLE_ACCOUNT });
+
+    // Assert — band is present but is a plain div (no live-region role)
+    const band = el.querySelector('.account-form__token-unreadable');
+    expect(band).toBeTruthy();
+    expect(band?.getAttribute('role')).toBeNull();
+  });
+
+  // U-1b: token input's aria-describedby includes the unreadable band id when tokenStatus is unreadable
+  it('should include the unreadable band id in token input aria-describedby when tokenStatus is unreadable', () => {
+    // Arrange / Act
+    const { el } = setup({ account: MOCK_UNREADABLE_ACCOUNT });
+
+    // Assert — aria-describedby chain reaches the band
+    const tokenInput = el.querySelector('#account-form-token') as HTMLInputElement;
+    const describedBy = tokenInput.getAttribute('aria-describedby') ?? '';
+    expect(describedBy).toContain('account-form-token-unreadable');
+  });
+
+  // U-1c: heading reads "Re-enter token for {name}" when editing an unreadable account
+  it('should show "Re-enter token for {name}" as heading when editing an unreadable account', () => {
     // Arrange / Act
     const { el } = setup({ account: MOCK_UNREADABLE_ACCOUNT });
 
     // Assert
-    const band = el.querySelector('.account-form__token-unreadable');
-    expect(band).toBeTruthy();
-    expect(band?.getAttribute('role')).toBe('alert');
+    const heading = el.querySelector('.account-form__heading');
+    expect(heading?.textContent?.trim()).toBe('Re-enter token for broken-account');
   });
 
   // U-2: unreadable band contains the correct copy text

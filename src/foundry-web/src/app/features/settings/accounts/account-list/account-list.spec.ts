@@ -163,6 +163,25 @@ describe('AccountListComponent', () => {
     expect(dot?.classList.contains('account-list__token-dot--present')).toBe(true);
   });
 
+  it('should not have role="status" on per-row token label spans', () => {
+    // Arrange / Act
+    const { el } = setup({ accounts: [MOCK_ACCOUNT] });
+
+    // Assert — token labels are plain spans, not live regions
+    const tokenLabel = el.querySelector('.account-list__token-label');
+    expect(tokenLabel?.getAttribute('role')).toBeNull();
+  });
+
+  it('should wrap the token-status area in role="group" with an account-scoped aria-label', () => {
+    // Arrange / Act
+    const { el } = setup({ accounts: [MOCK_ACCOUNT] });
+
+    // Assert
+    const group = el.querySelector('.account-list__token-status');
+    expect(group?.getAttribute('role')).toBe('group');
+    expect(group?.getAttribute('aria-label')).toBe('Token status for my-github');
+  });
+
   it('should show "Not configured" label and absent dot for accounts with tokenStatus absent', () => {
     // Arrange / Act
     const { el } = setup({ accounts: [MOCK_ACCOUNT_2] });
