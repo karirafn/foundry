@@ -22,6 +22,13 @@ How a worker container authenticates with the Anthropic API (Claude Code).
 Two methods: API key (`ANTHROPIC_API_KEY`, pay-per-use, stored encrypted in DB) and OAuth (Max/Pro/Team/Enterprise plan, managed via a shared Docker volume).
 Exactly one method is configured per Foundry instance — selected via the `AuthMode` on the single-row `ClaudeAccount` aggregate (Credentials module).
 
+**API-key credential states.**
+Only the secret is encrypted: `claude_account.auth_mode` stores plaintext JSON (the mode discriminator, plus OAuth `subscription_type`), while the API key lives in its own nullable, encrypted `claude_account.api_key` column.
+The key is modelled as an `ApiKeyCredential` value object with three states — `Present` (a usable key), `NotConfigured` (never set or cleared; the seeded state of a fresh account), and `Unreadable` (ciphertext that fails to decrypt or base64-decode, the lost-key-ring case).
+`Unreadable` arises only on read: a `CryptographicException` or `FormatException` while decrypting `api_key` materializes as `Unreadable` with a warning naming the column, rather than throwing and making the whole aggregate unloadable.
+Because the mode discriminator is plaintext, a lost key ring never blocks loading an OAuth account or reading the mode, and the operator can always reach the repair paths (re-enter the key via `PUT /auth`, or switch to OAuth and log in).
+`ClaudeAccount.CanDispatch` returns false while the key is non-`Present`, so no worker is dispatched with an empty or unusable `ANTHROPIC_API_KEY`; the state is surfaced to the operator through `ClaudeAccountSummary.ApiKeyStatus` and the settings, setup, and account-chip UI.
+
 OAuth mode delegates the full credential lifecycle to the genuine Claude Code CLI.
 Each worker mounts a Foundry-managed, shared, writable Docker volume at its Claude config dir (`CLAUDE_CONFIG_DIR` → `/home/node/.claude`) and the CLI reads, uses, and auto-refreshes `.credentials.json` in place.
 Foundry stores no token and injects none — the CLI is solely responsible for access-token refresh (silent, persisted to the shared volume) and for detecting refresh-token expiry.
