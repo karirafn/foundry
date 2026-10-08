@@ -31,6 +31,7 @@ public sealed class OutboxRelayService(
 
         DbContext dbContext = scope.ServiceProvider.GetRequiredService<DbContext>();
         IIntegrationEventProcessor processor = scope.ServiceProvider.GetRequiredService<IIntegrationEventProcessor>();
+        IntegrationEventCollector collector = scope.ServiceProvider.GetRequiredService<IntegrationEventCollector>();
 
         List<OutboxMessage> batch = await dbContext.FindUnpublishedBatchAsync(
             _options.BatchSize,
@@ -39,7 +40,7 @@ public sealed class OutboxRelayService(
 
         foreach (OutboxMessage message in batch)
         {
-            await ProcessMessageAsync(dbContext, processor, message, cancellationToken);
+            await ProcessMessageAsync(dbContext, processor, collector, message, cancellationToken);
         }
 
         await RunRetentionSweepIfDueAsync(dbContext, cancellationToken);
@@ -91,9 +92,12 @@ public sealed class OutboxRelayService(
     private async Task ProcessMessageAsync(
         DbContext dbContext,
         IIntegrationEventProcessor processor,
+        IntegrationEventCollector collector,
         OutboxMessage message,
         CancellationToken cancellationToken)
     {
+        AttachIfDetached(dbContext, message);
+
         Type? eventType = Type.GetType(message.Type);
 
         if (eventType is null)
@@ -149,11 +153,23 @@ public sealed class OutboxRelayService(
         try
         {
             await processor.ProcessAsync(message.Id, @event, cancellationToken);
+
+            // The processor may clear the shared change tracker (e.g. after a handled save conflict),
+            // which detaches the message; marking a detached entity published saves nothing.
+            AttachIfDetached(dbContext, message);
             message.MarkPublished(DateTimeOffset.UtcNow);
             await dbContext.SaveChangesAsync(cancellationToken);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
+            // The handler shares this scope's DbContext and collector. Whatever it left behind
+            // (tracked entities whose save failed, outbox rows already drained into the tracker,
+            // events still pending) must not be committed with the failure record, and a tracked
+            // entity that fails to save would make the failure save throw too, wedging the relay.
+            dbContext.ChangeTracker.Clear();
+            collector.DiscardPending();
+            AttachIfDetached(dbContext, message);
+
             message.RecordFailure(ex.Message);
             await dbContext.SaveChangesAsync(cancellationToken);
             logger.LogWarning(
@@ -162,6 +178,14 @@ public sealed class OutboxRelayService(
                 message.Id,
                 message.Attempts,
                 _options.MaxAttempts);
+        }
+    }
+
+    private static void AttachIfDetached(DbContext dbContext, OutboxMessage message)
+    {
+        if (dbContext.Entry(message).State == EntityState.Detached)
+        {
+            dbContext.Attach(message);
         }
     }
 }

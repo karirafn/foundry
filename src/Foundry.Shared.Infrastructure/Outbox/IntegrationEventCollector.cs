@@ -18,6 +18,11 @@ public sealed class IntegrationEventCollector
         _pending.Add(message);
     }
 
+    public void DiscardPending()
+    {
+        _pending.Clear();
+    }
+
     public void DrainInto(DbContext context)
     {
         foreach (OutboxMessage message in _pending)
