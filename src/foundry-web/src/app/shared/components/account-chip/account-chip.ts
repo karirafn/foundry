@@ -1,7 +1,7 @@
 import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { SettingsService } from '../../../core/services/settings.service';
-import { AuthSettings } from '../../../core/models/settings.model';
+import { ApiKeyStatus, AuthSettings } from '../../../core/models/settings.model';
 
 interface OAuthPresentView {
   kind: 'oauth';
@@ -25,11 +25,17 @@ interface ApiKeyView {
   ariaLabel: string;
 }
 
+interface ApiKeyUnreadableView {
+  kind: 'apiKeyUnreadable';
+  title: string;
+  ariaLabel: string;
+}
+
 interface HiddenView {
   kind: 'hidden';
 }
 
-type AccountChipView = OAuthPresentView | ReLoginView | ApiKeyView | HiddenView;
+type AccountChipView = OAuthPresentView | ReLoginView | ApiKeyView | ApiKeyUnreadableView | HiddenView;
 
 function buildTitle(org: string | null, subscription: string | null, email: string): string {
   if (org && subscription) {
@@ -54,7 +60,7 @@ function mapToView(authSettings: AuthSettings | null): AccountChipView {
     return { kind: 'hidden' };
   }
 
-  const { mode, oauth, accountEmail, accountOrgName } = authSettings;
+  const { mode, oauth, accountEmail, accountOrgName, apiKeyStatus } = authSettings;
 
   if (mode === 'oauth') {
     if (oauth === null || oauth.status === 'NotConfigured' || accountEmail === null) {
@@ -81,6 +87,21 @@ function mapToView(authSettings: AuthSettings | null): AccountChipView {
       };
     }
 
+    return { kind: 'hidden' };
+  }
+
+  // API-key mode — branch on the three key states
+  const status: ApiKeyStatus = apiKeyStatus;
+
+  if (status === 'Unreadable') {
+    return {
+      kind: 'apiKeyUnreadable',
+      title: 'API key unreadable',
+      ariaLabel: 'Worker API key is unreadable. Open settings to re-enter it.',
+    };
+  }
+
+  if (status === 'NotConfigured') {
     return { kind: 'hidden' };
   }
 
