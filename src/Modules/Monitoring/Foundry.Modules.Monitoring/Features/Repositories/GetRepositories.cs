@@ -65,7 +65,7 @@ internal static class GetRepositories
                     r.Position,
                     r.MaxConcurrentWorkers,
                     r.LastPolledAt,
-                    RepositoryMappings.ToEligibilityInfo(r.Eligibility),
+                    RepositoryMappings.ToEligibilityInfo(r.Eligibility, providerType),
                     r.UntrackSuppressedSince))
                 .ToList();
 

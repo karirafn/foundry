@@ -1,7 +1,10 @@
+using System.Diagnostics;
+
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Contracts.Queries;
 using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
+using Foundry.Modules.Monitoring.Features.Accounts;
 using Foundry.Modules.Monitoring.Features.Repositories;
 
 using Microsoft.EntityFrameworkCore;
@@ -27,7 +30,9 @@ internal sealed class RepositoryEligibilityQuery(DbContext db) : IRepositoryElig
             return null;
         }
 
-        return MapToInfo(repo);
+        string providerType = await ResolveProviderTypeAsync(repo.Host, cancellationToken);
+
+        return MapToInfo(repo, providerType);
     }
 
     public async Task<IReadOnlyList<EligibleRepository>> GetEligibleRepositoriesAsync(
@@ -76,7 +81,27 @@ internal sealed class RepositoryEligibilityQuery(DbContext db) : IRepositoryElig
         return statuses;
     }
 
-    private static RepositoryEligibilityInfo MapToInfo(MonitoredRepository repo) =>
-        RepositoryMappings.ToEligibilityInfo(repo.Eligibility)
+    private async Task<string> ResolveProviderTypeAsync(string host, CancellationToken cancellationToken)
+    {
+        // Resolve the credential that owns this host to determine the provider type.
+        // One-provider-per-host is a structural invariant: MonitoredRepository.Host is derived from
+        // credential.BaseUrl.Value.Host at creation, so a host maps to at most one provider type.
+        // When no credential is found (orphan host), fall back to a neutral default so the mapping never throws.
+        Credential? credential = await db.Set<Credential>()
+            .AsNoTracking()
+            .FirstOrDefaultAsync(c => c.Host == host, cancellationToken);
+
+        return credential switch
+        {
+            GitHubCredential => ProviderTypes.GitHub,
+            GitLabCredential => ProviderTypes.GitLab,
+            // Null (no credential for host) or unknown subtype: return a neutral value so
+            // NoPushAccessPreamble's generic `_` arm is hit instead of GitHub-specific wording.
+            _ => string.Empty,
+        };
+    }
+
+    private static RepositoryEligibilityInfo MapToInfo(MonitoredRepository repo, string providerType) =>
+        RepositoryMappings.ToEligibilityInfo(repo.Eligibility, providerType)
         ?? new RepositoryEligibilityInfo(repo.EligibilityStatus!, [], null);
 }

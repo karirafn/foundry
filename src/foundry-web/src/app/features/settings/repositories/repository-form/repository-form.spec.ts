@@ -3,6 +3,9 @@ import { RepositoryFormComponent } from './repository-form';
 import { AccountSummary } from '../../accounts/account.model';
 import { AvailableRepository, CreateRepositoryRequest, RepositorySummary, UpdateRepositoryRequest } from '../repository.model';
 
+const GITHUB_EXPLANATION = "Your token lacks push permission or SSO isn't authorized.";
+const GITLAB_EXPLANATION = "Your token's role is below Developer.";
+
 const MOCK_ACCOUNT: AccountSummary = {
   id: '00000000-0000-0000-0000-000000000001',
   name: 'My GitHub',
@@ -70,6 +73,7 @@ function setup(overrides: {
   saving?: boolean;
   saveError?: string | null;
   hasClaims?: boolean;
+  noPushAccessExplanation?: string;
 } = {}) {
   const fixture = TestBed.createComponent(RepositoryFormComponent);
   fixture.componentRef.setInput('repository', overrides.repository ?? null);
@@ -80,6 +84,7 @@ function setup(overrides: {
   fixture.componentRef.setInput('saving', overrides.saving ?? false);
   fixture.componentRef.setInput('saveError', overrides.saveError ?? null);
   fixture.componentRef.setInput('hasClaims', overrides.hasClaims ?? false);
+  fixture.componentRef.setInput('noPushAccessExplanation', overrides.noPushAccessExplanation ?? '');
   fixture.detectChanges();
   return { fixture, component: fixture.componentInstance, el: fixture.nativeElement as HTMLElement };
 }
@@ -908,12 +913,13 @@ describe('RepositoryFormComponent', () => {
     expect(options[1].getAttribute('aria-disabled')).toBe('true');
   });
 
-  it('should render the no-write-access reason text inside a non-writable option', () => {
+  it('should render no per-row reason span on a non-writable option (reason is now in group note)', () => {
     // Arrange
     const { el, fixture } = setup({
       repository: null,
       accounts: [MOCK_ACCOUNT],
       availableRepositories: MOCK_AVAILABLE_MIXED,
+      noPushAccessExplanation: GITHUB_EXPLANATION,
     });
 
     const select = el.querySelector('#repository-account') as HTMLSelectElement;
@@ -925,11 +931,13 @@ describe('RepositoryFormComponent', () => {
     combobox.click();
     fixture.detectChanges();
 
-    // Assert
+    // Assert — per-row reason span is gone; reason is now in the group note
     const options = el.querySelectorAll('[role="option"]') as NodeListOf<HTMLElement>;
     const reasonEl = options[1].querySelector('.repository-form__picker-option-reason');
-    expect(reasonEl).toBeTruthy();
-    expect(reasonEl?.textContent).toContain('no write access');
+    expect(reasonEl).toBeNull();
+    // Group note shows the explanation once
+    const groupNote = el.querySelector('.repository-form__picker-group-note');
+    expect(groupNote?.textContent?.trim()).toBe(GITHUB_EXPLANATION);
   });
 
   // Cycle 27: keyboard ArrowDown skips non-selectable options
@@ -988,8 +996,8 @@ describe('RepositoryFormComponent', () => {
     expect(activeOption.getAttribute('aria-disabled')).toBeNull();
   });
 
-  it('should skip readonly option when navigating with ArrowDown and land on next selectable', () => {
-    // Arrange — list: [readonly@0, writable@1]; ArrowDown from -1 skips readonly, lands on writable@1
+  it('should land on writable option at index 0 when navigating with ArrowDown (writable sorted first)', () => {
+    // Arrange — input list: [readonly, writable]; _sortedRepositories puts writable first
     const repos: AvailableRepository[] = [
       { slug: 'my-org/readonly-repo', isPrivate: false, canPush: false, isMonitored: false },
       { slug: 'my-org/writable-repo', isPrivate: false, canPush: true, isMonitored: false },
@@ -1007,18 +1015,18 @@ describe('RepositoryFormComponent', () => {
     fixture.detectChanges();
 
     const combobox = el.querySelector('[role="combobox"]') as HTMLInputElement;
-    // First ArrowDown — skips readonly@0, lands on writable@1
+    // First ArrowDown — sorted: [writable@0, readonly@1]; lands on writable@0
     combobox.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
     fixture.detectChanges();
 
-    expect(combobox.getAttribute('aria-activedescendant')).toBe('repo-option-1');
+    expect(combobox.getAttribute('aria-activedescendant')).toBe('repo-option-0');
     const activeOption = el.querySelector('[role="option"].repository-form__picker-option--active') as HTMLElement;
     expect(activeOption).toBeTruthy();
     expect(activeOption.getAttribute('aria-disabled')).toBeNull();
   });
 
   it('should select writable option when Enter is pressed on a writable active option', () => {
-    // Arrange — list: [readonly@0, writable@1]; arrow skips to writable, Enter selects
+    // Arrange — sorted: [writable@0, readonly@1]; ArrowDown lands on writable@0, Enter selects it
     const repos: AvailableRepository[] = [
       { slug: 'my-org/readonly-repo', isPrivate: false, canPush: false, isMonitored: false },
       { slug: 'my-org/writable-repo', isPrivate: false, canPush: true, isMonitored: false },
@@ -1036,10 +1044,10 @@ describe('RepositoryFormComponent', () => {
     fixture.detectChanges();
 
     const combobox = el.querySelector('[role="combobox"]') as HTMLInputElement;
-    // ArrowDown skips readonly@0, lands on writable@1
+    // ArrowDown: sorted puts writable@0 first; lands on writable@0
     combobox.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
     fixture.detectChanges();
-    expect(combobox.getAttribute('aria-activedescendant')).toBe('repo-option-1');
+    expect(combobox.getAttribute('aria-activedescendant')).toBe('repo-option-0');
 
     // Enter should select the writable option
     combobox.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
@@ -1318,9 +1326,10 @@ describe('RepositoryFormComponent', () => {
     expect(options[1].getAttribute('aria-disabled')).toBeNull();
   });
 
-  // Cycle 33: monitored wins precedence — !canPush && isMonitored shows check, no "no write access" reason
-  it('should show monitored check and no "no write access" reason for !canPush && isMonitored repo', () => {
-    // Arrange
+  // Cycle 33: monitored wins precedence — !canPush && isMonitored shows check, no per-row reason
+  it('should show monitored check and no per-row reason for !canPush && isMonitored repo (sorted to unpushable group)', () => {
+    // Arrange — MOCK_AVAILABLE_MONITORED_NO_PUSH: [monitored-nopush(canPush=false), selectable(canPush=true)]
+    // After sorting: [selectable@0, monitored-nopush@1] (pushable first)
     const { el, fixture } = setup({
       repository: null,
       accounts: [MOCK_ACCOUNT],
@@ -1340,12 +1349,12 @@ describe('RepositoryFormComponent', () => {
     // Act
     const options = el.querySelectorAll('[role="option"]') as NodeListOf<HTMLElement>;
 
-    // Assert — first option is monitored+noPush
-    const check = options[0].querySelector('.repository-form__picker-check');
+    // Assert — second option (index 1) is monitored+noPush (unpushable group, sorted after selectable)
+    const check = options[1].querySelector('.repository-form__picker-check');
     expect(check).toBeTruthy();
-    const reason = options[0].querySelector('.repository-form__picker-option-reason');
+    const reason = options[1].querySelector('.repository-form__picker-option-reason');
     expect(reason).toBeNull();
-    const srMonitored = options[0].querySelector('.sr-only');
+    const srMonitored = options[1].querySelector('.sr-only');
     expect(srMonitored?.textContent).toContain('already monitored');
   });
 
@@ -1464,8 +1473,8 @@ describe('RepositoryFormComponent', () => {
     expect(listbox?.contains(emptyStatus)).toBe(false);
   });
 
-  // Cycle 37: read-only row still shows reason when !isMonitored
-  it('should show "no write access" reason on a read-only (canPush=false, isMonitored=false) option', () => {
+  // Cycle 37: read-only row shows group note above it, not per-row reason
+  it('should show explanation in group note (not per-row) for a read-only (canPush=false, isMonitored=false) option', () => {
     // Arrange
     const repos: AvailableRepository[] = [
       { slug: 'my-org/readonly-repo', isPrivate: false, canPush: false, isMonitored: false },
@@ -1475,6 +1484,7 @@ describe('RepositoryFormComponent', () => {
       accounts: [MOCK_ACCOUNT],
       availableRepositories: repos,
       hasClaims: true,
+      noPushAccessExplanation: GITHUB_EXPLANATION,
     });
 
     const select = el.querySelector('#repository-account') as HTMLSelectElement;
@@ -1489,16 +1499,18 @@ describe('RepositoryFormComponent', () => {
     // Act
     const options = el.querySelectorAll('[role="option"]') as NodeListOf<HTMLElement>;
 
-    // Assert — read-only option shows reason text, no check, no "already monitored" sr-text
+    // Assert — per-row reason span is gone; group note has the explanation instead
     const reason = options[0].querySelector('.repository-form__picker-option-reason');
-    expect(reason).toBeTruthy();
-    expect(reason?.textContent).toContain('no write access');
+    expect(reason).toBeNull();
     const check = options[0].querySelector('.repository-form__picker-check');
     expect(check).toBeNull();
-    // The sr-only for "already monitored" must not be present (only the reason sr-only is allowed)
+    // The sr-only for "already monitored" must not be present
     const srTexts = Array.from(options[0].querySelectorAll('.sr-only'));
     const hasMonitoredSr = srTexts.some(el => el.textContent?.includes('already monitored'));
     expect(hasMonitoredSr).toBe(false);
+    // Group note shows explanation
+    const groupNote = el.querySelector('.repository-form__picker-group-note');
+    expect(groupNote?.textContent?.trim()).toBe(GITHUB_EXPLANATION);
   });
 
   // Cycle 39: max concurrent workers field renders with label and number input
@@ -1704,6 +1716,184 @@ describe('RepositoryFormComponent', () => {
 
     // Assert — empty emits default of 1
     expect((emitted as CreateRepositoryRequest).maxConcurrentWorkers).toBe(1);
+  });
+
+  // Cycle 40: "Polling enabled" checkbox label
+  it('should label the active toggle "Polling enabled" in edit mode', () => {
+    // Arrange
+
+    // Act
+    const { el } = setup({ repository: MOCK_REPOSITORY });
+
+    // Assert
+    const label = el.querySelector('label[for="repository-active"]');
+    expect(label?.textContent?.trim()).toBe('Polling enabled');
+  });
+
+  // Cycle 41: sorted order — pushable repos come before unpushable repos in listbox
+  it('should render pushable repos before unpushable repos in listbox regardless of input order', () => {
+    // Arrange — input order: readonly first, writable second
+    const repos: AvailableRepository[] = [
+      { slug: 'my-org/readonly-repo', isPrivate: false, canPush: false, isMonitored: false },
+      { slug: 'my-org/writable-repo', isPrivate: false, canPush: true, isMonitored: false },
+    ];
+    const { el, fixture } = setup({
+      repository: null,
+      accounts: [MOCK_ACCOUNT],
+      availableRepositories: repos,
+      hasClaims: true,
+    });
+
+    const select = el.querySelector('#repository-account') as HTMLSelectElement;
+    select.value = MOCK_ACCOUNT.id;
+    select.dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+
+    const combobox = el.querySelector('[role="combobox"]') as HTMLInputElement;
+    combobox.click();
+    fixture.detectChanges();
+
+    // Assert — writable-repo appears first despite being second in input
+    const options = el.querySelectorAll('[role="option"]') as NodeListOf<HTMLElement>;
+    expect(options[0].textContent).toContain('my-org/writable-repo');
+    expect(options[1].textContent).toContain('my-org/readonly-repo');
+  });
+
+  // Cycle 42: group header appears before the first unpushable option
+  it('should render a group header before the first unpushable option', () => {
+    // Arrange
+    const { el, fixture } = setup({
+      repository: null,
+      accounts: [MOCK_ACCOUNT],
+      availableRepositories: MOCK_AVAILABLE_MIXED,
+      hasClaims: true,
+    });
+
+    const select = el.querySelector('#repository-account') as HTMLSelectElement;
+    select.value = MOCK_ACCOUNT.id;
+    select.dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+
+    const combobox = el.querySelector('[role="combobox"]') as HTMLInputElement;
+    combobox.click();
+    fixture.detectChanges();
+
+    // Assert — group header is present in the listbox with count
+    const groupHeader = el.querySelector('.repository-form__picker-group-header');
+    expect(groupHeader).toBeTruthy();
+    expect(groupHeader?.textContent?.trim()).toBe('No push access (1)');
+  });
+
+  // Cycle 43: group note shows the noPushAccessExplanation below the group header
+  it('should render group note with noPushAccessExplanation text below group header', () => {
+    // Arrange
+    const { el, fixture } = setup({
+      repository: null,
+      accounts: [MOCK_ACCOUNT],
+      availableRepositories: MOCK_AVAILABLE_MIXED,
+      hasClaims: true,
+      noPushAccessExplanation: GITHUB_EXPLANATION,
+    });
+
+    const select = el.querySelector('#repository-account') as HTMLSelectElement;
+    select.value = MOCK_ACCOUNT.id;
+    select.dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+
+    const combobox = el.querySelector('[role="combobox"]') as HTMLInputElement;
+    combobox.click();
+    fixture.detectChanges();
+
+    // Assert — group note appears with the explanation text
+    const groupNote = el.querySelector('.repository-form__picker-group-note');
+    expect(groupNote).toBeTruthy();
+    expect(groupNote?.textContent?.trim()).toBe(GITHUB_EXPLANATION);
+  });
+
+  // Cycle 44: no group header when all repos are pushable
+  it('should not render group header when all available repos are pushable', () => {
+    // Arrange — all repos have canPush=true
+    const allPushable: AvailableRepository[] = [
+      { slug: 'my-org/repo-a', isPrivate: false, canPush: true, isMonitored: false },
+      { slug: 'my-org/repo-b', isPrivate: false, canPush: true, isMonitored: false },
+    ];
+    const { el, fixture } = setup({
+      repository: null,
+      accounts: [MOCK_ACCOUNT],
+      availableRepositories: allPushable,
+      hasClaims: true,
+    });
+
+    const select = el.querySelector('#repository-account') as HTMLSelectElement;
+    select.value = MOCK_ACCOUNT.id;
+    select.dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+
+    const combobox = el.querySelector('[role="combobox"]') as HTMLInputElement;
+    combobox.click();
+    fixture.detectChanges();
+
+    // Assert — no group header when no unpushable repos
+    const groupHeader = el.querySelector('.repository-form__picker-group-header');
+    expect(groupHeader).toBeNull();
+  });
+
+  // Cycle 45: unpushable options carry aria-describedby pointing to the group note id (Finding J)
+  it('should render aria-describedby pointing to the group note on unpushable options', () => {
+    // Arrange
+    const { el, fixture } = setup({
+      repository: null,
+      accounts: [MOCK_ACCOUNT],
+      availableRepositories: MOCK_AVAILABLE_MIXED,
+      hasClaims: true,
+      noPushAccessExplanation: GITHUB_EXPLANATION,
+    });
+
+    const select = el.querySelector('#repository-account') as HTMLSelectElement;
+    select.value = MOCK_ACCOUNT.id;
+    select.dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+
+    const combobox = el.querySelector('[role="combobox"]') as HTMLInputElement;
+    combobox.click();
+    fixture.detectChanges();
+
+    // Act
+    const options = el.querySelectorAll('[role="option"]') as NodeListOf<HTMLElement>;
+    const groupNote = el.querySelector('.repository-form__picker-group-note');
+
+    // Assert — pushable option has no aria-describedby; unpushable option points to the note
+    expect(options[0].getAttribute('aria-describedby')).toBeNull(); // writable
+    expect(options[1].getAttribute('aria-describedby')).toBe('repo-nopush-note'); // read-only
+    expect(groupNote?.id).toBe('repo-nopush-note');
+  });
+
+  it('should not render aria-describedby on a pushable option', () => {
+    // Arrange
+    const allPushable: AvailableRepository[] = [
+      { slug: 'my-org/repo-a', isPrivate: false, canPush: true, isMonitored: false },
+    ];
+    const { el, fixture } = setup({
+      repository: null,
+      accounts: [MOCK_ACCOUNT],
+      availableRepositories: allPushable,
+      hasClaims: true,
+    });
+
+    const select = el.querySelector('#repository-account') as HTMLSelectElement;
+    select.value = MOCK_ACCOUNT.id;
+    select.dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+
+    const combobox = el.querySelector('[role="combobox"]') as HTMLInputElement;
+    combobox.click();
+    fixture.detectChanges();
+
+    // Act
+    const options = el.querySelectorAll('[role="option"]') as NodeListOf<HTMLElement>;
+
+    // Assert — pushable option has no aria-describedby
+    expect(options[0].getAttribute('aria-describedby')).toBeNull();
   });
 
   // Cycle 38: aria-selected is always a boolean on every role="option" (WCAG 4.1.2)

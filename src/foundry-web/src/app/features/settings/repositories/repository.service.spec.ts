@@ -53,6 +53,7 @@ const MOCK_AVAILABLE_2: AvailableRepository = {
 const MOCK_AVAILABLE_RESPONSE: AvailableRepositoriesResponse = {
   hasClaims: true,
   repositories: [MOCK_AVAILABLE, MOCK_AVAILABLE_2],
+  noPushAccessExplanation: '',
 };
 
 function setupService() {
@@ -221,7 +222,7 @@ describe('RepositoryService', () => {
 
   it('should set availableHasClaims to true when response.hasClaims is true', () => {
     // Arrange
-    const response: AvailableRepositoriesResponse = { hasClaims: true, repositories: [MOCK_AVAILABLE] };
+    const response: AvailableRepositoriesResponse = { hasClaims: true, repositories: [MOCK_AVAILABLE], noPushAccessExplanation: '' };
 
     // Act
     service.loadAvailableRepositories(ACCOUNT_ID);
@@ -235,7 +236,7 @@ describe('RepositoryService', () => {
 
   it('should set availableHasClaims to false when response.hasClaims is false', () => {
     // Arrange
-    const response: AvailableRepositoriesResponse = { hasClaims: false, repositories: [MOCK_AVAILABLE] };
+    const response: AvailableRepositoriesResponse = { hasClaims: false, repositories: [MOCK_AVAILABLE], noPushAccessExplanation: '' };
 
     // Act
     service.loadAvailableRepositories(ACCOUNT_ID);

@@ -122,6 +122,25 @@ describe('RepositoryPageComponent', () => {
       expect(details).toBeTruthy();
     });
 
+    it('should wrap fd-repository-eligibility-details in a section with h2 "Eligibility"', () => {
+      // Arrange
+      const { fixture, repositoryService, component, httpMock } = setup(REPO_1_INELIGIBLE.id);
+      fixture.detectChanges();
+      flushAccounts(httpMock);
+      seedRepositories(repositoryService, [REPO_1_INELIGIBLE], component);
+
+      // Act
+      fixture.detectChanges();
+
+      // Assert — eligibility section with h2
+      const el = fixture.nativeElement as HTMLElement;
+      const eligibilitySection = el.querySelector('.repository-page__eligibility');
+      expect(eligibilitySection?.tagName.toLowerCase()).toBe('section');
+      const heading = eligibilitySection?.querySelector('.repository-page__eligibility-heading');
+      expect(heading?.tagName.toLowerCase()).toBe('h2');
+      expect(heading?.textContent?.trim()).toBe('Eligibility');
+    });
+
     it('should not render fd-repository-eligibility-details when eligibility is eligible', () => {
       // Arrange
       const { fixture, repositoryService, component, httpMock } = setup(REPO_1.id);

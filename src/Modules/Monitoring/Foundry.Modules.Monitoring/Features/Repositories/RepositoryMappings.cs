@@ -10,7 +10,9 @@ internal static class RepositoryMappings
     internal static int? ToSeconds(TimeSpan? interval) =>
         interval.HasValue ? (int)interval.Value.TotalSeconds : null;
 
-    internal static RepositoryEligibilityInfo? ToEligibilityInfo(RepositoryEligibility? eligibility) =>
+    internal static RepositoryEligibilityInfo? ToEligibilityInfo(
+        RepositoryEligibility? eligibility,
+        string providerType) =>
         eligibility switch
         {
             null => null,
@@ -18,7 +20,7 @@ internal static class RepositoryMappings
             RepositoryEligibility.Ineligible ineligible => new RepositoryEligibilityInfo(
                 "ineligible",
                 ineligible.Violations
-                    .Select(v => new EligibilityViolationInfo(v.Rule, v.Description))
+                    .Select(v => new EligibilityViolationInfo(v.Rule, DeriveDescription(v.Rule, providerType)))
                     .ToList(),
                 null),
             RepositoryEligibility.Unreachable unreachable => new RepositoryEligibilityInfo(
@@ -27,6 +29,32 @@ internal static class RepositoryMappings
                 ToReasonToken(unreachable.Reason)),
             _ => throw new UnreachableException(),
         };
+
+    private static string DeriveDescription(string rule, string providerType)
+    {
+        if (rule.StartsWith(EligibilityViolationInfo.CannotPushRulePrefix + ":", StringComparison.Ordinal))
+        {
+            string slug = rule[(EligibilityViolationInfo.CannotPushRulePrefix.Length + 1)..];
+            return EligibilityViolationInfo.CannotPushDescription(slug, providerType);
+        }
+
+        if (rule.StartsWith(EligibilityViolationInfo.NoCredentialRulePrefix + ":", StringComparison.Ordinal))
+        {
+            string namespaceName = rule[(EligibilityViolationInfo.NoCredentialRulePrefix.Length + 1)..];
+            return EligibilityViolationInfo.NoCredentialDescription(namespaceName);
+        }
+
+        return rule switch
+        {
+            var r when r == EligibilityViolationInfo.AllowDirectPushesRule
+                => EligibilityViolationInfo.AllowDirectPushesDescription,
+            var r when r == EligibilityViolationInfo.AllowForcePushesRule
+                => EligibilityViolationInfo.AllowForcePushesDescription,
+            var r when r == EligibilityViolationInfo.AllowDeletionRule
+                => EligibilityViolationInfo.AllowDeletionDescription,
+            _ => "This repository is ineligible for an unknown reason.",
+        };
+    }
 
     private static string ToReasonToken(UnreachableReason reason) =>
         reason switch

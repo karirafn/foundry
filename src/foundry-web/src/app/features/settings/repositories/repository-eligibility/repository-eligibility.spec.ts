@@ -89,7 +89,7 @@ describe('RepositoryEligibilityComponent', () => {
     expect(indicator?.classList.contains('repository-eligibility__indicator--unreachable')).toBe(true);
   });
 
-  it('should display "Unable to verify" text for unreachable status', () => {
+  it('should display "Unverified" text for unreachable status', () => {
     // Arrange
 
     // Act
@@ -97,7 +97,7 @@ describe('RepositoryEligibilityComponent', () => {
 
     // Assert
     const label = el.querySelector('.repository-eligibility__label');
-    expect(label?.textContent?.trim()).toBe('Unable to verify branch protection');
+    expect(label?.textContent?.trim()).toBe('Unverified');
   });
 
   it('should not render violations list for unreachable status', () => {

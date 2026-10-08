@@ -66,6 +66,26 @@ public sealed class GetEligibilityAsync : IAsyncDisposable
     }
 
     [Fact]
+    public async Task WhenRepositoryHasCannotPushViolation_DerivedDescriptionReflectsGitHubProvider()
+    {
+        // Arrange — seeded as a GitHub account so ResolveProviderTypeAsync returns "github".
+        // This exercises the host → credential → provider derivation path end-to-end.
+        const string slug = "owner/cannot-push-repo";
+        Guid accountId = await AccountSeeder.SeedGitHubAccountAsync(_factory, name: "Org 5");
+        RepositoryEligibility.Ineligible ineligible = new([EligibilityViolation.CannotPush(slug)]);
+        Guid repositoryId = await SeedRepositoryAsync(accountId, slug, ineligible);
+
+        // Act
+        RepositoryEligibilityInfo? result = await QueryEligibilityAsync(repositoryId);
+
+        // Assert
+        RepositoryEligibilityInfo info = result.ShouldNotBeNull();
+        info.Violations.ShouldHaveSingleItem();
+        info.Violations[0].Description.ShouldBe(
+            EligibilityViolationInfo.CannotPushDescription(slug, "github"));
+    }
+
+    [Fact]
     public async Task WhenRepositoryIsUnreachable_ReturnsUnreachableInfo()
     {
         // Arrange

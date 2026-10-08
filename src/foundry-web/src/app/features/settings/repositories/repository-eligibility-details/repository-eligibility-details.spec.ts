@@ -14,6 +14,7 @@ function setup(overrides: {
   recheckPending?: boolean;
   recheckError?: string | null;
   panelId?: string;
+  providerType?: string;
 } = {}) {
   const fixture = TestBed.createComponent(RepositoryEligibilityDetailsComponent);
   fixture.componentRef.setInput('status', overrides.status ?? 'ineligible');
@@ -22,6 +23,7 @@ function setup(overrides: {
   fixture.componentRef.setInput('recheckPending', overrides.recheckPending ?? false);
   fixture.componentRef.setInput('recheckError', overrides.recheckError ?? null);
   fixture.componentRef.setInput('panelId', overrides.panelId ?? 'eligibility-detail-test');
+  fixture.componentRef.setInput('providerType', overrides.providerType ?? 'github');
   fixture.detectChanges();
   return { fixture, component: fixture.componentInstance, el: fixture.nativeElement as HTMLElement };
 }
@@ -45,8 +47,8 @@ describe('RepositoryEligibilityDetailsComponent', () => {
     expect(panel?.id).toBe('eligibility-detail-abc');
   });
 
-  // Cycle 2: ineligible — shows violations heading
-  it('should show "Branch protection violations" heading for ineligible status', () => {
+  // Cycle 2: ineligible — shows neutral heading
+  it('should show neutral heading for ineligible status', () => {
     // Arrange
 
     // Act
@@ -54,7 +56,7 @@ describe('RepositoryEligibilityDetailsComponent', () => {
 
     // Assert
     const heading = el.querySelector('.repository-eligibility-details__heading');
-    expect(heading?.textContent?.trim()).toBe('Branch protection violations');
+    expect(heading?.textContent?.trim()).toBe("Why this repository can't be dispatched to");
   });
 
   // Cycle 3: unreachable — shows cannot-verify heading
@@ -183,7 +185,7 @@ describe('RepositoryEligibilityDetailsComponent', () => {
     // Arrange
 
     // Act
-    const { el } = setup({ status: 'unreachable', reason: 'rate-limited' });
+    const { el } = setup({ status: 'unreachable', reason: 'rate-limited', providerType: 'github' });
 
     // Assert
     const heading = el.querySelector('.repository-eligibility-details__heading');
@@ -191,6 +193,19 @@ describe('RepositoryEligibilityDetailsComponent', () => {
     const explanation = el.querySelector('.repository-eligibility-details__explanation');
     expect(explanation?.textContent).toContain('rate limit');
     expect(explanation?.textContent?.toLowerCase()).not.toContain('check');
+  });
+
+  it('should show GitLab-specific rate-limit heading when providerType is gitlab', () => {
+    // Arrange
+
+    // Act
+    const { el } = setup({ status: 'unreachable', reason: 'rate-limited', providerType: 'gitlab' });
+
+    // Assert
+    const heading = el.querySelector('.repository-eligibility-details__heading');
+    expect(heading?.textContent?.trim()).toBe('GitLab API rate limit reached');
+    const explanation = el.querySelector('.repository-eligibility-details__explanation');
+    expect(explanation?.textContent).toContain('rate limit');
   });
 
   // Cycle 14: unreachable + reason=never-probed — heading and explanation convey not-yet-checked, not permission problem
@@ -229,16 +244,18 @@ describe('RepositoryEligibilityDetailsComponent', () => {
     expect(recheckBtn?.disabled).toBe(true);
   });
 
-  // Cycle 18: unreachable + reason=rate-limited — Re-check button has explanatory title
-  it('should have an explanatory title on the Re-check button when reason is rate-limited', () => {
+  // Cycle 18: unreachable + reason=rate-limited — Re-check button has explanatory title naming the provider
+  it('should have an explanatory title on the Re-check button naming the provider when reason is rate-limited', () => {
     // Arrange
 
     // Act
-    const { el } = setup({ status: 'unreachable', reason: 'rate-limited' });
+    const { el } = setup({ status: 'unreachable', reason: 'rate-limited', providerType: 'github' });
 
     // Assert
     const recheckBtn = el.querySelector('.repository-eligibility-details__recheck-btn') as HTMLButtonElement;
-    expect(recheckBtn?.getAttribute('title')).toContain('rate limit');
+    const title = recheckBtn?.getAttribute('title') ?? '';
+    expect(title).toContain('rate limit');
+    expect(title).toContain('GitHub');
   });
 
   // Cycle 19: unreachable + reason=never-probed — Re-check button is enabled

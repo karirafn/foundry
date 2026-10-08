@@ -316,7 +316,7 @@ describe('RepositoryListComponent', () => {
   });
 
   // Cycle 9: active status indicator
-  it('should render "Active" status with dot for active repositories', () => {
+  it('should render "Polling" status with dot for active repositories', () => {
     // Arrange
 
     // Act
@@ -324,7 +324,7 @@ describe('RepositoryListComponent', () => {
 
     // Assert
     const statusLabel = el.querySelector('.repository-list__status-label');
-    expect(statusLabel?.textContent?.trim()).toBe('Active');
+    expect(statusLabel?.textContent?.trim()).toBe('Polling');
     const dot = el.querySelector('.repository-list__status-dot');
     expect(dot?.getAttribute('aria-hidden')).toBe('true');
     expect(dot?.classList.contains('repository-list__status-dot--active')).toBe(true);
@@ -516,18 +516,19 @@ describe('RepositoryListComponent', () => {
     expect(toggle).toBeTruthy();
   });
 
-  // Eligibility group sr-only: screen-reader text is always present in eligibility-group
-  it('should render an sr-only element with the eligibility status label in the eligibility group', () => {
+  // Eligibility group: no duplicate sr-only span — fd-repository-eligibility announces status once
+  it('should not render a duplicate sr-only status span in the eligibility group', () => {
     // Arrange
 
     // Act
     const { el } = setup({ repositories: [MOCK_REPO] });
 
-    // Assert
+    // Assert — the outer sr-only redundant span was removed; fd-repository-eligibility provides the label
     const eligibilityGroup = el.querySelector('.repository-list__eligibility-group');
-    const srOnly = eligibilityGroup?.querySelector('.sr-only');
-    expect(srOnly).toBeTruthy();
-    expect(srOnly?.textContent?.trim()).toBe('Eligible');
+    const directSrOnly = Array.from(eligibilityGroup?.children ?? []).find(
+      child => child.classList.contains('sr-only')
+    );
+    expect(directSrOnly).toBeUndefined();
   });
 
   // Finding 1: toggle aria-label is reason-neutral
@@ -758,6 +759,39 @@ describe('RepositoryListComponent', () => {
     const liveRegion = el.querySelector('.repository-list__announcement');
     expect(liveRegion?.getAttribute('aria-live')).toBe('polite');
     expect(liveRegion?.textContent?.trim()).toBe(`${MOCK_REPO_INELIGIBLE.slug}: Eligible`);
+  });
+
+  // Cycle 43: panel stays expanded after re-check when repo remains ineligible
+  it('should keep the panel expanded after re-check when repo remains ineligible', () => {
+    // Arrange — re-check returns updated repo that is still ineligible
+    const stillIneligibleRepo: RepositorySummary = {
+      ...MOCK_REPO_INELIGIBLE,
+      eligibility: { status: 'ineligible', violations: [{ rule: 'AllowDirectPushes', description: 'Allow direct pushes is enabled' }], reason: null },
+    };
+    const { el, fixture, httpMock } = setup({ repositories: [MOCK_REPO_INELIGIBLE] });
+
+    // Open the panel
+    const toggle = el.querySelector('.repository-list__toggle-btn') as HTMLButtonElement;
+    toggle.click();
+    fixture.detectChanges();
+
+    // Trigger re-check
+    const recheckBtn = el.querySelector('fd-repository-eligibility-details .repository-eligibility-details__recheck-btn') as HTMLButtonElement;
+    recheckBtn.click();
+    fixture.detectChanges();
+
+    // Act — flush with still-ineligible result
+    const req = httpMock.expectOne(
+      `/api/accounts/${MOCK_REPO_INELIGIBLE.accountId}/repositories/${MOCK_REPO_INELIGIBLE.id}/recheck`
+    );
+    req.flush(stillIneligibleRepo);
+    fixture.detectChanges();
+
+    // Assert — panel stays visible (toggle still aria-expanded="true")
+    const updatedToggle = el.querySelector('.repository-list__toggle-btn');
+    expect(updatedToggle?.getAttribute('aria-expanded')).toBe('true');
+    const panel = el.querySelector(`#eligibility-detail-${MOCK_REPO_INELIGIBLE.id}`) as HTMLElement;
+    expect(panel?.hidden).toBe(false);
   });
 
   // Cycle 44: helper text visible when multiple repositories exist

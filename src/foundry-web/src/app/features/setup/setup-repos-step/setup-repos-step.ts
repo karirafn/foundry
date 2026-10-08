@@ -16,7 +16,7 @@ import { from } from 'rxjs';
 import { extractErrorMessage } from '../../../core/http/extract-error-message';
 import { concatMap } from 'rxjs/operators';
 import { RepositoryService } from '../../settings/repositories/repository.service';
-import { AvailableRepository, NO_WRITE_ACCESS_REASON } from '../../settings/repositories/repository.model';
+import { AvailableRepository } from '../../settings/repositories/repository.model';
 import { SpinnerComponent } from '../../../shared/components/spinner/spinner';
 
 const ERROR_TRUNCATE_LENGTH = 200;
@@ -112,14 +112,14 @@ const ERROR_TRUNCATE_LENGTH = 200;
                     <span
                       class="setup-repos-step__repo-reason"
                       aria-hidden="true"
-                    >{{ _noWriteAccessReason }}</span>
+                    >{{ _repositoryService.availableNoPushAccessExplanation() }}</span>
                   }
                 </label>
                 @if (!repo.canPush) {
                   <span
                     class="sr-only"
                     [id]="'repo-reason-' + repo.slug.replaceAll('/', '-')"
-                  >{{ _noWriteAccessReason }}</span>
+                  >{{ _repositoryService.availableNoPushAccessExplanation() }}</span>
                 }
               }
             </li>
@@ -162,7 +162,6 @@ const ERROR_TRUNCATE_LENGTH = 200;
   styleUrl: './setup-repos-step.scss',
 })
 export class SetupReposStepComponent implements OnInit {
-  protected readonly _noWriteAccessReason = NO_WRITE_ACCESS_REASON;
   protected readonly _repositoryService = inject(RepositoryService);
 
   readonly accountId = input.required<string>();

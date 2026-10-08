@@ -423,7 +423,9 @@ Issue-level ineligibility is derived from the repository for display, never stor
 
 A value object describing a specific, user-actionable eligibility precondition failure on a repository — either an access failure (`no-credential:<namespace>`, `cannot-push:<slug>`) or a Branch Protection failure (`branch-protection:*`).
 An `Ineligible` result carries either a single access violation or one or more Branch Protection violations, never a mix — access is checked first and short-circuits the branch-rules evaluation.
-Carries `Rule` (a well-known string constant, e.g. `"branch-protection:allow-direct-pushes"`) and `Description` (human-readable explanation for dashboard display).
+Carries `Rule` (a well-known string constant, e.g. `"branch-protection:allow-direct-pushes"`), persisted as the sole state.
+`Description` (human-readable explanation for dashboard display) is **derived** from `Rule` (and the repository's provider type, for access-related rules such as `cannot-push`) at read time in `RepositoryMappings.ToEligibilityInfo` — it is not persisted.
+Legacy rows that stored a `Description` field deserialize without throwing (the field is accepted but ignored); the derived value is always used for display.
 Stored as a non-empty collection on the `Ineligible` variant of Repository Eligibility, surfaced on the repository card in settings.
 Provider-unreachable is modeled as the separate `Unreachable` eligibility variant rather than a violation, keeping the violation list strictly actionable.
 

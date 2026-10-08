@@ -61,23 +61,25 @@ internal static class UpdateRepository
 
             await dbContext.SaveChangesAsync(cancellationToken);
 
+            string providerType = credential switch
+            {
+                GitHubCredential => ProviderTypes.GitHub,
+                GitLabCredential => ProviderTypes.GitLab,
+                _ => throw new UnreachableException(),
+            };
+
             RepositorySummary summary = new(
                 repository.Id.Value,
                 repository.Slug.ToString(),
                 credential.Id.Value,
                 credential.Name,
-                credential switch
-                {
-                    GitHubCredential => ProviderTypes.GitHub,
-                    GitLabCredential => ProviderTypes.GitLab,
-                    _ => throw new UnreachableException(),
-                },
+                providerType,
                 RepositoryMappings.ToSeconds(repository.PollInterval),
                 repository.IsActive,
                 repository.Position,
                 repository.MaxConcurrentWorkers,
                 repository.LastPolledAt,
-                RepositoryMappings.ToEligibilityInfo(repository.Eligibility),
+                RepositoryMappings.ToEligibilityInfo(repository.Eligibility, providerType),
                 repository.UntrackSuppressedSince);
 
             return Result<RepositorySummary>.Ok(summary);

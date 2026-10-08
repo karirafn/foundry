@@ -1,5 +1,3 @@
-export const NO_WRITE_ACCESS_REASON = 'no write access — token lacks push or SSO not authorized';
-
 export type EligibilityStatus = 'eligible' | 'ineligible' | 'unreachable';
 
 export type EligibilityReason = 'never-probed' | 'rate-limited' | 'branch-rules-unavailable';
@@ -11,7 +9,7 @@ export function eligibilityStatusLabel(status: EligibilityStatus): string {
     case 'ineligible':
       return 'Ineligible';
     case 'unreachable':
-      return 'Unable to verify branch protection';
+      return 'Unverified';
   }
 }
 
@@ -50,6 +48,7 @@ export interface AvailableRepository {
 export interface AvailableRepositoriesResponse {
   hasClaims: boolean;
   repositories: AvailableRepository[];
+  noPushAccessExplanation: string;
 }
 
 export interface CreateRepositoryRequest {
