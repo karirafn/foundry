@@ -81,8 +81,6 @@ public static class MonitoringModule
 
         services.AddHostedService<MonitoringService>();
 
-        services.AddSingleton<UnreadableTokenMaterializationInterceptor>();
-
         return services;
     }
 

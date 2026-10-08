@@ -8,6 +8,7 @@ using Foundry.WebApi.Persistence;
 
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging.Abstractions;
 
 using Shouldly;
 
@@ -39,7 +40,7 @@ public sealed class HandleAsync : IAsyncDisposable
         await _connection.DisposeAsync();
     }
 
-    private GetAccounts.Handler BuildHandler() => new(_dbContext);
+    private GetAccounts.Handler BuildHandler() => new(_dbContext, NullLogger<GetAccounts.Handler>.Instance);
 
     [Fact]
     public async Task WhenCredentialHasToken_ReturnsHasTokenTrue()

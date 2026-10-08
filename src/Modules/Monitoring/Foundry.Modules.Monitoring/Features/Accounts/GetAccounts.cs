@@ -8,6 +8,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 
 namespace Foundry.Modules.Monitoring.Features.Accounts;
 
@@ -15,7 +16,7 @@ internal static class GetAccounts
 {
     internal sealed record Query : IQuery<IReadOnlyList<CredentialSummary>>;
 
-    internal sealed class Handler(DbContext dbContext)
+    internal sealed class Handler(DbContext dbContext, ILogger<Handler> logger)
         : IQueryHandler<Query, IReadOnlyList<CredentialSummary>>
     {
         public async Task<Result<IReadOnlyList<CredentialSummary>>> HandleAsync(
@@ -29,6 +30,11 @@ internal static class GetAccounts
                 .Include(a => a.Namespaces)
                 .AsNoTracking()
                 .ToListAsync(cancellationToken);
+
+            foreach (Credential credential in credentials)
+            {
+                credential.WarnIfTokenUnreadable(logger);
+            }
 
             List<CredentialSummary> summaries = credentials
                 .Select(a => new CredentialSummary(

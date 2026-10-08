@@ -2,6 +2,8 @@ using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Shared;
 
+using Microsoft.Extensions.Logging;
+
 namespace Foundry.Modules.Monitoring.Domain.Entities;
 
 public abstract class Credential : AggregateRoot<CredentialId>
@@ -75,6 +77,22 @@ public abstract class Credential : AggregateRoot<CredentialId>
         credential.Token = new ProviderToken.Unreadable();
         credential.BaseUrl = baseUrl;
         credential.Host = baseUrl.Value.Host;
+    }
+
+    /// <summary>
+    /// Logs a warning when this credential's token is <see cref="ProviderToken.Unreadable"/>.
+    /// Call at every site that loads and uses a credential, so an operator can detect that a
+    /// stored ciphertext could not be decrypted and needs to be re-entered.
+    /// </summary>
+    public void WarnIfTokenUnreadable(ILogger logger)
+    {
+        if (Token is ProviderToken.Unreadable)
+        {
+            logger.LogWarning(
+                "Credential {CredentialId} loaded with an unreadable accounts.token — " +
+                "the stored ciphertext could not be decrypted. The credential is treated as ineligible until the token is re-entered.",
+                Id.Value);
+        }
     }
 
     internal bool Covers(RepositorySlug slug) => ResolveCoveringNamespace(slug) is not null;

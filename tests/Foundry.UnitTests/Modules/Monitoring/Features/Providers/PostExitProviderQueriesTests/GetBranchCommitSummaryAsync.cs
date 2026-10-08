@@ -11,6 +11,7 @@ using Foundry.WebApi.Persistence;
 
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging.Abstractions;
 
 using Shouldly;
 
@@ -41,7 +42,7 @@ public sealed class GetBranchCommitSummaryAsync : IAsyncDisposable
         _sut = new PostExitProviderQueries(
             _dbContext,
             new StubProviderFactory(() => _stubProvider),
-            new CredentialResolver(_dbContext));
+            new CredentialResolver(_dbContext, NullLogger<CredentialResolver>.Instance));
     }
 
     async ValueTask IAsyncDisposable.DisposeAsync()

@@ -7,6 +7,7 @@ using Foundry.WebApi.Persistence;
 
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging.Abstractions;
 
 using Shouldly;
 
@@ -31,7 +32,7 @@ public sealed class ResolveAsync : IAsyncDisposable
 
         _dbContext = new FoundryDbContext(options);
         _dbContext.Database.EnsureCreated();
-        _sut = new CredentialResolver(_dbContext);
+        _sut = new CredentialResolver(_dbContext, NullLogger<CredentialResolver>.Instance);
     }
 
     async ValueTask IAsyncDisposable.DisposeAsync()

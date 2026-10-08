@@ -7,7 +7,6 @@ using Foundry.Modules.Credentials.Contracts;
 using Foundry.Modules.Issues;
 using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Monitoring;
-using Foundry.Modules.Monitoring.Infrastructure;
 using Foundry.Modules.Settings;
 using Foundry.Modules.Workers;
 using Foundry.Modules.Workers.Contracts;
@@ -52,8 +51,7 @@ builder.Services.AddDbContext<FoundryDbContext>((sp, options) =>
 {
     options.UseSqlite(builder.Configuration.GetConnectionString("foundry") ?? "Data Source=data/foundry.db");
     options.AddInterceptors(
-        sp.GetRequiredService<OutboxSaveChangesInterceptor>(),
-        sp.GetRequiredService<UnreadableTokenMaterializationInterceptor>());
+        sp.GetRequiredService<OutboxSaveChangesInterceptor>());
 });
 builder.Services.AddScoped<DbContext>(sp => sp.GetRequiredService<FoundryDbContext>());
 builder.Services.AddScoped<IDomainEventDispatcher, DomainEventDispatcher>();
