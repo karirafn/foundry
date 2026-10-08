@@ -253,6 +253,44 @@ public sealed class RunCreditProbe
     }
 
     [Fact]
+    public async Task WhenApiKeyModeWithUnreadableCredential_OmitsAnthropicApiKeyEnv()
+    {
+        // Arrange — Unreadable credential: the key could not be decrypted; probe cannot authenticate.
+        FakeDockerContainerRuntime runtime = new();
+        CredentialsOrchestrator sut = BuildSut(runtime);
+        CreditProbeSpec spec = new(
+            AuthMode: new AuthMode.ApiKey(new ApiKeyCredential.Unreadable()),
+            Prompt: CreditProbeSpec.DefaultPrompt,
+            TimeoutSeconds: CreditProbeSpec.DefaultTimeoutSeconds);
+
+        // Act
+        await sut.RunCreditProbeAsync(spec, CancellationToken.None);
+
+        // Assert — no ANTHROPIC_API_KEY env var; probe should fail toward not-dispatching.
+        CreateContainerParameters captured = runtime.LastCreateAndStartParameters.ShouldNotBeNull();
+        captured.Env.ShouldNotContain(e => e.StartsWith("ANTHROPIC_API_KEY=", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task WhenApiKeyModeWithNotConfiguredCredential_OmitsAnthropicApiKeyEnv()
+    {
+        // Arrange — NotConfigured credential: no API key has been set; probe cannot authenticate.
+        FakeDockerContainerRuntime runtime = new();
+        CredentialsOrchestrator sut = BuildSut(runtime);
+        CreditProbeSpec spec = new(
+            AuthMode: new AuthMode.ApiKey(new ApiKeyCredential.NotConfigured()),
+            Prompt: CreditProbeSpec.DefaultPrompt,
+            TimeoutSeconds: CreditProbeSpec.DefaultTimeoutSeconds);
+
+        // Act
+        await sut.RunCreditProbeAsync(spec, CancellationToken.None);
+
+        // Assert — no ANTHROPIC_API_KEY env var; probe should fail toward not-dispatching.
+        CreateContainerParameters captured = runtime.LastCreateAndStartParameters.ShouldNotBeNull();
+        captured.Env.ShouldNotContain(e => e.StartsWith("ANTHROPIC_API_KEY=", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public async Task WhenContainerRunsSuccessfully_ReturnsOkWithLogs()
     {
         // Arrange

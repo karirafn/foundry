@@ -1,6 +1,5 @@
 using Foundry.Modules.Credentials.Contracts;
 using Foundry.Modules.Credentials.Domain.Entities;
-using Foundry.Modules.Credentials.Domain.ValueObjects;
 using Foundry.Modules.Credentials.Features.Login;
 
 using Microsoft.EntityFrameworkCore;
@@ -25,16 +24,6 @@ internal sealed class CredentialGate(DbContext dbContext, ILoginSessionState log
             return false;
         }
 
-        if (account.Validity is CredentialValidity.Invalid)
-        {
-            return false;
-        }
-
-        if (account.SpendState is SpendState.Blocked)
-        {
-            return false;
-        }
-
-        return true;
+        return account.CanDispatch;
     }
 }
