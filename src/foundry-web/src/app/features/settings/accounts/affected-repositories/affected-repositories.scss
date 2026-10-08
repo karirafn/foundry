@@ -108,5 +108,15 @@
     &--unreachable {
       background: var(--fd-text-secondary);
     }
+
+    &--credential-unreadable {
+      background: var(--fd-text-error);
+    }
+  }
+
+  &__reason {
+    color: var(--fd-text-secondary);
+    font-size: 0.75rem;
+    width: 100%;
   }
 }

@@ -2004,4 +2004,101 @@ describe('AccountFormComponent', () => {
     const btn = el.querySelector('.account-form__save-btn') as HTMLButtonElement;
     expect(btn.getAttribute('aria-disabled')).toBe('true');
   });
+
+  // --- Step 10: unreadable token band ---
+
+  const MOCK_UNREADABLE_ACCOUNT: AccountSummary = {
+    id: '00000000-0000-0000-0000-000000000010',
+    name: 'broken-account',
+    providerType: 'GitHub',
+    baseUrl: 'https://github.com',
+    hasToken: true,
+    tokenStatus: 'unreadable',
+    namespaces: [],
+  };
+
+  // U-1: unreadable band renders with role="alert" in edit mode when tokenStatus is 'unreadable'
+  it('should render the token-unreadable band with role="alert" when editing an unreadable account', () => {
+    // Arrange / Act
+    const { el } = setup({ account: MOCK_UNREADABLE_ACCOUNT });
+
+    // Assert
+    const band = el.querySelector('.account-form__token-unreadable');
+    expect(band).toBeTruthy();
+    expect(band?.getAttribute('role')).toBe('alert');
+  });
+
+  // U-2: unreadable band contains the correct copy text
+  it('should render the unreadable band copy text when tokenStatus is unreadable', () => {
+    // Arrange / Act
+    const { el } = setup({ account: MOCK_UNREADABLE_ACCOUNT });
+
+    // Assert
+    const band = el.querySelector('.account-form__token-unreadable');
+    expect(band?.textContent).toContain('Token unreadable.');
+    expect(band?.textContent).toContain('can no longer be decrypted');
+  });
+
+  // U-3: unreadable band has sr-only "Error: " prefix
+  it('should include an sr-only "Error: " prefix in the unreadable band', () => {
+    // Arrange / Act
+    const { el } = setup({ account: MOCK_UNREADABLE_ACCOUNT });
+
+    // Assert
+    const band = el.querySelector('.account-form__token-unreadable');
+    const srOnly = band?.querySelector('.sr-only');
+    expect(srOnly?.textContent?.trim()).toBe('Error:');
+  });
+
+  // U-4: token label reads "Re-enter token" when editing an unreadable account
+  it('should label the token field "Re-enter token" when editing an unreadable account', () => {
+    // Arrange / Act
+    const { el } = setup({ account: MOCK_UNREADABLE_ACCOUNT });
+
+    // Assert
+    const label = el.querySelector('label[for="account-form-token"]');
+    expect(label?.textContent?.trim()).toBe('Re-enter token');
+  });
+
+  // U-5: "Leave empty to keep the current token" hint is suppressed when tokenStatus is unreadable
+  it('should not render the keep-token hint when editing an unreadable account', () => {
+    // Arrange / Act
+    const { el } = setup({ account: MOCK_UNREADABLE_ACCOUNT });
+
+    // Assert
+    const hint = el.querySelector('#account-form-token-hint');
+    expect(hint).toBeNull();
+  });
+
+  // U-6: the existing success band still shows for a normal hasToken edit (non-unreadable)
+  it('should show the token-on-file success band (not the unreadable band) for a normal edit', () => {
+    // Arrange / Act
+    const { el } = setup({ account: MOCK_ACCOUNT });
+
+    // Assert — success band present, unreadable band absent
+    const successBand = el.querySelector('.account-form__token-on-file');
+    expect(successBand).toBeTruthy();
+    const unreadableBand = el.querySelector('.account-form__token-unreadable');
+    expect(unreadableBand).toBeNull();
+  });
+
+  // U-7: unreadable band is not rendered in add mode
+  it('should not render the unreadable band in add mode', () => {
+    // Arrange / Act
+    const { el } = setup({ account: null });
+
+    // Assert
+    const band = el.querySelector('.account-form__token-unreadable');
+    expect(band).toBeNull();
+  });
+
+  // U-8: token-on-file success band not shown when tokenStatus is unreadable (even though hasToken=true)
+  it('should not render the success band when tokenStatus is unreadable', () => {
+    // Arrange / Act
+    const { el } = setup({ account: MOCK_UNREADABLE_ACCOUNT });
+
+    // Assert
+    const successBand = el.querySelector('.account-form__token-on-file');
+    expect(successBand).toBeNull();
+  });
 });

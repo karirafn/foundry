@@ -247,4 +247,142 @@ describe('AffectedRepositoriesComponent', () => {
     const row = el.querySelector('.affected-repositories__row');
     expect(row?.textContent).toContain('Unable to verify branch protection');
   });
+
+  // Cycle 16: credential-unreadable — label "Token unreadable"
+  it('should display "Token unreadable" label for credential-unreadable newStatus', () => {
+    // Arrange
+    const repositories: AffectedRepository[] = [{
+      id: 'repo-4',
+      slug: 'org/paused',
+      previousStatus: 'eligible',
+      newStatus: 'credential-unreadable',
+    }];
+
+    // Act
+    const { el } = setup(repositories);
+
+    // Assert
+    const row = el.querySelector('.affected-repositories__row');
+    expect(row?.textContent).toContain('Token unreadable');
+  });
+
+  // Cycle 17: credential-unreadable — reason line rendered
+  it('should render a reason line for credential-unreadable rows', () => {
+    // Arrange
+    const repositories: AffectedRepository[] = [{
+      id: 'repo-4',
+      slug: 'org/paused',
+      previousStatus: 'eligible',
+      newStatus: 'credential-unreadable',
+    }];
+
+    // Act
+    const { el } = setup(repositories);
+
+    // Assert
+    const reason = el.querySelector('.affected-repositories__reason');
+    expect(reason).toBeTruthy();
+    expect(reason?.textContent).toContain("the account token can't be decrypted");
+  });
+
+  // Cycle 18: credential-unreadable — no reason line for non-unreadable rows
+  it('should not render a reason line for non-credential-unreadable rows', () => {
+    // Arrange
+    const repositories = [ELIGIBLE_TO_INELIGIBLE];
+
+    // Act
+    const { el } = setup(repositories);
+
+    // Assert
+    const reason = el.querySelector('.affected-repositories__reason');
+    expect(reason).toBeNull();
+  });
+
+  // Cycle 19: credential-unreadable — error dot modifier class applied
+  it('should apply the credential-unreadable dot modifier for credential-unreadable newStatus', () => {
+    // Arrange
+    const repositories: AffectedRepository[] = [{
+      id: 'repo-4',
+      slug: 'org/paused',
+      previousStatus: 'eligible',
+      newStatus: 'credential-unreadable',
+    }];
+
+    // Act
+    const { el } = setup(repositories);
+
+    // Assert
+    const dot = el.querySelector('.affected-repositories__dot--credential-unreadable');
+    expect(dot).toBeTruthy();
+  });
+
+  // Cycle 20: credential-unreadable — sorts to top (lost-access)
+  it('should sort credential-unreadable rows before non-lost-access rows', () => {
+    // Arrange — eligible-to-eligible first in input, credential-unreadable second
+    const repositories: AffectedRepository[] = [
+      INELIGIBLE_TO_ELIGIBLE,
+      { id: 'repo-4', slug: 'org/paused', previousStatus: 'eligible', newStatus: 'credential-unreadable' },
+    ];
+
+    // Act
+    const { el } = setup(repositories);
+
+    // Assert — credential-unreadable (org/paused) should appear first
+    const rows = el.querySelectorAll('.affected-repositories__row');
+    expect(rows[0].textContent).toContain('org/paused');
+    expect(rows[1].textContent).toContain('org/regained');
+  });
+
+  // Cycle 21: credential-unreadable — counts as lost-access in warning heading
+  it('should include credential-unreadable repos in the lost-access count', () => {
+    // Arrange
+    const repositories: AffectedRepository[] = [
+      ELIGIBLE_TO_INELIGIBLE,
+      { id: 'repo-4', slug: 'org/paused', previousStatus: 'eligible', newStatus: 'credential-unreadable' },
+    ];
+
+    // Act
+    const { el } = setup(repositories);
+
+    // Assert — heading shows "2" (both lose access)
+    const heading = el.querySelector('.affected-repositories__heading');
+    expect(heading?.textContent?.trim()).toMatch(/^2\s/);
+  });
+
+  // Cycle 22: credential-unreadable — warning modifier class applied
+  it('should apply warning modifier class when a credential-unreadable repo is present', () => {
+    // Arrange
+    const repositories: AffectedRepository[] = [{
+      id: 'repo-4',
+      slug: 'org/paused',
+      previousStatus: 'eligible',
+      newStatus: 'credential-unreadable',
+    }];
+
+    // Act
+    const { el } = setup(repositories);
+
+    // Assert
+    const panel = el.querySelector('.affected-repositories');
+    expect(panel?.classList).toContain('affected-repositories--warning');
+  });
+
+  // Cycle 23: credential-unreadable — aria-label includes reason
+  it('should append the reason to the aria-label for credential-unreadable rows', () => {
+    // Arrange
+    const repositories: AffectedRepository[] = [{
+      id: 'repo-4',
+      slug: 'org/paused',
+      previousStatus: 'eligible',
+      newStatus: 'credential-unreadable',
+    }];
+
+    // Act
+    const { el } = setup(repositories);
+
+    // Assert
+    const row = el.querySelector('.affected-repositories__row');
+    const label = row?.getAttribute('aria-label');
+    expect(label).toContain("can't be decrypted");
+  });
 });
