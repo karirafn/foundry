@@ -451,7 +451,7 @@ describe('SetupReposStepComponent', () => {
     fixture.detectChanges();
     httpMock
       .expectOne(`/api/accounts/${ACCOUNT_ID}/repositories/available-repositories`)
-      .flush({ hasClaims: false, repositories: AVAILABLE_REPOS_WITH_NON_WRITABLE });
+      .flush({ hasClaims: false, repositories: AVAILABLE_REPOS_WITH_NON_WRITABLE, noPushAccessExplanation: 'no write access — token lacks push or SSO not authorized' });
     fixture.detectChanges();
 
     // Assert
@@ -531,7 +531,7 @@ describe('SetupReposStepComponent', () => {
     fixture.detectChanges();
     httpMock
       .expectOne(`/api/accounts/${ACCOUNT_ID}/repositories/available-repositories`)
-      .flush({ hasClaims: false, repositories: AVAILABLE_REPOS_WITH_NON_WRITABLE });
+      .flush({ hasClaims: false, repositories: AVAILABLE_REPOS_WITH_NON_WRITABLE, noPushAccessExplanation: 'no write access — token lacks push or SSO not authorized' });
     fixture.detectChanges();
 
     // Assert
@@ -689,7 +689,7 @@ describe('SetupReposStepComponent', () => {
     fixture.detectChanges();
     httpMock
       .expectOne(`/api/accounts/${ACCOUNT_ID}/repositories/available-repositories`)
-      .flush({ hasClaims: true, repositories: AVAILABLE_REPOS_WITH_MONITORED });
+      .flush({ hasClaims: true, repositories: AVAILABLE_REPOS_WITH_MONITORED, noPushAccessExplanation: 'no write access — token lacks push or SSO not authorized' });
     fixture.detectChanges();
 
     // Act

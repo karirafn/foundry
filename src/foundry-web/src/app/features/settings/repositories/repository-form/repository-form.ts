@@ -20,7 +20,6 @@ import { accountOptionLabel } from '../../account-label.util';
 import {
   AvailableRepository,
   CreateRepositoryRequest,
-  NO_WRITE_ACCESS_REASON,
   RepositorySummary,
   UpdateRepositoryRequest,
 } from '../repository.model';
@@ -128,10 +127,25 @@ const MAX_WORKER_LIMIT = 20;
                   role="listbox"
                   [hidden]="!_pickerOpen()"
                 >
-                  @if (_filteredRepositories().length === 0 && _emptyStatusText() === '') {
+                  @if (_sortedRepositories().length === 0 && _emptyStatusText() === '') {
                     <li class="repository-form__picker-empty">No matching repositories</li>
                   }
-                  @for (repo of _filteredRepositories(); track repo.slug; let i = $index) {
+
+                  @if (_pushableCount() === 0 && _unpushableCount() > 0) {
+                    <li class="repository-form__picker-notice" role="presentation">
+                      No repositories you can push to under this account.
+                    </li>
+                  }
+
+                  @for (repo of _sortedRepositories(); track repo.slug; let i = $index) {
+                    @if (i === _firstUnpushableIndex() && _unpushableCount() > 0) {
+                      <li class="repository-form__picker-group-header" role="presentation" aria-hidden="true">
+                        No push access ({{ _unpushableCount() }})
+                      </li>
+                      <li class="repository-form__picker-group-note" role="presentation" aria-hidden="true">
+                        {{ _noPushAccessExplanation() }}
+                      </li>
+                    }
                     <li
                       class="repository-form__picker-option"
                       [class.repository-form__picker-option--active]="i === _activeOptionIndex()"
@@ -141,7 +155,6 @@ const MAX_WORKER_LIMIT = 20;
                       role="option"
                       [attr.aria-selected]="(!repo.isMonitored && repo.canPush) && (_repoSlug() === repo.slug)"
                       [attr.aria-disabled]="(repo.isMonitored || !repo.canPush) ? 'true' : null"
-                      [attr.aria-describedby]="(!repo.isMonitored && !repo.canPush) ? 'repo-option-reason-sr-' + i : null"
                       (click)="selectRepo(repo)"
                       (mousedown)="$event.preventDefault()"
                     >
@@ -153,16 +166,6 @@ const MAX_WORKER_LIMIT = 20;
                       <span class="repository-form__picker-option-slug">{{ repo.slug }}</span>
                       @if (repo.isMonitored) {
                         <span class="sr-only">already monitored</span>
-                      }
-                      @if (!repo.isMonitored && !repo.canPush) {
-                        <span
-                          class="repository-form__picker-option-reason"
-                          aria-hidden="true"
-                        >{{ _noWriteAccessReason }}</span>
-                        <span
-                          class="sr-only"
-                          [id]="'repo-option-reason-sr-' + i"
-                        >{{ _noWriteAccessReason }}</span>
                       }
                     </li>
                   }
@@ -210,7 +213,7 @@ const MAX_WORKER_LIMIT = 20;
 
       @if (_isEditMode()) {
         <div class="repository-form__field repository-form__field--inline">
-          <label class="repository-form__field-label" for="repository-active">Active</label>
+          <label class="repository-form__field-label" for="repository-active">Polling enabled</label>
           <input
             class="repository-form__toggle"
             type="checkbox"
@@ -238,7 +241,6 @@ const MAX_WORKER_LIMIT = 20;
   styleUrl: './repository-form.scss',
 })
 export class RepositoryFormComponent implements OnInit {
-  protected readonly _noWriteAccessReason = NO_WRITE_ACCESS_REASON;
   protected readonly accountOptionLabel = accountOptionLabel;
 
   readonly repository: InputSignal<RepositorySummary | null> = input<RepositorySummary | null>(null);
@@ -249,6 +251,7 @@ export class RepositoryFormComponent implements OnInit {
   readonly saving: InputSignal<boolean> = input<boolean>(false);
   readonly saveError: InputSignal<string | null> = input<string | null>(null);
   readonly hasClaims: InputSignal<boolean> = input<boolean>(false);
+  readonly noPushAccessExplanation: InputSignal<string> = input<string>('');
 
   readonly save: OutputEmitterRef<CreateRepositoryRequest | UpdateRepositoryRequest> =
     output<CreateRepositoryRequest | UpdateRepositoryRequest>();
@@ -275,6 +278,29 @@ export class RepositoryFormComponent implements OnInit {
     }
     return this.availableRepositories().filter(r => r.slug.toLowerCase().includes(filter));
   });
+
+  protected readonly _sortedRepositories: Signal<AvailableRepository[]> = computed(() => {
+    const filtered = this._filteredRepositories();
+    const pushable = filtered.filter(r => r.canPush);
+    const unpushable = filtered.filter(r => !r.canPush);
+    return [...pushable, ...unpushable];
+  });
+
+  protected readonly _pushableCount: Signal<number> = computed(() =>
+    this._sortedRepositories().filter(r => r.canPush).length
+  );
+
+  protected readonly _unpushableCount: Signal<number> = computed(() =>
+    this._sortedRepositories().filter(r => !r.canPush).length
+  );
+
+  protected readonly _firstUnpushableIndex: Signal<number> = computed(() =>
+    this._pushableCount()
+  );
+
+  protected readonly _noPushAccessExplanation: Signal<string> = computed(() =>
+    this.noPushAccessExplanation()
+  );
 
   protected readonly _showNoClaims: Signal<boolean> = computed(
     () => this._pickerOpen() && !this.hasClaims()
@@ -362,24 +388,24 @@ export class RepositoryFormComponent implements OnInit {
   }
 
   onPickerKeydown(event: KeyboardEvent): void {
-    const filtered = this._filteredRepositories();
+    const sorted = this._sortedRepositories();
     const current = this._activeOptionIndex();
 
     if (event.key === 'ArrowDown') {
       event.preventDefault();
       this._pickerOpen.set(true);
-      const next = this._nextSelectableIndex(filtered, current, 1);
+      const next = this._nextSelectableIndex(sorted, current, 1);
       if (next !== -1) {
         this._activeOptionIndex.set(next);
       }
     } else if (event.key === 'ArrowUp') {
       event.preventDefault();
-      const next = this._nextSelectableIndex(filtered, current, -1);
+      const next = this._nextSelectableIndex(sorted, current, -1);
       this._activeOptionIndex.set(next);
     } else if (event.key === 'Enter') {
       event.preventDefault();
-      if (current >= 0 && current < filtered.length) {
-        this.selectRepo(filtered[current]);
+      if (current >= 0 && current < sorted.length) {
+        this.selectRepo(sorted[current]);
       }
     } else if (event.key === 'Escape') {
       this._pickerOpen.set(false);

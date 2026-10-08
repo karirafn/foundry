@@ -55,6 +55,7 @@ type RepositoryView = { kind: 'list' } | { kind: 'add' };
               [accounts]="accountService.accounts()"
               [availableRepositories]="repositoryService.availableRepositories()"
               [hasClaims]="repositoryService.availableHasClaims()"
+              [noPushAccessExplanation]="repositoryService.availableNoPushAccessExplanation()"
               [loadingAvailable]="repositoryService.loadingAvailable()"
               [loadAvailableError]="repositoryService.loadAvailableError()"
               [saving]="repositoryService.saving()"

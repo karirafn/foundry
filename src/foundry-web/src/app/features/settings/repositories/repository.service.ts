@@ -39,6 +39,9 @@ export class RepositoryService {
   private readonly _availableHasClaimsSignal: WritableSignal<boolean> = signal(false);
   readonly availableHasClaims: Signal<boolean> = this._availableHasClaimsSignal.asReadonly();
 
+  private readonly _availableNoPushAccessExplanationSignal: WritableSignal<string> = signal('');
+  readonly availableNoPushAccessExplanation: Signal<string> = this._availableNoPushAccessExplanationSignal.asReadonly();
+
   private readonly _loadingAvailableSignal: WritableSignal<boolean> = signal(false);
   readonly loadingAvailable: Signal<boolean> = this._loadingAvailableSignal.asReadonly();
 
@@ -99,6 +102,7 @@ export class RepositoryService {
       next: (response) => {
         this._availableRepositoriesSignal.set(response.repositories);
         this._availableHasClaimsSignal.set(response.hasClaims);
+        this._availableNoPushAccessExplanationSignal.set(response.noPushAccessExplanation ?? '');
         this._loadingAvailableSignal.set(false);
       },
       error: (err: HttpErrorResponse) => {
