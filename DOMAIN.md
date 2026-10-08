@@ -421,7 +421,8 @@ Issue-level ineligibility is derived from the repository for display, never stor
 
 ## Eligibility Violation
 
-A value object describing a specific, user-actionable Branch Protection precondition failure on a repository.
+A value object describing a specific, user-actionable eligibility precondition failure on a repository — either an access failure (`no-credential:<namespace>`, `cannot-push:<slug>`) or a Branch Protection failure (`branch-protection:*`).
+An `Ineligible` result carries either a single access violation or one or more Branch Protection violations, never a mix — access is checked first and short-circuits the branch-rules evaluation.
 Carries `Rule` (a well-known string constant, e.g. `"branch-protection:allow-direct-pushes"`) and `Description` (human-readable explanation for dashboard display).
 Stored as a non-empty collection on the `Ineligible` variant of Repository Eligibility, surfaced on the repository card in settings.
 Provider-unreachable is modeled as the separate `Unreachable` eligibility variant rather than a violation, keeping the violation list strictly actionable.
