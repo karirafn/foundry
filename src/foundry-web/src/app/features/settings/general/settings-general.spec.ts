@@ -2238,7 +2238,7 @@ describe('SettingsGeneralComponent', () => {
 
       // Act
       const el = fixture.nativeElement as HTMLElement;
-      const indicator = el.querySelector('#api-key-configured.general-settings__configured-indicator');
+      const indicator = el.querySelector('#api-key-configured .general-settings__configured-indicator');
 
       // Assert
       expect(indicator).toBeTruthy();
@@ -2255,7 +2255,7 @@ describe('SettingsGeneralComponent', () => {
 
       // Act
       const el = fixture.nativeElement as HTMLElement;
-      const hint = el.querySelector('#api-key-configured.general-settings__field-hint');
+      const hint = el.querySelector('#api-key-configured .general-settings__field-hint--credential-status');
 
       // Assert
       expect(hint).toBeTruthy();
@@ -2272,16 +2272,17 @@ describe('SettingsGeneralComponent', () => {
 
       // Act
       const el = fixture.nativeElement as HTMLElement;
-      const warning = el.querySelector('#api-key-configured.general-settings__api-key-warning');
+      const warningRegion = el.querySelector('#api-key-configured[role="alert"]');
+      const warning = el.querySelector('.general-settings__api-key-warning');
 
-      // Assert
+      // Assert — the persistent wrapper carries role="alert" and contains the warning content
+      expect(warningRegion).toBeTruthy();
       expect(warning).toBeTruthy();
-      expect(warning?.getAttribute('role')).toBe('alert');
       expect(warning?.textContent).toContain('can no longer be read');
       expect(warning?.textContent).toContain('Re-enter');
     });
 
-    it('should keep id="api-key-configured" on the element so the input aria-describedby association holds', () => {
+    it('should keep id="api-key-configured" always in the DOM so the input aria-describedby never dangles', () => {
       // Arrange
       const { httpMock } = setup();
       const fixture = TestBed.createComponent(SettingsGeneralComponent);
@@ -2294,9 +2295,57 @@ describe('SettingsGeneralComponent', () => {
       const statusEl = el.querySelector('#api-key-configured');
       const input = el.querySelector('.general-settings__api-key-input');
 
-      // Assert — element with id="api-key-configured" exists and input references it
+      // Assert — element with id="api-key-configured" is always present and input references it
       expect(statusEl).toBeTruthy();
       expect(input?.getAttribute('aria-describedby')).toContain('api-key-configured');
+    });
+
+    it('should keep id="api-key-configured" in the DOM even when apiKeyStatus is Present', () => {
+      // Arrange
+      const { httpMock } = setup();
+      const fixture = TestBed.createComponent(SettingsGeneralComponent);
+      fixture.detectChanges();
+      flushSettings(httpMock, API_KEY_RESPONSE, CREDENTIALS_API_KEY);
+      fixture.detectChanges();
+
+      // Act
+      const el = fixture.nativeElement as HTMLElement;
+      const statusEl = el.querySelector('#api-key-configured');
+
+      // Assert — persistent wrapper always in the DOM, not created/destroyed per status
+      expect(statusEl).toBeTruthy();
+    });
+
+    it('should keep id="api-key-configured" in the DOM when apiKeyStatus is Unreadable', () => {
+      // Arrange
+      const { httpMock } = setup();
+      const fixture = TestBed.createComponent(SettingsGeneralComponent);
+      fixture.detectChanges();
+      flushSettings(httpMock, API_KEY_RESPONSE, CREDENTIALS_API_KEY_UNREADABLE);
+      fixture.detectChanges();
+
+      // Act
+      const el = fixture.nativeElement as HTMLElement;
+      const statusEl = el.querySelector('#api-key-configured');
+
+      // Assert
+      expect(statusEl).toBeTruthy();
+    });
+
+    it('should set role="alert" on the persistent wrapper only when apiKeyStatus is Unreadable', () => {
+      // Arrange — Present state: no role="alert" on the wrapper
+      const { httpMock } = setup();
+      const fixture = TestBed.createComponent(SettingsGeneralComponent);
+      fixture.detectChanges();
+      flushSettings(httpMock, API_KEY_RESPONSE, CREDENTIALS_API_KEY);
+      fixture.detectChanges();
+
+      // Act
+      const el = fixture.nativeElement as HTMLElement;
+      const wrapper = el.querySelector('#api-key-configured');
+
+      // Assert — no alert role when not Unreadable
+      expect(wrapper?.getAttribute('role')).not.toBe('alert');
     });
 
     it('should not render the configured-indicator when apiKeyStatus is NotConfigured', () => {
@@ -2313,6 +2362,23 @@ describe('SettingsGeneralComponent', () => {
 
       // Assert
       expect(indicator).toBeFalsy();
+    });
+
+    it('should render the NotConfigured hint with the credential-status class (not the shared field-hint class alone)', () => {
+      // Arrange
+      const { httpMock } = setup();
+      const fixture = TestBed.createComponent(SettingsGeneralComponent);
+      fixture.detectChanges();
+      flushSettings(httpMock, API_KEY_RESPONSE, CREDENTIALS_API_KEY_NOT_CONFIGURED);
+      fixture.detectChanges();
+
+      // Act
+      const el = fixture.nativeElement as HTMLElement;
+      const hint = el.querySelector('.general-settings__field-hint--credential-status');
+
+      // Assert — the dedicated class exists so it can receive higher-contrast styling
+      expect(hint).toBeTruthy();
+      expect(hint?.textContent).toContain('No API key is set');
     });
   });
 

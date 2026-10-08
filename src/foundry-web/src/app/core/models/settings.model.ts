@@ -35,7 +35,8 @@ export interface OAuthCredentialInfo {
 export interface AuthSettings {
   mode: AuthMode;
   apiKeyStatus: ApiKeyStatus;
-  /** @deprecated Derive as `apiKeyStatus === 'Present'` — kept for Step 10 consumer migration. */
+  /** @deprecated Derive as `apiKeyStatus === 'Present'` instead — `apiKeyConfigured` is a boolean
+   *  projection of `apiKeyStatus` that predates the three-state model. */
   apiKeyConfigured: boolean;
   oauth: OAuthCredentialInfo | null;
   accountEmail: string | null;

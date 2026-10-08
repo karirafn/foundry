@@ -77,6 +77,13 @@
     font-size: 0.75rem;
   }
 
+  // Credential-status notes (NotConfigured) use --fd-text-secondary to meet WCAG 1.4.3 4.5:1
+  // on the card background — --fd-text-tertiary (#6e7681) falls below threshold at 0.75rem.
+  &__field-hint--credential-status {
+    color: var(--fd-text-secondary);
+    font-size: 0.75rem;
+  }
+
   &__api-key-wrapper {
     display: flex;
     align-items: center;

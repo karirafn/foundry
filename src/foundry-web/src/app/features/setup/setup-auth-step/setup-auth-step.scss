@@ -103,13 +103,28 @@
   }
 
   &__note--warning {
+    align-items: flex-start;
     display: flex;
     gap: var(--fd-spacing-sm);
+    overflow-wrap: break-word;
     padding: var(--fd-spacing-sm) var(--fd-spacing-md);
     border: 1px solid var(--fd-border-warning);
     border-radius: var(--fd-radius-sm);
     background: var(--fd-bg-warning-subtle);
     color: var(--fd-text-warning);
+
+    // The wrapper stays in the DOM (persistent live-region) but must not render
+    // a visible box when no Unreadable content is active.
+    &-hidden {
+      padding: 0;
+      border: 0;
+      background: transparent;
+    }
+  }
+
+  &__note-warning-icon {
+    flex-shrink: 0;
+    margin-block-start: 0.0625rem;
   }
 
   &__oauth-section {

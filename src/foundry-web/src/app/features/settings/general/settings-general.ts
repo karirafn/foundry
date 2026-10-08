@@ -105,23 +105,25 @@ const RATE_BUDGET_FLOOR = 500;
                 </button>
               </div>
 
-              @switch (_apiKeyStatus()) {
-                @case ('Present') {
-                  <span id="api-key-configured" class="general-settings__configured-indicator">
+              <!-- Persistent live-region wrapper: always in the DOM so aria-describedby never dangles.
+                   role="alert" is set only for Unreadable — assertive announcement on page load
+                   for the primary recovery scenario. Present/NotConfigured carry no live-region role. -->
+              <div
+                id="api-key-configured"
+                [attr.role]="_apiKeyStatus() === 'Unreadable' ? 'alert' : null"
+              >
+                @if (_apiKeyStatus() === 'Present') {
+                  <span class="general-settings__configured-indicator">
                     API key is configured
                   </span>
                 }
-                @case ('NotConfigured') {
-                  <span id="api-key-configured" class="general-settings__field-hint">
+                @if (_apiKeyStatus() === 'NotConfigured') {
+                  <span class="general-settings__field-hint--credential-status">
                     No API key is set. Workers stay paused until you enter one.
                   </span>
                 }
-                @case ('Unreadable') {
-                  <div
-                    id="api-key-configured"
-                    class="general-settings__api-key-warning"
-                    role="alert"
-                  >
+                @if (_apiKeyStatus() === 'Unreadable') {
+                  <div class="general-settings__api-key-warning">
                     <svg class="general-settings__api-key-warning-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                       <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
                       <line x1="12" y1="9" x2="12" y2="13"></line>
@@ -133,7 +135,7 @@ const RATE_BUDGET_FLOOR = 500;
                     </span>
                   </div>
                 }
-              }
+              </div>
             </div>
 
             <div id="api-key-error" class="general-settings__save-error" role="alert">{{ settingsService.saveError() ?? '' }}</div>

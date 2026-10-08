@@ -76,12 +76,30 @@ import { OAuthPanelComponent } from '../../settings/oauth-panel/oauth-panel';
 
           <div id="api-key-error" class="setup-auth-step__error" role="alert">{{ _settingsService.saveError() ?? '' }}</div>
 
-          @if (_apiKeyStatus() === 'Unreadable') {
-            <div class="setup-auth-step__oauth-note setup-auth-step__note--warning" role="alert">
-              The saved API key can't be read (its encryption key was lost). Enter a new
-              API key above, or choose OAuth and sign in.
-            </div>
-          } @else if (_apiKeyStatus() === 'NotConfigured') {
+          <!-- Persistent live-region wrapper: always in the DOM so the announcement fires
+               on page load when the operator arrives in the Unreadable state.
+               role="status" (polite) avoids a double assertive announcement alongside
+               the existing #api-key-error role="alert". The --hidden modifier suppresses
+               the visible box when no Unreadable content is active. -->
+          <div
+            class="setup-auth-step__oauth-note setup-auth-step__note--warning"
+            [class.setup-auth-step__note--warning-hidden]="_apiKeyStatus() !== 'Unreadable'"
+            role="status"
+          >
+            @if (_apiKeyStatus() === 'Unreadable') {
+              <svg class="setup-auth-step__note-warning-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+                <line x1="12" y1="9" x2="12" y2="13"></line>
+                <line x1="12" y1="17" x2="12.01" y2="17"></line>
+              </svg>
+              <span>
+                The saved API key can't be read (its encryption key was lost). Enter a new
+                API key above, or choose OAuth and sign in.
+              </span>
+            }
+          </div>
+
+          @if (_apiKeyStatus() === 'NotConfigured') {
             <div class="setup-auth-step__oauth-note">
               No API key is set yet. Enter one above to let workers run.
             </div>
