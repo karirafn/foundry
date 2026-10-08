@@ -1,5 +1,6 @@
 import { ChangeDetectionStrategy, Component, InputSignal, OutputEmitterRef, input, output } from '@angular/core';
 import { EligibilityReason, EligibilityStatus, EligibilityViolation } from '../repository.model';
+import { providerDisplayName } from '../../../../shared/utils/provider.util';
 
 @Component({
   selector: 'fd-repository-eligibility-details',
@@ -12,10 +13,9 @@ import { EligibilityReason, EligibilityStatus, EligibilityViolation } from '../r
         </h3>
         <button
           class="repository-eligibility-details__recheck-btn"
-          [class.repository-eligibility-details__recheck-btn--unreachable]="status() === 'unreachable'"
           type="button"
           [disabled]="recheckPending() || reason() === 'rate-limited'"
-          [attr.title]="reason() === 'rate-limited' ? 'GitHub rate limit active — Foundry retries automatically' : null"
+          [attr.title]="reason() === 'rate-limited' ? _rateLimitTitle() : null"
           (click)="recheck.emit()"
         >{{ recheckPending() ? 'Re-checking...' : 'Re-check' }}</button>
       </div>
@@ -49,16 +49,17 @@ export class RepositoryEligibilityDetailsComponent {
   readonly recheckPending: InputSignal<boolean> = input<boolean>(false);
   readonly recheckError: InputSignal<string | null> = input<string | null>(null);
   readonly panelId: InputSignal<string> = input.required<string>();
+  readonly providerType: InputSignal<string> = input<string>('github');
 
   readonly recheck: OutputEmitterRef<void> = output<void>();
 
   _heading(): string {
     if (this.status() !== 'unreachable') {
-      return 'Branch protection violations';
+      return "Why this repository can't be dispatched to";
     }
     switch (this.reason()) {
       case 'rate-limited':
-        return 'GitHub API rate limit reached';
+        return `${providerDisplayName(this.providerType())} API rate limit reached`;
       case 'never-probed':
         return 'Eligibility not yet checked';
       case 'branch-rules-unavailable':
@@ -68,10 +69,14 @@ export class RepositoryEligibilityDetailsComponent {
     }
   }
 
+  _rateLimitTitle(): string {
+    return `${providerDisplayName(this.providerType())} rate limit active — Foundry retries automatically`;
+  }
+
   _unreachableExplanation(): string {
     switch (this.reason()) {
       case 'rate-limited':
-        return 'The GitHub API rate limit has been reached. Foundry will retry automatically.';
+        return `The ${providerDisplayName(this.providerType())} API rate limit has been reached. Foundry will retry automatically.`;
       case 'never-probed':
         return 'Eligibility has not been checked yet. Foundry will probe automatically.';
       case 'branch-rules-unavailable':

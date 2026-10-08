@@ -1,6 +1,8 @@
+@use '../../../../../styles/controls' as *;
+
 .repository-eligibility-details {
   background: var(--fd-bg-card);
-  border-block-start: 1px solid var(--fd-border-muted);
+  border: 1px solid var(--fd-border-muted);
   border-radius: var(--fd-radius-sm);
   padding: var(--fd-spacing-md);
 
@@ -21,30 +23,17 @@
 
   &__recheck-btn {
     background: transparent;
-    border: 1px solid var(--fd-text-ineligible);
+    border: 1px solid var(--fd-border-muted);
     border-radius: var(--fd-radius-sm);
-    color: var(--fd-text-ineligible);
+    color: var(--fd-text-link);
     cursor: pointer;
     font-size: 0.8125rem;
     min-height: 44px;
     padding: var(--fd-spacing-xs) var(--fd-spacing-sm);
     white-space: nowrap;
 
-    &--unreachable {
-      border-color: var(--fd-text-secondary);
-      color: var(--fd-text-secondary);
-
-      &:hover:not([disabled]) {
-        background: var(--fd-bg-card-hover);
-      }
-
-      &:focus-visible {
-        outline-color: var(--fd-text-secondary);
-      }
-    }
-
     &:hover:not([disabled]) {
-      background: rgba(210, 153, 34, 0.1);
+      background: var(--fd-bg-card-hover);
     }
 
     &[disabled] {
@@ -53,8 +42,7 @@
     }
 
     &:focus-visible {
-      outline: 2px solid var(--fd-text-ineligible);
-      outline-offset: 2px;
+      @include focus-ring;
     }
   }
 
