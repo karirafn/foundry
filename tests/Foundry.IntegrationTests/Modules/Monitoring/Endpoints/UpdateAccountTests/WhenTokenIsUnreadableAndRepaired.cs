@@ -26,23 +26,26 @@ using Xunit;
 namespace Foundry.IntegrationTests.Modules.Monitoring.Endpoints.UpdateAccountTests;
 
 /// <summary>
-/// Verifies that a credential whose token column contains garbage ciphertext
+/// Verifies AC4: a credential whose token column contains garbage ciphertext
 /// (unreadable by the active key ring) can be repaired by supplying a fresh
-/// valid token via PUT /api/accounts/{id} (AC4 from issue #555).
+/// valid token via PUT /api/accounts/{id}.
+///
+/// Setup mirrors WhenRequestIsValid: the account is created through POST /api/accounts
+/// so its id and credential_namespaces rows are EF-native. After creation, only the
+/// token column is corrupted via raw SQL UPDATE (no WHERE — there is exactly one row),
+/// simulating a lost key ring without touching the id or namespace state.
 /// </summary>
 public sealed class WhenTokenIsUnreadableAndRepaired : IAsyncDisposable
 {
-    private const string AccountsTable = "accounts";
-
     // Valid base64 that the ephemeral key ring cannot unprotect.
     private const string GarbageBase64Token =
         "AAAA/totally/random+bytes+that+no+key+ring+can+ever+decrypt==";
 
     private const string FreshToken = "ghp_fresh_valid_token";
     private const string RepairedAccountName = "repaired-user";
-    private const string AccountName = "unreadable-account";
 
-    // One writable repo under "repaired-user" so namespace derivation passes during repair.
+    // One writable repo under "repaired-user" so namespace derivation passes during
+    // both the initial create and the repair PUT.
     private const string RepairedUserListingJson =
         """[{"full_name":"repaired-user/repo","private":false,"permissions":{"push":true}}]""";
 
@@ -59,7 +62,8 @@ public sealed class WhenTokenIsUnreadableAndRepaired : IAsyncDisposable
 
         _factory = FoundryWebAppFactory.WithOverrides(services =>
         {
-            // Stub ValidateToken so the fresh token resolves successfully without a real provider call.
+            // Stub ValidateToken so both the create and the repair token resolve
+            // successfully without a real provider call.
             services.RemoveAll<IQueryHandler<ValidateToken.Query, ValidateToken.Response>>();
             services.AddScoped<IQueryHandler<ValidateToken.Query, ValidateToken.Response>>(
                 _ => new ReturnsAlwaysOkStub(validResponse));
@@ -86,40 +90,54 @@ public sealed class WhenTokenIsUnreadableAndRepaired : IAsyncDisposable
     }
 
     /// <summary>
-    /// Inserts a credentials row with garbage ciphertext directly via raw SQL,
-    /// bypassing the ProviderTokenConverter write leg that rejects Unreadable tokens.
+    /// Creates a real account through POST /api/accounts (so its id and namespace rows
+    /// are EF-native), then overwrites only the token column with garbage ciphertext via
+    /// raw SQL UPDATE. No WHERE clause avoids Guid TEXT format mismatches — there is
+    /// exactly one credential row in the per-class test database at this point.
+    /// This mirrors the pattern in GetAvailableRepositoriesHandlerTests.SeedGitHubAccountWithGarbageTokenAsync.
     /// </summary>
-    private async Task<Guid> SeedRowWithGarbageTokenAsync()
+    private async Task<Guid> SeedAccountWithCorruptedTokenAsync()
     {
+        // Create via POST so the account has an EF-native id and credential_namespaces rows.
+        object createBody = new
+        {
+            providerType = "github",
+            baseUrl = "https://github.com",
+            token = "ghp_placeholder_token",
+        };
+
+        HttpResponseMessage createResponse = await _client.PostAsJsonAsync(
+            new Uri("/api/accounts", UriKind.Relative),
+            createBody,
+            TestContext.Current.CancellationToken);
+
+        createResponse.StatusCode.ShouldBe(HttpStatusCode.Created);
+
+        CredentialCreationResult? createdResult = await createResponse.Content
+            .ReadFromJsonAsync<CredentialCreationResult>(TestContext.Current.CancellationToken);
+        createdResult.ShouldNotBeNull();
+        Guid accountId = createdResult.Credential.Id;
+
+        // Overwrite the token column with garbage ciphertext. No WHERE clause — there is
+        // exactly one row in this per-class database. This simulates a lost key ring:
+        // ProviderTokenConverter.Read will throw CryptographicException and materialize
+        // ProviderToken.Unreadable.
         using IServiceScope scope = _factory.Services.CreateScope();
         DbContext dbContext = scope.ServiceProvider.GetRequiredService<DbContext>();
 
-        // Ensure migrations have run so the table exists.
-        await dbContext.Database.EnsureCreatedAsync(TestContext.Current.CancellationToken);
-
-        Guid id = Guid.NewGuid();
-
-        // type = "github" is the TPH discriminator for GitHubCredential.
-        // base_url must include the trailing slash; host is the bare domain.
         await dbContext.Database.ExecuteSqlRawAsync(
-            $"INSERT INTO {AccountsTable} (id, name, token, base_url, host, type) " +
-            "VALUES ({0}, {1}, {2}, {3}, {4}, {5})",
-            id.ToString(),
-            AccountName,
-            GarbageBase64Token,
-            "https://github.com/",
-            "github.com",
-            "github");
+            "UPDATE accounts SET token = {0}",
+            GarbageBase64Token);
 
-        return id;
+        return accountId;
     }
 
     [Fact]
     public async Task WhenFreshTokenSupplied_UpdateAccountReturnsPresent()
     {
-        // Arrange — seed a row whose token column contains garbage ciphertext so
-        // ProviderToken materializes as Unreadable on load.
-        Guid accountId = await SeedRowWithGarbageTokenAsync();
+        // Arrange — create a real account via POST, then corrupt only its token column
+        // to simulate the "lost key ring" scenario (AC4).
+        Guid accountId = await SeedAccountWithCorruptedTokenAsync();
 
         object updateBody = new
         {
@@ -128,7 +146,8 @@ public sealed class WhenTokenIsUnreadableAndRepaired : IAsyncDisposable
         };
 
         // Act — supply a fresh valid token via PUT /api/accounts/{id}.
-        // UpdateAccount does not read the old token; it writes the new one directly.
+        // UpdateAccount looks up the account by id and overwrites the token without
+        // reading the old one, so the garbage ciphertext does not block the repair.
         HttpResponseMessage response = await _client.PutAsJsonAsync(
             new Uri($"/api/accounts/{accountId}", UriKind.Relative),
             updateBody,
@@ -145,8 +164,8 @@ public sealed class WhenTokenIsUnreadableAndRepaired : IAsyncDisposable
     [Fact]
     public async Task WhenFreshTokenSupplied_GetAccountsReturnsPresentAfterRepair()
     {
-        // Arrange — seed a garbage-ciphertext row, then repair it via PUT.
-        Guid accountId = await SeedRowWithGarbageTokenAsync();
+        // Arrange — create a real account via POST, then corrupt only its token column.
+        Guid accountId = await SeedAccountWithCorruptedTokenAsync();
 
         object updateBody = new
         {
