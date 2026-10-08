@@ -1,19 +1,18 @@
-<Project Sdk="Aspire.AppHost.Sdk/13.4.2">
+<Project Sdk="Aspire.AppHost.Sdk/13.6.1">
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <UserSecretsId>c1958729-d6c2-4d7f-bbdd-2dd1564d3ccb</UserSecretsId>
+    <AspireUseCliBundle>true</AspireUseCliBundle>
+    <!-- Pins DCP and the Dashboard to the Aspire CLI version paired with the AppHost SDK, so a
+         different `aspire` on PATH cannot pair a mismatched orchestrator with Aspire.Hosting. -->
+    <AspireCliInvocationMode>DnxPinned</AspireCliInvocationMode>
   </PropertyGroup>
 
   <ItemGroup>
     <PackageReference Include="Aspire.Hosting.JavaScript" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
     <PackageReference Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" />
-  </ItemGroup>
-
-  <ItemGroup Label="Audit Suppressions">
-    <!-- MessagePack 2.5.192 transitive from Aspire — cannot update directly; suppress until Aspire ships a fix -->
-    <NuGetAuditSuppress Include="https://github.com/advisories/GHSA-hv8m-jj95-wg3x" />
   </ItemGroup>
 
   <ItemGroup>
