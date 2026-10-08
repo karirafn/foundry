@@ -142,6 +142,27 @@ public sealed class ConsumesReservation : IAsyncDisposable
     }
 
     [Fact]
+    public async Task WhenStartingRunAlreadyExists_DoesNotCreateBranchOrStartContainer()
+    {
+        // Arrange — a prior delivery crashed right after its first save, leaving a bare StartingRun
+        WorkerRunId workerRunId = WorkerRunId.New();
+        IssueClaimed @event = BuildEvent(workerRunId);
+        _dbContext.Set<WorkerRun>().Add(StartingRun.Begin(@event.Dispatch.IssueId, workerRunId));
+        await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+        _dbContext.ChangeTracker.Clear();
+
+        IssueClaimedHandler sut = BuildHandler();
+
+        // Act
+        await sut.HandleAsync(@event, TestContext.Current.CancellationToken);
+
+        // Assert
+        _dbContext.ShouldSatisfyAllConditions(
+            () => _providerQueries.CreateBranchCalls.ShouldBe(0),
+            () => _orchestrator.StartCalls.ShouldBe(0));
+    }
+
+    [Fact]
     public async Task WhenRunAlreadyExists_DoesNotCreateBranchOrStartContainer()
     {
         // Arrange — a prior delivery committed the StartingRun but never recorded completion
