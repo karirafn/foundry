@@ -20,7 +20,7 @@ Workers clone the repo, implement the issue, push a branch, and open a PR. Found
 
 How a worker container authenticates with the Anthropic API (Claude Code).
 Two methods: API key (`ANTHROPIC_API_KEY`, pay-per-use, stored encrypted in DB) and OAuth (Max/Pro/Team/Enterprise plan, managed via a shared Docker volume).
-Exactly one method is configured per Foundry instance — selected via auth mode in Global Settings.
+Exactly one method is configured per Foundry instance — selected via the `AuthMode` on the single-row `ClaudeAccount` aggregate (Credentials module).
 
 OAuth mode delegates the full credential lifecycle to the genuine Claude Code CLI.
 Each worker mounts a Foundry-managed, shared, writable Docker volume at its Claude config dir (`CLAUDE_CONFIG_DIR` → `/home/node/.claude`) and the CLI reads, uses, and auto-refreshes `.credentials.json` in place.
@@ -189,7 +189,7 @@ A Monitored Repository carries no account reference; on each eligibility evaluat
 ## Global Settings
 
 A strongly-typed single-row entity storing all UI-configurable settings.
-Includes worker settings (max concurrent, timeout, prompt templates), authentication mode (API key or OAuth), the Worker Image Configuration and Image Build State, the credit-probe interval (`ProbeIntervalMinutes`, default 60, validated to a minimum of 5), and dispatch pause controls: usage-limit controls (`AutoResumeOnUsageReset`, `UsageLimitResetsAt`) and the auth-invalid pause (`IsAuthInvalidPaused`) — both pause dispatch until explicitly resumed, but only the usage-limit pause supports auto-resume. `IsDispatchPaused` is the separate manual operator pause.
+Includes worker settings (max concurrent, timeout, prompt templates), the Worker Image Configuration and Image Build State, the credit-probe interval (`ProbeIntervalMinutes`, default 60, validated to a minimum of 5), and dispatch pause controls: usage-limit controls (`AutoResumeOnUsageReset`, `UsageLimitResetsAt`) and the auth-invalid pause (`IsAuthInvalidPaused`) — both pause dispatch until explicitly resumed, but only the usage-limit pause supports auto-resume. `IsDispatchPaused` is the separate manual operator pause.
 `ProbeIntervalMinutes` governs how long the credit block waits between probes (see Credit Probe); the operator sets it in the dispatch-settings form, `GlobalSettings.UpdateProbeInterval` rejects a below-minimum value, and the credit-probe scheduler reads it via `IGlobalSettingsQueries.GetProbeIntervalMinutesAsync` at each arm.
 DB is the single source of truth — `IConfiguration` is not consulted for settings the UI manages.
 Infrastructure-only settings (Docker image, mounts, memory/CPU/PID limits) remain in `IConfiguration`.
