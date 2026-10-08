@@ -10,6 +10,7 @@ const MOCK_ACCOUNT: AccountSummary = {
   providerType: 'GitHub',
   baseUrl: 'https://github.com',
   hasToken: true,
+  tokenStatus: 'present',
   namespaces: [],
 };
 
@@ -19,6 +20,7 @@ const MOCK_ACCOUNT_2: AccountSummary = {
   providerType: 'GitHub',
   baseUrl: 'https://github.com',
   hasToken: true,
+  tokenStatus: 'present',
   namespaces: [],
 };
 
@@ -1167,6 +1169,7 @@ describe('AccountFormComponent', () => {
       providerType: 'gitlab',
       baseUrl: 'https://gitlab.example.com',
       hasToken: true,
+      tokenStatus: 'present',
       namespaces: [],
     };
     const gitlabRequirements: TokenRequirements = {

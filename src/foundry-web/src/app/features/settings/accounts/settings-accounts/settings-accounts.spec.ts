@@ -140,6 +140,7 @@ describe('SettingsAccountsComponent', () => {
       providerType: 'GitHub',
       baseUrl: 'https://github.com',
       hasToken: true,
+      tokenStatus: 'present',
       namespaces: [],
     };
     const { fixture, httpMock } = setup();
@@ -186,6 +187,7 @@ describe('SettingsAccountsComponent', () => {
       providerType: 'GitHub',
       baseUrl: 'https://github.com',
       hasToken: true,
+      tokenStatus: 'present',
       namespaces: [],
     };
     const { fixture, httpMock } = setup();
@@ -267,6 +269,7 @@ describe('SettingsAccountsComponent', () => {
       providerType: 'GitHub',
       baseUrl: 'https://github.com',
       hasToken: true,
+      tokenStatus: 'present',
       namespaces: [],
     };
     const { fixture, httpMock } = setup();
@@ -296,6 +299,7 @@ describe('SettingsAccountsComponent', () => {
       providerType: 'GitHub',
       baseUrl: 'https://github.com',
       hasToken: true,
+      tokenStatus: 'present',
       namespaces: [],
     }));
   });
@@ -349,6 +353,7 @@ describe('SettingsAccountsComponent', () => {
       providerType: 'GitHub',
       baseUrl: 'https://github.com',
       hasToken: true,
+      tokenStatus: 'present',
       namespaces: [],
     };
     const { fixture, httpMock } = setup();
@@ -382,6 +387,7 @@ describe('SettingsAccountsComponent', () => {
       providerType: 'GitHub',
       baseUrl: 'https://github.com',
       hasToken: true,
+      tokenStatus: 'present',
       namespaces: [],
     };
     const { fixture, httpMock } = setup();
@@ -412,6 +418,7 @@ describe('SettingsAccountsComponent', () => {
       providerType: 'GitHub',
       baseUrl: 'https://github.com',
       hasToken: true,
+      tokenStatus: 'present',
       namespaces: [],
     };
     const { fixture, httpMock } = setup();
@@ -448,6 +455,7 @@ describe('SettingsAccountsComponent', () => {
       providerType: 'GitHub',
       baseUrl: 'https://github.com',
       hasToken: true,
+      tokenStatus: 'present',
       namespaces: [],
     };
     const { fixture, httpMock } = setup();
@@ -487,6 +495,7 @@ describe('SettingsAccountsComponent', () => {
       providerType: 'GitHub',
       baseUrl: 'https://github.com',
       hasToken: true,
+      tokenStatus: 'present',
       namespaces: [],
     };
     const { fixture, httpMock } = setup();
@@ -528,6 +537,7 @@ describe('SettingsAccountsComponent', () => {
       providerType: 'GitHub',
       baseUrl: 'https://github.com',
       hasToken: true,
+      tokenStatus: 'present',
       namespaces: [],
     };
     const { fixture, httpMock } = setup();
@@ -557,6 +567,7 @@ describe('SettingsAccountsComponent', () => {
       providerType: 'GitHub',
       baseUrl: 'https://github.com',
       hasToken: true,
+      tokenStatus: 'present',
       namespaces: [],
     };
     const { fixture, httpMock } = setup();
@@ -580,6 +591,7 @@ describe('SettingsAccountsComponent', () => {
       providerType: 'GitHub',
       baseUrl: 'https://github.com',
       hasToken: true,
+      tokenStatus: 'present',
       namespaces: [],
     };
     const { fixture, httpMock } = setup();
@@ -609,6 +621,7 @@ describe('SettingsAccountsComponent', () => {
       providerType: 'GitHub',
       baseUrl: 'https://github.com',
       hasToken: true,
+      tokenStatus: 'present',
       namespaces: [],
     };
     const { fixture, httpMock } = setup();

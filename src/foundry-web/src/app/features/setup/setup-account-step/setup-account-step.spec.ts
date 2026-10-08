@@ -22,6 +22,7 @@ const CREATED_ACCOUNT: AccountSummary = {
   providerType: 'GitHub',
   baseUrl: 'https://github.com',
   hasToken: true,
+  tokenStatus: 'present',
   namespaces: [],
 };
 

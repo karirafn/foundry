@@ -22,15 +22,36 @@ export type TokenRequirements = Schemas['TokenRequirements'];
 // ProviderType refines CredentialSummary.provider.
 // AffectedRepositoryStatus refines AffectedRepository.previousStatus and AffectedRepository.newStatus.
 // TokenValidationKind refines ValidateTokenResponse.kind.
+// TokenStatus refines CredentialSummary.tokenStatus.
 // Update these unions when the corresponding C# contract values change.
 export type ProviderType = 'GitHub' | 'GitLab';
-export type AffectedRepositoryStatus = 'eligible' | 'ineligible' | 'unreachable';
+export type AffectedRepositoryStatus = 'eligible' | 'ineligible' | 'unreachable' | 'credential-unreadable';
 export type TokenValidationKind =
   | 'authenticated'
   | 'authenticationFailed'
   | 'scopesUnverifiable'
   | 'identityUnresolved'
   | 'providerMismatch';
+
+export type TokenStatus = 'present' | 'absent' | 'unreadable';
+
+const KNOWN_TOKEN_STATUSES: ReadonlySet<TokenStatus> = new Set<TokenStatus>([
+  'present',
+  'absent',
+  'unreadable',
+]);
+
+/**
+ * Narrows the open-string wire field to a known TokenStatus, falling back to
+ * hasToken for a response predating the field (defensive during rollout).
+ */
+export function resolveTokenStatus(account: AccountSummary): TokenStatus {
+  const raw = (account as { tokenStatus?: string }).tokenStatus;
+  if (raw && KNOWN_TOKEN_STATUSES.has(raw as TokenStatus)) {
+    return raw as TokenStatus;
+  }
+  return account.hasToken ? 'present' : 'absent';
+}
 
 export function affectedStatusLabel(status: AffectedRepositoryStatus | string): string {
   switch (status) {
@@ -40,6 +61,8 @@ export function affectedStatusLabel(status: AffectedRepositoryStatus | string): 
       return 'Ineligible';
     case 'unreachable':
       return 'Unable to verify branch protection';
+    case 'credential-unreadable':
+      return 'Token unreadable';
     default:
       return status;
   }
