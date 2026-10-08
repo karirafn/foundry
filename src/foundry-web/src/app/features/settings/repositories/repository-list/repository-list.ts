@@ -168,7 +168,7 @@ import { SpinnerComponent } from '../../../../shared/components/spinner/spinner'
                   aria-hidden="true"
                 ></span>
                 <span class="repository-list__status-label">
-                  {{ repo.isActive ? 'Active' : 'Paused' }}
+                  {{ repo.isActive ? 'Polling' : 'Paused' }}
                 </span>
               </div>
               <span class="repository-list__last-polled">
@@ -177,7 +177,6 @@ import { SpinnerComponent } from '../../../../shared/components/spinner/spinner'
             </div>
             @if (repo.eligibility) {
               <div class="repository-list__eligibility-group">
-                <span class="sr-only">{{ eligibilityStatusLabel(repo.eligibility.status) }}</span>
                 <fd-repository-eligibility
                   class="repository-list__eligibility"
                   [status]="repo.eligibility.status"
@@ -230,6 +229,7 @@ import { SpinnerComponent } from '../../../../shared/components/spinner/spinner'
                 [status]="repo.eligibility.status"
                 [violations]="repo.eligibility.violations"
                 [reason]="repo.eligibility.reason"
+                [providerType]="repo.providerType"
                 [recheckPending]="_recheckingId() === repo.id"
                 [recheckError]="_recheckError()?.id === repo.id ? _recheckError()!.message : null"
                 (recheck)="onRecheck(repo)"
@@ -382,12 +382,12 @@ export class RepositoryListComponent {
 
     this._repositoryService.recheckEligibility(repo.accountId, repo.id).subscribe({
       next: (updated: RepositorySummary) => {
-        const wasExpanded = this._expandedId() === repo.id;
         this._recheckingId.set(null);
-        if (wasExpanded) {
+        const status = updated.eligibility?.status;
+        // Collapse panel only when the repo is now eligible; keep it open for still-ineligible results.
+        if (status === 'eligible' && this._expandedId() === repo.id) {
           this._expandedId.set(null);
         }
-        const status = updated.eligibility?.status;
         this._announcement.set(status ? `${repo.slug}: ${eligibilityStatusLabel(status)}` : '');
       },
       error: () => {
