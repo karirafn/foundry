@@ -34,6 +34,17 @@ public sealed class GitHubCredential : Credential
         };
     }
 
+    internal static GitHubCredential CreateWithUnreadableToken(string name, BaseUrl baseUrl)
+    {
+        return new GitHubCredential(CredentialId.New())
+        {
+            Name = name,
+            Token = new ProviderToken.Unreadable(),
+            BaseUrl = baseUrl,
+            Host = baseUrl.Value.Host,
+        };
+    }
+
     public void Update(string name, string? token, BaseUrl baseUrl)
     {
         Name = name;

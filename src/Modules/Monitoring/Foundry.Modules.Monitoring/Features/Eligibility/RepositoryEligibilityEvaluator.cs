@@ -37,7 +37,14 @@ internal sealed class RepositoryEligibilityEvaluator(
             return;
         }
 
-        string token = credential.ReadableTokenValue ?? string.Empty;
+        if (credential.Token is ProviderToken.Unreadable)
+        {
+            repo.SetEligibility(new RepositoryEligibility.Ineligible(
+                [EligibilityViolation.CredentialUnreadable()]));
+            return;
+        }
+
+        string token = credential.Token is ProviderToken.Present present ? present.Value : string.Empty;
 
         try
         {
@@ -88,7 +95,14 @@ internal sealed class RepositoryEligibilityEvaluator(
             return;
         }
 
-        string token = credential.ReadableTokenValue ?? string.Empty;
+        if (credential.Token is ProviderToken.Unreadable)
+        {
+            repo.SetEligibility(new RepositoryEligibility.Ineligible(
+                [EligibilityViolation.CredentialUnreadable()]));
+            return;
+        }
+
+        string token = credential.Token is ProviderToken.Present present ? present.Value : string.Empty;
 
         try
         {

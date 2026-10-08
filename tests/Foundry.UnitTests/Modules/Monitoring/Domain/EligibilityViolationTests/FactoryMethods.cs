@@ -1,3 +1,4 @@
+using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Shared;
@@ -58,6 +59,18 @@ public sealed class FactoryMethods
 
         // Assert
         violation.Rule.ShouldBe($"no-credential:{namespaceName}");
+    }
+
+    [Fact]
+    public void CredentialUnreadable_SetsExpectedRule()
+    {
+        // Arrange
+
+        // Act
+        EligibilityViolation violation = EligibilityViolation.CredentialUnreadable();
+
+        // Assert
+        violation.Rule.ShouldBe(EligibilityViolationInfo.CredentialUnreadableRule);
     }
 
     [Fact]

@@ -32,6 +32,17 @@ public sealed class GitLabCredential : Credential
         };
     }
 
+    internal static GitLabCredential CreateWithUnreadableToken(string name, BaseUrl baseUrl)
+    {
+        return new GitLabCredential(CredentialId.New())
+        {
+            Name = name,
+            Token = new ProviderToken.Unreadable(),
+            BaseUrl = baseUrl,
+            Host = baseUrl.Value.Host,
+        };
+    }
+
     public void Update(string name, string? token, BaseUrl baseUrl)
     {
         GuardAgainstQueryOrFragment(baseUrl);
