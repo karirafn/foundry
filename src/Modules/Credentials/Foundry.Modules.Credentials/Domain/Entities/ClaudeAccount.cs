@@ -27,9 +27,10 @@ public sealed class ClaudeAccount : AggregateRoot<ClaudeAccountId>
 
     /// <summary>
     /// Assembles the current auth mode from the private mode record and the separately-stored
-    /// API key credential. When <c>_apiKeyCredential</c> has not yet been loaded from its own
-    /// column (Step 3), the credential stored inside <c>_authModeRecord</c> is used as a fallback
-    /// so the existing single-column round-trip remains correct.
+    /// API key credential. <c>_authModeRecord</c> carries the discriminator (ApiKey or OAuth);
+    /// <c>_apiKeyCredential</c> carries the key credential loaded from the separate
+    /// <c>api_key</c> column. For non-EF-loaded instances (e.g. freshly created), the credential
+    /// in <c>apiKeyRecord</c> is used as a fallback.
     /// </summary>
     public AuthMode AuthMode
     {
@@ -40,8 +41,8 @@ public sealed class ClaudeAccount : AggregateRoot<ClaudeAccountId>
                 return _authModeRecord;
             }
 
-            // Prefer the separately-stored field; fall back to the credential embedded in the
-            // record (populated by EF via the auth_mode column until Step 3 adds its own column).
+            // Prefer the separately-loaded credential field; fall back to the credential embedded
+            // in the mode record for in-memory instances not yet persisted.
             ApiKeyCredential credential = _apiKeyCredential ?? apiKeyRecord.Credential;
             return new AuthMode.ApiKey(credential);
         }

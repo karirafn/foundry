@@ -14,7 +14,7 @@ namespace Foundry.Modules.Credentials.Infrastructure.Configurations;
 
 internal sealed class ClaudeAccountConfiguration(
     IDataProtectionProvider dataProtectionProvider,
-    ILogger<EncryptedStringConverter>? encryptedStringConverterLogger = null)
+    ILogger<ApiKeyCredentialConverter>? apiKeyCredentialConverterLogger = null)
     : IEntityTypeConfiguration<ClaudeAccount>
 {
     private static readonly JsonSerializerOptions AuthModeSerializerOptions = BuildAuthModeSerializerOptions();
@@ -31,22 +31,36 @@ internal sealed class ClaudeAccountConfiguration(
             .HasConversion(new StronglyTypedIdValueConverter<ClaudeAccountId>())
             .HasColumnName("id");
 
-        EncryptedStringConverter encryptedConverter = new(dataProtectionProvider, encryptedStringConverterLogger);
-        Func<string, string> encrypt = encryptedConverter.ConvertToProviderExpression.Compile();
-        Func<string, string> decrypt = encryptedConverter.ConvertFromProviderExpression.Compile();
-
+        // auth_mode persists the mode discriminator only (type + OAuth subscription_type) as
+        // plaintext JSON — no outer encryption. The API key credential lives in a separate
+        // encrypted column so that a corrupt api_key decrypts to Unreadable without preventing
+        // the row from loading.
         ValueConverter<AuthMode, string> authModeConverter = new(
-            mode => encrypt(SerializeAuthMode(mode)),
-            encrypted => DeserializeAuthMode(decrypt(encrypted)));
+            mode => SerializeAuthMode(mode),
+            json => DeserializeAuthMode(json));
 
         // _authModeRecord is the persistence-only backing field; AuthMode assembles the full
-        // value at read time. Step 3 will add the _apiKeyCredential column.
+        // value at read time from _authModeRecord (mode type) + _apiKeyCredential (key).
         builder.Property(a => a.AuthMode)
             .HasField("_authModeRecord")
             .UsePropertyAccessMode(PropertyAccessMode.Field)
             .HasConversion(authModeConverter)
             .HasColumnType("TEXT")
             .HasColumnName("auth_mode");
+
+        ApiKeyCredentialConverter apiKeyConverter = new(dataProtectionProvider, apiKeyCredentialConverterLogger);
+
+        // _apiKeyCredential: Present → encrypted TEXT; NotConfigured → NULL; Unreadable is
+        // a read-only outcome of a failed decrypt and is never written back.
+        // Mapped as a field-only property (no CLR property) so EF reads/writes the backing
+        // field directly — PropertyAccessMode.Field is required.
+        builder.Property<ApiKeyCredential?>("_apiKeyCredential")
+            .HasField("_apiKeyCredential")
+            .UsePropertyAccessMode(PropertyAccessMode.Field)
+            .HasConversion(apiKeyConverter)
+            .HasColumnType("TEXT")
+            .IsRequired(false)
+            .HasColumnName("api_key");
 
         ValueConverter<CredentialValidity, string> validityConverter = new(
             validity => SerializeValidity(validity),
@@ -106,8 +120,21 @@ internal sealed class ClaudeAccountConfiguration(
         => JsonSerializer.Serialize(mode, AuthModeSerializerOptions);
 
     private static AuthMode DeserializeAuthMode(string json)
-        => JsonSerializer.Deserialize<AuthMode>(json, AuthModeSerializerOptions)
-            ?? throw new InvalidOperationException("Failed to deserialize AuthMode from the stored value.");
+    {
+        try
+        {
+            return JsonSerializer.Deserialize<AuthMode>(json, AuthModeSerializerOptions)
+                ?? new AuthMode.ApiKey(new ApiKeyCredential.NotConfigured());
+        }
+        catch (JsonException)
+        {
+            // Legacy rows may contain encrypted ciphertext in auth_mode rather than plaintext
+            // JSON (the old single-column scheme encrypted the full mode blob). Return
+            // NotConfigured so the account still loads — the user will need to re-enter their
+            // API key, but they are not locked out of the repair UI.
+            return new AuthMode.ApiKey(new ApiKeyCredential.NotConfigured());
+        }
+    }
 
     private static string SerializeValidity(CredentialValidity validity)
         => JsonSerializer.Serialize(validity, ValiditySerializerOptions);

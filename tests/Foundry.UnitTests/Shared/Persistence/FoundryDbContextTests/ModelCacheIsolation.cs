@@ -1,5 +1,3 @@
-using System.Text.Json;
-
 using Foundry.Modules.Credentials.Domain.Entities;
 using Foundry.Modules.Credentials.Domain.ValueObjects;
 using Foundry.WebApi.Persistence;
@@ -122,8 +120,9 @@ public sealed class ModelCacheIsolation
         using SqliteConnection connection = new("Data Source=:memory:");
         await connection.OpenAsync(TestContext.Current.CancellationToken);
 
-        // P0 seeds the data; P1 will try to read it — the keys differ, so decrypt throws
-        // CryptographicException, which EncryptedStringConverter converts to a logged warning.
+        // P0 seeds the data; P1 will try to read it — the keys differ, so decrypting the
+        // api_key column throws CryptographicException, which ApiKeyCredentialConverter converts
+        // to a logged warning and returns Unreadable (auth_mode is plaintext and always readable).
         IDataProtectionProvider p0 = DataProtectionProvider.Create("Logger-P0-" + Guid.NewGuid().ToString("N"));
         IDataProtectionProvider p1 = DataProtectionProvider.Create("Logger-P1-" + Guid.NewGuid().ToString("N"));
 
@@ -141,16 +140,19 @@ public sealed class ModelCacheIsolation
         CapturingLoggerFactory capturingFactory = new();
 
         // Act — read back through a context using P1 and the capturing logger factory.
-        // P1 cannot decrypt P0's ciphertext → CryptographicException → warning logged → returns ""
-        // → DeserializeAuthMode("") throws JsonException from EF materialization.
+        // P1 cannot decrypt P0's api_key ciphertext → CryptographicException → warning logged
+        // → Unreadable credential; the row materializes successfully (no exception thrown).
         await using FoundryDbContext readContext = new(BuildOptions(connection), p1, capturingFactory);
-        await Should.ThrowAsync<JsonException>(async () =>
-            await readContext
-                .Set<ClaudeAccount>()
-                .FirstOrDefaultAsync(TestContext.Current.CancellationToken));
+        ClaudeAccount? result = await readContext
+            .Set<ClaudeAccount>()
+            .FirstOrDefaultAsync(TestContext.Current.CancellationToken);
 
         // Assert — the decrypt warning must be routed to the capturing factory, not lost.
+        // The row must still load (Unreadable rather than throwing).
         capturingFactory.Warnings.ShouldNotBeEmpty();
+        ClaudeAccount read = result.ShouldNotBeNull();
+        AuthMode.ApiKey apiKey = read.AuthMode.ShouldBeOfType<AuthMode.ApiKey>();
+        apiKey.Credential.ShouldBeOfType<ApiKeyCredential.Unreadable>();
     }
 
     private sealed class CapturingLoggerFactory : ILoggerFactory
