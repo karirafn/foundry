@@ -1,21 +1,11 @@
 @use '../../../../../styles/controls' as *;
-
-:host {
-  --repo-row-columns:
-    auto              /* reorder (drag handle + stacked ▲▼) */
-    minmax(9rem, 1fr) /* identity (icon + slug)              */
-    4.25rem           /* poll interval                       */
-    auto              /* status (dot + label)                */
-    4.5rem            /* last-polled                         */
-    auto              /* eligibility (dot + chevron)         */
-    auto;             /* actions (icon buttons)              */
-}
+@use '../../../../../styles/list-card' as *;
 
 .repository-list {
   &__empty {
+    align-items: center;
     display: flex;
     flex-direction: column;
-    align-items: center;
     gap: var(--fd-spacing-sm);
     padding: var(--fd-spacing-2xl);
     text-align: center;
@@ -80,8 +70,8 @@
   }
 
   &__header {
-    display: flex;
     align-items: center;
+    display: flex;
     justify-content: space-between;
     margin-bottom: var(--fd-spacing-md);
   }
@@ -111,8 +101,6 @@
   }
 
   &__list {
-    container-type: inline-size;
-    container-name: repo-list;
     display: flex;
     flex-direction: column;
     gap: var(--fd-spacing-sm);
@@ -121,19 +109,10 @@
     padding: 0;
   }
 
-  &__item {
-    background: var(--fd-bg-page);
-    border: 1px solid var(--fd-border-muted);
-    border-radius: var(--fd-radius-sm);
-    display: grid;
-    grid-template-columns: var(--repo-row-columns);
-    align-items: center;
-    column-gap: var(--fd-spacing-sm);
-    padding: var(--fd-spacing-sm) var(--fd-spacing-md);
+  // ── Card frame (via mixin) ──────────────────────────────────────────────────
 
-    &:hover {
-      background: var(--fd-bg-card-hover);
-    }
+  &__item {
+    @include list-card-frame;
 
     &.cdk-drag-preview {
       background: var(--fd-bg-page);
@@ -162,48 +141,23 @@
     }
   }
 
+  // ── Line 1 — title row ──────────────────────────────────────────────────────
+
+  &__line1 {
+    @include list-card-title-row;
+  }
+
   &__reorder-group {
-    display: flex;
     align-items: center;
+    display: flex;
+    flex-shrink: 0;
     gap: 0;
   }
 
   &__move-stack {
+    align-items: center;
     display: flex;
     flex-direction: column;
-    align-items: center;
-  }
-
-  &__identity {
-    display: flex;
-    align-items: center;
-    gap: var(--fd-spacing-sm);
-    min-width: 0;
-  }
-
-  &__metadata {
-    display: contents;
-  }
-
-  &__eligibility-group {
-    align-items: center;
-    border-inline-start: 1px solid var(--fd-border-muted);
-    display: flex;
-    gap: var(--fd-spacing-xs);
-    padding-inline-start: var(--fd-spacing-md);
-  }
-
-  &__eligibility {
-    flex-shrink: 0;
-  }
-
-  &__actions {
-    display: flex;
-    gap: var(--fd-spacing-xs);
-  }
-
-  fd-repository-eligibility-details {
-    grid-column: 1 / -1;
   }
 
   &__provider {
@@ -211,32 +165,51 @@
     flex-shrink: 0;
   }
 
+  &__item--paused &__provider {
+    opacity: 0.4;
+  }
+
   &__slug {
-    color: var(--fd-text-primary);
-    font-family: var(--fd-font-mono);
-    font-size: 0.9375rem;
-    font-weight: 600;
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    @include list-card-title;
+
+    color: inherit;
+    flex: 1;
+    text-decoration: none;
+
+    &:hover {
+      text-decoration: underline;
+    }
+
+    &:focus-visible {
+      @include focus-ring;
+    }
   }
 
-  &__poll-interval {
+  // Paused: secondary colour on slug and strip text (no opacity on text — #292)
+  &__item--paused &__slug,
+  &__item--paused &__state-label,
+  &__item--paused &__via {
     color: var(--fd-text-secondary);
-    font-size: 0.8125rem;
-    white-space: nowrap;
   }
 
-  &__status {
+  &__delete {
+    flex-shrink: 0;
+  }
+
+  // ── Line 2 — metadata strip ─────────────────────────────────────────────────
+
+  &__strip {
+    @include list-card-strip;
+  }
+
+  &__state {
     align-items: center;
     display: flex;
-    font-size: 0.8125rem;
     gap: var(--fd-spacing-xs);
     white-space: nowrap;
   }
 
-  &__status-dot {
+  &__state-dot {
     border-radius: 50%;
     display: inline-block;
     flex-shrink: 0;
@@ -252,35 +225,79 @@
     }
   }
 
-  &__status-label {
+  &__state-label {
     color: var(--fd-text-secondary);
+    font-size: 0.8125rem;
   }
 
-  &__status:has(.repository-list__status-dot--active) &__status-label {
+  &__state:has(.repository-list__state-dot--active) &__state-label {
     color: var(--fd-state-completed);
   }
 
-  &__last-polled {
+  &__chip {
+    @include list-card-chip;
+  }
+
+  &__chip-default {
+    color: var(--fd-text-tertiary);
+    font-size: 0.6875rem;
+    margin-inline-start: 0.25rem;
+  }
+
+  &__via {
     color: var(--fd-text-secondary);
     font-size: 0.8125rem;
     white-space: nowrap;
   }
 
-  &__toggle-btn {
-    align-items: center;
-    background: transparent;
-    border: none;
-    border-radius: var(--fd-radius-sm);
-    color: var(--fd-text-secondary);
-    cursor: pointer;
-    display: inline-flex;
-    justify-content: center;
-    min-height: 28px;
-    min-width: 28px;
-    padding: var(--fd-spacing-xs);
+  &__eligibility {
+    flex-shrink: 0;
+  }
 
-    &:hover {
+  // ── Inline eligibility reasons ──────────────────────────────────────────────
+
+  &__reasons {
+    display: flex;
+    flex-direction: column;
+    gap: var(--fd-spacing-xs);
+    margin-block-start: var(--fd-spacing-xs);
+  }
+
+  &__reason {
+    @include list-card-warning;
+  }
+
+  &__reason--error {
+    color: var(--fd-text-error);
+    font-size: 0.8125rem;
+    line-height: 1.4;
+  }
+
+  &__reason-actions {
+    display: flex;
+    align-items: center;
+    gap: var(--fd-spacing-xs);
+    margin-block-start: var(--fd-spacing-xs);
+  }
+
+  &__recheck-btn {
+    background: transparent;
+    border: 1px solid var(--fd-border-muted);
+    border-radius: var(--fd-radius-sm);
+    color: var(--fd-text-primary);
+    cursor: pointer;
+    font-size: 0.8125rem;
+    min-height: 44px;
+    padding: var(--fd-spacing-xs) var(--fd-spacing-sm);
+    white-space: nowrap;
+
+    &:hover:not([disabled]) {
       background: var(--fd-bg-card-hover);
+    }
+
+    &[disabled] {
+      cursor: not-allowed;
+      opacity: 0.6;
     }
 
     &:focus-visible {
@@ -288,31 +305,7 @@
     }
   }
 
-  &__toggle-chevron {
-    transition: transform 0.15s ease;
-
-    &--expanded {
-      transform: rotate(180deg);
-    }
-  }
-
-  &__priority-hint {
-    color: var(--fd-text-secondary);
-    font-size: 0.8125rem;
-    margin-block-end: var(--fd-spacing-sm);
-    margin-block-start: 0;
-  }
-
-  &__move-error {
-    align-items: center;
-    background: var(--fd-bg-error-subtle);
-    border: 1px solid var(--fd-state-failed);
-    border-radius: var(--fd-radius-sm);
-    color: var(--fd-state-failed);
-    font-size: 0.875rem;
-    margin-bottom: var(--fd-spacing-sm);
-    padding: var(--fd-spacing-sm) var(--fd-spacing-md);
-  }
+  // ── Reorder controls ────────────────────────────────────────────────────────
 
   &__drag-handle {
     align-items: center;
@@ -373,6 +366,24 @@
     }
   }
 
+  &__priority-hint {
+    color: var(--fd-text-secondary);
+    font-size: 0.8125rem;
+    margin-block-end: var(--fd-spacing-sm);
+    margin-block-start: 0;
+  }
+
+  &__move-error {
+    align-items: center;
+    background: var(--fd-bg-error-subtle);
+    border: 1px solid var(--fd-state-failed);
+    border-radius: var(--fd-radius-sm);
+    color: var(--fd-state-failed);
+    font-size: 0.875rem;
+    margin-bottom: var(--fd-spacing-sm);
+    padding: var(--fd-spacing-sm) var(--fd-spacing-md);
+  }
+
   &__list.cdk-drop-list-dragging &__item:not(.cdk-drag-placeholder) {
     transition: transform 0.25s ease;
 
@@ -382,76 +393,12 @@
   }
 }
 
-@container repo-list (max-width: 40rem) {
-  .repository-list {
-    // Flat-DOM two-tier layout via row-wrap flex:
-    // Tier 1 items flow inline on the first line;
-    // Tier 2 (__metadata) breaks to its own full-width line via flex-basis: 100%.
-    &__item {
-      display: flex;
-      flex-flow: row wrap;
-      align-items: center;
-      column-gap: var(--fd-spacing-sm);
-      row-gap: var(--fd-spacing-xs);
-      padding: var(--fd-spacing-sm) var(--fd-spacing-md);
-    }
-
-    // Tier 1: reorder-group visible on mobile (▲▼ buttons are the WCAG 2.5.7 non-drag alternative)
-    &__reorder-group {
-      order: 1;
-      flex-shrink: 0;
-    }
-
-    // Tier 1 row: identity takes remaining width so slug truncates correctly
-    &__identity {
-      flex: 1;
-      min-width: 0;
-      order: 2;
-    }
-
-    &__eligibility-group {
-      border-inline-start: none;
-      padding-inline-start: 0;
-      order: 3;
-      flex-shrink: 0;
-    }
-
-    &__actions {
-      order: 4;
-      flex-shrink: 0;
-    }
-
-    // Tier 2: metadata as flex-wrap inline cluster with dot separators on its own line
-    &__metadata {
-      display: flex;
-      flex-wrap: wrap;
-      align-items: center;
-      gap: 0;
-      order: 5;
-      flex: 0 0 100%;
-      width: 100%;
-
-      > * + *::before {
-        content: '·';
-        color: var(--fd-text-tertiary);
-        margin-inline: var(--fd-spacing-xs);
-      }
-    }
-
-    fd-repository-eligibility-details {
-      grid-column: unset;
-      width: 100%;
-      order: 6;
-    }
-  }
-}
-
 @media (any-pointer: coarse) {
   .repository-list {
     &__move-up-btn,
     &__move-down-btn,
     &__drag-handle,
-    &__toggle-btn {
+    &__recheck-btn {
       min-height: 2.75rem;
       min-width: 2.75rem;
     }

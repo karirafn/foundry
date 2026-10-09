@@ -1,23 +1,25 @@
 import { ChangeDetectionStrategy, Component, InputSignal, OutputEmitterRef, WritableSignal, computed, inject, input, output, signal } from '@angular/core';
-import { Router } from '@angular/router';
+import { RouterLink } from '@angular/router';
 import { CdkDragDrop, CdkDropList, CdkDrag, CdkDragHandle } from '@angular/cdk/drag-drop';
-import { RepositorySummary, eligibilityStatusLabel } from '../repository.model';
+import { RepositorySummary, EligibilityStatus, eligibilityStatusLabel } from '../repository.model';
 import { RepositoryEligibilityComponent } from '../repository-eligibility/repository-eligibility';
-import { RepositoryEligibilityDetailsComponent } from '../repository-eligibility-details/repository-eligibility-details';
 import { RepositoryService } from '../repository.service';
 import { ProviderIconComponent } from '../../../../shared/components/provider-icon/provider-icon';
-import { RowActionsComponent } from '../../../../shared/components/row-actions/row-actions';
+import { DeleteButtonComponent } from '../../../../shared/components/delete-button/delete-button';
 import { SpinnerComponent } from '../../../../shared/components/spinner/spinner';
+import { TooltipDirective } from '../../../../shared/directives/tooltip/tooltip.directive';
+import { unreachableExplanation, rateLimitTooltip } from '../repository-eligibility-unreachable.util';
 
 @Component({
   selector: 'fd-repository-list',
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
+    RouterLink,
     RepositoryEligibilityComponent,
-    RepositoryEligibilityDetailsComponent,
     ProviderIconComponent,
-    RowActionsComponent,
+    DeleteButtonComponent,
     SpinnerComponent,
+    TooltipDirective,
     CdkDropList,
     CdkDrag,
     CdkDragHandle,
@@ -94,146 +96,199 @@ import { SpinnerComponent } from '../../../../shared/components/spinner/spinner'
         @for (repo of repositories(); track repo.id; let i = $index) {
           <li
             class="repository-list__item"
+            [class.repository-list__item--paused]="!repo.isActive"
             role="listitem"
             cdkDrag
             [id]="'repo-item-' + repo.id"
             [attr.aria-roledescription]="_multipleRepos() ? 'reorderable item' : null"
           >
-            @if (_multipleRepos()) {
-              <div class="repository-list__reorder-group">
-                <button
-                  class="repository-list__drag-handle"
-                  cdkDragHandle
-                  type="button"
-                  [attr.aria-label]="'Reorder ' + repo.slug + ', use arrow keys to move'"
-                  (keydown.arrowup)="onMoveKey($event, i, -1)"
-                  (keydown.arrowdown)="onMoveKey($event, i, 1)"
-                  (keydown.home)="onMoveKey($event, i, -i)"
-                  (keydown.end)="onMoveKey($event, i, repositories().length - 1 - i)"
-                >
-                  <svg
-                    aria-hidden="true"
-                    xmlns="http://www.w3.org/2000/svg"
-                    width="16"
-                    height="16"
-                    viewBox="0 0 24 24"
-                    fill="currentColor"
+            <!-- TIER 1: reorder + provider icon + slug anchor + delete -->
+            <div class="repository-list__line1">
+              @if (_multipleRepos()) {
+                <div class="repository-list__reorder-group">
+                  <button
+                    class="repository-list__drag-handle"
+                    cdkDragHandle
+                    type="button"
+                    [attr.aria-label]="'Reorder ' + repo.slug + ', use arrow keys to move'"
+                    (keydown.arrowup)="onMoveKey($event, i, -1)"
+                    (keydown.arrowdown)="onMoveKey($event, i, 1)"
+                    (keydown.home)="onMoveKey($event, i, -i)"
+                    (keydown.end)="onMoveKey($event, i, repositories().length - 1 - i)"
                   >
-                    <circle cx="9" cy="6" r="1.5" />
-                    <circle cx="15" cy="6" r="1.5" />
-                    <circle cx="9" cy="12" r="1.5" />
-                    <circle cx="15" cy="12" r="1.5" />
-                    <circle cx="9" cy="18" r="1.5" />
-                    <circle cx="15" cy="18" r="1.5" />
-                  </svg>
-                </button>
-                <div class="repository-list__move-stack">
-                  <button
-                    class="repository-list__move-up-btn"
-                    type="button"
-                    [attr.disabled]="i === 0 ? '' : null"
-                    [attr.aria-label]="'Move ' + repo.slug + ' up'"
-                    (click)="onMove(i, -1)"
-                  >&#9650;</button>
-                  <button
-                    class="repository-list__move-down-btn"
-                    type="button"
-                    [attr.disabled]="i === repositories().length - 1 ? '' : null"
-                    [attr.aria-label]="'Move ' + repo.slug + ' down'"
-                    (click)="onMove(i, 1)"
-                  >&#9660;</button>
+                    <svg
+                      aria-hidden="true"
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="16"
+                      height="16"
+                      viewBox="0 0 24 24"
+                      fill="currentColor"
+                    >
+                      <circle cx="9" cy="6" r="1.5" />
+                      <circle cx="15" cy="6" r="1.5" />
+                      <circle cx="9" cy="12" r="1.5" />
+                      <circle cx="15" cy="12" r="1.5" />
+                      <circle cx="9" cy="18" r="1.5" />
+                      <circle cx="15" cy="18" r="1.5" />
+                    </svg>
+                  </button>
+                  <div class="repository-list__move-stack">
+                    <button
+                      class="repository-list__move-up-btn"
+                      type="button"
+                      [attr.disabled]="i === 0 ? '' : null"
+                      [attr.aria-label]="'Move ' + repo.slug + ' up'"
+                      (click)="onMove(i, -1)"
+                    >&#9650;</button>
+                    <button
+                      class="repository-list__move-down-btn"
+                      type="button"
+                      [attr.disabled]="i === repositories().length - 1 ? '' : null"
+                      [attr.aria-label]="'Move ' + repo.slug + ' down'"
+                      (click)="onMove(i, 1)"
+                    >&#9660;</button>
+                  </div>
                 </div>
-              </div>
-            }
-            <div class="repository-list__identity">
+              }
+
               <fd-provider-icon
                 [providerType]="repo.providerType"
                 class="repository-list__provider"
               />
-              <span
+
+              <a
                 class="repository-list__slug"
-                [title]="repo.slug + ' — ' + repo.accountName"
-              >{{ repo.slug }}</span>
+                [routerLink]="['/settings/repositories', repo.id]"
+                [innerHTML]="slugHtml(repo.slug)"
+              ></a>
+
+              <fd-delete-button
+                class="repository-list__delete"
+                [deleteLabel]="'Delete repository ' + repo.slug"
+                (delete)="delete.emit(repo)"
+              />
             </div>
-            <div class="repository-list__metadata">
-              <span
-                class="repository-list__poll-interval"
-                [title]="pollIntervalTitle(repo.pollIntervalSeconds)"
-              >
-                {{ pollIntervalLabel(repo.pollIntervalSeconds) }}
-              </span>
-              <div class="repository-list__status">
+
+            <!-- TIER 2: metadata strip -->
+            <div
+              class="repository-list__strip"
+              role="group"
+              [attr.aria-label]="'Status for ' + repo.slug"
+            >
+              <!-- Polling/Paused state word -->
+              <div class="repository-list__state">
                 <span
-                  class="repository-list__status-dot repository-list__status-dot--{{ repo.isActive ? 'active' : 'paused' }}"
+                  class="repository-list__state-dot repository-list__state-dot--{{ repo.isActive ? 'active' : 'paused' }}"
                   aria-hidden="true"
                 ></span>
-                <span class="repository-list__status-label">
+                <span class="repository-list__state-label">
                   {{ repo.isActive ? 'Polling' : 'Paused' }}
                 </span>
               </div>
-              <span class="repository-list__last-polled">
-                {{ lastPolledLabel(repo.lastPolledAt) }}
+
+              <!-- Interval chip -->
+              <span
+                class="repository-list__chip repository-list__chip--interval"
+                [attr.aria-label]="intervalTooltip(repo)"
+                [fdTooltip]="intervalTooltip(repo)"
+              >
+                <svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <circle cx="12" cy="12" r="10" />
+                  <polyline points="12 6 12 12 16 14" />
+                </svg>
+                {{ intervalChipText(repo) }}@if (repo.pollIntervalIsDefault) {
+                  <span class="repository-list__chip-default">default</span>
+                }
               </span>
-            </div>
-            @if (repo.eligibility) {
-              <div class="repository-list__eligibility-group">
+
+              <!-- Last-polled chip -->
+              <span
+                class="repository-list__chip repository-list__chip--last-polled"
+                [attr.aria-label]="lastPolledTooltip(repo)"
+                [fdTooltip]="lastPolledTooltip(repo)"
+              >
+                <svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <polyline points="1 4 1 10 7 10" />
+                  <path d="M3.51 15a9 9 0 1 0 .49-3" />
+                </svg>
+                {{ lastPolledChipText(repo) }}
+              </span>
+
+              <!-- Max-workers chip -->
+              <span
+                class="repository-list__chip repository-list__chip--max-workers"
+                [attr.aria-label]="maxWorkersTooltip(repo)"
+                [fdTooltip]="maxWorkersTooltip(repo)"
+              >
+                <svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                  <circle cx="9" cy="7" r="4" />
+                  <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+                  <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+                </svg>
+                {{ repo.maxConcurrentWorkers }}
+              </span>
+
+              <!-- Via account name -->
+              <span class="repository-list__via">via {{ repo.accountName }}</span>
+
+              <!-- Eligibility badge -->
+              @if (repo.eligibility) {
                 <fd-repository-eligibility
                   class="repository-list__eligibility"
                   [status]="repo.eligibility.status"
                   [recheckPending]="_recheckingId() === repo.id"
                 />
-                @if (repo.eligibility.status !== 'eligible') {
-                  <button
-                    class="repository-list__toggle-btn"
-                    type="button"
-                    [attr.aria-expanded]="_expandedId() === repo.id ? 'true' : 'false'"
-                    [attr.aria-controls]="'eligibility-detail-' + repo.id"
-                    [attr.aria-label]="'Eligibility details for ' + repo.slug"
-                    (click)="toggleExpand(repo.id)"
-                    (keydown.enter)="onToggleKeydown($event, repo.id)"
-                    (keydown.space)="onToggleKeydown($event, repo.id)"
-                  >
-                    <svg
-                      class="repository-list__toggle-chevron"
-                      [class.repository-list__toggle-chevron--expanded]="_expandedId() === repo.id"
-                      xmlns="http://www.w3.org/2000/svg"
-                      width="12"
-                      height="12"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="2.5"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      aria-hidden="true"
-                    >
-                      <polyline points="6 9 12 15 18 9" />
-                    </svg>
-                  </button>
-                }
-              </div>
-            }
-            <div class="repository-list__actions">
-              <fd-row-actions
-                [editLabel]="'Edit repository ' + repo.slug"
-                [deleteLabel]="'Delete repository ' + repo.slug"
-                (edit)="onEdit(repo)"
-                (delete)="delete.emit(repo)"
-              />
+              }
             </div>
+
+            <!-- INLINE ELIGIBILITY REASONS (below strip) -->
             @if (repo.eligibility && repo.eligibility.status !== 'eligible') {
-              <fd-repository-eligibility-details
-                [hidden]="_expandedId() !== repo.id"
-                [id]="'eligibility-detail-' + repo.id"
-                [panelId]="'eligibility-detail-' + repo.id"
-                [status]="repo.eligibility.status"
-                [violations]="repo.eligibility.violations"
-                [reason]="repo.eligibility.reason"
-                [providerType]="repo.providerType"
-                [recheckPending]="_recheckingId() === repo.id"
-                [recheckError]="_recheckError()?.id === repo.id ? _recheckError()!.message : null"
-                (recheck)="onRecheck(repo)"
-              />
+              <div
+                class="repository-list__reasons"
+                role="group"
+                [attr.aria-label]="'Eligibility for ' + repo.slug"
+              >
+                @if (repo.eligibility.status === 'ineligible') {
+                  @for (violation of repo.eligibility.violations; track violation.rule) {
+                    <div class="repository-list__reason">
+                      <svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+                        <line x1="12" y1="9" x2="12" y2="13" />
+                        <line x1="12" y1="17" x2="12.01" y2="17" />
+                      </svg>
+                      {{ violation.description }}
+                    </div>
+                  }
+                }
+
+                @if (repo.eligibility.status === 'unreachable') {
+                  <div class="repository-list__reason">
+                    <svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+                      <line x1="12" y1="9" x2="12" y2="13" />
+                      <line x1="12" y1="17" x2="12.01" y2="17" />
+                    </svg>
+                    {{ _unreachableExplanation(repo) }}
+                  </div>
+                }
+
+                @if (_recheckError()?.id === repo.id) {
+                  <div class="repository-list__reason--error" role="alert">
+                    {{ _recheckError()!.message }}
+                  </div>
+                }
+
+                <div class="repository-list__reason-actions">
+                  <button
+                    class="repository-list__recheck-btn"
+                    type="button"
+                    [disabled]="_recheckingId() !== null || _isRateLimited(repo)"
+                    [fdTooltip]="_isRateLimited(repo) ? _rateLimitTooltip(repo) : null"
+                    (click)="onRecheck(repo)"
+                  >{{ _recheckingId() === repo.id ? 'Re-checking…' : 'Re-check' }}</button>
+                </div>
+              </div>
             }
           </li>
         }
@@ -244,7 +299,6 @@ import { SpinnerComponent } from '../../../../shared/components/spinner/spinner'
 })
 export class RepositoryListComponent {
   private readonly _repositoryService = inject(RepositoryService);
-  private readonly _router = inject(Router);
 
   readonly repositories: InputSignal<RepositorySummary[]> = input<RepositorySummary[]>([]);
   readonly loading: InputSignal<boolean> = input<boolean>(false);
@@ -254,7 +308,6 @@ export class RepositoryListComponent {
   readonly delete: OutputEmitterRef<RepositorySummary> = output<RepositorySummary>();
   readonly retry: OutputEmitterRef<void> = output<void>();
 
-  protected readonly _expandedId: WritableSignal<string | null> = signal(null);
   protected readonly _recheckingId: WritableSignal<string | null> = signal(null);
   protected readonly _recheckError: WritableSignal<{ id: string; message: string } | null> = signal(null);
   protected readonly _announcement: WritableSignal<string> = signal('');
@@ -263,21 +316,82 @@ export class RepositoryListComponent {
 
   readonly eligibilityStatusLabel = eligibilityStatusLabel;
 
-  onEdit(repo: RepositorySummary): void {
-    this._router.navigate(['/settings/repositories', repo.id]);
+  slugHtml(slug: string): string {
+    return slug.split('/').join('/<wbr>');
   }
 
-  toggleExpand(id: string): void {
-    if (this._expandedId() === id) {
-      this._expandedId.set(null);
-    } else {
-      this._expandedId.set(id);
+  intervalChipText(repo: RepositorySummary): string {
+    const seconds = repo.effectivePollIntervalSeconds;
+    if (seconds < 60) {
+      return `${seconds}s`;
     }
+    return `${Math.round(seconds / 60)}m`;
   }
 
-  onToggleKeydown(event: Event, id: string): void {
-    event.preventDefault();
-    this.toggleExpand(id);
+  intervalTooltip(repo: RepositorySummary): string {
+    const seconds = repo.effectivePollIntervalSeconds;
+    const minutes = Math.round(seconds / 60);
+    const timeStr = seconds < 60
+      ? `${seconds} second${seconds === 1 ? '' : 's'}`
+      : `${minutes} minute${minutes === 1 ? '' : 's'}`;
+    const base = `Polls every ${timeStr}`;
+    return repo.pollIntervalIsDefault ? `${base} (default)` : base;
+  }
+
+  lastPolledChipText(repo: RepositorySummary): string {
+    if (repo.lastPolledAt === null) {
+      return 'never';
+    }
+    const diff = Date.now() - new Date(repo.lastPolledAt).getTime();
+    const minutes = Math.floor(diff / 60_000);
+    if (minutes < 1) {
+      return 'just now';
+    }
+    if (minutes < 60) {
+      return `${minutes}m ago`;
+    }
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) {
+      return `${hours}h ago`;
+    }
+    const days = Math.floor(hours / 24);
+    return `${days}d ago`;
+  }
+
+  lastPolledTooltip(repo: RepositorySummary): string {
+    if (repo.lastPolledAt === null) {
+      return 'Never polled';
+    }
+    const diff = Date.now() - new Date(repo.lastPolledAt).getTime();
+    const minutes = Math.floor(diff / 60_000);
+    if (minutes < 1) {
+      return 'Last polled just now';
+    }
+    if (minutes < 60) {
+      return `Last polled ${minutes} minute${minutes === 1 ? '' : 's'} ago`;
+    }
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) {
+      return `Last polled ${hours} hour${hours === 1 ? '' : 's'} ago`;
+    }
+    const days = Math.floor(hours / 24);
+    return `Last polled ${days} day${days === 1 ? '' : 's'} ago`;
+  }
+
+  maxWorkersTooltip(repo: RepositorySummary): string {
+    return `Max ${repo.maxConcurrentWorkers} concurrent worker${repo.maxConcurrentWorkers === 1 ? '' : 's'}`;
+  }
+
+  protected _unreachableExplanation(repo: RepositorySummary): string {
+    return unreachableExplanation(repo.eligibility?.reason ?? null, repo.providerType);
+  }
+
+  protected _isRateLimited(repo: RepositorySummary): boolean {
+    return repo.eligibility?.reason === 'rate-limited';
+  }
+
+  protected _rateLimitTooltip(repo: RepositorySummary): string {
+    return rateLimitTooltip(repo.providerType);
   }
 
   onDrop(event: CdkDragDrop<RepositorySummary[]>): void {
@@ -384,11 +498,8 @@ export class RepositoryListComponent {
       next: (updated: RepositorySummary) => {
         this._recheckingId.set(null);
         const status = updated.eligibility?.status;
-        // Collapse panel only when the repo is now eligible; keep it open for still-ineligible results.
-        if (status === 'eligible' && this._expandedId() === repo.id) {
-          this._expandedId.set(null);
-        }
-        this._announcement.set(status ? `${repo.slug}: ${eligibilityStatusLabel(status)}` : '');
+        const label = status ? eligibilityStatusLabel(status as EligibilityStatus) : '';
+        this._announcement.set(status ? `${repo.slug}: ${label}` : '');
       },
       error: () => {
         this._recheckingId.set(null);
@@ -396,41 +507,5 @@ export class RepositoryListComponent {
         this._announcement.set(`${repo.slug}: Re-check failed`);
       },
     });
-  }
-
-  pollIntervalLabel(pollIntervalSeconds: number | null): string {
-    if (pollIntervalSeconds === null) {
-      return '—';
-    }
-    const minutes = Math.round(pollIntervalSeconds / 60);
-    return `${minutes}m`;
-  }
-
-  pollIntervalTitle(pollIntervalSeconds: number | null): string {
-    if (pollIntervalSeconds === null) {
-      return 'Poll interval not set';
-    }
-    const minutes = Math.round(pollIntervalSeconds / 60);
-    return `Polls every ${minutes} minute${minutes === 1 ? '' : 's'}`;
-  }
-
-  lastPolledLabel(lastPolledAt: string | null): string {
-    if (lastPolledAt === null) {
-      return 'Never';
-    }
-    const diff = Date.now() - new Date(lastPolledAt).getTime();
-    const minutes = Math.floor(diff / 60_000);
-    if (minutes < 1) {
-      return 'Just now';
-    }
-    if (minutes < 60) {
-      return `${minutes}m ago`;
-    }
-    const hours = Math.floor(minutes / 60);
-    if (hours < 24) {
-      return `${hours}h ago`;
-    }
-    const days = Math.floor(hours / 24);
-    return `${days}d ago`;
   }
 }
