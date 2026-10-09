@@ -775,6 +775,9 @@ export interface components {
             position: number | string;
             /** Format: int32 */
             maxConcurrentWorkers: number | string;
+            /** Format: int32 */
+            effectivePollIntervalSeconds: number | string;
+            pollIntervalIsDefault: boolean;
             /** Format: date-time */
             lastPolledAt?: null | string;
             eligibility?: null | components["schemas"]["RepositoryEligibilityInfo"];

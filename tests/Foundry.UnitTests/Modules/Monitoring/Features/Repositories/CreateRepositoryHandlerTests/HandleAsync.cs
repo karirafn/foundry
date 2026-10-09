@@ -5,6 +5,7 @@ using Foundry.Modules.Monitoring.Features.Eligibility;
 using Foundry.Modules.Monitoring.Features.Repositories;
 using Foundry.Shared;
 using Foundry.Testing;
+using Foundry.UnitTests.Fakes.Monitoring;
 using Foundry.WebApi.Persistence;
 
 using Microsoft.Data.Sqlite;
@@ -41,7 +42,7 @@ public sealed class HandleAsync : IAsyncDisposable
     }
 
     private CreateRepository.Handler BuildHandler() =>
-        new(_dbContext, new NoOpEligibilityEvaluator());
+        new(_dbContext, new NoOpEligibilityEvaluator(), new StubGlobalSettingsQueries([]));
 
     private async Task<Guid> SeedCredentialAsync()
     {

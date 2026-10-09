@@ -7,6 +7,7 @@ using Foundry.Modules.Monitoring.Features.Accounts;
 using Foundry.Modules.Monitoring.Features.Repositories;
 using Foundry.Shared;
 using Foundry.Testing;
+using Foundry.UnitTests.Fakes.Monitoring;
 using Foundry.WebApi.Persistence;
 
 using Microsoft.Data.Sqlite;
@@ -51,6 +52,7 @@ public sealed class HandleAsync : IAsyncDisposable
             _dbContext,
             eligibilityEvaluator ?? new NullEligibilityEvaluator(),
             namespaceDeriver ?? new StubNamespaceDeriver(new NamespaceDerivationOutcome.Unavailable()),
+            new StubGlobalSettingsQueries([]),
             NullLogger<RecheckRepositoryEligibility.Handler>.Instance);
     }
 

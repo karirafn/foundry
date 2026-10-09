@@ -5,6 +5,7 @@ using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Features.Accounts;
 using Foundry.Modules.Monitoring.Features.Eligibility;
+using Foundry.Modules.Settings.Contracts.Queries;
 using Foundry.Shared;
 using Foundry.Shared.Infrastructure.Http;
 
@@ -42,7 +43,8 @@ internal static class CreateRepository
 
     internal sealed class Handler(
         DbContext dbContext,
-        IRepositoryEligibilityEvaluator eligibilityEvaluator) : ICommandHandler<Command, RepositorySummary>
+        IRepositoryEligibilityEvaluator eligibilityEvaluator,
+        IGlobalSettingsQueries globalSettingsQueries) : ICommandHandler<Command, RepositorySummary>
     {
         // SQLite emits the column-reference form ("monitored_repositories.slug") rather than the
         // index name on unique-constraint violations, so both forms must be checked.
@@ -136,12 +138,14 @@ internal static class CreateRepository
                 _ => throw new UnreachableException(),
             };
 
+            int defaultPollIntervalSeconds = await globalSettingsQueries.GetPollIntervalSecondsAsync(cancellationToken);
+
             RepositorySummary summary = RepositoryMappings.ToSummary(
                 repository,
                 credential.Id.Value,
                 credential.Name,
                 providerType,
-                defaultPollIntervalSeconds: 0);
+                defaultPollIntervalSeconds);
 
             return Result<RepositorySummary>.Ok(summary);
         }
