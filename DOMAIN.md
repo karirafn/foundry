@@ -251,6 +251,7 @@ Used by `BranchName.Generate()` to derive the branch prefix (`feat/`, `fix/`, `r
 
 A repository configured for Foundry to poll.
 Resolves its serving Account through the Namespace Claim on its owner (no stored account reference) and specifies an optional per-repo poll interval; when unset, the repo polls at the global `PollIntervalSeconds` from Global Settings.
+Its effective poll interval — the per-repo value when set, otherwise the inherited global default — is computed on the aggregate (`EffectivePollInterval`) and surfaced on the repository summary (`EffectivePollIntervalSeconds`, plus a `PollIntervalIsDefault` marker) so the dashboard can show the applied interval and flag it as the inherited default rather than a blank.
 Uniquely identified by the pair (Host, Repository Slug) — the same repo on the same host cannot be monitored twice (prevents duplicate issue detection), while the same path on different hosts (e.g. github.com vs gitlab.com, or self-hosted instances) refers to distinct repositories.
 Tracks `LastPolledAt` for per-repo poll timing.
 Carries a Repository Eligibility status, re-evaluated on each poll cycle.
