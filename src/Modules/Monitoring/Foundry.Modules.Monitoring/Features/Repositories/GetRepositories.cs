@@ -54,19 +54,12 @@ internal static class GetRepositories
 
             List<RepositorySummary> repositories = hostRepos
                 .Where(r => credential.ResolveCoveringNamespace(r.Slug) is not null)
-                .Select(r => new RepositorySummary(
-                    r.Id.Value,
-                    r.Slug.ToString(),
+                .Select(r => RepositoryMappings.ToSummary(
+                    r,
                     credential.Id.Value,
                     credential.Name,
                     providerType,
-                    RepositoryMappings.ToSeconds(r.PollInterval),
-                    r.IsActive,
-                    r.Position,
-                    r.MaxConcurrentWorkers,
-                    r.LastPolledAt,
-                    RepositoryMappings.ToEligibilityInfo(r.Eligibility, providerType),
-                    r.UntrackSuppressedSince))
+                    defaultPollIntervalSeconds: 0))
                 .ToList();
 
             return Result<IReadOnlyList<RepositorySummary>>.Ok(repositories);

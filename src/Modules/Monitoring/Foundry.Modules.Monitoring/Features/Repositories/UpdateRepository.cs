@@ -68,19 +68,12 @@ internal static class UpdateRepository
                 _ => throw new UnreachableException(),
             };
 
-            RepositorySummary summary = new(
-                repository.Id.Value,
-                repository.Slug.ToString(),
+            RepositorySummary summary = RepositoryMappings.ToSummary(
+                repository,
                 credential.Id.Value,
                 credential.Name,
                 providerType,
-                RepositoryMappings.ToSeconds(repository.PollInterval),
-                repository.IsActive,
-                repository.Position,
-                repository.MaxConcurrentWorkers,
-                repository.LastPolledAt,
-                RepositoryMappings.ToEligibilityInfo(repository.Eligibility, providerType),
-                repository.UntrackSuppressedSince);
+                defaultPollIntervalSeconds: 0);
 
             return Result<RepositorySummary>.Ok(summary);
         }
