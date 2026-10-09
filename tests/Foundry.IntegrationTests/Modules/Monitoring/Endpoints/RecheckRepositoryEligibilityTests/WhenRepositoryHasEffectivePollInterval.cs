@@ -95,6 +95,34 @@ public sealed class WhenRepositoryHasEffectivePollInterval : IAsyncDisposable
             () => repository.PollIntervalIsDefault.ShouldBeTrue());
     }
 
+    [Fact]
+    public async Task WhenRepoHasOwnInterval_ResponseCarriesOwnIntervalAndNotMarkedAsDefault()
+    {
+        // Arrange
+        Guid accountId = await AccountSeeder.SeedGitHubAccountAsync(_factory, name: "Recheck Org Own Interval");
+        await AccountSeeder.SetOwnerNamespacesAsync(_factory, accountId, "owner");
+        Guid repositoryId = await RepositorySeeder.SeedRepositoryAsync(
+            _factory,
+            accountId,
+            slug: "owner/recheck-own-interval",
+            pollIntervalSeconds: 300);
+
+        // Act
+        HttpResponseMessage response = await _client.PostAsync(
+            new Uri($"/api/accounts/{accountId}/repositories/{repositoryId}/recheck", UriKind.Relative),
+            content: null,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        RepositorySummary? repository = await response.Content
+            .ReadFromJsonAsync<RepositorySummary>(TestContext.Current.CancellationToken);
+        repository.ShouldNotBeNull();
+        repository.ShouldSatisfyAllConditions(
+            () => repository.EffectivePollIntervalSeconds.ShouldBe(300),
+            () => repository.PollIntervalIsDefault.ShouldBeFalse());
+    }
+
     private sealed class StubProviderFactory(Result<BranchProtection> branchProtectionResult) : IIssueProviderFactory
     {
         public IIssueProvider CreateProvider(Credential credential, string token) =>

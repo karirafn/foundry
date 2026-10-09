@@ -45,9 +45,11 @@
 }
 
 /// Icon chip — transparent pill with border; leading icon + short value text.
+/// Interactive (tabindex="0") so keyboard users can trigger the tooltip — border
+/// uses --fd-border-control for 3:1 non-text contrast (WCAG 1.4.11).
 @mixin list-card-chip {
   background: transparent;
-  border: 1px solid var(--fd-border-default);
+  border: 1px solid var(--fd-border-control);
   border-radius: var(--fd-radius-sm);
   color: var(--fd-text-secondary);
   display: inline-flex;
@@ -57,6 +59,10 @@
   line-height: 1;
   padding: 2px var(--fd-spacing-xs);
   white-space: nowrap;
+
+  &:focus-visible {
+    @include focus-ring;
+  }
 
   svg {
     color: var(--fd-text-tertiary);

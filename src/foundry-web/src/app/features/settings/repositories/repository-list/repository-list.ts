@@ -159,8 +159,9 @@ import { unreachableExplanation, rateLimitTooltip } from '../repository-eligibil
               <a
                 class="repository-list__slug"
                 [routerLink]="['/settings/repositories', repo.id]"
-                [innerHTML]="slugHtml(repo.slug)"
-              ></a>
+              >@for (segment of repo.slug.split('/'); track $index; let last = $last) {
+                {{ segment }}@if (!last) {/<wbr>}
+              }</a>
 
               <fd-delete-button
                 class="repository-list__delete"
@@ -189,6 +190,7 @@ import { unreachableExplanation, rateLimitTooltip } from '../repository-eligibil
               <!-- Interval chip -->
               <span
                 class="repository-list__chip repository-list__chip--interval"
+                tabindex="0"
                 [attr.aria-label]="intervalTooltip(repo)"
                 [fdTooltip]="intervalTooltip(repo)"
               >
@@ -204,6 +206,7 @@ import { unreachableExplanation, rateLimitTooltip } from '../repository-eligibil
               <!-- Last-polled chip -->
               <span
                 class="repository-list__chip repository-list__chip--last-polled"
+                tabindex="0"
                 [attr.aria-label]="lastPolledTooltip(repo)"
                 [fdTooltip]="lastPolledTooltip(repo)"
               >
@@ -217,6 +220,7 @@ import { unreachableExplanation, rateLimitTooltip } from '../repository-eligibil
               <!-- Max-workers chip -->
               <span
                 class="repository-list__chip repository-list__chip--max-workers"
+                tabindex="0"
                 [attr.aria-label]="maxWorkersTooltip(repo)"
                 [fdTooltip]="maxWorkersTooltip(repo)"
               >
@@ -315,10 +319,6 @@ export class RepositoryListComponent {
   protected readonly _multipleRepos = computed(() => this.repositories().length > 1);
 
   readonly eligibilityStatusLabel = eligibilityStatusLabel;
-
-  slugHtml(slug: string): string {
-    return slug.split('/').join('/<wbr>');
-  }
 
   intervalChipText(repo: RepositorySummary): string {
     const seconds = repo.effectivePollIntervalSeconds;

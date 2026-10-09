@@ -11,7 +11,7 @@ import { SpinnerComponent } from '../spinner/spinner';
       type="button"
       [attr.aria-label]="deleteLabel()"
       [attr.title]="deleteLabel()"
-      [attr.aria-disabled]="deleteBusy() ? 'true' : null"
+      [disabled]="deleteBusy()"
       (click)="onClick()"
     >
       @if (deleteBusy()) {

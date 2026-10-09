@@ -346,8 +346,27 @@ describe('RepositoryListComponent', () => {
 
     // Assert
     const slugLink = el.querySelector('.repository-list__slug');
-    // The full slug text must be present (wbr elements are zero-width, textContent excludes them)
-    expect(slugLink?.textContent?.trim()).toContain('efla/databridge/some-long-project-name');
+    // The full slug text must be present. Normalize whitespace because the @for template
+    // may add spaces around text nodes; <wbr> elements are zero-width and excluded from textContent.
+    const slugText = slugLink?.textContent?.replace(/\s+/g, '') ?? '';
+    expect(slugText).toContain('efla/databridge/some-long-project-name');
+  });
+
+  it('should render <wbr> elements between slug segments to allow wrapping at "/"', () => {
+    // Arrange
+    const multiSegmentRepo: RepositorySummary = {
+      ...MOCK_REPO,
+      slug: 'my-org/my-repo',
+    };
+
+    // Act
+    const { el } = setup({ repositories: [multiSegmentRepo] });
+
+    // Assert
+    const slugLink = el.querySelector('.repository-list__slug');
+    const wbrElements = slugLink?.querySelectorAll('wbr');
+    // A two-segment slug has one "/" so one <wbr> element should be present
+    expect(wbrElements?.length).toBeGreaterThanOrEqual(1);
   });
 
   it('should not render a pencil edit button in the card', () => {
@@ -640,6 +659,41 @@ describe('RepositoryListComponent', () => {
     const chip = el.querySelector('.repository-list__chip--max-workers');
     expect(chip?.textContent?.trim()).toContain('2');
     expect(chip?.getAttribute('aria-label')).toBe('Max 2 concurrent workers');
+  });
+
+  // ─── Keyboard-focusable metadata chips ───────────────────────────────────────
+
+  it('should have tabindex="0" on the interval chip so keyboard users can trigger the tooltip', () => {
+    // Arrange
+
+    // Act
+    const { el } = setup({ repositories: [MOCK_REPO] });
+
+    // Assert
+    const chip = el.querySelector('.repository-list__chip--interval');
+    expect(chip?.getAttribute('tabindex')).toBe('0');
+  });
+
+  it('should have tabindex="0" on the last-polled chip', () => {
+    // Arrange
+
+    // Act
+    const { el } = setup({ repositories: [MOCK_REPO] });
+
+    // Assert
+    const chip = el.querySelector('.repository-list__chip--last-polled');
+    expect(chip?.getAttribute('tabindex')).toBe('0');
+  });
+
+  it('should have tabindex="0" on the max-workers chip', () => {
+    // Arrange
+
+    // Act
+    const { el } = setup({ repositories: [MOCK_REPO] });
+
+    // Assert
+    const chip = el.querySelector('.repository-list__chip--max-workers');
+    expect(chip?.getAttribute('tabindex')).toBe('0');
   });
 
   // ─── No old elements (chevron, toggle, eligibility-details, old __metadata) ─────

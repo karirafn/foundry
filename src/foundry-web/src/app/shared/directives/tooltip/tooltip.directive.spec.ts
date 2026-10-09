@@ -231,6 +231,21 @@ describe('TooltipDirective', () => {
     expect(document.querySelector('.fd-tooltip-panel')).toBeNull();
   });
 
+  // ─── Behavior g: role="tooltip" on the panel ────────────────────────────────
+
+  it('(g) sets role="tooltip" on the panel element when shown', () => {
+    // Arrange
+    const { fixture, trigger } = setup();
+
+    // Act
+    dispatchEvent(trigger, 'mouseenter');
+    fixture.detectChanges();
+
+    // Assert
+    const panel = document.querySelector('.fd-tooltip-panel');
+    expect(panel?.getAttribute('role')).toBe('tooltip');
+  });
+
   // ─── Inert when input is null or empty ──────────────────────────────────────
 
   it('is inert when fdTooltip is null — no overlay on mouseenter', () => {

@@ -82,6 +82,7 @@ export class TooltipDirective implements OnDestroy {
 
     const panelEl = document.createElement('div');
     panelEl.id = this._tooltipId;
+    panelEl.setAttribute('role', 'tooltip');
     panelEl.textContent = text;
     panelEl.className = TOOLTIP_PANEL_CLASS;
     this._stylePanel(panelEl);

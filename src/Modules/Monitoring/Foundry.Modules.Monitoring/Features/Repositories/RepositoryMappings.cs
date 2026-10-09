@@ -27,7 +27,7 @@ internal static class RepositoryMappings
             repo.IsActive,
             repo.Position,
             repo.MaxConcurrentWorkers,
-            (int)repo.EffectivePollInterval(TimeSpan.FromSeconds(defaultPollIntervalSeconds)).TotalSeconds,
+            repo.PollInterval is { } ownInterval ? (int)ownInterval.TotalSeconds : defaultPollIntervalSeconds,
             repo.PollInterval is null,
             repo.LastPolledAt,
             ToEligibilityInfo(repo.Eligibility, providerType),

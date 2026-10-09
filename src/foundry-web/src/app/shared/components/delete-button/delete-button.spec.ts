@@ -107,23 +107,23 @@ describe('DeleteButtonComponent', () => {
     expect(emitCount).toBe(0);
   });
 
-  // Cycle 8: deleteBusy=true sets aria-disabled="true" on the button
-  it('should set aria-disabled="true" on the button when deleteBusy is true', () => {
+  // Cycle 8: deleteBusy=true disables the button natively so it leaves the tab order and cannot fire
+  it('should set the native disabled attribute on the button when deleteBusy is true', () => {
     // Arrange / Act
     const { el } = setup({ deleteBusy: true });
 
     // Assert
-    const btn = el.querySelector('button');
-    expect(btn?.getAttribute('aria-disabled')).toBe('true');
+    const btn = el.querySelector('button') as HTMLButtonElement;
+    expect(btn?.disabled).toBe(true);
   });
 
-  // Cycle 9: deleteBusy=false (default) — no aria-disabled attribute
-  it('should not set aria-disabled when deleteBusy is false', () => {
+  // Cycle 9: deleteBusy=false (default) — native disabled is absent
+  it('should not set the native disabled attribute when deleteBusy is false', () => {
     // Arrange / Act
     const { el } = setup({ deleteBusy: false });
 
     // Assert
-    const btn = el.querySelector('button');
-    expect(btn?.getAttribute('aria-disabled')).toBeNull();
+    const btn = el.querySelector('button') as HTMLButtonElement;
+    expect(btn?.disabled).toBe(false);
   });
 });
