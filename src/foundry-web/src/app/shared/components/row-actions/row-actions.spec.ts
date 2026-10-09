@@ -137,16 +137,16 @@ describe('RowActionsComponent', () => {
     expect(svg).toBeNull();
   });
 
-  // Cycle 11: deleteBusy=true → both buttons carry aria-disabled="true"
-  it('should set aria-disabled="true" on both buttons when deleteBusy is true', () => {
+  // Cycle 11: deleteBusy=true → edit button carries aria-disabled="true"; delete button is natively disabled
+  it('should set aria-disabled="true" on the edit button and native disabled on the delete button when deleteBusy is true', () => {
     // Arrange / Act
     const { el } = setup({ deleteBusy: true });
 
     // Assert
     const editBtn = el.querySelector('.row-actions__edit-btn');
-    const deleteBtn = el.querySelector('.row-actions__delete-btn');
+    const deleteBtn = el.querySelector('.row-actions__delete-btn') as HTMLButtonElement;
     expect(editBtn?.getAttribute('aria-disabled')).toBe('true');
-    expect(deleteBtn?.getAttribute('aria-disabled')).toBe('true');
+    expect(deleteBtn?.disabled).toBe(true);
   });
 
   // Cycle 12: deleteBusy=true → clicking delete emits nothing (no-op guard)
@@ -164,18 +164,18 @@ describe('RowActionsComponent', () => {
     expect(emitCount).toBe(0);
   });
 
-  // Cycle 13: deleteBusy=false (default) → trash SVG present, no spinner, no aria-disabled
-  it('should show trash SVG, no spinner, and no aria-disabled when deleteBusy is false (default)', () => {
+  // Cycle 13: deleteBusy=false (default) → trash SVG present, no spinner, no aria-disabled, not disabled
+  it('should show trash SVG, no spinner, no aria-disabled on edit, and not disabled on delete when deleteBusy is false (default)', () => {
     // Arrange / Act
     const { el } = setup();
 
     // Assert
-    const deleteBtn = el.querySelector('.row-actions__delete-btn') as HTMLElement;
+    const deleteBtn = el.querySelector('.row-actions__delete-btn') as HTMLButtonElement;
     const editBtn = el.querySelector('.row-actions__edit-btn') as HTMLElement;
     expect(deleteBtn.querySelector('svg')).not.toBeNull();
     expect(deleteBtn.querySelector('fd-spinner')).toBeNull();
     expect(editBtn.getAttribute('aria-disabled')).toBeNull();
-    expect(deleteBtn.getAttribute('aria-disabled')).toBeNull();
+    expect(deleteBtn.disabled).toBe(false);
   });
 
   // Cycle 14a: deleteBusy=true → clicking edit emits nothing (no-op guard)
@@ -208,18 +208,16 @@ describe('RowActionsComponent', () => {
     expect(emitCount).toBe(1);
   });
 
-  // Cycle 14: aria-disabled="true" styling — attribute present and CSS selector targets it
-  it('should apply not-allowed cursor styling via aria-disabled="true" on buttons when deleteBusy is true', () => {
+  // Cycle 14: disabled styling — edit button uses aria-disabled, delete button uses native disabled
+  it('should set aria-disabled="true" on the edit button and native disabled on the delete button when deleteBusy is true', () => {
     // Arrange / Act
     const { el } = setup({ deleteBusy: true });
 
-    // Assert — attribute presence confirms the CSS [aria-disabled="true"] selector engages
+    // Assert — edit button uses aria-disabled for CSS [aria-disabled="true"] { cursor: not-allowed }
+    // delete button is natively disabled (removes it from tab order, blocks click events)
     const editBtn = el.querySelector('.row-actions__edit-btn') as HTMLElement;
-    const deleteBtn = el.querySelector('.row-actions__delete-btn') as HTMLElement;
+    const deleteBtn = el.querySelector('.row-actions__delete-btn') as HTMLButtonElement;
     expect(editBtn.getAttribute('aria-disabled')).toBe('true');
-    expect(deleteBtn.getAttribute('aria-disabled')).toBe('true');
-    // The component SCSS defines &[aria-disabled="true"] { cursor: not-allowed; opacity: 0.5 }
-    // on the shared button selector — confirming the attribute is set is sufficient for the unit test
-    // since JSDOM does not apply external CSS. The treatment is verified by the SCSS rule's existence.
+    expect(deleteBtn.disabled).toBe(true);
   });
 });

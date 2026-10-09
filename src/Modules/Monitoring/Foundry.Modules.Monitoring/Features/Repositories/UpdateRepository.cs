@@ -3,6 +3,7 @@ using System.Diagnostics;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Modules.Monitoring.Features.Accounts;
+using Foundry.Modules.Settings.Contracts.Queries;
 using Foundry.Shared;
 using Foundry.Shared.Infrastructure.Http;
 
@@ -23,7 +24,8 @@ internal static class UpdateRepository
         bool IsActive,
         int MaxConcurrentWorkers) : ICommand<RepositorySummary>;
 
-    internal sealed class Handler(DbContext dbContext) : ICommandHandler<Command, RepositorySummary>
+    internal sealed class Handler(DbContext dbContext, IGlobalSettingsQueries globalSettingsQueries)
+        : ICommandHandler<Command, RepositorySummary>
     {
         public async Task<Result<RepositorySummary>> HandleAsync(
             Command command,
@@ -68,19 +70,14 @@ internal static class UpdateRepository
                 _ => throw new UnreachableException(),
             };
 
-            RepositorySummary summary = new(
-                repository.Id.Value,
-                repository.Slug.ToString(),
+            int defaultPollIntervalSeconds = await globalSettingsQueries.GetPollIntervalSecondsAsync(cancellationToken);
+
+            RepositorySummary summary = RepositoryMappings.ToSummary(
+                repository,
                 credential.Id.Value,
                 credential.Name,
                 providerType,
-                RepositoryMappings.ToSeconds(repository.PollInterval),
-                repository.IsActive,
-                repository.Position,
-                repository.MaxConcurrentWorkers,
-                repository.LastPolledAt,
-                RepositoryMappings.ToEligibilityInfo(repository.Eligibility, providerType),
-                repository.UntrackSuppressedSince);
+                defaultPollIntervalSeconds);
 
             return Result<RepositorySummary>.Ok(summary);
         }

@@ -1,0 +1,102 @@
+@use 'controls' as *;
+
+/// Card frame — flex column container replacing a grid layout.
+/// Guarantees no child can overflow horizontally at any width.
+@mixin list-card-frame {
+  background: var(--fd-bg-page);
+  border: 1px solid var(--fd-border-muted);
+  border-radius: var(--fd-radius-sm);
+  display: flex;
+  flex-direction: column;
+  padding: var(--fd-spacing-sm) var(--fd-spacing-md);
+  row-gap: var(--fd-spacing-xs);
+
+  &:hover {
+    background: var(--fd-bg-card-hover);
+  }
+}
+
+/// Line 1 — title row: reorder (optional) + icon + title + action.
+@mixin list-card-title-row {
+  align-items: center;
+  display: flex;
+  gap: var(--fd-spacing-sm);
+}
+
+/// Slug / primary title — mono, wrapping at any word boundary.
+/// No ellipsis; `overflow-wrap: anywhere` is the fallback for pathological single segments.
+@mixin list-card-title {
+  color: var(--fd-text-primary);
+  font-family: var(--fd-font-mono);
+  font-size: 0.9375rem;
+  font-weight: 600;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+/// Metadata strip — wrapping row of chips, words, and badges.
+@mixin list-card-strip {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  font-size: 0.8125rem;
+  gap: var(--fd-spacing-sm);
+}
+
+/// Icon chip — transparent pill with border; leading icon + short value text.
+/// Interactive (tabindex="0") so keyboard users can trigger the tooltip — border
+/// uses --fd-border-control for 3:1 non-text contrast (WCAG 1.4.11).
+@mixin list-card-chip {
+  background: transparent;
+  border: 1px solid var(--fd-border-control);
+  border-radius: var(--fd-radius-sm);
+  color: var(--fd-text-secondary);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.75rem;
+  line-height: 1;
+  padding: 2px var(--fd-spacing-xs);
+  white-space: nowrap;
+
+  &:focus-visible {
+    @include focus-ring;
+  }
+
+  svg {
+    color: var(--fd-text-tertiary);
+    flex-shrink: 0;
+    height: 13px;
+    width: 13px;
+  }
+
+  @media (any-pointer: coarse) {
+    min-height: 2.75rem;
+    min-width: 2.75rem;
+    align-items: center;
+    justify-content: center;
+  }
+}
+
+/// Inline warning line — warning-tone row with a left accent edge.
+@mixin list-card-warning {
+  align-items: flex-start;
+  background: var(--fd-bg-warning-subtle);
+  border: 1px solid var(--fd-border-warning);
+  border-inline-start-width: 3px;
+  border-radius: var(--fd-radius-sm);
+  color: var(--fd-text-warning);
+  display: flex;
+  font-size: 0.75rem;
+  gap: var(--fd-spacing-xs);
+  line-height: 1.4;
+  padding: var(--fd-spacing-xs) var(--fd-spacing-sm);
+
+  svg {
+    flex-shrink: 0;
+    height: 13px;
+    margin-block-start: 0.1rem;
+    width: 13px;
+  }
+}

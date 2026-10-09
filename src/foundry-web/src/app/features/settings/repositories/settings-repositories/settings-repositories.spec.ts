@@ -1,6 +1,7 @@
 import { TestBed } from '@angular/core/testing';
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
+import { provideRouter } from '@angular/router';
 import { SettingsRepositoriesComponent } from './settings-repositories';
 import { AccountService } from '../../accounts/account.service';
 import { RepositoryService } from '../repository.service';
@@ -35,6 +36,8 @@ const REPO_1: RepositorySummary = {
   providerType: 'github',
   position: 0,
   pollIntervalSeconds: 300,
+  effectivePollIntervalSeconds: 300,
+  pollIntervalIsDefault: false,
   isActive: true,
   maxConcurrentWorkers: 1,
   lastPolledAt: '2026-06-15T10:00:00Z',
@@ -49,6 +52,8 @@ const REPO_2: RepositorySummary = {
   providerType: 'gitlab',
   position: 1,
   pollIntervalSeconds: null,
+  effectivePollIntervalSeconds: 1800,
+  pollIntervalIsDefault: true,
   isActive: false,
   maxConcurrentWorkers: 1,
   lastPolledAt: null,
@@ -64,6 +69,7 @@ function setup() {
       RepositoryService,
       provideHttpClient(),
       provideHttpClientTesting(),
+      provideRouter([]),
     ],
   });
 

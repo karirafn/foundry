@@ -34,6 +34,8 @@ const MOCK_REPOSITORY: RepositorySummary = {
   providerType: 'github',
   position: 0,
   pollIntervalSeconds: 300,
+  effectivePollIntervalSeconds: 300,
+  pollIntervalIsDefault: false,
   isActive: true,
   maxConcurrentWorkers: 1,
   lastPolledAt: '2026-06-15T10:00:00Z',

@@ -6,6 +6,7 @@ using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Features.Accounts;
 using Foundry.Modules.Monitoring.Features.Eligibility;
 using Foundry.Modules.Monitoring.Features.NamespaceDerivation;
+using Foundry.Modules.Settings.Contracts.Queries;
 using Foundry.Shared;
 using Foundry.Shared.Infrastructure.Http;
 
@@ -26,6 +27,7 @@ internal static class RecheckRepositoryEligibility
         DbContext dbContext,
         IRepositoryEligibilityEvaluator eligibilityEvaluator,
         INamespaceDeriver namespaceDeriver,
+        IGlobalSettingsQueries globalSettingsQueries,
         ILogger<Handler> logger) : ICommandHandler<Command, RepositorySummary>
     {
         public async Task<Result<RepositorySummary>> HandleAsync(
@@ -66,19 +68,14 @@ internal static class RecheckRepositoryEligibility
                 _ => throw new UnreachableException(),
             };
 
-            RepositorySummary summary = new(
-                repository.Id.Value,
-                repository.Slug.ToString(),
+            int defaultPollIntervalSeconds = await globalSettingsQueries.GetPollIntervalSecondsAsync(cancellationToken);
+
+            RepositorySummary summary = RepositoryMappings.ToSummary(
+                repository,
                 credential.Id.Value,
                 credential.Name,
                 providerType,
-                RepositoryMappings.ToSeconds(repository.PollInterval),
-                repository.IsActive,
-                repository.Position,
-                repository.MaxConcurrentWorkers,
-                repository.LastPolledAt,
-                RepositoryMappings.ToEligibilityInfo(repository.Eligibility, providerType),
-                repository.UntrackSuppressedSince);
+                defaultPollIntervalSeconds);
 
             return Result<RepositorySummary>.Ok(summary);
         }

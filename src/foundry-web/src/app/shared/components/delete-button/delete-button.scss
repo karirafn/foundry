@@ -1,14 +1,9 @@
-.row-actions {
-  display: flex;
-  gap: var(--fd-spacing-xs);
-}
-
-.row-actions__edit-btn {
+.row-actions__delete-btn {
   align-items: center;
   background: transparent;
   border: none;
   border-radius: var(--fd-radius-sm);
-  color: var(--fd-text-link);
+  color: var(--fd-text-error);
   cursor: pointer;
   display: inline-flex;
   justify-content: center;
@@ -33,7 +28,7 @@
 }
 
 @media (any-pointer: coarse) {
-  .row-actions__edit-btn {
+  .row-actions__delete-btn {
     min-height: 2.75rem;
     min-width: 2.75rem;
   }

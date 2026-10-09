@@ -32,6 +32,8 @@ export interface RepositorySummary {
   providerType: string;
   position: number;
   pollIntervalSeconds: number | null;
+  effectivePollIntervalSeconds: number;
+  pollIntervalIsDefault: boolean;
   isActive: boolean;
   maxConcurrentWorkers: number;
   lastPolledAt: string | null;

@@ -1,6 +1,7 @@
 using System.Diagnostics;
 
 using Foundry.Modules.Monitoring.Contracts;
+using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
 
 namespace Foundry.Modules.Monitoring.Features.Repositories;
@@ -9,6 +10,28 @@ internal static class RepositoryMappings
 {
     internal static int? ToSeconds(TimeSpan? interval) =>
         interval.HasValue ? (int)interval.Value.TotalSeconds : null;
+
+    internal static RepositorySummary ToSummary(
+        MonitoredRepository repo,
+        Guid accountId,
+        string accountName,
+        string providerType,
+        int defaultPollIntervalSeconds) =>
+        new(
+            repo.Id.Value,
+            repo.Slug.ToString(),
+            accountId,
+            accountName,
+            providerType,
+            ToSeconds(repo.PollInterval),
+            repo.IsActive,
+            repo.Position,
+            repo.MaxConcurrentWorkers,
+            repo.PollInterval is { } ownInterval ? (int)ownInterval.TotalSeconds : defaultPollIntervalSeconds,
+            repo.PollInterval is null,
+            repo.LastPolledAt,
+            ToEligibilityInfo(repo.Eligibility, providerType),
+            repo.UntrackSuppressedSince);
 
     internal static RepositoryEligibilityInfo? ToEligibilityInfo(
         RepositoryEligibility? eligibility,

@@ -3,6 +3,7 @@ using System.Diagnostics;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Modules.Monitoring.Features.Accounts;
+using Foundry.Modules.Settings.Contracts.Queries;
 using Foundry.Shared;
 using Foundry.Shared.Infrastructure.Http;
 
@@ -18,7 +19,7 @@ internal static class GetRepositories
 {
     internal sealed record Query(Guid AccountId) : IQuery<IReadOnlyList<RepositorySummary>>;
 
-    internal sealed class Handler(DbContext dbContext)
+    internal sealed class Handler(DbContext dbContext, IGlobalSettingsQueries globalSettingsQueries)
         : IQueryHandler<Query, IReadOnlyList<RepositorySummary>>
     {
         public async Task<Result<IReadOnlyList<RepositorySummary>>> HandleAsync(
@@ -52,21 +53,17 @@ internal static class GetRepositories
                 _ => throw new UnreachableException(),
             };
 
+            // Read the global default once and reuse across all repos in the response.
+            int defaultPollIntervalSeconds = await globalSettingsQueries.GetPollIntervalSecondsAsync(cancellationToken);
+
             List<RepositorySummary> repositories = hostRepos
                 .Where(r => credential.ResolveCoveringNamespace(r.Slug) is not null)
-                .Select(r => new RepositorySummary(
-                    r.Id.Value,
-                    r.Slug.ToString(),
+                .Select(r => RepositoryMappings.ToSummary(
+                    r,
                     credential.Id.Value,
                     credential.Name,
                     providerType,
-                    RepositoryMappings.ToSeconds(r.PollInterval),
-                    r.IsActive,
-                    r.Position,
-                    r.MaxConcurrentWorkers,
-                    r.LastPolledAt,
-                    RepositoryMappings.ToEligibilityInfo(r.Eligibility, providerType),
-                    r.UntrackSuppressedSince))
+                    defaultPollIntervalSeconds))
                 .ToList();
 
             return Result<IReadOnlyList<RepositorySummary>>.Ok(repositories);

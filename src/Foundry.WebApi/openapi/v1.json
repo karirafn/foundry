@@ -2545,7 +2545,9 @@
           "pollIntervalSeconds",
           "isActive",
           "position",
-          "maxConcurrentWorkers"
+          "maxConcurrentWorkers",
+          "effectivePollIntervalSeconds",
+          "pollIntervalIsDefault"
         ],
         "type": "object",
         "properties": {
@@ -2593,6 +2595,17 @@
               "string"
             ],
             "format": "int32"
+          },
+          "effectivePollIntervalSeconds": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "pollIntervalIsDefault": {
+            "type": "boolean"
           },
           "lastPolledAt": {
             "type": [

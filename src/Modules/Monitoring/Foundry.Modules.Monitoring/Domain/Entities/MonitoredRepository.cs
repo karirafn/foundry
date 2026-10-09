@@ -103,6 +103,8 @@ public sealed class MonitoredRepository : AggregateRoot<MonitoredRepositoryId>
         Position = position;
     }
 
+    public TimeSpan EffectivePollInterval(TimeSpan defaultInterval) => PollInterval ?? defaultInterval;
+
     public bool IsDueForPoll(TimeSpan defaultInterval, DateTimeOffset now)
     {
         if (LastPolledAt is null)
@@ -110,8 +112,7 @@ public sealed class MonitoredRepository : AggregateRoot<MonitoredRepositoryId>
             return true;
         }
 
-        TimeSpan effectiveInterval = PollInterval ?? defaultInterval;
-        return LastPolledAt.Value + effectiveInterval < now;
+        return LastPolledAt.Value + EffectivePollInterval(defaultInterval) < now;
     }
 
     /// <summary>
