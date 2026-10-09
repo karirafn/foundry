@@ -193,7 +193,7 @@ describe('AccountListComponent', () => {
     expect(dot?.classList.contains('account-list__token-dot--absent')).toBe(true);
   });
 
-  it('should show a warning line with "Token unreadable" text and warning icon for accounts with tokenStatus unreadable', () => {
+  it('should render the warning line for an unreadable token', () => {
     // Arrange / Act
     const { el } = setup({ accounts: [MOCK_ACCOUNT_UNREADABLE] });
 
@@ -203,8 +203,23 @@ describe('AccountListComponent', () => {
     const reason = el.querySelector('.account-list__token-reason');
     expect(reason).toBeTruthy();
     expect(reason?.textContent).toContain('Token unreadable');
+  });
+
+  it('should include the warning icon svg for an unreadable token', () => {
+    // Arrange / Act
+    const { el } = setup({ accounts: [MOCK_ACCOUNT_UNREADABLE] });
+
+    // Assert
+    const reason = el.querySelector('.account-list__token-reason');
     const svg = reason?.querySelector('svg');
     expect(svg).toBeTruthy();
+  });
+
+  it('should not render a token dot for an unreadable token', () => {
+    // Arrange / Act
+    const { el } = setup({ accounts: [MOCK_ACCOUNT_UNREADABLE] });
+
+    // Assert
     const dot = el.querySelector('.account-list__token-dot');
     expect(dot).toBeNull();
   });

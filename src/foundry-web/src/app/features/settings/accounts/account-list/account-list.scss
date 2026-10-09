@@ -160,6 +160,7 @@
   &__token-reason {
     @include list-card-warning;
 
+    // center the icon/text against the 44px inline Re-enter button; the fixed label never wraps
     align-items: center;
   }
 

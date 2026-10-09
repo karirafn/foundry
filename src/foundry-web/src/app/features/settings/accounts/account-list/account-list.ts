@@ -90,6 +90,9 @@ const MAX_VISIBLE_NAMESPACES = 4;
                     <span class="account-list__token-label account-list__token-label--absent">Not configured</span>
                   </div>
                 }
+                @case ('unreadable') {
+                  <!-- rendered as a warning line below the strip -->
+                }
               }
               <span class="account-list__url">{{ account.baseUrl }}</span>
               @if (account.namespaces.length > 0) {
@@ -121,7 +124,7 @@ const MAX_VISIBLE_NAMESPACES = 4;
                     <line x1="12" y1="9" x2="12" y2="13"></line>
                     <line x1="12" y1="17" x2="12.01" y2="17"></line>
                   </svg>
-                  Token unreadable
+                  <span class="account-list__token-reason-text">Token unreadable</span>
                   <button type="button"
                           class="account-list__reenter-btn"
                           [attr.aria-label]="'Re-enter token for ' + account.name"
