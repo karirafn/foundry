@@ -1,4 +1,5 @@
-@use '../token-status' as token;
+@use '../../../../../styles/controls' as *;
+@use '../../../../../styles/list-card' as *;
 
 .account-list {
   &__empty {
@@ -50,8 +51,7 @@
     }
 
     &:focus-visible {
-      outline: 2px solid var(--fd-text-link);
-      outline-offset: 2px;
+      @include focus-ring;
     }
   }
 
@@ -64,74 +64,44 @@
     padding: 0;
   }
 
+  // ── Card frame (via mixin) ──────────────────────────────────────────────────
+
   &__item {
-    background: var(--fd-bg-page);
-    border: 1px solid var(--fd-border-muted);
-    border-radius: var(--fd-radius-sm);
-    display: flex;
-    align-items: center;
-    gap: var(--fd-spacing-md);
-    padding: var(--fd-spacing-sm) var(--fd-spacing-md);
+    @include list-card-frame;
   }
 
-  &__info {
-    display: flex;
-    flex-direction: column;
-    flex: 1;
-    gap: 2px;
-    min-width: 0;
+  // ── Line 1 — title row ──────────────────────────────────────────────────────
+
+  &__line1 {
+    @include list-card-title-row;
+  }
+
+  &__provider {
+    color: var(--fd-text-secondary);
+    flex-shrink: 0;
   }
 
   &__name {
-    color: var(--fd-text-primary);
-    font-size: 0.875rem;
-    font-weight: 500;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    @include list-card-title;
+
+    flex: 1;
   }
 
-  &__url {
-    color: var(--fd-text-secondary);
-    font-family: var(--fd-font-mono);
-    font-size: 0.75rem;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  &__namespaces {
+  &__actions {
+    flex-shrink: 0;
     display: flex;
-    flex-wrap: wrap;
-    gap: var(--fd-spacing-xs);
-    margin-top: 2px;
+    gap: var(--fd-spacing-sm);
   }
 
-  &__namespace,
-  &__namespace--overflow {
-    background: transparent;
-    border: 1px solid var(--fd-border-default);
-    border-radius: var(--fd-radius-sm);
-    display: inline-block;
-    font-family: var(--fd-font-mono);
-    font-size: 0.6875rem;
-    font-weight: 500;
-    line-height: 1;
-    padding: 2px var(--fd-spacing-xs);
+  // ── Line 2 — metadata strip ─────────────────────────────────────────────────
+
+  &__strip {
+    @include list-card-strip;
   }
 
-  &__namespace {
-    color: var(--fd-text-secondary);
-  }
-
-  &__namespace--overflow {
-    color: var(--fd-text-secondary);
-  }
-
-  &__token-status {
+  &__token-state {
     align-items: center;
     display: flex;
-    font-size: 0.8125rem;
     gap: var(--fd-spacing-xs);
     white-space: nowrap;
   }
@@ -153,12 +123,8 @@
     }
   }
 
-  &__token-icon {
-    color: var(--fd-text-error);
-    flex-shrink: 0;
-  }
-
   &__token-label {
+    font-size: 0.8125rem;
     white-space: nowrap;
 
     &--present {
@@ -168,19 +134,41 @@
     &--absent {
       color: var(--fd-text-warning);
     }
+  }
 
-    &--unreadable {
-      color: var(--fd-text-error);
-      font-weight: 600;
-    }
+  &__url {
+    color: var(--fd-text-secondary);
+    font-family: var(--fd-font-mono);
+    font-size: 0.75rem;
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+
+  &__namespace,
+  &__namespace--overflow {
+    @include list-card-chip;
+
+    font-family: var(--fd-font-mono);
+  }
+
+  // ── Tier 3 — unreadable warning line ───────────────────────────────────────
+
+  &__token-warning {
+    margin-block-start: var(--fd-spacing-xs);
+  }
+
+  &__token-reason {
+    @include list-card-warning;
+
+    align-items: center;
   }
 
   &__reenter-btn {
     background: transparent;
     border: none;
-    color: var(--fd-text-error);
+    color: var(--fd-text-warning);
     cursor: pointer;
-    font-size: 0.8125rem;
+    font-size: 0.75rem;
     font-weight: 500;
     margin-inline-start: var(--fd-spacing-xs);
     min-height: 44px;
@@ -193,14 +181,7 @@
     }
 
     &:focus-visible {
-      border-radius: var(--fd-radius-sm);
-      outline: 2px solid var(--fd-text-link);
-      outline-offset: 2px;
+      @include focus-ring;
     }
-  }
-
-  &__actions {
-    display: flex;
-    gap: var(--fd-spacing-sm);
   }
 }

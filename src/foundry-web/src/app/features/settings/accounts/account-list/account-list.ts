@@ -2,13 +2,14 @@ import { ChangeDetectionStrategy, Component, InputSignal, OutputEmitterRef, inpu
 import { AccountSummary, TokenStatus, resolveTokenStatus } from '../account.model';
 import { ProviderIconComponent } from '../../../../shared/components/provider-icon/provider-icon';
 import { RowActionsComponent } from '../../../../shared/components/row-actions/row-actions';
+import { TooltipDirective } from '../../../../shared/directives/tooltip/tooltip.directive';
 
 const MAX_VISIBLE_NAMESPACES = 4;
 
 @Component({
   selector: 'fd-account-list',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [ProviderIconComponent, RowActionsComponent],
+  imports: [ProviderIconComponent, RowActionsComponent, TooltipDirective],
   template: `
     @if (error()) {
       <div class="account-list__error" role="alert">
@@ -55,59 +56,15 @@ const MAX_VISIBLE_NAMESPACES = 4;
           @let visibleNs = account.namespaces.slice(0, MAX_VISIBLE_NAMESPACES);
           @let overflowNs = account.namespaces.slice(MAX_VISIBLE_NAMESPACES);
           @let overflowLabel = overflowNs.length + ' more namespace' + (overflowNs.length === 1 ? '' : 's') + ': ' + overflowNs.join(', ');
+          @let status = statusOf(account);
           <li class="account-list__item" role="listitem">
-            <fd-provider-icon [providerType]="account.providerType" />
-            <div class="account-list__info">
+
+            <!-- TIER 1 — title row -->
+            <div class="account-list__line1">
+              <fd-provider-icon [providerType]="account.providerType" class="account-list__provider" />
               <span class="account-list__name">{{ account.name }}</span>
-              <span class="account-list__url">{{ account.baseUrl }}</span>
-              @if (account.namespaces.length > 0) {
-                <div class="account-list__namespaces">
-                  @for (ns of visibleNs; track ns) {
-                    <span class="account-list__namespace">{{ ns }}</span>
-                  }
-                  @if (overflowNs.length > 0) {
-                    <span
-                      class="account-list__namespace--overflow"
-                      [attr.aria-label]="overflowLabel"
-                      [title]="overflowLabel"
-                    >+{{ overflowNs.length }}</span>
-                  }
-                </div>
-              }
-            </div>
-            <div class="account-list__token-status"
-                 role="group"
-                 [attr.aria-label]="'Token status for ' + account.name">
-              @let status = statusOf(account);
-              @switch (status) {
-                @case ('present') {
-                  <span class="account-list__token-dot account-list__token-dot--present" aria-hidden="true"></span>
-                  <span class="account-list__token-label account-list__token-label--present">Configured</span>
-                }
-                @case ('absent') {
-                  <span class="account-list__token-dot account-list__token-dot--absent" aria-hidden="true"></span>
-                  <span class="account-list__token-label account-list__token-label--absent">Not configured</span>
-                }
-                @case ('unreadable') {
-                  <svg class="account-list__token-icon" width="16" height="16" viewBox="0 0 24 24"
-                       fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
-                       stroke-linejoin="round" aria-hidden="true">
-                    <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
-                    <line x1="12" y1="9" x2="12" y2="13"></line>
-                    <line x1="12" y1="17" x2="12.01" y2="17"></line>
-                  </svg>
-                  <span class="account-list__token-label account-list__token-label--unreadable">
-                    Token unreadable
-                  </span>
-                  <button type="button"
-                          class="account-list__reenter-btn"
-                          [attr.aria-label]="'Re-enter token for ' + account.name"
-                          (click)="edit.emit(account)">Re-enter token</button>
-                }
-              }
-            </div>
-            <div class="account-list__actions">
               <fd-row-actions
+                class="account-list__actions"
                 [editLabel]="'Edit account ' + account.name"
                 [deleteBusy]="deletingAccountId() === account.id"
                 [deleteLabel]="deletingAccountId() === account.id ? ('Deleting account ' + account.name + '…') : ('Delete account ' + account.name)"
@@ -115,6 +72,63 @@ const MAX_VISIBLE_NAMESPACES = 4;
                 (delete)="delete.emit(account)"
               />
             </div>
+
+            <!-- TIER 2 — metadata strip: token state (present/absent) + base URL + namespace chips -->
+            <div class="account-list__strip"
+                 role="group"
+                 [attr.aria-label]="'Details for ' + account.name">
+              @switch (status) {
+                @case ('present') {
+                  <div class="account-list__token-state">
+                    <span class="account-list__token-dot account-list__token-dot--present" aria-hidden="true"></span>
+                    <span class="account-list__token-label account-list__token-label--present">Configured</span>
+                  </div>
+                }
+                @case ('absent') {
+                  <div class="account-list__token-state">
+                    <span class="account-list__token-dot account-list__token-dot--absent" aria-hidden="true"></span>
+                    <span class="account-list__token-label account-list__token-label--absent">Not configured</span>
+                  </div>
+                }
+              }
+              <span class="account-list__url">{{ account.baseUrl }}</span>
+              @if (account.namespaces.length > 0) {
+                @for (ns of visibleNs; track ns) {
+                  <span class="account-list__namespace">{{ ns }}</span>
+                }
+                @if (overflowNs.length > 0) {
+                  <span
+                    class="account-list__namespace--overflow"
+                    role="img"
+                    tabindex="0"
+                    [attr.aria-label]="overflowLabel"
+                    [fdTooltip]="overflowLabel"
+                  >+{{ overflowNs.length }}</span>
+                }
+              }
+            </div>
+
+            <!-- TIER 3 — warning line (unreadable only) -->
+            @if (status === 'unreadable') {
+              <div class="account-list__token-warning"
+                   role="group"
+                   [attr.aria-label]="'Token status for ' + account.name">
+                <div class="account-list__token-reason">
+                  <svg width="16" height="16" viewBox="0 0 24 24"
+                       fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                       stroke-linejoin="round" aria-hidden="true">
+                    <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+                    <line x1="12" y1="9" x2="12" y2="13"></line>
+                    <line x1="12" y1="17" x2="12.01" y2="17"></line>
+                  </svg>
+                  Token unreadable
+                  <button type="button"
+                          class="account-list__reenter-btn"
+                          [attr.aria-label]="'Re-enter token for ' + account.name"
+                          (click)="edit.emit(account)">Re-enter token</button>
+                </div>
+              </div>
+            }
           </li>
         }
       </ul>
