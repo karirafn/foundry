@@ -1,4 +1,5 @@
 using Foundry.Modules.Monitoring.Domain.Entities;
+using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Features.CredentialResolution;
 using Foundry.Modules.Monitoring.Features.Providers;
 using Foundry.Modules.Settings.Contracts.Queries;
@@ -89,16 +90,26 @@ internal sealed class MonitoringService(
             return;
         }
 
-        if (string.IsNullOrEmpty(credential.Token))
+        if (credential.Token is ProviderToken.Unreadable)
         {
             logger.LogWarning(
-                "Credential '{CredentialName}' has no token configured; skipping repo '{Slug}'.",
+                "Credential '{CredentialName}' (id '{CredentialId}') has an unreadable token; skipping poll for repo '{Slug}'.",
+                credential.Name,
+                credential.Id,
+                repo.Slug);
+            return;
+        }
+
+        if (credential.Token is not ProviderToken.Present present)
+        {
+            logger.LogDebug(
+                "Credential '{CredentialName}' has no token configured; skipping poll for repo '{Slug}'.",
                 credential.Name,
                 repo.Slug);
             return;
         }
 
-        IIssueProvider provider = providerFactory.CreateProvider(credential, credential.Token);
+        IIssueProvider provider = providerFactory.CreateProvider(credential, present.Value);
 
         Result pollResult = await poller.PollAsync(repo, provider, now, cancellationToken);
 

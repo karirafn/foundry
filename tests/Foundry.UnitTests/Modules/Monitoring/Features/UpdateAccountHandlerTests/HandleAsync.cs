@@ -12,6 +12,8 @@ using Foundry.Testing;
 using Foundry.UnitTests.Fakes.Monitoring;
 using Foundry.WebApi.Persistence;
 
+using ProviderToken = Foundry.Modules.Monitoring.Domain.ValueObjects.ProviderToken;
+
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -220,7 +222,7 @@ public sealed class HandleAsync : IAsyncDisposable
             .FirstOrDefaultAsync(c => c.Id == credential.Id, TestContext.Current.CancellationToken);
         stored.ShouldNotBeNull();
         stored.ShouldSatisfyAllConditions(
-            () => stored.Token.ShouldBe("ghp_original"),
+            () => stored.Token.ShouldBe(new ProviderToken.Present("ghp_original")),
             () => stored.Name.ShouldBe("original-user"),
             () => stored.BaseUrl.Value.Host.ShouldBe("github.com"));
     }
@@ -263,7 +265,7 @@ public sealed class HandleAsync : IAsyncDisposable
             .FirstOrDefaultAsync(c => c.Id == second.Id, TestContext.Current.CancellationToken);
         stored.ShouldNotBeNull();
         stored.ShouldSatisfyAllConditions(
-            () => stored.Token.ShouldBe("ghp_second"),
+            () => stored.Token.ShouldBe(new ProviderToken.Present("ghp_second")),
             () => stored.Name.ShouldBe("second-user"),
             () => stored.BaseUrl.Value.Host.ShouldBe("github.com"));
     }
@@ -378,7 +380,7 @@ public sealed class HandleAsync : IAsyncDisposable
             .FirstOrDefaultAsync(c => c.Id == credentialA.Id, CancellationToken.None);
         storedA.ShouldNotBeNull();
         storedA.ShouldSatisfyAllConditions(
-            () => storedA.Token.ShouldBe("ghp_new_a"),
+            () => storedA.Token.ShouldBe(new ProviderToken.Present("ghp_new_a")),
             () => storedA.Namespaces.Count.ShouldBe(1),
             () => storedA.Namespaces.ShouldContain(n => n.Value == "karirafn"));
 
@@ -508,6 +510,41 @@ public sealed class HandleAsync : IAsyncDisposable
 
         // Assert — empty derived set must not trigger the fully-claimed guard
         outcome.ShouldBeOfType<UpdateAccount.Outcome.Updated>();
+    }
+
+    [Fact]
+    public async Task WhenTokenSupplied_AndExistingTokenIsAbsent_AcceptsAndPersistsPresentToken()
+    {
+        // Arrange — seed a credential with no token (Token is null), analogous to the Unreadable
+        // state for the handler's purposes. The handler must NOT read the current token during
+        // re-entry — it only uses command.Token to write a new Present token.
+        // (The Unreadable state is produced at EF materialization time via failed decryption and
+        // cannot be round-tripped through the SQLite test DB; the handler's code path is identical
+        // for both absent and unreadable because neither is accessed during the update.)
+        BaseUrl baseUrl = BaseUrl.Create("https://github.com").ValueOrThrow();
+        GitHubCredential credential = GitHubCredential.Create("my-org", token: null, baseUrl);
+        _dbContext.Set<Credential>().Add(credential);
+        await _dbContext.SaveChangesAsync(CancellationToken.None);
+
+        UpdateAccount.Handler handler = BuildHandler(
+            validateToken: new StubValidateTokenHandler("my-org"),
+            deriver: new StubNamespaceDeriver(new NamespaceDerivationOutcome.Derived([], [])));
+
+        UpdateAccount.Command command = new(credential.Id, "https://github.com", "ghp_newtoken");
+
+        // Act
+        UpdateAccount.Outcome outcome = await handler.HandleAsync(command, TestContext.Current.CancellationToken);
+
+        // Assert — re-entry succeeds
+        UpdateAccount.Outcome.Updated updated = outcome.ShouldBeOfType<UpdateAccount.Outcome.Updated>();
+        updated.Value.Credential.Id.ShouldBe(credential.Id.Value);
+
+        // Assert — persisted token is now a fresh Present
+        Credential? stored = await _dbContext.Set<Credential>()
+            .FirstOrDefaultAsync(c => c.Id == credential.Id, TestContext.Current.CancellationToken);
+        stored.ShouldNotBeNull();
+        stored.Token.ShouldBeOfType<ProviderToken.Present>()
+            .Value.ShouldBe("ghp_newtoken");
     }
 
     [Fact]
@@ -731,6 +768,24 @@ public sealed class HandleAsync : IAsyncDisposable
         // Assert
         UpdateAccount.Outcome.Rejected rejected = outcome.ShouldBeOfType<UpdateAccount.Outcome.Rejected>();
         rejected.Error.Code.ShouldBe("ProviderHost.NotAllowed");
+    }
+
+    [Fact]
+    public async Task WhenTokenSupplied_ReturnsTokenStatusPresent()
+    {
+        // Arrange
+        GitHubCredential credential = await SeedCredentialAsync();
+        UpdateAccount.Handler handler = BuildHandler();
+        UpdateAccount.Command command = new(credential.Id, "https://github.com", "ghp_newtoken");
+
+        // Act
+        UpdateAccount.Outcome outcome = await handler.HandleAsync(
+            command,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        UpdateAccount.Outcome.Updated updated = outcome.ShouldBeOfType<UpdateAccount.Outcome.Updated>();
+        updated.Value.Credential.TokenStatus.ShouldBe("present");
     }
 
     // Stubs and fakes

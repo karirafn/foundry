@@ -17,6 +17,11 @@ public sealed record EligibilityViolationInfo(string Rule, string Description)
     public static string NoCredentialDescription(string namespaceName) =>
         $"No credential for namespace {namespaceName}.";
 
+    public const string CredentialUnreadableRule = "credential-unreadable";
+
+    public const string CredentialUnreadableDescription =
+        "The account token can't be decrypted. Re-enter it on the account to resume.";
+
     public const string CannotPushRulePrefix = "cannot-push";
 
     public static string CannotPushRule(string slug) =>

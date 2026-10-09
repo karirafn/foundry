@@ -187,6 +187,14 @@ Two behavioral rules apply:
 
 The endpoint (`POST /api/accounts/validate-token`) maps these variants to the response `Kind` field: `"authenticated"`, `"authenticationFailed"`, `"scopesUnverifiable"`, `"identityUnresolved"`, `"providerMismatch"`.
 
+### Unreadable Token
+
+A stored `accounts.token` value that cannot be decrypted — the Data Protection key that encrypted it was lost or rotated (`CryptographicException`), or the stored ciphertext is not valid base64 (`FormatException`).
+Modeled as the `Unreadable` variant of the `ProviderToken` value object (`Present(Value)` / `Unreadable`), materialized by `ProviderTokenConverter` when decryption fails — never an empty-string sentinel.
+An unreadable token is distinct from an **absent** token: the token column is null when no token is configured, and `Unreadable` when a token exists but cannot be read. Both report `HasToken = true` only for `Unreadable` (a value is present); the finer state is carried by the `TokenStatus` field (`"present"` / `"absent"` / `"unreadable"`).
+An account whose token is `Unreadable` sends no provider request: eligibility evaluation and every polling path short-circuit before calling the provider, so the account cannot silently degrade to anonymous access. Affected repositories report the credential-specific reason `credential-unreadable` rather than masquerading as inaccessible or unpushable.
+Materialization logs a warning naming `accounts.token` and the credential id. The state is repaired by re-entering the token through the account update path — the degraded credential loads normally and the re-entry never reads the old token, so no manual database edit is required.
+
 ## Namespace Claim
 
 The exclusive association between an Account and an owner namespace on a host — stored in `credential_namespaces` with a unique `(host, namespace)` constraint, so each namespace is served by exactly one account.

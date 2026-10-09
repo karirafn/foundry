@@ -8,6 +8,8 @@ using Foundry.WebApi.Persistence;
 
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 
 using Shouldly;
 
@@ -39,7 +41,9 @@ public sealed class HandleAsync : IAsyncDisposable
         await _connection.DisposeAsync();
     }
 
-    private GetAccounts.Handler BuildHandler() => new(_dbContext);
+    private GetAccounts.Handler BuildHandler() => new(_dbContext, NullLogger<GetAccounts.Handler>.Instance);
+
+    private GetAccounts.Handler BuildHandler(CapturingLogger<GetAccounts.Handler> logger) => new(_dbContext, logger);
 
     [Fact]
     public async Task WhenCredentialHasToken_ReturnsHasTokenTrue()
@@ -63,6 +67,27 @@ public sealed class HandleAsync : IAsyncDisposable
     }
 
     [Fact]
+    public async Task WhenCredentialHasToken_ReturnsTokenStatusPresent()
+    {
+        // Arrange
+        BaseUrl baseUrl = BaseUrl.Create("https://github.com").ValueOrThrow();
+        GitHubCredential credential = GitHubCredential.Create("my-org", "ghp_token", baseUrl);
+        _dbContext.Set<Credential>().Add(credential);
+        await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        GetAccounts.Handler handler = BuildHandler();
+
+        // Act
+        Result<IReadOnlyList<CredentialSummary>> result =
+            await handler.HandleAsync(new GetAccounts.Query(), TestContext.Current.CancellationToken);
+
+        // Assert
+        IReadOnlyList<CredentialSummary> summaries = result.ShouldBeOfType<Result<IReadOnlyList<CredentialSummary>>.Success>().Value;
+        CredentialSummary summary = summaries.ShouldHaveSingleItem();
+        summary.TokenStatus.ShouldBe("present");
+    }
+
+    [Fact]
     public async Task WhenCredentialHasNoToken_ReturnsHasTokenFalse()
     {
         // Arrange
@@ -81,6 +106,97 @@ public sealed class HandleAsync : IAsyncDisposable
         IReadOnlyList<CredentialSummary> summaries = result.ShouldBeOfType<Result<IReadOnlyList<CredentialSummary>>.Success>().Value;
         CredentialSummary summary = summaries.ShouldHaveSingleItem();
         summary.HasToken.ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task WhenCredentialHasNoToken_ReturnsTokenStatusAbsent()
+    {
+        // Arrange
+        BaseUrl baseUrl = BaseUrl.Create("https://github.com").ValueOrThrow();
+        GitHubCredential credential = GitHubCredential.Create("my-org", null, baseUrl);
+        _dbContext.Set<Credential>().Add(credential);
+        await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        GetAccounts.Handler handler = BuildHandler();
+
+        // Act
+        Result<IReadOnlyList<CredentialSummary>> result =
+            await handler.HandleAsync(new GetAccounts.Query(), TestContext.Current.CancellationToken);
+
+        // Assert
+        IReadOnlyList<CredentialSummary> summaries = result.ShouldBeOfType<Result<IReadOnlyList<CredentialSummary>>.Success>().Value;
+        CredentialSummary summary = summaries.ShouldHaveSingleItem();
+        summary.TokenStatus.ShouldBe("absent");
+    }
+
+    [Fact]
+    public async Task WhenCredentialHasUnreadableToken_ReturnsHasTokenTrue()
+    {
+        // Arrange — seed garbage ciphertext directly; the ProviderTokenConverter blocks persisting
+        // an Unreadable token (it originated from a failed decryption and has no storable value).
+        // A non-base64 string triggers a FormatException on read, producing ProviderToken.Unreadable.
+        // HasToken must remain true: the column is non-null, meaning a token is present (just corrupt).
+        await SeedCredentialWithGarbageTokenAsync("my-org");
+
+        GetAccounts.Handler handler = BuildHandler();
+
+        // Act
+        Result<IReadOnlyList<CredentialSummary>> result =
+            await handler.HandleAsync(new GetAccounts.Query(), TestContext.Current.CancellationToken);
+
+        // Assert
+        IReadOnlyList<CredentialSummary> summaries = result.ShouldBeOfType<Result<IReadOnlyList<CredentialSummary>>.Success>().Value;
+        CredentialSummary summary = summaries.ShouldHaveSingleItem();
+        summary.HasToken.ShouldBeTrue();
+    }
+
+    [Fact]
+    public async Task WhenCredentialHasUnreadableToken_ReturnsTokenStatusUnreadable()
+    {
+        // Arrange — garbage ciphertext forces FormatException in ProviderTokenConverter, yielding Unreadable.
+        await SeedCredentialWithGarbageTokenAsync("my-org");
+
+        GetAccounts.Handler handler = BuildHandler();
+
+        // Act
+        Result<IReadOnlyList<CredentialSummary>> result =
+            await handler.HandleAsync(new GetAccounts.Query(), TestContext.Current.CancellationToken);
+
+        // Assert
+        IReadOnlyList<CredentialSummary> summaries = result.ShouldBeOfType<Result<IReadOnlyList<CredentialSummary>>.Success>().Value;
+        CredentialSummary summary = summaries.ShouldHaveSingleItem();
+        summary.TokenStatus.ShouldBe("unreadable");
+    }
+
+    /// <summary>
+    /// Inserts a GitHub credential row with a garbage token ciphertext directly via raw SQL.
+    /// The ProviderTokenConverter throws on reads and writes of Unreadable tokens, so raw SQL
+    /// is the only way to reach this state in a unit test without a real corrupt DB.
+    /// </summary>
+    private async Task SeedCredentialWithGarbageTokenAsync(string name)
+    {
+        string id = Guid.NewGuid().ToString();
+        await _dbContext.Database.ExecuteSqlAsync(
+            $"INSERT INTO accounts (id, name, token, base_url, host, type) VALUES ({id}, {name}, {"not-valid-base64!!!"}, {"https://github.com/"}, {"github.com"}, {"github"})",
+            TestContext.Current.CancellationToken);
+    }
+
+    [Fact]
+    public async Task WhenCredentialHasUnreadableToken_LogsWarningContainingCredentialIdAndAccountsToken()
+    {
+        // Arrange — garbage token ciphertext forces ProviderToken.Unreadable on EF materialization.
+        await SeedCredentialWithGarbageTokenAsync("my-org");
+
+        CapturingLogger<GetAccounts.Handler> capturingLogger = new();
+        GetAccounts.Handler handler = BuildHandler(capturingLogger);
+
+        // Act
+        await handler.HandleAsync(new GetAccounts.Query(), TestContext.Current.CancellationToken);
+
+        // Assert
+        (LogLevel Level, string Message, Exception? Exception) entry = capturingLogger.Entries.ShouldHaveSingleItem();
+        entry.Level.ShouldBe(LogLevel.Warning);
+        entry.Message.ShouldContain("accounts.token");
     }
 
     [Fact]

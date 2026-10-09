@@ -12,6 +12,7 @@ const MOCK_ACCOUNT: AccountSummary = {
   providerType: 'github',
   baseUrl: 'https://api.github.com/',
   hasToken: true,
+  tokenStatus: 'present',
   namespaces: [],
 };
 
@@ -21,6 +22,7 @@ const MOCK_ACCOUNT_2: AccountSummary = {
   providerType: 'github',
   baseUrl: 'https://api.github.com/',
   hasToken: true,
+  tokenStatus: 'present',
   namespaces: [],
 };
 

@@ -50,7 +50,8 @@ builder.Services.AddScoped<OutboxSaveChangesInterceptor>();
 builder.Services.AddDbContext<FoundryDbContext>((sp, options) =>
 {
     options.UseSqlite(builder.Configuration.GetConnectionString("foundry") ?? "Data Source=data/foundry.db");
-    options.AddInterceptors(sp.GetRequiredService<OutboxSaveChangesInterceptor>());
+    options.AddInterceptors(
+        sp.GetRequiredService<OutboxSaveChangesInterceptor>());
 });
 builder.Services.AddScoped<DbContext>(sp => sp.GetRequiredService<FoundryDbContext>());
 builder.Services.AddScoped<IDomainEventDispatcher, DomainEventDispatcher>();

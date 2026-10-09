@@ -10,6 +10,7 @@ internal static class RepositoryErrors
     internal const string DuplicateSlugCode = "Repository.DuplicateSlug";
     internal const string AccountNotFoundCode = "Repository.AccountNotFound";
     internal const string AccountHasNoTokenCode = "Repository.AccountHasNoToken";
+    internal const string AccountTokenUnreadableCode = "Repository.AccountTokenUnreadable";
     internal const string NoTokenCode = "Repository.NoToken";
     internal const string ConflictOnCreateCode = "Repository.ConflictOnCreate";
 
@@ -33,6 +34,10 @@ internal static class RepositoryErrors
 
     internal static Error AccountHasNoToken(CredentialId id) =>
         new(AccountHasNoTokenCode, $"Account with ID '{id.Value}' has no token configured.");
+
+    internal static Error AccountTokenUnreadable(CredentialId id) =>
+        new(AccountTokenUnreadableCode,
+            $"Account with ID '{id.Value}' has an unreadable token — the stored ciphertext could not be decrypted.");
 
     internal static Error NoToken(CredentialId id) =>
         new(NoTokenCode, $"Account with ID '{id.Value}' has no token — eligibility cannot be re-checked.");

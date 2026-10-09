@@ -29,6 +29,7 @@ import {
   UpdateAccountRequest,
   narrowTokenValidationKind,
   providerDisplayName,
+  resolveTokenStatus,
 } from '../account.model';
 import { ProviderSelectorComponent } from '../provider-selector/provider-selector';
 import { AccountService } from '../account.service';
@@ -54,7 +55,7 @@ const CONFLICT_PANEL_HEADING_ID = 'account-form-conflict-heading';
       </button>
 
       <h2 class="account-form__heading" #formHeading tabindex="-1">
-        {{ _isEditMode() ? 'Edit Account' : 'Add Account' }}
+        {{ _isEditMode() ? (_tokenUnreadable() ? 'Re-enter token for ' + account()!.name : 'Edit Account') : 'Add Account' }}
       </h2>
 
       @if (_isEditMode()) {
@@ -123,21 +124,42 @@ const CONFLICT_PANEL_HEADING_ID = 'account-form-conflict-heading';
         </section>
       }
 
-      @if (_isEditMode() && account()!.hasToken) {
-        <div
-          id="account-form-token-on-file"
-          class="account-form__token-on-file"
-        >
-          <span class="account-form__validation-dot account-form__validation-dot--valid" aria-hidden="true"></span>
-          <span class="account-form__validation-message account-form__validation-message--valid">
-            Token on file — authenticated as {{ account()!.name }}
-          </span>
-        </div>
+      @if (_isEditMode()) {
+        @if (_tokenUnreadable()) {
+          <div
+            id="account-form-token-unreadable"
+            class="account-form__token-unreadable"
+          >
+            <span class="account-form__token-unreadable-icon" aria-hidden="true">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+                <line x1="12" y1="9" x2="12" y2="13"></line>
+                <line x1="12" y1="17" x2="12.01" y2="17"></line>
+              </svg>
+            </span>
+            <span class="account-form__token-unreadable-text">
+              <span class="sr-only">Error:</span>
+              <strong>Token unreadable.</strong> The stored token can no longer be decrypted,
+              so monitoring for this account is paused. Enter a new token below to repair it and
+              resume polling.
+            </span>
+          </div>
+        } @else if (account()!.hasToken) {
+          <div
+            id="account-form-token-on-file"
+            class="account-form__token-on-file"
+          >
+            <span class="account-form__validation-dot account-form__validation-dot--valid" aria-hidden="true"></span>
+            <span class="account-form__validation-message account-form__validation-message--valid">
+              Token on file — authenticated as {{ account()!.name }}
+            </span>
+          </div>
+        }
       }
 
       <div class="account-form__field">
         <label class="account-form__field-label" for="account-form-token">
-          {{ _isEditMode() ? 'Replace token' : 'Token' }}
+          {{ _tokenUnreadable() ? 'Re-enter token' : (_isEditMode() ? 'Replace token' : 'Token') }}
         </label>
         <div
           class="account-form__token-wrapper"
@@ -176,7 +198,7 @@ const CONFLICT_PANEL_HEADING_ID = 'account-form-conflict-heading';
           </button>
         </div>
 
-        @if (_isEditMode()) {
+        @if (_isEditMode() && !_tokenUnreadable()) {
           <span id="account-form-token-hint" class="account-form__field-hint">
             Leave empty to keep the current token
           </span>
@@ -356,6 +378,14 @@ export class AccountFormComponent implements OnInit {
 
   protected readonly _isEditMode: Signal<boolean> = computed(() => this.account() !== null);
 
+  protected readonly _tokenUnreadable: Signal<boolean> = computed(() => {
+    const acc = this.account();
+    if (acc === null) {
+      return false;
+    }
+    return resolveTokenStatus(acc) === 'unreadable';
+  });
+
   protected readonly _provider: WritableSignal<ProviderType> = signal('GitHub');
   protected readonly _baseUrl: WritableSignal<string> = signal(GITHUB_BASE_URL);
   protected readonly _baseUrlManuallyEdited: WritableSignal<boolean> = signal(false);
@@ -496,9 +526,13 @@ export class AccountFormComponent implements OnInit {
   protected readonly _tokenAriaDescribedBy: Signal<string> = computed(() => {
     const parts: string[] = ['account-token-validation', 'account-form-validation-error', 'account-token-error'];
     if (this._isEditMode()) {
-      parts.unshift('account-form-token-hint');
-      if (this.account()?.hasToken) {
-        parts.unshift('account-form-token-on-file');
+      if (this._tokenUnreadable()) {
+        parts.unshift('account-form-token-unreadable');
+      } else {
+        parts.unshift('account-form-token-hint');
+        if (this.account()?.hasToken) {
+          parts.unshift('account-form-token-on-file');
+        }
       }
     }
     return parts.join(' ');

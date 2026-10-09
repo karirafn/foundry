@@ -8,6 +8,7 @@ const MOCK_ACCOUNT: AccountSummary = {
   providerType: 'GitHub',
   baseUrl: 'https://github.com',
   hasToken: true,
+  tokenStatus: 'present',
   namespaces: [],
 };
 
@@ -17,6 +18,17 @@ const MOCK_ACCOUNT_2: AccountSummary = {
   providerType: 'GitLab',
   baseUrl: 'https://gitlab.com',
   hasToken: false,
+  tokenStatus: 'absent',
+  namespaces: [],
+};
+
+const MOCK_ACCOUNT_UNREADABLE: AccountSummary = {
+  id: '00000000-0000-0000-0000-000000000005',
+  name: 'broken-gitlab',
+  providerType: 'GitLab',
+  baseUrl: 'https://gitlab.company.com',
+  hasToken: true,
+  tokenStatus: 'unreadable',
   namespaces: [],
 };
 
@@ -26,6 +38,7 @@ const MOCK_ACCOUNT_LOWERCASE_GITHUB: AccountSummary = {
   providerType: 'github',
   baseUrl: 'https://github.com',
   hasToken: true,
+  tokenStatus: 'present',
   namespaces: [],
 };
 
@@ -35,6 +48,7 @@ const MOCK_ACCOUNT_LOWERCASE_GITLAB: AccountSummary = {
   providerType: 'gitlab',
   baseUrl: 'https://gitlab.com',
   hasToken: true,
+  tokenStatus: 'present',
   namespaces: [],
 };
 
@@ -137,8 +151,8 @@ describe('AccountListComponent', () => {
     expect(badge).toBeFalsy();
   });
 
-  // Cycle 6: token status indicator
-  it('should show "Configured" token status for accounts with a token', () => {
+  // Cycle 6: token status indicator — three states
+  it('should show "Configured" label and present dot for accounts with tokenStatus present', () => {
     // Arrange / Act
     const { el } = setup({ accounts: [MOCK_ACCOUNT] });
 
@@ -146,10 +160,29 @@ describe('AccountListComponent', () => {
     const tokenLabel = el.querySelector('.account-list__token-label');
     expect(tokenLabel?.textContent?.trim()).toBe('Configured');
     const dot = el.querySelector('.account-list__token-dot');
-    expect(dot?.classList.contains('account-list__token-dot--configured')).toBe(true);
+    expect(dot?.classList.contains('account-list__token-dot--present')).toBe(true);
   });
 
-  it('should show "Not configured" token status for accounts without a token', () => {
+  it('should not have role="status" on per-row token label spans', () => {
+    // Arrange / Act
+    const { el } = setup({ accounts: [MOCK_ACCOUNT] });
+
+    // Assert — token labels are plain spans, not live regions
+    const tokenLabel = el.querySelector('.account-list__token-label');
+    expect(tokenLabel?.getAttribute('role')).toBeNull();
+  });
+
+  it('should wrap the token-status area in role="group" with an account-scoped aria-label', () => {
+    // Arrange / Act
+    const { el } = setup({ accounts: [MOCK_ACCOUNT] });
+
+    // Assert
+    const group = el.querySelector('.account-list__token-status');
+    expect(group?.getAttribute('role')).toBe('group');
+    expect(group?.getAttribute('aria-label')).toBe('Token status for my-github');
+  });
+
+  it('should show "Not configured" label and absent dot for accounts with tokenStatus absent', () => {
     // Arrange / Act
     const { el } = setup({ accounts: [MOCK_ACCOUNT_2] });
 
@@ -157,7 +190,62 @@ describe('AccountListComponent', () => {
     const tokenLabel = el.querySelector('.account-list__token-label');
     expect(tokenLabel?.textContent?.trim()).toBe('Not configured');
     const dot = el.querySelector('.account-list__token-dot');
-    expect(dot?.classList.contains('account-list__token-dot--not-configured')).toBe(true);
+    expect(dot?.classList.contains('account-list__token-dot--absent')).toBe(true);
+  });
+
+  it('should show "Token unreadable" label and warning icon for accounts with tokenStatus unreadable', () => {
+    // Arrange / Act
+    const { el } = setup({ accounts: [MOCK_ACCOUNT_UNREADABLE] });
+
+    // Assert
+    const tokenLabel = el.querySelector('.account-list__token-label');
+    expect(tokenLabel?.textContent?.trim()).toBe('Token unreadable');
+    const icon = el.querySelector('.account-list__token-icon');
+    expect(icon).toBeTruthy();
+    const dot = el.querySelector('.account-list__token-dot');
+    expect(dot).toBeNull();
+  });
+
+  it('should render the Re-enter token button for accounts with tokenStatus unreadable', () => {
+    // Arrange / Act
+    const { el } = setup({ accounts: [MOCK_ACCOUNT_UNREADABLE] });
+
+    // Assert
+    const btn = el.querySelector('.account-list__reenter-btn');
+    expect(btn).toBeTruthy();
+    expect(btn?.textContent?.trim()).toBe('Re-enter token');
+  });
+
+  it('should not render the Re-enter token button for accounts with tokenStatus present', () => {
+    // Arrange / Act
+    const { el } = setup({ accounts: [MOCK_ACCOUNT] });
+
+    // Assert
+    const btn = el.querySelector('.account-list__reenter-btn');
+    expect(btn).toBeNull();
+  });
+
+  it('should not render the Re-enter token button for accounts with tokenStatus absent', () => {
+    // Arrange / Act
+    const { el } = setup({ accounts: [MOCK_ACCOUNT_2] });
+
+    // Assert
+    const btn = el.querySelector('.account-list__reenter-btn');
+    expect(btn).toBeNull();
+  });
+
+  it('should emit edit with the account when Re-enter token is clicked on an unreadable row', () => {
+    // Arrange
+    const { el, component } = setup({ accounts: [MOCK_ACCOUNT_UNREADABLE] });
+    let emittedAccount: AccountSummary | undefined;
+    component.edit.subscribe((a: AccountSummary) => { emittedAccount = a; });
+
+    // Act
+    const btn = el.querySelector('.account-list__reenter-btn') as HTMLButtonElement;
+    btn.click();
+
+    // Assert
+    expect(emittedAccount).toEqual(MOCK_ACCOUNT_UNREADABLE);
   });
 
   // Cycle 7: edit and delete action icon buttons with aria-labels (rendered via fd-row-actions)

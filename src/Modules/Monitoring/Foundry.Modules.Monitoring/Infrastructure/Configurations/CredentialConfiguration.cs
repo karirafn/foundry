@@ -7,13 +7,11 @@ using Foundry.Shared.Infrastructure;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
-using Microsoft.Extensions.Logging;
 
 namespace Foundry.Modules.Monitoring.Infrastructure.Configurations;
 
 internal sealed class CredentialConfiguration(
-    IDataProtectionProvider dataProtectionProvider,
-    ILogger<EncryptedStringConverter>? encryptedStringConverterLogger = null)
+    IDataProtectionProvider dataProtectionProvider)
     : IEntityTypeConfiguration<Credential>
 {
     private const int TokenMaxLength = 2000;
@@ -37,10 +35,10 @@ internal sealed class CredentialConfiguration(
             .IsRequired()
             .HasColumnName("name");
 
-        EncryptedStringConverter encryptedConverter = new(dataProtectionProvider, encryptedStringConverterLogger);
+        ProviderTokenConverter providerTokenConverter = new(dataProtectionProvider);
 
         builder.Property(a => a.Token)
-            .HasConversion(encryptedConverter)
+            .HasConversion(providerTokenConverter)
             .HasMaxLength(TokenMaxLength)
             .IsUnicode(false)
             .HasColumnName("token");

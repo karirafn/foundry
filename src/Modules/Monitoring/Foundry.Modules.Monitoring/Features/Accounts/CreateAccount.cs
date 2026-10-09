@@ -343,6 +343,7 @@ internal static partial class CreateAccount
                     providerTypeAfterTakeover,
                     credential.BaseUrl.Value.ToString(),
                     credential.Token is not null,
+                    AccountsDatabaseHelpers.ToTokenStatus(credential.Token),
                     credential.Namespaces.Select(n => n.Value).ToList());
 
                 return new Outcome.Created(new CredentialCreationResult(summaryAfterTakeover, affectedRepositories));
@@ -369,6 +370,7 @@ internal static partial class CreateAccount
                 providerType,
                 credential.BaseUrl.Value.ToString(),
                 credential.Token is not null,
+                AccountsDatabaseHelpers.ToTokenStatus(credential.Token),
                 credential.Namespaces.Select(n => n.Value).ToList());
 
             return new Outcome.Created(new CredentialCreationResult(summary, []));

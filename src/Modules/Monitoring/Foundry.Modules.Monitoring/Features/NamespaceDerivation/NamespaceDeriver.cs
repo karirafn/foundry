@@ -1,4 +1,5 @@
 using Foundry.Modules.Monitoring.Domain.Entities;
+using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Infrastructure;
 using Foundry.Modules.Monitoring.Infrastructure.GitHub;
 using Foundry.Modules.Monitoring.Infrastructure.GitLab;
@@ -17,14 +18,14 @@ internal sealed class NamespaceDeriver(
         Credential credential,
         CancellationToken cancellationToken)
     {
-        if (credential.Token is null)
+        if (credential.Token is not ProviderToken.Present present)
         {
             return Task.FromResult<NamespaceDerivationOutcome>(new NamespaceDerivationOutcome.Unavailable());
         }
 
         return DeriveAsync(
             credential.ApiBaseUrl,
-            credential.Token,
+            present.Value,
             credential is GitLabCredential,
             cancellationToken);
     }

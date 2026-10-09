@@ -48,6 +48,47 @@ public sealed class EvaluateBranchRulesAndStoreAsync
     }
 
     [Fact]
+    public async Task WhenCredentialTokenIsUnreadable_SetsEligibilityToIneligibleWithCredentialUnreadableViolation()
+    {
+        // Arrange
+        MonitoredRepository repo = CreateRepo(verdict: new WriteProbeVerdict.Granted());
+        GitHubCredential credential = GitHubCredential.CreateWithUnreadableToken(
+            "test",
+            BaseUrl.Create("https://github.com").ValueOrThrow());
+        RepositoryEligibilityEvaluator sut = CreateSut(
+            resolver: new StubCredentialResolver(credential),
+            providerFactory: new NullProviderFactory());
+
+        // Act
+        await sut.EvaluateBranchRulesAndStoreAsync(repo, CancellationToken.None);
+
+        // Assert
+        RepositoryEligibility.Ineligible ineligible = repo.Eligibility.ShouldBeOfType<RepositoryEligibility.Ineligible>();
+        ineligible.Violations.ShouldHaveSingleItem();
+        ineligible.Violations[0].Rule.ShouldBe(EligibilityViolationInfo.CredentialUnreadableRule);
+    }
+
+    [Fact]
+    public async Task WhenCredentialTokenIsUnreadable_DoesNotInvokeProviderFactory()
+    {
+        // Arrange
+        MonitoredRepository repo = CreateRepo(verdict: new WriteProbeVerdict.Granted());
+        GitHubCredential credential = GitHubCredential.CreateWithUnreadableToken(
+            "test",
+            BaseUrl.Create("https://github.com").ValueOrThrow());
+        TrackingProviderFactory trackingFactory = new();
+        RepositoryEligibilityEvaluator sut = CreateSut(
+            resolver: new StubCredentialResolver(credential),
+            providerFactory: trackingFactory);
+
+        // Act
+        await sut.EvaluateBranchRulesAndStoreAsync(repo, CancellationToken.None);
+
+        // Assert
+        trackingFactory.WasInvoked.ShouldBeFalse();
+    }
+
+    [Fact]
     public async Task WhenNoCredentialCoversRepo_SetsEligibilityToIneligibleWithNoCredentialViolation()
     {
         // Arrange

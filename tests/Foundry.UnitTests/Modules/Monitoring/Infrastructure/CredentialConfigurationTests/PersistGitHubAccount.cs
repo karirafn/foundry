@@ -3,6 +3,8 @@ using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Testing;
 using Foundry.WebApi.Persistence;
 
+using ProviderToken = Foundry.Modules.Monitoring.Domain.ValueObjects.ProviderToken;
+
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
@@ -60,7 +62,7 @@ public sealed class PersistGitHubAccount : IAsyncDisposable
         gitHub.ShouldSatisfyAllConditions(
             () => gitHub.Id.ShouldBe(credential.Id),
             () => gitHub.Name.ShouldBe("my-org"),
-            () => gitHub.Token.ShouldBe("ghp_mytoken"),
+            () => gitHub.Token.ShouldBe(new ProviderToken.Present("ghp_mytoken")),
             () => gitHub.BaseUrl.Value.ShouldBe(new Uri("https://github.com")),
             () => gitHub.Host.ShouldBe("github.com"));
     }

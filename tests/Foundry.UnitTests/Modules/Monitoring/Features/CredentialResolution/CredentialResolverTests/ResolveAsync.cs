@@ -7,6 +7,8 @@ using Foundry.WebApi.Persistence;
 
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 
 using Shouldly;
 
@@ -31,7 +33,7 @@ public sealed class ResolveAsync : IAsyncDisposable
 
         _dbContext = new FoundryDbContext(options);
         _dbContext.Database.EnsureCreated();
-        _sut = new CredentialResolver(_dbContext);
+        _sut = new CredentialResolver(_dbContext, NullLogger<CredentialResolver>.Instance);
     }
 
     async ValueTask IAsyncDisposable.DisposeAsync()
@@ -148,5 +150,35 @@ public sealed class ResolveAsync : IAsyncDisposable
 
         // Assert
         result.ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task WhenResolvedCredentialHasUnreadableToken_LogsWarningContainingCredentialIdAndAccountsToken()
+    {
+        // Arrange — insert a row with a garbage token ciphertext directly via raw SQL so the
+        // ProviderTokenConverter throws FormatException on read, producing ProviderToken.Unreadable.
+        // Also insert a covering namespace row so the resolver selects this credential.
+        Guid credentialId = Guid.NewGuid();
+        Guid namespaceId = Guid.NewGuid();
+        string credentialIdString = credentialId.ToString();
+        await _dbContext.Database.ExecuteSqlAsync(
+            $"INSERT INTO accounts (id, name, token, base_url, host, type) VALUES ({credentialIdString}, {"unreadable-org"}, {"not-valid-base64!!!"}, {"https://github.com/"}, {"github.com"}, {"github"})",
+            CancellationToken.None);
+        await _dbContext.Database.ExecuteSqlAsync(
+            $"INSERT INTO credential_namespaces (id, credential_id, host, value) VALUES ({namespaceId.ToString()}, {credentialIdString}, {"github.com"}, {"unreadable-org"})",
+            CancellationToken.None);
+
+        CapturingLogger<CredentialResolver> capturingLogger = new();
+        ICredentialResolver resolver = new CredentialResolver(_dbContext, capturingLogger);
+
+        // Act
+        await resolver.ResolveAsync("github.com", Slug("unreadable-org/repo"), CancellationToken.None);
+
+        // Assert
+        (LogLevel Level, string Message, Exception? Exception) entry = capturingLogger.Entries.ShouldHaveSingleItem();
+        entry.Level.ShouldBe(LogLevel.Warning);
+        entry.Message.ShouldSatisfyAllConditions(
+            () => entry.Message.ShouldContain(credentialIdString),
+            () => entry.Message.ShouldContain("accounts.token"));
     }
 }

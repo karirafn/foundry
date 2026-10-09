@@ -1,5 +1,5 @@
 import { ChangeDetectionStrategy, Component, InputSignal, OutputEmitterRef, input, output } from '@angular/core';
-import { AccountSummary } from '../account.model';
+import { AccountSummary, TokenStatus, resolveTokenStatus } from '../account.model';
 import { ProviderIconComponent } from '../../../../shared/components/provider-icon/provider-icon';
 import { RowActionsComponent } from '../../../../shared/components/row-actions/row-actions';
 
@@ -75,14 +75,36 @@ const MAX_VISIBLE_NAMESPACES = 4;
                 </div>
               }
             </div>
-            <div class="account-list__token-status">
-              <span
-                class="account-list__token-dot account-list__token-dot--{{ account.hasToken ? 'configured' : 'not-configured' }}"
-                aria-hidden="true"
-              ></span>
-              <span class="account-list__token-label account-list__token-label--{{ account.hasToken ? 'configured' : 'not-configured' }}">
-                {{ account.hasToken ? 'Configured' : 'Not configured' }}
-              </span>
+            <div class="account-list__token-status"
+                 role="group"
+                 [attr.aria-label]="'Token status for ' + account.name">
+              @let status = statusOf(account);
+              @switch (status) {
+                @case ('present') {
+                  <span class="account-list__token-dot account-list__token-dot--present" aria-hidden="true"></span>
+                  <span class="account-list__token-label account-list__token-label--present">Configured</span>
+                }
+                @case ('absent') {
+                  <span class="account-list__token-dot account-list__token-dot--absent" aria-hidden="true"></span>
+                  <span class="account-list__token-label account-list__token-label--absent">Not configured</span>
+                }
+                @case ('unreadable') {
+                  <svg class="account-list__token-icon" width="16" height="16" viewBox="0 0 24 24"
+                       fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                       stroke-linejoin="round" aria-hidden="true">
+                    <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+                    <line x1="12" y1="9" x2="12" y2="13"></line>
+                    <line x1="12" y1="17" x2="12.01" y2="17"></line>
+                  </svg>
+                  <span class="account-list__token-label account-list__token-label--unreadable">
+                    Token unreadable
+                  </span>
+                  <button type="button"
+                          class="account-list__reenter-btn"
+                          [attr.aria-label]="'Re-enter token for ' + account.name"
+                          (click)="edit.emit(account)">Re-enter token</button>
+                }
+              }
             </div>
             <div class="account-list__actions">
               <fd-row-actions
@@ -112,4 +134,8 @@ export class AccountListComponent {
   readonly retry: OutputEmitterRef<void> = output<void>();
 
   protected readonly MAX_VISIBLE_NAMESPACES = MAX_VISIBLE_NAMESPACES;
+
+  protected statusOf(account: AccountSummary): TokenStatus {
+    return resolveTokenStatus(account);
+  }
 }

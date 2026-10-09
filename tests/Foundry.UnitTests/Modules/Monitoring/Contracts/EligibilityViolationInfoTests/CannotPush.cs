@@ -86,6 +86,31 @@ public sealed class CannotPush
     }
 
     [Fact]
+    public void CredentialUnreadableRule_IsConstant()
+    {
+        // Arrange
+
+        // Act
+        string rule = EligibilityViolationInfo.CredentialUnreadableRule;
+
+        // Assert
+        rule.ShouldBe("credential-unreadable");
+    }
+
+    [Fact]
+    public void CredentialUnreadableDescription_IsSentenceCaseAndPeriodTerminated()
+    {
+        // Arrange
+
+        // Act
+        string description = EligibilityViolationInfo.CredentialUnreadableDescription;
+
+        // Assert
+        description.ShouldBe(
+            "The account token can't be decrypted. Re-enter it on the account to resume.");
+    }
+
+    [Fact]
     public void NoCredentialDescription_IsSentenceCaseAndPeriodTerminated()
     {
         // Arrange

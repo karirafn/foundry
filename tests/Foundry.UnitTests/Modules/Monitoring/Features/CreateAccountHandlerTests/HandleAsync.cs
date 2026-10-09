@@ -852,6 +852,24 @@ public sealed class HandleAsync : IAsyncDisposable
         spy.WasCalled.ShouldBeFalse();
     }
 
+    [Fact]
+    public async Task WhenAccountCreatedWithToken_ReturnsTokenStatusPresent()
+    {
+        // Arrange
+        Namespace ns = Namespace.Create("octocat").ValueOrThrow();
+        ProviderRepository writableRepo = new("octocat/hello-world", IsPrivate: false, CanPush: true);
+        NamespaceDerivationOutcome outcome = new NamespaceDerivationOutcome.Derived([ns], [writableRepo]);
+        CreateAccount.Handler handler = BuildHandler(new StubNamespaceDeriver(outcome));
+        CreateAccount.Command command = new("github", "https://github.com", "ghp_test");
+
+        // Act
+        CreateAccount.Outcome result = await handler.HandleAsync(command, TestContext.Current.CancellationToken);
+
+        // Assert
+        CreateAccount.Outcome.Created created = result.ShouldBeOfType<CreateAccount.Outcome.Created>();
+        created.Value.Credential.TokenStatus.ShouldBe("present");
+    }
+
     private sealed class StubValidateTokenHandler
         : IQueryHandler<ValidateToken.Query, ValidateToken.Response>
     {

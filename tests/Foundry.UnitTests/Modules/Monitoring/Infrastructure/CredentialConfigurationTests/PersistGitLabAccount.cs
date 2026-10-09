@@ -3,6 +3,8 @@ using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Testing;
 using Foundry.WebApi.Persistence;
 
+using ProviderToken = Foundry.Modules.Monitoring.Domain.ValueObjects.ProviderToken;
+
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
@@ -60,7 +62,7 @@ public sealed class PersistGitLabAccount : IAsyncDisposable
         gitLab.ShouldSatisfyAllConditions(
             () => gitLab.Id.ShouldBe(credential.Id),
             () => gitLab.Name.ShouldBe("my-org"),
-            () => gitLab.Token.ShouldBe("glpat_mytoken"),
+            () => gitLab.Token.ShouldBe(new ProviderToken.Present("glpat_mytoken")),
             () => gitLab.BaseUrl.Value.ShouldBe(new Uri("https://gitlab.com")),
             () => gitLab.Host.ShouldBe("gitlab.com"));
     }

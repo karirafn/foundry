@@ -14,7 +14,13 @@ public abstract class Credential : AggregateRoot<CredentialId>
 
     public string Name { get; private protected set; } = string.Empty;
 
-    public string? Token { get; private protected set; }
+    public ProviderToken? Token { get; private protected set; }
+
+    /// <summary>
+    /// Returns the raw decrypted token string when <see cref="Token"/> is <see cref="ProviderToken.Present"/>;
+    /// returns <see langword="null"/> when the token is absent or unreadable.
+    /// </summary>
+    internal string? ReadableTokenValue => Token is ProviderToken.Present present ? present.Value : null;
 
     public BaseUrl BaseUrl { get; private protected set; } = null!;
 
@@ -53,6 +59,29 @@ public abstract class Credential : AggregateRoot<CredentialId>
             }
         }
     }
+
+    /// <summary>
+    /// Configures an already-constructed <paramref name="credential"/> to carry an
+    /// <see cref="ProviderToken.Unreadable"/> token. Intended for unit-test construction of the
+    /// <c>Unreadable</c> state only — the production path to <see cref="ProviderToken.Unreadable"/>
+    /// is EF materialization of garbage ciphertext, exercised by the integration test
+    /// <c>WhenAccountHasGarbageCiphertext</c> in
+    /// <c>tests/Foundry.IntegrationTests/Modules/Monitoring/Endpoints/GetAccountsTests/</c>.
+    /// </summary>
+    [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
+    protected static void ApplyUnreadableToken(Credential credential, string name, BaseUrl baseUrl)
+    {
+        credential.Name = name;
+        credential.Token = new ProviderToken.Unreadable();
+        credential.BaseUrl = baseUrl;
+        credential.Host = baseUrl.Value.Host;
+    }
+
+    /// <summary>
+    /// Returns <see langword="true"/> when this credential's token is <see cref="ProviderToken.Unreadable"/> —
+    /// the stored ciphertext could not be decrypted and the credential is treated as ineligible.
+    /// </summary>
+    public bool IsTokenUnreadable => Token is ProviderToken.Unreadable;
 
     internal bool Covers(RepositorySlug slug) => ResolveCoveringNamespace(slug) is not null;
 

@@ -2,10 +2,11 @@ using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
 
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 
 namespace Foundry.Modules.Monitoring.Features.CredentialResolution;
 
-internal sealed class CredentialResolver(DbContext db) : ICredentialResolver
+internal sealed class CredentialResolver(DbContext db, ILogger<CredentialResolver> logger) : ICredentialResolver
 {
     public async Task<Credential?> ResolveAsync(
         string host,
@@ -35,6 +36,11 @@ internal sealed class CredentialResolver(DbContext db) : ICredentialResolver
                 bestSegmentCount = covering.SegmentCount;
                 best = candidate;
             }
+        }
+
+        if (best is not null && best.IsTokenUnreadable)
+        {
+            logger.LogWarning(CredentialWarnings.UnreadableToken, best.Id.Value);
         }
 
         return best;

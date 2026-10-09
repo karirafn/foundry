@@ -46,7 +46,7 @@ public sealed class HandleAsyncDispatchPayload : IAsyncDisposable
 
         _dispatcher = new CapturingIntegrationEventDispatcher();
 
-        RepositoryDispatchQueries repositoryDispatchQueries = new(_dbContext, new CredentialResolver(_dbContext));
+        RepositoryDispatchQueries repositoryDispatchQueries = new(_dbContext, new CredentialResolver(_dbContext, NullLogger<CredentialResolver>.Instance));
         DispatchCandidateSelector selector = new(
             _dbContext,
             repositoryDispatchQueries,

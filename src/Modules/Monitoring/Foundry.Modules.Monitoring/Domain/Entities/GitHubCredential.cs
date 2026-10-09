@@ -28,10 +28,25 @@ public sealed class GitHubCredential : Credential
         return new GitHubCredential(CredentialId.New())
         {
             Name = name,
-            Token = token,
+            Token = token is not null ? new ProviderToken.Present(token) : null,
             BaseUrl = baseUrl,
             Host = baseUrl.Value.Host,
         };
+    }
+
+    /// <summary>
+    /// Constructs a <see cref="GitHubCredential"/> carrying an <see cref="ProviderToken.Unreadable"/>
+    /// token for unit-test purposes. The production path to <see cref="ProviderToken.Unreadable"/>
+    /// is EF materialization of garbage ciphertext, exercised by the integration test
+    /// <c>WhenAccountHasGarbageCiphertext</c> in
+    /// <c>tests/Foundry.IntegrationTests/Modules/Monitoring/Endpoints/GetAccountsTests/</c>.
+    /// </summary>
+    [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
+    internal static GitHubCredential CreateWithUnreadableToken(string name, BaseUrl baseUrl)
+    {
+        GitHubCredential credential = new(CredentialId.New());
+        ApplyUnreadableToken(credential, name, baseUrl);
+        return credential;
     }
 
     public void Update(string name, string? token, BaseUrl baseUrl)
@@ -42,7 +57,7 @@ public sealed class GitHubCredential : Credential
 
         if (token is not null)
         {
-            Token = token;
+            Token = new ProviderToken.Present(token);
         }
     }
 }

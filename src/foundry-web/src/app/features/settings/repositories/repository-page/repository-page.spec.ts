@@ -16,6 +16,7 @@ const ACCOUNT_1: AccountSummary = {
   providerType: 'GitHub',
   baseUrl: 'https://github.com',
   hasToken: true,
+  tokenStatus: 'present',
   namespaces: [],
 };
 
