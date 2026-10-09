@@ -212,7 +212,7 @@ Infrastructure-only settings (Docker image, mounts, memory/CPU/PID limits) remai
 ## Monitor
 
 The background process that polls configured repositories for issues labeled `foundry`.
-Runs on a fixed tick interval (30s default) and checks whether each repo is due for polling based on its configured poll interval and `LastPolledAt` timestamp.
+Runs on a fixed tick interval (30s default) and checks whether each repo is due for polling based on its poll interval (falling back to the global default when unset) and `LastPolledAt` timestamp.
 The per-cycle provider call cost is bounded by `RepositoryPoller.MaxFixedPollCallsPerCycle` (see [Provider Rate Budget](#provider-rate-budget)) and enforced by the poll-call invariance test.
 
 ## Issue
@@ -250,7 +250,7 @@ Used by `BranchName.Generate()` to derive the branch prefix (`feat/`, `fix/`, `r
 ## Monitored Repository
 
 A repository configured for Foundry to poll.
-Resolves its serving Account through the Namespace Claim on its owner (no stored account reference) and specifies an optional per-repo poll interval.
+Resolves its serving Account through the Namespace Claim on its owner (no stored account reference) and specifies an optional per-repo poll interval; when unset, the repo polls at the global `PollIntervalSeconds` from Global Settings.
 Uniquely identified by the pair (Host, Repository Slug) — the same repo on the same host cannot be monitored twice (prevents duplicate issue detection), while the same path on different hosts (e.g. github.com vs gitlab.com, or self-hosted instances) refers to distinct repositories.
 Tracks `LastPolledAt` for per-repo poll timing.
 Carries a Repository Eligibility status, re-evaluated on each poll cycle.
