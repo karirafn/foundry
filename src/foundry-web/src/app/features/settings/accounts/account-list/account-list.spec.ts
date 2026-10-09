@@ -172,14 +172,14 @@ describe('AccountListComponent', () => {
     expect(tokenLabel?.getAttribute('role')).toBeNull();
   });
 
-  it('should wrap the token-status area in role="group" with an account-scoped aria-label', () => {
+  it('should wrap the metadata strip in role="group" with an account-scoped aria-label', () => {
     // Arrange / Act
     const { el } = setup({ accounts: [MOCK_ACCOUNT] });
 
     // Assert
-    const group = el.querySelector('.account-list__token-status');
+    const group = el.querySelector('.account-list__strip');
     expect(group?.getAttribute('role')).toBe('group');
-    expect(group?.getAttribute('aria-label')).toBe('Token status for my-github');
+    expect(group?.getAttribute('aria-label')).toBe('Details for my-github');
   });
 
   it('should show "Not configured" label and absent dot for accounts with tokenStatus absent', () => {
@@ -193,17 +193,45 @@ describe('AccountListComponent', () => {
     expect(dot?.classList.contains('account-list__token-dot--absent')).toBe(true);
   });
 
-  it('should show "Token unreadable" label and warning icon for accounts with tokenStatus unreadable', () => {
+  it('should render the warning line for an unreadable token', () => {
     // Arrange / Act
     const { el } = setup({ accounts: [MOCK_ACCOUNT_UNREADABLE] });
 
     // Assert
-    const tokenLabel = el.querySelector('.account-list__token-label');
-    expect(tokenLabel?.textContent?.trim()).toBe('Token unreadable');
-    const icon = el.querySelector('.account-list__token-icon');
-    expect(icon).toBeTruthy();
+    const warningLine = el.querySelector('.account-list__token-warning');
+    expect(warningLine).toBeTruthy();
+    const reason = el.querySelector('.account-list__token-reason');
+    expect(reason).toBeTruthy();
+    expect(reason?.textContent).toContain('Token unreadable');
+  });
+
+  it('should include the warning icon svg for an unreadable token', () => {
+    // Arrange / Act
+    const { el } = setup({ accounts: [MOCK_ACCOUNT_UNREADABLE] });
+
+    // Assert
+    const reason = el.querySelector('.account-list__token-reason');
+    const svg = reason?.querySelector('svg');
+    expect(svg).toBeTruthy();
+  });
+
+  it('should not render a token dot for an unreadable token', () => {
+    // Arrange / Act
+    const { el } = setup({ accounts: [MOCK_ACCOUNT_UNREADABLE] });
+
+    // Assert
     const dot = el.querySelector('.account-list__token-dot');
     expect(dot).toBeNull();
+  });
+
+  it('should wrap the unreadable warning line in role="group" with an account-scoped aria-label', () => {
+    // Arrange / Act
+    const { el } = setup({ accounts: [MOCK_ACCOUNT_UNREADABLE] });
+
+    // Assert
+    const warningGroup = el.querySelector('.account-list__token-warning');
+    expect(warningGroup?.getAttribute('role')).toBe('group');
+    expect(warningGroup?.getAttribute('aria-label')).toBe('Token status for broken-gitlab');
   });
 
   it('should render the Re-enter token button for accounts with tokenStatus unreadable', () => {
@@ -424,8 +452,8 @@ describe('AccountListComponent', () => {
     expect(overflow?.getAttribute('aria-label')).toBe('2 more namespaces: ns5, ns6');
   });
 
-  // Cycle 18b: overflow chip title attribute mirrors aria-label for sighted hover
-  it('should set title on the overflow chip matching its aria-label', () => {
+  // Cycle 18b: overflow chip uses fdTooltip (not native title) for sighted hover
+  it('should have fdTooltip (not title) on the overflow chip', () => {
     // Arrange
     const account = { ...MOCK_ACCOUNT, namespaces: ['ns1', 'ns2', 'ns3', 'ns4', 'ns5', 'ns6'] };
 
@@ -434,7 +462,7 @@ describe('AccountListComponent', () => {
 
     // Assert
     const overflow = el.querySelector('.account-list__namespace--overflow') as HTMLElement;
-    expect(overflow?.getAttribute('title')).toBe('2 more namespaces: ns5, ns6');
+    expect(overflow?.hasAttribute('title')).toBe(false);
   });
 
   // Cycle 19: exactly 4 namespaces — no overflow chip
