@@ -1,10 +1,10 @@
 import { ChangeDetectionStrategy, Component, OutputEmitterRef, input, output } from '@angular/core';
-import { SpinnerComponent } from '../spinner/spinner';
+import { DeleteButtonComponent } from '../delete-button/delete-button';
 
 @Component({
   selector: 'fd-row-actions',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [SpinnerComponent],
+  imports: [DeleteButtonComponent],
   template: `
     <div class="row-actions">
       <button
@@ -31,37 +31,11 @@ import { SpinnerComponent } from '../spinner/spinner';
           <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
         </svg>
       </button>
-      <button
-        class="row-actions__delete-btn"
-        type="button"
-        [attr.aria-label]="deleteLabel()"
-        [attr.title]="deleteLabel()"
-        [attr.aria-disabled]="deleteBusy() ? 'true' : null"
-        (click)="onDeleteClick()"
-      >
-        @if (deleteBusy()) {
-          <fd-spinner />
-        } @else {
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            width="14"
-            height="14"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            aria-hidden="true"
-          >
-            <polyline points="3 6 5 6 21 6" />
-            <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
-            <path d="M10 11v6" />
-            <path d="M14 11v6" />
-            <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
-          </svg>
-        }
-      </button>
+      <fd-delete-button
+        [deleteLabel]="deleteLabel()"
+        [deleteBusy]="deleteBusy()"
+        (delete)="delete.emit()"
+      />
     </div>
   `,
   styleUrl: './row-actions.scss',
@@ -79,12 +53,5 @@ export class RowActionsComponent {
       return;
     }
     this.edit.emit();
-  }
-
-  protected onDeleteClick(): void {
-    if (this.deleteBusy()) {
-      return;
-    }
-    this.delete.emit();
   }
 }
