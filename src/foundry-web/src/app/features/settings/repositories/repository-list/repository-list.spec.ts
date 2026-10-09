@@ -1283,6 +1283,21 @@ describe('RepositoryListComponent', () => {
     expect(icon?.getAttribute('aria-label')).toBe('GitLab');
   });
 
+  it('should have role="img" on the interval, last-polled, and max-workers chips', () => {
+    // Arrange
+
+    // Act
+    const { el } = setup({ repositories: [MOCK_REPO] });
+
+    // Assert
+    const intervalChip = el.querySelector('.repository-list__chip--interval');
+    const lastPolledChip = el.querySelector('.repository-list__chip--last-polled');
+    const maxWorkersChip = el.querySelector('.repository-list__chip--max-workers');
+    expect(intervalChip?.getAttribute('role')).toBe('img');
+    expect(lastPolledChip?.getAttribute('role')).toBe('img');
+    expect(maxWorkersChip?.getAttribute('role')).toBe('img');
+  });
+
   it('should render a row for each repository', () => {
     // Arrange
 

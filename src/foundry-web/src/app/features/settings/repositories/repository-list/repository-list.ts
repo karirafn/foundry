@@ -190,6 +190,7 @@ import { unreachableExplanation, rateLimitTooltip } from '../repository-eligibil
               <!-- Interval chip -->
               <span
                 class="repository-list__chip repository-list__chip--interval"
+                role="img"
                 tabindex="0"
                 [attr.aria-label]="intervalTooltip(repo)"
                 [fdTooltip]="intervalTooltip(repo)"
@@ -206,6 +207,7 @@ import { unreachableExplanation, rateLimitTooltip } from '../repository-eligibil
               <!-- Last-polled chip -->
               <span
                 class="repository-list__chip repository-list__chip--last-polled"
+                role="img"
                 tabindex="0"
                 [attr.aria-label]="lastPolledTooltip(repo)"
                 [fdTooltip]="lastPolledTooltip(repo)"
@@ -220,6 +222,7 @@ import { unreachableExplanation, rateLimitTooltip } from '../repository-eligibil
               <!-- Max-workers chip -->
               <span
                 class="repository-list__chip repository-list__chip--max-workers"
+                role="img"
                 tabindex="0"
                 [attr.aria-label]="maxWorkersTooltip(repo)"
                 [fdTooltip]="maxWorkersTooltip(repo)"
