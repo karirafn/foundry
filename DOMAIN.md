@@ -300,10 +300,15 @@ The comparison primitive is the four-tuple `DispatchOrderKey` — `(TierRank, Po
 - **DetectedAt** — oldest first within the same repository and tier.
 - **Id** — guarantees a deterministic total order when all other fields are equal.
 
-The single shared artifact consumed by both the dispatcher and the dashboard is a **capacity-aware ordering** over this key (`CapacityAwareDispatchOrder`): a multi-pass walk over the `DispatchOrderKey`-sorted sequence that carries each repository's remaining headroom (`headroom = max(0, MaxConcurrentWorkers − inFlightCount)`).
+The single shared artifact consumed by both the dispatcher and the dashboard is a **capacity-aware ordering** over this key (`CapacityAwareDispatchOrder`): a multi-pass walk over the `DispatchOrderKey`-sorted sequence that carries each repository's remaining headroom.
 An issue whose repository has remaining headroom takes the next place and decrements the headroom; an issue whose repository is at its [Repository Worker Limit](#repository-worker-limit) defers to a subsequent pass.
 The selector (`DispatchCandidateSelector`) takes the claimable head of this sequence; the dashboard query renders the sequence and derives Queue Position by index.
-The two cannot disagree about order at the moment the list is served — the same function produces both results.
+The two consumers feed the walk different headroom inputs via the `DispatchHeadroom` value object:
+
+- The selector uses **claim headroom** (`DispatchHeadroom.ForClaim`): `max(0, MaxConcurrentWorkers − inFlight)` — headroom as it actually is right now.
+- The dashboard query uses **forecast headroom** (`DispatchHeadroom.ForForecast`): under **global saturation** (total in-flight across all repositories ≥ the global `MaxConcurrent`), every repository with an in-flight run gets `max(0, MaxConcurrentWorkers − (inFlight − 1))`, modelling the one running worker whose completion opens the next global slot; repositories with no in-flight run keep their full `MaxConcurrentWorkers`. Below global saturation forecast equals claim, so ordering is unchanged.
+
+The two cannot disagree about order at the moment the list is served — the same walk function produces both results.
 
 The dashboard treats the server array order as the only source of queue order and reconciles it by refetching `GET /api/issues`, rather than deriving order locally or receiving a pushed order (see [ADR 0067](docs/adr/0067-dashboard-reconciles-queue-order-rather-than-deriving-it.md)).
 Every `IssueUpdated` event schedules a debounced reconcile (300 ms) alongside the counts refetch that already runs on that path, collapsing a burst of events into one request.
@@ -321,6 +326,8 @@ A queued issue's 1-based index in the capacity-aware ordering (see [Dispatch Ord
 Queue Position is derived from the rendered dispatchable-queued array on the dashboard (see [ADR 0067](docs/adr/0067-dashboard-reconciles-queue-order-rather-than-deriving-it.md)).
 It is never persisted and never transported from the server; the ordinal indexes the very array the cards are rendered from, so it cannot disagree with the on-screen sequence.
 Because the capacity-aware ordering is the shared artifact, Queue Position reflects what the dispatcher will actually claim next under saturation — a queued issue that belongs to a saturated repository defers in the ordering (and therefore in position) until headroom opens, even though its repository is eligible.
+Under **global saturation**, Queue Position 1 forecasts the repository whose in-flight worker's completion opens the next global slot, keeping **Next up** truthful against the dispatcher's actual next claim.
+Without this forecast, an idle repository's issue would appear at Position 1 while the dispatcher actually claims from the repository whose worker just finished.
 
 Not-dispatchable queued issues — those whose repository is ineligible or unreachable — have no Queue Position and their card gutter shows `—`.
 A queued issue belonging to a repository at its [Repository Worker Limit](#repository-worker-limit) still has a Queue Position — its repository is eligible; only the position reflects the deferral.

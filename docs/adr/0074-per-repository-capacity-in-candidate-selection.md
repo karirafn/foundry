@@ -1,5 +1,7 @@
 # Per-Repository Capacity Is Enforced in Candidate Selection
 
+> **2026-10-14 — Amended:** the Decision's description of the headroom the capacity-aware walk carries is qualified by [#569](https://github.com/karirafn/foundry/issues/569). The walk remains the single shared artifact, but its two consumers now feed it different headroom inputs under global saturation: the dashboard query consumes `DispatchHeadroom.ForForecast` (assuming one in-flight worker per repository finishes, so `Next up` matches the dispatcher's actual next claim) while the selector consumes `DispatchHeadroom.ForClaim` (headroom as it is now). No `superseded-by` — only this clause is amended.
+
 ## Context
 
 A monitored repository must be limited to a small number of concurrent workers (default 1) so one repository cannot hold every global slot. The obvious home for that check is the dispatch gate in `WorkerDispatchService.cs:143-153`, beside the global `MaxConcurrent` check — but the gate cannot see a repository. Dispatch capacity is published as an anonymous token: `WorkerCapacityAvailable` carries only a `WorkerRunId` (`WorkerCapacityAvailable.cs:5`), and which repository spends that token is decided afterwards, in the Issues module, by `DispatchCandidateSelector`. Of the three slot-occupying states, only `ActiveRun` carries a `MonitoredRepositoryId`; `DispatchReservation` and `StartingRun` do not.
