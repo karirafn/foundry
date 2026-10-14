@@ -19,8 +19,13 @@ public sealed class Order
 {
     private static readonly MonitoredRepositoryId RepoA = MonitoredRepositoryId.New();
     private static readonly MonitoredRepositoryId RepoB = MonitoredRepositoryId.New();
+    private static readonly MonitoredRepositoryId RepoC = MonitoredRepositoryId.New();
 
     private static readonly DateTimeOffset BaseTime = new(2025, 1, 1, 0, 0, 0, TimeSpan.Zero);
+
+    // Arbitrary MaxConcurrentWorkers ceiling used by HeadroomOf to invert headroom → inFlight.
+    // Large enough that all test headroom values (0, 1, 2) stay in range.
+    private const int HeadroomCeiling = 10;
 
     private static FreshQueuedIssue MakeIssue(
         MonitoredRepositoryId repoId,
@@ -33,9 +38,24 @@ public sealed class Order
             .WithDetectedAt(detectedAt ?? BaseTime)
             .FreshQueued();
 
-    private static Dictionary<MonitoredRepositoryId, int> HeadroomOf(
-        params (MonitoredRepositoryId Id, int Headroom)[] entries) =>
-        entries.ToDictionary(e => e.Id, e => e.Headroom);
+    /// <summary>
+    /// Builds a <see cref="DispatchHeadroom"/> for the given per-repo headroom values by driving
+    /// through the real <see cref="DispatchHeadroom.ForClaim"/> factory. Inverts each headroom
+    /// value to derive an in-flight count: <c>inFlight = HeadroomCeiling − headroom</c>, so
+    /// <c>ForClaim = max(0, HeadroomCeiling − inFlight) = headroom</c>.
+    /// </summary>
+    private static DispatchHeadroom HeadroomOf(params (MonitoredRepositoryId Id, int Headroom)[] entries)
+    {
+        IReadOnlyList<EligibleRepository> repos = entries
+            .Select(e => new EligibleRepository(e.Id.Value, Position: 0, MaxConcurrentWorkers: HeadroomCeiling))
+            .ToList();
+
+        Dictionary<MonitoredRepositoryId, int> inFlight = entries
+            .Where(e => e.Headroom < HeadroomCeiling)
+            .ToDictionary(e => e.Id, e => HeadroomCeiling - e.Headroom);
+
+        return DispatchHeadroom.ForClaim(repos, inFlight);
+    }
 
     private static int PositionOf(MonitoredRepositoryId repoId, IReadOnlyList<EligibleRepository> eligibleRepos)
     {
@@ -57,7 +77,7 @@ public sealed class Order
         [
             (issue, DispatchOrderKey.For(issue, PositionOf(RepoA, eligibleRepos))),
         ];
-        Dictionary<MonitoredRepositoryId, int> headroom = HeadroomOf((RepoA, 1));
+        DispatchHeadroom headroom = HeadroomOf((RepoA, 1));
 
         // Act
         IReadOnlyList<QueuedIssue> ordered = CapacityAwareDispatchOrder.Order(keyedIssues, headroom);
@@ -81,7 +101,7 @@ public sealed class Order
         [
             (issue, DispatchOrderKey.For(issue, PositionOf(RepoA, eligibleRepos))),
         ];
-        Dictionary<MonitoredRepositoryId, int> headroom = HeadroomOf((RepoA, 0));
+        DispatchHeadroom headroom = HeadroomOf((RepoA, 0));
 
         // Act
         IReadOnlyList<QueuedIssue> ordered = CapacityAwareDispatchOrder.Order(keyedIssues, headroom);
@@ -109,7 +129,7 @@ public sealed class Order
             (issueA, DispatchOrderKey.For(issueA, 0)),
             (issueB, DispatchOrderKey.For(issueB, 1)),
         ];
-        Dictionary<MonitoredRepositoryId, int> headroom = HeadroomOf((RepoA, 1), (RepoB, 1));
+        DispatchHeadroom headroom = HeadroomOf((RepoA, 1), (RepoB, 1));
 
         // Act
         IReadOnlyList<QueuedIssue> ordered = CapacityAwareDispatchOrder.Order(keyedIssues, headroom);
@@ -133,7 +153,7 @@ public sealed class Order
             (issueA, DispatchOrderKey.For(issueA, 0)),
             (issueB, DispatchOrderKey.For(issueB, 1)),
         ];
-        Dictionary<MonitoredRepositoryId, int> headroom = HeadroomOf((RepoA, 0), (RepoB, 1));
+        DispatchHeadroom headroom = HeadroomOf((RepoA, 0), (RepoB, 1));
 
         // Act
         IReadOnlyList<QueuedIssue> ordered = CapacityAwareDispatchOrder.Order(keyedIssues, headroom);
@@ -164,7 +184,7 @@ public sealed class Order
             (issueA2, DispatchOrderKey.For(issueA2, 0)),
             (issueB, DispatchOrderKey.For(issueB, 0)),
         ];
-        Dictionary<MonitoredRepositoryId, int> headroom = HeadroomOf((RepoA, 2), (RepoB, 1));
+        DispatchHeadroom headroom = HeadroomOf((RepoA, 2), (RepoB, 1));
 
         // Act
         IReadOnlyList<QueuedIssue> ordered = CapacityAwareDispatchOrder.Order(keyedIssues, headroom);
@@ -196,7 +216,7 @@ public sealed class Order
             (issueB1, DispatchOrderKey.For(issueB1, 1)),
             (issueB2, DispatchOrderKey.For(issueB2, 1)),
         ];
-        Dictionary<MonitoredRepositoryId, int> headroom = HeadroomOf((RepoA, 1), (RepoB, 1));
+        DispatchHeadroom headroom = HeadroomOf((RepoA, 1), (RepoB, 1));
 
         // Act
         IReadOnlyList<QueuedIssue> ordered = CapacityAwareDispatchOrder.Order(keyedIssues, headroom);
@@ -214,12 +234,63 @@ public sealed class Order
     {
         // Arrange
         List<(QueuedIssue Issue, DispatchOrderKey Key)> keyedIssues = [];
-        Dictionary<MonitoredRepositoryId, int> headroom = [];
+        DispatchHeadroom headroom = DispatchHeadroom.ForClaim([], new Dictionary<MonitoredRepositoryId, int>());
 
         // Act
         IReadOnlyList<QueuedIssue> ordered = CapacityAwareDispatchOrder.Order(keyedIssues, headroom);
 
         // Assert
         ordered.ShouldBeEmpty();
+    }
+
+    // Cycle 8 (global>1 criterion): global=2, RepoA and RepoB each have 1 in-flight issue
+    // (forecast headroom 1 each), RepoC is idle (headroom = its limit).
+    // RepoA has an earlier-keyed queued issue than RepoC — RepoA's issue must be placed first.
+    // Proves that an idle repo (C) does not jump ahead of an in-flight repo (A) that has
+    // a queued issue with a lower DispatchOrderKey, under global saturation with global>1.
+    [Fact]
+    public void WhenGlobalTwoAndTwoReposInFlight_IdleRepoDoesNotJumpAheadOfEarlierKeyedIssue()
+    {
+        // Arrange
+        // RepoA: 1 in-flight, limit 1 → forecast headroom = max(0, 1 - (1-1)) = 1.
+        //   Issue in RepoA detected at BaseTime (lowest key → placed first).
+        // RepoB: 1 in-flight, limit 1 → forecast headroom = max(0, 1 - (1-1)) = 1.
+        //   Issue in RepoB detected at BaseTime+1s.
+        // RepoC: idle, limit 2 → forecast headroom = 2 (full limit).
+        //   Issue in RepoC detected at BaseTime+2s (later key than A and B).
+        // global=2, sum(inFlight) = 2 >= globalMax → saturation applies.
+        FreshQueuedIssue issueA = MakeIssue(RepoA, issueNumber: 1, detectedAt: BaseTime);
+        FreshQueuedIssue issueB = MakeIssue(RepoB, issueNumber: 2, detectedAt: BaseTime.AddSeconds(1));
+        FreshQueuedIssue issueC = MakeIssue(RepoC, issueNumber: 3, detectedAt: BaseTime.AddSeconds(2));
+
+        IReadOnlyList<EligibleRepository> repos =
+        [
+            new EligibleRepository(RepoA.Value, Position: 0, MaxConcurrentWorkers: 1),
+            new EligibleRepository(RepoB.Value, Position: 0, MaxConcurrentWorkers: 1),
+            new EligibleRepository(RepoC.Value, Position: 0, MaxConcurrentWorkers: 2),
+        ];
+
+        Dictionary<MonitoredRepositoryId, int> inFlight = new()
+        {
+            [RepoA] = 1,
+            [RepoB] = 1,
+        };
+
+        DispatchHeadroom headroom = DispatchHeadroom.ForForecast(repos, inFlight, globalMax: 2);
+
+        List<(QueuedIssue Issue, DispatchOrderKey Key)> keyedIssues =
+        [
+            (issueA, DispatchOrderKey.For(issueA, 0)),
+            (issueB, DispatchOrderKey.For(issueB, 0)),
+            (issueC, DispatchOrderKey.For(issueC, 0)),
+        ];
+
+        // Act
+        IReadOnlyList<QueuedIssue> ordered = CapacityAwareDispatchOrder.Order(keyedIssues, headroom);
+
+        // Assert — A's issue (earliest key) is at index 0; C's issue must NOT be first.
+        ordered.Count.ShouldBe(3);
+        ordered[0].Id.ShouldBe(issueA.Id);
+        ordered[0].Id.ShouldNotBe(issueC.Id);
     }
 }

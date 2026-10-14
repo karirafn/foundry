@@ -589,18 +589,11 @@ internal sealed class IssueQueries(
                 Position: pos))
             .ToList();
 
-        // Build headroom map: headroom = max(0, MaxConcurrentWorkers − inFlightCount).
-        // Repositories absent from the eligibility list (ineligible) contribute no headroom
-        // and are excluded — their issues go into the ineligibleQueued partition.
-        Dictionary<MonitoredRepositoryId, int> headroomByRepo = eligibleRepositories
-            .Select(r => (Id: MonitoredRepositoryId.From(r.Id), r.MaxConcurrentWorkers))
-            .ToDictionary(
-                t => t.Id,
-                t =>
-                {
-                    inFlightCounts.TryGetValue(t.Id, out int inFlight);
-                    return Math.Max(0, t.MaxConcurrentWorkers - inFlight);
-                });
+        // Build headroom: claim headroom = max(0, MaxConcurrentWorkers − inFlightCount) per repo.
+        // Repositories absent from the eligibility list contribute no headroom and are excluded —
+        // their issues go into the ineligibleQueued partition.
+        // NOTE: step 4 will replace ForClaim with ForForecast once IGlobalSettingsQueries is injected.
+        DispatchHeadroom headroom = DispatchHeadroom.ForClaim(eligibleRepositories, inFlightCounts);
 
         // Eligible-repo queued issues: capacity-aware order via the shared helper so the
         // dashboard sequence matches the dispatcher exactly (ADR 0074, 0025, 0067).
@@ -613,7 +606,7 @@ internal sealed class IssueQueries(
             .Select(t => (t.Issue, DispatchOrderKey.For(t.Issue, t.Position)))
             .ToList();
 
-        IReadOnlyList<QueuedIssue> placed = CapacityAwareDispatchOrder.Order(eligibleKeyedIssues, headroomByRepo);
+        IReadOnlyList<QueuedIssue> placed = CapacityAwareDispatchOrder.Order(eligibleKeyedIssues, headroom);
 
         HashSet<IssueId> placedIds = placed
             .Select(i => i.Id)
