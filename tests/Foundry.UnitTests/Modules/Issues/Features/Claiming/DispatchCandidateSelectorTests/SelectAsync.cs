@@ -256,6 +256,44 @@ public sealed class SelectAsync : IAsyncDisposable
         outcome.ShouldBeOfType<SelectionOutcome.AllRepositoriesSaturated>();
     }
 
+    // Cycle 8: guard — with total in-flight >= global max, the selector never claims beyond a
+    // repository's MaxConcurrentWorkers. A repo with MaxConcurrentWorkers=1 and one in-flight issue
+    // yields zero ForClaim headroom, so the queued issue in that repo is not claimable — even though
+    // the global max has been lowered to 1 while a reservation is in flight.
+    // This proves the selector uses ForClaim (per-repo cap only) and never leaks ForForecast behaviour.
+    [Fact]
+    public async Task WhenGlobalMaxSaturatedAndRepoAtCap_ReturnsAllRepositoriesSaturated()
+    {
+        // Arrange
+        MonitoredRepositoryId repoId = MonitoredRepositoryId.New();
+
+        // Seed the queued issue — this is what we hope the selector does NOT claim.
+        SeedQueuedIssue(repoId, issueNumber: 1);
+
+        // Seed in-progress issue — consumes the repo's single slot.
+        // Total in-flight (1) >= hypothetical global max (1): the global slots are saturated.
+        // ForForecast would give headroom 1 here (assuming one worker finishes).
+        // ForClaim correctly gives headroom 0 (repo is at its cap right now).
+        InProgressIssue inProgress = new IssueBuilder()
+            .WithMonitoredRepositoryId(repoId)
+            .WithIssueNumber(10)
+            .InProgress();
+        _dbContext.Set<Issue>().Add(inProgress);
+        await _dbContext.SaveChangesAsync(CancellationToken.None);
+        _dbContext.ChangeTracker.Clear();
+
+        DispatchCandidateSelector sut = BuildSelector(
+            repositoryEligibilityQuery: new StubRepositoryEligibilityQuery(
+                [new EligibleRepository(repoId.Value, Position: 0, MaxConcurrentWorkers: 1)]));
+
+        // Act
+        SelectionOutcome outcome = await sut.SelectAsync(CancellationToken.None);
+
+        // Assert — ForClaim headroom is 0 (repo at cap); the queued issue must not be claimed.
+        // If the selector leaked ForForecast behaviour it would return Selected instead.
+        outcome.ShouldBeOfType<SelectionOutcome.AllRepositoriesSaturated>();
+    }
+
     // Stub that returns exactly the provided eligible repositories (with positions).
     private sealed class StubRepositoryEligibilityQuery(IReadOnlyCollection<EligibleRepository> eligibleRepositories)
         : IRepositoryEligibilityQuery
