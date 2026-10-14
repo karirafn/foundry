@@ -50,7 +50,8 @@ public sealed class GetIssueDetailAsync : IAsyncDisposable
             _slugQueries,
             new NullRepositoryEligibilityQuery(),
             new NullWorkerRunQueries(),
-            new InFlightWorkerCountQuery(_dbContext));
+            new InFlightWorkerCountQuery(_dbContext),
+            new NullGlobalSettingsQueries());
     }
 
     async ValueTask IAsyncDisposable.DisposeAsync()
@@ -395,7 +396,8 @@ public sealed class GetIssueDetailAsync : IAsyncDisposable
             _slugQueries,
             new NullRepositoryEligibilityQuery(),
             stubRunQueries,
-            new InFlightWorkerCountQuery(_dbContext));
+            new InFlightWorkerCountQuery(_dbContext),
+            new NullGlobalSettingsQueries());
 
         // Act
         Result<IssueDetail> result = await sut.GetIssueDetailAsync(
@@ -440,7 +442,8 @@ public sealed class GetIssueDetailAsync : IAsyncDisposable
             _slugQueries,
             new NullRepositoryEligibilityQuery(),
             stubRunQueries,
-            new InFlightWorkerCountQuery(_dbContext));
+            new InFlightWorkerCountQuery(_dbContext),
+            new NullGlobalSettingsQueries());
 
         // Act
         Result<IssueDetail> result = await sut.GetIssueDetailAsync(
@@ -483,7 +486,8 @@ public sealed class GetIssueDetailAsync : IAsyncDisposable
             _slugQueries,
             new NullRepositoryEligibilityQuery(),
             stubRunQueries,
-            new InFlightWorkerCountQuery(_dbContext));
+            new InFlightWorkerCountQuery(_dbContext),
+            new NullGlobalSettingsQueries());
 
         // Act
         Result<IssueDetail> result = await sut.GetIssueDetailAsync(
@@ -524,7 +528,8 @@ public sealed class GetIssueDetailAsync : IAsyncDisposable
             _slugQueries,
             new NullRepositoryEligibilityQuery(),
             stubRunQueries,
-            new InFlightWorkerCountQuery(_dbContext));
+            new InFlightWorkerCountQuery(_dbContext),
+            new NullGlobalSettingsQueries());
 
         // Act
         Result<IssueDetail> result = await sut.GetIssueDetailAsync(
@@ -569,7 +574,8 @@ public sealed class GetIssueDetailAsync : IAsyncDisposable
             _slugQueries,
             new NullRepositoryEligibilityQuery(),
             new NullWorkerRunQueries(consecutiveTransientRuns: 0),
-            new InFlightWorkerCountQuery(_dbContext));
+            new InFlightWorkerCountQuery(_dbContext),
+            new NullGlobalSettingsQueries());
 
         // Act
         Result<IssueDetail> result = await sut.GetIssueDetailAsync(
@@ -609,7 +615,8 @@ public sealed class GetIssueDetailAsync : IAsyncDisposable
             _slugQueries,
             new NullRepositoryEligibilityQuery(),
             stubRunQueries,
-            new InFlightWorkerCountQuery(_dbContext));
+            new InFlightWorkerCountQuery(_dbContext),
+            new NullGlobalSettingsQueries());
 
         // Act
         Result<IssueDetail> result = await sut.GetIssueDetailAsync(

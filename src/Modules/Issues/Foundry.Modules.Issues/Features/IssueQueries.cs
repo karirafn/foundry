@@ -9,6 +9,7 @@ using Foundry.Modules.Issues.Features.StateChanges;
 using Foundry.Modules.Issues.Features.TransientRetry;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Contracts.Queries;
+using Foundry.Modules.Settings.Contracts.Queries;
 using Foundry.Modules.Workers.Contracts;
 using Foundry.Modules.Workers.Contracts.Queries;
 using Foundry.Shared;
@@ -22,7 +23,8 @@ internal sealed class IssueQueries(
     IRepositorySlugQueries slugQueries,
     IRepositoryEligibilityQuery eligibilityQuery,
     IWorkerRunQueries workerRunQueries,
-    InFlightWorkerCountQuery inFlightWorkerCountQuery) : IIssueQueries
+    InFlightWorkerCountQuery inFlightWorkerCountQuery,
+    IGlobalSettingsQueries globalSettingsQueries) : IIssueQueries
 {
     public async Task<IReadOnlySet<int>> GetKnownIssueNumbersAsync(
         MonitoredRepositoryId repositoryId,
@@ -589,11 +591,13 @@ internal sealed class IssueQueries(
                 Position: pos))
             .ToList();
 
-        // Build headroom: claim headroom = max(0, MaxConcurrentWorkers − inFlightCount) per repo.
-        // Repositories absent from the eligibility list contribute no headroom and are excluded —
-        // their issues go into the ineligibleQueued partition.
-        // NOTE: step 4 will replace ForClaim with ForForecast once IGlobalSettingsQueries is injected.
-        DispatchHeadroom headroom = DispatchHeadroom.ForClaim(eligibleRepositories, inFlightCounts);
+        int globalMax = await globalSettingsQueries.GetMaxConcurrentAsync(cancellationToken);
+
+        // Build forecast headroom: under global saturation each in-flight repo is assumed to
+        // finish one worker, opening the next global slot. Below saturation this equals claim
+        // headroom. Repositories absent from the eligibility list contribute no headroom and are
+        // excluded — their issues go into the ineligibleQueued partition.
+        DispatchHeadroom headroom = DispatchHeadroom.ForForecast(eligibleRepositories, inFlightCounts, globalMax);
 
         // Eligible-repo queued issues: capacity-aware order via the shared helper so the
         // dashboard sequence matches the dispatcher exactly (ADR 0074, 0025, 0067).
