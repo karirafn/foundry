@@ -5,8 +5,8 @@ namespace Foundry.Testing;
 
 /// <summary>
 /// Null implementation of <see cref="IGlobalSettingsQueries"/> for unit tests that do not
-/// exercise global-settings-dependent logic. Returns safe defaults: max concurrent = 1,
-/// all other values zero or empty.
+/// exercise global-settings-dependent logic. Returns safe defaults: max concurrent =
+/// <see cref="int.MaxValue"/> (no global cap), all other values zero or empty.
 /// </summary>
 public sealed class NullGlobalSettingsQueries : IGlobalSettingsQueries
 {
@@ -14,7 +14,7 @@ public sealed class NullGlobalSettingsQueries : IGlobalSettingsQueries
         => Task.FromResult<GlobalSettingsSummary?>(null);
 
     public Task<int> GetMaxConcurrentAsync(CancellationToken cancellationToken)
-        => Task.FromResult(1);
+        => Task.FromResult(int.MaxValue);
 
     public Task<int> GetTimeoutMinutesAsync(CancellationToken cancellationToken)
         => Task.FromResult(0);

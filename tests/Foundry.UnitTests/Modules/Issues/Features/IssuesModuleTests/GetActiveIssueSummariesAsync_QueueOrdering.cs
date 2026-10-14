@@ -5,6 +5,7 @@ using Foundry.Modules.Issues.Features;
 using Foundry.Modules.Issues.Features.Claiming;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Contracts.Queries;
+using Foundry.Modules.Settings.Contracts.Queries;
 using Foundry.Modules.Workers.Contracts;
 using Foundry.Testing;
 using Foundry.WebApi.Persistence;
@@ -50,13 +51,16 @@ public sealed class GetActiveIssueSummariesAsync_QueueOrdering : IAsyncDisposabl
     }
 
     private IIssueQueries BuildSut(IRepositoryEligibilityQuery eligibilityQuery) =>
+        BuildSut(eligibilityQuery, new NullGlobalSettingsQueries());
+
+    private IIssueQueries BuildSut(IRepositoryEligibilityQuery eligibilityQuery, IGlobalSettingsQueries globalSettingsQueries) =>
         new IssueQueries(
             _dbContext,
             new NullRepositorySlugQueries(),
             eligibilityQuery,
             new NullWorkerRunQueries(),
             new InFlightWorkerCountQuery(_dbContext),
-            new NullGlobalSettingsQueries());
+            globalSettingsQueries);
 
     private FreshQueuedIssue SeedQueuedIssue(
         MonitoredRepositoryId repositoryId,
@@ -486,7 +490,8 @@ public sealed class GetActiveIssueSummariesAsync_QueueOrdering : IAsyncDisposabl
             ],
             new Dictionary<Guid, string>());
 
-        IIssueQueries sut = BuildSut(eligibilityQuery);
+        // Explicit cap of 1 so that total in-flight (1) >= globalMax (1) triggers ForForecast saturation.
+        IIssueQueries sut = BuildSut(eligibilityQuery, new FixedCapGlobalSettingsQueries(maxConcurrent: 1));
 
         // Act
         IReadOnlyList<IssueSummary> result = await sut.GetActiveIssueSummariesAsync(

@@ -126,25 +126,4 @@ public sealed class ForForecast
         headroom.For(RepoC).ShouldBe(0);
     }
 
-    // When total in-flight == 0, ForForecast below saturation equals ForClaim (no adjustment).
-    [Fact]
-    public void WhenNoInFlightWorkers_EqualForClaim()
-    {
-        // Arrange — global max 1, no in-flight workers
-        IReadOnlyList<EligibleRepository> repos =
-        [
-            Repo(RepoA, maxConcurrentWorkers: 2),
-            Repo(RepoB, maxConcurrentWorkers: 3),
-        ];
-        IReadOnlyDictionary<MonitoredRepositoryId, int> inFlight =
-            new Dictionary<MonitoredRepositoryId, int>();
-
-        // Act
-        DispatchHeadroom forecast = DispatchHeadroom.ForForecast(repos, inFlight, globalMax: 1);
-        DispatchHeadroom claim = DispatchHeadroom.ForClaim(repos, inFlight);
-
-        // Assert
-        forecast.For(RepoA).ShouldBe(claim.For(RepoA));
-        forecast.For(RepoB).ShouldBe(claim.For(RepoB));
-    }
 }

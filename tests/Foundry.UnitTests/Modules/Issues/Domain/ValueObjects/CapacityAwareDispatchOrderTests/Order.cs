@@ -288,9 +288,8 @@ public sealed class Order
         // Act
         IReadOnlyList<QueuedIssue> ordered = CapacityAwareDispatchOrder.Order(keyedIssues, headroom);
 
-        // Assert — A's issue (earliest key) is at index 0; C's issue must NOT be first.
+        // Assert — A's issue (earliest key) is at index 0.
         ordered.Count.ShouldBe(3);
         ordered[0].Id.ShouldBe(issueA.Id);
-        ordered[0].Id.ShouldNotBe(issueC.Id);
     }
 }

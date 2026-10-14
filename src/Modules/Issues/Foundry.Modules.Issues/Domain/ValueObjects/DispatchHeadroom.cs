@@ -22,12 +22,13 @@ internal sealed class DispatchHeadroom
     /// Remaining slots for <paramref name="repositoryId"/>; 0 when absent (matches
     /// <c>InFlightWorkerCountQuery</c> absent-means-zero semantics).
     /// </summary>
-    public int For(MonitoredRepositoryId repositoryId) =>
+    internal int For(MonitoredRepositoryId repositoryId) =>
         _byRepo.TryGetValue(repositoryId, out int slots) ? slots : 0;
 
     /// <summary>
-    /// Returns a mutable working copy of the backing dictionary. The walk decrements this
-    /// copy — the value object's own dictionary is never mutated.
+    /// Exposes the immutable backing dictionary. Callers that need a mutable working copy
+    /// must wrap it: <c>new Dictionary&lt;MonitoredRepositoryId, int&gt;(Snapshot)</c> —
+    /// as <see cref="CapacityAwareDispatchOrder"/> does.
     /// </summary>
     internal IReadOnlyDictionary<MonitoredRepositoryId, int> Snapshot => _byRepo;
 
@@ -36,7 +37,7 @@ internal sealed class DispatchHeadroom
     /// Repositories absent from <paramref name="inFlightByRepo"/> are treated as having 0
     /// in-flight workers (absent-means-zero, matching <c>InFlightWorkerCountQuery</c>).
     /// </summary>
-    public static DispatchHeadroom ForClaim(
+    internal static DispatchHeadroom ForClaim(
         IReadOnlyList<EligibleRepository> repositories,
         IReadOnlyDictionary<MonitoredRepositoryId, int> inFlightByRepo)
     {
@@ -60,7 +61,7 @@ internal sealed class DispatchHeadroom
     /// keep their full <c>MaxConcurrentWorkers</c>. Below saturation, returns the same
     /// result as <see cref="ForClaim"/>.
     /// </summary>
-    public static DispatchHeadroom ForForecast(
+    internal static DispatchHeadroom ForForecast(
         IReadOnlyList<EligibleRepository> repositories,
         IReadOnlyDictionary<MonitoredRepositoryId, int> inFlightByRepo,
         int globalMax)
