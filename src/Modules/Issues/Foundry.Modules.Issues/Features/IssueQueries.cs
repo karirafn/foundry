@@ -9,6 +9,7 @@ using Foundry.Modules.Issues.Features.StateChanges;
 using Foundry.Modules.Issues.Features.TransientRetry;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Contracts.Queries;
+using Foundry.Modules.Settings.Contracts.Queries;
 using Foundry.Modules.Workers.Contracts;
 using Foundry.Modules.Workers.Contracts.Queries;
 using Foundry.Shared;
@@ -22,7 +23,8 @@ internal sealed class IssueQueries(
     IRepositorySlugQueries slugQueries,
     IRepositoryEligibilityQuery eligibilityQuery,
     IWorkerRunQueries workerRunQueries,
-    InFlightWorkerCountQuery inFlightWorkerCountQuery) : IIssueQueries
+    InFlightWorkerCountQuery inFlightWorkerCountQuery,
+    IGlobalSettingsQueries globalSettingsQueries) : IIssueQueries
 {
     public async Task<IReadOnlySet<int>> GetKnownIssueNumbersAsync(
         MonitoredRepositoryId repositoryId,
@@ -589,18 +591,13 @@ internal sealed class IssueQueries(
                 Position: pos))
             .ToList();
 
-        // Build headroom map: headroom = max(0, MaxConcurrentWorkers − inFlightCount).
-        // Repositories absent from the eligibility list (ineligible) contribute no headroom
-        // and are excluded — their issues go into the ineligibleQueued partition.
-        Dictionary<MonitoredRepositoryId, int> headroomByRepo = eligibleRepositories
-            .Select(r => (Id: MonitoredRepositoryId.From(r.Id), r.MaxConcurrentWorkers))
-            .ToDictionary(
-                t => t.Id,
-                t =>
-                {
-                    inFlightCounts.TryGetValue(t.Id, out int inFlight);
-                    return Math.Max(0, t.MaxConcurrentWorkers - inFlight);
-                });
+        int globalMax = await globalSettingsQueries.GetMaxConcurrentAsync(cancellationToken);
+
+        // Build forecast headroom: under global saturation each in-flight repo is assumed to
+        // finish one worker, opening the next global slot. Below saturation this equals claim
+        // headroom. Repositories absent from the eligibility list contribute no headroom and are
+        // excluded — their issues go into the ineligibleQueued partition.
+        DispatchHeadroom headroom = DispatchHeadroom.ForForecast(eligibleRepositories, inFlightCounts, globalMax);
 
         // Eligible-repo queued issues: capacity-aware order via the shared helper so the
         // dashboard sequence matches the dispatcher exactly (ADR 0074, 0025, 0067).
@@ -613,7 +610,7 @@ internal sealed class IssueQueries(
             .Select(t => (t.Issue, DispatchOrderKey.For(t.Issue, t.Position)))
             .ToList();
 
-        IReadOnlyList<QueuedIssue> placed = CapacityAwareDispatchOrder.Order(eligibleKeyedIssues, headroomByRepo);
+        IReadOnlyList<QueuedIssue> placed = CapacityAwareDispatchOrder.Order(eligibleKeyedIssues, headroom);
 
         HashSet<IssueId> placedIds = placed
             .Select(i => i.Id)

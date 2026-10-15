@@ -46,7 +46,8 @@ public sealed class HandleAsync : IAsyncDisposable
                 new NullRepositorySlugQueries(),
                 new NullRepositoryEligibilityQuery(),
                 new NullWorkerRunQueries(),
-                new InFlightWorkerCountQuery(_dbContext)),
+                new InFlightWorkerCountQuery(_dbContext),
+                new NullGlobalSettingsQueries()),
             _dispatcher,
             NullLogger<ProcessIssueDependenciesHandler>.Instance);
     }

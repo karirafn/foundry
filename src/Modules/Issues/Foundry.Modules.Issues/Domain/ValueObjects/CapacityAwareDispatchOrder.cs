@@ -17,13 +17,18 @@ namespace Foundry.Modules.Issues.Domain.ValueObjects;
 ///   <item>An issue whose repository is saturated (headroom = 0) defers to the following pass.</item>
 ///   <item>Passes repeat until all issues are placed or all remaining repositories are saturated.</item>
 /// </list>
-/// Headroom = <c>max(0, MaxConcurrentWorkers − inFlightCount)</c>. A repository lowered below its
-/// in-flight count contributes zero headroom and is excluded without preempting running workers.
+/// Headroom is supplied by the caller as a <see cref="DispatchHeadroom"/> value object. The
+/// walk seeds a mutable working copy from the value object's snapshot so the walk never mutates
+/// the immutable value object itself.
 ///
 /// <para>
-/// This walk is the single shared artifact: the dashboard (step 6) calls the identical function
-/// with the same <paramref name="keyedIssues"/> / <paramref name="headroomByRepo"/> inputs, so the
-/// claim order and the displayed queue order cannot disagree.
+/// This walk is the single shared artifact consumed by both the dispatch selector and the
+/// dashboard. Under normal conditions both consumers pass equivalent headroom. Under global
+/// saturation the selector passes <see cref="DispatchHeadroom.ForClaim"/> headroom (as-is
+/// capacity) and the dashboard passes <see cref="DispatchHeadroom.ForForecast"/> headroom
+/// (one in-flight worker per repository assumed to finish), so the two consumers produce
+/// different orderings from different <see cref="DispatchHeadroom"/> instances — the walk
+/// itself is identical.
 /// </para>
 ///
 /// <para>
@@ -41,16 +46,19 @@ internal static class CapacityAwareDispatchOrder
     /// Issues paired with their pre-computed <see cref="DispatchOrderKey"/>, already sorted
     /// or in any order — the walk re-sorts them internally.
     /// </param>
-    /// <param name="headroomByRepo">
-    /// Remaining dispatch slots per repository, floored at 0.
-    /// Repositories absent from the map contribute no headroom.
+    /// <param name="headroom">
+    /// Per-repository remaining dispatch slots, floored at 0.
+    /// Repositories absent from the value object contribute no headroom.
+    /// The walk seeds a fresh mutable copy from <see cref="DispatchHeadroom.Snapshot"/> so
+    /// the immutable value object is never mutated — a single instance may be reused across
+    /// multiple calls without carrying decremented state.
     /// </param>
     /// <returns>
     /// Issues in placement order. Issues whose repository is saturated everywhere are excluded.
     /// </returns>
     internal static IReadOnlyList<QueuedIssue> Order(
         IReadOnlyList<(QueuedIssue Issue, DispatchOrderKey Key)> keyedIssues,
-        IReadOnlyDictionary<MonitoredRepositoryId, int> headroomByRepo)
+        DispatchHeadroom headroom)
     {
         if (keyedIssues.Count == 0)
         {
@@ -62,7 +70,8 @@ internal static class CapacityAwareDispatchOrder
         sorted.Sort(static (a, b) => a.Key.CompareTo(b.Key));
 
         // Working copy of headroom — decremented as issues are placed.
-        Dictionary<MonitoredRepositoryId, int> remaining = new(headroomByRepo);
+        // Seeded from a fresh copy of the immutable snapshot so the value object is never mutated.
+        Dictionary<MonitoredRepositoryId, int> remaining = new(headroom.Snapshot);
 
         List<QueuedIssue> placed = new(sorted.Count);
         List<(QueuedIssue Issue, DispatchOrderKey Key)> deferred = new(sorted.Count);

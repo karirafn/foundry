@@ -38,7 +38,8 @@ public sealed class GetDependencyGraphAsync : IAsyncDisposable
             new NullRepositorySlugQueries(),
             new NullRepositoryEligibilityQuery(),
             new NullWorkerRunQueries(),
-            new InFlightWorkerCountQuery(_dbContext));
+            new InFlightWorkerCountQuery(_dbContext),
+            new NullGlobalSettingsQueries());
     }
 
     async ValueTask IAsyncDisposable.DisposeAsync()
