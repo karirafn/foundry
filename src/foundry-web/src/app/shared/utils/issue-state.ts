@@ -4,6 +4,7 @@ export type IssueState =
   | 'blocked'
   | 'in_progress'
   | 'review'
+  | 'checks_pending'
   | 'unchanged'
   | 'failed'
   | 'continuable_failed'

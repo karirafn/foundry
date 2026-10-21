@@ -11,6 +11,7 @@ export const ACTIVE_STATES: ReadonlySet<IssueState> = new Set<IssueState>([
   'blocked',
   'in_progress',
   'review',
+  'checks_pending',
   'unchanged',
   'failed',
   'continuable_failed',
@@ -48,7 +49,7 @@ export const STATE_GROUPS: readonly StateGroup[] = [
   },
   {
     label: 'Waiting',
-    states: ['detected', 'queued', 'blocked', 'revision_queued', 'continuation_queued'],
+    states: ['detected', 'queued', 'blocked', 'revision_queued', 'continuation_queued', 'checks_pending'],
   },
   {
     label: 'Resolved',
@@ -79,7 +80,7 @@ export const WITHIN_GROUP_ORDER: Readonly<Record<string, readonly (readonly Issu
   ],
   'Waiting': [
     ['queued', 'revision_queued', 'continuation_queued'],
-    ['detected'],
+    ['detected', 'checks_pending'],
     ['blocked'],
   ],
   'Resolved': [
