@@ -27,3 +27,9 @@ export const RETRYABLE_STATES: ReadonlySet<IssueState> = new Set<IssueState>([
   'revision_failed',
   'unchanged',
 ]);
+
+// Revision states: a revision worker is queued or actively running.
+export const REVISION_STATES: ReadonlySet<IssueState> = new Set<IssueState>([
+  'revision_queued',
+  'revision_in_progress',
+]);
