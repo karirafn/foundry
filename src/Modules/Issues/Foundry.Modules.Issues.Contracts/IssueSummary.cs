@@ -11,4 +11,5 @@ public sealed record IssueSummary(
     string? FailureClassification,
     string? RepositoryEligibilityStatus,
     RunStats? RunStats,
-    string? ChecksOutcome = null);
+    string? ChecksOutcome = null,
+    string? PullRequestUrl = null);

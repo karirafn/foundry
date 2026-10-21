@@ -199,7 +199,8 @@ internal sealed class IssueQueries(
                 RunStats: runAggregates.TryGetValue(i.Id.Value, out RunAggregate? aggregate)
                     ? MapRunStats(aggregate)
                     : null,
-                ChecksOutcome: GetChecksOutcomeDiscriminator(i)))
+                ChecksOutcome: GetChecksOutcomeDiscriminator(i),
+                PullRequestUrl: GetPullRequestUrl(i)))
             .ToList();
     }
 
@@ -260,7 +261,8 @@ internal sealed class IssueQueries(
             RunStats: runAggregates.TryGetValue(issue.Id.Value, out RunAggregate? aggregate)
                 ? MapRunStats(aggregate)
                 : null,
-            ChecksOutcome: GetChecksOutcomeDiscriminator(issue));
+            ChecksOutcome: GetChecksOutcomeDiscriminator(issue),
+            PullRequestUrl: GetPullRequestUrl(issue));
     }
 
     private static string? GetFailureCategory(Issue issue) =>
@@ -276,6 +278,16 @@ internal sealed class IssueQueries(
         issue switch
         {
             ReviewIssue review => review.ChecksOutcome.Discriminator,
+            _ => null,
+        };
+
+    private static string? GetPullRequestUrl(Issue issue) =>
+        issue switch
+        {
+            ReviewIssue review => review.PullRequestUrl,
+            ChecksPendingIssue checksPending => checksPending.PullRequestUrl,
+            RevisionInProgressIssue revisionInProgress => revisionInProgress.PullRequestUrl,
+            RevisionQueuedIssue revisionQueued => revisionQueued.PullRequestUrl,
             _ => null,
         };
 
@@ -691,7 +703,8 @@ internal sealed class IssueQueries(
                 RunStats: runAggregates.TryGetValue(i.Id.Value, out RunAggregate? aggregate)
                     ? MapRunStats(aggregate)
                     : null,
-                ChecksOutcome: GetChecksOutcomeDiscriminator(i)))
+                ChecksOutcome: GetChecksOutcomeDiscriminator(i),
+                PullRequestUrl: GetPullRequestUrl(i)))
             .ToList();
     }
 

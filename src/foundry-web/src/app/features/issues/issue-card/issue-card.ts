@@ -124,7 +124,8 @@ function hasVisiblePills(stats: RunStats): boolean {
                 class="badge issue-card__checks-badge"
                 [class]="outcome.cssClass"
                 role="img"
-                [attr.aria-label]="'Checks outcome: ' + outcome.label"
+                [attr.aria-label]="outcome.label"
+                aria-hidden="true"
               >{{ outcome.label }}</span>
             }
             @if (repoWarningLabel()) {
@@ -227,7 +228,17 @@ function hasVisiblePills(stats: RunStats): boolean {
             <span class="issue-card__activity" aria-hidden="true">{{ _activityLineText() }}</span>
           }
           @if (_isChecksPending()) {
-            <span class="issue-card__checks-status">Waiting on checks</span>
+            <span class="issue-card__checks-status" aria-hidden="true">Waiting on checks</span>
+            @if (issue().pullRequestUrl | safeHref; as safePrUrl) {
+              <a
+                class="issue-card__pr-link"
+                [href]="safePrUrl"
+                target="_blank"
+                rel="noopener noreferrer"
+                [attr.aria-label]="'View pull request for issue #' + issue().issueNumber"
+                (click)="onLinkClick($event)"
+              >View PR</a>
+            }
           }
           @if (issue().url | safeHref; as safeUrl) {
             <a
@@ -347,10 +358,11 @@ export class IssueCardComponent {
     const warning = this.repoWarningLabel();
     const warningPart = warning ? ` ${warning}` : '';
     const outcome = this._checksOutcomeDisplay();
-    const checksPart = outcome ? ` Checks outcome: ${outcome.label}.` : '';
+    const checksPart = outcome ? ` ${outcome.label}.` : '';
+    const waitingPart = this._isChecksPending() ? ' Waiting on checks.' : '';
     const runStatsPart = this._buildRunStatsAriaText();
     const activityPart = this._buildActivityAriaText();
-    return `${base}${warningPart}${checksPart}${runStatsPart}${activityPart}`;
+    return `${base}${warningPart}${checksPart}${waitingPart}${runStatsPart}${activityPart}`;
   });
 
   private _buildQueuePositionAriaClause(): string {

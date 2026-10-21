@@ -1211,4 +1211,62 @@ describe('IssueDetailComponent', () => {
     const section = el.querySelector('.issue-detail__failing-checks');
     expect(section).toBeFalsy();
   });
+
+  // Fix 3d: failing-checks <ul> labelled by its heading
+  it('should label the failing-checks <ul> with its heading id (Fix 3d)', () => {
+    // Arrange
+    const reviewDetail: IssueDetail = {
+      ...mockDetail,
+      state: 'review',
+      stateDetails: {
+        ...mockStateDetails,
+        checksOutcome: 'still_failing',
+        failingChecks: [
+          { name: 'build / dotnet-test', conclusion: 'failure', detailsUrl: null },
+        ],
+      },
+    };
+
+    // Act
+    const fixture = createComponent(reviewDetail);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert — heading has an id; <ul> references it via aria-labelledby
+    const section = el.querySelector('.issue-detail__failing-checks') as HTMLElement;
+    const heading = section?.querySelector('.issue-detail__field-key') as HTMLElement;
+    const list = section?.querySelector('.issue-detail__failing-list') as HTMLElement;
+    const headingId = heading?.getAttribute('id');
+    expect(headingId).toBeTruthy();
+    expect(list?.getAttribute('aria-labelledby')).toBe(headingId);
+  });
+
+  // Fix 4: "View issue" link guarded by safeHref
+  it('should NOT render the View issue link when issue url is not https (Fix 4)', () => {
+    // Arrange — http:// url should be blocked by safeHref
+    const httpDetail: IssueDetail = {
+      ...mockDetail,
+      url: 'http://github.com/owner/repo/issues/42',
+    };
+
+    // Act
+    const fixture = createComponent(httpDetail);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    const link = el.querySelector('.issue-detail__issue-link');
+    expect(link).toBeFalsy();
+  });
+
+  it('should render the View issue link when issue url is https (Fix 4 guard-pass)', () => {
+    // Arrange — https:// url must still render
+    const fixture = createComponent(mockDetail); // mockDetail has https url
+
+    // Act
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    const link = el.querySelector('.issue-detail__issue-link') as HTMLAnchorElement;
+    expect(link).toBeTruthy();
+    expect(link?.getAttribute('href')).toBe('https://github.com/owner/repo/issues/42');
+  });
 });

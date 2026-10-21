@@ -23,6 +23,7 @@ export interface IssueSummary {
   repositoryEligibilityStatus?: string | null;
   runStats?: RunStats | null;
   checksOutcome?: string | null;
+  pullRequestUrl?: string | null;
 }
 
 export interface EligibilityViolation {

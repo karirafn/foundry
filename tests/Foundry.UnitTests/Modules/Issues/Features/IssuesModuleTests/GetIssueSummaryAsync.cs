@@ -159,6 +159,35 @@ public sealed class GetIssueSummaryAsync : IAsyncDisposable
     }
 
     [Fact]
+    public async Task WhenChecksPendingIssue_PullRequestUrlIsPopulatedOnSummary()
+    {
+        // Arrange
+        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
+        DetectedIssue detected = await CreateAndPersistDetectedIssueAsync(repositoryId);
+        FreshQueuedIssue queued = detected.Enqueue();
+        await _dbContext.TransitionAsync(detected, queued, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
+
+        InProgressIssue inProgress = queued.Claim(WorkerRunId.New());
+        await _dbContext.TransitionAsync(queued, inProgress, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
+
+        const string ExpectedPrUrl = "https://github.com/owner/repo/pull/7";
+        ChecksPendingIssue checksPending = inProgress.MarkChecksPending(
+            "feat/1-test",
+            ExpectedPrUrl,
+            DateTimeOffset.UtcNow.AddDays(1));
+        await _dbContext.TransitionAsync(inProgress, checksPending, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
+        _dbContext.ChangeTracker.Clear();
+
+        // Act
+        IssueSummary? result = await _sut.GetIssueSummaryAsync(checksPending.Id, TestContext.Current.CancellationToken);
+
+        // Assert
+        IssueSummary summary = result.ShouldNotBeNull();
+        summary.State.ShouldBe("checks_pending");
+        summary.PullRequestUrl.ShouldBe(ExpectedPrUrl);
+    }
+
+    [Fact]
     public async Task WhenNonReviewIssue_ChecksOutcomeIsNullOnSummary()
     {
         // Arrange

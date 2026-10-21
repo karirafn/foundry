@@ -51,13 +51,15 @@ import { IssueState, RETRYABLE_STATES } from '../../../shared/utils/issue-state'
         role="region"
         [attr.aria-label]="'Issue details for #' + d.issueNumber"
       >
-        <a
-          class="issue-detail__issue-link"
-          [href]="d.url"
-          target="_blank"
-          rel="noopener noreferrer"
-          [attr.aria-label]="'View issue #' + d.issueNumber + ' on provider'"
-        >View issue</a>
+        @if (d.url | safeHref; as safeIssueUrl) {
+          <a
+            class="issue-detail__issue-link"
+            [href]="safeIssueUrl"
+            target="_blank"
+            rel="noopener noreferrer"
+            [attr.aria-label]="'View issue #' + d.issueNumber + ' on provider'"
+          >View issue</a>
+        }
 
         @if (d.labels.length > 0) {
           <div class="issue-detail__labels">
@@ -135,8 +137,8 @@ import { IssueState, RETRYABLE_STATES } from '../../../shared/utils/issue-state'
 
           @if (s.checksOutcome === 'still_failing' && s.failingChecks?.length) {
             <div class="issue-detail__failing-checks">
-              <span class="issue-detail__field-key">Failing Checks</span>
-              <ul class="issue-detail__failing-list">
+              <span class="issue-detail__field-key" id="failing-checks-heading">Failing Checks</span>
+              <ul class="issue-detail__failing-list" aria-labelledby="failing-checks-heading">
                 @for (check of s.failingChecks; track check.name) {
                   <li class="issue-detail__failing-item">
                     <span class="issue-detail__failing-name">{{ check.name }}</span>

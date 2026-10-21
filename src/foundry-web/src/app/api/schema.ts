@@ -720,6 +720,7 @@ export interface components {
             repositoryEligibilityStatus: null | string;
             runStats: null | components["schemas"]["RunStats"];
             checksOutcome?: null | string;
+            pullRequestUrl?: null | string;
         };
         MoveRepositoryRequestBody: {
             /** Format: int32 */

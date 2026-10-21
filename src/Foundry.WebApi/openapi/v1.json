@@ -2365,6 +2365,12 @@
               "null",
               "string"
             ]
+          },
+          "pullRequestUrl": {
+            "type": [
+              "null",
+              "string"
+            ]
           }
         }
       },
