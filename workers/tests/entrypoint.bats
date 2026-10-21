@@ -455,6 +455,91 @@ EOF
     [[ "$output" == *"FOUNDRY_BOOTSTRAP_FAILED stage=auth"* ]]
 }
 
+# ---------------------------------------------------------------------------
+# Helper: build a sanitized PATH that excludes the system gh and glab binaries
+# while retaining all other tools the entrypoint needs.
+# Required because gh and glab may already be installed on the test host (they
+# are present in the worker image by design); the absent-CLI tests must prevent
+# command -v from finding them. Placing FAKE_BIN_DIR first is insufficient when
+# no fake is written — command -v walks PATH until it finds an executable match.
+# This helper symlinks all /usr/bin and /bin executables EXCEPT gh and glab into
+# a per-test sanitized dir and prepends it, so the real binaries are shadowed.
+make_sanitized_path_without() {
+    # Args: names to exclude (e.g. "gh" or "glab")
+    local exclude_dir="$BATS_TEST_TMPDIR/sanitized-bin"
+    mkdir -p "$exclude_dir"
+    local excluded=("$@")
+    for src_dir in /usr/bin /bin; do
+        for bin_path in "$src_dir"/*; do
+            local name
+            name="$(basename "$bin_path")"
+            local skip=false
+            for exc in "${excluded[@]}"; do
+                [ "$name" = "$exc" ] && skip=true && break
+            done
+            $skip && continue
+            [ -f "$bin_path" ] && [ -x "$bin_path" ] || continue
+            ln -sf "$bin_path" "$exclude_dir/$name" 2>/dev/null || true
+        done
+    done
+    printf '%s' "$FAKE_BIN_DIR:$exclude_dir"
+}
+
+@test "missing gh CLI with GH_TOKEN set emits FOUNDRY_BOOTSTRAP_FAILED stage=auth and exits non-zero" {
+    set_required_env
+    make_fake_git
+
+    # GH_TOKEN set but gh absent: build a PATH that excludes the gh binary so
+    # command -v gh finds nothing even when gh is installed on the test host.
+    export GH_TOKEN="test-gh-token"
+    local safe_path
+    safe_path="$(make_sanitized_path_without gh)"
+
+    run env PATH="$safe_path" bash "$ENTRYPOINT"
+
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"FOUNDRY_BOOTSTRAP_FAILED stage=auth"* ]]
+}
+
+@test "missing glab CLI with GITLAB_TOKEN set emits FOUNDRY_BOOTSTRAP_FAILED stage=auth and exits non-zero" {
+    set_required_env
+    make_fake_git
+
+    # GITLAB_TOKEN set but glab absent: build a PATH that excludes the glab binary.
+    export GITLAB_TOKEN="test-gitlab-token"
+    local safe_path
+    safe_path="$(make_sanitized_path_without glab)"
+
+    run env PATH="$safe_path" bash "$ENTRYPOINT"
+
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"FOUNDRY_BOOTSTRAP_FAILED stage=auth"* ]]
+}
+
+# Write a fake gh that exits 0 (CLI present, auth succeeds)
+make_fake_gh_success() {
+    cat > "$FAKE_BIN_DIR/gh" <<'EOF'
+#!/bin/bash
+exit 0
+EOF
+    chmod +x "$FAKE_BIN_DIR/gh"
+}
+
+@test "gh CLI present with GH_TOKEN: no bootstrap failure and claude is invoked" {
+    set_required_env
+    make_fake_git
+    make_fake_claude
+    make_fake_gh_success
+
+    export GH_TOKEN="test-gh-token"
+
+    run bash "$ENTRYPOINT"
+
+    [ "$status" -eq 0 ]
+    [[ "$output" != *"FOUNDRY_BOOTSTRAP_FAILED"* ]]
+    [ -f "$BATS_TEST_TMPDIR/claude_called" ]
+}
+
 @test "invalid BRANCH_NAME characters guard emits FOUNDRY_BOOTSTRAP_FAILED stage=branch" {
     set_required_env
     make_fake_git
