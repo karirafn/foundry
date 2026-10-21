@@ -11,11 +11,11 @@ using Xunit;
 
 namespace Foundry.IntegrationTests.Modules.Settings.Persistence.GlobalSettingsPersistenceTests;
 
-public sealed class WhenStoredJsonHasOnlyOriginalFourFlags : IAsyncDisposable
+public sealed class WhenStoredJsonHasOnlyOriginalTwoFlags : IAsyncDisposable
 {
     private readonly FoundryWebAppFactory _factory;
 
-    public WhenStoredJsonHasOnlyOriginalFourFlags()
+    public WhenStoredJsonHasOnlyOriginalTwoFlags()
     {
         _factory = new FoundryWebAppFactory();
     }
@@ -28,9 +28,10 @@ public sealed class WhenStoredJsonHasOnlyOriginalFourFlags : IAsyncDisposable
     [Fact]
     public async Task InstallChromiumDefaultsToFalse()
     {
-        // Arrange — write a row whose worker_image_configuration JSON contains only the original four keys,
-        // simulating a database row written before InstallChromium and InstallDocker were added.
-        GlobalSettingsId id = await SeedSettingsWithFourKeyJsonAsync();
+        // Arrange — write a row whose worker_image_configuration JSON contains only the original two keys
+        // (InstallDotnet and InstallAngular), simulating a database row written before InstallChromium
+        // and InstallDocker were added. InstallChromium is absent and must default to false.
+        GlobalSettingsId id = await SeedSettingsWithTwoKeyJsonAsync();
 
         // Act
         GlobalSettings? reloaded = await ReloadSettingsAsync(id);
@@ -43,9 +44,10 @@ public sealed class WhenStoredJsonHasOnlyOriginalFourFlags : IAsyncDisposable
     [Fact]
     public async Task InstallDockerDefaultsToFalse()
     {
-        // Arrange — write a row whose worker_image_configuration JSON contains only the original four keys,
-        // simulating a database row written before InstallChromium and InstallDocker were added.
-        GlobalSettingsId id = await SeedSettingsWithFourKeyJsonAsync();
+        // Arrange — write a row whose worker_image_configuration JSON contains only the original two keys
+        // (InstallDotnet and InstallAngular), simulating a database row written before InstallChromium
+        // and InstallDocker were added. InstallDocker is absent and must default to false.
+        GlobalSettingsId id = await SeedSettingsWithTwoKeyJsonAsync();
 
         // Act
         GlobalSettings? reloaded = await ReloadSettingsAsync(id);
@@ -60,7 +62,7 @@ public sealed class WhenStoredJsonHasOnlyOriginalFourFlags : IAsyncDisposable
     {
         // Arrange — write a row whose worker_image_configuration JSON contains only the original two keys.
         // The stored JSON has InstallDotnet=true and InstallAngular=false.
-        GlobalSettingsId id = await SeedSettingsWithFourKeyJsonAsync();
+        GlobalSettingsId id = await SeedSettingsWithTwoKeyJsonAsync();
 
         // Act
         GlobalSettings? reloaded = await ReloadSettingsAsync(id);
@@ -72,7 +74,7 @@ public sealed class WhenStoredJsonHasOnlyOriginalFourFlags : IAsyncDisposable
             () => reloaded.WorkerImageConfiguration.InstallAngular.ShouldBeFalse());
     }
 
-    private async Task<GlobalSettingsId> SeedSettingsWithFourKeyJsonAsync()
+    private async Task<GlobalSettingsId> SeedSettingsWithTwoKeyJsonAsync()
     {
         // Seed a normal row first so all other required columns are populated via EF,
         // then overwrite worker_image_configuration with a 2-key JSON string via raw SQL

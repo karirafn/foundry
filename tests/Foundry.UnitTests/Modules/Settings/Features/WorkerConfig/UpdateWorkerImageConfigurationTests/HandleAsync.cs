@@ -301,9 +301,9 @@ public sealed class HandleAsync : IAsyncLifetime
 
         UpdateWorkerImageConfiguration.Command command = new(
             InstallDotnet: true,
-            InstallAngular: false,
+            InstallAngular: true,
             InstallChromium: false,
-            InstallDocker: false);
+            InstallDocker: true);
 
         // Act
         Result<GlobalSettingsSummary> result = await sut.HandleAsync(
@@ -313,7 +313,11 @@ public sealed class HandleAsync : IAsyncLifetime
         // Assert
         Result<GlobalSettingsSummary>.Success success =
             result.ShouldBeOfType<Result<GlobalSettingsSummary>.Success>();
-        success.Value.InstallDotnet.ShouldBeTrue();
+        success.Value.ShouldSatisfyAllConditions(
+            () => success.Value.InstallDotnet.ShouldBeTrue(),
+            () => success.Value.InstallAngular.ShouldBeTrue(),
+            () => success.Value.InstallChromium.ShouldBeFalse(),
+            () => success.Value.InstallDocker.ShouldBeTrue());
     }
 
     [Fact]

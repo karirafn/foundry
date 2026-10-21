@@ -469,7 +469,7 @@ make_sanitized_path_without() {
     local exclude_dir="$BATS_TEST_TMPDIR/sanitized-bin"
     mkdir -p "$exclude_dir"
     local excluded=("$@")
-    for src_dir in /usr/bin /bin; do
+    for src_dir in /usr/bin /usr/local/bin /usr/sbin /bin; do
         for bin_path in "$src_dir"/*; do
             local name
             name="$(basename "$bin_path")"
