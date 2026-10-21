@@ -972,4 +972,243 @@ describe('IssueDetailComponent', () => {
     expect(text).toContain('shortly');
     expect(text).not.toContain('next attempt at .');
   });
+
+  // --- Surface 3: still_failing failing-checks list ---
+
+  it('should render failing-checks section when checksOutcome is still_failing with non-empty failingChecks', () => {
+    // Arrange
+    const reviewDetail: IssueDetail = {
+      ...mockDetail,
+      state: 'review',
+      stateDetails: {
+        ...mockStateDetails,
+        checksOutcome: 'still_failing',
+        failingChecks: [
+          { name: 'build / dotnet-test', conclusion: 'failure', detailsUrl: 'https://github.com/owner/repo/runs/123' },
+        ],
+      },
+    };
+
+    // Act
+    const fixture = createComponent(reviewDetail);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    const section = el.querySelector('.issue-detail__failing-checks');
+    expect(section).toBeTruthy();
+  });
+
+  it('should render "Failing Checks" field-key heading in the section', () => {
+    // Arrange
+    const reviewDetail: IssueDetail = {
+      ...mockDetail,
+      state: 'review',
+      stateDetails: {
+        ...mockStateDetails,
+        checksOutcome: 'still_failing',
+        failingChecks: [
+          { name: 'build / dotnet-test', conclusion: 'failure', detailsUrl: 'https://github.com/owner/repo/runs/123' },
+        ],
+      },
+    };
+
+    // Act
+    const fixture = createComponent(reviewDetail);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    const section = el.querySelector('.issue-detail__failing-checks');
+    const heading = section?.querySelector('.issue-detail__field-key');
+    expect(heading?.textContent?.trim()).toBe('Failing Checks');
+  });
+
+  it('should render each failing check as a list item with name and conclusion', () => {
+    // Arrange
+    const reviewDetail: IssueDetail = {
+      ...mockDetail,
+      state: 'review',
+      stateDetails: {
+        ...mockStateDetails,
+        checksOutcome: 'still_failing',
+        failingChecks: [
+          { name: 'build / dotnet-test', conclusion: 'failure', detailsUrl: 'https://github.com/owner/repo/runs/123' },
+          { name: 'lint', conclusion: 'timed_out', detailsUrl: null },
+        ],
+      },
+    };
+
+    // Act
+    const fixture = createComponent(reviewDetail);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    const items = el.querySelectorAll('.issue-detail__failing-item');
+    expect(items.length).toBe(2);
+
+    const firstName = items[0].querySelector('.issue-detail__failing-name');
+    expect(firstName?.textContent?.trim()).toBe('build / dotnet-test');
+
+    const firstConclusion = items[0].querySelector('.issue-detail__failing-conclusion');
+    expect(firstConclusion?.textContent?.trim()).toBe('failure');
+  });
+
+  it('should render conclusion chip with role="img" and aria-label', () => {
+    // Arrange
+    const reviewDetail: IssueDetail = {
+      ...mockDetail,
+      state: 'review',
+      stateDetails: {
+        ...mockStateDetails,
+        checksOutcome: 'still_failing',
+        failingChecks: [
+          { name: 'build / dotnet-test', conclusion: 'failure', detailsUrl: null },
+        ],
+      },
+    };
+
+    // Act
+    const fixture = createComponent(reviewDetail);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    const chip = el.querySelector('.issue-detail__failing-conclusion') as HTMLElement;
+    expect(chip?.getAttribute('role')).toBe('img');
+    expect(chip?.getAttribute('aria-label')).toBe('Conclusion: failure');
+  });
+
+  it('should render a "View details" link when detailsUrl is present', () => {
+    // Arrange
+    const reviewDetail: IssueDetail = {
+      ...mockDetail,
+      state: 'review',
+      stateDetails: {
+        ...mockStateDetails,
+        checksOutcome: 'still_failing',
+        failingChecks: [
+          { name: 'build / dotnet-test', conclusion: 'failure', detailsUrl: 'https://github.com/owner/repo/runs/123' },
+        ],
+      },
+    };
+
+    // Act
+    const fixture = createComponent(reviewDetail);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    const link = el.querySelector('.issue-detail__failing-link') as HTMLAnchorElement;
+    expect(link).toBeTruthy();
+    expect(link?.textContent?.trim()).toBe('View details');
+    expect(link?.getAttribute('href')).toBe('https://github.com/owner/repo/runs/123');
+    expect(link?.getAttribute('target')).toBe('_blank');
+    expect(link?.getAttribute('rel')).toBe('noopener noreferrer');
+  });
+
+  it('should set descriptive aria-label on the View details link', () => {
+    // Arrange
+    const reviewDetail: IssueDetail = {
+      ...mockDetail,
+      state: 'review',
+      stateDetails: {
+        ...mockStateDetails,
+        checksOutcome: 'still_failing',
+        failingChecks: [
+          { name: 'build / dotnet-test', conclusion: 'failure', detailsUrl: 'https://github.com/owner/repo/runs/123' },
+        ],
+      },
+    };
+
+    // Act
+    const fixture = createComponent(reviewDetail);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    const link = el.querySelector('.issue-detail__failing-link') as HTMLAnchorElement;
+    expect(link?.getAttribute('aria-label')).toBe('View details for failing check build / dotnet-test');
+  });
+
+  it('should NOT render a "View details" link when detailsUrl is null', () => {
+    // Arrange
+    const reviewDetail: IssueDetail = {
+      ...mockDetail,
+      state: 'review',
+      stateDetails: {
+        ...mockStateDetails,
+        checksOutcome: 'still_failing',
+        failingChecks: [
+          { name: 'lint', conclusion: 'timed_out', detailsUrl: null },
+        ],
+      },
+    };
+
+    // Act
+    const fixture = createComponent(reviewDetail);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    const link = el.querySelector('.issue-detail__failing-link');
+    expect(link).toBeFalsy();
+  });
+
+  it('should NOT render failing-checks section when checksOutcome is not still_failing', () => {
+    // Arrange
+    const reviewDetail: IssueDetail = {
+      ...mockDetail,
+      state: 'review',
+      stateDetails: {
+        ...mockStateDetails,
+        checksOutcome: 'passed',
+        failingChecks: null,
+      },
+    };
+
+    // Act
+    const fixture = createComponent(reviewDetail);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    const section = el.querySelector('.issue-detail__failing-checks');
+    expect(section).toBeFalsy();
+  });
+
+  it('should NOT render failing-checks section when checksOutcome is still_failing but failingChecks is empty', () => {
+    // Arrange
+    const reviewDetail: IssueDetail = {
+      ...mockDetail,
+      state: 'review',
+      stateDetails: {
+        ...mockStateDetails,
+        checksOutcome: 'still_failing',
+        failingChecks: [],
+      },
+    };
+
+    // Act
+    const fixture = createComponent(reviewDetail);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    const section = el.querySelector('.issue-detail__failing-checks');
+    expect(section).toBeFalsy();
+  });
+
+  it('should NOT render failing-checks section when checksOutcome is still_failing but failingChecks is null', () => {
+    // Arrange
+    const reviewDetail: IssueDetail = {
+      ...mockDetail,
+      state: 'review',
+      stateDetails: {
+        ...mockStateDetails,
+        checksOutcome: 'still_failing',
+        failingChecks: null,
+      },
+    };
+
+    // Act
+    const fixture = createComponent(reviewDetail);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    const section = el.querySelector('.issue-detail__failing-checks');
+    expect(section).toBeFalsy();
+  });
 });

@@ -1735,4 +1735,261 @@ describe('IssueCardComponent', () => {
     const card = el.querySelector('.issue-card') as HTMLElement;
     expect(card?.getAttribute('aria-label')).not.toContain('Queue position');
   });
+
+  // --- Surface 1: checks_pending "Waiting on checks" footer affordance ---
+
+  it('should render "Waiting on checks" phrase in footer for checks_pending state', () => {
+    // Arrange
+    const checksPendingIssue: IssueSummary = { ...mockIssue, state: 'checks_pending' };
+
+    // Act
+    const fixture = createComponent(checksPendingIssue);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    const checksStatus = el.querySelector('.issue-card__checks-status');
+    expect(checksStatus).toBeTruthy();
+    expect(checksStatus?.textContent?.trim()).toBe('Waiting on checks');
+  });
+
+  it('should NOT render "Waiting on checks" phrase for non-checks_pending states', () => {
+    // Arrange
+    const reviewIssue: IssueSummary = { ...mockIssue, state: 'review' };
+
+    // Act
+    const fixture = createComponent(reviewIssue);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    const checksStatus = el.querySelector('.issue-card__checks-status');
+    expect(checksStatus).toBeFalsy();
+  });
+
+  it('should NOT render "Waiting on checks" phrase for queued state', () => {
+    // Arrange
+    const queuedIssue: IssueSummary = { ...mockIssue, state: 'queued' };
+
+    // Act
+    const fixture = createComponent(queuedIssue);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    const checksStatus = el.querySelector('.issue-card__checks-status');
+    expect(checksStatus).toBeFalsy();
+  });
+
+  // --- Surface 2: review card outcome badge ---
+
+  it('should render outcome badge with "CHECKS: FAILING" label for still_failing checksOutcome', () => {
+    // Arrange
+    const reviewIssue: IssueSummary = { ...mockIssue, state: 'review', checksOutcome: 'still_failing' };
+
+    // Act
+    const fixture = createComponent(reviewIssue);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    const badge = el.querySelector('.issue-card__checks-badge');
+    expect(badge).toBeTruthy();
+    // Text is "Checks: failing" — uppercased by CSS text-transform; the DOM textContent is not CSS-transformed
+    expect(badge?.textContent?.trim()).toBe('Checks: failing');
+  });
+
+  it('should render outcome badge with "Checks: unreadable" label for unreadable checksOutcome', () => {
+    // Arrange
+    const reviewIssue: IssueSummary = { ...mockIssue, state: 'review', checksOutcome: 'unreadable' };
+
+    // Act
+    const fixture = createComponent(reviewIssue);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    const badge = el.querySelector('.issue-card__checks-badge');
+    expect(badge).toBeTruthy();
+    expect(badge?.textContent?.trim()).toBe('Checks: unreadable');
+  });
+
+  it('should render outcome badge with "No CI detected" label for none_detected checksOutcome', () => {
+    // Arrange
+    const reviewIssue: IssueSummary = { ...mockIssue, state: 'review', checksOutcome: 'none_detected' };
+
+    // Act
+    const fixture = createComponent(reviewIssue);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    const badge = el.querySelector('.issue-card__checks-badge');
+    expect(badge).toBeTruthy();
+    expect(badge?.textContent?.trim()).toBe('No CI detected');
+  });
+
+  it('should render outcome badge with "Checks: unfinished" label for unfinished checksOutcome', () => {
+    // Arrange
+    const reviewIssue: IssueSummary = { ...mockIssue, state: 'review', checksOutcome: 'unfinished' };
+
+    // Act
+    const fixture = createComponent(reviewIssue);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    const badge = el.querySelector('.issue-card__checks-badge');
+    expect(badge).toBeTruthy();
+    expect(badge?.textContent?.trim()).toBe('Checks: unfinished');
+  });
+
+  it('should NOT render outcome badge when checksOutcome is passed', () => {
+    // Arrange
+    const reviewIssue: IssueSummary = { ...mockIssue, state: 'review', checksOutcome: 'passed' };
+
+    // Act
+    const fixture = createComponent(reviewIssue);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    const badge = el.querySelector('.issue-card__checks-badge');
+    expect(badge).toBeFalsy();
+  });
+
+  it('should NOT render outcome badge when checksOutcome is null', () => {
+    // Arrange
+    const reviewIssue: IssueSummary = { ...mockIssue, state: 'review', checksOutcome: null };
+
+    // Act
+    const fixture = createComponent(reviewIssue);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    const badge = el.querySelector('.issue-card__checks-badge');
+    expect(badge).toBeFalsy();
+  });
+
+  it('should NOT render outcome badge when checksOutcome is undefined', () => {
+    // Arrange — mockIssue has no checksOutcome
+    const fixture = createComponent(mockIssue);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    const badge = el.querySelector('.issue-card__checks-badge');
+    expect(badge).toBeFalsy();
+  });
+
+  it('should NOT render outcome badge for unknown checksOutcome value (fail quiet)', () => {
+    // Arrange
+    const reviewIssue: IssueSummary = { ...mockIssue, state: 'review', checksOutcome: 'some_future_value' };
+
+    // Act
+    const fixture = createComponent(reviewIssue);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert — unknown discriminator falls through to null, no badge
+    const badge = el.querySelector('.issue-card__checks-badge');
+    expect(badge).toBeFalsy();
+  });
+
+  it('should apply error modifier class for still_failing outcome badge', () => {
+    // Arrange
+    const reviewIssue: IssueSummary = { ...mockIssue, state: 'review', checksOutcome: 'still_failing' };
+
+    // Act
+    const fixture = createComponent(reviewIssue);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    const badge = el.querySelector('.issue-card__checks-badge') as HTMLElement;
+    expect(badge?.classList.contains('issue-card__checks-badge--error')).toBe(true);
+  });
+
+  it('should apply warning modifier class for unreadable outcome badge', () => {
+    // Arrange
+    const reviewIssue: IssueSummary = { ...mockIssue, state: 'review', checksOutcome: 'unreadable' };
+
+    // Act
+    const fixture = createComponent(reviewIssue);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    const badge = el.querySelector('.issue-card__checks-badge') as HTMLElement;
+    expect(badge?.classList.contains('issue-card__checks-badge--warning')).toBe(true);
+  });
+
+  it('should apply muted modifier class for none_detected outcome badge', () => {
+    // Arrange
+    const reviewIssue: IssueSummary = { ...mockIssue, state: 'review', checksOutcome: 'none_detected' };
+
+    // Act
+    const fixture = createComponent(reviewIssue);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    const badge = el.querySelector('.issue-card__checks-badge') as HTMLElement;
+    expect(badge?.classList.contains('issue-card__checks-badge--muted')).toBe(true);
+  });
+
+  it('should have role="img" on the outcome badge', () => {
+    // Arrange
+    const reviewIssue: IssueSummary = { ...mockIssue, state: 'review', checksOutcome: 'still_failing' };
+
+    // Act
+    const fixture = createComponent(reviewIssue);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    const badge = el.querySelector('.issue-card__checks-badge') as HTMLElement;
+    expect(badge?.getAttribute('role')).toBe('img');
+  });
+
+  it('should set aria-label on outcome badge with "Checks outcome: " prefix', () => {
+    // Arrange
+    const reviewIssue: IssueSummary = { ...mockIssue, state: 'review', checksOutcome: 'still_failing' };
+
+    // Act
+    const fixture = createComponent(reviewIssue);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    const badge = el.querySelector('.issue-card__checks-badge') as HTMLElement;
+    expect(badge?.getAttribute('aria-label')).toBe('Checks outcome: Checks: failing');
+  });
+
+  it('should include outcome clause in card aria-label for non-passed checksOutcome', () => {
+    // Arrange
+    const reviewIssue: IssueSummary = { ...mockIssue, state: 'review', checksOutcome: 'still_failing' };
+
+    // Act
+    const fixture = createComponent(reviewIssue);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    const card = el.querySelector('.issue-card') as HTMLElement;
+    const label = card?.getAttribute('aria-label') ?? '';
+    expect(label).toContain('Checks outcome: Checks: failing');
+  });
+
+  it('should NOT include outcome clause in card aria-label when checksOutcome is null', () => {
+    // Arrange
+    const reviewIssue: IssueSummary = { ...mockIssue, state: 'review', checksOutcome: null };
+
+    // Act
+    const fixture = createComponent(reviewIssue);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    const card = el.querySelector('.issue-card') as HTMLElement;
+    const label = card?.getAttribute('aria-label') ?? '';
+    expect(label).not.toContain('Checks outcome:');
+  });
+
+  it('should NOT include outcome clause in card aria-label when checksOutcome is passed', () => {
+    // Arrange
+    const reviewIssue: IssueSummary = { ...mockIssue, state: 'review', checksOutcome: 'passed' };
+
+    // Act
+    const fixture = createComponent(reviewIssue);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    const card = el.querySelector('.issue-card') as HTMLElement;
+    const label = card?.getAttribute('aria-label') ?? '';
+    expect(label).not.toContain('Checks outcome:');
+  });
 });

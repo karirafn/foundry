@@ -19,6 +19,18 @@ const WARNING_CLASSES: Record<string, string> = {
   unreachable: 'issue-card__repo-warning--unreachable',
 };
 
+interface ChecksOutcomeDisplay {
+  readonly label: string;
+  readonly cssClass: string;
+}
+
+const CHECKS_OUTCOME_DISPLAY: Record<string, ChecksOutcomeDisplay> = {
+  still_failing: { label: 'Checks: failing', cssClass: 'issue-card__checks-badge--error' },
+  unreadable: { label: 'Checks: unreadable', cssClass: 'issue-card__checks-badge--warning' },
+  none_detected: { label: 'No CI detected', cssClass: 'issue-card__checks-badge--muted' },
+  unfinished: { label: 'Checks: unfinished', cssClass: 'issue-card__checks-badge--warning' },
+};
+
 function timeAgo(dateString: string): string {
   const now = Date.now();
   const then = new Date(dateString).getTime();
@@ -107,6 +119,14 @@ function hasVisiblePills(stats: RunStats): boolean {
           <span class="issue-card__slug">{{ issue().repositorySlug }}</span>
           <div class="issue-card__badge">
             <fd-state-badge [state]="issue().state" [failureClassification]="issue().failureClassification" />
+            @if (_checksOutcomeDisplay(); as outcome) {
+              <span
+                class="badge issue-card__checks-badge"
+                [class]="outcome.cssClass"
+                role="img"
+                [attr.aria-label]="'Checks outcome: ' + outcome.label"
+              >{{ outcome.label }}</span>
+            }
             @if (repoWarningLabel()) {
               <span
                 class="issue-card__repo-warning"
@@ -206,6 +226,9 @@ function hasVisiblePills(stats: RunStats): boolean {
           @if (_activityLineVisible()) {
             <span class="issue-card__activity" aria-hidden="true">{{ _activityLineText() }}</span>
           }
+          @if (_isChecksPending()) {
+            <span class="issue-card__checks-status">Waiting on checks</span>
+          }
           @if (issue().url | safeHref; as safeUrl) {
             <a
               class="issue-card__link"
@@ -251,6 +274,16 @@ export class IssueCardComponent {
   private readonly _ticker = inject(TickerService);
 
   protected readonly _isQueuedTier = computed(() => QUEUED_TIER_STATES.has(this.issue().state));
+
+  protected readonly _isChecksPending = computed(() => this.issue().state === 'checks_pending');
+
+  protected readonly _checksOutcomeDisplay = computed((): ChecksOutcomeDisplay | null => {
+    const outcome = this.issue().checksOutcome;
+    if (outcome == null || outcome === 'passed') {
+      return null;
+    }
+    return CHECKS_OUTCOME_DISPLAY[outcome] ?? null;
+  });
 
   protected readonly _queuePositionDisplay = computed((): string => {
     const pos = this.queuePosition();
@@ -313,9 +346,11 @@ export class IssueCardComponent {
     const base = `${nextUp}${queuePositionPart}Issue #${issue.issueNumber}: ${issue.title}. State: ${stateLabel}`;
     const warning = this.repoWarningLabel();
     const warningPart = warning ? ` ${warning}` : '';
+    const outcome = this._checksOutcomeDisplay();
+    const checksPart = outcome ? ` Checks outcome: ${outcome.label}.` : '';
     const runStatsPart = this._buildRunStatsAriaText();
     const activityPart = this._buildActivityAriaText();
-    return `${base}${warningPart}${runStatsPart}${activityPart}`;
+    return `${base}${warningPart}${checksPart}${runStatsPart}${activityPart}`;
   });
 
   private _buildQueuePositionAriaClause(): string {

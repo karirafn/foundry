@@ -29,6 +29,10 @@
     background-color: var(--fd-state-review);
   }
 
+  &--checks-pending {
+    background-color: var(--fd-state-queued);
+  }
+
   &--unchanged {
     background-color: var(--fd-state-unchanged);
   }

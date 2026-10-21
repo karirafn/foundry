@@ -133,6 +133,33 @@ import { IssueState, RETRYABLE_STATES } from '../../../shared/utils/issue-state'
             }
           </div>
 
+          @if (s.checksOutcome === 'still_failing' && s.failingChecks?.length) {
+            <div class="issue-detail__failing-checks">
+              <span class="issue-detail__field-key">Failing Checks</span>
+              <ul class="issue-detail__failing-list">
+                @for (check of s.failingChecks; track check.name) {
+                  <li class="issue-detail__failing-item">
+                    <span class="issue-detail__failing-name">{{ check.name }}</span>
+                    <span
+                      class="badge issue-detail__failing-conclusion"
+                      role="img"
+                      [attr.aria-label]="'Conclusion: ' + check.conclusion"
+                    >{{ check.conclusion }}</span>
+                    @if (check.detailsUrl | safeHref; as safeUrl) {
+                      <a
+                        class="issue-detail__failing-link"
+                        [href]="safeUrl"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        [attr.aria-label]="'View details for failing check ' + check.name"
+                      >View details</a>
+                    }
+                  </li>
+                }
+              </ul>
+            </div>
+          }
+
           <!-- Live region sits outside the grid so it does not create a phantom grid track
                when empty. It remains permanently mounted so screen readers detect content
                changes when retry data populates. -->
