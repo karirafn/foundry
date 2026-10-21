@@ -1,5 +1,6 @@
 using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Issues.Domain.Entities;
+using Foundry.Modules.Issues.Domain.ValueObjects;
 using Foundry.Modules.Workers.Contracts;
 
 namespace Foundry.Modules.Issues.Domain.Entities.States;
@@ -67,5 +68,12 @@ public sealed class ChecksPendingIssue : Issue
         checksPending.EnteredChecksPendingAt = DateTimeOffset.UtcNow;
         checksPending.FeedbackCutoffAt = feedbackCutoffAt;
         return checksPending;
+    }
+
+    public ReviewIssue ToReview(ChecksOutcome checksOutcome)
+    {
+        ReviewIssue review = ReviewIssue.FromChecksPending(this, checksOutcome);
+        AddDomainEvent(new Events.IssueInReview(Id, MonitoredRepositoryId));
+        return review;
     }
 }
