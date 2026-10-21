@@ -19,8 +19,7 @@ namespace Foundry.IntegrationTests.Modules.Issues.Features.ChecksGate;
 /// Seeds a pre-migration row with PascalCase review_comments JSON (as ReviewCommentsJsonConversion
 /// serialised it) and asserts that after the migration the entity materialises via RevisionTriggerJsonConversion
 /// with a ReviewFeedback trigger whose comments, omitted count, and newest-at survive intact.
-///
-/// Docker is NOT available in this sandbox — compile-verified only; executes in CI.
+/// Runs locally against SQLite — no Docker required.
 /// </summary>
 public sealed class WhenAddRevisionTriggerMigrationRuns : IAsyncLifetime, IAsyncDisposable
 {
@@ -83,10 +82,13 @@ public sealed class WhenAddRevisionTriggerMigrationRuns : IAsyncLifetime, IAsync
         await _dbContext.Database.MigrateAsync(TargetMigrationId, TestContext.Current.CancellationToken);
 
         // Assert — the row materialises as a RevisionQueuedIssue with the correct ReviewFeedback trigger.
+        // Look up by IssueNumber rather than id: raw SQL inserts the id in lowercase hyphenated GUID format,
+        // but EF + Microsoft.Data.Sqlite emits the id parameter in uppercase canonical GUID format, so the
+        // WHERE-clause string comparison on the id column finds nothing and returns null.
         _dbContext.ChangeTracker.Clear();
         Issue? loaded = await _dbContext
             .Set<Issue>()
-            .FindAsync([IssueId.From(issueId)], TestContext.Current.CancellationToken);
+            .FirstOrDefaultAsync(i => i.IssueNumber == 10, TestContext.Current.CancellationToken);
 
         RevisionQueuedIssue revisionQueued = loaded.ShouldBeOfType<RevisionQueuedIssue>();
         RevisionTrigger.ReviewFeedback rf = revisionQueued.Trigger.ShouldBeOfType<RevisionTrigger.ReviewFeedback>();
