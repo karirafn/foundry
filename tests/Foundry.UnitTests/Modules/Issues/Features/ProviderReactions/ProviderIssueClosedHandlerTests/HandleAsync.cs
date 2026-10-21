@@ -73,6 +73,18 @@ public sealed class HandleAsync : IAsyncDisposable
         return queued;
     }
 
+    private ChecksPendingIssue SeedChecksPendingIssue(MonitoredRepositoryId repositoryId, int issueNumber = 5)
+    {
+        ChecksPendingIssue checksPending = new IssueBuilder()
+            .WithMonitoredRepositoryId(repositoryId)
+            .WithIssueNumber(issueNumber)
+            .ChecksPending();
+        _dbContext.Set<Issue>().Add(checksPending);
+        _dbContext.SaveChanges();
+        _dbContext.ChangeTracker.Clear();
+        return checksPending;
+    }
+
     [Fact]
     public async Task WhenReviewIssue_TransitionsToCompletedIssue()
     {
@@ -97,7 +109,50 @@ public sealed class HandleAsync : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenNotReviewIssue_SilentlyIgnores()
+    public async Task WhenChecksPendingIssue_TransitionsToCompletedIssue()
+    {
+        // Arrange
+        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
+        SeedChecksPendingIssue(repositoryId, issueNumber: 5);
+
+        ProviderIssueClosed @event = new(
+            RepositoryId: repositoryId,
+            IssueNumber: 5);
+
+        // Act
+        await _sut.HandleAsync(@event, CancellationToken.None);
+
+        // Assert
+        _dbContext.ChangeTracker.Clear();
+        Issue? issue = await _dbContext.Set<Issue>()
+            .FirstOrDefaultAsync(
+                i => i.MonitoredRepositoryId == repositoryId,
+                TestContext.Current.CancellationToken);
+        issue.ShouldBeOfType<CompletedIssue>();
+    }
+
+    [Fact]
+    public async Task WhenChecksPendingIssueIsClosed_DispatchesIssueCompletedEvent()
+    {
+        // Arrange
+        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
+        SeedChecksPendingIssue(repositoryId, issueNumber: 6);
+
+        ProviderIssueClosed @event = new(
+            RepositoryId: repositoryId,
+            IssueNumber: 6);
+
+        // Act
+        await _sut.HandleAsync(@event, CancellationToken.None);
+
+        // Assert
+        _dispatcher.DispatchedEvents
+            .OfType<IssueCompleted>()
+            .ShouldHaveSingleItem();
+    }
+
+    [Fact]
+    public async Task WhenUnhandledState_SilentlyIgnores()
     {
         // Arrange
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
