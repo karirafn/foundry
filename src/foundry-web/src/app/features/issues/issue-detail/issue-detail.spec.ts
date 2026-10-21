@@ -917,8 +917,8 @@ describe('IssueDetailComponent', () => {
     const fixture = createComponent(retryingDetail);
     const el = fixture.nativeElement as HTMLElement;
 
-    // Assert — live region exists and contains retry content
-    const liveRegion = el.querySelector('[role="status"][aria-live="polite"]') as HTMLElement;
+    // Assert — retry live region exists and contains retry content
+    const liveRegion = el.querySelector('.issue-detail__retry-live-region') as HTMLElement;
     expect(liveRegion).toBeTruthy();
     expect(liveRegion?.textContent?.trim()).toContain('Attempt 1 of 2');
   });
@@ -938,8 +938,8 @@ describe('IssueDetailComponent', () => {
     const fixture = createComponent(noRetryDetail);
     const el = fixture.nativeElement as HTMLElement;
 
-    // Assert — live region is present but empty; stateDetails is non-null so the region is mounted
-    const liveRegion = el.querySelector('[role="status"][aria-live="polite"]') as HTMLElement;
+    // Assert — retry live region is present but empty; stateDetails is non-null so the region is mounted
+    const liveRegion = el.querySelector('.issue-detail__retry-live-region') as HTMLElement;
     expect(liveRegion).toBeTruthy();
     expect(liveRegion?.textContent?.trim()).toBe('');
   });

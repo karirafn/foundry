@@ -1,3 +1,5 @@
+using System.Globalization;
+
 using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Issues.Domain.Entities;
 using Foundry.Modules.Issues.Domain.Entities.States;
@@ -130,6 +132,31 @@ public sealed class WhenAddRevisionTriggerMigrationRuns : IAsyncLifetime, IAsync
         revisionTriggerIsNull.ShouldBeTrue();
     }
 
+    [Fact]
+    public async Task RevisionQueuedRowWithNullNewestConsumedCommentAt_MaterialisesCorrectlyAfterMigration()
+    {
+        // Arrange — insert a revision_queued row with null newest_consumed_comment_at.
+        Guid issueId = Guid.NewGuid();
+        Guid repositoryId = Guid.NewGuid();
+        Guid workerRunId = Guid.NewGuid();
+
+        await InsertRevisionQueuedRowWithNullNewestAtAsync(issueId, repositoryId, workerRunId);
+
+        // Act — apply AddRevisionTrigger.
+        await _dbContext.Database.MigrateAsync(TargetMigrationId, TestContext.Current.CancellationToken);
+
+        // Assert — the row materialises with NewestConsumedCommentAt == null.
+        _dbContext.ChangeTracker.Clear();
+        Issue? loaded = await _dbContext
+            .Set<Issue>()
+            .FirstOrDefaultAsync(i => i.IssueNumber == 12, TestContext.Current.CancellationToken);
+
+        RevisionQueuedIssue revisionQueued = loaded.ShouldBeOfType<RevisionQueuedIssue>();
+        RevisionTrigger.ReviewFeedback rf = revisionQueued.Trigger.ShouldBeOfType<RevisionTrigger.ReviewFeedback>();
+
+        rf.NewestConsumedCommentAt.ShouldBeNull();
+    }
+
     private async Task InsertRevisionQueuedRowAsync(
         Guid issueId,
         Guid repositoryId,
@@ -156,7 +183,34 @@ public sealed class WhenAddRevisionTriggerMigrationRuns : IAsyncLifetime, IAsync
         command.Parameters.AddWithValue("$id", issueId.ToString());
         command.Parameters.AddWithValue("$repoId", repositoryId.ToString());
         command.Parameters.AddWithValue("$reviewComments", reviewCommentsJson);
-        command.Parameters.AddWithValue("$newestAt", newestAt.ToString("O"));
+        // Seed in EF+Microsoft.Data.Sqlite's actual storage format for DateTimeOffset?: space separator,
+        // no 'T' between date and time (e.g. "2026-09-15 12:00:00.0000000+00:00"). Using the "O" / ISO-T
+        // form would mask the bug because STJ's DateTimeOffset converter already accepts 'T'-form input.
+        command.Parameters.AddWithValue("$newestAt", newestAt.ToString("yyyy-MM-dd HH:mm:ss.fffffffzzz", CultureInfo.InvariantCulture));
+        await command.ExecuteNonQueryAsync(TestContext.Current.CancellationToken);
+    }
+
+    private async Task InsertRevisionQueuedRowWithNullNewestAtAsync(
+        Guid issueId,
+        Guid repositoryId,
+        Guid workerRunId)
+    {
+        string reviewCommentsJson =
+            """[{"Body":"Fix this.","FilePath":null,"Line":null}]""";
+
+        using SqliteCommand command = _connection.CreateCommand();
+        command.CommandText =
+            "INSERT INTO issues " +
+            "(id, monitored_repository_id, issue_number, title, author, url, labels, state, detected_at, " +
+            " branch_name, pull_request_url, feedback_cutoff_at, review_comments, omitted_comment_count, " +
+            " newest_consumed_comment_at) " +
+            "VALUES ($id, $repoId, 12, 'Null newest-at issue', 'octocat', 'https://github.com/o/r/issues/12', " +
+            " '[]', 'revision_queued', datetime('now'), 'feat/12-test', " +
+            " 'https://github.com/o/r/pull/12', datetime('now', '+1 day'), " +
+            " $reviewComments, 0, NULL);";
+        command.Parameters.AddWithValue("$id", issueId.ToString());
+        command.Parameters.AddWithValue("$repoId", repositoryId.ToString());
+        command.Parameters.AddWithValue("$reviewComments", reviewCommentsJson);
         await command.ExecuteNonQueryAsync(TestContext.Current.CancellationToken);
     }
 

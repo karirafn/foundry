@@ -56,7 +56,7 @@ namespace Foundry.WebApi.Migrations
                         FROM json_each(review_comments)
                     ),
                     'omittedCommentCount', COALESCE(omitted_comment_count, 0),
-                    'newestConsumedCommentAt', newest_consumed_comment_at
+                    'newestConsumedCommentAt', REPLACE(newest_consumed_comment_at, ' ', 'T')
                 )
                 WHERE state IN ('revision_queued', 'revision_in_progress', 'revision_failed')
                   AND review_comments IS NOT NULL;
@@ -155,7 +155,7 @@ namespace Foundry.WebApi.Migrations
                         FROM json_each(json_extract(revision_trigger, '$.comments'))
                     ),
                     omitted_comment_count = json_extract(revision_trigger, '$.omittedCommentCount'),
-                    newest_consumed_comment_at = json_extract(revision_trigger, '$.newestConsumedCommentAt')
+                    newest_consumed_comment_at = REPLACE(json_extract(revision_trigger, '$.newestConsumedCommentAt'), 'T', ' ')
                 WHERE state IN ('revision_queued', 'revision_in_progress', 'revision_failed')
                   AND revision_trigger IS NOT NULL
                   AND json_extract(revision_trigger, '$.discriminator') = 'review_feedback';
