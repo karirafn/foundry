@@ -58,6 +58,7 @@ public static class IssuesModule
         AddIssueStateChangedHandler<IssueRevisionInProgress>(services);
         AddIssueStateChangedHandler<IssueContinuableFailed>(services);
         AddIssueStateChangedHandler<IssueContinuationQueued>(services);
+        AddIssueStateChangedHandler<IssueChecksPending>(services);
 
         return services;
     }

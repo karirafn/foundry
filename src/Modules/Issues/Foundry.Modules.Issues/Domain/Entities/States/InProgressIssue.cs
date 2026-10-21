@@ -42,6 +42,20 @@ public sealed class InProgressIssue : Issue
         return review;
     }
 
+    public ChecksPendingIssue MarkChecksPending(
+        string branchName,
+        string pullRequestUrl,
+        DateTimeOffset feedbackCutoffAt)
+    {
+        ChecksPendingIssue checksPending = ChecksPendingIssue.FromInProgress(
+            this,
+            branchName,
+            pullRequestUrl,
+            feedbackCutoffAt);
+        AddDomainEvent(new Events.IssueChecksPending(Id, MonitoredRepositoryId));
+        return checksPending;
+    }
+
     public UnchangedIssue MarkUnchanged()
     {
         UnchangedIssue unchanged = UnchangedIssue.FromInProgress(this);

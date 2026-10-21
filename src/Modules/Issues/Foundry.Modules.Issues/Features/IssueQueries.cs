@@ -318,6 +318,7 @@ internal sealed class IssueQueries(
             RevisionQueuedIssue => "revision_queued",
             RevisionInProgressIssue => "revision_in_progress",
             RevisionFailedIssue => "revision_failed",
+            ChecksPendingIssue => "checks_pending",
             _ => throw new InvalidOperationException($"Unknown issue type: {issue.GetType().Name}")
         };
 
@@ -486,6 +487,17 @@ internal sealed class IssueQueries(
                 BranchName: continuationQueued.BranchName,
                 PullRequestUrl: null,
                 FeedbackCutoffAt: null,
+                FailureReason: null,
+                FailedAt: null,
+                CompletedAt: null,
+                BlockedBy: null,
+                TransientRetry: null),
+
+            ChecksPendingIssue checksPending => new IssueStateDetails(
+                WorkerRunId: checksPending.WorkerRunId.Value,
+                BranchName: checksPending.BranchName,
+                PullRequestUrl: checksPending.PullRequestUrl,
+                FeedbackCutoffAt: checksPending.FeedbackCutoffAt,
                 FailureReason: null,
                 FailedAt: null,
                 CompletedAt: null,

@@ -173,6 +173,7 @@ public sealed class IssueConfiguration : IEntityTypeConfiguration<Issue>
             .HasValue<RevisionQueuedIssue>("revision_queued")
             .HasValue<RevisionInProgressIssue>("revision_in_progress")
             .HasValue<RevisionFailedIssue>("revision_failed")
+            .HasValue<ChecksPendingIssue>("checks_pending")
             .IsComplete(true);
 
         builder.Property<string>("state")
