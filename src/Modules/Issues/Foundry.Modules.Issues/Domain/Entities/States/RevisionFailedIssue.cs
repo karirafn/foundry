@@ -23,6 +23,7 @@ public sealed class RevisionFailedIssue : Issue
 
     public string PullRequestUrl { get; private set; } = string.Empty;
 
+    // Placeholder replaced by the factory method or EF materialisation; invalid until assigned.
     public RevisionTrigger Trigger { get; private set; } = new RevisionTrigger.ReviewFeedback([], 0, null);
 
     public int ChecksFixAttempts { get; private set; }

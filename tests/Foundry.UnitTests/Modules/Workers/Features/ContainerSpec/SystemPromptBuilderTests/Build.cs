@@ -1734,4 +1734,63 @@ public sealed class Build
         // Assert
         result.ShouldContain(detailsUrl);
     }
+
+    [Fact]
+    public void WhenBuiltForFailedChecksTrigger_FixRootCauseLeadInstructionPresent()
+    {
+        // Arrange — code-review #11: pin the unique lead instruction so a rename of the phrase
+        // surfaces as a failing test rather than silently disappearing from the worker's prompt.
+        WorkerOptions options = new();
+        DispatchContext.Revision revision = new(
+            "feat/1-fix",
+            "https://github.com/org/repo/pull/1",
+            new RevisionTrigger.FailedChecks(
+            [
+                new FailingCheck("ci/build", "failure", null),
+            ]));
+
+        // Act
+        Result<string> buildResult = SystemPromptBuilder.Build(
+            1, options, options.SystemPromptTemplate, revision,
+            "https://api.github.com/repos/owner/repo/issues/1",
+            timeoutMinutes: 120);
+        string result = buildResult.ShouldBeOfType<Result<string>.Success>().Value;
+
+        // Assert — unique lead instruction that distinguishes the FailedChecks path
+        result.ShouldContain("Fix the root cause of the failures");
+    }
+
+    [Fact]
+    public void WhenBuiltForFailedChecksTriggerWithManyChecks_PromptStaysUnderByteCeilingWithOmissionNote()
+    {
+        // Arrange — FINDING 2: BuildFailingChecksSection must budget checks the same way
+        // BuildRevisionSection budgets comments. GitHub can return up to 100 checks; all appended
+        // unconditionally would push the prompt over the 120 KB ceiling. Construct 100 checks
+        // with long names to force truncation, then assert the result is under the ceiling and
+        // contains an omission note rather than failing the build entirely.
+        WorkerOptions options = new();
+        IReadOnlyList<FailingCheck> manyChecks = Enumerable.Range(1, 100)
+            .Select(i => new FailingCheck(
+                new string('a', 1500) + $"-check-{i}",
+                "failure",
+                $"https://github.com/owner/repo/actions/runs/{i}"))
+            .ToList();
+        DispatchContext.Revision revision = new(
+            "feat/1-fix",
+            "https://github.com/org/repo/pull/1",
+            new RevisionTrigger.FailedChecks(manyChecks));
+
+        // Act
+        Result<string> buildResult = SystemPromptBuilder.Build(
+            1, options, options.SystemPromptTemplate, revision,
+            "https://api.github.com/repos/owner/repo/issues/1",
+            timeoutMinutes: 120);
+        string result = buildResult.ShouldBeOfType<Result<string>.Success>().Value;
+
+        // Assert — under ceiling, failing-checks section present, omission note rendered
+        Encoding.UTF8.GetByteCount(result).ShouldBeLessThan(SystemPromptBuilder.MaxSystemPromptBytes);
+        result.ShouldContain("<failing-checks>");
+        result.ShouldContain("</failing-checks>");
+        result.ShouldContain("check(s) were omitted to fit the prompt size budget");
+    }
 }

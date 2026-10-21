@@ -34,14 +34,29 @@ namespace Foundry.WebApi.Migrations
                 type: "TEXT",
                 nullable: true);
 
+            // Build the revision_trigger JSON using the keys that RevisionTriggerJsonConversion
+            // expects: lowercase 'discriminator', 'comments', 'omittedCommentCount', and
+            // 'newestConsumedCommentAt'. The old review_comments column was serialized by
+            // ReviewCommentsJsonConversion with DEFAULT (PascalCase) STJ options, so each element
+            // has keys 'Body', 'FilePath', and 'Line'. Re-key them to camelCase ('body', 'filePath',
+            // 'line') to match the new ReviewCommentDto's [JsonPropertyName] attributes.
             migrationBuilder.Sql(
                 """
                 UPDATE issues
                 SET revision_trigger = json_object(
-                    '$type', 'review_feedback',
-                    'Comments', json(review_comments),
-                    'OmittedCommentCount', COALESCE(omitted_comment_count, 0),
-                    'NewestConsumedCommentAt', newest_consumed_comment_at
+                    'discriminator', 'review_feedback',
+                    'comments', (
+                        SELECT json_group_array(
+                            json_object(
+                                'body',     json_extract(value, '$.Body'),
+                                'filePath', json_extract(value, '$.FilePath'),
+                                'line',     json_extract(value, '$.Line')
+                            )
+                        )
+                        FROM json_each(review_comments)
+                    ),
+                    'omittedCommentCount', COALESCE(omitted_comment_count, 0),
+                    'newestConsumedCommentAt', newest_consumed_comment_at
                 )
                 WHERE state IN ('revision_queued', 'revision_in_progress', 'revision_failed')
                   AND review_comments IS NOT NULL;
@@ -123,15 +138,27 @@ namespace Foundry.WebApi.Migrations
                 nullable: true);
 
             // Backfill old columns from revision_trigger for review_feedback rows.
+            // Re-key the comments array from camelCase ('body', 'filePath', 'line') back to the
+            // PascalCase keys ('Body', 'FilePath', 'Line') that ReviewCommentsJsonConversion
+            // (DEFAULT STJ options) wrote and expects when reading the old schema.
             migrationBuilder.Sql(
                 """
                 UPDATE issues
-                SET review_comments = json_extract(revision_trigger, '$.Comments'),
-                    omitted_comment_count = json_extract(revision_trigger, '$.OmittedCommentCount'),
-                    newest_consumed_comment_at = json_extract(revision_trigger, '$.NewestConsumedCommentAt')
+                SET review_comments = (
+                        SELECT json_group_array(
+                            json_object(
+                                'Body',     json_extract(value, '$.body'),
+                                'FilePath', json_extract(value, '$.filePath'),
+                                'Line',     json_extract(value, '$.line')
+                            )
+                        )
+                        FROM json_each(json_extract(revision_trigger, '$.comments'))
+                    ),
+                    omitted_comment_count = json_extract(revision_trigger, '$.omittedCommentCount'),
+                    newest_consumed_comment_at = json_extract(revision_trigger, '$.newestConsumedCommentAt')
                 WHERE state IN ('revision_queued', 'revision_in_progress', 'revision_failed')
                   AND revision_trigger IS NOT NULL
-                  AND json_extract(revision_trigger, '$.$type') = 'review_feedback';
+                  AND json_extract(revision_trigger, '$.discriminator') = 'review_feedback';
                 """);
 
             // Drop revision_trigger and checks_fix_attempts.

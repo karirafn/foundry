@@ -78,18 +78,15 @@ public sealed class HandleAsync : IAsyncDisposable
         MonitoredRepositoryId repositoryId,
         int issueNumber = 1)
     {
-        // Simulate ChecksMaxFixPushes (2) fix attempts to reach the cap.
-        IssueBuilder builder = new IssueBuilder()
+        // Delegate to ChecksPendingAtCap() — the canonical builder terminal that reaches the cap state
+        // via the same production path as integration tests, avoiding divergence.
+        ChecksPendingIssue checksPending = new IssueBuilder()
             .WithMonitoredRepositoryId(repositoryId)
             .WithIssueNumber(issueNumber)
             .WithBranchName("feat/1-test-issue")
             .WithPullRequestUrl("https://github.com/owner/repo/pull/10")
-            .WithFailingChecks(DefaultFailingChecks);
-
-        ChecksPendingIssue checksPending = builder.ChecksPendingFromFixChecks()
-            .FixChecks(DefaultFailingChecks)
-            .Claim(WorkerRunId.New())
-            .MarkChecksPending();
+            .WithFailingChecks(DefaultFailingChecks)
+            .ChecksPendingAtCap();
 
         _dbContext.Set<Issue>().Add(checksPending);
         _dbContext.SaveChanges();
