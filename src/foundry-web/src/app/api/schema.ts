@@ -704,6 +704,9 @@ export interface components {
             transientRetry: null | components["schemas"]["TransientRetryDetails"];
             checksOutcome?: null | string;
             failingChecks?: null | components["schemas"]["FailingCheck"][];
+            revisionTriggerKind?: null | string;
+            /** Format: int32 */
+            checksFixAttempts?: null | number | string;
         };
         IssueSummary: {
             /** Format: uuid */

@@ -1,3 +1,4 @@
+using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Issues.Domain.Entities.States;
 using Foundry.Modules.Issues.Domain.Events;
 using Foundry.Modules.Monitoring.Contracts;
@@ -64,7 +65,7 @@ public sealed class MarkUnchanged
         review.ShouldSatisfyAllConditions(
             () => review.BranchName.ShouldBe(revisionInProgress.BranchName),
             () => review.PullRequestUrl.ShouldBe(revisionInProgress.PullRequestUrl),
-            () => review.FeedbackCutoffAt.ShouldBe(revisionInProgress.NewestConsumedCommentAt!.Value),
+            () => review.FeedbackCutoffAt.ShouldBe(newestConsumedCommentAt),
             () => review.MonitoredRepositoryId.ShouldBe(repositoryId));
     }
 

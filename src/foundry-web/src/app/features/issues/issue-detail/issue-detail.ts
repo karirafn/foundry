@@ -13,7 +13,7 @@ import {
 } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { Observable } from 'rxjs';
-import { IssueDetail } from '../issue.model';
+import { IssueDetail, IssueStateDetails } from '../issue.model';
 import { SafeHrefPipe } from '../../../shared/pipes/safe-href.pipe';
 import { IssueService } from '../issue.service';
 import { WorkerRunService } from '../../workers/worker-run.service';
@@ -22,7 +22,7 @@ import { WorkerRunDetail } from '../../workers/worker-run.model';
 import { LogViewComponent } from '../../../shared/components/log-view/log-view';
 import { providerTerminology } from '../../../shared/utils/provider.util';
 import { getFailureCategoryDisplay } from '../../../shared/utils/failure-category';
-import { IssueState, RETRYABLE_STATES } from '../../../shared/utils/issue-state';
+import { IssueState, MAX_CHECKS_FIX_ATTEMPTS, RETRYABLE_STATES, REVISION_STATES } from '../../../shared/utils/issue-state';
 
 @Component({
   selector: 'fd-issue-detail',
@@ -198,6 +198,46 @@ import { IssueState, RETRYABLE_STATES } from '../../../shared/utils/issue-state'
               </div>
             }
           </div>
+
+          <!-- Revision kind callout. Permanently mounted like the retry live region so
+               screen readers detect the transition into a revision and attempt-count
+               increments. -->
+          <div
+            class="issue-detail__revision-live-region"
+            [class.issue-detail__revision-state]="_showsRevisionCallout(d.state, s)"
+            [class.issue-detail__revision-state--review]="s.revisionTriggerKind === 'review_feedback'"
+            [class.issue-detail__revision-live-region--empty]="!_showsRevisionCallout(d.state, s)"
+            role="status"
+            aria-live="polite"
+            aria-atomic="true"
+          >
+            @if (_showsRevisionCallout(d.state, s)) {
+              <span class="issue-detail__field-key">Revision</span>
+              <div class="issue-detail__revision-callout">
+                @if (s.revisionTriggerKind === 'failed_checks') {
+                  <span class="badge issue-detail__revision-chip badge--retrying"
+                    >Fixing checks (attempt {{ s.checksFixAttempts ?? 1 }} of {{ _maxChecksFixAttempts }})</span>
+                  <span class="issue-detail__revision-message issue-detail__field-value">
+                    @if (d.state === 'revision_in_progress') {
+                      Fixing checks — a worker is running.
+                    } @else {
+                      Fix run queued — checks failed on the PR.
+                    }
+                  </span>
+                } @else {
+                  <span class="badge issue-detail__revision-chip badge--revision-in-progress"
+                    >Addressing review</span>
+                  <span class="issue-detail__revision-message issue-detail__field-value">
+                    @if (d.state === 'revision_in_progress') {
+                      A worker is addressing reviewer feedback.
+                    } @else {
+                      Queued to address reviewer feedback.
+                    }
+                  </span>
+                }
+              </div>
+            }
+          </div>
         }
 
         <div class="issue-detail__fields issue-detail__fields--author">
@@ -325,8 +365,14 @@ export class IssueDetailComponent {
     this._issueService.retryIssue(id);
   }
 
+  protected readonly _maxChecksFixAttempts = MAX_CHECKS_FIX_ATTEMPTS;
+
   protected _isRetryable(state: string): boolean {
     return RETRYABLE_STATES.has(state as IssueState);
+  }
+
+  protected _showsRevisionCallout(state: string, s: IssueStateDetails): boolean {
+    return REVISION_STATES.has(state as IssueState) && s.revisionTriggerKind != null;
   }
 
   protected _prTerminology(providerType: string): { pullRequest: string; prAbbrev: string } {

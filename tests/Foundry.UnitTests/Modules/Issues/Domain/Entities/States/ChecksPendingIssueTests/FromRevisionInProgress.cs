@@ -68,7 +68,7 @@ public sealed class FromRevisionInProgress
         ChecksPendingIssue checksPending = revisionInProgress.MarkChecksPending();
 
         // Assert
-        checksPending.FeedbackCutoffAt.ShouldBe(revisionInProgress.NewestConsumedCommentAt!.Value);
+        checksPending.FeedbackCutoffAt.ShouldBe(newestConsumedCommentAt);
     }
 
     [Fact]

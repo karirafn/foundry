@@ -595,7 +595,7 @@ public sealed class HandleAsync : IAsyncDisposable
         DispatchContext.Revision revision = new(
             "feat/42-fix",
             "https://github.com/owner/repo/pull/10",
-            [new ReviewComment("Please add tests.")]);
+            new RevisionTrigger.ReviewFeedback([new ReviewComment("Please add tests.")], 0, null));
         IssueClaimed @event = BuildEvent(branchName: "feat/42-fix", context: revision);
 
         // Act

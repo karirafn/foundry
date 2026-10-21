@@ -3,7 +3,7 @@ import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { IssueService } from './issue.service';
 import { IssueSignalRService } from '../../core/services/issue-signalr.service';
-import { IssueSummary, IssueDetail } from './issue.model';
+import { IssueSummary, IssueDetail, RevisionTriggerKind } from './issue.model';
 import { ACTIVE_STATES } from './issue-lifecycle.model';
 import { vi } from 'vitest';
 
@@ -243,6 +243,40 @@ describe('IssueService', () => {
     // Assert
     expect(service.issueDetail()).toEqual(detail);
     expect(service.detailLoading()).toBe(false);
+  });
+
+  // Revision fields mapping: loadDetail preserves revisionTriggerKind and checksFixAttempts
+  it('should preserve revisionTriggerKind and checksFixAttempts from API response in issueDetail', () => {
+    // Arrange
+    const triggerKind: RevisionTriggerKind = 'failed_checks';
+    const detail: IssueDetail = {
+      ...mockSummary,
+      providerType: 'GitHub',
+      author: 'dev',
+      labels: [],
+      stateDetails: {
+        workerRunId: null,
+        branchName: null,
+        pullRequestUrl: null,
+        feedbackCutoffAt: null,
+        failureReason: null,
+        failedAt: null,
+        completedAt: null,
+        blockedBy: null,
+        violations: null,
+        transientRetry: null,
+        revisionTriggerKind: triggerKind,
+        checksFixAttempts: 2,
+      },
+    };
+
+    // Act
+    service.loadDetail('abc123');
+    httpMock.expectOne('/api/issues/abc123').flush(detail);
+
+    // Assert
+    expect(service.issueDetail()?.stateDetails?.revisionTriggerKind).toBe('failed_checks');
+    expect(service.issueDetail()?.stateDetails?.checksFixAttempts).toBe(2);
   });
 
   it('should set detailLoading to true before the detail request resolves', () => {

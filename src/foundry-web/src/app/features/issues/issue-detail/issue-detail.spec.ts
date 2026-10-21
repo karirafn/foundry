@@ -9,7 +9,7 @@ import { IssueService } from '../issue.service';
 import { IssueSignalRService } from '../../../core/services/issue-signalr.service';
 import { WorkerRunService } from '../../workers/worker-run.service';
 import { WorkerSignalRService, WORKER_HUB_FACTORY } from '../../../core/services/worker-signalr.service';
-import { RETRYABLE_STATES } from '../../../shared/utils/issue-state';
+import { MAX_CHECKS_FIX_ATTEMPTS, RETRYABLE_STATES } from '../../../shared/utils/issue-state';
 
 const mockIssueSignalRService = {
   on: () => {},
@@ -917,8 +917,8 @@ describe('IssueDetailComponent', () => {
     const fixture = createComponent(retryingDetail);
     const el = fixture.nativeElement as HTMLElement;
 
-    // Assert — live region exists and contains retry content
-    const liveRegion = el.querySelector('[role="status"][aria-live="polite"]') as HTMLElement;
+    // Assert — retry live region exists and contains retry content
+    const liveRegion = el.querySelector('.issue-detail__retry-live-region') as HTMLElement;
     expect(liveRegion).toBeTruthy();
     expect(liveRegion?.textContent?.trim()).toContain('Attempt 1 of 2');
   });
@@ -938,8 +938,8 @@ describe('IssueDetailComponent', () => {
     const fixture = createComponent(noRetryDetail);
     const el = fixture.nativeElement as HTMLElement;
 
-    // Assert — live region is present but empty; stateDetails is non-null so the region is mounted
-    const liveRegion = el.querySelector('[role="status"][aria-live="polite"]') as HTMLElement;
+    // Assert — retry live region is present but empty; stateDetails is non-null so the region is mounted
+    const liveRegion = el.querySelector('.issue-detail__retry-live-region') as HTMLElement;
     expect(liveRegion).toBeTruthy();
     expect(liveRegion?.textContent?.trim()).toBe('');
   });
@@ -1268,5 +1268,240 @@ describe('IssueDetailComponent', () => {
     const link = el.querySelector('.issue-detail__issue-link') as HTMLAnchorElement;
     expect(link).toBeTruthy();
     expect(link?.getAttribute('href')).toBe('https://github.com/owner/repo/issues/42');
+  });
+
+  // Revision callout — Cycle R1: failed_checks shows "Fixing checks (attempt n of 2)" chip
+  it('should render "Fixing checks (attempt 1 of 2)" chip when revisionTriggerKind is failed_checks and state is revision_in_progress', () => {
+    // Arrange
+    const detail: IssueDetail = {
+      ...mockDetail,
+      state: 'revision_in_progress',
+      stateDetails: {
+        ...mockStateDetails,
+        revisionTriggerKind: 'failed_checks',
+        checksFixAttempts: 1,
+      },
+    };
+
+    // Act
+    const fixture = createComponent(detail);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    const chip = el.querySelector('.issue-detail__revision-chip') as HTMLElement;
+    expect(chip).toBeTruthy();
+    expect(chip?.textContent?.trim()).toBe(`Fixing checks (attempt 1 of ${MAX_CHECKS_FIX_ATTEMPTS})`);
+  });
+
+  // Revision callout — Cycle R2: failed_checks attempt 2 renders correctly
+  it(`should render "Fixing checks (attempt 2 of ${MAX_CHECKS_FIX_ATTEMPTS})" chip when checksFixAttempts is 2`, () => {
+    // Arrange
+    const detail: IssueDetail = {
+      ...mockDetail,
+      state: 'revision_in_progress',
+      stateDetails: {
+        ...mockStateDetails,
+        revisionTriggerKind: 'failed_checks',
+        checksFixAttempts: 2,
+      },
+    };
+
+    // Act
+    const fixture = createComponent(detail);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    const chip = el.querySelector('.issue-detail__revision-chip') as HTMLElement;
+    expect(chip?.textContent?.trim()).toBe(`Fixing checks (attempt 2 of ${MAX_CHECKS_FIX_ATTEMPTS})`);
+  });
+
+  // Revision callout — Cycle R3: failed_checks defaults attempt to 1 when checksFixAttempts is null
+  it('should default to attempt 1 when checksFixAttempts is null for failed_checks', () => {
+    // Arrange
+    const detail: IssueDetail = {
+      ...mockDetail,
+      state: 'revision_in_progress',
+      stateDetails: {
+        ...mockStateDetails,
+        revisionTriggerKind: 'failed_checks',
+        checksFixAttempts: null,
+      },
+    };
+
+    // Act
+    const fixture = createComponent(detail);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    const chip = el.querySelector('.issue-detail__revision-chip') as HTMLElement;
+    expect(chip?.textContent?.trim()).toBe(`Fixing checks (attempt 1 of ${MAX_CHECKS_FIX_ATTEMPTS})`);
+  });
+
+  // Revision callout — Cycle R4: revision_queued + failed_checks shows queued message
+  it('should show queued message for failed_checks when state is revision_queued', () => {
+    // Arrange
+    const detail: IssueDetail = {
+      ...mockDetail,
+      state: 'revision_queued',
+      stateDetails: {
+        ...mockStateDetails,
+        revisionTriggerKind: 'failed_checks',
+        checksFixAttempts: 1,
+      },
+    };
+
+    // Act
+    const fixture = createComponent(detail);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    const message = el.querySelector('.issue-detail__revision-message') as HTMLElement;
+    expect(message?.textContent?.trim()).toContain('Fix run queued');
+  });
+
+  // Revision callout — Cycle R5: review_feedback shows "Addressing review" chip
+  it('should render "Addressing review" chip when revisionTriggerKind is review_feedback', () => {
+    // Arrange
+    const detail: IssueDetail = {
+      ...mockDetail,
+      state: 'revision_in_progress',
+      stateDetails: {
+        ...mockStateDetails,
+        revisionTriggerKind: 'review_feedback',
+      },
+    };
+
+    // Act
+    const fixture = createComponent(detail);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    const chip = el.querySelector('.issue-detail__revision-chip') as HTMLElement;
+    expect(chip).toBeTruthy();
+    expect(chip?.textContent?.trim()).toBe('Addressing review');
+  });
+
+  // Revision callout — Cycle R6: revision callout not shown when revisionTriggerKind is absent
+  it('should not render revision callout content when revisionTriggerKind is absent', () => {
+    // Arrange — state is revision_in_progress but no trigger kind
+    const detail: IssueDetail = {
+      ...mockDetail,
+      state: 'revision_in_progress',
+      stateDetails: {
+        ...mockStateDetails,
+        revisionTriggerKind: null,
+      },
+    };
+
+    // Act
+    const fixture = createComponent(detail);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert — chip is absent; live region collapses
+    const chip = el.querySelector('.issue-detail__revision-chip');
+    expect(chip).toBeFalsy();
+  });
+
+  // Revision callout — Cycle R7: revision callout not shown when state is not a revision state
+  it('should not render revision callout when state is in_progress even if revisionTriggerKind is set', () => {
+    // Arrange — state is in_progress (not a revision state)
+    const detail: IssueDetail = {
+      ...mockDetail,
+      state: 'in_progress',
+      stateDetails: {
+        ...mockStateDetails,
+        revisionTriggerKind: 'failed_checks',
+        checksFixAttempts: 1,
+      },
+    };
+
+    // Act
+    const fixture = createComponent(detail);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert — chip is absent
+    const chip = el.querySelector('.issue-detail__revision-chip');
+    expect(chip).toBeFalsy();
+  });
+
+  // Revision callout — revision_failed exclusion: failed state has its own failure callout,
+  // not the in-progress revision chip.
+  it('should NOT render revision chip when state is revision_failed with revisionTriggerKind failed_checks', () => {
+    // Arrange — revision_failed is intentionally excluded from REVISION_STATES;
+    // it surfaces via the retryable failure path, not the in-progress revision callout.
+    const detail: IssueDetail = {
+      ...mockDetail,
+      state: 'revision_failed',
+      stateDetails: {
+        ...mockStateDetails,
+        revisionTriggerKind: 'failed_checks',
+        checksFixAttempts: 1,
+      },
+    };
+
+    // Act
+    const fixture = createComponent(detail);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert — chip is absent; revision_failed renders no revision callout
+    const chip = el.querySelector('.issue-detail__revision-chip');
+    expect(chip).toBeFalsy();
+  });
+
+  // Revision callout — Cycle R8: live region is permanently mounted with role="status"
+  it('should permanently mount the revision live region with role="status" and aria-live="polite"', () => {
+    // Arrange — state is not a revision state (empty live region)
+    const fixture = createComponent(mockDetail);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert — region present even when empty
+    const liveRegion = el.querySelector('.issue-detail__revision-live-region');
+    expect(liveRegion).toBeTruthy();
+    expect(liveRegion?.getAttribute('role')).toBe('status');
+    expect(liveRegion?.getAttribute('aria-live')).toBe('polite');
+    expect(liveRegion?.getAttribute('aria-atomic')).toBe('true');
+  });
+
+  // Revision callout — Cycle R9: failed_checks in_progress shows fixing message
+  it('should show fixing message for failed_checks when state is revision_in_progress', () => {
+    // Arrange
+    const detail: IssueDetail = {
+      ...mockDetail,
+      state: 'revision_in_progress',
+      stateDetails: {
+        ...mockStateDetails,
+        revisionTriggerKind: 'failed_checks',
+        checksFixAttempts: 1,
+      },
+    };
+
+    // Act
+    const fixture = createComponent(detail);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    const message = el.querySelector('.issue-detail__revision-message') as HTMLElement;
+    expect(message?.textContent?.trim()).toContain('Fixing checks — a worker is running');
+  });
+
+  // Revision callout — Cycle R10: review_feedback in_progress shows reviewer feedback message
+  it('should show addressing feedback message for review_feedback when state is revision_in_progress', () => {
+    // Arrange
+    const detail: IssueDetail = {
+      ...mockDetail,
+      state: 'revision_in_progress',
+      stateDetails: {
+        ...mockStateDetails,
+        revisionTriggerKind: 'review_feedback',
+      },
+    };
+
+    // Act
+    const fixture = createComponent(detail);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    const message = el.querySelector('.issue-detail__revision-message') as HTMLElement;
+    expect(message?.textContent?.trim()).toContain('addressing reviewer feedback');
   });
 });

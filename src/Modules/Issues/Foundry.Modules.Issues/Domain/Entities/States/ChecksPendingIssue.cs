@@ -3,6 +3,7 @@ using Foundry.Modules.Issues.Domain.Entities;
 using Foundry.Modules.Issues.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Workers.Contracts;
+using Foundry.Shared;
 
 using FailureCategoryVO = Foundry.Modules.Workers.Contracts.FailureCategory;
 
@@ -10,6 +11,14 @@ namespace Foundry.Modules.Issues.Domain.Entities.States;
 
 public sealed class ChecksPendingIssue : Issue
 {
+    /// <summary>
+    /// Maximum number of FailedChecks revision containers Foundry will dispatch across the lifetime
+    /// of an issue before transitioning it back to review instead of retrying.
+    /// Distinct from <c>SystemPromptBuilder.ChecksMaxFixPushes</c>, which is the per-container
+    /// in-run fix-push budget instructed to the worker.
+    /// </summary>
+    public const int ChecksMaxFixPushes = 2;
+
     // Private parameterless constructor for EF Core materialization.
     private ChecksPendingIssue()
     {
@@ -28,6 +37,8 @@ public sealed class ChecksPendingIssue : Issue
     public DateTimeOffset EnteredChecksPendingAt { get; private set; }
 
     public DateTimeOffset FeedbackCutoffAt { get; private set; }
+
+    public int ChecksFixAttempts { get; private set; }
 
     internal static ChecksPendingIssue FromInProgress(
         InProgressIssue source,
@@ -49,6 +60,7 @@ public sealed class ChecksPendingIssue : Issue
         checksPending.PullRequestUrl = pullRequestUrl;
         checksPending.EnteredChecksPendingAt = DateTimeOffset.UtcNow;
         checksPending.FeedbackCutoffAt = feedbackCutoffAt;
+        checksPending.ChecksFixAttempts = 0;
         return checksPending;
     }
 
@@ -70,6 +82,7 @@ public sealed class ChecksPendingIssue : Issue
         checksPending.PullRequestUrl = source.PullRequestUrl;
         checksPending.EnteredChecksPendingAt = DateTimeOffset.UtcNow;
         checksPending.FeedbackCutoffAt = feedbackCutoffAt;
+        checksPending.ChecksFixAttempts = source.ChecksFixAttempts;
         return checksPending;
     }
 
@@ -90,6 +103,13 @@ public sealed class ChecksPendingIssue : Issue
             comments,
             omittedCommentCount,
             newestCommentAt);
+        AddDomainEvent(new Events.IssueRevisionQueued(Id, MonitoredRepositoryId));
+        return revisionQueued;
+    }
+
+    public RevisionQueuedIssue FixChecks(IReadOnlyList<FailingCheck> failingChecks)
+    {
+        RevisionQueuedIssue revisionQueued = RevisionQueuedIssue.FromChecksPendingFix(this, failingChecks);
         AddDomainEvent(new Events.IssueRevisionQueued(Id, MonitoredRepositoryId));
         return revisionQueued;
     }

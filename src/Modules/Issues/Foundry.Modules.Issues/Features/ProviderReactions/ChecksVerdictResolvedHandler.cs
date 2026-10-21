@@ -34,6 +34,14 @@ internal sealed class ChecksVerdictResolvedHandler(
             return;
         }
 
+        if (@event.Outcome == "still_failing"
+            && checksPendingIssue.ChecksFixAttempts < ChecksPendingIssue.ChecksMaxFixPushes)
+        {
+            RevisionQueuedIssue revisionQueued = checksPendingIssue.FixChecks(@event.FailingChecks);
+            await db.TransitionAsync(checksPendingIssue, revisionQueued, domainEventDispatcher, cancellationToken);
+            return;
+        }
+
         ChecksOutcome outcome = @event.Outcome switch
         {
             "passed" => new ChecksOutcome.Passed(),

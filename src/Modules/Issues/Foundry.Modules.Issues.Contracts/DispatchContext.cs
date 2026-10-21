@@ -1,7 +1,5 @@
 using System.Text.Json.Serialization;
 
-using Foundry.Modules.Monitoring.Contracts;
-
 namespace Foundry.Modules.Issues.Contracts;
 
 [JsonPolymorphic(TypeDiscriminatorPropertyName = "$type")]
@@ -19,8 +17,7 @@ public abstract record DispatchContext
     public sealed record Revision(
         string BranchName,
         string PullRequestUrl,
-        IReadOnlyList<ReviewComment> Comments,
-        int OmittedCommentCount = 0) : DispatchContext;
+        RevisionTrigger Trigger) : DispatchContext;
 
     public sealed record Continuation(string BranchName, string? FailureReason = null) : DispatchContext;
 }

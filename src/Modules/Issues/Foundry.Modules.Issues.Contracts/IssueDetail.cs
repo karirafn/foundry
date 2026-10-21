@@ -26,7 +26,9 @@ public sealed record IssueStateDetails(
     IReadOnlyList<int>? BlockedBy,
     TransientRetryDetails? TransientRetry,
     string? ChecksOutcome = null,
-    IReadOnlyList<FailingCheck>? FailingChecks = null);
+    IReadOnlyList<FailingCheck>? FailingChecks = null,
+    string? RevisionTriggerKind = null,
+    int? ChecksFixAttempts = null);
 
 public sealed record TransientRetryDetails(
     int AttemptNumber,

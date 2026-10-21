@@ -1,6 +1,5 @@
 using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Issues.Domain.Entities;
-using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Workers.Contracts;
 
 using FailureCategoryVO = Foundry.Modules.Workers.Contracts.FailureCategory;
@@ -24,11 +23,10 @@ public sealed class RevisionFailedIssue : Issue
 
     public string PullRequestUrl { get; private set; } = string.Empty;
 
-    public IReadOnlyList<ReviewComment> ReviewComments { get; private set; } = [];
+    // Placeholder replaced by the factory method or EF materialisation; invalid until assigned.
+    public RevisionTrigger Trigger { get; private set; } = new RevisionTrigger.ReviewFeedback([], 0, null);
 
-    public int OmittedCommentCount { get; private set; }
-
-    public DateTimeOffset? NewestConsumedCommentAt { get; private set; }
+    public int ChecksFixAttempts { get; private set; }
 
     public string FailureReason { get; private set; } = string.Empty;
 
@@ -54,9 +52,8 @@ public sealed class RevisionFailedIssue : Issue
         failed.WorkerRunId = source.WorkerRunId;
         failed.BranchName = source.BranchName;
         failed.PullRequestUrl = source.PullRequestUrl;
-        failed.ReviewComments = source.ReviewComments;
-        failed.OmittedCommentCount = source.OmittedCommentCount;
-        failed.NewestConsumedCommentAt = source.NewestConsumedCommentAt;
+        failed.Trigger = source.Trigger;
+        failed.ChecksFixAttempts = source.ChecksFixAttempts;
         failed.FailureReason = failureReason;
         failed.FailureCategory = failureCategory;
         failed.FailedAt = failedAt;

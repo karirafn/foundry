@@ -44,6 +44,8 @@ export interface FailingCheck {
   detailsUrl?: string | null;
 }
 
+export type RevisionTriggerKind = 'review_feedback' | 'failed_checks';
+
 export interface IssueStateDetails {
   workerRunId: string | null;
   branchName: string | null;
@@ -57,6 +59,8 @@ export interface IssueStateDetails {
   transientRetry: TransientRetryDetails | null;
   checksOutcome?: string | null;
   failingChecks?: FailingCheck[] | null;
+  revisionTriggerKind?: RevisionTriggerKind | null;
+  checksFixAttempts?: number | null;
 }
 
 export interface IssueDetail extends IssueSummary {

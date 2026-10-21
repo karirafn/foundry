@@ -24,17 +24,16 @@ public sealed class RevisionQueuedIssue : QueuedIssue
     public override BranchNameValue DispatchBranchName => BranchNameValue.From(BranchName);
 
     public override DispatchContext Context =>
-        new DispatchContext.Revision(BranchName, PullRequestUrl, ReviewComments, OmittedCommentCount);
+        new DispatchContext.Revision(BranchName, PullRequestUrl, Trigger);
 
     public string BranchName { get; private set; } = string.Empty;
 
     public string PullRequestUrl { get; private set; } = string.Empty;
 
-    public IReadOnlyList<ReviewComment> ReviewComments { get; private set; } = [];
+    // Placeholder replaced by the factory method or EF materialisation; invalid until assigned.
+    public RevisionTrigger Trigger { get; private set; } = new RevisionTrigger.ReviewFeedback([], 0, null);
 
-    public int OmittedCommentCount { get; private set; }
-
-    public DateTimeOffset? NewestConsumedCommentAt { get; private set; }
+    public int ChecksFixAttempts { get; private set; }
 
     internal static RevisionQueuedIssue FromReview(
         ReviewIssue source,
@@ -53,9 +52,8 @@ public sealed class RevisionQueuedIssue : QueuedIssue
             source.DetectedAt);
         revisionQueued.BranchName = source.BranchName;
         revisionQueued.PullRequestUrl = source.PullRequestUrl;
-        revisionQueued.ReviewComments = comments;
-        revisionQueued.OmittedCommentCount = omittedCommentCount;
-        revisionQueued.NewestConsumedCommentAt = newestCommentAt;
+        revisionQueued.Trigger = new RevisionTrigger.ReviewFeedback(comments, omittedCommentCount, newestCommentAt);
+        revisionQueued.ChecksFixAttempts = 0;
         return revisionQueued;
     }
 
@@ -76,9 +74,28 @@ public sealed class RevisionQueuedIssue : QueuedIssue
             source.DetectedAt);
         revisionQueued.BranchName = source.BranchName;
         revisionQueued.PullRequestUrl = source.PullRequestUrl;
-        revisionQueued.ReviewComments = comments;
-        revisionQueued.OmittedCommentCount = omittedCommentCount;
-        revisionQueued.NewestConsumedCommentAt = newestCommentAt;
+        revisionQueued.Trigger = new RevisionTrigger.ReviewFeedback(comments, omittedCommentCount, newestCommentAt);
+        revisionQueued.ChecksFixAttempts = 0;
+        return revisionQueued;
+    }
+
+    internal static RevisionQueuedIssue FromChecksPendingFix(
+        ChecksPendingIssue source,
+        IReadOnlyList<FailingCheck> failingChecks)
+    {
+        RevisionQueuedIssue revisionQueued = new(source.Id);
+        revisionQueued.SetSharedProperties(
+            source.MonitoredRepositoryId,
+            source.IssueNumber,
+            source.Title,
+            source.Author,
+            source.Url,
+            source.Labels,
+            source.DetectedAt);
+        revisionQueued.BranchName = source.BranchName;
+        revisionQueued.PullRequestUrl = source.PullRequestUrl;
+        revisionQueued.Trigger = new RevisionTrigger.FailedChecks(failingChecks);
+        revisionQueued.ChecksFixAttempts = source.ChecksFixAttempts + 1;
         return revisionQueued;
     }
 
@@ -95,9 +112,8 @@ public sealed class RevisionQueuedIssue : QueuedIssue
             source.DetectedAt);
         revisionQueued.BranchName = source.BranchName;
         revisionQueued.PullRequestUrl = source.PullRequestUrl;
-        revisionQueued.ReviewComments = source.ReviewComments;
-        revisionQueued.OmittedCommentCount = source.OmittedCommentCount;
-        revisionQueued.NewestConsumedCommentAt = source.NewestConsumedCommentAt;
+        revisionQueued.Trigger = source.Trigger;
+        revisionQueued.ChecksFixAttempts = source.ChecksFixAttempts;
         return revisionQueued;
     }
 

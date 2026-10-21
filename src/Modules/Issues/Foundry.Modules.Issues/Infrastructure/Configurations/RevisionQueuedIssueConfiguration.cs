@@ -19,18 +19,15 @@ public sealed class RevisionQueuedIssueConfiguration : IEntityTypeConfiguration<
             .IsUnicode(false)
             .HasColumnName("pull_request_url");
 
-        builder.Property(i => i.ReviewComments)
-            .HasConversion(ReviewCommentsJsonConversion.Converter, ReviewCommentsJsonConversion.Comparer)
+        builder.Property(i => i.Trigger)
+            .HasConversion(RevisionTriggerJsonConversion.Converter, RevisionTriggerJsonConversion.Comparer)
             .HasMaxLength(int.MaxValue)
             .IsUnicode(true)
             .HasColumnType("TEXT")
-            .HasColumnName("review_comments");
+            .HasColumnName("revision_trigger");
 
-        builder.Property(i => i.OmittedCommentCount)
+        builder.Property(i => i.ChecksFixAttempts)
             .HasDefaultValue(0)
-            .HasColumnName("omitted_comment_count");
-
-        builder.Property(i => i.NewestConsumedCommentAt)
-            .HasColumnName("newest_consumed_comment_at");
+            .HasColumnName("checks_fix_attempts");
     }
 }
