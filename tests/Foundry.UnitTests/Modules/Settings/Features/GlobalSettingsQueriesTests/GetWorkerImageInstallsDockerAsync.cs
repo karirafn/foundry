@@ -48,8 +48,6 @@ public sealed class GetWorkerImageInstallsDockerAsync : IAsyncDisposable
             settings.UpdateWorkerImageConfiguration(new WorkerImageConfiguration(
                 InstallDotnet: false,
                 InstallAngular: false,
-                InstallGlab: false,
-                InstallGh: false,
                 InstallChromium: false,
                 InstallDocker: true));
             seedDb.Set<GlobalSettings>().Add(settings);
@@ -76,8 +74,6 @@ public sealed class GetWorkerImageInstallsDockerAsync : IAsyncDisposable
             settings.UpdateWorkerImageConfiguration(new WorkerImageConfiguration(
                 InstallDotnet: false,
                 InstallAngular: false,
-                InstallGlab: false,
-                InstallGh: false,
                 InstallChromium: false,
                 InstallDocker: false));
             seedDb.Set<GlobalSettings>().Add(settings);

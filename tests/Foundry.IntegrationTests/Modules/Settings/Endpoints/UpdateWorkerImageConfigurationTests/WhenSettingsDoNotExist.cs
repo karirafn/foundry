@@ -36,8 +36,6 @@ public sealed class WhenSettingsDoNotExist : IAsyncDisposable
         {
             installDotnet = false,
             installAngular = false,
-            installGlab = false,
-            installGh = false,
             installChromium = false,
             installDocker = false,
         };

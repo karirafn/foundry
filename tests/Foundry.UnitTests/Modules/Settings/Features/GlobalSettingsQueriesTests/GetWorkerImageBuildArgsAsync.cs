@@ -45,8 +45,6 @@ public sealed class GetWorkerImageBuildArgsAsync : IAsyncDisposable
         WorkerImageConfiguration config = new(
             InstallDotnet: true,
             InstallAngular: false,
-            InstallGlab: true,
-            InstallGh: false,
             InstallChromium: true,
             InstallDocker: false);
 
@@ -86,5 +84,63 @@ public sealed class GetWorkerImageBuildArgsAsync : IAsyncDisposable
 
         // Assert
         result.ShouldBe(expected);
+    }
+
+    [Fact]
+    public async Task WhenConfigurationIsPopulated_DoesNotContainInstallGhKey()
+    {
+        // Arrange
+        WorkerImageConfiguration config = new(
+            InstallDotnet: true,
+            InstallAngular: false,
+            InstallChromium: false,
+            InstallDocker: false);
+
+        await using (FoundryDbContext seedDb = CreateDbContext())
+        {
+            GlobalSettings settings = GlobalSettings.Create();
+            settings.UpdateWorkerImageConfiguration(config);
+            seedDb.Set<GlobalSettings>().Add(settings);
+            await seedDb.SaveChangesAsync(TestContext.Current.CancellationToken);
+        }
+
+        await using FoundryDbContext dbContext = CreateDbContext();
+        GlobalSettingsQueries sut = new(dbContext);
+
+        // Act
+        IReadOnlyDictionary<string, string> result =
+            await sut.GetWorkerImageBuildArgsAsync(TestContext.Current.CancellationToken);
+
+        // Assert
+        result.ShouldNotContainKey("INSTALL_GH");
+    }
+
+    [Fact]
+    public async Task WhenConfigurationIsPopulated_DoesNotContainInstallGlabKey()
+    {
+        // Arrange
+        WorkerImageConfiguration config = new(
+            InstallDotnet: true,
+            InstallAngular: false,
+            InstallChromium: false,
+            InstallDocker: false);
+
+        await using (FoundryDbContext seedDb = CreateDbContext())
+        {
+            GlobalSettings settings = GlobalSettings.Create();
+            settings.UpdateWorkerImageConfiguration(config);
+            seedDb.Set<GlobalSettings>().Add(settings);
+            await seedDb.SaveChangesAsync(TestContext.Current.CancellationToken);
+        }
+
+        await using FoundryDbContext dbContext = CreateDbContext();
+        GlobalSettingsQueries sut = new(dbContext);
+
+        // Act
+        IReadOnlyDictionary<string, string> result =
+            await sut.GetWorkerImageBuildArgsAsync(TestContext.Current.CancellationToken);
+
+        // Assert
+        result.ShouldNotContainKey("INSTALL_GLAB");
     }
 }

@@ -19,8 +19,6 @@ public sealed class UpdateWorkerImageConfiguration
         ImageConfig newConfig = new(
             InstallDotnet: true,
             InstallAngular: false,
-            InstallGlab: false,
-            InstallGh: false,
             InstallChromium: false,
             InstallDocker: false);
 
@@ -56,8 +54,6 @@ public sealed class UpdateWorkerImageConfiguration
         ImageConfig newConfig = new(
             InstallDotnet: true,
             InstallAngular: false,
-            InstallGlab: false,
-            InstallGh: false,
             InstallChromium: false,
             InstallDocker: false);
 

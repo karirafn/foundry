@@ -15,16 +15,12 @@ public sealed class ValueEquality
         WorkerImageConfiguration first = new(
             InstallDotnet: true,
             InstallAngular: false,
-            InstallGlab: true,
-            InstallGh: false,
             InstallChromium: false,
             InstallDocker: false);
 
         WorkerImageConfiguration second = new(
             InstallDotnet: true,
             InstallAngular: false,
-            InstallGlab: true,
-            InstallGh: false,
             InstallChromium: false,
             InstallDocker: false);
 
@@ -42,16 +38,12 @@ public sealed class ValueEquality
         WorkerImageConfiguration first = new(
             InstallDotnet: true,
             InstallAngular: false,
-            InstallGlab: false,
-            InstallGh: false,
             InstallChromium: false,
             InstallDocker: false);
 
         WorkerImageConfiguration second = new(
             InstallDotnet: false,
             InstallAngular: false,
-            InstallGlab: false,
-            InstallGh: false,
             InstallChromium: false,
             InstallDocker: false);
 

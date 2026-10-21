@@ -29,8 +29,6 @@ public sealed class ToSummary
         result.ShouldSatisfyAllConditions(
             () => result.InstallDotnet.ShouldBeFalse(),
             () => result.InstallAngular.ShouldBeFalse(),
-            () => result.InstallGlab.ShouldBeFalse(),
-            () => result.InstallGh.ShouldBeFalse(),
             () => result.InstallChromium.ShouldBeFalse(),
             () => result.InstallDocker.ShouldBeFalse());
     }
@@ -43,8 +41,6 @@ public sealed class ToSummary
         settings.UpdateWorkerImageConfiguration(new WorkerImageConfiguration(
             InstallDotnet: true,
             InstallAngular: false,
-            InstallGlab: false,
-            InstallGh: false,
             InstallChromium: false,
             InstallDocker: false));
 
@@ -63,8 +59,6 @@ public sealed class ToSummary
         settings.UpdateWorkerImageConfiguration(new WorkerImageConfiguration(
             InstallDotnet: true,
             InstallAngular: true,
-            InstallGlab: true,
-            InstallGh: true,
             InstallChromium: true,
             InstallDocker: true));
 
@@ -75,8 +69,6 @@ public sealed class ToSummary
         result.ShouldSatisfyAllConditions(
             () => result.InstallDotnet.ShouldBeTrue(),
             () => result.InstallAngular.ShouldBeTrue(),
-            () => result.InstallGlab.ShouldBeTrue(),
-            () => result.InstallGh.ShouldBeTrue(),
             () => result.InstallChromium.ShouldBeTrue(),
             () => result.InstallDocker.ShouldBeTrue());
     }

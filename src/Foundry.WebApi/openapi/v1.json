@@ -1963,8 +1963,6 @@
           "autoResumeOnUsageReset",
           "installDotnet",
           "installAngular",
-          "installGlab",
-          "installGh",
           "installChromium",
           "installDocker",
           "imageBuildStatus",
@@ -2037,12 +2035,6 @@
             "type": "boolean"
           },
           "installAngular": {
-            "type": "boolean"
-          },
-          "installGlab": {
-            "type": "boolean"
-          },
-          "installGh": {
             "type": "boolean"
           },
           "installChromium": {
@@ -3034,8 +3026,6 @@
         "required": [
           "installDotnet",
           "installAngular",
-          "installGlab",
-          "installGh",
           "installChromium",
           "installDocker"
         ],
@@ -3045,12 +3035,6 @@
             "type": "boolean"
           },
           "installAngular": {
-            "type": "boolean"
-          },
-          "installGlab": {
-            "type": "boolean"
-          },
-          "installGh": {
             "type": "boolean"
           },
           "installChromium": {
