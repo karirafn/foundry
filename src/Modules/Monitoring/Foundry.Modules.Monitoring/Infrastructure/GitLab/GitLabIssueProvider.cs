@@ -148,7 +148,7 @@ internal sealed class GitLabIssueProvider(
         string pullRequestUrl,
         CancellationToken cancellationToken)
     {
-        return GitLabHttpClient.GetChecksAsync(apiBaseUrl, slug, pullRequestUrl, token, cancellationToken);
+        return httpClient.GetChecksAsync(apiBaseUrl, slug, pullRequestUrl, token, cancellationToken);
     }
 
     private Task<Result<string>> GetDefaultBranchAsync(
