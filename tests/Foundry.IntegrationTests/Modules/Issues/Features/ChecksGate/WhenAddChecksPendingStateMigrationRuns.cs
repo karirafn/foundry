@@ -141,10 +141,10 @@ public sealed class WhenAddChecksPendingStateMigrationRuns : IAsyncLifetime, IAs
         using SqliteCommand command = _connection.CreateCommand();
         command.CommandText =
             "INSERT INTO issues " +
-            "(id, monitored_repository_id, issue_number, title, author, url, state, detected_at, " +
+            "(id, monitored_repository_id, issue_number, title, author, url, labels, state, detected_at, " +
             " worker_run_id, branch_name, pull_request_url, feedback_cutoff_at, entered_checks_pending_at) " +
             "VALUES ($id, $repoId, 3, 'Checks pending issue', 'octocat', 'https://github.com/o/r/issues/3', " +
-            " 'checks_pending', datetime('now'), $workerRunId, 'feat/3-test', " +
+            " '[]', 'checks_pending', datetime('now'), $workerRunId, 'feat/3-test', " +
             " 'https://github.com/o/r/pull/3', datetime('now', '+1 day'), datetime('now'));";
         command.Parameters.AddWithValue("$id", issueId.ToString());
         command.Parameters.AddWithValue("$repoId", repositoryId.ToString());
@@ -159,10 +159,10 @@ public sealed class WhenAddChecksPendingStateMigrationRuns : IAsyncLifetime, IAs
         using SqliteCommand command = _connection.CreateCommand();
         command.CommandText =
             "INSERT INTO issues " +
-            "(id, monitored_repository_id, issue_number, title, author, url, state, detected_at, " +
+            "(id, monitored_repository_id, issue_number, title, author, url, labels, state, detected_at, " +
             " worker_run_id, branch_name, pull_request_url, feedback_cutoff_at) " +
             "VALUES ($id, $repoId, 1, 'Review issue', 'octocat', 'https://github.com/o/r/issues/1', " +
-            " 'review', datetime('now'), $workerRunId, 'feat/1-test', " +
+            " '[]', 'review', datetime('now'), $workerRunId, 'feat/1-test', " +
             " 'https://github.com/o/r/pull/1', datetime('now', '+1 day'));";
         command.Parameters.AddWithValue("$id", issueId.ToString());
         command.Parameters.AddWithValue("$repoId", repositoryId.ToString());
@@ -175,9 +175,9 @@ public sealed class WhenAddChecksPendingStateMigrationRuns : IAsyncLifetime, IAs
         using SqliteCommand command = _connection.CreateCommand();
         command.CommandText =
             "INSERT INTO issues " +
-            "(id, monitored_repository_id, issue_number, title, author, url, state, detected_at) " +
+            "(id, monitored_repository_id, issue_number, title, author, url, labels, state, detected_at) " +
             "VALUES ($id, $repoId, 2, 'Detected issue', 'octocat', 'https://github.com/o/r/issues/2', " +
-            " 'detected', datetime('now'));";
+            " '[]', 'detected', datetime('now'));";
         command.Parameters.AddWithValue("$id", issueId.ToString());
         command.Parameters.AddWithValue("$repoId", repositoryId.ToString());
         await command.ExecuteNonQueryAsync(TestContext.Current.CancellationToken);
