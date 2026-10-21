@@ -1,6 +1,7 @@
 using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Issues.Domain.Entities;
 using Foundry.Modules.Issues.Domain.Entities.States;
+using Foundry.Modules.Issues.Domain.ValueObjects;
 using Foundry.Modules.Issues.Features;
 using Foundry.Modules.Issues.Features.Claiming;
 using Foundry.Modules.Issues.Features.TransientRetry;
@@ -633,6 +634,122 @@ public sealed class GetIssueDetailAsync : IAsyncDisposable
             () => retryDetails.AttemptNumber.ShouldBe(TransientRetrySchedule.MaxTransientRetries),
             () => retryDetails.MaxAttempts.ShouldBe(TransientRetrySchedule.MaxTransientRetries),
             () => retryDetails.NextAttemptDueAt.ShouldBeNull());
+    }
+
+    [Fact]
+    public async Task WhenReviewIssueWithPassedOutcome_ReturnsPassedChecksOutcomeInStateDetails()
+    {
+        // Arrange
+        DetectedIssue detected = await SaveDetectedIssueAsync();
+        FreshQueuedIssue queued = detected.Enqueue();
+        await _dbContext.TransitionAsync(detected, queued, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
+
+        InProgressIssue inProgress = queued.Claim(WorkerRunId.New());
+        await _dbContext.TransitionAsync(queued, inProgress, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
+
+        ChecksPendingIssue checksPending = inProgress.MarkChecksPending(
+            "feat/issue-1",
+            "https://github.com/owner/repo/pull/42",
+            DateTimeOffset.UtcNow.AddDays(1));
+        await _dbContext.TransitionAsync(inProgress, checksPending, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
+
+        ReviewIssue review = checksPending.ToReview(new ChecksOutcome.Passed());
+        await _dbContext.TransitionAsync(checksPending, review, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
+        _dbContext.ChangeTracker.Clear();
+
+        // Act
+        Result<IssueDetail> result = await _sut.GetIssueDetailAsync(
+            review.Id,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        IssueDetail detail = result.ShouldBeOfType<Result<IssueDetail>.Success>().Value;
+        detail.State.ShouldBe("review");
+        IssueStateDetails stateDetails = detail.StateDetails.ShouldNotBeNull();
+        stateDetails.ShouldSatisfyAllConditions(
+            () => stateDetails.ChecksOutcome.ShouldBe("passed"),
+            () => stateDetails.FailingChecks.ShouldBeNull());
+    }
+
+    [Fact]
+    public async Task WhenReviewIssueWithStillFailingOutcome_ReturnsOutcomeAndFailingChecksInStateDetails()
+    {
+        // Arrange
+        DetectedIssue detected = await SaveDetectedIssueAsync();
+        FreshQueuedIssue queued = detected.Enqueue();
+        await _dbContext.TransitionAsync(detected, queued, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
+
+        InProgressIssue inProgress = queued.Claim(WorkerRunId.New());
+        await _dbContext.TransitionAsync(queued, inProgress, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
+
+        ChecksPendingIssue checksPending = inProgress.MarkChecksPending(
+            "feat/issue-1",
+            "https://github.com/owner/repo/pull/42",
+            DateTimeOffset.UtcNow.AddDays(1));
+        await _dbContext.TransitionAsync(inProgress, checksPending, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
+
+        IReadOnlyList<FailingCheck> failingChecks =
+        [
+            new FailingCheck("CI / build", "failure", "https://github.com/owner/repo/actions/runs/1"),
+        ];
+        ReviewIssue review = checksPending.ToReview(new ChecksOutcome.StillFailing(failingChecks));
+        await _dbContext.TransitionAsync(checksPending, review, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
+        _dbContext.ChangeTracker.Clear();
+
+        // Act
+        Result<IssueDetail> result = await _sut.GetIssueDetailAsync(
+            review.Id,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        IssueDetail detail = result.ShouldBeOfType<Result<IssueDetail>.Success>().Value;
+        IssueStateDetails stateDetails = detail.StateDetails.ShouldNotBeNull();
+        stateDetails.ChecksOutcome.ShouldBe("still_failing");
+        IReadOnlyList<FailingCheck> returnedChecks = stateDetails.FailingChecks.ShouldNotBeNull();
+        returnedChecks.Count.ShouldBe(1);
+        returnedChecks[0].ShouldSatisfyAllConditions(
+            () => returnedChecks[0].Name.ShouldBe("CI / build"),
+            () => returnedChecks[0].Conclusion.ShouldBe("failure"),
+            () => returnedChecks[0].DetailsUrl.ShouldBe("https://github.com/owner/repo/actions/runs/1"));
+    }
+
+    [Fact]
+    public async Task WhenChecksPendingIssueExists_ReturnsStateDetailsWithChecksPendingFields()
+    {
+        // Arrange
+        DetectedIssue detected = await SaveDetectedIssueAsync();
+        FreshQueuedIssue queued = detected.Enqueue();
+        await _dbContext.TransitionAsync(detected, queued, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
+
+        WorkerRunId workerRunId = WorkerRunId.New();
+        InProgressIssue inProgress = queued.Claim(workerRunId);
+        await _dbContext.TransitionAsync(queued, inProgress, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
+
+        DateTimeOffset feedbackCutoffAt = DateTimeOffset.UtcNow.AddDays(1);
+        ChecksPendingIssue checksPending = inProgress.MarkChecksPending(
+            "feat/issue-1",
+            "https://github.com/owner/repo/pull/42",
+            feedbackCutoffAt);
+        await _dbContext.TransitionAsync(inProgress, checksPending, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
+        _dbContext.ChangeTracker.Clear();
+
+        // Act
+        Result<IssueDetail> result = await _sut.GetIssueDetailAsync(
+            checksPending.Id,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        IssueDetail detail = result.ShouldBeOfType<Result<IssueDetail>.Success>().Value;
+        detail.State.ShouldBe("checks_pending");
+        IssueStateDetails stateDetails = detail.StateDetails.ShouldNotBeNull();
+        stateDetails.ShouldSatisfyAllConditions(
+            () => stateDetails.WorkerRunId.ShouldBe(workerRunId.Value),
+            () => stateDetails.BranchName.ShouldBe("feat/issue-1"),
+            () => stateDetails.PullRequestUrl.ShouldBe("https://github.com/owner/repo/pull/42"),
+            () => stateDetails.FeedbackCutoffAt.ShouldNotBeNull()
+                .ShouldBe(feedbackCutoffAt, tolerance: TimeSpan.FromSeconds(1)),
+            () => stateDetails.ChecksOutcome.ShouldBeNull(),
+            () => stateDetails.FailingChecks.ShouldBeNull());
     }
 
     private sealed class StubRepositorySlugQueries : IRepositorySlugQueries

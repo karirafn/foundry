@@ -198,7 +198,8 @@ internal sealed class IssueQueries(
                     : null,
                 RunStats: runAggregates.TryGetValue(i.Id.Value, out RunAggregate? aggregate)
                     ? MapRunStats(aggregate)
-                    : null))
+                    : null,
+                ChecksOutcome: GetChecksOutcomeDiscriminator(i)))
             .ToList();
     }
 
@@ -258,7 +259,8 @@ internal sealed class IssueQueries(
             RepositoryEligibilityStatus: eligibilityStatus,
             RunStats: runAggregates.TryGetValue(issue.Id.Value, out RunAggregate? aggregate)
                 ? MapRunStats(aggregate)
-                : null);
+                : null,
+            ChecksOutcome: GetChecksOutcomeDiscriminator(issue));
     }
 
     private static string? GetFailureCategory(Issue issue) =>
@@ -267,6 +269,13 @@ internal sealed class IssueQueries(
             FailedIssue failed => failed.FailureCategory.Value,
             ContinuableFailedIssue continuableFailed => continuableFailed.FailureCategory.Value,
             RevisionFailedIssue revisionFailed => revisionFailed.FailureCategory.Value,
+            _ => null,
+        };
+
+    private static string? GetChecksOutcomeDiscriminator(Issue issue) =>
+        issue switch
+        {
+            ReviewIssue review => review.ChecksOutcome.Discriminator,
             _ => null,
         };
 
@@ -418,7 +427,9 @@ internal sealed class IssueQueries(
                 FailedAt: null,
                 CompletedAt: null,
                 BlockedBy: null,
-                TransientRetry: null),
+                TransientRetry: null,
+                ChecksOutcome: review.ChecksOutcome.Discriminator,
+                FailingChecks: review.ChecksOutcome is ChecksOutcome.StillFailing sf ? sf.FailingChecks : null),
 
             UnchangedIssue unchanged => new IssueStateDetails(
                 WorkerRunId: unchanged.WorkerRunId.Value,
@@ -679,7 +690,8 @@ internal sealed class IssueQueries(
                     : null,
                 RunStats: runAggregates.TryGetValue(i.Id.Value, out RunAggregate? aggregate)
                     ? MapRunStats(aggregate)
-                    : null))
+                    : null,
+                ChecksOutcome: GetChecksOutcomeDiscriminator(i)))
             .ToList();
     }
 

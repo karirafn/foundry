@@ -1950,6 +1950,28 @@
           }
         }
       },
+      "FailingCheck": {
+        "required": [
+          "name",
+          "conclusion",
+          "detailsUrl"
+        ],
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "conclusion": {
+            "type": "string"
+          },
+          "detailsUrl": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
       "GlobalSettingsSummary": {
         "required": [
           "maxConcurrent",
@@ -2255,6 +2277,21 @@
                 "$ref": "#/components/schemas/TransientRetryDetails"
               }
             ]
+          },
+          "checksOutcome": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "failingChecks": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/FailingCheck"
+            }
           }
         }
       },
@@ -2321,6 +2358,12 @@
               {
                 "$ref": "#/components/schemas/RunStats"
               }
+            ]
+          },
+          "checksOutcome": {
+            "type": [
+              "null",
+              "string"
             ]
           }
         }
