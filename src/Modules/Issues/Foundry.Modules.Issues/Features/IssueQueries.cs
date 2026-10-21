@@ -116,6 +116,21 @@ internal sealed class IssueQueries(
             .ToListAsync(cancellationToken);
     }
 
+    public async Task<IReadOnlyList<ChecksPendingIssueInfo>> GetChecksPendingIssuesAsync(
+        MonitoredRepositoryId repositoryId,
+        CancellationToken cancellationToken)
+    {
+        return await db.Set<ChecksPendingIssue>()
+            .AsNoTracking()
+            .Where(i => i.MonitoredRepositoryId == repositoryId)
+            .Select(i => new ChecksPendingIssueInfo(
+                i.IssueNumber,
+                i.PullRequestUrl,
+                i.EnteredChecksPendingAt,
+                i.FeedbackCutoffAt))
+            .ToListAsync(cancellationToken);
+    }
+
     public async Task<IReadOnlyList<IssueSummary>> GetIssueSummariesAsync(
         MonitoredRepositoryId? repositoryId,
         CancellationToken cancellationToken)
