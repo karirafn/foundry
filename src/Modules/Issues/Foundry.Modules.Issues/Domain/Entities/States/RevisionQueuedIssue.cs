@@ -59,6 +59,29 @@ public sealed class RevisionQueuedIssue : QueuedIssue
         return revisionQueued;
     }
 
+    internal static RevisionQueuedIssue FromChecksPending(
+        ChecksPendingIssue source,
+        IReadOnlyList<ReviewComment> comments,
+        int omittedCommentCount = 0,
+        DateTimeOffset? newestCommentAt = null)
+    {
+        RevisionQueuedIssue revisionQueued = new(source.Id);
+        revisionQueued.SetSharedProperties(
+            source.MonitoredRepositoryId,
+            source.IssueNumber,
+            source.Title,
+            source.Author,
+            source.Url,
+            source.Labels,
+            source.DetectedAt);
+        revisionQueued.BranchName = source.BranchName;
+        revisionQueued.PullRequestUrl = source.PullRequestUrl;
+        revisionQueued.ReviewComments = comments;
+        revisionQueued.OmittedCommentCount = omittedCommentCount;
+        revisionQueued.NewestConsumedCommentAt = newestCommentAt;
+        return revisionQueued;
+    }
+
     internal static RevisionQueuedIssue FromRevisionFailed(RevisionFailedIssue source)
     {
         RevisionQueuedIssue revisionQueued = new(source.Id);

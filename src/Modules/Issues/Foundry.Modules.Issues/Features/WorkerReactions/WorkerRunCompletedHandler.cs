@@ -66,11 +66,11 @@ internal sealed class WorkerRunCompletedHandler(
                     // The ?? UtcNow fallback exists only for back-compat with WorkerRunCompleted events that were
                     // serialized before this field was added and are drained across the deploy boundary, reproducing
                     // the old completion-time cutoff for exactly that bounded window.
-                    ReviewIssue review = inProgress.MarkInReview(
+                    ChecksPendingIssue checksPending = inProgress.MarkChecksPending(
                         @event.BranchName,
                         @event.PullRequestUrl,
                         @event.RunStartedAt ?? DateTimeOffset.UtcNow);
-                    await db.TransitionAsync(inProgress, review, domainEventDispatcher, cancellationToken);
+                    await db.TransitionAsync(inProgress, checksPending, domainEventDispatcher, cancellationToken);
                     break;
 
                 default:
@@ -100,13 +100,13 @@ internal sealed class WorkerRunCompletedHandler(
             // any new feedback posted after the consumed batch is not silently dropped.
             if (@event.BranchName is not null && @event.PullRequestUrl is not null)
             {
-                ReviewIssue review = revisionInProgress.MarkInReview();
-                await db.TransitionAsync(revisionInProgress, review, domainEventDispatcher, cancellationToken);
+                ChecksPendingIssue revisionChecksPending = revisionInProgress.MarkChecksPending();
+                await db.TransitionAsync(revisionInProgress, revisionChecksPending, domainEventDispatcher, cancellationToken);
             }
             else
             {
-                ReviewIssue review = revisionInProgress.MarkUnchanged();
-                await db.TransitionAsync(revisionInProgress, review, domainEventDispatcher, cancellationToken);
+                ChecksPendingIssue revisionChecksPending = revisionInProgress.MarkUnchangedChecksPending();
+                await db.TransitionAsync(revisionInProgress, revisionChecksPending, domainEventDispatcher, cancellationToken);
             }
 
             return;

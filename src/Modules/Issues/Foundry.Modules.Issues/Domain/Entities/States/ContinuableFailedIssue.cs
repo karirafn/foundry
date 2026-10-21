@@ -53,6 +53,30 @@ public sealed class ContinuableFailedIssue : Issue
         return failed;
     }
 
+    internal static ContinuableFailedIssue FromChecksPending(
+        ChecksPendingIssue source,
+        string failureReason,
+        FailureCategoryVO failureCategory,
+        DateTimeOffset failedAt)
+    {
+        ContinuableFailedIssue failed = new(source.Id);
+        failed.SetSharedProperties(
+            source.MonitoredRepositoryId,
+            source.IssueNumber,
+            source.Title,
+            source.Author,
+            source.Url,
+            source.Labels,
+            source.DetectedAt);
+        failed.WorkerRunId = source.WorkerRunId;
+        failed.BranchName = source.BranchName;
+        failed.PullRequestUrl = source.PullRequestUrl;
+        failed.FailureReason = failureReason;
+        failed.FailureCategory = failureCategory;
+        failed.FailedAt = failedAt;
+        return failed;
+    }
+
     internal static ContinuableFailedIssue FromReview(
         ReviewIssue source,
         string failureReason,

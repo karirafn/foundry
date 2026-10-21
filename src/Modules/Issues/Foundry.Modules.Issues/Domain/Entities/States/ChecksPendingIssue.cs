@@ -1,7 +1,10 @@
 using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Issues.Domain.Entities;
 using Foundry.Modules.Issues.Domain.ValueObjects;
+using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Workers.Contracts;
+
+using FailureCategoryVO = Foundry.Modules.Workers.Contracts.FailureCategory;
 
 namespace Foundry.Modules.Issues.Domain.Entities.States;
 
@@ -75,5 +78,40 @@ public sealed class ChecksPendingIssue : Issue
         ReviewIssue review = ReviewIssue.FromChecksPending(this, checksOutcome);
         AddDomainEvent(new Events.IssueInReview(Id, MonitoredRepositoryId));
         return review;
+    }
+
+    public RevisionQueuedIssue Revise(
+        IReadOnlyList<ReviewComment> comments,
+        int omittedCommentCount = 0,
+        DateTimeOffset? newestCommentAt = null)
+    {
+        RevisionQueuedIssue revisionQueued = RevisionQueuedIssue.FromChecksPending(
+            this,
+            comments,
+            omittedCommentCount,
+            newestCommentAt);
+        AddDomainEvent(new Events.IssueRevisionQueued(Id, MonitoredRepositoryId));
+        return revisionQueued;
+    }
+
+    public CompletedIssue Complete(DateTimeOffset completedAt)
+    {
+        CompletedIssue completed = CompletedIssue.FromChecksPending(this, completedAt);
+        AddDomainEvent(new Events.IssueCompleted(Id, MonitoredRepositoryId));
+        return completed;
+    }
+
+    public ContinuableFailedIssue Fail(
+        string failureReason,
+        FailureCategoryVO failureCategory,
+        DateTimeOffset failedAt)
+    {
+        ContinuableFailedIssue failed = ContinuableFailedIssue.FromChecksPending(
+            this,
+            failureReason,
+            failureCategory,
+            failedAt);
+        AddDomainEvent(new Events.IssueContinuableFailed(Id, MonitoredRepositoryId));
+        return failed;
     }
 }
