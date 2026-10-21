@@ -1042,6 +1042,27 @@ public sealed class HandleAsync : IAsyncDisposable
         containerError.Message.ShouldContain("120000");
     }
 
+    [Fact]
+    public async Task WhenDispatched_SystemPromptEnvVarContainsChecksSection()
+    {
+        // Arrange — StubGlobalSettingsQueries.GetTimeoutMinutesAsync returns 120
+        StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c-checks-section");
+        IssueClaimedHandler sut = BuildHandler(orchestrator: orchestrator);
+        IssueClaimed @event = BuildEvent();
+
+        // Act
+        await sut.HandleAsync(@event, TestContext.Current.CancellationToken);
+
+        // Assert — the checks section from SystemPromptBuilder is wired end-to-end
+        WorkerContainerSpec? spec = orchestrator.LastSpec;
+        spec.ShouldNotBeNull();
+        spec.EnvironmentVariables["SYSTEM_PROMPT"].ShouldSatisfyAllConditions(
+            () => spec.EnvironmentVariables["SYSTEM_PROMPT"].ShouldContain("gh pr checks"),
+            () => spec.EnvironmentVariables["SYSTEM_PROMPT"].ShouldContain("glab ci status"),
+            () => spec.EnvironmentVariables["SYSTEM_PROMPT"].ShouldContain("Foundry continues to monitor"),
+            () => spec.EnvironmentVariables["SYSTEM_PROMPT"].ShouldContain("120"));
+    }
+
     private sealed class StubPostExitProviderQueries(bool branchCreationSucceeds) : IPostExitProviderQueries
     {
         public Task<Result<bool>> CreateBranchAsync(
