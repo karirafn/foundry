@@ -632,6 +632,11 @@ export interface components {
             rule: string;
             description: string;
         };
+        FailingCheck: {
+            name: string;
+            conclusion: string;
+            detailsUrl: null | string;
+        };
         GlobalSettingsSummary: {
             /** Format: int32 */
             maxConcurrent: number | string;
@@ -697,6 +702,8 @@ export interface components {
             completedAt: null | string;
             blockedBy: null | (number | string)[];
             transientRetry: null | components["schemas"]["TransientRetryDetails"];
+            checksOutcome?: null | string;
+            failingChecks?: null | components["schemas"]["FailingCheck"][];
         };
         IssueSummary: {
             /** Format: uuid */
@@ -712,6 +719,8 @@ export interface components {
             failureClassification: null | string;
             repositoryEligibilityStatus: null | string;
             runStats: null | components["schemas"]["RunStats"];
+            checksOutcome?: null | string;
+            pullRequestUrl?: null | string;
         };
         MoveRepositoryRequestBody: {
             /** Format: int32 */

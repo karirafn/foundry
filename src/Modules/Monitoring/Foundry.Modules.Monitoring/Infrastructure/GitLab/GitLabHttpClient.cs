@@ -11,6 +11,7 @@ using Foundry.Modules.Monitoring.Features.Accounts;
 using Foundry.Modules.Monitoring.Features.Accounts.Tokens;
 using Foundry.Modules.Monitoring.Features.Polling;
 using Foundry.Modules.Monitoring.Features.Providers;
+using Foundry.Modules.Monitoring.Features.Providers.Checks;
 using Foundry.Modules.Monitoring.Features.Providers.Feedback;
 using Foundry.Modules.Monitoring.Infrastructure;
 using Foundry.Modules.Monitoring.Infrastructure.GitHub;
@@ -788,6 +789,59 @@ internal sealed partial class GitLabHttpClient(
         return Result<BranchRules>.Ok(new BranchRules(rejectDirectPushes, rejectForcePushes, rejectDeletion));
     }
 
+    public async Task<Result<Checks>> GetChecksAsync(
+        Uri apiBaseUrl,
+        RepositorySlug slug,
+        string pullRequestUrl,
+        string token,
+        CancellationToken cancellationToken)
+    {
+        if (apiBaseUrl.Scheme is not "https")
+        {
+            return Result<Checks>.Fail(GitLabErrors.InvalidBaseUrl);
+        }
+
+        if (!TryParseMrIid(pullRequestUrl, out int mrIid))
+        {
+            return Result<Checks>.Fail(GitLabErrors.InvalidMergeRequestUrl);
+        }
+
+        string encodedPath = Uri.EscapeDataString(slug.FullPath);
+        string relativePath = $"projects/{encodedPath}/merge_requests/{mrIid}";
+        Uri requestUri = new(EnsureTrailingSlash(apiBaseUrl), relativePath);
+
+        using HttpRequestMessage request = new(HttpMethod.Get, requestUri);
+        AddCommonHeaders(request, token);
+
+        using HttpResponseMessage response = await httpClient.SendAsync(request, cancellationToken);
+
+        // 401/403 without rate-limit exhaustion signals an auth failure — return Unreadable
+        // rather than propagating a Result failure so callers can proceed with degraded behaviour.
+        if (response.StatusCode is HttpStatusCode.Unauthorized)
+        {
+            return Result<Checks>.Ok(new Checks.Unreadable());
+        }
+
+        if (response.StatusCode is HttpStatusCode.Forbidden && !IsRateLimited(response))
+        {
+            return Result<Checks>.Ok(new Checks.Unreadable());
+        }
+
+        if (!response.IsSuccessStatusCode)
+        {
+            return Result<Checks>.Fail(ErrorFromNonSuccess(response));
+        }
+
+        RecordRestHeadroom(response);
+
+        string body = await response.Content.ReadAsStringAsync(cancellationToken);
+        GitLabMergeRequestWithPipelineDto? dto =
+            JsonSerializer.Deserialize<GitLabMergeRequestWithPipelineDto>(body, JsonOptions);
+
+        string? pipelineStatus = dto?.HeadPipeline?.Status;
+        return Result<Checks>.Ok(Checks.FromGitLab(pipelineStatus));
+    }
+
     private GitLabUserDto? DeserializeUserDto(string responseBody, Uri apiBaseUrl, int statusCode)
     {
         try
@@ -899,6 +953,10 @@ internal sealed partial class GitLabHttpClient(
             new RateBudgetReading(remaining, limit, resetAt, timeProvider.GetUtcNow()));
     }
 
+    private static bool IsRateLimited(HttpResponseMessage response) =>
+        response.Headers.TryGetValues("RateLimit-Remaining", out IEnumerable<string>? remaining) &&
+        remaining.FirstOrDefault() == "0";
+
     private static Error ErrorFromNonSuccess(HttpResponseMessage response)
     {
         if (response.StatusCode == HttpStatusCode.TooManyRequests)
@@ -906,13 +964,9 @@ internal sealed partial class GitLabHttpClient(
             return GitLabErrors.RateLimitExhausted;
         }
 
-        if (response.StatusCode == HttpStatusCode.Forbidden)
+        if (response.StatusCode == HttpStatusCode.Forbidden && IsRateLimited(response))
         {
-            if (response.Headers.TryGetValues("RateLimit-Remaining", out IEnumerable<string>? remaining) &&
-                remaining.FirstOrDefault() == "0")
-            {
-                return GitLabErrors.RateLimitExhausted;
-            }
+            return GitLabErrors.RateLimitExhausted;
         }
 
         int statusCode = (int)response.StatusCode;
@@ -952,6 +1006,12 @@ internal sealed partial class GitLabHttpClient(
     private sealed record GitLabIssueStateDto(string State);
 
     private sealed record GitLabMergeRequestDto(string State);
+
+    private sealed record GitLabMergeRequestWithPipelineDto(
+        string State,
+        GitLabPipelineDto? HeadPipeline);
+
+    private sealed record GitLabPipelineDto(string? Status);
 
     private sealed record GitLabDiscussionDto(IReadOnlyList<GitLabNoteDto> Notes);
 

@@ -22,6 +22,8 @@ export interface IssueSummary {
   failureClassification?: string;
   repositoryEligibilityStatus?: string | null;
   runStats?: RunStats | null;
+  checksOutcome?: string | null;
+  pullRequestUrl?: string | null;
 }
 
 export interface EligibilityViolation {
@@ -36,6 +38,12 @@ export interface TransientRetryDetails {
   nextAttemptDueAt: string | null;
 }
 
+export interface FailingCheck {
+  name: string;
+  conclusion: string;
+  detailsUrl?: string | null;
+}
+
 export interface IssueStateDetails {
   workerRunId: string | null;
   branchName: string | null;
@@ -47,6 +55,8 @@ export interface IssueStateDetails {
   blockedBy: number[] | null;
   violations: EligibilityViolation[] | null;
   transientRetry: TransientRetryDetails | null;
+  checksOutcome?: string | null;
+  failingChecks?: FailingCheck[] | null;
 }
 
 export interface IssueDetail extends IssueSummary {

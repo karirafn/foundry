@@ -116,6 +116,21 @@ internal sealed class IssueQueries(
             .ToListAsync(cancellationToken);
     }
 
+    public async Task<IReadOnlyList<ChecksPendingIssueInfo>> GetChecksPendingIssuesAsync(
+        MonitoredRepositoryId repositoryId,
+        CancellationToken cancellationToken)
+    {
+        return await db.Set<ChecksPendingIssue>()
+            .AsNoTracking()
+            .Where(i => i.MonitoredRepositoryId == repositoryId)
+            .Select(i => new ChecksPendingIssueInfo(
+                i.IssueNumber,
+                i.PullRequestUrl,
+                i.EnteredChecksPendingAt,
+                i.FeedbackCutoffAt))
+            .ToListAsync(cancellationToken);
+    }
+
     public async Task<IReadOnlyList<IssueSummary>> GetIssueSummariesAsync(
         MonitoredRepositoryId? repositoryId,
         CancellationToken cancellationToken)
@@ -183,7 +198,9 @@ internal sealed class IssueQueries(
                     : null,
                 RunStats: runAggregates.TryGetValue(i.Id.Value, out RunAggregate? aggregate)
                     ? MapRunStats(aggregate)
-                    : null))
+                    : null,
+                ChecksOutcome: GetChecksOutcomeDiscriminator(i),
+                PullRequestUrl: GetPullRequestUrl(i)))
             .ToList();
     }
 
@@ -243,7 +260,9 @@ internal sealed class IssueQueries(
             RepositoryEligibilityStatus: eligibilityStatus,
             RunStats: runAggregates.TryGetValue(issue.Id.Value, out RunAggregate? aggregate)
                 ? MapRunStats(aggregate)
-                : null);
+                : null,
+            ChecksOutcome: GetChecksOutcomeDiscriminator(issue),
+            PullRequestUrl: GetPullRequestUrl(issue));
     }
 
     private static string? GetFailureCategory(Issue issue) =>
@@ -252,6 +271,23 @@ internal sealed class IssueQueries(
             FailedIssue failed => failed.FailureCategory.Value,
             ContinuableFailedIssue continuableFailed => continuableFailed.FailureCategory.Value,
             RevisionFailedIssue revisionFailed => revisionFailed.FailureCategory.Value,
+            _ => null,
+        };
+
+    private static string? GetChecksOutcomeDiscriminator(Issue issue) =>
+        issue switch
+        {
+            ReviewIssue review => review.ChecksOutcome.Discriminator,
+            _ => null,
+        };
+
+    private static string? GetPullRequestUrl(Issue issue) =>
+        issue switch
+        {
+            ReviewIssue review => review.PullRequestUrl,
+            ChecksPendingIssue checksPending => checksPending.PullRequestUrl,
+            RevisionInProgressIssue revisionInProgress => revisionInProgress.PullRequestUrl,
+            RevisionQueuedIssue revisionQueued => revisionQueued.PullRequestUrl,
             _ => null,
         };
 
@@ -318,6 +354,7 @@ internal sealed class IssueQueries(
             RevisionQueuedIssue => "revision_queued",
             RevisionInProgressIssue => "revision_in_progress",
             RevisionFailedIssue => "revision_failed",
+            ChecksPendingIssue => "checks_pending",
             _ => throw new InvalidOperationException($"Unknown issue type: {issue.GetType().Name}")
         };
 
@@ -402,7 +439,9 @@ internal sealed class IssueQueries(
                 FailedAt: null,
                 CompletedAt: null,
                 BlockedBy: null,
-                TransientRetry: null),
+                TransientRetry: null,
+                ChecksOutcome: review.ChecksOutcome.Discriminator,
+                FailingChecks: review.ChecksOutcome is ChecksOutcome.StillFailing sf ? sf.FailingChecks : null),
 
             UnchangedIssue unchanged => new IssueStateDetails(
                 WorkerRunId: unchanged.WorkerRunId.Value,
@@ -486,6 +525,17 @@ internal sealed class IssueQueries(
                 BranchName: continuationQueued.BranchName,
                 PullRequestUrl: null,
                 FeedbackCutoffAt: null,
+                FailureReason: null,
+                FailedAt: null,
+                CompletedAt: null,
+                BlockedBy: null,
+                TransientRetry: null),
+
+            ChecksPendingIssue checksPending => new IssueStateDetails(
+                WorkerRunId: checksPending.WorkerRunId.Value,
+                BranchName: checksPending.BranchName,
+                PullRequestUrl: checksPending.PullRequestUrl,
+                FeedbackCutoffAt: checksPending.FeedbackCutoffAt,
                 FailureReason: null,
                 FailedAt: null,
                 CompletedAt: null,
@@ -652,7 +702,9 @@ internal sealed class IssueQueries(
                     : null,
                 RunStats: runAggregates.TryGetValue(i.Id.Value, out RunAggregate? aggregate)
                     ? MapRunStats(aggregate)
-                    : null))
+                    : null,
+                ChecksOutcome: GetChecksOutcomeDiscriminator(i),
+                PullRequestUrl: GetPullRequestUrl(i)))
             .ToList();
     }
 

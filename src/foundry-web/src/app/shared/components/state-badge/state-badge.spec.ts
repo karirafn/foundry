@@ -348,4 +348,32 @@ describe('StateBadgeComponent', () => {
     // Assert
     expect(el.querySelector('span')?.getAttribute('aria-label')).toBe('State: provider error');
   });
+
+  // Cycle 10: checks_pending state
+  it('should display "CHECKS" for checks_pending state', () => {
+    // Arrange / Act
+    const fixture = createComponent('checks_pending');
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    expect(el.querySelector('span')?.textContent?.trim()).toBe('CHECKS');
+  });
+
+  it('should set aria-label "State: checks pending" for checks_pending state', () => {
+    // Arrange / Act
+    const fixture = createComponent('checks_pending');
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    expect(el.querySelector('span')?.getAttribute('aria-label')).toBe('State: checks pending');
+  });
+
+  it('should apply badge--checks-pending CSS class for checks_pending state', () => {
+    // Arrange / Act
+    const fixture = createComponent('checks_pending');
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    expect(el.querySelector('span')?.classList.contains('badge--checks-pending')).toBe(true);
+  });
 });

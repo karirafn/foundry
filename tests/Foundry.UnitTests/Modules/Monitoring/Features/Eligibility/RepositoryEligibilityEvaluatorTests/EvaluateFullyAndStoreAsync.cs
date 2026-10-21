@@ -4,6 +4,7 @@ using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Features.CredentialResolution;
 using Foundry.Modules.Monitoring.Features.Eligibility;
 using Foundry.Modules.Monitoring.Features.Providers;
+using Foundry.Modules.Monitoring.Features.Providers.Checks;
 using Foundry.Modules.Monitoring.Features.Providers.Feedback;
 using Foundry.Modules.Monitoring.Infrastructure;
 using Foundry.Modules.Monitoring.Infrastructure.GitHub;
@@ -661,6 +662,12 @@ public sealed class EvaluateFullyAndStoreAsync
                 RepositorySlug slug,
                 CancellationToken cancellationToken)
                 => Task.FromResult(Result<bool>.Ok(true));
+
+            public Task<Result<Checks>> GetChecksAsync(
+                RepositorySlug slug,
+                string pullRequestUrl,
+                CancellationToken cancellationToken)
+                => Task.FromResult(Result<Checks>.Ok(new Checks.NoneDetected()));
         }
     }
 
@@ -756,6 +763,12 @@ public sealed class EvaluateFullyAndStoreAsync
             RepositorySlug slug,
             CancellationToken cancellationToken)
             => Task.FromResult(_canPushResult);
+
+        public Task<Result<Checks>> GetChecksAsync(
+            RepositorySlug slug,
+            string pullRequestUrl,
+            CancellationToken cancellationToken)
+            => Task.FromResult(Result<Checks>.Ok(new Checks.NoneDetected()));
     }
 
     private sealed class ThrowingBranchProtectionProvider : IIssueProvider
@@ -819,6 +832,12 @@ public sealed class EvaluateFullyAndStoreAsync
             RepositorySlug slug,
             CancellationToken cancellationToken)
             => Task.FromResult(Result<bool>.Ok(true));
+
+        public Task<Result<Checks>> GetChecksAsync(
+            RepositorySlug slug,
+            string pullRequestUrl,
+            CancellationToken cancellationToken)
+            => Task.FromResult(Result<Checks>.Ok(new Checks.NoneDetected()));
     }
 
     private sealed class ThrowingCanPushProviderFactory : IIssueProviderFactory
@@ -888,6 +907,12 @@ public sealed class EvaluateFullyAndStoreAsync
                 RepositorySlug slug,
                 CancellationToken cancellationToken)
                 => throw new HttpRequestException("Connection refused");
+
+            public Task<Result<Checks>> GetChecksAsync(
+                RepositorySlug slug,
+                string pullRequestUrl,
+                CancellationToken cancellationToken)
+                => Task.FromResult(Result<Checks>.Ok(new Checks.NoneDetected()));
         }
     }
 

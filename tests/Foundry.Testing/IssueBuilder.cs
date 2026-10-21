@@ -32,6 +32,8 @@ public sealed class IssueBuilder
     private string _branchName = "feat/1-test";
     private string _pullRequestUrl = "https://github.com/owner/repo/pull/1";
     private DateTimeOffset _feedbackCutoffAt = DateTimeOffset.UtcNow;
+    private DateTimeOffset _enteredChecksPendingAt = DateTimeOffset.UtcNow;
+    private ChecksOutcome _checksOutcome = new ChecksOutcome.Passed();
     private DateTimeOffset _completedAt = DateTimeOffset.UtcNow;
     private DateTimeOffset _failedAt = DateTimeOffset.UtcNow;
     private string _failureReason = "Container exited with code 1";
@@ -73,6 +75,10 @@ public sealed class IssueBuilder
     public IssueBuilder WithPullRequestUrl(string value) { _pullRequestUrl = value; return this; }
 
     public IssueBuilder WithFeedbackCutoffAt(DateTimeOffset value) { _feedbackCutoffAt = value; return this; }
+
+    public IssueBuilder WithEnteredChecksPendingAt(DateTimeOffset value) { _enteredChecksPendingAt = value; return this; }
+
+    public IssueBuilder WithChecksOutcome(ChecksOutcome value) { _checksOutcome = value; return this; }
 
     public IssueBuilder WithCompletedAt(DateTimeOffset value) { _completedAt = value; return this; }
 
@@ -122,6 +128,13 @@ public sealed class IssueBuilder
 
     public RevisionFailedIssue RevisionFailed() =>
         RevisionInProgress().MarkFailed(_failureReason, _failureCategory, _failedAt);
+
+    public ChecksPendingIssue ChecksPending() =>
+        InProgress().MarkChecksPending(_branchName, _pullRequestUrl, _feedbackCutoffAt);
+
+    public ChecksPendingIssue ChecksPendingFromRevision() => RevisionInProgress().MarkChecksPending();
+
+    public ReviewIssue ReviewFromChecksPending() => ChecksPending().ToReview(_checksOutcome);
 
     public UnchangedIssue Unchanged() => InProgress().MarkUnchanged();
 

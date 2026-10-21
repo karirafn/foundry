@@ -37,6 +37,23 @@ public sealed class CompletedIssue : Issue
         return completed;
     }
 
+    internal static CompletedIssue FromChecksPending(ChecksPendingIssue source, DateTimeOffset completedAt)
+    {
+        CompletedIssue completed = new(source.Id);
+        completed.SetSharedProperties(
+            source.MonitoredRepositoryId,
+            source.IssueNumber,
+            source.Title,
+            source.Author,
+            source.Url,
+            source.Labels,
+            source.DetectedAt);
+        completed.BranchName = source.BranchName;
+        completed.PullRequestUrl = source.PullRequestUrl;
+        completed.CompletedAt = completedAt;
+        return completed;
+    }
+
     internal static CompletedIssue FromInProgress(
         InProgressIssue source,
         string branchName,

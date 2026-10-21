@@ -1,3 +1,5 @@
+using Foundry.Shared;
+
 namespace Foundry.Modules.Issues.Contracts;
 
 public sealed record IssueDetail(
@@ -22,7 +24,9 @@ public sealed record IssueStateDetails(
     DateTimeOffset? FailedAt,
     DateTimeOffset? CompletedAt,
     IReadOnlyList<int>? BlockedBy,
-    TransientRetryDetails? TransientRetry);
+    TransientRetryDetails? TransientRetry,
+    string? ChecksOutcome = null,
+    IReadOnlyList<FailingCheck>? FailingChecks = null);
 
 public sealed record TransientRetryDetails(
     int AttemptNumber,

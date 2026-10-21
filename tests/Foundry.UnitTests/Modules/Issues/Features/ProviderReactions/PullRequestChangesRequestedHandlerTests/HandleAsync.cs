@@ -74,6 +74,24 @@ public sealed class HandleAsync : IAsyncDisposable
         return queued;
     }
 
+    private ChecksPendingIssue SeedChecksPendingIssue(
+        MonitoredRepositoryId repositoryId,
+        int issueNumber = 6,
+        string branchName = "feat/1-test",
+        string pullRequestUrl = "https://github.com/owner/repo/pull/1")
+    {
+        ChecksPendingIssue checksPending = new IssueBuilder()
+            .WithMonitoredRepositoryId(repositoryId)
+            .WithIssueNumber(issueNumber)
+            .WithBranchName(branchName)
+            .WithPullRequestUrl(pullRequestUrl)
+            .ChecksPending();
+        _dbContext.Set<Issue>().Add(checksPending);
+        _dbContext.SaveChanges();
+        _dbContext.ChangeTracker.Clear();
+        return checksPending;
+    }
+
     [Fact]
     public async Task WhenReviewIssueExists_TransitionsToRevisionQueuedIssue()
     {
@@ -109,7 +127,66 @@ public sealed class HandleAsync : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenIssueNotInReviewState_SilentlyIgnores()
+    public async Task WhenChecksPendingIssueExists_TransitionsToRevisionQueuedIssue()
+    {
+        // Arrange
+        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
+        SeedChecksPendingIssue(
+            repositoryId,
+            issueNumber: 6,
+            branchName: "feat/6-checks-fix",
+            pullRequestUrl: "https://github.com/owner/repo/pull/20");
+
+        IReadOnlyList<ReviewComment> comments =
+        [
+            new ReviewComment("Please fix the null check", "src/Service.cs", Line: 42),
+        ];
+
+        PullRequestChangesRequested @event = new(
+            RepositoryId: repositoryId,
+            IssueNumber: 6,
+            Comments: comments);
+
+        // Act
+        await _sut.HandleAsync(@event, CancellationToken.None);
+
+        // Assert
+        _dbContext.ChangeTracker.Clear();
+        Issue? issue = await _dbContext.Set<Issue>()
+            .FirstOrDefaultAsync(
+                i => i.MonitoredRepositoryId == repositoryId,
+                TestContext.Current.CancellationToken);
+        RevisionQueuedIssue revisionQueued = issue.ShouldBeOfType<RevisionQueuedIssue>();
+        revisionQueued.ShouldSatisfyAllConditions(
+            () => revisionQueued.BranchName.ShouldBe("feat/6-checks-fix"),
+            () => revisionQueued.PullRequestUrl.ShouldBe("https://github.com/owner/repo/pull/20"),
+            () => revisionQueued.ReviewComments.Count.ShouldBe(1),
+            () => revisionQueued.ReviewComments[0].Body.ShouldBe("Please fix the null check"));
+    }
+
+    [Fact]
+    public async Task WhenChecksPendingIssueGetsChangesRequested_DispatchesIssueRevisionQueuedEvent()
+    {
+        // Arrange
+        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
+        SeedChecksPendingIssue(repositoryId, issueNumber: 7);
+
+        PullRequestChangesRequested @event = new(
+            RepositoryId: repositoryId,
+            IssueNumber: 7,
+            Comments: [new ReviewComment("Please update this.", "src/Service.cs", Line: 10)]);
+
+        // Act
+        await _sut.HandleAsync(@event, CancellationToken.None);
+
+        // Assert
+        _dispatcher.DispatchedEvents
+            .OfType<IssueRevisionQueued>()
+            .ShouldHaveSingleItem();
+    }
+
+    [Fact]
+    public async Task WhenUnhandledState_SilentlyIgnores()
     {
         // Arrange
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();

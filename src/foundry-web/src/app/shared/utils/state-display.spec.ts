@@ -87,4 +87,9 @@ describe('cardAccentFor', () => {
     // Arrange / Act / Assert
     expect(cardAccentFor('revision_failed')).toBeNull();
   });
+
+  it('should return null for checks_pending', () => {
+    // Arrange / Act / Assert
+    expect(cardAccentFor('checks_pending')).toBeNull();
+  });
 });

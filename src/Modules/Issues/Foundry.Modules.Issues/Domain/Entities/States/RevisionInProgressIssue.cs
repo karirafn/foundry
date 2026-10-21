@@ -71,6 +71,28 @@ public sealed class RevisionInProgressIssue : Issue
         return review;
     }
 
+    // MarkChecksPending and MarkUnchangedChecksPending mirror the MarkInReview/MarkUnchanged split:
+    // MarkChecksPending signals the revision produced (or updated) a PR that is now awaiting checks;
+    // MarkUnchangedChecksPending signals the worker found nothing to change but checks still need to run.
+    // The semantic distinction is preserved in logs and events without diverging the cutoff logic.
+    // Do NOT merge them into one method.
+
+    public ChecksPendingIssue MarkChecksPending()
+    {
+        DateTimeOffset feedbackCutoffAt = NewestConsumedCommentAt ?? DateTimeOffset.UtcNow;
+        ChecksPendingIssue checksPending = ChecksPendingIssue.FromRevisionInProgress(this, feedbackCutoffAt);
+        AddDomainEvent(new Events.IssueChecksPending(Id, MonitoredRepositoryId));
+        return checksPending;
+    }
+
+    public ChecksPendingIssue MarkUnchangedChecksPending()
+    {
+        DateTimeOffset feedbackCutoffAt = NewestConsumedCommentAt ?? DateTimeOffset.UtcNow;
+        ChecksPendingIssue checksPending = ChecksPendingIssue.FromRevisionInProgress(this, feedbackCutoffAt);
+        AddDomainEvent(new Events.IssueChecksPending(Id, MonitoredRepositoryId));
+        return checksPending;
+    }
+
     public RevisionFailedIssue MarkFailed(
         string failureReason,
         FailureCategory failureCategory,

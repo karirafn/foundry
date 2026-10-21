@@ -8,6 +8,7 @@ const ALL_LIFECYCLE_STATES: ReadonlySet<IssueState> = new Set<IssueState>([
   'blocked',
   'in_progress',
   'review',
+  'checks_pending',
   'unchanged',
   'failed',
   'continuable_failed',
@@ -29,6 +30,7 @@ describe('issue-lifecycle model', () => {
       'blocked',
       'in_progress',
       'review',
+      'checks_pending',
       'unchanged',
       'failed',
       'continuable_failed',
@@ -205,6 +207,15 @@ describe('issue-lifecycle model', () => {
     expect(waiting!.states).toContain('continuation_queued');
   });
 
+  it('should place checks_pending in the Waiting group', () => {
+    // Arrange
+    const waiting = STATE_GROUPS.find(g => g.label === 'Waiting');
+
+    // Act / Assert
+    expect(waiting).toBeDefined();
+    expect(waiting!.states).toContain('checks_pending');
+  });
+
   it('should place review, unchanged, failed, continuable_failed, revision_failed in the Needs attention group', () => {
     // Arrange
     const needsAttention = STATE_GROUPS.find(g => g.label === 'Needs attention');
@@ -259,6 +270,17 @@ describe('withinGroupRankFor', () => {
   it('should rank continuation_queued before detected in the Waiting group', () => {
     // Arrange / Act / Assert
     expect(withinGroupRankFor('continuation_queued')).toBeLessThan(withinGroupRankFor('detected'));
+  });
+
+  it('should rank checks_pending before blocked in the Waiting group', () => {
+    // Arrange / Act / Assert
+    expect(withinGroupRankFor('checks_pending')).toBeLessThan(withinGroupRankFor('blocked'));
+  });
+
+  it('should rank detected before or equal to checks_pending in the Waiting group', () => {
+    // Arrange / Act / Assert
+    // checks_pending precedes the review flow; it groups with detected in the same tier
+    expect(withinGroupRankFor('checks_pending')).toBe(withinGroupRankFor('detected'));
   });
 
   // Cycle 2: In-progress group tier ordering
