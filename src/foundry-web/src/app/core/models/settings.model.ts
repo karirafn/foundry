@@ -21,8 +21,6 @@ export interface LoginSessionUpdate {
 export interface WorkerImageFlags {
   installDotnet: boolean;
   installAngular: boolean;
-  installGlab: boolean;
-  installGh: boolean;
   installChromium: boolean;
   installDocker: boolean;
 }
@@ -76,8 +74,6 @@ export interface GlobalSettingsResponse {
   autoResumeOnUsageReset: boolean;
   installDotnet: boolean;
   installAngular: boolean;
-  installGlab: boolean;
-  installGh: boolean;
   installChromium: boolean;
   installDocker: boolean;
   imageBuildStatus: ImageBuildStatus;

@@ -4,6 +4,12 @@ status: accepted
 
 # Worker Image Flags in GlobalSettings with Rebuild-on-Save
 
+> **2026-10-21 — Amended:** the `INSTALL_GLAB` / `INSTALL_GH` members of the `WorkerImageConfiguration`
+> value object in Decision are removed by #580 — the provider CLIs (`gh`, `glab`) are now unconditional
+> worker prerequisites baked into `Dockerfile.base`, and a missing CLI fails bootstrap at the entrypoint
+> boundary. The remaining flags (`INSTALL_DOTNET`, `INSTALL_ANGULAR`, `INSTALL_CHROMIUM`, `INSTALL_DOCKER`)
+> stay as described. This was overturned by later work, not false when written.
+
 ## Context
 
 The worker image preinstall flags (`INSTALL_DOTNET`, `INSTALL_ANGULAR`, `INSTALL_GLAB`, `INSTALL_GH`) were free-form entries in `Workers:ImageBuild:BuildArgs` (`IConfiguration`), deliberately excluded from the DB-backed `GlobalSettings` aggregate — DOMAIN.md records "infrastructure-only settings (Docker image, mounts, memory/CPU/PID limits) remain in `IConfiguration`".

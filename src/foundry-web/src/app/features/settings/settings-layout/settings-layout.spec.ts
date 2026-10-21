@@ -25,8 +25,6 @@ const SETTINGS_RESPONSE = {
   autoResumeOnUsageReset: true,
   installDotnet: false,
   installAngular: false,
-  installGlab: false,
-  installGh: false,
   installChromium: false,
   installDocker: false,
   imageBuildStatus: 'Idle',

@@ -649,8 +649,6 @@ export interface components {
             autoResumeOnUsageReset: boolean;
             installDotnet: boolean;
             installAngular: boolean;
-            installGlab: boolean;
-            installGh: boolean;
             installChromium: boolean;
             installDocker: boolean;
             imageBuildStatus: components["schemas"]["ImageBuildStatus"];
@@ -879,8 +877,6 @@ export interface components {
         UpdateWorkerImageConfigurationRequestBody: {
             installDotnet: boolean;
             installAngular: boolean;
-            installGlab: boolean;
-            installGh: boolean;
             installChromium: boolean;
             installDocker: boolean;
         };

@@ -71,8 +71,6 @@ public sealed class OutboxHarvestHandleAsync : IAsyncDisposable
             settings.UpdateWorkerImageConfiguration(new WorkerImageConfiguration(
                 InstallDotnet: false,
                 InstallAngular: false,
-                InstallGlab: false,
-                InstallGh: false,
                 InstallChromium: false,
                 InstallDocker: false));
             seedDb.Set<GlobalSettings>().Add(settings);
@@ -89,8 +87,6 @@ public sealed class OutboxHarvestHandleAsync : IAsyncDisposable
         UpdateWorkerImageConfiguration.Command command = new(
             InstallDotnet: true,
             InstallAngular: false,
-            InstallGlab: false,
-            InstallGh: false,
             InstallChromium: false,
             InstallDocker: false);
 
@@ -121,8 +117,6 @@ public sealed class OutboxHarvestHandleAsync : IAsyncDisposable
             settings.UpdateWorkerImageConfiguration(new WorkerImageConfiguration(
                 InstallDotnet: true,
                 InstallAngular: false,
-                InstallGlab: false,
-                InstallGh: false,
                 InstallChromium: false,
                 InstallDocker: false));
             seedDb.Set<GlobalSettings>().Add(settings);
@@ -139,8 +133,6 @@ public sealed class OutboxHarvestHandleAsync : IAsyncDisposable
         UpdateWorkerImageConfiguration.Command command = new(
             InstallDotnet: true,
             InstallAngular: false,
-            InstallGlab: false,
-            InstallGh: false,
             InstallChromium: false,
             InstallDocker: false);
 
