@@ -148,6 +148,15 @@ public sealed class IssueBuilder
     public ChecksPendingIssue ChecksPendingFromFixChecks() =>
         ChecksPending().FixChecks(_failingChecks).Claim(_workerRunId).MarkChecksPending();
 
+    /// <summary>
+    /// Builds a <see cref="ChecksPendingIssue"/> that has exhausted all FixChecks dispatch
+    /// attempts (ChecksFixAttempts = <see cref="ChecksPendingIssue.ChecksMaxFixPushes"/> = 2).
+    /// At the cap, a <c>still_failing</c> verdict transitions to <see cref="ReviewIssue"/> rather
+    /// than dispatching another fix revision.
+    /// </summary>
+    public ChecksPendingIssue ChecksPendingAtCap() =>
+        ChecksPendingFromFixChecks().FixChecks(_failingChecks).Claim(_workerRunId).MarkChecksPending();
+
     public ReviewIssue ReviewFromChecksPending() => ChecksPending().ToReview(_checksOutcome);
 
     public UnchangedIssue Unchanged() => InProgress().MarkUnchanged();

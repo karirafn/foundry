@@ -17,10 +17,11 @@ using Xunit;
 namespace Foundry.IntegrationTests.Modules.Issues.Features.ChecksGate;
 
 // Handler has no HTTP endpoint — dispatched through the integration-event pipeline.
-// These tests exercise the real DbContext to prove the checks_outcome JSON column
-// round-trips a StillFailing outcome with its failing-check list intact.
+// These tests exercise the real DbContext (SQLite, no Docker) against the live handler wiring.
 //
-// Docker is NOT available in this sandbox — compile-verified only; executes in CI.
+// The three "at the cap" tests prove the ChecksOutcome.StillFailing JSON column round-trips
+// its failing-check list intact when ChecksFixAttempts has reached ChecksMaxFixPushes.
+// The "under cap" tests prove the handler dispatches a FixChecks revision instead.
 public sealed class WhenChecksStillFailing : IAsyncDisposable
 {
     private readonly FoundryWebAppFactory _factory;
@@ -38,7 +39,9 @@ public sealed class WhenChecksStillFailing : IAsyncDisposable
         await _factory.DisposeAsync();
     }
 
-    private async Task<ChecksPendingIssue> SeedChecksPendingIssueAsync(int issueNumber = 1)
+    // Seeds a ChecksPendingIssue at the cap (ChecksFixAttempts = 2).
+    // At the cap a still_failing verdict transitions to ReviewIssue rather than dispatching another fix.
+    private async Task<ChecksPendingIssue> SeedChecksPendingIssueAtCapAsync(int issueNumber = 1)
     {
         using IServiceScope scope = _factory.Services.CreateScope();
         DbContext dbContext = scope.ServiceProvider.GetRequiredService<DbContext>();
@@ -47,6 +50,27 @@ public sealed class WhenChecksStillFailing : IAsyncDisposable
             .WithMonitoredRepositoryId(RepositoryId)
             .WithIssueNumber(issueNumber)
             .WithTitle("Still failing checks issue")
+            .WithBranchName("feat/1-test")
+            .WithPullRequestUrl("https://github.com/owner/repo/pull/1")
+            .WithFeedbackCutoffAt(DateTimeOffset.UtcNow.AddDays(1))
+            .ChecksPendingAtCap();
+
+        dbContext.Set<Issue>().Add(checksPending);
+        await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+        return checksPending;
+    }
+
+    // Seeds a ChecksPendingIssue with ChecksFixAttempts = 0 (under the cap).
+    // Under the cap a still_failing verdict dispatches a FixChecks revision.
+    private async Task<ChecksPendingIssue> SeedChecksPendingIssueUnderCapAsync(int issueNumber = 10)
+    {
+        using IServiceScope scope = _factory.Services.CreateScope();
+        DbContext dbContext = scope.ServiceProvider.GetRequiredService<DbContext>();
+
+        ChecksPendingIssue checksPending = new IssueBuilder()
+            .WithMonitoredRepositoryId(RepositoryId)
+            .WithIssueNumber(issueNumber)
+            .WithTitle("Under-cap checks issue")
             .WithBranchName("feat/1-test")
             .WithPullRequestUrl("https://github.com/owner/repo/pull/1")
             .WithFeedbackCutoffAt(DateTimeOffset.UtcNow.AddDays(1))
@@ -61,7 +85,7 @@ public sealed class WhenChecksStillFailing : IAsyncDisposable
     public async Task WhenChecksVerdictResolvedWithStillFailing_PersistedReviewHasStillFailingOutcome()
     {
         // Arrange
-        ChecksPendingIssue checksPending = await SeedChecksPendingIssueAsync();
+        ChecksPendingIssue checksPending = await SeedChecksPendingIssueAtCapAsync();
 
         IReadOnlyList<FailingCheck> failingChecks =
         [
@@ -102,7 +126,7 @@ public sealed class WhenChecksStillFailing : IAsyncDisposable
     public async Task WhenChecksVerdictResolvedWithStillFailing_DetailDtoSurfacesOutcomeAndFailingChecks()
     {
         // Arrange
-        ChecksPendingIssue checksPending = await SeedChecksPendingIssueAsync(issueNumber: 2);
+        ChecksPendingIssue checksPending = await SeedChecksPendingIssueAtCapAsync(issueNumber: 2);
 
         IReadOnlyList<FailingCheck> failingChecks =
         [
@@ -146,7 +170,7 @@ public sealed class WhenChecksStillFailing : IAsyncDisposable
     public async Task WhenChecksVerdictResolvedWithStillFailing_SummaryDtoSurfacesChecksOutcome()
     {
         // Arrange
-        ChecksPendingIssue checksPending = await SeedChecksPendingIssueAsync(issueNumber: 3);
+        ChecksPendingIssue checksPending = await SeedChecksPendingIssueAtCapAsync(issueNumber: 3);
 
         ChecksVerdictResolved @event = new(
             RepositoryId: RepositoryId,
@@ -172,5 +196,101 @@ public sealed class WhenChecksStillFailing : IAsyncDisposable
         IssueSummary result = summary.ShouldNotBeNull();
         result.State.ShouldBe("review");
         result.ChecksOutcome.ShouldBe("still_failing");
+    }
+
+    [Fact]
+    public async Task WhenChecksVerdictResolvedWithStillFailing_UnderCap_PersistedIssueIsRevisionQueued()
+    {
+        // Arrange — ChecksFixAttempts = 0, still below ChecksMaxFixPushes = 2.
+        IReadOnlyList<FailingCheck> failingChecks =
+        [
+            new FailingCheck("CI / build", "failure", "https://github.com/owner/repo/actions/runs/10"),
+            new FailingCheck("CI / test", "failure", null),
+        ];
+
+        ChecksPendingIssue checksPending = await SeedChecksPendingIssueUnderCapAsync(issueNumber: 10);
+
+        ChecksVerdictResolved @event = new(
+            RepositoryId: RepositoryId,
+            IssueNumber: checksPending.IssueNumber,
+            Outcome: "still_failing",
+            FailingChecks: failingChecks);
+
+        // Act
+        using IServiceScope scope = _factory.Services.CreateScope();
+        IIntegrationEventHandler<ChecksVerdictResolved> handler =
+            scope.ServiceProvider.GetRequiredService<IIntegrationEventHandler<ChecksVerdictResolved>>();
+        await handler.HandleAsync(@event, TestContext.Current.CancellationToken);
+
+        // Assert — the issue becomes a RevisionQueuedIssue with a FailedChecks trigger.
+        using IServiceScope assertScope = _factory.Services.CreateScope();
+        DbContext dbContext = assertScope.ServiceProvider.GetRequiredService<DbContext>();
+        Issue? persisted = await dbContext.Set<Issue>()
+            .FirstOrDefaultAsync(i => i.Id == checksPending.Id, TestContext.Current.CancellationToken);
+
+        RevisionQueuedIssue revisionQueued = persisted.ShouldBeOfType<RevisionQueuedIssue>();
+        revisionQueued.ChecksFixAttempts.ShouldBe(1);
+        RevisionTrigger.FailedChecks trigger = revisionQueued.Trigger.ShouldBeOfType<RevisionTrigger.FailedChecks>();
+        trigger.FailingChecks.ShouldSatisfyAllConditions(
+            _ => trigger.FailingChecks.Count.ShouldBe(2),
+            _ => trigger.FailingChecks[0].Name.ShouldBe("CI / build"),
+            _ => trigger.FailingChecks[0].Conclusion.ShouldBe("failure"),
+            _ => trigger.FailingChecks[0].DetailsUrl.ShouldBe("https://github.com/owner/repo/actions/runs/10"),
+            _ => trigger.FailingChecks[1].Name.ShouldBe("CI / test"),
+            _ => trigger.FailingChecks[1].DetailsUrl.ShouldBeNull());
+    }
+
+    [Fact]
+    public async Task WhenChecksVerdictResolvedWithStillFailing_OneFixAttemptRemaining_DispatchesAnotherFix()
+    {
+        // Arrange — ChecksFixAttempts = 1 (one attempt made, one remaining before cap).
+        IReadOnlyList<FailingCheck> failingChecks =
+        [
+            new FailingCheck("CI / lint", "failure", "https://github.com/owner/repo/actions/runs/11"),
+        ];
+
+        ChecksPendingIssue checksPending = await SeedChecksPendingIssueWithOneAttemptAsync(issueNumber: 11);
+
+        ChecksVerdictResolved @event = new(
+            RepositoryId: RepositoryId,
+            IssueNumber: checksPending.IssueNumber,
+            Outcome: "still_failing",
+            FailingChecks: failingChecks);
+
+        // Act
+        using IServiceScope scope = _factory.Services.CreateScope();
+        IIntegrationEventHandler<ChecksVerdictResolved> handler =
+            scope.ServiceProvider.GetRequiredService<IIntegrationEventHandler<ChecksVerdictResolved>>();
+        await handler.HandleAsync(@event, TestContext.Current.CancellationToken);
+
+        // Assert — a second fix revision is dispatched; ChecksFixAttempts reaches the cap (2).
+        using IServiceScope assertScope = _factory.Services.CreateScope();
+        DbContext dbContext = assertScope.ServiceProvider.GetRequiredService<DbContext>();
+        Issue? persisted = await dbContext.Set<Issue>()
+            .FirstOrDefaultAsync(i => i.Id == checksPending.Id, TestContext.Current.CancellationToken);
+
+        RevisionQueuedIssue revisionQueued = persisted.ShouldBeOfType<RevisionQueuedIssue>();
+        revisionQueued.ChecksFixAttempts.ShouldBe(2);
+        revisionQueued.Trigger.ShouldBeOfType<RevisionTrigger.FailedChecks>();
+    }
+
+    // Seeds a ChecksPendingIssue with ChecksFixAttempts = 1 (one fix attempt already made).
+    private async Task<ChecksPendingIssue> SeedChecksPendingIssueWithOneAttemptAsync(int issueNumber)
+    {
+        using IServiceScope scope = _factory.Services.CreateScope();
+        DbContext dbContext = scope.ServiceProvider.GetRequiredService<DbContext>();
+
+        ChecksPendingIssue checksPending = new IssueBuilder()
+            .WithMonitoredRepositoryId(RepositoryId)
+            .WithIssueNumber(issueNumber)
+            .WithTitle("One-attempt checks issue")
+            .WithBranchName("feat/1-test")
+            .WithPullRequestUrl("https://github.com/owner/repo/pull/1")
+            .WithFeedbackCutoffAt(DateTimeOffset.UtcNow.AddDays(1))
+            .ChecksPendingFromFixChecks();
+
+        dbContext.Set<Issue>().Add(checksPending);
+        await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+        return checksPending;
     }
 }
