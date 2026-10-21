@@ -340,12 +340,29 @@ The sealed union describing the nature of the work being dispatched to a worker 
 Three variants:
 
 - **`Fresh`** — a new implementation attempt; carries `BranchName`.
-- **`Revision`** — a revision cycle addressing review feedback; carries `BranchName`, `PullRequestUrl`, and `IReadOnlyList<ReviewComment>`.
+- **`Revision`** — a revision cycle; carries `BranchName`, `PullRequestUrl`, and a polymorphic [Revision Trigger](#revision-trigger) describing why the revision was queued.
 - **`Continuation`** — resuming an existing branch after a failed run; carries `BranchName` and optional `FailureReason`.
 
 `DispatchContext` is assembled by the concrete `QueuedIssue` subtype overriding the abstract `Context` property — `FreshQueuedIssue` returns `Fresh`, `RevisionQueuedIssue` returns `Revision`, `ContinuationQueuedIssue` returns `Continuation`.
 The handler and claimer treat `Context` as an opaque value — they forward it into `ClaimedIssueDispatch` without switching on it.
 Survives the outbox round-trip via `[JsonPolymorphic]` / `[JsonDerivedType]` annotations (see [ADR 0051](docs/adr/0051-dispatch-context-union-and-typed-dispatch-seam.md)).
+
+## Revision Trigger
+
+Why a revision run was queued — a polymorphic value carried by `RevisionQueuedIssue`, `RevisionInProgressIssue`, and `RevisionFailedIssue` (and surfaced on `DispatchContext.Revision`) in place of comment-specific fields.
+Two variants:
+
+- **`ReviewFeedback`** — a human reviewer requested changes; carries `Comments`, `OmittedCommentCount`, and `NewestConsumedCommentAt`.
+- **`FailedChecks`** — the PR's provider checks went red within the fix budget; carries the `FailingChecks`.
+
+Modelling the trigger as a closed union makes a half-populated revision (comments *and* failing checks, or neither) unrepresentable, and lets the `SystemPromptBuilder` switch on the kind rather than null-checking fields.
+Persisted as a single `revision_trigger` JSON column and survives the outbox round-trip via `[JsonPolymorphic]` / `[JsonDerivedType]` annotations (see [ADR 0078](docs/adr/0078-revision-trigger-polymorphic-union.md)).
+
+## Checks Fix Attempts
+
+The number of `FailedChecks` revisions dispatched since the last human review feedback, carried on `ChecksPendingIssue` and threaded through the revision states so it survives `ChecksPending → RevisionQueued → RevisionInProgress → ChecksPending`.
+`ChecksPendingIssue.FixChecks` increments it; any `ReviewFeedback` revision (`ReviewIssue.Revise` / `ChecksPendingIssue.Revise`) resets it to 0.
+When a red verdict arrives and the count is below the cap (`ChecksMaxFixPushes`, = 2), the issue re-queues as a `FailedChecks` revision; at the cap it transitions to `ReviewIssue` with `ChecksOutcome.StillFailing`.
 
 ## Claim
 
