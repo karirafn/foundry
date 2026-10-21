@@ -55,8 +55,6 @@ function buildSettingsResponse(overrides: Record<string, unknown> = {}): Record<
     autoResumeOnUsageReset: true,
     installDotnet: false,
     installAngular: false,
-    installGlab: false,
-    installGh: false,
     installChromium: false,
     installDocker: false,
     imageBuildStatus: 'Idle',
@@ -868,8 +866,6 @@ describe('SettingsService', () => {
     flushLoadSettings(httpMock, {
       installDotnet: true,
       installAngular: false,
-      installGlab: true,
-      installGh: false,
       imageBuildStatus: 'Idle',
     });
 
@@ -878,8 +874,6 @@ describe('SettingsService', () => {
     expect(flags).not.toBeNull();
     expect(flags!.installDotnet).toBe(true);
     expect(flags!.installAngular).toBe(false);
-    expect(flags!.installGlab).toBe(true);
-    expect(flags!.installGh).toBe(false);
   });
 
   it('should populate installChromium and installDocker from loadSettings response', () => {
@@ -934,13 +928,13 @@ describe('SettingsService', () => {
     // (service initialized by test setup)
 
     // Act
-    service.updateWorkerImageFlags({ installDotnet: true, installAngular: false, installGlab: true, installGh: false, installChromium: false, installDocker: false });
+    service.updateWorkerImageFlags({ installDotnet: true, installAngular: false, installChromium: false, installDocker: false });
     const req = httpMock.expectOne('/api/settings/worker-image');
 
     // Assert
     expect(req.request.method).toBe('PUT');
-    expect(req.request.body).toEqual({ installDotnet: true, installAngular: false, installGlab: true, installGh: false, installChromium: false, installDocker: false });
-    req.flush(buildSettingsResponse({ installDotnet: true, installGlab: true }));
+    expect(req.request.body).toEqual({ installDotnet: true, installAngular: false, installChromium: false, installDocker: false });
+    req.flush(buildSettingsResponse({ installDotnet: true }));
   });
 
   it('should set savingImageFlags to true while updateWorkerImageFlags is in flight', () => {
@@ -948,7 +942,7 @@ describe('SettingsService', () => {
     // (service initialized by test setup)
 
     // Act
-    service.updateWorkerImageFlags({ installDotnet: false, installAngular: false, installGlab: false, installGh: false, installChromium: false, installDocker: false });
+    service.updateWorkerImageFlags({ installDotnet: false, installAngular: false, installChromium: false, installDocker: false });
 
     // Assert — before flush
     expect(service.savingImageFlags()).toBe(true);
@@ -957,12 +951,10 @@ describe('SettingsService', () => {
 
   it('should update workerImageFlags and clear savingImageFlags after updateWorkerImageFlags succeeds', () => {
     // Arrange
-    service.updateWorkerImageFlags({ installDotnet: true, installAngular: true, installGlab: false, installGh: false, installChromium: false, installDocker: false });
+    service.updateWorkerImageFlags({ installDotnet: true, installAngular: true, installChromium: false, installDocker: false });
     httpMock.expectOne('/api/settings/worker-image').flush(buildSettingsResponse({
       installDotnet: true,
       installAngular: true,
-      installGlab: false,
-      installGh: false,
     }));
 
     // Assert
@@ -974,7 +966,7 @@ describe('SettingsService', () => {
 
   it('should set saveImageFlagsSuccess to true after updateWorkerImageFlags succeeds', () => {
     // Arrange
-    service.updateWorkerImageFlags({ installDotnet: true, installAngular: false, installGlab: false, installGh: false, installChromium: false, installDocker: false });
+    service.updateWorkerImageFlags({ installDotnet: true, installAngular: false, installChromium: false, installDocker: false });
     httpMock.expectOne('/api/settings/worker-image').flush(buildSettingsResponse({ installDotnet: true }));
 
     // Assert
@@ -983,7 +975,7 @@ describe('SettingsService', () => {
 
   it('should keep saveImageFlagsSuccess false when updateWorkerImageFlags fails', () => {
     // Arrange
-    service.updateWorkerImageFlags({ installDotnet: false, installAngular: false, installGlab: false, installGh: false, installChromium: false, installDocker: false });
+    service.updateWorkerImageFlags({ installDotnet: false, installAngular: false, installChromium: false, installDocker: false });
     httpMock.expectOne('/api/settings/worker-image').flush('Server Error', { status: 500, statusText: 'Internal Server Error' });
 
     // Assert
@@ -992,7 +984,7 @@ describe('SettingsService', () => {
 
   it('should reset saveImageFlagsSuccess in loadSettings', () => {
     // Arrange — put success signal into true state
-    service.updateWorkerImageFlags({ installDotnet: false, installAngular: false, installGlab: false, installGh: false, installChromium: false, installDocker: false });
+    service.updateWorkerImageFlags({ installDotnet: false, installAngular: false, installChromium: false, installDocker: false });
     httpMock.expectOne('/api/settings/worker-image').flush(buildSettingsResponse());
     expect(service.saveImageFlagsSuccess()).toBe(true);
 
@@ -1006,7 +998,7 @@ describe('SettingsService', () => {
 
   it('should set saveImageFlagsError when updateWorkerImageFlags fails', () => {
     // Arrange
-    service.updateWorkerImageFlags({ installDotnet: false, installAngular: false, installGlab: false, installGh: false, installChromium: false, installDocker: false });
+    service.updateWorkerImageFlags({ installDotnet: false, installAngular: false, installChromium: false, installDocker: false });
     httpMock.expectOne('/api/settings/worker-image').flush('Server Error', {
       status: 500,
       statusText: 'Internal Server Error',
@@ -1019,7 +1011,7 @@ describe('SettingsService', () => {
 
   it('should set saveImageFlagsError to a fixed user-facing string when updateWorkerImageFlags fails', () => {
     // Arrange
-    service.updateWorkerImageFlags({ installDotnet: false, installAngular: false, installGlab: false, installGh: false, installChromium: false, installDocker: false });
+    service.updateWorkerImageFlags({ installDotnet: false, installAngular: false, installChromium: false, installDocker: false });
     httpMock.expectOne('/api/settings/worker-image').flush('Server Error', {
       status: 500,
       statusText: 'Internal Server Error',
@@ -1099,7 +1091,7 @@ describe('SettingsService', () => {
   // retryImageBuild resets saveImageFlagsSuccess
   it('should reset saveImageFlagsSuccess to false when retryImageBuild is called', () => {
     // Arrange — drive saveImageFlagsSuccess to true via updateWorkerImageFlags
-    service.updateWorkerImageFlags({ installDotnet: false, installAngular: false, installGlab: false, installGh: false, installChromium: false, installDocker: false });
+    service.updateWorkerImageFlags({ installDotnet: false, installAngular: false, installChromium: false, installDocker: false });
     httpMock.expectOne('/api/settings/worker-image').flush(buildSettingsResponse());
     expect(service.saveImageFlagsSuccess()).toBe(true);
 
@@ -1158,7 +1150,7 @@ describe('SettingsService', () => {
 
   it('should set hasUsableImage from updateWorkerImageFlags response', () => {
     // Arrange
-    service.updateWorkerImageFlags({ installDotnet: false, installAngular: false, installGlab: false, installGh: false, installChromium: false, installDocker: false });
+    service.updateWorkerImageFlags({ installDotnet: false, installAngular: false, installChromium: false, installDocker: false });
 
     // Act
     httpMock.expectOne('/api/settings/worker-image').flush(buildSettingsResponse({ hasUsableImage: true }));
@@ -1426,8 +1418,6 @@ describe('SettingsService — SignalR login session', () => {
       autoResumeOnUsageReset: true,
       installDotnet: false,
       installAngular: false,
-      installGlab: false,
-      installGh: false,
       installChromium: false,
       installDocker: false,
       imageBuildStatus: 'Idle',
@@ -1645,8 +1635,6 @@ describe('SettingsService — SignalR re-sync', () => {
       autoResumeOnUsageReset: true,
       installDotnet: false,
       installAngular: false,
-      installGlab: false,
-      installGh: false,
       installChromium: false,
       installDocker: false,
       imageBuildStatus: 'Idle',
@@ -1821,8 +1809,6 @@ describe('SettingsService — retry fields', () => {
       autoResumeOnUsageReset: true,
       installDotnet: false,
       installAngular: false,
-      installGlab: false,
-      installGh: false,
       installChromium: false,
       installDocker: false,
       imageBuildStatus: 'Idle',
@@ -1875,7 +1861,7 @@ describe('SettingsService — retry fields', () => {
     const { service, httpMock } = setup();
 
     // Act
-    service.updateWorkerImageFlags({ installDotnet: false, installAngular: false, installGlab: false, installGh: false, installChromium: false, installDocker: false });
+    service.updateWorkerImageFlags({ installDotnet: false, installAngular: false, installChromium: false, installDocker: false });
     httpMock.expectOne('/api/settings/worker-image').flush(buildSettings({ imageBuildStatus: 'Failed', nextRetryAt: '2026-08-08T14:00:00Z', attempt: 1 }));
 
     // Assert
@@ -1960,8 +1946,6 @@ describe('SettingsService — isColdBuildBlocking', () => {
       autoResumeOnUsageReset: true,
       installDotnet: false,
       installAngular: false,
-      installGlab: false,
-      installGh: false,
       installChromium: false,
       installDocker: false,
       imageBuildStatus: 'Idle',
