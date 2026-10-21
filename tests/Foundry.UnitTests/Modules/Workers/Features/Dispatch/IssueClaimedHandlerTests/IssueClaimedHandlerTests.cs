@@ -1045,7 +1045,7 @@ public sealed class HandleAsync : IAsyncDisposable
     [Fact]
     public async Task WhenDispatched_SystemPromptEnvVarContainsChecksSection()
     {
-        // Arrange — StubGlobalSettingsQueries.GetTimeoutMinutesAsync returns 120
+        // Arrange — timeout is 120 minutes (stub default)
         StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c-checks-section");
         IssueClaimedHandler sut = BuildHandler(orchestrator: orchestrator);
         IssueClaimed @event = BuildEvent();

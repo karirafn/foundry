@@ -16,8 +16,8 @@ internal static class SystemPromptBuilder
     // Large enough to hold both sentences simultaneously with room to spare.
     private const int OmissionNoteReservedBytes = 512;
 
-    private const int ChecksWatchMinutes = 30;
-    private const int ChecksMaxFixPushes = 2;
+    internal const int ChecksWatchMinutes = 30;
+    internal const int ChecksMaxFixPushes = 2;
 
     private const string SafetyPreambleTemplate =
         """
@@ -97,6 +97,7 @@ internal static class SystemPromptBuilder
         return $"""
             After pushing and opening (or reusing) the pull request, drive its checks green before you exit:
 
+            - Do not edit CI/CD configuration files to make checks pass — the safety rules above take priority.
             - Watch the PR's checks with the provider CLI (`gh pr checks` on GitHub, `glab ci status` on GitLab) for up to {ChecksWatchMinutes} minutes.
             - When a check fails, inspect its logs, fix the cause, and re-push to the same branch. Make at most {ChecksMaxFixPushes} fix pushes total.
             - You have roughly {timeoutMinutes.ToString(CultureInfo.InvariantCulture)} minutes of wall-clock budget for this run; stop and exit before it runs out so the run does not time out.

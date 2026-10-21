@@ -1426,8 +1426,8 @@ public sealed class Build
         result.ShouldSatisfyAllConditions(
             () => result.ShouldContain("gh pr checks"),
             () => result.ShouldContain("glab ci status"),
-            () => result.ShouldContain("30 minutes"),
-            () => result.ShouldContain("2 fix push"),
+            () => result.ShouldContain($"{SystemPromptBuilder.ChecksWatchMinutes} minutes"),
+            () => result.ShouldContain($"{SystemPromptBuilder.ChecksMaxFixPushes} fix push"),
             () => result.ShouldContain("Foundry continues to monitor"));
     }
 
@@ -1449,8 +1449,8 @@ public sealed class Build
         result.ShouldSatisfyAllConditions(
             () => result.ShouldContain("gh pr checks"),
             () => result.ShouldContain("glab ci status"),
-            () => result.ShouldContain("30 minutes"),
-            () => result.ShouldContain("2 fix push"),
+            () => result.ShouldContain($"{SystemPromptBuilder.ChecksWatchMinutes} minutes"),
+            () => result.ShouldContain($"{SystemPromptBuilder.ChecksMaxFixPushes} fix push"),
             () => result.ShouldContain("Foundry continues to monitor"));
     }
 
@@ -1475,13 +1475,13 @@ public sealed class Build
         result.ShouldSatisfyAllConditions(
             () => result.ShouldContain("gh pr checks"),
             () => result.ShouldContain("glab ci status"),
-            () => result.ShouldContain("30 minutes"),
-            () => result.ShouldContain("2 fix push"),
+            () => result.ShouldContain($"{SystemPromptBuilder.ChecksWatchMinutes} minutes"),
+            () => result.ShouldContain($"{SystemPromptBuilder.ChecksMaxFixPushes} fix push"),
             () => result.ShouldContain("Foundry continues to monitor"));
     }
 
     [Fact]
-    public void WhenOperatorCustomTemplateSuppiled_ChecksSectionStillPresent()
+    public void WhenOperatorCustomTemplateSupplied_ChecksSectionStillPresent()
     {
         // Arrange — AC3: checks section is in non-overridable builder output, not the template
         WorkerOptions options = new()
@@ -1518,8 +1518,84 @@ public sealed class Build
             timeoutMinutes: 90);
         string result = buildResult.ShouldBeOfType<Result<string>.Success>().Value;
 
-        // Assert — "90" appears in the budget sentence
-        result.ShouldContain("90");
+        // Assert — "90" appears in the budget sentence with its unique surrounding text
+        result.ShouldContain("90 minutes of wall-clock budget");
+    }
+
+    [Fact]
+    public void WhenBuiltForRevisionContext_ChecksSectionAppearsBeforeRevisionHeader()
+    {
+        // Arrange — Fix 4: lock the ordering of checks section relative to the revision header
+        WorkerOptions options = new();
+        DispatchContext.Revision revision = new(
+            "feat/1-fix",
+            "https://github.com/org/repo/pull/1",
+            [new ReviewComment("Please add tests.")]);
+
+        // Act
+        Result<string> buildResult = SystemPromptBuilder.Build(
+            1, options, options.SystemPromptTemplate, revision,
+            "https://api.github.com/repos/owner/repo/issues/1",
+            timeoutMinutes: 120);
+        string result = buildResult.ShouldBeOfType<Result<string>.Success>().Value;
+
+        // Assert — the checks section (from the shared floor) appears before the revision feedback block
+        int checksSectionIndex = result.IndexOf("gh pr checks", StringComparison.Ordinal);
+        int revisionHeaderIndex = result.IndexOf("You are addressing review feedback on an existing PR.", StringComparison.Ordinal);
+
+        checksSectionIndex.ShouldBeGreaterThan(0);
+        revisionHeaderIndex.ShouldBeGreaterThan(0);
+        checksSectionIndex.ShouldBeLessThan(revisionHeaderIndex);
+    }
+
+    [Fact]
+    public void WhenRevisionWithManyComments_PromptStaysUnderByteCeiling()
+    {
+        // Arrange — Fix 5: verify the revision byte budget accounts for the appended checks section.
+        // Construct a revision whose comment content pushes the prompt near the ceiling.
+        // 50 comments with bodies large enough to fill most of the comment budget.
+        WorkerOptions options = new();
+        // Each comment body: ~2000 ASCII bytes — 50 × ~2000 = ~100_000 bytes of raw comment content,
+        // which combined with the fixed floor (safety preamble + template + checks section + revision scaffold)
+        // approaches but stays under the 120_000-byte ceiling.
+        string body = new string('b', 2000);
+        List<ReviewComment> comments = Enumerable.Range(1, 50)
+            .Select(i => new ReviewComment($"Comment {i}: {body}"))
+            .ToList();
+        DispatchContext.Revision revision = new(
+            "feat/1-fix",
+            "https://github.com/org/repo/pull/1",
+            comments);
+
+        // Act
+        Result<string> buildResult = SystemPromptBuilder.Build(
+            1, options, options.SystemPromptTemplate, revision,
+            "https://api.github.com/repos/owner/repo/issues/1",
+            timeoutMinutes: 120);
+
+        // Assert — build succeeds and result stays within the ADR 0071 120,000-byte ceiling
+        string result = buildResult.ShouldBeOfType<Result<string>.Success>().Value;
+        System.Text.Encoding.UTF8.GetByteCount(result).ShouldBeLessThan(SystemPromptBuilder.MaxSystemPromptBytes);
+    }
+
+    [Fact]
+    public void WhenBuiltForChecksSection_CiCdSubordinationClausePresent()
+    {
+        // Arrange — Fix 1: the checks section must explicitly subordinate itself to the safety rules
+        // so the worker knows not to edit CI/CD files to make checks pass.
+        WorkerOptions options = new();
+
+        // Act
+        Result<string> buildResult = SystemPromptBuilder.Build(
+            1, options, options.SystemPromptTemplate,
+            new DispatchContext.Fresh("feat/1-title"),
+            "https://api.github.com/repos/owner/repo/issues/1",
+            timeoutMinutes: 120);
+        string result = buildResult.ShouldBeOfType<Result<string>.Success>().Value;
+
+        // Assert — the subordination clause appears in the checks section
+        result.ShouldContain("Do not edit CI/CD configuration files to make checks pass");
+        result.ShouldContain("safety rules");
     }
 
     [Fact]
