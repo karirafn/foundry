@@ -82,7 +82,7 @@ A non-`Idle` state drives the dashboard image-build banner and disables the work
 
 ## Worker Image Configuration
 
-The set of preinstall flags (provider CLIs and other tooling, e.g. `INSTALL_GH`, `INSTALL_GLAB`) stored on Global Settings, driving Docker build args for the worker image.
+The set of preinstall flags for optional toolchains (e.g. `INSTALL_DOTNET`, `INSTALL_ANGULAR`, `INSTALL_CHROMIUM`, `INSTALL_DOCKER`) stored on Global Settings, driving Docker build args for the worker image.
 Changing it publishes `WorkerImageConfigurationChanged`, which requests an immediate rebuild.
 
 ## Provider
@@ -91,7 +91,7 @@ A git hosting platform (GitHub, GitLab).
 Each provider has its own API client, label format (flat on GitHub, scoped on GitLab), and CLI tooling (`gh`, `glab`).
 The provider is carried on `ClaimedIssueDispatch` so the worker dispatch knows which CLI tooling and credential env var apply.
 Inside the worker, the provider CLI is registered as git's credential helper (e.g. `gh auth setup-git`), authenticated by the Account PAT injected as the provider-specific token env var (`GH_TOKEN` for GitHub, `GITLAB_TOKEN` for GitLab) — this authenticates both `git push` and PR/MR creation without embedding the PAT in the repo's git config.
-The provider CLI is baked into the worker image at build time via per-provider build-arg flags (`INSTALL_GH`, `INSTALL_GLAB`); when the flag is off the entrypoint warns rather than failing silently.
+The provider CLIs (`gh`, `glab`) are unconditionally baked into the worker base image (`Dockerfile.base`); when `GH_TOKEN`/`GITLAB_TOKEN` is set but the corresponding CLI is absent, the entrypoint fails bootstrap (`stage=auth`) rather than warning and continuing.
 
 ## Provider Rate Budget
 
