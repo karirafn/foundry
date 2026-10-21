@@ -1551,7 +1551,7 @@ public sealed class Build
     [Fact]
     public void WhenRevisionWithManyComments_PromptStaysUnderByteCeiling()
     {
-        // Arrange — Fix 5: verify the revision byte budget accounts for the appended checks section.
+        // Arrange — the revision byte budget must account for the appended checks section.
         // Construct a revision whose comment content pushes the prompt near the ceiling.
         // 50 comments with bodies large enough to fill most of the comment budget.
         WorkerOptions options = new();
@@ -1575,7 +1575,7 @@ public sealed class Build
 
         // Assert — build succeeds and result stays within the ADR 0071 120,000-byte ceiling
         string result = buildResult.ShouldBeOfType<Result<string>.Success>().Value;
-        System.Text.Encoding.UTF8.GetByteCount(result).ShouldBeLessThan(SystemPromptBuilder.MaxSystemPromptBytes);
+        Encoding.UTF8.GetByteCount(result).ShouldBeLessThan(SystemPromptBuilder.MaxSystemPromptBytes);
     }
 
     [Fact]

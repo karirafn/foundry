@@ -1060,7 +1060,7 @@ public sealed class HandleAsync : IAsyncDisposable
             () => spec.EnvironmentVariables["SYSTEM_PROMPT"].ShouldContain("gh pr checks"),
             () => spec.EnvironmentVariables["SYSTEM_PROMPT"].ShouldContain("glab ci status"),
             () => spec.EnvironmentVariables["SYSTEM_PROMPT"].ShouldContain("Foundry continues to monitor"),
-            () => spec.EnvironmentVariables["SYSTEM_PROMPT"].ShouldContain("120"));
+            () => spec.EnvironmentVariables["SYSTEM_PROMPT"].ShouldContain("120 minutes of wall-clock budget"));
     }
 
     private sealed class StubPostExitProviderQueries(bool branchCreationSucceeds) : IPostExitProviderQueries
