@@ -1,3 +1,4 @@
+using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Issues.Domain.Entities;
 using Foundry.Modules.Issues.Domain.Entities.States;
 using Foundry.Modules.Issues.Domain.Events;
@@ -119,11 +120,12 @@ public sealed class HandleAsync : IAsyncDisposable
                 i => i.MonitoredRepositoryId == repositoryId,
                 TestContext.Current.CancellationToken);
         RevisionQueuedIssue revisionQueued = issue.ShouldBeOfType<RevisionQueuedIssue>();
+        RevisionTrigger.ReviewFeedback rf1 = revisionQueued.Trigger.ShouldBeOfType<RevisionTrigger.ReviewFeedback>();
         revisionQueued.ShouldSatisfyAllConditions(
             () => revisionQueued.BranchName.ShouldBe("feat/issue-1-fix"),
             () => revisionQueued.PullRequestUrl.ShouldBe("https://github.com/owner/repo/pull/10"),
-            () => revisionQueued.ReviewComments.Count.ShouldBe(1),
-            () => revisionQueued.ReviewComments[0].Body.ShouldBe("Please fix the null check"));
+            () => rf1.Comments.Count.ShouldBe(1),
+            () => rf1.Comments[0].Body.ShouldBe("Please fix the null check"));
     }
 
     [Fact]
@@ -157,11 +159,12 @@ public sealed class HandleAsync : IAsyncDisposable
                 i => i.MonitoredRepositoryId == repositoryId,
                 TestContext.Current.CancellationToken);
         RevisionQueuedIssue revisionQueued = issue.ShouldBeOfType<RevisionQueuedIssue>();
+        RevisionTrigger.ReviewFeedback rf6 = revisionQueued.Trigger.ShouldBeOfType<RevisionTrigger.ReviewFeedback>();
         revisionQueued.ShouldSatisfyAllConditions(
             () => revisionQueued.BranchName.ShouldBe("feat/6-checks-fix"),
             () => revisionQueued.PullRequestUrl.ShouldBe("https://github.com/owner/repo/pull/20"),
-            () => revisionQueued.ReviewComments.Count.ShouldBe(1),
-            () => revisionQueued.ReviewComments[0].Body.ShouldBe("Please fix the null check"));
+            () => rf6.Comments.Count.ShouldBe(1),
+            () => rf6.Comments[0].Body.ShouldBe("Please fix the null check"));
     }
 
     [Fact]
@@ -272,7 +275,7 @@ public sealed class HandleAsync : IAsyncDisposable
                 i => i.MonitoredRepositoryId == repositoryId,
                 TestContext.Current.CancellationToken);
         RevisionQueuedIssue revisionQueued = issue.ShouldBeOfType<RevisionQueuedIssue>();
-        revisionQueued.OmittedCommentCount.ShouldBe(7);
+        revisionQueued.Trigger.ShouldBeOfType<RevisionTrigger.ReviewFeedback>().OmittedCommentCount.ShouldBe(7);
     }
 
     [Fact]
@@ -299,6 +302,6 @@ public sealed class HandleAsync : IAsyncDisposable
                 i => i.MonitoredRepositoryId == repositoryId,
                 TestContext.Current.CancellationToken);
         RevisionQueuedIssue revisionQueued = issue.ShouldBeOfType<RevisionQueuedIssue>();
-        revisionQueued.NewestConsumedCommentAt.ShouldBe(newestCommentAt);
+        revisionQueued.Trigger.ShouldBeOfType<RevisionTrigger.ReviewFeedback>().NewestConsumedCommentAt.ShouldBe(newestCommentAt);
     }
 }

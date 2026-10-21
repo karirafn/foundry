@@ -485,7 +485,9 @@ internal sealed class IssueQueries(
                 FailedAt: null,
                 CompletedAt: null,
                 BlockedBy: null,
-                TransientRetry: null),
+                TransientRetry: null,
+                RevisionTriggerKind: revisionQueued.Trigger.Discriminator,
+                ChecksFixAttempts: revisionQueued.ChecksFixAttempts),
 
             RevisionInProgressIssue revisionInProgress => new IssueStateDetails(
                 WorkerRunId: revisionInProgress.WorkerRunId.Value,
@@ -496,7 +498,9 @@ internal sealed class IssueQueries(
                 FailedAt: null,
                 CompletedAt: null,
                 BlockedBy: null,
-                TransientRetry: null),
+                TransientRetry: null,
+                RevisionTriggerKind: revisionInProgress.Trigger.Discriminator,
+                ChecksFixAttempts: revisionInProgress.ChecksFixAttempts),
 
             RevisionFailedIssue revisionFailed => new IssueStateDetails(
                 WorkerRunId: revisionFailed.WorkerRunId.Value,
@@ -507,7 +511,9 @@ internal sealed class IssueQueries(
                 FailedAt: revisionFailed.FailedAt,
                 CompletedAt: null,
                 BlockedBy: null,
-                TransientRetry: null),
+                TransientRetry: null,
+                RevisionTriggerKind: revisionFailed.Trigger.Discriminator,
+                ChecksFixAttempts: revisionFailed.ChecksFixAttempts),
 
             ContinuableFailedIssue continuableFailed => new IssueStateDetails(
                 WorkerRunId: continuableFailed.WorkerRunId.Value,

@@ -1,9 +1,11 @@
+using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Issues.Domain.Entities;
 using Foundry.Modules.Issues.Domain.Entities.States;
 using Foundry.Modules.Issues.Domain.Events;
 using Foundry.Modules.Issues.Domain.ValueObjects;
 using Foundry.Modules.Issues.Features.ProviderReactions;
 using Foundry.Modules.Monitoring.Contracts;
+using Foundry.Modules.Workers.Contracts;
 using Foundry.Shared;
 using Foundry.Testing;
 using Foundry.WebApi.Persistence;
@@ -49,6 +51,11 @@ public sealed class HandleAsync : IAsyncDisposable
         await _connection.DisposeAsync();
     }
 
+    private static readonly IReadOnlyList<FailingCheck> DefaultFailingChecks =
+    [
+        new FailingCheck("ci/build", "failure", "https://github.com/owner/repo/actions/runs/1"),
+    ];
+
     private ChecksPendingIssue SeedChecksPendingIssue(
         MonitoredRepositoryId repositoryId,
         int issueNumber = 1,
@@ -61,6 +68,29 @@ public sealed class HandleAsync : IAsyncDisposable
             .WithPullRequestUrl("https://github.com/owner/repo/pull/10")
             .WithFeedbackCutoffAt(feedbackCutoffAt ?? new DateTimeOffset(2026, 12, 1, 0, 0, 0, TimeSpan.Zero))
             .ChecksPending();
+        _dbContext.Set<Issue>().Add(checksPending);
+        _dbContext.SaveChanges();
+        _dbContext.ChangeTracker.Clear();
+        return checksPending;
+    }
+
+    private ChecksPendingIssue SeedChecksPendingIssueAtFixCap(
+        MonitoredRepositoryId repositoryId,
+        int issueNumber = 1)
+    {
+        // Simulate ChecksMaxFixPushes (2) fix attempts to reach the cap.
+        IssueBuilder builder = new IssueBuilder()
+            .WithMonitoredRepositoryId(repositoryId)
+            .WithIssueNumber(issueNumber)
+            .WithBranchName("feat/1-test-issue")
+            .WithPullRequestUrl("https://github.com/owner/repo/pull/10")
+            .WithFailingChecks(DefaultFailingChecks);
+
+        ChecksPendingIssue checksPending = builder.ChecksPendingFromFixChecks()
+            .FixChecks(DefaultFailingChecks)
+            .Claim(WorkerRunId.New())
+            .MarkChecksPending();
+
         _dbContext.Set<Issue>().Add(checksPending);
         _dbContext.SaveChanges();
         _dbContext.ChangeTracker.Clear();
@@ -170,9 +200,9 @@ public sealed class HandleAsync : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenChecksPendingAndOutcomeStillFailing_TransitionsToReviewIssueWithFailingChecks()
+    public async Task WhenChecksPendingAndOutcomeStillFailingAndUnderCap_TransitionsToRevisionQueued()
     {
-        // Arrange
+        // Arrange — ChecksFixAttempts = 0 (below ChecksMaxFixPushes = 2)
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
         SeedChecksPendingIssue(repositoryId, issueNumber: 1);
 
@@ -191,7 +221,44 @@ public sealed class HandleAsync : IAsyncDisposable
         // Act
         await _sut.HandleAsync(@event, CancellationToken.None);
 
-        // Assert
+        // Assert — should dispatch a fix run, not go to review
+        _dbContext.ChangeTracker.Clear();
+        Issue? issue = await _dbContext.Set<Issue>()
+            .FirstOrDefaultAsync(
+                i => i.MonitoredRepositoryId == repositoryId,
+                TestContext.Current.CancellationToken);
+        RevisionQueuedIssue revisionQueued = issue.ShouldBeOfType<RevisionQueuedIssue>();
+        RevisionTrigger.FailedChecks trigger = revisionQueued.Trigger.ShouldBeOfType<RevisionTrigger.FailedChecks>();
+        trigger.ShouldSatisfyAllConditions(
+            () => trigger.FailingChecks.Count.ShouldBe(2),
+            () => trigger.FailingChecks[0].Name.ShouldBe("ci/build"),
+            () => trigger.FailingChecks[1].Name.ShouldBe("ci/lint"));
+        revisionQueued.ChecksFixAttempts.ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task WhenChecksPendingAndOutcomeStillFailingAndAtCap_TransitionsToReviewIssueWithFailingChecks()
+    {
+        // Arrange — ChecksFixAttempts = 2 (at ChecksMaxFixPushes cap)
+        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
+        SeedChecksPendingIssueAtFixCap(repositoryId, issueNumber: 1);
+
+        IReadOnlyList<FailingCheck> failingChecks =
+        [
+            new FailingCheck("ci/build", "failure", "https://github.com/owner/repo/actions/runs/1"),
+            new FailingCheck("ci/lint", "failure", null),
+        ];
+
+        ChecksVerdictResolved @event = new(
+            RepositoryId: repositoryId,
+            IssueNumber: 1,
+            Outcome: "still_failing",
+            FailingChecks: failingChecks);
+
+        // Act
+        await _sut.HandleAsync(@event, CancellationToken.None);
+
+        // Assert — cap reached, transitions to ReviewIssue with StillFailing outcome
         _dbContext.ChangeTracker.Clear();
         Issue? issue = await _dbContext.Set<Issue>()
             .FirstOrDefaultAsync(
@@ -202,6 +269,28 @@ public sealed class HandleAsync : IAsyncDisposable
         stillFailing.FailingChecks.Count.ShouldBe(2);
         stillFailing.FailingChecks[0].Name.ShouldBe("ci/build");
         stillFailing.FailingChecks[1].Name.ShouldBe("ci/lint");
+    }
+
+    [Fact]
+    public async Task WhenChecksPendingAndOutcomeStillFailingAndUnderCap_DispatchesIssueRevisionQueuedEvent()
+    {
+        // Arrange
+        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
+        SeedChecksPendingIssue(repositoryId, issueNumber: 1);
+
+        ChecksVerdictResolved @event = new(
+            RepositoryId: repositoryId,
+            IssueNumber: 1,
+            Outcome: "still_failing",
+            FailingChecks: DefaultFailingChecks);
+
+        // Act
+        await _sut.HandleAsync(@event, CancellationToken.None);
+
+        // Assert
+        _dispatcher.DispatchedEvents
+            .OfType<IssueRevisionQueued>()
+            .ShouldHaveSingleItem();
     }
 
     [Fact]

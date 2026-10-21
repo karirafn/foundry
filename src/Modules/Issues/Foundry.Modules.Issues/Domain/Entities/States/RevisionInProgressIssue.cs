@@ -1,6 +1,5 @@
 using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Issues.Domain.Entities;
-using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Workers.Contracts;
 
 namespace Foundry.Modules.Issues.Domain.Entities.States;
@@ -22,11 +21,9 @@ public sealed class RevisionInProgressIssue : Issue
 
     public string PullRequestUrl { get; private set; } = string.Empty;
 
-    public IReadOnlyList<ReviewComment> ReviewComments { get; private set; } = [];
+    public RevisionTrigger Trigger { get; private set; } = new RevisionTrigger.ReviewFeedback([], 0, null);
 
-    public int OmittedCommentCount { get; private set; }
-
-    public DateTimeOffset? NewestConsumedCommentAt { get; private set; }
+    public int ChecksFixAttempts { get; private set; }
 
     internal static RevisionInProgressIssue FromRevisionQueued(RevisionQueuedIssue source, WorkerRunId workerRunId)
     {
@@ -42,9 +39,8 @@ public sealed class RevisionInProgressIssue : Issue
         revisionInProgress.WorkerRunId = workerRunId;
         revisionInProgress.BranchName = source.BranchName;
         revisionInProgress.PullRequestUrl = source.PullRequestUrl;
-        revisionInProgress.ReviewComments = source.ReviewComments;
-        revisionInProgress.OmittedCommentCount = source.OmittedCommentCount;
-        revisionInProgress.NewestConsumedCommentAt = source.NewestConsumedCommentAt;
+        revisionInProgress.Trigger = source.Trigger;
+        revisionInProgress.ChecksFixAttempts = source.ChecksFixAttempts;
         return revisionInProgress;
     }
 
@@ -57,7 +53,9 @@ public sealed class RevisionInProgressIssue : Issue
 
     public ReviewIssue MarkInReview()
     {
-        DateTimeOffset feedbackCutoffAt = NewestConsumedCommentAt ?? DateTimeOffset.UtcNow;
+        DateTimeOffset feedbackCutoffAt = Trigger is RevisionTrigger.ReviewFeedback rf
+            ? rf.NewestConsumedCommentAt ?? DateTimeOffset.UtcNow
+            : DateTimeOffset.UtcNow;
         ReviewIssue review = ReviewIssue.FromRevisionInProgress(this, feedbackCutoffAt);
         AddDomainEvent(new Events.IssueInReview(Id, MonitoredRepositoryId));
         return review;
@@ -65,7 +63,9 @@ public sealed class RevisionInProgressIssue : Issue
 
     public ReviewIssue MarkUnchanged()
     {
-        DateTimeOffset feedbackCutoffAt = NewestConsumedCommentAt ?? DateTimeOffset.UtcNow;
+        DateTimeOffset feedbackCutoffAt = Trigger is RevisionTrigger.ReviewFeedback rf
+            ? rf.NewestConsumedCommentAt ?? DateTimeOffset.UtcNow
+            : DateTimeOffset.UtcNow;
         ReviewIssue review = ReviewIssue.FromRevisionInProgress(this, feedbackCutoffAt);
         AddDomainEvent(new Events.IssueInReview(Id, MonitoredRepositoryId));
         return review;
@@ -79,7 +79,9 @@ public sealed class RevisionInProgressIssue : Issue
 
     public ChecksPendingIssue MarkChecksPending()
     {
-        DateTimeOffset feedbackCutoffAt = NewestConsumedCommentAt ?? DateTimeOffset.UtcNow;
+        DateTimeOffset feedbackCutoffAt = Trigger is RevisionTrigger.ReviewFeedback rf
+            ? rf.NewestConsumedCommentAt ?? DateTimeOffset.UtcNow
+            : DateTimeOffset.UtcNow;
         ChecksPendingIssue checksPending = ChecksPendingIssue.FromRevisionInProgress(this, feedbackCutoffAt);
         AddDomainEvent(new Events.IssueChecksPending(Id, MonitoredRepositoryId));
         return checksPending;
@@ -87,7 +89,9 @@ public sealed class RevisionInProgressIssue : Issue
 
     public ChecksPendingIssue MarkUnchangedChecksPending()
     {
-        DateTimeOffset feedbackCutoffAt = NewestConsumedCommentAt ?? DateTimeOffset.UtcNow;
+        DateTimeOffset feedbackCutoffAt = Trigger is RevisionTrigger.ReviewFeedback rf
+            ? rf.NewestConsumedCommentAt ?? DateTimeOffset.UtcNow
+            : DateTimeOffset.UtcNow;
         ChecksPendingIssue checksPending = ChecksPendingIssue.FromRevisionInProgress(this, feedbackCutoffAt);
         AddDomainEvent(new Events.IssueChecksPending(Id, MonitoredRepositoryId));
         return checksPending;

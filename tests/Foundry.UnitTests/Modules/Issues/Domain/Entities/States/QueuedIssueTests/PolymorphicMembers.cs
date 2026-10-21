@@ -155,11 +155,12 @@ public sealed class PolymorphicMembers
 
         // Assert
         DispatchContext.Revision revision = context.ShouldBeOfType<DispatchContext.Revision>();
+        RevisionTrigger.ReviewFeedback rf = revision.Trigger.ShouldBeOfType<RevisionTrigger.ReviewFeedback>();
         revision.ShouldSatisfyAllConditions(
             () => revision.BranchName.ShouldBe(revisionQueued.BranchName),
             () => revision.PullRequestUrl.ShouldBe(revisionQueued.PullRequestUrl),
-            () => revision.Comments.ShouldBe(revisionQueued.ReviewComments),
-            () => revision.OmittedCommentCount.ShouldBe(0));
+            () => rf.Comments.ShouldBe(revisionQueued.Trigger.ShouldBeOfType<RevisionTrigger.ReviewFeedback>().Comments),
+            () => rf.OmittedCommentCount.ShouldBe(0));
     }
 
     [Fact]
@@ -179,7 +180,7 @@ public sealed class PolymorphicMembers
 
         // Assert
         DispatchContext.Revision revision = context.ShouldBeOfType<DispatchContext.Revision>();
-        revision.OmittedCommentCount.ShouldBe(12);
+        revision.Trigger.ShouldBeOfType<RevisionTrigger.ReviewFeedback>().OmittedCommentCount.ShouldBe(12);
     }
 
     [Fact]

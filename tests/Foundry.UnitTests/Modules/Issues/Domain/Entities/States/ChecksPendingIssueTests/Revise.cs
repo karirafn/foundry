@@ -60,7 +60,7 @@ public sealed class Revise
         RevisionQueuedIssue revisionQueued = checksPending.Revise(comments);
 
         // Assert
-        revisionQueued.ReviewComments.Count.ShouldBe(2);
+        revisionQueued.Trigger.ShouldBeOfType<RevisionTrigger.ReviewFeedback>().Comments.Count.ShouldBe(2);
     }
 
     [Fact]
@@ -75,9 +75,10 @@ public sealed class Revise
         RevisionQueuedIssue revisionQueued = checksPending.Revise(comments, omittedCommentCount: 3, newestCommentAt: newestCommentAt);
 
         // Assert
-        revisionQueued.ShouldSatisfyAllConditions(
-            () => revisionQueued.OmittedCommentCount.ShouldBe(3),
-            () => revisionQueued.NewestConsumedCommentAt.ShouldBe(newestCommentAt));
+        RevisionTrigger.ReviewFeedback rf = revisionQueued.Trigger.ShouldBeOfType<RevisionTrigger.ReviewFeedback>();
+        rf.ShouldSatisfyAllConditions(
+            () => rf.OmittedCommentCount.ShouldBe(3),
+            () => rf.NewestConsumedCommentAt.ShouldBe(newestCommentAt));
     }
 
     [Fact]

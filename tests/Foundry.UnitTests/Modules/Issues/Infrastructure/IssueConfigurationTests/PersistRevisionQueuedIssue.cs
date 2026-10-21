@@ -69,20 +69,21 @@ public sealed class PersistRevisionQueuedIssue : IAsyncDisposable
 
         // Assert
         RevisionQueuedIssue reloaded = result.ShouldBeOfType<RevisionQueuedIssue>();
+        RevisionTrigger.ReviewFeedback rf = reloaded.Trigger.ShouldBeOfType<RevisionTrigger.ReviewFeedback>();
         reloaded.ShouldSatisfyAllConditions(
             () => reloaded.BranchName.ShouldBe("feat/issue-55"),
             () => reloaded.PullRequestUrl.ShouldBe("https://github.com/owner/repo/pull/10"),
-            () => reloaded.ReviewComments.Count.ShouldBe(2),
-            () => reloaded.ReviewComments[0].Body.ShouldBe("Please fix the formatting."),
-            () => reloaded.ReviewComments[1].Body.ShouldBe("Rename this variable."),
-            () => reloaded.ReviewComments[1].FilePath.ShouldBe("src/Foo.cs"),
-            () => reloaded.ReviewComments[1].Line.ShouldBe(42),
+            () => rf.Comments.Count.ShouldBe(2),
+            () => rf.Comments[0].Body.ShouldBe("Please fix the formatting."),
+            () => rf.Comments[1].Body.ShouldBe("Rename this variable."),
+            () => rf.Comments[1].FilePath.ShouldBe("src/Foo.cs"),
+            () => rf.Comments[1].Line.ShouldBe(42),
             () => reloaded.Author.Value.ShouldBe("octocat"),
             () => reloaded.MonitoredRepositoryId.ShouldBe(repositoryId));
     }
 
     [Fact]
-    public async Task WhenRevisionQueuedFromReviewWithOmittedCount_OmittedCommentCountIsPersisted()
+    public async Task WhenRevisionQueuedFromReviewWithOmittedCount_TriggerPreservesOmittedCountAndNewestCommentAt()
     {
         // Arrange
         ReviewIssue review = new IssueBuilder()
@@ -109,9 +110,10 @@ public sealed class PersistRevisionQueuedIssue : IAsyncDisposable
 
         // Assert
         RevisionQueuedIssue reloaded = result.ShouldBeOfType<RevisionQueuedIssue>();
+        RevisionTrigger.ReviewFeedback rf = reloaded.Trigger.ShouldBeOfType<RevisionTrigger.ReviewFeedback>();
         reloaded.ShouldSatisfyAllConditions(
-            () => reloaded.OmittedCommentCount.ShouldBe(5),
-            () => reloaded.NewestConsumedCommentAt.ShouldBe(new DateTimeOffset(2026, 9, 1, 8, 0, 0, TimeSpan.Zero)));
+            () => rf.OmittedCommentCount.ShouldBe(5),
+            () => rf.NewestConsumedCommentAt.ShouldBe(new DateTimeOffset(2026, 9, 1, 8, 0, 0, TimeSpan.Zero)));
     }
 
     [Fact]

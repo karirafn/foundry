@@ -94,10 +94,10 @@ internal sealed class WorkerRunCompletedHandler(
                 return;
             }
 
-            // The revision path derives the cutoff from NewestConsumedCommentAt (set when comments were consumed)
-            // rather than RunStartedAt. This is intentional: a first run has no consumed comments and anchors to
-            // run start; a revision run has already consumed comments, so it anchors to those instead, ensuring
-            // any new feedback posted after the consumed batch is not silently dropped.
+            // The revision path derives the cutoff from RevisionTrigger.ReviewFeedback.NewestConsumedCommentAt
+            // (set when comments were consumed) rather than RunStartedAt. This is intentional: a first run has no
+            // consumed comments and anchors to run start; a revision run has already consumed comments, so it
+            // anchors to those instead, ensuring any new feedback posted after the consumed batch is not dropped.
             if (@event.BranchName is not null && @event.PullRequestUrl is not null)
             {
                 ChecksPendingIssue revisionChecksPending = revisionInProgress.MarkChecksPending();

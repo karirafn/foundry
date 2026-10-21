@@ -61,12 +61,13 @@ public sealed class Revise
         RevisionQueuedIssue revisionQueued = review.Revise(comments);
 
         // Assert
+        RevisionTrigger.ReviewFeedback rfRevise = revisionQueued.Trigger.ShouldBeOfType<RevisionTrigger.ReviewFeedback>();
         revisionQueued.ShouldSatisfyAllConditions(
             () => revisionQueued.BranchName.ShouldBe(review.BranchName),
             () => revisionQueued.PullRequestUrl.ShouldBe(review.PullRequestUrl),
-            () => revisionQueued.ReviewComments.Count.ShouldBe(2),
-            () => revisionQueued.ReviewComments[0].Body.ShouldBe("Please fix the formatting."),
-            () => revisionQueued.ReviewComments[1].Body.ShouldBe("Rename this variable."),
+            () => rfRevise.Comments.Count.ShouldBe(2),
+            () => rfRevise.Comments[0].Body.ShouldBe("Please fix the formatting."),
+            () => rfRevise.Comments[1].Body.ShouldBe("Rename this variable."),
             () => revisionQueued.MonitoredRepositoryId.ShouldBe(repositoryId));
     }
 
@@ -81,7 +82,7 @@ public sealed class Revise
         RevisionQueuedIssue revisionQueued = review.Revise(comments, omittedCommentCount: 3);
 
         // Assert
-        revisionQueued.OmittedCommentCount.ShouldBe(3);
+        revisionQueued.Trigger.ShouldBeOfType<RevisionTrigger.ReviewFeedback>().OmittedCommentCount.ShouldBe(3);
     }
 
     [Fact]
@@ -96,7 +97,7 @@ public sealed class Revise
         RevisionQueuedIssue revisionQueued = review.Revise(comments, newestCommentAt: newestCommentAt);
 
         // Assert
-        revisionQueued.NewestConsumedCommentAt.ShouldBe(newestCommentAt);
+        revisionQueued.Trigger.ShouldBeOfType<RevisionTrigger.ReviewFeedback>().NewestConsumedCommentAt.ShouldBe(newestCommentAt);
     }
 
     [Fact]
@@ -110,8 +111,9 @@ public sealed class Revise
         RevisionQueuedIssue revisionQueued = review.Revise(comments);
 
         // Assert
-        revisionQueued.ShouldSatisfyAllConditions(
-            () => revisionQueued.OmittedCommentCount.ShouldBe(0),
-            () => revisionQueued.NewestConsumedCommentAt.ShouldBeNull());
+        RevisionTrigger.ReviewFeedback rf = revisionQueued.Trigger.ShouldBeOfType<RevisionTrigger.ReviewFeedback>();
+        rf.ShouldSatisfyAllConditions(
+            () => rf.OmittedCommentCount.ShouldBe(0),
+            () => rf.NewestConsumedCommentAt.ShouldBeNull());
     }
 }

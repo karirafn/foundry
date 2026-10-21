@@ -129,7 +129,10 @@ public sealed class PayloadRoundTrip
         DispatchContext.Revision context = new(
             "feat/7-implement-feature",
             "https://github.com/org/repo/pull/7",
-            [new ReviewComment("Please add tests.", "src/Service.cs", Line: 42)]);
+            new RevisionTrigger.ReviewFeedback(
+                [new ReviewComment("Please add tests.", "src/Service.cs", Line: 42)],
+                OmittedCommentCount: 0,
+                NewestConsumedCommentAt: null));
         ClaimedIssueDispatch dispatch = new(
             issueId,
             WorkerRunId.New(),
@@ -155,13 +158,14 @@ public sealed class PayloadRoundTrip
         // Assert
         deserialized.ShouldNotBeNull();
         DispatchContext.Revision revision = deserialized.Dispatch.Context.ShouldBeOfType<DispatchContext.Revision>();
+        RevisionTrigger.ReviewFeedback rf = revision.Trigger.ShouldBeOfType<RevisionTrigger.ReviewFeedback>();
         revision.ShouldSatisfyAllConditions(
             () => revision.BranchName.ShouldBe("feat/7-implement-feature"),
             () => revision.PullRequestUrl.ShouldBe("https://github.com/org/repo/pull/7"),
-            () => revision.Comments.Count.ShouldBe(1),
-            () => revision.Comments[0].Body.ShouldBe("Please add tests."),
-            () => revision.Comments[0].FilePath.ShouldBe("src/Service.cs"),
-            () => revision.Comments[0].Line.ShouldBe(42));
+            () => rf.Comments.Count.ShouldBe(1),
+            () => rf.Comments[0].Body.ShouldBe("Please add tests."),
+            () => rf.Comments[0].FilePath.ShouldBe("src/Service.cs"),
+            () => rf.Comments[0].Line.ShouldBe(42));
     }
 
     [Fact]
@@ -239,10 +243,10 @@ public sealed class PayloadRoundTrip
     }
 
     [Fact]
-    public void WhenLegacyDispatchContextRevisionOmitsOmittedCommentCount_DeserializesWithDefaultZero()
+    public void WhenLegacyRevisionTriggerOmitsOmittedCommentCount_DeserializesWithDefaultZero()
     {
         // Arrange — simulate an IssueClaimed outbox row serialized BEFORE OmittedCommentCount was added
-        // to DispatchContext.Revision. The field must default to 0 rather than causing deserialization
+        // to RevisionTrigger.ReviewFeedback. The field must default to 0 rather than causing deserialization
         // to throw, proving in-flight rows survive the schema evolution.
         IssueId issueId = IssueId.From(Guid.NewGuid());
         MonitoredRepositoryId repoId = MonitoredRepositoryId.From(Guid.NewGuid());
@@ -267,7 +271,10 @@ public sealed class PayloadRoundTrip
                         "$type": "revision",
                         "BranchName": "feat/7-fix",
                         "PullRequestUrl": "https://github.com/org/repo/pull/7",
-                        "Comments": [{"Body": "Please add tests.", "FilePath": null, "Line": null}]
+                        "Trigger": {
+                            "$type": "review_feedback",
+                            "Comments": [{"Body": "Please add tests.", "FilePath": null, "Line": null}]
+                        }
                     },
                     "IssueApiUrl": "https://api.github.com/repos/org/repo/issues/7"
                 }
@@ -282,10 +289,11 @@ public sealed class PayloadRoundTrip
         // Assert
         deserialized.ShouldNotBeNull();
         DispatchContext.Revision revision = deserialized.Dispatch.Context.ShouldBeOfType<DispatchContext.Revision>();
+        RevisionTrigger.ReviewFeedback rf = revision.Trigger.ShouldBeOfType<RevisionTrigger.ReviewFeedback>();
         revision.ShouldSatisfyAllConditions(
             () => revision.BranchName.ShouldBe("feat/7-fix"),
-            () => revision.Comments.Count.ShouldBe(1),
-            () => revision.OmittedCommentCount.ShouldBe(0));
+            () => rf.Comments.Count.ShouldBe(1),
+            () => rf.OmittedCommentCount.ShouldBe(0));
     }
 
     [Fact]

@@ -2292,6 +2292,21 @@
             "items": {
               "$ref": "#/components/schemas/FailingCheck"
             }
+          },
+          "revisionTriggerKind": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "checksFixAttempts": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int32"
           }
         }
       },

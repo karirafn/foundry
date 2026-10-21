@@ -30,5 +30,9 @@ public sealed class ChecksPendingIssueConfiguration : IEntityTypeConfiguration<C
 
         builder.Property(i => i.FeedbackCutoffAt)
             .HasColumnName("feedback_cutoff_at");
+
+        builder.Property(i => i.ChecksFixAttempts)
+            .HasDefaultValue(0)
+            .HasColumnName("checks_fix_attempts");
     }
 }
