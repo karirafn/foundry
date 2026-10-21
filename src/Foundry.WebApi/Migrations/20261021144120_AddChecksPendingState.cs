@@ -32,6 +32,7 @@ namespace Foundry.WebApi.Migrations
             // Move existing review rows to checks_pending so they are evaluated on the next poll.
             // entered_checks_pending_at is pinned to the migration generation time (ISO-8601 "O")
             // rather than datetime('now') so the Down migration remains deterministic.
+            // Down() reverts this by moving all checks_pending rows back to review.
             migrationBuilder.Sql(
                 """
                 UPDATE issues
@@ -44,6 +45,12 @@ namespace Foundry.WebApi.Migrations
         /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
+            // Revert the data-move from Up(): move checks_pending rows back to review
+            // so they are not left in an unrecognised discriminator state once the
+            // checks_pending-specific columns are dropped below. Best-effort for a
+            // feature rollback — any row that was review before Up() ran is restored.
+            migrationBuilder.Sql("UPDATE issues SET state = 'review' WHERE state = 'checks_pending';");
+
             migrationBuilder.DropCheckConstraint(
                 name: "ck_issues_checks_pending_fields",
                 table: "issues");

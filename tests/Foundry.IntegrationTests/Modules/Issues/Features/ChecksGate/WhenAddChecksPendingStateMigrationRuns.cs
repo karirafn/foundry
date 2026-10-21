@@ -112,6 +112,46 @@ public sealed class WhenAddChecksPendingStateMigrationRuns : IAsyncLifetime, IAs
         count.ShouldBeGreaterThanOrEqualTo(0);
     }
 
+    [Fact]
+    public async Task Down_RevertsChecksPendingRowsToReview()
+    {
+        // Arrange — apply Up() to reach the target schema, then insert a checks_pending row.
+        await _dbContext.Database.MigrateAsync(TargetMigrationId, TestContext.Current.CancellationToken);
+
+        Guid issueId = Guid.NewGuid();
+        Guid repositoryId = Guid.NewGuid();
+        Guid workerRunId = Guid.NewGuid();
+        await InsertChecksPendingIssueAsync(issueId, repositoryId, workerRunId);
+
+        // Act — roll back to the previous migration, which triggers Down().
+        await _dbContext.Database.MigrateAsync(PreviousMigrationId, TestContext.Current.CancellationToken);
+
+        // Assert — the row is now review; the checks_pending state has been reverted.
+        // After Down() the checks_pending columns are gone, so only the state column is read.
+        using SqliteCommand command = _connection.CreateCommand();
+        command.CommandText = "SELECT state FROM issues WHERE id = $id;";
+        command.Parameters.AddWithValue("$id", issueId.ToString());
+        string? state = (string?)await command.ExecuteScalarAsync(TestContext.Current.CancellationToken);
+        state.ShouldBe("review");
+    }
+
+    private async Task InsertChecksPendingIssueAsync(Guid issueId, Guid repositoryId, Guid workerRunId)
+    {
+        // Insert a checks_pending row using the columns available at the target schema.
+        using SqliteCommand command = _connection.CreateCommand();
+        command.CommandText =
+            "INSERT INTO issues " +
+            "(id, monitored_repository_id, issue_number, title, author, url, state, detected_at, " +
+            " worker_run_id, branch_name, pull_request_url, feedback_cutoff_at, entered_checks_pending_at) " +
+            "VALUES ($id, $repoId, 3, 'Checks pending issue', 'octocat', 'https://github.com/o/r/issues/3', " +
+            " 'checks_pending', datetime('now'), $workerRunId, 'feat/3-test', " +
+            " 'https://github.com/o/r/pull/3', datetime('now', '+1 day'), datetime('now'));";
+        command.Parameters.AddWithValue("$id", issueId.ToString());
+        command.Parameters.AddWithValue("$repoId", repositoryId.ToString());
+        command.Parameters.AddWithValue("$workerRunId", workerRunId.ToString());
+        await command.ExecuteNonQueryAsync(TestContext.Current.CancellationToken);
+    }
+
     private async Task InsertReviewIssueAsync(Guid issueId, Guid repositoryId, Guid workerRunId)
     {
         // Insert using only the columns that exist at the pre-migration schema.

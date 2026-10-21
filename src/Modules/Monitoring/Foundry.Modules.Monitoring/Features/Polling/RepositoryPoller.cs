@@ -1,3 +1,5 @@
+using System.Diagnostics;
+
 using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Domain.Entities;
@@ -372,7 +374,8 @@ internal sealed class RepositoryPoller(
 
             if (prStatusSuccess.Value.IsClosed)
             {
-                // PR merged — the Step 10 widened handler applies Complete/Fail.
+                // PR merged — no event here; the issue completes on a later poll when the
+                // provider issue closes (IsIssueClosedAsync -> ProviderIssueClosed).
                 continue;
             }
 
@@ -423,7 +426,9 @@ internal sealed class RepositoryPoller(
             Checks.NoneDetected => null,
             Checks.Pending when elapsed >= ChecksPendingUpperBound => "unfinished",
             Checks.Pending => null,
-            _ => null,
+            // Checks has a private constructor — all variants are enumerated above.
+            // This arm is unreachable; throwing ensures a future variant is never silently ignored.
+            _ => throw new UnreachableException($"Unhandled Checks variant: {verdict.GetType().Name}"),
         };
 
     private static void DetectUntrackedIssues(
