@@ -909,7 +909,7 @@ public sealed class HandleAsync : IAsyncDisposable
     {
         // Arrange
         string defaultWorkerPromptTemplate =
-            "Implement GitHub issue #{issueNumber}. Create a feature branch, make the changes, commit, and push to the remote. Do not create a pull request unless explicitly instructed.";
+            "Implement GitHub issue #{issueNumber}. Create a feature branch, make the changes, commit, and push to the remote. Open a pull request for your branch, or reuse the existing one if a pull request already exists.";
         StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c-fallback");
         IssueClaimedHandler sut = BuildHandler(
             orchestrator: orchestrator,
