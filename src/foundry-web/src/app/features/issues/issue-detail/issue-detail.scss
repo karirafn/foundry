@@ -365,6 +365,9 @@
     margin-top: var(--fd-spacing-md);
 
     &--empty {
+      // Collapse the empty live region visually without removing it from the
+      // accessibility tree — display:none or [hidden] would prevent screen readers
+      // from detecting content changes when revision data populates.
       padding: 0;
       margin: 0;
       border: none;

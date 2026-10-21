@@ -9,7 +9,7 @@ import { IssueService } from '../issue.service';
 import { IssueSignalRService } from '../../../core/services/issue-signalr.service';
 import { WorkerRunService } from '../../workers/worker-run.service';
 import { WorkerSignalRService, WORKER_HUB_FACTORY } from '../../../core/services/worker-signalr.service';
-import { RETRYABLE_STATES } from '../../../shared/utils/issue-state';
+import { MAX_CHECKS_FIX_ATTEMPTS, RETRYABLE_STATES } from '../../../shared/utils/issue-state';
 
 const mockIssueSignalRService = {
   on: () => {},
@@ -1290,11 +1290,11 @@ describe('IssueDetailComponent', () => {
     // Assert
     const chip = el.querySelector('.issue-detail__revision-chip') as HTMLElement;
     expect(chip).toBeTruthy();
-    expect(chip?.textContent?.trim()).toBe('Fixing checks (attempt 1 of 2)');
+    expect(chip?.textContent?.trim()).toBe(`Fixing checks (attempt 1 of ${MAX_CHECKS_FIX_ATTEMPTS})`);
   });
 
   // Revision callout — Cycle R2: failed_checks attempt 2 renders correctly
-  it('should render "Fixing checks (attempt 2 of 2)" chip when checksFixAttempts is 2', () => {
+  it(`should render "Fixing checks (attempt 2 of ${MAX_CHECKS_FIX_ATTEMPTS})" chip when checksFixAttempts is 2`, () => {
     // Arrange
     const detail: IssueDetail = {
       ...mockDetail,
@@ -1312,7 +1312,7 @@ describe('IssueDetailComponent', () => {
 
     // Assert
     const chip = el.querySelector('.issue-detail__revision-chip') as HTMLElement;
-    expect(chip?.textContent?.trim()).toBe('Fixing checks (attempt 2 of 2)');
+    expect(chip?.textContent?.trim()).toBe(`Fixing checks (attempt 2 of ${MAX_CHECKS_FIX_ATTEMPTS})`);
   });
 
   // Revision callout — Cycle R3: failed_checks defaults attempt to 1 when checksFixAttempts is null
@@ -1334,7 +1334,7 @@ describe('IssueDetailComponent', () => {
 
     // Assert
     const chip = el.querySelector('.issue-detail__revision-chip') as HTMLElement;
-    expect(chip?.textContent?.trim()).toBe('Fixing checks (attempt 1 of 2)');
+    expect(chip?.textContent?.trim()).toBe(`Fixing checks (attempt 1 of ${MAX_CHECKS_FIX_ATTEMPTS})`);
   });
 
   // Revision callout — Cycle R4: revision_queued + failed_checks shows queued message
@@ -1356,7 +1356,7 @@ describe('IssueDetailComponent', () => {
 
     // Assert
     const message = el.querySelector('.issue-detail__revision-message') as HTMLElement;
-    expect(message?.textContent?.trim()).toContain('fix run is queued');
+    expect(message?.textContent?.trim()).toContain('Fix run queued');
   });
 
   // Revision callout — Cycle R5: review_feedback shows "Addressing review" chip
@@ -1424,6 +1424,30 @@ describe('IssueDetailComponent', () => {
     expect(chip).toBeFalsy();
   });
 
+  // Revision callout — revision_failed exclusion: failed state has its own failure callout,
+  // not the in-progress revision chip.
+  it('should NOT render revision chip when state is revision_failed with revisionTriggerKind failed_checks', () => {
+    // Arrange — revision_failed is intentionally excluded from REVISION_STATES;
+    // it surfaces via the retryable failure path, not the in-progress revision callout.
+    const detail: IssueDetail = {
+      ...mockDetail,
+      state: 'revision_failed',
+      stateDetails: {
+        ...mockStateDetails,
+        revisionTriggerKind: 'failed_checks',
+        checksFixAttempts: 1,
+      },
+    };
+
+    // Act
+    const fixture = createComponent(detail);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert — chip is absent; revision_failed renders no revision callout
+    const chip = el.querySelector('.issue-detail__revision-chip');
+    expect(chip).toBeFalsy();
+  });
+
   // Revision callout — Cycle R8: live region is permanently mounted with role="status"
   it('should permanently mount the revision live region with role="status" and aria-live="polite"', () => {
     // Arrange — state is not a revision state (empty live region)
@@ -1457,7 +1481,7 @@ describe('IssueDetailComponent', () => {
 
     // Assert
     const message = el.querySelector('.issue-detail__revision-message') as HTMLElement;
-    expect(message?.textContent?.trim()).toContain('worker is fixing them automatically');
+    expect(message?.textContent?.trim()).toContain('Fixing checks — a worker is running');
   });
 
   // Revision callout — Cycle R10: review_feedback in_progress shows reviewer feedback message

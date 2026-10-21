@@ -22,7 +22,7 @@ import { WorkerRunDetail } from '../../workers/worker-run.model';
 import { LogViewComponent } from '../../../shared/components/log-view/log-view';
 import { providerTerminology } from '../../../shared/utils/provider.util';
 import { getFailureCategoryDisplay } from '../../../shared/utils/failure-category';
-import { IssueState, RETRYABLE_STATES, REVISION_STATES } from '../../../shared/utils/issue-state';
+import { IssueState, MAX_CHECKS_FIX_ATTEMPTS, RETRYABLE_STATES, REVISION_STATES } from '../../../shared/utils/issue-state';
 
 @Component({
   selector: 'fd-issue-detail',
@@ -219,9 +219,9 @@ import { IssueState, RETRYABLE_STATES, REVISION_STATES } from '../../../shared/u
                     >Fixing checks (attempt {{ s.checksFixAttempts ?? 1 }} of {{ _maxChecksFixAttempts }})</span>
                   <span class="issue-detail__revision-message issue-detail__field-value">
                     @if (d.state === 'revision_in_progress') {
-                      Checks failed — a worker is fixing them automatically.
+                      Fixing checks — a worker is running.
                     } @else {
-                      Checks failed — a fix run is queued.
+                      Fix run queued — checks failed on the PR.
                     }
                   </span>
                 } @else {
@@ -365,7 +365,7 @@ export class IssueDetailComponent {
     this._issueService.retryIssue(id);
   }
 
-  protected readonly _maxChecksFixAttempts = 2;
+  protected readonly _maxChecksFixAttempts = MAX_CHECKS_FIX_ATTEMPTS;
 
   protected _isRetryable(state: string): boolean {
     return RETRYABLE_STATES.has(state as IssueState);
