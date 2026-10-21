@@ -1,6 +1,7 @@
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Features.Providers;
+using Foundry.Modules.Monitoring.Features.Providers.Checks;
 using Foundry.Modules.Monitoring.Features.Providers.Feedback;
 using Foundry.Shared;
 
@@ -31,6 +32,7 @@ internal sealed class CountingIssueProvider : IIssueProvider
     public int GetMergeRequestByBranchCallCount { get; private set; }
     public int GetBranchCommitSummaryCallCount { get; private set; }
     public int CanPushCallCount { get; private set; }
+    public int GetChecksCallCount { get; private set; }
 
     public Task<Result<IssueListing>> GetIssuesAsync(
         RepositorySlug slug,
@@ -132,5 +134,15 @@ internal sealed class CountingIssueProvider : IIssueProvider
         TotalCalls++;
         CanPushCallCount++;
         return Task.FromResult(Result<bool>.Ok(true));
+    }
+
+    public Task<Result<Checks>> GetChecksAsync(
+        RepositorySlug slug,
+        string pullRequestUrl,
+        CancellationToken cancellationToken)
+    {
+        TotalCalls++;
+        GetChecksCallCount++;
+        return Task.FromResult(Result<Checks>.Ok(new Checks.NoneDetected()));
     }
 }

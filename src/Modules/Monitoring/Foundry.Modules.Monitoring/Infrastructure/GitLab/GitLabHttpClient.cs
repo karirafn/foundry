@@ -11,6 +11,7 @@ using Foundry.Modules.Monitoring.Features.Accounts;
 using Foundry.Modules.Monitoring.Features.Accounts.Tokens;
 using Foundry.Modules.Monitoring.Features.Polling;
 using Foundry.Modules.Monitoring.Features.Providers;
+using Foundry.Modules.Monitoring.Features.Providers.Checks;
 using Foundry.Modules.Monitoring.Features.Providers.Feedback;
 using Foundry.Modules.Monitoring.Infrastructure;
 using Foundry.Modules.Monitoring.Infrastructure.GitHub;
@@ -786,6 +787,17 @@ internal sealed partial class GitLabHttpClient(
         bool rejectDeletion = !(dto?.AllowForcePush ?? true);
 
         return Result<BranchRules>.Ok(new BranchRules(rejectDirectPushes, rejectForcePushes, rejectDeletion));
+    }
+
+    // TODO(#581 step 7): implement GitLab checks using head_pipeline.status from the MR API.
+    public static Task<Result<Checks>> GetChecksAsync(
+        Uri apiBaseUrl,
+        RepositorySlug slug,
+        string pullRequestUrl,
+        string token,
+        CancellationToken cancellationToken)
+    {
+        return Task.FromResult(Result<Checks>.Ok(new Checks.NoneDetected()));
     }
 
     private GitLabUserDto? DeserializeUserDto(string responseBody, Uri apiBaseUrl, int statusCode)

@@ -1,5 +1,6 @@
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
+using ProviderChecks = Foundry.Modules.Monitoring.Features.Providers.Checks.Checks;
 using Foundry.Modules.Monitoring.Features.Providers.Feedback;
 using Foundry.Shared;
 
@@ -53,5 +54,10 @@ internal interface IIssueProvider
 
     Task<Result<bool>> CanPushAsync(
         RepositorySlug slug,
+        CancellationToken cancellationToken);
+
+    Task<Result<ProviderChecks>> GetChecksAsync(
+        RepositorySlug slug,
+        string pullRequestUrl,
         CancellationToken cancellationToken);
 }

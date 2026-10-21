@@ -4,6 +4,7 @@ using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Features.Eligibility;
 using Foundry.Modules.Monitoring.Features.Providers;
+using Foundry.Modules.Monitoring.Features.Providers.Checks;
 using Foundry.Modules.Monitoring.Features.Providers.Feedback;
 using Foundry.Modules.Monitoring.Features.Polling;
 using Foundry.Shared;
@@ -347,5 +348,11 @@ public sealed class OutboxHarvestPollAsync : IAsyncDisposable
             RepositorySlug slug,
             CancellationToken cancellationToken)
             => Task.FromResult(Result<bool>.Ok(true));
+
+        public Task<Result<Checks>> GetChecksAsync(
+            RepositorySlug slug,
+            string pullRequestUrl,
+            CancellationToken cancellationToken)
+            => Task.FromResult(Result<Checks>.Ok(new Checks.NoneDetected()));
     }
 }

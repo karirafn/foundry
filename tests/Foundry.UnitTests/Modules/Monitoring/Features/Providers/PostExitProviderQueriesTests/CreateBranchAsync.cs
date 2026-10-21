@@ -4,6 +4,7 @@ using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Features.CredentialResolution;
 using Foundry.Modules.Monitoring.Features.Providers;
+using ProviderChecks = Foundry.Modules.Monitoring.Features.Providers.Checks.Checks;
 using Foundry.Modules.Monitoring.Features.Providers.Feedback;
 using Foundry.Shared;
 using Foundry.Testing;
@@ -317,5 +318,11 @@ public sealed class CreateBranchAsync : IAsyncDisposable
             RepositorySlug slug,
             CancellationToken cancellationToken)
             => Task.FromResult(Result<bool>.Ok(true));
+
+        public Task<Result<ProviderChecks>> GetChecksAsync(
+            RepositorySlug slug,
+            string pullRequestUrl,
+            CancellationToken cancellationToken)
+            => Task.FromResult(Result<ProviderChecks>.Ok(new ProviderChecks.NoneDetected()));
     }
 }
