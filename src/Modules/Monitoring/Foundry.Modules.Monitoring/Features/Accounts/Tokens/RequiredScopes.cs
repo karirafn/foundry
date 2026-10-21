@@ -18,6 +18,8 @@ internal static class RequiredScopes
                 "Pull requests (read and write)",
                 "Workflows (write)",
                 "Metadata (read)",
+                "Commit statuses (read)",
+                "Actions (read)",
             ],
             [ProviderTypes.GitLab] = ["api"],
         }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);

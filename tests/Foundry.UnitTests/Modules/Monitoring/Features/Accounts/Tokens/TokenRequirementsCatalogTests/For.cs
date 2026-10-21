@@ -28,7 +28,9 @@ public sealed class For
                 "Issues (read and write)",
                 "Pull requests (read and write)",
                 "Workflows (write)",
-                "Metadata (read)"]),
+                "Metadata (read)",
+                "Commit statuses (read)",
+                "Actions (read)"]),
             () => result.CreationUrlTemplate.ShouldBe(
                 "{baseUrl}/settings/personal-access-tokens/new?name=Foundry&contents=write&issues=write&pull_requests=write&workflows=write"));
     }

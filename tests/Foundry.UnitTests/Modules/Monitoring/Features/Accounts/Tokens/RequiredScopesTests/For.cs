@@ -22,7 +22,9 @@ public sealed class For
             "Issues (read and write)",
             "Pull requests (read and write)",
             "Workflows (write)",
-            "Metadata (read)"]);
+            "Metadata (read)",
+            "Commit statuses (read)",
+            "Actions (read)"]);
     }
 
     [Fact]
@@ -51,7 +53,9 @@ public sealed class For
             "Issues (read and write)",
             "Pull requests (read and write)",
             "Workflows (write)",
-            "Metadata (read)"]);
+            "Metadata (read)",
+            "Commit statuses (read)",
+            "Actions (read)"]);
     }
 
     [Fact]
