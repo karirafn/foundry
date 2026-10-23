@@ -228,9 +228,10 @@ The lifecycle splits into two partitions defined by `IssueStateRegistry` (server
 - **Active** — every state except `completed`.
 - **Resolved** — `completed` only.
 
-The dashboard renders Active states in four display groups, classified by one rule — the relationship between the issue and a worker:
+The dashboard renders Active states in five display groups, classified by one rule — the relationship between the issue and a worker:
 
 - **In progress** — a worker is actually running right now (`in_progress`, `revision_in_progress`). Exactly `LIVE_STATES`.
+- **Verifying** — the worker has finished and its output is awaiting an automatic external verdict (provider checks); advances with no user action (`checks_pending`).
 - **Needs attention** — requires a user action to progress (`review`, `unchanged`, `failed`, `continuable_failed`, `revision_failed`).
 - **Waiting** — waiting for a worker; advances with no user action (`detected`, `queued`, `blocked`, `revision_queued`, `continuation_queued`).
 - **Resolved** — done (`completed`).

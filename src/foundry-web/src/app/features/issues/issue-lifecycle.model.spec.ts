@@ -76,17 +76,18 @@ describe('issue-lifecycle model', () => {
   });
 
   // Cycle 3: STATE_GROUPS completeness and partition guard
-  it('should define exactly four semantic groups', () => {
+  it('should define exactly five semantic groups', () => {
     // Arrange / Act / Assert
-    expect(STATE_GROUPS.length).toBe(4);
+    expect(STATE_GROUPS.length).toBe(5);
   });
 
-  it('should have the four expected group labels', () => {
+  it('should have the five expected group labels', () => {
     // Arrange
     const labels = STATE_GROUPS.map(g => g.label);
 
     // Act / Assert
     expect(labels).toContain('In progress');
+    expect(labels).toContain('Verifying');
     expect(labels).toContain('Waiting');
     expect(labels).toContain('Needs attention');
     expect(labels).toContain('Resolved');
@@ -148,6 +149,17 @@ describe('issue-lifecycle model', () => {
     expect(needsAttentionIndex).toBeLessThan(waitingIndex);
   });
 
+  it('should place Verifying between In progress and Needs attention', () => {
+    // Arrange
+    const inProgressIndex = STATE_GROUPS.findIndex(g => g.label === 'In progress');
+    const verifyingIndex = STATE_GROUPS.findIndex(g => g.label === 'Verifying');
+    const needsAttentionIndex = STATE_GROUPS.findIndex(g => g.label === 'Needs attention');
+
+    // Act / Assert
+    expect(inProgressIndex).toBeLessThan(verifyingIndex);
+    expect(verifyingIndex).toBeLessThan(needsAttentionIndex);
+  });
+
   // Cycle 5: groupRankFor helper
   it('should return the group index for a state in that group', () => {
     // Arrange
@@ -162,7 +174,7 @@ describe('issue-lifecycle model', () => {
     expect(groupRankFor('review')).toBeLessThan(groupRankFor('queued'));
   });
 
-  it('should return the Resolved group index (3) for a Resolved-group state', () => {
+  it('should return the Resolved group index (4) for a Resolved-group state', () => {
     // Arrange
     const resolvedIndex = STATE_GROUPS.findIndex(g => g.label === 'Resolved');
 
@@ -171,7 +183,7 @@ describe('issue-lifecycle model', () => {
 
     // Assert
     expect(rank).toBe(resolvedIndex);
-    expect(rank).toBe(3);
+    expect(rank).toBe(4);
   });
 
   // Cycle 4: group → state membership spot checks
@@ -207,13 +219,15 @@ describe('issue-lifecycle model', () => {
     expect(waiting!.states).toContain('continuation_queued');
   });
 
-  it('should place checks_pending in the Waiting group', () => {
+  it('should place checks_pending in the Verifying group', () => {
     // Arrange
+    const verifying = STATE_GROUPS.find(g => g.label === 'Verifying');
     const waiting = STATE_GROUPS.find(g => g.label === 'Waiting');
 
     // Act / Assert
-    expect(waiting).toBeDefined();
-    expect(waiting!.states).toContain('checks_pending');
+    expect(verifying).toBeDefined();
+    expect(verifying!.states).toContain('checks_pending');
+    expect(waiting!.states).not.toContain('checks_pending');
   });
 
   it('should place review, unchanged, failed, continuable_failed, revision_failed in the Needs attention group', () => {
@@ -272,15 +286,10 @@ describe('withinGroupRankFor', () => {
     expect(withinGroupRankFor('continuation_queued')).toBeLessThan(withinGroupRankFor('detected'));
   });
 
-  it('should rank checks_pending before blocked in the Waiting group', () => {
+  it('should assign rank 0 to checks_pending as the sole state in the Verifying group tier', () => {
     // Arrange / Act / Assert
-    expect(withinGroupRankFor('checks_pending')).toBeLessThan(withinGroupRankFor('blocked'));
-  });
-
-  it('should rank detected before or equal to checks_pending in the Waiting group', () => {
-    // Arrange / Act / Assert
-    // checks_pending precedes the review flow; it groups with detected in the same tier
-    expect(withinGroupRankFor('checks_pending')).toBe(withinGroupRankFor('detected'));
+    // checks_pending is the only state in the Verifying group; it occupies tier 0
+    expect(withinGroupRankFor('checks_pending')).toBe(0);
   });
 
   // Cycle 2: In-progress group tier ordering

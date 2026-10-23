@@ -1,4 +1,4 @@
-import { cardAccentFor } from './state-display';
+import { cardAccentFor, STATE_LABELS, STATE_ARIA_LABELS, STATE_RAIL_LABELS, STATE_COLOR_VARS } from './state-display';
 import type { IssueState } from './issue-state';
 
 describe('cardAccentFor', () => {
@@ -91,5 +91,27 @@ describe('cardAccentFor', () => {
   it('should return null for checks_pending', () => {
     // Arrange / Act / Assert
     expect(cardAccentFor('checks_pending')).toBeNull();
+  });
+});
+
+describe('checks_pending display attributes', () => {
+  it('should map checks_pending label to "VERIFYING"', () => {
+    // Arrange / Act / Assert
+    expect(STATE_LABELS.checks_pending).toBe('VERIFYING');
+  });
+
+  it('should map checks_pending aria label to "verifying"', () => {
+    // Arrange / Act / Assert
+    expect(STATE_ARIA_LABELS.checks_pending).toBe('verifying');
+  });
+
+  it('should map checks_pending rail label to "Verifying"', () => {
+    // Arrange / Act / Assert
+    expect(STATE_RAIL_LABELS.checks_pending).toBe('Verifying');
+  });
+
+  it('should map checks_pending color var to "var(--fd-state-checks)"', () => {
+    // Arrange / Act / Assert
+    expect(STATE_COLOR_VARS.checks_pending).toBe('var(--fd-state-checks)');
   });
 });

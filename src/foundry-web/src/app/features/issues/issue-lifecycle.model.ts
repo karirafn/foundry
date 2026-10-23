@@ -44,12 +44,16 @@ export const STATE_GROUPS: readonly StateGroup[] = [
     states: ['in_progress', 'revision_in_progress'],
   },
   {
+    label: 'Verifying',
+    states: ['checks_pending'],
+  },
+  {
     label: 'Needs attention',
     states: ['review', 'unchanged', 'failed', 'continuable_failed', 'revision_failed'],
   },
   {
     label: 'Waiting',
-    states: ['detected', 'queued', 'blocked', 'revision_queued', 'continuation_queued', 'checks_pending'],
+    states: ['detected', 'queued', 'blocked', 'revision_queued', 'continuation_queued'],
   },
   {
     label: 'Resolved',
@@ -75,12 +79,15 @@ export const WITHIN_GROUP_ORDER: Readonly<Record<string, readonly (readonly Issu
   'In progress': [
     ['in_progress', 'revision_in_progress'],
   ],
+  'Verifying': [
+    ['checks_pending'],
+  ],
   'Needs attention': [
     ['review', 'unchanged', 'failed', 'continuable_failed', 'revision_failed'],
   ],
   'Waiting': [
     ['queued', 'revision_queued', 'continuation_queued'],
-    ['detected', 'checks_pending'],
+    ['detected'],
     ['blocked'],
   ],
   'Resolved': [
