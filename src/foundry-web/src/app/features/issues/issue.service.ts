@@ -105,7 +105,7 @@ export class IssueService {
       const rankA = groupRankFor(a.state);
       const rankB = groupRankFor(b.state);
 
-      // Primary: group rank ascending (In progress → Needs attention → Waiting → ungrouped last).
+      // Primary: group rank ascending (In progress → Verifying → Needs attention → Waiting → ungrouped last).
       if (rankA !== rankB) {
         return rankA - rankB;
       }
