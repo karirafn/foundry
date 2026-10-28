@@ -169,7 +169,8 @@ internal sealed class IssueClaimedHandler(
             effectiveSystemPromptTemplate,
             claimed.Context,
             claimed.IssueApiUrl,
-            timeoutMinutes);
+            timeoutMinutes,
+            installsDocker: false); // TODO(step-2): wire real installsDocker from container spec
 
         if (systemPromptResult is not Result<string>.Success systemPromptSuccess)
         {
