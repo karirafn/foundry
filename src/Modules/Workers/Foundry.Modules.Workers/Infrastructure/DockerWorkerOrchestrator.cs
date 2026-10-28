@@ -263,6 +263,49 @@ internal sealed class DockerWorkerOrchestrator(
         await TryDeleteDataRootVolumeAsync(workerRunId, cancellationToken);
     }
 
+    public async Task ReapOrphanedDataRootVolumesAsync(
+        IReadOnlySet<WorkerRunId> activeRunIds,
+        CancellationToken cancellationToken)
+    {
+        IReadOnlyList<(string Name, IReadOnlyDictionary<string, string> Labels)> volumes =
+            await runtime.ListVolumesByLabelAsync(WorkerRunLabelKey, cancellationToken);
+
+        // Reap is keyed on the label, not the name prefix, because the label is the authoritative
+        // ownership marker. The label "foundry.worker-run-id" is only ever placed on worker
+        // containers and data-root volumes, so querying by it is a sufficient filter. Volumes
+        // that carry the label but have an unparseable or missing run-id are skipped — they were
+        // not created by this orchestrator in a recognisable way and are left untouched.
+        foreach ((string name, IReadOnlyDictionary<string, string> labels) in volumes)
+        {
+            if (!labels.TryGetValue(WorkerRunLabelKey, out string? labelValue))
+            {
+                continue;
+            }
+
+            if (!Guid.TryParse(labelValue, out Guid guid))
+            {
+                continue;
+            }
+
+            WorkerRunId runId = WorkerRunId.From(guid);
+
+            if (activeRunIds.Contains(runId))
+            {
+                continue;
+            }
+
+            try
+            {
+                await runtime.RemoveVolumeAsync(name, force: true, cancellationToken);
+            }
+            catch (DockerApiException)
+            {
+                // Best-effort per-volume reap — a single remove failure must not abort the sweep.
+                // Continue removing remaining orphaned volumes.
+            }
+        }
+    }
+
     private async Task<string?> ReadWorkerRunIdAsync(
         string containerId,
         CancellationToken cancellationToken)

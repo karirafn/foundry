@@ -135,6 +135,11 @@ public sealed class IntegrationEventDispatchErrors : WorkerDispatchServiceTestBa
         public Task RemoveContainerAsync(string containerId, CancellationToken cancellationToken)
             => Task.CompletedTask;
 
+
+        public Task ReapOrphanedDataRootVolumesAsync(
+            IReadOnlySet<WorkerRunId> activeRunIds,
+            CancellationToken cancellationToken)
+            => Task.CompletedTask;
     }
 
     // Throws for run-specific events (WorkerRunCompleted/WorkerRunFailed) but not for

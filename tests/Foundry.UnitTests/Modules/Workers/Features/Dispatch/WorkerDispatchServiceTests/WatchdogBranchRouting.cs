@@ -339,6 +339,11 @@ public sealed class WatchdogBranchRouting : WorkerDispatchServiceTestBase
         public Task RemoveContainerAsync(string containerId, CancellationToken cancellationToken)
             => Task.CompletedTask;
 
+
+        public Task ReapOrphanedDataRootVolumesAsync(
+            IReadOnlySet<WorkerRunId> activeRunIds,
+            CancellationToken cancellationToken)
+            => Task.CompletedTask;
     }
 
     /// <summary>
@@ -379,6 +384,11 @@ public sealed class WatchdogBranchRouting : WorkerDispatchServiceTestBase
         public Task RemoveContainerAsync(string containerId, CancellationToken cancellationToken)
             => Task.CompletedTask;
 
+
+        public Task ReapOrphanedDataRootVolumesAsync(
+            IReadOnlySet<WorkerRunId> activeRunIds,
+            CancellationToken cancellationToken)
+            => Task.CompletedTask;
     }
 
     /// <summary>
@@ -428,6 +438,11 @@ public sealed class WatchdogBranchRouting : WorkerDispatchServiceTestBase
         public Task RemoveContainerAsync(string containerId, CancellationToken cancellationToken)
             => Task.CompletedTask;
 
+
+        public Task ReapOrphanedDataRootVolumesAsync(
+            IReadOnlySet<WorkerRunId> activeRunIds,
+            CancellationToken cancellationToken)
+            => Task.CompletedTask;
     }
 
     private sealed class FailingBranchCommitsCheckQueries : IPostExitProviderQueries

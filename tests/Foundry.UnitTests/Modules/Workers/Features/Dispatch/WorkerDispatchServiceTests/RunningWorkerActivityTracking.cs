@@ -444,6 +444,11 @@ public sealed class RunningWorkerActivityTracking : WorkerDispatchServiceTestBas
         public Task RemoveContainerAsync(string containerId, CancellationToken cancellationToken)
             => Task.CompletedTask;
 
+
+        public Task ReapOrphanedDataRootVolumesAsync(
+            IReadOnlySet<WorkerRunId> activeRunIds,
+            CancellationToken cancellationToken)
+            => Task.CompletedTask;
     }
 
     private sealed class ScriptedCommitProviderQueries(
@@ -682,6 +687,11 @@ public sealed class RunningWorkerActivityTracking : WorkerDispatchServiceTestBas
             => Task.CompletedTask;
 
         public Task RemoveContainerAsync(string containerId, CancellationToken cancellationToken)
+            => Task.CompletedTask;
+
+        public Task ReapOrphanedDataRootVolumesAsync(
+            IReadOnlySet<WorkerRunId> activeRunIds,
+            CancellationToken cancellationToken)
             => Task.CompletedTask;
     }
 }
