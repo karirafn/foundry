@@ -2372,6 +2372,28 @@ describe('SettingsGeneralComponent', () => {
     });
   });
 
+  describe('installDocker hint', () => {
+    it('should render a warning hint for the installDocker checkbox with security cost text', () => {
+      // Arrange
+      const { httpMock } = setup();
+      const fixture = TestBed.createComponent(SettingsGeneralComponent);
+      fixture.detectChanges();
+      flushSettings(httpMock);
+      fixture.detectChanges();
+
+      // Act
+      const el = fixture.nativeElement as HTMLElement;
+      const hint = el.querySelector('#installDocker-hint') as HTMLElement;
+
+      // Assert
+      expect(hint).toBeTruthy();
+      expect(hint.textContent).toContain('CAP_SYS_ADMIN');
+      expect(hint.textContent).toContain('seccomp/AppArmor unconfined');
+      expect(hint.textContent).toContain('Docker host');
+      expect(hint.textContent).toContain('Testcontainers');
+    });
+  });
+
   describe('Provider Rate Budget section', () => {
     it('should render the "Provider Rate Budget" section title', () => {
       // Arrange
