@@ -214,6 +214,10 @@ public sealed class WhenStartedWithRootlessDindAllowanceSet : IAsyncLifetime
         {
             return false;
         }
+        catch (IOException)
+        {
+            return false;
+        }
         catch (OperationCanceledException)
         {
             return false;
