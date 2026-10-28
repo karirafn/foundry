@@ -56,7 +56,10 @@ ENV CHROME_BIN=/usr/lib/chromium/chromium-headless-shell
 # hardcoded to match the base image — Docker's repo errors on mismatch.
 # This installs binaries only; rootless dockerd startup is handled by a separate entrypoint concern.
 # Storage driver: the data-root is mounted on a named volume at runtime, giving the nested daemon
-# a real ext4/overlayfs filesystem — fuse-overlayfs and /dev/fuse are not needed.
+# a real ext4/overlayfs filesystem — fuse-overlayfs and /dev/fuse are not needed. The data-root
+# path (/home/node/.local/share/docker) is pre-created owned by node so the per-run named volume
+# inherits node ownership on first mount; otherwise Docker initialises the fresh volume as root
+# and rootless dockerd (running as node) cannot chmod its own data-root and exits at startup.
 # Security: all setuid binaries except newuidmap and newgidmap are stripped of the setuid bit;
 # newuidmap/newgidmap (from uidmap) retain it because rootless dockerd needs them to write
 # uid/gid maps for user-namespace setup.
@@ -84,6 +87,7 @@ RUN if [ "$INSTALL_DOCKER" = "true" ]; then \
         touch /etc/subuid /etc/subgid && \
         sed -i '/^node:/d' /etc/subuid && echo "node:100000:65536" >> /etc/subuid && \
         sed -i '/^node:/d' /etc/subgid && echo "node:100000:65536" >> /etc/subgid && \
+        mkdir -p /home/node/.local/share/docker && chown -R node:node /home/node/.local && \
         find / -xdev -perm -4000 -type f ! -name newuidmap ! -name newgidmap -exec chmod u-s {} + && \
         rm -rf /var/lib/apt/lists/*; \
     fi
