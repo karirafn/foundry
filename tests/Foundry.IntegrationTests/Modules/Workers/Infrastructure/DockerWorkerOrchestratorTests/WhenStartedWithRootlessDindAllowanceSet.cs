@@ -1,5 +1,3 @@
-using System.Net;
-
 using Docker.DotNet;
 using Docker.DotNet.Models;
 
@@ -75,16 +73,11 @@ public sealed class WhenStartedWithRootlessDindAllowanceSet : IAsyncLifetime
 
         try
         {
-            await RemoveRunContainersAsync();
-            await RemoveDataRootVolumeAsync();
-        }
-        catch (DockerApiException)
-        {
-            // Best-effort teardown: a cleanup failure must not mask the test outcome.
-        }
-        catch (HttpRequestException)
-        {
-            // Daemon went away mid-teardown; nothing left to clean.
+            if (_daemonReachable)
+            {
+                await TryCleanupAsync(RemoveRunContainersAsync);
+                await TryCleanupAsync(RemoveDataRootVolumeAsync);
+            }
         }
         finally
         {
@@ -154,17 +147,10 @@ public sealed class WhenStartedWithRootlessDindAllowanceSet : IAsyncLifetime
 
         foreach (ContainerListResponse container in containers)
         {
-            try
-            {
-                await _dockerClient.Containers.RemoveContainerAsync(
-                    container.ID,
-                    new ContainerRemoveParameters { Force = true },
-                    CancellationToken.None);
-            }
-            catch (DockerContainerNotFoundException)
-            {
-                // Already removed — nothing to do.
-            }
+            await TryCleanupAsync(() => _dockerClient.Containers.RemoveContainerAsync(
+                container.ID,
+                new ContainerRemoveParameters { Force = true },
+                CancellationToken.None));
         }
     }
 
@@ -172,16 +158,39 @@ public sealed class WhenStartedWithRootlessDindAllowanceSet : IAsyncLifetime
     // It can only be removed after the container that mounts it.
     private async Task RemoveDataRootVolumeAsync()
     {
+        await _dockerClient!.Volumes.RemoveAsync(
+            WorkerVolumeNames.DataRootVolumeName(_runId),
+            force: true,
+            CancellationToken.None);
+    }
+
+    // Each step is guarded on its own so one failure cannot skip the remaining steps, and none can
+    // mask the test outcome.
+    private static async Task TryCleanupAsync(Func<Task> step)
+    {
         try
         {
-            await _dockerClient!.Volumes.RemoveAsync(
-                WorkerVolumeNames.DataRootVolumeName(_runId),
-                force: true,
-                CancellationToken.None);
+            await step();
         }
-        catch (DockerApiException ex) when (ex.StatusCode is HttpStatusCode.NotFound or HttpStatusCode.Conflict)
+        catch (DockerApiException)
         {
-            // Never created, or still referenced by a container that could not be removed.
+            // Already removed, never created, or still referenced; nothing more to clean.
+        }
+        catch (HttpRequestException)
+        {
+            // Daemon went away mid-teardown.
+        }
+        catch (IOException)
+        {
+            // Pipe or socket to the daemon broke mid-teardown.
+        }
+        catch (TimeoutException)
+        {
+            // Daemon did not answer in time.
+        }
+        catch (OperationCanceledException)
+        {
+            // Request cancelled or timed out by the client.
         }
     }
 
