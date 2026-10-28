@@ -7,6 +7,8 @@ internal sealed record WorkerContainerSpec(
     IReadOnlyDictionary<string, string> Labels,
     IReadOnlyList<string> Command)
 {
+    public IReadOnlyList<string> Capabilities { get; init; } = [];
+
     public IReadOnlyList<string> SecurityOptions { get; init; } = [];
 
     public IReadOnlyList<string> Devices { get; init; } = [];
