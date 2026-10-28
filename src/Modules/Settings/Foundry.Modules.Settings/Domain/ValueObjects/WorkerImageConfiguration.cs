@@ -3,8 +3,6 @@ namespace Foundry.Modules.Settings.Domain.ValueObjects;
 public sealed record WorkerImageConfiguration(
     bool InstallDotnet,
     bool InstallAngular,
-    bool InstallGlab,
-    bool InstallGh,
     bool InstallChromium,
     bool InstallDocker)
 {
@@ -14,8 +12,6 @@ public sealed record WorkerImageConfiguration(
     public static readonly WorkerImageConfiguration Default = new(
         InstallDotnet: false,
         InstallAngular: false,
-        InstallGlab: false,
-        InstallGh: false,
         InstallChromium: false,
         InstallDocker: false);
 
@@ -24,8 +20,6 @@ public sealed record WorkerImageConfiguration(
         {
             ["INSTALL_DOTNET"] = InstallDotnet ? TrueValue : FalseValue,
             ["INSTALL_ANGULAR"] = InstallAngular ? TrueValue : FalseValue,
-            ["INSTALL_GLAB"] = InstallGlab ? TrueValue : FalseValue,
-            ["INSTALL_GH"] = InstallGh ? TrueValue : FalseValue,
             ["INSTALL_CHROMIUM"] = InstallChromium ? TrueValue : FalseValue,
             ["INSTALL_DOCKER"] = InstallDocker ? TrueValue : FalseValue,
         };

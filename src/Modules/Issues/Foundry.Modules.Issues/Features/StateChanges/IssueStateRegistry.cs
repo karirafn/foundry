@@ -25,6 +25,7 @@ internal static class IssueStateRegistry
         ["revision_queued"] = typeof(RevisionQueuedIssue),
         ["revision_in_progress"] = typeof(RevisionInProgressIssue),
         ["revision_failed"] = typeof(RevisionFailedIssue),
+        ["checks_pending"] = typeof(ChecksPendingIssue),
     }.ToFrozenDictionary(StringComparer.Ordinal);
 
     private static readonly FrozenDictionary<string, Type> ResolvedMap = new Dictionary<string, Type>

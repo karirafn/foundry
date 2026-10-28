@@ -218,6 +218,64 @@
     font-size: 0.875rem;
   }
 
+  &__failing-checks {
+    margin-top: var(--fd-spacing-md);
+    padding-top: var(--fd-spacing-md);
+    border-top: 1px solid var(--fd-border-muted);
+  }
+
+  &__failing-list {
+    list-style: none;
+    margin: var(--fd-spacing-sm) 0 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: var(--fd-spacing-sm);
+  }
+
+  &__failing-item {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: var(--fd-spacing-sm);
+  }
+
+  &__failing-name {
+    color: var(--fd-text-primary);
+    font-size: 0.8125rem;
+    font-family: var(--fd-font-mono);
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  &__failing-conclusion {
+    background: transparent;
+    border: 1px solid var(--fd-text-error);
+    color: var(--fd-text-error);
+    flex-shrink: 0;
+  }
+
+  &__failing-link {
+    color: var(--fd-text-link);
+    text-decoration: none;
+    font-size: 0.8125rem;
+    margin-inline-start: auto;
+    flex-shrink: 0;
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+
+    &:hover {
+      text-decoration: underline;
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--fd-text-link);
+      outline-offset: 2px;
+    }
+  }
+
   &__worker-run {
     margin-top: var(--fd-spacing-lg);
     padding-top: var(--fd-spacing-md);
@@ -299,6 +357,46 @@
   // (font-size, font-weight, letter-spacing, text-transform are all defined there).
 
   &__retry-message {
+    color: var(--fd-text-secondary);
+    font-size: 0.8125rem;
+  }
+
+  &__revision-live-region {
+    margin-top: var(--fd-spacing-md);
+
+    &--empty {
+      // Collapse the empty live region visually without removing it from the
+      // accessibility tree — display:none or [hidden] would prevent screen readers
+      // from detecting content changes when revision data populates.
+      padding: 0;
+      margin: 0;
+      border: none;
+      height: 0;
+      overflow: hidden;
+    }
+  }
+
+  &__revision-state {
+    padding: var(--fd-spacing-sm) var(--fd-spacing-md);
+    border: 1px solid var(--fd-border-warning);
+    border-radius: var(--fd-radius-sm);
+    background: var(--fd-bg-warning-subtle);
+
+    &--review {
+      border-color: var(--fd-border-default);
+      background: var(--fd-bg-card-hover);
+    }
+  }
+
+  &__revision-callout {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: var(--fd-spacing-sm);
+    margin-top: var(--fd-spacing-xs);
+  }
+
+  &__revision-message {
     color: var(--fd-text-secondary);
     font-size: 0.8125rem;
   }

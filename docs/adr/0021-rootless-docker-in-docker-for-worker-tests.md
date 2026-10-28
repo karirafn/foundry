@@ -6,6 +6,8 @@ status: accepted
 
 > Updated by #221: daemon startup is now best-effort — failure is non-fatal and surfaces the `FOUNDRY_DOCKER_UNAVAILABLE` sentinel; the worker continues in degraded mode.
 
+> **2026-10-28 — Amended:** the allowance-set clause in Decision (`seccomp`/`apparmor` unconfined plus `/dev/fuse`), the fuse-overlayfs default, and the Consequences claim that Docker Desktop / WSL2 cannot run nested rootless DinD are replaced by [ADR 0079](0079-relaxed-allowances-for-nested-rootless-docker.md). These claims were false from the start, not drifted: no tested host ever produced a working daemon under the minimal set, and the image lacked binaries the daemon needs. The rejection of the host socket and `--privileged` stands.
+
 ## Context
 
 Workers run arbitrary repository code, including Testcontainers-based integration tests that need a Docker daemon (e.g. `Testcontainers.MsSql`).

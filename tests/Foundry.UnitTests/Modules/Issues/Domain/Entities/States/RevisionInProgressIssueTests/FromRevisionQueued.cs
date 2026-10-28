@@ -46,12 +46,13 @@ public sealed class FromRevisionQueued
         RevisionInProgressIssue revisionInProgress = revisionQueued.Claim(workerRunId);
 
         // Assert
+        RevisionTrigger.ReviewFeedback rfClaim = revisionInProgress.Trigger.ShouldBeOfType<RevisionTrigger.ReviewFeedback>();
         revisionInProgress.ShouldSatisfyAllConditions(
             () => revisionInProgress.WorkerRunId.ShouldBe(workerRunId),
             () => revisionInProgress.BranchName.ShouldBe(revisionQueued.BranchName),
             () => revisionInProgress.PullRequestUrl.ShouldBe(revisionQueued.PullRequestUrl),
-            () => revisionInProgress.ReviewComments.Count.ShouldBe(1),
-            () => revisionInProgress.ReviewComments[0].Body.ShouldBe("Please fix the formatting."),
+            () => rfClaim.Comments.Count.ShouldBe(1),
+            () => rfClaim.Comments[0].Body.ShouldBe("Please fix the formatting."),
             () => revisionInProgress.MonitoredRepositoryId.ShouldBe(repositoryId),
             () => revisionInProgress.IssueNumber.ShouldBe(revisionQueued.IssueNumber),
             () => revisionInProgress.Title.ShouldBe(revisionQueued.Title),

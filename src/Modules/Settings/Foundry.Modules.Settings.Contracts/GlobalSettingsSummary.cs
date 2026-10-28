@@ -12,8 +12,6 @@ public sealed record GlobalSettingsSummary(
     bool AutoResumeOnUsageReset,
     bool InstallDotnet,
     bool InstallAngular,
-    bool InstallGlab,
-    bool InstallGh,
     bool InstallChromium,
     bool InstallDocker,
     ImageBuildStatus ImageBuildStatus,

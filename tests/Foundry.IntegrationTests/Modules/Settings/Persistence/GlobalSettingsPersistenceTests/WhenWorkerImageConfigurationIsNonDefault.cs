@@ -32,8 +32,6 @@ public sealed class WhenWorkerImageConfigurationIsNonDefault : IAsyncDisposable
         WorkerImageConfiguration config = new(
             InstallDotnet: true,
             InstallAngular: true,
-            InstallGlab: false,
-            InstallGh: true,
             InstallChromium: true,
             InstallDocker: true);
 
@@ -47,8 +45,6 @@ public sealed class WhenWorkerImageConfigurationIsNonDefault : IAsyncDisposable
         reloaded.WorkerImageConfiguration.ShouldSatisfyAllConditions(
             () => reloaded.WorkerImageConfiguration.InstallDotnet.ShouldBeTrue(),
             () => reloaded.WorkerImageConfiguration.InstallAngular.ShouldBeTrue(),
-            () => reloaded.WorkerImageConfiguration.InstallGlab.ShouldBeFalse(),
-            () => reloaded.WorkerImageConfiguration.InstallGh.ShouldBeTrue(),
             () => reloaded.WorkerImageConfiguration.InstallChromium.ShouldBeTrue(),
             () => reloaded.WorkerImageConfiguration.InstallDocker.ShouldBeTrue());
     }

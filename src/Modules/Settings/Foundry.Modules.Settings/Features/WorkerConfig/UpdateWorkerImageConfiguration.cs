@@ -17,8 +17,6 @@ internal static class UpdateWorkerImageConfiguration
     internal sealed record Command(
         bool InstallDotnet,
         bool InstallAngular,
-        bool InstallGlab,
-        bool InstallGh,
         bool InstallChromium,
         bool InstallDocker) : ICommand<GlobalSettingsSummary>;
 
@@ -42,8 +40,6 @@ internal static class UpdateWorkerImageConfiguration
             WorkerImageConfiguration config = new(
                 command.InstallDotnet,
                 command.InstallAngular,
-                command.InstallGlab,
-                command.InstallGh,
                 command.InstallChromium,
                 command.InstallDocker);
 
@@ -67,8 +63,6 @@ internal static class UpdateWorkerImageConfiguration
         private sealed record RequestBody(
             bool InstallDotnet,
             bool InstallAngular,
-            bool InstallGlab,
-            bool InstallGh,
             bool InstallChromium,
             bool InstallDocker);
 
@@ -82,8 +76,6 @@ internal static class UpdateWorkerImageConfiguration
                     Command command = new(
                         body.InstallDotnet,
                         body.InstallAngular,
-                        body.InstallGlab,
-                        body.InstallGh,
                         body.InstallChromium,
                         body.InstallDocker);
 

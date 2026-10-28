@@ -21,17 +21,31 @@ internal sealed class ProviderIssueClosedHandler(
             .Where(i => i.MonitoredRepositoryId == @event.RepositoryId)
             .FirstOrDefaultAsync(i => i.IssueNumber == @event.IssueNumber, cancellationToken);
 
-        if (issue is not ReviewIssue reviewIssue)
-        {
-            logger.LogWarning(
-                "ProviderIssueClosed received for repository {RepositoryId} issue {IssueNumber} but it is not a ReviewIssue (state: {State}); ignoring.",
-                @event.RepositoryId,
-                @event.IssueNumber,
-                issue?.GetType().Name ?? "not found");
-            return;
-        }
+        DateTimeOffset now = DateTimeOffset.UtcNow;
 
-        CompletedIssue completed = reviewIssue.Complete(DateTimeOffset.UtcNow);
-        await db.TransitionAsync(reviewIssue, completed, domainEventDispatcher, cancellationToken);
+        switch (issue)
+        {
+            case ReviewIssue reviewIssue:
+            {
+                CompletedIssue completed = reviewIssue.Complete(now);
+                await db.TransitionAsync(reviewIssue, completed, domainEventDispatcher, cancellationToken);
+                break;
+            }
+
+            case ChecksPendingIssue checksPendingIssue:
+            {
+                CompletedIssue completed = checksPendingIssue.Complete(now);
+                await db.TransitionAsync(checksPendingIssue, completed, domainEventDispatcher, cancellationToken);
+                break;
+            }
+
+            default:
+                logger.LogWarning(
+                    "ProviderIssueClosed received for repository {RepositoryId} issue {IssueNumber} but it is not a ReviewIssue or ChecksPendingIssue (state: {State}); ignoring.",
+                    @event.RepositoryId,
+                    @event.IssueNumber,
+                    issue?.GetType().Name ?? "not found");
+                break;
+        }
     }
 }

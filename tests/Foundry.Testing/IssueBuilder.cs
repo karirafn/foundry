@@ -3,6 +3,7 @@ using Foundry.Modules.Issues.Domain.Entities.States;
 using Foundry.Modules.Issues.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Workers.Contracts;
+using Foundry.Shared;
 
 namespace Foundry.Testing;
 
@@ -32,6 +33,8 @@ public sealed class IssueBuilder
     private string _branchName = "feat/1-test";
     private string _pullRequestUrl = "https://github.com/owner/repo/pull/1";
     private DateTimeOffset _feedbackCutoffAt = DateTimeOffset.UtcNow;
+    private DateTimeOffset _enteredChecksPendingAt = DateTimeOffset.UtcNow;
+    private ChecksOutcome _checksOutcome = new ChecksOutcome.Passed();
     private DateTimeOffset _completedAt = DateTimeOffset.UtcNow;
     private DateTimeOffset _failedAt = DateTimeOffset.UtcNow;
     private string _failureReason = "Container exited with code 1";
@@ -39,6 +42,10 @@ public sealed class IssueBuilder
     private IReadOnlyList<ReviewComment> _reviewComments = [new ReviewComment("Please fix.")];
     private int _omittedCommentCount;
     private DateTimeOffset? _newestCommentAt;
+    private IReadOnlyList<FailingCheck> _failingChecks =
+    [
+        new FailingCheck("ci/build", "failure", "https://github.com/owner/repo/actions/runs/1"),
+    ];
 
     /// <summary>
     /// Exposes the configured worker run id so assertions can anchor to the aggregate's id. (AC #3)
@@ -74,6 +81,10 @@ public sealed class IssueBuilder
 
     public IssueBuilder WithFeedbackCutoffAt(DateTimeOffset value) { _feedbackCutoffAt = value; return this; }
 
+    public IssueBuilder WithEnteredChecksPendingAt(DateTimeOffset value) { _enteredChecksPendingAt = value; return this; }
+
+    public IssueBuilder WithChecksOutcome(ChecksOutcome value) { _checksOutcome = value; return this; }
+
     public IssueBuilder WithCompletedAt(DateTimeOffset value) { _completedAt = value; return this; }
 
     public IssueBuilder WithFailedAt(DateTimeOffset value) { _failedAt = value; return this; }
@@ -87,6 +98,8 @@ public sealed class IssueBuilder
     public IssueBuilder WithOmittedCommentCount(int value) { _omittedCommentCount = value; return this; }
 
     public IssueBuilder WithNewestCommentAt(DateTimeOffset value) { _newestCommentAt = value; return this; }
+
+    public IssueBuilder WithFailingChecks(IEnumerable<FailingCheck> value) { _failingChecks = [.. value]; return this; }
 
     public DetectedIssue Detected() =>
         DetectedIssue.Detect(
@@ -122,6 +135,29 @@ public sealed class IssueBuilder
 
     public RevisionFailedIssue RevisionFailed() =>
         RevisionInProgress().MarkFailed(_failureReason, _failureCategory, _failedAt);
+
+    public ChecksPendingIssue ChecksPending() =>
+        InProgress().MarkChecksPending(_branchName, _pullRequestUrl, _feedbackCutoffAt);
+
+    public ChecksPendingIssue ChecksPendingFromRevision() => RevisionInProgress().MarkChecksPending();
+
+    /// <summary>
+    /// Builds a <see cref="ChecksPendingIssue"/> that arrived via a FixChecks revision dispatch
+    /// (i.e., ChecksFixAttempts = 1). Used to test the second-attempt code path in FixChecks scenarios.
+    /// </summary>
+    public ChecksPendingIssue ChecksPendingFromFixChecks() =>
+        ChecksPending().FixChecks(_failingChecks).Claim(_workerRunId).MarkChecksPending();
+
+    /// <summary>
+    /// Builds a <see cref="ChecksPendingIssue"/> that has exhausted all FixChecks dispatch
+    /// attempts (ChecksFixAttempts = <see cref="ChecksPendingIssue.ChecksMaxFixPushes"/> = 2).
+    /// At the cap, a <c>still_failing</c> verdict transitions to <see cref="ReviewIssue"/> rather
+    /// than dispatching another fix revision.
+    /// </summary>
+    public ChecksPendingIssue ChecksPendingAtCap() =>
+        ChecksPendingFromFixChecks().FixChecks(_failingChecks).Claim(_workerRunId).MarkChecksPending();
+
+    public ReviewIssue ReviewFromChecksPending() => ChecksPending().ToReview(_checksOutcome);
 
     public UnchangedIssue Unchanged() => InProgress().MarkUnchanged();
 

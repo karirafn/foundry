@@ -27,5 +27,11 @@ public sealed class ReviewIssueConfiguration : IEntityTypeConfiguration<ReviewIs
 
         builder.Property(i => i.FeedbackCutoffAt)
             .HasColumnName("feedback_cutoff_at");
+
+        builder.Property(i => i.ChecksOutcome)
+            .HasConversion(ChecksOutcomeJsonConversion.Converter, ChecksOutcomeJsonConversion.Comparer)
+            .HasMaxLength(int.MaxValue)
+            .HasColumnType("TEXT")
+            .HasColumnName("checks_outcome");
     }
 }

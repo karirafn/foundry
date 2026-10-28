@@ -165,12 +165,15 @@ internal sealed class IssueClaimedHandler(
         string effectiveSystemPromptTemplate = dbSystemPromptTemplate ?? _options.SystemPromptTemplate;
         string effectiveWorkerPromptTemplate = dbWorkerPromptTemplate ?? _options.WorkerPromptTemplate;
 
+        int timeoutMinutes = await settingsQueries.GetTimeoutMinutesAsync(cancellationToken);
+
         Result<string> systemPromptResult = SystemPromptBuilder.Build(
             claimed.IssueNumber,
             _options,
             effectiveSystemPromptTemplate,
             claimed.Context,
-            claimed.IssueApiUrl);
+            claimed.IssueApiUrl,
+            timeoutMinutes);
 
         if (systemPromptResult is not Result<string>.Success systemPromptSuccess)
         {

@@ -9,6 +9,7 @@ using Foundry.Modules.Issues.Features.StateChanges;
 using Foundry.Modules.Issues.Features.TransientRetry;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Contracts.Queries;
+using Foundry.Modules.Settings.Contracts.Queries;
 using Foundry.Modules.Workers.Contracts;
 using Foundry.Modules.Workers.Contracts.Queries;
 using Foundry.Shared;
@@ -22,7 +23,8 @@ internal sealed class IssueQueries(
     IRepositorySlugQueries slugQueries,
     IRepositoryEligibilityQuery eligibilityQuery,
     IWorkerRunQueries workerRunQueries,
-    InFlightWorkerCountQuery inFlightWorkerCountQuery) : IIssueQueries
+    InFlightWorkerCountQuery inFlightWorkerCountQuery,
+    IGlobalSettingsQueries globalSettingsQueries) : IIssueQueries
 {
     public async Task<IReadOnlySet<int>> GetKnownIssueNumbersAsync(
         MonitoredRepositoryId repositoryId,
@@ -114,6 +116,21 @@ internal sealed class IssueQueries(
             .ToListAsync(cancellationToken);
     }
 
+    public async Task<IReadOnlyList<ChecksPendingIssueInfo>> GetChecksPendingIssuesAsync(
+        MonitoredRepositoryId repositoryId,
+        CancellationToken cancellationToken)
+    {
+        return await db.Set<ChecksPendingIssue>()
+            .AsNoTracking()
+            .Where(i => i.MonitoredRepositoryId == repositoryId)
+            .Select(i => new ChecksPendingIssueInfo(
+                i.IssueNumber,
+                i.PullRequestUrl,
+                i.EnteredChecksPendingAt,
+                i.FeedbackCutoffAt))
+            .ToListAsync(cancellationToken);
+    }
+
     public async Task<IReadOnlyList<IssueSummary>> GetIssueSummariesAsync(
         MonitoredRepositoryId? repositoryId,
         CancellationToken cancellationToken)
@@ -181,7 +198,9 @@ internal sealed class IssueQueries(
                     : null,
                 RunStats: runAggregates.TryGetValue(i.Id.Value, out RunAggregate? aggregate)
                     ? MapRunStats(aggregate)
-                    : null))
+                    : null,
+                ChecksOutcome: GetChecksOutcomeDiscriminator(i),
+                PullRequestUrl: GetPullRequestUrl(i)))
             .ToList();
     }
 
@@ -241,7 +260,9 @@ internal sealed class IssueQueries(
             RepositoryEligibilityStatus: eligibilityStatus,
             RunStats: runAggregates.TryGetValue(issue.Id.Value, out RunAggregate? aggregate)
                 ? MapRunStats(aggregate)
-                : null);
+                : null,
+            ChecksOutcome: GetChecksOutcomeDiscriminator(issue),
+            PullRequestUrl: GetPullRequestUrl(issue));
     }
 
     private static string? GetFailureCategory(Issue issue) =>
@@ -250,6 +271,23 @@ internal sealed class IssueQueries(
             FailedIssue failed => failed.FailureCategory.Value,
             ContinuableFailedIssue continuableFailed => continuableFailed.FailureCategory.Value,
             RevisionFailedIssue revisionFailed => revisionFailed.FailureCategory.Value,
+            _ => null,
+        };
+
+    private static string? GetChecksOutcomeDiscriminator(Issue issue) =>
+        issue switch
+        {
+            ReviewIssue review => review.ChecksOutcome.Discriminator,
+            _ => null,
+        };
+
+    private static string? GetPullRequestUrl(Issue issue) =>
+        issue switch
+        {
+            ReviewIssue review => review.PullRequestUrl,
+            ChecksPendingIssue checksPending => checksPending.PullRequestUrl,
+            RevisionInProgressIssue revisionInProgress => revisionInProgress.PullRequestUrl,
+            RevisionQueuedIssue revisionQueued => revisionQueued.PullRequestUrl,
             _ => null,
         };
 
@@ -316,6 +354,7 @@ internal sealed class IssueQueries(
             RevisionQueuedIssue => "revision_queued",
             RevisionInProgressIssue => "revision_in_progress",
             RevisionFailedIssue => "revision_failed",
+            ChecksPendingIssue => "checks_pending",
             _ => throw new InvalidOperationException($"Unknown issue type: {issue.GetType().Name}")
         };
 
@@ -400,7 +439,9 @@ internal sealed class IssueQueries(
                 FailedAt: null,
                 CompletedAt: null,
                 BlockedBy: null,
-                TransientRetry: null),
+                TransientRetry: null,
+                ChecksOutcome: review.ChecksOutcome.Discriminator,
+                FailingChecks: review.ChecksOutcome is ChecksOutcome.StillFailing sf ? sf.FailingChecks : null),
 
             UnchangedIssue unchanged => new IssueStateDetails(
                 WorkerRunId: unchanged.WorkerRunId.Value,
@@ -444,7 +485,9 @@ internal sealed class IssueQueries(
                 FailedAt: null,
                 CompletedAt: null,
                 BlockedBy: null,
-                TransientRetry: null),
+                TransientRetry: null,
+                RevisionTriggerKind: revisionQueued.Trigger.Discriminator,
+                ChecksFixAttempts: revisionQueued.ChecksFixAttempts),
 
             RevisionInProgressIssue revisionInProgress => new IssueStateDetails(
                 WorkerRunId: revisionInProgress.WorkerRunId.Value,
@@ -455,7 +498,9 @@ internal sealed class IssueQueries(
                 FailedAt: null,
                 CompletedAt: null,
                 BlockedBy: null,
-                TransientRetry: null),
+                TransientRetry: null,
+                RevisionTriggerKind: revisionInProgress.Trigger.Discriminator,
+                ChecksFixAttempts: revisionInProgress.ChecksFixAttempts),
 
             RevisionFailedIssue revisionFailed => new IssueStateDetails(
                 WorkerRunId: revisionFailed.WorkerRunId.Value,
@@ -466,7 +511,9 @@ internal sealed class IssueQueries(
                 FailedAt: revisionFailed.FailedAt,
                 CompletedAt: null,
                 BlockedBy: null,
-                TransientRetry: null),
+                TransientRetry: null,
+                RevisionTriggerKind: revisionFailed.Trigger.Discriminator,
+                ChecksFixAttempts: revisionFailed.ChecksFixAttempts),
 
             ContinuableFailedIssue continuableFailed => new IssueStateDetails(
                 WorkerRunId: continuableFailed.WorkerRunId.Value,
@@ -484,6 +531,17 @@ internal sealed class IssueQueries(
                 BranchName: continuationQueued.BranchName,
                 PullRequestUrl: null,
                 FeedbackCutoffAt: null,
+                FailureReason: null,
+                FailedAt: null,
+                CompletedAt: null,
+                BlockedBy: null,
+                TransientRetry: null),
+
+            ChecksPendingIssue checksPending => new IssueStateDetails(
+                WorkerRunId: checksPending.WorkerRunId.Value,
+                BranchName: checksPending.BranchName,
+                PullRequestUrl: checksPending.PullRequestUrl,
+                FeedbackCutoffAt: checksPending.FeedbackCutoffAt,
                 FailureReason: null,
                 FailedAt: null,
                 CompletedAt: null,
@@ -589,18 +647,13 @@ internal sealed class IssueQueries(
                 Position: pos))
             .ToList();
 
-        // Build headroom map: headroom = max(0, MaxConcurrentWorkers − inFlightCount).
-        // Repositories absent from the eligibility list (ineligible) contribute no headroom
-        // and are excluded — their issues go into the ineligibleQueued partition.
-        Dictionary<MonitoredRepositoryId, int> headroomByRepo = eligibleRepositories
-            .Select(r => (Id: MonitoredRepositoryId.From(r.Id), r.MaxConcurrentWorkers))
-            .ToDictionary(
-                t => t.Id,
-                t =>
-                {
-                    inFlightCounts.TryGetValue(t.Id, out int inFlight);
-                    return Math.Max(0, t.MaxConcurrentWorkers - inFlight);
-                });
+        int globalMax = await globalSettingsQueries.GetMaxConcurrentAsync(cancellationToken);
+
+        // Build forecast headroom: under global saturation each in-flight repo is assumed to
+        // finish one worker, opening the next global slot. Below saturation this equals claim
+        // headroom. Repositories absent from the eligibility list contribute no headroom and are
+        // excluded — their issues go into the ineligibleQueued partition.
+        DispatchHeadroom headroom = DispatchHeadroom.ForForecast(eligibleRepositories, inFlightCounts, globalMax);
 
         // Eligible-repo queued issues: capacity-aware order via the shared helper so the
         // dashboard sequence matches the dispatcher exactly (ADR 0074, 0025, 0067).
@@ -613,7 +666,7 @@ internal sealed class IssueQueries(
             .Select(t => (t.Issue, DispatchOrderKey.For(t.Issue, t.Position)))
             .ToList();
 
-        IReadOnlyList<QueuedIssue> placed = CapacityAwareDispatchOrder.Order(eligibleKeyedIssues, headroomByRepo);
+        IReadOnlyList<QueuedIssue> placed = CapacityAwareDispatchOrder.Order(eligibleKeyedIssues, headroom);
 
         HashSet<IssueId> placedIds = placed
             .Select(i => i.Id)
@@ -655,7 +708,9 @@ internal sealed class IssueQueries(
                     : null,
                 RunStats: runAggregates.TryGetValue(i.Id.Value, out RunAggregate? aggregate)
                     ? MapRunStats(aggregate)
-                    : null))
+                    : null,
+                ChecksOutcome: GetChecksOutcomeDiscriminator(i),
+                PullRequestUrl: GetPullRequestUrl(i)))
             .ToList();
     }
 

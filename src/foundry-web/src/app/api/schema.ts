@@ -632,6 +632,11 @@ export interface components {
             rule: string;
             description: string;
         };
+        FailingCheck: {
+            name: string;
+            conclusion: string;
+            detailsUrl: null | string;
+        };
         GlobalSettingsSummary: {
             /** Format: int32 */
             maxConcurrent: number | string;
@@ -649,8 +654,6 @@ export interface components {
             autoResumeOnUsageReset: boolean;
             installDotnet: boolean;
             installAngular: boolean;
-            installGlab: boolean;
-            installGh: boolean;
             installChromium: boolean;
             installDocker: boolean;
             imageBuildStatus: components["schemas"]["ImageBuildStatus"];
@@ -699,6 +702,11 @@ export interface components {
             completedAt: null | string;
             blockedBy: null | (number | string)[];
             transientRetry: null | components["schemas"]["TransientRetryDetails"];
+            checksOutcome?: null | string;
+            failingChecks?: null | components["schemas"]["FailingCheck"][];
+            revisionTriggerKind?: null | string;
+            /** Format: int32 */
+            checksFixAttempts?: null | number | string;
         };
         IssueSummary: {
             /** Format: uuid */
@@ -714,6 +722,8 @@ export interface components {
             failureClassification: null | string;
             repositoryEligibilityStatus: null | string;
             runStats: null | components["schemas"]["RunStats"];
+            checksOutcome?: null | string;
+            pullRequestUrl?: null | string;
         };
         MoveRepositoryRequestBody: {
             /** Format: int32 */
@@ -879,8 +889,6 @@ export interface components {
         UpdateWorkerImageConfigurationRequestBody: {
             installDotnet: boolean;
             installAngular: boolean;
-            installGlab: boolean;
-            installGh: boolean;
             installChromium: boolean;
             installDocker: boolean;
         };

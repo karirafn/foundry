@@ -48,7 +48,9 @@ public sealed class WhenProviderIsGitHub : IAsyncDisposable
                 "Issues (read and write)",
                 "Pull requests (read and write)",
                 "Workflows (write)",
-                "Metadata (read)"]),
+                "Metadata (read)",
+                "Commit statuses (read)",
+                "Actions (read)"]),
             () => dto.CreationUrlTemplate.ShouldContain("personal-access-tokens/new"),
             () => dto.CreationUrlTemplate.ShouldContain("name=Foundry&contents=write&issues=write&pull_requests=write&workflows=write"),
             () => dto.ResourceOwnerHint.ShouldNotBeNull());

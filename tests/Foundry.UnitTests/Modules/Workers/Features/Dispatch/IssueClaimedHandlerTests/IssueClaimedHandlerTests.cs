@@ -595,7 +595,7 @@ public sealed class HandleAsync : IAsyncDisposable
         DispatchContext.Revision revision = new(
             "feat/42-fix",
             "https://github.com/owner/repo/pull/10",
-            [new ReviewComment("Please add tests.")]);
+            new RevisionTrigger.ReviewFeedback([new ReviewComment("Please add tests.")], 0, null));
         IssueClaimed @event = BuildEvent(branchName: "feat/42-fix", context: revision);
 
         // Act
@@ -909,7 +909,7 @@ public sealed class HandleAsync : IAsyncDisposable
     {
         // Arrange
         string defaultWorkerPromptTemplate =
-            "Implement GitHub issue #{issueNumber}. Create a feature branch, make the changes, commit, and push to the remote. Do not create a pull request unless explicitly instructed.";
+            "Implement GitHub issue #{issueNumber}. Create a feature branch, make the changes, commit, and push to the remote. Open a pull request for your branch, or reuse the existing one if a pull request already exists.";
         StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c-fallback");
         IssueClaimedHandler sut = BuildHandler(
             orchestrator: orchestrator,
@@ -1040,6 +1040,27 @@ public sealed class HandleAsync : IAsyncDisposable
         FailedRun failedRun = run.ShouldBeOfType<FailedRun>();
         FailureReason.ContainerError containerError = failedRun.Reason.ShouldBeOfType<FailureReason.ContainerError>();
         containerError.Message.ShouldContain("120000");
+    }
+
+    [Fact]
+    public async Task WhenDispatched_SystemPromptEnvVarContainsChecksSection()
+    {
+        // Arrange — timeout is 120 minutes (stub default)
+        StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c-checks-section");
+        IssueClaimedHandler sut = BuildHandler(orchestrator: orchestrator);
+        IssueClaimed @event = BuildEvent();
+
+        // Act
+        await sut.HandleAsync(@event, TestContext.Current.CancellationToken);
+
+        // Assert — the checks section from SystemPromptBuilder is wired end-to-end
+        WorkerContainerSpec? spec = orchestrator.LastSpec;
+        spec.ShouldNotBeNull();
+        spec.EnvironmentVariables["SYSTEM_PROMPT"].ShouldSatisfyAllConditions(
+            () => spec.EnvironmentVariables["SYSTEM_PROMPT"].ShouldContain("gh pr checks"),
+            () => spec.EnvironmentVariables["SYSTEM_PROMPT"].ShouldContain("glab ci status"),
+            () => spec.EnvironmentVariables["SYSTEM_PROMPT"].ShouldContain("Foundry continues to monitor"),
+            () => spec.EnvironmentVariables["SYSTEM_PROMPT"].ShouldContain("120 minutes of wall-clock budget"));
     }
 
     private sealed class StubPostExitProviderQueries(bool branchCreationSucceeds) : IPostExitProviderQueries

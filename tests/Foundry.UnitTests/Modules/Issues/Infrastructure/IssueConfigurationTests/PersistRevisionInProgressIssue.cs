@@ -72,15 +72,16 @@ public sealed class PersistRevisionInProgressIssue : IAsyncDisposable
 
         // Assert
         RevisionInProgressIssue reloaded = result.ShouldBeOfType<RevisionInProgressIssue>();
+        RevisionTrigger.ReviewFeedback rf = reloaded.Trigger.ShouldBeOfType<RevisionTrigger.ReviewFeedback>();
         reloaded.ShouldSatisfyAllConditions(
             () => reloaded.WorkerRunId.ShouldBe(workerRunId),
             () => reloaded.BranchName.ShouldBe("feat/issue-60"),
             () => reloaded.PullRequestUrl.ShouldBe("https://github.com/owner/repo/pull/20"),
-            () => reloaded.ReviewComments.Count.ShouldBe(2),
-            () => reloaded.ReviewComments[0].Body.ShouldBe("Please fix the formatting."),
-            () => reloaded.ReviewComments[1].Body.ShouldBe("Rename this variable."),
-            () => reloaded.ReviewComments[1].FilePath.ShouldBe("src/Foo.cs"),
-            () => reloaded.ReviewComments[1].Line.ShouldBe(42),
+            () => rf.Comments.Count.ShouldBe(2),
+            () => rf.Comments[0].Body.ShouldBe("Please fix the formatting."),
+            () => rf.Comments[1].Body.ShouldBe("Rename this variable."),
+            () => rf.Comments[1].FilePath.ShouldBe("src/Foo.cs"),
+            () => rf.Comments[1].Line.ShouldBe(42),
             () => reloaded.Author.Value.ShouldBe("octocat"),
             () => reloaded.MonitoredRepositoryId.ShouldBe(repositoryId));
     }
