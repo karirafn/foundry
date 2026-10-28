@@ -187,6 +187,29 @@
     font-size: 0.75rem;
   }
 
+  &__checks-status {
+    color: var(--fd-text-secondary);
+    font-size: 0.75rem;
+    white-space: nowrap;
+  }
+
+  &__checks-badge {
+    background: transparent;
+    border: 1px solid currentColor;
+
+    &--error {
+      color: var(--fd-text-error);
+    }
+
+    &--warning {
+      color: var(--fd-text-warning);
+    }
+
+    &--muted {
+      color: var(--fd-text-secondary);
+    }
+  }
+
   &__link {
     color: var(--fd-text-secondary);
     display: flex;

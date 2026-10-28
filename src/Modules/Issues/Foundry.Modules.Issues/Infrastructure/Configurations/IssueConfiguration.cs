@@ -55,19 +55,22 @@ public sealed class IssueConfiguration : IEntityTypeConfiguration<Issue>
                 "state <> 'completed' OR completed_at IS NOT NULL");
             t.HasCheckConstraint(
                 "ck_issues_revision_queued_fields",
-                "state <> 'revision_queued' OR (branch_name IS NOT NULL AND pull_request_url IS NOT NULL AND review_comments IS NOT NULL)");
+                "state <> 'revision_queued' OR (branch_name IS NOT NULL AND pull_request_url IS NOT NULL AND revision_trigger IS NOT NULL)");
             t.HasCheckConstraint(
                 "ck_issues_revision_in_progress_fields",
-                "state <> 'revision_in_progress' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND pull_request_url IS NOT NULL AND review_comments IS NOT NULL)");
+                "state <> 'revision_in_progress' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND pull_request_url IS NOT NULL AND revision_trigger IS NOT NULL)");
             t.HasCheckConstraint(
                 "ck_issues_revision_failed_fields",
-                "state <> 'revision_failed' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND pull_request_url IS NOT NULL AND review_comments IS NOT NULL AND failure_reason IS NOT NULL AND failed_at IS NOT NULL)");
+                "state <> 'revision_failed' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND pull_request_url IS NOT NULL AND revision_trigger IS NOT NULL AND failure_reason IS NOT NULL AND failed_at IS NOT NULL)");
             t.HasCheckConstraint(
                 "ck_issues_continuable_failed_fields",
                 "state <> 'continuable_failed' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND failure_reason IS NOT NULL AND failed_at IS NOT NULL)");
             t.HasCheckConstraint(
                 "ck_issues_continuation_queued_branch_name",
                 "state <> 'continuation_queued' OR branch_name IS NOT NULL");
+            t.HasCheckConstraint(
+                "ck_issues_checks_pending_fields",
+                "state <> 'checks_pending' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND pull_request_url IS NOT NULL AND entered_checks_pending_at IS NOT NULL AND feedback_cutoff_at IS NOT NULL)");
         });
 
         builder.HasKey(i => i.Id);
@@ -173,6 +176,7 @@ public sealed class IssueConfiguration : IEntityTypeConfiguration<Issue>
             .HasValue<RevisionQueuedIssue>("revision_queued")
             .HasValue<RevisionInProgressIssue>("revision_in_progress")
             .HasValue<RevisionFailedIssue>("revision_failed")
+            .HasValue<ChecksPendingIssue>("checks_pending")
             .IsComplete(true);
 
         builder.Property<string>("state")

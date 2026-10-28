@@ -1950,6 +1950,28 @@
           }
         }
       },
+      "FailingCheck": {
+        "required": [
+          "name",
+          "conclusion",
+          "detailsUrl"
+        ],
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "conclusion": {
+            "type": "string"
+          },
+          "detailsUrl": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
       "GlobalSettingsSummary": {
         "required": [
           "maxConcurrent",
@@ -1963,8 +1985,6 @@
           "autoResumeOnUsageReset",
           "installDotnet",
           "installAngular",
-          "installGlab",
-          "installGh",
           "installChromium",
           "installDocker",
           "imageBuildStatus",
@@ -2037,12 +2057,6 @@
             "type": "boolean"
           },
           "installAngular": {
-            "type": "boolean"
-          },
-          "installGlab": {
-            "type": "boolean"
-          },
-          "installGh": {
             "type": "boolean"
           },
           "installChromium": {
@@ -2263,6 +2277,36 @@
                 "$ref": "#/components/schemas/TransientRetryDetails"
               }
             ]
+          },
+          "checksOutcome": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "failingChecks": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/FailingCheck"
+            }
+          },
+          "revisionTriggerKind": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "checksFixAttempts": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int32"
           }
         }
       },
@@ -2329,6 +2373,18 @@
               {
                 "$ref": "#/components/schemas/RunStats"
               }
+            ]
+          },
+          "checksOutcome": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "pullRequestUrl": {
+            "type": [
+              "null",
+              "string"
             ]
           }
         }
@@ -3034,8 +3090,6 @@
         "required": [
           "installDotnet",
           "installAngular",
-          "installGlab",
-          "installGh",
           "installChromium",
           "installDocker"
         ],
@@ -3045,12 +3099,6 @@
             "type": "boolean"
           },
           "installAngular": {
-            "type": "boolean"
-          },
-          "installGlab": {
-            "type": "boolean"
-          },
-          "installGh": {
             "type": "boolean"
           },
           "installChromium": {

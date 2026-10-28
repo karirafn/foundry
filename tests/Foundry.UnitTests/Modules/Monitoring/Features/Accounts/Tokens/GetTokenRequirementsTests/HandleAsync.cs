@@ -38,7 +38,9 @@ public sealed class HandleAsync
                 "Issues (read and write)",
                 "Pull requests (read and write)",
                 "Workflows (write)",
-                "Metadata (read)"]),
+                "Metadata (read)",
+                "Commit statuses (read)",
+                "Actions (read)"]),
             () => requirements.ResourceOwnerHint.ShouldNotBeNull());
     }
 

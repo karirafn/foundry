@@ -24,17 +24,31 @@ internal sealed class ProviderPullRequestClosedHandler(
             .Where(i => i.MonitoredRepositoryId == @event.RepositoryId)
             .FirstOrDefaultAsync(i => i.IssueNumber == @event.IssueNumber, cancellationToken);
 
-        if (issue is not ReviewIssue reviewIssue)
-        {
-            logger.LogWarning(
-                "ProviderPullRequestClosed received for repository {RepositoryId} issue {IssueNumber} but it is not a ReviewIssue (state: {State}); ignoring.",
-                @event.RepositoryId,
-                @event.IssueNumber,
-                issue?.GetType().Name ?? "not found");
-            return;
-        }
+        DateTimeOffset now = DateTimeOffset.UtcNow;
 
-        ContinuableFailedIssue failed = reviewIssue.Fail(FailureReason, FailureCategory.PrClosed, DateTimeOffset.UtcNow);
-        await db.TransitionAsync(reviewIssue, failed, domainEventDispatcher, cancellationToken);
+        switch (issue)
+        {
+            case ReviewIssue reviewIssue:
+            {
+                ContinuableFailedIssue failed = reviewIssue.Fail(FailureReason, FailureCategory.PrClosed, now);
+                await db.TransitionAsync(reviewIssue, failed, domainEventDispatcher, cancellationToken);
+                break;
+            }
+
+            case ChecksPendingIssue checksPendingIssue:
+            {
+                ContinuableFailedIssue failed = checksPendingIssue.Fail(FailureReason, FailureCategory.PrClosed, now);
+                await db.TransitionAsync(checksPendingIssue, failed, domainEventDispatcher, cancellationToken);
+                break;
+            }
+
+            default:
+                logger.LogWarning(
+                    "ProviderPullRequestClosed received for repository {RepositoryId} issue {IssueNumber} but it is not a ReviewIssue or ChecksPendingIssue (state: {State}); ignoring.",
+                    @event.RepositoryId,
+                    @event.IssueNumber,
+                    issue?.GetType().Name ?? "not found");
+                break;
+        }
     }
 }

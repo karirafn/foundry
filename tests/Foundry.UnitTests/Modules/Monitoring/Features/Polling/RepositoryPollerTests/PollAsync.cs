@@ -4,6 +4,7 @@ using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Features.Eligibility;
 using Foundry.Modules.Monitoring.Features.Providers;
+using Foundry.Modules.Monitoring.Features.Providers.Checks;
 using Foundry.Modules.Monitoring.Features.Providers.Feedback;
 using Foundry.Modules.Monitoring.Features.Polling;
 using Foundry.Shared;
@@ -1585,6 +1586,12 @@ public sealed class PollAsync : IAsyncDisposable
             RepositorySlug slug,
             CancellationToken cancellationToken)
             => Task.FromResult(Result<bool>.Ok(true));
+
+        public Task<Result<Checks>> GetChecksAsync(
+            RepositorySlug slug,
+            string pullRequestUrl,
+            CancellationToken cancellationToken)
+            => Task.FromResult(Result<Checks>.Ok(new Checks.NoneDetected()));
     }
 
     private sealed class FailingIssueProvider(Error error) : IIssueProvider
@@ -1664,6 +1671,12 @@ public sealed class PollAsync : IAsyncDisposable
             RepositorySlug slug,
             CancellationToken cancellationToken)
             => Task.FromResult(Result<bool>.Ok(true));
+
+        public Task<Result<Checks>> GetChecksAsync(
+            RepositorySlug slug,
+            string pullRequestUrl,
+            CancellationToken cancellationToken)
+            => Task.FromResult(Result<Checks>.Fail(error));
     }
 
     private sealed class StubIssueQueries : IIssueQueries
@@ -1726,6 +1739,11 @@ public sealed class PollAsync : IAsyncDisposable
         {
             return Task.FromResult(_reviewIssues);
         }
+
+        public Task<IReadOnlyList<ChecksPendingIssueInfo>> GetChecksPendingIssuesAsync(
+            MonitoredRepositoryId repositoryId,
+            CancellationToken cancellationToken)
+            => Task.FromResult<IReadOnlyList<ChecksPendingIssueInfo>>([]);
 
         public Task<IReadOnlySet<int>> GetUntrackableIssueNumbersAsync(
             MonitoredRepositoryId repositoryId,

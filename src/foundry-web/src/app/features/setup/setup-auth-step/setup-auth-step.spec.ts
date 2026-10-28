@@ -477,7 +477,7 @@ describe('SetupAuthStepComponent', () => {
       httpMock.expectOne('/api/settings').flush({
         maxConcurrent: 3, timeoutMinutes: 60, probeIntervalMinutes: 60, pollIntervalSeconds: 30,
         usageLimitResetsAt: null, isDispatchPaused: false, autoResumeOnUsageReset: true,
-        installDotnet: false, installAngular: false, installGlab: false, installGh: false,
+        installDotnet: false, installAngular: false,
         installChromium: false, installDocker: false, imageBuildStatus: 'Idle',
         lastImageBuildError: null, hasUsableImage: false, nextRetryAt: null, attempt: 0,
         systemPromptTemplate: null, workerPromptTemplate: null,
@@ -509,7 +509,7 @@ describe('SetupAuthStepComponent', () => {
       httpMock.expectOne('/api/settings').flush({
         maxConcurrent: 3, timeoutMinutes: 60, probeIntervalMinutes: 60, pollIntervalSeconds: 30,
         usageLimitResetsAt: null, isDispatchPaused: false, autoResumeOnUsageReset: true,
-        installDotnet: false, installAngular: false, installGlab: false, installGh: false,
+        installDotnet: false, installAngular: false,
         installChromium: false, installDocker: false, imageBuildStatus: 'Idle',
         lastImageBuildError: null, hasUsableImage: false, nextRetryAt: null, attempt: 0,
         systemPromptTemplate: null, workerPromptTemplate: null,
@@ -542,7 +542,7 @@ describe('SetupAuthStepComponent', () => {
       httpMock.expectOne('/api/settings').flush({
         maxConcurrent: 3, timeoutMinutes: 60, probeIntervalMinutes: 60, pollIntervalSeconds: 30,
         usageLimitResetsAt: null, isDispatchPaused: false, autoResumeOnUsageReset: true,
-        installDotnet: false, installAngular: false, installGlab: false, installGh: false,
+        installDotnet: false, installAngular: false,
         installChromium: false, installDocker: false, imageBuildStatus: 'Idle',
         lastImageBuildError: null, hasUsableImage: false, nextRetryAt: null, attempt: 0,
         systemPromptTemplate: null, workerPromptTemplate: null,
@@ -573,7 +573,7 @@ describe('SetupAuthStepComponent', () => {
       httpMock.expectOne('/api/settings').flush({
         maxConcurrent: 3, timeoutMinutes: 60, probeIntervalMinutes: 60, pollIntervalSeconds: 30,
         usageLimitResetsAt: null, isDispatchPaused: false, autoResumeOnUsageReset: true,
-        installDotnet: false, installAngular: false, installGlab: false, installGh: false,
+        installDotnet: false, installAngular: false,
         installChromium: false, installDocker: false, imageBuildStatus: 'Idle',
         lastImageBuildError: null, hasUsableImage: false, nextRetryAt: null, attempt: 0,
         systemPromptTemplate: null, workerPromptTemplate: null,
@@ -604,7 +604,7 @@ describe('SetupAuthStepComponent', () => {
       httpMock.expectOne('/api/settings').flush({
         maxConcurrent: 3, timeoutMinutes: 60, probeIntervalMinutes: 60, pollIntervalSeconds: 30,
         usageLimitResetsAt: null, isDispatchPaused: false, autoResumeOnUsageReset: true,
-        installDotnet: false, installAngular: false, installGlab: false, installGh: false,
+        installDotnet: false, installAngular: false,
         installChromium: false, installDocker: false, imageBuildStatus: 'Idle',
         lastImageBuildError: null, hasUsableImage: false, nextRetryAt: null, attempt: 0,
         systemPromptTemplate: null, workerPromptTemplate: null,
@@ -637,7 +637,7 @@ describe('SetupAuthStepComponent', () => {
       httpMock.expectOne('/api/settings').flush({
         maxConcurrent: 3, timeoutMinutes: 60, probeIntervalMinutes: 60, pollIntervalSeconds: 30,
         usageLimitResetsAt: null, isDispatchPaused: false, autoResumeOnUsageReset: true,
-        installDotnet: false, installAngular: false, installGlab: false, installGh: false,
+        installDotnet: false, installAngular: false,
         installChromium: false, installDocker: false, imageBuildStatus: 'Idle',
         lastImageBuildError: null, hasUsableImage: false, nextRetryAt: null, attempt: 0,
         systemPromptTemplate: null, workerPromptTemplate: null,

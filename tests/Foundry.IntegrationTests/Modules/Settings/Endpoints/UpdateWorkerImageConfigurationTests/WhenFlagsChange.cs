@@ -51,8 +51,6 @@ public sealed class WhenFlagsChange : IAsyncDisposable
         {
             installDotnet = true,
             installAngular = false,
-            installGlab = true,
-            installGh = false,
             installChromium = true,
             installDocker = true,
         };
@@ -73,8 +71,6 @@ public sealed class WhenFlagsChange : IAsyncDisposable
         summary.ShouldSatisfyAllConditions(
             () => summary.InstallDotnet.ShouldBeTrue(),
             () => summary.InstallAngular.ShouldBeFalse(),
-            () => summary.InstallGlab.ShouldBeTrue(),
-            () => summary.InstallGh.ShouldBeFalse(),
             () => summary.InstallChromium.ShouldBeTrue(),
             () => summary.InstallDocker.ShouldBeTrue());
     }
@@ -88,8 +84,6 @@ public sealed class WhenFlagsChange : IAsyncDisposable
         {
             installDotnet = true,
             installAngular = false,
-            installGlab = false,
-            installGh = false,
             installChromium = false,
             installDocker = false,
         };

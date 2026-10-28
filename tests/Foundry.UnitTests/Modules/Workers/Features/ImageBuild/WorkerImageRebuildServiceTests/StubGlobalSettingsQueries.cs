@@ -26,8 +26,6 @@ internal sealed class StubGlobalSettingsQueries(
         AutoResumeOnUsageReset: true,
         InstallDotnet: false,
         InstallAngular: false,
-        InstallGlab: false,
-        InstallGh: false,
         InstallChromium: false,
         InstallDocker: false,
         ImageBuildStatus: ImageBuildStatus.Idle,

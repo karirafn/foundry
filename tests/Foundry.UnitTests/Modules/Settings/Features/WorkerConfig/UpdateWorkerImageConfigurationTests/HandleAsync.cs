@@ -64,8 +64,6 @@ public sealed class HandleAsync : IAsyncLifetime
         WorkerImageConfiguration initial = new(
             InstallDotnet: false,
             InstallAngular: false,
-            InstallGlab: false,
-            InstallGh: false,
             InstallChromium: false,
             InstallDocker: false);
 
@@ -78,8 +76,6 @@ public sealed class HandleAsync : IAsyncLifetime
         UpdateWorkerImageConfiguration.Command command = new(
             InstallDotnet: true,
             InstallAngular: false,
-            InstallGlab: false,
-            InstallGh: false,
             InstallChromium: false,
             InstallDocker: false);
 
@@ -100,8 +96,6 @@ public sealed class HandleAsync : IAsyncLifetime
         WorkerImageConfiguration initial = new(
             InstallDotnet: false,
             InstallAngular: false,
-            InstallGlab: false,
-            InstallGh: false,
             InstallChromium: false,
             InstallDocker: false);
 
@@ -114,8 +108,6 @@ public sealed class HandleAsync : IAsyncLifetime
         UpdateWorkerImageConfiguration.Command command = new(
             InstallDotnet: true,
             InstallAngular: false,
-            InstallGlab: false,
-            InstallGh: false,
             InstallChromium: false,
             InstallDocker: false);
 
@@ -137,8 +129,6 @@ public sealed class HandleAsync : IAsyncLifetime
         WorkerImageConfiguration initial = new(
             InstallDotnet: false,
             InstallAngular: false,
-            InstallGlab: false,
-            InstallGh: false,
             InstallChromium: false,
             InstallDocker: false);
 
@@ -151,8 +141,6 @@ public sealed class HandleAsync : IAsyncLifetime
         UpdateWorkerImageConfiguration.Command command = new(
             InstallDotnet: false,
             InstallAngular: false,
-            InstallGlab: false,
-            InstallGh: false,
             InstallChromium: true,
             InstallDocker: false);
 
@@ -173,8 +161,6 @@ public sealed class HandleAsync : IAsyncLifetime
         WorkerImageConfiguration initial = new(
             InstallDotnet: false,
             InstallAngular: false,
-            InstallGlab: false,
-            InstallGh: false,
             InstallChromium: false,
             InstallDocker: false);
 
@@ -187,8 +173,6 @@ public sealed class HandleAsync : IAsyncLifetime
         UpdateWorkerImageConfiguration.Command command = new(
             InstallDotnet: false,
             InstallAngular: false,
-            InstallGlab: false,
-            InstallGh: false,
             InstallChromium: false,
             InstallDocker: true);
 
@@ -209,8 +193,6 @@ public sealed class HandleAsync : IAsyncLifetime
         WorkerImageConfiguration config = new(
             InstallDotnet: true,
             InstallAngular: false,
-            InstallGlab: false,
-            InstallGh: false,
             InstallChromium: false,
             InstallDocker: false);
 
@@ -223,8 +205,6 @@ public sealed class HandleAsync : IAsyncLifetime
         UpdateWorkerImageConfiguration.Command command = new(
             InstallDotnet: true,
             InstallAngular: false,
-            InstallGlab: false,
-            InstallGh: false,
             InstallChromium: false,
             InstallDocker: false);
 
@@ -242,8 +222,6 @@ public sealed class HandleAsync : IAsyncLifetime
         WorkerImageConfiguration config = new(
             InstallDotnet: true,
             InstallAngular: false,
-            InstallGlab: false,
-            InstallGh: false,
             InstallChromium: false,
             InstallDocker: false);
 
@@ -256,8 +234,6 @@ public sealed class HandleAsync : IAsyncLifetime
         UpdateWorkerImageConfiguration.Command command = new(
             InstallDotnet: true,
             InstallAngular: false,
-            InstallGlab: false,
-            InstallGh: false,
             InstallChromium: false,
             InstallDocker: false);
 
@@ -279,8 +255,6 @@ public sealed class HandleAsync : IAsyncLifetime
         WorkerImageConfiguration initial = new(
             InstallDotnet: false,
             InstallAngular: false,
-            InstallGlab: false,
-            InstallGh: false,
             InstallChromium: false,
             InstallDocker: false);
 
@@ -293,8 +267,6 @@ public sealed class HandleAsync : IAsyncLifetime
         UpdateWorkerImageConfiguration.Command command = new(
             InstallDotnet: true,
             InstallAngular: true,
-            InstallGlab: false,
-            InstallGh: false,
             InstallChromium: false,
             InstallDocker: false);
 
@@ -318,8 +290,6 @@ public sealed class HandleAsync : IAsyncLifetime
         WorkerImageConfiguration initial = new(
             InstallDotnet: false,
             InstallAngular: false,
-            InstallGlab: false,
-            InstallGh: false,
             InstallChromium: false,
             InstallDocker: false);
 
@@ -331,11 +301,9 @@ public sealed class HandleAsync : IAsyncLifetime
 
         UpdateWorkerImageConfiguration.Command command = new(
             InstallDotnet: true,
-            InstallAngular: false,
-            InstallGlab: true,
-            InstallGh: false,
+            InstallAngular: true,
             InstallChromium: false,
-            InstallDocker: false);
+            InstallDocker: true);
 
         // Act
         Result<GlobalSettingsSummary> result = await sut.HandleAsync(
@@ -347,7 +315,9 @@ public sealed class HandleAsync : IAsyncLifetime
             result.ShouldBeOfType<Result<GlobalSettingsSummary>.Success>();
         success.Value.ShouldSatisfyAllConditions(
             () => success.Value.InstallDotnet.ShouldBeTrue(),
-            () => success.Value.InstallGlab.ShouldBeTrue());
+            () => success.Value.InstallAngular.ShouldBeTrue(),
+            () => success.Value.InstallChromium.ShouldBeFalse(),
+            () => success.Value.InstallDocker.ShouldBeTrue());
     }
 
     [Fact]
@@ -361,8 +331,6 @@ public sealed class HandleAsync : IAsyncLifetime
         UpdateWorkerImageConfiguration.Command command = new(
             InstallDotnet: false,
             InstallAngular: false,
-            InstallGlab: false,
-            InstallGh: false,
             InstallChromium: false,
             InstallDocker: false);
 

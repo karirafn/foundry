@@ -82,7 +82,7 @@ A non-`Idle` state drives the dashboard image-build banner and disables the work
 
 ## Worker Image Configuration
 
-The set of preinstall flags (provider CLIs and other tooling, e.g. `INSTALL_GH`, `INSTALL_GLAB`) stored on Global Settings, driving Docker build args for the worker image.
+The set of preinstall flags for optional toolchains (e.g. `INSTALL_DOTNET`, `INSTALL_ANGULAR`, `INSTALL_CHROMIUM`, `INSTALL_DOCKER`) stored on Global Settings, driving Docker build args for the worker image.
 Changing it publishes `WorkerImageConfigurationChanged`, which requests an immediate rebuild.
 
 ## Provider
@@ -91,7 +91,7 @@ A git hosting platform (GitHub, GitLab).
 Each provider has its own API client, label format (flat on GitHub, scoped on GitLab), and CLI tooling (`gh`, `glab`).
 The provider is carried on `ClaimedIssueDispatch` so the worker dispatch knows which CLI tooling and credential env var apply.
 Inside the worker, the provider CLI is registered as git's credential helper (e.g. `gh auth setup-git`), authenticated by the Account PAT injected as the provider-specific token env var (`GH_TOKEN` for GitHub, `GITLAB_TOKEN` for GitLab) — this authenticates both `git push` and PR/MR creation without embedding the PAT in the repo's git config.
-The provider CLI is baked into the worker image at build time via per-provider build-arg flags (`INSTALL_GH`, `INSTALL_GLAB`); when the flag is off the entrypoint warns rather than failing silently.
+The provider CLIs (`gh`, `glab`) are unconditionally baked into the worker base image (`Dockerfile.base`); when `GH_TOKEN`/`GITLAB_TOKEN` is set but the corresponding CLI is absent, the entrypoint fails bootstrap (`stage=auth`) rather than warning and continuing.
 
 ## Provider Rate Budget
 
@@ -340,12 +340,29 @@ The sealed union describing the nature of the work being dispatched to a worker 
 Three variants:
 
 - **`Fresh`** — a new implementation attempt; carries `BranchName`.
-- **`Revision`** — a revision cycle addressing review feedback; carries `BranchName`, `PullRequestUrl`, and `IReadOnlyList<ReviewComment>`.
+- **`Revision`** — a revision cycle; carries `BranchName`, `PullRequestUrl`, and a polymorphic [Revision Trigger](#revision-trigger) describing why the revision was queued.
 - **`Continuation`** — resuming an existing branch after a failed run; carries `BranchName` and optional `FailureReason`.
 
 `DispatchContext` is assembled by the concrete `QueuedIssue` subtype overriding the abstract `Context` property — `FreshQueuedIssue` returns `Fresh`, `RevisionQueuedIssue` returns `Revision`, `ContinuationQueuedIssue` returns `Continuation`.
 The handler and claimer treat `Context` as an opaque value — they forward it into `ClaimedIssueDispatch` without switching on it.
 Survives the outbox round-trip via `[JsonPolymorphic]` / `[JsonDerivedType]` annotations (see [ADR 0051](docs/adr/0051-dispatch-context-union-and-typed-dispatch-seam.md)).
+
+## Revision Trigger
+
+Why a revision run was queued — a polymorphic value carried by `RevisionQueuedIssue`, `RevisionInProgressIssue`, and `RevisionFailedIssue` (and surfaced on `DispatchContext.Revision`) in place of comment-specific fields.
+Two variants:
+
+- **`ReviewFeedback`** — a human reviewer requested changes; carries `Comments`, `OmittedCommentCount`, and `NewestConsumedCommentAt`.
+- **`FailedChecks`** — the PR's provider checks went red within the fix budget; carries the `FailingChecks`.
+
+Modelling the trigger as a closed union makes a half-populated revision (comments *and* failing checks, or neither) unrepresentable, and lets the `SystemPromptBuilder` switch on the kind rather than null-checking fields.
+Persisted as a single `revision_trigger` JSON column and survives the outbox round-trip via `[JsonPolymorphic]` / `[JsonDerivedType]` annotations (see [ADR 0078](docs/adr/0078-revision-trigger-polymorphic-union.md)).
+
+## Checks Fix Attempts
+
+The number of `FailedChecks` revisions dispatched since the last human review feedback, carried on `ChecksPendingIssue` and threaded through the revision states so it survives `ChecksPending → RevisionQueued → RevisionInProgress → ChecksPending`.
+`ChecksPendingIssue.FixChecks` increments it; any `ReviewFeedback` revision (`ReviewIssue.Revise` / `ChecksPendingIssue.Revise`) resets it to 0.
+When a red verdict arrives and the count is below the cap (`ChecksMaxFixPushes`, = 2), the issue re-queues as a `FailedChecks` revision; at the cap it transitions to `ReviewIssue` with `ChecksOutcome.StillFailing`.
 
 ## Claim
 

@@ -21,20 +21,35 @@ internal sealed class PullRequestChangesRequestedHandler(
             .Where(i => i.MonitoredRepositoryId == @event.RepositoryId)
             .FirstOrDefaultAsync(i => i.IssueNumber == @event.IssueNumber, cancellationToken);
 
-        if (issue is not ReviewIssue reviewIssue)
+        switch (issue)
         {
-            logger.LogWarning(
-                "PullRequestChangesRequested received for repository {RepositoryId} issue {IssueNumber} but it is not a ReviewIssue (state: {State}); ignoring.",
-                @event.RepositoryId,
-                @event.IssueNumber,
-                issue?.GetType().Name ?? "not found");
-            return;
-        }
+            case ReviewIssue reviewIssue:
+            {
+                RevisionQueuedIssue revisionQueued = reviewIssue.Revise(
+                    @event.Comments,
+                    @event.OmittedCommentCount,
+                    @event.NewestCommentAt);
+                await db.TransitionAsync(reviewIssue, revisionQueued, domainEventDispatcher, cancellationToken);
+                break;
+            }
 
-        RevisionQueuedIssue revisionQueued = reviewIssue.Revise(
-            @event.Comments,
-            @event.OmittedCommentCount,
-            @event.NewestCommentAt);
-        await db.TransitionAsync(reviewIssue, revisionQueued, domainEventDispatcher, cancellationToken);
+            case ChecksPendingIssue checksPendingIssue:
+            {
+                RevisionQueuedIssue revisionQueued = checksPendingIssue.Revise(
+                    @event.Comments,
+                    @event.OmittedCommentCount,
+                    @event.NewestCommentAt);
+                await db.TransitionAsync(checksPendingIssue, revisionQueued, domainEventDispatcher, cancellationToken);
+                break;
+            }
+
+            default:
+                logger.LogWarning(
+                    "PullRequestChangesRequested received for repository {RepositoryId} issue {IssueNumber} but it is not a ReviewIssue or ChecksPendingIssue (state: {State}); ignoring.",
+                    @event.RepositoryId,
+                    @event.IssueNumber,
+                    issue?.GetType().Name ?? "not found");
+                break;
+        }
     }
 }
