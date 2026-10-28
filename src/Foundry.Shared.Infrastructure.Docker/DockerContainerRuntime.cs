@@ -236,6 +236,25 @@ internal sealed class DockerContainerRuntime(
         }
     }
 
+    public async Task<IReadOnlyList<(string Name, IReadOnlyDictionary<string, string> Labels)>> ListVolumesByLabelAsync(
+        string labelKey,
+        CancellationToken cancellationToken)
+    {
+        VolumesListParameters parameters = new()
+        {
+            Filters = new Dictionary<string, IDictionary<string, bool>>
+            {
+                ["label"] = new Dictionary<string, bool> { [labelKey] = true },
+            },
+        };
+
+        VolumesListResponse response = await volumeOperations.ListAsync(parameters, cancellationToken);
+
+        return (response.Volumes ?? [])
+            .Select(v => (v.Name, (IReadOnlyDictionary<string, string>)(v.Labels ?? new Dictionary<string, string>())))
+            .ToList();
+    }
+
     public async Task<string> ExecCaptureStdoutAsync(
         string containerId,
         IReadOnlyList<string> command,

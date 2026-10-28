@@ -8,11 +8,21 @@ namespace Foundry.UnitTests.Fakes.Workers;
 /// interactions with zero Docker daemon.
 /// <para>
 /// Inspect captured call arguments via <c>Last*</c> properties.
+/// Script return values via the <c>With*</c> fluent methods.
 /// </para>
 /// </summary>
 internal sealed class SpyVolumeOperations : IVolumeOperations
 {
+    private VolumesListResponse _listResponse = new();
+
     public VolumesCreateParameters? LastCreateParameters { get; private set; }
+    public VolumesListParameters? LastListParameters { get; private set; }
+
+    public SpyVolumeOperations WithListResponse(VolumesListResponse response)
+    {
+        _listResponse = response;
+        return this;
+    }
 
     public Task<VolumeResponse> CreateAsync(
         VolumesCreateParameters parameters,
@@ -31,7 +41,10 @@ internal sealed class SpyVolumeOperations : IVolumeOperations
     public Task<VolumesListResponse> ListAsync(
         VolumesListParameters parameters,
         CancellationToken cancellationToken)
-        => Task.FromResult(new VolumesListResponse());
+    {
+        LastListParameters = parameters;
+        return Task.FromResult(_listResponse);
+    }
 
     public Task<VolumesPruneResponse> PruneAsync(
         VolumesPruneParameters parameters,

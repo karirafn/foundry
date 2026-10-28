@@ -22,6 +22,7 @@ internal sealed class FakeDockerContainerRuntime : IDockerContainerRuntime
     private ContainerInspectResponse? _inspectResponse;
     private Exception? _inspectException;
     private IList<ContainerListResponse> _listResponse = [];
+    private IReadOnlyList<(string Name, IReadOnlyDictionary<string, string> Labels)> _volumeListResponse = [];
     private string? _getLogsResult;
     private string _execCaptureStdout = "";
     private string? _readFileResult;
@@ -125,6 +126,13 @@ internal sealed class FakeDockerContainerRuntime : IDockerContainerRuntime
         return this;
     }
 
+    public FakeDockerContainerRuntime WithVolumeListResponse(
+        IReadOnlyList<(string Name, IReadOnlyDictionary<string, string> Labels)> response)
+    {
+        _volumeListResponse = response;
+        return this;
+    }
+
     // ── IDockerContainerRuntime implementation ────────────────────────────────
 
     public Task<string> CreateAndStartAsync(
@@ -222,6 +230,16 @@ internal sealed class FakeDockerContainerRuntime : IDockerContainerRuntime
         LastRemovedVolumeName = name;
         _allRemovedVolumeNames.Add(name);
         return Task.CompletedTask;
+    }
+
+    public string? LastListVolumesByLabelKey { get; private set; }
+
+    public Task<IReadOnlyList<(string Name, IReadOnlyDictionary<string, string> Labels)>> ListVolumesByLabelAsync(
+        string labelKey,
+        CancellationToken cancellationToken)
+    {
+        LastListVolumesByLabelKey = labelKey;
+        return Task.FromResult(_volumeListResponse);
     }
 
     public Task<string> ExecCaptureStdoutAsync(
