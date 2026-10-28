@@ -1090,9 +1090,10 @@ public sealed class HandleAsync : IAsyncDisposable
         // Assert
         WorkerContainerSpec? spec = orchestrator.LastSpec;
         spec.ShouldNotBeNull();
-        spec.EnvironmentVariables["SYSTEM_PROMPT"].ShouldSatisfyAllConditions(
-            () => spec.EnvironmentVariables["SYSTEM_PROMPT"].ShouldContain(SystemPromptBuilder.PrePrSectionMarker),
-            () => spec.EnvironmentVariables["SYSTEM_PROMPT"].ShouldContain("DOCKER_HOST"));
+        string systemPrompt = spec.EnvironmentVariables["SYSTEM_PROMPT"];
+        systemPrompt.ShouldSatisfyAllConditions(
+            () => systemPrompt.ShouldContain(SystemPromptBuilder.PrePrSectionMarker),
+            () => systemPrompt.ShouldContain("DOCKER_HOST"));
     }
 
     [Fact]
@@ -1128,11 +1129,12 @@ public sealed class HandleAsync : IAsyncDisposable
         // Assert — the checks section from SystemPromptBuilder is wired end-to-end
         WorkerContainerSpec? spec = orchestrator.LastSpec;
         spec.ShouldNotBeNull();
-        spec.EnvironmentVariables["SYSTEM_PROMPT"].ShouldSatisfyAllConditions(
-            () => spec.EnvironmentVariables["SYSTEM_PROMPT"].ShouldContain("gh pr checks"),
-            () => spec.EnvironmentVariables["SYSTEM_PROMPT"].ShouldContain("glab ci status"),
-            () => spec.EnvironmentVariables["SYSTEM_PROMPT"].ShouldContain("Foundry continues to monitor"),
-            () => spec.EnvironmentVariables["SYSTEM_PROMPT"].ShouldContain("120 minutes of wall-clock budget"));
+        string systemPrompt = spec.EnvironmentVariables["SYSTEM_PROMPT"];
+        systemPrompt.ShouldSatisfyAllConditions(
+            () => systemPrompt.ShouldContain("gh pr checks"),
+            () => systemPrompt.ShouldContain("glab ci status"),
+            () => systemPrompt.ShouldContain("Foundry continues to monitor"),
+            () => systemPrompt.ShouldContain("120 minutes of wall-clock budget"));
     }
 
     private sealed class StubPostExitProviderQueries(bool branchCreationSucceeds) : IPostExitProviderQueries

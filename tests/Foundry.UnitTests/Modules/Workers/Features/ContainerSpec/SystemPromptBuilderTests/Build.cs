@@ -1910,6 +1910,48 @@ public sealed class Build
     }
 
     [Fact]
+    public void WhenInstallsDockerTrueAndContinuationContext_ResultContainsPrePrSectionMarker()
+    {
+        // Arrange
+        WorkerOptions options = new();
+        DispatchContext.Continuation continuation = new("feat/103-my-feature");
+
+        // Act
+        Result<string> buildResult = SystemPromptBuilder.Build(
+            103, options, options.SystemPromptTemplate, continuation,
+            "https://api.github.com/repos/owner/repo/issues/103",
+            timeoutMinutes: 120, installsDocker: true);
+        string result = buildResult.ShouldBeOfType<Result<string>.Success>().Value;
+
+        // Assert
+        result.ShouldContain(SystemPromptBuilder.PrePrSectionMarker);
+    }
+
+    [Fact]
+    public void WhenInstallsDockerTrueAndFailedChecksTrigger_ResultContainsPrePrSectionMarker()
+    {
+        // Arrange
+        WorkerOptions options = new();
+        DispatchContext.Revision revision = new(
+            "feat/1-fix",
+            "https://github.com/org/repo/pull/1",
+            new RevisionTrigger.FailedChecks(
+            [
+                new FailingCheck("ci/build", "failure", null),
+            ]));
+
+        // Act
+        Result<string> buildResult = SystemPromptBuilder.Build(
+            1, options, options.SystemPromptTemplate, revision,
+            "https://api.github.com/repos/owner/repo/issues/1",
+            timeoutMinutes: 120, installsDocker: true);
+        string result = buildResult.ShouldBeOfType<Result<string>.Success>().Value;
+
+        // Assert
+        result.ShouldContain(SystemPromptBuilder.PrePrSectionMarker);
+    }
+
+    [Fact]
     public void WhenBuiltForFailedChecksTriggerWithManyChecks_PromptStaysUnderByteCeilingWithOmissionNote()
     {
         // Arrange — FINDING 2: BuildFailingChecksSection must budget checks the same way
