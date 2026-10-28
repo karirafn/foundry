@@ -35,7 +35,6 @@ public sealed class WhenStartedWithRootlessDindAllowanceSet : IAsyncLifetime
     private DockerClientConfiguration? _config;
     private DockerClient? _dockerClient;
     private DockerWorkerOrchestrator? _sut;
-    private string? _containerId;
     private bool _daemonReachable;
 
     async ValueTask IAsyncLifetime.InitializeAsync()
@@ -76,8 +75,16 @@ public sealed class WhenStartedWithRootlessDindAllowanceSet : IAsyncLifetime
 
         try
         {
-            await RemoveContainerAsync();
+            await RemoveRunContainersAsync();
             await RemoveDataRootVolumeAsync();
+        }
+        catch (DockerApiException)
+        {
+            // Best-effort teardown: a cleanup failure must not mask the test outcome.
+        }
+        catch (HttpRequestException)
+        {
+            // Daemon went away mid-teardown; nothing left to clean.
         }
         finally
         {
@@ -117,10 +124,9 @@ public sealed class WhenStartedWithRootlessDindAllowanceSet : IAsyncLifetime
             ? $"{failure.Error.Code}: {failure.Error.Message}"
             : string.Empty;
         Result<ContainerId>.Success success = result.ShouldBeOfType<Result<ContainerId>.Success>(failureMessage);
-        _containerId = success.Value.Value;
 
         ContainerInspectResponse inspect = await _dockerClient!.Containers.InspectContainerAsync(
-            _containerId,
+            success.Value.Value,
             TestContext.Current.CancellationToken);
 
         inspect.HostConfig.ShouldSatisfyAllConditions(
@@ -128,23 +134,37 @@ public sealed class WhenStartedWithRootlessDindAllowanceSet : IAsyncLifetime
             () => inspect.HostConfig.ReadonlyPaths.ShouldNotBeNull().ShouldBeEmpty());
     }
 
-    private async Task RemoveContainerAsync()
+    // Found by label rather than by id: a container that was created but failed to start never
+    // reports an id back to the test, yet would still hold the volume.
+    private async Task RemoveRunContainersAsync()
     {
-        if (_containerId is null)
-        {
-            return;
-        }
+        IList<ContainerListResponse> containers = await _dockerClient!.Containers.ListContainersAsync(
+            new ContainersListParameters
+            {
+                All = true,
+                Filters = new Dictionary<string, IDictionary<string, bool>>
+                {
+                    ["label"] = new Dictionary<string, bool>
+                    {
+                        [$"{WorkerRunIdLabel}={_runId.Value}"] = true,
+                    },
+                },
+            },
+            CancellationToken.None);
 
-        try
+        foreach (ContainerListResponse container in containers)
         {
-            await _dockerClient!.Containers.RemoveContainerAsync(
-                _containerId,
-                new ContainerRemoveParameters { Force = true },
-                CancellationToken.None);
-        }
-        catch (DockerContainerNotFoundException)
-        {
-            // Already removed — nothing to do.
+            try
+            {
+                await _dockerClient.Containers.RemoveContainerAsync(
+                    container.ID,
+                    new ContainerRemoveParameters { Force = true },
+                    CancellationToken.None);
+            }
+            catch (DockerContainerNotFoundException)
+            {
+                // Already removed — nothing to do.
+            }
         }
     }
 
@@ -159,9 +179,9 @@ public sealed class WhenStartedWithRootlessDindAllowanceSet : IAsyncLifetime
                 force: true,
                 CancellationToken.None);
         }
-        catch (DockerApiException ex) when (ex.StatusCode == HttpStatusCode.NotFound)
+        catch (DockerApiException ex) when (ex.StatusCode is HttpStatusCode.NotFound or HttpStatusCode.Conflict)
         {
-            // Never created — nothing to do.
+            // Never created, or still referenced by a container that could not be removed.
         }
     }
 
@@ -193,6 +213,16 @@ public sealed class WhenStartedWithRootlessDindAllowanceSet : IAsyncLifetime
 
     private async Task PullImageIfAbsentAsync()
     {
+        try
+        {
+            await _dockerClient!.Images.InspectImageAsync(Image, TestContext.Current.CancellationToken);
+            return;
+        }
+        catch (DockerImageNotFoundException)
+        {
+            // Not cached locally — pull below.
+        }
+
         await _dockerClient!.Images.CreateImageAsync(
             new ImagesCreateParameters
             {
