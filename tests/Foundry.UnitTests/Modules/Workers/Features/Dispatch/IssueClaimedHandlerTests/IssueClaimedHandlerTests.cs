@@ -1075,6 +1075,47 @@ public sealed class HandleAsync : IAsyncDisposable
     }
 
     [Fact]
+    public async Task WhenDockerInstalled_SystemPromptEnvVarContainsPrePrSection()
+    {
+        // Arrange
+        StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c-pre-pr-docker");
+        IssueClaimedHandler sut = BuildHandler(
+            orchestrator: orchestrator,
+            settingsQueries: new StubGlobalSettingsQueries(installsDocker: true));
+        IssueClaimed @event = BuildEvent();
+
+        // Act
+        await sut.HandleAsync(@event, TestContext.Current.CancellationToken);
+
+        // Assert
+        WorkerContainerSpec? spec = orchestrator.LastSpec;
+        spec.ShouldNotBeNull();
+        string systemPrompt = spec.EnvironmentVariables["SYSTEM_PROMPT"];
+        systemPrompt.ShouldSatisfyAllConditions(
+            () => systemPrompt.ShouldContain(SystemPromptBuilder.PrePrSectionMarker),
+            () => systemPrompt.ShouldContain("DOCKER_HOST"));
+    }
+
+    [Fact]
+    public async Task WhenDockerNotInstalled_SystemPromptEnvVarOmitsPrePrSection()
+    {
+        // Arrange
+        StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c-pre-pr-no-docker");
+        IssueClaimedHandler sut = BuildHandler(
+            orchestrator: orchestrator,
+            settingsQueries: new StubGlobalSettingsQueries(installsDocker: false));
+        IssueClaimed @event = BuildEvent();
+
+        // Act
+        await sut.HandleAsync(@event, TestContext.Current.CancellationToken);
+
+        // Assert
+        WorkerContainerSpec? spec = orchestrator.LastSpec;
+        spec.ShouldNotBeNull();
+        spec.EnvironmentVariables["SYSTEM_PROMPT"].ShouldNotContain(SystemPromptBuilder.PrePrSectionMarker);
+    }
+
+    [Fact]
     public async Task WhenDispatched_SystemPromptEnvVarContainsChecksSection()
     {
         // Arrange — timeout is 120 minutes (stub default)
@@ -1088,11 +1129,12 @@ public sealed class HandleAsync : IAsyncDisposable
         // Assert — the checks section from SystemPromptBuilder is wired end-to-end
         WorkerContainerSpec? spec = orchestrator.LastSpec;
         spec.ShouldNotBeNull();
-        spec.EnvironmentVariables["SYSTEM_PROMPT"].ShouldSatisfyAllConditions(
-            () => spec.EnvironmentVariables["SYSTEM_PROMPT"].ShouldContain("gh pr checks"),
-            () => spec.EnvironmentVariables["SYSTEM_PROMPT"].ShouldContain("glab ci status"),
-            () => spec.EnvironmentVariables["SYSTEM_PROMPT"].ShouldContain("Foundry continues to monitor"),
-            () => spec.EnvironmentVariables["SYSTEM_PROMPT"].ShouldContain("120 minutes of wall-clock budget"));
+        string systemPrompt = spec.EnvironmentVariables["SYSTEM_PROMPT"];
+        systemPrompt.ShouldSatisfyAllConditions(
+            () => systemPrompt.ShouldContain("gh pr checks"),
+            () => systemPrompt.ShouldContain("glab ci status"),
+            () => systemPrompt.ShouldContain("Foundry continues to monitor"),
+            () => systemPrompt.ShouldContain("120 minutes of wall-clock budget"));
     }
 
     private sealed class StubPostExitProviderQueries(bool branchCreationSucceeds) : IPostExitProviderQueries
