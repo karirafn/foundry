@@ -83,6 +83,12 @@
     font-size: 0.75rem;
   }
 
+  // WCAG 1.4.3: security-cost note uses --fd-text-warning (not tertiary) for 4.5:1 at 0.75rem
+  &__field-hint--warning {
+    color: var(--fd-text-warning);
+    font-size: 0.75rem;
+  }
+
   &__api-key-wrapper {
     display: flex;
     align-items: center;

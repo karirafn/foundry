@@ -22,10 +22,12 @@ internal sealed class FakeDockerContainerRuntime : IDockerContainerRuntime
     private ContainerInspectResponse? _inspectResponse;
     private Exception? _inspectException;
     private IList<ContainerListResponse> _listResponse = [];
+    private IReadOnlyList<(string Name, IReadOnlyDictionary<string, string> Labels)> _volumeListResponse = [];
     private string? _getLogsResult;
     private string _execCaptureStdout = "";
     private string? _readFileResult;
     private string[] _streamLogLines = [];
+    private readonly List<string> _allRemovedVolumeNames = [];
 
     // Captured call arguments
     public CreateContainerParameters? LastCreateAndStartParameters { get; private set; }
@@ -34,6 +36,8 @@ internal sealed class FakeDockerContainerRuntime : IDockerContainerRuntime
     public int LastStopWaitBeforeKillSeconds { get; private set; }
     public string? LastRemoveContainerId { get; private set; }
     public string? LastInspectContainerId { get; private set; }
+    public string? LastRemovedVolumeName { get; private set; }
+    public IReadOnlyList<string> AllRemovedVolumeNames => _allRemovedVolumeNames;
     public ContainersListParameters? LastListParameters { get; private set; }
     public VolumesCreateParameters? LastCreateVolumeParameters { get; private set; }
     public string? LastExecContainerId { get; private set; }
@@ -76,6 +80,22 @@ internal sealed class FakeDockerContainerRuntime : IDockerContainerRuntime
         return this;
     }
 
+    public FakeDockerContainerRuntime WithInspectWorkerRunId(string workerRunId)
+    {
+        _inspectResponse = new ContainerInspectResponse
+        {
+            State = new ContainerState { Running = false },
+            Config = new Config
+            {
+                Labels = new Dictionary<string, string>
+                {
+                    ["foundry.worker-run-id"] = workerRunId,
+                },
+            },
+        };
+        return this;
+    }
+
     public FakeDockerContainerRuntime WithListResponse(IList<ContainerListResponse> response)
     {
         _listResponse = response;
@@ -103,6 +123,13 @@ internal sealed class FakeDockerContainerRuntime : IDockerContainerRuntime
     public FakeDockerContainerRuntime WithStreamLogLines(params string[] lines)
     {
         _streamLogLines = lines;
+        return this;
+    }
+
+    public FakeDockerContainerRuntime WithVolumeListResponse(
+        IReadOnlyList<(string Name, IReadOnlyDictionary<string, string> Labels)> response)
+    {
+        _volumeListResponse = response;
         return this;
     }
 
@@ -193,6 +220,26 @@ internal sealed class FakeDockerContainerRuntime : IDockerContainerRuntime
     {
         LastCreateVolumeParameters = parameters;
         return Task.CompletedTask;
+    }
+
+    public Task RemoveVolumeAsync(
+        string name,
+        bool force,
+        CancellationToken cancellationToken)
+    {
+        LastRemovedVolumeName = name;
+        _allRemovedVolumeNames.Add(name);
+        return Task.CompletedTask;
+    }
+
+    public string? LastListVolumesByLabelKey { get; private set; }
+
+    public Task<IReadOnlyList<(string Name, IReadOnlyDictionary<string, string> Labels)>> ListVolumesByLabelAsync(
+        string labelKey,
+        CancellationToken cancellationToken)
+    {
+        LastListVolumesByLabelKey = labelKey;
+        return Task.FromResult(_volumeListResponse);
     }
 
     public Task<string> ExecCaptureStdoutAsync(

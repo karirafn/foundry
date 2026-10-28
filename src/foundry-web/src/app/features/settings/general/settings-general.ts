@@ -321,7 +321,7 @@ const RATE_BUDGET_FLOOR = 500;
                   aria-describedby="installDocker-hint"
                 />
                 <label for="installDocker">Install Docker engine + CLI</label>
-                <span id="installDocker-hint" class="general-settings__field-hint">Adds a rootless-capable Docker engine and CLI for Testcontainers.</span>
+                <span id="installDocker-hint" class="general-settings__field-hint general-settings__field-hint--warning">Runs Testcontainers integration tests inside the worker via a nested rootless Docker daemon. Security cost: the worker runs with CAP_SYS_ADMIN and seccomp/AppArmor unconfined, so a privilege escalation inside a worker can reach the Docker host (the WSL VM on Docker Desktop). Off by default; enable only for repositories you trust.</span>
               </div>
             </div>
           </fieldset>

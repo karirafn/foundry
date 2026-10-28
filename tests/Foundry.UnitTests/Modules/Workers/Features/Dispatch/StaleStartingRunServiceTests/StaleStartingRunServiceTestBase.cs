@@ -163,6 +163,8 @@ public abstract class StaleStartingRunServiceTestBase : IAsyncDisposable
         private readonly bool _listThrowsConnectivity;
 
         public int StopAndRemoveCallCount { get; private set; }
+        public int ReapOrphanedDataRootVolumesCallCount { get; private set; }
+        public IReadOnlySet<WorkerRunId>? LastReapActiveRunIds { get; private set; }
 
         public List<string> StoppedAndRemovedContainerIds { get; } = [];
 
@@ -236,5 +238,14 @@ public abstract class StaleStartingRunServiceTestBase : IAsyncDisposable
 
         public Task RemoveContainerAsync(string containerId, CancellationToken cancellationToken)
             => Task.CompletedTask;
+
+        public Task ReapOrphanedDataRootVolumesAsync(
+            IReadOnlySet<WorkerRunId> activeRunIds,
+            CancellationToken cancellationToken)
+        {
+            ReapOrphanedDataRootVolumesCallCount++;
+            LastReapActiveRunIds = activeRunIds;
+            return Task.CompletedTask;
+        }
     }
 }

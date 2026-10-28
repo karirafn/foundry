@@ -85,6 +85,15 @@ A non-`Idle` state drives the dashboard image-build banner and disables the work
 The set of preinstall flags for optional toolchains (e.g. `INSTALL_DOTNET`, `INSTALL_ANGULAR`, `INSTALL_CHROMIUM`, `INSTALL_DOCKER`) stored on Global Settings, driving Docker build args for the worker image.
 Changing it publishes `WorkerImageConfigurationChanged`, which requests an immediate rebuild.
 
+### Docker-Enabled Worker Run Spec
+
+When `InstallDocker` is true, the worker runs its own nested rootless `dockerd` so Testcontainers-based integration tests work inside the container.
+This requires the relaxed allowance set from [ADR 0079](docs/adr/0079-relaxed-allowances-for-nested-rootless-docker.md): `CAP_SYS_ADMIN`, `seccomp=unconfined`, `apparmor=unconfined`, `systempaths=unconfined`, and the `/dev/net/tun` device.
+A named per-run data-root volume (`foundry-worker-docker-<workerRunId>`, labelled `foundry.managed=true` + `foundry.worker-run-id=<id>`) is mounted at `/home/node/.local/share/docker`; the nested daemon uses native overlayfs on this volume, so `/dev/fuse` is not required.
+The isolation boundary weakens: the worker runs as uid 1000 with no route to container root under normal operation, but `CAP_SYS_ADMIN` plus unconfined seccomp/AppArmor mean that code inside the worker that escalates to root can reach the Docker host (on Docker Desktop, the WSL VM).
+On hosts where the daemon cannot start, the entrypoint logs `FOUNDRY_DOCKER_UNAVAILABLE`, leaves `DOCKER_HOST` unset, and the run continues in degraded mode — authoring integration tests that execute where a daemon is available (CI, native Linux).
+Workers built without `InstallDocker` receive an unchanged run spec and entrypoint.
+
 ## Provider
 
 A git hosting platform (GitHub, GitLab).
@@ -823,6 +832,12 @@ The same guard applies to `WorkerRunCompletedHandler`: a `WorkerRunCompleted` ev
 **Daemon-unreachable defer.**
 When `ListByLabelAsync` fails with a daemon connectivity error (detected by `DockerDaemonConnectivity.IsUnreachable`), the sweep logs a warning and returns without reaping or failing anything — both phases are skipped for that tick.
 Per-run failure attempts that encounter Docker errors are also best-effort: a `TryStopAndRemoveAsync` failure is logged but does not abort the failure transition for the run.
+
+**Orphaned data-root volume reaping.**
+After the container and `StartingRun` phases, the sweep calls `IWorkerOrchestrator.ReapOrphanedDataRootVolumesAsync(slotRunIds)`, passing the current slot-occupancy run IDs.
+The orchestrator lists every Docker volume labelled `foundry.worker-run-id` and removes those whose run ID falls outside slot occupancy — host-crash orphans whose worker container was cleaned up but whose data-root volume was never deleted.
+Each removal is best-effort: a failure on one volume is logged but does not prevent the remaining volumes from being processed.
+This phase is covered by the same daemon-unreachable defer: when `ListByLabelAsync` earlier in the tick returned `Unreachable`, the whole tick is skipped before reaching this phase.
 
 ## Container Output
 

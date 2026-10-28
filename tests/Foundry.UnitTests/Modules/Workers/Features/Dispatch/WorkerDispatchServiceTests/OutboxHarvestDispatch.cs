@@ -414,6 +414,11 @@ public sealed class OutboxHarvestDispatch : IAsyncDisposable
 
         public Task RemoveContainerAsync(string containerId, CancellationToken cancellationToken)
             => Task.CompletedTask;
+
+        public Task ReapOrphanedDataRootVolumesAsync(
+            IReadOnlySet<WorkerRunId> activeRunIds,
+            CancellationToken cancellationToken)
+            => Task.CompletedTask;
     }
 
     private sealed class NullOrchestrator : IWorkerOrchestrator
@@ -449,6 +454,11 @@ public sealed class OutboxHarvestDispatch : IAsyncDisposable
             => Task.CompletedTask;
 
         public Task RemoveContainerAsync(string containerId, CancellationToken cancellationToken)
+            => Task.CompletedTask;
+
+        public Task ReapOrphanedDataRootVolumesAsync(
+            IReadOnlySet<WorkerRunId> activeRunIds,
+            CancellationToken cancellationToken)
             => Task.CompletedTask;
     }
 }

@@ -26,4 +26,6 @@ internal interface IWorkerOrchestrator
     Task StopContainerAsync(string containerId, CancellationToken cancellationToken);
 
     Task RemoveContainerAsync(string containerId, CancellationToken cancellationToken);
+
+    Task ReapOrphanedDataRootVolumesAsync(IReadOnlySet<WorkerRunId> activeRunIds, CancellationToken cancellationToken);
 }

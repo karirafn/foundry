@@ -359,5 +359,10 @@ public sealed class WhenRelayedBacklogExceedsMaxConcurrent : IAsyncDisposable
 
         public Task RemoveContainerAsync(string containerId, CancellationToken cancellationToken)
             => Task.CompletedTask;
+
+        public Task ReapOrphanedDataRootVolumesAsync(
+            IReadOnlySet<WorkerRunId> activeRunIds,
+            CancellationToken cancellationToken)
+            => Task.CompletedTask;
     }
 }

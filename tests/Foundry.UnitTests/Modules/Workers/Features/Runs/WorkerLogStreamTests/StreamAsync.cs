@@ -91,6 +91,10 @@ public sealed class StreamAsync : IAsyncDisposable
         public Task RemoveContainerAsync(string containerId, CancellationToken cancellationToken) =>
             throw new NotSupportedException();
 
+        public Task ReapOrphanedDataRootVolumesAsync(
+            IReadOnlySet<WorkerRunId> activeRunIds,
+            CancellationToken cancellationToken)
+            => Task.CompletedTask;
     }
 
     private async Task<ActiveRun> SeedActiveRunAsync(string containerId = "container-stream-test")

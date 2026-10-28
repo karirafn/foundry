@@ -41,6 +41,15 @@ public interface IDockerContainerRuntime
         VolumesCreateParameters parameters,
         CancellationToken cancellationToken);
 
+    Task RemoveVolumeAsync(
+        string name,
+        bool force,
+        CancellationToken cancellationToken);
+
+    Task<IReadOnlyList<(string Name, IReadOnlyDictionary<string, string> Labels)>> ListVolumesByLabelAsync(
+        string labelKey,
+        CancellationToken cancellationToken);
+
     // Exec / file I/O
     Task<string> ExecCaptureStdoutAsync(
         string containerId,

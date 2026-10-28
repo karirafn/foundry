@@ -66,12 +66,50 @@ internal sealed class DockerWorkerOrchestrator(
             cancellationToken);
     }
 
+    private async Task EnsureDataRootVolumeAsync(
+        WorkerContainerSpec spec,
+        CancellationToken cancellationToken)
+    {
+        // Name-prefix detection is safe here as a quick guard for the common case where no
+        // data-root mount is present. The authoritative ownership marker for orphan reaping is
+        // the "foundry.worker-run-id" label — IssueClaimedHandler.ApplyRootlessDinD is the
+        // only producer of a data-root mount, so prefix-matching is a sound, low-cost filter.
+        VolumeMount? dataRootMount = spec.VolumeMounts
+            .FirstOrDefault(m => m.VolumeName.StartsWith(
+                WorkerVolumeNames.DataRootVolumeNamePrefix,
+                StringComparison.Ordinal));
+
+        if (dataRootMount is null)
+        {
+            return;
+        }
+
+        if (!spec.Labels.TryGetValue(WorkerRunLabelKey, out string? runIdLabel))
+        {
+            return;
+        }
+
+        await runtime.CreateVolumeAsync(
+            new VolumesCreateParameters
+            {
+                Name = dataRootMount.VolumeName,
+                Labels = new Dictionary<string, string>
+                {
+                    [ManagedLabelKey] = "true",
+                    [WorkerRunLabelKey] = runIdLabel,
+                },
+            },
+            cancellationToken);
+    }
+
     public async Task<Result<ContainerId>> StartAsync(
         WorkerContainerSpec spec,
         CancellationToken cancellationToken)
     {
         try
         {
+            await EnsureDataRootVolumeAsync(spec, cancellationToken);
+
             CreateContainerParameters createParams = new()
             {
                 Image = spec.Image,
@@ -93,6 +131,9 @@ internal sealed class DockerWorkerOrchestrator(
                     Mounts = spec.VolumeMounts.Count > 0
                         ? [.. spec.VolumeMounts.Select(MapVolumeMount)]
                         : null,
+                    CapAdd = spec.Capabilities.Count > 0
+                        ? [.. spec.Capabilities]
+                        : null,
                 },
             };
 
@@ -101,6 +142,10 @@ internal sealed class DockerWorkerOrchestrator(
         }
         catch (DockerApiException ex)
         {
+            // EnsureDataRootVolumeAsync ran before CreateAndStartAsync, so a start failure
+            // leaves the data-root volume orphaned. Recovery happens automatically on the next
+            // StaleStartingRunService tick: the run id will not appear in the active-slot set,
+            // so ReapOrphanedDataRootVolumesAsync removes the volume without manual intervention.
             string redacted = SecretRedactor.Redact(ex.Message);
             string message = redacted.Length > DockerErrorMessageMaxLength
                 ? redacted[..DockerErrorMessageMaxLength]
@@ -111,8 +156,10 @@ internal sealed class DockerWorkerOrchestrator(
 
     public async Task StopAndRemoveAsync(string containerId, CancellationToken cancellationToken)
     {
+        string? workerRunId = await ReadWorkerRunIdAsync(containerId, cancellationToken);
         await runtime.StopAsync(containerId, 10, cancellationToken);
         await runtime.RemoveAsync(containerId, cancellationToken);
+        await TryDeleteDataRootVolumeAsync(workerRunId, cancellationToken);
     }
 
     public async Task<WorkerStatusProbe> GetStatusAsync(
@@ -219,6 +266,85 @@ internal sealed class DockerWorkerOrchestrator(
 
     public async Task RemoveContainerAsync(string containerId, CancellationToken cancellationToken)
     {
+        string? workerRunId = await ReadWorkerRunIdAsync(containerId, cancellationToken);
         await runtime.RemoveAsync(containerId, cancellationToken);
+        await TryDeleteDataRootVolumeAsync(workerRunId, cancellationToken);
+    }
+
+    public async Task ReapOrphanedDataRootVolumesAsync(
+        IReadOnlySet<WorkerRunId> activeRunIds,
+        CancellationToken cancellationToken)
+    {
+        IReadOnlyList<(string Name, IReadOnlyDictionary<string, string> Labels)> volumes =
+            await runtime.ListVolumesByLabelAsync(WorkerRunLabelKey, cancellationToken);
+
+        // Reap is keyed on the label, not the name prefix, because the label is the authoritative
+        // ownership marker. The label "foundry.worker-run-id" is only ever placed on worker
+        // containers and data-root volumes, so querying by it is a sufficient filter. Volumes
+        // that carry the label but have an unparseable or missing run-id are skipped — they were
+        // not created by this orchestrator in a recognisable way and are left untouched.
+        foreach ((string name, IReadOnlyDictionary<string, string> labels) in volumes)
+        {
+            if (!labels.TryGetValue(WorkerRunLabelKey, out string? labelValue))
+            {
+                continue;
+            }
+
+            if (!Guid.TryParse(labelValue, out Guid guid))
+            {
+                continue;
+            }
+
+            WorkerRunId runId = WorkerRunId.From(guid);
+
+            if (activeRunIds.Contains(runId))
+            {
+                continue;
+            }
+
+            try
+            {
+                await runtime.RemoveVolumeAsync(name, force: true, cancellationToken);
+            }
+            catch (DockerApiException)
+            {
+                // Best-effort per-volume reap — a single remove failure must not abort the sweep.
+                // Continue removing remaining orphaned volumes.
+            }
+        }
+    }
+
+    private async Task<string?> ReadWorkerRunIdAsync(
+        string containerId,
+        CancellationToken cancellationToken)
+    {
+        ContainerInspectResponse response = await runtime.InspectAsync(containerId, cancellationToken);
+
+        if (response.Config?.Labels is null)
+        {
+            return null;
+        }
+
+        return response.Config.Labels.TryGetValue(WorkerRunLabelKey, out string? runId) ? runId : null;
+    }
+
+    private async Task TryDeleteDataRootVolumeAsync(
+        string? workerRunId,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrEmpty(workerRunId) || !Guid.TryParse(workerRunId, out Guid guid))
+        {
+            return;
+        }
+
+        string volumeName = WorkerVolumeNames.DataRootVolumeName(WorkerRunId.From(guid));
+        try
+        {
+            await runtime.RemoveVolumeAsync(volumeName, force: false, cancellationToken);
+        }
+        catch (DockerApiException)
+        {
+            // Best-effort teardown — swallow Docker errors on volume removal.
+        }
     }
 }

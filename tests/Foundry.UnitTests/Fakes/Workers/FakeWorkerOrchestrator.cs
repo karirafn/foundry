@@ -21,6 +21,8 @@ internal sealed class FakeWorkerOrchestrator : IWorkerOrchestrator
 
     public int StopContainerCallCount { get; private set; }
     public int RemoveContainerCallCount { get; private set; }
+    public int ReapOrphanedDataRootVolumesCallCount { get; private set; }
+    public IReadOnlySet<WorkerRunId>? LastReapActiveRunIds { get; private set; }
 
     /// <summary>Scripts <see cref="GetStatusAsync"/> to return a container that exited with the given code.</summary>
     public FakeWorkerOrchestrator WithExitedContainer(int exitCode = 0)
@@ -78,6 +80,15 @@ internal sealed class FakeWorkerOrchestrator : IWorkerOrchestrator
     public Task RemoveContainerAsync(string containerId, CancellationToken cancellationToken)
     {
         RemoveContainerCallCount++;
+        return Task.CompletedTask;
+    }
+
+    public Task ReapOrphanedDataRootVolumesAsync(
+        IReadOnlySet<WorkerRunId> activeRunIds,
+        CancellationToken cancellationToken)
+    {
+        ReapOrphanedDataRootVolumesCallCount++;
+        LastReapActiveRunIds = activeRunIds;
         return Task.CompletedTask;
     }
 }

@@ -289,6 +289,10 @@ public sealed class TimeoutDetection : WorkerDispatchServiceTestBase
         public Task RemoveContainerAsync(string containerId, CancellationToken cancellationToken)
             => Task.CompletedTask;
 
+        public Task ReapOrphanedDataRootVolumesAsync(
+            IReadOnlySet<WorkerRunId> activeRunIds,
+            CancellationToken cancellationToken)
+            => Task.CompletedTask;
     }
 
     internal sealed class TimeoutStubWorkerOrchestrator(
@@ -372,5 +376,9 @@ public sealed class TimeoutDetection : WorkerDispatchServiceTestBase
             return Task.CompletedTask;
         }
 
+        public Task ReapOrphanedDataRootVolumesAsync(
+            IReadOnlySet<WorkerRunId> activeRunIds,
+            CancellationToken cancellationToken)
+            => Task.CompletedTask;
     }
 }

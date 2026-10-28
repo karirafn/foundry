@@ -32,10 +32,6 @@ internal sealed class IssueClaimedHandler(
     IPostExitProviderQueries postExitProviderQueries,
     ILogger<IssueClaimedHandler> logger) : IIntegrationEventHandler<IssueClaimed>
 {
-    private const string SeccompUnconfined = "seccomp=unconfined";
-    private const string ApparmorUnconfined = "apparmor=unconfined";
-    private const string FuseDevicePath = "/dev/fuse";
-
     private readonly WorkerOptions _options = optionsAccessor.Value;
 
     public async Task HandleAsync(IssueClaimed @event, CancellationToken cancellationToken)
@@ -269,16 +265,22 @@ internal sealed class IssueClaimedHandler(
         };
 
         return installsDocker
-            ? Result<WorkerContainerSpec>.Ok(ApplyRootlessDinD(spec))
+            ? Result<WorkerContainerSpec>.Ok(ApplyRootlessDinD(spec, startingRun.Id))
             : Result<WorkerContainerSpec>.Ok(spec);
     }
 
-    private static WorkerContainerSpec ApplyRootlessDinD(WorkerContainerSpec spec)
+    private static WorkerContainerSpec ApplyRootlessDinD(WorkerContainerSpec spec, WorkerRunId runId)
     {
         return spec with
         {
-            SecurityOptions = [SeccompUnconfined, ApparmorUnconfined],
-            Devices = [FuseDevicePath],
+            Capabilities = RootlessDindRunSpec.Capabilities,
+            SecurityOptions = RootlessDindRunSpec.SecurityOptions,
+            Devices = RootlessDindRunSpec.Devices,
+            VolumeMounts =
+            [
+                .. spec.VolumeMounts,
+                new VolumeMount(WorkerVolumeNames.DataRootVolumeName(runId), RootlessDindRunSpec.DataRootContainerPath),
+            ],
         };
     }
 

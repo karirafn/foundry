@@ -932,11 +932,12 @@ public sealed class HandleAsync : IAsyncDisposable
     public async Task WhenDockerEnabled_SecurityOptionsAndDevicesAreSet()
     {
         // Arrange
+        WorkerRunId runId = WorkerRunId.New();
         StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c-dind");
         IssueClaimedHandler sut = BuildHandler(
             orchestrator: orchestrator,
             settingsQueries: new StubGlobalSettingsQueries(installsDocker: true));
-        IssueClaimed @event = BuildEvent();
+        IssueClaimed @event = BuildEvent(workerRunId: runId);
 
         // Act
         await sut.HandleAsync(@event, TestContext.Current.CancellationToken);
@@ -945,8 +946,36 @@ public sealed class HandleAsync : IAsyncDisposable
         WorkerContainerSpec? spec = orchestrator.LastSpec;
         spec.ShouldNotBeNull();
         spec.ShouldSatisfyAllConditions(
-            () => spec.SecurityOptions.ShouldBe(["seccomp=unconfined", "apparmor=unconfined"]),
-            () => spec.Devices.ShouldBe(["/dev/fuse"]));
+            () => spec.Capabilities.ShouldBe(["SYS_ADMIN"]),
+            () => spec.SecurityOptions.ShouldBe(["seccomp=unconfined", "apparmor=unconfined", "systempaths=unconfined"]),
+            () => spec.Devices.ShouldBe(["/dev/net/tun"]),
+            () => spec.Devices.ShouldNotContain("/dev/fuse"),
+            () => spec.VolumeMounts.ShouldContain(m =>
+                m.VolumeName == WorkerVolumeNames.DataRootVolumeName(runId)
+                && m.ContainerPath == WorkerVolumeNames.DataRootContainerPath));
+    }
+
+    [Fact]
+    public async Task WhenDockerEnabled_SpecMatchesRootlessDindRunSpec()
+    {
+        // Arrange
+        WorkerRunId runId = WorkerRunId.New();
+        StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c-dind-parity");
+        IssueClaimedHandler sut = BuildHandler(
+            orchestrator: orchestrator,
+            settingsQueries: new StubGlobalSettingsQueries(installsDocker: true));
+        IssueClaimed @event = BuildEvent(workerRunId: runId);
+
+        // Act
+        await sut.HandleAsync(@event, TestContext.Current.CancellationToken);
+
+        // Assert
+        WorkerContainerSpec? spec = orchestrator.LastSpec;
+        spec.ShouldNotBeNull();
+        spec.ShouldSatisfyAllConditions(
+            () => spec.Capabilities.ShouldBe(RootlessDindRunSpec.Capabilities),
+            () => spec.SecurityOptions.ShouldBe(RootlessDindRunSpec.SecurityOptions),
+            () => spec.Devices.ShouldBe(RootlessDindRunSpec.Devices));
     }
 
     [Fact]
@@ -1018,8 +1047,11 @@ public sealed class HandleAsync : IAsyncDisposable
         WorkerContainerSpec? spec = orchestrator.LastSpec;
         spec.ShouldNotBeNull();
         spec.ShouldSatisfyAllConditions(
+            () => spec.Capabilities.ShouldBeEmpty(),
             () => spec.SecurityOptions.ShouldBeEmpty(),
-            () => spec.Devices.ShouldBeEmpty());
+            () => spec.Devices.ShouldBeEmpty(),
+            () => spec.VolumeMounts.ShouldNotContain(m =>
+                m.VolumeName.StartsWith(WorkerVolumeNames.DataRootVolumeNamePrefix, StringComparison.Ordinal)));
     }
 
     [Fact]
@@ -1150,6 +1182,10 @@ public sealed class HandleAsync : IAsyncDisposable
         public Task RemoveContainerAsync(string containerId, CancellationToken cancellationToken)
             => Task.CompletedTask;
 
+        public Task ReapOrphanedDataRootVolumesAsync(
+            IReadOnlySet<WorkerRunId> activeRunIds,
+            CancellationToken cancellationToken)
+            => Task.CompletedTask;
     }
 
     private sealed class StubCredentialQueries(
