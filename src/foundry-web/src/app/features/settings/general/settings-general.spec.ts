@@ -2391,6 +2391,7 @@ describe('SettingsGeneralComponent', () => {
       expect(hint.textContent).toContain('seccomp/AppArmor unconfined');
       expect(hint.textContent).toContain('Docker host');
       expect(hint.textContent).toContain('Testcontainers');
+      expect(hint.classList).toContain('general-settings__field-hint--warning');
     });
   });
 

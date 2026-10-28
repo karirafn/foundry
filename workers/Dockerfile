@@ -84,7 +84,7 @@ RUN if [ "$INSTALL_DOCKER" = "true" ]; then \
         touch /etc/subuid /etc/subgid && \
         sed -i '/^node:/d' /etc/subuid && echo "node:100000:65536" >> /etc/subuid && \
         sed -i '/^node:/d' /etc/subgid && echo "node:100000:65536" >> /etc/subgid && \
-        find / -xdev -perm -4000 -type f ! -name newuidmap ! -name newgidmap -exec chmod u-s {} + || true && \
+        find / -xdev -perm -4000 -type f ! -name newuidmap ! -name newgidmap -exec chmod u-s {} + && \
         rm -rf /var/lib/apt/lists/*; \
     fi
 

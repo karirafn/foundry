@@ -155,7 +155,6 @@ public sealed class DaemonUnreachable : WorkerDispatchServiceTestBase
         public Task RemoveContainerAsync(string containerId, CancellationToken cancellationToken)
             => Task.CompletedTask;
 
-
         public Task ReapOrphanedDataRootVolumesAsync(
             IReadOnlySet<WorkerRunId> activeRunIds,
             CancellationToken cancellationToken)

@@ -45,7 +45,7 @@ public sealed class OrphanedDataRootVolumeReaping : StaleStartingRunServiceTestB
     }
 
     [Fact]
-    public async Task WhenListByLabelAsyncThrows_DataRootVolumeReapIsNotCalled()
+    public async Task WhenDaemonUnreachableDuringContainerScan_ReapIsNotCalled()
     {
         // Arrange — daemon unreachable; tick should defer entirely before reaching the reap call
         OrchestratorStub orchestrator = OrchestratorStub.WithConnectivityException();

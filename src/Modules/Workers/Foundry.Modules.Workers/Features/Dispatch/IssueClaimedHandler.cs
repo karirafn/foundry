@@ -279,7 +279,7 @@ internal sealed class IssueClaimedHandler(
             VolumeMounts =
             [
                 .. spec.VolumeMounts,
-                new VolumeMount(WorkerVolumeNames.DataRootVolumeName(runId), WorkerVolumeNames.DataRootContainerPath),
+                new VolumeMount(WorkerVolumeNames.DataRootVolumeName(runId), RootlessDindRunSpec.DataRootContainerPath),
             ],
         };
     }

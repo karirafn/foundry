@@ -70,6 +70,10 @@ internal sealed class DockerWorkerOrchestrator(
         WorkerContainerSpec spec,
         CancellationToken cancellationToken)
     {
+        // Name-prefix detection is safe here as a quick guard for the common case where no
+        // data-root mount is present. The authoritative ownership marker for orphan reaping is
+        // the "foundry.worker-run-id" label — IssueClaimedHandler.ApplyRootlessDinD is the
+        // only producer of a data-root mount, so prefix-matching is a sound, low-cost filter.
         VolumeMount? dataRootMount = spec.VolumeMounts
             .FirstOrDefault(m => m.VolumeName.StartsWith(
                 WorkerVolumeNames.DataRootVolumeNamePrefix,
@@ -138,6 +142,10 @@ internal sealed class DockerWorkerOrchestrator(
         }
         catch (DockerApiException ex)
         {
+            // EnsureDataRootVolumeAsync ran before CreateAndStartAsync, so a start failure
+            // leaves the data-root volume orphaned. Recovery happens automatically on the next
+            // StaleStartingRunService tick: the run id will not appear in the active-slot set,
+            // so ReapOrphanedDataRootVolumesAsync removes the volume without manual intervention.
             string redacted = SecretRedactor.Redact(ex.Message);
             string message = redacted.Length > DockerErrorMessageMaxLength
                 ? redacted[..DockerErrorMessageMaxLength]

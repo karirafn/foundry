@@ -159,13 +159,11 @@ jobs:
             # Assert newgidmap is setuid
             echo "$found" | grep -q "newgidmap" || { echo "FAIL: newgidmap does not have setuid bit"; exit 1; }
             # Assert no other binary is setuid
-            for f in $found; do
+            while IFS= read -r f; do
+              [ -n "$f" ] || continue
               b="$(basename "$f")"
-              [ "$b" = "newuidmap" ] || [ "$b" = "newgidmap" ] || {
-                echo "FAIL: unexpected setuid binary: $f"
-                exit 1
-              }
-            done
+              [ "$b" = "newuidmap" ] || [ "$b" = "newgidmap" ] || { echo "FAIL: unexpected setuid binary: $f"; exit 1; }
+            done <<< "$found"
             echo "PASS: only newuidmap and newgidmap carry the setuid bit"
           '
 
@@ -203,6 +201,11 @@ jobs:
               # Source the real start_rootless_dockerd from the shipped entrypoint.
               # awk extracts the function body (closing } on its own line = standard style).
               # DOCKER_RETRY_COUNT/SLEEP give the daemon enough time to cold-start.
+              #
+              # Assumption: the awk range /^start_rootless_dockerd\(\)/,/^\}/ stops at the
+              # first line beginning with } at column 1. entrypoint.sh's start_rootless_dockerd
+              # must end with } on column 1 and must contain no nested top-level (column-1) }
+              # line. Violating either condition truncates or over-captures the extracted function.
               export DOCKER_RETRY_COUNT=30
               export DOCKER_RETRY_SLEEP=1
               eval "$(awk '"'"'/^start_rootless_dockerd\(\)/,/^\}/'"'"' /entrypoint.sh)"
