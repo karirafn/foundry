@@ -162,6 +162,7 @@ internal sealed class IssueClaimedHandler(
         string effectiveWorkerPromptTemplate = dbWorkerPromptTemplate ?? _options.WorkerPromptTemplate;
 
         int timeoutMinutes = await settingsQueries.GetTimeoutMinutesAsync(cancellationToken);
+        bool installsDocker = await settingsQueries.GetWorkerImageInstallsDockerAsync(cancellationToken);
 
         Result<string> systemPromptResult = SystemPromptBuilder.Build(
             claimed.IssueNumber,
@@ -170,7 +171,7 @@ internal sealed class IssueClaimedHandler(
             claimed.Context,
             claimed.IssueApiUrl,
             timeoutMinutes,
-            installsDocker: false); // TODO(step-2): wire real installsDocker from container spec
+            installsDocker);
 
         if (systemPromptResult is not Result<string>.Success systemPromptSuccess)
         {
@@ -252,8 +253,6 @@ internal sealed class IssueClaimedHandler(
         {
             ["foundry.worker-run-id"] = startingRun.Id.Value.ToString(),
         };
-
-        bool installsDocker = await settingsQueries.GetWorkerImageInstallsDockerAsync(cancellationToken);
 
         WorkerContainerSpec spec = new(
             _options.Image,
