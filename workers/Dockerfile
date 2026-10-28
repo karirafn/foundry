@@ -55,6 +55,11 @@ ENV CHROME_BIN=/usr/lib/chromium/chromium-headless-shell
 # without a gpg --dearmor step (the slim base image has no gpg). The bookworm codename is
 # hardcoded to match the base image — Docker's repo errors on mismatch.
 # This installs binaries only; rootless dockerd startup is handled by a separate entrypoint concern.
+# Storage driver: the data-root is mounted on a named volume at runtime, giving the nested daemon
+# a real ext4/overlayfs filesystem — fuse-overlayfs and /dev/fuse are not needed.
+# Security: all setuid binaries except newuidmap and newgidmap are stripped of the setuid bit;
+# newuidmap/newgidmap (from uidmap) retain it because rootless dockerd needs them to write
+# uid/gid maps for user-namespace setup.
 ARG INSTALL_DOCKER=false
 RUN if [ "$INSTALL_DOCKER" = "true" ]; then \
         apt-get update && \
@@ -74,10 +79,12 @@ RUN if [ "$INSTALL_DOCKER" = "true" ]; then \
             docker-ce-rootless-extras \
             uidmap \
             slirp4netns \
-            fuse-overlayfs && \
+            iproute2 \
+            procps && \
         touch /etc/subuid /etc/subgid && \
         sed -i '/^node:/d' /etc/subuid && echo "node:100000:65536" >> /etc/subuid && \
         sed -i '/^node:/d' /etc/subgid && echo "node:100000:65536" >> /etc/subgid && \
+        find / -xdev -perm -4000 -type f ! -name newuidmap ! -name newgidmap -exec chmod u-s {} + || true && \
         rm -rf /var/lib/apt/lists/*; \
     fi
 
