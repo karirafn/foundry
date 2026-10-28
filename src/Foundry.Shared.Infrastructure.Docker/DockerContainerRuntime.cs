@@ -221,6 +221,21 @@ internal sealed class DockerContainerRuntime(
             cancellationToken);
     }
 
+    public async Task RemoveVolumeAsync(
+        string name,
+        bool force,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            await volumeOperations.RemoveAsync(name, force, cancellationToken);
+        }
+        catch (DockerApiException ex) when (ex.StatusCode == HttpStatusCode.NotFound)
+        {
+            // Volume already gone — treat as successful removal.
+        }
+    }
+
     public async Task<string> ExecCaptureStdoutAsync(
         string containerId,
         IReadOnlyList<string> command,

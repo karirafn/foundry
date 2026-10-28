@@ -66,12 +66,46 @@ internal sealed class DockerWorkerOrchestrator(
             cancellationToken);
     }
 
+    private async Task EnsureDataRootVolumeAsync(
+        WorkerContainerSpec spec,
+        CancellationToken cancellationToken)
+    {
+        VolumeMount? dataRootMount = spec.VolumeMounts
+            .FirstOrDefault(m => m.VolumeName.StartsWith(
+                WorkerVolumeNames.DataRootVolumeNamePrefix,
+                StringComparison.Ordinal));
+
+        if (dataRootMount is null)
+        {
+            return;
+        }
+
+        if (!spec.Labels.TryGetValue(WorkerRunLabelKey, out string? runIdLabel))
+        {
+            return;
+        }
+
+        await runtime.CreateVolumeAsync(
+            new VolumesCreateParameters
+            {
+                Name = dataRootMount.VolumeName,
+                Labels = new Dictionary<string, string>
+                {
+                    [ManagedLabelKey] = "true",
+                    [WorkerRunLabelKey] = runIdLabel,
+                },
+            },
+            cancellationToken);
+    }
+
     public async Task<Result<ContainerId>> StartAsync(
         WorkerContainerSpec spec,
         CancellationToken cancellationToken)
     {
         try
         {
+            await EnsureDataRootVolumeAsync(spec, cancellationToken);
+
             CreateContainerParameters createParams = new()
             {
                 Image = spec.Image,
@@ -93,6 +127,9 @@ internal sealed class DockerWorkerOrchestrator(
                     Mounts = spec.VolumeMounts.Count > 0
                         ? [.. spec.VolumeMounts.Select(MapVolumeMount)]
                         : null,
+                    CapAdd = spec.Capabilities.Count > 0
+                        ? [.. spec.Capabilities]
+                        : null,
                 },
             };
 
@@ -111,8 +148,10 @@ internal sealed class DockerWorkerOrchestrator(
 
     public async Task StopAndRemoveAsync(string containerId, CancellationToken cancellationToken)
     {
+        string? workerRunId = await ReadWorkerRunIdAsync(containerId, cancellationToken);
         await runtime.StopAsync(containerId, 10, cancellationToken);
         await runtime.RemoveAsync(containerId, cancellationToken);
+        await TryDeleteDataRootVolumeAsync(workerRunId, cancellationToken);
     }
 
     public async Task<WorkerStatusProbe> GetStatusAsync(
@@ -219,6 +258,42 @@ internal sealed class DockerWorkerOrchestrator(
 
     public async Task RemoveContainerAsync(string containerId, CancellationToken cancellationToken)
     {
+        string? workerRunId = await ReadWorkerRunIdAsync(containerId, cancellationToken);
         await runtime.RemoveAsync(containerId, cancellationToken);
+        await TryDeleteDataRootVolumeAsync(workerRunId, cancellationToken);
+    }
+
+    private async Task<string?> ReadWorkerRunIdAsync(
+        string containerId,
+        CancellationToken cancellationToken)
+    {
+        ContainerInspectResponse response = await runtime.InspectAsync(containerId, cancellationToken);
+
+        if (response.Config?.Labels is null)
+        {
+            return null;
+        }
+
+        return response.Config.Labels.TryGetValue(WorkerRunLabelKey, out string? runId) ? runId : null;
+    }
+
+    private async Task TryDeleteDataRootVolumeAsync(
+        string? workerRunId,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrEmpty(workerRunId) || !Guid.TryParse(workerRunId, out Guid guid))
+        {
+            return;
+        }
+
+        string volumeName = WorkerVolumeNames.DataRootVolumeName(WorkerRunId.From(guid));
+        try
+        {
+            await runtime.RemoveVolumeAsync(volumeName, force: false, cancellationToken);
+        }
+        catch (DockerApiException)
+        {
+            // Best-effort teardown — swallow Docker errors on volume removal.
+        }
     }
 }

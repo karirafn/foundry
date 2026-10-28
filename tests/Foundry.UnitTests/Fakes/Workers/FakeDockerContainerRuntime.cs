@@ -26,6 +26,7 @@ internal sealed class FakeDockerContainerRuntime : IDockerContainerRuntime
     private string _execCaptureStdout = "";
     private string? _readFileResult;
     private string[] _streamLogLines = [];
+    private readonly List<string> _allRemovedVolumeNames = [];
 
     // Captured call arguments
     public CreateContainerParameters? LastCreateAndStartParameters { get; private set; }
@@ -34,6 +35,8 @@ internal sealed class FakeDockerContainerRuntime : IDockerContainerRuntime
     public int LastStopWaitBeforeKillSeconds { get; private set; }
     public string? LastRemoveContainerId { get; private set; }
     public string? LastInspectContainerId { get; private set; }
+    public string? LastRemovedVolumeName { get; private set; }
+    public IReadOnlyList<string> AllRemovedVolumeNames => _allRemovedVolumeNames;
     public ContainersListParameters? LastListParameters { get; private set; }
     public VolumesCreateParameters? LastCreateVolumeParameters { get; private set; }
     public string? LastExecContainerId { get; private set; }
@@ -73,6 +76,22 @@ internal sealed class FakeDockerContainerRuntime : IDockerContainerRuntime
     public FakeDockerContainerRuntime WithInspectThrowing(Exception exception)
     {
         _inspectException = exception;
+        return this;
+    }
+
+    public FakeDockerContainerRuntime WithInspectWorkerRunId(string workerRunId)
+    {
+        _inspectResponse = new ContainerInspectResponse
+        {
+            State = new ContainerState { Running = false },
+            Config = new Config
+            {
+                Labels = new Dictionary<string, string>
+                {
+                    ["foundry.worker-run-id"] = workerRunId,
+                },
+            },
+        };
         return this;
     }
 
@@ -192,6 +211,16 @@ internal sealed class FakeDockerContainerRuntime : IDockerContainerRuntime
         CancellationToken cancellationToken)
     {
         LastCreateVolumeParameters = parameters;
+        return Task.CompletedTask;
+    }
+
+    public Task RemoveVolumeAsync(
+        string name,
+        bool force,
+        CancellationToken cancellationToken)
+    {
+        LastRemovedVolumeName = name;
+        _allRemovedVolumeNames.Add(name);
         return Task.CompletedTask;
     }
 

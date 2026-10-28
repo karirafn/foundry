@@ -3,6 +3,7 @@ using System.Net;
 using Docker.DotNet;
 using Docker.DotNet.Models;
 
+using Foundry.Modules.Workers.Contracts;
 using Foundry.Modules.Workers.Domain.Entities;
 using Foundry.Modules.Workers.Domain.Entities.States;
 using Foundry.Modules.Workers.Domain.ValueObjects;
@@ -39,17 +40,20 @@ public sealed class StartAsync
         IReadOnlyList<BindMount>? bindMounts = null,
         IReadOnlyList<string>? securityOptions = null,
         IReadOnlyList<string>? devices = null,
-        IReadOnlyList<VolumeMount>? volumeMounts = null) =>
+        IReadOnlyList<VolumeMount>? volumeMounts = null,
+        IReadOnlyList<string>? capabilities = null,
+        IReadOnlyDictionary<string, string>? labels = null) =>
         new(
             Image: image,
             EnvironmentVariables: new Dictionary<string, string>(),
             BindMounts: bindMounts ?? [],
-            Labels: new Dictionary<string, string>(),
+            Labels: labels ?? new Dictionary<string, string>(),
             Command: [])
         {
             SecurityOptions = securityOptions ?? [],
             Devices = devices ?? [],
             VolumeMounts = volumeMounts ?? [],
+            Capabilities = capabilities ?? [],
         };
 
     private static DockerWorkerOrchestrator BuildSut(
@@ -198,6 +202,23 @@ public sealed class StartAsync
         CreateContainerParameters captured = runtime.LastCreateAndStartParameters.ShouldNotBeNull();
         captured.HostConfig.SecurityOpt.ShouldBeNull();
         captured.HostConfig.Devices.ShouldBeNull();
+        captured.HostConfig.CapAdd.ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task WhenSpecHasCapabilities_SetsHostConfigCapAdd()
+    {
+        // Arrange
+        FakeDockerContainerRuntime runtime = new();
+        IReadOnlyList<string> capabilities = ["SYS_ADMIN"];
+        DockerWorkerOrchestrator sut = BuildSut(runtime);
+
+        // Act
+        await sut.StartAsync(MinimalSpec(capabilities: capabilities), CancellationToken.None);
+
+        // Assert
+        CreateContainerParameters captured = runtime.LastCreateAndStartParameters.ShouldNotBeNull();
+        captured.HostConfig.CapAdd.ShouldBe(["SYS_ADMIN"], ignoreOrder: false);
     }
 
     [Fact]
@@ -279,6 +300,34 @@ public sealed class StartAsync
         Result<ContainerId>.Failure failure = result.ShouldBeOfType<Result<ContainerId>.Failure>();
         failure.Error.Message.ShouldContain("***");
         failure.Error.Message.ShouldNotContain("ghp_abc123TokenValue");
+    }
+
+    [Fact]
+    public async Task WhenSpecHasDataRootVolumeMount_CreatesVolumeWithManagedAndWorkerRunIdLabels()
+    {
+        // Arrange
+        WorkerRunId runId = WorkerRunId.New();
+        string dataRootVolumeName = WorkerVolumeNames.DataRootVolumeName(runId);
+        FakeDockerContainerRuntime runtime = new();
+        IReadOnlyList<VolumeMount> volumeMounts =
+        [
+            new VolumeMount(dataRootVolumeName, WorkerVolumeNames.DataRootContainerPath),
+        ];
+        IReadOnlyDictionary<string, string> labels = new Dictionary<string, string>
+        {
+            ["foundry.worker-run-id"] = runId.Value.ToString(),
+        };
+        DockerWorkerOrchestrator sut = BuildSut(runtime);
+
+        // Act
+        await sut.StartAsync(MinimalSpec(volumeMounts: volumeMounts, labels: labels), CancellationToken.None);
+
+        // Assert
+        VolumesCreateParameters created = runtime.LastCreateVolumeParameters.ShouldNotBeNull();
+        created.ShouldSatisfyAllConditions(
+            () => created.Name.ShouldBe(dataRootVolumeName),
+            () => created.Labels["foundry.managed"].ShouldBe("true"),
+            () => created.Labels["foundry.worker-run-id"].ShouldBe(runId.Value.ToString()));
     }
 
     [Fact]
