@@ -1,8 +1,11 @@
+using System.Diagnostics;
+
 using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Modules.Monitoring.Features.Eligibility;
 using Foundry.Modules.Monitoring.Features.Providers;
+using Foundry.Modules.Monitoring.Features.Providers.Checks;
 using Foundry.Modules.Monitoring.Features.Providers.Feedback;
 using Foundry.Shared;
 
@@ -23,10 +26,23 @@ internal sealed class RepositoryPoller(
     /// The fixed per-cycle provider call budget that does NOT scale with issue count:
     /// one eligibility branch-rules GET plus one <see cref="IIssueProvider.GetIssuesAsync"/> listing call.
     /// This applies when the repository's write-probe verdict is Granted (the cheap eligibility path),
-    /// there are zero review issues, and zero dependency candidates.
+    /// there are zero review issues, zero dependency candidates, and zero checks-pending issues.
     /// Referenced by ADR 0066 and DOMAIN.md; asserted by the poll-call invariance test.
     /// </summary>
     internal const int MaxFixedPollCallsPerCycle = 2;
+
+    /// <summary>
+    /// Grace window for <c>NoneDetected</c> verdicts: the poller waits this long before treating
+    /// absent checks as a gate decision. Checks are sometimes registered asynchronously after a
+    /// PR opens, so a short grace window avoids premature resolution.
+    /// </summary>
+    internal static readonly TimeSpan ChecksNoneGraceWindow = TimeSpan.FromMinutes(5);
+
+    /// <summary>
+    /// Maximum time the poller will wait for a <c>Pending</c> verdict to resolve.
+    /// After this upper bound elapses the issue is advanced to review with outcome <c>Unfinished</c>.
+    /// </summary>
+    internal static readonly TimeSpan ChecksPendingUpperBound = TimeSpan.FromMinutes(60);
 
     public async Task<Result> PollAsync(
         MonitoredRepository repository,
@@ -130,6 +146,13 @@ internal sealed class RepositoryPoller(
 
         // Pass 4: check provider-side status of all review issues.
         await DetectReviewStatusChangesAsync(repository, provider, cancellationToken);
+
+        await integrationEventDispatcher.DispatchAsync(repository.IntegrationEvents, cancellationToken);
+        repository.ClearIntegrationEvents();
+        await dbContext.SaveChangesAsync(cancellationToken);
+
+        // Pass 5: check provider-side checks verdict for all checks-pending issues.
+        await DetectChecksPendingStatusChangesAsync(repository, provider, now, cancellationToken);
 
         await integrationEventDispatcher.DispatchAsync(repository.IntegrationEvents, cancellationToken);
         repository.ClearIntegrationEvents();
@@ -299,6 +322,114 @@ internal sealed class RepositoryPoller(
             }
         }
     }
+
+    private async Task DetectChecksPendingStatusChangesAsync(
+        MonitoredRepository repository,
+        IIssueProvider provider,
+        DateTimeOffset now,
+        CancellationToken cancellationToken)
+    {
+        IReadOnlyList<ChecksPendingIssueInfo> checksPendingIssues = await issueQueries.GetChecksPendingIssuesAsync(
+            repository.Id,
+            cancellationToken);
+
+        // HTTP calls are sequential: GitHub has no batch issue/PR status endpoint,
+        // and checks-pending issues per repository are expected to be small (design decision D6).
+        foreach (ChecksPendingIssueInfo checksPendingIssue in checksPendingIssues)
+        {
+            // Apply the same closed/merged handling as the review pass.
+            Result<bool> isClosedResult = await provider.IsIssueClosedAsync(
+                repository.Slug,
+                checksPendingIssue.IssueNumber,
+                cancellationToken);
+
+            if (isClosedResult is not Result<bool>.Success isClosedSuccess)
+            {
+                continue;
+            }
+
+            if (isClosedSuccess.Value)
+            {
+                repository.RecordIntegrationEvent(
+                    new ProviderIssueClosed(repository.Id, checksPendingIssue.IssueNumber));
+                continue;
+            }
+
+            Result<PullRequestStatus> prStatusResult = await provider.GetPullRequestStatusAsync(
+                repository.Slug,
+                checksPendingIssue.PullRequestUrl,
+                cancellationToken);
+
+            if (prStatusResult is not Result<PullRequestStatus>.Success prStatusSuccess)
+            {
+                continue;
+            }
+
+            if (prStatusSuccess.Value.IsClosed && !prStatusSuccess.Value.IsMerged)
+            {
+                repository.RecordIntegrationEvent(
+                    new ProviderPullRequestClosed(repository.Id, checksPendingIssue.IssueNumber));
+                continue;
+            }
+
+            if (prStatusSuccess.Value.IsClosed)
+            {
+                // PR merged — no event here; the issue completes on a later poll when the
+                // provider issue closes (IsIssueClosedAsync -> ProviderIssueClosed).
+                continue;
+            }
+
+            // PR is still open — read the checks verdict and apply the gate decision.
+            Result<Checks> checksResult = await provider.GetChecksAsync(
+                repository.Slug,
+                checksPendingIssue.PullRequestUrl,
+                cancellationToken);
+
+            if (checksResult is not Result<Checks>.Success checksSuccess)
+            {
+                continue;
+            }
+
+            TimeSpan elapsed = now - checksPendingIssue.EnteredChecksPendingAt;
+
+            string? outcome = ResolveChecksOutcome(checksSuccess.Value, elapsed);
+            if (outcome is null)
+            {
+                // Issue stays in checks_pending — no event recorded this cycle.
+                continue;
+            }
+
+            IReadOnlyList<FailingCheck> failingChecks = checksSuccess.Value is Checks.Red red
+                ? red.FailingChecks
+                : [];
+
+            repository.RecordIntegrationEvent(new ChecksVerdictResolved(
+                repository.Id,
+                checksPendingIssue.IssueNumber,
+                outcome,
+                failingChecks));
+        }
+    }
+
+    /// <summary>
+    /// Maps a <see cref="Checks"/> verdict and elapsed time to a <see cref="ChecksVerdictResolved"/>
+    /// outcome discriminator, or <c>null</c> when the issue should remain in <c>checks_pending</c>.
+    /// </summary>
+    private static string? ResolveChecksOutcome(Checks verdict, TimeSpan elapsed) =>
+        verdict switch
+        {
+            Checks.Green => "passed",
+            Checks.Red => "still_failing",
+            Checks.Unfinished => "unfinished",
+            Checks.Unreadable => "unreadable",
+            Checks.NoneDetected when elapsed >= ChecksNoneGraceWindow => "none_detected",
+            Checks.NoneDetected => null,
+            Checks.Pending when elapsed >= ChecksPendingUpperBound => "unfinished",
+            Checks.Pending => null,
+            // Checks has a private constructor — all variants are enumerated above.
+            // This arm is unreachable; throwing ensures a future variant is never silently ignored.
+            _ => throw new UnreachableException($"Unhandled Checks variant: {verdict.GetType().Name}"),
+        };
 
     private static void DetectUntrackedIssues(
         MonitoredRepository repository,

@@ -13,7 +13,7 @@ import {
 } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { Observable } from 'rxjs';
-import { IssueDetail } from '../issue.model';
+import { IssueDetail, IssueStateDetails } from '../issue.model';
 import { SafeHrefPipe } from '../../../shared/pipes/safe-href.pipe';
 import { IssueService } from '../issue.service';
 import { WorkerRunService } from '../../workers/worker-run.service';
@@ -22,7 +22,7 @@ import { WorkerRunDetail } from '../../workers/worker-run.model';
 import { LogViewComponent } from '../../../shared/components/log-view/log-view';
 import { providerTerminology } from '../../../shared/utils/provider.util';
 import { getFailureCategoryDisplay } from '../../../shared/utils/failure-category';
-import { IssueState, RETRYABLE_STATES } from '../../../shared/utils/issue-state';
+import { IssueState, MAX_CHECKS_FIX_ATTEMPTS, RETRYABLE_STATES, REVISION_STATES } from '../../../shared/utils/issue-state';
 
 @Component({
   selector: 'fd-issue-detail',
@@ -51,13 +51,15 @@ import { IssueState, RETRYABLE_STATES } from '../../../shared/utils/issue-state'
         role="region"
         [attr.aria-label]="'Issue details for #' + d.issueNumber"
       >
-        <a
-          class="issue-detail__issue-link"
-          [href]="d.url"
-          target="_blank"
-          rel="noopener noreferrer"
-          [attr.aria-label]="'View issue #' + d.issueNumber + ' on provider'"
-        >View issue</a>
+        @if (d.url | safeHref; as safeIssueUrl) {
+          <a
+            class="issue-detail__issue-link"
+            [href]="safeIssueUrl"
+            target="_blank"
+            rel="noopener noreferrer"
+            [attr.aria-label]="'View issue #' + d.issueNumber + ' on provider'"
+          >View issue</a>
+        }
 
         @if (d.labels.length > 0) {
           <div class="issue-detail__labels">
@@ -133,6 +135,33 @@ import { IssueState, RETRYABLE_STATES } from '../../../shared/utils/issue-state'
             }
           </div>
 
+          @if (s.checksOutcome === 'still_failing' && s.failingChecks?.length) {
+            <div class="issue-detail__failing-checks">
+              <span class="issue-detail__field-key" id="failing-checks-heading">Failing Checks</span>
+              <ul class="issue-detail__failing-list" aria-labelledby="failing-checks-heading">
+                @for (check of s.failingChecks; track check.name) {
+                  <li class="issue-detail__failing-item">
+                    <span class="issue-detail__failing-name">{{ check.name }}</span>
+                    <span
+                      class="badge issue-detail__failing-conclusion"
+                      role="img"
+                      [attr.aria-label]="'Conclusion: ' + check.conclusion"
+                    >{{ check.conclusion }}</span>
+                    @if (check.detailsUrl | safeHref; as safeUrl) {
+                      <a
+                        class="issue-detail__failing-link"
+                        [href]="safeUrl"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        [attr.aria-label]="'View details for failing check ' + check.name"
+                      >View details</a>
+                    }
+                  </li>
+                }
+              </ul>
+            </div>
+          }
+
           <!-- Live region sits outside the grid so it does not create a phantom grid track
                when empty. It remains permanently mounted so screen readers detect content
                changes when retry data populates. -->
@@ -163,6 +192,46 @@ import { IssueState, RETRYABLE_STATES } from '../../../shared/utils/issue-state'
                       Automatic retry pending — next attempt at {{ retry.nextAttemptDueAt | date: 'medium' }}.
                     } @else {
                       Automatic retry pending — next attempt shortly.
+                    }
+                  </span>
+                }
+              </div>
+            }
+          </div>
+
+          <!-- Revision kind callout. Permanently mounted like the retry live region so
+               screen readers detect the transition into a revision and attempt-count
+               increments. -->
+          <div
+            class="issue-detail__revision-live-region"
+            [class.issue-detail__revision-state]="_showsRevisionCallout(d.state, s)"
+            [class.issue-detail__revision-state--review]="s.revisionTriggerKind === 'review_feedback'"
+            [class.issue-detail__revision-live-region--empty]="!_showsRevisionCallout(d.state, s)"
+            role="status"
+            aria-live="polite"
+            aria-atomic="true"
+          >
+            @if (_showsRevisionCallout(d.state, s)) {
+              <span class="issue-detail__field-key">Revision</span>
+              <div class="issue-detail__revision-callout">
+                @if (s.revisionTriggerKind === 'failed_checks') {
+                  <span class="badge issue-detail__revision-chip badge--retrying"
+                    >Fixing checks (attempt {{ s.checksFixAttempts ?? 1 }} of {{ _maxChecksFixAttempts }})</span>
+                  <span class="issue-detail__revision-message issue-detail__field-value">
+                    @if (d.state === 'revision_in_progress') {
+                      Fixing checks — a worker is running.
+                    } @else {
+                      Fix run queued — checks failed on the PR.
+                    }
+                  </span>
+                } @else {
+                  <span class="badge issue-detail__revision-chip badge--revision-in-progress"
+                    >Addressing review</span>
+                  <span class="issue-detail__revision-message issue-detail__field-value">
+                    @if (d.state === 'revision_in_progress') {
+                      A worker is addressing reviewer feedback.
+                    } @else {
+                      Queued to address reviewer feedback.
                     }
                   </span>
                 }
@@ -296,8 +365,14 @@ export class IssueDetailComponent {
     this._issueService.retryIssue(id);
   }
 
+  protected readonly _maxChecksFixAttempts = MAX_CHECKS_FIX_ATTEMPTS;
+
   protected _isRetryable(state: string): boolean {
     return RETRYABLE_STATES.has(state as IssueState);
+  }
+
+  protected _showsRevisionCallout(state: string, s: IssueStateDetails): boolean {
+    return REVISION_STATES.has(state as IssueState) && s.revisionTriggerKind != null;
   }
 
   protected _prTerminology(providerType: string): { pullRequest: string; prAbbrev: string } {

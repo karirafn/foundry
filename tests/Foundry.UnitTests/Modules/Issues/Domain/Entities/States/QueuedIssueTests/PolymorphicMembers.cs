@@ -146,8 +146,10 @@ public sealed class PolymorphicMembers
     {
         // Arrange
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
+        IReadOnlyList<ReviewComment> seededComments = [new ReviewComment("Please fix.")];
         RevisionQueuedIssue revisionQueued = new IssueBuilder()
             .WithMonitoredRepositoryId(repositoryId)
+            .WithReviewComments(seededComments)
             .RevisionQueued();
 
         // Act
@@ -155,11 +157,13 @@ public sealed class PolymorphicMembers
 
         // Assert
         DispatchContext.Revision revision = context.ShouldBeOfType<DispatchContext.Revision>();
+        RevisionTrigger.ReviewFeedback rf = revision.Trigger.ShouldBeOfType<RevisionTrigger.ReviewFeedback>();
         revision.ShouldSatisfyAllConditions(
             () => revision.BranchName.ShouldBe(revisionQueued.BranchName),
             () => revision.PullRequestUrl.ShouldBe(revisionQueued.PullRequestUrl),
-            () => revision.Comments.ShouldBe(revisionQueued.ReviewComments),
-            () => revision.OmittedCommentCount.ShouldBe(0));
+            () => rf.Comments.Count.ShouldBe(1),
+            () => rf.Comments[0].Body.ShouldBe("Please fix."),
+            () => rf.OmittedCommentCount.ShouldBe(0));
     }
 
     [Fact]
@@ -179,7 +183,7 @@ public sealed class PolymorphicMembers
 
         // Assert
         DispatchContext.Revision revision = context.ShouldBeOfType<DispatchContext.Revision>();
-        revision.OmittedCommentCount.ShouldBe(12);
+        revision.Trigger.ShouldBeOfType<RevisionTrigger.ReviewFeedback>().OmittedCommentCount.ShouldBe(12);
     }
 
     [Fact]

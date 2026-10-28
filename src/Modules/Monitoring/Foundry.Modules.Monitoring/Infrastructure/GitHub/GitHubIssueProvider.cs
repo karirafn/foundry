@@ -1,6 +1,7 @@
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Features.Providers;
+using ProviderChecks = Foundry.Modules.Monitoring.Features.Providers.Checks.Checks;
 using Foundry.Modules.Monitoring.Features.Providers.Feedback;
 using Foundry.Shared;
 
@@ -179,6 +180,14 @@ internal sealed class GitHubIssueProvider(
         CancellationToken cancellationToken)
     {
         return httpClient.GetPushPermissionAsync(apiBaseUrl, slug, token, cancellationToken);
+    }
+
+    public Task<Result<ProviderChecks>> GetChecksAsync(
+        RepositorySlug slug,
+        string pullRequestUrl,
+        CancellationToken cancellationToken)
+    {
+        return httpClient.GetChecksAsync(apiBaseUrl, slug, pullRequestUrl, token, cancellationToken);
     }
 
     private Task<Result<string>> GetDefaultBranchAsync(

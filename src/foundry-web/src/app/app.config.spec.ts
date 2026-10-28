@@ -21,8 +21,6 @@ function buildSettingsResponse(overrides: Record<string, unknown> = {}): Record<
     autoResumeOnUsageReset: true,
     installDotnet: false,
     installAngular: false,
-    installGlab: false,
-    installGh: false,
     installChromium: false,
     installDocker: false,
     imageBuildStatus: 'Idle',

@@ -231,9 +231,9 @@ if [[ -n "${GH_TOKEN:-}" ]]; then
     elif command -v gh > /dev/null 2>&1; then
         gh auth setup-git --hostname "$GH_HOST" --force
     else
-        echo "WARNING: GH_TOKEN is set but the gh CLI is not present in this image." >&2
-        echo "  git push and gh pr create will not authenticate." >&2
-        echo "  Rebuild the worker image with INSTALL_GH=true: docker build --build-arg INSTALL_GH=true -t foundry-worker:local workers/" >&2
+        echo "ERROR: GH_TOKEN is set but the gh CLI is not present in this image." >&2
+        fail_bootstrap "auth" "gh CLI not present but GH_TOKEN is set — git push and gh pr create cannot authenticate"
+        exit 1
     fi
 fi
 
@@ -250,9 +250,9 @@ if [[ -n "${GITLAB_TOKEN:-}" ]]; then
         export GITLAB_HOST="https://${GL_HOST}"
         git config credential."https://${GL_HOST}".helper "!glab auth git-credential"
     else
-        echo "WARNING: GITLAB_TOKEN is set but the glab CLI is not present in this image." >&2
-        echo "  git push and glab mr create will not authenticate." >&2
-        echo "  Rebuild the worker image with INSTALL_GLAB=true: docker build --build-arg INSTALL_GLAB=true -t foundry-worker:local workers/" >&2
+        echo "ERROR: GITLAB_TOKEN is set but the glab CLI is not present in this image." >&2
+        fail_bootstrap "auth" "glab CLI not present but GITLAB_TOKEN is set — git push and glab mr create cannot authenticate"
+        exit 1
     fi
 fi
 

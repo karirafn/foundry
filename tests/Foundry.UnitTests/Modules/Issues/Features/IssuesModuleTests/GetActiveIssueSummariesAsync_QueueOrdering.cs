@@ -5,6 +5,7 @@ using Foundry.Modules.Issues.Features;
 using Foundry.Modules.Issues.Features.Claiming;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Contracts.Queries;
+using Foundry.Modules.Settings.Contracts.Queries;
 using Foundry.Modules.Workers.Contracts;
 using Foundry.Testing;
 using Foundry.WebApi.Persistence;
@@ -50,12 +51,16 @@ public sealed class GetActiveIssueSummariesAsync_QueueOrdering : IAsyncDisposabl
     }
 
     private IIssueQueries BuildSut(IRepositoryEligibilityQuery eligibilityQuery) =>
+        BuildSut(eligibilityQuery, new NullGlobalSettingsQueries());
+
+    private IIssueQueries BuildSut(IRepositoryEligibilityQuery eligibilityQuery, IGlobalSettingsQueries globalSettingsQueries) =>
         new IssueQueries(
             _dbContext,
             new NullRepositorySlugQueries(),
             eligibilityQuery,
             new NullWorkerRunQueries(),
-            new InFlightWorkerCountQuery(_dbContext));
+            new InFlightWorkerCountQuery(_dbContext),
+            globalSettingsQueries);
 
     private FreshQueuedIssue SeedQueuedIssue(
         MonitoredRepositoryId repositoryId,
@@ -455,11 +460,13 @@ public sealed class GetActiveIssueSummariesAsync_QueueOrdering : IAsyncDisposabl
     }
 
     [Fact]
-    public async Task WhenEligibleRepoAtCapacityAndIdleRepoQueued_IdleRepoComeFirst()
+    public async Task WhenGloballySaturatedAndHigherPriorityRepoHasInFlight_InFlightRepoComeFirst()
     {
-        // Arrange: repo R (limit 1) has 1 in-flight worker + 1 queued issue B.
-        //          repo S (limit 1) has 0 in-flight + 1 queued issue C.
-        // Expected: C at position 1, B at position 2 (R is saturated on the first pass).
+        // Arrange: global max = 1. Repo R (limit 1, position 1) has 1 in-flight + 1 queued issue B.
+        //          Repo S (limit 1, position 2) has 0 in-flight + 1 queued issue C.
+        // ForForecast: total in-flight (1) >= globalMax (1) → global saturation.
+        // Repo R gets forecast headroom 1 (assumes its in-flight worker finishes).
+        // Repo S gets headroom 1 (no in-flight). Walk places repoR (position 1) before repoS (position 2).
         MonitoredRepositoryId repoR = MonitoredRepositoryId.New();
         MonitoredRepositoryId repoS = MonitoredRepositoryId.New();
 
@@ -470,10 +477,10 @@ public sealed class GetActiveIssueSummariesAsync_QueueOrdering : IAsyncDisposabl
             .InProgress();
         _dbContext.Set<Issue>().Add(inFlight);
 
-        // Seed queued issue B on repo R (detected earlier but repo is saturated).
+        // Seed queued issue B on repo R (higher-priority position 1).
         SeedQueuedIssue(repoR, issueNumber: 2, detectedAt: Now.AddHours(-2));
 
-        // Seed queued issue C on idle repo S (detected later).
+        // Seed queued issue C on idle repo S (lower-priority position 2).
         SeedQueuedIssue(repoS, issueNumber: 3, detectedAt: Now.AddHours(-1));
 
         StubEligibilityQuery eligibilityQuery = new(
@@ -483,7 +490,8 @@ public sealed class GetActiveIssueSummariesAsync_QueueOrdering : IAsyncDisposabl
             ],
             new Dictionary<Guid, string>());
 
-        IIssueQueries sut = BuildSut(eligibilityQuery);
+        // Explicit cap of 1 so that total in-flight (1) >= globalMax (1) triggers ForForecast saturation.
+        IIssueQueries sut = BuildSut(eligibilityQuery, new FixedCapGlobalSettingsQueries(maxConcurrent: 1));
 
         // Act
         IReadOnlyList<IssueSummary> result = await sut.GetActiveIssueSummariesAsync(
@@ -491,11 +499,13 @@ public sealed class GetActiveIssueSummariesAsync_QueueOrdering : IAsyncDisposabl
             states: null,
             TestContext.Current.CancellationToken);
 
-        // Assert — C (repoS, idle) precedes B (repoR, saturated); in-flight not in results.
+        // Assert — B (repoR, position 1, forecast headroom 1) precedes C (repoS, position 2).
+        // ForForecast restores repoR's headroom because the global slot will open when its
+        // in-flight worker finishes — the dashboard correctly predicts B is next to be claimed.
         IReadOnlyList<IssueSummary> queued = result.Where(s => s.State == "queued").ToList();
         queued.Count.ShouldBe(2);
-        queued[0].IssueNumber.ShouldBe(3);
-        queued[1].IssueNumber.ShouldBe(2);
+        queued[0].IssueNumber.ShouldBe(2);
+        queued[1].IssueNumber.ShouldBe(3);
     }
 
     /// <summary>

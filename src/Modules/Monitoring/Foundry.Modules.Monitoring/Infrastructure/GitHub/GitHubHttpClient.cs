@@ -10,6 +10,7 @@ using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Features.Accounts;
 using Foundry.Modules.Monitoring.Features.Polling;
 using Foundry.Modules.Monitoring.Features.Providers;
+using Foundry.Modules.Monitoring.Features.Providers.Checks;
 using Foundry.Modules.Monitoring.Features.Providers.Feedback;
 using Foundry.Modules.Monitoring.Infrastructure;
 using Foundry.Modules.Monitoring.Infrastructure.RateBudget;
@@ -125,6 +126,45 @@ internal sealed partial class GitHubHttpClient(
                   body
                   submittedAt
                   author { login __typename }
+                }
+              }
+            }
+          }
+        }
+        """;
+
+    // statusCheckRollup.state is the canonical verdict; contexts is fetched only to build the
+    // failing-check list for Red. The two fields are in one query to avoid a second round-trip
+    // for the common case. GitHub may occasionally perturb `state` when many context nodes are
+    // fetched at once, but the spec says `state` is the rollup truth — classification is taken
+    // from state, and contexts is enumerated only to populate FailingCheck names/urls.
+    private const string PrChecksQuery = """
+        query PrChecks($owner: String!, $name: String!, $pr: Int!) {
+          rateLimit { cost remaining }
+          repository(owner: $owner, name: $name) {
+            pullRequest(number: $pr) {
+              commits(last: 1) {
+                nodes {
+                  commit {
+                    statusCheckRollup {
+                      state
+                      contexts(first: 100) {
+                        nodes {
+                          __typename
+                          ... on CheckRun {
+                            name
+                            conclusion
+                            detailsUrl
+                          }
+                          ... on StatusContext {
+                            context
+                            state
+                            targetUrl
+                          }
+                        }
+                      }
+                    }
+                  }
                 }
               }
             }
@@ -593,6 +633,171 @@ internal sealed partial class GitHubHttpClient(
         bool isClosed = string.Equals(pr?.State, "CLOSED", StringComparison.OrdinalIgnoreCase);
         bool isMerged = pr?.Merged ?? false;
         return Result<PullRequestStatus>.Ok(new PullRequestStatus(isClosed, isMerged));
+    }
+
+    public async Task<Result<Checks>> GetChecksAsync(
+        Uri apiBaseUrl,
+        RepositorySlug slug,
+        string pullRequestUrl,
+        string token,
+        CancellationToken cancellationToken)
+    {
+        if (apiBaseUrl.Scheme is not "https")
+        {
+            return Result<Checks>.Fail(GitHubErrors.InvalidBaseUrl);
+        }
+
+        if (!TryParsePrNumber(pullRequestUrl, out int prNumber))
+        {
+            return Result<Checks>.Fail(GitHubErrors.InvalidPullRequestUrl);
+        }
+
+        object variables = new { owner = slug.Owner, name = slug.Name, pr = prNumber };
+        Result<PrChecksData> dataResult = await ExecuteGraphQlWithUnauthorizedMappingAsync<PrChecksData>(
+            apiBaseUrl, PrChecksQuery, variables, token, cancellationToken);
+
+        if (dataResult is not Result<PrChecksData>.Success dataSuccess)
+        {
+            Error error = ((Result<PrChecksData>.Failure)dataResult).Error;
+            if (string.Equals(error.Code, "GitHub.Unreadable", StringComparison.Ordinal))
+            {
+                return Result<Checks>.Ok(new Checks.Unreadable());
+            }
+
+            return Result<Checks>.Fail(error);
+        }
+
+        IReadOnlyList<PrChecksCommitEdge>? commitNodes = dataSuccess
+            .Value
+            .Repository?
+            .PullRequest?
+            .Commits?
+            .Nodes;
+
+        PrChecksStatusCheckRollup? rollup = commitNodes is { Count: > 0 }
+            ? commitNodes[0].Commit?.StatusCheckRollup
+            : null;
+
+        if (rollup is null)
+        {
+            return Result<Checks>.Ok(new Checks.NoneDetected());
+        }
+
+        IReadOnlyList<FailingCheck> failing = BuildFailingChecks(rollup.Contexts?.Nodes ?? (IReadOnlyList<PrChecksContextUnionNode>)[]);
+        return Result<Checks>.Ok(Checks.FromGitHub(rollup.State, failing));
+    }
+
+    private static List<FailingCheck> BuildFailingChecks(
+        IReadOnlyList<PrChecksContextUnionNode> contextNodes)
+    {
+        List<FailingCheck> failing = [];
+        foreach (PrChecksContextUnionNode node in contextNodes)
+        {
+            if (string.Equals(node.Typename, "CheckRun", StringComparison.Ordinal))
+            {
+                if (IsFailingConclusion(node.Conclusion))
+                {
+                    failing.Add(new FailingCheck(node.Name ?? string.Empty, node.Conclusion ?? string.Empty, node.DetailsUrl));
+                }
+            }
+            else if (string.Equals(node.Typename, "StatusContext", StringComparison.Ordinal))
+            {
+                if (IsFailingState(node.State))
+                {
+                    failing.Add(new FailingCheck(node.Context ?? string.Empty, node.State ?? string.Empty, node.TargetUrl));
+                }
+            }
+        }
+
+        return failing;
+    }
+
+    private static bool IsFailingConclusion(string? conclusion) =>
+        conclusion is not null &&
+        conclusion switch
+        {
+            "failure" or "timed_out" or "cancelled" or "action_required" or "startup_failure" => true,
+            _ => false,
+        };
+
+    private static bool IsFailingState(string? state) =>
+        state is not null &&
+        string.Equals(state, "failure", StringComparison.OrdinalIgnoreCase);
+
+    // Wraps ExecuteGraphQlAsync and maps 401/403 (non-rate-limited) to a sentinel error code
+    // so GetChecksAsync can convert it to Checks.Unreadable without returning a Result failure.
+    private async Task<Result<TData>> ExecuteGraphQlWithUnauthorizedMappingAsync<TData>(
+        Uri restBaseUrl,
+        string query,
+        object variables,
+        string token,
+        CancellationToken cancellationToken)
+        where TData : class
+    {
+        if (restBaseUrl.Scheme is not "https")
+        {
+            return Result<TData>.Fail(GitHubErrors.InvalidBaseUrl);
+        }
+
+        Uri graphQlEndpoint = DeriveGraphQlEndpoint(restBaseUrl);
+        string requestBody = JsonSerializer.Serialize(new { query, variables }, GraphQlJsonOptions);
+
+        using HttpRequestMessage request = new(HttpMethod.Post, graphQlEndpoint);
+        AddGitHubHeaders(request, token);
+        request.Content = new StringContent(requestBody, Encoding.UTF8, "application/json");
+
+        using HttpResponseMessage response = await httpClient.SendAsync(request, cancellationToken);
+
+        // 401/403 without rate-limit headers signals an auth failure; map to Unreadable.
+        if (response.StatusCode is HttpStatusCode.Unauthorized ||
+            (response.StatusCode is HttpStatusCode.Forbidden && !IsRateLimited(response)))
+        {
+            return Result<TData>.Fail(GitHubErrors.Unreadable);
+        }
+
+        if (!response.IsSuccessStatusCode)
+        {
+            return Result<TData>.Fail(ErrorFromNonSuccess(response));
+        }
+
+        string responseBody = await response.Content.ReadAsStringAsync(cancellationToken);
+        GraphQlEnvelope<TData>? envelope =
+            JsonSerializer.Deserialize<GraphQlEnvelope<TData>>(responseBody, GraphQlJsonOptions);
+
+        if (envelope?.Errors is { Count: > 0 } errors)
+        {
+            bool hasRateLimit = errors.Any(
+                e => string.Equals(e.Type, "RATE_LIMITED", StringComparison.OrdinalIgnoreCase));
+
+            if (hasRateLimit)
+            {
+                return Result<TData>.Fail(GitHubErrors.RateLimitExhausted);
+            }
+
+            string rawMessage = string.Join("; ", errors.Select(e => e.Message));
+            string safeMessage = TruncateWithEllipsis(RedactSecrets(rawMessage), MaxBranchErrorBodyLength);
+            return Result<TData>.Fail(GitHubErrors.GraphQlError(safeMessage));
+        }
+
+        if (envelope?.Data is null)
+        {
+            return Result<TData>.Fail(
+                GitHubErrors.ProviderError("GraphQL response contained neither data nor errors."));
+        }
+
+        if (envelope.RateLimit is { } rateLimit)
+        {
+            logger.LogDebug(
+                "GitHub GraphQL cost={Cost} remaining={Remaining}",
+                rateLimit.Cost,
+                rateLimit.Remaining);
+
+            rateBudget.Record(
+                ProviderBudgetKey.GitHubGraphQl,
+                new RateBudgetReading(rateLimit.Remaining, rateLimit.Limit, rateLimit.ResetAt, timeProvider.GetUtcNow()));
+        }
+
+        return Result<TData>.Ok(envelope.Data);
     }
 
     public async Task<Result<IReadOnlyList<ProviderComment>>> GetPullRequestReviewFeedbackAsync(
@@ -1629,6 +1834,40 @@ internal sealed partial class GitHubHttpClient(
         string? Body,
         DateTimeOffset? SubmittedAt,
         GraphQlCommentAuthor? Author);
+
+    // GraphQL PrChecks query DTOs — deserialized with GraphQlJsonOptions (camelCase).
+    private sealed record PrChecksData(GraphQlRateLimit? RateLimit, PrChecksRepository? Repository);
+
+    private sealed record PrChecksRepository(PrChecksPullRequest? PullRequest);
+
+    private sealed record PrChecksPullRequest(PrChecksCommitConnection? Commits);
+
+    private sealed record PrChecksCommitConnection(IReadOnlyList<PrChecksCommitEdge> Nodes);
+
+    private sealed record PrChecksCommitEdge(PrChecksCommit? Commit);
+
+    private sealed record PrChecksCommit(PrChecksStatusCheckRollup? StatusCheckRollup);
+
+    private sealed record PrChecksStatusCheckRollup(
+        string? State,
+        PrChecksContextConnection? Contexts);
+
+    private sealed record PrChecksContextConnection(IReadOnlyList<PrChecksContextUnionNode> Nodes);
+
+    // Unified DTO covering both CheckRun and StatusContext inline-fragment shapes.
+    // The __typename field tells us which variant to use; all other fields are nullable.
+    // CheckRun fields: name, conclusion, detailsUrl.
+    // StatusContext fields: context (as name), state (as conclusion), targetUrl (as detailsUrl).
+    private sealed record PrChecksContextUnionNode(
+        [property: JsonPropertyName("__typename")] string? Typename,
+        // CheckRun fields
+        string? Name,
+        string? Conclusion,
+        string? DetailsUrl,
+        // StatusContext fields
+        string? Context,
+        string? State,
+        string? TargetUrl);
 }
 
 internal sealed record BranchRules(bool RejectDirectPushes, bool RejectForcePushes, bool RejectDeletion);
@@ -1655,4 +1894,10 @@ internal static class GitHubErrors
 
     public static Error GraphQlError(string message) =>
         new("GitHub.GraphQlError", message);
+
+    // Sentinel used internally by GetChecksAsync to signal 401/403 auth failure.
+    // Never surfaced as a Result<T>.Fail to callers — mapped to Checks.Unreadable before returning.
+    internal static readonly Error Unreadable = new(
+        "GitHub.Unreadable",
+        "GitHub returned 401 or 403 — check results could not be read.");
 }

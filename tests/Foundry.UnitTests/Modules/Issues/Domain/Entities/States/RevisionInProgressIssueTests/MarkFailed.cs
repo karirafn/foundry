@@ -1,3 +1,4 @@
+using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Issues.Domain.Entities.States;
 using Foundry.Modules.Issues.Domain.Events;
 using Foundry.Modules.Monitoring.Contracts;
@@ -71,12 +72,13 @@ public sealed class MarkFailed
             failedAt);
 
         // Assert
+        RevisionTrigger.ReviewFeedback rfFailed = failed.Trigger.ShouldBeOfType<RevisionTrigger.ReviewFeedback>();
         failed.ShouldSatisfyAllConditions(
             () => failed.WorkerRunId.ShouldBe(revisionInProgress.WorkerRunId),
             () => failed.BranchName.ShouldBe(revisionInProgress.BranchName),
             () => failed.PullRequestUrl.ShouldBe(revisionInProgress.PullRequestUrl),
-            () => failed.ReviewComments.Count.ShouldBe(1),
-            () => failed.ReviewComments[0].Body.ShouldBe("Please fix."),
+            () => rfFailed.Comments.Count.ShouldBe(1),
+            () => rfFailed.Comments[0].Body.ShouldBe("Please fix."),
             () => failed.FailureReason.ShouldBe(failureReason),
             () => failed.FailedAt.ShouldBe(failedAt),
             () => failed.MonitoredRepositoryId.ShouldBe(repositoryId),

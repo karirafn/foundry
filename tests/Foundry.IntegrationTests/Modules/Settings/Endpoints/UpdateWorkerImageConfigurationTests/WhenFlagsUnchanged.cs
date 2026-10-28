@@ -35,8 +35,6 @@ public sealed class WhenFlagsUnchanged : IAsyncDisposable
     private async Task SeedSettingsWithFlagsAsync(
         bool dotnet,
         bool angular,
-        bool glab,
-        bool gh,
         bool chromium,
         bool docker)
     {
@@ -44,7 +42,7 @@ public sealed class WhenFlagsUnchanged : IAsyncDisposable
         DbContext dbContext = scope.ServiceProvider.GetRequiredService<DbContext>();
 
         GlobalSettings settings = GlobalSettings.Create();
-        settings.UpdateWorkerImageConfiguration(new WorkerImageConfiguration(dotnet, angular, glab, gh, chromium, docker));
+        settings.UpdateWorkerImageConfiguration(new WorkerImageConfiguration(dotnet, angular, chromium, docker));
         dbContext.Set<GlobalSettings>().Add(settings);
         await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
     }
@@ -53,13 +51,11 @@ public sealed class WhenFlagsUnchanged : IAsyncDisposable
     public async Task ReturnsOkWithExistingFlags()
     {
         // Arrange
-        await SeedSettingsWithFlagsAsync(dotnet: true, angular: false, glab: false, gh: false, chromium: false, docker: false);
+        await SeedSettingsWithFlagsAsync(dotnet: true, angular: false, chromium: false, docker: false);
         object body = new
         {
             installDotnet = true,
             installAngular = false,
-            installGlab = false,
-            installGh = false,
             installChromium = false,
             installDocker = false,
         };
@@ -84,13 +80,11 @@ public sealed class WhenFlagsUnchanged : IAsyncDisposable
     public async Task DoesNotSetBuildingStatus()
     {
         // Arrange
-        await SeedSettingsWithFlagsAsync(dotnet: true, angular: false, glab: false, gh: false, chromium: false, docker: false);
+        await SeedSettingsWithFlagsAsync(dotnet: true, angular: false, chromium: false, docker: false);
         object body = new
         {
             installDotnet = true,
             installAngular = false,
-            installGlab = false,
-            installGh = false,
             installChromium = false,
             installDocker = false,
         };

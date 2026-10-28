@@ -51,15 +51,7 @@ internal sealed class DispatchCandidateSelector(
         IReadOnlyDictionary<MonitoredRepositoryId, int> inFlightCounts =
             await inFlightWorkerCountQuery.GetCountsAsync(cancellationToken);
 
-        Dictionary<MonitoredRepositoryId, int> headroomByRepo = eligibleRepos
-            .Select(r =>
-            {
-                MonitoredRepositoryId id = MonitoredRepositoryId.From(r.Id);
-                inFlightCounts.TryGetValue(id, out int inFlight);
-                int headroom = Math.Max(0, r.MaxConcurrentWorkers - inFlight);
-                return (Id: id, Headroom: headroom);
-            })
-            .ToDictionary(r => r.Id, r => r.Headroom);
+        DispatchHeadroom headroom = DispatchHeadroom.ForClaim(eligibleRepos, inFlightCounts);
 
         Dictionary<MonitoredRepositoryId, int> positionByRepo = eligibleRepos
             .ToDictionary(r => MonitoredRepositoryId.From(r.Id), r => r.Position);
@@ -68,7 +60,7 @@ internal sealed class DispatchCandidateSelector(
             .Select(c => (c, DispatchOrderKey.For(c, positionByRepo[c.MonitoredRepositoryId])))
             .ToList();
 
-        IReadOnlyList<QueuedIssue> ordered = CapacityAwareDispatchOrder.Order(keyedCandidates, headroomByRepo);
+        IReadOnlyList<QueuedIssue> ordered = CapacityAwareDispatchOrder.Order(keyedCandidates, headroom);
 
         if (ordered.Count == 0)
         {

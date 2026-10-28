@@ -53,7 +53,7 @@ public sealed class Create
         DispatchContext.Revision revision = new(
             BranchName: "foundry/42",
             PullRequestUrl: "https://github.com/org/repo/pull/7",
-            Comments: [new ReviewComment("Please fix this")]);
+            Trigger: new RevisionTrigger.ReviewFeedback([new ReviewComment("Please fix this")], 0, null));
 
         // Act
         ClaimedIssueDispatch dispatch = new(
@@ -72,9 +72,10 @@ public sealed class Create
 
         // Assert
         DispatchContext.Revision held = dispatch.Context.ShouldBeOfType<DispatchContext.Revision>();
+        RevisionTrigger.ReviewFeedback rfHeld = held.Trigger.ShouldBeOfType<RevisionTrigger.ReviewFeedback>();
         held.ShouldSatisfyAllConditions(
             () => held.BranchName.ShouldBe("foundry/42"),
             () => held.PullRequestUrl.ShouldBe("https://github.com/org/repo/pull/7"),
-            () => held.Comments.Count.ShouldBe(1));
+            () => rfHeld.Comments.Count.ShouldBe(1));
     }
 }

@@ -1,5 +1,6 @@
 using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Issues.Domain.Entities;
+using Foundry.Modules.Issues.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Workers.Contracts;
 
@@ -24,6 +25,8 @@ public sealed class ReviewIssue : Issue
 
     public DateTimeOffset FeedbackCutoffAt { get; private set; }
 
+    public ChecksOutcome ChecksOutcome { get; private set; } = new ChecksOutcome.Passed();
+
     internal static ReviewIssue FromInProgress(
         InProgressIssue source,
         string branchName,
@@ -43,6 +46,7 @@ public sealed class ReviewIssue : Issue
         review.BranchName = branchName;
         review.PullRequestUrl = pullRequestUrl;
         review.FeedbackCutoffAt = feedbackCutoffAt;
+        review.ChecksOutcome = new ChecksOutcome.Passed();
         return review;
     }
 
@@ -63,6 +67,28 @@ public sealed class ReviewIssue : Issue
         review.BranchName = source.BranchName;
         review.PullRequestUrl = source.PullRequestUrl;
         review.FeedbackCutoffAt = feedbackCutoffAt;
+        review.ChecksOutcome = new ChecksOutcome.Passed();
+        return review;
+    }
+
+    internal static ReviewIssue FromChecksPending(
+        ChecksPendingIssue source,
+        ChecksOutcome checksOutcome)
+    {
+        ReviewIssue review = new(source.Id);
+        review.SetSharedProperties(
+            source.MonitoredRepositoryId,
+            source.IssueNumber,
+            source.Title,
+            source.Author,
+            source.Url,
+            source.Labels,
+            source.DetectedAt);
+        review.WorkerRunId = source.WorkerRunId;
+        review.BranchName = source.BranchName;
+        review.PullRequestUrl = source.PullRequestUrl;
+        review.FeedbackCutoffAt = source.FeedbackCutoffAt;
+        review.ChecksOutcome = checksOutcome;
         return review;
     }
 

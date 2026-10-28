@@ -41,7 +41,8 @@ public sealed class GetIssueStateCountsAsync : IAsyncDisposable
             new NullRepositorySlugQueries(),
             new NullRepositoryEligibilityQuery(),
             new NullWorkerRunQueries(),
-            new InFlightWorkerCountQuery(_dbContext));
+            new InFlightWorkerCountQuery(_dbContext),
+            new NullGlobalSettingsQueries());
     }
 
     async ValueTask IAsyncDisposable.DisposeAsync()
@@ -139,7 +140,7 @@ public sealed class GetIssueStateCountsAsync : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenAllKnownStatesRequested_AllThirteenStatesAreKeys()
+    public async Task WhenAllKnownStatesRequested_AllFourteenStatesAreKeys()
     {
         // Arrange — no seeded data; all counts should be zero
 
@@ -153,7 +154,7 @@ public sealed class GetIssueStateCountsAsync : IAsyncDisposable
             .Concat(IssueStateRegistry.Resolved)
             .ToHashSet();
 
-        result.Counts.Count.ShouldBe(13);
+        result.Counts.Count.ShouldBe(14);
         foreach (string state in allKnownStates)
         {
             result.Counts.ShouldContainKey(state);

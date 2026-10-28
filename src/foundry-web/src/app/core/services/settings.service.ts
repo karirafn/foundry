@@ -461,8 +461,6 @@ export class SettingsService {
     return {
       installDotnet: response.installDotnet,
       installAngular: response.installAngular,
-      installGlab: response.installGlab,
-      installGh: response.installGh,
       installChromium: response.installChromium,
       installDocker: response.installDocker,
     };

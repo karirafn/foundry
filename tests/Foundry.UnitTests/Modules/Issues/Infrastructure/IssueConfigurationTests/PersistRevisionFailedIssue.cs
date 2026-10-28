@@ -76,15 +76,16 @@ public sealed class PersistRevisionFailedIssue : IAsyncDisposable
 
         // Assert
         RevisionFailedIssue reloaded = result.ShouldBeOfType<RevisionFailedIssue>();
+        RevisionTrigger.ReviewFeedback rf = reloaded.Trigger.ShouldBeOfType<RevisionTrigger.ReviewFeedback>();
         reloaded.ShouldSatisfyAllConditions(
             () => reloaded.WorkerRunId.ShouldBe(workerRunId),
             () => reloaded.BranchName.ShouldBe("feat/issue-61"),
             () => reloaded.PullRequestUrl.ShouldBe("https://github.com/owner/repo/pull/21"),
-            () => reloaded.ReviewComments.Count.ShouldBe(2),
-            () => reloaded.ReviewComments[0].Body.ShouldBe("Please fix the formatting."),
-            () => reloaded.ReviewComments[1].Body.ShouldBe("Rename this variable."),
-            () => reloaded.ReviewComments[1].FilePath.ShouldBe("src/Foo.cs"),
-            () => reloaded.ReviewComments[1].Line.ShouldBe(42),
+            () => rf.Comments.Count.ShouldBe(2),
+            () => rf.Comments[0].Body.ShouldBe("Please fix the formatting."),
+            () => rf.Comments[1].Body.ShouldBe("Rename this variable."),
+            () => rf.Comments[1].FilePath.ShouldBe("src/Foo.cs"),
+            () => rf.Comments[1].Line.ShouldBe(42),
             () => reloaded.FailureReason.ShouldBe("Container exited with code 1"),
             () => reloaded.FailureCategory.ShouldBe(FailureCategory.NonZeroExit),
             () => reloaded.FailedAt.ShouldBe(failedAt),

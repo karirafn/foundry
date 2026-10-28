@@ -1,12 +1,14 @@
 using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Issues.Domain.Entities;
 using Foundry.Modules.Issues.Domain.Entities.States;
+using Foundry.Modules.Issues.Domain.ValueObjects;
 using Foundry.Modules.Issues.Features;
 using Foundry.Modules.Issues.Features.Claiming;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Workers.Contracts;
 using Foundry.Modules.Workers.Contracts.Queries;
 using Foundry.Shared;
+using Foundry.Shared.Infrastructure;
 using Foundry.Testing;
 using Foundry.WebApi.Persistence;
 
@@ -43,7 +45,8 @@ public sealed class GetIssueSummaryAsync : IAsyncDisposable
             new NullRepositorySlugQueries(),
             new NullRepositoryEligibilityQuery(),
             _workerRunQueries,
-            new InFlightWorkerCountQuery(_dbContext));
+            new InFlightWorkerCountQuery(_dbContext),
+            new NullGlobalSettingsQueries());
     }
 
     async ValueTask IAsyncDisposable.DisposeAsync()
@@ -122,6 +125,82 @@ public sealed class GetIssueSummaryAsync : IAsyncDisposable
             () => stats.TotalCostUsd.ShouldBe(0.30m),
             () => stats.InputTokens.ShouldBe(1300L),
             () => stats.OutputTokens.ShouldBe(500L));
+    }
+
+    [Fact]
+    public async Task WhenReviewIssue_ChecksOutcomeIsPopulatedOnSummary()
+    {
+        // Arrange
+        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
+        DetectedIssue detected = await CreateAndPersistDetectedIssueAsync(repositoryId);
+        FreshQueuedIssue queued = detected.Enqueue();
+        await _dbContext.TransitionAsync(detected, queued, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
+
+        InProgressIssue inProgress = queued.Claim(WorkerRunId.New());
+        await _dbContext.TransitionAsync(queued, inProgress, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
+
+        ChecksPendingIssue checksPending = inProgress.MarkChecksPending(
+            "feat/1-test",
+            "https://github.com/owner/repo/pull/1",
+            DateTimeOffset.UtcNow.AddDays(1));
+        await _dbContext.TransitionAsync(inProgress, checksPending, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
+
+        ReviewIssue review = checksPending.ToReview(new ChecksOutcome.Passed());
+        await _dbContext.TransitionAsync(checksPending, review, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
+        _dbContext.ChangeTracker.Clear();
+
+        // Act
+        IssueSummary? result = await _sut.GetIssueSummaryAsync(review.Id, TestContext.Current.CancellationToken);
+
+        // Assert
+        IssueSummary summary = result.ShouldNotBeNull();
+        summary.State.ShouldBe("review");
+        summary.ChecksOutcome.ShouldBe("passed");
+    }
+
+    [Fact]
+    public async Task WhenChecksPendingIssue_PullRequestUrlIsPopulatedOnSummary()
+    {
+        // Arrange
+        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
+        DetectedIssue detected = await CreateAndPersistDetectedIssueAsync(repositoryId);
+        FreshQueuedIssue queued = detected.Enqueue();
+        await _dbContext.TransitionAsync(detected, queued, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
+
+        InProgressIssue inProgress = queued.Claim(WorkerRunId.New());
+        await _dbContext.TransitionAsync(queued, inProgress, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
+
+        const string ExpectedPrUrl = "https://github.com/owner/repo/pull/7";
+        ChecksPendingIssue checksPending = inProgress.MarkChecksPending(
+            "feat/1-test",
+            ExpectedPrUrl,
+            DateTimeOffset.UtcNow.AddDays(1));
+        await _dbContext.TransitionAsync(inProgress, checksPending, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
+        _dbContext.ChangeTracker.Clear();
+
+        // Act
+        IssueSummary? result = await _sut.GetIssueSummaryAsync(checksPending.Id, TestContext.Current.CancellationToken);
+
+        // Assert
+        IssueSummary summary = result.ShouldNotBeNull();
+        summary.State.ShouldBe("checks_pending");
+        summary.PullRequestUrl.ShouldBe(ExpectedPrUrl);
+    }
+
+    [Fact]
+    public async Task WhenNonReviewIssue_ChecksOutcomeIsNullOnSummary()
+    {
+        // Arrange
+        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
+        DetectedIssue detected = await CreateAndPersistDetectedIssueAsync(repositoryId);
+
+        // Act
+        IssueSummary? result = await _sut.GetIssueSummaryAsync(detected.Id, TestContext.Current.CancellationToken);
+
+        // Assert
+        IssueSummary summary = result.ShouldNotBeNull();
+        summary.State.ShouldBe("detected");
+        summary.ChecksOutcome.ShouldBeNull();
     }
 
     private sealed class StubWorkerRunQueries : IWorkerRunQueries

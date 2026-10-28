@@ -70,12 +70,13 @@ public sealed class Retry
         RevisionQueuedIssue revisionQueued = failed.Retry();
 
         // Assert
+        RevisionTrigger.ReviewFeedback rfRetry = revisionQueued.Trigger.ShouldBeOfType<RevisionTrigger.ReviewFeedback>();
         revisionQueued.ShouldSatisfyAllConditions(
             () => revisionQueued.BranchName.ShouldBe(failed.BranchName),
             () => revisionQueued.PullRequestUrl.ShouldBe(failed.PullRequestUrl),
-            () => revisionQueued.ReviewComments.Count.ShouldBe(2),
-            () => revisionQueued.ReviewComments[0].Body.ShouldBe("Please fix the formatting."),
-            () => revisionQueued.ReviewComments[1].Body.ShouldBe("Rename this variable."),
+            () => rfRetry.Comments.Count.ShouldBe(2),
+            () => rfRetry.Comments[0].Body.ShouldBe("Please fix the formatting."),
+            () => rfRetry.Comments[1].Body.ShouldBe("Rename this variable."),
             () => revisionQueued.MonitoredRepositoryId.ShouldBe(repositoryId),
             () => revisionQueued.IssueNumber.ShouldBe(failed.IssueNumber),
             () => revisionQueued.Title.ShouldBe(failed.Title),
@@ -96,7 +97,9 @@ public sealed class Retry
         // Act
         RevisionInProgressIssue revisionInProgress = failed.Retry().Claim(runId);
 
-        // Assert
-        revisionInProgress.NewestConsumedCommentAt.ShouldBe(failed.NewestConsumedCommentAt);
+        // Assert — NewestConsumedCommentAt is now carried via Trigger; both must be ReviewFeedback
+        RevisionTrigger.ReviewFeedback rfInProgress = revisionInProgress.Trigger.ShouldBeOfType<RevisionTrigger.ReviewFeedback>();
+        RevisionTrigger.ReviewFeedback rfFailed = failed.Trigger.ShouldBeOfType<RevisionTrigger.ReviewFeedback>();
+        rfInProgress.NewestConsumedCommentAt.ShouldBe(rfFailed.NewestConsumedCommentAt);
     }
 }

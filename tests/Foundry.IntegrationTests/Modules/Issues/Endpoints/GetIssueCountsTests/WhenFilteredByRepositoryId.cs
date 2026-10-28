@@ -96,6 +96,7 @@ public sealed class WhenFilteredByRepositoryId : IAsyncDisposable
         counts.ShouldSatisfyAllConditions(
             () => counts.Counts["detected"].ShouldBe(2),
             () => counts.Counts["completed"].ShouldBe(0),
-            () => counts.Counts.Count.ShouldBe(13));
+            () => counts.Counts["checks_pending"].ShouldBe(0),
+            () => counts.Counts.Count.ShouldBe(14));
     }
 }

@@ -301,32 +301,6 @@ const RATE_BUDGET_FLOOR = 500;
               <div class="general-settings__image-flag">
                 <input
                   type="checkbox"
-                  id="installGlab"
-                  [ngModel]="_installGlabValue()"
-                  (ngModelChange)="_installGlabValue.set($event)"
-                  [attr.disabled]="settingsService.imageBuildStatus() === 'Building' || null"
-                  aria-describedby="installGlab-hint"
-                />
-                <label for="installGlab">Install GitLab CLI (glab)</label>
-                <span id="installGlab-hint" class="general-settings__field-hint">Adds the glab command-line tool.</span>
-              </div>
-
-              <div class="general-settings__image-flag">
-                <input
-                  type="checkbox"
-                  id="installGh"
-                  [ngModel]="_installGhValue()"
-                  (ngModelChange)="_installGhValue.set($event)"
-                  [attr.disabled]="settingsService.imageBuildStatus() === 'Building' || null"
-                  aria-describedby="installGh-hint"
-                />
-                <label for="installGh">Install GitHub CLI (gh)</label>
-                <span id="installGh-hint" class="general-settings__field-hint">Adds the gh command-line tool.</span>
-              </div>
-
-              <div class="general-settings__image-flag">
-                <input
-                  type="checkbox"
                   id="installChromium"
                   [ngModel]="_installChromiumValue()"
                   (ngModelChange)="_installChromiumValue.set($event)"
@@ -608,8 +582,6 @@ export class SettingsGeneralComponent {
 
   protected readonly _installDotnetValue: WritableSignal<boolean> = signal(false);
   protected readonly _installAngularValue: WritableSignal<boolean> = signal(false);
-  protected readonly _installGlabValue: WritableSignal<boolean> = signal(false);
-  protected readonly _installGhValue: WritableSignal<boolean> = signal(false);
   protected readonly _installChromiumValue: WritableSignal<boolean> = signal(false);
   protected readonly _installDockerValue: WritableSignal<boolean> = signal(false);
   private _imageInitialized = false;
@@ -622,8 +594,6 @@ export class SettingsGeneralComponent {
     return (
       this._installDotnetValue() !== saved.installDotnet ||
       this._installAngularValue() !== saved.installAngular ||
-      this._installGlabValue() !== saved.installGlab ||
-      this._installGhValue() !== saved.installGh ||
       this._installChromiumValue() !== saved.installChromium ||
       this._installDockerValue() !== saved.installDocker
     );
@@ -720,8 +690,6 @@ export class SettingsGeneralComponent {
         this._imageInitialized = true;
         this._installDotnetValue.set(flags.installDotnet);
         this._installAngularValue.set(flags.installAngular);
-        this._installGlabValue.set(flags.installGlab);
-        this._installGhValue.set(flags.installGh);
         this._installChromiumValue.set(flags.installChromium);
         this._installDockerValue.set(flags.installDocker);
       }
@@ -879,8 +847,6 @@ export class SettingsGeneralComponent {
     const flags: WorkerImageFlags = {
       installDotnet: this._installDotnetValue(),
       installAngular: this._installAngularValue(),
-      installGlab: this._installGlabValue(),
-      installGh: this._installGhValue(),
       installChromium: this._installChromiumValue(),
       installDocker: this._installDockerValue(),
     };
