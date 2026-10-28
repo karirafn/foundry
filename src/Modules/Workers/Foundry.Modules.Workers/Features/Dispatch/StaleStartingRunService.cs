@@ -92,6 +92,21 @@ internal sealed class StaleStartingRunService : PeriodicBackgroundService
             await TryStopAndRemoveAsync(orchestrator, containerId.Value, workerRunId, cancellationToken);
         }
 
+        // Reap data-root volumes whose run id falls outside slot occupancy. Best-effort: a failure
+        // must not abort the tick or prevent the stale-run failing loop below from running.
+        try
+        {
+            await orchestrator.ReapOrphanedDataRootVolumesAsync(slotRunIds, cancellationToken);
+        }
+#pragma warning disable CA1031 // Best-effort volume reap; Docker exceptions must not crash the BackgroundService tick.
+        catch (Exception ex) when (ex is not OperationCanceledException)
+#pragma warning restore CA1031
+        {
+            _log.LogWarning(
+                ex,
+                "Orphaned data-root volume reap failed during stale starting-run sweep; continuing to stale-run check.");
+        }
+
         // Load StartingRuns for staleness filtering (applied in memory — SQLite cannot translate DateTimeOffset).
         List<StartingRun> startingRuns = await db.Set<StartingRun>()
             .ToListAsync(cancellationToken);
