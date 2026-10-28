@@ -42,7 +42,8 @@ public sealed class StartAsync
         IReadOnlyList<string>? devices = null,
         IReadOnlyList<VolumeMount>? volumeMounts = null,
         IReadOnlyList<string>? capabilities = null,
-        IReadOnlyDictionary<string, string>? labels = null) =>
+        IReadOnlyDictionary<string, string>? labels = null,
+        bool unmaskSystemPaths = false) =>
         new(
             Image: image,
             EnvironmentVariables: new Dictionary<string, string>(),
@@ -54,6 +55,7 @@ public sealed class StartAsync
             Devices = devices ?? [],
             VolumeMounts = volumeMounts ?? [],
             Capabilities = capabilities ?? [],
+            UnmaskSystemPaths = unmaskSystemPaths,
         };
 
     private static DockerWorkerOrchestrator BuildSut(
@@ -203,6 +205,40 @@ public sealed class StartAsync
         captured.HostConfig.SecurityOpt.ShouldBeNull();
         captured.HostConfig.Devices.ShouldBeNull();
         captured.HostConfig.CapAdd.ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task WhenSpecUnmasksSystemPaths_MaskedAndReadonlyPathsAreEmptyLists()
+    {
+        // Arrange
+        FakeDockerContainerRuntime runtime = new();
+        DockerWorkerOrchestrator sut = BuildSut(runtime);
+
+        // Act
+        await sut.StartAsync(MinimalSpec(unmaskSystemPaths: true), CancellationToken.None);
+
+        // Assert
+        HostConfig hostConfig = runtime.LastCreateAndStartParameters.ShouldNotBeNull().HostConfig;
+        hostConfig.ShouldSatisfyAllConditions(
+            () => hostConfig.MaskedPaths.ShouldNotBeNull().ShouldBeEmpty(),
+            () => hostConfig.ReadonlyPaths.ShouldNotBeNull().ShouldBeEmpty());
+    }
+
+    [Fact]
+    public async Task WhenSpecKeepsDefaultMasking_MaskedAndReadonlyPathsAreNull()
+    {
+        // Arrange
+        FakeDockerContainerRuntime runtime = new();
+        DockerWorkerOrchestrator sut = BuildSut(runtime);
+
+        // Act
+        await sut.StartAsync(MinimalSpec(), CancellationToken.None);
+
+        // Assert
+        HostConfig hostConfig = runtime.LastCreateAndStartParameters.ShouldNotBeNull().HostConfig;
+        hostConfig.ShouldSatisfyAllConditions(
+            () => hostConfig.MaskedPaths.ShouldBeNull(),
+            () => hostConfig.ReadonlyPaths.ShouldBeNull());
     }
 
     [Fact]

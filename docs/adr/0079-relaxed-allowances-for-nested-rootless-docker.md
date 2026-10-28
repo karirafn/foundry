@@ -4,6 +4,8 @@ status: accepted
 
 # Relaxed Run-Spec Allowances for Nested Rootless Docker
 
+> **2026-10-28 — Amended:** the `systempaths=unconfined` security-opt in Context and Decision was **false from the start** as an Engine API value. It is a docker CLI alias that the CLI translates client-side into empty `HostConfig.MaskedPaths` and `HostConfig.ReadonlyPaths`; the daemon rejects it in `SecurityOpt` with `invalid --security-opt`. The spikes and the CI smoke step both ran through the CLI, so the translation hid it. The decision to unmask system paths stands: `RootlessDindRunSpec.UnmaskSystemPaths` sets `WorkerContainerSpec.UnmaskSystemPaths`, which `DockerWorkerOrchestrator` maps to empty `MaskedPaths`/`ReadonlyPaths`. The remaining security opts (`seccomp=unconfined`, `apparmor=unconfined`) are daemon-native.
+
 ## Context
 
 [ADR 0021](0021-rootless-docker-in-docker-for-worker-tests.md) gives Docker-enabled workers their own rootless `dockerd` under a minimal allowance set (`seccomp=unconfined`, `apparmor=unconfined`, `/dev/fuse`). This ADR replaces 0021's allowance-set clause, its fuse-overlayfs storage default, and its claim that nested rootless DinD cannot start on Docker Desktop / WSL2. 0021's rejection of the host socket and of `--privileged` still stands.

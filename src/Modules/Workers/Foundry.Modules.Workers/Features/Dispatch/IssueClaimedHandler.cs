@@ -276,6 +276,7 @@ internal sealed class IssueClaimedHandler(
             Capabilities = RootlessDindRunSpec.Capabilities,
             SecurityOptions = RootlessDindRunSpec.SecurityOptions,
             Devices = RootlessDindRunSpec.Devices,
+            UnmaskSystemPaths = RootlessDindRunSpec.UnmaskSystemPaths,
             VolumeMounts =
             [
                 .. spec.VolumeMounts,

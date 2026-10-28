@@ -13,5 +13,7 @@ internal sealed record WorkerContainerSpec(
 
     public IReadOnlyList<string> Devices { get; init; } = [];
 
+    public bool UnmaskSystemPaths { get; init; }
+
     public IReadOnlyList<VolumeMount> VolumeMounts { get; init; } = [];
 }

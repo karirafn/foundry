@@ -88,7 +88,7 @@ Changing it publishes `WorkerImageConfigurationChanged`, which requests an immed
 ### Docker-Enabled Worker Run Spec
 
 When `InstallDocker` is true, the worker runs its own nested rootless `dockerd` so Testcontainers-based integration tests work inside the container.
-This requires the relaxed allowance set from [ADR 0079](docs/adr/0079-relaxed-allowances-for-nested-rootless-docker.md): `CAP_SYS_ADMIN`, `seccomp=unconfined`, `apparmor=unconfined`, `systempaths=unconfined`, and the `/dev/net/tun` device.
+This requires the relaxed allowance set from [ADR 0079](docs/adr/0079-relaxed-allowances-for-nested-rootless-docker.md): `CAP_SYS_ADMIN`, `seccomp=unconfined`, `apparmor=unconfined`, unmasked `/proc` system paths (empty `MaskedPaths`/`ReadonlyPaths` — the Engine API form of the CLI's `systempaths=unconfined`), and the `/dev/net/tun` device.
 A named per-run data-root volume (`foundry-worker-docker-<workerRunId>`, labelled `foundry.managed=true` + `foundry.worker-run-id=<id>`) is mounted at `/home/node/.local/share/docker`; the nested daemon uses native overlayfs on this volume, so `/dev/fuse` is not required.
 The isolation boundary weakens: the worker runs as uid 1000 with no route to container root under normal operation, but `CAP_SYS_ADMIN` plus unconfined seccomp/AppArmor mean that code inside the worker that escalates to root can reach the Docker host (on Docker Desktop, the WSL VM).
 On hosts where the daemon cannot start, the entrypoint logs `FOUNDRY_DOCKER_UNAVAILABLE`, leaves `DOCKER_HOST` unset, and the run continues in degraded mode — authoring integration tests that execute where a daemon is available (CI, native Linux).

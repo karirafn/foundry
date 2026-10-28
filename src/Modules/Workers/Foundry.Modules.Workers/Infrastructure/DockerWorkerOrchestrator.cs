@@ -134,6 +134,10 @@ internal sealed class DockerWorkerOrchestrator(
                     CapAdd = spec.Capabilities.Count > 0
                         ? [.. spec.Capabilities]
                         : null,
+                    // An empty list turns off the daemon's default /proc masking while null keeps it,
+                    // so the two must never collapse into one another.
+                    MaskedPaths = spec.UnmaskSystemPaths ? [] : null,
+                    ReadonlyPaths = spec.UnmaskSystemPaths ? [] : null,
                 },
             };
 

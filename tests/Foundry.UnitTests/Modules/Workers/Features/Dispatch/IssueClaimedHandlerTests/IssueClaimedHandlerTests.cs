@@ -929,7 +929,7 @@ public sealed class HandleAsync : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenDockerEnabled_SecurityOptionsAndDevicesAreSet()
+    public async Task WhenDockerEnabled_RootlessDindAllowancesAreSet()
     {
         // Arrange
         WorkerRunId runId = WorkerRunId.New();
@@ -947,7 +947,8 @@ public sealed class HandleAsync : IAsyncDisposable
         spec.ShouldNotBeNull();
         spec.ShouldSatisfyAllConditions(
             () => spec.Capabilities.ShouldBe(["SYS_ADMIN"]),
-            () => spec.SecurityOptions.ShouldBe(["seccomp=unconfined", "apparmor=unconfined", "systempaths=unconfined"]),
+            () => spec.SecurityOptions.ShouldBe(["seccomp=unconfined", "apparmor=unconfined"]),
+            () => spec.UnmaskSystemPaths.ShouldBeTrue(),
             () => spec.Devices.ShouldBe(["/dev/net/tun"]),
             () => spec.Devices.ShouldNotContain("/dev/fuse"),
             () => spec.VolumeMounts.ShouldContain(m =>
@@ -975,7 +976,8 @@ public sealed class HandleAsync : IAsyncDisposable
         spec.ShouldSatisfyAllConditions(
             () => spec.Capabilities.ShouldBe(RootlessDindRunSpec.Capabilities),
             () => spec.SecurityOptions.ShouldBe(RootlessDindRunSpec.SecurityOptions),
-            () => spec.Devices.ShouldBe(RootlessDindRunSpec.Devices));
+            () => spec.Devices.ShouldBe(RootlessDindRunSpec.Devices),
+            () => spec.UnmaskSystemPaths.ShouldBe(RootlessDindRunSpec.UnmaskSystemPaths));
     }
 
     [Fact]
@@ -1031,7 +1033,7 @@ public sealed class HandleAsync : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenDockerDisabled_SecurityOptionsAndDevicesAreEmpty()
+    public async Task WhenDockerDisabled_RootlessDindAllowancesAreAbsent()
     {
         // Arrange
         StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c-no-dind");
@@ -1050,6 +1052,7 @@ public sealed class HandleAsync : IAsyncDisposable
             () => spec.Capabilities.ShouldBeEmpty(),
             () => spec.SecurityOptions.ShouldBeEmpty(),
             () => spec.Devices.ShouldBeEmpty(),
+            () => spec.UnmaskSystemPaths.ShouldBeFalse(),
             () => spec.VolumeMounts.ShouldNotContain(m =>
                 m.VolumeName.StartsWith(WorkerVolumeNames.DataRootVolumeNamePrefix, StringComparison.Ordinal)));
     }
