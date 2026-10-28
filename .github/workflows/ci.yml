@@ -135,46 +135,112 @@ jobs:
         if: github.event_name == 'push' || steps.changes.outputs.workers == 'true'
         run: docker build --build-arg INSTALL_DOCKER=true -t foundry-worker:ci workers/
 
-      - name: Smoke test — start_rootless_dockerd creates XDG_RUNTIME_DIR as node user
+      - name: Image contract check — verify iproute2/procps present, fuse-overlayfs absent, setuid only on newuidmap/newgidmap
         if: github.event_name == 'push' || steps.changes.outputs.workers == 'true'
         run: |
+          # AC1: iproute2 and procps must be present
+          docker run --rm foundry-worker:ci bash -c 'dpkg -l iproute2 procps | grep -E "^ii\s+(iproute2|procps)" | wc -l | grep -q "^2$"' \
+            || { echo "FAIL: iproute2 or procps not installed in foundry-worker:ci"; exit 1; }
+          echo "PASS: iproute2 and procps are installed"
+
+          # AC1: fuse-overlayfs must NOT be present
+          docker run --rm foundry-worker:ci bash -c '! dpkg -l fuse-overlayfs 2>/dev/null | grep -q "^ii"' \
+            || { echo "FAIL: fuse-overlayfs is installed in foundry-worker:ci (must not be)"; exit 1; }
+          echo "PASS: fuse-overlayfs is absent"
+
+          # AC1: only newuidmap and newgidmap may carry the setuid bit; assert both ARE present
+          docker run --rm --user root foundry-worker:ci bash -c '
+            set -euo pipefail
+            found=$(find / -xdev -perm -4000 -type f 2>/dev/null)
+            echo "Setuid binaries found:"
+            echo "$found"
+            # Assert newuidmap is setuid
+            echo "$found" | grep -q "newuidmap" || { echo "FAIL: newuidmap does not have setuid bit"; exit 1; }
+            # Assert newgidmap is setuid
+            echo "$found" | grep -q "newgidmap" || { echo "FAIL: newgidmap does not have setuid bit"; exit 1; }
+            # Assert no other binary is setuid
+            for f in $found; do
+              b="$(basename "$f")"
+              [ "$b" = "newuidmap" ] || [ "$b" = "newgidmap" ] || {
+                echo "FAIL: unexpected setuid binary: $f"
+                exit 1
+              }
+            done
+            echo "PASS: only newuidmap and newgidmap carry the setuid bit"
+          '
+
+      - name: Runner userns safeguard — allow unprivileged user namespaces (Ubuntu 24.04 AppArmor restriction)
+        if: github.event_name == 'push' || steps.changes.outputs.workers == 'true'
+        run: |
+          # Ubuntu 24.04 runners set kernel.apparmor_restrict_unprivileged_userns=1 by default,
+          # which blocks rootless Docker even with apparmor=unconfined on the outer container.
+          # This step relaxes the restriction so start_rootless_dockerd can create user namespaces.
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true
+
+      # AC8: real nested-daemon smoke — exercises start_rootless_dockerd with the REAL dockerd-rootless.sh
+      # and docker binaries (no stubs). Flags mirror RootlessDindRunSpec.cs exactly:
+      #   src/Modules/Workers/Foundry.Modules.Workers/Features/ContainerSpec/RootlessDindRunSpec.cs
+      # That file is the single source of truth for the ADR 0079 relaxed allowance set.
+      - name: Smoke test — real rootless dockerd starts and nested docker run reaches published port
+        if: github.event_name == 'push' || steps.changes.outputs.workers == 'true'
+        run: |
+          docker volume create foundry-worker-docker-smoke
+
           docker run --rm \
             --user node \
+            --cap-add SYS_ADMIN \
+            --security-opt seccomp=unconfined \
+            --security-opt apparmor=unconfined \
+            --security-opt systempaths=unconfined \
+            --device /dev/net/tun \
+            -v foundry-worker-docker-smoke:/home/node/.local/share/docker \
             foundry-worker:ci \
             bash -euo pipefail -c '
-              # Install stub dockerd-rootless.sh that stays alive long enough for the
-              # readiness poll, then exits. The stub docker CLI always reports healthy
-              # so the poll succeeds on the first attempt.
-              mkdir -p /tmp/stub-bin
+              set -euo pipefail
 
-              cat > /tmp/stub-bin/dockerd-rootless.sh <<'"'"'STUB'"'"'
-          #!/bin/bash
-          sleep 30 &
-          wait
-          STUB
-              chmod +x /tmp/stub-bin/dockerd-rootless.sh
+              echo "=== Extracting and calling start_rootless_dockerd ===" >&2
 
-              cat > /tmp/stub-bin/docker <<'"'"'STUB'"'"'
-          #!/bin/bash
-          exit 0
-          STUB
-              chmod +x /tmp/stub-bin/docker
-
-              export PATH="/tmp/stub-bin:$PATH"
-              export DOCKER_RETRY_COUNT=3
-              export DOCKER_RETRY_SLEEP=0
-
-              # Source the function and run it
+              # Source the real start_rootless_dockerd from the shipped entrypoint.
+              # awk extracts the function body (closing } on its own line = standard style).
+              # DOCKER_RETRY_COUNT/SLEEP give the daemon enough time to cold-start.
+              export DOCKER_RETRY_COUNT=30
+              export DOCKER_RETRY_SLEEP=1
               eval "$(awk '"'"'/^start_rootless_dockerd\(\)/,/^\}/'"'"' /entrypoint.sh)"
               start_rootless_dockerd
 
-              # Assert XDG_RUNTIME_DIR was created, is writable, and has mode 700
-              [ -d "$XDG_RUNTIME_DIR" ] || { echo "XDG_RUNTIME_DIR not created"; exit 1; }
-              [ -w "$XDG_RUNTIME_DIR" ] || { echo "XDG_RUNTIME_DIR not writable"; exit 1; }
-              mode="$(stat --format='%a' "$XDG_RUNTIME_DIR")"
-              [ "$mode" = "700" ] || { echo "XDG_RUNTIME_DIR mode is $mode, expected 700"; exit 1; }
-              echo "XDG_RUNTIME_DIR=${XDG_RUNTIME_DIR} — created, writable, mode 700"
+              echo "=== Asserting DOCKER_HOST is set ===" >&2
+              [ -n "${DOCKER_HOST:-}" ] || { echo "FAIL: DOCKER_HOST was not exported by start_rootless_dockerd"; exit 1; }
+              echo "DOCKER_HOST=${DOCKER_HOST}"
+
+              echo "=== Asserting docker version succeeds ===" >&2
+              docker version || { echo "FAIL: docker version failed — daemon did not come up properly"; exit 1; }
+
+              echo "=== Running nested container with published port ===" >&2
+              # busybox httpd serves HTTP on port 80; publish it on 18080 so we can
+              # reach it from the worker. Pull cost is minimal (busybox ~5 MB).
+              docker run -d --name smoke-httpd -p 18080:80 busybox sh -c "
+                mkdir -p /www && echo OK > /www/index.html && httpd -f -p 80 -h /www
+              "
+
+              echo "=== Polling published port 18080 ===" >&2
+              # curl is present in the worker image (installed in Dockerfile.base).
+              ok=0
+              for i in $(seq 1 15); do
+                response="$(curl -sf http://127.0.0.1:18080/ 2>/dev/null || true)"
+                if [ -n "$response" ]; then
+                  echo "PASS: got response from nested container: ${response}"
+                  ok=1
+                  break
+                fi
+                echo "  attempt ${i}/15 — not ready yet, sleeping 1s" >&2
+                sleep 1
+              done
+              [ "$ok" -eq 1 ] || { echo "FAIL: published port 18080 not reachable after 15 attempts"; docker logs smoke-httpd || true; exit 1; }
             '
+
+      - name: Remove smoke data-root volume
+        if: always() && (github.event_name == 'push' || steps.changes.outputs.workers == 'true')
+        run: docker volume rm foundry-worker-docker-smoke || true
 
   docs:
     runs-on: ubuntu-latest
