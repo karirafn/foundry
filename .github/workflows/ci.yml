@@ -175,8 +175,11 @@ jobs:
           # This step relaxes the restriction so start_rootless_dockerd can create user namespaces.
           sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true
 
-      # AC8: real nested-daemon smoke — exercises start_rootless_dockerd with the REAL dockerd-rootless.sh
-      # and docker binaries (no stubs). Flags mirror RootlessDindRunSpec.cs exactly:
+      # Real nested-daemon smoke — exercises start_rootless_dockerd with the REAL dockerd-rootless.sh
+      # and docker binaries (no stubs). Flags mirror RootlessDindRunSpec.cs, except that
+      # `--security-opt systempaths=unconfined` is the CLI-only alias of RootlessDindRunSpec.UnmaskSystemPaths,
+      # which the orchestrator sends to the Engine API as empty MaskedPaths/ReadonlyPaths (the daemon rejects
+      # the raw string):
       #   src/Modules/Workers/Foundry.Modules.Workers/Features/ContainerSpec/RootlessDindRunSpec.cs
       # That file is the single source of truth for the ADR 0079 relaxed allowance set.
       - name: Smoke test — real rootless dockerd starts and nested docker run reaches published port

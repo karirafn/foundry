@@ -21,7 +21,7 @@ public sealed class AllowanceSet
     }
 
     [Fact]
-    public void SecurityOptions_ContainsRequiredUnconfinedOptions()
+    public void WhenRead_SecurityOptionsAreExactlySeccompAndApparmorUnconfined()
     {
         // Arrange
 
@@ -29,23 +29,19 @@ public sealed class AllowanceSet
         IReadOnlyList<string> securityOptions = RootlessDindRunSpec.SecurityOptions;
 
         // Assert
-        securityOptions.ShouldSatisfyAllConditions(
-            () => securityOptions.ShouldContain("seccomp=unconfined"),
-            () => securityOptions.ShouldContain("apparmor=unconfined"),
-            () => securityOptions.ShouldContain("systempaths=unconfined")
-        );
+        securityOptions.ShouldBe(["seccomp=unconfined", "apparmor=unconfined"], ignoreOrder: false);
     }
 
     [Fact]
-    public void SecurityOptions_ContainsExactlyThreeOptions()
+    public void WhenRead_UnmaskSystemPathsIsTrue()
     {
         // Arrange
 
         // Act
-        IReadOnlyList<string> securityOptions = RootlessDindRunSpec.SecurityOptions;
+        bool unmaskSystemPaths = RootlessDindRunSpec.UnmaskSystemPaths;
 
         // Assert
-        securityOptions.Count.ShouldBe(3);
+        unmaskSystemPaths.ShouldBeTrue();
     }
 
     [Fact]
