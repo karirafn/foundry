@@ -12,9 +12,11 @@ namespace Foundry.UnitTests.Modules.Workers.Features.ImageBuild.WorkerImageRebui
 internal sealed class StubGlobalSettingsQueries(
     bool settingsExists = true,
     IReadOnlyDictionary<string, string>? buildArgs = null,
-    int attempt = 0) : IGlobalSettingsQueries
+    int attempt = 0,
+    string imageTag = "foundry-worker:local",
+    bool buildEnabled = true) : IGlobalSettingsQueries
 {
-    private static readonly GlobalSettingsSummary DefaultSummary = new(
+    private readonly GlobalSettingsSummary _summary = new(
         MaxConcurrent: 1,
         TimeoutMinutes: 60,
         ProbeIntervalMinutes: 60,
@@ -25,8 +27,8 @@ internal sealed class StubGlobalSettingsQueries(
         UsageLimitResetsAt: null,
         IsDispatchPaused: false,
         AutoResumeOnUsageReset: true,
-        ImageTag: "foundry-worker:local",
-        BuildEnabled: true,
+        ImageTag: imageTag,
+        BuildEnabled: buildEnabled,
         InstallDotnet: false,
         InstallAngular: false,
         InstallChromium: false,
@@ -35,10 +37,8 @@ internal sealed class StubGlobalSettingsQueries(
         LastImageBuildError: null,
         HasUsableImage: false,
         NextRetryAt: null,
-        Attempt: 0,
+        Attempt: attempt,
         AllowedProviderHosts: []);
-
-    private readonly GlobalSettingsSummary _summary = DefaultSummary with { Attempt = attempt };
 
     public Task<GlobalSettingsSummary?> GetSettingsAsync(CancellationToken cancellationToken)
         => Task.FromResult(settingsExists ? _summary : (GlobalSettingsSummary?)null);
@@ -69,10 +69,10 @@ internal sealed class StubGlobalSettingsQueries(
         => Task.FromResult(false);
 
     public Task<string> GetWorkerImageTagAsync(CancellationToken cancellationToken)
-        => Task.FromResult(string.Empty);
+        => Task.FromResult(imageTag);
 
     public Task<bool> GetWorkerImageBuildEnabledAsync(CancellationToken cancellationToken)
-        => Task.FromResult(false);
+        => Task.FromResult(buildEnabled);
 
     public Task<IReadOnlyDictionary<string, string>> GetWorkerImageBuildArgsAsync(
         CancellationToken cancellationToken)

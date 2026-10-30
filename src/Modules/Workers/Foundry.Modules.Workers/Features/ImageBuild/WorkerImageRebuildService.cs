@@ -17,6 +17,7 @@ using Microsoft.Extensions.Options;
 
 namespace Foundry.Modules.Workers.Features.ImageBuild;
 
+#pragma warning disable CS9113 // WorkerOptions retained for step 8 removal; constructor param kept for DI registration continuity.
 internal sealed class WorkerImageRebuildService(
     IWorkerImageRebuildQueue rebuildQueue,
     IServiceScopeFactory scopeFactory,
@@ -24,6 +25,7 @@ internal sealed class WorkerImageRebuildService(
     IHostEnvironment hostEnvironment,
     IOptions<WorkerOptions> optionsAccessor,
     ILogger<WorkerImageRebuildService> logger) : BackgroundService, IHostedLifecycleService
+#pragma warning restore CS9113
 {
     internal const string ImageBuildCategory = "image-build";
     internal const string BaseDockerfile = "Dockerfile.base";
@@ -37,11 +39,12 @@ internal sealed class WorkerImageRebuildService(
     internal const string LoginImageName = WorkerImageNames.LoginImageName;
 
     private const int LogTailLines = 200;
+    private const string ContextPath = "workers";
 
-    private readonly WorkerOptions _options = optionsAccessor.Value;
-    private readonly ImageBuildRetryPolicy _retryPolicy = new(
-        optionsAccessor.Value.ImageBuild.InitialBackoff,
-        optionsAccessor.Value.ImageBuild.MaxBackoff);
+    private static readonly TimeSpan InitialBackoff = TimeSpan.FromSeconds(30);
+    private static readonly TimeSpan MaxBackoff = TimeSpan.FromMinutes(15);
+
+    private readonly ImageBuildRetryPolicy _retryPolicy = new(InitialBackoff, MaxBackoff);
 
     // Pending retry CTS — mutations guarded by _stateLock.
     private readonly Lock _stateLock = new();
@@ -98,12 +101,6 @@ internal sealed class WorkerImageRebuildService(
 
         SubscribeToImmediateRebuild();
 
-        if (!_options.ImageBuild.Enabled)
-        {
-            logger.LogInformation("Startup image rebuild skipped: ImageBuild.Enabled is false.");
-            return;
-        }
-
         await using AsyncServiceScope scope = scopeFactory.CreateAsyncScope();
         IGlobalSettingsQueries settingsQueries = scope.ServiceProvider.GetRequiredService<IGlobalSettingsQueries>();
 
@@ -150,12 +147,6 @@ internal sealed class WorkerImageRebuildService(
 
     internal async Task ProcessRebuildAsync(CancellationToken cancellationToken)
     {
-        if (!_options.ImageBuild.Enabled)
-        {
-            logger.LogInformation("Image rebuild skipped: ImageBuild.Enabled is false.");
-            return;
-        }
-
         await using AsyncServiceScope scope = scopeFactory.CreateAsyncScope();
         IGlobalSettingsQueries settingsQueries = scope.ServiceProvider.GetRequiredService<IGlobalSettingsQueries>();
         IIntegrationEventDispatcher integrationEventDispatcher =
@@ -170,16 +161,26 @@ internal sealed class WorkerImageRebuildService(
             return;
         }
 
+        bool buildEnabled = await settingsQueries.GetWorkerImageBuildEnabledAsync(cancellationToken);
+
+        if (!buildEnabled)
+        {
+            logger.LogInformation("Image rebuild skipped: ImageBuild.Enabled is false.");
+            return;
+        }
+
         IReadOnlyDictionary<string, string> buildArgs =
             await settingsQueries.GetWorkerImageBuildArgsAsync(cancellationToken);
 
+        string imageTag = await settingsQueries.GetWorkerImageTagAsync(cancellationToken);
+
         await integrationEventDispatcher.DispatchAsync([new ImageBuildRequested()], cancellationToken);
 
-        string contextPath = ResolveContextPath(_options.ImageBuild.ContextPath);
+        string contextPath = ResolveContextPath(ContextPath);
 
         logger.LogInformation(
             "Building worker image '{Image}' from context '{ContextPath}'.",
-            _options.Image,
+            imageTag,
             contextPath);
 
         string? errorTail = null;
@@ -229,7 +230,7 @@ internal sealed class WorkerImageRebuildService(
 
                 ImageBuildParameters workerParameters = new()
                 {
-                    Tags = [_options.Image],
+                    Tags = [imageTag],
                     BuildArgs = workerBuildArgs,
                     Dockerfile = "Dockerfile",
                 };
@@ -311,7 +312,7 @@ internal sealed class WorkerImageRebuildService(
 
             await integrationEventDispatcher.DispatchAsync([new ImageBuildSucceeded()], cancellationToken);
 
-            logger.LogInformation("Worker image '{Image}' built successfully.", _options.Image);
+            logger.LogInformation("Worker image '{Image}' built successfully.", imageTag);
         }
         else
         {
@@ -340,7 +341,7 @@ internal sealed class WorkerImageRebuildService(
 
             logger.LogError(
                 "Worker image '{Image}' build failed (attempt {Attempt}, next retry at {NextRetryAt}): {Error}",
-                _options.Image,
+                imageTag,
                 nextAttempt,
                 nextRetryAt,
                 errorTail);

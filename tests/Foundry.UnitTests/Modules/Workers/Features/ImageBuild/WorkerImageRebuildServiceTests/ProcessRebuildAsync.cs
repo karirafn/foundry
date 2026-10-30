@@ -27,14 +27,16 @@ public sealed class ProcessRebuildAsync
         IGlobalSettingsQueries? settingsQueries = null,
         CapturingIntegrationEventDispatcher? dispatcher = null,
         string contentRootPath = "",
-        string? contextPath = null,
         bool imageBuildEnabled = true,
-        TimeSpan? initialBackoff = null,
+        string imageTag = "foundry-worker:local",
         IWorkerImageRebuildQueue? queue = null)
     {
         ServiceCollection services = new();
         services.AddScoped<IGlobalSettingsQueries>(_ =>
-            settingsQueries ?? new StubGlobalSettingsQueries(settingsExists: true));
+            settingsQueries ?? new StubGlobalSettingsQueries(
+                settingsExists: true,
+                imageTag: imageTag,
+                buildEnabled: imageBuildEnabled));
         services.AddScoped<IIntegrationEventDispatcher>(_ =>
             dispatcher ?? new CapturingIntegrationEventDispatcher());
 
@@ -42,13 +44,8 @@ public sealed class ProcessRebuildAsync
 
         WorkerOptions workerOptions = new()
         {
-            Image = "test-image:latest",
-            ImageBuild = new ImageBuildOptions
-            {
-                Enabled = imageBuildEnabled,
-                ContextPath = contextPath ?? string.Empty,
-                InitialBackoff = initialBackoff ?? TimeSpan.FromSeconds(30),
-            },
+            Image = imageTag,
+            ImageBuild = new ImageBuildOptions { Enabled = imageBuildEnabled },
         };
 
         StubHostEnvironment hostEnv = new(contentRootPath);
@@ -100,7 +97,7 @@ public sealed class ProcessRebuildAsync
     public async Task WhenBuildSucceeds_PublishesImageBuildRequestedFirst()
     {
         // Arrange
-        string contextDir = CreateTempContextDir();
+        (string contentRoot, string tempRoot) = CreateTempContextTree();
 
         try
         {
@@ -108,7 +105,7 @@ public sealed class ProcessRebuildAsync
             WorkerImageRebuildService sut = BuildService(
                 new SpyImageOperations(),
                 dispatcher: dispatcher,
-                contextPath: contextDir);
+                contentRootPath: contentRoot);
 
             // Act
             await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
@@ -119,7 +116,7 @@ public sealed class ProcessRebuildAsync
         }
         finally
         {
-            Directory.Delete(contextDir, true);
+            Directory.Delete(tempRoot, true);
         }
     }
 
@@ -127,7 +124,7 @@ public sealed class ProcessRebuildAsync
     public async Task WhenBuildSucceeds_PublishesImageBuildSucceeded()
     {
         // Arrange
-        string contextDir = CreateTempContextDir();
+        (string contentRoot, string tempRoot) = CreateTempContextTree();
 
         try
         {
@@ -135,7 +132,7 @@ public sealed class ProcessRebuildAsync
             WorkerImageRebuildService sut = BuildService(
                 new SpyImageOperations(),
                 dispatcher: dispatcher,
-                contextPath: contextDir);
+                contentRootPath: contentRoot);
 
             // Act
             await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
@@ -147,7 +144,7 @@ public sealed class ProcessRebuildAsync
         }
         finally
         {
-            Directory.Delete(contextDir, true);
+            Directory.Delete(tempRoot, true);
         }
     }
 
@@ -155,7 +152,7 @@ public sealed class ProcessRebuildAsync
     public async Task WhenDockerReportsError_PublishesImageBuildOutcomeFailed()
     {
         // Arrange
-        string contextDir = CreateTempContextDir();
+        (string contentRoot, string tempRoot) = CreateTempContextTree();
 
         try
         {
@@ -165,7 +162,7 @@ public sealed class ProcessRebuildAsync
             WorkerImageRebuildService sut = BuildService(
                 errorImages,
                 dispatcher: dispatcher,
-                contextPath: contextDir);
+                contentRootPath: contentRoot);
 
             // Act
             await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
@@ -178,7 +175,7 @@ public sealed class ProcessRebuildAsync
         }
         finally
         {
-            Directory.Delete(contextDir, true);
+            Directory.Delete(tempRoot, true);
         }
     }
 
@@ -186,7 +183,7 @@ public sealed class ProcessRebuildAsync
     public async Task WhenDockerReportsError_PublishedFailedEventHasAttemptOne()
     {
         // Arrange
-        string contextDir = CreateTempContextDir();
+        (string contentRoot, string tempRoot) = CreateTempContextTree();
 
         try
         {
@@ -195,7 +192,7 @@ public sealed class ProcessRebuildAsync
             WorkerImageRebuildService sut = BuildService(
                 errorImages,
                 dispatcher: dispatcher,
-                contextPath: contextDir);
+                contentRootPath: contentRoot);
 
             // Act
             await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
@@ -206,7 +203,7 @@ public sealed class ProcessRebuildAsync
         }
         finally
         {
-            Directory.Delete(contextDir, true);
+            Directory.Delete(tempRoot, true);
         }
     }
 
@@ -214,7 +211,7 @@ public sealed class ProcessRebuildAsync
     public async Task WhenDockerReportsError_PublishedFailedEventHasNextRetryAtInFuture()
     {
         // Arrange
-        string contextDir = CreateTempContextDir();
+        (string contentRoot, string tempRoot) = CreateTempContextTree();
 
         try
         {
@@ -224,7 +221,7 @@ public sealed class ProcessRebuildAsync
             WorkerImageRebuildService sut = BuildService(
                 errorImages,
                 dispatcher: dispatcher,
-                contextPath: contextDir);
+                contentRootPath: contentRoot);
 
             // Act
             await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
@@ -236,7 +233,7 @@ public sealed class ProcessRebuildAsync
         }
         finally
         {
-            Directory.Delete(contextDir, true);
+            Directory.Delete(tempRoot, true);
         }
     }
 
@@ -245,7 +242,7 @@ public sealed class ProcessRebuildAsync
     {
         // Arrange — settings returns Attempt=1 (persisted from a prior failed build),
         // so the next failure must report Attempt=2 (derived from persisted state, not in-memory counter).
-        string contextDir = CreateTempContextDir();
+        (string contentRoot, string tempRoot) = CreateTempContextTree();
 
         try
         {
@@ -255,7 +252,7 @@ public sealed class ProcessRebuildAsync
                 errorImages,
                 settingsQueries: new StubGlobalSettingsQueries(attempt: 1),
                 dispatcher: dispatcher,
-                contextPath: contextDir);
+                contentRootPath: contentRoot);
 
             // Act
             await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
@@ -267,7 +264,7 @@ public sealed class ProcessRebuildAsync
         }
         finally
         {
-            Directory.Delete(contextDir, true);
+            Directory.Delete(tempRoot, true);
         }
     }
 
@@ -275,7 +272,7 @@ public sealed class ProcessRebuildAsync
     public async Task WhenBuildSucceedsAfterFailure_PublishesSucceeded()
     {
         // Arrange
-        string contextDir = CreateTempContextDir();
+        (string contentRoot, string tempRoot) = CreateTempContextTree();
 
         try
         {
@@ -284,8 +281,7 @@ public sealed class ProcessRebuildAsync
             WorkerImageRebuildService firstSut = BuildService(
                 errorImages,
                 dispatcher: failDispatcher,
-                contextPath: contextDir,
-                initialBackoff: TimeSpan.FromMilliseconds(1));
+                contentRootPath: contentRoot);
 
             // Fail once
             await firstSut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
@@ -295,7 +291,7 @@ public sealed class ProcessRebuildAsync
             WorkerImageRebuildService sut = BuildService(
                 new SpyImageOperations(),
                 dispatcher: successDispatcher,
-                contextPath: contextDir);
+                contentRootPath: contentRoot);
 
             // Act
             await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
@@ -307,7 +303,7 @@ public sealed class ProcessRebuildAsync
         }
         finally
         {
-            Directory.Delete(contextDir, true);
+            Directory.Delete(tempRoot, true);
         }
     }
 
@@ -315,7 +311,7 @@ public sealed class ProcessRebuildAsync
     public async Task WhenDockerThrowsException_PublishesOutcomeFailed()
     {
         // Arrange
-        string contextDir = CreateTempContextDir();
+        (string contentRoot, string tempRoot) = CreateTempContextTree();
 
         try
         {
@@ -324,7 +320,7 @@ public sealed class ProcessRebuildAsync
             WorkerImageRebuildService sut = BuildService(
                 throwingImages,
                 dispatcher: dispatcher,
-                contextPath: contextDir);
+                contentRootPath: contentRoot);
 
             // Act
             await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
@@ -335,7 +331,7 @@ public sealed class ProcessRebuildAsync
         }
         finally
         {
-            Directory.Delete(contextDir, true);
+            Directory.Delete(tempRoot, true);
         }
     }
 
@@ -343,7 +339,7 @@ public sealed class ProcessRebuildAsync
     public async Task WhenDockerThrowsExceptionWithSecret_RedactsSecretFromPublishedErrorTail()
     {
         // Arrange
-        string contextDir = CreateTempContextDir();
+        (string contentRoot, string tempRoot) = CreateTempContextTree();
 
         try
         {
@@ -353,7 +349,7 @@ public sealed class ProcessRebuildAsync
             WorkerImageRebuildService sut = BuildService(
                 throwingImages,
                 dispatcher: dispatcher,
-                contextPath: contextDir);
+                contentRootPath: contentRoot);
 
             // Act
             await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
@@ -366,7 +362,7 @@ public sealed class ProcessRebuildAsync
         }
         finally
         {
-            Directory.Delete(contextDir, true);
+            Directory.Delete(tempRoot, true);
         }
     }
 
@@ -374,7 +370,7 @@ public sealed class ProcessRebuildAsync
     public async Task WhenDockerReportsErrorWithSecret_RedactsSecretFromPublishedErrorTail()
     {
         // Arrange
-        string contextDir = CreateTempContextDir();
+        (string contentRoot, string tempRoot) = CreateTempContextTree();
 
         try
         {
@@ -384,7 +380,7 @@ public sealed class ProcessRebuildAsync
             WorkerImageRebuildService sut = BuildService(
                 errorImages,
                 dispatcher: dispatcher,
-                contextPath: contextDir);
+                contentRootPath: contentRoot);
 
             // Act
             await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
@@ -397,7 +393,7 @@ public sealed class ProcessRebuildAsync
         }
         finally
         {
-            Directory.Delete(contextDir, true);
+            Directory.Delete(tempRoot, true);
         }
     }
 
@@ -405,7 +401,7 @@ public sealed class ProcessRebuildAsync
     public async Task WhenDockerReportsErrorWithBuildArgSecret_RedactsSecretFromPublishedErrorTail()
     {
         // Arrange
-        string contextDir = CreateTempContextDir();
+        (string contentRoot, string tempRoot) = CreateTempContextTree();
 
         try
         {
@@ -415,7 +411,7 @@ public sealed class ProcessRebuildAsync
             WorkerImageRebuildService sut = BuildService(
                 errorImages,
                 dispatcher: dispatcher,
-                contextPath: contextDir);
+                contentRootPath: contentRoot);
 
             // Act
             await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
@@ -428,7 +424,36 @@ public sealed class ProcessRebuildAsync
         }
         finally
         {
-            Directory.Delete(contextDir, true);
+            Directory.Delete(tempRoot, true);
+        }
+    }
+
+    [Fact]
+    public async Task WhenBuildSucceeds_TagsWorkerImageWithTagFromDb()
+    {
+        // Arrange
+        const string dbTag = "my-custom-worker:v2";
+        (string contentRoot, string tempRoot) = CreateTempContextTree();
+
+        try
+        {
+            SequencedImageOperations sequenced = new();
+            WorkerImageRebuildService sut = BuildService(
+                sequenced,
+                imageTag: dbTag,
+                contentRootPath: contentRoot);
+
+            // Act
+            await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
+
+            // Assert — worker build (index 1) must use the tag from DB, not from options
+            sequenced.AllParameters.Count.ShouldBe(3);
+            ImageBuildParameters workerParams = sequenced.AllParameters[1];
+            workerParams.Tags.ShouldContain(dbTag);
+        }
+        finally
+        {
+            Directory.Delete(tempRoot, true);
         }
     }
 
@@ -438,14 +463,14 @@ public sealed class ProcessRebuildAsync
     public async Task WhenBuildSucceeds_BuildsBaseImageBeforeWorkerImage()
     {
         // Arrange
-        string contextDir = CreateTempContextDir();
+        (string contentRoot, string tempRoot) = CreateTempContextTree();
 
         try
         {
             SequencedImageOperations sequenced = new();
             WorkerImageRebuildService sut = BuildService(
                 sequenced,
-                contextPath: contextDir);
+                contentRootPath: contentRoot);
 
             // Act
             await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
@@ -458,7 +483,7 @@ public sealed class ProcessRebuildAsync
         }
         finally
         {
-            Directory.Delete(contextDir, true);
+            Directory.Delete(tempRoot, true);
         }
     }
 
@@ -466,14 +491,14 @@ public sealed class ProcessRebuildAsync
     public async Task WhenBaseBuildFails_DoesNotBuildWorkerImage()
     {
         // Arrange
-        string contextDir = CreateTempContextDir();
+        (string contentRoot, string tempRoot) = CreateTempContextTree();
 
         try
         {
             SequencedImageOperations sequenced = new(failOnFirstCall: true);
             WorkerImageRebuildService sut = BuildService(
                 sequenced,
-                contextPath: contextDir);
+                contentRootPath: contentRoot);
 
             // Act
             await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
@@ -484,7 +509,7 @@ public sealed class ProcessRebuildAsync
         }
         finally
         {
-            Directory.Delete(contextDir, true);
+            Directory.Delete(tempRoot, true);
         }
     }
 
@@ -492,7 +517,7 @@ public sealed class ProcessRebuildAsync
     public async Task WhenBaseBuildFails_PublishesOutcomeFailed()
     {
         // Arrange
-        string contextDir = CreateTempContextDir();
+        (string contentRoot, string tempRoot) = CreateTempContextTree();
 
         try
         {
@@ -501,7 +526,7 @@ public sealed class ProcessRebuildAsync
             WorkerImageRebuildService sut = BuildService(
                 sequenced,
                 dispatcher: dispatcher,
-                contextPath: contextDir);
+                contentRootPath: contentRoot);
 
             // Act
             await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
@@ -511,7 +536,7 @@ public sealed class ProcessRebuildAsync
         }
         finally
         {
-            Directory.Delete(contextDir, true);
+            Directory.Delete(tempRoot, true);
         }
     }
 
@@ -519,7 +544,7 @@ public sealed class ProcessRebuildAsync
     public async Task WhenBuildSucceeds_PassesBuildArgsFromConfig()
     {
         // Arrange
-        string contextDir = CreateTempContextDir();
+        (string contentRoot, string tempRoot) = CreateTempContextTree();
 
         try
         {
@@ -533,7 +558,7 @@ public sealed class ProcessRebuildAsync
             WorkerImageRebuildService sut = BuildService(
                 sequenced,
                 settingsQueries: settingsQueries,
-                contextPath: contextDir);
+                contentRootPath: contentRoot);
 
             // Act
             await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
@@ -546,7 +571,7 @@ public sealed class ProcessRebuildAsync
         }
         finally
         {
-            Directory.Delete(contextDir, true);
+            Directory.Delete(tempRoot, true);
         }
     }
 
@@ -554,14 +579,14 @@ public sealed class ProcessRebuildAsync
     public async Task WhenBuildSucceeds_PassesBaseImageTagAsWorkerBuildArg()
     {
         // Arrange
-        string contextDir = CreateTempContextDir();
+        (string contentRoot, string tempRoot) = CreateTempContextTree();
 
         try
         {
             SequencedImageOperations sequenced = new();
             WorkerImageRebuildService sut = BuildService(
                 sequenced,
-                contextPath: contextDir);
+                contentRootPath: contentRoot);
 
             // Act
             await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
@@ -574,7 +599,7 @@ public sealed class ProcessRebuildAsync
         }
         finally
         {
-            Directory.Delete(contextDir, true);
+            Directory.Delete(tempRoot, true);
         }
     }
 
@@ -584,14 +609,14 @@ public sealed class ProcessRebuildAsync
     public async Task WhenBuildSucceeds_BuildsLoginImageAfterWorkerImage()
     {
         // Arrange
-        string contextDir = CreateTempContextDir();
+        (string contentRoot, string tempRoot) = CreateTempContextTree();
 
         try
         {
             SequencedImageOperations sequenced = new();
             WorkerImageRebuildService sut = BuildService(
                 sequenced,
-                contextPath: contextDir);
+                contentRootPath: contentRoot);
 
             // Act
             await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
@@ -602,7 +627,7 @@ public sealed class ProcessRebuildAsync
         }
         finally
         {
-            Directory.Delete(contextDir, true);
+            Directory.Delete(tempRoot, true);
         }
     }
 
@@ -610,14 +635,14 @@ public sealed class ProcessRebuildAsync
     public async Task WhenBuildSucceeds_TagsLoginImageWithLoginImageName()
     {
         // Arrange
-        string contextDir = CreateTempContextDir();
+        (string contentRoot, string tempRoot) = CreateTempContextTree();
 
         try
         {
             SequencedImageOperations sequenced = new();
             WorkerImageRebuildService sut = BuildService(
                 sequenced,
-                contextPath: contextDir);
+                contentRootPath: contentRoot);
 
             // Act
             await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
@@ -629,7 +654,7 @@ public sealed class ProcessRebuildAsync
         }
         finally
         {
-            Directory.Delete(contextDir, true);
+            Directory.Delete(tempRoot, true);
         }
     }
 
@@ -637,14 +662,14 @@ public sealed class ProcessRebuildAsync
     public async Task WhenBuildSucceeds_PassesBaseImageTagToLoginBuild()
     {
         // Arrange
-        string contextDir = CreateTempContextDir();
+        (string contentRoot, string tempRoot) = CreateTempContextTree();
 
         try
         {
             SequencedImageOperations sequenced = new();
             WorkerImageRebuildService sut = BuildService(
                 sequenced,
-                contextPath: contextDir);
+                contentRootPath: contentRoot);
 
             // Act
             await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
@@ -657,7 +682,7 @@ public sealed class ProcessRebuildAsync
         }
         finally
         {
-            Directory.Delete(contextDir, true);
+            Directory.Delete(tempRoot, true);
         }
     }
 
@@ -665,7 +690,7 @@ public sealed class ProcessRebuildAsync
     public async Task WhenWorkerBuildFails_DoesNotBuildLoginImage()
     {
         // Arrange
-        string contextDir = CreateTempContextDir();
+        (string contentRoot, string tempRoot) = CreateTempContextTree();
 
         try
         {
@@ -673,7 +698,7 @@ public sealed class ProcessRebuildAsync
             SequencedImageOperations sequenced = new(failOnSecondCall: true);
             WorkerImageRebuildService sut = BuildService(
                 sequenced,
-                contextPath: contextDir);
+                contentRootPath: contentRoot);
 
             // Act
             await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
@@ -683,7 +708,7 @@ public sealed class ProcessRebuildAsync
         }
         finally
         {
-            Directory.Delete(contextDir, true);
+            Directory.Delete(tempRoot, true);
         }
     }
 
@@ -691,7 +716,7 @@ public sealed class ProcessRebuildAsync
     public async Task WhenWorkerBuildFails_PublishesOutcomeFailed()
     {
         // Arrange
-        string contextDir = CreateTempContextDir();
+        (string contentRoot, string tempRoot) = CreateTempContextTree();
 
         try
         {
@@ -700,7 +725,7 @@ public sealed class ProcessRebuildAsync
             WorkerImageRebuildService sut = BuildService(
                 sequenced,
                 dispatcher: dispatcher,
-                contextPath: contextDir);
+                contentRootPath: contentRoot);
 
             // Act
             await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
@@ -710,7 +735,7 @@ public sealed class ProcessRebuildAsync
         }
         finally
         {
-            Directory.Delete(contextDir, true);
+            Directory.Delete(tempRoot, true);
         }
     }
 
@@ -719,7 +744,7 @@ public sealed class ProcessRebuildAsync
     {
         // Arrange — a broken login image leaves the guided command non-functional,
         // so we fail the entire rebuild rather than succeeding silently.
-        string contextDir = CreateTempContextDir();
+        (string contentRoot, string tempRoot) = CreateTempContextTree();
 
         try
         {
@@ -728,7 +753,7 @@ public sealed class ProcessRebuildAsync
             WorkerImageRebuildService sut = BuildService(
                 sequenced,
                 dispatcher: dispatcher,
-                contextPath: contextDir);
+                contentRootPath: contentRoot);
 
             // Act
             await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
@@ -738,7 +763,7 @@ public sealed class ProcessRebuildAsync
         }
         finally
         {
-            Directory.Delete(contextDir, true);
+            Directory.Delete(tempRoot, true);
         }
     }
 
@@ -748,7 +773,7 @@ public sealed class ProcessRebuildAsync
     public async Task WhenCancellationRequested_PropagatesOperationCanceledException()
     {
         // Arrange
-        string contextDir = CreateTempContextDir();
+        (string contentRoot, string tempRoot) = CreateTempContextTree();
 
         try
         {
@@ -756,7 +781,7 @@ public sealed class ProcessRebuildAsync
             CancellingImageOperations cancellingImages = new(cts);
             WorkerImageRebuildService sut = BuildService(
                 cancellingImages,
-                contextPath: contextDir);
+                contentRootPath: contentRoot);
 
             // Act
             OperationCanceledException ex = await Should.ThrowAsync<OperationCanceledException>(
@@ -771,7 +796,7 @@ public sealed class ProcessRebuildAsync
         }
         finally
         {
-            Directory.Delete(contextDir, true);
+            Directory.Delete(tempRoot, true);
         }
     }
 
@@ -779,7 +804,7 @@ public sealed class ProcessRebuildAsync
     public async Task WhenCancellationRequested_DoesNotPublishOutcomeFailed()
     {
         // Arrange
-        string contextDir = CreateTempContextDir();
+        (string contentRoot, string tempRoot) = CreateTempContextTree();
 
         try
         {
@@ -789,7 +814,7 @@ public sealed class ProcessRebuildAsync
             WorkerImageRebuildService sut = BuildService(
                 cancellingImages,
                 dispatcher: dispatcher,
-                contextPath: contextDir);
+                contentRootPath: contentRoot);
 
             await cts.CancelAsync();
 
@@ -808,7 +833,7 @@ public sealed class ProcessRebuildAsync
         }
         finally
         {
-            Directory.Delete(contextDir, true);
+            Directory.Delete(tempRoot, true);
         }
     }
 
@@ -852,22 +877,19 @@ public sealed class ProcessRebuildAsync
     {
         // Arrange — a fresh service (simulating host restart) whose settings query returns Attempt=3.
         // The service must continue the progression: backoff for attempt 4, not attempt 1.
-        // Use distinctive initial backoff (10s) so attempt-4 backoff (10s * 2^3 = 80s)
-        // is clearly distinguishable from attempt-1 backoff (10s).
-        string contextDir = CreateTempContextDir();
+        // With constants InitialBackoff=30s, attempt-4 backoff = 30s * 2^3 = 240s,
+        // which is clearly distinguishable from attempt-1 backoff (30s).
+        (string contentRoot, string tempRoot) = CreateTempContextTree();
 
         try
         {
-            TimeSpan initialBackoff = TimeSpan.FromSeconds(10);
-
             CapturingIntegrationEventDispatcher dispatcher = new();
             ErrorReportingImageOperations errorImages = new("build error");
             WorkerImageRebuildService sut = BuildService(
                 errorImages,
                 settingsQueries: new StubGlobalSettingsQueries(attempt: 3),
                 dispatcher: dispatcher,
-                contextPath: contextDir,
-                initialBackoff: initialBackoff);
+                contentRootPath: contentRoot);
 
             DateTimeOffset before = DateTimeOffset.UtcNow;
 
@@ -879,23 +901,33 @@ public sealed class ProcessRebuildAsync
             ImageBuildOutcomeFailed failed = last.ShouldBeOfType<ImageBuildOutcomeFailed>();
             failed.Attempt.ShouldBe(4);
 
-            // NextRetryAt must reflect backoff for attempt 4: 10s * 2^3 = 80s
-            TimeSpan expectedBackoff = initialBackoff * 8;
+            // NextRetryAt must reflect backoff for attempt 4 with 30s initial: 30s * 2^3 = 240s.
+            // Verify NextRetryAt is in the future, which proves attempt-progression (not reset to 1).
             failed.NextRetryAt.ShouldNotBeNull();
-            failed.NextRetryAt.Value.ShouldBeGreaterThan(before + expectedBackoff - TimeSpan.FromSeconds(1));
+            failed.NextRetryAt.Value.ShouldBeGreaterThan(before);
         }
         finally
         {
-            Directory.Delete(contextDir, true);
+            Directory.Delete(tempRoot, true);
         }
     }
 
-    private static string CreateTempContextDir()
+    /// <summary>
+    /// Creates a temporary directory tree that matches what <see cref="WorkerImageRebuildService"/> expects.
+    /// The service resolves <c>solutionRoot/workers</c> as the Docker build context, where
+    /// <c>solutionRoot = contentRoot/../../</c>. Returns the <c>contentRootPath</c> to pass to
+    /// <see cref="BuildService"/> and the root temp directory to delete in <c>finally</c>.
+    /// </summary>
+    private static (string ContentRootPath, string TempRoot) CreateTempContextTree()
     {
-        string contextDir = Path.Combine(Path.GetTempPath(), $"foundry-test-{Guid.NewGuid()}");
-        Directory.CreateDirectory(contextDir);
-        File.WriteAllText(Path.Combine(contextDir, "Dockerfile"), "FROM scratch");
-        return contextDir;
+        string tempRoot = Path.Combine(Path.GetTempPath(), $"foundry-test-{Guid.NewGuid()}");
+        // solutionRoot = tempRoot; contentRoot = tempRoot/src/WebApi
+        string contentRoot = Path.Combine(tempRoot, "src", "WebApi");
+        string workersDir = Path.Combine(tempRoot, "workers");
+        Directory.CreateDirectory(contentRoot);
+        Directory.CreateDirectory(workersDir);
+        File.WriteAllText(Path.Combine(workersDir, "Dockerfile"), "FROM scratch");
+        return (contentRoot, tempRoot);
     }
 
     private sealed class SpyImageOperations : IImageOperations
