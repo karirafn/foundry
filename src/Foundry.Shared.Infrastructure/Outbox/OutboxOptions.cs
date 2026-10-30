@@ -1,16 +1,16 @@
 namespace Foundry.Shared.Infrastructure.Outbox;
 
-public sealed class OutboxOptions
+internal sealed record OutboxOptions
 {
-    public TimeSpan TickInterval { get; set; } = TimeSpan.FromSeconds(2);
+    public TimeSpan TickInterval { get; init; } = TimeSpan.FromSeconds(2);
 
-    public int BatchSize { get; set; } = 100;
+    public int BatchSize { get; init; } = 100;
 
-    public int MaxAttempts { get; set; } = 10;
+    public int MaxAttempts { get; init; } = 10;
 
-    public TimeSpan RetentionWindow { get; set; } = TimeSpan.FromDays(7);
+    public TimeSpan RetentionWindow { get; init; } = TimeSpan.FromDays(7);
 
-    public TimeSpan RetentionSweepInterval { get; set; } = TimeSpan.FromHours(1);
+    public TimeSpan RetentionSweepInterval { get; init; } = TimeSpan.FromHours(1);
 
-    public int InboxPruneBatchSize { get; set; } = 5000;
+    public int InboxPruneBatchSize { get; init; } = 5000;
 }

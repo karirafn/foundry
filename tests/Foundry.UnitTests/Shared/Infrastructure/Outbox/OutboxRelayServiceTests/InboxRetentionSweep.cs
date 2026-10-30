@@ -6,7 +6,6 @@ using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
-using Microsoft.Extensions.Options;
 
 using Shouldly;
 
@@ -55,20 +54,16 @@ public sealed class InboxRetentionSweep : IAsyncDisposable
         });
         services.AddScoped<DbContext>(sp => sp.GetRequiredService<FoundryDbContext>());
 
-        services.AddSingleton(Options.Create(new OutboxOptions
-        {
-            RetentionWindow = TimeSpan.FromDays(7),
-            RetentionSweepInterval = TimeSpan.FromHours(1),
-        }));
-
         return services.BuildServiceProvider();
     }
 
     private OutboxRelayService CreateSut(OutboxOptions? optionsOverride = null)
     {
-        IOptions<OutboxOptions> options = optionsOverride is not null
-            ? Options.Create(optionsOverride)
-            : _serviceProvider.GetRequiredService<IOptions<OutboxOptions>>();
+        OutboxOptions options = optionsOverride ?? new OutboxOptions
+        {
+            RetentionWindow = TimeSpan.FromDays(7),
+            RetentionSweepInterval = TimeSpan.FromHours(1),
+        };
 
         IServiceScopeFactory scopeFactory = _serviceProvider.GetRequiredService<IServiceScopeFactory>();
         return new OutboxRelayService(scopeFactory, options, NullLogger<OutboxRelayService>.Instance);
@@ -176,16 +171,15 @@ public sealed class InboxRetentionSweep : IAsyncDisposable
             options.AddInterceptors(sp.GetRequiredService<OutboxSaveChangesInterceptor>());
         });
         services.AddScoped<DbContext>(sp => sp.GetRequiredService<FoundryDbContext>());
-        services.AddSingleton(Options.Create(new OutboxOptions
+        await using ServiceProvider provider = services.BuildServiceProvider();
+
+        OutboxOptions outboxOptions = new()
         {
             RetentionWindow = TimeSpan.FromDays(7),
             RetentionSweepInterval = TimeSpan.FromHours(1),
-        }));
-        await using ServiceProvider provider = services.BuildServiceProvider();
-
-        IOptions<OutboxOptions> options = provider.GetRequiredService<IOptions<OutboxOptions>>();
+        };
         IServiceScopeFactory scopeFactory = provider.GetRequiredService<IServiceScopeFactory>();
-        OutboxRelayService sut = new(scopeFactory, options, NullLogger<OutboxRelayService>.Instance);
+        OutboxRelayService sut = new(scopeFactory, outboxOptions, NullLogger<OutboxRelayService>.Instance);
 
         // Seed an outbox message for the same event so the relay attempts redelivery
         await using AsyncServiceScope outboxScope = provider.CreateAsyncScope();

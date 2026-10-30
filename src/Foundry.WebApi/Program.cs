@@ -57,8 +57,7 @@ builder.Services.AddScoped<DbContext>(sp => sp.GetRequiredService<FoundryDbConte
 builder.Services.AddScoped<IDomainEventDispatcher, DomainEventDispatcher>();
 builder.Services.AddScoped<IIntegrationEventDispatcher, OutboxIntegrationEventDispatcher>();
 builder.Services.AddScoped<IIntegrationEventProcessor, IntegrationEventProcessor>();
-builder.Services.Configure<OutboxOptions>(builder.Configuration.GetSection("Outbox"));
-builder.Services.AddOutboxOptionsValidation();
+builder.Services.AddSingleton(new OutboxOptions());
 
 if (!isDocGeneration)
 {

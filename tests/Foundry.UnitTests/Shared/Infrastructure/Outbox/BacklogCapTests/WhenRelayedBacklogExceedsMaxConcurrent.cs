@@ -25,7 +25,6 @@ using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
-using Microsoft.Extensions.Options;
 
 using Shouldly;
 
@@ -92,8 +91,6 @@ public sealed class WhenRelayedBacklogExceedsMaxConcurrent : IAsyncDisposable
         });
         services.AddScoped<DbContext>(sp => sp.GetRequiredService<FoundryDbContext>());
 
-        services.AddSingleton(Options.Create(new OutboxOptions()));
-
         // ─── Domain event dispatching ─────────────────────────────────────────────
         services.AddScoped<IDomainEventDispatcher, DomainEventDispatcher>();
         services.AddScoped<IDomainEventHandler<DomainWorkerRunFailed>, WorkerRunFailedBridgeHandler>();
@@ -128,7 +125,7 @@ public sealed class WhenRelayedBacklogExceedsMaxConcurrent : IAsyncDisposable
     private OutboxRelayService BuildRelayService()
         => new(
             _serviceProvider.GetRequiredService<IServiceScopeFactory>(),
-            _serviceProvider.GetRequiredService<IOptions<OutboxOptions>>(),
+            new OutboxOptions(),
             NullLogger<OutboxRelayService>.Instance);
 
     private async Task SeedQueuedIssueAsync(int issueNumber)
