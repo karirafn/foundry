@@ -76,7 +76,7 @@ public sealed class HandleAsync : IAsyncLifetime
     }
 
     [Fact]
-    public async Task WhenFlagsChange_PublishesWorkerImageConfigurationChangedEvent()
+    public async Task WhenFlagsChange_PublishesWorkerImageSettingsChangedEvent()
     {
         // Arrange
         await SeedSettingsAsync(CreateConfig());
@@ -100,7 +100,7 @@ public sealed class HandleAsync : IAsyncLifetime
 
         // Assert
         result.ShouldBeOfType<Result<GlobalSettingsSummary>.Success>();
-        dispatcher.Captured.ShouldContain(e => e is WorkerImageConfigurationChanged);
+        dispatcher.Captured.ShouldContain(e => e is WorkerImageSettingsChanged);
     }
 
     [Fact]
@@ -133,7 +133,7 @@ public sealed class HandleAsync : IAsyncLifetime
     }
 
     [Fact]
-    public async Task WhenOnlyInstallChromiumChanges_PublishesWorkerImageConfigurationChangedEvent()
+    public async Task WhenOnlyInstallChromiumChanges_PublishesWorkerImageSettingsChangedEvent()
     {
         // Arrange
         await SeedSettingsAsync(CreateConfig());
@@ -157,11 +157,11 @@ public sealed class HandleAsync : IAsyncLifetime
 
         // Assert
         result.ShouldBeOfType<Result<GlobalSettingsSummary>.Success>();
-        dispatcher.Captured.ShouldContain(e => e is WorkerImageConfigurationChanged);
+        dispatcher.Captured.ShouldContain(e => e is WorkerImageSettingsChanged);
     }
 
     [Fact]
-    public async Task WhenOnlyInstallDockerChanges_PublishesWorkerImageConfigurationChangedEvent()
+    public async Task WhenOnlyInstallDockerChanges_PublishesWorkerImageSettingsChangedEvent()
     {
         // Arrange
         await SeedSettingsAsync(CreateConfig());
@@ -185,7 +185,7 @@ public sealed class HandleAsync : IAsyncLifetime
 
         // Assert
         result.ShouldBeOfType<Result<GlobalSettingsSummary>.Success>();
-        dispatcher.Captured.ShouldContain(e => e is WorkerImageConfigurationChanged);
+        dispatcher.Captured.ShouldContain(e => e is WorkerImageSettingsChanged);
     }
 
     [Fact]
@@ -334,7 +334,7 @@ public sealed class HandleAsync : IAsyncLifetime
     }
 
     [Fact]
-    public async Task WhenImageTagChanges_PublishesWorkerImageConfigurationChangedEvent()
+    public async Task WhenImageTagChanges_PublishesWorkerImageSettingsChangedEvent()
     {
         // Arrange
         await SeedSettingsAsync(CreateConfig());
@@ -358,7 +358,7 @@ public sealed class HandleAsync : IAsyncLifetime
 
         // Assert
         result.ShouldBeOfType<Result<GlobalSettingsSummary>.Success>();
-        dispatcher.Captured.ShouldContain(e => e is WorkerImageConfigurationChanged);
+        dispatcher.Captured.ShouldContain(e => e is WorkerImageSettingsChanged);
     }
 
     [Fact]
@@ -420,7 +420,7 @@ public sealed class HandleAsync : IAsyncLifetime
     }
 
     [Fact]
-    public async Task WhenBuildEnabledChanges_PublishesWorkerImageConfigurationChangedEvent()
+    public async Task WhenBuildEnabledChanges_PublishesWorkerImageSettingsChangedEvent()
     {
         // Arrange
         await SeedSettingsAsync(CreateConfig(buildEnabled: true));
@@ -444,7 +444,7 @@ public sealed class HandleAsync : IAsyncLifetime
 
         // Assert
         result.ShouldBeOfType<Result<GlobalSettingsSummary>.Success>();
-        dispatcher.Captured.ShouldContain(e => e is WorkerImageConfigurationChanged);
+        dispatcher.Captured.ShouldContain(e => e is WorkerImageSettingsChanged);
     }
 
     [Fact]

@@ -17,7 +17,7 @@ using Xunit;
 namespace Foundry.UnitTests.Modules.Settings.Features.WorkerConfig.UpdateWorkerImageConfigurationTests;
 
 /// <summary>
-/// Verifies that UpdateWorkerImageConfiguration.Handler enqueues WorkerImageConfigurationChanged
+/// Verifies that UpdateWorkerImageConfiguration.Handler enqueues WorkerImageSettingsChanged
 /// before SaveChangesAsync so the outbox interceptor harvests the event atomically.
 /// </summary>
 public sealed class OutboxHarvestHandleAsync : IAsyncDisposable
@@ -61,7 +61,7 @@ public sealed class OutboxHarvestHandleAsync : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenFlagsChange_WorkerImageConfigurationChangedRowPersistedAtomically()
+    public async Task WhenFlagsChange_WorkerImageSettingsChangedRowPersistedAtomically()
     {
         // Arrange — seed settings with all flags off
         using (IServiceScope seedScope = _serviceProvider.CreateScope())
@@ -95,12 +95,12 @@ public sealed class OutboxHarvestHandleAsync : IAsyncDisposable
         // Assert — success
         result.ShouldBeOfType<Result<GlobalSettingsSummary>.Success>();
 
-        // Assert — WorkerImageConfigurationChanged outbox row written atomically with change
+        // Assert — WorkerImageSettingsChanged outbox row written atomically with change
         dbContext.ChangeTracker.Clear();
         List<OutboxMessage> messages = await dbContext
             .Set<OutboxMessage>()
             .ToListAsync(TestContext.Current.CancellationToken);
-        messages.ShouldContain(m => m.Type.Contains(nameof(WorkerImageConfigurationChanged)));
+        messages.ShouldContain(m => m.Type.Contains(nameof(WorkerImageSettingsChanged)));
     }
 
     [Fact]

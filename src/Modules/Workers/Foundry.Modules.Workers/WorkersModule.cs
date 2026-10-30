@@ -57,7 +57,7 @@ public static class WorkersModule
 
         services.AddIntegrationEventHandler<IssueClaimed, IssueClaimedHandler>();
         services.AddIntegrationEventHandler<ClaimSkipped, ClaimSkippedHandler>();
-        services.AddIntegrationEventHandler<WorkerImageConfigurationChanged, WorkerImageConfigurationChangedHandler>();
+        services.AddIntegrationEventHandler<WorkerImageSettingsChanged, WorkerImageSettingsChangedHandler>();
         services.AddIntegrationEventHandler<DispatchPaused, DispatchPausedBroadcastHandler>();
         services.AddIntegrationEventHandler<DispatchResumed, DispatchResumedBroadcastHandler>();
         services.AddIntegrationEventHandler<ImageBuildStarted, ImageBuildStartedBroadcastHandler>();

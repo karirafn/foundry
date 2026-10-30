@@ -58,7 +58,7 @@ internal static class UpdateWorkerImageConfiguration
             if (changed)
             {
                 await integrationEventDispatcher.DispatchAsync(
-                    [new WorkerImageConfigurationChanged()],
+                    [new WorkerImageSettingsChanged()],
                     cancellationToken);
 
                 await dbContext.SaveChangesAsync(cancellationToken);
