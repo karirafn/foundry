@@ -10,6 +10,10 @@ status: accepted
 > boundary. The remaining flags (`INSTALL_DOTNET`, `INSTALL_ANGULAR`, `INSTALL_CHROMIUM`, `INSTALL_DOCKER`)
 > stay as described. This was overturned by later work, not false when written.
 
+> **2026-10-30 — Amended:** the clause keeping mounts and CPU/PID/memory limits in `IConfiguration` (Decision,
+> last paragraph; Consequences, first bullet) is replaced by [ADR 0080](0080-all-worker-settings-in-global-settings.md),
+> which moves every operator-facing worker setting into `GlobalSettings`.
+
 ## Context
 
 The worker image preinstall flags (`INSTALL_DOTNET`, `INSTALL_ANGULAR`, `INSTALL_GLAB`, `INSTALL_GH`) were free-form entries in `Workers:ImageBuild:BuildArgs` (`IConfiguration`), deliberately excluded from the DB-backed `GlobalSettings` aggregate — DOMAIN.md records "infrastructure-only settings (Docker image, mounts, memory/CPU/PID limits) remain in `IConfiguration`".
