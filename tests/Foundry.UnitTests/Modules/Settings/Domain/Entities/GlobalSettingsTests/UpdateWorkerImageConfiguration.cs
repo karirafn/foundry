@@ -84,4 +84,75 @@ public sealed class UpdateWorkerImageConfiguration
         // Assert
         settings.UpdatedAt.ShouldBe(originalUpdatedAt);
     }
+
+    [Fact]
+    public void WhenOnlyImageTagChanges_ReturnsTrueAndBumpsUpdatedAt()
+    {
+        // Arrange
+        GlobalSettings settings = GlobalSettings.Create();
+        DateTimeOffset before = settings.UpdatedAt;
+        ImageConfig newConfig = ImageConfig.Create(
+            imageTag: "foundry-worker:v2",
+            buildEnabled: true,
+            installDotnet: false,
+            installAngular: false,
+            installChromium: false,
+            installDocker: false)
+            .Match(v => v, e => throw new InvalidOperationException(e.Message));
+
+        // Act
+        bool changed = settings.UpdateWorkerImageConfiguration(newConfig);
+
+        // Assert
+        changed.ShouldBeTrue();
+        settings.WorkerImageConfiguration.ShouldBe(newConfig);
+        settings.UpdatedAt.ShouldBeGreaterThanOrEqualTo(before);
+    }
+
+    [Fact]
+    public void WhenOnlyBuildEnabledChanges_ReturnsTrueAndBumpsUpdatedAt()
+    {
+        // Arrange
+        GlobalSettings settings = GlobalSettings.Create();
+        DateTimeOffset before = settings.UpdatedAt;
+        ImageConfig newConfig = ImageConfig.Create(
+            imageTag: "foundry-worker:local",
+            buildEnabled: false,
+            installDotnet: false,
+            installAngular: false,
+            installChromium: false,
+            installDocker: false)
+            .Match(v => v, e => throw new InvalidOperationException(e.Message));
+
+        // Act
+        bool changed = settings.UpdateWorkerImageConfiguration(newConfig);
+
+        // Assert
+        changed.ShouldBeTrue();
+        settings.WorkerImageConfiguration.ShouldBe(newConfig);
+        settings.UpdatedAt.ShouldBeGreaterThanOrEqualTo(before);
+    }
+
+    [Fact]
+    public void WhenTagAndBuildEnabledAndFlagsAllMatch_ReturnsFalseAndDoesNotBumpUpdatedAt()
+    {
+        // Arrange
+        GlobalSettings settings = GlobalSettings.Create();
+        DateTimeOffset originalUpdatedAt = settings.UpdatedAt;
+        ImageConfig identicalConfig = ImageConfig.Create(
+            imageTag: "foundry-worker:local",
+            buildEnabled: true,
+            installDotnet: false,
+            installAngular: false,
+            installChromium: false,
+            installDocker: false)
+            .Match(v => v, e => throw new InvalidOperationException(e.Message));
+
+        // Act
+        bool changed = settings.UpdateWorkerImageConfiguration(identicalConfig);
+
+        // Assert
+        changed.ShouldBeFalse();
+        settings.UpdatedAt.ShouldBe(originalUpdatedAt);
+    }
 }
