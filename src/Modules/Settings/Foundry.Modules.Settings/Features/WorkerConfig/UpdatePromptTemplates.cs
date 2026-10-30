@@ -26,14 +26,9 @@ internal static class UpdatePromptTemplates
             Command command,
             CancellationToken cancellationToken)
         {
-            GlobalSettings? settings = await dbContext.Set<GlobalSettings>()
-                .FirstOrDefaultAsync(cancellationToken);
-
-            if (settings is null)
-            {
-                return Result<GlobalSettingsSummary>.Fail(SettingsErrors.NotFound);
-            }
-
+            // Validate the payload before loading state, so an invalid request fails with 400
+            // regardless of whether the settings row exists — a null-check-first order would mask
+            // a bad payload behind a 404 on a not-yet-seeded database.
             Result<WorkerPrompts> promptsResult = WorkerPrompts.Create(
                 command.SystemPromptTemplate,
                 command.WorkerPromptTemplate,
@@ -42,6 +37,14 @@ internal static class UpdatePromptTemplates
             if (promptsResult is not Result<WorkerPrompts>.Success promptsSuccess)
             {
                 return Result<GlobalSettingsSummary>.Fail(((Result<WorkerPrompts>.Failure)promptsResult).Error);
+            }
+
+            GlobalSettings? settings = await dbContext.Set<GlobalSettings>()
+                .FirstOrDefaultAsync(cancellationToken);
+
+            if (settings is null)
+            {
+                return Result<GlobalSettingsSummary>.Fail(SettingsErrors.NotFound);
             }
 
             settings.UpdatePrompts(promptsSuccess.Value);
