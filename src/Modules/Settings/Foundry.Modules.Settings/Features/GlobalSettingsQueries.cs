@@ -58,16 +58,17 @@ internal sealed class GlobalSettingsQueries(DbContext dbContext) : IGlobalSettin
         return value ?? GlobalSettings.DefaultPollIntervalSeconds;
     }
 
-    public async Task<(string? SystemPromptTemplate, string? WorkerPromptTemplate)> GetPromptTemplatesAsync(
+    public async Task<(string SystemPromptTemplate, string WorkerPromptTemplate, string BranchNamingInstruction)> GetPromptTemplatesAsync(
         CancellationToken cancellationToken)
     {
-        (string? SystemPromptTemplate, string? WorkerPromptTemplate) result =
-            await dbContext.Set<GlobalSettings>()
-                .AsNoTracking()
-                .Select(s => ValueTuple.Create(s.WorkerPrompts.SystemPromptTemplate, s.WorkerPrompts.WorkerPromptTemplate))
-                .FirstOrDefaultAsync(cancellationToken);
+        // WorkerPrompts is stored as a JSON blob and cannot be projected into SQL columns —
+        // the full entity must be loaded and the values read in memory.
+        GlobalSettings? settings = await dbContext.Set<GlobalSettings>()
+            .AsNoTracking()
+            .FirstOrDefaultAsync(cancellationToken);
 
-        return result;
+        WorkerPrompts prompts = settings?.WorkerPrompts ?? WorkerPrompts.Default;
+        return (prompts.SystemPromptTemplate, prompts.WorkerPromptTemplate, prompts.BranchNamingInstruction);
     }
 
     public async Task<DispatchPauseState> GetDispatchPauseStateAsync(CancellationToken cancellationToken)

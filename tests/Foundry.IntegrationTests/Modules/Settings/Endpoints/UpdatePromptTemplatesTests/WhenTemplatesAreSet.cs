@@ -49,8 +49,9 @@ public sealed class WhenTemplatesAreSet : IAsyncDisposable
         await SeedDefaultSettingsAsync();
         object body = new
         {
-            systemPromptTemplate = "You are a helpful assistant.",
-            workerPromptTemplate = "Process the following issue: {issue}",
+            systemPromptTemplate = "You are a helpful assistant for issue #{issueNumber}.",
+            workerPromptTemplate = "Process issue {issueNumber}: implement the requested changes.",
+            branchNamingInstruction = "Use conventional branch naming",
         };
 
         // Act
@@ -67,8 +68,9 @@ public sealed class WhenTemplatesAreSet : IAsyncDisposable
                 TestContext.Current.CancellationToken);
         summary.ShouldNotBeNull();
         summary.ShouldSatisfyAllConditions(
-            () => summary.SystemPromptTemplate.ShouldBe("You are a helpful assistant."),
-            () => summary.WorkerPromptTemplate.ShouldBe("Process the following issue: {issue}"));
+            () => summary.SystemPromptTemplate.ShouldBe("You are a helpful assistant for issue #{issueNumber}."),
+            () => summary.WorkerPromptTemplate.ShouldBe("Process issue {issueNumber}: implement the requested changes."),
+            () => summary.BranchNamingInstruction.ShouldBe("Use conventional branch naming"));
     }
 
     [Fact]
@@ -78,8 +80,9 @@ public sealed class WhenTemplatesAreSet : IAsyncDisposable
         await SeedDefaultSettingsAsync();
         object body = new
         {
-            systemPromptTemplate = "System prompt here.",
-            workerPromptTemplate = "Worker prompt here.",
+            systemPromptTemplate = "System prompt for issue #{issueNumber}.",
+            workerPromptTemplate = "Worker prompt for {issueNumber}.",
+            branchNamingInstruction = "feat/TICKET-description",
         };
 
         await _client.PutAsJsonAsync(
@@ -100,7 +103,8 @@ public sealed class WhenTemplatesAreSet : IAsyncDisposable
                 TestContext.Current.CancellationToken);
         summary.ShouldNotBeNull();
         summary.ShouldSatisfyAllConditions(
-            () => summary.SystemPromptTemplate.ShouldBe("System prompt here."),
-            () => summary.WorkerPromptTemplate.ShouldBe("Worker prompt here."));
+            () => summary.SystemPromptTemplate.ShouldBe("System prompt for issue #{issueNumber}."),
+            () => summary.WorkerPromptTemplate.ShouldBe("Worker prompt for {issueNumber}."),
+            () => summary.BranchNamingInstruction.ShouldBe("feat/TICKET-description"));
     }
 }

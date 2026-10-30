@@ -155,7 +155,7 @@ internal sealed class IssueClaimedHandler(
 
         string gitPat = claimed.AccountToken;
 
-        (string? dbSystemPromptTemplate, string? dbWorkerPromptTemplate) =
+        (string dbSystemPromptTemplate, string dbWorkerPromptTemplate, string _) =
             await settingsQueries.GetPromptTemplatesAsync(cancellationToken);
 
         string effectiveSystemPromptTemplate = dbSystemPromptTemplate ?? _options.SystemPromptTemplate;

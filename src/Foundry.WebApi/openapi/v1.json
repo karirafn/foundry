@@ -1329,7 +1329,7 @@
         "tags": [
           "Settings"
         ],
-        "summary": "Updates the system and worker prompt templates",
+        "summary": "Updates the system prompt, worker prompt, and branch naming instruction",
         "operationId": "UpdatePromptTemplates",
         "requestBody": {
           "content": {
@@ -1980,6 +1980,7 @@
           "pollIntervalSeconds",
           "systemPromptTemplate",
           "workerPromptTemplate",
+          "branchNamingInstruction",
           "usageLimitResetsAt",
           "isDispatchPaused",
           "autoResumeOnUsageReset",
@@ -2029,16 +2030,13 @@
             "format": "int32"
           },
           "systemPromptTemplate": {
-            "type": [
-              "null",
-              "string"
-            ]
+            "type": "string"
           },
           "workerPromptTemplate": {
-            "type": [
-              "null",
-              "string"
-            ]
+            "type": "string"
+          },
+          "branchNamingInstruction": {
+            "type": "string"
           },
           "usageLimitResetsAt": {
             "type": [
@@ -3038,21 +3036,19 @@
       "UpdatePromptTemplatesRequestBody": {
         "required": [
           "systemPromptTemplate",
-          "workerPromptTemplate"
+          "workerPromptTemplate",
+          "branchNamingInstruction"
         ],
         "type": "object",
         "properties": {
           "systemPromptTemplate": {
-            "type": [
-              "null",
-              "string"
-            ]
+            "type": "string"
           },
           "workerPromptTemplate": {
-            "type": [
-              "null",
-              "string"
-            ]
+            "type": "string"
+          },
+          "branchNamingInstruction": {
+            "type": "string"
           }
         }
       },

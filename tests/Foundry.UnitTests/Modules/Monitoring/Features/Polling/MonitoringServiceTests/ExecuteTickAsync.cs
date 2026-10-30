@@ -347,9 +347,9 @@ public sealed class ExecuteTickAsync : IAsyncDisposable
         public Task<int> GetProbeIntervalMinutesAsync(CancellationToken cancellationToken)
             => Task.FromResult(60);
 
-        public Task<(string? SystemPromptTemplate, string? WorkerPromptTemplate)> GetPromptTemplatesAsync(
+        public Task<(string SystemPromptTemplate, string WorkerPromptTemplate, string BranchNamingInstruction)> GetPromptTemplatesAsync(
             CancellationToken cancellationToken)
-            => Task.FromResult<(string?, string?)>((null, null));
+            => Task.FromResult(("", "", ""));
 
         public Task<Foundry.Modules.Settings.Contracts.Queries.DispatchPauseState> GetDispatchPauseStateAsync(
             CancellationToken cancellationToken)

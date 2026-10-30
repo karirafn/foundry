@@ -24,6 +24,7 @@ internal static class GlobalSettingsMapper
             settings.PollIntervalSeconds,
             settings.WorkerPrompts.SystemPromptTemplate,
             settings.WorkerPrompts.WorkerPromptTemplate,
+            settings.WorkerPrompts.BranchNamingInstruction,
             settings.UsageLimitResetsAt,
             settings.IsDispatchPaused,
             settings.AutoResumeOnUsageReset,

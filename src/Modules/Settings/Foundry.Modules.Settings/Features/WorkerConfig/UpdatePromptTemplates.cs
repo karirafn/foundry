@@ -14,38 +14,11 @@ namespace Foundry.Modules.Settings.Features.WorkerConfig;
 
 internal static class UpdatePromptTemplates
 {
-    internal sealed record Command(string? SystemPromptTemplate, string? WorkerPromptTemplate)
+    internal sealed record Command(
+        string SystemPromptTemplate,
+        string WorkerPromptTemplate,
+        string BranchNamingInstruction)
         : ICommand<GlobalSettingsSummary>;
-
-    internal sealed class Validator : ICommandValidator<Command>
-    {
-        public Result Validate(Command command)
-        {
-            if (command.SystemPromptTemplate is not null && command.SystemPromptTemplate.Length == 0)
-            {
-                return SettingsErrors.InvalidPromptTemplate;
-            }
-
-            if (command.WorkerPromptTemplate is not null && command.WorkerPromptTemplate.Length == 0)
-            {
-                return SettingsErrors.InvalidPromptTemplate;
-            }
-
-            if (command.SystemPromptTemplate is not null
-                && command.SystemPromptTemplate.Length > WorkerPrompts.MaxPromptTemplateLength)
-            {
-                return SettingsErrors.InvalidPromptTemplateTooLong;
-            }
-
-            if (command.WorkerPromptTemplate is not null
-                && command.WorkerPromptTemplate.Length > WorkerPrompts.MaxPromptTemplateLength)
-            {
-                return SettingsErrors.InvalidPromptTemplateTooLong;
-            }
-
-            return Result.Ok();
-        }
-    }
 
     internal sealed class Handler(DbContext dbContext) : ICommandHandler<Command, GlobalSettingsSummary>
     {
@@ -61,13 +34,17 @@ internal static class UpdatePromptTemplates
                 return Result<GlobalSettingsSummary>.Fail(SettingsErrors.NotFound);
             }
 
-            // TODO(step-2): Replace with WorkerPrompts.Create + settings.UpdatePrompts when UpdatePromptTemplates handler is rewritten.
-            Result updateResult = Result.Ok();
+            Result<WorkerPrompts> promptsResult = WorkerPrompts.Create(
+                command.SystemPromptTemplate,
+                command.WorkerPromptTemplate,
+                command.BranchNamingInstruction);
 
-            if (updateResult is Result.Failure updateFailure)
+            if (promptsResult is not Result<WorkerPrompts>.Success promptsSuccess)
             {
-                return Result<GlobalSettingsSummary>.Fail(updateFailure.Error);
+                return Result<GlobalSettingsSummary>.Fail(((Result<WorkerPrompts>.Failure)promptsResult).Error);
             }
+
+            settings.UpdatePrompts(promptsSuccess.Value);
 
             await dbContext.SaveChangesAsync(cancellationToken);
 
@@ -77,7 +54,10 @@ internal static class UpdatePromptTemplates
 
     internal static class Endpoint
     {
-        private sealed record RequestBody(string? SystemPromptTemplate, string? WorkerPromptTemplate);
+        private sealed record RequestBody(
+            string SystemPromptTemplate,
+            string WorkerPromptTemplate,
+            string BranchNamingInstruction);
 
         public static void Map(RouteGroupBuilder group)
         {
@@ -86,7 +66,7 @@ internal static class UpdatePromptTemplates
                     ICommandHandler<Command, GlobalSettingsSummary> handler,
                     CancellationToken cancellationToken) =>
                 {
-                    Command command = new(body.SystemPromptTemplate, body.WorkerPromptTemplate);
+                    Command command = new(body.SystemPromptTemplate, body.WorkerPromptTemplate, body.BranchNamingInstruction);
                     Result<GlobalSettingsSummary> result = await handler.HandleAsync(command, cancellationToken);
 
                     return result.Match<Results<Ok<GlobalSettingsSummary>, ProblemHttpResult>>(
@@ -98,7 +78,7 @@ internal static class UpdatePromptTemplates
                         });
                 })
                 .WithName("UpdatePromptTemplates")
-                .WithSummary("Updates the system and worker prompt templates")
+                .WithSummary("Updates the system prompt, worker prompt, and branch naming instruction")
                 .Produces<GlobalSettingsSummary>()
                 .ProducesProblem(StatusCodes.Status404NotFound)
                 .ProducesProblem(StatusCodes.Status400BadRequest);
