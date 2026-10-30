@@ -1,4 +1,4 @@
-@use '../../../../styles/controls' as *;
+@use '../../../styles/controls' as *;
 
 .general-settings {
   display: flex;
@@ -169,6 +169,12 @@
   &__api-key-warning-icon {
     flex-shrink: 0;
     margin-top: 0.0625rem;
+  }
+
+  &__field-error {
+    color: var(--fd-text-error);
+    font-size: 0.875rem;
+    overflow-wrap: break-word;
   }
 
   &__save-error,

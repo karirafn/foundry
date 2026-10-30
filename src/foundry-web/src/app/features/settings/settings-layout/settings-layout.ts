@@ -35,11 +35,49 @@ import { SettingsService } from '../../../core/services/settings.service';
           <nav class="settings-layout__sidebar" aria-label="Settings navigation">
             <a
               class="settings-layout__nav-link"
-              routerLink="general"
+              routerLink="dispatch"
               routerLinkActive="settings-layout__nav-link--active"
-              #generalLink="routerLinkActive"
-              [attr.aria-current]="generalLink.isActive ? 'page' : null"
-            >General</a>
+              #dispatchLink="routerLinkActive"
+              [attr.aria-current]="dispatchLink.isActive ? 'page' : null"
+            >Dispatch</a>
+            <a
+              class="settings-layout__nav-link"
+              routerLink="worker-image"
+              routerLinkActive="settings-layout__nav-link--active"
+              #workerImageLink="routerLinkActive"
+              [attr.aria-current]="workerImageLink.isActive ? 'page' : null"
+            >Worker image</a>
+            <a
+              class="settings-layout__nav-link"
+              routerLink="worker-environment"
+              routerLinkActive="settings-layout__nav-link--active"
+              #workerEnvironmentLink="routerLinkActive"
+              [attr.aria-current]="workerEnvironmentLink.isActive ? 'page' : null"
+            >Worker environment</a>
+            <a
+              class="settings-layout__nav-link"
+              routerLink="claude-code"
+              routerLinkActive="settings-layout__nav-link--active"
+              #claudeCodeLink="routerLinkActive"
+              [attr.aria-current]="claudeCodeLink.isActive ? 'page' : null"
+            >Claude Code</a>
+            <a
+              class="settings-layout__nav-link"
+              routerLink="prompts"
+              routerLinkActive="settings-layout__nav-link--active"
+              #promptsLink="routerLinkActive"
+              [attr.aria-current]="promptsLink.isActive ? 'page' : null"
+            >Prompts</a>
+            <a
+              class="settings-layout__nav-link"
+              routerLink="provider-hosts"
+              routerLinkActive="settings-layout__nav-link--active"
+              #providerHostsLink="routerLinkActive"
+              [attr.aria-current]="providerHostsLink.isActive ? 'page' : null"
+            >Provider hosts</a>
+
+            <hr class="settings-layout__nav-divider" aria-hidden="true" />
+
             <a
               class="settings-layout__nav-link"
               routerLink="accounts"
@@ -55,7 +93,7 @@ import { SettingsService } from '../../../core/services/settings.service';
               [attr.aria-current]="repositoriesLink.isActive ? 'page' : null"
             >Repositories</a>
           </nav>
-          <section class="settings-layout__content">
+          <section class="settings-layout__content" aria-label="Page content">
             <router-outlet />
           </section>
         </div>
