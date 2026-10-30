@@ -4,6 +4,7 @@ using System.Text.Json;
 
 using Foundry.Modules.Settings.Contracts;
 using Foundry.Modules.Settings.Domain.Entities;
+using Foundry.Modules.Settings.Domain.ValueObjects;
 using Foundry.WebApi.Persistence;
 
 using Microsoft.EntityFrameworkCore;
@@ -75,7 +76,12 @@ public sealed class WhenSettingsExist : IAsyncDisposable
         DbContext dbContext = scope.ServiceProvider.GetRequiredService<DbContext>();
 
         GlobalSettings settings = GlobalSettings.Create();
-        settings.UpdatePromptTemplates("system-prompt", "worker-prompt");
+        WorkerPrompts prompts = WorkerPrompts.Create(
+                "system-prompt",
+                "worker-prompt with #{issueNumber}.",
+                WorkerPrompts.Default.BranchNamingInstruction)
+            .Match(onSuccess: v => v, onFailure: e => throw new InvalidOperationException(e.Message));
+        settings.UpdatePrompts(prompts);
         dbContext.Set<GlobalSettings>().Add(settings);
         await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
 
