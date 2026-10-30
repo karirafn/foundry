@@ -160,6 +160,7 @@ internal sealed class IssueClaimedHandler(
 
         int timeoutMinutes = await settingsQueries.GetTimeoutMinutesAsync(cancellationToken);
         bool installsDocker = await settingsQueries.GetWorkerImageInstallsDockerAsync(cancellationToken);
+        string imageTag = await settingsQueries.GetWorkerImageTagAsync(cancellationToken);
 
         Result<string> systemPromptResult = SystemPromptBuilder.Build(
             claimed.IssueNumber,
@@ -252,7 +253,7 @@ internal sealed class IssueClaimedHandler(
         };
 
         WorkerContainerSpec spec = new(
-            _options.Image,
+            imageTag,
             envVars,
             bindMounts,
             labels,

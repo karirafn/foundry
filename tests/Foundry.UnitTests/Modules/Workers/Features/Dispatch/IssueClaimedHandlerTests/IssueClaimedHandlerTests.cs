@@ -1077,6 +1077,26 @@ public sealed class HandleAsync : IAsyncDisposable
     }
 
     [Fact]
+    public async Task WhenImageTagConfiguredInDb_ContainerSpecImageComesFromDb()
+    {
+        // Arrange
+        const string dbImageTag = "ghcr.io/owner/repo:db-tag-123";
+        StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c-db-image-tag");
+        IssueClaimedHandler sut = BuildHandler(
+            orchestrator: orchestrator,
+            settingsQueries: new StubGlobalSettingsQueries(imageTag: dbImageTag));
+        IssueClaimed @event = BuildEvent();
+
+        // Act
+        await sut.HandleAsync(@event, TestContext.Current.CancellationToken);
+
+        // Assert
+        WorkerContainerSpec? spec = orchestrator.LastSpec;
+        spec.ShouldNotBeNull();
+        spec.Image.ShouldBe(dbImageTag);
+    }
+
+    [Fact]
     public async Task WhenDockerInstalled_SystemPromptEnvVarContainsPrePrSection()
     {
         // Arrange
@@ -1272,7 +1292,8 @@ public sealed class HandleAsync : IAsyncDisposable
     private sealed class StubGlobalSettingsQueries(
         string? systemPromptTemplate = null,
         string? workerPromptTemplate = null,
-        bool installsDocker = false) : IGlobalSettingsQueries
+        bool installsDocker = false,
+        string imageTag = "stub-image:latest") : IGlobalSettingsQueries
     {
         public Task<GlobalSettingsSummary?> GetSettingsAsync(CancellationToken cancellationToken)
             => Task.FromResult<GlobalSettingsSummary?>(null);
@@ -1303,7 +1324,7 @@ public sealed class HandleAsync : IAsyncDisposable
             => Task.FromResult(installsDocker);
 
         public Task<string> GetWorkerImageTagAsync(CancellationToken cancellationToken)
-            => Task.FromResult(string.Empty);
+            => Task.FromResult(imageTag);
 
         public Task<bool> GetWorkerImageBuildEnabledAsync(CancellationToken cancellationToken)
             => Task.FromResult(false);
