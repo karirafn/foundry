@@ -17,6 +17,38 @@ describe('SettingsWorkerImageComponent', () => {
   });
 
   describe('Worker Image section', () => {
+    it('should render the image tag input with id "imageTag"', () => {
+      // Arrange
+      const { fixture, httpMock } = setupSettingsPage(SettingsWorkerImageComponent);
+      fixture.detectChanges();
+      flushSettings(httpMock);
+      fixture.detectChanges();
+
+      // Act
+      const el = fixture.nativeElement as HTMLElement;
+      const input = el.querySelector('#imageTag') as HTMLInputElement;
+
+      // Assert
+      expect(input).toBeTruthy();
+      expect(input.type).toBe('text');
+    });
+
+    it('should render the build enabled checkbox with id "buildEnabled"', () => {
+      // Arrange
+      const { fixture, httpMock } = setupSettingsPage(SettingsWorkerImageComponent);
+      fixture.detectChanges();
+      flushSettings(httpMock);
+      fixture.detectChanges();
+
+      // Act
+      const el = fixture.nativeElement as HTMLElement;
+      const checkbox = el.querySelector('#buildEnabled') as HTMLInputElement;
+
+      // Assert
+      expect(checkbox).toBeTruthy();
+      expect(checkbox.type).toBe('checkbox');
+    });
+
     it('should render the "Worker Image" section title', () => {
       // Arrange
       const { fixture, httpMock } = setupSettingsPage(SettingsWorkerImageComponent);
@@ -33,7 +65,7 @@ describe('SettingsWorkerImageComponent', () => {
       expect(imageHeading).toBeTruthy();
     });
 
-    it('should render four checkboxes for the image flags', () => {
+    it('should render four checkboxes for the image flags inside the fieldset', () => {
       // Arrange
       const { fixture, httpMock } = setupSettingsPage(SettingsWorkerImageComponent);
       fixture.detectChanges();
@@ -42,11 +74,42 @@ describe('SettingsWorkerImageComponent', () => {
 
       // Act
       const el = fixture.nativeElement as HTMLElement;
-      const imageForm = el.querySelector('.general-settings__image-form') as HTMLElement;
-      const checkboxes = imageForm?.querySelectorAll('input[type="checkbox"]');
+      const fieldset = el.querySelector('.general-settings__image-fieldset') as HTMLElement;
+      const checkboxes = fieldset?.querySelectorAll('input[type="checkbox"]');
 
       // Assert
       expect(checkboxes?.length).toBe(4);
+    });
+
+    it('should initialize imageTag input from loaded settings', () => {
+      // Arrange
+      const { fixture, httpMock } = setupSettingsPage(SettingsWorkerImageComponent);
+      fixture.detectChanges();
+      flushSettings(httpMock, { ...API_KEY_RESPONSE, imageTag: 'foundry-worker:2.1.0' });
+      fixture.detectChanges();
+
+      // Act
+      const el = fixture.nativeElement as HTMLElement;
+      const input = el.querySelector('#imageTag') as HTMLInputElement;
+      const ngModel = fixture.debugElement.query(By.css('#imageTag')).injector.get(NgModel);
+
+      // Assert
+      expect(ngModel.model).toBe('foundry-worker:2.1.0');
+      expect(input).toBeTruthy();
+    });
+
+    it('should initialize buildEnabled checkbox from loaded settings', () => {
+      // Arrange
+      const { fixture, httpMock } = setupSettingsPage(SettingsWorkerImageComponent);
+      fixture.detectChanges();
+      flushSettings(httpMock, { ...API_KEY_RESPONSE, buildEnabled: false });
+      fixture.detectChanges();
+
+      // Act
+      const ngModel = fixture.debugElement.query(By.css('#buildEnabled')).injector.get(NgModel);
+
+      // Assert
+      expect(ngModel.model).toBe(false);
     });
 
     it('should initialize checkboxes from loaded settings', () => {
@@ -67,6 +130,42 @@ describe('SettingsWorkerImageComponent', () => {
       expect(dotnetModel.model).toBe(true);
       expect(angularModel.model).toBe(false);
       expect(dotnetCheckbox).toBeTruthy();
+    });
+
+    it('should mark dirty when imageTag is changed', () => {
+      // Arrange
+      const { fixture, httpMock } = setupSettingsPage(SettingsWorkerImageComponent);
+      fixture.detectChanges();
+      flushSettings(httpMock, { ...API_KEY_RESPONSE, imageTag: 'foundry-worker:local' });
+      fixture.detectChanges();
+
+      // Act
+      const component = fixture.componentInstance as unknown as { _imageTagValue: { set: (v: string) => void } };
+      component._imageTagValue.set('foundry-worker:2.0.0');
+      fixture.detectChanges();
+
+      // Assert
+      const el = fixture.nativeElement as HTMLElement;
+      const saveBtn = el.querySelector('.general-settings__save-btn') as HTMLButtonElement;
+      expect(saveBtn.disabled).toBe(false);
+    });
+
+    it('should mark dirty when buildEnabled is toggled', () => {
+      // Arrange
+      const { fixture, httpMock } = setupSettingsPage(SettingsWorkerImageComponent);
+      fixture.detectChanges();
+      flushSettings(httpMock, { ...API_KEY_RESPONSE, buildEnabled: true });
+      fixture.detectChanges();
+
+      // Act
+      const component = fixture.componentInstance as unknown as { _buildEnabledValue: { set: (v: boolean) => void } };
+      component._buildEnabledValue.set(false);
+      fixture.detectChanges();
+
+      // Assert
+      const el = fixture.nativeElement as HTMLElement;
+      const saveBtn = el.querySelector('.general-settings__save-btn') as HTMLButtonElement;
+      expect(saveBtn.disabled).toBe(false);
     });
 
     it('should disable the Save button when flags are not dirty', () => {
@@ -104,6 +203,29 @@ describe('SettingsWorkerImageComponent', () => {
       expect(saveBtn.disabled).toBe(false);
     });
 
+    it('should trim the imageTag value before sending in the save payload', () => {
+      // Arrange
+      const { fixture, httpMock } = setupSettingsPage(SettingsWorkerImageComponent);
+      fixture.detectChanges();
+      flushSettings(httpMock, { ...API_KEY_RESPONSE, imageTag: 'foundry-worker:local', installDotnet: false });
+      fixture.detectChanges();
+
+      // Make dirty by setting a tag with surrounding whitespace
+      const component = fixture.componentInstance as unknown as { _imageTagValue: { set: (v: string) => void } };
+      component._imageTagValue.set('  foundry-worker:2.0.0  ');
+      fixture.detectChanges();
+
+      // Act
+      const el = fixture.nativeElement as HTMLElement;
+      const saveBtn = el.querySelector('.general-settings__save-btn') as HTMLButtonElement;
+      saveBtn.click();
+
+      // Assert — trimmed in the payload
+      const req = httpMock.expectOne('/api/settings/worker-image');
+      expect(req.request.body.imageTag).toBe('foundry-worker:2.0.0');
+      req.flush({ ...API_KEY_RESPONSE, imageTag: 'foundry-worker:2.0.0' });
+    });
+
     it('should call updateWorkerImageFlags when Save is clicked', () => {
       // Arrange
       const { fixture, httpMock } = setupSettingsPage(SettingsWorkerImageComponent);
@@ -125,8 +247,76 @@ describe('SettingsWorkerImageComponent', () => {
       // Assert
       const req = httpMock.expectOne('/api/settings/worker-image');
       expect(req.request.method).toBe('PUT');
-      expect(req.request.body).toEqual({ installDotnet: true, installAngular: false, installChromium: false, installDocker: false });
+      expect(req.request.body).toEqual({ imageTag: 'foundry-worker:local', buildEnabled: true, installDotnet: true, installAngular: false, installChromium: false, installDocker: false });
       req.flush({ ...API_KEY_RESPONSE, installDotnet: true });
+    });
+
+    it('should disable the four toolchain checkboxes when buildEnabled is false', () => {
+      // Arrange
+      const { fixture, httpMock } = setupSettingsPage(SettingsWorkerImageComponent);
+      fixture.detectChanges();
+      flushSettings(httpMock, { ...API_KEY_RESPONSE, buildEnabled: false });
+      fixture.detectChanges();
+
+      // Act
+      const el = fixture.nativeElement as HTMLElement;
+      const fieldset = el.querySelector('.general-settings__image-fieldset') as HTMLElement;
+      const toolchainCheckboxes = Array.from(fieldset?.querySelectorAll('input[type="checkbox"]') ?? []) as HTMLInputElement[];
+
+      // Assert — all four toolchain flags are disabled
+      expect(toolchainCheckboxes.length).toBe(4);
+      toolchainCheckboxes.forEach(cb => expect(cb.disabled).toBe(true));
+    });
+
+    it('should not reset flag values when build is toggled off', () => {
+      // Arrange
+      const { fixture, httpMock } = setupSettingsPage(SettingsWorkerImageComponent);
+      fixture.detectChanges();
+      flushSettings(httpMock, { ...API_KEY_RESPONSE, buildEnabled: true, installDotnet: true });
+      fixture.detectChanges();
+
+      // Act — disable build
+      const component = fixture.componentInstance as unknown as {
+        _buildEnabledValue: { set: (v: boolean) => void };
+        _installDotnetValue: () => boolean;
+      };
+      component._buildEnabledValue.set(false);
+      fixture.detectChanges();
+
+      // Assert — installDotnet value is preserved
+      expect(component._installDotnetValue()).toBe(true);
+    });
+
+    it('should show explanatory warning note when buildEnabled is false', () => {
+      // Arrange
+      const { fixture, httpMock } = setupSettingsPage(SettingsWorkerImageComponent);
+      fixture.detectChanges();
+      flushSettings(httpMock, { ...API_KEY_RESPONSE, buildEnabled: false });
+      fixture.detectChanges();
+
+      // Act
+      const el = fixture.nativeElement as HTMLElement;
+      const note = el.querySelector('#buildEnabled-off-note') as HTMLElement;
+
+      // Assert
+      expect(note).toBeTruthy();
+      expect(note.textContent).toContain('Foundry never pulls images');
+      expect(note.classList).toContain('general-settings__field-hint--warning');
+    });
+
+    it('should not show explanatory note when buildEnabled is true', () => {
+      // Arrange
+      const { fixture, httpMock } = setupSettingsPage(SettingsWorkerImageComponent);
+      fixture.detectChanges();
+      flushSettings(httpMock, { ...API_KEY_RESPONSE, buildEnabled: true });
+      fixture.detectChanges();
+
+      // Act
+      const el = fixture.nativeElement as HTMLElement;
+      const note = el.querySelector('#buildEnabled-off-note');
+
+      // Assert
+      expect(note).toBeFalsy();
     });
 
     it('should disable checkboxes and Save while imageBuildStatus is Building', () => {
@@ -309,7 +499,7 @@ describe('SettingsWorkerImageComponent', () => {
 
       // Assert
       const req = httpMock.expectOne('/api/settings/worker-image');
-      expect(req.request.body).toEqual({ installDotnet: false, installAngular: false, installChromium: true, installDocker: false });
+      expect(req.request.body).toEqual({ imageTag: 'foundry-worker:local', buildEnabled: true, installDotnet: false, installAngular: false, installChromium: true, installDocker: false });
       req.flush({ ...API_KEY_RESPONSE, installChromium: true });
     });
 
@@ -321,7 +511,7 @@ describe('SettingsWorkerImageComponent', () => {
       fixture.detectChanges();
 
       // Make dirty and attempt save
-      service.updateWorkerImageFlags({ installDotnet: true, installAngular: false, installChromium: false, installDocker: false });
+      service.updateWorkerImageFlags({ imageTag: 'foundry-worker:local', buildEnabled: true, installDotnet: true, installAngular: false, installChromium: false, installDocker: false });
       httpMock.expectOne('/api/settings/worker-image').flush('Error', { status: 500, statusText: 'Server Error' });
       fixture.detectChanges();
 
@@ -333,6 +523,95 @@ describe('SettingsWorkerImageComponent', () => {
       expect(errorEl).toBeTruthy();
       expect(errorEl?.getAttribute('role')).toBe('alert');
       expect(errorEl?.textContent).toContain('Failed to save worker image settings');
+    });
+
+    describe('image tag validation', () => {
+      it('should show "Image tag is required." error when tag is empty', () => {
+        // Arrange
+        const { fixture, httpMock } = setupSettingsPage(SettingsWorkerImageComponent);
+        fixture.detectChanges();
+        flushSettings(httpMock, { ...API_KEY_RESPONSE, imageTag: 'foundry-worker:local' });
+        fixture.detectChanges();
+
+        // Act — clear the tag
+        const component = fixture.componentInstance as unknown as { _imageTagValue: { set: (v: string) => void } };
+        component._imageTagValue.set('');
+        fixture.detectChanges();
+
+        // Assert
+        const el = fixture.nativeElement as HTMLElement;
+        const errorEl = el.querySelector('#imageTag-error') as HTMLElement;
+        expect(errorEl.textContent).toContain('Image tag is required.');
+      });
+
+      it('should show ":latest not allowed" error when tag ends in :latest', () => {
+        // Arrange
+        const { fixture, httpMock } = setupSettingsPage(SettingsWorkerImageComponent);
+        fixture.detectChanges();
+        flushSettings(httpMock, { ...API_KEY_RESPONSE, imageTag: 'foundry-worker:local' });
+        fixture.detectChanges();
+
+        // Act — set :latest tag
+        const component = fixture.componentInstance as unknown as { _imageTagValue: { set: (v: string) => void } };
+        component._imageTagValue.set('foundry-worker:latest');
+        fixture.detectChanges();
+
+        // Assert
+        const el = fixture.nativeElement as HTMLElement;
+        const errorEl = el.querySelector('#imageTag-error') as HTMLElement;
+        expect(errorEl.textContent).toContain(":latest' is not allowed");
+      });
+
+      it('should treat :LATEST (uppercase) as invalid (case-insensitive)', () => {
+        // Arrange
+        const { fixture, httpMock } = setupSettingsPage(SettingsWorkerImageComponent);
+        fixture.detectChanges();
+        flushSettings(httpMock, { ...API_KEY_RESPONSE, imageTag: 'foundry-worker:local' });
+        fixture.detectChanges();
+
+        // Act
+        const component = fixture.componentInstance as unknown as { _imageTagValue: { set: (v: string) => void } };
+        component._imageTagValue.set('foundry-worker:LATEST');
+        fixture.detectChanges();
+
+        // Assert — validation error shown (mirrors server's OrdinalIgnoreCase)
+        const el = fixture.nativeElement as HTMLElement;
+        const errorEl = el.querySelector('#imageTag-error') as HTMLElement;
+        expect(errorEl.textContent).toContain(":latest' is not allowed");
+      });
+
+      it('should disable the Save button when tag is empty even if dirty', () => {
+        // Arrange
+        const { fixture, httpMock } = setupSettingsPage(SettingsWorkerImageComponent);
+        fixture.detectChanges();
+        flushSettings(httpMock, { ...API_KEY_RESPONSE, imageTag: 'foundry-worker:local' });
+        fixture.detectChanges();
+
+        // Act — clear the tag (makes dirty AND invalid)
+        const component = fixture.componentInstance as unknown as { _imageTagValue: { set: (v: string) => void } };
+        component._imageTagValue.set('');
+        fixture.detectChanges();
+
+        // Assert
+        const el = fixture.nativeElement as HTMLElement;
+        const saveBtn = el.querySelector('.general-settings__save-btn') as HTMLButtonElement;
+        expect(saveBtn.disabled).toBe(true);
+      });
+
+      it('should not show validation error when tag is valid', () => {
+        // Arrange
+        const { fixture, httpMock } = setupSettingsPage(SettingsWorkerImageComponent);
+        fixture.detectChanges();
+        flushSettings(httpMock, { ...API_KEY_RESPONSE, imageTag: 'foundry-worker:1.2.3' });
+        fixture.detectChanges();
+
+        // Act
+        const el = fixture.nativeElement as HTMLElement;
+        const errorEl = el.querySelector('#imageTag-error') as HTMLElement;
+
+        // Assert — no error text
+        expect(errorEl.textContent?.trim()).toBe('');
+      });
     });
 
     it('should wrap the four checkboxes in a fieldset with a sr-only legend', () => {
@@ -363,7 +642,7 @@ describe('SettingsWorkerImageComponent', () => {
       fixture.detectChanges();
 
       // Act
-      service.updateWorkerImageFlags({ installDotnet: true, installAngular: false, installChromium: false, installDocker: false });
+      service.updateWorkerImageFlags({ imageTag: 'foundry-worker:local', buildEnabled: true, installDotnet: true, installAngular: false, installChromium: false, installDocker: false });
       httpMock.expectOne('/api/settings/worker-image').flush({ ...API_KEY_RESPONSE, installDotnet: true, imageBuildStatus: 'Building' });
       fixture.detectChanges();
 
@@ -610,6 +889,38 @@ describe('SettingsWorkerImageComponent', () => {
       // Act
       const component = fixture.componentInstance as unknown as { _installDotnetValue: { set: (v: boolean) => void } };
       component._installDotnetValue.set(true);
+      fixture.detectChanges();
+
+      // Assert
+      expect(fixture.componentInstance.hasUnsavedChanges()).toBe(true);
+    });
+
+    it('should return true when imageTag has changed', () => {
+      // Arrange
+      const { fixture, httpMock } = setupSettingsPage(SettingsWorkerImageComponent);
+      fixture.detectChanges();
+      flushSettings(httpMock, { ...API_KEY_RESPONSE, imageTag: 'foundry-worker:local' });
+      fixture.detectChanges();
+
+      // Act
+      const component = fixture.componentInstance as unknown as { _imageTagValue: { set: (v: string) => void } };
+      component._imageTagValue.set('foundry-worker:2.0.0');
+      fixture.detectChanges();
+
+      // Assert
+      expect(fixture.componentInstance.hasUnsavedChanges()).toBe(true);
+    });
+
+    it('should return true when buildEnabled has changed', () => {
+      // Arrange
+      const { fixture, httpMock } = setupSettingsPage(SettingsWorkerImageComponent);
+      fixture.detectChanges();
+      flushSettings(httpMock, { ...API_KEY_RESPONSE, buildEnabled: true });
+      fixture.detectChanges();
+
+      // Act
+      const component = fixture.componentInstance as unknown as { _buildEnabledValue: { set: (v: boolean) => void } };
+      component._buildEnabledValue.set(false);
       fixture.detectChanges();
 
       // Assert

@@ -35,6 +35,8 @@ export const mockRateBudgetService = {
 // ---------------------------------------------------------------------------
 
 export const IMAGE_FLAGS_DEFAULTS: {
+  imageTag: string;
+  buildEnabled: boolean;
   installDotnet: boolean;
   installAngular: boolean;
   installChromium: boolean;
@@ -45,6 +47,8 @@ export const IMAGE_FLAGS_DEFAULTS: {
   nextRetryAt: string | null;
   attempt: number;
 } = {
+  imageTag: 'foundry-worker:local',
+  buildEnabled: true,
   installDotnet: false,
   installAngular: false,
   installChromium: false,

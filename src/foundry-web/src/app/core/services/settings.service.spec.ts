@@ -54,6 +54,8 @@ function buildSettingsResponse(overrides: Record<string, unknown> = {}): Record<
     usageLimitResetsAt: null,
     isDispatchPaused: false,
     autoResumeOnUsageReset: true,
+    imageTag: 'foundry-worker:local',
+    buildEnabled: true,
     installDotnet: false,
     installAngular: false,
     installChromium: false,
@@ -942,6 +944,46 @@ describe('SettingsService', () => {
     expect(flags!.installDocker).toBe(true);
   });
 
+  it('should populate imageTag from loadSettings response', () => {
+    // Arrange
+    // (service initialized by test setup)
+
+    // Act
+    service.loadSettings();
+    flushLoadSettings(httpMock, { imageTag: 'foundry-worker:1.2.3' });
+
+    // Assert
+    const flags = service.workerImageFlags();
+    expect(flags!.imageTag).toBe('foundry-worker:1.2.3');
+  });
+
+  it('should populate buildEnabled from loadSettings response', () => {
+    // Arrange
+    // (service initialized by test setup)
+
+    // Act
+    service.loadSettings();
+    flushLoadSettings(httpMock, { buildEnabled: false });
+
+    // Assert
+    const flags = service.workerImageFlags();
+    expect(flags!.buildEnabled).toBe(false);
+  });
+
+  it('should include imageTag and buildEnabled in the PUT body when updateWorkerImageFlags is called', () => {
+    // Arrange
+    // (service initialized by test setup)
+
+    // Act
+    service.updateWorkerImageFlags({ imageTag: 'foundry-worker:2.0.0', buildEnabled: false, installDotnet: false, installAngular: false, installChromium: false, installDocker: false });
+    const req = httpMock.expectOne('/api/settings/worker-image');
+
+    // Assert
+    expect(req.request.body.imageTag).toBe('foundry-worker:2.0.0');
+    expect(req.request.body.buildEnabled).toBe(false);
+    req.flush(buildSettingsResponse({ imageTag: 'foundry-worker:2.0.0', buildEnabled: false }));
+  });
+
   // loadSettings sets imageBuildStatus from response
   it('should populate imageBuildStatus from loadSettings response', () => {
     // Arrange
@@ -977,12 +1019,12 @@ describe('SettingsService', () => {
     // (service initialized by test setup)
 
     // Act
-    service.updateWorkerImageFlags({ installDotnet: true, installAngular: false, installChromium: false, installDocker: false });
+    service.updateWorkerImageFlags({ imageTag: 'foundry-worker:local', buildEnabled: true, installDotnet: true, installAngular: false, installChromium: false, installDocker: false });
     const req = httpMock.expectOne('/api/settings/worker-image');
 
     // Assert
     expect(req.request.method).toBe('PUT');
-    expect(req.request.body).toEqual({ installDotnet: true, installAngular: false, installChromium: false, installDocker: false });
+    expect(req.request.body).toEqual({ imageTag: 'foundry-worker:local', buildEnabled: true, installDotnet: true, installAngular: false, installChromium: false, installDocker: false });
     req.flush(buildSettingsResponse({ installDotnet: true }));
   });
 
@@ -991,7 +1033,7 @@ describe('SettingsService', () => {
     // (service initialized by test setup)
 
     // Act
-    service.updateWorkerImageFlags({ installDotnet: false, installAngular: false, installChromium: false, installDocker: false });
+    service.updateWorkerImageFlags({ imageTag: 'foundry-worker:local', buildEnabled: true, installDotnet: false, installAngular: false, installChromium: false, installDocker: false });
 
     // Assert — before flush
     expect(service.savingImageFlags()).toBe(true);
@@ -1000,7 +1042,7 @@ describe('SettingsService', () => {
 
   it('should update workerImageFlags and clear savingImageFlags after updateWorkerImageFlags succeeds', () => {
     // Arrange
-    service.updateWorkerImageFlags({ installDotnet: true, installAngular: true, installChromium: false, installDocker: false });
+    service.updateWorkerImageFlags({ imageTag: 'foundry-worker:local', buildEnabled: true, installDotnet: true, installAngular: true, installChromium: false, installDocker: false });
     httpMock.expectOne('/api/settings/worker-image').flush(buildSettingsResponse({
       installDotnet: true,
       installAngular: true,
@@ -1015,7 +1057,7 @@ describe('SettingsService', () => {
 
   it('should set saveImageFlagsSuccess to true after updateWorkerImageFlags succeeds', () => {
     // Arrange
-    service.updateWorkerImageFlags({ installDotnet: true, installAngular: false, installChromium: false, installDocker: false });
+    service.updateWorkerImageFlags({ imageTag: 'foundry-worker:local', buildEnabled: true, installDotnet: true, installAngular: false, installChromium: false, installDocker: false });
     httpMock.expectOne('/api/settings/worker-image').flush(buildSettingsResponse({ installDotnet: true }));
 
     // Assert
@@ -1024,7 +1066,7 @@ describe('SettingsService', () => {
 
   it('should keep saveImageFlagsSuccess false when updateWorkerImageFlags fails', () => {
     // Arrange
-    service.updateWorkerImageFlags({ installDotnet: false, installAngular: false, installChromium: false, installDocker: false });
+    service.updateWorkerImageFlags({ imageTag: 'foundry-worker:local', buildEnabled: true, installDotnet: false, installAngular: false, installChromium: false, installDocker: false });
     httpMock.expectOne('/api/settings/worker-image').flush('Server Error', { status: 500, statusText: 'Internal Server Error' });
 
     // Assert
@@ -1033,7 +1075,7 @@ describe('SettingsService', () => {
 
   it('should reset saveImageFlagsSuccess in loadSettings', () => {
     // Arrange — put success signal into true state
-    service.updateWorkerImageFlags({ installDotnet: false, installAngular: false, installChromium: false, installDocker: false });
+    service.updateWorkerImageFlags({ imageTag: 'foundry-worker:local', buildEnabled: true, installDotnet: false, installAngular: false, installChromium: false, installDocker: false });
     httpMock.expectOne('/api/settings/worker-image').flush(buildSettingsResponse());
     expect(service.saveImageFlagsSuccess()).toBe(true);
 
@@ -1047,7 +1089,7 @@ describe('SettingsService', () => {
 
   it('should set saveImageFlagsError when updateWorkerImageFlags fails', () => {
     // Arrange
-    service.updateWorkerImageFlags({ installDotnet: false, installAngular: false, installChromium: false, installDocker: false });
+    service.updateWorkerImageFlags({ imageTag: 'foundry-worker:local', buildEnabled: true, installDotnet: false, installAngular: false, installChromium: false, installDocker: false });
     httpMock.expectOne('/api/settings/worker-image').flush('Server Error', {
       status: 500,
       statusText: 'Internal Server Error',
@@ -1060,7 +1102,7 @@ describe('SettingsService', () => {
 
   it('should set saveImageFlagsError to a fixed user-facing string when updateWorkerImageFlags fails', () => {
     // Arrange
-    service.updateWorkerImageFlags({ installDotnet: false, installAngular: false, installChromium: false, installDocker: false });
+    service.updateWorkerImageFlags({ imageTag: 'foundry-worker:local', buildEnabled: true, installDotnet: false, installAngular: false, installChromium: false, installDocker: false });
     httpMock.expectOne('/api/settings/worker-image').flush('Server Error', {
       status: 500,
       statusText: 'Internal Server Error',
@@ -1140,7 +1182,7 @@ describe('SettingsService', () => {
   // retryImageBuild resets saveImageFlagsSuccess
   it('should reset saveImageFlagsSuccess to false when retryImageBuild is called', () => {
     // Arrange — drive saveImageFlagsSuccess to true via updateWorkerImageFlags
-    service.updateWorkerImageFlags({ installDotnet: false, installAngular: false, installChromium: false, installDocker: false });
+    service.updateWorkerImageFlags({ imageTag: 'foundry-worker:local', buildEnabled: true, installDotnet: false, installAngular: false, installChromium: false, installDocker: false });
     httpMock.expectOne('/api/settings/worker-image').flush(buildSettingsResponse());
     expect(service.saveImageFlagsSuccess()).toBe(true);
 
@@ -1199,7 +1241,7 @@ describe('SettingsService', () => {
 
   it('should set hasUsableImage from updateWorkerImageFlags response', () => {
     // Arrange
-    service.updateWorkerImageFlags({ installDotnet: false, installAngular: false, installChromium: false, installDocker: false });
+    service.updateWorkerImageFlags({ imageTag: 'foundry-worker:local', buildEnabled: true, installDotnet: false, installAngular: false, installChromium: false, installDocker: false });
 
     // Act
     httpMock.expectOne('/api/settings/worker-image').flush(buildSettingsResponse({ hasUsableImage: true }));
@@ -1466,6 +1508,8 @@ describe('SettingsService — SignalR login session', () => {
       usageLimitResetsAt: null,
       isDispatchPaused: false,
       autoResumeOnUsageReset: true,
+      imageTag: 'foundry-worker:local',
+      buildEnabled: true,
       installDotnet: false,
       installAngular: false,
       installChromium: false,
@@ -1684,6 +1728,8 @@ describe('SettingsService — SignalR re-sync', () => {
       usageLimitResetsAt: null,
       isDispatchPaused: false,
       autoResumeOnUsageReset: true,
+      imageTag: 'foundry-worker:local',
+      buildEnabled: true,
       installDotnet: false,
       installAngular: false,
       installChromium: false,
@@ -1859,6 +1905,8 @@ describe('SettingsService — retry fields', () => {
       usageLimitResetsAt: null,
       isDispatchPaused: false,
       autoResumeOnUsageReset: true,
+      imageTag: 'foundry-worker:local',
+      buildEnabled: true,
       installDotnet: false,
       installAngular: false,
       installChromium: false,
@@ -1913,7 +1961,7 @@ describe('SettingsService — retry fields', () => {
     const { service, httpMock } = setup();
 
     // Act
-    service.updateWorkerImageFlags({ installDotnet: false, installAngular: false, installChromium: false, installDocker: false });
+    service.updateWorkerImageFlags({ imageTag: 'foundry-worker:local', buildEnabled: true, installDotnet: false, installAngular: false, installChromium: false, installDocker: false });
     httpMock.expectOne('/api/settings/worker-image').flush(buildSettings({ imageBuildStatus: 'Failed', nextRetryAt: '2026-08-08T14:00:00Z', attempt: 1 }));
 
     // Assert
@@ -1997,6 +2045,8 @@ describe('SettingsService — isColdBuildBlocking', () => {
       usageLimitResetsAt: null,
       isDispatchPaused: false,
       autoResumeOnUsageReset: true,
+      imageTag: 'foundry-worker:local',
+      buildEnabled: true,
       installDotnet: false,
       installAngular: false,
       installChromium: false,

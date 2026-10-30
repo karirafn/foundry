@@ -14,6 +14,10 @@ import { SettingsService } from '../../../core/services/settings.service';
 import { ImageBuildStatus, WorkerImageFlags } from '../../../core/models/settings.model';
 import { UnsavedChanges } from '../guards/unsaved-changes.guard';
 
+const LATEST_TAG_SUFFIX = ':latest';
+const ERROR_IMAGE_TAG_REQUIRED = 'Image tag is required.';
+const ERROR_IMAGE_TAG_LATEST = "Pin a specific tag — ':latest' is not allowed because it is ambiguous across rebuilds.";
+
 @Component({
   selector: 'fd-settings-worker-image',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -28,6 +32,47 @@ import { UnsavedChanges } from '../guards/unsaved-changes.guard';
         </p>
 
         <div class="general-settings__image-form">
+          <div class="general-settings__field">
+            <label class="general-settings__field-label" for="imageTag">Worker image tag</label>
+            <input
+              class="general-settings__text-input"
+              type="text"
+              id="imageTag"
+              autocomplete="off"
+              autocapitalize="off"
+              autocorrect="off"
+              spellcheck="false"
+              [ngModel]="_imageTagValue()"
+              (ngModelChange)="_imageTagValue.set($event)"
+              aria-describedby="imageTag-hint imageTag-error image-flags-error"
+              [attr.aria-invalid]="_imageTagError() || !!settingsService.saveImageFlagsError() || null"
+            />
+            <span id="imageTag-hint" class="general-settings__field-hint">
+              The Docker image tag for the worker container, e.g. <code>foundry-worker:local</code>. Pin a specific tag.
+            </span>
+            <span id="imageTag-error" class="general-settings__field-error" role="alert">{{ _imageTagErrorText() }}</span>
+          </div>
+
+          <label class="general-settings__checkbox-label" for="buildEnabled">
+            <input
+              type="checkbox"
+              id="buildEnabled"
+              [ngModel]="_buildEnabledValue()"
+              (ngModelChange)="_buildEnabledValue.set($event)"
+              [attr.disabled]="settingsService.imageBuildStatus() === 'Building' || null"
+              [attr.aria-describedby]="_buildEnabledValue() ? null : 'buildEnabled-off-note'"
+            />
+            Build the worker image on change
+          </label>
+
+          @if (!_buildEnabledValue()) {
+            <p id="buildEnabled-off-note" class="general-settings__field-hint general-settings__field-hint--warning">
+              Foundry never pulls images. With building off, the tag above must already exist on the Docker host —
+              Foundry only inspects it. A missing tag leaves the image build failed and dispatch paused until the
+              image exists or you turn building back on.
+            </p>
+          }
+
           <fieldset class="general-settings__image-fieldset">
             <legend class="sr-only">Preinstalled toolchains</legend>
 
@@ -38,7 +83,7 @@ import { UnsavedChanges } from '../guards/unsaved-changes.guard';
                   id="installDotnet"
                   [ngModel]="_installDotnetValue()"
                   (ngModelChange)="_installDotnetValue.set($event)"
-                  [attr.disabled]="settingsService.imageBuildStatus() === 'Building' || null"
+                  [attr.disabled]="_flagsDisabled() || null"
                   aria-describedby="installDotnet-hint"
                 />
                 <label for="installDotnet">Install .NET SDK</label>
@@ -51,7 +96,7 @@ import { UnsavedChanges } from '../guards/unsaved-changes.guard';
                   id="installAngular"
                   [ngModel]="_installAngularValue()"
                   (ngModelChange)="_installAngularValue.set($event)"
-                  [attr.disabled]="settingsService.imageBuildStatus() === 'Building' || null"
+                  [attr.disabled]="_flagsDisabled() || null"
                   aria-describedby="installAngular-hint"
                 />
                 <label for="installAngular">Install Angular CLI</label>
@@ -64,7 +109,7 @@ import { UnsavedChanges } from '../guards/unsaved-changes.guard';
                   id="installChromium"
                   [ngModel]="_installChromiumValue()"
                   (ngModelChange)="_installChromiumValue.set($event)"
-                  [attr.disabled]="settingsService.imageBuildStatus() === 'Building' || null"
+                  [attr.disabled]="_flagsDisabled() || null"
                   aria-describedby="installChromium-hint"
                 />
                 <label for="installChromium">Install Chromium (headless)</label>
@@ -77,7 +122,7 @@ import { UnsavedChanges } from '../guards/unsaved-changes.guard';
                   id="installDocker"
                   [ngModel]="_installDockerValue()"
                   (ngModelChange)="_installDockerValue.set($event)"
-                  [attr.disabled]="settingsService.imageBuildStatus() === 'Building' || null"
+                  [attr.disabled]="_flagsDisabled() || null"
                   aria-describedby="installDocker-hint"
                 />
                 <label for="installDocker">Install Docker engine + CLI</label>
@@ -111,7 +156,7 @@ import { UnsavedChanges } from '../guards/unsaved-changes.guard';
             <button
               class="general-settings__save-btn"
               type="button"
-              [disabled]="settingsService.savingImageFlags() || settingsService.imageBuildStatus() === 'Building' || !_isImageFlagsDirty()"
+              [disabled]="settingsService.savingImageFlags() || settingsService.imageBuildStatus() === 'Building' || !_isImageFlagsDirty() || _imageTagError()"
               (click)="saveImageFlags()"
             >{{ settingsService.savingImageFlags() ? 'Saving...' : 'Save' }}</button>
 
@@ -135,11 +180,33 @@ export class SettingsWorkerImageComponent implements UnsavedChanges {
   protected readonly settingsService = inject(SettingsService);
   private readonly _datePipe = inject(DatePipe);
 
+  protected readonly _imageTagValue: WritableSignal<string> = signal('');
+  protected readonly _buildEnabledValue: WritableSignal<boolean> = signal(true);
   protected readonly _installDotnetValue: WritableSignal<boolean> = signal(false);
   protected readonly _installAngularValue: WritableSignal<boolean> = signal(false);
   protected readonly _installChromiumValue: WritableSignal<boolean> = signal(false);
   protected readonly _installDockerValue: WritableSignal<boolean> = signal(false);
   private _imageInitialized = false;
+
+  protected readonly _flagsDisabled: Signal<boolean> = computed(
+    () => this.settingsService.imageBuildStatus() === 'Building' || !this._buildEnabledValue()
+  );
+
+  protected readonly _imageTagError: Signal<boolean> = computed(() => {
+    const tag = this._imageTagValue().trim();
+    return tag.length === 0 || tag.toLowerCase().endsWith(LATEST_TAG_SUFFIX);
+  });
+
+  protected readonly _imageTagErrorText: Signal<string> = computed(() => {
+    const tag = this._imageTagValue().trim();
+    if (tag.length === 0) {
+      return ERROR_IMAGE_TAG_REQUIRED;
+    }
+    if (tag.toLowerCase().endsWith(LATEST_TAG_SUFFIX)) {
+      return ERROR_IMAGE_TAG_LATEST;
+    }
+    return '';
+  });
 
   protected readonly _isImageFlagsDirty: Signal<boolean> = computed(() => {
     const saved = this.settingsService.workerImageFlags();
@@ -147,6 +214,8 @@ export class SettingsWorkerImageComponent implements UnsavedChanges {
       return false;
     }
     return (
+      this._imageTagValue().trim() !== saved.imageTag ||
+      this._buildEnabledValue() !== saved.buildEnabled ||
       this._installDotnetValue() !== saved.installDotnet ||
       this._installAngularValue() !== saved.installAngular ||
       this._installChromiumValue() !== saved.installChromium ||
@@ -193,6 +262,8 @@ export class SettingsWorkerImageComponent implements UnsavedChanges {
       }
       if (!this._imageInitialized) {
         this._imageInitialized = true;
+        this._imageTagValue.set(flags.imageTag);
+        this._buildEnabledValue.set(flags.buildEnabled);
         this._installDotnetValue.set(flags.installDotnet);
         this._installAngularValue.set(flags.installAngular);
         this._installChromiumValue.set(flags.installChromium);
@@ -222,6 +293,8 @@ export class SettingsWorkerImageComponent implements UnsavedChanges {
 
   saveImageFlags(): void {
     const flags: WorkerImageFlags = {
+      imageTag: this._imageTagValue().trim(),
+      buildEnabled: this._buildEnabledValue(),
       installDotnet: this._installDotnetValue(),
       installAngular: this._installAngularValue(),
       installChromium: this._installChromiumValue(),
