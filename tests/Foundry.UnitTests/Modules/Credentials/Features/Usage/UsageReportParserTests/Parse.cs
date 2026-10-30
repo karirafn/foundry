@@ -11,28 +11,50 @@ public sealed class Parse
     private const string AccountEmail = "user@example.com";
     private static readonly DateTimeOffset CapturedAt = new(2025, 1, 15, 10, 30, 0, TimeSpan.Zero);
 
+    // ---------------------------------------------------------------------------
+    // Real rate_limit_event fixtures (CLI 2.1.302+)
+    // ---------------------------------------------------------------------------
+
     /// <summary>
-    /// Full stream-json log from <c>claude -p "/usage" --output-format stream-json --verbose</c>
-    /// (CLI 2.1.302). Contains session + weekly_all + two weekly_scoped limits plus extra_usage.
+    /// Full stream-json from a real turn on CLI 2.1.302: system init + assistant message +
+    /// rate_limit_event with both five_hour and seven_day windows, then a result.
+    /// The rate_limit_event carries rateLimitType="seven_day" so seven_day is IsActive.
     /// </summary>
-    private const string FullUsageLog = """
-        {"type":"system","subtype":"init","cwd":"/workspace","session_id":"abc123","tools":[],"mcp_servers":[],"model":"claude-opus-4-5","permissionMode":"default","apiKeySource":"none"}
-        {"type":"assistant","message":{"id":"msg_01","type":"message","role":"assistant","content":[{"type":"text","text":""}],"model":"claude-opus-4-5-synthetic","stop_reason":"end_turn","stop_sequence":null,"usage":{"input_tokens":0,"output_tokens":0}},"usage_report":{"session":{"tokens_used":12345,"tokens_limit":88000},"rate_limits":{"limits":[{"kind":"session","group":"tokens","percent":0.14,"resets_at":"2025-01-15T15:30:00.000Z","scope":{"type":"session"},"severity":"normal","is_active":false},{"kind":"weekly_all","group":"tokens","percent":0.65,"resets_at":"2025-01-20T00:00:00.000Z","scope":{"type":"weekly_all"},"severity":"warning","is_active":true},{"kind":"weekly_scoped","group":"tokens","percent":0.30,"resets_at":"2025-01-20T00:00:00.000Z","scope":{"type":"weekly_scoped","model":{"id":"claude-opus-4-5","display_name":"Claude Opus 4.5"}},"severity":"normal","is_active":false},{"kind":"weekly_scoped","group":"tokens","percent":0.80,"resets_at":"2025-01-20T00:00:00.000Z","scope":{"type":"weekly_scoped","model":{"id":"claude-sonnet-4-5","display_name":"Claude Sonnet 4.5"}},"severity":"critical","is_active":false}],"extra_usage":{"is_enabled":true,"monthly_limit":50000,"used_credits":16568,"utilization":0.33,"currency":"USD"}}}}
-        {"type":"result","subtype":"success","is_error":false,"duration_ms":123,"duration_api_ms":100,"num_turns":1,"result":"","total_cost_usd":0,"usage":{"input_tokens":0,"output_tokens":0,"cache_read_input_tokens":0,"cache_creation_input_tokens":0},"session_id":"abc123"}
+    private const string FullRateLimitEventLog = """
+        {"type":"system","subtype":"init","cwd":"/workspace","session_id":"abc123","tools":[],"mcp_servers":[],"model":"claude-opus-4-8","permissionMode":"default","apiKeySource":"none"}
+        {"type":"assistant","message":{"id":"msg_01","type":"message","role":"assistant","content":[{"type":"text","text":"ok"}],"stop_reason":"end_turn","usage":{"input_tokens":10,"output_tokens":3}},"parent_tool_use_id":null,"session_id":"abc123"}
+        {"type":"rate_limit_event","rate_limit_info":{"status":"rejected","resetsAt":1793527200,"rateLimitType":"seven_day","overageStatus":"allowed_warning","overageResetsAt":1793491200,"isUsingOverage":true,"overageInUse":true,"unifiedWindows":{"five_hour":{"utilization":0.06,"resetsAt":1793399400},"seven_day":{"utilization":1,"resetsAt":1793527200}}},"uuid":"dab406c8-9ba0-40d4-b473-fcbdabd857e3","session_id":"abc123"}
+        {"type":"result","subtype":"success","is_error":false,"duration_ms":1350,"duration_api_ms":1000,"num_turns":1,"result":"ok","total_cost_usd":0.001,"usage":{"input_tokens":10,"output_tokens":3},"session_id":"abc123"}
         """;
 
-    /// <summary>A stream-json log where no assistant message carries a usage_report.</summary>
-    private const string NoUsageReportLog = """
-        {"type":"system","subtype":"init","cwd":"/workspace","session_id":"abc123","tools":[],"mcp_servers":[],"model":"claude-opus-4-5","permissionMode":"default","apiKeySource":"none"}
-        {"type":"assistant","message":{"id":"msg_01","type":"message","role":"assistant","content":[{"type":"text","text":"Some response"}],"model":"claude-opus-4-5","stop_reason":"end_turn","stop_sequence":null,"usage":{"input_tokens":10,"output_tokens":5}}}
-        {"type":"result","subtype":"success","is_error":false,"duration_ms":500,"duration_api_ms":400,"num_turns":1,"result":"Some response","total_cost_usd":0.001,"usage":{"input_tokens":10,"output_tokens":5,"cache_read_input_tokens":0,"cache_creation_input_tokens":0},"session_id":"abc123"}
+    /// <summary>
+    /// A rate_limit_event where rateLimitType="five_hour", so five_hour is IsActive.
+    /// </summary>
+    private const string FiveHourActiveLog = """
+        {"type":"system","subtype":"init","session_id":"abc123"}
+        {"type":"assistant","message":{"id":"msg_01","type":"message","role":"assistant","content":[{"type":"text","text":"ok"}],"stop_reason":"end_turn","usage":{"input_tokens":10,"output_tokens":3}},"session_id":"abc123"}
+        {"type":"rate_limit_event","rate_limit_info":{"status":"active","resetsAt":1793399400,"rateLimitType":"five_hour","unifiedWindows":{"five_hour":{"utilization":0.85,"resetsAt":1793399400},"seven_day":{"utilization":0.30,"resetsAt":1793527200}}},"uuid":"aaa","session_id":"abc123"}
+        {"type":"result","subtype":"success","is_error":false,"duration_ms":100,"result":"ok","session_id":"abc123"}
         """;
 
-    /// <summary>A log where usage_report.rate_limits is null (usage-based billing).</summary>
-    private const string NullRateLimitsLog = """
-        {"type":"system","subtype":"init","cwd":"/workspace","session_id":"abc123","tools":[],"mcp_servers":[],"model":"claude-opus-4-5","permissionMode":"default","apiKeySource":"none"}
-        {"type":"assistant","message":{"id":"msg_01","type":"message","role":"assistant","content":[{"type":"text","text":""}],"model":"claude-opus-4-5-synthetic","stop_reason":"end_turn","stop_sequence":null,"usage":{"input_tokens":0,"output_tokens":0}},"usage_report":{"session":{"tokens_used":0,"tokens_limit":0},"rate_limits":null}}
-        {"type":"result","subtype":"success","is_error":false,"duration_ms":100,"duration_api_ms":80,"num_turns":1,"result":"","total_cost_usd":0,"usage":{"input_tokens":0,"output_tokens":0,"cache_read_input_tokens":0,"cache_creation_input_tokens":0},"session_id":"abc123"}
+    /// <summary>
+    /// A stream-json log from an actual turn where no rate_limit_event is emitted (low usage / API-key mode).
+    /// </summary>
+    private const string NoRateLimitEventLog = """
+        {"type":"system","subtype":"init","session_id":"abc123"}
+        {"type":"assistant","message":{"id":"msg_01","type":"message","role":"assistant","content":[{"type":"text","text":"ok"}],"stop_reason":"end_turn","usage":{"input_tokens":10,"output_tokens":3}},"session_id":"abc123"}
+        {"type":"result","subtype":"success","is_error":false,"duration_ms":100,"result":"ok","session_id":"abc123"}
+        """;
+
+    /// <summary>
+    /// A rate_limit_event present but unifiedWindows is absent (CLI &lt; 2.1.302).
+    /// Parser must return NoUsageReport — not Unparseable — because the absence of
+    /// unifiedWindows means we cannot produce useful meter data.
+    /// </summary>
+    private const string NoUnifiedWindowsLog = """
+        {"type":"system","subtype":"init","session_id":"abc123"}
+        {"type":"rate_limit_event","rate_limit_info":{"status":"rejected","resetsAt":1793527200,"rateLimitType":"seven_day","isUsingOverage":true},"uuid":"bbb","session_id":"abc123"}
+        {"type":"result","subtype":"success","is_error":false,"duration_ms":100,"result":"ok","session_id":"abc123"}
         """;
 
     /// <summary>A log with malformed JSON on one of the lines.</summary>
@@ -41,25 +63,35 @@ public sealed class Parse
         {INVALID JSON CANNOT PARSE THIS
         """;
 
-    /// <summary>A log where usage_report is present but missing the required rate_limits.limits field.</summary>
-    private const string MissingRequiredFieldLog = """
-        {"type":"system","subtype":"init","cwd":"/workspace","session_id":"abc123","tools":[],"mcp_servers":[],"model":"claude-opus-4-5","permissionMode":"default","apiKeySource":"none"}
-        {"type":"assistant","message":{"id":"msg_01","type":"message","role":"assistant","content":[{"type":"text","text":""}],"model":"claude-opus-4-5-synthetic","stop_reason":"end_turn","stop_sequence":null,"usage":{"input_tokens":0,"output_tokens":0}},"usage_report":{"session":{"tokens_used":0,"tokens_limit":0},"rate_limits":{"extra_usage":{"is_enabled":true,"monthly_limit":50000,"used_credits":16568,"utilization":0.33,"currency":"USD"}}}}
+    /// <summary>
+    /// A rate_limit_event where a window field has the wrong token type (string where number expected).
+    /// The parser must not throw — return Unparseable.
+    /// </summary>
+    private const string TypeMismatchedRateLimitEventLog = """
+        {"type":"system","subtype":"init","session_id":"abc123"}
+        {"type":"rate_limit_event","rate_limit_info":{"status":"rejected","resetsAt":1793527200,"rateLimitType":"seven_day","unifiedWindows":{"five_hour":{"utilization":"high","resetsAt":1793399400},"seven_day":{"utilization":1,"resetsAt":1793527200}}},"uuid":"ccc","session_id":"abc123"}
         """;
 
-    /// <summary>A log where extra_usage is absent from the rate_limits object.</summary>
-    private const string NoExtraUsageLog = """
-        {"type":"system","subtype":"init","cwd":"/workspace","session_id":"abc123","tools":[],"mcp_servers":[],"model":"claude-opus-4-5","permissionMode":"default","apiKeySource":"none"}
-        {"type":"assistant","message":{"id":"msg_01","type":"message","role":"assistant","content":[{"type":"text","text":""}],"model":"claude-opus-4-5-synthetic","stop_reason":"end_turn","stop_sequence":null,"usage":{"input_tokens":0,"output_tokens":0}},"usage_report":{"session":{"tokens_used":5000,"tokens_limit":88000},"rate_limits":{"limits":[{"kind":"session","group":"tokens","percent":0.06,"resets_at":"2025-01-15T15:30:00.000Z","scope":{"type":"session"},"severity":"normal","is_active":false}]}}}
-        {"type":"result","subtype":"success","is_error":false,"duration_ms":100,"duration_api_ms":80,"num_turns":1,"result":"","total_cost_usd":0,"usage":{"input_tokens":0,"output_tokens":0,"cache_read_input_tokens":0,"cache_creation_input_tokens":0},"session_id":"abc123"}
+    /// <summary>
+    /// A rate_limit_event where rateLimitType does not match any known window key.
+    /// The window with the highest utilization must be marked IsActive.
+    /// </summary>
+    private const string UnknownRateLimitTypeLog = """
+        {"type":"system","subtype":"init","session_id":"abc123"}
+        {"type":"rate_limit_event","rate_limit_info":{"status":"active","resetsAt":1793527200,"rateLimitType":"monthly","unifiedWindows":{"five_hour":{"utilization":0.06,"resetsAt":1793399400},"seven_day":{"utilization":0.90,"resetsAt":1793527200}}},"uuid":"ddd","session_id":"abc123"}
+        {"type":"result","subtype":"success","is_error":false,"duration_ms":100,"result":"ok","session_id":"abc123"}
         """;
+
+    // ---------------------------------------------------------------------------
+    // Happy-path: both windows parsed correctly
+    // ---------------------------------------------------------------------------
 
     [Fact]
-    public void WhenFullUsageReport_ReturnsParsedWithAllLimitsAndExtraUsage()
+    public void WhenRateLimitEventWithBothWindows_ReturnsParsedWithSessionAndWeeklyAllLimits()
     {
         // Arrange
         // Act
-        UsageParseResult result = UsageReportParser.Parse(FullUsageLog, AccountEmail, CapturedAt);
+        UsageParseResult result = UsageReportParser.Parse(FullRateLimitEventLog, AccountEmail, CapturedAt);
 
         // Assert
         UsageParseResult.Parsed parsed = result.ShouldBeOfType<UsageParseResult.Parsed>();
@@ -69,53 +101,180 @@ public sealed class Parse
             () => snapshot.AccountEmail.ShouldBe(AccountEmail),
             () => snapshot.CapturedAt.ShouldBe(CapturedAt),
             () => snapshot.LastRefreshFailedAt.ShouldBeNull(),
-            () => snapshot.Limits.Count.ShouldBe(4));
+            () => snapshot.Limits.Count.ShouldBe(2));
+    }
 
-        UsageRateLimit session = snapshot.Limits.Single(l => l.Kind == "session");
+    [Fact]
+    public void WhenRateLimitEventPresent_FiveHourWindowMapsToSessionKind()
+    {
+        // Arrange
+        // Act
+        UsageParseResult result = UsageReportParser.Parse(FullRateLimitEventLog, AccountEmail, CapturedAt);
+
+        // Assert
+        UsageParseResult.Parsed parsed = result.ShouldBeOfType<UsageParseResult.Parsed>();
+        UsageRateLimit session = parsed.Snapshot.Limits.Single(l => l.Kind == "session");
         session.ShouldSatisfyAllConditions(
-            () => session.Percent.ShouldBe(0.14m),
-            () => session.ResetsAt.ShouldBe(new DateTimeOffset(2025, 1, 15, 15, 30, 0, TimeSpan.Zero)),
+            // utilization=0.06 → percent=6
+            () => session.Percent.ShouldBe(6m),
+            () => session.ResetsAt.ShouldBe(DateTimeOffset.FromUnixTimeSeconds(1793399400)),
             () => session.ModelDisplayName.ShouldBeNull(),
-            () => session.Severity.ShouldBe("normal"),
             () => session.IsActive.ShouldBeFalse());
+    }
 
-        UsageRateLimit weeklyAll = snapshot.Limits.Single(l => l.Kind == "weekly_all");
+    [Fact]
+    public void WhenRateLimitEventPresent_SevenDayWindowMapsToWeeklyAllKind()
+    {
+        // Arrange
+        // Act
+        UsageParseResult result = UsageReportParser.Parse(FullRateLimitEventLog, AccountEmail, CapturedAt);
+
+        // Assert
+        UsageParseResult.Parsed parsed = result.ShouldBeOfType<UsageParseResult.Parsed>();
+        UsageRateLimit weeklyAll = parsed.Snapshot.Limits.Single(l => l.Kind == "weekly_all");
         weeklyAll.ShouldSatisfyAllConditions(
-            () => weeklyAll.Percent.ShouldBe(0.65m),
-            () => weeklyAll.Severity.ShouldBe("warning"),
-            () => weeklyAll.IsActive.ShouldBeTrue(),
-            () => weeklyAll.ModelDisplayName.ShouldBeNull());
-
-        UsageExtraCredits extra = snapshot.ExtraUsage.ShouldNotBeNull();
-        extra.ShouldSatisfyAllConditions(
-            () => extra.IsEnabled.ShouldBeTrue(),
-            () => extra.MonthlyLimit.ShouldBe(50000L),
-            () => extra.UsedCredits.ShouldBe(16568L),
-            () => extra.Utilization.ShouldBe(0.33m),
-            () => extra.Currency.ShouldBe("USD"));
+            // utilization=1 → percent=100
+            () => weeklyAll.Percent.ShouldBe(100m),
+            () => weeklyAll.ResetsAt.ShouldBe(DateTimeOffset.FromUnixTimeSeconds(1793527200)),
+            () => weeklyAll.ModelDisplayName.ShouldBeNull(),
+            () => weeklyAll.IsActive.ShouldBeTrue());
     }
 
+    // ---------------------------------------------------------------------------
+    // Severity derivation (server-side mapping)
+    // ---------------------------------------------------------------------------
+
     [Fact]
-    public void WhenNoUsageReportInLog_ReturnsNoUsageReport()
+    public void WhenUtilizationIsOne_SeverityIsCritical()
     {
         // Arrange
         // Act
-        UsageParseResult result = UsageReportParser.Parse(NoUsageReportLog, AccountEmail, CapturedAt);
+        UsageParseResult result = UsageReportParser.Parse(FullRateLimitEventLog, AccountEmail, CapturedAt);
+
+        // Assert — seven_day has utilization=1.0
+        UsageParseResult.Parsed parsed = result.ShouldBeOfType<UsageParseResult.Parsed>();
+        UsageRateLimit weeklyAll = parsed.Snapshot.Limits.Single(l => l.Kind == "weekly_all");
+        weeklyAll.Severity.ShouldBe("critical");
+    }
+
+    [Fact]
+    public void WhenUtilizationIsEightyFivePercent_SeverityIsWarning()
+    {
+        // Arrange
+        // Act
+        UsageParseResult result = UsageReportParser.Parse(FiveHourActiveLog, AccountEmail, CapturedAt);
+
+        // Assert — five_hour has utilization=0.85
+        UsageParseResult.Parsed parsed = result.ShouldBeOfType<UsageParseResult.Parsed>();
+        UsageRateLimit session = parsed.Snapshot.Limits.Single(l => l.Kind == "session");
+        session.Severity.ShouldBe("warning");
+    }
+
+    [Fact]
+    public void WhenUtilizationIsLow_SeverityIsNormal()
+    {
+        // Arrange
+        // Act
+        UsageParseResult result = UsageReportParser.Parse(FullRateLimitEventLog, AccountEmail, CapturedAt);
+
+        // Assert — five_hour has utilization=0.06
+        UsageParseResult.Parsed parsed = result.ShouldBeOfType<UsageParseResult.Parsed>();
+        UsageRateLimit session = parsed.Snapshot.Limits.Single(l => l.Kind == "session");
+        session.Severity.ShouldBe("normal");
+    }
+
+    // ---------------------------------------------------------------------------
+    // IsActive derivation
+    // ---------------------------------------------------------------------------
+
+    [Fact]
+    public void WhenRateLimitTypeIsFiveHour_FiveHourWindowIsActive()
+    {
+        // Arrange
+        // Act
+        UsageParseResult result = UsageReportParser.Parse(FiveHourActiveLog, AccountEmail, CapturedAt);
+
+        // Assert
+        UsageParseResult.Parsed parsed = result.ShouldBeOfType<UsageParseResult.Parsed>();
+        UsageRateLimit session = parsed.Snapshot.Limits.Single(l => l.Kind == "session");
+        UsageRateLimit weeklyAll = parsed.Snapshot.Limits.Single(l => l.Kind == "weekly_all");
+        session.IsActive.ShouldBeTrue();
+        weeklyAll.IsActive.ShouldBeFalse();
+    }
+
+    [Fact]
+    public void WhenRateLimitTypeIsSevenDay_SevenDayWindowIsActive()
+    {
+        // Arrange
+        // Act
+        UsageParseResult result = UsageReportParser.Parse(FullRateLimitEventLog, AccountEmail, CapturedAt);
+
+        // Assert
+        UsageParseResult.Parsed parsed = result.ShouldBeOfType<UsageParseResult.Parsed>();
+        UsageRateLimit weeklyAll = parsed.Snapshot.Limits.Single(l => l.Kind == "weekly_all");
+        weeklyAll.IsActive.ShouldBeTrue();
+    }
+
+    [Fact]
+    public void WhenRateLimitTypeIsUnknown_WindowWithHighestUtilizationIsActive()
+    {
+        // Arrange
+        // Act
+        UsageParseResult result = UsageReportParser.Parse(UnknownRateLimitTypeLog, AccountEmail, CapturedAt);
+
+        // Assert — seven_day has utilization=0.90, five_hour=0.06, so seven_day is active
+        UsageParseResult.Parsed parsed = result.ShouldBeOfType<UsageParseResult.Parsed>();
+        UsageRateLimit weeklyAll = parsed.Snapshot.Limits.Single(l => l.Kind == "weekly_all");
+        UsageRateLimit session = parsed.Snapshot.Limits.Single(l => l.Kind == "session");
+        weeklyAll.IsActive.ShouldBeTrue();
+        session.IsActive.ShouldBeFalse();
+    }
+
+    // ---------------------------------------------------------------------------
+    // ExtraUsage is always null (rate_limit_event carries no credit amounts)
+    // ---------------------------------------------------------------------------
+
+    [Fact]
+    public void WhenRateLimitEventParsed_ExtraUsageIsAlwaysNull()
+    {
+        // Arrange
+        // Act
+        UsageParseResult result = UsageReportParser.Parse(FullRateLimitEventLog, AccountEmail, CapturedAt);
+
+        // Assert — rate_limit_event carries no credit amounts; follow-up issue covers this.
+        UsageParseResult.Parsed parsed = result.ShouldBeOfType<UsageParseResult.Parsed>();
+        parsed.Snapshot.ExtraUsage.ShouldBeNull();
+    }
+
+    // ---------------------------------------------------------------------------
+    // NoUsageReport paths
+    // ---------------------------------------------------------------------------
+
+    [Fact]
+    public void WhenNoRateLimitEventInLog_ReturnsNoUsageReport()
+    {
+        // Arrange
+        // Act
+        UsageParseResult result = UsageReportParser.Parse(NoRateLimitEventLog, AccountEmail, CapturedAt);
 
         // Assert
         result.ShouldBeOfType<UsageParseResult.NoUsageReport>();
     }
 
     [Fact]
-    public void WhenRateLimitsIsNull_ReturnsNoUsageReport()
+    public void WhenRateLimitEventMissingUnifiedWindows_ReturnsNoUsageReport()
     {
         // Arrange
         // Act
-        UsageParseResult result = UsageReportParser.Parse(NullRateLimitsLog, AccountEmail, CapturedAt);
+        UsageParseResult result = UsageReportParser.Parse(NoUnifiedWindowsLog, AccountEmail, CapturedAt);
 
-        // Assert
+        // Assert — unifiedWindows absent means CLI < 2.1.302; treat as no usable data
         result.ShouldBeOfType<UsageParseResult.NoUsageReport>();
     }
+
+    // ---------------------------------------------------------------------------
+    // Unparseable paths
+    // ---------------------------------------------------------------------------
 
     [Fact]
     public void WhenMalformedJson_ReturnsUnparseable()
@@ -129,89 +288,13 @@ public sealed class Parse
     }
 
     [Fact]
-    public void WhenUsageReportMissingRequiredField_ReturnsUnparseable()
+    public void WhenRateLimitInfoHasWrongTokenType_ReturnsUnparseable()
     {
         // Arrange
         // Act
-        UsageParseResult result = UsageReportParser.Parse(MissingRequiredFieldLog, AccountEmail, CapturedAt);
-
-        // Assert
-        result.ShouldBeOfType<UsageParseResult.Unparseable>();
-    }
-
-    [Fact]
-    public void WhenMultipleWeeklyScopedEntries_MapsEachWithModelDisplayName()
-    {
-        // Arrange
-        // Act
-        UsageParseResult result = UsageReportParser.Parse(FullUsageLog, AccountEmail, CapturedAt);
-
-        // Assert
-        UsageParseResult.Parsed parsed = result.ShouldBeOfType<UsageParseResult.Parsed>();
-        IReadOnlyList<UsageRateLimit> scoped = parsed.Snapshot.Limits
-            .Where(l => l.Kind == "weekly_scoped")
-            .ToList();
-
-        scoped.Count.ShouldBe(2);
-        scoped.ShouldContain(l =>
-            l.ModelDisplayName == "Claude Opus 4.5" &&
-            l.Percent == 0.30m &&
-            l.Severity == "normal");
-        scoped.ShouldContain(l =>
-            l.ModelDisplayName == "Claude Sonnet 4.5" &&
-            l.Percent == 0.80m &&
-            l.Severity == "critical");
-    }
-
-    [Fact]
-    public void WhenExtraUsageAbsent_SnapshotExtraUsageIsNull()
-    {
-        // Arrange
-        // Act
-        UsageParseResult result = UsageReportParser.Parse(NoExtraUsageLog, AccountEmail, CapturedAt);
-
-        // Assert
-        UsageParseResult.Parsed parsed = result.ShouldBeOfType<UsageParseResult.Parsed>();
-        parsed.Snapshot.ExtraUsage.ShouldBeNull();
-    }
-
-    /// <summary>
-    /// A log where a limit field has a wrong token type (string where number expected).
-    /// The CLI could emit unexpected types; the parser must not throw — return Unparseable.
-    /// </summary>
-    private const string TypeMismatchedLimitLog = """
-        {"type":"system","subtype":"init","cwd":"/workspace","session_id":"abc123","tools":[],"mcp_servers":[],"model":"claude-opus-4-5","permissionMode":"default","apiKeySource":"none"}
-        {"type":"assistant","message":{"id":"msg_01","type":"message","role":"assistant","content":[{"type":"text","text":""}],"model":"claude-opus-4-5-synthetic","stop_reason":"end_turn","stop_sequence":null,"usage":{"input_tokens":0,"output_tokens":0}},"usage_report":{"session":{"tokens_used":0,"tokens_limit":0},"rate_limits":{"limits":[{"kind":"session","group":"tokens","percent":"high","resets_at":"2025-01-15T15:30:00.000Z","scope":{"type":"session"},"severity":"normal","is_active":false}]}}}
-        """;
-
-    /// <summary>
-    /// A log where rate_limits.limits is an empty array — no limits entries present.
-    /// </summary>
-    private const string EmptyLimitsArrayLog = """
-        {"type":"system","subtype":"init","cwd":"/workspace","session_id":"abc123","tools":[],"mcp_servers":[],"model":"claude-opus-4-5","permissionMode":"default","apiKeySource":"none"}
-        {"type":"assistant","message":{"id":"msg_01","type":"message","role":"assistant","content":[{"type":"text","text":""}],"model":"claude-opus-4-5-synthetic","stop_reason":"end_turn","stop_sequence":null,"usage":{"input_tokens":0,"output_tokens":0}},"usage_report":{"session":{"tokens_used":0,"tokens_limit":0},"rate_limits":{"limits":[]}}}
-        """;
-
-    [Fact]
-    public void WhenLimitFieldHasWrongTokenType_ReturnsUnparseable()
-    {
-        // Arrange
-        // Act
-        UsageParseResult result = UsageReportParser.Parse(TypeMismatchedLimitLog, AccountEmail, CapturedAt);
+        UsageParseResult result = UsageReportParser.Parse(TypeMismatchedRateLimitEventLog, AccountEmail, CapturedAt);
 
         // Assert — type mismatch must not throw; it must produce Unparseable
         result.ShouldBeOfType<UsageParseResult.Unparseable>();
-    }
-
-    [Fact]
-    public void WhenLimitsArrayIsEmpty_ReturnsParsedWithNoLimits()
-    {
-        // Arrange
-        // Act
-        UsageParseResult result = UsageReportParser.Parse(EmptyLimitsArrayLog, AccountEmail, CapturedAt);
-
-        // Assert — empty limits array is valid; snapshot is Parsed with zero limits
-        UsageParseResult.Parsed parsed = result.ShouldBeOfType<UsageParseResult.Parsed>();
-        parsed.Snapshot.Limits.ShouldBeEmpty();
     }
 }

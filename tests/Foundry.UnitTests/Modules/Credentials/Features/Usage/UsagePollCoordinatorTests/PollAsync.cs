@@ -27,19 +27,22 @@ public sealed class PollAsync : IAsyncDisposable
     private readonly ServiceProvider _serviceProvider;
 
     /// <summary>
-    /// Minimal stream-json with one session limit — sufficient for a successful parse.
+    /// Minimal stream-json from a real turn: system init + assistant message +
+    /// rate_limit_event with session and weekly_all windows — sufficient for a successful parse.
+    /// Reflects the real data source (rate_limit_event) used by the usage-report container.
     /// </summary>
     private const string ValidUsageLog = """
-        {"type":"system","subtype":"init","cwd":"/workspace","session_id":"abc123","tools":[],"mcp_servers":[],"model":"claude-opus-4-5","permissionMode":"default","apiKeySource":"none"}
-        {"type":"assistant","message":{"id":"msg_01","type":"message","role":"assistant","content":[{"type":"text","text":""}],"model":"claude-opus-4-5-synthetic","stop_reason":"end_turn","stop_sequence":null,"usage":{"input_tokens":0,"output_tokens":0}},"usage_report":{"session":{"tokens_used":12345,"tokens_limit":88000},"rate_limits":{"limits":[{"kind":"session","group":"tokens","percent":0.14,"resets_at":"2025-01-15T15:30:00.000Z","scope":{"type":"session"},"severity":"normal","is_active":true}]}}}
-        {"type":"result","subtype":"success","is_error":false,"duration_ms":100,"duration_api_ms":80,"num_turns":1,"result":"","total_cost_usd":0,"usage":{"input_tokens":0,"output_tokens":0,"cache_read_input_tokens":0,"cache_creation_input_tokens":0},"session_id":"abc123"}
+        {"type":"system","subtype":"init","cwd":"/workspace","session_id":"abc123","tools":[],"mcp_servers":[],"model":"claude-opus-4-8","permissionMode":"default","apiKeySource":"none"}
+        {"type":"assistant","message":{"id":"msg_01","type":"message","role":"assistant","content":[{"type":"text","text":"ok"}],"stop_reason":"end_turn","usage":{"input_tokens":10,"output_tokens":3}},"session_id":"abc123"}
+        {"type":"rate_limit_event","rate_limit_info":{"status":"active","resetsAt":1793527200,"rateLimitType":"seven_day","unifiedWindows":{"five_hour":{"utilization":0.14,"resetsAt":1793399400},"seven_day":{"utilization":0.65,"resetsAt":1793527200}}},"uuid":"abc","session_id":"abc123"}
+        {"type":"result","subtype":"success","is_error":false,"duration_ms":100,"duration_api_ms":80,"num_turns":1,"result":"ok","total_cost_usd":0.001,"session_id":"abc123"}
         """;
 
-    /// <summary>A log where no assistant message carries a usage_report → NoUsageReport.</summary>
+    /// <summary>A log where no rate_limit_event is emitted → NoUsageReport (no API turn / API-key mode).</summary>
     private const string NoUsageReportLog = """
-        {"type":"system","subtype":"init","cwd":"/workspace","session_id":"abc123","tools":[],"mcp_servers":[],"model":"claude-opus-4-5","permissionMode":"default","apiKeySource":"none"}
-        {"type":"assistant","message":{"id":"msg_01","type":"message","role":"assistant","content":[{"type":"text","text":"Some response"}],"model":"claude-opus-4-5","stop_reason":"end_turn","stop_sequence":null,"usage":{"input_tokens":10,"output_tokens":5}}}
-        {"type":"result","subtype":"success","is_error":false,"duration_ms":500,"duration_api_ms":400,"num_turns":1,"result":"Some response","total_cost_usd":0.001,"usage":{"input_tokens":10,"output_tokens":5,"cache_read_input_tokens":0,"cache_creation_input_tokens":0},"session_id":"abc123"}
+        {"type":"system","subtype":"init","cwd":"/workspace","session_id":"abc123","tools":[],"mcp_servers":[],"model":"claude-opus-4-8","permissionMode":"default","apiKeySource":"none"}
+        {"type":"assistant","message":{"id":"msg_01","type":"message","role":"assistant","content":[{"type":"text","text":"ok"}],"stop_reason":"end_turn","usage":{"input_tokens":10,"output_tokens":3}},"session_id":"abc123"}
+        {"type":"result","subtype":"success","is_error":false,"duration_ms":500,"duration_api_ms":400,"num_turns":1,"result":"ok","total_cost_usd":0.001,"session_id":"abc123"}
         """;
 
     /// <summary>A log with malformed JSON → Unparseable.</summary>

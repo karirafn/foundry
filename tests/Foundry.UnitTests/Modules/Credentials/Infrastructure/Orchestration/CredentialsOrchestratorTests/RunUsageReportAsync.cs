@@ -21,6 +21,9 @@ public sealed class RunUsageReportAsync
     private static UsageReportSpec DefaultSpec() =>
         new(TimeoutSeconds: UsageReportSpec.DefaultTimeoutSeconds);
 
+    private static readonly string DefaultTimeoutStr =
+        UsageReportSpec.DefaultTimeoutSeconds.ToString(System.Globalization.CultureInfo.InvariantCulture);
+
     [Fact]
     public async Task WhenContainerRunsSuccessfully_ReturnsOkWithLogs()
     {
@@ -111,19 +114,23 @@ public sealed class RunUsageReportAsync
         await sut.RunUsageReportAsync(DefaultSpec(), CancellationToken.None);
 
         // Assert — argv form:
-        // ["timeout", "<seconds>", "claude", "-p", "/usage", "--output-format", "stream-json", "--verbose"]
-        // No shell interpretation of the prompt or flags.
+        // ["timeout", "<seconds>", "claude", "-p", "<prompt>", "--max-turns", "1",
+        //  "--output-format", "stream-json", "--verbose"]
+        // --max-turns 1 limits the turn to one exchange so a rate_limit_event is reliably emitted
+        // after the assistant message, without risk of recursive tool use.
         CreateContainerParameters captured = runtime.LastCreateAndStartParameters.ShouldNotBeNull();
         IList<string> cmd = captured.Cmd.ShouldNotBeNull();
         cmd.ShouldSatisfyAllConditions(
             () => cmd[0].ShouldBe("timeout"),
-            () => cmd[1].ShouldBe(UsageReportSpec.DefaultTimeoutSeconds.ToString(System.Globalization.CultureInfo.InvariantCulture)),
+            () => cmd[1].ShouldBe(DefaultTimeoutStr),
             () => cmd[2].ShouldBe("claude"),
             () => cmd[3].ShouldBe("-p"),
             () => cmd[4].ShouldBe(UsageReportSpec.UsagePrompt),
-            () => cmd[5].ShouldBe("--output-format"),
-            () => cmd[6].ShouldBe("stream-json"),
-            () => cmd[7].ShouldBe("--verbose"));
+            () => cmd[5].ShouldBe("--max-turns"),
+            () => cmd[6].ShouldBe("1"),
+            () => cmd[7].ShouldBe("--output-format"),
+            () => cmd[8].ShouldBe("stream-json"),
+            () => cmd[9].ShouldBe("--verbose"));
     }
 
     [Fact]
@@ -136,7 +143,7 @@ public sealed class RunUsageReportAsync
         // Act
         await sut.RunUsageReportAsync(DefaultSpec(), CancellationToken.None);
 
-        // Assert — no shell wrapper; shell would interpret the /usage prompt as a file path on some systems
+        // Assert — no shell wrapper; shell would interpret prompt flags or slash commands
         CreateContainerParameters captured = runtime.LastCreateAndStartParameters.ShouldNotBeNull();
         IList<string> cmd = captured.Cmd.ShouldNotBeNull();
         cmd.ShouldNotContain("sh");

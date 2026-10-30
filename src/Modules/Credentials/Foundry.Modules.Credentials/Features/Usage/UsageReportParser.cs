@@ -4,30 +4,47 @@ using System.Text.Json.Nodes;
 namespace Foundry.Modules.Credentials.Features.Usage;
 
 /// <summary>
-/// Parses the stream-json output of <c>claude -p "/usage" --output-format stream-json --verbose</c>
-/// into a <see cref="UsageParseResult"/>.
+/// Parses the stream-json output of a real Claude CLI turn run by
+/// <c>UsageReportSpec</c> into a <see cref="UsageParseResult"/>.
+/// <para>
+/// The data source is a minimal real turn (<c>claude -p "Reply with: ok" --max-turns 1
+/// --output-format stream-json --verbose</c>) rather than the <c>/usage</c> print-mode
+/// command. A real turn emits a <c>rate_limit_event</c> that carries
+/// <c>rate_limit_info.unifiedWindows</c> — the only reliable source of per-window
+/// utilization data.
+/// </para>
 /// <para>
 /// Parser design decisions:
 /// <list type="bullet">
 /// <item>Pure of <c>DateTimeOffset.UtcNow</c> — <paramref name="capturedAt"/> and
 ///   <paramref name="accountEmail"/> are stamped by the caller (coordinator), not the parser.</item>
 /// <item>Signature: <c>Parse(string log, string accountEmail, DateTimeOffset capturedAt)</c> so the
-///   result is a complete, ready-to-store <see cref="UsageSnapshot"/> on success. The coordinator
-///   (step 6) passes the account email it already loaded from the DB and the timestamp it stamps.</item>
+///   result is a complete, ready-to-store <see cref="UsageSnapshot"/> on success.</item>
+/// <item><c>ExtraUsage</c> is always <c>null</c> — <c>rate_limit_event</c> carries no credit
+///   amounts; populating credits from this source is a follow-up.</item>
 /// </list>
 /// </para>
 /// </summary>
 internal static class UsageReportParser
 {
+    // Window-key → Kind mapping (CLI field name → domain term).
+    private const string FiveHourKey = "five_hour";
+    private const string SevenDayKey = "seven_day";
+    private const string SessionKind = "session";
+    private const string WeeklyAllKind = "weekly_all";
+
     /// <summary>
     /// Parses a stream-json log, stamping the resulting snapshot with
     /// <paramref name="accountEmail"/> and <paramref name="capturedAt"/>.
     /// </summary>
     /// <returns>
-    /// <see cref="UsageParseResult.Parsed"/> when <c>usage_report</c> is found and valid;
-    /// <see cref="UsageParseResult.NoUsageReport"/> when the log emits no <c>usage_report</c>
-    /// or <c>rate_limits</c> is null (usage-based billing / API-key mode);
-    /// <see cref="UsageParseResult.Unparseable"/> on malformed JSON or missing required fields.
+    /// <see cref="UsageParseResult.Parsed"/> when a <c>rate_limit_event</c> line is found
+    /// and <c>rate_limit_info.unifiedWindows</c> is present and parseable;
+    /// <see cref="UsageParseResult.NoUsageReport"/> when no <c>rate_limit_event</c> is
+    /// present (no API turn / API-key mode) or <c>unifiedWindows</c> is absent (CLI
+    /// version too old to emit it);
+    /// <see cref="UsageParseResult.Unparseable"/> on malformed JSON or a
+    /// <c>rate_limit_info</c> with broken field values.
     /// </returns>
     public static UsageParseResult Parse(string log, string accountEmail, DateTimeOffset capturedAt)
     {
@@ -56,165 +73,115 @@ internal static class UsageReportParser
                 continue;
             }
 
-            // Only assistant messages can carry usage_report.
-            if (node["type"]?.GetValue<string>() != "assistant")
+            if (node["type"]?.GetValue<string>() != "rate_limit_event")
             {
                 continue;
             }
 
-            if (!node.TryGetPropertyValue("usage_report", out JsonNode? usageReportNode))
+            if (node["rate_limit_info"] is not JsonObject rateLimitInfo)
             {
-                continue;
+                // rate_limit_event present but malformed — treat as Unparseable.
+                return new UsageParseResult.Unparseable();
             }
 
-            if (usageReportNode is not JsonObject usageReport)
-            {
-                continue;
-            }
+            return ParseRateLimitInfo(rateLimitInfo, accountEmail, capturedAt);
+        }
 
-            // rate_limits null → usage-based billing; clear, not a failure.
-            // Any non-object value (including JSON null) maps to NoUsageReport.
-            if (!usageReport.TryGetPropertyValue("rate_limits", out JsonNode? rateLimitsNode) ||
-                rateLimitsNode is not JsonObject rateLimits)
+        // No rate_limit_event found — no API turn happened or API-key mode.
+        return new UsageParseResult.NoUsageReport();
+    }
+
+    private static UsageParseResult ParseRateLimitInfo(
+        JsonObject rateLimitInfo,
+        string accountEmail,
+        DateTimeOffset capturedAt)
+    {
+        try
+        {
+            // unifiedWindows absent means CLI < 2.1.302 — return NoUsageReport (not a failure).
+            if (rateLimitInfo["unifiedWindows"] is not JsonObject unifiedWindows)
             {
                 return new UsageParseResult.NoUsageReport();
             }
 
-            return ParseRateLimits(rateLimits, accountEmail, capturedAt);
-        }
+            string? rateLimitType = rateLimitInfo["rateLimitType"]?.GetValue<string>();
 
-        // No assistant message with usage_report found.
-        return new UsageParseResult.NoUsageReport();
-    }
+            List<UsageRateLimit> limits = [];
 
-    private static UsageParseResult ParseRateLimits(
-        JsonObject rateLimits,
-        string accountEmail,
-        DateTimeOffset capturedAt)
-    {
-        if (!rateLimits.TryGetPropertyValue("limits", out JsonNode? limitsNode))
-        {
-            return new UsageParseResult.Unparseable();
-        }
-
-        if (limitsNode is not JsonArray limitsArray)
-        {
-            return new UsageParseResult.Unparseable();
-        }
-
-        List<UsageRateLimit> limits = [];
-
-        foreach (JsonNode? item in limitsArray)
-        {
-            if (item is not JsonObject limitObj)
+            foreach ((string windowKey, string kind) in WindowMappings())
             {
-                return new UsageParseResult.Unparseable();
+                if (unifiedWindows[windowKey] is not JsonObject windowObj)
+                {
+                    continue;
+                }
+
+                decimal utilization = windowObj["utilization"]?.GetValue<decimal>() ?? 0m;
+                long resetsAtUnix = windowObj["resetsAt"]?.GetValue<long>() ?? 0L;
+                DateTimeOffset resetsAt = DateTimeOffset.FromUnixTimeSeconds(resetsAtUnix);
+                decimal percent = utilization * 100m;
+
+                // Server-side severity mapping — the frontend clamps the bar; the parser derives severity.
+                string severity = utilization >= 1.0m
+                    ? "critical"
+                    : utilization >= 0.8m
+                        ? "warning"
+                        : "normal";
+
+                // IsActive: true for the window whose key matches rateLimitType.
+                // Resolved after all windows are collected when rateLimitType is unknown.
+                bool isActive = rateLimitType is not null &&
+                    MapRateLimitTypeToWindowKey(rateLimitType) == windowKey;
+
+                limits.Add(new UsageRateLimit(
+                    Kind: kind,
+                    Percent: percent,
+                    ResetsAt: resetsAt,
+                    ModelDisplayName: null,
+                    Severity: severity,
+                    IsActive: isActive));
             }
 
-            UsageRateLimit? limit = ParseLimit(limitObj);
-
-            if (limit is null)
+            // When rateLimitType did not match any known window key, mark the window
+            // with the highest utilization as active.
+            if (rateLimitType is not null &&
+                limits.All(l => !l.IsActive) &&
+                limits.Count > 0)
             {
-                return new UsageParseResult.Unparseable();
+                decimal maxUtil = limits.Max(l => l.Percent);
+                limits = limits
+                    .Select(l => l with { IsActive = l.Percent == maxUtil })
+                    .ToList();
             }
 
-            limits.Add(limit);
-        }
+            // ExtraUsage is always null — rate_limit_event carries no credit amounts;
+            // populating credits from this source is a follow-up.
+            UsageSnapshot snapshot = new(
+                Limits: limits,
+                ExtraUsage: null,
+                CapturedAt: capturedAt,
+                AccountEmail: accountEmail,
+                LastRefreshFailedAt: null);
 
-        UsageExtraCredits? extraUsage = null;
-
-        if (rateLimits.TryGetPropertyValue("extra_usage", out JsonNode? extraNode) &&
-            extraNode is JsonObject extraObj)
-        {
-            extraUsage = ParseExtraUsage(extraObj);
-
-            if (extraUsage is null)
-            {
-                return new UsageParseResult.Unparseable();
-            }
-        }
-
-        UsageSnapshot snapshot = new(
-            Limits: limits,
-            ExtraUsage: extraUsage,
-            CapturedAt: capturedAt,
-            AccountEmail: accountEmail,
-            LastRefreshFailedAt: null);
-
-        return new UsageParseResult.Parsed(snapshot);
-    }
-
-    private static UsageRateLimit? ParseLimit(JsonObject obj)
-    {
-        try
-        {
-            string? kind = obj["kind"]?.GetValue<string>();
-            string? severity = obj["severity"]?.GetValue<string>();
-            string? resetsAtStr = obj["resets_at"]?.GetValue<string>();
-
-            if (kind is null || severity is null || resetsAtStr is null)
-            {
-                return null;
-            }
-
-            if (!DateTimeOffset.TryParse(resetsAtStr, out DateTimeOffset resetsAt))
-            {
-                return null;
-            }
-
-            decimal percent = obj["percent"]?.GetValue<decimal>() ?? 0m;
-            bool isActive = obj["is_active"]?.GetValue<bool>() ?? false;
-
-            string? modelDisplayName = null;
-
-            if (obj["scope"] is JsonObject scope &&
-                scope["model"] is JsonObject model)
-            {
-                modelDisplayName = model["display_name"]?.GetValue<string>();
-            }
-
-            return new UsageRateLimit(
-                Kind: kind,
-                Percent: percent,
-                ResetsAt: resetsAt,
-                ModelDisplayName: modelDisplayName,
-                Severity: severity,
-                IsActive: isActive);
+            return new UsageParseResult.Parsed(snapshot);
         }
         catch (InvalidOperationException)
         {
-            // Token-type mismatch (e.g. string where number expected) — treat as unparseable.
-            return null;
+            // Token-type mismatch (e.g. string where number expected) — treat as Unparseable.
+            return new UsageParseResult.Unparseable();
         }
     }
 
-    private static UsageExtraCredits? ParseExtraUsage(JsonObject obj)
+    private static IEnumerable<(string Key, string Kind)> WindowMappings()
     {
-        try
-        {
-            string? currency = obj["currency"]?.GetValue<string>();
-
-            if (currency is null)
-            {
-                return null;
-            }
-
-            bool isEnabled = obj["is_enabled"]?.GetValue<bool>() ?? false;
-            long monthlyLimit = obj["monthly_limit"]?.GetValue<long>() ?? 0L;
-            long usedCredits = obj["used_credits"]?.GetValue<long>() ?? 0L;
-            decimal utilization = obj["utilization"]?.GetValue<decimal>() ?? 0m;
-
-            return new UsageExtraCredits(
-                IsEnabled: isEnabled,
-                MonthlyLimit: monthlyLimit,
-                UsedCredits: usedCredits,
-                Utilization: utilization,
-                Currency: currency);
-        }
-        catch (InvalidOperationException)
-        {
-            // Token-type mismatch (e.g. string where number expected) — treat as unparseable.
-            return null;
-        }
+        yield return (FiveHourKey, SessionKind);
+        yield return (SevenDayKey, WeeklyAllKind);
     }
+
+    private static string? MapRateLimitTypeToWindowKey(string rateLimitType) =>
+        rateLimitType switch
+        {
+            FiveHourKey => FiveHourKey,
+            SevenDayKey => SevenDayKey,
+            _ => null,
+        };
 }

@@ -282,9 +282,9 @@ internal sealed class CredentialsOrchestrator(IDockerContainerRuntime runtime) :
         try
         {
             // The usage container mounts the credential volume read-write, unlike the credit probe's
-            // read-only mount. The CLI may refresh an expired access token during the /usage call,
-            // and a read-only mount cannot persist the rotated refresh token — leaving a dead token
-            // on the volume that causes every subsequent OAuth operation to fail.
+            // read-only mount. The CLI may refresh an expired access token during the turn, and a
+            // read-only mount cannot persist the rotated refresh token — leaving a dead token on the
+            // volume that causes every subsequent OAuth operation to fail.
             CreateContainerParameters createParams = new()
             {
                 Image = WorkerImageNames.LoginImageName,
@@ -295,6 +295,8 @@ internal sealed class CredentialsOrchestrator(IDockerContainerRuntime runtime) :
                     "claude",
                     "-p",
                     UsageReportSpec.UsagePrompt,
+                    "--max-turns",
+                    "1",
                     "--output-format",
                     "stream-json",
                     "--verbose",
