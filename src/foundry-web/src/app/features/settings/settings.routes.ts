@@ -1,4 +1,5 @@
 import { Routes } from '@angular/router';
+import { unsavedChangesGuard } from './guards/unsaved-changes.guard';
 
 export const SETTINGS_ROUTES: Routes = [
   {
@@ -11,6 +12,14 @@ export const SETTINGS_ROUTES: Routes = [
         path: 'general',
         loadComponent: () =>
           import('./general/settings-general').then((m) => m.SettingsGeneralComponent),
+      },
+      {
+        path: 'worker-environment',
+        loadComponent: () =>
+          import('./worker-environment/settings-worker-environment').then(
+            (m) => m.SettingsWorkerEnvironmentComponent,
+          ),
+        canDeactivate: [unsavedChangesGuard],
       },
       {
         path: 'accounts',
