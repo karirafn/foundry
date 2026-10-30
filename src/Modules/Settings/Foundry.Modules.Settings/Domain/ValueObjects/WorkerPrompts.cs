@@ -44,14 +44,24 @@ public sealed record WorkerPrompts(
             return Result<WorkerPrompts>.Fail(SettingsErrors.InvalidPromptTemplateTooLong);
         }
 
+        if (!workerPromptTemplate.Contains("{issueNumber}", StringComparison.Ordinal))
+        {
+            return Result<WorkerPrompts>.Fail(SettingsErrors.WorkerPromptMissingIssueNumber);
+        }
+
         if (workerPromptTemplate.Length > MaxPromptTemplateLength)
         {
             return Result<WorkerPrompts>.Fail(SettingsErrors.InvalidPromptTemplateTooLong);
         }
 
-        if (!workerPromptTemplate.Contains("{issueNumber}", StringComparison.Ordinal))
+        if (string.IsNullOrWhiteSpace(branchNamingInstruction))
         {
-            return Result<WorkerPrompts>.Fail(SettingsErrors.WorkerPromptMissingIssueNumber);
+            return Result<WorkerPrompts>.Fail(SettingsErrors.InvalidBranchNamingInstruction);
+        }
+
+        if (branchNamingInstruction.Length > MaxPromptTemplateLength)
+        {
+            return Result<WorkerPrompts>.Fail(SettingsErrors.InvalidPromptTemplateTooLong);
         }
 
         if (branchNamingInstruction.Any(c => c is '\n' or '\r' or '\0'))

@@ -134,4 +134,56 @@ public sealed class Create
         // Assert
         result.IsFailure.ShouldBeTrue();
     }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void WhenBranchNamingInstructionIsEmptyOrWhitespace_ReturnsFailure(string branchInstruction)
+    {
+        // Arrange & Act
+        Result<WorkerPrompts> result = WorkerPrompts.Create(ValidSystem, ValidWorker, branchInstruction);
+
+        // Assert
+        result.IsFailure.ShouldBeTrue();
+    }
+
+    [Fact]
+    public void WhenBranchNamingInstructionExceedsMaxLength_ReturnsFailure()
+    {
+        // Arrange
+        string tooLong = new('a', WorkerPrompts.MaxPromptTemplateLength + 1);
+
+        // Act
+        Result<WorkerPrompts> result = WorkerPrompts.Create(ValidSystem, ValidWorker, tooLong);
+
+        // Assert
+        result.IsFailure.ShouldBeTrue();
+    }
+
+    [Fact]
+    public void WhenBranchNamingInstructionIsAtMaxLength_ReturnsSuccess()
+    {
+        // Arrange
+        string atMax = new('a', WorkerPrompts.MaxPromptTemplateLength);
+
+        // Act
+        Result<WorkerPrompts> result = WorkerPrompts.Create(ValidSystem, ValidWorker, atMax);
+
+        // Assert
+        result.IsSuccess.ShouldBeTrue();
+    }
+
+    [Fact]
+    public void WhenWorkerTemplateAtMaxLengthMissingIssueNumber_ReturnsWorkerPromptMissingIssueNumberError()
+    {
+        // Arrange — max-length worker template with no {issueNumber}
+        string maxLengthNoPlaceholder = new('a', WorkerPrompts.MaxPromptTemplateLength);
+
+        // Act
+        Result<WorkerPrompts> result = WorkerPrompts.Create(ValidSystem, maxLengthNoPlaceholder, ValidBranch);
+
+        // Assert — content check runs before length check; missing placeholder error is surfaced
+        Result<WorkerPrompts>.Failure failure = result.ShouldBeOfType<Result<WorkerPrompts>.Failure>();
+        failure.Error.Code.ShouldBe("Settings.WorkerPromptMissingIssueNumber");
+    }
 }
