@@ -76,10 +76,12 @@ internal static class UpdateAuthMode
             usageStateMutator.Clear();
 
             // Trigger an immediate poll when the new mode is OAuth-capable with usage reporting.
-            // The coordinator's own CanReportUsage gate handles the login-active / no-identity cases.
+            // Fire-and-forget — the coordinator is a singleton with internal single-flight and its
+            // own error handling, so blocking the HTTP response for the container runtime is
+            // unnecessary. CancellationToken.None ensures the poll outlives the HTTP request.
             if (account.CanReportUsage)
             {
-                await usagePollCoordinator.PollAsync(cancellationToken);
+                _ = usagePollCoordinator.PollAsync(CancellationToken.None);
             }
 
             return CredentialQueries.ToSummary(account);

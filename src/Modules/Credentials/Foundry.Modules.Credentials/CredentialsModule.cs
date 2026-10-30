@@ -67,13 +67,9 @@ public static class CredentialsModule
         services.AddSingleton<IUsagePollCoordinator>(sp => sp.GetRequiredService<UsagePollCoordinator>());
         services.AddHostedService<UsagePollService>();
 
-        // IUsageSnapshotBroadcaster: a no-op fallback is registered here so the module is
-        // self-contained and ScopeValidation passes before the WebApi host registers the real
-        // SignalR implementation (step 9). TryAdd ensures the WebApi registration (AddSingleton,
-        // registered AFTER AddCredentialsModule in Program.cs) takes precedence — the last
-        // AddSingleton wins for GetRequiredService resolution, and TryAdd skips if already present;
-        // since CredentialsModule runs first, TryAdd adds the no-op, then WebApi's plain
-        // AddSingleton appends the real impl, which becomes the last (winning) registration.
+        // No-op fallback so the module is self-contained; the WebApi host's later plain
+        // AddSingleton<IUsageSnapshotBroadcaster, SignalRUsageSnapshotBroadcaster> wins because
+        // .NET DI resolves the last registration for GetRequiredService.
         services.TryAddSingleton<IUsageSnapshotBroadcaster, NoOpUsageSnapshotBroadcaster>();
 
         return services;

@@ -174,4 +174,44 @@ public sealed class Parse
         UsageParseResult.Parsed parsed = result.ShouldBeOfType<UsageParseResult.Parsed>();
         parsed.Snapshot.ExtraUsage.ShouldBeNull();
     }
+
+    /// <summary>
+    /// A log where a limit field has a wrong token type (string where number expected).
+    /// The CLI could emit unexpected types; the parser must not throw — return Unparseable.
+    /// </summary>
+    private const string TypeMismatchedLimitLog = """
+        {"type":"system","subtype":"init","cwd":"/workspace","session_id":"abc123","tools":[],"mcp_servers":[],"model":"claude-opus-4-5","permissionMode":"default","apiKeySource":"none"}
+        {"type":"assistant","message":{"id":"msg_01","type":"message","role":"assistant","content":[{"type":"text","text":""}],"model":"claude-opus-4-5-synthetic","stop_reason":"end_turn","stop_sequence":null,"usage":{"input_tokens":0,"output_tokens":0}},"usage_report":{"session":{"tokens_used":0,"tokens_limit":0},"rate_limits":{"limits":[{"kind":"session","group":"tokens","percent":"high","resets_at":"2025-01-15T15:30:00.000Z","scope":{"type":"session"},"severity":"normal","is_active":false}]}}}
+        """;
+
+    /// <summary>
+    /// A log where rate_limits.limits is an empty array — no limits entries present.
+    /// </summary>
+    private const string EmptyLimitsArrayLog = """
+        {"type":"system","subtype":"init","cwd":"/workspace","session_id":"abc123","tools":[],"mcp_servers":[],"model":"claude-opus-4-5","permissionMode":"default","apiKeySource":"none"}
+        {"type":"assistant","message":{"id":"msg_01","type":"message","role":"assistant","content":[{"type":"text","text":""}],"model":"claude-opus-4-5-synthetic","stop_reason":"end_turn","stop_sequence":null,"usage":{"input_tokens":0,"output_tokens":0}},"usage_report":{"session":{"tokens_used":0,"tokens_limit":0},"rate_limits":{"limits":[]}}}
+        """;
+
+    [Fact]
+    public void WhenLimitFieldHasWrongTokenType_ReturnsUnparseable()
+    {
+        // Arrange
+        // Act
+        UsageParseResult result = UsageReportParser.Parse(TypeMismatchedLimitLog, AccountEmail, CapturedAt);
+
+        // Assert — type mismatch must not throw; it must produce Unparseable
+        result.ShouldBeOfType<UsageParseResult.Unparseable>();
+    }
+
+    [Fact]
+    public void WhenLimitsArrayIsEmpty_ReturnsParsedWithNoLimits()
+    {
+        // Arrange
+        // Act
+        UsageParseResult result = UsageReportParser.Parse(EmptyLimitsArrayLog, AccountEmail, CapturedAt);
+
+        // Assert — empty limits array is valid; snapshot is Parsed with zero limits
+        UsageParseResult.Parsed parsed = result.ShouldBeOfType<UsageParseResult.Parsed>();
+        parsed.Snapshot.Limits.ShouldBeEmpty();
+    }
 }

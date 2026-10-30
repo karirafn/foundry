@@ -14,10 +14,16 @@ internal sealed class UsageCredentialsValidatedHandler(
     IUsageSnapshotStateMutator stateMutator,
     IUsagePollCoordinator coordinator) : IIntegrationEventHandler<CredentialsValidated>
 {
-    public async Task HandleAsync(CredentialsValidated @event, CancellationToken cancellationToken)
+    public Task HandleAsync(CredentialsValidated @event, CancellationToken cancellationToken)
     {
         // Clear first so stale numbers from the previous account do not flash during the poll.
         stateMutator.Clear();
-        await coordinator.PollAsync(cancellationToken);
+
+        // Fire-and-forget — the outbox relay must not block on the container runtime.
+        // CancellationToken.None ensures the poll outlives the relay's request context.
+        // The coordinator is a singleton with internal single-flight and its own error handling.
+        _ = coordinator.PollAsync(CancellationToken.None);
+
+        return Task.CompletedTask;
     }
 }

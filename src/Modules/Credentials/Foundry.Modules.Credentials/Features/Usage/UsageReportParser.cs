@@ -146,59 +146,75 @@ internal static class UsageReportParser
 
     private static UsageRateLimit? ParseLimit(JsonObject obj)
     {
-        string? kind = obj["kind"]?.GetValue<string>();
-        string? severity = obj["severity"]?.GetValue<string>();
-        string? resetsAtStr = obj["resets_at"]?.GetValue<string>();
-
-        if (kind is null || severity is null || resetsAtStr is null)
+        try
         {
+            string? kind = obj["kind"]?.GetValue<string>();
+            string? severity = obj["severity"]?.GetValue<string>();
+            string? resetsAtStr = obj["resets_at"]?.GetValue<string>();
+
+            if (kind is null || severity is null || resetsAtStr is null)
+            {
+                return null;
+            }
+
+            if (!DateTimeOffset.TryParse(resetsAtStr, out DateTimeOffset resetsAt))
+            {
+                return null;
+            }
+
+            decimal percent = obj["percent"]?.GetValue<decimal>() ?? 0m;
+            bool isActive = obj["is_active"]?.GetValue<bool>() ?? false;
+
+            string? modelDisplayName = null;
+
+            if (obj["scope"] is JsonObject scope &&
+                scope["model"] is JsonObject model)
+            {
+                modelDisplayName = model["display_name"]?.GetValue<string>();
+            }
+
+            return new UsageRateLimit(
+                Kind: kind,
+                Percent: percent,
+                ResetsAt: resetsAt,
+                ModelDisplayName: modelDisplayName,
+                Severity: severity,
+                IsActive: isActive);
+        }
+        catch (InvalidOperationException)
+        {
+            // Token-type mismatch (e.g. string where number expected) — treat as unparseable.
             return null;
         }
-
-        if (!DateTimeOffset.TryParse(resetsAtStr, out DateTimeOffset resetsAt))
-        {
-            return null;
-        }
-
-        decimal percent = obj["percent"]?.GetValue<decimal>() ?? 0m;
-        bool isActive = obj["is_active"]?.GetValue<bool>() ?? false;
-
-        string? modelDisplayName = null;
-
-        if (obj["scope"] is JsonObject scope &&
-            scope["model"] is JsonObject model)
-        {
-            modelDisplayName = model["display_name"]?.GetValue<string>();
-        }
-
-        return new UsageRateLimit(
-            Kind: kind,
-            Percent: percent,
-            ResetsAt: resetsAt,
-            ModelDisplayName: modelDisplayName,
-            Severity: severity,
-            IsActive: isActive);
     }
 
     private static UsageExtraCredits? ParseExtraUsage(JsonObject obj)
     {
-        string? currency = obj["currency"]?.GetValue<string>();
-
-        if (currency is null)
+        try
         {
+            string? currency = obj["currency"]?.GetValue<string>();
+
+            if (currency is null)
+            {
+                return null;
+            }
+
+            bool isEnabled = obj["is_enabled"]?.GetValue<bool>() ?? false;
+            long monthlyLimit = obj["monthly_limit"]?.GetValue<long>() ?? 0L;
+            long usedCredits = obj["used_credits"]?.GetValue<long>() ?? 0L;
+            decimal utilization = obj["utilization"]?.GetValue<decimal>() ?? 0m;
+
+            return new UsageExtraCredits(
+                IsEnabled: isEnabled,
+                MonthlyLimit: monthlyLimit,
+                UsedCredits: usedCredits,
+                Utilization: utilization,
+                Currency: currency);
+        }
+        catch (InvalidOperationException)
+        {
+            // Token-type mismatch (e.g. string where number expected) — treat as unparseable.
             return null;
         }
-
-        bool isEnabled = obj["is_enabled"]?.GetValue<bool>() ?? false;
-        long monthlyLimit = obj["monthly_limit"]?.GetValue<long>() ?? 0L;
-        long usedCredits = obj["used_credits"]?.GetValue<long>() ?? 0L;
-        decimal utilization = obj["utilization"]?.GetValue<decimal>() ?? 0m;
-
-        return new UsageExtraCredits(
-            IsEnabled: isEnabled,
-            MonthlyLimit: monthlyLimit,
-            UsedCredits: usedCredits,
-            Utilization: utilization,
-            Currency: currency);
     }
 }
