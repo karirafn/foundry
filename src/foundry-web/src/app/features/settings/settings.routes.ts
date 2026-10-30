@@ -40,6 +40,12 @@ export const SETTINGS_ROUTES: Routes = [
         canDeactivate: [unsavedChangesGuard],
       },
       {
+        path: 'prompts',
+        loadComponent: () =>
+          import('./prompts/settings-prompts').then((m) => m.SettingsPromptsComponent),
+        canDeactivate: [unsavedChangesGuard],
+      },
+      {
         path: 'accounts',
         loadComponent: () =>
           import('./accounts/settings-accounts/settings-accounts').then((m) => m.SettingsAccountsComponent),
