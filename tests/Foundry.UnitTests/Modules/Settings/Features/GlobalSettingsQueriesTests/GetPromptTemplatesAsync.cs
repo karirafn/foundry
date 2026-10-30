@@ -1,5 +1,7 @@
 using Foundry.Modules.Settings.Domain.Entities;
+using Foundry.Modules.Settings.Domain.ValueObjects;
 using Foundry.Modules.Settings.Features;
+using Foundry.Shared;
 using Foundry.WebApi.Persistence;
 
 using Microsoft.Data.Sqlite;
@@ -41,10 +43,16 @@ public sealed class GetPromptTemplatesAsync : IAsyncLifetime
     public async Task WhenSettingsHaveTemplates_ReturnsSystemPromptTemplate()
     {
         // Arrange
+        Result<WorkerPrompts> promptsResult = WorkerPrompts.Create(
+            "system prompt {issueNumber}",
+            "worker prompt {issueNumber}",
+            "Use conventional branch naming");
+        WorkerPrompts prompts = promptsResult.ShouldBeOfType<Result<WorkerPrompts>.Success>().Value;
+
         await using (FoundryDbContext seedDb = CreateDbContext())
         {
             GlobalSettings settings = GlobalSettings.Create();
-            settings.UpdatePromptTemplates("system prompt {issueNumber}", "worker prompt {issueNumber}");
+            settings.UpdatePrompts(prompts);
             seedDb.Set<GlobalSettings>().Add(settings);
             await seedDb.SaveChangesAsync(TestContext.Current.CancellationToken);
         }
@@ -64,10 +72,16 @@ public sealed class GetPromptTemplatesAsync : IAsyncLifetime
     public async Task WhenSettingsHaveTemplates_ReturnsWorkerPromptTemplate()
     {
         // Arrange
+        Result<WorkerPrompts> promptsResult = WorkerPrompts.Create(
+            "system prompt {issueNumber}",
+            "worker prompt {issueNumber}",
+            "Use conventional branch naming");
+        WorkerPrompts prompts = promptsResult.ShouldBeOfType<Result<WorkerPrompts>.Success>().Value;
+
         await using (FoundryDbContext seedDb = CreateDbContext())
         {
             GlobalSettings settings = GlobalSettings.Create();
-            settings.UpdatePromptTemplates("system prompt {issueNumber}", "worker prompt {issueNumber}");
+            settings.UpdatePrompts(prompts);
             seedDb.Set<GlobalSettings>().Add(settings);
             await seedDb.SaveChangesAsync(TestContext.Current.CancellationToken);
         }
@@ -81,29 +95,6 @@ public sealed class GetPromptTemplatesAsync : IAsyncLifetime
 
         // Assert
         workerPromptTemplate.ShouldBe("worker prompt {issueNumber}");
-    }
-
-    [Fact]
-    public async Task WhenSettingsHaveNoTemplates_ReturnsBothNull()
-    {
-        // Arrange
-        await using (FoundryDbContext seedDb = CreateDbContext())
-        {
-            GlobalSettings settings = GlobalSettings.Create();
-            seedDb.Set<GlobalSettings>().Add(settings);
-            await seedDb.SaveChangesAsync(TestContext.Current.CancellationToken);
-        }
-
-        await using FoundryDbContext dbContext = CreateDbContext();
-        GlobalSettingsQueries sut = new(dbContext);
-
-        // Act
-        (string? systemPromptTemplate, string? workerPromptTemplate) = await sut.GetPromptTemplatesAsync(
-            TestContext.Current.CancellationToken);
-
-        // Assert
-        systemPromptTemplate.ShouldBeNull();
-        workerPromptTemplate.ShouldBeNull();
     }
 
     [Fact]

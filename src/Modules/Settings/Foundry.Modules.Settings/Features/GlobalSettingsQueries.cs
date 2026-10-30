@@ -64,7 +64,7 @@ internal sealed class GlobalSettingsQueries(DbContext dbContext) : IGlobalSettin
         (string? SystemPromptTemplate, string? WorkerPromptTemplate) result =
             await dbContext.Set<GlobalSettings>()
                 .AsNoTracking()
-                .Select(s => ValueTuple.Create(s.SystemPromptTemplate, s.WorkerPromptTemplate))
+                .Select(s => ValueTuple.Create(s.WorkerPrompts.SystemPromptTemplate, s.WorkerPrompts.WorkerPromptTemplate))
                 .FirstOrDefaultAsync(cancellationToken);
 
         return result;

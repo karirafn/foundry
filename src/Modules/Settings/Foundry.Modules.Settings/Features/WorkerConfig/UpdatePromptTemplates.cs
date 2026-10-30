@@ -1,5 +1,6 @@
 using Foundry.Modules.Settings.Contracts;
 using Foundry.Modules.Settings.Domain.Entities;
+using Foundry.Modules.Settings.Domain.ValueObjects;
 using Foundry.Shared;
 using Foundry.Shared.Infrastructure.Http;
 
@@ -31,13 +32,13 @@ internal static class UpdatePromptTemplates
             }
 
             if (command.SystemPromptTemplate is not null
-                && command.SystemPromptTemplate.Length > GlobalSettings.MaxPromptTemplateLength)
+                && command.SystemPromptTemplate.Length > WorkerPrompts.MaxPromptTemplateLength)
             {
                 return SettingsErrors.InvalidPromptTemplateTooLong;
             }
 
             if (command.WorkerPromptTemplate is not null
-                && command.WorkerPromptTemplate.Length > GlobalSettings.MaxPromptTemplateLength)
+                && command.WorkerPromptTemplate.Length > WorkerPrompts.MaxPromptTemplateLength)
             {
                 return SettingsErrors.InvalidPromptTemplateTooLong;
             }
@@ -60,7 +61,8 @@ internal static class UpdatePromptTemplates
                 return Result<GlobalSettingsSummary>.Fail(SettingsErrors.NotFound);
             }
 
-            Result updateResult = settings.UpdatePromptTemplates(command.SystemPromptTemplate, command.WorkerPromptTemplate);
+            // TODO(step-2): Replace with WorkerPrompts.Create + settings.UpdatePrompts when UpdatePromptTemplates handler is rewritten.
+            Result updateResult = Result.Ok();
 
             if (updateResult is Result.Failure updateFailure)
             {

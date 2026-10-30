@@ -12,7 +12,6 @@ public sealed class GlobalSettings : AggregateRoot<GlobalSettingsId>
     internal const int MaxTimeoutMinutes = 1440;
     internal const int DefaultMaxConcurrent = 1;
     internal const int DefaultTimeoutMinutes = 120;
-    internal const int MaxPromptTemplateLength = 32768;
     internal const int MaxUsageLimitResetDays = 7;
     internal const int MinProbeIntervalMinutes = 5;
     internal const int MaxProbeIntervalMinutes = 10080;
@@ -35,6 +34,7 @@ public sealed class GlobalSettings : AggregateRoot<GlobalSettingsId>
         PollIntervalSeconds = DefaultPollIntervalSeconds;
         AutoResumeOnUsageReset = true;
         WorkerImageConfiguration = WorkerImageConfiguration.Default;
+        WorkerPrompts = WorkerPrompts.Default;
         ImageBuildState = new ImageBuildState.Idle();
         CreatedAt = createdAt;
         UpdatedAt = createdAt;
@@ -48,9 +48,7 @@ public sealed class GlobalSettings : AggregateRoot<GlobalSettingsId>
 
     public int PollIntervalSeconds { get; private set; }
 
-    public string? SystemPromptTemplate { get; private set; }
-
-    public string? WorkerPromptTemplate { get; private set; }
+    public WorkerPrompts WorkerPrompts { get; private set; } = null!;
 
     public DateTimeOffset? UsageLimitResetsAt { get; private set; }
 
@@ -153,32 +151,10 @@ public sealed class GlobalSettings : AggregateRoot<GlobalSettingsId>
         return Result.Ok();
     }
 
-    public Result UpdatePromptTemplates(string? systemPromptTemplate, string? workerPromptTemplate)
+    public void UpdatePrompts(WorkerPrompts prompts)
     {
-        if (systemPromptTemplate is not null && systemPromptTemplate.Length == 0)
-        {
-            return SettingsErrors.InvalidPromptTemplate;
-        }
-
-        if (workerPromptTemplate is not null && workerPromptTemplate.Length == 0)
-        {
-            return SettingsErrors.InvalidPromptTemplate;
-        }
-
-        if (systemPromptTemplate is not null && systemPromptTemplate.Length > MaxPromptTemplateLength)
-        {
-            return SettingsErrors.InvalidPromptTemplateTooLong;
-        }
-
-        if (workerPromptTemplate is not null && workerPromptTemplate.Length > MaxPromptTemplateLength)
-        {
-            return SettingsErrors.InvalidPromptTemplateTooLong;
-        }
-
-        SystemPromptTemplate = systemPromptTemplate;
-        WorkerPromptTemplate = workerPromptTemplate;
+        WorkerPrompts = prompts;
         UpdatedAt = DateTimeOffset.UtcNow;
-        return Result.Ok();
     }
 
     public bool UpdateWorkerImageConfiguration(WorkerImageConfiguration config)

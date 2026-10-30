@@ -38,13 +38,14 @@ internal sealed class GlobalSettingsConfiguration : IEntityTypeConfiguration<Glo
             .HasColumnName("poll_interval_seconds")
             .HasDefaultValue(GlobalSettings.DefaultPollIntervalSeconds);
 
-        builder.Property(s => s.SystemPromptTemplate)
-            .HasMaxLength(GlobalSettings.MaxPromptTemplateLength)
-            .HasColumnName("system_prompt_template");
+        ValueConverter<WorkerPrompts, string> workerPromptsConverter = new(
+            prompts => SerializeWorkerPrompts(prompts),
+            json => DeserializeWorkerPrompts(json));
 
-        builder.Property(s => s.WorkerPromptTemplate)
-            .HasMaxLength(GlobalSettings.MaxPromptTemplateLength)
-            .HasColumnName("worker_prompt_template");
+        builder.Property(s => s.WorkerPrompts)
+            .HasConversion(workerPromptsConverter)
+            .HasColumnType("TEXT")
+            .HasColumnName("worker_prompts");
 
         builder.Property(s => s.UsageLimitResetsAt)
             .HasColumnName("usage_limit_resets_at");
@@ -113,6 +114,13 @@ internal sealed class GlobalSettingsConfiguration : IEntityTypeConfiguration<Glo
     private static WorkerImageConfiguration DeserializeWorkerImageConfiguration(string json)
         => JsonSerializer.Deserialize<WorkerImageConfiguration>(json)
             ?? WorkerImageConfiguration.Default;
+
+    private static string SerializeWorkerPrompts(WorkerPrompts prompts)
+        => JsonSerializer.Serialize(prompts);
+
+    private static WorkerPrompts DeserializeWorkerPrompts(string json)
+        => JsonSerializer.Deserialize<WorkerPrompts>(json)
+            ?? WorkerPrompts.Default;
 
     private static JsonSerializerOptions BuildImageBuildStateOptions()
     {
