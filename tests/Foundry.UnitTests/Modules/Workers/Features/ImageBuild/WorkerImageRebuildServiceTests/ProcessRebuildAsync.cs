@@ -837,37 +837,146 @@ public sealed class ProcessRebuildAsync
         }
     }
 
-    // Enabled flag tests
+    // Inspect-path tests (build disabled)
 
     [Fact]
-    public async Task WhenImageBuildDisabled_DoesNotBuildImage()
+    public async Task WhenBuildDisabled_DoesNotCallBuildImageFromDockerfile()
     {
-        // Arrange
+        // Arrange — disabled build routes to inspect, not build
         SpyImageOperations spyImages = new();
         WorkerImageRebuildService sut = BuildService(spyImages, imageBuildEnabled: false);
 
         // Act
         await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
 
-        // Assert
+        // Assert — build path was not taken
         spyImages.BuildCalled.ShouldBeFalse();
     }
 
     [Fact]
-    public async Task WhenImageBuildDisabled_PublishesNoEvents()
+    public async Task WhenBuildDisabledAndImageExists_PublishesImageBuildRequested()
     {
         // Arrange
         CapturingIntegrationEventDispatcher dispatcher = new();
+        SpyImageOperations spyImages = new();
         WorkerImageRebuildService sut = BuildService(
-            new SpyImageOperations(),
+            spyImages,
             dispatcher: dispatcher,
             imageBuildEnabled: false);
 
         // Act
         await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
 
-        // Assert
-        dispatcher.Published.ShouldBeEmpty();
+        // Assert — ImageBuildRequested is published even for the inspect path
+        dispatcher.Published.ShouldContain(e => e is ImageBuildRequested);
+    }
+
+    [Fact]
+    public async Task WhenBuildDisabledAndImageExists_PublishesImageBuildSucceeded()
+    {
+        // Arrange — SpyImageOperations.InspectImageAsync returns successfully (image exists)
+        CapturingIntegrationEventDispatcher dispatcher = new();
+        SpyImageOperations spyImages = new();
+        WorkerImageRebuildService sut = BuildService(
+            spyImages,
+            dispatcher: dispatcher,
+            imageBuildEnabled: false);
+
+        // Act
+        await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
+
+        // Assert — inspect succeeded → ImageBuildSucceeded published
+        dispatcher.Published.Count.ShouldBe(2);
+        dispatcher.Published[0].ShouldBeOfType<ImageBuildRequested>();
+        dispatcher.Published[1].ShouldBeOfType<ImageBuildSucceeded>();
+    }
+
+    [Fact]
+    public async Task WhenBuildDisabledAndImageMissing_PublishesImageBuildOutcomeFailedWithTagNamedMessage()
+    {
+        // Arrange — InspectImageAsync throws DockerImageNotFoundException
+        const string tag = "my-worker:v2";
+        CapturingIntegrationEventDispatcher dispatcher = new();
+        NotFoundImageOperations notFoundImages = new();
+        WorkerImageRebuildService sut = BuildService(
+            notFoundImages,
+            dispatcher: dispatcher,
+            imageBuildEnabled: false,
+            imageTag: tag);
+
+        // Act
+        await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
+
+        // Assert — error message names the tag
+        dispatcher.Published.Count.ShouldBe(2);
+        dispatcher.Published[0].ShouldBeOfType<ImageBuildRequested>();
+        ImageBuildOutcomeFailed failed = dispatcher.Published[1].ShouldBeOfType<ImageBuildOutcomeFailed>();
+        failed.ErrorTail.ShouldBe($"image '{tag}' not found on the Docker host");
+    }
+
+    [Fact]
+    public async Task WhenBuildDisabledAndDaemonDown_PublishesImageBuildOutcomeFailedWithRedactedError()
+    {
+        // Arrange — InspectImageAsync throws a non-not-found exception (daemon/API error)
+        CapturingIntegrationEventDispatcher dispatcher = new();
+        InspectThrowingImageOperations throwingImages = new("connection refused");
+        WorkerImageRebuildService sut = BuildService(
+            throwingImages,
+            dispatcher: dispatcher,
+            imageBuildEnabled: false);
+
+        // Act
+        await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
+
+        // Assert — daemon error surfaces as OutcomeFailed
+        dispatcher.Published.Count.ShouldBe(2);
+        dispatcher.Published[0].ShouldBeOfType<ImageBuildRequested>();
+        dispatcher.Published[1].ShouldBeOfType<ImageBuildOutcomeFailed>();
+    }
+
+    [Fact]
+    public async Task WhenBuildDisabledAndDaemonDownWithSecret_RedactsError()
+    {
+        // Arrange
+        const string secretError = "pull denied: https://user:sk-ant-api03-secret@registry.example.com/worker";
+        CapturingIntegrationEventDispatcher dispatcher = new();
+        InspectThrowingImageOperations throwingImages = new(secretError);
+        WorkerImageRebuildService sut = BuildService(
+            throwingImages,
+            dispatcher: dispatcher,
+            imageBuildEnabled: false);
+
+        // Act
+        await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
+
+        // Assert — secret is redacted from the published error
+        ImageBuildOutcomeFailed failed = dispatcher.Published[1].ShouldBeOfType<ImageBuildOutcomeFailed>();
+        string errorTail = failed.ErrorTail.ShouldNotBeNull();
+        errorTail.ShouldNotContain("sk-ant-api03-secret");
+        errorTail.ShouldContain("***");
+    }
+
+    [Fact]
+    public async Task WhenBuildDisabledAndImageMissing_ReusesAttemptProgressionForBackoff()
+    {
+        // Arrange — persisted Attempt=1 means next failure should report Attempt=2
+        const string tag = "my-worker:v3";
+        CapturingIntegrationEventDispatcher dispatcher = new();
+        NotFoundImageOperations notFoundImages = new();
+        WorkerImageRebuildService sut = BuildService(
+            notFoundImages,
+            settingsQueries: new StubGlobalSettingsQueries(attempt: 1, buildEnabled: false, imageTag: tag),
+            dispatcher: dispatcher,
+            imageBuildEnabled: false,
+            imageTag: tag);
+
+        // Act
+        await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
+
+        // Assert — same backoff progression as the build path
+        ImageBuildOutcomeFailed failed = dispatcher.Published[1].ShouldBeOfType<ImageBuildOutcomeFailed>();
+        failed.Attempt.ShouldBe(2);
+        failed.NextRetryAt.ShouldNotBeNull();
     }
 
     // Restart-continuity regression test (AC#1)
@@ -1132,6 +1241,83 @@ public sealed class ProcessRebuildAsync
 
         public Task<IList<ImagesListResponse>> ListImagesAsync(ImagesListParameters parameters, CancellationToken cancellationToken) => Task.FromResult<IList<ImagesListResponse>>([]);
         public Task<ImageInspectResponse> InspectImageAsync(string name, CancellationToken cancellationToken) => Task.FromResult(new ImageInspectResponse());
+        public Task<IList<IDictionary<string, string>>> DeleteImageAsync(string name, ImageDeleteParameters parameters, CancellationToken cancellationToken) => Task.FromResult<IList<IDictionary<string, string>>>([]);
+        public Task<IList<ImageSearchResponse>> SearchImagesAsync(ImagesSearchParameters parameters, CancellationToken cancellationToken) => Task.FromResult<IList<ImageSearchResponse>>([]);
+        public Task CreateImageAsync(ImagesCreateParameters parameters, AuthConfig authConfig, IProgress<JSONMessage> progress, CancellationToken cancellationToken) => Task.CompletedTask;
+        public Task CreateImageAsync(ImagesCreateParameters parameters, AuthConfig authConfig, IDictionary<string, string> headers, IProgress<JSONMessage> progress, CancellationToken cancellationToken) => Task.CompletedTask;
+        public Task CreateImageAsync(ImagesCreateParameters parameters, Stream imageStream, AuthConfig authConfig, IProgress<JSONMessage> progress, CancellationToken cancellationToken) => Task.CompletedTask;
+        public Task CreateImageAsync(ImagesCreateParameters parameters, Stream imageStream, AuthConfig authConfig, IDictionary<string, string> headers, IProgress<JSONMessage> progress, CancellationToken cancellationToken) => Task.CompletedTask;
+        public Task LoadImageAsync(ImageLoadParameters parameters, Stream imageStream, IProgress<JSONMessage> progress, CancellationToken cancellationToken) => Task.CompletedTask;
+        public Task<Stream> SaveImageAsync(string name, CancellationToken cancellationToken) => Task.FromResult<Stream>(Stream.Null);
+        public Task<Stream> SaveImagesAsync(string[] names, CancellationToken cancellationToken) => Task.FromResult<Stream>(Stream.Null);
+        public Task TagImageAsync(string name, ImageTagParameters parameters, CancellationToken cancellationToken) => Task.CompletedTask;
+        public Task PushImageAsync(string name, ImagePushParameters parameters, AuthConfig authConfig, IProgress<JSONMessage> progress, CancellationToken cancellationToken) => Task.CompletedTask;
+        public Task<ImagesPruneResponse> PruneImagesAsync(ImagesPruneParameters parameters, CancellationToken cancellationToken) => Task.FromResult(new ImagesPruneResponse());
+        public Task<CommitContainerChangesResponse> CommitContainerChangesAsync(CommitContainerChangesParameters parameters, CancellationToken cancellationToken) => Task.FromResult(new CommitContainerChangesResponse());
+        public Task<IList<ImageHistoryResponse>> GetImageHistoryAsync(string name, CancellationToken cancellationToken) => Task.FromResult<IList<ImageHistoryResponse>>([]);
+    }
+
+    /// <summary>
+    /// Throws <see cref="Docker.DotNet.DockerImageNotFoundException"/> on <see cref="InspectImageAsync"/>
+    /// to simulate a missing image on the Docker host.
+    /// </summary>
+    private sealed class NotFoundImageOperations : IImageOperations
+    {
+        public Task BuildImageFromDockerfileAsync(
+            ImageBuildParameters parameters,
+            Stream contents,
+            IEnumerable<AuthConfig> authConfigs,
+            IDictionary<string, string> headers,
+            IProgress<JSONMessage> progress,
+            CancellationToken cancellationToken)
+            => Task.CompletedTask;
+
+#pragma warning disable CS0618 // Required for interface compliance
+        public Task<Stream> BuildImageFromDockerfileAsync(Stream contents, ImageBuildParameters parameters, CancellationToken cancellationToken)
+            => Task.FromResult<Stream>(new MemoryStream("{}"u8.ToArray()));
+#pragma warning restore CS0618
+
+        public Task<IList<ImagesListResponse>> ListImagesAsync(ImagesListParameters parameters, CancellationToken cancellationToken) => Task.FromResult<IList<ImagesListResponse>>([]);
+        public Task<ImageInspectResponse> InspectImageAsync(string name, CancellationToken cancellationToken)
+            => throw new Docker.DotNet.DockerImageNotFoundException(System.Net.HttpStatusCode.NotFound, "No such image");
+        public Task<IList<IDictionary<string, string>>> DeleteImageAsync(string name, ImageDeleteParameters parameters, CancellationToken cancellationToken) => Task.FromResult<IList<IDictionary<string, string>>>([]);
+        public Task<IList<ImageSearchResponse>> SearchImagesAsync(ImagesSearchParameters parameters, CancellationToken cancellationToken) => Task.FromResult<IList<ImageSearchResponse>>([]);
+        public Task CreateImageAsync(ImagesCreateParameters parameters, AuthConfig authConfig, IProgress<JSONMessage> progress, CancellationToken cancellationToken) => Task.CompletedTask;
+        public Task CreateImageAsync(ImagesCreateParameters parameters, AuthConfig authConfig, IDictionary<string, string> headers, IProgress<JSONMessage> progress, CancellationToken cancellationToken) => Task.CompletedTask;
+        public Task CreateImageAsync(ImagesCreateParameters parameters, Stream imageStream, AuthConfig authConfig, IProgress<JSONMessage> progress, CancellationToken cancellationToken) => Task.CompletedTask;
+        public Task CreateImageAsync(ImagesCreateParameters parameters, Stream imageStream, AuthConfig authConfig, IDictionary<string, string> headers, IProgress<JSONMessage> progress, CancellationToken cancellationToken) => Task.CompletedTask;
+        public Task LoadImageAsync(ImageLoadParameters parameters, Stream imageStream, IProgress<JSONMessage> progress, CancellationToken cancellationToken) => Task.CompletedTask;
+        public Task<Stream> SaveImageAsync(string name, CancellationToken cancellationToken) => Task.FromResult<Stream>(Stream.Null);
+        public Task<Stream> SaveImagesAsync(string[] names, CancellationToken cancellationToken) => Task.FromResult<Stream>(Stream.Null);
+        public Task TagImageAsync(string name, ImageTagParameters parameters, CancellationToken cancellationToken) => Task.CompletedTask;
+        public Task PushImageAsync(string name, ImagePushParameters parameters, AuthConfig authConfig, IProgress<JSONMessage> progress, CancellationToken cancellationToken) => Task.CompletedTask;
+        public Task<ImagesPruneResponse> PruneImagesAsync(ImagesPruneParameters parameters, CancellationToken cancellationToken) => Task.FromResult(new ImagesPruneResponse());
+        public Task<CommitContainerChangesResponse> CommitContainerChangesAsync(CommitContainerChangesParameters parameters, CancellationToken cancellationToken) => Task.FromResult(new CommitContainerChangesResponse());
+        public Task<IList<ImageHistoryResponse>> GetImageHistoryAsync(string name, CancellationToken cancellationToken) => Task.FromResult<IList<ImageHistoryResponse>>([]);
+    }
+
+    /// <summary>
+    /// Throws a non-not-found exception on <see cref="InspectImageAsync"/> to simulate a daemon/API error.
+    /// </summary>
+    private sealed class InspectThrowingImageOperations(string errorMessage) : IImageOperations
+    {
+        public Task BuildImageFromDockerfileAsync(
+            ImageBuildParameters parameters,
+            Stream contents,
+            IEnumerable<AuthConfig> authConfigs,
+            IDictionary<string, string> headers,
+            IProgress<JSONMessage> progress,
+            CancellationToken cancellationToken)
+            => Task.CompletedTask;
+
+#pragma warning disable CS0618 // Required for interface compliance
+        public Task<Stream> BuildImageFromDockerfileAsync(Stream contents, ImageBuildParameters parameters, CancellationToken cancellationToken)
+            => Task.FromResult<Stream>(new MemoryStream("{}"u8.ToArray()));
+#pragma warning restore CS0618
+
+        public Task<IList<ImagesListResponse>> ListImagesAsync(ImagesListParameters parameters, CancellationToken cancellationToken) => Task.FromResult<IList<ImagesListResponse>>([]);
+        public Task<ImageInspectResponse> InspectImageAsync(string name, CancellationToken cancellationToken)
+            => throw new InvalidOperationException(errorMessage);
         public Task<IList<IDictionary<string, string>>> DeleteImageAsync(string name, ImageDeleteParameters parameters, CancellationToken cancellationToken) => Task.FromResult<IList<IDictionary<string, string>>>([]);
         public Task<IList<ImageSearchResponse>> SearchImagesAsync(ImagesSearchParameters parameters, CancellationToken cancellationToken) => Task.FromResult<IList<ImageSearchResponse>>([]);
         public Task CreateImageAsync(ImagesCreateParameters parameters, AuthConfig authConfig, IProgress<JSONMessage> progress, CancellationToken cancellationToken) => Task.CompletedTask;

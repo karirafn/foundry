@@ -162,19 +162,18 @@ internal sealed class WorkerImageRebuildService(
         }
 
         bool buildEnabled = await settingsQueries.GetWorkerImageBuildEnabledAsync(cancellationToken);
+        string imageTag = await settingsQueries.GetWorkerImageTagAsync(cancellationToken);
+
+        await integrationEventDispatcher.DispatchAsync([new ImageBuildRequested()], cancellationToken);
 
         if (!buildEnabled)
         {
-            logger.LogInformation("Image rebuild skipped: ImageBuild.Enabled is false.");
+            await InspectImageAsync(imageTag, settings, integrationEventDispatcher, cancellationToken);
             return;
         }
 
         IReadOnlyDictionary<string, string> buildArgs =
             await settingsQueries.GetWorkerImageBuildArgsAsync(cancellationToken);
-
-        string imageTag = await settingsQueries.GetWorkerImageTagAsync(cancellationToken);
-
-        await integrationEventDispatcher.DispatchAsync([new ImageBuildRequested()], cancellationToken);
 
         string contextPath = ResolveContextPath(ContextPath);
 
@@ -354,6 +353,93 @@ internal sealed class WorkerImageRebuildService(
             _ = ScheduleDelayedRetryAsync(backoff, retryCts, cancellationToken);
 #pragma warning restore CA2025
         }
+    }
+
+    private async Task InspectImageAsync(
+        string imageTag,
+        GlobalSettingsSummary settings,
+        IIntegrationEventDispatcher integrationEventDispatcher,
+        CancellationToken cancellationToken)
+    {
+        logger.LogInformation(
+            "Image build disabled; inspecting worker image '{Image}' on the Docker host.",
+            imageTag);
+
+        try
+        {
+            await imageOperations.InspectImageAsync(imageTag, cancellationToken);
+
+            CancellationTokenSource? oldCts;
+            lock (_stateLock)
+            {
+                oldCts = _pendingRetryCts;
+                _pendingRetryCts = null;
+            }
+
+            await CancelAndDisposeAsync(oldCts);
+
+            await integrationEventDispatcher.DispatchAsync([new ImageBuildSucceeded()], cancellationToken);
+
+            logger.LogInformation(
+                "Worker image '{Image}' found on the Docker host; marked as available.",
+                imageTag);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (DockerImageNotFoundException)
+        {
+            string errorTail = $"image '{imageTag}' not found on the Docker host";
+            await DispatchInspectFailureAsync(errorTail, settings, integrationEventDispatcher, imageTag, cancellationToken);
+        }
+#pragma warning disable CA1031 // Docker inspect failures must be surfaced as status notifications, not exceptions, to avoid crashing the BackgroundService consumer loop.
+        catch (Exception ex) when (ex is not OperationCanceledException)
+#pragma warning restore CA1031
+        {
+            string errorTail = TruncateTail(SecretRedactor.Redact(ex.Message));
+            logger.LogError("Worker image inspect failed with an unhandled exception: {Error}", errorTail);
+            await DispatchInspectFailureAsync(errorTail, settings, integrationEventDispatcher, imageTag, cancellationToken);
+        }
+    }
+
+    private async Task DispatchInspectFailureAsync(
+        string errorTail,
+        GlobalSettingsSummary settings,
+        IIntegrationEventDispatcher integrationEventDispatcher,
+        string imageTag,
+        CancellationToken cancellationToken)
+    {
+        int nextAttempt = settings.Attempt + 1;
+        TimeSpan backoff = _retryPolicy.ComputeBackoff(nextAttempt);
+
+        CancellationTokenSource retryCts = new();
+
+        CancellationTokenSource? oldCts;
+        lock (_stateLock)
+        {
+            oldCts = _pendingRetryCts;
+            _pendingRetryCts = retryCts;
+        }
+
+        await CancelAndDisposeAsync(oldCts);
+
+        DateTimeOffset nextRetryAt = DateTimeOffset.UtcNow + backoff;
+
+        await integrationEventDispatcher.DispatchAsync(
+            [new ImageBuildOutcomeFailed(errorTail, nextRetryAt, nextAttempt)],
+            cancellationToken);
+
+        logger.LogError(
+            "Worker image '{Image}' not available (attempt {Attempt}, next retry at {NextRetryAt}): {Error}",
+            imageTag,
+            nextAttempt,
+            nextRetryAt,
+            errorTail);
+
+#pragma warning disable CA2025 // The linked CancellationTokenSource is owned and disposed by ScheduleDelayedRetryAsync; the task disposes it internally before returning.
+        _ = ScheduleDelayedRetryAsync(backoff, retryCts, cancellationToken);
+#pragma warning restore CA2025
     }
 
     private static async Task CancelAndDisposeAsync(CancellationTokenSource? cts)
