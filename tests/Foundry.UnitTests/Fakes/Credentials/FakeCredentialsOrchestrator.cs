@@ -2,6 +2,7 @@ using System.Runtime.CompilerServices;
 
 using Foundry.Modules.Credentials.Features.CreditProbe;
 using Foundry.Modules.Credentials.Features.Login;
+using Foundry.Modules.Credentials.Features.Usage;
 using Foundry.Modules.Credentials.Infrastructure.Orchestration;
 using Foundry.Shared;
 
@@ -24,6 +25,8 @@ internal sealed class FakeCredentialsOrchestrator(IEnumerable<string>? logLines 
     private Result<string> _startLoginResult =
         Result<string>.Ok("fake-login-container");
     private Result<string> _creditProbeResult =
+        Result<string>.Ok("");
+    private Result<string> _usageReportResult =
         Result<string>.Ok("");
     private IReadOnlyList<string> _runningTransientContainerIds = [];
     private IReadOnlyList<string> _exitedTransientContainerIds = [];
@@ -73,6 +76,20 @@ internal sealed class FakeCredentialsOrchestrator(IEnumerable<string>? logLines 
     public FakeCredentialsOrchestrator WithCreditProbeFailure(Error error)
     {
         _creditProbeResult = Result<string>.Fail(error);
+        return this;
+    }
+
+    /// <summary>Scripts <see cref="RunUsageReportAsync"/> to return specific stream-json logs.</summary>
+    public FakeCredentialsOrchestrator WithUsageReportLogs(string logs)
+    {
+        _usageReportResult = Result<string>.Ok(logs);
+        return this;
+    }
+
+    /// <summary>Scripts <see cref="RunUsageReportAsync"/> to return a failure.</summary>
+    public FakeCredentialsOrchestrator WithUsageReportFailure(Error error)
+    {
+        _usageReportResult = Result<string>.Fail(error);
         return this;
     }
 
@@ -154,6 +171,11 @@ internal sealed class FakeCredentialsOrchestrator(IEnumerable<string>? logLines 
         CreditProbeSpec spec,
         CancellationToken cancellationToken)
         => Task.FromResult(_creditProbeResult);
+
+    public Task<Result<string>> RunUsageReportAsync(
+        UsageReportSpec spec,
+        CancellationToken cancellationToken)
+        => Task.FromResult(_usageReportResult);
 
     public async Task DeliverLoginCodeAsync(string containerId, string code, CancellationToken cancellationToken)
     {

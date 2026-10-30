@@ -854,6 +854,11 @@ public sealed class TryRunProbeAsync : IAsyncDisposable
         public Task<IReadOnlyList<string>> ListExitedTransientContainersAsync(CancellationToken cancellationToken)
             => Task.FromResult<IReadOnlyList<string>>([]);
 
+        public Task<Result<string>> RunUsageReportAsync(
+            Foundry.Modules.Credentials.Features.Usage.UsageReportSpec spec,
+            CancellationToken cancellationToken)
+            => Task.FromResult(Result<string>.Ok(""));
+
         public Task SeedOnboardingAsync(CancellationToken cancellationToken) => Task.CompletedTask;
 
         public Task EnsureCredentialVolumeAsync(CancellationToken cancellationToken) => Task.CompletedTask;

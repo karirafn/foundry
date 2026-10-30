@@ -1,5 +1,6 @@
 using Foundry.Modules.Credentials.Features.CreditProbe;
 using Foundry.Modules.Credentials.Features.Login;
+using Foundry.Modules.Credentials.Features.Usage;
 using Foundry.Shared;
 
 namespace Foundry.Modules.Credentials.Infrastructure.Orchestration;
@@ -41,6 +42,17 @@ internal interface ICredentialsOrchestrator
     /// </summary>
     Task<Result<string>> RunCreditProbeAsync(
         CreditProbeSpec spec,
+        CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Runs a short-lived transient container to capture the Claude subscription usage report
+    /// via <c>claude -p "/usage" --output-format stream-json --verbose</c>.
+    /// Returns the captured stream-json logs on success, or a <see cref="Result{T}.Failure"/>
+    /// when Docker-level errors prevent the container from starting.
+    /// Parsing the logs is performed separately by <c>UsageReportParser</c>.
+    /// </summary>
+    Task<Result<string>> RunUsageReportAsync(
+        UsageReportSpec spec,
         CancellationToken cancellationToken);
 
     Task SeedOnboardingAsync(CancellationToken cancellationToken);
