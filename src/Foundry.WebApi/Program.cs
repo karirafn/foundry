@@ -4,6 +4,7 @@ using System.Text.Json.Serialization.Metadata;
 
 using Foundry.Modules.Credentials;
 using Foundry.Modules.Credentials.Contracts;
+using Foundry.Modules.Credentials.Features.Usage;
 using Foundry.Modules.Issues;
 using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Monitoring;
@@ -130,6 +131,9 @@ builder.Services.AddScoped<IIssueBroadcaster, SignalRIssueBroadcaster>();
 builder.Services.AddSingleton<ISystemNotificationBroadcaster, SignalRSystemNotificationBroadcaster>();
 builder.Services.AddSingleton<ILoginSessionBroadcaster, SignalRLoginSessionBroadcaster>();
 builder.Services.AddScoped<IWorkerActivityBroadcaster, SignalRWorkerActivityBroadcaster>();
+// Overrides the Credentials module's TryAddSingleton no-op with the real SignalR implementation.
+// Must be registered AFTER AddCredentialsModule — the last AddSingleton wins for GetRequiredService.
+builder.Services.AddSingleton<IUsageSnapshotBroadcaster, SignalRUsageSnapshotBroadcaster>();
 
 builder.Services.AddCors(options =>
 {

@@ -11,6 +11,8 @@ import { SettingsService } from './core/services/settings.service';
 import { AccountService } from './features/settings/accounts/account.service';
 import { DispatchService } from './core/services/dispatch.service';
 import { CreditsService } from './core/services/credits.service';
+import { UsageService } from './core/services/usage.service';
+import { UsageSnapshot } from './core/models/usage.model';
 
 const mockSystemHubFactory = (): SystemHub => ({
   on: () => {},
@@ -113,7 +115,27 @@ function createMockCreditsService() {
   };
 }
 
-function setupApp(isColdBuildBlocking = false) {
+function buildTestSnapshot(overrides: Partial<UsageSnapshot> = {}): UsageSnapshot {
+  return {
+    limits: [
+      { kind: 'session', percent: 42, resetsAt: '2026-10-30T06:00:00Z', modelDisplayName: null, severity: 'normal', isActive: true },
+      { kind: 'weekly_all', percent: 78, resetsAt: '2026-11-03T09:00:00Z', modelDisplayName: null, severity: 'warning', isActive: false },
+    ],
+    extraUsage: null,
+    capturedAt: '2026-10-30T01:00:00Z',
+    accountEmail: 'ops@acme.com',
+    lastRefreshFailedAt: null,
+    ...overrides,
+  };
+}
+
+function createMockUsageService(snapshot: UsageSnapshot | null = null) {
+  return {
+    snapshot: signal(snapshot).asReadonly(),
+  };
+}
+
+function setupApp(isColdBuildBlocking = false, usageSnapshot: UsageSnapshot | null = buildTestSnapshot()) {
   const mockAccountService = createMockAccountService();
   TestBed.configureTestingModule({
     imports: [App],
@@ -127,6 +149,7 @@ function setupApp(isColdBuildBlocking = false) {
       { provide: DispatchService, useValue: createMockDispatchService() },
       { provide: SystemSignalRService, useValue: createMockSignalRService() },
       { provide: CreditsService, useValue: createMockCreditsService() },
+      { provide: UsageService, useValue: createMockUsageService(usageSnapshot) },
     ],
   });
   const fixture = TestBed.createComponent(App);
@@ -281,23 +304,38 @@ describe('App', () => {
     expect(announcer?.getAttribute('aria-atomic')).toBe('true');
   });
 
-  // Step 3: fd-account-chip renders before the settings gear link
-  it('should render fd-account-chip before .app-header__settings-link in .app-header__nav', () => {
-    // Arrange / Act
-    const { fixture } = setupApp();
+  // Behavior f: nav order is widget → chip → settings link
+  it('should render fd-usage-widget before fd-account-chip before .app-header__settings-link', () => {
+    // Arrange — provide a non-null snapshot so the widget renders
+    const { fixture } = setupApp(false, buildTestSnapshot());
     const compiled = fixture.nativeElement as HTMLElement;
     const nav = compiled.querySelector('.app-header__nav');
 
     // Assert
     expect(nav).not.toBeNull();
+    const widget = nav?.querySelector('fd-usage-widget');
     const chip = nav?.querySelector('fd-account-chip');
     const settingsLink = nav?.querySelector('.app-header__settings-link');
+    expect(widget).not.toBeNull();
     expect(chip).not.toBeNull();
     expect(settingsLink).not.toBeNull();
 
     const navChildren = Array.from(nav?.children ?? []);
+    const widgetIndex = navChildren.indexOf(widget as Element);
     const chipIndex = navChildren.indexOf(chip as Element);
     const settingsIndex = navChildren.indexOf(settingsLink as Element);
+    // widget < chip < settings
+    expect(widgetIndex).toBeLessThan(chipIndex);
     expect(chipIndex).toBeLessThan(settingsIndex);
+  });
+
+  // Behavior f: fd-usage-widget emits no DOM content when snapshot is null
+  it('should not render the usage widget trigger when usage snapshot is null', () => {
+    // Arrange — null snapshot means widget renders no trigger
+    const { fixture } = setupApp(false, null);
+    const compiled = fixture.nativeElement as HTMLElement;
+
+    // Assert — no trigger button rendered
+    expect(compiled.querySelector('.usage-widget__trigger')).toBeNull();
   });
 });

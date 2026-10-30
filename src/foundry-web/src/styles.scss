@@ -70,6 +70,18 @@
   --fd-stat-input:    #79c0ff;  /* light: #0550ae */
   --fd-stat-output:   #ffa657;  /* light: #bc4c00 */
 
+  /* Usage meter fill — severity-keyed; distinct role from state-badge backgrounds (see #611) */
+  --fd-usage-normal:   #3fb950;  /* meter-fill role; brighter than --fd-state-completed for recessed rail */
+  --fd-usage-warning:  #e0a526;  /* aligns with --fd-text-warning */
+  --fd-usage-critical: #da3633;  /* aligns with --fd-state-failed */
+  --fd-usage-neutral:  #6e7681;  /* fallback for unrecognised severity */
+
+  /* Usage severity-word TEXT tokens — used only for foreground text on --fd-bg-card (#161b22).
+     Fill tokens (#da3633, #6e7681) fail WCAG 1.4.3 4.5:1 as text; these lighter variants pass.
+     normal (#3fb950) = 6.81:1 ✓ and warning (#e0a526) = 7.89:1 ✓ — reuse fill tokens directly. */
+  --fd-usage-critical-text: #f28080;  /* 6.73:1 on #161b22 — lightened from fill #da3633 (3.75:1) */
+  --fd-usage-neutral-text:  #8b949e;  /* 5.62:1 on #161b22 — reuses --fd-text-secondary */
+
   /* Gutter — fixed leading cell width for listbox option rows */
   --fd-gutter: 1rem;
 

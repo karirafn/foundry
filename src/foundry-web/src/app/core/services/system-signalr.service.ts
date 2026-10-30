@@ -10,6 +10,7 @@ import {
 } from '../models/system-notification.model';
 import { DOCKER_UNAVAILABLE_MESSAGE } from '../models/system-status.model';
 import { LoginSessionUpdate } from '../models/settings.model';
+import { UsageSnapshot } from '../models/usage.model';
 
 const RELOAD_TRIGGER_CATEGORIES: ReadonlySet<string> = new Set([
   DISPATCH_NOTIFICATION_CATEGORY,
@@ -61,6 +62,9 @@ export class SystemSignalRService {
   private readonly _creditsNotification = new Subject<SystemNotification>();
   readonly creditsNotification: Observable<SystemNotification> = this._creditsNotification.asObservable();
 
+  private readonly _usageSnapshotUpdated = new Subject<UsageSnapshot | null>();
+  readonly usageSnapshotUpdated: Observable<UsageSnapshot | null> = this._usageSnapshotUpdated.asObservable();
+
   constructor() {
     const hub = this._hubFactory();
 
@@ -78,6 +82,10 @@ export class SystemSignalRService {
 
     hub.on('LoginSessionUpdated', (update: LoginSessionUpdate) => {
       this._loginSessionUpdate.next(update);
+    });
+
+    hub.on('UsageSnapshotUpdated', (snapshot: UsageSnapshot | null) => {
+      this._usageSnapshotUpdated.next(snapshot);
     });
 
     hub.onReconnected(() => {

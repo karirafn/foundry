@@ -47,7 +47,7 @@ ENV DISABLE_AUTOUPDATER=1
 
 # Pin exact version to a single location — both the worker image and the login image derive
 # from this base so the CLI version is enforced in one place.
-RUN npm install -g @anthropic-ai/claude-code@2.1.187
+RUN npm install -g @anthropic-ai/claude-code@2.1.314
 
 # Pre-create ~/.claude and ~/.runtime owned by the built-in node user (UID 1000).
 # ~/.runtime is the XDG_RUNTIME_DIR used by rootless dockerd; pre-creating it here

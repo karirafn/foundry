@@ -9,10 +9,12 @@ import {
 } from '../models/system-notification.model';
 import { DOCKER_UNAVAILABLE_MESSAGE } from '../models/system-status.model';
 import { LoginSessionUpdate } from '../models/settings.model';
+import { UsageSnapshot } from '../models/usage.model';
 
 interface CapturedHubCallbacks {
   onSystemNotificationReceived: ((notification: SystemNotification) => void) | null;
   onLoginSessionUpdated: ((update: LoginSessionUpdate) => void) | null;
+  onUsageSnapshotUpdated: ((snapshot: UsageSnapshot | null) => void) | null;
   onReconnected: (() => void) | null;
 }
 
@@ -25,6 +27,8 @@ function buildMockHub(captured: CapturedHubCallbacks): SystemHub {
         captured.onSystemNotificationReceived = cb as (notification: SystemNotification) => void;
       } else if (method === 'LoginSessionUpdated') {
         captured.onLoginSessionUpdated = cb as (update: LoginSessionUpdate) => void;
+      } else if (method === 'UsageSnapshotUpdated') {
+        captured.onUsageSnapshotUpdated = cb as (snapshot: UsageSnapshot | null) => void;
       }
     },
     onReconnected: (cb: () => void) => {
@@ -40,6 +44,7 @@ function setup() {
   const captured: CapturedHubCallbacks = {
     onSystemNotificationReceived: null,
     onLoginSessionUpdated: null,
+    onUsageSnapshotUpdated: null,
     onReconnected: null,
   };
   const mockHubFactory = () => buildMockHub(captured);
@@ -393,5 +398,58 @@ describe('SystemSignalRService', () => {
 
     // Assert
     expect((svc.creditsNotification as unknown as { next?: unknown }).next).toBeUndefined();
+  });
+
+  // Cycle 23: UsageSnapshotUpdated handler is registered on the hub
+  it('should register a UsageSnapshotUpdated handler on the hub', () => {
+    // Arrange / Act
+    const { captured } = setup();
+
+    // Assert
+    expect(captured.onUsageSnapshotUpdated).not.toBeNull();
+  });
+
+  // Cycle 24: receiving a UsageSnapshotUpdated message with a snapshot emits on usageSnapshotUpdated
+  it('should emit on usageSnapshotUpdated when a UsageSnapshotUpdated message arrives with a snapshot', () => {
+    // Arrange
+    const { svc, captured } = setup();
+    const snapshot: UsageSnapshot = {
+      limits: [{ kind: 'session', percent: 55, resetsAt: '2026-10-30T06:00:00Z', modelDisplayName: null, severity: 'normal', isActive: true }],
+      extraUsage: null,
+      capturedAt: '2026-10-30T01:00:00Z',
+      accountEmail: 'user@example.com',
+      lastRefreshFailedAt: null,
+    };
+    let received: UsageSnapshot | null | undefined;
+    svc.usageSnapshotUpdated.subscribe((s) => (received = s));
+
+    // Act
+    captured.onUsageSnapshotUpdated!(snapshot);
+
+    // Assert
+    expect(received).toEqual(snapshot);
+  });
+
+  // Cycle 25: receiving a UsageSnapshotUpdated message with null emits null on usageSnapshotUpdated
+  it('should emit null on usageSnapshotUpdated when a UsageSnapshotUpdated message arrives with null', () => {
+    // Arrange
+    const { svc, captured } = setup();
+    let received: UsageSnapshot | null | undefined;
+    svc.usageSnapshotUpdated.subscribe((s) => (received = s));
+
+    // Act
+    captured.onUsageSnapshotUpdated!(null);
+
+    // Assert
+    expect(received).toBeNull();
+  });
+
+  // Cycle 26: usageSnapshotUpdated is an Observable (not a writable Subject)
+  it('should expose usageSnapshotUpdated as an Observable (no next() method)', () => {
+    // Arrange / Act
+    const { svc } = setup();
+
+    // Assert
+    expect((svc.usageSnapshotUpdated as unknown as { next?: unknown }).next).toBeUndefined();
   });
 });

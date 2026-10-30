@@ -1,6 +1,7 @@
 using Foundry.Modules.Credentials.Contracts;
 using Foundry.Modules.Credentials.Domain.Entities;
 using Foundry.Modules.Credentials.Domain.ValueObjects;
+using Foundry.Modules.Credentials.Features.Usage;
 using Foundry.Shared;
 using Foundry.Shared.Infrastructure.Http;
 
@@ -44,7 +45,10 @@ internal static class UpdateAuthMode
         }
     }
 
-    internal sealed class Handler(DbContext dbContext) : ICommandHandler<Command, ClaudeAccountSummary>
+    internal sealed class Handler(
+        DbContext dbContext,
+        IUsageSnapshotStateMutator usageStateMutator,
+        IUsagePollCoordinator usagePollCoordinator) : ICommandHandler<Command, ClaudeAccountSummary>
     {
         public async Task<Result<ClaudeAccountSummary>> HandleAsync(
             Command command,
@@ -66,6 +70,19 @@ internal static class UpdateAuthMode
 
             account.SetAuthMode(mode);
             await dbContext.SaveChangesAsync(cancellationToken);
+
+            // Clear the usage snapshot on any auth-mode change — a different mode may produce
+            // entirely different (or no) usage data, and the prior snapshot is stale.
+            usageStateMutator.Clear();
+
+            // Trigger an immediate poll when the new mode is OAuth-capable with usage reporting.
+            // Fire-and-forget — the coordinator is a singleton with internal single-flight and its
+            // own error handling, so blocking the HTTP response for the container runtime is
+            // unnecessary. CancellationToken.None ensures the poll outlives the HTTP request.
+            if (account.CanReportUsage)
+            {
+                _ = usagePollCoordinator.PollAsync(CancellationToken.None);
+            }
 
             return CredentialQueries.ToSummary(account);
         }

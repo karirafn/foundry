@@ -1,5 +1,6 @@
 using Foundry.Modules.Credentials.Contracts;
 using Foundry.Modules.Credentials.Features.CreditProbe;
+using Foundry.Modules.Credentials.Features.Usage;
 
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
@@ -17,6 +18,7 @@ internal static class CredentialsEndpoints
         GetCredentials.Endpoint.Map(group);
         UpdateAuthMode.Endpoint.Map(group);
         CheckCreditsNow.Endpoint.Map(group);
+        GetUsageSnapshot.Endpoint.Map(group);
 
         return routes;
     }

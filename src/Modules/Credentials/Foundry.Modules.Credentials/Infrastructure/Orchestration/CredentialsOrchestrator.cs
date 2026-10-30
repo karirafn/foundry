@@ -8,6 +8,7 @@ using Docker.DotNet.Models;
 using Foundry.Modules.Credentials.Domain.ValueObjects;
 using Foundry.Modules.Credentials.Features.CreditProbe;
 using Foundry.Modules.Credentials.Features.Login;
+using Foundry.Modules.Credentials.Features.Usage;
 using Foundry.Modules.Workers.Contracts;
 using Foundry.Shared;
 using Foundry.Shared.Infrastructure.Docker;
@@ -271,6 +272,95 @@ internal sealed class CredentialsOrchestrator(IDockerContainerRuntime runtime) :
                 ? redacted[..DockerErrorMessageMaxLength]
                 : redacted;
             return Result<string>.Fail(new Error("Docker.CreditProbeStartFailed", message));
+        }
+    }
+
+    public async Task<Result<string>> RunUsageReportAsync(
+        UsageReportSpec spec,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            // The usage container mounts the credential volume read-write, unlike the credit probe's
+            // read-only mount. The CLI may refresh an expired access token during the real-turn
+            // command, and a read-only mount cannot persist the rotated refresh token — leaving a
+            // dead token on the volume that causes every subsequent OAuth operation to fail.
+            CreateContainerParameters createParams = new()
+            {
+                Image = WorkerImageNames.LoginImageName,
+                Cmd =
+                [
+                    "timeout",
+                    spec.TimeoutSeconds.ToString(CultureInfo.InvariantCulture),
+                    "claude",
+                    "-p",
+                    UsageReportSpec.UsagePrompt,
+                    "--max-turns",
+                    "1",
+                    "--output-format",
+                    "stream-json",
+                    "--verbose",
+                ],
+                Env = [$"{CredentialVolumeConstants.ConfigDirEnvVar}={CredentialVolumeConstants.ContainerPath}"],
+                Labels = new Dictionary<string, string>
+                {
+                    [ContainerLabelConstants.TransientLabelKey] = ContainerLabelConstants.TransientLabelValue,
+                    [ContainerLabelConstants.RoleLabelKey] = ContainerLabelConstants.RoleUsage,
+                },
+                HostConfig = new HostConfig
+                {
+                    AutoRemove = true,
+                    Mounts =
+                    [
+                        new Mount
+                        {
+                            Type = "volume",
+                            Source = CredentialVolumeConstants.VolumeName,
+                            Target = CredentialVolumeConstants.ContainerPath,
+                            // Read-write mount: the CLI may refresh an expired access token during
+                            // the real-turn command, and a read-only mount cannot persist the rotated
+                            // refresh token, leaving a dead token on the volume.
+                            ReadOnly = false,
+                        },
+                    ],
+                },
+            };
+
+            string containerId = await runtime.CreateAndStartAsync(createParams, cancellationToken);
+
+            StringBuilder logs = new();
+
+            await foreach (string line in runtime.StreamLogsAsync(containerId, cancellationToken))
+            {
+                if (logs.Length >= ProbeLogMaxLength)
+                {
+                    break;
+                }
+
+                if (logs.Length > 0)
+                {
+                    logs.AppendLine();
+                }
+
+                int remaining = ProbeLogMaxLength - logs.Length;
+                if (remaining <= 0)
+                {
+                    break;
+                }
+
+                string redacted = SecretRedactor.Redact(line);
+                logs.Append(redacted.Length > remaining ? redacted[..remaining] : redacted);
+            }
+
+            return Result<string>.Ok(logs.ToString());
+        }
+        catch (DockerApiException ex)
+        {
+            string redacted = SecretRedactor.Redact(ex.Message);
+            string message = redacted.Length > DockerErrorMessageMaxLength
+                ? redacted[..DockerErrorMessageMaxLength]
+                : redacted;
+            return Result<string>.Fail(new Error("Docker.UsageReportStartFailed", message));
         }
     }
 

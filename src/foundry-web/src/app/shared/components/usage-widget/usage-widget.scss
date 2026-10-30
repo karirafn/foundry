@@ -1,0 +1,297 @@
+:host {
+  display: contents;
+}
+
+// Local component custom properties
+.usage-widget {
+  --usage-meter-track-size: 56px;
+  --usage-meter-track-height: 6px;
+}
+
+// ─── Trigger button ─────────────────────────────────────────────────────────
+
+.usage-widget__trigger {
+  display: inline-flex;
+  align-items: center;
+  height: 28px;
+  gap: var(--fd-spacing-sm);
+  padding: var(--fd-spacing-xs) var(--fd-spacing-sm);
+  border: 1px solid var(--fd-border-default);
+  border-radius: var(--fd-radius-sm);
+  background: transparent;
+  color: var(--fd-text-secondary);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 0.75rem;
+  line-height: 1;
+  transition: background-color 0.15s ease;
+
+  &:hover {
+    background: var(--fd-bg-card-hover);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--fd-text-link);
+    outline-offset: 2px;
+  }
+}
+
+// ─── Inline meters (wide layout) ────────────────────────────────────────────
+
+.usage-widget__inline {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+// ─── Collapsed single figure (narrow layout) ────────────────────────────────
+
+.usage-widget__collapsed {
+  display: none;
+  gap: var(--fd-spacing-xs);
+  align-items: center;
+}
+
+// ─── Meter row ───────────────────────────────────────────────────────────────
+
+.usage-meter {
+  display: flex;
+  align-items: center;
+  gap: var(--fd-spacing-xs);
+}
+
+.usage-meter__label {
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--fd-text-secondary);
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.usage-meter__track {
+  inline-size: var(--usage-meter-track-size);
+  block-size: var(--usage-meter-track-height);
+  border-radius: var(--fd-radius-sm);
+  background: var(--fd-border-muted);
+  position: relative;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.usage-meter__fill {
+  block-size: 100%;
+  border-radius: inherit;
+  background: var(--fd-usage-neutral);
+  transition: inline-size 200ms ease;
+}
+
+.usage-meter__percent {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--fd-text-primary);
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+// ─── Severity fill colours ───────────────────────────────────────────────────
+
+.usage-meter--normal .usage-meter__fill,
+.usage-meter--normal .usage-widget__severity-dot {
+  background: var(--fd-usage-normal);
+}
+
+.usage-meter--warning .usage-meter__fill,
+.usage-meter--warning .usage-widget__severity-dot {
+  background: var(--fd-usage-warning);
+}
+
+.usage-meter--critical .usage-meter__fill,
+.usage-meter--critical .usage-widget__severity-dot {
+  background: var(--fd-usage-critical);
+}
+
+// .usage-meter--neutral falls through to the default (--fd-usage-neutral)
+
+// ─── Collapsed severity dot ───────────────────────────────────────────────────
+
+.usage-widget__severity-dot {
+  display: inline-block;
+  inline-size: 8px;
+  block-size: 8px;
+  border-radius: 50%;
+  background: var(--fd-usage-neutral);
+  flex-shrink: 0;
+}
+
+// ─── Failed / dimmed state ───────────────────────────────────────────────────
+// Dim only the visual bar elements; leave label/percent text at full opacity
+// so --fd-text-secondary (5.62:1) and --fd-text-primary (14.64:1) stay above 4.5:1.
+
+.usage-widget--failed {
+  .usage-meter__track,
+  .usage-meter__fill,
+  .usage-widget__severity-dot {
+    opacity: 0.55;
+    filter: saturate(0.6);
+  }
+}
+
+// ─── Container-query collapse ────────────────────────────────────────────────
+
+@container app-header-nav (max-width: 240px) {
+  .usage-widget__inline {
+    display: none;
+  }
+
+  .usage-widget__collapsed {
+    display: inline-flex;
+  }
+}
+
+// ─── Popover ─────────────────────────────────────────────────────────────────
+
+.usage-popover {
+  margin: 0;
+  inline-size: min(320px, calc(100vw - 2 * var(--fd-spacing-lg)));
+  padding: var(--fd-spacing-md);
+  border: 1px solid var(--fd-border-default);
+  border-radius: var(--fd-radius-md);
+  background: var(--fd-bg-card);
+  color: var(--fd-text-primary);
+  // Local shadow — no global shadow token exists in this project
+  box-shadow: 0 10px 15px rgba(0, 0, 0, 0.4);
+
+  // Safe fixed fallback placement (engines without anchor support use this)
+  position: fixed;
+  inset: auto;
+  inset-block-start: 52px;
+  inset-inline-end: var(--fd-spacing-xl);
+}
+
+.usage-popover__header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--fd-spacing-sm);
+  margin-block-end: var(--fd-spacing-xs);
+}
+
+.usage-popover__title {
+  font-weight: 600;
+  color: var(--fd-text-primary);
+  flex-shrink: 0;
+}
+
+.usage-popover__email {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--fd-text-secondary);
+  font-size: 0.75rem;
+}
+
+.usage-popover__asof {
+  // --fd-text-tertiary (#6e7681) = 3.77:1 on --fd-bg-card at 12px — fails WCAG 1.4.3.
+  // Use --fd-text-secondary (#8b949e) = 5.62:1 instead.
+  color: var(--fd-text-secondary);
+  font-size: 0.75rem;
+  margin: 0 0 var(--fd-spacing-sm);
+}
+
+.usage-popover__asof--failed {
+  color: var(--fd-text-warning);
+  display: flex;
+  align-items: center;
+  gap: var(--fd-spacing-xs);
+}
+
+.usage-popover__warn-icon {
+  flex-shrink: 0;
+}
+
+.usage-popover__limits {
+  display: flex;
+  flex-direction: column;
+  gap: var(--fd-spacing-sm);
+}
+
+.usage-popover__limit {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.usage-popover__limit-head {
+  display: flex;
+  align-items: center;
+  gap: var(--fd-spacing-xs);
+}
+
+.usage-popover__limit-label {
+  font-size: 0.8125rem;
+  color: var(--fd-text-primary);
+  flex-shrink: 0;
+}
+
+// Wider track inside the popover
+.usage-meter--popover {
+  --usage-meter-track-size: 96px;
+}
+
+.usage-popover__severity-word {
+  font-size: 0.75rem;
+
+  // Text tokens are distinct from fill tokens: fill tokens are only 3:1 against the rail;
+  // text on --fd-bg-card (#161b22) requires 4.5:1 (WCAG 1.4.3).
+  // normal (#3fb950) = 6.81:1 ✓ and warning (#e0a526) = 7.89:1 ✓ — fill tokens pass directly.
+  // critical (#da3633) = 3.75:1 ✗ → use --fd-usage-critical-text (#f28080, 6.73:1) ✓
+  // neutral (#6e7681) = 3.77:1 ✗ → use --fd-usage-neutral-text (#8b949e, 5.62:1) ✓
+
+  &.usage-meter--normal {
+    color: var(--fd-usage-normal);
+  }
+
+  &.usage-meter--warning {
+    color: var(--fd-usage-warning);
+  }
+
+  &.usage-meter--critical {
+    color: var(--fd-usage-critical-text);
+  }
+
+  &.usage-meter--neutral {
+    color: var(--fd-usage-neutral-text);
+  }
+}
+
+.usage-popover__reset {
+  font-size: 0.75rem;
+  // --fd-text-tertiary (#6e7681) = 3.77:1 on --fd-bg-card at 12px — fails WCAG 1.4.3.
+  // Use --fd-text-secondary (#8b949e) = 5.62:1 instead.
+  color: var(--fd-text-secondary);
+  margin: 0;
+  padding-inline-start: 0;
+}
+
+.usage-popover__credits {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--fd-spacing-sm);
+  margin-block-start: var(--fd-spacing-sm);
+  padding-block-start: var(--fd-spacing-sm);
+  border-block-start: 1px solid var(--fd-border-muted);
+}
+
+.usage-popover__credits-label {
+  font-size: 0.8125rem;
+  color: var(--fd-text-primary);
+}
+
+.usage-popover__credits-value {
+  font-size: 0.8125rem;
+  color: var(--fd-text-secondary);
+  font-variant-numeric: tabular-nums;
+}

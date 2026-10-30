@@ -917,6 +917,23 @@ The probe container mirrors the login/credential-helper containers: transient (`
 
 The operator can force an immediate probe regardless of `NextProbeAt` via `POST /api/credentials/probe` ("Check now"), which returns an in-flight indicator (`202`) when a probe is already running. `NextProbeAt` is exposed on the `/api/credentials` payload so the dashboard `credits` banner renders a live countdown. Container hardening for this new container type is deferred to #60.
 
+## Usage Snapshot
+
+A point-in-time view of the Claude subscription's usage limits, mirroring what Claude Code's `/usage` command reports — the proactive counterpart to the Credit Probe's reactive money-block signal.
+Modeled as an immutable value object (`UsageSnapshot`) holding the list of rate limits (`UsageRateLimit`: `Kind` in `session` / `weekly_all` / `weekly_scoped`, `Percent`, `ResetsAt`, optional `ModelDisplayName`, `Severity`, `IsActive`), optional extra-usage credits (`UsageExtraCredits`: `IsEnabled`, `MonthlyLimit`, `UsedCredits`, `Utilization`, `Currency`), the `CapturedAt` time, the `AccountEmail` it was captured for, and an optional `LastRefreshFailedAt` stamp.
+`Severity` is Anthropic's own `normal` / `warning` / `critical` classification, carried as a string the whole way to the wire so the client applies no thresholds of its own and tolerates an unrecognised value by falling back to a neutral colour.
+The snapshot is provider-owned, stale-by-definition data, so it is held only in an in-memory singleton (`UsageSnapshotState`, mirroring Docker Availability State) — no table, no migration; a startup poll re-establishes it after a restart.
+A successful poll replaces the snapshot and clears any failure stamp; a failed poll (Docker unavailable, container timeout, non-zero exit, missing or unparseable `usage_report`) retains the last good snapshot and stamps `LastRefreshFailedAt` so the dashboard dims it and shows "Couldn't refresh"; a poll that legitimately returns no usage (API-key mode, usage-based billing, `rate_limits` null) clears the snapshot rather than marking it failed.
+Delivered by `GET /api/credentials/usage` (204 when absent) for the initial seed and pushed on the system hub via a dedicated `UsageSnapshotUpdated` method — not a System Notification category — on every poll, failure, and clear, so the "As of" capture time never goes falsely stale on an idle system.
+
+## Usage Poll
+
+The act of capturing a Usage Snapshot: a transient helper container (`foundry.transient=true`, `foundry.role=usage`, `AutoRemove`, built from the login image) runs `claude -p "/usage" --output-format stream-json --verbose`, and `UsageReportParser` reads the `usage_report` field of the emitted assistant message.
+Unlike the Credit Probe's read-only mount, the usage container mounts the credential volume **read-write** at `/home/node/.claude`: the CLI may refresh an expired access token during the call, and a read-only mount cannot persist the rotated refresh token, leaving a dead token on the volume.
+Gated on `ClaudeAccount.CanReportUsage` — true only for OAuth mode with a committed account identity and `Validity` not Invalid, and deferred while `ILoginSessionState.IsLoginActive`; spend state does not gate it, so usage stays visible during a credit block.
+`UsagePollService` (a `PeriodicBackgroundService`) ticks every 5 minutes and once at startup, and `CredentialsValidated` / `CredentialsInvalidated` / an auth-mode change each clear the snapshot and trigger an immediate poll when the account can report usage.
+All of these run through `UsagePollCoordinator`, which holds a `SemaphoreSlim(1,1)` for single-flight but, unlike the Credit Probe's fail-fast coordinator, has a second concurrent caller **join** the in-flight poll rather than being dropped (see [ADR 0081](docs/adr/0081-usage-polling-single-flight-joins.md)), so an event-triggered poll arriving during a scheduled tick still refreshes without starting a second container.
+
 ## System Notification
 
 A lightweight SignalR broadcast (`Category`, `IsActive`, `Message`) delivered to all dashboard clients via the system hub, used for global operational banners.
