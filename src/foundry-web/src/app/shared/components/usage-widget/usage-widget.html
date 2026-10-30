@@ -74,7 +74,7 @@
         @for (meter of vm.allLimits; track meter.kind + (meter.label)) {
           <div class="usage-popover__limit">
             <div class="usage-popover__limit-head">
-              <span class="usage-popover__limit-label">{{ popoverLabelForKind(meter.kind, null) }}</span>
+              <span class="usage-popover__limit-label">{{ meter.popoverLabel }}</span>
               <div
                 class="usage-meter usage-meter--popover"
                 [ngClass]="meter.severityClass"

@@ -363,4 +363,269 @@ describe('UsageWidgetComponent', () => {
     const dot = el.querySelector('.usage-widget__severity-dot');
     expect(dot?.getAttribute('aria-hidden')).toBe('true');
   });
+
+  // ─── Step 13 behaviors ───────────────────────────────────────────────────────
+
+  // Behavior a — popover lists all limits (session + weekly_all + weekly_scoped)
+  it('should render all limit rows in the popover including weekly_scoped', () => {
+    // Arrange
+    const snapshot = buildSnapshot({
+      limits: [
+        { kind: 'session', percent: 42, resetsAt: '2026-10-30T06:00:00Z', modelDisplayName: null, severity: 'normal', isActive: true },
+        { kind: 'weekly_all', percent: 78, resetsAt: '2026-11-03T09:00:00Z', modelDisplayName: null, severity: 'warning', isActive: false },
+        { kind: 'weekly_scoped', percent: 51, resetsAt: '2026-11-03T09:00:00Z', modelDisplayName: 'Claude Opus 4', severity: 'normal', isActive: false },
+      ],
+    });
+
+    // Act
+    const fixture = setup(snapshot);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert — popover limits container has 3 rows
+    const limitRows = el.querySelectorAll('.usage-popover__limit');
+    expect(limitRows.length).toBe(3);
+  });
+
+  // Behavior a — weekly_scoped row in popover uses modelDisplayName as label
+  it('should label a weekly_scoped limit row in the popover with its modelDisplayName', () => {
+    // Arrange
+    const snapshot = buildSnapshot({
+      limits: [
+        { kind: 'session', percent: 42, resetsAt: '2026-10-30T06:00:00Z', modelDisplayName: null, severity: 'normal', isActive: true },
+        { kind: 'weekly_scoped', percent: 51, resetsAt: '2026-11-03T09:00:00Z', modelDisplayName: 'Claude Opus 4', severity: 'normal', isActive: false },
+      ],
+    });
+
+    // Act
+    const fixture = setup(snapshot);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert — the scoped row label contains the model display name
+    const limitLabels = Array.from(el.querySelectorAll('.usage-popover__limit-label'));
+    const labelTexts = limitLabels.map((l) => l.textContent?.trim() ?? '');
+    expect(labelTexts.some((t) => t.includes('Claude Opus 4'))).toBe(true);
+  });
+
+  // Behavior a — weekly_all row in popover uses "Weekly (all models)" label
+  it('should label a weekly_all limit row in the popover as "Weekly (all models)"', () => {
+    // Arrange
+    const snapshot = buildSnapshot({
+      limits: [
+        { kind: 'weekly_all', percent: 78, resetsAt: '2026-11-03T09:00:00Z', modelDisplayName: null, severity: 'warning', isActive: false },
+      ],
+    });
+
+    // Act
+    const fixture = setup(snapshot);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    const limitLabels = Array.from(el.querySelectorAll('.usage-popover__limit-label'));
+    expect(limitLabels.some((l) => l.textContent?.trim() === 'Weekly (all models)')).toBe(true);
+  });
+
+  // Behavior b — credits row hidden when extraUsage is null
+  it('should not render the credits row when extraUsage is null', () => {
+    // Arrange
+    const snapshot = buildSnapshot({ extraUsage: null });
+
+    // Act
+    const fixture = setup(snapshot);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    expect(el.querySelector('.usage-popover__credits')).toBeNull();
+  });
+
+  // Behavior b — credits row hidden when extraUsage.isEnabled is false
+  it('should not render the credits row when extraUsage.isEnabled is false', () => {
+    // Arrange
+    const snapshot = buildSnapshot({
+      extraUsage: { isEnabled: false, monthlyLimit: 50000, usedCredits: 16568, utilization: 0.33, currency: 'USD' },
+    });
+
+    // Act
+    const fixture = setup(snapshot);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    expect(el.querySelector('.usage-popover__credits')).toBeNull();
+  });
+
+  // Behavior b — credits row visible and formatted when isEnabled
+  it('should render the credits row with formatted currency when extraUsage.isEnabled is true', () => {
+    // Arrange — minor-unit: 50000 = $500.00, 16568 = $165.68 (verified against issue Notes line 103)
+    const snapshot = buildSnapshot({
+      extraUsage: { isEnabled: true, monthlyLimit: 50000, usedCredits: 16568, utilization: 0.33, currency: 'USD' },
+    });
+
+    // Act
+    const fixture = setup(snapshot);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    const creditsRow = el.querySelector('.usage-popover__credits');
+    expect(creditsRow).not.toBeNull();
+    const creditsValue = el.querySelector('.usage-popover__credits-value');
+    // The value text should contain the formatted amounts
+    expect(creditsValue?.textContent).toContain('165');  // $165.68
+    expect(creditsValue?.textContent).toContain('500');  // $500.00
+  });
+
+  // Behavior c — "As of" capture line rendered when not failed
+  it('should render "As of" capture line when not failed', () => {
+    // Arrange
+    const snapshot = buildSnapshot({ lastRefreshFailedAt: null });
+
+    // Act
+    const fixture = setup(snapshot);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    const asof = el.querySelector('.usage-popover__asof');
+    expect(asof?.textContent).toContain('As of');
+  });
+
+  // Behavior c — failure line shown instead of "As of" when lastRefreshFailedAt is set
+  it('should render the failure text instead of "As of" when lastRefreshFailedAt is set', () => {
+    // Arrange
+    const snapshot = buildSnapshot({ lastRefreshFailedAt: '2026-10-30T00:55:00Z' });
+
+    // Act
+    const fixture = setup(snapshot);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    const asofFailed = el.querySelector('.usage-popover__asof--failed');
+    expect(asofFailed).not.toBeNull();
+    expect(asofFailed?.textContent).toContain("Couldn't refresh");
+  });
+
+  // Behavior c — warning icon present in failure line
+  it('should render a warning SVG icon in the failure line', () => {
+    // Arrange
+    const snapshot = buildSnapshot({ lastRefreshFailedAt: '2026-10-30T00:55:00Z' });
+
+    // Act
+    const fixture = setup(snapshot);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    const warnIcon = el.querySelector('.usage-popover__warn-icon');
+    expect(warnIcon).not.toBeNull();
+  });
+
+  // Behavior e — trigger button has aria-expanded attribute
+  it('should have aria-expanded on the trigger button reflecting closed state initially', () => {
+    // Arrange
+    const snapshot = buildSnapshot();
+
+    // Act
+    const fixture = setup(snapshot);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert — initially the popover is closed
+    const trigger = el.querySelector('.usage-widget__trigger');
+    expect(trigger?.hasAttribute('aria-expanded')).toBe(true);
+    // false when closed
+    expect(trigger?.getAttribute('aria-expanded')).toBe('false');
+  });
+
+  // Behavior e — trigger button has aria-controls pointing to the popover
+  it('should have aria-controls on the trigger pointing to the popover element', () => {
+    // Arrange
+    const snapshot = buildSnapshot();
+
+    // Act
+    const fixture = setup(snapshot);
+    const el = fixture.nativeElement as HTMLElement;
+    const component = fixture.componentInstance;
+
+    // Assert
+    const trigger = el.querySelector('.usage-widget__trigger');
+    const popoverId = component.popoverId;
+    expect(trigger?.getAttribute('aria-controls')).toBe(popoverId);
+  });
+
+  // Behavior e — popover element has role="group" and aria-label
+  it('should have role="group" and aria-label on the popover element', () => {
+    // Arrange
+    const snapshot = buildSnapshot();
+
+    // Act
+    const fixture = setup(snapshot);
+    const el = fixture.nativeElement as HTMLElement;
+    const component = fixture.componentInstance;
+
+    // Assert
+    const popoverEl = el.querySelector(`#${component.popoverId}`);
+    expect(popoverEl?.getAttribute('role')).toBe('group');
+    expect(popoverEl?.getAttribute('aria-label')).toBe('Claude subscription usage detail');
+  });
+
+  // Behavior e — trigger is a real button element
+  it('should use a <button type="button"> for the trigger', () => {
+    // Arrange
+    const snapshot = buildSnapshot();
+
+    // Act
+    const fixture = setup(snapshot);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    const trigger = el.querySelector('.usage-widget__trigger');
+    expect(trigger?.tagName.toLowerCase()).toBe('button');
+    expect(trigger?.getAttribute('type')).toBe('button');
+  });
+
+  // Behavior e — collapsed state: trigger aria-label narrows to single figure format
+  it('should narrow trigger aria-label to single-figure format for collapsed meter when no inline meters', () => {
+    // Arrange
+    const snapshot = buildSnapshot({
+      limits: [
+        { kind: 'session', percent: 78, resetsAt: '2026-10-30T06:00:00Z', modelDisplayName: null, severity: 'critical', isActive: true },
+        { kind: 'weekly_all', percent: 55, resetsAt: '2026-11-03T09:00:00Z', modelDisplayName: null, severity: 'normal', isActive: false },
+      ],
+    });
+
+    // Act
+    const fixture = setup(snapshot);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert — when inline meters exist, label includes all of them
+    const trigger = el.querySelector('.usage-widget__trigger');
+    const label = trigger?.getAttribute('aria-label') ?? '';
+    expect(label).toContain('Claude usage');
+    expect(label).toContain('Activate to see details');
+  });
+
+  // Behavior d — credits appear only in popover, not in inline meters section
+  it('should not render credits in the inline meters section', () => {
+    // Arrange
+    const snapshot = buildSnapshot({
+      extraUsage: { isEnabled: true, monthlyLimit: 50000, usedCredits: 16568, utilization: 0.33, currency: 'USD' },
+    });
+
+    // Act
+    const fixture = setup(snapshot);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert — no credits in the inline meters area
+    const inline = el.querySelector('.usage-widget__inline');
+    expect(inline?.querySelector('.usage-popover__credits')).toBeNull();
+  });
+
+  // Behavior a — popover has a header with account email
+  it('should render the account email in the popover header', () => {
+    // Arrange
+    const snapshot = buildSnapshot({ accountEmail: 'ops@acme.com' });
+
+    // Act
+    const fixture = setup(snapshot);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    const email = el.querySelector('.usage-popover__email');
+    expect(email?.textContent?.trim()).toBe('ops@acme.com');
+  });
 });

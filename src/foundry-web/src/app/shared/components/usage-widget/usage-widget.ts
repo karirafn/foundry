@@ -44,16 +44,12 @@ function labelForKind(kind: string, modelDisplayName: string | null): string {
   return kind;
 }
 
-const POPOVER_LABEL_FOR_KIND: Record<string, string> = {
-  weekly_all: 'Weekly (all models)',
-};
-
 function popoverLabelForKind(kind: string, modelDisplayName: string | null): string {
   if (kind === 'session') {
     return 'Session';
   }
   if (kind === 'weekly_all') {
-    return POPOVER_LABEL_FOR_KIND['weekly_all'];
+    return 'Weekly (all models)';
   }
   if (kind === 'weekly_scoped') {
     return modelDisplayName ? `Weekly · ${modelDisplayName}` : 'Weekly';
@@ -64,6 +60,8 @@ function popoverLabelForKind(kind: string, modelDisplayName: string | null): str
 export interface UsageMeterVm {
   readonly kind: string;
   readonly label: string;
+  /** Longer label used in the popover (e.g. "Weekly (all models)" instead of "Weekly"). */
+  readonly popoverLabel: string;
   readonly percent: number;
   readonly percentLabel: string;
   readonly severityClass: string;
@@ -106,6 +104,7 @@ function buildMeterVm(
   isActive: boolean
 ): UsageMeterVm {
   const label = labelForKind(kind, modelDisplayName);
+  const popoverLabel = popoverLabelForKind(kind, modelDisplayName);
   const clampedPercent = Math.min(100, Math.max(0, percent));
   const percentLabel = `${percent}%`;
   const severityClass = mapSeverityClass(severity);
@@ -119,6 +118,7 @@ function buildMeterVm(
   return {
     kind,
     label,
+    popoverLabel,
     percent: clampedPercent,
     percentLabel,
     severityClass,
@@ -227,6 +227,4 @@ export class UsageWidgetComponent {
     return `Claude usage. ${parts.join('. ')}. Activate to see details.`;
   }
 
-  // Expose helpers used in the template
-  protected readonly popoverLabelForKind = popoverLabelForKind;
 }
