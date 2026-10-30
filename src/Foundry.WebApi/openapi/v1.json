@@ -118,6 +118,30 @@
         }
       }
     },
+    "/api/credentials/usage": {
+      "get": {
+        "tags": [
+          "Credentials"
+        ],
+        "summary": "Returns the current Claude subscription usage snapshot, or 204 when no snapshot exists",
+        "operationId": "GetUsageSnapshot",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UsageSnapshotResponse"
+                }
+              }
+            }
+          },
+          "204": {
+            "description": "No Content"
+          }
+        }
+      }
+    },
     "/api/credentials/login/start": {
       "post": {
         "tags": [
@@ -3127,6 +3151,130 @@
               "string"
             ],
             "format": "int32"
+          }
+        }
+      },
+      "UsageExtraCreditsResponse": {
+        "required": [
+          "isEnabled",
+          "monthlyLimit",
+          "usedCredits",
+          "utilization",
+          "currency"
+        ],
+        "type": "object",
+        "properties": {
+          "isEnabled": {
+            "type": "boolean"
+          },
+          "monthlyLimit": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int64"
+          },
+          "usedCredits": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int64"
+          },
+          "utilization": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?$",
+            "type": [
+              "number",
+              "string"
+            ],
+            "format": "double"
+          },
+          "currency": {
+            "type": "string"
+          }
+        }
+      },
+      "UsageRateLimitResponse": {
+        "required": [
+          "kind",
+          "percent",
+          "resetsAt",
+          "modelDisplayName",
+          "severity",
+          "isActive"
+        ],
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string"
+          },
+          "percent": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?$",
+            "type": [
+              "number",
+              "string"
+            ],
+            "format": "double"
+          },
+          "resetsAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "modelDisplayName": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "severity": {
+            "type": "string"
+          },
+          "isActive": {
+            "type": "boolean"
+          }
+        }
+      },
+      "UsageSnapshotResponse": {
+        "required": [
+          "limits",
+          "extraUsage",
+          "capturedAt",
+          "accountEmail",
+          "lastRefreshFailedAt"
+        ],
+        "type": "object",
+        "properties": {
+          "limits": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/UsageRateLimitResponse"
+            }
+          },
+          "extraUsage": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/UsageExtraCreditsResponse"
+              }
+            ]
+          },
+          "capturedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "accountEmail": {
+            "type": "string"
+          },
+          "lastRefreshFailedAt": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
           }
         }
       },

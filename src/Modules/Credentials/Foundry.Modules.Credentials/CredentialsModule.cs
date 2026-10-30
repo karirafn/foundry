@@ -5,6 +5,7 @@ using Foundry.Modules.Credentials.Features.Broadcasts;
 using Foundry.Modules.Credentials.Features.CreditProbe;
 using Foundry.Modules.Credentials.Features.DispatchReactions;
 using Foundry.Modules.Credentials.Features.Login;
+using Foundry.Modules.Credentials.Features.Usage;
 using Foundry.Modules.Credentials.Features.WorkerReactions;
 using Foundry.Modules.Credentials.Infrastructure.Orchestration;
 using Foundry.Modules.Workers.Contracts;
@@ -46,6 +47,13 @@ public static class CredentialsModule
         services.AddSingleton<CreditProbeCoordinator>();
         services.AddSingleton<ICreditProbeCoordinator>(sp => sp.GetRequiredService<CreditProbeCoordinator>());
         services.AddHostedService<CreditProbeService>();
+
+        // UsageSnapshotState singleton: both reader and mutator interfaces resolve to ONE instance.
+        // Step 8 must not double-register these — the singleton is intentionally registered here
+        // so the GET /api/credentials/usage endpoint resolves independently of the poller.
+        services.AddSingleton<UsageSnapshotState>();
+        services.AddSingleton<IUsageSnapshotState>(sp => sp.GetRequiredService<UsageSnapshotState>());
+        services.AddSingleton<IUsageSnapshotStateMutator>(sp => sp.GetRequiredService<UsageSnapshotState>());
 
         return services;
     }
