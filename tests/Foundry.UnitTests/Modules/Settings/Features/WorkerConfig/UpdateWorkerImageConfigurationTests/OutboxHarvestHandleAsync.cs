@@ -80,6 +80,8 @@ public sealed class OutboxHarvestHandleAsync : IAsyncDisposable
         UpdateWorkerImageConfiguration.Handler sut = new(dbContext, integrationEventDispatcher);
 
         UpdateWorkerImageConfiguration.Command command = new(
+            ImageTag: "foundry-worker:local",
+            BuildEnabled: true,
             InstallDotnet: true,
             InstallAngular: false,
             InstallChromium: false,
@@ -130,6 +132,8 @@ public sealed class OutboxHarvestHandleAsync : IAsyncDisposable
         UpdateWorkerImageConfiguration.Handler sut = new(dbContext, integrationEventDispatcher);
 
         UpdateWorkerImageConfiguration.Command command = new(
+            ImageTag: "foundry-worker:local",
+            BuildEnabled: true,
             InstallDotnet: true,
             InstallAngular: false,
             InstallChromium: false,

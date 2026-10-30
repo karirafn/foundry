@@ -49,6 +49,8 @@ public sealed class WhenFlagsChange : IAsyncDisposable
         await SeedDefaultSettingsAsync();
         object body = new
         {
+            imageTag = "foundry-worker:local",
+            buildEnabled = true,
             installDotnet = true,
             installAngular = false,
             installChromium = true,
@@ -82,6 +84,8 @@ public sealed class WhenFlagsChange : IAsyncDisposable
         await SeedDefaultSettingsAsync();
         object body = new
         {
+            imageTag = "foundry-worker:local",
+            buildEnabled = true,
             installDotnet = true,
             installAngular = false,
             installChromium = false,

@@ -62,6 +62,8 @@ public sealed class WhenFlagsUnchanged : IAsyncDisposable
         await SeedSettingsWithFlagsAsync(dotnet: true, angular: false, chromium: false, docker: false);
         object body = new
         {
+            imageTag = "foundry-worker:local",
+            buildEnabled = true,
             installDotnet = true,
             installAngular = false,
             installChromium = false,
@@ -91,6 +93,8 @@ public sealed class WhenFlagsUnchanged : IAsyncDisposable
         await SeedSettingsWithFlagsAsync(dotnet: true, angular: false, chromium: false, docker: false);
         object body = new
         {
+            imageTag = "foundry-worker:local",
+            buildEnabled = true,
             installDotnet = true,
             installAngular = false,
             installChromium = false,

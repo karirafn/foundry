@@ -34,6 +34,8 @@ public sealed class WhenSettingsDoNotExist : IAsyncDisposable
         // Arrange — no settings seeded; SettingsSeeder is a hosted service and is removed in tests
         object body = new
         {
+            imageTag = "foundry-worker:local",
+            buildEnabled = true,
             installDotnet = false,
             installAngular = false,
             installChromium = false,

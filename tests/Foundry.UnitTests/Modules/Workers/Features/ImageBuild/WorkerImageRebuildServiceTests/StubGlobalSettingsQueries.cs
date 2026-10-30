@@ -25,6 +25,8 @@ internal sealed class StubGlobalSettingsQueries(
         UsageLimitResetsAt: null,
         IsDispatchPaused: false,
         AutoResumeOnUsageReset: true,
+        ImageTag: "foundry-worker:local",
+        BuildEnabled: true,
         InstallDotnet: false,
         InstallAngular: false,
         InstallChromium: false,
@@ -64,6 +66,12 @@ internal sealed class StubGlobalSettingsQueries(
         => Task.FromResult(ImageBuildStatus.Idle);
 
     public Task<bool> GetWorkerImageInstallsDockerAsync(CancellationToken cancellationToken)
+        => Task.FromResult(false);
+
+    public Task<string> GetWorkerImageTagAsync(CancellationToken cancellationToken)
+        => Task.FromResult(string.Empty);
+
+    public Task<bool> GetWorkerImageBuildEnabledAsync(CancellationToken cancellationToken)
         => Task.FromResult(false);
 
     public Task<IReadOnlyDictionary<string, string>> GetWorkerImageBuildArgsAsync(

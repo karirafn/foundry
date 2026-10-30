@@ -15,6 +15,8 @@ namespace Foundry.Modules.Settings.Features.WorkerConfig;
 internal static class UpdateWorkerImageConfiguration
 {
     internal sealed record Command(
+        string ImageTag,
+        bool BuildEnabled,
         bool InstallDotnet,
         bool InstallAngular,
         bool InstallChromium,
@@ -38,8 +40,8 @@ internal static class UpdateWorkerImageConfiguration
             }
 
             Result<WorkerImageConfiguration> configResult = WorkerImageConfiguration.Create(
-                imageTag: settings.WorkerImageConfiguration.ImageTag,
-                buildEnabled: settings.WorkerImageConfiguration.BuildEnabled,
+                imageTag: command.ImageTag,
+                buildEnabled: command.BuildEnabled,
                 installDotnet: command.InstallDotnet,
                 installAngular: command.InstallAngular,
                 installChromium: command.InstallChromium,
@@ -69,6 +71,8 @@ internal static class UpdateWorkerImageConfiguration
     internal static class Endpoint
     {
         private sealed record RequestBody(
+            string ImageTag,
+            bool BuildEnabled,
             bool InstallDotnet,
             bool InstallAngular,
             bool InstallChromium,
@@ -82,6 +86,8 @@ internal static class UpdateWorkerImageConfiguration
                     CancellationToken cancellationToken) =>
                 {
                     Command command = new(
+                        body.ImageTag,
+                        body.BuildEnabled,
                         body.InstallDotnet,
                         body.InstallAngular,
                         body.InstallChromium,
@@ -98,7 +104,7 @@ internal static class UpdateWorkerImageConfiguration
                         });
                 })
                 .WithName("UpdateWorkerImageConfiguration")
-                .WithSummary("Updates the worker image build flags")
+                .WithSummary("Updates the worker image tag, build toggle, and build flags")
                 .Produces<GlobalSettingsSummary>()
                 .ProducesProblem(StatusCodes.Status404NotFound)
                 .ProducesProblem(StatusCodes.Status400BadRequest);
