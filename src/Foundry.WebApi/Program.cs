@@ -57,6 +57,8 @@ builder.Services.AddScoped<DbContext>(sp => sp.GetRequiredService<FoundryDbConte
 builder.Services.AddScoped<IDomainEventDispatcher, DomainEventDispatcher>();
 builder.Services.AddScoped<IIntegrationEventDispatcher, OutboxIntegrationEventDispatcher>();
 builder.Services.AddScoped<IIntegrationEventProcessor, IntegrationEventProcessor>();
+// Outbox relay tuning is fixed code constants (ADR 0080), not operator-configurable:
+// registered as a bare singleton so no IOptions<OutboxOptions> / appsettings binding exists.
 builder.Services.AddSingleton(new OutboxOptions());
 
 if (!isDocGeneration)

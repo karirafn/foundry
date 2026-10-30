@@ -73,5 +73,4 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IIntegrationEventHandler<TEvent>, THandler>();
         return services;
     }
-
 }
