@@ -24,6 +24,14 @@ export const SETTINGS_ROUTES: Routes = [
         canDeactivate: [unsavedChangesGuard],
       },
       {
+        path: 'worker-image',
+        loadComponent: () =>
+          import('./worker-image/settings-worker-image').then(
+            (m) => m.SettingsWorkerImageComponent,
+          ),
+        canDeactivate: [unsavedChangesGuard],
+      },
+      {
         path: 'accounts',
         loadComponent: () =>
           import('./accounts/settings-accounts/settings-accounts').then((m) => m.SettingsAccountsComponent),
