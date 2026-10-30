@@ -1,7 +1,7 @@
 namespace Foundry.Modules.Credentials.Features.Usage;
 
 /// <summary>
-/// One entry from <c>usage_report.rate_limits.limits[]</c> in the CLI /usage output.
+/// One window entry from <c>rate_limit_info.unifiedWindows</c> in a CLI <c>rate_limit_event</c>.
 /// </summary>
 internal sealed record UsageRateLimit(
     string Kind,

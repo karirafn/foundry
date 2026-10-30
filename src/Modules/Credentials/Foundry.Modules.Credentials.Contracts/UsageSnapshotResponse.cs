@@ -12,7 +12,7 @@ public sealed record UsageSnapshotResponse(
     DateTimeOffset? LastRefreshFailedAt);
 
 /// <summary>
-/// One entry from <c>usage_report.rate_limits.limits[]</c>.
+/// One window entry from <c>rate_limit_info.unifiedWindows</c> in a CLI <c>rate_limit_event</c>.
 /// </summary>
 public sealed record UsageRateLimitResponse(
     string Kind,

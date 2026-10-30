@@ -151,9 +151,8 @@ internal sealed class UsagePollCoordinator(
             _ = TryBroadcastAsync(current, CancellationToken.None);
 
             logger.LogDebug(
-                "Usage poll succeeded. Snapshot captured at {CapturedAt} for {AccountEmail}.",
-                snapshot.CapturedAt,
-                snapshot.AccountEmail);
+                "Usage poll succeeded. Snapshot captured at {CapturedAt}.",
+                snapshot.CapturedAt);
 
             logger.LogInformation(
                 "Usage poll succeeded. Snapshot captured at {CapturedAt}.",

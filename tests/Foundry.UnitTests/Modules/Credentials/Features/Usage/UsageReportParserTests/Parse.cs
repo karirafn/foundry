@@ -82,6 +82,75 @@ public sealed class Parse
         {"type":"result","subtype":"success","is_error":false,"duration_ms":100,"result":"ok","session_id":"abc123"}
         """;
 
+    /// <summary>
+    /// A rate_limit_event where rateLimitType is absent (null).
+    /// The highest-utilization fallback must still fire, marking the active window.
+    /// </summary>
+    private const string NullRateLimitTypeLog = """
+        {"type":"system","subtype":"init","session_id":"abc123"}
+        {"type":"rate_limit_event","rate_limit_info":{"status":"active","resetsAt":1793527200,"unifiedWindows":{"five_hour":{"utilization":0.06,"resetsAt":1793399400},"seven_day":{"utilization":0.90,"resetsAt":1793527200}}},"uuid":"eee","session_id":"abc123"}
+        {"type":"result","subtype":"success","is_error":false,"duration_ms":100,"result":"ok","session_id":"abc123"}
+        """;
+
+    /// <summary>
+    /// A rate_limit_event where a window's resetsAt value is wildly out of the
+    /// DateTimeOffset.FromUnixTimeSeconds valid range (-62135596800 to 253402300799).
+    /// The parser must return Unparseable without throwing.
+    /// </summary>
+    private const string OutOfRangeResetsAtLog = """
+        {"type":"system","subtype":"init","session_id":"abc123"}
+        {"type":"rate_limit_event","rate_limit_info":{"status":"active","resetsAt":1793527200,"rateLimitType":"five_hour","unifiedWindows":{"five_hour":{"utilization":0.50,"resetsAt":-9999999999999},"seven_day":{"utilization":0.30,"resetsAt":1793527200}}},"uuid":"fff","session_id":"abc123"}
+        """;
+
+    /// <summary>
+    /// A rate_limit_event where a window's utilization field is absent (null).
+    /// The parser must return Unparseable rather than silently defaulting to 0.
+    /// </summary>
+    private const string AbsentUtilizationLog = """
+        {"type":"system","subtype":"init","session_id":"abc123"}
+        {"type":"rate_limit_event","rate_limit_info":{"status":"active","resetsAt":1793527200,"rateLimitType":"five_hour","unifiedWindows":{"five_hour":{"resetsAt":1793399400},"seven_day":{"utilization":0.30,"resetsAt":1793527200}}},"uuid":"ggg","session_id":"abc123"}
+        """;
+
+    /// <summary>
+    /// A log with two rate_limit_event lines. The parser must use the LAST event that
+    /// carries unifiedWindows — the CLI may emit a preamble event before the real one.
+    /// The first event has five_hour active at 0.50; the last has seven_day active at 0.90.
+    /// </summary>
+    private const string TwoEventLinesLog = """
+        {"type":"system","subtype":"init","session_id":"abc123"}
+        {"type":"rate_limit_event","rate_limit_info":{"status":"active","resetsAt":1793399400,"rateLimitType":"five_hour","unifiedWindows":{"five_hour":{"utilization":0.50,"resetsAt":1793399400},"seven_day":{"utilization":0.20,"resetsAt":1793527200}}},"uuid":"hhh","session_id":"abc123"}
+        {"type":"assistant","message":{"id":"msg_01","type":"message","role":"assistant","content":[{"type":"text","text":"ok"}],"stop_reason":"end_turn","usage":{"input_tokens":10,"output_tokens":3}},"session_id":"abc123"}
+        {"type":"rate_limit_event","rate_limit_info":{"status":"active","resetsAt":1793527200,"rateLimitType":"seven_day","unifiedWindows":{"five_hour":{"utilization":0.06,"resetsAt":1793399400},"seven_day":{"utilization":0.90,"resetsAt":1793527200}}},"uuid":"iii","session_id":"abc123"}
+        {"type":"result","subtype":"success","is_error":false,"duration_ms":100,"result":"ok","session_id":"abc123"}
+        """;
+
+    /// <summary>
+    /// A rate_limit_event with utilization exactly 0.8 on the five_hour window.
+    /// Severity must be "warning" at the boundary.
+    /// </summary>
+    private const string ExactWarningThresholdLog = """
+        {"type":"system","subtype":"init","session_id":"abc123"}
+        {"type":"rate_limit_event","rate_limit_info":{"status":"active","resetsAt":1793399400,"rateLimitType":"five_hour","unifiedWindows":{"five_hour":{"utilization":0.8,"resetsAt":1793399400},"seven_day":{"utilization":0.30,"resetsAt":1793527200}}},"uuid":"jjj","session_id":"abc123"}
+        """;
+
+    /// <summary>
+    /// A rate_limit_event with utilization 0.79 on the five_hour window.
+    /// Severity must be "normal" just below the warning threshold.
+    /// </summary>
+    private const string BelowWarningThresholdLog = """
+        {"type":"system","subtype":"init","session_id":"abc123"}
+        {"type":"rate_limit_event","rate_limit_info":{"status":"active","resetsAt":1793399400,"rateLimitType":"five_hour","unifiedWindows":{"five_hour":{"utilization":0.79,"resetsAt":1793399400},"seven_day":{"utilization":0.30,"resetsAt":1793527200}}},"uuid":"kkk","session_id":"abc123"}
+        """;
+
+    /// <summary>
+    /// A rate_limit_event with utilization exactly 1.0 on the five_hour window.
+    /// Severity must be "critical" at the boundary.
+    /// </summary>
+    private const string ExactCriticalThresholdLog = """
+        {"type":"system","subtype":"init","session_id":"abc123"}
+        {"type":"rate_limit_event","rate_limit_info":{"status":"active","resetsAt":1793399400,"rateLimitType":"five_hour","unifiedWindows":{"five_hour":{"utilization":1.0,"resetsAt":1793399400},"seven_day":{"utilization":0.30,"resetsAt":1793527200}}},"uuid":"lll","session_id":"abc123"}
+        """;
+
     // ---------------------------------------------------------------------------
     // Happy-path: both windows parsed correctly
     // ---------------------------------------------------------------------------
@@ -209,10 +278,12 @@ public sealed class Parse
         // Act
         UsageParseResult result = UsageReportParser.Parse(FullRateLimitEventLog, AccountEmail, CapturedAt);
 
-        // Assert
+        // Assert — exactly one active window: weekly_all active, session inactive.
         UsageParseResult.Parsed parsed = result.ShouldBeOfType<UsageParseResult.Parsed>();
         UsageRateLimit weeklyAll = parsed.Snapshot.Limits.Single(l => l.Kind == "weekly_all");
+        UsageRateLimit session = parsed.Snapshot.Limits.Single(l => l.Kind == "session");
         weeklyAll.IsActive.ShouldBeTrue();
+        session.IsActive.ShouldBeFalse();
     }
 
     [Fact]
@@ -296,5 +367,114 @@ public sealed class Parse
 
         // Assert — type mismatch must not throw; it must produce Unparseable
         result.ShouldBeOfType<UsageParseResult.Unparseable>();
+    }
+
+    // ---------------------------------------------------------------------------
+    // IsActive: null rateLimitType falls through to highest-utilization fallback
+    // ---------------------------------------------------------------------------
+
+    [Fact]
+    public void WhenRateLimitTypeIsAbsent_HighestUtilizationWindowIsActive()
+    {
+        // Arrange
+        // Act
+        UsageParseResult result = UsageReportParser.Parse(NullRateLimitTypeLog, AccountEmail, CapturedAt);
+
+        // Assert — seven_day has utilization=0.90, so it must be active; session must be inactive
+        UsageParseResult.Parsed parsed = result.ShouldBeOfType<UsageParseResult.Parsed>();
+        UsageRateLimit weeklyAll = parsed.Snapshot.Limits.Single(l => l.Kind == "weekly_all");
+        UsageRateLimit session = parsed.Snapshot.Limits.Single(l => l.Kind == "session");
+        weeklyAll.IsActive.ShouldBeTrue();
+        session.IsActive.ShouldBeFalse();
+    }
+
+    // ---------------------------------------------------------------------------
+    // Robustness: out-of-range resetsAt and absent utilization → Unparseable
+    // ---------------------------------------------------------------------------
+
+    [Fact]
+    public void WhenResetsAtIsOutOfRange_ReturnsUnparseable()
+    {
+        // Arrange
+        // Act
+        UsageParseResult result = UsageReportParser.Parse(OutOfRangeResetsAtLog, AccountEmail, CapturedAt);
+
+        // Assert — out-of-range Unix timestamp must not throw; it must produce Unparseable
+        result.ShouldBeOfType<UsageParseResult.Unparseable>();
+    }
+
+    [Fact]
+    public void WhenUtilizationIsAbsent_ReturnsUnparseable()
+    {
+        // Arrange
+        // Act
+        UsageParseResult result = UsageReportParser.Parse(AbsentUtilizationLog, AccountEmail, CapturedAt);
+
+        // Assert — absent utilization must not silently default to 0; it must produce Unparseable
+        result.ShouldBeOfType<UsageParseResult.Unparseable>();
+    }
+
+    // ---------------------------------------------------------------------------
+    // Multiple event lines: last wins
+    // ---------------------------------------------------------------------------
+
+    [Fact]
+    public void WhenTwoEventLines_LastEventWins()
+    {
+        // Arrange
+        // Act
+        UsageParseResult result = UsageReportParser.Parse(TwoEventLinesLog, AccountEmail, CapturedAt);
+
+        // Assert — the last rate_limit_event has rateLimitType="seven_day" so seven_day is active
+        UsageParseResult.Parsed parsed = result.ShouldBeOfType<UsageParseResult.Parsed>();
+        UsageRateLimit weeklyAll = parsed.Snapshot.Limits.Single(l => l.Kind == "weekly_all");
+        UsageRateLimit session = parsed.Snapshot.Limits.Single(l => l.Kind == "session");
+        weeklyAll.IsActive.ShouldBeTrue();
+        session.IsActive.ShouldBeFalse();
+        // The last event had seven_day utilization=0.90 → percent=90, not the first event's 20
+        weeklyAll.Percent.ShouldBe(90m);
+    }
+
+    // ---------------------------------------------------------------------------
+    // Severity boundary: exactly 0.8 → warning, 0.79 → normal, 1.0 → critical
+    // ---------------------------------------------------------------------------
+
+    [Fact]
+    public void WhenUtilizationIsExactlyPointEight_SeverityIsWarning()
+    {
+        // Arrange
+        // Act
+        UsageParseResult result = UsageReportParser.Parse(ExactWarningThresholdLog, AccountEmail, CapturedAt);
+
+        // Assert — 0.8 is the warning threshold boundary (inclusive)
+        UsageParseResult.Parsed parsed = result.ShouldBeOfType<UsageParseResult.Parsed>();
+        UsageRateLimit session = parsed.Snapshot.Limits.Single(l => l.Kind == "session");
+        session.Severity.ShouldBe("warning");
+    }
+
+    [Fact]
+    public void WhenUtilizationIsPointSevenNine_SeverityIsNormal()
+    {
+        // Arrange
+        // Act
+        UsageParseResult result = UsageReportParser.Parse(BelowWarningThresholdLog, AccountEmail, CapturedAt);
+
+        // Assert — 0.79 is just below the warning threshold
+        UsageParseResult.Parsed parsed = result.ShouldBeOfType<UsageParseResult.Parsed>();
+        UsageRateLimit session = parsed.Snapshot.Limits.Single(l => l.Kind == "session");
+        session.Severity.ShouldBe("normal");
+    }
+
+    [Fact]
+    public void WhenUtilizationIsExactlyOne_SeverityIsCritical()
+    {
+        // Arrange
+        // Act
+        UsageParseResult result = UsageReportParser.Parse(ExactCriticalThresholdLog, AccountEmail, CapturedAt);
+
+        // Assert — 1.0 is the critical threshold boundary (inclusive)
+        UsageParseResult.Parsed parsed = result.ShouldBeOfType<UsageParseResult.Parsed>();
+        UsageRateLimit session = parsed.Snapshot.Limits.Single(l => l.Kind == "session");
+        session.Severity.ShouldBe("critical");
     }
 }
