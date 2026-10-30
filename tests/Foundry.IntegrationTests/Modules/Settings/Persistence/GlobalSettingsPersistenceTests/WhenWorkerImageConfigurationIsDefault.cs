@@ -68,6 +68,34 @@ public sealed class WhenWorkerImageConfigurationIsDefault : IAsyncDisposable
     }
 
     [Fact]
+    public async Task WhenDefaultSettings_ImageTagIsFoundryWorkerLocal()
+    {
+        // Arrange
+        GlobalSettingsId id = await SeedDefaultSettingsAsync();
+
+        // Act
+        GlobalSettings? reloaded = await ReloadSettingsAsync(id);
+
+        // Assert
+        reloaded.ShouldNotBeNull();
+        reloaded.WorkerImageConfiguration.ImageTag.ShouldBe(WorkerImageConfiguration.Default.ImageTag);
+    }
+
+    [Fact]
+    public async Task WhenDefaultSettings_BuildEnabledIsTrue()
+    {
+        // Arrange
+        GlobalSettingsId id = await SeedDefaultSettingsAsync();
+
+        // Act
+        GlobalSettings? reloaded = await ReloadSettingsAsync(id);
+
+        // Assert
+        reloaded.ShouldNotBeNull();
+        reloaded.WorkerImageConfiguration.BuildEnabled.ShouldBeTrue();
+    }
+
+    [Fact]
     public async Task ImageBuildStateRoundTripsAsIdle()
     {
         // Arrange

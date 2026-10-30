@@ -115,12 +115,26 @@ internal sealed class GlobalSettingsConfiguration : IEntityTypeConfiguration<Glo
     {
         WorkerImageConfiguration? config = JsonSerializer.Deserialize<WorkerImageConfiguration>(json);
 
-        // Rows written before the ImageTag/BuildEnabled fields were added have null ImageTag.
-        // Fall back to Default so existing data continues to deserialize cleanly until the
-        // backfill migration runs.
-        if (config is null || string.IsNullOrWhiteSpace(config.ImageTag))
+        if (config is null)
         {
             return WorkerImageConfiguration.Default;
+        }
+
+        // Rows written before the ImageTag/BuildEnabled fields were added have a null/empty ImageTag.
+        // Patch in the Default values for those two fields while preserving the existing install flags,
+        // so existing rows load correctly until the AddWorkerImageTagAndBuildToggle backfill migration runs.
+        if (string.IsNullOrWhiteSpace(config.ImageTag))
+        {
+            return WorkerImageConfiguration.Create(
+                    imageTag: WorkerImageConfiguration.Default.ImageTag,
+                    buildEnabled: WorkerImageConfiguration.Default.BuildEnabled,
+                    installDotnet: config.InstallDotnet,
+                    installAngular: config.InstallAngular,
+                    installChromium: config.InstallChromium,
+                    installDocker: config.InstallDocker)
+                .Match(
+                    onSuccess: v => v,
+                    onFailure: e => WorkerImageConfiguration.Default);
         }
 
         return config;

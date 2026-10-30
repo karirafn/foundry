@@ -53,6 +53,52 @@ public sealed class WhenWorkerImageConfigurationIsNonDefault : IAsyncDisposable
     }
 
     [Fact]
+    public async Task NonDefaultImageTag_RoundTrips()
+    {
+        // Arrange
+        WorkerImageConfiguration config = WorkerImageConfiguration.Create(
+            imageTag: "foundry-worker:custom",
+            buildEnabled: false,
+            installDotnet: false,
+            installAngular: false,
+            installChromium: false,
+            installDocker: false)
+            .Match(v => v, e => throw new InvalidOperationException(e.Message));
+
+        GlobalSettingsId id = await SeedSettingsWithConfigAsync(config);
+
+        // Act
+        GlobalSettings? reloaded = await ReloadSettingsAsync(id);
+
+        // Assert
+        reloaded.ShouldNotBeNull();
+        reloaded.WorkerImageConfiguration.ImageTag.ShouldBe("foundry-worker:custom");
+    }
+
+    [Fact]
+    public async Task BuildEnabledFalse_RoundTrips()
+    {
+        // Arrange
+        WorkerImageConfiguration config = WorkerImageConfiguration.Create(
+            imageTag: "foundry-worker:custom",
+            buildEnabled: false,
+            installDotnet: false,
+            installAngular: false,
+            installChromium: false,
+            installDocker: false)
+            .Match(v => v, e => throw new InvalidOperationException(e.Message));
+
+        GlobalSettingsId id = await SeedSettingsWithConfigAsync(config);
+
+        // Act
+        GlobalSettings? reloaded = await ReloadSettingsAsync(id);
+
+        // Assert
+        reloaded.ShouldNotBeNull();
+        reloaded.WorkerImageConfiguration.BuildEnabled.ShouldBeFalse();
+    }
+
+    [Fact]
     public async Task ImageBuildStateBuilding_RoundTrips()
     {
         // Arrange
