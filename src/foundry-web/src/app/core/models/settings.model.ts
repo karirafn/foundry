@@ -67,8 +67,9 @@ export interface GlobalSettingsResponse {
   timeoutMinutes: number;
   probeIntervalMinutes: number;
   pollIntervalSeconds: number;
-  systemPromptTemplate: string | null;
-  workerPromptTemplate: string | null;
+  systemPromptTemplate: string;
+  workerPromptTemplate: string;
+  branchNamingInstruction: string;
   usageLimitResetsAt: string | null;
   isDispatchPaused: boolean;
   autoResumeOnUsageReset: boolean;
@@ -85,8 +86,9 @@ export interface GlobalSettingsResponse {
 }
 
 export interface UpdatePromptTemplatesRequest {
-  systemPromptTemplate: string | null;
-  workerPromptTemplate: string | null;
+  systemPromptTemplate: string;
+  workerPromptTemplate: string;
+  branchNamingInstruction: string;
 }
 
 export interface DispatchSettings {

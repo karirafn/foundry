@@ -101,6 +101,54 @@ describe('SettingsPromptsComponent', () => {
     expect(workerTextarea.getAttribute('aria-describedby')).toBe('prompts-error');
   });
 
+  it('should render a branch naming instruction input with id="branchNamingInstruction"', () => {
+    // Arrange
+    const { fixture, httpMock } = setupSettingsPage(SettingsPromptsComponent);
+    fixture.detectChanges();
+    flushSettings(httpMock);
+    fixture.detectChanges();
+
+    // Act
+    const el = fixture.nativeElement as HTMLElement;
+    const branchInput = el.querySelector('#branchNamingInstruction') as HTMLElement;
+
+    // Assert
+    expect(branchInput).toBeTruthy();
+  });
+
+  it('should have a label with for="branchNamingInstruction"', () => {
+    // Arrange
+    const { fixture, httpMock } = setupSettingsPage(SettingsPromptsComponent);
+    fixture.detectChanges();
+    flushSettings(httpMock);
+    fixture.detectChanges();
+
+    // Act
+    const el = fixture.nativeElement as HTMLElement;
+    const branchLabel = el.querySelector('label[for="branchNamingInstruction"]');
+
+    // Assert
+    expect(branchLabel).toBeTruthy();
+    expect(branchLabel?.textContent?.trim()).toBe('Branch Naming Instruction');
+  });
+
+  it('should initialize branch naming instruction from loaded settings', () => {
+    // Arrange
+    const { fixture, httpMock } = setupSettingsPage(SettingsPromptsComponent);
+    fixture.detectChanges();
+    flushSettings(httpMock, {
+      ...API_KEY_RESPONSE,
+      branchNamingInstruction: 'feat/{issueNumber}-description',
+    });
+    fixture.detectChanges();
+
+    // Act
+    const branchNgModel = fixture.debugElement.query(By.css('#branchNamingInstruction')).injector.get(NgModel);
+
+    // Assert
+    expect(branchNgModel.model).toBe('feat/{issueNumber}-description');
+  });
+
   it('should call updatePromptTemplates with current values when Save is clicked', () => {
     // Arrange
     const { fixture, httpMock } = setupSettingsPage(SettingsPromptsComponent);
@@ -109,6 +157,7 @@ describe('SettingsPromptsComponent', () => {
       ...API_KEY_RESPONSE,
       systemPromptTemplate: 'System prompt text',
       workerPromptTemplate: 'Worker prompt text',
+      branchNamingInstruction: 'feat/{issueNumber}-description',
     });
     fixture.detectChanges();
 
@@ -124,8 +173,14 @@ describe('SettingsPromptsComponent', () => {
     expect(req.request.body).toEqual({
       systemPromptTemplate: 'System prompt text',
       workerPromptTemplate: 'Worker prompt text',
+      branchNamingInstruction: 'feat/{issueNumber}-description',
     });
-    req.flush({ ...API_KEY_RESPONSE, systemPromptTemplate: 'System prompt text', workerPromptTemplate: 'Worker prompt text' });
+    req.flush({
+      ...API_KEY_RESPONSE,
+      systemPromptTemplate: 'System prompt text',
+      workerPromptTemplate: 'Worker prompt text',
+      branchNamingInstruction: 'feat/{issueNumber}-description',
+    });
   });
 
   it('should show "Prompt templates saved successfully" after a successful prompts save', () => {
@@ -136,11 +191,12 @@ describe('SettingsPromptsComponent', () => {
     fixture.detectChanges();
 
     // Act
-    service.updatePromptTemplates({ systemPromptTemplate: 'sys', workerPromptTemplate: 'worker' });
+    service.updatePromptTemplates({ systemPromptTemplate: 'sys', workerPromptTemplate: 'worker', branchNamingInstruction: 'feat/branch' });
     httpMock.expectOne('/api/settings/prompts').flush({
       ...API_KEY_RESPONSE,
       systemPromptTemplate: 'sys',
       workerPromptTemplate: 'worker',
+      branchNamingInstruction: 'feat/branch',
     });
     fixture.detectChanges();
 
@@ -159,7 +215,7 @@ describe('SettingsPromptsComponent', () => {
     fixture.detectChanges();
 
     // Act
-    service.updatePromptTemplates({ systemPromptTemplate: 'sys', workerPromptTemplate: 'worker' });
+    service.updatePromptTemplates({ systemPromptTemplate: 'sys', workerPromptTemplate: 'worker', branchNamingInstruction: 'feat/branch' });
     httpMock.expectOne('/api/settings/prompts').flush('Bad Request', {
       status: 400,
       statusText: 'Bad Request',
@@ -182,7 +238,7 @@ describe('SettingsPromptsComponent', () => {
     fixture.detectChanges();
 
     // Act
-    service.updatePromptTemplates({ systemPromptTemplate: 'sys', workerPromptTemplate: 'worker' });
+    service.updatePromptTemplates({ systemPromptTemplate: 'sys', workerPromptTemplate: 'worker', branchNamingInstruction: 'feat/branch' });
     fixture.detectChanges();
 
     // Assert
@@ -196,6 +252,7 @@ describe('SettingsPromptsComponent', () => {
       ...API_KEY_RESPONSE,
       systemPromptTemplate: 'sys',
       workerPromptTemplate: 'worker',
+      branchNamingInstruction: 'feat/branch',
     });
   });
 
@@ -287,6 +344,43 @@ describe('SettingsPromptsComponent', () => {
       fixture.detectChanges();
 
       // Act & Assert — local signal initialized to '' matches null treated as ''
+      expect(fixture.componentInstance.hasUnsavedChanges()).toBe(false);
+    });
+
+    it('should return true from hasUnsavedChanges() when branch naming instruction differs from loaded value', () => {
+      // Arrange
+      const { fixture, httpMock } = setupSettingsPage(SettingsPromptsComponent);
+      fixture.detectChanges();
+      flushSettings(httpMock, {
+        ...API_KEY_RESPONSE,
+        systemPromptTemplate: 'sys',
+        workerPromptTemplate: 'worker',
+        branchNamingInstruction: 'original-branch',
+      });
+      fixture.detectChanges();
+
+      // Act — mutate branch naming instruction
+      const component = fixture.componentInstance as unknown as { _branchNamingValue: { set: (v: string) => void } };
+      component._branchNamingValue.set('modified-branch');
+      fixture.detectChanges();
+
+      // Assert
+      expect(fixture.componentInstance.hasUnsavedChanges()).toBe(true);
+    });
+
+    it('should return false from hasUnsavedChanges() when all three fields match loaded settings', () => {
+      // Arrange
+      const { fixture, httpMock } = setupSettingsPage(SettingsPromptsComponent);
+      fixture.detectChanges();
+      flushSettings(httpMock, {
+        ...API_KEY_RESPONSE,
+        systemPromptTemplate: 'sys',
+        workerPromptTemplate: 'worker',
+        branchNamingInstruction: 'feat/{issueNumber}-description',
+      });
+      fixture.detectChanges();
+
+      // Act & Assert
       expect(fixture.componentInstance.hasUnsavedChanges()).toBe(false);
     });
   });

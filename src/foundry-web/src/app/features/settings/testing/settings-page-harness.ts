@@ -52,6 +52,7 @@ export const BASE_RESPONSE = {
   ...IMAGE_FLAGS_DEFAULTS,
   systemPromptTemplate: null,
   workerPromptTemplate: null,
+  branchNamingInstruction: null,
 };
 
 export const API_KEY_RESPONSE = {
