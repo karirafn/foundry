@@ -3,7 +3,6 @@ using Foundry.Shared.Infrastructure.Outbox;
 
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
-using Microsoft.Extensions.Options;
 
 namespace Foundry.Shared.Infrastructure;
 
@@ -72,12 +71,6 @@ public static class ServiceCollectionExtensions
         services.TryAddSingleton(registry);
 
         services.AddScoped<IIntegrationEventHandler<TEvent>, THandler>();
-        return services;
-    }
-
-    public static IServiceCollection AddOutboxOptionsValidation(this IServiceCollection services)
-    {
-        services.AddSingleton<IValidateOptions<OutboxOptions>, OutboxOptionsValidator>();
         return services;
     }
 }

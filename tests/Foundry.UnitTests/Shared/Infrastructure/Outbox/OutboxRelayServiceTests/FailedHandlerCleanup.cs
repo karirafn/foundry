@@ -6,7 +6,6 @@ using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
-using Microsoft.Extensions.Options;
 
 using Shouldly;
 
@@ -56,16 +55,13 @@ public sealed class FailedHandlerCleanup : IAsyncDisposable
         });
         services.AddScoped<DbContext>(sp => sp.GetRequiredService<FoundryDbContext>());
 
-        services.AddSingleton(Options.Create(new OutboxOptions { MaxAttempts = 2 }));
-
         return services.BuildServiceProvider();
     }
 
     private OutboxRelayService CreateSut()
     {
-        IOptions<OutboxOptions> options = _serviceProvider.GetRequiredService<IOptions<OutboxOptions>>();
         IServiceScopeFactory scopeFactory = _serviceProvider.GetRequiredService<IServiceScopeFactory>();
-        return new OutboxRelayService(scopeFactory, options, NullLogger<OutboxRelayService>.Instance);
+        return new OutboxRelayService(scopeFactory, new OutboxOptions { MaxAttempts = 2 }, NullLogger<OutboxRelayService>.Instance);
     }
 
     private async Task SeedAsync(OutboxMessage message, ProcessedEvent? processedEvent = null)

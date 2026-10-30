@@ -6,7 +6,6 @@ using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
-using Microsoft.Extensions.Options;
 
 using Shouldly;
 
@@ -71,17 +70,14 @@ public sealed class TickAsync : IAsyncDisposable
         });
         services.AddScoped<DbContext>(sp => sp.GetRequiredService<FoundryDbContext>());
 
-        services.AddSingleton(Options.Create(new OutboxOptions()));
-
         return services.BuildServiceProvider();
     }
 
     private OutboxRelayService CreateSut(ServiceProvider? provider = null)
     {
         ServiceProvider p = provider ?? _serviceProvider;
-        IOptions<OutboxOptions> options = p.GetRequiredService<IOptions<OutboxOptions>>();
         IServiceScopeFactory scopeFactory = p.GetRequiredService<IServiceScopeFactory>();
-        return new OutboxRelayService(scopeFactory, options, NullLogger<OutboxRelayService>.Instance);
+        return new OutboxRelayService(scopeFactory, new OutboxOptions(), NullLogger<OutboxRelayService>.Instance);
     }
 
     private async Task SeedOutboxMessageAsync(IIntegrationEvent @event, DateTimeOffset occurredAt)
@@ -189,7 +185,6 @@ public sealed class TickAsync : IAsyncDisposable
     {
         // Arrange
         DateTimeOffset now = DateTimeOffset.UtcNow;
-        OutboxOptions outboxOptions = new() { MaxAttempts = 3 };
 
         // Seed a message that already has MaxAttempts failures
         await using AsyncServiceScope seedScope = _serviceProvider.CreateAsyncScope();
@@ -203,13 +198,11 @@ public sealed class TickAsync : IAsyncDisposable
         seedContext.Set<OutboxMessage>().Add(deadLettered);
         await seedContext.SaveChangesAsync(TestContext.Current.CancellationToken);
 
-        // Build a provider with MaxAttempts=3
+        // Build a provider with MaxAttempts=3 injected directly into the SUT ctor
         await using ServiceProvider customProvider = BuildServiceProvider(_connection, _handler);
-        customProvider.GetRequiredService<IOptions<OutboxOptions>>().Value.MaxAttempts = outboxOptions.MaxAttempts;
-
-        IOptions<OutboxOptions> options = Options.Create(outboxOptions);
+        OutboxOptions outboxOptions = new() { MaxAttempts = 3 };
         IServiceScopeFactory scopeFactory = customProvider.GetRequiredService<IServiceScopeFactory>();
-        OutboxRelayService sut = new(scopeFactory, options, NullLogger<OutboxRelayService>.Instance);
+        OutboxRelayService sut = new(scopeFactory, outboxOptions, NullLogger<OutboxRelayService>.Instance);
 
         // Act
         await sut.TickForTest(TestContext.Current.CancellationToken);

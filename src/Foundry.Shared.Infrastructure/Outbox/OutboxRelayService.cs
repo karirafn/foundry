@@ -5,16 +5,15 @@ using Foundry.Shared;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
 
 namespace Foundry.Shared.Infrastructure.Outbox;
 
-public sealed class OutboxRelayService(
+internal sealed class OutboxRelayService(
     IServiceScopeFactory scopeFactory,
-    IOptions<OutboxOptions> options,
+    OutboxOptions options,
     ILogger<OutboxRelayService> logger) : PeriodicBackgroundService(logger)
 {
-    private readonly OutboxOptions _options = options.Value;
+    private readonly OutboxOptions _options = options;
     private DateTimeOffset _lastPruneAt = DateTimeOffset.MinValue;
 
     protected override TimeSpan TickInterval => _options.TickInterval;

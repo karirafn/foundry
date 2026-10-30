@@ -6,7 +6,6 @@ using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
-using Microsoft.Extensions.Options;
 
 using Shouldly;
 
@@ -57,20 +56,16 @@ public sealed class RetentionSweep : IAsyncDisposable
         });
         services.AddScoped<DbContext>(sp => sp.GetRequiredService<FoundryDbContext>());
 
-        services.AddSingleton(Options.Create(new OutboxOptions
-        {
-            RetentionWindow = TimeSpan.FromDays(7),
-            RetentionSweepInterval = TimeSpan.FromHours(1),
-        }));
-
         return services.BuildServiceProvider();
     }
 
     private OutboxRelayService CreateSut(OutboxOptions? optionsOverride = null)
     {
-        IOptions<OutboxOptions> options = optionsOverride is not null
-            ? Options.Create(optionsOverride)
-            : _serviceProvider.GetRequiredService<IOptions<OutboxOptions>>();
+        OutboxOptions options = optionsOverride ?? new OutboxOptions
+        {
+            RetentionWindow = TimeSpan.FromDays(7),
+            RetentionSweepInterval = TimeSpan.FromHours(1),
+        };
 
         IServiceScopeFactory scopeFactory = _serviceProvider.GetRequiredService<IServiceScopeFactory>();
         return new OutboxRelayService(scopeFactory, options, NullLogger<OutboxRelayService>.Instance);
