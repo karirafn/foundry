@@ -70,6 +70,12 @@
   --fd-stat-input:    #79c0ff;  /* light: #0550ae */
   --fd-stat-output:   #ffa657;  /* light: #bc4c00 */
 
+  /* Usage meter fill — severity-keyed; distinct role from state-badge backgrounds (see #611) */
+  --fd-usage-normal:   #3fb950;  /* meter-fill role; brighter than --fd-state-completed for recessed rail */
+  --fd-usage-warning:  #e0a526;  /* aligns with --fd-text-warning */
+  --fd-usage-critical: #da3633;  /* aligns with --fd-state-failed */
+  --fd-usage-neutral:  #6e7681;  /* fallback for unrecognised severity */
+
   /* Gutter — fixed leading cell width for listbox option rows */
   --fd-gutter: 1rem;
 

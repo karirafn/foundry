@@ -1,0 +1,114 @@
+@if (view(); as vm) {
+  <div [class]="'usage-widget' + (vm.failed ? ' usage-widget--failed' : '')">
+    <button
+      type="button"
+      class="usage-widget__trigger"
+      [attr.popovertarget]="popoverId"
+      [attr.aria-expanded]="isOpen()"
+      [attr.aria-controls]="popoverId"
+      [attr.aria-label]="isOpen() ? 'Claude usage. Activate to close.' : buildTriggerLabel(vm)"
+    >
+      <!-- Inline meters (session + weekly_all) — hidden at narrow width -->
+      <div class="usage-widget__inline">
+        @for (meter of vm.inlineMeters; track meter.kind) {
+          <div class="usage-meter" [ngClass]="meter.severityClass">
+            <span class="usage-meter__label">{{ meter.label }}</span>
+            <div
+              class="usage-meter__track"
+              role="img"
+              [attr.aria-label]="meter.accessibleName"
+            >
+              <div
+                class="usage-meter__fill"
+                [style.inline-size.%]="meter.percent"
+                aria-hidden="true"
+              ></div>
+            </div>
+            <span class="usage-meter__percent">{{ meter.percentLabel }}</span>
+          </div>
+        }
+      </div>
+
+      <!-- Collapsed single figure — shown only at narrow width -->
+      <div class="usage-widget__collapsed">
+        <span
+          class="usage-widget__severity-dot"
+          [ngClass]="vm.collapsedMeter.severityClass"
+          aria-hidden="true"
+        ></span>
+        <span class="usage-meter__percent">{{ vm.collapsedMeter.percentLabel }}</span>
+      </div>
+    </button>
+
+    <!-- Popover — always in DOM for aria-controls; browser top-layer hides it when closed -->
+    <div
+      [id]="popoverId"
+      popover="auto"
+      class="usage-popover"
+      role="group"
+      aria-label="Claude subscription usage detail"
+      (toggle)="onToggle($event)"
+    >
+      <!-- Header -->
+      <div class="usage-popover__header">
+        <span class="usage-popover__title">Claude usage</span>
+        <span class="usage-popover__email">{{ vm.accountEmail }}</span>
+      </div>
+
+      <!-- Capture time / failure line -->
+      @if (vm.failed && vm.failedText) {
+        <p class="usage-popover__asof usage-popover__asof--failed">
+          <svg class="usage-popover__warn-icon" xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+            <line x1="12" y1="9" x2="12" y2="13"></line>
+            <line x1="12" y1="17" x2="12.01" y2="17"></line>
+          </svg>
+          {{ vm.failedText }}
+        </p>
+      } @else {
+        <p class="usage-popover__asof">As of {{ vm.capturedRelative }}</p>
+      }
+
+      <!-- All limits (session, weekly_all, each weekly_scoped) -->
+      <div class="usage-popover__limits">
+        @for (meter of vm.allLimits; track meter.kind + (meter.label)) {
+          <div class="usage-popover__limit">
+            <div class="usage-popover__limit-head">
+              <span class="usage-popover__limit-label">{{ popoverLabelForKind(meter.kind, null) }}</span>
+              <div
+                class="usage-meter usage-meter--popover"
+                [ngClass]="meter.severityClass"
+              >
+                <div
+                  class="usage-meter__track"
+                  role="img"
+                  [attr.aria-label]="meter.accessibleName"
+                >
+                  <div
+                    class="usage-meter__fill"
+                    [style.inline-size.%]="meter.percent"
+                    aria-hidden="true"
+                  ></div>
+                </div>
+              </div>
+              <span class="usage-meter__percent">{{ meter.percentLabel }}</span>
+              <span
+                class="usage-popover__severity-word"
+                [ngClass]="meter.severityClass"
+              >· {{ meter.severityWord }}</span>
+            </div>
+            <p class="usage-popover__reset">Resets {{ meter.resetsAtLocal }}</p>
+          </div>
+        }
+      </div>
+
+      <!-- Credits row (only when isEnabled) -->
+      @if (vm.credits) {
+        <div class="usage-popover__credits">
+          <span class="usage-popover__credits-label">Extra usage</span>
+          <span class="usage-popover__credits-value">{{ vm.credits.usedFormatted }} of {{ vm.credits.limitFormatted }}</span>
+        </div>
+      }
+    </div>
+  </div>
+}
