@@ -4,7 +4,7 @@ import { TitleStrategy, RouterStateSnapshot } from '@angular/router';
 
 const TITLE_SUFFIX = ' — Foundry Settings';
 
-@Injectable({ providedIn: 'root' })
+@Injectable()
 export class SettingsTitleStrategy extends TitleStrategy {
   private readonly _title = inject(Title);
 

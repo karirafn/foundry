@@ -11,9 +11,10 @@ import {
 } from '@angular/core';
 import { NavigationEnd, Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { filter } from 'rxjs/operators';
+import { filter, skip } from 'rxjs/operators';
 import { SettingsService } from '../../../core/services/settings.service';
 
+// h1 and h2 are the page's primary heading; h3+ are sub-section headings within the loaded page.
 const HEADING_SELECTOR = 'h1, h2';
 
 @Component({
@@ -123,20 +124,14 @@ export class SettingsLayoutComponent implements OnInit {
 
   @ViewChild('contentSection') private readonly _contentSection?: ElementRef<HTMLElement>;
 
-  private _firstNavigationSeen = false;
-
   constructor() {
     this._router.events
       .pipe(
         filter((e): e is NavigationEnd => e instanceof NavigationEnd),
+        skip(1),
         takeUntilDestroyed(),
       )
       .subscribe(() => {
-        if (!this._firstNavigationSeen) {
-          this._firstNavigationSeen = true;
-          return;
-        }
-
         runInInjectionContext(this._injector, () => {
           afterNextRender(() => {
             this._moveFocusToContent();
@@ -152,6 +147,9 @@ export class SettingsLayoutComponent implements OnInit {
   private _moveFocusToContent(): void {
     const contentEl = this._contentSection?.nativeElement;
     if (!contentEl) {
+      // Safe no-op: #contentSection is only rendered when settings are loaded and error-free
+      // (see the @if block in the template). While settings are loading or errored, the
+      // loading role="status" or error role="alert" region owns focus feedback instead.
       return;
     }
 

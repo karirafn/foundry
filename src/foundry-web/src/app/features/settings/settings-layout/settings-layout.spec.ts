@@ -23,6 +23,15 @@ const CONTENT_SELECTOR = '.settings-layout__content';
 })
 class NoHeadingFallbackComponent {}
 
+/** Minimal component whose primary heading is an h1 — proves the selector targets h1, not only h2. */
+@Component({
+  selector: 'fd-h1-detail-stub',
+  standalone: true,
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  template: '<h1>Detail page</h1>',
+})
+class H1DetailStubComponent {}
+
 const mockSystemSignalR = { reconnected: NEVER, reloadTrigger: NEVER, loginSessionUpdate: NEVER, notifications: signal([]).asReadonly() };
 const mockRateBudgetService = { snapshot: signal(null).asReadonly() };
 
@@ -580,6 +589,59 @@ describe('SettingsLayoutComponent', () => {
       expect(contentEl).toBeTruthy();
       expect(contentEl?.getAttribute('tabindex')).toBe('-1');
       expect(document.activeElement).toBe(contentEl);
+
+      httpMock.verify();
+    });
+
+    it('should focus an <h1> when the route renders one (HEADING_SELECTOR covers h1, not only h2)', async () => {
+      // Arrange — wire a stub route whose primary heading is an h1
+      TestBed.resetTestingModule();
+      TestBed.configureTestingModule({
+        providers: [
+          SettingsService,
+          provideHttpClient(),
+          provideHttpClientTesting(),
+          provideRouter([
+            {
+              path: 'settings',
+              children: [
+                {
+                  path: '',
+                  loadComponent: () =>
+                    import('./settings-layout').then((m) => m.SettingsLayoutComponent),
+                  children: [
+                    { path: 'dispatch', component: NoHeadingFallbackComponent },
+                    { path: 'detail', component: H1DetailStubComponent },
+                  ],
+                },
+              ],
+            },
+          ]),
+          { provide: SystemSignalRService, useValue: mockSystemSignalR },
+          { provide: RateBudgetService, useValue: mockRateBudgetService },
+        ],
+      });
+      const httpMock = TestBed.inject(HttpTestingController);
+      const harness = await RouterTestingHarness.create('/settings/dispatch');
+      httpMock.expectOne('/api/settings').flush(SETTINGS_RESPONSE);
+      httpMock.expectOne('/api/credentials').flush(CREDENTIALS_RESPONSE);
+      harness.detectChanges();
+      await harness.fixture.whenStable();
+      harness.detectChanges();
+
+      // Act — navigate to the page with an h1 (second NavigationEnd triggers focus move)
+      await harness.navigateByUrl('/settings/detail');
+      harness.detectChanges();
+      await harness.fixture.whenStable();
+      harness.detectChanges();
+
+      // Assert — the h1 receives focus
+      const rootEl = harness.fixture.nativeElement as HTMLElement;
+      const contentEl = rootEl.querySelector(CONTENT_SELECTOR);
+      const heading = contentEl?.querySelector('h1, h2') as HTMLElement | null;
+      expect(heading).toBeTruthy();
+      expect(document.activeElement).toBe(heading);
+      expect(document.activeElement?.tagName).toBe('H1');
 
       httpMock.verify();
     });
