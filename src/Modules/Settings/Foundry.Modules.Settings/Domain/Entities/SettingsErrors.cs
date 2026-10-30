@@ -64,7 +64,12 @@ internal static class SettingsErrors
     internal const string LatestImageTagCode = "Settings.LatestImageTag";
 
     internal static readonly Error LatestImageTag =
-        new(LatestImageTagCode, "The worker image tag must not be ':latest'. Provide a specific tag.");
+        new(LatestImageTagCode, "The worker image tag must not end with ':latest'. Provide a specific tag.");
+
+    internal const string ImageTagTooLongCode = "Settings.ImageTagTooLong";
+
+    internal static readonly Error ImageTagTooLong =
+        new(ImageTagTooLongCode, $"The worker image tag must not exceed {WorkerImageConfiguration.MaxImageTagLength} characters.");
 
     internal const string TooManyProviderHostsCode = "Settings.TooManyProviderHosts";
 

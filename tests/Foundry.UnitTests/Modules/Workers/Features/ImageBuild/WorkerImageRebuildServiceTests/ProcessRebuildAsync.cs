@@ -948,6 +948,30 @@ public sealed class ProcessRebuildAsync
     }
 
     [Fact]
+    public async Task WhenBuildDisabledAndImageMissingWithOverLongTag_TruncatesErrorTail()
+    {
+        // Arrange — tag longer than LogTailLines * 120 chars (200 * 120 = 24000) to force truncation
+        string longTag = new string('a', 25000);
+        CapturingIntegrationEventDispatcher dispatcher = new();
+        NotFoundImageOperations notFoundImages = new();
+        WorkerImageRebuildService sut = BuildService(
+            notFoundImages,
+            dispatcher: dispatcher,
+            imageBuildEnabled: false,
+            imageTag: longTag);
+
+        // Act
+        await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
+
+        // Assert — error message is truncated (cap = LogTailLines * 120 = 24000 chars)
+        ImageBuildOutcomeFailed failed = dispatcher.Published[1].ShouldBeOfType<ImageBuildOutcomeFailed>();
+        string errorTail = failed.ErrorTail.ShouldNotBeNull();
+        errorTail.Length.ShouldBeLessThanOrEqualTo(24000);
+        // The template text "not found on the Docker host" must be preserved at the tail
+        errorTail.ShouldEndWith("not found on the Docker host");
+    }
+
+    [Fact]
     public async Task WhenBuildDisabledAndImageMissing_ReusesAttemptProgressionForBackoff()
     {
         // Arrange — persisted Attempt=1 means next failure should report Attempt=2

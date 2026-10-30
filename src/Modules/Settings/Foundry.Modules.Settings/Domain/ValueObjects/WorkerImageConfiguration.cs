@@ -12,6 +12,9 @@ public sealed record WorkerImageConfiguration
     private const string LatestTag = ":latest";
     private const string DefaultImageTag = "foundry-worker:local";
 
+    // Docker image references are capped at 255 characters by the Docker specification.
+    internal const int MaxImageTagLength = 255;
+
     [JsonConstructor]
     private WorkerImageConfiguration(
         string imageTag,
@@ -65,7 +68,12 @@ public sealed record WorkerImageConfiguration
             return Result<WorkerImageConfiguration>.Fail(SettingsErrors.EmptyImageTag);
         }
 
-        if (imageTag.Equals(LatestTag, StringComparison.OrdinalIgnoreCase))
+        if (imageTag.Length > MaxImageTagLength)
+        {
+            return Result<WorkerImageConfiguration>.Fail(SettingsErrors.ImageTagTooLong);
+        }
+
+        if (imageTag.EndsWith(LatestTag, StringComparison.OrdinalIgnoreCase))
         {
             return Result<WorkerImageConfiguration>.Fail(SettingsErrors.LatestImageTag);
         }

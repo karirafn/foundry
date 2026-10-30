@@ -386,7 +386,7 @@ internal sealed class WorkerImageRebuildService(
         }
         catch (DockerImageNotFoundException)
         {
-            string errorTail = $"image '{imageTag}' not found on the Docker host";
+            string errorTail = TruncateTail($"image '{imageTag}' not found on the Docker host");
             await DispatchInspectFailureAsync(errorTail, settings, integrationEventDispatcher, imageTag, cancellationToken);
         }
 #pragma warning disable CA1031 // Docker inspect failures must be surfaced as status notifications, not exceptions, to avoid crashing the BackgroundService consumer loop.

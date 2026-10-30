@@ -103,7 +103,9 @@ public sealed class Create
     [InlineData(":latest")]
     [InlineData(":LATEST")]
     [InlineData(":Latest")]
-    public void WhenImageTagIsLatest_ReturnsFailure(string imageTag)
+    [InlineData("foundry-worker:latest")]
+    [InlineData("ghcr.io/org/image:LATEST")]
+    public void WhenImageTagEndsWithLatest_ReturnsFailure(string imageTag)
     {
         // Arrange & Act
         Result<WorkerImageConfiguration> result = WorkerImageConfiguration.Create(
@@ -122,7 +124,9 @@ public sealed class Create
     [InlineData(":latest")]
     [InlineData(":LATEST")]
     [InlineData(":Latest")]
-    public void WhenImageTagIsLatest_ReturnsLatestTagError(string imageTag)
+    [InlineData("foundry-worker:latest")]
+    [InlineData("ghcr.io/org/image:LATEST")]
+    public void WhenImageTagEndsWithLatest_ReturnsLatestTagError(string imageTag)
     {
         // Arrange & Act
         Result<WorkerImageConfiguration> result = WorkerImageConfiguration.Create(
@@ -136,5 +140,82 @@ public sealed class Create
         // Assert
         Result<WorkerImageConfiguration>.Failure failure = result.ShouldBeOfType<Result<WorkerImageConfiguration>.Failure>();
         failure.Error.Code.ShouldBe("Settings.LatestImageTag");
+    }
+
+    [Theory]
+    [InlineData("myimage:latestish")]
+    [InlineData("repo:v1")]
+    [InlineData("foundry-worker:local")]
+    public void WhenImageTagEndsWithLatestSuffix_ButNotLatest_ReturnsSuccess(string imageTag)
+    {
+        // Arrange & Act
+        Result<WorkerImageConfiguration> result = WorkerImageConfiguration.Create(
+            imageTag: imageTag,
+            buildEnabled: false,
+            installDotnet: false,
+            installAngular: false,
+            installChromium: false,
+            installDocker: false);
+
+        // Assert
+        result.IsSuccess.ShouldBeTrue();
+    }
+
+    [Fact]
+    public void WhenImageTagIs256Chars_ReturnsFailure()
+    {
+        // Arrange
+        string imageTag = new string('a', 252) + ":v1x"; // 256 chars total
+
+        // Act
+        Result<WorkerImageConfiguration> result = WorkerImageConfiguration.Create(
+            imageTag: imageTag,
+            buildEnabled: false,
+            installDotnet: false,
+            installAngular: false,
+            installChromium: false,
+            installDocker: false);
+
+        // Assert
+        result.IsFailure.ShouldBeTrue();
+    }
+
+    [Fact]
+    public void WhenImageTagIs256Chars_ReturnsImageTagTooLongError()
+    {
+        // Arrange
+        string imageTag = new string('a', 252) + ":v1x"; // 256 chars total
+
+        // Act
+        Result<WorkerImageConfiguration> result = WorkerImageConfiguration.Create(
+            imageTag: imageTag,
+            buildEnabled: false,
+            installDotnet: false,
+            installAngular: false,
+            installChromium: false,
+            installDocker: false);
+
+        // Assert
+        Result<WorkerImageConfiguration>.Failure failure = result.ShouldBeOfType<Result<WorkerImageConfiguration>.Failure>();
+        failure.Error.Code.ShouldBe("Settings.ImageTagTooLong");
+    }
+
+    [Fact]
+    public void WhenImageTagIs255Chars_ReturnsSuccess()
+    {
+        // Arrange
+        string imageTag = new string('a', 251) + ":v1x"; // 255 chars total
+
+        // Act
+        Result<WorkerImageConfiguration> result = WorkerImageConfiguration.Create(
+            imageTag: imageTag,
+            buildEnabled: false,
+            installDotnet: false,
+            installAngular: false,
+            installChromium: false,
+            installDocker: false);
+
+        // Assert
+        result.IsSuccess.ShouldBeTrue();
     }
 }

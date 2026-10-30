@@ -60,6 +60,10 @@ internal sealed class GlobalSettingsConfiguration : IEntityTypeConfiguration<Glo
             config => SerializeWorkerImageConfiguration(config),
             json => DeserializeWorkerImageConfiguration(json));
 
+        // WorkerImageConfiguration is serialized as a single JSON TEXT column. HasMaxLength is
+        // inapplicable here — it governs individual varchar/nvarchar column widths, not a JSON blob.
+        // The image tag is capped at 255 characters (the Docker reference limit) by domain logic
+        // in WorkerImageConfiguration.Create, enforced via the MaxImageTagLength constant.
         builder.Property(s => s.WorkerImageConfiguration)
             .HasConversion(workerImageConfigConverter)
             .HasColumnType("TEXT")
