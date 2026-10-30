@@ -1,6 +1,20 @@
-import { Component, ChangeDetectionStrategy, OnInit, inject } from '@angular/core';
-import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  ElementRef,
+  Injector,
+  OnInit,
+  ViewChild,
+  afterNextRender,
+  inject,
+  runInInjectionContext,
+} from '@angular/core';
+import { NavigationEnd, Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { filter } from 'rxjs/operators';
 import { SettingsService } from '../../../core/services/settings.service';
+
+const HEADING_SELECTOR = 'h1, h2';
 
 @Component({
   selector: 'fd-settings-layout',
@@ -93,7 +107,7 @@ import { SettingsService } from '../../../core/services/settings.service';
               [attr.aria-current]="repositoriesLink.isActive ? 'page' : null"
             >Repositories</a>
           </nav>
-          <section class="settings-layout__content" aria-label="Page content">
+          <section #contentSection class="settings-layout__content" aria-label="Page content">
             <router-outlet />
           </section>
         </div>
@@ -104,8 +118,50 @@ import { SettingsService } from '../../../core/services/settings.service';
 })
 export class SettingsLayoutComponent implements OnInit {
   protected readonly settingsService = inject(SettingsService);
+  private readonly _router = inject(Router);
+  private readonly _injector = inject(Injector);
+
+  @ViewChild('contentSection') private readonly _contentSection?: ElementRef<HTMLElement>;
+
+  private _firstNavigationSeen = false;
+
+  constructor() {
+    this._router.events
+      .pipe(
+        filter((e): e is NavigationEnd => e instanceof NavigationEnd),
+        takeUntilDestroyed(),
+      )
+      .subscribe(() => {
+        if (!this._firstNavigationSeen) {
+          this._firstNavigationSeen = true;
+          return;
+        }
+
+        runInInjectionContext(this._injector, () => {
+          afterNextRender(() => {
+            this._moveFocusToContent();
+          });
+        });
+      });
+  }
 
   ngOnInit(): void {
     this.settingsService.loadSettings();
+  }
+
+  private _moveFocusToContent(): void {
+    const contentEl = this._contentSection?.nativeElement;
+    if (!contentEl) {
+      return;
+    }
+
+    const heading = contentEl.querySelector<HTMLElement>(HEADING_SELECTOR);
+    if (heading) {
+      heading.setAttribute('tabindex', '-1');
+      heading.focus();
+    } else {
+      contentEl.setAttribute('tabindex', '-1');
+      contentEl.focus();
+    }
   }
 }

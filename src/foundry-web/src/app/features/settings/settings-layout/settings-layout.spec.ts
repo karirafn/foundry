@@ -3,7 +3,7 @@ import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { provideRouter, Router, TitleStrategy } from '@angular/router';
 import { RouterTestingHarness } from '@angular/router/testing';
-import { signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, signal } from '@angular/core';
 import { NEVER } from 'rxjs';
 import { SettingsLayoutComponent } from './settings-layout';
 import { SettingsService } from '../../../core/services/settings.service';
@@ -11,6 +11,17 @@ import { SystemSignalRService } from '../../../core/services/system-signalr.serv
 import { RateBudgetService } from '../../../core/services/rate-budget.service';
 import { SETTINGS_ROUTES } from '../settings.routes';
 import { SettingsTitleStrategy } from '../../../core/services/settings-title-strategy';
+
+const CONTENT_SELECTOR = '.settings-layout__content';
+
+/** Minimal component with no heading — used to test the content-element focus fallback. */
+@Component({
+  selector: 'fd-no-heading-fallback',
+  standalone: true,
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  template: '<p>No heading here</p>',
+})
+class NoHeadingFallbackComponent {}
 
 const mockSystemSignalR = { reconnected: NEVER, reloadTrigger: NEVER, loginSessionUpdate: NEVER, notifications: signal([]).asReadonly() };
 const mockRateBudgetService = { snapshot: signal(null).asReadonly() };
@@ -429,5 +440,148 @@ describe('SettingsLayoutComponent', () => {
     expect(document.title.endsWith(' — Foundry Settings')).toBe(true);
 
     httpMock.verify();
+  });
+
+  describe('route-change focus management (WCAG 2.4.3, 2.4.1)', () => {
+    function setupFocusHarness() {
+      TestBed.resetTestingModule();
+      TestBed.configureTestingModule({
+        providers: [
+          SettingsService,
+          provideHttpClient(),
+          provideHttpClientTesting(),
+          provideRouter([
+            { path: 'settings', children: SETTINGS_ROUTES },
+          ]),
+          { provide: SystemSignalRService, useValue: mockSystemSignalR },
+          { provide: RateBudgetService, useValue: mockRateBudgetService },
+        ],
+      });
+      return TestBed.inject(HttpTestingController);
+    }
+
+    it('should move focus to the first heading in content on settings navigation', async () => {
+      // Arrange
+      const httpMock = setupFocusHarness();
+      const harness = await RouterTestingHarness.create('/settings/dispatch');
+      httpMock.expectOne('/api/settings').flush(SETTINGS_RESPONSE);
+      httpMock.expectOne('/api/credentials').flush(CREDENTIALS_RESPONSE);
+      harness.detectChanges();
+      await harness.fixture.whenStable();
+      harness.detectChanges();
+
+      // Act — navigate to a second page
+      await harness.navigateByUrl('/settings/worker-image');
+      harness.detectChanges();
+      await harness.fixture.whenStable();
+      harness.detectChanges();
+
+      // Assert — active element is a heading inside .settings-layout__content
+      const rootEl = harness.fixture.nativeElement as HTMLElement;
+      const contentEl = rootEl.querySelector(CONTENT_SELECTOR);
+      const heading = contentEl?.querySelector('h1, h2') as HTMLElement | null;
+      expect(heading).toBeTruthy();
+      expect(document.activeElement).toBe(heading);
+
+      httpMock.verify();
+    });
+
+    it('should not steal focus on initial load (first NavigationEnd)', async () => {
+      // Arrange
+      const httpMock = setupFocusHarness();
+      const harness = await RouterTestingHarness.create('/settings/dispatch');
+      httpMock.expectOne('/api/settings').flush(SETTINGS_RESPONSE);
+      httpMock.expectOne('/api/credentials').flush(CREDENTIALS_RESPONSE);
+      harness.detectChanges();
+      await harness.fixture.whenStable();
+      harness.detectChanges();
+
+      // Assert — focus was not moved to a heading in .settings-layout__content
+      const rootEl = harness.fixture.nativeElement as HTMLElement;
+      const contentEl = rootEl.querySelector(CONTENT_SELECTOR);
+      const heading = contentEl?.querySelector('h1, h2') as HTMLElement | null;
+      expect(document.activeElement).not.toBe(heading);
+
+      httpMock.verify();
+    });
+
+    it('should programmatically set tabindex="-1" on a heading that lacks it (e.g. worker-environment)', async () => {
+      // Arrange
+      const httpMock = setupFocusHarness();
+      const harness = await RouterTestingHarness.create('/settings/dispatch');
+      httpMock.expectOne('/api/settings').flush(SETTINGS_RESPONSE);
+      httpMock.expectOne('/api/credentials').flush(CREDENTIALS_RESPONSE);
+      harness.detectChanges();
+      await harness.fixture.whenStable();
+      harness.detectChanges();
+
+      // Act — navigate to worker-environment whose <h2> has no tabindex
+      await harness.navigateByUrl('/settings/worker-environment');
+      harness.detectChanges();
+      await harness.fixture.whenStable();
+      harness.detectChanges();
+
+      // Assert — tabindex="-1" was set and focus was moved
+      const rootEl = harness.fixture.nativeElement as HTMLElement;
+      const contentEl = rootEl.querySelector(CONTENT_SELECTOR);
+      const heading = contentEl?.querySelector('h1, h2') as HTMLElement | null;
+      expect(heading).toBeTruthy();
+      expect(heading?.getAttribute('tabindex')).toBe('-1');
+      expect(document.activeElement).toBe(heading);
+
+      httpMock.verify();
+    });
+
+    it('should focus the content element and give it tabindex="-1" when no heading is rendered', async () => {
+      // Arrange — use a minimal route with no heading after initial navigation
+      TestBed.resetTestingModule();
+      TestBed.configureTestingModule({
+        providers: [
+          SettingsService,
+          provideHttpClient(),
+          provideHttpClientTesting(),
+          provideRouter([
+            {
+              path: 'settings',
+              children: [
+                {
+                  path: '',
+                  loadComponent: () =>
+                    import('./settings-layout').then((m) => m.SettingsLayoutComponent),
+                  children: [
+                    { path: 'dispatch', component: NoHeadingFallbackComponent },
+                    { path: 'no-heading', component: NoHeadingFallbackComponent },
+                  ],
+                },
+              ],
+            },
+          ]),
+          { provide: SystemSignalRService, useValue: mockSystemSignalR },
+          { provide: RateBudgetService, useValue: mockRateBudgetService },
+        ],
+      });
+      const httpMock = TestBed.inject(HttpTestingController);
+      const harness = await RouterTestingHarness.create('/settings/dispatch');
+      httpMock.expectOne('/api/settings').flush(SETTINGS_RESPONSE);
+      httpMock.expectOne('/api/credentials').flush(CREDENTIALS_RESPONSE);
+      harness.detectChanges();
+      await harness.fixture.whenStable();
+      harness.detectChanges();
+
+      // Act — navigate to the page with no heading (triggers second NavigationEnd)
+      await harness.navigateByUrl('/settings/no-heading');
+      harness.detectChanges();
+      await harness.fixture.whenStable();
+      harness.detectChanges();
+
+      // Assert — content element itself receives focus
+      const rootEl = harness.fixture.nativeElement as HTMLElement;
+      const contentEl = rootEl.querySelector(CONTENT_SELECTOR) as HTMLElement | null;
+      expect(contentEl).toBeTruthy();
+      expect(contentEl?.getAttribute('tabindex')).toBe('-1');
+      expect(document.activeElement).toBe(contentEl);
+
+      httpMock.verify();
+    });
   });
 });
