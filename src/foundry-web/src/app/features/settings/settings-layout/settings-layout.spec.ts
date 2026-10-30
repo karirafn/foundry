@@ -1,7 +1,7 @@
 import { TestBed } from '@angular/core/testing';
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
-import { provideRouter, Router } from '@angular/router';
+import { provideRouter, Router, TitleStrategy } from '@angular/router';
 import { RouterTestingHarness } from '@angular/router/testing';
 import { signal } from '@angular/core';
 import { NEVER } from 'rxjs';
@@ -10,6 +10,7 @@ import { SettingsService } from '../../../core/services/settings.service';
 import { SystemSignalRService } from '../../../core/services/system-signalr.service';
 import { RateBudgetService } from '../../../core/services/rate-budget.service';
 import { SETTINGS_ROUTES } from '../settings.routes';
+import { SettingsTitleStrategy } from '../../../core/services/settings-title-strategy';
 
 const mockSystemSignalR = { reconnected: NEVER, reloadTrigger: NEVER, loginSessionUpdate: NEVER, notifications: signal([]).asReadonly() };
 const mockRateBudgetService = { snapshot: signal(null).asReadonly() };
@@ -392,6 +393,40 @@ describe('SettingsLayoutComponent', () => {
     expect(activeLink).toBeTruthy();
     expect(activeLink?.textContent?.trim()).toBe('Dispatch');
     expect(activeLink?.getAttribute('aria-current')).toBe('page');
+
+    httpMock.verify();
+  });
+
+  it('should set document title to "Dispatch — Foundry Settings" when navigating to /settings/dispatch', async () => {
+    // Arrange
+    TestBed.resetTestingModule();
+    TestBed.configureTestingModule({
+      providers: [
+        SettingsService,
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        provideRouter([
+          { path: 'settings', children: SETTINGS_ROUTES },
+        ]),
+        { provide: SystemSignalRService, useValue: mockSystemSignalR },
+        { provide: RateBudgetService, useValue: mockRateBudgetService },
+        { provide: TitleStrategy, useClass: SettingsTitleStrategy },
+      ],
+    });
+    const httpMock = TestBed.inject(HttpTestingController);
+    const harness = await RouterTestingHarness.create('/settings/dispatch');
+    httpMock.expectOne('/api/settings').flush(SETTINGS_RESPONSE);
+    httpMock.expectOne('/api/credentials').flush(CREDENTIALS_RESPONSE);
+    harness.detectChanges();
+    await harness.fixture.whenStable();
+    harness.detectChanges();
+
+    // Act
+    // (title set by router after navigation completes)
+
+    // Assert
+    expect(document.title).toContain('Dispatch');
+    expect(document.title.endsWith(' — Foundry Settings')).toBe(true);
 
     httpMock.verify();
   });
