@@ -2,6 +2,7 @@ using Foundry.Modules.Credentials.Contracts;
 using Foundry.Modules.Credentials.Domain.Entities;
 using Foundry.Modules.Credentials.Domain.ValueObjects;
 using Foundry.Modules.Credentials.Features;
+using Foundry.Modules.Credentials.Features.Usage;
 using Foundry.Shared;
 using Foundry.WebApi.Persistence;
 
@@ -40,6 +41,36 @@ public sealed class HandleAsync : IAsyncDisposable
         return new FoundryDbContext(options);
     }
 
+    // ---------------------------------------------------------------------------
+    // Stubs
+    // ---------------------------------------------------------------------------
+
+    private sealed class StubUsagePollCoordinator : IUsagePollCoordinator
+    {
+        public int CallCount { get; private set; }
+
+        public Task<UsageSnapshot?> PollAsync(CancellationToken cancellationToken)
+        {
+            CallCount++;
+            return Task.FromResult<UsageSnapshot?>(null);
+        }
+    }
+
+    private sealed class SpyUsageSnapshotStateMutator : IUsageSnapshotStateMutator
+    {
+        public int ClearCallCount { get; private set; }
+
+        public void SetSnapshot(UsageSnapshot snapshot) { }
+        public void MarkRefreshFailed(DateTimeOffset failedAt) { }
+        public void Clear() => ClearCallCount++;
+    }
+
+    private static UpdateAuthMode.Handler BuildSut(
+        FoundryDbContext dbContext,
+        SpyUsageSnapshotStateMutator? mutator = null,
+        StubUsagePollCoordinator? coordinator = null)
+        => new(dbContext, mutator ?? new SpyUsageSnapshotStateMutator(), coordinator ?? new StubUsagePollCoordinator());
+
     [Fact]
     public async Task WhenSwitchingToApiKeyMode_UpdatesAuthModeAndReturnsSummary()
     {
@@ -52,7 +83,7 @@ public sealed class HandleAsync : IAsyncDisposable
         }
 
         await using FoundryDbContext dbContext = CreateDbContext();
-        UpdateAuthMode.Handler sut = new(dbContext);
+        UpdateAuthMode.Handler sut = BuildSut(dbContext);
 
         UpdateAuthMode.Command command = new("api_key", "sk-ant-abc123");
 
@@ -79,7 +110,7 @@ public sealed class HandleAsync : IAsyncDisposable
         }
 
         await using FoundryDbContext dbContext = CreateDbContext();
-        UpdateAuthMode.Handler sut = new(dbContext);
+        UpdateAuthMode.Handler sut = BuildSut(dbContext);
 
         UpdateAuthMode.Command command = new("oauth", null);
 
@@ -106,7 +137,7 @@ public sealed class HandleAsync : IAsyncDisposable
 
         await using (FoundryDbContext dbContext = CreateDbContext())
         {
-            UpdateAuthMode.Handler sut = new(dbContext);
+            UpdateAuthMode.Handler sut = BuildSut(dbContext);
             UpdateAuthMode.Command command = new("oauth", null);
             await sut.HandleAsync(command, TestContext.Current.CancellationToken);
         }
@@ -124,7 +155,7 @@ public sealed class HandleAsync : IAsyncDisposable
     {
         // Arrange
         await using FoundryDbContext dbContext = CreateDbContext();
-        UpdateAuthMode.Handler sut = new(dbContext);
+        UpdateAuthMode.Handler sut = BuildSut(dbContext);
 
         UpdateAuthMode.Command command = new("api_key", "sk-ant-abc123");
 
@@ -153,7 +184,7 @@ public sealed class HandleAsync : IAsyncDisposable
 
         await using (FoundryDbContext dbContext = CreateDbContext())
         {
-            UpdateAuthMode.Handler sut = new(dbContext);
+            UpdateAuthMode.Handler sut = BuildSut(dbContext);
             UpdateAuthMode.Command command = new("api_key", "sk-ant-new-key");
             await sut.HandleAsync(command, TestContext.Current.CancellationToken);
         }
@@ -179,7 +210,7 @@ public sealed class HandleAsync : IAsyncDisposable
 
         await using (FoundryDbContext dbContext = CreateDbContext())
         {
-            UpdateAuthMode.Handler sut = new(dbContext);
+            UpdateAuthMode.Handler sut = BuildSut(dbContext);
             UpdateAuthMode.Command command = new("api_key", "sk-ant-new-key");
             await sut.HandleAsync(command, TestContext.Current.CancellationToken);
         }
@@ -192,5 +223,105 @@ public sealed class HandleAsync : IAsyncDisposable
             () => account.OAuthAccountEmail.ShouldBeNull(),
             () => account.OAuthAccountOrgName.ShouldBeNull(),
             () => account.Validity.ShouldBeOfType<CredentialValidity.Valid>());
+    }
+
+    [Fact]
+    public async Task WhenAuthModeChanges_ClearsUsageSnapshot()
+    {
+        // Arrange
+        await using (FoundryDbContext seedDb = CreateDbContext())
+        {
+            ClaudeAccount account = ClaudeAccount.Create();
+            seedDb.Set<ClaudeAccount>().Add(account);
+            await seedDb.SaveChangesAsync(TestContext.Current.CancellationToken);
+        }
+
+        SpyUsageSnapshotStateMutator mutator = new();
+        await using FoundryDbContext dbContext = CreateDbContext();
+        UpdateAuthMode.Handler sut = BuildSut(dbContext, mutator);
+
+        UpdateAuthMode.Command command = new("oauth", null);
+
+        // Act
+        await sut.HandleAsync(command, TestContext.Current.CancellationToken);
+
+        // Assert
+        mutator.ClearCallCount.ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task WhenSwitchingToOAuthWithCommittedIdentity_TriggersPoll()
+    {
+        // Arrange — OAuth + committed identity + valid = CanReportUsage true → poll triggered.
+        await using (FoundryDbContext seedDb = CreateDbContext())
+        {
+            ClaudeAccount account = ClaudeAccount.Create();
+            // RecordSuccessfulLogin sets OAuth mode + committed identity + valid.
+            account.RecordSuccessfulLogin("user@example.com", "Acme Corp", "pro");
+            seedDb.Set<ClaudeAccount>().Add(account);
+            await seedDb.SaveChangesAsync(TestContext.Current.CancellationToken);
+        }
+
+        StubUsagePollCoordinator coordinator = new();
+        await using FoundryDbContext dbContext = CreateDbContext();
+        UpdateAuthMode.Handler sut = BuildSut(dbContext, coordinator: coordinator);
+
+        // Switching OAuth→OAuth (e.g. after a session ends and re-configured) still clears + polls.
+        UpdateAuthMode.Command command = new("oauth", null);
+
+        // Act
+        await sut.HandleAsync(command, TestContext.Current.CancellationToken);
+
+        // Assert
+        coordinator.CallCount.ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task WhenSwitchingToOAuthModeWithoutCommittedIdentity_DoesNotTriggerPoll()
+    {
+        // Arrange — OAuth without committed identity → CanReportUsage false → no poll.
+        await using (FoundryDbContext seedDb = CreateDbContext())
+        {
+            ClaudeAccount account = ClaudeAccount.Create();
+            seedDb.Set<ClaudeAccount>().Add(account);
+            await seedDb.SaveChangesAsync(TestContext.Current.CancellationToken);
+        }
+
+        StubUsagePollCoordinator coordinator = new();
+        await using FoundryDbContext dbContext = CreateDbContext();
+        UpdateAuthMode.Handler sut = BuildSut(dbContext, coordinator: coordinator);
+
+        UpdateAuthMode.Command command = new("oauth", null);
+
+        // Act
+        await sut.HandleAsync(command, TestContext.Current.CancellationToken);
+
+        // Assert
+        coordinator.CallCount.ShouldBe(0);
+    }
+
+    [Fact]
+    public async Task WhenSwitchingToApiKeyMode_DoesNotTriggerPoll()
+    {
+        // Arrange — API-key mode never yields CanReportUsage=true; no poll should be triggered.
+        await using (FoundryDbContext seedDb = CreateDbContext())
+        {
+            ClaudeAccount account = ClaudeAccount.Create();
+            account.SetAuthMode(new AuthMode.OAuth(SubscriptionType: null));
+            seedDb.Set<ClaudeAccount>().Add(account);
+            await seedDb.SaveChangesAsync(TestContext.Current.CancellationToken);
+        }
+
+        StubUsagePollCoordinator coordinator = new();
+        await using FoundryDbContext dbContext = CreateDbContext();
+        UpdateAuthMode.Handler sut = BuildSut(dbContext, coordinator: coordinator);
+
+        UpdateAuthMode.Command command = new("api_key", "sk-ant-new-key");
+
+        // Act
+        await sut.HandleAsync(command, TestContext.Current.CancellationToken);
+
+        // Assert
+        coordinator.CallCount.ShouldBe(0);
     }
 }

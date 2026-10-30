@@ -2,6 +2,7 @@ using Foundry.Modules.Credentials.Contracts;
 using Foundry.Modules.Credentials.Contracts.Queries;
 using Foundry.Modules.Credentials.Features;
 using Foundry.Modules.Credentials.Features.Broadcasts;
+using Foundry.Modules.Credentials.Features.CredentialReactions;
 using Foundry.Modules.Credentials.Features.CreditProbe;
 using Foundry.Modules.Credentials.Features.DispatchReactions;
 using Foundry.Modules.Credentials.Features.Login;
@@ -14,6 +15,7 @@ using Foundry.Shared.Infrastructure.Docker;
 
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace Foundry.Modules.Credentials;
 
@@ -33,6 +35,11 @@ public static class CredentialsModule
         services.AddIntegrationEventHandler<WorkerCreditsExhausted, WorkerCreditsExhaustedBroadcastHandler>();
         services.AddIntegrationEventHandler<CreditsRestored, CreditsRestoredBroadcastHandler>();
 
+        // Usage event reactions — a second handler for the same event (multiple handlers per event
+        // is supported; see WorkerCreditsExhausted registered twice above).
+        services.AddIntegrationEventHandler<CredentialsValidated, UsageCredentialsValidatedHandler>();
+        services.AddIntegrationEventHandler<CredentialsInvalidated, UsageCredentialsInvalidatedHandler>();
+
         services.AddScoped<ICredentialQueries, CredentialQueries>();
         services.AddScoped<ICredentialGate, CredentialGate>();
 
@@ -49,11 +56,25 @@ public static class CredentialsModule
         services.AddHostedService<CreditProbeService>();
 
         // UsageSnapshotState singleton: both reader and mutator interfaces resolve to ONE instance.
-        // Step 8 must not double-register these — the singleton is intentionally registered here
-        // so the GET /api/credentials/usage endpoint resolves independently of the poller.
+        // Registered here (not in step 8) so the GET /api/credentials/usage endpoint resolves
+        // independently of the poller. Do NOT double-register in step 8.
         services.AddSingleton<UsageSnapshotState>();
         services.AddSingleton<IUsageSnapshotState>(sp => sp.GetRequiredService<UsageSnapshotState>());
         services.AddSingleton<IUsageSnapshotStateMutator>(sp => sp.GetRequiredService<UsageSnapshotState>());
+
+        // UsagePollCoordinator singleton — depends on IUsageSnapshotBroadcaster.
+        services.AddSingleton<UsagePollCoordinator>();
+        services.AddSingleton<IUsagePollCoordinator>(sp => sp.GetRequiredService<UsagePollCoordinator>());
+        services.AddHostedService<UsagePollService>();
+
+        // IUsageSnapshotBroadcaster: a no-op fallback is registered here so the module is
+        // self-contained and ScopeValidation passes before the WebApi host registers the real
+        // SignalR implementation (step 9). TryAdd ensures the WebApi registration (AddSingleton,
+        // registered AFTER AddCredentialsModule in Program.cs) takes precedence — the last
+        // AddSingleton wins for GetRequiredService resolution, and TryAdd skips if already present;
+        // since CredentialsModule runs first, TryAdd adds the no-op, then WebApi's plain
+        // AddSingleton appends the real impl, which becomes the last (winning) registration.
+        services.TryAddSingleton<IUsageSnapshotBroadcaster, NoOpUsageSnapshotBroadcaster>();
 
         return services;
     }
