@@ -11,16 +11,26 @@ namespace Foundry.UnitTests.Modules.Settings.Domain.Entities.GlobalSettingsTests
 
 public sealed class UpdateWorkerImageConfiguration
 {
+    private static ImageConfig CreateConfig(
+        bool dotnet = false,
+        bool angular = false,
+        bool chromium = false,
+        bool docker = false) =>
+        ImageConfig.Create(
+            imageTag: "foundry-worker:local",
+            buildEnabled: true,
+            installDotnet: dotnet,
+            installAngular: angular,
+            installChromium: chromium,
+            installDocker: docker)
+            .Match(v => v, e => throw new InvalidOperationException(e.Message));
+
     [Fact]
     public void WhenConfigurationChanged_ReturnsTrueAndUpdatesConfiguration()
     {
         // Arrange
         GlobalSettings settings = GlobalSettings.Create();
-        ImageConfig newConfig = new(
-            InstallDotnet: true,
-            InstallAngular: false,
-            InstallChromium: false,
-            InstallDocker: false);
+        ImageConfig newConfig = CreateConfig(dotnet: true);
 
         // Act
         bool changed = settings.UpdateWorkerImageConfiguration(newConfig);
@@ -51,11 +61,7 @@ public sealed class UpdateWorkerImageConfiguration
         // Arrange
         GlobalSettings settings = GlobalSettings.Create();
         DateTimeOffset before = settings.UpdatedAt;
-        ImageConfig newConfig = new(
-            InstallDotnet: true,
-            InstallAngular: false,
-            InstallChromium: false,
-            InstallDocker: false);
+        ImageConfig newConfig = CreateConfig(dotnet: true);
 
         // Act
         settings.UpdateWorkerImageConfiguration(newConfig);

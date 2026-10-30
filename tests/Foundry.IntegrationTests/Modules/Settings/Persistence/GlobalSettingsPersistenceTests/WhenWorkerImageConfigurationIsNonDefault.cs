@@ -29,11 +29,14 @@ public sealed class WhenWorkerImageConfigurationIsNonDefault : IAsyncDisposable
     public async Task WorkerImageConfigurationFlagsRoundTrip()
     {
         // Arrange
-        WorkerImageConfiguration config = new(
-            InstallDotnet: true,
-            InstallAngular: true,
-            InstallChromium: true,
-            InstallDocker: true);
+        WorkerImageConfiguration config = WorkerImageConfiguration.Create(
+            imageTag: "foundry-worker:local",
+            buildEnabled: true,
+            installDotnet: true,
+            installAngular: true,
+            installChromium: true,
+            installDocker: true)
+            .Match(v => v, e => throw new InvalidOperationException(e.Message));
 
         GlobalSettingsId id = await SeedSettingsWithConfigAsync(config);
 

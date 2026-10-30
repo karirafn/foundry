@@ -68,11 +68,6 @@ public sealed class OutboxHarvestHandleAsync : IAsyncDisposable
         {
             FoundryDbContext seedDb = seedScope.ServiceProvider.GetRequiredService<FoundryDbContext>();
             GlobalSettings settings = GlobalSettings.Create();
-            settings.UpdateWorkerImageConfiguration(new WorkerImageConfiguration(
-                InstallDotnet: false,
-                InstallAngular: false,
-                InstallChromium: false,
-                InstallDocker: false));
             seedDb.Set<GlobalSettings>().Add(settings);
             await seedDb.SaveChangesAsync(TestContext.Current.CancellationToken);
         }
@@ -114,11 +109,15 @@ public sealed class OutboxHarvestHandleAsync : IAsyncDisposable
         {
             FoundryDbContext seedDb = seedScope.ServiceProvider.GetRequiredService<FoundryDbContext>();
             GlobalSettings settings = GlobalSettings.Create();
-            settings.UpdateWorkerImageConfiguration(new WorkerImageConfiguration(
-                InstallDotnet: true,
-                InstallAngular: false,
-                InstallChromium: false,
-                InstallDocker: false));
+            WorkerImageConfiguration config = WorkerImageConfiguration.Create(
+                imageTag: "foundry-worker:local",
+                buildEnabled: true,
+                installDotnet: true,
+                installAngular: false,
+                installChromium: false,
+                installDocker: false)
+                .Match(v => v, e => throw new InvalidOperationException(e.Message));
+            settings.UpdateWorkerImageConfiguration(config);
             seedDb.Set<GlobalSettings>().Add(settings);
             await seedDb.SaveChangesAsync(TestContext.Current.CancellationToken);
         }

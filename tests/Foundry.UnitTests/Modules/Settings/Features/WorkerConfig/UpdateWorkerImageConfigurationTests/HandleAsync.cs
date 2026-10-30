@@ -44,6 +44,20 @@ public sealed class HandleAsync : IAsyncLifetime
         return new FoundryDbContext(options);
     }
 
+    private static WorkerImageConfiguration CreateConfig(
+        bool dotnet = false,
+        bool angular = false,
+        bool chromium = false,
+        bool docker = false) =>
+        WorkerImageConfiguration.Create(
+            imageTag: "foundry-worker:local",
+            buildEnabled: true,
+            installDotnet: dotnet,
+            installAngular: angular,
+            installChromium: chromium,
+            installDocker: docker)
+            .Match(v => v, e => throw new InvalidOperationException(e.Message));
+
     private async Task SeedSettingsAsync(WorkerImageConfiguration? config = null)
     {
         await using FoundryDbContext seedDb = CreateDbContext();
@@ -61,13 +75,7 @@ public sealed class HandleAsync : IAsyncLifetime
     public async Task WhenFlagsChange_PublishesWorkerImageConfigurationChangedEvent()
     {
         // Arrange
-        WorkerImageConfiguration initial = new(
-            InstallDotnet: false,
-            InstallAngular: false,
-            InstallChromium: false,
-            InstallDocker: false);
-
-        await SeedSettingsAsync(initial);
+        await SeedSettingsAsync(CreateConfig());
 
         await using FoundryDbContext dbContext = CreateDbContext();
         CapturingIntegrationEventDispatcher dispatcher = new();
@@ -93,13 +101,7 @@ public sealed class HandleAsync : IAsyncLifetime
     public async Task WhenFlagsChange_DoesNotSetImageBuildStatusToBuilding()
     {
         // Arrange — status transition to Building is owned by WorkerImageRebuildService, not this handler
-        WorkerImageConfiguration initial = new(
-            InstallDotnet: false,
-            InstallAngular: false,
-            InstallChromium: false,
-            InstallDocker: false);
-
-        await SeedSettingsAsync(initial);
+        await SeedSettingsAsync(CreateConfig());
 
         await using FoundryDbContext dbContext = CreateDbContext();
         CapturingIntegrationEventDispatcher dispatcher = new();
@@ -126,13 +128,7 @@ public sealed class HandleAsync : IAsyncLifetime
     public async Task WhenOnlyInstallChromiumChanges_PublishesWorkerImageConfigurationChangedEvent()
     {
         // Arrange
-        WorkerImageConfiguration initial = new(
-            InstallDotnet: false,
-            InstallAngular: false,
-            InstallChromium: false,
-            InstallDocker: false);
-
-        await SeedSettingsAsync(initial);
+        await SeedSettingsAsync(CreateConfig());
 
         await using FoundryDbContext dbContext = CreateDbContext();
         CapturingIntegrationEventDispatcher dispatcher = new();
@@ -158,13 +154,7 @@ public sealed class HandleAsync : IAsyncLifetime
     public async Task WhenOnlyInstallDockerChanges_PublishesWorkerImageConfigurationChangedEvent()
     {
         // Arrange
-        WorkerImageConfiguration initial = new(
-            InstallDotnet: false,
-            InstallAngular: false,
-            InstallChromium: false,
-            InstallDocker: false);
-
-        await SeedSettingsAsync(initial);
+        await SeedSettingsAsync(CreateConfig());
 
         await using FoundryDbContext dbContext = CreateDbContext();
         CapturingIntegrationEventDispatcher dispatcher = new();
@@ -190,13 +180,7 @@ public sealed class HandleAsync : IAsyncLifetime
     public async Task WhenFlagsUnchanged_DoesNotPublishEvent()
     {
         // Arrange
-        WorkerImageConfiguration config = new(
-            InstallDotnet: true,
-            InstallAngular: false,
-            InstallChromium: false,
-            InstallDocker: false);
-
-        await SeedSettingsAsync(config);
+        await SeedSettingsAsync(CreateConfig(dotnet: true));
 
         await using FoundryDbContext dbContext = CreateDbContext();
         CapturingIntegrationEventDispatcher dispatcher = new();
@@ -219,13 +203,7 @@ public sealed class HandleAsync : IAsyncLifetime
     public async Task WhenFlagsUnchanged_DoesNotSetBuildingStatus()
     {
         // Arrange
-        WorkerImageConfiguration config = new(
-            InstallDotnet: true,
-            InstallAngular: false,
-            InstallChromium: false,
-            InstallDocker: false);
-
-        await SeedSettingsAsync(config);
+        await SeedSettingsAsync(CreateConfig(dotnet: true));
 
         await using FoundryDbContext dbContext = CreateDbContext();
         CapturingIntegrationEventDispatcher dispatcher = new();
@@ -252,13 +230,7 @@ public sealed class HandleAsync : IAsyncLifetime
     public async Task WhenFlagsChange_PersistsUpdatedFlagsToDatabase()
     {
         // Arrange
-        WorkerImageConfiguration initial = new(
-            InstallDotnet: false,
-            InstallAngular: false,
-            InstallChromium: false,
-            InstallDocker: false);
-
-        await SeedSettingsAsync(initial);
+        await SeedSettingsAsync(CreateConfig());
 
         await using FoundryDbContext dbContext = CreateDbContext();
         CapturingIntegrationEventDispatcher dispatcher = new();
@@ -287,13 +259,7 @@ public sealed class HandleAsync : IAsyncLifetime
     public async Task WhenFlagsChange_ReturnsUpdatedSummary()
     {
         // Arrange
-        WorkerImageConfiguration initial = new(
-            InstallDotnet: false,
-            InstallAngular: false,
-            InstallChromium: false,
-            InstallDocker: false);
-
-        await SeedSettingsAsync(initial);
+        await SeedSettingsAsync(CreateConfig());
 
         await using FoundryDbContext dbContext = CreateDbContext();
         CapturingIntegrationEventDispatcher dispatcher = new();

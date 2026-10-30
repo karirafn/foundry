@@ -8,6 +8,20 @@ namespace Foundry.UnitTests.Modules.Settings.Domain.ValueObjects.WorkerImageConf
 
 public sealed class ToBuildArgs
 {
+    private static WorkerImageConfiguration Config(
+        bool dotnet = false,
+        bool angular = false,
+        bool chromium = false,
+        bool docker = false) =>
+        WorkerImageConfiguration.Create(
+            imageTag: "foundry-worker:local",
+            buildEnabled: true,
+            installDotnet: dotnet,
+            installAngular: angular,
+            installChromium: chromium,
+            installDocker: docker)
+            .Match(v => v, e => throw new InvalidOperationException(e.Message));
+
     [Fact]
     public void WhenAllFlagsAreFalse_AllBuildArgsAreFalse()
     {
@@ -29,11 +43,7 @@ public sealed class ToBuildArgs
     public void WhenInstallDotnetIsTrue_BuildArgIsTrue()
     {
         // Arrange
-        WorkerImageConfiguration config = new(
-            InstallDotnet: true,
-            InstallAngular: false,
-            InstallChromium: false,
-            InstallDocker: false);
+        WorkerImageConfiguration config = Config(dotnet: true);
 
         // Act
         IReadOnlyDictionary<string, string> args = config.ToBuildArgs();
@@ -46,11 +56,7 @@ public sealed class ToBuildArgs
     public void WhenInstallAngularIsTrue_BuildArgIsTrue()
     {
         // Arrange
-        WorkerImageConfiguration config = new(
-            InstallDotnet: false,
-            InstallAngular: true,
-            InstallChromium: false,
-            InstallDocker: false);
+        WorkerImageConfiguration config = Config(angular: true);
 
         // Act
         IReadOnlyDictionary<string, string> args = config.ToBuildArgs();
@@ -63,11 +69,7 @@ public sealed class ToBuildArgs
     public void WhenInstallChromiumIsTrue_BuildArgIsTrue()
     {
         // Arrange
-        WorkerImageConfiguration config = new(
-            InstallDotnet: false,
-            InstallAngular: false,
-            InstallChromium: true,
-            InstallDocker: false);
+        WorkerImageConfiguration config = Config(chromium: true);
 
         // Act
         IReadOnlyDictionary<string, string> args = config.ToBuildArgs();
@@ -80,11 +82,7 @@ public sealed class ToBuildArgs
     public void WhenInstallDockerIsTrue_BuildArgIsTrue()
     {
         // Arrange
-        WorkerImageConfiguration config = new(
-            InstallDotnet: false,
-            InstallAngular: false,
-            InstallChromium: false,
-            InstallDocker: true);
+        WorkerImageConfiguration config = Config(docker: true);
 
         // Act
         IReadOnlyDictionary<string, string> args = config.ToBuildArgs();
@@ -97,11 +95,7 @@ public sealed class ToBuildArgs
     public void WhenAllFlagsAreTrue_AllBuildArgsAreTrue()
     {
         // Arrange
-        WorkerImageConfiguration config = new(
-            InstallDotnet: true,
-            InstallAngular: true,
-            InstallChromium: true,
-            InstallDocker: true);
+        WorkerImageConfiguration config = Config(dotnet: true, angular: true, chromium: true, docker: true);
 
         // Act
         IReadOnlyDictionary<string, string> args = config.ToBuildArgs();
@@ -125,5 +119,31 @@ public sealed class ToBuildArgs
 
         // Assert
         args.Count.ShouldBe(4);
+    }
+
+    [Fact]
+    public void WhenCalled_DoesNotIncludeImageTagEntry()
+    {
+        // Arrange
+        WorkerImageConfiguration config = WorkerImageConfiguration.Default;
+
+        // Act
+        IReadOnlyDictionary<string, string> args = config.ToBuildArgs();
+
+        // Assert
+        args.ContainsKey("IMAGE_TAG").ShouldBeFalse();
+    }
+
+    [Fact]
+    public void WhenCalled_DoesNotIncludeBuildEnabledEntry()
+    {
+        // Arrange
+        WorkerImageConfiguration config = WorkerImageConfiguration.Default;
+
+        // Act
+        IReadOnlyDictionary<string, string> args = config.ToBuildArgs();
+
+        // Assert
+        args.ContainsKey("BUILD_ENABLED").ShouldBeFalse();
     }
 }

@@ -37,12 +37,20 @@ internal static class UpdateWorkerImageConfiguration
                 return Result<GlobalSettingsSummary>.Fail(SettingsErrors.NotFound);
             }
 
-            WorkerImageConfiguration config = new(
-                command.InstallDotnet,
-                command.InstallAngular,
-                command.InstallChromium,
-                command.InstallDocker);
+            Result<WorkerImageConfiguration> configResult = WorkerImageConfiguration.Create(
+                imageTag: settings.WorkerImageConfiguration.ImageTag,
+                buildEnabled: settings.WorkerImageConfiguration.BuildEnabled,
+                installDotnet: command.InstallDotnet,
+                installAngular: command.InstallAngular,
+                installChromium: command.InstallChromium,
+                installDocker: command.InstallDocker);
 
+            if (configResult is not Result<WorkerImageConfiguration>.Success configSuccess)
+            {
+                return Result<GlobalSettingsSummary>.Fail(((Result<WorkerImageConfiguration>.Failure)configResult).Error);
+            }
+
+            WorkerImageConfiguration config = configSuccess.Value;
             bool changed = settings.UpdateWorkerImageConfiguration(config);
 
             if (changed)

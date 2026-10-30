@@ -42,7 +42,15 @@ public sealed class WhenFlagsUnchanged : IAsyncDisposable
         DbContext dbContext = scope.ServiceProvider.GetRequiredService<DbContext>();
 
         GlobalSettings settings = GlobalSettings.Create();
-        settings.UpdateWorkerImageConfiguration(new WorkerImageConfiguration(dotnet, angular, chromium, docker));
+        WorkerImageConfiguration config = WorkerImageConfiguration.Create(
+            imageTag: "foundry-worker:local",
+            buildEnabled: true,
+            installDotnet: dotnet,
+            installAngular: angular,
+            installChromium: chromium,
+            installDocker: docker)
+            .Match(v => v, e => throw new InvalidOperationException(e.Message));
+        settings.UpdateWorkerImageConfiguration(config);
         dbContext.Set<GlobalSettings>().Add(settings);
         await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
     }

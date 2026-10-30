@@ -38,15 +38,25 @@ public sealed class GetWorkerImageBuildArgsAsync : IAsyncDisposable
         return new FoundryDbContext(options);
     }
 
+    private static WorkerImageConfiguration CreateConfig(
+        bool dotnet = false,
+        bool angular = false,
+        bool chromium = false,
+        bool docker = false) =>
+        WorkerImageConfiguration.Create(
+            imageTag: "foundry-worker:local",
+            buildEnabled: true,
+            installDotnet: dotnet,
+            installAngular: angular,
+            installChromium: chromium,
+            installDocker: docker)
+            .Match(v => v, e => throw new InvalidOperationException(e.Message));
+
     [Fact]
     public async Task WhenConfigurationIsPopulated_ReturnsBuildArgsMatchingToBuildArgs()
     {
         // Arrange
-        WorkerImageConfiguration config = new(
-            InstallDotnet: true,
-            InstallAngular: false,
-            InstallChromium: true,
-            InstallDocker: false);
+        WorkerImageConfiguration config = CreateConfig(dotnet: true, chromium: true);
 
         await using (FoundryDbContext seedDb = CreateDbContext())
         {
@@ -90,11 +100,7 @@ public sealed class GetWorkerImageBuildArgsAsync : IAsyncDisposable
     public async Task WhenConfigurationIsPopulated_DoesNotContainInstallGhKey()
     {
         // Arrange
-        WorkerImageConfiguration config = new(
-            InstallDotnet: true,
-            InstallAngular: false,
-            InstallChromium: false,
-            InstallDocker: false);
+        WorkerImageConfiguration config = CreateConfig(dotnet: true);
 
         await using (FoundryDbContext seedDb = CreateDbContext())
         {
@@ -119,11 +125,7 @@ public sealed class GetWorkerImageBuildArgsAsync : IAsyncDisposable
     public async Task WhenConfigurationIsPopulated_DoesNotContainInstallGlabKey()
     {
         // Arrange
-        WorkerImageConfiguration config = new(
-            InstallDotnet: true,
-            InstallAngular: false,
-            InstallChromium: false,
-            InstallDocker: false);
+        WorkerImageConfiguration config = CreateConfig(dotnet: true);
 
         await using (FoundryDbContext seedDb = CreateDbContext())
         {

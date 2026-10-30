@@ -56,6 +56,16 @@ internal static class SettingsErrors
     internal static Error InvalidProviderHost(string host) =>
         new(InvalidProviderHostCode, $"'{host}' is not a valid provider host. Provide a bare hostname (e.g. git.example.com) with no scheme, port, or path.");
 
+    internal const string EmptyImageTagCode = "Settings.EmptyImageTag";
+
+    internal static readonly Error EmptyImageTag =
+        new(EmptyImageTagCode, "The worker image tag must not be empty or whitespace.");
+
+    internal const string LatestImageTagCode = "Settings.LatestImageTag";
+
+    internal static readonly Error LatestImageTag =
+        new(LatestImageTagCode, "The worker image tag must not be ':latest'. Provide a specific tag.");
+
     internal const string TooManyProviderHostsCode = "Settings.TooManyProviderHosts";
 
     internal static Error TooManyProviderHosts(int count) =>

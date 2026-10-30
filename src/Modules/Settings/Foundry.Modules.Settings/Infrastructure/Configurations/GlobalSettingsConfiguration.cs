@@ -112,8 +112,19 @@ internal sealed class GlobalSettingsConfiguration : IEntityTypeConfiguration<Glo
         => JsonSerializer.Serialize(config);
 
     private static WorkerImageConfiguration DeserializeWorkerImageConfiguration(string json)
-        => JsonSerializer.Deserialize<WorkerImageConfiguration>(json)
-            ?? WorkerImageConfiguration.Default;
+    {
+        WorkerImageConfiguration? config = JsonSerializer.Deserialize<WorkerImageConfiguration>(json);
+
+        // Rows written before the ImageTag/BuildEnabled fields were added have null ImageTag.
+        // Fall back to Default so existing data continues to deserialize cleanly until the
+        // backfill migration runs.
+        if (config is null || string.IsNullOrWhiteSpace(config.ImageTag))
+        {
+            return WorkerImageConfiguration.Default;
+        }
+
+        return config;
+    }
 
     private static string SerializeWorkerPrompts(WorkerPrompts prompts)
         => JsonSerializer.Serialize(prompts);

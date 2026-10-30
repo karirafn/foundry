@@ -12,17 +12,23 @@ public sealed class ValueEquality
     public void WhenSameValues_AreEqual()
     {
         // Arrange
-        WorkerImageConfiguration first = new(
-            InstallDotnet: true,
-            InstallAngular: false,
-            InstallChromium: false,
-            InstallDocker: false);
+        WorkerImageConfiguration first = WorkerImageConfiguration.Create(
+            imageTag: "foundry-worker:v1",
+            buildEnabled: true,
+            installDotnet: true,
+            installAngular: false,
+            installChromium: false,
+            installDocker: false)
+            .Match(v => v, e => throw new InvalidOperationException(e.Message));
 
-        WorkerImageConfiguration second = new(
-            InstallDotnet: true,
-            InstallAngular: false,
-            InstallChromium: false,
-            InstallDocker: false);
+        WorkerImageConfiguration second = WorkerImageConfiguration.Create(
+            imageTag: "foundry-worker:v1",
+            buildEnabled: true,
+            installDotnet: true,
+            installAngular: false,
+            installChromium: false,
+            installDocker: false)
+            .Match(v => v, e => throw new InvalidOperationException(e.Message));
 
         // Act
         bool result = first == second;
@@ -32,20 +38,84 @@ public sealed class ValueEquality
     }
 
     [Fact]
-    public void WhenDifferentValues_AreNotEqual()
+    public void WhenDifferentInstallFlags_AreNotEqual()
     {
         // Arrange
-        WorkerImageConfiguration first = new(
-            InstallDotnet: true,
-            InstallAngular: false,
-            InstallChromium: false,
-            InstallDocker: false);
+        WorkerImageConfiguration first = WorkerImageConfiguration.Create(
+            imageTag: "foundry-worker:v1",
+            buildEnabled: true,
+            installDotnet: true,
+            installAngular: false,
+            installChromium: false,
+            installDocker: false)
+            .Match(v => v, e => throw new InvalidOperationException(e.Message));
 
-        WorkerImageConfiguration second = new(
-            InstallDotnet: false,
-            InstallAngular: false,
-            InstallChromium: false,
-            InstallDocker: false);
+        WorkerImageConfiguration second = WorkerImageConfiguration.Create(
+            imageTag: "foundry-worker:v1",
+            buildEnabled: true,
+            installDotnet: false,
+            installAngular: false,
+            installChromium: false,
+            installDocker: false)
+            .Match(v => v, e => throw new InvalidOperationException(e.Message));
+
+        // Act
+        bool result = first == second;
+
+        // Assert
+        result.ShouldBeFalse();
+    }
+
+    [Fact]
+    public void WhenDifferentImageTag_AreNotEqual()
+    {
+        // Arrange
+        WorkerImageConfiguration first = WorkerImageConfiguration.Create(
+            imageTag: "foundry-worker:v1",
+            buildEnabled: true,
+            installDotnet: false,
+            installAngular: false,
+            installChromium: false,
+            installDocker: false)
+            .Match(v => v, e => throw new InvalidOperationException(e.Message));
+
+        WorkerImageConfiguration second = WorkerImageConfiguration.Create(
+            imageTag: "foundry-worker:v2",
+            buildEnabled: true,
+            installDotnet: false,
+            installAngular: false,
+            installChromium: false,
+            installDocker: false)
+            .Match(v => v, e => throw new InvalidOperationException(e.Message));
+
+        // Act
+        bool result = first == second;
+
+        // Assert
+        result.ShouldBeFalse();
+    }
+
+    [Fact]
+    public void WhenDifferentBuildEnabled_AreNotEqual()
+    {
+        // Arrange
+        WorkerImageConfiguration first = WorkerImageConfiguration.Create(
+            imageTag: "foundry-worker:v1",
+            buildEnabled: true,
+            installDotnet: false,
+            installAngular: false,
+            installChromium: false,
+            installDocker: false)
+            .Match(v => v, e => throw new InvalidOperationException(e.Message));
+
+        WorkerImageConfiguration second = WorkerImageConfiguration.Create(
+            imageTag: "foundry-worker:v1",
+            buildEnabled: false,
+            installDotnet: false,
+            installAngular: false,
+            installChromium: false,
+            installDocker: false)
+            .Match(v => v, e => throw new InvalidOperationException(e.Message));
 
         // Act
         bool result = first == second;
