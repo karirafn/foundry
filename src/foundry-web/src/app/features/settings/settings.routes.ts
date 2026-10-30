@@ -46,6 +46,14 @@ export const SETTINGS_ROUTES: Routes = [
         canDeactivate: [unsavedChangesGuard],
       },
       {
+        path: 'provider-hosts',
+        loadComponent: () =>
+          import('./provider-hosts/settings-provider-hosts').then(
+            (m) => m.SettingsProviderHostsComponent,
+          ),
+        canDeactivate: [unsavedChangesGuard],
+      },
+      {
         path: 'accounts',
         loadComponent: () =>
           import('./accounts/settings-accounts/settings-accounts').then((m) => m.SettingsAccountsComponent),
