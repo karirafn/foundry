@@ -1288,7 +1288,7 @@ public sealed class HandleAsync : IAsyncDisposable
         string? systemPromptTemplate = null,
         string? workerPromptTemplate = null,
         bool installsDocker = false,
-        string imageTag = "stub-image:latest") : IGlobalSettingsQueries
+        string imageTag = "stub-image:v1") : IGlobalSettingsQueries
     {
         public Task<GlobalSettingsSummary?> GetSettingsAsync(CancellationToken cancellationToken)
             => Task.FromResult<GlobalSettingsSummary?>(null);

@@ -12,13 +12,18 @@ namespace Foundry.WebApi.Migrations
         // rows must not be retroactively altered. The discipline mirrors DefaultWorkerImageConfiguration
         // in AddWorkerImageConfiguration and the frozen constants in AddWorkerPromptsValueObject.
         private const string DefaultImageTag = "foundry-worker:local";
+
+        // DefaultBuildEnabled must stay inside json(...) in the SQL below to serialise as a JSON
+        // boolean (true) rather than the quoted string "true", which would break the bool binding.
         private const string DefaultBuildEnabled = "true";
 
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
             // Backfill the two new keys into the existing worker_image_configuration JSON blob.
-            // json_set adds a key when absent and updates it when present, so this is idempotent.
+            // json_set adds the key when absent and overwrites when present; this runs exactly
+            // once via EF's migrations-history table — do not apply manually after the row has
+            // been customised.
             // The boolean is stored as JSON true (unquoted), matching STJ's default serialisation.
             migrationBuilder.Sql(
                 $"""

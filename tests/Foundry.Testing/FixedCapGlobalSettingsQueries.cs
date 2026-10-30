@@ -39,7 +39,7 @@ public sealed class FixedCapGlobalSettingsQueries(int maxConcurrent) : IGlobalSe
         => Task.FromResult(false);
 
     public Task<string> GetWorkerImageTagAsync(CancellationToken cancellationToken)
-        => Task.FromResult(string.Empty);
+        => Task.FromResult("foundry-worker:local");
 
     public Task<bool> GetWorkerImageBuildEnabledAsync(CancellationToken cancellationToken)
         => Task.FromResult(false);
