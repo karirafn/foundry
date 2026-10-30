@@ -6,7 +6,7 @@
       [attr.popovertarget]="popoverId"
       [attr.aria-expanded]="isOpen()"
       [attr.aria-controls]="popoverId"
-      [attr.aria-label]="isOpen() ? 'Claude usage. Activate to close.' : buildTriggerLabel(vm)"
+      [attr.aria-label]="buildTriggerLabel(vm)"
     >
       <!-- Inline meters (session + weekly_all) — hidden at narrow width -->
       <div class="usage-widget__inline">
@@ -29,15 +29,17 @@
         }
       </div>
 
-      <!-- Collapsed single figure — shown only at narrow width -->
-      <div class="usage-widget__collapsed">
-        <span
-          class="usage-widget__severity-dot"
-          [ngClass]="vm.collapsedMeter.severityClass"
-          aria-hidden="true"
-        ></span>
-        <span class="usage-meter__percent">{{ vm.collapsedMeter.percentLabel }}</span>
-      </div>
+      <!-- Collapsed single figure — shown only at narrow width; hidden when no limits -->
+      @if (vm.collapsedMeter; as cm) {
+        <div class="usage-widget__collapsed">
+          <span
+            class="usage-widget__severity-dot"
+            [ngClass]="cm.severityClass"
+            aria-hidden="true"
+          ></span>
+          <span class="usage-meter__percent">{{ cm.percentLabel }}</span>
+        </div>
+      }
     </button>
 
     <!-- Popover — always in DOM for aria-controls; browser top-layer hides it when closed -->
@@ -71,7 +73,7 @@
 
       <!-- All limits (session, weekly_all, each weekly_scoped) -->
       <div class="usage-popover__limits">
-        @for (meter of vm.allLimits; track meter.kind + (meter.label)) {
+        @for (meter of vm.allLimits; track meter.kind + '|' + (meter.modelDisplayName ?? '') + '|' + $index) {
           <div class="usage-popover__limit">
             <div class="usage-popover__limit-head">
               <span class="usage-popover__limit-label">{{ meter.popoverLabel }}</span>

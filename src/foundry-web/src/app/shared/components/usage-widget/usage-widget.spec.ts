@@ -599,6 +599,105 @@ describe('UsageWidgetComponent', () => {
     expect(label).toContain('Activate to see details');
   });
 
+  // Finding 5 — trigger aria-label is always the informative label (open and closed)
+  it('should use informative buildTriggerLabel as aria-label regardless of open/closed state', () => {
+    // Arrange
+    const snapshot = buildSnapshot({
+      limits: [
+        { kind: 'session', percent: 42, resetsAt: '2026-10-30T06:00:00Z', modelDisplayName: null, severity: 'normal', isActive: true },
+      ],
+    });
+    const fixture = setup(snapshot);
+    const component = fixture.componentInstance;
+
+    // Act — simulate open state
+    component.isOpen.set(true);
+    fixture.detectChanges();
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert — label still contains meter data even when open
+    const trigger = el.querySelector('.usage-widget__trigger');
+    const label = trigger?.getAttribute('aria-label') ?? '';
+    expect(label).toContain('Claude usage');
+    expect(label).toContain('42%');
+  });
+
+  // Finding 4 — isCollapsed=true narrows buildTriggerLabel to single-figure format
+  it('should narrow buildTriggerLabel when isCollapsed is true', () => {
+    // Arrange
+    const snapshot = buildSnapshot({
+      limits: [
+        { kind: 'session', percent: 78, resetsAt: '2026-10-30T06:00:00Z', modelDisplayName: null, severity: 'critical', isActive: true },
+        { kind: 'weekly_all', percent: 55, resetsAt: '2026-11-03T09:00:00Z', modelDisplayName: null, severity: 'normal', isActive: false },
+      ],
+    });
+    const fixture = setup(snapshot);
+    const component = fixture.componentInstance;
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Act — drive isCollapsed signal true (as ResizeObserver would)
+    component.isCollapsed.set(true);
+    fixture.detectChanges();
+
+    // Assert — label narrows to single figure (collapsed meter: session 78% critical)
+    const trigger = el.querySelector('.usage-widget__trigger');
+    const label = trigger?.getAttribute('aria-label') ?? '';
+    expect(label).toContain('78%');
+    expect(label).toContain('critical');
+    // Should NOT contain the second meter's data
+    expect(label).not.toContain('55%');
+  });
+
+  // Finding 4 — when isCollapsed is false, label includes all inline meters
+  it('should include all inline meters in buildTriggerLabel when isCollapsed is false', () => {
+    // Arrange
+    const snapshot = buildSnapshot({
+      limits: [
+        { kind: 'session', percent: 78, resetsAt: '2026-10-30T06:00:00Z', modelDisplayName: null, severity: 'critical', isActive: true },
+        { kind: 'weekly_all', percent: 55, resetsAt: '2026-11-03T09:00:00Z', modelDisplayName: null, severity: 'normal', isActive: false },
+      ],
+    });
+    const fixture = setup(snapshot);
+    const component = fixture.componentInstance;
+
+    // Act — isCollapsed false (default)
+    component.isCollapsed.set(false);
+    fixture.detectChanges();
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert — label includes both meters
+    const trigger = el.querySelector('.usage-widget__trigger');
+    const label = trigger?.getAttribute('aria-label') ?? '';
+    expect(label).toContain('78%');
+    expect(label).toContain('55%');
+  });
+
+  // Finding 6 — widget handles empty limits gracefully (no crash)
+  it('should render without throwing when limits is empty', () => {
+    // Arrange
+    const snapshot = buildSnapshot({ limits: [] });
+
+    // Act / Assert — should not throw
+    expect(() => {
+      const fixture = setup(snapshot);
+      fixture.detectChanges();
+    }).not.toThrow();
+  });
+
+  // Finding 6 — widget hides collapsed figure when collapsedMeter is null (empty limits)
+  it('should not render a collapsed meter percent when limits is empty', () => {
+    // Arrange
+    const snapshot = buildSnapshot({ limits: [] });
+
+    // Act
+    const fixture = setup(snapshot);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert — no collapsed percent rendered (widget may hide entirely or collapse section)
+    const collapsed = el.querySelector('.usage-widget__collapsed .usage-meter__percent');
+    expect(collapsed).toBeNull();
+  });
+
   // Behavior d — credits appear only in popover, not in inline meters section
   it('should not render credits in the inline meters section', () => {
     // Arrange

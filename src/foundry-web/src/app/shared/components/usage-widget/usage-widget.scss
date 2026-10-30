@@ -125,14 +125,14 @@
 }
 
 // ─── Failed / dimmed state ───────────────────────────────────────────────────
+// Dim only the visual bar elements; leave label/percent text at full opacity
+// so --fd-text-secondary (5.62:1) and --fd-text-primary (14.64:1) stay above 4.5:1.
 
 .usage-widget--failed {
-  .usage-widget__trigger {
-    opacity: 0.55;
-  }
-
+  .usage-meter__track,
   .usage-meter__fill,
   .usage-widget__severity-dot {
+    opacity: 0.55;
     filter: saturate(0.6);
   }
 }
@@ -193,7 +193,9 @@
 }
 
 .usage-popover__asof {
-  color: var(--fd-text-tertiary);
+  // --fd-text-tertiary (#6e7681) = 3.77:1 on --fd-bg-card at 12px — fails WCAG 1.4.3.
+  // Use --fd-text-secondary (#8b949e) = 5.62:1 instead.
+  color: var(--fd-text-secondary);
   font-size: 0.75rem;
   margin: 0 0 var(--fd-spacing-sm);
 }
@@ -241,6 +243,12 @@
 .usage-popover__severity-word {
   font-size: 0.75rem;
 
+  // Text tokens are distinct from fill tokens: fill tokens are only 3:1 against the rail;
+  // text on --fd-bg-card (#161b22) requires 4.5:1 (WCAG 1.4.3).
+  // normal (#3fb950) = 6.81:1 ✓ and warning (#e0a526) = 7.89:1 ✓ — fill tokens pass directly.
+  // critical (#da3633) = 3.75:1 ✗ → use --fd-usage-critical-text (#f28080, 6.73:1) ✓
+  // neutral (#6e7681) = 3.77:1 ✗ → use --fd-usage-neutral-text (#8b949e, 5.62:1) ✓
+
   &.usage-meter--normal {
     color: var(--fd-usage-normal);
   }
@@ -250,17 +258,19 @@
   }
 
   &.usage-meter--critical {
-    color: var(--fd-usage-critical);
+    color: var(--fd-usage-critical-text);
   }
 
   &.usage-meter--neutral {
-    color: var(--fd-usage-neutral);
+    color: var(--fd-usage-neutral-text);
   }
 }
 
 .usage-popover__reset {
   font-size: 0.75rem;
-  color: var(--fd-text-tertiary);
+  // --fd-text-tertiary (#6e7681) = 3.77:1 on --fd-bg-card at 12px — fails WCAG 1.4.3.
+  // Use --fd-text-secondary (#8b949e) = 5.62:1 instead.
+  color: var(--fd-text-secondary);
   margin: 0;
   padding-inline-start: 0;
 }

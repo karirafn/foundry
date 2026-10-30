@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
+import { afterNextRender, ChangeDetectionStrategy, Component, computed, inject, OnDestroy, signal } from '@angular/core';
 import { NgClass } from '@angular/common';
 import { UsageService } from '../../../core/services/usage.service';
 import { UsageSnapshot } from '../../../core/models/usage.model';
@@ -59,6 +59,7 @@ function popoverLabelForKind(kind: string, modelDisplayName: string | null): str
 
 export interface UsageMeterVm {
   readonly kind: string;
+  readonly modelDisplayName: string | null;
   readonly label: string;
   /** Longer label used in the popover (e.g. "Weekly (all models)" instead of "Weekly"). */
   readonly popoverLabel: string;
@@ -78,7 +79,8 @@ export interface UsageCreditsVm {
 
 export interface UsageWidgetVm {
   readonly inlineMeters: readonly UsageMeterVm[];
-  readonly collapsedMeter: UsageMeterVm;
+  /** Null when allLimits is empty — template must guard before access. */
+  readonly collapsedMeter: UsageMeterVm | null;
   readonly allLimits: readonly UsageMeterVm[];
   readonly credits: UsageCreditsVm | null;
   readonly accountEmail: string;
@@ -117,6 +119,7 @@ function buildMeterVm(
 
   return {
     kind,
+    modelDisplayName,
     label,
     popoverLabel,
     percent: clampedPercent,
@@ -137,12 +140,14 @@ function buildWidgetVm(snapshot: UsageSnapshot): UsageWidgetVm {
   const inlineMeters = allLimits.filter((m) => m.kind === 'session' || m.kind === 'weekly_all');
 
   const activeLimit = allLimits.find((m) => m.isActive);
-  const collapsedMeter: UsageMeterVm =
-    activeLimit ??
-    allLimits.reduce(
-      (best, current) => (current.percent > best.percent ? current : best),
-      allLimits[0]
-    );
+  const collapsedMeter: UsageMeterVm | null =
+    allLimits.length === 0
+      ? null
+      : (activeLimit ??
+          allLimits.reduce(
+            (best, current) => (current.percent > best.percent ? current : best),
+            allLimits[0]
+          ));
 
   const extraUsage = snapshot.extraUsage;
   const credits: UsageCreditsVm | null =
@@ -191,6 +196,8 @@ function buildWidgetVm(snapshot: UsageSnapshot): UsageWidgetVm {
 
 let _nextId = 0;
 
+const COLLAPSE_THRESHOLD_PX = 240;
+
 @Component({
   selector: 'fd-usage-widget',
   imports: [NgClass],
@@ -198,11 +205,13 @@ let _nextId = 0;
   styleUrl: './usage-widget.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
-export class UsageWidgetComponent {
+export class UsageWidgetComponent implements OnDestroy {
   private readonly _usageService = inject(UsageService);
+  private _resizeObserver: ResizeObserver | null = null;
 
   readonly popoverId = `usage-popover-${_nextId++}`;
   readonly isOpen = signal(false);
+  readonly isCollapsed = signal(false);
 
   readonly view = computed<UsageWidgetVm | null>(() => {
     const snapshot = this._usageService.snapshot();
@@ -212,15 +221,43 @@ export class UsageWidgetComponent {
     return buildWidgetVm(snapshot);
   });
 
+  constructor() {
+    afterNextRender(() => {
+      // Observe the host element for container-width changes to keep aria-label in sync
+      // with the CSS container-query collapse (threshold 240px matching @container rule).
+      const hostEl = document.querySelector('fd-usage-widget');
+      if (hostEl === null || typeof ResizeObserver === 'undefined') {
+        return;
+      }
+      this._resizeObserver = new ResizeObserver((entries) => {
+        const entry = entries[0];
+        if (entry === undefined) {
+          return;
+        }
+        this.isCollapsed.set(entry.contentRect.width <= COLLAPSE_THRESHOLD_PX);
+      });
+      this._resizeObserver.observe(hostEl);
+    });
+  }
+
+  ngOnDestroy(): void {
+    this._resizeObserver?.disconnect();
+  }
+
   onToggle(event: Event): void {
     this.isOpen.set((event as ToggleEvent).newState === 'open');
   }
 
   buildTriggerLabel(vm: UsageWidgetVm): string {
+    // When collapsed (≤240px), narrow to the single collapsed figure only.
+    if (this.isCollapsed() && vm.collapsedMeter !== null) {
+      const c = vm.collapsedMeter;
+      return `Claude usage ${c.percentLabel} ${c.severityWord.toLowerCase()}. Activate to see details.`;
+    }
     const parts = vm.inlineMeters.map(
       (m) => `${m.label} ${m.percentLabel} ${m.severityWord.toLowerCase()}`
     );
-    if (parts.length === 0) {
+    if (parts.length === 0 && vm.collapsedMeter !== null) {
       const c = vm.collapsedMeter;
       return `Claude usage ${c.percentLabel} ${c.severityWord.toLowerCase()}. Activate to see details.`;
     }
