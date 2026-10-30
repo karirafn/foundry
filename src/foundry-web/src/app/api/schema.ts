@@ -55,6 +55,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/credentials/usage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Returns the current Claude subscription usage snapshot, or 204 when no snapshot exists */
+        get: operations["GetUsageSnapshot"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/credentials/login/start": {
         parameters: {
             query?: never;
@@ -900,6 +917,35 @@ export interface components {
             /** Format: int32 */
             timeoutMinutes: number | string;
         };
+        UsageExtraCreditsResponse: {
+            isEnabled: boolean;
+            /** Format: int64 */
+            monthlyLimit: number | string;
+            /** Format: int64 */
+            usedCredits: number | string;
+            /** Format: double */
+            utilization: number | string;
+            currency: string;
+        };
+        UsageRateLimitResponse: {
+            kind: string;
+            /** Format: double */
+            percent: number | string;
+            /** Format: date-time */
+            resetsAt: string;
+            modelDisplayName: null | string;
+            severity: string;
+            isActive: boolean;
+        };
+        UsageSnapshotResponse: {
+            limits: components["schemas"]["UsageRateLimitResponse"][];
+            extraUsage: null | components["schemas"]["UsageExtraCreditsResponse"];
+            /** Format: date-time */
+            capturedAt: string;
+            accountEmail: string;
+            /** Format: date-time */
+            lastRefreshFailedAt: null | string;
+        };
         ValidateTokenRequestBody: {
             token: string;
             baseUrl: string;
@@ -1042,6 +1088,33 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["CheckCreditsNowResponse"];
                 };
+            };
+        };
+    };
+    GetUsageSnapshot: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UsageSnapshotResponse"];
+                };
+            };
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
