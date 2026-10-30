@@ -17,7 +17,7 @@ using Xunit;
 namespace Foundry.UnitTests.Modules.Settings.Features.WorkerConfig.UpdateWorkerImageConfigurationTests;
 
 /// <summary>
-/// Verifies that UpdateWorkerImageConfiguration.Handler enqueues WorkerImageConfigurationChanged
+/// Verifies that UpdateWorkerImageConfiguration.Handler enqueues WorkerImageSettingsChanged
 /// before SaveChangesAsync so the outbox interceptor harvests the event atomically.
 /// </summary>
 public sealed class OutboxHarvestHandleAsync : IAsyncDisposable
@@ -61,18 +61,13 @@ public sealed class OutboxHarvestHandleAsync : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenFlagsChange_WorkerImageConfigurationChangedRowPersistedAtomically()
+    public async Task WhenFlagsChange_WorkerImageSettingsChangedRowPersistedAtomically()
     {
         // Arrange — seed settings with all flags off
         using (IServiceScope seedScope = _serviceProvider.CreateScope())
         {
             FoundryDbContext seedDb = seedScope.ServiceProvider.GetRequiredService<FoundryDbContext>();
             GlobalSettings settings = GlobalSettings.Create();
-            settings.UpdateWorkerImageConfiguration(new WorkerImageConfiguration(
-                InstallDotnet: false,
-                InstallAngular: false,
-                InstallChromium: false,
-                InstallDocker: false));
             seedDb.Set<GlobalSettings>().Add(settings);
             await seedDb.SaveChangesAsync(TestContext.Current.CancellationToken);
         }
@@ -85,6 +80,8 @@ public sealed class OutboxHarvestHandleAsync : IAsyncDisposable
         UpdateWorkerImageConfiguration.Handler sut = new(dbContext, integrationEventDispatcher);
 
         UpdateWorkerImageConfiguration.Command command = new(
+            ImageTag: "foundry-worker:local",
+            BuildEnabled: true,
             InstallDotnet: true,
             InstallAngular: false,
             InstallChromium: false,
@@ -98,12 +95,12 @@ public sealed class OutboxHarvestHandleAsync : IAsyncDisposable
         // Assert — success
         result.ShouldBeOfType<Result<GlobalSettingsSummary>.Success>();
 
-        // Assert — WorkerImageConfigurationChanged outbox row written atomically with change
+        // Assert — WorkerImageSettingsChanged outbox row written atomically with change
         dbContext.ChangeTracker.Clear();
         List<OutboxMessage> messages = await dbContext
             .Set<OutboxMessage>()
             .ToListAsync(TestContext.Current.CancellationToken);
-        messages.ShouldContain(m => m.Type.Contains(nameof(WorkerImageConfigurationChanged)));
+        messages.ShouldContain(m => m.Type.Contains(nameof(WorkerImageSettingsChanged)));
     }
 
     [Fact]
@@ -114,11 +111,15 @@ public sealed class OutboxHarvestHandleAsync : IAsyncDisposable
         {
             FoundryDbContext seedDb = seedScope.ServiceProvider.GetRequiredService<FoundryDbContext>();
             GlobalSettings settings = GlobalSettings.Create();
-            settings.UpdateWorkerImageConfiguration(new WorkerImageConfiguration(
-                InstallDotnet: true,
-                InstallAngular: false,
-                InstallChromium: false,
-                InstallDocker: false));
+            WorkerImageConfiguration config = WorkerImageConfiguration.Create(
+                imageTag: "foundry-worker:local",
+                buildEnabled: true,
+                installDotnet: true,
+                installAngular: false,
+                installChromium: false,
+                installDocker: false)
+                .Match(v => v, e => throw new InvalidOperationException(e.Message));
+            settings.UpdateWorkerImageConfiguration(config);
             seedDb.Set<GlobalSettings>().Add(settings);
             await seedDb.SaveChangesAsync(TestContext.Current.CancellationToken);
         }
@@ -131,6 +132,8 @@ public sealed class OutboxHarvestHandleAsync : IAsyncDisposable
         UpdateWorkerImageConfiguration.Handler sut = new(dbContext, integrationEventDispatcher);
 
         UpdateWorkerImageConfiguration.Command command = new(
+            ImageTag: "foundry-worker:local",
+            BuildEnabled: true,
             InstallDotnet: true,
             InstallAngular: false,
             InstallChromium: false,

@@ -158,11 +158,12 @@ dotnet run --project src/Foundry.AppHost
 
 This command:
 
-- Starts the WebApi, which builds the worker Docker image at startup (controlled by `Workers:ImageBuild:Enabled`)
 - Starts the WebApi with auto-migration applied on startup
 - Starts the Angular dashboard
 
-The first run is slower due to the Docker image build. Subsequent runs use the Docker layer cache.
+The worker image tag and build toggle live in **Global Settings** (database), configured via the Worker Image settings page.
+With building enabled (the default), the WebApi builds the worker Docker image at startup; the first run is slower due to the Docker image build, and subsequent runs use the Docker layer cache.
+With building disabled, Foundry inspects the configured tag on the Docker host at startup — if the image exists, the build state becomes `Idle`; if it is absent, the state becomes `Failed` and dispatch is blocked until the image is made available and the operator retries.
 
 ## Windows notes
 

@@ -71,7 +71,9 @@ Distinct from provider authentication (Account / PAT), which authenticates git o
 
 The staged Docker build (base → worker → login images) that produces the images workers run on, executed by `WorkerImageRebuildService` (a Workers-module background service).
 A failure at any stage — including the login image — fails the whole rebuild.
-Rebuilds are requested when the Worker Image Configuration changes (`WorkerImageConfigurationChanged` → immediate rebuild request) and by operator retry; an immediate rebuild request supersedes a pending backoff wait.
+Rebuilds are requested when the Worker Image Configuration changes (`WorkerImageSettingsChanged` → immediate rebuild request) and by operator retry; an immediate rebuild request supersedes a pending backoff wait.
+When building is disabled, any image-settings change instead triggers a Docker image **inspect** on the configured tag: if the image exists on the Docker host the build state moves to `Idle`; if it is absent the state moves to `Failed` with the message `image '<tag>' not found on the Docker host`.
+Startup and operator retry also re-run the inspect when building is disabled.
 While no usable image exists and at least one account is configured, the dashboard blocks with a full-screen forge overlay (**cold build**) until the first build succeeds.
 
 ## Image Build State
@@ -79,12 +81,12 @@ While no usable image exists and at least one account is configured, the dashboa
 A closed-hierarchy value object on Global Settings tracking the worker image build lifecycle: `Idle`, `Building`, `Failed(ErrorTail, NextRetryAt, Attempt)`.
 Transitions are methods on the aggregate (`BeginImageBuild`, `CompleteImageBuild`, `FailImageBuild`); persisted as a JSON blob.
 Failed builds auto-retry with exponential backoff (`initial * 2^(attempt-1)`, capped at a configured maximum); operator retry is only permitted from `Failed`.
-A non-`Idle` state drives the dashboard image-build banner and disables the worker-image settings form, and dispatch gates on the status — no new workers are dispatched while the image is building or failed.
+A non-`Idle` state drives the dashboard image-build banner and disables the worker-image settings form, and dispatch gates on the status — no new workers are dispatched while `Building` or `Failed` (including the case where a pre-built image is absent when building is disabled).
 
 ## Worker Image Configuration
 
-The set of preinstall flags for optional toolchains (e.g. `INSTALL_DOTNET`, `INSTALL_ANGULAR`, `INSTALL_CHROMIUM`, `INSTALL_DOCKER`) stored on Global Settings, driving Docker build args for the worker image.
-Changing it publishes `WorkerImageConfigurationChanged`, which requests an immediate rebuild.
+The worker image settings stored on Global Settings: the **image tag** (default `foundry-worker:local`; empty or `:latest` rejected) and the **build toggle** (default enabled), alongside the set of preinstall flags for optional toolchains (e.g. `INSTALL_DOTNET`, `INSTALL_ANGULAR`, `INSTALL_CHROMIUM`, `INSTALL_DOCKER`) that drive Docker build args.
+Any change publishes `WorkerImageSettingsChanged`; with build enabled this requests an immediate rebuild, with build disabled it triggers an inspect (see Worker Image Build).
 
 ### Docker-Enabled Worker Run Spec
 
@@ -214,7 +216,7 @@ A Monitored Repository carries no account reference; on each eligibility evaluat
 ## Global Settings
 
 A strongly-typed single-row entity storing all UI-configurable settings.
-Includes worker settings (max concurrent, timeout, and the Worker Prompts value object — system prompt template, worker prompt template, and branch naming instruction), the Worker Image Configuration and Image Build State, the credit-probe interval (`ProbeIntervalMinutes`, default 60, validated to a minimum of 5), and dispatch pause controls: usage-limit controls (`AutoResumeOnUsageReset`, `UsageLimitResetsAt`) and the separate manual operator pause (`IsDispatchPaused`).
+Includes worker settings (max concurrent, timeout, and the Worker Prompts value object — system prompt template, worker prompt template, and branch naming instruction), the Worker Image Configuration (image tag, build toggle, and toolchain flags) and Image Build State, the credit-probe interval (`ProbeIntervalMinutes`, default 60, validated to a minimum of 5), and dispatch pause controls: usage-limit controls (`AutoResumeOnUsageReset`, `UsageLimitResetsAt`) and the separate manual operator pause (`IsDispatchPaused`).
 The Worker Prompts fields are non-null DB values (seeded from code defaults, backfilled for legacy rows) with no `IConfiguration` fallback — the dashboard always shows the values in effect, and `WorkerPrompts.Create` enforces their invariants (non-empty, length-bounded, worker template contains `{issueNumber}`, branch naming free of control characters).
 The auth-invalid pause is not stored here — it is `ClaudeAccount.Validity` in the Credentials module (see Worker Authentication).
 `ProbeIntervalMinutes` governs how long the credit block waits between probes (see Credit Probe); the operator sets it in the dispatch-settings form, `GlobalSettings.UpdateProbeInterval` rejects a below-minimum value, and the credit-probe scheduler reads it via `IGlobalSettingsQueries.GetProbeIntervalMinutesAsync` at each arm.

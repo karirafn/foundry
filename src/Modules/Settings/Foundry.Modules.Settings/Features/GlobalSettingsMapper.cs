@@ -28,6 +28,8 @@ internal static class GlobalSettingsMapper
             settings.UsageLimitResetsAt,
             settings.IsDispatchPaused,
             settings.AutoResumeOnUsageReset,
+            settings.WorkerImageConfiguration.ImageTag,
+            settings.WorkerImageConfiguration.BuildEnabled,
             settings.WorkerImageConfiguration.InstallDotnet,
             settings.WorkerImageConfiguration.InstallAngular,
             settings.WorkerImageConfiguration.InstallChromium,

@@ -62,10 +62,7 @@ public sealed class HandleAsync : IAsyncDisposable
         ICredentialQueries? credentialQueries = null,
         IPostExitProviderQueries? postExitProviderQueries = null)
     {
-        WorkerOptions options = workerOptions ?? new WorkerOptions
-        {
-            Image = "test-image:latest",
-        };
+        WorkerOptions options = workerOptions ?? new WorkerOptions();
 
         return new IssueClaimedHandler(
             _dbContext,
@@ -371,7 +368,6 @@ public sealed class HandleAsync : IAsyncDisposable
                 orchestrator: orchestrator,
                 workerOptions: new WorkerOptions
                 {
-                    Image = "test-image:latest",
                     Mounts = new Dictionary<string, string> { ["/container/config"] = hostDir },
                     WritableMounts = new Dictionary<string, string>(),
                 });
@@ -405,7 +401,6 @@ public sealed class HandleAsync : IAsyncDisposable
                 orchestrator: orchestrator,
                 workerOptions: new WorkerOptions
                 {
-                    Image = "test-image:latest",
                     Mounts = new Dictionary<string, string> { ["/container/config"] = hostDir },
                     WritableMounts = new Dictionary<string, string>(),
                 });
@@ -434,7 +429,7 @@ public sealed class HandleAsync : IAsyncDisposable
         IssueClaimedHandler sut = BuildHandler(
             workerOptions: new WorkerOptions
             {
-                Image = "test-image:latest",
+    
                 Mounts = new Dictionary<string, string> { ["/container/config"] = nonExistentPath },
                 WritableMounts = new Dictionary<string, string>(),
             });
@@ -459,7 +454,7 @@ public sealed class HandleAsync : IAsyncDisposable
         IssueClaimedHandler sut = BuildHandler(
             workerOptions: new WorkerOptions
             {
-                Image = "test-image:latest",
+    
                 Mounts = new Dictionary<string, string>(),
                 WritableMounts = new Dictionary<string, string> { ["/container/workspace"] = nonExistentPath },
             });
@@ -490,7 +485,7 @@ public sealed class HandleAsync : IAsyncDisposable
                 orchestrator: orchestrator,
                 workerOptions: new WorkerOptions
                 {
-                    Image = "test-image:latest",
+
                     Mounts = new Dictionary<string, string>(),
                     WritableMounts = new Dictionary<string, string> { ["/container/workspace"] = hostDir },
                 });
@@ -519,7 +514,7 @@ public sealed class HandleAsync : IAsyncDisposable
             orchestrator: orchestrator,
             workerOptions: new WorkerOptions
             {
-                Image = "test-image:latest",
+    
                 Mounts = new Dictionary<string, string>(),
                 WritableMounts = new Dictionary<string, string>(),
             });
@@ -1077,6 +1072,26 @@ public sealed class HandleAsync : IAsyncDisposable
     }
 
     [Fact]
+    public async Task WhenImageTagConfiguredInDb_ContainerSpecImageComesFromDb()
+    {
+        // Arrange
+        const string dbImageTag = "ghcr.io/owner/repo:db-tag-123";
+        StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c-db-image-tag");
+        IssueClaimedHandler sut = BuildHandler(
+            orchestrator: orchestrator,
+            settingsQueries: new StubGlobalSettingsQueries(imageTag: dbImageTag));
+        IssueClaimed @event = BuildEvent();
+
+        // Act
+        await sut.HandleAsync(@event, TestContext.Current.CancellationToken);
+
+        // Assert
+        WorkerContainerSpec? spec = orchestrator.LastSpec;
+        spec.ShouldNotBeNull();
+        spec.Image.ShouldBe(dbImageTag);
+    }
+
+    [Fact]
     public async Task WhenDockerInstalled_SystemPromptEnvVarContainsPrePrSection()
     {
         // Arrange
@@ -1272,7 +1287,8 @@ public sealed class HandleAsync : IAsyncDisposable
     private sealed class StubGlobalSettingsQueries(
         string? systemPromptTemplate = null,
         string? workerPromptTemplate = null,
-        bool installsDocker = false) : IGlobalSettingsQueries
+        bool installsDocker = false,
+        string imageTag = "stub-image:v1") : IGlobalSettingsQueries
     {
         public Task<GlobalSettingsSummary?> GetSettingsAsync(CancellationToken cancellationToken)
             => Task.FromResult<GlobalSettingsSummary?>(null);
@@ -1301,6 +1317,12 @@ public sealed class HandleAsync : IAsyncDisposable
 
         public Task<bool> GetWorkerImageInstallsDockerAsync(CancellationToken cancellationToken)
             => Task.FromResult(installsDocker);
+
+        public Task<string> GetWorkerImageTagAsync(CancellationToken cancellationToken)
+            => Task.FromResult(imageTag);
+
+        public Task<bool> GetWorkerImageBuildEnabledAsync(CancellationToken cancellationToken)
+            => Task.FromResult(false);
 
         public Task<IReadOnlyDictionary<string, string>> GetWorkerImageBuildArgsAsync(CancellationToken cancellationToken)
             => Task.FromResult(WorkerImageConfiguration.Default.ToBuildArgs());

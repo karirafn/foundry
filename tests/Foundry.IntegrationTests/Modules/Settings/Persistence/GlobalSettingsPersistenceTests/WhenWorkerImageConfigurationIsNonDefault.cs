@@ -29,11 +29,14 @@ public sealed class WhenWorkerImageConfigurationIsNonDefault : IAsyncDisposable
     public async Task WorkerImageConfigurationFlagsRoundTrip()
     {
         // Arrange
-        WorkerImageConfiguration config = new(
-            InstallDotnet: true,
-            InstallAngular: true,
-            InstallChromium: true,
-            InstallDocker: true);
+        WorkerImageConfiguration config = WorkerImageConfiguration.Create(
+            imageTag: "foundry-worker:local",
+            buildEnabled: true,
+            installDotnet: true,
+            installAngular: true,
+            installChromium: true,
+            installDocker: true)
+            .Match(v => v, e => throw new InvalidOperationException(e.Message));
 
         GlobalSettingsId id = await SeedSettingsWithConfigAsync(config);
 
@@ -47,6 +50,52 @@ public sealed class WhenWorkerImageConfigurationIsNonDefault : IAsyncDisposable
             () => reloaded.WorkerImageConfiguration.InstallAngular.ShouldBeTrue(),
             () => reloaded.WorkerImageConfiguration.InstallChromium.ShouldBeTrue(),
             () => reloaded.WorkerImageConfiguration.InstallDocker.ShouldBeTrue());
+    }
+
+    [Fact]
+    public async Task NonDefaultImageTag_RoundTrips()
+    {
+        // Arrange
+        WorkerImageConfiguration config = WorkerImageConfiguration.Create(
+            imageTag: "foundry-worker:custom",
+            buildEnabled: false,
+            installDotnet: false,
+            installAngular: false,
+            installChromium: false,
+            installDocker: false)
+            .Match(v => v, e => throw new InvalidOperationException(e.Message));
+
+        GlobalSettingsId id = await SeedSettingsWithConfigAsync(config);
+
+        // Act
+        GlobalSettings? reloaded = await ReloadSettingsAsync(id);
+
+        // Assert
+        reloaded.ShouldNotBeNull();
+        reloaded.WorkerImageConfiguration.ImageTag.ShouldBe("foundry-worker:custom");
+    }
+
+    [Fact]
+    public async Task BuildEnabledFalse_RoundTrips()
+    {
+        // Arrange
+        WorkerImageConfiguration config = WorkerImageConfiguration.Create(
+            imageTag: "foundry-worker:custom",
+            buildEnabled: false,
+            installDotnet: false,
+            installAngular: false,
+            installChromium: false,
+            installDocker: false)
+            .Match(v => v, e => throw new InvalidOperationException(e.Message));
+
+        GlobalSettingsId id = await SeedSettingsWithConfigAsync(config);
+
+        // Act
+        GlobalSettings? reloaded = await ReloadSettingsAsync(id);
+
+        // Assert
+        reloaded.ShouldNotBeNull();
+        reloaded.WorkerImageConfiguration.BuildEnabled.ShouldBeFalse();
     }
 
     [Fact]

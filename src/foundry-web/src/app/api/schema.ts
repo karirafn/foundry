@@ -526,7 +526,7 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        /** Updates the worker image build flags */
+        /** Updates the worker image tag, build toggle, and build flags */
         put: operations["UpdateWorkerImageConfiguration"];
         post?: never;
         delete?: never;
@@ -670,6 +670,8 @@ export interface components {
             usageLimitResetsAt: null | string;
             isDispatchPaused: boolean;
             autoResumeOnUsageReset: boolean;
+            imageTag: string;
+            buildEnabled: boolean;
             installDotnet: boolean;
             installAngular: boolean;
             installChromium: boolean;
@@ -906,6 +908,8 @@ export interface components {
             maxConcurrentWorkers: number | string;
         };
         UpdateWorkerImageConfigurationRequestBody: {
+            imageTag: string;
+            buildEnabled: boolean;
             installDotnet: boolean;
             installAngular: boolean;
             installChromium: boolean;

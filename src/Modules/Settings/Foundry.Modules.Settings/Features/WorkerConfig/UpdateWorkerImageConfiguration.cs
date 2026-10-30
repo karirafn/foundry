@@ -15,6 +15,8 @@ namespace Foundry.Modules.Settings.Features.WorkerConfig;
 internal static class UpdateWorkerImageConfiguration
 {
     internal sealed record Command(
+        string ImageTag,
+        bool BuildEnabled,
         bool InstallDotnet,
         bool InstallAngular,
         bool InstallChromium,
@@ -37,18 +39,26 @@ internal static class UpdateWorkerImageConfiguration
                 return Result<GlobalSettingsSummary>.Fail(SettingsErrors.NotFound);
             }
 
-            WorkerImageConfiguration config = new(
-                command.InstallDotnet,
-                command.InstallAngular,
-                command.InstallChromium,
-                command.InstallDocker);
+            Result<WorkerImageConfiguration> configResult = WorkerImageConfiguration.Create(
+                imageTag: command.ImageTag,
+                buildEnabled: command.BuildEnabled,
+                installDotnet: command.InstallDotnet,
+                installAngular: command.InstallAngular,
+                installChromium: command.InstallChromium,
+                installDocker: command.InstallDocker);
 
+            if (configResult is not Result<WorkerImageConfiguration>.Success configSuccess)
+            {
+                return Result<GlobalSettingsSummary>.Fail(((Result<WorkerImageConfiguration>.Failure)configResult).Error);
+            }
+
+            WorkerImageConfiguration config = configSuccess.Value;
             bool changed = settings.UpdateWorkerImageConfiguration(config);
 
             if (changed)
             {
                 await integrationEventDispatcher.DispatchAsync(
-                    [new WorkerImageConfigurationChanged()],
+                    [new WorkerImageSettingsChanged()],
                     cancellationToken);
 
                 await dbContext.SaveChangesAsync(cancellationToken);
@@ -61,6 +71,8 @@ internal static class UpdateWorkerImageConfiguration
     internal static class Endpoint
     {
         private sealed record RequestBody(
+            string ImageTag,
+            bool BuildEnabled,
             bool InstallDotnet,
             bool InstallAngular,
             bool InstallChromium,
@@ -74,6 +86,8 @@ internal static class UpdateWorkerImageConfiguration
                     CancellationToken cancellationToken) =>
                 {
                     Command command = new(
+                        body.ImageTag,
+                        body.BuildEnabled,
                         body.InstallDotnet,
                         body.InstallAngular,
                         body.InstallChromium,
@@ -90,7 +104,7 @@ internal static class UpdateWorkerImageConfiguration
                         });
                 })
                 .WithName("UpdateWorkerImageConfiguration")
-                .WithSummary("Updates the worker image build flags")
+                .WithSummary("Updates the worker image tag, build toggle, and build flags")
                 .Produces<GlobalSettingsSummary>()
                 .ProducesProblem(StatusCodes.Status404NotFound)
                 .ProducesProblem(StatusCodes.Status400BadRequest);

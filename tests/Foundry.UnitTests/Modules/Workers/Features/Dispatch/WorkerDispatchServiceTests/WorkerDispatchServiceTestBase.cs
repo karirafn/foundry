@@ -10,7 +10,6 @@ using Foundry.Modules.Workers.Contracts;
 using Foundry.Modules.Workers.Domain.Entities;
 using Foundry.Modules.Workers.Domain.Entities.States;
 using Foundry.Modules.Workers.Domain.ValueObjects;
-using Foundry.Modules.Workers.Features;
 using Foundry.Modules.Workers.Features.Orchestration;
 using Foundry.Modules.Workers.Features.Outcome;
 using Foundry.Modules.Workers.Features.ContainerSpec;
@@ -81,7 +80,6 @@ public abstract class WorkerDispatchServiceTestBase : IAsyncDisposable
 
     internal WorkerDispatchService BuildService(
         IWorkerOrchestrator orchestrator,
-        WorkerOptions? workerOptions = null,
         IIntegrationEventDispatcher? integrationEventDispatcher = null,
         IIntegrationEventProcessor? integrationEventProcessor = null,
         IGlobalSettingsQueries? settingsQueries = null,
@@ -310,6 +308,12 @@ public abstract class WorkerDispatchServiceTestBase : IAsyncDisposable
             => Task.FromResult(ImageBuildStatus.Idle);
 
         public Task<bool> GetWorkerImageInstallsDockerAsync(CancellationToken cancellationToken)
+            => Task.FromResult(false);
+
+        public Task<string> GetWorkerImageTagAsync(CancellationToken cancellationToken)
+            => Task.FromResult(string.Empty);
+
+        public Task<bool> GetWorkerImageBuildEnabledAsync(CancellationToken cancellationToken)
             => Task.FromResult(false);
 
         public Task<IReadOnlyDictionary<string, string>> GetWorkerImageBuildArgsAsync(CancellationToken cancellationToken)

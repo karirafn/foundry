@@ -45,11 +45,15 @@ public sealed class GetWorkerImageInstallsDockerAsync : IAsyncDisposable
         await using (FoundryDbContext seedDb = CreateDbContext())
         {
             GlobalSettings settings = GlobalSettings.Create();
-            settings.UpdateWorkerImageConfiguration(new WorkerImageConfiguration(
-                InstallDotnet: false,
-                InstallAngular: false,
-                InstallChromium: false,
-                InstallDocker: true));
+            WorkerImageConfiguration config = WorkerImageConfiguration.Create(
+                imageTag: "foundry-worker:local",
+                buildEnabled: true,
+                installDotnet: false,
+                installAngular: false,
+                installChromium: false,
+                installDocker: true)
+                .Match(v => v, e => throw new InvalidOperationException(e.Message));
+            settings.UpdateWorkerImageConfiguration(config);
             seedDb.Set<GlobalSettings>().Add(settings);
             await seedDb.SaveChangesAsync(TestContext.Current.CancellationToken);
         }
@@ -71,11 +75,15 @@ public sealed class GetWorkerImageInstallsDockerAsync : IAsyncDisposable
         await using (FoundryDbContext seedDb = CreateDbContext())
         {
             GlobalSettings settings = GlobalSettings.Create();
-            settings.UpdateWorkerImageConfiguration(new WorkerImageConfiguration(
-                InstallDotnet: false,
-                InstallAngular: false,
-                InstallChromium: false,
-                InstallDocker: false));
+            WorkerImageConfiguration config = WorkerImageConfiguration.Create(
+                imageTag: "foundry-worker:local",
+                buildEnabled: true,
+                installDotnet: false,
+                installAngular: false,
+                installChromium: false,
+                installDocker: false)
+                .Match(v => v, e => throw new InvalidOperationException(e.Message));
+            settings.UpdateWorkerImageConfiguration(config);
             seedDb.Set<GlobalSettings>().Add(settings);
             await seedDb.SaveChangesAsync(TestContext.Current.CancellationToken);
         }

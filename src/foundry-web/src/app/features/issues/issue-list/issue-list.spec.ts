@@ -49,6 +49,8 @@ const mockSettingsResponse: GlobalSettingsResponse = {
   usageLimitResetsAt: null,
   isDispatchPaused: false,
   autoResumeOnUsageReset: true,
+  imageTag: 'foundry-worker:local',
+  buildEnabled: true,
   installDotnet: false,
   installAngular: false,
   installChromium: false,

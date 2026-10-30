@@ -101,6 +101,12 @@ public sealed class ImageBuildGate : WorkerDispatchServiceTestBase
         public Task<bool> GetWorkerImageInstallsDockerAsync(CancellationToken cancellationToken)
             => Task.FromResult(false);
 
+        public Task<string> GetWorkerImageTagAsync(CancellationToken cancellationToken)
+            => Task.FromResult(string.Empty);
+
+        public Task<bool> GetWorkerImageBuildEnabledAsync(CancellationToken cancellationToken)
+            => Task.FromResult(false);
+
         public Task<IReadOnlyDictionary<string, string>> GetWorkerImageBuildArgsAsync(CancellationToken cancellationToken)
             => Task.FromResult(WorkerImageConfiguration.Default.ToBuildArgs());
 

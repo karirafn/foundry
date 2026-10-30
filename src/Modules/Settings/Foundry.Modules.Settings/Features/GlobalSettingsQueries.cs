@@ -108,6 +108,28 @@ internal sealed class GlobalSettingsQueries(DbContext dbContext) : IGlobalSettin
         return settings?.WorkerImageConfiguration.InstallDocker ?? false;
     }
 
+    public async Task<string> GetWorkerImageTagAsync(CancellationToken cancellationToken)
+    {
+        // WorkerImageConfiguration is stored as a JSON blob and cannot be projected
+        // into a SQL column — the full entity must be loaded and the value read in memory.
+        GlobalSettings? settings = await dbContext.Set<GlobalSettings>()
+            .AsNoTracking()
+            .FirstOrDefaultAsync(cancellationToken);
+
+        return settings?.WorkerImageConfiguration.ImageTag ?? WorkerImageConfiguration.Default.ImageTag;
+    }
+
+    public async Task<bool> GetWorkerImageBuildEnabledAsync(CancellationToken cancellationToken)
+    {
+        // WorkerImageConfiguration is stored as a JSON blob and cannot be projected
+        // into a SQL column — the full entity must be loaded and the value read in memory.
+        GlobalSettings? settings = await dbContext.Set<GlobalSettings>()
+            .AsNoTracking()
+            .FirstOrDefaultAsync(cancellationToken);
+
+        return settings?.WorkerImageConfiguration.BuildEnabled ?? WorkerImageConfiguration.Default.BuildEnabled;
+    }
+
     public async Task<IReadOnlyDictionary<string, string>> GetWorkerImageBuildArgsAsync(
         CancellationToken cancellationToken)
     {

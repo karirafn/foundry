@@ -18,7 +18,6 @@ public sealed class EnsureCredentialVolumeAsync
 {
     private static WorkerOptions DefaultOptions() => new()
     {
-        Image = "test-image:latest",
         MemoryLimitMb = 512,
         CpuLimit = 1.5,
         PidsLimit = 256,
