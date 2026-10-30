@@ -138,4 +138,35 @@ public sealed class ImageBuildRetryPolicyTests
         // Assert
         result.ShouldBe(MaxBackoff);
     }
+
+    [Fact]
+    public void ProductionConstants_FirstAttemptDelayIsThirtySeconds()
+    {
+        // Arrange — verify the production constants hardcoded in WorkerImageRebuildService
+        // produce the expected 30s initial backoff so a constant change is caught immediately.
+        ImageBuildRetryPolicy policy = new(
+            WorkerImageRebuildService.ProductionInitialBackoff,
+            WorkerImageRebuildService.ProductionMaxBackoff);
+
+        // Act
+        TimeSpan result = policy.ComputeBackoff(1);
+
+        // Assert
+        result.ShouldBe(TimeSpan.FromSeconds(30));
+    }
+
+    [Fact]
+    public void ProductionConstants_LargeAttemptCapsAtFifteenMinutes()
+    {
+        // Arrange — verify the production max-backoff cap is 15min.
+        ImageBuildRetryPolicy policy = new(
+            WorkerImageRebuildService.ProductionInitialBackoff,
+            WorkerImageRebuildService.ProductionMaxBackoff);
+
+        // Act
+        TimeSpan result = policy.ComputeBackoff(100);
+
+        // Assert
+        result.ShouldBe(TimeSpan.FromMinutes(15));
+    }
 }

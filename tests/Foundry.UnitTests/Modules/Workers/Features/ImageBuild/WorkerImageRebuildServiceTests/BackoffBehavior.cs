@@ -27,10 +27,22 @@ public sealed class BackoffBehavior
         IIntegrationEventDispatcher? dispatcher = null)
         => BuildServiceCore(queue, dispatcher, contentRootPath: FailingContentRootPath);
 
+    private static WorkerImageRebuildService BuildServiceWithFastRetryPolicy(
+        IWorkerImageRebuildQueue queue,
+        IIntegrationEventDispatcher? dispatcher = null)
+        => BuildServiceCore(
+            queue,
+            dispatcher,
+            contentRootPath: FailingContentRootPath,
+            testOnlyRetryPolicy: new ImageBuildRetryPolicy(
+                InitialBackoff: TimeSpan.FromMilliseconds(5),
+                MaxBackoff: TimeSpan.FromMilliseconds(10)));
+
     private static WorkerImageRebuildService BuildServiceCore(
         IWorkerImageRebuildQueue queue,
         IIntegrationEventDispatcher? dispatcher,
-        string contentRootPath = FailingContentRootPath)
+        string contentRootPath = FailingContentRootPath,
+        ImageBuildRetryPolicy? testOnlyRetryPolicy = null)
     {
         ServiceCollection services = new();
         services.AddScoped<IGlobalSettingsQueries>(_ => new StubGlobalSettingsQueries());
@@ -39,12 +51,13 @@ public sealed class BackoffBehavior
 
         ServiceProvider sp = services.BuildServiceProvider();
 
-        return new WorkerImageRebuildService(
-            queue,
-            sp.GetRequiredService<IServiceScopeFactory>(),
-            new NullImageOperations(),
-            new StubHostEnvironment(contentRootPath),
-            NullLogger<WorkerImageRebuildService>.Instance);
+        IServiceScopeFactory factory = sp.GetRequiredService<IServiceScopeFactory>();
+        NullImageOperations images = new();
+        StubHostEnvironment env = new(contentRootPath);
+
+        return testOnlyRetryPolicy is null
+            ? new WorkerImageRebuildService(queue, factory, images, env, NullLogger<WorkerImageRebuildService>.Instance)
+            : new WorkerImageRebuildService(queue, factory, images, env, NullLogger<WorkerImageRebuildService>.Instance, testOnlyRetryPolicy);
     }
 
     [Fact]
@@ -178,6 +191,38 @@ public sealed class BackoffBehavior
 
         // Assert — failure event dispatched confirms the retry was scheduled.
         failureNotified.ShouldBeTrue("the service should have dispatched an ImageBuildOutcomeFailed event after build failure");
+    }
+
+    [Fact]
+    public async Task WhenBuildFailsAndDelayElapses_ReEnqueuesRebuild()
+    {
+        // Arrange — use a fast retry policy (5ms/10ms) so the delayed retry fires in test time
+        // without 30-second production waits.  The test verifies that ScheduleDelayedRetryAsync
+        // actually calls TryEnqueue after the delay, closing the gap the old configurable test covered.
+        using SignallingDispatcher dispatcher = new();
+        using ControlledQueue queue = new();
+        WorkerImageRebuildService sut = BuildServiceWithFastRetryPolicy(queue, dispatcher);
+
+        using CancellationTokenSource cts = new();
+        await sut.StartAsync(cts.Token);
+
+        // Signal one rebuild — the build will fail (non-existent context path).
+        queue.Enqueue();
+
+        // Wait for the failure event so the delayed retry task is running.
+        bool failureNotified = await dispatcher.WaitForFailureEventAsync(TimeSpan.FromSeconds(5));
+        failureNotified.ShouldBeTrue("the service should have dispatched an ImageBuildOutcomeFailed event");
+
+        // Wait for ScheduleDelayedRetryAsync to call TryEnqueue after the 5ms delay.
+        bool reEnqueued = await queue.WaitForTryEnqueueAsync(TimeSpan.FromSeconds(5));
+
+        await cts.CancelAsync();
+        await sut.StopAsync(CancellationToken.None);
+
+        // Assert — the delayed retry path called TryEnqueue, re-enqueuing the rebuild.
+        reEnqueued.ShouldBeTrue("ScheduleDelayedRetryAsync should have called TryEnqueue after the backoff delay");
+        queue.TryEnqueueCount.ShouldBeGreaterThanOrEqualTo(1,
+            "TryEnqueue must have been called at least once by the delayed retry");
     }
 
     // -------------------------------------------------------------------------

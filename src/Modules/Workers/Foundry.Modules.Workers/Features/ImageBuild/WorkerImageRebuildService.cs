@@ -37,10 +37,29 @@ internal sealed class WorkerImageRebuildService(
     private const int LogTailLines = 200;
     private const string ContextPath = "workers";
 
-    private static readonly TimeSpan InitialBackoff = TimeSpan.FromSeconds(30);
-    private static readonly TimeSpan MaxBackoff = TimeSpan.FromMinutes(15);
+    internal static readonly TimeSpan ProductionInitialBackoff = TimeSpan.FromSeconds(30);
+    internal static readonly TimeSpan ProductionMaxBackoff = TimeSpan.FromMinutes(15);
 
-    private readonly ImageBuildRetryPolicy _retryPolicy = new(InitialBackoff, MaxBackoff);
+    // Production retry policy — computed from the constants above.
+    // Tests inject a fast-firing policy via the internal constructor overload below.
+    private readonly ImageBuildRetryPolicy _retryPolicy = new(ProductionInitialBackoff, ProductionMaxBackoff);
+
+    /// <summary>
+    /// Test-only constructor overload. Passes an explicit <see cref="ImageBuildRetryPolicy"/> so tests
+    /// can inject a fast-firing policy (millisecond delays) without reintroducing <c>appsettings</c> configurability.
+    /// DI always uses the primary constructor above via <see cref="ActivatorUtilitiesConstructorAttribute"/>.
+    /// </summary>
+    internal WorkerImageRebuildService(
+        IWorkerImageRebuildQueue rebuildQueue,
+        IServiceScopeFactory scopeFactory,
+        IImageOperations imageOperations,
+        IHostEnvironment hostEnvironment,
+        ILogger<WorkerImageRebuildService> logger,
+        ImageBuildRetryPolicy retryPolicy)
+        : this(rebuildQueue, scopeFactory, imageOperations, hostEnvironment, logger)
+    {
+        _retryPolicy = retryPolicy;
+    }
 
     // Pending retry CTS — mutations guarded by _stateLock.
     private readonly Lock _stateLock = new();
