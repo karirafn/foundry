@@ -84,7 +84,57 @@ describe('SettingsPromptsComponent', () => {
     expect(workerTextarea.rows).toBe(4);
   });
 
-  it('should set aria-describedby="prompts-error" on both textareas', () => {
+  it('should set aria-describedby on system and branch textareas to include prompts-error', () => {
+    // Arrange
+    const { fixture, httpMock } = setupSettingsPage(SettingsPromptsComponent);
+    fixture.detectChanges();
+    flushSettings(httpMock);
+    fixture.detectChanges();
+
+    // Act
+    const el = fixture.nativeElement as HTMLElement;
+    const systemTextarea = el.querySelector('#systemPromptTemplate') as HTMLTextAreaElement;
+    const branchTextarea = el.querySelector('#branchNamingInstruction') as HTMLTextAreaElement;
+
+    // Assert
+    expect(systemTextarea.getAttribute('aria-describedby')).toContain('prompts-error');
+    expect(branchTextarea.getAttribute('aria-describedby')).toContain('prompts-error');
+  });
+
+  it('should set aria-describedby on worker textarea to include both prompts-error and workerPromptHint', () => {
+    // Arrange
+    const { fixture, httpMock } = setupSettingsPage(SettingsPromptsComponent);
+    fixture.detectChanges();
+    flushSettings(httpMock);
+    fixture.detectChanges();
+
+    // Act
+    const el = fixture.nativeElement as HTMLElement;
+    const workerTextarea = el.querySelector('#workerPromptTemplate') as HTMLTextAreaElement;
+    const describedBy = workerTextarea.getAttribute('aria-describedby') ?? '';
+
+    // Assert
+    expect(describedBy).toContain('workerPromptHint');
+    expect(describedBy).toContain('prompts-error');
+  });
+
+  it('should render a hint under the worker textarea indicating it must include {issueNumber}', () => {
+    // Arrange
+    const { fixture, httpMock } = setupSettingsPage(SettingsPromptsComponent);
+    fixture.detectChanges();
+    flushSettings(httpMock);
+    fixture.detectChanges();
+
+    // Act
+    const el = fixture.nativeElement as HTMLElement;
+    const hint = el.querySelector('#workerPromptHint');
+
+    // Assert
+    expect(hint).toBeTruthy();
+    expect(hint?.textContent).toContain('{issueNumber}');
+  });
+
+  it('should not set aria-invalid on textareas when there is no save error', () => {
     // Arrange
     const { fixture, httpMock } = setupSettingsPage(SettingsPromptsComponent);
     fixture.detectChanges();
@@ -95,10 +145,34 @@ describe('SettingsPromptsComponent', () => {
     const el = fixture.nativeElement as HTMLElement;
     const systemTextarea = el.querySelector('#systemPromptTemplate') as HTMLTextAreaElement;
     const workerTextarea = el.querySelector('#workerPromptTemplate') as HTMLTextAreaElement;
+    const branchTextarea = el.querySelector('#branchNamingInstruction') as HTMLTextAreaElement;
 
     // Assert
-    expect(systemTextarea.getAttribute('aria-describedby')).toBe('prompts-error');
-    expect(workerTextarea.getAttribute('aria-describedby')).toBe('prompts-error');
+    expect(systemTextarea.getAttribute('aria-invalid')).toBeNull();
+    expect(workerTextarea.getAttribute('aria-invalid')).toBeNull();
+    expect(branchTextarea.getAttribute('aria-invalid')).toBeNull();
+  });
+
+  it('should set aria-invalid="true" on all textareas when prompts save fails', () => {
+    // Arrange
+    const { fixture, service, httpMock } = setupSettingsPage(SettingsPromptsComponent);
+    fixture.detectChanges();
+    flushSettings(httpMock);
+    fixture.detectChanges();
+
+    // Act
+    service.updatePromptTemplates({ systemPromptTemplate: 'sys', workerPromptTemplate: 'worker', branchNamingInstruction: 'feat/branch' });
+    httpMock.expectOne('/api/settings/prompts').flush('Bad Request', {
+      status: 400,
+      statusText: 'Bad Request',
+    });
+    fixture.detectChanges();
+
+    // Assert
+    const el = fixture.nativeElement as HTMLElement;
+    expect((el.querySelector('#systemPromptTemplate') as HTMLTextAreaElement).getAttribute('aria-invalid')).toBe('true');
+    expect((el.querySelector('#workerPromptTemplate') as HTMLTextAreaElement).getAttribute('aria-invalid')).toBe('true');
+    expect((el.querySelector('#branchNamingInstruction') as HTMLTextAreaElement).getAttribute('aria-invalid')).toBe('true');
   });
 
   it('should render a branch naming instruction input with id="branchNamingInstruction"', () => {

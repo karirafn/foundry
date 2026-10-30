@@ -10,6 +10,7 @@ import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { signal } from '@angular/core';
 import { NEVER } from 'rxjs';
+import { GlobalSettingsResponse, ImageBuildStatus } from '../../../core/models/settings.model';
 import { SettingsService } from '../../../core/services/settings.service';
 import { SystemSignalRService } from '../../../core/services/system-signalr.service';
 import { RateBudgetService } from '../../../core/services/rate-budget.service';
@@ -33,7 +34,17 @@ export const mockRateBudgetService = {
 // Fixture constants shared across settings page specs
 // ---------------------------------------------------------------------------
 
-export const IMAGE_FLAGS_DEFAULTS = {
+export const IMAGE_FLAGS_DEFAULTS: {
+  installDotnet: boolean;
+  installAngular: boolean;
+  installChromium: boolean;
+  installDocker: boolean;
+  imageBuildStatus: ImageBuildStatus;
+  lastImageBuildError: string | null;
+  hasUsableImage: boolean;
+  nextRetryAt: string | null;
+  attempt: number;
+} = {
   installDotnet: false,
   installAngular: false,
   installChromium: false,
@@ -45,14 +56,14 @@ export const IMAGE_FLAGS_DEFAULTS = {
   attempt: 0,
 };
 
-export const BASE_RESPONSE = {
+export const BASE_RESPONSE: Partial<GlobalSettingsResponse> = {
   usageLimitResetsAt: null,
   isDispatchPaused: false,
   autoResumeOnUsageReset: true,
   ...IMAGE_FLAGS_DEFAULTS,
-  systemPromptTemplate: null,
-  workerPromptTemplate: null,
-  branchNamingInstruction: null,
+  systemPromptTemplate: '',
+  workerPromptTemplate: '',
+  branchNamingInstruction: '',
 };
 
 export const API_KEY_RESPONSE = {

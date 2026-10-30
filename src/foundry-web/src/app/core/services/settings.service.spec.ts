@@ -683,13 +683,39 @@ describe('SettingsService', () => {
     expect(service.savePromptsSuccess()).toBe(false);
   });
 
-  it('should set savePromptsError to a fixed user-facing string when updatePromptTemplates fails', () => {
+  it('should set savePromptsError to a fixed user-facing string when updatePromptTemplates fails with no detail', () => {
     // Arrange
     service.updatePromptTemplates({ systemPromptTemplate: 'sys', workerPromptTemplate: 'worker', branchNamingInstruction: 'feat/branch' });
     httpMock.expectOne('/api/settings/prompts').flush('Bad Request', {
       status: 400,
       statusText: 'Bad Request',
     });
+
+    // Assert
+    expect(service.savePromptsError()).toBe('Failed to save prompt templates');
+  });
+
+  it('should surface the server detail message when updatePromptTemplates fails with a ProblemDetails body', () => {
+    // Arrange
+    service.updatePromptTemplates({ systemPromptTemplate: 'sys', workerPromptTemplate: 'worker', branchNamingInstruction: 'feat/branch' });
+    httpMock.expectOne('/api/settings/prompts').flush(
+      { type: 'tag:foundry,2026:problems/Settings.WorkerPromptMissingIssueNumber', title: 'Bad Request', status: 400, detail: 'The worker prompt template must contain the {issueNumber} placeholder.' },
+      { status: 400, statusText: 'Bad Request' }
+    );
+
+    // Assert
+    expect(service.savePromptsError()).toBe('The worker prompt template must contain the {issueNumber} placeholder.');
+    expect(service.savingPrompts()).toBe(false);
+    expect(service.savePromptsSuccess()).toBe(false);
+  });
+
+  it('should fall back to the generic constant when updatePromptTemplates fails with a non-detail error body', () => {
+    // Arrange
+    service.updatePromptTemplates({ systemPromptTemplate: 'sys', workerPromptTemplate: 'worker', branchNamingInstruction: 'feat/branch' });
+    httpMock.expectOne('/api/settings/prompts').flush(
+      { title: 'Bad Request' },
+      { status: 400, statusText: 'Bad Request' }
+    );
 
     // Assert
     expect(service.savePromptsError()).toBe('Failed to save prompt templates');

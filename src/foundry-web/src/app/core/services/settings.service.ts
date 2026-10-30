@@ -366,7 +366,7 @@ export class SettingsService {
       },
       error: (err: HttpErrorResponse) => {
         console.error(err);
-        this._savePromptsErrorSignal.set(SAVE_PROMPTS_ERROR);
+        this._savePromptsErrorSignal.set(extractErrorMessage(err) ?? SAVE_PROMPTS_ERROR);
         this._savingPromptsSignal.set(false);
       },
     });

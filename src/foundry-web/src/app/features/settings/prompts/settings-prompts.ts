@@ -33,6 +33,7 @@ import { UnsavedChanges } from '../guards/unsaved-changes.guard';
               [ngModel]="_systemPromptValue()"
               (ngModelChange)="_systemPromptValue.set($event)"
               aria-describedby="prompts-error"
+              [attr.aria-invalid]="!!settingsService.savePromptsError() || null"
             ></textarea>
           </div>
 
@@ -44,8 +45,10 @@ import { UnsavedChanges } from '../guards/unsaved-changes.guard';
               rows="4"
               [ngModel]="_workerPromptValue()"
               (ngModelChange)="_workerPromptValue.set($event)"
-              aria-describedby="prompts-error"
+              aria-describedby="workerPromptHint prompts-error"
+              [attr.aria-invalid]="!!settingsService.savePromptsError() || null"
             ></textarea>
+            <span id="workerPromptHint" class="general-settings__field-hint">Must include &#123;issueNumber&#125;.</span>
           </div>
 
           <div class="general-settings__field">
@@ -57,6 +60,7 @@ import { UnsavedChanges } from '../guards/unsaved-changes.guard';
               [ngModel]="_branchNamingValue()"
               (ngModelChange)="_branchNamingValue.set($event)"
               aria-describedby="prompts-error"
+              [attr.aria-invalid]="!!settingsService.savePromptsError() || null"
             ></textarea>
           </div>
 
