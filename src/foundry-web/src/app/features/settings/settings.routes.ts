@@ -7,11 +7,13 @@ export const SETTINGS_ROUTES: Routes = [
     loadComponent: () =>
       import('./settings-layout/settings-layout').then((m) => m.SettingsLayoutComponent),
     children: [
-      { path: '', redirectTo: 'general', pathMatch: 'full' },
+      { path: '', redirectTo: 'dispatch', pathMatch: 'full' },
+      { path: 'general', redirectTo: 'dispatch', pathMatch: 'full' },
       {
-        path: 'general',
+        path: 'dispatch',
         loadComponent: () =>
-          import('./general/settings-general').then((m) => m.SettingsGeneralComponent),
+          import('./dispatch/settings-dispatch').then((m) => m.SettingsDispatchComponent),
+        canDeactivate: [unsavedChangesGuard],
       },
       {
         path: 'worker-environment',
