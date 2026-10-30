@@ -1,7 +1,6 @@
 using System.Text.RegularExpressions;
 
 using Foundry.Modules.Workers.Features.ContainerSpec;
-using Foundry.Modules.Workers.Features.ImageBuild;
 
 using Microsoft.Extensions.Options;
 
@@ -27,15 +26,6 @@ internal sealed partial class WorkerOptionsValidator : IValidateOptions<WorkerOp
     {
         List<string> failures = [];
 
-        if (string.IsNullOrWhiteSpace(options.Image))
-        {
-            failures.Add("Workers:Image must be non-empty.");
-        }
-        else if (options.Image.EndsWith(":latest", StringComparison.OrdinalIgnoreCase))
-        {
-            failures.Add("Workers:Image must not use the ':latest' tag. Pin to a specific version tag or digest for reproducible builds.");
-        }
-
         ValidateMountDictionary(options.Mounts, "Workers:Mounts", failures);
         ValidateMountDictionary(options.WritableMounts, "Workers:WritableMounts", failures);
 
@@ -53,7 +43,6 @@ internal sealed partial class WorkerOptionsValidator : IValidateOptions<WorkerOp
         }
 
         ValidateSettings(options.Settings, failures);
-        ValidateImageBuild(options.ImageBuild, failures);
 
         return failures.Count > 0
             ? ValidateOptionsResult.Fail(failures)
@@ -118,29 +107,6 @@ internal sealed partial class WorkerOptionsValidator : IValidateOptions<WorkerOp
     {
         return path.StartsWith('/')
             || (path.Length >= 3 && char.IsLetter(path[0]) && path[1] == ':' && (path[2] == '\\' || path[2] == '/'));
-    }
-
-    private static void ValidateImageBuild(ImageBuildOptions imageBuild, List<string> failures)
-    {
-        if (!imageBuild.Enabled)
-        {
-            return;
-        }
-
-        if (string.IsNullOrWhiteSpace(imageBuild.ContextPath))
-        {
-            failures.Add("Workers:ImageBuild:ContextPath must be non-empty when ImageBuild is enabled.");
-        }
-        else if (IsAbsolutePath(imageBuild.ContextPath))
-        {
-            failures.Add(
-                "Workers:ImageBuild:ContextPath must be a relative path. " +
-                "It is resolved against the solution root at startup.");
-        }
-        else if (ContainsPathTraversal(imageBuild.ContextPath))
-        {
-            failures.Add("Workers:ImageBuild:ContextPath must not contain path traversal segments (..).");
-        }
     }
 
     private static bool ContainsPathTraversal(string path)

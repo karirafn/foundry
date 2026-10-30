@@ -60,6 +60,10 @@ internal sealed class GlobalSettingsConfiguration : IEntityTypeConfiguration<Glo
             config => SerializeWorkerImageConfiguration(config),
             json => DeserializeWorkerImageConfiguration(json));
 
+        // WorkerImageConfiguration is serialized as a single JSON TEXT column. HasMaxLength is
+        // inapplicable here — it governs individual varchar/nvarchar column widths, not a JSON blob.
+        // The image tag is capped at 255 characters (the Docker reference limit) by domain logic
+        // in WorkerImageConfiguration.Create, enforced via the MaxImageTagLength constant.
         builder.Property(s => s.WorkerImageConfiguration)
             .HasConversion(workerImageConfigConverter)
             .HasColumnType("TEXT")
@@ -112,8 +116,33 @@ internal sealed class GlobalSettingsConfiguration : IEntityTypeConfiguration<Glo
         => JsonSerializer.Serialize(config);
 
     private static WorkerImageConfiguration DeserializeWorkerImageConfiguration(string json)
-        => JsonSerializer.Deserialize<WorkerImageConfiguration>(json)
-            ?? WorkerImageConfiguration.Default;
+    {
+        WorkerImageConfiguration? config = JsonSerializer.Deserialize<WorkerImageConfiguration>(json);
+
+        if (config is null)
+        {
+            return WorkerImageConfiguration.Default;
+        }
+
+        // Rows written before the ImageTag/BuildEnabled fields were added have a null/empty ImageTag.
+        // Patch in the Default values for those two fields while preserving the existing install flags,
+        // so existing rows load correctly until the AddWorkerImageTagAndBuildToggle backfill migration runs.
+        if (string.IsNullOrWhiteSpace(config.ImageTag))
+        {
+            return WorkerImageConfiguration.Create(
+                    imageTag: WorkerImageConfiguration.Default.ImageTag,
+                    buildEnabled: WorkerImageConfiguration.Default.BuildEnabled,
+                    installDotnet: config.InstallDotnet,
+                    installAngular: config.InstallAngular,
+                    installChromium: config.InstallChromium,
+                    installDocker: config.InstallDocker)
+                .Match(
+                    onSuccess: v => v,
+                    onFailure: e => WorkerImageConfiguration.Default);
+        }
+
+        return config;
+    }
 
     private static string SerializeWorkerPrompts(WorkerPrompts prompts)
         => JsonSerializer.Serialize(prompts);

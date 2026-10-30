@@ -19,6 +19,8 @@ export interface LoginSessionUpdate {
 }
 
 export interface WorkerImageFlags {
+  imageTag: string;
+  buildEnabled: boolean;
   installDotnet: boolean;
   installAngular: boolean;
   installChromium: boolean;
@@ -73,6 +75,8 @@ export interface GlobalSettingsResponse {
   usageLimitResetsAt: string | null;
   isDispatchPaused: boolean;
   autoResumeOnUsageReset: boolean;
+  imageTag: string;
+  buildEnabled: boolean;
   installDotnet: boolean;
   installAngular: boolean;
   installChromium: boolean;

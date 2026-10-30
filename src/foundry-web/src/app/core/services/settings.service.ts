@@ -464,6 +464,8 @@ export class SettingsService {
 
   private _mapToWorkerImageFlags(response: GlobalSettingsResponse): WorkerImageFlags {
     return {
+      imageTag: response.imageTag,
+      buildEnabled: response.buildEnabled,
       installDotnet: response.installDotnet,
       installAngular: response.installAngular,
       installChromium: response.installChromium,

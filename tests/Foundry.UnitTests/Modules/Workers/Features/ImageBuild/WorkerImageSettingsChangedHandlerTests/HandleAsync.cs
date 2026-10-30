@@ -5,7 +5,7 @@ using Shouldly;
 
 using Xunit;
 
-namespace Foundry.UnitTests.Modules.Workers.Features.ImageBuild.WorkerImageConfigurationChangedHandlerTests;
+namespace Foundry.UnitTests.Modules.Workers.Features.ImageBuild.WorkerImageSettingsChangedHandlerTests;
 
 public sealed class HandleAsync
 {
@@ -14,10 +14,10 @@ public sealed class HandleAsync
     {
         // Arrange
         SpyWorkerImageRebuildQueue queue = new();
-        WorkerImageConfigurationChangedHandler sut = new(queue);
+        WorkerImageSettingsChangedHandler sut = new(queue);
 
         // Act
-        await sut.HandleAsync(new WorkerImageConfigurationChanged(), TestContext.Current.CancellationToken);
+        await sut.HandleAsync(new WorkerImageSettingsChanged(), TestContext.Current.CancellationToken);
 
         // Assert
         queue.RequestImmediateRebuildCalled.ShouldBeTrue();
@@ -28,12 +28,12 @@ public sealed class HandleAsync
     {
         // Arrange
         SpyWorkerImageRebuildQueue queue = new();
-        WorkerImageConfigurationChangedHandler sut = new(queue);
+        WorkerImageSettingsChangedHandler sut = new(queue);
         bool eventRaised = false;
         queue.ImmediateRebuildRequested += () => eventRaised = true;
 
         // Act
-        await sut.HandleAsync(new WorkerImageConfigurationChanged(), TestContext.Current.CancellationToken);
+        await sut.HandleAsync(new WorkerImageSettingsChanged(), TestContext.Current.CancellationToken);
 
         // Assert
         eventRaised.ShouldBeTrue();

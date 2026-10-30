@@ -2,7 +2,6 @@ using Foundry.Modules.Workers.Contracts;
 using Foundry.Modules.Workers.Domain.Entities;
 using Foundry.Modules.Workers.Domain.Entities.States;
 using Foundry.Modules.Workers.Domain.ValueObjects;
-using Foundry.Modules.Workers.Features;
 using Foundry.Modules.Workers.Features.Orchestration;
 using Foundry.Modules.Workers.Features.ContainerSpec;
 using Foundry.Modules.Workers.Features.Dispatch;
@@ -19,17 +18,10 @@ namespace Foundry.UnitTests.Modules.Workers.Features.Dispatch.WorkerDispatchServ
 
 public sealed class MonitorActiveRuns : WorkerDispatchServiceTestBase
 {
-    private WorkerDispatchService BuildService(
-        MonitoringStubWorkerOrchestrator orchestrator,
-        WorkerOptions? workerOptions = null)
+    private WorkerDispatchService BuildService(MonitoringStubWorkerOrchestrator orchestrator)
     {
-        WorkerOptions options = workerOptions ?? new WorkerOptions
-        {
-            Image = "test-image:latest",
-        };
-
         // Delegates to base.BuildService — accesses inherited instance state.
-        return base.BuildService(orchestrator, options);
+        return base.BuildService(orchestrator);
     }
 
     [Fact]

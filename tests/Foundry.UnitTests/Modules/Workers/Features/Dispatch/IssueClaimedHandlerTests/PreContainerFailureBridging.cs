@@ -106,7 +106,7 @@ public sealed class PreContainerFailureBridging : IAsyncDisposable
             _dbContext,
             orchestrator ?? new AlwaysFailingOrchestrator(),
             domainDispatcher,
-            Options.Create(new WorkerOptions { Image = "test-image:latest" }),
+            Options.Create(new WorkerOptions()),
             new StubGlobalSettingsQueries(),
             new StubCredentialQueries(("ANTHROPIC_API_KEY", "test-key")),
             postExitProviderQueries ?? new BranchCreationFailsQueries(),
@@ -353,6 +353,12 @@ public sealed class PreContainerFailureBridging : IAsyncDisposable
             => Task.FromResult(ImageBuildStatus.Idle);
 
         public Task<bool> GetWorkerImageInstallsDockerAsync(CancellationToken cancellationToken)
+            => Task.FromResult(false);
+
+        public Task<string> GetWorkerImageTagAsync(CancellationToken cancellationToken)
+            => Task.FromResult(string.Empty);
+
+        public Task<bool> GetWorkerImageBuildEnabledAsync(CancellationToken cancellationToken)
             => Task.FromResult(false);
 
         public Task<IReadOnlyDictionary<string, string>> GetWorkerImageBuildArgsAsync(CancellationToken cancellationToken)

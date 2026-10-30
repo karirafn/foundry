@@ -1,19 +1,14 @@
 using Foundry.Modules.Workers.Features.ContainerSpec;
-using Foundry.Modules.Workers.Features.ImageBuild;
 
 namespace Foundry.Modules.Workers.Features;
 
 internal sealed class WorkerOptions
 {
-    public string Image { get; set; } = "ghcr.io/anthropics/claude-code";
-
     public IReadOnlyDictionary<string, string> Mounts { get; set; } = new Dictionary<string, string>();
 
     public IReadOnlyDictionary<string, string> WritableMounts { get; set; } = new Dictionary<string, string>();
 
     public WorkerSettingsOptions Settings { get; set; } = new();
-
-    public ImageBuildOptions ImageBuild { get; set; } = new();
 
     /// <summary>Memory limit for worker containers in megabytes.</summary>
     public int MemoryLimitMb { get; set; } = 8192;

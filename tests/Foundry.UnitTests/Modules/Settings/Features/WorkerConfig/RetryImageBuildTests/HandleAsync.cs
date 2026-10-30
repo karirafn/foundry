@@ -52,7 +52,7 @@ public sealed class HandleAsync : IAsyncLifetime
     }
 
     [Fact]
-    public async Task WhenStatusIsFailed_PublishesWorkerImageConfigurationChangedEvent()
+    public async Task WhenStatusIsFailed_PublishesWorkerImageSettingsChangedEvent()
     {
         // Arrange
         GlobalSettings settings = GlobalSettings.Create();
@@ -70,7 +70,7 @@ public sealed class HandleAsync : IAsyncLifetime
 
         // Assert
         result.ShouldBeOfType<Result<GlobalSettingsSummary>.Success>();
-        dispatcher.Captured.ShouldContain(e => e is WorkerImageConfigurationChanged);
+        dispatcher.Captured.ShouldContain(e => e is WorkerImageSettingsChanged);
     }
 
     [Fact]

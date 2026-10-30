@@ -1,5 +1,4 @@
 using Foundry.Modules.Settings.Contracts.Queries;
-using Foundry.Modules.Workers.Features;
 using Foundry.Modules.Workers.Features.ImageBuild;
 using Foundry.Shared;
 
@@ -7,7 +6,6 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging.Abstractions;
-using Microsoft.Extensions.Options;
 
 using Shouldly;
 
@@ -19,7 +17,6 @@ public sealed class StartingAsync
 {
     private static WorkerImageRebuildService BuildService(
         SpyWorkerImageRebuildQueue? queue = null,
-        bool imageBuildEnabled = true,
         bool settingsExists = true)
     {
         ServiceCollection services = new();
@@ -28,22 +25,11 @@ public sealed class StartingAsync
 
         ServiceProvider sp = services.BuildServiceProvider();
 
-        WorkerOptions workerOptions = new()
-        {
-            Image = "test-image:latest",
-            ImageBuild = new ImageBuildOptions
-            {
-                Enabled = imageBuildEnabled,
-                ContextPath = string.Empty,
-            },
-        };
-
         return new WorkerImageRebuildService(
             queue ?? new SpyWorkerImageRebuildQueue(),
             sp.GetRequiredService<IServiceScopeFactory>(),
             new NullImageOperations(),
             new StubHostEnvironment(string.Empty),
-            Options.Create(workerOptions),
             NullLogger<WorkerImageRebuildService>.Instance);
     }
 
@@ -89,17 +75,18 @@ public sealed class StartingAsync
     }
 
     [Fact]
-    public async Task WhenImageBuildDisabled_DoesNotRequestImmediateRebuild()
+    public async Task WhenSettingsExist_RequestsImmediateRebuildRegardlessOfBuildToggle()
     {
-        // Arrange
+        // Arrange — startup enqueues regardless of the build toggle; the queue consumer
+        // reads the toggle and routes to inspect-vs-build accordingly.
         SpyWorkerImageRebuildQueue queue = new();
-        WorkerImageRebuildService sut = BuildService(queue, imageBuildEnabled: false);
+        WorkerImageRebuildService sut = BuildService(queue, settingsExists: true);
 
         // Act
         await ((IHostedLifecycleService)sut).StartingAsync(TestContext.Current.CancellationToken);
 
         // Assert
-        queue.RequestImmediateRebuildCalled.ShouldBeFalse();
+        queue.RequestImmediateRebuildCalled.ShouldBeTrue();
     }
 
     private sealed class SpyWorkerImageRebuildQueue : IWorkerImageRebuildQueue

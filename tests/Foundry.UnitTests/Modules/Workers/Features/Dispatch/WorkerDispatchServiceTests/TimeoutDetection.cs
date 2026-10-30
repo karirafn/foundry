@@ -4,7 +4,6 @@ using Foundry.Modules.Workers.Contracts;
 using Foundry.Modules.Workers.Domain.Entities;
 using Foundry.Modules.Workers.Domain.Entities.States;
 using Foundry.Modules.Workers.Domain.ValueObjects;
-using Foundry.Modules.Workers.Features;
 using Foundry.Modules.Workers.Features.Orchestration;
 using Foundry.Modules.Workers.Features.ContainerSpec;
 using Foundry.Modules.Workers.Features.Dispatch;
@@ -25,15 +24,10 @@ public sealed class TimeoutDetection : WorkerDispatchServiceTestBase
         TimeoutStubWorkerOrchestrator orchestrator,
         int timeoutMinutes = 120)
     {
-        WorkerOptions options = new()
-        {
-            Image = "test-image:latest",
-        };
-
         StubGlobalSettingsQueries settingsQueries = new(maxConcurrent: 3, timeoutMinutes: timeoutMinutes);
 
         // Delegates to base.BuildService — accesses inherited instance state.
-        return base.BuildService(orchestrator, options, settingsQueries: settingsQueries);
+        return base.BuildService(orchestrator, settingsQueries: settingsQueries);
     }
 
     [Fact]

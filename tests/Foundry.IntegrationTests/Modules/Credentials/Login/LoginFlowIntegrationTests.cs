@@ -75,7 +75,6 @@ public sealed class LoginFlowIntegrationTests : IAsyncLifetime
 
         WorkerOptions options = new()
         {
-            Image = LoginImage,
             MemoryLimitMb = 512,
             CpuLimit = 1.0,
             PidsLimit = 256,

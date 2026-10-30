@@ -39,7 +39,7 @@ internal static class RetryImageBuild
             }
 
             await integrationEventDispatcher.DispatchAsync(
-                [new WorkerImageConfigurationChanged()],
+                [new WorkerImageSettingsChanged()],
                 cancellationToken);
 
             await dbContext.SaveChangesAsync(cancellationToken);

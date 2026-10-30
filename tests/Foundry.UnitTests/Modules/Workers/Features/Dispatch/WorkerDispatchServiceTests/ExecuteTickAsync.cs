@@ -4,7 +4,6 @@ using Foundry.Modules.Workers.Contracts;
 using Foundry.Modules.Workers.Domain.Entities;
 using Foundry.Modules.Workers.Domain.Entities.States;
 using Foundry.Modules.Workers.Domain.ValueObjects;
-using Foundry.Modules.Workers.Features;
 using Foundry.Modules.Workers.Features.Orchestration;
 using Foundry.Modules.Workers.Features.ContainerSpec;
 using Foundry.Modules.Workers.Features.Dispatch;
@@ -25,17 +24,11 @@ public sealed class ExecuteTickAsync : WorkerDispatchServiceTestBase
         CapturingIntegrationEventDispatcher dispatcher,
         int maxConcurrent = 3)
     {
-        WorkerOptions workerOptions = new()
-        {
-            Image = "test-image:latest",
-        };
-
         StubGlobalSettingsQueries settingsQueries = new(maxConcurrent: maxConcurrent, timeoutMinutes: 120);
 
         return base.BuildService(
             new NullWorkerOrchestrator(),
-            workerOptions,
-            dispatcher,
+            integrationEventDispatcher: dispatcher,
             settingsQueries: settingsQueries);
     }
 

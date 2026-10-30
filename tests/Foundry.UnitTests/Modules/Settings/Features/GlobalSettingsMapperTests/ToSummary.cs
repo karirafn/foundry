@@ -38,11 +38,15 @@ public sealed class ToSummary
     {
         // Arrange
         GlobalSettings settings = CreateDefaultSettings();
-        settings.UpdateWorkerImageConfiguration(new WorkerImageConfiguration(
-            InstallDotnet: true,
-            InstallAngular: false,
-            InstallChromium: false,
-            InstallDocker: false));
+        WorkerImageConfiguration config = WorkerImageConfiguration.Create(
+            imageTag: "foundry-worker:local",
+            buildEnabled: true,
+            installDotnet: true,
+            installAngular: false,
+            installChromium: false,
+            installDocker: false)
+            .Match(v => v, e => throw new InvalidOperationException(e.Message));
+        settings.UpdateWorkerImageConfiguration(config);
 
         // Act
         GlobalSettingsSummary result = GlobalSettingsMapper.ToSummary(settings);
@@ -56,11 +60,15 @@ public sealed class ToSummary
     {
         // Arrange
         GlobalSettings settings = CreateDefaultSettings();
-        settings.UpdateWorkerImageConfiguration(new WorkerImageConfiguration(
-            InstallDotnet: true,
-            InstallAngular: true,
-            InstallChromium: true,
-            InstallDocker: true));
+        WorkerImageConfiguration config = WorkerImageConfiguration.Create(
+            imageTag: "foundry-worker:local",
+            buildEnabled: true,
+            installDotnet: true,
+            installAngular: true,
+            installChromium: true,
+            installDocker: true)
+            .Match(v => v, e => throw new InvalidOperationException(e.Message));
+        settings.UpdateWorkerImageConfiguration(config);
 
         // Act
         GlobalSettingsSummary result = GlobalSettingsMapper.ToSummary(settings);

@@ -64,7 +64,7 @@ public sealed class AddWorkersModule
         // Arrange
         IConfiguration configuration = BuildConfiguration(new Dictionary<string, string?>
         {
-            ["Workers:Image"] = "ghcr.io/anthropics/claude-code:v1.0",
+            ["Workers:MemoryLimitMb"] = "4096",
         });
         ServiceCollection services = new();
 
@@ -74,7 +74,7 @@ public sealed class AddWorkersModule
 
         // Assert
         IOptions<WorkerOptions> options = provider.GetRequiredService<IOptions<WorkerOptions>>();
-        options.Value.Image.ShouldBe("ghcr.io/anthropics/claude-code:v1.0");
+        options.Value.MemoryLimitMb.ShouldBe(4096);
     }
 
     [Fact]
@@ -96,18 +96,18 @@ public sealed class AddWorkersModule
     [Fact]
     public void WhenCalled_RegistersWorkerOptionsValidator()
     {
-        // Arrange — empty image triggers validation failure
-        IConfiguration emptyConfig = BuildConfiguration(new Dictionary<string, string?>
+        // Arrange — a relative mount container path triggers validation failure
+        IConfiguration invalidConfig = BuildConfiguration(new Dictionary<string, string?>
         {
-            ["Workers:Image"] = string.Empty,
+            ["Workers:Mounts:relative/path"] = "/host/config",
         });
         ServiceCollection services = new();
 
         // Act
-        services.AddWorkersModule(emptyConfig);
+        services.AddWorkersModule(invalidConfig);
         ServiceProvider provider = services.BuildServiceProvider();
 
-        // Assert — accessing Value with empty Image triggers validation failure
+        // Assert — accessing Value with invalid mount triggers validation failure
         IOptions<WorkerOptions> options = provider.GetRequiredService<IOptions<WorkerOptions>>();
         Should.Throw<OptionsValidationException>(() => _ = options.Value);
     }

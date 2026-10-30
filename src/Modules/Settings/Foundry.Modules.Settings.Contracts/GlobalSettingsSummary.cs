@@ -11,6 +11,8 @@ public sealed record GlobalSettingsSummary(
     DateTimeOffset? UsageLimitResetsAt,
     bool IsDispatchPaused,
     bool AutoResumeOnUsageReset,
+    string ImageTag,
+    bool BuildEnabled,
     bool InstallDotnet,
     bool InstallAngular,
     bool InstallChromium,

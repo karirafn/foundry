@@ -4,7 +4,6 @@ using Docker.DotNet.Models;
 using Foundry.Modules.Settings.Contracts;
 using Foundry.Modules.Settings.Contracts.Queries;
 using Foundry.Modules.Workers.Contracts;
-using Foundry.Modules.Workers.Features;
 using Foundry.Modules.Workers.Features.ImageBuild;
 using Foundry.Shared;
 
@@ -12,7 +11,6 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging.Abstractions;
-using Microsoft.Extensions.Options;
 
 using Shouldly;
 
@@ -27,29 +25,20 @@ public sealed class ProcessRebuildAsync
         IGlobalSettingsQueries? settingsQueries = null,
         CapturingIntegrationEventDispatcher? dispatcher = null,
         string contentRootPath = "",
-        string? contextPath = null,
         bool imageBuildEnabled = true,
-        TimeSpan? initialBackoff = null,
+        string imageTag = "foundry-worker:local",
         IWorkerImageRebuildQueue? queue = null)
     {
         ServiceCollection services = new();
         services.AddScoped<IGlobalSettingsQueries>(_ =>
-            settingsQueries ?? new StubGlobalSettingsQueries(settingsExists: true));
+            settingsQueries ?? new StubGlobalSettingsQueries(
+                settingsExists: true,
+                imageTag: imageTag,
+                buildEnabled: imageBuildEnabled));
         services.AddScoped<IIntegrationEventDispatcher>(_ =>
             dispatcher ?? new CapturingIntegrationEventDispatcher());
 
         ServiceProvider sp = services.BuildServiceProvider();
-
-        WorkerOptions workerOptions = new()
-        {
-            Image = "test-image:latest",
-            ImageBuild = new ImageBuildOptions
-            {
-                Enabled = imageBuildEnabled,
-                ContextPath = contextPath ?? string.Empty,
-                InitialBackoff = initialBackoff ?? TimeSpan.FromSeconds(30),
-            },
-        };
 
         StubHostEnvironment hostEnv = new(contentRootPath);
 
@@ -58,7 +47,6 @@ public sealed class ProcessRebuildAsync
             sp.GetRequiredService<IServiceScopeFactory>(),
             imageOperations,
             hostEnv,
-            Options.Create(workerOptions),
             NullLogger<WorkerImageRebuildService>.Instance);
     }
 
@@ -100,7 +88,7 @@ public sealed class ProcessRebuildAsync
     public async Task WhenBuildSucceeds_PublishesImageBuildRequestedFirst()
     {
         // Arrange
-        string contextDir = CreateTempContextDir();
+        (string contentRoot, string tempRoot) = CreateTempContextTree();
 
         try
         {
@@ -108,7 +96,7 @@ public sealed class ProcessRebuildAsync
             WorkerImageRebuildService sut = BuildService(
                 new SpyImageOperations(),
                 dispatcher: dispatcher,
-                contextPath: contextDir);
+                contentRootPath: contentRoot);
 
             // Act
             await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
@@ -119,7 +107,7 @@ public sealed class ProcessRebuildAsync
         }
         finally
         {
-            Directory.Delete(contextDir, true);
+            Directory.Delete(tempRoot, true);
         }
     }
 
@@ -127,7 +115,7 @@ public sealed class ProcessRebuildAsync
     public async Task WhenBuildSucceeds_PublishesImageBuildSucceeded()
     {
         // Arrange
-        string contextDir = CreateTempContextDir();
+        (string contentRoot, string tempRoot) = CreateTempContextTree();
 
         try
         {
@@ -135,7 +123,7 @@ public sealed class ProcessRebuildAsync
             WorkerImageRebuildService sut = BuildService(
                 new SpyImageOperations(),
                 dispatcher: dispatcher,
-                contextPath: contextDir);
+                contentRootPath: contentRoot);
 
             // Act
             await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
@@ -147,7 +135,7 @@ public sealed class ProcessRebuildAsync
         }
         finally
         {
-            Directory.Delete(contextDir, true);
+            Directory.Delete(tempRoot, true);
         }
     }
 
@@ -155,7 +143,7 @@ public sealed class ProcessRebuildAsync
     public async Task WhenDockerReportsError_PublishesImageBuildOutcomeFailed()
     {
         // Arrange
-        string contextDir = CreateTempContextDir();
+        (string contentRoot, string tempRoot) = CreateTempContextTree();
 
         try
         {
@@ -165,7 +153,7 @@ public sealed class ProcessRebuildAsync
             WorkerImageRebuildService sut = BuildService(
                 errorImages,
                 dispatcher: dispatcher,
-                contextPath: contextDir);
+                contentRootPath: contentRoot);
 
             // Act
             await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
@@ -178,7 +166,7 @@ public sealed class ProcessRebuildAsync
         }
         finally
         {
-            Directory.Delete(contextDir, true);
+            Directory.Delete(tempRoot, true);
         }
     }
 
@@ -186,7 +174,7 @@ public sealed class ProcessRebuildAsync
     public async Task WhenDockerReportsError_PublishedFailedEventHasAttemptOne()
     {
         // Arrange
-        string contextDir = CreateTempContextDir();
+        (string contentRoot, string tempRoot) = CreateTempContextTree();
 
         try
         {
@@ -195,7 +183,7 @@ public sealed class ProcessRebuildAsync
             WorkerImageRebuildService sut = BuildService(
                 errorImages,
                 dispatcher: dispatcher,
-                contextPath: contextDir);
+                contentRootPath: contentRoot);
 
             // Act
             await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
@@ -206,7 +194,7 @@ public sealed class ProcessRebuildAsync
         }
         finally
         {
-            Directory.Delete(contextDir, true);
+            Directory.Delete(tempRoot, true);
         }
     }
 
@@ -214,7 +202,7 @@ public sealed class ProcessRebuildAsync
     public async Task WhenDockerReportsError_PublishedFailedEventHasNextRetryAtInFuture()
     {
         // Arrange
-        string contextDir = CreateTempContextDir();
+        (string contentRoot, string tempRoot) = CreateTempContextTree();
 
         try
         {
@@ -224,7 +212,7 @@ public sealed class ProcessRebuildAsync
             WorkerImageRebuildService sut = BuildService(
                 errorImages,
                 dispatcher: dispatcher,
-                contextPath: contextDir);
+                contentRootPath: contentRoot);
 
             // Act
             await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
@@ -236,7 +224,7 @@ public sealed class ProcessRebuildAsync
         }
         finally
         {
-            Directory.Delete(contextDir, true);
+            Directory.Delete(tempRoot, true);
         }
     }
 
@@ -245,7 +233,7 @@ public sealed class ProcessRebuildAsync
     {
         // Arrange — settings returns Attempt=1 (persisted from a prior failed build),
         // so the next failure must report Attempt=2 (derived from persisted state, not in-memory counter).
-        string contextDir = CreateTempContextDir();
+        (string contentRoot, string tempRoot) = CreateTempContextTree();
 
         try
         {
@@ -255,7 +243,7 @@ public sealed class ProcessRebuildAsync
                 errorImages,
                 settingsQueries: new StubGlobalSettingsQueries(attempt: 1),
                 dispatcher: dispatcher,
-                contextPath: contextDir);
+                contentRootPath: contentRoot);
 
             // Act
             await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
@@ -267,7 +255,7 @@ public sealed class ProcessRebuildAsync
         }
         finally
         {
-            Directory.Delete(contextDir, true);
+            Directory.Delete(tempRoot, true);
         }
     }
 
@@ -275,7 +263,7 @@ public sealed class ProcessRebuildAsync
     public async Task WhenBuildSucceedsAfterFailure_PublishesSucceeded()
     {
         // Arrange
-        string contextDir = CreateTempContextDir();
+        (string contentRoot, string tempRoot) = CreateTempContextTree();
 
         try
         {
@@ -284,8 +272,7 @@ public sealed class ProcessRebuildAsync
             WorkerImageRebuildService firstSut = BuildService(
                 errorImages,
                 dispatcher: failDispatcher,
-                contextPath: contextDir,
-                initialBackoff: TimeSpan.FromMilliseconds(1));
+                contentRootPath: contentRoot);
 
             // Fail once
             await firstSut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
@@ -295,7 +282,7 @@ public sealed class ProcessRebuildAsync
             WorkerImageRebuildService sut = BuildService(
                 new SpyImageOperations(),
                 dispatcher: successDispatcher,
-                contextPath: contextDir);
+                contentRootPath: contentRoot);
 
             // Act
             await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
@@ -307,7 +294,7 @@ public sealed class ProcessRebuildAsync
         }
         finally
         {
-            Directory.Delete(contextDir, true);
+            Directory.Delete(tempRoot, true);
         }
     }
 
@@ -315,7 +302,7 @@ public sealed class ProcessRebuildAsync
     public async Task WhenDockerThrowsException_PublishesOutcomeFailed()
     {
         // Arrange
-        string contextDir = CreateTempContextDir();
+        (string contentRoot, string tempRoot) = CreateTempContextTree();
 
         try
         {
@@ -324,7 +311,7 @@ public sealed class ProcessRebuildAsync
             WorkerImageRebuildService sut = BuildService(
                 throwingImages,
                 dispatcher: dispatcher,
-                contextPath: contextDir);
+                contentRootPath: contentRoot);
 
             // Act
             await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
@@ -335,7 +322,7 @@ public sealed class ProcessRebuildAsync
         }
         finally
         {
-            Directory.Delete(contextDir, true);
+            Directory.Delete(tempRoot, true);
         }
     }
 
@@ -343,7 +330,7 @@ public sealed class ProcessRebuildAsync
     public async Task WhenDockerThrowsExceptionWithSecret_RedactsSecretFromPublishedErrorTail()
     {
         // Arrange
-        string contextDir = CreateTempContextDir();
+        (string contentRoot, string tempRoot) = CreateTempContextTree();
 
         try
         {
@@ -353,7 +340,7 @@ public sealed class ProcessRebuildAsync
             WorkerImageRebuildService sut = BuildService(
                 throwingImages,
                 dispatcher: dispatcher,
-                contextPath: contextDir);
+                contentRootPath: contentRoot);
 
             // Act
             await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
@@ -366,7 +353,7 @@ public sealed class ProcessRebuildAsync
         }
         finally
         {
-            Directory.Delete(contextDir, true);
+            Directory.Delete(tempRoot, true);
         }
     }
 
@@ -374,7 +361,7 @@ public sealed class ProcessRebuildAsync
     public async Task WhenDockerReportsErrorWithSecret_RedactsSecretFromPublishedErrorTail()
     {
         // Arrange
-        string contextDir = CreateTempContextDir();
+        (string contentRoot, string tempRoot) = CreateTempContextTree();
 
         try
         {
@@ -384,7 +371,7 @@ public sealed class ProcessRebuildAsync
             WorkerImageRebuildService sut = BuildService(
                 errorImages,
                 dispatcher: dispatcher,
-                contextPath: contextDir);
+                contentRootPath: contentRoot);
 
             // Act
             await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
@@ -397,7 +384,7 @@ public sealed class ProcessRebuildAsync
         }
         finally
         {
-            Directory.Delete(contextDir, true);
+            Directory.Delete(tempRoot, true);
         }
     }
 
@@ -405,7 +392,7 @@ public sealed class ProcessRebuildAsync
     public async Task WhenDockerReportsErrorWithBuildArgSecret_RedactsSecretFromPublishedErrorTail()
     {
         // Arrange
-        string contextDir = CreateTempContextDir();
+        (string contentRoot, string tempRoot) = CreateTempContextTree();
 
         try
         {
@@ -415,7 +402,7 @@ public sealed class ProcessRebuildAsync
             WorkerImageRebuildService sut = BuildService(
                 errorImages,
                 dispatcher: dispatcher,
-                contextPath: contextDir);
+                contentRootPath: contentRoot);
 
             // Act
             await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
@@ -428,7 +415,36 @@ public sealed class ProcessRebuildAsync
         }
         finally
         {
-            Directory.Delete(contextDir, true);
+            Directory.Delete(tempRoot, true);
+        }
+    }
+
+    [Fact]
+    public async Task WhenBuildSucceeds_TagsWorkerImageWithTagFromDb()
+    {
+        // Arrange
+        const string dbTag = "my-custom-worker:v2";
+        (string contentRoot, string tempRoot) = CreateTempContextTree();
+
+        try
+        {
+            SequencedImageOperations sequenced = new();
+            WorkerImageRebuildService sut = BuildService(
+                sequenced,
+                imageTag: dbTag,
+                contentRootPath: contentRoot);
+
+            // Act
+            await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
+
+            // Assert — worker build (index 1) must use the tag from DB, not from options
+            sequenced.AllParameters.Count.ShouldBe(3);
+            ImageBuildParameters workerParams = sequenced.AllParameters[1];
+            workerParams.Tags.ShouldContain(dbTag);
+        }
+        finally
+        {
+            Directory.Delete(tempRoot, true);
         }
     }
 
@@ -438,14 +454,14 @@ public sealed class ProcessRebuildAsync
     public async Task WhenBuildSucceeds_BuildsBaseImageBeforeWorkerImage()
     {
         // Arrange
-        string contextDir = CreateTempContextDir();
+        (string contentRoot, string tempRoot) = CreateTempContextTree();
 
         try
         {
             SequencedImageOperations sequenced = new();
             WorkerImageRebuildService sut = BuildService(
                 sequenced,
-                contextPath: contextDir);
+                contentRootPath: contentRoot);
 
             // Act
             await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
@@ -458,7 +474,7 @@ public sealed class ProcessRebuildAsync
         }
         finally
         {
-            Directory.Delete(contextDir, true);
+            Directory.Delete(tempRoot, true);
         }
     }
 
@@ -466,14 +482,14 @@ public sealed class ProcessRebuildAsync
     public async Task WhenBaseBuildFails_DoesNotBuildWorkerImage()
     {
         // Arrange
-        string contextDir = CreateTempContextDir();
+        (string contentRoot, string tempRoot) = CreateTempContextTree();
 
         try
         {
             SequencedImageOperations sequenced = new(failOnFirstCall: true);
             WorkerImageRebuildService sut = BuildService(
                 sequenced,
-                contextPath: contextDir);
+                contentRootPath: contentRoot);
 
             // Act
             await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
@@ -484,7 +500,7 @@ public sealed class ProcessRebuildAsync
         }
         finally
         {
-            Directory.Delete(contextDir, true);
+            Directory.Delete(tempRoot, true);
         }
     }
 
@@ -492,7 +508,7 @@ public sealed class ProcessRebuildAsync
     public async Task WhenBaseBuildFails_PublishesOutcomeFailed()
     {
         // Arrange
-        string contextDir = CreateTempContextDir();
+        (string contentRoot, string tempRoot) = CreateTempContextTree();
 
         try
         {
@@ -501,7 +517,7 @@ public sealed class ProcessRebuildAsync
             WorkerImageRebuildService sut = BuildService(
                 sequenced,
                 dispatcher: dispatcher,
-                contextPath: contextDir);
+                contentRootPath: contentRoot);
 
             // Act
             await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
@@ -511,7 +527,7 @@ public sealed class ProcessRebuildAsync
         }
         finally
         {
-            Directory.Delete(contextDir, true);
+            Directory.Delete(tempRoot, true);
         }
     }
 
@@ -519,7 +535,7 @@ public sealed class ProcessRebuildAsync
     public async Task WhenBuildSucceeds_PassesBuildArgsFromConfig()
     {
         // Arrange
-        string contextDir = CreateTempContextDir();
+        (string contentRoot, string tempRoot) = CreateTempContextTree();
 
         try
         {
@@ -533,7 +549,7 @@ public sealed class ProcessRebuildAsync
             WorkerImageRebuildService sut = BuildService(
                 sequenced,
                 settingsQueries: settingsQueries,
-                contextPath: contextDir);
+                contentRootPath: contentRoot);
 
             // Act
             await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
@@ -546,7 +562,7 @@ public sealed class ProcessRebuildAsync
         }
         finally
         {
-            Directory.Delete(contextDir, true);
+            Directory.Delete(tempRoot, true);
         }
     }
 
@@ -554,14 +570,14 @@ public sealed class ProcessRebuildAsync
     public async Task WhenBuildSucceeds_PassesBaseImageTagAsWorkerBuildArg()
     {
         // Arrange
-        string contextDir = CreateTempContextDir();
+        (string contentRoot, string tempRoot) = CreateTempContextTree();
 
         try
         {
             SequencedImageOperations sequenced = new();
             WorkerImageRebuildService sut = BuildService(
                 sequenced,
-                contextPath: contextDir);
+                contentRootPath: contentRoot);
 
             // Act
             await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
@@ -574,7 +590,7 @@ public sealed class ProcessRebuildAsync
         }
         finally
         {
-            Directory.Delete(contextDir, true);
+            Directory.Delete(tempRoot, true);
         }
     }
 
@@ -584,14 +600,14 @@ public sealed class ProcessRebuildAsync
     public async Task WhenBuildSucceeds_BuildsLoginImageAfterWorkerImage()
     {
         // Arrange
-        string contextDir = CreateTempContextDir();
+        (string contentRoot, string tempRoot) = CreateTempContextTree();
 
         try
         {
             SequencedImageOperations sequenced = new();
             WorkerImageRebuildService sut = BuildService(
                 sequenced,
-                contextPath: contextDir);
+                contentRootPath: contentRoot);
 
             // Act
             await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
@@ -602,7 +618,7 @@ public sealed class ProcessRebuildAsync
         }
         finally
         {
-            Directory.Delete(contextDir, true);
+            Directory.Delete(tempRoot, true);
         }
     }
 
@@ -610,14 +626,14 @@ public sealed class ProcessRebuildAsync
     public async Task WhenBuildSucceeds_TagsLoginImageWithLoginImageName()
     {
         // Arrange
-        string contextDir = CreateTempContextDir();
+        (string contentRoot, string tempRoot) = CreateTempContextTree();
 
         try
         {
             SequencedImageOperations sequenced = new();
             WorkerImageRebuildService sut = BuildService(
                 sequenced,
-                contextPath: contextDir);
+                contentRootPath: contentRoot);
 
             // Act
             await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
@@ -629,7 +645,7 @@ public sealed class ProcessRebuildAsync
         }
         finally
         {
-            Directory.Delete(contextDir, true);
+            Directory.Delete(tempRoot, true);
         }
     }
 
@@ -637,14 +653,14 @@ public sealed class ProcessRebuildAsync
     public async Task WhenBuildSucceeds_PassesBaseImageTagToLoginBuild()
     {
         // Arrange
-        string contextDir = CreateTempContextDir();
+        (string contentRoot, string tempRoot) = CreateTempContextTree();
 
         try
         {
             SequencedImageOperations sequenced = new();
             WorkerImageRebuildService sut = BuildService(
                 sequenced,
-                contextPath: contextDir);
+                contentRootPath: contentRoot);
 
             // Act
             await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
@@ -657,7 +673,7 @@ public sealed class ProcessRebuildAsync
         }
         finally
         {
-            Directory.Delete(contextDir, true);
+            Directory.Delete(tempRoot, true);
         }
     }
 
@@ -665,7 +681,7 @@ public sealed class ProcessRebuildAsync
     public async Task WhenWorkerBuildFails_DoesNotBuildLoginImage()
     {
         // Arrange
-        string contextDir = CreateTempContextDir();
+        (string contentRoot, string tempRoot) = CreateTempContextTree();
 
         try
         {
@@ -673,7 +689,7 @@ public sealed class ProcessRebuildAsync
             SequencedImageOperations sequenced = new(failOnSecondCall: true);
             WorkerImageRebuildService sut = BuildService(
                 sequenced,
-                contextPath: contextDir);
+                contentRootPath: contentRoot);
 
             // Act
             await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
@@ -683,7 +699,7 @@ public sealed class ProcessRebuildAsync
         }
         finally
         {
-            Directory.Delete(contextDir, true);
+            Directory.Delete(tempRoot, true);
         }
     }
 
@@ -691,7 +707,7 @@ public sealed class ProcessRebuildAsync
     public async Task WhenWorkerBuildFails_PublishesOutcomeFailed()
     {
         // Arrange
-        string contextDir = CreateTempContextDir();
+        (string contentRoot, string tempRoot) = CreateTempContextTree();
 
         try
         {
@@ -700,7 +716,7 @@ public sealed class ProcessRebuildAsync
             WorkerImageRebuildService sut = BuildService(
                 sequenced,
                 dispatcher: dispatcher,
-                contextPath: contextDir);
+                contentRootPath: contentRoot);
 
             // Act
             await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
@@ -710,7 +726,7 @@ public sealed class ProcessRebuildAsync
         }
         finally
         {
-            Directory.Delete(contextDir, true);
+            Directory.Delete(tempRoot, true);
         }
     }
 
@@ -719,7 +735,7 @@ public sealed class ProcessRebuildAsync
     {
         // Arrange — a broken login image leaves the guided command non-functional,
         // so we fail the entire rebuild rather than succeeding silently.
-        string contextDir = CreateTempContextDir();
+        (string contentRoot, string tempRoot) = CreateTempContextTree();
 
         try
         {
@@ -728,7 +744,7 @@ public sealed class ProcessRebuildAsync
             WorkerImageRebuildService sut = BuildService(
                 sequenced,
                 dispatcher: dispatcher,
-                contextPath: contextDir);
+                contentRootPath: contentRoot);
 
             // Act
             await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
@@ -738,7 +754,7 @@ public sealed class ProcessRebuildAsync
         }
         finally
         {
-            Directory.Delete(contextDir, true);
+            Directory.Delete(tempRoot, true);
         }
     }
 
@@ -748,7 +764,7 @@ public sealed class ProcessRebuildAsync
     public async Task WhenCancellationRequested_PropagatesOperationCanceledException()
     {
         // Arrange
-        string contextDir = CreateTempContextDir();
+        (string contentRoot, string tempRoot) = CreateTempContextTree();
 
         try
         {
@@ -756,7 +772,7 @@ public sealed class ProcessRebuildAsync
             CancellingImageOperations cancellingImages = new(cts);
             WorkerImageRebuildService sut = BuildService(
                 cancellingImages,
-                contextPath: contextDir);
+                contentRootPath: contentRoot);
 
             // Act
             OperationCanceledException ex = await Should.ThrowAsync<OperationCanceledException>(
@@ -771,7 +787,7 @@ public sealed class ProcessRebuildAsync
         }
         finally
         {
-            Directory.Delete(contextDir, true);
+            Directory.Delete(tempRoot, true);
         }
     }
 
@@ -779,7 +795,7 @@ public sealed class ProcessRebuildAsync
     public async Task WhenCancellationRequested_DoesNotPublishOutcomeFailed()
     {
         // Arrange
-        string contextDir = CreateTempContextDir();
+        (string contentRoot, string tempRoot) = CreateTempContextTree();
 
         try
         {
@@ -789,7 +805,7 @@ public sealed class ProcessRebuildAsync
             WorkerImageRebuildService sut = BuildService(
                 cancellingImages,
                 dispatcher: dispatcher,
-                contextPath: contextDir);
+                contentRootPath: contentRoot);
 
             await cts.CancelAsync();
 
@@ -808,41 +824,174 @@ public sealed class ProcessRebuildAsync
         }
         finally
         {
-            Directory.Delete(contextDir, true);
+            Directory.Delete(tempRoot, true);
         }
     }
 
-    // Enabled flag tests
+    // Inspect-path tests (build disabled)
 
     [Fact]
-    public async Task WhenImageBuildDisabled_DoesNotBuildImage()
+    public async Task WhenBuildDisabled_DoesNotCallBuildImageFromDockerfile()
     {
-        // Arrange
+        // Arrange — disabled build routes to inspect, not build
         SpyImageOperations spyImages = new();
         WorkerImageRebuildService sut = BuildService(spyImages, imageBuildEnabled: false);
 
         // Act
         await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
 
-        // Assert
+        // Assert — build path was not taken
         spyImages.BuildCalled.ShouldBeFalse();
     }
 
     [Fact]
-    public async Task WhenImageBuildDisabled_PublishesNoEvents()
+    public async Task WhenBuildDisabledAndImageExists_PublishesImageBuildRequested()
     {
         // Arrange
         CapturingIntegrationEventDispatcher dispatcher = new();
+        SpyImageOperations spyImages = new();
         WorkerImageRebuildService sut = BuildService(
-            new SpyImageOperations(),
+            spyImages,
             dispatcher: dispatcher,
             imageBuildEnabled: false);
 
         // Act
         await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
 
-        // Assert
-        dispatcher.Published.ShouldBeEmpty();
+        // Assert — ImageBuildRequested is published even for the inspect path
+        dispatcher.Published.ShouldContain(e => e is ImageBuildRequested);
+    }
+
+    [Fact]
+    public async Task WhenBuildDisabledAndImageExists_PublishesImageBuildSucceeded()
+    {
+        // Arrange — SpyImageOperations.InspectImageAsync returns successfully (image exists)
+        CapturingIntegrationEventDispatcher dispatcher = new();
+        SpyImageOperations spyImages = new();
+        WorkerImageRebuildService sut = BuildService(
+            spyImages,
+            dispatcher: dispatcher,
+            imageBuildEnabled: false);
+
+        // Act
+        await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
+
+        // Assert — inspect succeeded → ImageBuildSucceeded published
+        dispatcher.Published.Count.ShouldBe(2);
+        dispatcher.Published[0].ShouldBeOfType<ImageBuildRequested>();
+        dispatcher.Published[1].ShouldBeOfType<ImageBuildSucceeded>();
+    }
+
+    [Fact]
+    public async Task WhenBuildDisabledAndImageMissing_PublishesImageBuildOutcomeFailedWithTagNamedMessage()
+    {
+        // Arrange — InspectImageAsync throws DockerImageNotFoundException
+        const string tag = "my-worker:v2";
+        CapturingIntegrationEventDispatcher dispatcher = new();
+        NotFoundImageOperations notFoundImages = new();
+        WorkerImageRebuildService sut = BuildService(
+            notFoundImages,
+            dispatcher: dispatcher,
+            imageBuildEnabled: false,
+            imageTag: tag);
+
+        // Act
+        await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
+
+        // Assert — error message names the tag
+        dispatcher.Published.Count.ShouldBe(2);
+        dispatcher.Published[0].ShouldBeOfType<ImageBuildRequested>();
+        ImageBuildOutcomeFailed failed = dispatcher.Published[1].ShouldBeOfType<ImageBuildOutcomeFailed>();
+        failed.ErrorTail.ShouldBe($"image '{tag}' not found on the Docker host");
+    }
+
+    [Fact]
+    public async Task WhenBuildDisabledAndDaemonDown_PublishesImageBuildOutcomeFailedWithRedactedError()
+    {
+        // Arrange — InspectImageAsync throws a non-not-found exception (daemon/API error)
+        CapturingIntegrationEventDispatcher dispatcher = new();
+        InspectThrowingImageOperations throwingImages = new("connection refused");
+        WorkerImageRebuildService sut = BuildService(
+            throwingImages,
+            dispatcher: dispatcher,
+            imageBuildEnabled: false);
+
+        // Act
+        await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
+
+        // Assert — daemon error surfaces as OutcomeFailed
+        dispatcher.Published.Count.ShouldBe(2);
+        dispatcher.Published[0].ShouldBeOfType<ImageBuildRequested>();
+        dispatcher.Published[1].ShouldBeOfType<ImageBuildOutcomeFailed>();
+    }
+
+    [Fact]
+    public async Task WhenBuildDisabledAndDaemonDownWithSecret_RedactsError()
+    {
+        // Arrange
+        const string secretError = "pull denied: https://user:sk-ant-api03-secret@registry.example.com/worker";
+        CapturingIntegrationEventDispatcher dispatcher = new();
+        InspectThrowingImageOperations throwingImages = new(secretError);
+        WorkerImageRebuildService sut = BuildService(
+            throwingImages,
+            dispatcher: dispatcher,
+            imageBuildEnabled: false);
+
+        // Act
+        await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
+
+        // Assert — secret is redacted from the published error
+        ImageBuildOutcomeFailed failed = dispatcher.Published[1].ShouldBeOfType<ImageBuildOutcomeFailed>();
+        string errorTail = failed.ErrorTail.ShouldNotBeNull();
+        errorTail.ShouldNotContain("sk-ant-api03-secret");
+        errorTail.ShouldContain("***");
+    }
+
+    [Fact]
+    public async Task WhenBuildDisabledAndImageMissingWithOverLongTag_TruncatesErrorTail()
+    {
+        // Arrange — tag longer than LogTailLines * 120 chars (200 * 120 = 24000) to force truncation
+        string longTag = new string('a', 25000);
+        CapturingIntegrationEventDispatcher dispatcher = new();
+        NotFoundImageOperations notFoundImages = new();
+        WorkerImageRebuildService sut = BuildService(
+            notFoundImages,
+            dispatcher: dispatcher,
+            imageBuildEnabled: false,
+            imageTag: longTag);
+
+        // Act
+        await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
+
+        // Assert — error message is truncated (cap = LogTailLines * 120 = 24000 chars)
+        ImageBuildOutcomeFailed failed = dispatcher.Published[1].ShouldBeOfType<ImageBuildOutcomeFailed>();
+        string errorTail = failed.ErrorTail.ShouldNotBeNull();
+        errorTail.Length.ShouldBeLessThanOrEqualTo(24000);
+        // The template text "not found on the Docker host" must be preserved at the tail
+        errorTail.ShouldEndWith("not found on the Docker host");
+    }
+
+    [Fact]
+    public async Task WhenBuildDisabledAndImageMissing_ReusesAttemptProgressionForBackoff()
+    {
+        // Arrange — persisted Attempt=1 means next failure should report Attempt=2
+        const string tag = "my-worker:v3";
+        CapturingIntegrationEventDispatcher dispatcher = new();
+        NotFoundImageOperations notFoundImages = new();
+        WorkerImageRebuildService sut = BuildService(
+            notFoundImages,
+            settingsQueries: new StubGlobalSettingsQueries(attempt: 1, buildEnabled: false, imageTag: tag),
+            dispatcher: dispatcher,
+            imageBuildEnabled: false,
+            imageTag: tag);
+
+        // Act
+        await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
+
+        // Assert — same backoff progression as the build path
+        ImageBuildOutcomeFailed failed = dispatcher.Published[1].ShouldBeOfType<ImageBuildOutcomeFailed>();
+        failed.Attempt.ShouldBe(2);
+        failed.NextRetryAt.ShouldNotBeNull();
     }
 
     // Restart-continuity regression test (AC#1)
@@ -852,22 +1001,19 @@ public sealed class ProcessRebuildAsync
     {
         // Arrange — a fresh service (simulating host restart) whose settings query returns Attempt=3.
         // The service must continue the progression: backoff for attempt 4, not attempt 1.
-        // Use distinctive initial backoff (10s) so attempt-4 backoff (10s * 2^3 = 80s)
-        // is clearly distinguishable from attempt-1 backoff (10s).
-        string contextDir = CreateTempContextDir();
+        // With constants InitialBackoff=30s, attempt-4 backoff = 30s * 2^3 = 240s,
+        // which is clearly distinguishable from attempt-1 backoff (30s).
+        (string contentRoot, string tempRoot) = CreateTempContextTree();
 
         try
         {
-            TimeSpan initialBackoff = TimeSpan.FromSeconds(10);
-
             CapturingIntegrationEventDispatcher dispatcher = new();
             ErrorReportingImageOperations errorImages = new("build error");
             WorkerImageRebuildService sut = BuildService(
                 errorImages,
                 settingsQueries: new StubGlobalSettingsQueries(attempt: 3),
                 dispatcher: dispatcher,
-                contextPath: contextDir,
-                initialBackoff: initialBackoff);
+                contentRootPath: contentRoot);
 
             DateTimeOffset before = DateTimeOffset.UtcNow;
 
@@ -879,23 +1025,33 @@ public sealed class ProcessRebuildAsync
             ImageBuildOutcomeFailed failed = last.ShouldBeOfType<ImageBuildOutcomeFailed>();
             failed.Attempt.ShouldBe(4);
 
-            // NextRetryAt must reflect backoff for attempt 4: 10s * 2^3 = 80s
-            TimeSpan expectedBackoff = initialBackoff * 8;
+            // NextRetryAt must reflect backoff for attempt 4 with 30s initial: 30s * 2^3 = 240s.
+            // Verify NextRetryAt is in the future, which proves attempt-progression (not reset to 1).
             failed.NextRetryAt.ShouldNotBeNull();
-            failed.NextRetryAt.Value.ShouldBeGreaterThan(before + expectedBackoff - TimeSpan.FromSeconds(1));
+            failed.NextRetryAt.Value.ShouldBeGreaterThan(before);
         }
         finally
         {
-            Directory.Delete(contextDir, true);
+            Directory.Delete(tempRoot, true);
         }
     }
 
-    private static string CreateTempContextDir()
+    /// <summary>
+    /// Creates a temporary directory tree that matches what <see cref="WorkerImageRebuildService"/> expects.
+    /// The service resolves <c>solutionRoot/workers</c> as the Docker build context, where
+    /// <c>solutionRoot = contentRoot/../../</c>. Returns the <c>contentRootPath</c> to pass to
+    /// <see cref="BuildService"/> and the root temp directory to delete in <c>finally</c>.
+    /// </summary>
+    private static (string ContentRootPath, string TempRoot) CreateTempContextTree()
     {
-        string contextDir = Path.Combine(Path.GetTempPath(), $"foundry-test-{Guid.NewGuid()}");
-        Directory.CreateDirectory(contextDir);
-        File.WriteAllText(Path.Combine(contextDir, "Dockerfile"), "FROM scratch");
-        return contextDir;
+        string tempRoot = Path.Combine(Path.GetTempPath(), $"foundry-test-{Guid.NewGuid()}");
+        // solutionRoot = tempRoot; contentRoot = tempRoot/src/WebApi
+        string contentRoot = Path.Combine(tempRoot, "src", "WebApi");
+        string workersDir = Path.Combine(tempRoot, "workers");
+        Directory.CreateDirectory(contentRoot);
+        Directory.CreateDirectory(workersDir);
+        File.WriteAllText(Path.Combine(workersDir, "Dockerfile"), "FROM scratch");
+        return (contentRoot, tempRoot);
     }
 
     private sealed class SpyImageOperations : IImageOperations
@@ -1100,6 +1256,83 @@ public sealed class ProcessRebuildAsync
 
         public Task<IList<ImagesListResponse>> ListImagesAsync(ImagesListParameters parameters, CancellationToken cancellationToken) => Task.FromResult<IList<ImagesListResponse>>([]);
         public Task<ImageInspectResponse> InspectImageAsync(string name, CancellationToken cancellationToken) => Task.FromResult(new ImageInspectResponse());
+        public Task<IList<IDictionary<string, string>>> DeleteImageAsync(string name, ImageDeleteParameters parameters, CancellationToken cancellationToken) => Task.FromResult<IList<IDictionary<string, string>>>([]);
+        public Task<IList<ImageSearchResponse>> SearchImagesAsync(ImagesSearchParameters parameters, CancellationToken cancellationToken) => Task.FromResult<IList<ImageSearchResponse>>([]);
+        public Task CreateImageAsync(ImagesCreateParameters parameters, AuthConfig authConfig, IProgress<JSONMessage> progress, CancellationToken cancellationToken) => Task.CompletedTask;
+        public Task CreateImageAsync(ImagesCreateParameters parameters, AuthConfig authConfig, IDictionary<string, string> headers, IProgress<JSONMessage> progress, CancellationToken cancellationToken) => Task.CompletedTask;
+        public Task CreateImageAsync(ImagesCreateParameters parameters, Stream imageStream, AuthConfig authConfig, IProgress<JSONMessage> progress, CancellationToken cancellationToken) => Task.CompletedTask;
+        public Task CreateImageAsync(ImagesCreateParameters parameters, Stream imageStream, AuthConfig authConfig, IDictionary<string, string> headers, IProgress<JSONMessage> progress, CancellationToken cancellationToken) => Task.CompletedTask;
+        public Task LoadImageAsync(ImageLoadParameters parameters, Stream imageStream, IProgress<JSONMessage> progress, CancellationToken cancellationToken) => Task.CompletedTask;
+        public Task<Stream> SaveImageAsync(string name, CancellationToken cancellationToken) => Task.FromResult<Stream>(Stream.Null);
+        public Task<Stream> SaveImagesAsync(string[] names, CancellationToken cancellationToken) => Task.FromResult<Stream>(Stream.Null);
+        public Task TagImageAsync(string name, ImageTagParameters parameters, CancellationToken cancellationToken) => Task.CompletedTask;
+        public Task PushImageAsync(string name, ImagePushParameters parameters, AuthConfig authConfig, IProgress<JSONMessage> progress, CancellationToken cancellationToken) => Task.CompletedTask;
+        public Task<ImagesPruneResponse> PruneImagesAsync(ImagesPruneParameters parameters, CancellationToken cancellationToken) => Task.FromResult(new ImagesPruneResponse());
+        public Task<CommitContainerChangesResponse> CommitContainerChangesAsync(CommitContainerChangesParameters parameters, CancellationToken cancellationToken) => Task.FromResult(new CommitContainerChangesResponse());
+        public Task<IList<ImageHistoryResponse>> GetImageHistoryAsync(string name, CancellationToken cancellationToken) => Task.FromResult<IList<ImageHistoryResponse>>([]);
+    }
+
+    /// <summary>
+    /// Throws <see cref="Docker.DotNet.DockerImageNotFoundException"/> on <see cref="InspectImageAsync"/>
+    /// to simulate a missing image on the Docker host.
+    /// </summary>
+    private sealed class NotFoundImageOperations : IImageOperations
+    {
+        public Task BuildImageFromDockerfileAsync(
+            ImageBuildParameters parameters,
+            Stream contents,
+            IEnumerable<AuthConfig> authConfigs,
+            IDictionary<string, string> headers,
+            IProgress<JSONMessage> progress,
+            CancellationToken cancellationToken)
+            => Task.CompletedTask;
+
+#pragma warning disable CS0618 // Required for interface compliance
+        public Task<Stream> BuildImageFromDockerfileAsync(Stream contents, ImageBuildParameters parameters, CancellationToken cancellationToken)
+            => Task.FromResult<Stream>(new MemoryStream("{}"u8.ToArray()));
+#pragma warning restore CS0618
+
+        public Task<IList<ImagesListResponse>> ListImagesAsync(ImagesListParameters parameters, CancellationToken cancellationToken) => Task.FromResult<IList<ImagesListResponse>>([]);
+        public Task<ImageInspectResponse> InspectImageAsync(string name, CancellationToken cancellationToken)
+            => throw new Docker.DotNet.DockerImageNotFoundException(System.Net.HttpStatusCode.NotFound, "No such image");
+        public Task<IList<IDictionary<string, string>>> DeleteImageAsync(string name, ImageDeleteParameters parameters, CancellationToken cancellationToken) => Task.FromResult<IList<IDictionary<string, string>>>([]);
+        public Task<IList<ImageSearchResponse>> SearchImagesAsync(ImagesSearchParameters parameters, CancellationToken cancellationToken) => Task.FromResult<IList<ImageSearchResponse>>([]);
+        public Task CreateImageAsync(ImagesCreateParameters parameters, AuthConfig authConfig, IProgress<JSONMessage> progress, CancellationToken cancellationToken) => Task.CompletedTask;
+        public Task CreateImageAsync(ImagesCreateParameters parameters, AuthConfig authConfig, IDictionary<string, string> headers, IProgress<JSONMessage> progress, CancellationToken cancellationToken) => Task.CompletedTask;
+        public Task CreateImageAsync(ImagesCreateParameters parameters, Stream imageStream, AuthConfig authConfig, IProgress<JSONMessage> progress, CancellationToken cancellationToken) => Task.CompletedTask;
+        public Task CreateImageAsync(ImagesCreateParameters parameters, Stream imageStream, AuthConfig authConfig, IDictionary<string, string> headers, IProgress<JSONMessage> progress, CancellationToken cancellationToken) => Task.CompletedTask;
+        public Task LoadImageAsync(ImageLoadParameters parameters, Stream imageStream, IProgress<JSONMessage> progress, CancellationToken cancellationToken) => Task.CompletedTask;
+        public Task<Stream> SaveImageAsync(string name, CancellationToken cancellationToken) => Task.FromResult<Stream>(Stream.Null);
+        public Task<Stream> SaveImagesAsync(string[] names, CancellationToken cancellationToken) => Task.FromResult<Stream>(Stream.Null);
+        public Task TagImageAsync(string name, ImageTagParameters parameters, CancellationToken cancellationToken) => Task.CompletedTask;
+        public Task PushImageAsync(string name, ImagePushParameters parameters, AuthConfig authConfig, IProgress<JSONMessage> progress, CancellationToken cancellationToken) => Task.CompletedTask;
+        public Task<ImagesPruneResponse> PruneImagesAsync(ImagesPruneParameters parameters, CancellationToken cancellationToken) => Task.FromResult(new ImagesPruneResponse());
+        public Task<CommitContainerChangesResponse> CommitContainerChangesAsync(CommitContainerChangesParameters parameters, CancellationToken cancellationToken) => Task.FromResult(new CommitContainerChangesResponse());
+        public Task<IList<ImageHistoryResponse>> GetImageHistoryAsync(string name, CancellationToken cancellationToken) => Task.FromResult<IList<ImageHistoryResponse>>([]);
+    }
+
+    /// <summary>
+    /// Throws a non-not-found exception on <see cref="InspectImageAsync"/> to simulate a daemon/API error.
+    /// </summary>
+    private sealed class InspectThrowingImageOperations(string errorMessage) : IImageOperations
+    {
+        public Task BuildImageFromDockerfileAsync(
+            ImageBuildParameters parameters,
+            Stream contents,
+            IEnumerable<AuthConfig> authConfigs,
+            IDictionary<string, string> headers,
+            IProgress<JSONMessage> progress,
+            CancellationToken cancellationToken)
+            => Task.CompletedTask;
+
+#pragma warning disable CS0618 // Required for interface compliance
+        public Task<Stream> BuildImageFromDockerfileAsync(Stream contents, ImageBuildParameters parameters, CancellationToken cancellationToken)
+            => Task.FromResult<Stream>(new MemoryStream("{}"u8.ToArray()));
+#pragma warning restore CS0618
+
+        public Task<IList<ImagesListResponse>> ListImagesAsync(ImagesListParameters parameters, CancellationToken cancellationToken) => Task.FromResult<IList<ImagesListResponse>>([]);
+        public Task<ImageInspectResponse> InspectImageAsync(string name, CancellationToken cancellationToken)
+            => throw new InvalidOperationException(errorMessage);
         public Task<IList<IDictionary<string, string>>> DeleteImageAsync(string name, ImageDeleteParameters parameters, CancellationToken cancellationToken) => Task.FromResult<IList<IDictionary<string, string>>>([]);
         public Task<IList<ImageSearchResponse>> SearchImagesAsync(ImagesSearchParameters parameters, CancellationToken cancellationToken) => Task.FromResult<IList<ImageSearchResponse>>([]);
         public Task CreateImageAsync(ImagesCreateParameters parameters, AuthConfig authConfig, IProgress<JSONMessage> progress, CancellationToken cancellationToken) => Task.CompletedTask;

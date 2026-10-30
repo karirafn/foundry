@@ -1493,7 +1493,7 @@
         "tags": [
           "Settings"
         ],
-        "summary": "Updates the worker image build flags",
+        "summary": "Updates the worker image tag, build toggle, and build flags",
         "operationId": "UpdateWorkerImageConfiguration",
         "requestBody": {
           "content": {
@@ -1984,6 +1984,8 @@
           "usageLimitResetsAt",
           "isDispatchPaused",
           "autoResumeOnUsageReset",
+          "imageTag",
+          "buildEnabled",
           "installDotnet",
           "installAngular",
           "installChromium",
@@ -2049,6 +2051,12 @@
             "type": "boolean"
           },
           "autoResumeOnUsageReset": {
+            "type": "boolean"
+          },
+          "imageTag": {
+            "type": "string"
+          },
+          "buildEnabled": {
             "type": "boolean"
           },
           "installDotnet": {
@@ -3084,6 +3092,8 @@
       },
       "UpdateWorkerImageConfigurationRequestBody": {
         "required": [
+          "imageTag",
+          "buildEnabled",
           "installDotnet",
           "installAngular",
           "installChromium",
@@ -3091,6 +3101,12 @@
         ],
         "type": "object",
         "properties": {
+          "imageTag": {
+            "type": "string"
+          },
+          "buildEnabled": {
+            "type": "boolean"
+          },
           "installDotnet": {
             "type": "boolean"
           },

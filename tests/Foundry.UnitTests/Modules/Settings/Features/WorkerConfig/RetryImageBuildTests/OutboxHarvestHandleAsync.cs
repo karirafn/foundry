@@ -16,7 +16,7 @@ using Xunit;
 namespace Foundry.UnitTests.Modules.Settings.Features.WorkerConfig.RetryImageBuildTests;
 
 /// <summary>
-/// Verifies that RetryImageBuild.Handler enqueues WorkerImageConfigurationChanged and
+/// Verifies that RetryImageBuild.Handler enqueues WorkerImageSettingsChanged and
 /// the outbox interceptor harvests the event atomically (via SaveChangesAsync added in step 9a).
 /// </summary>
 public sealed class OutboxHarvestHandleAsync : IAsyncDisposable
@@ -60,7 +60,7 @@ public sealed class OutboxHarvestHandleAsync : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenStatusIsFailed_WorkerImageConfigurationChangedRowPersistedAtomically()
+    public async Task WhenStatusIsFailed_WorkerImageSettingsChangedRowPersistedAtomically()
     {
         // Arrange — seed settings with Failed image build state
         using (IServiceScope seedScope = _serviceProvider.CreateScope())
@@ -87,12 +87,12 @@ public sealed class OutboxHarvestHandleAsync : IAsyncDisposable
         // Assert — success
         result.ShouldBeOfType<Result<GlobalSettingsSummary>.Success>();
 
-        // Assert — WorkerImageConfigurationChanged outbox row written to database
+        // Assert — WorkerImageSettingsChanged outbox row written to database
         dbContext.ChangeTracker.Clear();
         List<OutboxMessage> messages = await dbContext
             .Set<OutboxMessage>()
             .ToListAsync(TestContext.Current.CancellationToken);
-        messages.ShouldContain(m => m.Type.Contains(nameof(WorkerImageConfigurationChanged)));
+        messages.ShouldContain(m => m.Type.Contains(nameof(WorkerImageSettingsChanged)));
     }
 
     [Fact]

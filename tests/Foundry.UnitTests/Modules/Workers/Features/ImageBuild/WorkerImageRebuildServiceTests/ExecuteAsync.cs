@@ -4,7 +4,6 @@ using Docker.DotNet;
 using Docker.DotNet.Models;
 
 using Foundry.Modules.Settings.Contracts.Queries;
-using Foundry.Modules.Workers.Features;
 using Foundry.Modules.Workers.Features.ImageBuild;
 using Foundry.Shared;
 using Foundry.Testing;
@@ -13,7 +12,6 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
 
 using Shouldly;
 
@@ -34,22 +32,11 @@ public sealed class ExecuteAsync
 
         ServiceProvider sp = services.BuildServiceProvider();
 
-        WorkerOptions workerOptions = new()
-        {
-            Image = "test-image:latest",
-            ImageBuild = new ImageBuildOptions
-            {
-                Enabled = true,
-                ContextPath = string.Empty,
-            },
-        };
-
         return new WorkerImageRebuildService(
             queue,
             sp.GetRequiredService<IServiceScopeFactory>(),
             new NullImageOperations(),
             new StubHostEnvironment(string.Empty),
-            Options.Create(workerOptions),
             new CapturingLoggerAdapter<WorkerImageRebuildService>(logger));
     }
 

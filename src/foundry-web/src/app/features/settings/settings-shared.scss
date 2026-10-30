@@ -96,7 +96,8 @@
   }
 
   &__api-key-input,
-  &__number-input {
+  &__number-input,
+  &__text-input {
     @include input-control;
     color: var(--fd-text-primary);
     font-size: 0.875rem;
@@ -123,6 +124,16 @@
 
   &__number-input {
     width: 100%;
+  }
+
+  &__text-input {
+    font-family: var(--fd-font-mono);
+    min-height: 44px;
+    width: 100%;
+
+    &::placeholder {
+      color: var(--fd-text-tertiary);
+    }
   }
 
   &__toggle-visibility-btn {
@@ -171,12 +182,7 @@
     margin-top: 0.0625rem;
   }
 
-  &__field-error {
-    color: var(--fd-text-error);
-    font-size: 0.875rem;
-    overflow-wrap: break-word;
-  }
-
+  &__field-error,
   &__save-error,
   &__switch-error {
     color: var(--fd-text-error);
@@ -252,14 +258,12 @@
     gap: var(--fd-spacing-sm);
   }
 
-  &__switch-confirm-btn {
+  &__switch-confirm-btn,
+  &__switch-cancel-btn {
     background: transparent;
-    border: 1px solid var(--fd-text-link);
     border-radius: var(--fd-radius-sm);
-    color: var(--fd-text-link);
     cursor: pointer;
     font-size: 0.875rem;
-    font-weight: 500;
     min-height: 44px;
     padding: var(--fd-spacing-xs) var(--fd-spacing-md);
 
@@ -267,18 +271,15 @@
     &:focus-visible { @include focus-ring; }
   }
 
-  &__switch-cancel-btn {
-    background: transparent;
-    border: 1px solid var(--fd-border-default);
-    border-radius: var(--fd-radius-sm);
-    color: var(--fd-text-secondary);
-    cursor: pointer;
-    font-size: 0.875rem;
-    min-height: 44px;
-    padding: var(--fd-spacing-xs) var(--fd-spacing-md);
+  &__switch-confirm-btn {
+    border: 1px solid var(--fd-text-link);
+    color: var(--fd-text-link);
+    font-weight: 500;
+  }
 
-    &:hover { background: var(--fd-bg-card-hover); }
-    &:focus-visible { @include focus-ring; }
+  &__switch-cancel-btn {
+    border: 1px solid var(--fd-border-default);
+    color: var(--fd-text-secondary);
   }
 
   &__drain-gate {

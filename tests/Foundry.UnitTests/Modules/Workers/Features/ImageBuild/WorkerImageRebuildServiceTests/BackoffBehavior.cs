@@ -2,7 +2,6 @@ using System.Runtime.CompilerServices;
 
 using Foundry.Modules.Settings.Contracts.Queries;
 using Foundry.Modules.Workers.Contracts;
-using Foundry.Modules.Workers.Features;
 using Foundry.Modules.Workers.Features.ImageBuild;
 using Foundry.Shared;
 
@@ -10,7 +9,6 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging.Abstractions;
-using Microsoft.Extensions.Options;
 
 using Shouldly;
 
@@ -20,24 +18,31 @@ namespace Foundry.UnitTests.Modules.Workers.Features.ImageBuild.WorkerImageRebui
 
 public sealed class BackoffBehavior
 {
+    // ContentRootPath=/tmp → solutionRoot=/ → context=solutionRoot/workers=/workers
+    // /workers does not exist so TarFile.CreateFromDirectoryAsync throws, causing a build failure.
+    private const string FailingContentRootPath = "/tmp";
+
     private static WorkerImageRebuildService BuildServiceWithFailingContextPath(
         IWorkerImageRebuildQueue queue,
-        IIntegrationEventDispatcher? dispatcher = null,
-        TimeSpan? initialBackoff = null)
+        IIntegrationEventDispatcher? dispatcher = null)
+        => BuildServiceCore(queue, dispatcher, contentRootPath: FailingContentRootPath);
+
+    private static WorkerImageRebuildService BuildServiceWithFastRetryPolicy(
+        IWorkerImageRebuildQueue queue,
+        IIntegrationEventDispatcher? dispatcher = null)
         => BuildServiceCore(
             queue,
             dispatcher,
-            // ContentRootPath=/tmp → solutionRoot=/ → resolved contextPath=/nonexistent-path-for-test
-            contentRootPath: "/tmp",
-            relativeContextPath: "nonexistent-path-for-test",
-            initialBackoff: initialBackoff);
+            contentRootPath: FailingContentRootPath,
+            testOnlyRetryPolicy: new ImageBuildRetryPolicy(
+                InitialBackoff: TimeSpan.FromMilliseconds(5),
+                MaxBackoff: TimeSpan.FromMilliseconds(10)));
 
     private static WorkerImageRebuildService BuildServiceCore(
         IWorkerImageRebuildQueue queue,
         IIntegrationEventDispatcher? dispatcher,
-        string contentRootPath,
-        string relativeContextPath,
-        TimeSpan? initialBackoff)
+        string contentRootPath = FailingContentRootPath,
+        ImageBuildRetryPolicy? testOnlyRetryPolicy = null)
     {
         ServiceCollection services = new();
         services.AddScoped<IGlobalSettingsQueries>(_ => new StubGlobalSettingsQueries());
@@ -46,31 +51,20 @@ public sealed class BackoffBehavior
 
         ServiceProvider sp = services.BuildServiceProvider();
 
-        WorkerOptions workerOptions = new()
-        {
-            Image = "test-image:latest",
-            ImageBuild = new ImageBuildOptions
-            {
-                Enabled = true,
-                ContextPath = relativeContextPath,
-                InitialBackoff = initialBackoff ?? TimeSpan.FromMilliseconds(1),
-                MaxBackoff = TimeSpan.FromMilliseconds(100),
-            },
-        };
+        IServiceScopeFactory factory = sp.GetRequiredService<IServiceScopeFactory>();
+        NullImageOperations images = new();
+        StubHostEnvironment env = new(contentRootPath);
 
-        return new WorkerImageRebuildService(
-            queue,
-            sp.GetRequiredService<IServiceScopeFactory>(),
-            new NullImageOperations(),
-            new StubHostEnvironment(contentRootPath),
-            Options.Create(workerOptions),
-            NullLogger<WorkerImageRebuildService>.Instance);
+        return testOnlyRetryPolicy is null
+            ? new WorkerImageRebuildService(queue, factory, images, env, NullLogger<WorkerImageRebuildService>.Instance)
+            : new WorkerImageRebuildService(queue, factory, images, env, NullLogger<WorkerImageRebuildService>.Instance, testOnlyRetryPolicy);
     }
 
     [Fact]
     public async Task WhenImmediateRebuildRequested_CancelsScheduledRetry()
     {
-        // Arrange — long backoff (500ms) so the delayed retry cannot fire before we supersede it.
+        // Arrange — the service uses a 30s constant backoff, which is long enough that the
+        // delayed retry cannot fire before we supersede it with RequestImmediateRebuild.
         // Use a non-existent context path so the build fails and a retry is scheduled.
 
         // The dispatcher signals when the OutcomeFailed event is dispatched, which means the
@@ -81,9 +75,7 @@ public sealed class BackoffBehavior
         WorkerImageRebuildService sut = BuildServiceCore(
             queue,
             signallingDispatcher,
-            contentRootPath: "/tmp",
-            relativeContextPath: "nonexistent-path-for-test",
-            initialBackoff: TimeSpan.FromMilliseconds(500));
+            contentRootPath: FailingContentRootPath);
 
         using CancellationTokenSource cts = new();
         await sut.StartAsync(cts.Token);
@@ -126,9 +118,7 @@ public sealed class BackoffBehavior
         WorkerImageRebuildService sut = BuildServiceCore(
             queue,
             signal,
-            contentRootPath: "/tmp",
-            relativeContextPath: "nonexistent-path-for-test",
-            initialBackoff: TimeSpan.FromMilliseconds(500));
+            contentRootPath: FailingContentRootPath);
 
         using CancellationTokenSource cts = new();
         await sut.StartAsync(cts.Token);
@@ -151,29 +141,88 @@ public sealed class BackoffBehavior
     }
 
     [Fact]
-    public async Task WhenBuildFailsAndDelayElapses_ReEnqueuesRebuild()
+    public async Task WhenBuildFails_NextRetryAtReflectsThirtySecondInitialBackoff()
     {
-        // Arrange — tiny backoff so the delay fires almost immediately
+        // Arrange — the service uses constant InitialBackoff=30s; verify the published
+        // NextRetryAt is at least 30s in the future (attempt 1 → 30s * 2^0 = 30s).
+        using SignallingDispatcher dispatcher = new();
         using ControlledQueue queue = new();
-        // Use a non-existent context path so the build fails (TarFile throws DirectoryNotFoundException)
-        WorkerImageRebuildService sut = BuildServiceWithFailingContextPath(
-            queue,
-            initialBackoff: TimeSpan.FromMilliseconds(5));
+        WorkerImageRebuildService sut = BuildServiceWithFailingContextPath(queue, dispatcher);
 
         using CancellationTokenSource cts = new();
+        DateTimeOffset before = DateTimeOffset.UtcNow;
         await sut.StartAsync(cts.Token);
 
-        // Signal one rebuild
         queue.Enqueue();
 
-        // Wait deterministically for the delayed retry to fire (5ms backoff).
-        bool retryFired = await queue.WaitForTryEnqueueAsync(TimeSpan.FromSeconds(5));
+        bool failureNotified = await dispatcher.WaitForFailureEventAsync(TimeSpan.FromSeconds(5));
 
         await cts.CancelAsync();
         await sut.StopAsync(CancellationToken.None);
 
-        // Assert — TryEnqueue was called once (the delayed retry fired after the failure)
-        retryFired.ShouldBeTrue("the delayed retry should have re-enqueued a rebuild after the backoff elapsed");
+        // Assert
+        failureNotified.ShouldBeTrue();
+        ImageBuildOutcomeFailed lastFailed = dispatcher.LastFailedEvent.ShouldNotBeNull();
+        lastFailed.NextRetryAt.ShouldNotBeNull();
+        DateTimeOffset nextRetryAt = lastFailed.NextRetryAt.Value;
+        nextRetryAt.ShouldBeGreaterThan(before + TimeSpan.FromSeconds(29));
+    }
+
+    [Fact]
+    public async Task WhenBuildFails_SchedulesDelayedRetry()
+    {
+        // Arrange — verify that after a build failure an ImageBuildOutcomeFailed event is dispatched,
+        // which proves the retry was scheduled (the actual delay fires after 30s, tested end-to-end).
+        using SignallingDispatcher dispatcher = new();
+        using ControlledQueue queue = new();
+        WorkerImageRebuildService sut = BuildServiceWithFailingContextPath(queue, dispatcher);
+
+        using CancellationTokenSource cts = new();
+        await sut.StartAsync(cts.Token);
+
+        // Signal one rebuild — the build will fail (non-existent context path).
+        queue.Enqueue();
+
+        // Wait deterministically for the failure event.
+        bool failureNotified = await dispatcher.WaitForFailureEventAsync(TimeSpan.FromSeconds(5));
+
+        await cts.CancelAsync();
+        await sut.StopAsync(CancellationToken.None);
+
+        // Assert — failure event dispatched confirms the retry was scheduled.
+        failureNotified.ShouldBeTrue("the service should have dispatched an ImageBuildOutcomeFailed event after build failure");
+    }
+
+    [Fact]
+    public async Task WhenBuildFailsAndDelayElapses_ReEnqueuesRebuild()
+    {
+        // Arrange — use a fast retry policy (5ms/10ms) so the delayed retry fires in test time
+        // without 30-second production waits.  The test verifies that ScheduleDelayedRetryAsync
+        // actually calls TryEnqueue after the delay, closing the gap the old configurable test covered.
+        using SignallingDispatcher dispatcher = new();
+        using ControlledQueue queue = new();
+        WorkerImageRebuildService sut = BuildServiceWithFastRetryPolicy(queue, dispatcher);
+
+        using CancellationTokenSource cts = new();
+        await sut.StartAsync(cts.Token);
+
+        // Signal one rebuild — the build will fail (non-existent context path).
+        queue.Enqueue();
+
+        // Wait for the failure event so the delayed retry task is running.
+        bool failureNotified = await dispatcher.WaitForFailureEventAsync(TimeSpan.FromSeconds(5));
+        failureNotified.ShouldBeTrue("the service should have dispatched an ImageBuildOutcomeFailed event");
+
+        // Wait for ScheduleDelayedRetryAsync to call TryEnqueue after the 5ms delay.
+        bool reEnqueued = await queue.WaitForTryEnqueueAsync(TimeSpan.FromSeconds(5));
+
+        await cts.CancelAsync();
+        await sut.StopAsync(CancellationToken.None);
+
+        // Assert — the delayed retry path called TryEnqueue, re-enqueuing the rebuild.
+        reEnqueued.ShouldBeTrue("ScheduleDelayedRetryAsync should have called TryEnqueue after the backoff delay");
+        queue.TryEnqueueCount.ShouldBeGreaterThanOrEqualTo(1,
+            "TryEnqueue must have been called at least once by the delayed retry");
     }
 
     // -------------------------------------------------------------------------
@@ -284,6 +333,8 @@ public sealed class BackoffBehavior
     {
         private readonly SemaphoreSlim _failureSignal = new(initialCount: 0, maxCount: 1);
 
+        public ImageBuildOutcomeFailed? LastFailedEvent { get; private set; }
+
         public void Dispose() => _failureSignal.Dispose();
 
         public Task<bool> WaitForFailureEventAsync(TimeSpan timeout)
@@ -293,8 +344,9 @@ public sealed class BackoffBehavior
         {
             foreach (IIntegrationEvent @event in events)
             {
-                if (@event is ImageBuildOutcomeFailed && _failureSignal.CurrentCount == 0)
+                if (@event is ImageBuildOutcomeFailed failed && _failureSignal.CurrentCount == 0)
                 {
+                    LastFailedEvent = failed;
                     _failureSignal.Release();
                 }
             }

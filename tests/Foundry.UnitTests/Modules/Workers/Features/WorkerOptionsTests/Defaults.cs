@@ -17,7 +17,6 @@ public sealed class Defaults
 
         // Assert
         options.ShouldSatisfyAllConditions(
-            () => options.Image.ShouldBe("ghcr.io/anthropics/claude-code"),
             () => options.Mounts.ShouldBeEmpty(),
             () => options.WritableMounts.ShouldBeEmpty(),
             () => options.MemoryLimitMb.ShouldBe(8192),
