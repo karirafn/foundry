@@ -139,6 +139,13 @@
     min-width: 0;
   }
 
+  &__nav-divider {
+    border: none;
+    border-block-start: 1px solid var(--fd-border-default);
+    margin-block: var(--fd-spacing-xs);
+    width: 100%;
+  }
+
   @media (max-width: 768px) {
     &__body {
       flex-direction: column;
@@ -154,6 +161,15 @@
     &__nav-link--active {
       border-inline-start: none;
       border-block-end: 2px solid var(--fd-text-link);
+    }
+
+    &__nav-divider {
+      border-block-start: none;
+      border-inline-start: 1px solid var(--fd-border-default);
+      width: auto;
+      margin-block: 0;
+      margin-inline: var(--fd-spacing-xs);
+      align-self: stretch;
     }
   }
 }

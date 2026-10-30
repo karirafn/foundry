@@ -73,7 +73,7 @@ describe('ImageBuildBannerComponent', () => {
     const link = imageBuildBar.querySelector('a.system-banner__details-link') as HTMLAnchorElement;
     expect(link).toBeTruthy();
     expect(link.textContent?.trim()).toBe('View details');
-    expect(link.getAttribute('href')).toBe('/settings/general');
+    expect(link.getAttribute('href')).toBe('/settings/worker-image');
 
     const retryBtn = imageBuildBar.querySelector('.system-banner__action-btn') as HTMLButtonElement;
     expect(retryBtn).toBeTruthy();

@@ -93,7 +93,7 @@ describe('SettingsLayoutComponent', () => {
     expect(heading?.textContent?.trim()).toBe('Settings');
   });
 
-  it('should render sidebar nav with General, Accounts, and Repositories links', () => {
+  it('should render sidebar nav with all 8 links in order', () => {
     // Arrange
     const { fixture, httpMock } = setup();
 
@@ -106,7 +106,33 @@ describe('SettingsLayoutComponent', () => {
     const el = fixture.nativeElement as HTMLElement;
     const navLinks = el.querySelectorAll('.settings-layout__nav-link');
     const linkTexts = Array.from(navLinks).map(link => link.textContent?.trim());
-    expect(linkTexts).toEqual(['General', 'Accounts', 'Repositories']);
+    expect(linkTexts).toEqual([
+      'Dispatch',
+      'Worker image',
+      'Worker environment',
+      'Claude Code',
+      'Prompts',
+      'Provider hosts',
+      'Accounts',
+      'Repositories',
+    ]);
+  });
+
+  it('should render a decorative nav divider between Provider hosts and Accounts', () => {
+    // Arrange
+    const { fixture, httpMock } = setup();
+
+    // Act
+    fixture.detectChanges();
+    flushSettings(httpMock);
+    fixture.detectChanges();
+
+    // Assert
+    const el = fixture.nativeElement as HTMLElement;
+    const divider = el.querySelector('.settings-layout__nav-divider') as HTMLElement;
+    expect(divider).toBeTruthy();
+    expect(divider.getAttribute('aria-hidden')).toBe('true');
+    expect(divider.tagName.toLowerCase()).toBe('hr');
   });
 
   it('should wrap nav links in a nav element with aria-label', () => {
@@ -279,7 +305,7 @@ describe('SettingsLayoutComponent', () => {
     expect(backLink?.textContent).toContain('Back to issues');
   });
 
-  it('should redirect from /settings to /settings/general', async () => {
+  it('should redirect from /settings to /settings/dispatch', async () => {
     // Arrange
     TestBed.resetTestingModule();
     TestBed.configureTestingModule({
@@ -300,14 +326,42 @@ describe('SettingsLayoutComponent', () => {
     await router.navigateByUrl('/settings');
 
     // Assert
-    expect(router.url).toBe('/settings/general');
+    expect(router.url).toBe('/settings/dispatch');
 
     const hm = TestBed.inject(HttpTestingController);
     hm.match('/api/settings');
     hm.match('/api/credentials');
   });
 
-  it('should set aria-current="page" on the active nav link', async () => {
+  it('should redirect from /settings/general to /settings/dispatch', async () => {
+    // Arrange
+    TestBed.resetTestingModule();
+    TestBed.configureTestingModule({
+      providers: [
+        SettingsService,
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        provideRouter([
+          { path: 'settings', children: SETTINGS_ROUTES },
+        ]),
+        { provide: SystemSignalRService, useValue: mockSystemSignalR },
+        { provide: RateBudgetService, useValue: mockRateBudgetService },
+      ],
+    });
+    const router = TestBed.inject(Router);
+
+    // Act
+    await router.navigateByUrl('/settings/general');
+
+    // Assert
+    expect(router.url).toBe('/settings/dispatch');
+
+    const hm = TestBed.inject(HttpTestingController);
+    hm.match('/api/settings');
+    hm.match('/api/credentials');
+  });
+
+  it('should set aria-current="page" on the active nav link when on dispatch', async () => {
     // Arrange
     TestBed.resetTestingModule();
     TestBed.configureTestingModule({
@@ -323,7 +377,7 @@ describe('SettingsLayoutComponent', () => {
       ],
     });
     const httpMock = TestBed.inject(HttpTestingController);
-    const harness = await RouterTestingHarness.create('/settings/general');
+    const harness = await RouterTestingHarness.create('/settings/dispatch');
     httpMock.expectOne('/api/settings').flush(SETTINGS_RESPONSE);
     httpMock.expectOne('/api/credentials').flush(CREDENTIALS_RESPONSE);
     harness.detectChanges();
@@ -336,7 +390,7 @@ describe('SettingsLayoutComponent', () => {
     // Assert
     const activeLink = rootEl.querySelector('.settings-layout__nav-link--active');
     expect(activeLink).toBeTruthy();
-    expect(activeLink?.textContent?.trim()).toBe('General');
+    expect(activeLink?.textContent?.trim()).toBe('Dispatch');
     expect(activeLink?.getAttribute('aria-current')).toBe('page');
 
     httpMock.verify();

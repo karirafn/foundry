@@ -43,7 +43,7 @@
         @if (settingsService.imageBuildLogTail()) {
           <span class="system-banner__log-tail"><span class="sr-only">Build log (partial): </span>{{ settingsService.imageBuildLogTail() | slice: -120 }}</span>
         }
-        <a routerLink="/settings/general" class="system-banner__details-link" aria-label="View image build details">View details</a>
+        <a routerLink="/settings/worker-image" class="system-banner__details-link" aria-label="View image build details">View details</a>
         <button
           type="button"
           class="system-banner__action-btn"

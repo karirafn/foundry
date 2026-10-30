@@ -2,8 +2,7 @@
  * Shared test harness for settings-page component specs.
  *
  * Import fixtures and helpers from here instead of duplicating them in each
- * page spec.  The existing settings-general.spec.ts keeps its own local copy
- * until the final refactor step removes the general page.
+ * page spec.
  */
 import { TestBed, ComponentFixture } from '@angular/core/testing';
 import { Type } from '@angular/core';
@@ -31,7 +30,7 @@ export const mockRateBudgetService = {
 };
 
 // ---------------------------------------------------------------------------
-// Fixture constants — lifted verbatim from settings-general.spec.ts
+// Fixture constants shared across settings page specs
 // ---------------------------------------------------------------------------
 
 export const IMAGE_FLAGS_DEFAULTS = {
