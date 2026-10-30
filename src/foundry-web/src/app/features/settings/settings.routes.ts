@@ -32,6 +32,14 @@ export const SETTINGS_ROUTES: Routes = [
         canDeactivate: [unsavedChangesGuard],
       },
       {
+        path: 'claude-code',
+        loadComponent: () =>
+          import('./claude-code/settings-claude-code').then(
+            (m) => m.SettingsClaudeCodeComponent,
+          ),
+        canDeactivate: [unsavedChangesGuard],
+      },
+      {
         path: 'accounts',
         loadComponent: () =>
           import('./accounts/settings-accounts/settings-accounts').then((m) => m.SettingsAccountsComponent),
