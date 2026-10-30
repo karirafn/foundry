@@ -224,9 +224,17 @@ export class UsageWidgetComponent implements OnDestroy {
 
   constructor() {
     afterNextRender(() => {
-      // Observe the host element for container-width changes to keep aria-label in sync
-      // with the CSS container-query collapse (threshold 240px matching @container rule).
       if (typeof ResizeObserver === 'undefined') {
+        return;
+      }
+      // The CSS collapse is keyed off the `app-header-nav` container query
+      // (see usage-widget.scss `@container app-header-nav`), which resolves to the
+      // host's parent nav. The host itself is `:host { display: contents }` and so
+      // generates no box — observing it yields a 0-width contentRect and would wrongly
+      // report "collapsed" at every size, desyncing the aria-label from what is rendered.
+      // Observe the parent query container so the threshold matches the container query.
+      const queryContainer = this._hostEl.nativeElement.parentElement;
+      if (queryContainer === null) {
         return;
       }
       this._resizeObserver = new ResizeObserver((entries) => {
@@ -236,7 +244,7 @@ export class UsageWidgetComponent implements OnDestroy {
         }
         this.isCollapsed.set(entry.contentRect.width <= COLLAPSE_THRESHOLD_PX);
       });
-      this._resizeObserver.observe(this._hostEl.nativeElement);
+      this._resizeObserver.observe(queryContainer);
     });
   }
 
