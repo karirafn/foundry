@@ -727,4 +727,22 @@ describe('UsageWidgetComponent', () => {
     const email = el.querySelector('.usage-popover__email');
     expect(email?.textContent?.trim()).toBe('ops@acme.com');
   });
+
+  // Finding 3 — degenerate aria-label: collapsed=true, collapsedMeter=null (empty limits)
+  it('should return "Claude usage. Activate to see details." when collapsed and limits is empty', () => {
+    // Arrange
+    const snapshot = buildSnapshot({ limits: [] });
+    const fixture = setup(snapshot);
+    const component = fixture.componentInstance;
+
+    // Act — drive isCollapsed signal true (as ResizeObserver would on a narrow container)
+    component.isCollapsed.set(true);
+    fixture.detectChanges();
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert — label has no empty fragment between "Claude usage." and "Activate to see details."
+    const trigger = el.querySelector('.usage-widget__trigger');
+    const label = trigger?.getAttribute('aria-label') ?? '';
+    expect(label).toBe('Claude usage. Activate to see details.');
+  });
 });

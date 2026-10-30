@@ -1,4 +1,4 @@
-import { afterNextRender, ChangeDetectionStrategy, Component, computed, inject, OnDestroy, signal } from '@angular/core';
+import { afterNextRender, ChangeDetectionStrategy, Component, computed, ElementRef, inject, OnDestroy, signal } from '@angular/core';
 import { NgClass } from '@angular/common';
 import { UsageService } from '../../../core/services/usage.service';
 import { UsageSnapshot } from '../../../core/models/usage.model';
@@ -207,6 +207,7 @@ const COLLAPSE_THRESHOLD_PX = 240;
 })
 export class UsageWidgetComponent implements OnDestroy {
   private readonly _usageService = inject(UsageService);
+  private readonly _hostEl = inject(ElementRef<HTMLElement>);
   private _resizeObserver: ResizeObserver | null = null;
 
   readonly popoverId = `usage-popover-${_nextId++}`;
@@ -225,8 +226,7 @@ export class UsageWidgetComponent implements OnDestroy {
     afterNextRender(() => {
       // Observe the host element for container-width changes to keep aria-label in sync
       // with the CSS container-query collapse (threshold 240px matching @container rule).
-      const hostEl = document.querySelector('fd-usage-widget');
-      if (hostEl === null || typeof ResizeObserver === 'undefined') {
+      if (typeof ResizeObserver === 'undefined') {
         return;
       }
       this._resizeObserver = new ResizeObserver((entries) => {
@@ -236,7 +236,7 @@ export class UsageWidgetComponent implements OnDestroy {
         }
         this.isCollapsed.set(entry.contentRect.width <= COLLAPSE_THRESHOLD_PX);
       });
-      this._resizeObserver.observe(hostEl);
+      this._resizeObserver.observe(this._hostEl.nativeElement);
     });
   }
 
@@ -257,9 +257,12 @@ export class UsageWidgetComponent implements OnDestroy {
     const parts = vm.inlineMeters.map(
       (m) => `${m.label} ${m.percentLabel} ${m.severityWord.toLowerCase()}`
     );
-    if (parts.length === 0 && vm.collapsedMeter !== null) {
-      const c = vm.collapsedMeter;
-      return `Claude usage ${c.percentLabel} ${c.severityWord.toLowerCase()}. Activate to see details.`;
+    if (parts.length === 0) {
+      if (vm.collapsedMeter !== null) {
+        const c = vm.collapsedMeter;
+        return `Claude usage ${c.percentLabel} ${c.severityWord.toLowerCase()}. Activate to see details.`;
+      }
+      return 'Claude usage. Activate to see details.';
     }
     return `Claude usage. ${parts.join('. ')}. Activate to see details.`;
   }
