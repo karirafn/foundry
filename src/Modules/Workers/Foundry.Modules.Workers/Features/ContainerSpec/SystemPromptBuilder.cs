@@ -39,7 +39,7 @@ internal static class SystemPromptBuilder
 
     public static Result<string> Build(
         int issueNumber,
-        WorkerOptions options,
+        string branchNamingInstruction,
         string systemPromptTemplate,
         DispatchContext context,
         string issueApiUrl,
@@ -47,7 +47,7 @@ internal static class SystemPromptBuilder
         bool installsDocker)
     {
         string safetyPreamble = SafetyPreambleTemplate
-            .Replace("{branchNamingInstruction}", options.BranchNamingInstruction, StringComparison.Ordinal);
+            .Replace("{branchNamingInstruction}", branchNamingInstruction, StringComparison.Ordinal);
 
         string issueNumberStr = issueNumber.ToString(CultureInfo.InvariantCulture);
         string issueContent = $"""
@@ -60,7 +60,7 @@ internal static class SystemPromptBuilder
         string basePrompt = systemPromptTemplate
             .Replace("{issueNumber}", issueNumberStr, StringComparison.Ordinal)
             .Replace("{issueContent}", issueContent, StringComparison.Ordinal)
-            .Replace("{branchNamingInstruction}", options.BranchNamingInstruction, StringComparison.Ordinal);
+            .Replace("{branchNamingInstruction}", branchNamingInstruction, StringComparison.Ordinal);
 
         string prePrSection = installsDocker ? "\n\n" + BuildPrePrSection() : string.Empty;
         string prompt = safetyPreamble + "\n\n" + basePrompt + prePrSection + "\n\n" + BuildChecksSection(timeoutMinutes);

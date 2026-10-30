@@ -155,19 +155,16 @@ internal sealed class IssueClaimedHandler(
 
         string gitPat = claimed.AccountToken;
 
-        (string dbSystemPromptTemplate, string dbWorkerPromptTemplate, string _) =
+        (string systemPromptTemplate, string workerPromptTemplate, string branchNamingInstruction) =
             await settingsQueries.GetPromptTemplatesAsync(cancellationToken);
-
-        string effectiveSystemPromptTemplate = dbSystemPromptTemplate ?? _options.SystemPromptTemplate;
-        string effectiveWorkerPromptTemplate = dbWorkerPromptTemplate ?? _options.WorkerPromptTemplate;
 
         int timeoutMinutes = await settingsQueries.GetTimeoutMinutesAsync(cancellationToken);
         bool installsDocker = await settingsQueries.GetWorkerImageInstallsDockerAsync(cancellationToken);
 
         Result<string> systemPromptResult = SystemPromptBuilder.Build(
             claimed.IssueNumber,
-            _options,
-            effectiveSystemPromptTemplate,
+            branchNamingInstruction,
+            systemPromptTemplate,
             claimed.Context,
             claimed.IssueApiUrl,
             timeoutMinutes,
@@ -180,7 +177,7 @@ internal sealed class IssueClaimedHandler(
 
         string systemPrompt = systemPromptSuccess.Value;
 
-        string workerPrompt = effectiveWorkerPromptTemplate
+        string workerPrompt = workerPromptTemplate
             .Replace("{issueNumber}", claimed.IssueNumber.ToString(CultureInfo.InvariantCulture), StringComparison.Ordinal);
 
         string? authMode = await credentialQueries.GetAuthModeAsync(cancellationToken);

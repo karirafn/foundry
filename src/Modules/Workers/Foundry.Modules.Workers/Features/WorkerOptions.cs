@@ -15,20 +15,6 @@ internal sealed class WorkerOptions
 
     public ImageBuildOptions ImageBuild { get; set; } = new();
 
-    public string BranchNamingInstruction { get; set; } = "Use conventional branch naming";
-
-    public string SystemPromptTemplate { get; set; } =
-        """
-        You are implementing GitHub issue #{issueNumber}.
-
-        {issueContent}
-
-        Branch naming: {branchNamingInstruction}.
-        """;
-
-    public string WorkerPromptTemplate { get; set; } =
-        "Implement GitHub issue #{issueNumber}. Create a feature branch, make the changes, commit, and push to the remote. Open a pull request for your branch, or reuse the existing one if a pull request already exists.";
-
     /// <summary>Memory limit for worker containers in megabytes.</summary>
     public int MemoryLimitMb { get; set; } = 8192;
 
