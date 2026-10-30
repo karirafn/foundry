@@ -128,6 +128,7 @@
 
   &__text-input {
     font-family: var(--fd-font-mono);
+    min-height: 44px;
     width: 100%;
 
     &::placeholder {

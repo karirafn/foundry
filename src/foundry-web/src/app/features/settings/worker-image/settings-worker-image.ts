@@ -43,14 +43,14 @@ const ERROR_IMAGE_TAG_LATEST = "Pin a specific tag — ':latest' is not allowed 
               autocorrect="off"
               spellcheck="false"
               [ngModel]="_imageTagValue()"
-              (ngModelChange)="_imageTagValue.set($event)"
+              (ngModelChange)="_onImageTagChange($event)"
               aria-describedby="imageTag-hint imageTag-error image-flags-error"
-              [attr.aria-invalid]="_imageTagError() || !!settingsService.saveImageFlagsError() || null"
+              [attr.aria-invalid]="(_hasInteracted() && _imageTagHasError()) || !!settingsService.saveImageFlagsError() || null"
             />
             <span id="imageTag-hint" class="general-settings__field-hint">
               The Docker image tag for the worker container, e.g. <code>foundry-worker:local</code>. Pin a specific tag.
             </span>
-            <span id="imageTag-error" class="general-settings__field-error" role="alert">{{ _imageTagErrorText() }}</span>
+            <span id="imageTag-error" class="general-settings__field-error" role="alert">{{ _hasInteracted() ? _imageTagErrorText() : '' }}</span>
           </div>
 
           <label class="general-settings__checkbox-label" for="buildEnabled">
@@ -59,19 +59,25 @@ const ERROR_IMAGE_TAG_LATEST = "Pin a specific tag — ':latest' is not allowed 
               id="buildEnabled"
               [ngModel]="_buildEnabledValue()"
               (ngModelChange)="_buildEnabledValue.set($event)"
-              [attr.disabled]="settingsService.imageBuildStatus() === 'Building' || null"
-              [attr.aria-describedby]="_buildEnabledValue() ? null : 'buildEnabled-off-note'"
+              [attr.disabled]="settingsService.imageBuildStatus() === 'Building' || settingsService.savingImageFlags() || null"
+              aria-describedby="buildEnabled-hint buildEnabled-off-note"
             />
             Build the worker image on change
           </label>
 
-          @if (!_buildEnabledValue()) {
-            <p id="buildEnabled-off-note" class="general-settings__field-hint general-settings__field-hint--warning">
-              Foundry never pulls images. With building off, the tag above must already exist on the Docker host —
-              Foundry only inspects it. A missing tag leaves the image build failed and dispatch paused until the
-              image exists or you turn building back on.
-            </p>
-          }
+          <span id="buildEnabled-hint" class="general-settings__field-hint">
+            Turning this off stops Foundry building the image and locks the toolchain settings below — the tag must already exist on the Docker host.
+          </span>
+
+          <p
+            id="buildEnabled-off-note"
+            class="general-settings__field-hint general-settings__field-hint--warning"
+            [hidden]="_buildEnabledValue()"
+          >
+            Foundry never pulls images. With building off, the tag above must already exist on the Docker host —
+            Foundry only inspects it. A missing tag leaves the image build failed and dispatch paused until the
+            image exists or you turn building back on.
+          </p>
 
           <fieldset class="general-settings__image-fieldset">
             <legend class="sr-only">Preinstalled toolchains</legend>
@@ -156,7 +162,7 @@ const ERROR_IMAGE_TAG_LATEST = "Pin a specific tag — ':latest' is not allowed 
             <button
               class="general-settings__save-btn"
               type="button"
-              [disabled]="settingsService.savingImageFlags() || settingsService.imageBuildStatus() === 'Building' || !_isImageFlagsDirty() || _imageTagError()"
+              [disabled]="settingsService.savingImageFlags() || settingsService.imageBuildStatus() === 'Building' || !_isImageFlagsDirty() || _imageTagHasError()"
               (click)="saveImageFlags()"
             >{{ settingsService.savingImageFlags() ? 'Saving...' : 'Save' }}</button>
 
@@ -186,13 +192,14 @@ export class SettingsWorkerImageComponent implements UnsavedChanges {
   protected readonly _installAngularValue: WritableSignal<boolean> = signal(false);
   protected readonly _installChromiumValue: WritableSignal<boolean> = signal(false);
   protected readonly _installDockerValue: WritableSignal<boolean> = signal(false);
+  protected readonly _hasInteracted: WritableSignal<boolean> = signal(false);
   private _imageInitialized = false;
 
   protected readonly _flagsDisabled: Signal<boolean> = computed(
-    () => this.settingsService.imageBuildStatus() === 'Building' || !this._buildEnabledValue()
+    () => this.settingsService.imageBuildStatus() === 'Building' || this.settingsService.savingImageFlags() || !this._buildEnabledValue()
   );
 
-  protected readonly _imageTagError: Signal<boolean> = computed(() => {
+  protected readonly _imageTagHasError: Signal<boolean> = computed(() => {
     const tag = this._imageTagValue().trim();
     return tag.length === 0 || tag.toLowerCase().endsWith(LATEST_TAG_SUFFIX);
   });
@@ -285,6 +292,11 @@ export class SettingsWorkerImageComponent implements UnsavedChanges {
         this._imageFailureAlertTextSignal.set('');
       }
     });
+  }
+
+  protected _onImageTagChange(value: string): void {
+    this._hasInteracted.set(true);
+    this._imageTagValue.set(value);
   }
 
   hasUnsavedChanges(): boolean {

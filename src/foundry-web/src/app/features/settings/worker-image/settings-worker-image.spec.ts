@@ -304,7 +304,7 @@ describe('SettingsWorkerImageComponent', () => {
       expect(note.classList).toContain('general-settings__field-hint--warning');
     });
 
-    it('should not show explanatory note when buildEnabled is true', () => {
+    it('should keep #buildEnabled-off-note in the DOM but hidden when buildEnabled is true', () => {
       // Arrange
       const { fixture, httpMock } = setupSettingsPage(SettingsWorkerImageComponent);
       fixture.detectChanges();
@@ -313,10 +313,11 @@ describe('SettingsWorkerImageComponent', () => {
 
       // Act
       const el = fixture.nativeElement as HTMLElement;
-      const note = el.querySelector('#buildEnabled-off-note');
+      const note = el.querySelector('#buildEnabled-off-note') as HTMLElement | null;
 
-      // Assert
-      expect(note).toBeFalsy();
+      // Assert — element is present but hidden (fix 2: [hidden] instead of @if)
+      expect(note).toBeTruthy();
+      expect(note?.hidden).toBe(true);
     });
 
     it('should disable checkboxes and Save while imageBuildStatus is Building', () => {
@@ -526,16 +527,17 @@ describe('SettingsWorkerImageComponent', () => {
     });
 
     describe('image tag validation', () => {
-      it('should show "Image tag is required." error when tag is empty', () => {
+      it('should show "Image tag is required." error when tag is empty after interaction', () => {
         // Arrange
         const { fixture, httpMock } = setupSettingsPage(SettingsWorkerImageComponent);
         fixture.detectChanges();
         flushSettings(httpMock, { ...API_KEY_RESPONSE, imageTag: 'foundry-worker:local' });
         fixture.detectChanges();
 
-        // Act — clear the tag
-        const component = fixture.componentInstance as unknown as { _imageTagValue: { set: (v: string) => void } };
-        component._imageTagValue.set('');
+        // Act — simulate user interaction then clear the tag
+        const input = fixture.nativeElement.querySelector('#imageTag') as HTMLInputElement;
+        input.value = '';
+        input.dispatchEvent(new Event('input'));
         fixture.detectChanges();
 
         // Assert
@@ -544,16 +546,17 @@ describe('SettingsWorkerImageComponent', () => {
         expect(errorEl.textContent).toContain('Image tag is required.');
       });
 
-      it('should show ":latest not allowed" error when tag ends in :latest', () => {
+      it('should show ":latest not allowed" error when tag ends in :latest after interaction', () => {
         // Arrange
         const { fixture, httpMock } = setupSettingsPage(SettingsWorkerImageComponent);
         fixture.detectChanges();
         flushSettings(httpMock, { ...API_KEY_RESPONSE, imageTag: 'foundry-worker:local' });
         fixture.detectChanges();
 
-        // Act — set :latest tag
-        const component = fixture.componentInstance as unknown as { _imageTagValue: { set: (v: string) => void } };
-        component._imageTagValue.set('foundry-worker:latest');
+        // Act — simulate user interaction then set :latest tag
+        const input = fixture.nativeElement.querySelector('#imageTag') as HTMLInputElement;
+        input.value = 'foundry-worker:latest';
+        input.dispatchEvent(new Event('input'));
         fixture.detectChanges();
 
         // Assert
@@ -562,16 +565,17 @@ describe('SettingsWorkerImageComponent', () => {
         expect(errorEl.textContent).toContain(":latest' is not allowed");
       });
 
-      it('should treat :LATEST (uppercase) as invalid (case-insensitive)', () => {
+      it('should treat :LATEST (uppercase) as invalid (case-insensitive) after interaction', () => {
         // Arrange
         const { fixture, httpMock } = setupSettingsPage(SettingsWorkerImageComponent);
         fixture.detectChanges();
         flushSettings(httpMock, { ...API_KEY_RESPONSE, imageTag: 'foundry-worker:local' });
         fixture.detectChanges();
 
-        // Act
-        const component = fixture.componentInstance as unknown as { _imageTagValue: { set: (v: string) => void } };
-        component._imageTagValue.set('foundry-worker:LATEST');
+        // Act — simulate user interaction
+        const input = fixture.nativeElement.querySelector('#imageTag') as HTMLInputElement;
+        input.value = 'foundry-worker:LATEST';
+        input.dispatchEvent(new Event('input'));
         fixture.detectChanges();
 
         // Assert — validation error shown (mirrors server's OrdinalIgnoreCase)
@@ -841,6 +845,216 @@ describe('SettingsWorkerImageComponent', () => {
       });
     });
   });
+
+    describe('fix 1 — no error announced before interaction', () => {
+      it('should not set aria-invalid on imageTag before user interacts', () => {
+        // Arrange
+        const { fixture, httpMock } = setupSettingsPage(SettingsWorkerImageComponent);
+        fixture.detectChanges();
+        flushSettings(httpMock, { ...API_KEY_RESPONSE, imageTag: 'foundry-worker:local' });
+        fixture.detectChanges();
+
+        // Act — no interaction yet
+        const el = fixture.nativeElement as HTMLElement;
+        const input = el.querySelector('#imageTag') as HTMLInputElement;
+
+        // Assert
+        expect(input.getAttribute('aria-invalid')).toBeNull();
+      });
+
+      it('should not render error text before user interacts, even if tag would be invalid', () => {
+        // Arrange — settings load with a valid tag; we then set an empty tag without interaction flag
+        const { fixture, httpMock } = setupSettingsPage(SettingsWorkerImageComponent);
+        fixture.detectChanges();
+        flushSettings(httpMock, { ...API_KEY_RESPONSE, imageTag: 'foundry-worker:local' });
+        fixture.detectChanges();
+
+        // Act — no interaction yet (tag is valid so error is empty anyway; check initial render with empty tag)
+        // Simulate page load with an empty imageTag in settings (edge case)
+        const { fixture: f2, httpMock: h2 } = setupSettingsPage(SettingsWorkerImageComponent);
+        f2.detectChanges();
+        flushSettings(h2, { ...API_KEY_RESPONSE, imageTag: '' });
+        f2.detectChanges();
+
+        const el2 = f2.nativeElement as HTMLElement;
+        const errorEl = el2.querySelector('#imageTag-error') as HTMLElement;
+        const input2 = el2.querySelector('#imageTag') as HTMLInputElement;
+
+        // Assert — no error shown before interaction even though tag is empty
+        expect(errorEl.textContent?.trim()).toBe('');
+        expect(input2.getAttribute('aria-invalid')).toBeNull();
+
+        h2.verify();
+      });
+
+      it('should set aria-invalid and show error after the user interacts with imageTag', () => {
+        // Arrange
+        const { fixture, httpMock } = setupSettingsPage(SettingsWorkerImageComponent);
+        fixture.detectChanges();
+        flushSettings(httpMock, { ...API_KEY_RESPONSE, imageTag: 'foundry-worker:local' });
+        fixture.detectChanges();
+
+        // Act — simulate ngModelChange (user types)
+        const input = fixture.nativeElement.querySelector('#imageTag') as HTMLInputElement;
+        input.value = '';
+        input.dispatchEvent(new Event('input'));
+        fixture.detectChanges();
+
+        const el = fixture.nativeElement as HTMLElement;
+        const errorEl = el.querySelector('#imageTag-error') as HTMLElement;
+
+        // Assert — error is now visible and aria-invalid is set
+        expect(errorEl.textContent).toContain('Image tag is required.');
+        expect(input.getAttribute('aria-invalid')).toBe('true');
+      });
+
+      it('should still block Save even before interaction when tag is invalid', () => {
+        // Arrange — load with empty tag (invalid) but no interaction
+        const { fixture, httpMock } = setupSettingsPage(SettingsWorkerImageComponent);
+        fixture.detectChanges();
+        flushSettings(httpMock, { ...API_KEY_RESPONSE, imageTag: 'foundry-worker:local' });
+        fixture.detectChanges();
+
+        // Make the tag invalid without using the input event (direct signal set)
+        const component = fixture.componentInstance as unknown as { _imageTagValue: { set: (v: string) => void } };
+        component._imageTagValue.set('');
+        fixture.detectChanges();
+
+        // Assert — Save is still blocked
+        const el = fixture.nativeElement as HTMLElement;
+        const saveBtn = el.querySelector('.general-settings__save-btn') as HTMLButtonElement;
+        expect(saveBtn.disabled).toBe(true);
+      });
+    });
+
+    describe('fix 2 — off-note always in DOM', () => {
+      it('should keep #buildEnabled-off-note always in DOM, hidden when build is enabled', () => {
+        // Arrange
+        const { fixture, httpMock } = setupSettingsPage(SettingsWorkerImageComponent);
+        fixture.detectChanges();
+        flushSettings(httpMock, { ...API_KEY_RESPONSE, buildEnabled: true });
+        fixture.detectChanges();
+
+        // Act
+        const el = fixture.nativeElement as HTMLElement;
+        const note = el.querySelector('#buildEnabled-off-note') as HTMLElement;
+
+        // Assert
+        expect(note).toBeTruthy();
+        expect(note.hidden).toBe(true);
+      });
+
+      it('should show #buildEnabled-off-note (not hidden) when build is disabled', () => {
+        // Arrange
+        const { fixture, httpMock } = setupSettingsPage(SettingsWorkerImageComponent);
+        fixture.detectChanges();
+        flushSettings(httpMock, { ...API_KEY_RESPONSE, buildEnabled: false });
+        fixture.detectChanges();
+
+        // Act
+        const el = fixture.nativeElement as HTMLElement;
+        const note = el.querySelector('#buildEnabled-off-note') as HTMLElement;
+
+        // Assert
+        expect(note).toBeTruthy();
+        expect(note.hidden).toBe(false);
+      });
+
+      it('should reference buildEnabled-off-note in aria-describedby statically', () => {
+        // Arrange — test with build ON (note is hidden but referenced)
+        const { fixture, httpMock } = setupSettingsPage(SettingsWorkerImageComponent);
+        fixture.detectChanges();
+        flushSettings(httpMock, { ...API_KEY_RESPONSE, buildEnabled: true });
+        fixture.detectChanges();
+
+        // Act
+        const el = fixture.nativeElement as HTMLElement;
+        const checkbox = el.querySelector('#buildEnabled') as HTMLInputElement;
+        const describedBy = checkbox.getAttribute('aria-describedby') ?? '';
+
+        // Assert — static reference present regardless of toggle state
+        expect(describedBy).toContain('buildEnabled-off-note');
+      });
+    });
+
+    describe('fix 3 — toggle disabled during save', () => {
+      it('should disable buildEnabled checkbox while savingImageFlags is true', () => {
+        // Arrange
+        const { fixture, httpMock, service } = setupSettingsPage(SettingsWorkerImageComponent);
+        fixture.detectChanges();
+        flushSettings(httpMock, { ...API_KEY_RESPONSE });
+        fixture.detectChanges();
+
+        // Act — trigger a save so savingImageFlags becomes true mid-request
+        service.updateWorkerImageFlags({ imageTag: 'foundry-worker:local', buildEnabled: true, installDotnet: true, installAngular: false, installChromium: false, installDocker: false });
+        fixture.detectChanges();
+
+        const el = fixture.nativeElement as HTMLElement;
+        const buildCheckbox = el.querySelector('#buildEnabled') as HTMLInputElement;
+
+        // Assert — disabled during save
+        expect(buildCheckbox.disabled).toBe(true);
+
+        // Cleanup
+        httpMock.expectOne('/api/settings/worker-image').flush({ ...API_KEY_RESPONSE, installDotnet: true });
+      });
+
+      it('should disable toolchain checkboxes while savingImageFlags is true', () => {
+        // Arrange
+        const { fixture, httpMock, service } = setupSettingsPage(SettingsWorkerImageComponent);
+        fixture.detectChanges();
+        flushSettings(httpMock, { ...API_KEY_RESPONSE, buildEnabled: true });
+        fixture.detectChanges();
+
+        // Act — trigger a save
+        service.updateWorkerImageFlags({ imageTag: 'foundry-worker:local', buildEnabled: true, installDotnet: true, installAngular: false, installChromium: false, installDocker: false });
+        fixture.detectChanges();
+
+        const el = fixture.nativeElement as HTMLElement;
+        const fieldset = el.querySelector('.general-settings__image-fieldset') as HTMLElement;
+        const toolchainCheckboxes = Array.from(fieldset.querySelectorAll('input[type="checkbox"]')) as HTMLInputElement[];
+
+        // Assert — all four disabled during save
+        toolchainCheckboxes.forEach(cb => expect(cb.disabled).toBe(true));
+
+        // Cleanup
+        httpMock.expectOne('/api/settings/worker-image').flush({ ...API_KEY_RESPONSE, installDotnet: true });
+      });
+    });
+
+    describe('fix 4 — build toggle hint', () => {
+      it('should render a static #buildEnabled-hint span with descriptive copy', () => {
+        // Arrange
+        const { fixture, httpMock } = setupSettingsPage(SettingsWorkerImageComponent);
+        fixture.detectChanges();
+        flushSettings(httpMock);
+        fixture.detectChanges();
+
+        // Act
+        const el = fixture.nativeElement as HTMLElement;
+        const hint = el.querySelector('#buildEnabled-hint') as HTMLElement;
+
+        // Assert
+        expect(hint).toBeTruthy();
+        expect(hint.textContent).toContain('locks');
+      });
+
+      it('should include buildEnabled-hint in aria-describedby of the buildEnabled checkbox', () => {
+        // Arrange
+        const { fixture, httpMock } = setupSettingsPage(SettingsWorkerImageComponent);
+        fixture.detectChanges();
+        flushSettings(httpMock);
+        fixture.detectChanges();
+
+        // Act
+        const el = fixture.nativeElement as HTMLElement;
+        const checkbox = el.querySelector('#buildEnabled') as HTMLInputElement;
+        const describedBy = checkbox.getAttribute('aria-describedby') ?? '';
+
+        // Assert
+        expect(describedBy).toContain('buildEnabled-hint');
+      });
+    });
 
   describe('installDocker hint', () => {
     it('should render a warning hint for the installDocker checkbox with security cost text', () => {
