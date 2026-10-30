@@ -11,7 +11,7 @@ Worker containers have no network path back to Foundry today, the WebApi is unau
 The entrypoint runs `claude` with `--output-format stream-json --verbose` and streams stdout as it is produced.
 Foundry reads the events from the Docker log stream it already follows, and parses them into an in-memory per-run projection (current task list, active subagents and skills, in-flight tool, token totals, last event time).
 The projection is not persisted: after a Foundry restart it is rebuilt by re-reading the container log from the start, which lives exactly as long as the run.
-Following ADR 0063, the projection reaches the dashboard over `WorkerHub` and is replayed on connect.
+Following [ADR 0063](0063-replay-live-worker-state-over-signalr-instead-of-the-issue-read-model.md), the projection reaches the dashboard over `WorkerHub` and is replayed on connect.
 
 Steps are read from the agent's own signals (`TaskCreate`/`TaskUpdate`, `Agent` dispatches, `Skill` calls, `task_*` system events) rather than a Foundry-defined stage vocabulary, so any workflow is displayed without configuration.
 
