@@ -72,4 +72,18 @@ public sealed class TickAsync
         // Assert
         interval.ShouldBe(TimeSpan.FromMinutes(5));
     }
+
+    [Fact]
+    public void RunTickOnStartup_IsTrue()
+    {
+        // Arrange
+        StubUsagePollCoordinator coordinator = new();
+        UsagePollService sut = new(coordinator, NullLogger<UsagePollService>.Instance);
+
+        // Act
+        bool result = sut.RunTickOnStartupForTest;
+
+        // Assert
+        result.ShouldBeTrue("UsagePollService must poll at startup per AC: 'plus once at startup'");
+    }
 }

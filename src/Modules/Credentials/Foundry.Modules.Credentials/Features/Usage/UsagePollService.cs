@@ -28,11 +28,18 @@ internal sealed class UsagePollService : PeriodicBackgroundService
 
     protected override string ServiceName => nameof(UsagePollService);
 
+    protected override bool RunTickOnStartup => true;
+
     /// <summary>
     /// Exposes <see cref="TickAsync"/> for direct invocation in unit tests without
     /// spinning up the full <see cref="PeriodicBackgroundService.ExecuteAsync"/> loop.
     /// </summary>
     internal Task TickForTest(CancellationToken cancellationToken) => TickAsync(cancellationToken);
+
+    /// <summary>
+    /// Exposes <see cref="RunTickOnStartup"/> for unit test assertion.
+    /// </summary>
+    internal bool RunTickOnStartupForTest => RunTickOnStartup;
 
     protected override Task TickAsync(CancellationToken cancellationToken)
         => _coordinator.PollAsync(cancellationToken);

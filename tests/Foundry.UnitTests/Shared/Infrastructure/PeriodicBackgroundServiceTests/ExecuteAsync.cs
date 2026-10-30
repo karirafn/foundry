@@ -80,6 +80,68 @@ public sealed class ExecuteAsync
             "OperationCanceledException when stopping token is not requested must be logged at Error");
     }
 
+    [Fact]
+    public async Task WhenRunTickOnStartupIsTrue_TickFiresBeforeFirstInterval()
+    {
+        // Arrange
+        CapturingLogger logger = new();
+        StartupTickService sut = new(logger);
+
+        using CancellationTokenSource cts = new();
+
+        // Act — start service; the startup tick fires immediately, signalling StartupTickReached
+        await sut.StartAsync(cts.Token);
+        bool reached = await sut.StartupTickReached.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
+        await cts.CancelAsync();
+        await sut.StopAsync(CancellationToken.None);
+
+        // Assert
+        reached.ShouldBeTrue("startup tick must fire before the first PeriodicTimer interval");
+        sut.TickCount.ShouldBeGreaterThanOrEqualTo(1);
+    }
+
+    [Fact]
+    public async Task WhenRunTickOnStartupIsFalse_NoTickFiresBeforeFirstInterval()
+    {
+        // Arrange
+        CapturingLogger logger = new();
+        // LongIntervalCountingService has RunTickOnStartup = false (default) and a 60s interval
+        LongIntervalCountingService sut = new(logger);
+
+        using CancellationTokenSource cts = new();
+
+        // Act — start service, cancel immediately before the long interval elapses
+        await sut.StartAsync(cts.Token);
+        await cts.CancelAsync();
+        await sut.StopAsync(CancellationToken.None);
+
+        // Assert — no tick should have fired (interval hasn't elapsed; no startup tick)
+        sut.TickCount.ShouldBe(0, "no tick must fire when RunTickOnStartup is false and the interval hasn't elapsed");
+    }
+
+    [Fact]
+    public async Task WhenRunTickOnStartupIsTrueAndStartupTickThrows_ErrorIsLoggedAndLoopContinues()
+    {
+        // Arrange
+        CapturingLogger logger = new();
+        InvalidOperationException startupException = new("startup boom");
+        StartupThrowingService sut = new(logger, startupException);
+
+        using CancellationTokenSource cts = new();
+
+        // Act — start service; startup tick throws, then loop continues
+        await sut.StartAsync(cts.Token);
+        await sut.LoopTickReached.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
+        await cts.CancelAsync();
+        await sut.StopAsync(CancellationToken.None);
+
+        // Assert
+        logger.Entries.ShouldContain(
+            e => e.Level == LogLevel.Error && e.Exception == startupException,
+            "startup tick exception must be logged and must not crash the host");
+        sut.LoopTickCount.ShouldBeGreaterThanOrEqualTo(1, "loop must continue after startup tick throws");
+    }
+
     // -------------------------------------------------------------------------
     // Test-only subclasses
     // -------------------------------------------------------------------------
@@ -153,6 +215,89 @@ public sealed class ExecuteAsync
                 FirstTickCompleted.Release();
                 // Throw OCE with a fresh token that is NOT the stopping token
                 throw _exception;
+            }
+
+            return Task.CompletedTask;
+        }
+    }
+
+    private sealed class LongIntervalCountingService : PeriodicBackgroundService
+    {
+        private int _tickCount;
+
+        public int TickCount => _tickCount;
+
+        public LongIntervalCountingService(ILogger logger) : base(logger) { }
+
+        protected override TimeSpan TickInterval => TimeSpan.FromSeconds(60);
+
+        // RunTickOnStartup intentionally NOT overridden — defaults to false
+
+        protected override Task TickAsync(CancellationToken cancellationToken)
+        {
+            Interlocked.Increment(ref _tickCount);
+            return Task.CompletedTask;
+        }
+    }
+
+    private sealed class StartupTickService : PeriodicBackgroundService
+    {
+        private int _tickCount;
+
+        public SemaphoreSlim StartupTickReached { get; } = new(0, 1);
+        public int TickCount => _tickCount;
+
+        public StartupTickService(ILogger logger) : base(logger) { }
+
+        protected override TimeSpan TickInterval => TimeSpan.FromSeconds(60);
+
+        protected override bool RunTickOnStartup => true;
+
+        protected override Task TickAsync(CancellationToken cancellationToken)
+        {
+            int tick = Interlocked.Increment(ref _tickCount);
+
+            if (tick == 1)
+            {
+                StartupTickReached.Release();
+            }
+
+            return Task.CompletedTask;
+        }
+    }
+
+    private sealed class StartupThrowingService : PeriodicBackgroundService
+    {
+        private readonly Exception _startupException;
+        private int _loopTickCount;
+
+        public SemaphoreSlim LoopTickReached { get; } = new(0, 1);
+        public int LoopTickCount => _loopTickCount;
+
+        public StartupThrowingService(ILogger logger, Exception startupException) : base(logger)
+        {
+            _startupException = startupException;
+        }
+
+        protected override TimeSpan TickInterval => TimeSpan.FromMilliseconds(20);
+
+        protected override bool RunTickOnStartup => true;
+
+        private bool _startupDone;
+
+        protected override Task TickAsync(CancellationToken cancellationToken)
+        {
+            if (!_startupDone)
+            {
+                _startupDone = true;
+                throw _startupException;
+            }
+
+            int count = Interlocked.Increment(ref _loopTickCount);
+
+            if (count == 1)
+            {
+                LoopTickReached.Release();
             }
 
             return Task.CompletedTask;
