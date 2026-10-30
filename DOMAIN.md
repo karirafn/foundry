@@ -758,7 +758,8 @@ Live pushes and connect-replay use the same `WorkerActivity` client method — t
 
 **Dashboard display.**
 The in-progress issue card headline shows the branch commit count.
-Log silence (the wall-clock gap since the last log output) is a frontend-only signal shown only past a 5-minute threshold — it is rendered alongside the commit count, not instead of it.
+Log silence is a frontend-only signal derived from `LastActivityAt`, shown only past a 5-minute threshold — it is rendered alongside the commit count, not instead of it.
+Because `LastActivityAt` is refreshed on every container-alive observation (the 10 s dispatch tick), the badge appears only when observation itself stops — it does not detect an agent that is alive but idle.
 
 ## Worker Outcome Detection
 
