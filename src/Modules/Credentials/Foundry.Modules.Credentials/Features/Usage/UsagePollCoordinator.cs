@@ -60,9 +60,18 @@ internal sealed class UsagePollCoordinator(
 
             // Clear the in-flight reference when the task completes (success or fault).
             // ContinueWith always runs because the continuation handles both outcomes.
+            // Log infrastructure faults (e.g. scope creation or DB failures) that escape
+            // RunPollCoreAsync before the handled paths (HandleFailure/HandleUnparseable) can run.
             _ = task.ContinueWith(
-                _ =>
+                t =>
                 {
+                    if (t.IsFaulted)
+                    {
+                        logger.LogError(
+                            t.Exception?.InnerException,
+                            "Unhandled exception in usage poll.");
+                    }
+
                     lock (_gate)
                     {
                         _inFlightTask = null;

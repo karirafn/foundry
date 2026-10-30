@@ -8,6 +8,8 @@ using Foundry.Testing;
 using Foundry.UnitTests.Fakes.Credentials;
 using Foundry.WebApi.Persistence;
 
+using Microsoft.Extensions.Logging;
+
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -453,6 +455,111 @@ public sealed class PollAsync : IAsyncDisposable
             // Assert — broadcast null
             broadcaster.Sent.Count.ShouldBe(1);
             broadcaster.LastSent.ShouldBeNull();
+        }
+    }
+
+    // ---------------------------------------------------------------------------
+    // Behavior g: Infrastructure fault — fault is logged and _inFlightTask is cleared
+    // ---------------------------------------------------------------------------
+
+    /// <summary>
+    /// An orchestrator that throws an infrastructure exception from RunUsageReportAsync,
+    /// simulating e.g. a Docker socket failure or transient infrastructure error that
+    /// propagates before the handled Result paths can run.
+    /// </summary>
+    private sealed class ThrowingOrchestrator(Exception exception) : ICredentialsOrchestrator
+    {
+        public Task<Result<string>> RunUsageReportAsync(
+            UsageReportSpec spec,
+            CancellationToken cancellationToken)
+            => Task.FromException<Result<string>>(exception);
+
+        public Task<Result<string>> StartLoginContainerAsync(
+            LoginContainerSpec spec,
+            CancellationToken cancellationToken)
+            => Task.FromResult(Result<string>.Ok(""));
+
+        public Task<Result<string>> RunCreditProbeAsync(
+            CreditProbeSpec spec,
+            CancellationToken cancellationToken)
+            => Task.FromResult(Result<string>.Ok(""));
+
+        public Task DeliverLoginCodeAsync(
+            string containerId,
+            string code,
+            CancellationToken cancellationToken)
+            => Task.CompletedTask;
+
+        public Task<Result<AccountIdentity>> GetCredentialVolumeAuthStatusAsync(
+            CancellationToken cancellationToken)
+            => Task.FromResult(Result<AccountIdentity>.Fail(new Error("test", "not used")));
+
+        public IAsyncEnumerable<string> StreamLogsAsync(
+            string containerId,
+            CancellationToken cancellationToken)
+            => AsyncEnumerable.Empty<string>();
+
+        public Task StopContainerAsync(string containerId, CancellationToken cancellationToken)
+            => Task.CompletedTask;
+
+        public Task RemoveContainerAsync(string containerId, CancellationToken cancellationToken)
+            => Task.CompletedTask;
+
+        public Task<IReadOnlyList<string>> ListTransientContainersAsync(CancellationToken cancellationToken)
+            => Task.FromResult<IReadOnlyList<string>>([]);
+
+        public Task<IReadOnlyList<string>> ListExitedTransientContainersAsync(CancellationToken cancellationToken)
+            => Task.FromResult<IReadOnlyList<string>>([]);
+
+        public Task SeedOnboardingAsync(CancellationToken cancellationToken)
+            => Task.CompletedTask;
+
+        public Task EnsureCredentialVolumeAsync(CancellationToken cancellationToken)
+            => Task.CompletedTask;
+    }
+
+    [Fact]
+    public async Task WhenInfrastructureFaultOccurs_LogsErrorAndClearsInFlightTaskSoSubsequentPollCanRun()
+    {
+        // Arrange
+        InvalidOperationException infrastructureException = new("Docker socket unavailable.");
+        ThrowingOrchestrator throwingOrchestrator = new(infrastructureException);
+        CapturingLogger<UsagePollCoordinator> capturingLogger = new();
+
+        ServiceProvider sp = BuildServiceProvider(
+            _connection,
+            throwingOrchestrator,
+            new FakeLoginSessionState());
+        await using (sp)
+        {
+            await SeedOAuthAccountAsync(sp);
+
+            UsagePollCoordinator sut = new(
+                sp.GetRequiredService<IServiceScopeFactory>(),
+                throwingOrchestrator,
+                sp.GetRequiredService<ILoginSessionState>(),
+                sp.GetRequiredService<IUsageSnapshotState>(),
+                sp.GetRequiredService<IUsageSnapshotStateMutator>(),
+                sp.GetRequiredService<IUsageSnapshotBroadcaster>(),
+                capturingLogger);
+
+            // Act — the task returned by PollAsync faults because the orchestrator throws
+            Task<UsageSnapshot?> firstPoll = sut.PollAsync(TestContext.Current.CancellationToken);
+            await Should.ThrowAsync<InvalidOperationException>(() => firstPoll);
+
+            // Allow the ContinueWith cleanup continuation to execute
+            await Task.Delay(50, TestContext.Current.CancellationToken);
+
+            // Assert — infrastructure fault was logged via LogError with the original exception
+            capturingLogger.Entries.ShouldContain(e =>
+                e.Level == LogLevel.Error && e.Exception == infrastructureException);
+
+            // Assert — _inFlightTask is cleared: a subsequent PollAsync starts a new poll
+            // (returns a new, distinct task object — not the same faulted reference)
+            Task<UsageSnapshot?> secondPoll = sut.PollAsync(TestContext.Current.CancellationToken);
+            await Should.ThrowAsync<InvalidOperationException>(() => secondPoll);
+
+            secondPoll.ShouldNotBeSameAs(firstPoll);
         }
     }
 
