@@ -8,7 +8,7 @@ import {
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { SettingsService } from '../../../core/services/settings.service';
-import { RateBudgetPanelComponent } from './rate-budget-panel/rate-budget-panel';
+import { RateBudgetPanelComponent } from '../provider-hosts/rate-budget-panel/rate-budget-panel';
 
 const RATE_BUDGET_FLOOR = 500;
 
