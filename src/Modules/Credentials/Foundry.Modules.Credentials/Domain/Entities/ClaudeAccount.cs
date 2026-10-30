@@ -61,6 +61,35 @@ public sealed class ClaudeAccount : AggregateRoot<ClaudeAccountId>
     public DateTimeOffset UpdatedAt { get; private set; }
 
     /// <summary>
+    /// Returns true when the account can supply usage data: OAuth mode, a committed account
+    /// identity (<see cref="OAuthAccountEmail"/> is not null), and validity is not Invalid.
+    /// Spend state does not affect usage reporting — usage stays visible during a credit block.
+    /// No DB access.
+    /// </summary>
+    public bool CanReportUsage
+    {
+        get
+        {
+            if (_authModeRecord is not AuthMode.OAuth)
+            {
+                return false;
+            }
+
+            if (Validity is CredentialValidity.Invalid)
+            {
+                return false;
+            }
+
+            if (OAuthAccountEmail is null)
+            {
+                return false;
+            }
+
+            return true;
+        }
+    }
+
+    /// <summary>
     /// Returns false when validity is Invalid, spend is Blocked, or mode is API-key
     /// with a non-Present credential. Returns true otherwise. No DB access.
     /// </summary>
