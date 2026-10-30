@@ -13,19 +13,15 @@ using Foundry.Shared.Infrastructure.Docker;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
 
 namespace Foundry.Modules.Workers.Features.ImageBuild;
 
-#pragma warning disable CS9113 // WorkerOptions retained for step 8 removal; constructor param kept for DI registration continuity.
 internal sealed class WorkerImageRebuildService(
     IWorkerImageRebuildQueue rebuildQueue,
     IServiceScopeFactory scopeFactory,
     IImageOperations imageOperations,
     IHostEnvironment hostEnvironment,
-    IOptions<WorkerOptions> optionsAccessor,
     ILogger<WorkerImageRebuildService> logger) : BackgroundService, IHostedLifecycleService
-#pragma warning restore CS9113
 {
     internal const string ImageBuildCategory = "image-build";
     internal const string BaseDockerfile = "Dockerfile.base";

@@ -1,6 +1,5 @@
 using Foundry.Modules.Workers.Features;
 using Foundry.Modules.Workers.Features.ContainerSpec;
-using Foundry.Modules.Workers.Features.ImageBuild;
 
 using Microsoft.Extensions.Options;
 
@@ -15,67 +14,10 @@ public sealed class Validate
     private readonly WorkerOptionsValidator _sut = new();
 
     [Fact]
-    public void WhenImageIsEmpty_ReturnsFailure()
-    {
-        // Arrange
-        WorkerOptions options = new() { Image = string.Empty };
-
-        // Act
-        ValidateOptionsResult result = _sut.Validate(null, options);
-
-        // Assert
-        result.Failed.ShouldBeTrue();
-    }
-
-    [Fact]
-    public void WhenImageIsEmpty_FailureMessageMentionsImage()
-    {
-        // Arrange
-        WorkerOptions options = new() { Image = string.Empty };
-
-        // Act
-        ValidateOptionsResult result = _sut.Validate(null, options);
-
-        // Assert
-        IEnumerable<string> failures = result.Failures.ShouldNotBeNull();
-        failures.ShouldContain(f => f.Contains("Image"));
-    }
-
-    [Fact]
-    public void WhenImageEndsWithLatestTag_ReturnsFailure()
-    {
-        // Arrange
-        WorkerOptions options = new() { Image = "ghcr.io/anthropics/claude-code:latest" };
-
-        // Act
-        ValidateOptionsResult result = _sut.Validate(null, options);
-
-        // Assert
-        result.Failed.ShouldBeTrue();
-    }
-
-    [Fact]
-    public void WhenImageEndsWithLatestTag_FailureMessageMentionsPinning()
-    {
-        // Arrange
-        WorkerOptions options = new() { Image = "ghcr.io/anthropics/claude-code:latest" };
-
-        // Act
-        ValidateOptionsResult result = _sut.Validate(null, options);
-
-        // Assert
-        IEnumerable<string> failures = result.Failures.ShouldNotBeNull();
-        failures.ShouldContain(f => f.Contains(":latest"));
-    }
-
-    [Fact]
     public void WhenAllValid_ReturnsSuccess()
     {
         // Arrange
-        WorkerOptions options = new()
-        {
-            Image = "ghcr.io/anthropics/claude-code:v1.0",
-        };
+        WorkerOptions options = new();
 
         // Act
         ValidateOptionsResult result = _sut.Validate(null, options);
@@ -90,7 +32,6 @@ public sealed class Validate
         // Arrange
         WorkerOptions options = new()
         {
-            Image = "ghcr.io/anthropics/claude-code:v1.0",
             Mounts = new Dictionary<string, string>(),
             WritableMounts = new Dictionary<string, string>(),
         };
@@ -108,7 +49,6 @@ public sealed class Validate
         // Arrange
         WorkerOptions options = new()
         {
-            Image = "ghcr.io/anthropics/claude-code:v1.0",
             Mounts = new Dictionary<string, string> { ["/config/"] = "/host/config" },
             WritableMounts = new Dictionary<string, string> { ["/data/"] = "/host/data" },
         };
@@ -126,7 +66,6 @@ public sealed class Validate
         // Arrange
         WorkerOptions options = new()
         {
-            Image = "ghcr.io/anthropics/claude-code:v1.0",
             Mounts = new Dictionary<string, string> { ["/shared/"] = "/host/a" },
             WritableMounts = new Dictionary<string, string> { ["/shared/"] = "/host/b" },
         };
@@ -144,7 +83,6 @@ public sealed class Validate
         // Arrange
         WorkerOptions options = new()
         {
-            Image = "ghcr.io/anthropics/claude-code:v1.0",
             Mounts = new Dictionary<string, string> { ["/shared/"] = "/host/a" },
             WritableMounts = new Dictionary<string, string> { ["/shared/"] = "/host/b" },
         };
@@ -163,7 +101,6 @@ public sealed class Validate
         // Arrange
         WorkerOptions options = new()
         {
-            Image = "ghcr.io/anthropics/claude-code:v1.0",
             Mounts = new Dictionary<string, string> { ["relative/path"] = "/host/config" },
             WritableMounts = new Dictionary<string, string>(),
         };
@@ -181,7 +118,6 @@ public sealed class Validate
         // Arrange
         WorkerOptions options = new()
         {
-            Image = "ghcr.io/anthropics/claude-code:v1.0",
             Mounts = new Dictionary<string, string>(),
             WritableMounts = new Dictionary<string, string> { ["no/leading/slash"] = "/host/data" },
         };
@@ -199,7 +135,6 @@ public sealed class Validate
         // Arrange
         WorkerOptions options = new()
         {
-            Image = "ghcr.io/anthropics/claude-code:v1.0",
             Mounts = new Dictionary<string, string> { ["/safe/../escape"] = "/host/config" },
             WritableMounts = new Dictionary<string, string>(),
         };
@@ -217,7 +152,6 @@ public sealed class Validate
         // Arrange
         WorkerOptions options = new()
         {
-            Image = "ghcr.io/anthropics/claude-code:v1.0",
             Mounts = new Dictionary<string, string>(),
             WritableMounts = new Dictionary<string, string> { ["/safe/../escape"] = "/host/data" },
         };
@@ -241,7 +175,6 @@ public sealed class Validate
         // Arrange
         WorkerOptions options = new()
         {
-            Image = "ghcr.io/anthropics/claude-code:v1.0",
             Mounts = new Dictionary<string, string> { [sensitivePath] = "/host/config" },
             WritableMounts = new Dictionary<string, string>(),
         };
@@ -265,7 +198,6 @@ public sealed class Validate
         // Arrange
         WorkerOptions options = new()
         {
-            Image = "ghcr.io/anthropics/claude-code:v1.0",
             Mounts = new Dictionary<string, string>(),
             WritableMounts = new Dictionary<string, string> { [sensitivePath] = "/host/data" },
         };
@@ -288,7 +220,6 @@ public sealed class Validate
         // Arrange
         WorkerOptions options = new()
         {
-            Image = "ghcr.io/anthropics/claude-code:v1.0",
             Mounts = new Dictionary<string, string> { [sensitivePath] = "/host/config" },
             WritableMounts = new Dictionary<string, string>(),
         };
@@ -312,7 +243,6 @@ public sealed class Validate
         // Arrange
         WorkerOptions options = new()
         {
-            Image = "ghcr.io/anthropics/claude-code:v1.0",
             Mounts = new Dictionary<string, string> { [subPath] = "/host/config" },
             WritableMounts = new Dictionary<string, string>(),
         };
@@ -334,7 +264,6 @@ public sealed class Validate
         // Arrange
         WorkerOptions options = new()
         {
-            Image = "ghcr.io/anthropics/claude-code:v1.0",
             Mounts = new Dictionary<string, string>(),
             WritableMounts = new Dictionary<string, string> { [subPath] = "/host/data" },
         };
@@ -361,7 +290,6 @@ public sealed class Validate
         // Arrange
         WorkerOptions options = new()
         {
-            Image = "ghcr.io/anthropics/claude-code:v1.0",
             Mounts = new Dictionary<string, string> { ["/config"] = sensitivePath },
             WritableMounts = new Dictionary<string, string>(),
         };
@@ -385,7 +313,6 @@ public sealed class Validate
         // Arrange
         WorkerOptions options = new()
         {
-            Image = "ghcr.io/anthropics/claude-code:v1.0",
             Mounts = new Dictionary<string, string>(),
             WritableMounts = new Dictionary<string, string> { ["/workspace"] = sensitivePath },
         };
@@ -403,7 +330,6 @@ public sealed class Validate
         // Arrange
         WorkerOptions options = new()
         {
-            Image = "ghcr.io/anthropics/claude-code:v1.0",
             Mounts = new Dictionary<string, string> { ["/var/run/docker.sock"] = "/var/run/docker.sock" },
             WritableMounts = new Dictionary<string, string>(),
         };
@@ -421,7 +347,6 @@ public sealed class Validate
         // Arrange
         WorkerOptions options = new()
         {
-            Image = "ghcr.io/anthropics/claude-code:v1.0",
             Mounts = new Dictionary<string, string>(),
             WritableMounts = new Dictionary<string, string> { ["/var/run/docker.sock"] = "/var/run/docker.sock" },
         };
@@ -439,7 +364,6 @@ public sealed class Validate
         // Arrange
         WorkerOptions options = new()
         {
-            Image = "ghcr.io/anthropics/claude-code:v1.0",
             Mounts = new Dictionary<string, string> { ["/config"] = "/host/config" },
             WritableMounts = new Dictionary<string, string>(),
         };
@@ -457,7 +381,6 @@ public sealed class Validate
         // Arrange
         WorkerOptions options = new()
         {
-            Image = "ghcr.io/anthropics/claude-code:v1.0",
             Mounts = new Dictionary<string, string> { ["/config"] = @"C:\Users\test\.claude\skills" },
             WritableMounts = new Dictionary<string, string>(),
         };
@@ -478,7 +401,6 @@ public sealed class Validate
         // Arrange
         WorkerOptions options = new()
         {
-            Image = "ghcr.io/anthropics/claude-code:v1.0",
             Mounts = new Dictionary<string, string> { ["/config"] = "/host/../../escape" },
             WritableMounts = new Dictionary<string, string>(),
         };
@@ -496,7 +418,6 @@ public sealed class Validate
         // Arrange
         WorkerOptions options = new()
         {
-            Image = "ghcr.io/anthropics/claude-code:v1.0",
             Mounts = new Dictionary<string, string>(),
             WritableMounts = new Dictionary<string, string> { ["/workspace"] = "/host/../../escape" },
         };
@@ -514,7 +435,6 @@ public sealed class Validate
         // Arrange
         WorkerOptions options = new()
         {
-            Image = "ghcr.io/anthropics/claude-code:v1.0",
             Mounts = new Dictionary<string, string> { ["/config"] = "relative/path" },
             WritableMounts = new Dictionary<string, string>(),
         };
@@ -532,7 +452,6 @@ public sealed class Validate
         // Arrange
         WorkerOptions options = new()
         {
-            Image = "ghcr.io/anthropics/claude-code:v1.0",
             Mounts = new Dictionary<string, string>(),
             WritableMounts = new Dictionary<string, string> { ["/workspace"] = "relative/path" },
         };
@@ -550,7 +469,6 @@ public sealed class Validate
         // Arrange
         WorkerOptions options = new()
         {
-            Image = "ghcr.io/anthropics/claude-code:v1.0",
             Mounts = new Dictionary<string, string> { ["/config/"] = "/host/a" },
             WritableMounts = new Dictionary<string, string> { ["/config"] = "/host/b" },
         };
@@ -568,7 +486,6 @@ public sealed class Validate
         // Arrange
         WorkerOptions options = new()
         {
-            Image = "ghcr.io/anthropics/claude-code:v1.0",
             Settings = new WorkerSettingsOptions { CiCdDenyRules = [string.Empty] },
         };
 
@@ -585,7 +502,6 @@ public sealed class Validate
         // Arrange
         WorkerOptions options = new()
         {
-            Image = "ghcr.io/anthropics/claude-code:v1.0",
             Settings = new WorkerSettingsOptions { CiCdDenyRules = ["   "] },
         };
 
@@ -602,7 +518,6 @@ public sealed class Validate
         // Arrange
         WorkerOptions options = new()
         {
-            Image = "ghcr.io/anthropics/claude-code:v1.0",
             Settings = new WorkerSettingsOptions { CiCdDenyRules = [] },
         };
 
@@ -619,7 +534,6 @@ public sealed class Validate
         // Arrange
         WorkerOptions options = new()
         {
-            Image = "ghcr.io/anthropics/claude-code:v1.0",
             Settings = new WorkerSettingsOptions { CiCdDenyRules = ["Edit(.github/workflows/**:*)"] },
         };
 
@@ -636,7 +550,6 @@ public sealed class Validate
         // Arrange
         WorkerOptions options = new()
         {
-            Image = "ghcr.io/anthropics/claude-code:v1.0",
             Settings = new WorkerSettingsOptions { AdditionalDenyRules = [string.Empty] },
         };
 
@@ -653,7 +566,6 @@ public sealed class Validate
         // Arrange
         WorkerOptions options = new()
         {
-            Image = "ghcr.io/anthropics/claude-code:v1.0",
             Settings = new WorkerSettingsOptions { AdditionalDenyRules = ["   "] },
         };
 
@@ -670,7 +582,6 @@ public sealed class Validate
         // Arrange
         WorkerOptions options = new()
         {
-            Image = "ghcr.io/anthropics/claude-code:v1.0",
             Settings = new WorkerSettingsOptions { AdditionalDenyRules = [string.Empty] },
         };
 
@@ -688,7 +599,6 @@ public sealed class Validate
         // Arrange
         WorkerOptions options = new()
         {
-            Image = "ghcr.io/anthropics/claude-code:v1.0",
             Settings = new WorkerSettingsOptions { AdditionalDenyRules = ["Bash(rm -rf:*)"] },
         };
 
@@ -705,7 +615,6 @@ public sealed class Validate
         // Arrange
         WorkerOptions options = new()
         {
-            Image = "ghcr.io/anthropics/claude-code:v1.0",
             Settings = new WorkerSettingsOptions
             {
                 Hooks = new Dictionary<string, List<HookGroup>>
@@ -734,7 +643,6 @@ public sealed class Validate
         // Arrange
         WorkerOptions options = new()
         {
-            Image = "ghcr.io/anthropics/claude-code:v1.0",
             Settings = new WorkerSettingsOptions
             {
                 Hooks = new Dictionary<string, List<HookGroup>>
@@ -764,7 +672,6 @@ public sealed class Validate
         // Arrange
         WorkerOptions options = new()
         {
-            Image = "ghcr.io/anthropics/claude-code:v1.0",
             Settings = new WorkerSettingsOptions
             {
                 Hooks = new Dictionary<string, List<HookGroup>>
@@ -793,7 +700,6 @@ public sealed class Validate
         // Arrange
         WorkerOptions options = new()
         {
-            Image = "ghcr.io/anthropics/claude-code:v1.0",
             Settings = new WorkerSettingsOptions
             {
                 Hooks = new Dictionary<string, List<HookGroup>>
@@ -822,7 +728,6 @@ public sealed class Validate
         // Arrange
         WorkerOptions options = new()
         {
-            Image = "ghcr.io/anthropics/claude-code:v1.0",
             Settings = new WorkerSettingsOptions
             {
                 Hooks = new Dictionary<string, List<HookGroup>>
@@ -852,7 +757,6 @@ public sealed class Validate
         // Arrange
         WorkerOptions options = new()
         {
-            Image = "ghcr.io/anthropics/claude-code:v1.0",
             Settings = new WorkerSettingsOptions
             {
                 Hooks = new Dictionary<string, List<HookGroup>>
@@ -877,154 +781,11 @@ public sealed class Validate
     }
 
     [Fact]
-    public void WhenImageBuildHasDefaultValues_ReturnsSuccess()
-    {
-        // Arrange
-        WorkerOptions options = new()
-        {
-            Image = "ghcr.io/anthropics/claude-code:v1.0",
-            ImageBuild = new ImageBuildOptions(),
-        };
-
-        // Act
-        ValidateOptionsResult result = _sut.Validate(null, options);
-
-        // Assert
-        result.Succeeded.ShouldBeTrue();
-    }
-
-    [Fact]
-    public void WhenImageBuildEnabledFalse_ReturnsSuccess()
-    {
-        // Arrange
-        WorkerOptions options = new()
-        {
-            Image = "ghcr.io/anthropics/claude-code:v1.0",
-            ImageBuild = new ImageBuildOptions { Enabled = false },
-        };
-
-        // Act
-        ValidateOptionsResult result = _sut.Validate(null, options);
-
-        // Assert
-        result.Succeeded.ShouldBeTrue();
-    }
-
-    [Fact]
-    public void WhenImageBuildEnabledAndContextPathEmpty_ReturnsFailure()
-    {
-        // Arrange
-        WorkerOptions options = new()
-        {
-            Image = "ghcr.io/anthropics/claude-code:v1.0",
-            ImageBuild = new ImageBuildOptions { Enabled = true, ContextPath = string.Empty },
-        };
-
-        // Act
-        ValidateOptionsResult result = _sut.Validate(null, options);
-
-        // Assert
-        result.Failed.ShouldBeTrue();
-    }
-
-    [Fact]
-    public void WhenImageBuildEnabledAndContextPathContainsTraversal_ReturnsFailure()
-    {
-        // Arrange
-        WorkerOptions options = new()
-        {
-            Image = "ghcr.io/anthropics/claude-code:v1.0",
-            ImageBuild = new ImageBuildOptions { Enabled = true, ContextPath = "../../outside" },
-        };
-
-        // Act
-        ValidateOptionsResult result = _sut.Validate(null, options);
-
-        // Assert
-        result.Failed.ShouldBeTrue();
-    }
-
-    [Fact]
-    public void WhenImageBuildDisabledAndContextPathEmpty_ReturnsSuccess()
-    {
-        // Arrange
-        WorkerOptions options = new()
-        {
-            Image = "ghcr.io/anthropics/claude-code:v1.0",
-            ImageBuild = new ImageBuildOptions { Enabled = false, ContextPath = string.Empty },
-        };
-
-        // Act
-        ValidateOptionsResult result = _sut.Validate(null, options);
-
-        // Assert
-        result.Succeeded.ShouldBeTrue();
-    }
-
-    [Theory]
-    [InlineData("/absolute/path")]
-    [InlineData("/etc/myapp")]
-    [InlineData("C:\\Users\\test\\workers")]
-    public void WhenImageBuildEnabledAndContextPathIsAbsolute_ReturnsFailure(string absolutePath)
-    {
-        // Arrange
-        WorkerOptions options = new()
-        {
-            Image = "ghcr.io/anthropics/claude-code:v1.0",
-            ImageBuild = new ImageBuildOptions { Enabled = true, ContextPath = absolutePath },
-        };
-
-        // Act
-        ValidateOptionsResult result = _sut.Validate(null, options);
-
-        // Assert
-        result.Failed.ShouldBeTrue();
-    }
-
-    [Theory]
-    [InlineData("/absolute/path")]
-    [InlineData("/etc/myapp")]
-    public void WhenImageBuildEnabledAndContextPathIsAbsolute_FailureMessageMentionsRelative(string absolutePath)
-    {
-        // Arrange
-        WorkerOptions options = new()
-        {
-            Image = "ghcr.io/anthropics/claude-code:v1.0",
-            ImageBuild = new ImageBuildOptions { Enabled = true, ContextPath = absolutePath },
-        };
-
-        // Act
-        ValidateOptionsResult result = _sut.Validate(null, options);
-
-        // Assert
-        IEnumerable<string> failures = result.Failures.ShouldNotBeNull();
-        failures.ShouldContain(f => f.Contains("relative"));
-    }
-
-    [Fact]
-    public void WhenImageBuildEnabledAndContextPathIsRelative_ReturnsSuccess()
-    {
-        // Arrange
-        WorkerOptions options = new()
-        {
-            Image = "ghcr.io/anthropics/claude-code:v1.0",
-            ImageBuild = new ImageBuildOptions { Enabled = true, ContextPath = "workers" },
-        };
-
-        // Act
-        ValidateOptionsResult result = _sut.Validate(null, options);
-
-        // Assert
-        result.Succeeded.ShouldBeTrue();
-    }
-
-    [Fact]
     public void WhenCiCdDenyRulesContainsEmptyString_FailureMessageMentionsCiCdDenyRules()
     {
         // Arrange
         WorkerOptions options = new()
         {
-            Image = "ghcr.io/anthropics/claude-code:v1.0",
             Settings = new WorkerSettingsOptions { CiCdDenyRules = [string.Empty] },
         };
 
@@ -1042,7 +803,6 @@ public sealed class Validate
         // Arrange
         WorkerOptions options = new()
         {
-            Image = "ghcr.io/anthropics/claude-code:v1.0",
             Settings = new WorkerSettingsOptions { CiCdDenyRules = ["not-a-valid-rule"] },
         };
 
@@ -1059,7 +819,6 @@ public sealed class Validate
         // Arrange
         WorkerOptions options = new()
         {
-            Image = "ghcr.io/anthropics/claude-code:v1.0",
             Settings = new WorkerSettingsOptions { CiCdDenyRules = ["Edit(.github/workflows/**:*)"] },
         };
 
@@ -1076,7 +835,6 @@ public sealed class Validate
         // Arrange
         WorkerOptions options = new()
         {
-            Image = "ghcr.io/anthropics/claude-code:v1.0",
             Settings = new WorkerSettingsOptions { AdditionalDenyRules = ["not-a-valid-rule"] },
         };
 
@@ -1093,7 +851,6 @@ public sealed class Validate
         // Arrange
         WorkerOptions options = new()
         {
-            Image = "ghcr.io/anthropics/claude-code:v1.0",
             Settings = new WorkerSettingsOptions { AdditionalDenyRules = ["Bash(rm -rf:*)"] },
         };
 

@@ -62,10 +62,7 @@ public sealed class HandleAsync : IAsyncDisposable
         ICredentialQueries? credentialQueries = null,
         IPostExitProviderQueries? postExitProviderQueries = null)
     {
-        WorkerOptions options = workerOptions ?? new WorkerOptions
-        {
-            Image = "test-image:latest",
-        };
+        WorkerOptions options = workerOptions ?? new WorkerOptions();
 
         return new IssueClaimedHandler(
             _dbContext,
@@ -371,7 +368,6 @@ public sealed class HandleAsync : IAsyncDisposable
                 orchestrator: orchestrator,
                 workerOptions: new WorkerOptions
                 {
-                    Image = "test-image:latest",
                     Mounts = new Dictionary<string, string> { ["/container/config"] = hostDir },
                     WritableMounts = new Dictionary<string, string>(),
                 });
@@ -405,7 +401,6 @@ public sealed class HandleAsync : IAsyncDisposable
                 orchestrator: orchestrator,
                 workerOptions: new WorkerOptions
                 {
-                    Image = "test-image:latest",
                     Mounts = new Dictionary<string, string> { ["/container/config"] = hostDir },
                     WritableMounts = new Dictionary<string, string>(),
                 });
@@ -434,7 +429,7 @@ public sealed class HandleAsync : IAsyncDisposable
         IssueClaimedHandler sut = BuildHandler(
             workerOptions: new WorkerOptions
             {
-                Image = "test-image:latest",
+    
                 Mounts = new Dictionary<string, string> { ["/container/config"] = nonExistentPath },
                 WritableMounts = new Dictionary<string, string>(),
             });
@@ -459,7 +454,7 @@ public sealed class HandleAsync : IAsyncDisposable
         IssueClaimedHandler sut = BuildHandler(
             workerOptions: new WorkerOptions
             {
-                Image = "test-image:latest",
+    
                 Mounts = new Dictionary<string, string>(),
                 WritableMounts = new Dictionary<string, string> { ["/container/workspace"] = nonExistentPath },
             });
@@ -490,7 +485,7 @@ public sealed class HandleAsync : IAsyncDisposable
                 orchestrator: orchestrator,
                 workerOptions: new WorkerOptions
                 {
-                    Image = "test-image:latest",
+
                     Mounts = new Dictionary<string, string>(),
                     WritableMounts = new Dictionary<string, string> { ["/container/workspace"] = hostDir },
                 });
@@ -519,7 +514,7 @@ public sealed class HandleAsync : IAsyncDisposable
             orchestrator: orchestrator,
             workerOptions: new WorkerOptions
             {
-                Image = "test-image:latest",
+    
                 Mounts = new Dictionary<string, string>(),
                 WritableMounts = new Dictionary<string, string>(),
             });

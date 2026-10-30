@@ -10,7 +10,6 @@ using Foundry.Modules.Workers.Contracts;
 using Foundry.Modules.Workers.Domain.Entities;
 using Foundry.Modules.Workers.Domain.Entities.States;
 using Foundry.Modules.Workers.Domain.ValueObjects;
-using Foundry.Modules.Workers.Features;
 using Foundry.Modules.Workers.Features.Orchestration;
 using Foundry.Modules.Workers.Features.Outcome;
 using Foundry.Modules.Workers.Features.ContainerSpec;
@@ -81,7 +80,6 @@ public abstract class WorkerDispatchServiceTestBase : IAsyncDisposable
 
     internal WorkerDispatchService BuildService(
         IWorkerOrchestrator orchestrator,
-        WorkerOptions? workerOptions = null,
         IIntegrationEventDispatcher? integrationEventDispatcher = null,
         IIntegrationEventProcessor? integrationEventProcessor = null,
         IGlobalSettingsQueries? settingsQueries = null,

@@ -57,10 +57,7 @@ public sealed class ConsumesReservation : IAsyncDisposable
 
     private IssueClaimedHandler BuildHandler()
     {
-        WorkerOptions options = new()
-        {
-            Image = "test-image:latest",
-        };
+        WorkerOptions options = new();
         return new IssueClaimedHandler(
             _dbContext,
             _orchestrator,

@@ -4,7 +4,6 @@ using Docker.DotNet.Models;
 using Foundry.Modules.Settings.Contracts;
 using Foundry.Modules.Settings.Contracts.Queries;
 using Foundry.Modules.Workers.Contracts;
-using Foundry.Modules.Workers.Features;
 using Foundry.Modules.Workers.Features.ImageBuild;
 using Foundry.Shared;
 
@@ -12,7 +11,6 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging.Abstractions;
-using Microsoft.Extensions.Options;
 
 using Shouldly;
 
@@ -42,12 +40,6 @@ public sealed class ProcessRebuildAsync
 
         ServiceProvider sp = services.BuildServiceProvider();
 
-        WorkerOptions workerOptions = new()
-        {
-            Image = imageTag,
-            ImageBuild = new ImageBuildOptions { Enabled = imageBuildEnabled },
-        };
-
         StubHostEnvironment hostEnv = new(contentRootPath);
 
         return new WorkerImageRebuildService(
@@ -55,7 +47,6 @@ public sealed class ProcessRebuildAsync
             sp.GetRequiredService<IServiceScopeFactory>(),
             imageOperations,
             hostEnv,
-            Options.Create(workerOptions),
             NullLogger<WorkerImageRebuildService>.Instance);
     }
 

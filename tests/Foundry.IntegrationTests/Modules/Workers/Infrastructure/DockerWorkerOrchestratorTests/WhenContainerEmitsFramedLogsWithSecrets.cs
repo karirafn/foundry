@@ -84,7 +84,6 @@ public sealed class WhenContainerEmitsFramedLogsWithSecrets : IAsyncLifetime
 
         WorkerOptions options = new()
         {
-            Image = Image,
             MemoryLimitMb = 512,
             CpuLimit = 1.0,
             PidsLimit = 256,

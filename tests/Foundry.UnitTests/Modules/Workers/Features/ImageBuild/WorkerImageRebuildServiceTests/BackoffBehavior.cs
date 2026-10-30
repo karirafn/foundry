@@ -2,7 +2,6 @@ using System.Runtime.CompilerServices;
 
 using Foundry.Modules.Settings.Contracts.Queries;
 using Foundry.Modules.Workers.Contracts;
-using Foundry.Modules.Workers.Features;
 using Foundry.Modules.Workers.Features.ImageBuild;
 using Foundry.Shared;
 
@@ -10,7 +9,6 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging.Abstractions;
-using Microsoft.Extensions.Options;
 
 using Shouldly;
 
@@ -41,18 +39,11 @@ public sealed class BackoffBehavior
 
         ServiceProvider sp = services.BuildServiceProvider();
 
-        WorkerOptions workerOptions = new()
-        {
-            Image = "test-image:latest",
-            ImageBuild = new ImageBuildOptions { Enabled = true },
-        };
-
         return new WorkerImageRebuildService(
             queue,
             sp.GetRequiredService<IServiceScopeFactory>(),
             new NullImageOperations(),
             new StubHostEnvironment(contentRootPath),
-            Options.Create(workerOptions),
             NullLogger<WorkerImageRebuildService>.Instance);
     }
 

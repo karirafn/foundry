@@ -1,5 +1,4 @@
 using Foundry.Modules.Settings.Contracts.Queries;
-using Foundry.Modules.Workers.Features;
 using Foundry.Modules.Workers.Features.ImageBuild;
 using Foundry.Shared;
 
@@ -7,7 +6,6 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging.Abstractions;
-using Microsoft.Extensions.Options;
 
 using Shouldly;
 
@@ -27,18 +25,11 @@ public sealed class StartingAsync
 
         ServiceProvider sp = services.BuildServiceProvider();
 
-        WorkerOptions workerOptions = new()
-        {
-            Image = "test-image:latest",
-            ImageBuild = new ImageBuildOptions(),
-        };
-
         return new WorkerImageRebuildService(
             queue ?? new SpyWorkerImageRebuildQueue(),
             sp.GetRequiredService<IServiceScopeFactory>(),
             new NullImageOperations(),
             new StubHostEnvironment(string.Empty),
-            Options.Create(workerOptions),
             NullLogger<WorkerImageRebuildService>.Instance);
     }
 

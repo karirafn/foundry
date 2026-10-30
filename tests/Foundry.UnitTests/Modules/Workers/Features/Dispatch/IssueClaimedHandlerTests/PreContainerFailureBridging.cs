@@ -106,7 +106,7 @@ public sealed class PreContainerFailureBridging : IAsyncDisposable
             _dbContext,
             orchestrator ?? new AlwaysFailingOrchestrator(),
             domainDispatcher,
-            Options.Create(new WorkerOptions { Image = "test-image:latest" }),
+            Options.Create(new WorkerOptions()),
             new StubGlobalSettingsQueries(),
             new StubCredentialQueries(("ANTHROPIC_API_KEY", "test-key")),
             postExitProviderQueries ?? new BranchCreationFailsQueries(),
