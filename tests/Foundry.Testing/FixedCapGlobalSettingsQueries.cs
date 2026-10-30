@@ -25,9 +25,9 @@ public sealed class FixedCapGlobalSettingsQueries(int maxConcurrent) : IGlobalSe
     public Task<int> GetPollIntervalSecondsAsync(CancellationToken cancellationToken)
         => Task.FromResult(0);
 
-    public Task<(string? SystemPromptTemplate, string? WorkerPromptTemplate)> GetPromptTemplatesAsync(
+    public Task<(string SystemPromptTemplate, string WorkerPromptTemplate, string BranchNamingInstruction)> GetPromptTemplatesAsync(
         CancellationToken cancellationToken)
-        => Task.FromResult<(string?, string?)>((null, null));
+        => Task.FromResult(("", "", ""));
 
     public Task<DispatchPauseState> GetDispatchPauseStateAsync(CancellationToken cancellationToken)
         => Task.FromResult(new DispatchPauseState(null, false, false));

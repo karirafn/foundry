@@ -105,6 +105,9 @@ export class SettingsService {
   private readonly _workerPromptTemplateSignal: WritableSignal<string | null> = signal(null);
   readonly workerPromptTemplate: Signal<string | null> = this._workerPromptTemplateSignal.asReadonly();
 
+  private readonly _branchNamingInstructionSignal: WritableSignal<string | null> = signal(null);
+  readonly branchNamingInstruction: Signal<string | null> = this._branchNamingInstructionSignal.asReadonly();
+
   private readonly _savingPromptsSignal: WritableSignal<boolean> = signal(false);
   readonly savingPrompts: Signal<boolean> = this._savingPromptsSignal.asReadonly();
 
@@ -222,6 +225,7 @@ export class SettingsService {
           this._workerLimitsSignal.set({ maxConcurrent: settings.maxConcurrent, timeoutMinutes: settings.timeoutMinutes });
           this._systemPromptTemplateSignal.set(settings.systemPromptTemplate);
           this._workerPromptTemplateSignal.set(settings.workerPromptTemplate);
+          this._branchNamingInstructionSignal.set(settings.branchNamingInstruction);
           this._allowedProviderHostsSignal.set(settings.allowedProviderHosts ?? []);
           this._dispatchService.updateFromSettings(settings);
           this._workerImageFlagsSignal.set(this._mapToWorkerImageFlags(settings));
@@ -356,12 +360,13 @@ export class SettingsService {
       next: (response) => {
         this._systemPromptTemplateSignal.set(response.systemPromptTemplate);
         this._workerPromptTemplateSignal.set(response.workerPromptTemplate);
+        this._branchNamingInstructionSignal.set(response.branchNamingInstruction);
         this._savingPromptsSignal.set(false);
         this._savePromptsSuccessSignal.set(true);
       },
       error: (err: HttpErrorResponse) => {
         console.error(err);
-        this._savePromptsErrorSignal.set(SAVE_PROMPTS_ERROR);
+        this._savePromptsErrorSignal.set(extractErrorMessage(err) ?? SAVE_PROMPTS_ERROR);
         this._savingPromptsSignal.set(false);
       },
     });

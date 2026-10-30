@@ -1,5 +1,6 @@
 using Foundry.Modules.Settings.Contracts;
 using Foundry.Modules.Settings.Domain.Entities;
+using Foundry.Modules.Settings.Domain.ValueObjects;
 using Foundry.Shared;
 using Foundry.Shared.Infrastructure.Http;
 
@@ -13,38 +14,11 @@ namespace Foundry.Modules.Settings.Features.WorkerConfig;
 
 internal static class UpdatePromptTemplates
 {
-    internal sealed record Command(string? SystemPromptTemplate, string? WorkerPromptTemplate)
+    internal sealed record Command(
+        string SystemPromptTemplate,
+        string WorkerPromptTemplate,
+        string BranchNamingInstruction)
         : ICommand<GlobalSettingsSummary>;
-
-    internal sealed class Validator : ICommandValidator<Command>
-    {
-        public Result Validate(Command command)
-        {
-            if (command.SystemPromptTemplate is not null && command.SystemPromptTemplate.Length == 0)
-            {
-                return SettingsErrors.InvalidPromptTemplate;
-            }
-
-            if (command.WorkerPromptTemplate is not null && command.WorkerPromptTemplate.Length == 0)
-            {
-                return SettingsErrors.InvalidPromptTemplate;
-            }
-
-            if (command.SystemPromptTemplate is not null
-                && command.SystemPromptTemplate.Length > GlobalSettings.MaxPromptTemplateLength)
-            {
-                return SettingsErrors.InvalidPromptTemplateTooLong;
-            }
-
-            if (command.WorkerPromptTemplate is not null
-                && command.WorkerPromptTemplate.Length > GlobalSettings.MaxPromptTemplateLength)
-            {
-                return SettingsErrors.InvalidPromptTemplateTooLong;
-            }
-
-            return Result.Ok();
-        }
-    }
 
     internal sealed class Handler(DbContext dbContext) : ICommandHandler<Command, GlobalSettingsSummary>
     {
@@ -52,6 +26,19 @@ internal static class UpdatePromptTemplates
             Command command,
             CancellationToken cancellationToken)
         {
+            // Validate the payload before loading state, so an invalid request fails with 400
+            // regardless of whether the settings row exists — a null-check-first order would mask
+            // a bad payload behind a 404 on a not-yet-seeded database.
+            Result<WorkerPrompts> promptsResult = WorkerPrompts.Create(
+                command.SystemPromptTemplate,
+                command.WorkerPromptTemplate,
+                command.BranchNamingInstruction);
+
+            if (promptsResult is not Result<WorkerPrompts>.Success promptsSuccess)
+            {
+                return Result<GlobalSettingsSummary>.Fail(((Result<WorkerPrompts>.Failure)promptsResult).Error);
+            }
+
             GlobalSettings? settings = await dbContext.Set<GlobalSettings>()
                 .FirstOrDefaultAsync(cancellationToken);
 
@@ -60,12 +47,7 @@ internal static class UpdatePromptTemplates
                 return Result<GlobalSettingsSummary>.Fail(SettingsErrors.NotFound);
             }
 
-            Result updateResult = settings.UpdatePromptTemplates(command.SystemPromptTemplate, command.WorkerPromptTemplate);
-
-            if (updateResult is Result.Failure updateFailure)
-            {
-                return Result<GlobalSettingsSummary>.Fail(updateFailure.Error);
-            }
+            settings.UpdatePrompts(promptsSuccess.Value);
 
             await dbContext.SaveChangesAsync(cancellationToken);
 
@@ -75,7 +57,10 @@ internal static class UpdatePromptTemplates
 
     internal static class Endpoint
     {
-        private sealed record RequestBody(string? SystemPromptTemplate, string? WorkerPromptTemplate);
+        private sealed record RequestBody(
+            string SystemPromptTemplate,
+            string WorkerPromptTemplate,
+            string BranchNamingInstruction);
 
         public static void Map(RouteGroupBuilder group)
         {
@@ -84,7 +69,7 @@ internal static class UpdatePromptTemplates
                     ICommandHandler<Command, GlobalSettingsSummary> handler,
                     CancellationToken cancellationToken) =>
                 {
-                    Command command = new(body.SystemPromptTemplate, body.WorkerPromptTemplate);
+                    Command command = new(body.SystemPromptTemplate, body.WorkerPromptTemplate, body.BranchNamingInstruction);
                     Result<GlobalSettingsSummary> result = await handler.HandleAsync(command, cancellationToken);
 
                     return result.Match<Results<Ok<GlobalSettingsSummary>, ProblemHttpResult>>(
@@ -96,7 +81,7 @@ internal static class UpdatePromptTemplates
                         });
                 })
                 .WithName("UpdatePromptTemplates")
-                .WithSummary("Updates the system and worker prompt templates")
+                .WithSummary("Updates the system prompt, worker prompt, and branch naming instruction")
                 .Produces<GlobalSettingsSummary>()
                 .ProducesProblem(StatusCodes.Status404NotFound)
                 .ProducesProblem(StatusCodes.Status400BadRequest);

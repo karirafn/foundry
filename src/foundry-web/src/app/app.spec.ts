@@ -39,6 +39,7 @@ function createMockSettingsService(isColdBuildBlocking = false) {
     saveLimitsError: signal(null).asReadonly(),
     systemPromptTemplate: signal(null).asReadonly(),
     workerPromptTemplate: signal(null).asReadonly(),
+    branchNamingInstruction: signal(null).asReadonly(),
     savingPrompts: signal(false).asReadonly(),
     savePromptsSuccess: signal(false).asReadonly(),
     savePromptsError: signal(null).asReadonly(),

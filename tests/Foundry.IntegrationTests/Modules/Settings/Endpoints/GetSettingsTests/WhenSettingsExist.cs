@@ -4,6 +4,7 @@ using System.Text.Json;
 
 using Foundry.Modules.Settings.Contracts;
 using Foundry.Modules.Settings.Domain.Entities;
+using Foundry.Modules.Settings.Domain.ValueObjects;
 using Foundry.WebApi.Persistence;
 
 using Microsoft.EntityFrameworkCore;
@@ -75,7 +76,12 @@ public sealed class WhenSettingsExist : IAsyncDisposable
         DbContext dbContext = scope.ServiceProvider.GetRequiredService<DbContext>();
 
         GlobalSettings settings = GlobalSettings.Create();
-        settings.UpdatePromptTemplates("system-prompt", "worker-prompt");
+        WorkerPrompts prompts = WorkerPrompts.Create(
+                "system-prompt for #{issueNumber}.",
+                "worker-prompt with #{issueNumber}.",
+                "Use conventional branch naming")
+            .Match(onSuccess: v => v, onFailure: e => throw new InvalidOperationException(e.Message));
+        settings.UpdatePrompts(prompts);
         dbContext.Set<GlobalSettings>().Add(settings);
         await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
 
@@ -92,12 +98,13 @@ public sealed class WhenSettingsExist : IAsyncDisposable
                 TestContext.Current.CancellationToken);
         summary.ShouldNotBeNull();
         summary.ShouldSatisfyAllConditions(
-            () => summary.SystemPromptTemplate.ShouldBe("system-prompt"),
-            () => summary.WorkerPromptTemplate.ShouldBe("worker-prompt"));
+            () => summary.SystemPromptTemplate.ShouldBe("system-prompt for #{issueNumber}."),
+            () => summary.WorkerPromptTemplate.ShouldBe("worker-prompt with #{issueNumber}."),
+            () => summary.BranchNamingInstruction.ShouldBe("Use conventional branch naming"));
     }
 
     [Fact]
-    public async Task ReturnsNullPromptTemplatesByDefault()
+    public async Task ReturnsDefaultPromptTemplatesWhenNotExplicitlySet()
     {
         // Arrange
         await SeedDefaultSettingsAsync();
@@ -114,9 +121,12 @@ public sealed class WhenSettingsExist : IAsyncDisposable
                 FoundryWebAppFactory.JsonOptions,
                 TestContext.Current.CancellationToken);
         summary.ShouldNotBeNull();
+        // GlobalSettings.Create() initialises WorkerPrompts to WorkerPrompts.Default — all three
+        // fields are non-null non-empty strings even before an explicit PUT /api/settings/prompts.
         summary.ShouldSatisfyAllConditions(
-            () => summary.SystemPromptTemplate.ShouldBeNull(),
-            () => summary.WorkerPromptTemplate.ShouldBeNull());
+            () => summary.SystemPromptTemplate.ShouldNotBeNullOrEmpty(),
+            () => summary.WorkerPromptTemplate.ShouldNotBeNullOrEmpty(),
+            () => summary.BranchNamingInstruction.ShouldNotBeNullOrEmpty());
     }
 
     [Fact]

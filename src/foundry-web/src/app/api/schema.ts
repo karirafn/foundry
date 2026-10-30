@@ -441,7 +441,7 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        /** Updates the system and worker prompt templates */
+        /** Updates the system prompt, worker prompt, and branch naming instruction */
         put: operations["UpdatePromptTemplates"];
         post?: never;
         delete?: never;
@@ -646,8 +646,9 @@ export interface components {
             probeIntervalMinutes: number | string;
             /** Format: int32 */
             pollIntervalSeconds: number | string;
-            systemPromptTemplate: null | string;
-            workerPromptTemplate: null | string;
+            systemPromptTemplate: string;
+            workerPromptTemplate: string;
+            branchNamingInstruction: string;
             /** Format: date-time */
             usageLimitResetsAt: null | string;
             isDispatchPaused: boolean;
@@ -876,8 +877,9 @@ export interface components {
             pollIntervalSeconds: number | string;
         };
         UpdatePromptTemplatesRequestBody: {
-            systemPromptTemplate: null | string;
-            workerPromptTemplate: null | string;
+            systemPromptTemplate: string;
+            workerPromptTemplate: string;
+            branchNamingInstruction: string;
         };
         UpdateRepositoryRequestBody: {
             /** Format: int32 */

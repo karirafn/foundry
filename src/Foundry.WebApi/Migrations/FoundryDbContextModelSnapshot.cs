@@ -15,7 +15,7 @@ namespace Foundry.WebApi.Migrations
         protected override void BuildModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
-            modelBuilder.HasAnnotation("ProductVersion", "10.0.12");
+            modelBuilder.HasAnnotation("ProductVersion", "10.0.14");
 
             modelBuilder.Entity("Foundry.Modules.Credentials.Domain.Entities.ClaudeAccount", b =>
                 {
@@ -381,11 +381,6 @@ namespace Foundry.WebApi.Migrations
                         .HasColumnType("INTEGER")
                         .HasColumnName("probe_interval_minutes");
 
-                    b.Property<string>("SystemPromptTemplate")
-                        .HasMaxLength(32768)
-                        .HasColumnType("TEXT")
-                        .HasColumnName("system_prompt_template");
-
                     b.Property<int>("TimeoutMinutes")
                         .HasColumnType("INTEGER")
                         .HasColumnName("timeout_minutes");
@@ -403,10 +398,10 @@ namespace Foundry.WebApi.Migrations
                         .HasColumnType("TEXT")
                         .HasColumnName("worker_image_configuration");
 
-                    b.Property<string>("WorkerPromptTemplate")
-                        .HasMaxLength(32768)
+                    b.Property<string>("WorkerPrompts")
+                        .IsRequired()
                         .HasColumnType("TEXT")
-                        .HasColumnName("worker_prompt_template");
+                        .HasColumnName("worker_prompts");
 
                     b.HasKey("Id");
 

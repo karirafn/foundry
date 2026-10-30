@@ -214,7 +214,8 @@ A Monitored Repository carries no account reference; on each eligibility evaluat
 ## Global Settings
 
 A strongly-typed single-row entity storing all UI-configurable settings.
-Includes worker settings (max concurrent, timeout, prompt templates), the Worker Image Configuration and Image Build State, the credit-probe interval (`ProbeIntervalMinutes`, default 60, validated to a minimum of 5), and dispatch pause controls: usage-limit controls (`AutoResumeOnUsageReset`, `UsageLimitResetsAt`) and the separate manual operator pause (`IsDispatchPaused`).
+Includes worker settings (max concurrent, timeout, and the Worker Prompts value object — system prompt template, worker prompt template, and branch naming instruction), the Worker Image Configuration and Image Build State, the credit-probe interval (`ProbeIntervalMinutes`, default 60, validated to a minimum of 5), and dispatch pause controls: usage-limit controls (`AutoResumeOnUsageReset`, `UsageLimitResetsAt`) and the separate manual operator pause (`IsDispatchPaused`).
+The Worker Prompts fields are non-null DB values (seeded from code defaults, backfilled for legacy rows) with no `IConfiguration` fallback — the dashboard always shows the values in effect, and `WorkerPrompts.Create` enforces their invariants (non-empty, length-bounded, worker template contains `{issueNumber}`, branch naming free of control characters).
 The auth-invalid pause is not stored here — it is `ClaudeAccount.Validity` in the Credentials module (see Worker Authentication).
 `ProbeIntervalMinutes` governs how long the credit block waits between probes (see Credit Probe); the operator sets it in the dispatch-settings form, `GlobalSettings.UpdateProbeInterval` rejects a below-minimum value, and the credit-probe scheduler reads it via `IGlobalSettingsQueries.GetProbeIntervalMinutesAsync` at each arm.
 DB is the single source of truth — `IConfiguration` is not consulted for settings the UI manages.

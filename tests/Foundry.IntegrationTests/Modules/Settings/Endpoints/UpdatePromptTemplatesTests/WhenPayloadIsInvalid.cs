@@ -22,7 +22,8 @@ public sealed class WhenPayloadIsInvalid(FoundryWebAppFactory factory) : IClassF
         object body = new
         {
             systemPromptTemplate = string.Empty,
-            workerPromptTemplate = "Valid worker prompt.",
+            workerPromptTemplate = "Valid worker prompt with {issueNumber}.",
+            branchNamingInstruction = "Use conventional branch naming",
         };
 
         // Act
@@ -51,6 +52,7 @@ public sealed class WhenPayloadIsInvalid(FoundryWebAppFactory factory) : IClassF
         {
             systemPromptTemplate = "Valid system prompt.",
             workerPromptTemplate = string.Empty,
+            branchNamingInstruction = "Use conventional branch naming",
         };
 
         // Act
@@ -68,6 +70,64 @@ public sealed class WhenPayloadIsInvalid(FoundryWebAppFactory factory) : IClassF
         problem.ShouldSatisfyAllConditions(
             () => problem.Status.ShouldBe(BadRequestStatus),
             () => problem.Type.ShouldEndWith("Settings.InvalidPromptTemplate"),
+            () => problem.Detail.ShouldNotBeNullOrEmpty());
+    }
+
+    [Fact]
+    public async Task WhenWorkerPromptTemplateMissingIssueNumber_ReturnsBadRequestAsProblemDetails()
+    {
+        // Arrange
+        object body = new
+        {
+            systemPromptTemplate = "Valid system prompt.",
+            workerPromptTemplate = "Worker prompt without the placeholder.",
+            branchNamingInstruction = "Use conventional branch naming",
+        };
+
+        // Act
+        HttpResponseMessage response = await _client.PutAsJsonAsync(
+            new Uri("/api/settings/prompts", UriKind.Relative),
+            body,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        response.Content.Headers.ContentType?.MediaType.ShouldBe("application/problem+json");
+        ProblemDetails problem = (await response.Content
+            .ReadFromJsonAsync<ProblemDetails>(TestContext.Current.CancellationToken))
+            .ShouldNotBeNull();
+        problem.ShouldSatisfyAllConditions(
+            () => problem.Status.ShouldBe(BadRequestStatus),
+            () => problem.Type.ShouldEndWith("Settings.WorkerPromptMissingIssueNumber"),
+            () => problem.Detail.ShouldNotBeNullOrEmpty());
+    }
+
+    [Fact]
+    public async Task WhenBranchNamingInstructionContainsNewline_ReturnsBadRequestAsProblemDetails()
+    {
+        // Arrange
+        object body = new
+        {
+            systemPromptTemplate = "Valid system prompt.",
+            workerPromptTemplate = "Valid worker prompt with {issueNumber}.",
+            branchNamingInstruction = "line one\nline two",
+        };
+
+        // Act
+        HttpResponseMessage response = await _client.PutAsJsonAsync(
+            new Uri("/api/settings/prompts", UriKind.Relative),
+            body,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        response.Content.Headers.ContentType?.MediaType.ShouldBe("application/problem+json");
+        ProblemDetails problem = (await response.Content
+            .ReadFromJsonAsync<ProblemDetails>(TestContext.Current.CancellationToken))
+            .ShouldNotBeNull();
+        problem.ShouldSatisfyAllConditions(
+            () => problem.Status.ShouldBe(BadRequestStatus),
+            () => problem.Type.ShouldEndWith("Settings.InvalidBranchNamingInstruction"),
             () => problem.Detail.ShouldNotBeNullOrEmpty());
     }
 }

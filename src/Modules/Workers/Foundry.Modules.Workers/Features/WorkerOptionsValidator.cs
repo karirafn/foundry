@@ -52,22 +52,6 @@ internal sealed partial class WorkerOptionsValidator : IValidateOptions<WorkerOp
             }
         }
 
-        if (string.IsNullOrWhiteSpace(options.WorkerPromptTemplate))
-        {
-            failures.Add("Workers:WorkerPromptTemplate must be non-empty.");
-        }
-        else if (!options.WorkerPromptTemplate.Contains("{issueNumber}", StringComparison.Ordinal))
-        {
-            failures.Add("Workers:WorkerPromptTemplate must contain the {issueNumber} token.");
-        }
-
-        if (options.BranchNamingInstruction.Contains('\n', StringComparison.Ordinal)
-            || options.BranchNamingInstruction.Contains('\r', StringComparison.Ordinal)
-            || options.BranchNamingInstruction.Contains('\0', StringComparison.Ordinal))
-        {
-            failures.Add("Workers:BranchNamingInstruction must not contain newline or null characters.");
-        }
-
         ValidateSettings(options.Settings, failures);
         ValidateImageBuild(options.ImageBuild, failures);
 

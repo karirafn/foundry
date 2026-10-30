@@ -34,8 +34,9 @@ public sealed class WhenSettingsDoNotExist : IAsyncDisposable
         // Arrange — no settings seeded; SettingsSeeder is a hosted service and is removed in tests
         object body = new
         {
-            systemPromptTemplate = "A valid system prompt.",
-            workerPromptTemplate = "A valid worker prompt.",
+            systemPromptTemplate = "A valid system prompt for issue #{issueNumber}.",
+            workerPromptTemplate = "A valid worker prompt for issue {issueNumber}.",
+            branchNamingInstruction = "Use conventional branch naming",
         };
 
         // Act

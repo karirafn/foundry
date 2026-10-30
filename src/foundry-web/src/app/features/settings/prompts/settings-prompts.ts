@@ -33,6 +33,7 @@ import { UnsavedChanges } from '../guards/unsaved-changes.guard';
               [ngModel]="_systemPromptValue()"
               (ngModelChange)="_systemPromptValue.set($event)"
               aria-describedby="prompts-error"
+              [attr.aria-invalid]="!!settingsService.savePromptsError() || null"
             ></textarea>
           </div>
 
@@ -44,7 +45,22 @@ import { UnsavedChanges } from '../guards/unsaved-changes.guard';
               rows="4"
               [ngModel]="_workerPromptValue()"
               (ngModelChange)="_workerPromptValue.set($event)"
+              aria-describedby="workerPromptHint prompts-error"
+              [attr.aria-invalid]="!!settingsService.savePromptsError() || null"
+            ></textarea>
+            <span id="workerPromptHint" class="general-settings__field-hint">Must include &#123;issueNumber&#125;.</span>
+          </div>
+
+          <div class="general-settings__field">
+            <label class="general-settings__field-label" for="branchNamingInstruction">Branch Naming Instruction</label>
+            <textarea
+              class="general-settings__textarea"
+              id="branchNamingInstruction"
+              rows="2"
+              [ngModel]="_branchNamingValue()"
+              (ngModelChange)="_branchNamingValue.set($event)"
               aria-describedby="prompts-error"
+              [attr.aria-invalid]="!!settingsService.savePromptsError() || null"
             ></textarea>
           </div>
 
@@ -69,6 +85,7 @@ export class SettingsPromptsComponent implements UnsavedChanges {
 
   protected readonly _systemPromptValue: WritableSignal<string> = signal('');
   protected readonly _workerPromptValue: WritableSignal<string> = signal('');
+  protected readonly _branchNamingValue: WritableSignal<string> = signal('');
   private _promptsInitialized = false;
 
   constructor() {
@@ -78,6 +95,7 @@ export class SettingsPromptsComponent implements UnsavedChanges {
         this._promptsInitialized = true;
         this._systemPromptValue.set(this.settingsService.systemPromptTemplate() ?? '');
         this._workerPromptValue.set(this.settingsService.workerPromptTemplate() ?? '');
+        this._branchNamingValue.set(this.settingsService.branchNamingInstruction() ?? '');
       }
     });
   }
@@ -85,16 +103,19 @@ export class SettingsPromptsComponent implements UnsavedChanges {
   hasUnsavedChanges(): boolean {
     const savedSystem = this.settingsService.systemPromptTemplate() ?? '';
     const savedWorker = this.settingsService.workerPromptTemplate() ?? '';
+    const savedBranch = this.settingsService.branchNamingInstruction() ?? '';
     return (
       this._systemPromptValue() !== savedSystem ||
-      this._workerPromptValue() !== savedWorker
+      this._workerPromptValue() !== savedWorker ||
+      this._branchNamingValue() !== savedBranch
     );
   }
 
   savePrompts(): void {
     const request: UpdatePromptTemplatesRequest = {
-      systemPromptTemplate: this._systemPromptValue() || null,
-      workerPromptTemplate: this._workerPromptValue() || null,
+      systemPromptTemplate: this._systemPromptValue(),
+      workerPromptTemplate: this._workerPromptValue(),
+      branchNamingInstruction: this._branchNamingValue(),
     };
     this.settingsService.updatePromptTemplates(request);
   }

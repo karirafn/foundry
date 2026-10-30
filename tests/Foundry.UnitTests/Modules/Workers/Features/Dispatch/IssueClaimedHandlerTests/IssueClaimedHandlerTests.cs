@@ -631,7 +631,9 @@ public sealed class HandleAsync : IAsyncDisposable
     {
         // Arrange
         StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c6");
-        IssueClaimedHandler sut = BuildHandler(orchestrator: orchestrator);
+        IssueClaimedHandler sut = BuildHandler(
+            orchestrator: orchestrator,
+            settingsQueries: new StubGlobalSettingsQueries(workerPromptTemplate: "Implement issue {issueNumber}."));
         IssueClaimed @event = BuildEvent(issueNumber: 42);
 
         // Act
@@ -905,17 +907,14 @@ public sealed class HandleAsync : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenDbTemplatesAreNull_FallsBackToWorkerOptionsDefaults()
+    public async Task WhenDbWorkerPromptTemplateProvided_UsesDbValueAsWorkerPrompt()
     {
         // Arrange
-        string defaultWorkerPromptTemplate =
-            "Implement GitHub issue #{issueNumber}. Create a feature branch, make the changes, commit, and push to the remote. Open a pull request for your branch, or reuse the existing one if a pull request already exists.";
-        StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c-fallback");
+        const string dbWorkerPromptTemplate = "DB template for issue {issueNumber}.";
+        StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c-db-template");
         IssueClaimedHandler sut = BuildHandler(
             orchestrator: orchestrator,
-            settingsQueries: new StubGlobalSettingsQueries(
-                systemPromptTemplate: null,
-                workerPromptTemplate: null));
+            settingsQueries: new StubGlobalSettingsQueries(workerPromptTemplate: dbWorkerPromptTemplate));
         IssueClaimed @event = BuildEvent(issueNumber: 7);
 
         // Act
@@ -925,7 +924,7 @@ public sealed class HandleAsync : IAsyncDisposable
         WorkerContainerSpec? spec = orchestrator.LastSpec;
         spec.ShouldNotBeNull();
         spec.EnvironmentVariables["WORKER_PROMPT"].ShouldBe(
-            defaultWorkerPromptTemplate.Replace("{issueNumber}", "7", StringComparison.Ordinal));
+            dbWorkerPromptTemplate.Replace("{issueNumber}", "7", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -1290,9 +1289,9 @@ public sealed class HandleAsync : IAsyncDisposable
         public Task<int> GetPollIntervalSecondsAsync(CancellationToken cancellationToken)
             => Task.FromResult(30);
 
-        public Task<(string? SystemPromptTemplate, string? WorkerPromptTemplate)> GetPromptTemplatesAsync(
+        public Task<(string SystemPromptTemplate, string WorkerPromptTemplate, string BranchNamingInstruction)> GetPromptTemplatesAsync(
             CancellationToken cancellationToken)
-            => Task.FromResult((systemPromptTemplate, workerPromptTemplate));
+            => Task.FromResult((systemPromptTemplate ?? "", workerPromptTemplate ?? "", ""));
 
         public Task<DispatchPauseState> GetDispatchPauseStateAsync(CancellationToken cancellationToken)
             => Task.FromResult(new DispatchPauseState(null, false, true));

@@ -1,3 +1,4 @@
+using Foundry.Modules.Settings.Domain.ValueObjects;
 using Foundry.Shared;
 
 namespace Foundry.Modules.Settings.Domain.Entities;
@@ -17,7 +18,17 @@ internal static class SettingsErrors
         new(InvalidPromptTemplateCode, "Prompt templates must not be empty. Provide a value or omit the field to use the default.");
 
     internal static readonly Error InvalidPromptTemplateTooLong =
-        new(InvalidPromptTemplateTooLongCode, $"Prompt templates must not exceed {GlobalSettings.MaxPromptTemplateLength} characters.");
+        new(InvalidPromptTemplateTooLongCode, $"Prompt templates must not exceed {WorkerPrompts.MaxPromptTemplateLength} characters.");
+
+    internal const string WorkerPromptMissingIssueNumberCode = "Settings.WorkerPromptMissingIssueNumber";
+
+    internal static readonly Error WorkerPromptMissingIssueNumber =
+        new(WorkerPromptMissingIssueNumberCode, "The worker prompt template must contain the {issueNumber} placeholder.");
+
+    internal const string InvalidBranchNamingInstructionCode = "Settings.InvalidBranchNamingInstruction";
+
+    internal static readonly Error InvalidBranchNamingInstruction =
+        new(InvalidBranchNamingInstructionCode, "Branch naming instructions must not contain line break or null characters.");
 
     internal static Error InvalidMaxConcurrent(int value) =>
         new(InvalidMaxConcurrentCode, $"Max concurrent workers must be between 1 and 20, but was {value}.");
