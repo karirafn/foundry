@@ -14,6 +14,8 @@ function runGuard(component: UnsavedChanges): any {
 }
 
 describe('unsavedChangesGuard', () => {
+  afterEach(() => vi.restoreAllMocks());
+
   // Cycle 1: returns true when component has no unsaved changes (clean)
   it('should return true when the component has no unsaved changes', () => {
     // Arrange

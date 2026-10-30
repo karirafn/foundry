@@ -93,7 +93,7 @@ import { SettingsService } from '../../../core/services/settings.service';
               [attr.aria-current]="repositoriesLink.isActive ? 'page' : null"
             >Repositories</a>
           </nav>
-          <section class="settings-layout__content">
+          <section class="settings-layout__content" aria-label="Page content">
             <router-outlet />
           </section>
         </div>

@@ -5,6 +5,7 @@ import {
   setupSettingsPage,
   flushSettings,
   API_KEY_RESPONSE,
+  OAUTH_RESPONSE,
   CREDENTIALS_API_KEY,
   CREDENTIALS_API_KEY_NOT_CONFIGURED,
   CREDENTIALS_API_KEY_UNREADABLE,
@@ -13,8 +14,6 @@ import {
   CREDENTIALS_OAUTH_RELOGIN_NEEDED,
 } from '../testing/settings-page-harness';
 import { SettingsClaudeCodeComponent } from './settings-claude-code';
-
-const OAUTH_RESPONSE = { ...API_KEY_RESPONSE };
 
 describe('SettingsClaudeCodeComponent', () => {
   afterEach(() => {

@@ -171,6 +171,12 @@
     margin-top: 0.0625rem;
   }
 
+  &__field-error {
+    color: var(--fd-text-error);
+    font-size: 0.875rem;
+    overflow-wrap: break-word;
+  }
+
   &__save-error,
   &__switch-error {
     color: var(--fd-text-error);
