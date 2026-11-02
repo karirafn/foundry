@@ -162,6 +162,7 @@ internal sealed class IssueClaimedHandler(
         int timeoutMinutes = await settingsQueries.GetTimeoutMinutesAsync(cancellationToken);
         bool installsDocker = await settingsQueries.GetWorkerImageInstallsDockerAsync(cancellationToken);
         string imageTag = await settingsQueries.GetWorkerImageTagAsync(cancellationToken);
+        ClaudeCodeSettingsSnapshot claudeCode = await settingsQueries.GetClaudeCodeSettingsAsync(cancellationToken);
         WorkerResourceLimitsSnapshot limits = await settingsQueries.GetWorkerResourceLimitsAsync(cancellationToken);
 
         Result<string> systemPromptResult = SystemPromptBuilder.Build(
@@ -212,7 +213,7 @@ internal sealed class IssueClaimedHandler(
             ["BRANCH_NAME"] = claimed.BranchName.Value,
             ["SYSTEM_PROMPT"] = systemPrompt,
             ["WORKER_PROMPT"] = workerPrompt,
-            ["CLAUDE_SETTINGS_JSON"] = WorkerSettingsBuilder.Build(_options.Settings),
+            ["CLAUDE_SETTINGS_JSON"] = WorkerSettingsBuilder.Build(claudeCode, _options.Settings.Hooks),
         };
 
         List<VolumeMount> volumeMounts = [];

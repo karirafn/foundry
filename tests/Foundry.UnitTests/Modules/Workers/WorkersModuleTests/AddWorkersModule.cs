@@ -64,7 +64,7 @@ public sealed class AddWorkersModule
         // Arrange
         IConfiguration configuration = BuildConfiguration(new Dictionary<string, string?>
         {
-            ["Workers:Settings:Model"] = "opus",
+            ["Workers:Settings:Hooks:PreToolUse:0:Matcher"] = "Bash",
         });
         ServiceCollection services = new();
 
@@ -74,7 +74,7 @@ public sealed class AddWorkersModule
 
         // Assert
         IOptions<WorkerOptions> options = provider.GetRequiredService<IOptions<WorkerOptions>>();
-        options.Value.Settings.Model.ShouldBe("opus");
+        options.Value.Settings.Hooks["PreToolUse"][0].Matcher.ShouldBe("Bash");
     }
 
     [Fact]
@@ -96,10 +96,11 @@ public sealed class AddWorkersModule
     [Fact]
     public void WhenCalled_RegistersWorkerOptionsValidator()
     {
-        // Arrange — a malformed deny rule triggers validation failure
+        // Arrange — an unsupported hook type triggers validation failure
         IConfiguration invalidConfig = BuildConfiguration(new Dictionary<string, string?>
         {
-            ["Workers:Settings:AdditionalDenyRules:0"] = "malformed",
+            ["Workers:Settings:Hooks:PreToolUse:0:Hooks:0:Type"] = "script",
+            ["Workers:Settings:Hooks:PreToolUse:0:Hooks:0:Command"] = "echo hi",
         });
         ServiceCollection services = new();
 
@@ -107,7 +108,7 @@ public sealed class AddWorkersModule
         services.AddWorkersModule(invalidConfig);
         ServiceProvider provider = services.BuildServiceProvider();
 
-        // Assert — accessing Value with an invalid deny rule triggers validation failure
+        // Assert — accessing Value with an invalid hook type triggers validation failure
         IOptions<WorkerOptions> options = provider.GetRequiredService<IOptions<WorkerOptions>>();
         Should.Throw<OptionsValidationException>(() => _ = options.Value);
     }

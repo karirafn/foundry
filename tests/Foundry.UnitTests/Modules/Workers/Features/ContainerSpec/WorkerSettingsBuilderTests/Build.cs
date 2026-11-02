@@ -1,5 +1,6 @@
 using System.Text.Json;
 
+using Foundry.Modules.Settings.Contracts;
 using Foundry.Modules.Workers.Features.ContainerSpec;
 
 using Shouldly;
@@ -10,14 +11,37 @@ namespace Foundry.UnitTests.Modules.Workers.Features.ContainerSpec.WorkerSetting
 
 public sealed class Build
 {
+    private static readonly IReadOnlyDictionary<string, List<HookGroup>> NoHooks =
+        new Dictionary<string, List<HookGroup>>();
+
+    private static ClaudeCodeSettingsSnapshot Snapshot(
+        string model = "",
+        bool blockCiCdEdits = true,
+        params string[] additionalDenyRules) =>
+        new(model, blockCiCdEdits, additionalDenyRules);
+
+    private static string[] DenyRules(string json)
+    {
+        using JsonDocument doc = JsonDocument.Parse(json);
+
+        return
+        [
+            .. doc.RootElement
+                .GetProperty("permissions")
+                .GetProperty("deny")
+                .EnumerateArray()
+                .Select(x => x.GetString()!),
+        ];
+    }
+
     [Fact]
-    public void WhenSettingsIsEmpty_ReturnsJsonWithBaseAndDefaultCiCdRules()
+    public void WhenBlockCiCdEditsTrueAndNothingElseSet_ReturnsJsonWithBaseAndCiCdRules()
     {
         // Arrange
-        WorkerSettingsOptions settings = new();
+        ClaudeCodeSettingsSnapshot snapshot = Snapshot();
 
         // Act
-        string json = WorkerSettingsBuilder.Build(settings);
+        string json = WorkerSettingsBuilder.Build(snapshot, NoHooks);
 
         // Assert
         using JsonDocument doc = JsonDocument.Parse(json);
@@ -26,11 +50,7 @@ public sealed class Build
         root.TryGetProperty("model", out _).ShouldBeFalse();
         root.TryGetProperty("hooks", out _).ShouldBeFalse();
 
-        JsonElement deny = root
-            .GetProperty("permissions")
-            .GetProperty("deny");
-
-        string[] rules = [.. deny.EnumerateArray().Select(x => x.GetString()!)];
+        string[] rules = DenyRules(json);
 
         rules.Length.ShouldBe(17);
         rules.ShouldContain("Bash(git push --force:*)");
@@ -56,54 +76,44 @@ public sealed class Build
     public void WhenModelIsSet_IncludesModelInJson()
     {
         // Arrange
-        WorkerSettingsOptions settings = new() { Model = "claude-opus-4-5" };
+        ClaudeCodeSettingsSnapshot snapshot = Snapshot(model: "claude-opus-4-5");
 
         // Act
-        string json = WorkerSettingsBuilder.Build(settings);
+        string json = WorkerSettingsBuilder.Build(snapshot, NoHooks);
 
         // Assert
         using JsonDocument doc = JsonDocument.Parse(json);
-        JsonElement root = doc.RootElement;
 
-        root.GetProperty("model").GetString().ShouldBe("claude-opus-4-5");
+        doc.RootElement.GetProperty("model").GetString().ShouldBe("claude-opus-4-5");
     }
 
     [Fact]
-    public void WhenModelIsNull_OmitsModelFromJson()
+    public void WhenModelIsEmpty_OmitsModelFromJson()
     {
         // Arrange
-        WorkerSettingsOptions settings = new() { Model = null };
+        ClaudeCodeSettingsSnapshot snapshot = Snapshot(model: string.Empty);
 
         // Act
-        string json = WorkerSettingsBuilder.Build(settings);
+        string json = WorkerSettingsBuilder.Build(snapshot, NoHooks);
 
         // Assert
         using JsonDocument doc = JsonDocument.Parse(json);
-        JsonElement root = doc.RootElement;
 
-        root.TryGetProperty("model", out _).ShouldBeFalse();
+        doc.RootElement.TryGetProperty("model", out _).ShouldBeFalse();
     }
 
     [Fact]
     public void WhenAdditionalDenyRulesProvided_AppendsThemAfterBaseAndCiCdRules()
     {
         // Arrange
-        WorkerSettingsOptions settings = new()
-        {
-            AdditionalDenyRules = ["Bash(rm -rf:*)", "Bash(curl:*)"],
-        };
+        ClaudeCodeSettingsSnapshot snapshot = Snapshot(
+            additionalDenyRules: ["Bash(rm -rf:*)", "Bash(curl:*)"]);
 
         // Act
-        string json = WorkerSettingsBuilder.Build(settings);
+        string json = WorkerSettingsBuilder.Build(snapshot, NoHooks);
 
         // Assert
-        using JsonDocument doc = JsonDocument.Parse(json);
-
-        JsonElement deny = doc.RootElement
-            .GetProperty("permissions")
-            .GetProperty("deny");
-
-        string[] rules = [.. deny.EnumerateArray().Select(x => x.GetString()!)];
+        string[] rules = DenyRules(json);
 
         rules.Length.ShouldBe(19);
         rules[17].ShouldBe("Bash(rm -rf:*)");
@@ -114,23 +124,20 @@ public sealed class Build
     public void WhenHooksConfigured_IncludesHooksSectionInJson()
     {
         // Arrange
-        WorkerSettingsOptions settings = new()
+        Dictionary<string, List<HookGroup>> hooks = new()
         {
-            Hooks = new Dictionary<string, List<HookGroup>>
-            {
-                ["PreToolUse"] =
-                [
-                    new HookGroup
-                    {
-                        Matcher = "Bash",
-                        Hooks = [new HookEntry { Type = "command", Command = "echo pre-tool" }],
-                    },
-                ],
-            },
+            ["PreToolUse"] =
+            [
+                new HookGroup
+                {
+                    Matcher = "Bash",
+                    Hooks = [new HookEntry { Type = "command", Command = "echo pre-tool" }],
+                },
+            ],
         };
 
         // Act
-        string json = WorkerSettingsBuilder.Build(settings);
+        string json = WorkerSettingsBuilder.Build(Snapshot(), hooks);
 
         // Assert
         using JsonDocument doc = JsonDocument.Parse(json);
@@ -155,22 +162,16 @@ public sealed class Build
     }
 
     [Fact]
-    public void WhenSettingsIsEmpty_BaseDenyListContainsBranchDeletionRules()
+    public void WhenBlockCiCdEditsTrue_BaseDenyListContainsBranchDeletionRules()
     {
         // Arrange
-        WorkerSettingsOptions settings = new();
+        ClaudeCodeSettingsSnapshot snapshot = Snapshot();
 
         // Act
-        string json = WorkerSettingsBuilder.Build(settings);
+        string json = WorkerSettingsBuilder.Build(snapshot, NoHooks);
 
         // Assert
-        using JsonDocument doc = JsonDocument.Parse(json);
-
-        JsonElement deny = doc.RootElement
-            .GetProperty("permissions")
-            .GetProperty("deny");
-
-        string[] rules = [.. deny.EnumerateArray().Select(x => x.GetString()!)];
+        string[] rules = DenyRules(json);
 
         rules.ShouldSatisfyAllConditions(
             () => rules.ShouldContain("Bash(git branch -D:*)"),
@@ -179,22 +180,16 @@ public sealed class Build
     }
 
     [Fact]
-    public void WhenSettingsIsEmpty_IncludesDefaultCiCdDenyRules()
+    public void WhenBlockCiCdEditsTrue_IncludesAllCiCdDenyRules()
     {
         // Arrange
-        WorkerSettingsOptions settings = new();
+        ClaudeCodeSettingsSnapshot snapshot = Snapshot(blockCiCdEdits: true);
 
         // Act
-        string json = WorkerSettingsBuilder.Build(settings);
+        string json = WorkerSettingsBuilder.Build(snapshot, NoHooks);
 
         // Assert
-        using JsonDocument doc = JsonDocument.Parse(json);
-
-        JsonElement deny = doc.RootElement
-            .GetProperty("permissions")
-            .GetProperty("deny");
-
-        string[] rules = [.. deny.EnumerateArray().Select(x => x.GetString()!)];
+        string[] rules = DenyRules(json);
 
         rules.ShouldSatisfyAllConditions(
             () => rules.ShouldContain("Edit(.github/workflows/**:*)"),
@@ -207,54 +202,39 @@ public sealed class Build
     }
 
     [Fact]
-    public void WhenCiCdDenyRulesCleared_CiCdRulesAbsentFromOutput()
+    public void WhenBlockCiCdEditsFalse_CiCdRulesAbsentFromOutput()
     {
         // Arrange
-        WorkerSettingsOptions settings = new()
-        {
-            CiCdDenyRules = [],
-        };
+        ClaudeCodeSettingsSnapshot snapshot = Snapshot(blockCiCdEdits: false);
 
         // Act
-        string json = WorkerSettingsBuilder.Build(settings);
+        string json = WorkerSettingsBuilder.Build(snapshot, NoHooks);
 
         // Assert
-        using JsonDocument doc = JsonDocument.Parse(json);
-
-        JsonElement deny = doc.RootElement
-            .GetProperty("permissions")
-            .GetProperty("deny");
-
-        string[] rules = [.. deny.EnumerateArray().Select(x => x.GetString()!)];
+        string[] rules = DenyRules(json);
 
         rules.Length.ShouldBe(10);
         rules.ShouldSatisfyAllConditions(
             () => rules.ShouldNotContain("Edit(.github/workflows/**:*)"),
             () => rules.ShouldNotContain("Edit(.gitlab-ci.yml:*)"),
             () => rules.ShouldNotContain("Edit(Dockerfile:*)"),
-            () => rules.ShouldNotContain("Edit(docker-compose*.yml:*)"));
+            () => rules.ShouldNotContain("Edit(docker-compose*.yml:*)"),
+            () => rules.ShouldNotContain("Edit(docker-compose.yaml:*)"),
+            () => rules.ShouldNotContain("Edit(compose.yml:*)"),
+            () => rules.ShouldNotContain("Edit(compose.yaml:*)"));
     }
 
     [Fact]
-    public void WhenCiCdDenyRulesCleared_BaseRulesStillPresent()
+    public void WhenBlockCiCdEditsFalse_BaseRulesStillPresent()
     {
         // Arrange
-        WorkerSettingsOptions settings = new()
-        {
-            CiCdDenyRules = [],
-        };
+        ClaudeCodeSettingsSnapshot snapshot = Snapshot(blockCiCdEdits: false);
 
         // Act
-        string json = WorkerSettingsBuilder.Build(settings);
+        string json = WorkerSettingsBuilder.Build(snapshot, NoHooks);
 
         // Assert
-        using JsonDocument doc = JsonDocument.Parse(json);
-
-        JsonElement deny = doc.RootElement
-            .GetProperty("permissions")
-            .GetProperty("deny");
-
-        string[] rules = [.. deny.EnumerateArray().Select(x => x.GetString()!)];
+        string[] rules = DenyRules(json);
 
         rules.ShouldSatisfyAllConditions(
             () => rules.ShouldContain("Bash(git push --force:*)"),
@@ -270,63 +250,64 @@ public sealed class Build
     }
 
     [Fact]
-    public void WhenAllThreeDenySourcesPopulated_OrderIsBaseThenCiCdThenAdditional()
+    public void WhenBlockCiCdEditsFalseAndAdditionalRulesSet_OrderIsBaseThenAdditional()
     {
         // Arrange
-        WorkerSettingsOptions settings = new()
-        {
-            CiCdDenyRules = ["Edit(.github/workflows/**:*)"],
-            AdditionalDenyRules = ["Bash(rm -rf:*)"],
-        };
+        ClaudeCodeSettingsSnapshot snapshot = Snapshot(
+            blockCiCdEdits: false,
+            additionalDenyRules: "Bash(rm -rf:*)");
 
         // Act
-        string json = WorkerSettingsBuilder.Build(settings);
+        string json = WorkerSettingsBuilder.Build(snapshot, NoHooks);
 
         // Assert
-        using JsonDocument doc = JsonDocument.Parse(json);
+        string[] rules = DenyRules(json);
 
-        JsonElement deny = doc.RootElement
-            .GetProperty("permissions")
-            .GetProperty("deny");
-
-        string[] rules = [.. deny.EnumerateArray().Select(x => x.GetString()!)];
-
-        // 10 base + 1 CI/CD + 1 additional = 12
-        rules.Length.ShouldBe(12);
-
-        // Base rules come first (indices 0-9)
-        rules[0].ShouldBe("Bash(git push --force:*)");
+        rules.Length.ShouldBe(11);
         rules[9].ShouldBe("Bash(git push * :*)");
-
-        // CI/CD rule follows base (index 10)
-        rules[10].ShouldBe("Edit(.github/workflows/**:*)");
-
-        // Additional rule comes last (index 11)
-        rules[11].ShouldBe("Bash(rm -rf:*)");
+        rules[10].ShouldBe("Bash(rm -rf:*)");
     }
 
     [Fact]
-    public void WhenAllOptionsSet_ProducesCorrectJson()
+    public void WhenAllSourcesPopulated_OrderIsBaseThenCiCdThenAdditional()
     {
         // Arrange
-        WorkerSettingsOptions settings = new()
+        ClaudeCodeSettingsSnapshot snapshot = Snapshot(additionalDenyRules: "Bash(rm -rf:*)");
+
+        // Act
+        string json = WorkerSettingsBuilder.Build(snapshot, NoHooks);
+
+        // Assert
+        string[] rules = DenyRules(json);
+
+        rules.Length.ShouldBe(18);
+        rules[0].ShouldBe("Bash(git push --force:*)");
+        rules[9].ShouldBe("Bash(git push * :*)");
+        rules[10].ShouldBe("Edit(.github/workflows/**:*)");
+        rules[16].ShouldBe("Edit(compose.yaml:*)");
+        rules[17].ShouldBe("Bash(rm -rf:*)");
+    }
+
+    [Fact]
+    public void WhenModelRulesAndHooksAllSet_ProducesCorrectJson()
+    {
+        // Arrange
+        ClaudeCodeSettingsSnapshot snapshot = Snapshot(
+            model: "claude-sonnet-4-5",
+            additionalDenyRules: "Bash(rm -rf:*)");
+        Dictionary<string, List<HookGroup>> hooks = new()
         {
-            Model = "claude-sonnet-4-5",
-            AdditionalDenyRules = ["Bash(rm -rf:*)"],
-            Hooks = new Dictionary<string, List<HookGroup>>
-            {
-                ["PostToolUse"] =
-                [
-                    new HookGroup
-                    {
-                        Hooks = [new HookEntry { Command = "notify" }],
-                    },
-                ],
-            },
+            ["PostToolUse"] =
+            [
+                new HookGroup
+                {
+                    Hooks = [new HookEntry { Command = "notify" }],
+                },
+            ],
         };
 
         // Act
-        string json = WorkerSettingsBuilder.Build(settings);
+        string json = WorkerSettingsBuilder.Build(snapshot, hooks);
 
         // Assert
         using JsonDocument doc = JsonDocument.Parse(json);
@@ -336,11 +317,7 @@ public sealed class Build
             () => root.GetProperty("model").GetString().ShouldBe("claude-sonnet-4-5"),
             () => root.TryGetProperty("hooks", out _).ShouldBeTrue());
 
-        JsonElement deny = root
-            .GetProperty("permissions")
-            .GetProperty("deny");
-
-        string[] rules = [.. deny.EnumerateArray().Select(x => x.GetString()!)];
+        string[] rules = DenyRules(json);
 
         rules.Length.ShouldBe(18);
         rules.ShouldContain("Bash(git push --force:*)");

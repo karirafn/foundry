@@ -18,7 +18,6 @@ public sealed class Defaults
         // Assert
         options.ShouldSatisfyAllConditions(
             () => options.Settings.ShouldNotBeNull(),
-            () => options.Settings.AdditionalDenyRules.ShouldBeEmpty(),
-            () => options.Settings.Model.ShouldBeNull());
+            () => options.Settings.Hooks.ShouldBeEmpty());
     }
 }
