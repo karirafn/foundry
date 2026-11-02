@@ -1,0 +1,107 @@
+using System.Net;
+using System.Net.Http.Json;
+
+using Foundry.Modules.Settings.Contracts;
+using Foundry.Modules.Settings.Domain.Entities;
+using Foundry.Testing;
+
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
+
+using Shouldly;
+
+using Xunit;
+
+namespace Foundry.IntegrationTests.Modules.Settings.Endpoints.UpdateWorkerEnvironmentTests;
+
+public sealed class WhenRequestInvalid : IAsyncDisposable
+{
+    private readonly FoundryWebAppFactory _factory;
+    private readonly HttpClient _client;
+
+    public WhenRequestInvalid()
+    {
+        _factory = new FoundryWebAppFactory();
+        _client = _factory.CreateClient();
+    }
+
+    async ValueTask IAsyncDisposable.DisposeAsync()
+    {
+        _client.Dispose();
+        await _factory.DisposeAsync();
+    }
+
+    private async Task SeedDefaultSettingsAsync()
+    {
+        // SettingsSeeder is a hosted service and is removed in tests — seed directly via DbContext.
+        using IServiceScope scope = _factory.Services.CreateScope();
+        DbContext dbContext = scope.ServiceProvider.GetRequiredService<DbContext>();
+
+        dbContext.Set<GlobalSettings>().Add(GlobalSettings.Create());
+        await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+    }
+
+    private Task<HttpResponseMessage> PutAsync(object body) =>
+        _client.PutAsJsonAsync(
+            new Uri("/api/settings/worker-environment", UriKind.Relative),
+            body,
+            TestContext.Current.CancellationToken);
+
+    [Fact]
+    public async Task WhenMemoryLimitOutOfRange_ReturnsBadRequest()
+    {
+        // Arrange
+        await SeedDefaultSettingsAsync();
+        object body = new UpdateWorkerEnvironmentRequestBuilder().WithMemoryLimitMb(1).Build();
+
+        // Act
+        HttpResponseMessage response = await PutAsync(body);
+
+        // Assert
+        await AssertProblemAsync(response, "Settings.InvalidMemoryLimit");
+    }
+
+    [Fact]
+    public async Task WhenMountContainerPathIsSensitive_ReturnsBadRequest()
+    {
+        // Arrange
+        await SeedDefaultSettingsAsync();
+        object body = new UpdateWorkerEnvironmentRequestBuilder()
+            .WithMount("/etc", "/home/user/etc")
+            .Build();
+
+        // Act
+        HttpResponseMessage response = await PutAsync(body);
+
+        // Assert
+        await AssertProblemAsync(response, "Settings.SensitiveMountContainerPath");
+    }
+
+    [Fact]
+    public async Task WhenMountContainerPathDuplicated_ReturnsBadRequest()
+    {
+        // Arrange
+        await SeedDefaultSettingsAsync();
+        object body = new UpdateWorkerEnvironmentRequestBuilder()
+            .WithMount("/skills", "/home/user/a")
+            .WithMount("/skills", "/home/user/b")
+            .Build();
+
+        // Act
+        HttpResponseMessage response = await PutAsync(body);
+
+        // Assert
+        await AssertProblemAsync(response, "Settings.DuplicateMountContainerPath");
+    }
+
+    private static async Task AssertProblemAsync(HttpResponseMessage response, string expectedErrorCode)
+    {
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        response.Content.Headers.ContentType?.MediaType.ShouldBe("application/problem+json");
+        ProblemDetails problem = (await response.Content
+            .ReadFromJsonAsync<ProblemDetails>(TestContext.Current.CancellationToken))
+            .ShouldNotBeNull();
+        problem.Type.ShouldEndWith(expectedErrorCode);
+    }
+}

@@ -1563,6 +1563,57 @@
         }
       }
     },
+    "/api/settings/worker-environment": {
+      "put": {
+        "tags": [
+          "Settings"
+        ],
+        "summary": "Updates the worker resource limits and host mounts",
+        "operationId": "UpdateWorkerEnvironment",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateWorkerEnvironmentRequestBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GlobalSettingsSummary"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/settings/worker-image/retry": {
       "post": {
         "tags": [
@@ -3145,6 +3196,66 @@
               "string"
             ],
             "format": "int32"
+          }
+        }
+      },
+      "UpdateWorkerEnvironmentMountRequest": {
+        "required": [
+          "containerPath",
+          "hostPath",
+          "readOnly"
+        ],
+        "type": "object",
+        "properties": {
+          "containerPath": {
+            "type": "string"
+          },
+          "hostPath": {
+            "type": "string"
+          },
+          "readOnly": {
+            "type": "boolean"
+          }
+        }
+      },
+      "UpdateWorkerEnvironmentRequestBody": {
+        "required": [
+          "memoryLimitMb",
+          "cpuLimit",
+          "pidsLimit",
+          "mounts"
+        ],
+        "type": "object",
+        "properties": {
+          "memoryLimitMb": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "cpuLimit": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "number",
+              "string"
+            ],
+            "format": "double"
+          },
+          "pidsLimit": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "mounts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/UpdateWorkerEnvironmentMountRequest"
+            }
           }
         }
       },
