@@ -1372,6 +1372,11 @@ public sealed class HandleAsync : IAsyncDisposable
         public Task<IReadOnlyList<WorkerMountEntry>> GetWorkerMountsAsync(CancellationToken cancellationToken)
             => Task.FromResult<IReadOnlyList<WorkerMountEntry>>(mounts ?? []);
 
+
+        public Task<ClaudeCodeSettingsSnapshot> GetClaudeCodeSettingsAsync(CancellationToken cancellationToken)
+
+            => Task.FromResult(new ClaudeCodeSettingsSnapshot(string.Empty, true, []));
+
         public Task<IReadOnlyList<string>> GetAllowedProviderHostsAsync(CancellationToken cancellationToken)
             => Task.FromResult<IReadOnlyList<string>>([]);
     }

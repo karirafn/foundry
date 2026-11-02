@@ -26,4 +26,7 @@ public sealed record GlobalSettingsSummary(
     int MemoryLimitMb,
     double CpuLimit,
     int PidsLimit,
-    IReadOnlyList<WorkerMountEntry> Mounts);
+    IReadOnlyList<WorkerMountEntry> Mounts,
+    string Model,
+    bool BlockCiCdEdits,
+    IReadOnlyList<string> AdditionalDenyRules);

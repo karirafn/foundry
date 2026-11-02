@@ -16,6 +16,11 @@ internal sealed class StubGlobalSettingsQueries(IReadOnlyList<string> allowedHos
     public Task<IReadOnlyList<WorkerMountEntry>> GetWorkerMountsAsync(CancellationToken cancellationToken)
         => Task.FromResult<IReadOnlyList<WorkerMountEntry>>([]);
 
+
+    public Task<ClaudeCodeSettingsSnapshot> GetClaudeCodeSettingsAsync(CancellationToken cancellationToken)
+
+        => Task.FromResult(new ClaudeCodeSettingsSnapshot(string.Empty, true, []));
+
     public Task<IReadOnlyList<string>> GetAllowedProviderHostsAsync(CancellationToken cancellationToken)
         => Task.FromResult(allowedHosts);
 

@@ -2,6 +2,7 @@ using Foundry.Modules.Settings.Contracts;
 using Foundry.Modules.Settings.Domain.Entities;
 using Foundry.Modules.Settings.Domain.ValueObjects;
 using Foundry.Modules.Settings.Features;
+using Foundry.Testing;
 
 using Shouldly;
 
@@ -407,5 +408,28 @@ public sealed class ToSummary
             () => result.CpuLimit.ShouldBe(WorkerResourceLimits.Default.CpuLimit),
             () => result.PidsLimit.ShouldBe(WorkerResourceLimits.Default.PidsLimit),
             () => result.Mounts.ShouldBeEmpty());
+    }
+
+    [Fact]
+    public void WhenClaudeCodeSettingsUpdated_SummaryCarriesThem()
+    {
+        // Arrange
+        GlobalSettings settings = CreateDefaultSettings();
+        ClaudeCodeSettings claudeCode = new ClaudeCodeSettingsBuilder()
+            .WithModel("claude-opus-4-1")
+            .WithBlockCiCdEdits(false)
+            .WithAdditionalDenyRules(["Bash(rm:*)"])
+            .Build()
+            .Match(v => v, e => throw new InvalidOperationException(e.Message));
+        settings.UpdateClaudeCodeSettings(claudeCode);
+
+        // Act
+        GlobalSettingsSummary result = GlobalSettingsMapper.ToSummary(settings);
+
+        // Assert
+        result.ShouldSatisfyAllConditions(
+            () => result.Model.ShouldBe(settings.ClaudeCodeSettings.Model),
+            () => result.BlockCiCdEdits.ShouldBe(settings.ClaudeCodeSettings.BlockCiCdEdits),
+            () => result.AdditionalDenyRules.ShouldBe(settings.ClaudeCodeSettings.AdditionalDenyRules));
     }
 }
