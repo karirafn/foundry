@@ -3,6 +3,40 @@ import { signal } from '@angular/core';
 import { IssueCardComponent, formatCost, formatDuration } from './issue-card';
 import { IssueSummary, RunStats } from '../issue.model';
 import { TickerService } from '../../../core/services/ticker.service';
+import { AgentActivity } from '../../../core/models/agent-activity.model';
+
+function buildAgentActivity(overrides: Partial<AgentActivity> = {}): AgentActivity {
+  return {
+    workerRunId: 'run-1',
+    issueId: 'abc123',
+    lastEventAt: new Date().toISOString(),
+    tasks: [],
+    currentTask: null,
+    completedTaskCount: 0,
+    subagents: [],
+    activeSkill: null,
+    inFlightTool: null,
+    tokens: { inputTokens: 0, outputTokens: 0, cacheReadInputTokens: 0, cacheCreationInputTokens: 0 },
+    ...overrides,
+  };
+}
+
+function createWithAgentActivity(agentActivity: AgentActivity, lastActivityAt: string, issue: IssueSummary = mockIssue) {
+  TestBed.configureTestingModule({
+    imports: [IssueCardComponent],
+    providers: [
+      { provide: TickerService, useValue: { tick: signal(0) } },
+    ],
+  });
+  const fixture = TestBed.createComponent(IssueCardComponent);
+  fixture.componentRef.setInput('issue', issue);
+  fixture.componentRef.setInput('expanded', false);
+  fixture.componentRef.setInput('lastActivityAt', lastActivityAt);
+  fixture.componentRef.setInput('commitCount', 2);
+  fixture.componentRef.setInput('agentActivity', agentActivity);
+  fixture.detectChanges();
+  return fixture;
+}
 
 const mockIssue: IssueSummary = {
   id: 'abc123',
@@ -2116,5 +2150,96 @@ describe('IssueCardComponent', () => {
     // Assert
     const prLink = el.querySelector('.issue-card__pr-link');
     expect(prLink).toBeFalsy();
+  });
+
+  describe('agent activity', () => {
+    const justNow = () => new Date().toISOString();
+    const minutesAgo = (m: number) => new Date(Date.now() - m * 60 * 1000).toISOString();
+
+    it('should show the agent activity line for an in-progress issue', () => {
+      // Arrange
+      const activity = buildAgentActivity({
+        tasks: Array.from({ length: 7 }, (_, i) => ({ id: String(i), subject: 't', activeForm: null, status: 'pending' })),
+        completedTaskCount: 3,
+        currentTask: { id: '4', subject: 'Run tests', activeForm: 'Running tests', status: 'in_progress' },
+        subagents: [{ subagentType: 'developer', description: null, spawnDepth: 1, lastTool: null }],
+      });
+
+      // Act
+      const fixture = createWithAgentActivity(activity, justNow());
+      const el = fixture.nativeElement as HTMLElement;
+
+      // Assert
+      const line = el.querySelector('.issue-card__agent-activity');
+      expect(line?.textContent?.trim()).toBe('developer · Running tests (3/7)');
+    });
+
+    it('should show the subagent and in-flight tool when there is no task list', () => {
+      // Arrange
+      const activity = buildAgentActivity({
+        subagents: [{ subagentType: 'developer', description: null, spawnDepth: 1, lastTool: null }],
+        inFlightTool: { name: 'Bash', summary: 'dotnet test', startedAt: null },
+      });
+
+      // Act
+      const fixture = createWithAgentActivity(activity, justNow());
+      const el = fixture.nativeElement as HTMLElement;
+
+      // Assert
+      expect(el.querySelector('.issue-card__agent-activity')?.textContent?.trim()).toBe('developer · Bash');
+    });
+
+    it('should not show the agent activity line for a non-live issue', () => {
+      // Arrange
+      const failedIssue: IssueSummary = { ...mockIssue, state: 'failed' };
+
+      // Act
+      const fixture = createWithAgentActivity(buildAgentActivity(), justNow(), failedIssue);
+      const el = fixture.nativeElement as HTMLElement;
+
+      // Assert
+      expect(el.querySelector('.issue-card__agent-activity')).toBeNull();
+    });
+
+    it('should compute silence from lastEventAt instead of lastActivityAt', () => {
+      // Arrange — the container is alive (fresh lastActivityAt) but the agent has been quiet for 6 minutes
+      const activity = buildAgentActivity({ lastEventAt: minutesAgo(6) });
+
+      // Act
+      const fixture = createWithAgentActivity(activity, justNow());
+      const el = fixture.nativeElement as HTMLElement;
+
+      // Assert
+      expect(el.querySelector('.issue-card__activity')?.textContent).toContain('silent 6m');
+    });
+
+    it('should not show silence when lastEventAt is recent even if lastActivityAt is stale', () => {
+      // Arrange
+      const activity = buildAgentActivity({ lastEventAt: justNow() });
+
+      // Act
+      const fixture = createWithAgentActivity(activity, minutesAgo(9));
+      const el = fixture.nativeElement as HTMLElement;
+
+      // Assert
+      expect(el.querySelector('.issue-card__activity')?.textContent).not.toContain('silent');
+    });
+
+    it('should name the in-flight tool next to the silence badge', () => {
+      // Arrange
+      const activity = buildAgentActivity({
+        lastEventAt: minutesAgo(6),
+        inFlightTool: { name: 'Bash', summary: 'dotnet test', startedAt: minutesAgo(6) },
+      });
+
+      // Act
+      const fixture = createWithAgentActivity(activity, justNow());
+      const el = fixture.nativeElement as HTMLElement;
+      const label = (el.querySelector('.issue-card') as HTMLElement).getAttribute('aria-label') ?? '';
+
+      // Assert
+      expect(el.querySelector('.issue-card__activity')?.textContent).toContain('silent 6m · Bash running');
+      expect(label).toContain('silent 6 minutes, Bash running');
+    });
   });
 });

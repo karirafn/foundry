@@ -5,6 +5,7 @@ import { STATE_ARIA_LABELS, cardAccentFor } from '../../../shared/utils/state-di
 import { StateBadgeComponent } from '../../../shared/components/state-badge/state-badge';
 import { SafeHrefPipe } from '../../../shared/pipes/safe-href.pipe';
 import { TickerService } from '../../../core/services/ticker.service';
+import { AgentActivity, agentActivitySummary } from '../../../core/models/agent-activity.model';
 import { formatCost as _formatCostImpl, formatDuration as _formatDurationImpl } from '../run-stats.format';
 
 const REPO_WARNING_STATES = new Set<string>(['queued', 'detected', 'revision_queued', 'continuation_queued']);
@@ -65,9 +66,9 @@ function timeAgo(dateString: string): string {
   return `${diffYears} year${diffYears === 1 ? '' : 's'} ago`;
 }
 
-function silentMinutes(lastActivityAt: string): number | null {
+function silentMinutes(since: string): number | null {
   const now = Date.now();
-  const then = new Date(lastActivityAt).getTime();
+  const then = new Date(since).getTime();
   const diffMinutes = Math.floor((now - then) / 60000);
   return diffMinutes >= SILENCE_THRESHOLD_MINUTES ? diffMinutes : null;
 }
@@ -160,6 +161,10 @@ function hasVisiblePills(stats: RunStats): boolean {
           class="issue-card__title"
           [attr.title]="issue().title"
         >{{ issue().title }}</div>
+
+        @if (_agentActivityLine(); as agentLine) {
+          <div class="issue-card__agent-activity" [attr.title]="agentLine" aria-hidden="true">{{ agentLine }}</div>
+        }
 
         @if (_visibleRunStats(); as stats) {
           <div class="issue-card__run-stats">
@@ -278,6 +283,7 @@ export class IssueCardComponent {
   readonly expanded: InputSignal<boolean> = input.required<boolean>();
   readonly lastActivityAt: InputSignal<string | null> = input<string | null>(null);
   readonly commitCount: InputSignal<number | null> = input<number | null>(null);
+  readonly agentActivity: InputSignal<AgentActivity | null> = input<AgentActivity | null>(null);
   readonly isNextUp: InputSignal<boolean> = input<boolean>(false);
   readonly queuePosition: InputSignal<number | null> = input<number | null>(null);
   readonly toggle: OutputEmitterRef<void> = output<void>();
@@ -308,19 +314,50 @@ export class IssueCardComponent {
     return [accentClass, hasGutter].filter(Boolean).join(' ');
   });
 
+  /** One-line Agent Activity summary, e.g. "developer · Running tests (3/7)". */
+  readonly _agentActivityLine = computed((): string | null => {
+    const activity = this.agentActivity();
+    if (activity === null || !LIVE_STATES.has(this.issue().state)) {
+      return null;
+    }
+    return agentActivitySummary(activity);
+  });
+
+  /**
+   * Silence is measured from the agent's last stream-json event (LastEventAt). Until the first
+   * Agent Activity payload arrives it falls back to the container-alive LastActivityAt.
+   */
+  private readonly _silenceSince = computed((): string | null =>
+    this.agentActivity()?.lastEventAt ?? this.lastActivityAt());
+
+  /** Silence badge text, e.g. "silent 6m · Bash running", or null below the threshold. */
+  private readonly _silenceText = computed((): { short: string; long: string } | null => {
+    void this._ticker.tick();
+    const since = this._silenceSince();
+    const minutes = since !== null ? silentMinutes(since) : null;
+    if (minutes === null) {
+      return null;
+    }
+    const tool = this.agentActivity()?.inFlightTool?.name ?? null;
+    const toolPart = tool !== null ? ` · ${tool} running` : '';
+    return {
+      short: `silent ${minutes}m${toolPart}`,
+      long: `silent ${minutes} minute${minutes === 1 ? '' : 's'}${tool !== null ? `, ${tool} running` : ''}`,
+    };
+  });
+
   readonly _activityLine = computed(() => {
     // Depend on ticker to re-evaluate every ~30s
     void this._ticker.tick();
-    const at = this.lastActivityAt();
-    if (at === null || !LIVE_STATES.has(this.issue().state)) {
+    if (this._silenceSince() === null || !LIVE_STATES.has(this.issue().state)) {
       return null;
     }
     const count = this.commitCount();
-    const silenceMinutes = silentMinutes(at);
-    const silencePart = silenceMinutes !== null ? ` · silent ${silenceMinutes}m` : '';
+    const silence = this._silenceText();
+    const silencePart = silence !== null ? ` · ${silence.short}` : '';
     // null count means pre-handshake: suppress commit phrase, show just "active"
     if (count === null) {
-      return silenceMinutes !== null ? `silent ${silenceMinutes}m` : '';
+      return silence !== null ? silence.short : '';
     }
     return `${commitPhrase(count)}${silencePart}`;
   });
@@ -379,20 +416,19 @@ export class IssueCardComponent {
   }
 
   private _buildActivityAriaText(): string {
-    const at = this.lastActivityAt();
-    if (at === null || !LIVE_STATES.has(this.issue().state)) {
+    if (this._silenceSince() === null || !LIVE_STATES.has(this.issue().state)) {
       return '';
     }
+    const agentLine = this._agentActivityLine();
+    const agentPart = agentLine !== null ? ` Agent: ${agentLine}.` : '';
     const count = this.commitCount();
     if (count === null) {
       // Pre-handshake: no commit info yet
-      return '';
+      return agentPart;
     }
-    const silenceMinutes = silentMinutes(at);
-    const silencePart = silenceMinutes !== null
-      ? `, silent ${silenceMinutes} minute${silenceMinutes === 1 ? '' : 's'}`
-      : '';
-    return ` Active: ${commitPhrase(count)}${silencePart}.`;
+    const silence = this._silenceText();
+    const silencePart = silence !== null ? `, ${silence.long}` : '';
+    return ` Active: ${commitPhrase(count)}${silencePart}.${agentPart}`;
   }
 
   private _buildRunStatsAriaText(): string {

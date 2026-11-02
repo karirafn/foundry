@@ -134,7 +134,7 @@ internal sealed partial class AgentTranscriptFormatter
         return summary is null ? $"→ {name}" : $"→ {name}: {summary}";
     }
 
-    private static string? SummarizeInput(string name, JsonNode? input)
+    internal static string? SummarizeInput(string name, JsonNode? input)
     {
         if (input is not JsonObject)
         {
@@ -275,14 +275,14 @@ internal sealed partial class AgentTranscriptFormatter
         return $"  [{label}] ";
     }
 
-    private static IEnumerable<JsonObject> ContentBlocks(JsonObject evt)
+    internal static IEnumerable<JsonObject> ContentBlocks(JsonObject evt)
     {
         return evt["message"]?["content"] is JsonArray content
             ? content.OfType<JsonObject>()
             : [];
     }
 
-    private static string? ReadToolResultText(JsonNode? content)
+    internal static string? ReadToolResultText(JsonNode? content)
     {
         return content switch
         {
@@ -294,7 +294,7 @@ internal sealed partial class AgentTranscriptFormatter
         };
     }
 
-    private static bool IsAgentTool(string name)
+    internal static bool IsAgentTool(string name)
     {
         return name is "Agent" or "Task";
     }
@@ -329,7 +329,7 @@ internal sealed partial class AgentTranscriptFormatter
         return parts.Length == 0 ? null : string.Join(" — ", parts);
     }
 
-    private static string Collapse(string? text, int maxLength)
+    internal static string Collapse(string? text, int maxLength)
     {
         if (string.IsNullOrWhiteSpace(text))
         {
@@ -343,7 +343,7 @@ internal sealed partial class AgentTranscriptFormatter
             : collapsed;
     }
 
-    private static JsonObject? TryParseObject(string json)
+    internal static JsonObject? TryParseObject(string json)
     {
         try
         {
@@ -355,14 +355,14 @@ internal sealed partial class AgentTranscriptFormatter
         }
     }
 
-    private static string? ReadString(JsonNode? node)
+    internal static string? ReadString(JsonNode? node)
     {
         return node is JsonValue value && value.GetValueKind() == JsonValueKind.String
             ? value.GetValue<string>()
             : null;
     }
 
-    private static decimal? ReadNumber(JsonNode? node)
+    internal static decimal? ReadNumber(JsonNode? node)
     {
         return node is JsonValue value
             && value.GetValueKind() == JsonValueKind.Number
@@ -371,7 +371,7 @@ internal sealed partial class AgentTranscriptFormatter
                 : null;
     }
 
-    private static DateTimeOffset? ReadTimestamp(JsonNode? node)
+    internal static DateTimeOffset? ReadTimestamp(JsonNode? node)
     {
         return ReadString(node) is { } text
             && DateTimeOffset.TryParse(
@@ -383,7 +383,7 @@ internal sealed partial class AgentTranscriptFormatter
                 : null;
     }
 
-    private static DateTimeOffset? ParseDockerTimestamp(string prefix)
+    internal static DateTimeOffset? ParseDockerTimestamp(string prefix)
     {
         return prefix.Length > 0
             && DateTimeOffset.TryParse(
@@ -395,7 +395,7 @@ internal sealed partial class AgentTranscriptFormatter
                 : null;
     }
 
-    private static (string Prefix, string Body) SplitDockerTimestamp(string line)
+    internal static (string Prefix, string Body) SplitDockerTimestamp(string line)
     {
         Match match = DockerTimestampPrefixPattern().Match(line);
 

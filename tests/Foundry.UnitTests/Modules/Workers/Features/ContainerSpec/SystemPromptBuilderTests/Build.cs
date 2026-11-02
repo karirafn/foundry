@@ -1607,6 +1607,24 @@ public sealed class Build
         result.ShouldContain("Fix the root cause of the failures");
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void WhenBuilt_ResultContainsTaskListInstructionOnce(bool installsDocker)
+    {
+        // Act
+        Result<string> buildResult = SystemPromptBuilder.Build(
+            1, DefaultBranchNaming, DefaultSystemPromptTemplate,
+            new DispatchContext.Fresh("feat/1-title"),
+            "https://api.github.com/repos/owner/repo/issues/1",
+            timeoutMinutes: 120, installsDocker: installsDocker);
+        string result = buildResult.ShouldBeOfType<Result<string>.Success>().Value;
+
+        // Assert
+        result.Split(SystemPromptBuilder.TaskListInstruction).Length.ShouldBe(2);
+        SystemPromptBuilder.TaskListInstruction.ShouldNotContain("\n");
+    }
+
     // =========================================================
     // Pre-PR section tests (Issue #592 step 1)
     // =========================================================

@@ -1,3 +1,4 @@
+using Foundry.Modules.Workers.Features.Activity;
 using Foundry.Modules.Workers.Features.Runs;
 using Foundry.Testing;
 using Foundry.WebApi.Hubs;
@@ -43,7 +44,7 @@ public sealed class StreamLog
         StubWorkerLogStream stub = new([]);
 
         // Act
-        WorkerHub sut = new(stub, new NullWorkerRunQueries());
+        WorkerHub sut = new(stub, new NullWorkerRunQueries(), new AgentActivityStore());
 
         // Assert
         sut.ShouldBeAssignableTo<Hub>();
@@ -55,7 +56,7 @@ public sealed class StreamLog
         // Arrange
         Guid workerRunId = Guid.NewGuid();
         StubWorkerLogStream stub = new(["line one"]);
-        WorkerHub sut = new(stub, new NullWorkerRunQueries());
+        WorkerHub sut = new(stub, new NullWorkerRunQueries(), new AgentActivityStore());
 
         // Act
         List<string> received = [];
@@ -75,7 +76,7 @@ public sealed class StreamLog
         Guid workerRunId = Guid.NewGuid();
         IReadOnlyList<string> expectedLines = ["line one", "line two"];
         StubWorkerLogStream stub = new(expectedLines);
-        WorkerHub sut = new(stub, new NullWorkerRunQueries());
+        WorkerHub sut = new(stub, new NullWorkerRunQueries(), new AgentActivityStore());
 
         // Act
         List<string> received = [];

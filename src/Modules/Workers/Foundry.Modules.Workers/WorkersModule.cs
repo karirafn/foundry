@@ -3,6 +3,7 @@ using Foundry.Modules.Settings.Contracts;
 using Foundry.Modules.Workers.Contracts;
 using Foundry.Modules.Workers.Contracts.Queries;
 using Foundry.Modules.Workers.Domain.Events;
+using Foundry.Modules.Workers.Features.Activity;
 using Foundry.Modules.Workers.Features.Dispatch;
 using Foundry.Modules.Workers.Features.DockerAvailability;
 using Foundry.Modules.Workers.Features.Health;
@@ -29,6 +30,8 @@ public static class WorkersModule
     {
         services.AddScoped<IWorkerRunQueries, WorkerRunQueries>();
         services.AddScoped<IWorkerLogStream, WorkerLogStream>();
+        services.AddSingleton<AgentActivityStore>();
+        services.AddSingleton<IAgentActivityQueries>(sp => sp.GetRequiredService<AgentActivityStore>());
 
         services.AddSharedDockerInfrastructure();
 
@@ -61,6 +64,7 @@ public static class WorkersModule
         services.AddSingleton(TimeProvider.System);
         services.AddScoped<WorkerOutcomeResolver>();
         services.AddHostedService<WorkerDispatchService>();
+        services.AddHostedService<AgentActivityFollowerService>();
         services.AddHostedService<WorkerImageRebuildService>();
         services.AddHostedService<StaleStartingRunService>();
         services.AddHostedService<StaleReservationService>();

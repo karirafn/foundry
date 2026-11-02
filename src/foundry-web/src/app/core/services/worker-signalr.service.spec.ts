@@ -2,16 +2,25 @@ import { TestBed } from '@angular/core/testing';
 import { firstValueFrom, take, toArray } from 'rxjs';
 import { WorkerSignalRService, WORKER_HUB_FACTORY, WorkerHub } from './worker-signalr.service';
 import { WorkerActivity } from '../models/worker-activity.model';
+import { AgentActivity, AgentActivityEnded } from '../models/agent-activity.model';
 
 interface CapturedHubCallbacks {
   onWorkerActivity: ((activity: WorkerActivity) => void) | null;
+  onAgentActivity?: ((activity: AgentActivity) => void) | null;
+  onAgentActivityEnded?: ((ended: AgentActivityEnded) => void) | null;
   onReconnected: (() => void) | null;
 }
 
 function buildMockHub(captured: CapturedHubCallbacks): WorkerHub {
   return {
-    on: (_method: string, cb: (activity: WorkerActivity) => void) => {
-      captured.onWorkerActivity = cb;
+    on: <T>(method: string, cb: (payload: T) => void) => {
+      if (method === 'WorkerActivity') {
+        captured.onWorkerActivity = cb as unknown as (activity: WorkerActivity) => void;
+      } else if (method === 'AgentActivity') {
+        captured.onAgentActivity = cb as unknown as (activity: AgentActivity) => void;
+      } else if (method === 'AgentActivityEnded') {
+        captured.onAgentActivityEnded = cb as unknown as (ended: AgentActivityEnded) => void;
+      }
     },
     onReconnected: (cb: () => void) => {
       captured.onReconnected = cb;
@@ -42,7 +51,72 @@ function setup() {
   };
 }
 
+function buildAgentActivity(overrides: Partial<AgentActivity> = {}): AgentActivity {
+  return {
+    workerRunId: 'run-1',
+    issueId: 'issue-1',
+    lastEventAt: '2026-01-01T00:00:00Z',
+    tasks: [],
+    currentTask: null,
+    completedTaskCount: 0,
+    subagents: [],
+    activeSkill: null,
+    inFlightTool: null,
+    tokens: { inputTokens: 0, outputTokens: 0, cacheReadInputTokens: 0, cacheCreationInputTokens: 0 },
+    ...overrides,
+  };
+}
+
 describe('WorkerSignalRService', () => {
+  describe('agent activity', () => {
+    it('should return null for an issue with no agent activity', () => {
+      // Arrange / Act
+      const { svc } = setup();
+
+      // Assert
+      expect(svc.agentActivityForIssue('issue-1')).toBeNull();
+    });
+
+    it('should store the latest AgentActivity payload by issue id', () => {
+      // Arrange
+      const { svc, captured } = setup();
+      const first = buildAgentActivity({ completedTaskCount: 1 });
+      const second = buildAgentActivity({ completedTaskCount: 2 });
+
+      // Act
+      captured.onAgentActivity!(first);
+      captured.onAgentActivity!(second);
+
+      // Assert
+      expect(svc.agentActivityForIssue('issue-1')).toEqual(second);
+    });
+
+    it('should remove the agent activity when AgentActivityEnded arrives for the same run', () => {
+      // Arrange
+      const { svc, captured } = setup();
+      captured.onAgentActivity!(buildAgentActivity());
+
+      // Act
+      captured.onAgentActivityEnded!({ workerRunId: 'run-1', issueId: 'issue-1' });
+
+      // Assert
+      expect(svc.agentActivityForIssue('issue-1')).toBeNull();
+    });
+
+    it('should keep a newer run\'s activity when AgentActivityEnded arrives for an older run', () => {
+      // Arrange
+      const { svc, captured } = setup();
+      const newer = buildAgentActivity({ workerRunId: 'run-2' });
+      captured.onAgentActivity!(newer);
+
+      // Act
+      captured.onAgentActivityEnded!({ workerRunId: 'run-1', issueId: 'issue-1' });
+
+      // Assert
+      expect(svc.agentActivityForIssue('issue-1')).toEqual(newer);
+    });
+  });
+
   // Cycle 1: service constructs without error
   it('should create the service', () => {
     // Arrange / Act
