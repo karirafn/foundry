@@ -46,6 +46,8 @@ internal static class GlobalSettingsMapper
             [.. settings.WorkerMounts.Mounts.Select(m => new WorkerMountEntry(m.ContainerPath, m.HostPath, m.ReadOnly))],
             settings.ClaudeCodeSettings.Model,
             settings.ClaudeCodeSettings.BlockCiCdEdits,
-            settings.ClaudeCodeSettings.AdditionalDenyRules);
+            settings.ClaudeCodeSettings.AdditionalDenyRules,
+            settings.HostHooks.HostSettingsPath,
+            settings.HostHooks.ExcludedCommands);
     }
 }

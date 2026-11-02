@@ -27,7 +27,9 @@ import {
   PIDS_MAX,
   PIDS_MIN,
   absolutePathValidator,
+  hostSettingsPathValidator,
   noTraversalValidator,
+  notBlankValidator,
   uniqueContainerPathsValidator,
   wholeNumberValidator,
 } from './settings-worker-environment.validators';
@@ -59,6 +61,14 @@ const LIMIT_CODES: Record<string, LimitControlName> = {
   'Settings.InvalidCpuLimit': 'cpuLimit',
   'Settings.InvalidPidsLimit': 'pidsLimit',
 };
+
+const HOST_SETTINGS_PATH_CODES: ReadonlySet<string> = new Set([
+  'Settings.HostSettingsPathNotAbsolute',
+  'Settings.HostSettingsPathTraversal',
+  'Settings.InvalidHostSettingsPathCharacters',
+  'Settings.SensitiveHostSettingsPath',
+  'Settings.HostSettingsPathTooLong',
+]);
 
 const MOUNT_CODE_FIELDS: Record<string, readonly MountPathField[]> = {
   'Settings.MountContainerPathNotAbsolute': ['containerPath'],
@@ -228,10 +238,86 @@ const MOUNT_CODE_FIELDS: Record<string, readonly MountPathField[]> = {
 
           <button type="button" id="addMount" class="general-settings__scan-btn worker-env__add" (click)="_addMount()">Add mount</button>
         </div>
+      </section>
 
-        <p class="general-settings__field-hint worker-env__hint worker-env__hooks">
-          Host hooks — commands run on the host around a worker's lifecycle — will be configurable here later.
+      <section class="general-settings__section">
+        <h2 class="general-settings__section-title">Host hooks</h2>
+        <p id="hostHooksGuidance" class="general-settings__section-description">
+          Worker hooks come from your host Claude Code <code>settings.json</code>. The file is mounted read-only into
+          every worker and its <code>hooks</code> are merged into the worker settings each time a container starts, so
+          a hook added on the host reaches the next worker. Other keys (permissions, env, status line) are not
+          imported. If the configured file is missing or is not valid JSON the worker fails at bootstrap. Leave the
+          path empty to run workers without host hooks.
         </p>
+
+        <div class="general-settings__field">
+          <label class="general-settings__field-label" for="hostSettingsPath">Host settings file</label>
+          <input
+            type="text"
+            id="hostSettingsPath"
+            formControlName="hostSettingsPath"
+            class="general-settings__text-input worker-env__input"
+            placeholder="/home/you/.claude/settings.json  or  C:\\Users\\you\\.claude\\settings.json"
+            autocomplete="off"
+            autocapitalize="off"
+            autocorrect="off"
+            spellcheck="false"
+            aria-describedby="hostHooksGuidance hostSettingsPath-error"
+            [attr.aria-invalid]="_hostSettingsPathInvalid() || null"
+          />
+          <span id="hostSettingsPath-error" class="general-settings__field-error" role="alert">{{ _hostSettingsPathError() }}</span>
+        </div>
+
+        <h3 class="general-settings__field-label">Excluded hook commands</h3>
+        <p id="excludedHooksGuidance" class="general-settings__field-hint worker-env__hint">
+          A host hook whose command exactly matches an entry is not run in workers — use this for host-specific hooks
+          such as a Windows path check. Each worker logs the hooks it applied and any exclusion that matched no hook.
+        </p>
+
+        <div class="worker-env__mounts" formArrayName="excludedHookCommands">
+          @if (excludedHookCommands.length === 0) {
+            <p class="general-settings__field-hint worker-env__hint worker-env__empty">
+              No exclusions. Every hook in the host settings file runs in workers.
+            </p>
+          }
+
+          @for (row of excludedHookCommands.controls; track row; let i = $index) {
+            <div class="worker-env__exclusion-row" role="group" [attr.aria-labelledby]="'exclusionLabel-' + i">
+              <span class="sr-only" [id]="'exclusionLabel-' + i">Excluded hook command {{ i + 1 }}</span>
+              <div class="general-settings__field">
+                <label class="sr-only" [for]="'excludedHookCommand-' + i">Excluded hook command {{ i + 1 }}</label>
+                <input
+                  type="text"
+                  [id]="'excludedHookCommand-' + i"
+                  [formControlName]="i"
+                  class="general-settings__text-input worker-env__input"
+                  aria-required="true"
+                  placeholder="bash ~/.claude/hooks/windows-path-check.sh"
+                  autocomplete="off"
+                  autocapitalize="off"
+                  autocorrect="off"
+                  spellcheck="false"
+                  [attr.aria-describedby]="'excludedHooksGuidance excludedHookCommand-' + i + '-error'"
+                  [attr.aria-invalid]="_exclusionInvalid(i) || null"
+                />
+                <span [id]="'excludedHookCommand-' + i + '-error'" class="general-settings__field-error" role="alert">{{ _exclusionError(i) }}</span>
+              </div>
+              <button
+                type="button"
+                class="general-settings__toggle-visibility-btn worker-env__remove"
+                [id]="'removeExclusion-' + i"
+                [attr.aria-label]="_removeExclusionLabel(i)"
+                (click)="_removeExclusion(i)"
+              >
+                <span aria-hidden="true">×</span>
+              </button>
+            </div>
+          }
+
+          <button type="button" id="addExclusion" class="general-settings__scan-btn worker-env__add" (click)="_addExclusion()">
+            Add exclusion
+          </button>
+        </div>
       </section>
       </fieldset>
 
@@ -272,10 +358,16 @@ export class SettingsWorkerEnvironmentComponent implements UnsavedChanges {
       wholeNumberValidator,
     ]),
     mounts: this._fb.array<MountRowGroup>([], uniqueContainerPathsValidator),
+    hostSettingsPath: this._fb.control('', hostSettingsPathValidator),
+    excludedHookCommands: this._fb.array<FormControl<string>>([]),
   });
 
   protected get mounts(): FormArray<MountRowGroup> {
     return this.form.controls.mounts;
+  }
+
+  protected get excludedHookCommands(): FormArray<FormControl<string>> {
+    return this.form.controls.excludedHookCommands;
   }
 
   protected readonly _summaryError: WritableSignal<string> = signal('');
@@ -329,7 +421,7 @@ export class SettingsWorkerEnvironmentComponent implements UnsavedChanges {
       this._focusFirstInvalid();
       return;
     }
-    this.settingsService.updateWorkerEnvironment(this.form.getRawValue());
+    this.settingsService.updateWorkerEnvironment(this._readForm());
   }
 
   protected _addMount(): void {
@@ -353,6 +445,66 @@ export class SettingsWorkerEnvironmentComponent implements UnsavedChanges {
   protected _removeLabel(index: number): string {
     const containerPath: string | undefined = this.mounts.at(index)?.controls.containerPath.value;
     return `Remove mount ${containerPath || index + 1}`;
+  }
+
+  protected _addExclusion(): void {
+    this.excludedHookCommands.push(this._createExclusion(''));
+    const index: number = this.excludedHookCommands.length - 1;
+    afterNextRender(() => this._focus(`excludedHookCommand-${index}`), { injector: this._injector });
+  }
+
+  protected _removeExclusion(index: number): void {
+    this.excludedHookCommands.removeAt(index);
+    const remaining: number = this.excludedHookCommands.length;
+    let targetId: string = 'addExclusion';
+    if (index < remaining) {
+      targetId = `removeExclusion-${index}`;
+    } else if (remaining > 0) {
+      targetId = `removeExclusion-${remaining - 1}`;
+    }
+    afterNextRender(() => this._focus(targetId), { injector: this._injector });
+  }
+
+  protected _removeExclusionLabel(index: number): string {
+    return `Remove excluded hook command ${this.excludedHookCommands.at(index)?.value || index + 1}`;
+  }
+
+  protected _hostSettingsPathInvalid(): boolean {
+    return this._hostSettingsPathError() !== '';
+  }
+
+  protected _hostSettingsPathError(): string {
+    const control: FormControl<string> = this.form.controls.hostSettingsPath;
+    const errors = control.errors;
+    if (errors?.[SERVER_ERROR_KEY]) {
+      return errors[SERVER_ERROR_KEY];
+    }
+    if (!control.touched) {
+      return '';
+    }
+    if (errors?.['notAbsolute']) {
+      return 'Host settings file must be an absolute path (/… or a drive path such as C:\\…).';
+    }
+    if (errors?.['traversal']) {
+      return "Path must not contain '..' segments.";
+    }
+    return '';
+  }
+
+  protected _exclusionInvalid(index: number): boolean {
+    return this._exclusionError(index) !== '';
+  }
+
+  protected _exclusionError(index: number): string {
+    const control: FormControl<string> | undefined = this.excludedHookCommands.at(index);
+    if (control === undefined) {
+      return '';
+    }
+    const errors = control.errors;
+    if (errors?.[SERVER_ERROR_KEY]) {
+      return errors[SERVER_ERROR_KEY];
+    }
+    return control.touched && (errors?.['required'] || errors?.['blank']) ? 'Excluded hook command is required.' : '';
   }
 
   protected _limitInvalid(name: LimitControlName): boolean {
@@ -429,6 +581,19 @@ export class SettingsWorkerEnvironmentComponent implements UnsavedChanges {
     });
   }
 
+  private _createExclusion(command: string): FormControl<string> {
+    return this._fb.control(command, [Validators.required, notBlankValidator]);
+  }
+
+  private _readForm(): WorkerEnvironment {
+    const value: WorkerEnvironment = this.form.getRawValue();
+    return {
+      ...value,
+      hostSettingsPath: value.hostSettingsPath.trim(),
+      excludedHookCommands: value.excludedHookCommands.map((command) => command.trim()),
+    };
+  }
+
   private _seed(environment: WorkerEnvironment): void {
     if (environmentsEqual(environment, this.form.getRawValue())) {
       this.form.markAsPristine();
@@ -438,11 +603,16 @@ export class SettingsWorkerEnvironmentComponent implements UnsavedChanges {
     }
     this.mounts.clear({ emitEvent: false });
     environment.mounts.forEach((mount) => this.mounts.push(this._createRow(mount), { emitEvent: false }));
+    this.excludedHookCommands.clear({ emitEvent: false });
+    environment.excludedHookCommands.forEach((command) =>
+      this.excludedHookCommands.push(this._createExclusion(command), { emitEvent: false })
+    );
     this.form.patchValue(
       {
         memoryLimitMb: environment.memoryLimitMb,
         cpuLimit: environment.cpuLimit,
         pidsLimit: environment.pidsLimit,
+        hostSettingsPath: environment.hostSettingsPath,
       },
       { emitEvent: false }
     );
@@ -456,6 +626,8 @@ export class SettingsWorkerEnvironmentComponent implements UnsavedChanges {
     const limit: LimitControlName | undefined = code === null ? undefined : LIMIT_CODES[code];
     if (limit !== undefined) {
       this.form.controls[limit].setErrors({ [SERVER_ERROR_KEY]: detail });
+    } else if (code !== null && HOST_SETTINGS_PATH_CODES.has(code)) {
+      this.form.controls.hostSettingsPath.setErrors({ [SERVER_ERROR_KEY]: detail });
     } else if (!this._attachToMountRow(code, detail)) {
       this._summaryError.set(detail);
       this._cdr.markForCheck();
@@ -502,6 +674,7 @@ export class SettingsWorkerEnvironmentComponent implements UnsavedChanges {
     const controls: FormControl[] = [
       ...Object.values(this.form.controls).filter((control): control is FormControl => control instanceof FormControl),
       ...this.mounts.controls.flatMap((row) => [row.controls.containerPath, row.controls.hostPath]),
+      ...this.excludedHookCommands.controls,
     ];
     return controls.filter((control) => control.errors?.[SERVER_ERROR_KEY]);
   }
@@ -514,6 +687,9 @@ export class SettingsWorkerEnvironmentComponent implements UnsavedChanges {
 function environmentsEqual(left: WorkerEnvironment, right: WorkerEnvironment): boolean {
   return (
     left.memoryLimitMb === right.memoryLimitMb &&
+    left.hostSettingsPath === right.hostSettingsPath &&
+    left.excludedHookCommands.length === right.excludedHookCommands.length &&
+    left.excludedHookCommands.every((command, index) => command === right.excludedHookCommands[index]) &&
     left.cpuLimit === right.cpuLimit &&
     left.pidsLimit === right.pidsLimit &&
     left.mounts.length === right.mounts.length &&

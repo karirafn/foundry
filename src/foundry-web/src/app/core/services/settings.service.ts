@@ -565,6 +565,8 @@ export class SettingsService {
       cpuLimit: response.cpuLimit,
       pidsLimit: response.pidsLimit,
       mounts: (response.mounts ?? []).map((mount) => ({ ...mount })),
+      hostSettingsPath: response.hostSettingsPath ?? '',
+      excludedHookCommands: [...(response.excludedHookCommands ?? [])],
     };
   }
 
