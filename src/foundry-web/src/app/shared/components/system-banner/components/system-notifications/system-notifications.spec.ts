@@ -3,6 +3,7 @@ import { signal } from '@angular/core';
 import { SystemNotificationsComponent } from './system-notifications';
 import { SystemSignalRService } from '../../../../../core/services/system-signalr.service';
 import { SystemNotification } from '../../../../../core/models/system-notification.model';
+import { GENERAL_NOTIFICATION_CATEGORIES } from './system-notifications';
 
 function createMockSignalRService(notifications: SystemNotification[]) {
   const notificationsSignal = signal(notifications);
@@ -12,13 +13,17 @@ function createMockSignalRService(notifications: SystemNotification[]) {
   };
 }
 
-function setup(notifications: SystemNotification[] = []) {
+function setup(
+  notifications: SystemNotification[] = [],
+  allowedCategories: ReadonlySet<string> | null = new Set(['auth', 'license'])
+) {
   const mockSignalR = createMockSignalRService(notifications);
 
   TestBed.configureTestingModule({
     imports: [SystemNotificationsComponent],
     providers: [
       { provide: SystemSignalRService, useValue: mockSignalR },
+      ...(allowedCategories ? [{ provide: GENERAL_NOTIFICATION_CATEGORIES, useValue: allowedCategories }] : []),
     ],
   });
 
@@ -168,6 +173,73 @@ describe('SystemNotificationsComponent', () => {
       // Assert
       const alerts = el.querySelectorAll('[role="alert"]');
       expect(alerts.length).toBe(0);
+    });
+  });
+
+  describe('category allow-list', () => {
+    // Cycle 11: credits reload-trigger notification must not render a generic bar
+    it('should not render a general alert bar when the only notification is a credits notification', () => {
+      // Arrange — credits notification with empty message (handled by fd-credits-banner)
+      const notification: SystemNotification = { category: 'credits', isActive: true, message: '' };
+
+      // Act
+      const { fixture } = setup([notification]);
+      const el = fixture.nativeElement as HTMLElement;
+
+      // Assert
+      expect(el.querySelectorAll('.system-banner__bar').length).toBe(0);
+      expect(el.querySelectorAll('[role="alert"]').length).toBe(0);
+    });
+
+    // Cycle 12: unknown category is not rendered by default
+    it('should not render a general alert bar for a category outside the allow-list', () => {
+      // Arrange
+      const notification: SystemNotification = { category: 'something-new', isActive: true, message: 'Hello' };
+
+      // Act
+      const { fixture } = setup([notification]);
+      const el = fixture.nativeElement as HTMLElement;
+
+      // Assert
+      expect(el.querySelectorAll('.system-banner__bar').length).toBe(0);
+    });
+
+    // Cycle 13: default allow-list renders no backend category generically
+    it('should render no general alert bar for any backend category with the default allow-list', () => {
+      // Arrange
+      const notifications: SystemNotification[] = [
+        { category: 'credits', isActive: true, message: '' },
+        { category: 'dispatch', isActive: true, message: '' },
+        { category: 'docker', isActive: true, message: 'Docker is unavailable' },
+        { category: 'image-build', isActive: true, message: 'Building|null' },
+        { category: 'auth', isActive: true, message: 'Auth invalid' },
+      ];
+
+      // Act
+      const { fixture } = setup(notifications, null);
+      const el = fixture.nativeElement as HTMLElement;
+
+      // Assert
+      expect(el.querySelectorAll('.system-banner__bar').length).toBe(0);
+      expect(el.querySelector('[aria-label="System notifications"]')).toBeNull();
+    });
+
+    // Cycle 14: allowed category with empty message renders no empty bar
+    it('should not render an empty bar for an allowed notification with an empty message', () => {
+      // Arrange
+      const notifications: SystemNotification[] = [
+        { category: 'auth', isActive: true, message: '   ' },
+        { category: 'license', isActive: true, message: 'License expired' },
+      ];
+
+      // Act
+      const { fixture } = setup(notifications);
+      const el = fixture.nativeElement as HTMLElement;
+
+      // Assert
+      const bars = el.querySelectorAll('.system-banner__bar');
+      expect(bars.length).toBe(1);
+      expect(bars[0].textContent?.trim()).toContain('License expired');
     });
   });
 });
