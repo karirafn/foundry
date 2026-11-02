@@ -136,6 +136,46 @@ internal static class SettingsErrors
     internal static Error InvalidDenyRule(string rule) =>
         new(InvalidDenyRuleCode, $"Deny rule '{rule}' must have the form Tool(pattern), where Tool is one of Bash, Edit, Read, Write, MultiEdit, Glob, or Grep.");
 
+    internal const string HostSettingsPathNotAbsoluteCode = "Settings.HostSettingsPathNotAbsolute";
+
+    internal static Error HostSettingsPathNotAbsolute(string path) =>
+        new(HostSettingsPathNotAbsoluteCode, $"Host settings file path '{path}' must be absolute (/… or a drive path such as C:\\…).");
+
+    internal const string HostSettingsPathTraversalCode = "Settings.HostSettingsPathTraversal";
+
+    internal static Error HostSettingsPathTraversal(string path) =>
+        new(HostSettingsPathTraversalCode, $"Host settings file path '{path}' must not contain path traversal segments (..).");
+
+    internal const string InvalidHostSettingsPathCharactersCode = "Settings.InvalidHostSettingsPathCharacters";
+
+    internal static Error InvalidHostSettingsPathCharacters(string path) =>
+        new(InvalidHostSettingsPathCharactersCode, $"Host settings file path '{path}' contains a separator or control character that is not allowed.");
+
+    internal const string SensitiveHostSettingsPathCode = "Settings.SensitiveHostSettingsPath";
+
+    internal static Error SensitiveHostSettingsPath(string path) =>
+        new(SensitiveHostSettingsPathCode, $"Host settings file path '{path}' targets a sensitive system directory and is not allowed.");
+
+    internal const string HostSettingsPathTooLongCode = "Settings.HostSettingsPathTooLong";
+
+    internal static readonly Error HostSettingsPathTooLong =
+        new(HostSettingsPathTooLongCode, $"The host settings file path must not exceed {HostHooks.MaxHostSettingsPathLength} characters.");
+
+    internal const string EmptyExcludedHookCommandCode = "Settings.EmptyExcludedHookCommand";
+
+    internal static readonly Error EmptyExcludedHookCommand =
+        new(EmptyExcludedHookCommandCode, "Excluded hook commands must not be empty or whitespace.");
+
+    internal const string ExcludedHookCommandTooLongCode = "Settings.ExcludedHookCommandTooLong";
+
+    internal static readonly Error ExcludedHookCommandTooLong =
+        new(ExcludedHookCommandTooLongCode, $"Excluded hook commands must not exceed {HostHooks.MaxExcludedCommandLength} characters.");
+
+    internal const string TooManyExcludedHookCommandsCode = "Settings.TooManyExcludedHookCommands";
+
+    internal static Error TooManyExcludedHookCommands(int count) =>
+        new(TooManyExcludedHookCommandsCode, $"The hook exclusion list may not exceed {HostHooks.MaxExcludedCommandCount} entries, but {count} were provided.");
+
     internal const string DuplicateMountContainerPathCode = "Settings.DuplicateMountContainerPath";
 
     internal static Error DuplicateMountContainerPath(string path) =>

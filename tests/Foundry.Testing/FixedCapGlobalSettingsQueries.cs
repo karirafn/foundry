@@ -58,6 +58,10 @@ public sealed class FixedCapGlobalSettingsQueries(int maxConcurrent) : IGlobalSe
 
         => Task.FromResult(new ClaudeCodeSettingsSnapshot(string.Empty, true, []));
 
+    public Task<HostHooksSnapshot> GetHostHooksAsync(CancellationToken cancellationToken)
+
+        => Task.FromResult(new HostHooksSnapshot(string.Empty, []));
+
     public Task<IReadOnlyList<string>> GetAllowedProviderHostsAsync(CancellationToken cancellationToken)
         => Task.FromResult<IReadOnlyList<string>>([]);
 }

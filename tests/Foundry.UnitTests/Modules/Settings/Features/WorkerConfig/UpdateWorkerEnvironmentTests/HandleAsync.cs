@@ -1,5 +1,6 @@
 using Foundry.Modules.Settings.Contracts;
 using Foundry.Modules.Settings.Domain.Entities;
+using Foundry.Modules.Settings.Domain.ValueObjects;
 using Foundry.Modules.Settings.Features.WorkerConfig;
 using Foundry.Shared;
 using Foundry.WebApi.Persistence;
@@ -59,7 +60,12 @@ public sealed class HandleAsync : IAsyncLifetime
         double cpuLimit = ValidCpuLimit,
         int pidsLimit = ValidPidsLimit,
         params UpdateWorkerEnvironment.MountRequest[] mounts) =>
-        new(memoryLimitMb, cpuLimit, pidsLimit, mounts);
+        new(memoryLimitMb, cpuLimit, pidsLimit, mounts, string.Empty, []);
+
+    private static UpdateWorkerEnvironment.Command CreateHostHooksCommand(
+        string hostSettingsPath,
+        params string[] excludedHookCommands) =>
+        new(ValidMemoryLimitMb, ValidCpuLimit, ValidPidsLimit, [], hostSettingsPath, excludedHookCommands);
 
     [Fact]
     public async Task WhenValid_ReturnsSummaryWithNewLimitsAndMounts()
@@ -223,5 +229,110 @@ public sealed class HandleAsync : IAsyncLifetime
         // Assert
         ((Result<GlobalSettingsSummary>.Failure)result).Error.Code
             .ShouldBe(SettingsErrors.DuplicateMountContainerPathCode);
+    }
+
+    [Fact]
+    public async Task WhenHostHooksValid_ReturnsSummaryAndPersistsCanonicalValues()
+    {
+        // Arrange
+        await SeedSettingsAsync();
+        await using (FoundryDbContext dbContext = CreateDbContext())
+        {
+            UpdateWorkerEnvironment.Handler sut = new(dbContext);
+            UpdateWorkerEnvironment.Command command = CreateHostHooksCommand(
+                " /home/user/.claude/settings.json ",
+                " notify ",
+                "notify",
+                "lint");
+
+            // Act
+            Result<GlobalSettingsSummary> result = await sut.HandleAsync(command, TestContext.Current.CancellationToken);
+
+            // Assert
+            GlobalSettingsSummary summary = result.Match(v => v, e => throw new InvalidOperationException(e.Message));
+            summary.ShouldSatisfyAllConditions(
+                () => summary.HostSettingsPath.ShouldBe("/home/user/.claude/settings.json"),
+                () => summary.ExcludedHookCommands.ShouldBe(["notify", "lint"]));
+        }
+
+        await using FoundryDbContext verifyDb = CreateDbContext();
+        GlobalSettings persisted = await verifyDb.Set<GlobalSettings>()
+            .AsNoTracking()
+            .SingleAsync(TestContext.Current.CancellationToken);
+        persisted.HostHooks.ShouldSatisfyAllConditions(
+            () => persisted.HostHooks.HostSettingsPath.ShouldBe("/home/user/.claude/settings.json"),
+            () => persisted.HostHooks.ExcludedCommands.ShouldBe(["notify", "lint"]));
+    }
+
+    [Fact]
+    public async Task WhenHostSettingsPathIsRelative_ReturnsNotAbsoluteErrorAndPersistsNothing()
+    {
+        // Arrange
+        await SeedSettingsAsync();
+        await using (FoundryDbContext dbContext = CreateDbContext())
+        {
+            UpdateWorkerEnvironment.Handler sut = new(dbContext);
+
+            // Act
+            Result<GlobalSettingsSummary> result = await sut.HandleAsync(
+                CreateHostHooksCommand("settings.json"),
+                TestContext.Current.CancellationToken);
+
+            // Assert
+            result.ShouldBeOfType<Result<GlobalSettingsSummary>.Failure>().Error.Code
+                .ShouldBe(SettingsErrors.HostSettingsPathNotAbsoluteCode);
+        }
+
+        await using FoundryDbContext verifyDb = CreateDbContext();
+        GlobalSettings persisted = await verifyDb.Set<GlobalSettings>()
+            .AsNoTracking()
+            .SingleAsync(TestContext.Current.CancellationToken);
+        persisted.HostHooks.ShouldBe(HostHooks.Default);
+    }
+
+    [Fact]
+    public async Task WhenExcludedHookCommandIsNull_ReturnsEmptyExclusionError()
+    {
+        // Arrange
+        await SeedSettingsAsync();
+        await using FoundryDbContext dbContext = CreateDbContext();
+        UpdateWorkerEnvironment.Handler sut = new(dbContext);
+        UpdateWorkerEnvironment.Command command = CreateHostHooksCommand(string.Empty, [null!]);
+
+        // Act
+        Result<GlobalSettingsSummary> result = await sut.HandleAsync(command, TestContext.Current.CancellationToken);
+
+        // Assert
+        result.ShouldBeOfType<Result<GlobalSettingsSummary>.Failure>().Error.Code
+            .ShouldBe(SettingsErrors.EmptyExcludedHookCommandCode);
+    }
+
+    [Fact]
+    public async Task WhenOnlyHostHooksChange_PersistsThem()
+    {
+        // Arrange
+        await SeedSettingsAsync();
+        await using (FoundryDbContext dbContext = CreateDbContext())
+        {
+            UpdateWorkerEnvironment.Handler sut = new(dbContext);
+            await sut.HandleAsync(CreateCommand(), TestContext.Current.CancellationToken);
+        }
+
+        await using (FoundryDbContext dbContext = CreateDbContext())
+        {
+            UpdateWorkerEnvironment.Handler sut = new(dbContext);
+
+            // Act
+            await sut.HandleAsync(
+                CreateHostHooksCommand("/home/user/.claude/settings.json"),
+                TestContext.Current.CancellationToken);
+        }
+
+        // Assert
+        await using FoundryDbContext verifyDb = CreateDbContext();
+        GlobalSettings persisted = await verifyDb.Set<GlobalSettings>()
+            .AsNoTracking()
+            .SingleAsync(TestContext.Current.CancellationToken);
+        persisted.HostHooks.HostSettingsPath.ShouldBe("/home/user/.claude/settings.json");
     }
 }

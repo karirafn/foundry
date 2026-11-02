@@ -25,7 +25,7 @@ public sealed class UsageLimitDetection : WorkerDispatchServiceTestBase
     private const string UsageLimitedFutureOutput =
         """
         Some prior output
-        {"terminal_reason":"blocking_limit","result":"resets at 2099-01-01T00:00:00Z"}
+        {"type":"result","terminal_reason":"blocking_limit","result":"resets at 2099-01-01T00:00:00Z"}
         """;
 
     // 429-only output — no terminal_reason, no parseable reset time.
@@ -33,7 +33,7 @@ public sealed class UsageLimitDetection : WorkerDispatchServiceTestBase
     private const string Credits429OnlyOutput =
         """
         Some prior output
-        {"api_error_status":429}
+        {"type":"result","api_error_status":429}
         """;
 
     private WorkerDispatchService BuildServiceWithParser(
@@ -215,7 +215,7 @@ public sealed class UsageLimitDetection : WorkerDispatchServiceTestBase
         SeedActiveRun("container-extends-pause");
 
         DateTimeOffset earlierReset = DateTimeOffset.UtcNow.AddDays(2);
-        string earlierOutput = $$$"""{"terminal_reason":"blocking_limit","result":"resets at {{{earlierReset:O}}}"}""";
+        string earlierOutput = $$$"""{"type":"result","terminal_reason":"blocking_limit","result":"resets at {{{earlierReset:O}}}"}""";
 
         WorkerStatus exitedStatus = new(IsRunning: false, ExitCode: 1, FinishedAt: DateTimeOffset.UtcNow);
         WorkerDispatchService sut1 = BuildServiceWithParser(earlierOutput, exitedStatus);
@@ -225,7 +225,7 @@ public sealed class UsageLimitDetection : WorkerDispatchServiceTestBase
         SeedActiveRun("container-later-reset");
 
         DateTimeOffset laterReset = DateTimeOffset.UtcNow.AddDays(5);
-        string laterOutput = $$$"""{"terminal_reason":"blocking_limit","result":"resets at {{{laterReset:O}}}"}""";
+        string laterOutput = $$$"""{"type":"result","terminal_reason":"blocking_limit","result":"resets at {{{laterReset:O}}}"}""";
 
         WorkerDispatchService sut2 = BuildServiceWithParser(laterOutput, exitedStatus);
 

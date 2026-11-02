@@ -12,6 +12,7 @@ using Foundry.Shared;
 using Foundry.WebApi.Persistence;
 
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging.Abstractions;
 
 using Shouldly;
 
@@ -187,6 +188,46 @@ public sealed class RunResultSummaryCapture : WorkerDispatchServiceTestBase
         FailedRun failedRun = run.ShouldBeOfType<FailedRun>();
         failedRun.ResultSummary.ShouldNotBeNull();
         failedRun.ResultSummary!.NumTurns.ShouldBe(5);
+    }
+
+    [Fact]
+    public async Task WhenStreamJsonTailExceeds64KB_FinalResultIsParsedAndRunSucceeds()
+    {
+        // Arrange — a 500-line stream-json tail larger than the 64 KB capture cap, ending in the
+        // recorded CLI result event; head truncation would cut off the result.
+        SeedActiveRun("container-summary-large-stream");
+        WorkerStatus exitedStatus = new(IsRunning: false, ExitCode: 0, FinishedAt: DateTimeOffset.UtcNow);
+        string eventLine =
+            """{"type":"assistant","message":{"id":"msg_1","content":[{"type":"tool_use","id":"toolu_1","name":"Bash","input":{"command":"dotnet test""" +
+            new string('x', 120) + "\"}}]}}";
+        IEnumerable<string> lines = Enumerable.Range(0, 499)
+            .Select(i => $"2026-11-02T17:31:{i % 60:00}.000000000Z {eventLine}")
+            .Append("2026-11-02T17:40:00.000000000Z " + StreamJsonFixtures.RecordedResultLine);
+        string logs = string.Join('\n', lines);
+        logs.Length.ShouldBeGreaterThan(65_536);
+        ContainerOutputParser parser = new(NullLogger<ContainerOutputParser>.Instance);
+        StubPostExitProviderQueries queries = new(
+            hasCommits: true,
+            mergeRequest: new MergeRequestByBranch(MergeRequestPresence.Open, "https://github.com/owner/repo/pull/1"));
+        ExitedWorkerOrchestrator orchestrator = new(exitedStatus, logs);
+        WorkerDispatchService sut = BuildService(orchestrator, parser, queries);
+
+        // Act
+        await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
+
+        // Assert
+        await using FoundryDbContext assertDb = CreateDbContext();
+        WorkerRun? run = await assertDb.Set<WorkerRun>().SingleOrDefaultAsync(TestContext.Current.CancellationToken);
+        CompletedRun completedRun = run.ShouldBeOfType<CompletedRun>();
+        RunResultSummary summary = completedRun.ResultSummary.ShouldNotBeNull();
+        summary.ShouldSatisfyAllConditions(
+            () => summary.Subtype.ShouldBe("success"),
+            () => summary.IsError.ShouldBeFalse(),
+            () => summary.NumTurns.ShouldBe(4),
+            () => summary.DurationMs.ShouldBe(10_643),
+            () => summary.TotalCostUsd.ShouldBe(0.1613702m),
+            () => summary.InputTokens.ShouldBe(6),
+            () => summary.OutputTokens.ShouldBe(507));
     }
 
     /// <summary>

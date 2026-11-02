@@ -124,6 +124,35 @@ public sealed class WhenRunLogRequested : IAsyncDisposable
     }
 
     [Fact]
+    public async Task WhenFailedRunHasStoredStreamJsonLog_ReturnsAgentTranscript()
+    {
+        // Arrange
+        FailedRun run = await SeedFailedRunAsync(
+            containerOutput: """
+                2026-11-02T17:30:00.000000000Z Cloning into '/workspace'...
+                2026-11-02T17:31:30.000000000Z {"type":"assistant","message":{"content":[{"type":"tool_use","id":"t1","name":"Read","input":{"file_path":"/workspace/README.md"}}]}}
+                2026-11-02T17:31:31.000000000Z {"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"t1","content":"README BODY","is_error":false}]}}
+                2026-11-02T17:31:32.000000000Z {"is_error":true,"subtype":"error_max_turns","num_turns":200,"type":"result"}
+                """);
+
+        // Act
+        HttpResponseMessage response = await _client.GetAsync(
+            new Uri($"/api/workers/runs/{run.Id.Value}/log", UriKind.Relative),
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        string content = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+        content.Split('\n').ShouldBe(
+        [
+            "2026-11-02T17:30:00.000000000Z Cloning into '/workspace'...",
+            "2026-11-02T17:31:30.000000000Z → Read: /workspace/README.md",
+            "2026-11-02T17:31:31.000000000Z ✓ Read (1.0s)",
+            "2026-11-02T17:31:32.000000000Z Result: error (error_max_turns) · 200 turns",
+        ]);
+    }
+
+    [Fact]
     public async Task WhenFailedRunHasNoStoredLog_Returns204()
     {
         // Arrange

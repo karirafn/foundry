@@ -10,6 +10,8 @@ import { SettingsWorkerEnvironmentComponent } from './settings-worker-environmen
 
 const ENV_URL = '/api/settings/worker-environment';
 const SKILLS_MOUNT = { containerPath: '/work/skills', hostPath: '/srv/skills', readOnly: true };
+const HOST_SETTINGS_PATH = '/home/you/.claude/settings.json';
+const WINDOWS_CHECK_HOOK = 'bash ~/.claude/hooks/windows-path-check.sh';
 
 interface Page {
   fixture: ComponentFixture<SettingsWorkerEnvironmentComponent>;
@@ -413,7 +415,14 @@ describe('SettingsWorkerEnvironmentComponent', () => {
     req.flush({ ...API_KEY_RESPONSE, memoryLimitMb: 4096, mounts: [SKILLS_MOUNT] });
 
     // Assert
-    expect(req.request.body).toEqual({ memoryLimitMb: 4096, cpuLimit: 2, pidsLimit: 512, mounts: [SKILLS_MOUNT] });
+    expect(req.request.body).toEqual({
+      memoryLimitMb: 4096,
+      cpuLimit: 2,
+      pidsLimit: 512,
+      mounts: [SKILLS_MOUNT],
+      hostSettingsPath: '',
+      excludedHookCommands: [],
+    });
   });
 
   it('should show the saved status and return to pristine after a successful save', async () => {
@@ -523,5 +532,174 @@ describe('SettingsWorkerEnvironmentComponent', () => {
     // Assert
     expect(button.disabled).toBe(true);
     expect(button.textContent?.trim()).toBe('Saving...');
+  });
+
+  describe('host hooks', () => {
+    it('should seed the host settings path and one row per excluded hook command', async () => {
+      // Arrange / Act
+      const page = await loadPage({ hostSettingsPath: HOST_SETTINGS_PATH, excludedHookCommands: [WINDOWS_CHECK_HOOK] });
+
+      // Assert
+      expect(input(page.el, 'hostSettingsPath').value).toBe(HOST_SETTINGS_PATH);
+      expect(input(page.el, 'excludedHookCommand-0').value).toBe(WINDOWS_CHECK_HOOK);
+    });
+
+    it('should replace the old placeholder with the host hooks section', async () => {
+      // Arrange / Act
+      const page = await loadPage();
+
+      // Assert
+      expect(page.el.textContent).toContain('Host hooks');
+      expect(page.el.textContent).not.toContain('will be configurable here later');
+      expect(page.el.textContent).toContain('No exclusions. Every hook in the host settings file runs in workers.');
+    });
+
+    it('should describe the host settings input with the guidance and its error', async () => {
+      // Arrange / Act
+      const page = await loadPage();
+
+      // Assert
+      expect(input(page.el, 'hostSettingsPath').getAttribute('aria-describedby')).toBe('hostHooksGuidance hostSettingsPath-error');
+    });
+
+    it('should accept a Windows host settings path', async () => {
+      // Arrange
+      const page = await loadPage();
+
+      // Act
+      type(page, 'hostSettingsPath', 'C:\\Users\\you\\.claude\\settings.json');
+      blur(page, 'hostSettingsPath');
+
+      // Assert
+      expect(text(page.el, 'hostSettingsPath-error')).toBe('');
+      expect(saveButton(page.el).disabled).toBe(false);
+    });
+
+    it('should reject a relative host settings path', async () => {
+      // Arrange
+      const page = await loadPage();
+
+      // Act
+      type(page, 'hostSettingsPath', '.claude/settings.json');
+      blur(page, 'hostSettingsPath');
+
+      // Assert
+      expect(text(page.el, 'hostSettingsPath-error')).toContain('absolute path');
+      expect(input(page.el, 'hostSettingsPath').getAttribute('aria-invalid')).toBe('true');
+    });
+
+    it('should reject a host settings path with a parent segment', async () => {
+      // Arrange
+      const page = await loadPage();
+
+      // Act
+      type(page, 'hostSettingsPath', '/home/you/../root/settings.json');
+      blur(page, 'hostSettingsPath');
+
+      // Assert
+      expect(text(page.el, 'hostSettingsPath-error')).toContain("'..'");
+    });
+
+    it('should add an exclusion row and focus it', async () => {
+      // Arrange
+      const page = await loadPage();
+
+      // Act
+      click(page, '#addExclusion');
+      await page.fixture.whenStable();
+
+      // Assert
+      expect(document.activeElement).toBe(input(page.el, 'excludedHookCommand-0'));
+    });
+
+    it('should remove an exclusion row and focus Add exclusion when the list empties', async () => {
+      // Arrange
+      const page = await loadPage({ excludedHookCommands: [WINDOWS_CHECK_HOOK] });
+
+      // Act
+      click(page, '#removeExclusion-0');
+      await page.fixture.whenStable();
+
+      // Assert
+      expect(page.el.querySelector('#excludedHookCommand-0')).toBeNull();
+      expect(document.activeElement).toBe(page.el.querySelector('#addExclusion'));
+    });
+
+    it('should label the remove button with the excluded command', async () => {
+      // Arrange / Act
+      const page = await loadPage({ excludedHookCommands: [WINDOWS_CHECK_HOOK] });
+
+      // Assert
+      expect(page.el.querySelector('#removeExclusion-0')?.getAttribute('aria-label'))
+        .toBe(`Remove excluded hook command ${WINDOWS_CHECK_HOOK}`);
+    });
+
+    it('should require a non-blank excluded command', async () => {
+      // Arrange
+      const page = await loadPage();
+      click(page, '#addExclusion');
+
+      // Act
+      type(page, 'excludedHookCommand-0', '   ');
+      blur(page, 'excludedHookCommand-0');
+
+      // Assert
+      expect(text(page.el, 'excludedHookCommand-0-error')).toBe('Excluded hook command is required.');
+    });
+
+    it('should PUT the trimmed host settings path and exclusions on submit', async () => {
+      // Arrange
+      const page = await loadPage();
+      type(page, 'hostSettingsPath', `  ${HOST_SETTINGS_PATH}  `);
+      click(page, '#addExclusion');
+      type(page, 'excludedHookCommand-0', ` ${WINDOWS_CHECK_HOOK} `);
+
+      // Act
+      saveButton(page.el).click();
+      const req = page.httpMock.expectOne(ENV_URL);
+      req.flush({ ...API_KEY_RESPONSE, hostSettingsPath: HOST_SETTINGS_PATH, excludedHookCommands: [WINDOWS_CHECK_HOOK] });
+      await page.fixture.whenStable();
+      page.fixture.detectChanges();
+
+      // Assert
+      expect(req.request.body).toEqual(expect.objectContaining({
+        hostSettingsPath: HOST_SETTINGS_PATH,
+        excludedHookCommands: [WINDOWS_CHECK_HOOK],
+      }));
+      expect(page.fixture.componentInstance.hasUnsavedChanges()).toBe(false);
+    });
+
+    it('should attach a host settings path server error to the path control', async () => {
+      // Arrange
+      const page = await loadPage();
+      type(page, 'hostSettingsPath', '/etc/claude/settings.json');
+
+      // Act
+      saveButton(page.el).click();
+      page.httpMock.expectOne(ENV_URL).flush(
+        {
+          detail: "Host settings file path '/etc/claude/settings.json' targets a sensitive system directory and is not allowed.",
+          type: 'tag:foundry,2026:problems/Settings.SensitiveHostSettingsPath',
+        },
+        { status: 400, statusText: 'Bad Request' },
+      );
+      await page.fixture.whenStable();
+      page.fixture.detectChanges();
+
+      // Assert
+      expect(text(page.el, 'hostSettingsPath-error')).toContain('sensitive system directory');
+      expect(input(page.el, 'hostSettingsPath').getAttribute('aria-invalid')).toBe('true');
+    });
+
+    it('should report unsaved changes after editing only the exclusions', async () => {
+      // Arrange
+      const page = await loadPage({ excludedHookCommands: [WINDOWS_CHECK_HOOK] });
+
+      // Act
+      type(page, 'excludedHookCommand-0', 'notify-send done');
+
+      // Assert
+      expect(page.fixture.componentInstance.hasUnsavedChanges()).toBe(true);
+    });
   });
 });

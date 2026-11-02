@@ -45,7 +45,9 @@ internal sealed class StubGlobalSettingsQueries(
         Mounts: [],
         Model: string.Empty,
         BlockCiCdEdits: true,
-        AdditionalDenyRules: []);
+        AdditionalDenyRules: [],
+        HostSettingsPath: string.Empty,
+        ExcludedHookCommands: []);
 
     public Task<GlobalSettingsSummary?> GetSettingsAsync(CancellationToken cancellationToken)
         => Task.FromResult(settingsExists ? _summary : (GlobalSettingsSummary?)null);
@@ -95,6 +97,10 @@ internal sealed class StubGlobalSettingsQueries(
     public Task<ClaudeCodeSettingsSnapshot> GetClaudeCodeSettingsAsync(CancellationToken cancellationToken)
 
         => Task.FromResult(new ClaudeCodeSettingsSnapshot(string.Empty, true, []));
+
+    public Task<HostHooksSnapshot> GetHostHooksAsync(CancellationToken cancellationToken)
+
+        => Task.FromResult(new HostHooksSnapshot(string.Empty, []));
 
     public Task<IReadOnlyList<string>> GetAllowedProviderHostsAsync(CancellationToken cancellationToken)
         => Task.FromResult<IReadOnlyList<string>>([]);

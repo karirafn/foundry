@@ -16,6 +16,14 @@ Ephemeral — created on demand, destroyed after completion.
 Has no identity independent of its WorkerRun — the container is the execution mechanism, not a separate domain concept.
 Workers clone the repo, implement the issue, push a branch, and open a PR. Foundry discovers each run's outcome by polling the container and querying the provider after the container exits.
 
+### Host Hooks
+
+The Claude Code hooks a worker runs, sourced from the operator's host Claude Code `settings.json` rather than stored by Foundry.
+The host file path and an exclusion list live on Global Settings (`HostHooks`). At dispatch the file is bind-mounted read-only at a fixed staging path (`/run/foundry/host-settings.json`, never `~/.claude/settings.json`), and on every container start the entrypoint merges the file's `hooks` object into the Foundry-generated worker settings; no other host key (`permissions`, `env`, `statusLine`, …) is imported, so a hook added on the host reaches the next worker with no Foundry change.
+Exclusion is exact: a hook entry whose `command` equals an exclusion entry is dropped, and matcher groups and events left empty are removed. Exclusion entries are trimmed, non-empty and de-duplicated; the path must be absolute (POSIX or Windows drive-rooted) and outside sensitive host paths.
+Fail-closed: a configured file that is missing, unreadable, or not valid JSON fails bootstrap (`WorkerBootstrapFailed`, stage `host-settings`, detail naming the host settings file) — hooks are guardrails, so silently dropping them would produce unchecked commits. A file with no `hooks` key yields zero host hooks; no configured path means no mount and no host hooks.
+Because the effective hooks are only known at container start, each run logs `Host hooks applied: N (excluded: M)`, the applied commands, and any exclusion entry that matched no hook.
+
 ## Worker Authentication
 
 How a worker container authenticates with the Anthropic API (Claude Code).
@@ -216,12 +224,12 @@ A Monitored Repository carries no account reference; on each eligibility evaluat
 ## Global Settings
 
 A strongly-typed single-row entity storing all UI-configurable settings.
-Includes worker settings (max concurrent, timeout, and the Worker Prompts value object — system prompt template, worker prompt template, and branch naming instruction), the Worker Image Configuration (image tag, build toggle, and toolchain flags) and Image Build State, the Worker Resource Limits (memory MB, CPU count, PID ceiling) and Worker Mounts (host bind mounts, each keyed on container path with a read-only/writable flag), the Claude Code Settings (model, `BlockCiCdEdits` toggle, and additional deny rules), the credit-probe interval (`ProbeIntervalMinutes`, default 60, validated to a minimum of 5), and dispatch pause controls: usage-limit controls (`AutoResumeOnUsageReset`, `UsageLimitResetsAt`) and the separate manual operator pause (`IsDispatchPaused`).
+Includes worker settings (max concurrent, timeout, and the Worker Prompts value object — system prompt template, worker prompt template, and branch naming instruction), the Worker Image Configuration (image tag, build toggle, and toolchain flags) and Image Build State, the Worker Resource Limits (memory MB, CPU count, PID ceiling) and Worker Mounts (host bind mounts, each keyed on container path with a read-only/writable flag), the Claude Code Settings (model, `BlockCiCdEdits` toggle, and additional deny rules), the Host Hooks source (host settings file path and hook exclusion list), the credit-probe interval (`ProbeIntervalMinutes`, default 60, validated to a minimum of 5), and dispatch pause controls: usage-limit controls (`AutoResumeOnUsageReset`, `UsageLimitResetsAt`) and the separate manual operator pause (`IsDispatchPaused`).
 The Worker Prompts fields are non-null DB values (seeded from code defaults, backfilled for legacy rows) with no `IConfiguration` fallback — the dashboard always shows the values in effect, and `WorkerPrompts.Create` enforces their invariants (non-empty, length-bounded, worker template contains `{issueNumber}`, branch naming free of control characters).
 `BlockCiCdEdits` is a boolean; the 7 CI/CD deny rules are a code constant in `WorkerSettingsBuilder`, never stored. When true they are injected into every worker's `permissions.deny`; when false the worker relies on soft prompt guidance (the system prompt still tells workers not to touch CI/CD files). The model is optional (unset lets Claude Code use its own default) and additional deny rules are appended after the always-enforced base deny list.
 The auth-invalid pause is not stored here — it is `ClaudeAccount.Validity` in the Credentials module (see Worker Authentication).
 `ProbeIntervalMinutes` governs how long the credit block waits between probes (see Credit Probe); the operator sets it in the dispatch-settings form, `GlobalSettings.UpdateProbeInterval` rejects a below-minimum value, and the credit-probe scheduler reads it via `IGlobalSettingsQueries.GetProbeIntervalMinutesAsync` at each arm.
-DB is the single source of truth — `IConfiguration` is not consulted for settings the UI manages.
+DB is the single source of truth — it is the only source for worker settings; `IConfiguration` is not consulted for any setting the UI manages, and the `Workers` configuration section no longer exists.
 
 ## Monitor
 
@@ -787,6 +795,14 @@ Any other failure (`Unknown`, network error, timeout) yields `Indeterminate` —
 When no MR exists the resolver falls back to exit code and branch commits.
 Exit 0 with commits triggers a bounded MR re-poll (preserving the PR-race retry window); exit 0 with no commits → `Unchanged` or `UsageLimited` (detected via JSON output); non-zero exit → `ContinuableFailure` (commits exist) or `Failure`, with bootstrap-failure and usage-limit classification layered on top.
 
+**Result selection from stream-json.**
+The worker runs `claude` with `--output-format stream-json --verbose` ([ADR 0083](docs/adr/0083-live-agent-activity-from-stream-json-over-the-container-log.md)), so the captured output is a stream of one JSON event per line rather than a single result object.
+Outcome classification and the Run Result Summary read the **last line whose `type` is `"result"`** — not merely the last JSON line: every other event (`assistant`, `user`, `system`, `rate_limit_event`, unknown types) and partial lines from a container killed mid-event are skipped.
+The `result` event is a superset of the former `--output-format json` object (it adds `model_usage_since_last_result`) and maps identically.
+One log can hold several `result` events — a transient-retry resume (`claude -c`), or a background subagent's notification re-waking the session — and the last one wins.
+Because the stream is far larger than the single result line it replaced, the captured tail (500 lines, capped at 64 KB) is truncated from the **head**, keeping the tail so the final `result` is never cut off.
+Output with no `result` event (bootstrap lines, `FOUNDRY_BOOTSTRAP_FAILED` / `FOUNDRY_DOCKER_UNAVAILABLE` sentinels) is classified exactly as before.
+
 **Side-effect applier.**
 A single `ApplyOutcomeAsync` performs all side effects in one place: state transition, integration-event dispatch (carrying `WorkerRunMergeState`), usage-limit persistence + dispatch-pause, and container stop-and-remove.
 Every terminal outcome (`Completed`, `Review`, `ContinuableFailure`, `Failure`, `Unchanged`) stops and removes the container — this is an invariant enforced at the applier, not a per-path decision.
@@ -848,14 +864,24 @@ This phase is covered by the same daemon-unreachable defer: when `ListByLabelAsy
 ## Container Output
 
 The captured tail of a failed worker container's stdout/stderr, stored on `FailedRun` as a nullable string.
-Captured by Foundry (not the worker) from the Docker API after the container stops but before removal.
+Captured by Foundry (not the worker) from the Docker API after the container stops but before removal; when the tail exceeds the 64 KB cap the head is dropped so the final `result` event survives (see Worker Outcome Detection).
 Best-effort — null when the container is already gone, never started, or the Docker API call fails.
 Docker timestamps are enabled (`--timestamps` flag) so each output line carries an RFC 3339 prefix, providing a unified timeline.
 
-Failed-run output is served by `GET /api/workers/runs/{workerRunId}/log` (200 with text body when available, 204 when absent, 404 when the run is unknown) and rendered in the dashboard by the shared `fd-log-view` component (static source mode) in the issue detail panel.
+Failed-run output is served by `GET /api/workers/runs/{workerRunId}/log` (200 with the stored output rendered as an Agent Transcript when available, 204 when absent, 404 when the run is unknown) and rendered in the dashboard by the shared `fd-log-view` component (static source mode) in the issue detail panel.
 
-Running workers stream live output via the `WorkerHub.StreamLog(workerRunId)` method on `/hubs/workers` — the hub method returns an `IAsyncEnumerable<string>` of redacted log lines with backlog replay followed by live follow.
-The dashboard's `fd-log-view` component subscribes to this stream (stream source mode) and renders the redacted lines in arrival order.
+Running workers stream live output via the `WorkerHub.StreamLog(workerRunId)` method on `/hubs/workers` — the hub method returns an `IAsyncEnumerable<string>` of redacted log lines, rendered as an Agent Transcript, with backlog replay followed by live follow.
+The dashboard's `fd-log-view` component subscribes to this stream (stream source mode) and renders the transcript lines in arrival order.
+
+## Agent Transcript
+
+The readable, summary-only rendering of a worker's stream-json container log, shown in both log views (the live `WorkerHub.StreamLog` stream and the stored failed-run log) instead of raw JSON.
+Produced server-side by `AgentTranscriptFormatter` — one formatter shared by both views, so the event vocabulary is interpreted only in C#.
+It emits one line per meaningful event: a tool call with an input summary (Bash `command` collapsed and truncated, Edit/Write/Read `file_path`, Agent `subagent_type` + `description`, Skill name), the tool's success or failure with its duration, assistant text, subagent start and finish (`task_started` / `task_notification`), session start, and the final `result`.
+Events from inside a subagent are indented and labelled with the subagent type.
+`tool_result` bodies are never rendered — only a truncated error message when a tool fails — and thinking, `system/thinking_tokens`, hooks, task progress, rate-limit and unknown events are omitted; non-JSON lines (bootstrap output, stderr, sentinels) pass through unchanged, and the Docker timestamp prefix is kept.
+Secret redaction (`SecretRedactor`) applies to every raw line before it reaches the formatter, and again to each rendered line.
+The full, raw event stream remains available only in `docker logs`.
 
 ## First-Run Wizard
 
@@ -947,10 +973,10 @@ Ephemeral — broadcast directly, never through the transactional outbox, since 
 ## Container Output Parser
 
 An infrastructure service (`IContainerOutputParser`) that classifies a worker container's JSON output.
-Takes raw JSON from `--output-format json` and returns a discriminated result: `NormalExit`, `UsageLimited(DateTimeOffset ResetsAt)`, `CreditsExhausted`, `AuthInvalid`, `TransientApiError`, `ParseFailure(string RawOutput)`, `NoResultLine`, or `WorkerBootstrapFailed(string Detail)`.
+Takes the captured `--output-format stream-json` output, selects the last `type: "result"` event (see Worker Outcome Detection), and returns a discriminated result: `NormalExit`, `UsageLimited(DateTimeOffset ResetsAt)`, `CreditsExhausted`, `AuthInvalid`, `TransientApiError`, `ParseFailure(string RawOutput)`, `NoResultLine`, or `WorkerBootstrapFailed(string Detail)`.
 Inspects `ResultMessage.api_error_status` (429) as the primary limit signal, with the `terminal_reason` allowlist as a secondary signal. When a limit signal is present, reset-time parse **success** is the discriminator (see ADR 0046): if a reset time is extracted from the result text via best-effort regex (wall-clock or ISO-8601) the result is `UsageLimited(resetsAt)`; if none parses the result is `CreditsExhausted`. `Parse` takes no cooldown fallback parameter — the former fabricated `DefaultCooldownMinutes` reset time is removed.
 Auth failures are detected from `api_error_status == 401`, with `error.type == "authentication_error"` as a secondary guard.
 Transient API faults are detected from `api_error_status` in the 5xx range (the durable signal), or — when `api_error_status` is null and `is_error: true` — from a narrow frozen allow-list of transient `result` phrases (`"API Error: Connection closed mid-response"`, `"API Error: 529 Overloaded"`) matched case-sensitively as a substring. The predicate is status-5xx-or-allow-list, never a bare `is_error: true`, so genuine task failures are never laundered into a retryable category. When `is_error: true` matches no known category (usage-limit, auth, transient), the parser logs a warning naming the unclassified `result` text — a tripwire for a reworded transient phrase that the brittle allow-list would otherwise miss silently.
-Bootstrap failures are detected via a sentinel line (`FOUNDRY_BOOTSTRAP_FAILED stage=… detail=…`) emitted by `entrypoint.sh` when the container dies before `claude` runs (clone, auth, or branch stage); the parser scans for the sentinel only when no Claude JSON result line is present, so a genuine result always wins; a non-zero exit with no result line and no sentinel falls back to `WorkerBootstrapFailed` heuristically.
+Bootstrap failures are detected via a sentinel line (`FOUNDRY_BOOTSTRAP_FAILED stage=… detail=…`) emitted by `entrypoint.sh` when the container dies before `claude` runs (host-settings, clone, auth, or branch stage); the parser scans for the sentinel only when no Claude JSON result line is present, so a genuine result always wins; a non-zero exit with no result line and no sentinel falls back to `WorkerBootstrapFailed` heuristically.
 Domain types remain JSON-unaware — all parsing is in infrastructure.
 `IContainerOutputParser` and `ContainerOutputParseResult` are `internal` to the Workers module; the Credentials credit probe (which runs outside Workers) reaches the same classification through `IProbeOutcomeClassifier`/`ProbeOutcome` in `Workers.Contracts`, a public wrapper that maps each parse result to the coarser probe outcome (`Available`, `CreditsStillBlocked`, `UsageLimited`, `InfrastructureFailure`) so there is one source of truth for the money-vs-time-vs-infrastructure discrimination.

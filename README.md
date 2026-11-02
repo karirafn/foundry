@@ -10,16 +10,7 @@ A containerized service that monitors repositories across multiple providers (Gi
 
 ## One-time setup
 
-```bash
-dotnet user-secrets init --project src/Foundry.WebApi
-dotnet user-secrets set "Monitoring:Secrets:github-default" "<your-github-pat>" --project src/Foundry.WebApi
-dotnet user-secrets set "Monitoring:Repositories:0:Slug" "owner/repo" --project src/Foundry.WebApi
-```
-
-Set exactly one worker credential — the application rejects both or neither at startup.
-
-- **Pay-per-use API:** `dotnet user-secrets set "Workers:ApiKey" "<your-anthropic-api-key>" --project src/Foundry.WebApi`
-- **Max plan (OAuth):** `dotnet user-secrets set "Workers:OAuthToken" "<token-from-claude-setup-token>" --project src/Foundry.WebApi`
+All operator configuration — provider accounts and their tokens, monitored repositories, the Claude credential (API key or OAuth login), and every worker setting — is entered in the dashboard's **Settings** pages and stored in the database. There are no configuration keys or user secrets to set; the database is the only source for worker settings.
 
 ### GitHub fine-grained token permissions
 
@@ -35,9 +26,9 @@ Generate a fine-grained token at **Settings > Developer settings > Personal acce
 
 ### Worker bind mounts
 
-Worker host bind mounts and container resource limits (memory, CPU, PIDs) are managed on the **Worker environment** settings page in the dashboard, stored in the database, and read fresh on each dispatch. Each mount is keyed on its container path with a read-only/writable flag. Do not mount `settings.json` directly — it is generated at dispatch time from Global Settings (model and deny rules) plus `Workers:Settings:Hooks` (see below).
+Worker host bind mounts and container resource limits (memory, CPU, PIDs) are managed on the **Worker environment** settings page in the dashboard, stored in the database, and read fresh on each dispatch. Each mount is keyed on its container path with a read-only/writable flag. Do not mount `settings.json` directly — it is generated at dispatch time from Global Settings (model and deny rules), with hooks merged in from the host settings file (see Worker settings below).
 
-Legacy `Workers:Mounts`, `Workers:WritableMounts`, `Workers:MemoryLimitMb`, `Workers:CpuLimit` and `Workers:PidsLimit` config keys are no longer read after upgrade; re-enter them on the Worker environment settings page (there is no automatic import, per ADR 0080).
+The `Workers` configuration section (mounts, limits, hooks, model, deny rules) is no longer read; re-enter any values you had there in the dashboard (there is no automatic import, per ADR 0080).
 
 On Windows, use the full Windows path (e.g. `C:\Users\you\.claude\skills`). Docker Desktop must have path sharing enabled — see Windows notes below.
 
@@ -63,30 +54,7 @@ The Claude Code model and additional deny rules, including the CI/CD edit protec
 
 > **Security model note:** the system prompt template is an operator-controlled setting, edited in the dashboard (Settings → Prompts) and stored in Global Settings. Operators are trusted — a malicious operator can weaken or override guidance in the system prompt template. The non-configurable safety preamble (prepended automatically) provides a baseline, but it is instructional guidance, not a cryptographic enforcement mechanism. Do not rely on it alone to contain an adversarial operator.
 
-**Hooks** — edit `secrets.json` directly for the complex hook structure (array values are not supported by the `dotnet user-secrets set` command):
-
-```bash
-dotnet user-secrets edit --project src/Foundry.WebApi
-```
-
-```json
-{
-  "Workers": {
-    "Settings": {
-      "Hooks": {
-        "PreToolUse": [
-          {
-            "Matcher": "Bash",
-            "Hooks": [
-              { "Type": "command", "Command": "/hooks/my-hook.sh" }
-            ]
-          }
-        ]
-      }
-    }
-  }
-}
-```
+**Hooks** — sourced from your host Claude Code `settings.json`. Set its path (and any hook commands to exclude, such as host-specific checks) on the **Worker environment** settings page. Each container start merges the file's `hooks` into the worker settings and logs `Host hooks applied: N (excluded: M)`; a configured file that is missing or not valid JSON fails the worker at bootstrap. Hook commands that reference `~/.claude/hooks/...` resolve through your existing bind mounts.
 
 ## Running
 

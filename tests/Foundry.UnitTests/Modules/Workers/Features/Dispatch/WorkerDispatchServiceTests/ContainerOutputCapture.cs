@@ -114,6 +114,30 @@ public sealed class ContainerOutputCapture : WorkerDispatchServiceTestBase
     }
 
     [Fact]
+    public async Task WhenContainerOutputExceedsMaxLength_TailIsKept()
+    {
+        // Arrange — stream-json output ends with the result event, so truncation must keep the tail
+        SeedActiveRun("container-output-tail");
+        WorkerStatus failedStatus = new(IsRunning: false, ExitCode: 1, FinishedAt: DateTimeOffset.UtcNow);
+        const string tail = """{"type":"result","subtype":"success","is_error":false,"result":"TAIL"}""";
+        string oversizedOutput = "HEAD" + new string('x', 70_000) + "\n" + tail;
+        LogCapturingStub orchestrator = new(status: failedStatus, logs: oversizedOutput);
+        WorkerDispatchService sut = BuildService(orchestrator);
+
+        // Act
+        await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
+
+        // Assert
+        await using FoundryDbContext assertDb = CreateDbContext();
+        WorkerRun? run = await assertDb.Set<WorkerRun>().SingleOrDefaultAsync(TestContext.Current.CancellationToken);
+        FailedRun failedRun = run.ShouldBeOfType<FailedRun>();
+        failedRun.ShouldSatisfyAllConditions(
+            () => failedRun.ContainerOutput.ShouldNotBeNull().ShouldEndWith(tail),
+            () => failedRun.ContainerOutput!.ShouldNotStartWith("HEAD"),
+            () => failedRun.ContainerOutput!.Length.ShouldBe(65_536));
+    }
+
+    [Fact]
     public async Task WhenContainerExitsWithNonZero_GetLogsAsyncCalledBeforeStop()
     {
         // Arrange

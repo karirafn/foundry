@@ -3,7 +3,6 @@ using Foundry.Modules.Settings.Contracts;
 using Foundry.Modules.Workers.Contracts;
 using Foundry.Modules.Workers.Contracts.Queries;
 using Foundry.Modules.Workers.Domain.Events;
-using Foundry.Modules.Workers.Features;
 using Foundry.Modules.Workers.Features.Dispatch;
 using Foundry.Modules.Workers.Features.DockerAvailability;
 using Foundry.Modules.Workers.Features.Health;
@@ -16,10 +15,8 @@ using Foundry.Shared.Infrastructure;
 using Foundry.Shared.Infrastructure.Docker;
 
 using Microsoft.AspNetCore.Routing;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
-using Microsoft.Extensions.Options;
 
 namespace Foundry.Modules.Workers;
 
@@ -28,13 +25,8 @@ public static class WorkersModule
     // This period is process-global — all health-check publishers ride this cadence.
     private const int HealthCheckPublisherPeriodSeconds = 15;
 
-    public static IServiceCollection AddWorkersModule(
-        this IServiceCollection services,
-        IConfiguration configuration)
+    public static IServiceCollection AddWorkersModule(this IServiceCollection services)
     {
-        services.Configure<WorkerOptions>(configuration.GetSection("Workers"));
-        services.AddSingleton<IValidateOptions<WorkerOptions>, WorkerOptionsValidator>();
-
         services.AddScoped<IWorkerRunQueries, WorkerRunQueries>();
         services.AddScoped<IWorkerLogStream, WorkerLogStream>();
 

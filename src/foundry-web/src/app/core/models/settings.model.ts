@@ -64,6 +64,8 @@ export interface WorkerEnvironment {
   cpuLimit: number;
   pidsLimit: number;
   mounts: WorkerMountEntry[];
+  hostSettingsPath: string;
+  excludedHookCommands: string[];
 }
 
 export interface ClaudeCodeSettings {
@@ -113,6 +115,8 @@ export interface GlobalSettingsResponse {
   model: string;
   blockCiCdEdits: boolean;
   additionalDenyRules: string[];
+  hostSettingsPath: string;
+  excludedHookCommands: string[];
 }
 
 export interface UpdatePromptTemplatesRequest {

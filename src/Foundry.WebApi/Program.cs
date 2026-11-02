@@ -70,7 +70,7 @@ if (!isDocGeneration)
 builder.Services.AddCredentialsModule();
 builder.Services.AddIssuesModule();
 builder.Services.AddMonitoringModule();
-builder.Services.AddWorkersModule(builder.Configuration);
+builder.Services.AddWorkersModule();
 builder.Services.AddSettingsModule();
 builder.Services.AddOpenApi(options =>
 {

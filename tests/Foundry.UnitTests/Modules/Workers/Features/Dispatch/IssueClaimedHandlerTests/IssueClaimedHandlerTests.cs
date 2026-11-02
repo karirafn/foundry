@@ -12,7 +12,6 @@ using Foundry.Modules.Workers.Contracts;
 using Foundry.Modules.Workers.Domain.Entities;
 using Foundry.Modules.Workers.Domain.Entities.States;
 using Foundry.Modules.Workers.Domain.ValueObjects;
-using Foundry.Modules.Workers.Features;
 using Foundry.Modules.Workers.Features.Orchestration;
 using Foundry.Modules.Workers.Features.ContainerSpec;
 using Foundry.Modules.Workers.Features.Dispatch;
@@ -23,7 +22,6 @@ using Foundry.WebApi.Persistence;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
-using Microsoft.Extensions.Options;
 
 using Shouldly;
 
@@ -57,18 +55,14 @@ public sealed class HandleAsync : IAsyncDisposable
 
     private IssueClaimedHandler BuildHandler(
         IWorkerOrchestrator? orchestrator = null,
-        WorkerOptions? workerOptions = null,
         IGlobalSettingsQueries? settingsQueries = null,
         ICredentialQueries? credentialQueries = null,
         IPostExitProviderQueries? postExitProviderQueries = null)
     {
-        WorkerOptions options = workerOptions ?? new WorkerOptions();
-
         return new IssueClaimedHandler(
             _dbContext,
             orchestrator ?? new StubWorkerOrchestrator(succeeds: true, containerId: "container-default"),
             new NullDomainEventDispatcher(),
-            Options.Create(options),
             settingsQueries ?? new StubGlobalSettingsQueries(),
             credentialQueries ?? new StubCredentialQueries(("ANTHROPIC_API_KEY", "test-api-key")),
             postExitProviderQueries ?? new StubPostExitProviderQueries(branchCreationSucceeds: true),
@@ -777,6 +771,117 @@ public sealed class HandleAsync : IAsyncDisposable
     }
 
     [Fact]
+    public async Task WhenHostSettingsPathConfigured_MountsFileReadOnlyAtStagingPath()
+    {
+        // Arrange
+        StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c-host-hooks");
+        StubGlobalSettingsQueries settingsQueries = new()
+        {
+            HostHooks = new HostHooksSnapshot("/home/operator/.claude/settings.json", []),
+        };
+        IssueClaimedHandler sut = BuildHandler(orchestrator: orchestrator, settingsQueries: settingsQueries);
+
+        // Act
+        await sut.HandleAsync(BuildEvent(), TestContext.Current.CancellationToken);
+
+        // Assert
+        WorkerContainerSpec? spec = orchestrator.LastSpec;
+        spec.ShouldNotBeNull();
+        spec.BindMounts.ShouldHaveSingleItem().ShouldBe(
+            new BindMount("/home/operator/.claude/settings.json", "/run/foundry/host-settings.json", ReadOnly: true));
+    }
+
+    [Fact]
+    public async Task WhenHostSettingsPathConfigured_SetsStagingPathAndExclusionsEnvVars()
+    {
+        // Arrange
+        StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c-host-hooks-env");
+        StubGlobalSettingsQueries settingsQueries = new()
+        {
+            HostHooks = new HostHooksSnapshot("/home/operator/.claude/settings.json", ["bash ~/.claude/hooks/win.sh", "notify \"done\""]),
+        };
+        IssueClaimedHandler sut = BuildHandler(orchestrator: orchestrator, settingsQueries: settingsQueries);
+
+        // Act
+        await sut.HandleAsync(BuildEvent(), TestContext.Current.CancellationToken);
+
+        // Assert
+        WorkerContainerSpec? spec = orchestrator.LastSpec;
+        spec.ShouldNotBeNull();
+        string[]? exclusions = JsonSerializer.Deserialize<string[]>(spec.EnvironmentVariables["FOUNDRY_HOST_HOOK_EXCLUSIONS"]);
+        spec.ShouldSatisfyAllConditions(
+            () => spec.EnvironmentVariables["FOUNDRY_HOST_SETTINGS_FILE"].ShouldBe("/run/foundry/host-settings.json"),
+            () => exclusions.ShouldBe(["bash ~/.claude/hooks/win.sh", "notify \"done\""]));
+    }
+
+    [Fact]
+    public async Task WhenNoHostSettingsPathConfigured_AddsNoMountAndNoHostHookEnvVars()
+    {
+        // Arrange
+        StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c-no-host-hooks");
+        StubGlobalSettingsQueries settingsQueries = new()
+        {
+            HostHooks = new HostHooksSnapshot(string.Empty, ["notify"]),
+        };
+        IssueClaimedHandler sut = BuildHandler(orchestrator: orchestrator, settingsQueries: settingsQueries);
+
+        // Act
+        await sut.HandleAsync(BuildEvent(), TestContext.Current.CancellationToken);
+
+        // Assert
+        WorkerContainerSpec? spec = orchestrator.LastSpec;
+        spec.ShouldNotBeNull();
+        spec.ShouldSatisfyAllConditions(
+            () => spec.BindMounts.ShouldBeEmpty(),
+            () => spec.EnvironmentVariables.ShouldNotContainKey("FOUNDRY_HOST_SETTINGS_FILE"),
+            () => spec.EnvironmentVariables.ShouldNotContainKey("FOUNDRY_HOST_HOOK_EXCLUSIONS"));
+    }
+
+    [Fact]
+    public async Task WhenHostSettingsPathConfigured_ClaudeSettingsJsonHasNoHooks()
+    {
+        // Arrange
+        StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c-host-hooks-json");
+        StubGlobalSettingsQueries settingsQueries = new()
+        {
+            HostHooks = new HostHooksSnapshot("/home/operator/.claude/settings.json", []),
+        };
+        IssueClaimedHandler sut = BuildHandler(orchestrator: orchestrator, settingsQueries: settingsQueries);
+
+        // Act
+        await sut.HandleAsync(BuildEvent(), TestContext.Current.CancellationToken);
+
+        // Assert
+        WorkerContainerSpec? spec = orchestrator.LastSpec;
+        spec.ShouldNotBeNull();
+        using JsonDocument doc = JsonDocument.Parse(spec.EnvironmentVariables["CLAUDE_SETTINGS_JSON"]);
+        doc.RootElement.TryGetProperty("hooks", out _).ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task WhenHostSettingsPathIsSensitive_FailsRunWithoutStartingContainer()
+    {
+        // Arrange
+        StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c-host-hooks-sensitive");
+        StubGlobalSettingsQueries settingsQueries = new()
+        {
+            HostHooks = new HostHooksSnapshot("/etc/claude/settings.json", []),
+        };
+        IssueClaimedHandler sut = BuildHandler(orchestrator: orchestrator, settingsQueries: settingsQueries);
+
+        // Act
+        await sut.HandleAsync(BuildEvent(), TestContext.Current.CancellationToken);
+        _dbContext.ChangeTracker.Clear();
+
+        // Assert
+        WorkerRun? run = await _dbContext.Set<WorkerRun>().SingleOrDefaultAsync(TestContext.Current.CancellationToken);
+        FailedRun failedRun = run.ShouldBeOfType<FailedRun>();
+        failedRun.ShouldSatisfyAllConditions(
+            () => orchestrator.LastSpec.ShouldBeNull(),
+            () => failedRun.Reason.ShouldBeOfType<FailureReason.ContainerError>().Message.ShouldContain("/etc/claude/settings.json"));
+    }
+
+    [Fact]
     public async Task WhenContinuationContext_SetsBranchNameEnvVar()
     {
         // Arrange
@@ -1363,6 +1468,8 @@ public sealed class HandleAsync : IAsyncDisposable
     {
         public ClaudeCodeSettingsSnapshot ClaudeCodeSettings { get; set; } = new(string.Empty, true, []);
 
+        public HostHooksSnapshot HostHooks { get; set; } = new(string.Empty, []);
+
         public Task<GlobalSettingsSummary?> GetSettingsAsync(CancellationToken cancellationToken)
             => Task.FromResult<GlobalSettingsSummary?>(null);
 
@@ -1410,6 +1517,10 @@ public sealed class HandleAsync : IAsyncDisposable
         public Task<ClaudeCodeSettingsSnapshot> GetClaudeCodeSettingsAsync(CancellationToken cancellationToken)
 
             => Task.FromResult(ClaudeCodeSettings);
+
+        public Task<HostHooksSnapshot> GetHostHooksAsync(CancellationToken cancellationToken)
+
+            => Task.FromResult(HostHooks);
 
         public Task<IReadOnlyList<string>> GetAllowedProviderHostsAsync(CancellationToken cancellationToken)
             => Task.FromResult<IReadOnlyList<string>>([]);
