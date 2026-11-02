@@ -13,11 +13,11 @@ public sealed partial record ClaudeCodeSettings
     private const string DenyRulePattern = @"^(Bash|Edit|Read|Write|MultiEdit|Glob|Grep)\(.+\)\z";
 
     [JsonConstructor]
-    private ClaudeCodeSettings(string model, bool blockCiCdEdits, IReadOnlyList<string> additionalDenyRules)
+    private ClaudeCodeSettings(string model, bool blockCiCdEdits = true, IReadOnlyList<string>? additionalDenyRules = null)
     {
         Model = model;
         BlockCiCdEdits = blockCiCdEdits;
-        AdditionalDenyRules = additionalDenyRules;
+        AdditionalDenyRules = additionalDenyRules ?? [];
     }
 
     public static readonly ClaudeCodeSettings Default = Create(
@@ -62,7 +62,7 @@ public sealed partial record ClaudeCodeSettings
             }
         }
 
-        return Result<ClaudeCodeSettings>.Ok(new ClaudeCodeSettings(trimmedModel, blockCiCdEdits, canonicalRules));
+        return Result<ClaudeCodeSettings>.Ok(new ClaudeCodeSettings(trimmedModel, blockCiCdEdits, canonicalRules.AsReadOnly()));
     }
 
     public bool Equals(ClaudeCodeSettings? other) =>
