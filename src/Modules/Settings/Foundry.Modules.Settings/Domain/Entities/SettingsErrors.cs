@@ -80,4 +80,49 @@ internal static class SettingsErrors
 
     internal static Error ProviderHostTooLong(string host) =>
         new(ProviderHostTooLongCode, $"'{host[..Math.Min(host.Length, 40)]}…' exceeds the maximum allowed host length of {GlobalSettings.MaxProviderHostLength} characters.");
+
+    internal const string InvalidMemoryLimitCode = "Settings.InvalidMemoryLimit";
+
+    internal static Error InvalidMemoryLimit(int value) =>
+        new(InvalidMemoryLimitCode, $"Worker memory limit must be between {WorkerResourceLimits.MinMemoryLimitMb} and {WorkerResourceLimits.MaxMemoryLimitMb} MB, but was {value}.");
+
+    internal const string InvalidCpuLimitCode = "Settings.InvalidCpuLimit";
+
+    internal static Error InvalidCpuLimit(double value) =>
+        new(InvalidCpuLimitCode, $"Worker CPU limit must be between {WorkerResourceLimits.MinCpuLimit} and {WorkerResourceLimits.MaxCpuLimit} CPUs, but was {value}.");
+
+    internal const string InvalidPidsLimitCode = "Settings.InvalidPidsLimit";
+
+    internal static Error InvalidPidsLimit(int value) =>
+        new(InvalidPidsLimitCode, $"Worker PIDs limit must be between {WorkerResourceLimits.MinPidsLimit} and {WorkerResourceLimits.MaxPidsLimit}, but was {value}.");
+
+    internal const string MountContainerPathNotAbsoluteCode = "Settings.MountContainerPathNotAbsolute";
+
+    internal static Error MountContainerPathNotAbsolute(string path) =>
+        new(MountContainerPathNotAbsoluteCode, $"Mount container path '{path}' must be absolute (start with '/').");
+
+    internal const string MountHostPathNotAbsoluteCode = "Settings.MountHostPathNotAbsolute";
+
+    internal static Error MountHostPathNotAbsolute(string path) =>
+        new(MountHostPathNotAbsoluteCode, $"Mount host path '{path}' must be absolute.");
+
+    internal const string MountPathTraversalCode = "Settings.MountPathTraversal";
+
+    internal static Error MountPathTraversal(string path) =>
+        new(MountPathTraversalCode, $"Mount path '{path}' must not contain path traversal segments (..).");
+
+    internal const string SensitiveMountContainerPathCode = "Settings.SensitiveMountContainerPath";
+
+    internal static Error SensitiveMountContainerPath(string path) =>
+        new(SensitiveMountContainerPathCode, $"Mount container path '{path}' targets a sensitive system directory and is not allowed.");
+
+    internal const string SensitiveMountHostPathCode = "Settings.SensitiveMountHostPath";
+
+    internal static Error SensitiveMountHostPath(string path) =>
+        new(SensitiveMountHostPathCode, $"Mount host path '{path}' targets a sensitive system directory and is not allowed.");
+
+    internal const string DuplicateMountContainerPathCode = "Settings.DuplicateMountContainerPath";
+
+    internal static Error DuplicateMountContainerPath(string path) =>
+        new(DuplicateMountContainerPathCode, $"Container path '{path}' appears more than once. Each container path may be mounted only once.");
 }
