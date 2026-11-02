@@ -5,7 +5,9 @@ using Foundry.Modules.Credentials.Features.Login;
 using Foundry.Modules.Settings.Contracts;
 using Foundry.Modules.Workers;
 using Foundry.Modules.Workers.Contracts;
+using Foundry.Modules.Workers.Contracts.Queries;
 using Foundry.Modules.Workers.Features;
+using Foundry.Modules.Workers.Features.Activity;
 using Foundry.Modules.Workers.Features.Dispatch;
 using Foundry.Modules.Workers.Features.DockerAvailability;
 using Foundry.Modules.Workers.Features.ImageBuild;
@@ -50,6 +52,15 @@ public sealed class AddWorkersModule
     private sealed class NullSystemNotificationBroadcaster : ISystemNotificationBroadcaster
     {
         public Task SendAsync(SystemNotification notification, CancellationToken cancellationToken)
+            => Task.CompletedTask;
+    }
+
+    private sealed class NullAgentActivityBroadcaster : IAgentActivityBroadcaster
+    {
+        public Task BroadcastActivityAsync(AgentActivity activity, CancellationToken cancellationToken)
+            => Task.CompletedTask;
+
+        public Task BroadcastEndedAsync(AgentActivityEnded ended, CancellationToken cancellationToken)
             => Task.CompletedTask;
     }
 
@@ -124,6 +135,7 @@ public sealed class AddWorkersModule
         services.AddSingleton<ISystemNotificationBroadcaster>(new NullSystemNotificationBroadcaster());
         services.AddSingleton<ILoginSessionBroadcaster>(NullLoginSessionBroadcaster.Instance);
         services.AddSingleton<ILoginSessionState, NullLoginSessionState>();
+        services.AddSingleton<IAgentActivityBroadcaster, NullAgentActivityBroadcaster>();
 
         // Act
         services.AddWorkersModule(configuration);
@@ -132,6 +144,29 @@ public sealed class AddWorkersModule
         // Assert
         IEnumerable<IHostedService> hostedServices = provider.GetServices<IHostedService>();
         hostedServices.ShouldContain(s => s is WorkerDispatchService);
+    }
+
+    [Fact]
+    public void WhenCalled_RegistersAgentActivityFollowerServiceAsHostedService()
+    {
+        // Arrange
+        IConfiguration configuration = BuildConfiguration(new Dictionary<string, string?>());
+        ServiceCollection services = new();
+        services.AddLogging();
+        services.AddSingleton<IHostEnvironment>(new StubHostEnvironment());
+        services.AddSingleton<ISystemNotificationBroadcaster>(new NullSystemNotificationBroadcaster());
+        services.AddSingleton<ILoginSessionBroadcaster>(NullLoginSessionBroadcaster.Instance);
+        services.AddSingleton<ILoginSessionState, NullLoginSessionState>();
+        services.AddSingleton<IAgentActivityBroadcaster, NullAgentActivityBroadcaster>();
+
+        // Act
+        services.AddWorkersModule(configuration);
+        ServiceProvider provider = services.BuildServiceProvider();
+
+        // Assert
+        IEnumerable<IHostedService> hostedServices = provider.GetServices<IHostedService>();
+        hostedServices.ShouldContain(s => s is AgentActivityFollowerService);
+        provider.GetRequiredService<IAgentActivityQueries>().ShouldBeSameAs(provider.GetRequiredService<AgentActivityStore>());
     }
 
     [Fact]
@@ -145,6 +180,7 @@ public sealed class AddWorkersModule
         services.AddSingleton<ISystemNotificationBroadcaster>(new NullSystemNotificationBroadcaster());
         services.AddSingleton<ILoginSessionBroadcaster>(NullLoginSessionBroadcaster.Instance);
         services.AddSingleton<ILoginSessionState, NullLoginSessionState>();
+        services.AddSingleton<IAgentActivityBroadcaster, NullAgentActivityBroadcaster>();
 
         // Act
         services.AddWorkersModule(configuration);
@@ -166,6 +202,7 @@ public sealed class AddWorkersModule
         services.AddSingleton<ISystemNotificationBroadcaster>(new NullSystemNotificationBroadcaster());
         services.AddSingleton<ILoginSessionBroadcaster>(NullLoginSessionBroadcaster.Instance);
         services.AddSingleton<ILoginSessionState, NullLoginSessionState>();
+        services.AddSingleton<IAgentActivityBroadcaster, NullAgentActivityBroadcaster>();
 
         // Act
         services.AddWorkersModule(configuration);

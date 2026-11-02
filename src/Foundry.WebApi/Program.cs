@@ -131,6 +131,7 @@ builder.Services.AddScoped<IIssueBroadcaster, SignalRIssueBroadcaster>();
 builder.Services.AddSingleton<ISystemNotificationBroadcaster, SignalRSystemNotificationBroadcaster>();
 builder.Services.AddSingleton<ILoginSessionBroadcaster, SignalRLoginSessionBroadcaster>();
 builder.Services.AddScoped<IWorkerActivityBroadcaster, SignalRWorkerActivityBroadcaster>();
+builder.Services.AddSingleton<IAgentActivityBroadcaster, SignalRAgentActivityBroadcaster>();
 // Overrides the Credentials module's TryAddSingleton no-op with the real SignalR implementation.
 // Must be registered AFTER AddCredentialsModule — the last AddSingleton wins for GetRequiredService.
 builder.Services.AddSingleton<IUsageSnapshotBroadcaster, SignalRUsageSnapshotBroadcaster>();

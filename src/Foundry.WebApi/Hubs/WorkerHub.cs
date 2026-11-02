@@ -6,8 +6,14 @@ using Microsoft.AspNetCore.SignalR;
 
 namespace Foundry.WebApi.Hubs;
 
-public sealed class WorkerHub(IWorkerLogStream logStream, IWorkerRunQueries workerRunQueries) : Hub
+public sealed class WorkerHub(
+    IWorkerLogStream logStream,
+    IWorkerRunQueries workerRunQueries,
+    IAgentActivityQueries agentActivityQueries) : Hub
 {
+    internal const string AgentActivityMethod = "AgentActivity";
+    internal const string AgentActivityEndedMethod = "AgentActivityEnded";
+
     private const string WorkerActivityMethod = "WorkerActivity";
 
     public override async Task OnConnectedAsync()
@@ -18,6 +24,12 @@ public sealed class WorkerHub(IWorkerLogStream logStream, IWorkerRunQueries work
         foreach (WorkerActivity activity in activities)
         {
             await Clients.Caller.SendAsync(WorkerActivityMethod, activity, Context.ConnectionAborted);
+        }
+
+        // Replay the in-memory Agent Activity projection for every active run (ADR 0063).
+        foreach (AgentActivity agentActivity in agentActivityQueries.GetCurrent())
+        {
+            await Clients.Caller.SendAsync(AgentActivityMethod, agentActivity, Context.ConnectionAborted);
         }
 
         await base.OnConnectedAsync();

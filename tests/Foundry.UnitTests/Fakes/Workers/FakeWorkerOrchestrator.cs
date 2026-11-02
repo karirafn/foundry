@@ -18,6 +18,10 @@ internal sealed class FakeWorkerOrchestrator : IWorkerOrchestrator
 {
     private WorkerStatus _containerStatus = new(IsRunning: true, ExitCode: null, FinishedAt: null);
     private WorkerStatusProbe? _probeOverride;
+    private IReadOnlyList<string> _logLines = [];
+    private Exception? _logStreamFault;
+
+    public int StreamLogsCallCount { get; private set; }
 
     public int StopContainerCallCount { get; private set; }
     public int RemoveContainerCallCount { get; private set; }
@@ -42,6 +46,20 @@ internal sealed class FakeWorkerOrchestrator : IWorkerOrchestrator
         return this;
     }
 
+    /// <summary>Scripts <see cref="StreamLogsAsync"/> to yield the given container log lines, then end.</summary>
+    public FakeWorkerOrchestrator WithLogLines(params string[] lines)
+    {
+        _logLines = lines;
+        return this;
+    }
+
+    /// <summary>Scripts <see cref="StreamLogsAsync"/> to throw after yielding the scripted lines.</summary>
+    public FakeWorkerOrchestrator WithLogStreamFault(Exception fault)
+    {
+        _logStreamFault = fault;
+        return this;
+    }
+
     public Task EnsureCredentialVolumeAsync(CancellationToken cancellationToken)
         => Task.CompletedTask;
 
@@ -60,8 +78,19 @@ internal sealed class FakeWorkerOrchestrator : IWorkerOrchestrator
         string containerId,
         [EnumeratorCancellation] CancellationToken cancellationToken)
     {
-        await Task.CompletedTask;
-        yield break;
+        StreamLogsCallCount++;
+
+        foreach (string line in _logLines)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            await Task.Yield();
+            yield return line;
+        }
+
+        if (_logStreamFault is not null)
+        {
+            throw _logStreamFault;
+        }
     }
 
     public Task<IReadOnlyList<(ContainerId ContainerId, WorkerRunId WorkerRunId)>> ListByLabelAsync(

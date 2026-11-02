@@ -760,8 +760,29 @@ Live pushes and connect-replay use the same `WorkerActivity` client method — t
 
 **Dashboard display.**
 The in-progress issue card headline shows the branch commit count.
-Log silence is a frontend-only signal derived from `LastActivityAt`, shown only past a 5-minute threshold — it is rendered alongside the commit count, not instead of it.
-Because `LastActivityAt` is refreshed on every container-alive observation (the 10 s dispatch tick), the badge appears only when observation itself stops — it does not detect an agent that is alive but idle.
+Log silence is a frontend-only signal derived from the [Agent Activity](#agent-activity) `LastEventAt` — the time of the last stream-json event the agent emitted — shown only past a 5-minute threshold, rendered alongside the commit count, not instead of it.
+Because `LastEventAt` advances only when the agent itself produces output (including `system/thinking_tokens`), the badge detects an agent that is alive but idle; when a tool is in flight the badge names it (e.g. `silent 6m · Bash running`) so a long-running test suite is not mistaken for a hang.
+Until the first Agent Activity payload arrives (e.g. during the SignalR handshake) the card falls back to `LastActivityAt`, which only lapses when observation itself stops.
+
+## Agent Activity
+
+A live, in-memory projection of a running worker's stream-json events, one per `ActiveRun` — the agent's own view of its progress, read without a Foundry-defined stage vocabulary.
+It holds the agent's task list (`TaskCreate` / `TaskUpdate`: subject, `activeForm`, status, with task ids correlated from the `TaskCreate` tool results), the current in-progress task and "N of M" completed, the active subagents (`subagent_type`, description, `spawn_depth`, last tool — parallel subagents tracked separately, each removed when its `task_notification` reports completion), the active skill, the in-flight tool (the latest `tool_use` with no matching `tool_result`, with the Agent Transcript input summary), token totals (input, output, cache read, cache creation — summed once per `message.id`, since a message is emitted once per content block with identical `usage`), and `LastEventAt`.
+Cost is not estimated live; it arrives with the final `result` event.
+
+**Follower.**
+`AgentActivityFollowerService` (not `WorkerDispatchService`) reconciles a log follower per `ActiveRun` every 10 s and flushes changed projections every 2 s.
+Each follower reads the container log from the start, so a Foundry restart rebuilds the projection by re-attaching (cost proportional to run length — accepted).
+A repeated `system/init` or the `claude -c` transient retry continues the projection rather than resetting it; a `result` event clears the in-flight tool and subagents but keeps tasks and token totals.
+When the run leaves `ActiveRun` its follower is cancelled, its projection disposed, and an `AgentActivityEnded` payload is broadcast; a follower whose log stream faults is re-attached with a fresh projection on the next reconcile.
+
+**Broadcast and replay.**
+Changed snapshots are broadcast as an `AgentActivity` payload via the `WorkerHub` `AgentActivity` client method, and `WorkerHub.OnConnectedAsync` replays the current payload for every active run after the `WorkerActivity` replay ([ADR 0063](docs/adr/0063-replay-live-worker-state-over-signalr-instead-of-the-issue-read-model.md)).
+The projection is presentation-only: it is never persisted, and text fields are redacted summaries — never tool result bodies.
+
+**Dashboard display.**
+The in-progress issue card shows one line such as `developer · Running tests (3/7)`: the latest active subagent type (or `main agent`), the current task `activeForm`, and task progress; a run with no task list shows the active subagent and the in-flight tool instead.
+The worker system prompt carries one workflow-neutral line asking the agent to track its plan with its task list and keep it current.
 
 ## Worker Outcome Detection
 

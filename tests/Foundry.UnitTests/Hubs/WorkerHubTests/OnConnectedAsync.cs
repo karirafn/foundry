@@ -1,5 +1,6 @@
 using Foundry.Modules.Workers.Contracts;
 using Foundry.Modules.Workers.Contracts.Queries;
+using Foundry.Modules.Workers.Features.Activity;
 using Foundry.Modules.Workers.Features.Runs;
 using Foundry.Testing;
 using Foundry.WebApi.Hubs;
@@ -105,12 +106,71 @@ public sealed class OnConnectedAsync
         clients.CallerProxy.SentActivities.ShouldNotBeEmpty();
     }
 
+    [Fact]
+    public async Task WhenAgentActivityProjectionsExist_ReplaysEachToCallerAsAgentActivity()
+    {
+        // Arrange
+        AgentActivityStore store = new();
+        AgentActivity first = CreateAgentActivity();
+        AgentActivity second = CreateAgentActivity();
+        store.Set(first);
+        store.Set(second);
+        SpyHubCallerClients clients = new();
+        WorkerHub sut = CreateHub(new StubWorkerLogStream([]), new NullWorkerRunQueries(), clients, store);
+
+        // Act
+        await sut.OnConnectedAsync();
+
+        // Assert
+        clients.CallerProxy.SentMethods.ShouldBe(["AgentActivity", "AgentActivity"]);
+        clients.CallerProxy.SentArguments.ShouldContain(first);
+        clients.CallerProxy.SentArguments.ShouldContain(second);
+        clients.AllProxy.SentMethods.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task WhenBothActivityKindsExist_ReplaysWorkerActivityBeforeAgentActivity()
+    {
+        // Arrange
+        WorkerActivity activity = new(
+            WorkerRunId: WorkerRunId.New(),
+            IssueId: Guid.NewGuid(),
+            LastActivityAt: DateTimeOffset.UtcNow,
+            CommitCount: 1);
+        AgentActivityStore store = new();
+        store.Set(CreateAgentActivity());
+        SpyHubCallerClients clients = new();
+        WorkerHub sut = CreateHub(new StubWorkerLogStream([]), new SpyWorkerRunQueries([activity]), clients, store);
+
+        // Act
+        await sut.OnConnectedAsync();
+
+        // Assert
+        clients.CallerProxy.SentMethods.ShouldBe(["WorkerActivity", "AgentActivity"]);
+    }
+
+    private static AgentActivity CreateAgentActivity()
+    {
+        return new AgentActivity(
+            WorkerRunId: WorkerRunId.New(),
+            IssueId: Guid.NewGuid(),
+            LastEventAt: DateTimeOffset.UtcNow,
+            Tasks: [],
+            CurrentTask: null,
+            CompletedTaskCount: 0,
+            Subagents: [],
+            ActiveSkill: null,
+            InFlightTool: new InFlightTool("Bash", "dotnet test", DateTimeOffset.UtcNow),
+            Tokens: new AgentTokenTotals(1, 2, 3, 4));
+    }
+
     private static WorkerHub CreateHub(
         StubWorkerLogStream logStream,
         IWorkerRunQueries queries,
-        SpyHubCallerClients clients)
+        SpyHubCallerClients clients,
+        AgentActivityStore? agentActivityStore = null)
     {
-        WorkerHub hub = new(logStream, queries);
+        WorkerHub hub = new(logStream, queries, agentActivityStore ?? new AgentActivityStore());
         hub.Clients = clients;
         hub.Context = new StubHubCallerContext();
         return hub;
@@ -203,6 +263,7 @@ public sealed class OnConnectedAsync
     {
         public List<string> SentMethods { get; } = [];
         public List<WorkerActivity> SentActivities { get; } = [];
+        public List<object?> SentArguments { get; } = [];
 
         public Task SendCoreAsync(
             string method,
@@ -210,6 +271,7 @@ public sealed class OnConnectedAsync
             CancellationToken cancellationToken = default)
         {
             SentMethods.Add(method);
+            SentArguments.Add(args.Length > 0 ? args[0] : null);
 
             if (args.Length > 0 && args[0] is WorkerActivity activity)
             {

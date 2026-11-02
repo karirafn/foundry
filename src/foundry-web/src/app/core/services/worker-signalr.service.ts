@@ -2,9 +2,10 @@ import { Injectable, InjectionToken, Signal, WritableSignal, inject, signal } fr
 import { Observable, Observer, Subject } from 'rxjs';
 import { HubConnection, HubConnectionBuilder } from '@microsoft/signalr';
 import { WorkerActivity } from '../models/worker-activity.model';
+import { AgentActivity, AgentActivityEnded } from '../models/agent-activity.model';
 
 export interface WorkerHub {
-  on(methodName: string, callback: (activity: WorkerActivity) => void): void;
+  on<T>(methodName: string, callback: (payload: T) => void): void;
   onReconnected(callback: () => void): void;
   stream(methodName: string, workerRunId: string): {
     subscribe(callbacks: {
@@ -50,13 +51,15 @@ export class WorkerSignalRService {
   private readonly _activityByIssueIdSignal: WritableSignal<ReadonlyMap<string, string>> = signal(new Map());
   private readonly _commitCountByIssueIdSignal: WritableSignal<ReadonlyMap<string, number>> = signal(new Map());
 
+  private readonly _agentActivityByIssueIdSignal: WritableSignal<ReadonlyMap<string, AgentActivity>> = signal(new Map());
+
   private readonly _reconnected = new Subject<void>();
   readonly reconnected: Observable<void> = this._reconnected.asObservable();
 
   constructor() {
     this._hub = this._hubFactory();
 
-    this._hub.on('WorkerActivity', (activity: WorkerActivity) => {
+    this._hub.on<WorkerActivity>('WorkerActivity', (activity) => {
       this._workerActivitySignal.set(activity);
 
       const nextByRunId = new Map(this._activityByRunIdSignal());
@@ -70,6 +73,23 @@ export class WorkerSignalRService {
       const nextCommitCount = new Map(this._commitCountByIssueIdSignal());
       nextCommitCount.set(activity.issueId, activity.commitCount);
       this._commitCountByIssueIdSignal.set(nextCommitCount);
+    });
+
+    this._hub.on<AgentActivity>('AgentActivity', (activity) => {
+      const next = new Map(this._agentActivityByIssueIdSignal());
+      next.set(activity.issueId, activity);
+      this._agentActivityByIssueIdSignal.set(next);
+    });
+
+    this._hub.on<AgentActivityEnded>('AgentActivityEnded', (ended) => {
+      const current = this._agentActivityByIssueIdSignal();
+      // A newer run for the same issue may already have replaced the entry.
+      if (current.get(ended.issueId)?.workerRunId !== ended.workerRunId) {
+        return;
+      }
+      const next = new Map(current);
+      next.delete(ended.issueId);
+      this._agentActivityByIssueIdSignal.set(next);
     });
 
     this._hub.onReconnected(() => {
@@ -92,6 +112,11 @@ export class WorkerSignalRService {
   /** Returns the observed commit count for the issue, or null if no WorkerActivity has arrived yet. */
   commitCountForIssue(issueId: string): number | null {
     return this._commitCountByIssueIdSignal().get(issueId) ?? null;
+  }
+
+  /** Returns the live Agent Activity projection for the issue's active run, or null if none has arrived. */
+  agentActivityForIssue(issueId: string): AgentActivity | null {
+    return this._agentActivityByIssueIdSignal().get(issueId) ?? null;
   }
 
   streamLog(workerRunId: string): Observable<string> {
