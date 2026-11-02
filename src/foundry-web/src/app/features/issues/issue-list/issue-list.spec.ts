@@ -68,6 +68,8 @@ const mockSettingsResponse: GlobalSettingsResponse = {
   model: '',
   blockCiCdEdits: true,
   additionalDenyRules: [],
+  hostSettingsPath: '',
+  excludedHookCommands: [],
 };
 
 const mockCredentialsResponse = {

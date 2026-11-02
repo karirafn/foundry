@@ -543,7 +543,7 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        /** Updates the worker resource limits and host mounts */
+        /** Updates the worker resource limits, host mounts, and host hooks source */
         put: operations["UpdateWorkerEnvironment"];
         post?: never;
         delete?: never;
@@ -728,6 +728,8 @@ export interface components {
             model: string;
             blockCiCdEdits: boolean;
             additionalDenyRules: string[];
+            hostSettingsPath: string;
+            excludedHookCommands: string[];
         };
         /** @enum {unknown} */
         ImageBuildStatus: "Idle" | "Building" | "Failed";
@@ -969,6 +971,8 @@ export interface components {
             /** Format: int32 */
             pidsLimit: number | string;
             mounts: components["schemas"]["UpdateWorkerEnvironmentMountRequest"][];
+            hostSettingsPath: string;
+            excludedHookCommands: string[];
         };
         UpdateWorkerImageConfigurationRequestBody: {
             imageTag: string;
