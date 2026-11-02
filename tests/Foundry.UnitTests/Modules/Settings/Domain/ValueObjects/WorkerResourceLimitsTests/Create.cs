@@ -53,6 +53,9 @@ public sealed class Create
     [Theory]
     [InlineData(0.49)]
     [InlineData(32.01)]
+    [InlineData(double.NaN)]
+    [InlineData(double.PositiveInfinity)]
+    [InlineData(double.NegativeInfinity)]
     public void WhenCpuIsOutOfRange_FailsWithCpuCodeNamingMinAndMax(double cpuLimit)
     {
         // Arrange

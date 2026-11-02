@@ -111,6 +111,11 @@ internal static class SettingsErrors
     internal static Error MountPathTraversal(string path) =>
         new(MountPathTraversalCode, $"Mount path '{path}' must not contain path traversal segments (..).");
 
+    internal const string InvalidMountPathCharactersCode = "Settings.InvalidMountPathCharacters";
+
+    internal static Error InvalidMountPathCharacters(string path) =>
+        new(InvalidMountPathCharactersCode, $"Mount path '{path}' contains a separator or control character that is not allowed.");
+
     internal const string SensitiveMountContainerPathCode = "Settings.SensitiveMountContainerPath";
 
     internal static Error SensitiveMountContainerPath(string path) =>

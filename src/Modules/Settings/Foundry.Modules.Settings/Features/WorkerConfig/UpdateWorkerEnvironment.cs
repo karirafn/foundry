@@ -48,7 +48,7 @@ internal static class UpdateWorkerEnvironment
             }
 
             Result<WorkerMounts> mountsResult = WorkerMounts.Create(
-                [.. command.Mounts.Select(m => new WorkerMount(m.ContainerPath, m.HostPath, m.ReadOnly))]);
+                [.. command.Mounts.Select(ToMount)]);
 
             if (mountsResult is not Result<WorkerMounts>.Success mountsSuccess)
             {
@@ -65,6 +65,12 @@ internal static class UpdateWorkerEnvironment
             return GlobalSettingsMapper.ToSummary(settings);
         }
     }
+
+    // System.Text.Json does not enforce non-nullable annotations, so a null element or path can arrive.
+    private static WorkerMount ToMount(MountRequest? request) =>
+        request is null
+            ? new WorkerMount(string.Empty, string.Empty, ReadOnly: false)
+            : new WorkerMount(request.ContainerPath ?? string.Empty, request.HostPath ?? string.Empty, request.ReadOnly);
 
     internal static class Endpoint
     {

@@ -75,6 +75,30 @@ public sealed class Create
     [InlineData("/skills", "/etc/ssl", SettingsErrors.SensitiveMountHostPathCode)]
     [InlineData("/skills", "/var/run/docker.sock", SettingsErrors.SensitiveMountHostPathCode)]
     [InlineData("/skills", "/proc", SettingsErrors.SensitiveMountHostPathCode)]
+    [InlineData("//etc", "/host/skills", SettingsErrors.SensitiveMountContainerPathCode)]
+    [InlineData("/./etc", "/host/skills", SettingsErrors.SensitiveMountContainerPathCode)]
+    [InlineData("//proc", "/host/skills", SettingsErrors.SensitiveMountContainerPathCode)]
+    [InlineData("/var/./run/x", "/host/skills", SettingsErrors.SensitiveMountContainerPathCode)]
+    [InlineData("/skills", "//etc", SettingsErrors.SensitiveMountHostPathCode)]
+    [InlineData("/skills", "/./etc", SettingsErrors.SensitiveMountHostPathCode)]
+    [InlineData("/skills", "/var/./run/docker.sock", SettingsErrors.SensitiveMountHostPathCode)]
+    [InlineData("/skills", "/./var/run/docker.sock", SettingsErrors.SensitiveMountHostPathCode)]
+    [InlineData("/skills", "/", SettingsErrors.SensitiveMountHostPathCode)]
+    [InlineData("/skills", "//", SettingsErrors.SensitiveMountHostPathCode)]
+    [InlineData("/skills", "/var", SettingsErrors.SensitiveMountHostPathCode)]
+    [InlineData("/skills", "/var/run", SettingsErrors.SensitiveMountHostPathCode)]
+    [InlineData("/skills", "/etc/", SettingsErrors.SensitiveMountHostPathCode)]
+    [InlineData("/skills", "/var/run/", SettingsErrors.SensitiveMountHostPathCode)]
+    [InlineData("/skills", "/dev", SettingsErrors.SensitiveMountHostPathCode)]
+    [InlineData("", "/host/skills", SettingsErrors.MountContainerPathNotAbsoluteCode)]
+    [InlineData(" ", "/host/skills", SettingsErrors.MountContainerPathNotAbsoluteCode)]
+    [InlineData("/skills", "", SettingsErrors.MountHostPathNotAbsoluteCode)]
+    [InlineData("/skills", " ", SettingsErrors.MountHostPathNotAbsoluteCode)]
+    [InlineData("/sk:ills", "/host/skills", SettingsErrors.InvalidMountPathCharactersCode)]
+    [InlineData("/skills", "/host/sk:ills", SettingsErrors.InvalidMountPathCharactersCode)]
+    [InlineData("/skills", "C:\\dev\\a:b", SettingsErrors.InvalidMountPathCharactersCode)]
+    [InlineData("/sk\u0000ills", "/host/skills", SettingsErrors.InvalidMountPathCharactersCode)]
+    [InlineData("/skills", "/host/sk\nills", SettingsErrors.InvalidMountPathCharactersCode)]
     public void WhenAMountPathIsRejected_FailsWithMatchingCode(
         string containerPath,
         string hostPath,
@@ -91,8 +115,43 @@ public sealed class Create
     }
 
     [Theory]
+    [InlineData("/etcetera", "/host/skills")]
+    [InlineData("/running", "/host/skills")]
+    [InlineData("/skills", "/host/skills")]
+    [InlineData("/skills", "/etcd/x")]
+    [InlineData("/skills", "/variable")]
+    [InlineData("/skills", "/home/user/skills/")]
+    public void WhenPathOnlySharesAPrefixWithASensitivePath_ReturnsSuccess(string containerPath, string hostPath)
+    {
+        // Arrange
+        WorkerMountsBuilder builder = new WorkerMountsBuilder().WithMount(containerPath, hostPath);
+
+        // Act
+        Result<WorkerMounts> result = builder.Build();
+
+        // Assert
+        result.IsSuccess.ShouldBeTrue();
+    }
+
+    [Fact]
+    public void WhenPathsAreNonCanonical_StoresTheCanonicalForm()
+    {
+        // Arrange
+        WorkerMountsBuilder builder = new WorkerMountsBuilder().WithMount("//skills/./sub/", "/home//user/./skills");
+
+        // Act
+        Result<WorkerMounts> result = builder.Build();
+
+        // Assert
+        result.ShouldBeOfType<Result<WorkerMounts>.Success>().Value.Mounts
+            .ShouldBe([new WorkerMount("/skills/sub", "/home/user/skills", true)]);
+    }
+
+    [Theory]
     [InlineData("/skills", "/skills")]
     [InlineData("/skills", "/skills/")]
+    [InlineData("/skills", "//skills")]
+    [InlineData("/skills", "/./skills")]
     public void WhenContainerPathIsDuplicated_FailsNamingThePath(string first, string second)
     {
         // Arrange

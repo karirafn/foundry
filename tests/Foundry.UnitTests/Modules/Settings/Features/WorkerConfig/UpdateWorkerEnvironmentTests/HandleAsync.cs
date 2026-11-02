@@ -150,6 +150,42 @@ public sealed class HandleAsync : IAsyncLifetime
     }
 
     [Fact]
+    public async Task WhenMountElementIsNull_ReturnsMountError()
+    {
+        // Arrange
+        await SeedSettingsAsync();
+        await using FoundryDbContext db = CreateDbContext();
+        UpdateWorkerEnvironment.Handler handler = new(db);
+
+        // Act
+        Result<GlobalSettingsSummary> result = await handler.HandleAsync(
+            CreateCommand(mounts: [null!]),
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        result.ShouldBeOfType<Result<GlobalSettingsSummary>.Failure>().Error.Code
+            .ShouldBe(SettingsErrors.MountContainerPathNotAbsoluteCode);
+    }
+
+    [Fact]
+    public async Task WhenMountHostPathIsNull_ReturnsHostPathError()
+    {
+        // Arrange
+        await SeedSettingsAsync();
+        await using FoundryDbContext db = CreateDbContext();
+        UpdateWorkerEnvironment.Handler handler = new(db);
+
+        // Act
+        Result<GlobalSettingsSummary> result = await handler.HandleAsync(
+            CreateCommand(mounts: new UpdateWorkerEnvironment.MountRequest("/skills", null!, true)),
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        result.ShouldBeOfType<Result<GlobalSettingsSummary>.Failure>().Error.Code
+            .ShouldBe(SettingsErrors.MountHostPathNotAbsoluteCode);
+    }
+
+    [Fact]
     public async Task WhenContainerPathNotAbsolute_ReturnsMountError()
     {
         // Arrange

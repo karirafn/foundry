@@ -37,6 +37,10 @@ Generate a fine-grained token at **Settings > Developer settings > Personal acce
 
 Worker host bind mounts and container resource limits (memory, CPU, PIDs) are managed on the **Worker environment** settings page in the dashboard, stored in the database, and read fresh on each dispatch. Each mount is keyed on its container path with a read-only/writable flag. Do not mount `settings.json` directly — it is generated at dispatch time from `Workers:Settings` (see below).
 
+Legacy `Workers:Mounts`, `Workers:WritableMounts`, `Workers:MemoryLimitMb`, `Workers:CpuLimit` and `Workers:PidsLimit` config keys are no longer read after upgrade; re-enter them on the Worker environment settings page (there is no automatic import, per ADR 0080).
+
+Legacy `Workers:Mounts`, `Workers:WritableMounts`, `Workers:MemoryLimitMb`, `Workers:CpuLimit` and `Workers:PidsLimit` config keys are no longer read after upgrade; re-enter them on the Worker environment settings page (there is no automatic import, per ADR 0080).
+
 On Windows, use the full Windows path (e.g. `C:\Users\you\.claude\skills`). Docker Desktop must have path sharing enabled — see Windows notes below.
 
 ### Worker settings

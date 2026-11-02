@@ -7,8 +7,6 @@ namespace Foundry.Modules.Settings.Domain.ValueObjects;
 
 public sealed record WorkerMounts
 {
-    private const char TrailingSeparator = '/';
-
     [JsonConstructor]
     private WorkerMounts(IReadOnlyList<WorkerMount> mounts)
     {
@@ -22,21 +20,26 @@ public sealed record WorkerMounts
     public static Result<WorkerMounts> Create(IReadOnlyList<WorkerMount> mounts)
     {
         HashSet<string> seenContainerPaths = new(StringComparer.Ordinal);
+        List<WorkerMount> canonicalMounts = [];
 
         foreach (WorkerMount mount in mounts)
         {
-            if (Validate(mount) is Error error)
+            Result<WorkerMount> validated = Validate(mount);
+
+            if (validated is not Result<WorkerMount>.Success success)
             {
-                return Result<WorkerMounts>.Fail(error);
+                return Result<WorkerMounts>.Fail(((Result<WorkerMount>.Failure)validated).Error);
             }
 
-            if (!seenContainerPaths.Add(mount.ContainerPath.TrimEnd(TrailingSeparator)))
+            if (!seenContainerPaths.Add(success.Value.ContainerPath))
             {
                 return Result<WorkerMounts>.Fail(SettingsErrors.DuplicateMountContainerPath(mount.ContainerPath));
             }
+
+            canonicalMounts.Add(success.Value);
         }
 
-        return Result<WorkerMounts>.Ok(new WorkerMounts([.. mounts]));
+        return Result<WorkerMounts>.Ok(new WorkerMounts(canonicalMounts));
     }
 
     public bool Equals(WorkerMounts? other) =>
@@ -53,35 +56,51 @@ public sealed record WorkerMounts
         return hash.ToHashCode();
     }
 
-    private static Error? Validate(WorkerMount mount)
+    private static Result<WorkerMount> Validate(WorkerMount mount)
     {
-        if (!mount.ContainerPath.StartsWith('/'))
+        if (string.IsNullOrWhiteSpace(mount.ContainerPath) || !mount.ContainerPath.StartsWith('/'))
         {
-            return SettingsErrors.MountContainerPathNotAbsolute(mount.ContainerPath);
+            return Result<WorkerMount>.Fail(SettingsErrors.MountContainerPathNotAbsolute(mount.ContainerPath));
         }
 
         if (MountPathRules.ContainsPathTraversal(mount.ContainerPath))
         {
-            return SettingsErrors.MountPathTraversal(mount.ContainerPath);
+            return Result<WorkerMount>.Fail(SettingsErrors.MountPathTraversal(mount.ContainerPath));
+        }
+
+        if (MountPathRules.HasInvalidContainerPathCharacters(mount.ContainerPath))
+        {
+            return Result<WorkerMount>.Fail(SettingsErrors.InvalidMountPathCharacters(mount.ContainerPath));
         }
 
         if (MountPathRules.IsSensitiveContainerPath(mount.ContainerPath))
         {
-            return SettingsErrors.SensitiveMountContainerPath(mount.ContainerPath);
+            return Result<WorkerMount>.Fail(SettingsErrors.SensitiveMountContainerPath(mount.ContainerPath));
         }
 
-        if (!MountPathRules.IsAbsolutePath(mount.HostPath))
+        if (string.IsNullOrWhiteSpace(mount.HostPath) || !MountPathRules.IsAbsolutePath(mount.HostPath))
         {
-            return SettingsErrors.MountHostPathNotAbsolute(mount.HostPath);
+            return Result<WorkerMount>.Fail(SettingsErrors.MountHostPathNotAbsolute(mount.HostPath));
         }
 
         if (MountPathRules.ContainsPathTraversal(mount.HostPath))
         {
-            return SettingsErrors.MountPathTraversal(mount.HostPath);
+            return Result<WorkerMount>.Fail(SettingsErrors.MountPathTraversal(mount.HostPath));
         }
 
-        return MountPathRules.IsSensitiveHostPath(mount.HostPath)
-            ? SettingsErrors.SensitiveMountHostPath(mount.HostPath)
-            : null;
+        if (MountPathRules.HasInvalidHostPathCharacters(mount.HostPath))
+        {
+            return Result<WorkerMount>.Fail(SettingsErrors.InvalidMountPathCharacters(mount.HostPath));
+        }
+
+        if (MountPathRules.IsSensitiveHostPath(mount.HostPath))
+        {
+            return Result<WorkerMount>.Fail(SettingsErrors.SensitiveMountHostPath(mount.HostPath));
+        }
+
+        return Result<WorkerMount>.Ok(new WorkerMount(
+            MountPathRules.Canonicalize(mount.ContainerPath),
+            MountPathRules.CanonicalizeHostPath(mount.HostPath),
+            mount.ReadOnly));
     }
 }
