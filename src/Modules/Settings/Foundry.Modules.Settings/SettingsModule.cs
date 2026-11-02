@@ -28,6 +28,7 @@ public static class SettingsModule
         services.AddCommandHandler<ResumeDispatch.Command, GlobalSettingsSummary, ResumeDispatch.Handler>();
         services.AddCommandHandler<UpdateWorkerImageConfiguration.Command, GlobalSettingsSummary, UpdateWorkerImageConfiguration.Handler>();
         services.AddCommandHandler<UpdateWorkerEnvironment.Command, GlobalSettingsSummary, UpdateWorkerEnvironment.Handler>();
+        services.AddCommandHandler<UpdateClaudeCodeSettings.Command, GlobalSettingsSummary, UpdateClaudeCodeSettings.Handler>();
         services.AddCommandHandler<RetryImageBuild.Command, GlobalSettingsSummary, RetryImageBuild.Handler>();
         services.AddCommandHandler<UpdateAllowedProviderHosts.Command, GlobalSettingsSummary, UpdateAllowedProviderHosts.Handler>();
 

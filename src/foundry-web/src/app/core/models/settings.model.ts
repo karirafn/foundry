@@ -66,6 +66,12 @@ export interface WorkerEnvironment {
   mounts: WorkerMountEntry[];
 }
 
+export interface ClaudeCodeSettings {
+  model: string;
+  blockCiCdEdits: boolean;
+  additionalDenyRules: string[];
+}
+
 export interface ClaudeAccountSummary {
   accountId: string;
   authMode: string;
@@ -104,6 +110,9 @@ export interface GlobalSettingsResponse {
   cpuLimit: number;
   pidsLimit: number;
   mounts: WorkerMountEntry[];
+  model: string;
+  blockCiCdEdits: boolean;
+  additionalDenyRules: string[];
 }
 
 export interface UpdatePromptTemplatesRequest {

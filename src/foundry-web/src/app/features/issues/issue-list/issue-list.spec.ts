@@ -65,6 +65,9 @@ const mockSettingsResponse: GlobalSettingsResponse = {
   cpuLimit: 2,
   pidsLimit: 512,
   mounts: [],
+  model: '',
+  blockCiCdEdits: true,
+  additionalDenyRules: [],
 };
 
 const mockCredentialsResponse = {

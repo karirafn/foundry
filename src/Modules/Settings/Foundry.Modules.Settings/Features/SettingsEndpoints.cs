@@ -23,6 +23,7 @@ internal static class SettingsEndpoints
         ResumeDispatch.Endpoint.Map(group);
         UpdateWorkerImageConfiguration.Endpoint.Map(group);
         UpdateWorkerEnvironment.Endpoint.Map(group);
+        UpdateClaudeCodeSettings.Endpoint.Map(group);
         RetryImageBuild.Endpoint.Map(group);
         UpdateAllowedProviderHosts.Endpoint.Map(group);
 

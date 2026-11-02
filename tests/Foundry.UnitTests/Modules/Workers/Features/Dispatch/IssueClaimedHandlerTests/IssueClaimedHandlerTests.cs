@@ -745,6 +745,38 @@ public sealed class HandleAsync : IAsyncDisposable
     }
 
     [Fact]
+    public async Task WhenClaudeCodeSettingsAreNonDefault_ClaudeSettingsJsonEnvVarReflectsThem()
+    {
+        // Arrange
+        StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c-settings-custom");
+        StubGlobalSettingsQueries settingsQueries = new()
+        {
+            ClaudeCodeSettings = new ClaudeCodeSettingsSnapshot("claude-test-model", false, ["Bash(rm:*)"]),
+        };
+        IssueClaimedHandler sut = BuildHandler(orchestrator: orchestrator, settingsQueries: settingsQueries);
+        IssueClaimed @event = BuildEvent();
+
+        // Act
+        await sut.HandleAsync(@event, TestContext.Current.CancellationToken);
+
+        // Assert
+        WorkerContainerSpec? spec = orchestrator.LastSpec;
+        spec.ShouldNotBeNull();
+
+        using JsonDocument doc = JsonDocument.Parse(spec.EnvironmentVariables["CLAUDE_SETTINGS_JSON"]);
+        string[] rules = [.. doc.RootElement
+            .GetProperty("permissions")
+            .GetProperty("deny")
+            .EnumerateArray()
+            .Select(x => x.GetString()!)];
+
+        doc.RootElement.ShouldSatisfyAllConditions(
+            () => doc.RootElement.GetProperty("model").GetString().ShouldBe("claude-test-model"),
+            () => rules.ShouldNotContain("Edit(Dockerfile:*)"),
+            () => rules.ShouldContain("Bash(rm:*)"));
+    }
+
+    [Fact]
     public async Task WhenContinuationContext_SetsBranchNameEnvVar()
     {
         // Arrange
@@ -1329,6 +1361,8 @@ public sealed class HandleAsync : IAsyncDisposable
         WorkerResourceLimitsSnapshot? limits = null,
         IReadOnlyList<WorkerMountEntry>? mounts = null) : IGlobalSettingsQueries
     {
+        public ClaudeCodeSettingsSnapshot ClaudeCodeSettings { get; set; } = new(string.Empty, true, []);
+
         public Task<GlobalSettingsSummary?> GetSettingsAsync(CancellationToken cancellationToken)
             => Task.FromResult<GlobalSettingsSummary?>(null);
 
@@ -1371,6 +1405,11 @@ public sealed class HandleAsync : IAsyncDisposable
 
         public Task<IReadOnlyList<WorkerMountEntry>> GetWorkerMountsAsync(CancellationToken cancellationToken)
             => Task.FromResult<IReadOnlyList<WorkerMountEntry>>(mounts ?? []);
+
+
+        public Task<ClaudeCodeSettingsSnapshot> GetClaudeCodeSettingsAsync(CancellationToken cancellationToken)
+
+            => Task.FromResult(ClaudeCodeSettings);
 
         public Task<IReadOnlyList<string>> GetAllowedProviderHostsAsync(CancellationToken cancellationToken)
             => Task.FromResult<IReadOnlyList<string>>([]);

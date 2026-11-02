@@ -53,6 +53,11 @@ public sealed class NullGlobalSettingsQueries : IGlobalSettingsQueries
     public Task<IReadOnlyList<WorkerMountEntry>> GetWorkerMountsAsync(CancellationToken cancellationToken)
         => Task.FromResult<IReadOnlyList<WorkerMountEntry>>([]);
 
+
+    public Task<ClaudeCodeSettingsSnapshot> GetClaudeCodeSettingsAsync(CancellationToken cancellationToken)
+
+        => Task.FromResult(new ClaudeCodeSettingsSnapshot(string.Empty, true, []));
+
     public Task<IReadOnlyList<string>> GetAllowedProviderHostsAsync(CancellationToken cancellationToken)
         => Task.FromResult<IReadOnlyList<string>>([]);
 }

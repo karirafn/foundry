@@ -166,6 +166,18 @@ internal sealed class GlobalSettingsQueries(DbContext dbContext) : IGlobalSettin
         return [.. mounts.Mounts.Select(m => new WorkerMountEntry(m.ContainerPath, m.HostPath, m.ReadOnly))];
     }
 
+    public async Task<ClaudeCodeSettingsSnapshot> GetClaudeCodeSettingsAsync(CancellationToken cancellationToken)
+    {
+        // ClaudeCodeSettings is stored as a JSON blob and cannot be projected
+        // into a SQL column — the full entity must be loaded and the value read in memory.
+        GlobalSettings? settings = await dbContext.Set<GlobalSettings>()
+            .AsNoTracking()
+            .FirstOrDefaultAsync(cancellationToken);
+
+        ClaudeCodeSettings claudeCode = settings?.ClaudeCodeSettings ?? ClaudeCodeSettings.Default;
+        return new ClaudeCodeSettingsSnapshot(claudeCode.Model, claudeCode.BlockCiCdEdits, claudeCode.AdditionalDenyRules);
+    }
+
     public async Task<IReadOnlyList<string>> GetAllowedProviderHostsAsync(CancellationToken cancellationToken)
     {
         // AllowedProviderHosts is stored as a JSON blob and cannot be projected

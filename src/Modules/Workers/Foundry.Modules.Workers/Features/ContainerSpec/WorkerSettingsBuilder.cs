@@ -1,6 +1,8 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
+using Foundry.Modules.Settings.Contracts;
+
 namespace Foundry.Modules.Workers.Features.ContainerSpec;
 
 internal static class WorkerSettingsBuilder
@@ -19,21 +21,39 @@ internal static class WorkerSettingsBuilder
         "Bash(git push * :*)",
     ];
 
+    private static readonly string[] CiCdDenyList =
+    [
+        "Edit(.github/workflows/**:*)",
+        "Edit(.gitlab-ci.yml:*)",
+        "Edit(Dockerfile:*)",
+        "Edit(docker-compose*.yml:*)",
+        "Edit(docker-compose.yaml:*)",
+        "Edit(compose.yml:*)",
+        "Edit(compose.yaml:*)",
+    ];
+
     private static readonly JsonSerializerOptions SerializerOptions = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
     };
 
-    public static string Build(WorkerSettingsOptions settings)
+    public static string Build(
+        ClaudeCodeSettingsSnapshot claudeCode,
+        IReadOnlyDictionary<string, List<HookGroup>> hooks)
     {
-        string[] denyRules = [..BaseDenyList, ..settings.CiCdDenyRules, ..settings.AdditionalDenyRules];
+        string[] denyRules =
+        [
+            ..BaseDenyList,
+            ..(claudeCode.BlockCiCdEdits ? CiCdDenyList : []),
+            ..claudeCode.AdditionalDenyRules,
+        ];
 
         SettingsDocument document = new()
         {
-            Model = settings.Model,
+            Model = string.IsNullOrWhiteSpace(claudeCode.Model) ? null : claudeCode.Model,
             Permissions = new() { Deny = denyRules },
-            Hooks = settings.Hooks.Count > 0 ? settings.Hooks : null,
+            Hooks = hooks.Count > 0 ? hooks : null,
         };
 
         return JsonSerializer.Serialize(document, SerializerOptions);
@@ -45,7 +65,7 @@ internal static class WorkerSettingsBuilder
 
         public required PermissionsSection Permissions { get; set; }
 
-        public Dictionary<string, List<HookGroup>>? Hooks { get; set; }
+        public IReadOnlyDictionary<string, List<HookGroup>>? Hooks { get; set; }
     }
 
     private sealed class PermissionsSection
