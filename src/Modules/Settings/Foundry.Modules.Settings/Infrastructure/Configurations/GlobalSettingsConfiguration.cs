@@ -95,6 +95,22 @@ internal sealed class GlobalSettingsConfiguration : IEntityTypeConfiguration<Glo
             .HasColumnType("TEXT")
             .HasColumnName("worker_mounts");
 
+        ValueConverter<ClaudeCodeSettings, string> claudeCodeSettingsConverter = new(
+            settings => SerializeClaudeCodeSettings(settings),
+            json => DeserializeClaudeCodeSettings(json));
+
+        ValueComparer<ClaudeCodeSettings> claudeCodeSettingsComparer = new(
+            (a, b) => a != null && b != null && a.Equals(b),
+            settings => settings.GetHashCode(),
+            settings => settings);
+
+        // Serialized as a single JSON TEXT column; the model length and deny-rule format are enforced
+        // by ClaudeCodeSettings.Create. The record is immutable, so the comparer snapshots by reference.
+        builder.Property(s => s.ClaudeCodeSettings)
+            .HasConversion(claudeCodeSettingsConverter, claudeCodeSettingsComparer)
+            .HasColumnType("TEXT")
+            .HasColumnName("claude_code_settings");
+
         ValueConverter<IReadOnlyList<string>, string> allowedProviderHostsConverter = new(
             hosts => SerializeAllowedProviderHosts(hosts),
             json => DeserializeAllowedProviderHosts(json));
@@ -183,6 +199,13 @@ internal sealed class GlobalSettingsConfiguration : IEntityTypeConfiguration<Glo
     private static WorkerMounts DeserializeWorkerMounts(string json)
         => JsonSerializer.Deserialize<WorkerMounts>(json)
             ?? WorkerMounts.Default;
+
+    private static string SerializeClaudeCodeSettings(ClaudeCodeSettings settings)
+        => JsonSerializer.Serialize(settings);
+
+    private static ClaudeCodeSettings DeserializeClaudeCodeSettings(string json)
+        => JsonSerializer.Deserialize<ClaudeCodeSettings>(json)
+            ?? ClaudeCodeSettings.Default;
 
     private static string SerializeWorkerPrompts(WorkerPrompts prompts)
         => JsonSerializer.Serialize(prompts);

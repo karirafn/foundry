@@ -36,6 +36,7 @@ public sealed class GlobalSettings : AggregateRoot<GlobalSettingsId>
         WorkerImageConfiguration = WorkerImageConfiguration.Default;
         WorkerResourceLimits = WorkerResourceLimits.Default;
         WorkerMounts = WorkerMounts.Default;
+        ClaudeCodeSettings = ClaudeCodeSettings.Default;
         WorkerPrompts = WorkerPrompts.Default;
         ImageBuildState = new ImageBuildState.Idle();
         CreatedAt = createdAt;
@@ -63,6 +64,8 @@ public sealed class GlobalSettings : AggregateRoot<GlobalSettingsId>
     public WorkerResourceLimits WorkerResourceLimits { get; private set; } = null!;
 
     public WorkerMounts WorkerMounts { get; private set; } = null!;
+
+    public ClaudeCodeSettings ClaudeCodeSettings { get; private set; } = null!;
 
     public IReadOnlyList<string> AllowedProviderHosts { get; private set; } = [];
 
@@ -184,6 +187,18 @@ public sealed class GlobalSettings : AggregateRoot<GlobalSettingsId>
 
         WorkerResourceLimits = limits;
         WorkerMounts = mounts;
+        UpdatedAt = DateTimeOffset.UtcNow;
+        return true;
+    }
+
+    public bool UpdateClaudeCodeSettings(ClaudeCodeSettings settings)
+    {
+        if (ClaudeCodeSettings == settings)
+        {
+            return false;
+        }
+
+        ClaudeCodeSettings = settings;
         UpdatedAt = DateTimeOffset.UtcNow;
         return true;
     }

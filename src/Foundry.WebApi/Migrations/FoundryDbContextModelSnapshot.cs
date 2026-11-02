@@ -350,6 +350,11 @@ namespace Foundry.WebApi.Migrations
                         .HasColumnType("INTEGER")
                         .HasColumnName("auto_resume_on_usage_reset");
 
+                    b.Property<string>("ClaudeCodeSettings")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("claude_code_settings");
+
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("TEXT")
                         .HasColumnName("created_at");
