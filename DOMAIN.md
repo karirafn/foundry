@@ -787,6 +787,14 @@ Any other failure (`Unknown`, network error, timeout) yields `Indeterminate` —
 When no MR exists the resolver falls back to exit code and branch commits.
 Exit 0 with commits triggers a bounded MR re-poll (preserving the PR-race retry window); exit 0 with no commits → `Unchanged` or `UsageLimited` (detected via JSON output); non-zero exit → `ContinuableFailure` (commits exist) or `Failure`, with bootstrap-failure and usage-limit classification layered on top.
 
+**Result selection from stream-json.**
+The worker runs `claude` with `--output-format stream-json --verbose` (ADR 0083), so the captured output is a stream of one JSON event per line rather than a single result object.
+Outcome classification and the Run Result Summary read the **last line whose `type` is `"result"`** — not merely the last JSON line: every other event (`assistant`, `user`, `system`, `rate_limit_event`, unknown types) and partial lines from a container killed mid-event are skipped.
+The `result` event is a superset of the former `--output-format json` object (it adds `model_usage_since_last_result`) and maps identically.
+One log can hold several `result` events — a transient-retry resume (`claude -c`), or a background subagent's notification re-waking the session — and the last one wins.
+Because the stream is far larger than the single result line it replaced, the captured tail (500 lines, capped at 64 KB) is truncated from the **head**, keeping the tail so the final `result` is never cut off.
+Output with no `result` event (bootstrap lines, `FOUNDRY_BOOTSTRAP_FAILED` / `FOUNDRY_DOCKER_UNAVAILABLE` sentinels) is classified exactly as before.
+
 **Side-effect applier.**
 A single `ApplyOutcomeAsync` performs all side effects in one place: state transition, integration-event dispatch (carrying `WorkerRunMergeState`), usage-limit persistence + dispatch-pause, and container stop-and-remove.
 Every terminal outcome (`Completed`, `Review`, `ContinuableFailure`, `Failure`, `Unchanged`) stops and removes the container — this is an invariant enforced at the applier, not a per-path decision.
@@ -848,14 +856,24 @@ This phase is covered by the same daemon-unreachable defer: when `ListByLabelAsy
 ## Container Output
 
 The captured tail of a failed worker container's stdout/stderr, stored on `FailedRun` as a nullable string.
-Captured by Foundry (not the worker) from the Docker API after the container stops but before removal.
+Captured by Foundry (not the worker) from the Docker API after the container stops but before removal; when the tail exceeds the 64 KB cap the head is dropped so the final `result` event survives (see Worker Outcome Detection).
 Best-effort — null when the container is already gone, never started, or the Docker API call fails.
 Docker timestamps are enabled (`--timestamps` flag) so each output line carries an RFC 3339 prefix, providing a unified timeline.
 
-Failed-run output is served by `GET /api/workers/runs/{workerRunId}/log` (200 with text body when available, 204 when absent, 404 when the run is unknown) and rendered in the dashboard by the shared `fd-log-view` component (static source mode) in the issue detail panel.
+Failed-run output is served by `GET /api/workers/runs/{workerRunId}/log` (200 with the stored output rendered as an Agent Transcript when available, 204 when absent, 404 when the run is unknown) and rendered in the dashboard by the shared `fd-log-view` component (static source mode) in the issue detail panel.
 
-Running workers stream live output via the `WorkerHub.StreamLog(workerRunId)` method on `/hubs/workers` — the hub method returns an `IAsyncEnumerable<string>` of redacted log lines with backlog replay followed by live follow.
-The dashboard's `fd-log-view` component subscribes to this stream (stream source mode) and renders the redacted lines in arrival order.
+Running workers stream live output via the `WorkerHub.StreamLog(workerRunId)` method on `/hubs/workers` — the hub method returns an `IAsyncEnumerable<string>` of redacted log lines, rendered as an Agent Transcript, with backlog replay followed by live follow.
+The dashboard's `fd-log-view` component subscribes to this stream (stream source mode) and renders the transcript lines in arrival order.
+
+## Agent Transcript
+
+The readable, summary-only rendering of a worker's stream-json container log, shown in both log views (the live `WorkerHub.StreamLog` stream and the stored failed-run log) instead of raw JSON.
+Produced server-side by `AgentTranscriptFormatter` — one formatter shared by both views, so the event vocabulary is interpreted only in C#.
+It emits one line per meaningful event: a tool call with an input summary (Bash `command` collapsed and truncated, Edit/Write/Read `file_path`, Agent `subagent_type` + `description`, Skill name), the tool's success or failure with its duration, assistant text, subagent start and finish (`task_started` / `task_notification`), session start, and the final `result`.
+Events from inside a subagent are indented and labelled with the subagent type.
+`tool_result` bodies are never rendered — only a truncated error message when a tool fails — and thinking, `system/thinking_tokens`, hooks, task progress, rate-limit and unknown events are omitted; non-JSON lines (bootstrap output, stderr, sentinels) pass through unchanged, and the Docker timestamp prefix is kept.
+Secret redaction (`SecretRedactor`) applies to every raw line before it reaches the formatter, and again to each rendered line.
+The full, raw event stream remains available only in `docker logs`.
 
 ## First-Run Wizard
 
@@ -947,7 +965,7 @@ Ephemeral — broadcast directly, never through the transactional outbox, since 
 ## Container Output Parser
 
 An infrastructure service (`IContainerOutputParser`) that classifies a worker container's JSON output.
-Takes raw JSON from `--output-format json` and returns a discriminated result: `NormalExit`, `UsageLimited(DateTimeOffset ResetsAt)`, `CreditsExhausted`, `AuthInvalid`, `TransientApiError`, `ParseFailure(string RawOutput)`, `NoResultLine`, or `WorkerBootstrapFailed(string Detail)`.
+Takes the captured `--output-format stream-json` output, selects the last `type: "result"` event (see Worker Outcome Detection), and returns a discriminated result: `NormalExit`, `UsageLimited(DateTimeOffset ResetsAt)`, `CreditsExhausted`, `AuthInvalid`, `TransientApiError`, `ParseFailure(string RawOutput)`, `NoResultLine`, or `WorkerBootstrapFailed(string Detail)`.
 Inspects `ResultMessage.api_error_status` (429) as the primary limit signal, with the `terminal_reason` allowlist as a secondary signal. When a limit signal is present, reset-time parse **success** is the discriminator (see ADR 0046): if a reset time is extracted from the result text via best-effort regex (wall-clock or ISO-8601) the result is `UsageLimited(resetsAt)`; if none parses the result is `CreditsExhausted`. `Parse` takes no cooldown fallback parameter — the former fabricated `DefaultCooldownMinutes` reset time is removed.
 Auth failures are detected from `api_error_status == 401`, with `error.type == "authentication_error"` as a secondary guard.
 Transient API faults are detected from `api_error_status` in the 5xx range (the durable signal), or — when `api_error_status` is null and `is_error: true` — from a narrow frozen allow-list of transient `result` phrases (`"API Error: Connection closed mid-response"`, `"API Error: 529 Overloaded"`) matched case-sensitively as a substring. The predicate is status-5xx-or-allow-list, never a bare `is_error: true`, so genuine task failures are never laundered into a retryable category. When `is_error: true` matches no known category (usage-limit, auth, transient), the parser logs a warning naming the unclassified `result` text — a tripwire for a reworded transient phrase that the brittle allow-list would otherwise miss silently.

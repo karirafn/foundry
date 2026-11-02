@@ -1,7 +1,7 @@
 namespace Foundry.Modules.Workers.Domain.ValueObjects;
 
 /// <summary>
-/// Parsed summary from the final JSON result line emitted by a claude --output-format json run.
+/// Parsed summary from the last "result" event emitted by a claude --output-format stream-json run.
 /// </summary>
 public sealed record RunResultSummary
 {
