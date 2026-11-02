@@ -286,6 +286,12 @@ public sealed class WhenRelayedBacklogExceedsMaxConcurrent : IAsyncDisposable
         public Task<IReadOnlyDictionary<string, string>> GetWorkerImageBuildArgsAsync(CancellationToken cancellationToken)
             => Task.FromResult(WorkerImageConfiguration.Default.ToBuildArgs());
 
+        public Task<WorkerResourceLimitsSnapshot> GetWorkerResourceLimitsAsync(CancellationToken cancellationToken)
+            => Task.FromResult(new WorkerResourceLimitsSnapshot(8192, 2.0, 512));
+
+        public Task<IReadOnlyList<WorkerMountEntry>> GetWorkerMountsAsync(CancellationToken cancellationToken)
+            => Task.FromResult<IReadOnlyList<WorkerMountEntry>>([]);
+
         public Task<IReadOnlyList<string>> GetAllowedProviderHostsAsync(CancellationToken cancellationToken)
             => Task.FromResult<IReadOnlyList<string>>([]);
     }

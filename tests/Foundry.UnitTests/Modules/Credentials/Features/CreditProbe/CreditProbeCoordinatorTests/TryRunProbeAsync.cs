@@ -1,6 +1,7 @@
 using Foundry.Modules.Credentials.Domain.Entities;
 using Foundry.Modules.Credentials.Domain.ValueObjects;
 using Foundry.Modules.Credentials.Features.CreditProbe;
+using Foundry.Modules.Settings.Contracts;
 using Foundry.Modules.Settings.Domain.Entities;
 using Foundry.Modules.Workers.Contracts;
 using Foundry.Shared;
@@ -205,6 +206,12 @@ public sealed class TryRunProbeAsync : IAsyncDisposable
             CancellationToken cancellationToken)
             => Task.FromResult<IReadOnlyDictionary<string, string>>(
                 new Dictionary<string, string>());
+
+        public Task<WorkerResourceLimitsSnapshot> GetWorkerResourceLimitsAsync(CancellationToken cancellationToken)
+            => Task.FromResult(new WorkerResourceLimitsSnapshot(8192, 2.0, 512));
+
+        public Task<IReadOnlyList<WorkerMountEntry>> GetWorkerMountsAsync(CancellationToken cancellationToken)
+            => Task.FromResult<IReadOnlyList<WorkerMountEntry>>([]);
 
         public Task<IReadOnlyList<string>> GetAllowedProviderHostsAsync(CancellationToken cancellationToken)
             => Task.FromResult<IReadOnlyList<string>>([]);

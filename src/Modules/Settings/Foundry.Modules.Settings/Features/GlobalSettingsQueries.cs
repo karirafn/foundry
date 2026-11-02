@@ -142,6 +142,30 @@ internal sealed class GlobalSettingsQueries(DbContext dbContext) : IGlobalSettin
         return (settings?.WorkerImageConfiguration ?? WorkerImageConfiguration.Default).ToBuildArgs();
     }
 
+    public async Task<WorkerResourceLimitsSnapshot> GetWorkerResourceLimitsAsync(CancellationToken cancellationToken)
+    {
+        // WorkerResourceLimits is stored as a JSON blob and cannot be projected
+        // into a SQL column — the full entity must be loaded and the value read in memory.
+        GlobalSettings? settings = await dbContext.Set<GlobalSettings>()
+            .AsNoTracking()
+            .FirstOrDefaultAsync(cancellationToken);
+
+        WorkerResourceLimits limits = settings?.WorkerResourceLimits ?? WorkerResourceLimits.Default;
+        return new WorkerResourceLimitsSnapshot(limits.MemoryLimitMb, limits.CpuLimit, limits.PidsLimit);
+    }
+
+    public async Task<IReadOnlyList<WorkerMountEntry>> GetWorkerMountsAsync(CancellationToken cancellationToken)
+    {
+        // WorkerMounts is stored as a JSON blob and cannot be projected
+        // into a SQL column — the full entity must be loaded and the value read in memory.
+        GlobalSettings? settings = await dbContext.Set<GlobalSettings>()
+            .AsNoTracking()
+            .FirstOrDefaultAsync(cancellationToken);
+
+        WorkerMounts mounts = settings?.WorkerMounts ?? WorkerMounts.Default;
+        return [.. mounts.Mounts.Select(m => new WorkerMountEntry(m.ContainerPath, m.HostPath, m.ReadOnly))];
+    }
+
     public async Task<IReadOnlyList<string>> GetAllowedProviderHostsAsync(CancellationToken cancellationToken)
     {
         // AllowedProviderHosts is stored as a JSON blob and cannot be projected
