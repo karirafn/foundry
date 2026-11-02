@@ -133,15 +133,183 @@ describe('SettingsWorkerEnvironmentComponent', () => {
     expect(document.activeElement).toBe(page.el.querySelector('#addMount'));
   });
 
-  it('should label the remove button with its row number', async () => {
+  it('should label the remove button with the container path', async () => {
     // Arrange / Act
     const page = await loadPage({ mounts: [SKILLS_MOUNT] });
 
     // Assert
-    expect(page.el.querySelector('#removeMount-0')?.getAttribute('aria-label')).toBe('Remove mount row 1');
+    expect(page.el.querySelector('#removeMount-0')?.getAttribute('aria-label')).toBe('Remove mount /work/skills');
   });
 
-  it('should show a range error and disable Save for an out-of-range memory', async () => {
+  it('should label the remove button with the row number while the container path is empty', async () => {
+    // Arrange
+    const page = await loadPage();
+
+    // Act
+    click(page, '#addMount');
+
+    // Assert
+    expect(page.el.querySelector('#removeMount-0')?.getAttribute('aria-label')).toBe('Remove mount 1');
+  });
+
+  it('should group each mount row under a per-row label', async () => {
+    // Arrange / Act
+    const page = await loadPage({ mounts: [SKILLS_MOUNT] });
+    const group: Element = page.el.querySelector('[role="group"]') as Element;
+
+    // Assert
+    expect(text(page.el, group.getAttribute('aria-labelledby') as string)).toBe('Mount 1');
+  });
+
+  it('should describe each host path input with the shared path guidance and its error', async () => {
+    // Arrange / Act
+    const page = await loadPage({ mounts: [SKILLS_MOUNT] });
+
+    // Assert
+    expect(input(page.el, 'hostPath-0').getAttribute('aria-describedby')).toBe('hostPathGuidance hostPath-0-error');
+    expect(text(page.el, 'hostPathGuidance')).toContain('C:');
+  });
+
+  it('should mark inputs required and expose the numeric bounds', async () => {
+    // Arrange / Act
+    const page = await loadPage({ mounts: [SKILLS_MOUNT] });
+
+    // Assert
+    expect(['memoryLimitMb', 'cpuLimit', 'pidsLimit', 'containerPath-0', 'hostPath-0']
+      .every((id) => input(page.el, id).getAttribute('aria-required') === 'true')).toBe(true);
+    expect([input(page.el, 'memoryLimitMb').min, input(page.el, 'memoryLimitMb').max, input(page.el, 'cpuLimit').min, input(page.el, 'cpuLimit').max, input(page.el, 'pidsLimit').min, input(page.el, 'pidsLimit').max])
+      .toEqual(['512', '65536', '0.5', '32', '64', '8192']);
+  });
+
+  it('should hint that an unchecked read-only box leaves the host directory writable', async () => {
+    // Arrange / Act
+    const page = await loadPage({ mounts: [SKILLS_MOUNT] });
+
+    // Assert
+    expect(input(page.el, 'readOnly-0').getAttribute('aria-describedby')).toBe('readOnly-0-hint');
+    expect(text(page.el, 'readOnly-0-hint')).toContain('can modify this host directory');
+  });
+
+  it('should focus the next row remove button after removing a non-last row', async () => {
+    // Arrange
+    const page = await loadPage({ mounts: [SKILLS_MOUNT, { containerPath: '/work/b', hostPath: '/srv/b', readOnly: true }] });
+
+    // Act
+    click(page, '#removeMount-0');
+    await page.fixture.whenStable();
+
+    // Assert
+    expect(document.activeElement).toBe(page.el.querySelector('#removeMount-0'));
+    expect(input(page.el, 'containerPath-0').value).toBe('/work/b');
+  });
+
+  it('should focus the previous row remove button after removing the last row', async () => {
+    // Arrange
+    const page = await loadPage({ mounts: [SKILLS_MOUNT, { containerPath: '/work/b', hostPath: '/srv/b', readOnly: true }] });
+
+    // Act
+    click(page, '#removeMount-1');
+    await page.fixture.whenStable();
+
+    // Assert
+    expect(document.activeElement).toBe(page.el.querySelector('#removeMount-0'));
+  });
+
+  it('should keep Save enabled for an invalid dirty form and reveal errors on submit without a PUT', async () => {
+    // Arrange
+    const page = await loadPage();
+    click(page, '#addMount');
+    await page.fixture.whenStable();
+
+    // Act
+    const enabled: boolean = !saveButton(page.el).disabled;
+    saveButton(page.el).click();
+    await page.fixture.whenStable();
+    page.fixture.detectChanges();
+
+    // Assert
+    expect(enabled).toBe(true);
+    expect(text(page.el, 'containerPath-0-error')).toBe('Container path is required.');
+    expect(text(page.el, 'hostPath-0-error')).toBe('Host path is required.');
+    expect(document.activeElement).toBe(input(page.el, 'containerPath-0'));
+  });
+
+  it('should disable the form while saving so edits cannot be lost', async () => {
+    // Arrange
+    const page = await loadPage();
+    type(page, 'pidsLimit', '1024');
+
+    // Act
+    saveButton(page.el).click();
+    page.fixture.detectChanges();
+    const disabled: boolean = (page.el.querySelector('fieldset') as HTMLFieldSetElement).disabled;
+    const announced: string = page.el.querySelector('[role="status"]')?.textContent?.trim() ?? '';
+    page.httpMock.expectOne(ENV_URL).flush({ ...API_KEY_RESPONSE, pidsLimit: 1024 });
+    await page.fixture.whenStable();
+    page.fixture.detectChanges();
+
+    // Assert
+    expect(disabled).toBe(true);
+    expect(announced).toBe('Saving worker environment...');
+    expect((page.el.querySelector('fieldset') as HTMLFieldSetElement).disabled).toBe(false);
+  });
+
+  it('should keep the existing row elements after a save that echoes the submitted values', async () => {
+    // Arrange
+    const page = await loadPage({ mounts: [SKILLS_MOUNT] });
+    type(page, 'pidsLimit', '1024');
+    const before: HTMLInputElement = input(page.el, 'containerPath-0');
+
+    // Act
+    saveButton(page.el).click();
+    page.httpMock.expectOne(ENV_URL).flush({ ...API_KEY_RESPONSE, pidsLimit: 1024, mounts: [SKILLS_MOUNT] });
+    await page.fixture.whenStable();
+    page.fixture.detectChanges();
+
+    // Assert
+    expect(input(page.el, 'containerPath-0')).toBe(before);
+  });
+
+  it('should summarise a field-keyed server error and focus the offending control', async () => {
+    // Arrange
+    const page = await loadPage();
+    type(page, 'cpuLimit', '4');
+    saveButton(page.el).click();
+
+    // Act
+    page.httpMock.expectOne(ENV_URL).flush(
+      { detail: 'CPU limit 4 is not allowed.', type: 'tag:foundry,2026:problems/Settings.InvalidCpuLimit' },
+      { status: 400, statusText: 'Bad Request' },
+    );
+    await page.fixture.whenStable();
+    page.fixture.detectChanges();
+    await page.fixture.whenStable();
+
+    // Assert
+    expect(page.el.querySelector('.general-settings__save-error')?.textContent?.trim()).toBe('1 field needs attention.');
+    expect(document.activeElement).toBe(input(page.el, 'cpuLimit'));
+  });
+
+  it('should clear only the edited control server error', async () => {
+    // Arrange
+    const page = await loadPage({ mounts: [SKILLS_MOUNT] });
+    type(page, 'cpuLimit', '4');
+    saveButton(page.el).click();
+    page.httpMock.expectOne(ENV_URL).flush(
+      { detail: 'CPU limit 4 is not allowed.', type: 'tag:foundry,2026:problems/Settings.InvalidCpuLimit' },
+      { status: 400, statusText: 'Bad Request' },
+    );
+    await page.fixture.whenStable();
+    page.fixture.detectChanges();
+
+    // Act
+    type(page, 'pidsLimit', '1024');
+
+    // Assert
+    expect(text(page.el, 'cpuLimit-error')).toBe('CPU limit 4 is not allowed.');
+  });
+
+  it('should show a range error for an out-of-range memory', async () => {
     // Arrange
     const page = await loadPage();
 
@@ -152,7 +320,6 @@ describe('SettingsWorkerEnvironmentComponent', () => {
     // Assert
     expect(text(page.el, 'memoryLimitMb-error')).toContain('between 512 and 65536 MB');
     expect(input(page.el, 'memoryLimitMb').getAttribute('aria-invalid')).toBe('true');
-    expect(saveButton(page.el).disabled).toBe(true);
   });
 
   it('should not set aria-invalid on a clean control', async () => {
@@ -209,7 +376,6 @@ describe('SettingsWorkerEnvironmentComponent', () => {
 
     // Assert
     expect(text(page.el, 'hostPath-0-error')).toBe('');
-    expect(saveButton(page.el).disabled).toBe(false);
   });
 
   it('should reject a host path with a parent segment', async () => {
@@ -234,7 +400,6 @@ describe('SettingsWorkerEnvironmentComponent', () => {
 
     // Assert
     expect(text(page.el, 'containerPath-1-error')).toContain('already used');
-    expect(saveButton(page.el).disabled).toBe(true);
   });
 
   it('should PUT the edited environment on submit', async () => {
@@ -284,7 +449,6 @@ describe('SettingsWorkerEnvironmentComponent', () => {
     // Assert
     expect(text(page.el, 'containerPath-0-error')).toContain('sensitive location');
     expect(input(page.el, 'containerPath-0').getAttribute('aria-invalid')).toBe('true');
-    expect(saveButton(page.el).disabled).toBe(true);
   });
 
   it('should attach a limit error to its limit control', async () => {

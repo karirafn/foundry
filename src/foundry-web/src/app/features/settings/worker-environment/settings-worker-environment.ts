@@ -45,6 +45,8 @@ const DEFAULT_MEMORY_MB = 8192;
 const DEFAULT_CPU = 2;
 const DEFAULT_PIDS = 512;
 const SERVER_ERROR_KEY = 'server';
+const SAVING_TEXT = 'Saving worker environment...';
+const SAVED_TEXT = 'Worker environment saved successfully';
 
 const LIMIT_MESSAGES: Record<LimitControlName, { label: string; range: string }> = {
   memoryLimitMb: { label: 'Memory', range: `between ${MEMORY_MIN_MB} and ${MEMORY_MAX_MB} MB` },
@@ -73,6 +75,8 @@ const MOUNT_CODE_FIELDS: Record<string, readonly MountPathField[]> = {
   imports: [ReactiveFormsModule],
   template: `
     <form class="general-settings worker-env" [formGroup]="form" (ngSubmit)="_save()" novalidate>
+      <fieldset class="worker-env__fieldset" [disabled]="settingsService.savingWorkerEnvironment()">
+      <legend class="sr-only">Worker environment settings. All fields are required.</legend>
       <section class="general-settings__section">
         <h2 class="general-settings__section-title">Worker environment</h2>
         <p class="general-settings__section-description">
@@ -88,10 +92,13 @@ const MOUNT_CODE_FIELDS: Record<string, readonly MountPathField[]> = {
               id="memoryLimitMb"
               formControlName="memoryLimitMb"
               step="256"
+              aria-required="true"
+              min="${MEMORY_MIN_MB}"
+              max="${MEMORY_MAX_MB}"
               aria-describedby="memoryLimitMb-hint memoryLimitMb-error"
               [attr.aria-invalid]="_limitInvalid('memoryLimitMb') || null"
             />
-            <span id="memoryLimitMb-hint" class="general-settings__field-hint">512–65,536 MB per worker.</span>
+            <span id="memoryLimitMb-hint" class="general-settings__field-hint worker-env__hint">512–65,536 MB per worker.</span>
             <span id="memoryLimitMb-error" class="general-settings__field-error" role="alert">{{ _limitError('memoryLimitMb') }}</span>
           </div>
 
@@ -103,10 +110,13 @@ const MOUNT_CODE_FIELDS: Record<string, readonly MountPathField[]> = {
               id="cpuLimit"
               formControlName="cpuLimit"
               step="0.5"
+              aria-required="true"
+              min="${CPU_MIN}"
+              max="${CPU_MAX}"
               aria-describedby="cpuLimit-hint cpuLimit-error"
               [attr.aria-invalid]="_limitInvalid('cpuLimit') || null"
             />
-            <span id="cpuLimit-hint" class="general-settings__field-hint">0.5–32 CPUs per worker; fractions allowed.</span>
+            <span id="cpuLimit-hint" class="general-settings__field-hint worker-env__hint">0.5–32 CPUs per worker; fractions allowed.</span>
             <span id="cpuLimit-error" class="general-settings__field-error" role="alert">{{ _limitError('cpuLimit') }}</span>
           </div>
 
@@ -118,10 +128,13 @@ const MOUNT_CODE_FIELDS: Record<string, readonly MountPathField[]> = {
               id="pidsLimit"
               formControlName="pidsLimit"
               step="1"
+              aria-required="true"
+              min="${PIDS_MIN}"
+              max="${PIDS_MAX}"
               aria-describedby="pidsLimit-hint pidsLimit-error"
               [attr.aria-invalid]="_limitInvalid('pidsLimit') || null"
             />
-            <span id="pidsLimit-hint" class="general-settings__field-hint">64–8,192 processes per worker.</span>
+            <span id="pidsLimit-hint" class="general-settings__field-hint worker-env__hint">64–8,192 processes per worker.</span>
             <span id="pidsLimit-error" class="general-settings__field-error" role="alert">{{ _limitError('pidsLimit') }}</span>
           </div>
         </div>
@@ -129,15 +142,16 @@ const MOUNT_CODE_FIELDS: Record<string, readonly MountPathField[]> = {
 
       <section class="general-settings__section">
         <h2 class="general-settings__section-title">Host bind mounts</h2>
-        <p class="general-settings__section-description">
-          Host paths are bind-mounted into every worker as-is. If a host path is a symlink, enter its
-          <strong>resolved target</strong> — Docker follows the link on the host, so the worker sees the real
-          directory, not the link. On Windows, a drive-rooted path such as <code>C:\\dev\\ai\\skills</code> is valid.
+        <p id="hostPathGuidance" class="general-settings__section-description">
+          Host paths are bind-mounted into every worker as-is. Accepted formats: an absolute POSIX path such as
+          <code>/srv/data</code>, or a Windows drive-rooted path such as <code>C:\\dev\\ai\\skills</code>. If a host
+          path is a symlink, enter its <strong>resolved target</strong> — Docker follows the link on the host, so the
+          worker sees the real directory, not the link.
         </p>
 
         <div class="worker-env__mounts" formArrayName="mounts">
           @if (mounts.length === 0) {
-            <p class="general-settings__field-hint worker-env__empty">
+            <p class="general-settings__field-hint worker-env__hint worker-env__empty">
               No mounts configured. Workers run with only their own workspace. Add a mount to expose a host
               directory (for example a shared skills folder) inside every worker.
             </p>
@@ -151,14 +165,16 @@ const MOUNT_CODE_FIELDS: Record<string, readonly MountPathField[]> = {
           }
 
           @for (row of mounts.controls; track row; let i = $index) {
-            <div class="worker-env__row" [formGroupName]="i">
+            <div class="worker-env__row" role="group" [formGroupName]="i" [attr.aria-labelledby]="'mountLabel-' + i">
+              <span class="sr-only" [id]="'mountLabel-' + i">Mount {{ i + 1 }}</span>
               <div class="general-settings__field">
                 <label class="general-settings__field-label" [for]="'containerPath-' + i">Container path</label>
                 <input
-                  class="general-settings__text-input"
                   type="text"
                   [id]="'containerPath-' + i"
                   formControlName="containerPath"
+                  class="general-settings__text-input worker-env__input"
+                  aria-required="true"
                   placeholder="/work/skills"
                   autocomplete="off"
                   autocapitalize="off"
@@ -173,7 +189,8 @@ const MOUNT_CODE_FIELDS: Record<string, readonly MountPathField[]> = {
               <div class="general-settings__field">
                 <label class="general-settings__field-label" [for]="'hostPath-' + i">Host path</label>
                 <input
-                  class="general-settings__text-input"
+                  class="general-settings__text-input worker-env__input"
+                  aria-required="true"
                   type="text"
                   [id]="'hostPath-' + i"
                   formControlName="hostPath"
@@ -182,22 +199,25 @@ const MOUNT_CODE_FIELDS: Record<string, readonly MountPathField[]> = {
                   autocapitalize="off"
                   autocorrect="off"
                   spellcheck="false"
-                  [attr.aria-describedby]="'hostPath-' + i + '-error'"
+                  [attr.aria-describedby]="'hostPathGuidance hostPath-' + i + '-error'"
                   [attr.aria-invalid]="_pathInvalid(i, 'hostPath') || null"
                 />
                 <span [id]="'hostPath-' + i + '-error'" class="general-settings__field-error" role="alert">{{ _pathError(i, 'hostPath') }}</span>
               </div>
 
-              <label class="general-settings__checkbox-label" [for]="'readOnly-' + i">
-                <input type="checkbox" [id]="'readOnly-' + i" formControlName="readOnly" />
-                Read-only
-              </label>
+              <div class="worker-env__readonly">
+                <label class="general-settings__checkbox-label" [for]="'readOnly-' + i">
+                  <input type="checkbox" [id]="'readOnly-' + i" formControlName="readOnly" [attr.aria-describedby]="'readOnly-' + i + '-hint'" />
+                  Read-only
+                </label>
+                <span [id]="'readOnly-' + i + '-hint'" class="general-settings__field-hint worker-env__hint">Unchecked: the worker can modify this host directory.</span>
+              </div>
 
               <button
                 type="button"
                 class="general-settings__toggle-visibility-btn worker-env__remove"
                 [id]="'removeMount-' + i"
-                [attr.aria-label]="'Remove mount row ' + (i + 1)"
+                [attr.aria-label]="_removeLabel(i)"
                 (click)="_removeMount(i)"
               >
                 <span aria-hidden="true">×</span>
@@ -205,21 +225,22 @@ const MOUNT_CODE_FIELDS: Record<string, readonly MountPathField[]> = {
             </div>
           }
 
-          <button type="button" id="addMount" class="general-settings__scan-btn" (click)="_addMount()">Add mount</button>
+          <button type="button" id="addMount" class="general-settings__scan-btn worker-env__add" (click)="_addMount()">Add mount</button>
         </div>
 
-        <p class="general-settings__field-hint worker-env__hooks">
+        <p class="general-settings__field-hint worker-env__hint worker-env__hooks">
           Host hooks — commands run on the host around a worker's lifecycle — will be configurable here later.
         </p>
       </section>
+      </fieldset>
 
       <div class="worker-env__actions">
         <span class="general-settings__save-error" role="alert">{{ _summaryError() }}</span>
-        <span class="general-settings__save-success" role="status">{{ _successText() }}</span>
+        <span class="general-settings__save-success" role="status" aria-live="polite">{{ _statusText() }}</span>
         <button
           type="submit"
           class="general-settings__save-btn"
-          [disabled]="settingsService.savingWorkerEnvironment() || form.invalid || !_isDirty()"
+          [disabled]="settingsService.savingWorkerEnvironment() || !_isDirty()"
         >
           {{ settingsService.savingWorkerEnvironment() ? 'Saving...' : 'Save' }}
         </button>
@@ -264,17 +285,17 @@ export class SettingsWorkerEnvironmentComponent implements UnsavedChanges {
     return baseline !== null && !environmentsEqual(baseline, this._formValue());
   });
 
-  protected readonly _successText: Signal<string> = computed(() =>
-    this.settingsService.saveWorkerEnvironmentSuccess() && !this._isDirty()
-      ? 'Worker environment saved successfully'
-      : ''
-  );
+  protected readonly _statusText: Signal<string> = computed(() => {
+    if (this.settingsService.savingWorkerEnvironment()) {
+      return SAVING_TEXT;
+    }
+    return this.settingsService.saveWorkerEnvironmentSuccess() && !this._isDirty() ? SAVED_TEXT : '';
+  });
 
   constructor() {
     this.form.valueChanges.pipe(takeUntilDestroyed()).subscribe(() => {
       this._formValue.set(this.form.getRawValue());
-      this._summaryError.set('');
-      this._clearServerErrors();
+      this._summaryError.set(this._attentionSummary());
     });
 
     effect(() => {
@@ -298,7 +319,13 @@ export class SettingsWorkerEnvironmentComponent implements UnsavedChanges {
   }
 
   protected _save(): void {
-    if (this.form.invalid || !this._isDirty() || this.settingsService.savingWorkerEnvironment()) {
+    if (!this._isDirty() || this.settingsService.savingWorkerEnvironment()) {
+      return;
+    }
+    if (this.form.invalid) {
+      this.form.markAllAsTouched();
+      this._summaryError.set(this._attentionSummary());
+      this._focusFirstInvalid();
       return;
     }
     this.settingsService.updateWorkerEnvironment(this.form.getRawValue());
@@ -312,8 +339,19 @@ export class SettingsWorkerEnvironmentComponent implements UnsavedChanges {
 
   protected _removeMount(index: number): void {
     this.mounts.removeAt(index);
-    const targetId: string = index > 0 ? `removeMount-${index - 1}` : 'addMount';
+    const remaining: number = this.mounts.length;
+    let targetId: string = 'addMount';
+    if (index < remaining) {
+      targetId = `removeMount-${index}`;
+    } else if (remaining > 0) {
+      targetId = `removeMount-${remaining - 1}`;
+    }
     afterNextRender(() => this._focus(targetId), { injector: this._injector });
+  }
+
+  protected _removeLabel(index: number): string {
+    const containerPath: string | undefined = this.mounts.at(index)?.controls.containerPath.value;
+    return `Remove mount ${containerPath || index + 1}`;
   }
 
   protected _limitInvalid(name: LimitControlName): boolean {
@@ -391,6 +429,12 @@ export class SettingsWorkerEnvironmentComponent implements UnsavedChanges {
   }
 
   private _seed(environment: WorkerEnvironment): void {
+    if (environmentsEqual(environment, this.form.getRawValue())) {
+      this.form.markAsPristine();
+      this.form.updateValueAndValidity();
+      this._cdr.markForCheck();
+      return;
+    }
     this.mounts.clear({ emitEvent: false });
     environment.mounts.forEach((mount) => this.mounts.push(this._createRow(mount), { emitEvent: false }));
     this.form.patchValue(
@@ -413,8 +457,27 @@ export class SettingsWorkerEnvironmentComponent implements UnsavedChanges {
       this.form.controls[limit].setErrors({ [SERVER_ERROR_KEY]: detail });
     } else if (!this._attachToMountRow(code, detail)) {
       this._summaryError.set(detail);
+      this._cdr.markForCheck();
+      return;
     }
+    this._summaryError.set(this._attentionSummary());
     this._cdr.markForCheck();
+    this._focusFirstInvalid();
+  }
+
+  private _focusFirstInvalid(): void {
+    afterNextRender(
+      () => this._host.nativeElement.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus(),
+      { injector: this._injector }
+    );
+  }
+
+  private _attentionSummary(): string {
+    const count: number = this._serverErrorControls().length;
+    if (count === 0) {
+      return '';
+    }
+    return count === 1 ? '1 field needs attention.' : `${count} fields need attention.`;
   }
 
   private _attachToMountRow(code: string | null, detail: string): boolean {
@@ -434,14 +497,12 @@ export class SettingsWorkerEnvironmentComponent implements UnsavedChanges {
     return false;
   }
 
-  private _clearServerErrors(): void {
+  private _serverErrorControls(): FormControl[] {
     const controls: FormControl[] = [
       ...Object.values(this.form.controls).filter((control): control is FormControl => control instanceof FormControl),
       ...this.mounts.controls.flatMap((row) => [row.controls.containerPath, row.controls.hostPath]),
     ];
-    controls
-      .filter((control) => control.errors?.[SERVER_ERROR_KEY])
-      .forEach((control) => control.updateValueAndValidity({ emitEvent: false }));
+    return controls.filter((control) => control.errors?.[SERVER_ERROR_KEY]);
   }
 
   private _focus(id: string): void {
