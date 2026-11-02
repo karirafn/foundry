@@ -535,6 +535,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/settings/worker-environment": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Updates the worker resource limits and host mounts */
+        put: operations["UpdateWorkerEnvironment"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/settings/worker-image/retry": {
         parameters: {
             query?: never;
@@ -684,6 +701,13 @@ export interface components {
             /** Format: int32 */
             attempt: number | string;
             allowedProviderHosts: string[];
+            /** Format: int32 */
+            memoryLimitMb: number | string;
+            /** Format: double */
+            cpuLimit: number | string;
+            /** Format: int32 */
+            pidsLimit: number | string;
+            mounts: components["schemas"]["WorkerMountEntry"][];
         };
         /** @enum {unknown} */
         ImageBuildStatus: "Idle" | "Building" | "Failed";
@@ -907,6 +931,20 @@ export interface components {
             /** Format: int32 */
             maxConcurrentWorkers: number | string;
         };
+        UpdateWorkerEnvironmentMountRequest: {
+            containerPath: string;
+            hostPath: string;
+            readOnly: boolean;
+        };
+        UpdateWorkerEnvironmentRequestBody: {
+            /** Format: int32 */
+            memoryLimitMb: number | string;
+            /** Format: double */
+            cpuLimit: number | string;
+            /** Format: int32 */
+            pidsLimit: number | string;
+            mounts: components["schemas"]["UpdateWorkerEnvironmentMountRequest"][];
+        };
         UpdateWorkerImageConfigurationRequestBody: {
             imageTag: string;
             buildEnabled: boolean;
@@ -960,6 +998,11 @@ export interface components {
             accountName: null | string;
             missingScopes: string[];
             detectedProvider: null | string;
+        };
+        WorkerMountEntry: {
+            containerPath: string;
+            hostPath: string;
+            readOnly: boolean;
         };
         WorkerRunDetail: {
             /** Format: uuid */
@@ -2190,6 +2233,48 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["UpdateWorkerImageConfigurationRequestBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GlobalSettingsSummary"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    UpdateWorkerEnvironment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateWorkerEnvironmentRequestBody"];
             };
         };
         responses: {

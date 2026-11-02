@@ -2172,3 +2172,97 @@ describe('SettingsService — isColdBuildBlocking', () => {
     });
   });
 });
+
+describe('SettingsService — worker environment', () => {
+  const ENV_URL = '/api/settings/worker-environment';
+  const MOUNT = { containerPath: '/work/skills', hostPath: '/srv/skills', readOnly: true };
+  const ENV = { memoryLimitMb: 4096, cpuLimit: 1.5, pidsLimit: 256, mounts: [MOUNT] };
+  let service: SettingsService;
+  let httpMock: HttpTestingController;
+
+  beforeEach(() => {
+    const setup = setupService();
+    service = setup.service;
+    httpMock = setup.httpMock;
+  });
+
+  afterEach(() => {
+    httpMock.verify();
+  });
+
+  it('should populate workerEnvironment from the loaded settings', async () => {
+    // Arrange
+    const loading = service.loadSettings();
+    flushLoadSettings(httpMock, ENV);
+    await loading;
+
+    // Act
+    const environment = service.workerEnvironment();
+
+    // Assert
+    expect(environment).toEqual(ENV);
+  });
+
+  it('should PUT the environment to /api/settings/worker-environment', () => {
+    // Arrange / Act
+    service.updateWorkerEnvironment(ENV);
+    const req = httpMock.expectOne(ENV_URL);
+    req.flush(buildSettingsResponse(ENV));
+
+    // Assert
+    expect(req.request.method).toBe('PUT');
+    expect(req.request.body).toEqual(ENV);
+  });
+
+  it('should set savingWorkerEnvironment while the PUT is in flight', () => {
+    // Arrange / Act
+    service.updateWorkerEnvironment(ENV);
+    const saving = service.savingWorkerEnvironment();
+    httpMock.expectOne(ENV_URL).flush(buildSettingsResponse(ENV));
+
+    // Assert
+    expect(saving).toBe(true);
+    expect(service.savingWorkerEnvironment()).toBe(false);
+  });
+
+  it('should refresh workerEnvironment and flag success after a successful save', () => {
+    // Arrange
+    service.updateWorkerEnvironment(ENV);
+
+    // Act
+    httpMock.expectOne(ENV_URL).flush(buildSettingsResponse({ ...ENV, memoryLimitMb: 8192 }));
+
+    // Assert
+    expect(service.workerEnvironment()!.memoryLimitMb).toBe(8192);
+    expect(service.saveWorkerEnvironmentSuccess()).toBe(true);
+  });
+
+  it('should expose the problem detail and code when the save is rejected', () => {
+    // Arrange
+    service.updateWorkerEnvironment(ENV);
+
+    // Act
+    httpMock.expectOne(ENV_URL).flush(
+      { detail: "Mount path '/etc' is sensitive.", type: 'tag:foundry,2026:problems/Settings.SensitiveMountContainerPath' },
+      { status: 400, statusText: 'Bad Request' },
+    );
+
+    // Assert
+    expect(service.saveWorkerEnvironmentError()).toBe("Mount path '/etc' is sensitive.");
+    expect(service.saveWorkerEnvironmentErrorCode()).toBe('Settings.SensitiveMountContainerPath');
+    expect(service.saveWorkerEnvironmentSuccess()).toBe(false);
+    expect(service.savingWorkerEnvironment()).toBe(false);
+  });
+
+  it('should fall back to a fixed message when the error has no problem detail', () => {
+    // Arrange
+    service.updateWorkerEnvironment(ENV);
+
+    // Act
+    httpMock.expectOne(ENV_URL).flush('boom', { status: 500, statusText: 'Server Error' });
+
+    // Assert
+    expect(service.saveWorkerEnvironmentError()).toBe('Failed to save worker environment');
+    expect(service.saveWorkerEnvironmentErrorCode()).toBeNull();
+  });
+});

@@ -1,7 +1,7 @@
 import { HttpErrorResponse } from '@angular/common/http';
 import { TimeoutError } from 'rxjs';
 import { describe, expect, it } from 'vitest';
-import { extractErrorMessage } from './extract-error-message';
+import { extractErrorCode, extractErrorMessage } from './extract-error-message';
 
 describe('extractErrorMessage', () => {
   it('returns timeout message when error is a TimeoutError', () => {
@@ -93,6 +93,33 @@ describe('extractErrorMessage', () => {
 
     // Act
     const result = extractErrorMessage(err);
+
+    // Assert
+    expect(result).toBeNull();
+  });
+});
+
+describe('extractErrorCode', () => {
+  it('returns the suffix after the last slash of the problem type', () => {
+    // Arrange
+    const err = new HttpErrorResponse({
+      error: { type: 'tag:foundry,2026:problems/Settings.InvalidCpuLimit' },
+      status: 400,
+    });
+
+    // Act
+    const result = extractErrorCode(err);
+
+    // Assert
+    expect(result).toBe('Settings.InvalidCpuLimit');
+  });
+
+  it('returns null when the body has no type', () => {
+    // Arrange
+    const err = new HttpErrorResponse({ error: 'plain', status: 500 });
+
+    // Act
+    const result = extractErrorCode(err);
 
     // Assert
     expect(result).toBeNull();
