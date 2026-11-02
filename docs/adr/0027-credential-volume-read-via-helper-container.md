@@ -19,7 +19,7 @@ Read credential state from the credential **volume** via a fresh, short-lived he
 Success is detected from the `Login successful.` log signal, not from the container exit code (which races the signal, as the Context explains); an `Invalid code` line or a stream that closes without the success signal is failure.
 The Claude Code CLI writes `.credentials.json` to `$CLAUDE_CONFIG_DIR` (on the mounted credential volume) before it emits that signal, so the credential persists on the volume independently of the login container.
 `DockerWorkerOrchestrator.GetCredentialVolumeAuthStatusAsync` starts a helper container (`foundry-claude-login` image, `sleep`, credential volume mounted), execs `claude auth status --json` inside it, then stops and removes the helper in a `finally`.
-The helper mounts the volume **read-only** — the auth-status read never writes, and least privilege on a long-lived token store is worth the one-line cost.
+The helper mounts the volume **read-write**. (Amended by #613: the original read-only mount assumed `auth status` never writes, but the CLI refreshes an expired access token during `auth status` and writes `.credentials.json` back; a read-only mount cannot persist a rotated refresh token, leaving a dead token on the volume.)
 This volume read is also the real confirmation that login persisted a valid credential.
 
 This is the single, cross-platform way Foundry touches the credential volume: through a container, via the Docker socket — never via host filesystem access to the daemon's volume mountpoint (see [ADR 0029](0029-oauth-status-derived-from-persisted-state.md), which removes the host-FS reader for status display).
