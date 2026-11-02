@@ -788,7 +788,7 @@ When no MR exists the resolver falls back to exit code and branch commits.
 Exit 0 with commits triggers a bounded MR re-poll (preserving the PR-race retry window); exit 0 with no commits → `Unchanged` or `UsageLimited` (detected via JSON output); non-zero exit → `ContinuableFailure` (commits exist) or `Failure`, with bootstrap-failure and usage-limit classification layered on top.
 
 **Result selection from stream-json.**
-The worker runs `claude` with `--output-format stream-json --verbose` (ADR 0083), so the captured output is a stream of one JSON event per line rather than a single result object.
+The worker runs `claude` with `--output-format stream-json --verbose` ([ADR 0083](docs/adr/0083-live-agent-activity-from-stream-json-over-the-container-log.md)), so the captured output is a stream of one JSON event per line rather than a single result object.
 Outcome classification and the Run Result Summary read the **last line whose `type` is `"result"`** — not merely the last JSON line: every other event (`assistant`, `user`, `system`, `rate_limit_event`, unknown types) and partial lines from a container killed mid-event are skipped.
 The `result` event is a superset of the former `--output-format json` object (it adds `model_usage_since_last_result`) and maps identically.
 One log can hold several `result` events — a transient-retry resume (`claude -c`), or a background subagent's notification re-waking the session — and the last one wins.
