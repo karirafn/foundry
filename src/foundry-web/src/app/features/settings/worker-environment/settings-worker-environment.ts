@@ -67,6 +67,7 @@ const MOUNT_CODE_FIELDS: Record<string, readonly MountPathField[]> = {
   'Settings.MountHostPathNotAbsolute': ['hostPath'],
   'Settings.SensitiveMountHostPath': ['hostPath'],
   'Settings.MountPathTraversal': ['containerPath', 'hostPath'],
+  'Settings.InvalidMountPathCharacters': ['containerPath', 'hostPath'],
 };
 
 @Component({

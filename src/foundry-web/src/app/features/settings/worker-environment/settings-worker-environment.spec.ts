@@ -451,6 +451,25 @@ describe('SettingsWorkerEnvironmentComponent', () => {
     expect(input(page.el, 'containerPath-0').getAttribute('aria-invalid')).toBe('true');
   });
 
+  it('should attach an invalid-characters error to the matching row control', async () => {
+    // Arrange
+    const page = await loadPage({ mounts: [SKILLS_MOUNT] });
+    type(page, 'containerPath-0', '/skills:ro');
+
+    // Act
+    saveButton(page.el).click();
+    page.httpMock.expectOne(ENV_URL).flush(
+      { detail: "Mount path '/skills:ro' contains invalid characters.", type: 'tag:foundry,2026:problems/Settings.InvalidMountPathCharacters' },
+      { status: 400, statusText: 'Bad Request' },
+    );
+    await page.fixture.whenStable();
+    page.fixture.detectChanges();
+
+    // Assert
+    expect(text(page.el, 'containerPath-0-error')).toContain('invalid characters');
+    expect(input(page.el, 'containerPath-0').getAttribute('aria-invalid')).toBe('true');
+  });
+
   it('should attach a limit error to its limit control', async () => {
     // Arrange
     const page = await loadPage();
