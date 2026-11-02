@@ -113,7 +113,7 @@ public sealed class GetAuthStatusAsync
     }
 
     [Fact]
-    public async Task WhenComplete_StartsHelperContainerWithReadOnlyMount()
+    public async Task WhenComplete_StartsHelperContainerWithReadWriteMount()
     {
         // Arrange
         FakeDockerContainerRuntime runtime = new FakeDockerContainerRuntime()
@@ -123,13 +123,13 @@ public sealed class GetAuthStatusAsync
         // Act
         await sut.GetCredentialVolumeAuthStatusAsync(CancellationToken.None);
 
-        // Assert — helper container mounts credential volume read-only
+        // Assert — helper container mounts credential volume read-write (auth status may refresh the token)
         CreateContainerParameters captured = runtime.LastCreateAndStartParameters.ShouldNotBeNull();
         IList<Mount> mounts = captured.HostConfig.Mounts.ShouldNotBeNull();
         mounts.ShouldContain(m =>
             m.Type == "volume"
             && m.Source == WorkerVolumeNames.CredentialVolumeName
             && m.Target == WorkerVolumeNames.ClaudeConfigContainerPath
-            && m.ReadOnly);
+            && !m.ReadOnly);
     }
 }

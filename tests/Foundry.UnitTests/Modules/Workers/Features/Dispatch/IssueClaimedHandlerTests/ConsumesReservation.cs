@@ -10,7 +10,6 @@ using Foundry.Modules.Workers.Contracts;
 using Foundry.Modules.Workers.Domain.Entities;
 using Foundry.Modules.Workers.Domain.Entities.States;
 using Foundry.Modules.Workers.Domain.ValueObjects;
-using Foundry.Modules.Workers.Features;
 using Foundry.Modules.Workers.Features.ContainerSpec;
 using Foundry.Modules.Workers.Features.Dispatch;
 using Foundry.Modules.Workers.Features.Orchestration;
@@ -21,7 +20,6 @@ using Foundry.WebApi.Persistence;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
-using Microsoft.Extensions.Options;
 
 using Shouldly;
 
@@ -57,12 +55,10 @@ public sealed class ConsumesReservation : IAsyncDisposable
 
     private IssueClaimedHandler BuildHandler()
     {
-        WorkerOptions options = new();
         return new IssueClaimedHandler(
             _dbContext,
             _orchestrator,
             new NullDomainEventDispatcher(),
-            Options.Create(options),
             new StubGlobalSettingsQueries(),
             new StubCredentialQueries(("ANTHROPIC_API_KEY", "test-api-key")),
             _providerQueries,
@@ -305,6 +301,10 @@ public sealed class ConsumesReservation : IAsyncDisposable
         public Task<ClaudeCodeSettingsSnapshot> GetClaudeCodeSettingsAsync(CancellationToken cancellationToken)
 
             => Task.FromResult(new ClaudeCodeSettingsSnapshot(string.Empty, true, []));
+
+        public Task<HostHooksSnapshot> GetHostHooksAsync(CancellationToken cancellationToken)
+
+            => Task.FromResult(new HostHooksSnapshot(string.Empty, []));
 
         public Task<IReadOnlyList<string>> GetAllowedProviderHostsAsync(CancellationToken cancellationToken)
             => Task.FromResult<IReadOnlyList<string>>([]);

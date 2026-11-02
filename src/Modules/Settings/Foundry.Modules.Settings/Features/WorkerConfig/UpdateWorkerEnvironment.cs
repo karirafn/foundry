@@ -20,7 +20,9 @@ internal static class UpdateWorkerEnvironment
         int MemoryLimitMb,
         double CpuLimit,
         int PidsLimit,
-        IReadOnlyList<MountRequest> Mounts) : ICommand<GlobalSettingsSummary>;
+        IReadOnlyList<MountRequest> Mounts,
+        string HostSettingsPath,
+        IReadOnlyList<string> ExcludedHookCommands) : ICommand<GlobalSettingsSummary>;
 
     internal sealed class Handler(DbContext dbContext)
         : ICommandHandler<Command, GlobalSettingsSummary>
@@ -55,7 +57,19 @@ internal static class UpdateWorkerEnvironment
                 return Result<GlobalSettingsSummary>.Fail(((Result<WorkerMounts>.Failure)mountsResult).Error);
             }
 
-            bool changed = settings.UpdateWorkerEnvironment(limitsSuccess.Value, mountsSuccess.Value);
+            // System.Text.Json does not enforce non-nullable annotations, so a null exclusion element can arrive.
+            Result<HostHooks> hostHooksResult = HostHooks.Create(
+                command.HostSettingsPath,
+                [.. command.ExcludedHookCommands.Select(excluded => excluded ?? string.Empty)]);
+
+            if (hostHooksResult is not Result<HostHooks>.Success hostHooksSuccess)
+            {
+                return Result<GlobalSettingsSummary>.Fail(((Result<HostHooks>.Failure)hostHooksResult).Error);
+            }
+
+            bool environmentChanged = settings.UpdateWorkerEnvironment(limitsSuccess.Value, mountsSuccess.Value);
+            bool hostHooksChanged = settings.UpdateHostHooks(hostHooksSuccess.Value);
+            bool changed = environmentChanged || hostHooksChanged;
 
             if (changed)
             {
@@ -78,7 +92,9 @@ internal static class UpdateWorkerEnvironment
             int MemoryLimitMb,
             double CpuLimit,
             int PidsLimit,
-            IReadOnlyList<MountRequest> Mounts);
+            IReadOnlyList<MountRequest> Mounts,
+            string HostSettingsPath,
+            IReadOnlyList<string> ExcludedHookCommands);
 
         public static void Map(RouteGroupBuilder group)
         {
@@ -91,7 +107,9 @@ internal static class UpdateWorkerEnvironment
                         body.MemoryLimitMb,
                         body.CpuLimit,
                         body.PidsLimit,
-                        body.Mounts ?? []);
+                        body.Mounts ?? [],
+                        body.HostSettingsPath ?? string.Empty,
+                        body.ExcludedHookCommands ?? []);
 
                     Result<GlobalSettingsSummary> result = await handler.HandleAsync(command, cancellationToken);
 
@@ -104,7 +122,7 @@ internal static class UpdateWorkerEnvironment
                         });
                 })
                 .WithName("UpdateWorkerEnvironment")
-                .WithSummary("Updates the worker resource limits and host mounts")
+                .WithSummary("Updates the worker resource limits, host mounts, and host hooks source")
                 .Produces<GlobalSettingsSummary>()
                 .ProducesProblem(StatusCodes.Status404NotFound)
                 .ProducesProblem(StatusCodes.Status400BadRequest);

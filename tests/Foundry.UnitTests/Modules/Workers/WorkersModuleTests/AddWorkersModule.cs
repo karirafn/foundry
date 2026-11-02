@@ -6,7 +6,6 @@ using Foundry.Modules.Settings.Contracts;
 using Foundry.Modules.Workers;
 using Foundry.Modules.Workers.Contracts;
 using Foundry.Modules.Workers.Contracts.Queries;
-using Foundry.Modules.Workers.Features;
 using Foundry.Modules.Workers.Features.Activity;
 using Foundry.Modules.Workers.Features.Dispatch;
 using Foundry.Modules.Workers.Features.DockerAvailability;
@@ -19,7 +18,6 @@ using Foundry.UnitTests.Fakes.Workers;
 
 using DomainWorkerRunFailed = Foundry.Modules.Workers.Domain.Events.WorkerRunFailed;
 
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.FileProviders;
@@ -34,13 +32,6 @@ namespace Foundry.UnitTests.Modules.Workers.WorkersModuleTests;
 
 public sealed class AddWorkersModule
 {
-    private static IConfiguration BuildConfiguration(Dictionary<string, string?> values)
-    {
-        return new ConfigurationBuilder()
-            .AddInMemoryCollection(values)
-            .Build();
-    }
-
     private sealed class StubHostEnvironment : IHostEnvironment
     {
         public string ApplicationName { get; set; } = "TestApp";
@@ -70,33 +61,13 @@ public sealed class AddWorkersModule
     }
 
     [Fact]
-    public void WhenCalled_RegistersWorkerOptions()
-    {
-        // Arrange
-        IConfiguration configuration = BuildConfiguration(new Dictionary<string, string?>
-        {
-            ["Workers:Settings:Hooks:PreToolUse:0:Matcher"] = "Bash",
-        });
-        ServiceCollection services = new();
-
-        // Act
-        services.AddWorkersModule(configuration);
-        ServiceProvider provider = services.BuildServiceProvider();
-
-        // Assert
-        IOptions<WorkerOptions> options = provider.GetRequiredService<IOptions<WorkerOptions>>();
-        options.Value.Settings.Hooks["PreToolUse"][0].Matcher.ShouldBe("Bash");
-    }
-
-    [Fact]
     public void WhenCalled_RegistersIWorkerOrchestrator()
     {
         // Arrange
-        IConfiguration configuration = BuildConfiguration(new Dictionary<string, string?>());
         ServiceCollection services = new();
 
         // Act
-        services.AddWorkersModule(configuration);
+        services.AddWorkersModule();
         ServiceProvider provider = services.BuildServiceProvider();
 
         // Assert
@@ -105,30 +76,9 @@ public sealed class AddWorkersModule
     }
 
     [Fact]
-    public void WhenCalled_RegistersWorkerOptionsValidator()
-    {
-        // Arrange — an unsupported hook type triggers validation failure
-        IConfiguration invalidConfig = BuildConfiguration(new Dictionary<string, string?>
-        {
-            ["Workers:Settings:Hooks:PreToolUse:0:Hooks:0:Type"] = "script",
-            ["Workers:Settings:Hooks:PreToolUse:0:Hooks:0:Command"] = "echo hi",
-        });
-        ServiceCollection services = new();
-
-        // Act
-        services.AddWorkersModule(invalidConfig);
-        ServiceProvider provider = services.BuildServiceProvider();
-
-        // Assert — accessing Value with an invalid hook type triggers validation failure
-        IOptions<WorkerOptions> options = provider.GetRequiredService<IOptions<WorkerOptions>>();
-        Should.Throw<OptionsValidationException>(() => _ = options.Value);
-    }
-
-    [Fact]
     public void WhenCalled_RegistersWorkerDispatchServiceAsHostedService()
     {
         // Arrange
-        IConfiguration configuration = BuildConfiguration(new Dictionary<string, string?>());
         ServiceCollection services = new();
         services.AddLogging();
         services.AddSingleton<IHostEnvironment>(new StubHostEnvironment());
@@ -138,7 +88,7 @@ public sealed class AddWorkersModule
         services.AddSingleton<IAgentActivityBroadcaster, NullAgentActivityBroadcaster>();
 
         // Act
-        services.AddWorkersModule(configuration);
+        services.AddWorkersModule();
         ServiceProvider provider = services.BuildServiceProvider();
 
         // Assert
@@ -150,7 +100,6 @@ public sealed class AddWorkersModule
     public void WhenCalled_RegistersAgentActivityFollowerServiceAsHostedService()
     {
         // Arrange
-        IConfiguration configuration = BuildConfiguration(new Dictionary<string, string?>());
         ServiceCollection services = new();
         services.AddLogging();
         services.AddSingleton<IHostEnvironment>(new StubHostEnvironment());
@@ -160,7 +109,7 @@ public sealed class AddWorkersModule
         services.AddSingleton<IAgentActivityBroadcaster, NullAgentActivityBroadcaster>();
 
         // Act
-        services.AddWorkersModule(configuration);
+        services.AddWorkersModule();
         ServiceProvider provider = services.BuildServiceProvider();
 
         // Assert
@@ -173,7 +122,6 @@ public sealed class AddWorkersModule
     public void WhenCalled_RegistersWorkerImageRebuildServiceAsHostedService()
     {
         // Arrange
-        IConfiguration configuration = BuildConfiguration(new Dictionary<string, string?>());
         ServiceCollection services = new();
         services.AddLogging();
         services.AddSingleton<IHostEnvironment>(new StubHostEnvironment());
@@ -183,7 +131,7 @@ public sealed class AddWorkersModule
         services.AddSingleton<IAgentActivityBroadcaster, NullAgentActivityBroadcaster>();
 
         // Act
-        services.AddWorkersModule(configuration);
+        services.AddWorkersModule();
         ServiceProvider provider = services.BuildServiceProvider();
 
         // Assert
@@ -195,7 +143,6 @@ public sealed class AddWorkersModule
     public void WhenCalled_RegistersStaleStartingRunServiceAsHostedService()
     {
         // Arrange
-        IConfiguration configuration = BuildConfiguration(new Dictionary<string, string?>());
         ServiceCollection services = new();
         services.AddLogging();
         services.AddSingleton<IHostEnvironment>(new StubHostEnvironment());
@@ -205,7 +152,7 @@ public sealed class AddWorkersModule
         services.AddSingleton<IAgentActivityBroadcaster, NullAgentActivityBroadcaster>();
 
         // Act
-        services.AddWorkersModule(configuration);
+        services.AddWorkersModule();
         ServiceProvider provider = services.BuildServiceProvider();
 
         // Assert
@@ -217,11 +164,10 @@ public sealed class AddWorkersModule
     public void WhenCalled_RegistersIImageOperations()
     {
         // Arrange
-        IConfiguration configuration = BuildConfiguration(new Dictionary<string, string?>());
         ServiceCollection services = new();
 
         // Act
-        services.AddWorkersModule(configuration);
+        services.AddWorkersModule();
         ServiceProvider provider = services.BuildServiceProvider();
 
         // Assert
@@ -233,11 +179,10 @@ public sealed class AddWorkersModule
     public void WhenCalled_RegistersIContainerOperations()
     {
         // Arrange
-        IConfiguration configuration = BuildConfiguration(new Dictionary<string, string?>());
         ServiceCollection services = new();
 
         // Act
-        services.AddWorkersModule(configuration);
+        services.AddWorkersModule();
         ServiceProvider provider = services.BuildServiceProvider();
 
         // Assert
@@ -249,11 +194,10 @@ public sealed class AddWorkersModule
     public void WhenCalled_RegistersIExecOperations()
     {
         // Arrange
-        IConfiguration configuration = BuildConfiguration(new Dictionary<string, string?>());
         ServiceCollection services = new();
 
         // Act
-        services.AddWorkersModule(configuration);
+        services.AddWorkersModule();
         ServiceProvider provider = services.BuildServiceProvider();
 
         // Assert
@@ -265,12 +209,11 @@ public sealed class AddWorkersModule
     public void WhenCalled_RegistersIContainerOutputParserAsSingleton()
     {
         // Arrange
-        IConfiguration configuration = BuildConfiguration(new Dictionary<string, string?>());
         ServiceCollection services = new();
         services.AddLogging();
 
         // Act
-        services.AddWorkersModule(configuration);
+        services.AddWorkersModule();
         ServiceProvider provider = services.BuildServiceProvider();
 
         // Assert
@@ -282,12 +225,11 @@ public sealed class AddWorkersModule
     public void WhenCalled_RegistersDispatchPausedBroadcastHandler()
     {
         // Arrange
-        IConfiguration configuration = BuildConfiguration(new Dictionary<string, string?>());
         ServiceCollection services = new();
         services.AddSingleton<ISystemNotificationBroadcaster>(new NullSystemNotificationBroadcaster());
 
         // Act
-        services.AddWorkersModule(configuration);
+        services.AddWorkersModule();
         ServiceProvider provider = services.BuildServiceProvider();
 
         // Assert
@@ -300,12 +242,11 @@ public sealed class AddWorkersModule
     public void WhenCalled_RegistersDispatchResumedBroadcastHandler()
     {
         // Arrange
-        IConfiguration configuration = BuildConfiguration(new Dictionary<string, string?>());
         ServiceCollection services = new();
         services.AddSingleton<ISystemNotificationBroadcaster>(new NullSystemNotificationBroadcaster());
 
         // Act
-        services.AddWorkersModule(configuration);
+        services.AddWorkersModule();
         ServiceProvider provider = services.BuildServiceProvider();
 
         // Assert
@@ -318,12 +259,11 @@ public sealed class AddWorkersModule
     public void WhenCalled_RegistersImageBuildStartedBroadcastHandler()
     {
         // Arrange
-        IConfiguration configuration = BuildConfiguration(new Dictionary<string, string?>());
         ServiceCollection services = new();
         services.AddSingleton<ISystemNotificationBroadcaster>(new NullSystemNotificationBroadcaster());
 
         // Act
-        services.AddWorkersModule(configuration);
+        services.AddWorkersModule();
         ServiceProvider provider = services.BuildServiceProvider();
 
         // Assert
@@ -336,12 +276,11 @@ public sealed class AddWorkersModule
     public void WhenCalled_RegistersImageBuildCompletedBroadcastHandler()
     {
         // Arrange
-        IConfiguration configuration = BuildConfiguration(new Dictionary<string, string?>());
         ServiceCollection services = new();
         services.AddSingleton<ISystemNotificationBroadcaster>(new NullSystemNotificationBroadcaster());
 
         // Act
-        services.AddWorkersModule(configuration);
+        services.AddWorkersModule();
         ServiceProvider provider = services.BuildServiceProvider();
 
         // Assert
@@ -354,12 +293,11 @@ public sealed class AddWorkersModule
     public void WhenCalled_RegistersImageBuildFailedBroadcastHandler()
     {
         // Arrange
-        IConfiguration configuration = BuildConfiguration(new Dictionary<string, string?>());
         ServiceCollection services = new();
         services.AddSingleton<ISystemNotificationBroadcaster>(new NullSystemNotificationBroadcaster());
 
         // Act
-        services.AddWorkersModule(configuration);
+        services.AddWorkersModule();
         ServiceProvider provider = services.BuildServiceProvider();
 
         // Assert
@@ -372,11 +310,10 @@ public sealed class AddWorkersModule
     public void WhenCalled_RegistersISystemOperations()
     {
         // Arrange
-        IConfiguration configuration = BuildConfiguration(new Dictionary<string, string?>());
         ServiceCollection services = new();
 
         // Act
-        services.AddWorkersModule(configuration);
+        services.AddWorkersModule();
         ServiceProvider provider = services.BuildServiceProvider();
 
         // Assert
@@ -388,11 +325,10 @@ public sealed class AddWorkersModule
     public void WhenCalled_RegistersDockerDaemonHealthCheckWithReadyTag()
     {
         // Arrange
-        IConfiguration configuration = BuildConfiguration(new Dictionary<string, string?>());
         ServiceCollection services = new();
 
         // Act
-        services.AddWorkersModule(configuration);
+        services.AddWorkersModule();
         ServiceProvider provider = services.BuildServiceProvider();
 
         // Assert
@@ -406,11 +342,10 @@ public sealed class AddWorkersModule
     public void WhenCalled_RegistersIDockerAvailabilityState()
     {
         // Arrange
-        IConfiguration configuration = BuildConfiguration(new Dictionary<string, string?>());
         ServiceCollection services = new();
 
         // Act
-        services.AddWorkersModule(configuration);
+        services.AddWorkersModule();
         ServiceProvider provider = services.BuildServiceProvider();
 
         // Assert
@@ -422,11 +357,10 @@ public sealed class AddWorkersModule
     public void WhenCalled_RegistersIDockerAvailabilityStateMutator()
     {
         // Arrange
-        IConfiguration configuration = BuildConfiguration(new Dictionary<string, string?>());
         ServiceCollection services = new();
 
         // Act
-        services.AddWorkersModule(configuration);
+        services.AddWorkersModule();
         ServiceProvider provider = services.BuildServiceProvider();
 
         // Assert
@@ -438,12 +372,11 @@ public sealed class AddWorkersModule
     public void WhenCalled_RegistersDockerAvailabilityHealthCheckPublisher()
     {
         // Arrange
-        IConfiguration configuration = BuildConfiguration(new Dictionary<string, string?>());
         ServiceCollection services = new();
         services.AddLogging();
 
         // Act
-        services.AddWorkersModule(configuration);
+        services.AddWorkersModule();
         ServiceProvider provider = services.BuildServiceProvider();
 
         // Assert
@@ -455,12 +388,11 @@ public sealed class AddWorkersModule
     public void WhenCalled_RegistersDockerAvailabilityChangedBroadcastHandler()
     {
         // Arrange
-        IConfiguration configuration = BuildConfiguration(new Dictionary<string, string?>());
         ServiceCollection services = new();
         services.AddSingleton<ISystemNotificationBroadcaster>(new NullSystemNotificationBroadcaster());
 
         // Act
-        services.AddWorkersModule(configuration);
+        services.AddWorkersModule();
         ServiceProvider provider = services.BuildServiceProvider();
 
         // Assert
@@ -473,11 +405,10 @@ public sealed class AddWorkersModule
     public void WhenCalled_SetsHealthCheckPublisherPeriodTo15Seconds()
     {
         // Arrange
-        IConfiguration configuration = BuildConfiguration(new Dictionary<string, string?>());
         ServiceCollection services = new();
 
         // Act
-        services.AddWorkersModule(configuration);
+        services.AddWorkersModule();
         ServiceProvider provider = services.BuildServiceProvider();
 
         // Assert
@@ -489,12 +420,11 @@ public sealed class AddWorkersModule
     public void WhenCalled_RegistersExactlyOneWorkerRunFailedBridgeHandler()
     {
         // Arrange
-        IConfiguration configuration = BuildConfiguration(new Dictionary<string, string?>());
         ServiceCollection services = new();
         services.AddScoped<IIntegrationEventDispatcher, NullIntegrationEventDispatcher>();
 
         // Act
-        services.AddWorkersModule(configuration);
+        services.AddWorkersModule();
         ServiceProvider provider = services.BuildServiceProvider();
 
         // Assert

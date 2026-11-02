@@ -11,9 +11,6 @@ namespace Foundry.UnitTests.Modules.Workers.Features.ContainerSpec.WorkerSetting
 
 public sealed class Build
 {
-    private static readonly IReadOnlyDictionary<string, List<HookGroup>> NoHooks =
-        new Dictionary<string, List<HookGroup>>();
-
     private static ClaudeCodeSettingsSnapshot Snapshot(
         string model = "",
         bool blockCiCdEdits = true,
@@ -41,7 +38,7 @@ public sealed class Build
         ClaudeCodeSettingsSnapshot snapshot = Snapshot();
 
         // Act
-        string json = WorkerSettingsBuilder.Build(snapshot, NoHooks);
+        string json = WorkerSettingsBuilder.Build(snapshot);
 
         // Assert
         using JsonDocument doc = JsonDocument.Parse(json);
@@ -79,7 +76,7 @@ public sealed class Build
         ClaudeCodeSettingsSnapshot snapshot = Snapshot(model: "claude-opus-4-5");
 
         // Act
-        string json = WorkerSettingsBuilder.Build(snapshot, NoHooks);
+        string json = WorkerSettingsBuilder.Build(snapshot);
 
         // Assert
         using JsonDocument doc = JsonDocument.Parse(json);
@@ -94,7 +91,7 @@ public sealed class Build
         ClaudeCodeSettingsSnapshot snapshot = Snapshot(model: string.Empty);
 
         // Act
-        string json = WorkerSettingsBuilder.Build(snapshot, NoHooks);
+        string json = WorkerSettingsBuilder.Build(snapshot);
 
         // Assert
         using JsonDocument doc = JsonDocument.Parse(json);
@@ -110,7 +107,7 @@ public sealed class Build
             additionalDenyRules: ["Bash(rm -rf:*)", "Bash(curl:*)"]);
 
         // Act
-        string json = WorkerSettingsBuilder.Build(snapshot, NoHooks);
+        string json = WorkerSettingsBuilder.Build(snapshot);
 
         // Assert
         string[] rules = DenyRules(json);
@@ -121,44 +118,18 @@ public sealed class Build
     }
 
     [Fact]
-    public void WhenHooksConfigured_IncludesHooksSectionInJson()
+    public void WhenCalled_NeverEmitsHooksSection()
     {
         // Arrange
-        Dictionary<string, List<HookGroup>> hooks = new()
-        {
-            ["PreToolUse"] =
-            [
-                new HookGroup
-                {
-                    Matcher = "Bash",
-                    Hooks = [new HookEntry { Type = "command", Command = "echo pre-tool" }],
-                },
-            ],
-        };
+        ClaudeCodeSettingsSnapshot snapshot = Snapshot(model: "claude-opus-4-5", additionalDenyRules: "Bash(rm -rf:*)");
 
         // Act
-        string json = WorkerSettingsBuilder.Build(Snapshot(), hooks);
+        string json = WorkerSettingsBuilder.Build(snapshot);
 
         // Assert
         using JsonDocument doc = JsonDocument.Parse(json);
-        JsonElement root = doc.RootElement;
 
-        root.TryGetProperty("hooks", out JsonElement hooksElement).ShouldBeTrue();
-
-        hooksElement.TryGetProperty("PreToolUse", out JsonElement preToolUse).ShouldBeTrue();
-
-        JsonElement firstGroup = preToolUse.EnumerateArray().First();
-
-        firstGroup.GetProperty("matcher").GetString().ShouldBe("Bash");
-
-        JsonElement firstHook = firstGroup
-            .GetProperty("hooks")
-            .EnumerateArray()
-            .First();
-
-        firstHook.ShouldSatisfyAllConditions(
-            () => firstHook.GetProperty("type").GetString().ShouldBe("command"),
-            () => firstHook.GetProperty("command").GetString().ShouldBe("echo pre-tool"));
+        doc.RootElement.TryGetProperty("hooks", out _).ShouldBeFalse();
     }
 
     [Fact]
@@ -168,7 +139,7 @@ public sealed class Build
         ClaudeCodeSettingsSnapshot snapshot = Snapshot();
 
         // Act
-        string json = WorkerSettingsBuilder.Build(snapshot, NoHooks);
+        string json = WorkerSettingsBuilder.Build(snapshot);
 
         // Assert
         string[] rules = DenyRules(json);
@@ -186,7 +157,7 @@ public sealed class Build
         ClaudeCodeSettingsSnapshot snapshot = Snapshot(blockCiCdEdits: true);
 
         // Act
-        string json = WorkerSettingsBuilder.Build(snapshot, NoHooks);
+        string json = WorkerSettingsBuilder.Build(snapshot);
 
         // Assert
         string[] rules = DenyRules(json);
@@ -208,7 +179,7 @@ public sealed class Build
         ClaudeCodeSettingsSnapshot snapshot = Snapshot(blockCiCdEdits: false);
 
         // Act
-        string json = WorkerSettingsBuilder.Build(snapshot, NoHooks);
+        string json = WorkerSettingsBuilder.Build(snapshot);
 
         // Assert
         string[] rules = DenyRules(json);
@@ -231,7 +202,7 @@ public sealed class Build
         ClaudeCodeSettingsSnapshot snapshot = Snapshot(blockCiCdEdits: false);
 
         // Act
-        string json = WorkerSettingsBuilder.Build(snapshot, NoHooks);
+        string json = WorkerSettingsBuilder.Build(snapshot);
 
         // Assert
         string[] rules = DenyRules(json);
@@ -258,7 +229,7 @@ public sealed class Build
             additionalDenyRules: "Bash(rm -rf:*)");
 
         // Act
-        string json = WorkerSettingsBuilder.Build(snapshot, NoHooks);
+        string json = WorkerSettingsBuilder.Build(snapshot);
 
         // Assert
         string[] rules = DenyRules(json);
@@ -275,7 +246,7 @@ public sealed class Build
         ClaudeCodeSettingsSnapshot snapshot = Snapshot(additionalDenyRules: "Bash(rm -rf:*)");
 
         // Act
-        string json = WorkerSettingsBuilder.Build(snapshot, NoHooks);
+        string json = WorkerSettingsBuilder.Build(snapshot);
 
         // Assert
         string[] rules = DenyRules(json);
@@ -289,33 +260,20 @@ public sealed class Build
     }
 
     [Fact]
-    public void WhenModelRulesAndHooksAllSet_ProducesCorrectJson()
+    public void WhenModelAndRulesAllSet_ProducesCorrectJson()
     {
         // Arrange
         ClaudeCodeSettingsSnapshot snapshot = Snapshot(
             model: "claude-sonnet-4-5",
             additionalDenyRules: "Bash(rm -rf:*)");
-        Dictionary<string, List<HookGroup>> hooks = new()
-        {
-            ["PostToolUse"] =
-            [
-                new HookGroup
-                {
-                    Hooks = [new HookEntry { Command = "notify" }],
-                },
-            ],
-        };
 
         // Act
-        string json = WorkerSettingsBuilder.Build(snapshot, hooks);
+        string json = WorkerSettingsBuilder.Build(snapshot);
 
         // Assert
         using JsonDocument doc = JsonDocument.Parse(json);
-        JsonElement root = doc.RootElement;
 
-        root.ShouldSatisfyAllConditions(
-            () => root.GetProperty("model").GetString().ShouldBe("claude-sonnet-4-5"),
-            () => root.TryGetProperty("hooks", out _).ShouldBeTrue());
+        doc.RootElement.GetProperty("model").GetString().ShouldBe("claude-sonnet-4-5");
 
         string[] rules = DenyRules(json);
 

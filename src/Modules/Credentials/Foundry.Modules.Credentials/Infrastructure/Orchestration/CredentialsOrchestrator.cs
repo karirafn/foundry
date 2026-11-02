@@ -100,7 +100,7 @@ internal sealed class CredentialsOrchestrator(IDockerContainerRuntime runtime) :
 
     public async Task<Result<AccountIdentity>> GetCredentialVolumeAuthStatusAsync(CancellationToken cancellationToken)
     {
-        string helperId = await StartCredentialHelperContainerAsync(readOnly: true, cancellationToken);
+        string helperId = await StartCredentialHelperContainerAsync(cancellationToken);
 
         try
         {
@@ -205,7 +205,10 @@ internal sealed class CredentialsOrchestrator(IDockerContainerRuntime runtime) :
                     Type = "volume",
                     Source = CredentialVolumeConstants.VolumeName,
                     Target = CredentialVolumeConstants.ContainerPath,
-                    ReadOnly = true,
+                    // Read-write mount, matching workers: the CLI may refresh an expired access
+                    // token during the probe, and a read-only mount cannot persist the rotated
+                    // refresh token, leaving a dead token on the volume for the next worker.
+                    ReadOnly = false,
                 });
             }
             else if (spec.AuthMode is AuthMode.ApiKey { Credential: ApiKeyCredential.Present apiKeyPresent })
@@ -368,7 +371,7 @@ internal sealed class CredentialsOrchestrator(IDockerContainerRuntime runtime) :
     {
         string configPath = $"{CredentialVolumeConstants.ContainerPath}/.claude.json";
 
-        string helperId = await StartCredentialHelperContainerAsync(readOnly: false, cancellationToken);
+        string helperId = await StartCredentialHelperContainerAsync(cancellationToken);
 
         try
         {
@@ -410,7 +413,7 @@ internal sealed class CredentialsOrchestrator(IDockerContainerRuntime runtime) :
         return AccountIdentity.Parse(json);
     }
 
-    private async Task<string> StartCredentialHelperContainerAsync(bool readOnly, CancellationToken cancellationToken)
+    private async Task<string> StartCredentialHelperContainerAsync(CancellationToken cancellationToken)
     {
         CreateContainerParameters createParams = new()
         {
@@ -432,7 +435,11 @@ internal sealed class CredentialsOrchestrator(IDockerContainerRuntime runtime) :
                         Type = "volume",
                         Source = CredentialVolumeConstants.VolumeName,
                         Target = CredentialVolumeConstants.ContainerPath,
-                        ReadOnly = readOnly,
+                        // Read-write mount: `claude auth status` refreshes an expired access token
+                        // and writes the result back, and onboarding seeding writes .claude.json; a
+                        // read-only mount cannot persist the rotated refresh token, leaving a dead
+                        // token on the volume.
+                        ReadOnly = false,
                     },
                 ],
             },

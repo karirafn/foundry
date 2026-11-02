@@ -359,6 +359,11 @@ namespace Foundry.WebApi.Migrations
                         .HasColumnType("TEXT")
                         .HasColumnName("created_at");
 
+                    b.Property<string>("HostHooks")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("host_hooks");
+
                     b.Property<string>("ImageBuildState")
                         .IsRequired()
                         .HasColumnType("TEXT")
