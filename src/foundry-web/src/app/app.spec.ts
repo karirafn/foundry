@@ -13,6 +13,8 @@ import { DispatchService } from './core/services/dispatch.service';
 import { CreditsService } from './core/services/credits.service';
 import { UsageService } from './core/services/usage.service';
 import { UsageSnapshot } from './core/models/usage.model';
+import { WORKER_HUB_FACTORY, WorkerHub } from './core/services/worker-signalr.service';
+import { AgentActivity } from './core/models/agent-activity.model';
 
 const mockSystemHubFactory = (): SystemHub => ({
   on: () => {},
@@ -137,8 +139,44 @@ function createMockUsageService(snapshot: UsageSnapshot | null = null) {
   };
 }
 
+interface CapturedWorkerHub {
+  onAgentActivity: ((activity: AgentActivity) => void) | null;
+}
+
+function createMockWorkerHub(captured: CapturedWorkerHub): WorkerHub {
+  return {
+    on: <T>(method: string, cb: (payload: T) => void) => {
+      if (method === 'AgentActivity') {
+        captured.onAgentActivity = cb as unknown as (activity: AgentActivity) => void;
+      }
+    },
+    onReconnected: () => {},
+    onReconnecting: () => {},
+    onClose: () => {},
+    stream: () => ({ subscribe: () => ({ dispose: () => {} }) }),
+    start: () => Promise.resolve(),
+  };
+}
+
+function buildAgentActivity(workerRunId: string, issueId: string): AgentActivity {
+  return {
+    workerRunId,
+    issueId,
+    lastEventAt: null,
+    tasks: [],
+    currentTask: null,
+    completedTaskCount: 0,
+    subagents: [],
+    activeSkill: null,
+    inFlightTool: null,
+    tokens: { inputTokens: 0, outputTokens: 0, cacheReadInputTokens: 0, cacheCreationInputTokens: 0 },
+  };
+}
+
 function setupApp(isColdBuildBlocking = false, usageSnapshot: UsageSnapshot | null = buildTestSnapshot()) {
   const mockAccountService = createMockAccountService();
+  const workerHubCallbacks: CapturedWorkerHub = { onAgentActivity: null };
+  const workerHub = createMockWorkerHub(workerHubCallbacks);
   TestBed.configureTestingModule({
     imports: [App],
     providers: [
@@ -152,11 +190,12 @@ function setupApp(isColdBuildBlocking = false, usageSnapshot: UsageSnapshot | nu
       { provide: SystemSignalRService, useValue: createMockSignalRService() },
       { provide: CreditsService, useValue: createMockCreditsService() },
       { provide: UsageService, useValue: createMockUsageService(usageSnapshot) },
+      { provide: WORKER_HUB_FACTORY, useValue: () => workerHub },
     ],
   });
   const fixture = TestBed.createComponent(App);
   fixture.detectChanges();
-  return { fixture, mockAccountService };
+  return { fixture, mockAccountService, workerHubCallbacks };
 }
 
 describe('App', () => {
@@ -339,5 +378,89 @@ describe('App', () => {
 
     // Assert — no trigger button rendered
     expect(compiled.querySelector('.usage-widget__trigger')).toBeNull();
+  });
+
+  describe('active-agents chip', () => {
+    it('should render the chip before the usage widget, linking to the Floor', () => {
+      // Arrange
+      const { fixture } = setupApp();
+      const compiled = fixture.nativeElement as HTMLElement;
+
+      // Act
+      const nav = compiled.querySelector('.app-header__nav');
+      const navChildren = Array.from(nav?.children ?? []);
+      const agentsChip = nav?.querySelector('fd-agents-chip');
+      const link = agentsChip?.querySelector('a');
+
+      // Assert
+      expect(link?.getAttribute('href')).toBe('/floor');
+      expect(navChildren.indexOf(agentsChip as Element)).toBeLessThan(
+        navChildren.indexOf(nav?.querySelector('fd-usage-widget') as Element));
+    });
+
+    it('should show the idle state when no agents are working', () => {
+      // Arrange
+      const { fixture } = setupApp();
+      const compiled = fixture.nativeElement as HTMLElement;
+
+      // Act
+      const link = compiled.querySelector('.agents-chip');
+
+      // Assert
+      expect(link?.classList).toContain('agents-chip--idle');
+      expect(link?.textContent).toContain('Agents idle');
+      expect(link?.getAttribute('aria-label')).toBe('Agents idle. Open the Floor');
+    });
+
+    it('should update the count live as agent activity arrives', () => {
+      // Arrange
+      const { fixture, workerHubCallbacks } = setupApp();
+      const compiled = fixture.nativeElement as HTMLElement;
+
+      // Act
+      workerHubCallbacks.onAgentActivity!(buildAgentActivity('run-1', 'issue-1'));
+      workerHubCallbacks.onAgentActivity!(buildAgentActivity('run-2', 'issue-2'));
+      fixture.detectChanges();
+
+      // Assert
+      const link = compiled.querySelector('.agents-chip');
+      expect(link?.classList).not.toContain('agents-chip--idle');
+      expect(link?.textContent).toContain('2 agents working');
+    });
+
+    it('should announce count changes through the shell announcer but not the initial count', () => {
+      // Arrange
+      const { fixture, workerHubCallbacks } = setupApp();
+      const compiled = fixture.nativeElement as HTMLElement;
+      const announcer = compiled.querySelector('.app__sr-announcer');
+      expect(announcer?.textContent?.trim()).toBe('');
+
+      // Act
+      workerHubCallbacks.onAgentActivity!(buildAgentActivity('run-1', 'issue-1'));
+      fixture.detectChanges();
+
+      // Assert
+      expect(announcer?.textContent?.trim()).toBe('1 agent working');
+    });
+
+    it('should not announce token-only updates for an already counted run', () => {
+      // Arrange
+      const { fixture, mockAccountService, workerHubCallbacks } = setupApp();
+      const compiled = fixture.nativeElement as HTMLElement;
+      workerHubCallbacks.onAgentActivity!(buildAgentActivity('run-1', 'issue-1'));
+      fixture.detectChanges();
+      mockAccountService._srAnnouncementSignal.set('Account added.');
+      fixture.detectChanges();
+
+      // Act — a later payload for the same run changes nothing countable.
+      workerHubCallbacks.onAgentActivity!({
+        ...buildAgentActivity('run-1', 'issue-1'),
+        tokens: { inputTokens: 10, outputTokens: 20, cacheReadInputTokens: 0, cacheCreationInputTokens: 0 },
+      });
+      fixture.detectChanges();
+
+      // Assert
+      expect(compiled.querySelector('.app__sr-announcer')?.textContent?.trim()).toBe('Account added.');
+    });
   });
 });

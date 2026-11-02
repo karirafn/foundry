@@ -10,6 +10,12 @@ export const routes: Routes = [
       import('./features/issues/issue.routes').then((m) => m.ISSUE_ROUTES),
   },
   {
+    path: 'floor',
+    canActivate: [setupGuard],
+    loadChildren: () =>
+      import('./features/floor/floor.routes').then((m) => m.FLOOR_ROUTES),
+  },
+  {
     path: 'settings',
     canActivate: [setupGuard],
     loadChildren: () =>

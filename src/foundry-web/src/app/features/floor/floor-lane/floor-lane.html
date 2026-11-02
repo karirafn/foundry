@@ -1,0 +1,127 @@
+<article
+  class="floor-lane"
+  [class.floor-lane--silent]="lastEvent()?.silent"
+  [class.floor-lane--stale]="stale()"
+  [attr.aria-labelledby]="headingId()"
+>
+  <header class="floor-lane__header">
+    <h2 class="floor-lane__title" [id]="headingId()">
+      @if (lane().issue; as issue) {
+        <a class="floor-lane__link" [href]="issue.url | safeHref" target="_blank" rel="noopener noreferrer">
+          <span class="floor-lane__number">#{{ issue.issueNumber }}</span>
+          {{ issue.title }}
+        </a>
+      } @else {
+        {{ heading() }}
+      }
+    </h2>
+    @if (lane().issue; as issue) {
+      <p class="floor-lane__repo">{{ issue.repositorySlug }}</p>
+    }
+    @if (stale()) {
+      <p class="floor-lane__stale-note">Connection lost — showing last known state</p>
+    }
+  </header>
+
+  <p class="sr-only" aria-live="polite" aria-atomic="true">{{ stepAnnouncement() }}</p>
+
+  <section class="floor-lane__section" [attr.aria-labelledby]="headingId() + '-tasks'">
+    <h3 class="floor-lane__section-heading" [id]="headingId() + '-tasks'">
+      Tasks
+      @if (taskProgress(); as progress) {
+        <span class="floor-lane__progress">{{ progress }}</span>
+      }
+    </h3>
+    @if (tasks().length > 0) {
+      <ol class="floor-lane__tasks">
+        @for (task of tasks(); track task.id) {
+          <li
+            class="floor-lane__task"
+            [class.floor-lane__task--current]="task.id === currentTaskId()"
+            [class.floor-lane__task--done]="task.status === 'completed'"
+            [attr.aria-current]="task.id === currentTaskId() ? 'step' : null"
+          >
+            <span class="floor-lane__task-marker" aria-hidden="true">{{ task.status === 'completed' ? '✓' : task.id === currentTaskId() ? '▸' : '·' }}</span>
+            <span class="floor-lane__task-text">{{ task.id === currentTaskId() ? (task.activeForm ?? task.subject) : task.subject }}</span>
+            @if (task.status === 'completed') {
+              <span class="sr-only"> (done)</span>
+            }
+          </li>
+        }
+      </ol>
+    } @else {
+      <p class="floor-lane__muted">No task list yet</p>
+    }
+  </section>
+
+  @if (subagentGroups().length > 0 || activeSkill()) {
+    <section class="floor-lane__section" [attr.aria-labelledby]="headingId() + '-agents'">
+      <h3 class="floor-lane__section-heading" [id]="headingId() + '-agents'">Subagents</h3>
+      @if (activeSkill(); as skill) {
+        <p class="floor-lane__skill"><span class="floor-lane__label">Skill</span> {{ skill }}</p>
+      }
+      @for (group of subagentGroups(); track group.label) {
+        @if (group.visible.length > 0) {
+          <p class="floor-lane__label">{{ group.label }}</p>
+          <ul class="floor-lane__subagents">
+            @for (agent of group.visible; track $index) {
+              <li class="floor-lane__subagent">
+                <span class="floor-lane__subagent-type">{{ agent.subagentType }}</span>
+                @if (agent.description) {
+                  <span class="floor-lane__subagent-description">{{ agent.description }}</span>
+                }
+              </li>
+            }
+          </ul>
+          @if (group.overflow.length > 0) {
+            <details class="floor-lane__overflow">
+              <summary>{{ group.overflow.length }} more {{ group.noun }}</summary>
+              <ul class="floor-lane__subagents">
+                @for (agent of group.overflow; track $index) {
+                  <li class="floor-lane__subagent">
+                    <span class="floor-lane__subagent-type">{{ agent.subagentType }}</span>
+                    @if (agent.description) {
+                      <span class="floor-lane__subagent-description">{{ agent.description }}</span>
+                    }
+                  </li>
+                }
+              </ul>
+            </details>
+          }
+        }
+      }
+    </section>
+  }
+
+  <section class="floor-lane__section" [attr.aria-labelledby]="headingId() + '-tools'">
+    <h3 class="floor-lane__section-heading" [id]="headingId() + '-tools'">Recent tools</h3>
+    @if (toolTicker().length > 0) {
+      <ul class="floor-lane__ticker">
+        @for (tool of toolTicker(); track $index) {
+          <li class="floor-lane__tool" [class.floor-lane__tool--latest]="$first">
+            <span class="floor-lane__tool-name">{{ tool.name }}</span>
+            @if (tool.summary) {
+              <span class="floor-lane__tool-summary" [attr.title]="tool.summary">{{ tool.summary }}</span>
+            }
+          </li>
+        }
+      </ul>
+    } @else {
+      <p class="floor-lane__muted">No tool calls seen yet</p>
+    }
+  </section>
+
+  <footer class="floor-lane__footer">
+    @if (tokens(); as t) {
+      <dl class="floor-lane__tokens">
+        <div><dt>In</dt><dd>{{ t.input }}</dd></div>
+        <div><dt>Out</dt><dd>{{ t.output }}</dd></div>
+        <div><dt>Cache read</dt><dd>{{ t.cacheRead }}</dd></div>
+        <div><dt>Cache write</dt><dd>{{ t.cacheCreation }}</dd></div>
+      </dl>
+    }
+    @if (lastEvent(); as event) {
+      <p class="floor-lane__last-event" [class.floor-lane__last-event--silent]="event.silent">{{ event.text }}</p>
+    }
+  </footer>
+</article>

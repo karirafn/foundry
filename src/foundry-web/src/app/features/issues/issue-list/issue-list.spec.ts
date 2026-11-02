@@ -24,6 +24,8 @@ const mockIssueSignalRService = {
 const mockWorkerHub = {
   on: () => {},
   onReconnected: () => {},
+  onReconnecting: () => {},
+  onClose: () => {},
   stream: () => ({ subscribe: () => ({ dispose: () => {} }) }),
   start: () => Promise.resolve(),
 };
