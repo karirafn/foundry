@@ -4,6 +4,8 @@ status: accepted
 
 # All Worker Settings in GlobalSettings, Database as the Only Source
 
+> **2026-11-02 — Amended:** the Decision's "`WorkerContainerSpec` (image tag, memory, CPU, PIDs)" shape clause is refined in implementation. The image tag ships on `WorkerImageConfiguration` (slice #625); the worker resource limits ship on a dedicated `WorkerResourceLimits` value object and the mounts on `WorkerMounts` (slice #604). Limit and mount changes are read per dispatch with no rebuild event, so they raise no `WorkerImageSettingsChanged`. The database-only, all-settings-in-`GlobalSettings` decision is unchanged.
+
 ## Context
 
 [ADR 0019](0019-worker-image-flags-in-settings.md) moved the worker image toolchain flags into `GlobalSettings` but deliberately kept the other worker settings — image tag, mounts, CPU/memory/PID limits, Claude Code settings (model, deny rules, hooks), branch naming, and the prompt-template fallbacks — in `IConfiguration` (`Workers` section of appsettings plus user secrets).
