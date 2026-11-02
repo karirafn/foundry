@@ -25,6 +25,10 @@ public sealed class WhenMigrationRunsOnExistingGlobalSettings : IAsyncLifetime, 
     private const string SelectLimitsSql = "SELECT worker_resource_limits FROM global_settings;";
     private const string SelectMountsSql = "SELECT worker_mounts FROM global_settings;";
 
+    private const int FrozenMemoryLimitMb = 8192;
+    private const double FrozenCpuLimit = 2.0;
+    private const int FrozenPidsLimit = 512;
+
     private readonly string _dbPath;
     private SqliteConnection _connection = null!;
     private FoundryDbContext _dbContext = null!;
@@ -72,7 +76,8 @@ public sealed class WhenMigrationRunsOnExistingGlobalSettings : IAsyncLifetime, 
 
         // Assert
         string json = await LoadColumnAsync(SelectLimitsSql);
-        JsonSerializer.Deserialize<WorkerResourceLimits>(json).ShouldBe(WorkerResourceLimits.Default);
+        WorkerResourceLimits limits = JsonSerializer.Deserialize<WorkerResourceLimits>(json)!;
+        (limits.MemoryLimitMb, limits.CpuLimit, limits.PidsLimit).ShouldBe((FrozenMemoryLimitMb, FrozenCpuLimit, FrozenPidsLimit));
     }
 
     [Fact]
@@ -86,7 +91,7 @@ public sealed class WhenMigrationRunsOnExistingGlobalSettings : IAsyncLifetime, 
 
         // Assert
         string json = await LoadColumnAsync(SelectMountsSql);
-        JsonSerializer.Deserialize<WorkerMounts>(json).ShouldBe(WorkerMounts.Default);
+        JsonSerializer.Deserialize<WorkerMounts>(json)!.Mounts.ShouldBeEmpty();
     }
 
     /// <summary>
