@@ -28,6 +28,10 @@ function buildResponse(overrides: Partial<GlobalSettingsResponse> = {}): GlobalS
     nextRetryAt: null,
     attempt: 0,
     allowedProviderHosts: [],
+    memoryLimitMb: 8192,
+    cpuLimit: 2,
+    pidsLimit: 512,
+    mounts: [],
     ...overrides,
   };
 }

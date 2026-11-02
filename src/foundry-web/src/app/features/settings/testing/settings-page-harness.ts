@@ -60,11 +60,19 @@ export const IMAGE_FLAGS_DEFAULTS: {
   attempt: 0,
 };
 
+export const WORKER_ENVIRONMENT_DEFAULTS = {
+  memoryLimitMb: 8192,
+  cpuLimit: 2,
+  pidsLimit: 512,
+  mounts: [] as { containerPath: string; hostPath: string; readOnly: boolean }[],
+};
+
 export const BASE_RESPONSE: Partial<GlobalSettingsResponse> = {
   usageLimitResetsAt: null,
   isDispatchPaused: false,
   autoResumeOnUsageReset: true,
   ...IMAGE_FLAGS_DEFAULTS,
+  ...WORKER_ENVIRONMENT_DEFAULTS,
   systemPromptTemplate: '',
   workerPromptTemplate: '',
   branchNamingInstruction: '',
