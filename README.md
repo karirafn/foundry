@@ -59,48 +59,7 @@ The entrypoint writes it to `/home/node/.claude/settings.json` before Claude Cod
 - `Bash(git push * HEAD:*)`
 - `Bash(git push * :*)`
 
-**Model** — omit to let Claude Code use its own default; set to pin a specific model:
-
-```bash
-dotnet user-secrets set "Workers:Settings:Model" "claude-sonnet-4-5" --project src/Foundry.WebApi
-```
-
-**Additional deny rules** — appended after the base deny list:
-
-```bash
-dotnet user-secrets set "Workers:Settings:AdditionalDenyRules:0" "Bash(rm -rf:*)" --project src/Foundry.WebApi
-```
-
-Rules must follow the `Tool(pattern:*)` format. For Bash rules, use `Bash(command:*)` — the `:*` suffix enables glob argument matching. A rule without the colon (e.g. `Bash(curl)`) matches only that exact string.
-
-**CI/CD deny defaults** — a configurable default deny list that blocks edits to CI/CD files.
-Unlike the base deny list, operators can clear it by binding an empty array:
-
-- `Edit(.github/workflows/**:*)`
-- `Edit(.gitlab-ci.yml:*)`
-- `Edit(Dockerfile:*)`
-- `Edit(docker-compose*.yml:*)`
-- `Edit(docker-compose.yaml:*)`
-- `Edit(compose.yml:*)`
-- `Edit(compose.yaml:*)`
-
-To clear the CI/CD deny defaults, edit `secrets.json` directly:
-
-```bash
-dotnet user-secrets edit --project src/Foundry.WebApi
-```
-
-```json
-{
-  "Workers": {
-    "Settings": {
-      "CiCdDenyRules": []
-    }
-  }
-}
-```
-
-Note: the system prompt still instructs workers not to touch CI/CD files even when this list is cleared (soft guidance).
+The Claude Code model and additional deny rules, including the CI/CD edit protection toggle, are managed on the Claude Code settings page in the dashboard and stored in Global Settings.
 
 > **Security model note:** the system prompt template is an operator-controlled setting, edited in the dashboard (Settings → Prompts) and stored in Global Settings. Operators are trusted — a malicious operator can weaken or override guidance in the system prompt template. The non-configurable safety preamble (prepended automatically) provides a baseline, but it is instructional guidance, not a cryptographic enforcement mechanism. Do not rely on it alone to contain an adversarial operator.
 
