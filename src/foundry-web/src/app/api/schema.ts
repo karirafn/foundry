@@ -72,6 +72,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/credentials/usage/refresh": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Requests an on-demand Claude usage poll; the result arrives via the UsageSnapshotUpdated push */
+        post: operations["RefreshUsage"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/credentials/login/start": {
         parameters: {
             query?: never;
@@ -831,6 +848,9 @@ export interface components {
         RateBudgetSnapshot: {
             budgets: components["schemas"]["ProviderBudgetHeadroom"][];
         };
+        RefreshUsageResponse: {
+            status: string;
+        };
         RepositoryEligibilityInfo: {
             status: string;
             violations: components["schemas"]["EligibilityViolationInfo"][];
@@ -1191,6 +1211,44 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    RefreshUsage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RefreshUsageResponse"];
+                };
+            };
+            /** @description Accepted */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RefreshUsageResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RefreshUsageResponse"];
+                };
             };
         };
     };

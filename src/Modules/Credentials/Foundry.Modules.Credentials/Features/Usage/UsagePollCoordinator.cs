@@ -35,6 +35,13 @@ internal sealed class UsagePollCoordinator(
     IUsageSnapshotBroadcaster broadcaster,
     ILogger<UsagePollCoordinator> logger) : IUsagePollCoordinator
 {
+    /// <summary>
+    /// Minimum age of the last <em>successful</em> snapshot before an on-demand refresh may start
+    /// a new poll. Protects the rate-limited upstream usage endpoint from rapid clicks and
+    /// multiple tabs. Failed polls do not count — a refresh right after a failure is allowed.
+    /// </summary>
+    internal static readonly TimeSpan RefreshFloor = TimeSpan.FromSeconds(30);
+
     private readonly Lock _gate = new();
     private Task<UsageSnapshot?>? _inFlightTask;
 
@@ -55,32 +62,92 @@ internal sealed class UsagePollCoordinator(
                 return _inFlightTask;
             }
 
-            Task<UsageSnapshot?> task = RunPollCoreAsync(cancellationToken);
-            _inFlightTask = task;
-
-            // Clear the in-flight reference when the task completes (success or fault).
-            // ContinueWith always runs because the continuation handles both outcomes.
-            // Log infrastructure faults (e.g. scope creation or DB failures) that escape
-            // RunPollCoreAsync before the handled paths (HandleFailure/HandleUnparseable) can run.
-            _ = task.ContinueWith(
-                t =>
-                {
-                    if (t.IsFaulted)
-                    {
-                        logger.LogError(
-                            t.Exception?.InnerException,
-                            "Unhandled exception in usage poll.");
-                    }
-
-                    lock (_gate)
-                    {
-                        _inFlightTask = null;
-                    }
-                },
-                TaskScheduler.Default);
-
-            return task;
+            return StartPollLocked(cancellationToken);
         }
+    }
+
+    /// <summary>
+    /// Requests an on-demand poll and returns without waiting for the container. The gating
+    /// checks mirror <see cref="RunPollCoreAsync"/> so the caller gets a visible refusal instead
+    /// of a silently skipped poll; the in-flight and floor checks run under <see cref="_gate"/>
+    /// so concurrent requests (repeated clicks, several tabs) start at most one poll.
+    /// </summary>
+    public async Task<UsageRefreshOutcome> RequestRefreshAsync(CancellationToken cancellationToken)
+    {
+        await using (AsyncServiceScope scope = scopeFactory.CreateAsyncScope())
+        {
+            DbContext dbContext = scope.ServiceProvider.GetRequiredService<DbContext>();
+
+            ClaudeAccount? account = await dbContext.Set<ClaudeAccount>()
+                .AsNoTracking()
+                .FirstOrDefaultAsync(cancellationToken);
+
+            if (account is null || !account.CanReportUsage)
+            {
+                logger.LogDebug("Usage refresh refused — account cannot report usage.");
+                return UsageRefreshOutcome.Unavailable;
+            }
+        }
+
+        if (loginSessionState.IsLoginActive)
+        {
+            logger.LogDebug("Usage refresh refused — login session is active.");
+            return UsageRefreshOutcome.LoginActive;
+        }
+
+        lock (_gate)
+        {
+            if (_inFlightTask is not null)
+            {
+                logger.LogDebug("Usage refresh requested while a poll is in flight; joining it.");
+                return UsageRefreshOutcome.InFlight;
+            }
+
+            if (IsWithinRefreshFloor(state.Current, DateTimeOffset.UtcNow))
+            {
+                logger.LogDebug("Usage refresh skipped — last successful snapshot is younger than the refresh floor.");
+                return UsageRefreshOutcome.AlreadyCurrent;
+            }
+
+            // CancellationToken.None: the poll outlives the HTTP request that triggered it.
+            _ = StartPollLocked(CancellationToken.None);
+            return UsageRefreshOutcome.Started;
+        }
+    }
+
+    private static bool IsWithinRefreshFloor(UsageSnapshot? current, DateTimeOffset now)
+        => current is not null
+            && current.LastRefreshFailedAt is null
+            && now - current.CapturedAt < RefreshFloor;
+
+    /// <summary>Starts a poll and tracks it as in flight. Caller must hold <see cref="_gate"/>.</summary>
+    private Task<UsageSnapshot?> StartPollLocked(CancellationToken cancellationToken)
+    {
+        Task<UsageSnapshot?> task = RunPollCoreAsync(cancellationToken);
+        _inFlightTask = task;
+
+        // Clear the in-flight reference when the task completes (success or fault).
+        // ContinueWith always runs because the continuation handles both outcomes.
+        // Log infrastructure faults (e.g. scope creation or DB failures) that escape
+        // RunPollCoreAsync before the handled paths (HandleFailure/HandleUnparseable) can run.
+        _ = task.ContinueWith(
+            t =>
+            {
+                if (t.IsFaulted)
+                {
+                    logger.LogError(
+                        t.Exception?.InnerException,
+                        "Unhandled exception in usage poll.");
+                }
+
+                lock (_gate)
+                {
+                    _inFlightTask = null;
+                }
+            },
+            TaskScheduler.Default);
+
+        return task;
     }
 
     private async Task<UsageSnapshot?> RunPollCoreAsync(CancellationToken cancellationToken)
