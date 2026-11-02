@@ -552,6 +552,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/settings/claude-code": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Updates the Claude Code model and deny rules */
+        put: operations["UpdateClaudeCodeSettings"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/settings/worker-image/retry": {
         parameters: {
             query?: never;
@@ -708,6 +725,9 @@ export interface components {
             /** Format: int32 */
             pidsLimit: number | string;
             mounts: components["schemas"]["WorkerMountEntry"][];
+            model: string;
+            blockCiCdEdits: boolean;
+            additionalDenyRules: string[];
         };
         /** @enum {unknown} */
         ImageBuildStatus: "Idle" | "Building" | "Failed";
@@ -911,6 +931,11 @@ export interface components {
         UpdateAuthModeRequestBody: {
             mode: string;
             apiKey: null | string;
+        };
+        UpdateClaudeCodeSettingsRequestBody: {
+            model: string;
+            blockCiCdEdits: boolean;
+            additionalDenyRules: string[];
         };
         UpdateDispatchSettingsRequestBody: {
             autoResumeOnUsageReset: boolean;
@@ -2275,6 +2300,48 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["UpdateWorkerEnvironmentRequestBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GlobalSettingsSummary"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    UpdateClaudeCodeSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateClaudeCodeSettingsRequestBody"];
             };
         };
         responses: {
