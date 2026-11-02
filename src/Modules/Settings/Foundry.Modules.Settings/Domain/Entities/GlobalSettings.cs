@@ -37,6 +37,7 @@ public sealed class GlobalSettings : AggregateRoot<GlobalSettingsId>
         WorkerResourceLimits = WorkerResourceLimits.Default;
         WorkerMounts = WorkerMounts.Default;
         ClaudeCodeSettings = ClaudeCodeSettings.Default;
+        HostHooks = HostHooks.Default;
         WorkerPrompts = WorkerPrompts.Default;
         ImageBuildState = new ImageBuildState.Idle();
         CreatedAt = createdAt;
@@ -66,6 +67,8 @@ public sealed class GlobalSettings : AggregateRoot<GlobalSettingsId>
     public WorkerMounts WorkerMounts { get; private set; } = null!;
 
     public ClaudeCodeSettings ClaudeCodeSettings { get; private set; } = null!;
+
+    public HostHooks HostHooks { get; private set; } = null!;
 
     public IReadOnlyList<string> AllowedProviderHosts { get; private set; } = [];
 
@@ -199,6 +202,18 @@ public sealed class GlobalSettings : AggregateRoot<GlobalSettingsId>
         }
 
         ClaudeCodeSettings = settings;
+        UpdatedAt = DateTimeOffset.UtcNow;
+        return true;
+    }
+
+    public bool UpdateHostHooks(HostHooks hostHooks)
+    {
+        if (HostHooks == hostHooks)
+        {
+            return false;
+        }
+
+        HostHooks = hostHooks;
         UpdatedAt = DateTimeOffset.UtcNow;
         return true;
     }

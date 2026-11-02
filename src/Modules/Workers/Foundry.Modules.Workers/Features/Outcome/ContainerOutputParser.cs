@@ -532,7 +532,7 @@ internal sealed partial class ContainerOutputParser(ILogger<ContainerOutputParse
     private static partial Regex WallClockResetTimePattern();
 
     [GeneratedRegex(
-        @"FOUNDRY_BOOTSTRAP_FAILED stage=(?:clone|auth|branch)[^\n]*",
+        @"FOUNDRY_BOOTSTRAP_FAILED stage=(?:clone|auth|branch|host-settings)[^\n]*",
         RegexOptions.ExplicitCapture,
         matchTimeoutMilliseconds: 1000)]
     private static partial Regex BootstrapSentinelPattern();
