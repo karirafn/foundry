@@ -27,3 +27,12 @@ export interface UsageSnapshot {
 /** Severity values known at authoring time. The client must accept unrecognised values (falls back to neutral). */
 export const KNOWN_SEVERITY_VALUES = ['normal', 'warning', 'critical'] as const;
 export type KnownSeverity = (typeof KNOWN_SEVERITY_VALUES)[number];
+
+/** Body of POST /api/credentials/usage/refresh — never carries a snapshot. */
+export interface UsageRefreshResponse {
+  /** 'started' | 'inFlight' (202), 'current' (200), 'unavailable' | 'loginActive' (409). */
+  readonly status: string;
+}
+
+/** Client-side state of the popover's Refresh action. */
+export type UsageRefreshState = 'idle' | 'refreshing' | 'upToDate' | 'unavailable' | 'error';

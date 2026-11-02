@@ -16,6 +16,9 @@ public sealed class TickAsync
 
     private sealed class StubUsagePollCoordinator : IUsagePollCoordinator
     {
+        public Task<UsageRefreshOutcome> RequestRefreshAsync(CancellationToken cancellationToken)
+            => Task.FromResult(UsageRefreshOutcome.Started);
+
         public int CallCount { get; private set; }
         public UsageSnapshot? ResultSnapshot { get; set; }
 

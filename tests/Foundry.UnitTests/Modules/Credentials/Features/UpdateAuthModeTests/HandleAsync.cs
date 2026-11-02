@@ -47,6 +47,9 @@ public sealed class HandleAsync : IAsyncDisposable
 
     private sealed class StubUsagePollCoordinator : IUsagePollCoordinator
     {
+        public Task<UsageRefreshOutcome> RequestRefreshAsync(CancellationToken cancellationToken)
+            => Task.FromResult(UsageRefreshOutcome.Started);
+
         public int CallCount { get; private set; }
 
         public Task<UsageSnapshot?> PollAsync(CancellationToken cancellationToken)
@@ -62,6 +65,9 @@ public sealed class HandleAsync : IAsyncDisposable
     /// </summary>
     private sealed class BlockingUsagePollCoordinator : IUsagePollCoordinator
     {
+        public Task<UsageRefreshOutcome> RequestRefreshAsync(CancellationToken cancellationToken)
+            => Task.FromResult(UsageRefreshOutcome.Started);
+
         private readonly TaskCompletionSource<UsageSnapshot?> _tcs = new();
 
         public void Release() => _tcs.SetResult(null);
