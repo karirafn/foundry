@@ -135,6 +135,19 @@ jobs:
         if: github.event_name == 'push' || steps.changes.outputs.workers == 'true'
         run: docker build --build-arg INSTALL_DOCKER=true -t foundry-worker:ci workers/
 
+      - name: Image contract check — Claude Code CLI matches workers/package.json
+        if: github.event_name == 'push' || steps.changes.outputs.workers == 'true'
+        run: |
+          expected=$(node -p "require('./workers/package.json').dependencies['@anthropic-ai/claude-code']")
+          actual=$(docker run --rm foundry-worker:ci claude --version | awk '{print $1}')
+          [ "$actual" = "$expected" ] \
+            || { echo "FAIL: claude --version is '$actual', workers/package.json pins '$expected'"; exit 1; }
+          echo "PASS: claude $actual matches workers/package.json"
+
+          docker run --rm foundry-worker:ci bash -c '[ "$DISABLE_AUTOUPDATER" = "1" ] && [ "$CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC" = "1" ]' \
+            || { echo "FAIL: DISABLE_AUTOUPDATER and CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC must both be 1"; exit 1; }
+          echo "PASS: auto-updater and nonessential traffic disabled"
+
       - name: Image contract check — verify iproute2/procps present, fuse-overlayfs absent, setuid only on newuidmap/newgidmap
         if: github.event_name == 'push' || steps.changes.outputs.workers == 'true'
         run: |
@@ -304,6 +317,8 @@ jobs:
             login:
               - 'workers/Dockerfile.base'
               - 'workers/Dockerfile.login'
+              - 'workers/package.json'
+              - 'workers/package-lock.json'
               - 'tests/Foundry.IntegrationTests/Modules/Workers/Login/**'
               - 'src/Modules/Workers/Foundry.Modules.Workers/Features/Login/**'
               - 'src/Modules/Workers/Foundry.Modules.Workers/Infrastructure/DockerWorkerOrchestrator.cs'
