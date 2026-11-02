@@ -54,6 +54,102 @@ fail_bootstrap() {
 }
 
 # ---------------------------------------------------------------------------
+# merge_host_hooks <settings_json> <host_settings_file> <exclusions_json>
+#
+# Prints <settings_json> with the `hooks` object of the operator's host Claude
+# Code settings file merged in.  Only `hooks` is imported — every other host key
+# (permissions, env, statusLine, ...) is ignored.  Every hook entry whose
+# `command` exactly matches an entry of the <exclusions_json> array is dropped;
+# matcher groups and events left empty are removed.  Host groups are appended
+# after any groups the generated settings already carry for the same event.
+#
+# Logs "Host hooks applied: N (excluded: M)", each applied command and each
+# exclusion that matched no hook to stderr.
+#
+# Fails closed: a missing, unreadable or invalid file (not a JSON object, or a
+# `hooks` value that is not an object of matcher-group arrays) emits the
+# bootstrap-failure sentinel naming the file and returns non-zero — hooks are
+# guardrails, so silently dropping them would produce unchecked commits.
+# ---------------------------------------------------------------------------
+merge_host_hooks() {
+    local settings_json="$1"
+    local host_file="$2"
+    local exclusions_json="${3:-[]}"
+
+    if ! command -v jq > /dev/null 2>&1; then
+        fail_bootstrap "host-settings" "jq is not installed; cannot merge hooks from host settings file $host_file"
+        return 1
+    fi
+
+    if [[ ! -f "$host_file" || ! -r "$host_file" ]]; then
+        echo "ERROR: host settings file $host_file is missing or unreadable." >&2
+        fail_bootstrap "host-settings" "host settings file $host_file is missing or unreadable"
+        return 1
+    fi
+
+    local host_json
+    if ! host_json="$(jq -cs '
+            if length == 1
+               and (.[0] | type) == "object"
+               and ((.[0].hooks // {}) | type) == "object"
+               and all((.[0].hooks // {})[]; type == "array" and all(.[]; type == "object" and ((.hooks // []) | type) == "array"))
+            then .[0]
+            else error("unexpected shape")
+            end' "$host_file" 2> /dev/null)"; then
+        echo "ERROR: host settings file $host_file is not valid JSON or has an unexpected hooks shape." >&2
+        fail_bootstrap "host-settings" "host settings file $host_file is not valid JSON"
+        return 1
+    fi
+
+    if ! printf '%s' "$exclusions_json" | jq -e 'type == "array" and all(.[]; type == "string")' > /dev/null 2>&1; then
+        fail_bootstrap "host-settings" "hook exclusion list is not a JSON array of strings; cannot merge host settings file $host_file"
+        return 1
+    fi
+
+    # errexit is suspended inside a function whose caller tests its status, so every
+    # jq failure below is checked explicitly.
+    local merge_result
+    if ! merge_result="$(jq -cn \
+        --argjson base "$settings_json" \
+        --argjson host "$host_json" \
+        --argjson excluded "$exclusions_json" '
+        def excluded($command): $command != null and any($excluded[]; . == $command);
+        def hook_label: .command // ("<" + (.type // "hook") + " hook>");
+
+        ($host.hooks // {}) as $hooks
+        | [$hooks[][] | (.hooks // [])[]] as $all
+        | ($hooks
+            | with_entries(
+                .value |= [.[] | .hooks = [(.hooks // [])[] | select(excluded(.command) | not)] | select(.hooks | length > 0)]
+              )
+            | with_entries(select(.value | length > 0))) as $kept
+        | [$kept[][] | .hooks[]] as $applied
+        | {
+            settings: (
+              if ($kept | length) == 0 then $base
+              else $base | .hooks = (reduce ($kept | to_entries[]) as $e (.hooks // {};
+                     .[$e.key] = ((.[$e.key] // []) + $e.value)))
+              end),
+            applied: [$applied[] | hook_label],
+            excluded_count: ([$all[] | select(excluded(.command))] | length),
+            unmatched: [$excluded[] | . as $x | select(any($all[]; .command == $x) | not)]
+          }')"; then
+        fail_bootstrap "host-settings" "could not merge hooks from host settings file $host_file"
+        return 1
+    fi
+
+    local applied_count excluded_count
+    applied_count="$(printf '%s' "$merge_result" | jq '.applied | length')"
+    excluded_count="$(printf '%s' "$merge_result" | jq '.excluded_count')"
+
+    echo "Host hooks applied: ${applied_count} (excluded: ${excluded_count})" >&2
+    printf '%s' "$merge_result" | jq -r '.applied[] | "  applied: " + .' >&2
+    printf '%s' "$merge_result" | jq -r '.unmatched[] | "  exclusion matched no hook: " + .' >&2
+
+    printf '%s' "$merge_result" | jq -c '.settings'
+}
+
+# ---------------------------------------------------------------------------
 # start_rootless_dockerd
 #
 # Starts rootless dockerd in the background and polls until its socket is ready.
@@ -167,19 +263,27 @@ if [[ "$sys_prompt_bytes" -ge "$MAX_SYSTEM_PROMPT_BYTES" ]]; then
 fi
 unset sys_prompt_bytes
 
-if [[ -n "${CLAUDE_SETTINGS_JSON:-}" ]]; then
+if [[ -n "${CLAUDE_SETTINGS_JSON:-}" || -n "${FOUNDRY_HOST_SETTINGS_FILE:-}" ]]; then
     if [[ ! -w ~/.claude ]]; then
         echo "ERROR: ~/.claude is not writable by $(whoami). Rebuild the worker image: docker build -t foundry-worker:local workers/" >&2
         exit 1
+    fi
+    settings_json="${CLAUDE_SETTINGS_JSON:-}"
+    [[ -n "$settings_json" ]] || settings_json='{}'
+    # The host settings file is mounted read-only at a staging path (never ~/.claude/settings.json);
+    # only its hooks are merged in, minus the operator's exclusion list.
+    if [[ -n "${FOUNDRY_HOST_SETTINGS_FILE:-}" ]]; then
+        settings_json="$(merge_host_hooks "$settings_json" "$FOUNDRY_HOST_SETTINGS_FILE" "${FOUNDRY_HOST_HOOK_EXCLUSIONS:-[]}")" || exit 1
     fi
     # Write via a temp file and atomically replace any pre-existing read-only settings.json.
     # mv -f replaces a 444 file owned by the same user (node owns the dir, so replacement is
     # permitted), fixing both re-run breakage and any concurrent-worker write race (last writer
     # wins with identical content). settings.json is regenerated fresh on every container start.
     settings_tmp="$(mktemp)"
-    printf '%s\n' "$CLAUDE_SETTINGS_JSON" > "$settings_tmp"
+    printf '%s\n' "$settings_json" > "$settings_tmp"
     chmod 444 "$settings_tmp"
     mv -f "$settings_tmp" ~/.claude/settings.json
+    unset settings_json settings_tmp
 fi
 
 # Authenticate the clone via GIT_ASKPASS so the token never appears in the
