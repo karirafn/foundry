@@ -1092,8 +1092,10 @@ internal sealed class WorkerDispatchService(
                 return null;
             }
 
+            // Keep the tail: stream-json output ends with the result event that outcome
+            // classification and the run summary are parsed from.
             return output.Length > MaxContainerOutputLength
-                ? output[..MaxContainerOutputLength]
+                ? output[^MaxContainerOutputLength..]
                 : output;
         }
 #pragma warning disable CA1031 // Best-effort log capture before transition; Docker exceptions must not crash the BackgroundService tick or prevent the failure transition.
