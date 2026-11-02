@@ -1,5 +1,6 @@
 using Foundry.Modules.Settings.Domain.Entities;
 using Foundry.Modules.Settings.Domain.ValueObjects;
+using Foundry.WebApi.Migrations;
 using Foundry.WebApi.Persistence;
 
 using Microsoft.EntityFrameworkCore;
@@ -19,8 +20,8 @@ namespace Foundry.IntegrationTests.Modules.Settings.Persistence.GlobalSettingsPe
 /// </summary>
 public sealed class WhenBackfillingWorkerEnvironment : IAsyncDisposable
 {
-    private const string FrozenLimitsJson = "{\"MemoryLimitMb\":8192,\"CpuLimit\":2,\"PidsLimit\":512}";
-    private const string FrozenMountsJson = "{\"Mounts\":[]}";
+    private const string FrozenLimitsJson = AddWorkerResourceLimitsAndMounts.DefaultWorkerResourceLimitsJson;
+    private const string FrozenMountsJson = AddWorkerResourceLimitsAndMounts.DefaultWorkerMountsJson;
 
     private readonly FoundryWebAppFactory _factory;
 

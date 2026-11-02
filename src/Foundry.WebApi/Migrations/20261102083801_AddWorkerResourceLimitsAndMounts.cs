@@ -11,9 +11,9 @@ namespace Foundry.WebApi.Migrations
         // WorkerMounts.Default. A migration is a historical snapshot: if the defaults change later,
         // rows already backfilled here must not be retroactively altered. The JSON matches the
         // shape the EF value converters emit (STJ default property names, double 2.0 as 2).
-        private const string DefaultWorkerResourceLimitsJson = "{\"MemoryLimitMb\":8192,\"CpuLimit\":2,\"PidsLimit\":512}";
+        internal const string DefaultWorkerResourceLimitsJson = "{\"MemoryLimitMb\":8192,\"CpuLimit\":2,\"PidsLimit\":512}";
 
-        private const string DefaultWorkerMountsJson = "{\"Mounts\":[]}";
+        internal const string DefaultWorkerMountsJson = "{\"Mounts\":[]}";
 
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
