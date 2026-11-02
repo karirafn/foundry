@@ -355,7 +355,7 @@ public sealed class HandleAsync : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenMountsConfigured_BindMountsContainsReadOnlyMountsFromDictionary()
+    public async Task WhenReadOnlyMountConfigured_BindMountsContainsReadOnlyMount()
     {
         // Arrange
         string hostDir = Path.Combine(Path.GetTempPath(), $"foundry-mount-test-{Guid.NewGuid()}");
@@ -366,11 +366,8 @@ public sealed class HandleAsync : IAsyncDisposable
             StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c-ro-mounts");
             IssueClaimedHandler sut = BuildHandler(
                 orchestrator: orchestrator,
-                workerOptions: new WorkerOptions
-                {
-                    Mounts = new Dictionary<string, string> { ["/container/config"] = hostDir },
-                    WritableMounts = new Dictionary<string, string>(),
-                });
+                settingsQueries: new StubGlobalSettingsQueries(
+                    mounts: [new WorkerMountEntry("/container/config", hostDir, ReadOnly: true)]));
             IssueClaimed @event = BuildEvent();
 
             // Act
@@ -399,11 +396,8 @@ public sealed class HandleAsync : IAsyncDisposable
             StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c-mounts-only");
             IssueClaimedHandler sut = BuildHandler(
                 orchestrator: orchestrator,
-                workerOptions: new WorkerOptions
-                {
-                    Mounts = new Dictionary<string, string> { ["/container/config"] = hostDir },
-                    WritableMounts = new Dictionary<string, string>(),
-                });
+                settingsQueries: new StubGlobalSettingsQueries(
+                    mounts: [new WorkerMountEntry("/container/config", hostDir, ReadOnly: true)]));
             IssueClaimed @event = BuildEvent();
 
             // Act
@@ -427,12 +421,8 @@ public sealed class HandleAsync : IAsyncDisposable
         // Arrange
         string nonExistentPath = Path.Combine(Path.GetTempPath(), $"foundry-nonexistent-{Guid.NewGuid()}");
         IssueClaimedHandler sut = BuildHandler(
-            workerOptions: new WorkerOptions
-            {
-    
-                Mounts = new Dictionary<string, string> { ["/container/config"] = nonExistentPath },
-                WritableMounts = new Dictionary<string, string>(),
-            });
+            settingsQueries: new StubGlobalSettingsQueries(
+                mounts: [new WorkerMountEntry("/container/config", nonExistentPath, ReadOnly: true)]));
         IssueClaimed @event = BuildEvent();
 
         // Act
@@ -452,12 +442,8 @@ public sealed class HandleAsync : IAsyncDisposable
         // Arrange
         string nonExistentPath = Path.Combine(Path.GetTempPath(), $"foundry-nonexistent-{Guid.NewGuid()}");
         IssueClaimedHandler sut = BuildHandler(
-            workerOptions: new WorkerOptions
-            {
-    
-                Mounts = new Dictionary<string, string>(),
-                WritableMounts = new Dictionary<string, string> { ["/container/workspace"] = nonExistentPath },
-            });
+            settingsQueries: new StubGlobalSettingsQueries(
+                mounts: [new WorkerMountEntry("/container/workspace", nonExistentPath, ReadOnly: false)]));
         IssueClaimed @event = BuildEvent();
 
         // Act
@@ -472,7 +458,7 @@ public sealed class HandleAsync : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenWritableMountsConfigured_BindMountsContainsReadWriteMountsFromDictionary()
+    public async Task WhenWritableMountConfigured_BindMountsContainsWritableMount()
     {
         // Arrange
         string hostDir = Path.Combine(Path.GetTempPath(), $"foundry-writable-test-{Guid.NewGuid()}");
@@ -483,12 +469,8 @@ public sealed class HandleAsync : IAsyncDisposable
             StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c-rw-mounts");
             IssueClaimedHandler sut = BuildHandler(
                 orchestrator: orchestrator,
-                workerOptions: new WorkerOptions
-                {
-
-                    Mounts = new Dictionary<string, string>(),
-                    WritableMounts = new Dictionary<string, string> { ["/container/workspace"] = hostDir },
-                });
+                settingsQueries: new StubGlobalSettingsQueries(
+                    mounts: [new WorkerMountEntry("/container/workspace", hostDir, ReadOnly: false)]));
             IssueClaimed @event = BuildEvent();
 
             // Act
@@ -512,12 +494,7 @@ public sealed class HandleAsync : IAsyncDisposable
         StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c-mounts-empty");
         IssueClaimedHandler sut = BuildHandler(
             orchestrator: orchestrator,
-            workerOptions: new WorkerOptions
-            {
-    
-                Mounts = new Dictionary<string, string>(),
-                WritableMounts = new Dictionary<string, string>(),
-            });
+            settingsQueries: new StubGlobalSettingsQueries(mounts: []));
         IssueClaimed @event = BuildEvent();
 
         // Act
@@ -527,6 +504,66 @@ public sealed class HandleAsync : IAsyncDisposable
         WorkerContainerSpec? spec = orchestrator.LastSpec;
         spec.ShouldNotBeNull();
         spec.BindMounts.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task WhenReadOnlyAndWritableMountsConfigured_BindMountsKeepsEachAccessMode()
+    {
+        // Arrange
+        string readOnlyDir = Path.Combine(Path.GetTempPath(), $"foundry-mixed-ro-{Guid.NewGuid()}");
+        string writableDir = Path.Combine(Path.GetTempPath(), $"foundry-mixed-rw-{Guid.NewGuid()}");
+        Directory.CreateDirectory(readOnlyDir);
+        Directory.CreateDirectory(writableDir);
+
+        try
+        {
+            StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c-mixed-mounts");
+            IssueClaimedHandler sut = BuildHandler(
+                orchestrator: orchestrator,
+                settingsQueries: new StubGlobalSettingsQueries(
+                    mounts:
+                    [
+                        new WorkerMountEntry("/container/config", readOnlyDir, ReadOnly: true),
+                        new WorkerMountEntry("/container/workspace", writableDir, ReadOnly: false),
+                    ]));
+            IssueClaimed @event = BuildEvent();
+
+            // Act
+            await sut.HandleAsync(@event, TestContext.Current.CancellationToken);
+
+            // Assert
+            WorkerContainerSpec? spec = orchestrator.LastSpec;
+            spec.ShouldNotBeNull();
+            spec.BindMounts.ShouldBe(
+                [
+                    new BindMount(readOnlyDir, "/container/config", ReadOnly: true),
+                    new BindMount(writableDir, "/container/workspace", ReadOnly: false),
+                ]);
+        }
+        finally
+        {
+            Directory.Delete(readOnlyDir, recursive: true);
+            Directory.Delete(writableDir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task WhenResourceLimitsConfigured_ContainerSpecCarriesThem()
+    {
+        // Arrange
+        StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c-limits");
+        IssueClaimedHandler sut = BuildHandler(
+            orchestrator: orchestrator,
+            settingsQueries: new StubGlobalSettingsQueries(limits: new WorkerResourceLimitsSnapshot(4096, 1.5, 128)));
+        IssueClaimed @event = BuildEvent();
+
+        // Act
+        await sut.HandleAsync(@event, TestContext.Current.CancellationToken);
+
+        // Assert
+        WorkerContainerSpec? spec = orchestrator.LastSpec;
+        spec.ShouldNotBeNull();
+        (spec.MemoryLimitMb, spec.CpuLimit, spec.PidsLimit).ShouldBe((4096, 1.5, 128));
     }
 
     [Fact]
@@ -1288,7 +1325,9 @@ public sealed class HandleAsync : IAsyncDisposable
         string? systemPromptTemplate = null,
         string? workerPromptTemplate = null,
         bool installsDocker = false,
-        string imageTag = "stub-image:v1") : IGlobalSettingsQueries
+        string imageTag = "stub-image:v1",
+        WorkerResourceLimitsSnapshot? limits = null,
+        IReadOnlyList<WorkerMountEntry>? mounts = null) : IGlobalSettingsQueries
     {
         public Task<GlobalSettingsSummary?> GetSettingsAsync(CancellationToken cancellationToken)
             => Task.FromResult<GlobalSettingsSummary?>(null);
@@ -1328,10 +1367,10 @@ public sealed class HandleAsync : IAsyncDisposable
             => Task.FromResult(WorkerImageConfiguration.Default.ToBuildArgs());
 
         public Task<WorkerResourceLimitsSnapshot> GetWorkerResourceLimitsAsync(CancellationToken cancellationToken)
-            => Task.FromResult(new WorkerResourceLimitsSnapshot(8192, 2.0, 512));
+            => Task.FromResult(limits ?? new WorkerResourceLimitsSnapshot(8192, 2.0, 512));
 
         public Task<IReadOnlyList<WorkerMountEntry>> GetWorkerMountsAsync(CancellationToken cancellationToken)
-            => Task.FromResult<IReadOnlyList<WorkerMountEntry>>([]);
+            => Task.FromResult<IReadOnlyList<WorkerMountEntry>>(mounts ?? []);
 
         public Task<IReadOnlyList<string>> GetAllowedProviderHostsAsync(CancellationToken cancellationToken)
             => Task.FromResult<IReadOnlyList<string>>([]);

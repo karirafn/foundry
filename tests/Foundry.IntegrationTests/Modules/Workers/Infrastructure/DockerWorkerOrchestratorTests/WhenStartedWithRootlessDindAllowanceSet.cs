@@ -3,13 +3,10 @@ using Docker.DotNet.Models;
 
 using Foundry.Modules.Workers.Contracts;
 using Foundry.Modules.Workers.Domain.ValueObjects;
-using Foundry.Modules.Workers.Features;
 using Foundry.Modules.Workers.Features.ContainerSpec;
 using Foundry.Modules.Workers.Infrastructure;
 using Foundry.Shared;
 using Foundry.Shared.Infrastructure.Docker;
-
-using Microsoft.Extensions.Options;
 
 using Shouldly;
 
@@ -48,19 +45,12 @@ public sealed class WhenStartedWithRootlessDindAllowanceSet : IAsyncLifetime
 
         await PullImageIfAbsentAsync();
 
-        WorkerOptions options = new()
-        {
-            MemoryLimitMb = 512,
-            CpuLimit = 1.0,
-            PidsLimit = 256,
-        };
-
         DockerContainerRuntime runtime = new(
             _dockerClient.Containers,
             _dockerClient.Volumes,
             _dockerClient.Exec);
 
-        _sut = new DockerWorkerOrchestrator(runtime, Options.Create(options));
+        _sut = new DockerWorkerOrchestrator(runtime);
     }
 
     async ValueTask IAsyncDisposable.DisposeAsync()
@@ -98,6 +88,9 @@ public sealed class WhenStartedWithRootlessDindAllowanceSet : IAsyncLifetime
             Labels: new Dictionary<string, string> { [WorkerRunIdLabel] = _runId.Value.ToString() },
             Command: ["true"])
         {
+            MemoryLimitMb = 512,
+            CpuLimit = 1.0,
+            PidsLimit = 256,
             Capabilities = RootlessDindRunSpec.Capabilities,
             SecurityOptions = RootlessDindRunSpec.SecurityOptions,
             Devices = RootlessDindRunSpec.Devices,

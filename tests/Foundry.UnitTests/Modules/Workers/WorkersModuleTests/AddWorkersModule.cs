@@ -64,7 +64,7 @@ public sealed class AddWorkersModule
         // Arrange
         IConfiguration configuration = BuildConfiguration(new Dictionary<string, string?>
         {
-            ["Workers:MemoryLimitMb"] = "4096",
+            ["Workers:Settings:Model"] = "opus",
         });
         ServiceCollection services = new();
 
@@ -74,7 +74,7 @@ public sealed class AddWorkersModule
 
         // Assert
         IOptions<WorkerOptions> options = provider.GetRequiredService<IOptions<WorkerOptions>>();
-        options.Value.MemoryLimitMb.ShouldBe(4096);
+        options.Value.Settings.Model.ShouldBe("opus");
     }
 
     [Fact]
@@ -96,10 +96,10 @@ public sealed class AddWorkersModule
     [Fact]
     public void WhenCalled_RegistersWorkerOptionsValidator()
     {
-        // Arrange — a relative mount container path triggers validation failure
+        // Arrange — a malformed deny rule triggers validation failure
         IConfiguration invalidConfig = BuildConfiguration(new Dictionary<string, string?>
         {
-            ["Workers:Mounts:relative/path"] = "/host/config",
+            ["Workers:Settings:AdditionalDenyRules:0"] = "malformed",
         });
         ServiceCollection services = new();
 
@@ -107,7 +107,7 @@ public sealed class AddWorkersModule
         services.AddWorkersModule(invalidConfig);
         ServiceProvider provider = services.BuildServiceProvider();
 
-        // Assert — accessing Value with invalid mount triggers validation failure
+        // Assert — accessing Value with an invalid deny rule triggers validation failure
         IOptions<WorkerOptions> options = provider.GetRequiredService<IOptions<WorkerOptions>>();
         Should.Throw<OptionsValidationException>(() => _ = options.Value);
     }

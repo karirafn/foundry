@@ -3,13 +3,10 @@ using Docker.DotNet.Models;
 
 using Foundry.Modules.Workers.Contracts;
 using Foundry.Modules.Workers.Domain.ValueObjects;
-using Foundry.Modules.Workers.Features;
 using Foundry.Modules.Workers.Features.Orchestration;
 using Foundry.Modules.Workers.Infrastructure;
 using Foundry.Shared.Infrastructure.Docker;
 using Foundry.UnitTests.Fakes.Workers;
-
-using Microsoft.Extensions.Options;
 
 using Shouldly;
 
@@ -19,15 +16,8 @@ namespace Foundry.UnitTests.Modules.Workers.Infrastructure.DockerWorkerOrchestra
 
 public sealed class ReapOrphanedDataRootVolumes
 {
-    private static WorkerOptions DefaultOptions() => new()
-    {
-        MemoryLimitMb = 512,
-        CpuLimit = 1.5,
-        PidsLimit = 256,
-    };
-
     private static DockerWorkerOrchestrator BuildSut(FakeDockerContainerRuntime runtime) =>
-        new(runtime, Options.Create(DefaultOptions()));
+        new(runtime);
 
     private static IReadOnlyDictionary<string, string> VolumeLabels(WorkerRunId runId) =>
         new Dictionary<string, string>
@@ -129,7 +119,7 @@ public sealed class ReapOrphanedDataRootVolumes
             [(volumeName1, VolumeLabels(orphan1)), (volumeName2, VolumeLabels(orphan2))]);
 
         // Build the SUT using the ThrowOnFirstRemoveRuntime typed as IDockerContainerRuntime.
-        DockerWorkerOrchestrator sut = new(runtime, Options.Create(DefaultOptions()));
+        DockerWorkerOrchestrator sut = new(runtime);
         HashSet<WorkerRunId> activeRunIds = [];
 
         // Act — must not throw despite one remove failing

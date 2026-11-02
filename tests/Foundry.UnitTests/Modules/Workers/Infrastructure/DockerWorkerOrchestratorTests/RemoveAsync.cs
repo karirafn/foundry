@@ -1,13 +1,10 @@
 using Docker.DotNet.Models;
 
 using Foundry.Modules.Workers.Contracts;
-using Foundry.Modules.Workers.Features;
 using Foundry.Modules.Workers.Features.Orchestration;
 using Foundry.Modules.Workers.Features.ContainerSpec;
 using Foundry.Modules.Workers.Infrastructure;
 using Foundry.UnitTests.Fakes.Workers;
-
-using Microsoft.Extensions.Options;
 
 using Shouldly;
 
@@ -17,15 +14,8 @@ namespace Foundry.UnitTests.Modules.Workers.Infrastructure.DockerWorkerOrchestra
 
 public sealed class RemoveAsync
 {
-    private static WorkerOptions DefaultOptions() => new()
-    {
-        MemoryLimitMb = 512,
-        CpuLimit = 1.5,
-        PidsLimit = 256,
-    };
-
     private static DockerWorkerOrchestrator BuildSut(FakeDockerContainerRuntime runtime) =>
-        new(runtime, Options.Create(DefaultOptions()));
+        new(runtime);
 
     // ── StopAndRemoveAsync ────────────────────────────────────────────────────
 

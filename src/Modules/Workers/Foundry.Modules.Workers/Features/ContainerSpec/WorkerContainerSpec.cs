@@ -7,6 +7,12 @@ internal sealed record WorkerContainerSpec(
     IReadOnlyDictionary<string, string> Labels,
     IReadOnlyList<string> Command)
 {
+    public required int MemoryLimitMb { get; init; }
+
+    public required double CpuLimit { get; init; }
+
+    public required int PidsLimit { get; init; }
+
     public IReadOnlyList<string> Capabilities { get; init; } = [];
 
     public IReadOnlyList<string> SecurityOptions { get; init; } = [];
