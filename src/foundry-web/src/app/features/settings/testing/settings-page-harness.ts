@@ -67,12 +67,19 @@ export const WORKER_ENVIRONMENT_DEFAULTS = {
   mounts: [] as { containerPath: string; hostPath: string; readOnly: boolean }[],
 };
 
+export const CLAUDE_CODE_DEFAULTS = {
+  model: '',
+  blockCiCdEdits: true,
+  additionalDenyRules: [] as string[],
+};
+
 export const BASE_RESPONSE: Partial<GlobalSettingsResponse> = {
   usageLimitResetsAt: null,
   isDispatchPaused: false,
   autoResumeOnUsageReset: true,
   ...IMAGE_FLAGS_DEFAULTS,
   ...WORKER_ENVIRONMENT_DEFAULTS,
+  ...CLAUDE_CODE_DEFAULTS,
   systemPromptTemplate: '',
   workerPromptTemplate: '',
   branchNamingInstruction: '',

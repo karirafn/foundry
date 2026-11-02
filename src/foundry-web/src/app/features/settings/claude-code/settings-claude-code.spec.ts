@@ -1,4 +1,4 @@
-import { TestBed } from '@angular/core/testing';
+import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { HttpTestingController } from '@angular/common/http/testing';
 import { SettingsService } from '../../../core/services/settings.service';
 import {
@@ -14,6 +14,7 @@ import {
   CREDENTIALS_OAUTH_RELOGIN_NEEDED,
 } from '../testing/settings-page-harness';
 import { SettingsClaudeCodeComponent } from './settings-claude-code';
+import { DENY_RULE_PATTERN, MODEL_MAX_LENGTH } from './settings-claude-code.validators';
 
 describe('SettingsClaudeCodeComponent', () => {
   afterEach(() => {
@@ -816,6 +817,405 @@ describe('SettingsClaudeCodeComponent', () => {
 
       // Assert — oauth mode, so not dirty
       expect(fixture.componentInstance.hasUnsavedChanges()).toBe(false);
+    });
+  });
+
+  describe('Claude Code configuration', () => {
+    const CLAUDE_CODE_URL = '/api/settings/claude-code';
+    const CI_CD_RULES = [
+      'Edit(.github/workflows/**:*)',
+      'Edit(.gitlab-ci.yml:*)',
+      'Edit(Dockerfile:*)',
+      'Edit(docker-compose*.yml:*)',
+      'Edit(docker-compose.yaml:*)',
+      'Edit(compose.yml:*)',
+      'Edit(compose.yaml:*)',
+    ];
+
+    interface Page {
+      fixture: ComponentFixture<SettingsClaudeCodeComponent>;
+      httpMock: HttpTestingController;
+      el: HTMLElement;
+    }
+
+    async function loadPage(overrides: object = {}): Promise<Page> {
+      const { fixture, httpMock } = setupSettingsPage(SettingsClaudeCodeComponent);
+      fixture.detectChanges();
+      flushSettings(httpMock, { ...API_KEY_RESPONSE, ...overrides });
+      await fixture.whenStable();
+      fixture.detectChanges();
+      return { fixture, httpMock, el: fixture.nativeElement as HTMLElement };
+    }
+
+    function field(page: Page, id: string): HTMLInputElement {
+      return page.el.querySelector(`#${id}`) as HTMLInputElement;
+    }
+
+    function type(page: Page, id: string, value: string): void {
+      const control = field(page, id);
+      control.value = value;
+      control.dispatchEvent(new Event('input'));
+      page.fixture.detectChanges();
+    }
+
+    function blur(page: Page, id: string): void {
+      field(page, id).dispatchEvent(new Event('blur'));
+      page.fixture.detectChanges();
+    }
+
+    function click(page: Page, selector: string): void {
+      (page.el.querySelector(selector) as HTMLElement).click();
+      page.fixture.detectChanges();
+    }
+
+    function saveButton(page: Page): HTMLButtonElement {
+      return page.el.querySelector('form.claude-code button[type="submit"]') as HTMLButtonElement;
+    }
+
+    function text(page: Page, id: string): string {
+      return page.el.querySelector(`#${id}`)?.textContent?.trim() ?? '';
+    }
+
+    it('should seed the model field from the loaded settings', async () => {
+      // Arrange & Act
+      const page = await loadPage({ model: 'claude-opus-4' });
+
+      // Assert
+      expect(field(page, 'model').value).toBe('claude-opus-4');
+    });
+
+    it('should cap the model input at the maximum length', async () => {
+      // Arrange & Act
+      const page = await loadPage();
+
+      // Assert
+      expect(field(page, 'model').maxLength).toBe(MODEL_MAX_LENGTH);
+    });
+
+    it('should show a length error when the model exceeds the maximum', async () => {
+      // Arrange
+      const page = await loadPage();
+
+      // Act
+      type(page, 'model', 'x'.repeat(MODEL_MAX_LENGTH + 1));
+      blur(page, 'model');
+
+      // Assert
+      expect(text(page, 'model-error')).toBe('Model must be 200 characters or fewer.');
+    });
+
+    it('should accept an empty model', async () => {
+      // Arrange
+      const page = await loadPage({ model: 'claude-opus-4' });
+
+      // Act
+      type(page, 'model', '');
+      blur(page, 'model');
+
+      // Assert
+      expect(text(page, 'model-error')).toBe('');
+    });
+
+    it('should list the seven CI/CD rules read-only when blocking is enabled', async () => {
+      // Arrange & Act
+      const page = await loadPage({ blockCiCdEdits: true });
+
+      // Assert
+      const rules = Array.from(page.el.querySelectorAll('.claude-code__rule-item code')).map((c) => c.textContent);
+      expect(rules).toEqual(CI_CD_RULES);
+    });
+
+    it('should show the soft-guidance note instead of the rule list when blocking is disabled', async () => {
+      // Arrange
+      const page = await loadPage({ blockCiCdEdits: true });
+
+      // Act
+      click(page, '#blockCiCdEdits');
+
+      // Assert
+      expect(page.el.querySelectorAll('.claude-code__rule-item').length).toBe(0);
+      expect(text(page, 'blockCiCdEdits-detail')).toContain('system prompt still instructs workers');
+    });
+
+    it('should keep the CI/CD detail region mounted with a stable id', async () => {
+      // Arrange
+      const page = await loadPage({ blockCiCdEdits: false });
+
+      // Act & Assert
+      expect(field(page, 'blockCiCdEdits').getAttribute('aria-describedby')).toBe('blockCiCdEdits-detail');
+      expect(page.el.querySelector('#blockCiCdEdits-detail')).toBeTruthy();
+    });
+
+    it('should render one input per seeded additional deny rule', async () => {
+      // Arrange & Act
+      const page = await loadPage({ additionalDenyRules: ['Bash(rm:*)', 'Edit(secrets/**)'] });
+
+      // Assert
+      expect(field(page, 'denyRule-0').value).toBe('Bash(rm:*)');
+      expect(field(page, 'denyRule-1').value).toBe('Edit(secrets/**)');
+    });
+
+    it('should show an empty state when there are no additional deny rules', async () => {
+      // Arrange & Act
+      const page = await loadPage();
+
+      // Assert
+      expect(page.el.querySelector('.claude-code__empty')).toBeTruthy();
+    });
+
+    it('should add a rule row and focus its input', async () => {
+      // Arrange
+      const page = await loadPage();
+
+      // Act
+      click(page, '#addRule');
+      await page.fixture.whenStable();
+
+      // Assert
+      expect(document.activeElement).toBe(field(page, 'denyRule-0'));
+    });
+
+    it('should remove a rule row and focus the next remove button', async () => {
+      // Arrange
+      const page = await loadPage({ additionalDenyRules: ['Bash(a)', 'Bash(b)'] });
+
+      // Act
+      click(page, '#removeRule-0');
+      await page.fixture.whenStable();
+
+      // Assert
+      expect(field(page, 'denyRule-0').value).toBe('Bash(b)');
+      expect(document.activeElement).toBe(field(page, 'removeRule-0'));
+    });
+
+    it('should focus the add button after removing the last rule', async () => {
+      // Arrange
+      const page = await loadPage({ additionalDenyRules: ['Bash(a)'] });
+
+      // Act
+      click(page, '#removeRule-0');
+      await page.fixture.whenStable();
+
+      // Assert
+      expect(document.activeElement).toBe(field(page, 'addRule'));
+    });
+
+    it('should require a value for a new rule row', async () => {
+      // Arrange
+      const page = await loadPage();
+      click(page, '#addRule');
+
+      // Act
+      blur(page, 'denyRule-0');
+
+      // Assert
+      expect(text(page, 'denyRule-0-error')).toBe('Deny rule is required.');
+    });
+
+    it('should reject a rule that does not match the Tool(pattern) format', async () => {
+      // Arrange
+      const page = await loadPage({ additionalDenyRules: ['Bash(a)'] });
+
+      // Act
+      type(page, 'denyRule-0', 'rm -rf');
+      blur(page, 'denyRule-0');
+
+      // Assert
+      expect(text(page, 'denyRule-0-error')).toContain('Use Tool(pattern)');
+      expect(field(page, 'denyRule-0').getAttribute('aria-invalid')).toBe('true');
+    });
+
+    it('should accept a rule matching the server pattern', async () => {
+      // Arrange
+      const rule = 'MultiEdit(secrets/**)';
+      const page = await loadPage({ additionalDenyRules: ['Bash(a)'] });
+
+      // Act
+      type(page, 'denyRule-0', rule);
+      blur(page, 'denyRule-0');
+
+      // Assert
+      expect(DENY_RULE_PATTERN.test(rule)).toBe(true);
+      expect(text(page, 'denyRule-0-error')).toBe('');
+    });
+
+    it('should allow duplicate rules because the server de-duplicates', async () => {
+      // Arrange
+      const page = await loadPage({ additionalDenyRules: ['Bash(a)'] });
+
+      // Act
+      click(page, '#addRule');
+      type(page, 'denyRule-1', 'Bash(a)');
+      blur(page, 'denyRule-1');
+
+      // Assert
+      expect(text(page, 'denyRule-1-error')).toBe('');
+    });
+
+    it('should disable Save while the form is pristine', async () => {
+      // Arrange & Act
+      const page = await loadPage();
+
+      // Assert
+      expect(saveButton(page).disabled).toBe(true);
+    });
+
+    it('should enable Save once a field changes', async () => {
+      // Arrange
+      const page = await loadPage();
+
+      // Act
+      type(page, 'model', 'claude-opus-4');
+
+      // Assert
+      expect(saveButton(page).disabled).toBe(false);
+    });
+
+    it('should disable Save again when the edit is reverted', async () => {
+      // Arrange
+      const page = await loadPage({ model: 'a' });
+      type(page, 'model', 'b');
+
+      // Act
+      type(page, 'model', 'a');
+
+      // Assert
+      expect(saveButton(page).disabled).toBe(true);
+    });
+
+    it('should report unsaved changes when the Claude Code form is dirty', async () => {
+      // Arrange
+      const page = await loadPage();
+
+      // Act
+      type(page, 'model', 'claude-opus-4');
+
+      // Assert
+      expect(page.fixture.componentInstance.hasUnsavedChanges()).toBe(true);
+    });
+
+    it('should report no unsaved changes when pristine', async () => {
+      // Arrange & Act
+      const page = await loadPage();
+
+      // Assert
+      expect(page.fixture.componentInstance.hasUnsavedChanges()).toBe(false);
+    });
+
+    it('should submit the form values to the claude-code endpoint', async () => {
+      // Arrange
+      const page = await loadPage();
+      type(page, 'model', 'claude-opus-4');
+      click(page, '#blockCiCdEdits');
+      click(page, '#addRule');
+      type(page, 'denyRule-0', 'Bash(rm:*)');
+
+      // Act
+      saveButton(page).click();
+
+      // Assert
+      const request = page.httpMock.expectOne(CLAUDE_CODE_URL);
+      expect(request.request.body).toEqual({
+        model: 'claude-opus-4',
+        blockCiCdEdits: false,
+        additionalDenyRules: ['Bash(rm:*)'],
+      });
+      request.flush({ ...API_KEY_RESPONSE });
+    });
+
+    it('should not submit while a rule is invalid and should focus it', async () => {
+      // Arrange
+      const page = await loadPage();
+      click(page, '#addRule');
+      type(page, 'model', 'claude-opus-4');
+
+      // Act
+      saveButton(page).click();
+      await page.fixture.whenStable();
+
+      // Assert
+      page.httpMock.expectNone(CLAUDE_CODE_URL);
+      expect(document.activeElement).toBe(field(page, 'denyRule-0'));
+    });
+
+    it('should show a saved status after a successful save', async () => {
+      // Arrange
+      const page = await loadPage();
+      type(page, 'model', 'claude-opus-4');
+      saveButton(page).click();
+
+      // Act
+      page.httpMock.expectOne(CLAUDE_CODE_URL).flush({ ...API_KEY_RESPONSE, model: 'claude-opus-4' });
+      await page.fixture.whenStable();
+      page.fixture.detectChanges();
+
+      // Assert
+      expect(page.el.querySelector('form.claude-code .general-settings__save-success')?.textContent?.trim()).toBe(
+        'Claude Code settings saved',
+      );
+    });
+
+    it('should attach a ModelTooLong server error to the model control', async () => {
+      // Arrange
+      const page = await loadPage();
+      type(page, 'model', 'claude-opus-4');
+      saveButton(page).click();
+
+      // Act
+      page.httpMock.expectOne(CLAUDE_CODE_URL).flush(
+        { detail: 'Model is too long.', type: 'tag:foundry,2026:problems/Settings.ModelTooLong' },
+        { status: 400, statusText: 'Bad Request' },
+      );
+      await page.fixture.whenStable();
+      page.fixture.detectChanges();
+      await page.fixture.whenStable();
+
+      // Assert
+      expect(text(page, 'model-error')).toBe('Model is too long.');
+      expect(document.activeElement).toBe(field(page, 'model'));
+    });
+
+    it('should attach an InvalidDenyRule server error to the matching row', async () => {
+      // Arrange
+      const page = await loadPage({ additionalDenyRules: ['Bash(a)', 'Bash(b)'] });
+      type(page, 'denyRule-1', 'Bash(bad)');
+      saveButton(page).click();
+
+      // Act
+      page.httpMock.expectOne(CLAUDE_CODE_URL).flush(
+        { detail: "Deny rule 'Bash(bad)' is not allowed.", type: 'tag:foundry,2026:problems/Settings.InvalidDenyRule' },
+        { status: 400, statusText: 'Bad Request' },
+      );
+      await page.fixture.whenStable();
+      page.fixture.detectChanges();
+      await page.fixture.whenStable();
+
+      // Assert
+      expect(text(page, 'denyRule-1-error')).toBe("Deny rule 'Bash(bad)' is not allowed.");
+      expect(text(page, 'denyRule-0-error')).toBe('');
+      expect(page.el.querySelector('form.claude-code .general-settings__save-error')?.textContent?.trim()).toBe(
+        '1 field needs attention.',
+      );
+    });
+
+    it('should show a form-level error for an error without a field', async () => {
+      // Arrange
+      const page = await loadPage();
+      type(page, 'model', 'claude-opus-4');
+      saveButton(page).click();
+
+      // Act
+      page.httpMock.expectOne(CLAUDE_CODE_URL).flush(
+        { detail: 'Settings not found.', type: 'tag:foundry,2026:problems/Settings.NotFound' },
+        { status: 404, statusText: 'Not Found' },
+      );
+      await page.fixture.whenStable();
+      page.fixture.detectChanges();
+
+      // Assert
+      expect(page.el.querySelector('form.claude-code .general-settings__save-error')?.textContent?.trim()).toBe(
+        'Settings not found.',
+      );
     });
   });
 });

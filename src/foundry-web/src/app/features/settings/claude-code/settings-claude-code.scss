@@ -1,1 +1,55 @@
 @use '../settings-shared' as *;
+
+.claude-code {
+  display: flex;
+  flex-direction: column;
+  gap: var(--fd-spacing-lg);
+
+  &__fieldset {
+    display: flex;
+    flex-direction: column;
+    gap: var(--fd-spacing-lg);
+    min-width: 0;
+    margin: 0;
+    padding: 0;
+    border: 0;
+  }
+
+  &__cicd-detail {
+    margin-top: var(--fd-spacing-sm);
+  }
+
+  &__rule-list {
+    margin: 0;
+    padding: var(--fd-spacing-sm) var(--fd-spacing-md);
+    list-style: none;
+    background: var(--fd-bg-page);
+    border: 1px solid var(--fd-border-default);
+    border-radius: var(--fd-radius-md);
+  }
+
+  &__rule-item {
+    font-family: var(--fd-font-mono);
+    overflow-wrap: anywhere;
+  }
+
+  &__row {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: var(--fd-spacing-sm);
+    align-items: start;
+    margin-bottom: var(--fd-spacing-sm);
+  }
+
+  &__empty {
+    margin-bottom: var(--fd-spacing-md);
+  }
+
+  &__actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-end;
+    gap: var(--fd-spacing-md);
+  }
+}
