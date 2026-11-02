@@ -416,6 +416,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/workers/capacity": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Gets the configured dispatch slot limit and the slots currently occupied and free */
+        get: operations["GetDispatchCapacity"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/system/status": {
         parameters: {
             query?: never;
@@ -695,6 +712,14 @@ export interface components {
         CredentialUpdateResult: {
             credential: components["schemas"]["CredentialSummary"];
             affectedRepositories: components["schemas"]["AffectedRepository"][];
+        };
+        DispatchCapacity: {
+            /** Format: int32 */
+            maxConcurrent: number | string;
+            /** Format: int32 */
+            occupiedSlots: number | string;
+            /** Format: int32 */
+            freeSlots: number | string;
         };
         EligibilityViolationInfo: {
             rule: string;
@@ -2073,6 +2098,26 @@ export interface operations {
                 };
                 content: {
                     "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    GetDispatchCapacity: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DispatchCapacity"];
                 };
             };
         };

@@ -722,6 +722,7 @@ Including `DispatchReservation` in the count prevents over-dispatch during the w
 An unresolved `DispatchReservation` holds its slot for at most `StaleReservationThreshold` (2 minutes) before `StaleReservationService` deletes it.
 An unresolved `StartingRun` holds its slot for at most `StaleStartingRunThreshold` (10 minutes) before `StaleStartingRunService` fails it (see Orphan Reconciliation).
 The query is implemented by `DbContext.GetSlotOccupancyCountAsync` and `DbContext.GetSlotOccupancyRunIdsAsync` extension methods, used by both `WorkerDispatchService` (dispatch gate) and `StaleStartingRunService` (orphan reaping).
+The same count is exposed read-only as `GET /api/workers/capacity` (`MaxConcurrent`, `OccupiedSlots`, `FreeSlots`) for the [Floor](#floor), so the dashboard never recomputes occupancy.
 
 This occupancy count is **distinct from the per-repository cap**: `MaxConcurrent` is a global ceiling enforced Workers-side via this count; the [Repository Worker Limit](#repository-worker-limit) is a per-repository ceiling enforced Issues-side from `count(InProgressIssue) + count(RevisionInProgressIssue)` grouped by repository.
 Neither count subsumes the other — `DispatchReservation` and `StartingRun` carry no repository identity and are therefore invisible to the per-repository count; `InProgressIssue` and `RevisionInProgressIssue` are not reservation types and are not included in slot occupancy.
@@ -791,6 +792,24 @@ The projection is presentation-only: it is never persisted, and text fields are 
 **Dashboard display.**
 The in-progress issue card shows one line such as `developer · Running tests (3/7)`: the latest active subagent type (or `main agent`), the current task `activeForm`, and task progress; a run with no task list shows the active subagent and the in-flight tool instead.
 The worker system prompt carries one workflow-neutral line asking the agent to track its plan with its task list and keep it current.
+
+## Floor
+
+The dashboard's factory-floor view (`/floor`): one lane per active run showing its live [Agent Activity](#agent-activity), followed by the dispatch slots that hold no lane and the next queued issues.
+
+**Lanes.**
+Lanes come from the `WorkerHub` Agent Activity payloads, so a page reload repopulates them from the connect replay.
+Each lane shows the issue number, title and repository; the task list with the current task highlighted and "N of M done"; active subagents (parallel and nested listed separately, collapsed beyond a visible limit) and the active skill; a tool ticker of the most recent in-flight tools (accumulated client-side from successive payloads, so it restarts on reload); token totals; and the time since `LastEventAt`, styled as silent past the same 5-minute threshold as the issue card.
+A lane leaves the Floor when `AgentActivityEnded` arrives or its issue leaves the working states; the run's cost then appears on the issue via `RunResultSummary`.
+While the worker hub is disconnected lanes show stale styling; after a reconnect, runs the replay does not re-send within a short grace window are pruned, covering an `AgentActivityEnded` missed while disconnected.
+
+**Slots and queue.**
+Free and starting slots come from the server's [Worker Slot Occupancy](#worker-slot-occupancy) via `GET /api/workers/capacity`: occupied slots without a lane (reservations, starting runs) render as *Starting*, the remaining `FreeSlots` as empty lanes.
+The queue lists the next eligible queued issues in [Dispatch Order](#dispatch-order), reusing the dashboard's server-ordered issue list ([Queue Position](#queue-position), ADR 0067).
+
+**Active-agents chip.**
+The top bar shows `● N agents working` (the count of active runs reporting Agent Activity), or an idle state at zero, linking to the Floor.
+Count changes are announced through the shell's single polite announcer; per-lane step changes are announced politely by the lane, and token or clock ticks are never announced.
 
 ## Worker Outcome Detection
 

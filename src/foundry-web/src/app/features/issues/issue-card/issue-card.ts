@@ -5,12 +5,11 @@ import { STATE_ARIA_LABELS, cardAccentFor } from '../../../shared/utils/state-di
 import { StateBadgeComponent } from '../../../shared/components/state-badge/state-badge';
 import { SafeHrefPipe } from '../../../shared/pipes/safe-href.pipe';
 import { TickerService } from '../../../core/services/ticker.service';
-import { AgentActivity, agentActivitySummary } from '../../../core/models/agent-activity.model';
+import { AGENT_SILENCE_THRESHOLD_MINUTES, AgentActivity, agentActivitySummary } from '../../../core/models/agent-activity.model';
 import { formatCost as _formatCostImpl, formatDuration as _formatDurationImpl } from '../run-stats.format';
 
 const REPO_WARNING_STATES = new Set<string>(['queued', 'detected', 'revision_queued', 'continuation_queued']);
 const EM_DASH = '—';
-const SILENCE_THRESHOLD_MINUTES = 5;
 
 // Re-export shared helpers so existing imports from this module continue to work.
 export { formatCost, formatDuration } from '../run-stats.format';
@@ -70,7 +69,7 @@ function silentMinutes(since: string): number | null {
   const now = Date.now();
   const then = new Date(since).getTime();
   const diffMinutes = Math.floor((now - then) / 60000);
-  return diffMinutes >= SILENCE_THRESHOLD_MINUTES ? diffMinutes : null;
+  return diffMinutes >= AGENT_SILENCE_THRESHOLD_MINUTES ? diffMinutes : null;
 }
 
 function commitPhrase(count: number): string {

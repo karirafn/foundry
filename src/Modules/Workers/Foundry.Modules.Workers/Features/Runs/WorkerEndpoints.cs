@@ -1,3 +1,5 @@
+using Foundry.Modules.Workers.Features.Dispatch;
+
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
@@ -18,6 +20,11 @@ internal static class WorkerEndpoints
             .WithTags("Workers");
 
         GetRunTotals.Endpoint.Map(runTotalsGroup);
+
+        RouteGroupBuilder capacityGroup = routes.MapGroup("/api/workers/capacity")
+            .WithTags("Workers");
+
+        GetDispatchCapacity.Endpoint.Map(capacityGroup);
 
         return routes;
     }

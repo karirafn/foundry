@@ -1,12 +1,25 @@
-import { Injectable, InjectionToken, Signal, WritableSignal, inject, signal } from '@angular/core';
+import { DestroyRef, Injectable, InjectionToken, Signal, WritableSignal, computed, inject, signal } from '@angular/core';
 import { Observable, Observer, Subject } from 'rxjs';
 import { HubConnection, HubConnectionBuilder } from '@microsoft/signalr';
 import { WorkerActivity } from '../models/worker-activity.model';
-import { AgentActivity, AgentActivityEnded } from '../models/agent-activity.model';
+import { AgentActivity, AgentActivityEnded, InFlightTool } from '../models/agent-activity.model';
+import { ConnectionStatus } from './issue-signalr.service';
+
+/** How many recent tool calls the Floor's tool ticker keeps per run. */
+export const RECENT_TOOL_LIMIT = 5;
+
+/**
+ * After a reconnect the hub replays the payload of every active run. Entries not re-sent within
+ * this window belong to runs that ended while the connection was down (their AgentActivityEnded
+ * was missed) and are pruned.
+ */
+export const RECONNECT_REPLAY_GRACE_MS = 10_000;
 
 export interface WorkerHub {
   on<T>(methodName: string, callback: (payload: T) => void): void;
   onReconnected(callback: () => void): void;
+  onReconnecting(callback: () => void): void;
+  onClose(callback: () => void): void;
   stream(methodName: string, workerRunId: string): {
     subscribe(callbacks: {
       next: (line: string) => void;
@@ -26,6 +39,8 @@ function buildWorkerHub(): WorkerHub {
   return {
     on: (methodName, callback) => conn.on(methodName, callback),
     onReconnected: (callback) => conn.onreconnected(callback),
+    onReconnecting: (callback) => conn.onreconnecting(callback),
+    onClose: (callback) => conn.onclose(callback),
     stream: (methodName, workerRunId) => conn.stream(methodName, workerRunId),
     start: () => conn.start(),
   };
@@ -39,6 +54,7 @@ export const WORKER_HUB_FACTORY = new InjectionToken<() => WorkerHub>(
 @Injectable({ providedIn: 'root' })
 export class WorkerSignalRService {
   private readonly _hubFactory = inject(WORKER_HUB_FACTORY);
+  private readonly _destroyRef = inject(DestroyRef);
   private readonly _hub: WorkerHub;
 
   private readonly _workerActivitySignal: WritableSignal<WorkerActivity | null> = signal(null);
@@ -52,6 +68,20 @@ export class WorkerSignalRService {
   private readonly _commitCountByIssueIdSignal: WritableSignal<ReadonlyMap<string, number>> = signal(new Map());
 
   private readonly _agentActivityByIssueIdSignal: WritableSignal<ReadonlyMap<string, AgentActivity>> = signal(new Map());
+  private readonly _recentToolsByRunIdSignal: WritableSignal<ReadonlyMap<string, readonly InFlightTool[]>> = signal(new Map());
+
+  /** Every live Agent Activity projection, one per active run, in arrival order. */
+  readonly agentActivities: Signal<readonly AgentActivity[]> = computed(() => [...this._agentActivityByIssueIdSignal().values()]);
+
+  /** Number of active runs reporting Agent Activity — the "agents working" count. */
+  readonly activeAgentCount: Signal<number> = computed(() => this._agentActivityByIssueIdSignal().size);
+
+  private readonly _connectionStatusSignal: WritableSignal<ConnectionStatus> = signal('disconnected');
+  readonly connectionStatus: Signal<ConnectionStatus> = this._connectionStatusSignal.asReadonly();
+
+  // Issue ids held when the connection dropped and not yet re-sent by the reconnect replay.
+  private _unconfirmedIssueIds: Set<string> | null = null;
+  private _replayGraceHandle: ReturnType<typeof setTimeout> | null = null;
 
   private readonly _reconnected = new Subject<void>();
   readonly reconnected: Observable<void> = this._reconnected.asObservable();
@@ -76,9 +106,13 @@ export class WorkerSignalRService {
     });
 
     this._hub.on<AgentActivity>('AgentActivity', (activity) => {
-      const next = new Map(this._agentActivityByIssueIdSignal());
+      this._unconfirmedIssueIds?.delete(activity.issueId);
+      const current = this._agentActivityByIssueIdSignal();
+      const replacedRunId = current.get(activity.issueId)?.workerRunId;
+      const next = new Map(current);
       next.set(activity.issueId, activity);
       this._agentActivityByIssueIdSignal.set(next);
+      this._recordTool(activity, replacedRunId !== undefined && replacedRunId !== activity.workerRunId ? replacedRunId : null);
     });
 
     this._hub.on<AgentActivityEnded>('AgentActivityEnded', (ended) => {
@@ -90,15 +124,45 @@ export class WorkerSignalRService {
       const next = new Map(current);
       next.delete(ended.issueId);
       this._agentActivityByIssueIdSignal.set(next);
+      this._forgetTools(ended.workerRunId);
+    });
+
+    this._hub.onReconnecting(() => {
+      this._connectionStatusSignal.set('reconnecting');
+      // A prune scheduled by an earlier reconnect must not fire while the connection is down again.
+      if (this._replayGraceHandle !== null) {
+        clearTimeout(this._replayGraceHandle);
+        this._replayGraceHandle = null;
+      }
+      this._unconfirmedIssueIds ??= new Set(this._agentActivityByIssueIdSignal().keys());
     });
 
     this._hub.onReconnected(() => {
+      this._connectionStatusSignal.set('connected');
+      this._scheduleUnconfirmedPrune();
       this._reconnected.next();
     });
 
-    this._hub.start().catch(() => {
-      console.warn('[WorkerSignalRService] Failed to connect to /hubs/workers');
+    this._hub.onClose(() => {
+      this._connectionStatusSignal.set('disconnected');
     });
+
+    this._destroyRef.onDestroy(() => {
+      if (this._replayGraceHandle !== null) {
+        clearTimeout(this._replayGraceHandle);
+      }
+    });
+
+    this._hub.start()
+      .then(() => this._connectionStatusSignal.set('connected'))
+      .catch(() => {
+        console.warn('[WorkerSignalRService] Failed to connect to /hubs/workers');
+      });
+  }
+
+  /** Recent tool calls for the run, newest last, accumulated from successive in-flight tools. */
+  recentToolsForRun(workerRunId: string): readonly InFlightTool[] {
+    return this._recentToolsByRunIdSignal().get(workerRunId) ?? [];
   }
 
   activityFor(workerRunId: string): string | null {
@@ -117,6 +181,60 @@ export class WorkerSignalRService {
   /** Returns the live Agent Activity projection for the issue's active run, or null if none has arrived. */
   agentActivityForIssue(issueId: string): AgentActivity | null {
     return this._agentActivityByIssueIdSignal().get(issueId) ?? null;
+  }
+
+  private _recordTool(activity: AgentActivity, replacedRunId: string | null): void {
+    const tool = activity.inFlightTool;
+    const current = this._recentToolsByRunIdSignal();
+    const existing = current.get(activity.workerRunId) ?? [];
+    const last = existing.length > 0 ? existing[existing.length - 1] : null;
+    const isNewTool = tool !== null && (last === null
+      || last.name !== tool.name || last.summary !== tool.summary || last.startedAt !== tool.startedAt);
+    if (!isNewTool && replacedRunId === null) {
+      return;
+    }
+    const next = new Map(current);
+    if (replacedRunId !== null) {
+      next.delete(replacedRunId);
+    }
+    if (isNewTool) {
+      next.set(activity.workerRunId, [...existing, tool].slice(-RECENT_TOOL_LIMIT));
+    }
+    this._recentToolsByRunIdSignal.set(next);
+  }
+
+  private _forgetTools(workerRunId: string): void {
+    const current = this._recentToolsByRunIdSignal();
+    if (!current.has(workerRunId)) {
+      return;
+    }
+    const next = new Map(current);
+    next.delete(workerRunId);
+    this._recentToolsByRunIdSignal.set(next);
+  }
+
+  private _scheduleUnconfirmedPrune(): void {
+    if (this._replayGraceHandle !== null) {
+      clearTimeout(this._replayGraceHandle);
+    }
+    this._replayGraceHandle = setTimeout(() => {
+      this._replayGraceHandle = null;
+      const unconfirmed = this._unconfirmedIssueIds;
+      this._unconfirmedIssueIds = null;
+      if (unconfirmed === null || unconfirmed.size === 0) {
+        return;
+      }
+      const current = this._agentActivityByIssueIdSignal();
+      const next = new Map(current);
+      for (const issueId of unconfirmed) {
+        const stale = next.get(issueId);
+        if (stale !== undefined) {
+          next.delete(issueId);
+          this._forgetTools(stale.workerRunId);
+        }
+      }
+      this._agentActivityByIssueIdSignal.set(next);
+    }, RECONNECT_REPLAY_GRACE_MS);
   }
 
   streamLog(workerRunId: string): Observable<string> {

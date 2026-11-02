@@ -1,3 +1,6 @@
+/** Minutes without an agent event before a run is styled as silent. */
+export const AGENT_SILENCE_THRESHOLD_MINUTES = 5;
+
 /** An entry in the agent's own task list (TaskCreate / TaskUpdate). */
 export interface AgentTaskItem {
   readonly id: string;

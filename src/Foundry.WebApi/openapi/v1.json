@@ -1286,6 +1286,27 @@
         }
       }
     },
+    "/api/workers/capacity": {
+      "get": {
+        "tags": [
+          "Workers"
+        ],
+        "summary": "Gets the configured dispatch slot limit and the slots currently occupied and free",
+        "operationId": "GetDispatchCapacity",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DispatchCapacity"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/system/status": {
       "get": {
         "tags": [
@@ -2099,6 +2120,40 @@
             "items": {
               "$ref": "#/components/schemas/AffectedRepository"
             }
+          }
+        }
+      },
+      "DispatchCapacity": {
+        "required": [
+          "maxConcurrent",
+          "occupiedSlots",
+          "freeSlots"
+        ],
+        "type": "object",
+        "properties": {
+          "maxConcurrent": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "occupiedSlots": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "freeSlots": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
           }
         }
       },

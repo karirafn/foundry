@@ -1,0 +1,68 @@
+:host {
+  display: contents;
+}
+
+.agents-chip {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  height: 28px;
+  gap: var(--fd-spacing-xs);
+  padding: var(--fd-spacing-xs) var(--fd-spacing-sm);
+  border: 1px solid var(--fd-border-default);
+  border-radius: var(--fd-radius-sm);
+  background: transparent;
+  color: var(--fd-text-secondary);
+  text-decoration: none;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  line-height: 1;
+  white-space: nowrap;
+  transition: color 0.15s ease, background-color 0.15s ease;
+
+  &:hover {
+    color: var(--fd-text-primary);
+    background: var(--fd-bg-card-hover);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--fd-text-link);
+    outline-offset: 2px;
+  }
+
+  &--active {
+    border-color: var(--fd-text-link);
+  }
+}
+
+.agents-chip__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--fd-accent-working);
+  flex-shrink: 0;
+
+  .agents-chip--idle & {
+    background: transparent;
+    border: 1px solid var(--fd-text-tertiary);
+  }
+
+  @media (forced-colors: active) {
+    background: CanvasText;
+  }
+}
+
+// The count duplicates the text; it is shown only when the text is hidden.
+.agents-chip__count {
+  display: none;
+}
+
+@container app-header-nav (max-width: 360px) {
+  .agents-chip__text {
+    display: none;
+  }
+
+  .agents-chip__count {
+    display: inline;
+  }
+}

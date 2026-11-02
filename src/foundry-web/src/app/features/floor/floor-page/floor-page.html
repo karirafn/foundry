@@ -1,0 +1,65 @@
+<section class="floor" aria-labelledby="floor-heading">
+  <header class="floor__header">
+    <div class="floor__heading-group">
+      <h1 class="floor__heading" id="floor-heading">Floor</h1>
+      <p class="floor__summary">{{ summary() }}</p>
+    </div>
+    <fd-connection-indicator [status]="connectionStatus()" />
+  </header>
+
+  @if (capacityError(); as error) {
+    <p class="floor__error" role="alert">{{ error }}</p>
+  }
+
+  @if (lanes().length === 0 && startingSlots().length === 0) {
+    <p class="floor__empty">No agents are working right now.</p>
+  }
+
+  <ul class="floor__lanes" aria-label="Agent lanes">
+    @for (lane of lanes(); track lane.issueId) {
+      <li class="floor__lane-item">
+        <fd-floor-lane [lane]="lane" [now]="now()" [stale]="stale()" />
+      </li>
+    }
+    @for (slot of startingSlots(); track slot) {
+      <li class="floor__lane-item">
+        <div class="floor__slot floor__slot--starting">
+          <span class="floor__slot-label">Starting</span>
+          <span class="floor__slot-hint">Waiting for the agent's first event</span>
+        </div>
+      </li>
+    }
+    @for (slot of freeSlots(); track slot) {
+      <li class="floor__lane-item">
+        <div class="floor__slot floor__slot--free">
+          <span class="floor__slot-label">Free slot</span>
+          <span class="floor__slot-hint">Ready for the next queued issue</span>
+        </div>
+      </li>
+    }
+  </ul>
+
+  <section class="floor__queue" aria-labelledby="floor-queue-heading">
+    <h2 class="floor__queue-heading" id="floor-queue-heading">Up next</h2>
+    @if (issuesError(); as error) {
+      <p class="floor__error" role="alert">{{ error }}</p>
+    } @else if (issuesLoading()) {
+      <p class="floor__muted">Loading queue…</p>
+    } @else if (nextQueued().length === 0) {
+      <p class="floor__muted">The queue is empty.</p>
+    } @else {
+      <ol class="floor__queue-list">
+        @for (issue of nextQueued(); track issue.id) {
+          <li class="floor__queue-item">
+            <span class="floor__queue-number">#{{ issue.issueNumber }}</span>
+            <span class="floor__queue-title">{{ issue.title }}</span>
+            <span class="floor__queue-repo">{{ issue.repositorySlug }}</span>
+          </li>
+        }
+      </ol>
+      @if (moreQueuedCount() > 0) {
+        <p class="floor__muted">and {{ moreQueuedCount() }} more queued</p>
+      }
+    }
+  </section>
+</section>

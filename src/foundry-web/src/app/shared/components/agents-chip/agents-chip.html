@@ -1,0 +1,12 @@
+<a
+  class="agents-chip"
+  [class.agents-chip--idle]="idle()"
+  routerLink="/floor"
+  routerLinkActive="agents-chip--active"
+  [title]="text()"
+  [attr.aria-label]="ariaLabel()"
+>
+  <span class="agents-chip__dot" aria-hidden="true"></span>
+  <span class="agents-chip__count" aria-hidden="true">{{ count() }}</span>
+  <span class="agents-chip__text" aria-hidden="true">{{ text() }}</span>
+</a>
