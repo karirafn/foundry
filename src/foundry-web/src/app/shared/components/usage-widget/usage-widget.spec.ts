@@ -2,7 +2,8 @@ import { TestBed } from '@angular/core/testing';
 import { signal } from '@angular/core';
 import { UsageWidgetComponent } from './usage-widget';
 import { UsageService } from '../../../core/services/usage.service';
-import { UsageSnapshot } from '../../../core/models/usage.model';
+import { UsageRefreshState, UsageSnapshot } from '../../../core/models/usage.model';
+import { vi } from 'vitest';
 
 function buildSnapshot(overrides: Partial<UsageSnapshot> = {}): UsageSnapshot {
   return {
@@ -35,6 +36,8 @@ function buildSnapshot(overrides: Partial<UsageSnapshot> = {}): UsageSnapshot {
 function createMockUsageService(snapshot: UsageSnapshot | null = null) {
   return {
     snapshot: signal(snapshot),
+    refreshState: signal<UsageRefreshState>('idle'),
+    refresh: vi.fn(),
   };
 }
 
@@ -744,5 +747,86 @@ describe('UsageWidgetComponent', () => {
     const trigger = el.querySelector('.usage-widget__trigger');
     const label = trigger?.getAttribute('aria-label') ?? '';
     expect(label).toBe('Claude usage. Activate to see details.');
+  });
+
+  describe('refresh action', () => {
+    function setupWithMock(refreshState: UsageRefreshState = 'idle') {
+      TestBed.resetTestingModule();
+      const mock = createMockUsageService(buildSnapshot());
+      mock.refreshState.set(refreshState);
+      TestBed.configureTestingModule({
+        imports: [UsageWidgetComponent],
+        providers: [{ provide: UsageService, useValue: mock }],
+      });
+      const fixture = TestBed.createComponent(UsageWidgetComponent);
+      fixture.detectChanges();
+      const el = fixture.nativeElement as HTMLElement;
+      const button = el.querySelector<HTMLButtonElement>('.usage-popover__refresh-btn');
+      const status = el.querySelector('.usage-popover__refresh-status');
+      return { fixture, mock, button, status };
+    }
+
+    it('should render an enabled Refresh button in the popover when idle', () => {
+      // Arrange / Act
+      const { button, status } = setupWithMock('idle');
+
+      // Assert
+      expect(button).not.toBeNull();
+      expect(button?.disabled).toBe(false);
+      expect(button?.textContent?.trim()).toBe('Refresh');
+      expect(status?.textContent?.trim()).toBe('');
+    });
+
+    it('should call UsageService.refresh when the Refresh button is clicked', () => {
+      // Arrange
+      const { button, mock } = setupWithMock('idle');
+
+      // Act
+      button?.click();
+
+      // Assert
+      expect(mock.refresh).toHaveBeenCalledTimes(1);
+    });
+
+    it('should show a disabled in-progress button while refreshing', () => {
+      // Arrange / Act
+      const { button } = setupWithMock('refreshing');
+
+      // Assert
+      expect(button?.disabled).toBe(true);
+      expect(button?.getAttribute('aria-busy')).toBe('true');
+      expect(button?.textContent?.trim()).toBe('Refreshing…');
+    });
+
+    it('should show "Up to date" when the server reports the floor applied', () => {
+      // Arrange / Act
+      const { status, button } = setupWithMock('upToDate');
+
+      // Assert
+      expect(status?.textContent?.trim()).toBe('Up to date');
+      expect(button?.disabled).toBe(false);
+    });
+
+    it('should show a refusal message when refresh is unavailable', () => {
+      // Arrange / Act
+      const { status } = setupWithMock('unavailable');
+
+      // Assert
+      expect(status?.textContent?.trim()).toBe("Can't refresh right now");
+    });
+
+    it('should update the button when the refresh state changes', () => {
+      // Arrange
+      const { fixture, mock } = setupWithMock('refreshing');
+
+      // Act
+      mock.refreshState.set('idle');
+      fixture.detectChanges();
+
+      // Assert
+      const button = (fixture.nativeElement as HTMLElement).querySelector<HTMLButtonElement>('.usage-popover__refresh-btn');
+      expect(button?.disabled).toBe(false);
+      expect(button?.textContent?.trim()).toBe('Refresh');
+    });
   });
 });

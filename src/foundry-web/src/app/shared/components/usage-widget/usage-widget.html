@@ -71,6 +71,20 @@
         <p class="usage-popover__asof">As of {{ vm.capturedRelative }}</p>
       }
 
+      <!-- On-demand refresh — fresh figures arrive via the UsageSnapshotUpdated push -->
+      <div class="usage-popover__refresh">
+        <button
+          type="button"
+          class="usage-popover__refresh-btn"
+          [disabled]="refreshState() === 'refreshing'"
+          [attr.aria-busy]="refreshState() === 'refreshing'"
+          (click)="onRefresh()"
+        >
+          {{ refreshState() === 'refreshing' ? 'Refreshing…' : 'Refresh' }}
+        </button>
+        <span class="usage-popover__refresh-status">{{ refreshStatusText() }}</span>
+      </div>
+
       <!-- All limits (session, weekly_all, each weekly_scoped) -->
       <div class="usage-popover__limits">
         @for (meter of vm.allLimits; track meter.kind + '|' + (meter.modelDisplayName ?? '') + '|' + $index) {

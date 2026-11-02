@@ -38,11 +38,18 @@ internal sealed class FakeCredentialsOrchestrator(IEnumerable<string>? logLines 
     // Gate for DeliverLoginCodeAsync — when set, Deliver blocks until the TCS is completed.
     private TaskCompletionSource? _deliverGate;
 
+    // Gate for RunUsageReportAsync — when set, the usage report blocks until the TCS is completed.
+    private TaskCompletionSource? _usageReportGate;
+
     public int DeliverLoginCodeCallCount { get; private set; }
     public int StopContainerCallCount { get; private set; }
     public int RemoveContainerCallCount { get; private set; }
     public int GetCredentialVolumeAuthStatusCallCount { get; private set; }
     public string? LastDeliveredCode { get; private set; }
+    public int UsageReportCallCount { get; private set; }
+
+    /// <summary>Completes when <see cref="RunUsageReportAsync"/> is first entered.</summary>
+    public TaskCompletionSource UsageReportStarted { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
     /// <summary>Scripts <see cref="GetCredentialVolumeAuthStatusAsync"/> to return a failure result.</summary>
     public FakeCredentialsOrchestrator WithAuthStatusFailure(Error error)
@@ -85,6 +92,19 @@ internal sealed class FakeCredentialsOrchestrator(IEnumerable<string>? logLines 
         _usageReportResult = Result<string>.Ok(logs);
         return this;
     }
+
+    /// <summary>
+    /// Makes <see cref="RunUsageReportAsync"/> block until <see cref="ReleaseUsageReport"/> is called,
+    /// so tests can observe a poll while it is in flight.
+    /// </summary>
+    public FakeCredentialsOrchestrator WithBlockingUsageReport()
+    {
+        _usageReportGate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        return this;
+    }
+
+    /// <summary>Releases the gate armed by <see cref="WithBlockingUsageReport"/>.</summary>
+    public void ReleaseUsageReport() => _usageReportGate?.TrySetResult();
 
     /// <summary>Scripts <see cref="RunUsageReportAsync"/> to return a failure.</summary>
     public FakeCredentialsOrchestrator WithUsageReportFailure(Error error)
@@ -172,10 +192,20 @@ internal sealed class FakeCredentialsOrchestrator(IEnumerable<string>? logLines 
         CancellationToken cancellationToken)
         => Task.FromResult(_creditProbeResult);
 
-    public Task<Result<string>> RunUsageReportAsync(
+    public async Task<Result<string>> RunUsageReportAsync(
         UsageReportSpec spec,
         CancellationToken cancellationToken)
-        => Task.FromResult(_usageReportResult);
+    {
+        UsageReportCallCount++;
+        UsageReportStarted.TrySetResult();
+
+        if (_usageReportGate is not null)
+        {
+            await _usageReportGate.Task;
+        }
+
+        return _usageReportResult;
+    }
 
     public async Task DeliverLoginCodeAsync(string containerId, string code, CancellationToken cancellationToken)
     {

@@ -70,8 +70,8 @@ function createMockToastService() {
   };
 }
 
-function setup() {
-  const mockSignalR = createMockSignalRService([]);
+function setup(notifications: SystemNotification[] = []) {
+  const mockSignalR = createMockSignalRService(notifications);
   const mockDispatch = createMockDispatchService();
   const mockSettings = createMockSettingsService();
   const mockToast = createMockToastService();
@@ -165,6 +165,29 @@ describe('SystemBannerComponent', () => {
       const creditsIndex = children.indexOf('fd-credits-banner');
       const dispatchIndex = children.indexOf('fd-dispatch-banner');
       expect(creditsIndex).toBeLessThan(dispatchIndex);
+    });
+  });
+
+  describe('generic notifications', () => {
+    it('should not render a generic notification bar for a credits notification with an empty message', () => {
+      // Arrange / Act
+      const { fixture } = setup([{ category: 'credits', isActive: true, message: '' }]);
+      const el = fixture.nativeElement as HTMLElement;
+
+      // Assert
+      const notifications = el.querySelector('fd-system-notifications') as HTMLElement;
+      expect(notifications.querySelectorAll('.system-banner__bar').length).toBe(0);
+      expect(notifications.querySelectorAll('[role="alert"]').length).toBe(0);
+    });
+
+    it('should not render a generic notification bar for an unknown category', () => {
+      // Arrange / Act
+      const { fixture } = setup([{ category: 'something-new', isActive: true, message: 'Hello' }]);
+      const el = fixture.nativeElement as HTMLElement;
+
+      // Assert
+      const notifications = el.querySelector('fd-system-notifications') as HTMLElement;
+      expect(notifications.querySelectorAll('.system-banner__bar').length).toBe(0);
     });
   });
 });

@@ -13,4 +13,12 @@ internal interface IUsagePollCoordinator
     /// the snapshot was cleared or the account cannot report usage).
     /// </summary>
     Task<UsageSnapshot?> PollAsync(CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Requests an on-demand poll without waiting for it to complete. Starts nothing when the
+    /// account cannot report usage, a login is active, a poll is already in flight (which the
+    /// request joins), or the last successful snapshot is younger than the refresh floor.
+    /// The poll's result reaches clients via the usage snapshot broadcast.
+    /// </summary>
+    Task<UsageRefreshOutcome> RequestRefreshAsync(CancellationToken cancellationToken);
 }

@@ -3,7 +3,7 @@ import { provideHttpClient } from '@angular/common/http';
 import { provideHttpClientTesting, HttpTestingController } from '@angular/common/http/testing';
 import { Subject } from 'rxjs';
 import { vi } from 'vitest';
-import { UsageService } from './usage.service';
+import { USAGE_REFRESH_STATUS_MS, USAGE_REFRESH_TIMEOUT_MS, UsageService } from './usage.service';
 import { SystemSignalRService } from './system-signalr.service';
 import { UsageSnapshot } from '../models/usage.model';
 
@@ -179,5 +179,145 @@ describe('UsageService', () => {
 
     // Assert
     expect(svc.snapshot()).toBeNull();
+  });
+
+  describe('refresh', () => {
+    const REFRESH_URL = '/api/credentials/usage/refresh';
+
+    function setupSeeded() {
+      const ctx = setup();
+      ctx.http.expectOne('/api/credentials/usage').flush(buildSnapshot());
+      return ctx;
+    }
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it('should start idle', () => {
+      // Arrange / Act
+      const { svc } = setupSeeded();
+
+      // Assert
+      expect(svc.refreshState()).toBe('idle');
+    });
+
+    it('should POST to the refresh endpoint and stay refreshing on 202 until the next push', () => {
+      // Arrange
+      const { svc, http, mockSignalR } = setupSeeded();
+
+      // Act
+      svc.refresh();
+      const req = http.expectOne(REFRESH_URL);
+      expect(req.request.method).toBe('POST');
+      req.flush({ status: 'started' }, { status: 202, statusText: 'Accepted' });
+
+      // Assert — still in progress after the 202
+      expect(svc.refreshState()).toBe('refreshing');
+
+      // Act — the poll result arrives via the push
+      const fresh = buildSnapshot({ capturedAt: '2026-10-30T02:00:00Z' });
+      mockSignalR._usageSnapshotUpdated$.next(fresh);
+
+      // Assert
+      expect(svc.refreshState()).toBe('idle');
+      expect(svc.snapshot()).toEqual(fresh);
+    });
+
+    it('should stay refreshing on 202 inFlight until the next push', () => {
+      // Arrange
+      const { svc, http, mockSignalR } = setupSeeded();
+
+      // Act
+      svc.refresh();
+      http.expectOne(REFRESH_URL).flush({ status: 'inFlight' }, { status: 202, statusText: 'Accepted' });
+
+      // Assert
+      expect(svc.refreshState()).toBe('refreshing');
+      mockSignalR._usageSnapshotUpdated$.next(buildSnapshot());
+      expect(svc.refreshState()).toBe('idle');
+    });
+
+    it('should end refreshing when the push arrives before the 202 response', () => {
+      // Arrange
+      const { svc, http, mockSignalR } = setupSeeded();
+      svc.refresh();
+      const req = http.expectOne(REFRESH_URL);
+
+      // Act — push beats the response
+      mockSignalR._usageSnapshotUpdated$.next(buildSnapshot());
+      req.flush({ status: 'started' }, { status: 202, statusText: 'Accepted' });
+
+      // Assert
+      expect(svc.refreshState()).toBe('idle');
+    });
+
+    it('should not send a second request while a refresh is in progress', () => {
+      // Arrange
+      const { svc, http } = setupSeeded();
+      svc.refresh();
+      http.expectOne(REFRESH_URL).flush({ status: 'started' }, { status: 202, statusText: 'Accepted' });
+
+      // Act
+      svc.refresh();
+
+      // Assert
+      http.expectNone(REFRESH_URL);
+    });
+
+    it('should report upToDate when the server says the data is current, then return to idle', () => {
+      // Arrange
+      vi.useFakeTimers();
+      const { svc, http } = setupSeeded();
+
+      // Act
+      svc.refresh();
+      http.expectOne(REFRESH_URL).flush({ status: 'current' });
+
+      // Assert
+      expect(svc.refreshState()).toBe('upToDate');
+      vi.advanceTimersByTime(USAGE_REFRESH_STATUS_MS);
+      expect(svc.refreshState()).toBe('idle');
+    });
+
+    it('should report unavailable when the server refuses with 409', () => {
+      // Arrange
+      const { svc, http } = setupSeeded();
+
+      // Act
+      svc.refresh();
+      http.expectOne(REFRESH_URL).flush({ status: 'loginActive' }, { status: 409, statusText: 'Conflict' });
+
+      // Assert
+      expect(svc.refreshState()).toBe('unavailable');
+    });
+
+    it('should report error when the request fails unexpectedly', () => {
+      // Arrange
+      const { svc, http } = setupSeeded();
+      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+      // Act
+      svc.refresh();
+      http.expectOne(REFRESH_URL).flush('Error', { status: 500, statusText: 'Internal Server Error' });
+
+      // Assert
+      expect(svc.refreshState()).toBe('error');
+      consoleSpy.mockRestore();
+    });
+
+    it('should fall back to idle when no push arrives within the timeout', () => {
+      // Arrange
+      vi.useFakeTimers();
+      const { svc, http } = setupSeeded();
+      svc.refresh();
+      http.expectOne(REFRESH_URL).flush({ status: 'started' }, { status: 202, statusText: 'Accepted' });
+
+      // Act
+      vi.advanceTimersByTime(USAGE_REFRESH_TIMEOUT_MS);
+
+      // Assert
+      expect(svc.refreshState()).toBe('idle');
+    });
   });
 });
