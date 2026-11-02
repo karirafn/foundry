@@ -126,6 +126,16 @@ internal static class SettingsErrors
     internal static Error SensitiveMountHostPath(string path) =>
         new(SensitiveMountHostPathCode, $"Mount host path '{path}' targets a sensitive system directory and is not allowed.");
 
+    internal const string ModelTooLongCode = "Settings.ModelTooLong";
+
+    internal static readonly Error ModelTooLong =
+        new(ModelTooLongCode, $"The Claude Code model must not exceed {ClaudeCodeSettings.MaxModelLength} characters.");
+
+    internal const string InvalidDenyRuleCode = "Settings.InvalidDenyRule";
+
+    internal static Error InvalidDenyRule(string rule) =>
+        new(InvalidDenyRuleCode, $"Deny rule '{rule}' must have the form Tool(pattern), where Tool is one of Bash, Edit, Read, Write, MultiEdit, Glob, or Grep.");
+
     internal const string DuplicateMountContainerPathCode = "Settings.DuplicateMountContainerPath";
 
     internal static Error DuplicateMountContainerPath(string path) =>
