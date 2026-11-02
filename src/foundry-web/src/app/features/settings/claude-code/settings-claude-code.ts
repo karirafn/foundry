@@ -33,11 +33,13 @@ import {
   CI_CD_DENY_RULES,
   MODEL_MAX_LENGTH,
   denyRuleFormatValidator,
+  trimmedMaxLengthValidator,
 } from './settings-claude-code.validators';
 
 const SERVER_ERROR_KEY = 'server';
 const SAVING_TEXT = 'Saving Claude Code settings...';
 const SAVED_TEXT = 'Claude Code settings saved';
+const QUOTED_RULE_PATTERN = /'(.*)'/s;
 const MODEL_TOO_LONG_CODE = 'Settings.ModelTooLong';
 const INVALID_DENY_RULE_CODE = 'Settings.InvalidDenyRule';
 const MODEL_TOO_LONG_TEXT = `Model must be ${MODEL_MAX_LENGTH} characters or fewer.`;
@@ -227,7 +229,7 @@ const RULE_FORMAT_TEXT =
           <section class="general-settings__section">
             <h2 class="general-settings__section-title">Model</h2>
             <p class="general-settings__section-description">
-              Pin the Claude model workers run. Leave empty to use the CLI default.
+              Pin the Claude model workers run.
             </p>
             <div class="general-settings__field">
               <label class="general-settings__field-label" for="model">Model</label>
@@ -236,7 +238,6 @@ const RULE_FORMAT_TEXT =
                 type="text"
                 class="general-settings__text-input"
                 formControlName="model"
-                maxlength="${MODEL_MAX_LENGTH}"
                 autocomplete="off"
                 autocapitalize="off"
                 autocorrect="off"
@@ -267,7 +268,7 @@ const RULE_FORMAT_TEXT =
             <div id="blockCiCdEdits-detail" class="claude-code__cicd-detail">
               @if (form.controls.blockCiCdEdits.value) {
                 <p class="general-settings__field-hint">These deny rules are applied to every worker:</p>
-                <ul class="claude-code__rule-list">
+                <ul class="claude-code__rule-list" role="list">
                   @for (rule of ciCdDenyRules; track rule) {
                     <li class="claude-code__rule-item"><code>{{ rule }}</code></li>
                   }
@@ -370,7 +371,7 @@ export class SettingsClaudeCodeComponent implements UnsavedChanges {
   protected readonly ciCdDenyRules: readonly string[] = CI_CD_DENY_RULES;
 
   protected readonly form = this._fb.group({
-    model: this._fb.control('', [Validators.maxLength(MODEL_MAX_LENGTH)]),
+    model: this._fb.control('', [trimmedMaxLengthValidator]),
     blockCiCdEdits: this._fb.control(true),
     denyRules: this._fb.array<FormControl<string>>([]),
   });
@@ -552,7 +553,9 @@ export class SettingsClaudeCodeComponent implements UnsavedChanges {
       this._focusFirstInvalid();
       return;
     }
-    this.settingsService.updateClaudeCodeSettings(this._readForm());
+    this._clearServerErrors();
+    const { model, ...rest } = this._readForm();
+    this.settingsService.updateClaudeCodeSettings({ model: model.trim(), ...rest });
   }
 
   protected _addRule(): void {
@@ -587,7 +590,7 @@ export class SettingsClaudeCodeComponent implements UnsavedChanges {
     if (errors?.[SERVER_ERROR_KEY]) {
       return errors[SERVER_ERROR_KEY];
     }
-    return control.touched && errors?.['maxlength'] ? MODEL_TOO_LONG_TEXT : '';
+    return control.touched && errors?.['modelTooLong'] ? MODEL_TOO_LONG_TEXT : '';
   }
 
   protected _ruleInvalid(index: number): boolean {
@@ -651,11 +654,20 @@ export class SettingsClaudeCodeComponent implements UnsavedChanges {
   }
 
   private _attachToRuleRow(detail: string): boolean {
-    const row: FormControl<string> | undefined = this.denyRules.controls.find(
-      (control) => control.value !== '' && detail.includes(control.value)
-    );
+    const offendingRule: string | undefined = QUOTED_RULE_PATTERN.exec(detail)?.[1];
+    const row: FormControl<string> | undefined =
+      offendingRule === undefined || offendingRule === ''
+        ? undefined
+        : this.denyRules.controls.find((control) => control.value === offendingRule);
     row?.setErrors({ [SERVER_ERROR_KEY]: detail });
     return row !== undefined;
+  }
+
+  private _clearServerErrors(): void {
+    [this.form.controls.model, ...this.denyRules.controls]
+      .filter((control) => control.errors?.[SERVER_ERROR_KEY])
+      .forEach((control) => control.updateValueAndValidity({ emitEvent: false }));
+    this._summaryError.set('');
   }
 
   private _attentionSummary(): string {

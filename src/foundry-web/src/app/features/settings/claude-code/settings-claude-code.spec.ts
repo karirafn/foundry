@@ -884,12 +884,19 @@ describe('SettingsClaudeCodeComponent', () => {
       expect(field(page, 'model').value).toBe('claude-opus-4');
     });
 
-    it('should cap the model input at the maximum length', async () => {
-      // Arrange & Act
+    it('should accept a model of the maximum length followed by whitespace and submit it trimmed', async () => {
+      // Arrange
       const page = await loadPage();
+      const model = 'x'.repeat(MODEL_MAX_LENGTH);
+
+      // Act
+      type(page, 'model', `${model}   `);
+      saveButton(page).click();
 
       // Assert
-      expect(field(page, 'model').maxLength).toBe(MODEL_MAX_LENGTH);
+      const request = page.httpMock.expectOne(CLAUDE_CODE_URL);
+      expect(request.request.body.model).toBe(model);
+      request.flush({ ...API_KEY_RESPONSE, model });
     });
 
     it('should show a length error when the model exceeds the maximum', async () => {
@@ -1196,6 +1203,85 @@ describe('SettingsClaudeCodeComponent', () => {
       expect(page.el.querySelector('form.claude-code .general-settings__save-error')?.textContent?.trim()).toBe(
         '1 field needs attention.',
       );
+    });
+
+    it('should attach an InvalidDenyRule error to the exact row when another rule is a prefix of it', async () => {
+      // Arrange
+      const page = await loadPage({ additionalDenyRules: ['Bash(a)', 'Bash(a))'] });
+      type(page, 'model', 'claude-opus-4');
+      saveButton(page).click();
+
+      // Act
+      page.httpMock.expectOne(CLAUDE_CODE_URL).flush(
+        { detail: "Deny rule 'Bash(a))' is not allowed.", type: 'tag:foundry,2026:problems/Settings.InvalidDenyRule' },
+        { status: 400, statusText: 'Bad Request' },
+      );
+      await page.fixture.whenStable();
+      page.fixture.detectChanges();
+      await page.fixture.whenStable();
+
+      // Assert
+      expect(text(page, 'denyRule-0-error')).toBe('');
+      expect(text(page, 'denyRule-1-error')).toBe("Deny rule 'Bash(a))' is not allowed.");
+    });
+
+    it('should show a form-level error when the offending rule matches no row exactly', async () => {
+      // Arrange
+      const page = await loadPage({ additionalDenyRules: ['Bash(a)'] });
+      type(page, 'model', 'claude-opus-4');
+      saveButton(page).click();
+
+      // Act
+      page.httpMock.expectOne(CLAUDE_CODE_URL).flush(
+        { detail: "Deny rule 'Bash(a))' is not allowed.", type: 'tag:foundry,2026:problems/Settings.InvalidDenyRule' },
+        { status: 400, statusText: 'Bad Request' },
+      );
+      await page.fixture.whenStable();
+      page.fixture.detectChanges();
+
+      // Assert
+      expect(text(page, 'denyRule-0-error')).toBe('');
+      expect(page.el.querySelector('form.claude-code .general-settings__save-error')?.textContent?.trim()).toBe(
+        "Deny rule 'Bash(a))' is not allowed.",
+      );
+    });
+
+    it('should clear a stale form-level error after a later successful save', async () => {
+      // Arrange
+      const page = await loadPage();
+      type(page, 'model', 'claude-opus-4');
+      saveButton(page).click();
+      page.httpMock.expectOne(CLAUDE_CODE_URL).flush(
+        { detail: 'Settings not found.', type: 'tag:foundry,2026:problems/Settings.NotFound' },
+        { status: 404, statusText: 'Not Found' },
+      );
+      await page.fixture.whenStable();
+      page.fixture.detectChanges();
+
+      // Act
+      saveButton(page).click();
+      page.httpMock.expectOne(CLAUDE_CODE_URL).flush({ ...API_KEY_RESPONSE, model: 'claude-opus-4' });
+      await page.fixture.whenStable();
+      page.fixture.detectChanges();
+
+      // Assert
+      expect(page.el.querySelector('form.claude-code .general-settings__save-error')?.textContent?.trim()).toBe('');
+    });
+
+    it('should mark the read-only CI/CD rule list as a list for assistive technology', async () => {
+      // Arrange & Act
+      const page = await loadPage();
+
+      // Assert
+      expect(page.el.querySelector('ul.claude-code__rule-list')?.getAttribute('role')).toBe('list');
+    });
+
+    it('should state the CLI default hint only once in the model section', async () => {
+      // Arrange & Act
+      const page = await loadPage();
+
+      // Assert
+      expect(page.el.textContent?.match(/Leave empty to use the CLI default\./g)?.length).toBe(1);
     });
 
     it('should show a form-level error for an error without a field', async () => {

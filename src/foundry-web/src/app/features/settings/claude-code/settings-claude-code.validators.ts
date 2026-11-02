@@ -16,6 +16,12 @@ export const CI_CD_DENY_RULES: readonly string[] = [
   'Edit(compose.yaml:*)',
 ];
 
+// The server trims the model before capping its length, so the client caps the trimmed value too.
+export function trimmedMaxLengthValidator(control: AbstractControl): ValidationErrors | null {
+  const value: string = control.value ?? '';
+  return value.trim().length > MODEL_MAX_LENGTH ? { modelTooLong: true } : null;
+}
+
 export function denyRuleFormatValidator(control: AbstractControl): ValidationErrors | null {
   const value: string = control.value;
   if (!value) {
