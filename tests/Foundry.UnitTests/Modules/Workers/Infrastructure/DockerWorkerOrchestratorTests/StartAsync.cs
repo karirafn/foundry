@@ -7,14 +7,11 @@ using Foundry.Modules.Workers.Contracts;
 using Foundry.Modules.Workers.Domain.Entities;
 using Foundry.Modules.Workers.Domain.Entities.States;
 using Foundry.Modules.Workers.Domain.ValueObjects;
-using Foundry.Modules.Workers.Features;
 using Foundry.Modules.Workers.Features.Orchestration;
 using Foundry.Modules.Workers.Features.ContainerSpec;
 using Foundry.Modules.Workers.Infrastructure;
 using Foundry.Shared;
 using Foundry.UnitTests.Fakes.Workers;
-
-using Microsoft.Extensions.Options;
 
 using Shouldly;
 
@@ -26,13 +23,9 @@ public sealed class StartAsync
 {
     private const long BytesPerMegabyte = 1024L * 1024L;
     private const long NanoCpusPerCpu = 1_000_000_000L;
-
-    private static WorkerOptions DefaultOptions() => new()
-    {
-        MemoryLimitMb = 512,
-        CpuLimit = 1.5,
-        PidsLimit = 256,
-    };
+    private const int DefaultMemoryLimitMb = 512;
+    private const double DefaultCpuLimit = 1.5;
+    private const int DefaultPidsLimit = 256;
 
     private static WorkerContainerSpec MinimalSpec(
         string image = "test-image:latest",
@@ -42,7 +35,10 @@ public sealed class StartAsync
         IReadOnlyList<VolumeMount>? volumeMounts = null,
         IReadOnlyList<string>? capabilities = null,
         IReadOnlyDictionary<string, string>? labels = null,
-        bool unmaskSystemPaths = false) =>
+        bool unmaskSystemPaths = false,
+        int memoryLimitMb = DefaultMemoryLimitMb,
+        double cpuLimit = DefaultCpuLimit,
+        int pidsLimit = DefaultPidsLimit) =>
         new(
             Image: image,
             EnvironmentVariables: new Dictionary<string, string>(),
@@ -50,6 +46,9 @@ public sealed class StartAsync
             Labels: labels ?? new Dictionary<string, string>(),
             Command: [])
         {
+            MemoryLimitMb = memoryLimitMb,
+            CpuLimit = cpuLimit,
+            PidsLimit = pidsLimit,
             SecurityOptions = securityOptions ?? [],
             Devices = devices ?? [],
             VolumeMounts = volumeMounts ?? [],
@@ -57,57 +56,51 @@ public sealed class StartAsync
             UnmaskSystemPaths = unmaskSystemPaths,
         };
 
-    private static DockerWorkerOrchestrator BuildSut(
-        FakeDockerContainerRuntime runtime,
-        WorkerOptions? options = null) =>
-        new(runtime, Options.Create(options ?? DefaultOptions()));
+    private static DockerWorkerOrchestrator BuildSut(FakeDockerContainerRuntime runtime) => new(runtime);
 
     [Fact]
-    public async Task WhenStarted_SetsMemoryLimitFromOptions()
+    public async Task WhenStarted_SetsMemoryLimitFromSpec()
     {
         // Arrange
         FakeDockerContainerRuntime runtime = new();
-        WorkerOptions options = DefaultOptions();
-        DockerWorkerOrchestrator sut = BuildSut(runtime, options);
+        DockerWorkerOrchestrator sut = BuildSut(runtime);
 
         // Act
-        await sut.StartAsync(MinimalSpec(), CancellationToken.None);
+        await sut.StartAsync(MinimalSpec(memoryLimitMb: 768), CancellationToken.None);
 
         // Assert
         CreateContainerParameters captured = runtime.LastCreateAndStartParameters.ShouldNotBeNull();
-        captured.HostConfig.Memory.ShouldBe(options.MemoryLimitMb * BytesPerMegabyte);
+        captured.HostConfig.Memory.ShouldBe(768 * BytesPerMegabyte);
     }
 
     [Fact]
-    public async Task WhenStarted_SetsNanoCpusFromOptions()
+    public async Task WhenStarted_SetsNanoCpusFromSpec()
     {
         // Arrange
         FakeDockerContainerRuntime runtime = new();
-        WorkerOptions options = DefaultOptions();
-        DockerWorkerOrchestrator sut = BuildSut(runtime, options);
+        DockerWorkerOrchestrator sut = BuildSut(runtime);
 
         // Act
-        await sut.StartAsync(MinimalSpec(), CancellationToken.None);
+        await sut.StartAsync(MinimalSpec(cpuLimit: 0.5), CancellationToken.None);
 
         // Assert
         CreateContainerParameters captured = runtime.LastCreateAndStartParameters.ShouldNotBeNull();
-        captured.HostConfig.NanoCPUs.ShouldBe((long)(options.CpuLimit * NanoCpusPerCpu));
+        captured.HostConfig.NanoCPUs.ShouldBe((long)(0.5 * NanoCpusPerCpu));
     }
 
     [Fact]
-    public async Task WhenStarted_SetsPidsLimitFromOptions()
+    public async Task WhenStarted_SetsPidsLimitFromSpec()
     {
         // Arrange
         FakeDockerContainerRuntime runtime = new();
-        WorkerOptions options = DefaultOptions();
-        DockerWorkerOrchestrator sut = BuildSut(runtime, options);
+        DockerWorkerOrchestrator sut = BuildSut(runtime);
 
         // Act
-        await sut.StartAsync(MinimalSpec(), CancellationToken.None);
+        await sut.StartAsync(MinimalSpec(pidsLimit: 128), CancellationToken.None);
 
         // Assert
         CreateContainerParameters captured = runtime.LastCreateAndStartParameters.ShouldNotBeNull();
-        captured.HostConfig.PidsLimit.ShouldBe(options.PidsLimit);
+        captured.HostConfig.PidsLimit.ShouldBe(128);
     }
 
     [Fact]

@@ -6,11 +6,8 @@ using Docker.DotNet.Models;
 using Foundry.Modules.Credentials.Features.Login;
 using Foundry.Modules.Credentials.Infrastructure.Orchestration;
 using Foundry.Modules.Workers.Contracts;
-using Foundry.Modules.Workers.Features;
 using Foundry.Modules.Workers.Infrastructure;
 using Foundry.Shared.Infrastructure.Docker;
-
-using Microsoft.Extensions.Options;
 
 using Shouldly;
 
@@ -73,19 +70,12 @@ public sealed class LoginFlowIntegrationTests : IAsyncLifetime
             new VolumesCreateParameters { Name = _testVolumeName },
             TestContext.Current.CancellationToken);
 
-        WorkerOptions options = new()
-        {
-            MemoryLimitMb = 512,
-            CpuLimit = 1.0,
-            PidsLimit = 256,
-        };
-
         DockerContainerRuntime runtime = new(
             _dockerClient.Containers,
             _dockerClient.Volumes,
             _dockerClient.Exec);
 
-        _workerSut = new DockerWorkerOrchestrator(runtime, Options.Create(options));
+        _workerSut = new DockerWorkerOrchestrator(runtime);
         _credentialsSut = new CredentialsOrchestrator(runtime);
     }
 

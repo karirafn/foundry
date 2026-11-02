@@ -19,3 +19,12 @@ export function extractErrorMessage(err: HttpErrorResponse | TimeoutError): stri
 
   return null;
 }
+
+export function extractErrorCode(err: HttpErrorResponse): string | null {
+  if (err.error === null || typeof err.error !== 'object' || typeof err.error.type !== 'string') {
+    return null;
+  }
+
+  const code: string = err.error.type.slice(err.error.type.lastIndexOf('/') + 1);
+  return code || null;
+}

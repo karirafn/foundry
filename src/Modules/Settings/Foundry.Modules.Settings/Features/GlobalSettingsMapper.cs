@@ -39,6 +39,10 @@ internal static class GlobalSettingsMapper
             settings.LastImageBuiltAt is not null,
             nextRetryAt,
             attempt,
-            settings.AllowedProviderHosts);
+            settings.AllowedProviderHosts,
+            settings.WorkerResourceLimits.MemoryLimitMb,
+            settings.WorkerResourceLimits.CpuLimit,
+            settings.WorkerResourceLimits.PidsLimit,
+            [.. settings.WorkerMounts.Mounts.Select(m => new WorkerMountEntry(m.ContainerPath, m.HostPath, m.ReadOnly))]);
     }
 }

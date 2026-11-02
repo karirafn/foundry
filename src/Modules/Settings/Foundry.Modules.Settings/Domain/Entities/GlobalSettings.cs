@@ -34,6 +34,8 @@ public sealed class GlobalSettings : AggregateRoot<GlobalSettingsId>
         PollIntervalSeconds = DefaultPollIntervalSeconds;
         AutoResumeOnUsageReset = true;
         WorkerImageConfiguration = WorkerImageConfiguration.Default;
+        WorkerResourceLimits = WorkerResourceLimits.Default;
+        WorkerMounts = WorkerMounts.Default;
         WorkerPrompts = WorkerPrompts.Default;
         ImageBuildState = new ImageBuildState.Idle();
         CreatedAt = createdAt;
@@ -57,6 +59,10 @@ public sealed class GlobalSettings : AggregateRoot<GlobalSettingsId>
     public bool AutoResumeOnUsageReset { get; private set; }
 
     public WorkerImageConfiguration WorkerImageConfiguration { get; private set; } = null!;
+
+    public WorkerResourceLimits WorkerResourceLimits { get; private set; } = null!;
+
+    public WorkerMounts WorkerMounts { get; private set; } = null!;
 
     public IReadOnlyList<string> AllowedProviderHosts { get; private set; } = [];
 
@@ -165,6 +171,19 @@ public sealed class GlobalSettings : AggregateRoot<GlobalSettingsId>
         }
 
         WorkerImageConfiguration = config;
+        UpdatedAt = DateTimeOffset.UtcNow;
+        return true;
+    }
+
+    public bool UpdateWorkerEnvironment(WorkerResourceLimits limits, WorkerMounts mounts)
+    {
+        if (WorkerResourceLimits == limits && WorkerMounts == mounts)
+        {
+            return false;
+        }
+
+        WorkerResourceLimits = limits;
+        WorkerMounts = mounts;
         UpdatedAt = DateTimeOffset.UtcNow;
         return true;
     }

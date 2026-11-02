@@ -5,6 +5,7 @@ using Foundry.Modules.Credentials.Contracts.Queries;
 using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Contracts.Queries;
+using Foundry.Modules.Settings.Contracts;
 using Foundry.Modules.Settings.Contracts.Queries;
 using Foundry.Modules.Workers.Contracts;
 using Foundry.Modules.Workers.Domain.Entities;
@@ -161,6 +162,7 @@ internal sealed class IssueClaimedHandler(
         int timeoutMinutes = await settingsQueries.GetTimeoutMinutesAsync(cancellationToken);
         bool installsDocker = await settingsQueries.GetWorkerImageInstallsDockerAsync(cancellationToken);
         string imageTag = await settingsQueries.GetWorkerImageTagAsync(cancellationToken);
+        WorkerResourceLimitsSnapshot limits = await settingsQueries.GetWorkerResourceLimitsAsync(cancellationToken);
 
         Result<string> systemPromptResult = SystemPromptBuilder.Build(
             claimed.IssueNumber,
@@ -238,7 +240,8 @@ internal sealed class IssueClaimedHandler(
                 throw new UnreachableException($"Unhandled WorkerProvider variant: {claimed.Provider.GetType().Name}");
         }
 
-        Result<List<BindMount>> mountsResult = BuildBindMounts();
+        IReadOnlyList<WorkerMountEntry> mountEntries = await settingsQueries.GetWorkerMountsAsync(cancellationToken);
+        Result<List<BindMount>> mountsResult = BuildBindMounts(mountEntries);
 
         if (mountsResult is not Result<List<BindMount>>.Success mountsSuccess)
         {
@@ -259,6 +262,9 @@ internal sealed class IssueClaimedHandler(
             labels,
             ["/entrypoint.sh"])
         {
+            MemoryLimitMb = limits.MemoryLimitMb,
+            CpuLimit = limits.CpuLimit,
+            PidsLimit = limits.PidsLimit,
             VolumeMounts = volumeMounts,
         };
 
@@ -283,47 +289,22 @@ internal sealed class IssueClaimedHandler(
         };
     }
 
-    private Result<List<BindMount>> BuildBindMounts()
+    private static Result<List<BindMount>> BuildBindMounts(IReadOnlyList<WorkerMountEntry> mountEntries)
     {
         List<BindMount> mounts = [];
 
-        Result<List<BindMount>> readOnlyResult = ResolveBindMounts(_options.Mounts, readOnly: true);
-        if (readOnlyResult is not Result<List<BindMount>>.Success readOnlySuccess)
+        foreach (WorkerMountEntry entry in mountEntries)
         {
-            return readOnlyResult;
-        }
-
-        mounts.AddRange(readOnlySuccess.Value);
-
-        Result<List<BindMount>> writableResult = ResolveBindMounts(_options.WritableMounts, readOnly: false);
-        if (writableResult is not Result<List<BindMount>>.Success writableSuccess)
-        {
-            return writableResult;
-        }
-
-        mounts.AddRange(writableSuccess.Value);
-
-        return Result<List<BindMount>>.Ok(mounts);
-    }
-
-    private static Result<List<BindMount>> ResolveBindMounts(
-        IReadOnlyDictionary<string, string> mounts,
-        bool readOnly)
-    {
-        List<BindMount> resolved = [];
-
-        foreach (KeyValuePair<string, string> mount in mounts)
-        {
-            Result<string> resolvedPath = ResolveAndValidateHostPath(mount.Value);
+            Result<string> resolvedPath = ResolveAndValidateHostPath(entry.HostPath);
             if (resolvedPath is not Result<string>.Success resolvedSuccess)
             {
                 return Result<List<BindMount>>.Fail(((Result<string>.Failure)resolvedPath).Error);
             }
 
-            resolved.Add(new BindMount(resolvedSuccess.Value, mount.Key, ReadOnly: readOnly));
+            mounts.Add(new BindMount(resolvedSuccess.Value, entry.ContainerPath, ReadOnly: entry.ReadOnly));
         }
 
-        return Result<List<BindMount>>.Ok(resolved);
+        return Result<List<BindMount>>.Ok(mounts);
     }
 
     private static Result<string> ResolveAndValidateHostPath(string path)

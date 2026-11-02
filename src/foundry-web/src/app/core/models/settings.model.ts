@@ -53,6 +53,19 @@ export interface WorkerLimits {
   timeoutMinutes: number;
 }
 
+export interface WorkerMountEntry {
+  containerPath: string;
+  hostPath: string;
+  readOnly: boolean;
+}
+
+export interface WorkerEnvironment {
+  memoryLimitMb: number;
+  cpuLimit: number;
+  pidsLimit: number;
+  mounts: WorkerMountEntry[];
+}
+
 export interface ClaudeAccountSummary {
   accountId: string;
   authMode: string;
@@ -87,6 +100,10 @@ export interface GlobalSettingsResponse {
   nextRetryAt: string | null;
   attempt: number;
   allowedProviderHosts: string[];
+  memoryLimitMb: number;
+  cpuLimit: number;
+  pidsLimit: number;
+  mounts: WorkerMountEntry[];
 }
 
 export interface UpdatePromptTemplatesRequest {

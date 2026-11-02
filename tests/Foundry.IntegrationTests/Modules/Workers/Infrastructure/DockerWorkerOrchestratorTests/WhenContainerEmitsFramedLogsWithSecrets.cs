@@ -1,11 +1,8 @@
 using Docker.DotNet;
 using Docker.DotNet.Models;
 
-using Foundry.Modules.Workers.Features;
 using Foundry.Modules.Workers.Infrastructure;
 using Foundry.Shared.Infrastructure.Docker;
-
-using Microsoft.Extensions.Options;
 
 using Shouldly;
 
@@ -82,19 +79,12 @@ public sealed class WhenContainerEmitsFramedLogsWithSecrets : IAsyncLifetime
             _containerId,
             TestContext.Current.CancellationToken);
 
-        WorkerOptions options = new()
-        {
-            MemoryLimitMb = 512,
-            CpuLimit = 1.0,
-            PidsLimit = 256,
-        };
-
         DockerContainerRuntime runtime = new(
             _dockerClient.Containers,
             _dockerClient.Volumes,
             _dockerClient.Exec);
 
-        _sut = new DockerWorkerOrchestrator(runtime, Options.Create(options));
+        _sut = new DockerWorkerOrchestrator(runtime);
     }
 
     async ValueTask IAsyncDisposable.DisposeAsync()

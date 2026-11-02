@@ -38,7 +38,11 @@ internal sealed class StubGlobalSettingsQueries(
         HasUsableImage: false,
         NextRetryAt: null,
         Attempt: attempt,
-        AllowedProviderHosts: []);
+        AllowedProviderHosts: [],
+        MemoryLimitMb: 8192,
+        CpuLimit: 2.0,
+        PidsLimit: 512,
+        Mounts: []);
 
     public Task<GlobalSettingsSummary?> GetSettingsAsync(CancellationToken cancellationToken)
         => Task.FromResult(settingsExists ? _summary : (GlobalSettingsSummary?)null);
@@ -77,6 +81,12 @@ internal sealed class StubGlobalSettingsQueries(
     public Task<IReadOnlyDictionary<string, string>> GetWorkerImageBuildArgsAsync(
         CancellationToken cancellationToken)
         => Task.FromResult(buildArgs ?? (IReadOnlyDictionary<string, string>)new Dictionary<string, string>());
+
+    public Task<WorkerResourceLimitsSnapshot> GetWorkerResourceLimitsAsync(CancellationToken cancellationToken)
+        => Task.FromResult(new WorkerResourceLimitsSnapshot(8192, 2.0, 512));
+
+    public Task<IReadOnlyList<WorkerMountEntry>> GetWorkerMountsAsync(CancellationToken cancellationToken)
+        => Task.FromResult<IReadOnlyList<WorkerMountEntry>>([]);
 
     public Task<IReadOnlyList<string>> GetAllowedProviderHostsAsync(CancellationToken cancellationToken)
         => Task.FromResult<IReadOnlyList<string>>([]);

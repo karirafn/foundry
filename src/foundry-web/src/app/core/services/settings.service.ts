@@ -1,7 +1,7 @@
 import { Injectable, Signal, WritableSignal, computed, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
-import { extractErrorMessage } from '../http/extract-error-message';
+import { extractErrorCode, extractErrorMessage } from '../http/extract-error-message';
 import { Observable, forkJoin, merge } from 'rxjs';
 import { debounceTime, switchMap } from 'rxjs/operators';
 import {
@@ -16,6 +16,7 @@ import {
   LoginSessionUpdate,
   OAuthCredentialInfo,
   UpdatePromptTemplatesRequest,
+  WorkerEnvironment,
   WorkerImageFlags,
   WorkerLimits,
 } from '../models/settings.model';
@@ -29,6 +30,7 @@ const SAVE_LIMITS_ERROR = 'Failed to save worker limits';
 const SAVE_PROMPTS_ERROR = 'Failed to save prompt templates';
 const SAVE_DISPATCH_ERROR = 'Failed to save dispatch settings';
 const SAVE_IMAGE_FLAGS_ERROR = 'Failed to save worker image settings';
+const SAVE_WORKER_ENVIRONMENT_ERROR = 'Failed to save worker environment';
 const SAVE_HOSTS_ERROR = 'Failed to save provider hosts';
 const START_LOGIN_ERROR = 'Failed to start login';
 
@@ -157,6 +159,21 @@ export class SettingsService {
   private readonly _saveImageFlagsErrorSignal: WritableSignal<string | null> = signal(null);
   readonly saveImageFlagsError: Signal<string | null> = this._saveImageFlagsErrorSignal.asReadonly();
 
+  private readonly _workerEnvironmentSignal: WritableSignal<WorkerEnvironment | null> = signal(null);
+  readonly workerEnvironment: Signal<WorkerEnvironment | null> = this._workerEnvironmentSignal.asReadonly();
+
+  private readonly _savingWorkerEnvironmentSignal: WritableSignal<boolean> = signal(false);
+  readonly savingWorkerEnvironment: Signal<boolean> = this._savingWorkerEnvironmentSignal.asReadonly();
+
+  private readonly _saveWorkerEnvironmentSuccessSignal: WritableSignal<boolean> = signal(false);
+  readonly saveWorkerEnvironmentSuccess: Signal<boolean> = this._saveWorkerEnvironmentSuccessSignal.asReadonly();
+
+  private readonly _saveWorkerEnvironmentErrorSignal: WritableSignal<string | null> = signal(null);
+  readonly saveWorkerEnvironmentError: Signal<string | null> = this._saveWorkerEnvironmentErrorSignal.asReadonly();
+
+  private readonly _saveWorkerEnvironmentErrorCodeSignal: WritableSignal<string | null> = signal(null);
+  readonly saveWorkerEnvironmentErrorCode: Signal<string | null> = this._saveWorkerEnvironmentErrorCodeSignal.asReadonly();
+
   private readonly _savingHostsSignal: WritableSignal<boolean> = signal(false);
   readonly savingHosts: Signal<boolean> = this._savingHostsSignal.asReadonly();
 
@@ -199,6 +216,10 @@ export class SettingsService {
     this._saveDispatchErrorSignal.set(null);
     this._saveImageFlagsErrorSignal.set(null);
     this._saveHostsErrorSignal.set(null);
+    this._saveWorkerEnvironmentErrorSignal.set(null);
+    this._saveWorkerEnvironmentErrorCodeSignal.set(null);
+    this._saveWorkerEnvironmentSuccessSignal.set(false);
+    this._savingWorkerEnvironmentSignal.set(false);
     this.saveSuccess.set(false);
     this._saveLimitsSuccessSignal.set(false);
     this._savePromptsSuccessSignal.set(false);
@@ -229,6 +250,7 @@ export class SettingsService {
           this._allowedProviderHostsSignal.set(settings.allowedProviderHosts ?? []);
           this._dispatchService.updateFromSettings(settings);
           this._workerImageFlagsSignal.set(this._mapToWorkerImageFlags(settings));
+          this._workerEnvironmentSignal.set(this._mapToWorkerEnvironment(settings));
           this._applyImageBuildResponse(settings);
           this.loading.set(false);
           observer.next();
@@ -431,6 +453,27 @@ export class SettingsService {
     });
   }
 
+  updateWorkerEnvironment(environment: WorkerEnvironment): void {
+    this._saveWorkerEnvironmentErrorSignal.set(null);
+    this._saveWorkerEnvironmentErrorCodeSignal.set(null);
+    this._saveWorkerEnvironmentSuccessSignal.set(false);
+    this._savingWorkerEnvironmentSignal.set(true);
+
+    this._http.put<GlobalSettingsResponse>('/api/settings/worker-environment', environment).subscribe({
+      next: (response) => {
+        this._workerEnvironmentSignal.set(this._mapToWorkerEnvironment(response));
+        this._savingWorkerEnvironmentSignal.set(false);
+        this._saveWorkerEnvironmentSuccessSignal.set(true);
+      },
+      error: (err: HttpErrorResponse) => {
+        console.error(err);
+        this._saveWorkerEnvironmentErrorSignal.set(extractErrorMessage(err) ?? SAVE_WORKER_ENVIRONMENT_ERROR);
+        this._saveWorkerEnvironmentErrorCodeSignal.set(extractErrorCode(err));
+        this._savingWorkerEnvironmentSignal.set(false);
+      },
+    });
+  }
+
   retryImageBuild(): void {
     this._saveImageFlagsErrorSignal.set(null);
     this._saveImageFlagsSuccessSignal.set(false);
@@ -470,6 +513,15 @@ export class SettingsService {
       installAngular: response.installAngular,
       installChromium: response.installChromium,
       installDocker: response.installDocker,
+    };
+  }
+
+  private _mapToWorkerEnvironment(response: GlobalSettingsResponse): WorkerEnvironment {
+    return {
+      memoryLimitMb: response.memoryLimitMb,
+      cpuLimit: response.cpuLimit,
+      pidsLimit: response.pidsLimit,
+      mounts: (response.mounts ?? []).map((mount) => ({ ...mount })),
     };
   }
 

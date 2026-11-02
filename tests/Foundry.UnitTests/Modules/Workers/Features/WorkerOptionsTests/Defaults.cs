@@ -17,11 +17,6 @@ public sealed class Defaults
 
         // Assert
         options.ShouldSatisfyAllConditions(
-            () => options.Mounts.ShouldBeEmpty(),
-            () => options.WritableMounts.ShouldBeEmpty(),
-            () => options.MemoryLimitMb.ShouldBe(8192),
-            () => options.CpuLimit.ShouldBe(2.0),
-            () => options.PidsLimit.ShouldBe(512),
             () => options.Settings.ShouldNotBeNull(),
             () => options.Settings.AdditionalDenyRules.ShouldBeEmpty(),
             () => options.Settings.Model.ShouldBeNull());

@@ -13,13 +13,9 @@ using Foundry.Modules.Workers.Features.ContainerSpec;
 using Foundry.Shared;
 using Foundry.Shared.Infrastructure.Docker;
 
-using Microsoft.Extensions.Options;
-
 namespace Foundry.Modules.Workers.Infrastructure;
 
-internal sealed class DockerWorkerOrchestrator(
-    IDockerContainerRuntime runtime,
-    IOptions<WorkerOptions> optionsAccessor) : IWorkerOrchestrator
+internal sealed class DockerWorkerOrchestrator(IDockerContainerRuntime runtime) : IWorkerOrchestrator
 {
     private const string WorkerRunLabelKey = "foundry.worker-run-id";
     private const string ManagedLabelKey = "foundry.managed";
@@ -27,8 +23,6 @@ internal sealed class DockerWorkerOrchestrator(
     private const long NanoCpusPerCpu = 1_000_000_000L;
     private const int DockerErrorMessageMaxLength = 500;
     private const int ContainerOutputMaxBytes = 65_536;
-
-    private readonly WorkerOptions _options = optionsAccessor.Value;
 
     internal static string FormatBind(BindMount mount) =>
         mount.ReadOnly
@@ -119,9 +113,9 @@ internal sealed class DockerWorkerOrchestrator(
                 HostConfig = new HostConfig
                 {
                     Binds = [.. spec.BindMounts.Select(FormatBind)],
-                    Memory = _options.MemoryLimitMb * BytesPerMegabyte,
-                    NanoCPUs = (long)(_options.CpuLimit * NanoCpusPerCpu),
-                    PidsLimit = _options.PidsLimit,
+                    Memory = spec.MemoryLimitMb * BytesPerMegabyte,
+                    NanoCPUs = (long)(spec.CpuLimit * NanoCpusPerCpu),
+                    PidsLimit = spec.PidsLimit,
                     SecurityOpt = spec.SecurityOptions.Count > 0
                         ? [.. spec.SecurityOptions]
                         : null,

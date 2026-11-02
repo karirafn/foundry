@@ -19,7 +19,12 @@ public sealed class VolumeMounts
             EnvironmentVariables: new Dictionary<string, string>(),
             BindMounts: [],
             Labels: new Dictionary<string, string>(),
-            Command: []);
+            Command: [])
+        {
+            MemoryLimitMb = 512,
+            CpuLimit = 1.0,
+            PidsLimit = 256,
+        };
 
         // Assert
         spec.VolumeMounts.ShouldBeEmpty();
@@ -39,6 +44,9 @@ public sealed class VolumeMounts
             Labels: new Dictionary<string, string>(),
             Command: [])
         {
+            MemoryLimitMb = 512,
+            CpuLimit = 1.0,
+            PidsLimit = 256,
             VolumeMounts = [credentialMount],
         };
 

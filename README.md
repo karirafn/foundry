@@ -35,30 +35,9 @@ Generate a fine-grained token at **Settings > Developer settings > Personal acce
 
 ### Worker bind mounts
 
-Workers run in sandboxed Docker containers. Use `Mounts` (read-only) and `WritableMounts` (read-write) to share host paths into every worker container.
+Worker host bind mounts and container resource limits (memory, CPU, PIDs) are managed on the **Worker environment** settings page in the dashboard, stored in the database, and read fresh on each dispatch. Each mount is keyed on its container path with a read-only/writable flag. Do not mount `settings.json` directly — it is generated at dispatch time from `Workers:Settings` (see below).
 
-Dictionary keys are container paths; values are host paths. Symlinks are resolved at dispatch time.
-
-Common mounts for Claude Code workers:
-
-| Host path | Container path | Dictionary |
-|---|---|---|
-| `~/.claude/skills` | `/home/node/.claude/skills` | `Mounts` |
-| `~/.claude/rules` | `/home/node/.claude/rules` | `Mounts` |
-| `~/.claude/commands` | `/home/node/.claude/commands` | `Mounts` |
-| `~/.claude/hooks` | `/home/node/.claude/hooks` | `Mounts` |
-| `~/.claude/plugins` | `/home/node/.claude/plugins` | `Mounts` |
-| `~/.claude/observations` | `/home/node/.claude/observations` | `WritableMounts` |
-
-Do not mount `settings.json` directly — it is generated at dispatch time from `Workers:Settings` (see below).
-
-Example — mount skills and rules read-only, observations read-write:
-
-```bash
-dotnet user-secrets set "Workers:Mounts:/home/node/.claude/skills" "/home/user/.claude/skills" --project src/Foundry.WebApi
-dotnet user-secrets set "Workers:Mounts:/home/node/.claude/rules" "/home/user/.claude/rules" --project src/Foundry.WebApi
-dotnet user-secrets set "Workers:WritableMounts:/home/node/.claude/observations" "/home/user/.claude/observations" --project src/Foundry.WebApi
-```
+Legacy `Workers:Mounts`, `Workers:WritableMounts`, `Workers:MemoryLimitMb`, `Workers:CpuLimit` and `Workers:PidsLimit` config keys are no longer read after upgrade; re-enter them on the Worker environment settings page (there is no automatic import, per ADR 0080).
 
 On Windows, use the full Windows path (e.g. `C:\Users\you\.claude\skills`). Docker Desktop must have path sharing enabled — see Windows notes below.
 

@@ -398,10 +398,20 @@ namespace Foundry.WebApi.Migrations
                         .HasColumnType("TEXT")
                         .HasColumnName("worker_image_configuration");
 
+                    b.Property<string>("WorkerMounts")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("worker_mounts");
+
                     b.Property<string>("WorkerPrompts")
                         .IsRequired()
                         .HasColumnType("TEXT")
                         .HasColumnName("worker_prompts");
+
+                    b.Property<string>("WorkerResourceLimits")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("worker_resource_limits");
 
                     b.HasKey("Id");
 
