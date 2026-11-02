@@ -16,6 +16,14 @@ Ephemeral — created on demand, destroyed after completion.
 Has no identity independent of its WorkerRun — the container is the execution mechanism, not a separate domain concept.
 Workers clone the repo, implement the issue, push a branch, and open a PR. Foundry discovers each run's outcome by polling the container and querying the provider after the container exits.
 
+### Host Hooks
+
+The Claude Code hooks a worker runs, sourced from the operator's host Claude Code `settings.json` rather than stored by Foundry.
+The host file path and an exclusion list live on Global Settings (`HostHooks`). At dispatch the file is bind-mounted read-only at a fixed staging path (`/run/foundry/host-settings.json`, never `~/.claude/settings.json`), and on every container start the entrypoint merges the file's `hooks` object into the Foundry-generated worker settings; no other host key (`permissions`, `env`, `statusLine`, …) is imported, so a hook added on the host reaches the next worker with no Foundry change.
+Exclusion is exact: a hook entry whose `command` equals an exclusion entry is dropped, and matcher groups and events left empty are removed. Exclusion entries are trimmed, non-empty and de-duplicated; the path must be absolute (POSIX or Windows drive-rooted) and outside sensitive host paths.
+Fail-closed: a configured file that is missing, unreadable, or not valid JSON fails bootstrap (`WorkerBootstrapFailed`, stage `host-settings`, detail naming the host settings file) — hooks are guardrails, so silently dropping them would produce unchecked commits. A file with no `hooks` key yields zero host hooks; no configured path means no mount and no host hooks.
+Because the effective hooks are only known at container start, each run logs `Host hooks applied: N (excluded: M)`, the applied commands, and any exclusion entry that matched no hook.
+
 ## Worker Authentication
 
 How a worker container authenticates with the Anthropic API (Claude Code).
@@ -216,12 +224,12 @@ A Monitored Repository carries no account reference; on each eligibility evaluat
 ## Global Settings
 
 A strongly-typed single-row entity storing all UI-configurable settings.
-Includes worker settings (max concurrent, timeout, and the Worker Prompts value object — system prompt template, worker prompt template, and branch naming instruction), the Worker Image Configuration (image tag, build toggle, and toolchain flags) and Image Build State, the Worker Resource Limits (memory MB, CPU count, PID ceiling) and Worker Mounts (host bind mounts, each keyed on container path with a read-only/writable flag), the Claude Code Settings (model, `BlockCiCdEdits` toggle, and additional deny rules), the credit-probe interval (`ProbeIntervalMinutes`, default 60, validated to a minimum of 5), and dispatch pause controls: usage-limit controls (`AutoResumeOnUsageReset`, `UsageLimitResetsAt`) and the separate manual operator pause (`IsDispatchPaused`).
+Includes worker settings (max concurrent, timeout, and the Worker Prompts value object — system prompt template, worker prompt template, and branch naming instruction), the Worker Image Configuration (image tag, build toggle, and toolchain flags) and Image Build State, the Worker Resource Limits (memory MB, CPU count, PID ceiling) and Worker Mounts (host bind mounts, each keyed on container path with a read-only/writable flag), the Claude Code Settings (model, `BlockCiCdEdits` toggle, and additional deny rules), the Host Hooks source (host settings file path and hook exclusion list), the credit-probe interval (`ProbeIntervalMinutes`, default 60, validated to a minimum of 5), and dispatch pause controls: usage-limit controls (`AutoResumeOnUsageReset`, `UsageLimitResetsAt`) and the separate manual operator pause (`IsDispatchPaused`).
 The Worker Prompts fields are non-null DB values (seeded from code defaults, backfilled for legacy rows) with no `IConfiguration` fallback — the dashboard always shows the values in effect, and `WorkerPrompts.Create` enforces their invariants (non-empty, length-bounded, worker template contains `{issueNumber}`, branch naming free of control characters).
 `BlockCiCdEdits` is a boolean; the 7 CI/CD deny rules are a code constant in `WorkerSettingsBuilder`, never stored. When true they are injected into every worker's `permissions.deny`; when false the worker relies on soft prompt guidance (the system prompt still tells workers not to touch CI/CD files). The model is optional (unset lets Claude Code use its own default) and additional deny rules are appended after the always-enforced base deny list.
 The auth-invalid pause is not stored here — it is `ClaudeAccount.Validity` in the Credentials module (see Worker Authentication).
 `ProbeIntervalMinutes` governs how long the credit block waits between probes (see Credit Probe); the operator sets it in the dispatch-settings form, `GlobalSettings.UpdateProbeInterval` rejects a below-minimum value, and the credit-probe scheduler reads it via `IGlobalSettingsQueries.GetProbeIntervalMinutesAsync` at each arm.
-DB is the single source of truth — `IConfiguration` is not consulted for settings the UI manages.
+DB is the single source of truth — it is the only source for worker settings; `IConfiguration` is not consulted for any setting the UI manages, and the `Workers` configuration section no longer exists.
 
 ## Monitor
 
