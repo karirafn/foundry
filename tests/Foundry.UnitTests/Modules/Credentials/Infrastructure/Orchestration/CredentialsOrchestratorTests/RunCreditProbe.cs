@@ -183,7 +183,7 @@ public sealed class RunCreditProbe
     }
 
     [Fact]
-    public async Task WhenOAuthMode_MountsCredentialVolumeReadOnly()
+    public async Task WhenOAuthMode_MountsCredentialVolumeReadWrite()
     {
         // Arrange
         FakeDockerContainerRuntime runtime = new();
@@ -199,7 +199,7 @@ public sealed class RunCreditProbe
             m.Type == "volume"
             && m.Source == WorkerVolumeNames.CredentialVolumeName
             && m.Target == WorkerVolumeNames.ClaudeConfigContainerPath
-            && m.ReadOnly);
+            && !m.ReadOnly);
     }
 
     [Fact]

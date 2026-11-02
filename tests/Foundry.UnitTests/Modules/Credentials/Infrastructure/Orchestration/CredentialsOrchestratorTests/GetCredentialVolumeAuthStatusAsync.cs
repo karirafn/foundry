@@ -16,7 +16,7 @@ public sealed class GetCredentialVolumeAuthStatusAsync
         new(runtime);
 
     [Fact]
-    public async Task WhenStarted_MountsCredentialVolumeReadOnly()
+    public async Task WhenStarted_MountsCredentialVolumeReadWrite()
     {
         // Arrange
         string validJson =
@@ -36,7 +36,7 @@ public sealed class GetCredentialVolumeAuthStatusAsync
             m.Type == "volume"
             && m.Source == WorkerVolumeNames.CredentialVolumeName
             && m.Target == WorkerVolumeNames.ClaudeConfigContainerPath
-            && m.ReadOnly);
+            && !m.ReadOnly);
     }
 
     [Fact]
