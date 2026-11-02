@@ -54,6 +54,102 @@ fail_bootstrap() {
 }
 
 # ---------------------------------------------------------------------------
+# merge_host_hooks <settings_json> <host_settings_file> <exclusions_json>
+#
+# Prints <settings_json> with the `hooks` object of the operator's host Claude
+# Code settings file merged in.  Only `hooks` is imported — every other host key
+# (permissions, env, statusLine, ...) is ignored.  Every hook entry whose
+# `command` exactly matches an entry of the <exclusions_json> array is dropped;
+# matcher groups and events left empty are removed.  Host groups are appended
+# after any groups the generated settings already carry for the same event.
+#
+# Logs "Host hooks applied: N (excluded: M)", each applied command and each
+# exclusion that matched no hook to stderr.
+#
+# Fails closed: a missing, unreadable or invalid file (not a JSON object, or a
+# `hooks` value that is not an object of matcher-group arrays) emits the
+# bootstrap-failure sentinel naming the file and returns non-zero — hooks are
+# guardrails, so silently dropping them would produce unchecked commits.
+# ---------------------------------------------------------------------------
+merge_host_hooks() {
+    local settings_json="$1"
+    local host_file="$2"
+    local exclusions_json="${3:-[]}"
+
+    if ! command -v jq > /dev/null 2>&1; then
+        fail_bootstrap "host-settings" "jq is not installed; cannot merge hooks from host settings file $host_file"
+        return 1
+    fi
+
+    if [[ ! -f "$host_file" || ! -r "$host_file" ]]; then
+        echo "ERROR: host settings file $host_file is missing or unreadable." >&2
+        fail_bootstrap "host-settings" "host settings file $host_file is missing or unreadable"
+        return 1
+    fi
+
+    local host_json
+    if ! host_json="$(jq -cs '
+            if length == 1
+               and (.[0] | type) == "object"
+               and ((.[0].hooks // {}) | type) == "object"
+               and all((.[0].hooks // {})[]; type == "array" and all(.[]; type == "object" and ((.hooks // []) | type) == "array"))
+            then .[0]
+            else error("unexpected shape")
+            end' "$host_file" 2> /dev/null)"; then
+        echo "ERROR: host settings file $host_file is not valid JSON or has an unexpected hooks shape." >&2
+        fail_bootstrap "host-settings" "host settings file $host_file is not valid JSON"
+        return 1
+    fi
+
+    if ! printf '%s' "$exclusions_json" | jq -e 'type == "array" and all(.[]; type == "string")' > /dev/null 2>&1; then
+        fail_bootstrap "host-settings" "hook exclusion list is not a JSON array of strings; cannot merge host settings file $host_file"
+        return 1
+    fi
+
+    # errexit is suspended inside a function whose caller tests its status, so every
+    # jq failure below is checked explicitly.
+    local merge_result
+    if ! merge_result="$(jq -cn \
+        --argjson base "$settings_json" \
+        --argjson host "$host_json" \
+        --argjson excluded "$exclusions_json" '
+        def excluded($command): $command != null and any($excluded[]; . == $command);
+        def hook_label: .command // ("<" + (.type // "hook") + " hook>");
+
+        ($host.hooks // {}) as $hooks
+        | [$hooks[][] | (.hooks // [])[]] as $all
+        | ($hooks
+            | with_entries(
+                .value |= [.[] | .hooks = [(.hooks // [])[] | select(excluded(.command) | not)] | select(.hooks | length > 0)]
+              )
+            | with_entries(select(.value | length > 0))) as $kept
+        | [$kept[][] | .hooks[]] as $applied
+        | {
+            settings: (
+              if ($kept | length) == 0 then $base
+              else $base | .hooks = (reduce ($kept | to_entries[]) as $e (.hooks // {};
+                     .[$e.key] = ((.[$e.key] // []) + $e.value)))
+              end),
+            applied: [$applied[] | hook_label],
+            excluded_count: ([$all[] | select(excluded(.command))] | length),
+            unmatched: [$excluded[] | . as $x | select(any($all[]; .command == $x) | not)]
+          }')"; then
+        fail_bootstrap "host-settings" "could not merge hooks from host settings file $host_file"
+        return 1
+    fi
+
+    local applied_count excluded_count
+    applied_count="$(printf '%s' "$merge_result" | jq '.applied | length')"
+    excluded_count="$(printf '%s' "$merge_result" | jq '.excluded_count')"
+
+    echo "Host hooks applied: ${applied_count} (excluded: ${excluded_count})" >&2
+    printf '%s' "$merge_result" | jq -r '.applied[] | "  applied: " + .' >&2
+    printf '%s' "$merge_result" | jq -r '.unmatched[] | "  exclusion matched no hook: " + .' >&2
+
+    printf '%s' "$merge_result" | jq -c '.settings'
+}
+
+# ---------------------------------------------------------------------------
 # start_rootless_dockerd
 #
 # Starts rootless dockerd in the background and polls until its socket is ready.
@@ -167,19 +263,27 @@ if [[ "$sys_prompt_bytes" -ge "$MAX_SYSTEM_PROMPT_BYTES" ]]; then
 fi
 unset sys_prompt_bytes
 
-if [[ -n "${CLAUDE_SETTINGS_JSON:-}" ]]; then
+if [[ -n "${CLAUDE_SETTINGS_JSON:-}" || -n "${FOUNDRY_HOST_SETTINGS_FILE:-}" ]]; then
     if [[ ! -w ~/.claude ]]; then
         echo "ERROR: ~/.claude is not writable by $(whoami). Rebuild the worker image: docker build -t foundry-worker:local workers/" >&2
         exit 1
+    fi
+    settings_json="${CLAUDE_SETTINGS_JSON:-}"
+    [[ -n "$settings_json" ]] || settings_json='{}'
+    # The host settings file is mounted read-only at a staging path (never ~/.claude/settings.json);
+    # only its hooks are merged in, minus the operator's exclusion list.
+    if [[ -n "${FOUNDRY_HOST_SETTINGS_FILE:-}" ]]; then
+        settings_json="$(merge_host_hooks "$settings_json" "$FOUNDRY_HOST_SETTINGS_FILE" "${FOUNDRY_HOST_HOOK_EXCLUSIONS:-[]}")" || exit 1
     fi
     # Write via a temp file and atomically replace any pre-existing read-only settings.json.
     # mv -f replaces a 444 file owned by the same user (node owns the dir, so replacement is
     # permitted), fixing both re-run breakage and any concurrent-worker write race (last writer
     # wins with identical content). settings.json is regenerated fresh on every container start.
     settings_tmp="$(mktemp)"
-    printf '%s\n' "$CLAUDE_SETTINGS_JSON" > "$settings_tmp"
+    printf '%s\n' "$settings_json" > "$settings_tmp"
     chmod 444 "$settings_tmp"
     mv -f "$settings_tmp" ~/.claude/settings.json
+    unset settings_json settings_tmp
 fi
 
 # Authenticate the clone via GIT_ASKPASS so the token never appears in the
@@ -278,44 +382,46 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# is_transient_api_error <json_output>
+# is_transient_api_error <stream_json_output>
 #
-# Returns 0 (true) when the captured claude JSON output classifies as a
+# Returns 0 (true) when the captured claude stream-json output classifies as a
 # transient API error, 1 (false) otherwise.
 #
 # Mirrors ContainerOutputParser.IsTransientApiError in C# — the detection
 # criteria MUST stay in sync between here and that class.
 #
-# Classification inspects only the LAST JSON line (the line whose first
-# non-space character is '{', walking backward through the output), matching
-# ExtractLastJsonLine in C#.  Earlier lines that happen to contain 5xx
-# statuses or error phrases do NOT trigger a resume.
+# Classification inspects only the LAST result event — the last JSON line
+# (first non-space character '{') carrying "type":"result" — matching
+# ExtractLastResultLine in C#.  Every other stream-json event (assistant,
+# user, system, ...) and earlier lines that happen to contain 5xx statuses or
+# error phrases do NOT trigger a resume.
 #
 # Transient when EITHER:
 #   - api_error_status is in the 500–599 range (numeric or string), OR
-#   - is_error is true AND the last JSON line contains one of these phrases:
+#   - is_error is true AND the result line contains one of these phrases:
 #       "API Error: Connection closed mid-response"
 #       "API Error: 529 Overloaded"
 #
-# Note: the phrase check runs against the whole last JSON line rather than
-# just the "result" field value (a minor widening vs C# which extracts only
-# the result string).  This is benign: both phrases are API Error messages
-# that only appear inside the result field in practice.
+# Note: the phrase check runs against the whole result line rather than just
+# the "result" field value (a minor widening vs C# which extracts only the
+# result string).  This is benign: both phrases are API Error messages that
+# only appear inside the result field in practice.
 # ---------------------------------------------------------------------------
 is_transient_api_error() {
     local output="$1"
 
-    # Extract the last line whose first non-space character is '{' — mirrors
-    # ExtractLastJsonLine in ContainerOutputParser.cs.
+    # Extract the last result event line — mirrors ExtractLastResultLine in
+    # ContainerOutputParser.cs.  The "type" key is not necessarily first in
+    # the object, so match it anywhere on a line that starts with '{'.
     local last_json_line
-    last_json_line="$(printf '%s\n' "$output" | grep -E '^[[:space:]]*\{' | tail -n 1)"
+    last_json_line="$(printf '%s\n' "$output" | grep -E '^[[:space:]]*\{' | grep -E '"type":[[:space:]]*"result"' | tail -n 1)"
 
-    # No JSON object line found — cannot be a transient API error.
+    # No result event found — cannot be a transient API error.
     if [[ -z "$last_json_line" ]]; then
         return 1
     fi
 
-    # Extract api_error_status value from the last JSON line (numeric or quoted numeric)
+    # Extract api_error_status value from the result line (numeric or quoted numeric)
     local status_raw
     status_raw="$(printf '%s' "$last_json_line" | grep -o '"api_error_status":[[:space:]]*[0-9"]*' | grep -o '[0-9]\{3,\}' | head -1)"
 
@@ -337,40 +443,47 @@ is_transient_api_error() {
 }
 
 # ---------------------------------------------------------------------------
-# Invoke claude in headless/JSON mode.  Capture stdout (the single JSON
-# result line) while letting stderr stream through live so logs are visible.
-# set -e is toggled off around the capture so we can inspect the exit status.
+# Invoke claude in headless stream-json mode.  stream-json emits one event per
+# line as the run progresses (the final line is the "result" event), so stdout
+# is piped through tee: each line reaches the container log as it is produced
+# while a copy is kept for transient-error classification.  stderr streams
+# through live.  --verbose is mandatory: the CLI rejects stream-json with
+# --print unless --verbose is also set.
+# set -e is toggled off around the pipeline so we can inspect claude's exit
+# status (PIPESTATUS[0], not tee's).
 #
 # If the first run classifies as a transient API error (mirrors
 # ContainerOutputParser.IsTransientApiError), resume the interrupted session
-# ONCE via "claude -c" before giving up.  The resume's JSON result line
-# becomes the last line of output — if it also fails transiently, Foundry's
-# outer retry bound (#368) still applies.
+# ONCE via "claude -c" with the same output flags before giving up.  The
+# resume's result event becomes the last result in the log — if it also fails
+# transiently, Foundry's outer retry bound (#368) still applies.
 # ---------------------------------------------------------------------------
+CLAUDE_OUTPUT_FILE="$(mktemp)"
+trap 'rm -f "${CLAUDE_OUTPUT_FILE:-}"' EXIT
+
 set +e
-first_output="$(claude -p "$WORKER_PROMPT" \
+claude -p "$WORKER_PROMPT" \
     --append-system-prompt "$SYSTEM_PROMPT" \
     --dangerously-skip-permissions \
-    --output-format json \
-    --max-turns 200)"
-first_status=$?
+    --output-format stream-json \
+    --verbose \
+    --max-turns 200 | tee "$CLAUDE_OUTPUT_FILE"
+first_status=${PIPESTATUS[0]}
 set -e
 
-[[ -n "$first_output" ]] && printf '%s\n' "$first_output"
-
-if is_transient_api_error "$first_output"; then
+if is_transient_api_error "$(cat "$CLAUDE_OUTPUT_FILE")"; then
     echo "Transient API error detected — resuming session once via claude -c" >&2
     # Resume the most recent conversation in cwd.  --append-system-prompt is
     # intentionally omitted: -c restores the original session (system prompt
     # included) and re-appending would duplicate it.
     set +e
-    resume_output="$(claude -c -p "$WORKER_PROMPT" \
+    claude -c -p "$WORKER_PROMPT" \
         --dangerously-skip-permissions \
-        --output-format json \
-        --max-turns 200)"
-    resume_status=$?
+        --output-format stream-json \
+        --verbose \
+        --max-turns 200 | tee "$CLAUDE_OUTPUT_FILE"
+    resume_status=${PIPESTATUS[0]}
     set -e
-    [[ -n "$resume_output" ]] && printf '%s\n' "$resume_output"
     exit "$resume_status"
 fi
 

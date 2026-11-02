@@ -27,7 +27,7 @@ public sealed class AuthInvalidDetection : WorkerDispatchServiceTestBase
     private const string AuthInvalidOutput =
         """
         Some prior output
-        {"api_error_status":401}
+        {"type":"result","api_error_status":401}
         """;
 
     private WorkerDispatchService BuildServiceWithParser(

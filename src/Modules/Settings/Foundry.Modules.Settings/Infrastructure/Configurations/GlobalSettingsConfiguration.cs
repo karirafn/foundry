@@ -111,6 +111,22 @@ internal sealed class GlobalSettingsConfiguration : IEntityTypeConfiguration<Glo
             .HasColumnType("TEXT")
             .HasColumnName("claude_code_settings");
 
+        ValueConverter<HostHooks, string> hostHooksConverter = new(
+            hostHooks => SerializeHostHooks(hostHooks),
+            json => DeserializeHostHooks(json));
+
+        ValueComparer<HostHooks> hostHooksComparer = new(
+            (a, b) => a != null && b != null && a.Equals(b),
+            hostHooks => hostHooks.GetHashCode(),
+            hostHooks => hostHooks);
+
+        // Serialized as a single JSON TEXT column; path rules and exclusion-list canonicalization are
+        // enforced by HostHooks.Create. The record is immutable, so the comparer snapshots by reference.
+        builder.Property(s => s.HostHooks)
+            .HasConversion(hostHooksConverter, hostHooksComparer)
+            .HasColumnType("TEXT")
+            .HasColumnName("host_hooks");
+
         ValueConverter<IReadOnlyList<string>, string> allowedProviderHostsConverter = new(
             hosts => SerializeAllowedProviderHosts(hosts),
             json => DeserializeAllowedProviderHosts(json));
@@ -206,6 +222,13 @@ internal sealed class GlobalSettingsConfiguration : IEntityTypeConfiguration<Glo
     private static ClaudeCodeSettings DeserializeClaudeCodeSettings(string json)
         => JsonSerializer.Deserialize<ClaudeCodeSettings>(json)
             ?? ClaudeCodeSettings.Default;
+
+    private static string SerializeHostHooks(HostHooks hostHooks)
+        => JsonSerializer.Serialize(hostHooks);
+
+    private static HostHooks DeserializeHostHooks(string json)
+        => JsonSerializer.Deserialize<HostHooks>(json)
+            ?? HostHooks.Default;
 
     private static string SerializeWorkerPrompts(WorkerPrompts prompts)
         => JsonSerializer.Serialize(prompts);

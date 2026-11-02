@@ -35,6 +35,8 @@ function buildResponse(overrides: Partial<GlobalSettingsResponse> = {}): GlobalS
     model: '',
     blockCiCdEdits: true,
     additionalDenyRules: [],
+    hostSettingsPath: '',
+    excludedHookCommands: [],
     ...overrides,
   };
 }

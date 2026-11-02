@@ -38,5 +38,7 @@ public interface IGlobalSettingsQueries
 
     Task<ClaudeCodeSettingsSnapshot> GetClaudeCodeSettingsAsync(CancellationToken cancellationToken);
 
+    Task<HostHooksSnapshot> GetHostHooksAsync(CancellationToken cancellationToken);
+
     Task<IReadOnlyList<string>> GetAllowedProviderHostsAsync(CancellationToken cancellationToken);
 }

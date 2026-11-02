@@ -25,7 +25,7 @@ public sealed class CreditsExhaustedDetection : WorkerDispatchServiceTestBase
     private const string Credits429OnlyOutput =
         """
         Some prior output
-        {"api_error_status":429}
+        {"type":"result","api_error_status":429}
         """;
 
     private WorkerDispatchService BuildServiceWithParser(

@@ -28,9 +28,15 @@ internal sealed class WorkerLogStream(DbContext db, IWorkerOrchestrator orchestr
         // containerId is resolved server-side and must never be exposed to clients.
         string containerId = activeRun.ContainerId.Value;
 
+        // Lines arrive already redacted; the formatter renders them as the Agent Transcript.
+        AgentTranscriptFormatter formatter = new();
+
         await foreach (string line in orchestrator.StreamLogsAsync(containerId, cancellationToken))
         {
-            yield return line;
+            foreach (string transcriptLine in formatter.FormatLine(line))
+            {
+                yield return transcriptLine;
+            }
         }
     }
 }

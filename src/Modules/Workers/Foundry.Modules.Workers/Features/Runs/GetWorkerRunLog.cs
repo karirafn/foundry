@@ -37,7 +37,9 @@ internal static class GetWorkerRunLog
                         WorkerRunLogResult.NoLog =>
                             TypedResults.NoContent(),
                         WorkerRunLogResult.LogAvailable log =>
-                            TypedResults.Text(log.LogText, contentType: "text/plain"),
+                            TypedResults.Text(
+                                AgentTranscriptFormatter.FormatLog(log.LogText),
+                                contentType: "text/plain; charset=utf-8"),
                         _ => throw new UnreachableException(
                             $"Unhandled {nameof(WorkerRunLogResult)} subtype: {logResult.GetType().Name}"),
                     };

@@ -32,6 +32,23 @@ export function absolutePathValidator(kind: MountPathKind): ValidatorFn {
   };
 }
 
+/** Optional host settings file path; validated trimmed because the server trims it before its own checks. */
+export function hostSettingsPathValidator(control: AbstractControl): ValidationErrors | null {
+  const value: string = (control.value ?? '').trim();
+  if (!value) {
+    return null;
+  }
+  if (!value.startsWith('/') && !WINDOWS_DRIVE_ROOT.test(value)) {
+    return { notAbsolute: true };
+  }
+  return value.replaceAll('\\', '/').split('/').includes(PARENT_SEGMENT) ? { traversal: true } : null;
+}
+
+export function notBlankValidator(control: AbstractControl): ValidationErrors | null {
+  const value: string = control.value;
+  return value && value.trim() === '' ? { blank: true } : null;
+}
+
 export function noTraversalValidator(control: AbstractControl): ValidationErrors | null {
   const value: string = control.value;
   if (!value) {

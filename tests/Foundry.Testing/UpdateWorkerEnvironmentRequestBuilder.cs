@@ -2,7 +2,7 @@ namespace Foundry.Testing;
 
 /// <summary>
 /// Test data builder for the <c>PUT /api/settings/worker-environment</c> request body.
-/// Defaults to a valid body with no mounts.
+/// Defaults to a valid body with no mounts and no host hooks source.
 /// </summary>
 public sealed class UpdateWorkerEnvironmentRequestBuilder
 {
@@ -10,6 +10,8 @@ public sealed class UpdateWorkerEnvironmentRequestBuilder
     private int _memoryLimitMb = 4096;
     private double _cpuLimit = 4.0;
     private int _pidsLimit = 1024;
+    private string _hostSettingsPath = string.Empty;
+    private string[] _excludedHookCommands = [];
 
     public UpdateWorkerEnvironmentRequestBuilder WithMemoryLimitMb(int memoryLimitMb)
     {
@@ -35,11 +37,25 @@ public sealed class UpdateWorkerEnvironmentRequestBuilder
         return this;
     }
 
+    public UpdateWorkerEnvironmentRequestBuilder WithHostSettingsPath(string hostSettingsPath)
+    {
+        _hostSettingsPath = hostSettingsPath;
+        return this;
+    }
+
+    public UpdateWorkerEnvironmentRequestBuilder WithExcludedHookCommands(params string[] excludedHookCommands)
+    {
+        _excludedHookCommands = excludedHookCommands;
+        return this;
+    }
+
     public object Build() => new
     {
         memoryLimitMb = _memoryLimitMb,
         cpuLimit = _cpuLimit,
         pidsLimit = _pidsLimit,
         mounts = _mounts.ToArray(),
+        hostSettingsPath = _hostSettingsPath,
+        excludedHookCommands = _excludedHookCommands,
     };
 }

@@ -13,7 +13,9 @@ namespace Foundry.Modules.Workers.Features.Outcome;
 internal sealed partial class ContainerOutputParser(ILogger<ContainerOutputParser> logger) : IContainerOutputParser
 {
     private const int MaxLogLength = 65_536;    // 64 KB
-    private const int MaxJsonLineLength = 4_096; // 4 KB
+    // stream-json's result event carries today's json keys plus model_usage_since_last_result,
+    // so a real result line with a multi-paragraph summary routinely exceeds the former 4 KB cap.
+    private const int MaxJsonLineLength = 16_384; // 16 KB
 
     private static readonly FrozenSet<string> UsageLimitReasons = new HashSet<string>(StringComparer.Ordinal)
     {
@@ -39,33 +41,19 @@ internal sealed partial class ContainerOutputParser(ILogger<ContainerOutputParse
             log = log[^MaxLogLength..];
         }
 
-        string? lastJsonLine = ExtractLastJsonLine(log);
+        (string Line, JsonObject Node)? resultLine = ExtractLastResultLine(log);
 
-        if (lastJsonLine is not null && lastJsonLine.Length > MaxJsonLineLength)
-        {
-            return new ContainerOutputParseResult.ParseFailure(log);
-        }
-
-        if (lastJsonLine is null)
+        if (resultLine is null)
         {
             return BootstrapSentinelOrNoResultLine(log);
         }
 
-        JsonNode? node;
-
-        try
-        {
-            node = JsonNode.Parse(lastJsonLine);
-        }
-        catch (JsonException)
+        if (resultLine.Value.Line.Length > MaxJsonLineLength)
         {
             return new ContainerOutputParseResult.ParseFailure(log);
         }
 
-        if (node is null)
-        {
-            return new ContainerOutputParseResult.ParseFailure(log);
-        }
+        JsonObject node = resultLine.Value.Node;
 
         string? terminalReason = ReadString(node["terminal_reason"]);
         int? apiErrorStatus = ReadApiErrorStatus(node);
@@ -113,28 +101,14 @@ internal sealed partial class ContainerOutputParser(ILogger<ContainerOutputParse
             log = log[^MaxLogLength..];
         }
 
-        string? lastJsonLine = ExtractLastJsonLine(log);
+        (string Line, JsonObject Node)? resultLine = ExtractLastResultLine(log);
 
-        if (lastJsonLine is null || lastJsonLine.Length > MaxJsonLineLength)
+        if (resultLine is null || resultLine.Value.Line.Length > MaxJsonLineLength)
         {
             return null;
         }
 
-        JsonNode? node;
-
-        try
-        {
-            node = JsonNode.Parse(lastJsonLine);
-        }
-        catch (JsonException)
-        {
-            return null;
-        }
-
-        if (node is null)
-        {
-            return null;
-        }
+        JsonObject node = resultLine.Value.Node;
 
         string? resultText = ReadString(node["result"]);
         string? subtype = ReadString(node["subtype"]);
@@ -316,27 +290,60 @@ internal sealed partial class ContainerOutputParser(ILogger<ContainerOutputParse
         return null;
     }
 
-    private static string? ExtractLastJsonLine(string log)
+    // Walks the log backward and returns the last line that parses as a JSON object whose
+    // "type" is "result". stream-json emits one event per line; every other event type, unknown
+    // types, and partial lines (a container killed mid-event) are skipped. One run can emit
+    // several result events (a transient-retry resume, or a background subagent re-waking the
+    // session), and the last one wins.
+    private static (string Line, JsonObject Node)? ExtractLastResultLine(string log)
     {
         ReadOnlySpan<char> span = log.AsSpan().TrimEnd();
+        int end = span.Length;
 
-        for (int i = span.Length - 1; i >= 0; i--)
+        for (int i = span.Length - 1; i >= -1; i--)
         {
-            if (span[i] == '\n')
+            if (i >= 0 && span[i] != '\n')
             {
-                ReadOnlySpan<char> candidate = span[(i + 1)..].TrimStart();
-                string? jsonLine = StripDockerTimestampAndExtractJson(candidate);
+                continue;
+            }
 
-                if (jsonLine is not null)
-                {
-                    return jsonLine;
-                }
+            ReadOnlySpan<char> candidate = span[(i + 1)..end].Trim();
+            end = i;
+
+            string? jsonLine = StripDockerTimestampAndExtractJson(candidate);
+
+            if (jsonLine is not null && TryParseResultEvent(jsonLine) is { } node)
+            {
+                return (jsonLine, node);
             }
         }
 
-        // No newline found — the entire trimmed input might be the JSON line
-        ReadOnlySpan<char> trimmed = span.TrimStart();
-        return StripDockerTimestampAndExtractJson(trimmed);
+        return null;
+    }
+
+    private static JsonObject? TryParseResultEvent(string jsonLine)
+    {
+        // Cheap pre-filter: most stream-json lines are not result events, so skip the full parse.
+        if (!jsonLine.Contains("\"result\"", StringComparison.Ordinal))
+        {
+            return null;
+        }
+
+        JsonNode? node;
+
+        try
+        {
+            node = JsonNode.Parse(jsonLine);
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+
+        return node is JsonObject obj
+            && string.Equals(ReadString(obj["type"]), "result", StringComparison.Ordinal)
+                ? obj
+                : null;
     }
 
     private static string? StripDockerTimestampAndExtractJson(ReadOnlySpan<char> candidate)
@@ -532,7 +539,7 @@ internal sealed partial class ContainerOutputParser(ILogger<ContainerOutputParse
     private static partial Regex WallClockResetTimePattern();
 
     [GeneratedRegex(
-        @"FOUNDRY_BOOTSTRAP_FAILED stage=(?:clone|auth|branch)[^\n]*",
+        @"FOUNDRY_BOOTSTRAP_FAILED stage=(?:clone|auth|branch|host-settings)[^\n]*",
         RegexOptions.ExplicitCapture,
         matchTimeoutMilliseconds: 1000)]
     private static partial Regex BootstrapSentinelPattern();

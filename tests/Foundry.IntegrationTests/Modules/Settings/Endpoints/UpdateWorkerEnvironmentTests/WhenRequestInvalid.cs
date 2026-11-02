@@ -95,6 +95,41 @@ public sealed class WhenRequestInvalid : IAsyncDisposable
         await AssertProblemAsync(response, "Settings.DuplicateMountContainerPath");
     }
 
+    [Theory]
+    [InlineData("settings.json", "Settings.HostSettingsPathNotAbsolute")]
+    [InlineData("/home/user/../root/.claude/settings.json", "Settings.HostSettingsPathTraversal")]
+    [InlineData("/etc/claude/settings.json", "Settings.SensitiveHostSettingsPath")]
+    public async Task WhenHostSettingsPathInvalid_ReturnsBadRequest(string hostSettingsPath, string expectedErrorCode)
+    {
+        // Arrange
+        await SeedDefaultSettingsAsync();
+        object body = new UpdateWorkerEnvironmentRequestBuilder()
+            .WithHostSettingsPath(hostSettingsPath)
+            .Build();
+
+        // Act
+        HttpResponseMessage response = await PutAsync(body);
+
+        // Assert
+        await AssertProblemAsync(response, expectedErrorCode);
+    }
+
+    [Fact]
+    public async Task WhenExcludedHookCommandIsBlank_ReturnsBadRequest()
+    {
+        // Arrange
+        await SeedDefaultSettingsAsync();
+        object body = new UpdateWorkerEnvironmentRequestBuilder()
+            .WithExcludedHookCommands("notify", "   ")
+            .Build();
+
+        // Act
+        HttpResponseMessage response = await PutAsync(body);
+
+        // Assert
+        await AssertProblemAsync(response, "Settings.EmptyExcludedHookCommand");
+    }
+
     private static async Task AssertProblemAsync(HttpResponseMessage response, string expectedErrorCode)
     {
         response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);

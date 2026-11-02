@@ -1609,7 +1609,7 @@
         "tags": [
           "Settings"
         ],
-        "summary": "Updates the worker resource limits and host mounts",
+        "summary": "Updates the worker resource limits, host mounts, and host hooks source",
         "operationId": "UpdateWorkerEnvironment",
         "requestBody": {
           "content": {
@@ -2169,7 +2169,9 @@
           "mounts",
           "model",
           "blockCiCdEdits",
-          "additionalDenyRules"
+          "additionalDenyRules",
+          "hostSettingsPath",
+          "excludedHookCommands"
         ],
         "type": "object",
         "properties": {
@@ -2315,6 +2317,15 @@
             "type": "boolean"
           },
           "additionalDenyRules": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "hostSettingsPath": {
+            "type": "string"
+          },
+          "excludedHookCommands": {
             "type": "array",
             "items": {
               "type": "string"
@@ -3363,7 +3374,9 @@
           "memoryLimitMb",
           "cpuLimit",
           "pidsLimit",
-          "mounts"
+          "mounts",
+          "hostSettingsPath",
+          "excludedHookCommands"
         ],
         "type": "object",
         "properties": {
@@ -3395,6 +3408,15 @@
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/UpdateWorkerEnvironmentMountRequest"
+            }
+          },
+          "hostSettingsPath": {
+            "type": "string"
+          },
+          "excludedHookCommands": {
+            "type": "array",
+            "items": {
+              "type": "string"
             }
           }
         }

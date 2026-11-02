@@ -145,10 +145,10 @@ public sealed class Parse
     }
 
     [Fact]
-    public void WhenJsonLineExceeds4KB_ReturnsParseFailure()
+    public void WhenResultLineExceeds16KB_ReturnsParseFailure()
     {
         // Arrange
-        string oversizedValue = new string('x', 4_100);
+        string oversizedValue = new string('x', 16_400);
         string jsonLine = $$$"""{"type":"result","terminal_reason":"blocking_limit","result":"{{{oversizedValue}}}"}""";
 
         // Act
@@ -334,6 +334,7 @@ public sealed class Parse
     [InlineData("clone")]
     [InlineData("auth")]
     [InlineData("branch")]
+    [InlineData("host-settings")]
     public void WhenBootstrapSentinelWithKnownStage_ReturnsWorkerBootstrapFailed(string stage)
     {
         // Arrange
@@ -345,6 +346,20 @@ public sealed class Parse
         // Assert
         ContainerOutputParseResult.WorkerBootstrapFailed failed = result.ShouldBeOfType<ContainerOutputParseResult.WorkerBootstrapFailed>();
         failed.Detail.ShouldContain(stage);
+    }
+
+    [Fact]
+    public void WhenHostSettingsSentinelPresent_DetailNamesTheHostSettingsFile()
+    {
+        // Arrange
+        string log = "FOUNDRY_BOOTSTRAP_FAILED stage=host-settings detail=host settings file /run/foundry/host-settings.json is not valid JSON";
+
+        // Act
+        ContainerOutputParseResult result = _sut.Parse(log);
+
+        // Assert
+        result.ShouldBeOfType<ContainerOutputParseResult.WorkerBootstrapFailed>()
+            .Detail.ShouldContain("host settings file /run/foundry/host-settings.json");
     }
 
     [Fact]
@@ -970,5 +985,156 @@ public sealed class Parse
 
         // Assert
         result.ShouldBeOfType<ContainerOutputParseResult.CreditsExhausted>();
+    }
+
+    [Fact]
+    public void WhenRecordedStreamJsonRun_ReturnsNormalExit()
+    {
+        // Arrange — real CLI 2.1.314 output: many non-result events, result key order puts "type" mid-object
+        string log = StreamJsonFixtures.RecordedRun;
+
+        // Act
+        ContainerOutputParseResult result = _sut.Parse(log);
+
+        // Assert
+        result.ShouldBeOfType<ContainerOutputParseResult.NormalExit>();
+    }
+
+    [Fact]
+    public void WhenTwoResultEvents_LastResultWins()
+    {
+        // Arrange — a background subagent notification re-wakes the session and a second result follows
+        string log = """
+            {"type":"result","subtype":"success","is_error":false,"num_turns":3,"result":"First pass done."}
+            {"type":"system","subtype":"task_notification","task_id":"t1","status":"completed"}
+            {"type":"assistant","message":{"content":[{"type":"text","text":"Resuming."}]}}
+            {"type":"result","subtype":"success","is_error":true,"api_error_status":429,"result":"Usage limit. Resets at 2099-01-01T00:00:00Z.","terminal_reason":"blocking_limit"}
+            """;
+
+        // Act
+        ContainerOutputParseResult result = _sut.Parse(log);
+
+        // Assert
+        ContainerOutputParseResult.UsageLimited limited = result.ShouldBeOfType<ContainerOutputParseResult.UsageLimited>();
+        limited.ResetsAt.ShouldBe(new DateTimeOffset(2099, 1, 1, 0, 0, 0, TimeSpan.Zero));
+    }
+
+    [Fact]
+    public void WhenTransientRetryLogHasTwoInvocations_LastResultWins()
+    {
+        // Arrange — first invocation fails transiently, the claude -c resume succeeds
+        string log = """
+            {"type":"system","subtype":"init","model":"claude-opus-5-5"}
+            {"type":"result","subtype":"error_during_execution","is_error":true,"api_error_status":503,"result":"API Error"}
+            Transient API error detected — resuming session once via claude -c
+            {"type":"system","subtype":"init","model":"claude-opus-5-5"}
+            {"type":"result","subtype":"success","is_error":false,"result":"Done."}
+            """;
+
+        // Act
+        ContainerOutputParseResult result = _sut.Parse(log);
+
+        // Assert
+        result.ShouldBeOfType<ContainerOutputParseResult.NormalExit>();
+    }
+
+    [Fact]
+    public void WhenResultIsFollowedByNonResultEvents_ResultEventIsStillSelected()
+    {
+        // Arrange — the last JSON line is not the result; it must not be classified
+        string log = """
+            {"type":"result","subtype":"success","is_error":false,"api_error_status":503,"result":"API Error"}
+            {"type":"system","subtype":"hook_response","api_error_status":401}
+            {"type":"rate_limit_event","rate_limit_info":{"status":"allowed"}}
+            """;
+
+        // Act
+        ContainerOutputParseResult result = _sut.Parse(log);
+
+        // Assert
+        result.ShouldBeOfType<ContainerOutputParseResult.TransientApiError>();
+    }
+
+    [Theory]
+    [InlineData("""{"type":"brand_new_event","api_error_status":401}""")]
+    [InlineData("""{"type":"system","subtype":"brand_new_subtype","api_error_status":401}""")]
+    [InlineData("""{"type":"system","subtype":"thinking_tokens","tokens":42}""")]
+    [InlineData("""{"api_error_status":401}""")]
+    [InlineData("""[1,2,3]""")]
+    public void WhenUnknownEventsFollowResult_TheyAreSkipped(string trailingLine)
+    {
+        // Arrange
+        string log = """{"type":"result","subtype":"success","is_error":false,"result":"Done."}""" + "\n" + trailingLine;
+
+        // Act
+        ContainerOutputParseResult result = _sut.Parse(log);
+
+        // Assert
+        result.ShouldBeOfType<ContainerOutputParseResult.NormalExit>();
+    }
+
+    [Fact]
+    public void WhenTrailingLineIsPartialEvent_PartialLineIsIgnored()
+    {
+        // Arrange — the container was killed mid-event
+        string log = """
+            {"type":"result","subtype":"success","is_error":true,"api_error_status":401,"result":"Invalid API key"}
+            {"type":"assistant","message":{"content":[{"type":"text","text":"half a li
+            """;
+
+        // Act
+        ContainerOutputParseResult result = _sut.Parse(log);
+
+        // Assert
+        result.ShouldBeOfType<ContainerOutputParseResult.AuthInvalid>();
+    }
+
+    [Fact]
+    public void WhenJsonEventsButNoResultEvent_ReturnsNoResultLine()
+    {
+        // Arrange — run killed before claude emitted its result
+        string log = """
+            {"type":"system","subtype":"init","model":"claude-opus-5-5"}
+            {"type":"assistant","message":{"content":[{"type":"tool_use","id":"t1","name":"Bash","input":{"command":"ls"}}]}}
+            """;
+
+        // Act
+        ContainerOutputParseResult result = _sut.Parse(log);
+
+        // Assert
+        result.ShouldBeOfType<ContainerOutputParseResult.NoResultLine>();
+    }
+
+    [Fact]
+    public void WhenJsonEventsButNoResultEventAndBootstrapSentinel_ReturnsWorkerBootstrapFailed()
+    {
+        // Arrange
+        string log = """
+            FOUNDRY_BOOTSTRAP_FAILED stage=clone detail=bootstrap failed at stage clone
+            {"type":"system","subtype":"init","model":"claude-opus-5-5"}
+            """;
+
+        // Act
+        ContainerOutputParseResult result = _sut.Parse(log);
+
+        // Assert
+        result.ShouldBeOfType<ContainerOutputParseResult.WorkerBootstrapFailed>();
+    }
+
+    [Fact]
+    public void WhenStreamWithDockerTimestampsEndsInResult_ClassifiesResult()
+    {
+        // Arrange
+        string log = """
+            2026-06-29T21:24:05.000000001Z {"type":"system","subtype":"init","model":"claude-opus-5-5"}
+            2026-06-29T21:24:06.000000001Z {"type":"assistant","message":{"content":[{"type":"text","text":"hi"}]}}
+            2026-06-29T21:24:07.000000001Z {"is_error":true,"api_error_status":401,"type":"result","result":"Invalid API key"}
+            """;
+
+        // Act
+        ContainerOutputParseResult result = _sut.Parse(log);
+
+        // Assert
+        result.ShouldBeOfType<ContainerOutputParseResult.AuthInvalid>();
     }
 }
