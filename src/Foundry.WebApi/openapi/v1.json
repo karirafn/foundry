@@ -1614,6 +1614,57 @@
         }
       }
     },
+    "/api/settings/claude-code": {
+      "put": {
+        "tags": [
+          "Settings"
+        ],
+        "summary": "Updates the Claude Code model and deny rules",
+        "operationId": "UpdateClaudeCodeSettings",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateClaudeCodeSettingsRequestBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GlobalSettingsSummary"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/settings/worker-image/retry": {
       "post": {
         "tags": [
@@ -3133,6 +3184,28 @@
               "null",
               "string"
             ]
+          }
+        }
+      },
+      "UpdateClaudeCodeSettingsRequestBody": {
+        "required": [
+          "model",
+          "blockCiCdEdits",
+          "additionalDenyRules"
+        ],
+        "type": "object",
+        "properties": {
+          "model": {
+            "type": "string"
+          },
+          "blockCiCdEdits": {
+            "type": "boolean"
+          },
+          "additionalDenyRules": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           }
         }
       },
