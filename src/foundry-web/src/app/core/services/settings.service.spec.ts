@@ -2266,3 +2266,78 @@ describe('SettingsService — worker environment', () => {
     expect(service.saveWorkerEnvironmentErrorCode()).toBeNull();
   });
 });
+
+describe('SettingsService — claude code settings', () => {
+  const CLAUDE_CODE_URL = '/api/settings/claude-code';
+  const CLAUDE_CODE = { model: 'claude-opus-4-7', blockCiCdEdits: false, additionalDenyRules: ['Bash(rm:*)'] };
+  let service: SettingsService;
+  let httpMock: HttpTestingController;
+
+  beforeEach(() => {
+    const setup = setupService();
+    service = setup.service;
+    httpMock = setup.httpMock;
+  });
+
+  afterEach(() => {
+    httpMock.verify();
+  });
+
+  it('should populate claudeCodeSettings from the loaded settings', async () => {
+    // Arrange
+    const loading = service.loadSettings();
+    flushLoadSettings(httpMock, CLAUDE_CODE);
+    await loading;
+
+    // Act
+    const settings = service.claudeCodeSettings();
+
+    // Assert
+    expect(settings).toEqual(CLAUDE_CODE);
+  });
+
+  it('should PUT the settings to /api/settings/claude-code and refresh claudeCodeSettings on success', () => {
+    // Arrange
+    service.updateClaudeCodeSettings(CLAUDE_CODE);
+
+    // Act
+    const req = httpMock.expectOne(CLAUDE_CODE_URL);
+    req.flush(buildSettingsResponse({ ...CLAUDE_CODE, model: 'claude-sonnet-4-6' }));
+
+    // Assert
+    expect(req.request.method).toBe('PUT');
+    expect(req.request.body).toEqual(CLAUDE_CODE);
+    expect(service.claudeCodeSettings()!.model).toBe('claude-sonnet-4-6');
+    expect(service.saveClaudeCodeSuccess()).toBe(true);
+    expect(service.savingClaudeCode()).toBe(false);
+  });
+
+  it('should expose the problem detail and code when the save is rejected', () => {
+    // Arrange
+    service.updateClaudeCodeSettings(CLAUDE_CODE);
+
+    // Act
+    httpMock.expectOne(CLAUDE_CODE_URL).flush(
+      { detail: 'Deny rule is malformed.', type: 'tag:foundry,2026:problems/Settings.InvalidDenyRule' },
+      { status: 400, statusText: 'Bad Request' },
+    );
+
+    // Assert
+    expect(service.saveClaudeCodeError()).toBe('Deny rule is malformed.');
+    expect(service.saveClaudeCodeErrorCode()).toBe('Settings.InvalidDenyRule');
+    expect(service.saveClaudeCodeSuccess()).toBe(false);
+    expect(service.savingClaudeCode()).toBe(false);
+  });
+
+  it('should fall back to a fixed message when the error has no problem detail', () => {
+    // Arrange
+    service.updateClaudeCodeSettings(CLAUDE_CODE);
+
+    // Act
+    httpMock.expectOne(CLAUDE_CODE_URL).flush('boom', { status: 500, statusText: 'Server Error' });
+
+    // Assert
+    expect(service.saveClaudeCodeError()).toBe('Failed to save Claude Code settings');
+    expect(service.saveClaudeCodeErrorCode()).toBeNull();
+  });
+});

@@ -9,6 +9,7 @@ import {
   AuthMode,
   AuthSettings,
   ClaudeAccountSummary,
+  ClaudeCodeSettings,
   GlobalSettingsResponse,
   ImageBuildStatus,
   LoginError,
@@ -31,6 +32,7 @@ const SAVE_PROMPTS_ERROR = 'Failed to save prompt templates';
 const SAVE_DISPATCH_ERROR = 'Failed to save dispatch settings';
 const SAVE_IMAGE_FLAGS_ERROR = 'Failed to save worker image settings';
 const SAVE_WORKER_ENVIRONMENT_ERROR = 'Failed to save worker environment';
+const SAVE_CLAUDE_CODE_ERROR = 'Failed to save Claude Code settings';
 const SAVE_HOSTS_ERROR = 'Failed to save provider hosts';
 const START_LOGIN_ERROR = 'Failed to start login';
 
@@ -174,6 +176,21 @@ export class SettingsService {
   private readonly _saveWorkerEnvironmentErrorCodeSignal: WritableSignal<string | null> = signal(null);
   readonly saveWorkerEnvironmentErrorCode: Signal<string | null> = this._saveWorkerEnvironmentErrorCodeSignal.asReadonly();
 
+  private readonly _savingClaudeCodeSignal: WritableSignal<boolean> = signal(false);
+  readonly savingClaudeCode: Signal<boolean> = this._savingClaudeCodeSignal.asReadonly();
+
+  private readonly _saveClaudeCodeSuccessSignal: WritableSignal<boolean> = signal(false);
+  readonly saveClaudeCodeSuccess: Signal<boolean> = this._saveClaudeCodeSuccessSignal.asReadonly();
+
+  private readonly _saveClaudeCodeErrorSignal: WritableSignal<string | null> = signal(null);
+  readonly saveClaudeCodeError: Signal<string | null> = this._saveClaudeCodeErrorSignal.asReadonly();
+
+  private readonly _saveClaudeCodeErrorCodeSignal: WritableSignal<string | null> = signal(null);
+  readonly saveClaudeCodeErrorCode: Signal<string | null> = this._saveClaudeCodeErrorCodeSignal.asReadonly();
+
+  private readonly _claudeCodeSettingsSignal: WritableSignal<ClaudeCodeSettings | null> = signal(null);
+  readonly claudeCodeSettings: Signal<ClaudeCodeSettings | null> = this._claudeCodeSettingsSignal.asReadonly();
+
   private readonly _savingHostsSignal: WritableSignal<boolean> = signal(false);
   readonly savingHosts: Signal<boolean> = this._savingHostsSignal.asReadonly();
 
@@ -220,6 +237,10 @@ export class SettingsService {
     this._saveWorkerEnvironmentErrorCodeSignal.set(null);
     this._saveWorkerEnvironmentSuccessSignal.set(false);
     this._savingWorkerEnvironmentSignal.set(false);
+    this._saveClaudeCodeErrorSignal.set(null);
+    this._saveClaudeCodeErrorCodeSignal.set(null);
+    this._saveClaudeCodeSuccessSignal.set(false);
+    this._savingClaudeCodeSignal.set(false);
     this.saveSuccess.set(false);
     this._saveLimitsSuccessSignal.set(false);
     this._savePromptsSuccessSignal.set(false);
@@ -251,6 +272,7 @@ export class SettingsService {
           this._dispatchService.updateFromSettings(settings);
           this._workerImageFlagsSignal.set(this._mapToWorkerImageFlags(settings));
           this._workerEnvironmentSignal.set(this._mapToWorkerEnvironment(settings));
+          this._claudeCodeSettingsSignal.set(this._mapToClaudeCodeSettings(settings));
           this._applyImageBuildResponse(settings);
           this.loading.set(false);
           observer.next();
@@ -474,6 +496,27 @@ export class SettingsService {
     });
   }
 
+  updateClaudeCodeSettings(settings: ClaudeCodeSettings): void {
+    this._saveClaudeCodeErrorSignal.set(null);
+    this._saveClaudeCodeErrorCodeSignal.set(null);
+    this._saveClaudeCodeSuccessSignal.set(false);
+    this._savingClaudeCodeSignal.set(true);
+
+    this._http.put<GlobalSettingsResponse>('/api/settings/claude-code', settings).subscribe({
+      next: (response) => {
+        this._claudeCodeSettingsSignal.set(this._mapToClaudeCodeSettings(response));
+        this._savingClaudeCodeSignal.set(false);
+        this._saveClaudeCodeSuccessSignal.set(true);
+      },
+      error: (err: HttpErrorResponse) => {
+        console.error(err);
+        this._saveClaudeCodeErrorSignal.set(extractErrorMessage(err) ?? SAVE_CLAUDE_CODE_ERROR);
+        this._saveClaudeCodeErrorCodeSignal.set(extractErrorCode(err));
+        this._savingClaudeCodeSignal.set(false);
+      },
+    });
+  }
+
   retryImageBuild(): void {
     this._saveImageFlagsErrorSignal.set(null);
     this._saveImageFlagsSuccessSignal.set(false);
@@ -522,6 +565,14 @@ export class SettingsService {
       cpuLimit: response.cpuLimit,
       pidsLimit: response.pidsLimit,
       mounts: (response.mounts ?? []).map((mount) => ({ ...mount })),
+    };
+  }
+
+  private _mapToClaudeCodeSettings(response: GlobalSettingsResponse): ClaudeCodeSettings {
+    return {
+      model: response.model,
+      blockCiCdEdits: response.blockCiCdEdits,
+      additionalDenyRules: [...(response.additionalDenyRules ?? [])],
     };
   }
 

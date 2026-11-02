@@ -32,6 +32,9 @@ function buildResponse(overrides: Partial<GlobalSettingsResponse> = {}): GlobalS
     cpuLimit: 2,
     pidsLimit: 512,
     mounts: [],
+    model: '',
+    blockCiCdEdits: true,
+    additionalDenyRules: [],
     ...overrides,
   };
 }
