@@ -367,4 +367,45 @@ public sealed class ToSummary
         // Assert
         result.PollIntervalSeconds.ShouldBe(120);
     }
+
+    [Fact]
+    public void WhenWorkerEnvironmentUpdated_SummaryCarriesLimitsAndMounts()
+    {
+        // Arrange
+        GlobalSettings settings = CreateDefaultSettings();
+        WorkerResourceLimits limits = WorkerResourceLimits.Create(4096, 1.5, 256)
+            .Match(v => v, e => throw new InvalidOperationException(e.Message));
+        WorkerMounts mounts = WorkerMounts.Create(
+                [new WorkerMount("/data", "/srv/data", true), new WorkerMount("/cache", "/srv/cache", false)])
+            .Match(v => v, e => throw new InvalidOperationException(e.Message));
+        settings.UpdateWorkerEnvironment(limits, mounts);
+
+        // Act
+        GlobalSettingsSummary result = GlobalSettingsMapper.ToSummary(settings);
+
+        // Assert
+        result.ShouldSatisfyAllConditions(
+            () => result.MemoryLimitMb.ShouldBe(4096),
+            () => result.CpuLimit.ShouldBe(1.5),
+            () => result.PidsLimit.ShouldBe(256),
+            () => result.Mounts.ShouldBe(
+                [new WorkerMountEntry("/data", "/srv/data", true), new WorkerMountEntry("/cache", "/srv/cache", false)]));
+    }
+
+    [Fact]
+    public void WhenDefaultSettings_SummaryCarriesDefaultLimitsAndNoMounts()
+    {
+        // Arrange
+        GlobalSettings settings = CreateDefaultSettings();
+
+        // Act
+        GlobalSettingsSummary result = GlobalSettingsMapper.ToSummary(settings);
+
+        // Assert
+        result.ShouldSatisfyAllConditions(
+            () => result.MemoryLimitMb.ShouldBe(WorkerResourceLimits.Default.MemoryLimitMb),
+            () => result.CpuLimit.ShouldBe(WorkerResourceLimits.Default.CpuLimit),
+            () => result.PidsLimit.ShouldBe(WorkerResourceLimits.Default.PidsLimit),
+            () => result.Mounts.ShouldBeEmpty());
+    }
 }

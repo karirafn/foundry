@@ -69,6 +69,32 @@ internal sealed class GlobalSettingsConfiguration : IEntityTypeConfiguration<Glo
             .HasColumnType("TEXT")
             .HasColumnName("worker_image_configuration");
 
+        ValueConverter<WorkerResourceLimits, string> workerResourceLimitsConverter = new(
+            limits => SerializeWorkerResourceLimits(limits),
+            json => DeserializeWorkerResourceLimits(json));
+
+        // Serialized as a single JSON TEXT column; ranges are enforced by WorkerResourceLimits.Create.
+        builder.Property(s => s.WorkerResourceLimits)
+            .HasConversion(workerResourceLimitsConverter)
+            .HasColumnType("TEXT")
+            .HasColumnName("worker_resource_limits");
+
+        ValueConverter<WorkerMounts, string> workerMountsConverter = new(
+            mounts => SerializeWorkerMounts(mounts),
+            json => DeserializeWorkerMounts(json));
+
+        ValueComparer<WorkerMounts> workerMountsComparer = new(
+            (a, b) => a != null && b != null && a.Mounts.SequenceEqual(b.Mounts),
+            mounts => mounts.GetHashCode(),
+            mounts => mounts);
+
+        // Serialized as a single JSON TEXT column; path rules are enforced by WorkerMounts.Create.
+        // WorkerMounts is an immutable record, so the comparer snapshots by reference.
+        builder.Property(s => s.WorkerMounts)
+            .HasConversion(workerMountsConverter, workerMountsComparer)
+            .HasColumnType("TEXT")
+            .HasColumnName("worker_mounts");
+
         ValueConverter<IReadOnlyList<string>, string> allowedProviderHostsConverter = new(
             hosts => SerializeAllowedProviderHosts(hosts),
             json => DeserializeAllowedProviderHosts(json));
@@ -143,6 +169,20 @@ internal sealed class GlobalSettingsConfiguration : IEntityTypeConfiguration<Glo
 
         return config;
     }
+
+    private static string SerializeWorkerResourceLimits(WorkerResourceLimits limits)
+        => JsonSerializer.Serialize(limits);
+
+    private static WorkerResourceLimits DeserializeWorkerResourceLimits(string json)
+        => JsonSerializer.Deserialize<WorkerResourceLimits>(json)
+            ?? WorkerResourceLimits.Default;
+
+    private static string SerializeWorkerMounts(WorkerMounts mounts)
+        => JsonSerializer.Serialize(mounts);
+
+    private static WorkerMounts DeserializeWorkerMounts(string json)
+        => JsonSerializer.Deserialize<WorkerMounts>(json)
+            ?? WorkerMounts.Default;
 
     private static string SerializeWorkerPrompts(WorkerPrompts prompts)
         => JsonSerializer.Serialize(prompts);

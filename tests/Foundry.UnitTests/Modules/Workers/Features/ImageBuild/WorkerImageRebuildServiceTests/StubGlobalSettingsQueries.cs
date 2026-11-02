@@ -38,7 +38,11 @@ internal sealed class StubGlobalSettingsQueries(
         HasUsableImage: false,
         NextRetryAt: null,
         Attempt: attempt,
-        AllowedProviderHosts: []);
+        AllowedProviderHosts: [],
+        MemoryLimitMb: 8192,
+        CpuLimit: 2.0,
+        PidsLimit: 512,
+        Mounts: []);
 
     public Task<GlobalSettingsSummary?> GetSettingsAsync(CancellationToken cancellationToken)
         => Task.FromResult(settingsExists ? _summary : (GlobalSettingsSummary?)null);

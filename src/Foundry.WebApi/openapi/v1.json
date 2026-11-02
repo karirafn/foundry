@@ -2019,7 +2019,11 @@
           "hasUsableImage",
           "nextRetryAt",
           "attempt",
-          "allowedProviderHosts"
+          "allowedProviderHosts",
+          "memoryLimitMb",
+          "cpuLimit",
+          "pidsLimit",
+          "mounts"
         ],
         "type": "object",
         "properties": {
@@ -2126,6 +2130,36 @@
             "type": "array",
             "items": {
               "type": "string"
+            }
+          },
+          "memoryLimitMb": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "cpuLimit": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "type": [
+              "number",
+              "string"
+            ],
+            "format": "double"
+          },
+          "pidsLimit": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "mounts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WorkerMountEntry"
             }
           }
         }
@@ -3342,6 +3376,25 @@
               "null",
               "string"
             ]
+          }
+        }
+      },
+      "WorkerMountEntry": {
+        "required": [
+          "containerPath",
+          "hostPath",
+          "readOnly"
+        ],
+        "type": "object",
+        "properties": {
+          "containerPath": {
+            "type": "string"
+          },
+          "hostPath": {
+            "type": "string"
+          },
+          "readOnly": {
+            "type": "boolean"
           }
         }
       },

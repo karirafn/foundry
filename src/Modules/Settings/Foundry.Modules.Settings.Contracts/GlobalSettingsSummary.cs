@@ -22,4 +22,8 @@ public sealed record GlobalSettingsSummary(
     bool HasUsableImage,
     DateTimeOffset? NextRetryAt,
     int Attempt,
-    IReadOnlyList<string> AllowedProviderHosts);
+    IReadOnlyList<string> AllowedProviderHosts,
+    int MemoryLimitMb,
+    double CpuLimit,
+    int PidsLimit,
+    IReadOnlyList<WorkerMountEntry> Mounts);
