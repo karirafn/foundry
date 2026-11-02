@@ -72,6 +72,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/credentials/usage/refresh": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Requests an on-demand Claude usage poll; the result arrives via the UsageSnapshotUpdated push */
+        post: operations["RefreshUsage"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/credentials/login/start": {
         parameters: {
             query?: never;
@@ -543,7 +560,7 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        /** Updates the worker resource limits and host mounts */
+        /** Updates the worker resource limits, host mounts, and host hooks source */
         put: operations["UpdateWorkerEnvironment"];
         post?: never;
         delete?: never;
@@ -728,6 +745,8 @@ export interface components {
             model: string;
             blockCiCdEdits: boolean;
             additionalDenyRules: string[];
+            hostSettingsPath: string;
+            excludedHookCommands: string[];
         };
         /** @enum {unknown} */
         ImageBuildStatus: "Idle" | "Building" | "Failed";
@@ -828,6 +847,9 @@ export interface components {
         };
         RateBudgetSnapshot: {
             budgets: components["schemas"]["ProviderBudgetHeadroom"][];
+        };
+        RefreshUsageResponse: {
+            status: string;
         };
         RepositoryEligibilityInfo: {
             status: string;
@@ -969,6 +991,8 @@ export interface components {
             /** Format: int32 */
             pidsLimit: number | string;
             mounts: components["schemas"]["UpdateWorkerEnvironmentMountRequest"][];
+            hostSettingsPath: string;
+            excludedHookCommands: string[];
         };
         UpdateWorkerImageConfigurationRequestBody: {
             imageTag: string;
@@ -1187,6 +1211,44 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    RefreshUsage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RefreshUsageResponse"];
+                };
+            };
+            /** @description Accepted */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RefreshUsageResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RefreshUsageResponse"];
+                };
             };
         };
     };

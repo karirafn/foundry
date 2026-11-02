@@ -295,3 +295,44 @@
   color: var(--fd-text-secondary);
   font-variant-numeric: tabular-nums;
 }
+
+.usage-popover__refresh {
+  display: flex;
+  align-items: center;
+  gap: var(--fd-spacing-sm);
+  margin: 0 0 var(--fd-spacing-sm);
+}
+
+.usage-popover__refresh-btn {
+  flex-shrink: 0;
+  background: transparent;
+  border: 1px solid var(--fd-border-muted);
+  border-radius: var(--fd-radius-sm);
+  color: var(--fd-text-primary);
+  cursor: pointer;
+  font-size: 0.75rem;
+  font-weight: 500;
+  min-height: 24px;
+  padding: 0 var(--fd-spacing-sm);
+  transition: background-color 150ms ease;
+
+  &:hover:not(:disabled) {
+    background: var(--fd-bg-card-hover);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--fd-text-link);
+    outline-offset: 2px;
+  }
+
+  &:disabled {
+    cursor: progress;
+    color: var(--fd-text-secondary);
+  }
+}
+
+.usage-popover__refresh-status {
+  // Same contrast rationale as .usage-popover__asof — secondary, not tertiary.
+  color: var(--fd-text-secondary);
+  font-size: 0.75rem;
+}

@@ -19,6 +19,7 @@ internal static class CredentialsEndpoints
         UpdateAuthMode.Endpoint.Map(group);
         CheckCreditsNow.Endpoint.Map(group);
         GetUsageSnapshot.Endpoint.Map(group);
+        RefreshUsage.Endpoint.Map(group);
 
         return routes;
     }

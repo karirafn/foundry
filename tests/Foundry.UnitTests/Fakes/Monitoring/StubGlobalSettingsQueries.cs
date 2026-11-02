@@ -21,6 +21,10 @@ internal sealed class StubGlobalSettingsQueries(IReadOnlyList<string> allowedHos
 
         => Task.FromResult(new ClaudeCodeSettingsSnapshot(string.Empty, true, []));
 
+    public Task<HostHooksSnapshot> GetHostHooksAsync(CancellationToken cancellationToken)
+
+        => Task.FromResult(new HostHooksSnapshot(string.Empty, []));
+
     public Task<IReadOnlyList<string>> GetAllowedProviderHostsAsync(CancellationToken cancellationToken)
         => Task.FromResult(allowedHosts);
 

@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Globalization;
+using System.Text.Json;
 
 using Foundry.Modules.Credentials.Contracts.Queries;
 using Foundry.Modules.Issues.Contracts;
@@ -18,7 +19,6 @@ using Foundry.Shared.Infrastructure;
 
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
 
 namespace Foundry.Modules.Workers.Features.Dispatch;
 
@@ -27,14 +27,11 @@ internal sealed class IssueClaimedHandler(
     DbContext dbContext,
     IWorkerOrchestrator orchestrator,
     IDomainEventDispatcher domainEventDispatcher,
-    IOptions<WorkerOptions> optionsAccessor,
     IGlobalSettingsQueries settingsQueries,
     ICredentialQueries credentialQueries,
     IPostExitProviderQueries postExitProviderQueries,
     ILogger<IssueClaimedHandler> logger) : IIntegrationEventHandler<IssueClaimed>
 {
-    private readonly WorkerOptions _options = optionsAccessor.Value;
-
     public async Task HandleAsync(IssueClaimed @event, CancellationToken cancellationToken)
     {
         ClaimedIssueDispatch claimed = @event.Dispatch;
@@ -213,7 +210,7 @@ internal sealed class IssueClaimedHandler(
             ["BRANCH_NAME"] = claimed.BranchName.Value,
             ["SYSTEM_PROMPT"] = systemPrompt,
             ["WORKER_PROMPT"] = workerPrompt,
-            ["CLAUDE_SETTINGS_JSON"] = WorkerSettingsBuilder.Build(claudeCode, _options.Settings.Hooks),
+            ["CLAUDE_SETTINGS_JSON"] = WorkerSettingsBuilder.Build(claudeCode),
         };
 
         List<VolumeMount> volumeMounts = [];
@@ -250,6 +247,25 @@ internal sealed class IssueClaimedHandler(
         }
 
         List<BindMount> bindMounts = mountsSuccess.Value;
+
+        HostHooksSnapshot hostHooks = await settingsQueries.GetHostHooksAsync(cancellationToken);
+
+        // The file is not checked for existence here: the API's filesystem is not necessarily the Docker host's,
+        // so a missing, unreadable or invalid file fails closed in the entrypoint as a bootstrap failure.
+        if (!string.IsNullOrEmpty(hostHooks.HostSettingsPath))
+        {
+            if (HostPathSecurity.IsSensitiveHostPath(hostHooks.HostSettingsPath))
+            {
+                return Result<WorkerContainerSpec>.Fail(
+                    new Error(
+                        "Worker.SensitiveHostSettingsPath",
+                        $"Host settings file path targets a sensitive system directory: {hostHooks.HostSettingsPath}"));
+            }
+
+            bindMounts.Add(new BindMount(hostHooks.HostSettingsPath, HostSettingsMount.ContainerPath, ReadOnly: true));
+            envVars[HostSettingsMount.FileEnvironmentVariable] = HostSettingsMount.ContainerPath;
+            envVars[HostSettingsMount.ExclusionsEnvironmentVariable] = JsonSerializer.Serialize(hostHooks.ExcludedCommands);
+        }
 
         Dictionary<string, string> labels = new()
         {

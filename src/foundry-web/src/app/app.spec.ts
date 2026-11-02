@@ -132,6 +132,8 @@ function buildTestSnapshot(overrides: Partial<UsageSnapshot> = {}): UsageSnapsho
 function createMockUsageService(snapshot: UsageSnapshot | null = null) {
   return {
     snapshot: signal(snapshot).asReadonly(),
+    refreshState: signal('idle').asReadonly(),
+    refresh: vi.fn(),
   };
 }
 

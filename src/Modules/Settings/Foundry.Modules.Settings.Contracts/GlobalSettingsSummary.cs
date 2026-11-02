@@ -29,4 +29,6 @@ public sealed record GlobalSettingsSummary(
     IReadOnlyList<WorkerMountEntry> Mounts,
     string Model,
     bool BlockCiCdEdits,
-    IReadOnlyList<string> AdditionalDenyRules);
+    IReadOnlyList<string> AdditionalDenyRules,
+    string HostSettingsPath,
+    IReadOnlyList<string> ExcludedHookCommands);

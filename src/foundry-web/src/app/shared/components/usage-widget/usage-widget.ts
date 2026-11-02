@@ -214,6 +214,21 @@ export class UsageWidgetComponent implements OnDestroy {
   readonly isOpen = signal(false);
   readonly isCollapsed = signal(false);
 
+  readonly refreshState = this._usageService.refreshState;
+
+  readonly refreshStatusText = computed<string>(() => {
+    switch (this.refreshState()) {
+      case 'upToDate':
+        return 'Up to date';
+      case 'unavailable':
+        return "Can't refresh right now";
+      case 'error':
+        return "Couldn't start refresh";
+      default:
+        return '';
+    }
+  });
+
   readonly view = computed<UsageWidgetVm | null>(() => {
     const snapshot = this._usageService.snapshot();
     if (snapshot === null) {
@@ -250,6 +265,10 @@ export class UsageWidgetComponent implements OnDestroy {
 
   ngOnDestroy(): void {
     this._resizeObserver?.disconnect();
+  }
+
+  onRefresh(): void {
+    this._usageService.refresh();
   }
 
   onToggle(event: Event): void {

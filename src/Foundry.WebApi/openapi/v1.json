@@ -142,6 +142,47 @@
         }
       }
     },
+    "/api/credentials/usage/refresh": {
+      "post": {
+        "tags": [
+          "Credentials"
+        ],
+        "summary": "Requests an on-demand Claude usage poll; the result arrives via the UsageSnapshotUpdated push",
+        "operationId": "RefreshUsage",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RefreshUsageResponse"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Accepted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RefreshUsageResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RefreshUsageResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/credentials/login/start": {
       "post": {
         "tags": [
@@ -1568,7 +1609,7 @@
         "tags": [
           "Settings"
         ],
-        "summary": "Updates the worker resource limits and host mounts",
+        "summary": "Updates the worker resource limits, host mounts, and host hooks source",
         "operationId": "UpdateWorkerEnvironment",
         "requestBody": {
           "content": {
@@ -2128,7 +2169,9 @@
           "mounts",
           "model",
           "blockCiCdEdits",
-          "additionalDenyRules"
+          "additionalDenyRules",
+          "hostSettingsPath",
+          "excludedHookCommands"
         ],
         "type": "object",
         "properties": {
@@ -2274,6 +2317,15 @@
             "type": "boolean"
           },
           "additionalDenyRules": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "hostSettingsPath": {
+            "type": "string"
+          },
+          "excludedHookCommands": {
             "type": "array",
             "items": {
               "type": "string"
@@ -2744,6 +2796,17 @@
             "items": {
               "$ref": "#/components/schemas/ProviderBudgetHeadroom"
             }
+          }
+        }
+      },
+      "RefreshUsageResponse": {
+        "required": [
+          "status"
+        ],
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string"
           }
         }
       },
@@ -3311,7 +3374,9 @@
           "memoryLimitMb",
           "cpuLimit",
           "pidsLimit",
-          "mounts"
+          "mounts",
+          "hostSettingsPath",
+          "excludedHookCommands"
         ],
         "type": "object",
         "properties": {
@@ -3343,6 +3408,15 @@
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/UpdateWorkerEnvironmentMountRequest"
+            }
+          },
+          "hostSettingsPath": {
+            "type": "string"
+          },
+          "excludedHookCommands": {
+            "type": "array",
+            "items": {
+              "type": "string"
             }
           }
         }

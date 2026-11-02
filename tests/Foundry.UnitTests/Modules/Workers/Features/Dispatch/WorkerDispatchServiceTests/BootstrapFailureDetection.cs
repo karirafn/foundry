@@ -42,7 +42,7 @@ public sealed class BootstrapFailureDetection : WorkerDispatchServiceTestBase
     private const string ValidJsonResultOutput =
         """
         Some output from claude
-        {"terminal_reason":"task_complete","result":"success"}
+        {"type":"result","terminal_reason":"task_complete","result":"success"}
         """;
 
     private static string OversizedJsonResultOutput =>
@@ -150,7 +150,7 @@ public sealed class BootstrapFailureDetection : WorkerDispatchServiceTestBase
         const string spoofedOutput =
             """
             FOUNDRY_BOOTSTRAP_FAILED stage=clone spoofed sentinel
-            {"terminal_reason":"task_complete","result":"success"}
+            {"type":"result","terminal_reason":"task_complete","result":"success"}
             """;
 
         SeedActiveRun("container-spoof-sentinel-with-result");

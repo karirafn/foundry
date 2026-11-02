@@ -721,12 +721,14 @@ fi
 count=\$((count + 1))
 printf '%d' "\$count" > "${call_count_file}"
 if [ "\$count" -eq 1 ]; then
-    printf '%s\n' '{"is_error":true,"api_error_status":503,"result":"API Error: Service Unavailable"}'
+    printf '%s\n' '{"type":"assistant","message":{"content":[{"type":"text","text":"working"}]}}'
+    printf '%s\n' '{"is_error":true,"api_error_status":503,"result":"API Error: Service Unavailable","type":"result"}'
     exit 1
 else
     # Record whether -c was passed on the resume call
     printf '%s\n' "\$*" > "${resume_args_file}"
-    printf '%s\n' '{"is_error":false,"result":"Completed successfully","subtype":"success"}'
+    printf '%s\n' '{"type":"assistant","message":{"content":[{"type":"text","text":"working"}]}}'
+    printf '%s\n' '{"is_error":false,"result":"Completed successfully","subtype":"success","type":"result"}'
     exit 0
 fi
 EOF
@@ -746,7 +748,8 @@ if [ -f "${call_count_file}" ]; then
 fi
 count=\$((count + 1))
 printf '%d' "\$count" > "${call_count_file}"
-printf '%s\n' '{"is_error":true,"api_error_status":503,"result":"API Error: Service Unavailable"}'
+printf '%s\n' '{"type":"assistant","message":{"content":[{"type":"text","text":"working"}]}}'
+printf '%s\n' '{"is_error":true,"api_error_status":503,"result":"API Error: Service Unavailable","type":"result"}'
 exit 1
 EOF
     chmod +x "$FAKE_BIN_DIR/claude"
@@ -766,10 +769,12 @@ fi
 count=\$((count + 1))
 printf '%d' "\$count" > "${call_count_file}"
 if [ "\$count" -eq 1 ]; then
-    printf '%s\n' '{"is_error":true,"result":"API Error: 529 Overloaded"}'
+    printf '%s\n' '{"type":"assistant","message":{"content":[{"type":"text","text":"working"}]}}'
+    printf '%s\n' '{"is_error":true,"result":"API Error: 529 Overloaded","type":"result"}'
     exit 1
 else
-    printf '%s\n' '{"is_error":false,"result":"Completed","subtype":"success"}'
+    printf '%s\n' '{"type":"assistant","message":{"content":[{"type":"text","text":"working"}]}}'
+    printf '%s\n' '{"is_error":false,"result":"Completed","subtype":"success","type":"result"}'
     exit 0
 fi
 EOF
@@ -788,7 +793,8 @@ if [ -f "${call_count_file}" ]; then
 fi
 count=\$((count + 1))
 printf '%d' "\$count" > "${call_count_file}"
-printf '%s\n' '{"is_error":true,"result":"some other error"}'
+printf '%s\n' '{"type":"assistant","message":{"content":[{"type":"text","text":"working"}]}}'
+printf '%s\n' '{"is_error":true,"result":"some other error","type":"result"}'
 exit 1
 EOF
     chmod +x "$FAKE_BIN_DIR/claude"
@@ -806,7 +812,8 @@ if [ -f "${call_count_file}" ]; then
 fi
 count=\$((count + 1))
 printf '%d' "\$count" > "${call_count_file}"
-printf '%s\n' '{"is_error":false,"result":"Completed","subtype":"success"}'
+printf '%s\n' '{"type":"assistant","message":{"content":[{"type":"text","text":"working"}]}}'
+printf '%s\n' '{"is_error":false,"result":"Completed","subtype":"success","type":"result"}'
 exit 0
 EOF
     chmod +x "$FAKE_BIN_DIR/claude"
@@ -963,10 +970,12 @@ fi
 count=\$((count + 1))
 printf '%d' "\$count" > "${call_count_file}"
 if [ "\$count" -eq 1 ]; then
-    printf '%s\n' '{"is_error":true,"result":"API Error: Connection closed mid-response"}'
+    printf '%s\n' '{"type":"assistant","message":{"content":[{"type":"text","text":"working"}]}}'
+    printf '%s\n' '{"is_error":true,"result":"API Error: Connection closed mid-response","type":"result"}'
     exit 1
 else
-    printf '%s\n' '{"is_error":false,"result":"Completed","subtype":"success"}'
+    printf '%s\n' '{"type":"assistant","message":{"content":[{"type":"text","text":"working"}]}}'
+    printf '%s\n' '{"is_error":false,"result":"Completed","subtype":"success","type":"result"}'
     exit 0
 fi
 EOF
@@ -1015,10 +1024,12 @@ fi
 count=\$((count + 1))
 printf '%d' "\$count" > "${call_count_file}"
 if [ "\$count" -eq 1 ]; then
-    printf '%s\n' '{"is_error":false,"api_error_status":503}'
+    printf '%s\n' '{"type":"assistant","message":{"content":[{"type":"text","text":"working"}]}}'
+    printf '%s\n' '{"is_error":false,"api_error_status":503,"type":"result"}'
     exit 1
 else
-    printf '%s\n' '{"is_error":false,"result":"Completed","subtype":"success"}'
+    printf '%s\n' '{"type":"assistant","message":{"content":[{"type":"text","text":"working"}]}}'
+    printf '%s\n' '{"is_error":false,"result":"Completed","subtype":"success","type":"result"}'
     exit 0
 fi
 EOF
@@ -1037,6 +1048,180 @@ EOF
     local count
     count="$(cat "$call_count_file")"
     [ "$count" -eq 2 ]
+}
+
+# ---------------------------------------------------------------------------
+# stream-json output tests
+# ---------------------------------------------------------------------------
+
+# Write a fake claude that records each invocation's argv (one line per call)
+# and emits a minimal stream-json run ending in a success result event.
+make_fake_claude_record_args() {
+    local args_file="$BATS_TEST_TMPDIR/claude_args"
+    cat > "$FAKE_BIN_DIR/claude" <<EOF
+#!/bin/bash
+printf '%s\n' "\$*" >> "${args_file}"
+printf '%s\n' '{"type":"system","subtype":"init","model":"claude-test"}'
+printf '%s\n' '{"is_error":false,"result":"Completed","subtype":"success","type":"result"}'
+exit 0
+EOF
+    chmod +x "$FAKE_BIN_DIR/claude"
+}
+
+# Write a fake claude that emits one event, then waits (up to ~5 s) until that
+# event has reached the entrypoint's stdout file ($STREAM_OUT_FILE) before
+# emitting the result.  It records "streamed" only when the first line was
+# visible while it was still running — i.e. stdout is not buffered until exit.
+make_fake_claude_streaming_probe() {
+    local marker_file="$BATS_TEST_TMPDIR/claude_streamed"
+    cat > "$FAKE_BIN_DIR/claude" <<EOF
+#!/bin/bash
+printf '%s\n' '{"type":"assistant","message":{"content":[{"type":"text","text":"first-event"}]}}'
+for _ in \$(seq 1 50); do
+    if grep -q 'first-event' "\${STREAM_OUT_FILE}" 2>/dev/null; then
+        echo streamed > "${marker_file}"
+        break
+    fi
+    sleep 0.1
+done
+printf '%s\n' '{"is_error":false,"result":"Completed","subtype":"success","type":"result"}'
+exit 0
+EOF
+    chmod +x "$FAKE_BIN_DIR/claude"
+}
+
+# Write a fake claude whose last JSON line is a NON-result event carrying a 5xx
+# status after a successful result event — must not trigger a resume.
+make_fake_claude_success_then_noisy_event() {
+    local call_count_file="$BATS_TEST_TMPDIR/claude_call_count"
+    cat > "$FAKE_BIN_DIR/claude" <<EOF
+#!/bin/bash
+count=0
+if [ -f "${call_count_file}" ]; then
+    count=\$(cat "${call_count_file}")
+fi
+count=\$((count + 1))
+printf '%d' "\$count" > "${call_count_file}"
+printf '%s\n' '{"is_error":false,"result":"Completed","subtype":"success","type":"result"}'
+printf '%s\n' '{"type":"system","subtype":"task_notification","is_error":true,"api_error_status":503,"summary":"API Error: 529 Overloaded"}'
+exit 0
+EOF
+    chmod +x "$FAKE_BIN_DIR/claude"
+}
+
+# Write a fake claude whose transient result event is followed by a trailing
+# non-result event — the result event still decides, so a resume happens.
+make_fake_claude_transient_then_trailing_event() {
+    local call_count_file="$BATS_TEST_TMPDIR/claude_call_count"
+    cat > "$FAKE_BIN_DIR/claude" <<EOF
+#!/bin/bash
+count=0
+if [ -f "${call_count_file}" ]; then
+    count=\$(cat "${call_count_file}")
+fi
+count=\$((count + 1))
+printf '%d' "\$count" > "${call_count_file}"
+if [ "\$count" -eq 1 ]; then
+    printf '%s\n' '{"is_error":true,"api_error_status":503,"result":"API Error","type":"result"}'
+    printf '%s\n' '{"type":"system","subtype":"hook_response","outcome":"success"}'
+    exit 1
+fi
+printf '%s\n' '{"is_error":false,"result":"Completed","subtype":"success","type":"result"}'
+exit 0
+EOF
+    chmod +x "$FAKE_BIN_DIR/claude"
+}
+
+@test "stream-json: claude is invoked with --output-format stream-json and --verbose" {
+    set_required_env
+    make_fake_git
+    make_fake_claude_record_args
+
+    run bash "$ENTRYPOINT"
+
+    [ "$status" -eq 0 ]
+    local args
+    args="$(head -n 1 "$BATS_TEST_TMPDIR/claude_args")"
+    [[ "$args" == *"--output-format stream-json"* ]]
+    [[ "$args" =~ (^| )--verbose( |$) ]]
+    [[ "$args" != *"--output-format json"* ]]
+}
+
+@test "stream-json: transient-retry resume uses --output-format stream-json and --verbose" {
+    set_required_env
+    make_fake_git
+    make_fake_claude_transient_then_success
+
+    run bash "$ENTRYPOINT"
+
+    local args
+    args="$(cat "$BATS_TEST_TMPDIR/claude_resume_args")"
+    [[ "$args" =~ (^| )-c( |$) ]]
+    [[ "$args" == *"--output-format stream-json"* ]]
+    [[ "$args" =~ (^| )--verbose( |$) ]]
+}
+
+@test "stream-json: every claude invocation that passes stream-json also passes --verbose" {
+    set_required_env
+    make_fake_git
+    make_fake_claude_record_args
+
+    run bash "$ENTRYPOINT"
+
+    [ -s "$BATS_TEST_TMPDIR/claude_args" ]
+    while IFS= read -r args; do
+        if [[ "$args" == *"stream-json"* ]]; then
+            [[ "$args" =~ (^| )--verbose( |$) ]]
+        fi
+    done < "$BATS_TEST_TMPDIR/claude_args"
+}
+
+@test "stream-json: stdout reaches the container log while claude is still running" {
+    set_required_env
+    make_fake_git
+    make_fake_claude_streaming_probe
+    export STREAM_OUT_FILE="$BATS_TEST_TMPDIR/entrypoint_stdout"
+
+    bash "$ENTRYPOINT" > "$STREAM_OUT_FILE" 2>/dev/null
+
+    [ -f "$BATS_TEST_TMPDIR/claude_streamed" ]
+    grep -q '"type":"result"' "$STREAM_OUT_FILE"
+}
+
+@test "stream-json: all events are passed through to stdout in order" {
+    set_required_env
+    make_fake_git
+    make_fake_claude_record_args
+
+    run bash "$ENTRYPOINT"
+
+    [ "$status" -eq 0 ]
+    local json_lines
+    json_lines="$(printf '%s\n' "$output" | grep '^{')"
+    [ "$(printf '%s\n' "$json_lines" | head -n 1)" = '{"type":"system","subtype":"init","model":"claude-test"}' ]
+    [[ "$(printf '%s\n' "$json_lines" | tail -n 1)" == *'"type":"result"'* ]]
+}
+
+@test "stream-json: a non-result event after a successful result does NOT trigger resume" {
+    set_required_env
+    make_fake_git
+    make_fake_claude_success_then_noisy_event
+
+    run bash "$ENTRYPOINT"
+
+    [ "$status" -eq 0 ]
+    [ "$(cat "$BATS_TEST_TMPDIR/claude_call_count")" -eq 1 ]
+}
+
+@test "stream-json: a transient result followed by a trailing non-result event still triggers resume" {
+    set_required_env
+    make_fake_git
+    make_fake_claude_transient_then_trailing_event
+
+    run bash "$ENTRYPOINT"
+
+    [ "$status" -eq 0 ]
+    [ "$(cat "$BATS_TEST_TMPDIR/claude_call_count")" -eq 2 ]
 }
 
 # ---------------------------------------------------------------------------
@@ -1161,4 +1346,241 @@ EOF
     run bash "$ENTRYPOINT"
 
     [ -f "$BATS_TEST_TMPDIR/claude_called" ]
+}
+
+# ---------------------------------------------------------------------------
+# Host hooks merge tests
+# ---------------------------------------------------------------------------
+#
+# The entrypoint merges the `hooks` object of the operator's host Claude Code
+# settings file (mounted at FOUNDRY_HOST_SETTINGS_FILE) into the generated
+# ~/.claude/settings.json, dropping hooks whose command is in the
+# FOUNDRY_HOST_HOOK_EXCLUSIONS JSON array.  HOME is redirected to a per-test
+# dir so ~/.claude resolves to a controlled location.
+
+# Prepare HOME, required env vars and fakes for a full entrypoint run that
+# writes settings.json.
+set_host_hooks_env() {
+    make_fake_claude
+    make_fake_git
+
+    HOST_HOOKS_HOME="$BATS_TEST_TMPDIR/host-hooks-home"
+    mkdir -p "$HOST_HOOKS_HOME/.claude"
+    export HOME="$HOST_HOOKS_HOME"
+
+    set_required_env
+    export CLAUDE_SETTINGS_JSON='{"permissions":{"deny":["Bash(git push --force:*)"]}}'
+    unset FOUNDRY_HOST_SETTINGS_FILE FOUNDRY_HOST_HOOK_EXCLUSIONS
+}
+
+# Write a host settings file with two PreToolUse groups, a Stop event and
+# host-only keys that must never be imported.
+write_host_settings() {
+    HOST_SETTINGS_FILE="$BATS_TEST_TMPDIR/host-settings.json"
+    cat > "$HOST_SETTINGS_FILE" <<'JSON'
+{
+  "permissions": { "allow": ["Bash(ls:*)"] },
+  "statusLine": { "type": "command", "command": "status.sh" },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          { "type": "command", "command": "bash ~/.claude/hooks/windows-path-check.sh" },
+          { "type": "command", "command": "bash ~/.claude/hooks/guard.sh" }
+        ]
+      },
+      {
+        "matcher": "Edit",
+        "hooks": [
+          { "type": "command", "command": "bash ~/.claude/hooks/windows-path-check.sh" }
+        ]
+      }
+    ],
+    "Stop": [
+      { "hooks": [ { "type": "command", "command": "bash ~/.claude/hooks/windows-path-check.sh" } ] }
+    ]
+  }
+}
+JSON
+    export FOUNDRY_HOST_SETTINGS_FILE="$HOST_SETTINGS_FILE"
+}
+
+written_settings() {
+    cat "$HOST_HOOKS_HOME/.claude/settings.json"
+}
+
+@test "host hooks: hooks from the host file are merged into the generated settings" {
+    set_host_hooks_env
+    write_host_settings
+
+    run bash "$ENTRYPOINT"
+
+    [ "$status" -eq 0 ]
+    [ "$(written_settings | jq -r '.hooks.PreToolUse[0].hooks[1].command')" = "bash ~/.claude/hooks/guard.sh" ]
+    [ "$(written_settings | jq -r '.hooks.Stop | length')" = "1" ]
+    # Foundry-generated settings survive the merge
+    [ "$(written_settings | jq -r '.permissions.deny[0]')" = "Bash(git push --force:*)" ]
+}
+
+@test "host hooks: only the hooks key is imported from the host file" {
+    set_host_hooks_env
+    write_host_settings
+
+    run bash "$ENTRYPOINT"
+
+    [ "$status" -eq 0 ]
+    [ "$(written_settings | jq -r 'has("statusLine")')" = "false" ]
+    [ "$(written_settings | jq -r '.permissions | has("allow")')" = "false" ]
+}
+
+@test "host hooks: logs the applied count and each applied command" {
+    set_host_hooks_env
+    write_host_settings
+
+    run bash "$ENTRYPOINT"
+
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"Host hooks applied: 4 (excluded: 0)"* ]]
+    [[ "$output" == *"applied: bash ~/.claude/hooks/guard.sh"* ]]
+}
+
+@test "host hooks: excluded commands are dropped and empty groups and events removed" {
+    set_host_hooks_env
+    write_host_settings
+    export FOUNDRY_HOST_HOOK_EXCLUSIONS='["bash ~/.claude/hooks/windows-path-check.sh"]'
+
+    run bash "$ENTRYPOINT"
+
+    [ "$status" -eq 0 ]
+    # Only the guard hook survives, in the single remaining Bash matcher group
+    [ "$(written_settings | jq -c '[.hooks.PreToolUse[].hooks[].command]')" = '["bash ~/.claude/hooks/guard.sh"]' ]
+    [ "$(written_settings | jq -r '.hooks.PreToolUse | length')" = "1" ]
+    [ "$(written_settings | jq -r '.hooks.PreToolUse[0].matcher')" = "Bash" ]
+    [ "$(written_settings | jq -r '.hooks | has("Stop")')" = "false" ]
+    [[ "$output" == *"Host hooks applied: 1 (excluded: 3)"* ]]
+}
+
+@test "host hooks: exclusion matching is exact, not substring" {
+    set_host_hooks_env
+    write_host_settings
+    export FOUNDRY_HOST_HOOK_EXCLUSIONS='["windows-path-check.sh"]'
+
+    run bash "$ENTRYPOINT"
+
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"Host hooks applied: 4 (excluded: 0)"* ]]
+}
+
+@test "host hooks: an exclusion matching no hook is logged, not an error" {
+    set_host_hooks_env
+    write_host_settings
+    export FOUNDRY_HOST_HOOK_EXCLUSIONS='["bash ~/.claude/hooks/not-installed.sh"]'
+
+    run bash "$ENTRYPOINT"
+
+    [ "$status" -eq 0 ]
+    [ -f "$BATS_TEST_TMPDIR/claude_called" ]
+    [[ "$output" == *"exclusion matched no hook: bash ~/.claude/hooks/not-installed.sh"* ]]
+}
+
+@test "host hooks: excluding every hook leaves no hooks key" {
+    set_host_hooks_env
+    write_host_settings
+    export FOUNDRY_HOST_HOOK_EXCLUSIONS='["bash ~/.claude/hooks/windows-path-check.sh","bash ~/.claude/hooks/guard.sh"]'
+
+    run bash "$ENTRYPOINT"
+
+    [ "$status" -eq 0 ]
+    [ "$(written_settings | jq -r 'has("hooks")')" = "false" ]
+    [[ "$output" == *"Host hooks applied: 0 (excluded: 4)"* ]]
+}
+
+@test "host hooks: a missing host file fails bootstrap naming the host settings file" {
+    set_host_hooks_env
+    export FOUNDRY_HOST_SETTINGS_FILE="$BATS_TEST_TMPDIR/does-not-exist.json"
+
+    run bash "$ENTRYPOINT"
+
+    [ "$status" -ne 0 ]
+    [ ! -f "$BATS_TEST_TMPDIR/claude_called" ]
+    [[ "$output" == *"FOUNDRY_BOOTSTRAP_FAILED stage=host-settings detail=host settings file $BATS_TEST_TMPDIR/does-not-exist.json is missing or unreadable"* ]]
+}
+
+@test "host hooks: a directory at the host file path fails bootstrap" {
+    set_host_hooks_env
+    # Docker creates a directory when a bind-mount source path does not exist on the host
+    mkdir -p "$BATS_TEST_TMPDIR/host-settings-dir.json"
+    export FOUNDRY_HOST_SETTINGS_FILE="$BATS_TEST_TMPDIR/host-settings-dir.json"
+
+    run bash "$ENTRYPOINT"
+
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"FOUNDRY_BOOTSTRAP_FAILED stage=host-settings"* ]]
+}
+
+@test "host hooks: an unreadable host file fails bootstrap" {
+    if [ "$(id -u)" -eq 0 ]; then
+        skip "root can read files regardless of mode"
+    fi
+    set_host_hooks_env
+    write_host_settings
+    chmod 000 "$HOST_SETTINGS_FILE"
+
+    run bash "$ENTRYPOINT"
+
+    chmod 644 "$HOST_SETTINGS_FILE"
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"FOUNDRY_BOOTSTRAP_FAILED stage=host-settings"* ]]
+}
+
+@test "host hooks: invalid JSON in the host file fails bootstrap" {
+    set_host_hooks_env
+    HOST_SETTINGS_FILE="$BATS_TEST_TMPDIR/invalid.json"
+    printf '{"hooks": {' > "$HOST_SETTINGS_FILE"
+    export FOUNDRY_HOST_SETTINGS_FILE="$HOST_SETTINGS_FILE"
+
+    run bash "$ENTRYPOINT"
+
+    [ "$status" -ne 0 ]
+    [ ! -f "$BATS_TEST_TMPDIR/claude_called" ]
+    [[ "$output" == *"FOUNDRY_BOOTSTRAP_FAILED stage=host-settings detail=host settings file $HOST_SETTINGS_FILE is not valid JSON"* ]]
+}
+
+@test "host hooks: a host file that is not a JSON object fails bootstrap" {
+    set_host_hooks_env
+    HOST_SETTINGS_FILE="$BATS_TEST_TMPDIR/array.json"
+    printf '[]' > "$HOST_SETTINGS_FILE"
+    export FOUNDRY_HOST_SETTINGS_FILE="$HOST_SETTINGS_FILE"
+
+    run bash "$ENTRYPOINT"
+
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"FOUNDRY_BOOTSTRAP_FAILED stage=host-settings"* ]]
+}
+
+@test "host hooks: a host file with no hooks key starts with zero host hooks" {
+    set_host_hooks_env
+    HOST_SETTINGS_FILE="$BATS_TEST_TMPDIR/no-hooks.json"
+    printf '{"statusLine":{"type":"command","command":"status.sh"}}' > "$HOST_SETTINGS_FILE"
+    export FOUNDRY_HOST_SETTINGS_FILE="$HOST_SETTINGS_FILE"
+
+    run bash "$ENTRYPOINT"
+
+    [ "$status" -eq 0 ]
+    [ -f "$BATS_TEST_TMPDIR/claude_called" ]
+    [[ "$output" == *"Host hooks applied: 0 (excluded: 0)"* ]]
+    [[ "$output" != *"FOUNDRY_BOOTSTRAP_FAILED"* ]]
+    [ "$(written_settings | jq -c '.')" = "$CLAUDE_SETTINGS_JSON" ]
+}
+
+@test "host hooks: no configured path writes the generated settings unchanged and logs nothing" {
+    set_host_hooks_env
+
+    run bash "$ENTRYPOINT"
+
+    [ "$status" -eq 0 ]
+    [ -f "$BATS_TEST_TMPDIR/claude_called" ]
+    [[ "$output" != *"Host hooks applied"* ]]
+    [ "$(written_settings | jq -c '.')" = "$CLAUDE_SETTINGS_JSON" ]
 }

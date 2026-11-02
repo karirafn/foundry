@@ -10,7 +10,6 @@ using Foundry.Modules.Workers.Contracts;
 using Foundry.Modules.Workers.Domain.Entities;
 using Foundry.Modules.Workers.Domain.Entities.States;
 using Foundry.Modules.Workers.Domain.ValueObjects;
-using Foundry.Modules.Workers.Features;
 using Foundry.Modules.Workers.Features.Orchestration;
 using Foundry.Modules.Workers.Features.Outcome;
 using Foundry.Modules.Workers.Features.ContainerSpec;
@@ -23,7 +22,6 @@ using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
-using Microsoft.Extensions.Options;
 
 using Shouldly;
 
@@ -106,7 +104,6 @@ public sealed class PreContainerFailureBridging : IAsyncDisposable
             _dbContext,
             orchestrator ?? new AlwaysFailingOrchestrator(),
             domainDispatcher,
-            Options.Create(new WorkerOptions()),
             new StubGlobalSettingsQueries(),
             new StubCredentialQueries(("ANTHROPIC_API_KEY", "test-key")),
             postExitProviderQueries ?? new BranchCreationFailsQueries(),
@@ -374,6 +371,10 @@ public sealed class PreContainerFailureBridging : IAsyncDisposable
         public Task<ClaudeCodeSettingsSnapshot> GetClaudeCodeSettingsAsync(CancellationToken cancellationToken)
 
             => Task.FromResult(new ClaudeCodeSettingsSnapshot(string.Empty, true, []));
+
+        public Task<HostHooksSnapshot> GetHostHooksAsync(CancellationToken cancellationToken)
+
+            => Task.FromResult(new HostHooksSnapshot(string.Empty, []));
 
         public Task<IReadOnlyList<string>> GetAllowedProviderHostsAsync(CancellationToken cancellationToken)
             => Task.FromResult<IReadOnlyList<string>>([]);

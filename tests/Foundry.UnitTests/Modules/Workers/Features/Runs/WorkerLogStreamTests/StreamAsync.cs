@@ -152,6 +152,36 @@ public sealed class StreamAsync : IAsyncDisposable
     }
 
     [Fact]
+    public async Task WhenRunIsActive_StreamsAgentTranscriptInsteadOfRawJson()
+    {
+        // Arrange
+        ActiveRun run = await SeedActiveRunAsync();
+        CapturingOrchestrator orchestrator = new(
+        [
+            "2026-11-02T17:30:00.000000000Z Starting rootless dockerd (uid=1000)...",
+            """2026-11-02T17:31:30.000000000Z {"type":"assistant","message":{"content":[{"type":"tool_use","id":"t1","name":"Bash","input":{"command":"dotnet test"}}]},"timestamp":"2026-11-02T17:31:30.000Z"}""",
+            """2026-11-02T17:31:31.000000000Z {"type":"system","subtype":"thinking_tokens","tokens":12}""",
+            """2026-11-02T17:31:40.000000000Z {"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"t1","content":"Passed!","is_error":false}]},"timestamp":"2026-11-02T17:31:40.000Z"}""",
+        ]);
+        WorkerLogStream sut = new(_dbContext, orchestrator);
+
+        // Act
+        List<string> received = [];
+        await foreach (string line in sut.StreamAsync(run.Id.Value, CancellationToken.None))
+        {
+            received.Add(line);
+        }
+
+        // Assert
+        received.ShouldBe(
+        [
+            "2026-11-02T17:30:00.000000000Z Starting rootless dockerd (uid=1000)...",
+            "2026-11-02T17:31:30.000000000Z → Bash: dotnet test",
+            "2026-11-02T17:31:40.000000000Z ✓ Bash (10.0s)",
+        ]);
+    }
+
+    [Fact]
     public async Task WhenRunIsActive_NeverExposesContainerIdInStream()
     {
         // Arrange

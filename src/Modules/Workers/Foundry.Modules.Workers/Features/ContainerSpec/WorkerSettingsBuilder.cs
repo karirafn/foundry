@@ -38,9 +38,8 @@ internal static class WorkerSettingsBuilder
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
     };
 
-    public static string Build(
-        ClaudeCodeSettingsSnapshot claudeCode,
-        IReadOnlyDictionary<string, List<HookGroup>> hooks)
+    // Hooks are not emitted here: the entrypoint merges them from the host settings file at container start.
+    public static string Build(ClaudeCodeSettingsSnapshot claudeCode)
     {
         string[] denyRules =
         [
@@ -53,7 +52,6 @@ internal static class WorkerSettingsBuilder
         {
             Model = string.IsNullOrWhiteSpace(claudeCode.Model) ? null : claudeCode.Model,
             Permissions = new() { Deny = denyRules },
-            Hooks = hooks.Count > 0 ? hooks : null,
         };
 
         return JsonSerializer.Serialize(document, SerializerOptions);
@@ -64,8 +62,6 @@ internal static class WorkerSettingsBuilder
         public string? Model { get; set; }
 
         public required PermissionsSection Permissions { get; set; }
-
-        public IReadOnlyDictionary<string, List<HookGroup>>? Hooks { get; set; }
     }
 
     private sealed class PermissionsSection

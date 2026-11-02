@@ -42,6 +42,15 @@ updates:
         update-types:
           - version-update:semver-major
 
+  # Claude Code CLI baked into the worker and login images (workers/Dockerfile.base).
+  # Each release arrives as its own PR, gated by the workers CI job (image build,
+  # BATS suite, CLI version check) and the login integration tests.
+  - package-ecosystem: npm
+    directory: /workers
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+
   - package-ecosystem: github-actions
     directory: /
     schedule:

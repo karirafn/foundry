@@ -29,13 +29,13 @@ public sealed class DispatchPausedEventDispatch : WorkerDispatchServiceTestBase
     private const string UsageLimitedFutureOutput =
         """
         Some prior output
-        {"terminal_reason":"blocking_limit","result":"resets at 2099-01-01T00:00:00Z"}
+        {"type":"result","terminal_reason":"blocking_limit","result":"resets at 2099-01-01T00:00:00Z"}
         """;
 
     private const string UsageLimitedPastOutput =
         """
         Some prior output
-        {"terminal_reason":"blocking_limit","result":"resets at 2000-01-01T00:00:00Z"}
+        {"type":"result","terminal_reason":"blocking_limit","result":"resets at 2000-01-01T00:00:00Z"}
         """;
 
     private void SeedGlobalSettings(DateTimeOffset? usageLimitResetsAt = null)
@@ -135,7 +135,7 @@ public sealed class DispatchPausedEventDispatch : WorkerDispatchServiceTestBase
         // Use a shorter future time to ensure it's less than longerExistingReset.
         DateTimeOffset shorterReset = DateTimeOffset.UtcNow.AddDays(1);
         string shorterOutput =
-            $$$"""{"terminal_reason":"blocking_limit","result":"resets at {{{shorterReset:O}}}"}""";
+            $$$"""{"type":"result","terminal_reason":"blocking_limit","result":"resets at {{{shorterReset:O}}}"}""";
 
         WorkerDispatchService sut = BuildServiceWithParser(
             shorterOutput,

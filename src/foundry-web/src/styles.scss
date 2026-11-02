@@ -214,8 +214,11 @@ body {
     min-width: 44px;
   }
 
-  &__hooks {
-    margin: var(--fd-spacing-xl) 0 0;
+  &__exclusion-row {
+    align-items: start;
+    display: grid;
+    gap: var(--fd-spacing-md);
+    grid-template-columns: 1fr 44px;
   }
 
   &__actions {

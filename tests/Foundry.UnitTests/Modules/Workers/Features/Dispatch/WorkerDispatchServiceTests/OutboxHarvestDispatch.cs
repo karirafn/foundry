@@ -232,13 +232,13 @@ public sealed class OutboxHarvestDispatch : IAsyncDisposable
     private const string AuthInvalidOutput =
         """
         Some output
-        {"api_error_status":401}
+        {"type":"result","api_error_status":401}
         """;
 
     private const string Credits429OnlyOutput =
         """
         Some output
-        {"api_error_status":429}
+        {"type":"result","api_error_status":429}
         """;
 
     private WorkerDispatchService BuildService(
@@ -346,6 +346,10 @@ public sealed class OutboxHarvestDispatch : IAsyncDisposable
         public Task<ClaudeCodeSettingsSnapshot> GetClaudeCodeSettingsAsync(CancellationToken cancellationToken)
 
             => Task.FromResult(new ClaudeCodeSettingsSnapshot(string.Empty, true, []));
+
+        public Task<HostHooksSnapshot> GetHostHooksAsync(CancellationToken cancellationToken)
+
+            => Task.FromResult(new HostHooksSnapshot(string.Empty, []));
 
         public Task<IReadOnlyList<string>> GetAllowedProviderHostsAsync(CancellationToken cancellationToken)
             => Task.FromResult<IReadOnlyList<string>>([]);
