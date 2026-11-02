@@ -382,44 +382,46 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# is_transient_api_error <json_output>
+# is_transient_api_error <stream_json_output>
 #
-# Returns 0 (true) when the captured claude JSON output classifies as a
+# Returns 0 (true) when the captured claude stream-json output classifies as a
 # transient API error, 1 (false) otherwise.
 #
 # Mirrors ContainerOutputParser.IsTransientApiError in C# — the detection
 # criteria MUST stay in sync between here and that class.
 #
-# Classification inspects only the LAST JSON line (the line whose first
-# non-space character is '{', walking backward through the output), matching
-# ExtractLastJsonLine in C#.  Earlier lines that happen to contain 5xx
-# statuses or error phrases do NOT trigger a resume.
+# Classification inspects only the LAST result event — the last JSON line
+# (first non-space character '{') carrying "type":"result" — matching
+# ExtractLastResultLine in C#.  Every other stream-json event (assistant,
+# user, system, ...) and earlier lines that happen to contain 5xx statuses or
+# error phrases do NOT trigger a resume.
 #
 # Transient when EITHER:
 #   - api_error_status is in the 500–599 range (numeric or string), OR
-#   - is_error is true AND the last JSON line contains one of these phrases:
+#   - is_error is true AND the result line contains one of these phrases:
 #       "API Error: Connection closed mid-response"
 #       "API Error: 529 Overloaded"
 #
-# Note: the phrase check runs against the whole last JSON line rather than
-# just the "result" field value (a minor widening vs C# which extracts only
-# the result string).  This is benign: both phrases are API Error messages
-# that only appear inside the result field in practice.
+# Note: the phrase check runs against the whole result line rather than just
+# the "result" field value (a minor widening vs C# which extracts only the
+# result string).  This is benign: both phrases are API Error messages that
+# only appear inside the result field in practice.
 # ---------------------------------------------------------------------------
 is_transient_api_error() {
     local output="$1"
 
-    # Extract the last line whose first non-space character is '{' — mirrors
-    # ExtractLastJsonLine in ContainerOutputParser.cs.
+    # Extract the last result event line — mirrors ExtractLastResultLine in
+    # ContainerOutputParser.cs.  The "type" key is not necessarily first in
+    # the object, so match it anywhere on a line that starts with '{'.
     local last_json_line
-    last_json_line="$(printf '%s\n' "$output" | grep -E '^[[:space:]]*\{' | tail -n 1)"
+    last_json_line="$(printf '%s\n' "$output" | grep -E '^[[:space:]]*\{' | grep -E '"type":[[:space:]]*"result"' | tail -n 1)"
 
-    # No JSON object line found — cannot be a transient API error.
+    # No result event found — cannot be a transient API error.
     if [[ -z "$last_json_line" ]]; then
         return 1
     fi
 
-    # Extract api_error_status value from the last JSON line (numeric or quoted numeric)
+    # Extract api_error_status value from the result line (numeric or quoted numeric)
     local status_raw
     status_raw="$(printf '%s' "$last_json_line" | grep -o '"api_error_status":[[:space:]]*[0-9"]*' | grep -o '[0-9]\{3,\}' | head -1)"
 
@@ -441,40 +443,47 @@ is_transient_api_error() {
 }
 
 # ---------------------------------------------------------------------------
-# Invoke claude in headless/JSON mode.  Capture stdout (the single JSON
-# result line) while letting stderr stream through live so logs are visible.
-# set -e is toggled off around the capture so we can inspect the exit status.
+# Invoke claude in headless stream-json mode.  stream-json emits one event per
+# line as the run progresses (the final line is the "result" event), so stdout
+# is piped through tee: each line reaches the container log as it is produced
+# while a copy is kept for transient-error classification.  stderr streams
+# through live.  --verbose is mandatory: the CLI rejects stream-json with
+# --print unless --verbose is also set.
+# set -e is toggled off around the pipeline so we can inspect claude's exit
+# status (PIPESTATUS[0], not tee's).
 #
 # If the first run classifies as a transient API error (mirrors
 # ContainerOutputParser.IsTransientApiError), resume the interrupted session
-# ONCE via "claude -c" before giving up.  The resume's JSON result line
-# becomes the last line of output — if it also fails transiently, Foundry's
-# outer retry bound (#368) still applies.
+# ONCE via "claude -c" with the same output flags before giving up.  The
+# resume's result event becomes the last result in the log — if it also fails
+# transiently, Foundry's outer retry bound (#368) still applies.
 # ---------------------------------------------------------------------------
+CLAUDE_OUTPUT_FILE="$(mktemp)"
+trap 'rm -f "${CLAUDE_OUTPUT_FILE:-}"' EXIT
+
 set +e
-first_output="$(claude -p "$WORKER_PROMPT" \
+claude -p "$WORKER_PROMPT" \
     --append-system-prompt "$SYSTEM_PROMPT" \
     --dangerously-skip-permissions \
-    --output-format json \
-    --max-turns 200)"
-first_status=$?
+    --output-format stream-json \
+    --verbose \
+    --max-turns 200 | tee "$CLAUDE_OUTPUT_FILE"
+first_status=${PIPESTATUS[0]}
 set -e
 
-[[ -n "$first_output" ]] && printf '%s\n' "$first_output"
-
-if is_transient_api_error "$first_output"; then
+if is_transient_api_error "$(cat "$CLAUDE_OUTPUT_FILE")"; then
     echo "Transient API error detected — resuming session once via claude -c" >&2
     # Resume the most recent conversation in cwd.  --append-system-prompt is
     # intentionally omitted: -c restores the original session (system prompt
     # included) and re-appending would duplicate it.
     set +e
-    resume_output="$(claude -c -p "$WORKER_PROMPT" \
+    claude -c -p "$WORKER_PROMPT" \
         --dangerously-skip-permissions \
-        --output-format json \
-        --max-turns 200)"
-    resume_status=$?
+        --output-format stream-json \
+        --verbose \
+        --max-turns 200 | tee "$CLAUDE_OUTPUT_FILE"
+    resume_status=${PIPESTATUS[0]}
     set -e
-    [[ -n "$resume_output" ]] && printf '%s\n' "$resume_output"
     exit "$resume_status"
 fi
 

@@ -721,12 +721,14 @@ fi
 count=\$((count + 1))
 printf '%d' "\$count" > "${call_count_file}"
 if [ "\$count" -eq 1 ]; then
-    printf '%s\n' '{"is_error":true,"api_error_status":503,"result":"API Error: Service Unavailable"}'
+    printf '%s\n' '{"type":"assistant","message":{"content":[{"type":"text","text":"working"}]}}'
+    printf '%s\n' '{"is_error":true,"api_error_status":503,"result":"API Error: Service Unavailable","type":"result"}'
     exit 1
 else
     # Record whether -c was passed on the resume call
     printf '%s\n' "\$*" > "${resume_args_file}"
-    printf '%s\n' '{"is_error":false,"result":"Completed successfully","subtype":"success"}'
+    printf '%s\n' '{"type":"assistant","message":{"content":[{"type":"text","text":"working"}]}}'
+    printf '%s\n' '{"is_error":false,"result":"Completed successfully","subtype":"success","type":"result"}'
     exit 0
 fi
 EOF
@@ -746,7 +748,8 @@ if [ -f "${call_count_file}" ]; then
 fi
 count=\$((count + 1))
 printf '%d' "\$count" > "${call_count_file}"
-printf '%s\n' '{"is_error":true,"api_error_status":503,"result":"API Error: Service Unavailable"}'
+printf '%s\n' '{"type":"assistant","message":{"content":[{"type":"text","text":"working"}]}}'
+printf '%s\n' '{"is_error":true,"api_error_status":503,"result":"API Error: Service Unavailable","type":"result"}'
 exit 1
 EOF
     chmod +x "$FAKE_BIN_DIR/claude"
@@ -766,10 +769,12 @@ fi
 count=\$((count + 1))
 printf '%d' "\$count" > "${call_count_file}"
 if [ "\$count" -eq 1 ]; then
-    printf '%s\n' '{"is_error":true,"result":"API Error: 529 Overloaded"}'
+    printf '%s\n' '{"type":"assistant","message":{"content":[{"type":"text","text":"working"}]}}'
+    printf '%s\n' '{"is_error":true,"result":"API Error: 529 Overloaded","type":"result"}'
     exit 1
 else
-    printf '%s\n' '{"is_error":false,"result":"Completed","subtype":"success"}'
+    printf '%s\n' '{"type":"assistant","message":{"content":[{"type":"text","text":"working"}]}}'
+    printf '%s\n' '{"is_error":false,"result":"Completed","subtype":"success","type":"result"}'
     exit 0
 fi
 EOF
@@ -788,7 +793,8 @@ if [ -f "${call_count_file}" ]; then
 fi
 count=\$((count + 1))
 printf '%d' "\$count" > "${call_count_file}"
-printf '%s\n' '{"is_error":true,"result":"some other error"}'
+printf '%s\n' '{"type":"assistant","message":{"content":[{"type":"text","text":"working"}]}}'
+printf '%s\n' '{"is_error":true,"result":"some other error","type":"result"}'
 exit 1
 EOF
     chmod +x "$FAKE_BIN_DIR/claude"
@@ -806,7 +812,8 @@ if [ -f "${call_count_file}" ]; then
 fi
 count=\$((count + 1))
 printf '%d' "\$count" > "${call_count_file}"
-printf '%s\n' '{"is_error":false,"result":"Completed","subtype":"success"}'
+printf '%s\n' '{"type":"assistant","message":{"content":[{"type":"text","text":"working"}]}}'
+printf '%s\n' '{"is_error":false,"result":"Completed","subtype":"success","type":"result"}'
 exit 0
 EOF
     chmod +x "$FAKE_BIN_DIR/claude"
@@ -963,10 +970,12 @@ fi
 count=\$((count + 1))
 printf '%d' "\$count" > "${call_count_file}"
 if [ "\$count" -eq 1 ]; then
-    printf '%s\n' '{"is_error":true,"result":"API Error: Connection closed mid-response"}'
+    printf '%s\n' '{"type":"assistant","message":{"content":[{"type":"text","text":"working"}]}}'
+    printf '%s\n' '{"is_error":true,"result":"API Error: Connection closed mid-response","type":"result"}'
     exit 1
 else
-    printf '%s\n' '{"is_error":false,"result":"Completed","subtype":"success"}'
+    printf '%s\n' '{"type":"assistant","message":{"content":[{"type":"text","text":"working"}]}}'
+    printf '%s\n' '{"is_error":false,"result":"Completed","subtype":"success","type":"result"}'
     exit 0
 fi
 EOF
@@ -1015,10 +1024,12 @@ fi
 count=\$((count + 1))
 printf '%d' "\$count" > "${call_count_file}"
 if [ "\$count" -eq 1 ]; then
-    printf '%s\n' '{"is_error":false,"api_error_status":503}'
+    printf '%s\n' '{"type":"assistant","message":{"content":[{"type":"text","text":"working"}]}}'
+    printf '%s\n' '{"is_error":false,"api_error_status":503,"type":"result"}'
     exit 1
 else
-    printf '%s\n' '{"is_error":false,"result":"Completed","subtype":"success"}'
+    printf '%s\n' '{"type":"assistant","message":{"content":[{"type":"text","text":"working"}]}}'
+    printf '%s\n' '{"is_error":false,"result":"Completed","subtype":"success","type":"result"}'
     exit 0
 fi
 EOF
@@ -1037,6 +1048,180 @@ EOF
     local count
     count="$(cat "$call_count_file")"
     [ "$count" -eq 2 ]
+}
+
+# ---------------------------------------------------------------------------
+# stream-json output tests
+# ---------------------------------------------------------------------------
+
+# Write a fake claude that records each invocation's argv (one line per call)
+# and emits a minimal stream-json run ending in a success result event.
+make_fake_claude_record_args() {
+    local args_file="$BATS_TEST_TMPDIR/claude_args"
+    cat > "$FAKE_BIN_DIR/claude" <<EOF
+#!/bin/bash
+printf '%s\n' "\$*" >> "${args_file}"
+printf '%s\n' '{"type":"system","subtype":"init","model":"claude-test"}'
+printf '%s\n' '{"is_error":false,"result":"Completed","subtype":"success","type":"result"}'
+exit 0
+EOF
+    chmod +x "$FAKE_BIN_DIR/claude"
+}
+
+# Write a fake claude that emits one event, then waits (up to ~5 s) until that
+# event has reached the entrypoint's stdout file ($STREAM_OUT_FILE) before
+# emitting the result.  It records "streamed" only when the first line was
+# visible while it was still running — i.e. stdout is not buffered until exit.
+make_fake_claude_streaming_probe() {
+    local marker_file="$BATS_TEST_TMPDIR/claude_streamed"
+    cat > "$FAKE_BIN_DIR/claude" <<EOF
+#!/bin/bash
+printf '%s\n' '{"type":"assistant","message":{"content":[{"type":"text","text":"first-event"}]}}'
+for _ in \$(seq 1 50); do
+    if grep -q 'first-event' "\${STREAM_OUT_FILE}" 2>/dev/null; then
+        echo streamed > "${marker_file}"
+        break
+    fi
+    sleep 0.1
+done
+printf '%s\n' '{"is_error":false,"result":"Completed","subtype":"success","type":"result"}'
+exit 0
+EOF
+    chmod +x "$FAKE_BIN_DIR/claude"
+}
+
+# Write a fake claude whose last JSON line is a NON-result event carrying a 5xx
+# status after a successful result event — must not trigger a resume.
+make_fake_claude_success_then_noisy_event() {
+    local call_count_file="$BATS_TEST_TMPDIR/claude_call_count"
+    cat > "$FAKE_BIN_DIR/claude" <<EOF
+#!/bin/bash
+count=0
+if [ -f "${call_count_file}" ]; then
+    count=\$(cat "${call_count_file}")
+fi
+count=\$((count + 1))
+printf '%d' "\$count" > "${call_count_file}"
+printf '%s\n' '{"is_error":false,"result":"Completed","subtype":"success","type":"result"}'
+printf '%s\n' '{"type":"system","subtype":"task_notification","is_error":true,"api_error_status":503,"summary":"API Error: 529 Overloaded"}'
+exit 0
+EOF
+    chmod +x "$FAKE_BIN_DIR/claude"
+}
+
+# Write a fake claude whose transient result event is followed by a trailing
+# non-result event — the result event still decides, so a resume happens.
+make_fake_claude_transient_then_trailing_event() {
+    local call_count_file="$BATS_TEST_TMPDIR/claude_call_count"
+    cat > "$FAKE_BIN_DIR/claude" <<EOF
+#!/bin/bash
+count=0
+if [ -f "${call_count_file}" ]; then
+    count=\$(cat "${call_count_file}")
+fi
+count=\$((count + 1))
+printf '%d' "\$count" > "${call_count_file}"
+if [ "\$count" -eq 1 ]; then
+    printf '%s\n' '{"is_error":true,"api_error_status":503,"result":"API Error","type":"result"}'
+    printf '%s\n' '{"type":"system","subtype":"hook_response","outcome":"success"}'
+    exit 1
+fi
+printf '%s\n' '{"is_error":false,"result":"Completed","subtype":"success","type":"result"}'
+exit 0
+EOF
+    chmod +x "$FAKE_BIN_DIR/claude"
+}
+
+@test "stream-json: claude is invoked with --output-format stream-json and --verbose" {
+    set_required_env
+    make_fake_git
+    make_fake_claude_record_args
+
+    run bash "$ENTRYPOINT"
+
+    [ "$status" -eq 0 ]
+    local args
+    args="$(head -n 1 "$BATS_TEST_TMPDIR/claude_args")"
+    [[ "$args" == *"--output-format stream-json"* ]]
+    [[ "$args" =~ (^| )--verbose( |$) ]]
+    [[ "$args" != *"--output-format json"* ]]
+}
+
+@test "stream-json: transient-retry resume uses --output-format stream-json and --verbose" {
+    set_required_env
+    make_fake_git
+    make_fake_claude_transient_then_success
+
+    run bash "$ENTRYPOINT"
+
+    local args
+    args="$(cat "$BATS_TEST_TMPDIR/claude_resume_args")"
+    [[ "$args" =~ (^| )-c( |$) ]]
+    [[ "$args" == *"--output-format stream-json"* ]]
+    [[ "$args" =~ (^| )--verbose( |$) ]]
+}
+
+@test "stream-json: every claude invocation that passes stream-json also passes --verbose" {
+    set_required_env
+    make_fake_git
+    make_fake_claude_record_args
+
+    run bash "$ENTRYPOINT"
+
+    [ -s "$BATS_TEST_TMPDIR/claude_args" ]
+    while IFS= read -r args; do
+        if [[ "$args" == *"stream-json"* ]]; then
+            [[ "$args" =~ (^| )--verbose( |$) ]]
+        fi
+    done < "$BATS_TEST_TMPDIR/claude_args"
+}
+
+@test "stream-json: stdout reaches the container log while claude is still running" {
+    set_required_env
+    make_fake_git
+    make_fake_claude_streaming_probe
+    export STREAM_OUT_FILE="$BATS_TEST_TMPDIR/entrypoint_stdout"
+
+    bash "$ENTRYPOINT" > "$STREAM_OUT_FILE" 2>/dev/null
+
+    [ -f "$BATS_TEST_TMPDIR/claude_streamed" ]
+    grep -q '"type":"result"' "$STREAM_OUT_FILE"
+}
+
+@test "stream-json: all events are passed through to stdout in order" {
+    set_required_env
+    make_fake_git
+    make_fake_claude_record_args
+
+    run bash "$ENTRYPOINT"
+
+    [ "$status" -eq 0 ]
+    local json_lines
+    json_lines="$(printf '%s\n' "$output" | grep '^{')"
+    [ "$(printf '%s\n' "$json_lines" | head -n 1)" = '{"type":"system","subtype":"init","model":"claude-test"}' ]
+    [[ "$(printf '%s\n' "$json_lines" | tail -n 1)" == *'"type":"result"'* ]]
+}
+
+@test "stream-json: a non-result event after a successful result does NOT trigger resume" {
+    set_required_env
+    make_fake_git
+    make_fake_claude_success_then_noisy_event
+
+    run bash "$ENTRYPOINT"
+
+    [ "$status" -eq 0 ]
+    [ "$(cat "$BATS_TEST_TMPDIR/claude_call_count")" -eq 1 ]
+}
+
+@test "stream-json: a transient result followed by a trailing non-result event still triggers resume" {
+    set_required_env
+    make_fake_git
+    make_fake_claude_transient_then_trailing_event
+
+    run bash "$ENTRYPOINT"
+
+    [ "$status" -eq 0 ]
+    [ "$(cat "$BATS_TEST_TMPDIR/claude_call_count")" -eq 2 ]
 }
 
 # ---------------------------------------------------------------------------

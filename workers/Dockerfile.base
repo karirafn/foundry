@@ -45,9 +45,13 @@ RUN GLAB_VERSION=$(curl -fsSL "https://gitlab.com/api/v4/projects/gitlab-org%2Fc
 ENV CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1
 ENV DISABLE_AUTOUPDATER=1
 
-# Pin exact version to a single location — both the worker image and the login image derive
-# from this base so the CLI version is enforced in one place.
-RUN npm install -g @anthropic-ai/claude-code@2.1.314
+# Install the Claude Code CLI from workers/package.json + package-lock.json — the single place the
+# exact version is pinned, tracked by Dependabot. Both the worker image and the login image derive
+# from this base, so they share that version. `npm ci` installs exactly the lockfile (and fails if it
+# disagrees with the manifest); the CLI's bin directory is put on PATH so `claude` resolves as before.
+COPY package.json package-lock.json /opt/claude-code/
+RUN npm ci --prefix /opt/claude-code --omit=dev --no-audit --no-fund && npm cache clean --force
+ENV PATH=/opt/claude-code/node_modules/.bin:$PATH
 
 # Pre-create ~/.claude and ~/.runtime owned by the built-in node user (UID 1000).
 # ~/.runtime is the XDG_RUNTIME_DIR used by rootless dockerd; pre-creating it here
