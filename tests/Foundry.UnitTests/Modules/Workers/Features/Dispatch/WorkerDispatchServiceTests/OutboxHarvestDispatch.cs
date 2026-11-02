@@ -232,13 +232,13 @@ public sealed class OutboxHarvestDispatch : IAsyncDisposable
     private const string AuthInvalidOutput =
         """
         Some output
-        {"api_error_status":401}
+        {"type":"result","api_error_status":401}
         """;
 
     private const string Credits429OnlyOutput =
         """
         Some output
-        {"api_error_status":429}
+        {"type":"result","api_error_status":429}
         """;
 
     private WorkerDispatchService BuildService(

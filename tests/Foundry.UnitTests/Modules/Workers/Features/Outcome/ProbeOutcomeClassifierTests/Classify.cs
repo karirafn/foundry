@@ -113,8 +113,8 @@ public sealed class Classify
     [Fact]
     public void WhenLogsProduceParseFailure_ReturnsInfrastructureFailure()
     {
-        // Arrange — produce a parse failure: a JSON line exceeding MaxJsonLineLength (4 KB)
-        string longJson = "{\"result\":\"" + new string('x', 5000) + "\"}";
+        // Arrange — produce a parse failure: a result line exceeding MaxJsonLineLength (16 KB)
+        string longJson = "{\"type\":\"result\",\"result\":\"" + new string('x', 17_000) + "\"}";
 
         // Act
         ProbeOutcome result = _sut.Classify(longJson);

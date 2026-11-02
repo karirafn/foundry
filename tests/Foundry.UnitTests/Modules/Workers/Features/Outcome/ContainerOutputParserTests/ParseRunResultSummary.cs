@@ -49,10 +49,10 @@ public sealed class ParseRunResultSummary
     }
 
     [Fact]
-    public void WhenJsonLineExceeds4KB_ReturnsNull()
+    public void WhenResultLineExceeds16KB_ReturnsNull()
     {
         // Arrange
-        string oversizedValue = new string('x', 4_100);
+        string oversizedValue = new string('x', 16_400);
         string log = $$$"""{"type":"result","subtype":"success","result":"{{{oversizedValue}}}"}""";
 
         // Act
@@ -245,5 +245,81 @@ public sealed class ParseRunResultSummary
             () => summary.ResultText.ShouldBe("Usage limit hit."),
             () => summary.NumTurns.ShouldBe(1),
             () => summary.DurationMs.ShouldBe(300));
+    }
+
+    [Fact]
+    public void WhenRecordedStreamJsonRun_MapsResultEventExactly()
+    {
+        // Arrange — real CLI 2.1.314 result event (superset of the json result: adds model_usage_since_last_result)
+        string log = StreamJsonFixtures.RecordedRun;
+
+        // Act
+        RunResultSummary? result = _sut.ParseRunResultSummary(log);
+
+        // Assert
+        RunResultSummary summary = result.ShouldNotBeNull();
+        summary.ShouldSatisfyAllConditions(
+            () => summary.Subtype.ShouldBe("success"),
+            () => summary.IsError.ShouldBeFalse(),
+            () => summary.DurationMs.ShouldBe(10_643),
+            () => summary.NumTurns.ShouldBe(4),
+            () => summary.TotalCostUsd.ShouldBe(0.1613702m),
+            () => summary.InputTokens.ShouldBe(6),
+            () => summary.OutputTokens.ShouldBe(507),
+            () => summary.ResultText.ShouldNotBeNull().ShouldEndWith("DONE"));
+    }
+
+    [Fact]
+    public void WhenRecordedResultLineAlone_MapsSameAsWithinStream()
+    {
+        // Arrange — the result event alone is shaped like today's single --output-format json object
+        string log = StreamJsonFixtures.RecordedResultLine;
+
+        // Act
+        RunResultSummary? alone = _sut.ParseRunResultSummary(log);
+        RunResultSummary? inStream = _sut.ParseRunResultSummary(StreamJsonFixtures.RecordedRun);
+
+        // Assert
+        alone.ShouldNotBeNull().NumTurns.ShouldBe(inStream.ShouldNotBeNull().NumTurns);
+        alone.ResultText.ShouldBe(inStream.ResultText);
+        alone.TotalCostUsd.ShouldBe(inStream.TotalCostUsd);
+    }
+
+    [Fact]
+    public void WhenTwoResultEvents_LastResultWins()
+    {
+        // Arrange
+        string log = """
+            {"type":"result","subtype":"success","is_error":false,"duration_ms":100,"num_turns":2,"result":"First."}
+            {"type":"system","subtype":"task_notification","task_id":"t1","status":"completed"}
+            {"type":"result","subtype":"success","is_error":false,"duration_ms":900,"num_turns":7,"result":"Second."}
+            {"type":"system","subtype":"hook_response","outcome":"success"}
+            """;
+
+        // Act
+        RunResultSummary? result = _sut.ParseRunResultSummary(log);
+
+        // Assert
+        RunResultSummary summary = result.ShouldNotBeNull();
+        summary.ShouldSatisfyAllConditions(
+            () => summary.NumTurns.ShouldBe(7),
+            () => summary.ResultText.ShouldBe("Second."),
+            () => summary.DurationMs.ShouldBe(900));
+    }
+
+    [Fact]
+    public void WhenNoResultEventAmongJsonLines_ReturnsNull()
+    {
+        // Arrange
+        string log = """
+            {"type":"system","subtype":"init","model":"claude-opus-5-5"}
+            {"type":"assistant","message":{"content":[{"type":"text","text":"working"}]}}
+            """;
+
+        // Act
+        RunResultSummary? result = _sut.ParseRunResultSummary(log);
+
+        // Assert
+        result.ShouldBeNull();
     }
 }
