@@ -125,14 +125,18 @@ internal static class SystemPromptBuilder
         return $"""
             {PrePrSectionMarker}
 
-            Check whether a Docker daemon is available by inspecting the DOCKER_HOST environment variable.
+            Check whether a Docker daemon is available by inspecting the DOCKER_HOST environment variable. Before you open (or reuse) the pull request, push the branch: a reused pull request needs the latest commits pushed.
 
-            - If DOCKER_HOST is set: run the repository's full test suite, including integration tests. Fix failures you can within your time budget, then open (or reuse) the pull request whenever the branch has commits, even when integration tests still fail.
-            - If DOCKER_HOST is not set: open (or reuse) the pull request anyway. State in the pull request description that integration tests were not run locally and are verified by CI.
-            - If integration tests still fail after reasonable fix attempts within your time budget: push the branch, open (or reuse) the pull request, and list every still-failing test in the pull request description. For each still-failing test, check out the default branch and run the same test, then group the failures as:
-              - new (passes on the default branch)
-              - pre-existing (fails the same way on the default branch)
-              - not compared (the default-branch comparison could not be completed)
+            When the branch has no commits there is nothing to review: report that and exit.
+
+            - If DOCKER_HOST is not set: push the branch, then open (or reuse) the pull request anyway. State in the pull request description that integration tests were not run locally and are verified by CI.
+            - If DOCKER_HOST is set: run the repository's full test suite, including integration tests. Fix failures you can within your time budget, then push the branch, then open (or reuse) the pull request whenever the branch has commits, even when integration tests still fail. When integration tests still fail:
+              - List each still-failing test in the pull request description by name with a one-line failure reason only; exclude raw logs, stack traces, environment variable values and credentials.
+              - After opening the pull request, run each failing test in a separate `git worktree` of the default branch, so the feature working tree stays on the feature branch, and update the pull request description to group the failures as:
+                - new (passes on the default branch)
+                - pre-existing (fails the same way on the default branch)
+                - not compared (the default-branch comparison could not be completed)
+              - When time is short, skip the comparison and mark remaining failures as not compared.
 
             Manage your wall-clock budget carefully. Do not spend it all on local testing — leave enough time to open the pull request and watch its checks.
             """;

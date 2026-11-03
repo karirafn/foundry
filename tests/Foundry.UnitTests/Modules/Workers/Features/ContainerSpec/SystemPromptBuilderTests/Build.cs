@@ -1680,7 +1680,8 @@ public sealed class Build
         result.ShouldSatisfyAllConditions(
             () => result.ShouldContain("DOCKER_HOST"),
             () => result.ShouldContain("integration tests"),
-            () => result.ShouldContain("open (or reuse) the pull request whenever the branch has commits"));
+            () => result.ShouldContain(
+                "open (or reuse) the pull request whenever the branch has commits, even when integration tests still fail"));
     }
 
     [Fact]
@@ -1717,7 +1718,7 @@ public sealed class Build
 
         // Assert — still-failing branch
         result.ShouldSatisfyAllConditions(
-            () => result.ShouldContain("list every still-failing test in the pull request description"),
+            () => result.ShouldContain("List each still-failing test in the pull request description"),
             () => result.ShouldContain("new (passes on the default branch)"),
             () => result.ShouldContain("pre-existing (fails the same way on the default branch)"),
             () => result.ShouldContain("not compared (the default-branch comparison could not be completed)"));
@@ -1739,7 +1740,93 @@ public sealed class Build
         // Assert
         result.ShouldSatisfyAllConditions(
             () => result.ShouldNotContain("open no pull request"),
-            () => result.ShouldNotContain("only when everything passes"));
+            () => result.ShouldNotContain("only when everything passes"),
+            () => result.ShouldNotContain("withhold"),
+            () => result.ShouldNotContain("do not open the pull request"));
+    }
+
+    [Fact]
+    public void WhenInstallsDockerTrue_PrePrSectionPushesBranchBeforeOpeningPullRequestOnEveryPath()
+    {
+        // Arrange
+
+        // Act
+        string section = BuildPrePrSection();
+
+        // Assert
+        section.ShouldSatisfyAllConditions(
+            () => section.ShouldContain("push the branch, then open (or reuse) the pull request anyway"),
+            () => section.ShouldContain("push the branch, then open (or reuse) the pull request whenever"),
+            () => section.ShouldContain("a reused pull request needs the latest commits pushed"));
+    }
+
+    [Fact]
+    public void WhenInstallsDockerTrue_PrePrSectionComparesInSeparateWorktreeAfterOpeningPullRequest()
+    {
+        // Arrange
+
+        // Act
+        string section = BuildPrePrSection();
+
+        // Assert
+        section.ShouldSatisfyAllConditions(
+            () => section.ShouldContain("After opening the pull request"),
+            () => section.ShouldContain("in a separate `git worktree` of the default branch"),
+            () => section.ShouldContain("so the feature working tree stays on the feature branch"),
+            () => section.ShouldContain("update the pull request description"),
+            () => section.ShouldContain("When time is short, skip the comparison and mark remaining failures as not compared"),
+            () => section.ShouldNotContain("check out the default branch"));
+    }
+
+    [Fact]
+    public void WhenInstallsDockerTrue_PrePrSectionReportsAndExitsWhenBranchHasNoCommits()
+    {
+        // Arrange
+
+        // Act
+        string section = BuildPrePrSection();
+
+        // Assert
+        section.ShouldContain("When the branch has no commits there is nothing to review: report that and exit");
+    }
+
+    [Fact]
+    public void WhenInstallsDockerTrue_PrePrSectionRestrictsFailureListingToNamesAndOneLineReasons()
+    {
+        // Arrange
+
+        // Act
+        string section = BuildPrePrSection();
+
+        // Assert
+        section.ShouldSatisfyAllConditions(
+            () => section.ShouldContain("by name with a one-line failure reason only"),
+            () => section.ShouldContain("exclude raw logs, stack traces, environment variable values and credentials"));
+    }
+
+    [Fact]
+    public void WhenInstallsDockerTrue_PrePrSectionPutsGroupsInPullRequestDescription()
+    {
+        // Arrange
+
+        // Act
+        string section = BuildPrePrSection();
+
+        // Assert
+        section.ShouldContain("update the pull request description to group the failures as");
+    }
+
+    private static string BuildPrePrSection()
+    {
+        Result<string> buildResult = SystemPromptBuilder.Build(
+            1, DefaultBranchNaming, DefaultSystemPromptTemplate,
+            new DispatchContext.Fresh("feat/1-title"),
+            "https://api.github.com/repos/owner/repo/issues/1",
+            timeoutMinutes: 120, installsDocker: true);
+        string result = buildResult.ShouldBeOfType<Result<string>.Success>().Value;
+        int start = result.IndexOf(SystemPromptBuilder.PrePrSectionMarker, StringComparison.Ordinal);
+        int end = result.IndexOf("leave enough time to open the pull request", start, StringComparison.Ordinal);
+        return result[start..end];
     }
 
     [Fact]
