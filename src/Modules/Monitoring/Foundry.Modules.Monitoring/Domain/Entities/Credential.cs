@@ -23,7 +23,7 @@ public abstract class Credential : AggregateRoot<CredentialId>
     internal string? ReadableTokenValue => Token is ProviderToken.Present present ? present.Value : null;
 
     /// <summary>
-    /// Optional, server-only token used solely to write default-branch protection (ADR 0084).
+    /// Optional, server-only token used solely to write default-branch protection.
     /// It is encrypted at rest exactly like <see cref="Token"/>, never returned by the API, and
     /// never given to workers — the dispatch path reads <see cref="Token"/> only.
     /// </summary>

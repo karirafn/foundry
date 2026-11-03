@@ -26,7 +26,7 @@ using Xunit;
 namespace Foundry.IntegrationTests.Modules.Monitoring.Endpoints.UpdateAccountTests;
 
 /// <summary>
-/// Endpoint-level coverage of the optional branch-rules token (ADR 0084): it is accepted on
+/// Endpoint-level coverage of the optional branch-rules token: it is accepted on
 /// create/update, persisted encrypted, never echoed by any accounts endpoint (only its status),
 /// reads <c>unreadable</c> when its ciphertext cannot be decrypted, and is repaired or cleared
 /// through PUT /api/accounts/{id}.

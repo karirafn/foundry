@@ -172,7 +172,7 @@ Multiple accounts can exist per provider and per host — including multiple PAT
 ### Branch-Rules Token
 
 An optional, server-only credential on an Account (`Credential.BranchRulesToken`), used solely to write default-branch protection, and never given to workers.
-It needs GitHub fine-grained **Administration: write** or the GitLab **Maintainer** role — privileges the worker-facing account token must not carry, because that token is injected into every worker container (ADR 0084).
+It needs GitHub fine-grained **Administration: write** or the GitLab **Maintainer** role — privileges the worker-facing account token must not carry, because that token is injected into every worker container.
 Stored encrypted with the same mechanism as the PAT (`ProviderToken`), never returned by the API (only `CredentialSummary.BranchRulesTokenStatus`: `present`, `absent` or `unreadable`), and set, replaced (repairing an unreadable one) or cleared through the account update path. Rotating the account PAT preserves it.
 An unreadable branch-rules token never affects the account's eligibility. Its permissions are not validated on save — they are established by attempting the write.
 

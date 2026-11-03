@@ -5,7 +5,7 @@ using Foundry.Shared;
 namespace Foundry.Modules.Monitoring.Features.Accounts.Tokens;
 
 /// <summary>
-/// Shape rules for the optional branch-rules token (ADR 0084). The token's permissions are
+/// Shape rules for the optional branch-rules token. The token's permissions are
 /// deliberately not validated on save — they are established by attempting the write.
 /// </summary>
 internal static partial class BranchRulesTokenRules

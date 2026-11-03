@@ -90,7 +90,7 @@ public sealed class GetDispatchInfoAsync : IAsyncDisposable
     [Fact]
     public async Task WhenCredentialHasBranchRulesToken_DispatchInfoCarriesOnlyTheAccountToken()
     {
-        // Arrange — the branch-rules token is server-only (ADR 0084); the dispatch boundary is the
+        // Arrange — the branch-rules token is server-only; the dispatch boundary is the
         // only path by which a token reaches a worker container (GH_TOKEN / GITLAB_TOKEN / GIT_PAT).
         const string AccountToken = "ghp_worker_token";
         const string RulesToken = "github_pat_branch_rules_secret";
