@@ -162,17 +162,17 @@ merge_host_hooks() {
 #   DOCKER_RETRY_SLEEP — seconds between attempts           (default: 1)
 # ---------------------------------------------------------------------------
 start_rootless_dockerd() {
-    # Unconditionally own the Testcontainers connection environment (DOCKER_HOST and every
-    # TESTCONTAINERS_* variable that redirects the daemon, socket, host, Ryuk or image
-    # prefix) so no inherited ambient value survives any exit path (success, no-dockerd,
-    # or daemon failure/degraded mode). On success the function re-exports what it needs
-    # below; on all other paths they stay unset.
+    # Unconditionally own DOCKER_HOST and every TESTCONTAINERS_* variable, swept by prefix
+    # so newly introduced Testcontainers settings are covered too, and no inherited
+    # ambient value survives any exit path (success, no-dockerd, or daemon
+    # failure/degraded mode). On success the function re-exports what it needs below; on
+    # all other paths they stay unset. The grep's no-match status is absorbed with
+    # `|| true` so the sweep is safe under set -e / pipefail.
     unset DOCKER_HOST
-    unset TESTCONTAINERS_HOST_OVERRIDE
-    unset TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE
-    unset TESTCONTAINERS_RYUK_DISABLED
-    unset TESTCONTAINERS_RYUK_CONTAINER_IMAGE
-    unset TESTCONTAINERS_HUB_IMAGE_NAME_PREFIX
+    local _tc_name
+    while IFS= read -r _tc_name; do
+        unset "$_tc_name"
+    done < <(compgen -e | grep '^TESTCONTAINERS_' || true)
 
     if ! command -v dockerd-rootless.sh > /dev/null 2>&1; then
         return 0

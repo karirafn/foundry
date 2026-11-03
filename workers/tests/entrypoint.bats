@@ -13,6 +13,10 @@ TESTCONTAINERS_CONNECTION_VARS=(
     TESTCONTAINERS_RYUK_DISABLED
     TESTCONTAINERS_RYUK_CONTAINER_IMAGE
     TESTCONTAINERS_HUB_IMAGE_NAME_PREFIX
+    TESTCONTAINERS_RYUK_PRIVILEGED
+    TESTCONTAINERS_RYUK_CONTAINER_PRIVILEGED
+    TESTCONTAINERS_REUSE_ENABLE
+    TESTCONTAINERS_FUTURE_SETTING
 )
 
 setup() {
@@ -119,6 +123,23 @@ EOF
     # loopback (pinned to IPv4 because the name localhost may resolve to ::1 first), not
     # on the bridge gateway Testcontainers would otherwise pick.
     [ "${TESTCONTAINERS_HOST_OVERRIDE:-}" = "127.0.0.1" ]
+}
+
+@test "start_rootless_dockerd leaves only TESTCONTAINERS_HOST_OVERRIDE of the inherited TESTCONTAINERS_ variables when daemon becomes ready" {
+    make_fake_dockerd_background
+    make_fake_docker_healthy
+    local name
+    for name in "${TESTCONTAINERS_CONNECTION_VARS[@]}"; do
+        export "$name=inherited.example"
+    done
+
+    # Call in the same shell so we can inspect exported vars
+    start_rootless_dockerd
+
+    local survivors
+    survivors="$(compgen -e | grep '^TESTCONTAINERS_' | sort | tr '\n' ' ' || true)"
+    [ "$survivors" = "TESTCONTAINERS_HOST_OVERRIDE " ] || { echo "survivors: $survivors" >&2; return 1; }
+    [ "$TESTCONTAINERS_HOST_OVERRIDE" = "127.0.0.1" ]
 }
 
 @test "start_rootless_dockerd sets DOCKER_HOST to the socket under XDG_RUNTIME_DIR" {
