@@ -22,6 +22,38 @@ public abstract class Credential : AggregateRoot<CredentialId>
     /// </summary>
     internal string? ReadableTokenValue => Token is ProviderToken.Present present ? present.Value : null;
 
+    /// <summary>
+    /// Optional, server-only token used solely to write default-branch protection (ADR 0084).
+    /// It is encrypted at rest exactly like <see cref="Token"/>, never returned by the API, and
+    /// never given to workers — the dispatch path reads <see cref="Token"/> only.
+    /// </summary>
+    public ProviderToken? BranchRulesToken { get; private set; }
+
+    /// <summary>
+    /// Returns <see langword="true"/> when the stored branch-rules token could not be decrypted.
+    /// Unlike <see cref="IsTokenUnreadable"/>, this never affects monitoring eligibility.
+    /// </summary>
+    public bool IsBranchRulesTokenUnreadable => BranchRulesToken is ProviderToken.Unreadable;
+
+    /// <summary>Sets (or replaces, including repairing an unreadable one) the branch-rules token.</summary>
+    public void SetBranchRulesToken(string token)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(token);
+        BranchRulesToken = new ProviderToken.Present(token);
+    }
+
+    /// <summary>Removes the branch-rules token.</summary>
+    public void ClearBranchRulesToken() => BranchRulesToken = null;
+
+    /// <summary>
+    /// Marks <paramref name="credential"/> as carrying an <see cref="ProviderToken.Unreadable"/>
+    /// branch-rules token. Intended for unit-test construction only — the production path is EF
+    /// materialization of garbage ciphertext.
+    /// </summary>
+    [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
+    internal static void ApplyUnreadableBranchRulesToken(Credential credential) =>
+        credential.BranchRulesToken = new ProviderToken.Unreadable();
+
     public BaseUrl BaseUrl { get; private protected set; } = null!;
 
     public string Host { get; private protected set; } = string.Empty;

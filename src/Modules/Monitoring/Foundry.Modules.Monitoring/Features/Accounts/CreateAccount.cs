@@ -31,7 +31,8 @@ internal static partial class CreateAccount
         string ProviderType,
         string BaseUrl,
         string Token,
-        IReadOnlyList<string>? TakeoverNamespaces = null) : ICommand<CredentialCreationResult>;
+        IReadOnlyList<string>? TakeoverNamespaces = null,
+        string? BranchRulesToken = null) : ICommand<CredentialCreationResult>;
 
     internal sealed partial class Validator : ICommandValidator<Command>
     {
@@ -68,6 +69,12 @@ internal static partial class CreateAccount
                 return new Error(
                     TokenInvalidCharsCode,
                     "Token contains invalid characters. Only alphanumeric characters, hyphens, underscores, and dots are allowed.");
+            }
+
+            Result branchRulesTokenValidation = BranchRulesTokenRules.Validate(command.BranchRulesToken);
+            if (branchRulesTokenValidation is Result.Failure branchRulesTokenFailure)
+            {
+                return branchRulesTokenFailure.Error;
             }
 
             bool isKnownProvider = ProviderTypes.IsKnown(command.ProviderType);
@@ -196,8 +203,8 @@ internal static partial class CreateAccount
             }
 
             Credential credential = isGitLab
-                ? GitLabCredential.Create(accountName, command.Token, baseUrl)
-                : GitHubCredential.Create(accountName, command.Token, baseUrl);
+                ? GitLabCredential.Create(accountName, command.Token, baseUrl, command.BranchRulesToken)
+                : GitHubCredential.Create(accountName, command.Token, baseUrl, command.BranchRulesToken);
 
             NamespaceDerivationOutcome derivationOutcome = await namespaceDeriver.DeriveAsync(credential, cancellationToken);
             IReadOnlyCollection<Namespace> derivedNamespaces;
@@ -336,15 +343,7 @@ internal static partial class CreateAccount
                     priorStatusSnapshot,
                     cancellationToken);
 
-                string providerTypeAfterTakeover = isGitLab ? ProviderTypes.GitLab : ProviderTypes.GitHub;
-                CredentialSummary summaryAfterTakeover = new(
-                    credential.Id.Value,
-                    credential.Name,
-                    providerTypeAfterTakeover,
-                    credential.BaseUrl.Value.ToString(),
-                    credential.Token is not null,
-                    AccountsDatabaseHelpers.ToTokenStatus(credential.Token),
-                    credential.Namespaces.Select(n => n.Value).ToList());
+                CredentialSummary summaryAfterTakeover = AccountsDatabaseHelpers.ToSummary(credential);
 
                 return new Outcome.Created(new CredentialCreationResult(summaryAfterTakeover, affectedRepositories));
             }
@@ -363,15 +362,7 @@ internal static partial class CreateAccount
                 await dbContext.SaveChangesAsync(cancellationToken);
             }
 
-            string providerType = isGitLab ? ProviderTypes.GitLab : ProviderTypes.GitHub;
-            CredentialSummary summary = new(
-                credential.Id.Value,
-                credential.Name,
-                providerType,
-                credential.BaseUrl.Value.ToString(),
-                credential.Token is not null,
-                AccountsDatabaseHelpers.ToTokenStatus(credential.Token),
-                credential.Namespaces.Select(n => n.Value).ToList());
+            CredentialSummary summary = AccountsDatabaseHelpers.ToSummary(credential);
 
             return new Outcome.Created(new CredentialCreationResult(summary, []));
         }
@@ -493,7 +484,8 @@ internal static partial class CreateAccount
             string ProviderType,
             string BaseUrl,
             string Token,
-            IReadOnlyList<string>? TakeoverNamespaces = null);
+            IReadOnlyList<string>? TakeoverNamespaces = null,
+            string? BranchRulesToken = null);
 
         public static void Map(RouteGroupBuilder group)
         {
@@ -503,7 +495,12 @@ internal static partial class CreateAccount
                     ICommandValidator<Command> validator,
                     CancellationToken cancellationToken) =>
                 {
-                    Command command = new(body.ProviderType, body.BaseUrl, body.Token, body.TakeoverNamespaces);
+                    Command command = new(
+                        body.ProviderType,
+                        body.BaseUrl,
+                        body.Token,
+                        body.TakeoverNamespaces,
+                        body.BranchRulesToken);
 
                     Result validation = validator.Validate(command);
                     if (validation is Result.Failure validationFailure)

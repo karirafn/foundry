@@ -9,6 +9,7 @@ function makeAccount(overrides: Partial<AccountSummary> = {}): AccountSummary {
     baseUrl: 'https://github.com',
     hasToken: true,
     tokenStatus: 'present',
+    branchRulesTokenStatus: 'absent',
     namespaces: [],
     ...overrides,
   };

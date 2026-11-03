@@ -13,6 +13,7 @@ const MOCK_ACCOUNT: AccountSummary = {
   baseUrl: 'https://api.github.com/',
   hasToken: true,
   tokenStatus: 'present',
+  branchRulesTokenStatus: 'absent',
   namespaces: [],
 };
 
@@ -23,6 +24,7 @@ const MOCK_ACCOUNT_2: AccountSummary = {
   baseUrl: 'https://api.github.com/',
   hasToken: true,
   tokenStatus: 'present',
+  branchRulesTokenStatus: 'absent',
   namespaces: [],
 };
 

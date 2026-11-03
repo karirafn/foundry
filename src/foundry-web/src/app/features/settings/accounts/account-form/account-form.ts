@@ -21,6 +21,7 @@ import {
 import {
   AccountSummary,
   CreateAccountRequest,
+  TokenStatus,
   NamespaceConflict,
   ProviderType,
   TokenRequirements,
@@ -29,6 +30,7 @@ import {
   UpdateAccountRequest,
   narrowTokenValidationKind,
   providerDisplayName,
+  resolveBranchRulesTokenStatus,
   resolveTokenStatus,
 } from '../account.model';
 import { ProviderSelectorComponent } from '../provider-selector/provider-selector';
@@ -291,6 +293,104 @@ const CONFLICT_PANEL_HEADING_ID = 'account-form-conflict-heading';
         }
       </div>
 
+      <section
+        class="account-form__branch-rules"
+        aria-labelledby="account-form-branch-rules-heading"
+      >
+        <h3 id="account-form-branch-rules-heading" class="account-form__branch-rules-heading">
+          Branch-rules token <span class="account-form__optional">(optional)</span>
+        </h3>
+        <p id="account-form-branch-rules-help" class="account-form__field-hint">
+          Used only by Foundry itself to write default-branch protection. It needs
+          <strong>{{ _branchRulesPermission() }}</strong>.
+          It is kept separate from the account token because the account token is given to every
+          worker container, and this permission also allows deleting the repository and removing its
+          rules. Workers never receive the branch-rules token.
+        </p>
+
+        @if (_isEditMode()) {
+          @switch (_branchRulesTokenStatus()) {
+            @case ('present') {
+              <div id="account-form-branch-rules-status" class="account-form__branch-rules-status account-form__branch-rules-status--present">
+                <span class="account-form__validation-dot account-form__validation-dot--valid" aria-hidden="true"></span>
+                <span class="account-form__validation-message account-form__validation-message--valid">
+                  Branch-rules token on file
+                </span>
+              </div>
+            }
+            @case ('unreadable') {
+              <div id="account-form-branch-rules-status" class="account-form__branch-rules-status account-form__branch-rules-status--unreadable">
+                <span class="account-form__token-unreadable-text">
+                  <span class="sr-only">Error:</span>
+                  <strong>Branch-rules token unreadable.</strong> The stored token can no longer be
+                  decrypted. Enter it again below to repair it, or remove it.
+                </span>
+              </div>
+            }
+            @default {
+              <span id="account-form-branch-rules-status" class="account-form__field-hint account-form__branch-rules-status account-form__branch-rules-status--absent">
+                No branch-rules token configured
+              </span>
+            }
+          }
+        }
+
+        <div class="account-form__field">
+          <label class="account-form__field-label" for="account-form-branch-rules-token">
+            {{ _isEditMode() && _branchRulesTokenStatus() !== 'absent' ? 'Replace branch-rules token' : 'Branch-rules token' }}
+          </label>
+          <div class="account-form__token-wrapper">
+            <input
+              class="account-form__input"
+              [type]="_showBranchRulesToken() ? 'text' : 'password'"
+              id="account-form-branch-rules-token"
+              [value]="_branchRulesToken()"
+              (input)="onBranchRulesTokenInput($any($event.target).value)"
+              autocomplete="off"
+              [disabled]="_clearBranchRulesToken()"
+              [attr.aria-describedby]="_branchRulesAriaDescribedBy()"
+            />
+            <button
+              class="account-form__toggle-visibility-btn"
+              type="button"
+              [attr.aria-label]="_showBranchRulesToken() ? 'Hide branch-rules token' : 'Show branch-rules token'"
+              (click)="_showBranchRulesToken.set(!_showBranchRulesToken())"
+            >
+              @if (_showBranchRulesToken()) {
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"></path>
+                  <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"></path>
+                  <line x1="1" y1="1" x2="23" y2="23"></line>
+                </svg>
+              } @else {
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                  <circle cx="12" cy="12" r="3"></circle>
+                </svg>
+              }
+            </button>
+          </div>
+          @if (_isEditMode() && _branchRulesTokenStatus() === 'present') {
+            <span id="account-form-branch-rules-hint" class="account-form__field-hint">
+              Leave empty to keep the current branch-rules token
+            </span>
+          }
+        </div>
+
+        @if (_isEditMode() && _branchRulesTokenStatus() !== 'absent') {
+          <label class="account-form__branch-rules-clear">
+            <input
+              class="account-form__conflict-checkbox"
+              type="checkbox"
+              id="account-form-branch-rules-clear"
+              [checked]="_clearBranchRulesToken()"
+              (change)="onClearBranchRulesTokenToggle($any($event.target).checked)"
+            />
+            <span>Remove the stored branch-rules token</span>
+          </label>
+        }
+      </section>
+
       <div
         id="account-form-validation-error"
         class="account-form__validation-error"
@@ -392,6 +492,33 @@ export class AccountFormComponent implements OnInit {
   protected readonly _token: WritableSignal<string> = signal('');
   protected readonly _showToken: WritableSignal<boolean> = signal(false);
   protected readonly _tokenRequirements: WritableSignal<TokenRequirements | null> = signal(null);
+  protected readonly _branchRulesToken: WritableSignal<string> = signal('');
+  protected readonly _showBranchRulesToken: WritableSignal<boolean> = signal(false);
+  protected readonly _clearBranchRulesToken: WritableSignal<boolean> = signal(false);
+
+  /** Stored branch-rules token status for the edited account; 'absent' in add mode. */
+  protected readonly _branchRulesTokenStatus: Signal<TokenStatus> = computed(() => {
+    const acc = this.account();
+    return acc === null ? 'absent' : resolveBranchRulesTokenStatus(acc);
+  });
+
+  /** Permission the branch-rules token needs on the selected provider. */
+  protected readonly _branchRulesPermission: Signal<string> = computed(() =>
+    this._provider() === 'GitLab'
+      ? 'the Maintainer role on each project'
+      : 'the fine-grained Administration permission (Read and write)',
+  );
+
+  protected readonly _branchRulesAriaDescribedBy: Signal<string> = computed(() => {
+    const parts: string[] = ['account-form-branch-rules-help'];
+    if (this._isEditMode()) {
+      parts.push('account-form-branch-rules-status');
+      if (this._branchRulesTokenStatus() === 'present') {
+        parts.push('account-form-branch-rules-hint');
+      }
+    }
+    return parts.join(' ');
+  });
 
   /** Tracks visible conflicts (cleared when inputs change). */
   protected readonly _visibleConflicts: WritableSignal<NamespaceConflict[]> = signal([]);
@@ -638,6 +765,17 @@ export class AccountFormComponent implements OnInit {
     }, 0);
   }
 
+  onBranchRulesTokenInput(value: string): void {
+    this._branchRulesToken.set(value);
+  }
+
+  onClearBranchRulesTokenToggle(checked: boolean): void {
+    this._clearBranchRulesToken.set(checked);
+    if (checked) {
+      this._branchRulesToken.set('');
+    }
+  }
+
   onConflictToggle(namespace: string, checked: boolean): void {
     const current = new Set(this._selectedConflicts());
     if (checked) {
@@ -688,9 +826,14 @@ export class AccountFormComponent implements OnInit {
     const acc = this.account();
     if (acc !== null) {
       const token = this._token() || null;
+      const clearBranchRulesToken = this._clearBranchRulesToken();
+      const branchRulesToken = clearBranchRulesToken ? null : this._branchRulesToken() || null;
+      // Branch-rules fields are only sent when changing it; omitting both keeps the stored token.
       const request: UpdateAccountRequest = {
         baseUrl: this._baseUrl(),
         token,
+        ...(branchRulesToken ? { branchRulesToken } : {}),
+        ...(clearBranchRulesToken ? { clearBranchRulesToken: true } : {}),
       };
       this.save.emit(request);
     } else {
@@ -699,6 +842,7 @@ export class AccountFormComponent implements OnInit {
         providerType: this._provider(),
         baseUrl: this._baseUrl(),
         token: this._token(),
+        ...(this._branchRulesToken() ? { branchRulesToken: this._branchRulesToken() } : {}),
         ...(selectedNamespaces.length > 0 ? { takeoverNamespaces: selectedNamespaces } : {}),
       };
       this.save.emit(request);

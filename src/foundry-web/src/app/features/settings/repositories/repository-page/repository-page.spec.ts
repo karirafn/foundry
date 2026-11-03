@@ -17,6 +17,7 @@ const ACCOUNT_1: AccountSummary = {
   baseUrl: 'https://github.com',
   hasToken: true,
   tokenStatus: 'present',
+  branchRulesTokenStatus: 'absent',
   namespaces: [],
 };
 

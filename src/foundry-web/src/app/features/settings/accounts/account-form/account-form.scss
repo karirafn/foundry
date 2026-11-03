@@ -176,6 +176,44 @@ $text-warning: token.$token-status-warning;
     }
   }
 
+  &__branch-rules {
+    border-block-start: 1px solid var(--fd-border-default);
+    display: flex;
+    flex-direction: column;
+    gap: var(--fd-spacing-sm);
+    padding-block-start: var(--fd-spacing-md);
+  }
+
+  &__branch-rules-heading {
+    color: var(--fd-text-primary);
+    font-size: 0.875rem;
+    font-weight: 600;
+    margin: 0;
+  }
+
+  &__optional {
+    color: var(--fd-text-tertiary);
+    font-weight: 400;
+  }
+
+  &__branch-rules-status--present {
+    @extend .account-form__token-on-file;
+  }
+
+  &__branch-rules-status--unreadable {
+    @extend .account-form__token-unreadable;
+  }
+
+  &__branch-rules-clear {
+    align-items: center;
+    color: var(--fd-text-secondary);
+    cursor: pointer;
+    display: inline-flex;
+    font-size: 0.875rem;
+    gap: var(--fd-spacing-sm);
+    min-height: 44px;
+  }
+
   &__validation-result {
     display: flex;
     flex-direction: column;

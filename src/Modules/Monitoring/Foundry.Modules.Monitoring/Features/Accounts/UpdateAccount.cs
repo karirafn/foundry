@@ -26,12 +26,15 @@ internal static partial class UpdateAccount
     internal sealed record Command(
         CredentialId Id,
         string BaseUrl,
-        string? Token) : ICommand<CredentialUpdateResult>;
+        string? Token,
+        string? BranchRulesToken = null,
+        bool ClearBranchRulesToken = false) : ICommand<CredentialUpdateResult>;
 
     internal sealed partial class Validator : ICommandValidator<Command>
     {
         internal const string TokenInvalidCharsCode = "UpdateAccount.TokenInvalidChars";
         internal const string TokenTooLongCode = "UpdateAccount.TokenTooLong";
+        internal const string BranchRulesTokenConflictCode = "UpdateAccount.BranchRulesTokenConflict";
 
         [GeneratedRegex(@"^[a-zA-Z0-9\-_.]+$")]
         private static partial Regex ValidTokenCharactersRegex();
@@ -58,7 +61,14 @@ internal static partial class UpdateAccount
                     "Token contains invalid characters. Only alphanumeric characters, hyphens, underscores, and dots are allowed.");
             }
 
-            return Result.Ok();
+            if (command.ClearBranchRulesToken && command.BranchRulesToken is not null)
+            {
+                return new Error(
+                    BranchRulesTokenConflictCode,
+                    "Supply either a branch-rules token or a request to clear it, not both.");
+            }
+
+            return BranchRulesTokenRules.Validate(command.BranchRulesToken);
         }
     }
 
@@ -118,6 +128,10 @@ internal static partial class UpdateAccount
             bool isGitLab = credential is GitLabCredential;
             string accountName = credential.Name;
 
+            // Applied before either save path below (rotation or plain save) so it commits with them.
+            // Leaving both fields unset preserves the stored branch-rules token, including across rotation.
+            ApplyBranchRulesTokenChange(credential, command);
+
             IReadOnlyList<AffectedRepository> affectedRepositories = [];
 
             if (command.Token is not null)
@@ -175,17 +189,21 @@ internal static partial class UpdateAccount
                 }
             }
 
-            string providerType = isGitLab ? ProviderTypes.GitLab : ProviderTypes.GitHub;
-            CredentialSummary summary = new(
-                credential.Id.Value,
-                credential.Name,
-                providerType,
-                credential.BaseUrl.Value.ToString(),
-                credential.Token is not null,
-                AccountsDatabaseHelpers.ToTokenStatus(credential.Token),
-                credential.Namespaces.Select(n => n.Value).ToList());
+            CredentialSummary summary = AccountsDatabaseHelpers.ToSummary(credential);
 
             return new Outcome.Updated(new CredentialUpdateResult(summary, affectedRepositories));
+        }
+
+        private static void ApplyBranchRulesTokenChange(Credential credential, Command command)
+        {
+            if (command.ClearBranchRulesToken)
+            {
+                credential.ClearBranchRulesToken();
+            }
+            else if (command.BranchRulesToken is not null)
+            {
+                credential.SetBranchRulesToken(command.BranchRulesToken);
+            }
         }
 
         private static void UpdateCredential(Credential credential, string accountName, string? token, BaseUrlVo baseUrl)
@@ -207,7 +225,13 @@ internal static partial class UpdateAccount
 
     internal static class Endpoint
     {
-        private sealed record RequestBody(string BaseUrl, string? Token);
+        /// <param name="BranchRulesToken">Write-only. <see langword="null"/> keeps the stored token.</param>
+        /// <param name="ClearBranchRulesToken">When <see langword="true"/>, removes the stored branch-rules token.</param>
+        private sealed record RequestBody(
+            string BaseUrl,
+            string? Token,
+            string? BranchRulesToken = null,
+            bool? ClearBranchRulesToken = null);
 
         public static void Map(RouteGroupBuilder group)
         {
@@ -219,7 +243,12 @@ internal static partial class UpdateAccount
                     CancellationToken cancellationToken) =>
                 {
                     CredentialId credentialId = CredentialId.From(id);
-                    Command command = new(credentialId, body.BaseUrl, body.Token);
+                    Command command = new(
+                        credentialId,
+                        body.BaseUrl,
+                        body.Token,
+                        body.BranchRulesToken,
+                        body.ClearBranchRulesToken ?? false);
 
                     Result validation = validator.Validate(command);
                     if (validation is Result.Failure validationFailure)

@@ -1,5 +1,6 @@
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Features.Accounts;
+using Foundry.Modules.Monitoring.Features.Accounts.Tokens;
 using Foundry.Shared;
 
 using Shouldly;
@@ -126,5 +127,64 @@ public sealed class Validate
 
         // Assert
         result.IsSuccess.ShouldBeTrue();
+    }
+
+    [Fact]
+    public void WhenBranchRulesTokenIsNull_ReturnsSuccess()
+    {
+        // Arrange
+        CreateAccount.Validator sut = new();
+
+        // Act
+        Result result = sut.Validate(ValidCommand with { BranchRulesToken = null });
+
+        // Assert
+        result.IsSuccess.ShouldBeTrue();
+    }
+
+    [Fact]
+    public void WhenBranchRulesTokenIsValid_ReturnsSuccess()
+    {
+        // Arrange
+        CreateAccount.Validator sut = new();
+
+        // Act
+        Result result = sut.Validate(ValidCommand with { BranchRulesToken = "github_pat_rules_123" });
+
+        // Assert
+        result.IsSuccess.ShouldBeTrue();
+    }
+
+    [Theory]
+    [InlineData("", BranchRulesTokenRules.EmptyCode)]
+    [InlineData("   ", BranchRulesTokenRules.EmptyCode)]
+    [InlineData("ghp_rules\nX-Injected: 1", BranchRulesTokenRules.InvalidCharsCode)]
+    [InlineData("ghp rules", BranchRulesTokenRules.InvalidCharsCode)]
+    public void WhenBranchRulesTokenIsMalformed_ReturnsBranchRulesTokenError(string token, string expectedCode)
+    {
+        // Arrange
+        CreateAccount.Validator sut = new();
+
+        // Act
+        Result result = sut.Validate(ValidCommand with { BranchRulesToken = token });
+
+        // Assert
+        result.IsFailure.ShouldBeTrue();
+        ((Result.Failure)result).Error.Code.ShouldBe(expectedCode);
+    }
+
+    [Fact]
+    public void WhenBranchRulesTokenExceedsMaxLength_ReturnsTooLongError()
+    {
+        // Arrange
+        CreateAccount.Validator sut = new();
+        string oversized = new('a', AccountsDatabaseHelpers.TokenMaxLength + 1);
+
+        // Act
+        Result result = sut.Validate(ValidCommand with { BranchRulesToken = oversized });
+
+        // Assert
+        result.IsFailure.ShouldBeTrue();
+        ((Result.Failure)result).Error.Code.ShouldBe(BranchRulesTokenRules.TooLongCode);
     }
 }

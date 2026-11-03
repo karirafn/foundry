@@ -19,17 +19,28 @@ public sealed class GitLabCredential : Credential
     public static Uri DeriveApiBaseUrl(BaseUrl baseUrl) =>
         new(baseUrl.Value.ToString().TrimEnd('/') + "/api/v4");
 
-    public static GitLabCredential Create(string name, string? token, BaseUrl baseUrl)
+    public static GitLabCredential Create(
+        string name,
+        string? token,
+        BaseUrl baseUrl,
+        string? branchRulesToken = null)
     {
         GuardAgainstQueryOrFragment(baseUrl);
 
-        return new GitLabCredential(CredentialId.New())
+        GitLabCredential credential = new(CredentialId.New())
         {
             Name = name,
             Token = token is not null ? new ProviderToken.Present(token) : null,
             BaseUrl = baseUrl,
             Host = baseUrl.Value.Host,
         };
+
+        if (branchRulesToken is not null)
+        {
+            credential.SetBranchRulesToken(branchRulesToken);
+        }
+
+        return credential;
     }
 
     /// <summary>

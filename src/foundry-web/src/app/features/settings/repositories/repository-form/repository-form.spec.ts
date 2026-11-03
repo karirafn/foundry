@@ -13,6 +13,7 @@ const MOCK_ACCOUNT: AccountSummary = {
   baseUrl: 'https://github.com',
   hasToken: true,
   tokenStatus: 'present',
+  branchRulesTokenStatus: 'absent',
   namespaces: [],
 };
 
@@ -23,6 +24,7 @@ const MOCK_ACCOUNT_2: AccountSummary = {
   baseUrl: 'https://github.com',
   hasToken: true,
   tokenStatus: 'present',
+  branchRulesTokenStatus: 'absent',
   namespaces: [],
 };
 
@@ -1179,6 +1181,7 @@ describe('RepositoryFormComponent', () => {
       baseUrl: 'https://github.com',
       hasToken: true,
       tokenStatus: 'present',
+      branchRulesTokenStatus: 'absent',
       namespaces: ['team-alpha'],
     };
     const accountB: AccountSummary = {
@@ -1188,6 +1191,7 @@ describe('RepositoryFormComponent', () => {
       baseUrl: 'https://github.com',
       hasToken: true,
       tokenStatus: 'present',
+      branchRulesTokenStatus: 'absent',
       namespaces: ['team-beta'],
     };
 

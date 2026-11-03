@@ -1,3 +1,5 @@
+using Foundry.Modules.Monitoring.Contracts;
+using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
 
 using Microsoft.EntityFrameworkCore;
@@ -25,6 +27,21 @@ internal static class AccountsDatabaseHelpers
             ProviderToken.Unreadable => TokenStatuses.Unreadable,
             _ => TokenStatuses.Absent,
         };
+
+    /// <summary>
+    /// Projects a materialized <see cref="Credential"/> to its wire summary. Token values —
+    /// including the branch-rules token — are never included; only their statuses.
+    /// </summary>
+    internal static CredentialSummary ToSummary(Credential credential) =>
+        new(
+            credential.Id.Value,
+            credential.Name,
+            credential is GitLabCredential ? ProviderTypes.GitLab : ProviderTypes.GitHub,
+            credential.BaseUrl.Value.ToString(),
+            credential.Token is not null,
+            ToTokenStatus(credential.Token),
+            credential.Namespaces.Select(n => n.Value).ToList(),
+            ToTokenStatus(credential.BranchRulesToken));
 
     // SQLite error code 19 is SQLITE_CONSTRAINT (unique constraint violation).
     // The monitoring module does not reference the SQLite provider directly,

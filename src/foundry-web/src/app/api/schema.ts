@@ -687,6 +687,7 @@ export interface components {
             baseUrl: string;
             token: string;
             takeoverNamespaces?: null | string[];
+            branchRulesToken?: null | string;
         };
         CreateRepositoryRequestBody: {
             slug: string;
@@ -708,6 +709,7 @@ export interface components {
             hasToken: boolean;
             tokenStatus: string;
             namespaces: string[];
+            branchRulesTokenStatus: string;
         };
         CredentialUpdateResult: {
             credential: components["schemas"]["CredentialSummary"];
@@ -971,6 +973,8 @@ export interface components {
         UpdateAccountRequestBody: {
             baseUrl: string;
             token: null | string;
+            branchRulesToken?: null | string;
+            clearBranchRulesToken?: null | boolean;
         };
         UpdateAllowedProviderHostsRequestBody: {
             hosts: string[];

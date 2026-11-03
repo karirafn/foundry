@@ -24,6 +24,19 @@ Generate a fine-grained token at **Settings > Developer settings > Personal acce
 | Metadata | Read |
 | Pull requests | Read and write (optional — required only if workers need to create or update PRs) |
 
+This is the **account (worker) token**. It keeps exactly this permission set — do not add Administration to it. It is injected into every worker container (as `GH_TOKEN`), so any permission it carries is available to autonomous workers.
+
+#### Branch-rules token (optional)
+
+An account can also carry a second, optional **branch-rules token**, entered in the account form's *Branch-rules token* field. Foundry uses it server-side only, to write default-branch protection; it is stored encrypted like the account token, is never returned by the API (only whether it is configured, absent or unreadable), and is never given to workers.
+
+| Provider | Required permission |
+|---|---|
+| GitHub (fine-grained token) | Administration — Read and write |
+| GitLab | Maintainer role on the project |
+
+It is kept separate from the account token because GitHub's Administration: write also grants repository deletion and rule removal, and GitLab's Maintainer role can likewise change protection — power autonomous workers must never hold. The two tokens may belong to different users. Leave the field empty if you don't want Foundry to manage branch protection; rotating the account token keeps the branch-rules token unless you change it.
+
 ### Worker bind mounts
 
 Worker host bind mounts and container resource limits (memory, CPU, PIDs) are managed on the **Worker environment** settings page in the dashboard, stored in the database, and read fresh on each dispatch. Each mount is keyed on its container path with a read-only/writable flag. Do not mount `settings.json` directly — it is generated at dispatch time from Global Settings (model and deny rules), with hooks merged in from the host settings file (see Worker settings below).

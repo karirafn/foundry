@@ -23,15 +23,26 @@ public sealed class GitHubCredential : Credential
     {
     }
 
-    public static GitHubCredential Create(string name, string? token, BaseUrl baseUrl)
+    public static GitHubCredential Create(
+        string name,
+        string? token,
+        BaseUrl baseUrl,
+        string? branchRulesToken = null)
     {
-        return new GitHubCredential(CredentialId.New())
+        GitHubCredential credential = new(CredentialId.New())
         {
             Name = name,
             Token = token is not null ? new ProviderToken.Present(token) : null,
             BaseUrl = baseUrl,
             Host = baseUrl.Value.Host,
         };
+
+        if (branchRulesToken is not null)
+        {
+            credential.SetBranchRulesToken(branchRulesToken);
+        }
+
+        return credential;
     }
 
     /// <summary>

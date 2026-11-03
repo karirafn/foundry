@@ -15,6 +15,7 @@ const ACCOUNT_1: AccountSummary = {
   baseUrl: 'https://github.com',
   hasToken: true,
   tokenStatus: 'present',
+  branchRulesTokenStatus: 'absent',
   namespaces: [],
 };
 
@@ -25,6 +26,7 @@ const ACCOUNT_2: AccountSummary = {
   baseUrl: 'https://gitlab.com',
   hasToken: true,
   tokenStatus: 'present',
+  branchRulesTokenStatus: 'absent',
   namespaces: [],
 };
 
