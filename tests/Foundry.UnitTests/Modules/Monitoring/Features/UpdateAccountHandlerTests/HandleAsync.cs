@@ -790,6 +790,91 @@ public sealed class HandleAsync : IAsyncDisposable
 
     // Stubs and fakes
 
+
+    private async Task<ProviderToken?> ReloadBranchRulesTokenAsync(CredentialId id)
+    {
+        _dbContext.ChangeTracker.Clear();
+        Credential reloaded = await _dbContext.Set<Credential>()
+            .SingleAsync(c => c.Id == id, TestContext.Current.CancellationToken);
+        return reloaded.BranchRulesToken;
+    }
+
+    [Fact]
+    public async Task WhenBranchRulesTokenSuppliedWithoutAccountToken_PersistsItAndReportsPresent()
+    {
+        // Arrange
+        GitHubCredential credential = await SeedCredentialAsync();
+        UpdateAccount.Handler handler = BuildHandler();
+        UpdateAccount.Command command = new(credential.Id, "https://github.com", null, "github_pat_rules");
+
+        // Act
+        UpdateAccount.Outcome outcome = await handler.HandleAsync(command, TestContext.Current.CancellationToken);
+
+        // Assert
+        UpdateAccount.Outcome.Updated updated = outcome.ShouldBeOfType<UpdateAccount.Outcome.Updated>();
+        updated.Value.Credential.BranchRulesTokenStatus.ShouldBe("present");
+        (await ReloadBranchRulesTokenAsync(credential.Id)).ShouldBe(new ProviderToken.Present("github_pat_rules"));
+    }
+
+    [Fact]
+    public async Task WhenClearRequested_RemovesBranchRulesToken()
+    {
+        // Arrange
+        GitHubCredential credential = await SeedCredentialAsync();
+        credential.SetBranchRulesToken("github_pat_rules");
+        await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+        UpdateAccount.Handler handler = BuildHandler();
+        UpdateAccount.Command command = new(credential.Id, "https://github.com", null, ClearBranchRulesToken: true);
+
+        // Act
+        UpdateAccount.Outcome outcome = await handler.HandleAsync(command, TestContext.Current.CancellationToken);
+
+        // Assert
+        UpdateAccount.Outcome.Updated updated = outcome.ShouldBeOfType<UpdateAccount.Outcome.Updated>();
+        updated.Value.Credential.BranchRulesTokenStatus.ShouldBe("absent");
+        (await ReloadBranchRulesTokenAsync(credential.Id)).ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task WhenAccountTokenRotatedWithoutBranchRulesFields_PreservesBranchRulesToken()
+    {
+        // Arrange
+        GitHubCredential credential = await SeedCredentialAsync();
+        credential.SetBranchRulesToken("github_pat_rules");
+        await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+        UpdateAccount.Handler handler = BuildHandler();
+        UpdateAccount.Command command = new(credential.Id, "https://github.com", "ghp_rotated");
+
+        // Act
+        UpdateAccount.Outcome outcome = await handler.HandleAsync(command, TestContext.Current.CancellationToken);
+
+        // Assert
+        UpdateAccount.Outcome.Updated updated = outcome.ShouldBeOfType<UpdateAccount.Outcome.Updated>();
+        updated.Value.Credential.BranchRulesTokenStatus.ShouldBe("present");
+        (await ReloadBranchRulesTokenAsync(credential.Id)).ShouldBe(new ProviderToken.Present("github_pat_rules"));
+    }
+
+    [Fact]
+    public async Task WhenAccountTokenRotatedWithNewBranchRulesToken_PersistsBoth()
+    {
+        // Arrange
+        GitHubCredential credential = await SeedCredentialAsync();
+        UpdateAccount.Handler handler = BuildHandler();
+        UpdateAccount.Command command = new(credential.Id, "https://github.com", "ghp_rotated", "github_pat_rules");
+
+        // Act
+        UpdateAccount.Outcome outcome = await handler.HandleAsync(command, TestContext.Current.CancellationToken);
+
+        // Assert
+        outcome.ShouldBeOfType<UpdateAccount.Outcome.Updated>();
+        _dbContext.ChangeTracker.Clear();
+        Credential reloaded = await _dbContext.Set<Credential>()
+            .SingleAsync(c => c.Id == credential.Id, TestContext.Current.CancellationToken);
+        reloaded.ShouldSatisfyAllConditions(
+            () => reloaded.Token.ShouldBe(new ProviderToken.Present("ghp_rotated")),
+            () => reloaded.BranchRulesToken.ShouldBe(new ProviderToken.Present("github_pat_rules")));
+    }
+
     private sealed class StubValidateTokenHandler(string accountName)
         : IQueryHandler<ValidateToken.Query, ValidateToken.Response>
     {

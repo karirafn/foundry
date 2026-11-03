@@ -12,4 +12,12 @@ internal static class CredentialWarnings
     internal const string UnreadableToken =
         "Credential {CredentialId} loaded with an unreadable accounts.token — " +
         "the stored ciphertext could not be decrypted. The credential is treated as ineligible until the token is re-entered.";
+
+    /// <summary>
+    /// Warning logged when a credential's branch-rules token could not be decrypted.
+    /// Structured-logging placeholder: <c>{CredentialId}</c>.
+    /// </summary>
+    internal const string UnreadableBranchRulesToken =
+        "Credential {CredentialId} loaded with an unreadable accounts.branch_rules_token — " +
+        "the stored ciphertext could not be decrypted. Re-enter the branch-rules token to repair it.";
 }

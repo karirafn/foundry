@@ -11,6 +11,7 @@ const MOCK_ACCOUNT: AccountSummary = {
   baseUrl: 'https://github.com',
   hasToken: true,
   tokenStatus: 'present',
+  branchRulesTokenStatus: 'absent',
   namespaces: [],
 };
 
@@ -21,6 +22,7 @@ const MOCK_ACCOUNT_2: AccountSummary = {
   baseUrl: 'https://github.com',
   hasToken: true,
   tokenStatus: 'present',
+  branchRulesTokenStatus: 'absent',
   namespaces: [],
 };
 
@@ -1170,6 +1172,7 @@ describe('AccountFormComponent', () => {
       baseUrl: 'https://gitlab.example.com',
       hasToken: true,
       tokenStatus: 'present',
+      branchRulesTokenStatus: 'absent',
       namespaces: [],
     };
     const gitlabRequirements: TokenRequirements = {
@@ -2014,6 +2017,7 @@ describe('AccountFormComponent', () => {
     baseUrl: 'https://github.com',
     hasToken: true,
     tokenStatus: 'unreadable',
+    branchRulesTokenStatus: 'absent',
     namespaces: [],
   };
 
@@ -2121,5 +2125,178 @@ describe('AccountFormComponent', () => {
     // Assert
     const successBand = el.querySelector('.account-form__token-on-file');
     expect(successBand).toBeNull();
+  });
+
+  describe('branch-rules token', () => {
+    const WITH_RULES_TOKEN: AccountSummary = { ...MOCK_ACCOUNT, branchRulesTokenStatus: 'present' };
+    const WITH_UNREADABLE_RULES_TOKEN: AccountSummary = { ...MOCK_ACCOUNT, branchRulesTokenStatus: 'unreadable' };
+    const GITLAB_ACCOUNT: AccountSummary = { ...MOCK_ACCOUNT, providerType: 'GitLab', baseUrl: 'https://gitlab.com' };
+
+    function captureSave(component: AccountFormComponent): () => CreateAccountRequest | UpdateAccountRequest | undefined {
+      let emitted: CreateAccountRequest | UpdateAccountRequest | undefined;
+      component.save.subscribe((v: CreateAccountRequest | UpdateAccountRequest) => { emitted = v; });
+      return () => emitted;
+    }
+
+    function typeInto(el: HTMLElement, selector: string, value: string): void {
+      const input = el.querySelector(selector) as HTMLInputElement;
+      input.value = value;
+      input.dispatchEvent(new Event('input'));
+    }
+
+    it('should render an optional branch-rules token field in add mode', () => {
+      // Arrange / Act
+      const { el } = setup({ account: null });
+
+      // Assert
+      const label = el.querySelector('label[for="account-form-branch-rules-token"]');
+      expect(label?.textContent?.trim()).toBe('Branch-rules token');
+      const input = el.querySelector('#account-form-branch-rules-token') as HTMLInputElement;
+      expect(input.type).toBe('password');
+      expect(input.required).toBe(false);
+      expect(el.querySelector('#account-form-branch-rules-heading')?.textContent).toContain('(optional)');
+    });
+
+    it('should name the GitHub Administration permission and why the token is separate', () => {
+      // Arrange / Act
+      const { el } = setup({ account: null });
+
+      // Assert
+      const help = el.querySelector('#account-form-branch-rules-help')?.textContent ?? '';
+      expect(help).toContain('Administration permission (Read and write)');
+      expect(help).toContain('given to every');
+      expect(help).toContain('Workers never receive the branch-rules token');
+    });
+
+    it('should name the GitLab Maintainer role for a GitLab account', () => {
+      // Arrange / Act
+      const { el } = setup({ account: GITLAB_ACCOUNT });
+
+      // Assert
+      const help = el.querySelector('#account-form-branch-rules-help')?.textContent ?? '';
+      expect(help).toContain('Maintainer role');
+    });
+
+    it('should omit the branch-rules token from CreateAccountRequest when left empty', () => {
+      // Arrange
+      const { el, component, fixture } = setup({ account: null, validationResult: VALID_RESULT });
+      const emitted = captureSave(component);
+      typeInto(el, '#account-form-token', 'ghp_newtoken');
+      fixture.detectChanges();
+      (el.querySelector('#account-form-token') as HTMLInputElement).dispatchEvent(new Event('blur'));
+      fixture.detectChanges();
+
+      // Act
+      (el.querySelector('.account-form__save-btn') as HTMLButtonElement).click();
+
+      // Assert
+      expect(emitted()).not.toHaveProperty('branchRulesToken');
+    });
+
+    it('should include the branch-rules token in CreateAccountRequest when entered', () => {
+      // Arrange
+      const { el, component, fixture } = setup({ account: null, validationResult: VALID_RESULT });
+      const emitted = captureSave(component);
+      typeInto(el, '#account-form-token', 'ghp_newtoken');
+      fixture.detectChanges();
+      (el.querySelector('#account-form-token') as HTMLInputElement).dispatchEvent(new Event('blur'));
+      typeInto(el, '#account-form-branch-rules-token', 'github_pat_rules');
+      fixture.detectChanges();
+
+      // Act
+      (el.querySelector('.account-form__save-btn') as HTMLButtonElement).click();
+
+      // Assert
+      expect(emitted()).toEqual({
+        providerType: 'GitHub',
+        baseUrl: 'https://github.com',
+        token: 'ghp_newtoken',
+        branchRulesToken: 'github_pat_rules',
+      });
+    });
+
+    it('should show "No branch-rules token configured" and no remove option when absent', () => {
+      // Arrange / Act
+      const { el } = setup({ account: MOCK_ACCOUNT });
+
+      // Assert
+      expect(el.querySelector('#account-form-branch-rules-status')?.textContent).toContain('No branch-rules token configured');
+      expect(el.querySelector('#account-form-branch-rules-clear')).toBeNull();
+    });
+
+    it('should show the token as on file when present, without revealing it', () => {
+      // Arrange / Act
+      const { el } = setup({ account: WITH_RULES_TOKEN });
+
+      // Assert
+      const status = el.querySelector('.account-form__branch-rules-status--present');
+      expect(status?.textContent).toContain('Branch-rules token on file');
+      expect((el.querySelector('#account-form-branch-rules-token') as HTMLInputElement).value).toBe('');
+      expect(el.querySelector('label[for="account-form-branch-rules-token"]')?.textContent?.trim()).toBe('Replace branch-rules token');
+    });
+
+    it('should show an unreadable warning when the stored branch-rules token cannot be decrypted', () => {
+      // Arrange / Act
+      const { el } = setup({ account: WITH_UNREADABLE_RULES_TOKEN });
+
+      // Assert
+      const status = el.querySelector('.account-form__branch-rules-status--unreadable');
+      expect(status?.textContent).toContain('Branch-rules token unreadable');
+      // The account-token unreadable band must not be triggered by the branch-rules token.
+      expect(el.querySelector('.account-form__token-unreadable')).toBeNull();
+    });
+
+    it('should not send branch-rules fields on update when unchanged (token preserved)', () => {
+      // Arrange
+      const { el, component } = setup({ account: WITH_RULES_TOKEN });
+      const emitted = captureSave(component);
+
+      // Act
+      (el.querySelector('.account-form__save-btn') as HTMLButtonElement).click();
+
+      // Assert
+      expect(emitted()).toEqual({ baseUrl: 'https://github.com', token: null });
+    });
+
+    it('should send the new branch-rules token on update when entered (repairs an unreadable one)', () => {
+      // Arrange
+      const { el, component, fixture } = setup({ account: WITH_UNREADABLE_RULES_TOKEN });
+      const emitted = captureSave(component);
+      typeInto(el, '#account-form-branch-rules-token', 'github_pat_fresh');
+      fixture.detectChanges();
+
+      // Act
+      (el.querySelector('.account-form__save-btn') as HTMLButtonElement).click();
+
+      // Assert
+      expect(emitted()).toEqual({
+        baseUrl: 'https://github.com',
+        token: null,
+        branchRulesToken: 'github_pat_fresh',
+      });
+    });
+
+    it('should send clearBranchRulesToken and disable the input when remove is checked', () => {
+      // Arrange
+      const { el, component, fixture } = setup({ account: WITH_RULES_TOKEN });
+      const emitted = captureSave(component);
+      typeInto(el, '#account-form-branch-rules-token', 'github_pat_discarded');
+      fixture.detectChanges();
+      const checkbox = el.querySelector('#account-form-branch-rules-clear') as HTMLInputElement;
+
+      // Act
+      checkbox.checked = true;
+      checkbox.dispatchEvent(new Event('change'));
+      fixture.detectChanges();
+      (el.querySelector('.account-form__save-btn') as HTMLButtonElement).click();
+
+      // Assert
+      expect((el.querySelector('#account-form-branch-rules-token') as HTMLInputElement).disabled).toBe(true);
+      expect(emitted()).toEqual({
+        baseUrl: 'https://github.com',
+        token: null,
+        clearBranchRulesToken: true,
+      });
+    });
   });
 });

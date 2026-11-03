@@ -141,6 +141,7 @@ describe('SettingsAccountsComponent', () => {
       baseUrl: 'https://github.com',
       hasToken: true,
       tokenStatus: 'present',
+      branchRulesTokenStatus: 'absent',
       namespaces: [],
     };
     const { fixture, httpMock } = setup();
@@ -188,6 +189,7 @@ describe('SettingsAccountsComponent', () => {
       baseUrl: 'https://github.com',
       hasToken: true,
       tokenStatus: 'present',
+      branchRulesTokenStatus: 'absent',
       namespaces: [],
     };
     const { fixture, httpMock } = setup();
@@ -270,6 +272,7 @@ describe('SettingsAccountsComponent', () => {
       baseUrl: 'https://github.com',
       hasToken: true,
       tokenStatus: 'present',
+      branchRulesTokenStatus: 'absent',
       namespaces: [],
     };
     const { fixture, httpMock } = setup();
@@ -300,6 +303,7 @@ describe('SettingsAccountsComponent', () => {
       baseUrl: 'https://github.com',
       hasToken: true,
       tokenStatus: 'present',
+      branchRulesTokenStatus: 'absent',
       namespaces: [],
     }));
   });
@@ -354,6 +358,7 @@ describe('SettingsAccountsComponent', () => {
       baseUrl: 'https://github.com',
       hasToken: true,
       tokenStatus: 'present',
+      branchRulesTokenStatus: 'absent',
       namespaces: [],
     };
     const { fixture, httpMock } = setup();
@@ -388,6 +393,7 @@ describe('SettingsAccountsComponent', () => {
       baseUrl: 'https://github.com',
       hasToken: true,
       tokenStatus: 'present',
+      branchRulesTokenStatus: 'absent',
       namespaces: [],
     };
     const { fixture, httpMock } = setup();
@@ -419,6 +425,7 @@ describe('SettingsAccountsComponent', () => {
       baseUrl: 'https://github.com',
       hasToken: true,
       tokenStatus: 'present',
+      branchRulesTokenStatus: 'absent',
       namespaces: [],
     };
     const { fixture, httpMock } = setup();
@@ -456,6 +463,7 @@ describe('SettingsAccountsComponent', () => {
       baseUrl: 'https://github.com',
       hasToken: true,
       tokenStatus: 'present',
+      branchRulesTokenStatus: 'absent',
       namespaces: [],
     };
     const { fixture, httpMock } = setup();
@@ -496,6 +504,7 @@ describe('SettingsAccountsComponent', () => {
       baseUrl: 'https://github.com',
       hasToken: true,
       tokenStatus: 'present',
+      branchRulesTokenStatus: 'absent',
       namespaces: [],
     };
     const { fixture, httpMock } = setup();
@@ -538,6 +547,7 @@ describe('SettingsAccountsComponent', () => {
       baseUrl: 'https://github.com',
       hasToken: true,
       tokenStatus: 'present',
+      branchRulesTokenStatus: 'absent',
       namespaces: [],
     };
     const { fixture, httpMock } = setup();
@@ -568,6 +578,7 @@ describe('SettingsAccountsComponent', () => {
       baseUrl: 'https://github.com',
       hasToken: true,
       tokenStatus: 'present',
+      branchRulesTokenStatus: 'absent',
       namespaces: [],
     };
     const { fixture, httpMock } = setup();
@@ -592,6 +603,7 @@ describe('SettingsAccountsComponent', () => {
       baseUrl: 'https://github.com',
       hasToken: true,
       tokenStatus: 'present',
+      branchRulesTokenStatus: 'absent',
       namespaces: [],
     };
     const { fixture, httpMock } = setup();
@@ -622,6 +634,7 @@ describe('SettingsAccountsComponent', () => {
       baseUrl: 'https://github.com',
       hasToken: true,
       tokenStatus: 'present',
+      branchRulesTokenStatus: 'absent',
       namespaces: [],
     };
     const { fixture, httpMock } = setup();

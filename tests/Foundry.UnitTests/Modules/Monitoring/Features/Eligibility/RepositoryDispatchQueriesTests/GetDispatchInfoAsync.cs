@@ -87,6 +87,33 @@ public sealed class GetDispatchInfoAsync : IAsyncDisposable
         result.ShouldBeNull();
     }
 
+    [Fact]
+    public async Task WhenCredentialHasBranchRulesToken_DispatchInfoCarriesOnlyTheAccountToken()
+    {
+        // Arrange — the branch-rules token is server-only; the dispatch boundary is the
+        // only path by which a token reaches a worker container (GH_TOKEN / GITLAB_TOKEN / GIT_PAT).
+        const string AccountToken = "ghp_worker_token";
+        const string RulesToken = "github_pat_branch_rules_secret";
+        MonitoredRepositoryId repoId = await SeedRepoAsync();
+        GitHubCredential credential = GitHubCredential.Create(
+            "owner",
+            AccountToken,
+            BaseUrl.Create("https://github.com").ValueOrThrow(),
+            RulesToken);
+
+        RepositoryDispatchQueries sut = BuildSut(new StubCredentialResolver(credential));
+
+        // Act
+        RepositoryDispatchInfo? result = await sut.GetDispatchInfoAsync(
+            repoId,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        result.ShouldNotBeNull();
+        result.AccountToken.ShouldBe(AccountToken);
+        System.Text.Json.JsonSerializer.Serialize(result).ShouldNotContain(RulesToken);
+    }
+
     private sealed class StubCredentialResolver(Credential? credential) : ICredentialResolver
     {
         public Task<Credential?> ResolveAsync(string host, RepositorySlug slug, CancellationToken cancellationToken)

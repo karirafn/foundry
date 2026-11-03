@@ -2015,6 +2015,12 @@
             "items": {
               "type": "string"
             }
+          },
+          "branchRulesToken": {
+            "type": [
+              "null",
+              "string"
+            ]
           }
         }
       },
@@ -2074,7 +2080,8 @@
           "baseUrl",
           "hasToken",
           "tokenStatus",
-          "namespaces"
+          "namespaces",
+          "branchRulesTokenStatus"
         ],
         "type": "object",
         "properties": {
@@ -2102,6 +2109,9 @@
             "items": {
               "type": "string"
             }
+          },
+          "branchRulesTokenStatus": {
+            "type": "string"
           }
         }
       },
@@ -3269,6 +3279,18 @@
             "type": [
               "null",
               "string"
+            ]
+          },
+          "branchRulesToken": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "clearBranchRulesToken": {
+            "type": [
+              "null",
+              "boolean"
             ]
           }
         }

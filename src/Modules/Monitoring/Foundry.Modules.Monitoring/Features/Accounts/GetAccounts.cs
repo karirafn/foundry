@@ -38,17 +38,15 @@ internal static class GetAccounts
                 {
                     logger.LogWarning(CredentialWarnings.UnreadableToken, credential.Id.Value);
                 }
+
+                if (credential.IsBranchRulesTokenUnreadable)
+                {
+                    logger.LogWarning(CredentialWarnings.UnreadableBranchRulesToken, credential.Id.Value);
+                }
             }
 
             List<CredentialSummary> summaries = credentials
-                .Select(a => new CredentialSummary(
-                    a.Id.Value,
-                    a.Name,
-                    a is GitLabCredential ? ProviderTypes.GitLab : ProviderTypes.GitHub,
-                    a.BaseUrl.Value.ToString(),
-                    a.Token is not null,
-                    AccountsDatabaseHelpers.ToTokenStatus(a.Token),
-                    a.Namespaces.Select(n => n.Value).ToList()))
+                .Select(AccountsDatabaseHelpers.ToSummary)
                 .ToList();
 
             return Result<IReadOnlyList<CredentialSummary>>.Ok(summaries);

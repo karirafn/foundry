@@ -9,6 +9,7 @@ const MOCK_ACCOUNT: AccountSummary = {
   baseUrl: 'https://github.com',
   hasToken: true,
   tokenStatus: 'present',
+  branchRulesTokenStatus: 'absent',
   namespaces: [],
 };
 
@@ -19,6 +20,7 @@ const MOCK_ACCOUNT_2: AccountSummary = {
   baseUrl: 'https://gitlab.com',
   hasToken: false,
   tokenStatus: 'absent',
+  branchRulesTokenStatus: 'absent',
   namespaces: [],
 };
 
@@ -29,6 +31,7 @@ const MOCK_ACCOUNT_UNREADABLE: AccountSummary = {
   baseUrl: 'https://gitlab.company.com',
   hasToken: true,
   tokenStatus: 'unreadable',
+  branchRulesTokenStatus: 'absent',
   namespaces: [],
 };
 
@@ -39,6 +42,7 @@ const MOCK_ACCOUNT_LOWERCASE_GITHUB: AccountSummary = {
   baseUrl: 'https://github.com',
   hasToken: true,
   tokenStatus: 'present',
+  branchRulesTokenStatus: 'absent',
   namespaces: [],
 };
 
@@ -49,6 +53,7 @@ const MOCK_ACCOUNT_LOWERCASE_GITLAB: AccountSummary = {
   baseUrl: 'https://gitlab.com',
   hasToken: true,
   tokenStatus: 'present',
+  branchRulesTokenStatus: 'absent',
   namespaces: [],
 };
 
