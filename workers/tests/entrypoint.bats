@@ -109,15 +109,16 @@ EOF
     [[ "$output" == *"Rootless dockerd is ready"* ]]
 }
 
-@test "start_rootless_dockerd exports TESTCONTAINERS_HOST_OVERRIDE=localhost when daemon becomes ready" {
+@test "start_rootless_dockerd exports TESTCONTAINERS_HOST_OVERRIDE=127.0.0.1 when daemon becomes ready" {
     make_fake_dockerd_background
     make_fake_docker_healthy
 
     # Call in the same shell so we can inspect exported vars
     start_rootless_dockerd
     # Published ports of nested containers are reachable only on the worker's
-    # localhost, not on the bridge gateway Testcontainers would otherwise pick.
-    [ "${TESTCONTAINERS_HOST_OVERRIDE:-}" = "localhost" ]
+    # loopback (pinned to IPv4 because the name localhost may resolve to ::1 first), not
+    # on the bridge gateway Testcontainers would otherwise pick.
+    [ "${TESTCONTAINERS_HOST_OVERRIDE:-}" = "127.0.0.1" ]
 }
 
 @test "start_rootless_dockerd sets DOCKER_HOST to the socket under XDG_RUNTIME_DIR" {

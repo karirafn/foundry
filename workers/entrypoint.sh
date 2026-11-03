@@ -154,7 +154,7 @@ merge_host_hooks() {
 #
 # Starts rootless dockerd in the background and polls until its socket is ready.
 # Exports DOCKER_HOST so subsequent commands (e.g. Testcontainers) can reach it, and
-# TESTCONTAINERS_HOST_OVERRIDE=localhost so they connect to published ports there.
+# TESTCONTAINERS_HOST_OVERRIDE=127.0.0.1 so they connect to published ports there.
 # Is a no-op when dockerd-rootless.sh is not on PATH (non-Docker image builds).
 #
 # Tunable via env vars (defaults chosen for typical container cold-start):
@@ -221,7 +221,9 @@ start_rootless_dockerd() {
             # gateway (172.17.0.1), which under rootless dockerd lives in rootlesskit's network
             # namespace; published ports are forwarded only to the worker's own localhost, so
             # the gateway refuses connections (breaking Ryuk and every mapped-port client).
-            export TESTCONTAINERS_HOST_OVERRIDE=localhost
+            # IPv4 loopback is pinned because the name localhost may resolve to ::1 first,
+            # and clients without address fallback then fail against an IPv4-only forwarder.
+            export TESTCONTAINERS_HOST_OVERRIDE=127.0.0.1
             # DOCKER_HOST is a unix:// URI. Testcontainers .NET (ResourceReaper / Ryuk) derives
             # the Docker socket bind-mount path from the scheme — when the scheme is "unix" it
             # extracts the absolute path from the URI, so no TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE
