@@ -351,7 +351,9 @@ internal sealed class CredentialsOrchestrator(IDockerContainerRuntime runtime) :
                     break;
                 }
 
-                string redacted = SecretRedactor.Redact(line);
+                // StreamLogsAsync requests Docker timestamps; strip the prefix so the parser sees
+                // the raw stream-json lines the CLI wrote.
+                string redacted = SecretRedactor.Redact(DockerLogLine.StripTimestamp(line));
                 logs.Append(redacted.Length > remaining ? redacted[..remaining] : redacted);
             }
 

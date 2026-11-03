@@ -47,11 +47,16 @@ internal static class UsageReportParser
     /// <returns>
     /// <see cref="UsageParseResult.Parsed"/> when a <c>rate_limit_event</c> line is found
     /// and <c>rate_limit_info.unifiedWindows</c> is present and parseable;
-    /// <see cref="UsageParseResult.NoUsageReport"/> when no <c>rate_limit_event</c> is
-    /// present (no API turn / API-key mode) or <c>unifiedWindows</c> is absent (CLI
-    /// version too old to emit it);
-    /// <see cref="UsageParseResult.Unparseable"/> on malformed JSON or a
-    /// <c>rate_limit_info</c> with broken field values.
+    /// <see cref="UsageParseResult.NoUsageReport"/> when the output contains JSON lines but
+    /// no <c>rate_limit_event</c> (no API turn / API-key mode) or none carries
+    /// <c>unifiedWindows</c> (CLI version too old to emit it);
+    /// <see cref="UsageParseResult.Unparseable"/> when the output contains no JSON line at all
+    /// (auth-error text, empty output from a <c>timeout</c> kill) or a
+    /// <c>rate_limit_event</c> / <c>rate_limit_info</c> with broken field values.
+    /// <para>
+    /// Lines that are not JSON objects — plain-text stderr notices merged into the stream, or
+    /// a line truncated by the log-length cap — are skipped rather than failing the parse.
+    /// </para>
     /// </returns>
     public static UsageParseResult Parse(string log, string accountEmail, DateTimeOffset capturedAt)
     {
@@ -83,13 +88,14 @@ internal static class UsageReportParser
     /// </summary>
     /// <param name="log">The raw stream-json log.</param>
     /// <param name="earlyResult">
-    /// Set to a non-null result when parsing must terminate early (malformed JSON or a
+    /// Set to a non-null result when parsing must terminate early (no JSON line at all, or a
     /// malformed <c>rate_limit_event</c>); otherwise <c>null</c>.
     /// </param>
     private static JsonObject? FindLastRateLimitInfo(string log, out UsageParseResult? earlyResult)
     {
         earlyResult = null;
         JsonObject? last = null;
+        bool sawJsonLine = false;
 
         foreach (string line in log.Split('\n', StringSplitOptions.RemoveEmptyEntries))
         {
@@ -100,22 +106,13 @@ internal static class UsageReportParser
                 continue;
             }
 
-            JsonObject? node;
-
-            try
-            {
-                node = JsonNode.Parse(trimmed) as JsonObject;
-            }
-            catch (JsonException)
-            {
-                earlyResult = new UsageParseResult.Unparseable();
-                return null;
-            }
-
-            if (node is null)
+            // Non-JSON lines (stderr notices, truncated tail lines) are skipped, not fatal.
+            if (trimmed[0] != '{' || TryParseObject(trimmed) is not { } node)
             {
                 continue;
             }
+
+            sawJsonLine = true;
 
             if (node["type"]?.GetValue<string>() != "rate_limit_event")
             {
@@ -136,7 +133,26 @@ internal static class UsageReportParser
             }
         }
 
+        if (!sawJsonLine)
+        {
+            // No stream-json at all — the CLI failed before emitting any event. Treat as a
+            // failed poll so the last good snapshot is retained rather than cleared.
+            earlyResult = new UsageParseResult.Unparseable();
+        }
+
         return last;
+    }
+
+    private static JsonObject? TryParseObject(string line)
+    {
+        try
+        {
+            return JsonNode.Parse(line) as JsonObject;
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
     }
 
     private static UsageParseResult ParseRateLimitInfo(

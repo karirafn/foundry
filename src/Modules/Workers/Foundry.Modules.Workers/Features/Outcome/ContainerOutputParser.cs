@@ -5,6 +5,7 @@ using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 
 using Foundry.Modules.Workers.Domain.ValueObjects;
+using Foundry.Shared.Infrastructure.Docker;
 
 using Microsoft.Extensions.Logging;
 
@@ -359,15 +360,14 @@ internal sealed partial class ContainerOutputParser(ILogger<ContainerOutputParse
         }
 
         // Strip optional Docker RFC3339Nano timestamp prefix (e.g. "2026-06-29T21:24:05.123456789Z ")
-        string candidateStr = candidate.ToString();
-        System.Text.RegularExpressions.Match match = DockerTimestampPrefixPattern().Match(candidateStr);
+        (string prefix, string body) = DockerLogLine.Split(candidate.ToString());
 
-        if (!match.Success)
+        if (prefix.Length == 0)
         {
             return null;
         }
 
-        ReadOnlySpan<char> afterTimestamp = candidateStr.AsSpan(match.Length).TrimStart();
+        ReadOnlySpan<char> afterTimestamp = body.AsSpan().TrimStart();
 
         if (!afterTimestamp.IsEmpty && afterTimestamp[0] == '{')
         {
@@ -543,12 +543,4 @@ internal sealed partial class ContainerOutputParser(ILogger<ContainerOutputParse
         RegexOptions.ExplicitCapture,
         matchTimeoutMilliseconds: 1000)]
     private static partial Regex BootstrapSentinelPattern();
-
-    // Matches a Docker log timestamp prefix: RFC3339Nano date-time followed by a space.
-    // Example: "2026-06-29T21:24:05.123456789Z " or "2026-06-29T21:24:05Z "
-    [GeneratedRegex(
-        @"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2}) ",
-        RegexOptions.ExplicitCapture,
-        matchTimeoutMilliseconds: 1000)]
-    private static partial Regex DockerTimestampPrefixPattern();
 }
