@@ -829,4 +829,85 @@ describe('UsageWidgetComponent', () => {
       expect(button?.textContent?.trim()).toBe('Refresh');
     });
   });
+  describe('unavailable state (no successful poll yet, last attempt failed)', () => {
+    function buildUnavailable(): UsageSnapshot {
+      return buildSnapshot({
+        limits: [],
+        extraUsage: null,
+        capturedAt: null,
+        lastRefreshFailedAt: '2026-10-30T01:05:00Z',
+      });
+    }
+
+    it('should render a "Usage unavailable" indicator in the trigger', () => {
+      // Arrange / Act
+      const fixture = setup(buildUnavailable());
+      const el = fixture.nativeElement as HTMLElement;
+
+      // Assert
+      const chip = el.querySelector('.usage-widget__trigger .usage-widget__unavailable');
+      expect(chip).not.toBeNull();
+      expect(chip?.textContent?.trim()).toBe('Usage unavailable');
+      expect(el.querySelectorAll('.usage-widget__inline .usage-meter').length).toBe(0);
+      expect(el.querySelector('.usage-widget__collapsed')).toBeNull();
+    });
+
+    it('should label the trigger as unavailable for assistive technology', () => {
+      // Arrange / Act
+      const fixture = setup(buildUnavailable());
+      const trigger = (fixture.nativeElement as HTMLElement).querySelector('.usage-widget__trigger');
+
+      // Assert
+      expect(trigger?.getAttribute('aria-label')).toBe(
+        'Claude usage unavailable. Activate to see details.'
+      );
+    });
+
+    it('should offer an enabled Refresh action in the popover', () => {
+      // Arrange / Act
+      const fixture = setup(buildUnavailable());
+      const button = (fixture.nativeElement as HTMLElement).querySelector<HTMLButtonElement>(
+        '.usage-popover__refresh-btn'
+      );
+
+      // Assert
+      expect(button).not.toBeNull();
+      expect(button?.disabled).toBe(false);
+      expect(button?.textContent?.trim()).toBe('Refresh');
+    });
+
+    it('should show a failure line instead of "As of" and no limit rows in the popover', () => {
+      // Arrange / Act
+      const fixture = setup(buildUnavailable());
+      const el = fixture.nativeElement as HTMLElement;
+
+      // Assert
+      const failed = el.querySelector('.usage-popover__asof--failed');
+      expect(failed?.textContent).toContain("Couldn't load usage.");
+      expect(el.querySelectorAll('.usage-popover__limit').length).toBe(0);
+      expect(el.querySelector('.usage-popover__credits')).toBeNull();
+    });
+
+    it('should show the normal meters once a later poll succeeds', () => {
+      // Arrange
+      TestBed.resetTestingModule();
+      const mock = createMockUsageService(buildUnavailable());
+      TestBed.configureTestingModule({
+        imports: [UsageWidgetComponent],
+        providers: [{ provide: UsageService, useValue: mock }],
+      });
+      const fixture = TestBed.createComponent(UsageWidgetComponent);
+      fixture.detectChanges();
+
+      // Act
+      mock.snapshot.set(buildSnapshot());
+      fixture.detectChanges();
+
+      // Assert
+      const el = fixture.nativeElement as HTMLElement;
+      expect(el.querySelector('.usage-widget__unavailable')).toBeNull();
+      expect(el.querySelectorAll('.usage-widget__inline .usage-meter').length).toBe(2);
+      expect(el.querySelector('.usage-widget--failed')).toBeNull();
+    });
+  });
 });

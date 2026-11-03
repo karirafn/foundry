@@ -3,11 +3,16 @@ namespace Foundry.Modules.Credentials.Contracts;
 /// <summary>
 /// Wire DTO for <c>GET /api/credentials/usage</c>.
 /// ASP.NET Core's default STJ serializer camelCases all property names on the wire.
+/// <para>
+/// A null <see cref="CapturedAt"/> means usage is unavailable: no poll has succeeded yet and the
+/// last attempt (at <see cref="LastRefreshFailedAt"/>) failed. <see cref="Limits"/> is then empty.
+/// This differs from 204 No Content, which means there is nothing to report.
+/// </para>
 /// </summary>
 public sealed record UsageSnapshotResponse(
     IReadOnlyList<UsageRateLimitResponse> Limits,
     UsageExtraCreditsResponse? ExtraUsage,
-    DateTimeOffset CapturedAt,
+    DateTimeOffset? CapturedAt,
     string AccountEmail,
     DateTimeOffset? LastRefreshFailedAt);
 

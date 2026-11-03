@@ -232,7 +232,7 @@ public sealed class RequestRefreshAsync : IAsyncDisposable
         _state.SetSnapshot(new UsageSnapshotBuilder()
             .WithCapturedAt(DateTimeOffset.UtcNow.AddSeconds(-5))
             .Build());
-        _state.MarkRefreshFailed(DateTimeOffset.UtcNow);
+        _state.MarkRefreshFailed("user@example.com", DateTimeOffset.UtcNow);
         UsagePollCoordinator sut = BuildCoordinator();
 
         // Act

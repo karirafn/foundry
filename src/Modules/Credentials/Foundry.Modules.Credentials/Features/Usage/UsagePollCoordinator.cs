@@ -122,7 +122,8 @@ internal sealed class UsagePollCoordinator(
     private static bool IsWithinRefreshFloor(UsageSnapshot? current, DateTimeOffset now)
         => current is not null
             && current.LastRefreshFailedAt is null
-            && now - current.CapturedAt < RefreshFloor;
+            && current.CapturedAt is { } capturedAt
+            && now - capturedAt < RefreshFloor;
 
     /// <summary>Starts a poll and tracks it as in flight. Caller must hold <see cref="_gate"/>.</summary>
     private Task<UsageSnapshot?> StartPollLocked(CancellationToken cancellationToken)
@@ -194,9 +195,9 @@ internal sealed class UsagePollCoordinator(
         if (orchestratorResult is Result<string>.Failure failure)
         {
             logger.LogWarning(
-                "Usage report orchestrator failed: {Error}. Retaining last good snapshot.",
+                "Usage report orchestrator failed: {Error}. Retaining last good snapshot, if any.",
                 failure.Error.Message);
-            return HandleFailure(capturedAt);
+            return HandleFailure(accountEmail, capturedAt);
         }
 
         string log = ((Result<string>.Success)orchestratorResult).Value;
@@ -247,10 +248,10 @@ internal sealed class UsagePollCoordinator(
         UsageSnapshot? HandleUnparseable(string output, DateTimeOffset failedAt)
         {
             logger.LogWarning(
-                "Usage report output was unparseable. Retaining last good snapshot. Output sample: {OutputSample}",
+                "Usage report output was unparseable. Retaining last good snapshot, if any. Output sample: {OutputSample}",
                 BuildOutputSample(output));
 
-            return HandleFailure(failedAt);
+            return HandleFailure(accountEmail, failedAt);
         }
     }
 
@@ -272,9 +273,9 @@ internal sealed class UsagePollCoordinator(
             : redacted;
     }
 
-    private UsageSnapshot? HandleFailure(DateTimeOffset failedAt)
+    private UsageSnapshot? HandleFailure(string accountEmail, DateTimeOffset failedAt)
     {
-        stateMutator.MarkRefreshFailed(failedAt);
+        stateMutator.MarkRefreshFailed(accountEmail, failedAt);
         UsageSnapshot? current = state.Current;
 
         _ = TryBroadcastAsync(current, CancellationToken.None);

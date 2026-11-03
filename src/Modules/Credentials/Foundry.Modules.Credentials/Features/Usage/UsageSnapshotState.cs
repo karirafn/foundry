@@ -8,7 +8,11 @@ internal interface IUsageSnapshotState
 internal interface IUsageSnapshotStateMutator
 {
     void SetSnapshot(UsageSnapshot snapshot);
-    void MarkRefreshFailed(DateTimeOffset failedAt);
+    /// <summary>
+    /// Records a failed poll. Retains the last good snapshot when one exists; otherwise stores an
+    /// unavailable snapshot for <paramref name="accountEmail"/> so the failure is observable.
+    /// </summary>
+    void MarkRefreshFailed(string accountEmail, DateTimeOffset failedAt);
     void Clear();
 }
 
@@ -36,16 +40,13 @@ internal sealed class UsageSnapshotState : IUsageSnapshotState, IUsageSnapshotSt
         }
     }
 
-    public void MarkRefreshFailed(DateTimeOffset failedAt)
+    public void MarkRefreshFailed(string accountEmail, DateTimeOffset failedAt)
     {
         lock (_lock)
         {
-            if (_current is null)
-            {
-                return;
-            }
-
-            _current = _current with { LastRefreshFailedAt = failedAt };
+            _current = _current is null
+                ? UsageSnapshot.Unavailable(accountEmail, failedAt)
+                : _current with { LastRefreshFailedAt = failedAt };
         }
     }
 

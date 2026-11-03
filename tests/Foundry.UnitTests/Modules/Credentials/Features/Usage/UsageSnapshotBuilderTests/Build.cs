@@ -22,7 +22,7 @@ public sealed class Build
         snapshot.ShouldSatisfyAllConditions(
             () => snapshot.AccountEmail.ShouldNotBeNullOrEmpty(),
             () => snapshot.Limits.ShouldNotBeEmpty(),
-            () => snapshot.CapturedAt.ShouldBeGreaterThan(DateTimeOffset.MinValue),
+            () => snapshot.CapturedAt.ShouldNotBeNull().ShouldBeGreaterThan(DateTimeOffset.MinValue),
             () => snapshot.LastRefreshFailedAt.ShouldBeNull());
     }
 

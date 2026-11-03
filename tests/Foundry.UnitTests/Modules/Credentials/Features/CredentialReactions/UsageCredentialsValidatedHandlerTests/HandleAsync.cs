@@ -36,7 +36,7 @@ public sealed class HandleAsync
 
         public void SetSnapshot(UsageSnapshot snapshot) { }
 
-        public void MarkRefreshFailed(DateTimeOffset failedAt) { }
+        public void MarkRefreshFailed(string accountEmail, DateTimeOffset failedAt) { }
 
         public void Clear() => ClearCallCount++;
     }
@@ -103,7 +103,7 @@ public sealed class HandleAsync
     private sealed class SequencedSpy(List<string> order) : IUsageSnapshotStateMutator
     {
         public void SetSnapshot(UsageSnapshot snapshot) { }
-        public void MarkRefreshFailed(DateTimeOffset failedAt) { }
+        public void MarkRefreshFailed(string accountEmail, DateTimeOffset failedAt) { }
         public void Clear() => order.Add("clear");
     }
 

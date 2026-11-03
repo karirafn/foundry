@@ -94,6 +94,23 @@ describe('UsageService', () => {
     expect(svc.snapshot()).toEqual(snapshot);
   });
 
+  it('should keep an unavailable snapshot (null capturedAt) distinct from 204', () => {
+    // Arrange
+    const { svc, http } = setup();
+    const unavailable = buildSnapshot({
+      limits: [],
+      extraUsage: null,
+      capturedAt: null,
+      lastRefreshFailedAt: '2026-10-30T01:05:00Z',
+    });
+
+    // Act
+    http.expectOne('/api/credentials/usage').flush(unavailable);
+
+    // Assert
+    expect(svc.snapshot()).toEqual(unavailable);
+  });
+
   // Cycle 3: 204 No Content maps to null snapshot
   it('should set snapshot to null when GET returns 204 No Content', () => {
     // Arrange
@@ -120,6 +137,23 @@ describe('UsageService', () => {
 
     // Assert
     expect(svc.snapshot()).toEqual(snapshot);
+  });
+
+  it('should keep an unavailable snapshot (null capturedAt) distinct from 204', () => {
+    // Arrange
+    const { svc, http } = setup();
+    const unavailable = buildSnapshot({
+      limits: [],
+      extraUsage: null,
+      capturedAt: null,
+      lastRefreshFailedAt: '2026-10-30T01:05:00Z',
+    });
+
+    // Act
+    http.expectOne('/api/credentials/usage').flush(unavailable);
+
+    // Assert
+    expect(svc.snapshot()).toEqual(unavailable);
   });
 
   // Cycle 5: hub UsageSnapshotUpdated push with null clears the signal

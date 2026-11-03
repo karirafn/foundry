@@ -44,6 +44,21 @@
   gap: 2px;
 }
 
+// ─── Unavailable chip (no successful poll yet, last attempt failed) ─────────
+
+.usage-widget__unavailable {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--fd-spacing-xs);
+  color: var(--fd-text-warning);
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.usage-widget__unavailable-icon {
+  flex-shrink: 0;
+}
+
 // ─── Collapsed single figure (narrow layout) ────────────────────────────────
 
 .usage-widget__collapsed {

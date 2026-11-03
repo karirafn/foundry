@@ -19,7 +19,11 @@ export interface UsageExtraCredits {
 export interface UsageSnapshot {
   readonly limits: UsageRateLimit[];
   readonly extraUsage: UsageExtraCredits | null;
-  readonly capturedAt: string;
+  /**
+   * Null when usage is unavailable: no poll has succeeded yet and the last attempt failed
+   * (lastRefreshFailedAt is then set and limits is empty).
+   */
+  readonly capturedAt: string | null;
   readonly accountEmail: string;
   readonly lastRefreshFailedAt: string | null;
 }
