@@ -1664,7 +1664,7 @@ public sealed class Build
     }
 
     [Fact]
-    public void WhenInstallsDockerTrue_PrePrSectionContainsDockerHostAndIntegrationTestAndPassesPhrasing()
+    public void WhenInstallsDockerTrue_PrePrSectionOpensPullRequestWheneverBranchHasCommitsEvenWhenTestsFail()
     {
         // Arrange
 
@@ -1680,7 +1680,7 @@ public sealed class Build
         result.ShouldSatisfyAllConditions(
             () => result.ShouldContain("DOCKER_HOST"),
             () => result.ShouldContain("integration tests"),
-            () => result.ShouldContain("only when everything passes"));
+            () => result.ShouldContain("open (or reuse) the pull request whenever the branch has commits"));
     }
 
     [Fact]
@@ -1703,7 +1703,7 @@ public sealed class Build
     }
 
     [Fact]
-    public void WhenInstallsDockerTrue_PrePrSectionContainsStillFailingBranchPhrasing()
+    public void WhenInstallsDockerTrue_PrePrSectionListsRemainingFailuresInDescriptionGroupedByKind()
     {
         // Arrange
 
@@ -1717,9 +1717,29 @@ public sealed class Build
 
         // Assert — still-failing branch
         result.ShouldSatisfyAllConditions(
-            () => result.ShouldContain("no pull request"),
-            () => result.ShouldContain("report"),
-            () => result.ShouldContain("also fail on the default branch"));
+            () => result.ShouldContain("list every still-failing test in the pull request description"),
+            () => result.ShouldContain("new (passes on the default branch)"),
+            () => result.ShouldContain("pre-existing (fails the same way on the default branch)"),
+            () => result.ShouldContain("not compared (the default-branch comparison could not be completed)"));
+    }
+
+    [Fact]
+    public void WhenInstallsDockerTrue_PrePrSectionContainsNoInstructionToWithholdPullRequest()
+    {
+        // Arrange
+
+        // Act
+        Result<string> buildResult = SystemPromptBuilder.Build(
+            1, DefaultBranchNaming, DefaultSystemPromptTemplate,
+            new DispatchContext.Fresh("feat/1-title"),
+            "https://api.github.com/repos/owner/repo/issues/1",
+            timeoutMinutes: 120, installsDocker: true);
+        string result = buildResult.ShouldBeOfType<Result<string>.Success>().Value;
+
+        // Assert
+        result.ShouldSatisfyAllConditions(
+            () => result.ShouldNotContain("open no pull request"),
+            () => result.ShouldNotContain("only when everything passes"));
     }
 
     [Fact]
