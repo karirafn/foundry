@@ -6,6 +6,15 @@
 
 ENTRYPOINT="$(cd "$(dirname "$BATS_TEST_FILENAME")/.." && pwd)/entrypoint.sh"
 
+# Testcontainers connection environment owned by start_rootless_dockerd.
+TESTCONTAINERS_CONNECTION_VARS=(
+    TESTCONTAINERS_HOST_OVERRIDE
+    TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE
+    TESTCONTAINERS_RYUK_DISABLED
+    TESTCONTAINERS_RYUK_CONTAINER_IMAGE
+    TESTCONTAINERS_HUB_IMAGE_NAME_PREFIX
+)
+
 setup() {
     # Create a per-test fake-bin directory and prepend it to PATH so fakes
     # shadow real binaries without touching committed files.
@@ -183,6 +192,20 @@ EOF
     # Call directly (not via run) so exported vars are visible
     start_rootless_dockerd
     [ -z "${TESTCONTAINERS_HOST_OVERRIDE:-}" ]
+}
+
+@test "start_rootless_dockerd unsets inherited Testcontainers connection variables when dockerd-rootless.sh is absent" {
+    local name
+    for name in "${TESTCONTAINERS_CONNECTION_VARS[@]}"; do
+        export "$name=inherited.example"
+    done
+
+    # Call directly (not via run) so exported vars are visible
+    start_rootless_dockerd
+
+    for name in "${TESTCONTAINERS_CONNECTION_VARS[@]}"; do
+        [ -z "${!name:-}" ] || { echo "$name survived: ${!name}" >&2; return 1; }
+    done
 }
 
 # ---------------------------------------------------------------------------
@@ -650,6 +673,42 @@ EOF
     local recorded_override
     recorded_override="$(cat "$override_file")"
     [ -z "$recorded_override" ]
+}
+
+# Fake claude that records, one NAME=value line per Testcontainers connection variable
+# (value empty if unset), the environment it was invoked with.
+make_fake_claude_record_testcontainers_connection_env() {
+    local record_file="$BATS_TEST_TMPDIR/claude_testcontainers_env"
+    {
+        echo '#!/bin/bash'
+        local name
+        for name in "${TESTCONTAINERS_CONNECTION_VARS[@]}"; do
+            echo "printf '%s=%s\\n' '$name' \"\${$name:-}\" >> '$record_file'"
+        done
+        echo 'exit 0'
+    } > "$FAKE_BIN_DIR/claude"
+    chmod +x "$FAKE_BIN_DIR/claude"
+}
+
+@test "degraded path (dockerd fail): ambient Testcontainers connection variables are not passed to claude" {
+    set_required_env
+    make_fake_git
+    make_fake_claude_record_testcontainers_connection_env
+    make_fake_dockerd_fail
+    make_fake_docker_unhealthy
+
+    local name
+    for name in "${TESTCONTAINERS_CONNECTION_VARS[@]}"; do
+        export "$name=inherited.example"
+    done
+
+    run bash "$ENTRYPOINT"
+
+    [ "$status" -eq 0 ]
+    local record_file="$BATS_TEST_TMPDIR/claude_testcontainers_env"
+    [ -f "$record_file" ]
+    # Every variable recorded as empty: no line carries an inherited value
+    ! grep -q 'inherited.example' "$record_file"
 }
 
 # ---------------------------------------------------------------------------
