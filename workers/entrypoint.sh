@@ -153,7 +153,8 @@ merge_host_hooks() {
 # start_rootless_dockerd
 #
 # Starts rootless dockerd in the background and polls until its socket is ready.
-# Exports DOCKER_HOST so subsequent commands (e.g. Testcontainers) can reach it.
+# Exports DOCKER_HOST so subsequent commands (e.g. Testcontainers) can reach it, and
+# TESTCONTAINERS_HOST_OVERRIDE=localhost so they connect to published ports there.
 # Is a no-op when dockerd-rootless.sh is not on PATH (non-Docker image builds).
 #
 # Tunable via env vars (defaults chosen for typical container cold-start):
@@ -161,10 +162,11 @@ merge_host_hooks() {
 #   DOCKER_RETRY_SLEEP — seconds between attempts           (default: 1)
 # ---------------------------------------------------------------------------
 start_rootless_dockerd() {
-    # Unconditionally own DOCKER_HOST so no inherited ambient value survives any
-    # exit path (success, no-dockerd, or daemon failure/degraded mode).
-    # On success the function re-exports it below; on all other paths it stays unset.
+    # Unconditionally own DOCKER_HOST and TESTCONTAINERS_HOST_OVERRIDE so no inherited
+    # ambient value survives any exit path (success, no-dockerd, or daemon failure/degraded mode).
+    # On success the function re-exports them below; on all other paths they stay unset.
     unset DOCKER_HOST
+    unset TESTCONTAINERS_HOST_OVERRIDE
 
     if ! command -v dockerd-rootless.sh > /dev/null 2>&1; then
         return 0
@@ -209,6 +211,11 @@ start_rootless_dockerd() {
         # Poll daemon readiness — check the API, not just socket-file existence
         if docker -H "$socket" version > /dev/null 2>&1; then
             export DOCKER_HOST="$socket"
+            # Testcontainers inside a container resolves the host to the default bridge
+            # gateway (172.17.0.1), which under rootless dockerd lives in rootlesskit's network
+            # namespace; published ports are forwarded only to the worker's own localhost, so
+            # the gateway refuses connections (breaking Ryuk and every mapped-port client).
+            export TESTCONTAINERS_HOST_OVERRIDE=localhost
             # DOCKER_HOST is a unix:// URI. Testcontainers .NET (ResourceReaper / Ryuk) derives
             # the Docker socket bind-mount path from the scheme — when the scheme is "unix" it
             # extracts the absolute path from the URI, so no TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE

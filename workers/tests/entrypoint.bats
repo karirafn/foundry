@@ -100,6 +100,17 @@ EOF
     [[ "$output" == *"Rootless dockerd is ready"* ]]
 }
 
+@test "start_rootless_dockerd exports TESTCONTAINERS_HOST_OVERRIDE=localhost when daemon becomes ready" {
+    make_fake_dockerd_background
+    make_fake_docker_healthy
+
+    # Call in the same shell so we can inspect exported vars
+    start_rootless_dockerd
+    # Published ports of nested containers are reachable only on the worker's
+    # localhost, not on the bridge gateway Testcontainers would otherwise pick.
+    [ "${TESTCONTAINERS_HOST_OVERRIDE:-}" = "localhost" ]
+}
+
 @test "start_rootless_dockerd sets DOCKER_HOST to the socket under XDG_RUNTIME_DIR" {
     make_fake_dockerd_background
     make_fake_docker_healthy
@@ -164,6 +175,14 @@ EOF
     # Call directly (not via run) so exported vars are visible
     start_rootless_dockerd
     [ -z "${DOCKER_HOST:-}" ]
+}
+
+@test "start_rootless_dockerd does not export TESTCONTAINERS_HOST_OVERRIDE when dockerd-rootless.sh is absent" {
+    export TESTCONTAINERS_HOST_OVERRIDE="inherited.example"
+
+    # Call directly (not via run) so exported vars are visible
+    start_rootless_dockerd
+    [ -z "${TESTCONTAINERS_HOST_OVERRIDE:-}" ]
 }
 
 # ---------------------------------------------------------------------------
@@ -593,6 +612,44 @@ EOF
     local recorded_docker_host
     recorded_docker_host="$(cat "$docker_host_file")"
     [ -z "$recorded_docker_host" ]
+}
+
+# Write a fake claude that records the value of TESTCONTAINERS_HOST_OVERRIDE (empty string
+# if unset) at invocation time into a marker file so the test can assert it was cleared.
+make_fake_claude_record_testcontainers_host() {
+    local override_file="$BATS_TEST_TMPDIR/claude_testcontainers_host"
+    cat > "$FAKE_BIN_DIR/claude" <<EOF
+#!/bin/bash
+# Fake claude: record TESTCONTAINERS_HOST_OVERRIDE (empty if unset) and exit 0
+printf '%s' "\${TESTCONTAINERS_HOST_OVERRIDE:-}" > "${override_file}"
+exit 0
+EOF
+    chmod +x "$FAKE_BIN_DIR/claude"
+}
+
+@test "degraded path (dockerd fail): ambient TESTCONTAINERS_HOST_OVERRIDE is not passed to claude" {
+    set_required_env
+    make_fake_git
+    make_fake_claude_record_testcontainers_host
+    make_fake_dockerd_fail
+    make_fake_docker_unhealthy
+
+    # Inject an ambient override that would send Testcontainers to a dead host
+    export TESTCONTAINERS_HOST_OVERRIDE="inherited.example"
+
+    run bash "$ENTRYPOINT"
+
+    # Entrypoint must succeed (degraded mode)
+    [ "$status" -eq 0 ]
+
+    # claude must have been invoked — marker file must exist
+    local override_file="$BATS_TEST_TMPDIR/claude_testcontainers_host"
+    [ -f "$override_file" ]
+
+    # The override seen by claude must be empty — not the injected value
+    local recorded_override
+    recorded_override="$(cat "$override_file")"
+    [ -z "$recorded_override" ]
 }
 
 # ---------------------------------------------------------------------------
