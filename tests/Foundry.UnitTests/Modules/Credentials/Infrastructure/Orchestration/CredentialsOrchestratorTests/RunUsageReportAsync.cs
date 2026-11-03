@@ -42,6 +42,30 @@ public sealed class RunUsageReportAsync
     }
 
     [Fact]
+    public async Task WhenLogLinesCarryDockerTimestamps_StripsPrefixSoParserReturnsParsed()
+    {
+        // Arrange — the real framing StreamLogsAsync delivers (Timestamps = true)
+        FakeDockerContainerRuntime runtime = new FakeDockerContainerRuntime()
+            .WithStreamLogLines(
+                """2026-11-03T08:36:12.901234567Z {"type":"system","subtype":"init","cwd":"/workspace","session_id":"abc123","tools":[],"mcp_servers":[],"model":"claude-opus-4-8","permissionMode":"default","apiKeySource":"none"}""",
+                """2026-11-03T08:36:13.998877665Z {"type":"assistant","message":{"id":"msg_01","type":"message","role":"assistant","content":[{"type":"text","text":"ok"}],"stop_reason":"end_turn","usage":{"input_tokens":10,"output_tokens":3}},"parent_tool_use_id":null,"session_id":"abc123"}""",
+                """2026-11-03T08:36:14.124595895Z {"type":"rate_limit_event","rate_limit_info":{"status":"allowed","resetsAt":1793399400,"rateLimitType":"five_hour","overageStatus":"allowed","isUsingOverage":false,"unifiedWindows":{"five_hour":{"utilization":0.12,"resetsAt":1793399400},"seven_day":{"utilization":0.34,"resetsAt":1793527200}}},"uuid":"dab406c8-9ba0-40d4-b473-fcbdabd857e3","session_id":"abc123"}""",
+                """2026-11-03T08:36:14.250000000Z {"type":"result","subtype":"success","is_error":false,"duration_ms":1350,"duration_api_ms":1000,"num_turns":1,"result":"ok","total_cost_usd":0.001,"usage":{"input_tokens":10,"output_tokens":3},"session_id":"abc123"}""");
+        CredentialsOrchestrator sut = BuildSut(runtime);
+
+        // Act
+        Result<string> result = await sut.RunUsageReportAsync(DefaultSpec(), CancellationToken.None);
+
+        // Assert — prefix-free lines that the usage parser accepts
+        string log = result.ShouldBeOfType<Result<string>.Success>().Value;
+        log.ShouldNotContain("2026-11-03T08:36:");
+        UsageParseResult parsed = UsageReportParser.Parse(log, "user@example.com", DateTimeOffset.UnixEpoch);
+        UsageParseResult.Parsed success = parsed.ShouldBeOfType<UsageParseResult.Parsed>();
+        success.Snapshot.Limits.ShouldContain(l => l.Kind == "session");
+        success.Snapshot.Limits.ShouldContain(l => l.Kind == "weekly_all");
+    }
+
+    [Fact]
     public async Task WhenStarted_UsesLoginImageName()
     {
         // Arrange

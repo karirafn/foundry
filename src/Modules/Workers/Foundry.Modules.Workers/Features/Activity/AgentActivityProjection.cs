@@ -48,7 +48,7 @@ internal sealed partial class AgentActivityProjection
     /// </summary>
     public bool Apply(string line, DateTimeOffset receivedAt)
     {
-        (string prefix, string body) = AgentTranscriptFormatter.SplitDockerTimestamp(line);
+        (string prefix, string body) = DockerLogLine.Split(line);
         string trimmed = body.Trim();
 
         if (trimmed.Length == 0 || trimmed[0] != '{')
@@ -64,7 +64,7 @@ internal sealed partial class AgentActivityProjection
         }
 
         DateTimeOffset at = AgentTranscriptFormatter.ReadTimestamp(evt["timestamp"])
-            ?? AgentTranscriptFormatter.ParseDockerTimestamp(prefix)
+            ?? DockerLogLine.ParseTimestamp(prefix)
             ?? receivedAt;
 
         if (LastEventAt is null || at > LastEventAt)

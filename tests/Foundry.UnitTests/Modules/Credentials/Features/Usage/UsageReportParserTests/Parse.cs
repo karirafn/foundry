@@ -57,10 +57,36 @@ public sealed class Parse
         {"type":"result","subtype":"success","is_error":false,"duration_ms":100,"result":"ok","session_id":"abc123"}
         """;
 
-    /// <summary>A log with malformed JSON on one of the lines.</summary>
+    /// <summary>
+    /// Valid stream-json followed by a tail line truncated by the log-length cap. The truncated
+    /// line is skipped as non-JSON; the remaining lines carry no rate_limit_event.
+    /// </summary>
     private const string MalformedJsonLog = """
         {"type":"system","subtype":"init"}
         {INVALID JSON CANNOT PARSE THIS
+        """;
+
+    /// <summary>
+    /// Plain-text stderr notices interleaved with a valid stream-json turn (the CLI merges stderr
+    /// into the container log).
+    /// </summary>
+    private const string InterleavedStderrLog = """
+        Warning: no stdin data received in 3s, proceeding without it.
+        {"type":"system","subtype":"init","session_id":"abc123"}
+        some other stderr notice
+        {"type":"rate_limit_event","rate_limit_info":{"status":"allowed","resetsAt":1793399400,"rateLimitType":"five_hour","unifiedWindows":{"five_hour":{"utilization":0.25,"resetsAt":1793399400},"seven_day":{"utilization":0.40,"resetsAt":1793527200}}},"uuid":"ddd","session_id":"abc123"}
+        {"type":"result","subtype":"success","is_error":false,"duration_ms":100,"result":"ok","session_id":"abc123"}
+        """;
+
+    /// <summary>Output with no JSON line at all — the CLI failed authentication.</summary>
+    private const string AuthErrorTextOnlyLog = """
+        Invalid API key · Please run /login
+        """;
+
+    /// <summary>A rate_limit_event whose rate_limit_info is not an object.</summary>
+    private const string MalformedRateLimitInfoLog = """
+        {"type":"system","subtype":"init","session_id":"abc123"}
+        {"type":"rate_limit_event","rate_limit_info":"broken","session_id":"abc123"}
         """;
 
     /// <summary>
@@ -348,11 +374,49 @@ public sealed class Parse
     // ---------------------------------------------------------------------------
 
     [Fact]
-    public void WhenMalformedJson_ReturnsUnparseable()
+    public void WhenTruncatedJsonLineAmongValidLines_SkipsItAndReturnsNoUsageReport()
     {
         // Arrange
         // Act
         UsageParseResult result = UsageReportParser.Parse(MalformedJsonLog, AccountEmail, CapturedAt);
+
+        // Assert — the truncated line is skipped; the valid lines carry no rate_limit_event
+        result.ShouldBeOfType<UsageParseResult.NoUsageReport>();
+    }
+
+    [Fact]
+    public void WhenNonJsonLinesInterleaved_SkipsThemAndReturnsParsed()
+    {
+        // Arrange
+        // Act
+        UsageParseResult result = UsageReportParser.Parse(InterleavedStderrLog, AccountEmail, CapturedAt);
+
+        // Assert
+        UsageParseResult.Parsed parsed = result.ShouldBeOfType<UsageParseResult.Parsed>();
+        parsed.Snapshot.Limits.ShouldContain(l => l.Kind == "session");
+        parsed.Snapshot.Limits.ShouldContain(l => l.Kind == "weekly_all");
+    }
+
+    [Theory]
+    [InlineData(AuthErrorTextOnlyLog)]
+    [InlineData("")]
+    [InlineData("\n  \n")]
+    public void WhenOutputHasNoJsonLine_ReturnsUnparseable(string log)
+    {
+        // Arrange
+        // Act
+        UsageParseResult result = UsageReportParser.Parse(log, AccountEmail, CapturedAt);
+
+        // Assert — a failed CLI run must retain the last good snapshot, not clear it
+        result.ShouldBeOfType<UsageParseResult.Unparseable>();
+    }
+
+    [Fact]
+    public void WhenRateLimitInfoIsNotAnObject_ReturnsUnparseable()
+    {
+        // Arrange
+        // Act
+        UsageParseResult result = UsageReportParser.Parse(MalformedRateLimitInfoLog, AccountEmail, CapturedAt);
 
         // Assert
         result.ShouldBeOfType<UsageParseResult.Unparseable>();

@@ -48,7 +48,7 @@ internal sealed partial class AgentTranscriptFormatter
     /// </summary>
     public IReadOnlyList<string> FormatLine(string line)
     {
-        (string prefix, string body) = SplitDockerTimestamp(line);
+        (string prefix, string body) = DockerLogLine.Split(line);
         string trimmed = body.Trim();
 
         if (trimmed.Length == 0 || trimmed[0] != '{')
@@ -63,7 +63,7 @@ internal sealed partial class AgentTranscriptFormatter
             return [line];
         }
 
-        DateTimeOffset? at = ReadTimestamp(evt["timestamp"]) ?? ParseDockerTimestamp(prefix);
+        DateTimeOffset? at = ReadTimestamp(evt["timestamp"]) ?? DockerLogLine.ParseTimestamp(prefix);
         string indent = SubagentIndent(evt);
 
         List<string> rendered = type switch
@@ -383,35 +383,7 @@ internal sealed partial class AgentTranscriptFormatter
                 : null;
     }
 
-    internal static DateTimeOffset? ParseDockerTimestamp(string prefix)
-    {
-        return prefix.Length > 0
-            && DateTimeOffset.TryParse(
-                prefix.Trim(),
-                CultureInfo.InvariantCulture,
-                DateTimeStyles.RoundtripKind,
-                out DateTimeOffset parsed)
-                ? parsed
-                : null;
-    }
-
-    internal static (string Prefix, string Body) SplitDockerTimestamp(string line)
-    {
-        Match match = DockerTimestampPrefixPattern().Match(line);
-
-        return match.Success
-            ? (line[..match.Length], line[match.Length..])
-            : (string.Empty, line);
-    }
-
     private readonly record struct PendingTool(string Name, DateTimeOffset? StartedAt);
-
-    // Matches a Docker log timestamp prefix: RFC3339Nano date-time followed by a space.
-    [GeneratedRegex(
-        @"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2}) ",
-        RegexOptions.ExplicitCapture,
-        matchTimeoutMilliseconds: 1000)]
-    private static partial Regex DockerTimestampPrefixPattern();
 
     [GeneratedRegex(@"\s+", RegexOptions.None, matchTimeoutMilliseconds: 1000)]
     private static partial Regex WhitespaceRunPattern();

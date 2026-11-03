@@ -45,9 +45,9 @@ public sealed class PollAsync : IAsyncDisposable
         {"type":"result","subtype":"success","is_error":false,"duration_ms":500,"duration_api_ms":400,"num_turns":1,"result":"ok","total_cost_usd":0.001,"session_id":"abc123"}
         """;
 
-    /// <summary>A log with malformed JSON → Unparseable.</summary>
+    /// <summary>Output with no stream-json line at all (CLI auth error) → Unparseable.</summary>
     private const string MalformedJsonLog = """
-        {"type":"system","subtype":"init"}
+        Invalid API key · Please run /login
         {INVALID JSON CANNOT PARSE THIS
         """;
 
@@ -101,7 +101,9 @@ public sealed class PollAsync : IAsyncDisposable
         return services.BuildServiceProvider();
     }
 
-    private static UsagePollCoordinator BuildCoordinator(ServiceProvider sp)
+    private static UsagePollCoordinator BuildCoordinator(
+        ServiceProvider sp,
+        ILogger<UsagePollCoordinator>? logger = null)
         => new(
             sp.GetRequiredService<IServiceScopeFactory>(),
             sp.GetRequiredService<ICredentialsOrchestrator>(),
@@ -109,7 +111,7 @@ public sealed class PollAsync : IAsyncDisposable
             sp.GetRequiredService<IUsageSnapshotState>(),
             sp.GetRequiredService<IUsageSnapshotStateMutator>(),
             sp.GetRequiredService<IUsageSnapshotBroadcaster>(),
-            NullLogger<UsagePollCoordinator>.Instance);
+            logger ?? NullLogger<UsagePollCoordinator>.Instance);
 
     private static async Task SeedOAuthAccountAsync(ServiceProvider sp, string email = "user@example.com")
     {
@@ -133,6 +135,42 @@ public sealed class PollAsync : IAsyncDisposable
     // ---------------------------------------------------------------------------
     // Test doubles
     // ---------------------------------------------------------------------------
+
+    private sealed class WarningCapturingLogger : ILogger<UsagePollCoordinator>
+    {
+        private readonly List<string> _warnings = [];
+
+        public IReadOnlyList<string> Warnings
+        {
+            get
+            {
+                lock (_warnings)
+                {
+                    return [.. _warnings];
+                }
+            }
+        }
+
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+
+        public bool IsEnabled(LogLevel logLevel) => true;
+
+        public void Log<TState>(
+            LogLevel logLevel,
+            EventId eventId,
+            TState state,
+            Exception? exception,
+            Func<TState, Exception?, string> formatter)
+        {
+            if (logLevel == LogLevel.Warning)
+            {
+                lock (_warnings)
+                {
+                    _warnings.Add(formatter(state, exception));
+                }
+            }
+        }
+    }
 
     internal sealed class CapturingUsageSnapshotBroadcaster : IUsageSnapshotBroadcaster
     {
@@ -414,6 +452,54 @@ public sealed class PollAsync : IAsyncDisposable
             broadcaster.LastSent.ShouldNotBeNull();
             broadcaster.LastSent.LastRefreshFailedAt.ShouldNotBeNull();
         }
+    }
+
+    [Fact]
+    public async Task WhenUnparseable_LogsWarningWithRedactedOutputSample()
+    {
+        // Arrange: no stream-json at all, with a token-shaped secret in the output
+        const string secretLog = "Error: credential sk-ant-oat01-SECRETVALUE123 rejected\nPlease run /login";
+        FakeCredentialsOrchestrator orchestrator = new FakeCredentialsOrchestrator()
+            .WithUsageReportLogs(secretLog);
+        WarningCapturingLogger logger = new();
+
+        ServiceProvider sp = BuildServiceProvider(_connection, orchestrator, new FakeLoginSessionState());
+        await using (sp)
+        {
+            await SeedOAuthAccountAsync(sp);
+            UsagePollCoordinator sut = BuildCoordinator(sp, logger);
+
+            // Act
+            await sut.PollAsync(TestContext.Current.CancellationToken);
+
+            // Assert — one warning carrying a redacted sample of the output
+            string warning = logger.Warnings.ShouldHaveSingleItem();
+            warning.ShouldContain("Please run /login");
+            warning.ShouldNotContain("SECRETVALUE123");
+        }
+    }
+
+    [Fact]
+    public void BuildOutputSample_WhenOutputIsLong_TruncatesToMaxLength()
+    {
+        // Arrange
+        string output = new('x', UsagePollCoordinator.UnparseableSampleMaxLength * 3);
+
+        // Act
+        string sample = UsagePollCoordinator.BuildOutputSample(output);
+
+        // Assert — capped sample plus a single ellipsis marker
+        sample.Length.ShouldBe(UsagePollCoordinator.UnparseableSampleMaxLength + 1);
+    }
+
+    [Fact]
+    public void BuildOutputSample_WhenOutputIsEmpty_ReturnsEmptyMarker()
+    {
+        // Act
+        string sample = UsagePollCoordinator.BuildOutputSample("  \n ");
+
+        // Assert
+        sample.ShouldBe("<empty>");
     }
 
     // ---------------------------------------------------------------------------

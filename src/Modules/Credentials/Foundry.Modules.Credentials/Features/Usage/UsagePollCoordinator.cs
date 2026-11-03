@@ -2,6 +2,7 @@ using Foundry.Modules.Credentials.Domain.Entities;
 using Foundry.Modules.Credentials.Features.Login;
 using Foundry.Modules.Credentials.Infrastructure.Orchestration;
 using Foundry.Shared;
+using Foundry.Shared.Infrastructure.Docker;
 
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -41,6 +42,9 @@ internal sealed class UsagePollCoordinator(
     /// multiple tabs. Failed polls do not count — a refresh right after a failure is allowed.
     /// </summary>
     internal static readonly TimeSpan RefreshFloor = TimeSpan.FromSeconds(30);
+
+    /// <summary>Maximum length of the output sample logged when a usage report is unparseable.</summary>
+    internal const int UnparseableSampleMaxLength = 500;
 
     private readonly Lock _gate = new();
     private Task<UsageSnapshot?>? _inFlightTask;
@@ -202,7 +206,7 @@ internal sealed class UsagePollCoordinator(
         {
             UsageParseResult.Parsed parsed => HandleParsed(parsed.Snapshot),
             UsageParseResult.NoUsageReport => HandleNoUsageReport(),
-            UsageParseResult.Unparseable => HandleUnparseable(capturedAt),
+            UsageParseResult.Unparseable => HandleUnparseable(log, capturedAt),
             _ => throw new System.Diagnostics.UnreachableException(
                 $"Unexpected UsageParseResult: {parseResult.GetType().Name}"),
         };
@@ -240,10 +244,32 @@ internal sealed class UsagePollCoordinator(
             return null;
         }
 
-        UsageSnapshot? HandleUnparseable(DateTimeOffset failedAt)
+        UsageSnapshot? HandleUnparseable(string output, DateTimeOffset failedAt)
         {
+            logger.LogWarning(
+                "Usage report output was unparseable. Retaining last good snapshot. Output sample: {OutputSample}",
+                BuildOutputSample(output));
+
             return HandleFailure(failedAt);
         }
+    }
+
+    /// <summary>
+    /// Builds a short, redacted sample of the usage-report output for diagnostics. Redaction runs
+    /// before truncation so a secret cut at the boundary is still masked.
+    /// </summary>
+    internal static string BuildOutputSample(string output)
+    {
+        string redacted = SecretRedactor.Redact(output).Trim();
+
+        if (redacted.Length == 0)
+        {
+            return "<empty>";
+        }
+
+        return redacted.Length > UnparseableSampleMaxLength
+            ? string.Concat(redacted.AsSpan(0, UnparseableSampleMaxLength), "…")
+            : redacted;
     }
 
     private UsageSnapshot? HandleFailure(DateTimeOffset failedAt)
