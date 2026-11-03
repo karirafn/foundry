@@ -244,6 +244,10 @@ jobs:
               [ -n "${DOCKER_HOST:-}" ] || { echo "FAIL: DOCKER_HOST was not exported by start_rootless_dockerd"; exit 1; }
               echo "DOCKER_HOST=${DOCKER_HOST}"
 
+              echo "=== Asserting TESTCONTAINERS_HOST_OVERRIDE is set ===" >&2
+              [ -n "${TESTCONTAINERS_HOST_OVERRIDE:-}" ] || { echo "FAIL: TESTCONTAINERS_HOST_OVERRIDE was not exported by start_rootless_dockerd"; exit 1; }
+              echo "TESTCONTAINERS_HOST_OVERRIDE=${TESTCONTAINERS_HOST_OVERRIDE}"
+
               echo "=== Asserting docker version succeeds ===" >&2
               docker version || { echo "FAIL: docker version failed — daemon did not come up properly"; exit 1; }
 
@@ -258,7 +262,7 @@ jobs:
               # curl is present in the worker image (installed in Dockerfile.base).
               ok=0
               for i in $(seq 1 15); do
-                response="$(curl -sf http://127.0.0.1:18080/ 2>/dev/null || true)"
+                response="$(curl -sf http://${TESTCONTAINERS_HOST_OVERRIDE}:18080/ 2>/dev/null || true)"
                 if [ -n "$response" ]; then
                   echo "PASS: got response from nested container: ${response}"
                   ok=1

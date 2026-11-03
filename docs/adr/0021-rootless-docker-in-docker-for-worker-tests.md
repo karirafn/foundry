@@ -8,6 +8,8 @@ status: accepted
 
 > **2026-10-28 — Amended:** the allowance-set clause in Decision (`seccomp`/`apparmor` unconfined plus `/dev/fuse`), the fuse-overlayfs default, and the Consequences claim that Docker Desktop / WSL2 cannot run nested rootless DinD are replaced by [ADR 0079](0079-relaxed-allowances-for-nested-rootless-docker.md). These claims were false from the start, not drifted: no tested host ever produced a working daemon under the minimal set, and the image lacked binaries the daemon needs. The rejection of the host socket and `--privileged` stands.
 
+> **2026-11-03 — Amended:** the Decision's claim that Ryuk resolves under rootless "with no extra configuration" was false from the start, not drifted. Inside a worker Testcontainers resolves the container host to the default bridge gateway (`172.17.0.1`), which under rootless DinD lives in rootlesskit's network namespace and refuses connections to published ports, so `TESTCONTAINERS_HOST_OVERRIDE=127.0.0.1` is required (IPv4 loopback rather than the name `localhost`, which may resolve to `::1` first). The entrypoint now exports it alongside `DOCKER_HOST`.
+
 ## Context
 
 Workers run arbitrary repository code, including Testcontainers-based integration tests that need a Docker daemon (e.g. `Testcontainers.MsSql`).
@@ -56,6 +58,6 @@ This verifies AC2 and AC4, which have no automated coverage.
 
 1. Build a worker image with Docker enabled: `docker build --build-arg INSTALL_DOCKER=true --build-arg INSTALL_DOTNET=true -t foundry-worker:dind workers/`.
 2. Dispatch (or `docker run`) a worker against a repository whose integration tests use Testcontainers (e.g. a suite using `Testcontainers.MsSql`), with the rootless allowances: `--security-opt seccomp=unconfined --security-opt apparmor=unconfined --device /dev/fuse`.
-3. Confirm the entrypoint logs `Rootless dockerd is ready` before tests run, and that `dotnet test` creates containers against the nested daemon and the integration suite passes (AC2).
+3. Confirm the entrypoint logs `Rootless dockerd is ready` before tests run, that `TESTCONTAINERS_HOST_OVERRIDE=127.0.0.1` is exported alongside `DOCKER_HOST`, and that `dotnet test` creates containers against the nested daemon and the integration suite passes (AC2).
 4. After the suite finishes, confirm Ryuk has removed the spawned containers — `docker -H "$DOCKER_HOST" ps -a` inside the worker shows no leftover test or Ryuk containers (AC4).
 5. Confirm the host daemon is untouched: the worker never mounted `/var/run/docker.sock`, and host `docker ps` shows only the worker container itself (AC3).
