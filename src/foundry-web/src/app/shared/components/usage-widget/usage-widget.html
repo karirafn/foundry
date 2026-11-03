@@ -69,22 +69,20 @@
         <span class="usage-popover__email">{{ vm.accountEmail }}</span>
       </div>
 
-      <!-- Capture time / failure line -->
-      @if (vm.failed && vm.failedText) {
-        <p class="usage-popover__asof usage-popover__asof--failed">
-          <svg class="usage-popover__warn-icon" xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
-            <line x1="12" y1="9" x2="12" y2="13"></line>
-            <line x1="12" y1="17" x2="12.01" y2="17"></line>
-          </svg>
-          {{ vm.failedText }}
-        </p>
-      } @else {
-        <p class="usage-popover__asof">As of {{ vm.capturedRelative }}</p>
-      }
-
-      <!-- On-demand refresh — fresh figures arrive via the UsageSnapshotUpdated push -->
+      <!-- Freshness (as-of or failure) left, Refresh right — fresh figures arrive via the UsageSnapshotUpdated push -->
       <div class="usage-popover__refresh">
+        @if (vm.failed && vm.failedText) {
+          <p class="usage-popover__asof usage-popover__asof--failed">
+            <svg class="usage-popover__warn-icon" xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+              <line x1="12" y1="9" x2="12" y2="13"></line>
+              <line x1="12" y1="17" x2="12.01" y2="17"></line>
+            </svg>
+            <span class="usage-popover__asof-text">{{ vm.failedText }}</span>
+          </p>
+        } @else {
+          <p class="usage-popover__asof">As of {{ vm.capturedRelative }}</p>
+        }
         <button
           type="button"
           class="usage-popover__refresh-btn"
@@ -94,36 +92,40 @@
         >
           {{ refreshState() === 'refreshing' ? 'Refreshing…' : 'Refresh' }}
         </button>
-        <span class="usage-popover__refresh-status">{{ refreshStatusText() }}</span>
       </div>
+      <!-- Live region — always rendered so screen readers announce changes (WCAG 4.1.3); collapses via :empty.
+           Keep the interpolation tight against the tags: whitespace would defeat :empty. -->
+      <p class="usage-popover__refresh-status" role="status">{{ refreshStatusText() }}</p>
 
-      <!-- All limits (session, weekly_all, each weekly_scoped) -->
+      <!-- All limits (session, weekly_all, each weekly_scoped) — stacked so every bar spans the full width -->
       <div class="usage-popover__limits">
         @for (meter of vm.allLimits; track meter.kind + '|' + (meter.modelDisplayName ?? '') + '|' + $index) {
           <div class="usage-popover__limit">
             <div class="usage-popover__limit-head">
               <span class="usage-popover__limit-label">{{ meter.popoverLabel }}</span>
+              <span class="usage-popover__limit-value">
+                <span class="usage-meter__percent">{{ meter.percentLabel }}</span>
+                <span
+                  class="usage-popover__severity-word"
+                  [ngClass]="meter.severityClass"
+                >· {{ meter.severityWord }}</span>
+              </span>
+            </div>
+            <div
+              class="usage-meter usage-meter--popover"
+              [ngClass]="meter.severityClass"
+            >
               <div
-                class="usage-meter usage-meter--popover"
-                [ngClass]="meter.severityClass"
+                class="usage-meter__track"
+                role="img"
+                [attr.aria-label]="meter.accessibleName"
               >
                 <div
-                  class="usage-meter__track"
-                  role="img"
-                  [attr.aria-label]="meter.accessibleName"
-                >
-                  <div
-                    class="usage-meter__fill"
-                    [style.inline-size.%]="meter.percent"
-                    aria-hidden="true"
-                  ></div>
-                </div>
+                  class="usage-meter__fill"
+                  [style.inline-size.%]="meter.percent"
+                  aria-hidden="true"
+                ></div>
               </div>
-              <span class="usage-meter__percent">{{ meter.percentLabel }}</span>
-              <span
-                class="usage-popover__severity-word"
-                [ngClass]="meter.severityClass"
-              >· {{ meter.severityWord }}</span>
             </div>
             <p class="usage-popover__reset">Resets {{ meter.resetsAtLocal }}</p>
           </div>

@@ -38,10 +38,24 @@
 
 // ─── Inline meters (wide layout) ────────────────────────────────────────────
 
+// Shared `label | bar | %` grid so the Session and Weekly bars and percentages
+// line up vertically. The label set is closed ("Session", "Weekly"), so an
+// auto-sized label column cannot grow unbounded.
 .usage-widget__inline {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
+  display: grid;
+  grid-template-columns: auto var(--usage-meter-track-size) auto;
+  align-items: center;
+  column-gap: var(--fd-spacing-xs);
+  row-gap: 2px;
+
+  // Each meter row contributes its children straight to the shared grid.
+  > .usage-meter {
+    display: contents;
+  }
+
+  .usage-meter__percent {
+    justify-self: end;
+  }
 }
 
 // ─── Unavailable chip (no successful poll yet, last attempt failed) ─────────
@@ -212,7 +226,10 @@
   // Use --fd-text-secondary (#8b949e) = 5.62:1 instead.
   color: var(--fd-text-secondary);
   font-size: 0.75rem;
-  margin: 0 0 var(--fd-spacing-sm);
+  margin: 0;
+  // Shares a row with the Refresh button: let the text wrap rather than push it out.
+  min-width: 0;
+  flex: 1 1 auto;
 }
 
 .usage-popover__asof--failed {
@@ -238,21 +255,33 @@
   gap: 2px;
 }
 
+// Line 1: label (left, wraps when long) + `NN% · Status` (right-aligned).
 .usage-popover__limit-head {
   display: flex;
-  align-items: center;
-  gap: var(--fd-spacing-xs);
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--fd-spacing-sm);
 }
 
 .usage-popover__limit-label {
   font-size: 0.8125rem;
   color: var(--fd-text-primary);
-  flex-shrink: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
-// Wider track inside the popover
+.usage-popover__limit-value {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--fd-spacing-xs);
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+// Line 2: full-width bar, independent of the label length.
 .usage-meter--popover {
-  --usage-meter-track-size: 96px;
+  display: block;
+  --usage-meter-track-size: 100%;
 }
 
 .usage-popover__severity-word {
@@ -311,9 +340,11 @@
   font-variant-numeric: tabular-nums;
 }
 
+// As-of text (or failure warning) left, Refresh button right, on one row.
 .usage-popover__refresh {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: var(--fd-spacing-sm);
   margin: 0 0 var(--fd-spacing-sm);
 }
@@ -350,4 +381,11 @@
   // Same contrast rationale as .usage-popover__asof — secondary, not tertiary.
   color: var(--fd-text-secondary);
   font-size: 0.75rem;
+  // Sits below the as-of/Refresh row; the refresh row's bottom margin spaces it.
+  margin: calc(-1 * var(--fd-spacing-xs)) 0 var(--fd-spacing-sm);
+
+  // Persistent live region (role="status") — takes no space while it has no text.
+  &:empty {
+    display: none;
+  }
 }

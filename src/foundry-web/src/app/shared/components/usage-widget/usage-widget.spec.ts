@@ -815,6 +815,43 @@ describe('UsageWidgetComponent', () => {
       expect(status?.textContent?.trim()).toBe("Can't refresh right now");
     });
 
+    it('should render the refresh status as a persistent role="status" live region while idle', () => {
+      // Arrange / Act
+      const { status } = setupWithMock('idle');
+
+      // Assert — present in the DOM even with no text, so later changes are announced
+      expect(status).not.toBeNull();
+      expect(status?.getAttribute('role')).toBe('status');
+      expect(status?.textContent).toBe('');
+    });
+
+    it('should announce status text changes through the same live region element', () => {
+      // Arrange
+      const { fixture, mock, status } = setupWithMock('idle');
+
+      // Act
+      mock.refreshState.set('unavailable');
+      fixture.detectChanges();
+
+      // Assert — same element instance, now carrying the message
+      const after = (fixture.nativeElement as HTMLElement).querySelector('.usage-popover__refresh-status');
+      expect(after).toBe(status);
+      expect(after?.getAttribute('role')).toBe('status');
+      expect(after?.textContent?.trim()).toBe("Can't refresh right now");
+    });
+
+    it('should place the Refresh button on the same row as the as-of text', () => {
+      // Arrange / Act
+      const { fixture } = setupWithMock('idle');
+      const el = fixture.nativeElement as HTMLElement;
+
+      // Assert
+      const row = el.querySelector('.usage-popover__refresh');
+      expect(row?.querySelector('.usage-popover__asof')).not.toBeNull();
+      expect(row?.querySelector('.usage-popover__refresh-btn')).not.toBeNull();
+      expect(row?.querySelector('.usage-popover__refresh-status')).toBeNull();
+    });
+
     it('should update the button when the refresh state changes', () => {
       // Arrange
       const { fixture, mock } = setupWithMock('refreshing');
