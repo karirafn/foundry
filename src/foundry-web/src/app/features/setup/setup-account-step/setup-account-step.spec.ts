@@ -23,6 +23,7 @@ const CREATED_ACCOUNT: AccountSummary = {
   baseUrl: 'https://github.com',
   hasToken: true,
   tokenStatus: 'present',
+  branchRulesTokenStatus: 'absent',
   namespaces: [],
 };
 

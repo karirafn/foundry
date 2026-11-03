@@ -169,6 +169,13 @@ Modeled as polymorphic variants (`GitHubCredential`, `GitLabCredential`) — eac
 The PAT is stored encrypted in the database using Data Protection API + EF Core Value Converters.
 Multiple accounts can exist per provider and per host — including multiple PATs authenticating as the same provider user. Accounts do not reference repositories; repositories resolve to an account through Namespace Claims.
 
+### Branch-Rules Token
+
+An optional, server-only credential on an Account (`Credential.BranchRulesToken`), used solely to write default-branch protection, and never given to workers.
+It needs GitHub fine-grained **Administration: write** or the GitLab **Maintainer** role — privileges the worker-facing account token must not carry, because that token is injected into every worker container.
+Stored encrypted with the same mechanism as the PAT (`ProviderToken`), never returned by the API (only `CredentialSummary.BranchRulesTokenStatus`: `present`, `absent` or `unreadable`), and set, replaced (repairing an unreadable one) or cleared through the account update path. Rotating the account PAT preserves it.
+An unreadable branch-rules token never affects the account's eligibility. Its permissions are not validated on save — they are established by attempting the write.
+
 ### PAT Owner
 
 The provider username the token authenticates as — resolved from the provider's `/user` endpoint at token validation and stored as the account's name (`Credential.Name`).

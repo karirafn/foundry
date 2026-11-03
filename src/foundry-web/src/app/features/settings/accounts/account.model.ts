@@ -22,7 +22,7 @@ export type TokenRequirements = Schemas['TokenRequirements'];
 // ProviderType refines CredentialSummary.provider.
 // AffectedRepositoryStatus refines AffectedRepository.previousStatus and AffectedRepository.newStatus.
 // TokenValidationKind refines ValidateTokenResponse.kind.
-// TokenStatus refines CredentialSummary.tokenStatus.
+// TokenStatus refines CredentialSummary.tokenStatus and CredentialSummary.branchRulesTokenStatus.
 // Update these unions when the corresponding C# contract values change.
 export type ProviderType = 'GitHub' | 'GitLab';
 export type AffectedRepositoryStatus = 'eligible' | 'ineligible' | 'unreachable' | 'credential-unreadable';
@@ -51,6 +51,15 @@ export function resolveTokenStatus(account: AccountSummary): TokenStatus {
     return raw as TokenStatus;
   }
   return account.hasToken ? 'present' : 'absent';
+}
+
+/** Narrows the open-string branch-rules token status; a response predating the field reads as absent. */
+export function resolveBranchRulesTokenStatus(account: AccountSummary): TokenStatus {
+  const raw = (account as { branchRulesTokenStatus?: string }).branchRulesTokenStatus;
+  if (raw && KNOWN_TOKEN_STATUSES.has(raw as TokenStatus)) {
+    return raw as TokenStatus;
+  }
+  return 'absent';
 }
 
 export function affectedStatusLabel(status: AffectedRepositoryStatus | string): string {

@@ -183,6 +183,12 @@ namespace Foundry.WebApi.Migrations
                         .HasColumnType("TEXT")
                         .HasColumnName("base_url");
 
+                    b.Property<string>("BranchRulesToken")
+                        .HasMaxLength(2000)
+                        .IsUnicode(false)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("branch_rules_token");
+
                     b.Property<string>("Host")
                         .IsRequired()
                         .HasMaxLength(253)

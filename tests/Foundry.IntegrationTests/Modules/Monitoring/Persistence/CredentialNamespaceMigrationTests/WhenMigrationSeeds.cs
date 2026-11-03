@@ -184,6 +184,10 @@ public sealed class WhenMigrationSeeds : IAsyncLifetime, IAsyncDisposable
         // Act — apply the migration
         await _dbContext.Database.MigrateAsync(TargetMigrationId, TestContext.Current.CancellationToken);
 
+        // Bring the schema up to date before reading through the current EF model, which maps
+        // columns added by later migrations (e.g. accounts.branch_rules_token).
+        await _dbContext.Database.MigrateAsync(TestContext.Current.CancellationToken);
+
         // Assert — the credential loaded with its namespaces resolves "acme/platform"
         // through ResolveCoveringNamespace to the seeded "acme" namespace.
         // Load all credentials with their namespaces, then find the one seeded for this test.
