@@ -120,7 +120,7 @@ public sealed class WhenSnapshotExists : IAsyncDisposable
 
         IUsageSnapshotStateMutator mutator = _factory.Services.GetRequiredService<IUsageSnapshotStateMutator>();
         mutator.SetSnapshot(snapshot);
-        mutator.MarkRefreshFailed(failedAt);
+        mutator.MarkRefreshFailed("user@example.com", failedAt);
 
         // Act
         HttpResponseMessage response = await _client.GetAsync(

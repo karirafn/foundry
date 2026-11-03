@@ -10,6 +10,8 @@ namespace Foundry.Modules.Credentials.Features.Usage;
 /// <summary>
 /// GET /api/credentials/usage
 /// Returns the current in-memory usage snapshot, or 204 No Content when none exists.
+/// When no poll has succeeded yet but one has failed, returns 200 with an unavailable snapshot
+/// (null <c>capturedAt</c>, empty limits, <c>lastRefreshFailedAt</c> set).
 /// </summary>
 internal static class GetUsageSnapshot
 {

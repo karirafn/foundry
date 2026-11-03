@@ -1057,7 +1057,7 @@ export interface components {
             limits: components["schemas"]["UsageRateLimitResponse"][];
             extraUsage: null | components["schemas"]["UsageExtraCreditsResponse"];
             /** Format: date-time */
-            capturedAt: string;
+            capturedAt: null | string;
             accountEmail: string;
             /** Format: date-time */
             lastRefreshFailedAt: null | string;

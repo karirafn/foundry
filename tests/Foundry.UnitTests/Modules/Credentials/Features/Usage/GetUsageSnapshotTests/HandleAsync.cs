@@ -59,6 +59,28 @@ public sealed class HandleAsync
         result.ShouldBeOfType<NoContent>();
     }
 
+    [Fact]
+    public void WhenFailedBeforeFirstSuccess_ReturnsOkWithUnavailableDto()
+    {
+        // Arrange
+        UsageSnapshotState state = new();
+        DateTimeOffset failedAt = new(2025, 1, 15, 12, 0, 0, TimeSpan.Zero);
+        ((IUsageSnapshotStateMutator)state).MarkRefreshFailed("user@example.com", failedAt);
+
+        // Act
+        IResult result = GetUsageSnapshot.Endpoint.Handle(state);
+
+        // Assert — distinguishable from 204: 200 with null capturedAt and the failure stamp
+        Ok<UsageSnapshotResponse> ok = result.ShouldBeOfType<Ok<UsageSnapshotResponse>>();
+        UsageSnapshotResponse dto = ok.Value.ShouldNotBeNull();
+        dto.ShouldSatisfyAllConditions(
+            () => dto.AccountEmail.ShouldBe("user@example.com"),
+            () => dto.CapturedAt.ShouldBeNull(),
+            () => dto.Limits.ShouldBeEmpty(),
+            () => dto.ExtraUsage.ShouldBeNull(),
+            () => dto.LastRefreshFailedAt.ShouldBe(failedAt));
+    }
+
     // ---------------------------------------------------------------------------
     // Behavior (c): severity serializes as a string (present in DTO as string, not int)
     // ---------------------------------------------------------------------------
@@ -98,7 +120,7 @@ public sealed class HandleAsync
         ((IUsageSnapshotStateMutator)state).SetSnapshot(snapshot);
 
         // Stamp the failure so LastRefreshFailedAt propagates
-        ((IUsageSnapshotStateMutator)state).MarkRefreshFailed(failedAt);
+        ((IUsageSnapshotStateMutator)state).MarkRefreshFailed(snapshot.AccountEmail, failedAt);
 
         // Act
         IResult result = GetUsageSnapshot.Endpoint.Handle(state);

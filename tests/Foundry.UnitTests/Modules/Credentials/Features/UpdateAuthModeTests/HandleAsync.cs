@@ -81,7 +81,7 @@ public sealed class HandleAsync : IAsyncDisposable
         public int ClearCallCount { get; private set; }
 
         public void SetSnapshot(UsageSnapshot snapshot) { }
-        public void MarkRefreshFailed(DateTimeOffset failedAt) { }
+        public void MarkRefreshFailed(string accountEmail, DateTimeOffset failedAt) { }
         public void Clear() => ClearCallCount++;
     }
 

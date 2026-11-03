@@ -87,6 +87,8 @@ export interface UsageWidgetVm {
   readonly capturedRelative: string;
   readonly failed: boolean;
   readonly failedText: string | null;
+  /** True when no poll has succeeded yet and the last attempt failed — no figures to show. */
+  readonly unavailable: boolean;
 }
 
 const CREDIT_MINOR_UNIT = 100;
@@ -132,7 +134,38 @@ function buildMeterVm(
   };
 }
 
+function formatShortDateTime(iso: string): string {
+  return new Intl.DateTimeFormat(undefined, {
+    dateStyle: 'short',
+    timeStyle: 'short',
+  }).format(new Date(iso));
+}
+
+/** No poll has succeeded yet and the last attempt failed: there are no figures to show. */
+function buildUnavailableVm(snapshot: UsageSnapshot): UsageWidgetVm {
+  const failedText =
+    snapshot.lastRefreshFailedAt !== null
+      ? `Couldn't load usage. Last attempt ${formatShortDateTime(snapshot.lastRefreshFailedAt)}.`
+      : "Couldn't load usage.";
+  return {
+    inlineMeters: [],
+    collapsedMeter: null,
+    allLimits: [],
+    credits: null,
+    accountEmail: snapshot.accountEmail,
+    capturedRelative: '',
+    failed: true,
+    failedText,
+    unavailable: true,
+  };
+}
+
 function buildWidgetVm(snapshot: UsageSnapshot): UsageWidgetVm {
+  const capturedAt = snapshot.capturedAt;
+  if (capturedAt === null) {
+    return buildUnavailableVm(snapshot);
+  }
+
   const allLimits: UsageMeterVm[] = snapshot.limits.map((l) =>
     buildMeterVm(l.kind, l.percent, l.resetsAt, l.modelDisplayName, l.severity, l.isActive)
   );
@@ -162,7 +195,7 @@ function buildWidgetVm(snapshot: UsageSnapshot): UsageWidgetVm {
 
   let capturedRelative = '';
   try {
-    const diffMs = Date.now() - new Date(snapshot.capturedAt).getTime();
+    const diffMs = Date.now() - new Date(capturedAt).getTime();
     const diffMinutes = Math.round(diffMs / 60_000);
     const rtf = new Intl.RelativeTimeFormat(undefined, { numeric: 'auto' });
     capturedRelative =
@@ -170,16 +203,12 @@ function buildWidgetVm(snapshot: UsageSnapshot): UsageWidgetVm {
         ? rtf.format(-diffMinutes, 'minute')
         : rtf.format(-Math.round(diffMinutes / 60), 'hour');
   } catch {
-    capturedRelative = snapshot.capturedAt;
+    capturedRelative = capturedAt;
   }
 
   let failedText: string | null = null;
-  if (failed && snapshot.lastRefreshFailedAt !== null) {
-    const lastGood = new Intl.DateTimeFormat(undefined, {
-      dateStyle: 'short',
-      timeStyle: 'short',
-    }).format(new Date(snapshot.capturedAt));
-    failedText = `Couldn't refresh. Showing usage from ${lastGood}.`;
+  if (failed) {
+    failedText = `Couldn't refresh. Showing usage from ${formatShortDateTime(capturedAt)}.`;
   }
 
   return {
@@ -191,6 +220,7 @@ function buildWidgetVm(snapshot: UsageSnapshot): UsageWidgetVm {
     capturedRelative,
     failed,
     failedText,
+    unavailable: false,
   };
 }
 
@@ -276,6 +306,9 @@ export class UsageWidgetComponent implements OnDestroy {
   }
 
   buildTriggerLabel(vm: UsageWidgetVm): string {
+    if (vm.unavailable) {
+      return 'Claude usage unavailable. Activate to see details.';
+    }
     // When collapsed (≤240px), narrow to the single collapsed figure only.
     if (this.isCollapsed() && vm.collapsedMeter !== null) {
       const c = vm.collapsedMeter;

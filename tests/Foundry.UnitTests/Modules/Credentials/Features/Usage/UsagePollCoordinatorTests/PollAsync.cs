@@ -315,7 +315,7 @@ public sealed class PollAsync : IAsyncDisposable
             // Pre-stamp failure on the state
             UsageSnapshot priorSnapshot = new UsageSnapshotBuilder().Build();
             sharedState.SetSnapshot(priorSnapshot);
-            sharedState.MarkRefreshFailed(DateTimeOffset.UtcNow.AddMinutes(-5));
+            sharedState.MarkRefreshFailed("user@example.com", DateTimeOffset.UtcNow.AddMinutes(-5));
 
             UsagePollCoordinator sut = BuildCoordinator(sp);
 
@@ -382,7 +382,7 @@ public sealed class PollAsync : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenOrchestratorFails_WithNoPriorSnapshot_BroadcastsNull()
+    public async Task WhenOrchestratorFails_WithNoPriorSnapshot_BroadcastsUnavailableSnapshot()
     {
         // Arrange: no prior snapshot, orchestrator fails
         FakeCredentialsOrchestrator orchestrator = new FakeCredentialsOrchestrator()
@@ -402,12 +402,87 @@ public sealed class PollAsync : IAsyncDisposable
             // Act
             UsageSnapshot? result = await sut.PollAsync(TestContext.Current.CancellationToken);
 
-            // Assert — null returned (no prior snapshot to retain)
-            result.ShouldBeNull();
+            // Assert — an unavailable snapshot is returned (no figures, failure stamped)
+            result.ShouldNotBeNull();
+            result.ShouldSatisfyAllConditions(
+                () => result.IsUnavailable.ShouldBeTrue(),
+                () => result.CapturedAt.ShouldBeNull(),
+                () => result.Limits.ShouldBeEmpty(),
+                () => result.AccountEmail.ShouldBe("user@example.com"),
+                () => result.LastRefreshFailedAt.ShouldNotBeNull());
 
-            // Assert — broadcast sent with null
+            // Assert — broadcast sent with the unavailable snapshot, not null
             broadcaster.Sent.Count.ShouldBe(1);
-            broadcaster.LastSent.ShouldBeNull();
+            broadcaster.LastSent.ShouldNotBeNull();
+            broadcaster.LastSent.IsUnavailable.ShouldBeTrue();
+        }
+    }
+
+    [Fact]
+    public async Task WhenUnparseable_WithNoPriorSnapshot_BroadcastsUnavailableSnapshot()
+    {
+        // Arrange: no prior snapshot, output unparseable
+        FakeCredentialsOrchestrator orchestrator = new FakeCredentialsOrchestrator()
+            .WithUsageReportLogs(MalformedJsonLog);
+        CapturingUsageSnapshotBroadcaster broadcaster = new();
+
+        ServiceProvider sp = BuildServiceProvider(
+            _connection,
+            orchestrator,
+            new FakeLoginSessionState(),
+            broadcaster);
+        await using (sp)
+        {
+            await SeedOAuthAccountAsync(sp);
+            UsagePollCoordinator sut = BuildCoordinator(sp);
+
+            // Act
+            UsageSnapshot? result = await sut.PollAsync(TestContext.Current.CancellationToken);
+
+            // Assert
+            result.ShouldNotBeNull();
+            result.IsUnavailable.ShouldBeTrue();
+            IUsageSnapshotState state = sp.GetRequiredService<IUsageSnapshotState>();
+            state.Current.ShouldNotBeNull();
+            state.Current.IsUnavailable.ShouldBeTrue();
+            broadcaster.LastSent.ShouldNotBeNull();
+            broadcaster.LastSent.IsUnavailable.ShouldBeTrue();
+        }
+    }
+
+    [Fact]
+    public async Task WhenUnavailable_ThenPollSucceeds_BroadcastsNormalSnapshot()
+    {
+        // Arrange: first poll fails before any success, the next succeeds
+        FakeCredentialsOrchestrator orchestrator = new FakeCredentialsOrchestrator()
+            .WithUsageReportLogs(ValidUsageLog);
+        UsageSnapshotState sharedState = new();
+        sharedState.MarkRefreshFailed("user@example.com", DateTimeOffset.UtcNow.AddMinutes(-1));
+        CapturingUsageSnapshotBroadcaster broadcaster = new();
+
+        ServiceProvider sp = BuildServiceProvider(
+            _connection,
+            orchestrator,
+            new FakeLoginSessionState(),
+            broadcaster,
+            sharedState);
+        await using (sp)
+        {
+            await SeedOAuthAccountAsync(sp);
+            UsagePollCoordinator sut = BuildCoordinator(sp);
+
+            // Act
+            UsageSnapshot? result = await sut.PollAsync(TestContext.Current.CancellationToken);
+
+            // Assert
+            result.ShouldNotBeNull();
+            result.ShouldSatisfyAllConditions(
+                () => result.IsUnavailable.ShouldBeFalse(),
+                () => result.CapturedAt.ShouldNotBeNull(),
+                () => result.Limits.ShouldNotBeEmpty(),
+                () => result.LastRefreshFailedAt.ShouldBeNull());
+            broadcaster.LastSent.ShouldNotBeNull();
+            broadcaster.LastSent.IsUnavailable.ShouldBeFalse();
         }
     }
 
