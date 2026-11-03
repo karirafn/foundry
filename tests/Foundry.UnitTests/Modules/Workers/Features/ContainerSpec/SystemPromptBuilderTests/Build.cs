@@ -13,6 +13,7 @@ namespace Foundry.UnitTests.Modules.Workers.Features.ContainerSpec.SystemPromptB
 
 public sealed class Build
 {
+    private const string PrePrSectionEndFragment = "leave enough time to open the pull request";
     private const string DefaultBranchNaming = "Use conventional branch naming";
     private const string DefaultSystemPromptTemplate =
         "You are implementing GitHub issue #{issueNumber}.\n\n{issueContent}\n\nBranch naming: {branchNamingInstruction}.";
@@ -1716,7 +1717,7 @@ public sealed class Build
             timeoutMinutes: 120, installsDocker: true);
         string result = buildResult.ShouldBeOfType<Result<string>.Success>().Value;
 
-        // Assert — still-failing branch
+        // Assert
         result.ShouldSatisfyAllConditions(
             () => result.ShouldContain("List each still-failing test in the pull request description"),
             () => result.ShouldContain("new (passes on the default branch)"),
@@ -1757,7 +1758,8 @@ public sealed class Build
         section.ShouldSatisfyAllConditions(
             () => section.ShouldContain("push the branch, then open (or reuse) the pull request anyway"),
             () => section.ShouldContain("push the branch, then open (or reuse) the pull request whenever"),
-            () => section.ShouldContain("a reused pull request needs the latest commits pushed"));
+            () => section.ShouldContain("A reused pull request needs the latest commits pushed"),
+            () => section.ShouldNotContain("Before you open (or reuse) the pull request, push the branch"));
     }
 
     [Fact]
@@ -1773,9 +1775,50 @@ public sealed class Build
             () => section.ShouldContain("After opening the pull request"),
             () => section.ShouldContain("in a separate `git worktree` of the default branch"),
             () => section.ShouldContain("so the feature working tree stays on the feature branch"),
-            () => section.ShouldContain("update the pull request description"),
-            () => section.ShouldContain("When time is short, skip the comparison and mark remaining failures as not compared"),
+            () => section.ShouldContain("update the pull request description to group the failures as"),
             () => section.ShouldNotContain("check out the default branch"));
+    }
+
+    [Fact]
+    public void WhenInstallsDockerTrue_PrePrSectionRunsComparisonOnlyWhileChecksWatchBudgetRemains()
+    {
+        // Arrange
+
+        // Act
+        string section = BuildPrePrSection();
+
+        // Assert
+        section.ShouldSatisfyAllConditions(
+            () => section.ShouldContain(
+                $"only while at least {SystemPromptBuilder.ChecksWatchMinutes} minutes of budget remain"),
+            () => section.ShouldContain("otherwise skip it and mark remaining failures as not compared"),
+            () => section.ShouldNotContain("When time is short"));
+    }
+
+    [Fact]
+    public void WhenInstallsDockerTrue_PrePrSectionCreatesComparisonWorktreeOutsideRepositoryAndRemovesIt()
+    {
+        // Arrange
+
+        // Act
+        string section = BuildPrePrSection();
+
+        // Assert
+        section.ShouldSatisfyAllConditions(
+            () => section.ShouldContain("outside the repository directory (for example under the temp directory)"),
+            () => section.ShouldContain("remove it with `git worktree remove` afterwards"));
+    }
+
+    [Fact]
+    public void WhenInstallsDockerTrue_PrePrSectionCountsDifferentDefaultBranchFailureAsNew()
+    {
+        // Arrange
+
+        // Act
+        string section = BuildPrePrSection();
+
+        // Assert
+        section.ShouldContain("A test that fails differently on the default branch counts as new");
     }
 
     [Fact]
@@ -1787,7 +1830,7 @@ public sealed class Build
         string section = BuildPrePrSection();
 
         // Assert
-        section.ShouldContain("When the branch has no commits there is nothing to review: report that and exit");
+        section.ShouldContain("When the branch has no commits beyond the default branch there is nothing to review: report that and exit");
     }
 
     [Fact]
@@ -1801,32 +1844,8 @@ public sealed class Build
         // Assert
         section.ShouldSatisfyAllConditions(
             () => section.ShouldContain("by name with a one-line failure reason only"),
-            () => section.ShouldContain("exclude raw logs, stack traces, environment variable values and credentials"));
-    }
-
-    [Fact]
-    public void WhenInstallsDockerTrue_PrePrSectionPutsGroupsInPullRequestDescription()
-    {
-        // Arrange
-
-        // Act
-        string section = BuildPrePrSection();
-
-        // Assert
-        section.ShouldContain("update the pull request description to group the failures as");
-    }
-
-    private static string BuildPrePrSection()
-    {
-        Result<string> buildResult = SystemPromptBuilder.Build(
-            1, DefaultBranchNaming, DefaultSystemPromptTemplate,
-            new DispatchContext.Fresh("feat/1-title"),
-            "https://api.github.com/repos/owner/repo/issues/1",
-            timeoutMinutes: 120, installsDocker: true);
-        string result = buildResult.ShouldBeOfType<Result<string>.Success>().Value;
-        int start = result.IndexOf(SystemPromptBuilder.PrePrSectionMarker, StringComparison.Ordinal);
-        int end = result.IndexOf("leave enough time to open the pull request", start, StringComparison.Ordinal);
-        return result[start..end];
+            () => section.ShouldContain("summarise the failure (for example its assertion or error category) rather than copying exception text"),
+            () => section.ShouldContain("exclude raw logs, stack traces, environment variable values, credentials, and URLs, tokens or connection strings"));
     }
 
     [Fact]
@@ -1945,5 +1964,20 @@ public sealed class Build
         result.ShouldContain("<failing-checks>");
         result.ShouldContain("</failing-checks>");
         result.ShouldContain("check(s) were omitted to fit the prompt size budget");
+    }
+
+    private static string BuildPrePrSection()
+    {
+        Result<string> buildResult = SystemPromptBuilder.Build(
+            1, DefaultBranchNaming, DefaultSystemPromptTemplate,
+            new DispatchContext.Fresh("feat/1-title"),
+            "https://api.github.com/repos/owner/repo/issues/1",
+            timeoutMinutes: 120, installsDocker: true);
+        string result = buildResult.ShouldBeOfType<Result<string>.Success>().Value;
+        int start = result.IndexOf(SystemPromptBuilder.PrePrSectionMarker, StringComparison.Ordinal);
+        int end = result.IndexOf(PrePrSectionEndFragment, start, StringComparison.Ordinal);
+        start.ShouldBeGreaterThan(-1);
+        end.ShouldBeGreaterThan(start);
+        return result[start..end];
     }
 }

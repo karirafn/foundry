@@ -125,18 +125,18 @@ internal static class SystemPromptBuilder
         return $"""
             {PrePrSectionMarker}
 
-            Check whether a Docker daemon is available by inspecting the DOCKER_HOST environment variable. Before you open (or reuse) the pull request, push the branch: a reused pull request needs the latest commits pushed.
+            Check whether a Docker daemon is available by inspecting the DOCKER_HOST environment variable.
 
-            When the branch has no commits there is nothing to review: report that and exit.
+            When the branch has no commits beyond the default branch there is nothing to review: report that and exit.
 
             - If DOCKER_HOST is not set: push the branch, then open (or reuse) the pull request anyway. State in the pull request description that integration tests were not run locally and are verified by CI.
-            - If DOCKER_HOST is set: run the repository's full test suite, including integration tests. Fix failures you can within your time budget, then push the branch, then open (or reuse) the pull request whenever the branch has commits, even when integration tests still fail. When integration tests still fail:
-              - List each still-failing test in the pull request description by name with a one-line failure reason only; exclude raw logs, stack traces, environment variable values and credentials.
-              - After opening the pull request, run each failing test in a separate `git worktree` of the default branch, so the feature working tree stays on the feature branch, and update the pull request description to group the failures as:
+            - If DOCKER_HOST is set: run the repository's full test suite, including integration tests. Fix failures you can within your time budget. A reused pull request needs the latest commits pushed, so push the branch, then open (or reuse) the pull request whenever the branch has commits, even when integration tests still fail. When integration tests still fail:
+              - List each still-failing test in the pull request description by name with a one-line failure reason only: summarise the failure (for example its assertion or error category) rather than copying exception text, and exclude raw logs, stack traces, environment variable values, credentials, and URLs, tokens or connection strings.
+              - After opening the pull request, compare only while at least {ChecksWatchMinutes} minutes of budget remain to also complete the checks watch and its fix pushes; otherwise skip it and mark remaining failures as not compared. Run each failing test in a separate `git worktree` of the default branch, created outside the repository directory (for example under the temp directory) so the feature working tree stays on the feature branch, and remove it with `git worktree remove` afterwards. Then update the pull request description to group the failures as:
                 - new (passes on the default branch)
                 - pre-existing (fails the same way on the default branch)
                 - not compared (the default-branch comparison could not be completed)
-              - When time is short, skip the comparison and mark remaining failures as not compared.
+              - A test that fails differently on the default branch counts as new.
 
             Manage your wall-clock budget carefully. Do not spend it all on local testing — leave enough time to open the pull request and watch its checks.
             """;
