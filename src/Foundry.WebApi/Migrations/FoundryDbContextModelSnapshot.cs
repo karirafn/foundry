@@ -265,6 +265,10 @@ namespace Foundry.WebApi.Migrations
                         .HasColumnType("TEXT")
                         .HasColumnName("id");
 
+                    b.Property<bool>("ApplyBranchRules")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("apply_branch_rules");
+
                     b.Property<string>("Eligibility")
                         .HasMaxLength(2147483647)
                         .HasColumnType("TEXT")

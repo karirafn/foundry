@@ -12,19 +12,31 @@ import {
   signal,
 } from '@angular/core';
 import { HttpErrorResponse } from '@angular/common/http';
-import { from } from 'rxjs';
+import { Observable, defer, from, of } from 'rxjs';
 import { extractErrorMessage } from '../../../core/http/extract-error-message';
-import { concatMap } from 'rxjs/operators';
+import { catchError, concatMap, finalize, map } from 'rxjs/operators';
 import { RepositoryService } from '../../settings/repositories/repository.service';
-import { AvailableRepository } from '../../settings/repositories/repository.model';
+import { AvailableRepository, CreateRepositoryResponse } from '../../settings/repositories/repository.model';
 import { SpinnerComponent } from '../../../shared/components/spinner/spinner';
+import { RepositoryAddProgressComponent } from '../../settings/repositories/repository-add-progress/repository-add-progress';
+import { RepositoryAddOutcomeComponent } from '../../settings/repositories/repository-add-outcome/repository-add-outcome';
 
 const ERROR_TRUNCATE_LENGTH = 200;
+
+type AddRowKind = 'queued' | 'adding' | 'added' | 'error';
+
+/** Per-repository state of a wizard batch add. Each row carries only what its own response returned. */
+interface AddRow {
+  slug: string;
+  kind: AddRowKind;
+  response: CreateRepositoryResponse | null;
+  error: string | null;
+}
 
 @Component({
   selector: 'fd-setup-repos-step',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [SpinnerComponent],
+  imports: [SpinnerComponent, RepositoryAddProgressComponent, RepositoryAddOutcomeComponent],
   template: `
     <div class="setup-repos-step">
       <h2 class="setup-repos-step__title">Select Repositories</h2>
@@ -32,7 +44,31 @@ const ERROR_TRUNCATE_LENGTH = 200;
         Choose which repositories Foundry should monitor for issues.
       </p>
 
-      @if (_repositoryService.loadingAvailable()) {
+      @if (_rows().length > 0) {
+        <ul class="setup-repos-step__results" aria-label="Repositories being added">
+          @for (row of _rows(); track row.slug) {
+            <li class="setup-repos-step__result setup-repos-step__result--{{ row.kind }}" [attr.data-slug]="row.slug">
+              <span class="setup-repos-step__repo-slug">{{ row.slug }}</span>
+              @switch (row.kind) {
+                @case ('queued') {
+                  <span class="setup-repos-step__result-queued">Queued</span>
+                }
+                @case ('adding') {
+                  <fd-repository-add-progress />
+                }
+                @case ('error') {
+                  <span class="setup-repos-step__result-error" role="alert">Not added: {{ row.error }}</span>
+                }
+              }
+              @if (row.response; as response) {
+                <div class="setup-repos-step__result-outcome" aria-live="polite">
+                  <fd-repository-add-outcome [response]="response" />
+                </div>
+              }
+            </li>
+          }
+        </ul>
+      } @else if (_repositoryService.loadingAvailable()) {
         <div class="setup-repos-step__loading" role="status">
           <fd-spinner [size]="16" />
           Loading repositories...
@@ -127,34 +163,48 @@ const ERROR_TRUNCATE_LENGTH = 200;
         </ul>
       }
 
-      <div class="setup-repos-step__save-error" role="alert">{{ _saveError() ?? '' }}</div>
+      <div class="setup-repos-step__apply-rules">
+        <label class="setup-repos-step__apply-rules-label">
+          <input
+            class="setup-repos-step__apply-rules-checkbox"
+            type="checkbox"
+            aria-describedby="setup-apply-branch-rules-hint"
+            [checked]="_applyBranchRules()"
+            [disabled]="_rows().length > 0"
+            (change)="_applyBranchRules.set($any($event.target).checked)"
+          />
+          Apply branch rules
+        </label>
+        <span class="setup-repos-step__apply-rules-hint" id="setup-apply-branch-rules-hint">
+          Applies to every repository added in this step. Where the default branch is missing the rules eligibility requires, Foundry adds them using the account's branch-rules token.
+        </span>
+      </div>
 
-      @if (_saving()) {
-        <div class="setup-repos-step__saving-indicator" role="status" aria-live="polite">
-          Creating repositories...
-        </div>
-      }
+      <div class="setup-repos-step__save-error" role="alert">{{ _saveError() ?? '' }}</div>
 
       <div class="setup-repos-step__actions">
         <button
           class="setup-repos-step__back-btn"
           type="button"
+          [disabled]="_saving()"
           (click)="back.emit()"
         >Back</button>
 
         <div class="setup-repos-step__secondary-actions">
-          <button
-            class="setup-repos-step__skip-btn"
-            type="button"
-            (click)="onSkip()"
-          >Skip</button>
+          @if (_rows().length === 0) {
+            <button
+              class="setup-repos-step__skip-btn"
+              type="button"
+              (click)="onSkip()"
+            >Skip</button>
+          }
 
           <button
             class="setup-repos-step__finish-btn"
             type="button"
             [disabled]="!_canFinish()"
-            (click)="onFinish()"
-          >{{ _saving() ? 'Creating...' : 'Finish' }}</button>
+            (click)="_batchFinished() ? complete.emit() : onFinish()"
+          >{{ _finishLabel() }}</button>
         </div>
       </div>
     </div>
@@ -173,6 +223,17 @@ export class SetupReposStepComponent implements OnInit {
   protected readonly _selectedSlugs: WritableSignal<Set<string>> = signal(new Set<string>());
   protected readonly _saving: WritableSignal<boolean> = signal(false);
   protected readonly _saveError: WritableSignal<string | null> = signal(null);
+  protected readonly _applyBranchRules: WritableSignal<boolean> = signal(true);
+  protected readonly _rows: WritableSignal<AddRow[]> = signal([]);
+
+  protected readonly _batchFinished: Signal<boolean> = computed(() => this._rows().length > 0 && !this._saving());
+
+  protected readonly _finishLabel: Signal<string> = computed(() => {
+    if (this._saving()) {
+      return 'Adding…';
+    }
+    return this._batchFinished() ? 'Continue' : 'Finish';
+  });
 
   protected readonly _filteredRepositories: Signal<AvailableRepository[]> = computed(() => {
     const filter = this._filterText().toLowerCase();
@@ -197,7 +258,7 @@ export class SetupReposStepComponent implements OnInit {
     if (this._saving()) {
       return false;
     }
-    return this._selectedSlugs().size > 0;
+    return this._batchFinished() || this._selectedSlugs().size > 0;
   });
 
   ngOnInit(): void {
@@ -230,28 +291,50 @@ export class SetupReposStepComponent implements OnInit {
 
   onFinish(): void {
     const accountId = this.accountId();
+    const applyBranchRules = this._applyBranchRules();
     const slugs = Array.from(this._selectedSlugs());
     const total = slugs.length;
-    let successCount = 0;
 
     this._saving.set(true);
     this._saveError.set(null);
+    this._rows.set(slugs.map(slug => ({ slug, kind: 'queued', response: null, error: null })));
 
+    // Sequential, and a failure in one row never aborts the batch: each row records its own result.
     from(slugs).pipe(
-      concatMap(slug => this._repositoryService.createRepository(accountId, { slug, pollIntervalSeconds: null, maxConcurrentWorkers: null })),
+      concatMap(slug => this._addOne(accountId, slug, applyBranchRules)),
+      finalize(() => this._saving.set(false)),
     ).subscribe({
-      next: () => {
-        successCount++;
-      },
       complete: () => {
-        this._saving.set(false);
-        this.complete.emit();
-      },
-      error: (err: HttpErrorResponse) => {
-        this._saving.set(false);
-        const rawMessage = (extractErrorMessage(err) ?? 'Failed to create repositories').slice(0, ERROR_TRUNCATE_LENGTH);
-        this._saveError.set(`Created ${successCount} of ${total} repositories. Error: ${rawMessage}`);
+        const rows = this._rows();
+        const failed = rows.filter(r => r.kind === 'error');
+        if (failed.length > 0) {
+          const added = rows.filter(r => r.kind === 'added').length;
+          this._saveError.set(`Created ${added} of ${total} repositories. Error: ${failed[0].error}`);
+        }
       },
     });
+  }
+
+  private _addOne(accountId: string, slug: string, applyBranchRules: boolean): Observable<void> {
+    return defer(() => {
+      this._updateRow(slug, { kind: 'adding' });
+      return this._repositoryService.createRepository(accountId, {
+        slug,
+        pollIntervalSeconds: null,
+        maxConcurrentWorkers: null,
+        applyBranchRules,
+      });
+    }).pipe(
+      map(response => this._updateRow(slug, { kind: 'added', response })),
+      catchError((err: HttpErrorResponse) => {
+        const message = (extractErrorMessage(err) ?? 'Failed to create repository').slice(0, ERROR_TRUNCATE_LENGTH);
+        this._updateRow(slug, { kind: 'error', error: message });
+        return of(undefined);
+      }),
+    );
+  }
+
+  private _updateRow(slug: string, patch: Partial<AddRow>): void {
+    this._rows.update(rows => rows.map(r => (r.slug === slug ? { ...r, ...patch } : r)));
   }
 }

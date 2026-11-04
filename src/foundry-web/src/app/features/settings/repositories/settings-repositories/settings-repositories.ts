@@ -18,7 +18,12 @@ import { AccountService } from '../../accounts/account.service';
 import { RepositoryService } from '../repository.service';
 import { RepositoryListComponent } from '../repository-list/repository-list';
 import { RepositoryFormComponent } from '../repository-form/repository-form';
-import { RepositorySummary, CreateRepositoryRequest, UpdateRepositoryRequest } from '../repository.model';
+import {
+  RepositorySummary,
+  CreateRepositoryRequest,
+  CreateRepositoryResponse,
+  UpdateRepositoryRequest,
+} from '../repository.model';
 
 type RepositoryView = { kind: 'list' } | { kind: 'add' };
 
@@ -60,8 +65,10 @@ type RepositoryView = { kind: 'list' } | { kind: 'add' };
               [loadAvailableError]="repositoryService.loadAvailableError()"
               [saving]="repositoryService.saving()"
               [saveError]="repositoryService.saveError()"
+              [outcome]="_addOutcome()"
               (save)="onSave($event)"
               (cancel)="onCancel()"
+              (done)="onAddDone()"
               (accountSelected)="onAccountSelected($event)"
             />
           }
@@ -79,6 +86,7 @@ export class SettingsRepositoriesComponent implements OnInit {
   @ViewChild('sectionHeading') private readonly _sectionHeading?: ElementRef<HTMLElement>;
 
   protected readonly _repositoryView: WritableSignal<RepositoryView> = signal({ kind: 'list' });
+  protected readonly _addOutcome: WritableSignal<CreateRepositoryResponse | null> = signal(null);
   private readonly _selectedAccountId: WritableSignal<string> = signal('');
   private readonly _accountIdsKey: Signal<string> = computed(() =>
     this.accountService.accounts().map(a => a.id).sort().join(',')
@@ -106,22 +114,22 @@ export class SettingsRepositoriesComponent implements OnInit {
   }
 
   onAdd(): void {
+    this._addOutcome.set(null);
     this._repositoryView.set({ kind: 'add' });
   }
 
   onCancel(): void {
-    this._repositoryView.set({ kind: 'list' });
-    runInInjectionContext(this._injector, () => {
-      afterNextRender(() => {
-        this._sectionHeading?.nativeElement.focus();
-      });
-    });
+    this._returnToList();
+  }
+
+  onAddDone(): void {
+    this._returnToList();
   }
 
   onSave(request: CreateRepositoryRequest | UpdateRepositoryRequest): void {
     this.repositoryService.createRepository(this._selectedAccountId(), request as CreateRepositoryRequest)
       .subscribe({
-        next: () => this._afterSave(),
+        next: (response) => this._afterSave(response),
         error: () => { /* handled via saveError signal */ },
       });
   }
@@ -141,9 +149,15 @@ export class SettingsRepositoriesComponent implements OnInit {
     this.repositoryService.loadAvailableRepositories(accountId);
   }
 
-  private _afterSave(): void {
-    this._repositoryView.set({ kind: 'list' });
+  private _afterSave(response: CreateRepositoryResponse): void {
+    // Stay on the add view and present the outcome checklist; Done returns to the list.
+    this._addOutcome.set(response);
     this._reloadAll();
+  }
+
+  private _returnToList(): void {
+    this._addOutcome.set(null);
+    this._repositoryView.set({ kind: 'list' });
     runInInjectionContext(this._injector, () => {
       afterNextRender(() => {
         this._sectionHeading?.nativeElement.focus();

@@ -1,0 +1,125 @@
+@use '../../../../../styles/controls' as *;
+
+@keyframes fd-add-outcome-reveal {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+$reveal-step: 180ms;
+
+.repository-add-outcome {
+  &__rows {
+    display: flex;
+    flex-direction: column;
+    gap: var(--fd-spacing-sm);
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+
+  // Staggered reveal of rows that are already received — purely presentational.
+  &__row {
+    align-items: baseline;
+    animation: fd-add-outcome-reveal 220ms ease-out both;
+    column-gap: var(--fd-spacing-sm);
+    display: grid;
+    font-size: 0.875rem;
+    grid-template-columns: var(--fd-gutter) auto 1fr;
+
+    @for $i from 1 through 3 {
+      &:nth-child(#{$i}) {
+        animation-delay: ($i - 1) * $reveal-step;
+      }
+    }
+
+    &--pass .repository-add-outcome__icon,
+    &--pass .repository-add-outcome__status {
+      color: var(--fd-text-success);
+    }
+
+    &--fail .repository-add-outcome__icon,
+    &--fail .repository-add-outcome__status {
+      color: var(--fd-text-ineligible);
+    }
+
+    &--neutral .repository-add-outcome__icon,
+    &--neutral .repository-add-outcome__status {
+      color: var(--fd-text-secondary);
+    }
+  }
+
+  &__icon {
+    font-weight: 600;
+    text-align: center;
+  }
+
+  &__label {
+    color: var(--fd-text-primary);
+    font-weight: 500;
+  }
+
+  &__status {
+    font-size: 0.8125rem;
+  }
+
+  &__violations,
+  &__details {
+    color: var(--fd-text-secondary);
+    font-size: 0.8125rem;
+    grid-column: 2 / -1;
+  }
+
+  &__violations {
+    margin: var(--fd-spacing-xs) 0 0;
+    padding-left: var(--fd-spacing-lg);
+  }
+
+  &__details {
+    display: flex;
+    flex-direction: column;
+    gap: var(--fd-spacing-xs);
+    margin-top: var(--fd-spacing-xs);
+  }
+
+  &__reason,
+  &__detail,
+  &__rules-heading {
+    margin: 0;
+  }
+
+  &__detail {
+    border-left: 2px solid var(--fd-border-default);
+    font-family: var(--fd-font-mono);
+    overflow-wrap: anywhere;
+    padding-left: var(--fd-spacing-sm);
+  }
+
+  &__rules {
+    margin: 0;
+    padding-left: var(--fd-spacing-lg);
+  }
+
+  &__settings-link {
+    align-self: flex-start;
+    color: var(--fd-text-link);
+
+    &:focus-visible {
+      @include focus-ring;
+      border-radius: var(--fd-radius-sm);
+    }
+  }
+}
+
+// Reduced motion: rows appear immediately — no transform, no staggered delay.
+@media (prefers-reduced-motion: reduce) {
+  .repository-add-outcome__row {
+    animation: none;
+  }
+}

@@ -4,9 +4,40 @@ import { provideHttpClientTesting, HttpTestingController } from '@angular/common
 import { Component } from '@angular/core';
 import { provideRouter } from '@angular/router';
 import { SetupReposStepComponent } from './setup-repos-step';
-import { AvailableRepository } from '../../settings/repositories/repository.model';
+import {
+  AvailableRepository,
+  BranchRulesOutcome,
+  CreateRepositoryResponse,
+} from '../../settings/repositories/repository.model';
 
 const ACCOUNT_ID = 'account-1';
+
+/** Repo-picker checkboxes only — excludes the batch-level "Apply branch rules" checkbox. */
+const REPO_CHECKBOXES = '.setup-repos-step__repo-list input[type="checkbox"]';
+
+function createdResponse(
+  slug: string,
+  branchRules: BranchRulesOutcome = { kind: 'applied', reason: null, settingsUrl: null, detail: null },
+): CreateRepositoryResponse {
+  return {
+    repository: {
+      id: `id-${slug}`,
+      slug,
+      accountId: ACCOUNT_ID,
+      accountName: 'acc',
+      providerType: 'github',
+      position: 0,
+      pollIntervalSeconds: null,
+      effectivePollIntervalSeconds: 300,
+      pollIntervalIsDefault: true,
+      isActive: true,
+      maxConcurrentWorkers: 1,
+      lastPolledAt: null,
+      eligibility: { status: 'eligible', violations: [], reason: null },
+    },
+    branchRules,
+  };
+}
 
 const AVAILABLE_REPOS: AvailableRepository[] = [
   { slug: 'org/repo-alpha', isPrivate: false, canPush: true, isMonitored: false },
@@ -66,7 +97,7 @@ describe('SetupReposStepComponent', () => {
     // Assert
     const el = fixture.nativeElement as HTMLElement;
     expect(el.querySelector('input[type="text"]')).toBeTruthy();
-    expect(el.querySelectorAll('input[type="checkbox"]').length).toBe(3);
+    expect(el.querySelectorAll(REPO_CHECKBOXES).length).toBe(3);
     expect(el.querySelector('button.setup-repos-step__back-btn')).toBeTruthy();
     expect(el.querySelector('button.setup-repos-step__skip-btn')).toBeTruthy();
     expect(el.querySelector('button.setup-repos-step__finish-btn')).toBeTruthy();
@@ -136,7 +167,7 @@ describe('SetupReposStepComponent', () => {
 
     // Act
     const el = fixture.nativeElement as HTMLElement;
-    const checkbox = el.querySelectorAll('input[type="checkbox"]')[0] as HTMLInputElement;
+    const checkbox = el.querySelectorAll(REPO_CHECKBOXES)[0] as HTMLInputElement;
     checkbox.checked = true;
     checkbox.dispatchEvent(new Event('change'));
     fixture.detectChanges();
@@ -162,7 +193,7 @@ describe('SetupReposStepComponent', () => {
     fixture.detectChanges();
 
     // Assert
-    expect(el.querySelectorAll('input[type="checkbox"]').length).toBe(1);
+    expect(el.querySelectorAll(REPO_CHECKBOXES).length).toBe(1);
     const label = el.querySelector('.setup-repos-step__repo-slug');
     expect(label?.textContent).toContain('alpha');
   });
@@ -176,7 +207,7 @@ describe('SetupReposStepComponent', () => {
     fixture.detectChanges();
 
     const el = fixture.nativeElement as HTMLElement;
-    const checkboxes = el.querySelectorAll('input[type="checkbox"]') as NodeListOf<HTMLInputElement>;
+    const checkboxes = el.querySelectorAll(REPO_CHECKBOXES) as NodeListOf<HTMLInputElement>;
     checkboxes[0].checked = true;
     checkboxes[0].dispatchEvent(new Event('change'));
     checkboxes[1].checked = true;
@@ -191,12 +222,12 @@ describe('SetupReposStepComponent', () => {
     // Assert — repositories are created sequentially, one at a time
     const req1 = httpMock.expectOne(`/api/accounts/${ACCOUNT_ID}/repositories`);
     expect(req1.request.method).toBe('POST');
-    req1.flush({ id: 'r1', slug: req1.request.body.slug, accountId: ACCOUNT_ID, accountName: 'acc', pollIntervalSeconds: null, isActive: true, lastPolledAt: null });
+    req1.flush(createdResponse(req1.request.body.slug));
     fixture.detectChanges();
 
     const req2 = httpMock.expectOne(`/api/accounts/${ACCOUNT_ID}/repositories`);
     expect(req2.request.method).toBe('POST');
-    req2.flush({ id: 'r2', slug: req2.request.body.slug, accountId: ACCOUNT_ID, accountName: 'acc', pollIntervalSeconds: null, isActive: true, lastPolledAt: null });
+    req2.flush(createdResponse(req2.request.body.slug));
     fixture.detectChanges();
 
     // Both slugs should have been sent
@@ -213,7 +244,7 @@ describe('SetupReposStepComponent', () => {
     fixture.detectChanges();
 
     const el = fixture.nativeElement as HTMLElement;
-    const checkbox = el.querySelectorAll('input[type="checkbox"]')[0] as HTMLInputElement;
+    const checkbox = el.querySelectorAll(REPO_CHECKBOXES)[0] as HTMLInputElement;
     checkbox.checked = true;
     checkbox.dispatchEvent(new Event('change'));
     fixture.detectChanges();
@@ -228,7 +259,7 @@ describe('SetupReposStepComponent', () => {
 
     // Cleanup
     const req = httpMock.expectOne(`/api/accounts/${ACCOUNT_ID}/repositories`);
-    req.flush({ id: 'r1', slug: 'org/repo-alpha', accountId: ACCOUNT_ID, accountName: 'acc', pollIntervalSeconds: null, isActive: true, lastPolledAt: null });
+    req.flush(createdResponse('org/repo-alpha'));
   });
 
   // Cycle 8: Back button emits back output
@@ -286,7 +317,7 @@ describe('SetupReposStepComponent', () => {
     component.complete.subscribe(() => (emitted = true));
 
     const el = fixture.nativeElement as HTMLElement;
-    const checkbox = el.querySelectorAll('input[type="checkbox"]')[0] as HTMLInputElement;
+    const checkbox = el.querySelectorAll(REPO_CHECKBOXES)[0] as HTMLInputElement;
     checkbox.checked = true;
     checkbox.dispatchEvent(new Event('change'));
     fixture.detectChanges();
@@ -296,18 +327,16 @@ describe('SetupReposStepComponent', () => {
     finishBtn.click();
     fixture.detectChanges();
 
-    httpMock.expectOne(`/api/accounts/${ACCOUNT_ID}/repositories`).flush({
-      id: 'r1',
-      slug: 'org/repo-alpha',
-      accountId: ACCOUNT_ID,
-      accountName: 'acc',
-      pollIntervalSeconds: null,
-      isActive: true,
-      lastPolledAt: null,
-    });
+    httpMock.expectOne(`/api/accounts/${ACCOUNT_ID}/repositories`).flush(createdResponse('org/repo-alpha'));
     fixture.detectChanges();
 
-    // Assert
+    // Assert — the outcome is shown first; complete is emitted only when the operator continues
+    expect(emitted).toBe(false);
+    expect(finishBtn.textContent?.trim()).toBe('Continue');
+    expect(finishBtn.disabled).toBe(false);
+
+    finishBtn.click();
+    fixture.detectChanges();
     expect(emitted).toBe(true);
   });
 
@@ -339,7 +368,7 @@ describe('SetupReposStepComponent', () => {
     fixture.detectChanges();
 
     const el = fixture.nativeElement as HTMLElement;
-    const checkbox = el.querySelectorAll('input[type="checkbox"]')[0] as HTMLInputElement;
+    const checkbox = el.querySelectorAll(REPO_CHECKBOXES)[0] as HTMLInputElement;
     checkbox.checked = true;
     checkbox.dispatchEvent(new Event('change'));
     fixture.detectChanges();
@@ -349,12 +378,16 @@ describe('SetupReposStepComponent', () => {
     finishBtn.click();
     fixture.detectChanges();
 
-    // Assert
-    expect(el.querySelector('.setup-repos-step__saving-indicator')).toBeTruthy();
+    // Assert — the in-flight row shows the indeterminate "Adding…" indicator, not a spinner
+    const row = el.querySelector('[data-slug="org/repo-alpha"]') as HTMLElement;
+    expect(row.querySelector('fd-repository-add-progress')).toBeTruthy();
+    expect(row.textContent).toContain('Adding…');
+    expect(row.querySelector('fd-spinner')).toBeFalsy();
+    expect(row.querySelector('fd-repository-add-outcome')).toBeFalsy();
 
     // Cleanup
     const req = httpMock.expectOne(`/api/accounts/${ACCOUNT_ID}/repositories`);
-    req.flush({ id: 'r1', slug: 'org/repo-alpha', accountId: ACCOUNT_ID, accountName: 'acc', pollIntervalSeconds: null, isActive: true, lastPolledAt: null });
+    req.flush(createdResponse('org/repo-alpha'));
   });
 
   // Cycle 12: shows save error message when creation fails
@@ -366,7 +399,7 @@ describe('SetupReposStepComponent', () => {
     fixture.detectChanges();
 
     const el = fixture.nativeElement as HTMLElement;
-    const checkbox = el.querySelectorAll('input[type="checkbox"]')[0] as HTMLInputElement;
+    const checkbox = el.querySelectorAll(REPO_CHECKBOXES)[0] as HTMLInputElement;
     checkbox.checked = true;
     checkbox.dispatchEvent(new Event('change'));
     fixture.detectChanges();
@@ -395,7 +428,7 @@ describe('SetupReposStepComponent', () => {
     fixture.detectChanges();
 
     const el = fixture.nativeElement as HTMLElement;
-    const checkboxes = el.querySelectorAll('input[type="checkbox"]') as NodeListOf<HTMLInputElement>;
+    const checkboxes = el.querySelectorAll(REPO_CHECKBOXES) as NodeListOf<HTMLInputElement>;
     checkboxes[0].checked = true;
     checkboxes[0].dispatchEvent(new Event('change'));
     checkboxes[1].checked = true;
@@ -408,9 +441,7 @@ describe('SetupReposStepComponent', () => {
     fixture.detectChanges();
 
     // Repositories are created sequentially — first succeeds, second fails
-    httpMock.expectOne(`/api/accounts/${ACCOUNT_ID}/repositories`).flush({
-      id: 'r1', slug: 'org/repo-alpha', accountId: ACCOUNT_ID, accountName: 'acc', pollIntervalSeconds: null, isActive: true, lastPolledAt: null,
-    });
+    httpMock.expectOne(`/api/accounts/${ACCOUNT_ID}/repositories`).flush(createdResponse('org/repo-alpha'));
     fixture.detectChanges();
 
     httpMock.expectOne(`/api/accounts/${ACCOUNT_ID}/repositories`).flush('Server Error', {
@@ -438,7 +469,7 @@ describe('SetupReposStepComponent', () => {
 
     // Assert
     const el = fixture.nativeElement as HTMLElement;
-    const checkboxes = el.querySelectorAll('input[type="checkbox"]') as NodeListOf<HTMLInputElement>;
+    const checkboxes = el.querySelectorAll(REPO_CHECKBOXES) as NodeListOf<HTMLInputElement>;
     expect(checkboxes[0].disabled).toBe(false);
     expect(checkboxes[1].disabled).toBe(true);
   });
@@ -492,7 +523,7 @@ describe('SetupReposStepComponent', () => {
 
     // Act — dispatch a programmatic change event on the disabled (non-writable) checkbox
     const el = fixture.nativeElement as HTMLElement;
-    const checkboxes = el.querySelectorAll('input[type="checkbox"]') as NodeListOf<HTMLInputElement>;
+    const checkboxes = el.querySelectorAll(REPO_CHECKBOXES) as NodeListOf<HTMLInputElement>;
     const readonlyCheckbox = checkboxes[1];
     readonlyCheckbox.checked = true;
     readonlyCheckbox.dispatchEvent(new Event('change'));
@@ -536,7 +567,7 @@ describe('SetupReposStepComponent', () => {
 
     // Assert
     const el = fixture.nativeElement as HTMLElement;
-    const checkboxes = el.querySelectorAll('input[type="checkbox"]') as NodeListOf<HTMLInputElement>;
+    const checkboxes = el.querySelectorAll(REPO_CHECKBOXES) as NodeListOf<HTMLInputElement>;
     const disabledCheckbox = checkboxes[1];
     const describedById = disabledCheckbox.getAttribute('aria-describedby');
     expect(describedById).toBeTruthy();
@@ -590,7 +621,7 @@ describe('SetupReposStepComponent', () => {
 
     // Assert — both entries visible, no empty state
     const el = fixture.nativeElement as HTMLElement;
-    const checkboxes = el.querySelectorAll('input[type="checkbox"]');
+    const checkboxes = el.querySelectorAll(REPO_CHECKBOXES);
     expect(checkboxes.length).toBe(2);
     const emptyEl = el.querySelector('.setup-repos-step__repo-empty');
     expect(emptyEl).toBeNull();
@@ -832,7 +863,7 @@ describe('SetupReposStepComponent', () => {
     fixture.detectChanges();
 
     const el = fixture.nativeElement as HTMLElement;
-    const checkbox = el.querySelectorAll('input[type="checkbox"]')[0] as HTMLInputElement;
+    const checkbox = el.querySelectorAll(REPO_CHECKBOXES)[0] as HTMLInputElement;
     checkbox.checked = true;
     checkbox.dispatchEvent(new Event('change'));
     fixture.detectChanges();
@@ -855,5 +886,175 @@ describe('SetupReposStepComponent', () => {
     expect(errorText).toBeTruthy();
     // The error should not contain more than 200 A's (the raw error is truncated)
     expect((errorText.match(/A+/)?.[0] ?? '').length).toBeLessThanOrEqual(200);
+  });
+  describe('apply branch rules and per-row outcomes', () => {
+    function selectAlphaAndBeta() {
+      const ctx = setup();
+      ctx.fixture.detectChanges();
+      ctx.httpMock
+        .expectOne(`/api/accounts/${ACCOUNT_ID}/repositories/available-repositories`)
+        .flush({ hasClaims: true, repositories: AVAILABLE_REPOS });
+      ctx.fixture.detectChanges();
+      const el = ctx.fixture.nativeElement as HTMLElement;
+      const checkboxes = el.querySelectorAll(REPO_CHECKBOXES) as NodeListOf<HTMLInputElement>;
+      checkboxes[0].checked = true;
+      checkboxes[0].dispatchEvent(new Event('change'));
+      checkboxes[1].checked = true;
+      checkboxes[1].dispatchEvent(new Event('change'));
+      ctx.fixture.detectChanges();
+      return { ...ctx, el };
+    }
+
+    function clickFinish(el: HTMLElement) {
+      (el.querySelector('button.setup-repos-step__finish-btn') as HTMLButtonElement).click();
+    }
+
+    it('should render one batch-level "Apply branch rules" checkbox, checked by default', () => {
+      // Arrange / Act
+      const { el, httpMock } = selectAlphaAndBeta();
+
+      // Assert
+      const applies = el.querySelectorAll('input.setup-repos-step__apply-rules-checkbox') as NodeListOf<HTMLInputElement>;
+      expect(applies.length).toBe(1);
+      expect(applies[0].checked).toBe(true);
+      expect(el.querySelector('.setup-repos-step__apply-rules')?.textContent).toContain('Apply branch rules');
+      httpMock.expectNone(`/api/accounts/${ACCOUNT_ID}/repositories`);
+    });
+
+    it('should send applyBranchRules: true on every create in the batch by default', () => {
+      // Arrange
+      const { fixture, el, httpMock } = selectAlphaAndBeta();
+
+      // Act
+      clickFinish(el);
+      fixture.detectChanges();
+      const req1 = httpMock.expectOne(`/api/accounts/${ACCOUNT_ID}/repositories`);
+      req1.flush(createdResponse(req1.request.body.slug));
+      fixture.detectChanges();
+      const req2 = httpMock.expectOne(`/api/accounts/${ACCOUNT_ID}/repositories`);
+      req2.flush(createdResponse(req2.request.body.slug));
+
+      // Assert
+      expect(req1.request.body.applyBranchRules).toBe(true);
+      expect(req2.request.body.applyBranchRules).toBe(true);
+    });
+
+    it('should send applyBranchRules: false on every create when the batch checkbox is cleared', () => {
+      // Arrange
+      const { fixture, el, httpMock } = selectAlphaAndBeta();
+      const apply = el.querySelector('input.setup-repos-step__apply-rules-checkbox') as HTMLInputElement;
+      apply.checked = false;
+      apply.dispatchEvent(new Event('change'));
+      fixture.detectChanges();
+
+      // Act
+      clickFinish(el);
+      fixture.detectChanges();
+      const req1 = httpMock.expectOne(`/api/accounts/${ACCOUNT_ID}/repositories`);
+      req1.flush(createdResponse(req1.request.body.slug, { kind: 'not-requested', settingsUrl: 'https://x/settings' }));
+      fixture.detectChanges();
+      const req2 = httpMock.expectOne(`/api/accounts/${ACCOUNT_ID}/repositories`);
+      req2.flush(createdResponse(req2.request.body.slug, { kind: 'not-requested', settingsUrl: 'https://x/settings' }));
+
+      // Assert
+      expect(req1.request.body.applyBranchRules).toBe(false);
+      expect(req2.request.body.applyBranchRules).toBe(false);
+    });
+
+    it('should disable the batch checkbox once the batch has started', () => {
+      // Arrange
+      const { fixture, el, httpMock } = selectAlphaAndBeta();
+
+      // Act
+      clickFinish(el);
+      fixture.detectChanges();
+
+      // Assert
+      const apply = el.querySelector('input.setup-repos-step__apply-rules-checkbox') as HTMLInputElement;
+      expect(apply.disabled).toBe(true);
+
+      // Cleanup
+      const req1 = httpMock.expectOne(`/api/accounts/${ACCOUNT_ID}/repositories`);
+      req1.flush(createdResponse(req1.request.body.slug));
+      fixture.detectChanges();
+      const req2 = httpMock.expectOne(`/api/accounts/${ACCOUNT_ID}/repositories`);
+      req2.flush(createdResponse(req2.request.body.slug));
+    });
+
+    it('should show each row its own outcome, including a failed branch-rules apply, without aborting the batch', () => {
+      // Arrange
+      const { fixture, el, httpMock } = selectAlphaAndBeta();
+      const settingsUrl = 'https://github.com/org/repo/settings/rules';
+
+      // Act — first row: added but branch-rules apply failed (still 201)
+      clickFinish(el);
+      fixture.detectChanges();
+      const req1 = httpMock.expectOne(`/api/accounts/${ACCOUNT_ID}/repositories`);
+      const slug1 = req1.request.body.slug as string;
+      req1.flush(createdResponse(slug1, { kind: 'failed', reason: 'insufficient-permission', settingsUrl, detail: 'Must have admin rights' }), { status: 201, statusText: 'Created' });
+      fixture.detectChanges();
+
+      // Assert — the second create is still issued; first row shows its outcome, second shows Adding…
+      const req2 = httpMock.expectOne(`/api/accounts/${ACCOUNT_ID}/repositories`);
+      const slug2 = req2.request.body.slug as string;
+      const row1 = el.querySelector(`[data-slug="${slug1}"]`) as HTMLElement;
+      const row2 = el.querySelector(`[data-slug="${slug2}"]`) as HTMLElement;
+      expect(row1.querySelector('fd-repository-add-outcome')).toBeTruthy();
+      expect(row1.querySelector('[data-row="branch-rules"]')?.textContent).toContain('Failed');
+      expect(row1.querySelector('a.repository-add-outcome__settings-link')?.getAttribute('href')).toBe(settingsUrl);
+      expect(row2.querySelector('fd-repository-add-progress')).toBeTruthy();
+
+      req2.flush(createdResponse(slug2));
+      fixture.detectChanges();
+
+      expect(row2.querySelector('[data-row="branch-rules"]')?.textContent).toContain('Applied');
+      expect(el.querySelector('.setup-repos-step__save-error')?.textContent?.trim()).toBe('');
+    });
+
+    it('should continue the batch after a create request fails and show the error on that row only', () => {
+      // Arrange
+      const { fixture, el, httpMock } = selectAlphaAndBeta();
+
+      // Act
+      clickFinish(el);
+      fixture.detectChanges();
+      const req1 = httpMock.expectOne(`/api/accounts/${ACCOUNT_ID}/repositories`);
+      const slug1 = req1.request.body.slug as string;
+      req1.flush('Repo already exists', { status: 409, statusText: 'Conflict' });
+      fixture.detectChanges();
+      const req2 = httpMock.expectOne(`/api/accounts/${ACCOUNT_ID}/repositories`);
+      const slug2 = req2.request.body.slug as string;
+      req2.flush(createdResponse(slug2));
+      fixture.detectChanges();
+
+      // Assert
+      const row1 = el.querySelector(`[data-slug="${slug1}"]`) as HTMLElement;
+      const row2 = el.querySelector(`[data-slug="${slug2}"]`) as HTMLElement;
+      expect(row1.querySelector('.setup-repos-step__result-error')?.textContent).toContain('Not added');
+      expect(row1.querySelector('fd-repository-add-outcome')).toBeFalsy();
+      expect(row2.querySelector('fd-repository-add-outcome')).toBeTruthy();
+      expect(el.querySelector('.setup-repos-step__save-error')?.textContent).toContain('1 of 2');
+    });
+
+    it('should not reveal any outcome before the response arrives', () => {
+      // Arrange
+      const { fixture, el, httpMock } = selectAlphaAndBeta();
+
+      // Act
+      clickFinish(el);
+      fixture.detectChanges();
+
+      // Assert
+      expect(el.querySelector('fd-repository-add-outcome')).toBeFalsy();
+      expect(el.querySelectorAll('fd-repository-add-progress').length).toBe(1);
+      expect(el.querySelector('.setup-repos-step__result-queued')).toBeTruthy();
+
+      // Cleanup
+      const req1 = httpMock.expectOne(`/api/accounts/${ACCOUNT_ID}/repositories`);
+      req1.flush(createdResponse(req1.request.body.slug));
+      fixture.detectChanges();
+      const req2 = httpMock.expectOne(`/api/accounts/${ACCOUNT_ID}/repositories`);
+      req2.flush(createdResponse(req2.request.body.slug));
+    });
   });
 });

@@ -187,6 +187,12 @@ public sealed class WhenWriteProbeVerdictIsNull : IAsyncDisposable
             Task.FromResult(Result<BranchProtection>.Ok(
                 new BranchProtection("main", false, false, false)));
 
+
+        public Task<Result> ApplyBranchRulesAsync(
+            RepositorySlug slug,
+            CancellationToken cancellationToken) =>
+            throw new NotSupportedException();
+
         public Task<Result<bool>> CreateBranchAsync(
             RepositorySlug slug,
             string branchName,

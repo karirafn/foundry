@@ -1071,4 +1071,7 @@ internal static class GitLabErrors
 
     public static Error UnexpectedStatusCode(int statusCode) =>
         new("GitLab.UnexpectedStatusCode", $"GitLab API returned unexpected status code {statusCode}.");
+
+    public static Error ProviderError(string message) =>
+        new("GitLab.ProviderError", message);
 }

@@ -55,6 +55,12 @@ public sealed class MonitoredRepository : AggregateRoot<MonitoredRepositoryId>
 
     public string? EligibilityStatus { get; private set; }
 
+    /// <summary>
+    /// The operator intent, captured when the repository is added, that Foundry may write its
+    /// default-branch rules to the provider. Persisted intent only — polling never writes rules.
+    /// </summary>
+    public bool ApplyBranchRules { get; private set; }
+
     internal WriteProbeVerdict WriteProbeVerdict { get; private set; } = new WriteProbeVerdict.Unknown();
 
     public static Result<MonitoredRepository> Create(
@@ -62,7 +68,8 @@ public sealed class MonitoredRepository : AggregateRoot<MonitoredRepositoryId>
         string host,
         TimeSpan? pollInterval,
         int position = 0,
-        int maxConcurrentWorkers = DefaultMaxConcurrentWorkers)
+        int maxConcurrentWorkers = DefaultMaxConcurrentWorkers,
+        bool applyBranchRules = false)
     {
         if (maxConcurrentWorkers < MinMaxConcurrentWorkers || maxConcurrentWorkers > MaxMaxConcurrentWorkers)
         {
@@ -90,6 +97,7 @@ public sealed class MonitoredRepository : AggregateRoot<MonitoredRepositoryId>
             Eligibility = new RepositoryEligibility.Unreachable(),
             EligibilityStatus = UnreachableStatus,
             WriteProbeVerdict = new WriteProbeVerdict.Unknown(),
+            ApplyBranchRules = applyBranchRules,
         };
     }
 

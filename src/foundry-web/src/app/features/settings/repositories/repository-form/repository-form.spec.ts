@@ -1,7 +1,13 @@
 import { TestBed } from '@angular/core/testing';
 import { RepositoryFormComponent } from './repository-form';
 import { AccountSummary } from '../../accounts/account.model';
-import { AvailableRepository, CreateRepositoryRequest, RepositorySummary, UpdateRepositoryRequest } from '../repository.model';
+import {
+  AvailableRepository,
+  CreateRepositoryRequest,
+  CreateRepositoryResponse,
+  RepositorySummary,
+  UpdateRepositoryRequest,
+} from '../repository.model';
 
 const GITHUB_EXPLANATION = "Your token lacks push permission or SSO isn't authorized.";
 const GITLAB_EXPLANATION = "Your token's role is below Developer.";
@@ -80,6 +86,7 @@ function setup(overrides: {
   saveError?: string | null;
   hasClaims?: boolean;
   noPushAccessExplanation?: string;
+  outcome?: CreateRepositoryResponse | null;
 } = {}) {
   const fixture = TestBed.createComponent(RepositoryFormComponent);
   fixture.componentRef.setInput('repository', overrides.repository ?? null);
@@ -91,6 +98,7 @@ function setup(overrides: {
   fixture.componentRef.setInput('saveError', overrides.saveError ?? null);
   fixture.componentRef.setInput('hasClaims', overrides.hasClaims ?? false);
   fixture.componentRef.setInput('noPushAccessExplanation', overrides.noPushAccessExplanation ?? '');
+  fixture.componentRef.setInput('outcome', overrides.outcome ?? null);
   fixture.detectChanges();
   return { fixture, component: fixture.componentInstance, el: fixture.nativeElement as HTMLElement };
 }
@@ -641,11 +649,12 @@ describe('RepositoryFormComponent', () => {
     const saveBtn = el.querySelector('.repository-form__save-btn') as HTMLButtonElement;
     saveBtn.click();
 
-    // Assert — maxConcurrentWorkers defaults to 1 (signal default, not null)
+    // Assert — maxConcurrentWorkers defaults to 1 (signal default, not null); applyBranchRules defaults to true
     expect(emitted).toEqual({
       slug: 'my-org/my-repo',
       pollIntervalSeconds: 300, // 5 min * 60 sec
       maxConcurrentWorkers: 1,
+      applyBranchRules: true,
     });
   });
 
@@ -1945,5 +1954,114 @@ describe('RepositoryFormComponent', () => {
     expect(options[1].getAttribute('aria-selected')).toBe('false');
     // Readonly option: aria-selected="false"
     expect(options[2].getAttribute('aria-selected')).toBe('false');
+  });
+  describe('apply branch rules, in-flight and outcome', () => {
+    const OUTCOME: CreateRepositoryResponse = {
+      repository: { ...MOCK_REPOSITORY, eligibility: { status: 'ineligible', violations: [], reason: null } },
+      branchRules: {
+        kind: 'skipped',
+        reason: 'no-rules-token',
+        settingsUrl: 'https://github.com/my-org/my-repo/settings/rules',
+        detail: null,
+      },
+    };
+
+    function pickRepo(el: HTMLElement, fixture: ReturnType<typeof setup>['fixture']) {
+      const select = el.querySelector('#repository-account') as HTMLSelectElement;
+      select.value = MOCK_ACCOUNT.id;
+      select.dispatchEvent(new Event('change'));
+      fixture.detectChanges();
+      (el.querySelector('[role="combobox"]') as HTMLInputElement).click();
+      fixture.detectChanges();
+      (el.querySelector('[role="option"]') as HTMLElement).click();
+      fixture.detectChanges();
+    }
+
+    it('should render an "Apply branch rules" checkbox, checked by default, in add mode', () => {
+      // Arrange / Act
+      const { el } = setup({ repository: null });
+
+      // Assert
+      const checkbox = el.querySelector('#repository-apply-branch-rules') as HTMLInputElement;
+      expect(checkbox).toBeTruthy();
+      expect(checkbox.type).toBe('checkbox');
+      expect(checkbox.checked).toBe(true);
+      expect(el.querySelector('label[for="repository-apply-branch-rules"]')?.textContent).toContain('Apply branch rules');
+    });
+
+    it('should not render the "Apply branch rules" checkbox in edit mode', () => {
+      // Arrange / Act
+      const { el } = setup({ repository: MOCK_REPOSITORY });
+
+      // Assert
+      expect(el.querySelector('#repository-apply-branch-rules')).toBeFalsy();
+    });
+
+    it('should emit applyBranchRules: false when the checkbox is cleared', () => {
+      // Arrange
+      const { el, component, fixture } = setup({ repository: null, accounts: [MOCK_ACCOUNT], availableRepositories: MOCK_AVAILABLE });
+      let emitted: CreateRepositoryRequest | UpdateRepositoryRequest | undefined;
+      component.save.subscribe((v: CreateRepositoryRequest | UpdateRepositoryRequest) => { emitted = v; });
+      pickRepo(el, fixture);
+      const checkbox = el.querySelector('#repository-apply-branch-rules') as HTMLInputElement;
+      checkbox.checked = false;
+      checkbox.dispatchEvent(new Event('change'));
+      fixture.detectChanges();
+
+      // Act
+      (el.querySelector('.repository-form__save-btn') as HTMLButtonElement).click();
+
+      // Assert
+      expect((emitted as CreateRepositoryRequest).applyBranchRules).toBe(false);
+    });
+
+    it('should show the indeterminate "Adding…" indicator while an add is in flight', () => {
+      // Arrange / Act
+      const { el } = setup({ repository: null, saving: true });
+
+      // Assert
+      const progress = el.querySelector('fd-repository-add-progress');
+      expect(progress).toBeTruthy();
+      expect(progress?.textContent).toContain('Adding…');
+      expect(el.querySelector('fd-repository-add-outcome')).toBeFalsy();
+    });
+
+    it('should not show the "Adding…" indicator in edit mode or when idle', () => {
+      // Arrange / Act
+      const edit = setup({ repository: MOCK_REPOSITORY, saving: true });
+      const idle = setup({ repository: null, saving: false });
+
+      // Assert
+      expect(edit.el.querySelector('fd-repository-add-progress')).toBeFalsy();
+      expect(idle.el.querySelector('fd-repository-add-progress')).toBeFalsy();
+    });
+
+    it('should replace the form with the outcome checklist and a Done button once the response arrives', () => {
+      // Arrange / Act
+      const { el } = setup({ repository: null, outcome: OUTCOME });
+
+      // Assert
+      expect(el.querySelector('fd-repository-add-outcome')).toBeTruthy();
+      expect(el.querySelector('.repository-form__outcome-heading')?.textContent).toContain(MOCK_REPOSITORY.slug);
+      expect(el.querySelector('#repository-account')).toBeFalsy();
+      expect(el.querySelector('.repository-form__cancel-link')).toBeFalsy();
+      expect(el.querySelector('fd-repository-add-progress')).toBeFalsy();
+      const link = el.querySelector('a.repository-add-outcome__settings-link') as HTMLAnchorElement;
+      expect(link.getAttribute('href')).toBe(OUTCOME.branchRules.settingsUrl);
+      expect(el.querySelector('.repository-form__done-btn')?.textContent?.trim()).toBe('Done');
+    });
+
+    it('should emit done when the Done button is clicked', () => {
+      // Arrange
+      const { el, component } = setup({ repository: null, outcome: OUTCOME });
+      let done = false;
+      component.done.subscribe(() => (done = true));
+
+      // Act
+      (el.querySelector('.repository-form__done-btn') as HTMLButtonElement).click();
+
+      // Assert
+      expect(done).toBe(true);
+    });
   });
 });

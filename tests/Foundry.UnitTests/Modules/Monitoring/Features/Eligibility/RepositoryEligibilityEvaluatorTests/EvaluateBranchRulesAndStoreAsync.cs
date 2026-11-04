@@ -409,6 +409,12 @@ public sealed class EvaluateBranchRulesAndStoreAsync
                 CancellationToken cancellationToken)
                 => Task.FromResult(Result<ReviewFeedback>.Ok(new ReviewFeedback([], OmittedCommentCount: 0, NewestCommentAt: null)));
 
+
+            public Task<Result> ApplyBranchRulesAsync(
+                RepositorySlug slug,
+                CancellationToken cancellationToken) =>
+                throw new NotSupportedException();
+
             public Task<Result<bool>> CreateBranchAsync(
                 RepositorySlug slug,
                 string branchName,
@@ -499,6 +505,12 @@ public sealed class EvaluateBranchRulesAndStoreAsync
             CancellationToken cancellationToken)
             => Task.FromResult(branchProtectionResult);
 
+
+        public Task<Result> ApplyBranchRulesAsync(
+            RepositorySlug slug,
+            CancellationToken cancellationToken) =>
+            throw new NotSupportedException();
+
         public Task<Result<bool>> CreateBranchAsync(
             RepositorySlug slug,
             string branchName,
@@ -567,6 +579,12 @@ public sealed class EvaluateBranchRulesAndStoreAsync
             RepositorySlug slug,
             CancellationToken cancellationToken)
             => throw new HttpRequestException("Connection refused");
+
+
+        public Task<Result> ApplyBranchRulesAsync(
+            RepositorySlug slug,
+            CancellationToken cancellationToken) =>
+            throw new NotSupportedException();
 
         public Task<Result<bool>> CreateBranchAsync(
             RepositorySlug slug,

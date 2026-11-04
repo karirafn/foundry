@@ -286,6 +286,18 @@ Tracks `LastPolledAt` for per-repo poll timing.
 Carries a Repository Eligibility status, re-evaluated on each poll cycle.
 Carries `MaxConcurrentWorkers` (non-nullable `int`, range 1..20, default 1) — see [Repository Worker Limit](#repository-worker-limit).
 
+### Apply Branch Rules
+
+The persisted operator intent on a Monitored Repository (`ApplyBranchRules`, non-nullable, default `true` on the add request; existing rows migrated to `false`) that Foundry may write its default-branch rules.
+Acted on only when the repository is added (`BranchRuleEnforcer`). Polling stays read-only toward the provider and never writes or repairs rules.
+
+### Branch Rules Outcome
+
+The per-request result of an apply attempt, returned in the add response (`CreateRepositoryResponse.branchRules`) and never persisted: `applied`, `already-present`, `not-requested`, `skipped` (`access-failure`, `unverifiable`, `no-rules-token`) or `failed` (`insufficient-permission`, `provider-error`).
+The write is attempted only when the full evaluation is `Ineligible` solely through `branch-protection:*` violations and the account has a readable Branch-Rules Token. The rules are then re-read (no second write probe) and the stored eligibility reflects that re-read, never the write's status code — a write that succeeds but does not take effect is `failed` (`provider-error`).
+A failed or skipped apply never fails the add.
+GitHub: Foundry upserts one repository ruleset named `foundry-eligibility` targeting `~DEFAULT_BRANCH` (`pull_request` with zero required approvals, `non_fast_forward`, `deletion`, no bypass actors). GitLab: Foundry protects the default branch (push: No one, merge: Maintainers, no force push), or patches an existing protection in place — it never unprotects the branch.
+
 ## Available Repository
 
 A candidate shown in the add-repository picker — the listing that answers "which repos can *this* account monitor". Three orthogonal facts about a repo are distinguished and must not be conflated:

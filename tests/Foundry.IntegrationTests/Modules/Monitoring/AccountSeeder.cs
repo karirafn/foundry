@@ -16,13 +16,14 @@ internal static class AccountSeeder
         FoundryWebAppFactory factory,
         string name = "My GitHub",
         string? token = "ghp_test_token",
-        string baseUrl = "https://github.com")
+        string baseUrl = "https://github.com",
+        string? branchRulesToken = null)
     {
         using IServiceScope scope = factory.Services.CreateScope();
         DbContext dbContext = scope.ServiceProvider.GetRequiredService<DbContext>();
 
         BaseUrl parsedBaseUrl = BaseUrl.Create(baseUrl).ValueOrThrow();
-        GitHubCredential credential = GitHubCredential.Create(name, token, parsedBaseUrl);
+        GitHubCredential credential = GitHubCredential.Create(name, token, parsedBaseUrl, branchRulesToken);
         dbContext.Set<Credential>().Add(credential);
         await dbContext.SaveChangesAsync(CancellationToken.None);
 

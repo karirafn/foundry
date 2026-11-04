@@ -1,0 +1,50 @@
+@keyframes fd-add-progress-sweep {
+  0% {
+    transform: translateX(-100%);
+  }
+
+  100% {
+    transform: translateX(250%);
+  }
+}
+
+.repository-add-progress {
+  display: flex;
+  flex-direction: column;
+  gap: var(--fd-spacing-xs);
+  min-width: 8rem;
+
+  &__label {
+    color: var(--fd-text-secondary);
+    font-size: 0.8125rem;
+  }
+
+  &__track {
+    background: var(--fd-border-muted);
+    border-radius: var(--fd-radius-sm);
+    display: block;
+    height: 4px;
+    overflow: hidden;
+    position: relative;
+    width: 100%;
+  }
+
+  &__bar {
+    animation: fd-add-progress-sweep 1.2s ease-in-out infinite;
+    background: var(--fd-text-link);
+    border-radius: inherit;
+    display: block;
+    height: 100%;
+    width: 40%;
+  }
+}
+
+// Reduced motion: no sweeping — a static, full-width muted bar signals "busy" without movement.
+@media (prefers-reduced-motion: reduce) {
+  .repository-add-progress__bar {
+    animation: none;
+    opacity: 0.5;
+    transform: none;
+    width: 100%;
+  }
+}

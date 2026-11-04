@@ -45,8 +45,8 @@ public sealed class WhenRequestIsValid : IAsyncDisposable
 
         // Assert
         response.StatusCode.ShouldBe(HttpStatusCode.Created);
-        RepositorySummary? repository = await response.Content
-            .ReadFromJsonAsync<RepositorySummary>(TestContext.Current.CancellationToken);
+        RepositorySummary? repository = (await response.Content
+            .ReadFromJsonAsync<CreateRepositoryResponse>(TestContext.Current.CancellationToken))?.Repository;
         repository.ShouldNotBeNull();
         repository.ShouldSatisfyAllConditions(
             () => repository.Slug.ShouldBe("owner/repo"),
@@ -76,8 +76,8 @@ public sealed class WhenRequestIsValid : IAsyncDisposable
 
         // Assert
         response.StatusCode.ShouldBe(HttpStatusCode.Created);
-        RepositorySummary? repository = await response.Content
-            .ReadFromJsonAsync<RepositorySummary>(TestContext.Current.CancellationToken);
+        RepositorySummary? repository = (await response.Content
+            .ReadFromJsonAsync<CreateRepositoryResponse>(TestContext.Current.CancellationToken))?.Repository;
         repository.ShouldNotBeNull();
         repository.MaxConcurrentWorkers.ShouldBe(5);
     }
@@ -100,8 +100,8 @@ public sealed class WhenRequestIsValid : IAsyncDisposable
 
         // Assert
         response.StatusCode.ShouldBe(HttpStatusCode.Created);
-        RepositorySummary? repository = await response.Content
-            .ReadFromJsonAsync<RepositorySummary>(TestContext.Current.CancellationToken);
+        RepositorySummary? repository = (await response.Content
+            .ReadFromJsonAsync<CreateRepositoryResponse>(TestContext.Current.CancellationToken))?.Repository;
         repository.ShouldNotBeNull();
         repository.ShouldSatisfyAllConditions(
             () => repository.IsActive.ShouldBeTrue(),

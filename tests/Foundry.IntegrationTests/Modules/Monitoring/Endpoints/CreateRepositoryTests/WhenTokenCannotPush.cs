@@ -69,8 +69,8 @@ public sealed class WhenTokenCannotPush : IAsyncDisposable
 
         // Assert
         response.StatusCode.ShouldBe(HttpStatusCode.Created);
-        RepositorySummary? repository = await response.Content
-            .ReadFromJsonAsync<RepositorySummary>(TestContext.Current.CancellationToken);
+        RepositorySummary? repository = (await response.Content
+            .ReadFromJsonAsync<CreateRepositoryResponse>(TestContext.Current.CancellationToken))?.Repository;
         repository.ShouldNotBeNull();
         repository.Eligibility.ShouldNotBeNull();
         repository.Eligibility.ShouldSatisfyAllConditions(

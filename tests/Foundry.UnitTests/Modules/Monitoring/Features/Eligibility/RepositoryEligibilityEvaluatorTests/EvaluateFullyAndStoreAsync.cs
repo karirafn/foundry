@@ -638,6 +638,12 @@ public sealed class EvaluateFullyAndStoreAsync
                 CancellationToken cancellationToken)
                 => Task.FromResult(Result<ReviewFeedback>.Ok(new ReviewFeedback([], OmittedCommentCount: 0, NewestCommentAt: null)));
 
+
+            public Task<Result> ApplyBranchRulesAsync(
+                RepositorySlug slug,
+                CancellationToken cancellationToken) =>
+                throw new NotSupportedException();
+
             public Task<Result<bool>> CreateBranchAsync(
                 RepositorySlug slug,
                 string branchName,
@@ -739,6 +745,12 @@ public sealed class EvaluateFullyAndStoreAsync
             return Task.FromResult(branchProtectionResult);
         }
 
+
+        public Task<Result> ApplyBranchRulesAsync(
+            RepositorySlug slug,
+            CancellationToken cancellationToken) =>
+            throw new NotSupportedException();
+
         public Task<Result<bool>> CreateBranchAsync(
             RepositorySlug slug,
             string branchName,
@@ -807,6 +819,12 @@ public sealed class EvaluateFullyAndStoreAsync
             RepositorySlug slug,
             CancellationToken cancellationToken)
             => throw new HttpRequestException("Connection refused");
+
+
+        public Task<Result> ApplyBranchRulesAsync(
+            RepositorySlug slug,
+            CancellationToken cancellationToken) =>
+            throw new NotSupportedException();
 
         public Task<Result<bool>> CreateBranchAsync(
             RepositorySlug slug,
@@ -882,6 +900,12 @@ public sealed class EvaluateFullyAndStoreAsync
                 CancellationToken cancellationToken)
                 => Task.FromResult(Result<BranchProtection>.Ok(
                     new BranchProtection("main", true, true, true)));
+
+
+            public Task<Result> ApplyBranchRulesAsync(
+                RepositorySlug slug,
+                CancellationToken cancellationToken) =>
+                throw new NotSupportedException();
 
             public Task<Result<bool>> CreateBranchAsync(
                 RepositorySlug slug,

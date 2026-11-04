@@ -57,6 +57,33 @@ export interface CreateRepositoryRequest {
   slug: string;
   pollIntervalSeconds: number | null;
   maxConcurrentWorkers: number | null;
+  /** Whether Foundry may write the default-branch rules eligibility requires. Server default: true. */
+  applyBranchRules?: boolean;
+}
+
+export type BranchRulesOutcomeKind = 'applied' | 'already-present' | 'not-requested' | 'skipped' | 'failed';
+
+export type BranchRulesOutcomeReason =
+  | 'access-failure'
+  | 'unverifiable'
+  | 'no-rules-token'
+  | 'insufficient-permission'
+  | 'provider-error';
+
+/** Per-request result of a branch-rules apply attempt. Returned on create, never persisted. */
+export interface BranchRulesOutcome {
+  kind: BranchRulesOutcomeKind;
+  /** Present only on skipped / failed. */
+  reason?: BranchRulesOutcomeReason | null;
+  /** Provider rules settings page; present on every kind except applied. */
+  settingsUrl?: string | null;
+  /** Human-readable explanation; present only on failed. */
+  detail?: string | null;
+}
+
+export interface CreateRepositoryResponse {
+  repository: RepositorySummary;
+  branchRules: BranchRulesOutcome;
 }
 
 export interface UpdateRepositoryRequest {
