@@ -3,6 +3,7 @@ using System.Diagnostics;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Modules.Monitoring.Features.Accounts;
+using Foundry.Modules.Monitoring.Features.Webhooks;
 using Foundry.Modules.Settings.Contracts.Queries;
 using Foundry.Shared;
 using Foundry.Shared.Infrastructure.Http;
@@ -24,7 +25,10 @@ internal static class UpdateRepository
         bool IsActive,
         int MaxConcurrentWorkers) : ICommand<RepositorySummary>;
 
-    internal sealed class Handler(DbContext dbContext, IGlobalSettingsQueries globalSettingsQueries)
+    internal sealed class Handler(
+        DbContext dbContext,
+        IGlobalSettingsQueries globalSettingsQueries,
+        WebhookIngress? webhookIngress = null)
         : ICommandHandler<Command, RepositorySummary>
     {
         public async Task<Result<RepositorySummary>> HandleAsync(
@@ -72,12 +76,16 @@ internal static class UpdateRepository
 
             int defaultPollIntervalSeconds = await globalSettingsQueries.GetPollIntervalSecondsAsync(cancellationToken);
 
+            bool webhookIngressConfigured = webhookIngress is not null
+                && (await webhookIngress.GetStateAsync(cancellationToken)).IsConfigured;
+
             RepositorySummary summary = RepositoryMappings.ToSummary(
                 repository,
                 credential.Id.Value,
                 credential.Name,
                 providerType,
-                defaultPollIntervalSeconds);
+                defaultPollIntervalSeconds,
+                webhookIngressConfigured);
 
             return Result<RepositorySummary>.Ok(summary);
         }

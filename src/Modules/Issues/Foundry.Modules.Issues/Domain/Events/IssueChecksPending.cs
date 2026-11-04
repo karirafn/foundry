@@ -6,4 +6,6 @@ namespace Foundry.Modules.Issues.Domain.Events;
 
 public sealed record IssueChecksPending(
     IssueId IssueId,
-    MonitoredRepositoryId MonitoredRepositoryId) : IDomainEvent, IIssueStateChanged;
+    MonitoredRepositoryId MonitoredRepositoryId,
+    int IssueNumber,
+    DateTimeOffset EnteredChecksPendingAt) : IDomainEvent, IIssueStateChanged;

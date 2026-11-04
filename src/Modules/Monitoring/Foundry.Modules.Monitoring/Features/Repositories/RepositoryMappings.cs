@@ -16,7 +16,8 @@ internal static class RepositoryMappings
         Guid accountId,
         string accountName,
         string providerType,
-        int defaultPollIntervalSeconds) =>
+        int defaultPollIntervalSeconds,
+        bool webhookIngressConfigured = false) =>
         new(
             repo.Id.Value,
             repo.Slug.ToString(),
@@ -31,7 +32,19 @@ internal static class RepositoryMappings
             repo.PollInterval is null,
             repo.LastPolledAt,
             ToEligibilityInfo(repo.Eligibility, providerType),
-            repo.UntrackSuppressedSince);
+            repo.UntrackSuppressedSince,
+            ToWebhookStatusToken(repo.EffectiveWebhookStatus(webhookIngressConfigured)));
+
+    internal static string ToWebhookStatusToken(WebhookStatus status) =>
+        status switch
+        {
+            WebhookStatus.NotConfigured => RepositorySummary.WebhookNotConfigured,
+            WebhookStatus.NotRegistered => "not-registered",
+            WebhookStatus.Pending => "pending",
+            WebhookStatus.Active => "active",
+            WebhookStatus.Silent => "silent",
+            _ => throw new UnreachableException(),
+        };
 
     internal static RepositoryEligibilityInfo? ToEligibilityInfo(
         RepositoryEligibility? eligibility,

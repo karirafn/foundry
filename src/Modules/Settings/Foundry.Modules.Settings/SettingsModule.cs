@@ -3,6 +3,7 @@ using Foundry.Modules.Settings.Contracts.Queries;
 using Foundry.Modules.Settings.Features;
 using Foundry.Modules.Settings.Features.Dispatch;
 using Foundry.Modules.Settings.Features.ProviderHosts;
+using Foundry.Modules.Settings.Features.Webhooks;
 using Foundry.Modules.Settings.Features.WorkerConfig;
 using Foundry.Modules.Workers.Contracts;
 using Foundry.Shared;
@@ -18,6 +19,7 @@ public static class SettingsModule
     public static IServiceCollection AddSettingsModule(this IServiceCollection services)
     {
         services.AddScoped<IGlobalSettingsQueries, GlobalSettingsQueries>();
+        services.AddScoped<IWebhookSettingsQueries, WebhookSettingsQueries>();
         services.AddHostedService<SettingsSeeder>();
 
         services.AddQueryHandler<GetSettings.Query, GlobalSettingsSummary, GetSettings.Handler>();
@@ -31,6 +33,7 @@ public static class SettingsModule
         services.AddCommandHandler<UpdateClaudeCodeSettings.Command, GlobalSettingsSummary, UpdateClaudeCodeSettings.Handler>();
         services.AddCommandHandler<RetryImageBuild.Command, GlobalSettingsSummary, RetryImageBuild.Handler>();
         services.AddCommandHandler<UpdateAllowedProviderHosts.Command, GlobalSettingsSummary, UpdateAllowedProviderHosts.Handler>();
+        services.AddCommandHandler<UpdateWebhookSettings.Command, GlobalSettingsSummary, UpdateWebhookSettings.Handler>();
 
         services.AddIntegrationEventHandler<ImageBuildRequested, ImageBuildRequestedHandler>();
         services.AddIntegrationEventHandler<ImageBuildSucceeded, ImageBuildSucceededHandler>();

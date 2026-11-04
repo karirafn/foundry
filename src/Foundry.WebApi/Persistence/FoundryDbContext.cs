@@ -51,7 +51,7 @@ public sealed class FoundryDbContext(
         ILogger<CredentialsInfrastructure.ApiKeyCredentialConverter>? credentialsConverterLogger =
             loggerFactory?.CreateLogger<CredentialsInfrastructure.ApiKeyCredentialConverter>();
 
-        modelBuilder.ApplyConfiguration(new MonitoredRepositoryConfiguration());
+        modelBuilder.ApplyConfiguration(new MonitoredRepositoryConfiguration(_dataProtectionProvider));
         modelBuilder.ApplyConfiguration(new CredentialConfiguration(_dataProtectionProvider));
         modelBuilder.ApplyConfiguration(new CredentialNamespaceConfiguration());
 

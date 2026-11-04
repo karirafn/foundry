@@ -324,6 +324,26 @@ namespace Foundry.WebApi.Migrations
                         .HasColumnType("TEXT")
                         .HasColumnName("untrack_suppressed_since");
 
+                    b.Property<string>("WebhookHookId")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .IsUnicode(false)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("webhook_hook_id");
+
+                    b.Property<string>("WebhookSecret")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("webhook_secret");
+
+                    b.Property<string>("WebhookStatus")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(20)
+                        .IsUnicode(false)
+                        .HasColumnType("TEXT")
+                        .HasDefaultValue("NotRegistered")
+                        .HasColumnName("webhook_status");
+
                     b.Property<string>("WriteProbeVerdict")
                         .HasMaxLength(2147483647)
                         .HasColumnType("TEXT")
@@ -337,6 +357,10 @@ namespace Foundry.WebApi.Migrations
                     b.HasIndex("Position")
                         .IsUnique()
                         .HasDatabaseName("ix_monitored_repositories_position");
+
+                    b.HasIndex("WebhookHookId")
+                        .IsUnique()
+                        .HasDatabaseName("ix_monitored_repositories_webhook_hook_id");
 
                     b.HasIndex("Host", "Slug")
                         .IsUnique()
@@ -359,6 +383,12 @@ namespace Foundry.WebApi.Migrations
                     b.Property<bool>("AutoResumeOnUsageReset")
                         .HasColumnType("INTEGER")
                         .HasColumnName("auto_resume_on_usage_reset");
+
+                    b.Property<int>("BackstopIntervalMinutes")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasDefaultValue(15)
+                        .HasColumnName("backstop_interval_minutes");
 
                     b.Property<string>("ClaudeCodeSettings")
                         .IsRequired()
@@ -412,6 +442,11 @@ namespace Foundry.WebApi.Migrations
                     b.Property<DateTimeOffset?>("UsageLimitResetsAt")
                         .HasColumnType("TEXT")
                         .HasColumnName("usage_limit_resets_at");
+
+                    b.Property<string>("WebhookPublicBaseUrl")
+                        .HasMaxLength(2048)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("webhook_public_base_url");
 
                     b.Property<string>("WorkerImageConfiguration")
                         .IsRequired()

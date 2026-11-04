@@ -3,7 +3,7 @@ import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { Observable, forkJoin } from 'rxjs';
 import { catchError, tap } from 'rxjs/operators';
 import { extractErrorMessage } from '../../../core/http/extract-error-message';
-import { ApplyBranchRulesResponse, AvailableRepositoriesResponse, AvailableRepository, CreateRepositoryRequest, CreateRepositoryResponse, RepositorySummary, UpdateRepositoryRequest } from './repository.model';
+import { ApplyBranchRulesResponse, AvailableRepositoriesResponse, AvailableRepository, CreateRepositoryRequest, CreateRepositoryResponse, RepositorySummary, RepositoryWebhookInfo, RepositoryWebhookSecret, UpdateRepositoryRequest, WebhookStatus } from './repository.model';
 
 @Injectable({ providedIn: 'root' })
 export class RepositoryService {
@@ -207,6 +207,22 @@ export class RepositoryService {
     );
   }
 
+  getWebhook(accountId: string, id: string): Observable<RepositoryWebhookInfo> {
+    return this._http.get<RepositoryWebhookInfo>(`${this._repositoriesUrl(accountId)}/${id}/webhook`);
+  }
+
+  /** Reveals the webhook secret on explicit operator request; never cached in a signal. */
+  revealWebhookSecret(accountId: string, id: string): Observable<RepositoryWebhookSecret> {
+    return this._http.post<RepositoryWebhookSecret>(`${this._repositoriesUrl(accountId)}/${id}/webhook/secret`, {});
+  }
+
+  /** Records the operator's "I've added the webhook" action; the hook then waits for its first delivery. */
+  markWebhookRegistered(accountId: string, id: string): Observable<RepositoryWebhookInfo> {
+    return this._http.post<RepositoryWebhookInfo>(`${this._repositoriesUrl(accountId)}/${id}/webhook/registered`, {}).pipe(
+      tap((info) => this._setWebhookStatus(id, info.status)),
+    );
+  }
+
   deleteRepository(accountId: string, id: string): Observable<void> {
     this._deleteErrorSignal.set(null);
     this._deletingSignal.set(true);
@@ -222,6 +238,12 @@ export class RepositoryService {
         this._deletingSignal.set(false);
         throw err;
       }),
+    );
+  }
+
+  private _setWebhookStatus(id: string, status: WebhookStatus): void {
+    this._repositoriesSignal.update(repositories =>
+      repositories.map(r => r.id === id ? { ...r, webhookStatus: status } : r)
     );
   }
 

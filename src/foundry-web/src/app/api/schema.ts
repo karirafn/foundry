@@ -382,6 +382,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/accounts/{accountId}/repositories/{id}/webhook": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Gets the manual webhook registration details for a repository (never the secret) */
+        get: operations["GetRepositoryWebhook"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/accounts/{accountId}/repositories/{id}/webhook/secret": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Reveals the repository's webhook secret for manual registration */
+        post: operations["RevealRepositoryWebhookSecret"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/accounts/{accountId}/repositories/{id}/webhook/registered": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Records that the operator added the webhook on the provider; the hook waits for its first delivery */
+        post: operations["MarkRepositoryWebhookRegistered"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/repositories/{id}/position": {
         parameters: {
             query?: never;
@@ -688,6 +739,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/settings/webhooks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Updates the webhook public base URL and the backstop poll interval */
+        put: operations["UpdateWebhookSettings"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -840,6 +908,12 @@ export interface components {
             additionalDenyRules: string[];
             hostSettingsPath: string;
             excludedHookCommands: string[];
+            webhookPublicBaseUrl?: null | string;
+            /**
+             * Format: int32
+             * @default 15
+             */
+            backstopIntervalMinutes: number | string;
         };
         /** @enum {unknown} */
         ImageBuildStatus: "Idle" | "Building" | "Failed";
@@ -972,6 +1046,19 @@ export interface components {
             eligibility?: null | components["schemas"]["RepositoryEligibilityInfo"];
             /** Format: date-time */
             untrackSuppressedSince?: null | string;
+            /** @default not-configured */
+            webhookStatus: string;
+        };
+        RepositoryWebhookInfo: {
+            status: string;
+            payloadUrl: null | string;
+            contentType: string;
+            events: string[];
+            /** Format: int32 */
+            backstopIntervalMinutes: number | string;
+        };
+        RepositoryWebhookSecret: {
+            secret: string;
         };
         RequestRunCancellationResponse: {
             /** Format: uuid */
@@ -1078,6 +1165,11 @@ export interface components {
             isActive: boolean;
             /** Format: int32 */
             maxConcurrentWorkers: number | string;
+        };
+        UpdateWebhookSettingsRequestBody: {
+            webhookPublicBaseUrl: null | string;
+            /** Format: int32 */
+            backstopIntervalMinutes: number | string;
         };
         UpdateWorkerEnvironmentMountRequest: {
             containerPath: string;
@@ -2127,6 +2219,102 @@ export interface operations {
             };
         };
     };
+    GetRepositoryWebhook: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                accountId: string;
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RepositoryWebhookInfo"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    RevealRepositoryWebhookSecret: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                accountId: string;
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RepositoryWebhookSecret"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    MarkRepositoryWebhookRegistered: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                accountId: string;
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RepositoryWebhookInfo"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
     MoveRepository: {
         parameters: {
             query?: never;
@@ -2746,6 +2934,48 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["UpdateAllowedProviderHostsRequestBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GlobalSettingsSummary"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    UpdateWebhookSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateWebhookSettingsRequestBody"];
             };
         };
         responses: {

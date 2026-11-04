@@ -1,3 +1,5 @@
+using Foundry.Modules.Monitoring.Features.Webhooks;
+
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
@@ -18,6 +20,7 @@ internal static class RepositoryEndpoints
         DeleteRepository.Endpoint.Map(accountScopedGroup);
         RecheckRepositoryEligibility.Endpoint.Map(accountScopedGroup);
         ApplyBranchRules.Endpoint.Map(accountScopedGroup);
+        RepositoryWebhookEndpoints.Map(accountScopedGroup);
 
         RouteGroupBuilder repositoriesGroup = routes.MapGroup("/api/repositories")
             .WithTags("Repositories");
