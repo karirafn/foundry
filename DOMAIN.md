@@ -289,11 +289,11 @@ Carries `MaxConcurrentWorkers` (non-nullable `int`, range 1..20, default 1) — 
 ### Apply Branch Rules
 
 The persisted operator intent on a Monitored Repository (`ApplyBranchRules`, non-nullable, default `true` on the add request; existing rows migrated to `false`) that Foundry may write its default-branch rules.
-Acted on only when the repository is added (`BranchRuleEnforcer`). Polling stays read-only toward the provider and never writes or repairs rules.
+Acted on only on explicit operator action (`BranchRuleEnforcer`): when the repository is added, or through the repository card's "Apply branch rules" action (`POST /api/accounts/{accountId}/repositories/{id}/apply-branch-rules`), which also flips the persisted intent to `true` — an explicit opt-in, even for a repo opted out at add time. That action is offered only when the repository is `Ineligible` solely through `branch-protection:*` violations, and only for a repository the account serves (same host, covered by its Namespace Claims). Polling stays read-only toward the provider and never writes or repairs rules.
 
 ### Branch Rules Outcome
 
-The per-request result of an apply attempt, returned in the add response (`CreateRepositoryResponse.branchRules`) and never persisted: `applied`, `already-present`, `not-requested`, `skipped` (`access-failure`, `unverifiable`, `no-rules-token`) or `failed` (`insufficient-permission`, `provider-error`).
+The per-request result of an apply attempt, returned in the add response (`CreateRepositoryResponse.branchRules`) and the apply-branch-rules response (`ApplyBranchRulesResponse.branchRules`, where `not-requested` cannot occur) and never persisted: `applied`, `already-present`, `not-requested`, `skipped` (`access-failure`, `unverifiable`, `no-rules-token`) or `failed` (`insufficient-permission`, `provider-error`).
 The write is attempted only when the full evaluation is `Ineligible` solely through `branch-protection:*` violations and the account has a readable Branch-Rules Token. The rules are then re-read (no second write probe) and the stored eligibility reflects that re-read, never the write's status code — a write that succeeds but does not take effect is `failed` (`provider-error`).
 A failed or skipped apply never fails the add.
 GitHub: Foundry upserts one repository ruleset named `foundry-eligibility` targeting `~DEFAULT_BRANCH` (`pull_request` with zero required approvals, `non_fast_forward`, `deletion`, no bypass actors). GitLab: Foundry protects the default branch (push: No one, merge: Maintainers, no force push), or patches an existing protection in place — it never unprotects the branch.

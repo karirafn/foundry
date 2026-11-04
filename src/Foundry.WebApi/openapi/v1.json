@@ -1095,6 +1095,57 @@
         }
       }
     },
+    "/api/accounts/{accountId}/repositories/{id}/apply-branch-rules": {
+      "post": {
+        "tags": [
+          "Repositories"
+        ],
+        "summary": "Applies Foundry's default-branch rules to a monitored repository",
+        "operationId": "ApplyBranchRules",
+        "parameters": [
+          {
+            "name": "accountId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApplyBranchRulesResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/repositories/{id}/position": {
       "patch": {
         "tags": [
@@ -1843,6 +1894,21 @@
           },
           "newStatus": {
             "type": "string"
+          }
+        }
+      },
+      "ApplyBranchRulesResponse": {
+        "required": [
+          "repository",
+          "branchRules"
+        ],
+        "type": "object",
+        "properties": {
+          "repository": {
+            "$ref": "#/components/schemas/RepositorySummary"
+          },
+          "branchRules": {
+            "$ref": "#/components/schemas/BranchRulesOutcome"
           }
         }
       },
