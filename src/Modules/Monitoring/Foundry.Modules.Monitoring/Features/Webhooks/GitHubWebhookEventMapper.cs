@@ -19,6 +19,7 @@ namespace Foundry.Modules.Monitoring.Features.Webhooks;
 /// pass when that issue is checks-pending (the review pass only acts on review issues)</description></item>
 /// <item><term><c>check_suite</c> (completed), <c>status</c></term><description>checks pass for the owning issue</description></item>
 /// <item><term><c>branch_protection_rule</c>, <c>repository_ruleset</c></term><description>branch-rules step</description></item>
+/// <item><term><c>push</c></term><description>no nudge — handled by <see cref="BranchPushPublisher"/></description></item>
 /// <item><term><c>ping</c></term><description>none (health only)</description></item>
 /// </list>
 /// </summary>
@@ -27,6 +28,12 @@ internal static partial class GitHubWebhookEventMapper
     internal const string EventHeaderName = "X-GitHub-Event";
 
     internal const string PingEvent = "ping";
+
+    /// <summary>
+    /// A branch push. Not a nudge: <see cref="BranchPushPublisher"/> turns a push to a running worker branch
+    /// into <c>ProviderBranchPushed</c> so Workers refreshes the run commit count (issue #660).
+    /// </summary>
+    internal const string PushEvent = "push";
 
     /// <summary>The label that marks an issue for Foundry.</summary>
     internal const string TriggerLabel = WebhookRelevance.TriggerLabel;
@@ -44,6 +51,7 @@ internal static partial class GitHubWebhookEventMapper
         "status",
         "branch_protection_rule",
         "repository_ruleset",
+        PushEvent,
     ];
 
     [GeneratedRegex(@"/pull/(?<number>\d{1,9})/?$", RegexOptions.CultureInvariant)]

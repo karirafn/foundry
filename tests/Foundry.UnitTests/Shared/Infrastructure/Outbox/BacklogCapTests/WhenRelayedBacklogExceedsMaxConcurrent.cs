@@ -111,6 +111,8 @@ public sealed class WhenRelayedBacklogExceedsMaxConcurrent : IAsyncDisposable
             sp.GetRequiredService<IContainerOutputParser>(),
             prRetryDelay: TimeSpan.Zero));
         services.AddScoped<ICredentialGate, AlwaysCanDispatchCredentialGate>();
+        services.AddSingleton<RunningBranchCompareGate>();
+        services.AddScoped<IWebhookStatusQueries>(_ => new StubWebhookStatusQueries());
         services.AddSingleton<IWorkerOrchestrator, NullWorkerOrchestrator>();
 
         return services.BuildServiceProvider();

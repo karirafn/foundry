@@ -18,6 +18,7 @@ namespace Foundry.Modules.Monitoring.Features.Webhooks;
 /// <item><term><c>merge_request</c>, <c>note</c> (on a merge request)</term><description>review pass for
 /// the owning issue — the checks pass when that issue is checks-pending</description></item>
 /// <item><term><c>pipeline</c> (finished)</term><description>checks pass for the owning issue</description></item>
+/// <item><term><c>push</c></term><description>no nudge — handled by <see cref="BranchPushPublisher"/></description></item>
 /// </list>
 /// GitLab has no event for issue links or protected branches, so neither the dependency pass (beyond a
 /// blocker closing) nor the branch-rules step is ever nudged from GitLab.
@@ -25,6 +26,12 @@ namespace Foundry.Modules.Monitoring.Features.Webhooks;
 internal static partial class GitLabWebhookEventMapper
 {
     internal const string EventHeaderName = "X-Gitlab-Event";
+
+    /// <summary>
+    /// The <c>object_kind</c> of a Push Hook. Not a nudge: <see cref="BranchPushPublisher"/> turns a push to a
+    /// running worker branch into <c>ProviderBranchPushed</c> so Workers refreshes the run commit count (issue #660).
+    /// </summary>
+    internal const string PushObjectKind = "push";
 
     /// <summary>
     /// The exact triggers the operator ticks on the GitLab webhook form. The confidential variants are
@@ -38,6 +45,7 @@ internal static partial class GitLabWebhookEventMapper
         "Confidential comments",
         "Merge request events",
         "Pipeline events",
+        "Push events",
     ];
 
     /// <summary>

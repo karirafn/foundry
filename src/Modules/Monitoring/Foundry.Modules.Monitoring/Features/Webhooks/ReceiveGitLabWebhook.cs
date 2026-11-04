@@ -17,6 +17,7 @@ namespace Foundry.Modules.Monitoring.Features.Webhooks;
 /// whose <c>project.path_with_namespace</c> names another project is 400. GitLab has no <c>ping</c>, so
 /// the first verified delivery of any kind (typically the hook form's "Test" action) activates the hook.
 /// A verified delivery enqueues at most one nudge and returns 202 without calling the provider.
+/// A push to a running worker branch publishes <c>ProviderBranchPushed</c> instead of a nudge.
 /// </summary>
 internal static class ReceiveGitLabWebhook
 {
@@ -24,6 +25,7 @@ internal static class ReceiveGitLabWebhook
         DbContext dbContext,
         IIssueQueries issueQueries,
         WebhookNudgeQueue nudgeQueue,
+        BranchPushPublisher branchPushPublisher,
         ILogger<Handler> logger)
     {
         public async Task<IResult> HandleAsync(string hookId, HttpRequest request, CancellationToken cancellationToken)
@@ -71,6 +73,16 @@ internal static class ReceiveGitLabWebhook
             }
 
             string? objectKind = GitLabWebhookEventMapper.GetObjectKind(document.RootElement);
+
+            if (objectKind == GitLabWebhookEventMapper.PushObjectKind)
+            {
+                if (!await branchPushPublisher.PublishIfRelevantAsync(repository.Id, document.RootElement, cancellationToken))
+                {
+                    logger.LogDebug("Dropped GitLab push delivery for repository {Slug}: not a running worker branch.", repository.Slug);
+                }
+
+                return Results.Accepted();
+            }
 
             WebhookTrackingContext tracked = GitLabWebhookEventMapper.NeedsTrackingContext(objectKind)
                 ? await WebhookDelivery.LoadTrackingContextAsync(
