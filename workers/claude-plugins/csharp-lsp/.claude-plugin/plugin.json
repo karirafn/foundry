@@ -1,0 +1,12 @@
+{
+  "name": "csharp-lsp",
+  "description": "C# language server (csharp-ls) for code intelligence in .NET workers",
+  "lspServers": {
+    "csharp-ls": {
+      "command": "csharp-ls",
+      "extensionToLanguage": {
+        ".cs": "csharp"
+      }
+    }
+  }
+}
