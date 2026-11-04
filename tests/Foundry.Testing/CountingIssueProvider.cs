@@ -15,10 +15,12 @@ namespace Foundry.Testing;
 internal sealed class CountingIssueProvider : IIssueProvider
 {
     private readonly IReadOnlyList<ProviderIssue> _issues;
+    private readonly IReadOnlyList<int> _dependencies;
 
-    internal CountingIssueProvider(IReadOnlyList<ProviderIssue>? issues = null)
+    internal CountingIssueProvider(IReadOnlyList<ProviderIssue>? issues = null, IReadOnlyList<int>? dependencies = null)
     {
         _issues = issues ?? [];
+        _dependencies = dependencies ?? [];
     }
 
     public int TotalCalls { get; private set; }
@@ -52,7 +54,7 @@ internal sealed class CountingIssueProvider : IIssueProvider
     {
         TotalCalls++;
         GetDependenciesCallCount++;
-        return Task.FromResult(Result<IReadOnlyList<int>>.Ok([]));
+        return Task.FromResult(Result<IReadOnlyList<int>>.Ok(_dependencies));
     }
 
     public Task<Result<bool>> IsIssueClosedAsync(

@@ -63,7 +63,8 @@ internal static class WebhookTestHost
         string eventName,
         string body,
         string? secret,
-        int localPort = WebhookPort)
+        int localPort = WebhookPort,
+        string pathPrefix = "/webhooks/github/")
     {
         Dictionary<string, string> headers = new() { [GitHubWebhookEventMapper.EventHeaderName] = eventName };
         if (secret is not null)
@@ -71,20 +72,38 @@ internal static class WebhookTestHost
             headers[GitHubWebhookSignature.HeaderName] = GitHubWebhookSignature.Compute(Encoding.UTF8.GetBytes(body), secret);
         }
 
-        return SendAsync(factory, HttpMethods.Post, $"/webhooks/github/{hookId}", localPort, body, headers);
+        return SendAsync(factory, HttpMethods.Post, $"{pathPrefix}{hookId}", localPort, body, headers);
+    }
+
+    internal static Task<HttpContext> DeliverGitLabAsync(
+        FoundryWebAppFactory factory,
+        string hookId,
+        string eventName,
+        string body,
+        string? token,
+        int localPort = WebhookPort)
+    {
+        Dictionary<string, string> headers = new() { [GitLabWebhookEventMapper.EventHeaderName] = eventName };
+        if (token is not null)
+        {
+            headers[GitLabWebhookToken.HeaderName] = token;
+        }
+
+        return SendAsync(factory, HttpMethods.Post, $"/webhooks/gitlab/{hookId}", localPort, body, headers);
     }
 
     internal static async Task<MonitoredRepository> SeedRepositoryAsync(
         FoundryWebAppFactory factory,
         string slug = "owner/repo",
-        bool registered = false)
+        bool registered = false,
+        string host = "github.com")
     {
         using IServiceScope scope = factory.Services.CreateScope();
         DbContext dbContext = scope.ServiceProvider.GetRequiredService<DbContext>();
 
         MonitoredRepository repository = MonitoredRepository.Create(
             RepositorySlug.Create(slug).ValueOrThrow(),
-            "github.com",
+            host,
             null).ValueOrThrow();
 
         if (registered)

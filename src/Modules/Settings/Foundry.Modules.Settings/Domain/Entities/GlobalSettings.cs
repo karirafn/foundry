@@ -183,7 +183,7 @@ public sealed class GlobalSettings : AggregateRoot<GlobalSettingsId>
     /// <summary>
     /// Updates the webhook ingress settings. The public base URL is optional; when present it must be
     /// an absolute <c>https</c> URL without query or fragment. A trailing slash is trimmed so the payload
-    /// URL is built as <c>&lt;base&gt;/webhooks/github/&lt;hookId&gt;</c>.
+    /// URL is built as <c>&lt;base&gt;/webhooks/{github|gitlab}/&lt;hookId&gt;</c>.
     /// </summary>
     public Result UpdateWebhookSettings(string? publicBaseUrl, int backstopIntervalMinutes)
     {

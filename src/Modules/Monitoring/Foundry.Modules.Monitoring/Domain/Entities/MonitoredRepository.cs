@@ -72,7 +72,7 @@ public sealed class MonitoredRepository : AggregateRoot<MonitoredRepositoryId>
 
     /// <summary>
     /// Random opaque identifier addressing this repository's webhook payload URL
-    /// (<c>/webhooks/github/{hookId}</c>). Carries no information about the repository.
+    /// (<c>/webhooks/github/{hookId}</c> or <c>/webhooks/gitlab/{hookId}</c>). Carries no information about the repository.
     /// </summary>
     public string WebhookHookId { get; private set; } = NewWebhookHookId();
 

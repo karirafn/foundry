@@ -349,14 +349,41 @@ internal sealed partial class GitLabHttpClient(
         string token,
         CancellationToken cancellationToken)
     {
+        Result<MergeRequestSnapshot> snapshot = await GetMergeRequestSnapshotAsync(
+            apiBaseUrl,
+            slug,
+            pullRequestUrl,
+            token,
+            cancellationToken);
+
+        return snapshot switch
+        {
+            Result<MergeRequestSnapshot>.Success success => Result<PullRequestStatus>.Ok(success.Value.Status),
+            Result<MergeRequestSnapshot>.Failure failure => Result<PullRequestStatus>.Fail(failure.Error),
+            _ => throw new InvalidOperationException("Unexpected result."),
+        };
+    }
+
+    /// <summary>
+    /// Reads one merge request — <c>GET projects/:id/merge_requests/:iid</c> — and returns both its
+    /// open/closed/merged status and the checks verdict of its <c>head_pipeline</c>, so a checks pass
+    /// needs a single fetch per merge request. Any non-success response is a failure.
+    /// </summary>
+    public async Task<Result<MergeRequestSnapshot>> GetMergeRequestSnapshotAsync(
+        Uri apiBaseUrl,
+        RepositorySlug slug,
+        string pullRequestUrl,
+        string token,
+        CancellationToken cancellationToken)
+    {
         if (apiBaseUrl.Scheme is not "https")
         {
-            return Result<PullRequestStatus>.Fail(GitLabErrors.InvalidBaseUrl);
+            return Result<MergeRequestSnapshot>.Fail(GitLabErrors.InvalidBaseUrl);
         }
 
         if (!TryParseMrIid(pullRequestUrl, out int mrIid))
         {
-            return Result<PullRequestStatus>.Fail(GitLabErrors.InvalidMergeRequestUrl);
+            return Result<MergeRequestSnapshot>.Fail(GitLabErrors.InvalidMergeRequestUrl);
         }
 
         string encodedPath = Uri.EscapeDataString(slug.FullPath);
@@ -370,19 +397,22 @@ internal sealed partial class GitLabHttpClient(
 
         if (!response.IsSuccessStatusCode)
         {
-            return Result<PullRequestStatus>.Fail(ErrorFromNonSuccess(response));
+            return Result<MergeRequestSnapshot>.Fail(ErrorFromNonSuccess(response));
         }
 
         RecordRestHeadroom(response);
 
         string body = await response.Content.ReadAsStringAsync(cancellationToken);
-        GitLabMergeRequestDto? dto = JsonSerializer.Deserialize<GitLabMergeRequestDto>(body, JsonOptions);
+        GitLabMergeRequestWithPipelineDto? dto =
+            JsonSerializer.Deserialize<GitLabMergeRequestWithPipelineDto>(body, JsonOptions);
 
         bool isMerged = string.Equals(dto?.State, "merged", StringComparison.OrdinalIgnoreCase);
         bool isClosed = isMerged ||
             string.Equals(dto?.State, "closed", StringComparison.OrdinalIgnoreCase);
 
-        return Result<PullRequestStatus>.Ok(new PullRequestStatus(isClosed, isMerged));
+        return Result<MergeRequestSnapshot>.Ok(new MergeRequestSnapshot(
+            new PullRequestStatus(isClosed, isMerged),
+            Checks.FromGitLab(dto?.HeadPipeline?.Status)));
     }
 
     public async Task<Result<IReadOnlyList<ProviderComment>>> GetPullRequestReviewFeedbackAsync(
@@ -1046,8 +1076,6 @@ internal sealed partial class GitLabHttpClient(
         int? ProjectId);
 
     private sealed record GitLabIssueStateDto(string State);
-
-    private sealed record GitLabMergeRequestDto(string State);
 
     private sealed record GitLabMergeRequestWithPipelineDto(
         string State,

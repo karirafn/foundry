@@ -151,6 +151,110 @@ public sealed class WebhookBackstop : IAsyncDisposable
         service.Scheduler.PendingCount.ShouldBe(0);
     }
 
+    [Fact]
+    public async Task WhenScheduledPollOfActiveGitLabHookFindsMappedChange_BecomesSilent()
+    {
+        // Arrange — an issue Foundry does not know yet: GitLab has an Issue event for that.
+        MonitoredRepositoryId repoId = await SeedRepoAsync(active: true, lastPolledAt: Now.AddMinutes(-16));
+        CountingIssueProvider provider = new([NewIssue(5)]);
+        MonitoringService service = BuildService(BuildServiceProvider(provider, ingressConfigured: true, gitLab: true));
+
+        // Act
+        await service.ExecuteTickAsync(Now, TestContext.Current.CancellationToken);
+
+        // Assert
+        (await LoadAsync(repoId)).WebhookStatus.ShouldBe(WebhookStatus.Silent);
+    }
+
+    [Fact]
+    public async Task WhenScheduledPollOfActiveGitLabHookFindsBranchRuleChange_StaysActive()
+    {
+        // Arrange — the protected-branch rules changed; GitLab has no webhook event for that.
+        MonitoredRepositoryId repoId = await SeedRepoAsync(
+            active: true,
+            lastPolledAt: Now.AddMinutes(-16),
+            eligibility: new RepositoryEligibility.Eligible());
+        CountingIssueProvider provider = new([]);
+        MonitoringService service = BuildService(BuildServiceProvider(
+            provider,
+            ingressConfigured: true,
+            gitLab: true,
+            eligibilityAfterEvaluation: BranchRulesViolated()));
+
+        // Act
+        await service.ExecuteTickAsync(Now, TestContext.Current.CancellationToken);
+
+        // Assert
+        MonitoredRepository repo = await LoadAsync(repoId);
+        repo.Eligibility.ShouldBeOfType<RepositoryEligibility.Ineligible>();
+        repo.WebhookStatus.ShouldBe(WebhookStatus.Active);
+    }
+
+    [Fact]
+    public async Task WhenScheduledPollOfActiveGitHubHookFindsBranchRuleChange_BecomesSilent()
+    {
+        // Arrange — GitHub announces branch-rule changes (branch_protection_rule, repository_ruleset).
+        MonitoredRepositoryId repoId = await SeedRepoAsync(
+            active: true,
+            lastPolledAt: Now.AddMinutes(-16),
+            eligibility: new RepositoryEligibility.Eligible());
+        CountingIssueProvider provider = new([]);
+        MonitoringService service = BuildService(BuildServiceProvider(
+            provider,
+            ingressConfigured: true,
+            eligibilityAfterEvaluation: BranchRulesViolated()));
+
+        // Act
+        await service.ExecuteTickAsync(Now, TestContext.Current.CancellationToken);
+
+        // Assert
+        (await LoadAsync(repoId)).WebhookStatus.ShouldBe(WebhookStatus.Silent);
+    }
+
+    [Fact]
+    public async Task WhenBranchRulesBecomeUnreadable_StaysActive()
+    {
+        // Arrange — a transient read failure is not a branch-rule change.
+        MonitoredRepositoryId repoId = await SeedRepoAsync(
+            active: true,
+            lastPolledAt: Now.AddMinutes(-16),
+            eligibility: new RepositoryEligibility.Eligible());
+        CountingIssueProvider provider = new([]);
+        MonitoringService service = BuildService(BuildServiceProvider(
+            provider,
+            ingressConfigured: true,
+            eligibilityAfterEvaluation: new RepositoryEligibility.Unreachable(UnreachableReason.BranchRulesUnavailable)));
+
+        // Act
+        await service.ExecuteTickAsync(Now, TestContext.Current.CancellationToken);
+
+        // Assert
+        (await LoadAsync(repoId)).WebhookStatus.ShouldBe(WebhookStatus.Active);
+    }
+
+    [Fact]
+    public async Task WhenScheduledPollOfActiveGitLabHookFindsDependencyLinkChange_StaysActive()
+    {
+        // Arrange — tracked issue 5 gained blocker 6; GitLab has no webhook event for issue links.
+        MonitoredRepositoryId repoId = await SeedRepoAsync(active: true, lastPolledAt: Now.AddMinutes(-16));
+        CountingIssueProvider provider = new([], dependencies: [6]);
+        MonitoringService service = BuildService(BuildServiceProvider(
+            provider,
+            ingressConfigured: true,
+            gitLab: true,
+            dispatchCandidates: new HashSet<int> { 5 }));
+
+        // Act
+        await service.ExecuteTickAsync(Now, TestContext.Current.CancellationToken);
+
+        // Assert
+        provider.GetDependenciesCallCount.ShouldBe(1);
+        (await LoadAsync(repoId)).WebhookStatus.ShouldBe(WebhookStatus.Active);
+    }
+
+    private static RepositoryEligibility BranchRulesViolated() =>
+        new RepositoryEligibility.Ineligible([EligibilityViolation.AllowForcePushes()]);
+
     private static ProviderIssue NewIssue(int number) =>
         new(number, $"Issue {number}", "user", $"https://github.com/owner/repo/issues/{number}", ["foundry"], "feature");
 
@@ -162,7 +266,11 @@ public sealed class WebhookBackstop : IAsyncDisposable
         return new FoundryDbContext(options);
     }
 
-    private async Task<MonitoredRepositoryId> SeedRepoAsync(bool active, DateTimeOffset lastPolledAt, bool isActive = true)
+    private async Task<MonitoredRepositoryId> SeedRepoAsync(
+        bool active,
+        DateTimeOffset lastPolledAt,
+        bool isActive = true,
+        RepositoryEligibility? eligibility = null)
     {
         await using FoundryDbContext db = CreateDbContext();
         MonitoredRepository repo = MonitoredRepository.Create(
@@ -180,6 +288,11 @@ public sealed class WebhookBackstop : IAsyncDisposable
         if (!isActive)
         {
             repo.Update(null, isActive: false, MonitoredRepository.DefaultMaxConcurrentWorkers);
+        }
+
+        if (eligibility is not null)
+        {
+            repo.SetEligibility(eligibility);
         }
 
         repo.MarkPolled(lastPolledAt);
@@ -201,7 +314,12 @@ public sealed class WebhookBackstop : IAsyncDisposable
             TimeProvider.System,
             NullLogger<MonitoringService>.Instance);
 
-    private ServiceProvider BuildServiceProvider(CountingIssueProvider provider, bool ingressConfigured)
+    private ServiceProvider BuildServiceProvider(
+        CountingIssueProvider provider,
+        bool ingressConfigured,
+        bool gitLab = false,
+        RepositoryEligibility? eligibilityAfterEvaluation = null,
+        IReadOnlySet<int>? dispatchCandidates = null)
     {
         SqliteConnection connection = _connection;
         ServiceCollection services = new();
@@ -210,16 +328,15 @@ public sealed class WebhookBackstop : IAsyncDisposable
             new DbContextOptionsBuilder<FoundryDbContext>().UseSqlite(connection).Options));
         services.AddScoped<DbContext>(sp => sp.GetRequiredService<FoundryDbContext>());
         services.AddLogging();
-        services.AddScoped<IIssueQueries, StubIssueQueries>();
+        services.AddScoped<IIssueQueries>(_ => new StubIssueQueries(dispatchCandidates ?? new HashSet<int>()));
         services.AddScoped<IDomainEventDispatcher, NullDomainEventDispatcher>();
         services.AddScoped<IIntegrationEventDispatcher, NullIntegrationEventDispatcher>();
-        services.AddScoped<IRepositoryEligibilityEvaluator, NullRepositoryEligibilityEvaluator>();
+        services.AddScoped<IRepositoryEligibilityEvaluator>(_ => new FixedRepositoryEligibilityEvaluator(eligibilityAfterEvaluation));
         services.AddScoped<IIssueProviderFactory>(_ => new FixedProviderFactory(provider));
 
-        GitHubCredential credential = GitHubCredential.Create(
-            "my-org",
-            "ghp_test_token",
-            BaseUrl.Create("https://github.com").ValueOrThrow());
+        Credential credential = gitLab
+            ? GitLabCredential.Create("my-group", "glpat_test_token", BaseUrl.Create("https://gitlab.com").ValueOrThrow())
+            : GitHubCredential.Create("my-org", "ghp_test_token", BaseUrl.Create("https://github.com").ValueOrThrow());
         services.AddScoped<ICredentialResolver>(_ => new StubCredentialResolverWithFixedCredential(credential));
         services.AddScoped<RepositoryPoller>();
         services.AddScoped<IGlobalSettingsQueries>(_ => new StubSettingsQueries(30));
@@ -305,7 +422,7 @@ public sealed class WebhookBackstop : IAsyncDisposable
             => Task.FromResult<IReadOnlyList<string>>([]);
     }
 
-    private sealed class StubIssueQueries : IIssueQueries
+    private sealed class StubIssueQueries(IReadOnlySet<int> dispatchCandidates) : IIssueQueries
     {
         public Task<IReadOnlySet<int>> GetKnownIssueNumbersAsync(
             MonitoredRepositoryId repositoryId,
@@ -370,7 +487,7 @@ public sealed class WebhookBackstop : IAsyncDisposable
             MonitoredRepositoryId repositoryId,
             CancellationToken cancellationToken)
         {
-            return Task.FromResult<IReadOnlySet<int>>(new HashSet<int>());
+            return Task.FromResult(dispatchCandidates);
         }
 
         public Task<IReadOnlyList<IssueSummary>> GetActiveIssueSummariesAsync(
@@ -409,18 +526,26 @@ public sealed class WebhookBackstop : IAsyncDisposable
         }
     }
 
-    private sealed class NullRepositoryEligibilityEvaluator : IRepositoryEligibilityEvaluator
+    /// <summary>Stores <paramref name="eligibility"/> when supplied; otherwise leaves eligibility untouched.</summary>
+    private sealed class FixedRepositoryEligibilityEvaluator(RepositoryEligibility? eligibility) : IRepositoryEligibilityEvaluator
     {
         public Task EvaluateFullyAndStoreAsync(
             MonitoredRepository repo,
             DateTimeOffset now,
             CancellationToken cancellationToken)
-            => Task.CompletedTask;
+            => EvaluateBranchRulesAndStoreAsync(repo, cancellationToken);
 
         public Task EvaluateBranchRulesAndStoreAsync(
             MonitoredRepository repo,
             CancellationToken cancellationToken)
-            => Task.CompletedTask;
+        {
+            if (eligibility is not null)
+            {
+                repo.SetEligibility(eligibility);
+            }
+
+            return Task.CompletedTask;
+        }
     }
 
     private sealed class StubCredentialResolverWithFixedCredential(Credential credential) : ICredentialResolver

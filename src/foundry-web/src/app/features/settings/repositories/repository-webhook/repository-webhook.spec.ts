@@ -15,6 +15,16 @@ const NOT_REGISTERED: RepositoryWebhookInfo = {
   contentType: 'application/json',
   events: ['issues', 'pull_request', 'check_suite'],
   backstopIntervalMinutes: 15,
+  provider: 'github',
+};
+
+const GITLAB_NOT_REGISTERED: RepositoryWebhookInfo = {
+  status: 'not-registered',
+  payloadUrl: 'https://hooks.example.com/webhooks/gitlab/abc',
+  contentType: 'application/json',
+  events: ['Issues events (Work item events)', 'Comments', 'Merge request events', 'Pipeline events'],
+  backstopIntervalMinutes: 15,
+  provider: 'gitlab',
 };
 
 function setup(info: RepositoryWebhookInfo) {
@@ -103,5 +113,27 @@ describe('RepositoryWebhookComponent', () => {
     expect(el.querySelector('.repository-webhook__status-value')?.textContent?.trim()).toBe('Not configured');
     expect(el.textContent).toContain('Webhooks:Port');
     expect(el.querySelector('.repository-webhook__details')).toBeNull();
+  });
+
+  it('shows GitLab instructions with the secret token, triggers and the Test action', () => {
+    // Arrange & Act
+    const { el } = setup(GITLAB_NOT_REGISTERED);
+
+    // Assert
+    const terms = Array.from(el.querySelectorAll('.repository-webhook__details dt')).map(dt => dt.textContent?.trim());
+    expect(terms).toEqual(['Payload URL', 'Secret token', 'Trigger']);
+    expect(el.textContent).toContain(GITLAB_NOT_REGISTERED.payloadUrl!);
+    const events = Array.from(el.querySelectorAll('.repository-webhook__events li')).map(li => li.textContent?.trim());
+    expect(events).toEqual(GITLAB_NOT_REGISTERED.events);
+    expect(el.querySelector('.repository-webhook__test-hint')?.textContent).toContain('"Test" action');
+  });
+
+  it('points GitLab users at the Test action while waiting for the first delivery', () => {
+    // Arrange & Act
+    const { el } = setup({ ...GITLAB_NOT_REGISTERED, status: 'pending' });
+
+    // Assert
+    expect(el.textContent).toContain('GitLab sends no ping');
+    expect(el.textContent).not.toContain('redeliver the ping');
   });
 });
