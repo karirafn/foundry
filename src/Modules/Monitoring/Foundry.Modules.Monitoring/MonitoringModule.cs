@@ -60,6 +60,7 @@ public static class MonitoringModule
         services.AddScoped<IRepositoryEligibilityQuery, RepositoryEligibilityQuery>();
         services.AddScoped<IRepositoryEligibilityEvaluator, RepositoryEligibilityEvaluator>();
         services.AddScoped<BranchRuleEnforcer>();
+        services.AddScoped<OptedInBranchRuleApplier>();
         services.AddScoped<IPostExitProviderQueries, PostExitProviderQueries>();
         services.AddScoped<RepositoryPoller>();
 

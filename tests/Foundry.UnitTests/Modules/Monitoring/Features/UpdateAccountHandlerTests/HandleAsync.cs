@@ -7,6 +7,7 @@ using Foundry.Modules.Monitoring.Features.NamespaceDerivation;
 using Foundry.Modules.Monitoring.Features.Accounts;
 using Foundry.Modules.Monitoring.Features.Accounts.Rotation;
 using Foundry.Modules.Monitoring.Features.Accounts.Tokens;
+using Foundry.Modules.Monitoring.Features.Providers;
 using Foundry.Shared;
 using Foundry.Testing;
 using Foundry.UnitTests.Fakes.Monitoring;
@@ -62,11 +63,13 @@ public sealed class HandleAsync : IAsyncDisposable
         IQueryHandler<ValidateToken.Query, ValidateToken.Response>? validateToken = null,
         INamespaceDeriver? deriver = null,
         IRepositoryEligibilityEvaluator? evaluator = null,
-        ProviderHostGuard? hostGuard = null)
+        ProviderHostGuard? hostGuard = null,
+        IIssueProviderFactory? providerFactory = null)
     {
+        IRepositoryEligibilityEvaluator resolvedEvaluator = evaluator ?? new NoOpEligibilityEvaluator();
         RepositoryEligibilityDiffer differ = new(
             _dbContext,
-            evaluator ?? new NoOpEligibilityEvaluator());
+            resolvedEvaluator);
 
         CredentialRotationService rotationService = new(
             _dbContext,
@@ -77,7 +80,23 @@ public sealed class HandleAsync : IAsyncDisposable
             validateToken ?? new StubValidateTokenHandler("updated-user"),
             deriver ?? new StubNamespaceDeriver(new NamespaceDerivationOutcome.Derived([], [])));
 
-        return new UpdateAccount.Handler(_dbContext, tokenAccountResolver, rotationService, hostGuard ?? BuildPassingGuard());
+        BranchRuleEnforcer enforcer = new(
+            resolvedEvaluator,
+            providerFactory ?? new RecordingBranchRulesProviderFactory(),
+            NullLogger<BranchRuleEnforcer>.Instance);
+
+        OptedInBranchRuleApplier branchRuleApplier = new(
+            _dbContext,
+            differ,
+            enforcer,
+            NullLogger<OptedInBranchRuleApplier>.Instance);
+
+        return new UpdateAccount.Handler(
+            _dbContext,
+            tokenAccountResolver,
+            rotationService,
+            branchRuleApplier,
+            hostGuard ?? BuildPassingGuard());
     }
 
     private async Task<GitHubCredential> SeedCredentialAsync(string accountName = "original-user")
@@ -835,6 +854,182 @@ public sealed class HandleAsync : IAsyncDisposable
         (await ReloadBranchRulesTokenAsync(credential.Id)).ShouldBeNull();
     }
 
+    private static readonly RepositoryEligibility BranchProtectionViolations = new RepositoryEligibility.Ineligible(
+    [
+        EligibilityViolation.AllowDirectPushes(),
+        EligibilityViolation.AllowForcePushes(),
+    ]);
+
+    private async Task<GitHubCredential> SeedCoveringCredentialAsync(string? branchRulesToken = null)
+    {
+        GitHubCredential credential = await SeedCredentialAsync("alice");
+        credential.SetNamespaces([Namespace.Create("alice").ValueOrThrow()]);
+        if (branchRulesToken is not null)
+        {
+            credential.SetBranchRulesToken(branchRulesToken);
+        }
+
+        await _dbContext.SaveChangesAsync(CancellationToken.None);
+        return credential;
+    }
+
+    private async Task<MonitoredRepository> SeedRepoAsync(string slug, bool applyBranchRules)
+    {
+        MonitoredRepository repo = MonitoredRepository.Create(
+            RepositorySlug.Create(slug).ValueOrThrow(),
+            "github.com",
+            pollInterval: null,
+            position: await _dbContext.Set<MonitoredRepository>().CountAsync(CancellationToken.None),
+            applyBranchRules: applyBranchRules).ValueOrThrow();
+        repo.SetEligibility(BranchProtectionViolations);
+        _dbContext.Set<MonitoredRepository>().Add(repo);
+        await _dbContext.SaveChangesAsync(CancellationToken.None);
+        return repo;
+    }
+
+    [Fact]
+    public async Task WhenBranchRulesTokenSaved_AppliesRulesToOptedInCoveredReposOnly()
+    {
+        // Arrange
+        GitHubCredential credential = await SeedCoveringCredentialAsync();
+        MonitoredRepository optedIn = await SeedRepoAsync("alice/opted-in", applyBranchRules: true);
+        await SeedRepoAsync("alice/opted-out", applyBranchRules: false);
+        RecordingBranchRulesProviderFactory factory = new();
+        UpdateAccount.Handler handler = BuildHandler(
+            evaluator: new EnforcementEvaluator(BranchProtectionViolations, new RepositoryEligibility.Eligible()),
+            providerFactory: factory);
+        UpdateAccount.Command command = new(credential.Id, "https://github.com", null, "github_pat_rules");
+
+        // Act
+        UpdateAccount.Outcome outcome = await handler.HandleAsync(command, TestContext.Current.CancellationToken);
+
+        // Assert
+        UpdateAccount.Outcome.Updated updated = outcome.ShouldBeOfType<UpdateAccount.Outcome.Updated>();
+        factory.ShouldSatisfyAllConditions(
+            () => factory.AppliedSlugs.ShouldBe(["alice/opted-in"]),
+            () => factory.TokensUsed.ShouldBe(["github_pat_rules"]));
+        updated.Value.AffectedRepositories.ShouldBe(
+            [new AffectedRepository(optedIn.Id.Value, "alice/opted-in", "ineligible", "eligible")]);
+    }
+
+    [Fact]
+    public async Task WhenBranchRulesTokenReplaced_AppliesWithTheNewToken()
+    {
+        // Arrange
+        GitHubCredential credential = await SeedCoveringCredentialAsync(branchRulesToken: "github_pat_old");
+        await SeedRepoAsync("alice/one", applyBranchRules: true);
+        RecordingBranchRulesProviderFactory factory = new();
+        UpdateAccount.Handler handler = BuildHandler(
+            evaluator: new EnforcementEvaluator(BranchProtectionViolations, new RepositoryEligibility.Eligible()),
+            providerFactory: factory);
+        UpdateAccount.Command command = new(credential.Id, "https://github.com", null, "github_pat_new");
+
+        // Act
+        await handler.HandleAsync(command, TestContext.Current.CancellationToken);
+
+        // Assert
+        factory.TokensUsed.ShouldBe(["github_pat_new"]);
+    }
+
+    [Fact]
+    public async Task WhenBranchRulesTokenCleared_RunsNoEnforcement()
+    {
+        // Arrange
+        GitHubCredential credential = await SeedCoveringCredentialAsync(branchRulesToken: "github_pat_rules");
+        await SeedRepoAsync("alice/one", applyBranchRules: true);
+        RecordingBranchRulesProviderFactory factory = new();
+        UpdateAccount.Handler handler = BuildHandler(
+            evaluator: new EnforcementEvaluator(BranchProtectionViolations, new RepositoryEligibility.Eligible()),
+            providerFactory: factory);
+        UpdateAccount.Command command = new(credential.Id, "https://github.com", null, ClearBranchRulesToken: true);
+
+        // Act
+        UpdateAccount.Outcome outcome = await handler.HandleAsync(command, TestContext.Current.CancellationToken);
+
+        // Assert
+        outcome.ShouldBeOfType<UpdateAccount.Outcome.Updated>();
+        factory.AppliedSlugs.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task WhenBranchRulesTokenUntouched_RunsNoEnforcement()
+    {
+        // Arrange — a stored rules token, but the update only changes the account token.
+        GitHubCredential credential = await SeedCoveringCredentialAsync(branchRulesToken: "github_pat_rules");
+        await SeedRepoAsync("alice/one", applyBranchRules: true);
+        RecordingBranchRulesProviderFactory factory = new();
+        UpdateAccount.Handler handler = BuildHandler(
+            deriver: new StubNamespaceDeriver(
+                new NamespaceDerivationOutcome.Derived([Namespace.Create("alice").ValueOrThrow()], [])),
+            evaluator: new EnforcementEvaluator(BranchProtectionViolations, new RepositoryEligibility.Eligible()),
+            providerFactory: factory);
+        UpdateAccount.Command command = new(credential.Id, "https://github.com", "ghp_rotated");
+
+        // Act
+        UpdateAccount.Outcome outcome = await handler.HandleAsync(command, TestContext.Current.CancellationToken);
+
+        // Assert
+        outcome.ShouldBeOfType<UpdateAccount.Outcome.Updated>();
+        factory.AppliedSlugs.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task WhenBranchRulesTokenSavedWithRotation_AffectedReflectsPostEnforcementEligibility()
+    {
+        // Arrange — the repo starts unreachable; rotation evaluates it ineligible, enforcement makes it eligible.
+        GitHubCredential credential = await SeedCredentialAsync("alice");
+        MonitoredRepository repo = MonitoredRepository.Create(
+            RepositorySlug.Create("alice/one").ValueOrThrow(),
+            "github.com",
+            pollInterval: null,
+            applyBranchRules: true).ValueOrThrow();
+        _dbContext.Set<MonitoredRepository>().Add(repo);
+        await _dbContext.SaveChangesAsync(CancellationToken.None);
+
+        RecordingBranchRulesProviderFactory factory = new();
+        UpdateAccount.Handler handler = BuildHandler(
+            validateToken: new StubValidateTokenHandler("alice"),
+            deriver: new StubNamespaceDeriver(
+                new NamespaceDerivationOutcome.Derived([Namespace.Create("alice").ValueOrThrow()], [])),
+            evaluator: new EnforcementEvaluator(BranchProtectionViolations, new RepositoryEligibility.Eligible()),
+            providerFactory: factory);
+        UpdateAccount.Command command = new(credential.Id, "https://github.com", "ghp_rotated", "github_pat_rules");
+
+        // Act
+        UpdateAccount.Outcome outcome = await handler.HandleAsync(command, TestContext.Current.CancellationToken);
+
+        // Assert
+        UpdateAccount.Outcome.Updated updated = outcome.ShouldBeOfType<UpdateAccount.Outcome.Updated>();
+        factory.AppliedSlugs.ShouldBe(["alice/one"]);
+        updated.Value.AffectedRepositories.ShouldBe(
+            [new AffectedRepository(repo.Id.Value, "alice/one", "unreachable", "eligible")]);
+    }
+
+    [Fact]
+    public async Task WhenOneRepoApplyFails_UpdateStillSucceedsAndOtherReposAreProcessed()
+    {
+        // Arrange
+        GitHubCredential credential = await SeedCoveringCredentialAsync();
+        await SeedRepoAsync("alice/broken", applyBranchRules: true);
+        MonitoredRepository healthy = await SeedRepoAsync("alice/healthy", applyBranchRules: true);
+        RecordingBranchRulesProviderFactory factory = new RecordingBranchRulesProviderFactory()
+            .WithException("alice/broken", new HttpRequestException("boom"));
+        UpdateAccount.Handler handler = BuildHandler(
+            evaluator: new EnforcementEvaluator(BranchProtectionViolations, new RepositoryEligibility.Eligible()),
+            providerFactory: factory);
+        UpdateAccount.Command command = new(credential.Id, "https://github.com", null, "github_pat_rules");
+
+        // Act
+        UpdateAccount.Outcome outcome = await handler.HandleAsync(command, TestContext.Current.CancellationToken);
+
+        // Assert
+        UpdateAccount.Outcome.Updated updated = outcome.ShouldBeOfType<UpdateAccount.Outcome.Updated>();
+        updated.Value.Credential.BranchRulesTokenStatus.ShouldBe("present");
+        factory.AppliedSlugs.ShouldBe(["alice/broken", "alice/healthy"], ignoreOrder: true);
+        updated.Value.AffectedRepositories.ShouldBe(
+            [new AffectedRepository(healthy.Id.Value, "alice/healthy", "ineligible", "eligible")]);
+    }
+
     [Fact]
     public async Task WhenAccountTokenRotatedWithoutBranchRulesFields_PreservesBranchRulesToken()
     {
@@ -924,6 +1119,28 @@ public sealed class HandleAsync : IAsyncDisposable
             bool isGitLab,
             CancellationToken cancellationToken) =>
             Task.FromResult(outcome);
+    }
+
+    private sealed class EnforcementEvaluator(
+        RepositoryEligibility fullEligibility,
+        RepositoryEligibility reReadEligibility) : IRepositoryEligibilityEvaluator
+    {
+        public Task EvaluateFullyAndStoreAsync(
+            MonitoredRepository repo,
+            DateTimeOffset now,
+            CancellationToken cancellationToken)
+        {
+            repo.SetEligibility(fullEligibility);
+            return Task.CompletedTask;
+        }
+
+        public Task EvaluateBranchRulesAndStoreAsync(
+            MonitoredRepository repo,
+            CancellationToken cancellationToken)
+        {
+            repo.SetEligibility(reReadEligibility);
+            return Task.CompletedTask;
+        }
     }
 
     private sealed class NoOpEligibilityEvaluator : IRepositoryEligibilityEvaluator
