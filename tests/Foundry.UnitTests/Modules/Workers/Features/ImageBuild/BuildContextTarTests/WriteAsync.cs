@@ -1,4 +1,6 @@
+using System.Diagnostics;
 using System.Formats.Tar;
+using System.Runtime.Versioning;
 
 using Foundry.Modules.Workers.Features.ImageBuild;
 
@@ -45,14 +47,12 @@ public sealed class WriteAsync : IDisposable
     }
 
     [Fact]
+    [UnsupportedOSPlatform("windows")]
     public async Task WhenFileIsExecutable_PreservesMode()
     {
-        // Arrange
-        if (OperatingSystem.IsWindows())
-        {
-            return;
-        }
+        Assert.SkipWhen(OperatingSystem.IsWindows(), "Unix file modes are not available on Windows.");
 
+        // Arrange
         await WriteFileAsync("entrypoint.sh", "#!/bin/sh");
         File.SetUnixFileMode(Path.Combine(_contextDirectory, "entrypoint.sh"), ExecutableMode);
         await using MemoryStream archive = new();
@@ -63,6 +63,73 @@ public sealed class WriteAsync : IDisposable
         // Assert
         TarEntry entry = (await ReadEntriesAsync(archive)).Single();
         entry.Mode.ShouldBe(ExecutableMode);
+    }
+
+    [Fact]
+    public async Task WhenContextContainsSymlinkedFile_ThrowsInvalidOperationException()
+    {
+        Assert.SkipWhen(OperatingSystem.IsWindows(), "Creating symbolic links requires elevated rights on Windows.");
+
+        // Arrange
+        await WriteFileAsync("target.txt", "secret");
+        File.CreateSymbolicLink(Path.Combine(_contextDirectory, "link.txt"), "target.txt");
+        await using MemoryStream archive = new();
+
+        // Act
+        Func<Task> act = async () => await BuildContextTar.WriteAsync(
+            _contextDirectory,
+            archive,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        await Should.ThrowAsync<InvalidOperationException>(act);
+    }
+
+    [Fact]
+    public async Task WhenContextContainsSymlinkedDirectory_ThrowsInvalidOperationException()
+    {
+        Assert.SkipWhen(OperatingSystem.IsWindows(), "Creating symbolic links requires elevated rights on Windows.");
+
+        // Arrange
+        Directory.CreateDirectory(Path.Combine(_contextDirectory, "real"));
+        Directory.CreateSymbolicLink(Path.Combine(_contextDirectory, "linked"), "real");
+        await using MemoryStream archive = new();
+
+        // Act
+        Func<Task> act = async () => await BuildContextTar.WriteAsync(
+            _contextDirectory,
+            archive,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        await Should.ThrowAsync<InvalidOperationException>(act);
+    }
+
+    [Fact]
+    public async Task WhenContextContainsFifo_ThrowsInvalidOperationExceptionNamingRelativePath()
+    {
+        Assert.SkipUnless(OperatingSystem.IsLinux(), "Creating a FIFO relies on mkfifo.");
+
+        // Arrange
+        Directory.CreateDirectory(Path.Combine(_contextDirectory, "dir"));
+        string fifoPath = Path.Combine(_contextDirectory, "dir", "pipe");
+        using (Process mkfifo = Process.Start("mkfifo", fifoPath)!)
+        {
+            await mkfifo.WaitForExitAsync(TestContext.Current.CancellationToken);
+            mkfifo.ExitCode.ShouldBe(0);
+        }
+
+        await using MemoryStream archive = new();
+
+        // Act
+        Func<Task> act = async () => await BuildContextTar.WriteAsync(
+            _contextDirectory,
+            archive,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        InvalidOperationException exception = await Should.ThrowAsync<InvalidOperationException>(act);
+        exception.Message.ShouldContain("dir/pipe");
     }
 
     private async Task WriteFileAsync(string relativePath, string content)

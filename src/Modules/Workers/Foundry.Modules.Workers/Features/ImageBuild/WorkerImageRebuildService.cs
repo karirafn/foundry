@@ -200,7 +200,14 @@ internal sealed class WorkerImageRebuildService(
 
         try
         {
-            await using MemoryStream tarStream = new();
+            // Spooled to disk so a large build context is never held in memory across the builds.
+            await using FileStream tarStream = new(
+                Path.Combine(Path.GetTempPath(), $"foundry-build-context-{Guid.NewGuid():N}.tar"),
+                FileMode.CreateNew,
+                FileAccess.ReadWrite,
+                FileShare.None,
+                bufferSize: 4096,
+                FileOptions.DeleteOnClose | FileOptions.Asynchronous);
             await BuildContextTar.WriteAsync(contextPath, tarStream, cancellationToken);
             tarStream.Seek(0, SeekOrigin.Begin);
 
