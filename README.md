@@ -10,7 +10,7 @@ A containerized service that monitors repositories across multiple providers (Gi
 
 ## One-time setup
 
-All operator configuration — provider accounts and their tokens, monitored repositories, the Claude credential (API key or OAuth login), and every worker setting — is entered in the dashboard's **Settings** pages and stored in the database. There are no configuration keys or user secrets to set; the database is the only source for worker settings.
+All operator configuration — provider accounts and their tokens, monitored repositories, the Claude credential (API key or OAuth login), and every worker setting — is entered in the dashboard's **Settings** pages and stored in the database. There are no configuration keys or user secrets to set (the one exception is the migration-only `DataProtection:LegacyApplicationName` bootstrap key, see [Moving an install](#moving-an-install)); the database is the only source for worker settings ([ADR 0080](docs/adr/0080-all-worker-settings-in-global-settings.md)).
 
 ### GitHub fine-grained token permissions
 
@@ -121,6 +121,24 @@ By default Foundry polls every repository. GitHub and GitLab webhooks make it re
 
 A repository polls at the backstop interval only while its webhook is **Active**. While it is active, a running worker's commit count is refreshed from push deliveries instead of a branch compare every 10 seconds. A hook registered before the `push` / *Push events* subscription was added should have it ticked, or the count only updates when the worker exits. If a scheduled poll finds a change that no delivery announced, the status becomes **Silent** and normal polling resumes until the next delivery.
 
+## Moving an install
+
+Stored secrets (account tokens, branch-rules tokens, webhook secrets, the Claude API key) are encrypted with ASP.NET Core Data Protection under the fixed application name `Foundry`, so they survive moving the install to another folder or operating system. To move an install, copy both of these to the same relative places in the new checkout:
+
+- the database directory `data/` at the repository root (the AppHost default, `../../data` relative to `src/Foundry.AppHost`);
+- the key ring `src/Foundry.WebApi/data/dp-keys` (relative to the WebApi working directory, which is `src/Foundry.WebApi` under the AppHost).
+
+An in-place upgrade needs nothing further.
+
+If the old install ran a version from before the application name was pinned, from a different path than the new one, its values are still bound to the old content root. Set `DataProtection:LegacyApplicationName` to the old WebApi content root, *including* its trailing separator (for example `C:\dev\foundry\src\Foundry.WebApi\`), for one start. At startup Foundry re-encrypts every value that only decrypts under that name, in a single transaction; afterwards remove the key.
+
+The AppHost does not forward this key, so set it on the WebApi directly, with either:
+
+- an environment variable in the shell that starts the AppHost (child processes inherit it): `DataProtection__LegacyApplicationName`;
+- WebApi user secrets (loaded in the Development environment): `dotnet user-secrets --project src/Foundry.WebApi set "DataProtection:LegacyApplicationName" "C:\dev\foundry\src\Foundry.WebApi\"`.
+
+A value that decrypts under neither name is left unchanged and logged as a warning naming its table, column and row id (`... decrypts under neither the current nor the legacy Data Protection discriminator and was left unchanged`). Re-enter those values in the dashboard.
+
 ## Windows notes
 
 Docker Desktop must have path sharing enabled for bind mounts from `C:\Users\...`. Enable it under **Settings > Resources > File sharing**.
@@ -135,7 +153,7 @@ dotnet build
 dotnet test
 
 # Run single test
-dotnet test --filter "FullyQualifiedName~ExampleTests.ExampleTest"
+dotnet test --project tests/Foundry.UnitTests --filter-class "*ExampleTests"
 
 # Frontend
 cd src/foundry-web

@@ -1,24 +1,27 @@
 using System.Security.Cryptography;
 
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
+using Foundry.Shared.Infrastructure.DataProtection;
 
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 namespace Foundry.Modules.Monitoring.Infrastructure.Configurations;
 
-internal sealed class ProviderTokenConverter : ValueConverter<ProviderToken?, string?>
+internal sealed class ProviderTokenConverter : ValueConverter<ProviderToken?, string?>, IDataProtectedConverter
 {
-    private const string ProtectorPurpose = "Foundry.Monitoring.Encryption";
+    private const string Purpose = "Foundry.Monitoring.Encryption";
 
     internal ProviderTokenConverter(IDataProtectionProvider provider)
         : base(
-            token => token == null ? null : Protect(provider.CreateProtector(ProtectorPurpose), token),
+            token => token == null ? null : Protect(provider.CreateProtector(Purpose), token),
             storedValue => storedValue == null ? null : Unprotect(
-                provider.CreateProtector(ProtectorPurpose),
+                provider.CreateProtector(Purpose),
                 storedValue))
     {
     }
+
+    public string ProtectorPurpose => Purpose;
 
     private static string Protect(IDataProtector protector, ProviderToken token)
     {
@@ -29,18 +32,14 @@ internal sealed class ProviderTokenConverter : ValueConverter<ProviderToken?, st
         }
 
         ProviderToken.Present present = (ProviderToken.Present)token;
-        byte[] bytes = System.Text.Encoding.UTF8.GetBytes(present.Value);
-        byte[] protectedBytes = protector.Protect(bytes);
-        return Convert.ToBase64String(protectedBytes);
+        return DataProtectedText.Protect(protector, present.Value);
     }
 
     private static ProviderToken? Unprotect(IDataProtector protector, string storedValue)
     {
         try
         {
-            byte[] protectedBytes = Convert.FromBase64String(storedValue);
-            byte[] bytes = protector.Unprotect(protectedBytes);
-            return new ProviderToken.Present(System.Text.Encoding.UTF8.GetString(bytes));
+            return new ProviderToken.Present(DataProtectedText.Unprotect(protector, storedValue));
         }
         catch (CryptographicException)
         {
