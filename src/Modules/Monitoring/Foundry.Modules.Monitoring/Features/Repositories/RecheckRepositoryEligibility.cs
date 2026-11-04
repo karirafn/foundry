@@ -6,6 +6,7 @@ using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Features.Accounts;
 using Foundry.Modules.Monitoring.Features.Eligibility;
 using Foundry.Modules.Monitoring.Features.NamespaceDerivation;
+using Foundry.Modules.Monitoring.Features.Webhooks;
 using Foundry.Modules.Settings.Contracts.Queries;
 using Foundry.Shared;
 using Foundry.Shared.Infrastructure.Http;
@@ -28,7 +29,8 @@ internal static class RecheckRepositoryEligibility
         IRepositoryEligibilityEvaluator eligibilityEvaluator,
         INamespaceDeriver namespaceDeriver,
         IGlobalSettingsQueries globalSettingsQueries,
-        ILogger<Handler> logger) : ICommandHandler<Command, RepositorySummary>
+        ILogger<Handler> logger,
+        WebhookIngress? webhookIngress = null) : ICommandHandler<Command, RepositorySummary>
     {
         public async Task<Result<RepositorySummary>> HandleAsync(
             Command command,
@@ -70,12 +72,16 @@ internal static class RecheckRepositoryEligibility
 
             int defaultPollIntervalSeconds = await globalSettingsQueries.GetPollIntervalSecondsAsync(cancellationToken);
 
+            bool webhookIngressConfigured = webhookIngress is not null
+                && (await webhookIngress.GetStateAsync(cancellationToken)).IsConfigured;
+
             RepositorySummary summary = RepositoryMappings.ToSummary(
                 repository,
                 credential.Id.Value,
                 credential.Name,
                 providerType,
-                defaultPollIntervalSeconds);
+                defaultPollIntervalSeconds,
+                webhookIngressConfigured);
 
             return Result<RepositorySummary>.Ok(summary);
         }

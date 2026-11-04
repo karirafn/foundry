@@ -52,7 +52,11 @@ public sealed class InProgressIssue : Issue
             branchName,
             pullRequestUrl,
             feedbackCutoffAt);
-        AddDomainEvent(new Events.IssueChecksPending(Id, MonitoredRepositoryId));
+        AddDomainEvent(new Events.IssueChecksPending(
+            Id,
+            MonitoredRepositoryId,
+            checksPending.IssueNumber,
+            checksPending.EnteredChecksPendingAt));
         return checksPending;
     }
 

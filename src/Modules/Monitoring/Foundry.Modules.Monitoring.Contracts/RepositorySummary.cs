@@ -14,4 +14,8 @@ public sealed record RepositorySummary(
     bool PollIntervalIsDefault,
     DateTimeOffset? LastPolledAt = null,
     RepositoryEligibilityInfo? Eligibility = null,
-    DateTimeOffset? UntrackSuppressedSince = null);
+    DateTimeOffset? UntrackSuppressedSince = null,
+    string WebhookStatus = RepositorySummary.WebhookNotConfigured)
+{
+    public const string WebhookNotConfigured = "not-configured";
+}

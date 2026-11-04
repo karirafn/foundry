@@ -31,4 +31,6 @@ public sealed record GlobalSettingsSummary(
     bool BlockCiCdEdits,
     IReadOnlyList<string> AdditionalDenyRules,
     string HostSettingsPath,
-    IReadOnlyList<string> ExcludedHookCommands);
+    IReadOnlyList<string> ExcludedHookCommands,
+    string? WebhookPublicBaseUrl = null,
+    int BackstopIntervalMinutes = 15);

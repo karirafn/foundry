@@ -30,6 +30,7 @@ const SAVE_SETTINGS_ERROR = 'Failed to save settings';
 const SAVE_LIMITS_ERROR = 'Failed to save worker limits';
 const SAVE_PROMPTS_ERROR = 'Failed to save prompt templates';
 const SAVE_DISPATCH_ERROR = 'Failed to save dispatch settings';
+const SAVE_WEBHOOKS_ERROR = 'Failed to save webhook settings';
 const SAVE_IMAGE_FLAGS_ERROR = 'Failed to save worker image settings';
 const SAVE_WORKER_ENVIRONMENT_ERROR = 'Failed to save worker environment';
 const SAVE_CLAUDE_CODE_ERROR = 'Failed to save Claude Code settings';
@@ -129,6 +130,19 @@ export class SettingsService {
 
   private readonly _saveDispatchErrorSignal: WritableSignal<string | null> = signal(null);
   readonly saveDispatchError: Signal<string | null> = this._saveDispatchErrorSignal.asReadonly();
+
+  private readonly _savingWebhooksSignal: WritableSignal<boolean> = signal(false);
+  readonly savingWebhooks: Signal<boolean> = this._savingWebhooksSignal.asReadonly();
+
+  private readonly _saveWebhooksSuccessSignal: WritableSignal<boolean> = signal(false);
+  readonly saveWebhooksSuccess: Signal<boolean> = this._saveWebhooksSuccessSignal.asReadonly();
+
+  private readonly _saveWebhooksErrorSignal: WritableSignal<string | null> = signal(null);
+  readonly saveWebhooksError: Signal<string | null> = this._saveWebhooksErrorSignal.asReadonly();
+
+  /** Error code of the last failed webhook save — keys the error to its field (e.g. Settings.InvalidWebhookPublicBaseUrl). */
+  private readonly _saveWebhooksErrorCodeSignal: WritableSignal<string | null> = signal(null);
+  readonly saveWebhooksErrorCode: Signal<string | null> = this._saveWebhooksErrorCodeSignal.asReadonly();
 
   private readonly _workerImageFlagsSignal: WritableSignal<WorkerImageFlags | null> = signal(null);
   readonly workerImageFlags: Signal<WorkerImageFlags | null> = this._workerImageFlagsSignal.asReadonly();
@@ -451,6 +465,27 @@ export class SettingsService {
         console.error(err);
         this._saveDispatchErrorSignal.set(SAVE_DISPATCH_ERROR);
         this._savingDispatchSignal.set(false);
+      },
+    });
+  }
+
+  updateWebhookSettings(webhookPublicBaseUrl: string | null, backstopIntervalMinutes: number): void {
+    this._saveWebhooksErrorSignal.set(null);
+    this._saveWebhooksErrorCodeSignal.set(null);
+    this._saveWebhooksSuccessSignal.set(false);
+    this._savingWebhooksSignal.set(true);
+
+    this._http.put<GlobalSettingsResponse>('/api/settings/webhooks', { webhookPublicBaseUrl, backstopIntervalMinutes }).subscribe({
+      next: (response) => {
+        this._settingsSignal.set(response);
+        this._savingWebhooksSignal.set(false);
+        this._saveWebhooksSuccessSignal.set(true);
+      },
+      error: (err: HttpErrorResponse) => {
+        console.error(err);
+        this._saveWebhooksErrorSignal.set(extractErrorMessage(err) ?? SAVE_WEBHOOKS_ERROR);
+        this._saveWebhooksErrorCodeSignal.set(extractErrorCode(err));
+        this._savingWebhooksSignal.set(false);
       },
     });
   }

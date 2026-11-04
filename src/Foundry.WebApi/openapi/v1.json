@@ -1146,6 +1146,159 @@
         }
       }
     },
+    "/api/accounts/{accountId}/repositories/{id}/webhook": {
+      "get": {
+        "tags": [
+          "Repositories"
+        ],
+        "summary": "Gets the manual webhook registration details for a repository (never the secret)",
+        "operationId": "GetRepositoryWebhook",
+        "parameters": [
+          {
+            "name": "accountId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RepositoryWebhookInfo"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/accounts/{accountId}/repositories/{id}/webhook/secret": {
+      "post": {
+        "tags": [
+          "Repositories"
+        ],
+        "summary": "Reveals the repository's webhook secret for manual registration",
+        "operationId": "RevealRepositoryWebhookSecret",
+        "parameters": [
+          {
+            "name": "accountId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RepositoryWebhookSecret"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/accounts/{accountId}/repositories/{id}/webhook/registered": {
+      "post": {
+        "tags": [
+          "Repositories"
+        ],
+        "summary": "Records that the operator added the webhook on the provider; the hook waits for its first delivery",
+        "operationId": "MarkRepositoryWebhookRegistered",
+        "parameters": [
+          {
+            "name": "accountId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RepositoryWebhookInfo"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/repositories/{id}/position": {
       "patch": {
         "tags": [
@@ -1931,6 +2084,57 @@
           }
         }
       }
+    },
+    "/api/settings/webhooks": {
+      "put": {
+        "tags": [
+          "Settings"
+        ],
+        "summary": "Updates the webhook public base URL and the backstop poll interval",
+        "operationId": "UpdateWebhookSettings",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateWebhookSettingsRequestBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GlobalSettingsSummary"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -2573,6 +2777,21 @@
             "items": {
               "type": "string"
             }
+          },
+          "webhookPublicBaseUrl": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "backstopIntervalMinutes": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32",
+            "default": 15
           }
         }
       },
@@ -3173,6 +3392,59 @@
               "string"
             ],
             "format": "date-time"
+          },
+          "webhookStatus": {
+            "type": "string",
+            "default": "not-configured"
+          }
+        }
+      },
+      "RepositoryWebhookInfo": {
+        "required": [
+          "status",
+          "payloadUrl",
+          "contentType",
+          "events",
+          "backstopIntervalMinutes"
+        ],
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string"
+          },
+          "payloadUrl": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "contentType": {
+            "type": "string"
+          },
+          "events": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "backstopIntervalMinutes": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          }
+        }
+      },
+      "RepositoryWebhookSecret": {
+        "required": [
+          "secret"
+        ],
+        "type": "object",
+        "properties": {
+          "secret": {
+            "type": "string"
           }
         }
       },
@@ -3613,6 +3885,29 @@
             "type": "boolean"
           },
           "maxConcurrentWorkers": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          }
+        }
+      },
+      "UpdateWebhookSettingsRequestBody": {
+        "required": [
+          "webhookPublicBaseUrl",
+          "backstopIntervalMinutes"
+        ],
+        "type": "object",
+        "properties": {
+          "webhookPublicBaseUrl": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "backstopIntervalMinutes": {
             "pattern": "^-?(?:0|[1-9]\\d*)$",
             "type": [
               "integer",

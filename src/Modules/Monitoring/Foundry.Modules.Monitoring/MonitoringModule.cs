@@ -1,3 +1,4 @@
+using Foundry.Modules.Issues.Contracts.Events;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Contracts.Queries;
 using Foundry.Modules.Monitoring.Domain.Services;
@@ -12,6 +13,7 @@ using Foundry.Modules.Monitoring.Features.Providers;
 using Foundry.Modules.Monitoring.Features.Providers.Feedback;
 using Foundry.Modules.Monitoring.Features.RateBudget;
 using Foundry.Modules.Monitoring.Features.Repositories;
+using Foundry.Modules.Monitoring.Features.Webhooks;
 using Foundry.Modules.Monitoring.Infrastructure;
 using Foundry.Modules.Monitoring.Infrastructure.GitHub;
 using Foundry.Modules.Monitoring.Infrastructure.GitLab;
@@ -22,6 +24,7 @@ using Foundry.Shared.Infrastructure;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Logging;
 
 namespace Foundry.Modules.Monitoring;
 
@@ -82,7 +85,20 @@ public static class MonitoringModule
         services.AddCommandHandler<RecheckRepositoryEligibility.Command, RepositorySummary, RecheckRepositoryEligibility.Handler>();
         services.AddCommandHandler<ApplyBranchRules.Command, ApplyBranchRulesResponse, ApplyBranchRules.Handler>();
 
-        services.AddHostedService<MonitoringService>();
+        // Webhook ingress (ADR 0085): host configuration, the single-consumer nudge channel, the
+        // receiving endpoint and the manual-registration endpoints.
+        services.AddOptions<WebhookIngressOptions>().BindConfiguration(WebhookIngressOptions.SectionName);
+        services.TryAddSingleton<WebhookNudgeQueue>();
+        services.AddScoped<WebhookIngress>();
+        services.AddScoped<ReceiveGitHubWebhook.Handler>();
+        services.AddScoped<RepositoryWebhookEndpoints.Handler>();
+        services.AddIntegrationEventHandler<IssueEnteredChecksPending, IssueEnteredChecksPendingHandler>();
+
+        services.AddHostedService(sp => new MonitoringService(
+            sp.GetRequiredService<IServiceScopeFactory>(),
+            sp.GetRequiredService<WebhookNudgeQueue>(),
+            sp.GetRequiredService<TimeProvider>(),
+            sp.GetRequiredService<ILogger<MonitoringService>>()));
 
         return services;
     }
@@ -93,6 +109,7 @@ public static class MonitoringModule
         app.MapProviderEndpoints();
         app.MapRateBudgetEndpoints();
         app.MapRepositoryEndpoints();
+        ReceiveGitHubWebhook.Endpoint.Map(app);
         return app;
     }
 }

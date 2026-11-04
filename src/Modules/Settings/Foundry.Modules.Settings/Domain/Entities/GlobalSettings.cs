@@ -19,6 +19,10 @@ public sealed class GlobalSettings : AggregateRoot<GlobalSettingsId>
     internal const int MinPollIntervalSeconds = 5;
     internal const int MaxPollIntervalSeconds = 3600;
     internal const int DefaultPollIntervalSeconds = 30;
+    internal const int MinBackstopIntervalMinutes = 5;
+    internal const int MaxBackstopIntervalMinutes = 1440;
+    internal const int DefaultBackstopIntervalMinutes = 15;
+    internal const int MaxWebhookPublicBaseUrlLength = 2048;
     internal const int MaxProviderHostLength = 255;
     internal const int MaxAllowedProviderHostCount = 50;
 
@@ -32,6 +36,7 @@ public sealed class GlobalSettings : AggregateRoot<GlobalSettingsId>
         TimeoutMinutes = DefaultTimeoutMinutes;
         ProbeIntervalMinutes = DefaultProbeIntervalMinutes;
         PollIntervalSeconds = DefaultPollIntervalSeconds;
+        BackstopIntervalMinutes = DefaultBackstopIntervalMinutes;
         AutoResumeOnUsageReset = true;
         WorkerImageConfiguration = WorkerImageConfiguration.Default;
         WorkerResourceLimits = WorkerResourceLimits.Default;
@@ -51,6 +56,18 @@ public sealed class GlobalSettings : AggregateRoot<GlobalSettingsId>
     public int ProbeIntervalMinutes { get; private set; }
 
     public int PollIntervalSeconds { get; private set; }
+
+    /// <summary>
+    /// The poll interval for repositories whose webhook is <c>Active</c> (ADR 0085) — the
+    /// health-gated backstop that recovers lost webhook nudges.
+    /// </summary>
+    public int BackstopIntervalMinutes { get; private set; }
+
+    /// <summary>
+    /// The operator-supplied public base URL (absolute <c>https</c>) that a tunnel or reverse proxy
+    /// forwards to Foundry's webhook-only port. <see langword="null"/> when webhooks are not configured.
+    /// </summary>
+    public string? WebhookPublicBaseUrl { get; private set; }
 
     public WorkerPrompts WorkerPrompts { get; private set; } = null!;
 
@@ -159,6 +176,43 @@ public sealed class GlobalSettings : AggregateRoot<GlobalSettingsId>
         }
 
         PollIntervalSeconds = pollIntervalSeconds;
+        UpdatedAt = DateTimeOffset.UtcNow;
+        return Result.Ok();
+    }
+
+    /// <summary>
+    /// Updates the webhook ingress settings. The public base URL is optional; when present it must be
+    /// an absolute <c>https</c> URL without query or fragment. A trailing slash is trimmed so the payload
+    /// URL is built as <c>&lt;base&gt;/webhooks/github/&lt;hookId&gt;</c>.
+    /// </summary>
+    public Result UpdateWebhookSettings(string? publicBaseUrl, int backstopIntervalMinutes)
+    {
+        if (backstopIntervalMinutes < MinBackstopIntervalMinutes || backstopIntervalMinutes > MaxBackstopIntervalMinutes)
+        {
+            return SettingsErrors.InvalidBackstopInterval(backstopIntervalMinutes);
+        }
+
+        string? normalizedUrl = null;
+        if (!string.IsNullOrWhiteSpace(publicBaseUrl))
+        {
+            string trimmed = publicBaseUrl.Trim();
+
+            if (trimmed.Length > MaxWebhookPublicBaseUrlLength
+                || !Uri.TryCreate(trimmed, UriKind.Absolute, out Uri? uri)
+                || uri.Scheme != Uri.UriSchemeHttps
+                || !string.IsNullOrEmpty(uri.Query)
+                || !string.IsNullOrEmpty(uri.Fragment)
+                || !string.IsNullOrEmpty(uri.UserInfo)
+                || string.IsNullOrEmpty(uri.Host))
+            {
+                return SettingsErrors.InvalidWebhookPublicBaseUrl;
+            }
+
+            normalizedUrl = trimmed.TrimEnd('/');
+        }
+
+        WebhookPublicBaseUrl = normalizedUrl;
+        BackstopIntervalMinutes = backstopIntervalMinutes;
         UpdatedAt = DateTimeOffset.UtcNow;
         return Result.Ok();
     }

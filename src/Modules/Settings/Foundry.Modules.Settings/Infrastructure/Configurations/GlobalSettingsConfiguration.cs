@@ -38,6 +38,14 @@ internal sealed class GlobalSettingsConfiguration : IEntityTypeConfiguration<Glo
             .HasColumnName("poll_interval_seconds")
             .HasDefaultValue(GlobalSettings.DefaultPollIntervalSeconds);
 
+        builder.Property(s => s.BackstopIntervalMinutes)
+            .HasColumnName("backstop_interval_minutes")
+            .HasDefaultValue(GlobalSettings.DefaultBackstopIntervalMinutes);
+
+        builder.Property(s => s.WebhookPublicBaseUrl)
+            .HasMaxLength(GlobalSettings.MaxWebhookPublicBaseUrlLength)
+            .HasColumnName("webhook_public_base_url");
+
         ValueConverter<WorkerPrompts, string> workerPromptsConverter = new(
             prompts => SerializeWorkerPrompts(prompts),
             json => DeserializeWorkerPrompts(json));

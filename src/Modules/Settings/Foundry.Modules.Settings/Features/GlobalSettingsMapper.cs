@@ -48,6 +48,8 @@ internal static class GlobalSettingsMapper
             settings.ClaudeCodeSettings.BlockCiCdEdits,
             settings.ClaudeCodeSettings.AdditionalDenyRules,
             settings.HostHooks.HostSettingsPath,
-            settings.HostHooks.ExcludedCommands);
+            settings.HostHooks.ExcludedCommands,
+            settings.WebhookPublicBaseUrl,
+            settings.BackstopIntervalMinutes);
     }
 }

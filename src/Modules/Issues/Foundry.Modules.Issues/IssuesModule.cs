@@ -60,6 +60,7 @@ public static class IssuesModule
         AddIssueStateChangedHandler<IssueContinuableFailed>(services);
         AddIssueStateChangedHandler<IssueContinuationQueued>(services);
         AddIssueStateChangedHandler<IssueChecksPending>(services);
+        services.AddScoped<IDomainEventHandler<IssueChecksPending>, IssueChecksPendingNudgeBridge>();
 
         return services;
     }
