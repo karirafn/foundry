@@ -249,6 +249,156 @@ start_rootless_dockerd() {
     return 1
 }
 
+# ---------------------------------------------------------------------------
+# Claude Code's Linux managed-settings path.  Settings here outrank user,
+# project, local and --settings values, and their hooks cannot be removed or
+# disabled from any other file (ADR 0086).
+# ---------------------------------------------------------------------------
+readonly MANAGED_SETTINGS_FILE=/etc/claude-code/managed-settings.json
+
+# ---------------------------------------------------------------------------
+# render_managed_settings <output_path>
+#
+# Renders Foundry's worker policy — $CLAUDE_SETTINGS_JSON (deny lists, model)
+# with the operator's host hooks merged in by merge_host_hooks — to
+# <output_path>.  The parent directory is made mode 0755 and the file mode 0644:
+# world-readable, because Claude Code starts without a managed source it cannot
+# read, so a root-only file would silently drop the policy.  When run as root
+# (production) both are chowned root:root, so the unprivileged worker can read
+# but never write, chmod or replace them.
+#
+# Fails closed: an empty, missing or non-object $CLAUDE_SETTINGS_JSON emits
+# the bootstrap-failure sentinel (stage=managed-settings); a failed host-hook
+# merge emits stage=host-settings.  Either returns non-zero.
+# ---------------------------------------------------------------------------
+render_managed_settings() {
+    local output_path="$1"
+    local output_dir
+    output_dir="$(dirname "$output_path")"
+
+    local settings_json="${CLAUDE_SETTINGS_JSON:-}"
+    if [[ -z "$settings_json" ]]; then
+        echo "ERROR: CLAUDE_SETTINGS_JSON is empty or missing; refusing to start a worker without its managed settings." >&2
+        fail_bootstrap "managed-settings" "CLAUDE_SETTINGS_JSON is empty or missing; the worker policy cannot be rendered"
+        return 1
+    fi
+
+    if ! command -v jq > /dev/null 2>&1; then
+        fail_bootstrap "managed-settings" "jq is not installed; cannot render $output_path"
+        return 1
+    fi
+
+    if ! printf '%s' "$settings_json" | jq -e 'type == "object"' > /dev/null 2>&1; then
+        echo "ERROR: CLAUDE_SETTINGS_JSON is not a JSON object." >&2
+        fail_bootstrap "managed-settings" "CLAUDE_SETTINGS_JSON is not a JSON object; the worker policy cannot be rendered"
+        return 1
+    fi
+
+    # The host settings file is mounted read-only at a staging path (never ~/.claude/settings.json);
+    # only its hooks are merged in, minus the operator's exclusion list.
+    if [[ -n "${FOUNDRY_HOST_SETTINGS_FILE:-}" ]]; then
+        settings_json="$(merge_host_hooks "$settings_json" "$FOUNDRY_HOST_SETTINGS_FILE" "${FOUNDRY_HOST_HOOK_EXCLUSIONS:-[]}")" || return 1
+    fi
+
+    # allowManagedHooksOnly would also block the target repository's own hooks; managed hooks
+    # are tamper-proof without it, so it is never carried into the managed file.
+    if ! settings_json="$(printf '%s' "$settings_json" | jq 'del(.allowManagedHooksOnly)')"; then
+        fail_bootstrap "managed-settings" "could not render $output_path"
+        return 1
+    fi
+
+    local is_root=false
+    [[ "$(id -u)" -eq 0 ]] && is_root=true
+
+    if ! mkdir -p "$output_dir" || ! chmod 0755 "$output_dir" \
+        || { $is_root && ! chown 0:0 "$output_dir"; }; then
+        fail_bootstrap "managed-settings" "could not create $output_dir"
+        return 1
+    fi
+
+    # Write via a temp file in the same directory and atomically rename it into place.
+    local settings_tmp
+    if ! settings_tmp="$(mktemp "${output_dir}/.managed-settings.XXXXXX")"; then
+        fail_bootstrap "managed-settings" "could not create a temp file in $output_dir"
+        return 1
+    fi
+    if ! printf '%s\n' "$settings_json" > "$settings_tmp" \
+        || ! chmod 0644 "$settings_tmp" \
+        || { $is_root && ! chown 0:0 "$settings_tmp"; } \
+        || ! mv -f "$settings_tmp" "$output_path"; then
+        rm -f "$settings_tmp"
+        fail_bootstrap "managed-settings" "could not write $output_path"
+        return 1
+    fi
+
+    echo "Managed settings rendered to $output_path" >&2
+}
+
+# ---------------------------------------------------------------------------
+# verify_managed_settings <path>
+#
+# Non-root invariant: <path> must exist, be owned by uid 0 and carry no group
+# or other write bit.  Otherwise emits the bootstrap-failure sentinel
+# (stage=managed-settings) and returns non-zero — this catches a container
+# started directly as a non-root user (e.g. `--user node`) or from a stale
+# image that skipped the root render phase.
+# ---------------------------------------------------------------------------
+verify_managed_settings() {
+    local path="$1"
+    local rebuild_hint="rebuild the worker image (docker build -t foundry-worker:local workers/) and start it as root so the entrypoint can render the managed settings"
+
+    local stat_out
+    if ! stat_out="$(stat -L -c '%u %a' -- "$path" 2> /dev/null)" || [[ -z "$stat_out" ]]; then
+        echo "ERROR: managed settings file $path is missing." >&2
+        fail_bootstrap "managed-settings" "managed settings file $path is missing; $rebuild_hint"
+        return 1
+    fi
+
+    local owner mode
+    read -r owner mode <<< "$stat_out"
+    if [[ "$owner" != "0" ]]; then
+        echo "ERROR: managed settings file $path is owned by uid $owner, not root." >&2
+        fail_bootstrap "managed-settings" "managed settings file $path is not owned by root (uid $owner); $rebuild_hint"
+        return 1
+    fi
+    if [[ ! "$mode" =~ ^[0-7]+$ ]] || (( (8#$mode & 8#022) != 0 )); then
+        echo "ERROR: managed settings file $path has mode $mode; it must not be group- or other-writable." >&2
+        fail_bootstrap "managed-settings" "managed settings file $path is group- or other-writable (mode $mode); $rebuild_hint"
+        return 1
+    fi
+}
+
+# ---------------------------------------------------------------------------
+# Root phase: render the managed settings, then drop to node.
+#
+# The image starts as root only so this phase can write the root-owned managed
+# file.  Nothing else — clone, auth, dockerd, claude — runs as root: the script
+# re-executes itself as node with no inheritable capabilities.  Docker's default
+# capability bounding set is left intact because rootless dockerd relies on the
+# setuid newuidmap/newgidmap.
+# ---------------------------------------------------------------------------
+if [[ "$(id -u)" -eq 0 ]]; then
+    render_managed_settings "$MANAGED_SETTINGS_FILE" || exit 1
+    unset CLAUDE_SETTINGS_JSON FOUNDRY_HOST_SETTINGS_FILE FOUNDRY_HOST_HOOK_EXCLUSIONS
+    # Docker derives HOME from the starting user (root); point it, and the
+    # login names, at node's passwd entry so ~ resolves as before.
+    _node_home="$(getent passwd node | cut -d: -f6)"
+    export HOME="${_node_home:-/home/node}" USER=node LOGNAME=node
+    unset _node_home
+    exec setpriv --reuid=node --regid=node --init-groups --inh-caps=-all "$0" "$@"
+fi
+
+# Non-root phase: before any other work, prove the root phase ran.
+verify_managed_settings "$MANAGED_SETTINGS_FILE" || exit 1
+
+# Foundry no longer writes user settings.  Remove any left over from an earlier
+# worker (in OAuth mode ~/.claude is the shared credential volume) so settings
+# a worker injected there never outlive the next worker start.
+if ! rm -f ~/.claude/settings.json || { [[ -n "${CLAUDE_CONFIG_DIR:-}" ]] && ! rm -f "${CLAUDE_CONFIG_DIR}/settings.json"; }; then
+    fail_bootstrap "managed-settings" "could not remove the stale user settings file ~/.claude/settings.json"
+    exit 1
+fi
+
 # Required environment variables
 # Valid auth: EITHER ANTHROPIC_API_KEY (API-key mode) OR a credential file at
 # $CLAUDE_CONFIG_DIR/.credentials.json (OAuth volume mode, written by claude /login).
@@ -277,29 +427,6 @@ if [[ "$sys_prompt_bytes" -ge "$MAX_SYSTEM_PROMPT_BYTES" ]]; then
     exit 1
 fi
 unset sys_prompt_bytes
-
-if [[ -n "${CLAUDE_SETTINGS_JSON:-}" || -n "${FOUNDRY_HOST_SETTINGS_FILE:-}" ]]; then
-    if [[ ! -w ~/.claude ]]; then
-        echo "ERROR: ~/.claude is not writable by $(whoami). Rebuild the worker image: docker build -t foundry-worker:local workers/" >&2
-        exit 1
-    fi
-    settings_json="${CLAUDE_SETTINGS_JSON:-}"
-    [[ -n "$settings_json" ]] || settings_json='{}'
-    # The host settings file is mounted read-only at a staging path (never ~/.claude/settings.json);
-    # only its hooks are merged in, minus the operator's exclusion list.
-    if [[ -n "${FOUNDRY_HOST_SETTINGS_FILE:-}" ]]; then
-        settings_json="$(merge_host_hooks "$settings_json" "$FOUNDRY_HOST_SETTINGS_FILE" "${FOUNDRY_HOST_HOOK_EXCLUSIONS:-[]}")" || exit 1
-    fi
-    # Write via a temp file and atomically replace any pre-existing read-only settings.json.
-    # mv -f replaces a 444 file owned by the same user (node owns the dir, so replacement is
-    # permitted), fixing both re-run breakage and any concurrent-worker write race (last writer
-    # wins with identical content). settings.json is regenerated fresh on every container start.
-    settings_tmp="$(mktemp)"
-    printf '%s\n' "$settings_json" > "$settings_tmp"
-    chmod 444 "$settings_tmp"
-    mv -f "$settings_tmp" ~/.claude/settings.json
-    unset settings_json settings_tmp
-fi
 
 # Authenticate the clone via GIT_ASKPASS so the token never appears in the
 # clone URL, on a command line, or in git's output.  The clone URL uses the

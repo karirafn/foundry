@@ -98,6 +98,8 @@ RUN chmod 555 /entrypoint.sh
 WORKDIR /workspace
 RUN chown node:node /workspace
 
-USER node
+# No USER: the entrypoint starts as root only to render the root-owned
+# /etc/claude-code/managed-settings.json, then drops to node via setpriv before any
+# other work (ADR 0086). Container hardening must preserve that render-then-drop phase.
 
 CMD ["echo", "foundry-worker image ready"]

@@ -1,5 +1,5 @@
 #!/usr/bin/env bats
-# Tests for start_rootless_dockerd in entrypoint.sh.
+# Tests for entrypoint.sh.
 # All fake binaries are written into a per-test temp dir ($FAKE_BIN_DIR) so the
 # committed helpers/ directory is never modified and tests are safe under parallel
 # execution.
@@ -28,6 +28,19 @@ setup() {
     export DOCKER_RETRY_COUNT=3
     export DOCKER_RETRY_SLEEP=0
 
+    # The entrypoint deletes ~/.claude/settings.json (and $CLAUDE_CONFIG_DIR/settings.json)
+    # on every start, so isolate HOME and drop any ambient CLAUDE_CONFIG_DIR — a local bats
+    # run must never touch the developer's own Claude Code settings.
+    export HOME="$BATS_TEST_TMPDIR/home"
+    /bin/mkdir -p "$HOME/.claude"
+    unset CLAUDE_CONFIG_DIR
+
+    # Full-entrypoint tests run as the non-root CI user, so they exercise the non-root
+    # phase, which first verifies /etc/claude-code/managed-settings.json via stat. Fake a
+    # valid root-owned 0644 file (see make_fake_stat) rather than provisioning a live
+    # managed policy in the runner's own /etc.
+    make_fake_stat
+
     # Derive the expected runtime home the same way production does — via the
     # OS passwd database — so tests remain correct even when the runner sets a
     # custom $HOME that differs from the passwd entry.
@@ -37,6 +50,26 @@ setup() {
     # needed because XDG_RUNTIME_DIR is now a passwd-sourced path that the test
     # user already owns.
     load_function
+}
+
+# Fake `stat` that answers for the managed settings file only and defers to the real
+# binary for every other path.  FAKE_MANAGED_STAT is the "<uid> <octal mode>" it prints
+# (default: a valid root-owned 0644 file); FAKE_MANAGED_STAT=missing makes it fail as
+# for a nonexistent file.
+make_fake_stat() {
+    local real_stat
+    real_stat="$(command -v stat)"
+    cat > "$FAKE_BIN_DIR/stat" <<EOF
+#!/bin/bash
+if [[ "\${!#}" == "/etc/claude-code/managed-settings.json" ]]; then
+    case "\${FAKE_MANAGED_STAT:-0 644}" in
+        missing) echo "stat: cannot statx '/etc/claude-code/managed-settings.json': No such file or directory" >&2; exit 1 ;;
+        *) printf '%s\\n' "\${FAKE_MANAGED_STAT:-0 644}"; exit 0 ;;
+    esac
+fi
+exec "${real_stat}" "\$@"
+EOF
+    chmod +x "$FAKE_BIN_DIR/stat"
 }
 
 # Loads start_rootless_dockerd from entrypoint.sh into the current shell.
@@ -834,7 +867,7 @@ set_required_env_no_auth() {
 }
 
 # ---------------------------------------------------------------------------
-# OAuth settings-write: atomic mv -f replaces a stale read-only settings.json
+# User settings: the entrypoint removes ~/.claude/settings.json at every start
 # ---------------------------------------------------------------------------
 
 # ---------------------------------------------------------------------------
@@ -1364,31 +1397,19 @@ EOF
 
 # ---------------------------------------------------------------------------
 
-@test "oauth settings-write: CLAUDE_SETTINGS_JSON overwrites a pre-existing chmod 444 settings.json" {
+@test "user settings: a stale read-only settings.json on the OAuth volume is removed at start" {
     make_fake_claude
     make_fake_git
 
-    # The entrypoint writes to ~/.claude/settings.json. Redirect HOME to a temp
-    # dir so ~/.claude resolves to our controlled directory (matching the
-    # production container layout where CLAUDE_CONFIG_DIR == ~/.claude).
-    local fake_home="$BATS_TEST_TMPDIR/oauth-home"
-    local cred_dir="$fake_home/.claude"
-    mkdir -p "$cred_dir"
-
-    # Pre-create a read-only settings.json — simulating the shared credential
-    # volume after a previous worker run (the re-run breakage scenario).
-    printf '{"old":"value"}' > "$cred_dir/settings.json"
+    # Simulate the shared credential volume after an earlier worker (or a worker that
+    # injected its own settings): a read-only settings.json next to the credentials.
+    local cred_dir="$HOME/.claude"
+    printf '{"permissions":{"allow":["Bash(*)"]}}' > "$cred_dir/settings.json"
     chmod 444 "$cred_dir/settings.json"
-
-    # Provide a credential file so the auth check passes.
     printf '{"token":"fake"}' > "$cred_dir/.credentials.json"
 
-    export HOME="$fake_home"
     export CLAUDE_CONFIG_DIR="$cred_dir"
-    export CLAUDE_SETTINGS_JSON='{"new":"value"}'
-    # Unset API key so only the credential-file auth path is active.
     unset ANTHROPIC_API_KEY
-
     export CLONE_URL="https://github.com/example/repo"
     export GIT_PAT="test-pat"
     export WORKER_PROMPT="test-prompt"
@@ -1397,13 +1418,126 @@ EOF
 
     run bash "$ENTRYPOINT"
 
-    # The entrypoint must succeed — the atomic mv -f must not be blocked by the 444 mode.
     [ "$status" -eq 0 ]
+    [ -f "$BATS_TEST_TMPDIR/claude_called" ]
+    [ ! -e "$cred_dir/settings.json" ]
+}
 
-    # The settings.json must contain the new content written by this run.
-    local written_content
-    written_content="$(cat "$cred_dir/settings.json")"
-    [[ "$written_content" == *'"new"'* ]]
+@test "user settings: the entrypoint never writes ~/.claude/settings.json" {
+    make_fake_claude
+    make_fake_git
+    set_required_env
+    export CLAUDE_SETTINGS_JSON='{"permissions":{"deny":["Bash(git push --force:*)"]}}'
+
+    run bash "$ENTRYPOINT"
+
+    [ "$status" -eq 0 ]
+    [ ! -e "$HOME/.claude/settings.json" ]
+}
+
+@test "user settings: settings.json in a separate CLAUDE_CONFIG_DIR is removed too" {
+    make_fake_claude
+    make_fake_git
+    set_required_env
+    local config_dir="$BATS_TEST_TMPDIR/config-dir"
+    mkdir -p "$config_dir"
+    printf '{}' > "$config_dir/settings.json"
+    export CLAUDE_CONFIG_DIR="$config_dir"
+
+    run bash "$ENTRYPOINT"
+
+    [ "$status" -eq 0 ]
+    [ ! -e "$config_dir/settings.json" ]
+}
+
+# ---------------------------------------------------------------------------
+# Managed settings: non-root invariant check
+# ---------------------------------------------------------------------------
+#
+# As non-root the entrypoint first verifies /etc/claude-code/managed-settings.json
+# exists, is owned by uid 0 and has no group/other write bit.  The fake stat from
+# setup() reports FAKE_MANAGED_STAT for that path.
+
+@test "managed settings: a valid root-owned 0644 file lets the entrypoint reach claude" {
+    make_fake_claude
+    make_fake_git
+    set_required_env
+    export FAKE_MANAGED_STAT="0 644"
+
+    run bash "$ENTRYPOINT"
+
+    [ "$status" -eq 0 ]
+    [ -f "$BATS_TEST_TMPDIR/claude_called" ]
+    [[ "$output" != *"FOUNDRY_BOOTSTRAP_FAILED"* ]]
+}
+
+@test "managed settings: a missing file fails bootstrap and tells the operator to rebuild" {
+    make_fake_claude
+    make_fake_git
+    set_required_env
+    export FAKE_MANAGED_STAT="missing"
+
+    run bash "$ENTRYPOINT"
+
+    [ "$status" -ne 0 ]
+    [ ! -f "$BATS_TEST_TMPDIR/claude_called" ]
+    [[ "$output" == *"FOUNDRY_BOOTSTRAP_FAILED stage=managed-settings detail="*"rebuild the worker image"* ]]
+}
+
+@test "managed settings: a file not owned by root fails bootstrap" {
+    make_fake_claude
+    make_fake_git
+    set_required_env
+    export FAKE_MANAGED_STAT="1000 644"
+
+    run bash "$ENTRYPOINT"
+
+    [ "$status" -ne 0 ]
+    [ ! -f "$BATS_TEST_TMPDIR/claude_called" ]
+    [[ "$output" == *"FOUNDRY_BOOTSTRAP_FAILED stage=managed-settings detail="*"not owned by root"*"rebuild the worker image"* ]]
+}
+
+@test "managed settings: a group-writable file fails bootstrap" {
+    make_fake_claude
+    make_fake_git
+    set_required_env
+    export FAKE_MANAGED_STAT="0 664"
+
+    run bash "$ENTRYPOINT"
+
+    [ "$status" -ne 0 ]
+    [ ! -f "$BATS_TEST_TMPDIR/claude_called" ]
+    [[ "$output" == *"FOUNDRY_BOOTSTRAP_FAILED stage=managed-settings detail="*"writable"* ]]
+}
+
+@test "managed settings: an other-writable file fails bootstrap" {
+    make_fake_claude
+    make_fake_git
+    set_required_env
+    export FAKE_MANAGED_STAT="0 646"
+
+    run bash "$ENTRYPOINT"
+
+    [ "$status" -ne 0 ]
+    [ ! -f "$BATS_TEST_TMPDIR/claude_called" ]
+    [[ "$output" == *"FOUNDRY_BOOTSTRAP_FAILED stage=managed-settings"* ]]
+}
+
+@test "managed settings: the invariant check runs before any other work" {
+    make_fake_claude
+    make_fake_git
+    # No auth and no required env at all: the managed-settings failure must come first.
+    unset ANTHROPIC_API_KEY CLONE_URL GIT_PAT WORKER_PROMPT SYSTEM_PROMPT ISSUE_NUMBER
+    export FAKE_MANAGED_STAT="missing"
+    printf '{}' > "$HOME/.claude/settings.json"
+
+    run bash "$ENTRYPOINT"
+
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"FOUNDRY_BOOTSTRAP_FAILED stage=managed-settings"* ]]
+    [[ "$output" != *"Authentication required"* ]]
+    # Nothing ran after the failed check — not even the user-settings cleanup.
+    [ -e "$HOME/.claude/settings.json" ]
 }
 
 # ---------------------------------------------------------------------------
@@ -1487,27 +1621,31 @@ EOF
 }
 
 # ---------------------------------------------------------------------------
-# Host hooks merge tests
+# Managed settings render + host hooks merge tests
 # ---------------------------------------------------------------------------
 #
-# The entrypoint merges the `hooks` object of the operator's host Claude Code
-# settings file (mounted at FOUNDRY_HOST_SETTINGS_FILE) into the generated
-# ~/.claude/settings.json, dropping hooks whose command is in the
-# FOUNDRY_HOST_HOOK_EXCLUSIONS JSON array.  HOME is redirected to a per-test
-# dir so ~/.claude resolves to a controlled location.
+# render_managed_settings renders CLAUDE_SETTINGS_JSON, with the `hooks` object of
+# the operator's host Claude Code settings file (FOUNDRY_HOST_SETTINGS_FILE) merged
+# in minus the FOUNDRY_HOST_HOOK_EXCLUSIONS JSON array, to the path it is given.
+# Production passes /etc/claude-code/managed-settings.json from the root phase;
+# these tests load the function with awk and render to a per-test temp path.
 
-# Prepare HOME, required env vars and fakes for a full entrypoint run that
-# writes settings.json.
+# Loads render_managed_settings and the helpers it calls into the current shell.
+load_render_function() {
+    local name func_body
+    for name in fail_bootstrap merge_host_hooks render_managed_settings; do
+        func_body="$(awk "/^${name}\\(\\)/,/^\\}/" "$ENTRYPOINT")"
+        [ -n "$func_body" ]
+        eval "$func_body"
+    done
+}
+
+# Prepare the render function, the generated settings and the output path.
 set_host_hooks_env() {
-    make_fake_claude
-    make_fake_git
-
-    HOST_HOOKS_HOME="$BATS_TEST_TMPDIR/host-hooks-home"
-    mkdir -p "$HOST_HOOKS_HOME/.claude"
-    export HOME="$HOST_HOOKS_HOME"
-
-    set_required_env
-    export CLAUDE_SETTINGS_JSON='{"permissions":{"deny":["Bash(git push --force:*)"]}}'
+    load_render_function
+    MANAGED_DIR="$BATS_TEST_TMPDIR/etc/claude-code"
+    MANAGED_FILE="$MANAGED_DIR/managed-settings.json"
+    export CLAUDE_SETTINGS_JSON='{"permissions":{"deny":["Bash(git push --force:*)"]},"model":"claude-opus-5-5"}'
     unset FOUNDRY_HOST_SETTINGS_FILE FOUNDRY_HOST_HOOK_EXCLUSIONS
 }
 
@@ -1519,6 +1657,7 @@ write_host_settings() {
 {
   "permissions": { "allow": ["Bash(ls:*)"] },
   "statusLine": { "type": "command", "command": "status.sh" },
+  "allowManagedHooksOnly": true,
   "hooks": {
     "PreToolUse": [
       {
@@ -1545,27 +1684,107 @@ JSON
 }
 
 written_settings() {
-    cat "$HOST_HOOKS_HOME/.claude/settings.json"
+    cat "$MANAGED_FILE"
 }
 
-@test "host hooks: hooks from the host file are merged into the generated settings" {
+@test "managed render: writes CLAUDE_SETTINGS_JSON unchanged when no host settings path is configured" {
+    set_host_hooks_env
+
+    run render_managed_settings "$MANAGED_FILE"
+
+    [ "$status" -eq 0 ]
+    [[ "$output" != *"Host hooks applied"* ]]
+    [ "$(written_settings | jq -c '.')" = "$CLAUDE_SETTINGS_JSON" ]
+}
+
+@test "managed render: the directory is mode 0755 and the file mode 0644" {
+    set_host_hooks_env
+
+    run render_managed_settings "$MANAGED_FILE"
+
+    [ "$status" -eq 0 ]
+    [ "$(stat -c '%a' "$MANAGED_DIR")" = "755" ]
+    [ "$(stat -c '%a' "$MANAGED_FILE")" = "644" ]
+}
+
+@test "managed render: an existing read-only file is replaced and no temp file is left behind" {
+    set_host_hooks_env
+    mkdir -p "$MANAGED_DIR"
+    printf '{"old":"value"}' > "$MANAGED_FILE"
+    chmod 444 "$MANAGED_FILE"
+
+    run render_managed_settings "$MANAGED_FILE"
+
+    [ "$status" -eq 0 ]
+    [ "$(written_settings | jq -c '.')" = "$CLAUDE_SETTINGS_JSON" ]
+    [ "$(ls -A "$MANAGED_DIR")" = "managed-settings.json" ]
+}
+
+@test "managed render: an empty CLAUDE_SETTINGS_JSON fails bootstrap and writes nothing" {
+    set_host_hooks_env
+    export CLAUDE_SETTINGS_JSON=""
+
+    run render_managed_settings "$MANAGED_FILE"
+
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"FOUNDRY_BOOTSTRAP_FAILED stage=managed-settings"* ]]
+    [ ! -e "$MANAGED_FILE" ]
+}
+
+@test "managed render: a missing CLAUDE_SETTINGS_JSON fails bootstrap even with a host settings file" {
+    set_host_hooks_env
+    write_host_settings
+    unset CLAUDE_SETTINGS_JSON
+
+    run render_managed_settings "$MANAGED_FILE"
+
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"FOUNDRY_BOOTSTRAP_FAILED stage=managed-settings"* ]]
+    [ ! -e "$MANAGED_FILE" ]
+}
+
+@test "managed render: a CLAUDE_SETTINGS_JSON that is not a JSON object fails bootstrap" {
+    set_host_hooks_env
+    export CLAUDE_SETTINGS_JSON='not json'
+
+    run render_managed_settings "$MANAGED_FILE"
+
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"FOUNDRY_BOOTSTRAP_FAILED stage=managed-settings"* ]]
+    [ ! -e "$MANAGED_FILE" ]
+}
+
+@test "managed render: never carries an allowManagedHooksOnly key" {
+    set_host_hooks_env
+    export CLAUDE_SETTINGS_JSON='{"allowManagedHooksOnly":true,"model":"claude-opus-5-5"}'
+    write_host_settings
+
+    run render_managed_settings "$MANAGED_FILE"
+
+    [ "$status" -eq 0 ]
+    [ "$(written_settings | jq -r 'has("allowManagedHooksOnly")')" = "false" ]
+    [ "$(written_settings | jq -r '.model')" = "claude-opus-5-5" ]
+}
+
+@test "host hooks: hooks from the host file are merged into the managed settings" {
     set_host_hooks_env
     write_host_settings
 
-    run bash "$ENTRYPOINT"
+    run render_managed_settings "$MANAGED_FILE"
 
     [ "$status" -eq 0 ]
     [ "$(written_settings | jq -r '.hooks.PreToolUse[0].hooks[1].command')" = "bash ~/.claude/hooks/guard.sh" ]
     [ "$(written_settings | jq -r '.hooks.Stop | length')" = "1" ]
     # Foundry-generated settings survive the merge
     [ "$(written_settings | jq -r '.permissions.deny[0]')" = "Bash(git push --force:*)" ]
+    [ "$(written_settings | jq -r '.model')" = "claude-opus-5-5" ]
 }
 
 @test "host hooks: only the hooks key is imported from the host file" {
     set_host_hooks_env
     write_host_settings
 
-    run bash "$ENTRYPOINT"
+    run render_managed_settings "$MANAGED_FILE"
 
     [ "$status" -eq 0 ]
     [ "$(written_settings | jq -r 'has("statusLine")')" = "false" ]
@@ -1576,7 +1795,7 @@ written_settings() {
     set_host_hooks_env
     write_host_settings
 
-    run bash "$ENTRYPOINT"
+    run render_managed_settings "$MANAGED_FILE"
 
     [ "$status" -eq 0 ]
     [[ "$output" == *"Host hooks applied: 4 (excluded: 0)"* ]]
@@ -1588,7 +1807,7 @@ written_settings() {
     write_host_settings
     export FOUNDRY_HOST_HOOK_EXCLUSIONS='["bash ~/.claude/hooks/windows-path-check.sh"]'
 
-    run bash "$ENTRYPOINT"
+    run render_managed_settings "$MANAGED_FILE"
 
     [ "$status" -eq 0 ]
     # Only the guard hook survives, in the single remaining Bash matcher group
@@ -1599,12 +1818,23 @@ written_settings() {
     [[ "$output" == *"Host hooks applied: 1 (excluded: 3)"* ]]
 }
 
+@test "host hooks: generated hooks are kept and host groups appended after them" {
+    set_host_hooks_env
+    export CLAUDE_SETTINGS_JSON='{"hooks":{"Stop":[{"hooks":[{"type":"command","command":"foundry-stop.sh"}]}]}}'
+    write_host_settings
+
+    run render_managed_settings "$MANAGED_FILE"
+
+    [ "$status" -eq 0 ]
+    [ "$(written_settings | jq -c '[.hooks.Stop[].hooks[].command]')" = '["foundry-stop.sh","bash ~/.claude/hooks/windows-path-check.sh"]' ]
+}
+
 @test "host hooks: exclusion matching is exact, not substring" {
     set_host_hooks_env
     write_host_settings
     export FOUNDRY_HOST_HOOK_EXCLUSIONS='["windows-path-check.sh"]'
 
-    run bash "$ENTRYPOINT"
+    run render_managed_settings "$MANAGED_FILE"
 
     [ "$status" -eq 0 ]
     [[ "$output" == *"Host hooks applied: 4 (excluded: 0)"* ]]
@@ -1615,10 +1845,10 @@ written_settings() {
     write_host_settings
     export FOUNDRY_HOST_HOOK_EXCLUSIONS='["bash ~/.claude/hooks/not-installed.sh"]'
 
-    run bash "$ENTRYPOINT"
+    run render_managed_settings "$MANAGED_FILE"
 
     [ "$status" -eq 0 ]
-    [ -f "$BATS_TEST_TMPDIR/claude_called" ]
+    [ -f "$MANAGED_FILE" ]
     [[ "$output" == *"exclusion matched no hook: bash ~/.claude/hooks/not-installed.sh"* ]]
 }
 
@@ -1627,21 +1857,33 @@ written_settings() {
     write_host_settings
     export FOUNDRY_HOST_HOOK_EXCLUSIONS='["bash ~/.claude/hooks/windows-path-check.sh","bash ~/.claude/hooks/guard.sh"]'
 
-    run bash "$ENTRYPOINT"
+    run render_managed_settings "$MANAGED_FILE"
 
     [ "$status" -eq 0 ]
     [ "$(written_settings | jq -r 'has("hooks")')" = "false" ]
     [[ "$output" == *"Host hooks applied: 0 (excluded: 4)"* ]]
 }
 
+@test "host hooks: an invalid exclusion list fails bootstrap" {
+    set_host_hooks_env
+    write_host_settings
+    export FOUNDRY_HOST_HOOK_EXCLUSIONS='{"not":"an array"}'
+
+    run render_managed_settings "$MANAGED_FILE"
+
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"FOUNDRY_BOOTSTRAP_FAILED stage=host-settings"* ]]
+    [ ! -e "$MANAGED_FILE" ]
+}
+
 @test "host hooks: a missing host file fails bootstrap naming the host settings file" {
     set_host_hooks_env
     export FOUNDRY_HOST_SETTINGS_FILE="$BATS_TEST_TMPDIR/does-not-exist.json"
 
-    run bash "$ENTRYPOINT"
+    run render_managed_settings "$MANAGED_FILE"
 
     [ "$status" -ne 0 ]
-    [ ! -f "$BATS_TEST_TMPDIR/claude_called" ]
+    [ ! -e "$MANAGED_FILE" ]
     [[ "$output" == *"FOUNDRY_BOOTSTRAP_FAILED stage=host-settings detail=host settings file $BATS_TEST_TMPDIR/does-not-exist.json is missing or unreadable"* ]]
 }
 
@@ -1651,7 +1893,7 @@ written_settings() {
     mkdir -p "$BATS_TEST_TMPDIR/host-settings-dir.json"
     export FOUNDRY_HOST_SETTINGS_FILE="$BATS_TEST_TMPDIR/host-settings-dir.json"
 
-    run bash "$ENTRYPOINT"
+    run render_managed_settings "$MANAGED_FILE"
 
     [ "$status" -ne 0 ]
     [[ "$output" == *"FOUNDRY_BOOTSTRAP_FAILED stage=host-settings"* ]]
@@ -1665,7 +1907,7 @@ written_settings() {
     write_host_settings
     chmod 000 "$HOST_SETTINGS_FILE"
 
-    run bash "$ENTRYPOINT"
+    run render_managed_settings "$MANAGED_FILE"
 
     chmod 644 "$HOST_SETTINGS_FILE"
     [ "$status" -ne 0 ]
@@ -1678,10 +1920,10 @@ written_settings() {
     printf '{"hooks": {' > "$HOST_SETTINGS_FILE"
     export FOUNDRY_HOST_SETTINGS_FILE="$HOST_SETTINGS_FILE"
 
-    run bash "$ENTRYPOINT"
+    run render_managed_settings "$MANAGED_FILE"
 
     [ "$status" -ne 0 ]
-    [ ! -f "$BATS_TEST_TMPDIR/claude_called" ]
+    [ ! -e "$MANAGED_FILE" ]
     [[ "$output" == *"FOUNDRY_BOOTSTRAP_FAILED stage=host-settings detail=host settings file $HOST_SETTINGS_FILE is not valid JSON"* ]]
 }
 
@@ -1691,7 +1933,7 @@ written_settings() {
     printf '[]' > "$HOST_SETTINGS_FILE"
     export FOUNDRY_HOST_SETTINGS_FILE="$HOST_SETTINGS_FILE"
 
-    run bash "$ENTRYPOINT"
+    run render_managed_settings "$MANAGED_FILE"
 
     [ "$status" -ne 0 ]
     [[ "$output" == *"FOUNDRY_BOOTSTRAP_FAILED stage=host-settings"* ]]
@@ -1703,22 +1945,10 @@ written_settings() {
     printf '{"statusLine":{"type":"command","command":"status.sh"}}' > "$HOST_SETTINGS_FILE"
     export FOUNDRY_HOST_SETTINGS_FILE="$HOST_SETTINGS_FILE"
 
-    run bash "$ENTRYPOINT"
+    run render_managed_settings "$MANAGED_FILE"
 
     [ "$status" -eq 0 ]
-    [ -f "$BATS_TEST_TMPDIR/claude_called" ]
     [[ "$output" == *"Host hooks applied: 0 (excluded: 0)"* ]]
     [[ "$output" != *"FOUNDRY_BOOTSTRAP_FAILED"* ]]
-    [ "$(written_settings | jq -c '.')" = "$CLAUDE_SETTINGS_JSON" ]
-}
-
-@test "host hooks: no configured path writes the generated settings unchanged and logs nothing" {
-    set_host_hooks_env
-
-    run bash "$ENTRYPOINT"
-
-    [ "$status" -eq 0 ]
-    [ -f "$BATS_TEST_TMPDIR/claude_called" ]
-    [[ "$output" != *"Host hooks applied"* ]]
     [ "$(written_settings | jq -c '.')" = "$CLAUDE_SETTINGS_JSON" ]
 }
