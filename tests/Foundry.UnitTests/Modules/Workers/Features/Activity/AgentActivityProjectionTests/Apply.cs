@@ -239,7 +239,7 @@ public sealed class Apply
     }
 
     [Fact]
-    public void WhenAssistantMessageIsEmittedPerContentBlock_SumsTokensOncePerMessageId()
+    public void WhenAssistantMessageIsEmittedPerContentBlock_SumsBillableInputOncePerMessageId()
     {
         // Arrange
         const string usage = """{"input_tokens":10,"output_tokens":20,"cache_read_input_tokens":300,"cache_creation_input_tokens":40}""";
@@ -250,7 +250,35 @@ public sealed class Apply
         _sut.Apply($$$"""{"type":"assistant","message":{"id":"m2","usage":{{{usage}}},"content":[{"type":"text","text":"c"}]}}""", ReceivedAt);
 
         // Assert
-        Snapshot().Tokens.ShouldBe(new AgentTokenTotals(20, 40, 600, 80));
+        // Billable input = (10 + 300 + 40) per message, two distinct messages; streamed
+        // output_tokens is a start-of-message stub, so output stays unknown while live.
+        Snapshot().Tokens.ShouldBe(new AgentTokenTotals(700, null));
+    }
+
+    [Fact]
+    public void WhenResultEventCarriesModelUsage_ReportsFinalOutputSummedAcrossModels()
+    {
+        // Arrange
+        _sut.Apply("""{"type":"assistant","message":{"id":"m1","usage":{"input_tokens":1,"output_tokens":2,"cache_read_input_tokens":3,"cache_creation_input_tokens":4},"content":[{"type":"text","text":"a"}]}}""", ReceivedAt);
+
+        // Act
+        _sut.Apply("""{"type":"result","subtype":"success","modelUsage":{"claude-opus-5-5":{"inputTokens":1,"outputTokens":700,"cacheReadInputTokens":3,"cacheCreationInputTokens":4},"claude-haiku-5-5":{"inputTokens":5,"outputTokens":14,"cacheReadInputTokens":0,"cacheCreationInputTokens":0}}}""", ReceivedAt);
+
+        // Assert
+        Snapshot().Tokens.ShouldBe(new AgentTokenTotals(8, 714));
+    }
+
+    [Fact]
+    public void WhenRunContinuesAfterResult_OutputIsHiddenAgain()
+    {
+        // Arrange — the claude -c transient retry resumes after a result event
+        _sut.Apply("""{"type":"result","subtype":"error","modelUsage":{"claude-opus-5-5":{"inputTokens":1,"outputTokens":700,"cacheReadInputTokens":0,"cacheCreationInputTokens":0}}}""", ReceivedAt);
+
+        // Act
+        _sut.Apply("""{"type":"assistant","message":{"id":"m2","usage":{"input_tokens":1,"output_tokens":2,"cache_read_input_tokens":0,"cache_creation_input_tokens":0},"content":[{"type":"text","text":"a"}]}}""", ReceivedAt);
+
+        // Assert
+        Snapshot().Tokens.OutputTokens.ShouldBeNull();
     }
 
     [Fact]

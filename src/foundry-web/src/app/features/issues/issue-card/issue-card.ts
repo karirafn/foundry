@@ -205,13 +205,13 @@ function hasVisiblePills(stats: RunStats): boolean {
                 <span class="sr-only">Cost: </span><span class="issue-card__stat-value">{{ _formatCost(stats.totalCostUsd) }}<span class="sr-only"> USD</span></span>
               </span>
             }
-            @if (stats.inputTokens !== null) {
+            @if (stats.inputTokens !== null || stats.outputTokens !== null) {
               <span class="issue-card__stat-pill issue-card__stat-pill--input-tokens">
                 <svg class="issue-card__stat-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                   <line x1="12" y1="19" x2="12" y2="5" />
                   <polyline points="6 11 12 5 18 11" />
                 </svg>
-                <span class="sr-only">Input tokens: </span><span class="issue-card__stat-value">{{ stats.inputTokens | number }}<span class="sr-only"> input tokens</span></span>
+                <span class="sr-only">Input tokens: </span><span class="issue-card__stat-value">{{ stats.inputTokens !== null ? (stats.inputTokens | number) : '-' }}<span class="sr-only"> input tokens</span></span>
               </span>
             }
             @if (stats.outputTokens !== null) {
@@ -452,6 +452,8 @@ export class IssueCardComponent {
     }
     if (stats.inputTokens !== null) {
       parts.push(`${stats.inputTokens.toLocaleString()} input tokens`);
+    } else if (stats.outputTokens !== null) {
+      parts.push('unknown input tokens');
     }
     if (stats.outputTokens !== null) {
       parts.push(`${stats.outputTokens.toLocaleString()} output tokens`);

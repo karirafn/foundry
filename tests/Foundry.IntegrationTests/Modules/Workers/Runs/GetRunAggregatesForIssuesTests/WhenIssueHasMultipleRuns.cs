@@ -38,7 +38,9 @@ public sealed class WhenIssueHasMultipleRuns : IAsyncDisposable
         int numTurns,
         decimal totalCostUsd,
         int inputTokens,
-        int outputTokens)
+        int outputTokens,
+        int? cacheReadInputTokens = 0,
+        int? cacheCreationInputTokens = 0)
     {
         // No POST endpoint for worker runs — seed directly via DbContext.
         using IServiceScope scope = _factory.Services.CreateScope();
@@ -57,8 +59,7 @@ public sealed class WhenIssueHasMultipleRuns : IAsyncDisposable
             durationMs: durationMs,
             numTurns: numTurns,
             totalCostUsd: totalCostUsd,
-            inputTokens: inputTokens,
-            outputTokens: outputTokens);
+            tokens: new TokenUsage(inputTokens, cacheReadInputTokens, cacheCreationInputTokens, outputTokens));
 
         CompletedRun completed = active.Complete(exitCode: 0, branchName: null, pullRequestUrl: null, resultSummary: summary);
 
@@ -105,6 +106,84 @@ public sealed class WhenIssueHasMultipleRuns : IAsyncDisposable
             () => aggregate.NumTurns.ShouldBe(8),
             () => aggregate.TotalCostUsd.ShouldBe(0.30m),
             () => aggregate.InputTokens.ShouldBe(1300L),
+            () => aggregate.OutputTokens.ShouldBe(500L));
+    }
+
+    [Fact]
+    public async Task WhenRunsHaveCacheTokens_InputTokensIsBillableInput()
+    {
+        // Arrange
+        IssueId issueId = IssueId.New();
+        await SeedCompletedRunAsync(
+            issueId,
+            durationMs: 1000,
+            numTurns: 3,
+            totalCostUsd: 0.10m,
+            inputTokens: 10,
+            outputTokens: 200,
+            cacheReadInputTokens: 1000,
+            cacheCreationInputTokens: 100);
+        await SeedCompletedRunAsync(
+            issueId,
+            durationMs: 2000,
+            numTurns: 5,
+            totalCostUsd: 0.20m,
+            inputTokens: 20,
+            outputTokens: 300,
+            cacheReadInputTokens: 2000,
+            cacheCreationInputTokens: 200);
+
+        using IServiceScope scope = _factory.Services.CreateScope();
+        IWorkerRunQueries sut = scope.ServiceProvider.GetRequiredService<IWorkerRunQueries>();
+
+        // Act
+        IReadOnlyDictionary<Guid, RunAggregate> result = await sut.GetRunAggregatesForIssuesAsync(
+            [issueId.Value],
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        RunAggregate aggregate = result[issueId.Value];
+        aggregate.ShouldSatisfyAllConditions(
+            () => aggregate.InputTokens.ShouldBe(3330L),
+            () => aggregate.OutputTokens.ShouldBe(500L));
+    }
+
+    [Fact]
+    public async Task WhenAnyRunHasUnknownBillableInput_AggregateInputTokensIsNull()
+    {
+        // Arrange — the second run is a legacy row persisted before the cache columns existed
+        IssueId issueId = IssueId.New();
+        await SeedCompletedRunAsync(
+            issueId,
+            durationMs: 1000,
+            numTurns: 3,
+            totalCostUsd: 0.10m,
+            inputTokens: 10,
+            outputTokens: 200,
+            cacheReadInputTokens: 1000,
+            cacheCreationInputTokens: 100);
+        await SeedCompletedRunAsync(
+            issueId,
+            durationMs: 2000,
+            numTurns: 5,
+            totalCostUsd: 0.20m,
+            inputTokens: 20,
+            outputTokens: 300,
+            cacheReadInputTokens: null,
+            cacheCreationInputTokens: null);
+
+        using IServiceScope scope = _factory.Services.CreateScope();
+        IWorkerRunQueries sut = scope.ServiceProvider.GetRequiredService<IWorkerRunQueries>();
+
+        // Act
+        IReadOnlyDictionary<Guid, RunAggregate> result = await sut.GetRunAggregatesForIssuesAsync(
+            [issueId.Value],
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        RunAggregate aggregate = result[issueId.Value];
+        aggregate.ShouldSatisfyAllConditions(
+            () => aggregate.InputTokens.ShouldBeNull(),
             () => aggregate.OutputTokens.ShouldBe(500L));
     }
 }

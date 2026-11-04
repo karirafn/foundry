@@ -32,8 +32,7 @@ public sealed class RunResultSummaryTests
             durationMs: 12345L,
             numTurns: 3,
             totalCostUsd: 0.05m,
-            inputTokens: 1000,
-            outputTokens: 500);
+            tokens: new TokenUsage(1000, 0, 0, 500));
 
         // Act
         CompletedRun completed = active.Complete(0, null, null, summary);

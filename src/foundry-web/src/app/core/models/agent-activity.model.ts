@@ -24,11 +24,12 @@ export interface InFlightTool {
   readonly startedAt: string | null;
 }
 
+/** Billable token totals; the server computes them, the client never sums token buckets. */
 export interface AgentTokenTotals {
+  /** Billable input (uncached + cache read + cache write) so far. */
   readonly inputTokens: number;
-  readonly outputTokens: number;
-  readonly cacheReadInputTokens: number;
-  readonly cacheCreationInputTokens: number;
+  /** Final output; null until the run's result event reports it. */
+  readonly outputTokens: number | null;
 }
 
 /** Live Agent Activity projection for an active run, pushed over the worker hub. */

@@ -83,8 +83,7 @@ public sealed class WhenIssueHasWorkerRuns : IAsyncDisposable
             durationMs: durationMs,
             numTurns: numTurns,
             totalCostUsd: totalCostUsd,
-            inputTokens: 100,
-            outputTokens: 50);
+            tokens: new TokenUsage(100, 0, 0, 50));
 
         CompletedRun completed = active.Complete(exitCode: 0, branchName: null, pullRequestUrl: null, resultSummary: summary);
         dbContext.Set<WorkerRun>().Add(completed);

@@ -21,8 +21,7 @@ public sealed class Create
             durationMs: 1000,
             numTurns: 3,
             totalCostUsd: null,
-            inputTokens: null,
-            outputTokens: null);
+            tokens: TokenUsage.Unknown);
 
         // Assert
         summary.Subtype.ShouldBeNull();
@@ -41,8 +40,7 @@ public sealed class Create
             durationMs: 1000,
             numTurns: 3,
             totalCostUsd: null,
-            inputTokens: null,
-            outputTokens: null);
+            tokens: TokenUsage.Unknown);
 
         // Assert
         summary.Subtype.ShouldBeNull();
@@ -61,8 +59,7 @@ public sealed class Create
             durationMs: 1000,
             numTurns: 3,
             totalCostUsd: null,
-            inputTokens: null,
-            outputTokens: null);
+            tokens: TokenUsage.Unknown);
 
         // Assert
         summary.Subtype.ShouldBeNull();
@@ -81,8 +78,7 @@ public sealed class Create
             durationMs: 5000,
             numTurns: 10,
             totalCostUsd: 0.01m,
-            inputTokens: null,
-            outputTokens: null);
+            tokens: TokenUsage.Unknown);
 
         // Assert
         summary.Subtype.ShouldBe("success");
@@ -101,8 +97,7 @@ public sealed class Create
             durationMs: 2000,
             numTurns: 20,
             totalCostUsd: null,
-            inputTokens: null,
-            outputTokens: null);
+            tokens: TokenUsage.Unknown);
 
         // Assert
         summary.Subtype.ShouldBe("error_max_turns");

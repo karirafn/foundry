@@ -82,11 +82,11 @@ public sealed class ParseRunResultSummary
     }
 
     [Fact]
-    public void WhenJsonHasUsageObject_ParsesInputAndOutputTokens()
+    public void WhenJsonHasModelUsage_ParsesAllTokenBuckets()
     {
         // Arrange
         string log =
-            """{"type":"result","subtype":"success","is_error":false,"duration_ms":2000,"num_turns":3,"result":"Done.","usage":{"input_tokens":500,"output_tokens":250}}""";
+            """{"type":"result","subtype":"success","is_error":false,"duration_ms":2000,"num_turns":3,"result":"Done.","usage":{"input_tokens":1,"output_tokens":2},"modelUsage":{"claude-opus-5-5":{"inputTokens":500,"outputTokens":250,"cacheReadInputTokens":10000,"cacheCreationInputTokens":2000,"costUSD":0.1}}}""";
 
         // Act
         RunResultSummary? result = _sut.ParseRunResultSummary(log);
@@ -95,7 +95,51 @@ public sealed class ParseRunResultSummary
         RunResultSummary summary = result.ShouldNotBeNull();
         summary.ShouldSatisfyAllConditions(
             () => summary.InputTokens.ShouldBe(500),
-            () => summary.OutputTokens.ShouldBe(250));
+            () => summary.CacheReadInputTokens.ShouldBe(10000),
+            () => summary.CacheCreationInputTokens.ShouldBe(2000),
+            () => summary.OutputTokens.ShouldBe(250),
+            () => summary.Tokens.BillableInputTokens.ShouldBe(12500L));
+    }
+
+    [Fact]
+    public void WhenModelUsageHasSeveralModels_SumsTokensAcrossModels()
+    {
+        // Arrange — a Haiku side-call alongside the main model
+        string log =
+            """{"type":"result","subtype":"success","is_error":false,"duration_ms":2000,"num_turns":3,"result":"Done.","modelUsage":{"claude-opus-5-5":{"inputTokens":40,"outputTokens":700,"cacheReadInputTokens":1000000,"cacheCreationInputTokens":50000},"claude-haiku-5-5":{"inputTokens":6,"outputTokens":14,"cacheReadInputTokens":18829,"cacheCreationInputTokens":1565}}}""";
+
+        // Act
+        RunResultSummary? result = _sut.ParseRunResultSummary(log);
+
+        // Assert
+        RunResultSummary summary = result.ShouldNotBeNull();
+        summary.ShouldSatisfyAllConditions(
+            () => summary.InputTokens.ShouldBe(46),
+            () => summary.CacheReadInputTokens.ShouldBe(1_018_829),
+            () => summary.CacheCreationInputTokens.ShouldBe(51_565),
+            () => summary.OutputTokens.ShouldBe(714),
+            () => summary.Tokens.BillableInputTokens.ShouldBe(1_070_440L));
+    }
+
+    [Fact]
+    public void WhenModelUsageAbsent_TokenFieldsAreNullAndCostIsParsed()
+    {
+        // Arrange — usage alone is not trusted: its subagent coverage is unverified
+        string log =
+            """{"type":"result","subtype":"success","is_error":false,"duration_ms":2000,"num_turns":3,"result":"Done.","total_cost_usd":0.72937,"usage":{"input_tokens":500,"output_tokens":250}}""";
+
+        // Act
+        RunResultSummary? result = _sut.ParseRunResultSummary(log);
+
+        // Assert
+        RunResultSummary summary = result.ShouldNotBeNull();
+        summary.ShouldSatisfyAllConditions(
+            () => summary.TotalCostUsd.ShouldBe(0.72937m),
+            () => summary.InputTokens.ShouldBeNull(),
+            () => summary.CacheReadInputTokens.ShouldBeNull(),
+            () => summary.CacheCreationInputTokens.ShouldBeNull(),
+            () => summary.OutputTokens.ShouldBeNull(),
+            () => summary.Tokens.BillableInputTokens.ShouldBeNull());
     }
 
     [Fact]
@@ -186,7 +230,7 @@ public sealed class ParseRunResultSummary
             2026-06-29T21:24:01.000000000Z Starting claude...
             2026-06-29T21:24:02.123456789Z Cloning repository...
             2026-06-29T21:24:03.987654321Z Running task...
-            2026-06-29T21:24:05.123456789Z {"type":"result","subtype":"success","is_error":false,"duration_ms":4123,"num_turns":7,"result":"Task completed successfully.","session_id":"abc","terminal_reason":"stop_reason","total_cost_usd":0.0123,"usage":{"input_tokens":1000,"output_tokens":500}}
+            2026-06-29T21:24:05.123456789Z {"type":"result","subtype":"success","is_error":false,"duration_ms":4123,"num_turns":7,"result":"Task completed successfully.","session_id":"abc","terminal_reason":"stop_reason","total_cost_usd":0.0123,"modelUsage":{"claude-opus-5-5":{"inputTokens":1000,"outputTokens":500,"cacheReadInputTokens":0,"cacheCreationInputTokens":0}}}
             """;
 
         // Act
@@ -264,8 +308,11 @@ public sealed class ParseRunResultSummary
             () => summary.DurationMs.ShouldBe(10_643),
             () => summary.NumTurns.ShouldBe(4),
             () => summary.TotalCostUsd.ShouldBe(0.1613702m),
-            () => summary.InputTokens.ShouldBe(6),
-            () => summary.OutputTokens.ShouldBe(507),
+            () => summary.InputTokens.ShouldBe(10),
+            () => summary.CacheReadInputTokens.ShouldBe(58_431),
+            () => summary.CacheCreationInputTokens.ShouldBe(22_112),
+            () => summary.OutputTokens.ShouldBe(714),
+            () => summary.Tokens.BillableInputTokens.ShouldBe(80_553L),
             () => summary.ResultText.ShouldNotBeNull().ShouldEndWith("DONE"));
     }
 

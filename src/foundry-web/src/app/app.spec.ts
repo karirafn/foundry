@@ -169,7 +169,7 @@ function buildAgentActivity(workerRunId: string, issueId: string): AgentActivity
     subagents: [],
     activeSkill: null,
     inFlightTool: null,
-    tokens: { inputTokens: 0, outputTokens: 0, cacheReadInputTokens: 0, cacheCreationInputTokens: 0 },
+    tokens: { inputTokens: 0, outputTokens: 0 },
   };
 }
 
@@ -455,7 +455,7 @@ describe('App', () => {
       // Act — a later payload for the same run changes nothing countable.
       workerHubCallbacks.onAgentActivity!({
         ...buildAgentActivity('run-1', 'issue-1'),
-        tokens: { inputTokens: 10, outputTokens: 20, cacheReadInputTokens: 0, cacheCreationInputTokens: 0 },
+        tokens: { inputTokens: 10, outputTokens: 20 },
       });
       fixture.detectChanges();
 

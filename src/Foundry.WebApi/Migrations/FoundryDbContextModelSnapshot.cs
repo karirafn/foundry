@@ -1597,6 +1597,16 @@ namespace Foundry.WebApi.Migrations
                             b1.Property<Guid>("CompletedRunId")
                                 .HasColumnType("TEXT");
 
+                            b1.Property<int?>("CacheCreationInputTokens")
+                                .ValueGeneratedOnUpdateSometimes()
+                                .HasColumnType("INTEGER")
+                                .HasColumnName("cache_creation_input_tokens");
+
+                            b1.Property<int?>("CacheReadInputTokens")
+                                .ValueGeneratedOnUpdateSometimes()
+                                .HasColumnType("INTEGER")
+                                .HasColumnName("cache_read_input_tokens");
+
                             b1.Property<long>("DurationMs")
                                 .ValueGeneratedOnUpdateSometimes()
                                 .HasColumnType("INTEGER")
@@ -1659,6 +1669,16 @@ namespace Foundry.WebApi.Migrations
                         {
                             b1.Property<Guid>("FailedRunId")
                                 .HasColumnType("TEXT");
+
+                            b1.Property<int?>("CacheCreationInputTokens")
+                                .ValueGeneratedOnUpdateSometimes()
+                                .HasColumnType("INTEGER")
+                                .HasColumnName("cache_creation_input_tokens");
+
+                            b1.Property<int?>("CacheReadInputTokens")
+                                .ValueGeneratedOnUpdateSometimes()
+                                .HasColumnType("INTEGER")
+                                .HasColumnName("cache_read_input_tokens");
 
                             b1.Property<long>("DurationMs")
                                 .ValueGeneratedOnUpdateSometimes()

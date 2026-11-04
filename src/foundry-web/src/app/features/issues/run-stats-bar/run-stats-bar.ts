@@ -18,6 +18,9 @@ const STAT_CARDS = [
   { key: 'outputTokens', label: 'Output tokens',   tintVar: '--fd-stat-output'   },
 ] as const satisfies readonly StatCard[];
 
+/** Rendered for a total the server reports as unknown (null). */
+const UNKNOWN_VALUE = '-';
+
 let nextScopeId = 0;
 
 @Component({
@@ -152,22 +155,25 @@ export class RunStatsBarComponent {
   protected readonly headingId = `run-stats-bar-heading-${nextScopeId}`;
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  protected _asRecord(totals: unknown): Record<string, number> {
-    return totals as Record<string, number>;
+  protected _asRecord(totals: unknown): Record<string, number | null> {
+    return totals as Record<string, number | null>;
   }
 
-  protected formatValue(key: string, totals: Record<string, number>): string {
+  protected formatValue(key: string, totals: Record<string, number | null>): string {
+    const value = totals[key];
+    if (value === null || value === undefined) {
+      return UNKNOWN_VALUE;
+    }
     switch (key) {
       case 'durationMs':
-        return formatDuration(totals['durationMs']);
+        return formatDuration(value);
       case 'totalCostUsd':
-        return formatCost(totals['totalCostUsd']);
+        return formatCost(value);
       case 'inputTokens':
-        return formatTokens(totals['inputTokens']);
       case 'outputTokens':
-        return formatTokens(totals['outputTokens']);
+        return formatTokens(value);
       default:
-        return String(totals[key]);
+        return String(value);
     }
   }
 

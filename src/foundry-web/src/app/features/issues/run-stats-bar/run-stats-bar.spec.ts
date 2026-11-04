@@ -178,6 +178,22 @@ describe('RunStatsBarComponent', () => {
     expect(text).toContain('10,000');
   });
 
+  it('should render a dash when a token total is unknown', () => {
+    // Arrange — a window containing a run that predates billable-input persistence
+    const { fixture, httpMock, service } = setup();
+    service.fetch();
+    httpMock
+      .expectOne((r) => r.url === '/api/workers/run-totals')
+      .flush({ ...mockTotals, inputTokens: null });
+    fixture.detectChanges();
+
+    // Assert
+    const el = fixture.nativeElement as HTMLElement;
+    const values = Array.from(el.querySelectorAll('.run-stats-bar__card-value')).map((n) => n.textContent?.trim());
+    expect(values[4]).toBe('-');
+    expect(values[5]).toBe('5,000');
+  });
+
   // Cycle 5: error state renders inline error
   it('should render inline error when service has error', () => {
     // Arrange

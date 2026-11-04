@@ -14,8 +14,15 @@ public sealed record RunResultSummary
     public long DurationMs { get; }
     public int NumTurns { get; }
     public decimal? TotalCostUsd { get; }
+
+    /// <summary>Uncached input tokens. Not billable input on its own — see <see cref="Tokens"/>.</summary>
     public int? InputTokens { get; }
+    public int? CacheReadInputTokens { get; }
+    public int? CacheCreationInputTokens { get; }
     public int? OutputTokens { get; }
+
+    /// <summary>The persisted token buckets as a <see cref="TokenUsage"/>.</summary>
+    public TokenUsage Tokens => new(InputTokens, CacheReadInputTokens, CacheCreationInputTokens, OutputTokens);
 
     private RunResultSummary(
         string? resultText,
@@ -25,6 +32,8 @@ public sealed record RunResultSummary
         int numTurns,
         decimal? totalCostUsd,
         int? inputTokens,
+        int? cacheReadInputTokens,
+        int? cacheCreationInputTokens,
         int? outputTokens)
     {
         ResultText = resultText;
@@ -34,6 +43,8 @@ public sealed record RunResultSummary
         NumTurns = numTurns;
         TotalCostUsd = totalCostUsd;
         InputTokens = inputTokens;
+        CacheReadInputTokens = cacheReadInputTokens;
+        CacheCreationInputTokens = cacheCreationInputTokens;
         OutputTokens = outputTokens;
     }
 
@@ -44,9 +55,10 @@ public sealed record RunResultSummary
         long durationMs,
         int numTurns,
         decimal? totalCostUsd,
-        int? inputTokens,
-        int? outputTokens)
+        TokenUsage tokens)
     {
+        ArgumentNullException.ThrowIfNull(tokens);
+
         // The Claude CLI emits subtype:"success" even when is_error:true — normalize the
         // misleading value to null so a failed run never surfaces a "success" subtype.
         // Genuine error subtypes (e.g. "error_max_turns") are preserved unchanged.
@@ -61,7 +73,16 @@ public sealed record RunResultSummary
             durationMs,
             numTurns,
             totalCostUsd,
-            inputTokens,
-            outputTokens);
+            ToStoredCount(tokens.InputTokens),
+            ToStoredCount(tokens.CacheReadInputTokens),
+            ToStoredCount(tokens.CacheCreationInputTokens),
+            ToStoredCount(tokens.OutputTokens));
+    }
+
+    // Token columns are INTEGER mapped to int?; a count that does not fit is stored as unknown
+    // rather than truncated, so it can never be reported as a wrong figure.
+    private static int? ToStoredCount(long? value)
+    {
+        return value is >= 0 and <= int.MaxValue ? (int)value.Value : null;
     }
 }

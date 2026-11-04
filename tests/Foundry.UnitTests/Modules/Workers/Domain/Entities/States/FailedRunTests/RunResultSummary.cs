@@ -32,8 +32,7 @@ public sealed class RunResultSummaryTests
             durationMs: 9876L,
             numTurns: 1,
             totalCostUsd: 0.01m,
-            inputTokens: 200,
-            outputTokens: 50);
+            tokens: new TokenUsage(200, 0, 0, 50));
 
         // Act
         FailedRun failed = active.Fail(new FailureReason.NonZeroExit(1), branchNameOrNull: null, containerOutput: null, resultSummary: summary);
