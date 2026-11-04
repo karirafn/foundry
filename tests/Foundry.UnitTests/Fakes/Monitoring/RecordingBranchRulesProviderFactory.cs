@@ -9,8 +9,9 @@ using Foundry.Shared;
 namespace Foundry.UnitTests.Fakes.Monitoring;
 
 /// <summary>
-/// Records every branch-rules write (slug and token) and answers each with a per-slug scripted
-/// result. Unscripted slugs succeed. Every other provider call throws.
+/// Records every branch-rules write and webhook upsert (slug, token and spec) and answers each with a
+/// per-slug scripted result. Unscripted slugs succeed (webhooks: <see cref="WebhookUpsertKind.Created"/>).
+/// Every other provider call throws.
 /// </summary>
 internal sealed class RecordingBranchRulesProviderFactory : IIssueProviderFactory
 {
@@ -20,6 +21,16 @@ internal sealed class RecordingBranchRulesProviderFactory : IIssueProviderFactor
     public List<string> TokensUsed { get; } = [];
 
     public List<string> AppliedSlugs { get; } = [];
+
+    public List<(string Slug, WebhookHookSpec Spec)> WebhookUpserts { get; } = [];
+
+    private readonly Dictionary<string, Result<WebhookUpsertKind>> _webhookResults = [];
+
+    public RecordingBranchRulesProviderFactory WithWebhookResult(string slug, Result<WebhookUpsertKind> result)
+    {
+        _webhookResults[slug] = result;
+        return this;
+    }
 
     public RecordingBranchRulesProviderFactory WithResult(string slug, Result result)
     {
@@ -50,6 +61,22 @@ internal sealed class RecordingBranchRulesProviderFactory : IIssueProviderFactor
             }
 
             return Task.FromResult(owner._results.TryGetValue(slug.FullPath, out Result? result) ? result : Result.Ok());
+        }
+
+        public Task<Result<WebhookUpsertKind>> UpsertWebhookAsync(
+            RepositorySlug slug,
+            WebhookHookSpec spec,
+            CancellationToken cancellationToken)
+        {
+            owner.WebhookUpserts.Add((slug.FullPath, spec));
+            if (owner._exceptions.TryGetValue(slug.FullPath, out Exception? exception))
+            {
+                throw exception;
+            }
+
+            return Task.FromResult(owner._webhookResults.TryGetValue(slug.FullPath, out Result<WebhookUpsertKind>? result)
+                ? result
+                : Result<WebhookUpsertKind>.Ok(WebhookUpsertKind.Created));
         }
 
         public Task<Result<IssueListing>> GetIssuesAsync(RepositorySlug slug, CancellationToken cancellationToken) =>

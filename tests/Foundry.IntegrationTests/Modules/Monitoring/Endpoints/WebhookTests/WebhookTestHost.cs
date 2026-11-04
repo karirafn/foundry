@@ -96,7 +96,8 @@ internal static class WebhookTestHost
         FoundryWebAppFactory factory,
         string slug = "owner/repo",
         bool registered = false,
-        string host = "github.com")
+        string host = "github.com",
+        int position = 0)
     {
         using IServiceScope scope = factory.Services.CreateScope();
         DbContext dbContext = scope.ServiceProvider.GetRequiredService<DbContext>();
@@ -104,7 +105,8 @@ internal static class WebhookTestHost
         MonitoredRepository repository = MonitoredRepository.Create(
             RepositorySlug.Create(slug).ValueOrThrow(),
             host,
-            null).ValueOrThrow();
+            null,
+            position).ValueOrThrow();
 
         if (registered)
         {

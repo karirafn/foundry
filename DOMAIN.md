@@ -171,8 +171,8 @@ Multiple accounts can exist per provider and per host — including multiple PAT
 
 ### Branch-Rules Token
 
-An optional, server-only credential on an Account (`Credential.BranchRulesToken`), used solely to write default-branch protection, and never given to workers.
-It needs GitHub fine-grained **Administration: write** or the GitLab **Maintainer** role — privileges the worker-facing account token must not carry, because that token is injected into every worker container.
+An optional, server-only credential on an Account (`Credential.BranchRulesToken`, the account's *server-side token*), used solely for server-side privileged provider writes — default-branch protection and [Webhook Registration](#webhook-registration) — and never given to workers.
+It needs GitHub fine-grained **Administration: write** (branch rules) and **Webhooks: read and write** (webhooks), or the GitLab **Maintainer** role (both) — privileges the worker-facing account token must not carry, because that token is injected into every worker container.
 Stored encrypted with the same mechanism as the PAT (`ProviderToken`), never returned by the API (only `CredentialSummary.BranchRulesTokenStatus`: `present`, `absent` or `unreadable`), and set, replaced (repairing an unreadable one) or cleared through the account update path. Rotating the account PAT preserves it.
 An unreadable branch-rules token never affects the account's eligibility. Its permissions are not validated on save — they are established by attempting the write.
 
@@ -252,7 +252,13 @@ One verified inbound HTTP request from a provider (see [ADR 0085](docs/adr/0085-
 
 ### Webhook Status
 
-Per-repository webhook health: `NotConfigured` (no webhook port or no public base URL — derived, never stored) / `NotRegistered` / `Pending` / `Active` / `Silent`. Only `Active` uses the Backstop Interval. The operator's "I've added the webhook" action sets `Pending`; any verified delivery (including GitHub's `ping`; GitLab has none, so a GitLab hook stays `Pending` until its first delivery — typically the hook form's "Test" action) moves `Pending` or `Silent` to `Active`; a [Missed Change](#missed-change) moves `Active` to `Silent`.
+Per-repository webhook health: `NotConfigured` (no webhook port or no public base URL — derived, never stored) / `NotRegistered` / `Pending` / `Active` / `Silent`. Only `Active` uses the Backstop Interval. The operator's "I've added the webhook" action and a successful [Webhook Registration](#webhook-registration) set `Pending` (an `Active` hook stays `Active`); any verified delivery (including GitHub's `ping`; GitLab has none, so a GitLab hook stays `Pending` until its first delivery — typically the hook form's "Test" action) moves `Pending` or `Silent` to `Active`; a [Missed Change](#missed-change) moves `Active` to `Silent`.
+
+### Webhook Registration
+
+Foundry creating or updating a repository's provider webhook itself (`WebhookRegistrar`), with the Account's [Branch-Rules Token](#branch-rules-token) — never the worker token. A hook whose payload URL matches (current, or the previous one after a public base URL change) is updated in place — URL, secret, JSON content type, exactly the mapped event list (GitHub events; GitLab trigger flags, with every other trigger including push events explicitly off) and the active flag — and adopted; otherwise one is created (GitHub `POST/PATCH /repos/{o}/{r}/hooks`, GitLab `POST/PUT /projects/:id/hooks`).
+Runs when a repository is added; on the repository page's "Register webhook" action (`POST /api/accounts/{accountId}/repositories/{id}/webhook/register`); when the Account's Branch-Rules Token is set or replaced (its covered `NotRegistered` repositories); when the Webhook Public Base URL changes to a new value (`WebhookPublicBaseUrlChanged`, every repository whose status is not `NotRegistered`); and once on each transition into `Silent` — a hook still `Silent` afterwards is not retried until its next transition into `Silent`. Multi-repository triggers run sequentially and one failure never stops the rest.
+Outcome (returned, never persisted): `created` / `updated` (status becomes `Pending`), `skipped` (`not-configured`, `no-server-token`, `server-token-unreadable` — no provider call) or `failed` (`insufficient-permission` for GitHub 403/404 on `/hooks` or GitLab 403; `provider-error` otherwise). Skipped or failed leaves the status unchanged, so a `NotRegistered` repository keeps showing the manual instructions; polling is never blocked. Hooks are never deleted (removing a repository leaves its hook).
 
 ### Nudge
 

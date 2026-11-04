@@ -3,7 +3,7 @@ import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { Observable, forkJoin } from 'rxjs';
 import { catchError, tap } from 'rxjs/operators';
 import { extractErrorMessage } from '../../../core/http/extract-error-message';
-import { ApplyBranchRulesResponse, AvailableRepositoriesResponse, AvailableRepository, CreateRepositoryRequest, CreateRepositoryResponse, RepositorySummary, RepositoryWebhookInfo, RepositoryWebhookSecret, UpdateRepositoryRequest, WebhookStatus } from './repository.model';
+import { ApplyBranchRulesResponse, AvailableRepositoriesResponse, AvailableRepository, CreateRepositoryRequest, CreateRepositoryResponse, RegisterWebhookResponse, RepositorySummary, RepositoryWebhookInfo, RepositoryWebhookSecret, UpdateRepositoryRequest, WebhookStatus } from './repository.model';
 
 @Injectable({ providedIn: 'root' })
 export class RepositoryService {
@@ -220,6 +220,13 @@ export class RepositoryService {
   markWebhookRegistered(accountId: string, id: string): Observable<RepositoryWebhookInfo> {
     return this._http.post<RepositoryWebhookInfo>(`${this._repositoriesUrl(accountId)}/${id}/webhook/registered`, {}).pipe(
       tap((info) => this._setWebhookStatus(id, info.status)),
+    );
+  }
+
+  /** Creates or updates the webhook on the provider with the account's server-side token. */
+  registerWebhook(accountId: string, id: string): Observable<RegisterWebhookResponse> {
+    return this._http.post<RegisterWebhookResponse>(`${this._repositoriesUrl(accountId)}/${id}/webhook/register`, {}).pipe(
+      tap((response) => this._setWebhookStatus(id, response.webhook.status)),
     );
   }
 

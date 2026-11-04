@@ -28,3 +28,9 @@ The outcome of each write is confirmed by re-running the branch-rules GET, never
 
 - "Newly added repositories are eligible" holds only for accounts with a branch-rules token; without one, adding a repository behaves exactly as before.
 - GitHub's branch-rules GET reports ruleset rules only (classic protection on `karirafn/foundry` did not appear in it), so a classic-protected repository receives the Foundry ruleset alongside its classic protection — additive, nothing loosened.
+
+## Override Note (2026-11-04)
+
+The branch-rules token gains a second consumer: [Webhook Registration](../../DOMAIN.md#webhook-registration) (issue #659, [ADR 0085](0085-webhooks-nudge-the-poll-loop.md)). Its documented purpose widens from "default-branch protection only" to **server-side privileged provider writes — branch rules and webhooks**, adding GitHub's fine-grained **Webhooks: read and write** permission (GitLab's Maintainer role already covers both). The separation this ADR establishes is unchanged and is the reason for the reuse: webhook write power lets the holder re-point or create hooks and so read every repository event, so it must not reach worker containers either, and the worker token's permission set is unchanged.
+
+Unlike branch rules, webhook registration also runs without a per-repository operator action — on repository add, a public-base-URL change, and once when a hook turns `Silent` (a poll-loop transition). These writes touch only the hook Foundry owns (matched by its payload URL); the poll loop still never writes or repairs branch rules. A third, webhook-only token was rejected as more operator ceremony for no added separation, since both uses are server-side.

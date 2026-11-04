@@ -101,6 +101,68 @@ public sealed class WebhookBackstop : IAsyncDisposable
     }
 
     [Fact]
+    public async Task WhenHookGoesSilent_ReRegistersItOnceWithTheServerSideToken()
+    {
+        // Arrange
+        MonitoredRepositoryId repoId = await SeedRepoAsync(active: true, lastPolledAt: Now.AddMinutes(-16));
+        CountingIssueProvider provider = new([NewIssue(5)]);
+        FixedProviderFactory factory = new(provider);
+        MonitoringService service = BuildService(BuildServiceProvider(
+            provider,
+            ingressConfigured: true,
+            serverToken: "server_side_token",
+            registerWebhooks: true,
+            factory: factory));
+
+        // Act
+        await service.ExecuteTickAsync(Now, TestContext.Current.CancellationToken);
+
+        // Assert — the re-registration succeeded, so the hook waits for its next delivery.
+        provider.UpsertWebhookCallCount.ShouldBe(1);
+        factory.Tokens.ShouldContain("server_side_token");
+        (await LoadAsync(repoId)).WebhookStatus.ShouldBe(WebhookStatus.Pending);
+    }
+
+    [Fact]
+    public async Task WhenHookGoesSilentWithoutServerSideToken_MakesNoRegistrationCallAndStaysSilent()
+    {
+        // Arrange
+        MonitoredRepositoryId repoId = await SeedRepoAsync(active: true, lastPolledAt: Now.AddMinutes(-16));
+        CountingIssueProvider provider = new([NewIssue(5)]);
+        MonitoringService service = BuildService(BuildServiceProvider(
+            provider,
+            ingressConfigured: true,
+            registerWebhooks: true));
+
+        // Act
+        await service.ExecuteTickAsync(Now, TestContext.Current.CancellationToken);
+
+        // Assert
+        provider.UpsertWebhookCallCount.ShouldBe(0);
+        (await LoadAsync(repoId)).WebhookStatus.ShouldBe(WebhookStatus.Silent);
+    }
+
+    [Fact]
+    public async Task WhenAlreadySilent_ADueScheduledPollDoesNotRetryRegistration()
+    {
+        // Arrange — the hook went Silent earlier and its one re-registration did not help.
+        MonitoredRepositoryId repoId = await SeedRepoAsync(active: true, lastPolledAt: Now.AddMinutes(-16), silent: true);
+        CountingIssueProvider provider = new([NewIssue(5)]);
+        MonitoringService service = BuildService(BuildServiceProvider(
+            provider,
+            ingressConfigured: true,
+            serverToken: "server_side_token",
+            registerWebhooks: true));
+
+        // Act
+        await service.ExecuteTickAsync(Now, TestContext.Current.CancellationToken);
+
+        // Assert
+        provider.UpsertWebhookCallCount.ShouldBe(0);
+        (await LoadAsync(repoId)).WebhookStatus.ShouldBe(WebhookStatus.Silent);
+    }
+
+    [Fact]
     public async Task WhenScheduledPollOfActiveHookFindsNoChange_StaysActive()
     {
         // Arrange
@@ -270,7 +332,8 @@ public sealed class WebhookBackstop : IAsyncDisposable
         bool active,
         DateTimeOffset lastPolledAt,
         bool isActive = true,
-        RepositoryEligibility? eligibility = null)
+        RepositoryEligibility? eligibility = null,
+        bool silent = false)
     {
         await using FoundryDbContext db = CreateDbContext();
         MonitoredRepository repo = MonitoredRepository.Create(
@@ -283,6 +346,11 @@ public sealed class WebhookBackstop : IAsyncDisposable
         {
             repo.MarkWebhookRegistered();
             repo.RecordWebhookDelivery();
+        }
+
+        if (silent)
+        {
+            repo.RecordMissedChange();
         }
 
         if (!isActive)
@@ -319,7 +387,10 @@ public sealed class WebhookBackstop : IAsyncDisposable
         bool ingressConfigured,
         bool gitLab = false,
         RepositoryEligibility? eligibilityAfterEvaluation = null,
-        IReadOnlySet<int>? dispatchCandidates = null)
+        IReadOnlySet<int>? dispatchCandidates = null,
+        string? serverToken = null,
+        bool registerWebhooks = false,
+        FixedProviderFactory? factory = null)
     {
         SqliteConnection connection = _connection;
         ServiceCollection services = new();
@@ -332,11 +403,11 @@ public sealed class WebhookBackstop : IAsyncDisposable
         services.AddScoped<IDomainEventDispatcher, NullDomainEventDispatcher>();
         services.AddScoped<IIntegrationEventDispatcher, NullIntegrationEventDispatcher>();
         services.AddScoped<IRepositoryEligibilityEvaluator>(_ => new FixedRepositoryEligibilityEvaluator(eligibilityAfterEvaluation));
-        services.AddScoped<IIssueProviderFactory>(_ => new FixedProviderFactory(provider));
+        services.AddScoped<IIssueProviderFactory>(_ => factory ?? new FixedProviderFactory(provider));
 
         Credential credential = gitLab
             ? GitLabCredential.Create("my-group", "glpat_test_token", BaseUrl.Create("https://gitlab.com").ValueOrThrow())
-            : GitHubCredential.Create("my-org", "ghp_test_token", BaseUrl.Create("https://github.com").ValueOrThrow());
+            : GitHubCredential.Create("my-org", "ghp_test_token", BaseUrl.Create("https://github.com").ValueOrThrow(), serverToken);
         services.AddScoped<ICredentialResolver>(_ => new StubCredentialResolverWithFixedCredential(credential));
         services.AddScoped<RepositoryPoller>();
         services.AddScoped<IGlobalSettingsQueries>(_ => new StubSettingsQueries(30));
@@ -346,12 +417,23 @@ public sealed class WebhookBackstop : IAsyncDisposable
             ingressConfigured ? "https://hooks.example.com" : null));
         services.AddScoped<WebhookIngress>();
 
+        if (registerWebhooks)
+        {
+            services.AddScoped<WebhookRegistrar>();
+        }
+
         return services.BuildServiceProvider();
     }
 
     private sealed class FixedProviderFactory(CountingIssueProvider provider) : IIssueProviderFactory
     {
-        public IIssueProvider CreateProvider(Credential credential, string token) => provider;
+        public List<string> Tokens { get; } = [];
+
+        public IIssueProvider CreateProvider(Credential credential, string token)
+        {
+            Tokens.Add(token);
+            return provider;
+        }
     }
 
     private sealed class StubWebhookSettingsQueries(string? publicBaseUrl) : IWebhookSettingsQueries

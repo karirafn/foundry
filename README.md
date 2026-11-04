@@ -28,14 +28,14 @@ This is the **account (worker) token**. It keeps exactly this permission set —
 
 #### Branch-rules token (optional)
 
-An account can also carry a second, optional **branch-rules token**, entered in the account form's *Branch-rules token* field. Foundry uses it server-side only, to write default-branch protection; it is stored encrypted like the account token, is never returned by the API (only whether it is configured, absent or unreadable), and is never given to workers.
+An account can also carry a second, optional **branch-rules token** (the account's *server-side token*), entered in the account form's *Branch-rules token* field. Foundry uses it server-side only, for privileged provider writes — default-branch protection and repository webhooks; it is stored encrypted like the account token, is never returned by the API (only whether it is configured, absent or unreadable), and is never given to workers.
 
 | Provider | Required permission |
 |---|---|
-| GitHub (fine-grained token) | Administration — Read and write |
-| GitLab | Maintainer role on the project |
+| GitHub (fine-grained token) | Administration — Read and write (branch rules); Webhooks — Read and write (webhooks) |
+| GitLab | Maintainer role on the project (both) |
 
-It is kept separate from the account token because GitHub's Administration: write also grants repository deletion and rule removal, and GitLab's Maintainer role can likewise change protection — power autonomous workers must never hold. The two tokens may belong to different users. Leave the field empty if you don't want Foundry to manage branch protection; rotating the account token keeps the branch-rules token unless you change it.
+It is kept separate from the account token because GitHub's Administration: write also grants repository deletion and rule removal, Webhooks: write lets the holder re-point or add hooks (and so read every event), and GitLab's Maintainer role can likewise change protection and hooks — power autonomous workers must never hold. The worker token's required permissions are unchanged. The two tokens may belong to different users. Leave the field empty if you don't want Foundry to manage branch protection; rotating the account token keeps the branch-rules token unless you change it.
 
 ### Worker bind mounts
 
@@ -109,7 +109,13 @@ By default Foundry polls every repository. GitHub and GitLab webhooks make it re
 
 3. **Set the public base URL.** In **Settings → Dispatch → Webhooks**, enter the public `https` URL the tunnel or proxy serves (e.g. `https://hooks.example.com`) and adjust the backstop interval if needed.
 
-4. **Register the webhook per repository.** Open the repository in **Settings → Repositories**. The Webhook panel shows the payload URL (`<public base URL>/webhooks/github/<hookId>`), the content type (`application/json`), the secret (revealed on demand) and the exact events to select. Add the webhook in the repository's GitHub settings, then click **I've added the webhook**. The status shows *Waiting for first delivery* until GitHub's `ping` (or any event) arrives — redeliver the `ping` from the webhook's *Recent Deliveries* tab if needed.
+4. **Register the webhook per repository.** If the repository's account has a [branch-rules token](#branch-rules-token-optional) with the webhook permission above, Foundry registers the webhook itself: when the repository is added, when that token is saved (for the account's not-yet-registered repositories), when the public base URL changes (every registered hook is re-pointed), and once whenever a hook turns **Silent**. It creates the hook — or updates a hook with the same payload URL in place, adopting one you added by hand — with the payload URL, the secret, JSON content type and exactly the events below, and the status becomes *Waiting for first delivery*. The repository's Webhook panel also has a **Register webhook** button that runs the same create-or-update. Without the token, or when the token lacks the permission (GitHub answers 403/404 on `/hooks`, GitLab 403 below Maintainer), nothing changes and you register the hook manually as below; polling is never blocked.
+
+   A hook still pointing at an *old* public base URL that Foundry did not re-point (for example one added by hand before the URL changed) is not matched, so a second hook is created; delete the old one on the provider — it only fails harmlessly. Removing a repository from Foundry does not delete its hook.
+
+   Whether GitHub additionally requires repository admin rights beyond the fine-grained **Webhooks** permission has not been verified with a real token; the GitHub REST documentation lists only *Webhooks* (write) for these endpoints. If it does, registration reports insufficient permission and the manual steps below remain the fallback.
+
+   To register manually, open the repository in **Settings → Repositories**. The Webhook panel shows the payload URL (`<public base URL>/webhooks/github/<hookId>`), the content type (`application/json`), the secret (revealed on demand) and the exact events to select. Add the webhook in the repository's GitHub settings, then click **I've added the webhook**. The status shows *Waiting for first delivery* until GitHub's `ping` (or any event) arrives — redeliver the `ping` from the webhook's *Recent Deliveries* tab if needed.
 
    For a **GitLab** repository the payload URL is `<public base URL>/webhooks/gitlab/<hookId>`. Paste the revealed secret as the hook's **Secret token** and tick the listed triggers (Issues/Work item events, Comments, Merge request events, Pipeline events, plus the confidential variants if you track confidential issues). GitLab has no `ping`, so after clicking **I've added the webhook** use the hook's **Test** action (for example *Issues events*) to send the first delivery. GitLab has no event for issue links or protected branches; while the hook is active those changes are picked up by the backstop poll.
 

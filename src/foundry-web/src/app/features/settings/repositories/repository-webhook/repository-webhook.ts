@@ -11,13 +11,20 @@ import {
 } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { RepositoryService } from '../repository.service';
-import { RepositoryWebhookInfo, webhookStatusLabel } from '../repository.model';
+import {
+  RepositoryWebhookInfo,
+  isWebhookRegistered,
+  webhookRegistrationMessage,
+  webhookStatusLabel,
+} from '../repository.model';
 
 /**
  * Webhook health and manual registration for one repository (ADR 0085). Shows the Webhook Status
  * and, while the hook is not active, the payload URL, content type (GitHub), on-demand secret
  * ("Secret token" on GitLab) and exact event or trigger list, plus the "I've added the webhook" action.
  * GitLab has no ping, so its instructions point at the hook's "Test" action instead.
+ * The "Register webhook" action creates or updates the hook with the account's server-side token;
+ * when that is not possible the manual instructions stay the fallback.
  */
 @Component({
   selector: 'fd-repository-webhook',
@@ -128,6 +135,28 @@ import { RepositoryWebhookInfo, webhookStatusLabel } from '../repository.model';
           }
         }
 
+        @if (info.status !== 'not-configured') {
+          <div class="repository-webhook__register">
+            <p class="repository-webhook__hint">
+              Foundry can create or update this webhook on {{ info.provider === 'gitlab' ? 'GitLab' : 'GitHub' }}
+              itself, using the account's server-side token.
+            </p>
+            <button
+              type="button"
+              class="repository-webhook__btn"
+              [disabled]="_registering()"
+              (click)="onRegister()"
+            >{{ _registering() ? 'Registering...' : 'Register webhook' }}</button>
+            @if (_registration(); as registration) {
+              <p
+                class="repository-webhook__outcome"
+                [class.repository-webhook__outcome--success]="registration.registered"
+                role="status"
+              >{{ registration.message }}</p>
+            }
+          </div>
+        }
+
         <p class="repository-webhook__error" role="alert">{{ _actionError() ?? '' }}</p>
       }
     </section>
@@ -146,6 +175,8 @@ export class RepositoryWebhookComponent {
   protected readonly _revealing: WritableSignal<boolean> = signal(false);
   protected readonly _marking: WritableSignal<boolean> = signal(false);
   protected readonly _actionError: WritableSignal<string | null> = signal(null);
+  protected readonly _registering: WritableSignal<boolean> = signal(false);
+  protected readonly _registration: WritableSignal<{ registered: boolean; message: string } | null> = signal(null);
 
   protected readonly _statusLabel: Signal<string> = computed(() => {
     const info = this._info();
@@ -158,6 +189,7 @@ export class RepositoryWebhookComponent {
       const repositoryId = this.repositoryId();
       this._secret.set(null);
       this._loadError.set(null);
+      this._registration.set(null);
       this._repositoryService.getWebhook(accountId, repositoryId).subscribe({
         next: info => this._info.set(info),
         error: () => this._loadError.set("Couldn't load the webhook details."),
@@ -176,6 +208,26 @@ export class RepositoryWebhookComponent {
       error: () => {
         this._revealing.set(false);
         this._actionError.set("Couldn't reveal the secret. Please try again.");
+      },
+    });
+  }
+
+  onRegister(): void {
+    this._actionError.set(null);
+    this._registration.set(null);
+    this._registering.set(true);
+    this._repositoryService.registerWebhook(this.accountId(), this.repositoryId()).subscribe({
+      next: response => {
+        this._info.set(response.webhook);
+        this._registration.set({
+          registered: isWebhookRegistered(response.outcome),
+          message: webhookRegistrationMessage(response.outcome, response.webhook.provider),
+        });
+        this._registering.set(false);
+      },
+      error: () => {
+        this._registering.set(false);
+        this._actionError.set("Couldn't register the webhook. Please try again.");
       },
     });
   }

@@ -136,4 +136,83 @@ describe('RepositoryWebhookComponent', () => {
     expect(el.textContent).toContain('GitLab sends no ping');
     expect(el.textContent).not.toContain('redeliver the ping');
   });
+
+  function registerButton(el: HTMLElement): HTMLButtonElement {
+    return Array.from(el.querySelectorAll('button')).find(b => b.textContent?.includes('Register webhook'))!;
+  }
+
+  it('registers the webhook with the server-side token and shows the pending status', () => {
+    // Arrange
+    const { fixture, httpMock, el } = setup(NOT_REGISTERED);
+
+    // Act
+    registerButton(el).click();
+    const request = httpMock.expectOne(`${BASE}/register`);
+    request.flush({ webhook: { ...NOT_REGISTERED, status: 'pending' }, outcome: { kind: 'created' } });
+    fixture.detectChanges();
+
+    // Assert
+    expect(request.request.method).toBe('POST');
+    expect(el.querySelector('.repository-webhook__status-value')?.textContent?.trim()).toBe('Waiting for first delivery');
+    const outcome = el.querySelector('.repository-webhook__outcome');
+    expect(outcome?.textContent).toContain('Webhook created on GitHub');
+    expect(outcome?.classList).toContain('repository-webhook__outcome--success');
+  });
+
+  it('keeps the manual instructions and explains a missing permission', () => {
+    // Arrange
+    const { fixture, httpMock, el } = setup(NOT_REGISTERED);
+
+    // Act
+    registerButton(el).click();
+    httpMock.expectOne(`${BASE}/register`).flush({
+      webhook: NOT_REGISTERED,
+      outcome: { kind: 'failed', reason: 'insufficient-permission', detail: '403' },
+    });
+    fixture.detectChanges();
+
+    // Assert
+    expect(el.querySelector('.repository-webhook__outcome')?.textContent)
+      .toContain('Webhooks (read and write) permission');
+    expect(el.querySelector('.repository-webhook__details')).not.toBeNull();
+  });
+
+  it('explains a missing server-side token on GitLab with the Maintainer role', () => {
+    // Arrange
+    const { fixture, httpMock, el } = setup(GITLAB_NOT_REGISTERED);
+
+    // Act
+    registerButton(el).click();
+    httpMock.expectOne(`${BASE}/register`).flush({
+      webhook: GITLAB_NOT_REGISTERED,
+      outcome: { kind: 'skipped', reason: 'no-server-token' },
+    });
+    fixture.detectChanges();
+
+    // Assert
+    const outcome = el.querySelector('.repository-webhook__outcome');
+    expect(outcome?.textContent).toContain('no server-side token');
+    expect(outcome?.textContent).toContain('Maintainer role');
+  });
+
+  it('shows an error when the registration request fails', () => {
+    // Arrange
+    const { fixture, httpMock, el } = setup(NOT_REGISTERED);
+
+    // Act
+    registerButton(el).click();
+    httpMock.expectOne(`${BASE}/register`).flush('boom', { status: 500, statusText: 'Server Error' });
+    fixture.detectChanges();
+
+    // Assert
+    expect(el.querySelector('.repository-webhook__error')?.textContent).toContain("Couldn't register the webhook");
+  });
+
+  it('offers no register action when webhooks are not configured', () => {
+    // Arrange & Act
+    const { el } = setup({ ...NOT_REGISTERED, status: 'not-configured', payloadUrl: null });
+
+    // Assert
+    expect(registerButton(el)).toBeUndefined();
+  });
 });

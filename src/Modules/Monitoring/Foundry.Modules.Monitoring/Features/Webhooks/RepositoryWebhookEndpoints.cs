@@ -13,8 +13,9 @@ using Microsoft.EntityFrameworkCore;
 namespace Foundry.Modules.Monitoring.Features.Webhooks;
 
 /// <summary>
-/// Manual webhook registration for one repository (ADR 0085): the registration details, the explicit
-/// secret reveal, and the operator's "I've added the webhook" action. All three are scoped to an
+/// Webhook registration for one repository (ADR 0085): the registration details, the explicit
+/// secret reveal, the operator's "I've added the webhook" action, and the "Register webhook" action
+/// that creates or updates the hook with the server-side token. All are scoped to an
 /// account that covers the repository, like the other repository endpoints.
 /// </summary>
 internal static class RepositoryWebhookEndpoints
@@ -24,7 +25,10 @@ internal static class RepositoryWebhookEndpoints
     internal const string ProviderGitHub = "github";
     internal const string ProviderGitLab = "gitlab";
 
-    internal sealed class Handler(DbContext dbContext, WebhookIngress webhookIngress)
+    internal sealed class Handler(
+        DbContext dbContext,
+        WebhookIngress webhookIngress,
+        WebhookRegistrar webhookRegistrar)
     {
         public async Task<Result<RepositoryWebhookInfo>> GetInfoAsync(
             Guid accountId,
@@ -77,6 +81,41 @@ internal static class RepositoryWebhookEndpoints
             success.Value.Repository.MarkWebhookRegistered();
             await dbContext.SaveChangesAsync(cancellationToken);
             return await ToInfoAsync(success.Value.Repository, success.Value.Credential, cancellationToken);
+        }
+
+        /// <summary>
+        /// The repository page's "Register webhook" action: the same create-or-update as the automatic
+        /// triggers, with the account's server-side token.
+        /// </summary>
+        public async Task<Result<RegisterWebhookResponse>> RegisterAsync(
+            Guid accountId,
+            Guid id,
+            CancellationToken cancellationToken)
+        {
+            Result<(MonitoredRepository Repository, Credential Credential)> loaded =
+                await LoadAsync(accountId, id, cancellationToken);
+            if (loaded is not Result<(MonitoredRepository Repository, Credential Credential)>.Success success)
+            {
+                return Result<RegisterWebhookResponse>.Fail(
+                    ((Result<(MonitoredRepository Repository, Credential Credential)>.Failure)loaded).Error);
+            }
+
+            WebhookRegistrationOutcome outcome = await webhookRegistrar.RegisterAsync(
+                success.Value.Repository,
+                success.Value.Credential,
+                cancellationToken);
+            await dbContext.SaveChangesAsync(cancellationToken);
+
+            Result<RepositoryWebhookInfo> info =
+                await ToInfoAsync(success.Value.Repository, success.Value.Credential, cancellationToken);
+            return info switch
+            {
+                Result<RepositoryWebhookInfo>.Success infoSuccess =>
+                    Result<RegisterWebhookResponse>.Ok(new RegisterWebhookResponse(infoSuccess.Value, outcome)),
+                Result<RepositoryWebhookInfo>.Failure infoFailure =>
+                    Result<RegisterWebhookResponse>.Fail(infoFailure.Error),
+                _ => throw new InvalidOperationException("Unexpected result."),
+            };
         }
 
         private async Task<Result<RepositoryWebhookInfo>> ToInfoAsync(
@@ -177,6 +216,22 @@ internal static class RepositoryWebhookEndpoints
             .WithName("MarkRepositoryWebhookRegistered")
             .WithSummary("Records that the operator added the webhook on the provider; the hook waits for its first delivery")
             .Produces<RepositoryWebhookInfo>()
+            .ProducesProblem(StatusCodes.Status404NotFound);
+
+        group.MapPost("{id:guid}/webhook/register", static async (
+                Guid accountId,
+                Guid id,
+                Handler handler,
+                CancellationToken cancellationToken) =>
+            {
+                Result<RegisterWebhookResponse> result = await handler.RegisterAsync(accountId, id, cancellationToken);
+                return result.Match<Results<Ok<RegisterWebhookResponse>, ProblemHttpResult>>(
+                    response => TypedResults.Ok(response),
+                    error => error.ToProblem(StatusCodes.Status404NotFound));
+            })
+            .WithName("RegisterRepositoryWebhook")
+            .WithSummary("Creates or updates the repository's webhook on the provider with the account's server-side token")
+            .Produces<RegisterWebhookResponse>()
             .ProducesProblem(StatusCodes.Status404NotFound);
     }
 }
