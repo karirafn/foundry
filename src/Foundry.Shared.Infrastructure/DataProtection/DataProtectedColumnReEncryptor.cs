@@ -43,7 +43,7 @@ public sealed partial class DataProtectedColumnReEncryptor(
         string select =
             $"SELECT {keyColumn} AS {nameof(StoredRow.RowId)}, {valueColumn} AS {nameof(StoredRow.StoredValue)} " +
             $"FROM {table} WHERE {valueColumn} IS NOT NULL AND {valueColumn} <> ''";
-        string update = $"UPDATE {table} SET {valueColumn} = {{0}} WHERE {keyColumn} = {{1}}";
+        string update = $"UPDATE {table} SET {valueColumn} = {{0}} WHERE {keyColumn} = {{1}} AND {valueColumn} = {{2}}";
 
         IDataProtector currentProtector = current.CreateProtector(column.ProtectorPurpose);
         IDataProtector? legacyProtector = legacy?.CreateProtector(column.ProtectorPurpose);
@@ -59,10 +59,17 @@ public sealed partial class DataProtectedColumnReEncryptor(
 
             if (outcome is ReEncryptionOutcome.Rewritten rewrite)
             {
-                await dbContext.Database.ExecuteSqlRawAsync(
+                int affected = await dbContext.Database.ExecuteSqlRawAsync(
                     update,
-                    [rewrite.NewStoredValue, row.RowId],
+                    [rewrite.NewStoredValue, row.RowId, row.StoredValue],
                     cancellationToken);
+
+                if (affected == 0)
+                {
+                    LogChangedConcurrently(column.Table, column.Column, row.RowId);
+                    continue;
+                }
+
                 rewritten++;
             }
             else if (outcome is ReEncryptionOutcome.Undecryptable)
@@ -81,6 +88,11 @@ public sealed partial class DataProtectedColumnReEncryptor(
         Level = LogLevel.Warning,
         Message = "{Table}.{Column} row {RowId} decrypts under neither the current nor the legacy Data Protection discriminator and was left unchanged")]
     private partial void LogUndecryptable(string table, string column, string rowId);
+
+    [LoggerMessage(
+        Level = LogLevel.Warning,
+        Message = "{Table}.{Column} row {RowId} changed after it was read and was left unchanged")]
+    private partial void LogChangedConcurrently(string table, string column, string rowId);
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Re-encrypted {Count} value(s) in {Table}.{Column}")]
     private partial void LogRewritten(int count, string table, string column);

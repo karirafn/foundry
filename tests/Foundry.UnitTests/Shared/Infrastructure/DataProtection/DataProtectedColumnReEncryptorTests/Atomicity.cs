@@ -42,6 +42,52 @@ public sealed class Atomicity : IAsyncDisposable
         after.ShouldBe(before);
     }
 
+    [Fact]
+    public async Task WhenARowChangesBetweenReadAndWrite_ItIsNotOverwritten()
+    {
+        // Arrange
+        await _database.SeedAsync(_database.Legacy, TestContext.Current.CancellationToken);
+        MutateApiKeyBeforeUpdateInterceptor interceptor = new();
+        await using FoundryDbContext dbContext = _database.CreateDbContext(_database.Current, interceptor);
+        DataProtectedColumnReEncryptor reEncryptor = new(
+            _database.Current,
+            _database.Legacy,
+            new CapturingLogger<DataProtectedColumnReEncryptor>());
+
+        // Act
+        await reEncryptor.ReEncryptAsync(dbContext, TestContext.Current.CancellationToken);
+
+        // Assert
+        Dictionary<string, string?> after = await _database.ReadRawAsync(TestContext.Current.CancellationToken);
+        after.Where(entry => entry.Key.StartsWith("claude_account.api_key.", StringComparison.Ordinal))
+            .Select(entry => entry.Value)
+            .ShouldBe([MutateApiKeyBeforeUpdateInterceptor.ConcurrentValue]);
+    }
+
+    private sealed class MutateApiKeyBeforeUpdateInterceptor : DbCommandInterceptor
+    {
+        internal const string ConcurrentValue = "changed-by-another-writer";
+
+        private const string ApiKeyUpdatePrefix = "UPDATE \"claude_account\"";
+
+        public override async ValueTask<InterceptionResult<int>> NonQueryExecutingAsync(
+            DbCommand command,
+            CommandEventData eventData,
+            InterceptionResult<int> result,
+            CancellationToken cancellationToken = default)
+        {
+            if (command.CommandText.StartsWith(ApiKeyUpdatePrefix, StringComparison.Ordinal))
+            {
+                await using DbCommand concurrent = command.Connection!.CreateCommand();
+                concurrent.Transaction = command.Transaction;
+                concurrent.CommandText = $"UPDATE claude_account SET api_key = '{ConcurrentValue}'";
+                await concurrent.ExecuteNonQueryAsync(cancellationToken);
+            }
+
+            return await base.NonQueryExecutingAsync(command, eventData, result, cancellationToken);
+        }
+    }
+
     private sealed class FailOnSecondUpdateInterceptor : DbCommandInterceptor
     {
         private const string UpdatePrefix = "UPDATE";
