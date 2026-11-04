@@ -1288,6 +1288,68 @@
         }
       }
     },
+    "/api/workers/runs/{workerRunId}/cancellation": {
+      "post": {
+        "tags": [
+          "Workers"
+        ],
+        "summary": "Requests cancellation of a running worker; the dispatch poll stops it",
+        "operationId": "RequestWorkerRunCancellation",
+        "parameters": [
+          {
+            "name": "workerRunId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "Accepted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RequestRunCancellationResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/workers/run-totals": {
       "get": {
         "tags": [
@@ -3114,6 +3176,23 @@
           }
         }
       },
+      "RequestRunCancellationResponse": {
+        "required": [
+          "workerRunId",
+          "cancelRequestedAt"
+        ],
+        "type": "object",
+        "properties": {
+          "workerRunId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "cancelRequestedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
       "RunStats": {
         "required": [
           "runCount",
@@ -3883,7 +3962,8 @@
           "inputTokens",
           "outputTokens",
           "lastActivityAt",
-          "hasStoredLog"
+          "hasStoredLog",
+          "cancelRequestedAt"
         ],
         "type": "object",
         "properties": {
@@ -3982,6 +4062,13 @@
           },
           "hasStoredLog": {
             "type": "boolean"
+          },
+          "cancelRequestedAt": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
           }
         }
       }

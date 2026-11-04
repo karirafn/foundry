@@ -15,6 +15,7 @@ namespace Foundry.Modules.Workers.Domain.ValueObjects;
 [JsonDerivedType(typeof(ProviderError), typeDiscriminator: FailureReason.ProviderErrorToken)]
 [JsonDerivedType(typeof(TransientApiError), typeDiscriminator: FailureReason.TransientApiErrorToken)]
 [JsonDerivedType(typeof(CreditsExhausted), typeDiscriminator: FailureReason.CreditsExhaustedToken)]
+[JsonDerivedType(typeof(Cancelled), typeDiscriminator: FailureReason.CancelledToken)]
 public abstract record FailureReason
 {
     public const string NonZeroExitToken = FailureCategory.NonZeroExitToken;
@@ -26,6 +27,7 @@ public abstract record FailureReason
     public const string ProviderErrorToken = FailureCategory.ProviderErrorToken;
     public const string TransientApiErrorToken = FailureCategory.TransientApiErrorToken;
     public const string CreditsExhaustedToken = FailureCategory.CreditsExhaustedToken;
+    public const string CancelledToken = FailureCategory.CancelledToken;
 
     private FailureReason()
     {
@@ -42,6 +44,7 @@ public abstract record FailureReason
         ProviderError => ProviderErrorToken,
         TransientApiError => TransientApiErrorToken,
         CreditsExhausted => CreditsExhaustedToken,
+        Cancelled => CancelledToken,
         _ => throw new UnreachableException($"Unknown {nameof(FailureReason)} variant: {GetType().Name}"),
     };
 
@@ -56,6 +59,7 @@ public abstract record FailureReason
         ProviderError providerError => providerError.Message,
         TransientApiError => "Transient Anthropic API fault",
         CreditsExhausted => "Credits exhausted",
+        Cancelled => "Worker run cancelled",
         _ => throw new UnreachableException($"Unknown {nameof(FailureReason)} variant: {GetType().Name}"),
     };
 
@@ -76,4 +80,9 @@ public abstract record FailureReason
     public sealed record TransientApiError : FailureReason;
 
     public sealed record CreditsExhausted : FailureReason;
+
+    /// <summary>
+    /// A user cancelled the run from the dashboard; the container was stopped.
+    /// </summary>
+    public sealed record Cancelled : FailureReason;
 }

@@ -18,6 +18,7 @@ public sealed record FailureCategory
     public const string TransientApiErrorToken = "transient_api_error";
     public const string CreditsExhaustedToken = "credits_exhausted";
     public const string PrClosedToken = "pr_closed";
+    public const string CancelledToken = "cancelled";
 
     public static readonly FailureCategory NonZeroExit = new(NonZeroExitToken);
     public static readonly FailureCategory TimedOut = new(TimedOutToken);
@@ -29,6 +30,7 @@ public sealed record FailureCategory
     public static readonly FailureCategory TransientApiError = new(TransientApiErrorToken);
     public static readonly FailureCategory CreditsExhausted = new(CreditsExhaustedToken);
     public static readonly FailureCategory PrClosed = new(PrClosedToken);
+    public static readonly FailureCategory Cancelled = new(CancelledToken);
 
     private static readonly FrozenDictionary<string, FailureCategory> KnownCategories =
         new Dictionary<string, FailureCategory>(StringComparer.Ordinal)
@@ -43,6 +45,7 @@ public sealed record FailureCategory
             { TransientApiErrorToken, TransientApiError },
             { CreditsExhaustedToken, CreditsExhausted },
             { PrClosedToken, PrClosed },
+            { CancelledToken, Cancelled },
         }.ToFrozenDictionary(StringComparer.Ordinal);
 
     public string Value { get; }

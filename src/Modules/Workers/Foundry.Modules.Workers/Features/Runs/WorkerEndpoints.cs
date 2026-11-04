@@ -15,6 +15,7 @@ internal static class WorkerEndpoints
 
         GetWorkerRunDetail.Endpoint.Map(runsGroup);
         GetWorkerRunLog.Endpoint.Map(runsGroup);
+        RequestRunCancellation.Endpoint.Map(runsGroup);
 
         RouteGroupBuilder runTotalsGroup = routes.MapGroup("/api/workers/run-totals")
             .WithTags("Workers");

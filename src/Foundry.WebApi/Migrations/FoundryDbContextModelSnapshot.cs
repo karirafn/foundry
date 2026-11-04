@@ -1236,6 +1236,11 @@ namespace Foundry.WebApi.Migrations
                         .HasColumnType("TEXT")
                         .HasColumnName("branch_name");
 
+                    b.Property<DateTimeOffset?>("CancelRequestedAt")
+                        .ValueGeneratedOnUpdateSometimes()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("cancel_requested_at");
+
                     b.Property<string>("ContainerId")
                         .IsRequired()
                         .HasMaxLength(200)
@@ -1290,6 +1295,11 @@ namespace Foundry.WebApi.Migrations
                         .HasColumnType("TEXT")
                         .HasColumnName("branch_name");
 
+                    b.Property<DateTimeOffset?>("CancelRequestedAt")
+                        .ValueGeneratedOnUpdateSometimes()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("cancel_requested_at");
+
                     b.Property<DateTimeOffset>("CompletedAt")
                         .HasColumnType("TEXT")
                         .HasColumnName("completed_at");
@@ -1332,6 +1342,11 @@ namespace Foundry.WebApi.Migrations
                         .IsUnicode(false)
                         .HasColumnType("TEXT")
                         .HasColumnName("branch_name");
+
+                    b.Property<DateTimeOffset?>("CancelRequestedAt")
+                        .ValueGeneratedOnUpdateSometimes()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("cancel_requested_at");
 
                     b.Property<string>("ContainerOutput")
                         .HasMaxLength(2147483647)

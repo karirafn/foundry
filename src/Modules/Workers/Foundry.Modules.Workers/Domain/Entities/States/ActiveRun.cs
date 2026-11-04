@@ -48,6 +48,25 @@ public sealed class ActiveRun : WorkerRun
 
     public int BranchCommitCount { get; private set; }
 
+    /// <summary>
+    /// When a user asked to cancel this run. The endpoint only records the request;
+    /// <c>WorkerDispatchService</c> remains the single writer of run state and applies it.
+    /// </summary>
+    public DateTimeOffset? CancelRequestedAt { get; private set; }
+
+    /// <summary>
+    /// Records a cancel request. Idempotent: a second call keeps the first timestamp.
+    /// </summary>
+    public void RequestCancel(DateTimeOffset requestedAt)
+    {
+        if (CancelRequestedAt.HasValue)
+        {
+            return;
+        }
+
+        CancelRequestedAt = requestedAt;
+    }
+
     public void RecordActivity(DateTimeOffset observedAt)
     {
         if (LastActivityAt.HasValue && observedAt <= LastActivityAt.Value)

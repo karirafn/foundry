@@ -11,6 +11,15 @@ describe('failure-category', () => {
     expect(display?.label).toBe('NON-ZERO EXIT');
   });
 
+  it('should return display for cancelled', () => {
+    // Arrange / Act
+    const display = getFailureCategoryDisplay('cancelled');
+
+    // Assert
+    expect(display?.label).toBe('CANCELLED');
+    expect(display?.cssClass).toBe('badge--failure-cancelled');
+  });
+
   it('should return display for timed_out', () => {
     // Arrange / Act
     const display = getFailureCategoryDisplay('timed_out');

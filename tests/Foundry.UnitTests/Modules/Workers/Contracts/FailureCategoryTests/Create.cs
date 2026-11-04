@@ -19,6 +19,7 @@ public sealed class Create
     [InlineData(FailureCategory.ProviderErrorToken)]
     [InlineData(FailureCategory.TransientApiErrorToken)]
     [InlineData(FailureCategory.CreditsExhaustedToken)]
+    [InlineData(FailureCategory.CancelledToken)]
     [InlineData(FailureCategory.PrClosedToken)]
     public void WhenKnownToken_ReturnsSuccess(string token)
     {
@@ -41,6 +42,7 @@ public sealed class Create
     [InlineData(FailureCategory.ProviderErrorToken)]
     [InlineData(FailureCategory.TransientApiErrorToken)]
     [InlineData(FailureCategory.CreditsExhaustedToken)]
+    [InlineData(FailureCategory.CancelledToken)]
     [InlineData(FailureCategory.PrClosedToken)]
     public void WhenKnownToken_ValueMatchesToken(string token)
     {
@@ -94,6 +96,7 @@ public sealed class Create
     [InlineData(FailureCategory.ProviderErrorToken)]
     [InlineData(FailureCategory.TransientApiErrorToken)]
     [InlineData(FailureCategory.CreditsExhaustedToken)]
+    [InlineData(FailureCategory.CancelledToken)]
     [InlineData(FailureCategory.PrClosedToken)]
     public void WhenKnownToken_ReturnsCanonicalStaticMember(string token)
     {

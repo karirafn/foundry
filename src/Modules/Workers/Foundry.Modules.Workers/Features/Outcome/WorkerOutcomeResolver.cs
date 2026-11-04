@@ -5,6 +5,7 @@ using Foundry.Modules.Monitoring.Contracts.Queries;
 using Foundry.Modules.Workers.Domain.Entities;
 using Foundry.Modules.Workers.Domain.Entities.States;
 using Foundry.Modules.Workers.Domain.ValueObjects;
+using Foundry.Modules.Workers.Features.Orchestration;
 using Foundry.Shared;
 using Foundry.Shared.Infrastructure.Docker;
 
@@ -36,11 +37,31 @@ internal sealed class WorkerOutcomeResolver(
 
     private const string NoPrAfterRetriesMessage = "No pull request found after retries";
 
+    internal const string OutOfMemoryMessage = "Worker ran out of memory";
+
+    internal const string TerminatedOutsideFoundryMessage = "Worker container was terminated outside Foundry";
+
+    internal const string RemovedOutsideFoundryMessage = "Worker container was removed outside Foundry";
+
+    // SIGKILL (128 + 9) and SIGTERM (128 + 15): a docker kill/stop issued outside Foundry.
+    private const int SigKillExitCode = 137;
+
+    private const int SigTermExitCode = 143;
+
     private readonly TimeSpan _prRetryDelay = prRetryDelay ?? DefaultPrRetryDelay;
 
+    /// <summary>
+    /// Resolves the outcome of a run whose container is no longer running.
+    /// </summary>
+    /// <param name="run">The active run being resolved.</param>
+    /// <param name="status">
+    /// The exited container's status, or <see langword="null"/> when the container no longer exists.
+    /// </param>
+    /// <param name="containerOutput">The captured container log, when available.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
     public async Task<WorkerOutcome> ResolveAsync(
         ActiveRun run,
-        int? exitCode,
+        WorkerStatus? status,
         string? containerOutput,
         CancellationToken cancellationToken)
     {
@@ -65,8 +86,36 @@ internal sealed class WorkerOutcomeResolver(
             MergeRequestPresence.Merged => ResolveMerged(run, mr, summary),
             MergeRequestPresence.Open => ResolveOpen(run, mr, summary),
             MergeRequestPresence.Closed => await ResolveClosedAsync(run, containerOutput, summary, cancellationToken),
-            MergeRequestPresence.None => await ResolveNoMrAsync(run, exitCode, containerOutput, cancellationToken),
+            MergeRequestPresence.None => await ResolveNoMrAsync(run, status, containerOutput, cancellationToken),
             _ => throw new UnreachableException($"Unknown {nameof(MergeRequestPresence)}: {mr.Presence}"),
+        };
+    }
+
+    /// <summary>
+    /// Returns <see cref="WorkerOutcome.Completed"/> or <see cref="WorkerOutcome.Review"/> when the run's
+    /// branch already has a merged or open merge request with a URL; otherwise <see langword="null"/>.
+    /// A provider failure is treated as "no merge request" — the caller decides how to proceed.
+    /// </summary>
+    public async Task<WorkerOutcome?> TryResolveExistingPullRequestAsync(
+        ActiveRun run,
+        RunResultSummary? summary,
+        CancellationToken cancellationToken)
+    {
+        Result<MergeRequestByBranch> mrResult = await postExitProviderQueries.GetMergeRequestByBranchAsync(
+            run.MonitoredRepositoryId,
+            run.BranchName.Value,
+            cancellationToken);
+
+        if (mrResult is not Result<MergeRequestByBranch>.Success { Value: { WebUrl: not null } mr })
+        {
+            return null;
+        }
+
+        return mr.Presence switch
+        {
+            MergeRequestPresence.Merged => ResolveMerged(run, mr, summary),
+            MergeRequestPresence.Open => ResolveOpen(run, mr, summary),
+            _ => null,
         };
     }
 
@@ -146,10 +195,12 @@ internal sealed class WorkerOutcomeResolver(
 
     private async Task<WorkerOutcome> ResolveNoMrAsync(
         ActiveRun run,
-        int? exitCode,
+        WorkerStatus? status,
         string? containerOutput,
         CancellationToken cancellationToken)
     {
+        int? exitCode = status?.ExitCode;
+
         // Step 5b — no MR fallback
         Result<BranchCommitSummary> commitsResult = await postExitProviderQueries.GetBranchCommitSummaryAsync(
             run.MonitoredRepositoryId,
@@ -188,9 +239,9 @@ internal sealed class WorkerOutcomeResolver(
             return ResolveExitZeroNoCommits(run, containerOutput, summary);
         }
 
-        // exit != 0 or null exit
+        // exit != 0, or the container is gone
         ContainerOutputParseResult parseResult = containerOutputParser.Parse(containerOutput);
-        FailureReason failureReason = ClassifyNonZeroFailureReason(parseResult, exitCode);
+        FailureReason failureReason = ClassifyNonZeroFailureReason(parseResult, status);
 
         return hasCommits
             ? new WorkerOutcome.ContinuableFailure(run.BranchName, failureReason, containerOutput, summary)
@@ -266,7 +317,7 @@ internal sealed class WorkerOutcomeResolver(
 
     private static FailureReason ClassifyNonZeroFailureReason(
         ContainerOutputParseResult parseResult,
-        int? exitCode)
+        WorkerStatus? status)
     {
         if (parseResult is ContainerOutputParseResult.WorkerBootstrapFailed bootstrapFailed)
         {
@@ -293,12 +344,36 @@ internal sealed class WorkerOutcomeResolver(
             return new FailureReason.TransientApiError();
         }
 
-        // NoResultLine with non-zero exit = bootstrap failure (no result line produced)
         if (parseResult is ContainerOutputParseResult.NoResultLine)
         {
-            return new FailureReason.WorkerBootstrapFailed(HeuristicBootstrapDetail);
+            return ClassifyNoResultLine(status);
         }
 
-        return new FailureReason.NonZeroExit(exitCode ?? -1);
+        return new FailureReason.NonZeroExit(status?.ExitCode ?? -1);
+    }
+
+    /// <summary>
+    /// Classifies a run that ended without a result line. Containers killed or removed outside
+    /// Foundry are container errors; anything else is a bootstrap failure (no result line produced).
+    /// </summary>
+    private static FailureReason ClassifyNoResultLine(WorkerStatus? status)
+    {
+        if (status is null)
+        {
+            return new FailureReason.ContainerError(RemovedOutsideFoundryMessage);
+        }
+
+        // OOM is checked first: the kernel's OOM kill also surfaces as exit 137.
+        if (status.OomKilled)
+        {
+            return new FailureReason.ContainerError(OutOfMemoryMessage);
+        }
+
+        if (status.ExitCode is SigKillExitCode or SigTermExitCode)
+        {
+            return new FailureReason.ContainerError(TerminatedOutsideFoundryMessage);
+        }
+
+        return new FailureReason.WorkerBootstrapFailed(HeuristicBootstrapDetail);
     }
 }

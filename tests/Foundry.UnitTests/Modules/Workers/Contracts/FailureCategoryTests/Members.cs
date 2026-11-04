@@ -117,6 +117,18 @@ public sealed class Members
     }
 
     [Fact]
+    public void Cancelled_ValueIsCancelled()
+    {
+        // Arrange
+
+        // Act
+        FailureCategory category = FailureCategory.Cancelled;
+
+        // Assert
+        category.Value.ShouldBe("cancelled");
+    }
+
+    [Fact]
     public void PrClosed_ValueMatchesToken()
     {
         // Arrange

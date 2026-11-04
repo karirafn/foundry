@@ -10,4 +10,9 @@ internal static class WorkerRunErrors
 
     internal static Error NotFound(WorkerRunId id) =>
         new(NotFoundCode, $"Worker run '{id.Value}' was not found.");
+
+    internal const string NotCancellableCode = "WorkerRun.NotCancellable";
+
+    internal static Error NotCancellable(WorkerRunId id) =>
+        new(NotCancellableCode, $"Worker run '{id.Value}' is not running and cannot be cancelled.");
 }

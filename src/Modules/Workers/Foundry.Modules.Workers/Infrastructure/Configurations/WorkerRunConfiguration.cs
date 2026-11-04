@@ -19,6 +19,9 @@ file static class WorkerRunValueConverters
 {
     internal const int BranchNameMaxLength = 500;
 
+    // Shared by ActiveRun, CompletedRun and FailedRun: the request is carried into the terminal state.
+    internal const string CancelRequestedAtColumn = "cancel_requested_at";
+
     internal static readonly ValueConverter<BranchName, string> BranchNameConverter = new(
         bn => bn.Value,
         value => BranchName.From(value));
@@ -133,6 +136,9 @@ public sealed class ActiveRunConfiguration : IEntityTypeConfiguration<ActiveRun>
         builder.Property(r => r.BranchCommitCount)
             .HasDefaultValue(0)
             .HasColumnName("branch_commit_count");
+
+        builder.Property(r => r.CancelRequestedAt)
+            .HasColumnName(WorkerRunValueConverters.CancelRequestedAtColumn);
     }
 }
 
@@ -163,6 +169,9 @@ public sealed class CompletedRunConfiguration : IEntityTypeConfiguration<Complet
             .HasMaxLength(PullRequestUrlMaxLength)
             .IsUnicode(false)
             .HasColumnName("pull_request_url");
+
+        builder.Property(r => r.CancelRequestedAt)
+            .HasColumnName(WorkerRunValueConverters.CancelRequestedAtColumn);
 
         builder.OwnsOne(r => r.ResultSummary, summary =>
         {
@@ -232,6 +241,9 @@ public sealed class FailedRunConfiguration : IEntityTypeConfiguration<FailedRun>
             .IsUnicode(true)
             .HasColumnType("TEXT")
             .HasColumnName("container_output");
+
+        builder.Property(r => r.CancelRequestedAt)
+            .HasColumnName(WorkerRunValueConverters.CancelRequestedAtColumn);
 
         builder.OwnsOne(r => r.ResultSummary, summary =>
         {

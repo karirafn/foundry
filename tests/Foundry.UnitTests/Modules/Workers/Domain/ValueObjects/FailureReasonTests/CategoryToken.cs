@@ -125,4 +125,17 @@ public sealed class CategoryToken
         // Assert
         token.ShouldBe("credits_exhausted");
     }
+
+    [Fact]
+    public void WhenCancelled_CategoryTokenIsCancelled()
+    {
+        // Arrange
+        FailureReason reason = new FailureReason.Cancelled();
+
+        // Act
+        string token = reason.CategoryToken;
+
+        // Assert
+        token.ShouldBe("cancelled");
+    }
 }
