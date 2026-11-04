@@ -23,6 +23,7 @@ using Foundry.WebApi.Persistence;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
 using Shouldly;
@@ -278,6 +279,10 @@ public sealed class OutboxHarvestDispatch : IAsyncDisposable
         services.AddSingleton<RunningBranchCompareGate>();
         services.AddScoped<IWebhookStatusQueries>(_ => new StubWebhookStatusQueries());
         services.AddSingleton<IWorkerOrchestrator>(_ => orchestrator);
+        services.AddSingleton(TimeProvider.System);
+        services.AddScoped<WorkerOutcomeApplier>();
+        services.AddScoped<WorkerRunMonitor>();
+        services.AddSingleton(typeof(ILogger<>), typeof(NullLogger<>));
 
         ServiceProvider sp = services.BuildServiceProvider();
         return new WorkerDispatchService(

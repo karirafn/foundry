@@ -142,17 +142,26 @@ public abstract class WorkerDispatchServiceTestBase : IAsyncDisposable
         services.AddScoped<IWebhookStatusQueries>(
             _ => webhookStatusQueries ?? new StubWebhookStatusQueries(isActive: false));
 
+        services.AddSingleton(resolvedTimeProvider);
+        services.AddScoped<WorkerOutcomeApplier>();
+        services.AddScoped<WorkerRunMonitor>();
+        services.AddSingleton<ILogger<WorkerOutcomeApplier>>(CreateLogger<WorkerOutcomeApplier>(logger));
+        services.AddSingleton<ILogger<WorkerRunMonitor>>(CreateLogger<WorkerRunMonitor>(logger));
+
         ServiceProvider sp = services.BuildServiceProvider();
 
-        ILogger<WorkerDispatchService> serviceLogger = logger is not null
-            ? new CapturingLoggerAdapter<WorkerDispatchService>(logger)
-            : NullLogger<WorkerDispatchService>.Instance;
+        ILogger<WorkerDispatchService> serviceLogger = CreateLogger<WorkerDispatchService>(logger);
 
         return new WorkerDispatchService(
             sp.GetRequiredService<IServiceScopeFactory>(),
             serviceLogger,
             resolvedTimeProvider);
     }
+
+    private static ILogger<T> CreateLogger<T>(CapturingLogger? logger)
+        => logger is not null
+            ? new CapturingLoggerAdapter<T>(logger)
+            : NullLogger<T>.Instance;
 
     /// <summary>
     /// Adapts a non-generic <see cref="CapturingLogger"/> to <see cref="ILogger{T}"/>

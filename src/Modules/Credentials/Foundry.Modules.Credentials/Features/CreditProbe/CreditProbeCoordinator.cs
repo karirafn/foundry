@@ -184,7 +184,7 @@ internal sealed class CreditProbeCoordinator(
         DateTimeOffset resetsAt,
         CancellationToken cancellationToken)
     {
-        // Mirror PersistUsageLimitIfNeededAsync in WorkerDispatchService:
+        // Mirror PersistUsageLimitIfNeededAsync in WorkerOutcomeApplier:
         // load GlobalSettings, call SetUsageLimitResetsAt, save, then deliver DispatchPaused
         // directly (ephemeral broadcast — no outbox row needed).
         GlobalSettings? settings = await dbContext.Set<GlobalSettings>()
