@@ -62,23 +62,7 @@ internal sealed class EligibilityComposer(IIssueProviderFactory providerFactory)
             return new RepositoryEligibility.Unreachable(UnreachableReason.BranchRulesUnavailable);
         }
 
-        BranchProtection protection = success.Value;
-        List<EligibilityViolation> violations = [];
-
-        if (!protection.RejectDirectPushes)
-        {
-            violations.Add(EligibilityViolation.AllowDirectPushes());
-        }
-
-        if (!protection.RejectForcePushes)
-        {
-            violations.Add(EligibilityViolation.AllowForcePushes());
-        }
-
-        if (!protection.RejectDeletion)
-        {
-            violations.Add(EligibilityViolation.AllowDeletion());
-        }
+        IReadOnlyList<EligibilityViolation> violations = success.Value.Violations;
 
         if (violations.Count > 0)
         {
