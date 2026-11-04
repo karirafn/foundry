@@ -3,8 +3,10 @@ export interface RunTotals {
   readonly durationMs: number;
   readonly numTurns: number;
   readonly totalCostUsd: number;
-  readonly inputTokens: number;
-  readonly outputTokens: number;
+  /** Billable input; null when any contributing run's figure is unknown. */
+  readonly inputTokens: number | null;
+  /** Null when any contributing run's figure is unknown. */
+  readonly outputTokens: number | null;
 }
 
 export type StatsScope = 'month' | 'all';

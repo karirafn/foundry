@@ -70,7 +70,7 @@ function buildAgentActivity(overrides: Partial<AgentActivity> = {}): AgentActivi
     subagents: [],
     activeSkill: null,
     inFlightTool: null,
-    tokens: { inputTokens: 0, outputTokens: 0, cacheReadInputTokens: 0, cacheCreationInputTokens: 0 },
+    tokens: { inputTokens: 0, outputTokens: 0 },
     ...overrides,
   };
 }

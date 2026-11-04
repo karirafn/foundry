@@ -146,8 +146,7 @@ public sealed class WhenRunTotalsRequested : IAsyncDisposable
             durationMs: 3000L,
             numTurns: 4,
             totalCostUsd: 0.10m,
-            inputTokens: 500,
-            outputTokens: 800);
+            tokens: new TokenUsage(500, 0, 0, 800));
 
         RunResultSummary failedSummary = RunResultSummary.Create(
             resultText: null,
@@ -156,8 +155,7 @@ public sealed class WhenRunTotalsRequested : IAsyncDisposable
             durationMs: 2000L,
             numTurns: 2,
             totalCostUsd: 0.05m,
-            inputTokens: 300,
-            outputTokens: 400);
+            tokens: new TokenUsage(300, 0, 0, 400));
 
         await SeedCompletedRunAsync(InWindow, completedSummary);
         await SeedFailedRunAsync(InWindow, failedSummary);
@@ -195,8 +193,7 @@ public sealed class WhenRunTotalsRequested : IAsyncDisposable
             durationMs: 2000L,
             numTurns: 3,
             totalCostUsd: 0.03m,
-            inputTokens: 200,
-            outputTokens: 300);
+            tokens: new TokenUsage(200, 0, 0, 300));
 
         RunResultSummary outSummary = RunResultSummary.Create(
             resultText: null,
@@ -205,8 +202,7 @@ public sealed class WhenRunTotalsRequested : IAsyncDisposable
             durationMs: 9999L,
             numTurns: 99,
             totalCostUsd: 9.99m,
-            inputTokens: 9999,
-            outputTokens: 9999);
+            tokens: new TokenUsage(9999, 0, 0, 9999));
 
         await SeedCompletedRunAsync(InWindow, inSummary);
         await SeedCompletedRunAsync(OutOfWindow, outSummary);
@@ -244,8 +240,7 @@ public sealed class WhenRunTotalsRequested : IAsyncDisposable
             durationMs: 1000L,
             numTurns: 2,
             totalCostUsd: 0.02m,
-            inputTokens: 100,
-            outputTokens: 200);
+            tokens: new TokenUsage(100, 0, 0, 200));
 
         await SeedCompletedRunAsync(InWindow, completedSummary);
         await SeedActiveRunAsync(InWindow);
@@ -315,8 +310,7 @@ public sealed class WhenRunTotalsRequested : IAsyncDisposable
             durationMs: 1000L,
             numTurns: 2,
             totalCostUsd: 0.02m,
-            inputTokens: 100,
-            outputTokens: 200);
+            tokens: new TokenUsage(100, 0, 0, 200));
 
         await SeedCompletedRunAsync(InWindow, completedSummary);
         await SeedStartingRunAsync(InWindow);

@@ -52,13 +52,14 @@ internal sealed class WorkerRunQueries(DbContext db) : IWorkerRunQueries
                         TotalCostUsd: groupRows.Any(r => r.TotalCostUsd.HasValue)
                             ? groupRows.Sum(r => r.TotalCostUsd)
                             : null,
-                        // int? per-row tokens promote to long? in the aggregate to avoid overflow.
-                        InputTokens: groupRows.Any(r => r.InputTokens.HasValue)
-                            ? groupRows.Sum(r => (long?)r.InputTokens)
-                            : null,
-                        OutputTokens: groupRows.Any(r => r.OutputTokens.HasValue)
-                            ? groupRows.Sum(r => (long?)r.OutputTokens)
-                            : null);
+                        // Null-propagating over runs that carry a result summary: one run with
+                        // unknown tokens makes the aggregate unknown rather than understated.
+                        InputTokens: TokenUsage.SumKnown(groupRows
+                            .Where(r => r.Tokens is not null)
+                            .Select(r => r.Tokens!.BillableInputTokens)),
+                        OutputTokens: TokenUsage.SumKnown(groupRows
+                            .Where(r => r.Tokens is not null)
+                            .Select(r => r.Tokens!.OutputTokens)));
                 });
     }
 
@@ -145,7 +146,7 @@ internal sealed class WorkerRunQueries(DbContext db) : IWorkerRunQueries
             DurationMs: run.ResultSummary?.DurationMs,
             NumTurns: run.ResultSummary?.NumTurns,
             TotalCostUsd: run.ResultSummary?.TotalCostUsd,
-            InputTokens: run.ResultSummary?.InputTokens,
+            InputTokens: run.ResultSummary?.Tokens.BillableInputTokens,
             OutputTokens: run.ResultSummary?.OutputTokens,
             LastActivityAt: null,
             HasStoredLog: false,
@@ -164,7 +165,7 @@ internal sealed class WorkerRunQueries(DbContext db) : IWorkerRunQueries
             DurationMs: run.ResultSummary?.DurationMs,
             NumTurns: run.ResultSummary?.NumTurns,
             TotalCostUsd: run.ResultSummary?.TotalCostUsd,
-            InputTokens: run.ResultSummary?.InputTokens,
+            InputTokens: run.ResultSummary?.Tokens.BillableInputTokens,
             OutputTokens: run.ResultSummary?.OutputTokens,
             LastActivityAt: null,
             HasStoredLog: run is { ContainerOutput.Length: > 0 },
@@ -280,7 +281,10 @@ internal sealed class WorkerRunQueries(DbContext db) : IWorkerRunQueries
                 DurationMs: r.ResultSummary != null ? (long?)r.ResultSummary.DurationMs : null,
                 NumTurns: r.ResultSummary != null ? (int?)r.ResultSummary.NumTurns : null,
                 TotalCostUsd: r.ResultSummary != null ? r.ResultSummary.TotalCostUsd : null,
+                HasSummary: r.ResultSummary != null,
                 InputTokens: r.ResultSummary != null ? r.ResultSummary.InputTokens : null,
+                CacheReadInputTokens: r.ResultSummary != null ? r.ResultSummary.CacheReadInputTokens : null,
+                CacheCreationInputTokens: r.ResultSummary != null ? r.ResultSummary.CacheCreationInputTokens : null,
                 OutputTokens: r.ResultSummary != null ? r.ResultSummary.OutputTokens : null))
             .ToListAsync(cancellationToken);
 
@@ -291,7 +295,10 @@ internal sealed class WorkerRunQueries(DbContext db) : IWorkerRunQueries
                 DurationMs: r.ResultSummary != null ? (long?)r.ResultSummary.DurationMs : null,
                 NumTurns: r.ResultSummary != null ? (int?)r.ResultSummary.NumTurns : null,
                 TotalCostUsd: r.ResultSummary != null ? r.ResultSummary.TotalCostUsd : null,
+                HasSummary: r.ResultSummary != null,
                 InputTokens: r.ResultSummary != null ? r.ResultSummary.InputTokens : null,
+                CacheReadInputTokens: r.ResultSummary != null ? r.ResultSummary.CacheReadInputTokens : null,
+                CacheCreationInputTokens: r.ResultSummary != null ? r.ResultSummary.CacheCreationInputTokens : null,
                 OutputTokens: r.ResultSummary != null ? r.ResultSummary.OutputTokens : null))
             .ToListAsync(cancellationToken);
 
@@ -306,11 +313,11 @@ internal sealed class WorkerRunQueries(DbContext db) : IWorkerRunQueries
             ..allCompleted
                 .Where(r => r.CreatedAt >= from)
                 .Where(r => r.CreatedAt < to)
-                .Select(r => new TelemetryRow(r.DurationMs, r.NumTurns, r.TotalCostUsd, r.InputTokens, r.OutputTokens)),
+                .Select(r => new TelemetryRow(r.DurationMs, r.NumTurns, r.TotalCostUsd, r.Tokens)),
             ..allFailed
                 .Where(r => r.CreatedAt >= from)
                 .Where(r => r.CreatedAt < to)
-                .Select(r => new TelemetryRow(r.DurationMs, r.NumTurns, r.TotalCostUsd, r.InputTokens, r.OutputTokens)),
+                .Select(r => new TelemetryRow(r.DurationMs, r.NumTurns, r.TotalCostUsd, r.Tokens)),
         ];
 
         int inProgressCount = inProgressDates
@@ -318,14 +325,23 @@ internal sealed class WorkerRunQueries(DbContext db) : IWorkerRunQueries
 
         int runCount = inWindowRows.Count + inProgressCount;
 
+        List<TokenUsage> inWindowTokens = [..inWindowRows
+            .Select(r => r.Tokens)
+            .OfType<TokenUsage>()];
+
         return new RunTotals(
             RunCount: runCount,
             DurationMs: inWindowRows.Sum(r => r.DurationMs) ?? 0L,
             NumTurns: inWindowRows.Sum(r => r.NumTurns) ?? 0,
             TotalCostUsd: inWindowRows.Sum(r => r.TotalCostUsd) ?? 0m,
-            // int? per-row tokens promote to long? via cast to avoid integer overflow.
-            InputTokens: inWindowRows.Sum(r => (long?)r.InputTokens) ?? 0L,
-            OutputTokens: inWindowRows.Sum(r => (long?)r.OutputTokens) ?? 0L);
+            // Zero when no run in the window carries telemetry; otherwise null-propagating, so a
+            // window containing a run with unknown tokens reports unknown rather than understated.
+            InputTokens: inWindowTokens.Count == 0
+                ? 0L
+                : TokenUsage.SumKnown(inWindowTokens.Select(t => t.BillableInputTokens)),
+            OutputTokens: inWindowTokens.Count == 0
+                ? 0L
+                : TokenUsage.SumKnown(inWindowTokens.Select(t => t.OutputTokens)));
     }
 
     // Fetches one row per worker run for the specified issues. Server-side filtering (WHERE issue_id IN ...)
@@ -343,7 +359,10 @@ internal sealed class WorkerRunQueries(DbContext db) : IWorkerRunQueries
                 DurationMs: r.ResultSummary != null ? (long?)r.ResultSummary.DurationMs : null,
                 NumTurns: r.ResultSummary != null ? (int?)r.ResultSummary.NumTurns : null,
                 TotalCostUsd: r.ResultSummary != null ? r.ResultSummary.TotalCostUsd : null,
+                HasSummary: r.ResultSummary != null,
                 InputTokens: r.ResultSummary != null ? r.ResultSummary.InputTokens : null,
+                CacheReadInputTokens: r.ResultSummary != null ? r.ResultSummary.CacheReadInputTokens : null,
+                CacheCreationInputTokens: r.ResultSummary != null ? r.ResultSummary.CacheCreationInputTokens : null,
                 OutputTokens: r.ResultSummary != null ? r.ResultSummary.OutputTokens : null))
             .ToListAsync(cancellationToken);
 
@@ -355,7 +374,10 @@ internal sealed class WorkerRunQueries(DbContext db) : IWorkerRunQueries
                 DurationMs: r.ResultSummary != null ? (long?)r.ResultSummary.DurationMs : null,
                 NumTurns: r.ResultSummary != null ? (int?)r.ResultSummary.NumTurns : null,
                 TotalCostUsd: r.ResultSummary != null ? r.ResultSummary.TotalCostUsd : null,
+                HasSummary: r.ResultSummary != null,
                 InputTokens: r.ResultSummary != null ? r.ResultSummary.InputTokens : null,
+                CacheReadInputTokens: r.ResultSummary != null ? r.ResultSummary.CacheReadInputTokens : null,
+                CacheCreationInputTokens: r.ResultSummary != null ? r.ResultSummary.CacheCreationInputTokens : null,
                 OutputTokens: r.ResultSummary != null ? r.ResultSummary.OutputTokens : null))
             .ToListAsync(cancellationToken);
 
@@ -369,22 +391,33 @@ internal sealed class WorkerRunQueries(DbContext db) : IWorkerRunQueries
                 DurationMs: null,
                 NumTurns: null,
                 TotalCostUsd: null,
+                HasSummary: false,
                 InputTokens: null,
+                CacheReadInputTokens: null,
+                CacheCreationInputTokens: null,
                 OutputTokens: null))
             .ToListAsync(cancellationToken);
 
         return [..completed, ..failed, ..noTelemetry];
     }
 
-    // InputTokens and OutputTokens are stored as int? per-row but aggregated as long? to avoid
-    // integer overflow when summing across many runs with high token counts.
+    // Token buckets are stored as int? per-row; TokenUsage widens them to long? so sums across
+    // many runs cannot overflow. Tokens is null for a run without a result summary.
     private sealed record WorkerRunTelemetryRow(
         Guid IssueId,
         long? DurationMs,
         int? NumTurns,
         decimal? TotalCostUsd,
+        bool HasSummary,
         int? InputTokens,
-        int? OutputTokens);
+        int? CacheReadInputTokens,
+        int? CacheCreationInputTokens,
+        int? OutputTokens)
+    {
+        public TokenUsage? Tokens => HasSummary
+            ? new TokenUsage(InputTokens, CacheReadInputTokens, CacheCreationInputTokens, OutputTokens)
+            : null;
+    }
 
     // Per-row projection for GetRunTotalsAsync — no IssueId needed since this is a cross-issue aggregate.
     // Includes CreatedAt for in-memory window filtering (SQLite cannot translate DateTimeOffset >= in LINQ).
@@ -393,16 +426,23 @@ internal sealed class WorkerRunQueries(DbContext db) : IWorkerRunQueries
         long? DurationMs,
         int? NumTurns,
         decimal? TotalCostUsd,
+        bool HasSummary,
         int? InputTokens,
-        int? OutputTokens);
+        int? CacheReadInputTokens,
+        int? CacheCreationInputTokens,
+        int? OutputTokens)
+    {
+        public TokenUsage? Tokens => HasSummary
+            ? new TokenUsage(InputTokens, CacheReadInputTokens, CacheCreationInputTokens, OutputTokens)
+            : null;
+    }
 
     // Post-filter projection after window filtering has been applied.
     private sealed record TelemetryRow(
         long? DurationMs,
         int? NumTurns,
         decimal? TotalCostUsd,
-        int? InputTokens,
-        int? OutputTokens);
+        TokenUsage? Tokens);
 
     // Minimal projection for CountConsecutiveTransientRunsAsync.
     // CategoryToken is null for non-FailedRun rows (starting, active, completed);

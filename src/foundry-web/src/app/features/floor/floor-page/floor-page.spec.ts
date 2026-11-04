@@ -41,7 +41,7 @@ function buildActivity(workerRunId: string, issueId: string): AgentActivity {
     subagents: [],
     activeSkill: null,
     inFlightTool: null,
-    tokens: { inputTokens: 0, outputTokens: 0, cacheReadInputTokens: 0, cacheCreationInputTokens: 0 },
+    tokens: { inputTokens: 0, outputTokens: 0 },
   };
 }
 

@@ -53,8 +53,7 @@ public sealed class WhenMultipleIssues : IAsyncDisposable
             durationMs: durationMs,
             numTurns: numTurns,
             totalCostUsd: null,
-            inputTokens: null,
-            outputTokens: null);
+            tokens: TokenUsage.Unknown);
 
         CompletedRun completed = active.Complete(exitCode: 0, branchName: null, pullRequestUrl: null, resultSummary: summary);
         dbContext.Set<WorkerRun>().Add(completed);

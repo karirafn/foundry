@@ -58,8 +58,7 @@ public sealed class PersistCompletedRunSummary : IAsyncDisposable
             durationMs: 55000L,
             numTurns: 7,
             totalCostUsd: 0.12m,
-            inputTokens: 3000,
-            outputTokens: 1500);
+            tokens: new TokenUsage(3000, 0, 0, 1500));
 
         CompletedRun run = active.Complete(
             exitCode: 0,

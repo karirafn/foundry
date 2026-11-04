@@ -201,8 +201,16 @@ public sealed class CompletedRunConfiguration : IEntityTypeConfiguration<Complet
             summary.Property(s => s.InputTokens)
                 .HasColumnName("input_tokens");
 
+            summary.Property(s => s.CacheReadInputTokens)
+                .HasColumnName("cache_read_input_tokens");
+
+            summary.Property(s => s.CacheCreationInputTokens)
+                .HasColumnName("cache_creation_input_tokens");
+
             summary.Property(s => s.OutputTokens)
                 .HasColumnName("output_tokens");
+
+            summary.Ignore(s => s.Tokens);
         });
     }
 }
@@ -273,8 +281,16 @@ public sealed class FailedRunConfiguration : IEntityTypeConfiguration<FailedRun>
             summary.Property(s => s.InputTokens)
                 .HasColumnName("input_tokens");
 
+            summary.Property(s => s.CacheReadInputTokens)
+                .HasColumnName("cache_read_input_tokens");
+
+            summary.Property(s => s.CacheCreationInputTokens)
+                .HasColumnName("cache_creation_input_tokens");
+
             summary.Property(s => s.OutputTokens)
                 .HasColumnName("output_tokens");
+
+            summary.Ignore(s => s.Tokens);
         });
     }
 }

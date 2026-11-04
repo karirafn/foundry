@@ -21,7 +21,7 @@ function buildActivity(overrides: Partial<AgentActivity> = {}): AgentActivity {
     subagents: [],
     activeSkill: null,
     inFlightTool: null,
-    tokens: { inputTokens: 12_345, outputTokens: 950, cacheReadInputTokens: 1_200_000, cacheCreationInputTokens: 0 },
+    tokens: { inputTokens: 1_212_345, outputTokens: null },
     ...overrides,
   };
 }
@@ -126,15 +126,28 @@ describe('FloorLaneComponent', () => {
     expect(tools).toEqual(['Bash', 'Read']);
   });
 
-  it('should show live token totals', () => {
+  it('should show billable input and hide output while the run is live', () => {
     // Act
     const { el } = render();
 
     // Assert
+    const terms = Array.from(el.querySelectorAll('.floor-lane__tokens dt')).map((n) => n.textContent);
     const tokens = el.querySelector('.floor-lane__tokens')?.textContent ?? '';
+    expect(terms).toEqual(['In']);
+    expect(tokens).toContain('1.2M');
+    expect(tokens).not.toContain('Cache');
+  });
+
+  it('should show final output once the run reports it', () => {
+    // Act
+    const { el } = render({ activity: buildActivity({ tokens: { inputTokens: 12_345, outputTokens: 950 } }) });
+
+    // Assert
+    const terms = Array.from(el.querySelectorAll('.floor-lane__tokens dt')).map((n) => n.textContent);
+    const tokens = el.querySelector('.floor-lane__tokens')?.textContent ?? '';
+    expect(terms).toEqual(['In', 'Out']);
     expect(tokens).toContain('12.3k');
     expect(tokens).toContain('950');
-    expect(tokens).toContain('1.2M');
   });
 
   it('should show time since the last event below the silence threshold', () => {
@@ -171,7 +184,7 @@ describe('FloorLaneComponent', () => {
     fixture.componentRef.setInput('lane', {
       issueId: 'issue-1',
       issue: ISSUE,
-      activity: buildActivity({ tokens: { inputTokens: 99_999, outputTokens: 1, cacheReadInputTokens: 0, cacheCreationInputTokens: 0 } }),
+      activity: buildActivity({ tokens: { inputTokens: 99_999, outputTokens: 1 } }),
       recentTools: [{ name: 'Bash', summary: null, startedAt: null }],
     });
     fixture.componentRef.setInput('now', NOW + 60_000);

@@ -243,8 +243,7 @@ public sealed class GetWorkerRunDetailAsync : IAsyncDisposable
             durationMs: 5000L,
             numTurns: 3,
             totalCostUsd: 0.05m,
-            inputTokens: 100,
-            outputTokens: 200);
+            tokens: new TokenUsage(100, 1000, 10, 200));
 
         WorkerRunQueries sut = new(_dbContext);
         FailedRun run = await SeedFailedRunAsync(resultSummary: summary);
@@ -263,7 +262,35 @@ public sealed class GetWorkerRunDetailAsync : IAsyncDisposable
             () => detail.DurationMs.ShouldBe(5000L),
             () => detail.NumTurns.ShouldBe(3),
             () => detail.TotalCostUsd.ShouldBe(0.05m),
-            () => detail.InputTokens.ShouldBe(100),
+            () => detail.InputTokens.ShouldBe(1110L),
+            () => detail.OutputTokens.ShouldBe(200));
+    }
+
+    [Fact]
+    public async Task WhenRunPredatesCacheColumns_InputTokensIsNull()
+    {
+        // Arrange — a legacy row: uncached input and output known, cache buckets unknown
+        RunResultSummary summary = RunResultSummary.Create(
+            resultText: "success",
+            subtype: "result",
+            isError: false,
+            durationMs: 5000L,
+            numTurns: 3,
+            totalCostUsd: 0.05m,
+            tokens: new TokenUsage(100, null, null, 200));
+
+        WorkerRunQueries sut = new(_dbContext);
+        FailedRun run = await SeedFailedRunAsync(resultSummary: summary);
+
+        // Act
+        Result<WorkerRunDetail> result = await sut.GetWorkerRunDetailAsync(
+            run.Id.Value,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        WorkerRunDetail detail = result.ShouldBeOfType<Result<WorkerRunDetail>.Success>().Value;
+        detail.ShouldSatisfyAllConditions(
+            () => detail.InputTokens.ShouldBeNull(),
             () => detail.OutputTokens.ShouldBe(200));
     }
 

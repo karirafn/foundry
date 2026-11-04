@@ -58,8 +58,7 @@ public sealed class PersistFailedRunSummary : IAsyncDisposable
             durationMs: 8000L,
             numTurns: 2,
             totalCostUsd: null,
-            inputTokens: null,
-            outputTokens: null);
+            tokens: TokenUsage.Unknown);
 
         FailedRun run = active.Fail(
             new FailureReason.NonZeroExit(1),

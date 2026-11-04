@@ -16,7 +16,7 @@ function buildAgentActivity(overrides: Partial<AgentActivity> = {}): AgentActivi
     subagents: [],
     activeSkill: null,
     inFlightTool: null,
-    tokens: { inputTokens: 0, outputTokens: 0, cacheReadInputTokens: 0, cacheCreationInputTokens: 0 },
+    tokens: { inputTokens: 0, outputTokens: 0 },
     ...overrides,
   };
 }
@@ -1115,6 +1115,21 @@ describe('IssueCardComponent', () => {
     // Assert
     const pill = el.querySelector('.issue-card__stat-pill--input-tokens');
     expect(pill).toBeTruthy();
+  });
+
+  it('should render a dash in the input-tokens pill when billable input is unknown', () => {
+    // Arrange — a legacy run: output known, billable input unknown
+    const issueWithStats: IssueSummary = { ...mockIssue, runStats: { ...fullRunStats, inputTokens: null } };
+
+    // Act
+    const fixture = createComponent(issueWithStats);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    const value = el.querySelector('.issue-card__stat-pill--input-tokens .issue-card__stat-value');
+    expect(value?.textContent?.trim()).toMatch(/^- input tokens$/);
+    const label = (el.querySelector('.issue-card') as HTMLElement).getAttribute('aria-label') ?? '';
+    expect(label).toContain('unknown input tokens');
   });
 
   it('should render the output-tokens pill', () => {

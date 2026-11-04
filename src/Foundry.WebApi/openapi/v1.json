@@ -3729,6 +3729,7 @@
           "inputTokens": {
             "pattern": "^-?(?:0|[1-9]\\d*)$",
             "type": [
+              "null",
               "integer",
               "string"
             ],
@@ -3737,6 +3738,7 @@
           "outputTokens": {
             "pattern": "^-?(?:0|[1-9]\\d*)$",
             "type": [
+              "null",
               "integer",
               "string"
             ],
@@ -4515,7 +4517,7 @@
               "integer",
               "string"
             ],
-            "format": "int32"
+            "format": "int64"
           },
           "outputTokens": {
             "pattern": "^-?(?:0|[1-9]\\d*)$",

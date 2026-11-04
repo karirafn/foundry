@@ -45,7 +45,7 @@ public sealed class RunResultSummaryCapture : WorkerDispatchServiceTestBase
         WorkerStatus exitedStatus = new(IsRunning: false, ExitCode: 0, FinishedAt: DateTimeOffset.UtcNow);
         RunResultSummary summary = RunResultSummary.Create(
             resultText: "Done", subtype: null, isError: false,
-            durationMs: 1000, numTurns: 3, totalCostUsd: 0.05m, inputTokens: 100, outputTokens: 50);
+            durationMs: 1000, numTurns: 3, totalCostUsd: 0.05m, tokens: new TokenUsage(100, 0, 0, 50));
         ScriptedContainerOutputParser parser = new(runResultSummary: summary);
         StubPostExitProviderQueries queries = new(
             hasCommits: true,
@@ -72,7 +72,7 @@ public sealed class RunResultSummaryCapture : WorkerDispatchServiceTestBase
         WorkerStatus exitedStatus = new(IsRunning: false, ExitCode: 1, FinishedAt: DateTimeOffset.UtcNow);
         RunResultSummary summary = RunResultSummary.Create(
             resultText: "Error", subtype: "error", isError: true,
-            durationMs: 500, numTurns: 1, totalCostUsd: 0.01m, inputTokens: 50, outputTokens: 10);
+            durationMs: 500, numTurns: 1, totalCostUsd: 0.01m, tokens: new TokenUsage(50, 0, 0, 10));
         ScriptedContainerOutputParser parser = new(runResultSummary: summary);
         StubPostExitProviderQueries queries = new(hasCommits: false);
         ExitedWorkerOrchestrator orchestrator = new(exitedStatus, logs: "error output");
@@ -118,7 +118,7 @@ public sealed class RunResultSummaryCapture : WorkerDispatchServiceTestBase
         WorkerStatus exitedStatus = new(IsRunning: false, ExitCode: 0, FinishedAt: DateTimeOffset.UtcNow);
         RunResultSummary summary = RunResultSummary.Create(
             resultText: "Done", subtype: null, isError: false,
-            durationMs: 800, numTurns: 2, totalCostUsd: 0.02m, inputTokens: 80, outputTokens: 20);
+            durationMs: 800, numTurns: 2, totalCostUsd: 0.02m, tokens: new TokenUsage(80, 0, 0, 20));
         ScriptedContainerOutputParser parser = new(runResultSummary: summary);
         StubPostExitProviderQueries queries = new(hasCommits: false);
         ExitedWorkerOrchestrator orchestrator = new(exitedStatus, logs: "output");
@@ -143,7 +143,7 @@ public sealed class RunResultSummaryCapture : WorkerDispatchServiceTestBase
         WorkerStatus exitedStatus = new(IsRunning: false, ExitCode: 0, FinishedAt: DateTimeOffset.UtcNow);
         RunResultSummary summary = RunResultSummary.Create(
             resultText: "Done", subtype: null, isError: false,
-            durationMs: 700, numTurns: 2, totalCostUsd: 0.02m, inputTokens: 60, outputTokens: 15);
+            durationMs: 700, numTurns: 2, totalCostUsd: 0.02m, tokens: new TokenUsage(60, 0, 0, 15));
         ScriptedContainerOutputParser parser = new(runResultSummary: summary);
         // has commits but no PR
         StubPostExitProviderQueries queries = new(hasCommits: true);
@@ -168,7 +168,7 @@ public sealed class RunResultSummaryCapture : WorkerDispatchServiceTestBase
         SeedActiveRun("container-summary-timeout");
         RunResultSummary summary = RunResultSummary.Create(
             resultText: "Timed", subtype: null, isError: true,
-            durationMs: 7200000, numTurns: 5, totalCostUsd: 0.5m, inputTokens: 500, outputTokens: 200);
+            durationMs: 7200000, numTurns: 5, totalCostUsd: 0.5m, tokens: new TokenUsage(500, 0, 0, 200));
         ScriptedContainerOutputParser parser = new(runResultSummary: summary);
         StubGlobalSettingsQueries settingsQueries = new(maxConcurrent: 3, timeoutMinutes: 0);
         ExitedWorkerOrchestrator orchestrator = new(
@@ -226,8 +226,8 @@ public sealed class RunResultSummaryCapture : WorkerDispatchServiceTestBase
             () => summary.NumTurns.ShouldBe(4),
             () => summary.DurationMs.ShouldBe(10_643),
             () => summary.TotalCostUsd.ShouldBe(0.1613702m),
-            () => summary.InputTokens.ShouldBe(6),
-            () => summary.OutputTokens.ShouldBe(507));
+            () => summary.Tokens.BillableInputTokens.ShouldBe(80_553L),
+            () => summary.OutputTokens.ShouldBe(714));
     }
 
     /// <summary>

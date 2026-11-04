@@ -83,9 +83,8 @@ export class FloorLaneComponent {
     const totals = this.lane().activity.tokens;
     return {
       input: formatTokenCount(totals.inputTokens),
-      output: formatTokenCount(totals.outputTokens),
-      cacheRead: formatTokenCount(totals.cacheReadInputTokens),
-      cacheCreation: formatTokenCount(totals.cacheCreationInputTokens),
+      // Output is only final once the run completes; streamed counts are start-of-message stubs.
+      output: totals.outputTokens !== null ? formatTokenCount(totals.outputTokens) : null,
     };
   });
 

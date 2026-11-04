@@ -117,8 +117,7 @@ internal sealed partial class ContainerOutputParser(ILogger<ContainerOutputParse
         long durationMs = ReadLong(node["duration_ms"]);
         int numTurns = ReadInt(node["num_turns"]);
         decimal? totalCostUsd = ReadDecimal(node["total_cost_usd"]);
-        int? inputTokens = ReadNullableInt(node["usage"]?["input_tokens"]);
-        int? outputTokens = ReadNullableInt(node["usage"]?["output_tokens"]);
+        TokenUsage tokens = ModelUsageReader.Read(node);
 
         return RunResultSummary.Create(
             resultText,
@@ -127,8 +126,7 @@ internal sealed partial class ContainerOutputParser(ILogger<ContainerOutputParse
             durationMs,
             numTurns,
             totalCostUsd,
-            inputTokens,
-            outputTokens);
+            tokens);
     }
 
     private const int MaxLoggedResultTextLength = 200;
@@ -181,23 +179,6 @@ internal sealed partial class ContainerOutputParser(ILogger<ContainerOutputParse
         if (value < int.MinValue || value > int.MaxValue)
         {
             return 0;
-        }
-
-        return (int)value;
-    }
-
-    private static int? ReadNullableInt(JsonNode? node)
-    {
-        if (node is null || node.GetValueKind() != JsonValueKind.Number)
-        {
-            return null;
-        }
-
-        long value = node.GetValue<long>();
-
-        if (value < int.MinValue || value > int.MaxValue)
-        {
-            return null;
         }
 
         return (int)value;

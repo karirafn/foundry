@@ -183,8 +183,7 @@ public sealed class GetRunTotalsAsync : IAsyncDisposable
             durationMs: 3000L,
             numTurns: 4,
             totalCostUsd: 0.10m,
-            inputTokens: 500,
-            outputTokens: 800);
+            tokens: new TokenUsage(500, 0, 0, 800));
 
         RunResultSummary failedSummary = RunResultSummary.Create(
             resultText: null,
@@ -193,8 +192,7 @@ public sealed class GetRunTotalsAsync : IAsyncDisposable
             durationMs: 2000L,
             numTurns: 2,
             totalCostUsd: 0.05m,
-            inputTokens: 300,
-            outputTokens: 400);
+            tokens: new TokenUsage(300, 0, 0, 400));
 
         await SeedCompletedRunAsync(createdAt: InWindow, resultSummary: completedSummary);
         await SeedFailedRunAsync(createdAt: InWindow, resultSummary: failedSummary);
@@ -218,6 +216,74 @@ public sealed class GetRunTotalsAsync : IAsyncDisposable
     }
 
     [Fact]
+    public async Task WhenCacheBucketsKnown_InputTokensIsBillableInput()
+    {
+        // Arrange
+        RunResultSummary summary = RunResultSummary.Create(
+            resultText: null,
+            subtype: null,
+            isError: false,
+            durationMs: 1000L,
+            numTurns: 2,
+            totalCostUsd: 0.73m,
+            tokens: new TokenUsage(46, 1_018_829, 51_565, 700));
+
+        await SeedCompletedRunAsync(createdAt: InWindow, resultSummary: summary);
+
+        WorkerRunQueries sut = new(_dbContext);
+
+        // Act
+        RunTotals result = await sut.GetRunTotalsAsync(
+            WindowStart,
+            WindowEnd,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        result.ShouldSatisfyAllConditions(
+            () => result.InputTokens.ShouldBe(1_070_440L),
+            () => result.OutputTokens.ShouldBe(700L));
+    }
+
+    [Fact]
+    public async Task WhenAnyRunHasUnknownCacheBuckets_InputTokensIsNull()
+    {
+        // Arrange — a legacy row persisted before the cache columns existed
+        RunResultSummary known = RunResultSummary.Create(
+            resultText: null,
+            subtype: null,
+            isError: false,
+            durationMs: 1000L,
+            numTurns: 2,
+            totalCostUsd: 0.02m,
+            tokens: new TokenUsage(10, 20, 30, 40));
+
+        RunResultSummary legacy = RunResultSummary.Create(
+            resultText: null,
+            subtype: null,
+            isError: false,
+            durationMs: 1000L,
+            numTurns: 2,
+            totalCostUsd: 0.02m,
+            tokens: new TokenUsage(10, null, null, 40));
+
+        await SeedCompletedRunAsync(createdAt: InWindow, resultSummary: known);
+        await SeedCompletedRunAsync(createdAt: InWindow, resultSummary: legacy);
+
+        WorkerRunQueries sut = new(_dbContext);
+
+        // Act
+        RunTotals result = await sut.GetRunTotalsAsync(
+            WindowStart,
+            WindowEnd,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        result.ShouldSatisfyAllConditions(
+            () => result.InputTokens.ShouldBeNull(),
+            () => result.OutputTokens.ShouldBe(80L));
+    }
+
+    [Fact]
     public async Task WhenActiveRunInWindow_AddsToRunCountOnly()
     {
         // Arrange
@@ -228,8 +294,7 @@ public sealed class GetRunTotalsAsync : IAsyncDisposable
             durationMs: 1000L,
             numTurns: 2,
             totalCostUsd: 0.02m,
-            inputTokens: 100,
-            outputTokens: 200);
+            tokens: new TokenUsage(100, 0, 0, 200));
 
         await SeedCompletedRunAsync(createdAt: InWindow, resultSummary: summary);
         await SeedActiveRunAsync(createdAt: InWindow);
@@ -263,8 +328,7 @@ public sealed class GetRunTotalsAsync : IAsyncDisposable
             durationMs: 1000L,
             numTurns: 1,
             totalCostUsd: 0.01m,
-            inputTokens: 50,
-            outputTokens: 100);
+            tokens: new TokenUsage(50, 0, 0, 100));
 
         // Seed a run exactly at the from boundary (inclusive)
         await SeedCompletedRunAsync(createdAt: WindowStart, resultSummary: summary);
@@ -292,8 +356,7 @@ public sealed class GetRunTotalsAsync : IAsyncDisposable
             durationMs: 1000L,
             numTurns: 1,
             totalCostUsd: 0.01m,
-            inputTokens: 50,
-            outputTokens: 100);
+            tokens: new TokenUsage(50, 0, 0, 100));
 
         // Seed a run exactly at the to boundary (exclusive — should not be included)
         await SeedCompletedRunAsync(createdAt: WindowEnd, resultSummary: summary);
@@ -321,8 +384,7 @@ public sealed class GetRunTotalsAsync : IAsyncDisposable
             durationMs: 2000L,
             numTurns: 3,
             totalCostUsd: 0.03m,
-            inputTokens: 200,
-            outputTokens: 300);
+            tokens: new TokenUsage(200, 0, 0, 300));
 
         RunResultSummary outSummary = RunResultSummary.Create(
             resultText: null,
@@ -331,8 +393,7 @@ public sealed class GetRunTotalsAsync : IAsyncDisposable
             durationMs: 9999L,
             numTurns: 99,
             totalCostUsd: 9.99m,
-            inputTokens: 9999,
-            outputTokens: 9999);
+            tokens: new TokenUsage(9999, 0, 0, 9999));
 
         await SeedCompletedRunAsync(createdAt: InWindow, resultSummary: inSummary);
         await SeedCompletedRunAsync(createdAt: OutOfWindow, resultSummary: outSummary);
@@ -411,8 +472,7 @@ public sealed class GetRunTotalsAsync : IAsyncDisposable
             durationMs: 1000L,
             numTurns: 2,
             totalCostUsd: 0.02m,
-            inputTokens: 100,
-            outputTokens: 200);
+            tokens: new TokenUsage(100, 0, 0, 200));
 
         await SeedCompletedRunAsync(createdAt: InWindow, resultSummary: completedSummary);
         await SeedStartingRunAsync(createdAt: InWindow);
