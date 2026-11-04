@@ -125,6 +125,27 @@ internal sealed class GitLabIssueProvider(
         return httpClient.CreateBranchAsync(apiBaseUrl, slug, branchName, token, cancellationToken);
     }
 
+    public async Task<Result<bool>> DeleteBranchAsync(
+        RepositorySlug slug,
+        string branchName,
+        CancellationToken cancellationToken)
+    {
+        Result<string> defaultBranchResult = await GetDefaultBranchAsync(slug, cancellationToken);
+
+        if (defaultBranchResult is not Result<string>.Success defaultBranchSuccess)
+        {
+            Error error = ((Result<string>.Failure)defaultBranchResult).Error;
+            return Result<bool>.Fail(error);
+        }
+
+        if (string.Equals(defaultBranchSuccess.Value, branchName, StringComparison.Ordinal))
+        {
+            return Result<bool>.Fail(BranchDeletionErrors.DefaultBranch(branchName));
+        }
+
+        return await httpClient.DeleteBranchAsync(apiBaseUrl, slug, branchName, token, cancellationToken);
+    }
+
     public Task<Result<MergeRequestByBranch>> GetMergeRequestByBranchAsync(
         RepositorySlug slug,
         string branchName,

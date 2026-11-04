@@ -30,6 +30,7 @@ public static class IssuesModule
         services.AddHostedService<TransientRetryService>();
 
         services.AddCommandHandler<RetryIssue.Command, IssueDetail, RetryIssue.Handler>();
+        services.AddCommandHandler<RetryIssueFresh.Command, IssueDetail, RetryIssueFresh.Handler>();
 
         services.AddIntegrationEventHandler<IssueDetected, CreateIssueHandler>();
         services.AddIntegrationEventHandler<IssueDetailsChanged, UpdateIssueDetailsHandler>();

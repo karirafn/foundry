@@ -782,6 +782,51 @@ describe('IssueService', () => {
     expect(service.retryError()).toBe('Failed to retry issue.');
   });
 
+  it('should POST to /api/issues/{id}/retry-fresh and reload detail when retryIssueFresh is called', () => {
+    // Arrange — no additional setup
+
+    // Act
+    service.retryIssueFresh('abc123');
+
+    // Assert
+    expect(service.retrying()).toBe(true);
+    const req = httpMock.expectOne('/api/issues/abc123/retry-fresh');
+    expect(req.request.method).toBe('POST');
+    req.flush({});
+    httpMock.expectOne('/api/issues/abc123').flush({});
+    expect(service.retrying()).toBe(false);
+    expect(service.retrySuccess()).toBe('Branch discarded. Issue queued fresh; status is updating.');
+  });
+
+  it('should explain the issue was not requeued when retryIssueFresh cannot delete the branch', () => {
+    // Arrange
+    service.retryIssueFresh('abc123');
+
+    // Act
+    httpMock.expectOne('/api/issues/abc123/retry-fresh').flush('Bad Gateway', {
+      status: 502,
+      statusText: 'Bad Gateway',
+    });
+
+    // Assert
+    expect(service.retrying()).toBe(false);
+    expect(service.retryError()).toBe('Could not delete the branch on the provider. The issue was not requeued.');
+  });
+
+  it('should set the generic retry-fresh error when retryIssueFresh fails otherwise', () => {
+    // Arrange
+    service.retryIssueFresh('abc123');
+
+    // Act
+    httpMock.expectOne('/api/issues/abc123/retry-fresh').flush('Conflict', {
+      status: 409,
+      statusText: 'Conflict',
+    });
+
+    // Assert
+    expect(service.retryError()).toBe('Failed to retry issue from a fresh branch.');
+  });
+
   it('should not change detailError when retryIssue fails', () => {
     // Arrange — confirm detailError stays null (retryIssue has its own error surface)
     service.retryIssue('abc123');

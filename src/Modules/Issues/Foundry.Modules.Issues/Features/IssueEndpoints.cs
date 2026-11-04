@@ -15,6 +15,7 @@ internal static class IssueEndpoints
         GetIssueCounts.Endpoint.Map(group);
         GetIssueById.Endpoint.Map(group);
         RetryIssue.Endpoint.Map(group);
+        RetryIssueFresh.Endpoint.Map(group);
 
         return routes;
     }
