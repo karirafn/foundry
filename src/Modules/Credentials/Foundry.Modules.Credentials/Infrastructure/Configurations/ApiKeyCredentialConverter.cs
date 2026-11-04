@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 
 using Foundry.Modules.Credentials.Domain.ValueObjects;
+using Foundry.Shared.Infrastructure.DataProtection;
 
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
@@ -20,9 +21,14 @@ namespace Foundry.Modules.Credentials.Infrastructure.Configurations;
 /// A <see cref="CryptographicException"/> or <see cref="FormatException"/> while reading yields
 /// <see cref="ApiKeyCredential.Unreadable"/> and logs a warning naming the column.
 /// </summary>
-internal sealed class ApiKeyCredentialConverter : ValueConverter<ApiKeyCredential?, string?>
+internal sealed class ApiKeyCredentialConverter : ValueConverter<ApiKeyCredential?, string?>, IDataProtectedConverter
 {
     internal const string ColumnName = "claude_account.api_key";
+
+    // This purpose string must remain stable — changing it renders every existing encrypted
+    // api_key row unreadable, because Data Protection binds the key material to the purpose
+    // at encryption time and rejects decryption attempts under any other value.
+    internal const string Purpose = "Foundry.Settings.Encryption";
 
     internal ApiKeyCredentialConverter(
         IDataProtectionProvider provider,
@@ -36,6 +42,8 @@ internal sealed class ApiKeyCredentialConverter : ValueConverter<ApiKeyCredentia
     {
     }
 
+    public string ProtectorPurpose => Purpose;
+
     private static string? Encrypt(IDataProtectionProvider provider, ApiKeyCredential? credential)
     {
         if (credential is not ApiKeyCredential.Present present)
@@ -43,10 +51,7 @@ internal sealed class ApiKeyCredentialConverter : ValueConverter<ApiKeyCredentia
             return null;
         }
 
-        IDataProtector protector = provider.CreateProtector(EncryptedStringConverter.ProtectorPurpose);
-        byte[] bytes = System.Text.Encoding.UTF8.GetBytes(present.Value);
-        byte[] protectedBytes = protector.Protect(bytes);
-        return Convert.ToBase64String(protectedBytes);
+        return DataProtectedText.Protect(provider.CreateProtector(Purpose), present.Value);
     }
 
     private static ApiKeyCredential? Decrypt(
@@ -61,11 +66,8 @@ internal sealed class ApiKeyCredentialConverter : ValueConverter<ApiKeyCredentia
 
         try
         {
-            IDataProtector protector = provider.CreateProtector(EncryptedStringConverter.ProtectorPurpose);
-            byte[] protectedBytes = Convert.FromBase64String(encrypted);
-            byte[] bytes = protector.Unprotect(protectedBytes);
-            string value = System.Text.Encoding.UTF8.GetString(bytes);
-            return new ApiKeyCredential.Present(value);
+            IDataProtector protector = provider.CreateProtector(Purpose);
+            return new ApiKeyCredential.Present(DataProtectedText.Unprotect(protector, encrypted));
         }
         catch (CryptographicException ex)
         {
