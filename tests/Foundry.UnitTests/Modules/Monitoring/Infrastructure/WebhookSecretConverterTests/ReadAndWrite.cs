@@ -1,4 +1,5 @@
 using Foundry.Modules.Monitoring.Infrastructure.Configurations;
+using Foundry.Shared.Infrastructure.DataProtection;
 
 using Microsoft.AspNetCore.DataProtection;
 
@@ -84,5 +85,18 @@ public sealed class ReadAndWrite
 
         // Assert
         result.ShouldBeNull();
+    }
+
+    [Fact]
+    public void ExposesItsProtectorPurpose()
+    {
+        // Arrange
+        IDataProtectedConverter converter = Converter;
+
+        // Act
+        string purpose = converter.ProtectorPurpose;
+
+        // Assert
+        purpose.ShouldBe("Foundry.Monitoring.WebhookSecret");
     }
 }
