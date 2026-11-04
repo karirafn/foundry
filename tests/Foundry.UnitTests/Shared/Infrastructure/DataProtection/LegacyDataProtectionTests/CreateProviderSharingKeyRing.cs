@@ -38,6 +38,23 @@ public sealed class CreateProviderSharingKeyRing
     }
 
     [Fact]
+    public void WhenKeyRingIsEmpty_WritesNoKeyFile()
+    {
+        // Arrange
+        using TemporaryKeyRing keys = new();
+        using ServiceProvider services = BuildServices(data => data.PersistKeysToFileSystem(keys.Directory));
+        KeyManagementOptions hostKeyManagement = services.GetRequiredService<IOptions<KeyManagementOptions>>().Value;
+        IDataProtectionProvider provider = LegacyDataProtection.CreateProviderSharingKeyRing(hostKeyManagement, LegacyName)
+            .ShouldNotBeNull();
+
+        // Act
+        Record.Exception(() => provider.CreateProtector(Purpose).Protect(Plaintext));
+
+        // Assert
+        keys.Directory.GetFiles().ShouldBeEmpty();
+    }
+
+    [Fact]
     public void WhenHostHasNoXmlRepository_ReturnsNull()
     {
         // Arrange

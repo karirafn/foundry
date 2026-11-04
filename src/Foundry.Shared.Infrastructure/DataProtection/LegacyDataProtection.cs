@@ -27,6 +27,10 @@ public static class LegacyDataProtection
             return null;
         }
 
-        return DataProtectionProvider.Create(repository.Directory, builder => builder.SetApplicationName(legacyName));
+        return DataProtectionProvider.Create(
+            repository.Directory,
+            builder => builder
+                .SetApplicationName(legacyName)
+                .DisableAutomaticKeyGeneration());
     }
 }
