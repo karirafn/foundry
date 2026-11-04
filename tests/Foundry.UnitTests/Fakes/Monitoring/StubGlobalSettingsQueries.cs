@@ -56,6 +56,11 @@ internal sealed class StubGlobalSettingsQueries(IReadOnlyList<string> allowedHos
     public Task<bool> GetWorkerImageInstallsDockerAsync(CancellationToken cancellationToken)
         => Task.FromResult(false);
 
+
+    public Task<bool> GetWorkerImageInstallsDotnetAsync(CancellationToken cancellationToken)
+
+        => Task.FromResult(false);
+
     public Task<string> GetWorkerImageTagAsync(CancellationToken cancellationToken)
         => Task.FromResult(string.Empty);
 

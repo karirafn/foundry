@@ -27,6 +27,10 @@ internal static class SystemPromptBuilder
     // wording change surfaces as a compile error rather than a silent assertion miss.
     internal const string PrePrSectionMarker = "Before opening the pull request:";
 
+    // Unique heading that opens the C# code-navigation section (emitted only for images that
+    // install the .NET SDK, which also bake csharp-ls and the csharp-lsp plugin).
+    internal const string CSharpLspSectionMarker = "C# code navigation:";
+
     // Workflow-neutral: Foundry reads the agent's task list to show live progress on the
     // dashboard (Agent Activity), so ask the agent to keep it current without prescribing stages.
     internal const string TaskListInstruction =
@@ -49,7 +53,8 @@ internal static class SystemPromptBuilder
         DispatchContext context,
         string issueApiUrl,
         int timeoutMinutes,
-        bool installsDocker)
+        bool installsDocker,
+        bool installsDotnet)
     {
         string safetyPreamble = SafetyPreambleTemplate
             .Replace("{branchNamingInstruction}", branchNamingInstruction, StringComparison.Ordinal);
@@ -68,7 +73,8 @@ internal static class SystemPromptBuilder
             .Replace("{branchNamingInstruction}", branchNamingInstruction, StringComparison.Ordinal);
 
         string prePrSection = installsDocker ? "\n\n" + BuildPrePrSection() : string.Empty;
-        string prompt = safetyPreamble + "\n\n" + basePrompt + "\n\n" + TaskListInstruction + prePrSection + "\n\n" + BuildChecksSection(timeoutMinutes);
+        string csharpLspSection = installsDotnet ? "\n\n" + BuildCSharpLspSection() : string.Empty;
+        string prompt = safetyPreamble + "\n\n" + basePrompt + "\n\n" + TaskListInstruction + csharpLspSection + prePrSection + "\n\n" + BuildChecksSection(timeoutMinutes);
 
         string contextSection = context switch
         {
@@ -117,6 +123,19 @@ internal static class SystemPromptBuilder
             - When a check fails, inspect its logs, fix the cause, and re-push to the same branch. Make at most {ChecksMaxFixPushes} fix pushes total.
             - You have roughly {timeoutMinutes.ToString(CultureInfo.InvariantCulture)} minutes of wall-clock budget for this run; stop and exit before it runs out so the run does not time out.
             - If checks are still pending or failing after your fix budget or the {ChecksWatchMinutes}-minute window, stop and exit. State that you are exiting with checks unresolved; Foundry continues to monitor them and will re-dispatch if needed.
+            """;
+    }
+
+    // The worker entrypoint loads the csharp-lsp plugin only after the repository restores
+    // cleanly, so the LSP tool may be absent even on a .NET image — hence the grep fallback.
+    // Claude Code exposes LSP as a deferred tool, so the agent must load it via ToolSearch.
+    private static string BuildCSharpLspSection()
+    {
+        return $"""
+            {CSharpLspSectionMarker}
+
+            - For C# symbol lookups (references, callers, implementations, definitions), load the `LSP` tool via ToolSearch and prefer it over grep.
+            - If the `LSP` tool is unavailable, fall back to grep.
             """;
     }
 

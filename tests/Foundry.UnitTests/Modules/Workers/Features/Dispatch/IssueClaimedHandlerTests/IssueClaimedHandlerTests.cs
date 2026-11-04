@@ -1317,6 +1317,44 @@ public sealed class HandleAsync : IAsyncDisposable
     }
 
     [Fact]
+    public async Task WhenDotnetInstalled_SystemPromptEnvVarContainsCSharpLspSection()
+    {
+        // Arrange
+        StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c-lsp-dotnet");
+        IssueClaimedHandler sut = BuildHandler(
+            orchestrator: orchestrator,
+            settingsQueries: new StubGlobalSettingsQueries(installsDotnet: true));
+        IssueClaimed @event = BuildEvent();
+
+        // Act
+        await sut.HandleAsync(@event, TestContext.Current.CancellationToken);
+
+        // Assert
+        WorkerContainerSpec? spec = orchestrator.LastSpec;
+        spec.ShouldNotBeNull();
+        spec.EnvironmentVariables["SYSTEM_PROMPT"].ShouldContain(SystemPromptBuilder.CSharpLspSectionMarker);
+    }
+
+    [Fact]
+    public async Task WhenDotnetNotInstalled_SystemPromptEnvVarOmitsCSharpLspSection()
+    {
+        // Arrange
+        StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c-lsp-no-dotnet");
+        IssueClaimedHandler sut = BuildHandler(
+            orchestrator: orchestrator,
+            settingsQueries: new StubGlobalSettingsQueries(installsDotnet: false));
+        IssueClaimed @event = BuildEvent();
+
+        // Act
+        await sut.HandleAsync(@event, TestContext.Current.CancellationToken);
+
+        // Assert
+        WorkerContainerSpec? spec = orchestrator.LastSpec;
+        spec.ShouldNotBeNull();
+        spec.EnvironmentVariables["SYSTEM_PROMPT"].ShouldNotContain(SystemPromptBuilder.CSharpLspSectionMarker);
+    }
+
+    [Fact]
     public async Task WhenDispatched_SystemPromptEnvVarContainsChecksSection()
     {
         // Arrange — timeout is 120 minutes (stub default)
@@ -1472,6 +1510,7 @@ public sealed class HandleAsync : IAsyncDisposable
         string? systemPromptTemplate = null,
         string? workerPromptTemplate = null,
         bool installsDocker = false,
+        bool installsDotnet = false,
         string imageTag = "stub-image:v1",
         WorkerResourceLimitsSnapshot? limits = null,
         IReadOnlyList<WorkerMountEntry>? mounts = null) : IGlobalSettingsQueries
@@ -1507,6 +1546,9 @@ public sealed class HandleAsync : IAsyncDisposable
 
         public Task<bool> GetWorkerImageInstallsDockerAsync(CancellationToken cancellationToken)
             => Task.FromResult(installsDocker);
+
+        public Task<bool> GetWorkerImageInstallsDotnetAsync(CancellationToken cancellationToken)
+            => Task.FromResult(installsDotnet);
 
         public Task<string> GetWorkerImageTagAsync(CancellationToken cancellationToken)
             => Task.FromResult(imageTag);
