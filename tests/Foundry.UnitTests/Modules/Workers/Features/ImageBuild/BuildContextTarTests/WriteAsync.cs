@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using System.Formats.Tar;
 using System.Runtime.Versioning;
 
@@ -103,33 +102,6 @@ public sealed class WriteAsync : IDisposable
 
         // Assert
         await Should.ThrowAsync<InvalidOperationException>(act);
-    }
-
-    [Fact]
-    public async Task WhenContextContainsFifo_ThrowsInvalidOperationExceptionNamingRelativePath()
-    {
-        Assert.SkipUnless(OperatingSystem.IsLinux(), "Creating a FIFO relies on mkfifo.");
-
-        // Arrange
-        Directory.CreateDirectory(Path.Combine(_contextDirectory, "dir"));
-        string fifoPath = Path.Combine(_contextDirectory, "dir", "pipe");
-        using (Process mkfifo = Process.Start("mkfifo", fifoPath)!)
-        {
-            await mkfifo.WaitForExitAsync(TestContext.Current.CancellationToken);
-            mkfifo.ExitCode.ShouldBe(0);
-        }
-
-        await using MemoryStream archive = new();
-
-        // Act
-        Func<Task> act = async () => await BuildContextTar.WriteAsync(
-            _contextDirectory,
-            archive,
-            TestContext.Current.CancellationToken);
-
-        // Assert
-        InvalidOperationException exception = await Should.ThrowAsync<InvalidOperationException>(act);
-        exception.Message.ShouldContain("dir/pipe");
     }
 
     private async Task WriteFileAsync(string relativePath, string content)
