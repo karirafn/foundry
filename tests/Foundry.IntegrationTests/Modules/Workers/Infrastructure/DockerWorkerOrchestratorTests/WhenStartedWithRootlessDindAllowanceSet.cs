@@ -81,7 +81,8 @@ public sealed class WhenStartedWithRootlessDindAllowanceSet : IAsyncLifetime
         // Arrange
         Assert.SkipUnless(_daemonReachable, "Docker daemon is not reachable.");
         DockerWorkerOrchestrator sut = _sut.ShouldNotBeNull();
-        WorkerContainerSpec spec = new(
+        // Composed as IssueClaimedHandler composes it: the hardened baseline, then the DinD relaxations.
+        WorkerContainerSpec spec = WorkerHardeningSpec.Apply(new(
             Image: Image,
             EnvironmentVariables: new Dictionary<string, string>(),
             BindMounts: [],
@@ -91,6 +92,8 @@ public sealed class WhenStartedWithRootlessDindAllowanceSet : IAsyncLifetime
             MemoryLimitMb = 512,
             CpuLimit = 1.0,
             PidsLimit = 256,
+        }) with
+        {
             Capabilities = RootlessDindRunSpec.Capabilities,
             SecurityOptions = RootlessDindRunSpec.SecurityOptions,
             Devices = RootlessDindRunSpec.Devices,
@@ -116,7 +119,9 @@ public sealed class WhenStartedWithRootlessDindAllowanceSet : IAsyncLifetime
 
         inspect.HostConfig.ShouldSatisfyAllConditions(
             () => inspect.HostConfig.MaskedPaths.ShouldNotBeNull().ShouldBeEmpty(),
-            () => inspect.HostConfig.ReadonlyPaths.ShouldNotBeNull().ShouldBeEmpty());
+            () => inspect.HostConfig.ReadonlyPaths.ShouldNotBeNull().ShouldBeEmpty(),
+            () => inspect.HostConfig.CapDrop.ShouldNotBeNull().ShouldContain(c => c.Equals("ALL", StringComparison.OrdinalIgnoreCase)),
+            () => inspect.HostConfig.ReadonlyRootfs.ShouldBeTrue());
     }
 
     // Found by label rather than by id: a container that was created but failed to start never
@@ -141,7 +146,7 @@ public sealed class WhenStartedWithRootlessDindAllowanceSet : IAsyncLifetime
         {
             await TryCleanupAsync(() => _dockerClient.Containers.RemoveContainerAsync(
                 container.ID,
-                new ContainerRemoveParameters { Force = true },
+                new ContainerRemoveParameters { Force = true, RemoveVolumes = true },
                 CancellationToken.None));
         }
     }

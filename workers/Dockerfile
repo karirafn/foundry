@@ -100,6 +100,9 @@ RUN chown node:node /workspace
 
 # No USER: the entrypoint starts as root only to render the root-owned
 # /etc/claude-code/managed-settings.json, then drops to node via setpriv before any
-# other work (ADR 0086). Container hardening must preserve that render-then-drop phase.
+# other work (ADR 0086). Foundry runs the container hardened (ADR 0088): capabilities dropped
+# to the SETUID/SETGID that drop needs, no-new-privileges, and a read-only root filesystem with
+# tmpfs at /tmp, /var/tmp and /etc/claude-code and anonymous volumes at /workspace and /home/node.
+# Anything the image needs writable at runtime must live under one of those paths.
 
 CMD ["echo", "foundry-worker image ready"]

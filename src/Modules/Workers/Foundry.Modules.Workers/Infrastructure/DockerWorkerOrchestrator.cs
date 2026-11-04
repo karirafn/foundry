@@ -46,6 +46,24 @@ internal sealed class DockerWorkerOrchestrator(IDockerContainerRuntime runtime) 
             ReadOnly = mount.ReadOnly,
         };
 
+    // No Source makes Docker create an anonymous volume, which the container removal deletes with it.
+    private static Mount MapScratchVolume(string containerPath) =>
+        new()
+        {
+            Type = "volume",
+            Target = containerPath,
+        };
+
+    private static List<Mount>? MapMounts(WorkerContainerSpec spec)
+    {
+        List<Mount> mounts =
+        [
+            .. spec.ScratchVolumePaths.Select(MapScratchVolume),
+            .. spec.VolumeMounts.Select(MapVolumeMount),
+        ];
+        return mounts.Count > 0 ? mounts : null;
+    }
+
     public async Task EnsureCredentialVolumeAsync(CancellationToken cancellationToken)
     {
         await runtime.CreateVolumeAsync(
@@ -122,8 +140,13 @@ internal sealed class DockerWorkerOrchestrator(IDockerContainerRuntime runtime) 
                     Devices = spec.Devices.Count > 0
                         ? [.. spec.Devices.Select(MapDevice)]
                         : null,
-                    Mounts = spec.VolumeMounts.Count > 0
-                        ? [.. spec.VolumeMounts.Select(MapVolumeMount)]
+                    Mounts = MapMounts(spec),
+                    Tmpfs = spec.TmpfsMounts.Count > 0
+                        ? new Dictionary<string, string>(spec.TmpfsMounts)
+                        : null,
+                    ReadonlyRootfs = spec.ReadOnlyRootFilesystem,
+                    CapDrop = spec.DroppedCapabilities.Count > 0
+                        ? [.. spec.DroppedCapabilities]
                         : null,
                     CapAdd = spec.Capabilities.Count > 0
                         ? [.. spec.Capabilities]

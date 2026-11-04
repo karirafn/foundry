@@ -56,7 +56,9 @@ internal sealed class DockerContainerRuntime(
         {
             await containerOperations.RemoveContainerAsync(
                 containerId,
-                new ContainerRemoveParameters { Force = true },
+                // RemoveVolumes deletes only the container's anonymous volumes (the worker's scratch
+                // /workspace and /home/node); named volumes such as the credential store are never touched.
+                new ContainerRemoveParameters { Force = true, RemoveVolumes = true },
                 cancellationToken);
         }
         catch (DockerContainerNotFoundException)
