@@ -33,6 +33,7 @@ internal sealed class CountingIssueProvider : IIssueProvider
     public int CreateBranchCallCount { get; private set; }
     public int DeleteBranchCallCount { get; private set; }
     public int ApplyBranchRulesCallCount { get; private set; }
+    public int UpsertWebhookCallCount { get; private set; }
     public int GetMergeRequestByBranchCallCount { get; private set; }
     public int GetBranchCommitSummaryCallCount { get; private set; }
     public int CanPushCallCount { get; private set; }
@@ -113,6 +114,16 @@ internal sealed class CountingIssueProvider : IIssueProvider
 
         return Task.FromResult(Result.Ok());
 
+    }
+
+    public Task<Result<WebhookUpsertKind>> UpsertWebhookAsync(
+        RepositorySlug slug,
+        WebhookHookSpec spec,
+        CancellationToken cancellationToken)
+    {
+        TotalCalls++;
+        UpsertWebhookCallCount++;
+        return Task.FromResult(Result<WebhookUpsertKind>.Ok(WebhookUpsertKind.Updated));
     }
 
 

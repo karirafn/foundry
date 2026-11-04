@@ -101,7 +101,8 @@ internal static partial class UpdateAccount
         TokenAccountResolver tokenAccountResolver,
         CredentialRotationService rotationService,
         OptedInBranchRuleApplier branchRuleApplier,
-        ProviderHostGuard hostGuard)
+        ProviderHostGuard hostGuard,
+        AccountWebhookRegistrar? webhookRegistrar = null)
     {
         public async Task<Outcome> HandleAsync(
             Command command,
@@ -198,6 +199,12 @@ internal static partial class UpdateAccount
                     credential,
                     affectedRepositories,
                     cancellationToken);
+
+                // The same token registers the webhooks of the account's NotRegistered repositories.
+                if (webhookRegistrar is not null)
+                {
+                    await webhookRegistrar.RegisterNotRegisteredAsync(credential, cancellationToken);
+                }
             }
 
             CredentialSummary summary = AccountsDatabaseHelpers.ToSummary(credential);

@@ -47,7 +47,8 @@ internal static class CreateRepository
         DbContext dbContext,
         BranchRuleEnforcer branchRuleEnforcer,
         IGlobalSettingsQueries globalSettingsQueries,
-        WebhookIngress? webhookIngress = null) : ICommandHandler<Command, CreateRepositoryResponse>
+        WebhookIngress? webhookIngress = null,
+        WebhookRegistrar? webhookRegistrar = null) : ICommandHandler<Command, CreateRepositoryResponse>
     {
         // SQLite emits the column-reference form ("monitored_repositories.slug") rather than the
         // index name on unique-constraint violations, so both forms must be checked.
@@ -141,6 +142,15 @@ internal static class CreateRepository
                 cancellationToken);
             await dbContext.SaveChangesAsync(cancellationToken);
 
+            // Likewise a skipped or failed webhook registration never fails the add: the repository
+            // stays NotRegistered and the repository page shows the manual instructions.
+            WebhookRegistrationOutcome? webhook = null;
+            if (webhookRegistrar is not null)
+            {
+                webhook = await webhookRegistrar.RegisterAsync(repository, credential, cancellationToken);
+                await dbContext.SaveChangesAsync(cancellationToken);
+            }
+
             string providerType = credential switch
             {
                 GitHubCredential => ProviderTypes.GitHub,
@@ -161,7 +171,7 @@ internal static class CreateRepository
                 defaultPollIntervalSeconds,
                 webhookIngressConfigured);
 
-            return Result<CreateRepositoryResponse>.Ok(new CreateRepositoryResponse(summary, branchRules));
+            return Result<CreateRepositoryResponse>.Ok(new CreateRepositoryResponse(summary, branchRules, webhook));
         }
     }
 

@@ -114,6 +114,41 @@ public sealed class GetDispatchInfoAsync : IAsyncDisposable
         System.Text.Json.JsonSerializer.Serialize(result).ShouldNotContain(RulesToken);
     }
 
+    [Fact]
+    public async Task WhenRepositoryHasWebhook_DispatchInfoCarriesNeitherTheWebhookSecretNorTheServerToken()
+    {
+        // Arrange — webhook registration uses the server-side token and the repository's secret; neither
+        // may reach a worker, or the worker could re-point or create hooks.
+        const string AccountToken = "ghp_worker_token";
+        const string ServerToken = "github_pat_webhooks_secret";
+        MonitoredRepositoryId repoId = await SeedRepoAsync();
+        MonitoredRepository repository = await _dbContext.Set<MonitoredRepository>()
+            .SingleAsync(r => r.Id == repoId, TestContext.Current.CancellationToken);
+        string webhookSecret = repository.EnsureWebhookSecret();
+        repository.MarkWebhookRegistered();
+        await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        GitHubCredential credential = GitHubCredential.Create(
+            "owner",
+            AccountToken,
+            BaseUrl.Create("https://github.com").ValueOrThrow(),
+            ServerToken);
+
+        RepositoryDispatchQueries sut = BuildSut(new StubCredentialResolver(credential));
+
+        // Act
+        RepositoryDispatchInfo? result = await sut.GetDispatchInfoAsync(
+            repoId,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        result.ShouldNotBeNull();
+        result.AccountToken.ShouldBe(AccountToken);
+        string serialized = System.Text.Json.JsonSerializer.Serialize(result);
+        serialized.ShouldNotContain(webhookSecret);
+        serialized.ShouldNotContain(ServerToken);
+    }
+
     private sealed class StubCredentialResolver(Credential? credential) : ICredentialResolver
     {
         public Task<Credential?> ResolveAsync(string host, RepositorySlug slug, CancellationToken cancellationToken)

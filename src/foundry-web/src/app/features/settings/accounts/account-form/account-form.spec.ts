@@ -2164,6 +2164,8 @@ describe('AccountFormComponent', () => {
       // Assert
       const help = el.querySelector('#account-form-branch-rules-help')?.textContent ?? '';
       expect(help).toContain('Administration permission (Read and write)');
+      expect(help).toContain('Webhooks permission (Read and write)');
+      expect(help).toContain('repository webhooks');
       expect(help).toContain('given to every');
       expect(help).toContain('Workers never receive the branch-rules token');
     });

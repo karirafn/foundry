@@ -79,6 +79,66 @@ export interface RepositoryWebhookSecret {
   secret: string;
 }
 
+export type WebhookRegistrationOutcomeKind = 'created' | 'updated' | 'skipped' | 'failed';
+
+export type WebhookRegistrationOutcomeReason =
+  | 'not-configured'
+  | 'no-server-token'
+  | 'server-token-unreadable'
+  | 'insufficient-permission'
+  | 'provider-error';
+
+/** Per-request result of registering a webhook with the account's server-side token. Never persisted. */
+export interface WebhookRegistrationOutcome {
+  kind: WebhookRegistrationOutcomeKind;
+  /** Present only on skipped / failed. */
+  reason?: WebhookRegistrationOutcomeReason | null;
+  /** Human-readable explanation; present only on failed. */
+  detail?: string | null;
+}
+
+/** Response of the repository page's "Register webhook" action. */
+export interface RegisterWebhookResponse {
+  webhook: RepositoryWebhookInfo;
+  outcome: WebhookRegistrationOutcome;
+}
+
+/** Whether a registration outcome left the hook registered on the provider. */
+export function isWebhookRegistered(outcome: WebhookRegistrationOutcome): boolean {
+  return outcome.kind === 'created' || outcome.kind === 'updated';
+}
+
+/** Operator-facing message for a registration outcome. */
+export function webhookRegistrationMessage(outcome: WebhookRegistrationOutcome, provider: WebhookProvider): string {
+  const providerName = provider === 'gitlab' ? 'GitLab' : 'GitHub';
+  const permission = provider === 'gitlab'
+    ? 'the Maintainer role'
+    : 'the Webhooks (read and write) permission';
+
+  switch (outcome.kind) {
+    case 'created':
+      return `Webhook created on ${providerName}. It becomes active on its first delivery.`;
+    case 'updated':
+      return `The existing webhook on ${providerName} was updated. It becomes active on its next delivery.`;
+    case 'skipped':
+      switch (outcome.reason) {
+        case 'no-server-token':
+          return `This account has no server-side token, so Foundry can't register the webhook. Add one with ${permission} in the account settings, or add the webhook manually.`;
+        case 'server-token-unreadable':
+          return "This account's server-side token can't be read. Re-enter it in the account settings, or add the webhook manually.";
+        default:
+          return 'Webhooks are off, so nothing was registered.';
+      }
+    case 'failed':
+      if (outcome.reason === 'insufficient-permission') {
+        return `The server-side token needs ${permission} to manage webhooks. Grant it, or add the webhook manually.`;
+      }
+      return outcome.detail
+        ? `${providerName} rejected the registration: ${outcome.detail}`
+        : `${providerName} rejected the registration.`;
+  }
+}
+
 export interface AvailableRepository {
   slug: string;
   isPrivate: boolean;
@@ -123,6 +183,8 @@ export interface BranchRulesOutcome {
 export interface CreateRepositoryResponse {
   repository: RepositorySummary;
   branchRules: BranchRulesOutcome;
+  /** Outcome of registering the webhook with the server-side token. Absent from older servers. */
+  webhook?: WebhookRegistrationOutcome | null;
 }
 
 /** Response of the repository card's "Apply branch rules" action — same contract as create. */

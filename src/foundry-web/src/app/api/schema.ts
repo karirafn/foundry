@@ -433,6 +433,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/accounts/{accountId}/repositories/{id}/webhook/register": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Creates or updates the repository's webhook on the provider with the account's server-side token */
+        post: operations["RegisterRepositoryWebhook"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/repositories/{id}/position": {
         parameters: {
             query?: never;
@@ -829,6 +846,7 @@ export interface components {
         CreateRepositoryResponse: {
             repository: components["schemas"]["RepositorySummary"];
             branchRules: components["schemas"]["BranchRulesOutcome"];
+            webhook?: null | components["schemas"]["WebhookRegistrationOutcome"];
         };
         CredentialCreationResult: {
             credential: components["schemas"]["CredentialSummary"];
@@ -1017,6 +1035,10 @@ export interface components {
         };
         RefreshUsageResponse: {
             status: string;
+        };
+        RegisterWebhookResponse: {
+            webhook: components["schemas"]["RepositoryWebhookInfo"];
+            outcome: components["schemas"]["WebhookRegistrationOutcome"];
         };
         RepositoryEligibilityInfo: {
             status: string;
@@ -1241,6 +1263,12 @@ export interface components {
             accountName: null | string;
             missingScopes: string[];
             detectedProvider: null | string;
+        };
+        WebhookRegistrationOutcome: {
+            kind: string;
+            reason?: null | string;
+            detail?: null | string;
+            isRegistered?: boolean;
         };
         WorkerMountEntry: {
             containerPath: string;
@@ -2303,6 +2331,38 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RepositoryWebhookInfo"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    RegisterRepositoryWebhook: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                accountId: string;
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RegisterWebhookResponse"];
                 };
             };
             /** @description Not Found */

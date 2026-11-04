@@ -137,6 +137,14 @@ internal sealed class GitLabIssueProvider(
             cancellationToken);
     }
 
+    public Task<Result<WebhookUpsertKind>> UpsertWebhookAsync(
+        RepositorySlug slug,
+        WebhookHookSpec spec,
+        CancellationToken cancellationToken)
+    {
+        return httpClient.UpsertWebhookAsync(apiBaseUrl, slug, spec, token, cancellationToken);
+    }
+
     public Task<Result<bool>> CreateBranchAsync(
         RepositorySlug slug,
         string branchName,

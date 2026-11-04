@@ -48,6 +48,23 @@ internal interface IIssueProvider
         RepositorySlug slug,
         CancellationToken cancellationToken);
 
+    /// <summary>
+    /// Creates or updates the repository webhook described by <paramref name="spec"/> with exactly
+    /// Foundry's mapped event list, JSON payloads and the repository's secret. A hook whose payload
+    /// URL matches <see cref="WebhookHookSpec.PayloadUrl"/> (or one of
+    /// <see cref="WebhookHookSpec.PreviousPayloadUrls"/>) is updated in place — events, secret, URL and
+    /// active flag — and adopted; otherwise a new hook is created. Callers pass a provider built with
+    /// the account's server-side token, never the worker token. A missing permission fails with
+    /// <see cref="WebhookWriteErrors.InsufficientPermissionCode"/>.
+    /// </summary>
+    /// <remarks>Providers without webhook support keep this default, which fails with
+    /// <see cref="WebhookWriteErrors.NotSupportedCode"/> without any provider call.</remarks>
+    Task<Result<WebhookUpsertKind>> UpsertWebhookAsync(
+        RepositorySlug slug,
+        WebhookHookSpec spec,
+        CancellationToken cancellationToken)
+        => Task.FromResult(Result<WebhookUpsertKind>.Fail(WebhookWriteErrors.NotSupported()));
+
     Task<Result<bool>> CreateBranchAsync(
         RepositorySlug slug,
         string branchName,

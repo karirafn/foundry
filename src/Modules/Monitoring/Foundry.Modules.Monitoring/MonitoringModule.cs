@@ -19,6 +19,7 @@ using Foundry.Modules.Monitoring.Infrastructure;
 using Foundry.Modules.Monitoring.Infrastructure.GitHub;
 using Foundry.Modules.Monitoring.Infrastructure.GitLab;
 using Foundry.Modules.Monitoring.Infrastructure.RateBudget;
+using Foundry.Modules.Settings.Contracts;
 using Foundry.Shared;
 using Foundry.Shared.Infrastructure;
 
@@ -97,6 +98,9 @@ public static class MonitoringModule
         services.AddScoped<BranchPushPublisher>();
         services.AddScoped<IWebhookStatusQueries, WebhookStatusQueries>();
         services.AddScoped<RepositoryWebhookEndpoints.Handler>();
+        services.AddScoped<WebhookRegistrar>();
+        services.AddScoped<AccountWebhookRegistrar>();
+        services.AddIntegrationEventHandler<WebhookPublicBaseUrlChanged, WebhookPublicBaseUrlChangedHandler>();
         services.AddIntegrationEventHandler<IssueEnteredChecksPending, IssueEnteredChecksPendingHandler>();
 
         services.AddHostedService(sp => new MonitoringService(

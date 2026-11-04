@@ -239,6 +239,8 @@ internal sealed class MonitoringService : PeriodicBackgroundService
                 _logger.LogWarning(
                     "Webhook for repository '{Slug}' missed a change; polling at the normal interval until the next delivery.",
                     repo.Slug);
+
+                await ReRegisterSilentWebhookAsync(scope.ServiceProvider, dbContext, repo, resolvedProvider.Credential, cancellationToken);
             }
         }
     }
@@ -365,6 +367,35 @@ internal sealed class MonitoringService : PeriodicBackgroundService
                 repo.Slug,
                 failure.Error.Message);
         }
+    }
+
+    /// <summary>
+    /// Runs one create-or-update of a hook that just went <c>Silent</c> — a drifted or deleted hook is
+    /// repaired with the server-side token. A hook still <c>Silent</c> afterwards is not retried until its
+    /// next transition into <c>Silent</c>, because this runs only on that transition.
+    /// </summary>
+    private async Task ReRegisterSilentWebhookAsync(
+        IServiceProvider services,
+        DbContext dbContext,
+        MonitoredRepository repo,
+        Credential credential,
+        CancellationToken cancellationToken)
+    {
+        // Optional: hosts (and tests) without webhook wiring skip re-registration.
+        WebhookRegistrar? registrar = services.GetService<WebhookRegistrar>();
+        if (registrar is null)
+        {
+            return;
+        }
+
+        WebhookRegistrationOutcome outcome = await registrar.RegisterAsync(repo, credential, cancellationToken);
+        await dbContext.SaveChangesAsync(cancellationToken);
+
+        _logger.LogInformation(
+            "Re-registering the silent webhook for repository '{Slug}': {Kind} ({Reason}).",
+            repo.Slug,
+            outcome.Kind,
+            outcome.Reason);
     }
 
     private static async Task<WebhookIngressState?> GetIngressStateAsync(
