@@ -5,10 +5,12 @@ using Foundry.Modules.Workers.Domain.ValueObjects;
 using Foundry.Modules.Workers.Features.Orchestration;
 using Foundry.Modules.Workers.Features.ContainerSpec;
 using Foundry.Modules.Workers.Features.Dispatch;
+using Foundry.Modules.Workers.Features.Outcome;
 using Foundry.Shared;
 using Foundry.WebApi.Persistence;
 
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging.Abstractions;
 
 using Shouldly;
 
@@ -48,6 +50,28 @@ public sealed class MonitorActiveRuns : WorkerDispatchServiceTestBase
         FailedRun failedRun = run.ShouldBeOfType<FailedRun>();
         FailureReason.NonZeroExit nonZeroExit = failedRun.Reason.ShouldBeOfType<FailureReason.NonZeroExit>();
         nonZeroExit.ExitCode.ShouldBe(-1);
+    }
+
+    [Fact]
+    public async Task WhenContainerDisappearsWithRealParser_FailsAsRemovedOutsideFoundry()
+    {
+        // Arrange — the real parser sees no output (no result line), so a vanished container is
+        // classified as removed outside Foundry rather than a bootstrap failure.
+        MonitoringStubWorkerOrchestrator orchestrator = new(status: null);
+        WorkerDispatchService sut = base.BuildService(
+            orchestrator,
+            containerOutputParser: new ContainerOutputParser(NullLogger<ContainerOutputParser>.Instance));
+        await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
+        SeedActiveRun("removed-container");
+
+        // Act
+        await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
+
+        // Assert
+        await using FoundryDbContext assertDb = CreateDbContext();
+        WorkerRun? run = await assertDb.Set<WorkerRun>().SingleOrDefaultAsync(TestContext.Current.CancellationToken);
+        FailedRun failedRun = run.ShouldBeOfType<FailedRun>();
+        failedRun.Reason.ShouldBe(new FailureReason.ContainerError("Worker container was removed outside Foundry"));
     }
 
     [Fact]

@@ -1,4 +1,4 @@
-export type WorkerRunState = 'running' | 'completed' | 'failed';
+export type WorkerRunState = 'starting' | 'running' | 'completed' | 'failed';
 
 export interface WorkerRunDetail {
   readonly workerRunId: string;
@@ -16,4 +16,6 @@ export interface WorkerRunDetail {
   readonly outputTokens: number | null;
   readonly lastActivityAt: string | null;
   readonly hasStoredLog: boolean;
+  /** Set once a user asked to cancel the run; carried into the completed/failed run. */
+  readonly cancelRequestedAt: string | null;
 }

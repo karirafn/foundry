@@ -729,7 +729,7 @@ Detection, detail-change, dependency, and review passes all continue normally an
 Suppression clears automatically on the first later cycle whose listing is complete; no operator action is involved.
 The `ProviderIssueUntrackedHandler` hard-deletes tracked records in resting states: `detected`, `queued`, `blocked`, `failed`, `continuable_failed`, `revision_failed`, `revision_queued`, `continuation_queued`, and `unchanged`.
 `completed` is preserved — completion wins over provider closure.
-`in_progress`, `revision_in_progress`, and `review` are preserved — a live worker is running or the issue is under active review; worker cancellation is out of scope.
+`in_progress`, `revision_in_progress`, and `review` are preserved — a live worker is running or the issue is under active review. Untracking never stops a worker; stopping one is an explicit user action (see Run Cancellation).
 An issue closed on the provider and later reopened with the trigger label is re-detected as a new issue.
 
 ## Provider Issue
@@ -756,6 +756,17 @@ Foundry derives each run's outcome via `WorkerOutcomeResolver` — a pure functi
 This window exists because the row must be committed before the Docker API is called — a crash or daemon failure in that gap would otherwise leave the issue in `in_progress` with no recovery path.
 `StartingRun` rows are bounded to at most `StaleStartingRunThreshold` (10 minutes) by the periodic sweep (see Orphan Reconciliation).
 After that threshold, the sweep fails the run via `StartingRun.Fail(ContainerError)`, which raises `WorkerRunFailed`, which the Issues module's `WorkerRunFailedHandler` turns into `InProgressIssue → FailedIssue` — making the issue retryable from the dashboard (see [ADR 0050](docs/adr/0050-recover-stranded-starting-runs-via-the-failure-bridge.md)).
+
+**Run Cancellation.**
+A user can stop the worker of an `in_progress` or `revision_in_progress` issue with **Cancel run** on the issue detail page (behind a confirmation dialog).
+`POST /api/workers/runs/{runId}/cancellation` only records the request: `ActiveRun.RequestCancel(at)` sets `CancelRequestedAt` (column `cancel_requested_at`); a repeated call keeps the first timestamp and still returns `202 Accepted` — idempotency is enforced on the aggregate.
+Only `ActiveRun` has `RequestCancel`: an unknown run returns `404`, a `StartingRun`, `CompletedRun` or `FailedRun` returns `409`. Cancelling a `StartingRun` is deliberately unsupported — its window is seconds and the stale-starting sweep covers hangs.
+`WorkerDispatchService` stays the single writer of run state. On its next tick, for a still-running container with a cancel request — checked **before** the timeout, so cancel beats timeout — it stops the container, captures its logs, and checks the provider for a merge request, all within one tick:
+an open or merged merge request means the worker finished before the cancel took effect, so the run resolves normally (`Review` / `Completed`); otherwise `StoppedRunOutcomeBuilder` (shared with the timeout path) builds a `FailureReason.Cancelled` outcome — `ContinuableFailure` when the branch has commits or the commit lookup fails transiently, `Failure` when the branch is `NotFound` — applied through `ApplyOutcomeAsync` like every terminal outcome.
+A transient merge-request lookup failure is treated as "no merge request" (accepted risk).
+A container that already exited before the tick resolves to its real outcome (side effects such as a usage-limit pause stand); a `NotFound` container resolves through the normal not-found path; an `Unreachable` daemon leaves the persisted request pending until the daemon is reachable again.
+`CancelRequestedAt` is carried into `CompletedRun` and `FailedRun` and exposed on the run-detail DTO (`cancelRequestedAt`), so the dashboard shows "Cancelling…" until `IssueUpdated` arrives, and tells a run that completed before the cancel took effect apart from an ordinary one.
+No Issues-side handler is involved: `WorkerRunFailedHandler` already routes a cancelled `InProgressIssue` run to `ContinuableFailedIssue` (branch with commits — Retry continues from the branch) or `FailedIssue`, and a cancelled `RevisionInProgressIssue` run to `RevisionFailedIssue`. `TransientRetryService` never auto-retries a cancelled run.
 
 ## Worker Slot Occupancy
 
@@ -878,6 +889,16 @@ Any other failure (`Unknown`, network error, timeout) yields `Indeterminate` —
 When no MR exists the resolver falls back to exit code and branch commits.
 Exit 0 with commits triggers a bounded MR re-poll (preserving the PR-race retry window); exit 0 with no commits → `Unchanged` or `UsageLimited` (detected via JSON output); non-zero exit → `ContinuableFailure` (commits exist) or `Failure`, with bootstrap-failure and usage-limit classification layered on top.
 
+**External-kill classification.**
+After the MR-first check, a run whose output has **no result line** is checked for a container killed or removed outside Foundry before falling back to the bootstrap heuristic:
+
+- `WorkerStatus.OomKilled` (Docker `State.OOMKilled`) → `ContainerError("Worker ran out of memory")` — checked first, since an OOM kill also exits 137.
+- Exit 137 or 143 (SIGKILL / SIGTERM), not OOM → `ContainerError("Worker container was terminated outside Foundry")`.
+- Container `NotFound` → `ContainerError("Worker container was removed outside Foundry")`.
+- Any other no-result-line exit → `WorkerBootstrapFailed`, as before.
+
+Commits still decide `ContinuableFailure` vs `Failure`. Foundry's own stops (timeout, cancellation) never reach this path — they build their outcome via `StoppedRunOutcomeBuilder`.
+
 **Result selection from stream-json.**
 The worker runs `claude` with `--output-format stream-json --verbose` ([ADR 0083](docs/adr/0083-live-agent-activity-from-stream-json-over-the-container-log.md)), so the captured output is a stream of one JSON event per line rather than a single result object.
 Outcome classification and the Run Result Summary read the **last line whose `type` is `"result"`** — not merely the last JSON line: every other event (`assistant`, `user`, `system`, `rate_limit_event`, unknown types) and partial lines from a container killed mid-event are skipped.
@@ -900,7 +921,7 @@ Runs stranded in `StartingRun` (never reaching `ActiveRun`) are handled by the p
 **Docker daemon reachability.**
 `GetStatusAsync` returns a discriminated `WorkerStatusProbe` distinguishing three cases:
 
-- `Available` — container exists (running or exited); carries a `WorkerStatus` with `IsRunning`, `ExitCode`, and `FinishedAt`.
+- `Available` — container exists (running or exited); carries a `WorkerStatus` with `IsRunning`, `ExitCode`, `FinishedAt`, and `OomKilled`.
 - `NotFound` — container is definitively gone (Docker 404).
 - `Unreachable` — daemon connectivity failure: only `HttpRequestException`, `TimeoutException`, or a self-timeout `OperationCanceledException` (caller's token was NOT already cancelled).
   Any other `DockerApiException` propagates as an unexpected error.
@@ -976,14 +997,15 @@ The wizard reuses the same form components as the settings page.
 ## FailureReason
 
 A value object on FailedRun that classifies how the run failed.
-Variants: `NonZeroExit(exitCode)` (container exited with non-zero code), `TimedOut` (exceeded configured timeout), `ContainerError(message)` (Docker-level failure — image not found, daemon unavailable, etc.), `UsageLimited(resetsAt)` (worker hit a *time-based* Anthropic API usage limit — session, weekly, or Opus quota — carrying a parseable reset time; token `usage_limited`), `CreditsExhausted` (worker hit a *money-based* 429 — credit pool empty, org monthly spend limit reached, or the CLI ≥ 2.1.119 regression — carrying no reset time; token `credits_exhausted`; summary `"Credits exhausted"`, which deliberately shares no prefix with the usage-limit summary so the auto-resume `LIKE 'Usage limit reached%'` sweep cannot catch it; blocks the account's spend indefinitely until an operator resumes), `WorkerBootstrapFailed(detail)` (pre-task failure — the worker container died during entrypoint bootstrap, before `claude` ran; carries a short, secret-redacted diagnostic `Detail` with the failed stage and error tail), `AuthInvalid` (the worker's Claude credentials were rejected — `api_error_status == 401` or `error.type == "authentication_error"`; triggers the auth-invalid pause), `TransientApiError` (a transient Anthropic API fault the run neither caused nor can fix — `api_error_status` in the 5xx range, or `is_error: true` with `api_error_status: null` and a `result` matching a known transient phrase such as a mid-response connection drop or `529 Overloaded`; token `transient_api_error`; drives the bounded auto-retry described under Transient Retry), `ProviderError(message)` (a provider API call needed to start the run failed, e.g. branch pre-creation rejected with 403; raised before the worker task begins).
+Variants: `NonZeroExit(exitCode)` (container exited with non-zero code), `TimedOut` (exceeded configured timeout), `ContainerError(message)` (Docker-level failure — image not found, daemon unavailable, etc.), `UsageLimited(resetsAt)` (worker hit a *time-based* Anthropic API usage limit — session, weekly, or Opus quota — carrying a parseable reset time; token `usage_limited`), `CreditsExhausted` (worker hit a *money-based* 429 — credit pool empty, org monthly spend limit reached, or the CLI ≥ 2.1.119 regression — carrying no reset time; token `credits_exhausted`; summary `"Credits exhausted"`, which deliberately shares no prefix with the usage-limit summary so the auto-resume `LIKE 'Usage limit reached%'` sweep cannot catch it; blocks the account's spend indefinitely until an operator resumes), `WorkerBootstrapFailed(detail)` (pre-task failure — the worker container died during entrypoint bootstrap, before `claude` ran; carries a short, secret-redacted diagnostic `Detail` with the failed stage and error tail), `AuthInvalid` (the worker's Claude credentials were rejected — `api_error_status == 401` or `error.type == "authentication_error"`; triggers the auth-invalid pause), `TransientApiError` (a transient Anthropic API fault the run neither caused nor can fix — `api_error_status` in the 5xx range, or `is_error: true` with `api_error_status: null` and a `result` matching a known transient phrase such as a mid-response connection drop or `529 Overloaded`; token `transient_api_error`; drives the bounded auto-retry described under Transient Retry), `ProviderError(message)` (a provider API call needed to start the run failed, e.g. branch pre-creation rejected with 403; raised before the worker task begins), `Cancelled` (a user cancelled the run and Foundry stopped its container — see Run Cancellation; token `cancelled`; summary `"Worker run cancelled"`; never auto-retried).
+`ContainerError` also carries the external-kill classifications described under Worker Outcome Detection (`"Worker ran out of memory"`, `"Worker container was terminated outside Foundry"`, `"Worker container was removed outside Foundry"`).
 Each variant's `CategoryToken` value flows from the matching `FailureCategory` const (see FailureCategory below), making `FailureCategory` the single source of truth for the token vocabulary.
 
 ## FailureCategory
 
-A value object in `Foundry.Modules.Workers.Contracts` owning the ten-token vocabulary that names *why* a run failed, and the single owning type for that vocabulary (see [ADR 0068](docs/adr/0068-failurecategory-value-object-owns-token-vocabulary.md)).
-The ten tokens are the nine `FailureReason` category tokens plus `pr_closed`.
-`FailureReason`'s nine `CategoryToken` values derive from the matching `FailureCategory` const fields, so both producers obtain their value from the owning type: `WorkerRunFailedHandler` converts `FailureReason.CategoryToken` at the domain boundary, and `ProviderPullRequestClosedHandler` uses `FailureCategory.PrClosed` directly.
+A value object in `Foundry.Modules.Workers.Contracts` owning the eleven-token vocabulary that names *why* a run failed, and the single owning type for that vocabulary (see [ADR 0068](docs/adr/0068-failurecategory-value-object-owns-token-vocabulary.md)).
+The eleven tokens are the ten `FailureReason` category tokens (including `cancelled`) plus `pr_closed`.
+`FailureReason`'s ten `CategoryToken` values derive from the matching `FailureCategory` const fields, so both producers obtain their value from the owning type: `WorkerRunFailedHandler` converts `FailureReason.CategoryToken` at the domain boundary, and `ProviderPullRequestClosedHandler` uses `FailureCategory.PrClosed` directly.
 The entity property on `FailedIssue`, `ContinuableFailedIssue`, and `RevisionFailedIssue` is typed `FailureCategory` and persisted via an EF `ValueConverter` to the unchanged `TEXT` column (`failure_category`) — no migration needed, and the `TransientRetryService` predicate stays SQL-translatable by comparing against `FailureCategory.TransientApiError`.
 The converter's read direction is lenient: unknown stored tokens coalesce defensively to `FailureCategory.NonZeroExit` without throwing, so a stale or legacy row never disables auto-retry. The domain-boundary conversion in `WorkerRunFailedHandler` remains the point that rejects and logs unknown tokens from incoming events.
 The `WorkerRunFailed` contract `Category` field remains `string?`; rejection of unknown or null values happens at the domain boundary in `WorkerRunFailedHandler`, which falls back to `FailureCategory.NonZeroExit` (logging a warning) so the issue always transitions to failed.

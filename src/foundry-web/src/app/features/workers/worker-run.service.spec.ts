@@ -20,6 +20,7 @@ const mockDetail: WorkerRunDetail = {
   outputTokens: 500,
   lastActivityAt: '2026-01-01T00:01:00Z',
   hasStoredLog: true,
+  cancelRequestedAt: null,
 };
 
 function setup() {
@@ -138,5 +139,47 @@ describe('WorkerRunService', () => {
 
     // Assert
     expect(result).toBeNull();
+  });
+
+  // requestCancel posts to the cancellation endpoint and emits null on 202
+  it('should POST to the cancellation endpoint and emit null on success', () => {
+    // Arrange
+    const { svc, controller } = setup();
+    let result: string | null | undefined = undefined;
+
+    // Act
+    svc.requestCancel('run-abc').subscribe((r) => (result = r));
+    const req = controller.expectOne('/api/workers/runs/run-abc/cancellation');
+    req.flush({ workerRunId: 'run-abc', cancelRequestedAt: '2026-11-04T10:00:00Z' }, { status: 202, statusText: 'Accepted' });
+
+    // Assert
+    expect(req.request.method).toBe('POST');
+    expect(result).toBeNull();
+  });
+
+  it('should emit a not-running message when cancellation returns 409', () => {
+    // Arrange
+    const { svc, controller } = setup();
+    let result: string | null | undefined = undefined;
+
+    // Act
+    svc.requestCancel('run-abc').subscribe((r) => (result = r));
+    controller.expectOne('/api/workers/runs/run-abc/cancellation').flush(null, { status: 409, statusText: 'Conflict' });
+
+    // Assert
+    expect(result).toBe('The run is no longer running.');
+  });
+
+  it('should emit a not-found message when cancellation returns 404', () => {
+    // Arrange
+    const { svc, controller } = setup();
+    let result: string | null | undefined = undefined;
+
+    // Act
+    svc.requestCancel('run-abc').subscribe((r) => (result = r));
+    controller.expectOne('/api/workers/runs/run-abc/cancellation').flush(null, { status: 404, statusText: 'Not Found' });
+
+    // Assert
+    expect(result).toBe('The run was not found.');
   });
 });

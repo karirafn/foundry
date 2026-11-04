@@ -249,7 +249,7 @@ internal sealed class WorkerDispatchService(
                 {
                     WorkerOutcome outcome = await resolver.ResolveAsync(
                         activeRun,
-                        exitCode: null,
+                        status: null,
                         containerOutput: null,
                         cancellationToken);
 
@@ -374,7 +374,7 @@ internal sealed class WorkerDispatchService(
             {
                 WorkerOutcome outcome = await resolver.ResolveAsync(
                     activeRun,
-                    exitCode: null,
+                    status: null,
                     containerOutput: null,
                     cancellationToken);
 
@@ -414,6 +414,24 @@ internal sealed class WorkerDispatchService(
 
                 if (status.IsRunning)
                 {
+                    // A pending cancel request beats the timeout. Only a still-running container is
+                    // cancelled: one that already exited resolves to its real outcome below.
+                    if (activeRun.CancelRequestedAt.HasValue)
+                    {
+                        await CancelRunningWorkerAsync(
+                            dbContext,
+                            orchestrator,
+                            integrationEventDispatcher,
+                            integrationEventProcessor,
+                            domainEventDispatcher,
+                            resolver,
+                            postExitProviderQueries,
+                            containerOutputParser,
+                            activeRun,
+                            cancellationToken);
+                        return;
+                    }
+
                     // Timeout applies only to still-running containers — an exited container's MR state
                     // must be consulted first regardless of wall-clock time.
                     if (DateTimeOffset.UtcNow >= timeout)
@@ -432,8 +450,9 @@ internal sealed class WorkerDispatchService(
 
                         RunResultSummary? timeoutSummary = containerOutputParser.ParseRunResultSummary(containerOutput);
 
-                        WorkerOutcome timeoutOutcome = await BuildTimeoutOutcomeAsync(
+                        WorkerOutcome timeoutOutcome = await StoppedRunOutcomeBuilder.BuildAsync(
                             activeRun,
+                            new FailureReason.TimedOut(),
                             containerOutput,
                             timeoutSummary,
                             postExitProviderQueries,
@@ -475,7 +494,7 @@ internal sealed class WorkerDispatchService(
 
                 WorkerOutcome exitOutcome = await resolver.ResolveAsync(
                     activeRun,
-                    status.ExitCode,
+                    status,
                     exitContainerOutput,
                     cancellationToken);
 
@@ -487,8 +506,9 @@ internal sealed class WorkerDispatchService(
                     if (DateTimeOffset.UtcNow >= timeout)
                     {
                         RunResultSummary? timeoutSummary = containerOutputParser.ParseRunResultSummary(exitContainerOutput);
-                        WorkerOutcome timeoutOutcome = await BuildTimeoutOutcomeAsync(
+                        WorkerOutcome timeoutOutcome = await StoppedRunOutcomeBuilder.BuildAsync(
                             activeRun,
+                            new FailureReason.TimedOut(),
                             exitContainerOutput,
                             timeoutSummary,
                             postExitProviderQueries,
@@ -714,42 +734,64 @@ internal sealed class WorkerDispatchService(
     }
 
     /// <summary>
-    /// Builds a <see cref="WorkerOutcome"/> for a run that exceeded the timeout ceiling.
-    /// Consults <see cref="IPostExitProviderQueries.GetBranchCommitSummaryAsync"/> to decide between
-    /// <see cref="WorkerOutcome.ContinuableFailure"/> (commits exist or query failed transiently)
-    /// and <see cref="WorkerOutcome.Failure"/> (definitively no commits).
+    /// Applies a user's cancel request to a still-running worker, all within one tick:
+    /// stop the container, capture its logs, then check the provider for a merge request.
+    /// An open or merged merge request means the worker finished its job before the cancel took
+    /// effect, so the run resolves normally. Otherwise the run fails with
+    /// <see cref="FailureReason.Cancelled"/>, keeping the branch when it has commits.
     /// </summary>
-    private static async Task<WorkerOutcome> BuildTimeoutOutcomeAsync(
-        ActiveRun run,
-        string? containerOutput,
-        RunResultSummary? summary,
+    private async Task CancelRunningWorkerAsync(
+        DbContext dbContext,
+        IWorkerOrchestrator orchestrator,
+        IIntegrationEventDispatcher integrationEventDispatcher,
+        IIntegrationEventProcessor integrationEventProcessor,
+        IDomainEventDispatcher domainEventDispatcher,
+        WorkerOutcomeResolver resolver,
         IPostExitProviderQueries postExitProviderQueries,
+        IContainerOutputParser containerOutputParser,
+        ActiveRun activeRun,
         CancellationToken cancellationToken)
     {
-        Result<BranchCommitSummary> commitsResult = await postExitProviderQueries.GetBranchCommitSummaryAsync(
-            run.MonitoredRepositoryId,
-            run.BranchName.Value,
+        await TryStopContainerAsync(
+            orchestrator,
+            activeRun.ContainerId.Value,
+            activeRun.Id,
             cancellationToken);
 
-        FailureReason timedOut = new FailureReason.TimedOut();
+        string? containerOutput = await TryGetLogsAsync(
+            orchestrator,
+            activeRun.ContainerId.Value,
+            activeRun.Id,
+            cancellationToken);
 
-        if (commitsResult is Result<BranchCommitSummary>.Failure commitsFailure)
-        {
-            if (commitsFailure.Error.Kind == ErrorKind.NotFound)
-            {
-                // Branch definitively does not exist — no commits to preserve
-                return new WorkerOutcome.Failure(timedOut, containerOutput, summary);
-            }
+        RunResultSummary? summary = containerOutputParser.ParseRunResultSummary(containerOutput);
 
-            // Transient provider failure — preserve the branch to allow a future retry
-            return new WorkerOutcome.ContinuableFailure(run.BranchName, timedOut, containerOutput, summary);
-        }
+        // A transient merge-request lookup failure is treated as "no PR" (accepted risk): the run may
+        // land in a retryable failed state while a PR is open.
+        WorkerOutcome outcome = await resolver.TryResolveExistingPullRequestAsync(activeRun, summary, cancellationToken)
+            ?? await StoppedRunOutcomeBuilder.BuildAsync(
+                activeRun,
+                new FailureReason.Cancelled(),
+                containerOutput,
+                summary,
+                postExitProviderQueries,
+                cancellationToken);
 
-        bool hasCommits = ((Result<BranchCommitSummary>.Success)commitsResult).Value.CommitCount > 0;
+        await ApplyOutcomeAsync(
+            outcome,
+            activeRun,
+            dbContext,
+            orchestrator,
+            integrationEventDispatcher,
+            integrationEventProcessor,
+            domainEventDispatcher,
+            cancellationToken);
 
-        return hasCommits
-            ? new WorkerOutcome.ContinuableFailure(run.BranchName, timedOut, containerOutput, summary)
-            : new WorkerOutcome.Failure(timedOut, containerOutput, summary);
+        logger.LogWarning(
+            "Worker run {WorkerRunId} cancel requested at {CancelRequestedAt}; container stopped and run marked as {OutcomeType}.",
+            activeRun.Id,
+            activeRun.CancelRequestedAt,
+            outcome.GetType().Name);
     }
 
     /// <summary>
@@ -1065,7 +1107,7 @@ internal sealed class WorkerDispatchService(
         {
             await orchestrator.StopContainerAsync(containerId, cancellationToken);
         }
-#pragma warning disable CA1031 // Best-effort stop before log capture on timeout path; Docker exceptions must not crash the BackgroundService tick or prevent log capture and cleanup.
+#pragma warning disable CA1031 // Best-effort stop before log capture on timeout/cancel paths; Docker exceptions must not crash the BackgroundService tick or prevent log capture and cleanup.
         catch (Exception ex) when (ex is not OperationCanceledException)
 #pragma warning restore CA1031
         {

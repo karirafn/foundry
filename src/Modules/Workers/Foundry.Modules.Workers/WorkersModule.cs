@@ -30,6 +30,7 @@ public static class WorkersModule
     {
         services.AddScoped<IWorkerRunQueries, WorkerRunQueries>();
         services.AddScoped<IWorkerLogStream, WorkerLogStream>();
+        services.AddCommandHandler<RequestRunCancellation.Command, RequestRunCancellation.Response, RequestRunCancellation.Handler>();
         services.AddSingleton<AgentActivityStore>();
         services.AddSingleton<IAgentActivityQueries>(sp => sp.GetRequiredService<AgentActivityStore>());
 

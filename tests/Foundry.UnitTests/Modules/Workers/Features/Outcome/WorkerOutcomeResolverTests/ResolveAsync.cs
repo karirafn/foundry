@@ -7,8 +7,11 @@ using Foundry.Modules.Workers.Contracts;
 using Foundry.Modules.Workers.Domain.Entities;
 using Foundry.Modules.Workers.Domain.Entities.States;
 using Foundry.Modules.Workers.Domain.ValueObjects;
+using Foundry.Modules.Workers.Features.Orchestration;
 using Foundry.Modules.Workers.Features.Outcome;
 using Foundry.Shared;
+
+using Microsoft.Extensions.Logging.Abstractions;
 
 using Shouldly;
 
@@ -30,6 +33,9 @@ public sealed class ResolveAsync
             BranchName.From(branchName),
             MonitoredRepositoryId.New());
     }
+
+    private static WorkerStatus Exited(int exitCode, bool oomKilled = false)
+        => new(IsRunning: false, ExitCode: exitCode, FinishedAt: DateTimeOffset.UtcNow, OomKilled: oomKilled);
 
     private static WorkerOutcomeResolver BuildResolver(
         IPostExitProviderQueries providerQueries,
@@ -60,7 +66,7 @@ public sealed class ResolveAsync
         // Act
         WorkerOutcome outcome = await sut.ResolveAsync(
             run,
-            exitCode: 0,
+            status: Exited(0),
             containerOutput: null,
             TestContext.Current.CancellationToken);
 
@@ -85,7 +91,7 @@ public sealed class ResolveAsync
         // Act
         WorkerOutcome outcome = await sut.ResolveAsync(
             run,
-            exitCode: 0,
+            status: Exited(0),
             containerOutput: null,
             TestContext.Current.CancellationToken);
 
@@ -107,7 +113,7 @@ public sealed class ResolveAsync
         // Act
         WorkerOutcome outcome = await sut.ResolveAsync(
             run,
-            exitCode: 0,
+            status: Exited(0),
             containerOutput: null,
             TestContext.Current.CancellationToken);
 
@@ -130,7 +136,7 @@ public sealed class ResolveAsync
         // Act
         WorkerOutcome outcome = await sut.ResolveAsync(
             run,
-            exitCode: 1,
+            status: Exited(1),
             containerOutput: null,
             TestContext.Current.CancellationToken);
 
@@ -153,7 +159,7 @@ public sealed class ResolveAsync
         // Act
         WorkerOutcome outcome = await sut.ResolveAsync(
             run,
-            exitCode: 1,
+            status: Exited(1),
             containerOutput: null,
             TestContext.Current.CancellationToken);
 
@@ -175,7 +181,7 @@ public sealed class ResolveAsync
         // Act
         WorkerOutcome outcome = await sut.ResolveAsync(
             run,
-            exitCode: 0,
+            status: Exited(0),
             containerOutput: null,
             TestContext.Current.CancellationToken);
 
@@ -198,7 +204,7 @@ public sealed class ResolveAsync
         // Act
         WorkerOutcome outcome = await sut.ResolveAsync(
             run,
-            exitCode: 0,
+            status: Exited(0),
             containerOutput: null,
             TestContext.Current.CancellationToken);
 
@@ -220,7 +226,7 @@ public sealed class ResolveAsync
         // Act
         WorkerOutcome outcome = await sut.ResolveAsync(
             run,
-            exitCode: 0,
+            status: Exited(0),
             containerOutput: null,
             TestContext.Current.CancellationToken);
 
@@ -251,7 +257,7 @@ public sealed class ResolveAsync
         // Act
         WorkerOutcome outcome = await sut.ResolveAsync(
             run,
-            exitCode: 0,
+            status: Exited(0),
             containerOutput: null,
             TestContext.Current.CancellationToken);
 
@@ -274,7 +280,7 @@ public sealed class ResolveAsync
         // Act
         WorkerOutcome outcome = await sut.ResolveAsync(
             run,
-            exitCode: 0,
+            status: Exited(0),
             containerOutput: null,
             TestContext.Current.CancellationToken);
 
@@ -304,7 +310,7 @@ public sealed class ResolveAsync
         // Act
         WorkerOutcome outcome = await sut.ResolveAsync(
             run,
-            exitCode: 0,
+            status: Exited(0),
             containerOutput: null,
             TestContext.Current.CancellationToken);
 
@@ -333,7 +339,7 @@ public sealed class ResolveAsync
         // Act
         WorkerOutcome outcome = await sut.ResolveAsync(
             run,
-            exitCode: 0,
+            status: Exited(0),
             containerOutput: null,
             TestContext.Current.CancellationToken);
 
@@ -367,7 +373,7 @@ public sealed class ResolveAsync
         // Act
         WorkerOutcome outcome = await sut.ResolveAsync(
             run,
-            exitCode: 0,
+            status: Exited(0),
             containerOutput: null,
             TestContext.Current.CancellationToken);
 
@@ -389,7 +395,7 @@ public sealed class ResolveAsync
         // Act
         WorkerOutcome outcome = await sut.ResolveAsync(
             run,
-            exitCode: 0,
+            status: Exited(0),
             containerOutput: null,
             TestContext.Current.CancellationToken);
 
@@ -413,7 +419,7 @@ public sealed class ResolveAsync
         // Act
         WorkerOutcome outcome = await sut.ResolveAsync(
             run,
-            exitCode: 0,
+            status: Exited(0),
             containerOutput: "some output",
             TestContext.Current.CancellationToken);
 
@@ -438,7 +444,7 @@ public sealed class ResolveAsync
         // Act
         WorkerOutcome outcome = await sut.ResolveAsync(
             run,
-            exitCode: 0,
+            status: Exited(0),
             containerOutput: "usage limit output",
             TestContext.Current.CancellationToken);
 
@@ -461,7 +467,7 @@ public sealed class ResolveAsync
         // Act
         WorkerOutcome outcome = await sut.ResolveAsync(
             run,
-            exitCode: 1,
+            status: Exited(1),
             containerOutput: null,
             TestContext.Current.CancellationToken);
 
@@ -484,7 +490,7 @@ public sealed class ResolveAsync
         // Act
         WorkerOutcome outcome = await sut.ResolveAsync(
             run,
-            exitCode: 1,
+            status: Exited(1),
             containerOutput: null,
             TestContext.Current.CancellationToken);
 
@@ -495,7 +501,7 @@ public sealed class ResolveAsync
     [Fact]
     public async Task WhenNoMrAndNullExitWithNoCommits_ReturnsFailure()
     {
-        // Arrange — null exit treated same as non-zero for failure classification
+        // Arrange — container not found (null status) is classified as a failure
         ActiveRun run = CreateActiveRun();
         MergeRequestByBranch noneMr = new(MergeRequestPresence.None, null);
         IPostExitProviderQueries queries = new ScriptedProviderQueries(
@@ -506,7 +512,7 @@ public sealed class ResolveAsync
         // Act
         WorkerOutcome outcome = await sut.ResolveAsync(
             run,
-            exitCode: null,
+            status: null,
             containerOutput: null,
             TestContext.Current.CancellationToken);
 
@@ -529,7 +535,7 @@ public sealed class ResolveAsync
         // Act
         WorkerOutcome outcome = await sut.ResolveAsync(
             run,
-            exitCode: 0,
+            status: Exited(0),
             containerOutput: null,
             TestContext.Current.CancellationToken);
 
@@ -552,7 +558,7 @@ public sealed class ResolveAsync
         // Act
         WorkerOutcome outcome = await sut.ResolveAsync(
             run,
-            exitCode: 0,
+            status: Exited(0),
             containerOutput: null,
             TestContext.Current.CancellationToken);
 
@@ -575,7 +581,7 @@ public sealed class ResolveAsync
         // Act
         WorkerOutcome outcome = await sut.ResolveAsync(
             run,
-            exitCode: 1,
+            status: Exited(1),
             containerOutput: null,
             TestContext.Current.CancellationToken);
 
@@ -600,7 +606,7 @@ public sealed class ResolveAsync
         // Act
         WorkerOutcome outcome = await sut.ResolveAsync(
             run,
-            exitCode: 1,
+            status: Exited(1),
             containerOutput: "output",
             TestContext.Current.CancellationToken);
 
@@ -624,7 +630,7 @@ public sealed class ResolveAsync
         // Act
         WorkerOutcome outcome = await sut.ResolveAsync(
             run,
-            exitCode: 1,
+            status: Exited(1),
             containerOutput: null,
             TestContext.Current.CancellationToken);
 
@@ -651,7 +657,7 @@ public sealed class ResolveAsync
         // Act
         WorkerOutcome outcome = await sut.ResolveAsync(
             run,
-            exitCode: 1,
+            status: Exited(1),
             containerOutput: "transient output",
             TestContext.Current.CancellationToken);
 
@@ -675,7 +681,7 @@ public sealed class ResolveAsync
         // Act
         WorkerOutcome outcome = await sut.ResolveAsync(
             run,
-            exitCode: 1,
+            status: Exited(1),
             containerOutput: "transient output",
             TestContext.Current.CancellationToken);
 
@@ -699,7 +705,7 @@ public sealed class ResolveAsync
         // Act
         WorkerOutcome outcome = await sut.ResolveAsync(
             run,
-            exitCode: 0,
+            status: Exited(0),
             containerOutput: "transient output",
             TestContext.Current.CancellationToken);
 
@@ -722,7 +728,7 @@ public sealed class ResolveAsync
         // Act
         WorkerOutcome outcome = await sut.ResolveAsync(
             run,
-            exitCode: 0,
+            status: Exited(0),
             containerOutput: null,
             TestContext.Current.CancellationToken);
 
@@ -744,7 +750,7 @@ public sealed class ResolveAsync
         // Act
         WorkerOutcome outcome = await sut.ResolveAsync(
             run,
-            exitCode: 2,
+            status: Exited(2),
             containerOutput: null,
             TestContext.Current.CancellationToken);
 
@@ -773,7 +779,7 @@ public sealed class ResolveAsync
         // Act
         WorkerOutcome outcome = await sut.ResolveAsync(
             run,
-            exitCode: 0,
+            status: Exited(0),
             containerOutput: "credits output",
             TestContext.Current.CancellationToken);
 
@@ -797,13 +803,221 @@ public sealed class ResolveAsync
         // Act
         WorkerOutcome outcome = await sut.ResolveAsync(
             run,
-            exitCode: 1,
+            status: Exited(1),
             containerOutput: "credits output",
             TestContext.Current.CancellationToken);
 
         // Assert
         WorkerOutcome.Failure failure = outcome.ShouldBeOfType<WorkerOutcome.Failure>();
         failure.FailureReason.ShouldBeOfType<FailureReason.CreditsExhausted>();
+    }
+
+    // -------------------------------------------------------------------------
+    // External-kill classification (no result line) — real parser so the
+    // no-result-line path is observable.
+    // -------------------------------------------------------------------------
+
+    private static WorkerOutcomeResolver BuildResolverWithRealParser(IPostExitProviderQueries providerQueries)
+        => BuildResolver(providerQueries, new ContainerOutputParser(NullLogger<ContainerOutputParser>.Instance));
+
+    private static IPostExitProviderQueries NoMrQueries(bool hasCommits)
+        => new ScriptedProviderQueries(
+            commitsResult: Result<bool>.Ok(hasCommits),
+            fallbackMrResult: Result<MergeRequestByBranch>.Ok(new MergeRequestByBranch(MergeRequestPresence.None, null)));
+
+    [Fact]
+    public async Task WhenOomKilledWithNoResultLine_ReturnsOutOfMemoryContainerError()
+    {
+        // Arrange — OOM also exits 137, so the OOM flag must win over the exit code
+        WorkerOutcomeResolver sut = BuildResolverWithRealParser(NoMrQueries(hasCommits: false));
+
+        // Act
+        WorkerOutcome outcome = await sut.ResolveAsync(
+            CreateActiveRun(),
+            status: Exited(137, oomKilled: true),
+            containerOutput: "cloning repository...",
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        WorkerOutcome.Failure failure = outcome.ShouldBeOfType<WorkerOutcome.Failure>();
+        failure.FailureReason.ShouldBe(new FailureReason.ContainerError("Worker ran out of memory"));
+    }
+
+    [Theory]
+    [InlineData(137)]
+    [InlineData(143)]
+    public async Task WhenKilledOutsideFoundryWithNoResultLine_ReturnsTerminatedContainerError(int exitCode)
+    {
+        // Arrange
+        WorkerOutcomeResolver sut = BuildResolverWithRealParser(NoMrQueries(hasCommits: false));
+
+        // Act
+        WorkerOutcome outcome = await sut.ResolveAsync(
+            CreateActiveRun(),
+            status: Exited(exitCode),
+            containerOutput: "cloning repository...",
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        WorkerOutcome.Failure failure = outcome.ShouldBeOfType<WorkerOutcome.Failure>();
+        failure.FailureReason.ShouldBe(new FailureReason.ContainerError("Worker container was terminated outside Foundry"));
+    }
+
+    [Fact]
+    public async Task WhenKilledOutsideFoundryWithCommits_ReturnsContinuableFailure()
+    {
+        // Arrange — commits still decide ContinuableFailure vs Failure
+        WorkerOutcomeResolver sut = BuildResolverWithRealParser(NoMrQueries(hasCommits: true));
+
+        // Act
+        WorkerOutcome outcome = await sut.ResolveAsync(
+            CreateActiveRun(),
+            status: Exited(137),
+            containerOutput: null,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        WorkerOutcome.ContinuableFailure continuable = outcome.ShouldBeOfType<WorkerOutcome.ContinuableFailure>();
+        continuable.FailureReason.ShouldBe(new FailureReason.ContainerError("Worker container was terminated outside Foundry"));
+    }
+
+    [Fact]
+    public async Task WhenContainerNotFound_ReturnsRemovedContainerError()
+    {
+        // Arrange
+        WorkerOutcomeResolver sut = BuildResolverWithRealParser(NoMrQueries(hasCommits: false));
+
+        // Act
+        WorkerOutcome outcome = await sut.ResolveAsync(
+            CreateActiveRun(),
+            status: null,
+            containerOutput: null,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        WorkerOutcome.Failure failure = outcome.ShouldBeOfType<WorkerOutcome.Failure>();
+        failure.FailureReason.ShouldBe(new FailureReason.ContainerError("Worker container was removed outside Foundry"));
+    }
+
+    [Fact]
+    public async Task WhenOtherNonZeroExitWithNoResultLine_ReturnsBootstrapFailed()
+    {
+        // Arrange
+        WorkerOutcomeResolver sut = BuildResolverWithRealParser(NoMrQueries(hasCommits: false));
+
+        // Act
+        WorkerOutcome outcome = await sut.ResolveAsync(
+            CreateActiveRun(),
+            status: Exited(1),
+            containerOutput: "cloning repository...",
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        WorkerOutcome.Failure failure = outcome.ShouldBeOfType<WorkerOutcome.Failure>();
+        failure.FailureReason.ShouldBeOfType<FailureReason.WorkerBootstrapFailed>();
+    }
+
+    [Fact]
+    public async Task WhenKilledWithOpenMr_ReturnsReview()
+    {
+        // Arrange — the MR-first check runs before any kill classification
+        IPostExitProviderQueries queries = new ScriptedProviderQueries(
+            commitsResult: Result<bool>.Ok(true),
+            fallbackMrResult: Result<MergeRequestByBranch>.Ok(new MergeRequestByBranch(MergeRequestPresence.Open, PrUrl)));
+        WorkerOutcomeResolver sut = BuildResolverWithRealParser(queries);
+
+        // Act
+        WorkerOutcome outcome = await sut.ResolveAsync(
+            CreateActiveRun(),
+            status: Exited(137, oomKilled: true),
+            containerOutput: null,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        outcome.ShouldBeOfType<WorkerOutcome.Review>();
+    }
+
+    // -------------------------------------------------------------------------
+    // TryResolveExistingPullRequestAsync — used by the cancel path
+    // -------------------------------------------------------------------------
+
+    [Fact]
+    public async Task TryResolveExistingPullRequest_WhenOpenMr_ReturnsReview()
+    {
+        // Arrange
+        IPostExitProviderQueries queries = new ScriptedProviderQueries(
+            commitsResult: Result<bool>.Ok(true),
+            fallbackMrResult: Result<MergeRequestByBranch>.Ok(new MergeRequestByBranch(MergeRequestPresence.Open, PrUrl)));
+        WorkerOutcomeResolver sut = BuildResolver(queries);
+
+        // Act
+        WorkerOutcome? outcome = await sut.TryResolveExistingPullRequestAsync(
+            CreateActiveRun(),
+            summary: null,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        WorkerOutcome.Review review = outcome.ShouldBeOfType<WorkerOutcome.Review>();
+        review.PullRequestUrl.Value.ShouldBe(PrUrl);
+    }
+
+    [Fact]
+    public async Task TryResolveExistingPullRequest_WhenMergedMr_ReturnsCompleted()
+    {
+        // Arrange
+        IPostExitProviderQueries queries = new ScriptedProviderQueries(
+            commitsResult: Result<bool>.Ok(true),
+            fallbackMrResult: Result<MergeRequestByBranch>.Ok(new MergeRequestByBranch(MergeRequestPresence.Merged, PrUrl)));
+        WorkerOutcomeResolver sut = BuildResolver(queries);
+
+        // Act
+        WorkerOutcome? outcome = await sut.TryResolveExistingPullRequestAsync(
+            CreateActiveRun(),
+            summary: null,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        outcome.ShouldBeOfType<WorkerOutcome.Completed>();
+    }
+
+    [Theory]
+    [InlineData(MergeRequestPresence.None)]
+    [InlineData(MergeRequestPresence.Closed)]
+    public async Task TryResolveExistingPullRequest_WhenNoOpenOrMergedMr_ReturnsNull(MergeRequestPresence presence)
+    {
+        // Arrange
+        IPostExitProviderQueries queries = new ScriptedProviderQueries(
+            commitsResult: Result<bool>.Ok(true),
+            fallbackMrResult: Result<MergeRequestByBranch>.Ok(new MergeRequestByBranch(presence, PrUrl)));
+        WorkerOutcomeResolver sut = BuildResolver(queries);
+
+        // Act
+        WorkerOutcome? outcome = await sut.TryResolveExistingPullRequestAsync(
+            CreateActiveRun(),
+            summary: null,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        outcome.ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task TryResolveExistingPullRequest_WhenLookupFails_ReturnsNull()
+    {
+        // Arrange — a transient lookup failure is treated as "no PR"
+        IPostExitProviderQueries queries = new ScriptedProviderQueries(
+            commitsResult: Result<bool>.Ok(true),
+            fallbackMrResult: Result<MergeRequestByBranch>.Fail(new Error("Provider.Unavailable", "boom")));
+        WorkerOutcomeResolver sut = BuildResolver(queries);
+
+        // Act
+        WorkerOutcome? outcome = await sut.TryResolveExistingPullRequestAsync(
+            CreateActiveRun(),
+            summary: null,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        outcome.ShouldBeNull();
     }
 
     // -------------------------------------------------------------------------

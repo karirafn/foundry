@@ -5,6 +5,7 @@ import {
   OutputEmitterRef,
   Signal,
   WritableSignal,
+  computed,
   effect,
   inject,
   input,
@@ -20,15 +21,22 @@ import { WorkerRunService } from '../../workers/worker-run.service';
 import { WorkerSignalRService } from '../../../core/services/worker-signalr.service';
 import { WorkerRunDetail } from '../../workers/worker-run.model';
 import { LogViewComponent } from '../../../shared/components/log-view/log-view';
+import { ConfirmDialogComponent } from '../../../shared/components/confirm-dialog/confirm-dialog';
 import { providerTerminology } from '../../../shared/utils/provider.util';
 import { getFailureCategoryDisplay } from '../../../shared/utils/failure-category';
-import { IssueState, MAX_CHECKS_FIX_ATTEMPTS, RETRYABLE_STATES, REVISION_STATES } from '../../../shared/utils/issue-state';
+import {
+  IssueState,
+  MAX_CHECKS_FIX_ATTEMPTS,
+  RETRYABLE_STATES,
+  REVISION_STATES,
+  WORKING_STATES,
+} from '../../../shared/utils/issue-state';
 
 @Component({
   selector: 'fd-issue-detail',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [DatePipe, SafeHrefPipe, LogViewComponent],
+  imports: [DatePipe, SafeHrefPipe, LogViewComponent, ConfirmDialogComponent],
   template: `
     @if (error()) {
       <div class="issue-detail__error" role="alert">
@@ -263,6 +271,12 @@ import { IssueState, MAX_CHECKS_FIX_ATTEMPTS, RETRYABLE_STATES, REVISION_STATES 
               </div>
             }
 
+            @if (wr.state === 'completed' && wr.cancelRequestedAt) {
+              <p class="issue-detail__cancel-note" role="status">
+                The run finished before the cancel took effect.
+              </p>
+            }
+
             @if (wr.resultText) {
               <div class="issue-detail__result-text">
                 <span class="issue-detail__field-key">Result</span>
@@ -284,6 +298,37 @@ import { IssueState, MAX_CHECKS_FIX_ATTEMPTS, RETRYABLE_STATES, REVISION_STATES 
               />
             }
           </div>
+        }
+
+        @if (_isWorking(d.state)) {
+          <div class="issue-detail__actions">
+            <button
+              class="issue-detail__cancel-btn"
+              type="button"
+              [disabled]="!_canCancel()"
+              [attr.aria-label]="'Cancel run for issue #' + d.issueNumber"
+              [attr.aria-describedby]="_cancelHint() ? 'cancel-run-hint-' + d.id : null"
+              (click)="openCancelConfirm()"
+            >{{ _cancelling() ? 'Cancelling…' : 'Cancel run' }}</button>
+            @if (_cancelHint(); as hint) {
+              <span class="issue-detail__cancel-hint" [id]="'cancel-run-hint-' + d.id">{{ hint }}</span>
+            }
+            <span
+              class="issue-detail__retry-error"
+              aria-live="assertive"
+              aria-atomic="true"
+            >{{ _cancelError() ?? '' }}</span>
+          </div>
+          <fd-confirm-dialog
+            [open]="_confirmCancelOpen()"
+            title="Stop the worker?"
+            message="Commits on the branch are kept; Retry continues from them."
+            confirmLabel="Stop worker"
+            cancelLabel="Keep running"
+            [destructive]="true"
+            (confirmed)="confirmCancel()"
+            (dismissed)="_confirmCancelOpen.set(false)"
+          />
         }
 
         @if (_isRetryable(d.state)) {
@@ -331,10 +376,40 @@ export class IssueDetailComponent {
   private readonly _liveLogStreamSignal: WritableSignal<Observable<string> | null> = signal(null);
   protected readonly _liveLogStream: Signal<Observable<string> | null> = this._liveLogStreamSignal.asReadonly();
 
+  protected readonly _confirmCancelOpen: WritableSignal<boolean> = signal(false);
+
+  // Set once the user confirmed a cancel in this view; reset whenever the issue detail reloads
+  // (an IssueUpdated push reloads it), after which the persisted cancelRequestedAt takes over.
+  private readonly _cancelSubmitted: WritableSignal<boolean> = signal(false);
+
+  private readonly _cancelErrorSignal: WritableSignal<string | null> = signal(null);
+  protected readonly _cancelError: Signal<string | null> = this._cancelErrorSignal.asReadonly();
+
+  protected readonly _cancelling: Signal<boolean> = computed(() => {
+    const wr = this._workerRun();
+    return this._cancelSubmitted() || (wr?.state === 'running' && wr.cancelRequestedAt !== null);
+  });
+
+  protected readonly _canCancel: Signal<boolean> = computed(
+    () => this._workerRun()?.state === 'running' && !this._cancelling(),
+  );
+
+  protected readonly _cancelHint: Signal<string | null> = computed(() => {
+    if (this._cancelling()) {
+      return null;
+    }
+    const wr = this._workerRun();
+    return wr === null || wr.state === 'starting' ? 'Starting…' : null;
+  });
+
   constructor() {
     effect(() => {
       const d = this.detail();
       const workerRunId = d?.stateDetails?.workerRunId ?? null;
+
+      this._cancelSubmitted.set(false);
+      this._cancelErrorSignal.set(null);
+      this._confirmCancelOpen.set(false);
 
       if (workerRunId === null) {
         this._workerRunSignal.set(null);
@@ -361,11 +436,37 @@ export class IssueDetailComponent {
     });
   }
 
+  openCancelConfirm(): void {
+    this._cancelErrorSignal.set(null);
+    this._confirmCancelOpen.set(true);
+  }
+
+  confirmCancel(): void {
+    this._confirmCancelOpen.set(false);
+    const workerRunId = this._workerRun()?.workerRunId;
+
+    if (!workerRunId) {
+      return;
+    }
+
+    this._cancelSubmitted.set(true);
+    this._workerRunService.requestCancel(workerRunId).subscribe((error) => {
+      if (error !== null) {
+        this._cancelSubmitted.set(false);
+        this._cancelErrorSignal.set(error);
+      }
+    });
+  }
+
   retryIssue(id: string): void {
     this._issueService.retryIssue(id);
   }
 
   protected readonly _maxChecksFixAttempts = MAX_CHECKS_FIX_ATTEMPTS;
+
+  protected _isWorking(state: string): boolean {
+    return WORKING_STATES.has(state as IssueState);
+  }
 
   protected _isRetryable(state: string): boolean {
     return RETRYABLE_STATES.has(state as IssueState);

@@ -467,6 +467,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/workers/runs/{workerRunId}/cancellation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Requests cancellation of a running worker; the dispatch poll stops it */
+        post: operations["RequestWorkerRunCancellation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/workers/run-totals": {
         parameters: {
             query?: never;
@@ -1026,6 +1043,12 @@ export interface components {
         RepositoryWebhookSecret: {
             secret: string;
         };
+        RequestRunCancellationResponse: {
+            /** Format: uuid */
+            workerRunId: string;
+            /** Format: date-time */
+            cancelRequestedAt: string;
+        };
         RunStats: {
             /** Format: int32 */
             runCount: number | string;
@@ -1230,6 +1253,8 @@ export interface components {
             /** Format: date-time */
             lastActivityAt: null | string;
             hasStoredLog: boolean;
+            /** Format: date-time */
+            cancelRequestedAt: null | string;
         };
     };
     responses: never;
@@ -2317,6 +2342,55 @@ export interface operations {
             };
             /** @description Not Found */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    RequestWorkerRunCancellation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workerRunId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Accepted */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RequestRunCancellationResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
                 headers: {
                     [name: string]: unknown;
                 };

@@ -1507,3 +1507,194 @@ describe('IssueDetailComponent', () => {
     expect(message?.textContent?.trim()).toContain('addressing reviewer feedback');
   });
 });
+
+describe('IssueDetailComponent — cancel run', () => {
+  function runDetail(overrides: Record<string, unknown> = {}) {
+    return {
+      workerRunId: 'run-cancel',
+      issueId: 'abc123',
+      state: 'running',
+      failureCategory: null,
+      failureSummary: null,
+      resultText: null,
+      subtype: null,
+      isError: null,
+      durationMs: null,
+      numTurns: null,
+      totalCostUsd: null,
+      inputTokens: null,
+      outputTokens: null,
+      lastActivityAt: null,
+      hasStoredLog: false,
+      cancelRequestedAt: null,
+      ...overrides,
+    };
+  }
+
+  function issueInState(state: string): IssueDetail {
+    return {
+      ...mockDetail,
+      state: state as IssueDetail['state'],
+      stateDetails: { ...mockStateDetails, workerRunId: 'run-cancel', completedAt: null },
+    };
+  }
+
+  function setup(
+    detail: IssueDetail,
+    run: ReturnType<typeof runDetail> | null,
+    requestCancelResult: string | null = null,
+  ) {
+    const requestCancel = vi.fn(() => of(requestCancelResult));
+    TestBed.resetTestingModule();
+    TestBed.configureTestingModule({
+      imports: [IssueDetailComponent],
+      providers: [
+        { provide: IssueService, useValue: { retrying: signal(false), retryError: signal(null), retrySuccess: signal(null) } },
+        WorkerSignalRService,
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        { provide: IssueSignalRService, useValue: mockIssueSignalRService },
+        {
+          provide: WorkerRunService,
+          useValue: { getDetail: () => of(run), getLog: () => of(null), requestCancel },
+        },
+        { provide: WORKER_HUB_FACTORY, useValue: () => mockWorkerHub },
+      ],
+    });
+    const fixture = TestBed.createComponent(IssueDetailComponent);
+    fixture.componentRef.setInput('detail', detail);
+    fixture.componentRef.setInput('loading', false);
+    fixture.componentRef.setInput('error', null);
+    fixture.detectChanges();
+    const el = fixture.nativeElement as HTMLElement;
+    const cancelButton = () => el.querySelector('.issue-detail__cancel-btn') as HTMLButtonElement | null;
+    const dialog = () => el.querySelector('dialog.confirm-dialog') as HTMLDialogElement | null;
+    return { fixture, el, requestCancel, cancelButton, dialog };
+  }
+
+  it.each(['in_progress', 'revision_in_progress'])('should show an enabled Cancel run button when the issue is %s', (state) => {
+    // Arrange / Act
+    const { cancelButton } = setup(issueInState(state), runDetail());
+
+    // Assert
+    expect(cancelButton()).not.toBeNull();
+    expect(cancelButton()?.disabled).toBe(false);
+    expect(cancelButton()?.textContent?.trim()).toBe('Cancel run');
+  });
+
+  it.each(['queued', 'failed', 'review', 'completed'])('should not show the Cancel run button when the issue is %s', (state) => {
+    // Arrange / Act
+    const { cancelButton } = setup(issueInState(state), runDetail());
+
+    // Assert
+    expect(cancelButton()).toBeNull();
+  });
+
+  it('should disable the button with a Starting… hint while the run is starting', () => {
+    // Arrange / Act
+    const { el, cancelButton } = setup(issueInState('in_progress'), runDetail({ state: 'starting' }));
+
+    // Assert
+    expect(cancelButton()?.disabled).toBe(true);
+    expect(el.querySelector('.issue-detail__cancel-hint')?.textContent?.trim()).toBe('Starting…');
+  });
+
+  it('should open the confirm dialog instead of cancelling immediately', () => {
+    // Arrange
+    const { fixture, requestCancel, cancelButton, dialog } = setup(issueInState('in_progress'), runDetail());
+
+    // Act
+    cancelButton()!.click();
+    fixture.detectChanges();
+
+    // Assert
+    expect(dialog()?.open).toBe(true);
+    expect(dialog()?.textContent).toContain('Stop the worker?');
+    expect(dialog()?.textContent).toContain('Commits on the branch are kept; Retry continues from them.');
+    expect(requestCancel).not.toHaveBeenCalled();
+  });
+
+  it('should request cancellation and show Cancelling… once confirmed', () => {
+    // Arrange
+    const { fixture, requestCancel, cancelButton, dialog } = setup(issueInState('in_progress'), runDetail());
+    cancelButton()!.click();
+    fixture.detectChanges();
+
+    // Act
+    (dialog()!.querySelector('.confirm-dialog__confirm') as HTMLButtonElement).click();
+    fixture.detectChanges();
+
+    // Assert
+    expect(requestCancel).toHaveBeenCalledWith('run-cancel');
+    expect(cancelButton()?.textContent?.trim()).toBe('Cancelling…');
+    expect(cancelButton()?.disabled).toBe(true);
+    expect(dialog()?.open).toBe(false);
+  });
+
+  it('should not request cancellation when the dialog is dismissed', () => {
+    // Arrange
+    const { fixture, requestCancel, cancelButton, dialog } = setup(issueInState('in_progress'), runDetail());
+    cancelButton()!.click();
+    fixture.detectChanges();
+
+    // Act
+    (dialog()!.querySelector('.confirm-dialog__cancel') as HTMLButtonElement).click();
+    fixture.detectChanges();
+
+    // Assert
+    expect(requestCancel).not.toHaveBeenCalled();
+    expect(cancelButton()?.textContent?.trim()).toBe('Cancel run');
+  });
+
+  it('should show Cancelling… on load when the run already carries a cancel request', () => {
+    // Arrange / Act
+    const { cancelButton } = setup(
+      issueInState('in_progress'),
+      runDetail({ cancelRequestedAt: '2026-11-04T10:00:00Z' }),
+    );
+
+    // Assert
+    expect(cancelButton()?.textContent?.trim()).toBe('Cancelling…');
+    expect(cancelButton()?.disabled).toBe(true);
+  });
+
+  it('should restore the button and show the error when the cancel request fails', () => {
+    // Arrange
+    const { fixture, el, cancelButton, dialog } = setup(
+      issueInState('in_progress'),
+      runDetail(),
+      'The run is no longer running.',
+    );
+    cancelButton()!.click();
+    fixture.detectChanges();
+
+    // Act
+    (dialog()!.querySelector('.confirm-dialog__confirm') as HTMLButtonElement).click();
+    fixture.detectChanges();
+
+    // Assert
+    expect(cancelButton()?.textContent?.trim()).toBe('Cancel run');
+    expect(el.querySelector('.issue-detail__actions')?.textContent).toContain('The run is no longer running.');
+  });
+
+  it('should explain that the run finished before the cancel took effect', () => {
+    // Arrange / Act
+    const { el } = setup(
+      issueInState('review'),
+      runDetail({ state: 'completed', cancelRequestedAt: '2026-11-04T10:00:00Z' }),
+    );
+
+    // Assert
+    expect(el.querySelector('.issue-detail__cancel-note')?.textContent).toContain(
+      'The run finished before the cancel took effect.',
+    );
+  });
+
+  it('should not show the finished-before-cancel note for a completed run without a cancel request', () => {
+    // Arrange / Act
+    const { el } = setup(issueInState('review'), runDetail({ state: 'completed' }));
+
+    // Assert
+    expect(el.querySelector('.issue-detail__cancel-note')).toBeNull();
+  });
+});

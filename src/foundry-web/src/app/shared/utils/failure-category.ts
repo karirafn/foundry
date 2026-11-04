@@ -5,7 +5,8 @@ export type FailureCategoryToken =
   | 'provider_error'
   | 'usage_limited'
   | 'worker_bootstrap_failed'
-  | 'credits_exhausted';
+  | 'credits_exhausted'
+  | 'cancelled';
 
 interface FailureCategoryDisplay {
   readonly label: string;
@@ -20,6 +21,7 @@ export const FAILURE_CATEGORY_DISPLAY = {
   usage_limited: { label: 'USAGE LIMITED', cssClass: 'badge--usage-limited' },
   worker_bootstrap_failed: { label: 'BOOTSTRAP FAILED', cssClass: 'badge--failure-bootstrap' },
   credits_exhausted: { label: 'CREDITS EXHAUSTED', cssClass: 'badge--failure-credits-exhausted' },
+  cancelled: { label: 'CANCELLED', cssClass: 'badge--failure-cancelled' },
 } as const satisfies Record<FailureCategoryToken, FailureCategoryDisplay>;
 
 export function getFailureCategoryDisplay(token: string): FailureCategoryDisplay | null {

@@ -41,6 +41,12 @@ public sealed class FailedRun : WorkerRun
 
     public RunResultSummary? ResultSummary { get; private set; }
 
+    /// <summary>
+    /// Carried over from <see cref="ActiveRun.CancelRequestedAt"/> so a run that resolved
+    /// before a pending cancel took effect can be told apart.
+    /// </summary>
+    public DateTimeOffset? CancelRequestedAt { get; private set; }
+
     internal static FailedRun FromStarting(StartingRun starting, FailureReason reason)
     {
         return new FailedRun(
@@ -68,6 +74,9 @@ public sealed class FailedRun : WorkerRun
             DateTimeOffset.UtcNow,
             active.BranchName,
             containerOutput,
-            resultSummary);
+            resultSummary)
+        {
+            CancelRequestedAt = active.CancelRequestedAt,
+        };
     }
 }

@@ -41,6 +41,12 @@ public sealed class CompletedRun : WorkerRun
 
     public RunResultSummary? ResultSummary { get; private set; }
 
+    /// <summary>
+    /// Carried over from <see cref="ActiveRun.CancelRequestedAt"/> so a run that resolved
+    /// before a pending cancel took effect can be told apart.
+    /// </summary>
+    public DateTimeOffset? CancelRequestedAt { get; private set; }
+
     internal static CompletedRun FromActive(
         ActiveRun active,
         int exitCode,
@@ -56,6 +62,9 @@ public sealed class CompletedRun : WorkerRun
             DateTimeOffset.UtcNow,
             branchName,
             pullRequestUrl,
-            resultSummary);
+            resultSummary)
+        {
+            CancelRequestedAt = active.CancelRequestedAt,
+        };
     }
 }
