@@ -180,6 +180,69 @@ jobs:
             echo "PASS: only newuidmap and newgidmap carry the setuid bit"
           '
 
+      - name: Image contract check — managed settings are root-owned and immutable to node
+        if: github.event_name == 'push' || steps.changes.outputs.workers == 'true'
+        run: |
+          # Render with the shipped functions as root (the image's default user), then assert
+          # ownership/modes and that the unprivileged node user cannot tamper with the file.
+          docker run --rm -i \
+            -e CLAUDE_SETTINGS_JSON='{"permissions":{"deny":["Bash(git push --force:*)"]},"model":"ci-model"}' \
+            foundry-worker:ci bash -s <<'SCRIPT'
+          set -euo pipefail
+          [ "$(id -u)" = "0" ] || { echo "FAIL: the worker image does not start as root (uid $(id -u))"; exit 1; }
+          for f in fail_bootstrap merge_host_hooks render_managed_settings; do
+            src="$(sed -n "/^${f}()/,/^}/p" /entrypoint.sh)"
+            [ -n "$src" ] || { echo "FAIL: could not extract $f from /entrypoint.sh"; exit 1; }
+            eval "$src"
+          done
+          render_managed_settings /etc/claude-code/managed-settings.json
+
+          dir_meta="$(stat -c '%U:%G %a' /etc/claude-code)"
+          file_meta="$(stat -c '%U:%G %a' /etc/claude-code/managed-settings.json)"
+          [ "$dir_meta" = "root:root 755" ] || { echo "FAIL: /etc/claude-code is '$dir_meta', expected 'root:root 755'"; exit 1; }
+          [ "$file_meta" = "root:root 644" ] || { echo "FAIL: managed-settings.json is '$file_meta', expected 'root:root 644'"; exit 1; }
+          echo "PASS: /etc/claude-code is root:root 0755 and managed-settings.json root:root 0644"
+
+          as_node() { setpriv --reuid=node --regid=node --init-groups --inh-caps=-all bash -c "$1"; }
+          as_node 'jq -e ".model == \"ci-model\"" /etc/claude-code/managed-settings.json > /dev/null' \
+            || { echo "FAIL: node cannot read the rendered managed settings"; exit 1; }
+          echo "PASS: node reads the rendered managed settings"
+          if as_node 'echo "{}" > /etc/claude-code/managed-settings.json' 2> /dev/null; then echo "FAIL: node wrote managed-settings.json"; exit 1; fi
+          if as_node 'chmod 666 /etc/claude-code/managed-settings.json' 2> /dev/null; then echo "FAIL: node chmodded managed-settings.json"; exit 1; fi
+          if as_node 't="$(mktemp)"; echo "{}" > "$t"; mv -f "$t" /etc/claude-code/managed-settings.json' 2> /dev/null; then echo "FAIL: node replaced managed-settings.json"; exit 1; fi
+          if as_node 'rm -f /etc/claude-code/managed-settings.json' 2> /dev/null; then echo "FAIL: node removed managed-settings.json"; exit 1; fi
+          if as_node 'mkdir /etc/claude-code/managed-settings.d' 2> /dev/null; then echo "FAIL: node created managed-settings.d/"; exit 1; fi
+          [ "$(stat -c '%U:%G %a' /etc/claude-code/managed-settings.json)" = "root:root 644" ] \
+            && jq -e '.model == "ci-model"' /etc/claude-code/managed-settings.json > /dev/null \
+            || { echo "FAIL: managed-settings.json changed after node tamper attempts"; exit 1; }
+          echo "PASS: node cannot write, chmod, replace or remove managed-settings.json, nor create managed-settings.d/"
+          SCRIPT
+
+          # The real entrypoint renders as root, drops to node and passes the non-root
+          # invariant check: with no auth configured it must stop at the auth check, not earlier.
+          set +e
+          out="$(docker run --rm -e CLAUDE_SETTINGS_JSON='{"model":"ci-model"}' foundry-worker:ci /entrypoint.sh 2>&1)"
+          set -e
+          echo "$out"
+          echo "$out" | grep -q "Authentication required" \
+            || { echo "FAIL: the entrypoint did not reach the non-root auth check after the root phase"; exit 1; }
+          if echo "$out" | grep -q "FOUNDRY_BOOTSTRAP_FAILED"; then echo "FAIL: the root render/drop phase failed bootstrap"; exit 1; fi
+          echo "PASS: entrypoint rendered, dropped to node and passed the managed-settings invariant"
+
+          # A start that skips the root phase, or one without a generated policy, fails closed.
+          set +e
+          out="$(docker run --rm --user node foundry-worker:ci /entrypoint.sh 2>&1)"
+          set -e
+          echo "$out" | grep -q "FOUNDRY_BOOTSTRAP_FAILED stage=managed-settings" \
+            || { echo "FAIL: a --user node start did not fail at stage=managed-settings: $out"; exit 1; }
+          echo "PASS: a --user node start fails bootstrap at stage=managed-settings"
+          set +e
+          out="$(docker run --rm foundry-worker:ci /entrypoint.sh 2>&1)"
+          set -e
+          echo "$out" | grep -q "FOUNDRY_BOOTSTRAP_FAILED stage=managed-settings" \
+            || { echo "FAIL: a start without CLAUDE_SETTINGS_JSON did not fail at stage=managed-settings: $out"; exit 1; }
+          echo "PASS: a start without CLAUDE_SETTINGS_JSON fails bootstrap at stage=managed-settings"
+
       - name: Runner userns safeguard — allow unprivileged user namespaces (Ubuntu 24.04 AppArmor restriction)
         if: github.event_name == 'push' || steps.changes.outputs.workers == 'true'
         run: |
