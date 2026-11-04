@@ -19,9 +19,6 @@ namespace Foundry.Modules.Monitoring.Features.Webhooks;
 /// </summary>
 internal static class ReceiveGitHubWebhook
 {
-    /// <summary>Upper bound on a delivery body; larger bodies are rejected with 413 before verification.</summary>
-    internal const int MaxBodyBytes = 5 * 1024 * 1024;
-
     internal sealed class Handler(
         DbContext dbContext,
         IIssueQueries issueQueries,
@@ -30,20 +27,13 @@ internal static class ReceiveGitHubWebhook
     {
         public async Task<IResult> HandleAsync(string hookId, HttpRequest request, CancellationToken cancellationToken)
         {
-            if (!IsWellFormedHookId(hookId))
-            {
-                return Results.NotFound();
-            }
-
-            MonitoredRepository? repository = await dbContext.Set<MonitoredRepository>()
-                .FirstOrDefaultAsync(r => r.WebhookHookId == hookId, cancellationToken);
-
+            MonitoredRepository? repository = await WebhookDelivery.FindRepositoryAsync(dbContext, hookId, cancellationToken);
             if (repository is null)
             {
                 return Results.NotFound();
             }
 
-            byte[]? body = await ReadBodyAsync(request, cancellationToken);
+            byte[]? body = await WebhookDelivery.ReadBodyAsync(request, cancellationToken);
             if (body is null)
             {
                 return Results.StatusCode(StatusCodes.Status413PayloadTooLarge);
@@ -64,8 +54,8 @@ internal static class ReceiveGitHubWebhook
                 return Results.BadRequest();
             }
 
-            using JsonDocument? document = TryParse(body);
-            if (document is null || !MatchesRepository(document.RootElement, repository))
+            using JsonDocument? document = WebhookDelivery.TryParse(body);
+            if (document is null || !WebhookDelivery.NamesRepository(document.RootElement, "repository", "full_name", repository))
             {
                 logger.LogWarning(
                     "Rejected verified webhook delivery for repository {Slug}: the body names another repository.",
@@ -85,7 +75,7 @@ internal static class ReceiveGitHubWebhook
             }
 
             WebhookTrackingContext tracked = GitHubWebhookEventMapper.NeedsTrackingContext(eventName)
-                ? await LoadTrackingContextAsync(repository, cancellationToken)
+                ? await WebhookDelivery.LoadTrackingContextAsync(issueQueries, repository.Id, includeBlockers: false, cancellationToken)
                 : WebhookTrackingContext.Empty;
 
             NudgeKey? key = GitHubWebhookEventMapper.Map(eventName, document.RootElement, repository.Id, tracked);
@@ -103,65 +93,6 @@ internal static class ReceiveGitHubWebhook
 
             return Results.Accepted();
         }
-
-        private async Task<WebhookTrackingContext> LoadTrackingContextAsync(
-            MonitoredRepository repository,
-            CancellationToken cancellationToken)
-        {
-            IReadOnlySet<int> known = await issueQueries.GetKnownIssueNumbersAsync(repository.Id, cancellationToken);
-            IReadOnlyList<ReviewIssueInfo> review = await issueQueries.GetReviewIssuesAsync(repository.Id, cancellationToken);
-            IReadOnlyList<ChecksPendingIssueInfo> checksPending = await issueQueries.GetChecksPendingIssuesAsync(
-                repository.Id,
-                cancellationToken);
-            return new WebhookTrackingContext(known, review, checksPending);
-        }
-
-        private static bool IsWellFormedHookId(string hookId) =>
-            hookId.Length == MonitoredRepository.WebhookHookIdLength
-            && hookId.All(c => char.IsAsciiDigit(c) || (c >= 'a' && c <= 'f'));
-
-        private static async Task<byte[]?> ReadBodyAsync(HttpRequest request, CancellationToken cancellationToken)
-        {
-            if (request.ContentLength is > MaxBodyBytes)
-            {
-                return null;
-            }
-
-            using MemoryStream buffer = new();
-            byte[] chunk = new byte[16 * 1024];
-            int read;
-            while ((read = await request.Body.ReadAsync(chunk, cancellationToken)) > 0)
-            {
-                if (buffer.Length + read > MaxBodyBytes)
-                {
-                    return null;
-                }
-
-                await buffer.WriteAsync(chunk.AsMemory(0, read), cancellationToken);
-            }
-
-            return buffer.ToArray();
-        }
-
-        private static JsonDocument? TryParse(byte[] body)
-        {
-            try
-            {
-                return JsonDocument.Parse(body);
-            }
-            catch (JsonException)
-            {
-                return null;
-            }
-        }
-
-        private static bool MatchesRepository(JsonElement root, MonitoredRepository repository) =>
-            root.ValueKind == JsonValueKind.Object
-            && root.TryGetProperty("repository", out JsonElement repositoryElement)
-            && repositoryElement.ValueKind == JsonValueKind.Object
-            && repositoryElement.TryGetProperty("full_name", out JsonElement fullName)
-            && fullName.ValueKind == JsonValueKind.String
-            && string.Equals(fullName.GetString(), repository.Slug.ToString(), StringComparison.OrdinalIgnoreCase);
     }
 
     internal static class Endpoint

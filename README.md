@@ -84,9 +84,9 @@ The worker image tag and build toggle live in **Global Settings** (database), co
 With building enabled (the default), the WebApi builds the worker Docker image at startup; the first run is slower due to the Docker image build, and subsequent runs use the Docker layer cache.
 With building disabled, Foundry inspects the configured tag on the Docker host at startup — if the image exists, the build state becomes `Idle`; if it is absent, the state becomes `Failed` and dispatch is blocked until the image is made available and the operator retries.
 
-## GitHub webhooks (optional)
+## Webhooks (optional)
 
-By default Foundry polls every repository. GitHub webhooks make it react within seconds and let repositories with a healthy webhook drop to a slower **backstop** poll (15 minutes by default). Webhook deliveries only *nudge* the existing poll passes — they never change state directly (ADR 0085).
+By default Foundry polls every repository. GitHub and GitLab webhooks make it react within seconds and let repositories with a healthy webhook drop to a slower **backstop** poll (15 minutes by default). Webhook deliveries only *nudge* the existing poll passes — they never change state directly (ADR 0085).
 
 1. **Enable the webhook port.** Set `Webhooks:Port` in the AppHost configuration, for example with user secrets:
 
@@ -110,6 +110,8 @@ By default Foundry polls every repository. GitHub webhooks make it react within 
 3. **Set the public base URL.** In **Settings → Dispatch → Webhooks**, enter the public `https` URL the tunnel or proxy serves (e.g. `https://hooks.example.com`) and adjust the backstop interval if needed.
 
 4. **Register the webhook per repository.** Open the repository in **Settings → Repositories**. The Webhook panel shows the payload URL (`<public base URL>/webhooks/github/<hookId>`), the content type (`application/json`), the secret (revealed on demand) and the exact events to select. Add the webhook in the repository's GitHub settings, then click **I've added the webhook**. The status shows *Waiting for first delivery* until GitHub's `ping` (or any event) arrives — redeliver the `ping` from the webhook's *Recent Deliveries* tab if needed.
+
+   For a **GitLab** repository the payload URL is `<public base URL>/webhooks/gitlab/<hookId>`. Paste the revealed secret as the hook's **Secret token** and tick the listed triggers (Issues/Work item events, Comments, Merge request events, Pipeline events, plus the confidential variants if you track confidential issues). GitLab has no `ping`, so after clicking **I've added the webhook** use the hook's **Test** action (for example *Issues events*) to send the first delivery. GitLab has no event for issue links or protected branches; while the hook is active those changes are picked up by the backstop poll.
 
 A repository polls at the backstop interval only while its webhook is **Active**. If a scheduled poll finds a change that no delivery announced, the status becomes **Silent** and normal polling resumes until the next delivery.
 

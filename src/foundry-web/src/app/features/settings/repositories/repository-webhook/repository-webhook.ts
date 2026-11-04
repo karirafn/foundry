@@ -15,8 +15,9 @@ import { RepositoryWebhookInfo, webhookStatusLabel } from '../repository.model';
 
 /**
  * Webhook health and manual registration for one repository (ADR 0085). Shows the Webhook Status
- * and, while the hook is not active, the payload URL, content type, on-demand secret and exact
- * event list, plus the "I've added the webhook" action.
+ * and, while the hook is not active, the payload URL, content type (GitHub), on-demand secret
+ * ("Secret token" on GitLab) and exact event or trigger list, plus the "I've added the webhook" action.
+ * GitLab has no ping, so its instructions point at the hook's "Test" action instead.
  */
 @Component({
   selector: 'fd-repository-webhook',
@@ -50,10 +51,17 @@ import { RepositoryWebhookInfo, webhookStatusLabel } from '../repository.model';
           }
           @default {
             @if (info.status === 'pending') {
-              <p class="repository-webhook__hint">
-                Waiting for the first delivery. If you already added the webhook, redeliver the <code>ping</code>
-                event from the webhook's "Recent Deliveries" tab on GitHub.
-              </p>
+              @if (info.provider === 'gitlab') {
+                <p class="repository-webhook__hint">
+                  Waiting for the first delivery. GitLab sends no ping: if you already added the webhook, use its
+                  "Test" action on GitLab (for example "Issues events") to send one.
+                </p>
+              } @else {
+                <p class="repository-webhook__hint">
+                  Waiting for the first delivery. If you already added the webhook, redeliver the <code>ping</code>
+                  event from the webhook's "Recent Deliveries" tab on GitHub.
+                </p>
+              }
             }
             @if (info.status === 'silent') {
               <p class="repository-webhook__hint">
@@ -66,10 +74,12 @@ import { RepositoryWebhookInfo, webhookStatusLabel } from '../repository.model';
               <dt>Payload URL</dt>
               <dd><code class="repository-webhook__value">{{ info.payloadUrl }}</code></dd>
 
-              <dt>Content type</dt>
-              <dd><code class="repository-webhook__value">{{ info.contentType }}</code></dd>
+              @if (info.provider !== 'gitlab') {
+                <dt>Content type</dt>
+                <dd><code class="repository-webhook__value">{{ info.contentType }}</code></dd>
+              }
 
-              <dt>Secret</dt>
+              <dt>{{ info.provider === 'gitlab' ? 'Secret token' : 'Secret' }}</dt>
               <dd>
                 @if (_secret(); as secret) {
                   <code class="repository-webhook__value repository-webhook__secret">{{ secret }}</code>
@@ -83,9 +93,15 @@ import { RepositoryWebhookInfo, webhookStatusLabel } from '../repository.model';
                 }
               </dd>
 
-              <dt>Events</dt>
+              <dt>{{ info.provider === 'gitlab' ? 'Trigger' : 'Events' }}</dt>
               <dd>
-                <p class="repository-webhook__events-hint">Choose "Let me select individual events" and tick exactly:</p>
+                @if (info.provider === 'gitlab') {
+                  <p class="repository-webhook__events-hint">
+                    Tick these triggers (the confidential ones only matter for confidential issues and comments):
+                  </p>
+                } @else {
+                  <p class="repository-webhook__events-hint">Choose "Let me select individual events" and tick exactly:</p>
+                }
                 <ul class="repository-webhook__events">
                   @for (event of info.events; track event) {
                     <li><code>{{ event }}</code></li>
@@ -93,6 +109,13 @@ import { RepositoryWebhookInfo, webhookStatusLabel } from '../repository.model';
                 </ul>
               </dd>
             </dl>
+
+            @if (info.provider === 'gitlab') {
+              <p class="repository-webhook__hint repository-webhook__test-hint">
+                After you add the webhook, use its "Test" action on GitLab (for example "Issues events"). GitLab
+                sends no ping, so the webhook waits for its first delivery before it becomes active.
+              </p>
+            }
 
             @if (info.status !== 'pending') {
               <button

@@ -3477,7 +3477,8 @@
           "payloadUrl",
           "contentType",
           "events",
-          "backstopIntervalMinutes"
+          "backstopIntervalMinutes",
+          "provider"
         ],
         "type": "object",
         "properties": {
@@ -3506,6 +3507,9 @@
               "string"
             ],
             "format": "int32"
+          },
+          "provider": {
+            "type": "string"
           }
         }
       },

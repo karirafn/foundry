@@ -204,15 +204,20 @@ internal sealed class MonitoringService : PeriodicBackgroundService
                 continue;
             }
 
-            IIssueProvider? provider = await ResolveProviderAsync(repo, credentialResolver, providerFactory, cancellationToken);
-            if (provider is null)
+            (IIssueProvider Provider, Credential Credential)? resolved =
+                await ResolveProviderAsync(repo, credentialResolver, providerFactory, cancellationToken);
+            if (resolved is not { } resolvedProvider)
             {
                 continue;
             }
 
-            Result<bool> pollResult = await poller.PollDetectingChangesAsync(repo, provider, now, cancellationToken);
+            Result<PollChanges> pollResult = await poller.PollDetectingChangesAsync(
+                repo,
+                resolvedProvider.Provider,
+                now,
+                cancellationToken);
 
-            if (pollResult is Result<bool>.Failure pollFailure)
+            if (pollResult is Result<PollChanges>.Failure pollFailure)
             {
                 _logger.LogWarning(
                     "Poll failed for repo '{Slug}': {Error}",
@@ -221,10 +226,13 @@ internal sealed class MonitoringService : PeriodicBackgroundService
                 continue;
             }
 
-            // Missed change: a scheduled poll of an Active hook found a webhook-mapped change that no
-            // delivery announced — fall back to the normal interval until the next verified delivery.
+            // Missed change: a scheduled poll of an Active hook found a change the provider has a webhook
+            // event for, yet no delivery announced — fall back to the normal interval until the next
+            // verified delivery. Changes the provider has no event for (GitLab issue links and protected
+            // branches) never count.
             if (backstopInterval is not null
-                && pollResult is Result<bool>.Success { Value: true }
+                && pollResult is Result<PollChanges>.Success pollSuccess
+                && IsMissedChange(pollSuccess.Value, resolvedProvider.Credential)
                 && repo.RecordMissedChange())
             {
                 await dbContext.SaveChangesAsync(cancellationToken);
@@ -268,15 +276,16 @@ internal sealed class MonitoringService : PeriodicBackgroundService
         {
             MonitoredRepository repo = repos[group.Key];
 
-            IIssueProvider? provider = await ResolveProviderAsync(repo, credentialResolver, providerFactory, cancellationToken);
-            if (provider is null)
+            (IIssueProvider Provider, Credential Credential)? resolved =
+                await ResolveProviderAsync(repo, credentialResolver, providerFactory, cancellationToken);
+            if (resolved is not { } resolvedProvider)
             {
                 continue;
             }
 
             foreach (NudgeKey key in group)
             {
-                await RunNudgedPassAsync(poller, repo, provider, key, now, cancellationToken);
+                await RunNudgedPassAsync(poller, repo, resolvedProvider.Provider, key, now, cancellationToken);
             }
         }
     }
@@ -376,7 +385,15 @@ internal sealed class MonitoringService : PeriodicBackgroundService
             .ToListAsync(cancellationToken);
     }
 
-    private async Task<IIssueProvider?> ResolveProviderAsync(
+    /// <summary>
+    /// Whether <paramref name="changes"/> include a category the repository's provider has a webhook
+    /// event for (<see cref="WebhookProviders.MissedChangeCategories"/>).
+    /// </summary>
+    internal static bool IsMissedChange(PollChanges changes, Credential credential) =>
+        WebhookProviders.From(credential) is { } provider
+        && (changes & WebhookProviders.MissedChangeCategories(provider)) != PollChanges.None;
+
+    private async Task<(IIssueProvider Provider, Credential Credential)?> ResolveProviderAsync(
         MonitoredRepository repo,
         ICredentialResolver credentialResolver,
         IIssueProviderFactory providerFactory,
@@ -414,6 +431,6 @@ internal sealed class MonitoringService : PeriodicBackgroundService
             return null;
         }
 
-        return providerFactory.CreateProvider(credential, present.Value);
+        return (providerFactory.CreateProvider(credential, present.Value), credential);
     }
 }

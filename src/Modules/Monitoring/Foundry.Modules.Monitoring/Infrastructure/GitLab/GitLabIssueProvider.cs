@@ -14,6 +14,12 @@ internal sealed class GitLabIssueProvider(
     string token,
     Uri apiBaseUrl) : IIssueProvider
 {
+    // Checks verdicts read alongside a merge request status, keyed by merge request URL. GitLab returns
+    // both from one GET, so the checks pass (status, then checks, for the same open merge request) costs
+    // one fetch per merge request instead of two. Each entry is consumed once by GetChecksAsync, so a
+    // verdict is never served from an earlier pass. The provider is scoped to one poll tick.
+    private readonly Dictionary<string, ProviderChecks> _checksReadWithStatus = new(StringComparer.Ordinal);
+
     public Task<Result<IssueListing>> GetIssuesAsync(
         RepositorySlug slug,
         CancellationToken cancellationToken)
@@ -37,12 +43,26 @@ internal sealed class GitLabIssueProvider(
         return httpClient.IsIssueClosedAsync(apiBaseUrl, slug, issueNumber, token, cancellationToken);
     }
 
-    public Task<Result<PullRequestStatus>> GetPullRequestStatusAsync(
+    public async Task<Result<PullRequestStatus>> GetPullRequestStatusAsync(
         RepositorySlug slug,
         string pullRequestUrl,
         CancellationToken cancellationToken)
     {
-        return httpClient.GetPullRequestStatusAsync(apiBaseUrl, slug, pullRequestUrl, token, cancellationToken);
+        Result<MergeRequestSnapshot> snapshot = await httpClient.GetMergeRequestSnapshotAsync(
+            apiBaseUrl,
+            slug,
+            pullRequestUrl,
+            token,
+            cancellationToken);
+
+        if (snapshot is not Result<MergeRequestSnapshot>.Success success)
+        {
+            _checksReadWithStatus.Remove(pullRequestUrl);
+            return Result<PullRequestStatus>.Fail(((Result<MergeRequestSnapshot>.Failure)snapshot).Error);
+        }
+
+        _checksReadWithStatus[pullRequestUrl] = success.Value.Checks;
+        return Result<PullRequestStatus>.Ok(success.Value.Status);
     }
 
     public async Task<Result<ReviewFeedback>> GetReviewFeedbackAsync(
@@ -188,6 +208,11 @@ internal sealed class GitLabIssueProvider(
         string pullRequestUrl,
         CancellationToken cancellationToken)
     {
+        if (_checksReadWithStatus.Remove(pullRequestUrl, out ProviderChecks? checks))
+        {
+            return Task.FromResult(Result<ProviderChecks>.Ok(checks));
+        }
+
         return httpClient.GetChecksAsync(apiBaseUrl, slug, pullRequestUrl, token, cancellationToken);
     }
 
