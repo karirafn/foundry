@@ -115,9 +115,9 @@
     @if (tokens(); as t) {
       <dl class="floor-lane__tokens">
         <div><dt>In</dt><dd>{{ t.input }}</dd></div>
-        <div><dt>Out</dt><dd>{{ t.output }}</dd></div>
-        <div><dt>Cache read</dt><dd>{{ t.cacheRead }}</dd></div>
-        <div><dt>Cache write</dt><dd>{{ t.cacheCreation }}</dd></div>
+        @if (t.output !== null) {
+          <div><dt>Out</dt><dd>{{ t.output }}</dd></div>
+        }
       </dl>
     }
     @if (lastEvent(); as event) {

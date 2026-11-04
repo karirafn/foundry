@@ -1113,9 +1113,9 @@ export interface components {
             /** Format: double */
             totalCostUsd: number | string;
             /** Format: int64 */
-            inputTokens: number | string;
+            inputTokens: null | number | string;
             /** Format: int64 */
-            outputTokens: number | string;
+            outputTokens: null | number | string;
         };
         StartLoginResponse: {
             /** Format: uuid */
@@ -1292,7 +1292,7 @@ export interface components {
             numTurns: null | number | string;
             /** Format: double */
             totalCostUsd: null | number | string;
-            /** Format: int32 */
+            /** Format: int64 */
             inputTokens: null | number | string;
             /** Format: int32 */
             outputTokens: null | number | string;

@@ -37,12 +37,18 @@ public sealed record InFlightTool(
     string? Summary,
     DateTimeOffset? StartedAt);
 
-/// <summary>Token totals summed across assistant messages, de-duplicated by message id.</summary>
+/// <summary>Billable token totals for the run so far.</summary>
+/// <param name="InputTokens">
+/// Billable input tokens (uncached + cache-read + cache-write) summed across streamed assistant
+/// messages, de-duplicated by message id.
+/// </param>
+/// <param name="OutputTokens">
+/// Final output tokens from the <c>result</c> event's <c>modelUsage</c>; <see langword="null"/>
+/// until the session completes, because streamed messages only carry a start-of-message stub.
+/// </param>
 public sealed record AgentTokenTotals(
     long InputTokens,
-    long OutputTokens,
-    long CacheReadInputTokens,
-    long CacheCreationInputTokens);
+    long? OutputTokens);
 
 /// <summary>Payload broadcast when a run leaves <c>ActiveRun</c> and its projection is disposed.</summary>
 public sealed record AgentActivityEnded(

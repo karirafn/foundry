@@ -19,7 +19,7 @@ function buildActivity(overrides: Partial<AgentActivity> = {}): AgentActivity {
     subagents: [],
     activeSkill: null,
     inFlightTool: null,
-    tokens: { inputTokens: 0, outputTokens: 0, cacheReadInputTokens: 0, cacheCreationInputTokens: 0 },
+    tokens: { inputTokens: 0, outputTokens: 0 },
     ...overrides,
   };
 }
@@ -164,7 +164,7 @@ describe('laneStepText', () => {
   it('should not change when only token totals change', () => {
     // Arrange
     const before = buildActivity();
-    const after = buildActivity({ tokens: { inputTokens: 5, outputTokens: 9, cacheReadInputTokens: 1, cacheCreationInputTokens: 2 } });
+    const after = buildActivity({ tokens: { inputTokens: 5, outputTokens: 9 } });
 
     // Act / Assert
     expect(laneStepText(after)).toBe(laneStepText(before));

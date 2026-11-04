@@ -4,6 +4,8 @@ using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 
 using Foundry.Modules.Workers.Contracts;
+using Foundry.Modules.Workers.Domain.ValueObjects;
+using Foundry.Modules.Workers.Features.Outcome;
 using Foundry.Modules.Workers.Features.Runs;
 using Foundry.Shared.Infrastructure.Docker;
 
@@ -36,9 +38,9 @@ internal sealed partial class AgentActivityProjection
     private long _sequence;
     private string? _activeSkill;
     private long _inputTokens;
-    private long _outputTokens;
     private long _cacheReadInputTokens;
     private long _cacheCreationInputTokens;
+    private long? _finalOutputTokens;
 
     public DateTimeOffset? LastEventAt { get; private set; }
 
@@ -93,6 +95,7 @@ internal sealed partial class AgentActivityProjection
                 _subagents.Clear();
                 _subagentKeyByTaskId.Clear();
                 _activeSkill = null;
+                _finalOutputTokens = ModelUsageReader.Read(evt).OutputTokens;
                 break;
         }
 
@@ -133,14 +136,16 @@ internal sealed partial class AgentActivityProjection
             ActiveSkill: _activeSkill,
             InFlightTool: inFlightTool,
             Tokens: new AgentTokenTotals(
-                _inputTokens,
-                _outputTokens,
-                _cacheReadInputTokens,
-                _cacheCreationInputTokens));
+                new TokenUsage(_inputTokens, _cacheReadInputTokens, _cacheCreationInputTokens, null)
+                    .BillableInputTokens ?? 0,
+                _finalOutputTokens));
     }
 
     private void ApplyAssistant(JsonObject evt, DateTimeOffset at)
     {
+        // A claude -c retry continues after a result event: its output is not final any more.
+        _finalOutputTokens = null;
+
         CountUsage(evt["message"]);
 
         string? parentToolUseId = ReadString(evt["parent_tool_use_id"]);
@@ -157,6 +162,8 @@ internal sealed partial class AgentActivityProjection
     private void CountUsage(JsonNode? message)
     {
         // Each message is emitted once per content block with identical usage, so count it once.
+        // Streamed output_tokens is a start-of-message stub, never the final count, so only the
+        // input buckets are summed here; final output comes from the result event.
         if (message?["usage"] is not JsonObject usage
             || ReadString(message["id"]) is not { } messageId)
         {
@@ -174,7 +181,6 @@ internal sealed partial class AgentActivityProjection
         }
 
         _inputTokens += ReadLong(usage["input_tokens"]);
-        _outputTokens += ReadLong(usage["output_tokens"]);
         _cacheReadInputTokens += ReadLong(usage["cache_read_input_tokens"]);
         _cacheCreationInputTokens += ReadLong(usage["cache_creation_input_tokens"]);
     }

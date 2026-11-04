@@ -161,7 +161,7 @@ public sealed class OnConnectedAsync
             Subagents: [],
             ActiveSkill: null,
             InFlightTool: new InFlightTool("Bash", "dotnet test", DateTimeOffset.UtcNow),
-            Tokens: new AgentTokenTotals(1, 2, 3, 4));
+            Tokens: new AgentTokenTotals(1, 2));
     }
 
     private static WorkerHub CreateHub(
