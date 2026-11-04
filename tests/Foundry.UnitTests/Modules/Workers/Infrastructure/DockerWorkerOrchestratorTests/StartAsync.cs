@@ -36,6 +36,10 @@ public sealed class StartAsync
         IReadOnlyList<string>? capabilities = null,
         IReadOnlyDictionary<string, string>? labels = null,
         bool unmaskSystemPaths = false,
+        IReadOnlyList<string>? droppedCapabilities = null,
+        bool readOnlyRootFilesystem = false,
+        IReadOnlyDictionary<string, string>? tmpfsMounts = null,
+        IReadOnlyList<string>? scratchVolumePaths = null,
         int memoryLimitMb = DefaultMemoryLimitMb,
         double cpuLimit = DefaultCpuLimit,
         int pidsLimit = DefaultPidsLimit) =>
@@ -54,6 +58,10 @@ public sealed class StartAsync
             VolumeMounts = volumeMounts ?? [],
             Capabilities = capabilities ?? [],
             UnmaskSystemPaths = unmaskSystemPaths,
+            DroppedCapabilities = droppedCapabilities ?? [],
+            ReadOnlyRootFilesystem = readOnlyRootFilesystem,
+            TmpfsMounts = tmpfsMounts ?? new Dictionary<string, string>(),
+            ScratchVolumePaths = scratchVolumePaths ?? [],
         };
 
     private static DockerWorkerOrchestrator BuildSut(FakeDockerContainerRuntime runtime) => new(runtime);
@@ -247,6 +255,112 @@ public sealed class StartAsync
         // Assert
         CreateContainerParameters captured = runtime.LastCreateAndStartParameters.ShouldNotBeNull();
         captured.HostConfig.CapAdd.ShouldBe(["SYS_ADMIN"], ignoreOrder: false);
+    }
+
+    [Fact]
+    public async Task WhenSpecDropsCapabilities_SetsHostConfigCapDrop()
+    {
+        // Arrange
+        FakeDockerContainerRuntime runtime = new();
+        DockerWorkerOrchestrator sut = BuildSut(runtime);
+
+        // Act
+        await sut.StartAsync(MinimalSpec(droppedCapabilities: ["ALL"]), CancellationToken.None);
+
+        // Assert
+        CreateContainerParameters captured = runtime.LastCreateAndStartParameters.ShouldNotBeNull();
+        captured.HostConfig.CapDrop.ShouldBe(["ALL"]);
+    }
+
+    [Fact]
+    public async Task WhenSpecDropsNoCapabilities_HostConfigCapDropIsNull()
+    {
+        // Arrange
+        FakeDockerContainerRuntime runtime = new();
+        DockerWorkerOrchestrator sut = BuildSut(runtime);
+
+        // Act
+        await sut.StartAsync(MinimalSpec(), CancellationToken.None);
+
+        // Assert
+        CreateContainerParameters captured = runtime.LastCreateAndStartParameters.ShouldNotBeNull();
+        captured.HostConfig.CapDrop.ShouldBeNull();
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task WhenStarted_SetsReadonlyRootfsFromSpec(bool readOnly)
+    {
+        // Arrange
+        FakeDockerContainerRuntime runtime = new();
+        DockerWorkerOrchestrator sut = BuildSut(runtime);
+
+        // Act
+        await sut.StartAsync(MinimalSpec(readOnlyRootFilesystem: readOnly), CancellationToken.None);
+
+        // Assert
+        CreateContainerParameters captured = runtime.LastCreateAndStartParameters.ShouldNotBeNull();
+        captured.HostConfig.ReadonlyRootfs.ShouldBe(readOnly);
+    }
+
+    [Fact]
+    public async Task WhenSpecHasTmpfsMounts_SetsHostConfigTmpfs()
+    {
+        // Arrange
+        FakeDockerContainerRuntime runtime = new();
+        Dictionary<string, string> tmpfs = new()
+        {
+            ["/tmp"] = "rw,nosuid,mode=1777",
+            ["/etc/claude-code"] = "rw,noexec,mode=0755",
+        };
+        DockerWorkerOrchestrator sut = BuildSut(runtime);
+
+        // Act
+        await sut.StartAsync(MinimalSpec(tmpfsMounts: tmpfs), CancellationToken.None);
+
+        // Assert
+        CreateContainerParameters captured = runtime.LastCreateAndStartParameters.ShouldNotBeNull();
+        captured.HostConfig.Tmpfs.ShouldNotBeNull().ShouldBe(tmpfs, ignoreOrder: true);
+    }
+
+    [Fact]
+    public async Task WhenSpecHasNoTmpfsMounts_HostConfigTmpfsIsNull()
+    {
+        // Arrange
+        FakeDockerContainerRuntime runtime = new();
+        DockerWorkerOrchestrator sut = BuildSut(runtime);
+
+        // Act
+        await sut.StartAsync(MinimalSpec(), CancellationToken.None);
+
+        // Assert
+        CreateContainerParameters captured = runtime.LastCreateAndStartParameters.ShouldNotBeNull();
+        captured.HostConfig.Tmpfs.ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task WhenSpecHasScratchVolumePaths_MountsAnonymousVolumesBeforeNamedOnes()
+    {
+        // Arrange
+        FakeDockerContainerRuntime runtime = new();
+        DockerWorkerOrchestrator sut = BuildSut(runtime);
+
+        // Act
+        await sut.StartAsync(
+            MinimalSpec(
+                scratchVolumePaths: ["/workspace", "/home/node"],
+                volumeMounts: [new VolumeMount("foundry-claude-credentials", "/home/node/.claude")]),
+            CancellationToken.None);
+
+        // Assert
+        CreateContainerParameters captured = runtime.LastCreateAndStartParameters.ShouldNotBeNull();
+        IList<Docker.DotNet.Models.Mount> mounts = captured.HostConfig.Mounts.ShouldNotBeNull();
+        mounts.Select(m => m.Target).ShouldBe(["/workspace", "/home/node", "/home/node/.claude"], ignoreOrder: false);
+        mounts.ShouldSatisfyAllConditions(
+            () => mounts.ShouldAllBe(m => m.Type == "volume"),
+            () => mounts.Take(2).ShouldAllBe(m => string.IsNullOrEmpty(m.Source) && !m.ReadOnly),
+            () => mounts[2].Source.ShouldBe("foundry-claude-credentials"));
     }
 
     [Fact]

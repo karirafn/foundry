@@ -9,7 +9,7 @@ namespace Foundry.UnitTests.Modules.Workers.Features.ContainerSpec.RootlessDindR
 public sealed class AllowanceSet
 {
     [Fact]
-    public void Capabilities_ContainsSysAdmin()
+    public void Capabilities_AreExactlyTheRootPhaseAndUidMapNeeds()
     {
         // Arrange
 
@@ -17,7 +17,19 @@ public sealed class AllowanceSet
         IReadOnlyList<string> capabilities = RootlessDindRunSpec.Capabilities;
 
         // Assert
-        capabilities.ShouldBe(["SYS_ADMIN"]);
+        capabilities.ShouldBe(["SETUID", "SETGID", "DAC_OVERRIDE", "SYS_ADMIN"], ignoreOrder: true);
+    }
+
+    [Fact]
+    public void Capabilities_ExtendTheHardenedSet()
+    {
+        // Arrange
+
+        // Act
+        IReadOnlyList<string> capabilities = RootlessDindRunSpec.Capabilities;
+
+        // Assert
+        WorkerHardeningSpec.Capabilities.ShouldBeSubsetOf(capabilities);
     }
 
     [Fact]

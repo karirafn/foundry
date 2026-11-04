@@ -1114,8 +1114,12 @@ public sealed class HandleAsync : IAsyncDisposable
         WorkerContainerSpec? spec = orchestrator.LastSpec;
         spec.ShouldNotBeNull();
         spec.ShouldSatisfyAllConditions(
-            () => spec.Capabilities.ShouldBe(["SYS_ADMIN"]),
+            () => spec.Capabilities.ShouldBe(["SETUID", "SETGID", "DAC_OVERRIDE", "SYS_ADMIN"], ignoreOrder: true),
+            () => spec.DroppedCapabilities.ShouldBe(["ALL"]),
             () => spec.SecurityOptions.ShouldBe(["seccomp=unconfined", "apparmor=unconfined"]),
+            () => spec.ReadOnlyRootFilesystem.ShouldBeTrue(),
+            () => spec.TmpfsMounts.ShouldBe(WorkerHardeningSpec.TmpfsMounts),
+            () => spec.ScratchVolumePaths.ShouldBe(WorkerHardeningSpec.ScratchVolumePaths),
             () => spec.UnmaskSystemPaths.ShouldBeTrue(),
             () => spec.Devices.ShouldBe(["/dev/net/tun"]),
             () => spec.Devices.ShouldNotContain("/dev/fuse"),
@@ -1201,7 +1205,7 @@ public sealed class HandleAsync : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenDockerDisabled_RootlessDindAllowancesAreAbsent()
+    public async Task WhenDockerDisabled_RootlessDindAllowancesAreAbsentAndWorkerIsHardened()
     {
         // Arrange
         StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c-no-dind");
@@ -1217,8 +1221,14 @@ public sealed class HandleAsync : IAsyncDisposable
         WorkerContainerSpec? spec = orchestrator.LastSpec;
         spec.ShouldNotBeNull();
         spec.ShouldSatisfyAllConditions(
-            () => spec.Capabilities.ShouldBeEmpty(),
-            () => spec.SecurityOptions.ShouldBeEmpty(),
+            () => spec.DroppedCapabilities.ShouldBe(["ALL"]),
+            () => spec.Capabilities.ShouldBe(["SETUID", "SETGID"], ignoreOrder: true),
+            () => spec.Capabilities.ShouldNotContain("SYS_ADMIN"),
+            () => spec.SecurityOptions.ShouldBe(["no-new-privileges:true"]),
+            () => spec.SecurityOptions.ShouldNotContain(o => o.StartsWith("seccomp=", StringComparison.Ordinal)),
+            () => spec.ReadOnlyRootFilesystem.ShouldBeTrue(),
+            () => spec.TmpfsMounts.Keys.ShouldBe(["/tmp", "/var/tmp", "/etc/claude-code"], ignoreOrder: true),
+            () => spec.ScratchVolumePaths.ShouldBe(["/workspace", "/home/node"], ignoreOrder: true),
             () => spec.Devices.ShouldBeEmpty(),
             () => spec.UnmaskSystemPaths.ShouldBeFalse(),
             () => spec.VolumeMounts.ShouldNotContain(m =>

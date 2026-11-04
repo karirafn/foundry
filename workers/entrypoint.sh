@@ -373,9 +373,12 @@ verify_managed_settings() {
 #
 # The image starts as root only so this phase can write the root-owned managed
 # file.  Nothing else — clone, auth, dockerd, claude — runs as root: the script
-# re-executes itself as node with no inheritable capabilities.  Docker's default
-# capability bounding set is left intact because rootless dockerd relies on the
-# setuid newuidmap/newgidmap.
+# re-executes itself as node with no inheritable capabilities.  Foundry starts the
+# container with every capability dropped except SETUID/SETGID for this drop
+# (ADR 0088); the bounding set is not narrowed further here because a Docker-
+# enabled worker's setuid newuidmap/newgidmap need the extra capabilities its
+# run spec adds back.  The root filesystem is read-only, so the managed file is
+# written to the root-owned tmpfs Foundry mounts at /etc/claude-code.
 # ---------------------------------------------------------------------------
 if [[ "$(id -u)" -eq 0 ]]; then
     render_managed_settings "$MANAGED_SETTINGS_FILE" || exit 1

@@ -272,7 +272,7 @@ internal sealed class IssueClaimedHandler(
             ["foundry.worker-run-id"] = startingRun.Id.Value.ToString(),
         };
 
-        WorkerContainerSpec spec = new(
+        WorkerContainerSpec spec = WorkerHardeningSpec.Apply(new(
             imageTag,
             envVars,
             bindMounts,
@@ -283,7 +283,7 @@ internal sealed class IssueClaimedHandler(
             CpuLimit = limits.CpuLimit,
             PidsLimit = limits.PidsLimit,
             VolumeMounts = volumeMounts,
-        };
+        });
 
         return installsDocker
             ? Result<WorkerContainerSpec>.Ok(ApplyRootlessDinD(spec, startingRun.Id))
