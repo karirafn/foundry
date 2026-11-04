@@ -88,7 +88,9 @@ public abstract class WorkerDispatchServiceTestBase : IAsyncDisposable
         ICredentialGate? credentialGate = null,
         IDomainEventDispatcher? domainEventDispatcher = null,
         CapturingLogger? logger = null,
-        TimeProvider? timeProvider = null)
+        TimeProvider? timeProvider = null,
+        IWebhookStatusQueries? webhookStatusQueries = null,
+        RunningBranchCompareGate? compareGate = null)
     {
         TimeProvider resolvedTimeProvider = timeProvider ?? TimeProvider.System;
         SqliteConnection connection = _connection;
@@ -136,6 +138,9 @@ public abstract class WorkerDispatchServiceTestBase : IAsyncDisposable
             prRetryDelay: TimeSpan.Zero));
 
         services.AddScoped<ICredentialGate>(_ => credentialGate ?? new AlwaysCanDispatchCredentialGate());
+        services.AddSingleton(compareGate ?? new RunningBranchCompareGate());
+        services.AddScoped<IWebhookStatusQueries>(
+            _ => webhookStatusQueries ?? new StubWebhookStatusQueries(isActive: false));
 
         ServiceProvider sp = services.BuildServiceProvider();
 

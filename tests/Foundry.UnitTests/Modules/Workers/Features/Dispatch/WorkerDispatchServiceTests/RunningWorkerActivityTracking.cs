@@ -32,14 +32,18 @@ public sealed class RunningWorkerActivityTracking : WorkerDispatchServiceTestBas
         IPostExitProviderQueries? postExitProviderQueries = null,
         IDomainEventDispatcher? domainEventDispatcher = null,
         CapturingLogger? logger = null,
-        TimeProvider? timeProvider = null)
+        TimeProvider? timeProvider = null,
+        IWebhookStatusQueries? webhookStatusQueries = null,
+        RunningBranchCompareGate? compareGate = null)
     {
         return base.BuildService(
             orchestrator,
             postExitProviderQueries: postExitProviderQueries,
             domainEventDispatcher: domainEventDispatcher,
             logger: logger,
-            timeProvider: timeProvider);
+            timeProvider: timeProvider,
+            webhookStatusQueries: webhookStatusQueries,
+            compareGate: compareGate);
     }
 
     [Fact]
@@ -392,7 +396,179 @@ public sealed class RunningWorkerActivityTracking : WorkerDispatchServiceTestBas
         activityEvents.ShouldAllBe(e => e.CommitCount == 3, "commit count unchanged — no commit-path event fired");
     }
 
+    // ─── push-webhook driven compares (issue #660) ────────────────────────────
+
+    [Fact]
+    public async Task WhenWebhookIsNotActive_CompareRunsOnEveryTick()
+    {
+        // Arrange
+        SeedActiveRun("push-not-active");
+        ConstantStatusOrchestrator orchestrator = new(new WorkerStatus(IsRunning: true, ExitCode: null, FinishedAt: null));
+        CountingCommitProviderQueries queries = new(new BranchCommitSummary(CommitCount: 1, LatestSha: "sha-1"));
+        WorkerDispatchService sut = BuildService(
+            orchestrator,
+            queries,
+            webhookStatusQueries: new StubWebhookStatusQueries(isActive: false));
+
+        // Act
+        await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
+        await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
+        await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
+
+        // Assert — exactly as before: one compare per tick
+        queries.CompareCount.ShouldBe(3);
+    }
+
+    [Fact]
+    public async Task WhenWebhookIsActiveAndNoPushArrives_CompareRunsOnlyOnFirstObservation()
+    {
+        // Arrange
+        SeedActiveRun("push-active-no-push");
+        ConstantStatusOrchestrator orchestrator = new(new WorkerStatus(IsRunning: true, ExitCode: null, FinishedAt: null));
+        CountingCommitProviderQueries queries = new(new BranchCommitSummary(CommitCount: 1, LatestSha: "sha-1"));
+        WorkerDispatchService sut = BuildService(
+            orchestrator,
+            queries,
+            webhookStatusQueries: new StubWebhookStatusQueries(isActive: true));
+
+        // Act
+        await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
+        await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
+        await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
+
+        // Assert — the first observation covers pushes that arrived before the run was running;
+        //          after that the per-tick compare is skipped.
+        queries.CompareCount.ShouldBe(1);
+
+        await using FoundryDbContext assertDb = CreateDbContext();
+        ActiveRun run = (await assertDb.Set<WorkerRun>().SingleAsync(TestContext.Current.CancellationToken)).ShouldBeOfType<ActiveRun>();
+        run.BranchCommitCount.ShouldBe(1);
+        run.LastActivityAt.ShouldNotBeNull("liveness is still recorded on every tick");
+    }
+
+    [Fact]
+    public async Task WhenWebhookIsActiveAndBranchIsPushed_NextTickComparesAndRecordsCount()
+    {
+        // Arrange
+        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
+        SeedActiveRun("push-active-pushed", branchName: "feat/7-push", monitoredRepositoryId: repositoryId);
+        ConstantStatusOrchestrator orchestrator = new(new WorkerStatus(IsRunning: true, ExitCode: null, FinishedAt: null));
+        CountingCommitProviderQueries queries = new(new BranchCommitSummary(CommitCount: 0, LatestSha: null));
+        RunningBranchCompareGate gate = new();
+        CapturingDomainEventDispatcher dispatcher = new();
+        WorkerDispatchService sut = BuildService(
+            orchestrator,
+            queries,
+            dispatcher,
+            webhookStatusQueries: new StubWebhookStatusQueries(isActive: true),
+            compareGate: gate);
+
+        await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
+        await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
+        queries.CompareCount.ShouldBe(1);
+
+        // Act — the worker pushes; the push webhook reaches Workers via ProviderBranchPushed
+        queries.Summary = new BranchCommitSummary(CommitCount: 2, LatestSha: "sha-pushed");
+        await new ProviderBranchPushedHandler(gate).HandleAsync(
+            new ProviderBranchPushed(repositoryId, "feat/7-push"),
+            TestContext.Current.CancellationToken);
+        await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
+
+        // Assert — one compare for the push, count recorded with a WorkerActivityObserved
+        queries.CompareCount.ShouldBe(2);
+        await using FoundryDbContext assertDb = CreateDbContext();
+        ActiveRun run = (await assertDb.Set<WorkerRun>().SingleAsync(TestContext.Current.CancellationToken)).ShouldBeOfType<ActiveRun>();
+        run.BranchCommitCount.ShouldBe(2);
+        run.LastObservedCommitSha.ShouldBe("sha-pushed");
+        dispatcher.DispatchedEvents.OfType<WorkerActivityObserved>().ShouldContain(e => e.CommitCount == 2);
+    }
+
+    [Fact]
+    public async Task WhenSeveralPushesArriveWithinOneTick_OnlyOneCompareRuns()
+    {
+        // Arrange
+        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
+        SeedActiveRun("push-burst", branchName: "feat/8-burst", monitoredRepositoryId: repositoryId);
+        ConstantStatusOrchestrator orchestrator = new(new WorkerStatus(IsRunning: true, ExitCode: null, FinishedAt: null));
+        CountingCommitProviderQueries queries = new(new BranchCommitSummary(CommitCount: 1, LatestSha: "sha-1"));
+        RunningBranchCompareGate gate = new();
+        WorkerDispatchService sut = BuildService(
+            orchestrator,
+            queries,
+            webhookStatusQueries: new StubWebhookStatusQueries(isActive: true),
+            compareGate: gate);
+
+        await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
+        queries.CompareCount.ShouldBe(1);
+
+        // Act — three pushes within the 10 s cadence, then two ticks
+        gate.RecordPush(repositoryId, "feat/8-burst");
+        gate.RecordPush(repositoryId, "feat/8-burst");
+        gate.RecordPush(repositoryId, "feat/8-burst");
+        await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
+        await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
+
+        // Assert — the burst coalesced into one compare
+        queries.CompareCount.ShouldBe(2);
+    }
+
+    [Fact]
+    public async Task WhenPushTargetsAnotherBranch_RunIsNotCompared()
+    {
+        // Arrange
+        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
+        SeedActiveRun("push-other-branch", branchName: "feat/9-mine", monitoredRepositoryId: repositoryId);
+        ConstantStatusOrchestrator orchestrator = new(new WorkerStatus(IsRunning: true, ExitCode: null, FinishedAt: null));
+        CountingCommitProviderQueries queries = new(new BranchCommitSummary(CommitCount: 1, LatestSha: "sha-1"));
+        RunningBranchCompareGate gate = new();
+        WorkerDispatchService sut = BuildService(
+            orchestrator,
+            queries,
+            webhookStatusQueries: new StubWebhookStatusQueries(isActive: true),
+            compareGate: gate);
+
+        await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
+
+        // Act
+        gate.RecordPush(repositoryId, "main");
+        gate.RecordPush(MonitoredRepositoryId.New(), "feat/9-mine");
+        await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
+
+        // Assert
+        queries.CompareCount.ShouldBe(1);
+    }
+
     // ─── orchestrator / query stubs ──────────────────────────────────────────
+
+    /// <summary>Returns <see cref="Summary"/> for every compare and counts the compares.</summary>
+    private sealed class CountingCommitProviderQueries(BranchCommitSummary summary) : IPostExitProviderQueries
+    {
+        public BranchCommitSummary Summary { get; set; } = summary;
+
+        public int CompareCount { get; private set; }
+
+        public Task<Result<bool>> CreateBranchAsync(
+            MonitoredRepositoryId repositoryId,
+            string branchName,
+            CancellationToken cancellationToken)
+            => Task.FromResult(Result<bool>.Ok(true));
+
+        public Task<Result<MergeRequestByBranch>> GetMergeRequestByBranchAsync(
+            MonitoredRepositoryId repositoryId,
+            string branchName,
+            CancellationToken cancellationToken)
+            => Task.FromResult(
+                Result<MergeRequestByBranch>.Ok(new MergeRequestByBranch(MergeRequestPresence.None, null)));
+
+        public Task<Result<BranchCommitSummary>> GetBranchCommitSummaryAsync(
+            MonitoredRepositoryId repositoryId,
+            string branchName,
+            CancellationToken cancellationToken)
+        {
+            CompareCount++;
+            return Task.FromResult(Result<BranchCommitSummary>.Ok(Summary));
+        }
+    }
 
     /// <summary>
     /// Returns firstLogs on all calls until the first SaveChanges cycle completes (i.e., first tick),

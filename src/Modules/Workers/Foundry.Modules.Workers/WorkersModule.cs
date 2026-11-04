@@ -1,4 +1,5 @@
 using Foundry.Modules.Issues.Contracts;
+using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Settings.Contracts;
 using Foundry.Modules.Workers.Contracts;
 using Foundry.Modules.Workers.Contracts.Queries;
@@ -29,6 +30,7 @@ public static class WorkersModule
     public static IServiceCollection AddWorkersModule(this IServiceCollection services)
     {
         services.AddScoped<IWorkerRunQueries, WorkerRunQueries>();
+        services.AddScoped<IRunningBranchQueries, RunningBranchQueries>();
         services.AddScoped<IWorkerLogStream, WorkerLogStream>();
         services.AddCommandHandler<RequestRunCancellation.Command, RequestRunCancellation.Response, RequestRunCancellation.Handler>();
         services.AddSingleton<AgentActivityStore>();
@@ -59,6 +61,8 @@ public static class WorkersModule
         services.AddIntegrationEventHandler<ImageBuildStarted, ImageBuildStartedBroadcastHandler>();
         services.AddIntegrationEventHandler<ImageBuildCompleted, ImageBuildCompletedBroadcastHandler>();
         services.AddIntegrationEventHandler<ImageBuildFailed, ImageBuildFailedBroadcastHandler>();
+        services.AddSingleton<RunningBranchCompareGate>();
+        services.AddIntegrationEventHandler<ProviderBranchPushed, ProviderBranchPushedHandler>();
         services.AddDomainEventHandler<WorkerActivityObserved, WorkerActivityObservedHandler>();
         services.AddDomainEventHandler<Domain.Events.WorkerRunFailed, WorkerRunFailedBridgeHandler>();
 

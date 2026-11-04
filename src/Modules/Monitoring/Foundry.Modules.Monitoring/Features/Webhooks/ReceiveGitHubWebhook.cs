@@ -15,7 +15,8 @@ namespace Foundry.Modules.Monitoring.Features.Webhooks;
 /// Receives one GitHub webhook delivery (ADR 0085). Verification fails fast at the boundary: an unknown
 /// hook id is 404; a missing or wrong <c>X-Hub-Signature-256</c> is 401 and the body is never parsed;
 /// a body for another repository is 400. A verified delivery marks the hook healthy, enqueues at most one
-/// nudge and returns 202 without calling the provider.
+/// nudge and returns 202 without calling the provider. A push to a running worker branch publishes
+/// <c>ProviderBranchPushed</c> instead of a nudge.
 /// </summary>
 internal static class ReceiveGitHubWebhook
 {
@@ -23,6 +24,7 @@ internal static class ReceiveGitHubWebhook
         DbContext dbContext,
         IIssueQueries issueQueries,
         WebhookNudgeQueue nudgeQueue,
+        BranchPushPublisher branchPushPublisher,
         ILogger<Handler> logger)
     {
         public async Task<IResult> HandleAsync(string hookId, HttpRequest request, CancellationToken cancellationToken)
@@ -71,6 +73,16 @@ internal static class ReceiveGitHubWebhook
 
             if (eventName == GitHubWebhookEventMapper.PingEvent || !repository.IsActive)
             {
+                return Results.Accepted();
+            }
+
+            if (eventName == GitHubWebhookEventMapper.PushEvent)
+            {
+                if (!await branchPushPublisher.PublishIfRelevantAsync(repository.Id, document.RootElement, cancellationToken))
+                {
+                    logger.LogDebug("Dropped push delivery for repository {Slug}: not a running worker branch.", repository.Slug);
+                }
+
                 return Results.Accepted();
             }
 

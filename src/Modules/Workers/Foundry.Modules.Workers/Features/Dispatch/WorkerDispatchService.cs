@@ -70,9 +70,16 @@ internal sealed class WorkerDispatchService(
         WorkerOutcomeResolver resolver = scope.ServiceProvider.GetRequiredService<WorkerOutcomeResolver>();
         ICredentialGate credentialGate =
             scope.ServiceProvider.GetRequiredService<ICredentialGate>();
+        RunningBranchCompareGate compareGate =
+            scope.ServiceProvider.GetRequiredService<RunningBranchCompareGate>();
+        IWebhookStatusQueries webhookStatusQueries =
+            scope.ServiceProvider.GetRequiredService<IWebhookStatusQueries>();
 
         List<ActiveRun> activeRuns = await dbContext.Set<ActiveRun>()
             .ToListAsync(cancellationToken);
+
+        compareGate.RetainRuns(activeRuns.Select(r => r.Id).ToList());
+        RunningBranchObservation branchObservation = new(compareGate, webhookStatusQueries);
 
         int timeoutMinutes = await settingsQueries.GetTimeoutMinutesAsync(cancellationToken);
 
@@ -103,6 +110,7 @@ internal sealed class WorkerDispatchService(
             containerOutputParser,
             timeoutMinutes,
             activeRuns,
+            branchObservation,
             cancellationToken);
 
         DispatchPauseState pauseState = await settingsQueries.GetDispatchPauseStateAsync(cancellationToken);
@@ -328,6 +336,7 @@ internal sealed class WorkerDispatchService(
         IContainerOutputParser containerOutputParser,
         int timeoutMinutes,
         List<ActiveRun> activeRuns,
+        RunningBranchObservation branchObservation,
         CancellationToken cancellationToken)
     {
         foreach (ActiveRun activeRun in activeRuns)
@@ -343,7 +352,8 @@ internal sealed class WorkerDispatchService(
                 containerOutputParser,
                 timeoutMinutes,
                 activeRun,
-                cancellationToken);
+                cancellationToken,
+                branchObservation: branchObservation);
         }
     }
 
@@ -359,7 +369,8 @@ internal sealed class WorkerDispatchService(
         int timeoutMinutes,
         ActiveRun activeRun,
         CancellationToken cancellationToken,
-        WorkerStatusProbe? knownProbe = null)
+        WorkerStatusProbe? knownProbe = null,
+        RunningBranchObservation? branchObservation = null)
     {
         WorkerStatusProbe statusProbe = knownProbe
             ?? await orchestrator.GetStatusAsync(activeRun.ContainerId.Value, cancellationToken);
@@ -479,6 +490,7 @@ internal sealed class WorkerDispatchService(
                         dbContext,
                         domainEventDispatcher,
                         postExitProviderQueries,
+                        branchObservation,
                         activeRun,
                         cancellationToken);
                     return;
@@ -846,6 +858,7 @@ internal sealed class WorkerDispatchService(
         DbContext dbContext,
         IDomainEventDispatcher domainEventDispatcher,
         IPostExitProviderQueries postExitProviderQueries,
+        RunningBranchObservation? branchObservation,
         ActiveRun activeRun,
         CancellationToken cancellationToken)
     {
@@ -855,6 +868,25 @@ internal sealed class WorkerDispatchService(
         // Record activity unconditionally; do not gate on log growth (claude buffers all output until exit).
         activeRun.RecordActivity(now);
 
+        if (branchObservation is null || await branchObservation.ShouldCompareAsync(activeRun, cancellationToken))
+        {
+            await RecordBranchCommitsAsync(postExitProviderQueries, activeRun, now, cancellationToken);
+        }
+
+        if (activeRun.DomainEvents.Count > 0)
+        {
+            await dbContext.SaveChangesAsync(cancellationToken);
+            await domainEventDispatcher.DispatchAsync(activeRun.DomainEvents, cancellationToken);
+            activeRun.ClearDomainEvents();
+        }
+    }
+
+    private async Task RecordBranchCommitsAsync(
+        IPostExitProviderQueries postExitProviderQueries,
+        ActiveRun activeRun,
+        DateTimeOffset now,
+        CancellationToken cancellationToken)
+    {
         Result<BranchCommitSummary> commitResult = await postExitProviderQueries.GetBranchCommitSummaryAsync(
             activeRun.MonitoredRepositoryId,
             activeRun.BranchName.Value,
@@ -882,12 +914,27 @@ internal sealed class WorkerDispatchService(
                     failure.Error);
                 break;
         }
+    }
 
-        if (activeRun.DomainEvents.Count > 0)
+    /// <summary>
+    /// Per-tick view of the running-branch compare policy (issue #660): skips the compare for a run whose
+    /// repository has an <c>Active</c> webhook unless a push is pending, so push webhooks replace polling.
+    /// </summary>
+    private sealed class RunningBranchObservation(
+        RunningBranchCompareGate gate,
+        IWebhookStatusQueries webhookStatusQueries)
+    {
+        private readonly Dictionary<MonitoredRepositoryId, bool> _webhookActive = [];
+
+        public async Task<bool> ShouldCompareAsync(ActiveRun run, CancellationToken cancellationToken)
         {
-            await dbContext.SaveChangesAsync(cancellationToken);
-            await domainEventDispatcher.DispatchAsync(activeRun.DomainEvents, cancellationToken);
-            activeRun.ClearDomainEvents();
+            if (!_webhookActive.TryGetValue(run.MonitoredRepositoryId, out bool active))
+            {
+                active = await webhookStatusQueries.IsWebhookActiveAsync(run.MonitoredRepositoryId, cancellationToken);
+                _webhookActive[run.MonitoredRepositoryId] = active;
+            }
+
+            return gate.ShouldCompare(run.Id, run.MonitoredRepositoryId, run.BranchName.Value, active);
         }
     }
 
