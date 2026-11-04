@@ -1,4 +1,5 @@
 using Foundry.Modules.Monitoring.Contracts;
+using Foundry.Modules.Monitoring.Contracts.Commands;
 using Foundry.Modules.Monitoring.Contracts.Queries;
 using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
@@ -12,7 +13,7 @@ namespace Foundry.Modules.Monitoring.Features.Providers;
 internal sealed class PostExitProviderQueries(
     DbContext dbContext,
     IIssueProviderFactory providerFactory,
-    ICredentialResolver credentialResolver) : IPostExitProviderQueries
+    ICredentialResolver credentialResolver) : IPostExitProviderQueries, IWorkBranchCommands
 {
     public async Task<Result<bool>> CreateBranchAsync(
         MonitoredRepositoryId repositoryId,
@@ -30,6 +31,24 @@ internal sealed class PostExitProviderQueries(
 
         (IIssueProvider provider, MonitoredRepository repo) = resolvedSuccess.Value;
         return await provider.CreateBranchAsync(repo.Slug, branchName, cancellationToken);
+    }
+
+    public async Task<Result<bool>> DeleteBranchAsync(
+        MonitoredRepositoryId repositoryId,
+        string branchName,
+        CancellationToken cancellationToken)
+    {
+        Result<(IIssueProvider Provider, MonitoredRepository Repo)> resolved =
+            await ResolveAsync(repositoryId, cancellationToken);
+
+        if (resolved is not Result<(IIssueProvider, MonitoredRepository)>.Success resolvedSuccess)
+        {
+            Error error = ((Result<(IIssueProvider, MonitoredRepository)>.Failure)resolved).Error;
+            return Result<bool>.Fail(error);
+        }
+
+        (IIssueProvider provider, MonitoredRepository repo) = resolvedSuccess.Value;
+        return await provider.DeleteBranchAsync(repo.Slug, branchName, cancellationToken);
     }
 
     public async Task<Result<MergeRequestByBranch>> GetMergeRequestByBranchAsync(

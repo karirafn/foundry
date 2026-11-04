@@ -19,6 +19,9 @@ const LOAD_MORE_RESOLVED_ERROR = 'Failed to load more resolved issues';
 const LOAD_DETAIL_ERROR = 'Failed to load issue details';
 const RETRY_ERROR = 'Failed to retry issue.';
 const RETRY_SUCCESS = 'Retry queued. Issue status is updating.';
+const RETRY_FRESH_ERROR = 'Failed to retry issue from a fresh branch.';
+const RETRY_FRESH_BRANCH_ERROR = 'Could not delete the branch on the provider. The issue was not requeued.';
+const RETRY_FRESH_SUCCESS = 'Branch discarded. Issue queued fresh; status is updating.';
 const SAFE_ID_RE = /^[\w-]+$/;
 const COUNTS_DEBOUNCE_MS = 300;
 // Safety-net interval for queue-order reconcile — covers order inputs that raise no IssueUpdated
@@ -352,6 +355,28 @@ export class IssueService {
         console.error(err);
         this.retrying.set(false);
         this._retryErrorSignal.set(RETRY_ERROR);
+      },
+    });
+  }
+
+  /**
+   * Discards a continuable failure's branch on the provider and requeues the issue fresh, so the
+   * next worker starts from the default branch instead of the previous commits.
+   */
+  retryIssueFresh(id: string): void {
+    this._retryErrorSignal.set(null);
+    this._retrySuccessSignal.set(null);
+    this.retrying.set(true);
+    this._http.post<IssueDetail>(`/api/issues/${encodeURIComponent(id)}/retry-fresh`, {}).subscribe({
+      next: () => {
+        this.retrying.set(false);
+        this._retrySuccessSignal.set(RETRY_FRESH_SUCCESS);
+        this.loadDetail(id);
+      },
+      error: (err: HttpErrorResponse) => {
+        console.error(err);
+        this.retrying.set(false);
+        this._retryErrorSignal.set(err.status === 502 ? RETRY_FRESH_BRANCH_ERROR : RETRY_FRESH_ERROR);
       },
     });
   }

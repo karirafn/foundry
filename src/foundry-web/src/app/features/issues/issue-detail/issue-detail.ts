@@ -340,6 +340,15 @@ import {
               [attr.aria-label]="'Retry issue #' + d.issueNumber"
               (click)="retryIssue(d.id)"
             >{{ _issueService.retrying() ? 'Retrying Issue...' : 'Retry Issue' }}</button>
+            @if (d.state === 'continuable_failed') {
+              <button
+                class="issue-detail__retry-fresh-btn"
+                type="button"
+                [disabled]="_issueService.retrying()"
+                [attr.aria-label]="'Retry issue #' + d.issueNumber + ' from a fresh branch'"
+                (click)="_confirmRetryFreshOpen.set(true)"
+              >Retry fresh</button>
+            }
             <span
               class="issue-detail__retry-error"
               aria-live="assertive"
@@ -351,6 +360,18 @@ import {
               aria-atomic="true"
             >{{ _issueService.retrySuccess() ?? '' }}</span>
           </div>
+          @if (d.state === 'continuable_failed') {
+            <fd-confirm-dialog
+              [open]="_confirmRetryFreshOpen()"
+              title="Retry from a fresh branch?"
+              message="The branch and all of its commits will be deleted on the provider, and any open pull request for it closed. The next worker starts over from the default branch. This cannot be undone."
+              confirmLabel="Discard branch and retry"
+              cancelLabel="Keep branch"
+              [destructive]="true"
+              (confirmed)="confirmRetryFresh(d.id)"
+              (dismissed)="_confirmRetryFreshOpen.set(false)"
+            />
+          }
         }
       </div>
     }
@@ -377,6 +398,8 @@ export class IssueDetailComponent {
   protected readonly _liveLogStream: Signal<Observable<string> | null> = this._liveLogStreamSignal.asReadonly();
 
   protected readonly _confirmCancelOpen: WritableSignal<boolean> = signal(false);
+
+  protected readonly _confirmRetryFreshOpen: WritableSignal<boolean> = signal(false);
 
   // Set once the user confirmed a cancel in this view; reset whenever the issue detail reloads
   // (an IssueUpdated push reloads it), after which the persisted cancelRequestedAt takes over.
@@ -410,6 +433,7 @@ export class IssueDetailComponent {
       this._cancelSubmitted.set(false);
       this._cancelErrorSignal.set(null);
       this._confirmCancelOpen.set(false);
+      this._confirmRetryFreshOpen.set(false);
 
       if (workerRunId === null) {
         this._workerRunSignal.set(null);
@@ -460,6 +484,11 @@ export class IssueDetailComponent {
 
   retryIssue(id: string): void {
     this._issueService.retryIssue(id);
+  }
+
+  confirmRetryFresh(id: string): void {
+    this._confirmRetryFreshOpen.set(false);
+    this._issueService.retryIssueFresh(id);
   }
 
   protected readonly _maxChecksFixAttempts = MAX_CHECKS_FIX_ATTEMPTS;

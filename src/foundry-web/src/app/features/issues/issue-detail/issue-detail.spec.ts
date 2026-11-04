@@ -1698,3 +1698,114 @@ describe('IssueDetailComponent — cancel run', () => {
     expect(el.querySelector('.issue-detail__cancel-note')).toBeNull();
   });
 });
+
+describe('IssueDetailComponent — retry fresh', () => {
+  function setup(state: string) {
+    const retryIssueFresh = vi.fn();
+    const retryIssue = vi.fn();
+    TestBed.resetTestingModule();
+    TestBed.configureTestingModule({
+      imports: [IssueDetailComponent],
+      providers: [
+        {
+          provide: IssueService,
+          useValue: {
+            retrying: signal(false),
+            retryError: signal(null),
+            retrySuccess: signal(null),
+            retryIssue,
+            retryIssueFresh,
+          },
+        },
+        WorkerSignalRService,
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        { provide: IssueSignalRService, useValue: mockIssueSignalRService },
+        {
+          provide: WorkerRunService,
+          useValue: { getDetail: () => of(null), getLog: () => of(null), requestCancel: vi.fn() },
+        },
+        { provide: WORKER_HUB_FACTORY, useValue: () => mockWorkerHub },
+      ],
+    });
+    const fixture = TestBed.createComponent(IssueDetailComponent);
+    fixture.componentRef.setInput('detail', {
+      ...mockDetail,
+      state: state as IssueDetail['state'],
+      stateDetails: null,
+    });
+    fixture.componentRef.setInput('loading', false);
+    fixture.componentRef.setInput('error', null);
+    fixture.detectChanges();
+    const el = fixture.nativeElement as HTMLElement;
+    const freshButton = () => el.querySelector('.issue-detail__retry-fresh-btn') as HTMLButtonElement | null;
+    const dialog = () => el.querySelector('dialog.confirm-dialog') as HTMLDialogElement | null;
+    return { fixture, el, retryIssue, retryIssueFresh, freshButton, dialog };
+  }
+
+  it('should show Retry fresh alongside Retry Issue for a continuable failure', () => {
+    // Arrange / Act
+    const { el, freshButton } = setup('continuable_failed');
+
+    // Assert
+    expect(el.querySelector('.issue-detail__retry-btn')).not.toBeNull();
+    expect(freshButton()?.textContent?.trim()).toBe('Retry fresh');
+  });
+
+  it.each(['failed', 'revision_failed', 'unchanged', 'completed'])(
+    'should not show Retry fresh when the issue is %s',
+    (state) => {
+      // Arrange / Act
+      const { freshButton } = setup(state);
+
+      // Assert
+      expect(freshButton()).toBeNull();
+    },
+  );
+
+  it('should open a confirmation stating the branch work is discarded instead of retrying immediately', () => {
+    // Arrange
+    const { fixture, retryIssueFresh, freshButton, dialog } = setup('continuable_failed');
+
+    // Act
+    freshButton()!.click();
+    fixture.detectChanges();
+
+    // Assert
+    expect(dialog()?.open).toBe(true);
+    expect(dialog()?.textContent).toContain('Retry from a fresh branch?');
+    expect(dialog()?.textContent).toContain('The branch and all of its commits will be deleted');
+    expect(retryIssueFresh).not.toHaveBeenCalled();
+  });
+
+  it('should retry fresh once confirmed', () => {
+    // Arrange
+    const { fixture, retryIssue, retryIssueFresh, freshButton, dialog } = setup('continuable_failed');
+    freshButton()!.click();
+    fixture.detectChanges();
+
+    // Act
+    (dialog()!.querySelector('.confirm-dialog__confirm') as HTMLButtonElement).click();
+    fixture.detectChanges();
+
+    // Assert
+    expect(retryIssueFresh).toHaveBeenCalledWith(mockDetail.id);
+    expect(retryIssue).not.toHaveBeenCalled();
+    expect(dialog()?.open).toBe(false);
+  });
+
+  it('should not retry when the confirmation is dismissed', () => {
+    // Arrange
+    const { fixture, retryIssueFresh, freshButton, dialog } = setup('continuable_failed');
+    freshButton()!.click();
+    fixture.detectChanges();
+
+    // Act
+    (dialog()!.querySelector('.confirm-dialog__cancel') as HTMLButtonElement).click();
+    fixture.detectChanges();
+
+    // Assert
+    expect(retryIssueFresh).not.toHaveBeenCalled();
+    expect(dialog()?.open).toBe(false);
+  });
+});

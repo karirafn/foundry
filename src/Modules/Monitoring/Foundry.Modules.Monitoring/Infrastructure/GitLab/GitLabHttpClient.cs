@@ -595,6 +595,48 @@ internal sealed partial class GitLabHttpClient(
         return Result<bool>.Ok(true);
     }
 
+    /// <summary>
+    /// Deletes <paramref name="branchName"/> from the project. Returns <c>true</c> when the branch
+    /// was deleted and <c>false</c> when it was already absent (404), so a repeated discard is
+    /// idempotent.
+    /// </summary>
+    public async Task<Result<bool>> DeleteBranchAsync(
+        Uri apiBaseUrl,
+        RepositorySlug slug,
+        string branchName,
+        string token,
+        CancellationToken cancellationToken)
+    {
+        if (apiBaseUrl.Scheme is not "https")
+        {
+            return Result<bool>.Fail(GitLabErrors.InvalidBaseUrl);
+        }
+
+        string encodedPath = Uri.EscapeDataString(slug.FullPath);
+        string encodedBranch = Uri.EscapeDataString(branchName);
+        string relativePath = $"projects/{encodedPath}/repository/branches/{encodedBranch}";
+        Uri requestUri = new(EnsureTrailingSlash(apiBaseUrl), relativePath);
+
+        using HttpRequestMessage request = new(HttpMethod.Delete, requestUri);
+        AddCommonHeaders(request, token);
+
+        using HttpResponseMessage response = await httpClient.SendAsync(request, cancellationToken);
+
+        if (response.StatusCode == HttpStatusCode.NotFound)
+        {
+            RecordRestHeadroom(response);
+            return Result<bool>.Ok(false);
+        }
+
+        if (!response.IsSuccessStatusCode)
+        {
+            return Result<bool>.Fail(ErrorFromNonSuccess(response));
+        }
+
+        RecordRestHeadroom(response);
+        return Result<bool>.Ok(true);
+    }
+
     public async Task<Result<MergeRequestByBranch>> GetMergeRequestByBranchAsync(
         Uri apiBaseUrl,
         RepositorySlug slug,

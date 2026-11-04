@@ -183,7 +183,8 @@
     gap: var(--fd-spacing-md);
   }
 
-  &__cancel-btn {
+  &__cancel-btn,
+  &__retry-fresh-btn {
     display: inline-flex;
     align-items: center;
     justify-content: center;
