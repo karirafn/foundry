@@ -60,13 +60,13 @@ public sealed class Build
         rules.ShouldContain("Bash(git push --delete:*)");
         rules.ShouldContain("Bash(git push * HEAD:*)");
         rules.ShouldContain("Bash(git push * :*)");
-        rules.ShouldContain("Edit(.github/workflows/**:*)");
-        rules.ShouldContain("Edit(.gitlab-ci.yml:*)");
-        rules.ShouldContain("Edit(Dockerfile:*)");
-        rules.ShouldContain("Edit(docker-compose*.yml:*)");
-        rules.ShouldContain("Edit(docker-compose.yaml:*)");
-        rules.ShouldContain("Edit(compose.yml:*)");
-        rules.ShouldContain("Edit(compose.yaml:*)");
+        rules.ShouldContain("Edit(**/.github/workflows/**)");
+        rules.ShouldContain("Edit(**/.gitlab-ci.yml)");
+        rules.ShouldContain("Edit(**/Dockerfile)");
+        rules.ShouldContain("Edit(**/docker-compose*.yml)");
+        rules.ShouldContain("Edit(**/docker-compose.yaml)");
+        rules.ShouldContain("Edit(**/compose.yml)");
+        rules.ShouldContain("Edit(**/compose.yaml)");
     }
 
     [Fact]
@@ -163,13 +163,29 @@ public sealed class Build
         string[] rules = DenyRules(json);
 
         rules.ShouldSatisfyAllConditions(
-            () => rules.ShouldContain("Edit(.github/workflows/**:*)"),
-            () => rules.ShouldContain("Edit(.gitlab-ci.yml:*)"),
-            () => rules.ShouldContain("Edit(Dockerfile:*)"),
-            () => rules.ShouldContain("Edit(docker-compose*.yml:*)"),
-            () => rules.ShouldContain("Edit(docker-compose.yaml:*)"),
-            () => rules.ShouldContain("Edit(compose.yml:*)"),
-            () => rules.ShouldContain("Edit(compose.yaml:*)"));
+            () => rules.ShouldContain("Edit(**/.github/workflows/**)"),
+            () => rules.ShouldContain("Edit(**/.gitlab-ci.yml)"),
+            () => rules.ShouldContain("Edit(**/Dockerfile)"),
+            () => rules.ShouldContain("Edit(**/docker-compose*.yml)"),
+            () => rules.ShouldContain("Edit(**/docker-compose.yaml)"),
+            () => rules.ShouldContain("Edit(**/compose.yml)"),
+            () => rules.ShouldContain("Edit(**/compose.yaml)"));
+    }
+
+    [Fact]
+    public void WhenBlockCiCdEditsTrue_CiCdRulesArePathGlobsMatchingAnyDepth()
+    {
+        // Arrange
+        ClaudeCodeSettingsSnapshot snapshot = Snapshot(blockCiCdEdits: true);
+
+        // Act
+        string json = WorkerSettingsBuilder.Build(snapshot);
+
+        // Assert — Claude Code skips Edit rules using the Bash-only ":*" prefix syntax as invalid.
+        string[] editRules = [.. DenyRules(json).Where(rule => rule.StartsWith("Edit(", StringComparison.Ordinal))];
+
+        editRules.Length.ShouldBe(7);
+        editRules.ShouldAllBe(rule => rule.StartsWith("Edit(**/", StringComparison.Ordinal) && !rule.Contains(":*"));
     }
 
     [Fact]
@@ -186,13 +202,13 @@ public sealed class Build
 
         rules.Length.ShouldBe(10);
         rules.ShouldSatisfyAllConditions(
-            () => rules.ShouldNotContain("Edit(.github/workflows/**:*)"),
-            () => rules.ShouldNotContain("Edit(.gitlab-ci.yml:*)"),
-            () => rules.ShouldNotContain("Edit(Dockerfile:*)"),
-            () => rules.ShouldNotContain("Edit(docker-compose*.yml:*)"),
-            () => rules.ShouldNotContain("Edit(docker-compose.yaml:*)"),
-            () => rules.ShouldNotContain("Edit(compose.yml:*)"),
-            () => rules.ShouldNotContain("Edit(compose.yaml:*)"));
+            () => rules.ShouldNotContain("Edit(**/.github/workflows/**)"),
+            () => rules.ShouldNotContain("Edit(**/.gitlab-ci.yml)"),
+            () => rules.ShouldNotContain("Edit(**/Dockerfile)"),
+            () => rules.ShouldNotContain("Edit(**/docker-compose*.yml)"),
+            () => rules.ShouldNotContain("Edit(**/docker-compose.yaml)"),
+            () => rules.ShouldNotContain("Edit(**/compose.yml)"),
+            () => rules.ShouldNotContain("Edit(**/compose.yaml)"));
     }
 
     [Fact]
@@ -254,8 +270,8 @@ public sealed class Build
         rules.Length.ShouldBe(18);
         rules[0].ShouldBe("Bash(git push --force:*)");
         rules[9].ShouldBe("Bash(git push * :*)");
-        rules[10].ShouldBe("Edit(.github/workflows/**:*)");
-        rules[16].ShouldBe("Edit(compose.yaml:*)");
+        rules[10].ShouldBe("Edit(**/.github/workflows/**)");
+        rules[16].ShouldBe("Edit(**/compose.yaml)");
         rules[17].ShouldBe("Bash(rm -rf:*)");
     }
 
