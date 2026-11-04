@@ -18,6 +18,7 @@ import { AccountService } from '../../accounts/account.service';
 import { RepositoryService } from '../repository.service';
 import { RepositoryListComponent } from '../repository-list/repository-list';
 import { RepositoryFormComponent } from '../repository-form/repository-form';
+import { ConfirmDialogComponent } from '../../../../shared/components/confirm-dialog/confirm-dialog';
 import {
   RepositorySummary,
   CreateRepositoryRequest,
@@ -30,7 +31,7 @@ type RepositoryView = { kind: 'list' } | { kind: 'add' };
 @Component({
   selector: 'fd-settings-repositories',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [RepositoryListComponent, RepositoryFormComponent],
+  imports: [RepositoryListComponent, RepositoryFormComponent, ConfirmDialogComponent],
   template: `
     <div class="repositories-settings">
       <section class="repositories-settings__section">
@@ -54,6 +55,16 @@ type RepositoryView = { kind: 'list' } | { kind: 'add' };
                 {{ deleteError }}
               }
             </div>
+            <fd-confirm-dialog
+              [open]="_pendingDeleteRepository() !== null"
+              title="Delete repository?"
+              [message]="_deleteRepositoryMessage()"
+              confirmLabel="Delete repository"
+              cancelLabel="Keep repository"
+              [destructive]="true"
+              (confirmed)="confirmDeleteRepository()"
+              (dismissed)="cancelDeleteRepository()"
+            />
           }
           @case ('add') {
             <fd-repository-form
@@ -87,6 +98,11 @@ export class SettingsRepositoriesComponent implements OnInit {
 
   protected readonly _repositoryView: WritableSignal<RepositoryView> = signal({ kind: 'list' });
   protected readonly _addOutcome: WritableSignal<CreateRepositoryResponse | null> = signal(null);
+  protected readonly _pendingDeleteRepository: WritableSignal<RepositorySummary | null> = signal(null);
+  protected readonly _deleteRepositoryMessage: Signal<string> = computed(() => {
+    const repository = this._pendingDeleteRepository();
+    return repository ? `Delete repository "${repository.slug}"? Foundry will stop monitoring it.` : '';
+  });
   private readonly _selectedAccountId: WritableSignal<string> = signal('');
   private readonly _accountIdsKey: Signal<string> = computed(() =>
     this.accountService.accounts().map(a => a.id).sort().join(',')
@@ -135,13 +151,24 @@ export class SettingsRepositoriesComponent implements OnInit {
   }
 
   onDelete(repository: RepositorySummary): void {
-    if (window.confirm(`Delete repository "${repository.slug}"?`)) {
-      this.repositoryService.deleteRepository(repository.accountId, repository.id)
-        .subscribe({
-          next: () => this._reloadAll(),
-          error: () => { /* handled via deleteError signal */ },
-        });
+    this._pendingDeleteRepository.set(repository);
+  }
+
+  confirmDeleteRepository(): void {
+    const repository = this._pendingDeleteRepository();
+    this._pendingDeleteRepository.set(null);
+    if (!repository) {
+      return;
     }
+    this.repositoryService.deleteRepository(repository.accountId, repository.id)
+      .subscribe({
+        next: () => this._reloadAll(),
+        error: () => { /* handled via deleteError signal */ },
+      });
+  }
+
+  cancelDeleteRepository(): void {
+    this._pendingDeleteRepository.set(null);
   }
 
   onAccountSelected(accountId: string): void {

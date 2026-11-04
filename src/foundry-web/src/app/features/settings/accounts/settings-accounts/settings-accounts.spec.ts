@@ -495,7 +495,7 @@ describe('SettingsAccountsComponent', () => {
     document.body.removeChild(fixture.nativeElement);
   });
 
-  it('should call deleteAccount with confirmation when onDeleteAccount is invoked', () => {
+  it('should open fd-confirm-dialog and call deleteAccount when the dialog is confirmed', () => {
     // Arrange
     const account: AccountSummary = {
       id: '1',
@@ -511,12 +511,28 @@ describe('SettingsAccountsComponent', () => {
     fixture.detectChanges();
     flushAccounts(httpMock, [account]);
     fixture.detectChanges();
-    vi.spyOn(window, 'confirm').mockReturnValue(true);
+    const nativeConfirm = vi.fn();
+    vi.stubGlobal('confirm', nativeConfirm);
 
     // Act
     fixture.componentInstance.onDeleteAccount(account);
+    fixture.detectChanges();
+    const el = fixture.nativeElement as HTMLElement;
+    const dialog = el.querySelector('fd-confirm-dialog dialog') as HTMLDialogElement;
+
+    // Assert — the shared dialog asks, not the native confirm
+    expect(dialog.open).toBe(true);
+    expect(dialog.querySelector('.confirm-dialog__message')?.textContent).toContain('Delete account "My Org"?');
+    expect(nativeConfirm).not.toHaveBeenCalled();
+    httpMock.expectNone(`/api/accounts/${account.id}`);
+    vi.unstubAllGlobals();
+
+    // Act — confirm
+    (dialog.querySelector('.confirm-dialog__confirm') as HTMLButtonElement).click();
+    fixture.detectChanges();
 
     // Assert
+    expect(dialog.open).toBe(false);
     const req = httpMock.expectOne(`/api/accounts/${account.id}`);
     expect(req.request.method).toBe('DELETE');
     req.flush(null);
@@ -569,7 +585,7 @@ describe('SettingsAccountsComponent', () => {
     httpMock.expectOne('/api/accounts/1').flush(null);
   });
 
-  it('should not call deleteAccount when confirmation is declined', () => {
+  it('should not call deleteAccount when the confirm dialog is dismissed', () => {
     // Arrange
     const account: AccountSummary = {
       id: '1',
@@ -585,12 +601,17 @@ describe('SettingsAccountsComponent', () => {
     fixture.detectChanges();
     flushAccounts(httpMock, [account]);
     fixture.detectChanges();
-    vi.spyOn(window, 'confirm').mockReturnValue(false);
 
     // Act
     fixture.componentInstance.onDeleteAccount(account);
+    fixture.detectChanges();
+    const el = fixture.nativeElement as HTMLElement;
+    const dialog = el.querySelector('fd-confirm-dialog dialog') as HTMLDialogElement;
+    (dialog.querySelector('.confirm-dialog__cancel') as HTMLButtonElement).click();
+    fixture.detectChanges();
 
-    // Assert - no DELETE request should have been made
+    // Assert - dialog closed and no DELETE request should have been made
+    expect(dialog.open).toBe(false);
     httpMock.expectNone(`/api/accounts/${account.id}`);
   });
 

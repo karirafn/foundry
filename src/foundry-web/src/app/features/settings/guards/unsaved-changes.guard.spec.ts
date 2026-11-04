@@ -1,6 +1,7 @@
 import { TestBed } from '@angular/core/testing';
 import { vi } from 'vitest';
 import { unsavedChangesGuard, UnsavedChanges } from './unsaved-changes.guard';
+import { ConfirmDialogService } from '../../../shared/components/confirm-dialog/confirm-dialog.service';
 
 function makeComponent(dirty: boolean): UnsavedChanges {
   return { hasUnsavedChanges: () => dirty };
@@ -16,47 +17,63 @@ function runGuard(component: UnsavedChanges): any {
 describe('unsavedChangesGuard', () => {
   afterEach(() => vi.restoreAllMocks());
 
-  // Cycle 1: returns true when component has no unsaved changes (clean)
   it('should return true when the component has no unsaved changes', () => {
     // Arrange
     const component = makeComponent(false);
+    const confirmSpy = vi.spyOn(TestBed.inject(ConfirmDialogService), 'confirm');
 
     // Act
     const result = runGuard(component);
 
     // Assert
     expect(result).toBe(true);
+    expect(confirmSpy).not.toHaveBeenCalled();
   });
 
-  // Cycle 2: consults window.confirm when the component has unsaved changes and honours true
-  it('should call window.confirm and return true when the user confirms leaving', () => {
+  it('should confirm through the shared confirm dialog and allow leaving when confirmed', async () => {
     // Arrange
     const component = makeComponent(true);
-    vi.spyOn(window, 'confirm').mockReturnValue(true);
+    const confirmSpy = vi
+      .spyOn(TestBed.inject(ConfirmDialogService), 'confirm')
+      .mockResolvedValue(true);
 
     // Act
-    const result = runGuard(component);
+    const result = await runGuard(component);
 
     // Assert
-    expect(window.confirm).toHaveBeenCalledWith(
-      'You have unsaved changes. Leave this page and discard them?',
+    expect(confirmSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        message: 'You have unsaved changes. Leave this page and discard them?',
+        destructive: true,
+      }),
     );
     expect(result).toBe(true);
   });
 
-  // Cycle 3: consults window.confirm and returns false when the user cancels
-  it('should call window.confirm and return false when the user cancels', () => {
+  it('should block leaving when the confirm dialog is dismissed', async () => {
     // Arrange
     const component = makeComponent(true);
-    vi.spyOn(window, 'confirm').mockReturnValue(false);
+    vi.spyOn(TestBed.inject(ConfirmDialogService), 'confirm').mockResolvedValue(false);
 
     // Act
-    const result = runGuard(component);
+    const result = await runGuard(component);
 
     // Assert
-    expect(window.confirm).toHaveBeenCalledWith(
-      'You have unsaved changes. Leave this page and discard them?',
-    );
     expect(result).toBe(false);
+  });
+
+  it('should never fall back to the native confirm prompt', async () => {
+    // Arrange
+    const component = makeComponent(true);
+    vi.spyOn(TestBed.inject(ConfirmDialogService), 'confirm').mockResolvedValue(true);
+    const nativeConfirm = vi.fn();
+    vi.stubGlobal('confirm', nativeConfirm);
+
+    // Act
+    await runGuard(component);
+
+    // Assert
+    expect(nativeConfirm).not.toHaveBeenCalled();
+    vi.unstubAllGlobals();
   });
 });

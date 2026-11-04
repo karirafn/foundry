@@ -1,4 +1,6 @@
+import { inject } from '@angular/core';
 import { CanDeactivateFn } from '@angular/router';
+import { ConfirmDialogService } from '../../../shared/components/confirm-dialog/confirm-dialog.service';
 
 export interface UnsavedChanges {
   hasUnsavedChanges(): boolean;
@@ -10,5 +12,11 @@ export const unsavedChangesGuard: CanDeactivateFn<UnsavedChanges> = (component) 
   if (!component.hasUnsavedChanges()) {
     return true;
   }
-  return window.confirm(UNSAVED_CHANGES_MESSAGE);
+  return inject(ConfirmDialogService).confirm({
+    title: 'Discard unsaved changes?',
+    message: UNSAVED_CHANGES_MESSAGE,
+    confirmLabel: 'Discard changes',
+    cancelLabel: 'Stay on page',
+    destructive: true,
+  });
 };

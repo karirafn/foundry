@@ -3,6 +3,7 @@ import { AccountService } from '../account.service';
 import { AccountListComponent } from '../account-list/account-list';
 import { AccountFormComponent } from '../account-form/account-form';
 import { AffectedRepositoriesComponent } from '../affected-repositories/affected-repositories';
+import { ConfirmDialogComponent } from '../../../../shared/components/confirm-dialog/confirm-dialog';
 import { AccountSummary, CreateAccountRequest, UpdateAccountRequest } from '../account.model';
 
 type AccountView = { kind: 'list' } | { kind: 'add' } | { kind: 'edit'; account: AccountSummary };
@@ -10,7 +11,7 @@ type AccountView = { kind: 'list' } | { kind: 'add' } | { kind: 'edit'; account:
 @Component({
   selector: 'fd-settings-accounts',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [AccountListComponent, AccountFormComponent, AffectedRepositoriesComponent],
+  imports: [AccountListComponent, AccountFormComponent, AffectedRepositoriesComponent, ConfirmDialogComponent],
   template: `
     <div class="accounts-settings">
       <section class="accounts-settings__section">
@@ -44,6 +45,16 @@ type AccountView = { kind: 'list' } | { kind: 'add' } | { kind: 'edit'; account:
                 {{ deleteError }}
               }
             </div>
+            <fd-confirm-dialog
+              [open]="_pendingDeleteAccount() !== null"
+              title="Delete account?"
+              [message]="_deleteAccountMessage()"
+              confirmLabel="Delete account"
+              cancelLabel="Keep account"
+              [destructive]="true"
+              (confirmed)="confirmDeleteAccount()"
+              (dismissed)="cancelDeleteAccount()"
+            />
           }
           @case ('add') {
             <fd-account-form
@@ -86,6 +97,11 @@ export class SettingsAccountsComponent implements OnInit {
   @ViewChild('sectionHeading') private readonly _sectionHeading?: ElementRef<HTMLElement>;
 
   protected readonly _accountView: WritableSignal<AccountView> = signal({ kind: 'list' });
+  protected readonly _pendingDeleteAccount: WritableSignal<AccountSummary | null> = signal(null);
+  protected readonly _deleteAccountMessage: Signal<string> = computed(() => {
+    const account = this._pendingDeleteAccount();
+    return account ? `Delete account "${account.name}"? This cannot be undone.` : '';
+  });
   protected readonly _accountError: Signal<string | null> = computed(() => this.accountService.loadError());
 
   protected get _editAccount(): AccountSummary {
@@ -119,9 +135,19 @@ export class SettingsAccountsComponent implements OnInit {
   }
 
   onDeleteAccount(account: AccountSummary): void {
-    if (window.confirm(`Delete account "${account.name}"?`)) {
+    this._pendingDeleteAccount.set(account);
+  }
+
+  confirmDeleteAccount(): void {
+    const account = this._pendingDeleteAccount();
+    this._pendingDeleteAccount.set(null);
+    if (account) {
       this.accountService.deleteAccount(account.id);
     }
+  }
+
+  cancelDeleteAccount(): void {
+    this._pendingDeleteAccount.set(null);
   }
 
   onSaveNewAccount(request: CreateAccountRequest | UpdateAccountRequest): void {

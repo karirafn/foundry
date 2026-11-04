@@ -272,7 +272,7 @@ describe('SettingsRepositoriesComponent', () => {
     expect(el.querySelector('fd-repository-form')).toBeFalsy();
   });
 
-  it('should show confirm dialog and call deleteRepository when onDelete is confirmed', () => {
+  it('should open fd-confirm-dialog and call deleteRepository when the dialog is confirmed', () => {
     // Arrange
     const { fixture, httpMock } = setup();
     fixture.detectChanges();
@@ -280,13 +280,28 @@ describe('SettingsRepositoriesComponent', () => {
     fixture.detectChanges();
     flushRepositories(httpMock, ACCOUNT_1.id, [REPO_1]);
     fixture.detectChanges();
-    vi.spyOn(window, 'confirm').mockReturnValue(true);
+    const nativeConfirm = vi.fn();
+    vi.stubGlobal('confirm', nativeConfirm);
 
     // Act
     fixture.componentInstance.onDelete(REPO_1);
+    fixture.detectChanges();
+    const el = fixture.nativeElement as HTMLElement;
+    const dialog = el.querySelector('fd-confirm-dialog dialog') as HTMLDialogElement;
+
+    // Assert — the shared dialog asks, not the native confirm
+    expect(dialog.open).toBe(true);
+    expect(dialog.querySelector('.confirm-dialog__message')?.textContent).toContain(`Delete repository "${REPO_1.slug}"?`);
+    expect(nativeConfirm).not.toHaveBeenCalled();
+    httpMock.expectNone(`/api/accounts/${ACCOUNT_1.id}/repositories/${REPO_1.id}`);
+    vi.unstubAllGlobals();
+
+    // Act — confirm
+    (dialog.querySelector('.confirm-dialog__confirm') as HTMLButtonElement).click();
+    fixture.detectChanges();
 
     // Assert
-    expect(window.confirm).toHaveBeenCalledWith(`Delete repository "${REPO_1.slug}"?`);
+    expect(dialog.open).toBe(false);
     const req = httpMock.expectOne(`/api/accounts/${ACCOUNT_1.id}/repositories/${REPO_1.id}`);
     expect(req.request.method).toBe('DELETE');
     req.flush(null, { status: 204, statusText: 'No Content' });
@@ -295,7 +310,7 @@ describe('SettingsRepositoriesComponent', () => {
     flushRepositories(httpMock, ACCOUNT_1.id, []);
   });
 
-  it('should not call deleteRepository when confirmation is declined', () => {
+  it('should not call deleteRepository when the confirm dialog is dismissed', () => {
     // Arrange
     const { fixture, httpMock } = setup();
     fixture.detectChanges();
@@ -303,12 +318,17 @@ describe('SettingsRepositoriesComponent', () => {
     fixture.detectChanges();
     flushRepositories(httpMock, ACCOUNT_1.id, [REPO_1]);
     fixture.detectChanges();
-    vi.spyOn(window, 'confirm').mockReturnValue(false);
 
     // Act
     fixture.componentInstance.onDelete(REPO_1);
+    fixture.detectChanges();
+    const el = fixture.nativeElement as HTMLElement;
+    const dialog = el.querySelector('fd-confirm-dialog dialog') as HTMLDialogElement;
+    (dialog.querySelector('.confirm-dialog__cancel') as HTMLButtonElement).click();
+    fixture.detectChanges();
 
-    // Assert — no DELETE request
+    // Assert — dialog closed and no DELETE request
+    expect(dialog.open).toBe(false);
     httpMock.expectNone(`/api/accounts/${ACCOUNT_1.id}/repositories/${REPO_1.id}`);
   });
 
@@ -353,7 +373,6 @@ describe('SettingsRepositoriesComponent', () => {
     fixture.detectChanges();
     flushRepositories(httpMock, ACCOUNT_1.id, [REPO_1]);
     fixture.detectChanges();
-    vi.spyOn(window, 'confirm').mockReturnValue(true);
 
     // Act
     const repositoryService = TestBed.inject(RepositoryService);
