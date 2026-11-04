@@ -21,6 +21,9 @@ internal static class RepositoryWebhookEndpoints
 {
     internal const string ContentType = "application/json";
 
+    internal const string ProviderGitHub = "github";
+    internal const string ProviderGitLab = "gitlab";
+
     internal sealed class Handler(DbContext dbContext, WebhookIngress webhookIngress)
     {
         public async Task<Result<RepositoryWebhookInfo>> GetInfoAsync(
@@ -28,11 +31,14 @@ internal static class RepositoryWebhookEndpoints
             Guid id,
             CancellationToken cancellationToken)
         {
-            Result<MonitoredRepository> repository = await LoadAsync(accountId, id, cancellationToken);
-            return repository switch
+            Result<(MonitoredRepository Repository, Credential Credential)> loaded =
+                await LoadAsync(accountId, id, cancellationToken);
+            return loaded switch
             {
-                Result<MonitoredRepository>.Success success => await ToInfoAsync(success.Value, cancellationToken),
-                Result<MonitoredRepository>.Failure failure => Result<RepositoryWebhookInfo>.Fail(failure.Error),
+                Result<(MonitoredRepository Repository, Credential Credential)>.Success success =>
+                    await ToInfoAsync(success.Value.Repository, success.Value.Credential, cancellationToken),
+                Result<(MonitoredRepository Repository, Credential Credential)>.Failure failure =>
+                    Result<RepositoryWebhookInfo>.Fail(failure.Error),
                 _ => throw new InvalidOperationException("Unexpected result."),
             };
         }
@@ -42,13 +48,15 @@ internal static class RepositoryWebhookEndpoints
             Guid id,
             CancellationToken cancellationToken)
         {
-            Result<MonitoredRepository> repository = await LoadAsync(accountId, id, cancellationToken);
-            if (repository is not Result<MonitoredRepository>.Success success)
+            Result<(MonitoredRepository Repository, Credential Credential)> loaded =
+                await LoadAsync(accountId, id, cancellationToken);
+            if (loaded is not Result<(MonitoredRepository Repository, Credential Credential)>.Success success)
             {
-                return Result<RepositoryWebhookSecret>.Fail(((Result<MonitoredRepository>.Failure)repository).Error);
+                return Result<RepositoryWebhookSecret>.Fail(
+                    ((Result<(MonitoredRepository Repository, Credential Credential)>.Failure)loaded).Error);
             }
 
-            string secret = success.Value.EnsureWebhookSecret();
+            string secret = success.Value.Repository.EnsureWebhookSecret();
             await dbContext.SaveChangesAsync(cancellationToken);
             return Result<RepositoryWebhookSecret>.Ok(new RepositoryWebhookSecret(secret));
         }
@@ -58,31 +66,38 @@ internal static class RepositoryWebhookEndpoints
             Guid id,
             CancellationToken cancellationToken)
         {
-            Result<MonitoredRepository> repository = await LoadAsync(accountId, id, cancellationToken);
-            if (repository is not Result<MonitoredRepository>.Success success)
+            Result<(MonitoredRepository Repository, Credential Credential)> loaded =
+                await LoadAsync(accountId, id, cancellationToken);
+            if (loaded is not Result<(MonitoredRepository Repository, Credential Credential)>.Success success)
             {
-                return Result<RepositoryWebhookInfo>.Fail(((Result<MonitoredRepository>.Failure)repository).Error);
+                return Result<RepositoryWebhookInfo>.Fail(
+                    ((Result<(MonitoredRepository Repository, Credential Credential)>.Failure)loaded).Error);
             }
 
-            success.Value.MarkWebhookRegistered();
+            success.Value.Repository.MarkWebhookRegistered();
             await dbContext.SaveChangesAsync(cancellationToken);
-            return await ToInfoAsync(success.Value, cancellationToken);
+            return await ToInfoAsync(success.Value.Repository, success.Value.Credential, cancellationToken);
         }
 
         private async Task<Result<RepositoryWebhookInfo>> ToInfoAsync(
             MonitoredRepository repository,
+            Credential credential,
             CancellationToken cancellationToken)
         {
             WebhookIngressState ingress = await webhookIngress.GetStateAsync(cancellationToken);
+            WebhookProvider provider = WebhookProviders.From(credential) ?? WebhookProvider.GitHub;
             return Result<RepositoryWebhookInfo>.Ok(new RepositoryWebhookInfo(
                 RepositoryMappings.ToWebhookStatusToken(repository.EffectiveWebhookStatus(ingress.IsConfigured)),
-                ingress.GitHubPayloadUrl(repository.WebhookHookId),
+                ingress.PayloadUrl(provider, repository.WebhookHookId),
                 ContentType,
-                GitHubWebhookEventMapper.SubscribedEvents,
-                (int)ingress.BackstopInterval.TotalMinutes));
+                provider == WebhookProvider.GitLab
+                    ? GitLabWebhookEventMapper.SubscribedEvents
+                    : GitHubWebhookEventMapper.SubscribedEvents,
+                (int)ingress.BackstopInterval.TotalMinutes,
+                provider == WebhookProvider.GitLab ? ProviderGitLab : ProviderGitHub));
         }
 
-        private async Task<Result<MonitoredRepository>> LoadAsync(
+        private async Task<Result<(MonitoredRepository Repository, Credential Credential)>> LoadAsync(
             Guid accountId,
             Guid id,
             CancellationToken cancellationToken)
@@ -103,10 +118,11 @@ internal static class RepositoryWebhookEndpoints
                 || repository.Host != credential.Host
                 || !credential.Covers(repository.Slug))
             {
-                return Result<MonitoredRepository>.Fail(RepositoryErrors.NotFound(repositoryId));
+                return Result<(MonitoredRepository Repository, Credential Credential)>.Fail(
+                    RepositoryErrors.NotFound(repositoryId));
             }
 
-            return Result<MonitoredRepository>.Ok(repository);
+            return Result<(MonitoredRepository Repository, Credential Credential)>.Ok((repository, credential));
         }
     }
 

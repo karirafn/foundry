@@ -1,22 +1,11 @@
-using System.Globalization;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 
-using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Monitoring.Contracts;
 
-namespace Foundry.Modules.Monitoring.Features.Webhooks;
+using static Foundry.Modules.Monitoring.Features.Webhooks.WebhookRelevance;
 
-/// <summary>
-/// What Foundry currently tracks for one repository — the input to the relevance filter.
-/// </summary>
-internal sealed record WebhookTrackingContext(
-    IReadOnlySet<int> KnownIssueNumbers,
-    IReadOnlyList<ReviewIssueInfo> ReviewIssues,
-    IReadOnlyList<ChecksPendingIssueInfo> ChecksPendingIssues)
-{
-    internal static readonly WebhookTrackingContext Empty = new(new HashSet<int>(), [], []);
-}
+namespace Foundry.Modules.Monitoring.Features.Webhooks;
 
 /// <summary>
 /// Maps a verified GitHub delivery to at most one <see cref="NudgeKey"/> (ADR 0085), applying the
@@ -39,11 +28,8 @@ internal static partial class GitHubWebhookEventMapper
 
     internal const string PingEvent = "ping";
 
-    /// <summary>
-    /// The label that marks an issue for Foundry — the GitHub issue listing filters on it
-    /// (<c>GitHubHttpClient</c> <c>IssueListQuery</c>).
-    /// </summary>
-    internal const string TriggerLabel = "foundry";
+    /// <summary>The label that marks an issue for Foundry.</summary>
+    internal const string TriggerLabel = WebhookRelevance.TriggerLabel;
 
     /// <summary>The exact event list the operator subscribes the webhook to.</summary>
     internal static readonly IReadOnlyList<string> SubscribedEvents =
@@ -59,10 +45,6 @@ internal static partial class GitHubWebhookEventMapper
         "branch_protection_rule",
         "repository_ruleset",
     ];
-
-    // Worker branches are "<prefix>/<issue-number>-<slug>" (or "<prefix>/<issue-number>").
-    [GeneratedRegex(@"^[a-z][a-z0-9-]*/(?<number>\d{1,9})(?:-|$)", RegexOptions.CultureInvariant)]
-    private static partial Regex WorkerBranchPattern();
 
     [GeneratedRegex(@"/pull/(?<number>\d{1,9})/?$", RegexOptions.CultureInvariant)]
     private static partial Regex PullRequestUrlPattern();
@@ -133,7 +115,7 @@ internal static partial class GitHubWebhookEventMapper
         int? pullNumber = GetInt(pullRequest, "number");
         string? headBranch = TryGetObject(pullRequest, "head", out JsonElement head) ? GetString(head, "ref") : null;
 
-        return MapOwningIssue(repositoryId, tracked, pullNumber is { } n ? [n] : [], headBranch is { } b ? [b] : []);
+        return WebhookRelevance.MapOwningIssue(repositoryId, tracked, pullNumber is { } n ? [n] : [], headBranch is { } b ? [b] : [], PullRequestUrlPattern());
     }
 
     private static NudgeKey? MapIssueComment(JsonElement payload, MonitoredRepositoryId repositoryId, WebhookTrackingContext tracked)
@@ -146,7 +128,7 @@ internal static partial class GitHubWebhookEventMapper
             return null;
         }
 
-        return MapOwningIssue(repositoryId, tracked, [pullNumber], []);
+        return WebhookRelevance.MapOwningIssue(repositoryId, tracked, [pullNumber], [], PullRequestUrlPattern());
     }
 
     private static NudgeKey? MapCheckSuite(JsonElement payload, MonitoredRepositoryId repositoryId, WebhookTrackingContext tracked)
@@ -170,7 +152,7 @@ internal static partial class GitHubWebhookEventMapper
 
         List<string> branches = GetString(suite, "head_branch") is { } branch ? [branch] : [];
 
-        return MapChecksPendingIssue(repositoryId, tracked, pullNumbers, branches);
+        return WebhookRelevance.MapChecksPendingIssue(repositoryId, tracked, pullNumbers, branches, PullRequestUrlPattern());
     }
 
     private static NudgeKey? MapStatus(JsonElement payload, MonitoredRepositoryId repositoryId, WebhookTrackingContext tracked)
@@ -187,73 +169,7 @@ internal static partial class GitHubWebhookEventMapper
             }
         }
 
-        return MapChecksPendingIssue(repositoryId, tracked, [], branches);
-    }
-
-    private static NudgeKey? MapOwningIssue(
-        MonitoredRepositoryId repositoryId,
-        WebhookTrackingContext tracked,
-        IReadOnlyList<int> pullNumbers,
-        IReadOnlyList<string> branches)
-    {
-        HashSet<int> candidates = CandidateIssueNumbers(branches);
-
-        foreach (ReviewIssueInfo review in tracked.ReviewIssues)
-        {
-            if (candidates.Contains(review.IssueNumber) || MatchesPull(review.PullRequestUrl, pullNumbers))
-            {
-                return new NudgeKey(repositoryId, NudgePass.Review, review.IssueNumber);
-            }
-        }
-
-        return MapChecksPendingIssue(repositoryId, tracked, pullNumbers, branches);
-    }
-
-    private static NudgeKey? MapChecksPendingIssue(
-        MonitoredRepositoryId repositoryId,
-        WebhookTrackingContext tracked,
-        IReadOnlyList<int> pullNumbers,
-        IReadOnlyList<string> branches)
-    {
-        HashSet<int> candidates = CandidateIssueNumbers(branches);
-
-        foreach (ChecksPendingIssueInfo checksPending in tracked.ChecksPendingIssues)
-        {
-            if (candidates.Contains(checksPending.IssueNumber) || MatchesPull(checksPending.PullRequestUrl, pullNumbers))
-            {
-                return new NudgeKey(repositoryId, NudgePass.Checks, checksPending.IssueNumber);
-            }
-        }
-
-        return null;
-    }
-
-    private static HashSet<int> CandidateIssueNumbers(IReadOnlyList<string> branches)
-    {
-        HashSet<int> numbers = [];
-        foreach (string branch in branches)
-        {
-            Match match = WorkerBranchPattern().Match(branch);
-            if (match.Success && int.TryParse(match.Groups["number"].Value, NumberStyles.None, CultureInfo.InvariantCulture, out int number))
-            {
-                numbers.Add(number);
-            }
-        }
-
-        return numbers;
-    }
-
-    private static bool MatchesPull(string pullRequestUrl, IReadOnlyList<int> pullNumbers)
-    {
-        if (pullNumbers.Count == 0)
-        {
-            return false;
-        }
-
-        Match match = PullRequestUrlPattern().Match(pullRequestUrl);
-        return match.Success
-            && int.TryParse(match.Groups["number"].Value, NumberStyles.None, CultureInfo.InvariantCulture, out int number)
-            && pullNumbers.Contains(number);
+        return WebhookRelevance.MapChecksPendingIssue(repositoryId, tracked, [], branches, PullRequestUrlPattern());
     }
 
     private static bool HasLabel(JsonElement issue, string labelName)
@@ -276,32 +192,4 @@ internal static partial class GitHubWebhookEventMapper
 
     private static bool IsTriggerLabel(JsonElement label) =>
         string.Equals(GetString(label, "name"), TriggerLabel, StringComparison.OrdinalIgnoreCase);
-
-    private static bool TryGetObject(JsonElement element, string property, out JsonElement value)
-    {
-        if (element.ValueKind == JsonValueKind.Object
-            && element.TryGetProperty(property, out value)
-            && value.ValueKind == JsonValueKind.Object)
-        {
-            return true;
-        }
-
-        value = default;
-        return false;
-    }
-
-    private static int? GetInt(JsonElement element, string property) =>
-        element.ValueKind == JsonValueKind.Object
-        && element.TryGetProperty(property, out JsonElement value)
-        && value.ValueKind == JsonValueKind.Number
-        && value.TryGetInt32(out int number)
-            ? number
-            : null;
-
-    private static string? GetString(JsonElement element, string property) =>
-        element.ValueKind == JsonValueKind.Object
-        && element.TryGetProperty(property, out JsonElement value)
-        && value.ValueKind == JsonValueKind.String
-            ? value.GetString()
-            : null;
 }

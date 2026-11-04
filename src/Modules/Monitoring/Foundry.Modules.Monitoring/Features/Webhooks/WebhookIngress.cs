@@ -11,9 +11,19 @@ namespace Foundry.Modules.Monitoring.Features.Webhooks;
 internal sealed record WebhookIngressState(bool IsConfigured, string? PublicBaseUrl, TimeSpan BackstopInterval)
 {
     internal const string GitHubPathPrefix = "/webhooks/github/";
+    internal const string GitLabPathPrefix = "/webhooks/gitlab/";
 
-    internal string? GitHubPayloadUrl(string hookId) =>
-        IsConfigured && PublicBaseUrl is { } baseUrl ? $"{baseUrl}{GitHubPathPrefix}{hookId}" : null;
+    /// <summary>The payload URL to register on <paramref name="provider"/>; <see langword="null"/> when not configured.</summary>
+    internal string? PayloadUrl(WebhookProvider provider, string hookId)
+    {
+        if (!IsConfigured || PublicBaseUrl is not { } baseUrl)
+        {
+            return null;
+        }
+
+        string prefix = provider == WebhookProvider.GitLab ? GitLabPathPrefix : GitHubPathPrefix;
+        return $"{baseUrl}{prefix}{hookId}";
+    }
 }
 
 internal sealed class WebhookIngress(IOptions<WebhookIngressOptions> options, IWebhookSettingsQueries settingsQueries)

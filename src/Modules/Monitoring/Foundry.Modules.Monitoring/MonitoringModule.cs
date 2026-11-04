@@ -91,6 +91,7 @@ public static class MonitoringModule
         services.TryAddSingleton<WebhookNudgeQueue>();
         services.AddScoped<WebhookIngress>();
         services.AddScoped<ReceiveGitHubWebhook.Handler>();
+        services.AddScoped<ReceiveGitLabWebhook.Handler>();
         services.AddScoped<RepositoryWebhookEndpoints.Handler>();
         services.AddIntegrationEventHandler<IssueEnteredChecksPending, IssueEnteredChecksPendingHandler>();
 
@@ -110,6 +111,7 @@ public static class MonitoringModule
         app.MapRateBudgetEndpoints();
         app.MapRepositoryEndpoints();
         ReceiveGitHubWebhook.Endpoint.Map(app);
+        ReceiveGitLabWebhook.Endpoint.Map(app);
         return app;
     }
 }

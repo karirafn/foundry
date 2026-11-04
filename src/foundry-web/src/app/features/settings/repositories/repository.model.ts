@@ -60,13 +60,19 @@ export function webhookStatusLabel(status: WebhookStatus): string {
   }
 }
 
+/** The provider a repository webhook is registered on. */
+export type WebhookProvider = 'github' | 'gitlab';
+
 /** Manual registration details. Never carries the secret — see {@link RepositoryWebhookSecret}. */
 export interface RepositoryWebhookInfo {
   status: WebhookStatus;
   payloadUrl: string | null;
+  /** GitHub only — GitLab always sends JSON. */
   contentType: string;
+  /** GitHub event names, or GitLab trigger labels. */
   events: string[];
   backstopIntervalMinutes: number;
+  provider: WebhookProvider;
 }
 
 export interface RepositoryWebhookSecret {

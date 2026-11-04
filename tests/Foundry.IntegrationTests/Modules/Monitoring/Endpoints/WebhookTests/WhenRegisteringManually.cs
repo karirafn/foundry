@@ -59,6 +59,33 @@ public sealed class WhenRegisteringManually : IAsyncDisposable
         info.Events.ShouldContain("issues");
         info.Events.ShouldContain("check_suite");
         info.BackstopIntervalMinutes.ShouldBe(15);
+        info.Provider.ShouldBe("github");
+    }
+
+    [Fact]
+    public async Task WhenRepositoryIsOnGitLab_DetailsCarryGitLabPayloadUrlAndTriggers()
+    {
+        // Arrange
+        await WebhookTestHost.SeedSettingsAsync(_factory, "https://hooks.example.com");
+        Guid accountId = await AccountSeeder.SeedGitLabAccountAsync(_factory);
+        await AccountSeeder.SetOwnerNamespacesAsync(_factory, accountId, "group/sub");
+        MonitoredRepository repository = await WebhookTestHost.SeedRepositoryAsync(
+            _factory,
+            slug: "group/sub/project",
+            host: "gitlab.com");
+
+        // Act
+        RepositoryWebhookInfo? info = await _client.GetFromJsonAsync<RepositoryWebhookInfo>(
+            new Uri($"/api/accounts/{accountId}/repositories/{repository.Id.Value}/webhook", UriKind.Relative),
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        info.ShouldNotBeNull();
+        info.Provider.ShouldBe("gitlab");
+        info.PayloadUrl.ShouldBe($"https://hooks.example.com/webhooks/gitlab/{repository.WebhookHookId}");
+        info.Events.ShouldContain("Merge request events");
+        info.Events.ShouldContain("Pipeline events");
+        info.Events.ShouldNotContain("check_suite");
     }
 
     [Fact]

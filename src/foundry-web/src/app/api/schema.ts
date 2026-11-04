@@ -1039,6 +1039,7 @@ export interface components {
             events: string[];
             /** Format: int32 */
             backstopIntervalMinutes: number | string;
+            provider: string;
         };
         RepositoryWebhookSecret: {
             secret: string;

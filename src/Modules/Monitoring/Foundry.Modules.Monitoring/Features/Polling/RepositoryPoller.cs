@@ -3,6 +3,7 @@ using System.Diagnostics;
 using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Domain.Entities;
+using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Features.Eligibility;
 using Foundry.Modules.Monitoring.Features.Providers;
 using Foundry.Modules.Monitoring.Features.Providers.Checks;
@@ -50,26 +51,28 @@ internal sealed class RepositoryPoller(
         DateTimeOffset now,
         CancellationToken cancellationToken)
     {
-        Result<bool> result = await PollDetectingChangesAsync(repository, provider, now, cancellationToken);
+        Result<PollChanges> result = await PollDetectingChangesAsync(repository, provider, now, cancellationToken);
 
-        return result is Result<bool>.Failure failure ? failure.Error : Result.Ok();
+        return result is Result<PollChanges>.Failure failure ? failure.Error : Result.Ok();
     }
 
     /// <summary>
     /// Runs one full scheduled poll — the composition of every per-pass entry point, in the same order
-    /// and with the same saves a nudge would use (ADR 0085). Returns whether any pass found a change in
-    /// a category a provider webhook event announces (a candidate <em>missed change</em>): issue
-    /// detection, detail change or untrack; a closed issue or pull request; new review feedback; or a
-    /// provider-driven checks verdict. Time-based checks exits and dependency refreshes never count.
+    /// and with the same saves a nudge would use (ADR 0085). Returns the categories of change found —
+    /// candidate <em>missed changes</em>, filtered per provider by the caller: issue detection, detail
+    /// change or untrack; a closed issue or pull request; new review feedback; a provider-driven checks
+    /// verdict; or a branch-rule change. Time-based checks exits and dependency refreshes never count.
     /// </summary>
-    internal async Task<Result<bool>> PollDetectingChangesAsync(
+    internal async Task<Result<PollChanges>> PollDetectingChangesAsync(
         MonitoredRepository repository,
         IIssueProvider provider,
         DateTimeOffset now,
         CancellationToken cancellationToken)
     {
         // Pass 0: evaluate repository-level eligibility every poll cycle.
+        RepositoryEligibility? eligibilityBefore = repository.Eligibility;
         await EvaluateEligibilityAsync(repository, now, cancellationToken);
+        bool branchRulesChanged = BranchRuleOutcomeChanged(eligibilityBefore, repository.Eligibility);
 
         // Passes 1-2: listing (detect, detail change, complete-listing untrack), stamping the poll time.
         Result<bool> listingResult = await RunListingCoreAsync(
@@ -81,7 +84,9 @@ internal sealed class RepositoryPoller(
 
         if (listingResult is not Result<bool>.Success listingSuccess)
         {
-            return listingResult;
+            return listingResult is Result<bool>.Failure listingFailure
+                ? Result<PollChanges>.Fail(listingFailure.Error)
+                : Result<PollChanges>.Fail(new Error("Monitoring.UnexpectedResult", "The listing pass returned an unexpected result type."));
         }
 
         // Pass 3: detect dependencies for the dispatch-candidate issues the dependency handler can act on.
@@ -93,8 +98,46 @@ internal sealed class RepositoryPoller(
         // Pass 5: check provider-side checks verdict for all checks-pending issues.
         bool checksChanged = await RunChecksPassAsync(repository, provider, issueNumber: null, now, cancellationToken);
 
-        return Result<bool>.Ok(listingSuccess.Value || reviewChanged || checksChanged);
+        PollChanges changes = PollChanges.None;
+        changes |= listingSuccess.Value ? PollChanges.IssueListing : PollChanges.None;
+        changes |= reviewChanged ? PollChanges.Review : PollChanges.None;
+        changes |= checksChanged ? PollChanges.Checks : PollChanges.None;
+        changes |= branchRulesChanged ? PollChanges.BranchRules : PollChanges.None;
+        return Result<PollChanges>.Ok(changes);
     }
+
+    /// <summary>
+    /// Whether the branch-rule outcome changed between two eligibility evaluations. Only outcomes decided
+    /// by the default branch's rules compare (<c>Eligible</c>, or <c>Ineligible</c> with branch-rule
+    /// violations only); a transition through <c>Unreachable</c>, a write-probe denial or a missing
+    /// credential is not a branch-rule change.
+    /// </summary>
+    internal static bool BranchRuleOutcomeChanged(RepositoryEligibility? before, RepositoryEligibility? after)
+    {
+        HashSet<string>? beforeRules = BranchRuleViolations(before);
+        HashSet<string>? afterRules = BranchRuleViolations(after);
+
+        return beforeRules is not null && afterRules is not null && !beforeRules.SetEquals(afterRules);
+    }
+
+    private static HashSet<string>? BranchRuleViolations(RepositoryEligibility? eligibility)
+    {
+        switch (eligibility)
+        {
+            case RepositoryEligibility.Eligible:
+                return [];
+            case RepositoryEligibility.Ineligible ineligible:
+                HashSet<string> rules = ineligible.Violations.Select(v => v.Rule).ToHashSet(StringComparer.Ordinal);
+                return rules.All(IsBranchRule) ? rules : null;
+            default:
+                return null;
+        }
+    }
+
+    private static bool IsBranchRule(string rule) =>
+        rule == EligibilityViolation.AllowDirectPushesRule
+        || rule == EligibilityViolation.AllowForcePushesRule
+        || rule == EligibilityViolation.AllowDeletionRule;
 
     /// <summary>
     /// The branch-rules eligibility step on its own (nudged by <c>branch_protection_rule</c> and
