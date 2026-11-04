@@ -130,6 +130,14 @@ internal sealed class GitHubIssueProvider(
         return httpClient.ApplyBranchRulesAsync(apiBaseUrl, slug, token, cancellationToken);
     }
 
+    public Task<Result<WebhookUpsertKind>> UpsertWebhookAsync(
+        RepositorySlug slug,
+        WebhookHookSpec spec,
+        CancellationToken cancellationToken)
+    {
+        return httpClient.UpsertWebhookAsync(apiBaseUrl, slug, spec, token, cancellationToken);
+    }
+
     public async Task<Result<bool>> CreateBranchAsync(
         RepositorySlug slug,
         string branchName,

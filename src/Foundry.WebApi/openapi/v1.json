@@ -1371,6 +1371,57 @@
         }
       }
     },
+    "/api/accounts/{accountId}/repositories/{id}/webhook/register": {
+      "post": {
+        "tags": [
+          "Repositories"
+        ],
+        "summary": "Creates or updates the repository's webhook on the provider with the account's server-side token",
+        "operationId": "RegisterRepositoryWebhook",
+        "parameters": [
+          {
+            "name": "accountId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RegisterWebhookResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/repositories/{id}/position": {
       "patch": {
         "tags": [
@@ -2505,6 +2556,16 @@
           },
           "branchRules": {
             "$ref": "#/components/schemas/BranchRulesOutcome"
+          },
+          "webhook": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/WebhookRegistrationOutcome"
+              }
+            ]
           }
         }
       },
@@ -3341,6 +3402,21 @@
         "properties": {
           "status": {
             "type": "string"
+          }
+        }
+      },
+      "RegisterWebhookResponse": {
+        "required": [
+          "webhook",
+          "outcome"
+        ],
+        "type": "object",
+        "properties": {
+          "webhook": {
+            "$ref": "#/components/schemas/RepositoryWebhookInfo"
+          },
+          "outcome": {
+            "$ref": "#/components/schemas/WebhookRegistrationOutcome"
           }
         }
       },
@@ -4295,6 +4371,32 @@
               "null",
               "string"
             ]
+          }
+        }
+      },
+      "WebhookRegistrationOutcome": {
+        "required": [
+          "kind"
+        ],
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string"
+          },
+          "reason": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "detail": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "isRegistered": {
+            "type": "boolean"
           }
         }
       },

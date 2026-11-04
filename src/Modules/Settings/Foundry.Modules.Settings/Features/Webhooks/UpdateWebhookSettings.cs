@@ -21,7 +21,10 @@ internal static class UpdateWebhookSettings
     internal sealed record Command(string? PublicBaseUrl, int BackstopIntervalMinutes)
         : ICommand<GlobalSettingsSummary>;
 
-    internal sealed class Handler(DbContext dbContext) : ICommandHandler<Command, GlobalSettingsSummary>
+    internal sealed class Handler(
+        DbContext dbContext,
+        IIntegrationEventDispatcher integrationEventDispatcher)
+        : ICommandHandler<Command, GlobalSettingsSummary>
     {
         public async Task<Result<GlobalSettingsSummary>> HandleAsync(
             Command command,
@@ -35,10 +38,21 @@ internal static class UpdateWebhookSettings
                 return Result<GlobalSettingsSummary>.Fail(SettingsErrors.NotFound);
             }
 
+            string? previousPublicBaseUrl = settings.WebhookPublicBaseUrl;
+
             Result updateResult = settings.UpdateWebhookSettings(command.PublicBaseUrl, command.BackstopIntervalMinutes);
             if (updateResult is Result.Failure failure)
             {
                 return Result<GlobalSettingsSummary>.Fail(failure.Error);
+            }
+
+            // A new, non-empty URL re-points every registered hook; the event commits with the change.
+            if (settings.WebhookPublicBaseUrl is { } publicBaseUrl
+                && !string.Equals(previousPublicBaseUrl, publicBaseUrl, StringComparison.Ordinal))
+            {
+                await integrationEventDispatcher.DispatchAsync(
+                    [new WebhookPublicBaseUrlChanged(previousPublicBaseUrl, publicBaseUrl)],
+                    cancellationToken);
             }
 
             await dbContext.SaveChangesAsync(cancellationToken);

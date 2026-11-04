@@ -301,11 +301,11 @@ const CONFLICT_PANEL_HEADING_ID = 'account-form-conflict-heading';
           Branch-rules token <span class="account-form__optional">(optional)</span>
         </h3>
         <p id="account-form-branch-rules-help" class="account-form__field-hint">
-          Used only by Foundry itself to write default-branch protection. It needs
-          <strong>{{ _branchRulesPermission() }}</strong>.
+          Used only by Foundry itself for privileged provider writes: default-branch protection and
+          repository webhooks. It needs <strong>{{ _branchRulesPermission() }}</strong>.
           It is kept separate from the account token because the account token is given to every
-          worker container, and this permission also allows deleting the repository and removing its
-          rules. Workers never receive the branch-rules token.
+          worker container, and these permissions also allow deleting the repository, removing its
+          rules and re-pointing its webhooks. Workers never receive the branch-rules token.
         </p>
 
         @if (_isEditMode()) {
@@ -506,7 +506,7 @@ export class AccountFormComponent implements OnInit {
   protected readonly _branchRulesPermission: Signal<string> = computed(() =>
     this._provider() === 'GitLab'
       ? 'the Maintainer role on each project'
-      : 'the fine-grained Administration permission (Read and write)',
+      : 'the fine-grained Administration permission (Read and write) and the Webhooks permission (Read and write)',
   );
 
   protected readonly _branchRulesAriaDescribedBy: Signal<string> = computed(() => {

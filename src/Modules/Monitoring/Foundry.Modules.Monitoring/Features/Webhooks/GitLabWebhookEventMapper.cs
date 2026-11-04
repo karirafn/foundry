@@ -41,6 +41,41 @@ internal static partial class GitLabWebhookEventMapper
     ];
 
     /// <summary>
+    /// The project-hook API trigger flags matching <see cref="SubscribedEvents"/>, set to
+    /// <see langword="true"/> when Foundry registers the hook itself.
+    /// </summary>
+    internal static readonly IReadOnlyList<string> SubscribedTriggers =
+    [
+        "issues_events",
+        "confidential_issues_events",
+        "note_events",
+        "confidential_note_events",
+        "merge_requests_events",
+        "pipeline_events",
+    ];
+
+    /// <summary>
+    /// Every project-hook trigger flag Foundry sends explicitly. The ones outside
+    /// <see cref="SubscribedTriggers"/> are sent as <see langword="false"/> — notably
+    /// <c>push_events</c>, which GitLab enables by default.
+    /// </summary>
+    internal static readonly IReadOnlyList<string> AllTriggers =
+    [
+        "push_events",
+        "tag_push_events",
+        "issues_events",
+        "confidential_issues_events",
+        "note_events",
+        "confidential_note_events",
+        "merge_requests_events",
+        "job_events",
+        "pipeline_events",
+        "wiki_page_events",
+        "deployment_events",
+        "releases_events",
+    ];
+
+    /// <summary>
     /// Pipeline statuses that settle a checks verdict (<c>Checks.FromGitLab</c>): green, red or unfinished.
     /// Intermediate statuses (created, pending, running…) leave the issue checks-pending, so they are dropped.
     /// </summary>
