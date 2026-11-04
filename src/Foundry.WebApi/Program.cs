@@ -26,6 +26,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.OpenApi;
 
 const string AngularDevServerPolicy = "AngularDevServer";
+const string DataProtectionApplicationName = "Foundry";
 const string DocGenerationEntryAssemblyName = "GetDocument.Insider";
 
 // GetDocument.Insider is the build-time OpenAPI doc generation tool entry point.
@@ -46,6 +47,7 @@ builder.Services.ConfigureHttpJsonOptions(options =>
 if (!isDocGeneration)
 {
     builder.Services.AddDataProtection()
+        .SetApplicationName(DataProtectionApplicationName)
         .PersistKeysToFileSystem(new DirectoryInfo("data/dp-keys"));
 }
 
