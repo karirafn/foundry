@@ -348,6 +348,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/accounts/{accountId}/repositories/{id}/apply-branch-rules": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Applies Foundry's default-branch rules to a monitored repository */
+        post: operations["ApplyBranchRules"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/repositories/{id}/position": {
         parameters: {
             query?: never;
@@ -647,6 +664,10 @@ export interface components {
             slug: string;
             previousStatus: string;
             newStatus: string;
+        };
+        ApplyBranchRulesResponse: {
+            repository: components["schemas"]["RepositorySummary"];
+            branchRules: components["schemas"]["BranchRulesOutcome"];
         };
         AvailableRepositoriesResponse: {
             hasClaims: boolean;
@@ -1965,6 +1986,38 @@ export interface operations {
             };
             /** @description Unprocessable Entity */
             422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    ApplyBranchRules: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                accountId: string;
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApplyBranchRulesResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };

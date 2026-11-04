@@ -1,7 +1,7 @@
 import { TestBed } from '@angular/core/testing';
 import { provideRouter, Router } from '@angular/router';
 import { RepositoryListComponent } from './repository-list';
-import { RepositorySummary } from '../repository.model';
+import { ApplyBranchRulesResponse, RepositorySummary } from '../repository.model';
 import { RepositoryService } from '../repository.service';
 import { provideHttpClient } from '@angular/common/http';
 import { provideHttpClientTesting, HttpTestingController } from '@angular/common/http/testing';
@@ -1307,5 +1307,154 @@ describe('RepositoryListComponent', () => {
     // Assert
     const items = el.querySelectorAll('[role="listitem"]');
     expect(items.length).toBe(2);
+  });
+
+  // ─── Apply branch rules ───────────────────────────────────────────────────────
+
+  describe('apply branch rules', () => {
+    const BRANCH_RULES_REPO: RepositorySummary = {
+      ...MOCK_REPO_INELIGIBLE,
+      id: '00000000-0000-0000-0000-000000000099',
+      slug: 'my-org/unprotected',
+      eligibility: {
+        status: 'ineligible',
+        violations: [
+          { rule: 'branch-protection:direct-pushes', description: 'Direct pushes are allowed' },
+          { rule: 'branch-protection:force-pushes', description: 'Force pushes are allowed' },
+        ],
+        reason: null,
+      },
+    };
+    const APPLY_URL = `/api/accounts/${BRANCH_RULES_REPO.accountId}/repositories/${BRANCH_RULES_REPO.id}/apply-branch-rules`;
+    const APPLIED: ApplyBranchRulesResponse = {
+      repository: { ...BRANCH_RULES_REPO, eligibility: { status: 'eligible', violations: [], reason: null } },
+      branchRules: { kind: 'applied' },
+    };
+
+    it('should show the button when the repo is ineligible only through branch-protection violations', () => {
+      // Act
+      const { el } = setup({ repositories: [BRANCH_RULES_REPO] });
+
+      // Assert
+      const btn = el.querySelector('.repository-list__apply-rules-btn');
+      expect(btn).toBeTruthy();
+      expect(btn?.textContent?.trim()).toBe('Apply branch rules');
+    });
+
+    it('should not show the button when any violation is not a branch-protection violation', () => {
+      // Arrange
+      const mixed: RepositorySummary = {
+        ...BRANCH_RULES_REPO,
+        eligibility: {
+          status: 'ineligible',
+          violations: [
+            ...BRANCH_RULES_REPO.eligibility!.violations,
+            { rule: 'cannot-push:my-org/unprotected', description: 'Token cannot push' },
+          ],
+          reason: null,
+        },
+      };
+
+      // Act
+      const { el } = setup({ repositories: [mixed, MOCK_REPO_INELIGIBLE] });
+
+      // Assert
+      expect(el.querySelector('.repository-list__apply-rules-btn')).toBeFalsy();
+    });
+
+    it('should not show the button for eligible or unreachable repos', () => {
+      // Arrange
+      const unreachable: RepositorySummary = {
+        ...BRANCH_RULES_REPO,
+        eligibility: { status: 'unreachable', violations: [], reason: 'never-probed' },
+      };
+
+      // Act
+      const { el } = setup({ repositories: [MOCK_REPO, unreachable] });
+
+      // Assert
+      expect(el.querySelector('.repository-list__apply-rules-btn')).toBeFalsy();
+    });
+
+    it('should POST to the apply-branch-rules endpoint and show progress while in flight', () => {
+      // Arrange
+      const { el, fixture, httpMock } = setup({ repositories: [BRANCH_RULES_REPO] });
+
+      // Act
+      (el.querySelector('.repository-list__apply-rules-btn') as HTMLButtonElement).click();
+      fixture.detectChanges();
+
+      // Assert
+      const req = httpMock.expectOne(APPLY_URL);
+      expect(req.request.method).toBe('POST');
+      expect(el.querySelector('fd-repository-add-progress')?.textContent).toContain('Applying branch rules');
+      const btn = el.querySelector('.repository-list__apply-rules-btn') as HTMLButtonElement;
+      expect(btn.disabled).toBe(true);
+      expect((el.querySelector('.repository-list__recheck-btn') as HTMLButtonElement).disabled).toBe(true);
+      req.flush(APPLIED);
+    });
+
+    it('should ignore a repeated click while the request is in flight', () => {
+      // Arrange
+      const { component, httpMock } = setup({ repositories: [BRANCH_RULES_REPO] });
+
+      // Act
+      component.onApplyBranchRules(BRANCH_RULES_REPO);
+      component.onApplyBranchRules(BRANCH_RULES_REPO);
+
+      // Assert — exactly one request
+      httpMock.expectOne(APPLY_URL).flush(APPLIED);
+      httpMock.verify();
+    });
+
+    it('should show the outcome checklist after the request completes, even once the card is eligible', () => {
+      // Arrange
+      const { el, fixture, httpMock } = setup({ repositories: [BRANCH_RULES_REPO] });
+      (el.querySelector('.repository-list__apply-rules-btn') as HTMLButtonElement).click();
+
+      // Act — service updates the list; parent feeds it back as the input
+      httpMock.expectOne(APPLY_URL).flush(APPLIED);
+      fixture.componentRef.setInput('repositories', [APPLIED.repository]);
+      fixture.detectChanges();
+
+      // Assert
+      expect(el.querySelector('fd-repository-add-progress')).toBeFalsy();
+      const outcome = el.querySelector('fd-repository-add-outcome');
+      expect(outcome).toBeTruthy();
+      expect(outcome?.querySelector('[data-row="branch-rules"]')?.textContent).toContain('Applied');
+      expect(el.querySelector('.repository-list__reasons')).toBeFalsy();
+      expect(el.querySelector('.repository-list__apply-rules-btn')).toBeFalsy();
+    });
+
+    it('should hide the outcome when dismissed', () => {
+      // Arrange
+      const { el, fixture, httpMock } = setup({ repositories: [BRANCH_RULES_REPO] });
+      (el.querySelector('.repository-list__apply-rules-btn') as HTMLButtonElement).click();
+      httpMock.expectOne(APPLY_URL).flush(APPLIED);
+      fixture.detectChanges();
+
+      // Act
+      (el.querySelector('.repository-list__apply-rules-dismiss') as HTMLButtonElement).click();
+      fixture.detectChanges();
+
+      // Assert
+      expect(el.querySelector('fd-repository-add-outcome')).toBeFalsy();
+    });
+
+    it('should show an alert when the request fails', () => {
+      // Arrange
+      const { el, fixture, httpMock } = setup({ repositories: [BRANCH_RULES_REPO] });
+      (el.querySelector('.repository-list__apply-rules-btn') as HTMLButtonElement).click();
+
+      // Act
+      httpMock.expectOne(APPLY_URL).flush('Server error', { status: 500, statusText: 'Internal Server Error' });
+      fixture.detectChanges();
+
+      // Assert
+      const errorLine = el.querySelector('.repository-list__reason--error');
+      expect(errorLine?.textContent).toContain('Applying branch rules failed');
+      expect(errorLine?.getAttribute('role')).toBe('alert');
+      expect((el.querySelector('.repository-list__apply-rules-btn') as HTMLButtonElement).disabled).toBe(false);
+    });
   });
 });

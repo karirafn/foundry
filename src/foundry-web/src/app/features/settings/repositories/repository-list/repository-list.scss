@@ -280,7 +280,9 @@
     margin-block-start: var(--fd-spacing-xs);
   }
 
-  &__recheck-btn {
+  &__recheck-btn,
+  &__apply-rules-btn,
+  &__apply-rules-dismiss {
     background: transparent;
     border: 1px solid var(--fd-border-control);
     border-radius: var(--fd-radius-sm);
@@ -303,6 +305,25 @@
     &:focus-visible {
       @include focus-ring;
     }
+  }
+
+  &__apply-rules-btn {
+    font-weight: 500;
+  }
+
+  // ── Apply branch rules progress / outcome ───────────────────────────────────
+
+  &__apply-rules {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--fd-spacing-xs);
+    margin-block-start: var(--fd-spacing-sm);
+  }
+
+  &__apply-rules > fd-repository-add-progress,
+  &__apply-rules > fd-repository-add-outcome {
+    align-self: stretch;
   }
 
   // ── Reorder controls ────────────────────────────────────────────────────────
@@ -398,7 +419,9 @@
     &__move-up-btn,
     &__move-down-btn,
     &__drag-handle,
-    &__recheck-btn {
+    &__recheck-btn,
+    &__apply-rules-btn,
+    &__apply-rules-dismiss {
       min-height: 2.75rem;
       min-width: 2.75rem;
     }

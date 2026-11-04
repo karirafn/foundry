@@ -2,7 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { RepositoryService } from './repository.service';
-import { AvailableRepositoriesResponse, AvailableRepository, CreateRepositoryRequest, CreateRepositoryResponse, RepositorySummary, UpdateRepositoryRequest } from './repository.model';
+import { ApplyBranchRulesResponse, AvailableRepositoriesResponse, AvailableRepository, CreateRepositoryRequest, CreateRepositoryResponse, RepositorySummary, UpdateRepositoryRequest } from './repository.model';
 
 const ACCOUNT_ID = '00000000-0000-0000-0000-000000000001';
 const REPO_ID = '00000000-0000-0000-0000-000000000010';
@@ -821,5 +821,44 @@ describe('RepositoryService', () => {
     const repos = service.repositories();
     expect(repos.length).toBe(1);
     expect(repos[0].eligibility?.status).toBe('eligible');
+  });
+
+  it('should POST to the apply-branch-rules endpoint and replace the repository from the response', () => {
+    // Arrange
+    service.loadRepositories(ACCOUNT_ID);
+    httpMock.expectOne(`/api/accounts/${ACCOUNT_ID}/repositories`).flush([MOCK_REPOSITORY_2]);
+    const response: ApplyBranchRulesResponse = {
+      repository: { ...MOCK_REPOSITORY_2, eligibility: { status: 'eligible', violations: [], reason: null } },
+      branchRules: { kind: 'applied' },
+    };
+    let received: ApplyBranchRulesResponse | undefined;
+
+    // Act
+    service.applyBranchRules(ACCOUNT_ID, REPO_ID_2).subscribe(r => { received = r; });
+    const req = httpMock.expectOne(`/api/accounts/${ACCOUNT_ID}/repositories/${REPO_ID_2}/apply-branch-rules`);
+    req.flush(response);
+
+    // Assert
+    expect(req.request.method).toBe('POST');
+    expect(received).toEqual(response);
+    const repos = service.repositories();
+    expect(repos.length).toBe(1);
+    expect(repos[0].eligibility?.status).toBe('eligible');
+  });
+
+  it('should leave the repositories signal unchanged when applyBranchRules fails', () => {
+    // Arrange
+    service.loadRepositories(ACCOUNT_ID);
+    httpMock.expectOne(`/api/accounts/${ACCOUNT_ID}/repositories`).flush([MOCK_REPOSITORY_2]);
+    let failed = false;
+
+    // Act
+    service.applyBranchRules(ACCOUNT_ID, REPO_ID_2).subscribe({ error: () => { failed = true; } });
+    httpMock.expectOne(`/api/accounts/${ACCOUNT_ID}/repositories/${REPO_ID_2}/apply-branch-rules`)
+      .flush('nope', { status: 404, statusText: 'Not Found' });
+
+    // Assert
+    expect(failed).toBe(true);
+    expect(service.repositories()).toEqual([MOCK_REPOSITORY_2]);
   });
 });

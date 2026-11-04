@@ -3,7 +3,7 @@ import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { Observable, forkJoin } from 'rxjs';
 import { catchError, tap } from 'rxjs/operators';
 import { extractErrorMessage } from '../../../core/http/extract-error-message';
-import { AvailableRepositoriesResponse, AvailableRepository, CreateRepositoryRequest, CreateRepositoryResponse, RepositorySummary, UpdateRepositoryRequest } from './repository.model';
+import { ApplyBranchRulesResponse, AvailableRepositoriesResponse, AvailableRepository, CreateRepositoryRequest, CreateRepositoryResponse, RepositorySummary, UpdateRepositoryRequest } from './repository.model';
 
 @Injectable({ providedIn: 'root' })
 export class RepositoryService {
@@ -184,6 +184,20 @@ export class RepositoryService {
       tap((updated) => {
         this._repositoriesSignal.update(repositories =>
           repositories.map(r => r.id === updated.id ? updated : r)
+        );
+      }),
+      catchError((err: HttpErrorResponse) => {
+        console.error(err);
+        throw err;
+      }),
+    );
+  }
+
+  applyBranchRules(accountId: string, id: string): Observable<ApplyBranchRulesResponse> {
+    return this._http.post<ApplyBranchRulesResponse>(`${this._repositoriesUrl(accountId)}/${id}/apply-branch-rules`, {}).pipe(
+      tap((response) => {
+        this._repositoriesSignal.update(repositories =>
+          repositories.map(r => r.id === response.repository.id ? response.repository : r)
         );
       }),
       catchError((err: HttpErrorResponse) => {

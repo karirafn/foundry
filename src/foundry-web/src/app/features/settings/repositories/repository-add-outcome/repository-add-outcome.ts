@@ -121,7 +121,7 @@ export function branchRulesExplanation(outcome: BranchRulesOutcome): string | nu
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="repository-add-outcome">
-      <ol class="repository-add-outcome__rows" aria-label="Add result">
+      <ol class="repository-add-outcome__rows" [attr.aria-label]="label()">
         @for (row of _rows(); track row.key) {
           <li
             class="repository-add-outcome__row repository-add-outcome__row--{{ row.tone }}"
@@ -170,6 +170,8 @@ export function branchRulesExplanation(outcome: BranchRulesOutcome): string | nu
 })
 export class RepositoryAddOutcomeComponent {
   readonly response: InputSignal<CreateRepositoryResponse> = input.required<CreateRepositoryResponse>();
+  /** Accessible name of the checklist. */
+  readonly label: InputSignal<string> = input<string>('Add result');
 
   protected readonly requiredRules = REQUIRED_BRANCH_RULES;
 
