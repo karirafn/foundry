@@ -659,6 +659,12 @@ export interface components {
             canPush: boolean;
             isMonitored: boolean;
         };
+        BranchRulesOutcome: {
+            kind: string;
+            reason?: null | string;
+            settingsUrl?: null | string;
+            detail?: null | string;
+        };
         CheckCreditsNowResponse: {
             inFlight: boolean;
             outcome: null | string;
@@ -695,6 +701,11 @@ export interface components {
             pollIntervalSeconds: null | number | string;
             /** Format: int32 */
             maxConcurrentWorkers?: null | number | string;
+            applyBranchRules?: null | boolean;
+        };
+        CreateRepositoryResponse: {
+            repository: components["schemas"]["RepositorySummary"];
+            branchRules: components["schemas"]["BranchRulesOutcome"];
         };
         CredentialCreationResult: {
             credential: components["schemas"]["CredentialSummary"];
@@ -1775,7 +1786,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["RepositorySummary"];
+                    "application/json": components["schemas"]["CreateRepositoryResponse"];
                 };
             };
             /** @description Bad Request */

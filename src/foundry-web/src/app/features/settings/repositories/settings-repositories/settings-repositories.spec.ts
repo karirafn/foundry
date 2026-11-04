@@ -6,7 +6,7 @@ import { SettingsRepositoriesComponent } from './settings-repositories';
 import { AccountService } from '../../accounts/account.service';
 import { RepositoryService } from '../repository.service';
 import { AccountSummary } from '../../accounts/account.model';
-import { RepositorySummary } from '../repository.model';
+import { CreateRepositoryResponse, RepositorySummary } from '../repository.model';
 
 const ACCOUNT_1: AccountSummary = {
   id: '00000000-0000-0000-0000-000000000001',
@@ -44,6 +44,11 @@ const REPO_1: RepositorySummary = {
   maxConcurrentWorkers: 1,
   lastPolledAt: '2026-06-15T10:00:00Z',
   eligibility: { status: 'eligible', violations: [], reason: null },
+};
+
+const CREATED_1: CreateRepositoryResponse = {
+  repository: REPO_1,
+  branchRules: { kind: 'already-present', reason: null, settingsUrl: 'https://github.com/my-org/my-repo/settings/rules', detail: null },
 };
 
 const REPO_2: RepositorySummary = {
@@ -228,13 +233,13 @@ describe('SettingsRepositoriesComponent', () => {
     const req = httpMock.expectOne(`/api/accounts/${ACCOUNT_1.id}/repositories`);
     expect(req.request.method).toBe('POST');
     expect(req.request.body).toEqual({ slug: 'my-org/new-repo', pollIntervalSeconds: 300, maxConcurrentWorkers: null });
-    req.flush(REPO_1, { status: 201, statusText: 'Created' });
+    req.flush(CREATED_1, { status: 201, statusText: 'Created' });
 
     // Flush reload
     flushRepositories(httpMock, ACCOUNT_1.id, [REPO_1]);
   });
 
-  it('should return to list view and reload after successful save', () => {
+  it('should show the add outcome, reload, and return to the list view on Done after a successful save', () => {
     // Arrange
     const { fixture, httpMock } = setup();
     fixture.detectChanges();
@@ -248,18 +253,23 @@ describe('SettingsRepositoriesComponent', () => {
 
     // Act
     fixture.componentInstance.onSave({ slug: 'my-org/new-repo', pollIntervalSeconds: 300, maxConcurrentWorkers: null });
-    httpMock.expectOne(`/api/accounts/${ACCOUNT_1.id}/repositories`).flush(REPO_1, { status: 201, statusText: 'Created' });
+    httpMock.expectOne(`/api/accounts/${ACCOUNT_1.id}/repositories`).flush(CREATED_1, { status: 201, statusText: 'Created' });
+    fixture.detectChanges();
+    flushRepositories(httpMock, ACCOUNT_1.id, [REPO_1]);
+    fixture.detectChanges();
+
+    // Assert — the form stays and presents the outcome checklist
+    const el = fixture.nativeElement as HTMLElement;
+    expect(el.querySelector('fd-repository-form fd-repository-add-outcome')).toBeTruthy();
+    expect(el.querySelector('fd-repository-list')).toBeFalsy();
+
+    // Act — Done returns to the list
+    (el.querySelector('.repository-form__done-btn') as HTMLButtonElement).click();
     fixture.detectChanges();
 
     // Assert — back in list view
-    const el = fixture.nativeElement as HTMLElement;
-    const list = el.querySelector('fd-repository-list');
-    expect(list).toBeTruthy();
-    const form = el.querySelector('fd-repository-form');
-    expect(form).toBeFalsy();
-
-    // Flush the reload requests
-    flushRepositories(httpMock, ACCOUNT_1.id, [REPO_1]);
+    expect(el.querySelector('fd-repository-list')).toBeTruthy();
+    expect(el.querySelector('fd-repository-form')).toBeFalsy();
   });
 
   it('should show confirm dialog and call deleteRepository when onDelete is confirmed', () => {

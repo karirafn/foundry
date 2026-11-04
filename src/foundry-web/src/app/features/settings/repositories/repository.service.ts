@@ -3,7 +3,7 @@ import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { Observable, forkJoin } from 'rxjs';
 import { catchError, tap } from 'rxjs/operators';
 import { extractErrorMessage } from '../../../core/http/extract-error-message';
-import { AvailableRepositoriesResponse, AvailableRepository, CreateRepositoryRequest, RepositorySummary, UpdateRepositoryRequest } from './repository.model';
+import { AvailableRepositoriesResponse, AvailableRepository, CreateRepositoryRequest, CreateRepositoryResponse, RepositorySummary, UpdateRepositoryRequest } from './repository.model';
 
 @Injectable({ providedIn: 'root' })
 export class RepositoryService {
@@ -114,14 +114,14 @@ export class RepositoryService {
     });
   }
 
-  createRepository(accountId: string, request: CreateRepositoryRequest): Observable<RepositorySummary> {
+  createRepository(accountId: string, request: CreateRepositoryRequest): Observable<CreateRepositoryResponse> {
     this._saveErrorSignal.set(null);
     this._saveSuccessSignal.set(false);
     this._savingSignal.set(true);
 
-    return this._http.post<RepositorySummary>(this._repositoriesUrl(accountId), request).pipe(
-      tap((repository) => {
-        this._repositoriesSignal.update(repositories => [...repositories, repository]);
+    return this._http.post<CreateRepositoryResponse>(this._repositoriesUrl(accountId), request).pipe(
+      tap((response) => {
+        this._repositoriesSignal.update(repositories => [...repositories, response.repository]);
         this._savingSignal.set(false);
         this._saveSuccessSignal.set(true);
       }),

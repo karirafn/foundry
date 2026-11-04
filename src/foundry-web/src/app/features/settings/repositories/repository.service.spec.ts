@@ -2,7 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { RepositoryService } from './repository.service';
-import { AvailableRepositoriesResponse, AvailableRepository, CreateRepositoryRequest, RepositorySummary, UpdateRepositoryRequest } from './repository.model';
+import { AvailableRepositoriesResponse, AvailableRepository, CreateRepositoryRequest, CreateRepositoryResponse, RepositorySummary, UpdateRepositoryRequest } from './repository.model';
 
 const ACCOUNT_ID = '00000000-0000-0000-0000-000000000001';
 const REPO_ID = '00000000-0000-0000-0000-000000000010';
@@ -38,6 +38,11 @@ const MOCK_REPOSITORY_2: RepositorySummary = {
   maxConcurrentWorkers: 1,
   lastPolledAt: null,
   eligibility: { status: 'ineligible', violations: [{ rule: 'AllowDirectPushes', description: 'Allow direct pushes is enabled' }], reason: null },
+};
+
+const MOCK_CREATE_RESPONSE: CreateRepositoryResponse = {
+  repository: MOCK_REPOSITORY,
+  branchRules: { kind: 'applied', reason: null, settingsUrl: null, detail: null },
 };
 
 const MOCK_AVAILABLE: AvailableRepository = {
@@ -320,6 +325,7 @@ describe('RepositoryService', () => {
       slug: 'my-org/my-repo',
       pollIntervalSeconds: 300,
       maxConcurrentWorkers: null,
+      applyBranchRules: false,
     };
 
     // Act
@@ -329,7 +335,7 @@ describe('RepositoryService', () => {
     // Assert
     expect(req.request.method).toBe('POST');
     expect(req.request.body).toEqual(request);
-    req.flush(MOCK_REPOSITORY, { status: 201, statusText: 'Created' });
+    req.flush(MOCK_CREATE_RESPONSE, { status: 201, statusText: 'Created' });
   });
 
   it('should set saving to true while createRepository is in flight', () => {
@@ -341,7 +347,7 @@ describe('RepositoryService', () => {
 
     // Assert — before flush
     expect(service.saving()).toBe(true);
-    httpMock.expectOne(`/api/accounts/${ACCOUNT_ID}/repositories`).flush(MOCK_REPOSITORY, {
+    httpMock.expectOne(`/api/accounts/${ACCOUNT_ID}/repositories`).flush(MOCK_CREATE_RESPONSE, {
       status: 201,
       statusText: 'Created',
     });
@@ -353,7 +359,7 @@ describe('RepositoryService', () => {
     service.createRepository(ACCOUNT_ID, request).subscribe();
     httpMock
       .expectOne(`/api/accounts/${ACCOUNT_ID}/repositories`)
-      .flush(MOCK_REPOSITORY, { status: 201, statusText: 'Created' });
+      .flush(MOCK_CREATE_RESPONSE, { status: 201, statusText: 'Created' });
 
     // Assert
     expect(service.saving()).toBe(false);
@@ -371,10 +377,33 @@ describe('RepositoryService', () => {
     service.createRepository(ACCOUNT_ID, request).subscribe();
     httpMock
       .expectOne(`/api/accounts/${ACCOUNT_ID}/repositories`)
-      .flush(MOCK_REPOSITORY, { status: 201, statusText: 'Created' });
+      .flush(MOCK_CREATE_RESPONSE, { status: 201, statusText: 'Created' });
 
     // Assert
     expect(service.repositories()).toContain(MOCK_REPOSITORY);
+  });
+
+  it('should emit the full CreateRepositoryResponse (repository + branchRules) from createRepository', () => {
+    // Arrange
+    const request: CreateRepositoryRequest = { slug: 'my-org/another-repo', pollIntervalSeconds: null, maxConcurrentWorkers: null, applyBranchRules: true };
+    let received: CreateRepositoryResponse | undefined;
+    const failed: CreateRepositoryResponse = {
+      repository: MOCK_REPOSITORY_2,
+      branchRules: {
+        kind: 'failed',
+        reason: 'insufficient-permission',
+        settingsUrl: 'https://github.com/my-org/another-repo/settings/rules',
+        detail: 'Must have admin rights',
+      },
+    };
+
+    // Act
+    service.createRepository(ACCOUNT_ID, request).subscribe(r => (received = r));
+    httpMock.expectOne(`/api/accounts/${ACCOUNT_ID}/repositories`).flush(failed, { status: 201, statusText: 'Created' });
+
+    // Assert
+    expect(received).toEqual(failed);
+    expect(service.repositories()).toEqual([MOCK_REPOSITORY_2]);
   });
 
   it('should set saving to false and saveSuccess to false when createRepository fails', () => {
@@ -421,7 +450,7 @@ describe('RepositoryService', () => {
     expect(service.saveError()).toBeNull();
     httpMock
       .expectOne(`/api/accounts/${ACCOUNT_ID}/repositories`)
-      .flush(MOCK_REPOSITORY, { status: 201, statusText: 'Created' });
+      .flush(MOCK_CREATE_RESPONSE, { status: 201, statusText: 'Created' });
   });
 
   // Cycle 5: updateRepository calls PUT
