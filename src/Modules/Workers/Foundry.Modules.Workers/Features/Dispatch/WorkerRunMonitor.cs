@@ -26,6 +26,8 @@ internal sealed class WorkerRunMonitor(
     IDomainEventDispatcher domainEventDispatcher,
     WorkerOutcomeResolver resolver,
     WorkerOutcomeApplier outcomeApplier,
+    RunningBranchCompareGate compareGate,
+    IWebhookStatusQueries webhookStatusQueries,
     IPostExitProviderQueries postExitProviderQueries,
     IContainerOutputParser containerOutputParser,
     TimeProvider timeProvider,
@@ -117,9 +119,11 @@ internal sealed class WorkerRunMonitor(
         int timeoutMinutes,
         CancellationToken cancellationToken)
     {
+        RunningBranchObservation branchObservation = new(compareGate, webhookStatusQueries);
+
         foreach (ActiveRun activeRun in activeRuns)
         {
-            await MonitorRunAsync(activeRun, timeoutMinutes, cancellationToken);
+            await MonitorRunAsync(activeRun, timeoutMinutes, cancellationToken, branchObservation: branchObservation);
         }
     }
 
@@ -127,7 +131,8 @@ internal sealed class WorkerRunMonitor(
         ActiveRun activeRun,
         int timeoutMinutes,
         CancellationToken cancellationToken,
-        WorkerStatusProbe? knownProbe = null)
+        WorkerStatusProbe? knownProbe = null,
+        RunningBranchObservation? branchObservation = null)
     {
         WorkerStatusProbe statusProbe = knownProbe
             ?? await orchestrator.GetStatusAsync(activeRun.ContainerId.Value, cancellationToken);
@@ -143,7 +148,7 @@ internal sealed class WorkerRunMonitor(
                 return;
 
             case WorkerStatusProbe.Available { Status.IsRunning: true }:
-                await HandleRunningAsync(activeRun, timeoutMinutes, cancellationToken);
+                await HandleRunningAsync(activeRun, timeoutMinutes, branchObservation, cancellationToken);
                 return;
 
             case WorkerStatusProbe.Available available:
@@ -186,6 +191,7 @@ internal sealed class WorkerRunMonitor(
     private async Task HandleRunningAsync(
         ActiveRun activeRun,
         int timeoutMinutes,
+        RunningBranchObservation? branchObservation,
         CancellationToken cancellationToken)
     {
         // A pending cancel request beats the timeout. Only a still-running container is
@@ -213,7 +219,7 @@ internal sealed class WorkerRunMonitor(
             return;
         }
 
-        await ObserveRunningWorkerAsync(activeRun, cancellationToken);
+        await ObserveRunningWorkerAsync(activeRun, branchObservation, cancellationToken);
     }
 
     private async Task HandleExitedAsync(
@@ -312,7 +318,10 @@ internal sealed class WorkerRunMonitor(
             outcome.GetType().Name);
     }
 
-    private async Task ObserveRunningWorkerAsync(ActiveRun activeRun, CancellationToken cancellationToken)
+    private async Task ObserveRunningWorkerAsync(
+        ActiveRun activeRun,
+        RunningBranchObservation? branchObservation,
+        CancellationToken cancellationToken)
     {
         DateTimeOffset now = timeProvider.GetUtcNow();
 
@@ -320,6 +329,24 @@ internal sealed class WorkerRunMonitor(
         // Record activity unconditionally; do not gate on log growth (claude buffers all output until exit).
         activeRun.RecordActivity(now);
 
+        if (branchObservation is null || await branchObservation.ShouldCompareAsync(activeRun, cancellationToken))
+        {
+            await RecordBranchCommitsAsync(activeRun, now, cancellationToken);
+        }
+
+        if (activeRun.DomainEvents.Count > 0)
+        {
+            await dbContext.SaveChangesAsync(cancellationToken);
+            await domainEventDispatcher.DispatchAsync(activeRun.DomainEvents, cancellationToken);
+            activeRun.ClearDomainEvents();
+        }
+    }
+
+    private async Task RecordBranchCommitsAsync(
+        ActiveRun activeRun,
+        DateTimeOffset now,
+        CancellationToken cancellationToken)
+    {
         Result<BranchCommitSummary> commitResult = await postExitProviderQueries.GetBranchCommitSummaryAsync(
             activeRun.MonitoredRepositoryId,
             activeRun.BranchName.Value,
@@ -346,13 +373,6 @@ internal sealed class WorkerRunMonitor(
                     activeRun.Id,
                     failure.Error);
                 break;
-        }
-
-        if (activeRun.DomainEvents.Count > 0)
-        {
-            await dbContext.SaveChangesAsync(cancellationToken);
-            await domainEventDispatcher.DispatchAsync(activeRun.DomainEvents, cancellationToken);
-            activeRun.ClearDomainEvents();
         }
     }
 
@@ -411,5 +431,27 @@ internal sealed class WorkerRunMonitor(
             + "deferring until next tick.",
             runId,
             containerId);
+    }
+
+    /// <summary>
+    /// Per-pass view of the running-branch compare policy (issue #660): skips the compare for a run whose
+    /// repository has an <c>Active</c> webhook unless a push is pending, so push webhooks replace polling.
+    /// </summary>
+    private sealed class RunningBranchObservation(
+        RunningBranchCompareGate gate,
+        IWebhookStatusQueries webhookStatusQueries)
+    {
+        private readonly Dictionary<MonitoredRepositoryId, bool> _webhookActive = [];
+
+        public async Task<bool> ShouldCompareAsync(ActiveRun run, CancellationToken cancellationToken)
+        {
+            if (!_webhookActive.TryGetValue(run.MonitoredRepositoryId, out bool active))
+            {
+                active = await webhookStatusQueries.IsWebhookActiveAsync(run.MonitoredRepositoryId, cancellationToken);
+                _webhookActive[run.MonitoredRepositoryId] = active;
+            }
+
+            return gate.ShouldCompare(run.Id, run.MonitoredRepositoryId, run.BranchName.Value, active);
+        }
     }
 }

@@ -17,6 +17,7 @@ using Foundry.Modules.Workers.Features.Dispatch;
 using Foundry.Shared;
 using Foundry.Shared.Infrastructure;
 using Foundry.Shared.Infrastructure.Outbox;
+using Foundry.Testing;
 using Foundry.WebApi.Persistence;
 
 using Microsoft.Data.Sqlite;
@@ -87,6 +88,8 @@ public sealed class OutboxHarvestDispatch : IAsyncDisposable
             sp.GetRequiredService<IContainerOutputParser>(),
             prRetryDelay: TimeSpan.Zero));
         services.AddScoped<ICredentialGate, AlwaysCanDispatchCredentialGate>();
+        services.AddSingleton<RunningBranchCompareGate>();
+        services.AddScoped<IWebhookStatusQueries>(_ => new StubWebhookStatusQueries());
 
         return services.BuildServiceProvider();
     }
@@ -273,6 +276,8 @@ public sealed class OutboxHarvestDispatch : IAsyncDisposable
             sp.GetRequiredService<IContainerOutputParser>(),
             prRetryDelay: TimeSpan.Zero));
         services.AddScoped<ICredentialGate, AlwaysCanDispatchCredentialGate>();
+        services.AddSingleton<RunningBranchCompareGate>();
+        services.AddScoped<IWebhookStatusQueries>(_ => new StubWebhookStatusQueries());
         services.AddSingleton<IWorkerOrchestrator>(_ => orchestrator);
         services.AddSingleton(TimeProvider.System);
         services.AddScoped<WorkerOutcomeApplier>();

@@ -95,6 +95,8 @@ public static class MonitoringModule
         services.AddScoped<WebhookIngress>();
         services.AddScoped<ReceiveGitHubWebhook.Handler>();
         services.AddScoped<ReceiveGitLabWebhook.Handler>();
+        services.AddScoped<BranchPushPublisher>();
+        services.AddScoped<IWebhookStatusQueries, WebhookStatusQueries>();
         services.AddScoped<RepositoryWebhookEndpoints.Handler>();
         services.AddScoped<WebhookRegistrar>();
         services.AddScoped<AccountWebhookRegistrar>();
