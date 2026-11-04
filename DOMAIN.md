@@ -237,12 +237,34 @@ The Worker Prompts fields are non-null DB values (seeded from code defaults, bac
 The auth-invalid pause is not stored here — it is `ClaudeAccount.Validity` in the Credentials module (see Worker Authentication).
 `ProbeIntervalMinutes` governs how long the credit block waits between probes (see Credit Probe); the operator sets it in the dispatch-settings form, `GlobalSettings.UpdateProbeInterval` rejects a below-minimum value, and the credit-probe scheduler reads it via `IGlobalSettingsQueries.GetProbeIntervalMinutesAsync` at each arm.
 DB is the single source of truth — it is the only source for worker settings; `IConfiguration` is not consulted for any setting the UI manages, and the `Workers` configuration section no longer exists.
+Webhook ingress settings (ADR 0085): the optional **Webhook Public Base URL** (`WebhookPublicBaseUrl`, absolute `https` only, no query or fragment — rejected otherwise with `Settings.InvalidWebhookPublicBaseUrl`) and the [Backstop Interval](#backstop-interval) (`BackstopIntervalMinutes`, default 15, 5..1440, `Settings.InvalidBackstopInterval`), both edited in the dispatch settings page through `PUT /api/settings/webhooks`. The webhook port itself is host configuration (`Webhooks:Port`), not a Global Setting.
 
 ## Monitor
 
 The background process that polls configured repositories for issues labeled `foundry`.
-Runs on a fixed tick interval (30s default) and checks whether each repo is due for polling based on its poll interval (falling back to the global default when unset) and `LastPolledAt` timestamp.
-The per-cycle provider call cost is bounded by `RepositoryPoller.MaxFixedPollCallsPerCycle` (see [Provider Rate Budget](#provider-rate-budget)) and enforced by the poll-call invariance test.
+Runs on a fixed tick interval (30s default) and checks whether each repo is due for polling based on its scheduled interval — the [Backstop Interval](#backstop-interval) while its [Webhook Status](#webhook-status) is `Active` and webhook ingress is configured, otherwise its effective poll interval (falling back to the global default when unset) — and its `LastPolledAt` timestamp.
+It is also the only consumer of the [Nudge](#nudge) channel: a nudge wakes it immediately, and nudged passes run in the same loop as scheduled polls, so a repository is never polled concurrently. A scheduled poll composes the same per-pass `RepositoryPoller` entry points a nudge runs (listing, dependency, review, checks, branch-rules step), so behaviour is identical whether a pass is nudged or scheduled.
+The per-cycle provider call cost is bounded by `RepositoryPoller.MaxFixedPollCallsPerCycle` (see [Provider Rate Budget](#provider-rate-budget)) and enforced by the poll-call invariance test; the nudge rate cap is enforced by the sibling nudge-call-cap test.
+
+### Webhook Delivery
+
+One verified inbound HTTP request from a provider (ADR 0085). Deliveries arrive only on the dedicated webhook port (`Webhooks:Port`), at `/webhooks/github/{hookId}`; a two-way port guard returns 404 for any other path on that port and for `/webhooks/*` on the main port. Verification fails fast before the body is parsed: an unknown hook id is 404, a missing or mismatched `X-Hub-Signature-256` (HMAC-SHA256 of the raw body under the repository's secret, constant-time compare) is 401, and a body whose `repository.full_name` is another repository is 400. A verified delivery returns 202 without calling the provider, after enqueueing at most one Nudge. Deliveries touching nothing Foundry tracks are dropped (the relevance filter).
+
+### Webhook Status
+
+Per-repository webhook health: `NotConfigured` (no webhook port or no public base URL — derived, never stored) / `NotRegistered` / `Pending` / `Active` / `Silent`. Only `Active` uses the Backstop Interval. The operator's "I've added the webhook" action sets `Pending`; any verified delivery (including `ping`) moves `Pending` or `Silent` to `Active`; a [Missed Change](#missed-change) moves `Active` to `Silent`.
+
+### Nudge
+
+A request to run one poll pass for `(repository, pass, issue?)` now — or not before a deadline. It is caused by a relevant delivery or a deadline, coalesced (a ~2 s window; pending nudges for one key run once) and rate-capped (each key runs at most once per the repository's normal effective poll interval: a leading run, then one coalesced trailing run at the end of that interval), and never changes domain state itself. Nudges live in a bounded in-memory channel; a full channel drops the new nudge and a restart loses pending ones — the backstop poll recovers both. Event mapping: `issues` → listing; `issue_dependencies` → listing + dependency pass; `pull_request`, `pull_request_review`, `pull_request_review_comment`, `issue_comment` (on a PR) → review pass for the owning issue (checks pass when it is checks-pending); `check_suite` (completed), `status` → checks pass; `branch_protection_rule`, `repository_ruleset` → branch-rules step; `ping` → none. An issue entering checks-pending raises `IssueEnteredChecksPending`, which schedules a checks nudge immediately plus not-before nudges at the grace-window and upper-bound deadlines.
+
+### Backstop Interval
+
+The poll interval for repositories whose webhook is `Active` (Global Settings, default 15 minutes) — never shorter than the repository's own effective poll interval.
+
+### Missed Change
+
+A change found by a **scheduled** poll, in a category the provider has a webhook event for (issue detection, detail change or untrack; a closed issue or pull request; new review feedback; a provider-driven checks verdict), that no delivery announced. It moves `Active` to `Silent`, so the next poll uses the normal interval. Changes without a mapped event — time-based checks exits, dependency refreshes, blockers in another repository — never count.
 
 ## Issue
 
@@ -282,7 +304,9 @@ A repository configured for Foundry to poll.
 Resolves its serving Account through the Namespace Claim on its owner (no stored account reference) and specifies an optional per-repo poll interval; when unset, the repo polls at the global `PollIntervalSeconds` from Global Settings.
 Its effective poll interval — the per-repo value when set, otherwise the inherited global default — is computed on the aggregate (`EffectivePollInterval`) and surfaced on the repository summary (`EffectivePollIntervalSeconds`, plus a `PollIntervalIsDefault` marker) so the dashboard can show the applied interval and flag it as the inherited default rather than a blank.
 Uniquely identified by the pair (Host, Repository Slug) — the same repo on the same host cannot be monitored twice (prevents duplicate issue detection), while the same path on different hosts (e.g. github.com vs gitlab.com, or self-hosted instances) refers to distinct repositories.
-Tracks `LastPolledAt` for per-repo poll timing.
+Tracks `LastPolledAt` for per-repo poll timing; nudged passes do not stamp it.
+Its scheduled interval also depends on its [Webhook Status](#webhook-status): while `Active` (and ingress is configured) it polls at the [Backstop Interval](#backstop-interval), otherwise at its effective poll interval.
+Carries a random opaque webhook hook id (addressing its payload URL) and a Foundry-generated webhook secret, encrypted at rest with the same DataProtection mechanism as provider tokens. The secret is never returned in list responses — only by the explicit reveal endpoint (`POST /api/accounts/{accountId}/repositories/{id}/webhook/secret`) used for manual registration.
 Carries a Repository Eligibility status, re-evaluated on each poll cycle.
 Carries `MaxConcurrentWorkers` (non-nullable `int`, range 1..20, default 1) — see [Repository Worker Limit](#repository-worker-limit).
 

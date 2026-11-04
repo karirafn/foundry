@@ -84,6 +84,35 @@ The worker image tag and build toggle live in **Global Settings** (database), co
 With building enabled (the default), the WebApi builds the worker Docker image at startup; the first run is slower due to the Docker image build, and subsequent runs use the Docker layer cache.
 With building disabled, Foundry inspects the configured tag on the Docker host at startup — if the image exists, the build state becomes `Idle`; if it is absent, the state becomes `Failed` and dispatch is blocked until the image is made available and the operator retries.
 
+## GitHub webhooks (optional)
+
+By default Foundry polls every repository. GitHub webhooks make it react within seconds and let repositories with a healthy webhook drop to a slower **backstop** poll (15 minutes by default). Webhook deliveries only *nudge* the existing poll passes — they never change state directly (ADR 0085).
+
+1. **Enable the webhook port.** Set `Webhooks:Port` in the AppHost configuration, for example with user secrets:
+
+   ```bash
+   dotnet user-secrets --project src/Foundry.AppHost set "Webhooks:Port" "5099"
+   ```
+
+   The WebApi then binds a second, plain-HTTP endpoint on that port that serves **only** `/webhooks/*` — every other path returns 404 there, and `/webhooks/*` returns 404 on the main port. Without the setting no webhook endpoint exists.
+
+2. **Expose that port publicly** through a tunnel or reverse proxy that terminates TLS, and forward only that port. The WebApi itself is unauthenticated, so never expose the main port. For example:
+
+   ```bash
+   # Cloudflare Tunnel
+   cloudflared tunnel --url http://localhost:5099
+   # ngrok
+   ngrok http 5099
+   ```
+
+   With a reverse proxy (Caddy, nginx, Traefik), route `https://hooks.example.com/webhooks/*` to `http://<foundry-host>:5099`.
+
+3. **Set the public base URL.** In **Settings → Dispatch → Webhooks**, enter the public `https` URL the tunnel or proxy serves (e.g. `https://hooks.example.com`) and adjust the backstop interval if needed.
+
+4. **Register the webhook per repository.** Open the repository in **Settings → Repositories**. The Webhook panel shows the payload URL (`<public base URL>/webhooks/github/<hookId>`), the content type (`application/json`), the secret (revealed on demand) and the exact events to select. Add the webhook in the repository's GitHub settings, then click **I've added the webhook**. The status shows *Waiting for first delivery* until GitHub's `ping` (or any event) arrives — redeliver the `ping` from the webhook's *Recent Deliveries* tab if needed.
+
+A repository polls at the backstop interval only while its webhook is **Active**. If a scheduled poll finds a change that no delivery announced, the status becomes **Silent** and normal polling resumes until the next delivery.
+
 ## Windows notes
 
 Docker Desktop must have path sharing enabled for bind mounts from `C:\Users\...`. Enable it under **Settings > Resources > File sharing**.

@@ -32,6 +32,12 @@ internal sealed class MonitoringService : PeriodicBackgroundService
     /// </summary>
     internal static readonly TimeSpan DependencyFollowUpDelay = TimeSpan.FromSeconds(10);
 
+    /// <summary>
+    /// Floor on scheduler-driven waits, so a nudge pass that keeps failing cannot spin the loop.
+    /// A new nudge in the channel still wakes the loop immediately.
+    /// </summary>
+    private static readonly TimeSpan MinimumWait = TimeSpan.FromSeconds(1);
+
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly WebhookNudgeQueue? _nudgeQueue;
     private readonly TimeProvider _timeProvider;
@@ -120,9 +126,14 @@ internal sealed class MonitoringService : PeriodicBackgroundService
             : nextHeartbeat;
         TimeSpan delay = wakeAt > now ? wakeAt - now : TimeSpan.Zero;
 
-        if (delay == TimeSpan.Zero)
+        if (delay == TimeSpan.Zero && wakeAt == nextHeartbeat)
         {
             return false;
+        }
+
+        if (delay < MinimumWait)
+        {
+            delay = MinimumWait;
         }
 
         using CancellationTokenSource timeout = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken);

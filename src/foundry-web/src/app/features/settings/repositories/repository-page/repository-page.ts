@@ -21,6 +21,7 @@ import { RepositoryService } from '../repository.service';
 import { AccountService } from '../../accounts/account.service';
 import { RepositoryFormComponent } from '../repository-form/repository-form';
 import { RepositoryEligibilityDetailsComponent } from '../repository-eligibility-details/repository-eligibility-details';
+import { RepositoryWebhookComponent } from '../repository-webhook/repository-webhook';
 import { SpinnerComponent } from '../../../../shared/components/spinner/spinner';
 import { RepositorySummary, UpdateRepositoryRequest, CreateRepositoryRequest } from '../repository.model';
 
@@ -33,6 +34,7 @@ type ViewState = 'loading' | 'load-error' | 'not-found' | 'loaded';
     RouterLink,
     RepositoryFormComponent,
     RepositoryEligibilityDetailsComponent,
+    RepositoryWebhookComponent,
     SpinnerComponent,
   ],
   template: `
@@ -117,6 +119,11 @@ type ViewState = 'loading' | 'load-error' | 'not-found' | 'loaded';
               />
             </section>
           }
+
+          <fd-repository-webhook
+            [accountId]="_repository()!.accountId"
+            [repositoryId]="_repository()!.id"
+          />
         }
       }
     </section>

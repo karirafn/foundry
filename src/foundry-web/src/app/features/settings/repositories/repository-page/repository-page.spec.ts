@@ -88,9 +88,16 @@ function seedRepositories(repositoryService: RepositoryService, repos: Repositor
     ._loadAttempted.set(true);
 }
 
+/** The embedded webhook panel loads its own details; tests of the page itself ignore that request. */
+function discardWebhookRequests(httpMock: HttpTestingController): void {
+  httpMock.match(req => req.url.endsWith('/webhook')).forEach(req => req.flush(null));
+}
+
 describe('RepositoryPageComponent', () => {
   afterEach(() => {
-    TestBed.inject(HttpTestingController).verify({ ignoreCancelled: true });
+    const httpMock = TestBed.inject(HttpTestingController);
+    discardWebhookRequests(httpMock);
+    httpMock.verify({ ignoreCancelled: true });
   });
 
   describe('loaded state', () => {
@@ -795,6 +802,7 @@ describe('RepositoryPageComponent', () => {
       const heading = el.querySelector('.repository-page__heading');
       expect(heading?.textContent?.trim()).toBe(REPO_1.slug);
 
+      discardWebhookRequests(httpMock);
       httpMock.verify();
     });
 
@@ -825,6 +833,7 @@ describe('RepositoryPageComponent', () => {
       const backLink = el.querySelector('.repository-page__back-link');
       expect(backLink).toBeTruthy();
 
+      discardWebhookRequests(httpMock);
       httpMock.verify();
     });
   });

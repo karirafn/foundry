@@ -38,6 +38,39 @@ export interface RepositorySummary {
   maxConcurrentWorkers: number;
   lastPolledAt: string | null;
   eligibility: RepositoryEligibility | null;
+  /** Effective webhook health (ADR 0085). Absent on responses from older servers. */
+  webhookStatus?: WebhookStatus;
+}
+
+/** Per-repository webhook health. Only `active` polls at the Backstop Interval. */
+export type WebhookStatus = 'not-configured' | 'not-registered' | 'pending' | 'active' | 'silent';
+
+export function webhookStatusLabel(status: WebhookStatus): string {
+  switch (status) {
+    case 'not-configured':
+      return 'Not configured';
+    case 'not-registered':
+      return 'Not registered';
+    case 'pending':
+      return 'Waiting for first delivery';
+    case 'active':
+      return 'Active';
+    case 'silent':
+      return 'Silent';
+  }
+}
+
+/** Manual registration details. Never carries the secret — see {@link RepositoryWebhookSecret}. */
+export interface RepositoryWebhookInfo {
+  status: WebhookStatus;
+  payloadUrl: string | null;
+  contentType: string;
+  events: string[];
+  backstopIntervalMinutes: number;
+}
+
+export interface RepositoryWebhookSecret {
+  secret: string;
 }
 
 export interface AvailableRepository {
