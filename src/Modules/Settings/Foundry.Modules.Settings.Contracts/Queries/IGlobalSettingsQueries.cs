@@ -26,6 +26,8 @@ public interface IGlobalSettingsQueries
 
     Task<bool> GetWorkerImageInstallsDockerAsync(CancellationToken cancellationToken);
 
+    Task<bool> GetWorkerImageInstallsDotnetAsync(CancellationToken cancellationToken);
+
     Task<string> GetWorkerImageTagAsync(CancellationToken cancellationToken);
 
     Task<bool> GetWorkerImageBuildEnabledAsync(CancellationToken cancellationToken);

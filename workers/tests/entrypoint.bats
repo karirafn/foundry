@@ -1952,3 +1952,316 @@ written_settings() {
     [[ "$output" != *"FOUNDRY_BOOTSTRAP_FAILED"* ]]
     [ "$(written_settings | jq -c '.')" = "$CLAUDE_SETTINGS_JSON" ]
 }
+
+# ---------------------------------------------------------------------------
+# C# LSP pre-restore (prepare_csharp_lsp): the csharp-lsp plugin is loaded only
+# after every restore target restores cleanly; anything else fails closed to
+# "no LSP" without failing the bootstrap.
+# ---------------------------------------------------------------------------
+
+# Loads prepare_csharp_lsp from entrypoint.sh and defines the constants the
+# entrypoint declares at its call site (the timeout is shortened by tests).
+load_prepare_csharp_lsp() {
+    local func_body
+    func_body="$(awk '/^prepare_csharp_lsp\(\)/,/^\}/' "$ENTRYPOINT")"
+    eval "$func_body"
+    CSHARP_LSP_RESTORE_TIMEOUT_SECONDS=300
+    CSHARP_LSP_PLUGIN_DIR=/opt/claude-plugins/csharp-lsp
+}
+
+# Fake csharp-ls: only its presence on PATH matters.
+make_fake_csharp_ls() {
+    cat > "$FAKE_BIN_DIR/csharp-ls" <<'EOF'
+#!/bin/bash
+exit 0
+EOF
+    chmod +x "$FAKE_BIN_DIR/csharp-ls"
+}
+
+# Fake dotnet: appends "<args>" to $BATS_TEST_TMPDIR/dotnet_calls and
+# "dotnet GIT_PAT=<value|unset>" to $BATS_TEST_TMPDIR/order.  Behaviour is
+# read at run time from FAKE_DOTNET_FAIL_MATCH (exit 1 when the last argument
+# contains it) and FAKE_DOTNET_SLEEP (seconds to sleep before exiting).
+make_fake_dotnet() {
+    local calls_file="$BATS_TEST_TMPDIR/dotnet_calls"
+    local order_file="$BATS_TEST_TMPDIR/order"
+    cat > "$FAKE_BIN_DIR/dotnet" <<EOF
+#!/bin/bash
+printf '%s\n' "\$*" >> "${calls_file}"
+printf 'dotnet GIT_PAT=%s\n' "\${GIT_PAT:-unset}" >> "${order_file}"
+if [[ -n "\${FAKE_DOTNET_SLEEP:-}" ]]; then
+    sleep "\${FAKE_DOTNET_SLEEP}"
+fi
+if [[ -n "\${FAKE_DOTNET_FAIL_MATCH:-}" && "\${!#}" == *"\${FAKE_DOTNET_FAIL_MATCH}"* ]]; then
+    echo "error NU1301: Unable to load the service index" >&2
+    exit 1
+fi
+exit 0
+EOF
+    chmod +x "$FAKE_BIN_DIR/dotnet"
+}
+
+# Fake find that redirects a search rooted at the hardcoded clone target
+# /workspace to $FAKE_WORKSPACE_DIR, so full-entrypoint tests can supply a
+# fixture tree without touching the runner's /workspace.
+make_fake_find_workspace() {
+    local real_find
+    real_find="$(command -v find)"
+    cat > "$FAKE_BIN_DIR/find" <<EOF
+#!/bin/bash
+if [[ "\${1:-}" == "/workspace" && -n "\${FAKE_WORKSPACE_DIR:-}" ]]; then
+    shift
+    exec "${real_find}" "\${FAKE_WORKSPACE_DIR}" "\$@"
+fi
+exec "${real_find}" "\$@"
+EOF
+    chmod +x "$FAKE_BIN_DIR/find"
+}
+
+# Creates empty files (and their parent directories) under $1.
+make_fixture_tree() {
+    local root="$1"
+    shift
+    local rel
+    for rel in "$@"; do
+        mkdir -p "$root/$(dirname "$rel")"
+        : > "$root/$rel"
+    done
+}
+
+# Writes the restore targets recorded by the fake dotnet, one per line, as
+# paths relative to $1 (dotnet is invoked as "dotnet restore <path>").
+restored_targets() {
+    local root="$1"
+    [ -f "$BATS_TEST_TMPDIR/dotnet_calls" ] || return 0
+    sed -e 's/^restore //' -e "s#^${root}/##" "$BATS_TEST_TMPDIR/dotnet_calls"
+}
+
+# Fake claude that appends every invocation's argv to $BATS_TEST_TMPDIR/claude_args
+# and $BATS_TEST_TMPDIR/order: a transient 5xx result on the first call (so the
+# entrypoint resumes via claude -c), success on the second.
+make_fake_claude_record_args_transient_then_success() {
+    local args_file="$BATS_TEST_TMPDIR/claude_args"
+    local order_file="$BATS_TEST_TMPDIR/order"
+    cat > "$FAKE_BIN_DIR/claude" <<EOF
+#!/bin/bash
+printf '%s\n' "\$*" >> "${args_file}"
+echo claude >> "${order_file}"
+if [ "\$(wc -l < "${args_file}")" -eq 1 ]; then
+    printf '%s\n' '{"is_error":true,"api_error_status":503,"result":"API Error: Service Unavailable","type":"result"}'
+    exit 1
+fi
+printf '%s\n' '{"is_error":false,"result":"Completed","subtype":"success","type":"result"}'
+exit 0
+EOF
+    chmod +x "$FAKE_BIN_DIR/claude"
+}
+
+@test "csharp lsp: a solution in a subfolder is restored and the plugin is enabled" {
+    load_prepare_csharp_lsp
+    make_fake_csharp_ls
+    make_fake_dotnet
+    local repo="$BATS_TEST_TMPDIR/repo"
+    make_fixture_tree "$repo" src/App.slnx src/App/App.csproj node_modules/pkg/Ignored.sln
+
+    prepare_csharp_lsp "$repo" 2> "$BATS_TEST_TMPDIR/log"
+
+    [ "$(restored_targets "$repo")" = "src/App.slnx" ]
+    [ "${CSHARP_LSP_PLUGIN_ARGS[*]}" = "--plugin-dir /opt/claude-plugins/csharp-lsp" ]
+    grep -qx "C# LSP: enabled" "$BATS_TEST_TMPDIR/log"
+}
+
+@test "csharp lsp: every solution is restored when there are several" {
+    load_prepare_csharp_lsp
+    make_fake_csharp_ls
+    make_fake_dotnet
+    local repo="$BATS_TEST_TMPDIR/repo"
+    make_fixture_tree "$repo" Root.sln tools/Tools.slnx tools/Tool/Tool.csproj
+
+    prepare_csharp_lsp "$repo" 2> "$BATS_TEST_TMPDIR/log"
+
+    [ "$(restored_targets "$repo")" = "$(printf '%s\n' Root.sln tools/Tools.slnx)" ]
+    [ "${#CSHARP_LSP_PLUGIN_ARGS[@]}" -eq 2 ]
+    grep -qx "C# LSP: enabled" "$BATS_TEST_TMPDIR/log"
+}
+
+@test "csharp lsp: without solutions every csproj/fsproj outside node_modules is restored" {
+    load_prepare_csharp_lsp
+    make_fake_csharp_ls
+    make_fake_dotnet
+    local repo="$BATS_TEST_TMPDIR/repo"
+    make_fixture_tree "$repo" a/A.csproj b/nested/B.fsproj node_modules/x/X.csproj web/node_modules/y/Y.fsproj
+
+    prepare_csharp_lsp "$repo" 2> "$BATS_TEST_TMPDIR/log"
+
+    [ "$(restored_targets "$repo")" = "$(printf '%s\n' a/A.csproj b/nested/B.fsproj)" ]
+    [ "${CSHARP_LSP_PLUGIN_ARGS[*]}" = "--plugin-dir /opt/claude-plugins/csharp-lsp" ]
+    grep -qx "C# LSP: enabled" "$BATS_TEST_TMPDIR/log"
+}
+
+@test "csharp lsp: a failing restore disables the plugin and names the reason" {
+    load_prepare_csharp_lsp
+    make_fake_csharp_ls
+    make_fake_dotnet
+    local repo="$BATS_TEST_TMPDIR/repo"
+    make_fixture_tree "$repo" A.sln B.sln
+    export FAKE_DOTNET_FAIL_MATCH="A.sln"
+
+    prepare_csharp_lsp "$repo" 2> "$BATS_TEST_TMPDIR/log"
+
+    [ "${#CSHARP_LSP_PLUGIN_ARGS[@]}" -eq 0 ]
+    grep -q "^C# LSP: disabled (dotnet restore failed for A.sln" "$BATS_TEST_TMPDIR/log"
+    ! grep -q "C# LSP: enabled" "$BATS_TEST_TMPDIR/log"
+    ! grep -q "FOUNDRY_BOOTSTRAP_FAILED" "$BATS_TEST_TMPDIR/log"
+}
+
+@test "csharp lsp: a restore that exceeds the overall timeout disables the plugin" {
+    load_prepare_csharp_lsp
+    CSHARP_LSP_RESTORE_TIMEOUT_SECONDS=1
+    make_fake_csharp_ls
+    make_fake_dotnet
+    local repo="$BATS_TEST_TMPDIR/repo"
+    make_fixture_tree "$repo" App.sln
+    export FAKE_DOTNET_SLEEP=10
+
+    local started=$SECONDS
+    prepare_csharp_lsp "$repo" 2> "$BATS_TEST_TMPDIR/log"
+
+    [ $(( SECONDS - started )) -lt 8 ]
+    [ "${#CSHARP_LSP_PLUGIN_ARGS[@]}" -eq 0 ]
+    grep -qx "C# LSP: disabled (restore exceeded 1s)" "$BATS_TEST_TMPDIR/log"
+}
+
+@test "csharp lsp: the timeout bounds all restores together, not each one" {
+    load_prepare_csharp_lsp
+    CSHARP_LSP_RESTORE_TIMEOUT_SECONDS=3
+    make_fake_csharp_ls
+    make_fake_dotnet
+    local repo="$BATS_TEST_TMPDIR/repo"
+    make_fixture_tree "$repo" A.sln B.sln C.sln
+    export FAKE_DOTNET_SLEEP=2
+
+    prepare_csharp_lsp "$repo" 2> "$BATS_TEST_TMPDIR/log"
+
+    [ "${#CSHARP_LSP_PLUGIN_ARGS[@]}" -eq 0 ]
+    grep -qx "C# LSP: disabled (restore exceeded 3s)" "$BATS_TEST_TMPDIR/log"
+    [ "$(wc -l < "$BATS_TEST_TMPDIR/dotnet_calls")" -lt 3 ]
+}
+
+@test "csharp lsp: no solution or project files means no restore and no plugin" {
+    load_prepare_csharp_lsp
+    make_fake_csharp_ls
+    make_fake_dotnet
+    local repo="$BATS_TEST_TMPDIR/repo"
+    make_fixture_tree "$repo" README.md node_modules/x/X.csproj
+
+    prepare_csharp_lsp "$repo" 2> "$BATS_TEST_TMPDIR/log"
+
+    [ ! -f "$BATS_TEST_TMPDIR/dotnet_calls" ]
+    [ "${#CSHARP_LSP_PLUGIN_ARGS[@]}" -eq 0 ]
+    grep -qx "C# LSP: disabled (no solution or project files)" "$BATS_TEST_TMPDIR/log"
+}
+
+@test "csharp lsp: csharp-ls missing from PATH means no restore and no plugin" {
+    load_prepare_csharp_lsp
+    make_fake_dotnet
+    local repo="$BATS_TEST_TMPDIR/repo"
+    make_fixture_tree "$repo" App.sln
+    local safe_path
+    safe_path="$(make_sanitized_path_without csharp-ls)"
+
+    PATH="$safe_path" prepare_csharp_lsp "$repo" 2> "$BATS_TEST_TMPDIR/log"
+
+    [ ! -f "$BATS_TEST_TMPDIR/dotnet_calls" ]
+    [ "${#CSHARP_LSP_PLUGIN_ARGS[@]}" -eq 0 ]
+    grep -qx "C# LSP: disabled (csharp-ls not on PATH)" "$BATS_TEST_TMPDIR/log"
+}
+
+@test "csharp lsp entrypoint: a clean restore passes --plugin-dir to both claude -p and the claude -c retry" {
+    set_required_env
+    make_fake_git
+    make_fake_csharp_ls
+    make_fake_dotnet
+    make_fake_find_workspace
+    make_fake_claude_record_args_transient_then_success
+    export FAKE_WORKSPACE_DIR="$BATS_TEST_TMPDIR/repo"
+    make_fixture_tree "$FAKE_WORKSPACE_DIR" src/App.slnx
+
+    run bash "$ENTRYPOINT"
+
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"C# LSP: enabled"* ]]
+    [ "$(wc -l < "$BATS_TEST_TMPDIR/claude_args")" -eq 2 ]
+    local first resume
+    first="$(sed -n 1p "$BATS_TEST_TMPDIR/claude_args")"
+    resume="$(sed -n 2p "$BATS_TEST_TMPDIR/claude_args")"
+    [[ "$first" == "-p "* ]]
+    [[ "$resume" == "-c -p "* ]]
+    [[ "$first" == *"--plugin-dir /opt/claude-plugins/csharp-lsp"* ]]
+    [[ "$resume" == *"--plugin-dir /opt/claude-plugins/csharp-lsp"* ]]
+    # The retry reuses the decision: the repo is restored exactly once.
+    [ "$(wc -l < "$BATS_TEST_TMPDIR/dotnet_calls")" -eq 1 ]
+}
+
+@test "csharp lsp entrypoint: a failed restore passes --plugin-dir to neither claude invocation and the run continues" {
+    set_required_env
+    make_fake_git
+    make_fake_csharp_ls
+    make_fake_dotnet
+    make_fake_find_workspace
+    make_fake_claude_record_args_transient_then_success
+    export FAKE_WORKSPACE_DIR="$BATS_TEST_TMPDIR/repo"
+    make_fixture_tree "$FAKE_WORKSPACE_DIR" App.sln
+    export FAKE_DOTNET_FAIL_MATCH="App.sln"
+
+    run bash "$ENTRYPOINT"
+
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"C# LSP: disabled (dotnet restore failed for"* ]]
+    [[ "$output" != *"FOUNDRY_BOOTSTRAP_FAILED"* ]]
+    [ "$(wc -l < "$BATS_TEST_TMPDIR/claude_args")" -eq 2 ]
+    ! grep -q -- "--plugin-dir" "$BATS_TEST_TMPDIR/claude_args"
+}
+
+@test "csharp lsp entrypoint: without csharp-ls on PATH no restore runs and no --plugin-dir is passed" {
+    set_required_env
+    make_fake_git
+    make_fake_dotnet
+    make_fake_find_workspace
+    make_fake_claude_record_args_transient_then_success
+    export FAKE_WORKSPACE_DIR="$BATS_TEST_TMPDIR/repo"
+    make_fixture_tree "$FAKE_WORKSPACE_DIR" App.sln
+    local safe_path
+    safe_path="$(make_sanitized_path_without csharp-ls)"
+
+    run env PATH="$safe_path" bash "$ENTRYPOINT"
+
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"C# LSP: disabled (csharp-ls not on PATH)"* ]]
+    [ ! -f "$BATS_TEST_TMPDIR/dotnet_calls" ]
+    ! grep -q -- "--plugin-dir" "$BATS_TEST_TMPDIR/claude_args"
+}
+
+@test "csharp lsp entrypoint: the restore runs after GIT_PAT is unset and gh setup, immediately before claude" {
+    set_required_env
+    make_fake_git
+    make_fake_csharp_ls
+    make_fake_dotnet
+    make_fake_find_workspace
+    make_fake_claude_record_args_transient_then_success
+    export FAKE_WORKSPACE_DIR="$BATS_TEST_TMPDIR/repo"
+    make_fixture_tree "$FAKE_WORKSPACE_DIR" App.sln
+    export GH_TOKEN="test-gh-token"
+    local order_file="$BATS_TEST_TMPDIR/order"
+    cat > "$FAKE_BIN_DIR/gh" <<EOF
+#!/bin/bash
+echo gh >> "${order_file}"
+exit 0
+EOF
+    chmod +x "$FAKE_BIN_DIR/gh"
+
+    run bash "$ENTRYPOINT"
+
+    [ "$status" -eq 0 ]
+    [ "$(cat "$order_file")" = "$(printf '%s\n' gh 'dotnet GIT_PAT=unset' claude claude)" ]
+}
