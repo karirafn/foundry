@@ -335,6 +335,7 @@ public sealed class Parse
     [InlineData("auth")]
     [InlineData("branch")]
     [InlineData("host-settings")]
+    [InlineData("managed-settings")]
     public void WhenBootstrapSentinelWithKnownStage_ReturnsWorkerBootstrapFailed(string stage)
     {
         // Arrange
@@ -346,6 +347,20 @@ public sealed class Parse
         // Assert
         ContainerOutputParseResult.WorkerBootstrapFailed failed = result.ShouldBeOfType<ContainerOutputParseResult.WorkerBootstrapFailed>();
         failed.Detail.ShouldContain(stage);
+    }
+
+    [Fact]
+    public void WhenManagedSettingsSentinelPresent_DetailTellsTheOperatorToRebuild()
+    {
+        // Arrange
+        string log = "FOUNDRY_BOOTSTRAP_FAILED stage=managed-settings detail=managed settings file /etc/claude-code/managed-settings.json is missing; rebuild the worker image";
+
+        // Act
+        ContainerOutputParseResult result = _sut.Parse(log);
+
+        // Assert
+        result.ShouldBeOfType<ContainerOutputParseResult.WorkerBootstrapFailed>()
+            .Detail.ShouldContain("rebuild the worker image");
     }
 
     [Fact]
