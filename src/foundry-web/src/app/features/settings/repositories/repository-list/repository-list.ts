@@ -1,8 +1,10 @@
 import { ChangeDetectionStrategy, Component, InputSignal, OutputEmitterRef, WritableSignal, computed, inject, input, output, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { CdkDragDrop, CdkDropList, CdkDrag, CdkDragHandle } from '@angular/cdk/drag-drop';
-import { RepositorySummary, EligibilityStatus, eligibilityStatusLabel } from '../repository.model';
+import { ApplyBranchRulesResponse, RepositorySummary, EligibilityStatus, canApplyBranchRules, eligibilityStatusLabel } from '../repository.model';
 import { RepositoryEligibilityComponent } from '../repository-eligibility/repository-eligibility';
+import { RepositoryAddProgressComponent } from '../repository-add-progress/repository-add-progress';
+import { RepositoryAddOutcomeComponent } from '../repository-add-outcome/repository-add-outcome';
 import { RepositoryService } from '../repository.service';
 import { ProviderIconComponent } from '../../../../shared/components/provider-icon/provider-icon';
 import { DeleteButtonComponent } from '../../../../shared/components/delete-button/delete-button';
@@ -16,6 +18,8 @@ import { unreachableExplanation, rateLimitTooltip } from '../repository-eligibil
   imports: [
     RouterLink,
     RepositoryEligibilityComponent,
+    RepositoryAddProgressComponent,
+    RepositoryAddOutcomeComponent,
     ProviderIconComponent,
     DeleteButtonComponent,
     SpinnerComponent,
@@ -286,15 +290,48 @@ import { unreachableExplanation, rateLimitTooltip } from '../repository-eligibil
                   </div>
                 }
 
+                @if (_applyError()?.id === repo.id) {
+                  <div class="repository-list__reason--error" role="alert">
+                    {{ _applyError()!.message }}
+                  </div>
+                }
+
                 <div class="repository-list__reason-actions">
                   <button
                     class="repository-list__recheck-btn"
                     type="button"
-                    [disabled]="_recheckingId() !== null || _isRateLimited(repo)"
+                    [disabled]="_recheckingId() !== null || _applyingId() !== null || _isRateLimited(repo)"
                     [fdTooltip]="_isRateLimited(repo) ? _rateLimitTooltip(repo) : null"
                     (click)="onRecheck(repo)"
                   >{{ _recheckingId() === repo.id ? 'Re-checking…' : 'Re-check' }}</button>
+                  @if (_canApplyBranchRules(repo)) {
+                    <button
+                      class="repository-list__apply-rules-btn"
+                      type="button"
+                      [disabled]="_applyingId() !== null || _recheckingId() !== null"
+                      (click)="onApplyBranchRules(repo)"
+                    >Apply branch rules</button>
+                  }
                 </div>
+              </div>
+            }
+
+            <!-- APPLY BRANCH RULES: in-flight progress, then the outcome checklist -->
+            @if (_applyingId() === repo.id) {
+              <div class="repository-list__apply-rules">
+                <fd-repository-add-progress label="Applying branch rules…" />
+              </div>
+            } @else if (_applyResult()?.id === repo.id) {
+              <div class="repository-list__apply-rules" aria-live="polite">
+                <fd-repository-add-outcome
+                  [response]="_applyResult()!.response"
+                  [label]="'Apply branch rules result for ' + repo.slug"
+                />
+                <button
+                  class="repository-list__apply-rules-dismiss"
+                  type="button"
+                  (click)="onDismissApplyResult()"
+                >Dismiss</button>
               </div>
             }
           </li>
@@ -317,6 +354,9 @@ export class RepositoryListComponent {
 
   protected readonly _recheckingId: WritableSignal<string | null> = signal(null);
   protected readonly _recheckError: WritableSignal<{ id: string; message: string } | null> = signal(null);
+  protected readonly _applyingId: WritableSignal<string | null> = signal(null);
+  protected readonly _applyError: WritableSignal<{ id: string; message: string } | null> = signal(null);
+  protected readonly _applyResult: WritableSignal<{ id: string; response: ApplyBranchRulesResponse } | null> = signal(null);
   protected readonly _announcement: WritableSignal<string> = signal('');
   protected readonly _moveError: WritableSignal<string | null> = signal(null);
   protected readonly _multipleRepos = computed(() => this.repositories().length > 1);
@@ -510,5 +550,39 @@ export class RepositoryListComponent {
         this._announcement.set(`${repo.slug}: Re-check failed`);
       },
     });
+  }
+
+  protected _canApplyBranchRules(repo: RepositorySummary): boolean {
+    return canApplyBranchRules(repo.eligibility);
+  }
+
+  onApplyBranchRules(repo: RepositorySummary): void {
+    // Disabled while any request is pending — a repeated click never sends a second write.
+    if (this._applyingId() !== null) {
+      return;
+    }
+    this._applyError.set(null);
+    this._applyResult.set(null);
+    this._applyingId.set(repo.id);
+    this._announcement.set(`${repo.slug}: Applying branch rules...`);
+
+    this._repositoryService.applyBranchRules(repo.accountId, repo.id).subscribe({
+      next: (response: ApplyBranchRulesResponse) => {
+        this._applyingId.set(null);
+        this._applyResult.set({ id: repo.id, response });
+        const status = response.repository.eligibility?.status;
+        const label = status ? eligibilityStatusLabel(status as EligibilityStatus) : '';
+        this._announcement.set(status ? `${repo.slug}: ${label}` : '');
+      },
+      error: () => {
+        this._applyingId.set(null);
+        this._applyError.set({ id: repo.id, message: 'Applying branch rules failed. Please try again.' });
+        this._announcement.set(`${repo.slug}: Applying branch rules failed`);
+      },
+    });
+  }
+
+  onDismissApplyResult(): void {
+    this._applyResult.set(null);
   }
 }
