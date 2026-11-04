@@ -153,7 +153,7 @@ dotnet build
 dotnet test
 
 # Run single test
-dotnet test --filter "FullyQualifiedName~ExampleTests.ExampleTest"
+dotnet test --project tests/Foundry.UnitTests --filter-class "*ExampleTests"
 
 # Frontend
 cd src/foundry-web

@@ -14,10 +14,14 @@ Encrypted columns are discovered from the EF model, not listed: every Data Prote
 
 ## Considered Options
 
-- **Fallback decryption inside each converter** — keeps two discriminators alive indefinitely across four converters; a one-time rewrite converges.
+- **Fallback decryption inside each converter** — keeps two discriminators alive indefinitely across three converters; a one-time rewrite converges.
 - **Set the application name to the old Windows path** — preserves data but binds the install to a path that no longer exists.
 - **Hand-maintained column list in the host** — a new encrypted column can be forgotten, and the host learns module table names.
 
 ## Consequences
 
 The legacy provider is built over the host's file-system key repository (`FileSystemXmlRepository.Directory`); moving key storage to another repository type requires extending it, or the fallback is skipped.
+
+The re-encryption is one-way. After it runs, the data is readable only under the pinned name "Foundry"; reverting to a build without the pinned name makes the encrypted columns unreadable.
+
+The legacy provider shares only the key repository, not the host's key-at-rest encryptor. If `ProtectKeysWith*` is ever added, the legacy keys become unreadable to the legacy provider and the affected values are reported as undecryptable.
