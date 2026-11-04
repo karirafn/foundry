@@ -86,6 +86,22 @@ export interface CreateRepositoryResponse {
   branchRules: BranchRulesOutcome;
 }
 
+/** Response of the repository card's "Apply branch rules" action — same contract as create. */
+export type ApplyBranchRulesResponse = CreateRepositoryResponse;
+
+const BRANCH_PROTECTION_RULE_PREFIX = 'branch-protection:';
+
+/**
+ * True when the repository is ineligible solely through `branch-protection:*` violations — the
+ * only state the "Apply branch rules" action can fix.
+ */
+export function canApplyBranchRules(eligibility: RepositoryEligibility | null): boolean {
+  return eligibility !== null
+    && eligibility.status === 'ineligible'
+    && eligibility.violations.length > 0
+    && eligibility.violations.every(v => v.rule.startsWith(BRANCH_PROTECTION_RULE_PREFIX));
+}
+
 export interface UpdateRepositoryRequest {
   pollIntervalSeconds: number | null;
   isActive: boolean;

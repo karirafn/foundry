@@ -80,6 +80,7 @@ public static class MonitoringModule
         services.AddCommandHandler<DeleteRepository.Command, bool, DeleteRepository.Handler>();
         services.AddCommandHandler<MoveRepository.Command, bool, MoveRepository.Handler, MoveRepository.Validator>();
         services.AddCommandHandler<RecheckRepositoryEligibility.Command, RepositorySummary, RecheckRepositoryEligibility.Handler>();
+        services.AddCommandHandler<ApplyBranchRules.Command, ApplyBranchRulesResponse, ApplyBranchRules.Handler>();
 
         services.AddHostedService<MonitoringService>();
 

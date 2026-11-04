@@ -169,6 +169,15 @@ public sealed class MonitoredRepository : AggregateRoot<MonitoredRepositoryId>
         return Result.Ok();
     }
 
+    /// <summary>
+    /// Records an explicit operator opt-in to Foundry writing its default-branch rules — e.g. the
+    /// repository card's "Apply branch rules" action, which flips an add-time opt-out.
+    /// </summary>
+    public void OptInToBranchRules()
+    {
+        ApplyBranchRules = true;
+    }
+
     public void MarkPolled(DateTimeOffset polledAt)
     {
         LastPolledAt = polledAt;
