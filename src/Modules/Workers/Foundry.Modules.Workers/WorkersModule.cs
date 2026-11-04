@@ -64,6 +64,8 @@ public static class WorkersModule
 
         services.AddSingleton(TimeProvider.System);
         services.AddScoped<WorkerOutcomeResolver>();
+        services.AddScoped<WorkerOutcomeApplier>();
+        services.AddScoped<WorkerRunMonitor>();
         services.AddHostedService<WorkerDispatchService>();
         services.AddHostedService<AgentActivityFollowerService>();
         services.AddHostedService<WorkerImageRebuildService>();

@@ -24,6 +24,7 @@ using Foundry.WebApi.Persistence;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
 using Shouldly;
@@ -112,6 +113,10 @@ public sealed class WhenRelayedBacklogExceedsMaxConcurrent : IAsyncDisposable
             prRetryDelay: TimeSpan.Zero));
         services.AddScoped<ICredentialGate, AlwaysCanDispatchCredentialGate>();
         services.AddSingleton<IWorkerOrchestrator, NullWorkerOrchestrator>();
+        services.AddSingleton(TimeProvider.System);
+        services.AddScoped<WorkerOutcomeApplier>();
+        services.AddScoped<WorkerRunMonitor>();
+        services.AddSingleton(typeof(ILogger<>), typeof(NullLogger<>));
 
         return services.BuildServiceProvider();
     }
