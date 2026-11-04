@@ -29,6 +29,10 @@
     background-color: var(--fd-state-review);
   }
 
+  &--rebase-pending {
+    background-color: var(--fd-state-queued);
+  }
+
   &--checks-pending {
     background-color: var(--fd-state-queued);
   }

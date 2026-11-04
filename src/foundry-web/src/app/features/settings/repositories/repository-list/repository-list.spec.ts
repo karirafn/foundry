@@ -18,6 +18,7 @@ const MOCK_REPO: RepositorySummary = {
   pollIntervalIsDefault: false,
   isActive: true,
   maxConcurrentWorkers: 2,
+  rebaseAfterRun: true,
   lastPolledAt: '2026-06-14T12:00:00Z',
   eligibility: { status: 'eligible', violations: [], reason: null },
 };
@@ -34,6 +35,7 @@ const MOCK_REPO_2: RepositorySummary = {
   pollIntervalIsDefault: true,
   isActive: false,
   maxConcurrentWorkers: 1,
+  rebaseAfterRun: true,
   lastPolledAt: null,
   eligibility: { status: 'ineligible', violations: [{ rule: 'AllowDirectPushes', description: 'Allow direct pushes is enabled' }], reason: null },
 };
@@ -50,6 +52,7 @@ const MOCK_REPO_INELIGIBLE: RepositorySummary = {
   pollIntervalIsDefault: false,
   isActive: true,
   maxConcurrentWorkers: 1,
+  rebaseAfterRun: true,
   lastPolledAt: '2026-06-14T12:00:00Z',
   eligibility: {
     status: 'ineligible',
@@ -72,6 +75,7 @@ const MOCK_REPO_MULTI_VIOLATIONS: RepositorySummary = {
   pollIntervalIsDefault: false,
   isActive: true,
   maxConcurrentWorkers: 1,
+  rebaseAfterRun: true,
   lastPolledAt: '2026-06-14T12:00:00Z',
   eligibility: {
     status: 'ineligible',
@@ -95,6 +99,7 @@ const MOCK_REPO_NULL_ELIGIBILITY: RepositorySummary = {
   pollIntervalIsDefault: false,
   isActive: true,
   maxConcurrentWorkers: 1,
+  rebaseAfterRun: true,
   lastPolledAt: null,
   eligibility: null,
 };
@@ -111,6 +116,7 @@ const MOCK_REPO_UNREACHABLE: RepositorySummary = {
   pollIntervalIsDefault: false,
   isActive: true,
   maxConcurrentWorkers: 1,
+  rebaseAfterRun: true,
   lastPolledAt: '2026-06-14T12:00:00Z',
   eligibility: { status: 'unreachable', violations: [], reason: null },
 };
@@ -127,6 +133,7 @@ const MOCK_REPO_RATE_LIMITED: RepositorySummary = {
   pollIntervalIsDefault: false,
   isActive: true,
   maxConcurrentWorkers: 1,
+  rebaseAfterRun: true,
   lastPolledAt: '2026-06-14T12:00:00Z',
   eligibility: { status: 'unreachable', violations: [], reason: 'rate-limited' },
 };
@@ -143,6 +150,7 @@ const MOCK_REPO_PAUSED: RepositorySummary = {
   pollIntervalIsDefault: false,
   isActive: false,
   maxConcurrentWorkers: 1,
+  rebaseAfterRun: true,
   lastPolledAt: '2026-06-14T12:00:00Z',
   eligibility: { status: 'eligible', violations: [], reason: null },
 };

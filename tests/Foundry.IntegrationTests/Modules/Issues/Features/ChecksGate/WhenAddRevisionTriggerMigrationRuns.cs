@@ -87,6 +87,9 @@ public sealed class WhenAddRevisionTriggerMigrationRuns : IAsyncLifetime, IAsync
         // Look up by IssueNumber rather than id: raw SQL inserts the id in lowercase hyphenated GUID format,
         // but EF + Microsoft.Data.Sqlite emits the id parameter in uppercase canonical GUID format, so the
         // WHERE-clause string comparison on the id column finds nothing and returns null.
+        // Materialising through the current model needs every later issues column too (e.g. rebase_outcome),
+        // so apply the remaining migrations before reading the row back.
+        await _dbContext.Database.MigrateAsync(TestContext.Current.CancellationToken);
         _dbContext.ChangeTracker.Clear();
         Issue? loaded = await _dbContext
             .Set<Issue>()
@@ -146,6 +149,9 @@ public sealed class WhenAddRevisionTriggerMigrationRuns : IAsyncLifetime, IAsync
         await _dbContext.Database.MigrateAsync(TargetMigrationId, TestContext.Current.CancellationToken);
 
         // Assert — the row materialises with NewestConsumedCommentAt == null.
+        // Materialising through the current model needs every later issues column too (e.g. rebase_outcome),
+        // so apply the remaining migrations before reading the row back.
+        await _dbContext.Database.MigrateAsync(TestContext.Current.CancellationToken);
         _dbContext.ChangeTracker.Clear();
         Issue? loaded = await _dbContext
             .Set<Issue>()

@@ -7,7 +7,7 @@ using Shouldly;
 
 using Xunit;
 
-namespace Foundry.UnitTests.Modules.Issues.Domain.Entities.States.ChecksPendingIssueTests;
+namespace Foundry.UnitTests.Modules.Issues.Domain.Entities.States.RebasePendingIssueTests;
 
 public sealed class FromRevisionInProgress
 {
@@ -21,17 +21,17 @@ public sealed class FromRevisionInProgress
             .RevisionInProgress();
 
         // Act
-        ChecksPendingIssue checksPending = revisionInProgress.MarkChecksPending();
+        RebasePendingIssue rebasePending = revisionInProgress.MarkRebasePending();
 
         // Assert
-        checksPending.ShouldSatisfyAllConditions(
-            () => checksPending.Id.ShouldBe(revisionInProgress.Id),
-            () => checksPending.MonitoredRepositoryId.ShouldBe(repositoryId),
-            () => checksPending.IssueNumber.ShouldBe(revisionInProgress.IssueNumber),
-            () => checksPending.Title.ShouldBe(revisionInProgress.Title),
-            () => checksPending.Author.ShouldBe(revisionInProgress.Author),
-            () => checksPending.Url.ShouldBe(revisionInProgress.Url),
-            () => checksPending.DetectedAt.ShouldBe(revisionInProgress.DetectedAt));
+        rebasePending.ShouldSatisfyAllConditions(
+            () => rebasePending.Id.ShouldBe(revisionInProgress.Id),
+            () => rebasePending.MonitoredRepositoryId.ShouldBe(repositoryId),
+            () => rebasePending.IssueNumber.ShouldBe(revisionInProgress.IssueNumber),
+            () => rebasePending.Title.ShouldBe(revisionInProgress.Title),
+            () => rebasePending.Author.ShouldBe(revisionInProgress.Author),
+            () => rebasePending.Url.ShouldBe(revisionInProgress.Url),
+            () => rebasePending.DetectedAt.ShouldBe(revisionInProgress.DetectedAt));
     }
 
     [Fact]
@@ -44,13 +44,13 @@ public sealed class FromRevisionInProgress
             .RevisionInProgress();
 
         // Act
-        ChecksPendingIssue checksPending = revisionInProgress.MarkChecksPending();
+        RebasePendingIssue rebasePending = revisionInProgress.MarkRebasePending();
 
         // Assert
-        checksPending.ShouldSatisfyAllConditions(
-            () => checksPending.WorkerRunId.ShouldBe(revisionInProgress.WorkerRunId),
-            () => checksPending.BranchName.ShouldBe(revisionInProgress.BranchName),
-            () => checksPending.PullRequestUrl.ShouldBe(revisionInProgress.PullRequestUrl));
+        rebasePending.ShouldSatisfyAllConditions(
+            () => rebasePending.WorkerRunId.ShouldBe(revisionInProgress.WorkerRunId),
+            () => rebasePending.BranchName.ShouldBe(revisionInProgress.BranchName),
+            () => rebasePending.PullRequestUrl.ShouldBe(revisionInProgress.PullRequestUrl));
     }
 
     [Fact]
@@ -65,10 +65,10 @@ public sealed class FromRevisionInProgress
             .RevisionInProgress();
 
         // Act
-        ChecksPendingIssue checksPending = revisionInProgress.MarkChecksPending();
+        RebasePendingIssue rebasePending = revisionInProgress.MarkRebasePending();
 
         // Assert
-        checksPending.FeedbackCutoffAt.ShouldBe(newestConsumedCommentAt);
+        rebasePending.FeedbackCutoffAt.ShouldBe(newestConsumedCommentAt);
     }
 
     [Fact]
@@ -82,15 +82,15 @@ public sealed class FromRevisionInProgress
         DateTimeOffset before = DateTimeOffset.UtcNow;
 
         // Act
-        ChecksPendingIssue checksPending = revisionInProgress.MarkChecksPending();
+        RebasePendingIssue rebasePending = revisionInProgress.MarkRebasePending();
 
         // Assert
         DateTimeOffset after = DateTimeOffset.UtcNow;
-        checksPending.FeedbackCutoffAt.ShouldBeInRange(before, after);
+        rebasePending.FeedbackCutoffAt.ShouldBeInRange(before, after);
     }
 
     [Fact]
-    public void WhenCreatedFromRevisionInProgress_SetsEnteredChecksPendingAt()
+    public void WhenCreatedFromRevisionInProgress_SetsEnteredRebasePendingAt()
     {
         // Arrange
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
@@ -100,15 +100,15 @@ public sealed class FromRevisionInProgress
         DateTimeOffset before = DateTimeOffset.UtcNow;
 
         // Act
-        ChecksPendingIssue checksPending = revisionInProgress.MarkChecksPending();
+        RebasePendingIssue rebasePending = revisionInProgress.MarkRebasePending();
 
         // Assert
         DateTimeOffset after = DateTimeOffset.UtcNow;
-        checksPending.EnteredChecksPendingAt.ShouldBeInRange(before, after);
+        rebasePending.EnteredRebasePendingAt.ShouldBeInRange(before, after);
     }
 
     [Fact]
-    public void WhenCreatedFromRevisionInProgress_RaisesIssueChecksPendingDomainEvent()
+    public void WhenCreatedFromRevisionInProgress_RaisesIssueRebasePendingDomainEvent()
     {
         // Arrange
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
@@ -117,19 +117,19 @@ public sealed class FromRevisionInProgress
             .RevisionInProgress();
 
         // Act
-        revisionInProgress.MarkChecksPending();
+        revisionInProgress.MarkRebasePending();
 
         // Assert
-        IssueChecksPending domainEvent = revisionInProgress.DomainEvents
+        IssueRebasePending domainEvent = revisionInProgress.DomainEvents
             .ShouldHaveSingleItem()
-            .ShouldBeOfType<IssueChecksPending>();
+            .ShouldBeOfType<IssueRebasePending>();
         domainEvent.ShouldSatisfyAllConditions(
             () => domainEvent.IssueId.ShouldBe(revisionInProgress.Id),
             () => domainEvent.MonitoredRepositoryId.ShouldBe(repositoryId));
     }
 
     [Fact]
-    public void WhenCreatedFromRevisionInProgress_ViaMarkUnchangedChecksPending_CopiesSharedProperties()
+    public void WhenCreatedFromRevisionInProgress_ViaMarkUnchangedRebasePending_CopiesSharedProperties()
     {
         // Arrange
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
@@ -138,18 +138,18 @@ public sealed class FromRevisionInProgress
             .RevisionInProgress();
 
         // Act
-        ChecksPendingIssue checksPending = revisionInProgress.MarkUnchangedChecksPending();
+        RebasePendingIssue rebasePending = revisionInProgress.MarkUnchangedRebasePending();
 
         // Assert
-        checksPending.ShouldSatisfyAllConditions(
-            () => checksPending.Id.ShouldBe(revisionInProgress.Id),
-            () => checksPending.MonitoredRepositoryId.ShouldBe(repositoryId),
-            () => checksPending.BranchName.ShouldBe(revisionInProgress.BranchName),
-            () => checksPending.PullRequestUrl.ShouldBe(revisionInProgress.PullRequestUrl));
+        rebasePending.ShouldSatisfyAllConditions(
+            () => rebasePending.Id.ShouldBe(revisionInProgress.Id),
+            () => rebasePending.MonitoredRepositoryId.ShouldBe(repositoryId),
+            () => rebasePending.BranchName.ShouldBe(revisionInProgress.BranchName),
+            () => rebasePending.PullRequestUrl.ShouldBe(revisionInProgress.PullRequestUrl));
     }
 
     [Fact]
-    public void WhenCreatedFromRevisionInProgress_ViaMarkUnchangedChecksPending_RaisesIssueChecksPendingDomainEvent()
+    public void WhenCreatedFromRevisionInProgress_ViaMarkUnchangedRebasePending_RaisesIssueRebasePendingDomainEvent()
     {
         // Arrange
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
@@ -158,12 +158,12 @@ public sealed class FromRevisionInProgress
             .RevisionInProgress();
 
         // Act
-        revisionInProgress.MarkUnchangedChecksPending();
+        revisionInProgress.MarkUnchangedRebasePending();
 
         // Assert
-        IssueChecksPending domainEvent = revisionInProgress.DomainEvents
+        IssueRebasePending domainEvent = revisionInProgress.DomainEvents
             .ShouldHaveSingleItem()
-            .ShouldBeOfType<IssueChecksPending>();
+            .ShouldBeOfType<IssueRebasePending>();
         domainEvent.ShouldSatisfyAllConditions(
             () => domainEvent.IssueId.ShouldBe(revisionInProgress.Id),
             () => domainEvent.MonitoredRepositoryId.ShouldBe(repositoryId));

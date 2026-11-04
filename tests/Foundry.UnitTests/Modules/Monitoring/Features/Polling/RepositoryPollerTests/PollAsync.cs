@@ -1760,6 +1760,11 @@ public sealed class PollAsync : IAsyncDisposable
             return Task.FromResult(_reviewIssues);
         }
 
+        public Task<IReadOnlyList<RebasePendingIssueInfo>> GetRebasePendingIssuesAsync(
+            MonitoredRepositoryId repositoryId,
+            CancellationToken cancellationToken)
+            => Task.FromResult<IReadOnlyList<RebasePendingIssueInfo>>([]);
+
         public Task<IReadOnlyList<ChecksPendingIssueInfo>> GetChecksPendingIssuesAsync(
             MonitoredRepositoryId repositoryId,
             CancellationToken cancellationToken)

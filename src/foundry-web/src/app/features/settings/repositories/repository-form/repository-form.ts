@@ -252,6 +252,24 @@ const MAX_WORKER_LIMIT = 20;
           </div>
         }
 
+        <div class="repository-form__field">
+          <div class="repository-form__checkbox-row">
+            <input
+              class="repository-form__toggle"
+              type="checkbox"
+              id="repository-rebase-after-run"
+              aria-describedby="repository-rebase-after-run-hint"
+              [checked]="_rebaseAfterRun()"
+              [disabled]="saving()"
+              (change)="_rebaseAfterRun.set($any($event.target).checked)"
+            />
+            <label class="repository-form__field-label" for="repository-rebase-after-run">Rebase after run</label>
+          </div>
+          <span class="repository-form__field-hint" id="repository-rebase-after-run-hint">
+            After each worker run, Foundry rebases the branch onto the default branch before waiting on checks.
+          </span>
+        </div>
+
         @if (_isEditMode()) {
           <div class="repository-form__field repository-form__field--inline">
             <label class="repository-form__field-label" for="repository-active">Polling enabled</label>
@@ -320,6 +338,7 @@ export class RepositoryFormComponent implements OnInit {
   protected readonly _maxConcurrentWorkers: WritableSignal<number | ''> = signal(DEFAULT_MAX_CONCURRENT_WORKERS);
   protected readonly _isActive: WritableSignal<boolean> = signal(true);
   protected readonly _applyBranchRules: WritableSignal<boolean> = signal(true);
+  protected readonly _rebaseAfterRun: WritableSignal<boolean> = signal(true);
   protected readonly _pickerOpen: WritableSignal<boolean> = signal(false);
   protected readonly _activeOptionIndex: WritableSignal<number> = signal(-1);
   protected readonly _filterText: WritableSignal<string> = signal('');
@@ -421,6 +440,7 @@ export class RepositoryFormComponent implements OnInit {
       this._pollIntervalMinutes.set(minutes);
       this._maxConcurrentWorkers.set(repo.maxConcurrentWorkers ?? DEFAULT_MAX_CONCURRENT_WORKERS);
       this._isActive.set(repo.isActive);
+      this._rebaseAfterRun.set(repo.rebaseAfterRun ?? true);
     }
   }
 
@@ -517,6 +537,7 @@ export class RepositoryFormComponent implements OnInit {
         pollIntervalSeconds,
         isActive: this._isActive(),
         maxConcurrentWorkers,
+        rebaseAfterRun: this._rebaseAfterRun(),
       };
       this.save.emit(request);
     } else {
@@ -525,6 +546,7 @@ export class RepositoryFormComponent implements OnInit {
         pollIntervalSeconds,
         maxConcurrentWorkers,
         applyBranchRules: this._applyBranchRules(),
+        rebaseAfterRun: this._rebaseAfterRun(),
       };
       this.save.emit(request);
     }

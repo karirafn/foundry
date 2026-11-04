@@ -184,6 +184,11 @@ public sealed class NudgeCallCap : IAsyncDisposable
             CancellationToken cancellationToken)
             => Task.FromResult<IReadOnlyList<ReviewIssueInfo>>([]);
 
+        public Task<IReadOnlyList<RebasePendingIssueInfo>> GetRebasePendingIssuesAsync(
+            MonitoredRepositoryId repositoryId,
+            CancellationToken cancellationToken)
+            => Task.FromResult<IReadOnlyList<RebasePendingIssueInfo>>([]);
+
         public Task<IReadOnlyList<ChecksPendingIssueInfo>> GetChecksPendingIssuesAsync(
             MonitoredRepositoryId repositoryId,
             CancellationToken cancellationToken)
