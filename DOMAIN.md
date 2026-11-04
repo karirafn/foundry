@@ -237,7 +237,7 @@ The Worker Prompts fields are non-null DB values (seeded from code defaults, bac
 The auth-invalid pause is not stored here — it is `ClaudeAccount.Validity` in the Credentials module (see Worker Authentication).
 `ProbeIntervalMinutes` governs how long the credit block waits between probes (see Credit Probe); the operator sets it in the dispatch-settings form, `GlobalSettings.UpdateProbeInterval` rejects a below-minimum value, and the credit-probe scheduler reads it via `IGlobalSettingsQueries.GetProbeIntervalMinutesAsync` at each arm.
 DB is the single source of truth — it is the only source for worker settings; `IConfiguration` is not consulted for any setting the UI manages, and the `Workers` configuration section no longer exists.
-Webhook ingress settings (ADR 0085): the optional **Webhook Public Base URL** (`WebhookPublicBaseUrl`, absolute `https` only, no query or fragment — rejected otherwise with `Settings.InvalidWebhookPublicBaseUrl`) and the [Backstop Interval](#backstop-interval) (`BackstopIntervalMinutes`, default 15, 5..1440, `Settings.InvalidBackstopInterval`), both edited in the dispatch settings page through `PUT /api/settings/webhooks`. The webhook port itself is host configuration (`Webhooks:Port`), not a Global Setting.
+Webhook ingress settings ([ADR 0085](docs/adr/0085-webhooks-nudge-the-poll-loop.md)): the optional **Webhook Public Base URL** (`WebhookPublicBaseUrl`, absolute `https` only, no query or fragment — rejected otherwise with `Settings.InvalidWebhookPublicBaseUrl`) and the [Backstop Interval](#backstop-interval) (`BackstopIntervalMinutes`, default 15, 5..1440, `Settings.InvalidBackstopInterval`), both edited in the dispatch settings page through `PUT /api/settings/webhooks`. The webhook port itself is host configuration (`Webhooks:Port`), not a Global Setting.
 
 ## Monitor
 
@@ -248,7 +248,7 @@ The per-cycle provider call cost is bounded by `RepositoryPoller.MaxFixedPollCal
 
 ### Webhook Delivery
 
-One verified inbound HTTP request from a provider (ADR 0085). Deliveries arrive only on the dedicated webhook port (`Webhooks:Port`), at `/webhooks/github/{hookId}`; a two-way port guard returns 404 for any other path on that port and for `/webhooks/*` on the main port. Verification fails fast before the body is parsed: an unknown hook id is 404, a missing or mismatched `X-Hub-Signature-256` (HMAC-SHA256 of the raw body under the repository's secret, constant-time compare) is 401, and a body whose `repository.full_name` is another repository is 400. A verified delivery returns 202 without calling the provider, after enqueueing at most one Nudge. Deliveries touching nothing Foundry tracks are dropped (the relevance filter).
+One verified inbound HTTP request from a provider (see [ADR 0085](docs/adr/0085-webhooks-nudge-the-poll-loop.md)). Deliveries arrive only on the dedicated webhook port (`Webhooks:Port`), at `/webhooks/github/{hookId}`; a two-way port guard returns 404 for any other path on that port and for `/webhooks/*` on the main port. Verification fails fast before the body is parsed: an unknown hook id is 404, a missing or mismatched `X-Hub-Signature-256` (HMAC-SHA256 of the raw body under the repository's secret, constant-time compare) is 401, and a body whose `repository.full_name` is another repository is 400. A verified delivery returns 202 without calling the provider, after enqueueing at most one Nudge. Deliveries touching nothing Foundry tracks are dropped (the relevance filter).
 
 ### Webhook Status
 
