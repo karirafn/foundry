@@ -8,6 +8,7 @@ using Foundry.Modules.Credentials.Features.Usage;
 using Foundry.Modules.Issues;
 using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Monitoring;
+using Foundry.Modules.Monitoring.Features.Webhooks;
 using Foundry.Modules.Settings;
 using Foundry.Modules.Workers;
 using Foundry.Modules.Workers.Contracts;
@@ -15,6 +16,7 @@ using Foundry.ServiceDefaults;
 using Foundry.Shared;
 using Foundry.Shared.Infrastructure;
 using Foundry.Shared.Infrastructure.Outbox;
+using Foundry.WebApi;
 using Foundry.WebApi.Hubs;
 using Foundry.WebApi.Persistence;
 
@@ -34,6 +36,7 @@ bool isDocGeneration = Assembly.GetEntryAssembly()?.GetName().Name == DocGenerat
 WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
 
 builder.AddServiceDefaults();
+WebhookKestrelBinding.AddWebhookEndpoint(builder);
 builder.Services.ConfigureHttpJsonOptions(options =>
 {
     options.SerializerOptions.Converters.Add(new JsonStringEnumConverter());
@@ -152,6 +155,10 @@ WebApplication app = builder.Build();
 
 GlobalExceptionLogging.Install(app.Services.GetRequiredService<ILoggerFactory>());
 
+// Two-way port guard (ADR 0085): first in the pipeline so the public webhook port exposes nothing
+// but /webhooks/*, and the main port never serves /webhooks/*.
+app.UseWebhookPortGuard();
+
 if (!isDocGeneration)
 {
     app.Services.GetRequiredService<HandlerDedupIdentityRegistry>().Validate();
@@ -167,7 +174,8 @@ if (app.Environment.IsDevelopment())
     app.MapOpenApi();
 }
 
-app.UseHttpsRedirection();
+// The webhook port is plain HTTP behind the operator's tunnel or reverse proxy; never redirect it.
+app.UseWhen(context => !WebhookPortGuard.IsWebhookPortRequest(context), branch => branch.UseHttpsRedirection());
 app.UseStatusCodePages();
 
 app.MapDefaultEndpoints();

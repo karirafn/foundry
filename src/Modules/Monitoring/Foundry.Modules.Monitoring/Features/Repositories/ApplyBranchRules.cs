@@ -5,6 +5,7 @@ using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Features.Accounts;
 using Foundry.Modules.Monitoring.Features.Eligibility;
+using Foundry.Modules.Monitoring.Features.Webhooks;
 using Foundry.Modules.Settings.Contracts.Queries;
 using Foundry.Shared;
 using Foundry.Shared.Infrastructure.Http;
@@ -29,7 +30,8 @@ internal static class ApplyBranchRules
     internal sealed class Handler(
         DbContext dbContext,
         BranchRuleEnforcer branchRuleEnforcer,
-        IGlobalSettingsQueries globalSettingsQueries) : ICommandHandler<Command, ApplyBranchRulesResponse>
+        IGlobalSettingsQueries globalSettingsQueries,
+        WebhookIngress? webhookIngress = null) : ICommandHandler<Command, ApplyBranchRulesResponse>
     {
         public async Task<Result<ApplyBranchRulesResponse>> HandleAsync(
             Command command,
@@ -82,12 +84,16 @@ internal static class ApplyBranchRules
 
             int defaultPollIntervalSeconds = await globalSettingsQueries.GetPollIntervalSecondsAsync(cancellationToken);
 
+            bool webhookIngressConfigured = webhookIngress is not null
+                && (await webhookIngress.GetStateAsync(cancellationToken)).IsConfigured;
+
             RepositorySummary summary = RepositoryMappings.ToSummary(
                 repository,
                 credential.Id.Value,
                 credential.Name,
                 providerType,
-                defaultPollIntervalSeconds);
+                defaultPollIntervalSeconds,
+                webhookIngressConfigured);
 
             return Result<ApplyBranchRulesResponse>.Ok(new ApplyBranchRulesResponse(summary, branchRules));
         }

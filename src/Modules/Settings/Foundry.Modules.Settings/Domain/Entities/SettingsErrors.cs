@@ -51,6 +51,16 @@ internal static class SettingsErrors
     internal static Error InvalidPollInterval(int value) =>
         new(InvalidPollIntervalCode, $"Poll interval must be between {GlobalSettings.MinPollIntervalSeconds} and {GlobalSettings.MaxPollIntervalSeconds} seconds, but was {value}.");
 
+    internal const string InvalidBackstopIntervalCode = "Settings.InvalidBackstopInterval";
+
+    internal static Error InvalidBackstopInterval(int value) =>
+        new(InvalidBackstopIntervalCode, $"Backstop interval must be between {GlobalSettings.MinBackstopIntervalMinutes} and {GlobalSettings.MaxBackstopIntervalMinutes} minutes, but was {value}.");
+
+    internal const string InvalidWebhookPublicBaseUrlCode = "Settings.InvalidWebhookPublicBaseUrl";
+
+    internal static readonly Error InvalidWebhookPublicBaseUrl =
+        new(InvalidWebhookPublicBaseUrlCode, $"The webhook public base URL must be an absolute https URL without query or fragment, at most {GlobalSettings.MaxWebhookPublicBaseUrlLength} characters.");
+
     internal const string InvalidProviderHostCode = "Settings.InvalidProviderHost";
 
     internal static Error InvalidProviderHost(string host) =>

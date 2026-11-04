@@ -50,7 +50,152 @@ internal sealed class RepositoryPoller(
         DateTimeOffset now,
         CancellationToken cancellationToken)
     {
+        Result<bool> result = await PollDetectingChangesAsync(repository, provider, now, cancellationToken);
+
+        return result is Result<bool>.Failure failure ? failure.Error : Result.Ok();
+    }
+
+    /// <summary>
+    /// Runs one full scheduled poll — the composition of every per-pass entry point, in the same order
+    /// and with the same saves a nudge would use (ADR 0085). Returns whether any pass found a change in
+    /// a category a provider webhook event announces (a candidate <em>missed change</em>): issue
+    /// detection, detail change or untrack; a closed issue or pull request; new review feedback; or a
+    /// provider-driven checks verdict. Time-based checks exits and dependency refreshes never count.
+    /// </summary>
+    internal async Task<Result<bool>> PollDetectingChangesAsync(
+        MonitoredRepository repository,
+        IIssueProvider provider,
+        DateTimeOffset now,
+        CancellationToken cancellationToken)
+    {
         // Pass 0: evaluate repository-level eligibility every poll cycle.
+        await EvaluateEligibilityAsync(repository, now, cancellationToken);
+
+        // Passes 1-2: listing (detect, detail change, complete-listing untrack), stamping the poll time.
+        Result<bool> listingResult = await RunListingCoreAsync(
+            repository,
+            provider,
+            now,
+            markPolled: true,
+            cancellationToken);
+
+        if (listingResult is not Result<bool>.Success listingSuccess)
+        {
+            return listingResult;
+        }
+
+        // Pass 3: detect dependencies for the dispatch-candidate issues the dependency handler can act on.
+        await RunDependencyPassAsync(repository, provider, cancellationToken);
+
+        // Pass 4: check provider-side status of all review issues.
+        bool reviewChanged = await RunReviewPassAsync(repository, provider, issueNumber: null, cancellationToken);
+
+        // Pass 5: check provider-side checks verdict for all checks-pending issues.
+        bool checksChanged = await RunChecksPassAsync(repository, provider, issueNumber: null, now, cancellationToken);
+
+        return Result<bool>.Ok(listingSuccess.Value || reviewChanged || checksChanged);
+    }
+
+    /// <summary>
+    /// The branch-rules eligibility step on its own (nudged by <c>branch_protection_rule</c> and
+    /// <c>repository_ruleset</c> deliveries): evaluates and persists the repository's eligibility.
+    /// </summary>
+    public async Task RunBranchRulesStepAsync(
+        MonitoredRepository repository,
+        DateTimeOffset now,
+        CancellationToken cancellationToken)
+    {
+        await EvaluateEligibilityAsync(repository, now, cancellationToken);
+        await dbContext.SaveChangesAsync(cancellationToken);
+    }
+
+    /// <summary>
+    /// The listing pass on its own (nudged by <c>issues</c> deliveries): detection, detail change and the
+    /// complete-listing untrack guard. Unlike a scheduled poll it does not stamp <c>LastPolledAt</c>, so
+    /// the scheduled cadence is unaffected. Returns whether a webhook-mapped change was found.
+    /// </summary>
+    public Task<Result<bool>> RunListingPassAsync(
+        MonitoredRepository repository,
+        IIssueProvider provider,
+        DateTimeOffset now,
+        CancellationToken cancellationToken)
+        => RunListingCoreAsync(repository, provider, now, markPolled: false, cancellationToken);
+
+    /// <summary>
+    /// The dependency pass on its own: refreshes the blockers of every dispatch-candidate issue. Run after
+    /// a listing pass on the same provider instance, the GitHub provider answers from the listing's cached
+    /// dependency data without further calls.
+    /// </summary>
+    public async Task RunDependencyPassAsync(
+        MonitoredRepository repository,
+        IIssueProvider provider,
+        CancellationToken cancellationToken)
+    {
+        // Re-query after the listing save so issues newly detected in this cycle are included.
+        IReadOnlySet<int> candidateNumbers = await issueQueries.GetDispatchCandidateIssueNumbersAsync(
+            repository.Id,
+            cancellationToken);
+
+        await DetectDependenciesAsync(repository, provider, candidateNumbers, cancellationToken);
+
+        await integrationEventDispatcher.DispatchAsync(repository.IntegrationEvents, cancellationToken);
+        repository.ClearIntegrationEvents();
+        await dbContext.SaveChangesAsync(cancellationToken);
+        await domainEventDispatcher.DispatchAsync(repository.DomainEvents, cancellationToken);
+        repository.ClearDomainEvents();
+    }
+
+    /// <summary>
+    /// The review pass — for every review issue, or only <paramref name="issueNumber"/> when supplied
+    /// (nudged by pull request, review and PR comment deliveries). Returns whether a webhook-mapped
+    /// change was found.
+    /// </summary>
+    public async Task<bool> RunReviewPassAsync(
+        MonitoredRepository repository,
+        IIssueProvider provider,
+        int? issueNumber,
+        CancellationToken cancellationToken)
+    {
+        bool changed = await DetectReviewStatusChangesAsync(repository, provider, issueNumber, cancellationToken);
+
+        await integrationEventDispatcher.DispatchAsync(repository.IntegrationEvents, cancellationToken);
+        repository.ClearIntegrationEvents();
+        await dbContext.SaveChangesAsync(cancellationToken);
+
+        return changed;
+    }
+
+    /// <summary>
+    /// The checks pass — for every checks-pending issue, or only <paramref name="issueNumber"/> when
+    /// supplied (nudged by <c>check_suite</c>, <c>status</c> and deadline nudges). Returns whether a
+    /// webhook-mapped change was found.
+    /// </summary>
+    public async Task<bool> RunChecksPassAsync(
+        MonitoredRepository repository,
+        IIssueProvider provider,
+        int? issueNumber,
+        DateTimeOffset now,
+        CancellationToken cancellationToken)
+    {
+        bool changed = await DetectChecksPendingStatusChangesAsync(
+            repository,
+            provider,
+            issueNumber,
+            now,
+            cancellationToken);
+
+        await integrationEventDispatcher.DispatchAsync(repository.IntegrationEvents, cancellationToken);
+        repository.ClearIntegrationEvents();
+        await dbContext.SaveChangesAsync(cancellationToken);
+
+        return changed;
+    }
+
+    private async Task EvaluateEligibilityAsync(
+        MonitoredRepository repository,
+        DateTimeOffset now,
+        CancellationToken cancellationToken)
+    {
         // Branch on whether a fresh write probe is due (verdict is Unknown and either never attempted
         // or the 15-minute cooldown has elapsed). Repositories with no credential early-return
         // Ineligible(NoCredential) inside both evaluation paths before any probe is issued, so a
@@ -64,7 +209,15 @@ internal sealed class RepositoryPoller(
             // Verdict is Granted, Denied, or Unknown within the cooldown — use the cheap path.
             await eligibilityEvaluator.EvaluateBranchRulesAndStoreAsync(repository, cancellationToken);
         }
+    }
 
+    private async Task<Result<bool>> RunListingCoreAsync(
+        MonitoredRepository repository,
+        IIssueProvider provider,
+        DateTimeOffset now,
+        bool markPolled,
+        CancellationToken cancellationToken)
+    {
         IReadOnlySet<int> knownNumbers = await issueQueries.GetKnownIssueNumbersAsync(
             repository.Id,
             cancellationToken);
@@ -77,10 +230,10 @@ internal sealed class RepositoryPoller(
         {
             if (providerResult is Result<IssueListing>.Failure f)
             {
-                return f.Error;
+                return Result<bool>.Fail(f.Error);
             }
 
-            return new Error("Monitoring.UnexpectedResult", "GetIssues returned an unexpected result type.");
+            return Result<bool>.Fail(new Error("Monitoring.UnexpectedResult", "GetIssues returned an unexpected result type."));
         }
 
         IssueListing listing = providerSuccess.Value;
@@ -90,8 +243,9 @@ internal sealed class RepositoryPoller(
             .Select(i => i.Number)
             .ToHashSet();
 
-        DetectNewIssues(repository, fetchedIssues, knownNumbers, now);
-        await DetectDetailChangesAsync(repository, fetchedIssues, knownNumbers, cancellationToken);
+        bool detected = DetectNewIssues(repository, fetchedIssues, knownNumbers, now);
+        bool detailsChanged = await DetectDetailChangesAsync(repository, fetchedIssues, knownNumbers, cancellationToken);
+        bool untracked = false;
 
         // Only run the untrack pass when the listing is provably complete. An incomplete listing
         // (IsComplete: false, pagination cap reached) cannot distinguish a missing issue from one
@@ -106,7 +260,7 @@ internal sealed class RepositoryPoller(
                 repository.Id,
                 cancellationToken);
 
-            DetectUntrackedIssues(repository, untrackableNumbers, fetchedNumbers);
+            untracked = DetectUntrackedIssues(repository, untrackableNumbers, fetchedNumbers);
         }
         else
         {
@@ -123,20 +277,10 @@ internal sealed class RepositoryPoller(
             }
         }
 
-        repository.MarkPolled(now);
-        await integrationEventDispatcher.DispatchAsync(repository.IntegrationEvents, cancellationToken);
-        repository.ClearIntegrationEvents();
-        await dbContext.SaveChangesAsync(cancellationToken);
-        await domainEventDispatcher.DispatchAsync(repository.DomainEvents, cancellationToken);
-        repository.ClearDomainEvents();
-
-        // Pass 3: detect dependencies for the dispatch-candidate issues the dependency handler can act on.
-        // Re-query after the first save so issues newly detected in this cycle are included.
-        IReadOnlySet<int> candidateNumbers = await issueQueries.GetDispatchCandidateIssueNumbersAsync(
-            repository.Id,
-            cancellationToken);
-
-        await DetectDependenciesAsync(repository, provider, candidateNumbers, cancellationToken);
+        if (markPolled)
+        {
+            repository.MarkPolled(now);
+        }
 
         await integrationEventDispatcher.DispatchAsync(repository.IntegrationEvents, cancellationToken);
         repository.ClearIntegrationEvents();
@@ -144,21 +288,7 @@ internal sealed class RepositoryPoller(
         await domainEventDispatcher.DispatchAsync(repository.DomainEvents, cancellationToken);
         repository.ClearDomainEvents();
 
-        // Pass 4: check provider-side status of all review issues.
-        await DetectReviewStatusChangesAsync(repository, provider, cancellationToken);
-
-        await integrationEventDispatcher.DispatchAsync(repository.IntegrationEvents, cancellationToken);
-        repository.ClearIntegrationEvents();
-        await dbContext.SaveChangesAsync(cancellationToken);
-
-        // Pass 5: check provider-side checks verdict for all checks-pending issues.
-        await DetectChecksPendingStatusChangesAsync(repository, provider, now, cancellationToken);
-
-        await integrationEventDispatcher.DispatchAsync(repository.IntegrationEvents, cancellationToken);
-        repository.ClearIntegrationEvents();
-        await dbContext.SaveChangesAsync(cancellationToken);
-
-        return Result.Ok();
+        return Result<bool>.Ok(detected || detailsChanged || untracked);
     }
 
     private static async Task DetectDependenciesAsync(
@@ -188,12 +318,14 @@ internal sealed class RepositoryPoller(
         }
     }
 
-    private static void DetectNewIssues(
+    private static bool DetectNewIssues(
         MonitoredRepository repository,
         IReadOnlyList<ProviderIssue> fetchedIssues,
         IReadOnlySet<int> knownNumbers,
         DateTimeOffset now)
     {
+        bool detected = false;
+
         foreach (ProviderIssue issue in fetchedIssues)
         {
             if (!knownNumbers.Contains(issue.Number))
@@ -207,11 +339,14 @@ internal sealed class RepositoryPoller(
                     issue.Labels,
                     issue.IssueKindLabel,
                     now));
+                detected = true;
             }
         }
+
+        return detected;
     }
 
-    private async Task DetectDetailChangesAsync(
+    private async Task<bool> DetectDetailChangesAsync(
         MonitoredRepository repository,
         IReadOnlyList<ProviderIssue> fetchedIssues,
         IReadOnlySet<int> knownNumbers,
@@ -223,13 +358,15 @@ internal sealed class RepositoryPoller(
 
         if (knownFetchedNumbers.Count == 0)
         {
-            return;
+            return false;
         }
 
         IReadOnlyDictionary<int, IssueSnapshot> snapshots = await issueQueries.GetIssueSnapshotsAsync(
             repository.Id,
             knownFetchedNumbers,
             cancellationToken);
+
+        bool changed = false;
 
         foreach (ProviderIssue issue in fetchedIssues)
         {
@@ -245,23 +382,34 @@ internal sealed class RepositoryPoller(
                     issue.Number,
                     issue.Title,
                     issue.Labels));
+                changed = true;
             }
         }
+
+        return changed;
     }
 
-    private async Task DetectReviewStatusChangesAsync(
+    private async Task<bool> DetectReviewStatusChangesAsync(
         MonitoredRepository repository,
         IIssueProvider provider,
+        int? issueNumber,
         CancellationToken cancellationToken)
     {
         IReadOnlyList<ReviewIssueInfo> reviewIssues = await issueQueries.GetReviewIssuesAsync(
             repository.Id,
             cancellationToken);
 
+        bool changed = false;
+
         // HTTP calls are sequential: GitHub has no batch issue/PR status endpoint,
         // and review issues per repository are expected to be small (design decision D6).
         foreach (ReviewIssueInfo reviewIssue in reviewIssues)
         {
+            if (issueNumber is { } targetNumber && reviewIssue.IssueNumber != targetNumber)
+            {
+                continue;
+            }
+
             Result<bool> isClosedResult = await provider.IsIssueClosedAsync(
                 repository.Slug,
                 reviewIssue.IssueNumber,
@@ -275,6 +423,7 @@ internal sealed class RepositoryPoller(
             if (isClosedSuccess.Value)
             {
                 repository.RecordIntegrationEvent(new ProviderIssueClosed(repository.Id, reviewIssue.IssueNumber));
+                changed = true;
                 continue;
             }
 
@@ -291,6 +440,7 @@ internal sealed class RepositoryPoller(
             if (prStatusSuccess.Value.IsClosed && !prStatusSuccess.Value.IsMerged)
             {
                 repository.RecordIntegrationEvent(new ProviderPullRequestClosed(repository.Id, reviewIssue.IssueNumber));
+                changed = true;
                 continue;
             }
 
@@ -319,13 +469,17 @@ internal sealed class RepositoryPoller(
                     feedback.Comments,
                     feedback.OmittedCommentCount,
                     feedback.NewestCommentAt));
+                changed = true;
             }
         }
+
+        return changed;
     }
 
-    private async Task DetectChecksPendingStatusChangesAsync(
+    private async Task<bool> DetectChecksPendingStatusChangesAsync(
         MonitoredRepository repository,
         IIssueProvider provider,
+        int? issueNumber,
         DateTimeOffset now,
         CancellationToken cancellationToken)
     {
@@ -333,10 +487,17 @@ internal sealed class RepositoryPoller(
             repository.Id,
             cancellationToken);
 
+        bool changed = false;
+
         // HTTP calls are sequential: GitHub has no batch issue/PR status endpoint,
         // and checks-pending issues per repository are expected to be small (design decision D6).
         foreach (ChecksPendingIssueInfo checksPendingIssue in checksPendingIssues)
         {
+            if (issueNumber is { } targetNumber && checksPendingIssue.IssueNumber != targetNumber)
+            {
+                continue;
+            }
+
             // Apply the same closed/merged handling as the review pass.
             Result<bool> isClosedResult = await provider.IsIssueClosedAsync(
                 repository.Slug,
@@ -352,6 +513,7 @@ internal sealed class RepositoryPoller(
             {
                 repository.RecordIntegrationEvent(
                     new ProviderIssueClosed(repository.Id, checksPendingIssue.IssueNumber));
+                changed = true;
                 continue;
             }
 
@@ -369,6 +531,7 @@ internal sealed class RepositoryPoller(
             {
                 repository.RecordIntegrationEvent(
                     new ProviderPullRequestClosed(repository.Id, checksPendingIssue.IssueNumber));
+                changed = true;
                 continue;
             }
 
@@ -408,8 +571,20 @@ internal sealed class RepositoryPoller(
                 checksPendingIssue.IssueNumber,
                 outcome,
                 failingChecks));
+
+            // Only a provider-driven verdict counts as a webhook-mapped change; the grace-window and
+            // upper-bound exits are time-based (deadline nudges), never announced by a delivery.
+            if (IsProviderDrivenVerdict(checksSuccess.Value))
+            {
+                changed = true;
+            }
         }
+
+        return changed;
     }
+
+    private static bool IsProviderDrivenVerdict(Checks verdict) =>
+        verdict is Checks.Green or Checks.Red or Checks.Unfinished;
 
     /// <summary>
     /// Maps a <see cref="Checks"/> verdict and elapsed time to a <see cref="ChecksVerdictResolved"/>
@@ -431,18 +606,23 @@ internal sealed class RepositoryPoller(
             _ => throw new UnreachableException($"Unhandled Checks variant: {verdict.GetType().Name}"),
         };
 
-    private static void DetectUntrackedIssues(
+    private static bool DetectUntrackedIssues(
         MonitoredRepository repository,
         IReadOnlySet<int> untrackableNumbers,
         HashSet<int> fetchedNumbers)
     {
+        bool untracked = false;
+
         foreach (int issueNumber in untrackableNumbers)
         {
             if (!fetchedNumbers.Contains(issueNumber))
             {
                 repository.RecordIntegrationEvent(new ProviderIssueUntracked(repository.Id, issueNumber));
+                untracked = true;
             }
         }
+
+        return untracked;
     }
 
     private static bool HasDetailsChanged(IssueSnapshot snapshot, ProviderIssue issue)

@@ -6,17 +6,20 @@ using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Shared;
 using Foundry.Shared.Infrastructure;
 
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 namespace Foundry.Modules.Monitoring.Infrastructure.Configurations;
 
-internal sealed class MonitoredRepositoryConfiguration : IEntityTypeConfiguration<MonitoredRepository>
+internal sealed class MonitoredRepositoryConfiguration(IDataProtectionProvider dataProtectionProvider)
+    : IEntityTypeConfiguration<MonitoredRepository>
 {
     private const int SlugMaxLength = 500;
     private const int HostMaxLength = 253;
     private const int EligibilityStatusMaxLength = 20;
+    private const int WebhookStatusMaxLength = 20;
 
     private static readonly JsonSerializerOptions EligibilitySerializerOptions = new();
 
@@ -133,6 +136,30 @@ internal sealed class MonitoredRepositoryConfiguration : IEntityTypeConfiguratio
         builder.HasIndex(r => new { r.Host, r.Slug })
             .IsUnique()
             .HasDatabaseName("ix_monitored_repositories_host_slug");
+
+        builder.Property(r => r.WebhookHookId)
+            .HasMaxLength(MonitoredRepository.WebhookHookIdLength)
+            .IsUnicode(false)
+            .IsRequired()
+            .HasColumnName("webhook_hook_id");
+
+        builder.HasIndex(r => r.WebhookHookId)
+            .IsUnique()
+            .HasDatabaseName("ix_monitored_repositories_webhook_hook_id");
+
+        builder.Property(r => r.WebhookSecret)
+            .HasConversion(new WebhookSecretConverter(dataProtectionProvider))
+            .HasColumnType("TEXT")
+            .IsRequired(false)
+            .HasColumnName("webhook_secret");
+
+        builder.Property(r => r.WebhookStatus)
+            .HasConversion<string>()
+            .HasMaxLength(WebhookStatusMaxLength)
+            .IsUnicode(false)
+            .HasDefaultValue(WebhookStatus.NotRegistered)
+            .HasSentinel(WebhookStatus.NotConfigured)
+            .HasColumnName("webhook_status");
 
     }
 

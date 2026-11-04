@@ -1,5 +1,6 @@
 using Foundry.Modules.Settings.Features.Dispatch;
 using Foundry.Modules.Settings.Features.ProviderHosts;
+using Foundry.Modules.Settings.Features.Webhooks;
 using Foundry.Modules.Settings.Features.WorkerConfig;
 
 using Microsoft.AspNetCore.Builder;
@@ -26,6 +27,7 @@ internal static class SettingsEndpoints
         UpdateClaudeCodeSettings.Endpoint.Map(group);
         RetryImageBuild.Endpoint.Map(group);
         UpdateAllowedProviderHosts.Endpoint.Map(group);
+        UpdateWebhookSettings.Endpoint.Map(group);
 
         return routes;
     }

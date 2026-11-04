@@ -84,7 +84,11 @@ public sealed class RevisionInProgressIssue : Issue
             ? rf.NewestConsumedCommentAt ?? DateTimeOffset.UtcNow
             : DateTimeOffset.UtcNow;
         ChecksPendingIssue checksPending = ChecksPendingIssue.FromRevisionInProgress(this, feedbackCutoffAt);
-        AddDomainEvent(new Events.IssueChecksPending(Id, MonitoredRepositoryId));
+        AddDomainEvent(new Events.IssueChecksPending(
+            Id,
+            MonitoredRepositoryId,
+            checksPending.IssueNumber,
+            checksPending.EnteredChecksPendingAt));
         return checksPending;
     }
 
@@ -94,7 +98,11 @@ public sealed class RevisionInProgressIssue : Issue
             ? rf.NewestConsumedCommentAt ?? DateTimeOffset.UtcNow
             : DateTimeOffset.UtcNow;
         ChecksPendingIssue checksPending = ChecksPendingIssue.FromRevisionInProgress(this, feedbackCutoffAt);
-        AddDomainEvent(new Events.IssueChecksPending(Id, MonitoredRepositoryId));
+        AddDomainEvent(new Events.IssueChecksPending(
+            Id,
+            MonitoredRepositoryId,
+            checksPending.IssueNumber,
+            checksPending.EnteredChecksPendingAt));
         return checksPending;
     }
 
