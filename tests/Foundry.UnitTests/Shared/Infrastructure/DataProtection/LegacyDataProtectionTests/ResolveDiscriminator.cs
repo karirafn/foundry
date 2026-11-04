@@ -45,8 +45,6 @@ public sealed class ResolveDiscriminator
     [InlineData("  ", "  ")]
     public void WhenConfiguredAndHostDefaultAreBlank_ReturnsNull(string? configured, string? hostDefault)
     {
-        // Arrange
-
         // Act
         string? discriminator = LegacyDataProtection.ResolveDiscriminator(configured, hostDefault, CurrentName);
 

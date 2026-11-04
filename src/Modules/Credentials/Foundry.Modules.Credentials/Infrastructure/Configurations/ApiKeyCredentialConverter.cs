@@ -28,7 +28,7 @@ internal sealed class ApiKeyCredentialConverter : ValueConverter<ApiKeyCredentia
     // This purpose string must remain stable — changing it renders every existing encrypted
     // api_key row unreadable, because Data Protection binds the key material to the purpose
     // at encryption time and rejects decryption attempts under any other value.
-    internal const string Purpose = "Foundry.Settings.Encryption";
+    private const string Purpose = "Foundry.Settings.Encryption";
 
     internal ApiKeyCredentialConverter(
         IDataProtectionProvider provider,

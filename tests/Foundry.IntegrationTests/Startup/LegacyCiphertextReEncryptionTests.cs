@@ -57,11 +57,11 @@ public sealed class LegacyCiphertextReEncryptionTests : IDisposable
         // Arrange
         string legacyName = await ResolveHostDefaultDiscriminatorAsync();
         await using FoundryWebAppFactory factory = FoundryWebAppFactory.WithPersistentDataProtection(_keys.Directory);
-        Seeded seeded = await MigrateAndSeedAsync(factory, legacyName);
-        using HttpClient client = factory.CreateClient();
+        await MigrateAndSeedAsync(factory, legacyName);
         IDataProtector pinned = _keys.ProviderFor(CurrentApplicationName).CreateProtector(AccountTokenPurpose);
 
         // Act
+        using HttpClient client = factory.CreateClient();
         string raw = await ReadRawTokenAsync(factory);
 
         // Assert
