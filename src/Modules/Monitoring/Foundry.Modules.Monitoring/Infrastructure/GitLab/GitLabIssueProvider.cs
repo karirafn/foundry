@@ -3,6 +3,7 @@ using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Features.Providers;
 using ProviderChecks = Foundry.Modules.Monitoring.Features.Providers.Checks.Checks;
 using Foundry.Modules.Monitoring.Features.Providers.Feedback;
+using Foundry.Modules.Monitoring.Features.Providers.Rebase;
 using Foundry.Modules.Monitoring.Infrastructure.GitHub;
 using Foundry.Shared;
 
@@ -223,6 +224,21 @@ internal sealed class GitLabIssueProvider(
 
         return httpClient.GetChecksAsync(apiBaseUrl, slug, pullRequestUrl, token, cancellationToken);
     }
+
+    // GitLab rebase (PUT /merge_requests/:iid/rebase) follows in a separate issue (ADR 0087); until then the
+    // rebase step resolves Skipped(unsupported) without any provider call.
+    public Task<Result<PullRequestRebaseState>> GetRebaseStateAsync(
+        RepositorySlug slug,
+        string pullRequestUrl,
+        CancellationToken cancellationToken)
+        => Task.FromResult(Result<PullRequestRebaseState>.Ok(new PullRequestRebaseState.Unsupported()));
+
+    public Task<Result<RebaseRequestOutcome>> RequestRebaseAsync(
+        RepositorySlug slug,
+        string pullRequestId,
+        string expectedHeadSha,
+        CancellationToken cancellationToken)
+        => Task.FromResult(Result<RebaseRequestOutcome>.Ok(new RebaseRequestOutcome.Unsupported()));
 
     private Task<Result<string>> GetDefaultBranchAsync(
         RepositorySlug slug,

@@ -131,6 +131,20 @@ internal sealed class IssueQueries(
             .ToListAsync(cancellationToken);
     }
 
+    public async Task<IReadOnlyList<RebasePendingIssueInfo>> GetRebasePendingIssuesAsync(
+        MonitoredRepositoryId repositoryId,
+        CancellationToken cancellationToken)
+    {
+        return await db.Set<RebasePendingIssue>()
+            .AsNoTracking()
+            .Where(i => i.MonitoredRepositoryId == repositoryId)
+            .Select(i => new RebasePendingIssueInfo(
+                i.IssueNumber,
+                i.PullRequestUrl,
+                i.EnteredRebasePendingAt))
+            .ToListAsync(cancellationToken);
+    }
+
     public async Task<IReadOnlyList<IssueSummary>> GetIssueSummariesAsync(
         MonitoredRepositoryId? repositoryId,
         CancellationToken cancellationToken)
@@ -200,7 +214,9 @@ internal sealed class IssueQueries(
                     ? MapRunStats(aggregate)
                     : null,
                 ChecksOutcome: GetChecksOutcomeDiscriminator(i),
-                PullRequestUrl: GetPullRequestUrl(i)))
+                PullRequestUrl: GetPullRequestUrl(i),
+                RebaseOutcome: GetRebaseOutcome(i)?.Discriminator,
+                RebaseSkippedReason: (GetRebaseOutcome(i) as RebaseOutcome.Skipped)?.Reason))
             .ToList();
     }
 
@@ -262,7 +278,9 @@ internal sealed class IssueQueries(
                 ? MapRunStats(aggregate)
                 : null,
             ChecksOutcome: GetChecksOutcomeDiscriminator(issue),
-            PullRequestUrl: GetPullRequestUrl(issue));
+            PullRequestUrl: GetPullRequestUrl(issue),
+            RebaseOutcome: GetRebaseOutcome(issue)?.Discriminator,
+            RebaseSkippedReason: (GetRebaseOutcome(issue) as RebaseOutcome.Skipped)?.Reason);
     }
 
     private static string? GetFailureCategory(Issue issue) =>
@@ -281,11 +299,20 @@ internal sealed class IssueQueries(
             _ => null,
         };
 
+    private static RebaseOutcome? GetRebaseOutcome(Issue issue) =>
+        issue switch
+        {
+            ReviewIssue review => review.RebaseOutcome,
+            ChecksPendingIssue checksPending => checksPending.RebaseOutcome,
+            _ => null,
+        };
+
     private static string? GetPullRequestUrl(Issue issue) =>
         issue switch
         {
             ReviewIssue review => review.PullRequestUrl,
             ChecksPendingIssue checksPending => checksPending.PullRequestUrl,
+            RebasePendingIssue rebasePending => rebasePending.PullRequestUrl,
             RevisionInProgressIssue revisionInProgress => revisionInProgress.PullRequestUrl,
             RevisionQueuedIssue revisionQueued => revisionQueued.PullRequestUrl,
             _ => null,
@@ -355,6 +382,7 @@ internal sealed class IssueQueries(
             RevisionInProgressIssue => "revision_in_progress",
             RevisionFailedIssue => "revision_failed",
             ChecksPendingIssue => "checks_pending",
+            RebasePendingIssue => "rebase_pending",
             _ => throw new InvalidOperationException($"Unknown issue type: {issue.GetType().Name}")
         };
 
@@ -441,7 +469,9 @@ internal sealed class IssueQueries(
                 BlockedBy: null,
                 TransientRetry: null,
                 ChecksOutcome: review.ChecksOutcome.Discriminator,
-                FailingChecks: review.ChecksOutcome is ChecksOutcome.StillFailing sf ? sf.FailingChecks : null),
+                FailingChecks: review.ChecksOutcome is ChecksOutcome.StillFailing sf ? sf.FailingChecks : null,
+                RebaseOutcome: review.RebaseOutcome?.Discriminator,
+                RebaseSkippedReason: (review.RebaseOutcome as RebaseOutcome.Skipped)?.Reason),
 
             UnchangedIssue unchanged => new IssueStateDetails(
                 WorkerRunId: unchanged.WorkerRunId.Value,
@@ -542,6 +572,19 @@ internal sealed class IssueQueries(
                 BranchName: checksPending.BranchName,
                 PullRequestUrl: checksPending.PullRequestUrl,
                 FeedbackCutoffAt: checksPending.FeedbackCutoffAt,
+                FailureReason: null,
+                FailedAt: null,
+                CompletedAt: null,
+                BlockedBy: null,
+                TransientRetry: null,
+                RebaseOutcome: checksPending.RebaseOutcome?.Discriminator,
+                RebaseSkippedReason: (checksPending.RebaseOutcome as RebaseOutcome.Skipped)?.Reason),
+
+            RebasePendingIssue rebasePending => new IssueStateDetails(
+                WorkerRunId: rebasePending.WorkerRunId.Value,
+                BranchName: rebasePending.BranchName,
+                PullRequestUrl: rebasePending.PullRequestUrl,
+                FeedbackCutoffAt: rebasePending.FeedbackCutoffAt,
                 FailureReason: null,
                 FailedAt: null,
                 CompletedAt: null,
@@ -710,7 +753,9 @@ internal sealed class IssueQueries(
                     ? MapRunStats(aggregate)
                     : null,
                 ChecksOutcome: GetChecksOutcomeDiscriminator(i),
-                PullRequestUrl: GetPullRequestUrl(i)))
+                PullRequestUrl: GetPullRequestUrl(i),
+                RebaseOutcome: GetRebaseOutcome(i)?.Discriminator,
+                RebaseSkippedReason: (GetRebaseOutcome(i) as RebaseOutcome.Skipped)?.Reason))
             .ToList();
     }
 

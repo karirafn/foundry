@@ -72,38 +72,39 @@ public sealed class RevisionInProgressIssue : Issue
         return review;
     }
 
-    // MarkChecksPending and MarkUnchangedChecksPending mirror the MarkInReview/MarkUnchanged split:
-    // MarkChecksPending signals the revision produced (or updated) a PR that is now awaiting checks;
-    // MarkUnchangedChecksPending signals the worker found nothing to change but checks still need to run.
+    // MarkRebasePending and MarkUnchangedRebasePending mirror the MarkInReview/MarkUnchanged split:
+    // MarkRebasePending signals the revision produced (or updated) a PR whose branch is now rebased before checks;
+    // MarkUnchangedRebasePending signals the worker found nothing to change but the branch may still be behind
+    // the default branch, so it is rebased all the same (ADR 0087).
     // The semantic distinction is preserved in logs and events without diverging the cutoff logic.
     // Do NOT merge them into one method.
 
-    public ChecksPendingIssue MarkChecksPending()
+    public RebasePendingIssue MarkRebasePending()
     {
         DateTimeOffset feedbackCutoffAt = Trigger is RevisionTrigger.ReviewFeedback rf
             ? rf.NewestConsumedCommentAt ?? DateTimeOffset.UtcNow
             : DateTimeOffset.UtcNow;
-        ChecksPendingIssue checksPending = ChecksPendingIssue.FromRevisionInProgress(this, feedbackCutoffAt);
-        AddDomainEvent(new Events.IssueChecksPending(
+        RebasePendingIssue rebasePending = RebasePendingIssue.FromRevisionInProgress(this, feedbackCutoffAt);
+        AddDomainEvent(new Events.IssueRebasePending(
             Id,
             MonitoredRepositoryId,
-            checksPending.IssueNumber,
-            checksPending.EnteredChecksPendingAt));
-        return checksPending;
+            rebasePending.IssueNumber,
+            rebasePending.EnteredRebasePendingAt));
+        return rebasePending;
     }
 
-    public ChecksPendingIssue MarkUnchangedChecksPending()
+    public RebasePendingIssue MarkUnchangedRebasePending()
     {
         DateTimeOffset feedbackCutoffAt = Trigger is RevisionTrigger.ReviewFeedback rf
             ? rf.NewestConsumedCommentAt ?? DateTimeOffset.UtcNow
             : DateTimeOffset.UtcNow;
-        ChecksPendingIssue checksPending = ChecksPendingIssue.FromRevisionInProgress(this, feedbackCutoffAt);
-        AddDomainEvent(new Events.IssueChecksPending(
+        RebasePendingIssue rebasePending = RebasePendingIssue.FromRevisionInProgress(this, feedbackCutoffAt);
+        AddDomainEvent(new Events.IssueRebasePending(
             Id,
             MonitoredRepositoryId,
-            checksPending.IssueNumber,
-            checksPending.EnteredChecksPendingAt));
-        return checksPending;
+            rebasePending.IssueNumber,
+            rebasePending.EnteredRebasePendingAt));
+        return rebasePending;
     }
 
     public RevisionFailedIssue MarkFailed(

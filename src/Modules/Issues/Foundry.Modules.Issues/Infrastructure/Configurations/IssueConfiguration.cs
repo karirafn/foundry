@@ -71,6 +71,9 @@ public sealed class IssueConfiguration : IEntityTypeConfiguration<Issue>
             t.HasCheckConstraint(
                 "ck_issues_checks_pending_fields",
                 "state <> 'checks_pending' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND pull_request_url IS NOT NULL AND entered_checks_pending_at IS NOT NULL AND feedback_cutoff_at IS NOT NULL)");
+            t.HasCheckConstraint(
+                "ck_issues_rebase_pending_fields",
+                "state <> 'rebase_pending' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND pull_request_url IS NOT NULL AND entered_rebase_pending_at IS NOT NULL AND feedback_cutoff_at IS NOT NULL)");
         });
 
         builder.HasKey(i => i.Id);
@@ -177,6 +180,7 @@ public sealed class IssueConfiguration : IEntityTypeConfiguration<Issue>
             .HasValue<RevisionInProgressIssue>("revision_in_progress")
             .HasValue<RevisionFailedIssue>("revision_failed")
             .HasValue<ChecksPendingIssue>("checks_pending")
+            .HasValue<RebasePendingIssue>("rebase_pending")
             .IsComplete(true);
 
         builder.Property<string>("state")

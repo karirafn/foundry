@@ -42,22 +42,26 @@ public sealed class InProgressIssue : Issue
         return review;
     }
 
-    public ChecksPendingIssue MarkChecksPending(
+    /// <summary>
+    /// The run left an open pull request: Foundry rebases its branch onto the default branch before the
+    /// checks gate reads any verdict (ADR 0087).
+    /// </summary>
+    public RebasePendingIssue MarkRebasePending(
         string branchName,
         string pullRequestUrl,
         DateTimeOffset feedbackCutoffAt)
     {
-        ChecksPendingIssue checksPending = ChecksPendingIssue.FromInProgress(
+        RebasePendingIssue rebasePending = RebasePendingIssue.FromInProgress(
             this,
             branchName,
             pullRequestUrl,
             feedbackCutoffAt);
-        AddDomainEvent(new Events.IssueChecksPending(
+        AddDomainEvent(new Events.IssueRebasePending(
             Id,
             MonitoredRepositoryId,
-            checksPending.IssueNumber,
-            checksPending.EnteredChecksPendingAt));
-        return checksPending;
+            rebasePending.IssueNumber,
+            rebasePending.EnteredRebasePendingAt));
+        return rebasePending;
     }
 
     public UnchangedIssue MarkUnchanged()

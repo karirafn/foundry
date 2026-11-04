@@ -66,11 +66,12 @@ internal sealed class WorkerRunCompletedHandler(
                     // The ?? UtcNow fallback exists only for back-compat with WorkerRunCompleted events that were
                     // serialized before this field was added and are drained across the deploy boundary, reproducing
                     // the old completion-time cutoff for exactly that bounded window.
-                    ChecksPendingIssue checksPending = inProgress.MarkChecksPending(
+                    // An open PR is rebased onto the default branch before the checks gate (ADR 0087).
+                    RebasePendingIssue rebasePending = inProgress.MarkRebasePending(
                         @event.BranchName,
                         @event.PullRequestUrl,
                         @event.RunStartedAt ?? DateTimeOffset.UtcNow);
-                    await db.TransitionAsync(inProgress, checksPending, domainEventDispatcher, cancellationToken);
+                    await db.TransitionAsync(inProgress, rebasePending, domainEventDispatcher, cancellationToken);
                     break;
 
                 default:
@@ -98,15 +99,16 @@ internal sealed class WorkerRunCompletedHandler(
             // (set when comments were consumed) rather than RunStartedAt. This is intentional: a first run has no
             // consumed comments and anchors to run start; a revision run has already consumed comments, so it
             // anchors to those instead, ensuring any new feedback posted after the consumed batch is not dropped.
+            // Both paths rebase: a revision that pushed nothing may still be behind the default branch (ADR 0087).
             if (@event.BranchName is not null && @event.PullRequestUrl is not null)
             {
-                ChecksPendingIssue revisionChecksPending = revisionInProgress.MarkChecksPending();
-                await db.TransitionAsync(revisionInProgress, revisionChecksPending, domainEventDispatcher, cancellationToken);
+                RebasePendingIssue revisionRebasePending = revisionInProgress.MarkRebasePending();
+                await db.TransitionAsync(revisionInProgress, revisionRebasePending, domainEventDispatcher, cancellationToken);
             }
             else
             {
-                ChecksPendingIssue revisionChecksPending = revisionInProgress.MarkUnchangedChecksPending();
-                await db.TransitionAsync(revisionInProgress, revisionChecksPending, domainEventDispatcher, cancellationToken);
+                RebasePendingIssue revisionRebasePending = revisionInProgress.MarkUnchangedRebasePending();
+                await db.TransitionAsync(revisionInProgress, revisionRebasePending, domainEventDispatcher, cancellationToken);
             }
 
             return;

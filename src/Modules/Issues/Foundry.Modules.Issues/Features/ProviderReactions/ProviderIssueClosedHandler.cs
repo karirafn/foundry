@@ -39,9 +39,16 @@ internal sealed class ProviderIssueClosedHandler(
                 break;
             }
 
+            case RebasePendingIssue rebasePendingIssue:
+            {
+                CompletedIssue completed = rebasePendingIssue.Complete(now);
+                await db.TransitionAsync(rebasePendingIssue, completed, domainEventDispatcher, cancellationToken);
+                break;
+            }
+
             default:
                 logger.LogWarning(
-                    "ProviderIssueClosed received for repository {RepositoryId} issue {IssueNumber} but it is not a ReviewIssue or ChecksPendingIssue (state: {State}); ignoring.",
+                    "ProviderIssueClosed received for repository {RepositoryId} issue {IssueNumber} but it is not a ReviewIssue, ChecksPendingIssue or RebasePendingIssue (state: {State}); ignoring.",
                     @event.RepositoryId,
                     @event.IssueNumber,
                     issue?.GetType().Name ?? "not found");

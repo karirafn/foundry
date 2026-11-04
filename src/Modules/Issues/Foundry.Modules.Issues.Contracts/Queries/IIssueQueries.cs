@@ -26,6 +26,10 @@ public interface IIssueQueries
         MonitoredRepositoryId repositoryId,
         CancellationToken cancellationToken);
 
+    Task<IReadOnlyList<RebasePendingIssueInfo>> GetRebasePendingIssuesAsync(
+        MonitoredRepositoryId repositoryId,
+        CancellationToken cancellationToken);
+
     Task<IReadOnlySet<int>> GetUntrackableIssueNumbersAsync(
         MonitoredRepositoryId repositoryId,
         CancellationToken cancellationToken);
