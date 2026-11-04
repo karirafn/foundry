@@ -831,7 +831,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/RepositorySummary"
+                  "$ref": "#/components/schemas/CreateRepositoryResponse"
                 }
               }
             }
@@ -1891,6 +1891,35 @@
           }
         }
       },
+      "BranchRulesOutcome": {
+        "required": [
+          "kind"
+        ],
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string"
+          },
+          "reason": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "settingsUrl": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "detail": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
       "CheckCreditsNowResponse": {
         "required": [
           "inFlight",
@@ -2051,6 +2080,27 @@
               "string"
             ],
             "format": "int32"
+          },
+          "applyBranchRules": {
+            "type": [
+              "null",
+              "boolean"
+            ]
+          }
+        }
+      },
+      "CreateRepositoryResponse": {
+        "required": [
+          "repository",
+          "branchRules"
+        ],
+        "type": "object",
+        "properties": {
+          "repository": {
+            "$ref": "#/components/schemas/RepositorySummary"
+          },
+          "branchRules": {
+            "$ref": "#/components/schemas/BranchRulesOutcome"
           }
         }
       },

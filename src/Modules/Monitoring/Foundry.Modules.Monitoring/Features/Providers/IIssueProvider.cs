@@ -37,6 +37,17 @@ internal interface IIssueProvider
         RepositorySlug slug,
         CancellationToken cancellationToken);
 
+    /// <summary>
+    /// Writes the default-branch rules that eligibility checks (reject direct pushes, force pushes
+    /// and deletion). Idempotent: re-applying never duplicates provider objects. Callers must
+    /// re-read the rules afterwards rather than trust this call's status — the write succeeding
+    /// does not prove the rules are effective. A 403 fails with
+    /// <see cref="BranchRuleWriteErrors.InsufficientPermissionCode"/>.
+    /// </summary>
+    Task<Result> ApplyBranchRulesAsync(
+        RepositorySlug slug,
+        CancellationToken cancellationToken);
+
     Task<Result<bool>> CreateBranchAsync(
         RepositorySlug slug,
         string branchName,

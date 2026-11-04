@@ -1556,6 +1556,12 @@ public sealed class PollAsync : IAsyncDisposable
                 ?? Result<BranchProtection>.Ok(new BranchProtection("main", true, true, true)));
         }
 
+
+        public Task<Result> ApplyBranchRulesAsync(
+            RepositorySlug slug,
+            CancellationToken cancellationToken) =>
+            throw new NotSupportedException();
+
         public Task<Result<bool>> CreateBranchAsync(
             RepositorySlug slug,
             string branchName,
@@ -1642,6 +1648,12 @@ public sealed class PollAsync : IAsyncDisposable
         {
             return Task.FromResult(Result<BranchProtection>.Fail(error));
         }
+
+
+        public Task<Result> ApplyBranchRulesAsync(
+            RepositorySlug slug,
+            CancellationToken cancellationToken) =>
+            throw new NotSupportedException();
 
         public Task<Result<bool>> CreateBranchAsync(
             RepositorySlug slug,

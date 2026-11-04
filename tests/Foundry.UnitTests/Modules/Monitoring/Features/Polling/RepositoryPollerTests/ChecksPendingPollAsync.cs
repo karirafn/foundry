@@ -644,6 +644,12 @@ public sealed class ChecksPendingPollAsync : IAsyncDisposable
             CancellationToken cancellationToken)
             => Task.FromResult(Result<BranchProtection>.Ok(new BranchProtection("main", true, true, true)));
 
+
+        public Task<Result> ApplyBranchRulesAsync(
+            RepositorySlug slug,
+            CancellationToken cancellationToken) =>
+            throw new NotSupportedException();
+
         public Task<Result<bool>> CreateBranchAsync(
             RepositorySlug slug,
             string branchName,

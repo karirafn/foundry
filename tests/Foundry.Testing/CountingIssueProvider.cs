@@ -29,6 +29,7 @@ internal sealed class CountingIssueProvider : IIssueProvider
     public int GetReviewFeedbackCallCount { get; private set; }
     public int GetBranchProtectionCallCount { get; private set; }
     public int CreateBranchCallCount { get; private set; }
+    public int ApplyBranchRulesCallCount { get; private set; }
     public int GetMergeRequestByBranchCallCount { get; private set; }
     public int GetBranchCommitSummaryCallCount { get; private set; }
     public int CanPushCallCount { get; private set; }
@@ -94,6 +95,23 @@ internal sealed class CountingIssueProvider : IIssueProvider
         return Task.FromResult(
             Result<BranchProtection>.Ok(new BranchProtection("main", true, true, true)));
     }
+
+    public Task<Result> ApplyBranchRulesAsync(
+
+        RepositorySlug slug,
+
+        CancellationToken cancellationToken)
+
+    {
+
+        TotalCalls++;
+
+        ApplyBranchRulesCallCount++;
+
+        return Task.FromResult(Result.Ok());
+
+    }
+
 
     public Task<Result<bool>> CreateBranchAsync(
         RepositorySlug slug,

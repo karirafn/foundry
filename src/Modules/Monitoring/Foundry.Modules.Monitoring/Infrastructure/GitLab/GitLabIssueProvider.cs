@@ -98,6 +98,25 @@ internal sealed class GitLabIssueProvider(
             rules.RejectDeletion));
     }
 
+    public async Task<Result> ApplyBranchRulesAsync(
+        RepositorySlug slug,
+        CancellationToken cancellationToken)
+    {
+        Result<string> defaultBranchResult = await GetDefaultBranchAsync(slug, cancellationToken);
+
+        if (defaultBranchResult is not Result<string>.Success defaultBranchSuccess)
+        {
+            return Result.Fail(((Result<string>.Failure)defaultBranchResult).Error);
+        }
+
+        return await httpClient.ApplyBranchRulesAsync(
+            apiBaseUrl,
+            slug,
+            defaultBranchSuccess.Value,
+            token,
+            cancellationToken);
+    }
+
     public Task<Result<bool>> CreateBranchAsync(
         RepositorySlug slug,
         string branchName,

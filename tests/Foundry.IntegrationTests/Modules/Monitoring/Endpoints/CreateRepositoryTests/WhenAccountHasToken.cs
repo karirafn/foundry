@@ -84,8 +84,8 @@ public sealed class WhenAccountHasToken : IAsyncDisposable
 
         // Assert
         response.StatusCode.ShouldBe(HttpStatusCode.Created);
-        RepositorySummary? repository = await response.Content
-            .ReadFromJsonAsync<RepositorySummary>(TestContext.Current.CancellationToken);
+        RepositorySummary? repository = (await response.Content
+            .ReadFromJsonAsync<CreateRepositoryResponse>(TestContext.Current.CancellationToken))?.Repository;
         repository.ShouldNotBeNull();
         repository.Eligibility.ShouldNotBeNull();
         repository.Eligibility.ShouldSatisfyAllConditions(
@@ -135,8 +135,8 @@ public sealed class WhenAccountHasToken : IAsyncDisposable
 
             // Assert
             response.StatusCode.ShouldBe(HttpStatusCode.Created);
-            RepositorySummary? repository = await response.Content
-                .ReadFromJsonAsync<RepositorySummary>(TestContext.Current.CancellationToken);
+            RepositorySummary? repository = (await response.Content
+                .ReadFromJsonAsync<CreateRepositoryResponse>(TestContext.Current.CancellationToken))?.Repository;
             repository.ShouldNotBeNull();
             repository.Eligibility.ShouldNotBeNull();
             repository.Eligibility.ShouldSatisfyAllConditions(
@@ -163,8 +163,8 @@ public sealed class WhenAccountHasToken : IAsyncDisposable
 
         // Assert
         response.StatusCode.ShouldBe(HttpStatusCode.Created);
-        RepositorySummary? repository = await response.Content
-            .ReadFromJsonAsync<RepositorySummary>(TestContext.Current.CancellationToken);
+        RepositorySummary? repository = (await response.Content
+            .ReadFromJsonAsync<CreateRepositoryResponse>(TestContext.Current.CancellationToken))?.Repository;
         repository.ShouldNotBeNull();
         repository.Eligibility.ShouldNotBeNull();
         repository.Eligibility.ShouldSatisfyAllConditions(
@@ -215,6 +215,12 @@ public sealed class WhenAccountHasToken : IAsyncDisposable
             DateTimeOffset since,
             CancellationToken cancellationToken) =>
             Task.FromResult(Result<ReviewFeedback>.Ok(new ReviewFeedback([], OmittedCommentCount: 0, NewestCommentAt: null)));
+
+
+        public Task<Result> ApplyBranchRulesAsync(
+            RepositorySlug slug,
+            CancellationToken cancellationToken) =>
+            throw new NotSupportedException();
 
         public Task<Result<bool>> CreateBranchAsync(
             RepositorySlug slug,

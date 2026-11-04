@@ -24,7 +24,8 @@ internal static class CreateRepository
         Guid AccountId,
         string Slug,
         int? PollIntervalSeconds,
-        int? MaxConcurrentWorkers = null) : ICommand<RepositorySummary>;
+        int? MaxConcurrentWorkers = null,
+        bool ApplyBranchRules = true) : ICommand<CreateRepositoryResponse>;
 
     internal sealed class Validator : ICommandValidator<Command>
     {
@@ -43,8 +44,8 @@ internal static class CreateRepository
 
     internal sealed class Handler(
         DbContext dbContext,
-        IRepositoryEligibilityEvaluator eligibilityEvaluator,
-        IGlobalSettingsQueries globalSettingsQueries) : ICommandHandler<Command, RepositorySummary>
+        BranchRuleEnforcer branchRuleEnforcer,
+        IGlobalSettingsQueries globalSettingsQueries) : ICommandHandler<Command, CreateRepositoryResponse>
     {
         // SQLite emits the column-reference form ("monitored_repositories.slug") rather than the
         // index name on unique-constraint violations, so both forms must be checked.
@@ -60,7 +61,7 @@ internal static class CreateRepository
                 || message.Contains(slugValue, StringComparison.OrdinalIgnoreCase);
         }
 
-        public async Task<Result<RepositorySummary>> HandleAsync(
+        public async Task<Result<CreateRepositoryResponse>> HandleAsync(
             Command command,
             CancellationToken cancellationToken)
         {
@@ -72,13 +73,13 @@ internal static class CreateRepository
 
             if (credential is null)
             {
-                return Result<RepositorySummary>.Fail(RepositoryErrors.AccountNotFound(credentialId));
+                return Result<CreateRepositoryResponse>.Fail(RepositoryErrors.AccountNotFound(credentialId));
             }
 
             Result<RepositorySlug> slugResult = RepositorySlug.Create(command.Slug);
             if (slugResult is Result<RepositorySlug>.Failure slugFailure)
             {
-                return Result<RepositorySummary>.Fail(slugFailure.Error);
+                return Result<CreateRepositoryResponse>.Fail(slugFailure.Error);
             }
 
             if (slugResult is not Result<RepositorySlug>.Success slugSuccess)
@@ -103,11 +104,12 @@ internal static class CreateRepository
                 credential.BaseUrl.Value.Host,
                 pollInterval,
                 position,
-                maxConcurrentWorkers);
+                maxConcurrentWorkers,
+                command.ApplyBranchRules);
 
             if (createResult is Result<MonitoredRepository>.Failure createFailure)
             {
-                return Result<RepositorySummary>.Fail(createFailure.Error);
+                return Result<CreateRepositoryResponse>.Fail(createFailure.Error);
             }
 
             MonitoredRepository repository = ((Result<MonitoredRepository>.Success)createResult).Value;
@@ -121,14 +123,20 @@ internal static class CreateRepository
             }
             catch (DbUpdateException ex) when (IsSlugConstraintViolation(ex, repositorySlug))
             {
-                return Result<RepositorySummary>.Fail(RepositoryErrors.DuplicateSlug(command.Slug));
+                return Result<CreateRepositoryResponse>.Fail(RepositoryErrors.DuplicateSlug(command.Slug));
             }
             catch (DbUpdateException)
             {
-                return Result<RepositorySummary>.Fail(RepositoryErrors.ConflictOnCreate());
+                return Result<CreateRepositoryResponse>.Fail(RepositoryErrors.ConflictOnCreate());
             }
 
-            await eligibilityEvaluator.EvaluateFullyAndStoreAsync(repository, DateTimeOffset.UtcNow, cancellationToken);
+            // The repository is already committed: a failed or skipped rules write never fails the add.
+            BranchRulesOutcome branchRules = await branchRuleEnforcer.EvaluateAndApplyAsync(
+                repository,
+                credential,
+                command.ApplyBranchRules,
+                DateTimeOffset.UtcNow,
+                cancellationToken);
             await dbContext.SaveChangesAsync(cancellationToken);
 
             string providerType = credential switch
@@ -147,29 +155,38 @@ internal static class CreateRepository
                 providerType,
                 defaultPollIntervalSeconds);
 
-            return Result<RepositorySummary>.Ok(summary);
+            return Result<CreateRepositoryResponse>.Ok(new CreateRepositoryResponse(summary, branchRules));
         }
     }
 
     internal static class Endpoint
     {
-        private sealed record RequestBody(string Slug, int? PollIntervalSeconds, int? MaxConcurrentWorkers = null);
+        private sealed record RequestBody(
+            string Slug,
+            int? PollIntervalSeconds,
+            int? MaxConcurrentWorkers = null,
+            bool? ApplyBranchRules = null);
 
         public static void Map(RouteGroupBuilder group)
         {
             group.MapPost(string.Empty, static async (
                     Guid accountId,
                     RequestBody body,
-                    ICommandHandler<Command, RepositorySummary> handler,
+                    ICommandHandler<Command, CreateRepositoryResponse> handler,
                     CancellationToken cancellationToken) =>
                 {
-                    Command command = new(accountId, body.Slug, body.PollIntervalSeconds, body.MaxConcurrentWorkers);
-                    Result<RepositorySummary> result = await handler.HandleAsync(command, cancellationToken);
+                    Command command = new(
+                        accountId,
+                        body.Slug,
+                        body.PollIntervalSeconds,
+                        body.MaxConcurrentWorkers,
+                        body.ApplyBranchRules ?? true);
+                    Result<CreateRepositoryResponse> result = await handler.HandleAsync(command, cancellationToken);
 
-                    return result.Match<Results<Created<RepositorySummary>, ProblemHttpResult>>(
-                        repository => TypedResults.Created(
-                            $"/api/accounts/{accountId}/repositories/{repository.Id}",
-                            repository),
+                    return result.Match<Results<Created<CreateRepositoryResponse>, ProblemHttpResult>>(
+                        response => TypedResults.Created(
+                            $"/api/accounts/{accountId}/repositories/{response.Repository.Id}",
+                            response),
                         error => error.Code switch
                         {
                             RepositoryErrors.AccountNotFoundCode => error.ToProblem(StatusCodes.Status404NotFound),
@@ -180,7 +197,7 @@ internal static class CreateRepository
                 })
                 .WithName("CreateRepository")
                 .WithSummary("Creates a new monitored repository for an account")
-                .Produces<RepositorySummary>(StatusCodes.Status201Created)
+                .Produces<CreateRepositoryResponse>(StatusCodes.Status201Created)
                 .ProducesProblem(StatusCodes.Status400BadRequest)
                 .ProducesProblem(StatusCodes.Status404NotFound)
                 .ProducesProblem(StatusCodes.Status409Conflict);

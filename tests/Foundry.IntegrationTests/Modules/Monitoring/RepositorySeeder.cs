@@ -25,8 +25,8 @@ internal static class RepositorySeeder
 
         response.EnsureSuccessStatusCode();
 
-        RepositorySummary summary = (await response.Content
-            .ReadFromJsonAsync<RepositorySummary>(CancellationToken.None))
+        RepositorySummary summary = ((await response.Content
+            .ReadFromJsonAsync<CreateRepositoryResponse>(CancellationToken.None))?.Repository)
             .ShouldNotBeNull();
 
         return summary.Id;

@@ -59,6 +59,7 @@ public static class MonitoringModule
         services.AddScoped<IRepositorySlugQueries, RepositorySlugQueries>();
         services.AddScoped<IRepositoryEligibilityQuery, RepositoryEligibilityQuery>();
         services.AddScoped<IRepositoryEligibilityEvaluator, RepositoryEligibilityEvaluator>();
+        services.AddScoped<BranchRuleEnforcer>();
         services.AddScoped<IPostExitProviderQueries, PostExitProviderQueries>();
         services.AddScoped<RepositoryPoller>();
 
@@ -73,7 +74,7 @@ public static class MonitoringModule
 
         services.AddQueryHandler<GetRepositories.Query, IReadOnlyList<RepositorySummary>, GetRepositories.Handler>();
         services.AddQueryHandler<GetAvailableRepositories.Query, AvailableRepositoriesResponse, GetAvailableRepositories.Handler>();
-        services.AddCommandHandler<CreateRepository.Command, RepositorySummary, CreateRepository.Handler, CreateRepository.Validator>();
+        services.AddCommandHandler<CreateRepository.Command, CreateRepositoryResponse, CreateRepository.Handler, CreateRepository.Validator>();
         services.AddCommandHandler<UpdateRepository.Command, RepositorySummary, UpdateRepository.Handler>();
         services.AddCommandHandler<DeleteRepository.Command, bool, DeleteRepository.Handler>();
         services.AddCommandHandler<MoveRepository.Command, bool, MoveRepository.Handler, MoveRepository.Validator>();

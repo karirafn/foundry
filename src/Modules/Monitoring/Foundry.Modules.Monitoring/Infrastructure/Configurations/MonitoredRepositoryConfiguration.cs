@@ -75,6 +75,9 @@ internal sealed class MonitoredRepositoryConfiguration : IEntityTypeConfiguratio
         builder.Property(r => r.IsActive)
             .HasColumnName("is_active");
 
+        builder.Property(r => r.ApplyBranchRules)
+            .HasColumnName("apply_branch_rules");
+
         builder.Property(r => r.MaxConcurrentWorkers)
             .HasDefaultValue(MonitoredRepository.DefaultMaxConcurrentWorkers)
             .HasColumnName("max_concurrent_workers");

@@ -123,6 +123,13 @@ internal sealed class GitHubIssueProvider(
             rules.RejectDeletion));
     }
 
+    public Task<Result> ApplyBranchRulesAsync(
+        RepositorySlug slug,
+        CancellationToken cancellationToken)
+    {
+        return httpClient.ApplyBranchRulesAsync(apiBaseUrl, slug, token, cancellationToken);
+    }
+
     public async Task<Result<bool>> CreateBranchAsync(
         RepositorySlug slug,
         string branchName,

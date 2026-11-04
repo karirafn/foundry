@@ -150,6 +150,12 @@ public sealed class ComposeAsync
             RepositorySlug slug, string pullRequestUrl, DateTimeOffset since, CancellationToken cancellationToken)
             => Task.FromResult(Result<ReviewFeedback>.Ok(new ReviewFeedback([], OmittedCommentCount: 0, NewestCommentAt: null)));
 
+
+        public Task<Result> ApplyBranchRulesAsync(
+            RepositorySlug slug,
+            CancellationToken cancellationToken) =>
+            throw new NotSupportedException();
+
         public Task<Result<bool>> CreateBranchAsync(
             RepositorySlug slug, string branchName, CancellationToken cancellationToken)
             => Task.FromResult(Result<bool>.Ok(true));
