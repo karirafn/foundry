@@ -107,4 +107,16 @@ public sealed class ContinuableFailedIssue : Issue
         AddDomainEvent(new Events.IssueContinuationQueued(Id, MonitoredRepositoryId));
         return queued;
     }
+
+    /// <summary>
+    /// Requeues the issue fresh, discarding the work on <see cref="BranchName"/>. The caller
+    /// deletes the branch on the provider first so the next dispatch re-creates it from the
+    /// default branch rather than continuing from the previous commits.
+    /// </summary>
+    public FreshQueuedIssue RetryFresh()
+    {
+        FreshQueuedIssue queued = FreshQueuedIssue.FromRetry(this);
+        AddDomainEvent(new Events.IssueQueued(Id, MonitoredRepositoryId));
+        return queued;
+    }
 }

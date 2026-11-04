@@ -617,7 +617,7 @@ Optionally carries `PullRequestUrl` — present when created from `ReviewIssue.F
 Created from `InProgressIssue` when the failed run left commits on the branch — Foundry checks via `GetBranchCommitSummaryAsync` against the provider after the container exits; commit count > 0 is the branch-has-commits boolean.
 Also created from `ReviewIssue.Fail()` since `ReviewIssue` always has a branch.
 Retry dispatches a continuation run that checks out the existing branch and resumes implementation.
-Transitions: `ContinuableFailedIssue.Retry()` → `ContinuationQueuedIssue` (resumes existing branch).
+Transitions: `ContinuableFailedIssue.Retry()` → `ContinuationQueuedIssue` (resumes existing branch); `ContinuableFailedIssue.RetryFresh()` → `FreshQueuedIssue` (discards the branch work — see Operator-Triggered Fresh Retry).
 
 ## Continuation Queued Issue
 
@@ -647,6 +647,16 @@ Transitions: `Retry()` → `RevisionQueuedIssue` (re-enters revision path with e
 A manual action available on any retry-supporting issue via `POST /api/issues/{id}/retry`.
 Dispatches polymorphically on the loaded issue state: `FailedIssue.Retry()` → `FreshQueuedIssue` (fresh run); `ContinuableFailedIssue.Retry()` → `ContinuationQueuedIssue` (resumes existing branch); `RevisionFailedIssue.Retry()` → `RevisionQueuedIssue` (re-enters revision path); `UnchangedIssue.Retry()` → `FreshQueuedIssue` (fresh run, operator disagrees with worker assessment).
 Any non-retryable state returns a conflict error with no state change.
+
+## Operator-Triggered Fresh Retry
+
+A manual action for a `ContinuableFailedIssue` whose branch went in the wrong direction, via `POST /api/issues/{id}/retry-fresh`.
+The handler first deletes the issue's `BranchName` on the provider (`IWorkBranchCommands.DeleteBranchAsync`), then transitions `ContinuableFailedIssue.RetryFresh()` → `FreshQueuedIssue`.
+Deleting first matters: dispatch pre-creates the work branch from the default branch and reuses a branch that already exists, so a surviving branch would hand the "fresh" worker the previous commits.
+An already-absent branch counts as deleted; the provider refuses to delete the repository's default branch.
+If the delete fails the issue stays `continuable_failed` and the endpoint returns 502 — the operator can still use the regular Retry.
+On GitHub, deleting the head branch also closes any open pull request for it.
+Any other state returns a conflict error with no state change and no provider call.
 
 ## Transient Retry
 

@@ -9,6 +9,7 @@ public static class IssueErrors
     public const string InvalidStatesCode = "Issue.InvalidStates";
     public const string InvalidCursorCode = "Issue.InvalidCursor";
     public const string MixedStatesCode = "Issue.MixedStates";
+    public const string BranchDiscardFailedCode = "Issue.BranchDiscardFailed";
 
     public static Error NotFound(IssueId id) =>
         new(NotFoundCode, $"Issue with ID '{id.Value}' was not found.");
@@ -31,4 +32,7 @@ public static class IssueErrors
 
     public static Error MixedStates() =>
         new(MixedStatesCode, "States must all be active or all be resolved — mixing active and resolved states is not supported.");
+
+    public static Error BranchDiscardFailed(IssueId id, string branchName, string reason) =>
+        new(BranchDiscardFailedCode, $"Could not discard branch '{branchName}' for issue '{id.Value}': {reason}");
 }

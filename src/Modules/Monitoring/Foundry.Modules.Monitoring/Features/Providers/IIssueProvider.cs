@@ -53,6 +53,17 @@ internal interface IIssueProvider
         string branchName,
         CancellationToken cancellationToken);
 
+    /// <summary>
+    /// Deletes a work branch so the next dispatch starts from the default branch. Returns
+    /// <c>true</c> when the branch was deleted and <c>false</c> when it was already absent.
+    /// Refuses to delete the repository's default branch
+    /// (<see cref="BranchDeletionErrors.DefaultBranchCode"/>).
+    /// </summary>
+    Task<Result<bool>> DeleteBranchAsync(
+        RepositorySlug slug,
+        string branchName,
+        CancellationToken cancellationToken);
+
     Task<Result<MergeRequestByBranch>> GetMergeRequestByBranchAsync(
         RepositorySlug slug,
         string branchName,

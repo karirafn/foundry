@@ -1,5 +1,6 @@
 using Foundry.Modules.Issues.Contracts.Events;
 using Foundry.Modules.Monitoring.Contracts;
+using Foundry.Modules.Monitoring.Contracts.Commands;
 using Foundry.Modules.Monitoring.Contracts.Queries;
 using Foundry.Modules.Monitoring.Domain.Services;
 using Foundry.Modules.Monitoring.Features.Accounts;
@@ -65,6 +66,7 @@ public static class MonitoringModule
         services.AddScoped<BranchRuleEnforcer>();
         services.AddScoped<OptedInBranchRuleApplier>();
         services.AddScoped<IPostExitProviderQueries, PostExitProviderQueries>();
+        services.AddScoped<IWorkBranchCommands, PostExitProviderQueries>();
         services.AddScoped<RepositoryPoller>();
 
         services.AddQueryHandler<GetAccounts.Query, IReadOnlyList<CredentialSummary>, GetAccounts.Handler>();

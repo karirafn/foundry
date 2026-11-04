@@ -1292,6 +1292,50 @@ internal sealed partial class GitHubHttpClient(
         return Result<bool>.Ok(true);
     }
 
+    /// <summary>
+    /// Deletes <paramref name="branchName"/> from the repository. Returns <c>true</c> when the
+    /// branch was deleted and <c>false</c> when it was already absent (404 or 422 "Reference does
+    /// not exist"), so a repeated discard is idempotent.
+    /// </summary>
+    public async Task<Result<bool>> DeleteBranchAsync(
+        Uri apiBaseUrl,
+        RepositorySlug slug,
+        string branchName,
+        string token,
+        CancellationToken cancellationToken)
+    {
+        if (apiBaseUrl.Scheme is not "https")
+        {
+            return Result<bool>.Fail(GitHubErrors.InvalidBaseUrl);
+        }
+
+        string owner = Uri.EscapeDataString(slug.Owner);
+        string repo = Uri.EscapeDataString(slug.Name);
+        // Encode each segment but keep the '/' separators: the git refs API addresses a ref by path.
+        string encodedBranch = string.Join('/', branchName.Split('/').Select(Uri.EscapeDataString));
+        string relativePath = $"repos/{owner}/{repo}/git/refs/heads/{encodedBranch}";
+        Uri requestUri = new(EnsureTrailingSlash(apiBaseUrl), relativePath);
+
+        using HttpRequestMessage request = new(HttpMethod.Delete, requestUri);
+        AddGitHubHeaders(request, token);
+
+        using HttpResponseMessage response = await httpClient.SendAsync(request, cancellationToken);
+
+        if (response.StatusCode is HttpStatusCode.NotFound or HttpStatusCode.UnprocessableEntity)
+        {
+            RecordRestHeadroom(response);
+            return Result<bool>.Ok(false);
+        }
+
+        if (!response.IsSuccessStatusCode)
+        {
+            return Result<bool>.Fail(ErrorFromNonSuccess(response));
+        }
+
+        RecordRestHeadroom(response);
+        return Result<bool>.Ok(true);
+    }
+
     public async Task<Result<BranchCommitSummary>> GetBranchCommitSummaryAsync(
         Uri apiBaseUrl,
         RepositorySlug slug,

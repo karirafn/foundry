@@ -179,6 +179,10 @@ public sealed class WhenRepositoryHasEffectivePollInterval : IAsyncDisposable
             CancellationToken cancellationToken) =>
             Task.FromResult(Result<bool>.Ok(true));
 
+        public Task<Result<bool>> DeleteBranchAsync(
+            RepositorySlug slug, string branchName, CancellationToken cancellationToken) =>
+            throw new NotSupportedException();
+
         public Task<Result<MergeRequestByBranch>> GetMergeRequestByBranchAsync(
             RepositorySlug slug,
             string branchName,
