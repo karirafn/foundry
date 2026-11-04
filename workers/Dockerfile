@@ -1,8 +1,11 @@
 ARG BASE_IMAGE=foundry-claude-base:local
 FROM ${BASE_IMAGE}
 
-# Conditional .NET SDK install — uses apt GPG signing key for authenticity verification
+# Conditional .NET SDK install — uses apt GPG signing key for authenticity verification.
+# csharp-ls (the C# language server registered by the baked csharp-lsp plugin) is pinned in
+# .config/dotnet-tools.json, the single source of its version, which Dependabot tracks.
 ARG INSTALL_DOTNET=false
+COPY .config/dotnet-tools.json /tmp/dotnet-tools.json
 RUN if [ "$INSTALL_DOTNET" = "true" ]; then \
         apt-get update && \
         apt-get install -y --no-install-recommends curl gnupg && \
@@ -13,9 +16,15 @@ RUN if [ "$INSTALL_DOTNET" = "true" ]; then \
         apt-get update && \
         apt-get install -y --no-install-recommends dotnet-sdk-10.0 && \
         dotnet tool install --tool-path /usr/local/bin dotnet-ef && \
-        dotnet tool install --tool-path /usr/local/bin rq-cli && \
+        csharp_ls_version=$(jq -er '.tools["csharp-ls"].version' /tmp/dotnet-tools.json) && \
+        dotnet tool install --tool-path /usr/local/bin csharp-ls --version "$csharp_ls_version" && \
         rm -rf /var/lib/apt/lists/*; \
-    fi
+    fi && \
+    rm -f /tmp/dotnet-tools.json
+
+# Claude Code plugin registering csharp-ls as the C# LSP server. Copied unconditionally (tiny);
+# it is only loaded when the entrypoint opts in, gated on csharp-ls being on PATH.
+COPY claude-plugins/csharp-lsp /opt/claude-plugins/csharp-lsp
 
 # Conditional Angular CLI install
 ARG INSTALL_ANGULAR=false
