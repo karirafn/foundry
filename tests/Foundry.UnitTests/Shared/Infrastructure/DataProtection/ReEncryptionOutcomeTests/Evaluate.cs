@@ -84,4 +84,27 @@ public sealed class Evaluate
         // Assert
         outcome.ShouldBeOfType<ReEncryptionOutcome.Undecryptable>();
     }
+
+    [Fact]
+    public void ValueWhoseRewriteDoesNotRoundTrip_ReturnsUndecryptable()
+    {
+        // Arrange
+        string stored = DataProtectedText.Protect(Legacy, Plaintext);
+        IDataProtector corruptingCurrent = new CorruptingProtector(Current);
+
+        // Act
+        ReEncryptionOutcome outcome = ReEncryptionOutcome.Evaluate(stored, corruptingCurrent, Legacy);
+
+        // Assert
+        outcome.ShouldBeOfType<ReEncryptionOutcome.Undecryptable>();
+    }
+
+    private sealed class CorruptingProtector(IDataProtector inner) : IDataProtector
+    {
+        public IDataProtector CreateProtector(string purpose) => new CorruptingProtector(inner.CreateProtector(purpose));
+
+        public byte[] Protect(byte[] plaintext) => inner.Protect([.. plaintext, (byte)'x']);
+
+        public byte[] Unprotect(byte[] protectedData) => inner.Unprotect(protectedData);
+    }
 }

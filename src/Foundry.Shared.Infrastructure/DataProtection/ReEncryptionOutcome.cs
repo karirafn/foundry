@@ -24,10 +24,20 @@ public abstract record ReEncryptionOutcome
 
         if (legacy is not null && TryUnprotect(legacy, storedValue, out string plaintext))
         {
-            return new Rewritten(DataProtectedText.Protect(current, plaintext));
+            return RewriteUnderCurrent(current, plaintext);
         }
 
         return new Undecryptable();
+    }
+
+    private static ReEncryptionOutcome RewriteUnderCurrent(IDataProtector current, string plaintext)
+    {
+        string rewritten = DataProtectedText.Protect(current, plaintext);
+
+        bool roundTrips = TryUnprotect(current, rewritten, out string roundTripped)
+            && string.Equals(roundTripped, plaintext, StringComparison.Ordinal);
+
+        return roundTrips ? new Rewritten(rewritten) : new Undecryptable();
     }
 
     private static bool TryUnprotect(IDataProtector protector, string storedValue, out string plaintext)
