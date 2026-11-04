@@ -178,7 +178,8 @@ internal sealed class DockerWorkerOrchestrator(IDockerContainerRuntime runtime) 
             WorkerStatus status = new(
                 response.State.Running,
                 response.State.Running ? null : (int)Math.Clamp(response.State.ExitCode, int.MinValue, int.MaxValue),
-                finishedAt);
+                finishedAt,
+                OomKilled: response.State.OOMKilled);
 
             return new WorkerStatusProbe.Available(status);
         }

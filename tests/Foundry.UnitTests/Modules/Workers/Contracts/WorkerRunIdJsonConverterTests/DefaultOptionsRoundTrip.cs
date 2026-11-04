@@ -52,7 +52,8 @@ public sealed class DefaultOptionsRoundTrip
             null,
             null,
             null,
-            false);
+            false,
+            null);
 
         // Act
         string json = JsonSerializer.Serialize(detail, DefaultWebOptions);

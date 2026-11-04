@@ -15,4 +15,5 @@ public sealed record WorkerRunDetail(
     int? InputTokens,
     int? OutputTokens,
     DateTimeOffset? LastActivityAt,
-    bool HasStoredLog);
+    bool HasStoredLog,
+    DateTimeOffset? CancelRequestedAt);

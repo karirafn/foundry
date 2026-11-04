@@ -1,0 +1,60 @@
+.confirm-dialog {
+  background: var(--fd-bg-card);
+  border: 1px solid var(--fd-border-default);
+  border-radius: var(--fd-radius-md);
+  color: var(--fd-text-primary);
+  max-width: min(28rem, calc(100vw - 2 * var(--fd-gutter)));
+  padding: var(--fd-spacing-xl);
+
+  &::backdrop {
+    background: rgba(0, 0, 0, 0.6);
+  }
+
+  &__title {
+    font-size: 1rem;
+    font-weight: 600;
+    margin: 0 0 var(--fd-spacing-sm);
+  }
+
+  &__message {
+    color: var(--fd-text-secondary);
+    font-size: 0.875rem;
+    line-height: 1.5;
+    margin: 0 0 var(--fd-spacing-xl);
+  }
+
+  &__actions {
+    display: flex;
+    gap: var(--fd-spacing-sm);
+    justify-content: flex-end;
+  }
+
+  &__cancel,
+  &__confirm {
+    align-items: center;
+    background: transparent;
+    border: 1px solid var(--fd-text-secondary);
+    border-radius: var(--fd-radius-sm);
+    color: var(--fd-text-primary);
+    cursor: pointer;
+    display: inline-flex;
+    font-size: 0.875rem;
+    justify-content: center;
+    min-height: 44px;
+    padding: var(--fd-spacing-xs) var(--fd-spacing-lg);
+
+    &:hover {
+      background: var(--fd-bg-card-hover);
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--fd-text-link);
+      outline-offset: 2px;
+    }
+  }
+
+  &__confirm--destructive {
+    border-color: var(--fd-state-failed);
+    color: var(--fd-text-error);
+  }
+}

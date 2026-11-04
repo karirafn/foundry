@@ -20,6 +20,7 @@ public sealed class JsonRoundTrip
     [InlineData(FailureCategory.ProviderErrorToken)]
     [InlineData(FailureCategory.TransientApiErrorToken)]
     [InlineData(FailureCategory.CreditsExhaustedToken)]
+    [InlineData(FailureCategory.CancelledToken)]
     [InlineData(FailureCategory.PrClosedToken)]
     public void WhenSerialized_EmitsFlatTokenString(string token)
     {
@@ -43,6 +44,7 @@ public sealed class JsonRoundTrip
     [InlineData(FailureCategory.ProviderErrorToken)]
     [InlineData(FailureCategory.TransientApiErrorToken)]
     [InlineData(FailureCategory.CreditsExhaustedToken)]
+    [InlineData(FailureCategory.CancelledToken)]
     [InlineData(FailureCategory.PrClosedToken)]
     public void WhenDeserializedFromTokenString_ProducesEqualCategory(string token)
     {
