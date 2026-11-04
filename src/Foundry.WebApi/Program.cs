@@ -15,6 +15,7 @@ using Foundry.Modules.Workers.Contracts;
 using Foundry.ServiceDefaults;
 using Foundry.Shared;
 using Foundry.Shared.Infrastructure;
+using Foundry.Shared.Infrastructure.DataProtection;
 using Foundry.Shared.Infrastructure.Outbox;
 using Foundry.WebApi;
 using Foundry.WebApi.Hubs;
@@ -27,6 +28,7 @@ using Microsoft.OpenApi;
 
 const string AngularDevServerPolicy = "AngularDevServer";
 const string DataProtectionApplicationName = "Foundry";
+const string LegacyDataProtectionApplicationNameKey = "DataProtection:LegacyApplicationName";
 const string DocGenerationEntryAssemblyName = "GetDocument.Insider";
 
 // GetDocument.Insider is the build-time OpenAPI doc generation tool entry point.
@@ -168,6 +170,10 @@ if (!isDocGeneration)
     await using AsyncServiceScope scope = app.Services.CreateAsyncScope();
     FoundryDbContext dbContext = scope.ServiceProvider.GetRequiredService<FoundryDbContext>();
     await dbContext.Database.MigrateAsync(app.Lifetime.ApplicationStopping);
+    await scope.ServiceProvider.ReEncryptLegacyCiphertextAsync(
+        dbContext,
+        app.Configuration[LegacyDataProtectionApplicationNameKey],
+        app.Lifetime.ApplicationStopping);
 }
 
 if (app.Environment.IsDevelopment())
