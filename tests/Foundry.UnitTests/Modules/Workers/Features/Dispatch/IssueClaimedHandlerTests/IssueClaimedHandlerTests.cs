@@ -766,7 +766,7 @@ public sealed class HandleAsync : IAsyncDisposable
 
         doc.RootElement.ShouldSatisfyAllConditions(
             () => doc.RootElement.GetProperty("model").GetString().ShouldBe("claude-test-model"),
-            () => rules.ShouldNotContain("Edit(Dockerfile:*)"),
+            () => rules.ShouldNotContain("Edit(**/Dockerfile)"),
             () => rules.ShouldContain("Bash(rm:*)"));
     }
 

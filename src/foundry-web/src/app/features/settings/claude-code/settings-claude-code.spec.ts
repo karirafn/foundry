@@ -823,13 +823,13 @@ describe('SettingsClaudeCodeComponent', () => {
   describe('Claude Code configuration', () => {
     const CLAUDE_CODE_URL = '/api/settings/claude-code';
     const CI_CD_RULES = [
-      'Edit(.github/workflows/**:*)',
-      'Edit(.gitlab-ci.yml:*)',
-      'Edit(Dockerfile:*)',
-      'Edit(docker-compose*.yml:*)',
-      'Edit(docker-compose.yaml:*)',
-      'Edit(compose.yml:*)',
-      'Edit(compose.yaml:*)',
+      'Edit(**/.github/workflows/**)',
+      'Edit(**/.gitlab-ci.yml)',
+      'Edit(**/Dockerfile)',
+      'Edit(**/docker-compose*.yml)',
+      'Edit(**/docker-compose.yaml)',
+      'Edit(**/compose.yml)',
+      'Edit(**/compose.yaml)',
     ];
 
     interface Page {

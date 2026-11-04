@@ -23,13 +23,13 @@ internal static class WorkerSettingsBuilder
 
     private static readonly string[] CiCdDenyList =
     [
-        "Edit(.github/workflows/**:*)",
-        "Edit(.gitlab-ci.yml:*)",
-        "Edit(Dockerfile:*)",
-        "Edit(docker-compose*.yml:*)",
-        "Edit(docker-compose.yaml:*)",
-        "Edit(compose.yml:*)",
-        "Edit(compose.yaml:*)",
+        "Edit(**/.github/workflows/**)",
+        "Edit(**/.gitlab-ci.yml)",
+        "Edit(**/Dockerfile)",
+        "Edit(**/docker-compose*.yml)",
+        "Edit(**/docker-compose.yaml)",
+        "Edit(**/compose.yml)",
+        "Edit(**/compose.yaml)",
     ];
 
     private static readonly JsonSerializerOptions SerializerOptions = new()
