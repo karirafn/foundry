@@ -100,6 +100,7 @@ internal static partial class UpdateAccount
         DbContext dbContext,
         TokenAccountResolver tokenAccountResolver,
         CredentialRotationService rotationService,
+        OptedInBranchRuleApplier branchRuleApplier,
         ProviderHostGuard hostGuard)
     {
         public async Task<Outcome> HandleAsync(
@@ -187,6 +188,16 @@ internal static partial class UpdateAccount
                 {
                     return new Outcome.Rejected(CredentialErrors.DuplicateNamespace(credential.Host));
                 }
+            }
+
+            // The update is committed: the rules writes run after it and never fail it. Only a newly
+            // supplied branch-rules token triggers them — a clear or an untouched token never does.
+            if (command.BranchRulesToken is not null)
+            {
+                affectedRepositories = await branchRuleApplier.ApplyAsync(
+                    credential,
+                    affectedRepositories,
+                    cancellationToken);
             }
 
             CredentialSummary summary = AccountsDatabaseHelpers.ToSummary(credential);
