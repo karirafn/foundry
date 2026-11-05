@@ -39,12 +39,20 @@ internal sealed class CountingIssueProvider : IIssueProvider
     public int CanPushCallCount { get; private set; }
     public int GetChecksCallCount { get; private set; }
 
+    /// <summary>When set, the listing call fails with this error instead of returning the configured issues.</summary>
+    public Error? ListingError { get; set; }
+
     public Task<Result<IssueListing>> GetIssuesAsync(
         RepositorySlug slug,
         CancellationToken cancellationToken)
     {
         TotalCalls++;
         GetIssuesCallCount++;
+        if (ListingError is not null)
+        {
+            return Task.FromResult(Result<IssueListing>.Fail(ListingError));
+        }
+
         return Task.FromResult(Result<IssueListing>.Ok(new IssueListing(_issues, IsComplete: true)));
     }
 

@@ -45,6 +45,11 @@ internal sealed class MonitoringService : PeriodicBackgroundService
     private readonly ILogger<MonitoringService> _logger;
     private readonly NudgeScheduler _scheduler = new();
 
+    // In-memory on purpose: any process start (clean restart or crash) re-arms the one-time catch-up,
+    // because webhook deliveries that arrived while Foundry was down are lost (the same pattern as
+    // WorkerDispatchService._reconciled).
+    private bool _startupCatchUpPending = true;
+
     public MonitoringService(
         IServiceScopeFactory scopeFactory,
         ILogger<MonitoringService> logger)
@@ -68,6 +73,17 @@ internal sealed class MonitoringService : PeriodicBackgroundService
     protected override TimeSpan TickInterval => Interval;
 
     internal NudgeScheduler Scheduler => _scheduler;
+
+    /// <summary>
+    /// Whether the next scheduled tick is the one-time startup catch-up, which polls every active
+    /// repository regardless of <see cref="MonitoredRepository.IsDueForPoll"/> and never records a
+    /// missed change. Settable so tests can start from the steady state.
+    /// </summary>
+    internal bool StartupCatchUpPending
+    {
+        get => _startupCatchUpPending;
+        set => _startupCatchUpPending = value;
+    }
 
     protected override Task TickAsync(CancellationToken cancellationToken)
         => ExecuteTickAsync(_timeProvider.GetUtcNow(), cancellationToken);
@@ -201,9 +217,21 @@ internal sealed class MonitoringService : PeriodicBackgroundService
 
         List<MonitoredRepository> repos = await LoadActiveReposAsync(dbContext, cancellationToken);
 
+        // The catch-up is consumed once the repositories are loaded: a per-repository failure returns
+        // that repository to its normal schedule rather than retrying on every tick.
+        bool catchUp = _startupCatchUpPending;
+        _startupCatchUpPending = false;
+
+        if (catchUp && repos.Count > 0)
+        {
+            _logger.LogInformation(
+                "Startup catch-up: polling all {Count} active repositories once to recover changes missed while down.",
+                repos.Count);
+        }
+
         foreach (MonitoredRepository repo in repos)
         {
-            if (!repo.IsDueForPoll(pollInterval, now, backstopInterval))
+            if (!catchUp && !repo.IsDueForPoll(pollInterval, now, backstopInterval))
             {
                 continue;
             }
@@ -240,8 +268,10 @@ internal sealed class MonitoringService : PeriodicBackgroundService
             // Missed change: a scheduled poll of an Active hook found a change the provider has a webhook
             // event for, yet no delivery announced — fall back to the normal interval until the next
             // verified delivery. Changes the provider has no event for (GitLab issue links and protected
-            // branches) never count.
-            if (backstopInterval is not null
+            // branches) never count. The startup catch-up is exempt: a change it finds was lost to
+            // downtime, not to a silent hook.
+            if (!catchUp
+                && backstopInterval is not null
                 && pollResult is Result<PollChanges>.Success pollSuccess
                 && IsMissedChange(pollSuccess.Value, resolvedProvider.Credential)
                 && repo.RecordMissedChange())
