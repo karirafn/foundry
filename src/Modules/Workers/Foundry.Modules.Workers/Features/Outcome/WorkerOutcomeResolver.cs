@@ -37,6 +37,10 @@ internal sealed class WorkerOutcomeResolver(
 
     private const string NoPrAfterRetriesMessage = "No pull request found after retries";
 
+    internal const string ErrorResultMessage = "Worker reported an error";
+
+    internal const int MaxErrorResultTextLength = 500;
+
     internal const string OutOfMemoryMessage = "Worker ran out of memory";
 
     internal const string TerminatedOutsideFoundryMessage = "Worker container was terminated outside Foundry";
@@ -295,53 +299,54 @@ internal sealed class WorkerOutcomeResolver(
         RunResultSummary? summary)
     {
         ContainerOutputParseResult parseResult = containerOutputParser.Parse(containerOutput);
+        FailureReason? classified = TryClassifyParseResult(parseResult);
 
-        if (parseResult is ContainerOutputParseResult.UsageLimited usageLimited)
+        if (classified is not null)
         {
-            return new WorkerOutcome.Failure(new FailureReason.UsageLimited(usageLimited.ResetsAt), containerOutput, summary);
+            return new WorkerOutcome.Failure(classified, containerOutput, summary);
         }
 
-        if (parseResult is ContainerOutputParseResult.CreditsExhausted)
+        // The CLI can exit 0 while its result line reports is_error (e.g. an expired OAuth session).
+        // Such a run did no work; recording it as Unchanged would hide the failure from retry.
+        if (summary is { IsError: true })
         {
-            return new WorkerOutcome.Failure(new FailureReason.CreditsExhausted(), containerOutput, summary);
-        }
-
-        if (parseResult is ContainerOutputParseResult.TransientApiError)
-        {
-            return new WorkerOutcome.Failure(new FailureReason.TransientApiError(), containerOutput, summary);
+            return new WorkerOutcome.Failure(ErrorResultFailureReason(summary), containerOutput, summary);
         }
 
         // Exit 0 with no commits — the issue is unchanged (nothing to submit)
         return new WorkerOutcome.Unchanged(run.BranchName, summary);
     }
 
+    /// <summary>
+    /// Builds the generic failure reason for an exit-0 run whose result line reports
+    /// <c>is_error</c> but whose output matches no known failure category.
+    /// </summary>
+    private static FailureReason.ContainerError ErrorResultFailureReason(RunResultSummary summary)
+    {
+        string? resultText = summary.ResultText?.Trim();
+
+        if (string.IsNullOrEmpty(resultText))
+        {
+            return new FailureReason.ContainerError(ErrorResultMessage);
+        }
+
+        string redacted = SecretRedactor.Redact(resultText).ReplaceLineEndings(" ");
+
+        if (redacted.Length > MaxErrorResultTextLength)
+        {
+            redacted = redacted[..MaxErrorResultTextLength];
+        }
+
+        return new FailureReason.ContainerError($"{ErrorResultMessage}: {redacted}");
+    }
+
     private static FailureReason ClassifyNonZeroFailureReason(
         ContainerOutputParseResult parseResult,
         WorkerStatus? status)
     {
-        if (parseResult is ContainerOutputParseResult.WorkerBootstrapFailed bootstrapFailed)
+        if (TryClassifyParseResult(parseResult) is { } classified)
         {
-            return new FailureReason.WorkerBootstrapFailed(SecretRedactor.Redact(bootstrapFailed.Detail));
-        }
-
-        if (parseResult is ContainerOutputParseResult.UsageLimited usageLimited)
-        {
-            return new FailureReason.UsageLimited(usageLimited.ResetsAt);
-        }
-
-        if (parseResult is ContainerOutputParseResult.CreditsExhausted)
-        {
-            return new FailureReason.CreditsExhausted();
-        }
-
-        if (parseResult is ContainerOutputParseResult.AuthInvalid)
-        {
-            return new FailureReason.AuthInvalid();
-        }
-
-        if (parseResult is ContainerOutputParseResult.TransientApiError)
-        {
-            return new FailureReason.TransientApiError();
+            return classified;
         }
 
         if (parseResult is ContainerOutputParseResult.NoResultLine)
@@ -350,6 +355,25 @@ internal sealed class WorkerOutcomeResolver(
         }
 
         return new FailureReason.NonZeroExit(status?.ExitCode ?? -1);
+    }
+
+    /// <summary>
+    /// Maps a parse result that identifies a specific failure category to its
+    /// <see cref="FailureReason"/>; returns <see langword="null"/> when the parse carries no category.
+    /// Shared by the non-zero and the exit-0 paths so both classify a failure identically.
+    /// </summary>
+    private static FailureReason? TryClassifyParseResult(ContainerOutputParseResult parseResult)
+    {
+        return parseResult switch
+        {
+            ContainerOutputParseResult.WorkerBootstrapFailed bootstrapFailed =>
+                new FailureReason.WorkerBootstrapFailed(SecretRedactor.Redact(bootstrapFailed.Detail)),
+            ContainerOutputParseResult.UsageLimited usageLimited => new FailureReason.UsageLimited(usageLimited.ResetsAt),
+            ContainerOutputParseResult.CreditsExhausted => new FailureReason.CreditsExhausted(),
+            ContainerOutputParseResult.AuthInvalid => new FailureReason.AuthInvalid(),
+            ContainerOutputParseResult.TransientApiError => new FailureReason.TransientApiError(),
+            _ => null,
+        };
     }
 
     /// <summary>
