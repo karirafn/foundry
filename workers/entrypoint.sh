@@ -54,6 +54,73 @@ fail_bootstrap() {
 }
 
 # ---------------------------------------------------------------------------
+# prepare_csharp_lsp <workspace_root>
+#
+# Decides whether claude loads the baked csharp-lsp plugin and records the
+# decision in the CSHARP_LSP_PLUGIN_ARGS array, which both claude invocations
+# (the initial -p run and the transient-error -c resume) expand verbatim.
+#
+# csharp-ls snapshots the workspace when it starts and never picks up a later
+# restore, so loading it against an unrestored repo yields silently partial
+# results.  This therefore restores first and fails closed to "no LSP" (the
+# agent falls back to grep) on any problem; it never fails the bootstrap.
+#
+# Restore targets mirror csharp-ls's own discovery: every *.sln / *.slnx found
+# recursively (excluding node_modules), else every *.csproj / *.fsproj.  The
+# superset is restored so whichever solution csharp-ls picks is covered.  All
+# restores share one overall CSHARP_LSP_RESTORE_TIMEOUT_SECONDS budget.
+#
+# Prints exactly one "C# LSP: enabled" or "C# LSP: disabled (<reason>)" line
+# to stderr; restore output also goes to stderr so stdout stays stream-json.
+# ---------------------------------------------------------------------------
+prepare_csharp_lsp() {
+    local root="$1"
+    CSHARP_LSP_PLUGIN_ARGS=()
+
+    if ! command -v csharp-ls > /dev/null 2>&1; then
+        echo "C# LSP: disabled (csharp-ls not on PATH)" >&2
+        return 0
+    fi
+    if ! command -v dotnet > /dev/null 2>&1; then
+        echo "C# LSP: disabled (dotnet not on PATH)" >&2
+        return 0
+    fi
+
+    local -a targets=()
+    mapfile -d '' -t targets < <(find "$root" -name node_modules -prune -o -type f \( -name '*.sln' -o -name '*.slnx' \) -print0 | sort -z)
+    if (( ${#targets[@]} == 0 )); then
+        mapfile -d '' -t targets < <(find "$root" -name node_modules -prune -o -type f \( -name '*.csproj' -o -name '*.fsproj' \) -print0 | sort -z)
+    fi
+    if (( ${#targets[@]} == 0 )); then
+        echo "C# LSP: disabled (no solution or project files)" >&2
+        return 0
+    fi
+
+    local deadline=$(( SECONDS + CSHARP_LSP_RESTORE_TIMEOUT_SECONDS ))
+    local target remaining rc
+    for target in "${targets[@]}"; do
+        remaining=$(( deadline - SECONDS ))
+        if (( remaining <= 0 )); then
+            echo "C# LSP: disabled (restore exceeded ${CSHARP_LSP_RESTORE_TIMEOUT_SECONDS}s)" >&2
+            return 0
+        fi
+        echo "C# LSP: restoring ${target#"$root"/}" >&2
+        rc=0
+        timeout --kill-after=10 "$remaining" dotnet restore "$target" >&2 || rc=$?
+        if (( rc == 124 || rc == 137 )); then
+            echo "C# LSP: disabled (restore exceeded ${CSHARP_LSP_RESTORE_TIMEOUT_SECONDS}s)" >&2
+            return 0
+        elif (( rc != 0 )); then
+            echo "C# LSP: disabled (dotnet restore failed for ${target#"$root"/} with exit code ${rc})" >&2
+            return 0
+        fi
+    done
+
+    CSHARP_LSP_PLUGIN_ARGS=(--plugin-dir "$CSHARP_LSP_PLUGIN_DIR")
+    echo "C# LSP: enabled" >&2
+}
+
+# ---------------------------------------------------------------------------
 # merge_host_hooks <settings_json> <host_settings_file> <exclusions_json>
 #
 # Prints <settings_json> with the `hooks` object of the operator's host Claude
@@ -373,9 +440,12 @@ verify_managed_settings() {
 #
 # The image starts as root only so this phase can write the root-owned managed
 # file.  Nothing else — clone, auth, dockerd, claude — runs as root: the script
-# re-executes itself as node with no inheritable capabilities.  Docker's default
-# capability bounding set is left intact because rootless dockerd relies on the
-# setuid newuidmap/newgidmap.
+# re-executes itself as node with no inheritable capabilities.  Foundry starts the
+# container with every capability dropped except SETUID/SETGID for this drop
+# (ADR 0088); the bounding set is not narrowed further here because a Docker-
+# enabled worker's setuid newuidmap/newgidmap need the extra capabilities its
+# run spec adds back.  The root filesystem is read-only, so the managed file is
+# written to the root-owned tmpfs Foundry mounts at /etc/claude-code.
 # ---------------------------------------------------------------------------
 if [[ "$(id -u)" -eq 0 ]]; then
     render_managed_settings "$MANAGED_SETTINGS_FILE" || exit 1
@@ -584,6 +654,13 @@ is_transient_api_error() {
     return 1
 }
 
+# Restore the repo and decide on the C# LSP plugin immediately before claude
+# starts: after `unset GIT_PAT` and the gh/glab credential-helper setup, so the
+# repo-controlled MSBuild evaluation sees exactly the environment the agent sees.
+readonly CSHARP_LSP_RESTORE_TIMEOUT_SECONDS=300
+readonly CSHARP_LSP_PLUGIN_DIR=/opt/claude-plugins/csharp-lsp
+prepare_csharp_lsp /workspace
+
 # ---------------------------------------------------------------------------
 # Invoke claude in headless stream-json mode.  stream-json emits one event per
 # line as the run progresses (the final line is the "result" event), so stdout
@@ -609,7 +686,8 @@ claude -p "$WORKER_PROMPT" \
     --dangerously-skip-permissions \
     --output-format stream-json \
     --verbose \
-    --max-turns 200 | tee "$CLAUDE_OUTPUT_FILE"
+    --max-turns 200 \
+    "${CSHARP_LSP_PLUGIN_ARGS[@]}" | tee "$CLAUDE_OUTPUT_FILE"
 first_status=${PIPESTATUS[0]}
 set -e
 
@@ -617,13 +695,15 @@ if is_transient_api_error "$(cat "$CLAUDE_OUTPUT_FILE")"; then
     echo "Transient API error detected — resuming session once via claude -c" >&2
     # Resume the most recent conversation in cwd.  --append-system-prompt is
     # intentionally omitted: -c restores the original session (system prompt
-    # included) and re-appending would duplicate it.
+    # included) and re-appending would duplicate it.  The C# LSP decision is
+    # reused as-is (plugins are not part of the session); no second restore.
     set +e
     claude -c -p "$WORKER_PROMPT" \
         --dangerously-skip-permissions \
         --output-format stream-json \
         --verbose \
-        --max-turns 200 | tee "$CLAUDE_OUTPUT_FILE"
+        --max-turns 200 \
+        "${CSHARP_LSP_PLUGIN_ARGS[@]}" | tee "$CLAUDE_OUTPUT_FILE"
     resume_status=${PIPESTATUS[0]}
     set -e
     exit "$resume_status"

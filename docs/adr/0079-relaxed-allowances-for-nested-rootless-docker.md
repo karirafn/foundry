@@ -4,6 +4,8 @@ status: accepted
 
 # Relaxed Run-Spec Allowances for Nested Rootless Docker
 
+> **2026-11-04 — Amended by [ADR 0088](0088-worker-containers-run-hardened-by-default.md):** the allowance set now layers on the hardened worker baseline instead of on Docker's defaults. `--cap-add SYS_ADMIN` on top of the default capability set becomes `CapDrop: [ALL]` with `CapAdd: [SETUID, SETGID, DAC_OVERRIDE, SYS_ADMIN]`, and the root filesystem is read-only. The security opts, `/dev/net/tun`, the unmasked system paths and the data-root volume are unchanged.
+
 > **2026-10-28 — Amended:** the `systempaths=unconfined` security-opt in Context and Decision was **false from the start** as an Engine API value. It is a docker CLI alias that the CLI translates client-side into empty `HostConfig.MaskedPaths` and `HostConfig.ReadonlyPaths`; the daemon rejects it in `SecurityOpt` with `invalid --security-opt`. The spikes and the CI smoke step both ran through the CLI, so the translation hid it. The decision to unmask system paths stands: `RootlessDindRunSpec.UnmaskSystemPaths` sets `WorkerContainerSpec.UnmaskSystemPaths`, which `DockerWorkerOrchestrator` maps to empty `MaskedPaths`/`ReadonlyPaths`. The remaining security opts (`seccomp=unconfined`, `apparmor=unconfined`) are daemon-native.
 
 ## Context

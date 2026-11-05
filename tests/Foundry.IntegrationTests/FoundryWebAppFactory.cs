@@ -26,8 +26,12 @@ public sealed class FoundryWebAppFactory : WebApplicationFactory<Program>, IAsyn
         Converters = { new JsonStringEnumConverter() },
     };
 
+    private const string LegacyApplicationNameSetting = "DataProtection:LegacyApplicationName";
+
     private readonly SqliteConnection _connection;
     private readonly Action<IServiceCollection>? _serviceOverrides;
+    private DirectoryInfo? _persistentKeysDirectory;
+    private string? _legacyApplicationName;
 
     public FoundryWebAppFactory()
     {
@@ -41,6 +45,17 @@ public sealed class FoundryWebAppFactory : WebApplicationFactory<Program>, IAsyn
         _connection.Open();
         _serviceOverrides = serviceOverrides;
     }
+
+    public SqliteConnection Connection => _connection;
+
+    public static FoundryWebAppFactory WithPersistentDataProtection(
+        DirectoryInfo keysDirectory,
+        string? legacyApplicationName = null) =>
+        new()
+        {
+            _persistentKeysDirectory = keysDirectory,
+            _legacyApplicationName = legacyApplicationName,
+        };
 
     public static FoundryWebAppFactory WithOverrides(Action<IServiceCollection> serviceOverrides) =>
         new(serviceOverrides);
@@ -63,13 +78,25 @@ public sealed class FoundryWebAppFactory : WebApplicationFactory<Program>, IAsyn
             // the background timer loop (R1 from the outbox design).
             services.AddSingleton<OutboxRelayService>();
 
-            // Use ephemeral data protection keys so tests do not depend on
-            // a persistent key store and encryption works within a single test run.
-            services.AddDataProtection()
-                .UseEphemeralDataProtectionProvider();
+            // Ephemeral keys by default so tests do not depend on a persistent key store;
+            // a persistent key ring lets a test seed ciphertext before the host boots.
+            IDataProtectionBuilder dataProtection = services.AddDataProtection();
+            if (_persistentKeysDirectory is null)
+            {
+                dataProtection.UseEphemeralDataProtectionProvider();
+            }
+            else
+            {
+                dataProtection.PersistKeysToFileSystem(_persistentKeysDirectory);
+            }
 
             _serviceOverrides?.Invoke(services);
         });
+
+        if (_legacyApplicationName is not null)
+        {
+            builder.UseSetting(LegacyApplicationNameSetting, _legacyApplicationName);
+        }
 
         builder.UseEnvironment("Testing");
     }

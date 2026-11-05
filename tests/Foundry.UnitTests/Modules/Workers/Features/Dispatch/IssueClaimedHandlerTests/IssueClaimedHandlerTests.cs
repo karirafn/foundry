@@ -1114,8 +1114,12 @@ public sealed class HandleAsync : IAsyncDisposable
         WorkerContainerSpec? spec = orchestrator.LastSpec;
         spec.ShouldNotBeNull();
         spec.ShouldSatisfyAllConditions(
-            () => spec.Capabilities.ShouldBe(["SYS_ADMIN"]),
+            () => spec.Capabilities.ShouldBe(["SETUID", "SETGID", "DAC_OVERRIDE", "SYS_ADMIN"], ignoreOrder: true),
+            () => spec.DroppedCapabilities.ShouldBe(["ALL"]),
             () => spec.SecurityOptions.ShouldBe(["seccomp=unconfined", "apparmor=unconfined"]),
+            () => spec.ReadOnlyRootFilesystem.ShouldBeTrue(),
+            () => spec.TmpfsMounts.ShouldBe(WorkerHardeningSpec.TmpfsMounts),
+            () => spec.ScratchVolumePaths.ShouldBe(WorkerHardeningSpec.ScratchVolumePaths),
             () => spec.UnmaskSystemPaths.ShouldBeTrue(),
             () => spec.Devices.ShouldBe(["/dev/net/tun"]),
             () => spec.Devices.ShouldNotContain("/dev/fuse"),
@@ -1201,7 +1205,7 @@ public sealed class HandleAsync : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenDockerDisabled_RootlessDindAllowancesAreAbsent()
+    public async Task WhenDockerDisabled_RootlessDindAllowancesAreAbsentAndWorkerIsHardened()
     {
         // Arrange
         StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c-no-dind");
@@ -1217,8 +1221,14 @@ public sealed class HandleAsync : IAsyncDisposable
         WorkerContainerSpec? spec = orchestrator.LastSpec;
         spec.ShouldNotBeNull();
         spec.ShouldSatisfyAllConditions(
-            () => spec.Capabilities.ShouldBeEmpty(),
-            () => spec.SecurityOptions.ShouldBeEmpty(),
+            () => spec.DroppedCapabilities.ShouldBe(["ALL"]),
+            () => spec.Capabilities.ShouldBe(["SETUID", "SETGID"], ignoreOrder: true),
+            () => spec.Capabilities.ShouldNotContain("SYS_ADMIN"),
+            () => spec.SecurityOptions.ShouldBe(["no-new-privileges:true"]),
+            () => spec.SecurityOptions.ShouldNotContain(o => o.StartsWith("seccomp=", StringComparison.Ordinal)),
+            () => spec.ReadOnlyRootFilesystem.ShouldBeTrue(),
+            () => spec.TmpfsMounts.Keys.ShouldBe(["/tmp", "/var/tmp", "/etc/claude-code"], ignoreOrder: true),
+            () => spec.ScratchVolumePaths.ShouldBe(["/workspace", "/home/node"], ignoreOrder: true),
             () => spec.Devices.ShouldBeEmpty(),
             () => spec.UnmaskSystemPaths.ShouldBeFalse(),
             () => spec.VolumeMounts.ShouldNotContain(m =>
@@ -1304,6 +1314,44 @@ public sealed class HandleAsync : IAsyncDisposable
         WorkerContainerSpec? spec = orchestrator.LastSpec;
         spec.ShouldNotBeNull();
         spec.EnvironmentVariables["SYSTEM_PROMPT"].ShouldNotContain(SystemPromptBuilder.PrePrSectionMarker);
+    }
+
+    [Fact]
+    public async Task WhenDotnetInstalled_SystemPromptEnvVarContainsCSharpLspSection()
+    {
+        // Arrange
+        StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c-lsp-dotnet");
+        IssueClaimedHandler sut = BuildHandler(
+            orchestrator: orchestrator,
+            settingsQueries: new StubGlobalSettingsQueries(installsDotnet: true));
+        IssueClaimed @event = BuildEvent();
+
+        // Act
+        await sut.HandleAsync(@event, TestContext.Current.CancellationToken);
+
+        // Assert
+        WorkerContainerSpec? spec = orchestrator.LastSpec;
+        spec.ShouldNotBeNull();
+        spec.EnvironmentVariables["SYSTEM_PROMPT"].ShouldContain(SystemPromptBuilder.CSharpLspSectionMarker);
+    }
+
+    [Fact]
+    public async Task WhenDotnetNotInstalled_SystemPromptEnvVarOmitsCSharpLspSection()
+    {
+        // Arrange
+        StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c-lsp-no-dotnet");
+        IssueClaimedHandler sut = BuildHandler(
+            orchestrator: orchestrator,
+            settingsQueries: new StubGlobalSettingsQueries(installsDotnet: false));
+        IssueClaimed @event = BuildEvent();
+
+        // Act
+        await sut.HandleAsync(@event, TestContext.Current.CancellationToken);
+
+        // Assert
+        WorkerContainerSpec? spec = orchestrator.LastSpec;
+        spec.ShouldNotBeNull();
+        spec.EnvironmentVariables["SYSTEM_PROMPT"].ShouldNotContain(SystemPromptBuilder.CSharpLspSectionMarker);
     }
 
     [Fact]
@@ -1462,6 +1510,7 @@ public sealed class HandleAsync : IAsyncDisposable
         string? systemPromptTemplate = null,
         string? workerPromptTemplate = null,
         bool installsDocker = false,
+        bool installsDotnet = false,
         string imageTag = "stub-image:v1",
         WorkerResourceLimitsSnapshot? limits = null,
         IReadOnlyList<WorkerMountEntry>? mounts = null) : IGlobalSettingsQueries
@@ -1497,6 +1546,9 @@ public sealed class HandleAsync : IAsyncDisposable
 
         public Task<bool> GetWorkerImageInstallsDockerAsync(CancellationToken cancellationToken)
             => Task.FromResult(installsDocker);
+
+        public Task<bool> GetWorkerImageInstallsDotnetAsync(CancellationToken cancellationToken)
+            => Task.FromResult(installsDotnet);
 
         public Task<string> GetWorkerImageTagAsync(CancellationToken cancellationToken)
             => Task.FromResult(imageTag);

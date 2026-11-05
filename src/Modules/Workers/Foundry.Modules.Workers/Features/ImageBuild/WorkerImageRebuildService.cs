@@ -1,4 +1,3 @@
-using System.Formats.Tar;
 using System.Reflection;
 
 using Docker.DotNet;
@@ -201,12 +200,9 @@ internal sealed class WorkerImageRebuildService(
 
         try
         {
-            await using MemoryStream tarStream = new();
-            await TarFile.CreateFromDirectoryAsync(
-                contextPath,
-                tarStream,
-                includeBaseDirectory: false,
-                cancellationToken);
+            // Spooled to disk so a large build context is never held in memory across the builds.
+            await using FileStream tarStream = BuildContextSpool.CreateStream();
+            await BuildContextTar.WriteAsync(contextPath, tarStream, cancellationToken);
             tarStream.Seek(0, SeekOrigin.Begin);
 
             // Build the shared base image first; the worker image depends on it.

@@ -48,6 +48,21 @@ public sealed class RemoveAsync
     }
 
     [Fact]
+    public async Task WhenCalled_RemovesAnonymousVolumes()
+    {
+        // Arrange
+        SpyContainerOperations spy = new();
+        DockerContainerRuntime sut = BuildSut(spy);
+
+        // Act
+        await sut.RemoveAsync("container-id", CancellationToken.None);
+
+        // Assert
+        ContainerRemoveParameters captured = spy.LastRemoveParameters.ShouldNotBeNull();
+        captured.RemoveVolumes.ShouldBe(true);
+    }
+
+    [Fact]
     public async Task WhenContainerAlreadyGone_SwallowsDockerContainerNotFoundException()
     {
         // Arrange

@@ -158,6 +158,7 @@ internal sealed class IssueClaimedHandler(
 
         int timeoutMinutes = await settingsQueries.GetTimeoutMinutesAsync(cancellationToken);
         bool installsDocker = await settingsQueries.GetWorkerImageInstallsDockerAsync(cancellationToken);
+        bool installsDotnet = await settingsQueries.GetWorkerImageInstallsDotnetAsync(cancellationToken);
         string imageTag = await settingsQueries.GetWorkerImageTagAsync(cancellationToken);
         ClaudeCodeSettingsSnapshot claudeCode = await settingsQueries.GetClaudeCodeSettingsAsync(cancellationToken);
         WorkerResourceLimitsSnapshot limits = await settingsQueries.GetWorkerResourceLimitsAsync(cancellationToken);
@@ -169,7 +170,8 @@ internal sealed class IssueClaimedHandler(
             claimed.Context,
             claimed.IssueApiUrl,
             timeoutMinutes,
-            installsDocker);
+            installsDocker,
+            installsDotnet);
 
         if (systemPromptResult is not Result<string>.Success systemPromptSuccess)
         {
@@ -272,7 +274,7 @@ internal sealed class IssueClaimedHandler(
             ["foundry.worker-run-id"] = startingRun.Id.Value.ToString(),
         };
 
-        WorkerContainerSpec spec = new(
+        WorkerContainerSpec spec = WorkerHardeningSpec.Apply(new(
             imageTag,
             envVars,
             bindMounts,
@@ -283,7 +285,7 @@ internal sealed class IssueClaimedHandler(
             CpuLimit = limits.CpuLimit,
             PidsLimit = limits.PidsLimit,
             VolumeMounts = volumeMounts,
-        };
+        });
 
         return installsDocker
             ? Result<WorkerContainerSpec>.Ok(ApplyRootlessDinD(spec, startingRun.Id))

@@ -133,7 +133,7 @@ jobs:
 
       - name: Build worker image
         if: github.event_name == 'push' || steps.changes.outputs.workers == 'true'
-        run: docker build --build-arg INSTALL_DOCKER=true -t foundry-worker:ci workers/
+        run: docker build --build-arg INSTALL_DOCKER=true --build-arg INSTALL_DOTNET=true -t foundry-worker:ci workers/
 
       - name: Image contract check — Claude Code CLI matches workers/package.json
         if: github.event_name == 'push' || steps.changes.outputs.workers == 'true'
@@ -147,6 +147,26 @@ jobs:
           docker run --rm foundry-worker:ci bash -c '[ "$DISABLE_AUTOUPDATER" = "1" ] && [ "$CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC" = "1" ]' \
             || { echo "FAIL: DISABLE_AUTOUPDATER and CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC must both be 1"; exit 1; }
           echo "PASS: auto-updater and nonessential traffic disabled"
+
+      - name: Image contract check — csharp-ls matches workers/.config/dotnet-tools.json, plugin baked, rq-cli absent
+        if: github.event_name == 'push' || steps.changes.outputs.workers == 'true'
+        run: |
+          expected=$(jq -er '.tools["csharp-ls"].version' workers/.config/dotnet-tools.json)
+          # csharp-ls --version prints "csharp-ls, <version> (<commit>)"
+          actual=$(docker run --rm foundry-worker:ci csharp-ls --version | awk -F'[ ,]+' 'NR==1 {print $2}')
+          [ "$actual" = "$expected" ] \
+            || { echo "FAIL: csharp-ls --version is '$actual', workers/.config/dotnet-tools.json pins '$expected'"; exit 1; }
+          echo "PASS: csharp-ls $actual matches workers/.config/dotnet-tools.json"
+
+          docker run --rm foundry-worker:ci \
+            jq -e '.name == "csharp-lsp" and .lspServers["csharp-ls"].command == "csharp-ls" and .lspServers["csharp-ls"].extensionToLanguage[".cs"] == "csharp"' \
+            /opt/claude-plugins/csharp-lsp/.claude-plugin/plugin.json \
+            || { echo "FAIL: baked csharp-lsp plugin.json must declare lspServers.csharp-ls"; exit 1; }
+          echo "PASS: csharp-lsp plugin baked with lspServers.csharp-ls"
+
+          docker run --rm foundry-worker:ci bash -c '[ ! -e /usr/local/bin/rq-cli ]' \
+            || { echo "FAIL: rq-cli must not be installed in /usr/local/bin"; exit 1; }
+          echo "PASS: rq-cli absent"
 
       - name: Image contract check — verify iproute2/procps present, fuse-overlayfs absent, setuid only on newuidmap/newgidmap
         if: github.event_name == 'push' || steps.changes.outputs.workers == 'true'
