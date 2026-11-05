@@ -111,8 +111,8 @@ const mockRunTotals = {
   durationMs: 0,
   numTurns: 0,
   totalCostUsd: 0,
-  inputTokens: 0,
-  outputTokens: 0,
+  inputTokens: { total: 0, knownRunCount: 0, unknownRunCount: 0 },
+  outputTokens: { total: 0, knownRunCount: 0, unknownRunCount: 0 },
 };
 
 function flushInit(httpMock: HttpTestingController, issues: IssueSummary[] = []) {

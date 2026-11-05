@@ -120,6 +120,16 @@
     text-overflow: ellipsis;
   }
 
+  // "N runs untracked" — visible beneath a partial or unknown token total so a lower bound
+  // is never read as exact.
+  &__card-caption {
+    font-size: 0.6875rem;
+    color: var(--fd-text-secondary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
   // Skeleton state
   &__skeleton {
     display: grid;

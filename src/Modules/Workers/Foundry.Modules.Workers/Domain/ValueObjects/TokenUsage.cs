@@ -1,3 +1,5 @@
+using Foundry.Modules.Workers.Contracts;
+
 namespace Foundry.Modules.Workers.Domain.ValueObjects;
 
 /// <summary>
@@ -31,26 +33,30 @@ public sealed record TokenUsage(
                 : null;
 
     /// <summary>
-    /// Sums values across runs, propagating unknowns: the result is <see langword="null"/> when
-    /// any value is <see langword="null"/> (or when there are no values), because an aggregate
-    /// that silently skips unknown runs would understate usage.
+    /// Sums one token metric across runs, counting known and unknown figures separately. This is
+    /// the single place run-level token figures are aggregated: unknown runs are excluded from the
+    /// total but reported in <see cref="TokenTotal.UnknownRunCount"/>, so a partial total is never
+    /// presented as exact.
     /// </summary>
-    public static long? SumKnown(IEnumerable<long?> values)
+    public static TokenTotal Sum(IEnumerable<long?> values)
     {
         long total = 0;
-        bool any = false;
+        int known = 0;
+        int unknown = 0;
 
         foreach (long? value in values)
         {
-            if (value is not { } known)
+            if (value is { } figure)
             {
-                return null;
+                total += figure;
+                known++;
             }
-
-            total += known;
-            any = true;
+            else
+            {
+                unknown++;
+            }
         }
 
-        return any ? total : null;
+        return new TokenTotal(total, known, unknown);
     }
 }

@@ -5,6 +5,9 @@ import { IssueService } from './issue.service';
 import { IssueSignalRService } from '../../core/services/issue-signalr.service';
 import { IssueSummary, IssueDetail, RevisionTriggerKind } from './issue.model';
 import { vi } from 'vitest';
+import type { components } from '../../api/schema';
+
+type SchemaTokenTotal = components['schemas']['TokenTotal'];
 
 const mockIssueSignalRService = {
   on: () => {},
@@ -3046,8 +3049,8 @@ describe('IssueService (code-review findings)', () => {
       durationMs: null | number | string;
       numTurns: null | number | string;
       totalCostUsd: null | number | string;
-      inputTokens: null | number | string;
-      outputTokens: null | number | string;
+      inputTokens: SchemaTokenTotal;
+      outputTokens: SchemaTokenTotal;
     },
   };
 
@@ -3119,8 +3122,8 @@ describe('IssueService (code-review findings)', () => {
         durationMs: '1500' as null | number | string,
         numTurns: '10' as null | number | string,
         totalCostUsd: '0.05' as null | number | string,
-        inputTokens: '1000' as null | number | string,
-        outputTokens: '500' as null | number | string,
+        inputTokens: { total: '1000', knownRunCount: '2', unknownRunCount: '1' } as SchemaTokenTotal,
+        outputTokens: { total: '500', knownRunCount: 3, unknownRunCount: 0 } as SchemaTokenTotal,
       },
     };
 
@@ -3134,8 +3137,8 @@ describe('IssueService (code-review findings)', () => {
     expect(stats.durationMs).toBe(1500);
     expect(stats.numTurns).toBe(10);
     expect(stats.totalCostUsd).toBeCloseTo(0.05);
-    expect(stats.inputTokens).toBe(1000);
-    expect(stats.outputTokens).toBe(500);
+    expect(stats.inputTokens).toEqual({ total: 1000, knownRunCount: 2, unknownRunCount: 1 });
+    expect(stats.outputTokens).toEqual({ total: 500, knownRunCount: 3, unknownRunCount: 0 });
   });
 
   // Finding 1 + Finding 4 — nullable runStats numeric fields coerced: null stays null, bad value degrades to 0
@@ -3148,8 +3151,8 @@ describe('IssueService (code-review findings)', () => {
         durationMs: null as null | number | string,
         numTurns: 'bad' as null | number | string,
         totalCostUsd: null as null | number | string,
-        inputTokens: null as null | number | string,
-        outputTokens: null as null | number | string,
+        inputTokens: { total: 'bad', knownRunCount: 0, unknownRunCount: 2 } as SchemaTokenTotal,
+        outputTokens: { total: 0, knownRunCount: 0, unknownRunCount: 0 } as SchemaTokenTotal,
       },
     };
 
@@ -3157,14 +3160,14 @@ describe('IssueService (code-review findings)', () => {
     service.loadIssues();
     httpMock.expectOne('/api/issues').flush({ items: [schemaItem], nextCursor: null });
 
-    // Assert — null stays null; 'bad' degrades to 0
+    // Assert — null stays null; 'bad' degrades to 0 (including a token total)
     const stats = service.issues()[0].runStats!;
     expect(stats.runCount).toBe(2);
     expect(stats.durationMs).toBeNull();
     expect(stats.numTurns).toBe(0);
     expect(stats.totalCostUsd).toBeNull();
-    expect(stats.inputTokens).toBeNull();
-    expect(stats.outputTokens).toBeNull();
+    expect(stats.inputTokens).toEqual({ total: 0, knownRunCount: 0, unknownRunCount: 2 });
+    expect(stats.outputTokens).toEqual({ total: 0, knownRunCount: 0, unknownRunCount: 0 });
   });
 
   // Finding 5 — _fetchResolvedPage null-coalesce: null items body degrades to empty page

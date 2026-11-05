@@ -168,8 +168,8 @@ public sealed class GetRunTotalsAsync : IAsyncDisposable
             () => result.DurationMs.ShouldBe(0L),
             () => result.NumTurns.ShouldBe(0),
             () => result.TotalCostUsd.ShouldBe(0m),
-            () => result.InputTokens.ShouldBe(0L),
-            () => result.OutputTokens.ShouldBe(0L));
+            () => result.InputTokens.ShouldBe(TokenTotal.None),
+            () => result.OutputTokens.ShouldBe(TokenTotal.None));
     }
 
     [Fact]
@@ -211,8 +211,8 @@ public sealed class GetRunTotalsAsync : IAsyncDisposable
             () => result.DurationMs.ShouldBe(5000L),
             () => result.NumTurns.ShouldBe(6),
             () => result.TotalCostUsd.ShouldBe(0.15m),
-            () => result.InputTokens.ShouldBe(800L),
-            () => result.OutputTokens.ShouldBe(1200L));
+            () => result.InputTokens.ShouldBe(new TokenTotal(800L, KnownRunCount: 2, UnknownRunCount: 0)),
+            () => result.OutputTokens.ShouldBe(new TokenTotal(1200L, KnownRunCount: 2, UnknownRunCount: 0)));
     }
 
     [Fact]
@@ -240,12 +240,12 @@ public sealed class GetRunTotalsAsync : IAsyncDisposable
 
         // Assert
         result.ShouldSatisfyAllConditions(
-            () => result.InputTokens.ShouldBe(1_070_440L),
-            () => result.OutputTokens.ShouldBe(700L));
+            () => result.InputTokens.ShouldBe(new TokenTotal(1_070_440L, KnownRunCount: 1, UnknownRunCount: 0)),
+            () => result.OutputTokens.ShouldBe(new TokenTotal(700L, KnownRunCount: 1, UnknownRunCount: 0)));
     }
 
     [Fact]
-    public async Task WhenAnyRunHasUnknownCacheBuckets_InputTokensIsNull()
+    public async Task WhenAnyRunHasUnknownCacheBuckets_InputTokensIsPartialSumWithUnknownCount()
     {
         // Arrange — a legacy row persisted before the cache columns existed
         RunResultSummary known = RunResultSummary.Create(
@@ -279,8 +279,38 @@ public sealed class GetRunTotalsAsync : IAsyncDisposable
 
         // Assert
         result.ShouldSatisfyAllConditions(
-            () => result.InputTokens.ShouldBeNull(),
-            () => result.OutputTokens.ShouldBe(80L));
+            () => result.InputTokens.ShouldBe(new TokenTotal(60L, KnownRunCount: 1, UnknownRunCount: 1)),
+            () => result.OutputTokens.ShouldBe(new TokenTotal(80L, KnownRunCount: 2, UnknownRunCount: 0)));
+    }
+
+    [Fact]
+    public async Task WhenEveryRunHasUnknownCacheBuckets_InputTokensHasNoKnownRuns()
+    {
+        // Arrange — only legacy rows persisted before the cache columns existed
+        RunResultSummary legacy = RunResultSummary.Create(
+            resultText: null,
+            subtype: null,
+            isError: false,
+            durationMs: 1000L,
+            numTurns: 2,
+            totalCostUsd: 0.02m,
+            tokens: new TokenUsage(10, null, null, 40));
+
+        await SeedCompletedRunAsync(createdAt: InWindow, resultSummary: legacy);
+        await SeedFailedRunAsync(createdAt: InWindow, resultSummary: legacy);
+
+        WorkerRunQueries sut = new(_dbContext);
+
+        // Act
+        RunTotals result = await sut.GetRunTotalsAsync(
+            WindowStart,
+            WindowEnd,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        result.ShouldSatisfyAllConditions(
+            () => result.InputTokens.ShouldBe(new TokenTotal(0L, KnownRunCount: 0, UnknownRunCount: 2)),
+            () => result.OutputTokens.ShouldBe(new TokenTotal(80L, KnownRunCount: 2, UnknownRunCount: 0)));
     }
 
     [Fact]
@@ -313,8 +343,8 @@ public sealed class GetRunTotalsAsync : IAsyncDisposable
             () => result.DurationMs.ShouldBe(1000L),
             () => result.NumTurns.ShouldBe(2),
             () => result.TotalCostUsd.ShouldBe(0.02m),
-            () => result.InputTokens.ShouldBe(100L),
-            () => result.OutputTokens.ShouldBe(200L));
+            () => result.InputTokens.ShouldBe(new TokenTotal(100L, KnownRunCount: 1, UnknownRunCount: 0)),
+            () => result.OutputTokens.ShouldBe(new TokenTotal(200L, KnownRunCount: 1, UnknownRunCount: 0)));
     }
 
     [Fact]
@@ -412,8 +442,8 @@ public sealed class GetRunTotalsAsync : IAsyncDisposable
             () => result.DurationMs.ShouldBe(2000L),
             () => result.NumTurns.ShouldBe(3),
             () => result.TotalCostUsd.ShouldBe(0.03m),
-            () => result.InputTokens.ShouldBe(200L),
-            () => result.OutputTokens.ShouldBe(300L));
+            () => result.InputTokens.ShouldBe(new TokenTotal(200L, KnownRunCount: 1, UnknownRunCount: 0)),
+            () => result.OutputTokens.ShouldBe(new TokenTotal(300L, KnownRunCount: 1, UnknownRunCount: 0)));
     }
 
     [Fact]
@@ -457,8 +487,8 @@ public sealed class GetRunTotalsAsync : IAsyncDisposable
             () => result.DurationMs.ShouldBe(0L),
             () => result.NumTurns.ShouldBe(0),
             () => result.TotalCostUsd.ShouldBe(0m),
-            () => result.InputTokens.ShouldBe(0L),
-            () => result.OutputTokens.ShouldBe(0L));
+            () => result.InputTokens.ShouldBe(TokenTotal.None),
+            () => result.OutputTokens.ShouldBe(TokenTotal.None));
     }
 
     [Fact]
@@ -491,7 +521,7 @@ public sealed class GetRunTotalsAsync : IAsyncDisposable
             () => result.DurationMs.ShouldBe(1000L),
             () => result.NumTurns.ShouldBe(2),
             () => result.TotalCostUsd.ShouldBe(0.02m),
-            () => result.InputTokens.ShouldBe(100L),
-            () => result.OutputTokens.ShouldBe(200L));
+            () => result.InputTokens.ShouldBe(new TokenTotal(100L, KnownRunCount: 1, UnknownRunCount: 0)),
+            () => result.OutputTokens.ShouldBe(new TokenTotal(200L, KnownRunCount: 1, UnknownRunCount: 0)));
     }
 }
