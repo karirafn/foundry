@@ -4,6 +4,7 @@ using Foundry.Modules.Issues.Domain.Events;
 using Foundry.Modules.Issues.Features;
 using Foundry.Modules.Issues.Features.Claiming;
 using Foundry.Modules.Issues.Features.CredentialReactions;
+using Foundry.Modules.Issues.Features.Dependencies;
 using Foundry.Modules.Issues.Features.DispatchReactions;
 using Foundry.Modules.Issues.Features.ProviderReactions;
 using Foundry.Modules.Issues.Features.StateChanges;
@@ -27,6 +28,7 @@ public static class IssuesModule
         services.AddScoped<InFlightWorkerCountQuery>();
         services.AddScoped<DispatchCandidateSelector>();
         services.AddScoped<IssueClaimer>();
+        services.AddScoped<IssueDependencyApplier>();
         services.AddHostedService<TransientRetryService>();
 
         services.AddCommandHandler<RetryIssue.Command, IssueDetail, RetryIssue.Handler>();

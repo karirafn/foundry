@@ -13,8 +13,28 @@ namespace Foundry.Modules.Monitoring.Features.Providers;
 internal sealed class PostExitProviderQueries(
     DbContext dbContext,
     IIssueProviderFactory providerFactory,
-    ICredentialResolver credentialResolver) : IPostExitProviderQueries, IWorkBranchCommands
+    ICredentialResolver credentialResolver) : IPostExitProviderQueries, IWorkBranchCommands, IIssueBlockerQueries
 {
+    public async Task<Result<IReadOnlyList<int>>> GetOpenBlockersAsync(
+        MonitoredRepositoryId repositoryId,
+        int issueNumber,
+        CancellationToken cancellationToken)
+    {
+        Result<(IIssueProvider Provider, MonitoredRepository Repo)> resolved =
+            await ResolveAsync(repositoryId, cancellationToken);
+
+        if (resolved is not Result<(IIssueProvider, MonitoredRepository)>.Success resolvedSuccess)
+        {
+            Error error = ((Result<(IIssueProvider, MonitoredRepository)>.Failure)resolved).Error;
+            return Result<IReadOnlyList<int>>.Fail(error);
+        }
+
+        // A provider created here has performed no issue listing, so GitHub answers from REST
+        // rather than a listing cache — the read is live.
+        (IIssueProvider provider, MonitoredRepository repo) = resolvedSuccess.Value;
+        return await provider.GetDependenciesAsync(repo.Slug, issueNumber, cancellationToken);
+    }
+
     public async Task<Result<bool>> CreateBranchAsync(
         MonitoredRepositoryId repositoryId,
         string branchName,

@@ -2,6 +2,7 @@ using Foundry.IntegrationTests.Modules.Monitoring;
 using Foundry.Modules.Issues.Domain.Entities;
 using Foundry.Modules.Issues.Domain.Entities.States;
 using Foundry.Modules.Monitoring.Contracts;
+using Foundry.Modules.Monitoring.Contracts.Queries;
 using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Modules.Workers.Contracts;
@@ -11,6 +12,7 @@ using Foundry.WebApi.Persistence;
 
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 using Shouldly;
 
@@ -25,11 +27,18 @@ namespace Foundry.IntegrationTests.Modules.Issues.Features.Claiming;
 // Docker is NOT available in this sandbox — compile-verified only; executes in CI.
 public sealed class ClaimFallThrough : IAsyncDisposable
 {
+    private readonly StubIssueBlockerQueries _blockerQueries = new();
     private readonly FoundryWebAppFactory _factory;
 
     public ClaimFallThrough()
     {
-        _factory = new FoundryWebAppFactory();
+        // The claim-time blocker re-check (#731) reads blockers live from the provider; the seeded
+        // token is fake, so substitute a stub that reports blockers per issue.
+        _factory = FoundryWebAppFactory.WithOverrides(services =>
+        {
+            services.RemoveAll<IIssueBlockerQueries>();
+            services.AddSingleton<IIssueBlockerQueries>(_blockerQueries);
+        });
         _ = _factory.CreateClient();
     }
 

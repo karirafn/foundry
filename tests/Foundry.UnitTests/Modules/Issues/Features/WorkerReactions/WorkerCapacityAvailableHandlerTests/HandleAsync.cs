@@ -51,7 +51,8 @@ public sealed class HandleAsync : IAsyncDisposable
     private WorkerCapacityAvailableHandler BuildHandler(
         IRepositoryEligibilityQuery? repositoryEligibilityQuery = null,
         IRepositoryDispatchQueries? repositoryDispatchQueries = null,
-        IIntegrationEventDispatcher? integrationEventDispatcher = null)
+        IIntegrationEventDispatcher? integrationEventDispatcher = null,
+        IIssueBlockerQueries? issueBlockerQueries = null)
     {
         DispatchCandidateSelector selector = new(
             _dbContext,
@@ -62,7 +63,10 @@ public sealed class HandleAsync : IAsyncDisposable
                 new WorkerProvider.GitHub(),
                 "https://api.github.com/repos/owner/repo/issues")),
             repositoryEligibilityQuery ?? new AllEligibleRepositoryEligibilityQuery(),
-            new InFlightWorkerCountQuery(_dbContext));
+            new InFlightWorkerCountQuery(_dbContext),
+            issueBlockerQueries ?? new StubIssueBlockerQueries(),
+            IssueDependencyApplierFactory.Create(_dbContext, _domainEventDispatcher),
+            NullLogger<DispatchCandidateSelector>.Instance);
 
         IssueClaimer claimer = new(
             _dbContext,
@@ -1293,6 +1297,157 @@ public sealed class HandleAsync : IAsyncDisposable
     /// <summary>
     /// Stub that returns exactly the provided eligible repositories (with positions).
     /// </summary>
+    // Claim-time blocker re-check (#731)
+    [Fact]
+    public async Task WhenHeadCandidateGainedBlocker_BlocksItAndClaimsNextCandidateInSameEvent()
+    {
+        // Arrange
+        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
+        FreshQueuedIssue head = SeedQueuedIssue(repositoryId, issueNumber: 1);
+        FreshQueuedIssue next = SeedQueuedIssue(repositoryId, issueNumber: 2);
+
+        CapturingIntegrationEventDispatcher capturingDispatcher = new();
+        WorkerCapacityAvailableHandler sut = BuildHandler(
+            integrationEventDispatcher: capturingDispatcher,
+            issueBlockerQueries: new StubIssueBlockerQueries().WithBlockers(1, 40));
+
+        WorkerCapacityAvailable @event = new(WorkerRunId: WorkerRunId.New());
+
+        // Act
+        await sut.HandleAsync(@event, TestContext.Current.CancellationToken);
+
+        // Assert
+        capturingDispatcher.DispatchedEvents.OfType<IssueClaimed>().ShouldHaveSingleItem()
+            .Dispatch.IssueId.ShouldBe(next.Id);
+        capturingDispatcher.DispatchedEvents.OfType<ClaimSkipped>().ShouldBeEmpty();
+
+        _dbContext.ChangeTracker.Clear();
+        (await _dbContext.Set<Issue>().SingleAsync(i => i.Id == head.Id, TestContext.Current.CancellationToken))
+            .ShouldBeOfType<BlockedIssue>().BlockedBy.ShouldBe([40]);
+        (await _dbContext.Set<Issue>().SingleAsync(i => i.Id == next.Id, TestContext.Current.CancellationToken))
+            .ShouldBeOfType<InProgressIssue>();
+    }
+
+    [Fact]
+    public async Task WhenEveryCandidateBlockedAtClaimTime_DispatchesClaimSkipped()
+    {
+        // Arrange
+        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
+        SeedQueuedIssue(repositoryId, issueNumber: 1);
+
+        CapturingIntegrationEventDispatcher capturingDispatcher = new();
+        WorkerCapacityAvailableHandler sut = BuildHandler(
+            integrationEventDispatcher: capturingDispatcher,
+            issueBlockerQueries: new StubIssueBlockerQueries().WithBlockers(1, 40));
+
+        WorkerCapacityAvailable @event = new(WorkerRunId: WorkerRunId.New());
+
+        // Act
+        await sut.HandleAsync(@event, TestContext.Current.CancellationToken);
+
+        // Assert
+        capturingDispatcher.DispatchedEvents.OfType<ClaimSkipped>().ShouldHaveSingleItem()
+            .WorkerRunId.ShouldBe(@event.WorkerRunId);
+        capturingDispatcher.DispatchedEvents.OfType<IssueClaimed>().ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task WhenEveryBlockerReadFails_DispatchesClaimSkippedAndLeavesCandidateQueued()
+    {
+        // Arrange
+        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
+        FreshQueuedIssue queued = SeedQueuedIssue(repositoryId, issueNumber: 1);
+
+        CapturingIntegrationEventDispatcher capturingDispatcher = new();
+        WorkerCapacityAvailableHandler sut = BuildHandler(
+            integrationEventDispatcher: capturingDispatcher,
+            issueBlockerQueries: new StubIssueBlockerQueries().WithFailure(1));
+
+        WorkerCapacityAvailable @event = new(WorkerRunId: WorkerRunId.New());
+
+        // Act
+        await sut.HandleAsync(@event, TestContext.Current.CancellationToken);
+
+        // Assert
+        capturingDispatcher.DispatchedEvents.OfType<ClaimSkipped>().ShouldHaveSingleItem();
+        _dbContext.ChangeTracker.Clear();
+        (await _dbContext.Set<Issue>().SingleAsync(i => i.Id == queued.Id, TestContext.Current.CancellationToken))
+            .ShouldBeOfType<FreshQueuedIssue>();
+    }
+
+    [Fact]
+    public async Task WhenRedeliveredAfterBlockingThenThrowing_DoesNotReselectBlockedIssue()
+    {
+        // Arrange — first delivery blocks issue 1, then the claim of issue 2 throws
+        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
+        FreshQueuedIssue head = SeedQueuedIssue(repositoryId, issueNumber: 1);
+        FreshQueuedIssue next = SeedQueuedIssue(repositoryId, issueNumber: 2);
+        WorkerCapacityAvailable @event = new(WorkerRunId: WorkerRunId.New());
+
+        WorkerCapacityAvailableHandler firstDelivery = BuildHandler(
+            integrationEventDispatcher: new ThrowingIntegrationEventDispatcher(),
+            issueBlockerQueries: new StubIssueBlockerQueries().WithBlockers(1, 40));
+
+        await Should.ThrowAsync<InvalidOperationException>(
+            () => firstDelivery.HandleAsync(@event, TestContext.Current.CancellationToken));
+
+        // The relay clears the change tracker after a handler throws.
+        _dbContext.ChangeTracker.Clear();
+
+        StubIssueBlockerQueries redeliveryBlockerQueries = new StubIssueBlockerQueries().WithBlockers(1, 40);
+        CapturingIntegrationEventDispatcher capturingDispatcher = new();
+        WorkerCapacityAvailableHandler redelivery = BuildHandler(
+            integrationEventDispatcher: capturingDispatcher,
+            issueBlockerQueries: redeliveryBlockerQueries);
+
+        // Act
+        await redelivery.HandleAsync(@event, TestContext.Current.CancellationToken);
+
+        // Assert
+        redeliveryBlockerQueries.RequestedIssueNumbers.ShouldBe([2]);
+        capturingDispatcher.DispatchedEvents.OfType<IssueClaimed>().ShouldHaveSingleItem()
+            .Dispatch.IssueId.ShouldBe(next.Id);
+        _domainEventDispatcher.DispatchedEvents.OfType<IssueBlocked>().ShouldHaveSingleItem();
+
+        _dbContext.ChangeTracker.Clear();
+        (await _dbContext.Set<Issue>().SingleAsync(i => i.Id == head.Id, TestContext.Current.CancellationToken))
+            .ShouldBeOfType<BlockedIssue>();
+    }
+
+    [Fact]
+    public async Task WhenCandidateIsRevisionQueued_ClaimsWithoutReadingBlockers()
+    {
+        // Arrange
+        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
+        RevisionQueuedIssue revision = new IssueBuilder()
+            .WithMonitoredRepositoryId(repositoryId)
+            .WithIssueNumber(5)
+            .RevisionQueued();
+        _dbContext.Set<Issue>().Add(revision);
+        await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+        _dbContext.ChangeTracker.Clear();
+
+        StubIssueBlockerQueries blockerQueries = new StubIssueBlockerQueries().WithBlockers(5, 1);
+        CapturingIntegrationEventDispatcher capturingDispatcher = new();
+        WorkerCapacityAvailableHandler sut = BuildHandler(
+            integrationEventDispatcher: capturingDispatcher,
+            issueBlockerQueries: blockerQueries);
+
+        // Act
+        await sut.HandleAsync(new WorkerCapacityAvailable(WorkerRunId.New()), TestContext.Current.CancellationToken);
+
+        // Assert
+        capturingDispatcher.DispatchedEvents.OfType<IssueClaimed>().ShouldHaveSingleItem()
+            .Dispatch.IssueId.ShouldBe(revision.Id);
+        blockerQueries.RequestedIssueNumbers.ShouldBeEmpty();
+    }
+
+    private sealed class ThrowingIntegrationEventDispatcher : IIntegrationEventDispatcher
+    {
+        public Task DispatchAsync(IEnumerable<IIntegrationEvent> events, CancellationToken cancellationToken)
+            => throw new InvalidOperationException("Simulated handler failure after a candidate was blocked.");
+    }
+
     private sealed class StubRepositoryEligibilityQuery(IReadOnlyCollection<EligibleRepository> eligibleRepositories)
         : IRepositoryEligibilityQuery
     {

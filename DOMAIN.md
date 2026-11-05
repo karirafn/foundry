@@ -581,8 +581,15 @@ A directed "blocked by" relationship between two issues within the same reposito
 Stored as a collection of blocking issue numbers on the Issue aggregate — the blocking issue may or may not be tracked by Foundry.
 Both GitHub (REST API v2026-03-10) and GitLab (Issue Links API, Premium+) expose dependencies via structured APIs.
 Foundry fetches dependencies during the detection poll cycle and reconciles them on each subsequent poll.
+Because the poll can lag behind the provider (GitLab sends no webhook when an issue link is created), Foundry also re-reads a `FreshQueuedIssue`'s open blockers live from the provider immediately before claiming it, so an issue with an open blocker is never dispatched regardless of webhook delivery.
+A claim-time hit is applied exactly as the poll path applies detected dependencies — the issue transitions to `BlockedIssue` and the next candidate in dispatch order is tried within the same capacity event; when every candidate is blocked or unreadable, the claim is skipped and the capacity reservation is released.
+A failed claim-time read skips the candidate for that dispatch without changing its state; the next dispatch tick retries it.
+`RevisionQueuedIssue` and `ContinuationQueuedIssue` are not re-checked — they run on an existing branch or pull request.
+A blocker added after an issue is claimed is not detected; add blockers before applying the trigger label.
 When the provider does not expose dependency links (e.g. GitLab Free tier), the provider degrades gracefully — it treats the issue as having no dependencies and logs once, rather than failing the poll.
 Circular dependencies are detected by a domain service and flagged via a `CircularDependencyDetected` domain event.
+A cycle does not exempt an issue from blocking: a `DetectedIssue` or `FreshQueuedIssue` in a cycle still transitions to `BlockedIssue`, and the event is still raised.
+The cycle is resolved by breaking it in the provider, after which the dependency pass unblocks the issue.
 A blocker is *resolved* when it is closed in the provider — the provider client filters out closed blockers at the anti-corruption boundary so domain logic never sees them.
 The provider client also scopes "blocked by" links to the same repository or project at this boundary — GitHub by `repository.full_name`, GitLab by the linked issue's numeric `project_id` — so cross-project and cross-repository links never reach domain logic.
 Link entries whose project or repository cannot be determined are kept as blockers (fail-safe toward blocking).
@@ -592,8 +599,9 @@ When a blocker's state is missing or unrecognized, it is treated as still blocki
 
 A lifecycle state for an issue that has unresolved dependencies.
 A `DetectedIssue` with blockers transitions to `BlockedIssue` instead of `FreshQueuedIssue`.
-A `FreshQueuedIssue` that gains blockers is demoted to `BlockedIssue`.
-When all blockers are resolved — that is, closed in the provider — a `BlockedIssue` transitions to `FreshQueuedIssue`.
+A `FreshQueuedIssue` that gains blockers is demoted to `BlockedIssue` — whether the blockers are found by the dependency pass or by the claim-time re-check (see Issue Dependency).
+A `DetectedIssue` or `FreshQueuedIssue` whose blockers form a cycle is blocked like any other; `CircularDependencyDetected` is raised alongside the transition.
+When all blockers are resolved — that is, closed in the provider, or the link removed (including one that broke a cycle) — a `BlockedIssue` transitions to `FreshQueuedIssue` on the next dependency pass.
 
 ## Rebase Pending Issue
 
