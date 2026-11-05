@@ -199,11 +199,11 @@ public sealed class HandleAsync : IAsyncDisposable
         WorkerContainerSpec? spec = orchestrator.LastSpec;
         spec.ShouldNotBeNull();
         spec.VolumeMounts.ShouldContain(m =>
-            m.VolumeName == "foundry-claude-credentials" && m.ContainerPath == "/home/node/.claude");
+            m.VolumeName == "foundry-claude-credentials" && m.ContainerPath == "/home/node/.claude-credentials");
     }
 
     [Fact]
-    public async Task WhenOAuthModeConfigured_ContainerSpecHasClaudeConfigDirEnvVar()
+    public async Task WhenOAuthModeConfigured_ContainerSpecPointsCredentialStoreAtCredentialVolume()
     {
         // Arrange
         StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c8-dir");
@@ -218,7 +218,27 @@ public sealed class HandleAsync : IAsyncDisposable
         // Assert
         WorkerContainerSpec? spec = orchestrator.LastSpec;
         spec.ShouldNotBeNull();
-        spec.EnvironmentVariables["CLAUDE_CONFIG_DIR"].ShouldBe("/home/node/.claude");
+        spec.EnvironmentVariables["CLAUDE_SECURESTORAGE_CONFIG_DIR"].ShouldBe("/home/node/.claude-credentials");
+    }
+
+    [Fact]
+    public async Task WhenOAuthModeConfigured_ClaudeConfigDirIsNotTheSharedCredentialVolume()
+    {
+        // Arrange
+        StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c8-local-config");
+        IssueClaimedHandler sut = BuildHandler(
+            orchestrator: orchestrator,
+            credentialQueries: StubCredentialQueries.ForOAuth());
+        IssueClaimed @event = BuildEvent();
+
+        // Act
+        await sut.HandleAsync(@event, TestContext.Current.CancellationToken);
+
+        // Assert
+        WorkerContainerSpec? spec = orchestrator.LastSpec;
+        spec.ShouldNotBeNull();
+        spec.EnvironmentVariables.ShouldNotContainKey("CLAUDE_CONFIG_DIR");
+        spec.VolumeMounts.ShouldNotContain(m => m.ContainerPath == "/home/node/.claude");
     }
 
     [Fact]
