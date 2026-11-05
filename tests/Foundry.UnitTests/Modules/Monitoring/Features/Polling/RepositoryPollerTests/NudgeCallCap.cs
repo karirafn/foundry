@@ -142,6 +142,7 @@ public sealed class NudgeCallCap : IAsyncDisposable
             new NullDomainEventDispatcher(),
             new NullIntegrationEventDispatcher(),
             new NeverCalledEligibilityEvaluator(),
+            new WebhookNudgeQueue(NullLogger<WebhookNudgeQueue>.Instance),
             NullLogger<RepositoryPoller>.Instance);
 
     /// <summary>Targeted listing and checks passes never evaluate eligibility.</summary>
