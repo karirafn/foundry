@@ -30,6 +30,12 @@ public sealed class AuthInvalidDetection : WorkerDispatchServiceTestBase
         {"type":"result","api_error_status":401}
         """;
 
+    private const string AuthInvalidIsErrorExitZeroOutput =
+        """
+        {"type":"system","subtype":"init"}
+        {"type":"result","subtype":"success","is_error":true,"api_error_status":401,"num_turns":1,"result":"Failed to authenticate: OAuth session expired and could not be refreshed"}
+        """;
+
     private WorkerDispatchService BuildServiceWithParser(
         string? containerLogs,
         WorkerStatus exitedStatus,
@@ -117,6 +123,35 @@ public sealed class AuthInvalidDetection : WorkerDispatchServiceTestBase
             .ShouldHaveSingleItem();
         authFailedEvent.WorkerRunId.ShouldBe(activeRun.Id);
         authFailedEvent.IssueId.ShouldBe(activeRun.IssueId.Value);
+    }
+
+    [Fact]
+    public async Task WhenContainerExitsZeroWithAuthInvalidIsErrorResultLine_PublishesWorkerAuthenticationFailed()
+    {
+        // Arrange — the CLI exits 0 yet its result line reports an auth error
+        SeedGlobalSettings();
+        ActiveRun activeRun = SeedActiveRun("container-auth-invalid-exit-zero");
+        WorkerStatus exitedStatus = new(IsRunning: false, ExitCode: 0, FinishedAt: DateTimeOffset.UtcNow);
+        CapturingIntegrationEventDispatcher dispatcher = new();
+        WorkerDispatchService sut = BuildServiceWithParser(
+            AuthInvalidIsErrorExitZeroOutput,
+            exitedStatus,
+            integrationEventDispatcher: dispatcher);
+
+        // Act
+        await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
+
+        // Assert
+        WorkerAuthenticationFailed authFailedEvent = dispatcher.Captured
+            .OfType<WorkerAuthenticationFailed>()
+            .ShouldHaveSingleItem();
+        authFailedEvent.WorkerRunId.ShouldBe(activeRun.Id);
+
+        await using FoundryDbContext assertDb = CreateDbContext();
+        WorkerRun? run = await assertDb.Set<WorkerRun>()
+            .SingleOrDefaultAsync(TestContext.Current.CancellationToken);
+        FailedRun failedRun = run.ShouldBeOfType<FailedRun>();
+        failedRun.Reason.ShouldBeOfType<FailureReason.AuthInvalid>();
     }
 
     [Fact]
