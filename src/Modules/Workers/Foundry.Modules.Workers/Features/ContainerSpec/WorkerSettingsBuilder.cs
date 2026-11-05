@@ -67,7 +67,7 @@ internal static class WorkerSettingsBuilder
         public required AttributionSection Attribution { get; set; }
     }
 
-    // An empty string hides the attribution; `false` in place of the object is not a documented form.
+    // The object form is used because Claude Code CLIs older than v2.1.281 skip the whole settings file when `attribution` is `false`.
     private sealed class AttributionSection
     {
         public string Commit { get; set; } = string.Empty;

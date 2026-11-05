@@ -70,7 +70,7 @@ public sealed class Build
     }
 
     [Fact]
-    public void Always_SuppressesCommitAndPullRequestAttributionAndSessionUrl()
+    public void WhenCalled_AlwaysEmitsEmptyAttributionObject()
     {
         // Arrange
         ClaudeCodeSettingsSnapshot snapshot = Snapshot();
@@ -80,11 +80,11 @@ public sealed class Build
 
         // Assert
         using JsonDocument doc = JsonDocument.Parse(json);
-        JsonElement attribution = doc.RootElement.GetProperty("attribution");
 
-        attribution.GetProperty("commit").GetString().ShouldBe(string.Empty);
-        attribution.GetProperty("pr").GetString().ShouldBe(string.Empty);
-        attribution.GetProperty("sessionUrl").ValueKind.ShouldBe(JsonValueKind.False);
+        doc.RootElement
+            .GetProperty("attribution")
+            .GetRawText()
+            .ShouldBe("""{"commit":"","pr":"","sessionUrl":false}""");
     }
 
     [Fact]
