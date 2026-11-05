@@ -18,8 +18,8 @@ const mockTotals: RunTotals = {
   durationMs: 300000,
   numTurns: 20,
   totalCostUsd: 4.31,
-  inputTokens: 10000,
-  outputTokens: 5000,
+  inputTokens: { total: 10000, knownRunCount: 5, unknownRunCount: 0 },
+  outputTokens: { total: 5000, knownRunCount: 5, unknownRunCount: 0 },
 };
 
 const zeroTotals: RunTotals = {
@@ -27,8 +27,8 @@ const zeroTotals: RunTotals = {
   durationMs: 0,
   numTurns: 0,
   totalCostUsd: 0,
-  inputTokens: 0,
-  outputTokens: 0,
+  inputTokens: { total: 0, knownRunCount: 0, unknownRunCount: 0 },
+  outputTokens: { total: 0, knownRunCount: 0, unknownRunCount: 0 },
 };
 
 function setup() {
@@ -178,20 +178,96 @@ describe('RunStatsBarComponent', () => {
     expect(text).toContain('10,000');
   });
 
-  it('should render a dash when a token total is unknown', () => {
-    // Arrange — a window containing a run that predates billable-input persistence
+  function renderCards(totals: RunTotals): HTMLElement[] {
     const { fixture, httpMock, service } = setup();
     service.fetch();
-    httpMock
-      .expectOne((r) => r.url === '/api/workers/run-totals')
-      .flush({ ...mockTotals, inputTokens: null });
+    httpMock.expectOne((r) => r.url === '/api/workers/run-totals').flush(totals);
     fixture.detectChanges();
+    const el = fixture.nativeElement as HTMLElement;
+    return Array.from(el.querySelectorAll<HTMLElement>('.run-stats-bar__card'));
+  }
+
+  function cardValue(card: HTMLElement): string | undefined {
+    return card.querySelector('.run-stats-bar__card-value')?.textContent?.trim();
+  }
+
+  function cardCaption(card: HTMLElement): string | undefined {
+    return card.querySelector('.run-stats-bar__card-caption')?.textContent?.trim();
+  }
+
+  it('should render a partial token total as a lower bound with a visible untracked caption', () => {
+    // Arrange — a window mixing tracked runs with legacy runs that predate cache-column persistence
+    const cards = renderCards({
+      ...mockTotals,
+      inputTokens: { total: 10000, knownRunCount: 3, unknownRunCount: 2 },
+    });
 
     // Assert
-    const el = fixture.nativeElement as HTMLElement;
-    const values = Array.from(el.querySelectorAll('.run-stats-bar__card-value')).map((n) => n.textContent?.trim());
-    expect(values[4]).toBe('-');
-    expect(values[5]).toBe('5,000');
+    expect(cardValue(cards[4])).toBe('≥ 10,000');
+    expect(cardCaption(cards[4])).toBe('2 runs untracked');
+    expect(cards[4].querySelector('.sr-only')?.textContent?.trim())
+      .toBe('Input tokens: at least 10,000, 2 runs untracked');
+  });
+
+  it('should use the singular caption for one untracked run', () => {
+    // Arrange
+    const cards = renderCards({
+      ...mockTotals,
+      outputTokens: { total: 5000, knownRunCount: 4, unknownRunCount: 1 },
+    });
+
+    // Assert
+    expect(cardValue(cards[5])).toBe('≥ 5,000');
+    expect(cardCaption(cards[5])).toBe('1 run untracked');
+  });
+
+  it('should render a dash with the untracked caption when every run is unknown', () => {
+    // Arrange
+    const cards = renderCards({
+      ...mockTotals,
+      inputTokens: { total: 0, knownRunCount: 0, unknownRunCount: 3 },
+    });
+
+    // Assert
+    expect(cardValue(cards[4])).toBe('-');
+    expect(cardCaption(cards[4])).toBe('3 runs untracked');
+    expect(cards[4].querySelector('.sr-only')?.textContent?.trim())
+      .toBe('Input tokens: unknown, 3 runs untracked');
+  });
+
+  it('should render tiles with every run known without a prefix or caption', () => {
+    // Arrange
+    const cards = renderCards(mockTotals);
+
+    // Assert
+    expect(cardValue(cards[4])).toBe('10,000');
+    expect(cardValue(cards[5])).toBe('5,000');
+    expect(cardCaption(cards[4])).toBeUndefined();
+    expect(cardCaption(cards[5])).toBeUndefined();
+  });
+
+  it('should render a zero token total without a prefix or caption when there are no runs', () => {
+    // Arrange
+    const cards = renderCards(zeroTotals);
+
+    // Assert
+    expect(cardValue(cards[4])).toBe('0');
+    expect(cardValue(cards[5])).toBe('0');
+    expect(cardCaption(cards[4])).toBeUndefined();
+  });
+
+  it('should count untracked runs per metric', () => {
+    // Arrange — legacy runs are unknown for input but known for output
+    const cards = renderCards({
+      ...mockTotals,
+      inputTokens: { total: 10000, knownRunCount: 3, unknownRunCount: 2 },
+      outputTokens: { total: 5000, knownRunCount: 5, unknownRunCount: 0 },
+    });
+
+    // Assert
+    expect(cardCaption(cards[4])).toBe('2 runs untracked');
+    expect(cardValue(cards[5])).toBe('5,000');
+    expect(cardCaption(cards[5])).toBeUndefined();
   });
 
   // Cycle 5: error state renders inline error

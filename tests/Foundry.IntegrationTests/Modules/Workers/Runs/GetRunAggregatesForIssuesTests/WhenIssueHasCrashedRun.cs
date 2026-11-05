@@ -93,8 +93,8 @@ public sealed class WhenIssueHasCrashedRun : IAsyncDisposable
             () => aggregate.DurationMs.ShouldBeNull(),
             () => aggregate.NumTurns.ShouldBeNull(),
             () => aggregate.TotalCostUsd.ShouldBeNull(),
-            () => aggregate.InputTokens.ShouldBeNull(),
-            () => aggregate.OutputTokens.ShouldBeNull());
+            () => aggregate.InputTokens.ShouldBe(TokenTotal.None),
+            () => aggregate.OutputTokens.ShouldBe(TokenTotal.None));
     }
 
     [Fact]

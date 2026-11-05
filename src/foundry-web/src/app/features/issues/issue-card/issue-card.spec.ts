@@ -1129,9 +1129,11 @@ describe('IssueCardComponent', () => {
     durationMs: 90000,
     numTurns: 12,
     totalCostUsd: 1.239,
-    inputTokens: 5000,
-    outputTokens: 2000,
+    inputTokens: { total: 5000, knownRunCount: 3, unknownRunCount: 0 },
+    outputTokens: { total: 2000, knownRunCount: 3, unknownRunCount: 0 },
   };
+
+  const noTokenRuns = { total: 0, knownRunCount: 0, unknownRunCount: 0 };
 
   // Cycle 14: all pills present when all stats are non-null and runCount > 1
   it('should render the run-stats row when runStats has non-null fields', () => {
@@ -1214,19 +1216,79 @@ describe('IssueCardComponent', () => {
     expect(pill).toBeTruthy();
   });
 
-  it('should render a dash in the input-tokens pill when billable input is unknown', () => {
-    // Arrange — a legacy run: output known, billable input unknown
-    const issueWithStats: IssueSummary = { ...mockIssue, runStats: { ...fullRunStats, inputTokens: null } };
+  it('should render exact token totals without a prefix, untracked count or title', () => {
+    // Arrange
+    const issueWithStats: IssueSummary = { ...mockIssue, runStats: fullRunStats };
 
     // Act
     const fixture = createComponent(issueWithStats);
     const el = fixture.nativeElement as HTMLElement;
 
     // Assert
-    const value = el.querySelector('.issue-card__stat-pill--input-tokens .issue-card__stat-value');
-    expect(value?.textContent?.trim()).toMatch(/^- input tokens$/);
+    const pill = el.querySelector('.issue-card__stat-pill--input-tokens') as HTMLElement;
+    expect(pill.querySelector('.issue-card__stat-value')?.textContent?.trim()).toBe('5,000 input tokens');
+    expect(pill.hasAttribute('title')).toBe(false);
     const label = (el.querySelector('.issue-card__toggle') as HTMLElement).getAttribute('aria-label') ?? '';
-    expect(label).toContain('unknown input tokens');
+    expect(label).toContain('5,000 input tokens, 2,000 output tokens.');
+    expect(label).not.toContain('untracked');
+  });
+
+  it('should render a partial input total as a lower bound with the untracked count', () => {
+    // Arrange — two legacy runs: output known, billable input unknown
+    const issueWithStats: IssueSummary = {
+      ...mockIssue,
+      runStats: { ...fullRunStats, inputTokens: { total: 5000, knownRunCount: 1, unknownRunCount: 2 } },
+    };
+
+    // Act
+    const fixture = createComponent(issueWithStats);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    const pill = el.querySelector('.issue-card__stat-pill--input-tokens') as HTMLElement;
+    const value = pill.querySelector('.issue-card__stat-value');
+    expect(value?.firstChild?.textContent?.trim()).toBe('≥ 5,000');
+    expect(value?.querySelector('.sr-only')?.textContent).toBe(' input tokens, 2 runs untracked');
+    expect(pill.getAttribute('title')).toBe('At least 5,000 input tokens, 2 runs untracked');
+    const label = (el.querySelector('.issue-card__toggle') as HTMLElement).getAttribute('aria-label') ?? '';
+    expect(label).toContain('at least 5,000 input tokens, 2 runs untracked');
+    expect(label).toContain('2,000 output tokens.');
+  });
+
+  it('should use the singular untracked wording for one unknown run', () => {
+    // Arrange
+    const issueWithStats: IssueSummary = {
+      ...mockIssue,
+      runStats: { ...fullRunStats, outputTokens: { total: 2000, knownRunCount: 2, unknownRunCount: 1 } },
+    };
+
+    // Act
+    const fixture = createComponent(issueWithStats);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    const pill = el.querySelector('.issue-card__stat-pill--output-tokens') as HTMLElement;
+    expect(pill.getAttribute('title')).toBe('At least 2,000 output tokens, 1 run untracked');
+  });
+
+  it('should render a dash in the input-tokens pill when every run is unknown', () => {
+    // Arrange — every run predates cache-column persistence: output known, billable input unknown
+    const issueWithStats: IssueSummary = {
+      ...mockIssue,
+      runStats: { ...fullRunStats, inputTokens: { total: 0, knownRunCount: 0, unknownRunCount: 3 } },
+    };
+
+    // Act
+    const fixture = createComponent(issueWithStats);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    const pill = el.querySelector('.issue-card__stat-pill--input-tokens') as HTMLElement;
+    const value = pill.querySelector('.issue-card__stat-value');
+    expect(value?.textContent?.trim()).toBe('- input tokens, 3 runs untracked');
+    expect(pill.getAttribute('title')).toBe('Unknown input tokens, 3 runs untracked');
+    const label = (el.querySelector('.issue-card__toggle') as HTMLElement).getAttribute('aria-label') ?? '';
+    expect(label).toContain('unknown input tokens, 3 runs untracked');
   });
 
   it('should render the output-tokens pill', () => {
@@ -1335,8 +1397,8 @@ describe('IssueCardComponent', () => {
       durationMs: null,
       numTurns: null,
       totalCostUsd: null,
-      inputTokens: null,
-      outputTokens: null,
+      inputTokens: noTokenRuns,
+      outputTokens: noTokenRuns,
     };
     const issueWithStats: IssueSummary = { ...mockIssue, runStats: singleRunNoMetrics };
 
@@ -1471,8 +1533,8 @@ describe('IssueCardComponent', () => {
       durationMs: 90000,
       numTurns: null,
       totalCostUsd: null,
-      inputTokens: null,
-      outputTokens: null,
+      inputTokens: noTokenRuns,
+      outputTokens: noTokenRuns,
     };
     const issueWithStats: IssueSummary = { ...mockIssue, runStats: partialStats };
 

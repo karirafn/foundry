@@ -115,8 +115,8 @@ public sealed class WhenIssueHasWorkerRuns : IAsyncDisposable
             () => runStats.DurationMs.ShouldBe(3000L),
             () => runStats.NumTurns.ShouldBe(8),
             () => runStats.TotalCostUsd.ShouldBe(0.30m),
-            () => runStats.InputTokens.ShouldBe(200L),
-            () => runStats.OutputTokens.ShouldBe(100L));
+            () => runStats.InputTokens.ShouldBe(new TokenTotal(200L, KnownRunCount: 2, UnknownRunCount: 0)),
+            () => runStats.OutputTokens.ShouldBe(new TokenTotal(100L, KnownRunCount: 2, UnknownRunCount: 0)));
     }
 
     [Fact]

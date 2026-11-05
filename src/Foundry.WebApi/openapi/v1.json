@@ -3702,22 +3702,10 @@
             "format": "double"
           },
           "inputTokens": {
-            "pattern": "^-?(?:0|[1-9]\\d*)$",
-            "type": [
-              "null",
-              "integer",
-              "string"
-            ],
-            "format": "int64"
+            "$ref": "#/components/schemas/TokenTotal"
           },
           "outputTokens": {
-            "pattern": "^-?(?:0|[1-9]\\d*)$",
-            "type": [
-              "null",
-              "integer",
-              "string"
-            ],
-            "format": "int64"
+            "$ref": "#/components/schemas/TokenTotal"
           }
         }
       },
@@ -3765,22 +3753,10 @@
             "format": "double"
           },
           "inputTokens": {
-            "pattern": "^-?(?:0|[1-9]\\d*)$",
-            "type": [
-              "null",
-              "integer",
-              "string"
-            ],
-            "format": "int64"
+            "$ref": "#/components/schemas/TokenTotal"
           },
           "outputTokens": {
-            "pattern": "^-?(?:0|[1-9]\\d*)$",
-            "type": [
-              "null",
-              "integer",
-              "string"
-            ],
-            "format": "int64"
+            "$ref": "#/components/schemas/TokenTotal"
           }
         }
       },
@@ -3862,6 +3838,40 @@
               "null",
               "string"
             ]
+          }
+        }
+      },
+      "TokenTotal": {
+        "required": [
+          "total",
+          "knownRunCount",
+          "unknownRunCount"
+        ],
+        "type": "object",
+        "properties": {
+          "total": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int64"
+          },
+          "knownRunCount": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "unknownRunCount": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
           }
         }
       },

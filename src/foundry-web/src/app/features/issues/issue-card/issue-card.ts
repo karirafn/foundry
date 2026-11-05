@@ -1,5 +1,5 @@
 import { Component, InputSignal, OutputEmitterRef, computed, inject, input, output } from '@angular/core';
-import { DecimalPipe, NgClass } from '@angular/common';
+import { NgClass } from '@angular/common';
 import { IssueSummary, RunStats, LIVE_STATES, QUEUED_TIER_STATES } from '../issue.model';
 import { STATE_ARIA_LABELS, cardAccentFor } from '../../../shared/utils/state-display';
 import { StateBadgeComponent } from '../../../shared/components/state-badge/state-badge';
@@ -8,7 +8,15 @@ import { TickerService } from '../../../core/services/ticker.service';
 import { AGENT_SILENCE_THRESHOLD_MINUTES, AgentActivity, agentActivitySummary } from '../../../core/models/agent-activity.model';
 import { ProviderTerminology, providerTerminology } from '../../../shared/utils/provider.util';
 import { RebaseOutcomeBadge, rebaseOutcomeBadge } from '../rebase-outcome.format';
-import { formatCost as _formatCostImpl, formatDuration as _formatDurationImpl } from '../run-stats.format';
+import {
+  describeTokenTotal,
+  formatCost as _formatCostImpl,
+  formatDuration as _formatDurationImpl,
+  formatTokenTotal,
+  tokenTotalKind,
+  untrackedRunsText,
+} from '../run-stats.format';
+import type { TokenTotal } from '../../workers/run-totals.model';
 
 const REPO_WARNING_STATES = new Set<string>(['queued', 'detected', 'revision_queued', 'continuation_queued']);
 const EM_DASH = '—';
@@ -87,15 +95,26 @@ function hasVisiblePills(stats: RunStats): boolean {
     stats.durationMs !== null ||
     stats.numTurns !== null ||
     stats.totalCostUsd !== null ||
-    stats.inputTokens !== null ||
-    stats.outputTokens !== null
+    hasTokenRuns(stats.inputTokens) ||
+    hasTokenRuns(stats.outputTokens)
   );
+}
+
+// A token metric is shown once any run with a result summary contributed to it, known or not.
+function hasTokenRuns(tokens: TokenTotal): boolean {
+  return tokenTotalKind(tokens) !== 'none';
+}
+
+// The untracked-run count rides along wherever a partial or unknown total is described.
+function isUntracked(tokens: TokenTotal): boolean {
+  const kind = tokenTotalKind(tokens);
+  return kind === 'partial' || kind === 'unknown';
 }
 
 @Component({
   selector: 'fd-issue-card',
   standalone: true,
-  imports: [StateBadgeComponent, SafeHrefPipe, NgClass, DecimalPipe],
+  imports: [StateBadgeComponent, SafeHrefPipe, NgClass],
   template: `
     <!--
       The root is a non-interactive container: HTML forbids links inside a <button>, so the
@@ -224,22 +243,22 @@ function hasVisiblePills(stats: RunStats): boolean {
                 <span class="sr-only">Cost: </span><span class="issue-card__stat-value">{{ _formatCost(stats.totalCostUsd) }}<span class="sr-only"> USD</span></span>
               </span>
             }
-            @if (stats.inputTokens !== null || stats.outputTokens !== null) {
-              <span class="issue-card__stat-pill issue-card__stat-pill--input-tokens">
+            @if (_hasTokenRuns(stats.inputTokens) || _hasTokenRuns(stats.outputTokens)) {
+              <span class="issue-card__stat-pill issue-card__stat-pill--input-tokens" [attr.title]="_tokenPillTitle(stats.inputTokens, 'input tokens')">
                 <svg class="issue-card__stat-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                   <line x1="12" y1="19" x2="12" y2="5" />
                   <polyline points="6 11 12 5 18 11" />
                 </svg>
-                <span class="sr-only">Input tokens: </span><span class="issue-card__stat-value">{{ stats.inputTokens !== null ? (stats.inputTokens | number) : '-' }}<span class="sr-only"> input tokens</span></span>
+                <span class="sr-only">Input tokens: </span><span class="issue-card__stat-value">{{ _formatTokenTotal(stats.inputTokens) }}<span class="sr-only">{{ _tokenPillSrSuffix(stats.inputTokens, 'input tokens') }}</span></span>
               </span>
             }
-            @if (stats.outputTokens !== null) {
-              <span class="issue-card__stat-pill issue-card__stat-pill--output-tokens">
+            @if (_hasTokenRuns(stats.outputTokens)) {
+              <span class="issue-card__stat-pill issue-card__stat-pill--output-tokens" [attr.title]="_tokenPillTitle(stats.outputTokens, 'output tokens')">
                 <svg class="issue-card__stat-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                   <line x1="12" y1="5" x2="12" y2="19" />
                   <polyline points="6 13 12 19 18 13" />
                 </svg>
-                <span class="sr-only">Output tokens: </span><span class="issue-card__stat-value">{{ stats.outputTokens | number }}<span class="sr-only"> output tokens</span></span>
+                <span class="sr-only">Output tokens: </span><span class="issue-card__stat-value">{{ _formatTokenTotal(stats.outputTokens) }}<span class="sr-only">{{ _tokenPillSrSuffix(stats.outputTokens, 'output tokens') }}</span></span>
               </span>
             }
           </div>
@@ -478,13 +497,11 @@ export class IssueCardComponent {
     if (stats.totalCostUsd !== null) {
       parts.push(_formatCostImpl(stats.totalCostUsd));
     }
-    if (stats.inputTokens !== null) {
-      parts.push(`${stats.inputTokens.toLocaleString()} input tokens`);
-    } else if (stats.outputTokens !== null) {
-      parts.push('unknown input tokens');
+    if (hasTokenRuns(stats.inputTokens)) {
+      parts.push(describeTokenTotal(stats.inputTokens, 'input tokens'));
     }
-    if (stats.outputTokens !== null) {
-      parts.push(`${stats.outputTokens.toLocaleString()} output tokens`);
+    if (hasTokenRuns(stats.outputTokens)) {
+      parts.push(describeTokenTotal(stats.outputTokens, 'output tokens'));
     }
 
     return ` Run stats: ${parts.join(', ')}.`;
@@ -515,6 +532,31 @@ export class IssueCardComponent {
 
   protected _formatDuration(ms: number): string {
     return _formatDurationImpl(ms);
+  }
+
+  protected _hasTokenRuns(tokens: TokenTotal): boolean {
+    return hasTokenRuns(tokens);
+  }
+
+  protected _formatTokenTotal(tokens: TokenTotal): string {
+    return formatTokenTotal(tokens);
+  }
+
+  // Screen-reader tail after the visible value: the metric noun, plus the untracked-run count
+  // when the total is partial or unknown.
+  protected _tokenPillSrSuffix(tokens: TokenTotal, noun: string): string {
+    const untracked = untrackedRunsText(tokens);
+    return untracked === null ? ` ${noun}` : ` ${noun}, ${untracked}`;
+  }
+
+  // Hover title for a partial or unknown total, e.g. "At least 1,234 input tokens, 2 runs
+  // untracked"; null (no title) when the total is exact.
+  protected _tokenPillTitle(tokens: TokenTotal, noun: string): string | null {
+    if (!isUntracked(tokens)) {
+      return null;
+    }
+    const description = describeTokenTotal(tokens, noun);
+    return description.charAt(0).toUpperCase() + description.slice(1);
   }
 
   onCardClick(): void {

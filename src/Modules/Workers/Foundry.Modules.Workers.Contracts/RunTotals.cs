@@ -11,8 +11,9 @@ namespace Foundry.Modules.Workers.Contracts;
 /// or <see cref="OutputTokens"/>, because telemetry is only available once a run completes.
 /// <para>
 /// <see cref="InputTokens"/> is billable input (uncached + cache-read + cache-write).
-/// <see cref="InputTokens"/> and <see cref="OutputTokens"/> are <see langword="null"/> when any
-/// contributing run's figure is unknown (e.g. a run that predates cache-column persistence).
+/// <see cref="InputTokens"/> and <see cref="OutputTokens"/> are partial sums over the runs whose
+/// figure is known, with known/unknown run counts per metric (see <see cref="TokenTotal"/>). A run
+/// that predates cache-column persistence is unknown for input but known for output.
 /// </para>
 /// </remarks>
 public sealed record RunTotals(
@@ -20,5 +21,5 @@ public sealed record RunTotals(
     long DurationMs,
     int NumTurns,
     decimal TotalCostUsd,
-    long? InputTokens,
-    long? OutputTokens);
+    TokenTotal InputTokens,
+    TokenTotal OutputTokens);

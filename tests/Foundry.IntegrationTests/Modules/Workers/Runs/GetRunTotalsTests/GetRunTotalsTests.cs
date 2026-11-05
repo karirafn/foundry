@@ -178,8 +178,8 @@ public sealed class WhenRunTotalsRequested : IAsyncDisposable
             () => totals.DurationMs.ShouldBe(5000L),
             () => totals.NumTurns.ShouldBe(6),
             () => totals.TotalCostUsd.ShouldBe(0.15m),
-            () => totals.InputTokens.ShouldBe(800L),
-            () => totals.OutputTokens.ShouldBe(1200L));
+            () => totals.InputTokens.ShouldBe(new TokenTotal(800L, KnownRunCount: 2, UnknownRunCount: 0)),
+            () => totals.OutputTokens.ShouldBe(new TokenTotal(1200L, KnownRunCount: 2, UnknownRunCount: 0)));
     }
 
     [Fact]
@@ -225,8 +225,8 @@ public sealed class WhenRunTotalsRequested : IAsyncDisposable
             () => totals.DurationMs.ShouldBe(2000L),
             () => totals.NumTurns.ShouldBe(3),
             () => totals.TotalCostUsd.ShouldBe(0.03m),
-            () => totals.InputTokens.ShouldBe(200L),
-            () => totals.OutputTokens.ShouldBe(300L));
+            () => totals.InputTokens.ShouldBe(new TokenTotal(200L, KnownRunCount: 1, UnknownRunCount: 0)),
+            () => totals.OutputTokens.ShouldBe(new TokenTotal(300L, KnownRunCount: 1, UnknownRunCount: 0)));
     }
 
     [Fact]
@@ -263,8 +263,8 @@ public sealed class WhenRunTotalsRequested : IAsyncDisposable
             () => totals.DurationMs.ShouldBe(1000L),
             () => totals.NumTurns.ShouldBe(2),
             () => totals.TotalCostUsd.ShouldBe(0.02m),
-            () => totals.InputTokens.ShouldBe(100L),
-            () => totals.OutputTokens.ShouldBe(200L));
+            () => totals.InputTokens.ShouldBe(new TokenTotal(100L, KnownRunCount: 1, UnknownRunCount: 0)),
+            () => totals.OutputTokens.ShouldBe(new TokenTotal(200L, KnownRunCount: 1, UnknownRunCount: 0)));
     }
 
     [Fact]
@@ -333,7 +333,7 @@ public sealed class WhenRunTotalsRequested : IAsyncDisposable
             () => totals.DurationMs.ShouldBe(1000L),
             () => totals.NumTurns.ShouldBe(2),
             () => totals.TotalCostUsd.ShouldBe(0.02m),
-            () => totals.InputTokens.ShouldBe(100L),
-            () => totals.OutputTokens.ShouldBe(200L));
+            () => totals.InputTokens.ShouldBe(new TokenTotal(100L, KnownRunCount: 1, UnknownRunCount: 0)),
+            () => totals.OutputTokens.ShouldBe(new TokenTotal(200L, KnownRunCount: 1, UnknownRunCount: 0)));
     }
 }
