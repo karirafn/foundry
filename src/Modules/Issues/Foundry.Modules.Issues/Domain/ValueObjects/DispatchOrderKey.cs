@@ -5,12 +5,14 @@ namespace Foundry.Modules.Issues.Domain.ValueObjects;
 
 /// <summary>
 /// Ordering key for queued issues in dispatch priority order.
-/// Lower key = dispatched first. Compare by TierRank, then Position, then DetectedAt, then Id.
+/// Lower key = dispatched first. Compare by TierRank, then Position, then IssueNumber, then Id.
+/// Within the same repository and tier the lowest issue number is dispatched first (ADR 0092);
+/// Id only breaks ties between repositories that share a position.
 /// </summary>
 public readonly record struct DispatchOrderKey(
     int TierRank,
     int Position,
-    DateTimeOffset DetectedAt,
+    int IssueNumber,
     IssueId Id) : IComparable<DispatchOrderKey>, IComparable
 {
     /// <summary>
@@ -18,7 +20,7 @@ public readonly record struct DispatchOrderKey(
     /// Position is external to the aggregate — it comes from the repository's EligibleRepository.Position.
     /// </summary>
     public static DispatchOrderKey For(QueuedIssue issue, int position) =>
-        new(issue.TierRank, position, issue.DetectedAt, issue.Id);
+        new(issue.TierRank, position, issue.IssueNumber, issue.Id);
 
     public static bool operator <(DispatchOrderKey left, DispatchOrderKey right) => left.CompareTo(right) < 0;
 
@@ -42,10 +44,10 @@ public readonly record struct DispatchOrderKey(
             return positionComparison;
         }
 
-        int detectedAtComparison = DetectedAt.CompareTo(other.DetectedAt);
-        if (detectedAtComparison != 0)
+        int issueNumberComparison = IssueNumber.CompareTo(other.IssueNumber);
+        if (issueNumberComparison != 0)
         {
-            return detectedAtComparison;
+            return issueNumberComparison;
         }
 
         return Id.CompareTo(other.Id);

@@ -11,9 +11,9 @@ public sealed class StubRepositorySlugQueries : IRepositorySlugQueries
 {
     private readonly Dictionary<MonitoredRepositoryId, RepositoryDisplayInfo> _displayInfos = [];
 
-    public void AddSlug(MonitoredRepositoryId repositoryId, string slug, string? providerType = null)
+    public void AddSlug(MonitoredRepositoryId repositoryId, string slug, string? providerType = null, int position = 0)
     {
-        _displayInfos[repositoryId] = new RepositoryDisplayInfo(slug, providerType);
+        _displayInfos[repositoryId] = new RepositoryDisplayInfo(slug, providerType, position);
     }
 
     public Task<IReadOnlyDictionary<MonitoredRepositoryId, RepositoryDisplayInfo>> GetRepositoryDisplayInfoAsync(

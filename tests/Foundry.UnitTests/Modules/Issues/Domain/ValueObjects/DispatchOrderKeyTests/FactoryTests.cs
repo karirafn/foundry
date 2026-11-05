@@ -16,8 +16,8 @@ public sealed class FactoryTests
     public void WhenFreshQueued_BuildsKeyWithTierRankTwo()
     {
         // Arrange
-        DateTimeOffset detectedAt = new(2025, 6, 1, 0, 0, 0, TimeSpan.Zero);
-        FreshQueuedIssue freshQueued = new IssueBuilder().WithDetectedAt(detectedAt).FreshQueued();
+        int issueNumber = 42;
+        FreshQueuedIssue freshQueued = new IssueBuilder().WithIssueNumber(issueNumber).FreshQueued();
         int position = 3;
 
         // Act
@@ -27,7 +27,7 @@ public sealed class FactoryTests
         key.ShouldSatisfyAllConditions(
             () => key.TierRank.ShouldBe(2),
             () => key.Position.ShouldBe(3),
-            () => key.DetectedAt.ShouldBe(detectedAt),
+            () => key.IssueNumber.ShouldBe(42),
             () => key.Id.ShouldBe(freshQueued.Id));
     }
 
@@ -35,9 +35,9 @@ public sealed class FactoryTests
     public void WhenRevisionQueued_BuildsKeyWithTierRankZero()
     {
         // Arrange
-        DateTimeOffset detectedAt = new(2025, 6, 1, 0, 0, 0, TimeSpan.Zero);
+        int issueNumber = 42;
         RevisionQueuedIssue revisionQueued = new IssueBuilder()
-            .WithDetectedAt(detectedAt)
+            .WithIssueNumber(issueNumber)
             .WithReviewComments([new ReviewComment("Please fix the formatting.")])
             .RevisionQueued();
         int position = 1;
@@ -49,7 +49,7 @@ public sealed class FactoryTests
         key.ShouldSatisfyAllConditions(
             () => key.TierRank.ShouldBe(0),
             () => key.Position.ShouldBe(1),
-            () => key.DetectedAt.ShouldBe(detectedAt),
+            () => key.IssueNumber.ShouldBe(42),
             () => key.Id.ShouldBe(revisionQueued.Id));
     }
 
@@ -57,9 +57,9 @@ public sealed class FactoryTests
     public void WhenContinuationQueued_BuildsKeyWithTierRankOne()
     {
         // Arrange
-        DateTimeOffset detectedAt = new(2025, 6, 1, 0, 0, 0, TimeSpan.Zero);
+        int issueNumber = 42;
         ContinuationQueuedIssue continuationQueued = new IssueBuilder()
-            .WithDetectedAt(detectedAt)
+            .WithIssueNumber(issueNumber)
             .ContinuableFailed()
             .Retry();
         int position = 2;
@@ -71,7 +71,29 @@ public sealed class FactoryTests
         key.ShouldSatisfyAllConditions(
             () => key.TierRank.ShouldBe(1),
             () => key.Position.ShouldBe(2),
-            () => key.DetectedAt.ShouldBe(detectedAt),
+            () => key.IssueNumber.ShouldBe(42),
             () => key.Id.ShouldBe(continuationQueued.Id));
+    }
+
+    [Fact]
+    public void WhenLowerNumberDetectedLater_SortsBeforeHigherNumberDetectedEarlier()
+    {
+        // Arrange — #12 detected after #50 in the same repository and tier
+        DateTimeOffset baseTime = new(2025, 6, 1, 0, 0, 0, TimeSpan.Zero);
+        FreshQueuedIssue issue50 = new IssueBuilder()
+            .WithIssueNumber(50)
+            .WithDetectedAt(baseTime)
+            .FreshQueued();
+        FreshQueuedIssue issue12 = new IssueBuilder()
+            .WithIssueNumber(12)
+            .WithDetectedAt(baseTime.AddHours(1))
+            .FreshQueued();
+
+        // Act
+        DispatchOrderKey key12 = DispatchOrderKey.For(issue12, position: 0);
+        DispatchOrderKey key50 = DispatchOrderKey.For(issue50, position: 0);
+
+        // Assert
+        (key12 < key50).ShouldBeTrue();
     }
 }

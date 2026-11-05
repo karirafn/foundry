@@ -9,16 +9,15 @@ namespace Foundry.UnitTests.Modules.Issues.Domain.ValueObjects.DispatchOrderKeyT
 
 public sealed class ComparisonTests
 {
-    private static readonly DateTimeOffset BaseTime = new(2025, 1, 1, 0, 0, 0, TimeSpan.Zero);
     private static readonly IssueId LowerId = IssueId.From(new Guid("00000000-0000-0000-0000-000000000001"));
     private static readonly IssueId HigherId = IssueId.From(new Guid("ffffffff-ffff-ffff-ffff-ffffffffffff"));
 
     [Fact]
-    public void WhenTierRankLower_SortsBefore_EvenWithWorsePositionAndDetectedAt()
+    public void WhenTierRankLower_SortsBefore_EvenWithWorsePositionAndIssueNumber()
     {
-        // Arrange — revision (tier 0) with higher position and later time vs fresh (tier 2) with position 0
-        DispatchOrderKey revision = new(TierRank: 0, Position: 999, DetectedAt: BaseTime.AddDays(100), Id: HigherId);
-        DispatchOrderKey fresh = new(TierRank: 2, Position: 0, DetectedAt: BaseTime, Id: LowerId);
+        // Arrange — revision (tier 0) with higher position and higher issue number vs fresh (tier 2) with position 0
+        DispatchOrderKey revision = new(TierRank: 0, Position: 999, IssueNumber: 999, Id: HigherId);
+        DispatchOrderKey fresh = new(TierRank: 2, Position: 0, IssueNumber: 1, Id: LowerId);
 
         // Act
         int result = revision.CompareTo(fresh);
@@ -31,8 +30,8 @@ public sealed class ComparisonTests
     public void WhenTierRankEqual_OrdersByPosition()
     {
         // Arrange
-        DispatchOrderKey first = new(TierRank: 1, Position: 1, DetectedAt: BaseTime, Id: LowerId);
-        DispatchOrderKey second = new(TierRank: 1, Position: 2, DetectedAt: BaseTime, Id: LowerId);
+        DispatchOrderKey first = new(TierRank: 1, Position: 1, IssueNumber: 1, Id: LowerId);
+        DispatchOrderKey second = new(TierRank: 1, Position: 2, IssueNumber: 1, Id: LowerId);
 
         // Act
         int result = first.CompareTo(second);
@@ -42,25 +41,25 @@ public sealed class ComparisonTests
     }
 
     [Fact]
-    public void WhenTierRankAndPositionEqual_OrdersByDetectedAt()
+    public void WhenTierRankAndPositionEqual_OrdersByIssueNumber()
     {
         // Arrange
-        DispatchOrderKey earlier = new(TierRank: 1, Position: 1, DetectedAt: BaseTime, Id: LowerId);
-        DispatchOrderKey later = new(TierRank: 1, Position: 1, DetectedAt: BaseTime.AddSeconds(1), Id: LowerId);
+        DispatchOrderKey lowerNumber = new(TierRank: 1, Position: 1, IssueNumber: 1, Id: LowerId);
+        DispatchOrderKey higherNumber = new(TierRank: 1, Position: 1, IssueNumber: 2, Id: LowerId);
 
         // Act
-        int result = earlier.CompareTo(later);
+        int result = lowerNumber.CompareTo(higherNumber);
 
         // Assert
         result.ShouldBeLessThan(0);
     }
 
     [Fact]
-    public void WhenTierRankPositionAndDetectedAtEqual_OrdersById()
+    public void WhenTierRankPositionAndIssueNumberEqual_OrdersById()
     {
         // Arrange — ordinal string ordering: "00000000-..." < "ffffffff-..."
-        DispatchOrderKey withLowerId = new(TierRank: 0, Position: 0, DetectedAt: BaseTime, Id: LowerId);
-        DispatchOrderKey withHigherId = new(TierRank: 0, Position: 0, DetectedAt: BaseTime, Id: HigherId);
+        DispatchOrderKey withLowerId = new(TierRank: 0, Position: 0, IssueNumber: 1, Id: LowerId);
+        DispatchOrderKey withHigherId = new(TierRank: 0, Position: 0, IssueNumber: 1, Id: HigherId);
 
         // Act
         int result = withLowerId.CompareTo(withHigherId);
@@ -73,8 +72,8 @@ public sealed class ComparisonTests
     public void WhenAllFieldsEqual_ReturnsZero()
     {
         // Arrange
-        DispatchOrderKey left = new(TierRank: 0, Position: 5, DetectedAt: BaseTime, Id: LowerId);
-        DispatchOrderKey right = new(TierRank: 0, Position: 5, DetectedAt: BaseTime, Id: LowerId);
+        DispatchOrderKey left = new(TierRank: 0, Position: 5, IssueNumber: 1, Id: LowerId);
+        DispatchOrderKey right = new(TierRank: 0, Position: 5, IssueNumber: 1, Id: LowerId);
 
         // Act
         int result = left.CompareTo(right);
@@ -86,33 +85,33 @@ public sealed class ComparisonTests
     [Fact]
     public void WhenShuffled_SortsToExpectedDispatchOrder()
     {
-        // Arrange — mixed tiers, positions, times; expected order after sort:
+        // Arrange — mixed tiers, positions, issue numbers; expected order after sort:
         // 1. revision tier=0, pos=1 (lowest tier, first position)
-        // 2. continuation tier=1, pos=1 (same tier rank, earlier time)
-        // 3. continuation tier=1, pos=1, later time
+        // 2. continuation tier=1, pos=1 (same tier rank, lower issue number)
+        // 3. continuation tier=1, pos=1, higher issue number
         // 4. fresh tier=2, pos=1 (highest tier)
         // 5. fresh tier=2, pos=2 (same tier, higher position)
-        DispatchOrderKey revisionFirstRepo = new(TierRank: 0, Position: 1, DetectedAt: BaseTime, Id: LowerId);
-        DispatchOrderKey continuationFirstRepoEarlier = new(
+        DispatchOrderKey revisionFirstRepo = new(TierRank: 0, Position: 1, IssueNumber: 1, Id: LowerId);
+        DispatchOrderKey continuationFirstRepoLowerNumber = new(
             TierRank: 1,
             Position: 1,
-            DetectedAt: BaseTime,
+            IssueNumber: 1,
             Id: LowerId);
-        DispatchOrderKey continuationFirstRepoLater = new(
+        DispatchOrderKey continuationFirstRepoHigherNumber = new(
             TierRank: 1,
             Position: 1,
-            DetectedAt: BaseTime.AddSeconds(10),
+            IssueNumber: 2,
             Id: LowerId);
-        DispatchOrderKey freshFirstRepo = new(TierRank: 2, Position: 1, DetectedAt: BaseTime, Id: LowerId);
-        DispatchOrderKey freshSecondRepo = new(TierRank: 2, Position: 2, DetectedAt: BaseTime, Id: LowerId);
+        DispatchOrderKey freshFirstRepo = new(TierRank: 2, Position: 1, IssueNumber: 1, Id: LowerId);
+        DispatchOrderKey freshSecondRepo = new(TierRank: 2, Position: 2, IssueNumber: 1, Id: LowerId);
 
         List<DispatchOrderKey> shuffled =
         [
             freshSecondRepo,
-            continuationFirstRepoLater,
+            continuationFirstRepoHigherNumber,
             freshFirstRepo,
             revisionFirstRepo,
-            continuationFirstRepoEarlier,
+            continuationFirstRepoLowerNumber,
         ];
 
         // Act
@@ -123,8 +122,8 @@ public sealed class ComparisonTests
         sorted.ShouldBe(
         [
             revisionFirstRepo,
-            continuationFirstRepoEarlier,
-            continuationFirstRepoLater,
+            continuationFirstRepoLowerNumber,
+            continuationFirstRepoHigherNumber,
             freshFirstRepo,
             freshSecondRepo,
         ]);
