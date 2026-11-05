@@ -123,4 +123,40 @@ public sealed class TakeDue
         // Assert
         due.Count.ShouldBe(3);
     }
+
+    [Fact]
+    public void WhenIdenticalDeferredNudgesAreAdded_KeepsOne()
+    {
+        // Arrange
+        NudgeScheduler scheduler = new();
+        Nudge deferred = new(Key, T0.AddMinutes(2));
+
+        // Act
+        scheduler.Add(deferred, T0);
+        scheduler.Add(deferred, T0.AddSeconds(30));
+
+        // Assert
+        scheduler.PendingCount.ShouldBe(1);
+    }
+
+    [Fact]
+    public void WhenReviewPassDefersFollowUpForHeldComment_RunsItAtTheQuietPeriodEnd()
+    {
+        // Arrange — the nudged review pass ran at T0 and held a comment back until T0 + 2 min
+        NudgeKey reviewKey = new(RepoId, NudgePass.Review, 7);
+        NudgeScheduler scheduler = new();
+        scheduler.Add(new Nudge(reviewKey), T0);
+        scheduler.TakeDue(T0, IntervalFor);
+        scheduler.Add(new Nudge(reviewKey, T0.AddMinutes(2)), T0.AddSeconds(1));
+
+        // Act
+        IReadOnlyList<NudgeKey> early = scheduler.TakeDue(T0.AddMinutes(1), IntervalFor);
+        DateTimeOffset? wake = scheduler.NextWakeAt;
+        IReadOnlyList<NudgeKey> due = scheduler.TakeDue(T0.AddMinutes(2), IntervalFor);
+
+        // Assert
+        early.ShouldBeEmpty();
+        wake.ShouldBe(T0.AddMinutes(2));
+        due.ShouldBe([reviewKey]);
+    }
 }

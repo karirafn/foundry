@@ -378,7 +378,7 @@ public sealed class WebhookBackstop : IAsyncDisposable
     private static MonitoringService BuildService(ServiceProvider serviceProvider) =>
         new(
             serviceProvider.GetRequiredService<IServiceScopeFactory>(),
-            new WebhookNudgeQueue(NullLogger<WebhookNudgeQueue>.Instance),
+            serviceProvider.GetRequiredService<WebhookNudgeQueue>(),
             TimeProvider.System,
             NullLogger<MonitoringService>.Instance);
 
@@ -409,6 +409,7 @@ public sealed class WebhookBackstop : IAsyncDisposable
             ? GitLabCredential.Create("my-group", "glpat_test_token", BaseUrl.Create("https://gitlab.com").ValueOrThrow())
             : GitHubCredential.Create("my-org", "ghp_test_token", BaseUrl.Create("https://github.com").ValueOrThrow(), serverToken);
         services.AddScoped<ICredentialResolver>(_ => new StubCredentialResolverWithFixedCredential(credential));
+        services.AddSingleton(new WebhookNudgeQueue(NullLogger<WebhookNudgeQueue>.Instance));
         services.AddScoped<RepositoryPoller>();
         services.AddScoped<IGlobalSettingsQueries>(_ => new StubSettingsQueries(30));
 

@@ -40,6 +40,12 @@ internal sealed class NudgeScheduler
     {
         if (nudge.NotBefore is { } notBefore && notBefore > receivedAt)
         {
+            // Identical deferred nudges (e.g. repeated review passes over the same held comment) run once anyway.
+            if (_deferred.Contains(nudge))
+            {
+                return;
+            }
+
             _deferred.Add(nudge);
             NextWakeAt = Earliest(NextWakeAt, notBefore);
             return;

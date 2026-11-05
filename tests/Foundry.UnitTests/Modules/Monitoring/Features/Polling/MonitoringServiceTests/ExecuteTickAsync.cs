@@ -8,6 +8,7 @@ using Foundry.Modules.Monitoring.Features.Providers;
 using Foundry.Modules.Monitoring.Features.Providers.Checks;
 using Foundry.Modules.Monitoring.Features.Providers.Feedback;
 using Foundry.Modules.Monitoring.Features.Polling;
+using Foundry.Modules.Monitoring.Features.Webhooks;
 using Foundry.Modules.Settings.Contracts;
 using Foundry.Modules.Settings.Contracts.Queries;
 using Foundry.Shared;
@@ -102,6 +103,7 @@ public sealed class ExecuteTickAsync : IAsyncDisposable
             services.AddScoped<ICredentialResolver, CredentialResolver>();
         }
 
+        services.AddSingleton(new WebhookNudgeQueue(NullLogger<WebhookNudgeQueue>.Instance));
         services.AddScoped<RepositoryPoller>();
 
         // Default: poll interval of 30 seconds (mirrors GlobalSettings default).
