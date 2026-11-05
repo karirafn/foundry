@@ -301,7 +301,10 @@ describe('SettingsWorkerImageComponent', () => {
       // Assert
       expect(note).toBeTruthy();
       expect(note.textContent).toContain('Foundry never pulls images');
-      expect(note.classList).toContain('general-settings__field-hint--warning');
+      expect(note.classList).toContain('general-settings__callout--warning');
+      expect(note.classList).not.toContain('general-settings__field-hint--warning');
+      expect(note.querySelector('.general-settings__callout-lead')?.textContent?.trim()).toBe('Warning:');
+      expect(note.hidden).toBe(false);
     });
 
     it('should keep #buildEnabled-off-note in the DOM but hidden when buildEnabled is true', () => {
@@ -1056,8 +1059,53 @@ describe('SettingsWorkerImageComponent', () => {
       });
     });
 
-  describe('installDocker hint', () => {
-    it('should render a warning hint for the installDocker checkbox with security cost text', () => {
+  describe('installDocker hint and security callout', () => {
+    it('should render the Docker hint and an always-visible security-cost callout', () => {
+      // Arrange
+      const { fixture, httpMock } = setupSettingsPage(SettingsWorkerImageComponent);
+      fixture.detectChanges();
+      flushSettings(httpMock, { ...API_KEY_RESPONSE, installDocker: false });
+      fixture.detectChanges();
+
+      // Act
+      const el = fixture.nativeElement as HTMLElement;
+      const hint = el.querySelector('#installDocker-hint') as HTMLElement;
+      const callout = el.querySelector('#installDocker-warning') as HTMLElement;
+
+      // Assert
+      expect(hint.textContent).toContain('Testcontainers');
+      expect(callout).toBeTruthy();
+      expect(callout.hidden).toBe(false);
+      expect(callout.classList).toContain('general-settings__callout--warning');
+      expect(callout.querySelector('.general-settings__callout-lead')?.textContent?.trim()).toBe('Security cost:');
+      expect(callout.querySelector('.general-settings__callout-icon')?.getAttribute('aria-hidden')).toBe('true');
+      expect(callout.textContent).toContain('CAP_SYS_ADMIN');
+      expect(callout.textContent).toContain('seccomp/AppArmor unconfined');
+      expect(callout.textContent).toContain('Docker host');
+      expect(callout.textContent?.replace(/\s+/g, ' ').trim()).toMatch(
+        /Applies to every worker in every repository\. Enable only if you trust all monitored repositories\.$/
+      );
+      expect(callout.textContent).not.toContain('Off by default');
+    });
+
+    it('should keep the Docker callout visible when the toolchain checkboxes are locked', () => {
+      // Arrange
+      const { fixture, httpMock } = setupSettingsPage(SettingsWorkerImageComponent);
+      fixture.detectChanges();
+      flushSettings(httpMock, { ...API_KEY_RESPONSE, buildEnabled: false, installDocker: true });
+      fixture.detectChanges();
+
+      // Act
+      const el = fixture.nativeElement as HTMLElement;
+      const checkbox = el.querySelector('#installDocker') as HTMLInputElement;
+      const callout = el.querySelector('#installDocker-warning') as HTMLElement;
+
+      // Assert
+      expect(checkbox.disabled).toBe(true);
+      expect(callout.hidden).toBe(false);
+    });
+
+    it('should reference both the hint and the callout from the Docker checkbox', () => {
       // Arrange
       const { fixture, httpMock } = setupSettingsPage(SettingsWorkerImageComponent);
       fixture.detectChanges();
@@ -1066,15 +1114,94 @@ describe('SettingsWorkerImageComponent', () => {
 
       // Act
       const el = fixture.nativeElement as HTMLElement;
-      const hint = el.querySelector('#installDocker-hint') as HTMLElement;
+      const describedBy = (el.querySelector('#installDocker') as HTMLInputElement).getAttribute('aria-describedby') ?? '';
 
       // Assert
-      expect(hint).toBeTruthy();
-      expect(hint.textContent).toContain('CAP_SYS_ADMIN');
-      expect(hint.textContent).toContain('seccomp/AppArmor unconfined');
-      expect(hint.textContent).toContain('Docker host');
-      expect(hint.textContent).toContain('Testcontainers');
-      expect(hint.classList).toContain('general-settings__field-hint--warning');
+      expect(describedBy.split(' ')).toEqual(['installDocker-hint', 'installDocker-warning']);
+    });
+  });
+
+  describe('toggle layout', () => {
+    it('should render all five checkboxes in the shared toggle row with the hint stacked underneath', () => {
+      // Arrange
+      const { fixture, httpMock } = setupSettingsPage(SettingsWorkerImageComponent);
+      fixture.detectChanges();
+      flushSettings(httpMock);
+      fixture.detectChanges();
+
+      // Act
+      const el = fixture.nativeElement as HTMLElement;
+      const ids = ['buildEnabled', 'installDotnet', 'installAngular', 'installChromium', 'installDocker'];
+
+      // Assert
+      for (const id of ids) {
+        const checkbox = el.querySelector(`#${id}`) as HTMLInputElement;
+        const row = checkbox.closest('label.general-settings__toggle-row') as HTMLLabelElement;
+        expect(row).toBeTruthy();
+        expect(row.htmlFor).toBe(id);
+        const toggle = row.parentElement as HTMLElement;
+        expect(toggle.classList).toContain('general-settings__toggle');
+        const hint = toggle.querySelector(`#${id}-hint`) as HTMLElement;
+        expect(hint.classList).toContain('general-settings__toggle-hint');
+        expect(checkbox.getAttribute('aria-describedby')?.split(' ')).toContain(`${id}-hint`);
+      }
+      expect(el.querySelector('.general-settings__checkbox-label')).toBeNull();
+      expect(el.querySelector('.general-settings__field-hint--warning')).toBeNull();
+    });
+
+    it('should use the shortened build-on-change hint copy', () => {
+      // Arrange
+      const { fixture, httpMock } = setupSettingsPage(SettingsWorkerImageComponent);
+      fixture.detectChanges();
+      flushSettings(httpMock);
+      fixture.detectChanges();
+
+      // Act
+      const hint = (fixture.nativeElement as HTMLElement).querySelector('#buildEnabled-hint') as HTMLElement;
+
+      // Assert
+      expect(hint.textContent?.trim()).toBe(
+        'Turning this off stops Foundry building the image and locks the toolchain settings below.'
+      );
+    });
+  });
+
+  describe('feedback wrapper', () => {
+    it('should group the four status regions in one feedback wrapper kept in the DOM', () => {
+      // Arrange
+      const { fixture, httpMock } = setupSettingsPage(SettingsWorkerImageComponent);
+      fixture.detectChanges();
+      flushSettings(httpMock);
+      fixture.detectChanges();
+
+      // Act
+      const el = fixture.nativeElement as HTMLElement;
+      const wrapper = el.querySelector('.general-settings__image-feedback') as HTMLElement;
+
+      // Assert
+      expect(wrapper).toBeTruthy();
+      expect(wrapper.querySelectorAll('.general-settings__image-status[role="status"]').length).toBe(2);
+      expect(wrapper.querySelector('#image-flags-error[role="alert"]')).toBeTruthy();
+      expect(wrapper.querySelector('.general-settings__save-success[role="status"]')).toBeTruthy();
+      expect(el.querySelectorAll('.general-settings__image-feedback').length).toBe(1);
+    });
+
+    it('should render the build log below the feedback wrapper when the build failed', () => {
+      // Arrange
+      const { fixture, httpMock } = setupSettingsPage(SettingsWorkerImageComponent);
+      fixture.detectChanges();
+      flushSettings(httpMock, { ...API_KEY_RESPONSE, imageBuildStatus: 'Failed', lastImageBuildError: 'step 3 failed' });
+      fixture.detectChanges();
+
+      // Act
+      const el = fixture.nativeElement as HTMLElement;
+      const wrapper = el.querySelector('.general-settings__image-feedback') as HTMLElement;
+      const log = el.querySelector('.general-settings__image-log') as HTMLElement;
+
+      // Assert
+      expect(log).toBeTruthy();
+      expect(wrapper.contains(log)).toBe(false);
+      expect(wrapper.compareDocumentPosition(log) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     });
   });
 
