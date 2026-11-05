@@ -52,6 +52,7 @@ internal static class WorkerSettingsBuilder
         {
             Model = string.IsNullOrWhiteSpace(claudeCode.Model) ? null : claudeCode.Model,
             Permissions = new() { Deny = denyRules },
+            Attribution = new(),
         };
 
         return JsonSerializer.Serialize(document, SerializerOptions);
@@ -62,6 +63,18 @@ internal static class WorkerSettingsBuilder
         public string? Model { get; set; }
 
         public required PermissionsSection Permissions { get; set; }
+
+        public required AttributionSection Attribution { get; set; }
+    }
+
+    // An empty string hides the attribution; `false` in place of the object is not a documented form.
+    private sealed class AttributionSection
+    {
+        public string Commit { get; set; } = string.Empty;
+
+        public string Pr { get; set; } = string.Empty;
+
+        public bool SessionUrl { get; set; }
     }
 
     private sealed class PermissionsSection

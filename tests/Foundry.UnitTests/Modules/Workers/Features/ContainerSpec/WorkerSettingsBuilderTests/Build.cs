@@ -70,6 +70,24 @@ public sealed class Build
     }
 
     [Fact]
+    public void Always_SuppressesCommitAndPullRequestAttributionAndSessionUrl()
+    {
+        // Arrange
+        ClaudeCodeSettingsSnapshot snapshot = Snapshot();
+
+        // Act
+        string json = WorkerSettingsBuilder.Build(snapshot);
+
+        // Assert
+        using JsonDocument doc = JsonDocument.Parse(json);
+        JsonElement attribution = doc.RootElement.GetProperty("attribution");
+
+        attribution.GetProperty("commit").GetString().ShouldBe(string.Empty);
+        attribution.GetProperty("pr").GetString().ShouldBe(string.Empty);
+        attribution.GetProperty("sessionUrl").ValueKind.ShouldBe(JsonValueKind.False);
+    }
+
+    [Fact]
     public void WhenModelIsSet_IncludesModelInJson()
     {
         // Arrange
