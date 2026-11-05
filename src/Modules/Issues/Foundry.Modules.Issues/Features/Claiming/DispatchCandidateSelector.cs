@@ -1,22 +1,31 @@
 using Foundry.Modules.Issues.Domain.Entities;
+using Foundry.Modules.Issues.Domain.Entities.States;
 using Foundry.Modules.Issues.Domain.ValueObjects;
+using Foundry.Modules.Issues.Features.Dependencies;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Contracts.Queries;
+using Foundry.Shared;
 
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 
 namespace Foundry.Modules.Issues.Features.Claiming;
 
 /// <summary>
 /// Selects the best <see cref="DispatchCandidate"/> from all claimable issues across eligible
 /// repositories, applying capacity-aware ordering (ADR 0074) and per-repository dispatch-info
-/// memoization.
+/// memoization. Each <see cref="FreshQueuedIssue"/> candidate's open blockers are re-read from the
+/// provider before it is selected; a candidate that gained a blocker is transitioned to
+/// <see cref="BlockedIssue"/> and the next candidate in dispatch order is tried.
 /// </summary>
 internal sealed class DispatchCandidateSelector(
     DbContext db,
     IRepositoryDispatchQueries repositoryDispatchQueries,
     IRepositoryEligibilityQuery repositoryEligibilityQuery,
-    InFlightWorkerCountQuery inFlightWorkerCountQuery)
+    InFlightWorkerCountQuery inFlightWorkerCountQuery,
+    IIssueBlockerQueries issueBlockerQueries,
+    IssueDependencyApplier dependencyApplier,
+    ILogger<DispatchCandidateSelector> logger)
 {
     public async Task<SelectionOutcome> SelectAsync(CancellationToken cancellationToken)
     {
@@ -68,27 +77,119 @@ internal sealed class DispatchCandidateSelector(
         }
 
         Dictionary<MonitoredRepositoryId, RepositoryDispatchInfo?> dispatchInfoCache = [];
-        int skipped = 0;
+        HashSet<QueuedIssue> skippedCandidates = [];
+        int unresolvable = 0;
+        int blocked = 0;
+        int blockerReadFailed = 0;
+        bool reordered;
 
-        foreach (QueuedIssue candidate in ordered)
+        do
         {
-            MonitoredRepositoryId repoId = candidate.MonitoredRepositoryId;
+            reordered = false;
 
-            if (!dispatchInfoCache.TryGetValue(repoId, out RepositoryDispatchInfo? dispatchInfo))
+            foreach (QueuedIssue candidate in ordered)
             {
-                dispatchInfo = await repositoryDispatchQueries.GetDispatchInfoAsync(repoId, cancellationToken);
-                dispatchInfoCache[repoId] = dispatchInfo;
-            }
+                if (skippedCandidates.Contains(candidate))
+                {
+                    continue;
+                }
 
-            if (dispatchInfo is null)
-            {
-                skipped++;
-                continue;
-            }
+                MonitoredRepositoryId repoId = candidate.MonitoredRepositoryId;
 
-            return new SelectionOutcome.Selected(new DispatchCandidate(candidate, dispatchInfo));
+                if (!dispatchInfoCache.TryGetValue(repoId, out RepositoryDispatchInfo? dispatchInfo))
+                {
+                    dispatchInfo = await repositoryDispatchQueries.GetDispatchInfoAsync(repoId, cancellationToken);
+                    dispatchInfoCache[repoId] = dispatchInfo;
+                }
+
+                if (dispatchInfo is null)
+                {
+                    skippedCandidates.Add(candidate);
+                    unresolvable++;
+                    continue;
+                }
+
+                // Claim-time blocker re-check: the recorded BlockedBy may predate a blocker added
+                // on the provider (GitLab sends no webhook for issue links), so re-read it live for
+                // fresh work. Revisions and continuations run on an existing branch/PR and are not
+                // re-gated.
+                if (candidate is FreshQueuedIssue fresh)
+                {
+                    BlockerCheck check = await CheckBlockersAsync(fresh, cancellationToken);
+
+                    if (check == BlockerCheck.ReadFailed)
+                    {
+                        // No state change on a failed read: the candidate stays queued and the
+                        // next dispatch tick retries it.
+                        skippedCandidates.Add(candidate);
+                        blockerReadFailed++;
+                        continue;
+                    }
+
+                    if (check == BlockerCheck.Blocked)
+                    {
+                        // The issue is now a BlockedIssue and no longer holds a dispatch slot, so
+                        // re-walk the capacity-aware order without it: the next same-repository
+                        // issue may only now fit within the repository's headroom.
+                        blocked++;
+                        keyedCandidates.RemoveAll(k => ReferenceEquals(k.Issue, fresh));
+                        ordered = CapacityAwareDispatchOrder.Order(keyedCandidates, headroom);
+                        reordered = true;
+                        break;
+                    }
+                }
+
+                return new SelectionOutcome.Selected(new DispatchCandidate(candidate, dispatchInfo));
+            }
+        }
+        while (reordered);
+
+        if (blocked == 0 && blockerReadFailed == 0)
+        {
+            return new SelectionOutcome.AllCandidatesUnresolvable(unresolvable);
         }
 
-        return new SelectionOutcome.AllCandidatesUnresolvable(skipped);
+        return new SelectionOutcome.AllCandidatesSkipped(unresolvable, blocked, blockerReadFailed);
+    }
+
+    private async Task<BlockerCheck> CheckBlockersAsync(
+        FreshQueuedIssue candidate,
+        CancellationToken cancellationToken)
+    {
+        Result<IReadOnlyList<int>> blockers = await issueBlockerQueries.GetOpenBlockersAsync(
+            candidate.MonitoredRepositoryId,
+            candidate.IssueNumber,
+            cancellationToken);
+
+        if (blockers is not Result<IReadOnlyList<int>>.Success blockersSuccess)
+        {
+            Error error = ((Result<IReadOnlyList<int>>.Failure)blockers).Error;
+            logger.LogWarning(
+                "Skipping issue #{IssueNumber} for this dispatch: its open blockers could not be read ({ErrorCode}).",
+                candidate.IssueNumber,
+                error.Code);
+            return BlockerCheck.ReadFailed;
+        }
+
+        if (blockersSuccess.Value.Count == 0)
+        {
+            return BlockerCheck.Clear;
+        }
+
+        // Transition to BlockedIssue (committed) so the issue is not re-selected on the next tick
+        // or on redelivery of this capacity event.
+        await dependencyApplier.ApplyAsync(candidate, blockersSuccess.Value, cancellationToken);
+        logger.LogInformation(
+            "Issue #{IssueNumber} gained open blocker(s) {BlockedBy} since the last dependency pass; blocked instead of claimed.",
+            candidate.IssueNumber,
+            blockersSuccess.Value);
+        return BlockerCheck.Blocked;
+    }
+
+    private enum BlockerCheck
+    {
+        Clear,
+        Blocked,
+        ReadFailed,
     }
 }

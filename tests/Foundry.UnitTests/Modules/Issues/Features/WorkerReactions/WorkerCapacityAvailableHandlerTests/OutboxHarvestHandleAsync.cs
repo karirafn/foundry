@@ -100,7 +100,10 @@ public sealed class OutboxHarvestHandleAsync : IAsyncDisposable
                 new WorkerProvider.GitHub(),
                 "https://api.github.com/repos/owner/repo/issues")),
             new AllEligibleRepositoryEligibilityQuery(),
-            new InFlightWorkerCountQuery(dbContext));
+            new InFlightWorkerCountQuery(dbContext),
+            new StubIssueBlockerQueries(),
+            IssueDependencyApplierFactory.Create(dbContext, new NullDomainEventDispatcher()),
+            NullLogger<DispatchCandidateSelector>.Instance);
         IssueClaimer claimer = new(dbContext, integrationEventDispatcher, new CapturingDomainEventDispatcher());
         WorkerCapacityAvailableHandler sut = new(
             dbContext,
@@ -150,7 +153,10 @@ public sealed class OutboxHarvestHandleAsync : IAsyncDisposable
                 new WorkerProvider.GitHub(),
                 "https://api.github.com/repos/owner/repo/issues")),
             new AllEligibleRepositoryEligibilityQuery(),
-            new InFlightWorkerCountQuery(dbContext));
+            new InFlightWorkerCountQuery(dbContext),
+            new StubIssueBlockerQueries(),
+            IssueDependencyApplierFactory.Create(dbContext, new NullDomainEventDispatcher()),
+            NullLogger<DispatchCandidateSelector>.Instance);
         IssueClaimer claimer = new(dbContext, integrationEventDispatcher, new CapturingDomainEventDispatcher());
         WorkerCapacityAvailableHandler sut = new(
             dbContext,
@@ -200,7 +206,10 @@ public sealed class OutboxHarvestHandleAsync : IAsyncDisposable
                 new WorkerProvider.GitHub(),
                 "https://api.github.com/repos/owner/repo/issues")),
             new AllEligibleRepositoryEligibilityQuery(),
-            new InFlightWorkerCountQuery(dbContext));
+            new InFlightWorkerCountQuery(dbContext),
+            new StubIssueBlockerQueries(),
+            IssueDependencyApplierFactory.Create(dbContext, new NullDomainEventDispatcher()),
+            NullLogger<DispatchCandidateSelector>.Instance);
         IssueClaimer claimer = new(dbContext, integrationEventDispatcher, new CapturingDomainEventDispatcher());
         WorkerCapacityAvailableHandler sut = new(
             dbContext,
@@ -247,7 +256,10 @@ public sealed class OutboxHarvestHandleAsync : IAsyncDisposable
             dbContext,
             new StubRepositoryDispatchQueries(null),
             new NoEligibleRepositoryEligibilityQuery(),
-            new InFlightWorkerCountQuery(dbContext));
+            new InFlightWorkerCountQuery(dbContext),
+            new StubIssueBlockerQueries(),
+            IssueDependencyApplierFactory.Create(dbContext, new NullDomainEventDispatcher()),
+            NullLogger<DispatchCandidateSelector>.Instance);
         IssueClaimer claimer = new(dbContext, integrationEventDispatcher, new CapturingDomainEventDispatcher());
         WorkerCapacityAvailableHandler sut = new(
             dbContext,

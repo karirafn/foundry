@@ -3,6 +3,7 @@ using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Issues.Domain.Entities;
 using Foundry.Modules.Issues.Domain.Entities.States;
 using Foundry.Modules.Monitoring.Contracts;
+using Foundry.Modules.Monitoring.Contracts.Queries;
 using Foundry.Modules.Workers.Contracts;
 using Foundry.Shared;
 using Foundry.Shared.Infrastructure.Outbox;
@@ -11,6 +12,7 @@ using Foundry.WebApi.Persistence;
 
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 using Shouldly;
 
@@ -25,11 +27,18 @@ namespace Foundry.IntegrationTests.Modules.Issues.Features.Claiming;
 // Docker is NOT available in this sandbox — compile-verified only; executes in CI.
 public sealed class ClaimHappyPath : IAsyncDisposable
 {
+    private readonly StubIssueBlockerQueries _blockerQueries = new();
     private readonly FoundryWebAppFactory _factory;
 
     public ClaimHappyPath()
     {
-        _factory = new FoundryWebAppFactory();
+        // The claim-time blocker re-check (#731) reads blockers live from the provider; the seeded
+        // token is fake, so substitute a stub that reports blockers per issue.
+        _factory = FoundryWebAppFactory.WithOverrides(services =>
+        {
+            services.RemoveAll<IIssueBlockerQueries>();
+            services.AddSingleton<IIssueBlockerQueries>(_blockerQueries);
+        });
         _ = _factory.CreateClient();
     }
 
@@ -124,5 +133,32 @@ public sealed class ClaimHappyPath : IAsyncDisposable
         List<OutboxMessage> messages = await dbContext.Set<OutboxMessage>()
             .ToListAsync(TestContext.Current.CancellationToken);
         messages.ShouldContain(m => m.Type.Contains(nameof(IssueClaimed)));
+    }
+
+    [Fact]
+    public async Task WhenQueuedIssueGainedBlockerOnProvider_BlocksIssueAndSkipsClaim()
+    {
+        // Arrange — the provider reports an open blocker Foundry has not yet recorded.
+        MonitoredRepositoryId repositoryId = await SeedEligibleRepositoryWithDispatchInfoAsync();
+        FreshQueuedIssue queued = await SeedQueuedIssueAsync(repositoryId, issueNumber: 3);
+        _blockerQueries.WithBlockers(3, 1);
+        WorkerCapacityAvailable @event = new(WorkerRunId: WorkerRunId.New());
+
+        // Act
+        using IServiceScope scope = _factory.Services.CreateScope();
+        IIntegrationEventHandler<WorkerCapacityAvailable> handler =
+            scope.ServiceProvider.GetRequiredService<IIntegrationEventHandler<WorkerCapacityAvailable>>();
+        await handler.HandleAsync(@event, TestContext.Current.CancellationToken);
+
+        // Assert — the issue is blocked with the provider's blocker and nothing is claimed.
+        using IServiceScope assertScope = _factory.Services.CreateScope();
+        DbContext dbContext = assertScope.ServiceProvider.GetRequiredService<DbContext>();
+        Issue? persisted = await dbContext.Set<Issue>()
+            .FirstOrDefaultAsync(i => i.Id == queued.Id, TestContext.Current.CancellationToken);
+        persisted.ShouldBeOfType<BlockedIssue>().BlockedBy.ShouldBe([1]);
+
+        List<OutboxMessage> messages = await dbContext.Set<OutboxMessage>()
+            .ToListAsync(TestContext.Current.CancellationToken);
+        messages.ShouldNotContain(m => m.Type.Contains(nameof(IssueClaimed)));
     }
 }

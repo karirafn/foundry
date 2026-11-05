@@ -25,6 +25,19 @@ internal abstract record SelectionOutcome
     internal sealed record AllCandidatesUnresolvable(int Skipped) : SelectionOutcome;
 
     /// <summary>
+    /// Candidates exist but none could be claimed: each was skipped because its repository
+    /// dispatch info failed to resolve, it gained an open blocker since the last dependency pass
+    /// (and was transitioned to <c>BlockedIssue</c>), or its open blockers could not be read from
+    /// the provider. At least one candidate was blocked or unreadable; when every candidate is
+    /// unresolvable, <see cref="AllCandidatesUnresolvable"/> is returned instead.
+    /// </summary>
+    /// <param name="Unresolvable">Candidates skipped because their dispatch info failed to resolve.</param>
+    /// <param name="Blocked">Candidates blocked by an open blocker found at claim time.</param>
+    /// <param name="BlockerReadFailed">Candidates skipped because their blocker read failed.</param>
+    internal sealed record AllCandidatesSkipped(int Unresolvable, int Blocked, int BlockerReadFailed)
+        : SelectionOutcome;
+
+    /// <summary>
     /// Candidates exist and their repositories are eligible, but every repository with queued
     /// work is at or above its <c>MaxConcurrentWorkers</c> limit. No issue can be claimed on
     /// this tick; the dispatched capacity token will be released via <c>ClaimSkipped</c>.

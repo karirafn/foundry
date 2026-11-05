@@ -68,6 +68,17 @@ internal sealed class WorkerCapacityAvailableHandler(
                     cancellationToken);
                 break;
 
+            case SelectionOutcome.AllCandidatesSkipped(int unresolvable, int blocked, int blockerReadFailed):
+                logger.LogInformation(
+                    "No candidate claimable: {Blocked} blocked at claim time, {BlockerReadFailed} with unreadable blockers, {Unresolvable} with unresolvable dispatch info; skipping dispatch.",
+                    blocked,
+                    blockerReadFailed,
+                    unresolvable);
+                await integrationEventDispatcher.DispatchAsync(
+                    [new ClaimSkipped(@event.WorkerRunId)],
+                    cancellationToken);
+                break;
+
             case SelectionOutcome.AllRepositoriesSaturated:
                 logger.LogDebug("All repositories with queued work are at capacity; skipping dispatch.");
                 await integrationEventDispatcher.DispatchAsync(

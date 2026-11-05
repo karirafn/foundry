@@ -1,5 +1,6 @@
 using Foundry.Modules.Issues.Domain.Entities;
 using Foundry.Modules.Issues.Domain.Entities.States;
+using Foundry.Modules.Issues.Domain.Events;
 using Foundry.Modules.Issues.Features.Claiming;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Contracts.Queries;
@@ -8,6 +9,7 @@ using Foundry.WebApi.Persistence;
 
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging.Abstractions;
 
 using Shouldly;
 
@@ -19,6 +21,7 @@ public sealed class SelectAsync : IAsyncDisposable
 {
     private readonly SqliteConnection _connection;
     private readonly FoundryDbContext _dbContext;
+    private readonly CapturingDomainEventDispatcher _domainEventDispatcher = new();
 
     private static readonly RepositoryDispatchInfo DefaultDispatchInfo = new(
         "owner/repo",
@@ -48,13 +51,17 @@ public sealed class SelectAsync : IAsyncDisposable
 
     private DispatchCandidateSelector BuildSelector(
         IRepositoryEligibilityQuery? repositoryEligibilityQuery = null,
-        IRepositoryDispatchQueries? repositoryDispatchQueries = null)
+        IRepositoryDispatchQueries? repositoryDispatchQueries = null,
+        IIssueBlockerQueries? issueBlockerQueries = null)
     {
         return new DispatchCandidateSelector(
             _dbContext,
             repositoryDispatchQueries ?? new StubRepositoryDispatchQueries(DefaultDispatchInfo),
             repositoryEligibilityQuery ?? new AllEligibleRepositoryEligibilityQuery(),
-            new InFlightWorkerCountQuery(_dbContext));
+            new InFlightWorkerCountQuery(_dbContext),
+            issueBlockerQueries ?? new StubIssueBlockerQueries(),
+            IssueDependencyApplierFactory.Create(_dbContext, _domainEventDispatcher),
+            NullLogger<DispatchCandidateSelector>.Instance);
     }
 
     private FreshQueuedIssue SeedQueuedIssue(MonitoredRepositoryId repositoryId, int issueNumber = 1)
@@ -292,6 +299,187 @@ public sealed class SelectAsync : IAsyncDisposable
         // Assert — ForClaim headroom is 0 (repo at cap); the queued issue must not be claimed.
         // If the selector leaked ForForecast behaviour it would return Selected instead.
         outcome.ShouldBeOfType<SelectionOutcome.AllRepositoriesSaturated>();
+    }
+
+    // Claim-time blocker re-check (#731)
+    [Fact]
+    public async Task WhenFreshCandidateHasNoOpenBlockers_ReturnsSelectedAfterReadingBlockers()
+    {
+        // Arrange
+        MonitoredRepositoryId repoId = MonitoredRepositoryId.New();
+        FreshQueuedIssue queued = SeedQueuedIssue(repoId, issueNumber: 7);
+        StubIssueBlockerQueries blockerQueries = new();
+
+        DispatchCandidateSelector sut = BuildSelector(issueBlockerQueries: blockerQueries);
+
+        // Act
+        SelectionOutcome outcome = await sut.SelectAsync(CancellationToken.None);
+
+        // Assert
+        outcome.ShouldBeOfType<SelectionOutcome.Selected>().Candidate.Issue.Id.ShouldBe(queued.Id);
+        blockerQueries.RequestedIssueNumbers.ShouldBe([7]);
+    }
+
+    [Fact]
+    public async Task WhenHeadCandidateGainedBlocker_BlocksItAndSelectsNextSameRepositoryCandidate()
+    {
+        // Arrange — MaxConcurrentWorkers 1: issue 2 only fits once issue 1 releases its slot
+        MonitoredRepositoryId repoId = MonitoredRepositoryId.New();
+        SeedQueuedIssue(repoId, issueNumber: 1);
+        FreshQueuedIssue next = SeedQueuedIssue(repoId, issueNumber: 2);
+        StubIssueBlockerQueries blockerQueries = new StubIssueBlockerQueries().WithBlockers(1, 99);
+
+        DispatchCandidateSelector sut = BuildSelector(
+            repositoryEligibilityQuery: new StubRepositoryEligibilityQuery(
+                [new EligibleRepository(repoId.Value, Position: 0, MaxConcurrentWorkers: 1)]),
+            issueBlockerQueries: blockerQueries);
+
+        // Act
+        SelectionOutcome outcome = await sut.SelectAsync(CancellationToken.None);
+
+        // Assert
+        outcome.ShouldBeOfType<SelectionOutcome.Selected>().Candidate.Issue.Id.ShouldBe(next.Id);
+
+        _dbContext.ChangeTracker.Clear();
+        Issue blocked = await _dbContext.Set<Issue>()
+            .SingleAsync(i => i.IssueNumber == 1, TestContext.Current.CancellationToken);
+        blocked.ShouldBeOfType<BlockedIssue>().BlockedBy.ShouldBe([99]);
+        _domainEventDispatcher.DispatchedEvents.OfType<IssueBlocked>().ShouldHaveSingleItem();
+    }
+
+    [Fact]
+    public async Task WhenEveryCandidateGainedBlocker_ReturnsAllCandidatesSkippedWithBlockedCount()
+    {
+        // Arrange
+        MonitoredRepositoryId repoId = MonitoredRepositoryId.New();
+        SeedQueuedIssue(repoId, issueNumber: 1);
+        SeedQueuedIssue(repoId, issueNumber: 2);
+        StubIssueBlockerQueries blockerQueries = new StubIssueBlockerQueries()
+            .WithBlockers(1, 50)
+            .WithBlockers(2, 50);
+
+        DispatchCandidateSelector sut = BuildSelector(issueBlockerQueries: blockerQueries);
+
+        // Act
+        SelectionOutcome outcome = await sut.SelectAsync(CancellationToken.None);
+
+        // Assert
+        outcome.ShouldBe(new SelectionOutcome.AllCandidatesSkipped(
+            Unresolvable: 0,
+            Blocked: 2,
+            BlockerReadFailed: 0));
+
+        _dbContext.ChangeTracker.Clear();
+        (await _dbContext.Set<QueuedIssue>().CountAsync(TestContext.Current.CancellationToken)).ShouldBe(0);
+        (await _dbContext.Set<BlockedIssue>().CountAsync(TestContext.Current.CancellationToken)).ShouldBe(2);
+    }
+
+    [Fact]
+    public async Task WhenBlockerReadFails_SkipsCandidateWithoutStateChangeAndSelectsNext()
+    {
+        // Arrange — two repositories so the failed candidate keeps its slot and the next is tried
+        MonitoredRepositoryId failingRepoId = MonitoredRepositoryId.New();
+        MonitoredRepositoryId otherRepoId = MonitoredRepositoryId.New();
+        FreshQueuedIssue failing = SeedQueuedIssue(failingRepoId, issueNumber: 1);
+        FreshQueuedIssue other = SeedQueuedIssue(otherRepoId, issueNumber: 2);
+        StubIssueBlockerQueries blockerQueries = new StubIssueBlockerQueries().WithFailure(1);
+
+        DispatchCandidateSelector sut = BuildSelector(
+            repositoryEligibilityQuery: new StubRepositoryEligibilityQuery(
+            [
+                new EligibleRepository(failingRepoId.Value, Position: 0, MaxConcurrentWorkers: 1),
+                new EligibleRepository(otherRepoId.Value, Position: 1, MaxConcurrentWorkers: 1),
+            ]),
+            issueBlockerQueries: blockerQueries);
+
+        // Act
+        SelectionOutcome outcome = await sut.SelectAsync(CancellationToken.None);
+
+        // Assert
+        outcome.ShouldBeOfType<SelectionOutcome.Selected>().Candidate.Issue.Id.ShouldBe(other.Id);
+
+        _dbContext.ChangeTracker.Clear();
+        Issue unchanged = await _dbContext.Set<Issue>()
+            .SingleAsync(i => i.Id == failing.Id, TestContext.Current.CancellationToken);
+        unchanged.ShouldBeOfType<FreshQueuedIssue>();
+        _domainEventDispatcher.DispatchedEvents.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task WhenEveryBlockerReadFails_ReturnsAllCandidatesSkippedWithReadFailedCount()
+    {
+        // Arrange
+        MonitoredRepositoryId repoId = MonitoredRepositoryId.New();
+        SeedQueuedIssue(repoId, issueNumber: 1);
+        StubIssueBlockerQueries blockerQueries = new StubIssueBlockerQueries().WithFailure(1);
+
+        DispatchCandidateSelector sut = BuildSelector(issueBlockerQueries: blockerQueries);
+
+        // Act
+        SelectionOutcome outcome = await sut.SelectAsync(CancellationToken.None);
+
+        // Assert
+        outcome.ShouldBe(new SelectionOutcome.AllCandidatesSkipped(
+            Unresolvable: 0,
+            Blocked: 0,
+            BlockerReadFailed: 1));
+    }
+
+    [Fact]
+    public async Task WhenCandidateIsRevisionQueued_DoesNotReadBlockers()
+    {
+        // Arrange
+        MonitoredRepositoryId repoId = MonitoredRepositoryId.New();
+        RevisionQueuedIssue revision = new IssueBuilder()
+            .WithMonitoredRepositoryId(repoId)
+            .WithIssueNumber(3)
+            .RevisionQueued();
+        _dbContext.Set<Issue>().Add(revision);
+        await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+        _dbContext.ChangeTracker.Clear();
+
+        StubIssueBlockerQueries blockerQueries = new StubIssueBlockerQueries().WithBlockers(3, 1);
+
+        DispatchCandidateSelector sut = BuildSelector(issueBlockerQueries: blockerQueries);
+
+        // Act
+        SelectionOutcome outcome = await sut.SelectAsync(CancellationToken.None);
+
+        // Assert
+        outcome.ShouldBeOfType<SelectionOutcome.Selected>().Candidate.Issue.Id.ShouldBe(revision.Id);
+        blockerQueries.RequestedIssueNumbers.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task WhenClaimTimeBlockerFormsCycle_BlocksCandidateAndRaisesCircularDependency()
+    {
+        // Arrange — issue 1 is already blocked by 2; issue 2 now reports 1 as a blocker
+        MonitoredRepositoryId repoId = MonitoredRepositoryId.New();
+        BlockedIssue existing = new IssueBuilder()
+            .WithMonitoredRepositoryId(repoId)
+            .WithIssueNumber(1)
+            .Detected()
+            .Block([2]);
+        _dbContext.Set<Issue>().Add(existing);
+        await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+        _dbContext.ChangeTracker.Clear();
+        SeedQueuedIssue(repoId, issueNumber: 2);
+
+        StubIssueBlockerQueries blockerQueries = new StubIssueBlockerQueries().WithBlockers(2, 1);
+
+        DispatchCandidateSelector sut = BuildSelector(issueBlockerQueries: blockerQueries);
+
+        // Act
+        SelectionOutcome outcome = await sut.SelectAsync(CancellationToken.None);
+
+        // Assert
+        outcome.ShouldBeOfType<SelectionOutcome.AllCandidatesSkipped>().Blocked.ShouldBe(1);
+
+        _dbContext.ChangeTracker.Clear();
+        Issue issue = await _dbContext.Set<Issue>()
+            .SingleAsync(i => i.IssueNumber == 2, TestContext.Current.CancellationToken);
+        issue.ShouldBeOfType<BlockedIssue>().BlockedBy.ShouldBe([1]);
+        _domainEventDispatcher.DispatchedEvents.OfType<CircularDependencyDetected>().ShouldHaveSingleItem();
     }
 
     // Stub that returns exactly the provided eligible repositories (with positions).

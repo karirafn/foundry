@@ -69,6 +69,7 @@ public static class MonitoringModule
         services.AddScoped<OptedInBranchRuleApplier>();
         services.AddScoped<IPostExitProviderQueries, PostExitProviderQueries>();
         services.AddScoped<IWorkBranchCommands, PostExitProviderQueries>();
+        services.AddScoped<IIssueBlockerQueries, PostExitProviderQueries>();
         services.AddScoped<RepositoryPoller>();
         services.AddScoped<RebaseStep>();
 

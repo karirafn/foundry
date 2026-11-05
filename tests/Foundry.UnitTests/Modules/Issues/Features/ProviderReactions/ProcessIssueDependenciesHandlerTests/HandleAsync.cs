@@ -2,8 +2,6 @@ using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Issues.Domain.Entities;
 using Foundry.Modules.Issues.Domain.Entities.States;
 using Foundry.Modules.Issues.Domain.Events;
-using Foundry.Modules.Issues.Features;
-using Foundry.Modules.Issues.Features.Claiming;
 using Foundry.Modules.Issues.Features.ProviderReactions;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Shared;
@@ -41,14 +39,7 @@ public sealed class HandleAsync : IAsyncDisposable
         _dispatcher = new CapturingDomainEventDispatcher();
         _sut = new ProcessIssueDependenciesHandler(
             _dbContext,
-            new IssueQueries(
-                _dbContext,
-                new NullRepositorySlugQueries(),
-                new NullRepositoryEligibilityQuery(),
-                new NullWorkerRunQueries(),
-                new InFlightWorkerCountQuery(_dbContext),
-                new NullGlobalSettingsQueries()),
-            _dispatcher,
+            IssueDependencyApplierFactory.Create(_dbContext, _dispatcher),
             NullLogger<ProcessIssueDependenciesHandler>.Instance);
     }
 
@@ -453,9 +444,9 @@ public sealed class HandleAsync : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenCycleDetectedIncludingCurrentIssue_IssueRemainsInCurrentState()
+    public async Task WhenCycleIncludesDetectedIssue_TransitionsToBlockedIssue()
     {
-        // Arrange
+        // Arrange — issue 1 is blocked by 2; issue 2 now reports 1 → cycle 1→2→1
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
         SeedBlockedIssue(repositoryId, issueNumber: 1, blockedBy: [2]);
         SeedDetectedIssue(repositoryId, issueNumber: 2);
@@ -468,7 +459,7 @@ public sealed class HandleAsync : IAsyncDisposable
         // Act
         await _sut.HandleAsync(@event, CancellationToken.None);
 
-        // Assert — issue 2 was DetectedIssue, should remain DetectedIssue (no transition on cycle)
+        // Assert — a cycle no longer suppresses the transition: open blockers always block
         _dbContext.ChangeTracker.Clear();
         Issue? issue = await _dbContext.Set<Issue>()
             .FirstOrDefaultAsync(
@@ -476,8 +467,95 @@ public sealed class HandleAsync : IAsyncDisposable
                 TestContext.Current.CancellationToken);
 
         Issue reloaded = issue.ShouldNotBeNull();
-        reloaded.ShouldBeOfType<DetectedIssue>();
-        // BlockedBy should still be updated though
+        reloaded.ShouldBeOfType<BlockedIssue>();
         reloaded.BlockedBy.ShouldBe([1]);
+        _dispatcher.DispatchedEvents.OfType<IssueBlocked>().ShouldHaveSingleItem();
+        _dispatcher.DispatchedEvents.OfType<CircularDependencyDetected>().ShouldHaveSingleItem();
+    }
+
+    [Fact]
+    public async Task WhenCycleIncludesQueuedIssue_TransitionsToBlockedIssueAndRaisesCycle()
+    {
+        // Arrange
+        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
+        SeedBlockedIssue(repositoryId, issueNumber: 1, blockedBy: [2]);
+        SeedQueuedIssue(repositoryId, issueNumber: 2);
+
+        IssueDependenciesDetected @event = new(
+            MonitoredRepositoryId: repositoryId,
+            IssueNumber: 2,
+            BlockedByIssueNumbers: [1]);
+
+        // Act
+        await _sut.HandleAsync(@event, CancellationToken.None);
+
+        // Assert
+        _dbContext.ChangeTracker.Clear();
+        Issue? issue = await _dbContext.Set<Issue>()
+            .FirstOrDefaultAsync(
+                i => i.MonitoredRepositoryId == repositoryId && i.IssueNumber == 2,
+                TestContext.Current.CancellationToken);
+
+        issue.ShouldNotBeNull().ShouldBeOfType<BlockedIssue>().BlockedBy.ShouldBe([1]);
+        CircularDependencyDetected cycleEvent = _dispatcher.DispatchedEvents
+            .OfType<CircularDependencyDetected>()
+            .ShouldHaveSingleItem();
+        cycleEvent.CyclePath.ShouldContain(2);
+    }
+
+    [Fact]
+    public async Task WhenBlockedIssueInCycleStillBlocked_StaysBlockedAndRaisesCycle()
+    {
+        // Arrange
+        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
+        SeedBlockedIssue(repositoryId, issueNumber: 1, blockedBy: [2]);
+        SeedBlockedIssue(repositoryId, issueNumber: 2, blockedBy: [1]);
+
+        IssueDependenciesDetected @event = new(
+            MonitoredRepositoryId: repositoryId,
+            IssueNumber: 2,
+            BlockedByIssueNumbers: [1]);
+
+        // Act
+        await _sut.HandleAsync(@event, CancellationToken.None);
+
+        // Assert
+        _dbContext.ChangeTracker.Clear();
+        Issue? issue = await _dbContext.Set<Issue>()
+            .FirstOrDefaultAsync(
+                i => i.MonitoredRepositoryId == repositoryId && i.IssueNumber == 2,
+                TestContext.Current.CancellationToken);
+
+        issue.ShouldNotBeNull().ShouldBeOfType<BlockedIssue>();
+        _dispatcher.DispatchedEvents.OfType<IssueBlocked>().ShouldBeEmpty();
+        _dispatcher.DispatchedEvents.OfType<CircularDependencyDetected>().ShouldHaveSingleItem();
+    }
+
+    [Fact]
+    public async Task WhenCycleBrokenOnProvider_BlockedIssueTransitionsToQueuedIssue()
+    {
+        // Arrange — issues 1 and 2 were blocked in a cycle; the provider now reports issue 2 has
+        // no open blockers (the link was removed)
+        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
+        SeedBlockedIssue(repositoryId, issueNumber: 1, blockedBy: [2]);
+        SeedBlockedIssue(repositoryId, issueNumber: 2, blockedBy: [1]);
+
+        IssueDependenciesDetected @event = new(
+            MonitoredRepositoryId: repositoryId,
+            IssueNumber: 2,
+            BlockedByIssueNumbers: []);
+
+        // Act
+        await _sut.HandleAsync(@event, CancellationToken.None);
+
+        // Assert
+        _dbContext.ChangeTracker.Clear();
+        Issue? issue = await _dbContext.Set<Issue>()
+            .FirstOrDefaultAsync(
+                i => i.MonitoredRepositoryId == repositoryId && i.IssueNumber == 2,
+                TestContext.Current.CancellationToken);
+
+        issue.ShouldNotBeNull().ShouldBeOfType<FreshQueuedIssue>().BlockedBy.ShouldBeEmpty();
+        _dispatcher.DispatchedEvents.OfType<CircularDependencyDetected>().ShouldBeEmpty();
     }
 }
