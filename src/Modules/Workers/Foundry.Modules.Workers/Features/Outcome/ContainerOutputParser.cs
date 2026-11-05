@@ -70,7 +70,7 @@ internal sealed partial class ContainerOutputParser(ILogger<ContainerOutputParse
                 : new ContainerOutputParseResult.CreditsExhausted();
         }
 
-        if (IsAuthInvalid(apiErrorStatus, node))
+        if (IsAuthInvalid(apiErrorStatus, isError, resultText, node))
         {
             return new ContainerOutputParseResult.AuthInvalid();
         }
@@ -200,14 +200,32 @@ internal sealed partial class ContainerOutputParser(ILogger<ContainerOutputParse
             || (terminalReason is not null && UsageLimitReasons.Contains(terminalReason));
     }
 
-    private static bool IsAuthInvalid(int? apiErrorStatus, JsonNode node)
+    // The CLI reports a failed OAuth token refresh before any API call is made, so the real
+    // result line carries api_error_status: null and no error object — only is_error: true and a
+    // result text starting with this prefix, e.g.
+    // {"type":"result","subtype":"success","is_error":true,"api_error_status":null,
+    //  "result":"Failed to authenticate: OAuth session expired and could not be refreshed"}
+    // The prefix is matched only when is_error is true, so an agent's successful summary that
+    // merely quotes the phrase is never treated as an auth failure.
+    private const string FailedToAuthenticatePrefix = "Failed to authenticate:";
+
+    private static bool IsAuthInvalid(int? apiErrorStatus, bool isError, string? resultText, JsonNode node)
     {
         if (apiErrorStatus == 401)
         {
             return true;
         }
 
-        // Secondary guard: error.type == "authentication_error" (shape assumed — no real fixture found)
+        if (isError
+            && resultText is not null
+            && resultText.TrimStart().StartsWith(FailedToAuthenticatePrefix, StringComparison.Ordinal))
+        {
+            return true;
+        }
+
+        // Defence-in-depth for an API-level rejection surfaced as an Anthropic error body
+        // (error.type == "authentication_error"); the token-refresh fixture above carries neither
+        // this nor a 401, which is why the result-text prefix check exists.
         string? errorType = ReadString(node["error"]?["type"]);
 
         return errorType is not null
