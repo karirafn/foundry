@@ -18,6 +18,8 @@ public sealed class CompletedIssue : Issue
 
     public string PullRequestUrl { get; private set; } = string.Empty;
 
+    public override string? LinkedPullRequestUrl => NullIfEmpty(PullRequestUrl);
+
     public DateTimeOffset CompletedAt { get; private set; }
 
     internal static CompletedIssue FromReview(ReviewIssue source, DateTimeOffset completedAt)

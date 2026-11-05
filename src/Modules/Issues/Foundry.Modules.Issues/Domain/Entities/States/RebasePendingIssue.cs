@@ -35,6 +35,8 @@ public sealed class RebasePendingIssue : Issue
 
     public string PullRequestUrl { get; private set; } = string.Empty;
 
+    public override string? LinkedPullRequestUrl => NullIfEmpty(PullRequestUrl);
+
     public DateTimeOffset EnteredRebasePendingAt { get; private set; }
 
     public DateTimeOffset FeedbackCutoffAt { get; private set; }

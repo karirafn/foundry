@@ -35,6 +35,16 @@ public abstract class Issue : AggregateRoot<IssueId>, IStateMachine<Issue>
 
     public IReadOnlyList<int> BlockedBy { get; private set; } = [];
 
+    /// <summary>
+    /// The URL of the pull request this issue carries, or <c>null</c> when the current state has none.
+    /// Every state that stores a PR URL overrides this beside its stored field, normalizing an empty
+    /// stored value (e.g. a continuable failure or completion without a PR) to <c>null</c>.
+    /// </summary>
+    public virtual string? LinkedPullRequestUrl => null;
+
+    private protected static string? NullIfEmpty(string value) =>
+        string.IsNullOrEmpty(value) ? null : value;
+
     // GitHub limits dependencies to 50 per direction; cap silently to match.
     private const int MaxBlockers = 50;
 

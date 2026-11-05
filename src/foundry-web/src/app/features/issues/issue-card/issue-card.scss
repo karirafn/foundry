@@ -172,9 +172,41 @@
 
   &__footer {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     justify-content: space-between;
     gap: var(--fd-spacing-sm);
+    min-width: 0;
+  }
+
+  &__footer-links {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--fd-spacing-xs);
+    margin-inline-start: auto;
+  }
+
+  &__pr-link {
+    color: var(--fd-text-secondary);
+    font-size: 0.75rem;
+    font-weight: 500;
+    line-height: 1.4;
+    white-space: nowrap;
+    text-decoration: none;
+    padding: 1px var(--fd-spacing-xs);
+    border: 1px solid var(--fd-border-default);
+    border-radius: var(--fd-radius-sm);
+    transition: color 150ms ease, border-color 150ms ease;
+
+    &:hover {
+      color: var(--fd-text-link);
+      border-color: currentColor;
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--fd-text-link);
+      outline-offset: 2px;
+    }
   }
 
   &__timestamp {
