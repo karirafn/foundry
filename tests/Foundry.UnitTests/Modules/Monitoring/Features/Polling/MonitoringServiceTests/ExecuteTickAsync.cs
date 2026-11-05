@@ -62,9 +62,13 @@ public sealed class ExecuteTickAsync : IAsyncDisposable
     {
         IServiceScopeFactory scopeFactory = serviceProvider.GetRequiredService<IServiceScopeFactory>();
 
+        // Steady state: the startup catch-up is covered by WebhookBackstop's catch-up tests.
         return new MonitoringService(
             scopeFactory,
-            NullLogger<MonitoringService>.Instance);
+            NullLogger<MonitoringService>.Instance)
+        {
+            StartupCatchUpPending = false,
+        };
     }
 
     private ServiceProvider BuildServiceProvider(

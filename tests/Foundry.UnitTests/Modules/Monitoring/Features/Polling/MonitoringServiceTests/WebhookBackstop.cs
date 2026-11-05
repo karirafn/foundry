@@ -314,6 +314,113 @@ public sealed class WebhookBackstop : IAsyncDisposable
         (await LoadAsync(repoId)).WebhookStatus.ShouldBe(WebhookStatus.Active);
     }
 
+    [Fact]
+    public async Task OnFirstTickAfterStartup_PollsActiveRepositoryNotYetDue()
+    {
+        // Arrange — polled 5 min ago, well within the 15 min Backstop Interval.
+        MonitoredRepositoryId repoId = await SeedRepoAsync(active: true, lastPolledAt: Now.AddMinutes(-5));
+        CountingIssueProvider provider = new([], dependencies: [6]);
+        MonitoringService service = BuildService(
+            BuildServiceProvider(provider, ingressConfigured: true, dispatchCandidates: new HashSet<int> { 5 }),
+            startupCatchUp: true);
+
+        // Act
+        await service.ExecuteTickAsync(Now, TestContext.Current.CancellationToken);
+
+        // Assert — a full scheduled poll: eligibility (branch rules), listing and dependency passes.
+        provider.GetIssuesCallCount.ShouldBe(1);
+        provider.GetDependenciesCallCount.ShouldBe(1);
+        (await LoadAsync(repoId)).LastPolledAt.ShouldBe(Now);
+        service.StartupCatchUpPending.ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task AfterFirstTick_LaterTicksPollOnlyDueRepositories()
+    {
+        // Arrange
+        MonitoredRepositoryId repoId = await SeedRepoAsync(active: true, lastPolledAt: Now.AddMinutes(-5));
+        CountingIssueProvider provider = new([]);
+        MonitoringService service = BuildService(BuildServiceProvider(provider, ingressConfigured: true), startupCatchUp: true);
+        await service.ExecuteTickAsync(Now, TestContext.Current.CancellationToken);
+
+        // Act — the next heartbeat; the Backstop Interval has not elapsed since the catch-up.
+        await service.ExecuteTickAsync(Now.AddSeconds(30), TestContext.Current.CancellationToken);
+
+        // Assert
+        provider.GetIssuesCallCount.ShouldBe(1);
+        (await LoadAsync(repoId)).LastPolledAt.ShouldBe(Now);
+    }
+
+    [Fact]
+    public async Task WhenFirstTickPollFails_RepositoryReturnsToNormalSchedule()
+    {
+        // Arrange
+        MonitoredRepositoryId repoId = await SeedRepoAsync(active: true, lastPolledAt: Now.AddMinutes(-5));
+        CountingIssueProvider provider = new([]) { ListingError = new Error("Test.Failure", "listing failed") };
+        MonitoringService service = BuildService(BuildServiceProvider(provider, ingressConfigured: true), startupCatchUp: true);
+        await service.ExecuteTickAsync(Now, TestContext.Current.CancellationToken);
+
+        // Act — later ticks inside the Backstop Interval measured from the original poll.
+        await service.ExecuteTickAsync(Now.AddSeconds(30), TestContext.Current.CancellationToken);
+        await service.ExecuteTickAsync(Now.AddMinutes(5), TestContext.Current.CancellationToken);
+
+        // Assert — the failed catch-up is not retried; the repository waits for its scheduled poll.
+        provider.GetIssuesCallCount.ShouldBe(1);
+        (await LoadAsync(repoId)).LastPolledAt.ShouldBe(Now.AddMinutes(-5));
+    }
+
+    [Fact]
+    public async Task OnFirstTickAfterStartup_NeverPolledRepositoryIsPolledOnce()
+    {
+        // Arrange — a repository that has never been polled (LastPolledAt null).
+        MonitoredRepositoryId repoId = await SeedNeverPolledRepoAsync();
+        CountingIssueProvider provider = new([]);
+        MonitoringService service = BuildService(BuildServiceProvider(provider, ingressConfigured: false), startupCatchUp: true);
+
+        // Act
+        await service.ExecuteTickAsync(Now, TestContext.Current.CancellationToken);
+
+        // Assert
+        provider.GetIssuesCallCount.ShouldBe(1);
+        (await LoadAsync(repoId)).LastPolledAt.ShouldBe(Now);
+    }
+
+    [Fact]
+    public async Task WhenCatchUpPollOfActiveHookFindsMappedChange_StaysActive()
+    {
+        // Arrange — the listing returns an issue Foundry does not know yet: lost to downtime.
+        MonitoredRepositoryId repoId = await SeedRepoAsync(active: true, lastPolledAt: Now.AddMinutes(-5));
+        CountingIssueProvider provider = new([NewIssue(5)]);
+        MonitoringService service = BuildService(
+            BuildServiceProvider(
+                provider,
+                ingressConfigured: true,
+                serverToken: "server_side_token",
+                registerWebhooks: true),
+            startupCatchUp: true);
+
+        // Act
+        await service.ExecuteTickAsync(Now, TestContext.Current.CancellationToken);
+
+        // Assert — no missed change recorded and no silent-hook re-registration.
+        provider.GetIssuesCallCount.ShouldBe(1);
+        provider.UpsertWebhookCallCount.ShouldBe(0);
+        (await LoadAsync(repoId)).WebhookStatus.ShouldBe(WebhookStatus.Active);
+    }
+
+    private async Task<MonitoredRepositoryId> SeedNeverPolledRepoAsync()
+    {
+        await using FoundryDbContext db = CreateDbContext();
+        MonitoredRepository repo = MonitoredRepository.Create(
+            RepositorySlug.Create("owner/repo").ValueOrThrow(),
+            "github.com",
+            null).ValueOrThrow();
+        repo.SetWriteProbeVerdict(new WriteProbeVerdict.Granted());
+        db.Set<MonitoredRepository>().Add(repo);
+        await db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        return repo.Id;
+    }
+
     private static RepositoryEligibility BranchRulesViolated() =>
         new RepositoryEligibility.Ineligible([EligibilityViolation.AllowForcePushes()]);
 
@@ -375,12 +482,19 @@ public sealed class WebhookBackstop : IAsyncDisposable
         return await db.Set<MonitoredRepository>().SingleAsync(r => r.Id == id, TestContext.Current.CancellationToken);
     }
 
-    private static MonitoringService BuildService(ServiceProvider serviceProvider) =>
+    /// <summary>
+    /// Builds the service in its steady state (startup catch-up already consumed) unless
+    /// <paramref name="startupCatchUp"/> asks for a freshly started one.
+    /// </summary>
+    private static MonitoringService BuildService(ServiceProvider serviceProvider, bool startupCatchUp = false) =>
         new(
             serviceProvider.GetRequiredService<IServiceScopeFactory>(),
             serviceProvider.GetRequiredService<WebhookNudgeQueue>(),
             TimeProvider.System,
-            NullLogger<MonitoringService>.Instance);
+            NullLogger<MonitoringService>.Instance)
+        {
+            StartupCatchUpPending = startupCatchUp,
+        };
 
     private ServiceProvider BuildServiceProvider(
         CountingIssueProvider provider,
