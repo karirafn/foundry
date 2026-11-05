@@ -12,7 +12,8 @@ namespace Foundry.Modules.Monitoring.Features.Webhooks;
 /// relevance filter: a delivery touching nothing Foundry tracks maps to <see langword="null"/> and is
 /// dropped without a provider call.
 /// <list type="table">
-/// <item><term><c>issues</c></term><description>issue listing</description></item>
+/// <item><term><c>issues</c></term><description>issue listing — plus the dependency pass when the issue
+/// closing is a blocker of a tracked issue (GitHub sends no <c>issue_dependencies</c> delivery then)</description></item>
 /// <item><term><c>issue_dependencies</c></term><description>issue listing + dependency pass</description></item>
 /// <item><term><c>pull_request</c>, <c>pull_request_review</c>, <c>pull_request_review_comment</c>,
 /// <c>issue_comment</c> (on a PR)</term><description>review pass for the owning issue — the checks
@@ -62,6 +63,12 @@ internal static partial class GitHubWebhookEventMapper
         eventName is "issues" or "issue_dependencies" or "pull_request" or "pull_request_review"
             or "pull_request_review_comment" or "issue_comment" or "check_suite" or "status";
 
+    /// <summary>
+    /// Whether mapping <paramref name="eventName"/> needs the blockers of tracked issues — only an
+    /// <c>issues</c> close can be a blocker closing.
+    /// </summary>
+    public static bool NeedsBlockers(string? eventName) => eventName is "issues";
+
     public static NudgeKey? Map(
         string eventName,
         JsonElement payload,
@@ -87,6 +94,11 @@ internal static partial class GitHubWebhookEventMapper
         if (!TryGetObject(payload, "issue", out JsonElement issue) || GetInt(issue, "number") is not { } number)
         {
             return null;
+        }
+
+        if (MapBlockerClosed(repositoryId, tracked, number, GetString(payload, "action") == "closed") is { } blockerClosed)
+        {
+            return blockerClosed;
         }
 
         bool isTracked = tracked.KnownIssueNumbers.Contains(number);

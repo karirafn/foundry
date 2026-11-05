@@ -87,7 +87,11 @@ internal static class ReceiveGitHubWebhook
             }
 
             WebhookTrackingContext tracked = GitHubWebhookEventMapper.NeedsTrackingContext(eventName)
-                ? await WebhookDelivery.LoadTrackingContextAsync(issueQueries, repository.Id, includeBlockers: false, cancellationToken)
+                ? await WebhookDelivery.LoadTrackingContextAsync(
+                    issueQueries,
+                    repository.Id,
+                    GitHubWebhookEventMapper.NeedsBlockers(eventName),
+                    cancellationToken)
                 : WebhookTrackingContext.Empty;
 
             NudgeKey? key = GitHubWebhookEventMapper.Map(eventName, document.RootElement, repository.Id, tracked);

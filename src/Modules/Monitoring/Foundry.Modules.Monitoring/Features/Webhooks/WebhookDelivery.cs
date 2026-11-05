@@ -90,7 +90,7 @@ internal static class WebhookDelivery
 
     /// <summary>
     /// Loads what Foundry tracks for the repository. Blockers are loaded only when
-    /// <paramref name="includeBlockers"/> is set (GitLab issue events), since they cost an extra query.
+    /// <paramref name="includeBlockers"/> is set (GitHub and GitLab issue events), since they cost an extra query.
     /// </summary>
     internal static async Task<WebhookTrackingContext> LoadTrackingContextAsync(
         IIssueQueries issueQueries,

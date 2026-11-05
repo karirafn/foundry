@@ -124,10 +124,9 @@ internal static partial class GitLabWebhookEventMapper
             return null;
         }
 
-        // A blocker closing frees the issues it blocks: refresh the listing and the dependency pass.
-        if (GetString(attributes, "action") == "close" && tracked.Blockers.Contains(iid))
+        if (MapBlockerClosed(repositoryId, tracked, iid, GetString(attributes, "action") == "close") is { } blockerClosed)
         {
-            return new NudgeKey(repositoryId, NudgePass.IssueListingAndDependencies);
+            return blockerClosed;
         }
 
         bool hasTriggerLabel = HasTriggerLabel(payload, "labels")
