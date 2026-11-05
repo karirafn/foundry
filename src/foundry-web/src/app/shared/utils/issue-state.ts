@@ -19,6 +19,10 @@ export type IssueState =
 // Mirrors the server-side ChecksPendingIssue.ChecksMaxFixPushes value.
 export const MAX_CHECKS_FIX_ATTEMPTS = 2;
 
+// Display-only cap for the "attempt n of MAX" label on the resolving-conflicts revision callout.
+// Mirrors the server-side RebasePendingIssue.MaxRebaseConflictAttempts value.
+export const MAX_REBASE_CONFLICT_ATTEMPTS = 2;
+
 // Live states: issues with an active worker running (in progress or under revision).
 // continuation_queued is intentionally excluded: it is a queued tier, not an active worker state.
 export const WORKING_STATES: ReadonlySet<IssueState> = new Set<IssueState>(['in_progress', 'revision_in_progress']);

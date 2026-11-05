@@ -25,6 +25,8 @@ public sealed class ReviewIssue : Issue
 
     public DateTimeOffset FeedbackCutoffAt { get; private set; }
 
+    public int RebaseConflictAttempts { get; private set; }
+
     public ChecksOutcome ChecksOutcome { get; private set; } = new ChecksOutcome.Passed();
 
     /// <summary>
@@ -74,6 +76,7 @@ public sealed class ReviewIssue : Issue
         review.PullRequestUrl = source.PullRequestUrl;
         review.FeedbackCutoffAt = feedbackCutoffAt;
         review.ChecksOutcome = new ChecksOutcome.Passed();
+        review.RebaseConflictAttempts = source.RebaseConflictAttempts;
         return review;
     }
 
@@ -96,6 +99,7 @@ public sealed class ReviewIssue : Issue
         review.FeedbackCutoffAt = source.FeedbackCutoffAt;
         review.ChecksOutcome = checksOutcome;
         review.RebaseOutcome = source.RebaseOutcome;
+        review.RebaseConflictAttempts = source.RebaseConflictAttempts;
         return review;
     }
 

@@ -12,7 +12,7 @@ namespace Foundry.Modules.Issues.Features.ProviderReactions;
 
 /// <summary>
 /// Moves a rebase-pending issue on to the checks gate once Monitoring's rebase step resolved a
-/// <see cref="RebaseOutcome"/> (ADR 0087). Any other state — including an issue that already left
+/// <see cref="RebaseOutcome"/> (ADR 0087) — or, for a conflict below the cap, queues a conflict-resolution revision. Any other state — including an issue that already left
 /// rebase-pending on an earlier delivery — is ignored, so redelivery is a no-op beyond inbox dedup.
 /// </summary>
 [IntegrationEventHandlerIdentity("Issues.RebaseResolved")]
@@ -41,7 +41,7 @@ internal sealed class RebaseResolvedHandler(
         RebaseOutcome outcome = RebaseOutcome.FromDiscriminator(@event.Outcome, @event.Reason)
             ?? new RebaseOutcome.Skipped($"unknown-outcome:{@event.Outcome}");
 
-        ChecksPendingIssue checksPending = rebasePendingIssue.MarkChecksPending(outcome);
-        await db.TransitionAsync(rebasePendingIssue, checksPending, domainEventDispatcher, cancellationToken);
+        Issue next = rebasePendingIssue.ResolveRebase(outcome);
+        await db.TransitionAsync(rebasePendingIssue, next, domainEventDispatcher, cancellationToken);
     }
 }

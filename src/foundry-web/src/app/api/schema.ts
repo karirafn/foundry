@@ -978,6 +978,8 @@ export interface components {
             checksFixAttempts?: null | number | string;
             rebaseOutcome?: null | string;
             rebaseSkippedReason?: null | string;
+            /** Format: int32 */
+            rebaseConflictAttempts?: null | number | string;
         };
         IssueSummary: {
             /** Format: uuid */

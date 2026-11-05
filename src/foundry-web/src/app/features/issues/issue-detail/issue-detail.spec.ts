@@ -9,7 +9,7 @@ import { IssueService } from '../issue.service';
 import { IssueSignalRService } from '../../../core/services/issue-signalr.service';
 import { WorkerRunService } from '../../workers/worker-run.service';
 import { WorkerSignalRService, WORKER_HUB_FACTORY } from '../../../core/services/worker-signalr.service';
-import { MAX_CHECKS_FIX_ATTEMPTS, RETRYABLE_STATES } from '../../../shared/utils/issue-state';
+import { MAX_CHECKS_FIX_ATTEMPTS, MAX_REBASE_CONFLICT_ATTEMPTS, RETRYABLE_STATES } from '../../../shared/utils/issue-state';
 
 const mockIssueSignalRService = {
   on: () => {},
@@ -1404,6 +1404,52 @@ describe('IssueDetailComponent', () => {
     // Assert
     const message = el.querySelector('.issue-detail__revision-message') as HTMLElement;
     expect(message?.textContent?.trim()).toContain('Fix run queued');
+  });
+
+  it(`should render "Resolving conflicts (attempt 2 of ${MAX_REBASE_CONFLICT_ATTEMPTS})" chip when revisionTriggerKind is rebase_conflict`, () => {
+    // Arrange
+    const detail: IssueDetail = {
+      ...mockDetail,
+      state: 'revision_in_progress',
+      stateDetails: {
+        ...mockStateDetails,
+        revisionTriggerKind: 'rebase_conflict',
+        rebaseConflictAttempts: 2,
+      },
+    };
+
+    // Act
+    const fixture = createComponent(detail);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    const chip = el.querySelector('.issue-detail__revision-chip') as HTMLElement;
+    const message = el.querySelector('.issue-detail__revision-message') as HTMLElement;
+    expect(chip?.textContent?.trim()).toBe(`Resolving conflicts (attempt 2 of ${MAX_REBASE_CONFLICT_ATTEMPTS})`);
+    expect(message?.textContent?.trim()).toContain('a worker is running');
+  });
+
+  it('should show queued conflict-resolution message for rebase_conflict when state is revision_queued', () => {
+    // Arrange
+    const detail: IssueDetail = {
+      ...mockDetail,
+      state: 'revision_queued',
+      stateDetails: {
+        ...mockStateDetails,
+        revisionTriggerKind: 'rebase_conflict',
+        rebaseConflictAttempts: null,
+      },
+    };
+
+    // Act
+    const fixture = createComponent(detail);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    const chip = el.querySelector('.issue-detail__revision-chip') as HTMLElement;
+    const message = el.querySelector('.issue-detail__revision-message') as HTMLElement;
+    expect(chip?.textContent?.trim()).toBe(`Resolving conflicts (attempt 1 of ${MAX_REBASE_CONFLICT_ATTEMPTS})`);
+    expect(message?.textContent?.trim()).toContain('Conflict-resolution run queued');
   });
 
   // Revision callout — Cycle R5: review_feedback shows "Addressing review" chip

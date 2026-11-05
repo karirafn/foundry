@@ -28,6 +28,8 @@ public sealed class RevisionFailedIssue : Issue
 
     public int ChecksFixAttempts { get; private set; }
 
+    public int RebaseConflictAttempts { get; private set; }
+
     public string FailureReason { get; private set; } = string.Empty;
 
     public FailureCategoryVO FailureCategory { get; private set; } = FailureCategoryVO.NonZeroExit;
@@ -54,6 +56,7 @@ public sealed class RevisionFailedIssue : Issue
         failed.PullRequestUrl = source.PullRequestUrl;
         failed.Trigger = source.Trigger;
         failed.ChecksFixAttempts = source.ChecksFixAttempts;
+        failed.RebaseConflictAttempts = source.RebaseConflictAttempts;
         failed.FailureReason = failureReason;
         failed.FailureCategory = failureCategory;
         failed.FailedAt = failedAt;

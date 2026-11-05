@@ -2072,4 +2072,75 @@ public sealed class Build
         fits.ShouldBeOfType<Result<string>.Success>();
         overflows.ShouldBeOfType<Result<string>.Failure>().Error.Code.ShouldBe("Worker.SystemPromptTooLarge");
     }
+
+    private static string BuildRebaseConflictPrompt(string branchName = "feat/42-fix")
+    {
+        DispatchContext.Revision revision = new(
+            branchName,
+            "https://github.com/org/repo/pull/42",
+            new RevisionTrigger.RebaseConflict());
+
+        Result<string> buildResult = SystemPromptBuilder.Build(
+            42, DefaultBranchNaming, DefaultSystemPromptTemplate, revision,
+            "https://api.github.com/repos/owner/repo/issues/42",
+            timeoutMinutes: 120, installsDocker: false, installsDotnet: false);
+        return buildResult.ShouldBeOfType<Result<string>.Success>().Value;
+    }
+
+    [Fact]
+    public void WhenBuiltForRebaseConflictTrigger_AppendsConflictSectionWithMergeInstructions()
+    {
+        // Act
+        string result = BuildRebaseConflictPrompt();
+
+        // Assert
+        int markerIndex = result.IndexOf(SystemPromptBuilder.RebaseConflictSectionMarker, StringComparison.Ordinal);
+        markerIndex.ShouldBeGreaterThan(-1);
+        string section = result[markerIndex..];
+        section.ShouldSatisfyAllConditions(
+            () => section.ShouldContain("<branch-name>feat/42-fix</branch-name>"),
+            () => section.ShouldContain("Check out that existing branch"),
+            () => section.ShouldContain("git fetch origin"),
+            () => section.ShouldContain("git merge origin/HEAD"),
+            () => section.ShouldContain("preserving both the branch's intent and the default branch's changes"),
+            () => section.ShouldContain("Run the tests"),
+            () => section.ShouldContain("Push to the same branch"),
+            () => section.ShouldContain("Do not create a new PR."),
+            () => section.ShouldContain("Do not rebase and do not force-push"));
+    }
+
+    [Fact]
+    public void WhenBuiltForRebaseConflictTrigger_ChecksSectionPrecedesConflictSection()
+    {
+        // Act
+        string result = BuildRebaseConflictPrompt();
+
+        // Assert
+        int checksSectionIndex = result.IndexOf("gh pr checks", StringComparison.Ordinal);
+        int conflictSectionIndex = result.IndexOf(SystemPromptBuilder.RebaseConflictSectionMarker, StringComparison.Ordinal);
+        checksSectionIndex.ShouldBeGreaterThan(-1);
+        conflictSectionIndex.ShouldBeGreaterThan(checksSectionIndex);
+    }
+
+    [Fact]
+    public void WhenBuiltForRebaseConflictTrigger_OmitsReviewFeedbackAndFailingChecksSections()
+    {
+        // Act
+        string result = BuildRebaseConflictPrompt();
+
+        // Assert
+        result.ShouldSatisfyAllConditions(
+            () => result.ShouldNotContain("<review-feedback>"),
+            () => result.ShouldNotContain("<failing-checks>"));
+    }
+
+    [Fact]
+    public void WhenRebaseConflictBranchNameContainsXmlDelimiters_EncodesThemInOutput()
+    {
+        // Act
+        string result = BuildRebaseConflictPrompt("feat/<evil>&");
+
+        // Assert
+        result.ShouldContain("<branch-name>feat/&lt;evil&gt;&amp;</branch-name>");
+    }
 }

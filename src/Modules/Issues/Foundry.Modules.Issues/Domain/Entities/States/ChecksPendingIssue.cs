@@ -40,6 +40,8 @@ public sealed class ChecksPendingIssue : Issue
 
     public int ChecksFixAttempts { get; private set; }
 
+    public int RebaseConflictAttempts { get; private set; }
+
     /// <summary>
     /// How the post-run rebase resolved before the issue entered the checks gate (ADR 0087).
     /// <see langword="null"/> for issues that entered checks-pending before the rebase step existed.
@@ -65,6 +67,9 @@ public sealed class ChecksPendingIssue : Issue
         checksPending.EnteredChecksPendingAt = DateTimeOffset.UtcNow;
         checksPending.FeedbackCutoffAt = source.FeedbackCutoffAt;
         checksPending.ChecksFixAttempts = source.ChecksFixAttempts;
+        checksPending.RebaseConflictAttempts = rebaseOutcome is RebaseOutcome.UpToDate or RebaseOutcome.Rebased
+            ? 0
+            : source.RebaseConflictAttempts;
         checksPending.RebaseOutcome = rebaseOutcome;
         return checksPending;
     }

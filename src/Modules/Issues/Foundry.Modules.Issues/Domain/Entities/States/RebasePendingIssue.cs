@@ -14,6 +14,12 @@ namespace Foundry.Modules.Issues.Domain.Entities.States;
 /// </summary>
 public sealed class RebasePendingIssue : Issue
 {
+    /// <summary>
+    /// Maximum number of consecutive <see cref="RevisionTrigger.RebaseConflict"/> revisions Foundry dispatches before a
+    /// further conflict fails open to checks-pending with <see cref="RebaseOutcome.Conflict"/>.
+    /// </summary>
+    public const int MaxRebaseConflictAttempts = 2;
+
     // Private parameterless constructor for EF Core materialization.
     private RebasePendingIssue()
     {
@@ -34,6 +40,13 @@ public sealed class RebasePendingIssue : Issue
     public DateTimeOffset FeedbackCutoffAt { get; private set; }
 
     public int ChecksFixAttempts { get; private set; }
+
+    /// <summary>
+    /// Consecutive rebase conflicts that dispatched a conflict-resolution revision. Reset by a successful sync
+    /// (<see cref="RebaseOutcome.UpToDate"/> or <see cref="RebaseOutcome.Rebased"/>); left unchanged by
+    /// <see cref="RebaseOutcome.Disabled"/> and <see cref="RebaseOutcome.Skipped"/>.
+    /// </summary>
+    public int RebaseConflictAttempts { get; private set; }
 
     internal static RebasePendingIssue FromInProgress(
         InProgressIssue source,
@@ -56,6 +69,7 @@ public sealed class RebasePendingIssue : Issue
         rebasePending.EnteredRebasePendingAt = DateTimeOffset.UtcNow;
         rebasePending.FeedbackCutoffAt = feedbackCutoffAt;
         rebasePending.ChecksFixAttempts = 0;
+        rebasePending.RebaseConflictAttempts = 0;
         return rebasePending;
     }
 
@@ -78,7 +92,34 @@ public sealed class RebasePendingIssue : Issue
         rebasePending.EnteredRebasePendingAt = DateTimeOffset.UtcNow;
         rebasePending.FeedbackCutoffAt = feedbackCutoffAt;
         rebasePending.ChecksFixAttempts = source.ChecksFixAttempts;
+        rebasePending.RebaseConflictAttempts = source.RebaseConflictAttempts;
         return rebasePending;
+    }
+
+    /// <summary>
+    /// Applies the rebase step's <paramref name="rebaseOutcome"/>: a <see cref="RebaseOutcome.Conflict"/> below
+    /// <see cref="MaxRebaseConflictAttempts"/> queues a conflict-resolution revision; anything else (including a
+    /// conflict at the cap, which fails open) moves on to the checks gate.
+    /// </summary>
+    public Issue ResolveRebase(RebaseOutcome rebaseOutcome) =>
+        rebaseOutcome is RebaseOutcome.Conflict && RebaseConflictAttempts < MaxRebaseConflictAttempts
+            ? ResolveConflict()
+            : MarkChecksPending(rebaseOutcome);
+
+    /// <summary>
+    /// The rebase conflicted: queues a <see cref="RevisionTrigger.RebaseConflict"/> revision and counts the attempt.
+    /// </summary>
+    public RevisionQueuedIssue ResolveConflict()
+    {
+        if (RebaseConflictAttempts >= MaxRebaseConflictAttempts)
+        {
+            throw new InvalidOperationException(
+                $"Rebase conflict attempts ({RebaseConflictAttempts}) already reached the cap ({MaxRebaseConflictAttempts}).");
+        }
+
+        RevisionQueuedIssue revisionQueued = RevisionQueuedIssue.FromRebaseConflict(this);
+        AddDomainEvent(new Events.IssueRevisionQueued(Id, MonitoredRepositoryId));
+        return revisionQueued;
     }
 
     /// <summary>
