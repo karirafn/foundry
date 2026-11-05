@@ -38,6 +38,7 @@ internal static class RevisionTriggerJsonConversion
                 null,
                 null,
                 [.. fc.FailingChecks.Select(c => new FailingCheckDto(c.Name, c.Conclusion, c.DetailsUrl))]),
+            RevisionTrigger.RebaseConflict => new RevisionTriggerDto(trigger.Discriminator, null, null, null, null),
             _ => throw new UnreachableException($"Unknown RevisionTrigger discriminator: '{trigger.Discriminator}'"),
         };
 
@@ -62,6 +63,7 @@ internal static class RevisionTriggerJsonConversion
                 dto.NewestConsumedCommentAt),
             "failed_checks" => new RevisionTrigger.FailedChecks(
                 [.. (dto.FailingChecks ?? []).Select(c => new FailingCheck(c.Name, c.Conclusion, c.DetailsUrl))]),
+            "rebase_conflict" => new RevisionTrigger.RebaseConflict(),
             _ => throw new UnreachableException($"Unknown RevisionTrigger discriminator: '{dto.Discriminator}'"),
         };
     }
@@ -75,6 +77,7 @@ internal static class RevisionTriggerJsonConversion
                 && rfA.Comments.SequenceEqual(rfB.Comments),
             (RevisionTrigger.FailedChecks fcA, RevisionTrigger.FailedChecks fcB) =>
                 fcA.FailingChecks.SequenceEqual(fcB.FailingChecks),
+            (RevisionTrigger.RebaseConflict, RevisionTrigger.RebaseConflict) => true,
             _ => false,
         };
 

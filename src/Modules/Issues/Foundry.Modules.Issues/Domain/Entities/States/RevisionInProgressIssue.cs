@@ -26,6 +26,8 @@ public sealed class RevisionInProgressIssue : Issue
 
     public int ChecksFixAttempts { get; private set; }
 
+    public int RebaseConflictAttempts { get; private set; }
+
     internal static RevisionInProgressIssue FromRevisionQueued(RevisionQueuedIssue source, WorkerRunId workerRunId)
     {
         RevisionInProgressIssue revisionInProgress = new(source.Id);
@@ -42,6 +44,7 @@ public sealed class RevisionInProgressIssue : Issue
         revisionInProgress.PullRequestUrl = source.PullRequestUrl;
         revisionInProgress.Trigger = source.Trigger;
         revisionInProgress.ChecksFixAttempts = source.ChecksFixAttempts;
+        revisionInProgress.RebaseConflictAttempts = source.RebaseConflictAttempts;
         return revisionInProgress;
     }
 

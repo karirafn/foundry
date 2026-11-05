@@ -29,5 +29,9 @@ public sealed class RevisionQueuedIssueConfiguration : IEntityTypeConfiguration<
         builder.Property(i => i.ChecksFixAttempts)
             .HasDefaultValue(0)
             .HasColumnName("checks_fix_attempts");
+
+        builder.Property(i => i.RebaseConflictAttempts)
+            .HasDefaultValue(0)
+            .HasColumnName("rebase_conflict_attempts");
     }
 }

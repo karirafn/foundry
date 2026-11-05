@@ -35,6 +35,8 @@ public sealed class RevisionQueuedIssue : QueuedIssue
 
     public int ChecksFixAttempts { get; private set; }
 
+    public int RebaseConflictAttempts { get; private set; }
+
     internal static RevisionQueuedIssue FromReview(
         ReviewIssue source,
         IReadOnlyList<ReviewComment> comments,
@@ -54,6 +56,7 @@ public sealed class RevisionQueuedIssue : QueuedIssue
         revisionQueued.PullRequestUrl = source.PullRequestUrl;
         revisionQueued.Trigger = new RevisionTrigger.ReviewFeedback(comments, omittedCommentCount, newestCommentAt);
         revisionQueued.ChecksFixAttempts = 0;
+        revisionQueued.RebaseConflictAttempts = source.RebaseConflictAttempts;
         return revisionQueued;
     }
 
@@ -76,6 +79,7 @@ public sealed class RevisionQueuedIssue : QueuedIssue
         revisionQueued.PullRequestUrl = source.PullRequestUrl;
         revisionQueued.Trigger = new RevisionTrigger.ReviewFeedback(comments, omittedCommentCount, newestCommentAt);
         revisionQueued.ChecksFixAttempts = 0;
+        revisionQueued.RebaseConflictAttempts = source.RebaseConflictAttempts;
         return revisionQueued;
     }
 
@@ -96,6 +100,26 @@ public sealed class RevisionQueuedIssue : QueuedIssue
         revisionQueued.PullRequestUrl = source.PullRequestUrl;
         revisionQueued.Trigger = new RevisionTrigger.FailedChecks(failingChecks);
         revisionQueued.ChecksFixAttempts = source.ChecksFixAttempts + 1;
+        revisionQueued.RebaseConflictAttempts = source.RebaseConflictAttempts;
+        return revisionQueued;
+    }
+
+    internal static RevisionQueuedIssue FromRebaseConflict(RebasePendingIssue source)
+    {
+        RevisionQueuedIssue revisionQueued = new(source.Id);
+        revisionQueued.SetSharedProperties(
+            source.MonitoredRepositoryId,
+            source.IssueNumber,
+            source.Title,
+            source.Author,
+            source.Url,
+            source.Labels,
+            source.DetectedAt);
+        revisionQueued.BranchName = source.BranchName;
+        revisionQueued.PullRequestUrl = source.PullRequestUrl;
+        revisionQueued.Trigger = new RevisionTrigger.RebaseConflict();
+        revisionQueued.ChecksFixAttempts = source.ChecksFixAttempts;
+        revisionQueued.RebaseConflictAttempts = source.RebaseConflictAttempts + 1;
         return revisionQueued;
     }
 
@@ -114,6 +138,7 @@ public sealed class RevisionQueuedIssue : QueuedIssue
         revisionQueued.PullRequestUrl = source.PullRequestUrl;
         revisionQueued.Trigger = source.Trigger;
         revisionQueued.ChecksFixAttempts = source.ChecksFixAttempts;
+        revisionQueued.RebaseConflictAttempts = source.RebaseConflictAttempts;
         return revisionQueued;
     }
 

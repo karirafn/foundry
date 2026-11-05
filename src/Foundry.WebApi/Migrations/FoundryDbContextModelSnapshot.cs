@@ -750,6 +750,12 @@ namespace Foundry.WebApi.Migrations
                         .HasColumnType("TEXT")
                         .HasColumnName("pull_request_url");
 
+                    b.Property<int>("RebaseConflictAttempts")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasDefaultValue(0)
+                        .HasColumnName("rebase_conflict_attempts");
+
                     b.Property<string>("RebaseOutcome")
                         .ValueGeneratedOnUpdateSometimes()
                         .HasMaxLength(2147483647)
@@ -1089,6 +1095,12 @@ namespace Foundry.WebApi.Migrations
                         .HasColumnType("TEXT")
                         .HasColumnName("pull_request_url");
 
+                    b.Property<int>("RebaseConflictAttempts")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasDefaultValue(0)
+                        .HasColumnName("rebase_conflict_attempts");
+
                     b.Property<Guid>("WorkerRunId")
                         .ValueGeneratedOnUpdateSometimes()
                         .HasColumnType("TEXT")
@@ -1154,6 +1166,12 @@ namespace Foundry.WebApi.Migrations
                         .IsUnicode(false)
                         .HasColumnType("TEXT")
                         .HasColumnName("pull_request_url");
+
+                    b.Property<int>("RebaseConflictAttempts")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasDefaultValue(0)
+                        .HasColumnName("rebase_conflict_attempts");
 
                     b.Property<string>("RebaseOutcome")
                         .ValueGeneratedOnUpdateSometimes()
@@ -1243,6 +1261,12 @@ namespace Foundry.WebApi.Migrations
                         .HasColumnType("TEXT")
                         .HasColumnName("pull_request_url");
 
+                    b.Property<int>("RebaseConflictAttempts")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasDefaultValue(0)
+                        .HasColumnName("rebase_conflict_attempts");
+
                     b.Property<string>("Trigger")
                         .IsRequired()
                         .ValueGeneratedOnUpdateSometimes()
@@ -1311,6 +1335,12 @@ namespace Foundry.WebApi.Migrations
                         .IsUnicode(false)
                         .HasColumnType("TEXT")
                         .HasColumnName("pull_request_url");
+
+                    b.Property<int>("RebaseConflictAttempts")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasDefaultValue(0)
+                        .HasColumnName("rebase_conflict_attempts");
 
                     b.Property<string>("Trigger")
                         .IsRequired()
@@ -1703,6 +1733,12 @@ namespace Foundry.WebApi.Migrations
                         .IsUnicode(false)
                         .HasColumnType("TEXT")
                         .HasColumnName("pull_request_url");
+
+                    b.Property<int>("RebaseConflictAttempts")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasDefaultValue(0)
+                        .HasColumnName("rebase_conflict_attempts");
 
                     b.Property<string>("Trigger")
                         .IsRequired()

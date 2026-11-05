@@ -61,6 +61,40 @@ public sealed class RoundTrip
     }
 
     [Fact]
+    public void WhenRebaseConflictTrigger_RoundTripsThroughOutboxSerializerWithStableTypeToken()
+    {
+        // Arrange
+        RevisionTrigger.RebaseConflict trigger = new();
+
+        // Act
+        string json = JsonSerializer.Serialize<RevisionTrigger>(trigger, OutboxSerializerOptions.Default);
+        RevisionTrigger? deserialized = JsonSerializer.Deserialize<RevisionTrigger>(json, OutboxSerializerOptions.Default);
+
+        // Assert
+        json.ShouldContain("\"$type\":\"rebase_conflict\"");
+        RevisionTrigger.RebaseConflict result = deserialized.ShouldBeOfType<RevisionTrigger.RebaseConflict>();
+        result.Discriminator.ShouldBe("rebase_conflict");
+    }
+
+    [Fact]
+    public void WhenRebaseConflictEmbeddedInDispatchContext_RoundTripsThroughOutboxSerializer()
+    {
+        // Arrange
+        DispatchContext.Revision revision = new(
+            BranchName: "feat/42-fix-it",
+            PullRequestUrl: "https://github.com/owner/repo/pull/42",
+            Trigger: new RevisionTrigger.RebaseConflict());
+
+        // Act
+        string json = JsonSerializer.Serialize<DispatchContext>(revision, OutboxSerializerOptions.Default);
+        DispatchContext? deserialized = JsonSerializer.Deserialize<DispatchContext>(json, OutboxSerializerOptions.Default);
+
+        // Assert
+        DispatchContext.Revision result = deserialized.ShouldBeOfType<DispatchContext.Revision>();
+        result.Trigger.ShouldBeOfType<RevisionTrigger.RebaseConflict>();
+    }
+
+    [Fact]
     public void WhenReviewFeedbackEmbeddedInDispatchContext_RoundTripsThroughOutboxSerializer()
     {
         // Arrange

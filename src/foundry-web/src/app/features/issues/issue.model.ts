@@ -46,7 +46,7 @@ export interface FailingCheck {
   detailsUrl?: string | null;
 }
 
-export type RevisionTriggerKind = 'review_feedback' | 'failed_checks';
+export type RevisionTriggerKind = 'review_feedback' | 'failed_checks' | 'rebase_conflict';
 
 export interface IssueStateDetails {
   workerRunId: string | null;
@@ -63,6 +63,7 @@ export interface IssueStateDetails {
   failingChecks?: FailingCheck[] | null;
   revisionTriggerKind?: RevisionTriggerKind | null;
   checksFixAttempts?: number | null;
+  rebaseConflictAttempts?: number | null;
   rebaseOutcome?: string | null;
   rebaseSkippedReason?: string | null;
 }
