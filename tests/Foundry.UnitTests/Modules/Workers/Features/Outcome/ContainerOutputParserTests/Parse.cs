@@ -476,7 +476,8 @@ public sealed class Parse
     public void WhenErrorTypeIsAuthenticationError_ReturnsAuthInvalid()
     {
         // Arrange
-        // Secondary guard: error.type == "authentication_error" (shape assumed — no real fixture found).
+        // Defence-in-depth guard for an API-level error body; the real token-refresh fixture
+        // (see WhenResultIsFailedToAuthenticateFixture_ReturnsAuthInvalid) carries neither this nor a 401.
         string log = """
             {"type":"result","subtype":"error","is_error":true,"duration_ms":100,"num_turns":0,"result":"Authentication error.","session_id":"abc","terminal_reason":"error","error":{"type":"authentication_error","message":"Invalid API key"}}
             """;
@@ -486,6 +487,53 @@ public sealed class Parse
 
         // Assert
         result.ShouldBeOfType<ContainerOutputParseResult.AuthInvalid>();
+    }
+
+    [Fact]
+    public void WhenResultIsFailedToAuthenticateFixture_ReturnsAuthInvalid()
+    {
+        // Arrange — real result line from a worker whose OAuth token refresh failed before any
+        // API call: api_error_status is null and there is no error object, only is_error + text.
+        string log = """
+            {"type":"system","subtype":"init"}
+            {"type":"result","subtype":"success","is_error":true,"num_turns":1,"api_error_status":null,"duration_ms":117,"result":"Failed to authenticate: OAuth session expired and could not be refreshed"}
+            """;
+
+        // Act
+        ContainerOutputParseResult result = _sut.Parse(log);
+
+        // Assert
+        result.ShouldBeOfType<ContainerOutputParseResult.AuthInvalid>();
+    }
+
+    [Fact]
+    public void WhenResultQuotesFailedToAuthenticateButIsErrorFalse_ReturnsNormalExit()
+    {
+        // Arrange — the agent merely quoting the phrase in a successful summary is not an auth failure
+        string log = """
+            {"type":"result","subtype":"success","is_error":false,"num_turns":12,"api_error_status":null,"duration_ms":90000,"result":"Failed to authenticate: OAuth session expired — fixed the parser to classify this message."}
+            """;
+
+        // Act
+        ContainerOutputParseResult result = _sut.Parse(log);
+
+        // Assert
+        result.ShouldBeOfType<ContainerOutputParseResult.NormalExit>();
+    }
+
+    [Fact]
+    public void WhenIsErrorResultMentionsFailedToAuthenticateMidText_ReturnsNormalExit()
+    {
+        // Arrange — the phrase must lead the result text, not appear somewhere inside it
+        string log = """
+            {"type":"result","subtype":"error","is_error":true,"num_turns":3,"api_error_status":null,"duration_ms":500,"result":"Tool call failed. Log said: Failed to authenticate: bad token in fixture."}
+            """;
+
+        // Act
+        ContainerOutputParseResult result = _sut.Parse(log);
+
+        // Assert
+        result.ShouldBeOfType<ContainerOutputParseResult.NormalExit>();
     }
 
     [Fact]

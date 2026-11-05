@@ -829,10 +829,14 @@ public sealed class ResolveAsync
     // Exit 0 with an is_error result line — captured stream-json result-line fixtures
     // -------------------------------------------------------------------------
 
-    private const string ErrorResultText = "Failed to authenticate: OAuth session expired and could not be refreshed";
+    private const string ErrorResultText = "Execution error: the session ended before the task could be completed";
 
     private const string IsErrorResultLine =
-        """{"type":"result","subtype":"success","is_error":true,"duration_ms":412,"duration_api_ms":0,"num_turns":1,"result":"Failed to authenticate: OAuth session expired and could not be refreshed","session_id":"9b0c2f1e-4d7a-4c1b-8f3e-2a6d5e7c9b10","total_cost_usd":0,"usage":{"input_tokens":0,"cache_creation_input_tokens":0,"cache_read_input_tokens":0,"output_tokens":0}}""";
+        """{"type":"result","subtype":"success","is_error":true,"duration_ms":412,"duration_api_ms":0,"num_turns":1,"result":"Execution error: the session ended before the task could be completed","session_id":"9b0c2f1e-4d7a-4c1b-8f3e-2a6d5e7c9b10","total_cost_usd":0,"usage":{"input_tokens":0,"cache_creation_input_tokens":0,"cache_read_input_tokens":0,"output_tokens":0}}""";
+
+    // Real token-refresh failure: no api_error_status and no error object, only is_error + result text.
+    private const string FailedToAuthenticateIsErrorResultLine =
+        """{"type":"result","subtype":"success","is_error":true,"num_turns":1,"api_error_status":null,"duration_ms":117,"result":"Failed to authenticate: OAuth session expired and could not be refreshed"}""";
 
     private const string SuccessResultLine =
         """{"type":"result","subtype":"success","is_error":false,"duration_ms":81234,"duration_api_ms":79001,"num_turns":12,"result":"No changes were needed; the issue is already resolved.","session_id":"9b0c2f1e-4d7a-4c1b-8f3e-2a6d5e7c9b10","total_cost_usd":0.4213,"usage":{"input_tokens":12,"cache_creation_input_tokens":3400,"cache_read_input_tokens":51000,"output_tokens":900}}""";
@@ -898,6 +902,20 @@ public sealed class ResolveAsync
     {
         // Arrange
         string containerOutput = ContainerLog(AuthInvalidIsErrorResultLine);
+
+        // Act
+        WorkerOutcome outcome = await ResolveExitZeroNoCommitsAsync(containerOutput);
+
+        // Assert
+        WorkerOutcome.Failure failure = outcome.ShouldBeOfType<WorkerOutcome.Failure>();
+        failure.FailureReason.ShouldBeOfType<FailureReason.AuthInvalid>();
+    }
+
+    [Fact]
+    public async Task WhenNoMrAndExitZeroWithNoCommitsAndFailedToAuthenticateResultLine_ReturnsFailureWithAuthInvalid()
+    {
+        // Arrange
+        string containerOutput = ContainerLog(FailedToAuthenticateIsErrorResultLine);
 
         // Act
         WorkerOutcome outcome = await ResolveExitZeroNoCommitsAsync(containerOutput);
