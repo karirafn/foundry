@@ -376,4 +376,32 @@ describe('StateBadgeComponent', () => {
     // Assert
     expect(el.querySelector('span')?.classList.contains('badge--checks-pending')).toBe(true);
   });
+
+  // rebase_pending state (#684)
+  it('should display "REBASING" for rebase_pending state', () => {
+    // Arrange / Act
+    const fixture = createComponent('rebase_pending');
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    expect(el.querySelector('span')?.textContent?.trim()).toBe('REBASING');
+  });
+
+  it('should set aria-label "State: rebasing" for rebase_pending state', () => {
+    // Arrange / Act
+    const fixture = createComponent('rebase_pending');
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    expect(el.querySelector('span')?.getAttribute('aria-label')).toBe('State: rebasing');
+  });
+
+  it('should apply badge--rebase-pending CSS class for rebase_pending state', () => {
+    // Arrange / Act
+    const fixture = createComponent('rebase_pending');
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    expect(el.querySelector('span')?.classList.contains('badge--rebase-pending')).toBe(true);
+  });
 });

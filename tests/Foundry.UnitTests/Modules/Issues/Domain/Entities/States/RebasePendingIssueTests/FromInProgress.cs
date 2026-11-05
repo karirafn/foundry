@@ -7,7 +7,7 @@ using Shouldly;
 
 using Xunit;
 
-namespace Foundry.UnitTests.Modules.Issues.Domain.Entities.States.ChecksPendingIssueTests;
+namespace Foundry.UnitTests.Modules.Issues.Domain.Entities.States.RebasePendingIssueTests;
 
 public sealed class FromInProgress
 {
@@ -21,20 +21,20 @@ public sealed class FromInProgress
             .InProgress();
 
         // Act
-        ChecksPendingIssue checksPending = inProgress.MarkChecksPending(
+        RebasePendingIssue rebasePending = inProgress.MarkRebasePending(
             "feat/1-test",
             "https://github.com/owner/repo/pull/1",
             DateTimeOffset.UtcNow);
 
         // Assert
-        checksPending.ShouldSatisfyAllConditions(
-            () => checksPending.Id.ShouldBe(inProgress.Id),
-            () => checksPending.MonitoredRepositoryId.ShouldBe(repositoryId),
-            () => checksPending.IssueNumber.ShouldBe(inProgress.IssueNumber),
-            () => checksPending.Title.ShouldBe(inProgress.Title),
-            () => checksPending.Author.ShouldBe(inProgress.Author),
-            () => checksPending.Url.ShouldBe(inProgress.Url),
-            () => checksPending.DetectedAt.ShouldBe(inProgress.DetectedAt));
+        rebasePending.ShouldSatisfyAllConditions(
+            () => rebasePending.Id.ShouldBe(inProgress.Id),
+            () => rebasePending.MonitoredRepositoryId.ShouldBe(repositoryId),
+            () => rebasePending.IssueNumber.ShouldBe(inProgress.IssueNumber),
+            () => rebasePending.Title.ShouldBe(inProgress.Title),
+            () => rebasePending.Author.ShouldBe(inProgress.Author),
+            () => rebasePending.Url.ShouldBe(inProgress.Url),
+            () => rebasePending.DetectedAt.ShouldBe(inProgress.DetectedAt));
     }
 
     [Fact]
@@ -49,16 +49,16 @@ public sealed class FromInProgress
         string pullRequestUrl = "https://github.com/owner/repo/pull/1";
 
         // Act
-        ChecksPendingIssue checksPending = inProgress.MarkChecksPending(
+        RebasePendingIssue rebasePending = inProgress.MarkRebasePending(
             branchName,
             pullRequestUrl,
             DateTimeOffset.UtcNow);
 
         // Assert
-        checksPending.ShouldSatisfyAllConditions(
-            () => checksPending.WorkerRunId.ShouldBe(inProgress.WorkerRunId),
-            () => checksPending.BranchName.ShouldBe(branchName),
-            () => checksPending.PullRequestUrl.ShouldBe(pullRequestUrl));
+        rebasePending.ShouldSatisfyAllConditions(
+            () => rebasePending.WorkerRunId.ShouldBe(inProgress.WorkerRunId),
+            () => rebasePending.BranchName.ShouldBe(branchName),
+            () => rebasePending.PullRequestUrl.ShouldBe(pullRequestUrl));
     }
 
     [Fact]
@@ -72,17 +72,17 @@ public sealed class FromInProgress
             .InProgress();
 
         // Act
-        ChecksPendingIssue checksPending = inProgress.MarkChecksPending(
+        RebasePendingIssue rebasePending = inProgress.MarkRebasePending(
             "feat/1-test",
             "https://github.com/owner/repo/pull/1",
             feedbackCutoffAt);
 
         // Assert
-        checksPending.FeedbackCutoffAt.ShouldBe(feedbackCutoffAt);
+        rebasePending.FeedbackCutoffAt.ShouldBe(feedbackCutoffAt);
     }
 
     [Fact]
-    public void WhenCreatedFromInProgress_SetsEnteredChecksPendingAt()
+    public void WhenCreatedFromInProgress_SetsEnteredRebasePendingAt()
     {
         // Arrange
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
@@ -92,18 +92,18 @@ public sealed class FromInProgress
         DateTimeOffset before = DateTimeOffset.UtcNow;
 
         // Act
-        ChecksPendingIssue checksPending = inProgress.MarkChecksPending(
+        RebasePendingIssue rebasePending = inProgress.MarkRebasePending(
             "feat/1-test",
             "https://github.com/owner/repo/pull/1",
             DateTimeOffset.UtcNow);
 
         // Assert
         DateTimeOffset after = DateTimeOffset.UtcNow;
-        checksPending.EnteredChecksPendingAt.ShouldBeInRange(before, after);
+        rebasePending.EnteredRebasePendingAt.ShouldBeInRange(before, after);
     }
 
     [Fact]
-    public void WhenCreatedFromInProgress_RaisesIssueChecksPendingDomainEvent()
+    public void WhenCreatedFromInProgress_RaisesIssueRebasePendingDomainEvent()
     {
         // Arrange
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
@@ -112,15 +112,15 @@ public sealed class FromInProgress
             .InProgress();
 
         // Act
-        inProgress.MarkChecksPending(
+        inProgress.MarkRebasePending(
             "feat/1-test",
             "https://github.com/owner/repo/pull/1",
             DateTimeOffset.UtcNow);
 
         // Assert
-        IssueChecksPending domainEvent = inProgress.DomainEvents
+        IssueRebasePending domainEvent = inProgress.DomainEvents
             .ShouldHaveSingleItem()
-            .ShouldBeOfType<IssueChecksPending>();
+            .ShouldBeOfType<IssueRebasePending>();
         domainEvent.ShouldSatisfyAllConditions(
             () => domainEvent.IssueId.ShouldBe(inProgress.Id),
             () => domainEvent.MonitoredRepositoryId.ShouldBe(repositoryId));

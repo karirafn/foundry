@@ -33,7 +33,8 @@ internal static class RepositoryMappings
             repo.LastPolledAt,
             ToEligibilityInfo(repo.Eligibility, providerType),
             repo.UntrackSuppressedSince,
-            ToWebhookStatusToken(repo.EffectiveWebhookStatus(webhookIngressConfigured)));
+            ToWebhookStatusToken(repo.EffectiveWebhookStatus(webhookIngressConfigured)),
+            repo.RebaseAfterRun);
 
     internal static string ToWebhookStatusToken(WebhookStatus status) =>
         status switch

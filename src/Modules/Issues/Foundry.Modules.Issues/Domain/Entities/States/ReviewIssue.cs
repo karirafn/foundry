@@ -27,6 +27,12 @@ public sealed class ReviewIssue : Issue
 
     public ChecksOutcome ChecksOutcome { get; private set; } = new ChecksOutcome.Passed();
 
+    /// <summary>
+    /// How the post-run rebase resolved, carried from checks-pending (ADR 0087). <see langword="null"/> when the
+    /// issue reached review without a rebase step.
+    /// </summary>
+    public RebaseOutcome? RebaseOutcome { get; private set; }
+
     internal static ReviewIssue FromInProgress(
         InProgressIssue source,
         string branchName,
@@ -89,6 +95,7 @@ public sealed class ReviewIssue : Issue
         review.PullRequestUrl = source.PullRequestUrl;
         review.FeedbackCutoffAt = source.FeedbackCutoffAt;
         review.ChecksOutcome = checksOutcome;
+        review.RebaseOutcome = source.RebaseOutcome;
         return review;
     }
 

@@ -12,4 +12,6 @@ public sealed record IssueSummary(
     string? RepositoryEligibilityStatus,
     RunStats? RunStats,
     string? ChecksOutcome = null,
-    string? PullRequestUrl = null);
+    string? PullRequestUrl = null,
+    string? RebaseOutcome = null,
+    string? RebaseSkippedReason = null);

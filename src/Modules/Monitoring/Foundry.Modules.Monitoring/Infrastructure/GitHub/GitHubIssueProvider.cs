@@ -3,6 +3,7 @@ using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Features.Providers;
 using ProviderChecks = Foundry.Modules.Monitoring.Features.Providers.Checks.Checks;
 using Foundry.Modules.Monitoring.Features.Providers.Feedback;
+using Foundry.Modules.Monitoring.Features.Providers.Rebase;
 using Foundry.Shared;
 
 namespace Foundry.Modules.Monitoring.Infrastructure.GitHub;
@@ -224,6 +225,23 @@ internal sealed class GitHubIssueProvider(
         CancellationToken cancellationToken)
     {
         return httpClient.GetChecksAsync(apiBaseUrl, slug, pullRequestUrl, token, cancellationToken);
+    }
+
+    public Task<Result<PullRequestRebaseState>> GetRebaseStateAsync(
+        RepositorySlug slug,
+        string pullRequestUrl,
+        CancellationToken cancellationToken)
+    {
+        return httpClient.GetRebaseStateAsync(apiBaseUrl, slug, pullRequestUrl, token, cancellationToken);
+    }
+
+    public Task<Result<RebaseRequestOutcome>> RequestRebaseAsync(
+        RepositorySlug slug,
+        string pullRequestId,
+        string expectedHeadSha,
+        CancellationToken cancellationToken)
+    {
+        return httpClient.RequestRebaseAsync(apiBaseUrl, pullRequestId, expectedHeadSha, token, cancellationToken);
     }
 
     private Task<Result<string>> GetDefaultBranchAsync(

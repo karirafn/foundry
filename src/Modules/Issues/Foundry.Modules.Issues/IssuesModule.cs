@@ -43,6 +43,7 @@ public static class IssuesModule
         services.AddIntegrationEventHandler<ProviderPullRequestClosed, ProviderPullRequestClosedHandler>();
         services.AddIntegrationEventHandler<PullRequestChangesRequested, PullRequestChangesRequestedHandler>();
         services.AddIntegrationEventHandler<ChecksVerdictResolved, ChecksVerdictResolvedHandler>();
+        services.AddIntegrationEventHandler<RebaseResolved, RebaseResolvedHandler>();
         services.AddIntegrationEventHandler<DispatchResumed, DispatchResumedHandler>();
         services.AddIntegrationEventHandler<CredentialsValidated, CredentialsValidatedHandler>();
         services.AddIntegrationEventHandler<CreditsRestored, CreditsRestoredHandler>();
@@ -62,6 +63,8 @@ public static class IssuesModule
         AddIssueStateChangedHandler<IssueContinuationQueued>(services);
         AddIssueStateChangedHandler<IssueChecksPending>(services);
         services.AddScoped<IDomainEventHandler<IssueChecksPending>, IssueChecksPendingNudgeBridge>();
+        AddIssueStateChangedHandler<IssueRebasePending>(services);
+        services.AddScoped<IDomainEventHandler<IssueRebasePending>, IssueRebasePendingNudgeBridge>();
 
         return services;
     }

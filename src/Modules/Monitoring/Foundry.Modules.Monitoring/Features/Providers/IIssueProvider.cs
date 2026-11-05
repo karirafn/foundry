@@ -2,6 +2,7 @@ using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using ProviderChecks = Foundry.Modules.Monitoring.Features.Providers.Checks.Checks;
 using Foundry.Modules.Monitoring.Features.Providers.Feedback;
+using Foundry.Modules.Monitoring.Features.Providers.Rebase;
 using Foundry.Shared;
 
 namespace Foundry.Modules.Monitoring.Features.Providers;
@@ -99,4 +100,31 @@ internal interface IIssueProvider
         RepositorySlug slug,
         string pullRequestUrl,
         CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Reads the pull request branch head and how far it is behind its base branch, for the post-run rebase
+    /// (ADR 0087). A <c>Result</c> failure is transient and retried; a permanent refusal is
+    /// <see cref="PullRequestRebaseState.Refused"/>.
+    /// </summary>
+    /// <remarks>Providers without a rebase implementation keep this default, which answers
+    /// <see cref="PullRequestRebaseState.Unsupported"/> without any provider call.</remarks>
+    Task<Result<PullRequestRebaseState>> GetRebaseStateAsync(
+        RepositorySlug slug,
+        string pullRequestUrl,
+        CancellationToken cancellationToken)
+        => Task.FromResult(Result<PullRequestRebaseState>.Ok(new PullRequestRebaseState.Unsupported()));
+
+    /// <summary>
+    /// Asks the provider to rebase the pull request branch onto its base server-side, guarded by
+    /// <paramref name="expectedHeadSha"/> (ADR 0087). The rebase lands asynchronously: callers wait for a new
+    /// head rather than trusting this call. A <c>Result</c> failure is transient and retried.
+    /// </summary>
+    /// <remarks>Providers without a rebase implementation keep this default, which answers
+    /// <see cref="RebaseRequestOutcome.Unsupported"/> without any provider call.</remarks>
+    Task<Result<RebaseRequestOutcome>> RequestRebaseAsync(
+        RepositorySlug slug,
+        string pullRequestId,
+        string expectedHeadSha,
+        CancellationToken cancellationToken)
+        => Task.FromResult(Result<RebaseRequestOutcome>.Ok(new RebaseRequestOutcome.Unsupported()));
 }

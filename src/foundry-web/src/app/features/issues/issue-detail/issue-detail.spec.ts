@@ -975,6 +975,51 @@ describe('IssueDetailComponent', () => {
     expect(text).not.toContain('next attempt at .');
   });
 
+  // --- Rebase outcome row (#684): shown for every outcome ---
+
+  it.each([
+    ['up_to_date', null, 'Up to date'],
+    ['rebased', null, 'Rebased'],
+    ['disabled', null, 'Disabled'],
+    ['skipped', 'timeout', 'Skipped (timeout)'],
+    ['skipped', 'permission-denied', 'Skipped (permission denied)'],
+    ['skipped', 'brand-new-reason', 'Skipped (brand-new-reason)'],
+    ['conflict', null, 'Conflict'],
+  ])('should render a Rebase row for %s outcome (reason %s) as "%s"', (outcome, reason, expected) => {
+    // Arrange
+    const detail: IssueDetail = {
+      ...mockDetail,
+      state: 'review',
+      stateDetails: { ...mockStateDetails, rebaseOutcome: outcome, rebaseSkippedReason: reason },
+    };
+
+    // Act
+    const fixture = createComponent(detail);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    const row = el.querySelector('.issue-detail__rebase');
+    expect(row).toBeTruthy();
+    expect(row?.querySelector('.issue-detail__field-key')?.textContent?.trim()).toBe('Rebase');
+    expect(row?.querySelector('.issue-detail__field-value')?.textContent?.trim()).toBe(expected);
+  });
+
+  it('should NOT render a Rebase row when rebaseOutcome is not set', () => {
+    // Arrange
+    const detail: IssueDetail = {
+      ...mockDetail,
+      state: 'review',
+      stateDetails: { ...mockStateDetails, rebaseOutcome: null },
+    };
+
+    // Act
+    const fixture = createComponent(detail);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    expect(el.querySelector('.issue-detail__rebase')).toBeFalsy();
+  });
+
   // --- Surface 3: still_failing failing-checks list ---
 
   it('should render failing-checks section when checksOutcome is still_failing with non-empty failingChecks', () => {

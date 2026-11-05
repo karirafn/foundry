@@ -63,7 +63,7 @@ public sealed class HandleAsync : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenInProgressIssueWithOpenState_TransitionsToChecksPendingIssue()
+    public async Task WhenInProgressIssueWithOpenState_TransitionsToRebasePendingIssue()
     {
         // Arrange
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
@@ -85,11 +85,11 @@ public sealed class HandleAsync : IAsyncDisposable
             .FirstOrDefaultAsync(
                 i => i.MonitoredRepositoryId == repositoryId,
                 TestContext.Current.CancellationToken);
-        ChecksPendingIssue checksPending = issue.ShouldBeOfType<ChecksPendingIssue>();
-        checksPending.ShouldSatisfyAllConditions(
-            () => checksPending.WorkerRunId.ShouldBe(inProgress.WorkerRunId),
-            () => checksPending.BranchName.ShouldBe("feat/issue-1-fix"),
-            () => checksPending.PullRequestUrl.ShouldBe("https://github.com/owner/repo/pull/10"));
+        RebasePendingIssue rebasePending = issue.ShouldBeOfType<RebasePendingIssue>();
+        rebasePending.ShouldSatisfyAllConditions(
+            () => rebasePending.WorkerRunId.ShouldBe(inProgress.WorkerRunId),
+            () => rebasePending.BranchName.ShouldBe("feat/issue-1-fix"),
+            () => rebasePending.PullRequestUrl.ShouldBe("https://github.com/owner/repo/pull/10"));
     }
 
     [Fact]
@@ -230,7 +230,7 @@ public sealed class HandleAsync : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenRevisionInProgressWithPrUrl_TransitionsToChecksPendingIssue()
+    public async Task WhenRevisionInProgressWithPrUrl_TransitionsToRebasePendingIssue()
     {
         // Arrange
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
@@ -252,15 +252,15 @@ public sealed class HandleAsync : IAsyncDisposable
             .FirstOrDefaultAsync(
                 i => i.MonitoredRepositoryId == repositoryId,
                 TestContext.Current.CancellationToken);
-        ChecksPendingIssue checksPending = issue.ShouldBeOfType<ChecksPendingIssue>();
-        checksPending.ShouldSatisfyAllConditions(
-            () => checksPending.BranchName.ShouldBe(revisionInProgress.BranchName),
-            () => checksPending.PullRequestUrl.ShouldBe(revisionInProgress.PullRequestUrl),
-            () => checksPending.FeedbackCutoffAt.ShouldBe(SeededNewestCommentAt));
+        RebasePendingIssue rebasePending = issue.ShouldBeOfType<RebasePendingIssue>();
+        rebasePending.ShouldSatisfyAllConditions(
+            () => rebasePending.BranchName.ShouldBe(revisionInProgress.BranchName),
+            () => rebasePending.PullRequestUrl.ShouldBe(revisionInProgress.PullRequestUrl),
+            () => rebasePending.FeedbackCutoffAt.ShouldBe(SeededNewestCommentAt));
     }
 
     [Fact]
-    public async Task WhenRevisionInProgressWithoutPrUrl_TransitionsToChecksPendingIssue()
+    public async Task WhenRevisionInProgressWithoutPrUrl_TransitionsToRebasePendingIssue()
     {
         // Arrange
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
@@ -282,11 +282,11 @@ public sealed class HandleAsync : IAsyncDisposable
             .FirstOrDefaultAsync(
                 i => i.MonitoredRepositoryId == repositoryId,
                 TestContext.Current.CancellationToken);
-        ChecksPendingIssue checksPending = issue.ShouldBeOfType<ChecksPendingIssue>();
-        checksPending.ShouldSatisfyAllConditions(
-            () => checksPending.BranchName.ShouldBe(revisionInProgress.BranchName),
-            () => checksPending.PullRequestUrl.ShouldBe(revisionInProgress.PullRequestUrl),
-            () => checksPending.FeedbackCutoffAt.ShouldBe(SeededNewestCommentAt));
+        RebasePendingIssue rebasePending = issue.ShouldBeOfType<RebasePendingIssue>();
+        rebasePending.ShouldSatisfyAllConditions(
+            () => rebasePending.BranchName.ShouldBe(revisionInProgress.BranchName),
+            () => rebasePending.PullRequestUrl.ShouldBe(revisionInProgress.PullRequestUrl),
+            () => rebasePending.FeedbackCutoffAt.ShouldBe(SeededNewestCommentAt));
     }
 
     [Fact]
@@ -314,8 +314,8 @@ public sealed class HandleAsync : IAsyncDisposable
             .FirstOrDefaultAsync(
                 i => i.MonitoredRepositoryId == repositoryId,
                 TestContext.Current.CancellationToken);
-        ChecksPendingIssue checksPending = issue.ShouldBeOfType<ChecksPendingIssue>();
-        checksPending.FeedbackCutoffAt.ShouldBeLessThan(laterCommentCreatedAt);
+        RebasePendingIssue rebasePending = issue.ShouldBeOfType<RebasePendingIssue>();
+        rebasePending.FeedbackCutoffAt.ShouldBeLessThan(laterCommentCreatedAt);
     }
 
     [Fact]
@@ -343,8 +343,8 @@ public sealed class HandleAsync : IAsyncDisposable
             .FirstOrDefaultAsync(
                 i => i.MonitoredRepositoryId == repositoryId,
                 TestContext.Current.CancellationToken);
-        ChecksPendingIssue checksPending = issue.ShouldBeOfType<ChecksPendingIssue>();
-        checksPending.FeedbackCutoffAt.ShouldBeLessThan(laterCommentCreatedAt);
+        RebasePendingIssue rebasePending = issue.ShouldBeOfType<RebasePendingIssue>();
+        rebasePending.FeedbackCutoffAt.ShouldBeLessThan(laterCommentCreatedAt);
     }
 
     [Fact]
@@ -479,7 +479,7 @@ public sealed class HandleAsync : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenInProgressIssueWithOpenState_DispatchesIssueChecksPendingEvent()
+    public async Task WhenInProgressIssueWithOpenState_DispatchesIssueRebasePendingEvent()
     {
         // Arrange
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
@@ -497,7 +497,7 @@ public sealed class HandleAsync : IAsyncDisposable
 
         // Assert
         _dispatcher.DispatchedEvents
-            .OfType<IssueChecksPending>()
+            .OfType<IssueRebasePending>()
             .ShouldHaveSingleItem();
     }
 
@@ -526,8 +526,8 @@ public sealed class HandleAsync : IAsyncDisposable
             .FirstOrDefaultAsync(
                 i => i.MonitoredRepositoryId == repositoryId,
                 TestContext.Current.CancellationToken);
-        ChecksPendingIssue checksPending = issue.ShouldBeOfType<ChecksPendingIssue>();
-        checksPending.FeedbackCutoffAt.ShouldBe(runStartedAt);
+        RebasePendingIssue rebasePending = issue.ShouldBeOfType<RebasePendingIssue>();
+        rebasePending.FeedbackCutoffAt.ShouldBe(runStartedAt);
     }
 
     [Fact]
@@ -556,7 +556,7 @@ public sealed class HandleAsync : IAsyncDisposable
             .FirstOrDefaultAsync(
                 i => i.MonitoredRepositoryId == repositoryId,
                 TestContext.Current.CancellationToken);
-        ChecksPendingIssue checksPending = issue.ShouldBeOfType<ChecksPendingIssue>();
-        checksPending.FeedbackCutoffAt.ShouldBeInRange(before, after);
+        RebasePendingIssue rebasePending = issue.ShouldBeOfType<RebasePendingIssue>();
+        rebasePending.FeedbackCutoffAt.ShouldBeInRange(before, after);
     }
 }

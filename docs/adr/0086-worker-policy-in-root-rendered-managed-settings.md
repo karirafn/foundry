@@ -30,4 +30,4 @@ Foundry's generated worker settings — the deny list, `model`, and the host hoo
 ## Consequences
 
 - The worker image's default user is root. Container hardening (capability dropping, seccomp, read-only rootfs, non-root user) must preserve the root render-then-drop phase or move the render out of the container.
-- The shared OAuth config directory still exposes `CLAUDE.md`, `skills/`, `agents/`, `commands/` and `~/.claude.json` to cross-worker writes; this decision does not close that.
+- The shared OAuth config directory still exposes `CLAUDE.md`, `skills/`, `agents/`, `commands/` and `~/.claude.json` to cross-worker writes; this decision does not close that. [ADR 0090](0090-workers-share-only-the-oauth-credential-store.md) closes it for workers.

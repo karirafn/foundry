@@ -53,98 +53,118 @@ const ERROR_IMAGE_TAG_LATEST = "Pin a specific tag — ':latest' is not allowed 
             <span id="imageTag-error" class="general-settings__field-error" role="alert">{{ _hasInteracted() ? _imageTagErrorText() : '' }}</span>
           </div>
 
-          <label class="general-settings__checkbox-label" for="buildEnabled">
-            <input
-              type="checkbox"
-              id="buildEnabled"
-              [ngModel]="_buildEnabledValue()"
-              (ngModelChange)="_buildEnabledValue.set($event)"
-              [attr.disabled]="settingsService.imageBuildStatus() === 'Building' || settingsService.savingImageFlags() || null"
-              aria-describedby="buildEnabled-hint buildEnabled-off-note"
-            />
-            Build the worker image on change
-          </label>
-
-          <span id="buildEnabled-hint" class="general-settings__field-hint">
-            Turning this off stops Foundry building the image and locks the toolchain settings below — the tag must already exist on the Docker host.
-          </span>
-
-          <p
-            id="buildEnabled-off-note"
-            class="general-settings__field-hint general-settings__field-hint--warning"
-            [hidden]="_buildEnabledValue()"
-          >
-            Foundry never pulls images. With building off, the tag above must already exist on the Docker host —
-            Foundry only inspects it. A missing tag leaves the image build failed and dispatch paused until the
-            image exists or you turn building back on.
-          </p>
+          <div class="general-settings__toggle">
+            <label class="general-settings__toggle-row" for="buildEnabled">
+              <input
+                type="checkbox"
+                id="buildEnabled"
+                [ngModel]="_buildEnabledValue()"
+                (ngModelChange)="_buildEnabledValue.set($event)"
+                [attr.disabled]="settingsService.imageBuildStatus() === 'Building' || settingsService.savingImageFlags() || null"
+                aria-describedby="buildEnabled-hint buildEnabled-off-note"
+              />
+              Build the worker image on change
+            </label>
+            <span id="buildEnabled-hint" class="general-settings__field-hint general-settings__toggle-hint">
+              Turning this off stops Foundry building the image and locks the toolchain settings below.
+            </span>
+            <p
+              id="buildEnabled-off-note"
+              class="general-settings__callout general-settings__callout--warning general-settings__toggle-hint"
+              [hidden]="_buildEnabledValue()"
+            >
+              <span class="general-settings__callout-icon" aria-hidden="true">⚠</span>
+              <span>
+                <strong class="general-settings__callout-lead">Warning:</strong>
+                Foundry never pulls images. With building off, the tag above must already exist on the Docker host —
+                Foundry only inspects it. A missing tag leaves the image build failed and dispatch paused until the
+                image exists or you turn building back on.
+              </span>
+            </p>
+          </div>
 
           <fieldset class="general-settings__image-fieldset">
             <legend class="sr-only">Preinstalled toolchains</legend>
 
             <div class="general-settings__image-flags">
-              <div class="general-settings__image-flag">
-                <input
-                  type="checkbox"
-                  id="installDotnet"
-                  [ngModel]="_installDotnetValue()"
-                  (ngModelChange)="_installDotnetValue.set($event)"
-                  [attr.disabled]="_flagsDisabled() || null"
-                  aria-describedby="installDotnet-hint"
-                />
-                <label for="installDotnet">Install .NET SDK</label>
-                <span id="installDotnet-hint" class="general-settings__field-hint">Adds the .NET SDK to the worker image.</span>
+              <div class="general-settings__toggle">
+                <label class="general-settings__toggle-row" for="installDotnet">
+                  <input
+                    type="checkbox"
+                    id="installDotnet"
+                    [ngModel]="_installDotnetValue()"
+                    (ngModelChange)="_installDotnetValue.set($event)"
+                    [attr.disabled]="_flagsDisabled() || null"
+                    aria-describedby="installDotnet-hint"
+                  />
+                  Install .NET SDK
+                </label>
+                <span id="installDotnet-hint" class="general-settings__field-hint general-settings__toggle-hint">Adds the .NET SDK to the worker image.</span>
               </div>
 
-              <div class="general-settings__image-flag">
-                <input
-                  type="checkbox"
-                  id="installAngular"
-                  [ngModel]="_installAngularValue()"
-                  (ngModelChange)="_installAngularValue.set($event)"
-                  [attr.disabled]="_flagsDisabled() || null"
-                  aria-describedby="installAngular-hint"
-                />
-                <label for="installAngular">Install Angular CLI</label>
-                <span id="installAngular-hint" class="general-settings__field-hint">Adds the Angular CLI (ng).</span>
+              <div class="general-settings__toggle">
+                <label class="general-settings__toggle-row" for="installAngular">
+                  <input
+                    type="checkbox"
+                    id="installAngular"
+                    [ngModel]="_installAngularValue()"
+                    (ngModelChange)="_installAngularValue.set($event)"
+                    [attr.disabled]="_flagsDisabled() || null"
+                    aria-describedby="installAngular-hint"
+                  />
+                  Install Angular CLI
+                </label>
+                <span id="installAngular-hint" class="general-settings__field-hint general-settings__toggle-hint">Adds the Angular CLI (ng).</span>
               </div>
 
-              <div class="general-settings__image-flag">
-                <input
-                  type="checkbox"
-                  id="installChromium"
-                  [ngModel]="_installChromiumValue()"
-                  (ngModelChange)="_installChromiumValue.set($event)"
-                  [attr.disabled]="_flagsDisabled() || null"
-                  aria-describedby="installChromium-hint"
-                />
-                <label for="installChromium">Install Chromium (headless)</label>
-                <span id="installChromium-hint" class="general-settings__field-hint">Adds a headless Chromium browser for Angular component tests.</span>
+              <div class="general-settings__toggle">
+                <label class="general-settings__toggle-row" for="installChromium">
+                  <input
+                    type="checkbox"
+                    id="installChromium"
+                    [ngModel]="_installChromiumValue()"
+                    (ngModelChange)="_installChromiumValue.set($event)"
+                    [attr.disabled]="_flagsDisabled() || null"
+                    aria-describedby="installChromium-hint"
+                  />
+                  Install Chromium (headless)
+                </label>
+                <span id="installChromium-hint" class="general-settings__field-hint general-settings__toggle-hint">Adds a headless Chromium browser for Angular component tests.</span>
               </div>
 
-              <div class="general-settings__image-flag">
-                <input
-                  type="checkbox"
-                  id="installDocker"
-                  [ngModel]="_installDockerValue()"
-                  (ngModelChange)="_installDockerValue.set($event)"
-                  [attr.disabled]="_flagsDisabled() || null"
-                  aria-describedby="installDocker-hint"
-                />
-                <label for="installDocker">Install Docker engine + CLI</label>
-                <span id="installDocker-hint" class="general-settings__field-hint general-settings__field-hint--warning">Runs Testcontainers integration tests inside the worker via a nested rootless Docker daemon. Security cost: the worker runs with CAP_SYS_ADMIN and seccomp/AppArmor unconfined, so a privilege escalation inside a worker can reach the Docker host (the WSL VM on Docker Desktop). Off by default; enable only for repositories you trust.</span>
+              <div class="general-settings__toggle">
+                <label class="general-settings__toggle-row" for="installDocker">
+                  <input
+                    type="checkbox"
+                    id="installDocker"
+                    [ngModel]="_installDockerValue()"
+                    (ngModelChange)="_installDockerValue.set($event)"
+                    [attr.disabled]="_flagsDisabled() || null"
+                    aria-describedby="installDocker-hint installDocker-warning"
+                  />
+                  Install Docker engine + CLI
+                </label>
+                <span id="installDocker-hint" class="general-settings__field-hint general-settings__toggle-hint">Runs Testcontainers integration tests inside the worker via a nested rootless Docker daemon.</span>
+                <p id="installDocker-warning" class="general-settings__callout general-settings__callout--warning general-settings__toggle-hint">
+                  <span class="general-settings__callout-icon" aria-hidden="true">⚠</span>
+                  <span>
+                    <strong class="general-settings__callout-lead">Security cost:</strong>
+                    the worker runs with CAP_SYS_ADMIN and seccomp/AppArmor unconfined, so a privilege escalation inside
+                    a worker can reach the Docker host (the WSL VM on Docker Desktop). Applies to every worker in every
+                    repository. Enable only if you trust all monitored repositories.
+                  </span>
+                </p>
               </div>
             </div>
           </fieldset>
 
-          <span class="sr-only general-settings__image-failure-alert" role="alert" aria-live="assertive">{{ imageFailureAlertText() }}</span>
-          <div class="general-settings__image-status" role="status" aria-live="polite">
-            @if (settingsService.imageBuildStatus() === 'Building') {
-              <span class="general-settings__image-spinner" aria-hidden="true"></span>
-            }
-            {{ _imageBuildingText() }}
+          <div class="general-settings__image-feedback">
+            <span class="sr-only general-settings__image-failure-alert" role="alert" aria-live="assertive">{{ imageFailureAlertText() }}</span>
+            <div class="general-settings__image-status" role="status" aria-live="polite">@if (settingsService.imageBuildStatus() === 'Building') {<span class="general-settings__image-spinner" aria-hidden="true"></span>}{{ _imageBuildingText() }}</div>
+            <div class="general-settings__image-status" role="status" aria-live="polite">{{ _imageFailedText() }}</div>
+            <div id="image-flags-error" role="alert" class="general-settings__save-error">{{ settingsService.saveImageFlagsError() ?? '' }}</div>
+            <div role="status" class="general-settings__save-success">{{ settingsService.saveImageFlagsSuccess() ? 'Worker image settings saved — building now…' : '' }}</div>
           </div>
-          <div class="general-settings__image-status" role="status" aria-live="polite">{{ _imageFailedText() }}</div>
 
           @if (settingsService.imageBuildStatus() === 'Failed' && settingsService.imageBuildLogTail()) {
             <pre
@@ -153,10 +173,6 @@ const ERROR_IMAGE_TAG_LATEST = "Pin a specific tag — ':latest' is not allowed 
               aria-label="Build log output"
             >{{ settingsService.imageBuildLogTail() }}</pre>
           }
-
-          <div id="image-flags-error" role="alert" class="general-settings__save-error">{{ settingsService.saveImageFlagsError() ?? '' }}</div>
-
-          <div role="status" class="general-settings__save-success">{{ settingsService.saveImageFlagsSuccess() ? 'Worker image settings saved — building now…' : '' }}</div>
 
           <div class="general-settings__image-actions">
             <button

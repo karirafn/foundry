@@ -81,6 +81,11 @@ internal sealed class MonitoredRepositoryConfiguration(IDataProtectionProvider d
         builder.Property(r => r.ApplyBranchRules)
             .HasColumnName("apply_branch_rules");
 
+        builder.Property(r => r.RebaseAfterRun)
+            .HasDefaultValue(true)
+            .HasSentinel(true)
+            .HasColumnName("rebase_after_run");
+
         builder.Property(r => r.MaxConcurrentWorkers)
             .HasDefaultValue(MonitoredRepository.DefaultMaxConcurrentWorkers)
             .HasColumnName("max_concurrent_workers");

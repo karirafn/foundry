@@ -274,9 +274,13 @@ const RULE_FORMAT_TEXT =
                   }
                 </ul>
               } @else {
-                <p class="general-settings__field-hint--warning">
-                  CI/CD files are not blocked by permission rules. The system prompt still instructs workers
-                  to leave CI/CD files alone, but this is soft guidance a worker can override.
+                <p class="general-settings__callout general-settings__callout--warning">
+                  <span class="general-settings__callout-icon" aria-hidden="true">⚠</span>
+                  <span>
+                    <strong class="general-settings__callout-lead">Warning:</strong>
+                    CI/CD files are not blocked by permission rules. The system prompt still instructs workers
+                    to leave CI/CD files alone, but this is soft guidance a worker can override.
+                  </span>
                 </p>
               }
             </div>

@@ -1827,6 +1827,121 @@ describe('IssueCardComponent', () => {
     expect(checksStatus).toBeFalsy();
   });
 
+  // --- Rebase outcome badge (#684): only skipped and conflict are badged ---
+
+  it('should render "Rebase conflict" badge for conflict rebaseOutcome', () => {
+    // Arrange
+    const reviewIssue: IssueSummary = { ...mockIssue, state: 'review', rebaseOutcome: 'conflict' };
+
+    // Act
+    const fixture = createComponent(reviewIssue);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    const badge = el.querySelector('.issue-card__rebase-badge');
+    expect(badge).toBeTruthy();
+    expect(badge?.textContent?.trim()).toBe('Rebase conflict');
+    expect(badge?.classList.contains('issue-card__checks-badge--error')).toBe(true);
+  });
+
+  it('should render "Rebase skipped: <reason>" badge for skipped rebaseOutcome', () => {
+    // Arrange
+    const issue: IssueSummary = {
+      ...mockIssue,
+      state: 'checks_pending',
+      rebaseOutcome: 'skipped',
+      rebaseSkippedReason: 'provider-error',
+    };
+
+    // Act
+    const fixture = createComponent(issue);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    const badge = el.querySelector('.issue-card__rebase-badge');
+    expect(badge).toBeTruthy();
+    expect(badge?.textContent?.trim()).toBe('Rebase skipped: provider error');
+    expect(badge?.classList.contains('issue-card__checks-badge--warning')).toBe(true);
+  });
+
+  it('should show the raw skipped reason when it is unknown', () => {
+    // Arrange
+    const issue: IssueSummary = {
+      ...mockIssue,
+      state: 'review',
+      rebaseOutcome: 'skipped',
+      rebaseSkippedReason: 'some-future-reason',
+    };
+
+    // Act
+    const fixture = createComponent(issue);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    expect(el.querySelector('.issue-card__rebase-badge')?.textContent?.trim())
+      .toBe('Rebase skipped: some-future-reason');
+  });
+
+  it('should render "Rebase skipped" without a reason when none is given', () => {
+    // Arrange
+    const issue: IssueSummary = { ...mockIssue, state: 'review', rebaseOutcome: 'skipped', rebaseSkippedReason: null };
+
+    // Act
+    const fixture = createComponent(issue);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    expect(el.querySelector('.issue-card__rebase-badge')?.textContent?.trim()).toBe('Rebase skipped');
+  });
+
+  it.each(['up_to_date', 'rebased', 'disabled'])('should NOT render a rebase badge for %s rebaseOutcome', (outcome) => {
+    // Arrange
+    const issue: IssueSummary = { ...mockIssue, state: 'review', rebaseOutcome: outcome };
+
+    // Act
+    const fixture = createComponent(issue);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    expect(el.querySelector('.issue-card__rebase-badge')).toBeFalsy();
+  });
+
+  it('should NOT render a rebase badge when rebaseOutcome is null', () => {
+    // Arrange
+    const issue: IssueSummary = { ...mockIssue, state: 'review', rebaseOutcome: null };
+
+    // Act
+    const fixture = createComponent(issue);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    expect(el.querySelector('.issue-card__rebase-badge')).toBeFalsy();
+  });
+
+  it('should include the rebase badge label in the card aria-label', () => {
+    // Arrange
+    const issue: IssueSummary = { ...mockIssue, state: 'review', rebaseOutcome: 'conflict' };
+
+    // Act
+    const fixture = createComponent(issue);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    expect(el.querySelector('.issue-card')?.getAttribute('aria-label')).toContain('Rebase conflict.');
+  });
+
+  it('should render the REBASING state badge for rebase_pending', () => {
+    // Arrange
+    const issue: IssueSummary = { ...mockIssue, state: 'rebase_pending' };
+
+    // Act
+    const fixture = createComponent(issue);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    expect(el.querySelector('.badge--rebase-pending')?.textContent?.trim()).toBe('REBASING');
+  });
+
   // --- Surface 2: review card outcome badge ---
 
   it('should render outcome badge with "CHECKS: FAILING" label for still_failing checksOutcome', () => {

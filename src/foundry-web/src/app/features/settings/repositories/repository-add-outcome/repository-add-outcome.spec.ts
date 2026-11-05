@@ -29,6 +29,7 @@ function repository(eligibility: RepositoryEligibility | null): RepositorySummar
     pollIntervalIsDefault: true,
     isActive: true,
     maxConcurrentWorkers: 1,
+    rebaseAfterRun: true,
     lastPolledAt: null,
     eligibility,
   };
