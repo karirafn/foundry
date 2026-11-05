@@ -6,6 +6,8 @@ const REBASE_SKIPPED_REASON_LABELS: Record<string, string> = {
   'provider-error': 'provider error',
   unsupported: 'unsupported',
   'permission-denied': 'permission denied',
+  'force-push-protected': 'force-push protected',
+  'rebase-failed': 'rebase failed',
   'not-found': 'not found',
   'stale-head': 'stale head',
   'unrecognised-error': 'unrecognised error',

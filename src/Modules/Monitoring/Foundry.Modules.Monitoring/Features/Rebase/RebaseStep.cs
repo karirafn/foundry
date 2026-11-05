@@ -302,6 +302,14 @@ internal sealed class RebaseStep(
 
             PullRequestRebaseState.Behind behind = (PullRequestRebaseState.Behind)state;
 
+            if (behind.Progress is ProviderRebaseProgress.InProgress)
+            {
+                // A rebase is already running (e.g. requested before a restart lost the progress): await it
+                // rather than ask again, which the provider would refuse while it runs.
+                rebase.RecordRequested(behind.HeadSha, now);
+                return new StepResult.Waiting();
+            }
+
             Result<RebaseRequestOutcome> requestResult = await provider.RequestRebaseAsync(
                 repository.Slug,
                 behind.PullRequestId,
@@ -354,7 +362,8 @@ internal sealed class RebaseStep(
             return new StepResult.Transient(stateFailure.Error.Message);
         }
 
-        string? headSha = ((Result<PullRequestRebaseState>.Success)stateResult).Value switch
+        PullRequestRebaseState state = ((Result<PullRequestRebaseState>.Success)stateResult).Value;
+        string? headSha = state switch
         {
             PullRequestRebaseState.UpToDate upToDate => upToDate.HeadSha,
             PullRequestRebaseState.Behind behind => behind.HeadSha,
@@ -366,6 +375,17 @@ internal sealed class RebaseStep(
             return new StepResult.Resolved(RebaseOutcomes.Rebased);
         }
 
+        // Providers that report their own rebase progress (GitLab) resolve from it once the rebase finishes.
+        switch (state.Progress)
+        {
+            case ProviderRebaseProgress.Completed:
+                return new StepResult.Resolved(RebaseOutcomes.Rebased);
+            case ProviderRebaseProgress.Conflicted:
+                return new StepResult.Resolved(RebaseOutcomes.Conflict);
+            case ProviderRebaseProgress.Failed failed:
+                return Skipped(failed.Reason);
+        }
+
         if (rebase.HasLandingTimedOut(now))
         {
             return Skipped(RebaseSkipReasons.Timeout);
@@ -374,7 +394,7 @@ internal sealed class RebaseStep(
         if (headSha is null)
         {
             // The provider stopped answering with a head (refused or unsupported): skip rather than wait it out.
-            return ((Result<PullRequestRebaseState>.Success)stateResult).Value is PullRequestRebaseState.Refused refused
+            return state is PullRequestRebaseState.Refused refused
                 ? Skipped(refused.Reason)
                 : Skipped(RebaseSkipReasons.Unsupported);
         }
