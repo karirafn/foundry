@@ -82,7 +82,7 @@ describe('IssueCardComponent', () => {
     expect(fixture.componentInstance).toBeTruthy();
   });
 
-  it('should render a native button as the card container', () => {
+  it('should render a non-interactive container as the card root', () => {
     // Arrange / Act
     const fixture = createComponent();
     const el = fixture.nativeElement as HTMLElement;
@@ -90,7 +90,104 @@ describe('IssueCardComponent', () => {
     // Assert
     const card = el.querySelector('.issue-card') as HTMLElement;
     expect(card).toBeTruthy();
-    expect(card.tagName).toBe('BUTTON');
+    expect(card.tagName).toBe('DIV');
+    expect(card.getAttribute('role')).toBeNull();
+    expect(card.getAttribute('tabindex')).toBeNull();
+    expect(card.getAttribute('aria-expanded')).toBeNull();
+  });
+
+  it('should render a dedicated toggle button inside the card', () => {
+    // Arrange / Act
+    const fixture = createComponent();
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    const buttons = el.querySelectorAll('.issue-card button');
+    expect(buttons.length).toBe(1);
+    expect(buttons[0].classList.contains('issue-card__toggle')).toBe(true);
+    expect(buttons[0].textContent?.trim()).toBe('Enable dark mode for dashboard');
+  });
+
+  it('should not nest any link inside a button', () => {
+    // Arrange / Act
+    const fixture = createComponent({ ...mockIssue, pullRequestUrl: 'https://github.com/owner/repo/pull/7' });
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    expect(el.querySelectorAll('.issue-card a').length).toBe(2);
+    expect(el.querySelectorAll('button a').length).toBe(0);
+  });
+
+  it('should place the toggle button before the links in tab order', () => {
+    // Arrange / Act
+    const fixture = createComponent({ ...mockIssue, pullRequestUrl: 'https://github.com/owner/repo/pull/7' });
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    const focusables = Array.from(el.querySelectorAll<HTMLElement>('button, a[href]'));
+    expect(focusables.map((f) => f.className)).toEqual([
+      'issue-card__toggle',
+      'issue-card__pr-link',
+      'issue-card__link',
+    ]);
+  });
+
+  it('should still toggle a card with no links', () => {
+    // Arrange
+    const fixture = createComponent({ ...mockIssue, url: '', pullRequestUrl: null });
+    const el = fixture.nativeElement as HTMLElement;
+    let emitted = false;
+    fixture.componentInstance.toggle.subscribe(() => (emitted = true));
+
+    // Act
+    (el.querySelector('.issue-card__toggle') as HTMLButtonElement).click();
+
+    // Assert
+    expect(el.querySelectorAll('.issue-card a').length).toBe(0);
+    expect(emitted).toBe(true);
+  });
+
+  it('should emit toggle exactly once when the toggle button is clicked', () => {
+    // Arrange
+    const fixture = createComponent();
+    const el = fixture.nativeElement as HTMLElement;
+    let count = 0;
+    fixture.componentInstance.toggle.subscribe(() => count++);
+
+    // Act
+    (el.querySelector('.issue-card__toggle') as HTMLButtonElement).click();
+
+    // Assert
+    expect(count).toBe(1);
+  });
+
+  it('should emit toggle when a non-link area of the card is clicked', () => {
+    // Arrange
+    const fixture = createComponent();
+    const el = fixture.nativeElement as HTMLElement;
+    let emitted = false;
+    fixture.componentInstance.toggle.subscribe(() => (emitted = true));
+
+    // Act
+    (el.querySelector('.issue-card__timestamp') as HTMLElement).click();
+
+    // Assert
+    expect(emitted).toBe(true);
+  });
+
+  it('should not emit toggle when Enter is pressed on a link', () => {
+    // Arrange
+    const fixture = createComponent();
+    const el = fixture.nativeElement as HTMLElement;
+    let emitted = false;
+    fixture.componentInstance.toggle.subscribe(() => (emitted = true));
+
+    // Act
+    const link = el.querySelector('.issue-card__link') as HTMLAnchorElement;
+    link.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+
+    // Assert
+    expect(emitted).toBe(false);
   });
 
   // Cycle 2: meta row renders issue number and repo slug
@@ -231,7 +328,7 @@ describe('IssueCardComponent', () => {
     const el = fixture.nativeElement as HTMLElement;
 
     // Assert
-    const card = el.querySelector('.issue-card') as HTMLElement;
+    const card = el.querySelector('.issue-card__toggle') as HTMLElement;
     expect(card?.getAttribute('aria-expanded')).toBe('false');
   });
 
@@ -241,17 +338,17 @@ describe('IssueCardComponent', () => {
     const el = fixture.nativeElement as HTMLElement;
 
     // Assert
-    const card = el.querySelector('.issue-card') as HTMLElement;
+    const card = el.querySelector('.issue-card__toggle') as HTMLElement;
     expect(card?.getAttribute('aria-expanded')).toBe('true');
   });
 
-  it('should be focusable as a native button', () => {
+  it('should make the toggle focusable as a native button', () => {
     // Arrange / Act
     const fixture = createComponent();
     const el = fixture.nativeElement as HTMLElement;
 
     // Assert
-    const card = el.querySelector('.issue-card') as HTMLButtonElement;
+    const card = el.querySelector('.issue-card__toggle') as HTMLButtonElement;
     expect(card?.tagName).toBe('BUTTON');
     expect(card?.type).toBe('button');
   });
@@ -263,7 +360,7 @@ describe('IssueCardComponent', () => {
     const el = fixture.nativeElement as HTMLElement;
 
     // Assert
-    const card = el.querySelector('.issue-card') as HTMLElement;
+    const card = el.querySelector('.issue-card__toggle') as HTMLElement;
     expect(card?.getAttribute('aria-controls')).toBe('detail-abc123');
   });
 
@@ -273,7 +370,7 @@ describe('IssueCardComponent', () => {
     const el = fixture.nativeElement as HTMLElement;
 
     // Assert
-    const card = el.querySelector('.issue-card') as HTMLElement;
+    const card = el.querySelector('.issue-card__toggle') as HTMLElement;
     expect(card?.getAttribute('aria-label')).toBe('Issue #42: Enable dark mode for dashboard. State: in progress');
   });
 
@@ -290,7 +387,7 @@ describe('IssueCardComponent', () => {
     const el = fixture.nativeElement as HTMLElement;
 
     // Assert
-    const card = el.querySelector('.issue-card') as HTMLElement;
+    const card = el.querySelector('.issue-card__toggle') as HTMLElement;
     expect(card?.getAttribute('aria-label')).toContain('Repo ineligible');
   });
 
@@ -307,7 +404,7 @@ describe('IssueCardComponent', () => {
     const el = fixture.nativeElement as HTMLElement;
 
     // Assert
-    const card = el.querySelector('.issue-card') as HTMLElement;
+    const card = el.querySelector('.issue-card__toggle') as HTMLElement;
     expect(card?.getAttribute('aria-label')).toContain('Repo unreachable');
   });
 
@@ -317,7 +414,7 @@ describe('IssueCardComponent', () => {
     const el = fixture.nativeElement as HTMLElement;
 
     // Assert
-    const card = el.querySelector('.issue-card') as HTMLElement;
+    const card = el.querySelector('.issue-card__toggle') as HTMLElement;
     const label = card?.getAttribute('aria-label') ?? '';
     expect(label).not.toContain('Repo ineligible');
     expect(label).not.toContain('Repo unreachable');
@@ -328,7 +425,7 @@ describe('IssueCardComponent', () => {
     // Arrange
     const fixture = createComponent();
     const el = fixture.nativeElement as HTMLElement;
-    const card = el.querySelector('.issue-card') as HTMLElement;
+    const card = el.querySelector('.issue-card__toggle') as HTMLElement;
     let emitted = false;
     fixture.componentInstance.toggle.subscribe(() => (emitted = true));
 
@@ -343,7 +440,7 @@ describe('IssueCardComponent', () => {
     // Arrange
     const fixture = createComponent();
     const el = fixture.nativeElement as HTMLElement;
-    const card = el.querySelector('.issue-card') as HTMLElement;
+    const card = el.querySelector('.issue-card__toggle') as HTMLElement;
     let emitted = false;
     fixture.componentInstance.toggle.subscribe(() => (emitted = true));
 
@@ -358,7 +455,7 @@ describe('IssueCardComponent', () => {
     // Arrange
     const fixture = createComponent();
     const el = fixture.nativeElement as HTMLElement;
-    const card = el.querySelector('.issue-card') as HTMLElement;
+    const card = el.querySelector('.issue-card__toggle') as HTMLElement;
     const event = new KeyboardEvent('keydown', { key: ' ', bubbles: true, cancelable: true });
     let defaultPrevented = false;
     event.preventDefault = () => { defaultPrevented = true; };
@@ -374,7 +471,7 @@ describe('IssueCardComponent', () => {
     // Arrange
     const fixture = createComponent();
     const el = fixture.nativeElement as HTMLElement;
-    const card = el.querySelector('.issue-card') as HTMLElement;
+    const card = el.querySelector('.issue-card__toggle') as HTMLElement;
     const event = new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true });
     let defaultPrevented = false;
     event.preventDefault = () => { defaultPrevented = true; };
@@ -1021,7 +1118,7 @@ describe('IssueCardComponent', () => {
     const el = fixture.nativeElement as HTMLElement;
 
     // Assert
-    const card = el.querySelector('.issue-card') as HTMLElement;
+    const card = el.querySelector('.issue-card__toggle') as HTMLElement;
     expect(card?.getAttribute('aria-label')).toContain('Next up');
   });
 
@@ -1128,7 +1225,7 @@ describe('IssueCardComponent', () => {
     // Assert
     const value = el.querySelector('.issue-card__stat-pill--input-tokens .issue-card__stat-value');
     expect(value?.textContent?.trim()).toMatch(/^- input tokens$/);
-    const label = (el.querySelector('.issue-card') as HTMLElement).getAttribute('aria-label') ?? '';
+    const label = (el.querySelector('.issue-card__toggle') as HTMLElement).getAttribute('aria-label') ?? '';
     expect(label).toContain('unknown input tokens');
   });
 
@@ -1333,7 +1430,7 @@ describe('IssueCardComponent', () => {
     const el = fixture.nativeElement as HTMLElement;
 
     // Assert
-    const card = el.querySelector('.issue-card') as HTMLElement;
+    const card = el.querySelector('.issue-card__toggle') as HTMLElement;
     const label = card?.getAttribute('aria-label') ?? '';
     expect(label).toContain('Run stats:');
   });
@@ -1347,7 +1444,7 @@ describe('IssueCardComponent', () => {
     const el = fixture.nativeElement as HTMLElement;
 
     // Assert
-    const card = el.querySelector('.issue-card') as HTMLElement;
+    const card = el.querySelector('.issue-card__toggle') as HTMLElement;
     const label = card?.getAttribute('aria-label') ?? '';
     expect(label).toContain('3 runs');
   });
@@ -1362,7 +1459,7 @@ describe('IssueCardComponent', () => {
     const el = fixture.nativeElement as HTMLElement;
 
     // Assert
-    const card = el.querySelector('.issue-card') as HTMLElement;
+    const card = el.querySelector('.issue-card__toggle') as HTMLElement;
     const label = card?.getAttribute('aria-label') ?? '';
     expect(label).not.toContain('runs');
   });
@@ -1384,7 +1481,7 @@ describe('IssueCardComponent', () => {
     const el = fixture.nativeElement as HTMLElement;
 
     // Assert
-    const card = el.querySelector('.issue-card') as HTMLElement;
+    const card = el.querySelector('.issue-card__toggle') as HTMLElement;
     const label = card?.getAttribute('aria-label') ?? '';
     expect(label).toContain('Run stats:');
     expect(label).toContain('2 runs');
@@ -1402,7 +1499,7 @@ describe('IssueCardComponent', () => {
     const el = fixture.nativeElement as HTMLElement;
 
     // Assert
-    const card = el.querySelector('.issue-card') as HTMLElement;
+    const card = el.querySelector('.issue-card__toggle') as HTMLElement;
     const label = card?.getAttribute('aria-label') ?? '';
     expect(label).not.toContain('Run stats:');
   });
@@ -1418,7 +1515,7 @@ describe('IssueCardComponent', () => {
     const el = fixture.nativeElement as HTMLElement;
 
     // Assert — aria-label should contain screen-reader-friendly activity info
-    const card = el.querySelector('.issue-card') as HTMLElement;
+    const card = el.querySelector('.issue-card__toggle') as HTMLElement;
     const label = card?.getAttribute('aria-label') ?? '';
     expect(label).toContain('Active: 3 commits.');
   });
@@ -1433,7 +1530,7 @@ describe('IssueCardComponent', () => {
     const el = fixture.nativeElement as HTMLElement;
 
     // Assert
-    const card = el.querySelector('.issue-card') as HTMLElement;
+    const card = el.querySelector('.issue-card__toggle') as HTMLElement;
     const label = card?.getAttribute('aria-label') ?? '';
     expect(label).toContain('Active: 1 commit.');
   });
@@ -1448,7 +1545,7 @@ describe('IssueCardComponent', () => {
     const el = fixture.nativeElement as HTMLElement;
 
     // Assert
-    const card = el.querySelector('.issue-card') as HTMLElement;
+    const card = el.querySelector('.issue-card__toggle') as HTMLElement;
     const label = card?.getAttribute('aria-label') ?? '';
     expect(label).toContain('Active: no commits yet.');
   });
@@ -1463,7 +1560,7 @@ describe('IssueCardComponent', () => {
     const el = fixture.nativeElement as HTMLElement;
 
     // Assert — aria-label uses "7 minutes", not "7m"
-    const card = el.querySelector('.issue-card') as HTMLElement;
+    const card = el.querySelector('.issue-card__toggle') as HTMLElement;
     const label = card?.getAttribute('aria-label') ?? '';
     expect(label).toContain('silent 7 minutes');
   });
@@ -1478,7 +1575,7 @@ describe('IssueCardComponent', () => {
     const el = fixture.nativeElement as HTMLElement;
 
     // Assert
-    const card = el.querySelector('.issue-card') as HTMLElement;
+    const card = el.querySelector('.issue-card__toggle') as HTMLElement;
     const label = card?.getAttribute('aria-label') ?? '';
     expect(label).not.toContain('Active:');
   });
@@ -1523,7 +1620,7 @@ describe('IssueCardComponent', () => {
     const el = fixture.nativeElement as HTMLElement;
 
     // Assert
-    const card = el.querySelector('.issue-card') as HTMLElement;
+    const card = el.querySelector('.issue-card__toggle') as HTMLElement;
     const label = card?.getAttribute('aria-label') ?? '';
     expect(label).not.toContain('commits');
   });
@@ -1557,7 +1654,7 @@ describe('IssueCardComponent', () => {
     // To prove it's reactive: read it inside an effect/computed context — if it's a plain
     // method it won't track tick; if it's a computed it will. We verify via the DOM that
     // the aria-label updates even when ONLY the ticker changes.
-    const card = fixture.nativeElement.querySelector('.issue-card') as HTMLElement;
+    const card = fixture.nativeElement.querySelector('.issue-card__toggle') as HTMLElement;
     const labelBefore = card?.getAttribute('aria-label') ?? '';
     expect(labelBefore).toContain('silent');
 
@@ -1738,7 +1835,7 @@ describe('IssueCardComponent', () => {
     const el = fixture.nativeElement as HTMLElement;
 
     // Assert
-    const card = el.querySelector('.issue-card') as HTMLElement;
+    const card = el.querySelector('.issue-card__toggle') as HTMLElement;
     expect(card?.getAttribute('aria-label')).toContain('Queue position 2');
   });
 
@@ -1761,7 +1858,7 @@ describe('IssueCardComponent', () => {
     const el = fixture.nativeElement as HTMLElement;
 
     // Assert
-    const card = el.querySelector('.issue-card') as HTMLElement;
+    const card = el.querySelector('.issue-card__toggle') as HTMLElement;
     const label = card?.getAttribute('aria-label') ?? '';
     expect(label.startsWith('Next up. ')).toBe(true);
     expect(label).not.toContain('Queue position 1');
@@ -1781,7 +1878,7 @@ describe('IssueCardComponent', () => {
     const el = fixture.nativeElement as HTMLElement;
 
     // Assert
-    const card = el.querySelector('.issue-card') as HTMLElement;
+    const card = el.querySelector('.issue-card__toggle') as HTMLElement;
     expect(card?.getAttribute('aria-label')).not.toContain('Queue position');
   });
 
@@ -1927,7 +2024,7 @@ describe('IssueCardComponent', () => {
     const el = fixture.nativeElement as HTMLElement;
 
     // Assert
-    expect(el.querySelector('.issue-card')?.getAttribute('aria-label')).toContain('Rebase conflict.');
+    expect(el.querySelector('.issue-card__toggle')?.getAttribute('aria-label')).toContain('Rebase conflict.');
   });
 
   it('should render the REBASING state badge for rebase_pending', () => {
@@ -2137,7 +2234,7 @@ describe('IssueCardComponent', () => {
     const el = fixture.nativeElement as HTMLElement;
 
     // Assert
-    const card = el.querySelector('.issue-card') as HTMLElement;
+    const card = el.querySelector('.issue-card__toggle') as HTMLElement;
     const label = card?.getAttribute('aria-label') ?? '';
     expect(label).toContain('Checks: failing');
     // Must NOT have doubled "Checks outcome: Checks:"
@@ -2153,7 +2250,7 @@ describe('IssueCardComponent', () => {
     const el = fixture.nativeElement as HTMLElement;
 
     // Assert
-    const card = el.querySelector('.issue-card') as HTMLElement;
+    const card = el.querySelector('.issue-card__toggle') as HTMLElement;
     const label = card?.getAttribute('aria-label') ?? '';
     expect(label).not.toContain('Checks:');
   });
@@ -2167,7 +2264,7 @@ describe('IssueCardComponent', () => {
     const el = fixture.nativeElement as HTMLElement;
 
     // Assert
-    const card = el.querySelector('.issue-card') as HTMLElement;
+    const card = el.querySelector('.issue-card__toggle') as HTMLElement;
     const label = card?.getAttribute('aria-label') ?? '';
     expect(label).not.toContain('Checks:');
   });
@@ -2194,7 +2291,7 @@ describe('IssueCardComponent', () => {
     const el = fixture.nativeElement as HTMLElement;
 
     // Assert
-    const card = el.querySelector('.issue-card') as HTMLElement;
+    const card = el.querySelector('.issue-card__toggle') as HTMLElement;
     const label = card?.getAttribute('aria-label') ?? '';
     expect(label).toContain('Waiting on checks');
   });
@@ -2208,7 +2305,7 @@ describe('IssueCardComponent', () => {
     const el = fixture.nativeElement as HTMLElement;
 
     // Assert
-    const card = el.querySelector('.issue-card') as HTMLElement;
+    const card = el.querySelector('.issue-card__toggle') as HTMLElement;
     const label = card?.getAttribute('aria-label') ?? '';
     expect(label).not.toContain('Waiting on checks');
   });
@@ -2500,7 +2597,7 @@ describe('IssueCardComponent', () => {
       // Act
       const fixture = createWithAgentActivity(activity, justNow());
       const el = fixture.nativeElement as HTMLElement;
-      const label = (el.querySelector('.issue-card') as HTMLElement).getAttribute('aria-label') ?? '';
+      const label = (el.querySelector('.issue-card__toggle') as HTMLElement).getAttribute('aria-label') ?? '';
 
       // Assert
       expect(el.querySelector('.issue-card__activity')?.textContent).toContain('silent 6m · Bash running');

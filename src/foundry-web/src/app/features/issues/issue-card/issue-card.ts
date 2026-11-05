@@ -97,15 +97,16 @@ function hasVisiblePills(stats: RunStats): boolean {
   standalone: true,
   imports: [StateBadgeComponent, SafeHrefPipe, NgClass, DecimalPipe],
   template: `
-    <button
-      type="button"
+    <!--
+      The root is a non-interactive container: HTML forbids links inside a <button>, so the
+      expand/collapse control is the dedicated title button below and the links are its siblings.
+      The container click handler keeps the whole card as the pointer hit area; keyboard and
+      assistive-technology users reach the toggle button directly.
+    -->
+    <div
       class="issue-card"
       [ngClass]="_accentClass()"
-      [attr.aria-expanded]="expanded().toString()"
-      [attr.aria-controls]="'detail-' + issue().id"
-      [attr.aria-label]="issueAriaLabel()"
       (click)="onCardClick()"
-      (keydown)="onKeydown($event)"
     >
       @if (_isQueuedTier()) {
         <div
@@ -115,7 +116,7 @@ function hasVisiblePills(stats: RunStats): boolean {
         >{{ _queuePositionDisplay() }}</div>
       }
       <div class="issue-card__body">
-        <div class="issue-card__meta">
+        <div class="issue-card__meta" aria-hidden="true">
           <span class="issue-card__number">#{{ issue().issueNumber }}</span>
           <span class="issue-card__separator" aria-hidden="true">·</span>
           <span class="issue-card__slug">{{ issue().repositorySlug }}</span>
@@ -170,14 +171,21 @@ function hasVisiblePills(stats: RunStats): boolean {
         <div
           class="issue-card__title"
           [attr.title]="issue().title"
-        >{{ issue().title }}</div>
+        ><button
+          type="button"
+          class="issue-card__toggle"
+          [attr.aria-expanded]="expanded().toString()"
+          [attr.aria-controls]="'detail-' + issue().id"
+          [attr.aria-label]="issueAriaLabel()"
+          (keydown)="onKeydown($event)"
+        >{{ issue().title }}</button></div>
 
         @if (_agentActivityLine(); as agentLine) {
           <div class="issue-card__agent-activity" [attr.title]="agentLine" aria-hidden="true">{{ agentLine }}</div>
         }
 
         @if (_visibleRunStats(); as stats) {
-          <div class="issue-card__run-stats">
+          <div class="issue-card__run-stats" aria-hidden="true">
             @if (stats.runCount > 1) {
               <span class="issue-card__stat-pill issue-card__stat-pill--run-count issue-card__stat-pill--warning">
                 <svg class="issue-card__stat-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -238,7 +246,7 @@ function hasVisiblePills(stats: RunStats): boolean {
         }
 
         <div class="issue-card__footer">
-          <span class="issue-card__timestamp">{{ timestamp() }}</span>
+          <span class="issue-card__timestamp" aria-hidden="true">{{ timestamp() }}</span>
           @if (_activityLineVisible()) {
             <span class="issue-card__activity" aria-hidden="true">{{ _activityLineText() }}</span>
           }
@@ -286,7 +294,7 @@ function hasVisiblePills(stats: RunStats): boolean {
           </span>
         </div>
       </div>
-    </button>
+    </div>
   `,
   styleUrl: './issue-card.scss',
 })
