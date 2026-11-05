@@ -1,6 +1,7 @@
 using Foundry.Modules.Credentials.Domain.Entities;
 using Foundry.Modules.Credentials.Domain.ValueObjects;
 using Foundry.Modules.Credentials.Features.CreditProbe;
+using Foundry.Modules.Credentials.Features.SessionCheck;
 using Foundry.Modules.Settings.Contracts;
 using Foundry.Modules.Settings.Domain.Entities;
 using Foundry.Modules.Workers.Contracts;
@@ -885,6 +886,9 @@ public sealed class TryRunProbeAsync : IAsyncDisposable
             Foundry.Modules.Credentials.Features.Usage.UsageReportSpec spec,
             CancellationToken cancellationToken)
             => Task.FromResult(Result<string>.Ok(""));
+
+        public Task<Result<OAuthSessionStatus>> CheckOAuthSessionAsync(CancellationToken cancellationToken)
+            => Task.FromResult(Result<OAuthSessionStatus>.Ok(new OAuthSessionStatus.Active()));
 
         public Task SeedOnboardingAsync(CancellationToken cancellationToken) => Task.CompletedTask;
 

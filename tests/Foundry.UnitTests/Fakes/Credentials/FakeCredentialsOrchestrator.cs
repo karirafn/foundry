@@ -2,6 +2,7 @@ using System.Runtime.CompilerServices;
 
 using Foundry.Modules.Credentials.Features.CreditProbe;
 using Foundry.Modules.Credentials.Features.Login;
+using Foundry.Modules.Credentials.Features.SessionCheck;
 using Foundry.Modules.Credentials.Features.Usage;
 using Foundry.Modules.Credentials.Infrastructure.Orchestration;
 using Foundry.Shared;
@@ -28,6 +29,9 @@ internal sealed class FakeCredentialsOrchestrator(IEnumerable<string>? logLines 
         Result<string>.Ok("");
     private Result<string> _usageReportResult =
         Result<string>.Ok("");
+    private Result<OAuthSessionStatus> _sessionCheckResult =
+        Result<OAuthSessionStatus>.Ok(new OAuthSessionStatus.Active());
+    private Func<Task>? _onSessionCheck;
     private IReadOnlyList<string> _runningTransientContainerIds = [];
     private IReadOnlyList<string> _exitedTransientContainerIds = [];
     private Exception? _listTransientException;
@@ -47,6 +51,7 @@ internal sealed class FakeCredentialsOrchestrator(IEnumerable<string>? logLines 
     public int GetCredentialVolumeAuthStatusCallCount { get; private set; }
     public string? LastDeliveredCode { get; private set; }
     public int UsageReportCallCount { get; private set; }
+    public int SessionCheckCallCount { get; private set; }
 
     /// <summary>Completes when <see cref="RunUsageReportAsync"/> is first entered.</summary>
     public TaskCompletionSource UsageReportStarted { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -126,6 +131,30 @@ internal sealed class FakeCredentialsOrchestrator(IEnumerable<string>? logLines 
                 new Error("Login.ContainerExitedWithError", $"Container exited with code {exitCode}"));
         }
 
+        return this;
+    }
+
+    /// <summary>Scripts <see cref="CheckOAuthSessionAsync"/> to return the given status.</summary>
+    public FakeCredentialsOrchestrator WithSessionStatus(OAuthSessionStatus status)
+    {
+        _sessionCheckResult = Result<OAuthSessionStatus>.Ok(status);
+        return this;
+    }
+
+    /// <summary>Scripts <see cref="CheckOAuthSessionAsync"/> to return a failure.</summary>
+    public FakeCredentialsOrchestrator WithSessionCheckFailure(Error error)
+    {
+        _sessionCheckResult = Result<OAuthSessionStatus>.Fail(error);
+        return this;
+    }
+
+    /// <summary>
+    /// Runs <paramref name="callback"/> inside <see cref="CheckOAuthSessionAsync"/> before it returns,
+    /// so tests can change state while a check is in flight.
+    /// </summary>
+    public FakeCredentialsOrchestrator OnSessionCheck(Func<Task> callback)
+    {
+        _onSessionCheck = callback;
         return this;
     }
 
@@ -274,6 +303,18 @@ internal sealed class FakeCredentialsOrchestrator(IEnumerable<string>? logLines 
         }
 
         return Task.FromResult(_exitedTransientContainerIds);
+    }
+
+    public async Task<Result<OAuthSessionStatus>> CheckOAuthSessionAsync(CancellationToken cancellationToken)
+    {
+        SessionCheckCallCount++;
+
+        if (_onSessionCheck is not null)
+        {
+            await _onSessionCheck();
+        }
+
+        return _sessionCheckResult;
     }
 
     public Task SeedOnboardingAsync(CancellationToken cancellationToken)

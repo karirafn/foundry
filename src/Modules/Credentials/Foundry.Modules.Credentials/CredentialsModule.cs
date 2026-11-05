@@ -6,6 +6,7 @@ using Foundry.Modules.Credentials.Features.CredentialReactions;
 using Foundry.Modules.Credentials.Features.CreditProbe;
 using Foundry.Modules.Credentials.Features.DispatchReactions;
 using Foundry.Modules.Credentials.Features.Login;
+using Foundry.Modules.Credentials.Features.SessionCheck;
 using Foundry.Modules.Credentials.Features.Usage;
 using Foundry.Modules.Credentials.Features.WorkerReactions;
 using Foundry.Modules.Credentials.Infrastructure.Orchestration;
@@ -54,6 +55,11 @@ public static class CredentialsModule
         services.AddSingleton<CreditProbeCoordinator>();
         services.AddSingleton<ICreditProbeCoordinator>(sp => sp.GetRequiredService<CreditProbeCoordinator>());
         services.AddHostedService<CreditProbeService>();
+
+        // OAuth session check: verifies the stored login before dispatch reaches a dead session.
+        services.AddSingleton<OAuthSessionCheckCoordinator>();
+        services.AddSingleton<IOAuthSessionCheckCoordinator>(sp => sp.GetRequiredService<OAuthSessionCheckCoordinator>());
+        services.AddHostedService<OAuthSessionCheckService>();
 
         // UsageSnapshotState singleton: both reader and mutator interfaces resolve to ONE instance.
         // Registered here (not in step 8) so the GET /api/credentials/usage endpoint resolves
