@@ -944,6 +944,18 @@ describe('SettingsClaudeCodeComponent', () => {
       expect(text(page, 'blockCiCdEdits-detail')).toContain('system prompt still instructs workers');
     });
 
+    it('should render the soft-guidance note as a warning callout with a visible text lead', async () => {
+      // Arrange & Act
+      const page = await loadPage({ blockCiCdEdits: false });
+
+      // Assert
+      const callout = page.el.querySelector('#blockCiCdEdits-detail .general-settings__callout--warning') as HTMLElement;
+      expect(callout).toBeTruthy();
+      expect(callout.querySelector('.general-settings__callout-lead')?.textContent?.trim()).toBe('Warning:');
+      expect(callout.querySelector('.general-settings__callout-icon')?.getAttribute('aria-hidden')).toBe('true');
+      expect(page.el.querySelector('.general-settings__field-hint--warning')).toBeNull();
+    });
+
     it('should keep the CI/CD detail region mounted with a stable id', async () => {
       // Arrange
       const page = await loadPage({ blockCiCdEdits: false });
