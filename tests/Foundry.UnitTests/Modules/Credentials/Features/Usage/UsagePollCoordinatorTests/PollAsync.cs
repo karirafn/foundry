@@ -1,6 +1,7 @@
 using Foundry.Modules.Credentials.Domain.Entities;
 using Foundry.Modules.Credentials.Features.CreditProbe;
 using Foundry.Modules.Credentials.Features.Login;
+using Foundry.Modules.Credentials.Features.SessionCheck;
 using Foundry.Modules.Credentials.Features.Usage;
 using Foundry.Modules.Credentials.Infrastructure.Orchestration;
 using Foundry.Shared;
@@ -242,6 +243,9 @@ public sealed class PollAsync : IAsyncDisposable
 
         public Task<IReadOnlyList<string>> ListExitedTransientContainersAsync(CancellationToken cancellationToken)
             => Task.FromResult<IReadOnlyList<string>>([]);
+
+        public Task<Result<OAuthSessionStatus>> CheckOAuthSessionAsync(CancellationToken cancellationToken)
+            => Task.FromResult(Result<OAuthSessionStatus>.Ok(new OAuthSessionStatus.Active()));
 
         public Task SeedOnboardingAsync(CancellationToken cancellationToken)
             => Task.CompletedTask;
@@ -674,6 +678,9 @@ public sealed class PollAsync : IAsyncDisposable
 
         public Task<IReadOnlyList<string>> ListExitedTransientContainersAsync(CancellationToken cancellationToken)
             => Task.FromResult<IReadOnlyList<string>>([]);
+
+        public Task<Result<OAuthSessionStatus>> CheckOAuthSessionAsync(CancellationToken cancellationToken)
+            => Task.FromResult(Result<OAuthSessionStatus>.Ok(new OAuthSessionStatus.Active()));
 
         public Task SeedOnboardingAsync(CancellationToken cancellationToken)
             => Task.CompletedTask;

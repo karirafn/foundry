@@ -26,6 +26,8 @@ internal sealed class FakeDockerContainerRuntime : IDockerContainerRuntime
     private string? _getLogsResult;
     private string _execCaptureStdout = "";
     private string? _readFileResult;
+    private Queue<string?>? _readFileResults;
+    private readonly List<string> _callLog = [];
     private string[] _streamLogLines = [];
     private readonly List<string> _allRemovedVolumeNames = [];
 
@@ -45,6 +47,12 @@ internal sealed class FakeDockerContainerRuntime : IDockerContainerRuntime
     public IReadOnlyList<string>? LastExecEnvironment { get; private set; }
     public int? LastExecMaxBytes { get; private set; }
     public string? LastReadFilePath { get; private set; }
+
+    /// <summary>
+    /// Ordered log of exec, read, stop and remove calls: <c>exec:&lt;argv&gt;</c>, <c>read:&lt;path&gt;</c>,
+    /// <c>stop:&lt;id&gt;</c>, <c>remove:&lt;id&gt;</c>.
+    /// </summary>
+    public IReadOnlyList<string> CallLog => _callLog;
     public string? LastWriteFilePath { get; private set; }
     public string? LastWriteFileContent { get; private set; }
     public string? LastExecAsyncContainerId { get; private set; }
@@ -120,6 +128,15 @@ internal sealed class FakeDockerContainerRuntime : IDockerContainerRuntime
         return this;
     }
 
+    /// <summary>
+    /// Scripts successive <see cref="ReadFileAsync"/> results; once exhausted, the last one repeats.
+    /// </summary>
+    public FakeDockerContainerRuntime WithReadFileResults(params string?[] results)
+    {
+        _readFileResults = new Queue<string?>(results);
+        return this;
+    }
+
     public FakeDockerContainerRuntime WithStreamLogLines(params string[] lines)
     {
         _streamLogLines = lines;
@@ -156,6 +173,7 @@ internal sealed class FakeDockerContainerRuntime : IDockerContainerRuntime
     {
         LastStopContainerId = containerId;
         LastStopWaitBeforeKillSeconds = waitBeforeKillSeconds;
+        _callLog.Add($"stop:{containerId}");
         return Task.CompletedTask;
     }
 
@@ -164,6 +182,7 @@ internal sealed class FakeDockerContainerRuntime : IDockerContainerRuntime
         CancellationToken cancellationToken)
     {
         LastRemoveContainerId = containerId;
+        _callLog.Add($"remove:{containerId}");
         return Task.CompletedTask;
     }
 
@@ -253,6 +272,7 @@ internal sealed class FakeDockerContainerRuntime : IDockerContainerRuntime
         LastExecCommand = command;
         LastExecEnvironment = environment;
         LastExecMaxBytes = maxBytes;
+        _callLog.Add($"exec:{string.Join(' ', command)}");
 
         string result = maxBytes is null
             ? _execCaptureStdout
@@ -269,6 +289,13 @@ internal sealed class FakeDockerContainerRuntime : IDockerContainerRuntime
         CancellationToken cancellationToken)
     {
         LastReadFilePath = filePath;
+        _callLog.Add($"read:{filePath}");
+
+        if (_readFileResults is { Count: > 0 })
+        {
+            _readFileResult = _readFileResults.Dequeue();
+        }
+
         return Task.FromResult(_readFileResult);
     }
 
