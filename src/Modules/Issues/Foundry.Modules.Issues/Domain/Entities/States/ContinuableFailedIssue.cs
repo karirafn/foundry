@@ -23,6 +23,8 @@ public sealed class ContinuableFailedIssue : Issue
 
     public string PullRequestUrl { get; private set; } = string.Empty;
 
+    public override string? LinkedPullRequestUrl => NullIfEmpty(PullRequestUrl);
+
     public string FailureReason { get; private set; } = string.Empty;
 
     public FailureCategoryVO FailureCategory { get; private set; } = FailureCategoryVO.NonZeroExit;

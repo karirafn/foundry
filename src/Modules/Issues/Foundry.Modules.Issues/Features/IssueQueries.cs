@@ -198,25 +198,11 @@ internal sealed class IssueQueries(
             cancellationToken);
 
         return issues
-            .Select(i => new IssueSummary(
-                Id: i.Id.Value,
-                IssueNumber: i.IssueNumber,
-                Title: i.Title,
-                State: GetStateDiscriminator(i),
-                RepositorySlug: slugs.TryGetValue(i.MonitoredRepositoryId, out string? slug) ? slug : string.Empty,
-                DetectedAt: i.DetectedAt,
-                Url: i.Url.Value.ToString(),
-                FailureClassification: GetFailureCategory(i),
-                RepositoryEligibilityStatus: eligibilityStatuses.TryGetValue(i.MonitoredRepositoryId.Value, out string? status)
-                    ? status
-                    : null,
-                RunStats: runAggregates.TryGetValue(i.Id.Value, out RunAggregate? aggregate)
-                    ? MapRunStats(aggregate)
-                    : null,
-                ChecksOutcome: GetChecksOutcomeDiscriminator(i),
-                PullRequestUrl: GetPullRequestUrl(i),
-                RebaseOutcome: GetRebaseOutcome(i)?.Discriminator,
-                RebaseSkippedReason: (GetRebaseOutcome(i) as RebaseOutcome.Skipped)?.Reason))
+            .Select(i => ToSummary(
+                i,
+                slugs.TryGetValue(i.MonitoredRepositoryId, out string? slug) ? slug : string.Empty,
+                eligibilityStatuses.TryGetValue(i.MonitoredRepositoryId.Value, out string? status) ? status : null,
+                runAggregates))
             .ToList();
     }
 
@@ -264,6 +250,17 @@ internal sealed class IssueQueries(
             [issue.Id.Value],
             cancellationToken);
 
+        return ToSummary(issue, repositorySlug, eligibilityStatus, runAggregates);
+    }
+
+    private static IssueSummary ToSummary(
+        Issue issue,
+        string repositorySlug,
+        string? eligibilityStatus,
+        IReadOnlyDictionary<Guid, RunAggregate> runAggregates)
+    {
+        RebaseOutcome? rebaseOutcome = GetRebaseOutcome(issue);
+
         return new IssueSummary(
             Id: issue.Id.Value,
             IssueNumber: issue.IssueNumber,
@@ -278,9 +275,9 @@ internal sealed class IssueQueries(
                 ? MapRunStats(aggregate)
                 : null,
             ChecksOutcome: GetChecksOutcomeDiscriminator(issue),
-            PullRequestUrl: GetPullRequestUrl(issue),
-            RebaseOutcome: GetRebaseOutcome(issue)?.Discriminator,
-            RebaseSkippedReason: (GetRebaseOutcome(issue) as RebaseOutcome.Skipped)?.Reason);
+            PullRequestUrl: issue.LinkedPullRequestUrl,
+            RebaseOutcome: rebaseOutcome?.Discriminator,
+            RebaseSkippedReason: (rebaseOutcome as RebaseOutcome.Skipped)?.Reason);
     }
 
     private static string? GetFailureCategory(Issue issue) =>
@@ -304,17 +301,6 @@ internal sealed class IssueQueries(
         {
             ReviewIssue review => review.RebaseOutcome,
             ChecksPendingIssue checksPending => checksPending.RebaseOutcome,
-            _ => null,
-        };
-
-    private static string? GetPullRequestUrl(Issue issue) =>
-        issue switch
-        {
-            ReviewIssue review => review.PullRequestUrl,
-            ChecksPendingIssue checksPending => checksPending.PullRequestUrl,
-            RebasePendingIssue rebasePending => rebasePending.PullRequestUrl,
-            RevisionInProgressIssue revisionInProgress => revisionInProgress.PullRequestUrl,
-            RevisionQueuedIssue revisionQueued => revisionQueued.PullRequestUrl,
             _ => null,
         };
 
@@ -461,7 +447,7 @@ internal sealed class IssueQueries(
             ReviewIssue review => new IssueStateDetails(
                 WorkerRunId: review.WorkerRunId.Value,
                 BranchName: review.BranchName,
-                PullRequestUrl: review.PullRequestUrl,
+                PullRequestUrl: review.LinkedPullRequestUrl,
                 FeedbackCutoffAt: review.FeedbackCutoffAt,
                 FailureReason: null,
                 FailedAt: null,
@@ -498,7 +484,7 @@ internal sealed class IssueQueries(
             CompletedIssue completed => new IssueStateDetails(
                 WorkerRunId: null,
                 BranchName: completed.BranchName,
-                PullRequestUrl: completed.PullRequestUrl,
+                PullRequestUrl: completed.LinkedPullRequestUrl,
                 FeedbackCutoffAt: null,
                 FailureReason: null,
                 FailedAt: null,
@@ -509,7 +495,7 @@ internal sealed class IssueQueries(
             RevisionQueuedIssue revisionQueued => new IssueStateDetails(
                 WorkerRunId: null,
                 BranchName: revisionQueued.BranchName,
-                PullRequestUrl: revisionQueued.PullRequestUrl,
+                PullRequestUrl: revisionQueued.LinkedPullRequestUrl,
                 FeedbackCutoffAt: null,
                 FailureReason: null,
                 FailedAt: null,
@@ -523,7 +509,7 @@ internal sealed class IssueQueries(
             RevisionInProgressIssue revisionInProgress => new IssueStateDetails(
                 WorkerRunId: revisionInProgress.WorkerRunId.Value,
                 BranchName: revisionInProgress.BranchName,
-                PullRequestUrl: revisionInProgress.PullRequestUrl,
+                PullRequestUrl: revisionInProgress.LinkedPullRequestUrl,
                 FeedbackCutoffAt: null,
                 FailureReason: null,
                 FailedAt: null,
@@ -537,7 +523,7 @@ internal sealed class IssueQueries(
             RevisionFailedIssue revisionFailed => new IssueStateDetails(
                 WorkerRunId: revisionFailed.WorkerRunId.Value,
                 BranchName: revisionFailed.BranchName,
-                PullRequestUrl: revisionFailed.PullRequestUrl,
+                PullRequestUrl: revisionFailed.LinkedPullRequestUrl,
                 FeedbackCutoffAt: null,
                 FailureReason: revisionFailed.FailureReason,
                 FailedAt: revisionFailed.FailedAt,
@@ -551,7 +537,7 @@ internal sealed class IssueQueries(
             ContinuableFailedIssue continuableFailed => new IssueStateDetails(
                 WorkerRunId: continuableFailed.WorkerRunId.Value,
                 BranchName: continuableFailed.BranchName,
-                PullRequestUrl: continuableFailed.PullRequestUrl.Length > 0 ? continuableFailed.PullRequestUrl : null,
+                PullRequestUrl: continuableFailed.LinkedPullRequestUrl,
                 FeedbackCutoffAt: null,
                 FailureReason: continuableFailed.FailureReason,
                 FailedAt: continuableFailed.FailedAt,
@@ -573,7 +559,7 @@ internal sealed class IssueQueries(
             ChecksPendingIssue checksPending => new IssueStateDetails(
                 WorkerRunId: checksPending.WorkerRunId.Value,
                 BranchName: checksPending.BranchName,
-                PullRequestUrl: checksPending.PullRequestUrl,
+                PullRequestUrl: checksPending.LinkedPullRequestUrl,
                 FeedbackCutoffAt: checksPending.FeedbackCutoffAt,
                 FailureReason: null,
                 FailedAt: null,
@@ -586,7 +572,7 @@ internal sealed class IssueQueries(
             RebasePendingIssue rebasePending => new IssueStateDetails(
                 WorkerRunId: rebasePending.WorkerRunId.Value,
                 BranchName: rebasePending.BranchName,
-                PullRequestUrl: rebasePending.PullRequestUrl,
+                PullRequestUrl: rebasePending.LinkedPullRequestUrl,
                 FeedbackCutoffAt: rebasePending.FeedbackCutoffAt,
                 FailureReason: null,
                 FailedAt: null,
@@ -740,25 +726,11 @@ internal sealed class IssueQueries(
         List<Issue> orderedIssues = [..eligibleQueued, ..ineligibleQueued, ..nonQueuedIssues];
 
         return orderedIssues
-            .Select(i => new IssueSummary(
-                Id: i.Id.Value,
-                IssueNumber: i.IssueNumber,
-                Title: i.Title,
-                State: GetStateDiscriminator(i),
-                RepositorySlug: slugs.TryGetValue(i.MonitoredRepositoryId, out string? slug) ? slug : string.Empty,
-                DetectedAt: i.DetectedAt,
-                Url: i.Url.Value.ToString(),
-                FailureClassification: GetFailureCategory(i),
-                RepositoryEligibilityStatus: eligibilityStatuses.TryGetValue(i.MonitoredRepositoryId.Value, out string? status)
-                    ? status
-                    : null,
-                RunStats: runAggregates.TryGetValue(i.Id.Value, out RunAggregate? aggregate)
-                    ? MapRunStats(aggregate)
-                    : null,
-                ChecksOutcome: GetChecksOutcomeDiscriminator(i),
-                PullRequestUrl: GetPullRequestUrl(i),
-                RebaseOutcome: GetRebaseOutcome(i)?.Discriminator,
-                RebaseSkippedReason: (GetRebaseOutcome(i) as RebaseOutcome.Skipped)?.Reason))
+            .Select(i => ToSummary(
+                i,
+                slugs.TryGetValue(i.MonitoredRepositoryId, out string? slug) ? slug : string.Empty,
+                eligibilityStatuses.TryGetValue(i.MonitoredRepositoryId.Value, out string? status) ? status : null,
+                runAggregates))
             .ToList();
     }
 

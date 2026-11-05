@@ -1,7 +1,7 @@
 import { TestBed } from '@angular/core/testing';
 import { signal } from '@angular/core';
 import { IssueCardComponent, formatCost, formatDuration } from './issue-card';
-import { IssueSummary, RunStats } from '../issue.model';
+import { IssueState, IssueSummary, RunStats } from '../issue.model';
 import { TickerService } from '../../../core/services/ticker.service';
 import { AgentActivity } from '../../../core/models/agent-activity.model';
 
@@ -2213,38 +2213,57 @@ describe('IssueCardComponent', () => {
     expect(label).not.toContain('Waiting on checks');
   });
 
-  // --- Fix 1: PR link on checks_pending card ---
+  // --- PR link: rendered whenever the issue has a pull request (#709) ---
 
-  it('should render a PR link in footer for checks_pending card when pullRequestUrl is present', () => {
-    // Arrange
-    const checksPendingIssue: IssueSummary = {
-      ...mockIssue,
-      state: 'checks_pending',
-      pullRequestUrl: 'https://github.com/owner/repo/pull/7',
-    };
+  const prUrl = 'https://github.com/owner/repo/pull/7';
+  const prStates: IssueState[] = [
+    'review',
+    'checks_pending',
+    'rebase_pending',
+    'revision_queued',
+    'revision_in_progress',
+    'revision_failed',
+    'continuable_failed',
+    'completed',
+  ];
+
+  for (const state of prStates) {
+    it(`should render a PR link in the footer for a ${state} card when pullRequestUrl is present`, () => {
+      // Arrange
+      const issue: IssueSummary = { ...mockIssue, state, pullRequestUrl: prUrl };
+
+      // Act
+      const fixture = createComponent(issue);
+      const el = fixture.nativeElement as HTMLElement;
+
+      // Assert
+      const prLink = el.querySelector('.issue-card__footer .issue-card__pr-link') as HTMLAnchorElement;
+      expect(prLink).toBeTruthy();
+      expect(prLink?.getAttribute('href')).toBe(prUrl);
+      expect(prLink?.getAttribute('target')).toBe('_blank');
+      expect(prLink?.getAttribute('rel')).toBe('noopener noreferrer');
+      expect(prLink?.textContent?.trim()).toBe('View PR');
+    });
+  }
+
+  it('should apply no state gate to the PR link', () => {
+    // Arrange — even a state that never stores a PR renders the link when the summary carries one
+    const issue: IssueSummary = { ...mockIssue, state: 'detected', pullRequestUrl: prUrl };
 
     // Act
-    const fixture = createComponent(checksPendingIssue);
+    const fixture = createComponent(issue);
     const el = fixture.nativeElement as HTMLElement;
 
     // Assert
-    const prLink = el.querySelector('.issue-card__pr-link') as HTMLAnchorElement;
-    expect(prLink).toBeTruthy();
-    expect(prLink?.getAttribute('href')).toBe('https://github.com/owner/repo/pull/7');
-    expect(prLink?.getAttribute('target')).toBe('_blank');
-    expect(prLink?.getAttribute('rel')).toBe('noopener noreferrer');
+    expect(el.querySelector('.issue-card__pr-link')).toBeTruthy();
   });
 
-  it('should set descriptive aria-label on the PR link for checks_pending', () => {
+  it('should set descriptive aria-label on the PR link', () => {
     // Arrange
-    const checksPendingIssue: IssueSummary = {
-      ...mockIssue,
-      state: 'checks_pending',
-      pullRequestUrl: 'https://github.com/owner/repo/pull/7',
-    };
+    const issue: IssueSummary = { ...mockIssue, state: 'review', pullRequestUrl: prUrl };
 
     // Act
-    const fixture = createComponent(checksPendingIssue);
+    const fixture = createComponent(issue);
     const el = fixture.nativeElement as HTMLElement;
 
     // Assert
@@ -2252,34 +2271,104 @@ describe('IssueCardComponent', () => {
     expect(prLink?.getAttribute('aria-label')).toBe('View pull request for issue #42');
   });
 
-  it('should NOT render a PR link for checks_pending when pullRequestUrl is absent', () => {
+  it('should group the PR link with the external issue link in the footer', () => {
     // Arrange
-    const checksPendingIssue: IssueSummary = { ...mockIssue, state: 'checks_pending' };
+    const issue: IssueSummary = { ...mockIssue, state: 'completed', pullRequestUrl: prUrl };
 
     // Act
-    const fixture = createComponent(checksPendingIssue);
+    const fixture = createComponent(issue);
     const el = fixture.nativeElement as HTMLElement;
 
     // Assert
-    const prLink = el.querySelector('.issue-card__pr-link');
-    expect(prLink).toBeFalsy();
+    const group = el.querySelector('.issue-card__footer .issue-card__footer-links') as HTMLElement;
+    expect(group.querySelector('.issue-card__pr-link')).toBeTruthy();
+    expect(group.querySelector('.issue-card__link')).toBeTruthy();
+    expect(group.lastElementChild?.classList.contains('issue-card__link')).toBe(true);
   });
 
-  it('should NOT render a PR link for checks_pending when pullRequestUrl is not https', () => {
+  it('should not emit toggle when the PR link is clicked', () => {
     // Arrange
-    const checksPendingIssue: IssueSummary = {
+    const issue: IssueSummary = { ...mockIssue, state: 'review', pullRequestUrl: prUrl };
+    const fixture = createComponent(issue);
+    const el = fixture.nativeElement as HTMLElement;
+    const prLink = el.querySelector('.issue-card__pr-link') as HTMLAnchorElement;
+    prLink.addEventListener('click', (e) => e.preventDefault());
+    let emitted = false;
+    fixture.componentInstance.toggle.subscribe(() => (emitted = true));
+
+    // Act
+    prLink.click();
+
+    // Assert
+    expect(emitted).toBe(false);
+  });
+
+  it('should NOT render a PR link when pullRequestUrl is absent', () => {
+    // Arrange
+    const issue: IssueSummary = { ...mockIssue, state: 'completed', pullRequestUrl: null };
+
+    // Act
+    const fixture = createComponent(issue);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    expect(el.querySelector('.issue-card__pr-link')).toBeFalsy();
+  });
+
+  it('should NOT render a PR link when pullRequestUrl is not https', () => {
+    // Arrange
+    const issue: IssueSummary = {
       ...mockIssue,
-      state: 'checks_pending',
+      state: 'review',
       pullRequestUrl: 'http://github.com/owner/repo/pull/7',
     };
 
     // Act
-    const fixture = createComponent(checksPendingIssue);
+    const fixture = createComponent(issue);
     const el = fixture.nativeElement as HTMLElement;
 
     // Assert
-    const prLink = el.querySelector('.issue-card__pr-link');
-    expect(prLink).toBeFalsy();
+    expect(el.querySelector('.issue-card__pr-link')).toBeFalsy();
+  });
+
+  it('should render "Waiting on checks" without a PR link for checks_pending when pullRequestUrl is absent', () => {
+    // Arrange
+    const issue: IssueSummary = { ...mockIssue, state: 'checks_pending' };
+
+    // Act
+    const fixture = createComponent(issue);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    expect(el.querySelector('.issue-card__checks-status')?.textContent?.trim()).toBe('Waiting on checks');
+    expect(el.querySelector('.issue-card__pr-link')).toBeFalsy();
+  });
+
+  it('should render "Waiting on checks" alongside the PR link for checks_pending', () => {
+    // Arrange
+    const issue: IssueSummary = { ...mockIssue, state: 'checks_pending', pullRequestUrl: prUrl };
+
+    // Act
+    const fixture = createComponent(issue);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    expect(el.querySelector('.issue-card__checks-status')?.textContent?.trim()).toBe('Waiting on checks');
+    expect(el.querySelector('.issue-card__pr-link')).toBeTruthy();
+  });
+
+  it('should show the PR link without a reload when a pushed summary gains a pullRequestUrl', () => {
+    // Arrange
+    const fixture = createComponent({ ...mockIssue, state: 'in_progress', pullRequestUrl: null });
+    const el = fixture.nativeElement as HTMLElement;
+    expect(el.querySelector('.issue-card__pr-link')).toBeFalsy();
+
+    // Act — simulate the SignalR-pushed summary after the transition into review
+    fixture.componentRef.setInput('issue', { ...mockIssue, state: 'review', pullRequestUrl: prUrl });
+    fixture.detectChanges();
+
+    // Assert
+    expect(el.querySelector('.issue-card__pr-link')?.getAttribute('href')).toBe(prUrl);
   });
 
   describe('agent activity', () => {

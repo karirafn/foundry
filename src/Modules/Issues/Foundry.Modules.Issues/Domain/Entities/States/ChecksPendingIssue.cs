@@ -34,6 +34,8 @@ public sealed class ChecksPendingIssue : Issue
 
     public string PullRequestUrl { get; private set; } = string.Empty;
 
+    public override string? LinkedPullRequestUrl => NullIfEmpty(PullRequestUrl);
+
     public DateTimeOffset EnteredChecksPendingAt { get; private set; }
 
     public DateTimeOffset FeedbackCutoffAt { get; private set; }

@@ -205,6 +205,84 @@ public sealed class GetIssueSummaryAsync : IAsyncDisposable
         summary.ChecksOutcome.ShouldBeNull();
     }
 
+    [Theory]
+    [InlineData("review")]
+    [InlineData("checks_pending")]
+    [InlineData("rebase_pending")]
+    [InlineData("revision_queued")]
+    [InlineData("revision_in_progress")]
+    [InlineData("revision_failed")]
+    [InlineData("continuable_failed")]
+    [InlineData("completed")]
+    public async Task WhenStateStoresPullRequestUrl_PullRequestUrlIsPopulatedOnSummary(string state)
+    {
+        // Arrange
+        const string ExpectedPrUrl = "https://github.com/owner/repo/pull/9";
+        IssueBuilder builder = new IssueBuilder().WithPullRequestUrl(ExpectedPrUrl);
+        Issue issue = BuildState(builder, state);
+        _dbContext.Set<Issue>().Add(issue);
+        await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+        _dbContext.ChangeTracker.Clear();
+
+        // Act
+        IssueSummary? result = await _sut.GetIssueSummaryAsync(issue.Id, TestContext.Current.CancellationToken);
+
+        // Assert
+        IssueSummary summary = result.ShouldNotBeNull();
+        summary.State.ShouldBe(state);
+        summary.PullRequestUrl.ShouldBe(ExpectedPrUrl);
+    }
+
+    [Fact]
+    public async Task WhenContinuableFailedStoresEmptyPullRequestUrl_PullRequestUrlIsNullOnSummary()
+    {
+        // Arrange — failing from in_progress before a PR opened stores string.Empty
+        ContinuableFailedIssue issue = new IssueBuilder().ContinuableFailed();
+        _dbContext.Set<Issue>().Add(issue);
+        await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+        _dbContext.ChangeTracker.Clear();
+
+        // Act
+        IssueSummary? result = await _sut.GetIssueSummaryAsync(issue.Id, TestContext.Current.CancellationToken);
+
+        // Assert
+        IssueSummary summary = result.ShouldNotBeNull();
+        summary.State.ShouldBe("continuable_failed");
+        summary.PullRequestUrl.ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task WhenCompletedStoresEmptyPullRequestUrl_PullRequestUrlIsNullOnSummary()
+    {
+        // Arrange
+        CompletedIssue issue = new IssueBuilder().WithPullRequestUrl(string.Empty).Completed();
+        _dbContext.Set<Issue>().Add(issue);
+        await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+        _dbContext.ChangeTracker.Clear();
+
+        // Act
+        IssueSummary? result = await _sut.GetIssueSummaryAsync(issue.Id, TestContext.Current.CancellationToken);
+
+        // Assert
+        IssueSummary summary = result.ShouldNotBeNull();
+        summary.State.ShouldBe("completed");
+        summary.PullRequestUrl.ShouldBeNull();
+    }
+
+    private static Issue BuildState(IssueBuilder builder, string state) =>
+        state switch
+        {
+            "review" => builder.Review(),
+            "checks_pending" => builder.ChecksPending(),
+            "rebase_pending" => builder.RebasePending(),
+            "revision_queued" => builder.RevisionQueued(),
+            "revision_in_progress" => builder.RevisionInProgress(),
+            "revision_failed" => builder.RevisionFailed(),
+            "continuable_failed" => builder.ContinuableFailedFromReview(),
+            "completed" => builder.Completed(),
+            _ => throw new ArgumentOutOfRangeException(nameof(state), state, null),
+        };
+
     private sealed class StubWorkerRunQueries : IWorkerRunQueries
     {
         private readonly Dictionary<Guid, RunAggregate> _aggregates = [];

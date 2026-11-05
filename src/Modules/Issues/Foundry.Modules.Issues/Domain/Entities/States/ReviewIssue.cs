@@ -23,6 +23,8 @@ public sealed class ReviewIssue : Issue
 
     public string PullRequestUrl { get; private set; } = string.Empty;
 
+    public override string? LinkedPullRequestUrl => NullIfEmpty(PullRequestUrl);
+
     public DateTimeOffset FeedbackCutoffAt { get; private set; }
 
     public int RebaseConflictAttempts { get; private set; }
