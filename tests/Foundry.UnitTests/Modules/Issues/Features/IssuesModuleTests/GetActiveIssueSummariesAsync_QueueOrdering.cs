@@ -22,7 +22,8 @@ namespace Foundry.UnitTests.Modules.Issues.Features.IssuesModuleTests;
 /// <summary>
 /// Tests for the queued-issue Dispatch Order partition in GetActiveIssueSummariesAsync.
 /// Eligible-repo queued issues (in Dispatch Order) come before ineligible-repo queued issues
-/// (also in Dispatch Order, with sentinel position). Non-queued active states follow separately.
+/// (also in Dispatch Order, using each repository's real position from display info, falling back
+/// to a sentinel position). Non-queued active states follow separately.
 /// </summary>
 public sealed class GetActiveIssueSummariesAsync_QueueOrdering : IAsyncDisposable
 {
@@ -54,9 +55,18 @@ public sealed class GetActiveIssueSummariesAsync_QueueOrdering : IAsyncDisposabl
         BuildSut(eligibilityQuery, new NullGlobalSettingsQueries());
 
     private IIssueQueries BuildSut(IRepositoryEligibilityQuery eligibilityQuery, IGlobalSettingsQueries globalSettingsQueries) =>
+        BuildSut(eligibilityQuery, globalSettingsQueries, new NullRepositorySlugQueries());
+
+    private IIssueQueries BuildSut(IRepositoryEligibilityQuery eligibilityQuery, IRepositorySlugQueries slugQueries) =>
+        BuildSut(eligibilityQuery, new NullGlobalSettingsQueries(), slugQueries);
+
+    private IIssueQueries BuildSut(
+        IRepositoryEligibilityQuery eligibilityQuery,
+        IGlobalSettingsQueries globalSettingsQueries,
+        IRepositorySlugQueries slugQueries) =>
         new IssueQueries(
             _dbContext,
-            new NullRepositorySlugQueries(),
+            slugQueries,
             eligibilityQuery,
             new NullWorkerRunQueries(),
             new InFlightWorkerCountQuery(_dbContext),
@@ -202,15 +212,16 @@ public sealed class GetActiveIssueSummariesAsync_QueueOrdering : IAsyncDisposabl
     }
 
     [Fact]
-    public async Task WhenQueuedIssuesSameTierAndPosition_OrderedByDetectedAtAscending()
+    public async Task WhenQueuedIssuesSameTierAndPosition_OrderedByIssueNumberAscending()
     {
-        // Arrange: two QueuedIssues in same repo (same position), older one dispatched first.
+        // Arrange: two QueuedIssues in same repo (same position); #12 is detected after #50
+        // but the lower issue number is dispatched first (ADR 0092).
         MonitoredRepositoryId repo = MonitoredRepositoryId.New();
         DateTimeOffset older = Now.AddHours(-2);
         DateTimeOffset newer = Now.AddHours(-1);
 
-        SeedQueuedIssue(repo, issueNumber: 1, detectedAt: newer);
-        SeedQueuedIssue(repo, issueNumber: 2, detectedAt: older);
+        SeedQueuedIssue(repo, issueNumber: 50, detectedAt: older);
+        SeedQueuedIssue(repo, issueNumber: 12, detectedAt: newer);
 
         StubEligibilityQuery eligibilityQuery = new(
             [new EligibleRepository(repo.Value, Position: 1, MaxConcurrentWorkers: 1)],
@@ -224,10 +235,10 @@ public sealed class GetActiveIssueSummariesAsync_QueueOrdering : IAsyncDisposabl
             states: null,
             TestContext.Current.CancellationToken);
 
-        // Assert — older detected first = lower DetectedAt value = dispatched first.
+        // Assert — lower issue number dispatched first, regardless of detection order.
         result.Count.ShouldBe(2);
-        result[0].IssueNumber.ShouldBe(2);
-        result[1].IssueNumber.ShouldBe(1);
+        result[0].IssueNumber.ShouldBe(12);
+        result[1].IssueNumber.ShouldBe(50);
     }
 
     [Fact]
@@ -263,15 +274,16 @@ public sealed class GetActiveIssueSummariesAsync_QueueOrdering : IAsyncDisposabl
     }
 
     [Fact]
-    public async Task WhenIneligibleQueuedIssues_SortDeterministicallyByDetectedAtThenId()
+    public async Task WhenIneligibleQueuedIssuesWithoutDisplayInfo_FallBackToSentinelAndSortByIssueNumber()
     {
-        // Arrange: two ineligible-repo queued issues — sentinel position, sort by DetectedAt then Id.
+        // Arrange: two ineligible-repo queued issues with no display info — sentinel position,
+        // sort by issue number then Id.
         MonitoredRepositoryId ineligibleRepo = MonitoredRepositoryId.New();
         DateTimeOffset older = Now.AddHours(-3);
         DateTimeOffset newer = Now.AddHours(-1);
 
-        SeedQueuedIssue(ineligibleRepo, issueNumber: 1, detectedAt: newer);
         SeedQueuedIssue(ineligibleRepo, issueNumber: 2, detectedAt: older);
+        SeedQueuedIssue(ineligibleRepo, issueNumber: 1, detectedAt: newer);
 
         StubEligibilityQuery eligibilityQuery = new(
             [],
@@ -288,10 +300,83 @@ public sealed class GetActiveIssueSummariesAsync_QueueOrdering : IAsyncDisposabl
             states: null,
             TestContext.Current.CancellationToken);
 
-        // Assert — older detected first (lower DetectedAt = dispatched first among ineligibles).
+        // Assert — lower issue number first among ineligibles, regardless of detection order.
         result.Count.ShouldBe(2);
-        result[0].IssueNumber.ShouldBe(2);
-        result[1].IssueNumber.ShouldBe(1);
+        result[0].IssueNumber.ShouldBe(1);
+        result[1].IssueNumber.ShouldBe(2);
+    }
+
+    [Fact]
+    public async Task WhenIneligibleQueuedIssuesInTwoRepos_GroupedByRealPositionThenIssueNumber_AfterEligible()
+    {
+        // Arrange: two ineligible repos with real positions 3 and 1, plus one eligible repo.
+        // Issues are seeded so that sentinel ordering by Id would interleave them.
+        MonitoredRepositoryId eligibleRepo = MonitoredRepositoryId.New();
+        MonitoredRepositoryId ineligibleLater = MonitoredRepositoryId.New();   // position 3
+        MonitoredRepositoryId ineligibleEarlier = MonitoredRepositoryId.New(); // position 1
+
+        SeedQueuedIssue(ineligibleLater, issueNumber: 1);
+        SeedQueuedIssue(ineligibleEarlier, issueNumber: 7);
+        SeedQueuedIssue(ineligibleLater, issueNumber: 4);
+        SeedQueuedIssue(ineligibleEarlier, issueNumber: 2);
+        SeedQueuedIssue(eligibleRepo, issueNumber: 99);
+
+        StubRepositorySlugQueries slugQueries = new();
+        slugQueries.AddSlug(eligibleRepo, "owner/eligible", position: 2);
+        slugQueries.AddSlug(ineligibleLater, "owner/later", position: 3);
+        slugQueries.AddSlug(ineligibleEarlier, "owner/earlier", position: 1);
+
+        StubEligibilityQuery eligibilityQuery = new(
+            [new EligibleRepository(eligibleRepo.Value, Position: 2, MaxConcurrentWorkers: 1)],
+            new Dictionary<Guid, string>
+            {
+                [ineligibleLater.Value] = "ineligible",
+                [ineligibleEarlier.Value] = "ineligible",
+            });
+
+        IIssueQueries sut = BuildSut(eligibilityQuery, slugQueries);
+
+        // Act
+        IReadOnlyList<IssueSummary> result = await sut.GetActiveIssueSummariesAsync(
+            repositoryId: null,
+            states: null,
+            TestContext.Current.CancellationToken);
+
+        // Assert — eligible first, then ineligible grouped by real position, then issue number.
+        result.Select(s => s.IssueNumber).ShouldBe([99, 2, 7, 1, 4]);
+    }
+
+    [Fact]
+    public async Task WhenIneligibleQueuedIssueHasNoDisplayInfo_SortsAfterIneligibleWithRealPosition()
+    {
+        // Arrange: one ineligible repo has display info, the other does not (int.MaxValue fallback).
+        MonitoredRepositoryId withInfo = MonitoredRepositoryId.New();
+        MonitoredRepositoryId withoutInfo = MonitoredRepositoryId.New();
+
+        SeedQueuedIssue(withoutInfo, issueNumber: 1);
+        SeedQueuedIssue(withInfo, issueNumber: 5);
+
+        StubRepositorySlugQueries slugQueries = new();
+        slugQueries.AddSlug(withInfo, "owner/with-info", position: 4);
+
+        StubEligibilityQuery eligibilityQuery = new(
+            [],
+            new Dictionary<Guid, string>
+            {
+                [withInfo.Value] = "ineligible",
+                [withoutInfo.Value] = "ineligible",
+            });
+
+        IIssueQueries sut = BuildSut(eligibilityQuery, slugQueries);
+
+        // Act
+        IReadOnlyList<IssueSummary> result = await sut.GetActiveIssueSummariesAsync(
+            repositoryId: null,
+            states: null,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        result.Select(s => s.IssueNumber).ShouldBe([5, 1]);
     }
 
     [Fact]

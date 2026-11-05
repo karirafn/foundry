@@ -653,8 +653,8 @@ internal sealed class IssueQueries(
         // Partition queued issues once — single TryGetValue lookup per issue avoids
         // ContainsKey + indexer double-lookup.
         // For ineligible issues (IsEligible = false), pos defaults to 0 here, but Position is
-        // not consumed for them — ineligible issues pass int.MaxValue as the sentinel position
-        // to DispatchOrderKey.For, ensuring they sort after all eligible queued issues.
+        // not consumed for them — ineligible issues take their repository's real Position from
+        // display info instead and are partitioned after all eligible queued issues.
         List<(QueuedIssue Issue, bool IsEligible, int Position)> queuedWithPosition = queuedIssues
             .Select(i => (
                 Issue: i,
@@ -698,11 +698,17 @@ internal sealed class IssueQueries(
 
         List<Issue> eligibleQueued = [..placed.Select(i => (Issue)i), ..capacityDeferred.Select(i => (Issue)i)];
 
-        // Ineligible-repo queued issues: sentinel position so they sort among themselves
-        // by DetectedAt then Id, consistently after all eligible queued issues.
+        // Ineligible-repo queued issues sort after all eligible queued issues by the same key,
+        // using each repository's real Position from display info, so they group by repository
+        // and then by issue number. A repository with no display info falls back to the
+        // int.MaxValue sentinel position.
         List<Issue> ineligibleQueued = queuedWithPosition
             .Where(t => !t.IsEligible)
-            .OrderBy(t => DispatchOrderKey.For(t.Issue, int.MaxValue))
+            .OrderBy(t => DispatchOrderKey.For(
+                t.Issue,
+                displayInfos.TryGetValue(t.Issue.MonitoredRepositoryId, out RepositoryDisplayInfo? info)
+                    ? info.Position
+                    : int.MaxValue))
             .Select(t => (Issue)t.Issue)
             .ToList();
 

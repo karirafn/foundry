@@ -118,8 +118,8 @@ public sealed class GetRepositoryDisplayInfoAsync : IAsyncDisposable
         // Assert
         result.Count.ShouldBe(2);
         result.ShouldSatisfyAllConditions(
-            () => result[githubRepo.Id].ShouldBe(new RepositoryDisplayInfo("owner/repo", "github")),
-            () => result[gitlabRepo.Id].ShouldBe(new RepositoryDisplayInfo("group/project", "gitlab")));
+            () => result[githubRepo.Id].ShouldBe(new RepositoryDisplayInfo("owner/repo", "github", 0)),
+            () => result[gitlabRepo.Id].ShouldBe(new RepositoryDisplayInfo("group/project", "gitlab", 1)));
     }
 
     [Fact]
@@ -136,7 +136,7 @@ public sealed class GetRepositoryDisplayInfoAsync : IAsyncDisposable
                 TestContext.Current.CancellationToken);
 
         // Assert
-        result[repo.Id].ShouldBe(new RepositoryDisplayInfo("uncovered/repo", null));
+        result[repo.Id].ShouldBe(new RepositoryDisplayInfo("uncovered/repo", null, 0));
     }
 
     [Fact]

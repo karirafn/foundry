@@ -208,7 +208,7 @@ public sealed class HandleAsync : IAsyncDisposable
         MonitoredRepositoryId ineligibleRepoId = MonitoredRepositoryId.New();
         MonitoredRepositoryId eligibleRepoId = MonitoredRepositoryId.New();
 
-        // Ineligible issue has an earlier timestamp so it appears first in OrderBy(DetectedAt)
+        // Ineligible issue has a lower issue number and earlier timestamp so it would otherwise head the queue
         FreshQueuedIssue ineligibleQueued = new IssueBuilder()
             .WithMonitoredRepositoryId(ineligibleRepoId)
             .WithIssueNumber(1)
@@ -785,7 +785,7 @@ public sealed class HandleAsync : IAsyncDisposable
         MonitoredRepositoryId highPriorityRepoId = MonitoredRepositoryId.New(); // position 0
         MonitoredRepositoryId lowPriorityRepoId = MonitoredRepositoryId.New();  // position 1
 
-        // Both issues have the same DetectedAt so position is the tiebreaker.
+        // Position outranks issue number, so the lower-position repo wins.
         DateTimeOffset sameTime = DateTimeOffset.UtcNow;
         SeedQueuedIssueAtTime(highPriorityRepoId, issueNumber: 1, detectedAt: sameTime);
         SeedQueuedIssueAtTime(lowPriorityRepoId, issueNumber: 2, detectedAt: sameTime);
@@ -817,26 +817,22 @@ public sealed class HandleAsync : IAsyncDisposable
         lowPriorityIssue.ShouldBeOfType<FreshQueuedIssue>();
     }
 
-    // DetectedAt tiebreaker within the same Position
+    // IssueNumber tiebreaker within the same repository and tier (ADR 0092)
     [Fact]
-    public async Task WhenTwoQueuedIssuesHaveSamePosition_ClaimsOldestDetectedAtIssue()
+    public async Task WhenTwoFreshQueuedIssuesInSameRepo_ClaimsLowerIssueNumberEvenIfDetectedLater()
     {
-        // Arrange
-        MonitoredRepositoryId repoAId = MonitoredRepositoryId.New();
-        MonitoredRepositoryId repoBId = MonitoredRepositoryId.New();
-
-        // Both repos have position 0 — DetectedAt decides
+        // Arrange — #12 is detected after #50; the lower issue number still wins
+        MonitoredRepositoryId repoId = MonitoredRepositoryId.New();
         DateTimeOffset olderTime = DateTimeOffset.UtcNow.AddMinutes(-10);
         DateTimeOffset newerTime = DateTimeOffset.UtcNow;
-        SeedQueuedIssueAtTime(repoBId, issueNumber: 1, detectedAt: newerTime);
-        SeedQueuedIssueAtTime(repoAId, issueNumber: 2, detectedAt: olderTime);
+        SeedQueuedIssueAtTime(repoId, issueNumber: 50, detectedAt: olderTime);
+        SeedQueuedIssueAtTime(repoId, issueNumber: 12, detectedAt: newerTime);
 
         WorkerCapacityAvailableHandler sut = BuildHandler(
             repositoryEligibilityQuery: new StubRepositoryEligibilityQuery(
                 eligibleRepositories:
                 [
-                    new EligibleRepository(repoAId.Value, Position: 0, MaxConcurrentWorkers: 1),
-                    new EligibleRepository(repoBId.Value, Position: 0, MaxConcurrentWorkers: 1),
+                    new EligibleRepository(repoId.Value, Position: 0, MaxConcurrentWorkers: 1),
                 ]));
 
         WorkerCapacityAvailable @event = new(WorkerRunId: WorkerRunId.New());
@@ -844,18 +840,46 @@ public sealed class HandleAsync : IAsyncDisposable
         // Act
         await sut.HandleAsync(@event, CancellationToken.None);
 
-        // Assert — repo A has older DetectedAt so its issue should be claimed
+        // Assert
         _dbContext.ChangeTracker.Clear();
-        Issue? repoAIssue = await _dbContext.Set<Issue>()
-            .FirstOrDefaultAsync(
-                i => i.MonitoredRepositoryId == repoAId,
-                TestContext.Current.CancellationToken);
-        Issue? repoBIssue = await _dbContext.Set<Issue>()
-            .FirstOrDefaultAsync(
-                i => i.MonitoredRepositoryId == repoBId,
-                TestContext.Current.CancellationToken);
-        repoAIssue.ShouldBeOfType<InProgressIssue>();
-        repoBIssue.ShouldBeOfType<FreshQueuedIssue>();
+        Issue issue12 = await _dbContext.Set<Issue>()
+            .SingleAsync(i => i.IssueNumber == 12, TestContext.Current.CancellationToken);
+        Issue issue50 = await _dbContext.Set<Issue>()
+            .SingleAsync(i => i.IssueNumber == 50, TestContext.Current.CancellationToken);
+        issue12.ShouldBeOfType<InProgressIssue>();
+        issue50.ShouldBeOfType<FreshQueuedIssue>();
+    }
+
+    // Tier still outranks IssueNumber within the same repository (ADR 0092, 0025)
+    [Fact]
+    public async Task WhenRevisionQueuedHasHigherIssueNumberInSameRepo_RevisionTierStillWins()
+    {
+        // Arrange
+        MonitoredRepositoryId repoId = MonitoredRepositoryId.New();
+        DateTimeOffset sameTime = DateTimeOffset.UtcNow;
+        SeedRevisionQueuedIssueAtTime(repoId, issueNumber: 50, detectedAt: sameTime);
+        SeedQueuedIssueAtTime(repoId, issueNumber: 12, detectedAt: sameTime);
+
+        WorkerCapacityAvailableHandler sut = BuildHandler(
+            repositoryEligibilityQuery: new StubRepositoryEligibilityQuery(
+                eligibleRepositories:
+                [
+                    new EligibleRepository(repoId.Value, Position: 0, MaxConcurrentWorkers: 1),
+                ]));
+
+        WorkerCapacityAvailable @event = new(WorkerRunId: WorkerRunId.New());
+
+        // Act
+        await sut.HandleAsync(@event, CancellationToken.None);
+
+        // Assert
+        _dbContext.ChangeTracker.Clear();
+        Issue issue50 = await _dbContext.Set<Issue>()
+            .SingleAsync(i => i.IssueNumber == 50, TestContext.Current.CancellationToken);
+        Issue issue12 = await _dbContext.Set<Issue>()
+            .SingleAsync(i => i.IssueNumber == 12, TestContext.Current.CancellationToken);
+        issue50.ShouldBeOfType<RevisionInProgressIssue>();
+        issue12.ShouldBeOfType<FreshQueuedIssue>();
     }
 
     // Cross-tier: high-position revision queued still beats low-position fresh queued
@@ -974,19 +998,19 @@ public sealed class HandleAsync : IAsyncDisposable
         lowPriorityIssue.ShouldBeOfType<ContinuationQueuedIssue>();
     }
 
-    // AC8: IssueId tiebreak — when tier, Position, and DetectedAt are all identical,
-    // the issue with the lower IssueId (ordinal) is claimed.
+    // AC8: IssueId tiebreak — when tier, Position, and IssueNumber are all identical
+    // (possible only across repositories sharing a position), the lower IssueId is claimed.
     [Fact]
-    public async Task WhenTwoQueuedIssuesHaveSameTierPositionAndDetectedAt_ClaimsIssueWithLowerIssueId()
+    public async Task WhenTwoQueuedIssuesHaveSameTierPositionAndIssueNumber_ClaimsIssueWithLowerIssueId()
     {
         // Arrange
         DateTimeOffset sameTime = DateTimeOffset.UtcNow;
         MonitoredRepositoryId repoAId = MonitoredRepositoryId.New();
         MonitoredRepositoryId repoBId = MonitoredRepositoryId.New();
 
-        // Seed both issues with exactly the same DetectedAt; both repos share the same Position.
+        // Seed both issues with the same issue number; both repos share the same Position.
         FreshQueuedIssue issueA = SeedQueuedIssueAtTime(repoAId, issueNumber: 1, detectedAt: sameTime);
-        FreshQueuedIssue issueB = SeedQueuedIssueAtTime(repoBId, issueNumber: 2, detectedAt: sameTime);
+        FreshQueuedIssue issueB = SeedQueuedIssueAtTime(repoBId, issueNumber: 1, detectedAt: sameTime);
 
         // Determine which IssueId is lower by the same ordering used by DispatchOrderKey.
         bool issueAHasLowerId = issueA.Id.CompareTo(issueB.Id) < 0;

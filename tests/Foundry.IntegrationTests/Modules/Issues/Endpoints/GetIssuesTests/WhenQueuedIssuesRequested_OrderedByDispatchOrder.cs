@@ -22,7 +22,7 @@ namespace Foundry.IntegrationTests.Modules.Issues.Endpoints.GetIssuesTests;
 
 /// <summary>
 /// Integration test proving the real EF Core + eligibility query wiring returns queued issues
-/// in Dispatch Order: eligible-repo queued issues (ordered by TierRank, Position, DetectedAt, Id)
+/// in Dispatch Order: eligible-repo queued issues (ordered by TierRank, Position, IssueNumber, Id)
 /// partition first, ineligible-repo queued issues partition after, non-queued active states last.
 /// </summary>
 public sealed class WhenQueuedIssuesRequested_OrderedByDispatchOrder : IAsyncDisposable
@@ -67,7 +67,7 @@ public sealed class WhenQueuedIssuesRequested_OrderedByDispatchOrder : IAsyncDis
         return repo.Id;
     }
 
-    private async Task<MonitoredRepositoryId> SeedIneligibleRepositoryAsync(string slug)
+    private async Task<MonitoredRepositoryId> SeedIneligibleRepositoryAsync(string slug, int position = 0)
     {
         // No POST endpoint for repositories — seed directly via DbContext.
         using IServiceScope scope = _factory.Services.CreateScope();
@@ -83,7 +83,7 @@ public sealed class WhenQueuedIssuesRequested_OrderedByDispatchOrder : IAsyncDis
 
         RepositorySlug repoSlug = RepositorySlug.Create(slug).ValueOrThrow();
         RepositoryEligibility.Ineligible ineligible = new([EligibilityViolation.AllowDirectPushes()]);
-        MonitoredRepository repo = MonitoredRepository.Create(repoSlug, "github.com", null).ValueOrThrow();
+        MonitoredRepository repo = MonitoredRepository.Create(repoSlug, "github.com", null, position).ValueOrThrow();
         repo.SetEligibility(ineligible);
         dbContext.Set<MonitoredRepository>().Add(repo);
 
@@ -223,7 +223,7 @@ public sealed class WhenQueuedIssuesRequested_OrderedByDispatchOrder : IAsyncDis
         // Eligible queued are ordered by the capacity-aware multi-pass walk (CapacityAwareDispatchOrder.Order).
         // Each repo defaults to MaxConcurrentWorkers=1. No issues are in-flight, so headroom=1 per repo.
         //
-        // DispatchOrderKey sort (TierRank → Position → DetectedAt → Id) gives this input order:
+        // DispatchOrderKey sort (TierRank → Position → IssueNumber → Id) gives this input order:
         //   issue 2 — revision_queued, repoB (tier 0, pos 1)
         //   issue 3 — continuation_queued, repoB (tier 1, pos 1)
         //   issue 1 — queued, repoA (tier 2, pos 2)
@@ -269,7 +269,7 @@ public sealed class WhenQueuedIssuesRequested_OrderedByDispatchOrder : IAsyncDis
     [Fact]
     public async Task WhenQueuedIssuesSameTierOnDifferentEligibleRepos_LowerPositionComesFirst()
     {
-        // Arrange — two eligible repos at position 1 and 2, both with fresh QueuedIssues at the same DetectedAt.
+        // Arrange — two eligible repos at position 1 and 2, both with fresh QueuedIssues.
         MonitoredRepositoryId repoAtPosition2 = await SeedEligibleRepositoryAsync("owner/repo-pos2", position: 2);
         MonitoredRepositoryId repoAtPosition1 = await SeedEligibleRepositoryAsync("owner/repo-pos1", position: 1);
 
@@ -292,5 +292,53 @@ public sealed class WhenQueuedIssuesRequested_OrderedByDispatchOrder : IAsyncDis
         // Issue on repo at position 1 (issue 20) dispatched before issue on repo at position 2 (issue 10).
         result.Items[0].IssueNumber.ShouldBe(20);
         result.Items[1].IssueNumber.ShouldBe(10);
+    }
+
+    [Fact]
+    public async Task WhenQueuedIssuesSameTierInSameRepo_LowerIssueNumberComesFirstRegardlessOfDetection()
+    {
+        // Arrange — #12 is detected after #50 in the same eligible repository (ADR 0092).
+        MonitoredRepositoryId repo = await SeedEligibleRepositoryAsync("owner/repo", position: 1);
+        await SeedQueuedIssueAsync(repo, issueNumber: 50, detectedAt: Now.AddHours(-2));
+        await SeedQueuedIssueAsync(repo, issueNumber: 12, detectedAt: Now.AddHours(-1));
+
+        // Act
+        HttpResponseMessage response = await _client.GetAsync(
+            new Uri("/api/issues", UriKind.Relative),
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        PagedIssues? result = await response.Content
+            .ReadFromJsonAsync<PagedIssues>(TestContext.Current.CancellationToken);
+        result.ShouldNotBeNull();
+        result.Items.Select(i => i.IssueNumber).ShouldBe([12, 50]);
+    }
+
+    [Fact]
+    public async Task WhenQueuedIssuesInTwoIneligibleRepos_GroupedByRealPositionThenIssueNumber()
+    {
+        // Arrange — two ineligible repos; issues seeded so that a shared sentinel position would interleave them.
+        MonitoredRepositoryId eligibleRepo = await SeedEligibleRepositoryAsync("owner/eligible", position: 0);
+        MonitoredRepositoryId laterRepo = await SeedIneligibleRepositoryAsync("owner/ineligible-later", position: 4);
+        MonitoredRepositoryId earlierRepo = await SeedIneligibleRepositoryAsync("owner/ineligible-earlier", position: 3);
+
+        await SeedQueuedIssueAsync(laterRepo, issueNumber: 1, detectedAt: Now.AddHours(-4));
+        await SeedQueuedIssueAsync(earlierRepo, issueNumber: 7, detectedAt: Now.AddHours(-3));
+        await SeedQueuedIssueAsync(laterRepo, issueNumber: 4, detectedAt: Now.AddHours(-2));
+        await SeedQueuedIssueAsync(earlierRepo, issueNumber: 2, detectedAt: Now.AddHours(-1));
+        await SeedQueuedIssueAsync(eligibleRepo, issueNumber: 99, detectedAt: Now);
+
+        // Act
+        HttpResponseMessage response = await _client.GetAsync(
+            new Uri("/api/issues", UriKind.Relative),
+            TestContext.Current.CancellationToken);
+
+        // Assert — eligible first, then ineligible grouped by repository position, then issue number.
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        PagedIssues? result = await response.Content
+            .ReadFromJsonAsync<PagedIssues>(TestContext.Current.CancellationToken);
+        result.ShouldNotBeNull();
+        result.Items.Select(i => i.IssueNumber).ShouldBe([99, 2, 7, 1, 4]);
     }
 }

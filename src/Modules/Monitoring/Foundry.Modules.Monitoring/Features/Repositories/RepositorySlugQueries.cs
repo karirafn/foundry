@@ -46,7 +46,8 @@ internal sealed class RepositorySlugQueries(DbContext db) : IRepositorySlugQueri
             r => r.Id,
             r => new RepositoryDisplayInfo(
                 r.Slug.ToString(),
-                ToProviderType(CredentialResolver.SelectMostSpecific(credentialsByHost[r.Host], r.Slug))));
+                ToProviderType(CredentialResolver.SelectMostSpecific(credentialsByHost[r.Host], r.Slug)),
+                r.Position));
     }
 
     private static string? ToProviderType(Credential? credential) =>

@@ -177,7 +177,7 @@ public sealed class SelectAsync : IAsyncDisposable
         DateTimeOffset olderTime = DateTimeOffset.UtcNow.AddMinutes(-5);
         DateTimeOffset newerTime = DateTimeOffset.UtcNow;
 
-        // Unresolvable repo has older DetectedAt → lower DispatchOrderKey → heads the queue
+        // Unresolvable repo has the lower issue number → lower DispatchOrderKey → heads the queue
         FreshQueuedIssue unresolvableIssue = SeedQueuedIssueAtTime(unresolvableRepoId, issueNumber: 1, detectedAt: olderTime);
         FreshQueuedIssue resolvableIssue = SeedQueuedIssueAtTime(resolvableRepoId, issueNumber: 2, detectedAt: newerTime);
 

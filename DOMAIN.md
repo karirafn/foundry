@@ -375,11 +375,11 @@ Lowering the limit below the current in-flight count does not preempt running wo
 ## Dispatch Order
 
 The total order that governs which queued issue is claimed next and the order the dashboard list query serves queued issues in.
-The comparison primitive is the four-tuple `DispatchOrderKey` — `(TierRank, Position, DetectedAt, Id)`, evaluated in that precedence:
+The comparison primitive is the four-tuple `DispatchOrderKey` — `(TierRank, Position, IssueNumber, Id)`, evaluated in that precedence:
 
 - **TierRank** — a property of the queued state variant that encodes dispatch-priority class: revision (0) < continuation (1) < fresh (2). Lower rank is claimed first; this is the primary ordering criterion.
 - **Position** — the `EligibleRepository.Position` of the repository that owns the issue, supplied externally into the key. Lower position is preferred within a tier.
-- **DetectedAt** — oldest first within the same repository and tier.
+- **IssueNumber** — the provider's issue number (the per-project `iid` on GitLab), lowest first within the same repository and tier, reflecting author intent rather than when Foundry noticed the issue (see [ADR 0092](docs/adr/0092-order-same-repository-queued-issues-by-issue-number.md)). `DetectedAt` is not a key component.
 - **Id** — guarantees a deterministic total order when all other fields are equal.
 
 The single shared artifact consumed by both the dispatcher and the dashboard is a **capacity-aware ordering** over this key (`CapacityAwareDispatchOrder`): a multi-pass walk over the `DispatchOrderKey`-sorted sequence that carries each repository's remaining headroom.

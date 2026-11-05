@@ -188,7 +188,7 @@ public sealed class WhenGloballySaturated_ForecastsFinishingWorkersRepo : IAsync
 
         // Issue 950 (repo A, revision_queued, tier 0) must precede issue 86 (repo B, fresh queued, tier 2).
         //
-        // DispatchOrderKey sort (TierRank → Position → DetectedAt → Id) gives this input order for queued issues:
+        // DispatchOrderKey sort (TierRank → Position → IssueNumber → Id) gives this input order for queued issues:
         //   issue 950 — revision_queued (tier 0), repoA (pos 0)
         //   issue 86  — queued (tier 2), repoB (pos 1)
         //
