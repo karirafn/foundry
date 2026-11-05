@@ -8,6 +8,7 @@ using Docker.DotNet.Models;
 using Foundry.Modules.Credentials.Domain.ValueObjects;
 using Foundry.Modules.Credentials.Features.CreditProbe;
 using Foundry.Modules.Credentials.Features.Login;
+using Foundry.Modules.Credentials.Features.SessionCheck;
 using Foundry.Modules.Credentials.Features.Usage;
 using Foundry.Modules.Workers.Contracts;
 using Foundry.Shared;
@@ -27,6 +28,7 @@ internal sealed class CredentialsOrchestrator(IDockerContainerRuntime runtime) :
     private const int DockerErrorMessageMaxLength = 500;
     private const int AuthStatusOutputMaxBytes = 16_384;
     private const int ProbeLogMaxLength = 65_536;
+    private const int SessionRefreshTimeoutSeconds = 20;
 
     public async Task<Result<string>> StartLoginContainerAsync(
         LoginContainerSpec spec,
@@ -366,6 +368,63 @@ internal sealed class CredentialsOrchestrator(IDockerContainerRuntime runtime) :
                 ? redacted[..DockerErrorMessageMaxLength]
                 : redacted;
             return Result<string>.Fail(new Error("Docker.UsageReportStartFailed", message));
+        }
+    }
+
+    public async Task<Result<OAuthSessionStatus>> CheckOAuthSessionAsync(CancellationToken cancellationToken)
+    {
+        string credentialsPath = $"{CredentialVolumeConstants.ContainerPath}/{OAuthCredentialFile.FileName}";
+
+        try
+        {
+            string helperId = await StartCredentialHelperContainerAsync(cancellationToken);
+
+            try
+            {
+                OAuthSessionStatus status = OAuthCredentialFile.Classify(
+                    await runtime.ReadFileAsync(helperId, credentialsPath, cancellationToken),
+                    DateTimeOffset.UtcNow);
+
+                if (status is not OAuthSessionStatus.Expired)
+                {
+                    return status;
+                }
+
+                // The access token has expired. Let the CLI refresh it, exactly as a worker would:
+                // `claude auth status` refreshes an expired token under the shared .storage-write
+                // lock and persists the rotated refresh token to the volume. On invalid_grant the CLI
+                // clears the stored tokens; on a network error it leaves the file untouched. The
+                // exit code and stdout carry neither signal, so the file is read again instead.
+                await runtime.ExecCaptureStdoutAsync(
+                    helperId,
+                    [
+                        "timeout",
+                        SessionRefreshTimeoutSeconds.ToString(CultureInfo.InvariantCulture),
+                        "claude",
+                        "auth",
+                        "status",
+                        "--json",
+                    ],
+                    [],
+                    AuthStatusOutputMaxBytes,
+                    cancellationToken);
+
+                return OAuthCredentialFile.Classify(
+                    await runtime.ReadFileAsync(helperId, credentialsPath, cancellationToken),
+                    DateTimeOffset.UtcNow);
+            }
+            finally
+            {
+                await StopAndRemoveAsync(helperId, cancellationToken);
+            }
+        }
+        catch (DockerApiException ex)
+        {
+            string redacted = SecretRedactor.Redact(ex.Message);
+            string message = redacted.Length > DockerErrorMessageMaxLength
+                ? redacted[..DockerErrorMessageMaxLength]
+                : redacted;
+            return Result<OAuthSessionStatus>.Fail(new Error("Docker.SessionCheckFailed", message));
         }
     }
 

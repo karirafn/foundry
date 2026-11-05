@@ -1,5 +1,6 @@
 using Foundry.Modules.Credentials.Features.CreditProbe;
 using Foundry.Modules.Credentials.Features.Login;
+using Foundry.Modules.Credentials.Features.SessionCheck;
 using Foundry.Modules.Credentials.Features.Usage;
 using Foundry.Shared;
 
@@ -54,6 +55,16 @@ internal interface ICredentialsOrchestrator
     Task<Result<string>> RunUsageReportAsync(
         UsageReportSpec spec,
         CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Reads the stored Claude OAuth session from the credential volume in a credential-helper
+    /// container. When the access token has expired, lets the Claude Code CLI attempt its own
+    /// refresh (`claude auth status`, which serialises on the store lock and writes the rotated
+    /// token back to the shared volume) and classifies the file again. Foundry never posts the
+    /// refresh token itself. Returns a <see cref="Result{T}.Failure"/> when Docker-level errors
+    /// prevent the check from running.
+    /// </summary>
+    Task<Result<OAuthSessionStatus>> CheckOAuthSessionAsync(CancellationToken cancellationToken);
 
     Task SeedOnboardingAsync(CancellationToken cancellationToken);
 
