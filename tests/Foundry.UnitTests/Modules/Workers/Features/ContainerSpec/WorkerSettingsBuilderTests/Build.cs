@@ -298,4 +298,27 @@ public sealed class Build
         rules.ShouldContain("Bash(npx -y:*)");
         rules[17].ShouldBe("Bash(rm -rf:*)");
     }
+
+    [Theory]
+    [InlineData("", true)]
+    [InlineData("claude-opus-4-5", false)]
+    public void WhenCalled_SuppressesAiAttributionWithObjectForm(string model, bool blockCiCdEdits)
+    {
+        // Arrange
+        ClaudeCodeSettingsSnapshot snapshot = Snapshot(model, blockCiCdEdits, "Bash(rm -rf:*)");
+
+        // Act
+        string json = WorkerSettingsBuilder.Build(snapshot);
+
+        // Assert — the object form, not `false`, so a CLI older than v2.1.281 does not skip the whole file.
+        using JsonDocument doc = JsonDocument.Parse(json);
+        JsonElement attribution = doc.RootElement.GetProperty("attribution");
+
+        attribution.ValueKind.ShouldBe(JsonValueKind.Object);
+        attribution.ShouldSatisfyAllConditions(
+            () => attribution.GetProperty("commit").GetString().ShouldBe(string.Empty),
+            () => attribution.GetProperty("pr").GetString().ShouldBe(string.Empty),
+            () => attribution.GetProperty("sessionUrl").ValueKind.ShouldBe(JsonValueKind.False),
+            () => attribution.EnumerateObject().Count().ShouldBe(3));
+    }
 }

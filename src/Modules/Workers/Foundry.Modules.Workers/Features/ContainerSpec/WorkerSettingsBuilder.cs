@@ -52,6 +52,7 @@ internal static class WorkerSettingsBuilder
         {
             Model = string.IsNullOrWhiteSpace(claudeCode.Model) ? null : claudeCode.Model,
             Permissions = new() { Deny = denyRules },
+            Attribution = new(),
         };
 
         return JsonSerializer.Serialize(document, SerializerOptions);
@@ -62,6 +63,19 @@ internal static class WorkerSettingsBuilder
         public string? Model { get; set; }
 
         public required PermissionsSection Permissions { get; set; }
+
+        public required AttributionSection Attribution { get; set; }
+    }
+
+    // A worker never adds AI attribution; managed settings make this unoverridable. The object form is used
+    // rather than `"attribution": false` because CLIs before v2.1.281 reject the boolean and skip the whole file.
+    private sealed class AttributionSection
+    {
+        public string Commit { get; } = string.Empty;
+
+        public string Pr { get; } = string.Empty;
+
+        public bool SessionUrl { get; }
     }
 
     private sealed class PermissionsSection
