@@ -3,7 +3,19 @@ import { HttpClient, HttpErrorResponse, HttpParams } from '@angular/common/http'
 import { Subscription } from 'rxjs';
 import { IssueSignalRService } from '../../core/services/issue-signalr.service';
 import { IssueDetail, IssueState, IssueSummary, LIVE_STATES, QUEUED_TIER_STATES } from './issue.model';
-import { ACTIVE_STATES, RESOLVED_STATES, groupRankFor, isKnownState, isResolvedState, withinGroupRankFor } from './issue-lifecycle.model';
+import {
+  DEFAULT_SELECTED_GROUPS,
+  RESOLVED_GROUP_ID,
+  STATE_GROUPS,
+  StateGroup,
+  StateGroupId,
+  groupById,
+  groupFor,
+  groupRankFor,
+  isKnownState,
+  isResolvedState,
+  withinGroupRankFor,
+} from './issue-lifecycle.model';
 import { components } from '../../api/schema';
 
 type PagedIssues = components['schemas']['PagedIssues'];
@@ -11,6 +23,12 @@ type GeneratedIssueSummary = components['schemas']['IssueSummary'];
 
 interface IssueCountsResponse {
   counts: Record<string, number>;
+}
+
+/** One rendered section of the active band: a selected, non-empty active group and its issues. */
+export interface IssueSection {
+  readonly group: StateGroup;
+  readonly issues: readonly IssueSummary[];
 }
 
 const LOAD_ISSUES_ERROR = 'Failed to load issues';
@@ -66,11 +84,10 @@ export class IssueService {
   private readonly _countsSignal: WritableSignal<Record<string, number>> = signal({});
   readonly counts: Signal<Record<string, number>> = this._countsSignal.asReadonly();
 
-  private readonly _selectedActiveStatesSignal: WritableSignal<ReadonlySet<IssueState>> = signal(ACTIVE_STATES);
-  readonly selectedActiveStates: Signal<ReadonlySet<IssueState>> = this._selectedActiveStatesSignal.asReadonly();
+  private readonly _selectedGroupsSignal: WritableSignal<ReadonlySet<StateGroupId>> = signal(DEFAULT_SELECTED_GROUPS);
+  readonly selectedGroups: Signal<ReadonlySet<StateGroupId>> = this._selectedGroupsSignal.asReadonly();
 
-  private readonly _selectedResolvedStatesSignal: WritableSignal<ReadonlySet<IssueState>> = signal(new Set<IssueState>());
-  readonly selectedResolvedStates: Signal<ReadonlySet<IssueState>> = this._selectedResolvedStatesSignal.asReadonly();
+  readonly resolvedSelected: Signal<boolean> = computed(() => this.selectedGroups().has(RESOLVED_GROUP_ID));
 
   private readonly _resolvedIssuesSignal: WritableSignal<IssueSummary[]> = signal([]);
   readonly resolvedIssues: Signal<IssueSummary[]> = this._resolvedIssuesSignal.asReadonly();
@@ -154,15 +171,39 @@ export class IssueService {
     return first?.id ?? null;
   });
 
-  readonly activeBandIssues: Signal<IssueSummary[]> = computed(() =>
-    this.sortedIssues().filter(i => this.selectedActiveStates().has(i.state))
-  );
+  readonly activeBandIssues: Signal<IssueSummary[]> = computed(() => {
+    const selected = this.selectedGroups();
+    return this.sortedIssues().filter(i => selected.has(groupFor(i.state).id));
+  });
+
+  // Splits the active band into one section per selected, non-empty active group, in STATE_GROUPS
+  // order. sortedIssues() is already ordered by group rank, so concatenating the sections yields
+  // exactly activeBandIssues() — queuePositions keeps indexing the rendered order.
+  readonly activeSections: Signal<readonly IssueSection[]> = computed(() => {
+    const byGroup = new Map<StateGroupId, IssueSummary[]>();
+    for (const issue of this.activeBandIssues()) {
+      const id = groupFor(issue.state).id;
+      const bucket = byGroup.get(id);
+      if (bucket === undefined) {
+        byGroup.set(id, [issue]);
+      } else {
+        bucket.push(issue);
+      }
+    }
+    const sections: IssueSection[] = [];
+    for (const group of STATE_GROUPS) {
+      const issues = byGroup.get(group.id);
+      if (issues !== undefined) {
+        sections.push({ group, issues });
+      }
+    }
+    return sections;
+  });
 
   // Positions index the rendered activeBandIssues() array so the ordinal always matches the
-  // on-screen order (ADR 0067). Consequently, deselecting a queued-tier state renumbers the
-  // visible ordinals contiguously rather than preserving absolute dispatch position — this is
-  // intended: the topmost visible card must always show "1", never a non-1 number when cards
-  // above it are hidden by a filter.
+  // on-screen order (ADR 0067). Every queued-tier state lives in the Waiting group, so the queue is
+  // either fully visible or fully hidden; ordinals are numbered contiguously from the topmost
+  // visible queued card so it always shows "1".
   readonly queuePositions: Signal<ReadonlyMap<string, number>> = computed(() => {
     const positions = new Map<string, number>();
     let position = 1;
@@ -187,14 +228,6 @@ export class IssueService {
   });
 
   readonly isEmpty: Signal<boolean> = computed(() => this.issues().length === 0);
-
-  readonly activeFilterCount: Signal<number> = computed(() => {
-    const selectedActive = this.selectedActiveStates();
-    const selectedResolved = this.selectedResolvedStates();
-    const deselectedActive = [...ACTIVE_STATES].filter(s => !selectedActive.has(s)).length;
-    const selectedResolvedCount = [...RESOLVED_STATES].filter(s => selectedResolved.has(s)).length;
-    return deselectedActive + selectedResolvedCount;
-  });
 
   constructor() {
     this._signalR.on<IssueSummary>('IssueUpdated', (updated) => this._upsertIssue(updated));
@@ -254,33 +287,25 @@ export class IssueService {
     return this._countsSignal()[state] ?? 0;
   }
 
-  isStateSelected(state: IssueState): boolean {
-    if (isResolvedState(state)) {
-      return this.selectedResolvedStates().has(state);
-    }
-    return this.selectedActiveStates().has(state);
+  /** Sum of the per-state counts of every state in the group. */
+  countForGroup(id: StateGroupId): number {
+    return groupById(id).states.reduce((sum, state) => sum + this.countFor(state), 0);
   }
 
-  toggleState(state: IssueState): void {
-    if (isResolvedState(state)) {
-      const current = this.selectedResolvedStates();
-      const next = new Set<IssueState>(current);
-      if (next.has(state)) {
-        next.delete(state);
-      } else {
-        next.add(state);
-      }
-      this._selectedResolvedStatesSignal.set(next);
-      this._onResolvedSelectionChanged(next);
+  isGroupSelected(id: StateGroupId): boolean {
+    return this.selectedGroups().has(id);
+  }
+
+  toggleGroup(id: StateGroupId): void {
+    const next = new Set<StateGroupId>(this.selectedGroups());
+    if (next.has(id)) {
+      next.delete(id);
     } else {
-      const current = this.selectedActiveStates();
-      const next = new Set<IssueState>(current);
-      if (next.has(state)) {
-        next.delete(state);
-      } else {
-        next.add(state);
-      }
-      this._selectedActiveStatesSignal.set(next);
+      next.add(id);
+    }
+    this._selectedGroupsSignal.set(next);
+    if (id === RESOLVED_GROUP_ID) {
+      this._onResolvedSelectionChanged();
     }
   }
 
@@ -291,11 +316,11 @@ export class IssueService {
 
     this._resolvedLoadMoreErrorSignal.set(null);
     this.resolvedLoadingMore.set(true);
-    this._fetchResolvedPage(this.selectedResolvedStates(), this._resolvedCursor(), repositoryId, false, this._resolvedRequestToken);
+    this._fetchResolvedPage(this._resolvedCursor(), repositoryId, false, this._resolvedRequestToken);
   }
 
   retryResolvedFetch(): void {
-    this._onResolvedSelectionChanged(this.selectedResolvedStates());
+    this._onResolvedSelectionChanged();
   }
 
   loadDetail(id: string): void {
@@ -419,7 +444,7 @@ export class IssueService {
   }
 
   private _prependToResolvedIfSelected(issue: IssueSummary): void {
-    if (!this.selectedResolvedStates().has(issue.state)) {
+    if (!this.resolvedSelected() || groupFor(issue.state).id !== RESOLVED_GROUP_ID) {
       return;
     }
     const existing = this._resolvedIssuesSignal();
@@ -540,30 +565,31 @@ export class IssueService {
     });
   }
 
-  private _onResolvedSelectionChanged(states: ReadonlySet<IssueState>): void {
+  private _onResolvedSelectionChanged(): void {
     this._resolvedIssuesSignal.set([]);
     this._resolvedCursor.set(null);
     this._resolvedErrorSignal.set(null);
     this._resolvedLoadMoreErrorSignal.set(null);
     this._resolvedRequestToken += 1;
 
-    if (states.size === 0) {
+    if (!this.resolvedSelected()) {
+      this.resolvedLoading.set(false);
+      this.resolvedLoadingMore.set(false);
       return;
     }
 
     this.resolvedLoading.set(true);
-    this._fetchResolvedPage(states, null, undefined, true, this._resolvedRequestToken);
+    this._fetchResolvedPage(null, undefined, true, this._resolvedRequestToken);
   }
 
   private _fetchResolvedPage(
-    states: ReadonlySet<IssueState>,
     cursor: string | null,
     repositoryId: string | undefined,
     isFirstPage: boolean,
     requestToken: number,
   ): void {
     let params = new HttpParams();
-    for (const s of states) {
+    for (const s of groupById(RESOLVED_GROUP_ID).states) {
       params = params.append('states', s);
     }
     if (cursor !== null) {

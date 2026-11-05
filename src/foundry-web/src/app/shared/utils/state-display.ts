@@ -54,28 +54,6 @@ export const STATE_CSS_CLASSES: Record<IssueState, string> = {
   revision_failed: 'badge--revision-failed',
 };
 
-/**
- * Human-readable rail labels — title-cased, suitable for UI display in the filter rail.
- * Distinct from STATE_LABELS which uses short all-caps badge text.
- */
-export const STATE_RAIL_LABELS: Record<IssueState, string> = {
-  detected: 'Detected',
-  queued: 'Queued',
-  blocked: 'Blocked',
-  in_progress: 'In Progress',
-  review: 'Review',
-  rebase_pending: 'Rebasing',
-  checks_pending: 'Checks Pending',
-  unchanged: 'Unchanged',
-  failed: 'Failed',
-  continuable_failed: 'Continuable Failed',
-  continuation_queued: 'Continuation Queued',
-  completed: 'Completed',
-  revision_queued: 'Revision Queued',
-  revision_in_progress: 'Revision In Progress',
-  revision_failed: 'Revision Failed',
-};
-
 export function cardAccentFor(state: IssueState): 'working' | 'ready' | null {
   if (WORKING_STATES.has(state)) {
     return 'working';
@@ -85,25 +63,3 @@ export function cardAccentFor(state: IssueState): 'working' | 'ready' | null {
   }
   return null;
 }
-
-/**
- * CSS custom property name for per-state color, used by the filter rail dot indicator.
- * Maps each state to the --fd-state-* token from styles.scss.
- */
-export const STATE_COLOR_VARS: Record<IssueState, string> = {
-  detected: 'var(--fd-state-detected)',
-  queued: 'var(--fd-state-queued)',
-  blocked: 'var(--fd-state-blocked)',
-  in_progress: 'var(--fd-state-in-progress)',
-  review: 'var(--fd-state-review)',
-  rebase_pending: 'var(--fd-state-queued)',
-  checks_pending: 'var(--fd-state-queued)',
-  unchanged: 'var(--fd-state-unchanged)',
-  failed: 'var(--fd-state-failed)',
-  continuable_failed: 'var(--fd-state-failed)',
-  continuation_queued: 'var(--fd-state-queued)',
-  completed: 'var(--fd-state-completed)',
-  revision_queued: 'var(--fd-state-queued)',
-  revision_in_progress: 'var(--fd-state-in-progress)',
-  revision_failed: 'var(--fd-state-failed)',
-};

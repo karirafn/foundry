@@ -7,19 +7,19 @@ import { IssueCardSkeletonComponent } from '../issue-card/issue-card-skeleton';
 import { IssueDetailComponent } from '../issue-detail/issue-detail';
 import { ConnectionIndicatorComponent } from '../../../shared/components/connection-indicator/connection-indicator';
 import { DispatchControlsComponent } from './dispatch-controls/dispatch-controls';
-import { IssueFilterRailComponent } from '../issue-filter-rail/issue-filter-rail';
-import { IssueFilterBarComponent } from '../issue-filter-bar/issue-filter-bar';
+import { IssueGroupFilterComponent } from '../issue-group-filter/issue-group-filter';
 import { SettingsService } from '../../../core/services/settings.service';
 import { LIVE_STATES } from '../issue.model';
 import { RunStatsBarComponent } from '../run-stats-bar/run-stats-bar';
 import { WorkerRunTotalsService } from '../../workers/run-totals.service';
 
 const SKELETON_COUNT = 4;
-const EMPTY_ACTIVE_MESSAGE = 'No active issues match the current filters. Check the Resolved counts to see closed work.';
+const EMPTY_ACTIVE_MESSAGE = 'No active issues match the selected groups. Select Resolved to see closed work.';
 const EMPTY_RESOLVED_MESSAGE = 'No resolved issues match the selected filters';
 const STALE_MESSAGE = 'Queue order may be out of date';
 const RESOLVED_HEADING_ID = 'resolved-band-heading';
 const INELIGIBLE_QUEUE_HEADING_ID = 'ineligible-queue-heading';
+const SECTION_HEADING_ID_PREFIX = 'issue-section-heading-';
 
 @Component({
   selector: 'fd-issue-list',
@@ -31,8 +31,7 @@ const INELIGIBLE_QUEUE_HEADING_ID = 'ineligible-queue-heading';
     IssueDetailComponent,
     ConnectionIndicatorComponent,
     DispatchControlsComponent,
-    IssueFilterRailComponent,
-    IssueFilterBarComponent,
+    IssueGroupFilterComponent,
     RunStatsBarComponent,
   ],
   template: `
@@ -45,9 +44,7 @@ const INELIGIBLE_QUEUE_HEADING_ID = 'ineligible-queue-heading';
       <fd-dispatch-controls />
 
       <div class="issue-list__layout">
-        <aside class="issue-list__rail" aria-label="Filter by state">
-          <fd-issue-filter-rail />
-        </aside>
+        <fd-issue-group-filter class="issue-list__filters" />
 
         <div class="issue-list__body">
           <fd-run-stats-bar />
@@ -122,67 +119,76 @@ const INELIGIBLE_QUEUE_HEADING_ID = 'ineligible-queue-heading';
             </div>
           }
 
-          <div class="issue-list__grid">
-            @for (issue of issueService.activeBandIssues(); track issue.id; let idx = $index) {
-              @if (issueService.liveIssueCount() > 0 && idx === issueService.liveIssueCount()) {
-                <span class="sr-only">End of in-progress issues. Other issues follow.</span>
-                <hr class="issue-list__separator" aria-hidden="true" />
-              }
-              @if (ineligibleQueueStartIndex() >= 0 && idx === ineligibleQueueStartIndex()) {
-                <!-- H3: caption changed from h3 to p — no heading hierarchy skip (h1 → h3).
-                     M1: role="group" + aria-labelledby makes the label effective on the container.
-                     M2: guidance text is nested inside the labelled <p> so screen readers hear
-                         exactly one boundary announcement — no duplicate sibling sr-only span. -->
-                <div
-                  role="group"
-                  class="issue-list__ineligible-queue-divider"
-                  [attr.aria-labelledby]="ineligibleQueueHeadingId"
-                >
-                  <hr class="issue-list__ineligible-queue-hr" aria-hidden="true" />
-                  <p
-                    [id]="ineligibleQueueHeadingId"
-                    class="issue-list__ineligible-queue-caption"
-                  >Not dispatchable<span class="sr-only"> — queued issues from repositories that are currently not dispatchable follow. Check repository settings to make them eligible.</span></p>
-                </div>
-              }
-              <div class="issue-list__item">
-                <fd-issue-card
-                  [issue]="issue"
-                  [expanded]="issueService.expandedIssueId() === issue.id"
-                  [lastActivityAt]="isLiveIssue(issue.state) ? workerSignalR.activityForIssue(issue.id) : null"
-                  [commitCount]="isLiveIssue(issue.state) ? workerSignalR.commitCountForIssue(issue.id) : null"
-                  [agentActivity]="isLiveIssue(issue.state) ? workerSignalR.agentActivityForIssue(issue.id) : null"
-                  [isNextUp]="issueService.nextUpIssueId() === issue.id"
-                  [queuePosition]="issueService.queuePositions().get(issue.id) ?? null"
-                  (toggle)="issueService.toggleExpand(issue.id)"
-                />
-
-                <div
-                  class="issue-list__detail-wrapper"
-                  [id]="'detail-' + issue.id"
-                  [hidden]="issueService.expandedIssueId() !== issue.id"
-                >
-                  @if (issueService.expandedIssueId() === issue.id) {
-                    <fd-issue-detail
-                      [detail]="issueService.issueDetail()"
-                      [loading]="issueService.detailLoading()"
-                      [error]="issueService.detailError()"
-                      (retry)="issueService.loadDetail(issueService.expandedIssueId()!)"
-                    />
-                  }
-                </div>
-              </div>
-            }
-          </div>
-
-          @if (issueService.selectedResolvedStates().size > 0) {
+          @for (section of issueService.activeSections(); track section.group.id) {
             <section
-              class="issue-list__resolved-section"
+              class="issue-list__section"
+              [attr.data-group]="section.group.id"
+              [attr.aria-labelledby]="sectionHeadingId(section.group.id)"
+            >
+              <div class="issue-list__section-header">
+                <h2 [id]="sectionHeadingId(section.group.id)" class="issue-list__section-caption">{{ section.group.label }}</h2>
+                <hr class="issue-list__section-hr" aria-hidden="true" />
+              </div>
+
+              <div class="issue-list__grid">
+                @for (issue of section.issues; track issue.id) {
+                  @if (issue.id === ineligibleQueueStartId()) {
+                    <!-- H3: caption changed from h3 to p — no heading hierarchy skip (h1 → h3).
+                         M1: role="group" + aria-labelledby makes the label effective on the container.
+                         M2: guidance text is nested inside the labelled <p> so screen readers hear
+                             exactly one boundary announcement — no duplicate sibling sr-only span. -->
+                    <div
+                      role="group"
+                      class="issue-list__ineligible-queue-divider"
+                      [attr.aria-labelledby]="ineligibleQueueHeadingId"
+                    >
+                      <hr class="issue-list__ineligible-queue-hr" aria-hidden="true" />
+                      <p
+                        [id]="ineligibleQueueHeadingId"
+                        class="issue-list__ineligible-queue-caption"
+                      >Not dispatchable<span class="sr-only"> — queued issues from repositories that are currently not dispatchable follow. Check repository settings to make them eligible.</span></p>
+                    </div>
+                  }
+                  <div class="issue-list__item">
+                    <fd-issue-card
+                      [issue]="issue"
+                      [expanded]="issueService.expandedIssueId() === issue.id"
+                      [lastActivityAt]="isLiveIssue(issue.state) ? workerSignalR.activityForIssue(issue.id) : null"
+                      [commitCount]="isLiveIssue(issue.state) ? workerSignalR.commitCountForIssue(issue.id) : null"
+                      [agentActivity]="isLiveIssue(issue.state) ? workerSignalR.agentActivityForIssue(issue.id) : null"
+                      [isNextUp]="issueService.nextUpIssueId() === issue.id"
+                      [queuePosition]="issueService.queuePositions().get(issue.id) ?? null"
+                      (toggle)="issueService.toggleExpand(issue.id)"
+                    />
+
+                    <div
+                      class="issue-list__detail-wrapper"
+                      [id]="'detail-' + issue.id"
+                      [hidden]="issueService.expandedIssueId() !== issue.id"
+                    >
+                      @if (issueService.expandedIssueId() === issue.id) {
+                        <fd-issue-detail
+                          [detail]="issueService.issueDetail()"
+                          [loading]="issueService.detailLoading()"
+                          [error]="issueService.detailError()"
+                          (retry)="issueService.loadDetail(issueService.expandedIssueId()!)"
+                        />
+                      }
+                    </div>
+                  </div>
+                }
+              </div>
+            </section>
+          }
+
+          @if (issueService.resolvedSelected()) {
+            <section
+              class="issue-list__section issue-list__resolved-section"
               [attr.aria-labelledby]="resolvedHeadingId"
             >
-              <div class="issue-list__resolved-divider">
-                <hr class="issue-list__resolved-hr" aria-hidden="true" />
-                <h2 #resolvedBandHeadingEl [id]="resolvedHeadingId" class="issue-list__resolved-caption" tabindex="-1">Resolved</h2>
+              <div class="issue-list__section-header issue-list__resolved-divider">
+                <h2 #resolvedBandHeadingEl [id]="resolvedHeadingId" class="issue-list__section-caption issue-list__resolved-caption" tabindex="-1">Resolved</h2>
+                <hr class="issue-list__section-hr issue-list__resolved-hr" aria-hidden="true" />
               </div>
 
               @if (issueService.resolvedLoading()) {
@@ -270,10 +276,6 @@ const INELIGIBLE_QUEUE_HEADING_ID = 'ineligible-queue-heading';
           >{{ issueService.nextUpAnnouncement() }}</span>
         </div>
       </div>
-
-      <div class="issue-list__filter-bar-container">
-        <fd-issue-filter-bar />
-      </div>
     </div>
   `,
   styleUrl: './issue-list.scss',
@@ -294,14 +296,17 @@ export class IssueListComponent implements OnInit {
   protected readonly resolvedHeadingId = RESOLVED_HEADING_ID;
   protected readonly ineligibleQueueHeadingId = INELIGIBLE_QUEUE_HEADING_ID;
 
-  /** Index in activeBandIssues() where ineligible queued issues begin, or -1 if none. */
-  protected readonly ineligibleQueueStartIndex = computed(() => {
+  /**
+   * Id of the first rendered ineligible queued issue — the "Not dispatchable" sub-divider renders
+   * just before it (inside the Waiting section, which holds every queued-tier state) — or null.
+   */
+  protected readonly ineligibleQueueStartId = computed<string | null>(() => {
     const ineligibleIds = new Set(this.issueService.ineligibleQueuedIssues().map(i => i.id));
     if (ineligibleIds.size === 0) {
-      return -1;
+      return null;
     }
-    const band = this.issueService.activeBandIssues();
-    return band.findIndex(i => ineligibleIds.has(i.id));
+    const first = this.issueService.activeBandIssues().find(i => ineligibleIds.has(i.id));
+    return first?.id ?? null;
   });
 
   private _preLoadResolvedCount = 0;
@@ -326,7 +331,7 @@ export class IssueListComponent implements OnInit {
       return 'Loading resolved issues…';
     }
     const count = this.issueService.resolvedIssues().length;
-    if (this.issueService.selectedResolvedStates().size > 0 && count > 0) {
+    if (this.issueService.resolvedSelected() && count > 0) {
       const delta = count - this._preLoadResolvedCount;
       if (delta > 0 && this._preLoadResolvedCount > 0) {
         return `Loaded ${delta} more resolved issue${delta === 1 ? '' : 's'} (${count} total)`;
@@ -334,7 +339,7 @@ export class IssueListComponent implements OnInit {
       return `Loaded ${count} resolved issue${count === 1 ? '' : 's'}`;
     }
     if (
-      this.issueService.selectedResolvedStates().size > 0 &&
+      this.issueService.resolvedSelected() &&
       !this.issueService.resolvedError() &&
       count === 0
     ) {
@@ -342,6 +347,10 @@ export class IssueListComponent implements OnInit {
     }
     return '';
   });
+
+  protected sectionHeadingId(groupId: string): string {
+    return SECTION_HEADING_ID_PREFIX + groupId;
+  }
 
   protected isLiveIssue(state: string): boolean {
     return LIVE_STATES.has(state as never);

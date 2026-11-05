@@ -7,6 +7,7 @@ using Foundry.Modules.Monitoring.Features.Providers;
 using Foundry.Modules.Monitoring.Features.Providers.Checks;
 using Foundry.Modules.Monitoring.Features.Providers.Feedback;
 using Foundry.Modules.Monitoring.Features.Polling;
+using Foundry.Modules.Monitoring.Features.Webhooks;
 using Foundry.Shared;
 using Foundry.Testing;
 using Foundry.WebApi.Persistence;
@@ -75,6 +76,7 @@ public sealed class ChecksPendingPollAsync : IAsyncDisposable
             new NullDomainEventDispatcher(),
             _dispatcher,
             _eligibilityEvaluator,
+            new WebhookNudgeQueue(NullLogger<WebhookNudgeQueue>.Instance),
             NullLogger<RepositoryPoller>.Instance);
     }
 

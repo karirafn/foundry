@@ -243,4 +243,80 @@ public sealed class Apply
         // Assert
         result.Comments.ShouldBeEmpty();
     }
+
+    [Fact]
+    public void WhenCommentsAreHeldOnlyByQuietPeriod_HeldBackUntilIsNewestHeldCreatedAtPlusQuietPeriod()
+    {
+        // Arrange — a burst of comments inside the quiet period, plus one already actionable
+        DateTimeOffset older = Now.AddSeconds(-90);
+        DateTimeOffset newest = Now.AddSeconds(-5);
+        ProviderComment actionable = new ProviderCommentBuilder().WithCreatedAt(Now.AddMinutes(-10)).Build();
+        ProviderComment heldOlder = new ProviderCommentBuilder().WithCreatedAt(older).Build();
+        ProviderComment heldNewest = new ProviderCommentBuilder().WithCreatedAt(newest).Build();
+
+        ActionableFeedbackPolicy sut = BuildSut();
+
+        // Act
+        ReviewFeedback result = sut.Apply([heldNewest, actionable, heldOlder], Since);
+
+        // Assert
+        result.ShouldSatisfyAllConditions(
+            () => result.Comments.Count.ShouldBe(1),
+            () => result.HeldBackUntil.ShouldBe(newest + ActionableFeedbackPolicy.QuietPeriod));
+    }
+
+    [Fact]
+    public void WhenNoCommentIsHeldByQuietPeriod_HeldBackUntilIsNull()
+    {
+        // Arrange
+        ProviderComment actionable = new ProviderCommentBuilder().WithCreatedAt(Now.AddMinutes(-10)).Build();
+
+        ActionableFeedbackPolicy sut = BuildSut();
+
+        // Act
+        ReviewFeedback result = sut.Apply([actionable], Since);
+
+        // Assert
+        result.HeldBackUntil.ShouldBeNull();
+    }
+
+    [Fact]
+    public void WhenRecentCommentIsExcludedForAnotherReason_HeldBackUntilIsNull()
+    {
+        // Arrange — recent comments that would never become actionable must not schedule a follow-up
+        ProviderComment bot = new ProviderCommentBuilder().WithAuthorIsBot(true).WithCreatedAt(Now.AddSeconds(-5)).Build();
+        ProviderComment system = new ProviderCommentBuilder().WithIsSystem(true).WithCreatedAt(Now.AddSeconds(-5)).Build();
+        ProviderComment resolved = new ProviderCommentBuilder().WithThreadResolved(true).WithCreatedAt(Now.AddSeconds(-5)).Build();
+
+        ActionableFeedbackPolicy sut = BuildSut();
+
+        // Act
+        ReviewFeedback result = sut.Apply([bot, system, resolved], Now.AddMinutes(-10));
+
+        // Assert
+        result.HeldBackUntil.ShouldBeNull();
+    }
+
+    [Fact]
+    public void WhenRunAtHeldBackUntil_HeldCommentsBecomeActionable()
+    {
+        // Arrange — the follow-up review pass runs when the deferred nudge comes due
+        DateTimeOffset older = Now.AddSeconds(-30);
+        DateTimeOffset newest = Now.AddSeconds(-5);
+        ProviderComment heldOlder = new ProviderCommentBuilder().WithCreatedAt(older).WithBody("first").Build();
+        ProviderComment heldNewest = new ProviderCommentBuilder().WithCreatedAt(newest).WithBody("second").Build();
+
+        ReviewFeedback first = BuildSut().Apply([heldOlder, heldNewest], Since);
+        DateTimeOffset dueAt = first.HeldBackUntil.ShouldNotBeNull();
+
+        // Act
+        ReviewFeedback followUp = BuildSut(dueAt).Apply([heldOlder, heldNewest], Since);
+
+        // Assert
+        followUp.ShouldSatisfyAllConditions(
+            () => first.Comments.ShouldBeEmpty(),
+            () => followUp.Comments.Select(c => c.Body).ShouldBe(["first", "second"]),
+            () => followUp.NewestCommentAt.ShouldBe(newest),
+            () => followUp.HeldBackUntil.ShouldBeNull());
+    }
 }

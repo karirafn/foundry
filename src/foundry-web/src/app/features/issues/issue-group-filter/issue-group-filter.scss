@@ -1,0 +1,68 @@
+// Chip row — one inline row at every width, wrapping on narrow containers.
+.group-filter {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--fd-spacing-sm);
+}
+
+.group-filter__chip {
+  align-items: center;
+  background: transparent;
+  border: 1px solid var(--fd-border-default);
+  border-radius: 999px;
+  // --fd-text-secondary (#8b949e) on the page background is 6.14:1 — WCAG AA 4.5:1 for unpressed text.
+  color: var(--fd-text-secondary);
+  cursor: pointer;
+  display: inline-flex;
+  font-family: var(--fd-font-family);
+  font-size: 0.8125rem;
+  font-weight: 500;
+  gap: var(--fd-spacing-sm);
+  min-height: 36px;
+  padding: var(--fd-spacing-xs) var(--fd-spacing-md);
+
+  &:hover {
+    background: var(--fd-bg-card-hover);
+    color: var(--fd-text-primary);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--fd-text-link);
+    outline-offset: 2px;
+  }
+
+  // Pressed: filled surface + control-strength border so the state reads without relying on colour
+  // alone (the border weight and fill both change, and aria-pressed carries it for AT).
+  &--pressed {
+    background: var(--fd-bg-card);
+    border-color: var(--fd-border-control);
+    color: var(--fd-text-primary);
+  }
+
+  // Zero-count groups stay focusable and toggleable; 0.6 keeps the label ≥3:1 for UI components.
+  &--empty {
+    opacity: 0.6;
+  }
+
+  // Touch pointers get a 44px target (WCAG 2.5.5).
+  @media (pointer: coarse) {
+    min-height: 44px;
+  }
+
+  // In forced-colors mode backgrounds are overridden; mark pressed chips with the system highlight.
+  @media (forced-colors: active) {
+    &--pressed {
+      background: Highlight;
+      color: HighlightText;
+      forced-color-adjust: none;
+    }
+  }
+}
+
+.group-filter__count {
+  font-family: var(--fd-font-mono);
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+  min-width: 1.5ch;
+  text-align: right;
+}

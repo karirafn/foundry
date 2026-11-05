@@ -5,8 +5,9 @@ using Microsoft.Extensions.Logging;
 namespace Foundry.Modules.Monitoring.Features.Webhooks;
 
 /// <summary>
-/// The bounded in-memory nudge channel (ADR 0085). Producers are the webhook endpoint and the
-/// checks-pending deadline handler; the only consumer is <see cref="Polling.MonitoringService"/>.
+/// The bounded in-memory nudge channel (ADR 0085). Producers are the webhook endpoint, the
+/// review pass (quiet-period follow-ups) and the checks-pending deadline handler; the only consumer
+/// is <see cref="Polling.MonitoringService"/>.
 /// A full channel drops the new nudge — the backstop poll recovers it. Nudges are not persisted:
 /// a restart loses them, which the backstop also covers.
 /// </summary>
