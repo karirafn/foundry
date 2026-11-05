@@ -231,14 +231,19 @@ internal sealed class GitLabIssueProvider(
         RepositorySlug slug,
         string pullRequestUrl,
         CancellationToken cancellationToken)
-        => Task.FromResult(Result<PullRequestRebaseState>.Ok(new PullRequestRebaseState.Unsupported()));
+    {
+        return httpClient.GetRebaseStateAsync(apiBaseUrl, slug, pullRequestUrl, token, cancellationToken);
+    }
 
     public Task<Result<RebaseRequestOutcome>> RequestRebaseAsync(
         RepositorySlug slug,
         string pullRequestId,
         string expectedHeadSha,
         CancellationToken cancellationToken)
-        => Task.FromResult(Result<RebaseRequestOutcome>.Ok(new RebaseRequestOutcome.Unsupported()));
+    {
+        // GitLab's rebase endpoint has no expected-head guard; the merge request IID is the pull request id.
+        return httpClient.RequestRebaseAsync(apiBaseUrl, slug, pullRequestId, token, cancellationToken);
+    }
 
     private Task<Result<string>> GetDefaultBranchAsync(
         RepositorySlug slug,

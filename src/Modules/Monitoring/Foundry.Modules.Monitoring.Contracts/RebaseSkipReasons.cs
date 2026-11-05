@@ -12,11 +12,23 @@ public static class RebaseSkipReasons
     /// <summary>Transient provider failures (5xx, timeouts, rate limits) exhausted the retry budget.</summary>
     public const string ProviderError = "provider-error";
 
-    /// <summary>The provider has no rebase implementation yet (GitLab).</summary>
+    /// <summary>The provider has no rebase implementation.</summary>
     public const string Unsupported = "unsupported";
 
     /// <summary>The token may not update the pull request branch.</summary>
     public const string PermissionDenied = "permission-denied";
+
+    /// <summary>
+    /// The source branch is protected against force pushes, so the provider refuses to rebase it (GitLab
+    /// <c>403 Source branch is protected from force push</c>).
+    /// </summary>
+    public const string ForcePushProtected = "force-push-protected";
+
+    /// <summary>
+    /// The provider ran the rebase and reported it failed for a reason other than a conflict (GitLab
+    /// <c>merge_error</c> without a conflict signal).
+    /// </summary>
+    public const string RebaseFailed = "rebase-failed";
 
     /// <summary>The pull request or its branch could not be found.</summary>
     public const string NotFound = "not-found";
