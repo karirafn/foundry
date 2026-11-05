@@ -52,12 +52,12 @@ internal sealed class WorkerRunQueries(DbContext db) : IWorkerRunQueries
                         TotalCostUsd: groupRows.Any(r => r.TotalCostUsd.HasValue)
                             ? groupRows.Sum(r => r.TotalCostUsd)
                             : null,
-                        // Null-propagating over runs that carry a result summary: one run with
-                        // unknown tokens makes the aggregate unknown rather than understated.
-                        InputTokens: TokenUsage.SumKnown(groupRows
+                        // Partial sums over runs that carry a result summary: unknown runs are
+                        // counted rather than summed, so a partial total is reported as such.
+                        InputTokens: TokenUsage.Sum(groupRows
                             .Where(r => r.Tokens is not null)
                             .Select(r => r.Tokens!.BillableInputTokens)),
-                        OutputTokens: TokenUsage.SumKnown(groupRows
+                        OutputTokens: TokenUsage.Sum(groupRows
                             .Where(r => r.Tokens is not null)
                             .Select(r => r.Tokens!.OutputTokens)));
                 });
@@ -334,14 +334,10 @@ internal sealed class WorkerRunQueries(DbContext db) : IWorkerRunQueries
             DurationMs: inWindowRows.Sum(r => r.DurationMs) ?? 0L,
             NumTurns: inWindowRows.Sum(r => r.NumTurns) ?? 0,
             TotalCostUsd: inWindowRows.Sum(r => r.TotalCostUsd) ?? 0m,
-            // Zero when no run in the window carries telemetry; otherwise null-propagating, so a
-            // window containing a run with unknown tokens reports unknown rather than understated.
-            InputTokens: inWindowTokens.Count == 0
-                ? 0L
-                : TokenUsage.SumKnown(inWindowTokens.Select(t => t.BillableInputTokens)),
-            OutputTokens: inWindowTokens.Count == 0
-                ? 0L
-                : TokenUsage.SumKnown(inWindowTokens.Select(t => t.OutputTokens)));
+            // Partial sums: unknown runs are counted rather than summed, so a window containing a
+            // run with unknown tokens reports a lower bound with its untracked-run count.
+            InputTokens: TokenUsage.Sum(inWindowTokens.Select(t => t.BillableInputTokens)),
+            OutputTokens: TokenUsage.Sum(inWindowTokens.Select(t => t.OutputTokens)));
     }
 
     // Fetches one row per worker run for the specified issues. Server-side filtering (WHERE issue_id IN ...)

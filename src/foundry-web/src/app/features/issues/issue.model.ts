@@ -1,14 +1,16 @@
 import type { IssueState } from '../../shared/utils/issue-state';
 export type { IssueState } from '../../shared/utils/issue-state';
 import { WORKING_STATES } from '../../shared/utils/issue-state';
+import type { TokenTotal } from '../workers/run-totals.model';
 
 export interface RunStats {
   runCount: number;
   durationMs: number | null;
   numTurns: number | null;
   totalCostUsd: number | null;
-  inputTokens: number | null;
-  outputTokens: number | null;
+  /** Billable input, summed over known runs; see TokenTotal for the partial-sum rule. */
+  inputTokens: TokenTotal;
+  outputTokens: TokenTotal;
 }
 
 export interface IssueSummary {

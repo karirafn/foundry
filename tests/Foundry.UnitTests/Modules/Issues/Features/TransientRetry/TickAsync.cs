@@ -284,7 +284,7 @@ public sealed class TickAsync : IAsyncDisposable
             DateTimeOffset from,
             DateTimeOffset to,
             CancellationToken cancellationToken)
-            => Task.FromResult(new RunTotals(0, 0L, 0, 0m, 0L, 0L));
+            => Task.FromResult(new RunTotals(0, 0L, 0, 0m, TokenTotal.None, TokenTotal.None));
 
         public Task<IReadOnlyCollection<WorkerActivity>> GetActiveRunActivityAsync(
             CancellationToken cancellationToken)

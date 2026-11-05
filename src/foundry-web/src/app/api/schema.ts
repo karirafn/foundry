@@ -1106,10 +1106,8 @@ export interface components {
             numTurns: null | number | string;
             /** Format: double */
             totalCostUsd: null | number | string;
-            /** Format: int64 */
-            inputTokens: null | number | string;
-            /** Format: int64 */
-            outputTokens: null | number | string;
+            inputTokens: components["schemas"]["TokenTotal"];
+            outputTokens: components["schemas"]["TokenTotal"];
         };
         RunTotals: {
             /** Format: int32 */
@@ -1120,10 +1118,8 @@ export interface components {
             numTurns: number | string;
             /** Format: double */
             totalCostUsd: number | string;
-            /** Format: int64 */
-            inputTokens: null | number | string;
-            /** Format: int64 */
-            outputTokens: null | number | string;
+            inputTokens: components["schemas"]["TokenTotal"];
+            outputTokens: components["schemas"]["TokenTotal"];
         };
         StartLoginResponse: {
             /** Format: uuid */
@@ -1144,6 +1140,14 @@ export interface components {
             scopes: string[];
             creationUrlTemplate: string;
             resourceOwnerHint: null | string;
+        };
+        TokenTotal: {
+            /** Format: int64 */
+            total: number | string;
+            /** Format: int32 */
+            knownRunCount: number | string;
+            /** Format: int32 */
+            unknownRunCount: number | string;
         };
         TransientRetryDetails: {
             /** Format: int32 */

@@ -105,8 +105,8 @@ public sealed class WhenIssueHasMultipleRuns : IAsyncDisposable
             () => aggregate.DurationMs.ShouldBe(3000L),
             () => aggregate.NumTurns.ShouldBe(8),
             () => aggregate.TotalCostUsd.ShouldBe(0.30m),
-            () => aggregate.InputTokens.ShouldBe(1300L),
-            () => aggregate.OutputTokens.ShouldBe(500L));
+            () => aggregate.InputTokens.ShouldBe(new TokenTotal(1300L, KnownRunCount: 2, UnknownRunCount: 0)),
+            () => aggregate.OutputTokens.ShouldBe(new TokenTotal(500L, KnownRunCount: 2, UnknownRunCount: 0)));
     }
 
     [Fact]
@@ -144,12 +144,12 @@ public sealed class WhenIssueHasMultipleRuns : IAsyncDisposable
         // Assert
         RunAggregate aggregate = result[issueId.Value];
         aggregate.ShouldSatisfyAllConditions(
-            () => aggregate.InputTokens.ShouldBe(3330L),
-            () => aggregate.OutputTokens.ShouldBe(500L));
+            () => aggregate.InputTokens.ShouldBe(new TokenTotal(3330L, KnownRunCount: 2, UnknownRunCount: 0)),
+            () => aggregate.OutputTokens.ShouldBe(new TokenTotal(500L, KnownRunCount: 2, UnknownRunCount: 0)));
     }
 
     [Fact]
-    public async Task WhenAnyRunHasUnknownBillableInput_AggregateInputTokensIsNull()
+    public async Task WhenAnyRunHasUnknownBillableInput_AggregateInputTokensIsPartialSumWithUnknownCount()
     {
         // Arrange — the second run is a legacy row persisted before the cache columns existed
         IssueId issueId = IssueId.New();
@@ -183,7 +183,7 @@ public sealed class WhenIssueHasMultipleRuns : IAsyncDisposable
         // Assert
         RunAggregate aggregate = result[issueId.Value];
         aggregate.ShouldSatisfyAllConditions(
-            () => aggregate.InputTokens.ShouldBeNull(),
-            () => aggregate.OutputTokens.ShouldBe(500L));
+            () => aggregate.InputTokens.ShouldBe(new TokenTotal(1110L, KnownRunCount: 1, UnknownRunCount: 1)),
+            () => aggregate.OutputTokens.ShouldBe(new TokenTotal(500L, KnownRunCount: 2, UnknownRunCount: 0)));
     }
 }

@@ -3,6 +3,7 @@ import { HttpClient, HttpErrorResponse, HttpParams } from '@angular/common/http'
 import { Subscription } from 'rxjs';
 import { IssueSignalRService } from '../../core/services/issue-signalr.service';
 import { IssueDetail, IssueState, IssueSummary, LIVE_STATES, QUEUED_TIER_STATES } from './issue.model';
+import type { TokenTotal } from '../workers/run-totals.model';
 import {
   DEFAULT_SELECTED_GROUPS,
   RESOLVED_GROUP_ID,
@@ -20,6 +21,7 @@ import { components } from '../../api/schema';
 
 type PagedIssues = components['schemas']['PagedIssues'];
 type GeneratedIssueSummary = components['schemas']['IssueSummary'];
+type GeneratedTokenTotal = components['schemas']['TokenTotal'];
 
 interface IssueCountsResponse {
   counts: Record<string, number>;
@@ -509,8 +511,8 @@ export class IssueService {
         durationMs: i.runStats.durationMs === null ? null : this._toFiniteNumber(i.runStats.durationMs),
         numTurns: i.runStats.numTurns === null ? null : this._toFiniteNumber(i.runStats.numTurns),
         totalCostUsd: i.runStats.totalCostUsd === null ? null : this._toFiniteNumber(i.runStats.totalCostUsd),
-        inputTokens: i.runStats.inputTokens === null ? null : this._toFiniteNumber(i.runStats.inputTokens),
-        outputTokens: i.runStats.outputTokens === null ? null : this._toFiniteNumber(i.runStats.outputTokens),
+        inputTokens: this._toTokenTotal(i.runStats.inputTokens),
+        outputTokens: this._toTokenTotal(i.runStats.outputTokens),
       },
       pullRequestUrl: i.pullRequestUrl ?? null,
       providerType: i.providerType ?? null,
@@ -522,6 +524,14 @@ export class IssueService {
   private _toFiniteNumber(value: number | string): number {
     const n = Number(value);
     return Number.isFinite(n) ? n : 0;
+  }
+
+  private _toTokenTotal(tokens: GeneratedTokenTotal): TokenTotal {
+    return {
+      total: this._toFiniteNumber(tokens.total),
+      knownRunCount: this._toFiniteNumber(tokens.knownRunCount),
+      unknownRunCount: this._toFiniteNumber(tokens.unknownRunCount),
+    };
   }
 
   // Filters generated schema items to those with valid IDs and known states, then maps to domain

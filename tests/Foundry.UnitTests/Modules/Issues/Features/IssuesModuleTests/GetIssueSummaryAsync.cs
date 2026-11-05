@@ -144,8 +144,8 @@ public sealed class GetIssueSummaryAsync : IAsyncDisposable
             DurationMs: 3000L,
             NumTurns: 8,
             TotalCostUsd: 0.30m,
-            InputTokens: 1300L,
-            OutputTokens: 500L);
+            InputTokens: new TokenTotal(1300L, KnownRunCount: 1, UnknownRunCount: 1),
+            OutputTokens: new TokenTotal(500L, KnownRunCount: 2, UnknownRunCount: 0));
 
         _workerRunQueries.SetAggregate(issue.Id.Value, aggregate);
 
@@ -160,8 +160,8 @@ public sealed class GetIssueSummaryAsync : IAsyncDisposable
             () => stats.DurationMs.ShouldBe(3000L),
             () => stats.NumTurns.ShouldBe(8),
             () => stats.TotalCostUsd.ShouldBe(0.30m),
-            () => stats.InputTokens.ShouldBe(1300L),
-            () => stats.OutputTokens.ShouldBe(500L));
+            () => stats.InputTokens.ShouldBe(new TokenTotal(1300L, KnownRunCount: 1, UnknownRunCount: 1)),
+            () => stats.OutputTokens.ShouldBe(new TokenTotal(500L, KnownRunCount: 2, UnknownRunCount: 0)));
     }
 
     [Fact]
@@ -351,7 +351,7 @@ public sealed class GetIssueSummaryAsync : IAsyncDisposable
             DateTimeOffset from,
             DateTimeOffset to,
             CancellationToken cancellationToken)
-            => Task.FromResult(new RunTotals(0, 0L, 0, 0m, 0L, 0L));
+            => Task.FromResult(new RunTotals(0, 0L, 0, 0m, TokenTotal.None, TokenTotal.None));
 
         public Task<int> CountConsecutiveTransientRunsAsync(
             Guid issueId,

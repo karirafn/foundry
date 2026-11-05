@@ -1,7 +1,13 @@
 import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
 import { WorkerRunTotalsService } from '../../workers/run-totals.service';
-import { StatsScope } from '../../workers/run-totals.model';
-import { formatCost, formatDuration, formatTokens } from '../run-stats.format';
+import { RunTotals, StatsScope } from '../../workers/run-totals.model';
+import {
+  describeTokenTotal,
+  formatCost,
+  formatDuration,
+  formatTokenTotal,
+  untrackedRunsText,
+} from '../run-stats.format';
 
 interface StatCard {
   readonly key: string;
@@ -18,8 +24,7 @@ const STAT_CARDS = [
   { key: 'outputTokens', label: 'Output tokens',   tintVar: '--fd-stat-output'   },
 ] as const satisfies readonly StatCard[];
 
-/** Rendered for a total the server reports as unknown (null). */
-const UNKNOWN_VALUE = '-';
+type StatKey = (typeof STAT_CARDS)[number]['key'];
 
 let nextScopeId = 0;
 
@@ -94,7 +99,7 @@ let nextScopeId = 0;
               class="run-stats-bar__card"
               [style.--card-tint]="'var(' + card.tintVar + ')'"
             >
-              <span class="sr-only">{{ card.label }}: {{ formatValue(card.key, _asRecord(totals)) }}</span>
+              <span class="sr-only">{{ card.label }}: {{ describeValue(card.key, totals) }}</span>
               <svg
                 class="run-stats-bar__icon"
                 width="14"
@@ -138,7 +143,10 @@ let nextScopeId = 0;
               </svg>
               <span class="run-stats-bar__card-body" aria-hidden="true">
                 <span class="run-stats-bar__card-label">{{ card.label }}</span>
-                <span class="run-stats-bar__card-value">{{ formatValue(card.key, _asRecord(totals)) }}</span>
+                <span class="run-stats-bar__card-value">{{ formatValue(card.key, totals) }}</span>
+                @if (untrackedCaption(card.key, totals); as caption) {
+                  <span class="run-stats-bar__card-caption">{{ caption }}</span>
+                }
               </span>
             </div>
           }
@@ -154,27 +162,36 @@ export class RunStatsBarComponent {
   protected readonly _radioGroupName = `run-stats-scope-${++nextScopeId}`;
   protected readonly headingId = `run-stats-bar-heading-${nextScopeId}`;
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  protected _asRecord(totals: unknown): Record<string, number | null> {
-    return totals as Record<string, number | null>;
-  }
-
-  protected formatValue(key: string, totals: Record<string, number | null>): string {
-    const value = totals[key];
-    if (value === null || value === undefined) {
-      return UNKNOWN_VALUE;
-    }
+  protected formatValue(key: StatKey, totals: RunTotals): string {
     switch (key) {
       case 'durationMs':
-        return formatDuration(value);
+        return formatDuration(totals.durationMs);
       case 'totalCostUsd':
-        return formatCost(value);
+        return formatCost(totals.totalCostUsd);
       case 'inputTokens':
       case 'outputTokens':
-        return formatTokens(value);
+        return formatTokenTotal(totals[key]);
       default:
-        return String(value);
+        return String(totals[key]);
     }
+  }
+
+  /** Screen-reader value: spells a partial or unknown token total out with its untracked count. */
+  protected describeValue(key: StatKey, totals: RunTotals): string {
+    switch (key) {
+      case 'inputTokens':
+      case 'outputTokens':
+        return describeTokenTotal(totals[key]);
+      default:
+        return this.formatValue(key, totals);
+    }
+  }
+
+  /** Visible "N runs untracked" caption under a token tile; null when every run is known. */
+  protected untrackedCaption(key: StatKey, totals: RunTotals): string | null {
+    return key === 'inputTokens' || key === 'outputTokens'
+      ? untrackedRunsText(totals[key])
+      : null;
   }
 
   onScopeChange(scope: StatsScope): void {

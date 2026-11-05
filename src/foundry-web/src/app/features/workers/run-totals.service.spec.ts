@@ -17,8 +17,8 @@ const mockTotals: RunTotals = {
   durationMs: 300000,
   numTurns: 20,
   totalCostUsd: 4.31,
-  inputTokens: 10000,
-  outputTokens: 5000,
+  inputTokens: { total: 10000, knownRunCount: 5, unknownRunCount: 0 },
+  outputTokens: { total: 5000, knownRunCount: 5, unknownRunCount: 0 },
 };
 
 const zeroTotals: RunTotals = {
@@ -26,8 +26,8 @@ const zeroTotals: RunTotals = {
   durationMs: 0,
   numTurns: 0,
   totalCostUsd: 0,
-  inputTokens: 0,
-  outputTokens: 0,
+  inputTokens: { total: 0, knownRunCount: 0, unknownRunCount: 0 },
+  outputTokens: { total: 0, knownRunCount: 0, unknownRunCount: 0 },
 };
 
 function setup() {
