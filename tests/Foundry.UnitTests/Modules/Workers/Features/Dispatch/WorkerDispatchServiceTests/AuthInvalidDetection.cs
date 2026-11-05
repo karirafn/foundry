@@ -36,6 +36,13 @@ public sealed class AuthInvalidDetection : WorkerDispatchServiceTestBase
         {"type":"result","subtype":"success","is_error":true,"api_error_status":401,"num_turns":1,"result":"Failed to authenticate: OAuth session expired and could not be refreshed"}
         """;
 
+    // Real result line from a worker whose OAuth token refresh failed: no api_error_status, no error object.
+    private const string FailedToAuthenticateOutput =
+        """
+        {"type":"system","subtype":"init"}
+        {"type":"result","subtype":"success","is_error":true,"num_turns":1,"api_error_status":null,"duration_ms":117,"result":"Failed to authenticate: OAuth session expired and could not be refreshed"}
+        """;
+
     private WorkerDispatchService BuildServiceWithParser(
         string? containerLogs,
         WorkerStatus exitedStatus,
@@ -146,6 +153,39 @@ public sealed class AuthInvalidDetection : WorkerDispatchServiceTestBase
             .OfType<WorkerAuthenticationFailed>()
             .ShouldHaveSingleItem();
         authFailedEvent.WorkerRunId.ShouldBe(activeRun.Id);
+
+        await using FoundryDbContext assertDb = CreateDbContext();
+        WorkerRun? run = await assertDb.Set<WorkerRun>()
+            .SingleOrDefaultAsync(TestContext.Current.CancellationToken);
+        FailedRun failedRun = run.ShouldBeOfType<FailedRun>();
+        failedRun.Reason.ShouldBeOfType<FailureReason.AuthInvalid>();
+    }
+
+    [Fact]
+    public async Task WhenContainerExitsNonZeroWithFailedToAuthenticateResult_FailsAsAuthInvalidAndPublishesWorkerAuthenticationFailed()
+    {
+        // Arrange
+        SeedGlobalSettings();
+        ActiveRun activeRun = SeedActiveRun("container-failed-to-authenticate");
+        WorkerStatus exitedStatus = new(IsRunning: false, ExitCode: 1, FinishedAt: DateTimeOffset.UtcNow);
+        CapturingIntegrationEventDispatcher dispatcher = new();
+        WorkerDispatchService sut = BuildServiceWithParser(
+            FailedToAuthenticateOutput,
+            exitedStatus,
+            integrationEventDispatcher: dispatcher);
+
+        // Act
+        await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
+
+        // Assert
+        WorkerAuthenticationFailed authFailedEvent = dispatcher.Captured
+            .OfType<WorkerAuthenticationFailed>()
+            .ShouldHaveSingleItem();
+        authFailedEvent.WorkerRunId.ShouldBe(activeRun.Id);
+        dispatcher.Captured
+            .OfType<WorkerRunFailed>()
+            .ShouldHaveSingleItem()
+            .Category.ShouldBe("auth_invalid");
 
         await using FoundryDbContext assertDb = CreateDbContext();
         WorkerRun? run = await assertDb.Set<WorkerRun>()
