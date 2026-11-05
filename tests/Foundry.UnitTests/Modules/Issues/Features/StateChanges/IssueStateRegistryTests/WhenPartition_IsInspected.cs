@@ -9,7 +9,7 @@ namespace Foundry.UnitTests.Modules.Issues.Features.StateChanges.IssueStateRegis
 public sealed class WhenPartition_IsInspected
 {
     [Fact]
-    public void Active_ContainsExactly13Names()
+    public void Active_ContainsExactly14Names()
     {
         // Arrange
         // (registry is the system under test)
@@ -18,7 +18,7 @@ public sealed class WhenPartition_IsInspected
         IReadOnlySet<string> active = IssueStateRegistry.Active;
 
         // Assert
-        active.Count.ShouldBe(13);
+        active.Count.ShouldBe(14);
     }
 
     [Fact]
@@ -48,6 +48,7 @@ public sealed class WhenPartition_IsInspected
     [InlineData("revision_failed")]
     [InlineData("unchanged")]
     [InlineData("checks_pending")]
+    [InlineData("rebase_pending")]
     public void Active_ContainsExpectedName(string name)
     {
         // Arrange
@@ -102,6 +103,7 @@ public sealed class WhenPartition_IsInspected
     [InlineData("revision_failed")]
     [InlineData("unchanged")]
     [InlineData("checks_pending")]
+    [InlineData("rebase_pending")]
     public void Resolved_DoesNotContainActiveName(string name)
     {
         // Arrange

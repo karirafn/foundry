@@ -4,7 +4,6 @@ import { HttpTestingController, provideHttpClientTesting } from '@angular/common
 import { IssueService } from './issue.service';
 import { IssueSignalRService } from '../../core/services/issue-signalr.service';
 import { IssueSummary, IssueDetail, RevisionTriggerKind } from './issue.model';
-import { ACTIVE_STATES } from './issue-lifecycle.model';
 import { vi } from 'vitest';
 
 const mockIssueSignalRService = {
@@ -1117,32 +1116,48 @@ describe('IssueService', () => {
 
   // Step 4 — Selected-state signals + active-band filtering
 
-  // Cycle S1: default selectedActiveStates contains all active states
-  it('should initialize selectedActiveStates with all active states and isStateSelected true for each', () => {
+  // Cycle S1: default selectedGroups = every active group, Resolved off
+  it('should initialize selectedGroups with In progress, Needs attention and Waiting but not Resolved', () => {
     // Arrange — initial state of the service
 
     // Act / Assert
-    for (const state of ACTIVE_STATES) {
-      expect(service.isStateSelected(state)).toBe(true);
-    }
+    expect([...service.selectedGroups()].sort()).toEqual(['in_progress', 'needs_attention', 'waiting']);
+    expect(service.isGroupSelected('in_progress')).toBe(true);
+    expect(service.isGroupSelected('resolved')).toBe(false);
+    expect(service.resolvedSelected()).toBe(false);
   });
 
-  // Cycle S2: toggleState deselects an active state; toggling again re-selects
-  it('should deselect an active state after toggleState and re-select on second toggle', () => {
+  // Cycle S2: toggleGroup deselects a group; toggling again re-selects
+  it('should deselect a group after toggleGroup and re-select on second toggle', () => {
     // Arrange
-    expect(service.isStateSelected('detected')).toBe(true);
+    expect(service.isGroupSelected('waiting')).toBe(true);
 
     // Act — first toggle deselects
-    service.toggleState('detected');
+    service.toggleGroup('waiting');
 
     // Assert
-    expect(service.isStateSelected('detected')).toBe(false);
+    expect(service.isGroupSelected('waiting')).toBe(false);
+    expect(service.isGroupSelected('in_progress')).toBe(true);
 
     // Act — second toggle re-selects
-    service.toggleState('detected');
+    service.toggleGroup('waiting');
 
     // Assert
-    expect(service.isStateSelected('detected')).toBe(true);
+    expect(service.isGroupSelected('waiting')).toBe(true);
+  });
+
+  it('should sum the state counts of a group via countForGroup', () => {
+    // Arrange
+    service.loadCounts();
+    httpMock.expectOne('/api/issues/counts').flush({
+      counts: { queued: 2, blocked: 1, checks_pending: 4, review: 3, completed: 7 },
+    });
+
+    // Act / Assert
+    expect(service.countForGroup('waiting')).toBe(7);
+    expect(service.countForGroup('needs_attention')).toBe(3);
+    expect(service.countForGroup('in_progress')).toBe(0);
+    expect(service.countForGroup('resolved')).toBe(7);
   });
 
   // Cycle S3: activeBandIssues preserves sortedIssues ordering (live before non-live)
@@ -1160,23 +1175,23 @@ describe('IssueService', () => {
     expect(service.activeBandIssues()[1].id).toBe('non-live');
   });
 
-  // Cycle S6: selection sets are replaced immutably after toggleState
-  it('should replace the selectedActiveStates set immutably on toggleState', () => {
+  // Cycle S6: the selection set is replaced immutably after toggleGroup
+  it('should replace the selectedGroups set immutably on toggleGroup', () => {
     // Arrange
-    const setBeforeToggle = service.selectedActiveStates();
+    const setBeforeToggle = service.selectedGroups();
 
     // Act
-    service.toggleState('detected');
+    service.toggleGroup('waiting');
 
     // Assert — a new Set was created; the old reference is unchanged
-    const setAfterToggle = service.selectedActiveStates();
+    const setAfterToggle = service.selectedGroups();
     expect(setAfterToggle).not.toBe(setBeforeToggle);
-    expect(setBeforeToggle.has('detected')).toBe(true);
-    expect(setAfterToggle.has('detected')).toBe(false);
+    expect(setBeforeToggle.has('waiting')).toBe(true);
+    expect(setAfterToggle.has('waiting')).toBe(false);
   });
 
-  // Cycle S4: activeBandIssues excludes issues of deselected state with no HTTP request
-  it('should exclude issues of a deselected state from activeBandIssues without making an HTTP request', () => {
+  // Cycle S4: activeBandIssues excludes issues of a deselected group with no HTTP request
+  it('should exclude issues of a deselected group from activeBandIssues without making an HTTP request', () => {
     // Arrange — load one detected issue
     const detectedIssue: IssueSummary = { ...mockSummary, id: 'detected-1', state: 'detected' };
     const failedIssue: IssueSummary = { ...mockSummary, id: 'failed-1', state: 'failed' };
@@ -1185,8 +1200,8 @@ describe('IssueService', () => {
     httpMock.expectOne('/api/issues').flush({ items: [detectedIssue, failedIssue], nextCursor: null });
     expect(service.activeBandIssues().length).toBe(2);
 
-    // Act — deselect 'detected'
-    service.toggleState('detected');
+    // Act — deselect the Waiting group (holds 'detected')
+    service.toggleGroup('waiting');
 
     // Assert — no HTTP requests were made
     httpMock.expectNone('/api/issues');
@@ -1251,7 +1266,7 @@ describe('IssueService (band transitions + counts debounce)', () => {
     // Arrange — load an active issue, select 'completed' resolved state
     service.loadIssues();
     httpMock.expectOne('/api/issues').flush({ items: [activeSummary], nextCursor: null });
-    service.toggleState('completed');
+    service.toggleGroup('resolved');
     httpMock.expectOne(r => r.url === '/api/issues').flush({ items: [], nextCursor: null });
 
     const transitioned: IssueSummary = { ...activeSummary, state: 'completed' };
@@ -1285,7 +1300,7 @@ describe('IssueService (band transitions + counts debounce)', () => {
   // Cycle B3: resolved→active transition → added to issues, removed from resolvedIssues
   it('should add issue to issues and remove from resolvedIssues when transitioning from resolved to active', () => {
     // Arrange — select 'completed', load a resolved issue in the resolved band
-    service.toggleState('completed');
+    service.toggleGroup('resolved');
     httpMock.expectOne(r => r.url === '/api/issues').flush({ items: [resolvedSummary], nextCursor: null });
     expect(service.resolvedIssues().length).toBe(1);
 
@@ -1303,7 +1318,7 @@ describe('IssueService (band transitions + counts debounce)', () => {
   // Cycle B4: dedup-by-id on prepend — same id arriving twice yields single entry at front
   it('should deduplicate by id on prepend to resolvedIssues, keeping newest data at front', () => {
     // Arrange — select 'completed', load one resolved issue in the resolved band
-    service.toggleState('completed');
+    service.toggleGroup('resolved');
     httpMock.expectOne(r => r.url === '/api/issues').flush({
       items: [resolvedSummary],
       nextCursor: null,
@@ -1325,7 +1340,7 @@ describe('IssueService (band transitions + counts debounce)', () => {
   // Cycle B5-new: brand-new resolved id (never in issues) arriving via IssueUpdated when its state is selected
   it('should prepend a brand-new resolved issue to resolvedIssues when its state is selected and the id was never in issues', () => {
     // Arrange — select 'completed'; flush empty page (no prior resolved issues)
-    service.toggleState('completed');
+    service.toggleGroup('resolved');
     httpMock.expectOne(r => r.url === '/api/issues').flush({ items: [], nextCursor: null });
     expect(service.resolvedIssues().length).toBe(0);
 
@@ -1431,11 +1446,11 @@ describe('IssueService (resolved paging)', () => {
   afterEach(() => httpMock.verify({ ignoreCancelled: true }));
 
   // Cycle R1: selecting a resolved state fetches GET /api/issues with states=<state>
-  it('should fetch GET /api/issues with states=completed (bracketless) when toggleState("completed") is called', () => {
+  it('should fetch GET /api/issues with states=completed (bracketless) when the Resolved group is toggled on', () => {
     // Arrange — no resolved states selected initially
 
     // Act
-    service.toggleState('completed');
+    service.toggleGroup('resolved');
 
     // Assert — one request with states=completed (bracketless), no cursor param
     const req = httpMock.expectOne(r =>
@@ -1455,7 +1470,7 @@ describe('IssueService (resolved paging)', () => {
   // (RESOLVED_STATES = ['completed'] since unchanged moved to active in step 2)
   it('should send the resolved state as a bracketless states param in the request', () => {
     // Arrange — select completed
-    service.toggleState('completed');
+    service.toggleGroup('resolved');
 
     // Assert — single request with states=completed
     const req = httpMock.expectOne(r =>
@@ -1471,7 +1486,7 @@ describe('IssueService (resolved paging)', () => {
     // Arrange — no resolved states selected
 
     // Act — trigger page 1 fetch
-    service.toggleState('completed');
+    service.toggleGroup('resolved');
 
     // Assert — resolvedLoading is true before response
     expect(service.resolvedLoading()).toBe(true);
@@ -1483,7 +1498,7 @@ describe('IssueService (resolved paging)', () => {
 
   it('should set resolvedLoadingMore to true while load-more fetch is in flight and false after', () => {
     // Arrange — select completed and get page 1 with a cursor
-    service.toggleState('completed');
+    service.toggleGroup('resolved');
     httpMock.expectOne(r => r.url === '/api/issues').flush({ items: [], nextCursor: 'c1' });
     expect(service.resolvedLoadingMore()).toBe(false);
 
@@ -1504,7 +1519,7 @@ describe('IssueService (resolved paging)', () => {
   it('should leave prior resolvedIssues intact and not set loadError when resolved fetch fails', () => {
     // Arrange — select completed, get page 1 successfully
     const item: IssueSummary = { ...resolvedSummary, id: 'res-1' };
-    service.toggleState('completed');
+    service.toggleGroup('resolved');
     httpMock.expectOne(r => r.url === '/api/issues').flush({
       items: [item],
       nextCursor: 'cursor-1',
@@ -1526,7 +1541,7 @@ describe('IssueService (resolved paging)', () => {
   // Cycle R6: repositoryId is forwarded on resolved fetches when provided
   it('should forward repositoryId param on resolved fetches when loadMoreResolved is called with one', () => {
     // Arrange — select completed, flush page 1 with a cursor (no repositoryId on page 1 for simplicity)
-    service.toggleState('completed');
+    service.toggleGroup('resolved');
     httpMock.expectOne(r => r.url === '/api/issues').flush({
       items: [],
       nextCursor: 'cursor-r1',
@@ -1546,7 +1561,7 @@ describe('IssueService (resolved paging)', () => {
   it('should clear resolvedIssues and cursor and make no request when all resolved states are deselected', () => {
     // Arrange — select completed, get a result
     const item: IssueSummary = { ...resolvedSummary, id: 'res-1' };
-    service.toggleState('completed');
+    service.toggleGroup('resolved');
     httpMock.expectOne(r => r.url === '/api/issues').flush({
       items: [item],
       nextCursor: 'cursor-xyz',
@@ -1555,7 +1570,7 @@ describe('IssueService (resolved paging)', () => {
     expect(service.hasMoreResolved()).toBe(true);
 
     // Act — deselect completed (resolved set becomes empty)
-    service.toggleState('completed');
+    service.toggleGroup('resolved');
 
     // Assert — cleared, no request
     expect(service.resolvedIssues().length).toBe(0);
@@ -1567,7 +1582,7 @@ describe('IssueService (resolved paging)', () => {
   it('should reset resolvedIssues and refetch page 1 when the resolved selection changes', () => {
     // Arrange — select completed, get page 1 with a cursor
     const page1Item: IssueSummary = { ...resolvedSummary, id: 'res-old' };
-    service.toggleState('completed');
+    service.toggleGroup('resolved');
     httpMock.expectOne(r => r.url === '/api/issues').flush({
       items: [page1Item],
       nextCursor: 'old-cursor',
@@ -1576,7 +1591,7 @@ describe('IssueService (resolved paging)', () => {
     expect(service.hasMoreResolved()).toBe(true);
 
     // Act — deselect completed (empty resolved set → clear; no request)
-    service.toggleState('completed');
+    service.toggleGroup('resolved');
 
     // Assert — resolvedIssues cleared immediately, no cursor, no new request
     expect(service.resolvedIssues().length).toBe(0);
@@ -1591,7 +1606,7 @@ describe('IssueService (resolved paging)', () => {
     const unknown = { ...resolvedSummary, id: 'res-ghost', state: 'ghost_state' as never };
 
     // Act
-    service.toggleState('completed');
+    service.toggleGroup('resolved');
     httpMock.expectOne(r => r.url === '/api/issues').flush({ items: [valid, unknown], nextCursor: null });
 
     // Assert — only valid item retained
@@ -1602,15 +1617,15 @@ describe('IssueService (resolved paging)', () => {
   // Finding 4: stale inflight resolved-page write race
   it('should discard a stale resolved-page response when a newer selection change supersedes it', () => {
     // Arrange — select completed; fire first request but do not flush it yet
-    service.toggleState('completed');
+    service.toggleGroup('resolved');
     const staleReq = httpMock.expectOne(r =>
       r.url === '/api/issues' && r.params.getAll('states')?.includes('completed') === true
     );
 
     // Act — deselect then re-select completed before the first request resolves
     // (triggers a new token, old selection cleared, new request for completed again)
-    service.toggleState('completed'); // deselect — clears resolved set, no new request (empty)
-    service.toggleState('completed'); // re-select — triggers a fresh fetch with a new token
+    service.toggleGroup('resolved'); // deselect — clears resolved set, no new request (empty)
+    service.toggleGroup('resolved'); // re-select — triggers a fresh fetch with a new token
     const freshReq = httpMock.expectOne(r =>
       r.url === '/api/issues' && r.params.getAll('states')?.includes('completed') === true
     );
@@ -1635,7 +1650,7 @@ describe('IssueService (resolved paging)', () => {
   it('should append next page items (dedup-by-id) and advance cursor on loadMoreResolved', () => {
     // Arrange — select completed, flush page 1 with a cursor
     const page1Item: IssueSummary = { ...resolvedSummary, id: 'res-1' };
-    service.toggleState('completed');
+    service.toggleGroup('resolved');
     httpMock.expectOne(r => r.url === '/api/issues').flush({
       items: [page1Item],
       nextCursor: 'cursor-abc',
@@ -1665,7 +1680,7 @@ describe('IssueService (resolved paging)', () => {
   // New: first-page HTTP failure sets resolvedError, not loadError
   it('should set resolvedError when the first-page resolved fetch fails with an HTTP error', () => {
     // Arrange
-    service.toggleState('completed');
+    service.toggleGroup('resolved');
 
     // Act
     httpMock.expectOne(r => r.url === '/api/issues').flush('Server Error', {
@@ -1681,7 +1696,7 @@ describe('IssueService (resolved paging)', () => {
   // New: first-page failure does not affect active-band loadError (band independence)
   it('should not set loadError when the resolved fetch fails', () => {
     // Arrange
-    service.toggleState('completed');
+    service.toggleGroup('resolved');
 
     // Act
     httpMock.expectOne(r => r.url === '/api/issues').flush('Server Error', {
@@ -1711,7 +1726,7 @@ describe('IssueService (resolved paging)', () => {
   // New: resolvedError cleared at start of new selection-change fetch
   it('should clear resolvedError when a new resolved selection triggers a fresh fetch', () => {
     // Arrange — trigger a resolved error
-    service.toggleState('completed');
+    service.toggleGroup('resolved');
     httpMock.expectOne(r => r.url === '/api/issues').flush('Server Error', {
       status: 500,
       statusText: 'Internal Server Error',
@@ -1719,8 +1734,8 @@ describe('IssueService (resolved paging)', () => {
     expect(service.resolvedError()).not.toBeNull();
 
     // Act — deselect then re-select completed (clears set, then re-fetches)
-    service.toggleState('completed'); // deselect — clears resolved set; error should reset too
-    service.toggleState('completed'); // re-select — triggers fresh fetch
+    service.toggleGroup('resolved'); // deselect — clears resolved set; error should reset too
+    service.toggleGroup('resolved'); // re-select — triggers fresh fetch
 
     // Assert — error cleared immediately before the new response arrives
     expect(service.resolvedError()).toBeNull();
@@ -1732,7 +1747,7 @@ describe('IssueService (resolved paging)', () => {
   // New: retryResolvedFetch clears error and re-fetches
   it('should clear resolvedError and re-fetch when retryResolvedFetch is called', () => {
     // Arrange — trigger a resolved error
-    service.toggleState('completed');
+    service.toggleGroup('resolved');
     httpMock.expectOne(r => r.url === '/api/issues').flush('Server Error', {
       status: 500,
       statusText: 'Internal Server Error',
@@ -1757,7 +1772,7 @@ describe('IssueService (resolved paging)', () => {
   // New: load-more failure sets resolvedLoadMoreError, preserves prior issues
   it('should set resolvedLoadMoreError and preserve prior resolved issues when load-more fails', () => {
     // Arrange — get page 1 successfully with a cursor
-    service.toggleState('completed');
+    service.toggleGroup('resolved');
     httpMock.expectOne(r => r.url === '/api/issues').flush({
       items: [resolvedSummary],
       nextCursor: 'cursor-1',
@@ -1779,7 +1794,7 @@ describe('IssueService (resolved paging)', () => {
   // New: load-more failure does not set resolvedError (full-band error)
   it('should not set resolvedError when load-more fails', () => {
     // Arrange
-    service.toggleState('completed');
+    service.toggleGroup('resolved');
     httpMock.expectOne(r => r.url === '/api/issues').flush({
       items: [resolvedSummary],
       nextCursor: 'cursor-1',
@@ -1799,7 +1814,7 @@ describe('IssueService (resolved paging)', () => {
   // New: loadMoreResolved clears resolvedLoadMoreError before retrying
   it('should clear resolvedLoadMoreError and retry when loadMoreResolved is called after a load-more failure', () => {
     // Arrange — fail a load-more
-    service.toggleState('completed');
+    service.toggleGroup('resolved');
     httpMock.expectOne(r => r.url === '/api/issues').flush({
       items: [resolvedSummary],
       nextCursor: 'cursor-1',
@@ -1822,74 +1837,79 @@ describe('IssueService (resolved paging)', () => {
     req.flush({ items: [], nextCursor: null });
   });
 
-  // activeFilterCount signal
+  // activeSections — the active band split by group, in STATE_GROUPS order
+  function loadActive(items: IssueSummary[]): void {
+    service.loadIssues();
+    httpMock.expectOne('/api/issues').flush({ items, nextCursor: null });
+  }
 
-  // Cycle 1: default selection returns 0
-  it('should return 0 for activeFilterCount with the default filter selection', () => {
-    // Arrange — no state changes; service starts with all active states selected and no resolved states
+  it('should split the active band into one section per non-empty selected group in STATE_GROUPS order', () => {
+    // Arrange — server order deliberately scrambled across groups
+    const queued: IssueSummary = { ...mockSummary, id: 'q', state: 'queued' };
+    const review: IssueSummary = { ...mockSummary, id: 'r', state: 'review' };
+    const running: IssueSummary = { ...mockSummary, id: 'p', state: 'in_progress' };
+    const blocked: IssueSummary = { ...mockSummary, id: 'b', state: 'blocked' };
 
     // Act
-    const count = service.activeFilterCount();
+    loadActive([queued, review, running, blocked]);
 
     // Assert
-    expect(count).toBe(0);
+    const sections = service.activeSections();
+    expect(sections.map(sec => sec.group.id)).toEqual(['in_progress', 'needs_attention', 'waiting']);
+    expect(sections.map(sec => sec.group.label)).toEqual(['In progress', 'Needs attention', 'Waiting']);
+    expect(sections[2].issues.map(i => i.id)).toEqual(['q', 'b']);
+    // Concatenated sections reproduce the rendered band order exactly
+    expect(sections.flatMap(sec => sec.issues.map(i => i.id))).toEqual(service.activeBandIssues().map(i => i.id));
   });
 
-  // Cycle 2: deselecting one active state increments count by 1
-  it('should return 1 for activeFilterCount after deselecting one active state', () => {
+  it('should render no section for a selected group with no issues', () => {
+    // Arrange / Act
+    loadActive([{ ...mockSummary, id: 'q', state: 'queued' }]);
+
+    // Assert
+    expect(service.activeSections().map(sec => sec.group.id)).toEqual(['waiting']);
+  });
+
+  it('should omit deselected groups from activeSections', () => {
     // Arrange
-    service.toggleState('detected');
+    loadActive([
+      { ...mockSummary, id: 'p', state: 'in_progress' },
+      { ...mockSummary, id: 'q', state: 'queued' },
+    ]);
 
     // Act
-    const count = service.activeFilterCount();
+    service.toggleGroup('in_progress');
 
     // Assert
-    expect(count).toBe(1);
+    expect(service.activeSections().map(sec => sec.group.id)).toEqual(['waiting']);
   });
 
-  // Cycle 3: selecting a resolved state increments count by 1
-  it('should return 1 for activeFilterCount after selecting one resolved state', () => {
+  it('should have no active sections when no group is selected', () => {
     // Arrange
-    service.toggleState('completed');
-    httpMock.expectOne(r => r.url === '/api/issues').flush({ items: [], nextCursor: null });
+    loadActive([{ ...mockSummary, id: 'p', state: 'in_progress' }]);
 
     // Act
-    const count = service.activeFilterCount();
+    service.toggleGroup('in_progress');
+    service.toggleGroup('needs_attention');
+    service.toggleGroup('waiting');
 
     // Assert
-    expect(count).toBe(1);
+    expect(service.activeSections()).toEqual([]);
+    expect(service.activeBandIssues()).toEqual([]);
   });
 
-  // Cycle 4: combined deviations from default accumulate
-  // (unchanged moved to ACTIVE_STATES in step 2, so RESOLVED_STATES = ['completed'])
-  it('should sum deselected active states and selected resolved states for activeFilterCount', () => {
-    // Arrange — deselect 3 active, select 1 resolved
-    service.toggleState('detected');
-    service.toggleState('queued');
-    service.toggleState('unchanged');
-    service.toggleState('completed');
-    httpMock.expectOne(r => r.url === '/api/issues').flush({ items: [], nextCursor: null });
+  it('should move an issue to its new section when it changes group, dropping a section left empty', () => {
+    // Arrange
+    const issue: IssueSummary = { ...mockSummary, id: 'x', state: 'queued' };
+    loadActive([issue]);
+    expect(service.activeSections().map(sec => sec.group.id)).toEqual(['waiting']);
 
-    // Act
-    const count = service.activeFilterCount();
-
-    // Assert — 3 deselected active + 1 selected resolved = 4
-    expect(count).toBe(4);
-  });
-
-  // Cycle 5: re-toggling active state back resets count to 0
-  it('should return 0 for activeFilterCount after re-toggling a deselected active state back on', () => {
-    // Arrange — deselect then re-select
-    service.toggleState('detected');
-    service.toggleState('detected');
-
-    // Act
-    const count = service.activeFilterCount();
+    // Act — the active band is driven by issues(); a group change re-sorts it into the new section
+    service.issues.set([{ ...issue, state: 'in_progress' }]);
 
     // Assert
-    expect(count).toBe(0);
+    expect(service.activeSections().map(sec => sec.group.id)).toEqual(['in_progress']);
   });
-
 });
 
 // Step 7 — Dispatch-order queue grouping (issue #261)
@@ -2958,28 +2978,37 @@ describe('IssueService (queuePositions)', () => {
     expect(positions.get('q1')).toBe(2);
   });
 
-  // Cycle QP6: deselecting a queued-tier state hides those cards and renumbers remaining ordinals
-  // from 1 (ADR 0067 — positions index the rendered activeBandIssues() array, not the unfiltered
-  // eligibleQueuedIssues(), so the on-screen topmost card always shows "1")
-  it('should exclude hidden issues and renumber visible dispatchable issues from 1 after a state is deselected', () => {
+  // Cycle QP6: positions index the rendered activeBandIssues() array (ADR 0067). Every queued-tier
+  // state is in the Waiting group, so deselecting Waiting hides the whole queue and its ordinals.
+  it('should drop every queue position when the Waiting group is deselected', () => {
     // Arrange — load one queued and one revision_queued issue, both dispatchable
     const q1: IssueSummary = { ...baseQueued, id: 'q1', state: 'queued', repositoryEligibilityStatus: null };
     const rv1: IssueSummary = { ...baseQueued, id: 'rv1', state: 'revision_queued', repositoryEligibilityStatus: null };
-
-    // Act — load both, then deselect the 'queued' state so q1 is hidden
     loadIssues([q1, rv1]);
-
-    // Before toggle: q1 → 1, rv1 → 2
     expect(service.queuePositions().get('q1')).toBe(1);
     expect(service.queuePositions().get('rv1')).toBe(2);
 
-    service.toggleState('queued');
+    // Act
+    service.toggleGroup('waiting');
 
-    // Assert — q1 is now hidden; rv1 is the only visible dispatchable issue and gets position 1
-    const positions = service.queuePositions();
-    expect(positions.has('q1')).toBe(false);
-    expect(positions.get('rv1')).toBe(1);
-    expect(positions.size).toBe(1);
+    // Assert
+    expect(service.queuePositions().size).toBe(0);
+  });
+
+  it('should keep queue positions unchanged when a group above the queue is deselected', () => {
+    // Arrange
+    const running: IssueSummary = { ...baseQueued, id: 'p1', state: 'in_progress', repositoryEligibilityStatus: null };
+    const q1: IssueSummary = { ...baseQueued, id: 'q1', state: 'queued', repositoryEligibilityStatus: null };
+    const rv1: IssueSummary = { ...baseQueued, id: 'rv1', state: 'revision_queued', repositoryEligibilityStatus: null };
+    loadIssues([running, q1, rv1]);
+
+    // Act
+    service.toggleGroup('in_progress');
+
+    // Assert
+    expect(service.queuePositions().get('q1')).toBe(1);
+    expect(service.queuePositions().get('rv1')).toBe(2);
+    expect(service.nextUpIssueId()).toBe('q1');
   });
 });
 
@@ -3127,7 +3156,7 @@ describe('IssueService (code-review findings)', () => {
   // Finding 5 — _fetchResolvedPage null-coalesce: null items body degrades to empty page
   it('should degrade to an empty resolved page when the server returns null items', () => {
     // Arrange — select completed to trigger _fetchResolvedPage
-    service.toggleState('completed');
+    service.toggleGroup('resolved');
 
     // Act — server returns null items (malformed body)
     httpMock.expectOne(r => r.url === '/api/issues').flush({ items: null, nextCursor: null });

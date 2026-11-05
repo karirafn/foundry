@@ -10,6 +10,7 @@ using Foundry.Modules.Monitoring.Features.CredentialResolution;
 using Foundry.Modules.Monitoring.Features.Eligibility;
 using Foundry.Modules.Monitoring.Features.NamespaceDerivation;
 using Foundry.Modules.Monitoring.Features.Polling;
+using Foundry.Modules.Monitoring.Features.Rebase;
 using Foundry.Modules.Monitoring.Features.Providers;
 using Foundry.Modules.Monitoring.Features.Providers.Feedback;
 using Foundry.Modules.Monitoring.Features.RateBudget;
@@ -69,6 +70,7 @@ public static class MonitoringModule
         services.AddScoped<IPostExitProviderQueries, PostExitProviderQueries>();
         services.AddScoped<IWorkBranchCommands, PostExitProviderQueries>();
         services.AddScoped<RepositoryPoller>();
+        services.AddScoped<RebaseStep>();
 
         services.AddQueryHandler<GetAccounts.Query, IReadOnlyList<CredentialSummary>, GetAccounts.Handler>();
         services.AddQueryHandler<GetTokenRequirements.Query, TokenRequirements, GetTokenRequirements.Handler>();
@@ -102,6 +104,7 @@ public static class MonitoringModule
         services.AddScoped<AccountWebhookRegistrar>();
         services.AddIntegrationEventHandler<WebhookPublicBaseUrlChanged, WebhookPublicBaseUrlChangedHandler>();
         services.AddIntegrationEventHandler<IssueEnteredChecksPending, IssueEnteredChecksPendingHandler>();
+        services.AddIntegrationEventHandler<IssueEnteredRebasePending, IssueEnteredRebasePendingHandler>();
 
         services.AddHostedService(sp => new MonitoringService(
             sp.GetRequiredService<IServiceScopeFactory>(),

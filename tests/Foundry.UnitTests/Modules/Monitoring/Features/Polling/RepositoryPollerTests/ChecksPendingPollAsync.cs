@@ -93,6 +93,29 @@ public sealed class ChecksPendingPollAsync : IAsyncDisposable
             FeedbackCutoffAt: feedbackCutoffAt ?? Now.AddDays(7));
     }
 
+    // --- Rebase-pending guard (ADR 0087) ---
+
+    [Fact]
+    public async Task WhenChecksNudgeArrivesWhileIssueIsRebasePending_AppliesNoVerdict()
+    {
+        // Arrange — the issue is rebase-pending, so it is not among the checks-pending issues the pass reads.
+        MonitoredRepository repository = SeedRepository();
+        StubChecksPendingIssueQueries issueQueries = new([]);
+        StubIssueProvider provider = new(
+            checksResults: new Dictionary<string, Result<Checks>>
+            {
+                ["https://github.com/owner/repo/pull/99"] = Result<Checks>.Ok(new Checks.Green()),
+            });
+        RepositoryPoller sut = BuildPoller(issueQueries);
+
+        // Act
+        bool changed = await sut.RunChecksPassAsync(repository, provider, issueNumber: 42, Now, CancellationToken.None);
+
+        // Assert
+        changed.ShouldBeFalse();
+        _dispatcher.DispatchedEvents.OfType<ChecksVerdictResolved>().ShouldBeEmpty();
+    }
+
     // --- Green verdict → "passed" ---
 
     [Fact]
@@ -540,6 +563,11 @@ public sealed class ChecksPendingPollAsync : IAsyncDisposable
             MonitoredRepositoryId repositoryId,
             CancellationToken cancellationToken)
             => Task.FromResult<IReadOnlyList<ReviewIssueInfo>>([]);
+
+        public Task<IReadOnlyList<RebasePendingIssueInfo>> GetRebasePendingIssuesAsync(
+            MonitoredRepositoryId repositoryId,
+            CancellationToken cancellationToken)
+            => Task.FromResult<IReadOnlyList<RebasePendingIssueInfo>>([]);
 
         public Task<IReadOnlyList<ChecksPendingIssueInfo>> GetChecksPendingIssuesAsync(
             MonitoredRepositoryId repositoryId,

@@ -35,6 +35,7 @@ public sealed class IssueBuilder
     private DateTimeOffset _feedbackCutoffAt = DateTimeOffset.UtcNow;
     private DateTimeOffset _enteredChecksPendingAt = DateTimeOffset.UtcNow;
     private ChecksOutcome _checksOutcome = new ChecksOutcome.Passed();
+    private RebaseOutcome _rebaseOutcome = new RebaseOutcome.UpToDate();
     private DateTimeOffset _completedAt = DateTimeOffset.UtcNow;
     private DateTimeOffset _failedAt = DateTimeOffset.UtcNow;
     private string _failureReason = "Container exited with code 1";
@@ -84,6 +85,8 @@ public sealed class IssueBuilder
     public IssueBuilder WithEnteredChecksPendingAt(DateTimeOffset value) { _enteredChecksPendingAt = value; return this; }
 
     public IssueBuilder WithChecksOutcome(ChecksOutcome value) { _checksOutcome = value; return this; }
+
+    public IssueBuilder WithRebaseOutcome(RebaseOutcome value) { _rebaseOutcome = value; return this; }
 
     public IssueBuilder WithCompletedAt(DateTimeOffset value) { _completedAt = value; return this; }
 
@@ -136,17 +139,21 @@ public sealed class IssueBuilder
     public RevisionFailedIssue RevisionFailed() =>
         RevisionInProgress().MarkFailed(_failureReason, _failureCategory, _failedAt);
 
-    public ChecksPendingIssue ChecksPending() =>
-        InProgress().MarkChecksPending(_branchName, _pullRequestUrl, _feedbackCutoffAt);
+    public RebasePendingIssue RebasePending() =>
+        InProgress().MarkRebasePending(_branchName, _pullRequestUrl, _feedbackCutoffAt);
 
-    public ChecksPendingIssue ChecksPendingFromRevision() => RevisionInProgress().MarkChecksPending();
+    public RebasePendingIssue RebasePendingFromRevision() => RevisionInProgress().MarkRebasePending();
+
+    public ChecksPendingIssue ChecksPending() => RebasePending().MarkChecksPending(_rebaseOutcome);
+
+    public ChecksPendingIssue ChecksPendingFromRevision() => RebasePendingFromRevision().MarkChecksPending(_rebaseOutcome);
 
     /// <summary>
     /// Builds a <see cref="ChecksPendingIssue"/> that arrived via a FixChecks revision dispatch
     /// (i.e., ChecksFixAttempts = 1). Used to test the second-attempt code path in FixChecks scenarios.
     /// </summary>
     public ChecksPendingIssue ChecksPendingFromFixChecks() =>
-        ChecksPending().FixChecks(_failingChecks).Claim(_workerRunId).MarkChecksPending();
+        ChecksPending().FixChecks(_failingChecks).Claim(_workerRunId).MarkRebasePending().MarkChecksPending(_rebaseOutcome);
 
     /// <summary>
     /// Builds a <see cref="ChecksPendingIssue"/> that has exhausted all FixChecks dispatch
@@ -155,7 +162,7 @@ public sealed class IssueBuilder
     /// than dispatching another fix revision.
     /// </summary>
     public ChecksPendingIssue ChecksPendingAtCap() =>
-        ChecksPendingFromFixChecks().FixChecks(_failingChecks).Claim(_workerRunId).MarkChecksPending();
+        ChecksPendingFromFixChecks().FixChecks(_failingChecks).Claim(_workerRunId).MarkRebasePending().MarkChecksPending(_rebaseOutcome);
 
     public ReviewIssue ReviewFromChecksPending() => ChecksPending().ToReview(_checksOutcome);
 

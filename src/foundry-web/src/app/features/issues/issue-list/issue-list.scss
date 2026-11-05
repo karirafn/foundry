@@ -1,6 +1,4 @@
 .issue-list {
-  container-type: inline-size;
-  container-name: issue-list;
   max-width: 1024px;
   margin-inline: auto;
   padding: var(--fd-spacing-lg);
@@ -27,45 +25,50 @@
 
   &__layout {
     display: flex;
-    gap: var(--fd-spacing-xl);
-    align-items: flex-start;
+    flex-direction: column;
+    gap: var(--fd-spacing-lg);
   }
 
-  &__rail {
-    flex: 0 0 200px;
-    width: 200px;
+  &__filters {
+    display: block;
   }
 
   &__body {
-    flex: 1 1 0;
     min-width: 0;
   }
 
-  // Threshold: rail (200px) + gap (~24px) + minimum readable card (~376px) = ~600px.
-  // Below this threshold the rail no longer coexists with a readable card, so switch to the
-  // sticky-bar layout. Use a container query (not a media query) because the breakpoint is
-  // content-driven — .issue-list is the named container.
-  &__filter-bar-container {
-    display: none;
+  // Group section — caption on the left, hairline rule filling the rest of the row.
+  // Section spacing separates groups; the first section sits flush under the stats bar.
+  &__section {
+    & + & {
+      margin-top: var(--fd-spacing-xl);
+    }
   }
 
-  @container issue-list (max-width: 600px) {
-    .issue-list__rail {
-      display: none;
-    }
+  &__section-header {
+    display: flex;
+    align-items: center;
+    gap: var(--fd-spacing-sm);
+    margin-bottom: var(--fd-spacing-md);
+  }
 
-    .issue-list__filter-bar-container {
-      display: block;
-    }
+  // --fd-text-secondary (#8b949e) is 6.14:1 on the page background — WCAG AA.
+  &__section-caption {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--fd-text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    white-space: nowrap;
+    margin: 0;
+    line-height: inherit;
+  }
 
-    // Bottom padding ensures the last issue card is not occluded by the fixed filter bar.
-    // --fd-filter-bar-height is defined on the bar's :host so it propagates here.
-    // env(safe-area-inset-bottom) accounts for notch/home-indicator on iOS/Android.
-    .issue-list__body {
-      padding-block-end: calc(
-        var(--fd-filter-bar-height, 56px) + env(safe-area-inset-bottom, 0px)
-      );
-    }
+  &__section-hr {
+    flex: 1;
+    border: none;
+    border-top: 1px solid var(--fd-border-default);
+    margin: 0;
   }
 
   &__grid {
@@ -83,13 +86,6 @@
   &__item {
     display: flex;
     flex-direction: column;
-  }
-
-  &__separator {
-    align-self: center;
-    border: none;
-    border-top: 1px solid var(--fd-text-tertiary);
-    margin-block: var(--fd-spacing-xs);
   }
 
   &__detail-wrapper {
@@ -205,33 +201,10 @@
     line-height: inherit;
   }
 
+  // Resolved follows the active sections (or the empty-active state) — keep the gap even when
+  // no active section precedes it.
   &__resolved-section {
-    margin-top: var(--fd-spacing-lg);
-  }
-
-  &__resolved-divider {
-    display: flex;
-    align-items: center;
-    gap: var(--fd-spacing-sm);
-    margin-bottom: var(--fd-spacing-md);
-  }
-
-  &__resolved-hr {
-    flex: 1;
-    border: none;
-    border-top: 1px solid var(--fd-border-default);
-    margin: 0;
-  }
-
-  &__resolved-caption {
-    font-size: 0.75rem;
-    font-weight: 600;
-    color: var(--fd-text-secondary);
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    white-space: nowrap;
-    margin: 0;
-    line-height: inherit;
+    margin-top: var(--fd-spacing-xl);
   }
 
   &__resolved-band {

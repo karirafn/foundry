@@ -23,6 +23,7 @@ import { WorkerRunDetail } from '../../workers/worker-run.model';
 import { LogViewComponent } from '../../../shared/components/log-view/log-view';
 import { ConfirmDialogComponent } from '../../../shared/components/confirm-dialog/confirm-dialog';
 import { providerTerminology } from '../../../shared/utils/provider.util';
+import { rebaseOutcomeLabel } from '../rebase-outcome.format';
 import { getFailureCategoryDisplay } from '../../../shared/utils/failure-category';
 import {
   IssueState,
@@ -139,6 +140,13 @@ import {
               <div class="issue-detail__field">
                 <span class="issue-detail__field-key">Feedback Cutoff</span>
                 <span class="issue-detail__field-value">{{ s.feedbackCutoffAt | date: 'medium' }}</span>
+              </div>
+            }
+
+            @if (_rebaseOutcomeLabel(s); as rebaseLabel) {
+              <div class="issue-detail__field issue-detail__rebase">
+                <span class="issue-detail__field-key">Rebase</span>
+                <span class="issue-detail__field-value">{{ rebaseLabel }}</span>
               </div>
             }
           </div>
@@ -503,6 +511,10 @@ export class IssueDetailComponent {
 
   protected _showsRevisionCallout(state: string, s: IssueStateDetails): boolean {
     return REVISION_STATES.has(state as IssueState) && s.revisionTriggerKind != null;
+  }
+
+  protected _rebaseOutcomeLabel(s: IssueStateDetails): string | null {
+    return rebaseOutcomeLabel(s.rebaseOutcome, s.rebaseSkippedReason);
   }
 
   protected _prTerminology(providerType: string): { pullRequest: string; prAbbrev: string } {

@@ -23,6 +23,8 @@ export interface IssueSummary {
   repositoryEligibilityStatus?: string | null;
   runStats?: RunStats | null;
   checksOutcome?: string | null;
+  rebaseOutcome?: string | null;
+  rebaseSkippedReason?: string | null;
   pullRequestUrl?: string | null;
 }
 
@@ -61,6 +63,8 @@ export interface IssueStateDetails {
   failingChecks?: FailingCheck[] | null;
   revisionTriggerKind?: RevisionTriggerKind | null;
   checksFixAttempts?: number | null;
+  rebaseOutcome?: string | null;
+  rebaseSkippedReason?: string | null;
 }
 
 export interface IssueDetail extends IssueSummary {

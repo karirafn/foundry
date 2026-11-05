@@ -842,6 +842,7 @@ export interface components {
             /** Format: int32 */
             maxConcurrentWorkers?: null | number | string;
             applyBranchRules?: null | boolean;
+            rebaseAfterRun?: null | boolean;
         };
         CreateRepositoryResponse: {
             repository: components["schemas"]["RepositorySummary"];
@@ -975,6 +976,8 @@ export interface components {
             revisionTriggerKind?: null | string;
             /** Format: int32 */
             checksFixAttempts?: null | number | string;
+            rebaseOutcome?: null | string;
+            rebaseSkippedReason?: null | string;
         };
         IssueSummary: {
             /** Format: uuid */
@@ -992,6 +995,8 @@ export interface components {
             runStats: null | components["schemas"]["RunStats"];
             checksOutcome?: null | string;
             pullRequestUrl?: null | string;
+            rebaseOutcome?: null | string;
+            rebaseSkippedReason?: null | string;
         };
         MoveRepositoryRequestBody: {
             /** Format: int32 */
@@ -1070,6 +1075,8 @@ export interface components {
             untrackSuppressedSince?: null | string;
             /** @default not-configured */
             webhookStatus: string;
+            /** @default true */
+            rebaseAfterRun: boolean;
         };
         RepositoryWebhookInfo: {
             status: string;
@@ -1188,6 +1195,7 @@ export interface components {
             isActive: boolean;
             /** Format: int32 */
             maxConcurrentWorkers: number | string;
+            rebaseAfterRun?: null | boolean;
         };
         UpdateWebhookSettingsRequestBody: {
             webhookPublicBaseUrl: null | string;

@@ -40,33 +40,15 @@ public sealed class ChecksPendingIssue : Issue
 
     public int ChecksFixAttempts { get; private set; }
 
-    internal static ChecksPendingIssue FromInProgress(
-        InProgressIssue source,
-        string branchName,
-        string pullRequestUrl,
-        DateTimeOffset feedbackCutoffAt)
-    {
-        ChecksPendingIssue checksPending = new(source.Id);
-        checksPending.SetSharedProperties(
-            source.MonitoredRepositoryId,
-            source.IssueNumber,
-            source.Title,
-            source.Author,
-            source.Url,
-            source.Labels,
-            source.DetectedAt);
-        checksPending.WorkerRunId = source.WorkerRunId;
-        checksPending.BranchName = branchName;
-        checksPending.PullRequestUrl = pullRequestUrl;
-        checksPending.EnteredChecksPendingAt = DateTimeOffset.UtcNow;
-        checksPending.FeedbackCutoffAt = feedbackCutoffAt;
-        checksPending.ChecksFixAttempts = 0;
-        return checksPending;
-    }
+    /// <summary>
+    /// How the post-run rebase resolved before the issue entered the checks gate (ADR 0087).
+    /// <see langword="null"/> for issues that entered checks-pending before the rebase step existed.
+    /// </summary>
+    public RebaseOutcome? RebaseOutcome { get; private set; }
 
-    internal static ChecksPendingIssue FromRevisionInProgress(
-        RevisionInProgressIssue source,
-        DateTimeOffset feedbackCutoffAt)
+    internal static ChecksPendingIssue FromRebasePending(
+        RebasePendingIssue source,
+        RebaseOutcome rebaseOutcome)
     {
         ChecksPendingIssue checksPending = new(source.Id);
         checksPending.SetSharedProperties(
@@ -81,8 +63,9 @@ public sealed class ChecksPendingIssue : Issue
         checksPending.BranchName = source.BranchName;
         checksPending.PullRequestUrl = source.PullRequestUrl;
         checksPending.EnteredChecksPendingAt = DateTimeOffset.UtcNow;
-        checksPending.FeedbackCutoffAt = feedbackCutoffAt;
+        checksPending.FeedbackCutoffAt = source.FeedbackCutoffAt;
         checksPending.ChecksFixAttempts = source.ChecksFixAttempts;
+        checksPending.RebaseOutcome = rebaseOutcome;
         return checksPending;
     }
 

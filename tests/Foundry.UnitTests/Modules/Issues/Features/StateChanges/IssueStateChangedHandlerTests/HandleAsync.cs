@@ -131,6 +131,11 @@ public sealed class HandleAsync
             CancellationToken cancellationToken)
             => Task.FromResult<IReadOnlyList<ReviewIssueInfo>>([]);
 
+        public Task<IReadOnlyList<RebasePendingIssueInfo>> GetRebasePendingIssuesAsync(
+            MonitoredRepositoryId repositoryId,
+            CancellationToken cancellationToken)
+            => Task.FromResult<IReadOnlyList<RebasePendingIssueInfo>>([]);
+
         public Task<IReadOnlyList<ChecksPendingIssueInfo>> GetChecksPendingIssuesAsync(
             MonitoredRepositoryId repositoryId,
             CancellationToken cancellationToken)

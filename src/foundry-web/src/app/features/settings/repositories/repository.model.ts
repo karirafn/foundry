@@ -36,6 +36,8 @@ export interface RepositorySummary {
   pollIntervalIsDefault: boolean;
   isActive: boolean;
   maxConcurrentWorkers: number;
+  /** Whether Foundry rebases the worker branch onto the default branch after each run. */
+  rebaseAfterRun: boolean;
   lastPolledAt: string | null;
   eligibility: RepositoryEligibility | null;
   /** Effective webhook health (ADR 0085). Absent on responses from older servers. */
@@ -158,6 +160,8 @@ export interface CreateRepositoryRequest {
   maxConcurrentWorkers: number | null;
   /** Whether Foundry may write the default-branch rules eligibility requires. Server default: true. */
   applyBranchRules?: boolean;
+  /** Whether to rebase the worker branch onto the default branch after each run. Server default: true. */
+  rebaseAfterRun?: boolean;
 }
 
 export type BranchRulesOutcomeKind = 'applied' | 'already-present' | 'not-requested' | 'skipped' | 'failed';
@@ -207,4 +211,6 @@ export interface UpdateRepositoryRequest {
   pollIntervalSeconds: number | null;
   isActive: boolean;
   maxConcurrentWorkers: number;
+  /** Omitted leaves the setting unchanged. */
+  rebaseAfterRun?: boolean;
 }

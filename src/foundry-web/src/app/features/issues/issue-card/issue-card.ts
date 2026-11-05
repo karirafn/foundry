@@ -6,6 +6,7 @@ import { StateBadgeComponent } from '../../../shared/components/state-badge/stat
 import { SafeHrefPipe } from '../../../shared/pipes/safe-href.pipe';
 import { TickerService } from '../../../core/services/ticker.service';
 import { AGENT_SILENCE_THRESHOLD_MINUTES, AgentActivity, agentActivitySummary } from '../../../core/models/agent-activity.model';
+import { RebaseOutcomeBadge, rebaseOutcomeBadge } from '../rebase-outcome.format';
 import { formatCost as _formatCostImpl, formatDuration as _formatDurationImpl } from '../run-stats.format';
 
 const REPO_WARNING_STATES = new Set<string>(['queued', 'detected', 'revision_queued', 'continuation_queued']);
@@ -127,6 +128,15 @@ function hasVisiblePills(stats: RunStats): boolean {
                 [attr.aria-label]="outcome.label"
                 aria-hidden="true"
               >{{ outcome.label }}</span>
+            }
+            @if (_rebaseOutcomeDisplay(); as rebase) {
+              <span
+                class="badge issue-card__checks-badge issue-card__rebase-badge"
+                [class]="rebase.cssClass"
+                role="img"
+                [attr.aria-label]="rebase.label"
+                aria-hidden="true"
+              >{{ rebase.label }}</span>
             }
             @if (repoWarningLabel()) {
               <span
@@ -301,6 +311,9 @@ export class IssueCardComponent {
     return CHECKS_OUTCOME_DISPLAY[outcome] ?? null;
   });
 
+  protected readonly _rebaseOutcomeDisplay = computed((): RebaseOutcomeBadge | null =>
+    rebaseOutcomeBadge(this.issue().rebaseOutcome, this.issue().rebaseSkippedReason));
+
   protected readonly _queuePositionDisplay = computed((): string => {
     const pos = this.queuePosition();
     return typeof pos === 'number' ? String(pos) : EM_DASH;
@@ -395,10 +408,12 @@ export class IssueCardComponent {
     const warningPart = warning ? ` ${warning}` : '';
     const outcome = this._checksOutcomeDisplay();
     const checksPart = outcome ? ` ${outcome.label}.` : '';
+    const rebase = this._rebaseOutcomeDisplay();
+    const rebasePart = rebase ? ` ${rebase.label}.` : '';
     const waitingPart = this._isChecksPending() ? ' Waiting on checks.' : '';
     const runStatsPart = this._buildRunStatsAriaText();
     const activityPart = this._buildActivityAriaText();
-    return `${base}${warningPart}${checksPart}${waitingPart}${runStatsPart}${activityPart}`;
+    return `${base}${warningPart}${checksPart}${rebasePart}${waitingPart}${runStatsPart}${activityPart}`;
   });
 
   private _buildQueuePositionAriaClause(): string {

@@ -32,6 +32,7 @@ function createdResponse(
       pollIntervalIsDefault: true,
       isActive: true,
       maxConcurrentWorkers: 1,
+      rebaseAfterRun: true,
       lastPolledAt: null,
       eligibility: { status: 'eligible', violations: [], reason: null },
     },

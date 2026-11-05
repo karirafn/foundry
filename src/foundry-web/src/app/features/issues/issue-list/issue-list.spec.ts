@@ -1,10 +1,11 @@
 import { TestBed } from '@angular/core/testing';
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
-import { WritableSignal, signal } from '@angular/core';
+import { Signal, WritableSignal, computed, signal } from '@angular/core';
 import { NEVER } from 'rxjs';
 import { IssueListComponent } from './issue-list';
-import { IssueService } from '../issue.service';
+import { IssueSection, IssueService } from '../issue.service';
+import { DEFAULT_SELECTED_GROUPS, STATE_GROUPS, StateGroupId, groupFor } from '../issue-lifecycle.model';
 import { IssueSignalRService } from '../../../core/services/issue-signalr.service';
 import { SystemSignalRService } from '../../../core/services/system-signalr.service';
 import { WorkerSignalRService, WORKER_HUB_FACTORY } from '../../../core/services/worker-signalr.service';
@@ -185,8 +186,8 @@ describe('IssueListComponent', () => {
     httpMock.expectOne((r) => r.url === '/api/workers/run-totals').flush(mockRunTotals);
   });
 
-  // Cycle 3: renders fd-issue-filter-rail
-  it('should render fd-issue-filter-rail', () => {
+  // Cycle 3: renders the inline group chip row
+  it('should render fd-issue-group-filter', () => {
     // Arrange
     const { fixture, httpMock } = setupComponent();
 
@@ -197,8 +198,7 @@ describe('IssueListComponent', () => {
 
     // Assert
     const el = fixture.nativeElement as HTMLElement;
-    const rail = el.querySelector('fd-issue-filter-rail');
-    expect(rail).toBeTruthy();
+    expect(el.querySelector('fd-issue-group-filter')).toBeTruthy();
   });
 
   // Cycle 4: renders fd-issue-card for each active band issue
@@ -249,7 +249,7 @@ describe('IssueListComponent', () => {
     expect(heading?.textContent?.trim()).toBe('No active issues');
   });
 
-  it('should render the empty-active hint with layout-neutral copy', () => {
+  it('should render the empty-active hint directing the user to select Resolved', () => {
     // Arrange
     const { fixture, httpMock } = setupComponent();
     fixture.detectChanges();
@@ -258,11 +258,32 @@ describe('IssueListComponent', () => {
     // Act
     fixture.detectChanges();
 
-    // Assert — copy must not reference "filter rail" (hidden on mobile)
+    // Assert
     const el = fixture.nativeElement as HTMLElement;
     const hint = el.querySelector('.issue-list__empty-active-hint');
-    expect(hint?.textContent?.trim()).not.toContain('filter rail');
-    expect(hint?.textContent?.trim()).toContain('Resolved counts');
+    expect(hint?.textContent?.trim()).toBe('No active issues match the selected groups. Select Resolved to see closed work.');
+    expect(hint?.textContent).not.toContain('Resolved counts');
+  });
+
+  it('should render the active empty state when no group is selected', () => {
+    // Arrange
+    const live: IssueSummary = { ...mockSummary, id: 'p', state: 'in_progress' };
+    const { fixture, httpMock } = setupComponent();
+    fixture.detectChanges();
+    flushInit(httpMock, [live]);
+    fixture.detectChanges();
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Act — deselect every pressed chip
+    for (const id of ['in_progress', 'needs_attention', 'waiting']) {
+      el.querySelector<HTMLButtonElement>(`fd-issue-group-filter button[data-group="${id}"]`)!.click();
+    }
+    fixture.detectChanges();
+
+    // Assert
+    expect(el.querySelector('.issue-list__empty-active-heading')?.textContent?.trim()).toBe('No active issues');
+    expect(el.querySelector('section.issue-list__section')).toBeFalsy();
+    expect(el.querySelector('fd-issue-card')).toBeFalsy();
   });
 
   it('should not render "No active issues" when active band has issues', () => {
@@ -534,137 +555,87 @@ describe('IssueListComponent', () => {
     expect(indicator).toBeTruthy();
   });
 
-  // Cycle 9: separator renders between live and non-live issues (active band)
-  it('should render an hr separator when there are both live and non-live issues', () => {
-    // Arrange
-    const liveIssue: IssueSummary = { ...mockSummary, id: 'live', state: 'in_progress' };
-    const nonLiveIssue: IssueSummary = { ...mockSummary, id: 'non-live', state: 'detected', issueNumber: 43 };
+  // Group sections: one <section> + <h2> per selected, non-empty active group, in STATE_GROUPS order
+  function sectionIds(el: HTMLElement): (string | null)[] {
+    return Array.from(el.querySelectorAll('section.issue-list__section:not(.issue-list__resolved-section)'))
+      .map((sec) => sec.getAttribute('data-group'));
+  }
+
+  it('should render one labelled section per non-empty active group in STATE_GROUPS order', () => {
+    // Arrange — server order scrambled across groups
+    const queued: IssueSummary = { ...mockSummary, id: 'q', state: 'queued', issueNumber: 1 };
+    const failed: IssueSummary = { ...mockSummary, id: 'f', state: 'failed', issueNumber: 2 };
+    const live: IssueSummary = { ...mockSummary, id: 'p', state: 'in_progress', issueNumber: 3 };
     const { fixture, httpMock } = setupComponent();
     fixture.detectChanges();
-    flushInit(httpMock, [liveIssue, nonLiveIssue]);
+    flushInit(httpMock, [queued, failed, live]);
 
     // Act
     fixture.detectChanges();
 
     // Assert
     const el = fixture.nativeElement as HTMLElement;
-    const separator = el.querySelector('hr.issue-list__separator');
-    expect(separator).toBeTruthy();
-    expect(separator?.getAttribute('aria-hidden')).toBe('true');
+    expect(sectionIds(el)).toEqual(['in_progress', 'needs_attention', 'waiting']);
+    const sections = Array.from(el.querySelectorAll('section.issue-list__section:not(.issue-list__resolved-section)'));
+    const headings = sections.map((sec) => sec.querySelector('h2'));
+    expect(headings.map((h) => h?.textContent?.trim())).toEqual(['In progress', 'Needs attention', 'Waiting']);
+    sections.forEach((sec, i) => {
+      expect(sec.getAttribute('aria-labelledby')).toBe(headings[i]?.id);
+    });
+    // Each issue card renders inside its own group section
+    expect(sections[0].querySelectorAll('fd-issue-card').length).toBe(1);
+    expect(sections[1].querySelectorAll('fd-issue-card').length).toBe(1);
+    expect(sections[2].querySelectorAll('fd-issue-card').length).toBe(1);
   });
 
-  it('should NOT render a separator for continuation_queued — it is a queued tier, not a live state', () => {
-    // Arrange — continuation_queued is a queued tier (not live); no live issues means no separator
-    const continuationQueued: IssueSummary = { ...mockSummary, id: 'cont-queued', state: 'continuation_queued' };
-    const nonLiveIssue: IssueSummary = { ...mockSummary, id: 'done', state: 'detected', issueNumber: 43 };
+  it('should not render a section for a selected group with no issues', () => {
+    // Arrange
+    const queued: IssueSummary = { ...mockSummary, id: 'q', state: 'queued' };
     const { fixture, httpMock } = setupComponent();
     fixture.detectChanges();
-    flushInit(httpMock, [nonLiveIssue, continuationQueued]);
+    flushInit(httpMock, [queued]);
 
     // Act
     fixture.detectChanges();
 
-    // Assert — no separator because continuation_queued is not a live state
-    const el = fixture.nativeElement as HTMLElement;
-    const separator = el.querySelector('hr.issue-list__separator');
-    expect(separator).toBeFalsy();
+    // Assert
+    expect(sectionIds(fixture.nativeElement as HTMLElement)).toEqual(['waiting']);
   });
 
-  it('should not render an hr separator when all issues are in-progress', () => {
+  it('should hide a group section when its chip is deselected', () => {
     // Arrange
-    const live1: IssueSummary = { ...mockSummary, id: 'live-1', state: 'in_progress' };
-    const live2: IssueSummary = { ...mockSummary, id: 'live-2', state: 'revision_in_progress', issueNumber: 43 };
+    const live: IssueSummary = { ...mockSummary, id: 'p', state: 'in_progress' };
+    const queued: IssueSummary = { ...mockSummary, id: 'q', state: 'queued', issueNumber: 43 };
     const { fixture, httpMock } = setupComponent();
     fixture.detectChanges();
-    flushInit(httpMock, [live1, live2]);
+    flushInit(httpMock, [live, queued]);
+    fixture.detectChanges();
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Act
+    el.querySelector<HTMLButtonElement>('fd-issue-group-filter button[data-group="in_progress"]')!.click();
+    fixture.detectChanges();
+
+    // Assert
+    expect(sectionIds(el)).toEqual(['waiting']);
+  });
+
+  it('should not render the removed live-boundary separator or its sr-only boundary line', () => {
+    // Arrange
+    const live: IssueSummary = { ...mockSummary, id: 'live', state: 'in_progress' };
+    const waiting: IssueSummary = { ...mockSummary, id: 'waiting', state: 'detected', issueNumber: 43 };
+    const { fixture, httpMock } = setupComponent();
+    fixture.detectChanges();
+    flushInit(httpMock, [live, waiting]);
 
     // Act
     fixture.detectChanges();
 
     // Assert
     const el = fixture.nativeElement as HTMLElement;
-    const separator = el.querySelector('hr.issue-list__separator');
-    expect(separator).toBeFalsy();
-  });
-
-  it('should not render an hr separator when no issues are in-progress', () => {
-    // Arrange
-    const non1: IssueSummary = { ...mockSummary, id: 'non-1', state: 'completed' };
-    const non2: IssueSummary = { ...mockSummary, id: 'non-2', state: 'failed', issueNumber: 43 };
-    const { fixture, httpMock } = setupComponent();
-    fixture.detectChanges();
-    flushInit(httpMock, [non1, non2]);
-
-    // Act
-    fixture.detectChanges();
-
-    // Assert — completed is resolved, so the active band will be empty; no separator
-    const el = fixture.nativeElement as HTMLElement;
-    const separator = el.querySelector('hr.issue-list__separator');
-    expect(separator).toBeFalsy();
-  });
-
-  it('should not render an hr separator when the list is empty', () => {
-    // Arrange
-    const { fixture, httpMock } = setupComponent();
-    fixture.detectChanges();
-    flushInit(httpMock);
-
-    // Act
-    fixture.detectChanges();
-
-    // Assert
-    const el = fixture.nativeElement as HTMLElement;
-    const separator = el.querySelector('hr.issue-list__separator');
-    expect(separator).toBeFalsy();
-  });
-
-  // Decision 3 regression: separator renders at index liveIssueCount() for a mix of live + waiting cards
-  it('should place the separator between the last live card and the first waiting card', () => {
-    // Arrange — two live (in_progress, revision_in_progress), one waiting (queued), one detected
-    const live1: IssueSummary = { ...mockSummary, id: 'live-1', state: 'in_progress', issueNumber: 1 };
-    const live2: IssueSummary = { ...mockSummary, id: 'live-2', state: 'revision_in_progress', issueNumber: 2 };
-    const waiting: IssueSummary = { ...mockSummary, id: 'waiting-1', state: 'queued', issueNumber: 3 };
-    const detected: IssueSummary = { ...mockSummary, id: 'detected-1', state: 'detected', issueNumber: 4 };
-    const { fixture, httpMock } = setupComponent();
-    fixture.detectChanges();
-    flushInit(httpMock, [live1, live2, waiting, detected]);
-
-    // Act
-    fixture.detectChanges();
-
-    // Assert — separator is present
-    const el = fixture.nativeElement as HTMLElement;
-    const grid = el.querySelector('.issue-list__grid') as HTMLElement;
-    const separator = grid.querySelector('hr.issue-list__separator');
-    expect(separator).toBeTruthy();
-
-    // Assert — exactly 2 issue-list__item divs precede the separator in the grid (liveIssueCount = 2)
-    const gridChildren = Array.from(grid.children);
-    const separatorIndex = gridChildren.findIndex((c) => c.classList.contains('issue-list__separator'));
-    const itemsBefore = gridChildren
-      .slice(0, separatorIndex)
-      .filter((c) => c.classList.contains('issue-list__item'));
-    expect(itemsBefore.length).toBe(2);
-  });
-
-  // Cycle 10: sr-only span announces section boundary for screen readers
-  it('should render an sr-only span announcing the section boundary when there are both live and non-live issues', () => {
-    // Arrange
-    const liveIssue: IssueSummary = { ...mockSummary, id: 'live', state: 'in_progress' };
-    const completedIssue: IssueSummary = { ...mockSummary, id: 'done', state: 'detected', issueNumber: 43 };
-    const { fixture, httpMock } = setupComponent();
-    fixture.detectChanges();
-    flushInit(httpMock, [liveIssue, completedIssue]);
-
-    // Act
-    fixture.detectChanges();
-
-    // Assert
-    const el = fixture.nativeElement as HTMLElement;
+    expect(el.querySelector('hr.issue-list__separator')).toBeFalsy();
     const srSpans = Array.from(el.querySelectorAll('.sr-only'));
-    const boundarySpan = srSpans.find((s) => s.textContent?.includes('End of in-progress issues'));
-    expect(boundarySpan).toBeTruthy();
+    expect(srSpans.some((sp) => sp.textContent?.includes('End of in-progress issues'))).toBe(false);
   });
 
   // Finding 3: per-run activity isolation — each live card receives its own lastActivityAt
@@ -848,7 +819,7 @@ describe('IssueListComponent', () => {
 
     // Act — select a resolved state via the service
     const issueService = TestBed.inject(IssueService);
-    issueService.toggleState('completed');
+    issueService.toggleGroup('resolved');
     // Flush the paged resolved request
     httpMock.expectOne((req) => req.url === '/api/issues' && req.params.has('states')).flush({
       items: [resolvedIssue],
@@ -874,7 +845,7 @@ describe('IssueListComponent', () => {
 
     // Act
     const issueService = TestBed.inject(IssueService);
-    issueService.toggleState('completed');
+    issueService.toggleGroup('resolved');
     httpMock.expectOne((req) => req.url === '/api/issues' && req.params.has('states')).flush({
       items: [resolvedIssue],
       nextCursor: null,
@@ -898,7 +869,7 @@ describe('IssueListComponent', () => {
 
     // Act
     const issueService = TestBed.inject(IssueService);
-    issueService.toggleState('completed');
+    issueService.toggleGroup('resolved');
     httpMock.expectOne((req) => req.url === '/api/issues' && req.params.has('states')).flush({
       items: [resolvedIssue],
       nextCursor: null,
@@ -921,7 +892,7 @@ describe('IssueListComponent', () => {
 
     // Act
     const issueService = TestBed.inject(IssueService);
-    issueService.toggleState('completed');
+    issueService.toggleGroup('resolved');
     httpMock.expectOne((req) => req.url === '/api/issues' && req.params.has('states')).flush({
       items: [resolvedIssue],
       nextCursor: 'cursor-abc',
@@ -943,7 +914,7 @@ describe('IssueListComponent', () => {
     fixture.detectChanges();
 
     const issueService = TestBed.inject(IssueService);
-    issueService.toggleState('completed');
+    issueService.toggleGroup('resolved');
     httpMock.expectOne((req) => req.url === '/api/issues' && req.params.has('states')).flush({
       items: [resolvedIssue],
       nextCursor: 'cursor-abc',
@@ -977,22 +948,6 @@ describe('IssueListComponent', () => {
     expect(announcer).toBeTruthy();
   });
 
-  // Finding 2: aside has accessible name
-  it('should give the filter-rail aside an aria-label of "Filter by state"', () => {
-    // Arrange
-    const { fixture, httpMock } = setupComponent();
-
-    // Act
-    fixture.detectChanges();
-    flushInit(httpMock);
-    fixture.detectChanges();
-
-    // Assert
-    const el = fixture.nativeElement as HTMLElement;
-    const aside = el.querySelector('aside.issue-list__rail');
-    expect(aside?.getAttribute('aria-label')).toBe('Filter by state');
-  });
-
   // Finding 1: resolved caption is an h2 inside a section
   it('should render "Resolved" as an h2 when the resolved band is open', () => {
     // Arrange
@@ -1004,7 +959,7 @@ describe('IssueListComponent', () => {
 
     // Act
     const issueService = TestBed.inject(IssueService);
-    issueService.toggleState('completed');
+    issueService.toggleGroup('resolved');
     httpMock.expectOne((req) => req.url === '/api/issues' && req.params.has('states')).flush({
       items: [resolvedIssue],
       nextCursor: null,
@@ -1027,7 +982,7 @@ describe('IssueListComponent', () => {
 
     // Act
     const issueService = TestBed.inject(IssueService);
-    issueService.toggleState('completed');
+    issueService.toggleGroup('resolved');
     httpMock.expectOne((req) => req.url === '/api/issues' && req.params.has('states')).flush({
       items: [resolvedIssue],
       nextCursor: null,
@@ -1082,7 +1037,7 @@ describe('IssueListComponent', () => {
     fixture.detectChanges();
 
     const issueService = TestBed.inject(IssueService);
-    issueService.toggleState('completed');
+    issueService.toggleGroup('resolved');
     // First request immediately resolves but triggers resolvedLoading briefly;
     // we flush to get into steady state then check there is no stale role="status"
     httpMock.expectOne((req) => req.url === '/api/issues' && req.params.has('states')).flush({
@@ -1111,7 +1066,7 @@ describe('IssueListComponent', () => {
 
     // Act — select resolved state; the HTTP call is pending so resolvedLoading is true
     const issueService = TestBed.inject(IssueService);
-    issueService.toggleState('completed');
+    issueService.toggleGroup('resolved');
     fixture.detectChanges();
 
     // Capture announcement text before flushing (loading state)
@@ -1140,7 +1095,7 @@ describe('IssueListComponent', () => {
     fixture.detectChanges();
 
     const issueService = TestBed.inject(IssueService);
-    issueService.toggleState('completed');
+    issueService.toggleGroup('resolved');
     httpMock.expectOne((req) => req.url === '/api/issues' && req.params.has('states')).flush({
       items: [resolvedIssue],
       nextCursor: 'cursor-abc',
@@ -1191,7 +1146,7 @@ describe('IssueListComponent', () => {
 
     // Act — select a resolved state and fail the HTTP request
     const issueService = TestBed.inject(IssueService);
-    issueService.toggleState('completed');
+    issueService.toggleGroup('resolved');
     httpMock.expectOne((req) => req.url === '/api/issues' && req.params.has('states')).flush('Server Error', {
       status: 500,
       statusText: 'Internal Server Error',
@@ -1216,7 +1171,7 @@ describe('IssueListComponent', () => {
 
     // Act
     const issueService = TestBed.inject(IssueService);
-    issueService.toggleState('completed');
+    issueService.toggleGroup('resolved');
     httpMock.expectOne((req) => req.url === '/api/issues' && req.params.has('states')).flush('Server Error', {
       status: 500,
       statusText: 'Internal Server Error',
@@ -1238,7 +1193,7 @@ describe('IssueListComponent', () => {
     fixture.detectChanges();
 
     const issueService = TestBed.inject(IssueService);
-    issueService.toggleState('completed');
+    issueService.toggleGroup('resolved');
     httpMock.expectOne((req) => req.url === '/api/issues' && req.params.has('states')).flush('Server Error', {
       status: 500,
       statusText: 'Internal Server Error',
@@ -1265,7 +1220,7 @@ describe('IssueListComponent', () => {
 
     // Act
     const issueService = TestBed.inject(IssueService);
-    issueService.toggleState('completed');
+    issueService.toggleGroup('resolved');
     httpMock.expectOne((req) => req.url === '/api/issues' && req.params.has('states')).flush('Server Error', {
       status: 500,
       statusText: 'Internal Server Error',
@@ -1288,7 +1243,7 @@ describe('IssueListComponent', () => {
 
     // Act — select completed, return empty result
     const issueService = TestBed.inject(IssueService);
-    issueService.toggleState('completed');
+    issueService.toggleGroup('resolved');
     httpMock.expectOne((req) => req.url === '/api/issues' && req.params.has('states')).flush({
       items: [],
       nextCursor: null,
@@ -1311,7 +1266,7 @@ describe('IssueListComponent', () => {
 
     // Act
     const issueService = TestBed.inject(IssueService);
-    issueService.toggleState('completed');
+    issueService.toggleGroup('resolved');
     httpMock.expectOne((req) => req.url === '/api/issues' && req.params.has('states')).flush({
       items: [],
       nextCursor: null,
@@ -1334,7 +1289,7 @@ describe('IssueListComponent', () => {
     fixture.detectChanges();
 
     const issueService = TestBed.inject(IssueService);
-    issueService.toggleState('completed');
+    issueService.toggleGroup('resolved');
     httpMock.expectOne((req) => req.url === '/api/issues' && req.params.has('states')).flush({
       items: [resolvedIssue],
       nextCursor: 'cursor-abc',
@@ -1367,7 +1322,7 @@ describe('IssueListComponent', () => {
     fixture.detectChanges();
 
     const issueService = TestBed.inject(IssueService);
-    issueService.toggleState('completed');
+    issueService.toggleGroup('resolved');
     httpMock.expectOne((req) => req.url === '/api/issues' && req.params.has('states')).flush({
       items: [resolvedIssue],
       nextCursor: 'cursor-abc',
@@ -1399,7 +1354,7 @@ describe('IssueListComponent', () => {
     fixture.detectChanges();
 
     const issueService = TestBed.inject(IssueService);
-    issueService.toggleState('completed');
+    issueService.toggleGroup('resolved');
     httpMock.expectOne((req) => req.url === '/api/issues' && req.params.has('states')).flush({
       items: [resolvedIssue],
       nextCursor: 'cursor-abc',
@@ -1457,7 +1412,7 @@ describe('IssueListComponent', () => {
 
     // Act — select resolved state and fail that fetch
     const issueService = TestBed.inject(IssueService);
-    issueService.toggleState('completed');
+    issueService.toggleGroup('resolved');
     httpMock.expectOne((req) => req.url === '/api/issues' && req.params.has('states')).flush('Server Error', {
       status: 500,
       statusText: 'Internal Server Error',
@@ -1484,7 +1439,7 @@ describe('IssueListComponent', () => {
     fixture.detectChanges();
 
     const issueService = TestBed.inject(IssueService);
-    issueService.toggleState('completed');
+    issueService.toggleGroup('resolved');
     httpMock.expectOne((req) => req.url === '/api/issues' && req.params.has('states')).flush({
       items: [resolvedIssue],
       nextCursor: 'cursor-abc',
@@ -1517,7 +1472,7 @@ describe('IssueListComponent', () => {
 
     // Act — select a resolved state and return empty results
     const issueService = TestBed.inject(IssueService);
-    issueService.toggleState('completed');
+    issueService.toggleGroup('resolved');
     httpMock.expectOne((req) => req.url === '/api/issues' && req.params.has('states')).flush({
       items: [],
       nextCursor: null,
@@ -1540,7 +1495,7 @@ describe('IssueListComponent', () => {
 
     // Act — select a resolved state and return results
     const issueService = TestBed.inject(IssueService);
-    issueService.toggleState('completed');
+    issueService.toggleGroup('resolved');
     httpMock.expectOne((req) => req.url === '/api/issues' && req.params.has('states')).flush({
       items: [resolvedIssue],
       nextCursor: null,
@@ -1562,7 +1517,7 @@ describe('IssueListComponent', () => {
 
     // Act — select a resolved state and fail the fetch
     const issueService = TestBed.inject(IssueService);
-    issueService.toggleState('completed');
+    issueService.toggleGroup('resolved');
     httpMock.expectOne((req) => req.url === '/api/issues' && req.params.has('states')).flush('Server Error', {
       status: 500,
       statusText: 'Internal Server Error',
@@ -1610,7 +1565,7 @@ describe('IssueListComponent', () => {
     fixture.detectChanges();
 
     const issueService = TestBed.inject(IssueService);
-    issueService.toggleState('completed');
+    issueService.toggleGroup('resolved');
     httpMock.expectOne((req) => req.url === '/api/issues' && req.params.has('states')).flush('Server Error', {
       status: 500,
       statusText: 'Internal Server Error',
@@ -1641,7 +1596,7 @@ describe('IssueListComponent', () => {
     fixture.detectChanges();
 
     const issueService = TestBed.inject(IssueService);
-    issueService.toggleState('completed');
+    issueService.toggleGroup('resolved');
     httpMock.expectOne((req) => req.url === '/api/issues' && req.params.has('states')).flush({
       items: [resolvedIssue],
       nextCursor: 'cursor-abc',
@@ -1681,7 +1636,7 @@ describe('IssueListComponent', () => {
 
     // Act — select completed, return empty result
     const issueService = TestBed.inject(IssueService);
-    issueService.toggleState('completed');
+    issueService.toggleGroup('resolved');
     httpMock.expectOne((req) => req.url === '/api/issues' && req.params.has('states')).flush({
       items: [],
       nextCursor: null,
@@ -1695,9 +1650,8 @@ describe('IssueListComponent', () => {
     expect(emptyMsg?.textContent?.trim()).toBe('No resolved issues match the selected filters');
   });
 
-  // Step 4: fd-issue-filter-bar and container-query layout
-  // Cycle 16: fd-issue-filter-bar is present in the DOM alongside the rail aside
-  it('should render fd-issue-filter-bar in the DOM', () => {
+  // Layout: the chip row sits inline above the list at every width — no side rail, no mobile bar/sheet
+  it('should render the group chip row above the list without a side rail, filter bar or filter sheet', () => {
     // Arrange
     const { fixture, httpMock } = setupComponent();
 
@@ -1706,56 +1660,15 @@ describe('IssueListComponent', () => {
     flushInit(httpMock);
     fixture.detectChanges();
 
-    // Assert — both the static rail aside and the sticky bar exist in the DOM at all times
+    // Assert
     const el = fixture.nativeElement as HTMLElement;
-    const filterBar = el.querySelector('fd-issue-filter-bar');
-    expect(filterBar).toBeTruthy();
-  });
-
-  it('should render both fd-issue-filter-rail (inside aside) and fd-issue-filter-bar simultaneously in the DOM', () => {
-    // Arrange
-    const { fixture, httpMock } = setupComponent();
-
-    // Act
-    fixture.detectChanges();
-    flushInit(httpMock);
-    fixture.detectChanges();
-
-    // Assert — CSS toggles visibility; both elements exist in DOM at all times (no *ngIf on viewport)
-    const el = fixture.nativeElement as HTMLElement;
-    expect(el.querySelector('aside.issue-list__rail fd-issue-filter-rail')).toBeTruthy();
-    expect(el.querySelector('fd-issue-filter-bar')).toBeTruthy();
-  });
-
-  it('should place fd-issue-filter-bar inside an element with class issue-list__filter-bar-container', () => {
-    // Arrange
-    const { fixture, httpMock } = setupComponent();
-
-    // Act
-    fixture.detectChanges();
-    flushInit(httpMock);
-    fixture.detectChanges();
-
-    // Assert — filter bar is wrapped in its container for CSS targeting
-    const el = fixture.nativeElement as HTMLElement;
-    const container = el.querySelector('.issue-list__filter-bar-container');
-    expect(container).toBeTruthy();
-    expect(container?.querySelector('fd-issue-filter-bar')).toBeTruthy();
-  });
-
-  it('should apply issue-list__layout--container-query class to the layout element', () => {
-    // Arrange
-    const { fixture, httpMock } = setupComponent();
-
-    // Act
-    fixture.detectChanges();
-    flushInit(httpMock);
-    fixture.detectChanges();
-
-    // Assert — layout wrapper carries the container-query anchor class
-    const el = fixture.nativeElement as HTMLElement;
-    const layout = el.querySelector('.issue-list__layout');
-    expect(layout?.classList).toContain('issue-list__layout');
+    const layout = el.querySelector('.issue-list__layout') as HTMLElement;
+    expect(layout.firstElementChild?.tagName.toLowerCase()).toBe('fd-issue-group-filter');
+    expect(el.querySelector('aside')).toBeFalsy();
+    expect(el.querySelector('.issue-list__rail')).toBeFalsy();
+    expect(el.querySelector('fd-issue-filter-bar')).toBeFalsy();
+    expect(el.querySelector('fd-issue-filter-sheet')).toBeFalsy();
+    expect(el.querySelector('.issue-list__filter-bar-container')).toBeFalsy();
   });
 
   // Dispatch-order queue grouping tests (issue #261)
@@ -2131,8 +2044,9 @@ interface StubIssueService {
   resolvedLoadMoreError: WritableSignal<null>;
   resolvedLoadingMore: WritableSignal<boolean>;
   hasMoreResolved: WritableSignal<boolean>;
-  selectedResolvedStates: WritableSignal<ReadonlySet<IssueState>>;
-  selectedActiveStates: WritableSignal<ReadonlySet<IssueState>>;
+  selectedGroups: WritableSignal<ReadonlySet<StateGroupId>>;
+  resolvedSelected: Signal<boolean>;
+  activeSections: Signal<readonly IssueSection[]>;
   counts: WritableSignal<Record<string, number>>;
   retrying: WritableSignal<boolean>;
   retryError: WritableSignal<null>;
@@ -2140,28 +2054,36 @@ interface StubIssueService {
   ineligibleQueuedIssues: WritableSignal<IssueSummary[]>;
   nextUpIssueId: WritableSignal<string | null>;
   isEmpty: WritableSignal<boolean>;
-  activeFilterCount: WritableSignal<number>;
   eligibleQueuedIssues: WritableSignal<IssueSummary[]>;
   queuePositions: WritableSignal<ReadonlyMap<string, number>>;
   nextUpAnnouncement: WritableSignal<string>;
   loadIssues: () => void;
   loadCounts: () => void;
   toggleExpand: (id: string) => void;
-  toggleState: (state: IssueState) => void;
+  toggleGroup: (id: StateGroupId) => void;
   loadMoreResolved: () => void;
   retryResolvedFetch: () => void;
   loadDetail: (id: string) => void;
   retryIssue: (id: string) => void;
   countFor: (state: IssueState) => number;
-  isStateSelected: (state: IssueState) => boolean;
+  countForGroup: (id: StateGroupId) => number;
+  isGroupSelected: (id: StateGroupId) => boolean;
 }
 
 function makeStubIssueService(issues: IssueSummary[] = []): StubIssueService {
+  const activeBandIssues = signal(issues);
+  const selectedGroups = signal<ReadonlySet<StateGroupId>>(DEFAULT_SELECTED_GROUPS);
+  // Mirror IssueService.activeSections: split the stubbed band by group, in STATE_GROUPS order.
+  const activeSections = computed<readonly IssueSection[]>(() =>
+    STATE_GROUPS
+      .map(group => ({ group, issues: activeBandIssues().filter(i => groupFor(i.state).id === group.id) }))
+      .filter(section => section.issues.length > 0)
+  );
   return {
     queueOrderStale: signal(false),
     initialLoading: signal(false),
     issues: signal(issues),
-    activeBandIssues: signal(issues),
+    activeBandIssues,
     liveIssueCount: signal(0),
     loadError: signal(null),
     expandedIssueId: signal(null),
@@ -2174,8 +2096,9 @@ function makeStubIssueService(issues: IssueSummary[] = []): StubIssueService {
     resolvedLoadMoreError: signal(null),
     resolvedLoadingMore: signal(false),
     hasMoreResolved: signal(false),
-    selectedResolvedStates: signal(new Set<IssueState>()),
-    selectedActiveStates: signal(new Set<IssueState>()),
+    selectedGroups,
+    resolvedSelected: computed(() => selectedGroups().has('resolved')),
+    activeSections,
     counts: signal({}),
     retrying: signal(false),
     retryError: signal(null),
@@ -2183,20 +2106,20 @@ function makeStubIssueService(issues: IssueSummary[] = []): StubIssueService {
     ineligibleQueuedIssues: signal([]),
     nextUpIssueId: signal(null),
     isEmpty: signal(issues.length === 0),
-    activeFilterCount: signal(0),
     eligibleQueuedIssues: signal([]),
     queuePositions: signal(new Map<string, number>()),
     nextUpAnnouncement: signal(''),
     loadIssues: () => {},
     loadCounts: () => {},
     toggleExpand: () => {},
-    toggleState: () => {},
+    toggleGroup: () => {},
     loadMoreResolved: () => {},
     retryResolvedFetch: () => {},
     loadDetail: () => {},
     retryIssue: () => {},
     countFor: () => 0,
-    isStateSelected: () => false,
+    countForGroup: () => 0,
+    isGroupSelected: (id: StateGroupId) => selectedGroups().has(id),
   };
 }
 
@@ -2527,7 +2450,7 @@ describe('IssueListComponent (ordinal binding + next-up announcer)', () => {
     const resolvedIssue: IssueSummary = { ...mockSummary, id: 'done1', state: 'completed' };
     const stub = makeStubIssueService([]);
     stub.resolvedIssues.set([resolvedIssue]);
-    stub.selectedResolvedStates.set(new Set<IssueState>(['completed']));
+    stub.selectedGroups.set(new Set<StateGroupId>([...DEFAULT_SELECTED_GROUPS, 'resolved']));
     const { fixture } = setupStubComponent(stub);
 
     // Act

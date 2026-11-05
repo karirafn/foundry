@@ -59,8 +59,7 @@
     color: inherit;
   }
 
-  &__field,
-  &__oauth-field {
+  &__field {
     display: flex;
     flex-direction: column;
     gap: var(--fd-spacing-xs);
@@ -83,10 +82,50 @@
     font-size: 0.75rem;
   }
 
-  // WCAG 1.4.3: security-cost note uses --fd-text-warning (not tertiary) for 4.5:1 at 0.75rem
-  &__field-hint--warning {
+  // Warning box shared by the API-key warning and the settings callouts. Callouts carry a bold
+  // text lead so the meaning survives without colour (WCAG 1.4.1); callout body text uses
+  // --fd-text-primary on the amber tint for >= 4.5:1 contrast (WCAG 1.4.3).
+  &__api-key-warning,
+  &__callout {
+    align-items: flex-start;
+    border-radius: var(--fd-radius-sm);
+    display: flex;
+    font-size: 0.8125rem;
+    gap: var(--fd-spacing-sm);
+    overflow-wrap: break-word;
+    padding: var(--fd-spacing-sm) var(--fd-spacing-md);
+  }
+
+  &__api-key-warning,
+  &__callout--warning {
+    background: var(--fd-bg-warning-subtle);
+    border: 1px solid var(--fd-border-warning);
+  }
+
+  &__api-key-warning,
+  &__callout-icon,
+  &__callout-lead {
     color: var(--fd-text-warning);
-    font-size: 0.75rem;
+  }
+
+  &__callout {
+    color: var(--fd-text-primary);
+    margin: 0;
+
+    &[hidden] { display: none; }
+  }
+
+  &__callout--warning {
+    border-left-width: 4px;
+  }
+
+  &__callout-lead {
+    font-weight: 600;
+  }
+
+  &__api-key-warning-icon,
+  &__callout-icon {
+    flex-shrink: 0;
   }
 
   &__api-key-wrapper {
@@ -164,24 +203,6 @@
     font-size: 0.8125rem;
   }
 
-  &__api-key-warning {
-    display: flex;
-    align-items: flex-start;
-    gap: var(--fd-spacing-sm);
-    padding: var(--fd-spacing-sm) var(--fd-spacing-md);
-    border: 1px solid var(--fd-border-warning);
-    border-radius: var(--fd-radius-sm);
-    background: var(--fd-bg-warning-subtle);
-    color: var(--fd-text-warning);
-    font-size: 0.8125rem;
-    overflow-wrap: break-word;
-  }
-
-  &__api-key-warning-icon {
-    flex-shrink: 0;
-    margin-top: 0.0625rem;
-  }
-
   &__field-error,
   &__save-error,
   &__switch-error {
@@ -198,7 +219,6 @@
   &__save-btn,
   &__scan-btn,
   &__retry-btn,
-  &__switch-account-btn,
   &__resume-btn {
     align-self: flex-start;
     background: transparent;
@@ -297,16 +317,6 @@
     }
   }
 
-  &__switch-account-btn {
-    border: 1px solid var(--fd-border-default);
-    color: var(--fd-text-secondary);
-
-    &:not(:disabled):hover {
-      background: var(--fd-bg-card-hover);
-      color: var(--fd-text-primary);
-    }
-  }
-
   &__resume-btn {
     border: 1px solid var(--fd-text-link);
     color: var(--fd-text-link);
@@ -369,24 +379,29 @@
   &__image-flags {
     display: flex;
     flex-direction: column;
-    gap: var(--fd-spacing-sm);
-
-    input[type='checkbox'] {
-      accent-color: var(--fd-text-link);
-      height: 16px;
-      width: 16px;
-    }
+    gap: var(--fd-spacing-xs);
   }
 
-  &__image-flag {
-    align-items: center;
+  // Checkbox toggle: checkbox + label row (__toggle-row, shared with __checkbox-label) with the hint stacked
+  // underneath, indented to the label text.
+  &__toggle {
     display: flex;
-    gap: var(--fd-spacing-sm);
+    flex-direction: column;
+    gap: var(--fd-spacing-xs);
+  }
 
-    label {
-      color: var(--fd-text-primary);
-      cursor: pointer;
-      font-size: 0.875rem;
+  &__toggle-hint {
+    margin-left: calc(16px + var(--fd-spacing-sm));
+  }
+
+  // Groups the status/alert live regions above Save into one column gap. Regions stay in
+  // the DOM (so role="status"/"alert" still announce) but collapse to zero height when empty.
+  &__image-feedback {
+    display: flex;
+    flex-direction: column;
+
+    > :not(:empty):not(.sr-only) ~ :not(:empty) {
+      margin-top: var(--fd-spacing-xs);
     }
   }
 
@@ -430,8 +445,11 @@
     gap: var(--fd-spacing-sm);
   }
 
-  &__checkbox-label {
+  // 44px clickable row (WCAG 2.5.5)
+  &__checkbox-label,
+  &__toggle-row {
     align-items: center;
+    align-self: flex-start;
     color: var(--fd-text-primary);
     cursor: pointer;
     display: flex;
@@ -441,7 +459,9 @@
 
     input[type='checkbox'] {
       accent-color: var(--fd-text-link);
+      flex-shrink: 0;
       height: 16px;
+      margin: 0;
       width: 16px;
     }
   }

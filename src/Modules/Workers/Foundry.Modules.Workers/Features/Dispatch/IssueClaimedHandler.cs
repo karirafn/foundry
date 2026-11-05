@@ -221,7 +221,8 @@ internal sealed class IssueClaimedHandler(
         {
             await orchestrator.EnsureCredentialVolumeAsync(cancellationToken);
             volumeMounts.Add(new VolumeMount(CredentialVolume.VolumeName, CredentialVolume.ContainerPath));
-            envVars[CredentialVolume.ConfigDirEnvVar] = CredentialVolume.ContainerPath;
+            // Only the credential store is shared; CLAUDE_CONFIG_DIR is left at the container-local ~/.claude.
+            envVars[CredentialVolume.SecureStorageDirEnvVar] = CredentialVolume.ContainerPath;
         }
         else
         {

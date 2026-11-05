@@ -154,6 +154,8 @@ namespace Foundry.WebApi.Migrations
 
                             t.HasCheckConstraint("ck_issues_in_progress_worker_run_id", "state <> 'in_progress' OR worker_run_id IS NOT NULL");
 
+                            t.HasCheckConstraint("ck_issues_rebase_pending_fields", "state <> 'rebase_pending' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND pull_request_url IS NOT NULL AND entered_rebase_pending_at IS NOT NULL AND feedback_cutoff_at IS NOT NULL)");
+
                             t.HasCheckConstraint("ck_issues_review_fields", "state <> 'review' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND pull_request_url IS NOT NULL AND feedback_cutoff_at IS NOT NULL)");
 
                             t.HasCheckConstraint("ck_issues_revision_failed_fields", "state <> 'revision_failed' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND pull_request_url IS NOT NULL AND revision_trigger IS NOT NULL AND failure_reason IS NOT NULL AND failed_at IS NOT NULL)");
@@ -313,6 +315,12 @@ namespace Foundry.WebApi.Migrations
                         .HasDefaultValue(0)
                         .HasColumnName("position");
 
+                    b.Property<bool>("RebaseAfterRun")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasDefaultValue(true)
+                        .HasColumnName("rebase_after_run");
+
                     b.Property<string>("Slug")
                         .IsRequired()
                         .HasMaxLength(500)
@@ -367,6 +375,47 @@ namespace Foundry.WebApi.Migrations
                         .HasDatabaseName("ix_monitored_repositories_host_slug");
 
                     b.ToTable("monitored_repositories", (string)null);
+                });
+
+            modelBuilder.Entity("Foundry.Modules.Monitoring.Domain.Entities.PendingRebase", b =>
+                {
+                    b.Property<Guid>("MonitoredRepositoryId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("monitored_repository_id");
+
+                    b.Property<int>("IssueNumber")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("issue_number");
+
+                    b.Property<DateTimeOffset>("EnteredRebasePendingAt")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("entered_rebase_pending_at");
+
+                    b.Property<DateTimeOffset?>("NextAttemptAt")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("next_attempt_at");
+
+                    b.Property<string>("PreRebaseHeadSha")
+                        .HasMaxLength(64)
+                        .IsUnicode(false)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("pre_rebase_head_sha");
+
+                    b.Property<DateTimeOffset?>("RequestedAt")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("requested_at");
+
+                    b.Property<DateTimeOffset?>("ResolvedAt")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("resolved_at");
+
+                    b.Property<int>("TransientFailures")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("transient_failures");
+
+                    b.HasKey("MonitoredRepositoryId", "IssueNumber");
+
+                    b.ToTable("pending_rebases", (string)null);
                 });
 
             modelBuilder.Entity("Foundry.Modules.Settings.Domain.Entities.GlobalSettings", b =>
@@ -616,6 +665,8 @@ namespace Foundry.WebApi.Migrations
 
                             t.HasCheckConstraint("ck_issues_in_progress_worker_run_id", "state <> 'in_progress' OR worker_run_id IS NOT NULL");
 
+                            t.HasCheckConstraint("ck_issues_rebase_pending_fields", "state <> 'rebase_pending' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND pull_request_url IS NOT NULL AND entered_rebase_pending_at IS NOT NULL AND feedback_cutoff_at IS NOT NULL)");
+
                             t.HasCheckConstraint("ck_issues_review_fields", "state <> 'review' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND pull_request_url IS NOT NULL AND feedback_cutoff_at IS NOT NULL)");
 
                             t.HasCheckConstraint("ck_issues_revision_failed_fields", "state <> 'revision_failed' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND pull_request_url IS NOT NULL AND revision_trigger IS NOT NULL AND failure_reason IS NOT NULL AND failed_at IS NOT NULL)");
@@ -647,6 +698,8 @@ namespace Foundry.WebApi.Migrations
                             t.HasCheckConstraint("ck_issues_failed_fields", "state <> 'failed' OR (worker_run_id IS NOT NULL AND failure_reason IS NOT NULL AND failed_at IS NOT NULL)");
 
                             t.HasCheckConstraint("ck_issues_in_progress_worker_run_id", "state <> 'in_progress' OR worker_run_id IS NOT NULL");
+
+                            t.HasCheckConstraint("ck_issues_rebase_pending_fields", "state <> 'rebase_pending' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND pull_request_url IS NOT NULL AND entered_rebase_pending_at IS NOT NULL AND feedback_cutoff_at IS NOT NULL)");
 
                             t.HasCheckConstraint("ck_issues_review_fields", "state <> 'review' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND pull_request_url IS NOT NULL AND feedback_cutoff_at IS NOT NULL)");
 
@@ -697,6 +750,12 @@ namespace Foundry.WebApi.Migrations
                         .HasColumnType("TEXT")
                         .HasColumnName("pull_request_url");
 
+                    b.Property<string>("RebaseOutcome")
+                        .ValueGeneratedOnUpdateSometimes()
+                        .HasMaxLength(2147483647)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("rebase_outcome");
+
                     b.Property<Guid>("WorkerRunId")
                         .ValueGeneratedOnUpdateSometimes()
                         .HasColumnType("TEXT")
@@ -715,6 +774,8 @@ namespace Foundry.WebApi.Migrations
                             t.HasCheckConstraint("ck_issues_failed_fields", "state <> 'failed' OR (worker_run_id IS NOT NULL AND failure_reason IS NOT NULL AND failed_at IS NOT NULL)");
 
                             t.HasCheckConstraint("ck_issues_in_progress_worker_run_id", "state <> 'in_progress' OR worker_run_id IS NOT NULL");
+
+                            t.HasCheckConstraint("ck_issues_rebase_pending_fields", "state <> 'rebase_pending' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND pull_request_url IS NOT NULL AND entered_rebase_pending_at IS NOT NULL AND feedback_cutoff_at IS NOT NULL)");
 
                             t.HasCheckConstraint("ck_issues_review_fields", "state <> 'review' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND pull_request_url IS NOT NULL AND feedback_cutoff_at IS NOT NULL)");
 
@@ -767,6 +828,8 @@ namespace Foundry.WebApi.Migrations
                             t.HasCheckConstraint("ck_issues_failed_fields", "state <> 'failed' OR (worker_run_id IS NOT NULL AND failure_reason IS NOT NULL AND failed_at IS NOT NULL)");
 
                             t.HasCheckConstraint("ck_issues_in_progress_worker_run_id", "state <> 'in_progress' OR worker_run_id IS NOT NULL");
+
+                            t.HasCheckConstraint("ck_issues_rebase_pending_fields", "state <> 'rebase_pending' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND pull_request_url IS NOT NULL AND entered_rebase_pending_at IS NOT NULL AND feedback_cutoff_at IS NOT NULL)");
 
                             t.HasCheckConstraint("ck_issues_review_fields", "state <> 'review' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND pull_request_url IS NOT NULL AND feedback_cutoff_at IS NOT NULL)");
 
@@ -842,6 +905,8 @@ namespace Foundry.WebApi.Migrations
 
                             t.HasCheckConstraint("ck_issues_in_progress_worker_run_id", "state <> 'in_progress' OR worker_run_id IS NOT NULL");
 
+                            t.HasCheckConstraint("ck_issues_rebase_pending_fields", "state <> 'rebase_pending' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND pull_request_url IS NOT NULL AND entered_rebase_pending_at IS NOT NULL AND feedback_cutoff_at IS NOT NULL)");
+
                             t.HasCheckConstraint("ck_issues_review_fields", "state <> 'review' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND pull_request_url IS NOT NULL AND feedback_cutoff_at IS NOT NULL)");
 
                             t.HasCheckConstraint("ck_issues_revision_failed_fields", "state <> 'revision_failed' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND pull_request_url IS NOT NULL AND revision_trigger IS NOT NULL AND failure_reason IS NOT NULL AND failed_at IS NOT NULL)");
@@ -873,6 +938,8 @@ namespace Foundry.WebApi.Migrations
                             t.HasCheckConstraint("ck_issues_failed_fields", "state <> 'failed' OR (worker_run_id IS NOT NULL AND failure_reason IS NOT NULL AND failed_at IS NOT NULL)");
 
                             t.HasCheckConstraint("ck_issues_in_progress_worker_run_id", "state <> 'in_progress' OR worker_run_id IS NOT NULL");
+
+                            t.HasCheckConstraint("ck_issues_rebase_pending_fields", "state <> 'rebase_pending' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND pull_request_url IS NOT NULL AND entered_rebase_pending_at IS NOT NULL AND feedback_cutoff_at IS NOT NULL)");
 
                             t.HasCheckConstraint("ck_issues_review_fields", "state <> 'review' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND pull_request_url IS NOT NULL AND feedback_cutoff_at IS NOT NULL)");
 
@@ -932,6 +999,8 @@ namespace Foundry.WebApi.Migrations
 
                             t.HasCheckConstraint("ck_issues_in_progress_worker_run_id", "state <> 'in_progress' OR worker_run_id IS NOT NULL");
 
+                            t.HasCheckConstraint("ck_issues_rebase_pending_fields", "state <> 'rebase_pending' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND pull_request_url IS NOT NULL AND entered_rebase_pending_at IS NOT NULL AND feedback_cutoff_at IS NOT NULL)");
+
                             t.HasCheckConstraint("ck_issues_review_fields", "state <> 'review' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND pull_request_url IS NOT NULL AND feedback_cutoff_at IS NOT NULL)");
 
                             t.HasCheckConstraint("ck_issues_revision_failed_fields", "state <> 'revision_failed' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND pull_request_url IS NOT NULL AND revision_trigger IS NOT NULL AND failure_reason IS NOT NULL AND failed_at IS NOT NULL)");
@@ -969,6 +1038,8 @@ namespace Foundry.WebApi.Migrations
 
                             t.HasCheckConstraint("ck_issues_in_progress_worker_run_id", "state <> 'in_progress' OR worker_run_id IS NOT NULL");
 
+                            t.HasCheckConstraint("ck_issues_rebase_pending_fields", "state <> 'rebase_pending' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND pull_request_url IS NOT NULL AND entered_rebase_pending_at IS NOT NULL AND feedback_cutoff_at IS NOT NULL)");
+
                             t.HasCheckConstraint("ck_issues_review_fields", "state <> 'review' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND pull_request_url IS NOT NULL AND feedback_cutoff_at IS NOT NULL)");
 
                             t.HasCheckConstraint("ck_issues_revision_failed_fields", "state <> 'revision_failed' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND pull_request_url IS NOT NULL AND revision_trigger IS NOT NULL AND failure_reason IS NOT NULL AND failed_at IS NOT NULL)");
@@ -981,6 +1052,76 @@ namespace Foundry.WebApi.Migrations
                         });
 
                     b.HasDiscriminator().HasValue("in_progress");
+                });
+
+            modelBuilder.Entity("Foundry.Modules.Issues.Domain.Entities.States.RebasePendingIssue", b =>
+                {
+                    b.HasBaseType("Foundry.Modules.Issues.Domain.Entities.Issue");
+
+                    b.Property<string>("BranchName")
+                        .IsRequired()
+                        .ValueGeneratedOnUpdateSometimes()
+                        .HasMaxLength(500)
+                        .IsUnicode(false)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("branch_name");
+
+                    b.Property<int>("ChecksFixAttempts")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasDefaultValue(0)
+                        .HasColumnName("checks_fix_attempts");
+
+                    b.Property<DateTimeOffset>("EnteredRebasePendingAt")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("entered_rebase_pending_at");
+
+                    b.Property<DateTimeOffset>("FeedbackCutoffAt")
+                        .ValueGeneratedOnUpdateSometimes()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("feedback_cutoff_at");
+
+                    b.Property<string>("PullRequestUrl")
+                        .IsRequired()
+                        .ValueGeneratedOnUpdateSometimes()
+                        .HasMaxLength(2000)
+                        .IsUnicode(false)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("pull_request_url");
+
+                    b.Property<Guid>("WorkerRunId")
+                        .ValueGeneratedOnUpdateSometimes()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("worker_run_id");
+
+                    b.ToTable(t =>
+                        {
+                            t.HasCheckConstraint("ck_issues_checks_pending_fields", "state <> 'checks_pending' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND pull_request_url IS NOT NULL AND entered_checks_pending_at IS NOT NULL AND feedback_cutoff_at IS NOT NULL)");
+
+                            t.HasCheckConstraint("ck_issues_completed_completed_at", "state <> 'completed' OR completed_at IS NOT NULL");
+
+                            t.HasCheckConstraint("ck_issues_continuable_failed_fields", "state <> 'continuable_failed' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND failure_reason IS NOT NULL AND failed_at IS NOT NULL)");
+
+                            t.HasCheckConstraint("ck_issues_continuation_queued_branch_name", "state <> 'continuation_queued' OR branch_name IS NOT NULL");
+
+                            t.HasCheckConstraint("ck_issues_failed_fields", "state <> 'failed' OR (worker_run_id IS NOT NULL AND failure_reason IS NOT NULL AND failed_at IS NOT NULL)");
+
+                            t.HasCheckConstraint("ck_issues_in_progress_worker_run_id", "state <> 'in_progress' OR worker_run_id IS NOT NULL");
+
+                            t.HasCheckConstraint("ck_issues_rebase_pending_fields", "state <> 'rebase_pending' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND pull_request_url IS NOT NULL AND entered_rebase_pending_at IS NOT NULL AND feedback_cutoff_at IS NOT NULL)");
+
+                            t.HasCheckConstraint("ck_issues_review_fields", "state <> 'review' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND pull_request_url IS NOT NULL AND feedback_cutoff_at IS NOT NULL)");
+
+                            t.HasCheckConstraint("ck_issues_revision_failed_fields", "state <> 'revision_failed' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND pull_request_url IS NOT NULL AND revision_trigger IS NOT NULL AND failure_reason IS NOT NULL AND failed_at IS NOT NULL)");
+
+                            t.HasCheckConstraint("ck_issues_revision_in_progress_fields", "state <> 'revision_in_progress' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND pull_request_url IS NOT NULL AND revision_trigger IS NOT NULL)");
+
+                            t.HasCheckConstraint("ck_issues_revision_queued_fields", "state <> 'revision_queued' OR (branch_name IS NOT NULL AND pull_request_url IS NOT NULL AND revision_trigger IS NOT NULL)");
+
+                            t.HasCheckConstraint("ck_issues_unchanged_worker_run_id", "state <> 'unchanged' OR worker_run_id IS NOT NULL");
+                        });
+
+                    b.HasDiscriminator().HasValue("rebase_pending");
                 });
 
             modelBuilder.Entity("Foundry.Modules.Issues.Domain.Entities.States.ReviewIssue", b =>
@@ -1014,6 +1155,12 @@ namespace Foundry.WebApi.Migrations
                         .HasColumnType("TEXT")
                         .HasColumnName("pull_request_url");
 
+                    b.Property<string>("RebaseOutcome")
+                        .ValueGeneratedOnUpdateSometimes()
+                        .HasMaxLength(2147483647)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("rebase_outcome");
+
                     b.Property<Guid>("WorkerRunId")
                         .ValueGeneratedOnUpdateSometimes()
                         .HasColumnType("TEXT")
@@ -1032,6 +1179,8 @@ namespace Foundry.WebApi.Migrations
                             t.HasCheckConstraint("ck_issues_failed_fields", "state <> 'failed' OR (worker_run_id IS NOT NULL AND failure_reason IS NOT NULL AND failed_at IS NOT NULL)");
 
                             t.HasCheckConstraint("ck_issues_in_progress_worker_run_id", "state <> 'in_progress' OR worker_run_id IS NOT NULL");
+
+                            t.HasCheckConstraint("ck_issues_rebase_pending_fields", "state <> 'rebase_pending' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND pull_request_url IS NOT NULL AND entered_rebase_pending_at IS NOT NULL AND feedback_cutoff_at IS NOT NULL)");
 
                             t.HasCheckConstraint("ck_issues_review_fields", "state <> 'review' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND pull_request_url IS NOT NULL AND feedback_cutoff_at IS NOT NULL)");
 
@@ -1121,6 +1270,8 @@ namespace Foundry.WebApi.Migrations
 
                             t.HasCheckConstraint("ck_issues_in_progress_worker_run_id", "state <> 'in_progress' OR worker_run_id IS NOT NULL");
 
+                            t.HasCheckConstraint("ck_issues_rebase_pending_fields", "state <> 'rebase_pending' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND pull_request_url IS NOT NULL AND entered_rebase_pending_at IS NOT NULL AND feedback_cutoff_at IS NOT NULL)");
+
                             t.HasCheckConstraint("ck_issues_review_fields", "state <> 'review' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND pull_request_url IS NOT NULL AND feedback_cutoff_at IS NOT NULL)");
 
                             t.HasCheckConstraint("ck_issues_revision_failed_fields", "state <> 'revision_failed' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND pull_request_url IS NOT NULL AND revision_trigger IS NOT NULL AND failure_reason IS NOT NULL AND failed_at IS NOT NULL)");
@@ -1188,6 +1339,8 @@ namespace Foundry.WebApi.Migrations
 
                             t.HasCheckConstraint("ck_issues_in_progress_worker_run_id", "state <> 'in_progress' OR worker_run_id IS NOT NULL");
 
+                            t.HasCheckConstraint("ck_issues_rebase_pending_fields", "state <> 'rebase_pending' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND pull_request_url IS NOT NULL AND entered_rebase_pending_at IS NOT NULL AND feedback_cutoff_at IS NOT NULL)");
+
                             t.HasCheckConstraint("ck_issues_review_fields", "state <> 'review' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND pull_request_url IS NOT NULL AND feedback_cutoff_at IS NOT NULL)");
 
                             t.HasCheckConstraint("ck_issues_revision_failed_fields", "state <> 'revision_failed' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND pull_request_url IS NOT NULL AND revision_trigger IS NOT NULL AND failure_reason IS NOT NULL AND failed_at IS NOT NULL)");
@@ -1224,6 +1377,8 @@ namespace Foundry.WebApi.Migrations
                             t.HasCheckConstraint("ck_issues_failed_fields", "state <> 'failed' OR (worker_run_id IS NOT NULL AND failure_reason IS NOT NULL AND failed_at IS NOT NULL)");
 
                             t.HasCheckConstraint("ck_issues_in_progress_worker_run_id", "state <> 'in_progress' OR worker_run_id IS NOT NULL");
+
+                            t.HasCheckConstraint("ck_issues_rebase_pending_fields", "state <> 'rebase_pending' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND pull_request_url IS NOT NULL AND entered_rebase_pending_at IS NOT NULL AND feedback_cutoff_at IS NOT NULL)");
 
                             t.HasCheckConstraint("ck_issues_review_fields", "state <> 'review' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND pull_request_url IS NOT NULL AND feedback_cutoff_at IS NOT NULL)");
 
@@ -1473,6 +1628,8 @@ namespace Foundry.WebApi.Migrations
 
                             t.HasCheckConstraint("ck_issues_in_progress_worker_run_id", "state <> 'in_progress' OR worker_run_id IS NOT NULL");
 
+                            t.HasCheckConstraint("ck_issues_rebase_pending_fields", "state <> 'rebase_pending' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND pull_request_url IS NOT NULL AND entered_rebase_pending_at IS NOT NULL AND feedback_cutoff_at IS NOT NULL)");
+
                             t.HasCheckConstraint("ck_issues_review_fields", "state <> 'review' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND pull_request_url IS NOT NULL AND feedback_cutoff_at IS NOT NULL)");
 
                             t.HasCheckConstraint("ck_issues_revision_failed_fields", "state <> 'revision_failed' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND pull_request_url IS NOT NULL AND revision_trigger IS NOT NULL AND failure_reason IS NOT NULL AND failed_at IS NOT NULL)");
@@ -1504,6 +1661,8 @@ namespace Foundry.WebApi.Migrations
                             t.HasCheckConstraint("ck_issues_failed_fields", "state <> 'failed' OR (worker_run_id IS NOT NULL AND failure_reason IS NOT NULL AND failed_at IS NOT NULL)");
 
                             t.HasCheckConstraint("ck_issues_in_progress_worker_run_id", "state <> 'in_progress' OR worker_run_id IS NOT NULL");
+
+                            t.HasCheckConstraint("ck_issues_rebase_pending_fields", "state <> 'rebase_pending' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND pull_request_url IS NOT NULL AND entered_rebase_pending_at IS NOT NULL AND feedback_cutoff_at IS NOT NULL)");
 
                             t.HasCheckConstraint("ck_issues_review_fields", "state <> 'review' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND pull_request_url IS NOT NULL AND feedback_cutoff_at IS NOT NULL)");
 
@@ -1567,6 +1726,8 @@ namespace Foundry.WebApi.Migrations
 
                             t.HasCheckConstraint("ck_issues_in_progress_worker_run_id", "state <> 'in_progress' OR worker_run_id IS NOT NULL");
 
+                            t.HasCheckConstraint("ck_issues_rebase_pending_fields", "state <> 'rebase_pending' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND pull_request_url IS NOT NULL AND entered_rebase_pending_at IS NOT NULL AND feedback_cutoff_at IS NOT NULL)");
+
                             t.HasCheckConstraint("ck_issues_review_fields", "state <> 'review' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND pull_request_url IS NOT NULL AND feedback_cutoff_at IS NOT NULL)");
 
                             t.HasCheckConstraint("ck_issues_revision_failed_fields", "state <> 'revision_failed' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND pull_request_url IS NOT NULL AND revision_trigger IS NOT NULL AND failure_reason IS NOT NULL AND failed_at IS NOT NULL)");
@@ -1586,6 +1747,15 @@ namespace Foundry.WebApi.Migrations
                     b.HasOne("Foundry.Modules.Monitoring.Domain.Entities.Credential", null)
                         .WithMany("Namespaces")
                         .HasForeignKey("CredentialId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Foundry.Modules.Monitoring.Domain.Entities.PendingRebase", b =>
+                {
+                    b.HasOne("Foundry.Modules.Monitoring.Domain.Entities.MonitoredRepository", null)
+                        .WithMany()
+                        .HasForeignKey("MonitoredRepositoryId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });

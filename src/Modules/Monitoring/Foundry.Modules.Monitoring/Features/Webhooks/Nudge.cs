@@ -22,6 +22,9 @@ internal enum NudgePass
 
     /// <summary>The branch-rules eligibility step.</summary>
     BranchRules,
+
+    /// <summary>The post-run rebase step for one issue (ADR 0087).</summary>
+    Rebase,
 }
 
 /// <summary>

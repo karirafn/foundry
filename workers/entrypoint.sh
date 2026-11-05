@@ -461,23 +461,28 @@ fi
 # Non-root phase: before any other work, prove the root phase ran.
 verify_managed_settings "$MANAGED_SETTINGS_FILE" || exit 1
 
-# Foundry no longer writes user settings.  Remove any left over from an earlier
-# worker (in OAuth mode ~/.claude is the shared credential volume) so settings
-# a worker injected there never outlive the next worker start.
+# Foundry no longer writes user settings.  Remove any left over (the config dir
+# is container-local, but a custom CLAUDE_CONFIG_DIR may point elsewhere) so
+# settings injected there never outlive the next worker start.
 if ! rm -f ~/.claude/settings.json || { [[ -n "${CLAUDE_CONFIG_DIR:-}" ]] && ! rm -f "${CLAUDE_CONFIG_DIR}/settings.json"; }; then
     fail_bootstrap "managed-settings" "could not remove the stale user settings file ~/.claude/settings.json"
     exit 1
 fi
 
 # Required environment variables
-# Valid auth: EITHER ANTHROPIC_API_KEY (API-key mode) OR a credential file at
-# $CLAUDE_CONFIG_DIR/.credentials.json (OAuth volume mode, written by claude /login).
-_cred_file="${CLAUDE_CONFIG_DIR:-}/.credentials.json"
-if [[ -z "${ANTHROPIC_API_KEY:-}" ]] && [[ -z "${CLAUDE_CONFIG_DIR:-}" || ! -f "$_cred_file" ]]; then
-    echo "Authentication required: set ANTHROPIC_API_KEY (API-key mode) or mount a credentials file at \$CLAUDE_CONFIG_DIR/.credentials.json (OAuth mode)" >&2
+# Valid auth: EITHER ANTHROPIC_API_KEY (API-key mode) OR a credential file in the
+# CLI's credential store (OAuth volume mode, written by claude /login).  The CLI
+# resolves that store from CLAUDE_SECURESTORAGE_CONFIG_DIR, falling back to
+# CLAUDE_CONFIG_DIR.  Foundry sets only the former: the shared credential volume
+# holds just the credentials, while the Claude config dir (~/.claude) stays
+# container-local so one worker cannot plant CLAUDE.md, skills, agents, commands
+# or settings that another worker loads (ADR 0090).
+_cred_dir="${CLAUDE_SECURESTORAGE_CONFIG_DIR:-${CLAUDE_CONFIG_DIR:-}}"
+if [[ -z "${ANTHROPIC_API_KEY:-}" ]] && [[ -z "$_cred_dir" || ! -f "$_cred_dir/.credentials.json" ]]; then
+    echo "Authentication required: set ANTHROPIC_API_KEY (API-key mode) or mount a credentials file at \$CLAUDE_SECURESTORAGE_CONFIG_DIR/.credentials.json (OAuth mode)" >&2
     exit 1
 fi
-unset _cred_file
+unset _cred_dir
 : "${CLONE_URL:?CLONE_URL is required}"
 : "${GIT_PAT:?GIT_PAT is required}"
 : "${WORKER_PROMPT:?WORKER_PROMPT is required}"

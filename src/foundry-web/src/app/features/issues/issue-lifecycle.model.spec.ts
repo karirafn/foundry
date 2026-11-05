@@ -1,4 +1,16 @@
-import { ACTIVE_STATES, RESOLVED_STATES, STATE_GROUPS, WITHIN_GROUP_ORDER, groupRankFor, isResolvedState, withinGroupRankFor } from './issue-lifecycle.model';
+import {
+  ACTIVE_STATES,
+  DEFAULT_SELECTED_GROUPS,
+  RESOLVED_STATES,
+  STATE_GROUPS,
+  StateGroupId,
+  WITHIN_GROUP_ORDER,
+  groupById,
+  groupFor,
+  groupRankFor,
+  isResolvedState,
+  withinGroupRankFor,
+} from './issue-lifecycle.model';
 import { IssueState } from './issue.model';
 
 // All lifecycle states — must match IssueState union exactly.
@@ -8,6 +20,7 @@ const ALL_LIFECYCLE_STATES: ReadonlySet<IssueState> = new Set<IssueState>([
   'blocked',
   'in_progress',
   'review',
+  'rebase_pending',
   'checks_pending',
   'unchanged',
   'failed',
@@ -30,7 +43,8 @@ describe('issue-lifecycle model', () => {
       'blocked',
       'in_progress',
       'review',
-      'checks_pending',
+      'rebase_pending',
+  'checks_pending',
       'unchanged',
       'failed',
       'continuable_failed',
@@ -216,6 +230,22 @@ describe('issue-lifecycle model', () => {
     expect(waiting!.states).toContain('checks_pending');
   });
 
+  it('should place rebase_pending in the Waiting group', () => {
+    // Arrange
+    const waiting = STATE_GROUPS.find(g => g.label === 'Waiting');
+
+    // Act / Assert
+    expect(waiting).toBeDefined();
+    expect(waiting!.states).toContain('rebase_pending');
+    expect(groupRankFor('rebase_pending')).toBe(groupRankFor('checks_pending'));
+  });
+
+  it('should treat rebase_pending as an active state', () => {
+    // Arrange / Act / Assert
+    expect(ACTIVE_STATES.has('rebase_pending')).toBe(true);
+    expect(isResolvedState('rebase_pending')).toBe(false);
+  });
+
   it('should place review, unchanged, failed, continuable_failed, revision_failed in the Needs attention group', () => {
     // Arrange
     const needsAttention = STATE_GROUPS.find(g => g.label === 'Needs attention');
@@ -283,6 +313,14 @@ describe('withinGroupRankFor', () => {
     expect(withinGroupRankFor('checks_pending')).toBe(withinGroupRankFor('detected'));
   });
 
+  it('should rank rebase_pending in the same tier as checks_pending, before blocked', () => {
+    // Arrange / Act / Assert
+    expect(withinGroupRankFor('rebase_pending')).toBe(withinGroupRankFor('checks_pending'));
+    expect(withinGroupRankFor('rebase_pending')).toBeLessThan(withinGroupRankFor('blocked'));
+    const waitingTier = WITHIN_GROUP_ORDER.waiting.find(tier => tier.includes('checks_pending'))!;
+    expect(waitingTier.indexOf('rebase_pending')).toBe(waitingTier.indexOf('checks_pending') - 1);
+  });
+
   // Cycle 2: In-progress group tier ordering
   it('should assign equal rank to in_progress and revision_in_progress', () => {
     // Arrange / Act / Assert
@@ -314,12 +352,12 @@ describe('withinGroupRankFor', () => {
     const seenInTiers = new Map<IssueState, number>();
 
     // Act
-    for (const [groupLabel, tiers] of Object.entries(WITHIN_GROUP_ORDER) as [string, readonly (readonly IssueState[])[]][]) {
+    for (const [groupId, tiers] of Object.entries(WITHIN_GROUP_ORDER) as [StateGroupId, readonly (readonly IssueState[])[]][]) {
       tiers.forEach((tier: readonly IssueState[], tierIndex: number) => {
         for (const state of tier) {
           if (seenInTiers.has(state)) {
             throw new Error(
-              `State '${state}' appears in multiple tiers of group '${groupLabel}'`
+              `State '${state}' appears in multiple tiers of group '${groupId}'`
             );
           }
           seenInTiers.set(state, tierIndex);
@@ -335,5 +373,71 @@ describe('withinGroupRankFor', () => {
       }
     }
     expect(missingFromTiers).toEqual([]);
+  });
+});
+
+describe('StateGroupId', () => {
+  const ALL_GROUP_IDS: readonly StateGroupId[] = ['in_progress', 'needs_attention', 'waiting', 'resolved'];
+
+  it('should give every STATE_GROUPS entry a distinct id in display order', () => {
+    // Arrange / Act
+    const ids = STATE_GROUPS.map(g => g.id);
+
+    // Assert
+    expect(ids).toEqual(ALL_GROUP_IDS);
+  });
+
+  it('should key WITHIN_GROUP_ORDER by exactly the StateGroupId values', () => {
+    // Arrange / Act
+    const keys = Object.keys(WITHIN_GROUP_ORDER).sort();
+
+    // Assert
+    expect(keys).toEqual([...ALL_GROUP_IDS].sort());
+  });
+
+  it('should map every lifecycle state to the same StateGroupId in STATE_GROUPS and WITHIN_GROUP_ORDER', () => {
+    // Arrange
+    const tierGroupByState = new Map<IssueState, StateGroupId>();
+    for (const id of ALL_GROUP_IDS) {
+      for (const tier of WITHIN_GROUP_ORDER[id]) {
+        for (const state of tier) {
+          if (tierGroupByState.has(state)) {
+            throw new Error(`State '${state}' appears in more than one WITHIN_GROUP_ORDER group`);
+          }
+          tierGroupByState.set(state, id);
+        }
+      }
+    }
+
+    // Act / Assert — totality and agreement for every lifecycle state
+    for (const state of ALL_LIFECYCLE_STATES) {
+      const group = STATE_GROUPS.find(g => g.states.includes(state));
+      expect(group, `state ${state} missing from STATE_GROUPS`).toBeDefined();
+      expect(tierGroupByState.get(state), `state ${state} WITHIN_GROUP_ORDER group`).toBe(group!.id);
+    }
+    expect(tierGroupByState.size).toBe(ALL_LIFECYCLE_STATES.size);
+  });
+
+  it('should resolve groupFor(state) to the group containing that state', () => {
+    // Arrange / Act / Assert
+    for (const state of ALL_LIFECYCLE_STATES) {
+      expect(groupFor(state).states).toContain(state);
+    }
+    expect(groupFor('revision_in_progress').id).toBe('in_progress');
+    expect(groupFor('unchanged').id).toBe('needs_attention');
+    expect(groupFor('checks_pending').id).toBe('waiting');
+    expect(groupFor('completed').id).toBe('resolved');
+  });
+
+  it('should resolve groupById(id) to the STATE_GROUPS entry with that id', () => {
+    // Arrange / Act / Assert
+    for (const id of ALL_GROUP_IDS) {
+      expect(groupById(id).id).toBe(id);
+    }
+  });
+
+  it('should select every group except Resolved by default', () => {
+    // Arrange / Act / Assert
+    expect([...DEFAULT_SELECTED_GROUPS].sort()).toEqual(['in_progress', 'needs_attention', 'waiting']);
   });
 });

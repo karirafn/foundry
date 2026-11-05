@@ -23,7 +23,8 @@ internal static class UpdateRepository
         Guid Id,
         int? PollIntervalSeconds,
         bool IsActive,
-        int MaxConcurrentWorkers) : ICommand<RepositorySummary>;
+        int MaxConcurrentWorkers,
+        bool? RebaseAfterRun = null) : ICommand<RepositorySummary>;
 
     internal sealed class Handler(
         DbContext dbContext,
@@ -65,6 +66,12 @@ internal static class UpdateRepository
                 return Result<RepositorySummary>.Fail(updateFailure.Error);
             }
 
+            // Omitted (null) leaves the toggle unchanged, so older clients cannot reset it by accident.
+            if (command.RebaseAfterRun is { } rebaseAfterRun)
+            {
+                repository.SetRebaseAfterRun(rebaseAfterRun);
+            }
+
             await dbContext.SaveChangesAsync(cancellationToken);
 
             string providerType = credential switch
@@ -93,7 +100,11 @@ internal static class UpdateRepository
 
     internal static class Endpoint
     {
-        private sealed record RequestBody(int? PollIntervalSeconds, bool IsActive, int MaxConcurrentWorkers);
+        private sealed record RequestBody(
+            int? PollIntervalSeconds,
+            bool IsActive,
+            int MaxConcurrentWorkers,
+            bool? RebaseAfterRun = null);
 
         public static void Map(RouteGroupBuilder group)
         {
@@ -104,7 +115,13 @@ internal static class UpdateRepository
                     ICommandHandler<Command, RepositorySummary> handler,
                     CancellationToken cancellationToken) =>
                 {
-                    Command command = new(accountId, id, body.PollIntervalSeconds, body.IsActive, body.MaxConcurrentWorkers);
+                    Command command = new(
+                        accountId,
+                        id,
+                        body.PollIntervalSeconds,
+                        body.IsActive,
+                        body.MaxConcurrentWorkers,
+                        body.RebaseAfterRun);
                     Result<RepositorySummary> result = await handler.HandleAsync(command, cancellationToken);
 
                     return result.Match<Results<Ok<RepositorySummary>, ProblemHttpResult>>(
