@@ -19,8 +19,6 @@
   cursor: pointer;
   position: relative;
   transition: background 150ms ease, border-color 150ms ease;
-  outline: none;
-  font: inherit;
   color: inherit;
   text-align: left;
   width: 100%;
@@ -38,7 +36,7 @@
   }
 
   &:hover,
-  &:focus-visible {
+  &:has(.issue-card__toggle:focus-visible) {
     --fd-card-base: var(--fd-bg-card-hover);
 
     border-color: #484f58;
@@ -60,7 +58,9 @@
     }
   }
 
-  &:focus-visible {
+  // The focus ring is drawn around the whole card while its toggle button has keyboard focus,
+  // so the visible affordance matches the card-wide pointer hit area.
+  &:has(.issue-card__toggle:focus-visible) {
     outline: 2px solid var(--fd-text-link);
     outline-offset: 2px;
   }
@@ -168,6 +168,17 @@
     overflow: hidden;
     text-overflow: ellipsis;
     margin-bottom: var(--fd-spacing-sm);
+  }
+
+  // Dedicated expand/collapse control: visually the title text, reset to inherit the title styles.
+  &__toggle {
+    all: unset;
+    cursor: pointer;
+    display: block;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   &__footer {
