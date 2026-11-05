@@ -15,11 +15,13 @@ public sealed class Map
     private static readonly MonitoredRepositoryId RepoId = MonitoredRepositoryId.New();
     private static readonly DateTimeOffset At = new(2026, 11, 4, 12, 0, 0, TimeSpan.Zero);
 
-    // Issue 10 is tracked (detected); 20 is in review on PR 21; 30 is checks-pending on PR 31.
+    // Issue 10 is tracked (detected) and blocked by untracked issue 77; 20 is in review on PR 21 and
+    // blocks tracked issue 30; 30 is checks-pending on PR 31.
     private static readonly WebhookTrackingContext Tracked = new(
         new HashSet<int> { 10, 20, 30 },
         [new ReviewIssueInfo(20, "https://github.com/owner/repo/pull/21", At)],
-        [new ChecksPendingIssueInfo(30, "https://github.com/owner/repo/pull/31", At, At)]);
+        [new ChecksPendingIssueInfo(30, "https://github.com/owner/repo/pull/31", At, At)],
+        new HashSet<int> { 77, 20 });
 
     private static NudgeKey? MapEvent(string eventName, string json)
     {
@@ -156,5 +158,87 @@ public sealed class Map
     public void WhenEventMapsToNoPass_ReturnsNull(string eventName)
     {
         MapEvent(eventName, """{"zen":"Keep it logically awesome."}""").ShouldBeNull();
+    }
+
+    [Fact]
+    public void WhenIssuesEventClosesUntrackedUnlabeledBlocker_NudgesListingAndDependencies()
+    {
+        MapEvent("issues", """{"action":"closed","issue":{"number":77,"labels":[]}}""")
+            .ShouldBe(new NudgeKey(RepoId, NudgePass.IssueListingAndDependencies));
+    }
+
+    [Fact]
+    public void WhenIssuesEventClosesTrackedBlocker_NudgesListingAndDependencies()
+    {
+        MapEvent("issues", """{"action":"closed","issue":{"number":20,"labels":[{"name":"foundry"}]}}""")
+            .ShouldBe(new NudgeKey(RepoId, NudgePass.IssueListingAndDependencies));
+    }
+
+    [Fact]
+    public void WhenIssuesEventClosesTrackedIssueThatBlocksNothing_NudgesIssueListing()
+    {
+        MapEvent("issues", """{"action":"closed","issue":{"number":10,"labels":[]}}""")
+            .ShouldBe(new NudgeKey(RepoId, NudgePass.IssueListing));
+    }
+
+    [Fact]
+    public void WhenIssuesEventClosesLabeledUntrackedIssueThatBlocksNothing_NudgesIssueListing()
+    {
+        MapEvent("issues", """{"action":"closed","issue":{"number":99,"labels":[{"name":"foundry"}]}}""")
+            .ShouldBe(new NudgeKey(RepoId, NudgePass.IssueListing));
+    }
+
+    [Fact]
+    public void WhenIssuesEventClosesUnlabeledUntrackedIssueThatBlocksNothing_IsDropped()
+    {
+        MapEvent("issues", """{"action":"closed","issue":{"number":99,"labels":[]}}""")
+            .ShouldBeNull();
+    }
+
+    [Theory]
+    [InlineData("reopened")]
+    [InlineData("edited")]
+    [InlineData("labeled")]
+    [InlineData("deleted")]
+    public void WhenIssuesEventForUntrackedUnlabeledBlockerIsNotAClose_IsDropped(string action)
+    {
+        MapEvent("issues", $$$"""{"action":"{{{action}}}","issue":{"number":77,"labels":[]}}""")
+            .ShouldBeNull();
+    }
+
+    [Theory]
+    [InlineData("reopened")]
+    [InlineData("edited")]
+    public void WhenIssuesEventForTrackedBlockerIsNotAClose_NudgesIssueListing(string action)
+    {
+        MapEvent("issues", $$$"""{"action":"{{{action}}}","issue":{"number":20,"labels":[]}}""")
+            .ShouldBe(new NudgeKey(RepoId, NudgePass.IssueListing));
+    }
+
+    [Fact]
+    public void WhenIssuesEventClosesBlockerButBlockersWereNotLoaded_IsDropped()
+    {
+        WebhookTrackingContext withoutBlockers = Tracked with { BlockerIssueNumbers = null };
+        using JsonDocument document = JsonDocument.Parse("""{"action":"closed","issue":{"number":77,"labels":[]}}""");
+
+        GitHubWebhookEventMapper.Map("issues", document.RootElement, RepoId, withoutBlockers).ShouldBeNull();
+    }
+
+    [Theory]
+    [InlineData("issues", true)]
+    [InlineData("issue_dependencies", false)]
+    [InlineData("pull_request", false)]
+    [InlineData("pull_request_review", false)]
+    [InlineData("pull_request_review_comment", false)]
+    [InlineData("issue_comment", false)]
+    [InlineData("check_suite", false)]
+    [InlineData("status", false)]
+    [InlineData("branch_protection_rule", false)]
+    [InlineData("repository_ruleset", false)]
+    [InlineData("push", false)]
+    [InlineData("ping", false)]
+    public void NeedsBlockers_IsTrueOnlyForIssuesEvents(string eventName, bool expected)
+    {
+        GitHubWebhookEventMapper.NeedsBlockers(eventName).ShouldBe(expected);
     }
 }

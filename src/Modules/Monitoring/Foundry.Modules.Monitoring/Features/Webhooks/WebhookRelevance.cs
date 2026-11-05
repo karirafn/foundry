@@ -10,7 +10,8 @@ namespace Foundry.Modules.Monitoring.Features.Webhooks;
 /// <summary>
 /// What Foundry currently tracks for one repository — the input to the relevance filter.
 /// <see cref="BlockerIssueNumbers"/> holds the same-repository issues that currently block a tracked
-/// issue; it is loaded only for providers whose issue events must nudge the dependency pass.
+/// issue; it is loaded only for issue events (GitHub <c>issues</c>, GitLab <c>issue</c> / <c>work_item</c>),
+/// whose close of a blocker must nudge the dependency pass.
 /// </summary>
 internal sealed record WebhookTrackingContext(
     IReadOnlySet<int> KnownIssueNumbers,
@@ -28,7 +29,8 @@ internal sealed record WebhookTrackingContext(
 /// <summary>
 /// Provider-neutral relevance rules shared by the webhook event mappers (ADR 0085): a pull/merge
 /// request delivery nudges the review pass of the issue that owns it, or the checks pass when that
-/// issue is checks-pending; anything else maps to <see langword="null"/>.
+/// issue is checks-pending; an issue close of a blocker nudges the listing plus the dependency pass;
+/// anything else maps to <see langword="null"/>.
 /// </summary>
 internal static partial class WebhookRelevance
 {
@@ -87,6 +89,20 @@ internal static partial class WebhookRelevance
 
         return null;
     }
+
+    /// <summary>
+    /// Maps an issue close to the listing plus dependency pass when the closing issue blocks a tracked
+    /// issue — a blocker closing frees the issues it blocks. It applies whether or not the blocker itself
+    /// is tracked or labeled, and wins over the plain listing nudge since it runs the superset pass.
+    /// </summary>
+    internal static NudgeKey? MapBlockerClosed(
+        MonitoredRepositoryId repositoryId,
+        WebhookTrackingContext tracked,
+        int issueNumber,
+        bool isClose) =>
+        isClose && tracked.Blockers.Contains(issueNumber)
+            ? new NudgeKey(repositoryId, NudgePass.IssueListingAndDependencies)
+            : null;
 
     private static HashSet<int> CandidateIssueNumbers(IReadOnlyList<string> branches)
     {
