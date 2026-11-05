@@ -1,5 +1,7 @@
 # Shared Dispatch Order for Dispatcher and Dashboard
 
+> **2026-11-05 — Amended:** the `DetectedAt` component of the key in Decision, and the dashboard's `int.MaxValue` sentinel position for ineligible-repository issues, are replaced by [ADR 0092](0092-order-same-repository-queued-issues-by-issue-number.md).
+
 ## Context
 
 The dashboard sorted queued issues newest-first, the opposite of dispatch order (revision → continuation → fresh, then by repository position).
