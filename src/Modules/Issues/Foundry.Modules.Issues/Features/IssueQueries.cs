@@ -177,7 +177,7 @@ internal sealed class IssueQueries(
             .Select(i => i.MonitoredRepositoryId)
             .ToHashSet();
 
-        IReadOnlyDictionary<MonitoredRepositoryId, string> slugs = await slugQueries.GetSlugsAsync(
+        IReadOnlyDictionary<MonitoredRepositoryId, RepositoryDisplayInfo> displayInfos = await slugQueries.GetRepositoryDisplayInfoAsync(
             repositoryIds,
             cancellationToken);
 
@@ -200,7 +200,7 @@ internal sealed class IssueQueries(
         return issues
             .Select(i => ToSummary(
                 i,
-                slugs.TryGetValue(i.MonitoredRepositoryId, out string? slug) ? slug : string.Empty,
+                displayInfos.GetValueOrDefault(i.MonitoredRepositoryId),
                 eligibilityStatuses.TryGetValue(i.MonitoredRepositoryId.Value, out string? status) ? status : null,
                 runAggregates))
             .ToList();
@@ -229,13 +229,9 @@ internal sealed class IssueQueries(
         }
 
         HashSet<MonitoredRepositoryId> repoIds = [issue.MonitoredRepositoryId];
-        IReadOnlyDictionary<MonitoredRepositoryId, string> slugs = await slugQueries.GetSlugsAsync(
+        IReadOnlyDictionary<MonitoredRepositoryId, RepositoryDisplayInfo> displayInfos = await slugQueries.GetRepositoryDisplayInfoAsync(
             repoIds,
             cancellationToken);
-
-        string repositorySlug = slugs.TryGetValue(issue.MonitoredRepositoryId, out string? slug)
-            ? slug
-            : string.Empty;
 
         HashSet<Guid> repoGuids = [issue.MonitoredRepositoryId.Value];
         IReadOnlyDictionary<Guid, string> eligibilityStatuses = await eligibilityQuery.GetEligibilityStatusesAsync(
@@ -250,12 +246,16 @@ internal sealed class IssueQueries(
             [issue.Id.Value],
             cancellationToken);
 
-        return ToSummary(issue, repositorySlug, eligibilityStatus, runAggregates);
+        return ToSummary(
+            issue,
+            displayInfos.GetValueOrDefault(issue.MonitoredRepositoryId),
+            eligibilityStatus,
+            runAggregates);
     }
 
     private static IssueSummary ToSummary(
         Issue issue,
-        string repositorySlug,
+        RepositoryDisplayInfo? displayInfo,
         string? eligibilityStatus,
         IReadOnlyDictionary<Guid, RunAggregate> runAggregates)
     {
@@ -266,7 +266,7 @@ internal sealed class IssueQueries(
             IssueNumber: issue.IssueNumber,
             Title: issue.Title,
             State: GetStateDiscriminator(issue),
-            RepositorySlug: repositorySlug,
+            RepositorySlug: displayInfo?.Slug ?? string.Empty,
             DetectedAt: issue.DetectedAt,
             Url: issue.Url.Value.ToString(),
             FailureClassification: GetFailureCategory(issue),
@@ -277,7 +277,8 @@ internal sealed class IssueQueries(
             ChecksOutcome: GetChecksOutcomeDiscriminator(issue),
             PullRequestUrl: issue.LinkedPullRequestUrl,
             RebaseOutcome: rebaseOutcome?.Discriminator,
-            RebaseSkippedReason: (rebaseOutcome as RebaseOutcome.Skipped)?.Reason);
+            RebaseSkippedReason: (rebaseOutcome as RebaseOutcome.Skipped)?.Reason,
+            ProviderType: displayInfo?.ProviderType);
     }
 
     private static string? GetFailureCategory(Issue issue) =>
@@ -320,17 +321,13 @@ internal sealed class IssueQueries(
         }
 
         HashSet<MonitoredRepositoryId> repoIds = [issue.MonitoredRepositoryId];
-        IReadOnlyDictionary<MonitoredRepositoryId, string> slugs = await slugQueries.GetSlugsAsync(
+        IReadOnlyDictionary<MonitoredRepositoryId, RepositoryDisplayInfo> displayInfos = await slugQueries.GetRepositoryDisplayInfoAsync(
             repoIds,
             cancellationToken);
 
-        string repositorySlug = slugs.TryGetValue(issue.MonitoredRepositoryId, out string? slug)
-            ? slug
+        string repositorySlug = displayInfos.TryGetValue(issue.MonitoredRepositoryId, out RepositoryDisplayInfo? displayInfo)
+            ? displayInfo.Slug
             : string.Empty;
-
-        string? providerType = await slugQueries.GetProviderTypeAsync(
-            issue.MonitoredRepositoryId,
-            cancellationToken);
 
         string state = GetStateDiscriminator(issue);
 
@@ -343,7 +340,6 @@ internal sealed class IssueQueries(
             Title: issue.Title,
             State: state,
             RepositorySlug: repositorySlug,
-            ProviderType: providerType ?? string.Empty,
             DetectedAt: issue.DetectedAt,
             Url: issue.Url.Value.ToString(),
             Author: issue.Author.Value,
@@ -425,7 +421,6 @@ internal sealed class IssueQueries(
             BlockedIssue blocked => new IssueStateDetails(
                 WorkerRunId: null,
                 BranchName: null,
-                PullRequestUrl: null,
                 FeedbackCutoffAt: null,
                 FailureReason: null,
                 FailedAt: null,
@@ -436,7 +431,6 @@ internal sealed class IssueQueries(
             InProgressIssue inProgress => new IssueStateDetails(
                 WorkerRunId: inProgress.WorkerRunId.Value,
                 BranchName: null,
-                PullRequestUrl: null,
                 FeedbackCutoffAt: null,
                 FailureReason: null,
                 FailedAt: null,
@@ -447,7 +441,6 @@ internal sealed class IssueQueries(
             ReviewIssue review => new IssueStateDetails(
                 WorkerRunId: review.WorkerRunId.Value,
                 BranchName: review.BranchName,
-                PullRequestUrl: review.LinkedPullRequestUrl,
                 FeedbackCutoffAt: review.FeedbackCutoffAt,
                 FailureReason: null,
                 FailedAt: null,
@@ -462,7 +455,6 @@ internal sealed class IssueQueries(
             UnchangedIssue unchanged => new IssueStateDetails(
                 WorkerRunId: unchanged.WorkerRunId.Value,
                 BranchName: null,
-                PullRequestUrl: null,
                 FeedbackCutoffAt: null,
                 FailureReason: null,
                 FailedAt: null,
@@ -473,7 +465,6 @@ internal sealed class IssueQueries(
             FailedIssue failed => new IssueStateDetails(
                 WorkerRunId: failed.WorkerRunId.Value,
                 BranchName: null,
-                PullRequestUrl: null,
                 FeedbackCutoffAt: null,
                 FailureReason: failed.FailureReason,
                 FailedAt: failed.FailedAt,
@@ -484,7 +475,6 @@ internal sealed class IssueQueries(
             CompletedIssue completed => new IssueStateDetails(
                 WorkerRunId: null,
                 BranchName: completed.BranchName,
-                PullRequestUrl: completed.LinkedPullRequestUrl,
                 FeedbackCutoffAt: null,
                 FailureReason: null,
                 FailedAt: null,
@@ -495,7 +485,6 @@ internal sealed class IssueQueries(
             RevisionQueuedIssue revisionQueued => new IssueStateDetails(
                 WorkerRunId: null,
                 BranchName: revisionQueued.BranchName,
-                PullRequestUrl: revisionQueued.LinkedPullRequestUrl,
                 FeedbackCutoffAt: null,
                 FailureReason: null,
                 FailedAt: null,
@@ -509,7 +498,6 @@ internal sealed class IssueQueries(
             RevisionInProgressIssue revisionInProgress => new IssueStateDetails(
                 WorkerRunId: revisionInProgress.WorkerRunId.Value,
                 BranchName: revisionInProgress.BranchName,
-                PullRequestUrl: revisionInProgress.LinkedPullRequestUrl,
                 FeedbackCutoffAt: null,
                 FailureReason: null,
                 FailedAt: null,
@@ -523,7 +511,6 @@ internal sealed class IssueQueries(
             RevisionFailedIssue revisionFailed => new IssueStateDetails(
                 WorkerRunId: revisionFailed.WorkerRunId.Value,
                 BranchName: revisionFailed.BranchName,
-                PullRequestUrl: revisionFailed.LinkedPullRequestUrl,
                 FeedbackCutoffAt: null,
                 FailureReason: revisionFailed.FailureReason,
                 FailedAt: revisionFailed.FailedAt,
@@ -537,7 +524,6 @@ internal sealed class IssueQueries(
             ContinuableFailedIssue continuableFailed => new IssueStateDetails(
                 WorkerRunId: continuableFailed.WorkerRunId.Value,
                 BranchName: continuableFailed.BranchName,
-                PullRequestUrl: continuableFailed.LinkedPullRequestUrl,
                 FeedbackCutoffAt: null,
                 FailureReason: continuableFailed.FailureReason,
                 FailedAt: continuableFailed.FailedAt,
@@ -548,7 +534,6 @@ internal sealed class IssueQueries(
             ContinuationQueuedIssue continuationQueued => new IssueStateDetails(
                 WorkerRunId: null,
                 BranchName: continuationQueued.BranchName,
-                PullRequestUrl: null,
                 FeedbackCutoffAt: null,
                 FailureReason: null,
                 FailedAt: null,
@@ -559,7 +544,6 @@ internal sealed class IssueQueries(
             ChecksPendingIssue checksPending => new IssueStateDetails(
                 WorkerRunId: checksPending.WorkerRunId.Value,
                 BranchName: checksPending.BranchName,
-                PullRequestUrl: checksPending.LinkedPullRequestUrl,
                 FeedbackCutoffAt: checksPending.FeedbackCutoffAt,
                 FailureReason: null,
                 FailedAt: null,
@@ -572,7 +556,6 @@ internal sealed class IssueQueries(
             RebasePendingIssue rebasePending => new IssueStateDetails(
                 WorkerRunId: rebasePending.WorkerRunId.Value,
                 BranchName: rebasePending.BranchName,
-                PullRequestUrl: rebasePending.LinkedPullRequestUrl,
                 FeedbackCutoffAt: rebasePending.FeedbackCutoffAt,
                 FailureReason: null,
                 FailedAt: null,
@@ -629,7 +612,7 @@ internal sealed class IssueQueries(
             .Select(id => id.Value)
             .ToHashSet();
 
-        IReadOnlyDictionary<MonitoredRepositoryId, string> slugs = await slugQueries.GetSlugsAsync(
+        IReadOnlyDictionary<MonitoredRepositoryId, RepositoryDisplayInfo> displayInfos = await slugQueries.GetRepositoryDisplayInfoAsync(
             repositoryIds,
             cancellationToken);
 
@@ -728,7 +711,7 @@ internal sealed class IssueQueries(
         return orderedIssues
             .Select(i => ToSummary(
                 i,
-                slugs.TryGetValue(i.MonitoredRepositoryId, out string? slug) ? slug : string.Empty,
+                displayInfos.GetValueOrDefault(i.MonitoredRepositoryId),
                 eligibilityStatuses.TryGetValue(i.MonitoredRepositoryId.Value, out string? status) ? status : null,
                 runAggregates))
             .ToList();

@@ -195,7 +195,6 @@ public sealed class HandleAsync : IAsyncDisposable
                 Title: "stub",
                 State: "queued",
                 RepositorySlug: "owner/repo",
-                ProviderType: "github",
                 DetectedAt: DateTimeOffset.UtcNow,
                 Url: "https://github.com/owner/repo/issues/1",
                 Author: "octocat",

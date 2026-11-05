@@ -5,14 +5,9 @@ namespace Foundry.Testing;
 
 public sealed class NullRepositorySlugQueries : IRepositorySlugQueries
 {
-    public Task<IReadOnlyDictionary<MonitoredRepositoryId, string>> GetSlugsAsync(
+    public Task<IReadOnlyDictionary<MonitoredRepositoryId, RepositoryDisplayInfo>> GetRepositoryDisplayInfoAsync(
         IReadOnlySet<MonitoredRepositoryId> repositoryIds,
         CancellationToken cancellationToken)
-        => Task.FromResult<IReadOnlyDictionary<MonitoredRepositoryId, string>>(
-            new Dictionary<MonitoredRepositoryId, string>());
-
-    public Task<string?> GetProviderTypeAsync(
-        MonitoredRepositoryId repositoryId,
-        CancellationToken cancellationToken)
-        => Task.FromResult<string?>(null);
+        => Task.FromResult<IReadOnlyDictionary<MonitoredRepositoryId, RepositoryDisplayInfo>>(
+            new Dictionary<MonitoredRepositoryId, RepositoryDisplayInfo>());
 }

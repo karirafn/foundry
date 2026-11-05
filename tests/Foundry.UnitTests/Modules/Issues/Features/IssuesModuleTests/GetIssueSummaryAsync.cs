@@ -26,6 +26,7 @@ public sealed class GetIssueSummaryAsync : IAsyncDisposable
     private readonly SqliteConnection _connection;
     private readonly FoundryDbContext _dbContext;
     private readonly StubWorkerRunQueries _workerRunQueries;
+    private readonly StubRepositorySlugQueries _slugQueries;
     private readonly IIssueQueries _sut;
 
     public GetIssueSummaryAsync()
@@ -40,9 +41,10 @@ public sealed class GetIssueSummaryAsync : IAsyncDisposable
         _dbContext = new FoundryDbContext(options);
         _dbContext.Database.EnsureCreated();
         _workerRunQueries = new StubWorkerRunQueries();
+        _slugQueries = new StubRepositorySlugQueries();
         _sut = new IssueQueries(
             _dbContext,
-            new NullRepositorySlugQueries(),
+            _slugQueries,
             new NullRepositoryEligibilityQuery(),
             _workerRunQueries,
             new InFlightWorkerCountQuery(_dbContext),
@@ -78,6 +80,41 @@ public sealed class GetIssueSummaryAsync : IAsyncDisposable
 
         // Assert
         result.ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task WhenRepositoryCoveredByGitLabCredential_SummaryCarriesSlugAndProviderType()
+    {
+        // Arrange
+        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
+        _slugQueries.AddSlug(repositoryId, "group/project", "gitlab");
+        DetectedIssue detected = await CreateAndPersistDetectedIssueAsync(repositoryId);
+
+        // Act
+        IssueSummary? result = await _sut.GetIssueSummaryAsync(detected.Id, TestContext.Current.CancellationToken);
+
+        // Assert
+        IssueSummary summary = result.ShouldNotBeNull();
+        summary.ShouldSatisfyAllConditions(
+            () => summary.RepositorySlug.ShouldBe("group/project"),
+            () => summary.ProviderType.ShouldBe("gitlab"));
+    }
+
+    [Fact]
+    public async Task WhenRepositoryHasNoDisplayInfo_SummaryHasEmptySlugAndNullProviderType()
+    {
+        // Arrange
+        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
+        DetectedIssue detected = await CreateAndPersistDetectedIssueAsync(repositoryId);
+
+        // Act
+        IssueSummary? result = await _sut.GetIssueSummaryAsync(detected.Id, TestContext.Current.CancellationToken);
+
+        // Assert
+        IssueSummary summary = result.ShouldNotBeNull();
+        summary.ShouldSatisfyAllConditions(
+            () => summary.RepositorySlug.ShouldBe(string.Empty),
+            () => summary.ProviderType.ShouldBeNull());
     }
 
     [Fact]

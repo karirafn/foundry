@@ -37,6 +37,7 @@ const mockSummary: IssueSummary = {
   title: 'Enable dark mode',
   state: 'detected',
   repositorySlug: 'owner/repo',
+  providerType: 'github',
   detectedAt: '2026-01-01T00:00:00Z',
   url: 'https://github.com/owner/repo/issues/42',
 };
@@ -440,7 +441,6 @@ describe('IssueListComponent', () => {
       stateDetails: {
         workerRunId: null,
         branchName: null,
-        pullRequestUrl: null,
         feedbackCutoffAt: null,
         failureReason: null,
         failedAt: null,
@@ -689,7 +689,6 @@ describe('IssueListComponent', () => {
       stateDetails: {
         workerRunId: null,
         branchName: null,
-        pullRequestUrl: null,
         feedbackCutoffAt: null,
         failureReason: null,
         failedAt: null,

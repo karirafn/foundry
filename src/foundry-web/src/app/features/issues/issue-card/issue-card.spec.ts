@@ -2371,6 +2371,52 @@ describe('IssueCardComponent', () => {
     expect(el.querySelector('.issue-card__pr-link')?.getAttribute('href')).toBe(prUrl);
   });
 
+  // --- PR link wording follows the repository's provider (#710) ---
+
+  const mrUrl = 'https://git.acme.com/group/project/-/merge_requests/7';
+  const prWordingCases: { providerType: string | null | undefined; text: string; ariaLabel: string }[] = [
+    { providerType: 'gitlab', text: 'View MR', ariaLabel: 'View merge request for issue #42' },
+    { providerType: 'github', text: 'View PR', ariaLabel: 'View pull request for issue #42' },
+    { providerType: null, text: 'View PR', ariaLabel: 'View pull request for issue #42' },
+    { providerType: undefined, text: 'View PR', ariaLabel: 'View pull request for issue #42' },
+  ];
+
+  for (const { providerType, text, ariaLabel } of prWordingCases) {
+    it(`should word the PR link "${text}" when providerType is ${String(providerType)}`, () => {
+      // Arrange
+      const issue: IssueSummary = { ...mockIssue, state: 'review', pullRequestUrl: mrUrl, providerType };
+
+      // Act
+      const fixture = createComponent(issue);
+      const el = fixture.nativeElement as HTMLElement;
+
+      // Assert
+      const prLink = el.querySelector('.issue-card__pr-link') as HTMLAnchorElement;
+      expect(prLink?.textContent?.trim()).toBe(text);
+      expect(prLink?.getAttribute('aria-label')).toBe(ariaLabel);
+      expect(prLink?.getAttribute('href')).toBe(mrUrl);
+    });
+  }
+
+  it('should word a self-hosted GitLab merge request link "View MR" regardless of the URL host', () => {
+    // Arrange — the host gives no hint of GitLab; wording comes from providerType only
+    const issue: IssueSummary = {
+      ...mockIssue,
+      state: 'completed',
+      pullRequestUrl: 'https://code.example.org/team/app/-/merge_requests/3',
+      providerType: 'gitlab',
+    };
+
+    // Act
+    const fixture = createComponent(issue);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    const prLink = el.querySelector('.issue-card__pr-link') as HTMLAnchorElement;
+    expect(prLink?.textContent?.trim()).toBe('View MR');
+    expect(prLink?.getAttribute('aria-label')).toBe('View merge request for issue #42');
+  });
+
   describe('agent activity', () => {
     const justNow = () => new Date().toISOString();
     const minutesAgo = (m: number) => new Date(Date.now() - m * 60 * 1000).toISOString();

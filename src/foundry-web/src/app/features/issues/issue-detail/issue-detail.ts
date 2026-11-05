@@ -22,7 +22,6 @@ import { WorkerSignalRService } from '../../../core/services/worker-signalr.serv
 import { WorkerRunDetail } from '../../workers/worker-run.model';
 import { LogViewComponent } from '../../../shared/components/log-view/log-view';
 import { ConfirmDialogComponent } from '../../../shared/components/confirm-dialog/confirm-dialog';
-import { providerTerminology } from '../../../shared/utils/provider.util';
 import { rebaseOutcomeLabel } from '../rebase-outcome.format';
 import { getFailureCategoryDisplay } from '../../../shared/utils/failure-category';
 import {
@@ -85,20 +84,6 @@ import {
               <div class="issue-detail__field">
                 <span class="issue-detail__field-key">Branch</span>
                 <span class="issue-detail__branch issue-detail__field-value">{{ s.branchName }}</span>
-              </div>
-            }
-
-            @if (s.pullRequestUrl | safeHref; as safePrUrl) {
-              @let terms = _prTerminology(d.providerType);
-              <div class="issue-detail__field">
-                <span class="issue-detail__field-key">{{ terms.pullRequest }}</span>
-                <a
-                  class="issue-detail__pr-link issue-detail__field-value"
-                  [href]="safePrUrl"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  [attr.aria-label]="'Open ' + terms.pullRequest.toLowerCase() + ' for issue #' + d.issueNumber"
-                >View {{ terms.prAbbrev }}</a>
               </div>
             }
 
@@ -527,10 +512,6 @@ export class IssueDetailComponent {
 
   protected _rebaseOutcomeLabel(s: IssueStateDetails): string | null {
     return rebaseOutcomeLabel(s.rebaseOutcome, s.rebaseSkippedReason);
-  }
-
-  protected _prTerminology(providerType: string): { pullRequest: string; prAbbrev: string } {
-    return providerTerminology(providerType);
   }
 
   protected _failureCategoryLabel(category: string): string {

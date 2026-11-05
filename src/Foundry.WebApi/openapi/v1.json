@@ -2948,7 +2948,6 @@
           "title",
           "state",
           "repositorySlug",
-          "providerType",
           "detectedAt",
           "url",
           "author",
@@ -2976,9 +2975,6 @@
             "type": "string"
           },
           "repositorySlug": {
-            "type": "string"
-          },
-          "providerType": {
             "type": "string"
           },
           "detectedAt": {
@@ -3032,7 +3028,6 @@
         "required": [
           "workerRunId",
           "branchName",
-          "pullRequestUrl",
           "feedbackCutoffAt",
           "failureReason",
           "failedAt",
@@ -3050,12 +3045,6 @@
             "format": "uuid"
           },
           "branchName": {
-            "type": [
-              "null",
-              "string"
-            ]
-          },
-          "pullRequestUrl": {
             "type": [
               "null",
               "string"
@@ -3249,6 +3238,12 @@
             ]
           },
           "rebaseSkippedReason": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "providerType": {
             "type": [
               "null",
               "string"
