@@ -30,7 +30,8 @@ public sealed record IssueStateDetails(
     string? RevisionTriggerKind = null,
     int? ChecksFixAttempts = null,
     string? RebaseOutcome = null,
-    string? RebaseSkippedReason = null);
+    string? RebaseSkippedReason = null,
+    int? RebaseConflictAttempts = null);
 
 public sealed record TransientRetryDetails(
     int AttemptNumber,

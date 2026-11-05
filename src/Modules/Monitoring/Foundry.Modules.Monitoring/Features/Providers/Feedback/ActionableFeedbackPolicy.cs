@@ -4,7 +4,8 @@ namespace Foundry.Modules.Monitoring.Features.Providers.Feedback;
 
 internal sealed class ActionableFeedbackPolicy(TimeProvider timeProvider)
 {
-    private static readonly TimeSpan QuietPeriod = TimeSpan.FromMinutes(2);
+    /// <summary>How long a comment must age before it is actionable, so a burst of comments is consumed together.</summary>
+    internal static readonly TimeSpan QuietPeriod = TimeSpan.FromMinutes(2);
     private const int MaxComments = 50;
 
     public ReviewFeedback Apply(IReadOnlyList<ProviderComment> comments, DateTimeOffset since)
@@ -12,11 +13,20 @@ internal sealed class ActionableFeedbackPolicy(TimeProvider timeProvider)
         DateTimeOffset now = timeProvider.GetUtcNow();
         DateTimeOffset quietCutoff = now - QuietPeriod;
 
-        List<ProviderComment> survivors = comments
+        List<ProviderComment> candidates = comments
             .Where(c => !c.IsSystem)
             .Where(c => !c.AuthorIsBot)
             .Where(c => !c.ThreadResolved)
             .Where(c => c.CreatedAt > since)
+            .ToList();
+
+        // Comments held back only by the quiet period: the newest one decides when they all become actionable.
+        DateTimeOffset? newestHeldAt = candidates
+            .Where(c => c.CreatedAt > quietCutoff)
+            .Select(c => (DateTimeOffset?)c.CreatedAt)
+            .Max();
+
+        List<ProviderComment> survivors = candidates
             .Where(c => c.CreatedAt <= quietCutoff)
             .OrderByDescending(c => c.CreatedAt)
             .ToList();
@@ -36,6 +46,10 @@ internal sealed class ActionableFeedbackPolicy(TimeProvider timeProvider)
             .Select(c => new ReviewComment(c.Body, c.FilePath, c.Line))
             .ToList();
 
-        return new ReviewFeedback(reviewComments, omittedCommentCount, newestCommentAt);
+        return new ReviewFeedback(
+            reviewComments,
+            omittedCommentCount,
+            newestCommentAt,
+            newestHeldAt + QuietPeriod);
     }
 }

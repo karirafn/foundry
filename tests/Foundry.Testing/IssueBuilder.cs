@@ -144,6 +144,21 @@ public sealed class IssueBuilder
 
     public RebasePendingIssue RebasePendingFromRevision() => RevisionInProgress().MarkRebasePending();
 
+    /// <summary>
+    /// Builds a <see cref="RebasePendingIssue"/> that has already dispatched <paramref name="conflicts"/>
+    /// consecutive conflict-resolution revisions (RebaseConflictAttempts = <paramref name="conflicts"/>).
+    /// </summary>
+    public RebasePendingIssue RebasePendingAfterConflicts(int conflicts)
+    {
+        RebasePendingIssue rebasePending = RebasePending();
+        for (int i = 0; i < conflicts; i++)
+        {
+            rebasePending = rebasePending.ResolveConflict().Claim(_workerRunId).MarkRebasePending();
+        }
+
+        return rebasePending;
+    }
+
     public ChecksPendingIssue ChecksPending() => RebasePending().MarkChecksPending(_rebaseOutcome);
 
     public ChecksPendingIssue ChecksPendingFromRevision() => RebasePendingFromRevision().MarkChecksPending(_rebaseOutcome);

@@ -7,6 +7,7 @@ using Foundry.Modules.Monitoring.Features.Providers;
 using Foundry.Modules.Monitoring.Features.Providers.Checks;
 using Foundry.Modules.Monitoring.Features.Providers.Feedback;
 using Foundry.Modules.Monitoring.Features.Polling;
+using Foundry.Modules.Monitoring.Features.Webhooks;
 using Foundry.Shared;
 using Foundry.Testing;
 using Foundry.WebApi.Persistence;
@@ -28,6 +29,7 @@ public sealed class PollAsync : IAsyncDisposable
     private readonly FoundryDbContext _dbContext;
     private readonly CapturingIntegrationEventDispatcher _dispatcher;
     private readonly CapturingEligibilityEvaluator _eligibilityEvaluator;
+    private readonly WebhookNudgeQueue _nudgeQueue = new(NullLogger<WebhookNudgeQueue>.Instance);
     private readonly RepositoryPoller _sut;
 
     private static readonly DateTimeOffset Now = new(2026, 5, 27, 12, 0, 0, TimeSpan.Zero);
@@ -54,6 +56,7 @@ public sealed class PollAsync : IAsyncDisposable
             new NullDomainEventDispatcher(),
             _dispatcher,
             _eligibilityEvaluator,
+            _nudgeQueue,
             NullLogger<RepositoryPoller>.Instance);
     }
 
@@ -121,7 +124,7 @@ public sealed class PollAsync : IAsyncDisposable
             new HashSet<int> { 5 },
             new Dictionary<int, IssueSnapshot> { [5] = snapshot });
 
-        RepositoryPoller sut = new(issueQueries, _dbContext, new NullDomainEventDispatcher(), _dispatcher, _eligibilityEvaluator, NullLogger<RepositoryPoller>.Instance);
+        RepositoryPoller sut = new(issueQueries, _dbContext, new NullDomainEventDispatcher(), _dispatcher, _eligibilityEvaluator, _nudgeQueue, NullLogger<RepositoryPoller>.Instance);
         StubIssueProvider provider = new([existingIssue]);
 
         // Act
@@ -152,7 +155,7 @@ public sealed class PollAsync : IAsyncDisposable
             new HashSet<int> { 7 },
             new Dictionary<int, IssueSnapshot> { [7] = oldSnapshot });
 
-        RepositoryPoller sut = new(issueQueries, _dbContext, new NullDomainEventDispatcher(), _dispatcher, _eligibilityEvaluator, NullLogger<RepositoryPoller>.Instance);
+        RepositoryPoller sut = new(issueQueries, _dbContext, new NullDomainEventDispatcher(), _dispatcher, _eligibilityEvaluator, _nudgeQueue, NullLogger<RepositoryPoller>.Instance);
         StubIssueProvider provider = new([updatedIssue]);
 
         // Act
@@ -181,7 +184,7 @@ public sealed class PollAsync : IAsyncDisposable
             new HashSet<int> { 7 },
             new Dictionary<int, IssueSnapshot> { [7] = oldSnapshot });
 
-        RepositoryPoller sut = new(issueQueries, _dbContext, new NullDomainEventDispatcher(), _dispatcher, _eligibilityEvaluator, NullLogger<RepositoryPoller>.Instance);
+        RepositoryPoller sut = new(issueQueries, _dbContext, new NullDomainEventDispatcher(), _dispatcher, _eligibilityEvaluator, _nudgeQueue, NullLogger<RepositoryPoller>.Instance);
         StubIssueProvider provider = new([updatedIssue]);
 
         // Act
@@ -217,7 +220,7 @@ public sealed class PollAsync : IAsyncDisposable
             new HashSet<int> { 3 },
             new Dictionary<int, IssueSnapshot> { [3] = snapshot });
 
-        RepositoryPoller sut = new(issueQueries, _dbContext, new NullDomainEventDispatcher(), _dispatcher, _eligibilityEvaluator, NullLogger<RepositoryPoller>.Instance);
+        RepositoryPoller sut = new(issueQueries, _dbContext, new NullDomainEventDispatcher(), _dispatcher, _eligibilityEvaluator, _nudgeQueue, NullLogger<RepositoryPoller>.Instance);
         StubIssueProvider provider = new([issue]);
 
         // Act
@@ -247,7 +250,7 @@ public sealed class PollAsync : IAsyncDisposable
             new HashSet<int> { 9 },
             new Dictionary<int, IssueSnapshot> { [9] = snapshot });
 
-        RepositoryPoller sut = new(issueQueries, _dbContext, new NullDomainEventDispatcher(), _dispatcher, _eligibilityEvaluator, NullLogger<RepositoryPoller>.Instance);
+        RepositoryPoller sut = new(issueQueries, _dbContext, new NullDomainEventDispatcher(), _dispatcher, _eligibilityEvaluator, _nudgeQueue, NullLogger<RepositoryPoller>.Instance);
         StubIssueProvider provider = new([issue]);
 
         // Act
@@ -321,7 +324,7 @@ public sealed class PollAsync : IAsyncDisposable
             knownNumbers: new HashSet<int> { 42 },
             snapshots: new Dictionary<int, IssueSnapshot>(),
             dispatchCandidateNumbers: new HashSet<int> { 42 });
-        RepositoryPoller sut = new(issueQueries, _dbContext, new NullDomainEventDispatcher(), _dispatcher, _eligibilityEvaluator, NullLogger<RepositoryPoller>.Instance);
+        RepositoryPoller sut = new(issueQueries, _dbContext, new NullDomainEventDispatcher(), _dispatcher, _eligibilityEvaluator, _nudgeQueue, NullLogger<RepositoryPoller>.Instance);
         StubIssueProvider provider = new([]);
 
         // Act
@@ -351,7 +354,7 @@ public sealed class PollAsync : IAsyncDisposable
             knownNumbers: new HashSet<int> { 42 },
             snapshots: new Dictionary<int, IssueSnapshot>(),
             dispatchCandidateNumbers: new HashSet<int> { 42 });
-        RepositoryPoller sut = new(issueQueries, _dbContext, new NullDomainEventDispatcher(), _dispatcher, _eligibilityEvaluator, NullLogger<RepositoryPoller>.Instance);
+        RepositoryPoller sut = new(issueQueries, _dbContext, new NullDomainEventDispatcher(), _dispatcher, _eligibilityEvaluator, _nudgeQueue, NullLogger<RepositoryPoller>.Instance);
         StubIssueProvider provider = new([], dependencyResults);
 
         // Act
@@ -378,7 +381,7 @@ public sealed class PollAsync : IAsyncDisposable
             knownNumbers: new HashSet<int> { 7 },
             snapshots: new Dictionary<int, IssueSnapshot>(),
             dispatchCandidateNumbers: new HashSet<int> { 7 });
-        RepositoryPoller sut = new(issueQueries, _dbContext, new NullDomainEventDispatcher(), _dispatcher, _eligibilityEvaluator, NullLogger<RepositoryPoller>.Instance);
+        RepositoryPoller sut = new(issueQueries, _dbContext, new NullDomainEventDispatcher(), _dispatcher, _eligibilityEvaluator, _nudgeQueue, NullLogger<RepositoryPoller>.Instance);
         StubIssueProvider provider = new([], dependencyResults);
 
         // Act
@@ -407,7 +410,7 @@ public sealed class PollAsync : IAsyncDisposable
             knownNumbers: new HashSet<int> { 5, 6 },
             snapshots: new Dictionary<int, IssueSnapshot>(),
             dispatchCandidateNumbers: new HashSet<int> { 5, 6 });
-        RepositoryPoller sut = new(issueQueries, _dbContext, new NullDomainEventDispatcher(), _dispatcher, _eligibilityEvaluator, NullLogger<RepositoryPoller>.Instance);
+        RepositoryPoller sut = new(issueQueries, _dbContext, new NullDomainEventDispatcher(), _dispatcher, _eligibilityEvaluator, _nudgeQueue, NullLogger<RepositoryPoller>.Instance);
         StubIssueProvider provider = new([], dependencyResults);
 
         // Act
@@ -444,7 +447,7 @@ public sealed class PollAsync : IAsyncDisposable
             snapshots: new Dictionary<int, IssueSnapshot>(),
             dispatchCandidateNumbers: new HashSet<int> { 15, 16 });
 
-        RepositoryPoller sut = new(issueQueries, _dbContext, new NullDomainEventDispatcher(), _dispatcher, _eligibilityEvaluator, NullLogger<RepositoryPoller>.Instance);
+        RepositoryPoller sut = new(issueQueries, _dbContext, new NullDomainEventDispatcher(), _dispatcher, _eligibilityEvaluator, _nudgeQueue, NullLogger<RepositoryPoller>.Instance);
         StubIssueProvider provider = new([newIssue]);
 
         // Act
@@ -480,7 +483,7 @@ public sealed class PollAsync : IAsyncDisposable
             [42] = Result<bool>.Ok(true),
         };
         StubIssueProvider provider = new([], isClosedResults: isClosedResults);
-        RepositoryPoller sut = new(issueQueries, _dbContext, new NullDomainEventDispatcher(), _dispatcher, _eligibilityEvaluator, NullLogger<RepositoryPoller>.Instance);
+        RepositoryPoller sut = new(issueQueries, _dbContext, new NullDomainEventDispatcher(), _dispatcher, _eligibilityEvaluator, _nudgeQueue, NullLogger<RepositoryPoller>.Instance);
 
         // Act
         Result result = await sut.PollAsync(repository, provider, Now, CancellationToken.None);
@@ -517,7 +520,7 @@ public sealed class PollAsync : IAsyncDisposable
             [prUrl] = Result<PullRequestStatus>.Ok(new PullRequestStatus(IsClosed: true, IsMerged: false)),
         };
         StubIssueProvider provider = new([], isClosedResults: isClosedResults, pullRequestStatusResults: prStatusResults);
-        RepositoryPoller sut = new(issueQueries, _dbContext, new NullDomainEventDispatcher(), _dispatcher, _eligibilityEvaluator, NullLogger<RepositoryPoller>.Instance);
+        RepositoryPoller sut = new(issueQueries, _dbContext, new NullDomainEventDispatcher(), _dispatcher, _eligibilityEvaluator, _nudgeQueue, NullLogger<RepositoryPoller>.Instance);
 
         // Act
         Result result = await sut.PollAsync(repository, provider, Now, CancellationToken.None);
@@ -554,7 +557,7 @@ public sealed class PollAsync : IAsyncDisposable
             [prUrl] = Result<PullRequestStatus>.Ok(new PullRequestStatus(IsClosed: false, IsMerged: false)),
         };
         StubIssueProvider provider = new([], isClosedResults: isClosedResults, pullRequestStatusResults: prStatusResults);
-        RepositoryPoller sut = new(issueQueries, _dbContext, new NullDomainEventDispatcher(), _dispatcher, _eligibilityEvaluator, NullLogger<RepositoryPoller>.Instance);
+        RepositoryPoller sut = new(issueQueries, _dbContext, new NullDomainEventDispatcher(), _dispatcher, _eligibilityEvaluator, _nudgeQueue, NullLogger<RepositoryPoller>.Instance);
 
         // Act
         Result result = await sut.PollAsync(repository, provider, Now, CancellationToken.None);
@@ -589,7 +592,7 @@ public sealed class PollAsync : IAsyncDisposable
             [20] = Result<bool>.Ok(true),
         };
         StubIssueProvider provider = new([], isClosedResults: isClosedResults);
-        RepositoryPoller sut = new(issueQueries, _dbContext, new NullDomainEventDispatcher(), _dispatcher, _eligibilityEvaluator, NullLogger<RepositoryPoller>.Instance);
+        RepositoryPoller sut = new(issueQueries, _dbContext, new NullDomainEventDispatcher(), _dispatcher, _eligibilityEvaluator, _nudgeQueue, NullLogger<RepositoryPoller>.Instance);
 
         // Act
         Result result = await sut.PollAsync(repository, provider, Now, CancellationToken.None);
@@ -626,7 +629,7 @@ public sealed class PollAsync : IAsyncDisposable
             [prUrl] = Result<PullRequestStatus>.Ok(new PullRequestStatus(IsClosed: true, IsMerged: true)),
         };
         StubIssueProvider provider = new([], isClosedResults: isClosedResults, pullRequestStatusResults: prStatusResults);
-        RepositoryPoller sut = new(issueQueries, _dbContext, new NullDomainEventDispatcher(), _dispatcher, _eligibilityEvaluator, NullLogger<RepositoryPoller>.Instance);
+        RepositoryPoller sut = new(issueQueries, _dbContext, new NullDomainEventDispatcher(), _dispatcher, _eligibilityEvaluator, _nudgeQueue, NullLogger<RepositoryPoller>.Instance);
 
         // Act
         Result result = await sut.PollAsync(repository, provider, Now, CancellationToken.None);
@@ -660,7 +663,7 @@ public sealed class PollAsync : IAsyncDisposable
             [prUrl] = Result<PullRequestStatus>.Fail(providerError),
         };
         StubIssueProvider provider = new([], isClosedResults: isClosedResults, pullRequestStatusResults: prStatusResults);
-        RepositoryPoller sut = new(issueQueries, _dbContext, new NullDomainEventDispatcher(), _dispatcher, _eligibilityEvaluator, NullLogger<RepositoryPoller>.Instance);
+        RepositoryPoller sut = new(issueQueries, _dbContext, new NullDomainEventDispatcher(), _dispatcher, _eligibilityEvaluator, _nudgeQueue, NullLogger<RepositoryPoller>.Instance);
 
         // Act
         Result result = await sut.PollAsync(repository, provider, Now, CancellationToken.None);
@@ -735,7 +738,7 @@ public sealed class PollAsync : IAsyncDisposable
             isClosedResults: isClosedResults,
             pullRequestStatusResults: prStatusResults,
             reviewFeedbackResults: feedbackResults);
-        RepositoryPoller sut = new(issueQueries, _dbContext, new NullDomainEventDispatcher(), _dispatcher, _eligibilityEvaluator, NullLogger<RepositoryPoller>.Instance);
+        RepositoryPoller sut = new(issueQueries, _dbContext, new NullDomainEventDispatcher(), _dispatcher, _eligibilityEvaluator, _nudgeQueue, NullLogger<RepositoryPoller>.Instance);
 
         // Act
         Result result = await sut.PollAsync(repository, provider, Now, CancellationToken.None);
@@ -782,7 +785,7 @@ public sealed class PollAsync : IAsyncDisposable
             isClosedResults: isClosedResults,
             pullRequestStatusResults: prStatusResults,
             reviewFeedbackResults: feedbackResults);
-        RepositoryPoller sut = new(issueQueries, _dbContext, new NullDomainEventDispatcher(), _dispatcher, _eligibilityEvaluator, NullLogger<RepositoryPoller>.Instance);
+        RepositoryPoller sut = new(issueQueries, _dbContext, new NullDomainEventDispatcher(), _dispatcher, _eligibilityEvaluator, _nudgeQueue, NullLogger<RepositoryPoller>.Instance);
 
         // Act
         Result result = await sut.PollAsync(repository, provider, Now, CancellationToken.None);
@@ -829,7 +832,7 @@ public sealed class PollAsync : IAsyncDisposable
             isClosedResults: isClosedResults,
             pullRequestStatusResults: prStatusResults,
             reviewFeedbackResults: feedbackResults);
-        RepositoryPoller sut = new(issueQueries, _dbContext, new NullDomainEventDispatcher(), _dispatcher, _eligibilityEvaluator, NullLogger<RepositoryPoller>.Instance);
+        RepositoryPoller sut = new(issueQueries, _dbContext, new NullDomainEventDispatcher(), _dispatcher, _eligibilityEvaluator, _nudgeQueue, NullLogger<RepositoryPoller>.Instance);
 
         // Act
         Result result = await sut.PollAsync(repository, provider, Now, CancellationToken.None);
@@ -884,6 +887,7 @@ public sealed class PollAsync : IAsyncDisposable
             new NullDomainEventDispatcher(),
             _dispatcher,
             _eligibilityEvaluator,
+            _nudgeQueue,
             NullLogger<RepositoryPoller>.Instance);
 
         // Act
@@ -922,7 +926,7 @@ public sealed class PollAsync : IAsyncDisposable
         };
         // No feedback configured — if called, stub returns empty feedback (not a problem for this test's assertion)
         StubIssueProvider provider = new([], isClosedResults: isClosedResults, pullRequestStatusResults: prStatusResults);
-        RepositoryPoller sut = new(issueQueries, _dbContext, new NullDomainEventDispatcher(), _dispatcher, _eligibilityEvaluator, NullLogger<RepositoryPoller>.Instance);
+        RepositoryPoller sut = new(issueQueries, _dbContext, new NullDomainEventDispatcher(), _dispatcher, _eligibilityEvaluator, _nudgeQueue, NullLogger<RepositoryPoller>.Instance);
 
         // Act
         Result result = await sut.PollAsync(repository, provider, Now, CancellationToken.None);
@@ -945,7 +949,7 @@ public sealed class PollAsync : IAsyncDisposable
             dispatchCandidateNumbers: new HashSet<int>());
 
         CountingIssueProvider provider = new();
-        RepositoryPoller sut = new(issueQueries, _dbContext, new NullDomainEventDispatcher(), _dispatcher, _eligibilityEvaluator, NullLogger<RepositoryPoller>.Instance);
+        RepositoryPoller sut = new(issueQueries, _dbContext, new NullDomainEventDispatcher(), _dispatcher, _eligibilityEvaluator, _nudgeQueue, NullLogger<RepositoryPoller>.Instance);
 
         // Act
         Result result = await sut.PollAsync(repository, provider, Now, CancellationToken.None);
@@ -1050,6 +1054,7 @@ public sealed class PollAsync : IAsyncDisposable
             new NullDomainEventDispatcher(),
             _dispatcher,
             evaluator,
+            _nudgeQueue,
             NullLogger<RepositoryPoller>.Instance);
         StubIssueProvider provider = new([]);
 
@@ -1074,6 +1079,7 @@ public sealed class PollAsync : IAsyncDisposable
             new NullDomainEventDispatcher(),
             _dispatcher,
             evaluator,
+            _nudgeQueue,
             NullLogger<RepositoryPoller>.Instance);
         StubIssueProvider provider = new([]);
 
@@ -1108,7 +1114,7 @@ public sealed class PollAsync : IAsyncDisposable
             reviewIssues: null,
             untrackableNumbers: new HashSet<int> { 7 });
 
-        RepositoryPoller sut = new(issueQueries, _dbContext, new NullDomainEventDispatcher(), _dispatcher, _eligibilityEvaluator, NullLogger<RepositoryPoller>.Instance);
+        RepositoryPoller sut = new(issueQueries, _dbContext, new NullDomainEventDispatcher(), _dispatcher, _eligibilityEvaluator, _nudgeQueue, NullLogger<RepositoryPoller>.Instance);
         StubIssueProvider provider = new([otherIssue]);
 
         // Act
@@ -1144,7 +1150,7 @@ public sealed class PollAsync : IAsyncDisposable
             reviewIssues: null,
             untrackableNumbers: new HashSet<int> { 7 });
 
-        RepositoryPoller sut = new(issueQueries, _dbContext, new NullDomainEventDispatcher(), _dispatcher, _eligibilityEvaluator, NullLogger<RepositoryPoller>.Instance);
+        RepositoryPoller sut = new(issueQueries, _dbContext, new NullDomainEventDispatcher(), _dispatcher, _eligibilityEvaluator, _nudgeQueue, NullLogger<RepositoryPoller>.Instance);
         StubIssueProvider provider = new([existingIssue]);
 
         // Act
@@ -1169,7 +1175,7 @@ public sealed class PollAsync : IAsyncDisposable
             reviewIssues: null,
             untrackableNumbers: new HashSet<int>());
 
-        RepositoryPoller sut = new(issueQueries, _dbContext, new NullDomainEventDispatcher(), _dispatcher, _eligibilityEvaluator, NullLogger<RepositoryPoller>.Instance);
+        RepositoryPoller sut = new(issueQueries, _dbContext, new NullDomainEventDispatcher(), _dispatcher, _eligibilityEvaluator, _nudgeQueue, NullLogger<RepositoryPoller>.Instance);
         StubIssueProvider provider = new([]);
 
         // Act
@@ -1201,7 +1207,7 @@ public sealed class PollAsync : IAsyncDisposable
             reviewIssues: null,
             untrackableNumbers: new HashSet<int> { 5, 6 });
 
-        RepositoryPoller sut = new(issueQueries, _dbContext, new NullDomainEventDispatcher(), _dispatcher, _eligibilityEvaluator, NullLogger<RepositoryPoller>.Instance);
+        RepositoryPoller sut = new(issueQueries, _dbContext, new NullDomainEventDispatcher(), _dispatcher, _eligibilityEvaluator, _nudgeQueue, NullLogger<RepositoryPoller>.Instance);
         StubIssueProvider provider = new([otherIssue]);
 
         // Act
@@ -1238,7 +1244,7 @@ public sealed class PollAsync : IAsyncDisposable
             reviewIssues: null,
             untrackableNumbers: new HashSet<int> { 7 });
 
-        RepositoryPoller sut = new(issueQueries, _dbContext, new NullDomainEventDispatcher(), _dispatcher, _eligibilityEvaluator, NullLogger<RepositoryPoller>.Instance);
+        RepositoryPoller sut = new(issueQueries, _dbContext, new NullDomainEventDispatcher(), _dispatcher, _eligibilityEvaluator, _nudgeQueue, NullLogger<RepositoryPoller>.Instance);
         StubIssueProvider provider = new([newIssue], isComplete: false);
 
         // Act
@@ -1266,7 +1272,7 @@ public sealed class PollAsync : IAsyncDisposable
             reviewIssues: null,
             untrackableNumbers: new HashSet<int> { 3, 4 });
 
-        RepositoryPoller sut = new(issueQueries, _dbContext, new NullDomainEventDispatcher(), _dispatcher, _eligibilityEvaluator, NullLogger<RepositoryPoller>.Instance);
+        RepositoryPoller sut = new(issueQueries, _dbContext, new NullDomainEventDispatcher(), _dispatcher, _eligibilityEvaluator, _nudgeQueue, NullLogger<RepositoryPoller>.Instance);
         StubIssueProvider provider = new([]);
 
         // Act
@@ -1294,7 +1300,7 @@ public sealed class PollAsync : IAsyncDisposable
             reviewIssues: null,
             untrackableNumbers: new HashSet<int> { 7 });
 
-        RepositoryPoller sut = new(issueQueries, _dbContext, new NullDomainEventDispatcher(), _dispatcher, _eligibilityEvaluator, NullLogger<RepositoryPoller>.Instance);
+        RepositoryPoller sut = new(issueQueries, _dbContext, new NullDomainEventDispatcher(), _dispatcher, _eligibilityEvaluator, _nudgeQueue, NullLogger<RepositoryPoller>.Instance);
         StubIssueProvider provider = new([new ProviderIssue(
             Number: 99, Title: "New", Author: "octocat",
             Url: "https://github.com/owner/repo/issues/99", Labels: [], IssueKindLabel: "feature")],
@@ -1326,6 +1332,7 @@ public sealed class PollAsync : IAsyncDisposable
             new NullDomainEventDispatcher(),
             _dispatcher,
             _eligibilityEvaluator,
+            _nudgeQueue,
             capturingLogger);
 
         StubIssueProvider incompleteProvider = new([], isComplete: false);
@@ -1357,6 +1364,7 @@ public sealed class PollAsync : IAsyncDisposable
             new NullDomainEventDispatcher(),
             _dispatcher,
             _eligibilityEvaluator,
+            _nudgeQueue,
             NullLogger<RepositoryPoller>.Instance);
 
         StubIssueProvider incompleteProvider = new([], isComplete: false);
@@ -1392,6 +1400,7 @@ public sealed class PollAsync : IAsyncDisposable
             new NullDomainEventDispatcher(),
             _dispatcher,
             _eligibilityEvaluator,
+            _nudgeQueue,
             NullLogger<RepositoryPoller>.Instance);
 
         StubIssueProvider incompleteProvider = new([], isComplete: false);
@@ -1430,6 +1439,7 @@ public sealed class PollAsync : IAsyncDisposable
             new NullDomainEventDispatcher(),
             _dispatcher,
             _eligibilityEvaluator,
+            _nudgeQueue,
             NullLogger<RepositoryPoller>.Instance);
 
         StubIssueProvider incompleteProvider = new([], isComplete: false);
@@ -1448,6 +1458,65 @@ public sealed class PollAsync : IAsyncDisposable
     }
 
     [Fact]
+    public async Task WhenReviewFeedbackHoldsCommentsBackByQuietPeriod_SchedulesReviewNudgeAtHeldBackUntil()
+    {
+        // Arrange
+        MonitoredRepository repository = SeedRepository();
+        DateTimeOffset heldBackUntil = Now.AddMinutes(2);
+        (RepositoryPoller sut, StubIssueProvider provider) = BuildReviewSut(
+            new ReviewFeedback([], OmittedCommentCount: 0, NewestCommentAt: null, HeldBackUntil: heldBackUntil));
+
+        // Act
+        await sut.RunReviewPassAsync(repository, provider, issueNumber: 42, CancellationToken.None);
+
+        // Assert
+        _nudgeQueue.Reader.TryRead(out Nudge nudge).ShouldBeTrue();
+        nudge.ShouldBe(new Nudge(new NudgeKey(repository.Id, NudgePass.Review, 42), heldBackUntil));
+        _nudgeQueue.Reader.TryRead(out _).ShouldBeFalse();
+        _dispatcher.DispatchedEvents.OfType<PullRequestChangesRequested>().ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task WhenReviewFeedbackHoldsNoComments_SchedulesNoNudge()
+    {
+        // Arrange
+        MonitoredRepository repository = SeedRepository();
+        (RepositoryPoller sut, StubIssueProvider provider) = BuildReviewSut(
+            new ReviewFeedback([new ReviewComment("Please fix")], OmittedCommentCount: 0, NewestCommentAt: Now.AddMinutes(-5)));
+
+        // Act
+        await sut.RunReviewPassAsync(repository, provider, issueNumber: 42, CancellationToken.None);
+
+        // Assert
+        _nudgeQueue.Reader.TryRead(out _).ShouldBeFalse();
+        _dispatcher.DispatchedEvents.OfType<PullRequestChangesRequested>().ShouldHaveSingleItem();
+    }
+
+    private (RepositoryPoller Sut, StubIssueProvider Provider) BuildReviewSut(ReviewFeedback feedback)
+    {
+        string prUrl = "https://github.com/owner/repo/pull/99";
+        ReviewIssueInfo reviewIssue = new(IssueNumber: 42, PullRequestUrl: prUrl, FeedbackCutoffAt: Now.AddHours(-1));
+        StubIssueQueries issueQueries = new(
+            new HashSet<int>(),
+            new Dictionary<int, IssueSnapshot>(),
+            dispatchCandidateNumbers: null,
+            reviewIssues: [reviewIssue]);
+        StubIssueProvider provider = new(
+            [],
+            isClosedResults: new Dictionary<int, Result<bool>> { [42] = Result<bool>.Ok(false) },
+            pullRequestStatusResults: new Dictionary<string, Result<PullRequestStatus>>
+            {
+                [prUrl] = Result<PullRequestStatus>.Ok(new PullRequestStatus(IsClosed: false, IsMerged: false)),
+            },
+            reviewFeedbackResults: new Dictionary<string, Result<ReviewFeedback>>
+            {
+                [prUrl] = Result<ReviewFeedback>.Ok(feedback),
+            });
+        RepositoryPoller sut = new(issueQueries, _dbContext, new NullDomainEventDispatcher(), _dispatcher, _eligibilityEvaluator, _nudgeQueue, NullLogger<RepositoryPoller>.Instance);
+        return (sut, provider);
+    }
+
+    [Fact]
     public async Task WhenCompleteEmptyListingWithNoKnownIssues_SuppressionNeverEngaged()
     {
         // Arrange — genuine-zero repo: complete listing, no known issues
@@ -1460,6 +1529,7 @@ public sealed class PollAsync : IAsyncDisposable
             new NullDomainEventDispatcher(),
             _dispatcher,
             _eligibilityEvaluator,
+            _nudgeQueue,
             capturingLogger);
 
         StubIssueProvider completeEmptyProvider = new([]);

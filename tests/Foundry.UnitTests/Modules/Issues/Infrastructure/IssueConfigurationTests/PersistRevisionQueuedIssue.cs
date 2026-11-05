@@ -1,6 +1,7 @@
 using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Issues.Domain.Entities;
 using Foundry.Modules.Issues.Domain.Entities.States;
+using Foundry.Modules.Issues.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Workers.Contracts;
 using Foundry.Shared;
@@ -191,5 +192,55 @@ public sealed class PersistRevisionQueuedIssue : IAsyncDisposable
         // Assert
         ReviewIssue reloaded = result.ShouldBeOfType<ReviewIssue>();
         reloaded.FeedbackCutoffAt.ShouldBe(feedbackCutoffAt);
+    }
+
+    [Fact]
+    public async Task WhenRevisionQueuedFromRebaseConflict_TriggerAndAttemptsRoundTrip()
+    {
+        // Arrange
+        RevisionQueuedIssue revisionQueued = new IssueBuilder()
+            .WithIssueNumber(58)
+            .WithLabels([])
+            .RebasePendingAfterConflicts(1)
+            .ResolveConflict();
+
+        _dbContext.Set<Issue>().Add(revisionQueued);
+        await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+        _dbContext.ChangeTracker.Clear();
+
+        // Act
+        Issue? result = await _dbContext
+            .Set<Issue>()
+            .FindAsync([revisionQueued.Id], TestContext.Current.CancellationToken);
+
+        // Assert
+        RevisionQueuedIssue reloaded = result.ShouldBeOfType<RevisionQueuedIssue>();
+        reloaded.ShouldSatisfyAllConditions(
+            () => reloaded.Trigger.ShouldBeOfType<RevisionTrigger.RebaseConflict>(),
+            () => reloaded.RebaseConflictAttempts.ShouldBe(2));
+    }
+
+    [Fact]
+    public async Task WhenReviewCarriesRebaseConflictAttempts_AttemptsRoundTrip()
+    {
+        // Arrange
+        ReviewIssue review = new IssueBuilder()
+            .WithIssueNumber(59)
+            .WithLabels([])
+            .RebasePendingAfterConflicts(1)
+            .MarkChecksPending(new RebaseOutcome.Disabled())
+            .ToReview(new ChecksOutcome.Passed());
+
+        _dbContext.Set<Issue>().Add(review);
+        await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+        _dbContext.ChangeTracker.Clear();
+
+        // Act
+        Issue? result = await _dbContext
+            .Set<Issue>()
+            .FindAsync([review.Id], TestContext.Current.CancellationToken);
+
+        // Assert
+        result.ShouldBeOfType<ReviewIssue>().RebaseConflictAttempts.ShouldBe(1);
     }
 }

@@ -8,6 +8,7 @@ namespace Foundry.Modules.Issues.Contracts;
 [JsonPolymorphic(TypeDiscriminatorPropertyName = "$type")]
 [JsonDerivedType(typeof(ReviewFeedback), "review_feedback")]
 [JsonDerivedType(typeof(FailedChecks), "failed_checks")]
+[JsonDerivedType(typeof(RebaseConflict), "rebase_conflict")]
 public abstract record RevisionTrigger
 {
     private RevisionTrigger()
@@ -27,5 +28,15 @@ public abstract record RevisionTrigger
     public sealed record FailedChecks(IReadOnlyList<FailingCheck> FailingChecks) : RevisionTrigger
     {
         public override string Discriminator => "failed_checks";
+    }
+
+    /// <summary>
+    /// The post-run rebase of the worker branch onto the default branch conflicted (ADR 0087): the worker merges
+    /// the default branch into the branch and resolves the conflicts in a merge commit. Payload-free — the worker
+    /// discovers the conflicting paths from <c>git merge</c>.
+    /// </summary>
+    public sealed record RebaseConflict : RevisionTrigger
+    {
+        public override string Discriminator => "rebase_conflict";
     }
 }

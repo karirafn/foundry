@@ -1,3 +1,4 @@
+using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Issues.Domain.Entities;
 using Foundry.Modules.Issues.Domain.Entities.States;
 using Foundry.Modules.Issues.Domain.Events;
@@ -71,7 +72,6 @@ public sealed class HandleAsync : IAsyncDisposable
     [InlineData("up_to_date", typeof(RebaseOutcome.UpToDate))]
     [InlineData("rebased", typeof(RebaseOutcome.Rebased))]
     [InlineData("disabled", typeof(RebaseOutcome.Disabled))]
-    [InlineData("conflict", typeof(RebaseOutcome.Conflict))]
     public async Task WhenRebasePending_TransitionsToChecksPendingWithOutcome(string outcome, Type expectedType)
     {
         // Arrange
@@ -84,6 +84,50 @@ public sealed class HandleAsync : IAsyncDisposable
         // Assert
         ChecksPendingIssue checksPending = (await LoadAsync(repositoryId)).ShouldBeOfType<ChecksPendingIssue>();
         checksPending.RebaseOutcome.ShouldNotBeNull().GetType().ShouldBe(expectedType);
+    }
+
+    [Fact]
+    public async Task WhenConflictBelowCap_QueuesRebaseConflictRevision()
+    {
+        // Arrange
+        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
+        SeedRebasePendingIssue(repositoryId);
+
+        // Act
+        await _sut.HandleAsync(new RebaseResolved(repositoryId, 1, "conflict"), TestContext.Current.CancellationToken);
+
+        // Assert
+        RevisionQueuedIssue revisionQueued = (await LoadAsync(repositoryId)).ShouldBeOfType<RevisionQueuedIssue>();
+        revisionQueued.ShouldSatisfyAllConditions(
+            () => revisionQueued.Trigger.ShouldBeOfType<RevisionTrigger.RebaseConflict>(),
+            () => revisionQueued.RebaseConflictAttempts.ShouldBe(1),
+            () => revisionQueued.BranchName.ShouldBe("feat/1-test-issue"),
+            () => revisionQueued.PullRequestUrl.ShouldBe("https://github.com/owner/repo/pull/10"));
+        _dispatcher.DispatchedEvents.OfType<IssueRevisionQueued>().ShouldHaveSingleItem();
+        _dispatcher.DispatchedEvents.OfType<IssueChecksPending>().ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task WhenConflictAtCap_FailsOpenToChecksPendingWithConflictOutcome()
+    {
+        // Arrange
+        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
+        RebasePendingIssue rebasePending = new IssueBuilder()
+            .WithMonitoredRepositoryId(repositoryId)
+            .WithIssueNumber(1)
+            .RebasePendingAfterConflicts(RebasePendingIssue.MaxRebaseConflictAttempts);
+        _dbContext.Set<Issue>().Add(rebasePending);
+        await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+        _dbContext.ChangeTracker.Clear();
+
+        // Act
+        await _sut.HandleAsync(new RebaseResolved(repositoryId, 1, "conflict"), TestContext.Current.CancellationToken);
+
+        // Assert
+        ChecksPendingIssue checksPending = (await LoadAsync(repositoryId)).ShouldBeOfType<ChecksPendingIssue>();
+        checksPending.ShouldSatisfyAllConditions(
+            () => checksPending.RebaseOutcome.ShouldBeOfType<RebaseOutcome.Conflict>(),
+            () => checksPending.RebaseConflictAttempts.ShouldBe(RebasePendingIssue.MaxRebaseConflictAttempts));
     }
 
     [Fact]

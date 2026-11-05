@@ -8,6 +8,7 @@ using Foundry.Modules.Monitoring.Features.Eligibility;
 using Foundry.Modules.Monitoring.Features.Providers;
 using Foundry.Modules.Monitoring.Features.Providers.Checks;
 using Foundry.Modules.Monitoring.Features.Providers.Feedback;
+using Foundry.Modules.Monitoring.Features.Webhooks;
 using Foundry.Shared;
 
 using Microsoft.EntityFrameworkCore;
@@ -21,6 +22,7 @@ internal sealed class RepositoryPoller(
     IDomainEventDispatcher domainEventDispatcher,
     IIntegrationEventDispatcher integrationEventDispatcher,
     IRepositoryEligibilityEvaluator eligibilityEvaluator,
+    WebhookNudgeQueue nudgeQueue,
     ILogger<RepositoryPoller> logger)
 {
     /// <summary>
@@ -501,6 +503,16 @@ internal sealed class RepositoryPoller(
             if (feedbackResult is not Result<ReviewFeedback>.Success feedbackSuccess)
             {
                 continue;
+            }
+
+            if (feedbackSuccess.Value.HeldBackUntil is { } heldBackUntil)
+            {
+                // Comments still inside the quiet period would otherwise wait for the backstop poll:
+                // re-run this issue's review pass once the newest of them becomes actionable (issue #702).
+                // Same-key nudges coalesce, so a burst of held comments yields one follow-up run.
+                nudgeQueue.TryEnqueue(new Nudge(
+                    new NudgeKey(repository.Id, NudgePass.Review, reviewIssue.IssueNumber),
+                    heldBackUntil));
             }
 
             if (feedbackSuccess.Value.Comments.Count > 0)

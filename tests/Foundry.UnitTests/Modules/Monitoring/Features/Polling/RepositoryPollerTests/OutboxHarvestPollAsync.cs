@@ -7,6 +7,7 @@ using Foundry.Modules.Monitoring.Features.Providers;
 using Foundry.Modules.Monitoring.Features.Providers.Checks;
 using Foundry.Modules.Monitoring.Features.Providers.Feedback;
 using Foundry.Modules.Monitoring.Features.Polling;
+using Foundry.Modules.Monitoring.Features.Webhooks;
 using Foundry.Shared;
 using Foundry.Shared.Infrastructure;
 using Foundry.Shared.Infrastructure.Outbox;
@@ -98,6 +99,7 @@ public sealed class OutboxHarvestPollAsync : IAsyncDisposable
             new NullDomainEventDispatcher(),
             integrationEventDispatcher,
             new NullEligibilityEvaluator(),
+            new WebhookNudgeQueue(NullLogger<WebhookNudgeQueue>.Instance),
             NullLogger<RepositoryPoller>.Instance);
 
         ProviderIssue newIssue = new(
@@ -148,6 +150,7 @@ public sealed class OutboxHarvestPollAsync : IAsyncDisposable
             new NullDomainEventDispatcher(),
             integrationEventDispatcher,
             new NullEligibilityEvaluator(),
+            new WebhookNudgeQueue(NullLogger<WebhookNudgeQueue>.Instance),
             NullLogger<RepositoryPoller>.Instance);
 
         StubIssueProvider provider = new(
@@ -186,6 +189,7 @@ public sealed class OutboxHarvestPollAsync : IAsyncDisposable
             new NullDomainEventDispatcher(),
             integrationEventDispatcher,
             new NullEligibilityEvaluator(),
+            new WebhookNudgeQueue(NullLogger<WebhookNudgeQueue>.Instance),
             NullLogger<RepositoryPoller>.Instance);
 
         StubIssueProvider provider = new([]);

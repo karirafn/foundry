@@ -432,10 +432,11 @@ Survives the outbox round-trip via `[JsonPolymorphic]` / `[JsonDerivedType]` ann
 ## Revision Trigger
 
 Why a revision run was queued — a polymorphic value carried by `RevisionQueuedIssue`, `RevisionInProgressIssue`, and `RevisionFailedIssue` (and surfaced on `DispatchContext.Revision`) in place of comment-specific fields.
-Two variants:
+Three variants:
 
 - **`ReviewFeedback`** — a human reviewer requested changes; carries `Comments`, `OmittedCommentCount`, and `NewestConsumedCommentAt`.
 - **`FailedChecks`** — the PR's provider checks went red within the fix budget; carries the `FailingChecks`.
+- **`RebaseConflict`** (`$type` `rebase_conflict`) — the post-run rebase conflicted with the default branch within the conflict budget (see [Rebase Conflict Attempts](#rebase-conflict-attempts)); payload-free. The worker fetches `origin`, merges `origin/HEAD` into the branch and resolves the conflicts in a merge commit, runs the tests and pushes to the same branch — it never rebases or force-pushes, and discovers the conflicting paths from `git merge` itself.
 
 Modelling the trigger as a closed union makes a half-populated revision (comments *and* failing checks, or neither) unrepresentable, and lets the `SystemPromptBuilder` switch on the kind rather than null-checking fields.
 Persisted as a single `revision_trigger` JSON column and survives the outbox round-trip via `[JsonPolymorphic]` / `[JsonDerivedType]` annotations (see [ADR 0078](docs/adr/0078-revision-trigger-polymorphic-union.md)).
@@ -445,6 +446,13 @@ Persisted as a single `revision_trigger` JSON column and survives the outbox rou
 The number of `FailedChecks` revisions dispatched since the last human review feedback, carried on `ChecksPendingIssue` and threaded through the revision states so it survives `ChecksPending → RevisionQueued → RevisionInProgress → ChecksPending`.
 `ChecksPendingIssue.FixChecks` increments it; any `ReviewFeedback` revision (`ReviewIssue.Revise` / `ChecksPendingIssue.Revise`) resets it to 0.
 When a red verdict arrives and the count is below the cap (`ChecksMaxFixPushes`, = 2), the issue re-queues as a `FailedChecks` revision; at the cap it transitions to `ReviewIssue` with `ChecksOutcome.StillFailing`.
+
+## Rebase Conflict Attempts
+
+The number of consecutive rebase conflicts that dispatched a `RebaseConflict` revision, carried on `RebasePendingIssue` and threaded — like [Checks Fix Attempts](#checks-fix-attempts) — through `RevisionQueuedIssue`, `RevisionInProgressIssue`, `RevisionFailedIssue`, `ChecksPendingIssue` and `ReviewIssue`, so it survives `RebasePending → RevisionQueued → RevisionInProgress → RebasePending → ChecksPending → Review` (column `rebase_conflict_attempts`).
+`RebasePendingIssue.ResolveRebase` applies the rebase outcome: a `Conflict` below the cap (`MaxRebaseConflictAttempts`, = 2) increments it and queues a `RebaseConflict` revision; a `Conflict` at the cap fails open to `ChecksPendingIssue` with `RebaseOutcome.Conflict`.
+A successful sync (`UpToDate` or `Rebased`) resets it to 0; `Disabled` and `Skipped` leave it unchanged. Review feedback and `FailedChecks` revisions do not touch it — resetting on feedback would let two unrelated conflict episodes without a review between them exhaust the cap.
+A `RebaseConflict` revision that pushes nothing still passes through `RebasePending`, conflicts again and counts toward the cap.
 
 ## Rebase Outcome
 
@@ -588,11 +596,11 @@ When all blockers are resolved — that is, closed in the provider — a `Blocke
 ## Rebase Pending Issue
 
 A lifecycle state (`rebase_pending`, Active / Waiting) for an issue whose worker run left an open pull request: Foundry is rebasing the worker branch onto the default branch through the provider before the checks gate ([ADR 0087](docs/adr/0087-foundry-rebases-worker-branches-through-the-provider-after-each-run.md)). The agent never rebases or force-pushes.
-Carries `WorkerRunId`, `BranchName`, `PullRequestUrl`, `EnteredRebasePendingAt`, `FeedbackCutoffAt` and `ChecksFixAttempts` — all non-nullable.
+Carries `WorkerRunId`, `BranchName`, `PullRequestUrl`, `EnteredRebasePendingAt`, `FeedbackCutoffAt`, `ChecksFixAttempts` and [`RebaseConflictAttempts`](#rebase-conflict-attempts) — all non-nullable.
 Entered from `InProgressIssue.MarkRebasePending` (a run that completed with `MergeState.Open`) and from `RevisionInProgressIssue.MarkRebasePending` / `MarkUnchangedRebasePending` (a revision that reported a branch and PR, or pushed nothing — the branch may still be behind). A merged PR or no PR keeps the existing `Completed` / `Unchanged` transitions, with no rebase.
 Entering raises `IssueEnteredRebasePending`, which nudges Monitoring's rebase step; the scheduled poll is its backstop. The step's progress (pre-rebase head, request time, transient-failure backoff) is persisted per episode in `pending_rebases`, so a host restart resumes it.
 The step: if `RebaseAfterRun` is off → `Disabled`; otherwise it reads the PR head and compares it with the base (`behind_by = 0` → `UpToDate`, no rebase call); otherwise it asks the provider to rebase, guarded by the head it read, and the issue stays `rebase_pending` until the PR head differs from that pre-rebase head (`Rebased`), or 5 minutes pass (`Skipped(timeout)`). A stale head (a push landed in between) re-reads the head and retries, up to 3 times (`Skipped(stale-head)`). Transient provider failures (5xx, timeouts, rate limits) back off exponentially (30 s doubling, capped at 10 min) driven by nudges and the backstop poll; after 5 the outcome is `Skipped(provider-error)`. GitLab resolves `Skipped(unsupported)` until its rebase lands.
-Transitions: `MarkChecksPending(RebaseOutcome)` → `ChecksPendingIssue` (raises `IssueChecksPending`, so checks nudges start only after the rebase landed); `Complete()` → `CompletedIssue` (issue closed) and `Fail()` → `ContinuableFailedIssue` (PR closed without merge) — the same exits `ChecksPendingIssue` takes. A checks nudge never applies a verdict to a rebase-pending issue.
+Transitions: `ResolveRebase(RebaseOutcome)` → `RevisionQueuedIssue` with a `RebaseConflict` trigger (a `Conflict` below the [conflict cap](#rebase-conflict-attempts); raises `IssueRevisionQueued`) or else `MarkChecksPending(RebaseOutcome)` → `ChecksPendingIssue` (raises `IssueChecksPending`, so checks nudges start only after the rebase landed); `Complete()` → `CompletedIssue` (issue closed) and `Fail()` → `ContinuableFailedIssue` (PR closed without merge) — the same exits `ChecksPendingIssue` takes. A checks nudge never applies a verdict to a rebase-pending issue.
 
 ## Review Issue
 

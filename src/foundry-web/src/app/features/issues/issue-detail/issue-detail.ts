@@ -28,6 +28,7 @@ import { getFailureCategoryDisplay } from '../../../shared/utils/failure-categor
 import {
   IssueState,
   MAX_CHECKS_FIX_ATTEMPTS,
+  MAX_REBASE_CONFLICT_ATTEMPTS,
   RETRYABLE_STATES,
   REVISION_STATES,
   WORKING_STATES,
@@ -238,6 +239,16 @@ import {
                       Fixing checks — a worker is running.
                     } @else {
                       Fix run queued — checks failed on the PR.
+                    }
+                  </span>
+                } @else if (s.revisionTriggerKind === 'rebase_conflict') {
+                  <span class="badge issue-detail__revision-chip badge--retrying"
+                    >Resolving conflicts (attempt {{ s.rebaseConflictAttempts ?? 1 }} of {{ _maxRebaseConflictAttempts }})</span>
+                  <span class="issue-detail__revision-message issue-detail__field-value">
+                    @if (d.state === 'revision_in_progress') {
+                      Resolving conflicts with the default branch — a worker is running.
+                    } @else {
+                      Conflict-resolution run queued — the rebase onto the default branch conflicted.
                     }
                   </span>
                 } @else {
@@ -500,6 +511,7 @@ export class IssueDetailComponent {
   }
 
   protected readonly _maxChecksFixAttempts = MAX_CHECKS_FIX_ATTEMPTS;
+  protected readonly _maxRebaseConflictAttempts = MAX_REBASE_CONFLICT_ATTEMPTS;
 
   protected _isWorking(state: string): boolean {
     return WORKING_STATES.has(state as IssueState);
