@@ -33,6 +33,7 @@ const REPO_1: RepositorySummary = {
   pollIntervalIsDefault: false,
   isActive: true,
   maxConcurrentWorkers: 1,
+  rebaseAfterRun: true,
   lastPolledAt: '2026-06-15T10:00:00Z',
   eligibility: { status: 'eligible', violations: [], reason: null },
 };

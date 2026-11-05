@@ -46,6 +46,7 @@ const MOCK_REPOSITORY: RepositorySummary = {
   pollIntervalIsDefault: false,
   isActive: true,
   maxConcurrentWorkers: 1,
+  rebaseAfterRun: true,
   lastPolledAt: '2026-06-15T10:00:00Z',
   eligibility: { status: 'eligible', violations: [], reason: null },
 };
@@ -655,6 +656,7 @@ describe('RepositoryFormComponent', () => {
       pollIntervalSeconds: 300, // 5 min * 60 sec
       maxConcurrentWorkers: 1,
       applyBranchRules: true,
+      rebaseAfterRun: true,
     });
   });
 
@@ -680,6 +682,7 @@ describe('RepositoryFormComponent', () => {
       pollIntervalSeconds: 600, // 10 min * 60 sec
       isActive: true,
       maxConcurrentWorkers: 1,
+      rebaseAfterRun: true,
     });
   });
 
@@ -703,6 +706,54 @@ describe('RepositoryFormComponent', () => {
 
     // Assert
     expect((emitted as UpdateRepositoryRequest).isActive).toBe(false);
+  });
+
+  // Rebase after run toggle (#684)
+  it('should seed the Rebase after run toggle from the repository in edit mode', () => {
+    // Arrange / Act
+    const { el } = setup({ repository: { ...MOCK_REPOSITORY, rebaseAfterRun: false } });
+
+    // Assert
+    const toggle = el.querySelector('#repository-rebase-after-run') as HTMLInputElement;
+    expect(toggle).toBeTruthy();
+    expect(toggle.checked).toBe(false);
+    expect(el.querySelector('label[for="repository-rebase-after-run"]')?.textContent).toContain('Rebase after run');
+  });
+
+  it('should send rebaseAfterRun false in UpdateRepositoryRequest when the toggle is turned off', () => {
+    // Arrange
+    const { el, component, fixture } = setup({ repository: { ...MOCK_REPOSITORY, rebaseAfterRun: true } });
+    let emitted: CreateRepositoryRequest | UpdateRepositoryRequest | undefined;
+    component.save.subscribe((v: CreateRepositoryRequest | UpdateRepositoryRequest) => { emitted = v; });
+
+    const toggle = el.querySelector('#repository-rebase-after-run') as HTMLInputElement;
+    toggle.checked = false;
+    toggle.dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+
+    // Act
+    (el.querySelector('.repository-form__save-btn') as HTMLButtonElement).click();
+
+    // Assert
+    expect((emitted as UpdateRepositoryRequest).rebaseAfterRun).toBe(false);
+  });
+
+  it('should send rebaseAfterRun true in UpdateRepositoryRequest when the toggle is turned on', () => {
+    // Arrange
+    const { el, component, fixture } = setup({ repository: { ...MOCK_REPOSITORY, rebaseAfterRun: false } });
+    let emitted: CreateRepositoryRequest | UpdateRepositoryRequest | undefined;
+    component.save.subscribe((v: CreateRepositoryRequest | UpdateRepositoryRequest) => { emitted = v; });
+
+    const toggle = el.querySelector('#repository-rebase-after-run') as HTMLInputElement;
+    toggle.checked = true;
+    toggle.dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+
+    // Act
+    (el.querySelector('.repository-form__save-btn') as HTMLButtonElement).click();
+
+    // Assert
+    expect((emitted as UpdateRepositoryRequest).rebaseAfterRun).toBe(true);
   });
 
   // Cycle 20: keyboard navigation — ArrowDown opens dropdown

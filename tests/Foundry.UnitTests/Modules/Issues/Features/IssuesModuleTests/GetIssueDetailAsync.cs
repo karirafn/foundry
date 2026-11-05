@@ -647,10 +647,11 @@ public sealed class GetIssueDetailAsync : IAsyncDisposable
         InProgressIssue inProgress = queued.Claim(WorkerRunId.New());
         await _dbContext.TransitionAsync(queued, inProgress, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
 
-        ChecksPendingIssue checksPending = inProgress.MarkChecksPending(
+        ChecksPendingIssue checksPending = inProgress.MarkRebasePending(
             "feat/issue-1",
             "https://github.com/owner/repo/pull/42",
-            DateTimeOffset.UtcNow.AddDays(1));
+            DateTimeOffset.UtcNow.AddDays(1))
+            .MarkChecksPending(new RebaseOutcome.UpToDate());
         await _dbContext.TransitionAsync(inProgress, checksPending, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
 
         ReviewIssue review = checksPending.ToReview(new ChecksOutcome.Passed());
@@ -682,10 +683,11 @@ public sealed class GetIssueDetailAsync : IAsyncDisposable
         InProgressIssue inProgress = queued.Claim(WorkerRunId.New());
         await _dbContext.TransitionAsync(queued, inProgress, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
 
-        ChecksPendingIssue checksPending = inProgress.MarkChecksPending(
+        ChecksPendingIssue checksPending = inProgress.MarkRebasePending(
             "feat/issue-1",
             "https://github.com/owner/repo/pull/42",
-            DateTimeOffset.UtcNow.AddDays(1));
+            DateTimeOffset.UtcNow.AddDays(1))
+            .MarkChecksPending(new RebaseOutcome.UpToDate());
         await _dbContext.TransitionAsync(inProgress, checksPending, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
 
         IReadOnlyList<FailingCheck> failingChecks =
@@ -726,10 +728,11 @@ public sealed class GetIssueDetailAsync : IAsyncDisposable
         await _dbContext.TransitionAsync(queued, inProgress, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
 
         DateTimeOffset feedbackCutoffAt = DateTimeOffset.UtcNow.AddDays(1);
-        ChecksPendingIssue checksPending = inProgress.MarkChecksPending(
+        ChecksPendingIssue checksPending = inProgress.MarkRebasePending(
             "feat/issue-1",
             "https://github.com/owner/repo/pull/42",
-            feedbackCutoffAt);
+            feedbackCutoffAt)
+            .MarkChecksPending(new RebaseOutcome.UpToDate());
         await _dbContext.TransitionAsync(inProgress, checksPending, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
         _dbContext.ChangeTracker.Clear();
 

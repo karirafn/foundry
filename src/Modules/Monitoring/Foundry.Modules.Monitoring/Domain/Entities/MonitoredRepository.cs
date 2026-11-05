@@ -68,6 +68,13 @@ public sealed class MonitoredRepository : AggregateRoot<MonitoredRepositoryId>
     /// </summary>
     public bool ApplyBranchRules { get; private set; }
 
+    /// <summary>
+    /// Whether Foundry rebases a worker branch onto the default branch through the provider after each run
+    /// that leaves an open pull request (ADR 0087). Read when the rebase step runs, not snapshotted.
+    /// Defaults to <see langword="true"/>: the rebase writes only Foundry-owned branches.
+    /// </summary>
+    public bool RebaseAfterRun { get; private set; } = true;
+
     internal WriteProbeVerdict WriteProbeVerdict { get; private set; } = new WriteProbeVerdict.Unknown();
 
     /// <summary>
@@ -95,7 +102,8 @@ public sealed class MonitoredRepository : AggregateRoot<MonitoredRepositoryId>
         TimeSpan? pollInterval,
         int position = 0,
         int maxConcurrentWorkers = DefaultMaxConcurrentWorkers,
-        bool applyBranchRules = false)
+        bool applyBranchRules = false,
+        bool rebaseAfterRun = true)
     {
         if (maxConcurrentWorkers < MinMaxConcurrentWorkers || maxConcurrentWorkers > MaxMaxConcurrentWorkers)
         {
@@ -124,6 +132,7 @@ public sealed class MonitoredRepository : AggregateRoot<MonitoredRepositoryId>
             EligibilityStatus = UnreachableStatus,
             WriteProbeVerdict = new WriteProbeVerdict.Unknown(),
             ApplyBranchRules = applyBranchRules,
+            RebaseAfterRun = rebaseAfterRun,
             WebhookHookId = NewWebhookHookId(),
             WebhookSecret = NewWebhookSecret(),
             WebhookStatus = WebhookStatus.NotRegistered,
@@ -300,6 +309,12 @@ public sealed class MonitoredRepository : AggregateRoot<MonitoredRepositoryId>
     public void OptInToBranchRules()
     {
         ApplyBranchRules = true;
+    }
+
+    /// <summary>Sets the operator toggle that turns the post-run rebase on or off (ADR 0087).</summary>
+    public void SetRebaseAfterRun(bool rebaseAfterRun)
+    {
+        RebaseAfterRun = rebaseAfterRun;
     }
 
     public void MarkPolled(DateTimeOffset polledAt)

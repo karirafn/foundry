@@ -139,10 +139,11 @@ public sealed class GetIssueSummaryAsync : IAsyncDisposable
         InProgressIssue inProgress = queued.Claim(WorkerRunId.New());
         await _dbContext.TransitionAsync(queued, inProgress, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
 
-        ChecksPendingIssue checksPending = inProgress.MarkChecksPending(
+        ChecksPendingIssue checksPending = inProgress.MarkRebasePending(
             "feat/1-test",
             "https://github.com/owner/repo/pull/1",
-            DateTimeOffset.UtcNow.AddDays(1));
+            DateTimeOffset.UtcNow.AddDays(1))
+            .MarkChecksPending(new RebaseOutcome.UpToDate());
         await _dbContext.TransitionAsync(inProgress, checksPending, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
 
         ReviewIssue review = checksPending.ToReview(new ChecksOutcome.Passed());
@@ -171,10 +172,11 @@ public sealed class GetIssueSummaryAsync : IAsyncDisposable
         await _dbContext.TransitionAsync(queued, inProgress, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
 
         const string ExpectedPrUrl = "https://github.com/owner/repo/pull/7";
-        ChecksPendingIssue checksPending = inProgress.MarkChecksPending(
+        ChecksPendingIssue checksPending = inProgress.MarkRebasePending(
             "feat/1-test",
             ExpectedPrUrl,
-            DateTimeOffset.UtcNow.AddDays(1));
+            DateTimeOffset.UtcNow.AddDays(1))
+            .MarkChecksPending(new RebaseOutcome.UpToDate());
         await _dbContext.TransitionAsync(inProgress, checksPending, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
         _dbContext.ChangeTracker.Clear();
 

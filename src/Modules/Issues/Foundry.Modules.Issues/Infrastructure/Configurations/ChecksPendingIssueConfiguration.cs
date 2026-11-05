@@ -34,5 +34,11 @@ public sealed class ChecksPendingIssueConfiguration : IEntityTypeConfiguration<C
         builder.Property(i => i.ChecksFixAttempts)
             .HasDefaultValue(0)
             .HasColumnName("checks_fix_attempts");
+
+        builder.Property(i => i.RebaseOutcome)
+            .HasConversion(RebaseOutcomeJsonConversion.Converter, RebaseOutcomeJsonConversion.Comparer)
+            .HasMaxLength(int.MaxValue)
+            .HasColumnType("TEXT")
+            .HasColumnName("rebase_outcome");
     }
 }

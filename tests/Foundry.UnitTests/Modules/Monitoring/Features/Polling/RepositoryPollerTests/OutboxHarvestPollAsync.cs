@@ -235,6 +235,11 @@ public sealed class OutboxHarvestPollAsync : IAsyncDisposable
             CancellationToken cancellationToken)
             => Task.FromResult(reviewIssues ?? (IReadOnlyList<ReviewIssueInfo>)[]);
 
+        public Task<IReadOnlyList<RebasePendingIssueInfo>> GetRebasePendingIssuesAsync(
+            MonitoredRepositoryId repositoryId,
+            CancellationToken cancellationToken)
+            => Task.FromResult<IReadOnlyList<RebasePendingIssueInfo>>([]);
+
         public Task<IReadOnlyList<ChecksPendingIssueInfo>> GetChecksPendingIssuesAsync(
             MonitoredRepositoryId repositoryId,
             CancellationToken cancellationToken)

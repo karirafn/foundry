@@ -33,5 +33,11 @@ public sealed class ReviewIssueConfiguration : IEntityTypeConfiguration<ReviewIs
             .HasMaxLength(int.MaxValue)
             .HasColumnType("TEXT")
             .HasColumnName("checks_outcome");
+
+        builder.Property(i => i.RebaseOutcome)
+            .HasConversion(RebaseOutcomeJsonConversion.Converter, RebaseOutcomeJsonConversion.Comparer)
+            .HasMaxLength(int.MaxValue)
+            .HasColumnType("TEXT")
+            .HasColumnName("rebase_outcome");
     }
 }

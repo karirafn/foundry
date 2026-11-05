@@ -265,7 +265,7 @@ Outcome (returned, never persisted): `created` / `updated` (status becomes `Pend
 
 ### Nudge
 
-A request to run one poll pass for `(repository, pass, issue?)` now — or not before a deadline. It is caused by a relevant delivery or a deadline, coalesced (a ~2 s window; pending nudges for one key run once) and rate-capped (each key runs at most once per the repository's normal effective poll interval: a leading run, then one coalesced trailing run at the end of that interval), and never changes domain state itself. Nudges live in a bounded in-memory channel; a full channel drops the new nudge and a restart loses pending ones — the backstop poll recovers both. Event mapping: `issues` → listing; `issue_dependencies` → listing + dependency pass; `pull_request`, `pull_request_review`, `pull_request_review_comment`, `issue_comment` (on a PR) → review pass for the owning issue (checks pass when it is checks-pending); `check_suite` (completed), `status` → checks pass; `branch_protection_rule`, `repository_ruleset` → branch-rules step; `push` → no nudge, see [Push-Driven Commit Tracking](#push-driven-commit-tracking); `ping` → none. GitLab events are read from the body's `object_kind` and nudge the same passes: `issue` / `work_item` → listing (plus the dependency pass when the closing issue blocks a tracked issue); `merge_request`, `note` (on a merge request) → review pass for the owning issue (checks pass when it is checks-pending); `pipeline` (finished status) → checks pass; `push` → no nudge, as for GitHub. Confidential issues and comments map like their public counterparts. GitLab has no event for issue links or protected branches, so it never nudges the dependency pass otherwise or the branch-rules step. An issue entering checks-pending raises `IssueEnteredChecksPending`, which schedules a checks nudge immediately plus not-before nudges at the grace-window and upper-bound deadlines.
+A request to run one poll pass for `(repository, pass, issue?)` now — or not before a deadline. It is caused by a relevant delivery or a deadline, coalesced (a ~2 s window; pending nudges for one key run once) and rate-capped (each key runs at most once per the repository's normal effective poll interval: a leading run, then one coalesced trailing run at the end of that interval), and never changes domain state itself. Nudges live in a bounded in-memory channel; a full channel drops the new nudge and a restart loses pending ones — the backstop poll recovers both. Event mapping: `issues` → listing; `issue_dependencies` → listing + dependency pass; `pull_request`, `pull_request_review`, `pull_request_review_comment`, `issue_comment` (on a PR) → review pass for the owning issue (checks pass when it is checks-pending); `check_suite` (completed), `status` → checks pass; `branch_protection_rule`, `repository_ruleset` → branch-rules step; `push` → no nudge, see [Push-Driven Commit Tracking](#push-driven-commit-tracking); `ping` → none. GitLab events are read from the body's `object_kind` and nudge the same passes: `issue` / `work_item` → listing (plus the dependency pass when the closing issue blocks a tracked issue); `merge_request`, `note` (on a merge request) → review pass for the owning issue (checks pass when it is checks-pending); `pipeline` (finished status) → checks pass; `push` → no nudge, as for GitHub. Confidential issues and comments map like their public counterparts. GitLab has no event for issue links or protected branches, so it never nudges the dependency pass otherwise or the branch-rules step. An issue entering checks-pending raises `IssueEnteredChecksPending`, which schedules a checks nudge immediately plus not-before nudges at the grace-window and upper-bound deadlines. An issue entering rebase-pending raises `IssueEnteredRebasePending`, which nudges the rebase pass immediately; the rebase step schedules its own not-before nudges while it waits for a rebase to land or backs off a transient failure.
 
 ### Backstop Interval
 
@@ -278,7 +278,7 @@ A change found by a **scheduled** poll, in a category the provider has a webhook
 ## Issue
 
 A provider-side issue tagged for Foundry processing.
-Modeled as a polymorphic aggregate — each lifecycle state is a distinct type (`DetectedIssue`, `BlockedIssue`, `FreshQueuedIssue`, `ContinuationQueuedIssue`, `RevisionQueuedIssue`, `InProgressIssue`, `RevisionInProgressIssue`, `ReviewIssue`, `UnchangedIssue`, `CompletedIssue`, `FailedIssue`, `ContinuableFailedIssue`, `RevisionFailedIssue`).
+Modeled as a polymorphic aggregate — each lifecycle state is a distinct type (`DetectedIssue`, `BlockedIssue`, `FreshQueuedIssue`, `ContinuationQueuedIssue`, `RevisionQueuedIssue`, `InProgressIssue`, `RevisionInProgressIssue`, `RebasePendingIssue`, `ChecksPendingIssue`, `ReviewIssue`, `UnchangedIssue`, `CompletedIssue`, `FailedIssue`, `ContinuableFailedIssue`, `RevisionFailedIssue`).
 State transitions are methods on each variant that return the next variant type, enforcing valid transitions at compile time.
 
 ### Issue Lifecycle Partition
@@ -292,7 +292,7 @@ The dashboard renders Active states in four display groups, classified by one ru
 
 - **In progress** — a worker is actually running right now (`in_progress`, `revision_in_progress`). Exactly `LIVE_STATES`.
 - **Needs attention** — requires a user action to progress (`review`, `unchanged`, `failed`, `continuable_failed`, `revision_failed`).
-- **Waiting** — waiting for a worker; advances with no user action (`detected`, `queued`, `blocked`, `revision_queued`, `continuation_queued`, `checks_pending`).
+- **Waiting** — waiting for a worker or for Foundry; advances with no user action (`detected`, `queued`, `blocked`, `revision_queued`, `continuation_queued`, `rebase_pending`, `checks_pending`).
 - **Resolved** — done (`completed`).
 
 Two states deserve explicit note:
@@ -318,11 +318,19 @@ Its scheduled interval also depends on its [Webhook Status](#webhook-status): wh
 Carries a random opaque webhook hook id (addressing its payload URL) and a Foundry-generated webhook secret, encrypted at rest with the same DataProtection mechanism as provider tokens. The secret is never returned in list responses — only by the explicit reveal endpoint (`POST /api/accounts/{accountId}/repositories/{id}/webhook/secret`) used for manual registration.
 Carries a Repository Eligibility status, re-evaluated on each poll cycle.
 Carries `MaxConcurrentWorkers` (non-nullable `int`, range 1..20, default 1) — see [Repository Worker Limit](#repository-worker-limit).
+Carries `RebaseAfterRun` (non-nullable `bool`, default `true`) — see [Rebase After Run](#rebase-after-run).
 
 ### Apply Branch Rules
 
 The persisted operator intent on a Monitored Repository (`ApplyBranchRules`, non-nullable, default `true` on the add request; existing rows migrated to `false`) that Foundry may write its default-branch rules.
 Acted on only on explicit operator action (`BranchRuleEnforcer`): when the repository is added, when the Account's Branch-Rules Token is set or replaced (every opted-in repository the Account covers, processed sequentially; one failure never stops the rest or fails the account update; clearing the token, or an update that leaves it untouched, writes nothing), or through the repository card's "Apply branch rules" action (`POST /api/accounts/{accountId}/repositories/{id}/apply-branch-rules`), which also flips the persisted intent to `true` — an explicit opt-in, even for a repo opted out at add time. That action is offered only when the repository is `Ineligible` solely through `branch-protection:*` violations, and only for a repository the account serves (same host, covered by its Namespace Claims). Polling stays read-only toward the provider and never writes or repairs rules.
+
+### Rebase After Run
+
+The per-repository operator toggle (`RebaseAfterRun`, non-nullable, default `true` for new repositories; existing rows migrated to `true`) that turns the post-run rebase on or off (see [Rebase Pending Issue](#rebase-pending-issue), [ADR 0087](docs/adr/0087-foundry-rebases-worker-branches-through-the-provider-after-each-run.md)).
+Set on the add request (`rebaseAfterRun`, default `true`) and toggled from the repository form through the update request (`rebaseAfterRun`; omitted leaves it unchanged); surfaced on the repository summary.
+Read by the Monitoring module's rebase step when it runs — never snapshotted, so a change mid-run wins. When off, a rebase-pending issue resolves straight away with `RebaseOutcome.Disabled`.
+Unlike [Apply Branch Rules](#apply-branch-rules), existing rows default to `true`: the rebase writes only Foundry-owned branches, never repository-wide protection.
 
 ### Branch Rules Outcome
 
@@ -437,6 +445,20 @@ Persisted as a single `revision_trigger` JSON column and survives the outbox rou
 The number of `FailedChecks` revisions dispatched since the last human review feedback, carried on `ChecksPendingIssue` and threaded through the revision states so it survives `ChecksPending → RevisionQueued → RevisionInProgress → ChecksPending`.
 `ChecksPendingIssue.FixChecks` increments it; any `ReviewFeedback` revision (`ReviewIssue.Revise` / `ChecksPendingIssue.Revise`) resets it to 0.
 When a red verdict arrives and the count is below the cap (`ChecksMaxFixPushes`, = 2), the issue re-queues as a `FailedChecks` revision; at the cap it transitions to `ReviewIssue` with `ChecksOutcome.StillFailing`.
+
+## Rebase Outcome
+
+How the post-run rebase resolved, persisted on `ChecksPendingIssue` and carried onto `ReviewIssue` (like `ChecksOutcome` on `ReviewIssue`) in a single `rebase_outcome` JSON column, and exposed on the issue DTOs as `rebaseOutcome` plus `rebaseSkippedReason`. `null` for issues that passed the checks gate before the rebase step existed.
+A closed union, every variant failing open to the checks gate:
+
+- **`UpToDate`** — the branch had nothing to catch up (compare `behind_by = 0`, or the provider answered "no new commits"); no rebase.
+- **`Rebased`** — the provider rebased the branch and its new head was observed.
+- **`Disabled`** — [Rebase After Run](#rebase-after-run) was off when the step ran.
+- **`Skipped(reason)`** — the rebase did not happen: `timeout`, `provider-error`, `unsupported`, `permission-denied`, `not-found`, `stale-head` or `unrecognised-error`.
+- **`Conflict`** — the rebase conflicts with the default branch. For now it fails open to the checks gate; conflict revisions follow separately.
+
+GitHub error contract (`updatePullRequestBranch` with `updateMethod: REBASE` and `expectedHeadOid`, probed 2026-11-04): every refusal is `type: UNPROCESSABLE` and is told apart only by `message` — `PullRequest::RebaseConflictError` → `Conflict`; `There are no new commits on the base branch.` → `UpToDate`; `head sha didn't match the current head ref.` → stale head (retry). `FORBIDDEN` → `Skipped(permission-denied)`, `RATE_LIMITED` → transient, and any other message → `Skipped(unrecognised-error)`. A clean rebase returns the pre-rebase `headRefOid`; the new head appears asynchronously (within ~5 s in the probe).
+The dashboard badges only `Skipped(reason)` and `Conflict` on the issue card; the issue detail shows every outcome.
 
 ## Claim
 
@@ -562,6 +584,15 @@ A lifecycle state for an issue that has unresolved dependencies.
 A `DetectedIssue` with blockers transitions to `BlockedIssue` instead of `FreshQueuedIssue`.
 A `FreshQueuedIssue` that gains blockers is demoted to `BlockedIssue`.
 When all blockers are resolved — that is, closed in the provider — a `BlockedIssue` transitions to `FreshQueuedIssue`.
+
+## Rebase Pending Issue
+
+A lifecycle state (`rebase_pending`, Active / Waiting) for an issue whose worker run left an open pull request: Foundry is rebasing the worker branch onto the default branch through the provider before the checks gate ([ADR 0087](docs/adr/0087-foundry-rebases-worker-branches-through-the-provider-after-each-run.md)). The agent never rebases or force-pushes.
+Carries `WorkerRunId`, `BranchName`, `PullRequestUrl`, `EnteredRebasePendingAt`, `FeedbackCutoffAt` and `ChecksFixAttempts` — all non-nullable.
+Entered from `InProgressIssue.MarkRebasePending` (a run that completed with `MergeState.Open`) and from `RevisionInProgressIssue.MarkRebasePending` / `MarkUnchangedRebasePending` (a revision that reported a branch and PR, or pushed nothing — the branch may still be behind). A merged PR or no PR keeps the existing `Completed` / `Unchanged` transitions, with no rebase.
+Entering raises `IssueEnteredRebasePending`, which nudges Monitoring's rebase step; the scheduled poll is its backstop. The step's progress (pre-rebase head, request time, transient-failure backoff) is persisted per episode in `pending_rebases`, so a host restart resumes it.
+The step: if `RebaseAfterRun` is off → `Disabled`; otherwise it reads the PR head and compares it with the base (`behind_by = 0` → `UpToDate`, no rebase call); otherwise it asks the provider to rebase, guarded by the head it read, and the issue stays `rebase_pending` until the PR head differs from that pre-rebase head (`Rebased`), or 5 minutes pass (`Skipped(timeout)`). A stale head (a push landed in between) re-reads the head and retries, up to 3 times (`Skipped(stale-head)`). Transient provider failures (5xx, timeouts, rate limits) back off exponentially (30 s doubling, capped at 10 min) driven by nudges and the backstop poll; after 5 the outcome is `Skipped(provider-error)`. GitLab resolves `Skipped(unsupported)` until its rebase lands.
+Transitions: `MarkChecksPending(RebaseOutcome)` → `ChecksPendingIssue` (raises `IssueChecksPending`, so checks nudges start only after the rebase landed); `Complete()` → `CompletedIssue` (issue closed) and `Fail()` → `ContinuableFailedIssue` (PR closed without merge) — the same exits `ChecksPendingIssue` takes. A checks nudge never applies a verdict to a rebase-pending issue.
 
 ## Review Issue
 

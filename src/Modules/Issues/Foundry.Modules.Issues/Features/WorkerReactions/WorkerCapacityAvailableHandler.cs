@@ -91,7 +91,8 @@ internal sealed class WorkerCapacityAvailableHandler(
     ///   <see cref="States.InProgressIssue"/>, <see cref="States.RevisionInProgressIssue"/>,
     ///   <see cref="States.ReviewIssue"/>, <see cref="States.UnchangedIssue"/>,
     ///   <see cref="States.FailedIssue"/>, <see cref="States.ContinuableFailedIssue"/>,
-    ///   <see cref="States.RevisionFailedIssue"/>, <see cref="States.ChecksPendingIssue"/>.
+    ///   <see cref="States.RevisionFailedIssue"/>, <see cref="States.ChecksPendingIssue"/>,
+    ///   <see cref="States.RebasePendingIssue"/>.
     /// When adding a new <see cref="Domain.Entities.Issue"/> subtype that carries <c>WorkerRunId</c>,
     /// add a corresponding <c>AnyAsync</c> check here and update
     /// <c>WorkerRunIdGuardExhaustivenessTests.GuardedTypes</c> in the unit-test project.
@@ -142,7 +143,13 @@ internal sealed class WorkerCapacityAvailableHandler(
             return true;
         }
 
-        return await dbContext.Set<ChecksPendingIssue>()
+        if (await dbContext.Set<ChecksPendingIssue>()
+                .AnyAsync(i => i.WorkerRunId == workerRunId, cancellationToken))
+        {
+            return true;
+        }
+
+        return await dbContext.Set<RebasePendingIssue>()
             .AnyAsync(i => i.WorkerRunId == workerRunId, cancellationToken);
     }
 }

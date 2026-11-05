@@ -3,6 +3,7 @@ using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Features.CredentialResolution;
 using Foundry.Modules.Monitoring.Features.Providers;
+using Foundry.Modules.Monitoring.Features.Rebase;
 using Foundry.Modules.Monitoring.Features.Webhooks;
 using Foundry.Modules.Settings.Contracts.Queries;
 using Foundry.Shared;
@@ -188,6 +189,9 @@ internal sealed class MonitoringService : PeriodicBackgroundService
         RepositoryPoller poller = scope.ServiceProvider.GetRequiredService<RepositoryPoller>();
         IGlobalSettingsQueries settingsQueries = scope.ServiceProvider.GetRequiredService<IGlobalSettingsQueries>();
 
+        // Optional: hosts (and tests) without the rebase step poll exactly as before.
+        RebaseStep? rebaseStep = scope.ServiceProvider.GetService<RebaseStep>();
+
         int pollIntervalSeconds = await settingsQueries.GetPollIntervalSecondsAsync(cancellationToken);
         TimeSpan pollInterval = TimeSpan.FromSeconds(pollIntervalSeconds);
 
@@ -216,6 +220,13 @@ internal sealed class MonitoringService : PeriodicBackgroundService
                 resolvedProvider.Provider,
                 now,
                 cancellationToken);
+
+            // The scheduled poll is the rebase step's backstop (ADR 0087): it resumes rebases whose nudges
+            // were lost, e.g. across a host restart.
+            if (rebaseStep is not null)
+            {
+                await rebaseStep.RunAsync(repo, resolvedProvider.Provider, issueNumber: null, now, cancellationToken);
+            }
 
             if (pollResult is Result<PollChanges>.Failure pollFailure)
             {
@@ -264,6 +275,7 @@ internal sealed class MonitoringService : PeriodicBackgroundService
         ICredentialResolver credentialResolver = scope.ServiceProvider.GetRequiredService<ICredentialResolver>();
         RepositoryPoller poller = scope.ServiceProvider.GetRequiredService<RepositoryPoller>();
         IGlobalSettingsQueries settingsQueries = scope.ServiceProvider.GetRequiredService<IGlobalSettingsQueries>();
+        RebaseStep? rebaseStep = scope.ServiceProvider.GetService<RebaseStep>();
 
         TimeSpan pollInterval = TimeSpan.FromSeconds(await settingsQueries.GetPollIntervalSecondsAsync(cancellationToken));
 
@@ -287,13 +299,14 @@ internal sealed class MonitoringService : PeriodicBackgroundService
 
             foreach (NudgeKey key in group)
             {
-                await RunNudgedPassAsync(poller, repo, resolvedProvider.Provider, key, now, cancellationToken);
+                await RunNudgedPassAsync(poller, rebaseStep, repo, resolvedProvider.Provider, key, now, cancellationToken);
             }
         }
     }
 
     private async Task RunNudgedPassAsync(
         RepositoryPoller poller,
+        RebaseStep? rebaseStep,
         MonitoredRepository repo,
         IIssueProvider provider,
         NudgeKey key,
@@ -351,6 +364,14 @@ internal sealed class MonitoringService : PeriodicBackgroundService
 
             case NudgePass.BranchRules:
                 await poller.RunBranchRulesStepAsync(repo, now, cancellationToken);
+                break;
+
+            case NudgePass.Rebase:
+                if (rebaseStep is not null)
+                {
+                    await rebaseStep.RunAsync(repo, provider, key.IssueNumber, now, cancellationToken);
+                }
+
                 break;
 
             default:

@@ -87,6 +87,33 @@ public sealed class HandleAsync : IAsyncDisposable
     }
 
     [Fact]
+    public async Task WhenRebasePendingIssue_TransitionsToContinuableFailedIssue()
+    {
+        // Arrange
+        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
+        RebasePendingIssue rebasePending = new IssueBuilder()
+            .WithMonitoredRepositoryId(repositoryId)
+            .WithIssueNumber(7)
+            .RebasePending();
+        _dbContext.Set<Issue>().Add(rebasePending);
+        await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+        _dbContext.ChangeTracker.Clear();
+
+        ProviderPullRequestClosed @event = new(RepositoryId: repositoryId, IssueNumber: 7);
+
+        // Act
+        await _sut.HandleAsync(@event, CancellationToken.None);
+
+        // Assert
+        _dbContext.ChangeTracker.Clear();
+        Issue? issue = await _dbContext.Set<Issue>()
+            .FirstOrDefaultAsync(
+                i => i.MonitoredRepositoryId == repositoryId,
+                TestContext.Current.CancellationToken);
+        issue.ShouldBeOfType<ContinuableFailedIssue>();
+    }
+
+    [Fact]
     public async Task WhenReviewIssue_TransitionsToContinuableFailedIssue()
     {
         // Arrange
