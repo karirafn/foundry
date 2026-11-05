@@ -825,6 +825,135 @@ public sealed class ResolveAsync
             commitsResult: Result<bool>.Ok(hasCommits),
             fallbackMrResult: Result<MergeRequestByBranch>.Ok(new MergeRequestByBranch(MergeRequestPresence.None, null)));
 
+    // -------------------------------------------------------------------------
+    // Exit 0 with an is_error result line — captured stream-json result-line fixtures
+    // -------------------------------------------------------------------------
+
+    private const string ErrorResultText = "Failed to authenticate: OAuth session expired and could not be refreshed";
+
+    private const string IsErrorResultLine =
+        """{"type":"result","subtype":"success","is_error":true,"duration_ms":412,"duration_api_ms":0,"num_turns":1,"result":"Failed to authenticate: OAuth session expired and could not be refreshed","session_id":"9b0c2f1e-4d7a-4c1b-8f3e-2a6d5e7c9b10","total_cost_usd":0,"usage":{"input_tokens":0,"cache_creation_input_tokens":0,"cache_read_input_tokens":0,"output_tokens":0}}""";
+
+    private const string SuccessResultLine =
+        """{"type":"result","subtype":"success","is_error":false,"duration_ms":81234,"duration_api_ms":79001,"num_turns":12,"result":"No changes were needed; the issue is already resolved.","session_id":"9b0c2f1e-4d7a-4c1b-8f3e-2a6d5e7c9b10","total_cost_usd":0.4213,"usage":{"input_tokens":12,"cache_creation_input_tokens":3400,"cache_read_input_tokens":51000,"output_tokens":900}}""";
+
+    private const string AuthInvalidIsErrorResultLine =
+        """{"type":"result","subtype":"success","is_error":true,"api_error_status":401,"duration_ms":390,"duration_api_ms":120,"num_turns":1,"result":"Failed to authenticate. API Error: 401 {\"type\":\"error\",\"error\":{\"type\":\"authentication_error\",\"message\":\"OAuth token has expired.\"}}","session_id":"9b0c2f1e-4d7a-4c1b-8f3e-2a6d5e7c9b10","total_cost_usd":0}""";
+
+    private const string OverloadedIsErrorResultLine =
+        """{"type":"result","subtype":"success","is_error":true,"duration_ms":5120,"duration_api_ms":5000,"num_turns":3,"result":"API Error: 529 Overloaded","session_id":"9b0c2f1e-4d7a-4c1b-8f3e-2a6d5e7c9b10","total_cost_usd":0.01}""";
+
+    private static string ContainerLog(string resultLine)
+        => $$"""
+            {"type":"system","subtype":"init","session_id":"9b0c2f1e-4d7a-4c1b-8f3e-2a6d5e7c9b10"}
+            {{resultLine}}
+            """;
+
+    private static async Task<WorkerOutcome> ResolveExitZeroNoCommitsAsync(string containerOutput)
+    {
+        WorkerOutcomeResolver sut = BuildResolverWithRealParser(NoMrQueries(hasCommits: false));
+
+        return await sut.ResolveAsync(
+            CreateActiveRun(),
+            status: Exited(0),
+            containerOutput,
+            TestContext.Current.CancellationToken);
+    }
+
+    [Fact]
+    public async Task WhenNoMrAndExitZeroWithNoCommitsAndIsErrorResultLine_ReturnsFailureCarryingResultText()
+    {
+        // Arrange
+        string containerOutput = ContainerLog(IsErrorResultLine);
+
+        // Act
+        WorkerOutcome outcome = await ResolveExitZeroNoCommitsAsync(containerOutput);
+
+        // Assert
+        WorkerOutcome.Failure failure = outcome.ShouldBeOfType<WorkerOutcome.Failure>();
+        FailureReason.ContainerError containerError = failure.FailureReason.ShouldBeOfType<FailureReason.ContainerError>();
+        containerError.Message.ShouldBe($"{WorkerOutcomeResolver.ErrorResultMessage}: {ErrorResultText}");
+        failure.ContainerOutput.ShouldBe(containerOutput);
+        RunResultSummary summary = failure.Summary.ShouldNotBeNull();
+        summary.IsError.ShouldBeTrue();
+        summary.ResultText.ShouldBe(ErrorResultText);
+    }
+
+    [Fact]
+    public async Task WhenNoMrAndExitZeroWithNoCommitsAndIsErrorFalseResultLine_ReturnsUnchanged()
+    {
+        // Arrange
+        string containerOutput = ContainerLog(SuccessResultLine);
+
+        // Act
+        WorkerOutcome outcome = await ResolveExitZeroNoCommitsAsync(containerOutput);
+
+        // Assert
+        WorkerOutcome.Unchanged unchanged = outcome.ShouldBeOfType<WorkerOutcome.Unchanged>();
+        unchanged.Summary.ShouldNotBeNull().IsError.ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task WhenNoMrAndExitZeroWithNoCommitsAndAuthInvalidIsErrorResultLine_ReturnsFailureWithAuthInvalid()
+    {
+        // Arrange
+        string containerOutput = ContainerLog(AuthInvalidIsErrorResultLine);
+
+        // Act
+        WorkerOutcome outcome = await ResolveExitZeroNoCommitsAsync(containerOutput);
+
+        // Assert
+        WorkerOutcome.Failure failure = outcome.ShouldBeOfType<WorkerOutcome.Failure>();
+        failure.FailureReason.ShouldBeOfType<FailureReason.AuthInvalid>();
+    }
+
+    [Fact]
+    public async Task WhenNoMrAndExitZeroWithNoCommitsAndOverloadedIsErrorResultLine_ReturnsFailureWithTransientApiError()
+    {
+        // Arrange
+        string containerOutput = ContainerLog(OverloadedIsErrorResultLine);
+
+        // Act
+        WorkerOutcome outcome = await ResolveExitZeroNoCommitsAsync(containerOutput);
+
+        // Assert
+        WorkerOutcome.Failure failure = outcome.ShouldBeOfType<WorkerOutcome.Failure>();
+        failure.FailureReason.ShouldBeOfType<FailureReason.TransientApiError>();
+    }
+
+    [Fact]
+    public async Task WhenNoMrAndExitZeroWithNoCommitsAndIsErrorResultLineWithoutText_ReturnsGenericFailure()
+    {
+        // Arrange
+        string containerOutput = ContainerLog("""{"type":"result","subtype":"error_during_execution","is_error":true,"num_turns":0}""");
+
+        // Act
+        WorkerOutcome outcome = await ResolveExitZeroNoCommitsAsync(containerOutput);
+
+        // Assert
+        WorkerOutcome.Failure failure = outcome.ShouldBeOfType<WorkerOutcome.Failure>();
+        failure.FailureReason.ShouldBe(new FailureReason.ContainerError(WorkerOutcomeResolver.ErrorResultMessage));
+    }
+
+    [Fact]
+    public async Task WhenNoMrAndExitZeroWithNoCommitsAndLongMultilineIsErrorText_TruncatesToSingleLine()
+    {
+        // Arrange
+        string longText = "first line\\n" + new string('x', WorkerOutcomeResolver.MaxErrorResultTextLength * 2);
+        string containerOutput = ContainerLog($$"""{"type":"result","is_error":true,"result":"{{longText}}"}""");
+
+        // Act
+        WorkerOutcome outcome = await ResolveExitZeroNoCommitsAsync(containerOutput);
+
+        // Assert
+        WorkerOutcome.Failure failure = outcome.ShouldBeOfType<WorkerOutcome.Failure>();
+        FailureReason.ContainerError containerError = failure.FailureReason.ShouldBeOfType<FailureReason.ContainerError>();
+        string detail = containerError.Message[(WorkerOutcomeResolver.ErrorResultMessage.Length + 2)..];
+        detail.Length.ShouldBe(WorkerOutcomeResolver.MaxErrorResultTextLength);
+        detail.ShouldStartWith("first line x");
+        detail.ShouldNotContain('\n');
+    }
+
     [Fact]
     public async Task WhenOomKilledWithNoResultLine_ReturnsOutOfMemoryContainerError()
     {
