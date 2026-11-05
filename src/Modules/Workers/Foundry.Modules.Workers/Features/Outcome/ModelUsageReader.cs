@@ -12,17 +12,27 @@ namespace Foundry.Modules.Workers.Features.Outcome;
 /// </summary>
 internal static class ModelUsageReader
 {
+    private static readonly TokenUsage Zero = new(0, 0, 0, 0);
+
     /// <summary>
     /// Returns the summed buckets, or <see cref="TokenUsage.Unknown"/> when <c>modelUsage</c> is
-    /// absent, not an object or names no model. A bucket missing from any model is unknown.
+    /// absent or not an object. A bucket missing from any model is unknown. An empty
+    /// <c>modelUsage</c> means no model ran (e.g. the run failed to authenticate) and reads as zero
+    /// tokens, but only when <c>total_cost_usd</c> is a number equal to zero; a non-zero, missing
+    /// or non-numeric cost fails closed to unknown so a billed run never reads as an exact zero.
     /// </summary>
     public static TokenUsage Read(JsonObject resultEvent)
     {
         ArgumentNullException.ThrowIfNull(resultEvent);
 
-        if (resultEvent["modelUsage"] is not JsonObject models || models.Count == 0)
+        if (resultEvent["modelUsage"] is not JsonObject models)
         {
             return TokenUsage.Unknown;
+        }
+
+        if (models.Count == 0)
+        {
+            return IsZeroCost(resultEvent["total_cost_usd"]) ? Zero : TokenUsage.Unknown;
         }
 
         long? input = 0;
@@ -41,6 +51,12 @@ internal static class ModelUsageReader
 
         return new TokenUsage(input, cacheRead, cacheCreation, output);
     }
+
+    private static bool IsZeroCost(JsonNode? cost) =>
+        cost is not null
+        && cost.GetValueKind() == JsonValueKind.Number
+        && cost.AsValue().TryGetValue(out double value)
+        && value == 0d;
 
     private static long? Add(long? total, JsonNode? node)
     {
