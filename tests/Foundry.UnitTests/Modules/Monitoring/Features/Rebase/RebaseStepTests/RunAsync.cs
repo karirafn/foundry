@@ -272,7 +272,7 @@ public sealed class RunAsync : IAsyncDisposable
     [Fact]
     public async Task WhenProviderIsUnsupported_ResolvesSkippedUnsupported()
     {
-        // Arrange — the default IIssueProvider rebase methods (GitLab) answer Unsupported.
+        // Arrange — the default IIssueProvider rebase methods answer Unsupported.
         MonitoredRepository repository = SeedRepository();
         _provider.States.Enqueue(Result<PullRequestRebaseState>.Ok(new PullRequestRebaseState.Unsupported()));
 
@@ -390,6 +390,156 @@ public sealed class RunAsync : IAsyncDisposable
         // Assert
         _dispatcher.DispatchedEvents.ShouldBeEmpty();
         LoadProgress().TransientFailures.ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task WhenProviderReportsRebaseInProgress_StaysPending()
+    {
+        // Arrange — GitLab: the head is unchanged and rebase_in_progress is still true.
+        MonitoredRepository repository = SeedRepository();
+        RebaseStep sut = await RequestRebaseAsync(repository);
+        _provider.States.Enqueue(Result<PullRequestRebaseState>.Ok(
+            new PullRequestRebaseState.Behind(PrId, OldHead, 3) { Progress = new ProviderRebaseProgress.InProgress() }));
+
+        // Act
+        await sut.RunAsync(repository, _provider, null, Now.AddSeconds(30), TestContext.Current.CancellationToken);
+
+        // Assert
+        _dispatcher.DispatchedEvents.OfType<RebaseResolved>().ShouldBeEmpty();
+        LoadProgress().IsResolved.ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task WhenProviderReportsRebaseCompletedWithoutError_ResolvesRebased()
+    {
+        // Arrange — GitLab: rebase_in_progress false, merge_error null.
+        MonitoredRepository repository = SeedRepository();
+        RebaseStep sut = await RequestRebaseAsync(repository);
+        _provider.States.Enqueue(Result<PullRequestRebaseState>.Ok(
+            new PullRequestRebaseState.Behind(PrId, OldHead, 3) { Progress = new ProviderRebaseProgress.Completed() }));
+
+        // Act
+        await sut.RunAsync(repository, _provider, null, Now.AddSeconds(30), TestContext.Current.CancellationToken);
+
+        // Assert
+        SingleResolved().Outcome.ShouldBe("rebased");
+    }
+
+    [Fact]
+    public async Task WhenProviderReportsRebaseConflicted_ResolvesConflict()
+    {
+        // Arrange
+        MonitoredRepository repository = SeedRepository();
+        RebaseStep sut = await RequestRebaseAsync(repository);
+        _provider.States.Enqueue(Result<PullRequestRebaseState>.Ok(
+            new PullRequestRebaseState.Behind(PrId, OldHead, 3) { Progress = new ProviderRebaseProgress.Conflicted() }));
+
+        // Act
+        await sut.RunAsync(repository, _provider, null, Now.AddSeconds(30), TestContext.Current.CancellationToken);
+
+        // Assert
+        SingleResolved().Outcome.ShouldBe("conflict");
+    }
+
+    [Fact]
+    public async Task WhenProviderReportsRebaseFailed_ResolvesSkippedWithTheReason()
+    {
+        // Arrange
+        MonitoredRepository repository = SeedRepository();
+        RebaseStep sut = await RequestRebaseAsync(repository);
+        _provider.States.Enqueue(Result<PullRequestRebaseState>.Ok(
+            new PullRequestRebaseState.Behind(PrId, OldHead, 3)
+            {
+                Progress = new ProviderRebaseProgress.Failed(RebaseSkipReasons.RebaseFailed),
+            }));
+
+        // Act
+        await sut.RunAsync(repository, _provider, null, Now.AddSeconds(30), TestContext.Current.CancellationToken);
+
+        // Assert
+        RebaseResolved resolved = SingleResolved();
+        resolved.Outcome.ShouldBe("skipped");
+        resolved.Reason.ShouldBe(RebaseSkipReasons.RebaseFailed);
+    }
+
+    [Fact]
+    public async Task WhenRebaseStillInProgressAfterTheBound_ResolvesSkippedTimeout()
+    {
+        // Arrange
+        MonitoredRepository repository = SeedRepository();
+        RebaseStep sut = await RequestRebaseAsync(repository);
+        _provider.States.Enqueue(Result<PullRequestRebaseState>.Ok(
+            new PullRequestRebaseState.Behind(PrId, OldHead, 3) { Progress = new ProviderRebaseProgress.InProgress() }));
+
+        // Act
+        await sut.RunAsync(repository, _provider, null, Now + PendingRebase.LandingTimeout, TestContext.Current.CancellationToken);
+
+        // Assert
+        RebaseResolved resolved = SingleResolved();
+        resolved.Outcome.ShouldBe("skipped");
+        resolved.Reason.ShouldBe(RebaseSkipReasons.Timeout);
+    }
+
+    [Fact]
+    public async Task WhenNewHeadAppearsDespiteAStaleMergeError_ResolvesRebased()
+    {
+        // Arrange — a merge_error left over from an earlier rebase never outranks an observed new head.
+        MonitoredRepository repository = SeedRepository();
+        RebaseStep sut = await RequestRebaseAsync(repository);
+        _provider.States.Enqueue(Result<PullRequestRebaseState>.Ok(
+            new PullRequestRebaseState.UpToDate(NewHead) { Progress = new ProviderRebaseProgress.Conflicted() }));
+
+        // Act
+        await sut.RunAsync(repository, _provider, null, Now.AddSeconds(30), TestContext.Current.CancellationToken);
+
+        // Assert
+        SingleResolved().Outcome.ShouldBe("rebased");
+    }
+
+    [Fact]
+    public async Task WhenARebaseIsAlreadyRunning_AwaitsItWithoutRequestingAnother()
+    {
+        // Arrange
+        MonitoredRepository repository = SeedRepository();
+        _provider.States.Enqueue(Result<PullRequestRebaseState>.Ok(
+            new PullRequestRebaseState.Behind(PrId, OldHead, 3) { Progress = new ProviderRebaseProgress.InProgress() }));
+
+        // Act
+        await BuildSut().RunAsync(repository, _provider, null, Now, TestContext.Current.CancellationToken);
+
+        // Assert
+        _provider.RebaseCalls.ShouldBeEmpty();
+        _dispatcher.DispatchedEvents.OfType<RebaseResolved>().ShouldBeEmpty();
+        PendingRebase progress = LoadProgress();
+        progress.ShouldSatisfyAllConditions(
+            () => progress.PreRebaseHeadSha.ShouldBe(OldHead),
+            () => progress.RequestedAt.ShouldBe(Now));
+    }
+
+    [Fact]
+    public async Task WhenBehindWithAStaleMergeErrorBeforeRequesting_StillRequestsTheRebase()
+    {
+        // Arrange — before the request, a failure report is left over from an earlier rebase and is ignored.
+        MonitoredRepository repository = SeedRepository();
+        _provider.States.Enqueue(Result<PullRequestRebaseState>.Ok(
+            new PullRequestRebaseState.Behind(PrId, OldHead, 3) { Progress = new ProviderRebaseProgress.Conflicted() }));
+        _provider.Requests.Enqueue(Result<RebaseRequestOutcome>.Ok(new RebaseRequestOutcome.Requested()));
+
+        // Act
+        await BuildSut().RunAsync(repository, _provider, null, Now, TestContext.Current.CancellationToken);
+
+        // Assert
+        _provider.RebaseCalls.ShouldHaveSingleItem().ShouldBe((PrId, OldHead));
+        _dispatcher.DispatchedEvents.OfType<RebaseResolved>().ShouldBeEmpty();
+    }
+
+    private async Task<RebaseStep> RequestRebaseAsync(MonitoredRepository repository)
+    {
+        _provider.States.Enqueue(Result<PullRequestRebaseState>.Ok(new PullRequestRebaseState.Behind(PrId, OldHead, 3)));
+        _provider.Requests.Enqueue(Result<RebaseRequestOutcome>.Ok(new RebaseRequestOutcome.Requested()));
+        RebaseStep sut = BuildSut();
+        await sut.RunAsync(repository, _provider, null, Now, TestContext.Current.CancellationToken);
+        return sut;
     }
 
     [Fact]

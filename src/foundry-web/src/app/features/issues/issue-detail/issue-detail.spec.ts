@@ -983,6 +983,8 @@ describe('IssueDetailComponent', () => {
     ['disabled', null, 'Disabled'],
     ['skipped', 'timeout', 'Skipped (timeout)'],
     ['skipped', 'permission-denied', 'Skipped (permission denied)'],
+    ['skipped', 'force-push-protected', 'Skipped (force-push protected)'],
+    ['skipped', 'rebase-failed', 'Skipped (rebase failed)'],
     ['skipped', 'brand-new-reason', 'Skipped (brand-new-reason)'],
     ['conflict', null, 'Conflict'],
   ])('should render a Rebase row for %s outcome (reason %s) as "%s"', (outcome, reason, expected) => {
