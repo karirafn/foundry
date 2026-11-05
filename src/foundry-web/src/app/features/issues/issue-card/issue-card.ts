@@ -6,6 +6,7 @@ import { StateBadgeComponent } from '../../../shared/components/state-badge/stat
 import { SafeHrefPipe } from '../../../shared/pipes/safe-href.pipe';
 import { TickerService } from '../../../core/services/ticker.service';
 import { AGENT_SILENCE_THRESHOLD_MINUTES, AgentActivity, agentActivitySummary } from '../../../core/models/agent-activity.model';
+import { ProviderTerminology, providerTerminology } from '../../../shared/utils/provider.util';
 import { RebaseOutcomeBadge, rebaseOutcomeBadge } from '../rebase-outcome.format';
 import { formatCost as _formatCostImpl, formatDuration as _formatDurationImpl } from '../run-stats.format';
 
@@ -251,9 +252,9 @@ function hasVisiblePills(stats: RunStats): boolean {
                 [href]="safePrUrl"
                 target="_blank"
                 rel="noopener noreferrer"
-                [attr.aria-label]="'View pull request for issue #' + issue().issueNumber"
+                [attr.aria-label]="'View ' + _prTerminology().pullRequest.toLowerCase() + ' for issue #' + issue().issueNumber"
                 (click)="onLinkClick($event)"
-              >View PR</a>
+              >View {{ _prTerminology().prAbbrev }}</a>
             }
             @if (issue().url | safeHref; as safeUrl) {
               <a
@@ -304,6 +305,8 @@ export class IssueCardComponent {
   protected readonly _isQueuedTier = computed(() => QUEUED_TIER_STATES.has(this.issue().state));
 
   protected readonly _isChecksPending = computed(() => this.issue().state === 'checks_pending');
+
+  protected readonly _prTerminology = computed((): ProviderTerminology => providerTerminology(this.issue().providerType ?? ''));
 
   protected readonly _checksOutcomeDisplay = computed((): ChecksOutcomeDisplay | null => {
     const outcome = this.issue().checksOutcome;

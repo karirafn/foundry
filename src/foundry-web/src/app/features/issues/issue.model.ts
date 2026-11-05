@@ -26,6 +26,7 @@ export interface IssueSummary {
   rebaseOutcome?: string | null;
   rebaseSkippedReason?: string | null;
   pullRequestUrl?: string | null;
+  providerType?: string | null;
 }
 
 export interface EligibilityViolation {
@@ -51,7 +52,6 @@ export type RevisionTriggerKind = 'review_feedback' | 'failed_checks' | 'rebase_
 export interface IssueStateDetails {
   workerRunId: string | null;
   branchName: string | null;
-  pullRequestUrl: string | null;
   feedbackCutoffAt: string | null;
   failureReason: string | null;
   failedAt: string | null;
@@ -69,7 +69,6 @@ export interface IssueStateDetails {
 }
 
 export interface IssueDetail extends IssueSummary {
-  providerType: string;
   author: string;
   labels: string[];
   stateDetails: IssueStateDetails | null;

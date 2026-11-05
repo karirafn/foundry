@@ -1,7 +1,6 @@
 using System.Net;
 using System.Net.Http.Json;
 
-using Foundry.IntegrationTests.Modules.Monitoring;
 using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Issues.Domain.Entities;
 using Foundry.Modules.Issues.Domain.Entities.States;
@@ -86,76 +85,5 @@ public sealed class WhenIssueExists : IAsyncDisposable
             () => detail.Author.ShouldBe("octocat"),
             () => detail.Labels.ShouldBe(["bug"]),
             () => detail.StateDetails.ShouldBeNull());
-    }
-
-    [Fact]
-    public async Task WhenIssueLinkedToGitHubRepository_ReturnsGithubProviderType()
-    {
-        // Arrange
-        Guid accountId = await AccountSeeder.SeedGitHubAccountAsync(_factory);
-        Guid repositoryId = await RepositorySeeder.SeedRepositoryAsync(_factory, accountId);
-        MonitoredRepositoryId repoId = MonitoredRepositoryId.From(repositoryId);
-
-        // RepositorySeeder uses slug "owner/repo" — seed that namespace so the resolver finds it.
-        // No endpoint exposes namespace seeding directly; seed via DbContext to simulate resolver state.
-        await AccountSeeder.SetOwnerNamespacesAsync(_factory, accountId, "owner");
-
-        DetectedIssue issue = await SeedDetectedIssueAsync(repoId);
-
-        // Act
-        HttpResponseMessage response = await _client.GetAsync(
-            new Uri($"/api/issues/{issue.Id.Value}", UriKind.Relative),
-            TestContext.Current.CancellationToken);
-
-        // Assert
-        response.StatusCode.ShouldBe(HttpStatusCode.OK);
-        IssueDetail? detail = await response.Content.ReadFromJsonAsync<IssueDetail>(
-            TestContext.Current.CancellationToken);
-        detail.ShouldNotBeNull();
-        detail.ProviderType.ShouldBe("github");
-    }
-
-    [Fact]
-    public async Task WhenIssueLinkedToGitLabRepository_ReturnsGitlabProviderType()
-    {
-        // Arrange
-        Guid accountId = await AccountSeeder.SeedGitLabAccountAsync(_factory);
-        Guid repositoryId = await RepositorySeeder.SeedRepositoryAsync(_factory, accountId, slug: "owner/gitlab-repo");
-        MonitoredRepositoryId repoId = MonitoredRepositoryId.From(repositoryId);
-
-        // Seed namespace so the resolver can match "owner/gitlab-repo".
-        // No endpoint exposes namespace seeding directly; seed via DbContext to simulate resolver state.
-        await AccountSeeder.SetOwnerNamespacesAsync(_factory, accountId, "owner");
-
-        // No POST endpoint exists for issues — seed directly via DbContext.
-        IssueId issueId;
-        using (IServiceScope scope = _factory.Services.CreateScope())
-        {
-            DbContext dbContext = scope.ServiceProvider.GetRequiredService<DbContext>();
-
-            DetectedIssue issue = new IssueBuilder()
-                .WithMonitoredRepositoryId(repoId)
-                .WithIssueNumber(7)
-                .WithTitle("A GitLab issue")
-                .WithUrl(ProviderUrl.Create("https://gitlab.com/owner/gitlab-repo/issues/7").ValueOrThrow())
-                .WithLabels([])
-                .Detected();
-
-            dbContext.Set<Issue>().Add(issue);
-            await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
-            issueId = issue.Id;
-        }
-
-        // Act
-        HttpResponseMessage response = await _client.GetAsync(
-            new Uri($"/api/issues/{issueId.Value}", UriKind.Relative),
-            TestContext.Current.CancellationToken);
-
-        // Assert
-        response.StatusCode.ShouldBe(HttpStatusCode.OK);
-        IssueDetail? detail = await response.Content.ReadFromJsonAsync<IssueDetail>(
-            TestContext.Current.CancellationToken);
-        detail.ShouldNotBeNull();
-        detail.ProviderType.ShouldBe("gitlab");
     }
 }

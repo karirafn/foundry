@@ -1,56 +1,59 @@
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Contracts.Queries;
 using Foundry.Modules.Monitoring.Domain.Entities;
+using Foundry.Modules.Monitoring.Features.Accounts;
 using Foundry.Modules.Monitoring.Features.CredentialResolution;
 
 using Microsoft.EntityFrameworkCore;
 
 namespace Foundry.Modules.Monitoring.Features.Repositories;
 
-internal sealed class RepositorySlugQueries(
-    DbContext db,
-    ICredentialResolver credentialResolver) : IRepositorySlugQueries
+internal sealed class RepositorySlugQueries(DbContext db) : IRepositorySlugQueries
 {
-    public async Task<IReadOnlyDictionary<MonitoredRepositoryId, string>> GetSlugsAsync(
+    public async Task<IReadOnlyDictionary<MonitoredRepositoryId, RepositoryDisplayInfo>> GetRepositoryDisplayInfoAsync(
         IReadOnlySet<MonitoredRepositoryId> repositoryIds,
         CancellationToken cancellationToken)
     {
         if (repositoryIds.Count == 0)
         {
-            return new Dictionary<MonitoredRepositoryId, string>();
+            return new Dictionary<MonitoredRepositoryId, RepositoryDisplayInfo>();
         }
 
-        return await db.Set<MonitoredRepository>()
+        List<MonitoredRepository> repositories = await db.Set<MonitoredRepository>()
             .AsNoTracking()
             .Where(r => repositoryIds.Contains(r.Id))
-            .Select(r => new { r.Id, Slug = r.Slug.ToString() })
-            .ToDictionaryAsync(r => r.Id, r => r.Slug, cancellationToken);
-    }
+            .ToListAsync(cancellationToken);
 
-    public async Task<string?> GetProviderTypeAsync(
-        MonitoredRepositoryId repositoryId,
-        CancellationToken cancellationToken)
-    {
-        MonitoredRepository? repo = await db.Set<MonitoredRepository>()
-            .AsNoTracking()
-            .FirstOrDefaultAsync(r => r.Id == repositoryId, cancellationToken);
-
-        if (repo is null)
+        if (repositories.Count == 0)
         {
-            return null;
+            return new Dictionary<MonitoredRepositoryId, RepositoryDisplayInfo>();
         }
 
-        Credential? credential = await credentialResolver.ResolveAsync(
-            repo.Host,
-            repo.Slug,
-            cancellationToken);
+        List<string> hosts = repositories
+            .Select(r => r.Host)
+            .Distinct(StringComparer.Ordinal)
+            .ToList();
 
-        return credential switch
+        List<Credential> credentials = await db.Set<Credential>()
+            .AsNoTracking()
+            .Where(c => hosts.Contains(c.Host))
+            .Include(c => c.Namespaces)
+            .ToListAsync(cancellationToken);
+
+        ILookup<string, Credential> credentialsByHost = credentials.ToLookup(c => c.Host, StringComparer.Ordinal);
+
+        return repositories.ToDictionary(
+            r => r.Id,
+            r => new RepositoryDisplayInfo(
+                r.Slug.ToString(),
+                ToProviderType(CredentialResolver.SelectMostSpecific(credentialsByHost[r.Host], r.Slug))));
+    }
+
+    private static string? ToProviderType(Credential? credential) =>
+        credential switch
         {
-            GitHubCredential => "github",
-            GitLabCredential => "gitlab",
-            null => null,
+            GitHubCredential => ProviderTypes.GitHub,
+            GitLabCredential => ProviderTypes.GitLab,
             _ => null,
         };
-    }
 }

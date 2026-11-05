@@ -14,4 +14,5 @@ public sealed record IssueSummary(
     string? ChecksOutcome = null,
     string? PullRequestUrl = null,
     string? RebaseOutcome = null,
-    string? RebaseSkippedReason = null);
+    string? RebaseSkippedReason = null,
+    string? ProviderType = null);

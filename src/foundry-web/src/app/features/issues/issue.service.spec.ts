@@ -17,6 +17,7 @@ const mockSummary: IssueSummary = {
   title: 'Fix the bug',
   state: 'detected',
   repositorySlug: 'owner/repo',
+  providerType: 'github',
   detectedAt: '2026-01-01T00:00:00Z',
   url: 'https://github.com/owner/repo/issues/42',
 };
@@ -74,6 +75,25 @@ describe('IssueService', () => {
 
     // Assert — mapper adds missing optional fields; use toMatchObject to check the data we care about
     expect(service.issues()).toMatchObject(mockIssues);
+  });
+
+  it('should carry pullRequestUrl and providerType through loadIssues so the card can word its PR link', () => {
+    // Arrange
+    const gitlabSummary: IssueSummary = {
+      ...mockSummary,
+      state: 'review',
+      pullRequestUrl: 'https://gitlab.com/group/project/-/merge_requests/7',
+      providerType: 'gitlab',
+    };
+
+    // Act
+    service.loadIssues();
+    httpMock.expectOne('/api/issues').flush({ items: [gitlabSummary], nextCursor: null });
+
+    // Assert
+    const [loaded] = service.issues();
+    expect(loaded.pullRequestUrl).toBe('https://gitlab.com/group/project/-/merge_requests/7');
+    expect(loaded.providerType).toBe('gitlab');
   });
 
   // Cycle 2: loadIssues with repositoryId appends query param
@@ -217,13 +237,11 @@ describe('IssueService', () => {
     // Arrange
     const detail: IssueDetail = {
       ...mockSummary,
-      providerType: 'GitHub',
       author: 'dev',
       labels: ['bug'],
       stateDetails: {
         workerRunId: null,
         branchName: null,
-        pullRequestUrl: null,
         feedbackCutoffAt: null,
         failureReason: null,
         failedAt: null,
@@ -250,13 +268,11 @@ describe('IssueService', () => {
     const triggerKind: RevisionTriggerKind = 'failed_checks';
     const detail: IssueDetail = {
       ...mockSummary,
-      providerType: 'GitHub',
       author: 'dev',
       labels: [],
       stateDetails: {
         workerRunId: null,
         branchName: null,
-        pullRequestUrl: null,
         feedbackCutoffAt: null,
         failureReason: null,
         failedAt: null,
@@ -378,13 +394,11 @@ describe('IssueService', () => {
     const detailB: IssueDetail = {
       ...mockSummary,
       id: 'def456',
-      providerType: 'GitHub',
       author: 'dev',
       labels: [],
       stateDetails: {
         workerRunId: null,
         branchName: null,
-        pullRequestUrl: null,
         feedbackCutoffAt: null,
         failureReason: null,
         failedAt: null,

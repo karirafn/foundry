@@ -19,6 +19,23 @@ internal sealed class CredentialResolver(DbContext db, ILogger<CredentialResolve
             .Include(c => c.Namespaces)
             .ToListAsync(cancellationToken);
 
+        Credential? best = SelectMostSpecific(candidates, slug);
+
+        if (best is not null && best.IsTokenUnreadable)
+        {
+            logger.LogWarning(CredentialWarnings.UnreadableToken, best.Id.Value);
+        }
+
+        return best;
+    }
+
+    /// <summary>
+    /// Picks the candidate whose covering namespace for <paramref name="slug"/> is the most specific
+    /// (most segments); the first such candidate wins a tie. Candidates must already be narrowed to
+    /// the repository's host. Shared by single and batch resolution so both apply one rule.
+    /// </summary>
+    internal static Credential? SelectMostSpecific(IEnumerable<Credential> candidates, RepositorySlug slug)
+    {
         Credential? best = null;
         int bestSegmentCount = -1;
 
@@ -36,11 +53,6 @@ internal sealed class CredentialResolver(DbContext db, ILogger<CredentialResolve
                 bestSegmentCount = covering.SegmentCount;
                 best = candidate;
             }
-        }
-
-        if (best is not null && best.IsTokenUnreadable)
-        {
-            logger.LogWarning(CredentialWarnings.UnreadableToken, best.Id.Value);
         }
 
         return best;

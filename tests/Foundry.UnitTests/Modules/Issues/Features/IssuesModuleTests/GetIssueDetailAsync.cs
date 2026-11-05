@@ -6,7 +6,6 @@ using Foundry.Modules.Issues.Features;
 using Foundry.Modules.Issues.Features.Claiming;
 using Foundry.Modules.Issues.Features.TransientRetry;
 using Foundry.Modules.Monitoring.Contracts;
-using Foundry.Modules.Monitoring.Contracts.Queries;
 using Foundry.Modules.Workers.Contracts;
 using Foundry.Shared;
 using Foundry.Shared.Infrastructure;
@@ -135,39 +134,6 @@ public sealed class GetIssueDetailAsync : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenProviderTypeIsKnown_ReturnsProviderTypeInDetail()
-    {
-        // Arrange
-        _slugQueries.AddProviderType(RepositoryId, "github");
-        DetectedIssue issue = await SaveDetectedIssueAsync();
-
-        // Act
-        Result<IssueDetail> result = await _sut.GetIssueDetailAsync(
-            issue.Id,
-            TestContext.Current.CancellationToken);
-
-        // Assert
-        IssueDetail detail = result.ShouldBeOfType<Result<IssueDetail>.Success>().Value;
-        detail.ProviderType.ShouldBe("github");
-    }
-
-    [Fact]
-    public async Task WhenProviderTypeIsUnknown_ReturnsEmptyProviderType()
-    {
-        // Arrange — no provider type registered in stub
-        DetectedIssue issue = await SaveDetectedIssueAsync();
-
-        // Act
-        Result<IssueDetail> result = await _sut.GetIssueDetailAsync(
-            issue.Id,
-            TestContext.Current.CancellationToken);
-
-        // Assert
-        IssueDetail detail = result.ShouldBeOfType<Result<IssueDetail>.Success>().Value;
-        detail.ProviderType.ShouldBe(string.Empty);
-    }
-
-    [Fact]
     public async Task WhenBlockedIssueExists_ReturnsStateDetailsWithBlockedBy()
     {
         // Arrange
@@ -220,7 +186,6 @@ public sealed class GetIssueDetailAsync : IAsyncDisposable
         stateDetails.ShouldSatisfyAllConditions(
             () => stateDetails.WorkerRunId.ShouldBe(workerRunId.Value),
             () => stateDetails.BranchName.ShouldBe("feat/issue-1"),
-            () => stateDetails.PullRequestUrl.ShouldBe("https://github.com/owner/repo/pull/42"),
             () => stateDetails.FeedbackCutoffAt.ShouldNotBeNull()
                 .ShouldBe(feedbackCutoffAt, tolerance: TimeSpan.FromSeconds(1)));
     }
@@ -292,7 +257,6 @@ public sealed class GetIssueDetailAsync : IAsyncDisposable
         IssueStateDetails stateDetails = detail.StateDetails.ShouldNotBeNull();
         stateDetails.ShouldSatisfyAllConditions(
             () => stateDetails.BranchName.ShouldBe("feat/issue-1"),
-            () => stateDetails.PullRequestUrl.ShouldBe("https://github.com/owner/repo/pull/42"),
             () => stateDetails.CompletedAt.ShouldNotBeNull()
                 .ShouldBe(completedAt, tolerance: TimeSpan.FromSeconds(1)));
     }
@@ -748,50 +712,9 @@ public sealed class GetIssueDetailAsync : IAsyncDisposable
         stateDetails.ShouldSatisfyAllConditions(
             () => stateDetails.WorkerRunId.ShouldBe(workerRunId.Value),
             () => stateDetails.BranchName.ShouldBe("feat/issue-1"),
-            () => stateDetails.PullRequestUrl.ShouldBe("https://github.com/owner/repo/pull/42"),
             () => stateDetails.FeedbackCutoffAt.ShouldNotBeNull()
                 .ShouldBe(feedbackCutoffAt, tolerance: TimeSpan.FromSeconds(1)),
             () => stateDetails.ChecksOutcome.ShouldBeNull(),
             () => stateDetails.FailingChecks.ShouldBeNull());
-    }
-
-    private sealed class StubRepositorySlugQueries : IRepositorySlugQueries
-    {
-        private readonly Dictionary<MonitoredRepositoryId, string> _slugs = [];
-        private readonly Dictionary<MonitoredRepositoryId, string> _providerTypes = [];
-
-        public void AddSlug(MonitoredRepositoryId repositoryId, string slug)
-        {
-            _slugs[repositoryId] = slug;
-        }
-
-        public void AddProviderType(MonitoredRepositoryId repositoryId, string providerType)
-        {
-            _providerTypes[repositoryId] = providerType;
-        }
-
-        public Task<IReadOnlyDictionary<MonitoredRepositoryId, string>> GetSlugsAsync(
-            IReadOnlySet<MonitoredRepositoryId> repositoryIds,
-            CancellationToken cancellationToken)
-        {
-            Dictionary<MonitoredRepositoryId, string> result = [];
-            foreach (MonitoredRepositoryId id in repositoryIds)
-            {
-                if (_slugs.TryGetValue(id, out string? slug))
-                {
-                    result[id] = slug;
-                }
-            }
-
-            return Task.FromResult<IReadOnlyDictionary<MonitoredRepositoryId, string>>(result);
-        }
-
-        public Task<string?> GetProviderTypeAsync(
-            MonitoredRepositoryId repositoryId,
-            CancellationToken cancellationToken)
-        {
-            _providerTypes.TryGetValue(repositoryId, out string? providerType);
-            return Task.FromResult(providerType);
-        }
     }
 }

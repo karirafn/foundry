@@ -4,7 +4,6 @@ using Foundry.Modules.Issues.Domain.Entities.States;
 using Foundry.Modules.Issues.Features;
 using Foundry.Modules.Issues.Features.Claiming;
 using Foundry.Modules.Monitoring.Contracts;
-using Foundry.Modules.Monitoring.Contracts.Queries;
 using Foundry.Modules.Workers.Contracts;
 using Foundry.Shared;
 using Foundry.Shared.Infrastructure;
@@ -110,6 +109,27 @@ public sealed class GetIssueSummariesAsync : IAsyncDisposable
             () => summary.Id.ShouldBe(issue.Id.Value),
             () => summary.DetectedAt.ShouldBe(detectedAt, tolerance: TimeSpan.FromSeconds(1)),
             () => summary.Url.ShouldBe("https://github.com/owner/repo/issues/1"));
+    }
+
+    [Theory]
+    [InlineData("github")]
+    [InlineData("gitlab")]
+    [InlineData(null)]
+    public async Task WhenRepositoryHasProviderType_SummaryCarriesProviderType(string? providerType)
+    {
+        // Arrange
+        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
+        _slugQueries.AddSlug(repositoryId, "owner/repo", providerType);
+        await CreateAndPersistDetectedIssueAsync(repositoryId, issueNumber: 1, DateTimeOffset.UtcNow);
+
+        // Act
+        IReadOnlyList<IssueSummary> result = await _sut.GetIssueSummariesAsync(
+            repositoryId: null,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        IssueSummary summary = result.ShouldHaveSingleItem();
+        summary.ProviderType.ShouldBe(providerType);
     }
 
     [Fact]
@@ -254,31 +274,5 @@ public sealed class GetIssueSummariesAsync : IAsyncDisposable
         // Assert
         IssueSummary summary = result.ShouldHaveSingleItem();
         summary.FailureClassification.ShouldBe(FailureCategory.NonZeroExitToken);
-    }
-
-    private sealed class StubRepositorySlugQueries : IRepositorySlugQueries
-    {
-        private readonly Dictionary<MonitoredRepositoryId, string> _slugs = [];
-
-        public void AddSlug(MonitoredRepositoryId repositoryId, string slug)
-        {
-            _slugs[repositoryId] = slug;
-        }
-
-        public Task<IReadOnlyDictionary<MonitoredRepositoryId, string>> GetSlugsAsync(
-            IReadOnlySet<MonitoredRepositoryId> repositoryIds,
-            CancellationToken cancellationToken)
-        {
-            Dictionary<MonitoredRepositoryId, string> result = repositoryIds
-                .Where(id => _slugs.ContainsKey(id))
-                .ToDictionary(id => id, id => _slugs[id]);
-
-            return Task.FromResult<IReadOnlyDictionary<MonitoredRepositoryId, string>>(result);
-        }
-
-        public Task<string?> GetProviderTypeAsync(
-            MonitoredRepositoryId repositoryId,
-            CancellationToken cancellationToken)
-            => Task.FromResult<string?>(null);
     }
 }

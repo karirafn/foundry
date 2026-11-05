@@ -944,7 +944,6 @@ export interface components {
             title: string;
             state: string;
             repositorySlug: string;
-            providerType: string;
             /** Format: date-time */
             detectedAt: string;
             url: string;
@@ -961,7 +960,6 @@ export interface components {
             /** Format: uuid */
             workerRunId: null | string;
             branchName: null | string;
-            pullRequestUrl: null | string;
             /** Format: date-time */
             feedbackCutoffAt: null | string;
             failureReason: null | string;
@@ -999,6 +997,7 @@ export interface components {
             pullRequestUrl?: null | string;
             rebaseOutcome?: null | string;
             rebaseSkippedReason?: null | string;
+            providerType?: null | string;
         };
         MoveRepositoryRequestBody: {
             /** Format: int32 */

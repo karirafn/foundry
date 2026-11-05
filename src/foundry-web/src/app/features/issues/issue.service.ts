@@ -512,6 +512,8 @@ export class IssueService {
         inputTokens: i.runStats.inputTokens === null ? null : this._toFiniteNumber(i.runStats.inputTokens),
         outputTokens: i.runStats.outputTokens === null ? null : this._toFiniteNumber(i.runStats.outputTokens),
       },
+      pullRequestUrl: i.pullRequestUrl ?? null,
+      providerType: i.providerType ?? null,
     };
   }
 

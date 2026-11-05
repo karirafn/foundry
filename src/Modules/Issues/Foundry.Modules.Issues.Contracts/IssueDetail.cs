@@ -8,7 +8,6 @@ public sealed record IssueDetail(
     string Title,
     string State,
     string RepositorySlug,
-    string ProviderType,
     DateTimeOffset DetectedAt,
     string Url,
     string Author,
@@ -18,7 +17,6 @@ public sealed record IssueDetail(
 public sealed record IssueStateDetails(
     Guid? WorkerRunId,
     string? BranchName,
-    string? PullRequestUrl,
     DateTimeOffset? FeedbackCutoffAt,
     string? FailureReason,
     DateTimeOffset? FailedAt,
