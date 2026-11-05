@@ -53,9 +53,12 @@ COPY package.json package-lock.json /opt/claude-code/
 RUN npm ci --prefix /opt/claude-code --omit=dev --no-audit --no-fund && npm cache clean --force
 ENV PATH=/opt/claude-code/node_modules/.bin:$PATH
 
-# Pre-create ~/.claude and ~/.runtime owned by the built-in node user (UID 1000).
+# Pre-create ~/.claude, ~/.claude-credentials and ~/.runtime owned by the built-in node
+# user (UID 1000).  ~/.claude is the container-local Claude config dir; an OAuth worker
+# mounts the shared credential volume at ~/.claude-credentials (ADR 0090), and a node-owned
+# mountpoint keeps the volume writable for the CLI even if a worker is the first to mount it.
 # ~/.runtime is the XDG_RUNTIME_DIR used by rootless dockerd; pre-creating it here
 # is belt-and-suspenders — the entrypoint mkdir -p also suffices since node owns $HOME.
-RUN mkdir -p /home/node/.claude /home/node/.runtime \
-    && chown node:node /home/node/.claude /home/node/.runtime \
+RUN mkdir -p /home/node/.claude /home/node/.claude-credentials /home/node/.runtime \
+    && chown node:node /home/node/.claude /home/node/.claude-credentials /home/node/.runtime \
     && chmod 700 /home/node/.runtime

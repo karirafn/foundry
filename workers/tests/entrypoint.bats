@@ -33,7 +33,7 @@ setup() {
     # run must never touch the developer's own Claude Code settings.
     export HOME="$BATS_TEST_TMPDIR/home"
     /bin/mkdir -p "$HOME/.claude"
-    unset CLAUDE_CONFIG_DIR
+    unset CLAUDE_CONFIG_DIR CLAUDE_SECURESTORAGE_CONFIG_DIR
 
     # Full-entrypoint tests run as the non-root CI user, so they exercise the non-root
     # phase, which first verifies /etc/claude-code/managed-settings.json via stat. Fake a
@@ -811,6 +811,48 @@ set_required_env_no_auth() {
 
     [ "$status" -eq 0 ]
     [ -f "$BATS_TEST_TMPDIR/claude_called" ]
+}
+
+@test "auth: credential file in CLAUDE_SECURESTORAGE_CONFIG_DIR with a container-local config dir — entrypoint reaches claude" {
+    # Foundry's OAuth wiring (ADR 0090): the shared credential volume is the CLI's
+    # credential store only, and CLAUDE_CONFIG_DIR stays unset so ~/.claude is per-container.
+    cat > "$FAKE_BIN_DIR/claude" <<EOF
+#!/bin/bash
+printf '%s|%s\n' "\${CLAUDE_SECURESTORAGE_CONFIG_DIR:-}" "\${CLAUDE_CONFIG_DIR:-unset}" > "$BATS_TEST_TMPDIR/claude_env"
+exit 0
+EOF
+    chmod +x "$FAKE_BIN_DIR/claude"
+    make_fake_git
+
+    set_required_env_no_auth
+    local cred_dir="$BATS_TEST_TMPDIR/claude-credentials"
+    mkdir -p "$cred_dir"
+    printf '{"token":"fake"}' > "$cred_dir/.credentials.json"
+    export CLAUDE_SECURESTORAGE_CONFIG_DIR="$cred_dir"
+
+    run bash "$ENTRYPOINT"
+
+    [ "$status" -eq 0 ]
+    [ "$(head -n1 "$BATS_TEST_TMPDIR/claude_env")" = "$cred_dir|unset" ]
+}
+
+@test "auth: CLAUDE_SECURESTORAGE_CONFIG_DIR without a credential file — exits non-zero even when CLAUDE_CONFIG_DIR has one" {
+    # The CLI reads credentials from CLAUDE_SECURESTORAGE_CONFIG_DIR when it is set, so a
+    # credential file in CLAUDE_CONFIG_DIR would not authenticate it.
+    make_fake_git
+
+    set_required_env_no_auth
+    local cred_dir="$BATS_TEST_TMPDIR/claude-credentials-empty"
+    local config_dir="$BATS_TEST_TMPDIR/claude-config-with-creds"
+    mkdir -p "$cred_dir" "$config_dir"
+    printf '{"token":"fake"}' > "$config_dir/.credentials.json"
+    export CLAUDE_SECURESTORAGE_CONFIG_DIR="$cred_dir"
+    export CLAUDE_CONFIG_DIR="$config_dir"
+
+    run bash "$ENTRYPOINT"
+
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"CLAUDE_SECURESTORAGE_CONFIG_DIR"* ]]
 }
 
 @test "auth: neither ANTHROPIC_API_KEY nor credential file — entrypoint exits non-zero" {
