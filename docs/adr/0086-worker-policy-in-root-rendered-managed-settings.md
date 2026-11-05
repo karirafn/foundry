@@ -2,6 +2,8 @@
 
 > **2026-11-04 — Amended by [ADR 0088](0088-worker-containers-run-hardened-by-default.md):** the root phase now runs with only `SETUID`/`SETGID` (plus the DinD additions) under `no-new-privileges`, and it writes the managed file to a root-owned tmpfs at `/etc/claude-code` on a read-only root filesystem. The render-then-drop sequence and the non-root invariant check are unchanged.
 
+> **2026-11-05 — Amended:** the list of generated settings in Decision now also includes `attribution` (`commit` and `pr` empty, `sessionUrl` false), so a worker never adds AI attribution. The list drifted: `WorkerSettingsBuilder` gained the section after this ADR was written. The original list was accurate at the time.
+
 ## Context
 
 A worker runs `claude --dangerously-skip-permissions` as `node`, and Foundry's guardrails (the deny list, the merged host hooks) were written to `~/.claude/settings.json`, a file `node` owns. In OAuth mode that directory is the shared credential volume. Claude Code watches user, project, local and managed settings files and reloads `permissions` and `hooks` mid-session, so a worker could rewrite or strip its own guardrails with a single `Bash` call and, through the shared volume, affect every concurrent and later worker.
