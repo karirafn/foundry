@@ -175,4 +175,40 @@ public sealed class Parse
         // Assert
         catalog.Find(WorkerRole.Implement).ShouldNotBeNull().VerdictSchema.ShouldBe("""{"type":"object"}""");
     }
+
+    [Theory]
+    [InlineData("""{"type":""")]
+    [InlineData("""["not","an","object"]""")]
+    public void WhenARoleVerdictSchemaIsNotAJsonObject_FailsNamingTheFile(string schema)
+    {
+        // Arrange
+        Dictionary<string, string> files = ValidFiles();
+        files["implement/verdict.schema.json"] = schema;
+
+        // Act
+        Result<WorkerRoleCatalogContent> result = WorkerRoleCatalogReader.Parse(files);
+
+        // Assert
+        Error error = result.ShouldBeOfType<Result<WorkerRoleCatalogContent>.Failure>().Error;
+        error.ShouldSatisfyAllConditions(
+            () => error.Code.ShouldBe(WorkerRoleCatalogReader.InvalidCatalogCode),
+            () => error.Message.ShouldContain("roles/implement/verdict.schema.json"));
+    }
+
+    [Theory]
+    [InlineData("not json")]
+    [InlineData("""[]""")]
+    public void WhenTheSharedVerdictDefinitionsAreNotAJsonObject_FailsNamingTheFile(string definitions)
+    {
+        // Arrange
+        Dictionary<string, string> files = ValidFiles();
+        files["shared/verdict.defs.json"] = definitions;
+
+        // Act
+        Result<WorkerRoleCatalogContent> result = WorkerRoleCatalogReader.Parse(files);
+
+        // Assert
+        result.ShouldBeOfType<Result<WorkerRoleCatalogContent>.Failure>().Error.Message
+            .ShouldContain("roles/shared/verdict.defs.json");
+    }
 }

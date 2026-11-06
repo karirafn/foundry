@@ -571,6 +571,17 @@ namespace Foundry.WebApi.Migrations
                         .HasDefaultValue("implement")
                         .HasColumnName("role");
 
+                    b.Property<string>("VerdictQuestions")
+                        .HasMaxLength(2147483647)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("verdict_questions");
+
+                    b.Property<string>("VerdictStatus")
+                        .HasMaxLength(20)
+                        .IsUnicode(false)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("verdict_status");
+
                     b.Property<string>("state")
                         .IsRequired()
                         .HasMaxLength(20)

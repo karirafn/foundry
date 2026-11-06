@@ -1,7 +1,10 @@
+using System.Text.Json.Nodes;
+
 using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Workers.Domain.ValueObjects;
 using Foundry.Modules.Workers.Features.ContainerSpec;
 using Foundry.Modules.Workers.Features.Roles;
+using Foundry.Modules.Workers.Features.Verdicts;
 using Foundry.Shared;
 using Foundry.UnitTests.Fakes.Workers;
 
@@ -87,13 +90,130 @@ public sealed class RepositoryRoles
     }
 
     [Fact]
-    public void TheImplementRole_HasNoVerdictSchema()
+    public void TheImplementRole_HasAVerdictSchema()
     {
         // Act
         WorkerRoleCatalogContent catalog = LoadRepositoryCatalog();
 
         // Assert
-        catalog.Find(WorkerRole.Implement).ShouldNotBeNull().VerdictSchema.ShouldBeNull();
+        catalog.Find(WorkerRole.Implement).ShouldNotBeNull().VerdictSchema.ShouldNotBeNull();
+    }
+
+    [Fact]
+    public void TheImplementVerdictSchema_MatchesTheTypedImplementVerdict()
+    {
+        // Arrange
+        JsonObject schema = ReadJsonObject(Path.Combine(RolesDirectory, WorkerRole.Implement.Name, WorkerRoleCatalogReader.VerdictSchemaPath));
+
+        // Act
+        string[] outcomes = [.. schema["properties"]![ImplementVerdict.OutcomeProperty]!["enum"]!.AsArray().Select(node => node!.GetValue<string>())];
+        string[] required = [.. schema["required"]!.AsArray().Select(node => node!.GetValue<string>())];
+        string? conditionalOutcome = schema["if"]?["properties"]?[ImplementVerdict.OutcomeProperty]?["const"]?.GetValue<string>();
+        string[] conditionallyRequired = [.. schema["then"]!["required"]!.AsArray().Select(node => node!.GetValue<string>())];
+
+        // Assert
+        schema.ShouldSatisfyAllConditions(
+            () => outcomes.ShouldBe([ImplementVerdict.DoneToken, ImplementVerdict.NeedsInputToken]),
+            () => required.ShouldBe([ImplementVerdict.OutcomeProperty]),
+            () => conditionalOutcome.ShouldBe(ImplementVerdict.NeedsInputToken),
+            () => conditionallyRequired.ShouldBe([ImplementVerdict.QuestionsProperty]),
+            () => schema["properties"]![ImplementVerdict.QuestionsProperty]!["$ref"]!.GetValue<string>().ShouldBe("#/$defs/questions"),
+            () => schema["additionalProperties"]!.GetValue<bool>().ShouldBeFalse());
+    }
+
+    [Fact]
+    public void TheSharedQuestionsDefinition_MatchesTheQuestionsReader()
+    {
+        // Arrange
+        JsonObject definitions = ReadJsonObject(
+            Path.Combine(RolesDirectory, WorkerRole.SharedFolder, WorkerRoleCatalogReader.SharedVerdictDefinitionsPath));
+
+        // Act
+        JsonNode questions = definitions["$defs"]!["questions"]!;
+        JsonNode items = questions["items"]!;
+        string[] itemRequired = [.. items["required"]!.AsArray().Select(node => node!.GetValue<string>())];
+
+        // Assert
+        questions.ShouldSatisfyAllConditions(
+            () => questions["type"]!.GetValue<string>().ShouldBe("array"),
+            () => questions["minItems"]!.GetValue<int>().ShouldBe(1),
+            () => items["additionalProperties"]!.GetValue<bool>().ShouldBeFalse(),
+            () => itemRequired.ShouldBe([VerdictQuestionsReader.QuestionProperty, VerdictQuestionsReader.ContextProperty]),
+            () => items["properties"]![VerdictQuestionsReader.QuestionProperty]!["minLength"]!.GetValue<int>().ShouldBe(1));
+    }
+
+    [Theory]
+    [MemberData(nameof(RoleNames))]
+    public void EveryRoleVerdictSchemaReference_ResolvesToASharedOrOwnDefinition(string roleName)
+    {
+        // Arrange
+        string schemaPath = Path.Combine(RolesDirectory, roleName, WorkerRoleCatalogReader.VerdictSchemaPath);
+
+        if (!File.Exists(schemaPath))
+        {
+            return;
+        }
+
+        JsonObject schema = ReadJsonObject(schemaPath);
+        JsonObject shared = ReadJsonObject(
+            Path.Combine(RolesDirectory, WorkerRole.SharedFolder, WorkerRoleCatalogReader.SharedVerdictDefinitionsPath));
+        HashSet<string> definitions = [
+            .. (schema["$defs"] as JsonObject ?? []).Select(pair => pair.Key),
+            .. (shared["$defs"] as JsonObject ?? []).Select(pair => pair.Key)];
+
+        // Act
+        List<string> references = [];
+        CollectReferences(schema, references);
+        const string DefsPrefix = "#/$defs/";
+        string[] unresolved = [.. references.Where(reference =>
+            !reference.StartsWith(DefsPrefix, StringComparison.Ordinal)
+            || !definitions.Contains(reference[DefsPrefix.Length..]))];
+
+        // Assert
+        unresolved.ShouldBeEmpty();
+    }
+
+    [Theory]
+    [InlineData("""{"outcome":"done"}""", RunVerdictStatus.Done)]
+    [InlineData("""{"outcome":"needs_input","questions":[{"question":"Which database?","context":"The issue names two."}]}""", RunVerdictStatus.NeedsInput)]
+    public void ASampleMatchingTheImplementVerdictSchema_ParsesWithTheImplementVerdictParser(string sample, RunVerdictStatus expected)
+    {
+        // Act
+        RunVerdict verdict = new ImplementVerdictParser().Parse(JsonNode.Parse(sample)!.AsObject());
+
+        // Assert
+        verdict.Status.ShouldBe(expected);
+    }
+
+    private static JsonObject ReadJsonObject(string path) =>
+        JsonNode.Parse(File.ReadAllText(path))!.AsObject();
+
+    private static void CollectReferences(JsonNode? node, List<string> references)
+    {
+        switch (node)
+        {
+            case JsonObject obj:
+                foreach (KeyValuePair<string, JsonNode?> property in obj)
+                {
+                    if (property.Key == "$ref" && property.Value is JsonValue value)
+                    {
+                        references.Add(value.GetValue<string>());
+                    }
+                    else
+                    {
+                        CollectReferences(property.Value, references);
+                    }
+                }
+
+                break;
+            case JsonArray array:
+                foreach (JsonNode? item in array)
+                {
+                    CollectReferences(item, references);
+                }
+
+                break;
+        }
     }
 
     [Theory]

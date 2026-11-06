@@ -1,0 +1,22 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["outcome"],
+  "properties": {
+    "outcome": {
+      "description": "done when you finished the work; needs_input when the issue cannot be implemented without answers from a person.",
+      "type": "string",
+      "enum": ["done", "needs_input"]
+    },
+    "questions": {
+      "$ref": "#/$defs/questions"
+    }
+  },
+  "if": {
+    "properties": { "outcome": { "const": "needs_input" } },
+    "required": ["outcome"]
+  },
+  "then": {
+    "required": ["questions"]
+  }
+}

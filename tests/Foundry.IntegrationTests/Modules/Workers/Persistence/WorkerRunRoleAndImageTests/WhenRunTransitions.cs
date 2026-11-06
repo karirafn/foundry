@@ -58,4 +58,42 @@ public sealed class WhenRunTransitions : IAsyncDisposable
             () => persisted.Role.ShouldBe(WorkerRole.Implement),
             () => persisted.Image.ShouldBe("foundry-worker:local@sha256:abc"));
     }
+
+    [Fact]
+    public async Task ANeedsInputVerdictIsPersistedWithItsQuestionsOnTheTerminalRun()
+    {
+        // Arrange
+        WorkerRunId runId = WorkerRunId.New();
+        RunVerdict verdict = RunVerdict.NeedsInput(
+        [
+            new RunVerdictQuestion("Which database?", "The issue names both SQLite and Postgres."),
+            new RunVerdictQuestion("Keep the v1 endpoint?", string.Empty),
+        ]);
+        ActiveRun active = StartingRun.Begin(IssueId.New(), runId, WorkerRole.Implement, image: null).Activate(
+            ContainerId.From("container-verdict"),
+            BranchName.From("feat/43-test"),
+            MonitoredRepositoryId.New());
+        CompletedRun completed = active.Complete(0, BranchName.From("feat/43-test"), pullRequestUrl: null, verdict: verdict);
+
+        using (IServiceScope scope = _factory.Services.CreateScope())
+        {
+            DbContext dbContext = scope.ServiceProvider.GetRequiredService<DbContext>();
+            dbContext.Set<WorkerRun>().Add(completed);
+            await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+        }
+
+        // Act
+        WorkerRun persisted;
+        using (IServiceScope scope = _factory.Services.CreateScope())
+        {
+            DbContext dbContext = scope.ServiceProvider.GetRequiredService<DbContext>();
+            persisted = await dbContext.Set<WorkerRun>()
+                .SingleAsync(run => run.Id == runId, TestContext.Current.CancellationToken);
+        }
+
+        // Assert
+        persisted.ShouldSatisfyAllConditions(
+            () => persisted.VerdictStatus.ShouldBe(RunVerdictStatus.NeedsInput),
+            () => persisted.Verdict.ShouldBe(verdict));
+    }
 }
