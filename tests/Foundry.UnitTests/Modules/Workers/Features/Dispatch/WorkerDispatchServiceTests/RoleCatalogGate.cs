@@ -70,7 +70,9 @@ public sealed class RoleCatalogGate : WorkerDispatchServiceTestBase
         await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
 
         // Assert
-        logger.Entries.ShouldContain(e => e.Level == LogLevel.Information && e.Message == WorkerDispatchService.RoleCatalogNotLoadedMessage);
+        logger.Entries.ShouldContain(e =>
+            e.Level == LogLevel.Information
+            && e.Message == "Dispatch skipped: worker role catalog is not loaded.");
     }
 
     [Fact]
