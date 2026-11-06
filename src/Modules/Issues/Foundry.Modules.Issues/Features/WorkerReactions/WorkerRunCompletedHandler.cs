@@ -95,19 +95,21 @@ internal sealed class WorkerRunCompletedHandler(
                 return;
             }
 
-            // The revision path derives the cutoff from RevisionTrigger.ReviewFeedback.NewestConsumedCommentAt
-            // (set when comments were consumed) rather than RunStartedAt. This is intentional: a first run has no
-            // consumed comments and anchors to run start; a revision run has already consumed comments, so it
-            // anchors to those instead, ensuring any new feedback posted after the consumed batch is not dropped.
+            // A ReviewFeedback revision anchors the cutoff to the newest comment it consumed, so feedback posted
+            // after the consumed batch is not dropped. A revision that consumed no comments (FailedChecks,
+            // RebaseConflict, or ReviewFeedback without a consumed timestamp) anchors to the run's start time, the
+            // same as a first run, so a comment posted while the run was working is still read.
+            // The ?? UtcNow fallback is back-compat for events serialized before RunStartedAt existed (see above).
             // Both paths rebase: a revision that pushed nothing may still be behind the default branch (ADR 0087).
+            DateTimeOffset revisionRunStartedAt = @event.RunStartedAt ?? DateTimeOffset.UtcNow;
             if (@event.BranchName is not null && @event.PullRequestUrl is not null)
             {
-                RebasePendingIssue revisionRebasePending = revisionInProgress.MarkRebasePending();
+                RebasePendingIssue revisionRebasePending = revisionInProgress.MarkRebasePending(revisionRunStartedAt);
                 await db.TransitionAsync(revisionInProgress, revisionRebasePending, domainEventDispatcher, cancellationToken);
             }
             else
             {
-                RebasePendingIssue revisionRebasePending = revisionInProgress.MarkUnchangedRebasePending();
+                RebasePendingIssue revisionRebasePending = revisionInProgress.MarkUnchangedRebasePending(revisionRunStartedAt);
                 await db.TransitionAsync(revisionInProgress, revisionRebasePending, domainEventDispatcher, cancellationToken);
             }
 

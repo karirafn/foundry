@@ -12,6 +12,8 @@ namespace Foundry.UnitTests.Modules.Issues.Domain.Entities.States.RevisionInProg
 
 public sealed class MarkInReview
 {
+    private static readonly DateTimeOffset RunStartedAt = new(2026, 6, 1, 11, 0, 0, TimeSpan.Zero);
+
     [Fact]
     public void WhenMarkedInReview_ReturnsReviewIssueWithSameId()
     {
@@ -22,7 +24,7 @@ public sealed class MarkInReview
             .RevisionInProgress();
 
         // Act
-        ReviewIssue review = revisionInProgress.MarkInReview();
+        ReviewIssue review = revisionInProgress.MarkInReview(RunStartedAt);
 
         // Assert
         review.Id.ShouldBe(revisionInProgress.Id);
@@ -38,7 +40,7 @@ public sealed class MarkInReview
             .RevisionInProgress();
 
         // Act
-        revisionInProgress.MarkInReview();
+        revisionInProgress.MarkInReview(RunStartedAt);
 
         // Assert
         IssueInReview domainEvent = revisionInProgress.DomainEvents.ShouldHaveSingleItem().ShouldBeOfType<IssueInReview>();
@@ -59,7 +61,7 @@ public sealed class MarkInReview
             .RevisionInProgress();
 
         // Act
-        ReviewIssue review = revisionInProgress.MarkInReview();
+        ReviewIssue review = revisionInProgress.MarkInReview(RunStartedAt);
 
         // Assert
         review.ShouldSatisfyAllConditions(
@@ -74,20 +76,18 @@ public sealed class MarkInReview
     }
 
     [Fact]
-    public void WhenMarkedInReview_WithNullNewestConsumedComment_ReturnsReviewIssueWithUtcNowFallback()
+    public void WhenMarkedInReview_WithNullNewestConsumedComment_FallsBackToRunStartedAt()
     {
         // Arrange
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
         RevisionInProgressIssue revisionInProgress = new IssueBuilder()
             .WithMonitoredRepositoryId(repositoryId)
             .RevisionInProgress();
-        DateTimeOffset before = DateTimeOffset.UtcNow;
 
         // Act
-        ReviewIssue review = revisionInProgress.MarkInReview();
+        ReviewIssue review = revisionInProgress.MarkInReview(RunStartedAt);
 
         // Assert
-        DateTimeOffset after = DateTimeOffset.UtcNow;
-        review.FeedbackCutoffAt.ShouldBeInRange(before, after);
+        review.FeedbackCutoffAt.ShouldBe(RunStartedAt);
     }
 }
