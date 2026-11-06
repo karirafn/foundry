@@ -57,21 +57,17 @@ public sealed class RevisionInProgressIssue : Issue
     // reported, which preserves the semantic distinction in logs and domain events without diverging the cutoff
     // logic. Do NOT merge them into one method.
 
-    public ReviewIssue MarkInReview()
+    public ReviewIssue MarkInReview(DateTimeOffset runStartedAt)
     {
-        DateTimeOffset feedbackCutoffAt = Trigger is RevisionTrigger.ReviewFeedback rf
-            ? rf.NewestConsumedCommentAt ?? DateTimeOffset.UtcNow
-            : DateTimeOffset.UtcNow;
+        DateTimeOffset feedbackCutoffAt = FeedbackCutoffAt(runStartedAt);
         ReviewIssue review = ReviewIssue.FromRevisionInProgress(this, feedbackCutoffAt);
         AddDomainEvent(new Events.IssueInReview(Id, MonitoredRepositoryId));
         return review;
     }
 
-    public ReviewIssue MarkUnchanged()
+    public ReviewIssue MarkUnchanged(DateTimeOffset runStartedAt)
     {
-        DateTimeOffset feedbackCutoffAt = Trigger is RevisionTrigger.ReviewFeedback rf
-            ? rf.NewestConsumedCommentAt ?? DateTimeOffset.UtcNow
-            : DateTimeOffset.UtcNow;
+        DateTimeOffset feedbackCutoffAt = FeedbackCutoffAt(runStartedAt);
         ReviewIssue review = ReviewIssue.FromRevisionInProgress(this, feedbackCutoffAt);
         AddDomainEvent(new Events.IssueInReview(Id, MonitoredRepositoryId));
         return review;
@@ -84,11 +80,9 @@ public sealed class RevisionInProgressIssue : Issue
     // The semantic distinction is preserved in logs and events without diverging the cutoff logic.
     // Do NOT merge them into one method.
 
-    public RebasePendingIssue MarkRebasePending()
+    public RebasePendingIssue MarkRebasePending(DateTimeOffset runStartedAt)
     {
-        DateTimeOffset feedbackCutoffAt = Trigger is RevisionTrigger.ReviewFeedback rf
-            ? rf.NewestConsumedCommentAt ?? DateTimeOffset.UtcNow
-            : DateTimeOffset.UtcNow;
+        DateTimeOffset feedbackCutoffAt = FeedbackCutoffAt(runStartedAt);
         RebasePendingIssue rebasePending = RebasePendingIssue.FromRevisionInProgress(this, feedbackCutoffAt);
         AddDomainEvent(new Events.IssueRebasePending(
             Id,
@@ -98,11 +92,9 @@ public sealed class RevisionInProgressIssue : Issue
         return rebasePending;
     }
 
-    public RebasePendingIssue MarkUnchangedRebasePending()
+    public RebasePendingIssue MarkUnchangedRebasePending(DateTimeOffset runStartedAt)
     {
-        DateTimeOffset feedbackCutoffAt = Trigger is RevisionTrigger.ReviewFeedback rf
-            ? rf.NewestConsumedCommentAt ?? DateTimeOffset.UtcNow
-            : DateTimeOffset.UtcNow;
+        DateTimeOffset feedbackCutoffAt = FeedbackCutoffAt(runStartedAt);
         RebasePendingIssue rebasePending = RebasePendingIssue.FromRevisionInProgress(this, feedbackCutoffAt);
         AddDomainEvent(new Events.IssueRebasePending(
             Id,
@@ -111,6 +103,16 @@ public sealed class RevisionInProgressIssue : Issue
             rebasePending.EnteredRebasePendingAt));
         return rebasePending;
     }
+
+    // The cutoff the next review pass reads comments after. A ReviewFeedback trigger anchors to the newest comment
+    // it consumed, so feedback posted after that batch is still read. Every other trigger (FailedChecks,
+    // RebaseConflict) consumed no comments, so it anchors to the run's start time — the same as a first run — and a
+    // comment posted while the run was working is not dropped. A ReviewFeedback trigger with no consumed timestamp
+    // falls back to the run's start time as well.
+    private DateTimeOffset FeedbackCutoffAt(DateTimeOffset runStartedAt) =>
+        Trigger is RevisionTrigger.ReviewFeedback { NewestConsumedCommentAt: DateTimeOffset newestConsumedCommentAt }
+            ? newestConsumedCommentAt
+            : runStartedAt;
 
     public RevisionFailedIssue MarkFailed(
         string failureReason,
