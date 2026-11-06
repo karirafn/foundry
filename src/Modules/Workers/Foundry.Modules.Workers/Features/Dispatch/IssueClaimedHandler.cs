@@ -161,7 +161,7 @@ internal sealed class IssueClaimedHandler(
         {
             return Result<WorkerContainerSpec>.Fail(new Error(
                 "Worker.RoleUnavailable",
-                $"The worker role '{startingRun.Role.Name}' is not loaded. Its catalog is read during the worker image build; wait for the image build to succeed."));
+                $"The worker role '{startingRun.Role.Name}' is not loaded: dispatch ran before the worker role catalog loaded. Retry the issue."));
         }
 
         if (string.IsNullOrEmpty(claimed.AccountToken))

@@ -17,11 +17,13 @@ using Foundry.Modules.Workers.Features.ContainerSpec;
 using Foundry.Modules.Workers.Features.Dispatch;
 using Foundry.Modules.Workers.Features.Orchestration;
 using Foundry.Modules.Workers.Features.Outcome;
+using Foundry.Modules.Workers.Features.Roles;
 using Foundry.Modules.Workers.Features.Verdicts;
 using Foundry.Shared;
 using Foundry.Shared.Infrastructure;
 using Foundry.Shared.Infrastructure.Outbox;
 using Foundry.Testing;
+using Foundry.UnitTests.Fakes.Workers;
 using Foundry.WebApi.Persistence;
 
 using Microsoft.Data.Sqlite;
@@ -116,6 +118,7 @@ public sealed class WhenRelayedBacklogExceedsMaxConcurrent : IAsyncDisposable
             prRetryDelay: TimeSpan.Zero));
         services.AddScoped<ICredentialGate, AlwaysCanDispatchCredentialGate>();
         services.AddSingleton<RunningBranchCompareGate>();
+        services.AddSingleton<IWorkerRoleCatalogStore>(StubWorkerRoleCatalogStore.With());
         services.AddScoped<IWebhookStatusQueries>(_ => new StubWebhookStatusQueries());
         services.AddSingleton<IWorkerOrchestrator, NullWorkerOrchestrator>();
         services.AddSingleton(TimeProvider.System);

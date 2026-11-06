@@ -6,6 +6,7 @@ using Foundry.Modules.Workers.Contracts;
 using Foundry.Modules.Workers.Domain.Entities;
 using Foundry.Modules.Workers.Domain.Entities.States;
 using Foundry.Modules.Workers.Domain.ValueObjects;
+using Foundry.Modules.Workers.Features.Roles;
 using Foundry.Shared;
 using Foundry.Shared.Infrastructure;
 
@@ -21,13 +22,16 @@ namespace Foundry.Modules.Workers.Features.Dispatch;
 /// Periodic dispatch loop. Each tick reconciles orphaned runs once (after startup), delegates
 /// per-run monitoring to <see cref="WorkerRunMonitor"/>, auto-resumes an expired usage-limit
 /// pause, and — when every dispatch gate passes — reserves a slot and publishes
-/// <see cref="WorkerCapacityAvailable"/>.
+/// <see cref="WorkerCapacityAvailable"/>. Dispatch also waits until the worker role catalog
+/// has been published, since the in-memory catalog is empty after a restart until the startup image build completes.
 /// </summary>
 internal sealed class WorkerDispatchService(
     IServiceScopeFactory scopeFactory,
     ILogger<WorkerDispatchService> logger,
     TimeProvider timeProvider) : PeriodicBackgroundService(logger)
 {
+    internal const string RoleCatalogNotLoadedMessage = "Dispatch skipped: worker role catalog is not loaded.";
+
     private static readonly TimeSpan Interval = TimeSpan.FromSeconds(10);
 
     // Safe without locking — PeriodicTimer loop is single-threaded
@@ -104,6 +108,13 @@ internal sealed class WorkerDispatchService(
             logger.LogDebug(
                 "Dispatch skipped: worker image build is not ready (ImageBuildStatus={ImageBuildStatus}).",
                 imageBuildStatus);
+            return;
+        }
+
+        if (scope.ServiceProvider.GetRequiredService<IWorkerRoleCatalogStore>().Current is null)
+        {
+            // Information, not Debug: operators and the composed-host smoke test wait on this line.
+            logger.LogInformation(RoleCatalogNotLoadedMessage);
             return;
         }
 
