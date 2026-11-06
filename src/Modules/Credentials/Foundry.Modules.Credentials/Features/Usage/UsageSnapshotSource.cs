@@ -1,7 +1,7 @@
 namespace Foundry.Modules.Credentials.Features.Usage;
 
 /// <summary>
-/// Which CLI output a <see cref="UsageSnapshot"/> was read from (ADR 0097).
+/// Which CLI output a <see cref="UsageSnapshot"/> was read from (ADR 0099).
 /// Serialized on the wire as a camelCase string (<c>usageReport</c> | <c>probeTurn</c>).
 /// </summary>
 internal enum UsageSnapshotSource

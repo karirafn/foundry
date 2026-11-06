@@ -892,7 +892,7 @@ public sealed class PollAsync : IAsyncDisposable
     }
 
     // ---------------------------------------------------------------------------
-    // Two-source poll: /usage first, probe turn as fallback (ADR 0097)
+    // Two-source poll: /usage first, probe turn as fallback (ADR 0099)
     // ---------------------------------------------------------------------------
 
     private async Task<(UsageSnapshot? Result, CapturingUsageSnapshotBroadcaster Broadcaster, UsageSnapshotState State)> RunPollAsync(

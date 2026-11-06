@@ -8,7 +8,7 @@ namespace Foundry.Modules.Credentials.Features.Usage;
 /// into a <see cref="UsageParseResult"/> whose snapshot has <see cref="UsageSnapshotSource.ProbeTurn"/>.
 /// <para>
 /// The probe turn (<c>claude -p "Reply with: ok" --max-turns 1 --output-format stream-json --verbose</c>)
-/// runs only when the <c>/usage</c> report carried no rate limits (ADR 0097). A real turn emits a
+/// runs only when the <c>/usage</c> report carried no rate limits (ADR 0099). A real turn emits a
 /// <c>rate_limit_event</c> whose <c>rate_limit_info.unifiedWindows</c> carries the session and weekly
 /// windows; severity is derived here because the event carries none.
 /// </para>

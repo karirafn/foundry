@@ -23,7 +23,7 @@ internal abstract record UsageParseResult
     /// <summary>
     /// <c>/usage</c> emitted a <c>usage_report</c> whose <c>rate_limits</c> (or its <c>limits</c>
     /// rows) is null or absent — a known print-mode regression across CLI versions. The caller
-    /// runs the probe-turn fallback within the same poll (ADR 0097) and keeps
+    /// runs the probe-turn fallback within the same poll (ADR 0099) and keeps
     /// <paramref name="ExtraCredits"/>, when <c>/usage</c> still reported them, alongside the
     /// fallback windows.
     /// </summary>

@@ -1,6 +1,6 @@
 namespace Foundry.Modules.Credentials.Features.Usage;
 
-/// <summary>Which CLI command a usage container runs (ADR 0097).</summary>
+/// <summary>Which CLI command a usage container runs (ADR 0099).</summary>
 internal enum UsageReportCommand
 {
     /// <summary>

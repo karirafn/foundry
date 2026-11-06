@@ -14,7 +14,7 @@ namespace Foundry.Modules.Credentials.Features.Usage;
 /// Process-wide singleton coordinator that runs a usage poll at most once concurrently
 /// (single-flight JOIN semantics) and routes the outcome to the appropriate state transitions and
 /// broadcast. A poll runs <c>claude -p "/usage"</c> and, only when its report carries no rate limits,
-/// the probe-turn fallback after it — sequentially, inside the same single-flight task (ADR 0097).
+/// the probe-turn fallback after it — sequentially, inside the same single-flight task (ADR 0099).
 /// <para>
 /// Singleton lifetime: <see cref="_gate"/> provides process-wide single-flight state via an
 /// in-flight task tracked under a <see cref="Lock"/>. Scoped dependencies (<see cref="DbContext"/>)
@@ -190,7 +190,7 @@ internal sealed class UsagePollCoordinator(
         string accountEmail = account.OAuthAccountEmail!;
         DateTimeOffset capturedAt = DateTimeOffset.UtcNow;
 
-        // Primary source: the /usage report (ADR 0097).
+        // Primary source: the /usage report (ADR 0099).
         Result<string> usageResult = await orchestrator.RunUsageReportAsync(
             new UsageReportSpec(UsageReportCommand.UsageCommand, UsageReportSpec.DefaultTimeoutSeconds),
             cancellationToken);
