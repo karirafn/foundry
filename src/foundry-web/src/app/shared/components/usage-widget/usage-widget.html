@@ -127,7 +127,9 @@
                 ></div>
               </div>
             </div>
-            <p class="usage-popover__reset">Resets {{ meter.resetsAtLocal }}</p>
+            @if (meter.resetsAtLocal) {
+              <p class="usage-popover__reset">Resets {{ meter.resetsAtLocal }}</p>
+            }
           </div>
         }
       </div>
@@ -136,7 +138,9 @@
       @if (vm.credits) {
         <div class="usage-popover__credits">
           <span class="usage-popover__credits-label">Extra usage</span>
-          <span class="usage-popover__credits-value">{{ vm.credits.usedFormatted }} of {{ vm.credits.limitFormatted }}</span>
+          <span class="usage-popover__credits-value"
+            >{{ vm.credits.usedFormatted }}@if (vm.credits.limitFormatted) { of {{ vm.credits.limitFormatted }}}</span
+          >
         </div>
       }
     </div>

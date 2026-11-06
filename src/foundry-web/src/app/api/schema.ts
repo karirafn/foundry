@@ -1275,19 +1275,22 @@ export interface components {
         UsageExtraCreditsResponse: {
             isEnabled: boolean;
             /** Format: int64 */
-            monthlyLimit: number | string;
+            monthlyLimit: null | number | string;
             /** Format: int64 */
             usedCredits: number | string;
             /** Format: double */
-            utilization: number | string;
+            utilization: null | number | string;
             currency: string;
+            /** Format: double */
+            percent: null | number | string;
+            severity: null | string;
         };
         UsageRateLimitResponse: {
             kind: string;
             /** Format: double */
             percent: number | string;
             /** Format: date-time */
-            resetsAt: string;
+            resetsAt: null | string;
             modelDisplayName: null | string;
             severity: string;
             isActive: boolean;
@@ -1300,6 +1303,7 @@ export interface components {
             accountEmail: string;
             /** Format: date-time */
             lastRefreshFailedAt: null | string;
+            source: null | string;
         };
         ValidateTokenRequestBody: {
             token: string;

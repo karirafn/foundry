@@ -19,11 +19,11 @@ namespace Foundry.UnitTests.Modules.Credentials.Features.Usage.UsagePollCoordina
 
 public sealed class RequestRefreshAsync : IAsyncDisposable
 {
-    /// <summary>Minimal stream-json with a rate_limit_event — sufficient for a successful parse.</summary>
+    /// <summary>Minimal <c>/usage</c> stream-json carrying a usage_report with rate limits — a successful parse.</summary>
     private const string ValidUsageLog = """
-        {"type":"system","subtype":"init","cwd":"/workspace","session_id":"abc123","tools":[],"mcp_servers":[],"model":"claude-opus-4-8","permissionMode":"default","apiKeySource":"none"}
-        {"type":"rate_limit_event","rate_limit_info":{"status":"active","resetsAt":1793527200,"rateLimitType":"seven_day","unifiedWindows":{"five_hour":{"utilization":0.14,"resetsAt":1793399400},"seven_day":{"utilization":0.65,"resetsAt":1793527200}}},"uuid":"abc","session_id":"abc123"}
-        {"type":"result","subtype":"success","is_error":false,"duration_ms":100,"duration_api_ms":80,"num_turns":1,"result":"ok","total_cost_usd":0.001,"session_id":"abc123"}
+        {"type":"system","subtype":"init","cwd":"/workspace","session_id":"abc123","tools":[],"mcp_servers":[],"model":"claude-opus-4-8","permissionMode":"default","apiKeySource":"none","claude_code_version":"2.1.316"}
+        {"type":"assistant","message":{"id":"msg_01","type":"message","role":"assistant","model":"<synthetic>","content":[{"type":"text","text":"Current session"}]},"parent_tool_use_id":null,"session_id":"abc123","usage_report":{"session":{},"rate_limits":{"limits":[{"kind":"session","group":"session","percent":14,"resets_at":"2026-11-06T13:00:00Z","severity":"normal","is_active":true}],"extra_usage":null}}}
+        {"type":"result","subtype":"success","is_error":false,"duration_ms":100,"duration_api_ms":0,"num_turns":0,"result":"","total_cost_usd":0,"session_id":"abc123"}
         """;
 
     private readonly SqliteConnection _connection;

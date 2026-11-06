@@ -23,6 +23,7 @@ public sealed class UsageSnapshotBuilder
     private DateTimeOffset _capturedAt = DateTimeOffset.UtcNow;
     private string _accountEmail = "user@example.com";
     private DateTimeOffset? _lastRefreshFailedAt;
+    private UsageSnapshotSource? _source = UsageSnapshotSource.UsageReport;
 
     internal UsageSnapshotBuilder WithLimits(IReadOnlyList<UsageRateLimit> limits)
     {
@@ -60,11 +61,18 @@ public sealed class UsageSnapshotBuilder
         return this;
     }
 
+    internal UsageSnapshotBuilder WithSource(UsageSnapshotSource? source)
+    {
+        _source = source;
+        return this;
+    }
+
     internal UsageSnapshot Build() =>
         new(
             Limits: _limits,
             ExtraUsage: _extraUsage,
             CapturedAt: _capturedAt,
             AccountEmail: _accountEmail,
-            LastRefreshFailedAt: _lastRefreshFailedAt);
+            LastRefreshFailedAt: _lastRefreshFailedAt,
+            Source: _source);
 }

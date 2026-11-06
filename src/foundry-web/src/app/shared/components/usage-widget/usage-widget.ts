@@ -67,14 +67,16 @@ export interface UsageMeterVm {
   readonly percentLabel: string;
   readonly severityClass: string;
   readonly severityWord: string;
-  readonly resetsAtLocal: string;
+  /** Null when the window reports no reset time. */
+  readonly resetsAtLocal: string | null;
   readonly accessibleName: string;
   readonly isActive: boolean;
 }
 
 export interface UsageCreditsVm {
   readonly usedFormatted: string;
-  readonly limitFormatted: string;
+  /** Null when the plan reports no monthly limit (amount-only credits). */
+  readonly limitFormatted: string | null;
 }
 
 export interface UsageWidgetVm {
@@ -102,7 +104,7 @@ function formatCurrency(amount: number, currency: string): string {
 function buildMeterVm(
   kind: string,
   percent: number,
-  resetsAt: string,
+  resetsAt: string | null,
   modelDisplayName: string | null,
   severity: string,
   isActive: boolean
@@ -113,10 +115,7 @@ function buildMeterVm(
   const percentLabel = `${percent}%`;
   const severityClass = mapSeverityClass(severity);
   const severityWord = mapSeverityWord(severity);
-  const resetsAtLocal = new Intl.DateTimeFormat(undefined, {
-    dateStyle: 'short',
-    timeStyle: 'short',
-  }).format(new Date(resetsAt));
+  const resetsAtLocal = resetsAt === null ? null : formatShortDateTime(resetsAt);
   const accessibleName = `${label} usage, ${percentLabel}, ${severityWord.toLowerCase()}`;
 
   return {
@@ -187,7 +186,8 @@ function buildWidgetVm(snapshot: UsageSnapshot): UsageWidgetVm {
     extraUsage?.isEnabled === true
       ? {
           usedFormatted: formatCurrency(extraUsage.usedCredits, extraUsage.currency),
-          limitFormatted: formatCurrency(extraUsage.monthlyLimit, extraUsage.currency),
+          limitFormatted:
+            extraUsage.monthlyLimit === null ? null : formatCurrency(extraUsage.monthlyLimit, extraUsage.currency),
         }
       : null;
 

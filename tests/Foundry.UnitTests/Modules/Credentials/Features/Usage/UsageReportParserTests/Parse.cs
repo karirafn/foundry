@@ -6,539 +6,378 @@ using Xunit;
 
 namespace Foundry.UnitTests.Modules.Credentials.Features.Usage.UsageReportParserTests;
 
+/// <summary>
+/// Tests for <see cref="UsageReportParser"/>, which reads the <c>usage_report</c> carried on the
+/// synthetic assistant message of <c>claude -p "/usage" --output-format stream-json --verbose</c>.
+/// Fixture shape verified against Claude Code CLI 2.1.316.
+/// </summary>
 public sealed class Parse
 {
     private const string AccountEmail = "user@example.com";
-    private static readonly DateTimeOffset CapturedAt = new(2025, 1, 15, 10, 30, 0, TimeSpan.Zero);
+    private static readonly DateTimeOffset CapturedAt = new(2026, 11, 6, 10, 30, 0, TimeSpan.Zero);
+
+    private const string InitLine =
+        """{"type":"system","subtype":"init","cwd":"/workspace","session_id":"s1","tools":[],"mcp_servers":[],"model":"claude-opus-4-8","permissionMode":"default","apiKeySource":"none","claude_code_version":"2.1.316"}""";
+
+    private const string ResultLine =
+        """{"type":"result","subtype":"success","is_error":false,"duration_ms":900,"duration_api_ms":0,"num_turns":0,"result":"","total_cost_usd":0,"session_id":"s1"}""";
+
+    private const string Session =
+        """{"total_cost_usd":0,"total_api_duration_ms":0,"total_duration_ms":0,"total_lines_added":0,"total_lines_removed":0,"model_usage":{}}""";
+
+    private const string FullLimits = """
+        [
+          {"kind":"session","group":"session","percent":14,"resets_at":"2026-11-06T13:00:00Z","scope":null,"severity":"normal","is_active":false},
+          {"kind":"weekly_all","group":"weekly","percent":65.5,"resets_at":"2026-11-10T09:00:00+00:00","severity":"warning","is_active":true},
+          {"kind":"weekly_scoped","group":"weekly","percent":51,"resets_at":"2026-11-10T09:00:00Z","scope":{"model":{"display_name":"Opus"}},"severity":"normal","is_active":false}
+        ]
+        """;
+
+    private const string FullExtraUsage =
+        """{"is_enabled":true,"monthly_limit":50000,"used_credits":16568,"utilization":null,"currency":"USD"}""";
+
+    private static string AssistantLine(string usageReportJson) =>
+        """{"type":"assistant","message":{"id":"msg_01","type":"message","role":"assistant","model":"<synthetic>","content":[{"type":"text","text":"Current session ..."}],"stop_reason":"end_turn","usage":{"input_tokens":0,"output_tokens":0}},"parent_tool_use_id":null,"session_id":"s1","usage_report":"""
+        + Compact(usageReportJson) + "}";
+
+    private static string RateLimitsReport(string limitsJson, string extraUsageJson) =>
+        """{"session":""" + Session + ""","rate_limits":{"limits":""" + Compact(limitsJson)
+        + ""","extra_usage":""" + extraUsageJson + "}}";
+
+    private static string Compact(string json) => string.Join(' ', json.Split('\n', StringSplitOptions.TrimEntries));
+
+    private static string Log(params string[] lines) => string.Join('\n', lines);
+
+    private static string ReportLog(string limitsJson = FullLimits, string extraUsageJson = FullExtraUsage) =>
+        Log(InitLine, AssistantLine(RateLimitsReport(limitsJson, extraUsageJson)), ResultLine);
+
+    private static UsageSnapshot ParsedSnapshot(string log) =>
+        UsageReportParser.Parse(log, AccountEmail, CapturedAt)
+            .ShouldBeOfType<UsageParseResult.Parsed>()
+            .Snapshot;
 
     // ---------------------------------------------------------------------------
-    // Real rate_limit_event fixtures (CLI 2.1.302+)
-    // ---------------------------------------------------------------------------
-
-    /// <summary>
-    /// Full stream-json from a real turn on CLI 2.1.302: system init + assistant message +
-    /// rate_limit_event with both five_hour and seven_day windows, then a result.
-    /// The rate_limit_event carries rateLimitType="seven_day" so seven_day is IsActive.
-    /// </summary>
-    private const string FullRateLimitEventLog = """
-        {"type":"system","subtype":"init","cwd":"/workspace","session_id":"abc123","tools":[],"mcp_servers":[],"model":"claude-opus-4-8","permissionMode":"default","apiKeySource":"none"}
-        {"type":"assistant","message":{"id":"msg_01","type":"message","role":"assistant","content":[{"type":"text","text":"ok"}],"stop_reason":"end_turn","usage":{"input_tokens":10,"output_tokens":3}},"parent_tool_use_id":null,"session_id":"abc123"}
-        {"type":"rate_limit_event","rate_limit_info":{"status":"rejected","resetsAt":1793527200,"rateLimitType":"seven_day","overageStatus":"allowed_warning","overageResetsAt":1793491200,"isUsingOverage":true,"overageInUse":true,"unifiedWindows":{"five_hour":{"utilization":0.06,"resetsAt":1793399400},"seven_day":{"utilization":1,"resetsAt":1793527200}}},"uuid":"dab406c8-9ba0-40d4-b473-fcbdabd857e3","session_id":"abc123"}
-        {"type":"result","subtype":"success","is_error":false,"duration_ms":1350,"duration_api_ms":1000,"num_turns":1,"result":"ok","total_cost_usd":0.001,"usage":{"input_tokens":10,"output_tokens":3},"session_id":"abc123"}
-        """;
-
-    /// <summary>
-    /// A rate_limit_event where rateLimitType="five_hour", so five_hour is IsActive.
-    /// </summary>
-    private const string FiveHourActiveLog = """
-        {"type":"system","subtype":"init","session_id":"abc123"}
-        {"type":"assistant","message":{"id":"msg_01","type":"message","role":"assistant","content":[{"type":"text","text":"ok"}],"stop_reason":"end_turn","usage":{"input_tokens":10,"output_tokens":3}},"session_id":"abc123"}
-        {"type":"rate_limit_event","rate_limit_info":{"status":"active","resetsAt":1793399400,"rateLimitType":"five_hour","unifiedWindows":{"five_hour":{"utilization":0.85,"resetsAt":1793399400},"seven_day":{"utilization":0.30,"resetsAt":1793527200}}},"uuid":"aaa","session_id":"abc123"}
-        {"type":"result","subtype":"success","is_error":false,"duration_ms":100,"result":"ok","session_id":"abc123"}
-        """;
-
-    /// <summary>
-    /// A stream-json log from an actual turn where no rate_limit_event is emitted (low usage / API-key mode).
-    /// </summary>
-    private const string NoRateLimitEventLog = """
-        {"type":"system","subtype":"init","session_id":"abc123"}
-        {"type":"assistant","message":{"id":"msg_01","type":"message","role":"assistant","content":[{"type":"text","text":"ok"}],"stop_reason":"end_turn","usage":{"input_tokens":10,"output_tokens":3}},"session_id":"abc123"}
-        {"type":"result","subtype":"success","is_error":false,"duration_ms":100,"result":"ok","session_id":"abc123"}
-        """;
-
-    /// <summary>
-    /// A rate_limit_event present but unifiedWindows is absent (CLI &lt; 2.1.302).
-    /// Parser must return NoUsageReport — not Unparseable — because the absence of
-    /// unifiedWindows means we cannot produce useful meter data.
-    /// </summary>
-    private const string NoUnifiedWindowsLog = """
-        {"type":"system","subtype":"init","session_id":"abc123"}
-        {"type":"rate_limit_event","rate_limit_info":{"status":"rejected","resetsAt":1793527200,"rateLimitType":"seven_day","isUsingOverage":true},"uuid":"bbb","session_id":"abc123"}
-        {"type":"result","subtype":"success","is_error":false,"duration_ms":100,"result":"ok","session_id":"abc123"}
-        """;
-
-    /// <summary>
-    /// Valid stream-json followed by a tail line truncated by the log-length cap. The truncated
-    /// line is skipped as non-JSON; the remaining lines carry no rate_limit_event.
-    /// </summary>
-    private const string MalformedJsonLog = """
-        {"type":"system","subtype":"init"}
-        {INVALID JSON CANNOT PARSE THIS
-        """;
-
-    /// <summary>
-    /// Plain-text stderr notices interleaved with a valid stream-json turn (the CLI merges stderr
-    /// into the container log).
-    /// </summary>
-    private const string InterleavedStderrLog = """
-        Warning: no stdin data received in 3s, proceeding without it.
-        {"type":"system","subtype":"init","session_id":"abc123"}
-        some other stderr notice
-        {"type":"rate_limit_event","rate_limit_info":{"status":"allowed","resetsAt":1793399400,"rateLimitType":"five_hour","unifiedWindows":{"five_hour":{"utilization":0.25,"resetsAt":1793399400},"seven_day":{"utilization":0.40,"resetsAt":1793527200}}},"uuid":"ddd","session_id":"abc123"}
-        {"type":"result","subtype":"success","is_error":false,"duration_ms":100,"result":"ok","session_id":"abc123"}
-        """;
-
-    /// <summary>Output with no JSON line at all — the CLI failed authentication.</summary>
-    private const string AuthErrorTextOnlyLog = """
-        Invalid API key · Please run /login
-        """;
-
-    /// <summary>A rate_limit_event whose rate_limit_info is not an object.</summary>
-    private const string MalformedRateLimitInfoLog = """
-        {"type":"system","subtype":"init","session_id":"abc123"}
-        {"type":"rate_limit_event","rate_limit_info":"broken","session_id":"abc123"}
-        """;
-
-    /// <summary>
-    /// A rate_limit_event where a window field has the wrong token type (string where number expected).
-    /// The parser must not throw — return Unparseable.
-    /// </summary>
-    private const string TypeMismatchedRateLimitEventLog = """
-        {"type":"system","subtype":"init","session_id":"abc123"}
-        {"type":"rate_limit_event","rate_limit_info":{"status":"rejected","resetsAt":1793527200,"rateLimitType":"seven_day","unifiedWindows":{"five_hour":{"utilization":"high","resetsAt":1793399400},"seven_day":{"utilization":1,"resetsAt":1793527200}}},"uuid":"ccc","session_id":"abc123"}
-        """;
-
-    /// <summary>
-    /// A rate_limit_event where rateLimitType does not match any known window key.
-    /// The window with the highest utilization must be marked IsActive.
-    /// </summary>
-    private const string UnknownRateLimitTypeLog = """
-        {"type":"system","subtype":"init","session_id":"abc123"}
-        {"type":"rate_limit_event","rate_limit_info":{"status":"active","resetsAt":1793527200,"rateLimitType":"monthly","unifiedWindows":{"five_hour":{"utilization":0.06,"resetsAt":1793399400},"seven_day":{"utilization":0.90,"resetsAt":1793527200}}},"uuid":"ddd","session_id":"abc123"}
-        {"type":"result","subtype":"success","is_error":false,"duration_ms":100,"result":"ok","session_id":"abc123"}
-        """;
-
-    /// <summary>
-    /// A rate_limit_event where rateLimitType is absent (null).
-    /// The highest-utilization fallback must still fire, marking the active window.
-    /// </summary>
-    private const string NullRateLimitTypeLog = """
-        {"type":"system","subtype":"init","session_id":"abc123"}
-        {"type":"rate_limit_event","rate_limit_info":{"status":"active","resetsAt":1793527200,"unifiedWindows":{"five_hour":{"utilization":0.06,"resetsAt":1793399400},"seven_day":{"utilization":0.90,"resetsAt":1793527200}}},"uuid":"eee","session_id":"abc123"}
-        {"type":"result","subtype":"success","is_error":false,"duration_ms":100,"result":"ok","session_id":"abc123"}
-        """;
-
-    /// <summary>
-    /// A rate_limit_event where a window's resetsAt value is wildly out of the
-    /// DateTimeOffset.FromUnixTimeSeconds valid range (-62135596800 to 253402300799).
-    /// The parser must return Unparseable without throwing.
-    /// </summary>
-    private const string OutOfRangeResetsAtLog = """
-        {"type":"system","subtype":"init","session_id":"abc123"}
-        {"type":"rate_limit_event","rate_limit_info":{"status":"active","resetsAt":1793527200,"rateLimitType":"five_hour","unifiedWindows":{"five_hour":{"utilization":0.50,"resetsAt":-9999999999999},"seven_day":{"utilization":0.30,"resetsAt":1793527200}}},"uuid":"fff","session_id":"abc123"}
-        """;
-
-    /// <summary>
-    /// A rate_limit_event where a window's utilization field is absent (null).
-    /// The parser must return Unparseable rather than silently defaulting to 0.
-    /// </summary>
-    private const string AbsentUtilizationLog = """
-        {"type":"system","subtype":"init","session_id":"abc123"}
-        {"type":"rate_limit_event","rate_limit_info":{"status":"active","resetsAt":1793527200,"rateLimitType":"five_hour","unifiedWindows":{"five_hour":{"resetsAt":1793399400},"seven_day":{"utilization":0.30,"resetsAt":1793527200}}},"uuid":"ggg","session_id":"abc123"}
-        """;
-
-    /// <summary>
-    /// A log with two rate_limit_event lines. The parser must use the LAST event that
-    /// carries unifiedWindows — the CLI may emit a preamble event before the real one.
-    /// The first event has five_hour active at 0.50; the last has seven_day active at 0.90.
-    /// </summary>
-    private const string TwoEventLinesLog = """
-        {"type":"system","subtype":"init","session_id":"abc123"}
-        {"type":"rate_limit_event","rate_limit_info":{"status":"active","resetsAt":1793399400,"rateLimitType":"five_hour","unifiedWindows":{"five_hour":{"utilization":0.50,"resetsAt":1793399400},"seven_day":{"utilization":0.20,"resetsAt":1793527200}}},"uuid":"hhh","session_id":"abc123"}
-        {"type":"assistant","message":{"id":"msg_01","type":"message","role":"assistant","content":[{"type":"text","text":"ok"}],"stop_reason":"end_turn","usage":{"input_tokens":10,"output_tokens":3}},"session_id":"abc123"}
-        {"type":"rate_limit_event","rate_limit_info":{"status":"active","resetsAt":1793527200,"rateLimitType":"seven_day","unifiedWindows":{"five_hour":{"utilization":0.06,"resetsAt":1793399400},"seven_day":{"utilization":0.90,"resetsAt":1793527200}}},"uuid":"iii","session_id":"abc123"}
-        {"type":"result","subtype":"success","is_error":false,"duration_ms":100,"result":"ok","session_id":"abc123"}
-        """;
-
-    /// <summary>
-    /// A rate_limit_event with utilization exactly 0.8 on the five_hour window.
-    /// Severity must be "warning" at the boundary.
-    /// </summary>
-    private const string ExactWarningThresholdLog = """
-        {"type":"system","subtype":"init","session_id":"abc123"}
-        {"type":"rate_limit_event","rate_limit_info":{"status":"active","resetsAt":1793399400,"rateLimitType":"five_hour","unifiedWindows":{"five_hour":{"utilization":0.8,"resetsAt":1793399400},"seven_day":{"utilization":0.30,"resetsAt":1793527200}}},"uuid":"jjj","session_id":"abc123"}
-        """;
-
-    /// <summary>
-    /// A rate_limit_event with utilization 0.79 on the five_hour window.
-    /// Severity must be "normal" just below the warning threshold.
-    /// </summary>
-    private const string BelowWarningThresholdLog = """
-        {"type":"system","subtype":"init","session_id":"abc123"}
-        {"type":"rate_limit_event","rate_limit_info":{"status":"active","resetsAt":1793399400,"rateLimitType":"five_hour","unifiedWindows":{"five_hour":{"utilization":0.79,"resetsAt":1793399400},"seven_day":{"utilization":0.30,"resetsAt":1793527200}}},"uuid":"kkk","session_id":"abc123"}
-        """;
-
-    /// <summary>
-    /// A rate_limit_event with utilization exactly 1.0 on the five_hour window.
-    /// Severity must be "critical" at the boundary.
-    /// </summary>
-    private const string ExactCriticalThresholdLog = """
-        {"type":"system","subtype":"init","session_id":"abc123"}
-        {"type":"rate_limit_event","rate_limit_info":{"status":"active","resetsAt":1793399400,"rateLimitType":"five_hour","unifiedWindows":{"five_hour":{"utilization":1.0,"resetsAt":1793399400},"seven_day":{"utilization":0.30,"resetsAt":1793527200}}},"uuid":"lll","session_id":"abc123"}
-        """;
-
-    // ---------------------------------------------------------------------------
-    // Happy-path: both windows parsed correctly
+    // Parsed
     // ---------------------------------------------------------------------------
 
     [Fact]
-    public void WhenRateLimitEventWithBothWindows_ReturnsParsedWithSessionAndWeeklyAllLimits()
+    public void WhenReportCarriesRateLimits_ReturnsParsedSnapshotStampedWithSourceAndCaller()
     {
-        // Arrange
         // Act
-        UsageParseResult result = UsageReportParser.Parse(FullRateLimitEventLog, AccountEmail, CapturedAt);
+        UsageSnapshot snapshot = ParsedSnapshot(ReportLog());
 
         // Assert
-        UsageParseResult.Parsed parsed = result.ShouldBeOfType<UsageParseResult.Parsed>();
-        UsageSnapshot snapshot = parsed.Snapshot;
-
         snapshot.ShouldSatisfyAllConditions(
+            () => snapshot.Source.ShouldBe(UsageSnapshotSource.UsageReport),
             () => snapshot.AccountEmail.ShouldBe(AccountEmail),
             () => snapshot.CapturedAt.ShouldBe(CapturedAt),
             () => snapshot.LastRefreshFailedAt.ShouldBeNull(),
-            () => snapshot.Limits.Count.ShouldBe(2));
+            () => snapshot.Limits.Select(l => l.Kind).ShouldBe(["session", "weekly_all", "weekly_scoped"]));
     }
 
     [Fact]
-    public void WhenRateLimitEventPresent_FiveHourWindowMapsToSessionKind()
+    public void WhenReportCarriesRateLimits_MapsEachLimitVerbatim()
     {
-        // Arrange
         // Act
-        UsageParseResult result = UsageReportParser.Parse(FullRateLimitEventLog, AccountEmail, CapturedAt);
+        UsageSnapshot snapshot = ParsedSnapshot(ReportLog());
 
         // Assert
-        UsageParseResult.Parsed parsed = result.ShouldBeOfType<UsageParseResult.Parsed>();
-        UsageRateLimit session = parsed.Snapshot.Limits.Single(l => l.Kind == "session");
-        session.ShouldSatisfyAllConditions(
-            // utilization=0.06 → percent=6
-            () => session.Percent.ShouldBe(6m),
-            () => session.ResetsAt.ShouldBe(DateTimeOffset.FromUnixTimeSeconds(1793399400)),
-            () => session.ModelDisplayName.ShouldBeNull(),
-            () => session.IsActive.ShouldBeFalse());
+        UsageRateLimit weekly = snapshot.Limits[1];
+        UsageRateLimit scoped = snapshot.Limits[2];
+        snapshot.ShouldSatisfyAllConditions(
+            () => snapshot.Limits[0].Percent.ShouldBe(14m),
+            () => snapshot.Limits[0].ResetsAt.ShouldBe(new DateTimeOffset(2026, 11, 6, 13, 0, 0, TimeSpan.Zero)),
+            () => snapshot.Limits[0].ModelDisplayName.ShouldBeNull(),
+            () => snapshot.Limits[0].IsActive.ShouldBeFalse(),
+            () => weekly.Percent.ShouldBe(65.5m),
+            () => weekly.Severity.ShouldBe("warning"),
+            () => weekly.IsActive.ShouldBeTrue(),
+            () => weekly.ModelDisplayName.ShouldBeNull(),
+            () => scoped.ModelDisplayName.ShouldBe("Opus"),
+            () => scoped.ResetsAt.ShouldBe(new DateTimeOffset(2026, 11, 10, 9, 0, 0, TimeSpan.Zero)));
     }
 
     [Fact]
-    public void WhenRateLimitEventPresent_SevenDayWindowMapsToWeeklyAllKind()
+    public void WhenSeverityIsUnknown_PassesItThrough()
     {
         // Arrange
+        string limits = """[{"kind":"session","group":"session","percent":50,"resets_at":"2026-11-06T13:00:00Z","severity":"extreme","is_active":true}]""";
+
         // Act
-        UsageParseResult result = UsageReportParser.Parse(FullRateLimitEventLog, AccountEmail, CapturedAt);
+        UsageSnapshot snapshot = ParsedSnapshot(ReportLog(limits));
 
         // Assert
-        UsageParseResult.Parsed parsed = result.ShouldBeOfType<UsageParseResult.Parsed>();
-        UsageRateLimit weeklyAll = parsed.Snapshot.Limits.Single(l => l.Kind == "weekly_all");
-        weeklyAll.ShouldSatisfyAllConditions(
-            // utilization=1 → percent=100
-            () => weeklyAll.Percent.ShouldBe(100m),
-            () => weeklyAll.ResetsAt.ShouldBe(DateTimeOffset.FromUnixTimeSeconds(1793527200)),
-            () => weeklyAll.ModelDisplayName.ShouldBeNull(),
-            () => weeklyAll.IsActive.ShouldBeTrue());
-    }
-
-    // ---------------------------------------------------------------------------
-    // Severity derivation (server-side mapping)
-    // ---------------------------------------------------------------------------
-
-    [Fact]
-    public void WhenUtilizationIsOne_SeverityIsCritical()
-    {
-        // Arrange
-        // Act
-        UsageParseResult result = UsageReportParser.Parse(FullRateLimitEventLog, AccountEmail, CapturedAt);
-
-        // Assert — seven_day has utilization=1.0
-        UsageParseResult.Parsed parsed = result.ShouldBeOfType<UsageParseResult.Parsed>();
-        UsageRateLimit weeklyAll = parsed.Snapshot.Limits.Single(l => l.Kind == "weekly_all");
-        weeklyAll.Severity.ShouldBe("critical");
+        snapshot.Limits.ShouldHaveSingleItem().Severity.ShouldBe("extreme");
     }
 
     [Fact]
-    public void WhenUtilizationIsEightyFivePercent_SeverityIsWarning()
+    public void WhenResetsAtIsNull_LimitHasNoResetTime()
     {
         // Arrange
+        string limits = """[{"kind":"session","group":"session","percent":0,"resets_at":null,"severity":"normal","is_active":true}]""";
+
         // Act
-        UsageParseResult result = UsageReportParser.Parse(FiveHourActiveLog, AccountEmail, CapturedAt);
-
-        // Assert — five_hour has utilization=0.85
-        UsageParseResult.Parsed parsed = result.ShouldBeOfType<UsageParseResult.Parsed>();
-        UsageRateLimit session = parsed.Snapshot.Limits.Single(l => l.Kind == "session");
-        session.Severity.ShouldBe("warning");
-    }
-
-    [Fact]
-    public void WhenUtilizationIsLow_SeverityIsNormal()
-    {
-        // Arrange
-        // Act
-        UsageParseResult result = UsageReportParser.Parse(FullRateLimitEventLog, AccountEmail, CapturedAt);
-
-        // Assert — five_hour has utilization=0.06
-        UsageParseResult.Parsed parsed = result.ShouldBeOfType<UsageParseResult.Parsed>();
-        UsageRateLimit session = parsed.Snapshot.Limits.Single(l => l.Kind == "session");
-        session.Severity.ShouldBe("normal");
-    }
-
-    // ---------------------------------------------------------------------------
-    // IsActive derivation
-    // ---------------------------------------------------------------------------
-
-    [Fact]
-    public void WhenRateLimitTypeIsFiveHour_FiveHourWindowIsActive()
-    {
-        // Arrange
-        // Act
-        UsageParseResult result = UsageReportParser.Parse(FiveHourActiveLog, AccountEmail, CapturedAt);
+        UsageSnapshot snapshot = ParsedSnapshot(ReportLog(limits));
 
         // Assert
-        UsageParseResult.Parsed parsed = result.ShouldBeOfType<UsageParseResult.Parsed>();
-        UsageRateLimit session = parsed.Snapshot.Limits.Single(l => l.Kind == "session");
-        UsageRateLimit weeklyAll = parsed.Snapshot.Limits.Single(l => l.Kind == "weekly_all");
-        session.IsActive.ShouldBeTrue();
-        weeklyAll.IsActive.ShouldBeFalse();
+        snapshot.Limits.ShouldHaveSingleItem().ResetsAt.ShouldBeNull();
     }
 
     [Fact]
-    public void WhenRateLimitTypeIsSevenDay_SevenDayWindowIsActive()
+    public void WhenLimitsIsEmpty_ReturnsParsedWithNoLimits()
     {
-        // Arrange
         // Act
-        UsageParseResult result = UsageReportParser.Parse(FullRateLimitEventLog, AccountEmail, CapturedAt);
-
-        // Assert — exactly one active window: weekly_all active, session inactive.
-        UsageParseResult.Parsed parsed = result.ShouldBeOfType<UsageParseResult.Parsed>();
-        UsageRateLimit weeklyAll = parsed.Snapshot.Limits.Single(l => l.Kind == "weekly_all");
-        UsageRateLimit session = parsed.Snapshot.Limits.Single(l => l.Kind == "session");
-        weeklyAll.IsActive.ShouldBeTrue();
-        session.IsActive.ShouldBeFalse();
-    }
-
-    [Fact]
-    public void WhenRateLimitTypeIsUnknown_WindowWithHighestUtilizationIsActive()
-    {
-        // Arrange
-        // Act
-        UsageParseResult result = UsageReportParser.Parse(UnknownRateLimitTypeLog, AccountEmail, CapturedAt);
-
-        // Assert — seven_day has utilization=0.90, five_hour=0.06, so seven_day is active
-        UsageParseResult.Parsed parsed = result.ShouldBeOfType<UsageParseResult.Parsed>();
-        UsageRateLimit weeklyAll = parsed.Snapshot.Limits.Single(l => l.Kind == "weekly_all");
-        UsageRateLimit session = parsed.Snapshot.Limits.Single(l => l.Kind == "session");
-        weeklyAll.IsActive.ShouldBeTrue();
-        session.IsActive.ShouldBeFalse();
-    }
-
-    // ---------------------------------------------------------------------------
-    // ExtraUsage is always null (rate_limit_event carries no credit amounts)
-    // ---------------------------------------------------------------------------
-
-    [Fact]
-    public void WhenRateLimitEventParsed_ExtraUsageIsAlwaysNull()
-    {
-        // Arrange
-        // Act
-        UsageParseResult result = UsageReportParser.Parse(FullRateLimitEventLog, AccountEmail, CapturedAt);
-
-        // Assert — rate_limit_event carries no credit amounts; follow-up issue covers this.
-        UsageParseResult.Parsed parsed = result.ShouldBeOfType<UsageParseResult.Parsed>();
-        parsed.Snapshot.ExtraUsage.ShouldBeNull();
-    }
-
-    // ---------------------------------------------------------------------------
-    // NoUsageReport paths
-    // ---------------------------------------------------------------------------
-
-    [Fact]
-    public void WhenNoRateLimitEventInLog_ReturnsNoUsageReport()
-    {
-        // Arrange
-        // Act
-        UsageParseResult result = UsageReportParser.Parse(NoRateLimitEventLog, AccountEmail, CapturedAt);
+        UsageSnapshot snapshot = ParsedSnapshot(ReportLog("[]"));
 
         // Assert
-        result.ShouldBeOfType<UsageParseResult.NoUsageReport>();
+        snapshot.Limits.ShouldBeEmpty();
     }
 
     [Fact]
-    public void WhenRateLimitEventMissingUnifiedWindows_ReturnsNoUsageReport()
+    public void WhenExtraUsagePresent_MapsCredits()
     {
-        // Arrange
         // Act
-        UsageParseResult result = UsageReportParser.Parse(NoUnifiedWindowsLog, AccountEmail, CapturedAt);
-
-        // Assert — unifiedWindows absent means CLI < 2.1.302; treat as no usable data
-        result.ShouldBeOfType<UsageParseResult.NoUsageReport>();
-    }
-
-    // ---------------------------------------------------------------------------
-    // Unparseable paths
-    // ---------------------------------------------------------------------------
-
-    [Fact]
-    public void WhenTruncatedJsonLineAmongValidLines_SkipsItAndReturnsNoUsageReport()
-    {
-        // Arrange
-        // Act
-        UsageParseResult result = UsageReportParser.Parse(MalformedJsonLog, AccountEmail, CapturedAt);
-
-        // Assert — the truncated line is skipped; the valid lines carry no rate_limit_event
-        result.ShouldBeOfType<UsageParseResult.NoUsageReport>();
-    }
-
-    [Fact]
-    public void WhenNonJsonLinesInterleaved_SkipsThemAndReturnsParsed()
-    {
-        // Arrange
-        // Act
-        UsageParseResult result = UsageReportParser.Parse(InterleavedStderrLog, AccountEmail, CapturedAt);
+        UsageSnapshot snapshot = ParsedSnapshot(ReportLog());
 
         // Assert
-        UsageParseResult.Parsed parsed = result.ShouldBeOfType<UsageParseResult.Parsed>();
-        parsed.Snapshot.Limits.ShouldContain(l => l.Kind == "session");
-        parsed.Snapshot.Limits.ShouldContain(l => l.Kind == "weekly_all");
+        UsageExtraCredits credits = snapshot.ExtraUsage.ShouldNotBeNull();
+        credits.ShouldBe(new UsageExtraCredits(
+            IsEnabled: true,
+            MonthlyLimit: 50000,
+            UsedCredits: 16568,
+            Utilization: null,
+            Currency: "USD"));
     }
 
-    [Theory]
-    [InlineData(AuthErrorTextOnlyLog)]
-    [InlineData("")]
-    [InlineData("\n  \n")]
-    public void WhenOutputHasNoJsonLine_ReturnsUnparseable(string log)
+    [Fact]
+    public void WhenExtraUsageCarriesUtilizationAndNullLimit_MapsThemAsNullable()
     {
         // Arrange
+        string extra = """{"is_enabled":true,"monthly_limit":null,"used_credits":1200,"utilization":12.5,"currency":"EUR"}""";
+
+        // Act
+        UsageSnapshot snapshot = ParsedSnapshot(ReportLog(extraUsageJson: extra));
+
+        // Assert
+        UsageExtraCredits credits = snapshot.ExtraUsage.ShouldNotBeNull();
+        credits.ShouldSatisfyAllConditions(
+            () => credits.MonthlyLimit.ShouldBeNull(),
+            () => credits.Utilization.ShouldBe(12.5m),
+            () => credits.Currency.ShouldBe("EUR"));
+    }
+
+    [Fact]
+    public void WhenExtraUsageOmitsCurrencyAndUsedCredits_DefaultsToUsdAndZero()
+    {
+        // Arrange — currency is optional and used_credits nullable in the CLI schema
+        string extra = """{"is_enabled":true,"monthly_limit":50000,"used_credits":null,"utilization":null}""";
+
+        // Act
+        UsageSnapshot snapshot = ParsedSnapshot(ReportLog(extraUsageJson: extra));
+
+        // Assert
+        UsageExtraCredits credits = snapshot.ExtraUsage.ShouldNotBeNull();
+        credits.ShouldSatisfyAllConditions(
+            () => credits.Currency.ShouldBe("USD"),
+            () => credits.UsedCredits.ShouldBe(0));
+    }
+
+    [Fact]
+    public void WhenUsedCreditsIsFractional_TruncatesToWholeMinorUnits()
+    {
+        // Arrange
+        string extra = """{"is_enabled":true,"monthly_limit":50000,"used_credits":16568.7,"utilization":null,"currency":"USD"}""";
+
+        // Act
+        UsageSnapshot snapshot = ParsedSnapshot(ReportLog(extraUsageJson: extra));
+
+        // Assert
+        snapshot.ExtraUsage.ShouldNotBeNull().UsedCredits.ShouldBe(16568);
+    }
+
+    [Fact]
+    public void WhenExtraUsageIsNull_HasNoCredits()
+    {
+        // Act
+        UsageSnapshot snapshot = ParsedSnapshot(ReportLog(extraUsageJson: "null"));
+
+        // Assert
+        snapshot.ExtraUsage.ShouldBeNull();
+    }
+
+    [Fact]
+    public void WhenOutputInterleavesNonJsonLines_SkipsThem()
+    {
+        // Arrange
+        string log = Log(
+            "Warning: something on stderr",
+            InitLine,
+            AssistantLine(RateLimitsReport(FullLimits, FullExtraUsage)),
+            """{"type":"result","subtype":"succ""");
+
+        // Act
+        UsageSnapshot snapshot = ParsedSnapshot(log);
+
+        // Assert
+        snapshot.Limits.Count.ShouldBe(3);
+    }
+
+    // ---------------------------------------------------------------------------
+    // RateLimitsMissing
+    // ---------------------------------------------------------------------------
+
+    [Fact]
+    public void WhenRateLimitsIsNull_ReturnsRateLimitsMissingWithoutCredits()
+    {
+        // Arrange
+        string log = Log(InitLine, AssistantLine($$"""{"session":{{Session}},"rate_limits":null}"""), ResultLine);
+
         // Act
         UsageParseResult result = UsageReportParser.Parse(log, AccountEmail, CapturedAt);
 
-        // Assert — a failed CLI run must retain the last good snapshot, not clear it
-        result.ShouldBeOfType<UsageParseResult.Unparseable>();
+        // Assert
+        result.ShouldBeOfType<UsageParseResult.RateLimitsMissing>().ExtraCredits.ShouldBeNull();
     }
 
     [Fact]
-    public void WhenRateLimitInfoIsNotAnObject_ReturnsUnparseable()
+    public void WhenRateLimitsIsAbsent_ReturnsRateLimitsMissingWithoutCredits()
     {
         // Arrange
+        string log = Log(InitLine, AssistantLine($$"""{"session":{{Session}}}"""), ResultLine);
+
         // Act
-        UsageParseResult result = UsageReportParser.Parse(MalformedRateLimitInfoLog, AccountEmail, CapturedAt);
+        UsageParseResult result = UsageReportParser.Parse(log, AccountEmail, CapturedAt);
+
+        // Assert
+        result.ShouldBeOfType<UsageParseResult.RateLimitsMissing>().ExtraCredits.ShouldBeNull();
+    }
+
+    [Fact]
+    public void WhenLimitsIsNullButExtraUsagePresent_ReturnsRateLimitsMissingCarryingCredits()
+    {
+        // Arrange
+        string log = Log(
+            InitLine,
+            AssistantLine("""{"session":""" + Session + ""","rate_limits":{"limits":null,"extra_usage":""" + FullExtraUsage + "}}"),
+            ResultLine);
+
+        // Act
+        UsageParseResult result = UsageReportParser.Parse(log, AccountEmail, CapturedAt);
+
+        // Assert
+        UsageExtraCredits credits = result.ShouldBeOfType<UsageParseResult.RateLimitsMissing>().ExtraCredits.ShouldNotBeNull();
+        credits.MonthlyLimit.ShouldBe(50000);
+    }
+
+    // ---------------------------------------------------------------------------
+    // NoUsageReport
+    // ---------------------------------------------------------------------------
+
+    [Fact]
+    public void WhenNoLineCarriesUsageReport_ReturnsNoUsageReport()
+    {
+        // Arrange — API-key mode: the CLI answers /usage without a structured twin
+        string log = Log(
+            InitLine,
+            """{"type":"assistant","message":{"id":"msg_01","type":"message","role":"assistant","model":"<synthetic>","content":[{"type":"text","text":"/usage is only available for subscription plans."}]},"parent_tool_use_id":null,"session_id":"s1"}""",
+            ResultLine);
+
+        // Act
+        UsageParseResult result = UsageReportParser.Parse(log, AccountEmail, CapturedAt);
+
+        // Assert
+        result.ShouldBeOfType<UsageParseResult.NoUsageReport>();
+    }
+
+    // ---------------------------------------------------------------------------
+    // Unparseable
+    // ---------------------------------------------------------------------------
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("Invalid API key · Please run /login")]
+    [InlineData("{INVALID JSON CANNOT PARSE THIS")]
+    public void WhenOutputHasNoJsonLine_ReturnsUnparseable(string log)
+    {
+        // Act
+        UsageParseResult result = UsageReportParser.Parse(log, AccountEmail, CapturedAt);
 
         // Assert
         result.ShouldBeOfType<UsageParseResult.Unparseable>();
     }
 
-    [Fact]
-    public void WhenRateLimitInfoHasWrongTokenType_ReturnsUnparseable()
+    [Theory]
+    [InlineData("""[{"kind":"session","percent":"lots","resets_at":"2026-11-06T13:00:00Z","severity":"normal","is_active":true}]""")]
+    [InlineData("""[{"kind":"session","percent":10,"resets_at":"not-a-date","severity":"normal","is_active":true}]""")]
+    [InlineData("""[{"percent":10,"resets_at":"2026-11-06T13:00:00Z","severity":"normal","is_active":true}]""")]
+    [InlineData("""[{"kind":"session","resets_at":"2026-11-06T13:00:00Z","severity":"normal","is_active":true}]""")]
+    [InlineData("""[{"kind":"session","percent":10,"resets_at":"2026-11-06T13:00:00Z","is_active":true}]""")]
+    [InlineData("""[{"kind":"session","percent":10,"resets_at":"2026-11-06T13:00:00Z","severity":"normal"}]""")]
+    [InlineData("""[{"kind":"session","percent":10,"resets_at":"2026-11-06T13:00:00Z","severity":"normal","is_active":"yes"}]""")]
+    [InlineData("""["session"]""")]
+    [InlineData("""{"kind":"session"}""")]
+    public void WhenALimitIsMalformed_ReturnsUnparseable(string limits)
+    {
+        // Act
+        UsageParseResult result = UsageReportParser.Parse(ReportLog(limits), AccountEmail, CapturedAt);
+
+        // Assert
+        result.ShouldBeOfType<UsageParseResult.Unparseable>();
+    }
+
+    [Theory]
+    [InlineData("""{"is_enabled":"yes","monthly_limit":50000,"used_credits":1,"utilization":null,"currency":"USD"}""")]
+    [InlineData("""{"monthly_limit":50000,"used_credits":1,"utilization":null,"currency":"USD"}""")]
+    [InlineData("""{"is_enabled":true,"monthly_limit":"lots","used_credits":1,"utilization":null,"currency":"USD"}""")]
+    [InlineData("""[1]""")]
+    public void WhenExtraUsageIsMalformed_ReturnsUnparseable(string extra)
+    {
+        // Act
+        UsageParseResult result = UsageReportParser.Parse(ReportLog(extraUsageJson: extra), AccountEmail, CapturedAt);
+
+        // Assert
+        result.ShouldBeOfType<UsageParseResult.Unparseable>();
+    }
+
+    [Theory]
+    [InlineData("\"text\"")]
+    [InlineData("{\"session\":{},\"rate_limits\":\"none\"}")]
+    public void WhenUsageReportOrRateLimitsIsNotAnObject_ReturnsUnparseable(string usageReport)
     {
         // Arrange
-        // Act
-        UsageParseResult result = UsageReportParser.Parse(TypeMismatchedRateLimitEventLog, AccountEmail, CapturedAt);
+        string log = Log(InitLine, AssistantLine(usageReport), ResultLine);
 
-        // Assert — type mismatch must not throw; it must produce Unparseable
+        // Act
+        UsageParseResult result = UsageReportParser.Parse(log, AccountEmail, CapturedAt);
+
+        // Assert
         result.ShouldBeOfType<UsageParseResult.Unparseable>();
     }
 
     // ---------------------------------------------------------------------------
-    // IsActive: null rateLimitType falls through to highest-utilization fallback
+    // ReadClaudeCodeVersion
     // ---------------------------------------------------------------------------
 
     [Fact]
-    public void WhenRateLimitTypeIsAbsent_HighestUtilizationWindowIsActive()
+    public void ReadClaudeCodeVersion_WhenInitLineCarriesVersion_ReturnsIt()
     {
-        // Arrange
         // Act
-        UsageParseResult result = UsageReportParser.Parse(NullRateLimitTypeLog, AccountEmail, CapturedAt);
+        string? version = UsageReportParser.ReadClaudeCodeVersion(ReportLog());
 
-        // Assert — seven_day has utilization=0.90, so it must be active; session must be inactive
-        UsageParseResult.Parsed parsed = result.ShouldBeOfType<UsageParseResult.Parsed>();
-        UsageRateLimit weeklyAll = parsed.Snapshot.Limits.Single(l => l.Kind == "weekly_all");
-        UsageRateLimit session = parsed.Snapshot.Limits.Single(l => l.Kind == "session");
-        weeklyAll.IsActive.ShouldBeTrue();
-        session.IsActive.ShouldBeFalse();
+        // Assert
+        version.ShouldBe("2.1.316");
     }
 
-    // ---------------------------------------------------------------------------
-    // Robustness: out-of-range resetsAt and absent utilization → Unparseable
-    // ---------------------------------------------------------------------------
-
-    [Fact]
-    public void WhenResetsAtIsOutOfRange_ReturnsUnparseable()
+    [Theory]
+    [InlineData("")]
+    [InlineData("""{"type":"system","subtype":"init","session_id":"s1"}""")]
+    [InlineData("""{"type":"system","subtype":"init","claude_code_version":42}""")]
+    public void ReadClaudeCodeVersion_WhenNoVersionIsReported_ReturnsNull(string log)
     {
-        // Arrange
         // Act
-        UsageParseResult result = UsageReportParser.Parse(OutOfRangeResetsAtLog, AccountEmail, CapturedAt);
+        string? version = UsageReportParser.ReadClaudeCodeVersion(log);
 
-        // Assert — out-of-range Unix timestamp must not throw; it must produce Unparseable
-        result.ShouldBeOfType<UsageParseResult.Unparseable>();
-    }
-
-    [Fact]
-    public void WhenUtilizationIsAbsent_ReturnsUnparseable()
-    {
-        // Arrange
-        // Act
-        UsageParseResult result = UsageReportParser.Parse(AbsentUtilizationLog, AccountEmail, CapturedAt);
-
-        // Assert — absent utilization must not silently default to 0; it must produce Unparseable
-        result.ShouldBeOfType<UsageParseResult.Unparseable>();
-    }
-
-    // ---------------------------------------------------------------------------
-    // Multiple event lines: last wins
-    // ---------------------------------------------------------------------------
-
-    [Fact]
-    public void WhenTwoEventLines_LastEventWins()
-    {
-        // Arrange
-        // Act
-        UsageParseResult result = UsageReportParser.Parse(TwoEventLinesLog, AccountEmail, CapturedAt);
-
-        // Assert — the last rate_limit_event has rateLimitType="seven_day" so seven_day is active
-        UsageParseResult.Parsed parsed = result.ShouldBeOfType<UsageParseResult.Parsed>();
-        UsageRateLimit weeklyAll = parsed.Snapshot.Limits.Single(l => l.Kind == "weekly_all");
-        UsageRateLimit session = parsed.Snapshot.Limits.Single(l => l.Kind == "session");
-        weeklyAll.IsActive.ShouldBeTrue();
-        session.IsActive.ShouldBeFalse();
-        // The last event had seven_day utilization=0.90 → percent=90, not the first event's 20
-        weeklyAll.Percent.ShouldBe(90m);
-    }
-
-    // ---------------------------------------------------------------------------
-    // Severity boundary: exactly 0.8 → warning, 0.79 → normal, 1.0 → critical
-    // ---------------------------------------------------------------------------
-
-    [Fact]
-    public void WhenUtilizationIsExactlyPointEight_SeverityIsWarning()
-    {
-        // Arrange
-        // Act
-        UsageParseResult result = UsageReportParser.Parse(ExactWarningThresholdLog, AccountEmail, CapturedAt);
-
-        // Assert — 0.8 is the warning threshold boundary (inclusive)
-        UsageParseResult.Parsed parsed = result.ShouldBeOfType<UsageParseResult.Parsed>();
-        UsageRateLimit session = parsed.Snapshot.Limits.Single(l => l.Kind == "session");
-        session.Severity.ShouldBe("warning");
-    }
-
-    [Fact]
-    public void WhenUtilizationIsPointSevenNine_SeverityIsNormal()
-    {
-        // Arrange
-        // Act
-        UsageParseResult result = UsageReportParser.Parse(BelowWarningThresholdLog, AccountEmail, CapturedAt);
-
-        // Assert — 0.79 is just below the warning threshold
-        UsageParseResult.Parsed parsed = result.ShouldBeOfType<UsageParseResult.Parsed>();
-        UsageRateLimit session = parsed.Snapshot.Limits.Single(l => l.Kind == "session");
-        session.Severity.ShouldBe("normal");
-    }
-
-    [Fact]
-    public void WhenUtilizationIsExactlyOne_SeverityIsCritical()
-    {
-        // Arrange
-        // Act
-        UsageParseResult result = UsageReportParser.Parse(ExactCriticalThresholdLog, AccountEmail, CapturedAt);
-
-        // Assert — 1.0 is the critical threshold boundary (inclusive)
-        UsageParseResult.Parsed parsed = result.ShouldBeOfType<UsageParseResult.Parsed>();
-        UsageRateLimit session = parsed.Snapshot.Limits.Single(l => l.Kind == "session");
-        session.Severity.ShouldBe("critical");
+        // Assert
+        version.ShouldBeNull();
     }
 }

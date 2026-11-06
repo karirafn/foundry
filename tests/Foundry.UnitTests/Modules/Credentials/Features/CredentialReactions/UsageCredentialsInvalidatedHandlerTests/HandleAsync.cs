@@ -29,7 +29,7 @@ public sealed class HandleAsync
     private sealed class SpyUsageSnapshotBroadcaster : IUsageSnapshotBroadcaster
     {
         public int CallCount { get; private set; }
-        public UsageSnapshot? LastSnapshot { get; private set; } = new UsageSnapshot([], null, DateTimeOffset.UtcNow, "sentinel@example.com", null);
+        public UsageSnapshot? LastSnapshot { get; private set; } = new UsageSnapshot([], null, DateTimeOffset.UtcNow, "sentinel@example.com", null, null);
 
         public Task SendSnapshotAsync(UsageSnapshot? snapshot, CancellationToken cancellationToken)
         {

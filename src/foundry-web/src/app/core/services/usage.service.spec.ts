@@ -23,6 +23,7 @@ function buildSnapshot(overrides: Partial<UsageSnapshot> = {}): UsageSnapshot {
     capturedAt: '2026-10-30T01:00:00Z',
     accountEmail: 'test@example.com',
     lastRefreshFailedAt: null,
+    source: 'usageReport',
     ...overrides,
   };
 }

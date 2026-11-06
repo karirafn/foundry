@@ -287,25 +287,13 @@ internal sealed class CredentialsOrchestrator(IDockerContainerRuntime runtime) :
         try
         {
             // The usage container mounts the credential volume read-write, unlike the credit probe's
-            // read-only mount. The CLI may refresh an expired access token during the real-turn
+            // read-only mount. The CLI may refresh an expired access token during the usage
             // command, and a read-only mount cannot persist the rotated refresh token — leaving a
             // dead token on the volume that causes every subsequent OAuth operation to fail.
             CreateContainerParameters createParams = new()
             {
                 Image = WorkerImageNames.LoginImageName,
-                Cmd =
-                [
-                    "timeout",
-                    spec.TimeoutSeconds.ToString(CultureInfo.InvariantCulture),
-                    "claude",
-                    "-p",
-                    UsageReportSpec.UsagePrompt,
-                    "--max-turns",
-                    "1",
-                    "--output-format",
-                    "stream-json",
-                    "--verbose",
-                ],
+                Cmd = BuildUsageCommand(spec),
                 Env = [$"{CredentialVolumeConstants.ConfigDirEnvVar}={CredentialVolumeConstants.ContainerPath}"],
                 Labels = new Dictionary<string, string>
                 {
@@ -323,7 +311,7 @@ internal sealed class CredentialsOrchestrator(IDockerContainerRuntime runtime) :
                             Source = CredentialVolumeConstants.VolumeName,
                             Target = CredentialVolumeConstants.ContainerPath,
                             // Read-write mount: the CLI may refresh an expired access token during
-                            // the real-turn command, and a read-only mount cannot persist the rotated
+                            // the command, and a read-only mount cannot persist the rotated
                             // refresh token, leaving a dead token on the volume.
                             ReadOnly = false,
                         },
@@ -369,6 +357,28 @@ internal sealed class CredentialsOrchestrator(IDockerContainerRuntime runtime) :
                 : redacted;
             return Result<string>.Fail(new Error("Docker.UsageReportStartFailed", message));
         }
+    }
+
+    /// <summary>
+    /// Builds the direct argv (no shell — a shell would rewrite or interpret the slash command) for the
+    /// usage container, wrapped in <c>timeout</c> so a hung CLI cannot hold the poll.
+    /// </summary>
+    private static List<string> BuildUsageCommand(UsageReportSpec spec)
+    {
+        List<string> cmd = ["timeout", spec.TimeoutSeconds.ToString(CultureInfo.InvariantCulture), "claude", "-p"];
+
+        if (spec.Command == UsageReportCommand.ProbeTurn)
+        {
+            // --max-turns 1 keeps the probe to one exchange so no tool use can follow.
+            cmd.AddRange([UsageReportSpec.ProbePrompt, "--max-turns", "1"]);
+        }
+        else
+        {
+            cmd.Add(UsageReportSpec.UsageSlashCommand);
+        }
+
+        cmd.AddRange(["--output-format", "stream-json", "--verbose"]);
+        return cmd;
     }
 
     public async Task<Result<OAuthSessionStatus>> CheckOAuthSessionAsync(CancellationToken cancellationToken)

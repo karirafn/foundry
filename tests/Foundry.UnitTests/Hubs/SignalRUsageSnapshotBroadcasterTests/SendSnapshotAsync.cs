@@ -20,7 +20,15 @@ public sealed class SendSnapshotAsync
         SpyHubContext hubContext = new();
         SignalRUsageSnapshotBroadcaster sut = new(hubContext);
 
-        UsageSnapshot snapshot = new UsageSnapshotBuilder().Build();
+        UsageSnapshot snapshot = new UsageSnapshotBuilder()
+            .WithSource(UsageSnapshotSource.ProbeTurn)
+            .WithExtraUsage(new UsageExtraCredits(
+                IsEnabled: true,
+                MonthlyLimit: 10000,
+                UsedCredits: 10000,
+                Utilization: null,
+                Currency: "USD"))
+            .Build();
 
         // Act
         await sut.SendSnapshotAsync(snapshot, TestContext.Current.CancellationToken);
@@ -31,6 +39,10 @@ public sealed class SendSnapshotAsync
         UsageSnapshotResponse dto = hubContext.SentArgs[0].ShouldBeOfType<UsageSnapshotResponse>();
         dto.AccountEmail.ShouldBe(snapshot.AccountEmail);
         dto.CapturedAt.ShouldBe(snapshot.CapturedAt);
+        dto.Source.ShouldBe("probeTurn");
+        UsageExtraCreditsResponse extra = dto.ExtraUsage.ShouldNotBeNull();
+        extra.Percent.ShouldBe(100m);
+        extra.Severity.ShouldBe("critical");
     }
 
     [Fact]

@@ -19,7 +19,10 @@ public sealed class RunUsageReportAsync
         new(runtime);
 
     private static UsageReportSpec DefaultSpec() =>
-        new(TimeoutSeconds: UsageReportSpec.DefaultTimeoutSeconds);
+        new(UsageReportCommand.UsageCommand, TimeoutSeconds: UsageReportSpec.DefaultTimeoutSeconds);
+
+    private static UsageReportSpec ProbeTurnSpec() =>
+        new(UsageReportCommand.ProbeTurn, TimeoutSeconds: UsageReportSpec.DefaultTimeoutSeconds);
 
     private static readonly string DefaultTimeoutStr =
         UsageReportSpec.DefaultTimeoutSeconds.ToString(System.Globalization.CultureInfo.InvariantCulture);
@@ -59,7 +62,7 @@ public sealed class RunUsageReportAsync
         // Assert — prefix-free lines that the usage parser accepts
         string log = result.ShouldBeOfType<Result<string>.Success>().Value;
         log.ShouldNotContain("2026-11-03T08:36:");
-        UsageParseResult parsed = UsageReportParser.Parse(log, "user@example.com", DateTimeOffset.UnixEpoch);
+        UsageParseResult parsed = ProbeTurnUsageParser.Parse(log, "user@example.com", DateTimeOffset.UnixEpoch);
         UsageParseResult.Parsed success = parsed.ShouldBeOfType<UsageParseResult.Parsed>();
         success.Snapshot.Limits.ShouldContain(l => l.Kind == "session");
         success.Snapshot.Limits.ShouldContain(l => l.Kind == "weekly_all");
@@ -128,7 +131,7 @@ public sealed class RunUsageReportAsync
     }
 
     [Fact]
-    public async Task WhenStarted_CmdIsDirectArgvWithTimeoutAndUsageFlags()
+    public async Task WhenUsageCommand_CmdIsDirectArgvRunningSlashUsage()
     {
         // Arrange
         FakeDockerContainerRuntime runtime = new();
@@ -136,6 +139,23 @@ public sealed class RunUsageReportAsync
 
         // Act
         await sut.RunUsageReportAsync(DefaultSpec(), CancellationToken.None);
+
+        // Assert — argv form, no shell, no prompt turn:
+        // ["timeout", "<seconds>", "claude", "-p", "/usage", "--output-format", "stream-json", "--verbose"]
+        CreateContainerParameters captured = runtime.LastCreateAndStartParameters.ShouldNotBeNull();
+        IList<string> cmd = captured.Cmd.ShouldNotBeNull();
+        cmd.ShouldBe(["timeout", DefaultTimeoutStr, "claude", "-p", "/usage", "--output-format", "stream-json", "--verbose"]);
+    }
+
+    [Fact]
+    public async Task WhenProbeTurn_CmdIsDirectArgvWithTimeoutAndProbeFlags()
+    {
+        // Arrange
+        FakeDockerContainerRuntime runtime = new();
+        CredentialsOrchestrator sut = BuildSut(runtime);
+
+        // Act
+        await sut.RunUsageReportAsync(ProbeTurnSpec(), CancellationToken.None);
 
         // Assert — argv form:
         // ["timeout", "<seconds>", "claude", "-p", "<prompt>", "--max-turns", "1",
@@ -149,7 +169,7 @@ public sealed class RunUsageReportAsync
             () => cmd[1].ShouldBe(DefaultTimeoutStr),
             () => cmd[2].ShouldBe("claude"),
             () => cmd[3].ShouldBe("-p"),
-            () => cmd[4].ShouldBe(UsageReportSpec.UsagePrompt),
+            () => cmd[4].ShouldBe(UsageReportSpec.ProbePrompt),
             () => cmd[5].ShouldBe("--max-turns"),
             () => cmd[6].ShouldBe("1"),
             () => cmd[7].ShouldBe("--output-format"),

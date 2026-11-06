@@ -29,6 +29,9 @@ internal sealed class FakeCredentialsOrchestrator(IEnumerable<string>? logLines 
         Result<string>.Ok("");
     private Result<string> _usageReportResult =
         Result<string>.Ok("");
+
+    private Result<string> _probeTurnResult =
+        Result<string>.Fail(new Error("Fake.ProbeTurnNotScripted", "The fallback probe turn was not scripted."));
     private Result<OAuthSessionStatus> _sessionCheckResult =
         Result<OAuthSessionStatus>.Ok(new OAuthSessionStatus.Active());
     private Func<Task>? _onSessionCheck;
@@ -51,6 +54,9 @@ internal sealed class FakeCredentialsOrchestrator(IEnumerable<string>? logLines 
     public int GetCredentialVolumeAuthStatusCallCount { get; private set; }
     public string? LastDeliveredCode { get; private set; }
     public int UsageReportCallCount { get; private set; }
+
+    /// <summary>The command of every <see cref="RunUsageReportAsync"/> call, in order.</summary>
+    public List<UsageReportCommand> UsageReportCommands { get; } = [];
     public int SessionCheckCallCount { get; private set; }
 
     /// <summary>Completes when <see cref="RunUsageReportAsync"/> is first entered.</summary>
@@ -91,7 +97,7 @@ internal sealed class FakeCredentialsOrchestrator(IEnumerable<string>? logLines 
         return this;
     }
 
-    /// <summary>Scripts <see cref="RunUsageReportAsync"/> to return specific stream-json logs.</summary>
+    /// <summary>Scripts the <see cref="UsageReportCommand.UsageCommand"/> run of <see cref="RunUsageReportAsync"/> to return stream-json logs.</summary>
     public FakeCredentialsOrchestrator WithUsageReportLogs(string logs)
     {
         _usageReportResult = Result<string>.Ok(logs);
@@ -110,6 +116,20 @@ internal sealed class FakeCredentialsOrchestrator(IEnumerable<string>? logLines 
 
     /// <summary>Releases the gate armed by <see cref="WithBlockingUsageReport"/>.</summary>
     public void ReleaseUsageReport() => _usageReportGate?.TrySetResult();
+
+    /// <summary>Scripts the <see cref="UsageReportCommand.ProbeTurn"/> run of <see cref="RunUsageReportAsync"/> to return logs.</summary>
+    public FakeCredentialsOrchestrator WithProbeTurnLogs(string logs)
+    {
+        _probeTurnResult = Result<string>.Ok(logs);
+        return this;
+    }
+
+    /// <summary>Scripts the <see cref="UsageReportCommand.ProbeTurn"/> run of <see cref="RunUsageReportAsync"/> to fail.</summary>
+    public FakeCredentialsOrchestrator WithProbeTurnFailure(Error error)
+    {
+        _probeTurnResult = Result<string>.Fail(error);
+        return this;
+    }
 
     /// <summary>Scripts <see cref="RunUsageReportAsync"/> to return a failure.</summary>
     public FakeCredentialsOrchestrator WithUsageReportFailure(Error error)
@@ -226,6 +246,7 @@ internal sealed class FakeCredentialsOrchestrator(IEnumerable<string>? logLines 
         CancellationToken cancellationToken)
     {
         UsageReportCallCount++;
+        UsageReportCommands.Add(spec.Command);
         UsageReportStarted.TrySetResult();
 
         if (_usageReportGate is not null)
@@ -233,7 +254,7 @@ internal sealed class FakeCredentialsOrchestrator(IEnumerable<string>? logLines 
             await _usageReportGate.Task;
         }
 
-        return _usageReportResult;
+        return spec.Command == UsageReportCommand.ProbeTurn ? _probeTurnResult : _usageReportResult;
     }
 
     public async Task DeliverLoginCodeAsync(string containerId, string code, CancellationToken cancellationToken)

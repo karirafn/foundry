@@ -1,279 +1,221 @@
+using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 
 namespace Foundry.Modules.Credentials.Features.Usage;
 
 /// <summary>
-/// Parses the stream-json output of a real Claude CLI turn run by
-/// <c>UsageReportSpec</c> into a <see cref="UsageParseResult"/>.
+/// Parses the stream-json output of <c>claude -p "/usage" --output-format stream-json --verbose</c>
+/// into a <see cref="UsageParseResult"/>.
 /// <para>
-/// The data source is a minimal real turn (<c>claude -p "Reply with: ok" --max-turns 1
-/// --output-format stream-json --verbose</c>). A real turn emits a <c>rate_limit_event</c>
-/// that carries <c>rate_limit_info.unifiedWindows</c> — the only reliable source of
-/// per-window utilization data.
+/// The CLI answers <c>/usage</c> with a synthetic assistant message whose wrapper-level
+/// <c>usage_report</c> sibling carries <c>rate_limits.limits[]</c> (Anthropic's rows, percent on a
+/// 0–100 scale, ISO-8601 <c>resets_at</c>, and Anthropic's own <c>severity</c>) and
+/// <c>rate_limits.extra_usage</c> (credit spend in minor units). Rows are mapped verbatim — Foundry
+/// grades nothing here. The shape is documented by the CLI as experimental; a change surfaces as
+/// <see cref="UsageParseResult.Unparseable"/> (a failed poll), never as wrong numbers.
 /// </para>
 /// <para>
-/// Parser design decisions:
-/// <list type="bullet">
-/// <item>Pure of <c>DateTimeOffset.UtcNow</c> — <paramref name="capturedAt"/> and
-///   <paramref name="accountEmail"/> are stamped by the caller (coordinator), not the parser.</item>
-/// <item>Signature: <c>Parse(string log, string accountEmail, DateTimeOffset capturedAt)</c> so the
-///   result is a complete, ready-to-store <see cref="UsageSnapshot"/> on success.</item>
-/// <item><c>ExtraUsage</c> is always <c>null</c> — <c>rate_limit_event</c> carries no credit
-///   amounts; populating credits from this source is a follow-up.</item>
-/// </list>
+/// Pure of <c>DateTimeOffset.UtcNow</c>: <c>accountEmail</c> and <c>capturedAt</c> are stamped by
+/// the caller.
 /// </para>
 /// </summary>
 internal static class UsageReportParser
 {
-    // Window-key → Kind mapping (CLI field name → domain term).
-    private const string FiveHourKey = "five_hour";
-    private const string SevenDayKey = "seven_day";
-    private const string SessionKind = "session";
-    private const string WeeklyAllKind = "weekly_all";
+    /// <summary>The CLI defaults a missing <c>extra_usage.currency</c> to USD; so does Foundry.</summary>
+    internal const string DefaultCurrency = "USD";
 
-    // Severity thresholds — match frontend display logic.
-    private const decimal CriticalThreshold = 1.0m;
-    private const decimal WarningThreshold = 0.8m;
-
-    // Valid range for DateTimeOffset.FromUnixTimeSeconds (from the BCL documentation).
-    private const long MinUnixSeconds = -62135596800L;
-    private const long MaxUnixSeconds = 253402300799L;
-
-    /// <summary>
-    /// Parses a stream-json log, stamping the resulting snapshot with
-    /// <paramref name="accountEmail"/> and <paramref name="capturedAt"/>.
-    /// </summary>
     /// <returns>
-    /// <see cref="UsageParseResult.Parsed"/> when a <c>rate_limit_event</c> line is found
-    /// and <c>rate_limit_info.unifiedWindows</c> is present and parseable;
-    /// <see cref="UsageParseResult.NoUsageReport"/> when the output contains JSON lines but
-    /// no <c>rate_limit_event</c> (no API turn / API-key mode) or none carries
-    /// <c>unifiedWindows</c> (CLI version too old to emit it);
-    /// <see cref="UsageParseResult.Unparseable"/> when the output contains no JSON line at all
-    /// (auth-error text, empty output from a <c>timeout</c> kill) or a
-    /// <c>rate_limit_event</c> / <c>rate_limit_info</c> with broken field values.
-    /// <para>
-    /// Lines that are not JSON objects — plain-text stderr notices merged into the stream, or
-    /// a line truncated by the log-length cap — are skipped rather than failing the parse.
-    /// </para>
+    /// <see cref="UsageParseResult.Parsed"/> when the last <c>usage_report</c> carries
+    /// <c>rate_limits.limits</c>;
+    /// <see cref="UsageParseResult.RateLimitsMissing"/> when it carries a null or absent
+    /// <c>rate_limits</c> or <c>limits</c> (with any <c>extra_usage</c> credits it still reports);
+    /// <see cref="UsageParseResult.NoUsageReport"/> when the output holds JSON lines but none carries a
+    /// <c>usage_report</c> (API-key mode / not reportable);
+    /// <see cref="UsageParseResult.Unparseable"/> when the output holds no JSON line at all (auth-error
+    /// text, empty output from a <c>timeout</c> kill) or the report has missing or broken fields.
+    /// Non-JSON lines (stderr notices, a line cut by the log-length cap) are skipped.
     /// </returns>
     public static UsageParseResult Parse(string log, string accountEmail, DateTimeOffset capturedAt)
     {
-        UsageParseResult? earlyResult = null;
-        JsonObject? lastRateLimitInfo = FindLastRateLimitInfo(log, out earlyResult);
-
-        if (earlyResult is not null)
-        {
-            return earlyResult;
-        }
-
-        if (lastRateLimitInfo is null)
-        {
-            // No rate_limit_event found (or none had unifiedWindows) — no API turn happened,
-            // API-key mode, or CLI too old to emit unifiedWindows.
-            return new UsageParseResult.NoUsageReport();
-        }
-
-        return ParseRateLimitInfo(lastRateLimitInfo, accountEmail, capturedAt);
-    }
-
-    /// <summary>
-    /// Scans all lines and returns the LAST <c>rate_limit_info</c> whose
-    /// <c>unifiedWindows</c> is non-null.
-    /// <para>
-    /// The CLI may emit a preamble <c>rate_limit_event</c> before the real one — taking
-    /// the last event with <c>unifiedWindows</c> ensures we use the most complete data.
-    /// </para>
-    /// </summary>
-    /// <param name="log">The raw stream-json log.</param>
-    /// <param name="earlyResult">
-    /// Set to a non-null result when parsing must terminate early (no JSON line at all, or a
-    /// malformed <c>rate_limit_event</c>); otherwise <c>null</c>.
-    /// </param>
-    private static JsonObject? FindLastRateLimitInfo(string log, out UsageParseResult? earlyResult)
-    {
-        earlyResult = null;
-        JsonObject? last = null;
         bool sawJsonLine = false;
+        JsonNode? usageReport = null;
+        bool sawUsageReport = false;
 
-        foreach (string line in log.Split('\n', StringSplitOptions.RemoveEmptyEntries))
+        foreach (JsonObject line in JsonLines(log))
         {
-            string trimmed = line.Trim();
-
-            if (string.IsNullOrEmpty(trimmed))
-            {
-                continue;
-            }
-
-            // Non-JSON lines (stderr notices, truncated tail lines) are skipped, not fatal.
-            if (trimmed[0] != '{' || TryParseObject(trimmed) is not { } node)
-            {
-                continue;
-            }
-
             sawJsonLine = true;
 
-            if (node["type"]?.GetValue<string>() != "rate_limit_event")
+            if (line.TryGetPropertyValue("usage_report", out JsonNode? report))
             {
-                continue;
-            }
-
-            if (node["rate_limit_info"] is not JsonObject rateLimitInfo)
-            {
-                // rate_limit_event present but malformed — terminate immediately.
-                earlyResult = new UsageParseResult.Unparseable();
-                return null;
-            }
-
-            // Only keep events that carry unifiedWindows; preamble events often omit it.
-            if (rateLimitInfo["unifiedWindows"] is JsonObject)
-            {
-                last = rateLimitInfo;
+                usageReport = report;
+                sawUsageReport = true;
             }
         }
 
         if (!sawJsonLine)
         {
-            // No stream-json at all — the CLI failed before emitting any event. Treat as a
-            // failed poll so the last good snapshot is retained rather than cleared.
-            earlyResult = new UsageParseResult.Unparseable();
-        }
-
-        return last;
-    }
-
-    private static JsonObject? TryParseObject(string line)
-    {
-        try
-        {
-            return JsonNode.Parse(line) as JsonObject;
-        }
-        catch (JsonException)
-        {
-            return null;
-        }
-    }
-
-    private static UsageParseResult ParseRateLimitInfo(
-        JsonObject rateLimitInfo,
-        string accountEmail,
-        DateTimeOffset capturedAt)
-    {
-        try
-        {
-            // unifiedWindows presence is guaranteed by FindLastRateLimitInfo.
-            JsonObject unifiedWindows = (JsonObject)rateLimitInfo["unifiedWindows"]!;
-
-            string? rateLimitType = rateLimitInfo["rateLimitType"]?.GetValue<string>();
-
-            List<UsageRateLimit> limits = [];
-
-            foreach ((string windowKey, string kind) in WindowMappings())
-            {
-                if (unifiedWindows[windowKey] is not JsonObject windowObj)
-                {
-                    continue;
-                }
-
-                // Absent utilization is a malformed window — return Unparseable rather than
-                // silently defaulting to 0, which would misrepresent the account's usage.
-                if (windowObj["utilization"] is not JsonNode utilizationNode)
-                {
-                    return new UsageParseResult.Unparseable();
-                }
-
-                decimal utilization = utilizationNode.GetValue<decimal>();
-
-                // Absent or out-of-range resetsAt is a malformed window — return Unparseable
-                // rather than silently defaulting to epoch or throwing ArgumentOutOfRangeException.
-                if (windowObj["resetsAt"] is not JsonNode resetsAtNode)
-                {
-                    return new UsageParseResult.Unparseable();
-                }
-
-                long resetsAtUnix = resetsAtNode.GetValue<long>();
-
-                if (resetsAtUnix < MinUnixSeconds || resetsAtUnix > MaxUnixSeconds)
-                {
-                    return new UsageParseResult.Unparseable();
-                }
-
-                DateTimeOffset resetsAt = DateTimeOffset.FromUnixTimeSeconds(resetsAtUnix);
-                decimal percent = utilization * 100m;
-
-                // Server-side severity mapping — the frontend clamps the bar; the parser derives severity.
-                string severity = utilization >= CriticalThreshold
-                    ? "critical"
-                    : utilization >= WarningThreshold
-                        ? "warning"
-                        : "normal";
-
-                // IsActive: true for the window whose key matches rateLimitType.
-                // When rateLimitType is null or unknown, the highest-utilization fallback below applies.
-                bool isActive = rateLimitType is not null &&
-                    MapRateLimitTypeToWindowKey(rateLimitType) == windowKey;
-
-                limits.Add(new UsageRateLimit(
-                    Kind: kind,
-                    Percent: percent,
-                    ResetsAt: resetsAt,
-                    ModelDisplayName: null,
-                    Severity: severity,
-                    IsActive: isActive));
-            }
-
-            // When rateLimitType is null, or did not match any known window key, mark the window
-            // with the highest utilization as active. This covers both absent rateLimitType and
-            // any future divergence between rateLimitType values and window key names.
-            if (limits.All(l => !l.IsActive) && limits.Count > 0)
-            {
-                decimal maxUtil = limits.Max(l => l.Percent);
-                limits = limits
-                    .Select(l => l with { IsActive = l.Percent == maxUtil })
-                    .ToList();
-            }
-
-            // ExtraUsage is always null — rate_limit_event carries no credit amounts;
-            // populating credits from this source is a follow-up.
-            UsageSnapshot snapshot = new(
-                Limits: limits,
-                ExtraUsage: null,
-                CapturedAt: capturedAt,
-                AccountEmail: accountEmail,
-                LastRefreshFailedAt: null);
-
-            return new UsageParseResult.Parsed(snapshot);
-        }
-        catch (InvalidOperationException)
-        {
-            // Token-type mismatch (e.g. string where number expected) — treat as Unparseable.
             return new UsageParseResult.Unparseable();
         }
-        catch (OverflowException)
+
+        if (!sawUsageReport)
         {
-            // Arithmetic overflow (e.g. utilization value too large for decimal multiplication).
+            return new UsageParseResult.NoUsageReport();
+        }
+
+        try
+        {
+            return ParseUsageReport(usageReport, accountEmail, capturedAt);
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or FormatException or OverflowException)
+        {
+            // Token-type mismatch (string where a number is expected, etc.) or an unparseable value.
             return new UsageParseResult.Unparseable();
         }
-    }
-
-    private static IEnumerable<(string Key, string Kind)> WindowMappings()
-    {
-        yield return (FiveHourKey, SessionKind);
-        yield return (SevenDayKey, WeeklyAllKind);
     }
 
     /// <summary>
-    /// Maps a <c>rateLimitType</c> value to the corresponding <c>unifiedWindows</c> key.
-    /// Currently <c>rateLimitType</c> shares the same value space as the window keys
-    /// ("five_hour", "seven_day"), so this is an identity map. The highest-utilization
-    /// fallback in <see cref="ParseRateLimitInfo"/> covers any future divergence.
+    /// Reads the Claude Code CLI version from the stream-json <c>system</c>/<c>init</c> line
+    /// (<c>claude_code_version</c>), or <see langword="null"/> when the output reports none.
     /// </summary>
-    private static string? MapRateLimitTypeToWindowKey(string rateLimitType) =>
-        rateLimitType switch
+    public static string? ReadClaudeCodeVersion(string log)
+    {
+        foreach (JsonObject line in JsonLines(log))
         {
-            FiveHourKey => FiveHourKey,
-            SevenDayKey => SevenDayKey,
-            _ => null,
-        };
+            if (line["type"] is JsonValue type
+                && type.TryGetValue(out string? typeName)
+                && typeName == "system"
+                && line["claude_code_version"] is JsonValue version
+                && version.TryGetValue(out string? value))
+            {
+                return value;
+            }
+        }
+
+        return null;
+    }
+
+    private static IEnumerable<JsonObject> JsonLines(string log)
+    {
+        foreach (string line in log.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            if (line[0] != '{')
+            {
+                continue;
+            }
+
+            JsonObject? node;
+            try
+            {
+                node = JsonNode.Parse(line) as JsonObject;
+            }
+            catch (JsonException)
+            {
+                continue;
+            }
+
+            if (node is not null)
+            {
+                yield return node;
+            }
+        }
+    }
+
+    private static UsageParseResult ParseUsageReport(
+        JsonNode? usageReport,
+        string accountEmail,
+        DateTimeOffset capturedAt)
+    {
+        if (usageReport is not JsonObject report)
+        {
+            return new UsageParseResult.Unparseable();
+        }
+
+        JsonNode? rateLimitsNode = report["rate_limits"];
+
+        if (rateLimitsNode is null)
+        {
+            return new UsageParseResult.RateLimitsMissing(ExtraCredits: null);
+        }
+
+        if (rateLimitsNode is not JsonObject rateLimits)
+        {
+            return new UsageParseResult.Unparseable();
+        }
+
+        UsageExtraCredits? extraCredits = ParseExtraUsage(rateLimits["extra_usage"]);
+
+        if (rateLimits["limits"] is not { } limitsNode)
+        {
+            return new UsageParseResult.RateLimitsMissing(extraCredits);
+        }
+
+        if (limitsNode is not JsonArray limitsArray)
+        {
+            return new UsageParseResult.Unparseable();
+        }
+
+        List<UsageRateLimit> limits = [];
+
+        foreach (JsonNode? entry in limitsArray)
+        {
+            if (entry is not JsonObject limit
+                || RequiredString(limit, "kind") is not { } kind
+                || RequiredString(limit, "severity") is not { } severity
+                || limit["percent"] is not JsonValue percent
+                || limit["is_active"] is not JsonValue isActive)
+            {
+                return new UsageParseResult.Unparseable();
+            }
+
+            limits.Add(new UsageRateLimit(
+                Kind: kind,
+                Percent: percent.GetValue<decimal>(),
+                ResetsAt: ParseResetsAt(limit["resets_at"]),
+                ModelDisplayName: limit["scope"]?["model"]?["display_name"]?.GetValue<string>(),
+                Severity: severity,
+                IsActive: isActive.GetValue<bool>()));
+        }
+
+        UsageSnapshot snapshot = new(
+            Limits: limits,
+            ExtraUsage: extraCredits,
+            CapturedAt: capturedAt,
+            AccountEmail: accountEmail,
+            LastRefreshFailedAt: null,
+            Source: UsageSnapshotSource.UsageReport);
+
+        return new UsageParseResult.Parsed(snapshot);
+    }
+
+    private static string? RequiredString(JsonObject node, string property) =>
+        node[property] is JsonValue value ? value.GetValue<string>() : null;
+
+    private static DateTimeOffset? ParseResetsAt(JsonNode? node) =>
+        node is null
+            ? null
+            : DateTimeOffset.Parse(node.GetValue<string>(), CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal);
+
+    private static UsageExtraCredits? ParseExtraUsage(JsonNode? node)
+    {
+        if (node is null)
+        {
+            return null;
+        }
+
+        if (node is not JsonObject extra || extra["is_enabled"] is not JsonValue isEnabled)
+        {
+            throw new InvalidOperationException("extra_usage is malformed.");
+        }
+
+        decimal? monthlyLimit = extra["monthly_limit"]?.GetValue<decimal>();
+        decimal? usedCredits = extra["used_credits"]?.GetValue<decimal>();
+
+        return new UsageExtraCredits(
+            IsEnabled: isEnabled.GetValue<bool>(),
+            MonthlyLimit: monthlyLimit is { } limit ? (long)decimal.Truncate(limit) : null,
+            UsedCredits: usedCredits is { } used ? (long)decimal.Truncate(used) : 0,
+            Utilization: extra["utilization"]?.GetValue<decimal>(),
+            Currency: extra["currency"]?.GetValue<string>() ?? DefaultCurrency);
+    }
 }
