@@ -557,7 +557,6 @@ export class SettingsService {
 
   private _mapToClaudeCodeSettings(response: GlobalSettingsResponse): ClaudeCodeSettings {
     return {
-      model: response.model,
       blockCiCdEdits: response.blockCiCdEdits,
       additionalDenyRules: [...(response.additionalDenyRules ?? [])],
     };

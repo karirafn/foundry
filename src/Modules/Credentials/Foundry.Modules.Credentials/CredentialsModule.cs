@@ -1,6 +1,7 @@
 using Foundry.Modules.Credentials.Contracts;
 using Foundry.Modules.Credentials.Contracts.Queries;
 using Foundry.Modules.Credentials.Features;
+using Foundry.Modules.Credentials.Features.ApiCredential;
 using Foundry.Modules.Credentials.Features.Broadcasts;
 using Foundry.Modules.Credentials.Features.CredentialReactions;
 using Foundry.Modules.Credentials.Features.CreditProbe;
@@ -43,6 +44,7 @@ public static class CredentialsModule
 
         services.AddScoped<ICredentialQueries, CredentialQueries>();
         services.AddScoped<ICredentialGate, CredentialGate>();
+        services.AddScoped<IClaudeApiCredentialReader, ClaudeApiCredentialReader>();
 
         services.AddSharedDockerInfrastructure();
         services.AddSingleton<ICredentialsOrchestrator, CredentialsOrchestrator>();

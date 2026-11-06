@@ -11,6 +11,15 @@ describe('failure-category', () => {
     expect(display?.label).toBe('NON-ZERO EXIT');
   });
 
+  it('should return display for model_unavailable', () => {
+    // Arrange / Act
+    const display = getFailureCategoryDisplay('model_unavailable');
+
+    // Assert
+    expect(display?.label).toBe('MODEL UNAVAILABLE');
+    expect(display?.cssClass).toBe('badge--failure-model-unavailable');
+  });
+
   it('should return display for cancelled', () => {
     // Arrange / Act
     const display = getFailureCategoryDisplay('cancelled');

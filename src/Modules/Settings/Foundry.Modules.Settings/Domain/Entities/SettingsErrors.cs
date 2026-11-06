@@ -88,11 +88,6 @@ internal static class SettingsErrors
     internal static Error InvalidPidsLimit(int value) =>
         new(InvalidPidsLimitCode, $"Worker PIDs limit must be between {WorkerResourceLimits.MinPidsLimit} and {WorkerResourceLimits.MaxPidsLimit}, but was {value}.");
 
-    internal const string ModelTooLongCode = "Settings.ModelTooLong";
-
-    internal static readonly Error ModelTooLong =
-        new(ModelTooLongCode, $"The Claude Code model must not exceed {ClaudeCodeSettings.MaxModelLength} characters.");
-
     internal const string InvalidDenyRuleCode = "Settings.InvalidDenyRule";
 
     internal static Error InvalidDenyRule(string rule) =>

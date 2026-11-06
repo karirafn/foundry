@@ -40,7 +40,6 @@ internal static class GlobalSettingsMapper
             settings.WorkerResourceLimits.MemoryLimitMb,
             settings.WorkerResourceLimits.CpuLimit,
             settings.WorkerResourceLimits.PidsLimit,
-            settings.ClaudeCodeSettings.Model,
             settings.ClaudeCodeSettings.BlockCiCdEdits,
             settings.ClaudeCodeSettings.AdditionalDenyRules,
             settings.WebhookPublicBaseUrl,

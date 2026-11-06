@@ -54,7 +54,6 @@ public sealed class WhenValid : IAsyncDisposable
         // Arrange
         await SeedDefaultSettingsAsync();
         object body = new UpdateClaudeCodeSettingsRequestBuilder()
-            .WithModel("claude-opus-4-1")
             .WithBlockCiCdEdits(false)
             .WithAdditionalDenyRule("Bash(rm:*)")
             .Build();
@@ -70,7 +69,6 @@ public sealed class WhenValid : IAsyncDisposable
                 TestContext.Current.CancellationToken))
             .ShouldNotBeNull();
         summary.ShouldSatisfyAllConditions(
-            () => summary.Model.ShouldBe("claude-opus-4-1"),
             () => summary.BlockCiCdEdits.ShouldBeFalse(),
             () => summary.AdditionalDenyRules.ShouldBe(["Bash(rm:*)"]));
     }
@@ -81,7 +79,6 @@ public sealed class WhenValid : IAsyncDisposable
         // Arrange
         await SeedDefaultSettingsAsync();
         object body = new UpdateClaudeCodeSettingsRequestBuilder()
-            .WithModel("claude-opus-4-1")
             .WithAdditionalDenyRule("Read(./secrets/**)")
             .Build();
 
@@ -98,7 +95,6 @@ public sealed class WhenValid : IAsyncDisposable
                 TestContext.Current.CancellationToken))
             .ShouldNotBeNull();
         summary.ShouldSatisfyAllConditions(
-            () => summary.Model.ShouldBe("claude-opus-4-1"),
             () => summary.AdditionalDenyRules.ShouldBe(["Read(./secrets/**)"]));
     }
 }

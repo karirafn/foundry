@@ -69,4 +69,11 @@ internal interface ICredentialsOrchestrator
     Task SeedOnboardingAsync(CancellationToken cancellationToken);
 
     Task EnsureCredentialVolumeAsync(CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Reads the stored OAuth access token from the credential volume in a credential-helper container, letting
+    /// the Claude Code CLI refresh an expired token first, as <see cref="CheckOAuthSessionAsync"/> does. Fails
+    /// when no usable token is stored or Docker-level errors prevent the read.
+    /// </summary>
+    Task<Result<string>> ReadOAuthAccessTokenAsync(CancellationToken cancellationToken);
 }

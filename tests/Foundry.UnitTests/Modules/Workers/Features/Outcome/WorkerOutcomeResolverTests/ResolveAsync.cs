@@ -813,6 +813,35 @@ public sealed class ResolveAsync
     }
 
     // -------------------------------------------------------------------------
+    // Model-unavailable result line: a named reason pointing at the role's model setting
+    // -------------------------------------------------------------------------
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1)]
+    public async Task WhenNoMrAndNoCommitsAndModelUnavailable_ReturnsFailureNamingTheRole(int exitCode)
+    {
+        // Arrange
+        ActiveRun run = CreateActiveRun();
+        WorkerOutcomeResolver sut = BuildResolverWithRealParser(NoMrQueries(hasCommits: false));
+        string log = """
+            {"type":"result","subtype":"success","is_error":true,"api_error_status":404,"result":"There's an issue with the selected model (claude-x). It may not exist or you may not have access to it. Run /model to pick a different model."}
+            """;
+
+        // Act
+        WorkerOutcome outcome = await sut.ResolveAsync(
+            run,
+            status: Exited(exitCode),
+            containerOutput: log,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        WorkerOutcome.Failure failure = outcome.ShouldBeOfType<WorkerOutcome.Failure>();
+        FailureReason.ModelUnavailable reason = failure.FailureReason.ShouldBeOfType<FailureReason.ModelUnavailable>();
+        reason.Role.ShouldBe(run.Role.Name);
+    }
+
+    // -------------------------------------------------------------------------
     // External-kill classification (no result line) — real parser so the
     // no-result-line path is observable.
     // -------------------------------------------------------------------------

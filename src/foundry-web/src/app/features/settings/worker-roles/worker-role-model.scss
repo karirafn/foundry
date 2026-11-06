@@ -1,0 +1,116 @@
+@use '../../../../styles/controls' as *;
+
+:host {
+  display: block;
+}
+
+.role-model {
+  display: flex;
+  flex-direction: column;
+  gap: var(--fd-spacing-xs);
+
+  &__title {
+    color: var(--fd-text-primary);
+    font-size: 0.875rem;
+    font-weight: 600;
+    margin: 0;
+  }
+
+  &__hint {
+    color: var(--fd-text-secondary);
+    font-size: 0.8125rem;
+    margin: 0;
+  }
+
+  &__row {
+    align-items: center;
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--fd-spacing-sm);
+  }
+
+  &__select {
+    @include input-control;
+    appearance: auto;
+    color: var(--fd-text-primary);
+    flex: 1 1 18rem;
+    font-size: 0.875rem;
+    max-inline-size: 32rem;
+    min-height: 40px;
+    min-inline-size: 0;
+    padding: var(--fd-spacing-xs) var(--fd-spacing-md);
+
+    &:focus-visible {
+      @include focus-ring;
+    }
+
+    &[aria-invalid='true'] {
+      border-color: var(--fd-state-failed);
+    }
+  }
+
+  &__save,
+  &__retry {
+    background: var(--fd-bg-card-hover);
+    border: 1px solid var(--fd-border-control);
+    border-radius: var(--fd-radius-sm);
+    color: var(--fd-text-primary);
+    cursor: pointer;
+    font-size: 0.875rem;
+    min-height: 40px;
+    padding: var(--fd-spacing-xs) var(--fd-spacing-lg);
+
+    &:focus-visible {
+      @include focus-ring;
+    }
+
+    &:disabled {
+      cursor: not-allowed;
+      opacity: 0.6;
+    }
+  }
+
+  &__retry {
+    min-height: 32px;
+    margin-inline-start: auto;
+  }
+
+  &__error {
+    color: var(--fd-text-error);
+    font-size: 0.8125rem;
+
+    &:empty {
+      display: none;
+    }
+  }
+
+  &__status {
+    color: var(--fd-text-success);
+    font-size: 0.8125rem;
+
+    &:empty {
+      display: none;
+    }
+  }
+
+  &__refresh-error {
+    @include warning-callout;
+    align-items: center;
+    display: flex;
+    gap: var(--fd-spacing-sm);
+    margin: 0;
+  }
+
+  &__refresh-icon,
+  &__refresh-lead {
+    color: var(--fd-text-warning);
+  }
+
+  &__refresh-icon {
+    flex-shrink: 0;
+  }
+
+  &__refresh-lead {
+    font-weight: 600;
+  }
+}

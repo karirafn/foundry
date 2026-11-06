@@ -322,4 +322,14 @@ internal sealed class FakeCredentialsOrchestrator(IEnumerable<string>? logLines 
 
     public Task EnsureCredentialVolumeAsync(CancellationToken cancellationToken)
         => Task.CompletedTask;
+
+    public Result<string> AccessTokenResult { get; set; } = Result<string>.Ok("oauth-access-token");
+
+    public int ReadAccessTokenCallCount { get; private set; }
+
+    public Task<Result<string>> ReadOAuthAccessTokenAsync(CancellationToken cancellationToken)
+    {
+        ReadAccessTokenCallCount++;
+        return Task.FromResult(AccessTokenResult);
+    }
 }

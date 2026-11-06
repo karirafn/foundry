@@ -10,12 +10,10 @@ namespace Foundry.UnitTests.Modules.Settings.Domain.Entities.GlobalSettingsTests
 
 public sealed class UpdateClaudeCodeSettings
 {
-    private const string CustomModel = "claude-opus-4-1";
     private const string CustomDenyRule = "Bash(rm -rf:*)";
 
     private static ClaudeCodeSettings CreateCustom() =>
         new ClaudeCodeSettingsBuilder()
-            .WithModel(CustomModel)
             .WithBlockCiCdEdits(false)
             .WithAdditionalDenyRules([CustomDenyRule])
             .Build()
