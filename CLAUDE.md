@@ -62,6 +62,7 @@ src/Modules/
 
 ### Key Patterns
 
+- **Deterministic first** — code owns every transition, ordering, retry, and side effect; Claude is used only for judgment code cannot express, and returns a schema-validated verdict that code acts on (ADR 0094)
 - **Result pattern** — handlers return `Result<T>`, endpoints call `result.Match()`
 - **Value objects** — strongly-typed IDs and domain concepts
 - **Entity factories** — private constructors, static `Create()` methods

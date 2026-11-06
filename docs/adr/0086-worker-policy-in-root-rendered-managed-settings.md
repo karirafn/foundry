@@ -4,6 +4,8 @@
 
 > **2026-11-05 — Amended:** the list of generated settings in Decision now also includes `attribution` (`commit` and `pr` empty, `sessionUrl` false), so a worker never adds AI attribution. The list drifted: `WorkerSettingsBuilder` gained the section after this ADR was written. The original list was accurate at the time.
 
+> **2026-11-06 — Amended:** [ADR 0093](0093-workers-receive-no-host-claude-code-configuration.md) removes host hooks. The Decision's "host hooks merged from the operator's host settings file" and the failed-host-hook-merge case under Fail closed no longer apply. The reason given for rejecting "Write the file from the API through the Docker archive API before start" (the API cannot read the host settings file) no longer holds, so that option is open for reconsideration.
+
 ## Context
 
 A worker runs `claude --dangerously-skip-permissions` as `node`, and Foundry's guardrails (the deny list, the merged host hooks) were written to `~/.claude/settings.json`, a file `node` owns. In OAuth mode that directory is the shared credential volume. Claude Code watches user, project, local and managed settings files and reloads `permissions` and `hooks` mid-session, so a worker could rewrite or strip its own guardrails with a single `Bash` call and, through the shared volume, affect every concurrent and later worker.

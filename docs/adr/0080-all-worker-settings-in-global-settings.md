@@ -6,6 +6,10 @@ status: accepted
 
 > **2026-11-02 — Amended:** the Decision's "`WorkerContainerSpec` (image tag, memory, CPU, PIDs)" shape clause is refined in implementation. The image tag ships on `WorkerImageConfiguration` (slice #625); the worker resource limits ship on a dedicated `WorkerResourceLimits` value object and the mounts on `WorkerMounts` (slice #604). Limit and mount changes are read per dispatch with no rebuild event, so they raise no `WorkerImageSettingsChanged`. The database-only, all-settings-in-`GlobalSettings` decision is unchanged.
 
+> **2026-11-06 — Amended:** the Decision's Hooks clause and the `WorkerMounts` part of its Shape clause are replaced by [ADR 0093](0093-workers-receive-no-host-claude-code-configuration.md), which removes host hooks and worker mounts.
+
+> **2026-11-06 — Amended:** the `WorkerPrompts` part of the Decision's Shape clause (system and worker templates, branch naming, edited in the dashboard) is replaced by [ADR 0095](0095-worker-roles-ship-in-the-worker-image.md). Role prompts move into the worker image. The `model` field of `ClaudeCodeSettings` is also replaced by ADR 0095, which gives each role its own model setting.
+
 ## Context
 
 [ADR 0019](0019-worker-image-flags-in-settings.md) moved the worker image toolchain flags into `GlobalSettings` but deliberately kept the other worker settings — image tag, mounts, CPU/memory/PID limits, Claude Code settings (model, deny rules, hooks), branch naming, and the prompt-template fallbacks — in `IConfiguration` (`Workers` section of appsettings plus user secrets).

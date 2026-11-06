@@ -1,5 +1,7 @@
 # Worker Containers Run Hardened by Default
 
+> **2026-11-06 — Amended:** [ADR 0093](0093-workers-receive-no-host-claude-code-configuration.md) removes host hooks and worker bind mounts. The main reason given for rejecting "Move the managed-settings render out of the container so the image can start as `node`" (the API cannot read the host settings file) no longer holds, so that option is open for reconsideration. The Consequences' "its bind or volume mounts" now means volume mounts only.
+
 ## Context
 
 A worker runs an autonomous agent with `--dangerously-skip-permissions` against untrusted repository content. Before this decision it ran with Docker's default capability set (14 capabilities, including `CHOWN`, `DAC_OVERRIDE`, `FOWNER`, `NET_RAW`, `MKNOD`, `SETFCAP` and `SETPCAP`), a writable root filesystem and no `no-new-privileges`. [ADR 0086](0086-worker-policy-in-root-rendered-managed-settings.md) made the image start as root so its entrypoint can render the root-owned `/etc/claude-code/managed-settings.json` and then drop to `node` through `setpriv`. Hardening has to keep that render-then-drop phase working, and it also has to keep the rootless Docker-in-Docker allowance set of [ADR 0079](0079-relaxed-allowances-for-nested-rootless-docker.md) working.
