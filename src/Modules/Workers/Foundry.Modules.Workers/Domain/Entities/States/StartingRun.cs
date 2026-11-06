@@ -17,14 +17,18 @@ public sealed class StartingRun : WorkerRun
     {
     }
 
-    private StartingRun(WorkerRunId id, IssueId issueId, DateTimeOffset createdAt)
-        : base(id, issueId, createdAt)
+    private StartingRun(WorkerRunId id, IssueId issueId, DateTimeOffset createdAt, WorkerRole role, string? image)
+        : base(id, issueId, createdAt, role, image)
     {
     }
 
-    public static StartingRun Begin(IssueId issueId, WorkerRunId workerRunId)
+    /// <summary>
+    /// Begins a run. <paramref name="role"/> defaults to <see cref="WorkerRole.Implement"/>; <paramref name="image"/> is the
+    /// worker image the run is dispatched on (see <see cref="WorkerRun.Image"/>).
+    /// </summary>
+    public static StartingRun Begin(IssueId issueId, WorkerRunId workerRunId, WorkerRole? role = null, string? image = null)
     {
-        return new StartingRun(workerRunId, issueId, DateTimeOffset.UtcNow);
+        return new StartingRun(workerRunId, issueId, DateTimeOffset.UtcNow, role ?? WorkerRole.Implement, image);
     }
 
     public ActiveRun Activate(

@@ -69,67 +69,6 @@ public sealed class WhenSettingsExist : IAsyncDisposable
     }
 
     [Fact]
-    public async Task ReturnsPromptTemplatesWhenSet()
-    {
-        // Arrange
-        using IServiceScope scope = _factory.Services.CreateScope();
-        DbContext dbContext = scope.ServiceProvider.GetRequiredService<DbContext>();
-
-        GlobalSettings settings = GlobalSettings.Create();
-        WorkerPrompts prompts = WorkerPrompts.Create(
-                "system-prompt for #{issueNumber}.",
-                "worker-prompt with #{issueNumber}.",
-                "Use conventional branch naming")
-            .Match(onSuccess: v => v, onFailure: e => throw new InvalidOperationException(e.Message));
-        settings.UpdatePrompts(prompts);
-        dbContext.Set<GlobalSettings>().Add(settings);
-        await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
-
-        // Act
-        HttpResponseMessage response = await _client.GetAsync(
-            new Uri("/api/settings", UriKind.Relative),
-            TestContext.Current.CancellationToken);
-
-        // Assert
-        response.StatusCode.ShouldBe(HttpStatusCode.OK);
-        GlobalSettingsSummary? summary = await response.Content
-            .ReadFromJsonAsync<GlobalSettingsSummary>(
-                FoundryWebAppFactory.JsonOptions,
-                TestContext.Current.CancellationToken);
-        summary.ShouldNotBeNull();
-        summary.ShouldSatisfyAllConditions(
-            () => summary.SystemPromptTemplate.ShouldBe("system-prompt for #{issueNumber}."),
-            () => summary.WorkerPromptTemplate.ShouldBe("worker-prompt with #{issueNumber}."),
-            () => summary.BranchNamingInstruction.ShouldBe("Use conventional branch naming"));
-    }
-
-    [Fact]
-    public async Task ReturnsDefaultPromptTemplatesWhenNotExplicitlySet()
-    {
-        // Arrange
-        await SeedDefaultSettingsAsync();
-
-        // Act
-        HttpResponseMessage response = await _client.GetAsync(
-            new Uri("/api/settings", UriKind.Relative),
-            TestContext.Current.CancellationToken);
-
-        // Assert
-        response.StatusCode.ShouldBe(HttpStatusCode.OK);
-        GlobalSettingsSummary? summary = await response.Content
-            .ReadFromJsonAsync<GlobalSettingsSummary>(
-                FoundryWebAppFactory.JsonOptions,
-                TestContext.Current.CancellationToken);
-        summary.ShouldNotBeNull();
-        // GlobalSettings.Create() initialises WorkerPrompts to WorkerPrompts.Default — all three
-        // fields are non-null non-empty strings even before an explicit PUT /api/settings/prompts.
-        summary.ShouldSatisfyAllConditions(
-            () => summary.SystemPromptTemplate.ShouldNotBeNullOrEmpty(),
-            () => summary.WorkerPromptTemplate.ShouldNotBeNullOrEmpty(),
-            () => summary.BranchNamingInstruction.ShouldNotBeNullOrEmpty());
-    }
-
-    [Fact]
     public async Task SerializesImageBuildStatusAsString()
     {
         // Arrange

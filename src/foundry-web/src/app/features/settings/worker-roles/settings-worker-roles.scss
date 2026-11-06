@@ -1,0 +1,3 @@
+// Only the shared settings styles: they already sit near the 10 kB component style budget, so
+// page layout reuses shared classes and role card styles live in worker-role-card.scss.
+@use '../settings-shared' as *;

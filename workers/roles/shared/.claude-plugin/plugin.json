@@ -1,0 +1,5 @@
+{
+  "name": "foundry-role-shared",
+  "description": "Skills and agents loaded for every worker role.",
+  "version": "1.0.0"
+}

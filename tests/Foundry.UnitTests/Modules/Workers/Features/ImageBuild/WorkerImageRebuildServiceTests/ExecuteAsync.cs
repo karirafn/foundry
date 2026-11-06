@@ -5,6 +5,7 @@ using Docker.DotNet.Models;
 
 using Foundry.Modules.Settings.Contracts.Queries;
 using Foundry.Modules.Workers.Features.ImageBuild;
+using Foundry.Modules.Workers.Features.Roles;
 using Foundry.Shared;
 using Foundry.Testing;
 
@@ -37,6 +38,7 @@ public sealed class ExecuteAsync
             sp.GetRequiredService<IServiceScopeFactory>(),
             new NullImageOperations(),
             new StubHostEnvironment(string.Empty),
+            new WorkerRoleCatalogStore(),
             new CapturingLoggerAdapter<WorkerImageRebuildService>(logger));
     }
 

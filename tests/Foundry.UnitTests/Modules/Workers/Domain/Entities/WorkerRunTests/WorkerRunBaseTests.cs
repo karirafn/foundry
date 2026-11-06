@@ -16,7 +16,7 @@ public sealed class WorkerRunBaseTests
     private sealed class ConcreteWorkerRun : WorkerRun
     {
         public ConcreteWorkerRun(WorkerRunId id, IssueId issueId, DateTimeOffset createdAt)
-            : base(id, issueId, createdAt)
+            : base(id, issueId, createdAt, WorkerRole.Implement, image: null)
         {
         }
     }

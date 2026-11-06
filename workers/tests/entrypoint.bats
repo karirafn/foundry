@@ -41,6 +41,13 @@ setup() {
     # managed policy in the runner's own /etc.
     make_fake_stat
 
+    # Full-entrypoint tests resolve the run's role plugins before cloning. Point the
+    # entrypoint at a per-test roles tree holding the implement and shared plugins
+    # (the image bakes the real one at /opt/foundry/roles).
+    make_role_fixture "$BATS_TEST_TMPDIR/roles" implement shared
+    export FOUNDRY_ROLES_DIR="$BATS_TEST_TMPDIR/roles"
+    export WORKER_ROLE="implement"
+
     # Derive the expected runtime home the same way production does — via the
     # OS passwd database — so tests remain correct even when the runner sets a
     # custom $HOME that differs from the passwd entry.
@@ -70,6 +77,19 @@ fi
 exec "${real_stat}" "\$@"
 EOF
     chmod +x "$FAKE_BIN_DIR/stat"
+}
+
+# make_role_fixture <roles_dir> <role>... — writes a minimal plugin manifest for each
+# named role under <roles_dir>.
+make_role_fixture() {
+    local roles_dir="$1"
+    shift
+    local role
+    for role in "$@"; do
+        /bin/mkdir -p "$roles_dir/$role/.claude-plugin"
+        printf '{"name":"foundry-role-%s","description":"fixture"}\n' "$role" \
+            > "$roles_dir/$role/.claude-plugin/plugin.json"
+    done
 }
 
 # Loads start_rootless_dockerd from entrypoint.sh into the current shell.
@@ -2018,7 +2038,7 @@ EOF
     [ "$(wc -l < "$BATS_TEST_TMPDIR/dotnet_calls")" -eq 1 ]
 }
 
-@test "csharp lsp entrypoint: a failed restore passes --plugin-dir to neither claude invocation and the run continues" {
+@test "csharp lsp entrypoint: a failed restore passes the csharp-lsp plugin to neither claude invocation and the run continues" {
     set_required_env
     make_fake_git
     make_fake_csharp_ls
@@ -2035,10 +2055,10 @@ EOF
     [[ "$output" == *"C# LSP: disabled (dotnet restore failed for"* ]]
     [[ "$output" != *"FOUNDRY_BOOTSTRAP_FAILED"* ]]
     [ "$(wc -l < "$BATS_TEST_TMPDIR/claude_args")" -eq 2 ]
-    ! grep -q -- "--plugin-dir" "$BATS_TEST_TMPDIR/claude_args"
+    ! grep -q -- "--plugin-dir /opt/claude-plugins/csharp-lsp" "$BATS_TEST_TMPDIR/claude_args"
 }
 
-@test "csharp lsp entrypoint: without csharp-ls on PATH no restore runs and no --plugin-dir is passed" {
+@test "csharp lsp entrypoint: without csharp-ls on PATH no restore runs and the csharp-lsp plugin is not passed" {
     set_required_env
     make_fake_git
     make_fake_dotnet
@@ -2054,7 +2074,7 @@ EOF
     [ "$status" -eq 0 ]
     [[ "$output" == *"C# LSP: disabled (csharp-ls not on PATH)"* ]]
     [ ! -f "$BATS_TEST_TMPDIR/dotnet_calls" ]
-    ! grep -q -- "--plugin-dir" "$BATS_TEST_TMPDIR/claude_args"
+    ! grep -q -- "--plugin-dir /opt/claude-plugins/csharp-lsp" "$BATS_TEST_TMPDIR/claude_args"
 }
 
 @test "csharp lsp entrypoint: the restore runs after GIT_PAT is unset and gh setup, immediately before claude" {
@@ -2079,4 +2099,101 @@ EOF
 
     [ "$status" -eq 0 ]
     [ "$(cat "$order_file")" = "$(printf '%s\n' gh 'dotnet GIT_PAT=unset' claude claude)" ]
+}
+
+# ---------------------------------------------------------------------------
+# Worker roles (ADR 0095): the run's role and the shared plugin are loaded with
+# --plugin-dir; a role the image does not carry fails bootstrap at stage=role.
+# ---------------------------------------------------------------------------
+
+@test "role: claude loads the run's role plugin and the shared plugin with --plugin-dir" {
+    set_required_env
+    make_fake_git
+    make_fake_claude_record_args
+
+    run bash "$ENTRYPOINT"
+
+    [ "$status" -eq 0 ]
+    local args
+    args="$(head -n 1 "$BATS_TEST_TMPDIR/claude_args")"
+    [[ "$args" == *"--plugin-dir $FOUNDRY_ROLES_DIR/implement --plugin-dir $FOUNDRY_ROLES_DIR/shared"* ]]
+}
+
+@test "role: the transient-error resume loads the same role plugins" {
+    set_required_env
+    make_fake_git
+    make_fake_claude_record_args_transient_then_success
+
+    run bash "$ENTRYPOINT"
+
+    [ "$status" -eq 0 ]
+    local resume_args
+    resume_args="$(sed -n 2p "$BATS_TEST_TMPDIR/claude_args")"
+    [[ "$resume_args" =~ (^| )-c( |$) ]]
+    [[ "$resume_args" == *"--plugin-dir $FOUNDRY_ROLES_DIR/implement --plugin-dir $FOUNDRY_ROLES_DIR/shared"* ]]
+}
+
+@test "role: a role with no folder in the image fails bootstrap at stage=role before cloning" {
+    set_required_env
+    make_fake_git
+    make_fake_claude
+    export WORKER_ROLE="review"
+
+    run bash "$ENTRYPOINT"
+
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"FOUNDRY_BOOTSTRAP_FAILED stage=role"* ]]
+    [ ! -f "$BATS_TEST_TMPDIR/claude_called" ]
+}
+
+@test "role: a missing shared plugin fails bootstrap at stage=role" {
+    set_required_env
+    make_fake_git
+    make_fake_claude
+    rm -rf "$FOUNDRY_ROLES_DIR/shared"
+
+    run bash "$ENTRYPOINT"
+
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"FOUNDRY_BOOTSTRAP_FAILED stage=role"* ]]
+    [ ! -f "$BATS_TEST_TMPDIR/claude_called" ]
+}
+
+@test "role: a role name that is not a plain slug fails bootstrap at stage=role" {
+    set_required_env
+    make_fake_git
+    make_fake_claude
+    make_role_fixture "$BATS_TEST_TMPDIR" outside
+    export WORKER_ROLE="../outside"
+
+    run bash "$ENTRYPOINT"
+
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"FOUNDRY_BOOTSTRAP_FAILED stage=role"* ]]
+    [ ! -f "$BATS_TEST_TMPDIR/claude_called" ]
+}
+
+@test "role: the shared plugin cannot be dispatched as a role" {
+    set_required_env
+    make_fake_git
+    make_fake_claude
+    export WORKER_ROLE="shared"
+
+    run bash "$ENTRYPOINT"
+
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"FOUNDRY_BOOTSTRAP_FAILED stage=role"* ]]
+}
+
+@test "role: a missing WORKER_ROLE stops the entrypoint before cloning" {
+    set_required_env
+    make_fake_git
+    make_fake_claude
+    unset WORKER_ROLE
+
+    run bash "$ENTRYPOINT"
+
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"WORKER_ROLE is required"* ]]
+    [ ! -f "$BATS_TEST_TMPDIR/claude_called" ]
 }

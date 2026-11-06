@@ -30,6 +30,8 @@ file static class WorkerRunValueConverters
 public sealed class WorkerRunConfiguration : IEntityTypeConfiguration<WorkerRun>
 {
     private const int DiscriminatorMaxLength = 20;
+    private const int RoleMaxLength = 50;
+    private const int ImageMaxLength = 500;
 
     public void Configure(EntityTypeBuilder<WorkerRun> builder)
     {
@@ -72,6 +74,19 @@ public sealed class WorkerRunConfiguration : IEntityTypeConfiguration<WorkerRun>
 
         builder.Property(r => r.CreatedAt)
             .HasColumnName("created_at");
+
+        builder.Property(r => r.Role)
+            .HasConversion(new ValueConverter<WorkerRole, string>(role => role.Name, name => WorkerRole.FromStored(name)))
+            .HasMaxLength(RoleMaxLength)
+            .IsUnicode(false)
+            .IsRequired()
+            .HasDefaultValue(WorkerRole.Implement)
+            .HasColumnName("role");
+
+        builder.Property(r => r.Image)
+            .HasMaxLength(ImageMaxLength)
+            .IsUnicode(false)
+            .HasColumnName("image");
 
         builder.HasDiscriminator<string>("state")
             .HasValue<StartingRun>("starting")

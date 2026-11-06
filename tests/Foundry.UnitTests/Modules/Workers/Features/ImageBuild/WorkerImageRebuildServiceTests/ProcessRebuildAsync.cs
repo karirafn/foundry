@@ -4,7 +4,9 @@ using Docker.DotNet.Models;
 using Foundry.Modules.Settings.Contracts;
 using Foundry.Modules.Settings.Contracts.Queries;
 using Foundry.Modules.Workers.Contracts;
+using Foundry.Modules.Workers.Domain.ValueObjects;
 using Foundry.Modules.Workers.Features.ImageBuild;
+using Foundry.Modules.Workers.Features.Roles;
 using Foundry.Shared;
 
 using Microsoft.Extensions.DependencyInjection;
@@ -27,7 +29,8 @@ public sealed class ProcessRebuildAsync
         string contentRootPath = "",
         bool imageBuildEnabled = true,
         string imageTag = "foundry-worker:local",
-        IWorkerImageRebuildQueue? queue = null)
+        IWorkerImageRebuildQueue? queue = null,
+        IWorkerRoleCatalogStore? roleCatalogStore = null)
     {
         ServiceCollection services = new();
         services.AddScoped<IGlobalSettingsQueries>(_ =>
@@ -47,6 +50,7 @@ public sealed class ProcessRebuildAsync
             sp.GetRequiredService<IServiceScopeFactory>(),
             imageOperations,
             hostEnv,
+            roleCatalogStore ?? new WorkerRoleCatalogStore(),
             NullLogger<WorkerImageRebuildService>.Instance);
     }
 
@@ -866,20 +870,154 @@ public sealed class ProcessRebuildAsync
     public async Task WhenBuildDisabledAndImageExists_PublishesImageBuildSucceeded()
     {
         // Arrange — SpyImageOperations.InspectImageAsync returns successfully (image exists)
-        CapturingIntegrationEventDispatcher dispatcher = new();
-        SpyImageOperations spyImages = new();
-        WorkerImageRebuildService sut = BuildService(
-            spyImages,
-            dispatcher: dispatcher,
-            imageBuildEnabled: false);
+        (string contentRoot, string tempRoot) = CreateTempContextTree();
+        try
+        {
+            CapturingIntegrationEventDispatcher dispatcher = new();
+            SpyImageOperations spyImages = new();
+            WorkerImageRebuildService sut = BuildService(
+                spyImages,
+                dispatcher: dispatcher,
+                contentRootPath: contentRoot,
+                imageBuildEnabled: false);
 
-        // Act
-        await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
+            // Act
+            await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
 
-        // Assert — inspect succeeded → ImageBuildSucceeded published
-        dispatcher.Published.Count.ShouldBe(2);
-        dispatcher.Published[0].ShouldBeOfType<ImageBuildRequested>();
-        dispatcher.Published[1].ShouldBeOfType<ImageBuildSucceeded>();
+            // Assert — inspect succeeded → ImageBuildSucceeded published
+            dispatcher.Published.Count.ShouldBe(2);
+            dispatcher.Published[0].ShouldBeOfType<ImageBuildRequested>();
+            dispatcher.Published[1].ShouldBeOfType<ImageBuildSucceeded>();
+        }
+        finally
+        {
+            Directory.Delete(tempRoot, true);
+        }
+    }
+
+    [Fact]
+    public async Task WhenBuildDisabledAndImageExists_PublishesTheRoleCatalogFromDiskMarkedUnverified()
+    {
+        // Arrange
+        (string contentRoot, string tempRoot) = CreateTempContextTree();
+        try
+        {
+            WorkerRoleCatalogStore store = new();
+            WorkerImageRebuildService sut = BuildService(
+                new SpyImageOperations(),
+                contentRootPath: contentRoot,
+                imageBuildEnabled: false,
+                imageTag: "operator/worker:v1",
+                roleCatalogStore: store);
+
+            // Act
+            await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
+
+            // Assert
+            WorkerRoleCatalog catalog = store.Current.ShouldNotBeNull();
+            catalog.ShouldSatisfyAllConditions(
+                () => catalog.Image.Verified.ShouldBeFalse(),
+                () => catalog.Image.Tag.ShouldBe("operator/worker:v1"),
+                () => catalog.Content.Find(WorkerRole.Implement).ShouldNotBeNull().TaskPromptTemplate
+                    .ShouldBe("Implement issue #{issueNumber}."));
+        }
+        finally
+        {
+            Directory.Delete(tempRoot, true);
+        }
+    }
+
+    [Fact]
+    public async Task WhenBuildDisabledAndRolesMissingOnDisk_PublishesImageBuildOutcomeFailedAndNoCatalog()
+    {
+        // Arrange
+        (string contentRoot, string tempRoot) = CreateTempContextTree();
+        try
+        {
+            Directory.Delete(Path.Combine(tempRoot, "workers", "roles"), true);
+            CapturingIntegrationEventDispatcher dispatcher = new();
+            WorkerRoleCatalogStore store = new();
+            WorkerImageRebuildService sut = BuildService(
+                new SpyImageOperations(),
+                dispatcher: dispatcher,
+                contentRootPath: contentRoot,
+                imageBuildEnabled: false,
+                roleCatalogStore: store);
+
+            // Act
+            await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
+
+            // Assert
+            ImageBuildOutcomeFailed failed = dispatcher.Published[^1].ShouldBeOfType<ImageBuildOutcomeFailed>();
+            failed.ErrorTail.ShouldStartWith("Worker role catalog is invalid:");
+            store.Current.ShouldBeNull();
+        }
+        finally
+        {
+            Directory.Delete(tempRoot, true);
+        }
+    }
+
+    [Fact]
+    public async Task WhenBuildSucceeds_PublishesTheRoleCatalogCapturedFromTheBuildContextMarkedVerified()
+    {
+        // Arrange
+        (string contentRoot, string tempRoot) = CreateTempContextTree();
+        try
+        {
+            WorkerRoleCatalogStore store = new();
+            WorkerImageRebuildService sut = BuildService(
+                new SpyImageOperations(),
+                contentRootPath: contentRoot,
+                roleCatalogStore: store);
+
+            // Act
+            await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
+
+            // Assert
+            WorkerRoleCatalog catalog = store.Current.ShouldNotBeNull();
+            catalog.ShouldSatisfyAllConditions(
+                () => catalog.Image.Verified.ShouldBeTrue(),
+                () => catalog.Image.Tag.ShouldBe("foundry-worker:local"),
+                () => catalog.Content.Find(WorkerRole.Implement).ShouldNotBeNull().Plugin.Description
+                    .ShouldBe("Implements."));
+        }
+        finally
+        {
+            Directory.Delete(tempRoot, true);
+        }
+    }
+
+    [Fact]
+    public async Task WhenTheBuildContextHasNoRoleCatalog_FailsWithoutBuildingAndPublishesNoCatalog()
+    {
+        // Arrange
+        (string contentRoot, string tempRoot) = CreateTempContextTree();
+        try
+        {
+            File.Delete(Path.Combine(tempRoot, "workers", "roles", "implement", "prompts", "task.md"));
+            CapturingIntegrationEventDispatcher dispatcher = new();
+            SpyImageOperations spyImages = new();
+            WorkerRoleCatalogStore store = new();
+            WorkerImageRebuildService sut = BuildService(
+                spyImages,
+                dispatcher: dispatcher,
+                contentRootPath: contentRoot,
+                roleCatalogStore: store);
+
+            // Act
+            await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
+
+            // Assert
+            spyImages.BuildCalled.ShouldBeFalse();
+            store.Current.ShouldBeNull();
+            ImageBuildOutcomeFailed failed = dispatcher.Published[^1].ShouldBeOfType<ImageBuildOutcomeFailed>();
+            failed.ErrorTail.ShouldNotBeNull().ShouldContain("prompts/task.md");
+        }
+        finally
+        {
+            Directory.Delete(tempRoot, true);
+        }
     }
 
     [Fact]
@@ -1042,6 +1180,20 @@ public sealed class ProcessRebuildAsync
     /// <c>solutionRoot = contentRoot/../../</c>. Returns the <c>contentRootPath</c> to pass to
     /// <see cref="BuildService"/> and the root temp directory to delete in <c>finally</c>.
     /// </summary>
+    /// <summary>Writes the minimal valid role catalog (the implement role and the shared plugin) under <c>workersDir/roles</c>.</summary>
+    private static void WriteRoleFixture(string workersDir)
+    {
+        string implement = Path.Combine(workersDir, "roles", "implement");
+        string shared = Path.Combine(workersDir, "roles", "shared");
+        Directory.CreateDirectory(Path.Combine(implement, ".claude-plugin"));
+        Directory.CreateDirectory(Path.Combine(implement, "prompts"));
+        Directory.CreateDirectory(Path.Combine(shared, ".claude-plugin"));
+        File.WriteAllText(Path.Combine(implement, ".claude-plugin", "plugin.json"), """{"name":"implement","description":"Implements."}""");
+        File.WriteAllText(Path.Combine(implement, "prompts", "system.md"), "You are implementing issue #{issueNumber}.\n\n{issueContent}");
+        File.WriteAllText(Path.Combine(implement, "prompts", "task.md"), "Implement issue #{issueNumber}.");
+        File.WriteAllText(Path.Combine(shared, ".claude-plugin", "plugin.json"), """{"name":"shared"}""");
+    }
+
     private static (string ContentRootPath, string TempRoot) CreateTempContextTree()
     {
         string tempRoot = Path.Combine(Path.GetTempPath(), $"foundry-test-{Guid.NewGuid()}");
@@ -1051,6 +1203,7 @@ public sealed class ProcessRebuildAsync
         Directory.CreateDirectory(contentRoot);
         Directory.CreateDirectory(workersDir);
         File.WriteAllText(Path.Combine(workersDir, "Dockerfile"), "FROM scratch");
+        WriteRoleFixture(workersDir);
         return (contentRoot, tempRoot);
     }
 

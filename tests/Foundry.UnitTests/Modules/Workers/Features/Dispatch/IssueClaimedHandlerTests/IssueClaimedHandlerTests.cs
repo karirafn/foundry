@@ -15,8 +15,10 @@ using Foundry.Modules.Workers.Domain.ValueObjects;
 using Foundry.Modules.Workers.Features.Orchestration;
 using Foundry.Modules.Workers.Features.ContainerSpec;
 using Foundry.Modules.Workers.Features.Dispatch;
+using Foundry.Modules.Workers.Features.Roles;
 using Foundry.Shared;
 using Foundry.Testing;
+using Foundry.UnitTests.Fakes.Workers;
 using Foundry.WebApi.Persistence;
 
 using Microsoft.Data.Sqlite;
@@ -57,7 +59,8 @@ public sealed class HandleAsync : IAsyncDisposable
         IWorkerOrchestrator? orchestrator = null,
         IGlobalSettingsQueries? settingsQueries = null,
         ICredentialQueries? credentialQueries = null,
-        IPostExitProviderQueries? postExitProviderQueries = null)
+        IPostExitProviderQueries? postExitProviderQueries = null,
+        IWorkerRoleCatalogStore? roleCatalog = null)
     {
         return new IssueClaimedHandler(
             _dbContext,
@@ -66,6 +69,7 @@ public sealed class HandleAsync : IAsyncDisposable
             settingsQueries ?? new StubGlobalSettingsQueries(),
             credentialQueries ?? new StubCredentialQueries(("ANTHROPIC_API_KEY", "test-api-key")),
             postExitProviderQueries ?? new StubPostExitProviderQueries(branchCreationSucceeds: true),
+            roleCatalog ?? StubWorkerRoleCatalogStore.With(),
             NullLogger<IssueClaimedHandler>.Instance);
     }
 
@@ -488,7 +492,7 @@ public sealed class HandleAsync : IAsyncDisposable
         StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c6");
         IssueClaimedHandler sut = BuildHandler(
             orchestrator: orchestrator,
-            settingsQueries: new StubGlobalSettingsQueries(workerPromptTemplate: "Implement issue {issueNumber}."));
+            roleCatalog: StubWorkerRoleCatalogStore.With(taskPrompt: "Implement issue {issueNumber}."));
         IssueClaimed @event = BuildEvent(issueNumber: 42);
 
         // Act
@@ -674,15 +678,13 @@ public sealed class HandleAsync : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenDbHasSystemPromptTemplate_UsesDbTemplateInSystemPromptEnvVar()
+    public async Task WhenRoleHasSystemPromptTemplate_UsesItInSystemPromptEnvVar()
     {
         // Arrange
         StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c-system-template");
         IssueClaimedHandler sut = BuildHandler(
             orchestrator: orchestrator,
-            settingsQueries: new StubGlobalSettingsQueries(
-                systemPromptTemplate: "Custom system prompt for issue #{issueNumber}. {issueContent}",
-                workerPromptTemplate: null));
+            roleCatalog: StubWorkerRoleCatalogStore.With(systemPrompt: "Custom system prompt for issue #{issueNumber}. {issueContent}"));
         IssueClaimed @event = BuildEvent(issueNumber: 99);
 
         // Act
@@ -695,15 +697,13 @@ public sealed class HandleAsync : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenDbHasWorkerPromptTemplate_UsesDbTemplateInWorkerPromptEnvVar()
+    public async Task WhenRoleHasTaskPromptTemplate_UsesItInWorkerPromptEnvVar()
     {
         // Arrange
         StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c-worker-template");
         IssueClaimedHandler sut = BuildHandler(
             orchestrator: orchestrator,
-            settingsQueries: new StubGlobalSettingsQueries(
-                systemPromptTemplate: null,
-                workerPromptTemplate: "Custom worker prompt for #{issueNumber}."));
+            roleCatalog: StubWorkerRoleCatalogStore.With(taskPrompt: "Custom worker prompt for #{issueNumber}."));
         IssueClaimed @event = BuildEvent(issueNumber: 55);
 
         // Act
@@ -794,14 +794,14 @@ public sealed class HandleAsync : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenDbWorkerPromptTemplateProvided_UsesDbValueAsWorkerPrompt()
+    public async Task WhenRoleTaskPromptProvided_FillsIssueNumberInWorkerPrompt()
     {
         // Arrange
-        const string dbWorkerPromptTemplate = "DB template for issue {issueNumber}.";
+        const string taskPromptTemplate = "DB template for issue {issueNumber}.";
         StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c-db-template");
         IssueClaimedHandler sut = BuildHandler(
             orchestrator: orchestrator,
-            settingsQueries: new StubGlobalSettingsQueries(workerPromptTemplate: dbWorkerPromptTemplate));
+            roleCatalog: StubWorkerRoleCatalogStore.With(taskPrompt: taskPromptTemplate));
         IssueClaimed @event = BuildEvent(issueNumber: 7);
 
         // Act
@@ -811,7 +811,7 @@ public sealed class HandleAsync : IAsyncDisposable
         WorkerContainerSpec? spec = orchestrator.LastSpec;
         spec.ShouldNotBeNull();
         spec.EnvironmentVariables["WORKER_PROMPT"].ShouldBe(
-            dbWorkerPromptTemplate.Replace("{issueNumber}", "7", StringComparison.Ordinal));
+            taskPromptTemplate.Replace("{issueNumber}", "7", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -954,12 +954,70 @@ public sealed class HandleAsync : IAsyncDisposable
     }
 
     [Fact]
+    public async Task WhenDispatched_ContainerSpecCarriesTheImplementRoleForTheEntrypoint()
+    {
+        // Arrange
+        StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c-role");
+        IssueClaimedHandler sut = BuildHandler(orchestrator: orchestrator);
+
+        // Act
+        await sut.HandleAsync(BuildEvent(), TestContext.Current.CancellationToken);
+
+        // Assert
+        WorkerContainerSpec spec = orchestrator.LastSpec.ShouldNotBeNull();
+        spec.EnvironmentVariables["WORKER_ROLE"].ShouldBe(WorkerRole.Implement.Name);
+    }
+
+    [Fact]
+    public async Task WhenDispatched_TheRunRecordsItsRoleAndTheImageItRanOn()
+    {
+        // Arrange
+        IssueClaimedHandler sut = BuildHandler(
+            roleCatalog: StubWorkerRoleCatalogStore.With(imageTag: "foundry-worker:local", imageId: "sha256:abc"));
+
+        // Act
+        await sut.HandleAsync(BuildEvent(), TestContext.Current.CancellationToken);
+        _dbContext.ChangeTracker.Clear();
+
+        // Assert
+        WorkerRun run = (await _dbContext.Set<WorkerRun>().SingleOrDefaultAsync(TestContext.Current.CancellationToken))
+            .ShouldBeOfType<ActiveRun>();
+        run.ShouldSatisfyAllConditions(
+            () => run.Role.ShouldBe(WorkerRole.Implement),
+            () => run.Image.ShouldBe("foundry-worker:local@sha256:abc"));
+    }
+
+    [Fact]
+    public async Task WhenTheRoleCatalogIsNotLoaded_FailsTheRunWithoutStartingAContainer()
+    {
+        // Arrange
+        StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c-no-catalog");
+        IssueClaimedHandler sut = BuildHandler(
+            orchestrator: orchestrator,
+            settingsQueries: new StubGlobalSettingsQueries(imageTag: "foundry-worker:local"),
+            roleCatalog: StubWorkerRoleCatalogStore.Empty());
+
+        // Act
+        await sut.HandleAsync(BuildEvent(), TestContext.Current.CancellationToken);
+        _dbContext.ChangeTracker.Clear();
+
+        // Assert
+        orchestrator.LastSpec.ShouldBeNull();
+        FailedRun failedRun = (await _dbContext.Set<WorkerRun>().SingleOrDefaultAsync(TestContext.Current.CancellationToken))
+            .ShouldBeOfType<FailedRun>();
+        failedRun.ShouldSatisfyAllConditions(
+            () => failedRun.Reason.ShouldBeOfType<FailureReason.ContainerError>().Message.ShouldContain("'implement' is not loaded"),
+            () => failedRun.Role.ShouldBe(WorkerRole.Implement),
+            () => failedRun.Image.ShouldBe("foundry-worker:local"));
+    }
+
+    [Fact]
     public async Task WhenSystemPromptTooLarge_CreatesFailedRunWithContainerError()
     {
-        // Arrange — a DB system prompt template large enough to exceed the 120_000-byte ceiling
+        // Arrange — a role system prompt template large enough to exceed the 120_000-byte ceiling
         string hugeTemplate = new string('X', 200_000);
         IssueClaimedHandler sut = BuildHandler(
-            settingsQueries: new StubGlobalSettingsQueries(systemPromptTemplate: hugeTemplate));
+            roleCatalog: StubWorkerRoleCatalogStore.With(systemPrompt: hugeTemplate));
         IssueClaimed @event = BuildEvent();
 
         // Act
@@ -1225,8 +1283,6 @@ public sealed class HandleAsync : IAsyncDisposable
     }
 
     private sealed class StubGlobalSettingsQueries(
-        string? systemPromptTemplate = null,
-        string? workerPromptTemplate = null,
         bool installsDocker = false,
         bool installsDotnet = false,
         string imageTag = "stub-image:v1",
@@ -1249,9 +1305,6 @@ public sealed class HandleAsync : IAsyncDisposable
         public Task<int> GetPollIntervalSecondsAsync(CancellationToken cancellationToken)
             => Task.FromResult(30);
 
-        public Task<(string SystemPromptTemplate, string WorkerPromptTemplate, string BranchNamingInstruction)> GetPromptTemplatesAsync(
-            CancellationToken cancellationToken)
-            => Task.FromResult((systemPromptTemplate ?? "", workerPromptTemplate ?? "", ""));
 
         public Task<DispatchPauseState> GetDispatchPauseStateAsync(CancellationToken cancellationToken)
             => Task.FromResult(new DispatchPauseState(null, false, true));

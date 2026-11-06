@@ -39,14 +39,4 @@ public sealed class InitialState
         // Assert
         settings.LastImageBuiltAt.ShouldBeNull();
     }
-
-    [Fact]
-    public void WhenCreated_WorkerPromptsIsDefault()
-    {
-        // Act
-        GlobalSettings settings = GlobalSettings.Create();
-
-        // Assert
-        settings.WorkerPrompts.ShouldBe(WorkerPrompts.Default);
-    }
 }

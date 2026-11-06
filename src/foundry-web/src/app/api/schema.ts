@@ -569,6 +569,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/worker-roles": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Returns the worker roles of the running worker image, read-only, with the system-prompt sections Foundry adds */
+        get: operations["GetWorkerRoleCatalog"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/settings": {
         parameters: {
             query?: never;
@@ -596,23 +613,6 @@ export interface paths {
         get?: never;
         /** Updates the worker concurrency and timeout limits */
         put: operations["UpdateWorkerLimits"];
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/settings/prompts": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        /** Updates the system prompt, worker prompt, and branch naming instruction */
-        put: operations["UpdatePromptTemplates"];
         post?: never;
         delete?: never;
         options?: never;
@@ -894,9 +894,6 @@ export interface components {
             probeIntervalMinutes: number | string;
             /** Format: int32 */
             pollIntervalSeconds: number | string;
-            systemPromptTemplate: string;
-            workerPromptTemplate: string;
-            branchNamingInstruction: string;
             /** Format: date-time */
             usageLimitResetsAt: null | string;
             isDispatchPaused: boolean;
@@ -1018,6 +1015,14 @@ export interface components {
             detail?: null | string;
             instance?: null | string;
         };
+        /** @enum {unknown} */
+        PromptSectionCondition: "Always" | "DotnetImage" | "DockerImage" | "Fresh" | "Continuation" | "Revision" | "RebaseConflict";
+        PromptSectionDescriptor: {
+            key: string;
+            title: string;
+            condition: components["schemas"]["PromptSectionCondition"];
+            content: string;
+        };
         ProviderBudgetHeadroom: {
             budget: string;
             displayName: string;
@@ -1094,6 +1099,12 @@ export interface components {
             /** Format: date-time */
             cancelRequestedAt: string;
         };
+        RolePluginComponent: {
+            name: string;
+            description: null | string;
+            path: string;
+            content: string;
+        };
         RunStats: {
             /** Format: int32 */
             runCount: number | string;
@@ -1117,6 +1128,11 @@ export interface components {
             totalCostUsd: number | string;
             inputTokens: components["schemas"]["TokenTotal"];
             outputTokens: components["schemas"]["TokenTotal"];
+        };
+        SharedRolePlugin: {
+            description: null | string;
+            skills: components["schemas"]["RolePluginComponent"][];
+            agents: components["schemas"]["RolePluginComponent"][];
         };
         StartLoginResponse: {
             /** Format: uuid */
@@ -1185,11 +1201,6 @@ export interface components {
             probeIntervalMinutes: number | string;
             /** Format: int32 */
             pollIntervalSeconds: number | string;
-        };
-        UpdatePromptTemplatesRequestBody: {
-            systemPromptTemplate: string;
-            workerPromptTemplate: string;
-            branchNamingInstruction: string;
         };
         UpdateRepositoryRequestBody: {
             /** Format: int32 */
@@ -1271,6 +1282,30 @@ export interface components {
             reason?: null | string;
             detail?: null | string;
             isRegistered?: boolean;
+        };
+        WorkerRoleCard: {
+            name: string;
+            purpose: null | string;
+            systemPrompt: string;
+            taskPrompt: string;
+            skills: components["schemas"]["RolePluginComponent"][];
+            agents: components["schemas"]["RolePluginComponent"][];
+            verdictSchema: null | string;
+        };
+        WorkerRoleCatalogResponse: {
+            image: components["schemas"]["WorkerRoleImage"];
+            roles: components["schemas"]["WorkerRoleCard"][];
+            shared: components["schemas"]["SharedRolePlugin"];
+            promptSections: components["schemas"]["PromptSectionDescriptor"][];
+            rolePromptSlot: string;
+        };
+        WorkerRoleImage: {
+            tag: string;
+            imageId: null | string;
+            /** Format: date-time */
+            builtAt: string;
+            commit: null | string;
+            verified: boolean;
         };
         WorkerRunDetail: {
             /** Format: uuid */
@@ -2605,6 +2640,35 @@ export interface operations {
             };
         };
     };
+    GetWorkerRoleCatalog: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkerRoleCatalogResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
     GetSettings: {
         parameters: {
             query?: never;
@@ -2644,48 +2708,6 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["UpdateWorkerLimitsRequestBody"];
-            };
-        };
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["GlobalSettingsSummary"];
-                };
-            };
-            /** @description Bad Request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetails"];
-                };
-            };
-            /** @description Not Found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetails"];
-                };
-            };
-        };
-    };
-    UpdatePromptTemplates: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["UpdatePromptTemplatesRequestBody"];
             };
         };
         responses: {

@@ -21,9 +21,6 @@ internal sealed class StubGlobalSettingsQueries(
         TimeoutMinutes: 60,
         ProbeIntervalMinutes: 60,
         PollIntervalSeconds: 30,
-        SystemPromptTemplate: "",
-        WorkerPromptTemplate: "",
-        BranchNamingInstruction: "",
         UsageLimitResetsAt: null,
         IsDispatchPaused: false,
         AutoResumeOnUsageReset: true,
@@ -61,9 +58,6 @@ internal sealed class StubGlobalSettingsQueries(
     public Task<int> GetPollIntervalSecondsAsync(CancellationToken cancellationToken)
         => Task.FromResult(30);
 
-    public Task<(string SystemPromptTemplate, string WorkerPromptTemplate, string BranchNamingInstruction)> GetPromptTemplatesAsync(
-        CancellationToken cancellationToken)
-        => Task.FromResult(("", "", ""));
 
     public Task<DispatchPauseState> GetDispatchPauseStateAsync(CancellationToken cancellationToken)
         => Task.FromResult(new DispatchPauseState(null, false, true));

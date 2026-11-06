@@ -14,8 +14,6 @@ function buildSettingsResponse(overrides: Record<string, unknown> = {}): Record<
     maxConcurrent: 3,
     timeoutMinutes: 60,
     probeIntervalMinutes: 60,
-    systemPromptTemplate: null,
-    workerPromptTemplate: null,
     usageLimitResetsAt: null,
     isDispatchPaused: false,
     autoResumeOnUsageReset: true,

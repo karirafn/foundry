@@ -17,9 +17,6 @@ public interface IGlobalSettingsQueries
 
     Task<int> GetPollIntervalSecondsAsync(CancellationToken cancellationToken);
 
-    Task<(string SystemPromptTemplate, string WorkerPromptTemplate, string BranchNamingInstruction)> GetPromptTemplatesAsync(
-        CancellationToken cancellationToken);
-
     Task<DispatchPauseState> GetDispatchPauseStateAsync(CancellationToken cancellationToken);
 
     Task<ImageBuildStatus> GetImageBuildStatusAsync(CancellationToken cancellationToken);

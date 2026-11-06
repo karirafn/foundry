@@ -18,7 +18,6 @@ internal static class SettingsEndpoints
 
         GetSettings.Endpoint.Map(group);
         UpdateWorkerLimits.Endpoint.Map(group);
-        UpdatePromptTemplates.Endpoint.Map(group);
         UpdateDispatchSettings.Endpoint.Map(group);
         PauseDispatch.Endpoint.Map(group);
         ResumeDispatch.Endpoint.Map(group);

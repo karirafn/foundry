@@ -480,7 +480,6 @@ describe('SetupAuthStepComponent', () => {
         installDotnet: false, installAngular: false,
         installChromium: false, installDocker: false, imageBuildStatus: 'Idle',
         lastImageBuildError: null, hasUsableImage: false, nextRetryAt: null, attempt: 0,
-        systemPromptTemplate: null, workerPromptTemplate: null,
       });
       httpMock.expectOne('/api/credentials').flush(CREDENTIALS_API_KEY_NOT_CONFIGURED);
       fixture.detectChanges();
@@ -512,7 +511,6 @@ describe('SetupAuthStepComponent', () => {
         installDotnet: false, installAngular: false,
         installChromium: false, installDocker: false, imageBuildStatus: 'Idle',
         lastImageBuildError: null, hasUsableImage: false, nextRetryAt: null, attempt: 0,
-        systemPromptTemplate: null, workerPromptTemplate: null,
       });
       httpMock.expectOne('/api/credentials').flush(CREDENTIALS_API_KEY_UNREADABLE);
       fixture.detectChanges();
@@ -545,7 +543,6 @@ describe('SetupAuthStepComponent', () => {
         installDotnet: false, installAngular: false,
         installChromium: false, installDocker: false, imageBuildStatus: 'Idle',
         lastImageBuildError: null, hasUsableImage: false, nextRetryAt: null, attempt: 0,
-        systemPromptTemplate: null, workerPromptTemplate: null,
       });
       httpMock.expectOne('/api/credentials').flush(CREDENTIALS_API_KEY_UNREADABLE);
       fixture.detectChanges();
@@ -576,7 +573,6 @@ describe('SetupAuthStepComponent', () => {
         installDotnet: false, installAngular: false,
         installChromium: false, installDocker: false, imageBuildStatus: 'Idle',
         lastImageBuildError: null, hasUsableImage: false, nextRetryAt: null, attempt: 0,
-        systemPromptTemplate: null, workerPromptTemplate: null,
       });
       httpMock.expectOne('/api/credentials').flush(CREDENTIALS_API_KEY_NOT_CONFIGURED);
       fixture.detectChanges();
@@ -607,7 +603,6 @@ describe('SetupAuthStepComponent', () => {
         installDotnet: false, installAngular: false,
         installChromium: false, installDocker: false, imageBuildStatus: 'Idle',
         lastImageBuildError: null, hasUsableImage: false, nextRetryAt: null, attempt: 0,
-        systemPromptTemplate: null, workerPromptTemplate: null,
       });
       httpMock.expectOne('/api/credentials').flush(CREDENTIALS_API_KEY_UNREADABLE);
       fixture.detectChanges();
@@ -640,7 +635,6 @@ describe('SetupAuthStepComponent', () => {
         installDotnet: false, installAngular: false,
         installChromium: false, installDocker: false, imageBuildStatus: 'Idle',
         lastImageBuildError: null, hasUsableImage: false, nextRetryAt: null, attempt: 0,
-        systemPromptTemplate: null, workerPromptTemplate: null,
       });
       httpMock.expectOne('/api/credentials').flush(CREDENTIALS_API_KEY_RESPONSE);
       fixture.detectChanges();

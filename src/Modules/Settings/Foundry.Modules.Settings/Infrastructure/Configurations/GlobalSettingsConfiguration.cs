@@ -46,15 +46,6 @@ internal sealed class GlobalSettingsConfiguration : IEntityTypeConfiguration<Glo
             .HasMaxLength(GlobalSettings.MaxWebhookPublicBaseUrlLength)
             .HasColumnName("webhook_public_base_url");
 
-        ValueConverter<WorkerPrompts, string> workerPromptsConverter = new(
-            prompts => SerializeWorkerPrompts(prompts),
-            json => DeserializeWorkerPrompts(json));
-
-        builder.Property(s => s.WorkerPrompts)
-            .HasConversion(workerPromptsConverter)
-            .HasColumnType("TEXT")
-            .HasColumnName("worker_prompts");
-
         builder.Property(s => s.UsageLimitResetsAt)
             .HasColumnName("usage_limit_resets_at");
 
@@ -191,13 +182,6 @@ internal sealed class GlobalSettingsConfiguration : IEntityTypeConfiguration<Glo
     private static ClaudeCodeSettings DeserializeClaudeCodeSettings(string json)
         => JsonSerializer.Deserialize<ClaudeCodeSettings>(json)
             ?? ClaudeCodeSettings.Default;
-
-    private static string SerializeWorkerPrompts(WorkerPrompts prompts)
-        => JsonSerializer.Serialize(prompts);
-
-    private static WorkerPrompts DeserializeWorkerPrompts(string json)
-        => JsonSerializer.Deserialize<WorkerPrompts>(json)
-            ?? WorkerPrompts.Default;
 
     private static JsonSerializerOptions BuildImageBuildStateOptions()
     {

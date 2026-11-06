@@ -121,6 +121,43 @@ prepare_csharp_lsp() {
 }
 
 # ---------------------------------------------------------------------------
+# prepare_role_plugins <roles_dir> <role>
+#
+# Resolves the run's Worker Role (ADR 0095) to the plugin directories claude
+# loads, recorded in the ROLE_PLUGIN_ARGS array that both claude invocations
+# (the initial -p run and the transient-error -c resume) expand verbatim: the
+# role's own plugin, then the shared plugin loaded for every role.
+#
+# Fails closed: a role name that is not a plain lowercase slug, or a role (or
+# the shared plugin) with no plugin manifest under <roles_dir>, emits the
+# bootstrap-failure sentinel (stage=role) and returns non-zero, so a run never
+# starts without the instructions Foundry dispatched it with.
+# ---------------------------------------------------------------------------
+prepare_role_plugins() {
+    local roles_dir="$1"
+    local role="$2"
+    ROLE_PLUGIN_ARGS=()
+
+    if [[ ! "$role" =~ ^[a-z][a-z0-9-]*$ ]] || [[ "$role" == "shared" ]]; then
+        echo "ERROR: WORKER_ROLE '$role' is not a valid worker role name." >&2
+        fail_bootstrap "role" "WORKER_ROLE is not a valid worker role name"
+        return 1
+    fi
+
+    local plugin_dir
+    for plugin_dir in "$roles_dir/$role" "$roles_dir/shared"; do
+        if [[ ! -f "$plugin_dir/.claude-plugin/plugin.json" ]]; then
+            echo "ERROR: worker role plugin $plugin_dir is missing from this image." >&2
+            fail_bootstrap "role" "worker role plugin $plugin_dir is missing from this image; rebuild the worker image"
+            return 1
+        fi
+        ROLE_PLUGIN_ARGS+=(--plugin-dir "$plugin_dir")
+    done
+
+    echo "Worker role: $role" >&2
+}
+
+# ---------------------------------------------------------------------------
 # start_rootless_dockerd
 #
 # Starts rootless dockerd in the background and polls until its socket is ready.
@@ -384,6 +421,13 @@ unset _cred_dir
 : "${WORKER_PROMPT:?WORKER_PROMPT is required}"
 : "${SYSTEM_PROMPT:?SYSTEM_PROMPT is required}"
 : "${ISSUE_NUMBER:?ISSUE_NUMBER is required}"
+: "${WORKER_ROLE:?WORKER_ROLE is required}"
+
+# Resolve the run's role plugins before any clone/auth work so a role this image
+# does not carry fails fast at stage=role.  The roles directory is baked into the
+# image (ADR 0095); FOUNDRY_ROLES_DIR only redirects it for the bats suite.
+readonly WORKER_ROLES_DIR="${FOUNDRY_ROLES_DIR:-/opt/foundry/roles}"
+prepare_role_plugins "$WORKER_ROLES_DIR" "$WORKER_ROLE" || exit 1
 
 # Guard: SYSTEM_PROMPT must not exceed the Linux kernel MAX_ARG_STRLEN limit.
 # A single argv/env string above this ceiling makes execve fail with E2BIG,
@@ -588,6 +632,7 @@ claude -p "$WORKER_PROMPT" \
     --output-format stream-json \
     --verbose \
     --max-turns 200 \
+    "${ROLE_PLUGIN_ARGS[@]}" \
     "${CSHARP_LSP_PLUGIN_ARGS[@]}" | tee "$CLAUDE_OUTPUT_FILE"
 first_status=${PIPESTATUS[0]}
 set -e
@@ -598,12 +643,14 @@ if is_transient_api_error "$(cat "$CLAUDE_OUTPUT_FILE")"; then
     # intentionally omitted: -c restores the original session (system prompt
     # included) and re-appending would duplicate it.  The C# LSP decision is
     # reused as-is (plugins are not part of the session); no second restore.
+    # The role plugins are passed again for the same reason.
     set +e
     claude -c -p "$WORKER_PROMPT" \
         --dangerously-skip-permissions \
         --output-format stream-json \
         --verbose \
         --max-turns 200 \
+        "${ROLE_PLUGIN_ARGS[@]}" \
         "${CSHARP_LSP_PLUGIN_ARGS[@]}" | tee "$CLAUDE_OUTPUT_FILE"
     resume_status=${PIPESTATUS[0]}
     set -e

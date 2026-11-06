@@ -1717,6 +1717,37 @@
         }
       }
     },
+    "/api/worker-roles": {
+      "get": {
+        "tags": [
+          "Worker Roles"
+        ],
+        "summary": "Returns the worker roles of the running worker image, read-only, with the system-prompt sections Foundry adds",
+        "operationId": "GetWorkerRoleCatalog",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkerRoleCatalogResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/settings": {
       "get": {
         "tags": [
@@ -1760,57 +1791,6 @@
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/UpdateWorkerLimitsRequestBody"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/GlobalSettingsSummary"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Not Found",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Bad Request",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/settings/prompts": {
-      "put": {
-        "tags": [
-          "Settings"
-        ],
-        "summary": "Updates the system prompt, worker prompt, and branch naming instruction",
-        "operationId": "UpdatePromptTemplates",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/UpdatePromptTemplatesRequestBody"
               }
             }
           },
@@ -2731,9 +2711,6 @@
           "timeoutMinutes",
           "probeIntervalMinutes",
           "pollIntervalSeconds",
-          "systemPromptTemplate",
-          "workerPromptTemplate",
-          "branchNamingInstruction",
           "usageLimitResetsAt",
           "isDispatchPaused",
           "autoResumeOnUsageReset",
@@ -2789,15 +2766,6 @@
               "string"
             ],
             "format": "int32"
-          },
-          "systemPromptTemplate": {
-            "type": "string"
-          },
-          "workerPromptTemplate": {
-            "type": "string"
-          },
-          "branchNamingInstruction": {
-            "type": "string"
           },
           "usageLimitResetsAt": {
             "type": [
@@ -3328,6 +3296,40 @@
           }
         }
       },
+      "PromptSectionCondition": {
+        "enum": [
+          "Always",
+          "DotnetImage",
+          "DockerImage",
+          "Fresh",
+          "Continuation",
+          "Revision",
+          "RebaseConflict"
+        ]
+      },
+      "PromptSectionDescriptor": {
+        "required": [
+          "key",
+          "title",
+          "condition",
+          "content"
+        ],
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "condition": {
+            "$ref": "#/components/schemas/PromptSectionCondition"
+          },
+          "content": {
+            "type": "string"
+          }
+        }
+      },
       "ProviderBudgetHeadroom": {
         "required": [
           "budget",
@@ -3637,6 +3639,32 @@
           }
         }
       },
+      "RolePluginComponent": {
+        "required": [
+          "name",
+          "description",
+          "path",
+          "content"
+        ],
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "path": {
+            "type": "string"
+          },
+          "content": {
+            "type": "string"
+          }
+        }
+      },
       "RunStats": {
         "required": [
           "runCount",
@@ -3739,6 +3767,34 @@
           },
           "outputTokens": {
             "$ref": "#/components/schemas/TokenTotal"
+          }
+        }
+      },
+      "SharedRolePlugin": {
+        "required": [
+          "description",
+          "skills",
+          "agents"
+        ],
+        "type": "object",
+        "properties": {
+          "description": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "skills": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RolePluginComponent"
+            }
+          },
+          "agents": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RolePluginComponent"
+            }
           }
         }
       },
@@ -4026,25 +4082,6 @@
               "string"
             ],
             "format": "int32"
-          }
-        }
-      },
-      "UpdatePromptTemplatesRequestBody": {
-        "required": [
-          "systemPromptTemplate",
-          "workerPromptTemplate",
-          "branchNamingInstruction"
-        ],
-        "type": "object",
-        "properties": {
-          "systemPromptTemplate": {
-            "type": "string"
-          },
-          "workerPromptTemplate": {
-            "type": "string"
-          },
-          "branchNamingInstruction": {
-            "type": "string"
           }
         }
       },
@@ -4401,6 +4438,120 @@
           }
         }
       },
+      "WorkerRoleCard": {
+        "required": [
+          "name",
+          "purpose",
+          "systemPrompt",
+          "taskPrompt",
+          "skills",
+          "agents",
+          "verdictSchema"
+        ],
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "purpose": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "systemPrompt": {
+            "type": "string"
+          },
+          "taskPrompt": {
+            "type": "string"
+          },
+          "skills": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RolePluginComponent"
+            }
+          },
+          "agents": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RolePluginComponent"
+            }
+          },
+          "verdictSchema": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "WorkerRoleCatalogResponse": {
+        "required": [
+          "image",
+          "roles",
+          "shared",
+          "promptSections",
+          "rolePromptSlot"
+        ],
+        "type": "object",
+        "properties": {
+          "image": {
+            "$ref": "#/components/schemas/WorkerRoleImage"
+          },
+          "roles": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WorkerRoleCard"
+            }
+          },
+          "shared": {
+            "$ref": "#/components/schemas/SharedRolePlugin"
+          },
+          "promptSections": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PromptSectionDescriptor"
+            }
+          },
+          "rolePromptSlot": {
+            "type": "string"
+          }
+        }
+      },
+      "WorkerRoleImage": {
+        "required": [
+          "tag",
+          "imageId",
+          "builtAt",
+          "commit",
+          "verified"
+        ],
+        "type": "object",
+        "properties": {
+          "tag": {
+            "type": "string"
+          },
+          "imageId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "builtAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "commit": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "verified": {
+            "type": "boolean"
+          }
+        }
+      },
       "WorkerRunDetail": {
         "required": [
           "workerRunId",
@@ -4556,6 +4707,9 @@
     },
     {
       "name": "System"
+    },
+    {
+      "name": "Worker Roles"
     },
     {
       "name": "Settings"

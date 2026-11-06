@@ -1,0 +1,210 @@
+@use '../../../../styles/controls' as *;
+
+:host {
+  display: block;
+}
+
+.role-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--fd-spacing-lg);
+
+  code {
+    font-family: var(--fd-font-mono);
+  }
+
+  &__header {
+    display: flex;
+    flex-direction: column;
+    gap: var(--fd-spacing-sm);
+  }
+
+  &__heading {
+    align-items: center;
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--fd-spacing-sm);
+  }
+
+  &__title {
+    color: var(--fd-text-primary);
+    font-family: var(--fd-font-mono);
+    font-size: 1rem;
+    font-weight: 600;
+    margin: 0;
+  }
+
+  &__purpose {
+    color: var(--fd-text-secondary);
+    font-size: 0.875rem;
+    margin: 0;
+  }
+
+  &__meta {
+    display: flex;
+    flex-wrap: wrap;
+    font-size: 0.8125rem;
+    gap: var(--fd-spacing-xs) var(--fd-spacing-xl);
+    margin: 0;
+
+    dt {
+      color: var(--fd-text-secondary);
+      display: inline;
+      margin-right: var(--fd-spacing-xs);
+    }
+
+    dd {
+      color: var(--fd-text-primary);
+      display: inline;
+      margin: 0;
+    }
+  }
+
+  &__block {
+    border-top: 1px solid var(--fd-border-muted);
+    display: flex;
+    flex-direction: column;
+    gap: var(--fd-spacing-sm);
+    padding-top: var(--fd-spacing-md);
+  }
+
+  &__block-title {
+    color: var(--fd-text-primary);
+    font-size: 0.875rem;
+    font-weight: 600;
+    margin: 0;
+  }
+
+  &__sub-title {
+    color: var(--fd-text-secondary);
+    font-size: 0.8125rem;
+    font-weight: 500;
+    margin: var(--fd-spacing-xs) 0 0;
+  }
+
+  &__hint {
+    color: var(--fd-text-secondary);
+    font-size: 0.75rem;
+    margin: 0;
+  }
+
+  &__list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--fd-spacing-xs);
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+
+  &__details {
+    border: 1px solid var(--fd-border-muted);
+    border-radius: var(--fd-radius-sm);
+
+    &[open] {
+      padding-bottom: var(--fd-spacing-sm);
+
+      > :not(summary) {
+        margin-left: var(--fd-spacing-md);
+        margin-right: var(--fd-spacing-md);
+      }
+    }
+  }
+
+  &__summary {
+    align-items: center;
+    border-radius: var(--fd-radius-sm);
+    color: var(--fd-text-primary);
+    cursor: pointer;
+    display: flex;
+    flex-wrap: wrap;
+    font-size: 0.8125rem;
+    gap: var(--fd-spacing-sm);
+    list-style: none;
+    min-height: 36px;
+    padding: var(--fd-spacing-xs) var(--fd-spacing-md);
+
+    &::-webkit-details-marker {
+      display: none;
+    }
+
+    &::before {
+      color: var(--fd-text-secondary);
+      content: '▸';
+      transition: transform 0.1s ease;
+    }
+
+    &:hover {
+      background: var(--fd-bg-card-hover);
+    }
+
+    &:focus-visible {
+      @include focus-ring;
+    }
+  }
+
+  &__details[open] > &__summary::before {
+    transform: rotate(90deg);
+  }
+
+  &__summary-name {
+    font-weight: 500;
+  }
+
+  &__summary-description {
+    color: var(--fd-text-secondary);
+    flex-basis: 100%;
+    padding-left: 1.25em;
+  }
+
+  &__badge {
+    border: 1px solid var(--fd-border-default);
+    border-radius: 999px;
+    color: var(--fd-text-secondary);
+    font-size: 0.6875rem;
+    font-weight: 500;
+    line-height: 1.4;
+    padding: 0 var(--fd-spacing-sm);
+    white-space: nowrap;
+  }
+
+  &__badge--warning {
+    background: var(--fd-bg-warning-subtle);
+    border-color: var(--fd-border-warning);
+    color: var(--fd-text-warning);
+  }
+
+  &__shared {
+    border-color: var(--fd-text-link);
+    color: var(--fd-text-link);
+  }
+
+  &__slot-note {
+    color: var(--fd-text-secondary);
+    font-size: 0.8125rem;
+    font-style: italic;
+    margin: var(--fd-spacing-xs) 0 0;
+  }
+
+  &__path {
+    margin-bottom: var(--fd-spacing-xs);
+    margin-top: var(--fd-spacing-xs);
+  }
+
+  &__schema {
+    background: var(--fd-bg-page);
+    border: 1px solid var(--fd-border-muted);
+    border-radius: var(--fd-radius-sm);
+    color: var(--fd-text-primary);
+    font-family: var(--fd-font-mono);
+    font-size: 0.8125rem;
+    margin: 0;
+    max-height: 24rem;
+    overflow: auto;
+    padding: var(--fd-spacing-sm) var(--fd-spacing-md);
+
+    &:focus-visible {
+      @include focus-ring;
+    }
+  }
+}

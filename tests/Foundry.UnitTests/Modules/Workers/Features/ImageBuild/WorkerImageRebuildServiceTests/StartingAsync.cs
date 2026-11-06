@@ -1,5 +1,6 @@
 using Foundry.Modules.Settings.Contracts.Queries;
 using Foundry.Modules.Workers.Features.ImageBuild;
+using Foundry.Modules.Workers.Features.Roles;
 using Foundry.Shared;
 
 using Microsoft.Extensions.DependencyInjection;
@@ -30,6 +31,7 @@ public sealed class StartingAsync
             sp.GetRequiredService<IServiceScopeFactory>(),
             new NullImageOperations(),
             new StubHostEnvironment(string.Empty),
+            new WorkerRoleCatalogStore(),
             NullLogger<WorkerImageRebuildService>.Instance);
     }
 

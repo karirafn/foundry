@@ -78,11 +78,11 @@ const HEADING_SELECTOR = 'h1, h2';
             >Claude Code</a>
             <a
               class="settings-layout__nav-link"
-              routerLink="prompts"
+              routerLink="roles"
               routerLinkActive="settings-layout__nav-link--active"
-              #promptsLink="routerLinkActive"
-              [attr.aria-current]="promptsLink.isActive ? 'page' : null"
-            >Prompts</a>
+              #rolesLink="routerLinkActive"
+              [attr.aria-current]="rolesLink.isActive ? 'page' : null"
+            >Worker roles</a>
             <a
               class="settings-layout__nav-link"
               routerLink="provider-hosts"

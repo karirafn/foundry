@@ -1,0 +1,39 @@
+@use '../../../../styles/controls' as *;
+
+:host {
+  display: block;
+}
+
+.prompt-text {
+  background: var(--fd-bg-page);
+  border: 1px solid var(--fd-border-muted);
+  border-radius: var(--fd-radius-sm);
+  color: var(--fd-text-primary);
+  font-family: var(--fd-font-mono);
+  font-size: 0.8125rem;
+  line-height: 1.5;
+  margin: 0;
+  max-height: 24rem;
+  overflow: auto;
+  padding: var(--fd-spacing-sm) var(--fd-spacing-md);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+
+  &:focus-visible {
+    @include focus-ring;
+  }
+
+  code {
+    font-family: inherit;
+  }
+
+  // Placeholders are left unfilled; the highlight marks where the worker substitutes a value.
+  &__placeholder {
+    background: var(--fd-bg-warning-subtle);
+    border: 1px solid var(--fd-border-warning);
+    border-radius: 3px;
+    color: var(--fd-text-warning);
+    font-weight: 600;
+    padding: 0 2px;
+  }
+}

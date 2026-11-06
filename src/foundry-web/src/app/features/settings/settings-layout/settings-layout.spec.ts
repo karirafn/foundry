@@ -39,8 +39,6 @@ const SETTINGS_RESPONSE = {
   maxConcurrent: 3,
   timeoutMinutes: 60,
   probeIntervalMinutes: 60,
-  systemPromptTemplate: null,
-  workerPromptTemplate: null,
   usageLimitResetsAt: null,
   isDispatchPaused: false,
   autoResumeOnUsageReset: true,
@@ -134,7 +132,7 @@ describe('SettingsLayoutComponent', () => {
       'Worker image',
       'Worker environment',
       'Claude Code',
-      'Prompts',
+      'Worker roles',
       'Provider hosts',
       'Accounts',
       'Repositories',
@@ -382,6 +380,52 @@ describe('SettingsLayoutComponent', () => {
     const hm = TestBed.inject(HttpTestingController);
     hm.match('/api/settings');
     hm.match('/api/credentials');
+  });
+
+  it('should redirect the retired /settings/prompts page to /settings/roles', async () => {
+    // Arrange
+    TestBed.resetTestingModule();
+    TestBed.configureTestingModule({
+      providers: [
+        SettingsService,
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        provideRouter([
+          { path: 'settings', children: SETTINGS_ROUTES },
+        ]),
+        { provide: SystemSignalRService, useValue: mockSystemSignalR },
+        { provide: RateBudgetService, useValue: mockRateBudgetService },
+      ],
+    });
+    const router = TestBed.inject(Router);
+
+    // Act
+    await router.navigateByUrl('/settings/prompts');
+
+    // Assert
+    expect(router.url).toBe('/settings/roles');
+
+    const hm = TestBed.inject(HttpTestingController);
+    hm.match('/api/settings');
+    hm.match('/api/credentials');
+    hm.match('/api/worker-roles');
+  });
+
+  it('should link the "Worker roles" nav item to the roles page', () => {
+    // Arrange
+    const { fixture, httpMock } = setup();
+
+    // Act
+    fixture.detectChanges();
+    flushSettings(httpMock);
+    fixture.detectChanges();
+
+    // Assert
+    const el = fixture.nativeElement as HTMLElement;
+    const link = Array.from(el.querySelectorAll<HTMLAnchorElement>('.settings-layout__nav-link')).find(
+      (a) => a.textContent?.trim() === 'Worker roles',
+    );
+    expect(link?.getAttribute('href')).toBe('/roles');
   });
 
   it('should set aria-current="page" on the active nav link when on dispatch', async () => {

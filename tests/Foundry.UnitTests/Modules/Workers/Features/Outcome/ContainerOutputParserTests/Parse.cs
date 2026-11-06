@@ -335,6 +335,7 @@ public sealed class Parse
     [InlineData("auth")]
     [InlineData("branch")]
     [InlineData("managed-settings")]
+    [InlineData("role")]
     public void WhenBootstrapSentinelWithKnownStage_ReturnsWorkerBootstrapFailed(string stage)
     {
         // Arrange
