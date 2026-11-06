@@ -525,6 +525,26 @@ namespace Foundry.WebApi.Migrations
                     b.ToTable("dispatch_reservations", (string)null);
                 });
 
+            modelBuilder.Entity("Foundry.Modules.Workers.Domain.Entities.WorkerRoleSettings", b =>
+                {
+                    b.Property<string>("Role")
+                        .HasMaxLength(50)
+                        .IsUnicode(false)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("role");
+
+                    b.Property<string>("Model")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .IsUnicode(false)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("model");
+
+                    b.HasKey("Role");
+
+                    b.ToTable("worker_role_settings", (string)null);
+                });
+
             modelBuilder.Entity("Foundry.Modules.Workers.Domain.Entities.WorkerRun", b =>
                 {
                     b.Property<Guid>("Id")
