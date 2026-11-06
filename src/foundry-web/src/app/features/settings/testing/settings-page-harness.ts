@@ -64,9 +64,6 @@ export const WORKER_ENVIRONMENT_DEFAULTS = {
   memoryLimitMb: 8192,
   cpuLimit: 2,
   pidsLimit: 512,
-  mounts: [] as { containerPath: string; hostPath: string; readOnly: boolean }[],
-  hostSettingsPath: '',
-  excludedHookCommands: [] as string[],
 };
 
 export const CLAUDE_CODE_DEFAULTS = {

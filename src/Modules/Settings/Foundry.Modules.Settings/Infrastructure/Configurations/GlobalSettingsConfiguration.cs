@@ -87,22 +87,6 @@ internal sealed class GlobalSettingsConfiguration : IEntityTypeConfiguration<Glo
             .HasColumnType("TEXT")
             .HasColumnName("worker_resource_limits");
 
-        ValueConverter<WorkerMounts, string> workerMountsConverter = new(
-            mounts => SerializeWorkerMounts(mounts),
-            json => DeserializeWorkerMounts(json));
-
-        ValueComparer<WorkerMounts> workerMountsComparer = new(
-            (a, b) => a != null && b != null && a.Mounts.SequenceEqual(b.Mounts),
-            mounts => mounts.GetHashCode(),
-            mounts => mounts);
-
-        // Serialized as a single JSON TEXT column; path rules are enforced by WorkerMounts.Create.
-        // WorkerMounts is an immutable record, so the comparer snapshots by reference.
-        builder.Property(s => s.WorkerMounts)
-            .HasConversion(workerMountsConverter, workerMountsComparer)
-            .HasColumnType("TEXT")
-            .HasColumnName("worker_mounts");
-
         ValueConverter<ClaudeCodeSettings, string> claudeCodeSettingsConverter = new(
             settings => SerializeClaudeCodeSettings(settings),
             json => DeserializeClaudeCodeSettings(json));
@@ -118,22 +102,6 @@ internal sealed class GlobalSettingsConfiguration : IEntityTypeConfiguration<Glo
             .HasConversion(claudeCodeSettingsConverter, claudeCodeSettingsComparer)
             .HasColumnType("TEXT")
             .HasColumnName("claude_code_settings");
-
-        ValueConverter<HostHooks, string> hostHooksConverter = new(
-            hostHooks => SerializeHostHooks(hostHooks),
-            json => DeserializeHostHooks(json));
-
-        ValueComparer<HostHooks> hostHooksComparer = new(
-            (a, b) => a != null && b != null && a.Equals(b),
-            hostHooks => hostHooks.GetHashCode(),
-            hostHooks => hostHooks);
-
-        // Serialized as a single JSON TEXT column; path rules and exclusion-list canonicalization are
-        // enforced by HostHooks.Create. The record is immutable, so the comparer snapshots by reference.
-        builder.Property(s => s.HostHooks)
-            .HasConversion(hostHooksConverter, hostHooksComparer)
-            .HasColumnType("TEXT")
-            .HasColumnName("host_hooks");
 
         ValueConverter<IReadOnlyList<string>, string> allowedProviderHostsConverter = new(
             hosts => SerializeAllowedProviderHosts(hosts),
@@ -217,26 +185,12 @@ internal sealed class GlobalSettingsConfiguration : IEntityTypeConfiguration<Glo
         => JsonSerializer.Deserialize<WorkerResourceLimits>(json)
             ?? WorkerResourceLimits.Default;
 
-    private static string SerializeWorkerMounts(WorkerMounts mounts)
-        => JsonSerializer.Serialize(mounts);
-
-    private static WorkerMounts DeserializeWorkerMounts(string json)
-        => JsonSerializer.Deserialize<WorkerMounts>(json)
-            ?? WorkerMounts.Default;
-
     private static string SerializeClaudeCodeSettings(ClaudeCodeSettings settings)
         => JsonSerializer.Serialize(settings);
 
     private static ClaudeCodeSettings DeserializeClaudeCodeSettings(string json)
         => JsonSerializer.Deserialize<ClaudeCodeSettings>(json)
             ?? ClaudeCodeSettings.Default;
-
-    private static string SerializeHostHooks(HostHooks hostHooks)
-        => JsonSerializer.Serialize(hostHooks);
-
-    private static HostHooks DeserializeHostHooks(string json)
-        => JsonSerializer.Deserialize<HostHooks>(json)
-            ?? HostHooks.Default;
 
     private static string SerializeWorkerPrompts(WorkerPrompts prompts)
         => JsonSerializer.Serialize(prompts);

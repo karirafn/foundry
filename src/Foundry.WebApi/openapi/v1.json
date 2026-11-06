@@ -2019,7 +2019,7 @@
         "tags": [
           "Settings"
         ],
-        "summary": "Updates the worker resource limits, host mounts, and host hooks source",
+        "summary": "Updates the worker resource limits",
         "operationId": "UpdateWorkerEnvironment",
         "requestBody": {
           "content": {
@@ -2752,12 +2752,9 @@
           "memoryLimitMb",
           "cpuLimit",
           "pidsLimit",
-          "mounts",
           "model",
           "blockCiCdEdits",
-          "additionalDenyRules",
-          "hostSettingsPath",
-          "excludedHookCommands"
+          "additionalDenyRules"
         ],
         "type": "object",
         "properties": {
@@ -2890,12 +2887,6 @@
             ],
             "format": "int32"
           },
-          "mounts": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/WorkerMountEntry"
-            }
-          },
           "model": {
             "type": "string"
           },
@@ -2903,15 +2894,6 @@
             "type": "boolean"
           },
           "additionalDenyRules": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "hostSettingsPath": {
-            "type": "string"
-          },
-          "excludedHookCommands": {
             "type": "array",
             "items": {
               "type": "string"
@@ -4125,33 +4107,11 @@
           }
         }
       },
-      "UpdateWorkerEnvironmentMountRequest": {
-        "required": [
-          "containerPath",
-          "hostPath",
-          "readOnly"
-        ],
-        "type": "object",
-        "properties": {
-          "containerPath": {
-            "type": "string"
-          },
-          "hostPath": {
-            "type": "string"
-          },
-          "readOnly": {
-            "type": "boolean"
-          }
-        }
-      },
       "UpdateWorkerEnvironmentRequestBody": {
         "required": [
           "memoryLimitMb",
           "cpuLimit",
-          "pidsLimit",
-          "mounts",
-          "hostSettingsPath",
-          "excludedHookCommands"
+          "pidsLimit"
         ],
         "type": "object",
         "properties": {
@@ -4178,21 +4138,6 @@
               "string"
             ],
             "format": "int32"
-          },
-          "mounts": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/UpdateWorkerEnvironmentMountRequest"
-            }
-          },
-          "hostSettingsPath": {
-            "type": "string"
-          },
-          "excludedHookCommands": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
           }
         }
       },
@@ -4452,25 +4397,6 @@
             ]
           },
           "isRegistered": {
-            "type": "boolean"
-          }
-        }
-      },
-      "WorkerMountEntry": {
-        "required": [
-          "containerPath",
-          "hostPath",
-          "readOnly"
-        ],
-        "type": "object",
-        "properties": {
-          "containerPath": {
-            "type": "string"
-          },
-          "hostPath": {
-            "type": "string"
-          },
-          "readOnly": {
             "type": "boolean"
           }
         }

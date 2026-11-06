@@ -53,19 +53,10 @@ export interface WorkerLimits {
   timeoutMinutes: number;
 }
 
-export interface WorkerMountEntry {
-  containerPath: string;
-  hostPath: string;
-  readOnly: boolean;
-}
-
 export interface WorkerEnvironment {
   memoryLimitMb: number;
   cpuLimit: number;
   pidsLimit: number;
-  mounts: WorkerMountEntry[];
-  hostSettingsPath: string;
-  excludedHookCommands: string[];
 }
 
 export interface ClaudeCodeSettings {
@@ -111,12 +102,9 @@ export interface GlobalSettingsResponse {
   memoryLimitMb: number;
   cpuLimit: number;
   pidsLimit: number;
-  mounts: WorkerMountEntry[];
   model: string;
   blockCiCdEdits: boolean;
   additionalDenyRules: string[];
-  hostSettingsPath: string;
-  excludedHookCommands: string[];
   /** Public https base URL the operator's tunnel forwards to the webhook port (ADR 0085). */
   webhookPublicBaseUrl?: string | null;
   /** Poll interval for repositories whose webhook is active. */

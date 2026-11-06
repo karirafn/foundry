@@ -37,13 +37,11 @@ An account can also carry a second, optional **branch-rules token** (the account
 
 It is kept separate from the account token because GitHub's Administration: write also grants repository deletion and rule removal, Webhooks: write lets the holder re-point or add hooks (and so read every event), and GitLab's Maintainer role can likewise change protection and hooks — power autonomous workers must never hold. The worker token's required permissions are unchanged. The two tokens may belong to different users. Leave the field empty if you don't want Foundry to manage branch protection; rotating the account token keeps the branch-rules token unless you change it.
 
-### Worker bind mounts
+### Worker environment
 
-Worker host bind mounts and container resource limits (memory, CPU, PIDs) are managed on the **Worker environment** settings page in the dashboard, stored in the database, and read fresh on each dispatch. Each mount is keyed on its container path with a read-only/writable flag. Do not mount `settings.json` directly — it is generated at dispatch time from Global Settings (model and deny rules), with hooks merged in from the host settings file (see Worker settings below).
+Worker container resource limits (memory, CPU, PIDs) are managed on the **Worker environment** settings page in the dashboard, stored in the database, and read fresh on each dispatch. Workers take no configuration from the operator's host: Foundry does not bind-mount host files or directories into worker containers and does not import hooks from a host Claude Code `settings.json`.
 
-The `Workers` configuration section (mounts, limits, hooks, model, deny rules) is no longer read; re-enter any values you had there in the dashboard (there is no automatic import, per ADR 0080).
-
-On Windows, use the full Windows path (e.g. `C:\Users\you\.claude\skills`). Docker Desktop must have path sharing enabled — see Windows notes below.
+The `Workers` configuration section (limits, model, deny rules) is no longer read; re-enter any values you had there in the dashboard (there is no automatic import, per ADR 0080).
 
 ### Worker settings
 
@@ -66,8 +64,6 @@ The entrypoint writes it to `/home/node/.claude/settings.json` before Claude Cod
 The Claude Code model and additional deny rules, including the CI/CD edit protection toggle, are managed on the Claude Code settings page in the dashboard and stored in Global Settings.
 
 > **Security model note:** the system prompt template is an operator-controlled setting, edited in the dashboard (Settings → Prompts) and stored in Global Settings. Operators are trusted — a malicious operator can weaken or override guidance in the system prompt template. The non-configurable safety preamble (prepended automatically) provides a baseline, but it is instructional guidance, not a cryptographic enforcement mechanism. Do not rely on it alone to contain an adversarial operator.
-
-**Hooks** — sourced from your host Claude Code `settings.json`. Set its path (and any hook commands to exclude, such as host-specific checks) on the **Worker environment** settings page. Each container start merges the file's `hooks` into the worker settings and logs `Host hooks applied: N (excluded: M)`; a configured file that is missing or not valid JSON fails the worker at bootstrap. Hook commands that reference `~/.claude/hooks/...` resolve through your existing bind mounts.
 
 ## Running
 
@@ -138,10 +134,6 @@ The AppHost does not forward this key, so set it on the WebApi directly, with ei
 - WebApi user secrets (loaded in the Development environment): `dotnet user-secrets --project src/Foundry.WebApi set "DataProtection:LegacyApplicationName" "C:\dev\foundry\src\Foundry.WebApi\"`.
 
 A value that decrypts under neither name is left unchanged and logged as a warning naming its table, column and row id (`... decrypts under neither the current nor the legacy Data Protection discriminator and was left unchanged`). Re-enter those values in the dashboard.
-
-## Windows notes
-
-Docker Desktop must have path sharing enabled for bind mounts from `C:\Users\...`. Enable it under **Settings > Resources > File sharing**.
 
 ## Development
 

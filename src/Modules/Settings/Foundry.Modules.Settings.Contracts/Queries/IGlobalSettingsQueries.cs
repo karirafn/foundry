@@ -36,11 +36,7 @@ public interface IGlobalSettingsQueries
 
     Task<WorkerResourceLimitsSnapshot> GetWorkerResourceLimitsAsync(CancellationToken cancellationToken);
 
-    Task<IReadOnlyList<WorkerMountEntry>> GetWorkerMountsAsync(CancellationToken cancellationToken);
-
     Task<ClaudeCodeSettingsSnapshot> GetClaudeCodeSettingsAsync(CancellationToken cancellationToken);
-
-    Task<HostHooksSnapshot> GetHostHooksAsync(CancellationToken cancellationToken);
 
     Task<IReadOnlyList<string>> GetAllowedProviderHostsAsync(CancellationToken cancellationToken);
 }

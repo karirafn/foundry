@@ -169,7 +169,6 @@ public sealed class WhenStartedWithWorkerHardening : IAsyncLifetime
         WorkerContainerSpec spec = WorkerHardeningSpec.Apply(new(
             Image: Image,
             EnvironmentVariables: new Dictionary<string, string>(),
-            BindMounts: [],
             Labels: new Dictionary<string, string> { [WorkerRunIdLabel] = _runId.Value.ToString() },
             Command: ["/bin/sh", "-c", Probe])
         {

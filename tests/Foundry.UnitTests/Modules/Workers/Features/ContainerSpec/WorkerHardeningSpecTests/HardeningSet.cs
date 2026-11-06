@@ -12,7 +12,6 @@ public sealed class HardeningSet
         new(
             Image: "foundry-worker:local",
             EnvironmentVariables: new Dictionary<string, string>(),
-            BindMounts: [],
             Labels: new Dictionary<string, string>(),
             Command: ["/entrypoint.sh"])
         {

@@ -1,6 +1,5 @@
 using System.Diagnostics;
 using System.Globalization;
-using System.Text.Json;
 
 using Foundry.Modules.Credentials.Contracts.Queries;
 using Foundry.Modules.Issues.Contracts;
@@ -241,35 +240,6 @@ internal sealed class IssueClaimedHandler(
                 throw new UnreachableException($"Unhandled WorkerProvider variant: {claimed.Provider.GetType().Name}");
         }
 
-        IReadOnlyList<WorkerMountEntry> mountEntries = await settingsQueries.GetWorkerMountsAsync(cancellationToken);
-        Result<List<BindMount>> mountsResult = BuildBindMounts(mountEntries);
-
-        if (mountsResult is not Result<List<BindMount>>.Success mountsSuccess)
-        {
-            return Result<WorkerContainerSpec>.Fail(((Result<List<BindMount>>.Failure)mountsResult).Error);
-        }
-
-        List<BindMount> bindMounts = mountsSuccess.Value;
-
-        HostHooksSnapshot hostHooks = await settingsQueries.GetHostHooksAsync(cancellationToken);
-
-        // The file is not checked for existence here: the API's filesystem is not necessarily the Docker host's,
-        // so a missing, unreadable or invalid file fails closed in the entrypoint as a bootstrap failure.
-        if (!string.IsNullOrEmpty(hostHooks.HostSettingsPath))
-        {
-            if (HostPathSecurity.IsSensitiveHostPath(hostHooks.HostSettingsPath))
-            {
-                return Result<WorkerContainerSpec>.Fail(
-                    new Error(
-                        "Worker.SensitiveHostSettingsPath",
-                        $"Host settings file path targets a sensitive system directory: {hostHooks.HostSettingsPath}"));
-            }
-
-            bindMounts.Add(new BindMount(hostHooks.HostSettingsPath, HostSettingsMount.ContainerPath, ReadOnly: true));
-            envVars[HostSettingsMount.FileEnvironmentVariable] = HostSettingsMount.ContainerPath;
-            envVars[HostSettingsMount.ExclusionsEnvironmentVariable] = JsonSerializer.Serialize(hostHooks.ExcludedCommands);
-        }
-
         Dictionary<string, string> labels = new()
         {
             ["foundry.worker-run-id"] = startingRun.Id.Value.ToString(),
@@ -278,7 +248,6 @@ internal sealed class IssueClaimedHandler(
         WorkerContainerSpec spec = WorkerHardeningSpec.Apply(new(
             imageTag,
             envVars,
-            bindMounts,
             labels,
             ["/entrypoint.sh"])
         {
@@ -307,45 +276,5 @@ internal sealed class IssueClaimedHandler(
                 new VolumeMount(WorkerVolumeNames.DataRootVolumeName(runId), RootlessDindRunSpec.DataRootContainerPath),
             ],
         };
-    }
-
-    private static Result<List<BindMount>> BuildBindMounts(IReadOnlyList<WorkerMountEntry> mountEntries)
-    {
-        List<BindMount> mounts = [];
-
-        foreach (WorkerMountEntry entry in mountEntries)
-        {
-            Result<string> resolvedPath = ResolveAndValidateHostPath(entry.HostPath);
-            if (resolvedPath is not Result<string>.Success resolvedSuccess)
-            {
-                return Result<List<BindMount>>.Fail(((Result<string>.Failure)resolvedPath).Error);
-            }
-
-            mounts.Add(new BindMount(resolvedSuccess.Value, entry.ContainerPath, ReadOnly: entry.ReadOnly));
-        }
-
-        return Result<List<BindMount>>.Ok(mounts);
-    }
-
-    private static Result<string> ResolveAndValidateHostPath(string path)
-    {
-        string fullPath = Path.GetFullPath(path);
-
-        if (!Path.Exists(fullPath))
-        {
-            return Result<string>.Fail(
-                new Error("Worker.MountPathNotFound", $"Mount host path does not exist: {fullPath}"));
-        }
-
-        string resolvedPath = new FileInfo(fullPath).ResolveLinkTarget(returnFinalTarget: true)?.FullName
-            ?? fullPath;
-
-        if (HostPathSecurity.IsSensitiveHostPath(resolvedPath))
-        {
-            return Result<string>.Fail(
-                new Error("Worker.SensitiveMountPath", $"Mount host path resolves to a sensitive system directory: {resolvedPath}"));
-        }
-
-        return Result<string>.Ok(resolvedPath);
     }
 }

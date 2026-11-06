@@ -53,7 +53,7 @@ public sealed class GetWorkerResourceLimitsAsync : IAsyncDisposable
                 .WithPidsLimit(1024)
                 .Build()
                 .Match(v => v, e => throw new InvalidOperationException(e.Message));
-            settings.UpdateWorkerEnvironment(limits, WorkerMounts.Default);
+            settings.UpdateWorkerEnvironment(limits);
             seedDb.Set<GlobalSettings>().Add(settings);
             await seedDb.SaveChangesAsync(TestContext.Current.CancellationToken);
         }

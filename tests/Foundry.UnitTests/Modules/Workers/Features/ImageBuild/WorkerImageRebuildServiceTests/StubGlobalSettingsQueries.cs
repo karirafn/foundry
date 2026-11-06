@@ -42,12 +42,9 @@ internal sealed class StubGlobalSettingsQueries(
         MemoryLimitMb: 8192,
         CpuLimit: 2.0,
         PidsLimit: 512,
-        Mounts: [],
         Model: string.Empty,
         BlockCiCdEdits: true,
-        AdditionalDenyRules: [],
-        HostSettingsPath: string.Empty,
-        ExcludedHookCommands: []);
+        AdditionalDenyRules: []);
 
     public Task<GlobalSettingsSummary?> GetSettingsAsync(CancellationToken cancellationToken)
         => Task.FromResult(settingsExists ? _summary : (GlobalSettingsSummary?)null);
@@ -95,17 +92,9 @@ internal sealed class StubGlobalSettingsQueries(
     public Task<WorkerResourceLimitsSnapshot> GetWorkerResourceLimitsAsync(CancellationToken cancellationToken)
         => Task.FromResult(new WorkerResourceLimitsSnapshot(8192, 2.0, 512));
 
-    public Task<IReadOnlyList<WorkerMountEntry>> GetWorkerMountsAsync(CancellationToken cancellationToken)
-        => Task.FromResult<IReadOnlyList<WorkerMountEntry>>([]);
-
-
     public Task<ClaudeCodeSettingsSnapshot> GetClaudeCodeSettingsAsync(CancellationToken cancellationToken)
 
         => Task.FromResult(new ClaudeCodeSettingsSnapshot(string.Empty, true, []));
-
-    public Task<HostHooksSnapshot> GetHostHooksAsync(CancellationToken cancellationToken)
-
-        => Task.FromResult(new HostHooksSnapshot(string.Empty, []));
 
     public Task<IReadOnlyList<string>> GetAllowedProviderHostsAsync(CancellationToken cancellationToken)
         => Task.FromResult<IReadOnlyList<string>>([]);

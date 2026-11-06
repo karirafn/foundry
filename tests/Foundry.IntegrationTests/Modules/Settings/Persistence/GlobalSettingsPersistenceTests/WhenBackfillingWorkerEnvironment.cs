@@ -21,7 +21,6 @@ namespace Foundry.IntegrationTests.Modules.Settings.Persistence.GlobalSettingsPe
 public sealed class WhenBackfillingWorkerEnvironment : IAsyncDisposable
 {
     private const string FrozenLimitsJson = AddWorkerResourceLimitsAndMounts.DefaultWorkerResourceLimitsJson;
-    private const string FrozenMountsJson = AddWorkerResourceLimitsAndMounts.DefaultWorkerMountsJson;
 
     private readonly FoundryWebAppFactory _factory;
 
@@ -36,19 +35,17 @@ public sealed class WhenBackfillingWorkerEnvironment : IAsyncDisposable
     }
 
     [Fact]
-    public async Task PreMigrationRow_BackfillsToDefaultLimitsAndMounts()
+    public async Task PreMigrationRow_BackfillsToDefaultLimits()
     {
         // Arrange
-        GlobalSettingsId id = await SeedRowWithRawColumnsAsync(FrozenLimitsJson, FrozenMountsJson);
+        GlobalSettingsId id = await SeedRowWithRawColumnsAsync(FrozenLimitsJson);
 
         // Act
         GlobalSettings? reloaded = await ReloadAsync(id);
 
         // Assert
         reloaded.ShouldNotBeNull();
-        reloaded.ShouldSatisfyAllConditions(
-            () => reloaded.WorkerResourceLimits.ShouldBe(WorkerResourceLimits.Default),
-            () => reloaded.WorkerMounts.ShouldBe(WorkerMounts.Default));
+        reloaded.WorkerResourceLimits.ShouldBe(WorkerResourceLimits.Default);
     }
 
     [Fact]
@@ -67,18 +64,12 @@ public sealed class WhenBackfillingWorkerEnvironment : IAsyncDisposable
                 "SELECT worker_resource_limits AS Value FROM global_settings WHERE id = {0}",
                 fresh.Id.Value)
             .ToListAsync(TestContext.Current.CancellationToken);
-        List<string> mountsJson = await dbContext.Database
-            .SqlQueryRaw<string>(
-                "SELECT worker_mounts AS Value FROM global_settings WHERE id = {0}",
-                fresh.Id.Value)
-            .ToListAsync(TestContext.Current.CancellationToken);
 
         // Assert
         limitsJson.ShouldBe([FrozenLimitsJson]);
-        mountsJson.ShouldBe([FrozenMountsJson]);
     }
 
-    private async Task<GlobalSettingsId> SeedRowWithRawColumnsAsync(string limitsJson, string mountsJson)
+    private async Task<GlobalSettingsId> SeedRowWithRawColumnsAsync(string limitsJson)
     {
         using IServiceScope scope = _factory.Services.CreateScope();
         DbContext dbContext = scope.ServiceProvider.GetRequiredService<DbContext>();
@@ -88,8 +79,8 @@ public sealed class WhenBackfillingWorkerEnvironment : IAsyncDisposable
         await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         await dbContext.Database.ExecuteSqlRawAsync(
-            "UPDATE global_settings SET worker_resource_limits = {0}, worker_mounts = {1} WHERE id = {2}",
-            [limitsJson, mountsJson, settings.Id.Value],
+            "UPDATE global_settings SET worker_resource_limits = {0} WHERE id = {1}",
+            [limitsJson, settings.Id.Value],
             TestContext.Current.CancellationToken);
 
         return settings.Id;

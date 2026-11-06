@@ -15,12 +15,12 @@ using Xunit;
 
 namespace Foundry.IntegrationTests.Modules.Settings.Endpoints.UpdateWorkerEnvironmentTests;
 
-public sealed class WhenLimitsAndMountsValid : IAsyncDisposable
+public sealed class WhenLimitsValid : IAsyncDisposable
 {
     private readonly FoundryWebAppFactory _factory;
     private readonly HttpClient _client;
 
-    public WhenLimitsAndMountsValid()
+    public WhenLimitsValid()
     {
         _factory = new FoundryWebAppFactory();
         _client = _factory.CreateClient();
@@ -49,7 +49,7 @@ public sealed class WhenLimitsAndMountsValid : IAsyncDisposable
             TestContext.Current.CancellationToken);
 
     [Fact]
-    public async Task ReturnsOkWithUpdatedLimitsAndMounts()
+    public async Task ReturnsOkWithUpdatedLimits()
     {
         // Arrange
         await SeedDefaultSettingsAsync();
@@ -57,7 +57,6 @@ public sealed class WhenLimitsAndMountsValid : IAsyncDisposable
             .WithMemoryLimitMb(16384)
             .WithCpuLimit(6.5)
             .WithPidsLimit(2048)
-            .WithMount("/skills", "/home/user/skills")
             .Build();
 
         // Act
@@ -73,18 +72,16 @@ public sealed class WhenLimitsAndMountsValid : IAsyncDisposable
         summary.ShouldSatisfyAllConditions(
             () => summary.MemoryLimitMb.ShouldBe(16384),
             () => summary.CpuLimit.ShouldBe(6.5),
-            () => summary.PidsLimit.ShouldBe(2048),
-            () => summary.Mounts.ShouldBe([new WorkerMountEntry("/skills", "/home/user/skills", true)]));
+            () => summary.PidsLimit.ShouldBe(2048));
     }
 
     [Fact]
-    public async Task PersistsLimitsAndMounts()
+    public async Task PersistsLimits()
     {
         // Arrange
         await SeedDefaultSettingsAsync();
         object body = new UpdateWorkerEnvironmentRequestBuilder()
             .WithMemoryLimitMb(16384)
-            .WithMount("/cache", "/var/cache/foundry", readOnly: false)
             .Build();
 
         // Act
@@ -99,8 +96,6 @@ public sealed class WhenLimitsAndMountsValid : IAsyncDisposable
                 FoundryWebAppFactory.JsonOptions,
                 TestContext.Current.CancellationToken))
             .ShouldNotBeNull();
-        summary.ShouldSatisfyAllConditions(
-            () => summary.MemoryLimitMb.ShouldBe(16384),
-            () => summary.Mounts.ShouldBe([new WorkerMountEntry("/cache", "/var/cache/foundry", false)]));
+        summary.MemoryLimitMb.ShouldBe(16384);
     }
 }

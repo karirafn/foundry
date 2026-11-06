@@ -40,9 +40,7 @@ public sealed class GlobalSettings : AggregateRoot<GlobalSettingsId>
         AutoResumeOnUsageReset = true;
         WorkerImageConfiguration = WorkerImageConfiguration.Default;
         WorkerResourceLimits = WorkerResourceLimits.Default;
-        WorkerMounts = WorkerMounts.Default;
         ClaudeCodeSettings = ClaudeCodeSettings.Default;
-        HostHooks = HostHooks.Default;
         WorkerPrompts = WorkerPrompts.Default;
         ImageBuildState = new ImageBuildState.Idle();
         CreatedAt = createdAt;
@@ -81,11 +79,7 @@ public sealed class GlobalSettings : AggregateRoot<GlobalSettingsId>
 
     public WorkerResourceLimits WorkerResourceLimits { get; private set; } = null!;
 
-    public WorkerMounts WorkerMounts { get; private set; } = null!;
-
     public ClaudeCodeSettings ClaudeCodeSettings { get; private set; } = null!;
-
-    public HostHooks HostHooks { get; private set; } = null!;
 
     public IReadOnlyList<string> AllowedProviderHosts { get; private set; } = [];
 
@@ -235,15 +229,14 @@ public sealed class GlobalSettings : AggregateRoot<GlobalSettingsId>
         return true;
     }
 
-    public bool UpdateWorkerEnvironment(WorkerResourceLimits limits, WorkerMounts mounts)
+    public bool UpdateWorkerEnvironment(WorkerResourceLimits limits)
     {
-        if (WorkerResourceLimits == limits && WorkerMounts == mounts)
+        if (WorkerResourceLimits == limits)
         {
             return false;
         }
 
         WorkerResourceLimits = limits;
-        WorkerMounts = mounts;
         UpdatedAt = DateTimeOffset.UtcNow;
         return true;
     }
@@ -256,18 +249,6 @@ public sealed class GlobalSettings : AggregateRoot<GlobalSettingsId>
         }
 
         ClaudeCodeSettings = settings;
-        UpdatedAt = DateTimeOffset.UtcNow;
-        return true;
-    }
-
-    public bool UpdateHostHooks(HostHooks hostHooks)
-    {
-        if (HostHooks == hostHooks)
-        {
-            return false;
-        }
-
-        HostHooks = hostHooks;
         UpdatedAt = DateTimeOffset.UtcNow;
         return true;
     }

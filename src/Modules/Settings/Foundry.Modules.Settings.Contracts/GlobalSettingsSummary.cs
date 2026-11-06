@@ -26,11 +26,8 @@ public sealed record GlobalSettingsSummary(
     int MemoryLimitMb,
     double CpuLimit,
     int PidsLimit,
-    IReadOnlyList<WorkerMountEntry> Mounts,
     string Model,
     bool BlockCiCdEdits,
     IReadOnlyList<string> AdditionalDenyRules,
-    string HostSettingsPath,
-    IReadOnlyList<string> ExcludedHookCommands,
     string? WebhookPublicBaseUrl = null,
     int BackstopIntervalMinutes = 15);

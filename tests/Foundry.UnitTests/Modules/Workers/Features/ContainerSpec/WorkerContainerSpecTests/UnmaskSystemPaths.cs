@@ -17,7 +17,6 @@ public sealed class UnmaskSystemPaths
         WorkerContainerSpec spec = new(
             Image: "test-image:latest",
             EnvironmentVariables: new Dictionary<string, string>(),
-            BindMounts: [],
             Labels: new Dictionary<string, string>(),
             Command: [])
         {
@@ -39,7 +38,6 @@ public sealed class UnmaskSystemPaths
         WorkerContainerSpec spec = new(
             Image: "test-image:latest",
             EnvironmentVariables: new Dictionary<string, string>(),
-            BindMounts: [],
             Labels: new Dictionary<string, string>(),
             Command: [])
         {

@@ -370,16 +370,13 @@ public sealed class ToSummary
     }
 
     [Fact]
-    public void WhenWorkerEnvironmentUpdated_SummaryCarriesLimitsAndMounts()
+    public void WhenWorkerEnvironmentUpdated_SummaryCarriesLimits()
     {
         // Arrange
         GlobalSettings settings = CreateDefaultSettings();
         WorkerResourceLimits limits = WorkerResourceLimits.Create(4096, 1.5, 256)
             .Match(v => v, e => throw new InvalidOperationException(e.Message));
-        WorkerMounts mounts = WorkerMounts.Create(
-                [new WorkerMount("/data", "/srv/data", true), new WorkerMount("/cache", "/srv/cache", false)])
-            .Match(v => v, e => throw new InvalidOperationException(e.Message));
-        settings.UpdateWorkerEnvironment(limits, mounts);
+        settings.UpdateWorkerEnvironment(limits);
 
         // Act
         GlobalSettingsSummary result = GlobalSettingsMapper.ToSummary(settings);
@@ -388,13 +385,11 @@ public sealed class ToSummary
         result.ShouldSatisfyAllConditions(
             () => result.MemoryLimitMb.ShouldBe(4096),
             () => result.CpuLimit.ShouldBe(1.5),
-            () => result.PidsLimit.ShouldBe(256),
-            () => result.Mounts.ShouldBe(
-                [new WorkerMountEntry("/data", "/srv/data", true), new WorkerMountEntry("/cache", "/srv/cache", false)]));
+            () => result.PidsLimit.ShouldBe(256));
     }
 
     [Fact]
-    public void WhenDefaultSettings_SummaryCarriesDefaultLimitsAndNoMounts()
+    public void WhenDefaultSettings_SummaryCarriesDefaultLimits()
     {
         // Arrange
         GlobalSettings settings = CreateDefaultSettings();
@@ -406,8 +401,7 @@ public sealed class ToSummary
         result.ShouldSatisfyAllConditions(
             () => result.MemoryLimitMb.ShouldBe(WorkerResourceLimits.Default.MemoryLimitMb),
             () => result.CpuLimit.ShouldBe(WorkerResourceLimits.Default.CpuLimit),
-            () => result.PidsLimit.ShouldBe(WorkerResourceLimits.Default.PidsLimit),
-            () => result.Mounts.ShouldBeEmpty());
+            () => result.PidsLimit.ShouldBe(WorkerResourceLimits.Default.PidsLimit));
     }
 
     [Fact]
