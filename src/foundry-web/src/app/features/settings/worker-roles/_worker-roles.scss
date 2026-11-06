@@ -1,0 +1,72 @@
+@use '../../../../styles/controls' as *;
+
+// Placeholders stay unfilled; the dashed outline marks a slot the worker fills at dispatch.
+@mixin placeholder-chip {
+  background: var(--fd-bg-card-hover);
+  border: 1px dashed var(--fd-border-control);
+  border-radius: 3px;
+  color: var(--fd-text-primary);
+  font-weight: 600;
+  padding-inline: 2px;
+}
+
+// Applied to a <details> element: bordered row, chevron summary and open state.
+@mixin role-disclosure {
+  border: 1px solid var(--fd-border-default);
+  border-radius: var(--fd-radius-sm);
+
+  &[open] {
+    padding-block-end: var(--fd-spacing-sm);
+
+    > summary {
+      border-block-end: 1px solid var(--fd-border-muted);
+      margin-block-end: var(--fd-spacing-sm);
+    }
+
+    > summary::before {
+      transform: rotate(45deg);
+    }
+
+    > :not(summary) {
+      margin-inline: var(--fd-spacing-md);
+    }
+  }
+
+  > summary {
+    align-items: center;
+    border-radius: var(--fd-radius-sm);
+    color: var(--fd-text-primary);
+    column-gap: var(--fd-spacing-sm);
+    cursor: pointer;
+    display: grid;
+    font-size: 0.8125rem;
+    grid-template-columns: 0.75rem minmax(0, 1fr) auto;
+    list-style: none;
+    min-block-size: 44px;
+    padding: var(--fd-spacing-xs) var(--fd-spacing-md);
+
+    &::-webkit-details-marker {
+      display: none;
+    }
+
+    &::before {
+      block-size: 0.4em;
+      border-block-end: 1.5px solid;
+      border-inline-end: 1.5px solid;
+      color: var(--fd-text-secondary);
+      content: '';
+      inline-size: 0.4em;
+      justify-self: center;
+      transform: rotate(-45deg);
+      transition: transform 0.1s ease;
+    }
+
+    &:hover {
+      background: var(--fd-bg-card-hover);
+    }
+
+    &:focus-visible {
+      @include focus-ring;
+    }
+  }
+}

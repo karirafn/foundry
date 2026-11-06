@@ -14,8 +14,7 @@ import { WorkerRoleCatalog, WorkerRoleService } from './worker-role.service';
         <h2 id="worker-roles-title" class="general-settings__section-title">Worker roles</h2>
         <p class="general-settings__section-description">
           Roles ship in the worker image and are read-only here. Each card shows the prompts, plugin
-          skills and agents a role runs with, as read from the image. Placeholders are highlighted,
-          not filled: the worker substitutes them at dispatch time.
+          skills and agents a role runs with, as read from the image.
         </p>
 
         @switch (roleService.status()) {
@@ -64,7 +63,9 @@ import { WorkerRoleCatalog, WorkerRoleService } from './worker-role.service';
                 </p>
               }
               @if (c.roles.length === 0) {
-                <p class="general-settings__field-hint">The worker image declares no roles.</p>
+                <p class="general-settings__section-description">
+                  The worker image declares no roles.
+                </p>
               }
             }
           }

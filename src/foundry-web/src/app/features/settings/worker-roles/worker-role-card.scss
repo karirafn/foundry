@@ -1,6 +1,8 @@
 @use '../../../../styles/controls' as *;
+@use 'worker-roles' as *;
 
 :host {
+  container: role-card / inline-size;
   display: block;
 }
 
@@ -19,13 +21,6 @@
     gap: var(--fd-spacing-sm);
   }
 
-  &__heading {
-    align-items: center;
-    display: flex;
-    flex-wrap: wrap;
-    gap: var(--fd-spacing-sm);
-  }
-
   &__title {
     color: var(--fd-text-primary);
     font-family: var(--fd-font-mono);
@@ -40,6 +35,27 @@
     margin: 0;
   }
 
+  &__unverified {
+    @include warning-callout;
+    align-items: flex-start;
+    display: flex;
+    gap: var(--fd-spacing-sm);
+    margin: 0;
+  }
+
+  &__unverified-icon,
+  &__unverified-lead {
+    color: var(--fd-text-warning);
+  }
+
+  &__unverified-icon {
+    flex-shrink: 0;
+  }
+
+  &__unverified-lead {
+    font-weight: 600;
+  }
+
   &__meta {
     display: flex;
     flex-wrap: wrap;
@@ -47,25 +63,34 @@
     gap: var(--fd-spacing-xs) var(--fd-spacing-xl);
     margin: 0;
 
-    dt {
-      color: var(--fd-text-secondary);
-      display: inline;
-      margin-right: var(--fd-spacing-xs);
-    }
-
-    dd {
-      color: var(--fd-text-primary);
-      display: inline;
-      margin: 0;
+    @container role-card (max-width: 30rem) {
+      flex-direction: column;
     }
   }
 
+  &__meta-item {
+    min-inline-size: 0;
+  }
+
+  &__meta dt {
+    color: var(--fd-text-secondary);
+    display: inline;
+    margin-inline-end: var(--fd-spacing-xs);
+  }
+
+  &__meta dd {
+    color: var(--fd-text-primary);
+    display: inline;
+    margin: 0;
+    overflow-wrap: anywhere;
+  }
+
   &__block {
-    border-top: 1px solid var(--fd-border-muted);
+    border-block-start: 1px solid var(--fd-border-default);
     display: flex;
     flex-direction: column;
     gap: var(--fd-spacing-sm);
-    padding-top: var(--fd-spacing-md);
+    padding-block-start: var(--fd-spacing-lg);
   }
 
   &__block-title {
@@ -78,14 +103,25 @@
   &__sub-title {
     color: var(--fd-text-secondary);
     font-size: 0.8125rem;
-    font-weight: 500;
-    margin: var(--fd-spacing-xs) 0 0;
+    font-weight: 600;
+    margin: var(--fd-spacing-sm) 0 0;
   }
 
   &__hint {
     color: var(--fd-text-secondary);
     font-size: 0.75rem;
     margin: 0;
+  }
+
+  &__placeholder-sample {
+    @include placeholder-chip;
+  }
+
+  &__skills,
+  &__agents {
+    display: flex;
+    flex-direction: column;
+    gap: var(--fd-spacing-xs);
   }
 
   &__list {
@@ -98,53 +134,13 @@
   }
 
   &__details {
-    border: 1px solid var(--fd-border-muted);
-    border-radius: var(--fd-radius-sm);
+    @include role-disclosure;
 
-    &[open] {
-      padding-bottom: var(--fd-spacing-sm);
-
-      > :not(summary) {
-        margin-left: var(--fd-spacing-md);
-        margin-right: var(--fd-spacing-md);
+    @container role-card (max-width: 30rem) {
+      &[open] > :not(summary) {
+        margin-inline: 0;
       }
     }
-  }
-
-  &__summary {
-    align-items: center;
-    border-radius: var(--fd-radius-sm);
-    color: var(--fd-text-primary);
-    cursor: pointer;
-    display: flex;
-    flex-wrap: wrap;
-    font-size: 0.8125rem;
-    gap: var(--fd-spacing-sm);
-    list-style: none;
-    min-height: 36px;
-    padding: var(--fd-spacing-xs) var(--fd-spacing-md);
-
-    &::-webkit-details-marker {
-      display: none;
-    }
-
-    &::before {
-      color: var(--fd-text-secondary);
-      content: '▸';
-      transition: transform 0.1s ease;
-    }
-
-    &:hover {
-      background: var(--fd-bg-card-hover);
-    }
-
-    &:focus-visible {
-      @include focus-ring;
-    }
-  }
-
-  &__details[open] > &__summary::before {
-    transform: rotate(90deg);
   }
 
   &__summary-name {
@@ -153,8 +149,7 @@
 
   &__summary-description {
     color: var(--fd-text-secondary);
-    flex-basis: 100%;
-    padding-left: 1.25em;
+    grid-column: 2 / -1;
   }
 
   &__badge {
@@ -164,14 +159,8 @@
     font-size: 0.6875rem;
     font-weight: 500;
     line-height: 1.4;
-    padding: 0 var(--fd-spacing-sm);
+    padding-inline: var(--fd-spacing-sm);
     white-space: nowrap;
-  }
-
-  &__badge--warning {
-    background: var(--fd-bg-warning-subtle);
-    border-color: var(--fd-border-warning);
-    color: var(--fd-text-warning);
   }
 
   &__shared {
@@ -179,16 +168,8 @@
     color: var(--fd-text-link);
   }
 
-  &__slot-note {
-    color: var(--fd-text-secondary);
-    font-size: 0.8125rem;
-    font-style: italic;
-    margin: var(--fd-spacing-xs) 0 0;
-  }
-
   &__path {
-    margin-bottom: var(--fd-spacing-xs);
-    margin-top: var(--fd-spacing-xs);
+    margin-block: var(--fd-spacing-xs);
   }
 
   &__schema {
@@ -199,7 +180,7 @@
     font-family: var(--fd-font-mono);
     font-size: 0.8125rem;
     margin: 0;
-    max-height: 24rem;
+    max-block-size: 24rem;
     overflow: auto;
     padding: var(--fd-spacing-sm) var(--fd-spacing-md);
 

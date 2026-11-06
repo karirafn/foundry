@@ -109,6 +109,28 @@ describe('SettingsWorkerRolesComponent', () => {
     });
   });
 
+  describe('page copy', () => {
+    it('should render the empty state with the readable description style', () => {
+      // Arrange / Act
+      const { el } = setupLoaded(buildWorkerRoleCatalog({ roles: [] }));
+
+      // Assert
+      const empty = el.querySelector('.general-settings__section-description:last-of-type')!;
+      expect(text(empty)).toBe('The worker image declares no roles.');
+      expect(el.querySelector('.general-settings__field-hint')).toBeNull();
+    });
+
+    it('should leave placeholder explanation to the cards, not the page description', () => {
+      // Arrange / Act
+      const { el } = setupLoaded();
+
+      // Assert
+      expect(text(el.querySelector('.general-settings__section-description'))).not.toContain(
+        'Placeholders',
+      );
+    });
+  });
+
   describe('role card', () => {
     it('should render one card per role with name and purpose', () => {
       // Arrange / Act
@@ -178,7 +200,35 @@ describe('SettingsWorkerRolesComponent', () => {
       const warning = el.querySelector('.worker-roles__unverified');
       expect(text(warning)).toContain('Unverified');
       expect(text(warning)).toContain('read from disk');
-      expect(text(cards(el)[0].querySelector('.role-card__unverified'))).toBe('Unverified');
+    });
+
+    it('should show a visible unverified strip on each card instead of a pill beside the title', () => {
+      // Arrange
+      const catalog = buildWorkerRoleCatalog();
+      catalog.image = { ...catalog.image, verified: false };
+
+      // Act
+      const { el } = setupLoaded(catalog);
+
+      // Assert
+      const card = cards(el)[0];
+      const strip = card.querySelector('p.role-card__unverified')!;
+      expect(strip.getAttribute('role')).toBe('note');
+      expect(text(strip)).toBe(
+        '⚠Unverified image: the roles below were read from disk and may differ from foundry-worker:local.',
+      );
+      expect(card.querySelector('.role-card__heading .role-card__unverified')).toBeNull();
+      expect(card.querySelector('.role-card__badge--warning')).toBeNull();
+    });
+
+    it('should not label the image metadata list', () => {
+      // Arrange / Act
+      const { el } = setupLoaded();
+
+      // Assert
+      expect(cards(el)[0].querySelector('dl.role-card__meta')!.hasAttribute('aria-label')).toBe(
+        false,
+      );
     });
   });
 
@@ -194,6 +244,29 @@ describe('SettingsWorkerRolesComponent', () => {
       );
       expect(marks).toEqual(['{issueNumber}', '{repository}']);
       expect(prompt.textContent).toBe('You are implementing issue #{issueNumber} in {repository}.');
+    });
+
+    it('should not make role prompts scroll regions', () => {
+      // Arrange / Act
+      const { el } = setupLoaded();
+
+      // Assert
+      const pre = cards(el)[0].querySelector('.role-card__system-prompt pre')!;
+      expect(pre.getAttribute('role')).toBeNull();
+      expect(pre.getAttribute('tabindex')).toBeNull();
+      expect(pre.getAttribute('aria-label')).toBeNull();
+    });
+
+    it('should explain placeholders with a sample chip in the role prompt block', () => {
+      // Arrange / Act
+      const { el } = setupLoaded();
+
+      // Assert
+      const hint = cards(el)[0].querySelector('.role-card__placeholder-hint')!;
+      expect(text(hint)).toBe(
+        'Placeholders such as {issueNumber} are filled in by the worker at dispatch time.',
+      );
+      expect(text(hint.querySelector('.role-card__placeholder-sample'))).toBe('{issueNumber}');
     });
 
     it('should preserve the task prompt text verbatim, including newlines', () => {
@@ -234,14 +307,26 @@ describe('SettingsWorkerRolesComponent', () => {
     });
   });
 
-  describe('prompt sections', () => {
-    it('should list every section in order with a human condition label', () => {
+  describe('prompt assembly', () => {
+    function assembly(el: HTMLElement): HTMLElement {
+      return cards(el)[0].querySelector<HTMLElement>('fd-prompt-assembly')!;
+    }
+
+    it('should title the block "System prompt assembly"', () => {
       // Arrange / Act
       const { el } = setupLoaded();
 
       // Assert
-      const sections = Array.from(cards(el)[0].querySelectorAll('.role-card__section'));
-      expect(sections.map((s) => text(s.querySelector('.role-card__summary-name')))).toEqual([
+      expect(text(assembly(el).querySelector('h4'))).toBe('System prompt assembly');
+    });
+
+    it('should list every section in order', () => {
+      // Arrange / Act
+      const { el } = setupLoaded();
+
+      // Assert
+      const items = Array.from(assembly(el).querySelectorAll('li'));
+      expect(items.map((i) => text(i.querySelector('.prompt-assembly__summary-name')))).toEqual([
         'Base instructions',
         'Role prompt',
         '.NET toolchain',
@@ -251,16 +336,67 @@ describe('SettingsWorkerRolesComponent', () => {
         'Revision',
         'Rebase',
       ]);
-      expect(sections.map((s) => text(s.querySelector('.role-card__condition')))).toEqual([
+    });
+
+    it('should number sections in a gutter outside the disclosure', () => {
+      // Arrange / Act
+      const { el } = setupLoaded();
+
+      // Assert
+      const items = Array.from(assembly(el).querySelectorAll('li'));
+      const ordinals = items.map((li) => li.querySelector(':scope > span[aria-hidden="true"]'));
+      expect(ordinals.map((o) => text(o))).toEqual(['1', '2', '3', '4', '5', '6', '7', '8']);
+    });
+
+    it('should label each condition with a human tag', () => {
+      // Arrange / Act
+      const { el } = setupLoaded();
+
+      // Assert
+      const tags = Array.from(assembly(el).querySelectorAll('.prompt-assembly__condition'));
+      expect(tags.map((t) => text(t))).toEqual([
         'Always',
         'Always',
         '.NET image',
         'Docker image',
-        'Fresh',
-        'Continuation',
-        'Revision',
+        'Fresh run',
+        'Continuation run',
+        'Revision run',
         'Rebase conflict',
       ]);
+    });
+
+    it('should colour condition tags by kind: always, image and run', () => {
+      // Arrange / Act
+      const { el } = setupLoaded();
+
+      // Assert
+      const tags = Array.from(assembly(el).querySelectorAll('.prompt-assembly__condition'));
+      expect(tags.map((t) => t.className.match(/condition--(\w+)/)![1])).toEqual([
+        'always',
+        'always',
+        'image',
+        'image',
+        'run',
+        'run',
+        'run',
+        'run',
+      ]);
+    });
+
+    it('should treat an unknown condition as a run-kind tag labelled with its raw value', () => {
+      // Arrange
+      const catalog = buildWorkerRoleCatalog({
+        promptSections: [{ key: 'x', title: 'X', condition: 'Future' as never, content: 'x' }],
+      });
+
+      // Act
+      const { el } = setupLoaded(catalog);
+
+      // Assert
+      const tag = assembly(el).querySelector('.prompt-assembly__condition')!;
+      expect(text(tag)).toBe('Future');
+      expect(tag.classList.contains('prompt-assembly__condition--run')).toBe(true);
     });
 
     it('should render sections as keyboard-accessible details/summary expanders', () => {
@@ -268,21 +404,23 @@ describe('SettingsWorkerRolesComponent', () => {
       const { el } = setupLoaded();
 
       // Assert
-      const section = cards(el)[0].querySelector('.role-card__section')!;
+      const section = assembly(el).querySelector('.prompt-assembly__section')!;
       expect(section.tagName.toLowerCase()).toBe('details');
       expect(section.querySelector(':scope > summary')).toBeTruthy();
     });
 
-    it('should replace the role prompt slot marker with a note', () => {
+    it('should show the role prompt slot as a static row, not a disclosure', () => {
       // Arrange / Act
       const { el } = setupLoaded();
 
       // Assert
-      const slot = cards(el)[0].querySelectorAll('.role-card__section')[1];
-      expect(text(slot.querySelector('.role-card__slot-note'))).toContain(
-        "The role's system prompt (above) is inserted here.",
+      const slot = assembly(el).querySelector('.prompt-assembly__slot')!;
+      expect(slot.tagName.toLowerCase()).not.toBe('details');
+      expect(slot.querySelector('details, summary, pre, a')).toBeNull();
+      expect(text(slot.querySelector('.prompt-assembly__slot-note'))).toBe(
+        'Shown under System prompt above.',
       );
-      expect(slot.querySelector('pre')).toBeNull();
+      expect(text(slot.querySelector('.prompt-assembly__condition'))).toBe('Always');
       expect(slot.textContent).not.toContain(ROLE_PROMPT_SLOT);
     });
 
@@ -291,8 +429,92 @@ describe('SettingsWorkerRolesComponent', () => {
       const { el } = setupLoaded();
 
       // Assert
-      const base = cards(el)[0].querySelector('.role-card__section')!;
+      const base = assembly(el).querySelector('.prompt-assembly__section')!;
       expect(text(base.querySelector('mark.prompt-text__placeholder'))).toBe('{branchName}');
+    });
+
+    it('should highlight placeholders in section titles', () => {
+      // Arrange
+      const catalog = buildWorkerRoleCatalog({
+        promptSections: [
+          { key: 'x', title: 'Issue {issueContent}', condition: 'Always', content: 'body' },
+        ],
+      });
+
+      // Act
+      const { el } = setupLoaded(catalog);
+
+      // Assert
+      const name = assembly(el).querySelector('.prompt-assembly__summary-name')!;
+      expect(text(name.querySelector('mark.prompt-text__placeholder'))).toBe('{issueContent}');
+      expect(text(name)).toBe('Issue {issueContent}');
+    });
+
+    it('should not make section content a scroll region', () => {
+      // Arrange / Act
+      const { el } = setupLoaded();
+
+      // Assert
+      const pre = assembly(el).querySelector('.prompt-assembly__section pre')!;
+      expect(pre.getAttribute('role')).toBeNull();
+      expect(pre.getAttribute('tabindex')).toBeNull();
+    });
+
+    it('should offer Expand all, which opens every expandable section', () => {
+      // Arrange
+      const { el, fixture } = setupLoaded();
+      const button = assembly(el).querySelector<HTMLButtonElement>('button')!;
+      expect(text(button)).toBe('Expand all');
+      expect(button.type).toBe('button');
+
+      // Act
+      button.click();
+      fixture.detectChanges();
+
+      // Assert
+      const sections = Array.from(
+        assembly(el).querySelectorAll<HTMLDetailsElement>('details.prompt-assembly__section'),
+      );
+      expect(sections).toHaveLength(7);
+      expect(sections.every((d) => d.open)).toBe(true);
+      expect(text(button)).toBe('Collapse all');
+    });
+
+    it('should collapse every section again with Collapse all', () => {
+      // Arrange
+      const { el, fixture } = setupLoaded();
+      const button = assembly(el).querySelector<HTMLButtonElement>('button')!;
+      button.click();
+      fixture.detectChanges();
+
+      // Act
+      button.click();
+      fixture.detectChanges();
+
+      // Assert
+      const sections = Array.from(
+        assembly(el).querySelectorAll<HTMLDetailsElement>('details.prompt-assembly__section'),
+      );
+      expect(sections.some((d) => d.open)).toBe(false);
+      expect(text(button)).toBe('Expand all');
+    });
+
+    it('should switch to Collapse all once every section was opened by hand', async () => {
+      // Arrange
+      const { el, fixture } = setupLoaded();
+      const sections = Array.from(
+        assembly(el).querySelectorAll<HTMLDetailsElement>('details.prompt-assembly__section'),
+      );
+
+      // Act
+      for (const details of sections) {
+        details.open = true;
+        details.dispatchEvent(new Event('toggle'));
+      }
+      fixture.detectChanges();
+
+      // Assert
+      expect(text(assembly(el).querySelector('button'))).toBe('Collapse all');
     });
   });
 
@@ -312,6 +534,69 @@ describe('SettingsWorkerRolesComponent', () => {
       expect(text(skills[0].querySelector('.role-card__summary-description'))).toBe(
         'Red-green-refactor loop',
       );
+    });
+
+    it('should merge skills and agents into one block with Skills and Agents subgroups', () => {
+      // Arrange / Act
+      const { el } = setupLoaded();
+
+      // Assert
+      const card = cards(el)[0];
+      const blocks = Array.from(card.querySelectorAll('h4')).map((h) => text(h));
+      expect(blocks).toContain('Skills and agents');
+      expect(blocks).not.toContain('Skills');
+      expect(blocks).not.toContain('Agents');
+      expect(text(card.querySelector('.role-card__skills h5'))).toBe('Skills');
+      expect(text(card.querySelector('.role-card__agents h5'))).toBe('Agents');
+    });
+
+    it('should show the shared description hint when a shared entry exists', () => {
+      // Arrange / Act
+      const { el } = setupLoaded();
+
+      // Assert
+      expect(text(cards(el)[0].querySelector('.role-card__shared-hint'))).toBe(
+        'Shared: Loaded for every role',
+      );
+    });
+
+    it('should omit the shared hint when there are no shared entries', () => {
+      // Arrange
+      const catalog = buildWorkerRoleCatalog();
+      catalog.shared = { ...catalog.shared, skills: [], agents: [] };
+
+      // Act
+      const { el } = setupLoaded(catalog);
+
+      // Assert
+      expect(cards(el)[0].querySelector('.role-card__shared-hint')).toBeNull();
+    });
+
+    it('should show one hint when the role loads no skills or agents', () => {
+      // Arrange
+      const role = buildWorkerRole({ skills: [], agents: [] });
+      const catalog = buildWorkerRoleCatalog({ roles: [role] });
+      catalog.shared = { ...catalog.shared, skills: [], agents: [] };
+
+      // Act
+      const { el } = setupLoaded(catalog);
+
+      // Assert
+      const card = cards(el)[0];
+      expect(text(card)).toContain('This role loads no skills or agents.');
+      expect(card.querySelector('.role-card__skills')).toBeNull();
+      expect(card.querySelector('.role-card__agents')).toBeNull();
+    });
+
+    it('should make skill file content a labelled scroll region', () => {
+      // Arrange / Act
+      const { el } = setupLoaded();
+
+      // Assert
+      const pre = cards(el)[0].querySelector('.role-card__skills details pre')!;
+      expect(pre.getAttribute('role')).toBe('region');
+      expect(pre.getAttribute('aria-label')).toBe('tdd file');
+      expect(pre.getAttribute('tabindex')).toBe('0');
     });
 
     it('should expand a skill to its full file content with placeholders highlighted', () => {
@@ -357,7 +642,7 @@ describe('SettingsWorkerRolesComponent', () => {
   });
 
   describe('verdict schema', () => {
-    it('should show the generative-role note when the verdict schema is absent', () => {
+    it('should say the role returns no verdict when the verdict schema is absent', () => {
       // Arrange / Act
       const { el } = setupLoaded();
 
@@ -365,7 +650,7 @@ describe('SettingsWorkerRolesComponent', () => {
       const card = cards(el)[0];
       expect(card.querySelector('.role-card__schema')).toBeNull();
       expect(text(card.querySelector('.role-card__no-schema'))).toBe(
-        'No verdict schema (generative role).',
+        'None. This role returns no verdict.',
       );
     });
 
@@ -382,6 +667,7 @@ describe('SettingsWorkerRolesComponent', () => {
         JSON.stringify({ type: 'object', required: ['verdict'] }, null, 2),
       );
       expect(cards(el)[0].querySelector('.role-card__no-schema')).toBeNull();
+      expect(schema.getAttribute('role')).toBe('region');
     });
 
     it('should show a verdict schema that is not valid JSON verbatim', () => {
