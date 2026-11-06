@@ -448,11 +448,6 @@ namespace Foundry.WebApi.Migrations
                         .HasColumnType("TEXT")
                         .HasColumnName("created_at");
 
-                    b.Property<string>("HostHooks")
-                        .IsRequired()
-                        .HasColumnType("TEXT")
-                        .HasColumnName("host_hooks");
-
                     b.Property<string>("ImageBuildState")
                         .IsRequired()
                         .HasColumnType("TEXT")
@@ -501,11 +496,6 @@ namespace Foundry.WebApi.Migrations
                         .IsRequired()
                         .HasColumnType("TEXT")
                         .HasColumnName("worker_image_configuration");
-
-                    b.Property<string>("WorkerMounts")
-                        .IsRequired()
-                        .HasColumnType("TEXT")
-                        .HasColumnName("worker_mounts");
 
                     b.Property<string>("WorkerPrompts")
                         .IsRequired()

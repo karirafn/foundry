@@ -29,7 +29,6 @@ public sealed class StartAsync
 
     private static WorkerContainerSpec MinimalSpec(
         string image = "test-image:latest",
-        IReadOnlyList<BindMount>? bindMounts = null,
         IReadOnlyList<string>? securityOptions = null,
         IReadOnlyList<string>? devices = null,
         IReadOnlyList<VolumeMount>? volumeMounts = null,
@@ -46,7 +45,6 @@ public sealed class StartAsync
         new(
             Image: image,
             EnvironmentVariables: new Dictionary<string, string>(),
-            BindMounts: bindMounts ?? [],
             Labels: labels ?? new Dictionary<string, string>(),
             Command: [])
         {
@@ -112,25 +110,18 @@ public sealed class StartAsync
     }
 
     [Fact]
-    public async Task WhenStarted_SetsBindsFromSpec()
+    public async Task WhenStarted_SetsNoHostBinds()
     {
         // Arrange
         FakeDockerContainerRuntime runtime = new();
-        IReadOnlyList<BindMount> bindMounts =
-        [
-            new BindMount("/host/data", "/container/data", ReadOnly: false),
-            new BindMount("/host/config", "/container/config", ReadOnly: true),
-        ];
         DockerWorkerOrchestrator sut = BuildSut(runtime);
 
         // Act
-        await sut.StartAsync(MinimalSpec(bindMounts: bindMounts), CancellationToken.None);
+        await sut.StartAsync(MinimalSpec(), CancellationToken.None);
 
         // Assert
         CreateContainerParameters captured = runtime.LastCreateAndStartParameters.ShouldNotBeNull();
-        captured.HostConfig.Binds.ShouldBe(
-            ["/host/data:/container/data", "/host/config:/container/config:ro"],
-            ignoreOrder: false);
+        captured.HostConfig.Binds.ShouldBeNull();
     }
 
     [Fact]

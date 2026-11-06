@@ -121,102 +121,6 @@ prepare_csharp_lsp() {
 }
 
 # ---------------------------------------------------------------------------
-# merge_host_hooks <settings_json> <host_settings_file> <exclusions_json>
-#
-# Prints <settings_json> with the `hooks` object of the operator's host Claude
-# Code settings file merged in.  Only `hooks` is imported — every other host key
-# (permissions, env, statusLine, ...) is ignored.  Every hook entry whose
-# `command` exactly matches an entry of the <exclusions_json> array is dropped;
-# matcher groups and events left empty are removed.  Host groups are appended
-# after any groups the generated settings already carry for the same event.
-#
-# Logs "Host hooks applied: N (excluded: M)", each applied command and each
-# exclusion that matched no hook to stderr.
-#
-# Fails closed: a missing, unreadable or invalid file (not a JSON object, or a
-# `hooks` value that is not an object of matcher-group arrays) emits the
-# bootstrap-failure sentinel naming the file and returns non-zero — hooks are
-# guardrails, so silently dropping them would produce unchecked commits.
-# ---------------------------------------------------------------------------
-merge_host_hooks() {
-    local settings_json="$1"
-    local host_file="$2"
-    local exclusions_json="${3:-[]}"
-
-    if ! command -v jq > /dev/null 2>&1; then
-        fail_bootstrap "host-settings" "jq is not installed; cannot merge hooks from host settings file $host_file"
-        return 1
-    fi
-
-    if [[ ! -f "$host_file" || ! -r "$host_file" ]]; then
-        echo "ERROR: host settings file $host_file is missing or unreadable." >&2
-        fail_bootstrap "host-settings" "host settings file $host_file is missing or unreadable"
-        return 1
-    fi
-
-    local host_json
-    if ! host_json="$(jq -cs '
-            if length == 1
-               and (.[0] | type) == "object"
-               and ((.[0].hooks // {}) | type) == "object"
-               and all((.[0].hooks // {})[]; type == "array" and all(.[]; type == "object" and ((.hooks // []) | type) == "array"))
-            then .[0]
-            else error("unexpected shape")
-            end' "$host_file" 2> /dev/null)"; then
-        echo "ERROR: host settings file $host_file is not valid JSON or has an unexpected hooks shape." >&2
-        fail_bootstrap "host-settings" "host settings file $host_file is not valid JSON"
-        return 1
-    fi
-
-    if ! printf '%s' "$exclusions_json" | jq -e 'type == "array" and all(.[]; type == "string")' > /dev/null 2>&1; then
-        fail_bootstrap "host-settings" "hook exclusion list is not a JSON array of strings; cannot merge host settings file $host_file"
-        return 1
-    fi
-
-    # errexit is suspended inside a function whose caller tests its status, so every
-    # jq failure below is checked explicitly.
-    local merge_result
-    if ! merge_result="$(jq -cn \
-        --argjson base "$settings_json" \
-        --argjson host "$host_json" \
-        --argjson excluded "$exclusions_json" '
-        def excluded($command): $command != null and any($excluded[]; . == $command);
-        def hook_label: .command // ("<" + (.type // "hook") + " hook>");
-
-        ($host.hooks // {}) as $hooks
-        | [$hooks[][] | (.hooks // [])[]] as $all
-        | ($hooks
-            | with_entries(
-                .value |= [.[] | .hooks = [(.hooks // [])[] | select(excluded(.command) | not)] | select(.hooks | length > 0)]
-              )
-            | with_entries(select(.value | length > 0))) as $kept
-        | [$kept[][] | .hooks[]] as $applied
-        | {
-            settings: (
-              if ($kept | length) == 0 then $base
-              else $base | .hooks = (reduce ($kept | to_entries[]) as $e (.hooks // {};
-                     .[$e.key] = ((.[$e.key] // []) + $e.value)))
-              end),
-            applied: [$applied[] | hook_label],
-            excluded_count: ([$all[] | select(excluded(.command))] | length),
-            unmatched: [$excluded[] | . as $x | select(any($all[]; .command == $x) | not)]
-          }')"; then
-        fail_bootstrap "host-settings" "could not merge hooks from host settings file $host_file"
-        return 1
-    fi
-
-    local applied_count excluded_count
-    applied_count="$(printf '%s' "$merge_result" | jq '.applied | length')"
-    excluded_count="$(printf '%s' "$merge_result" | jq '.excluded_count')"
-
-    echo "Host hooks applied: ${applied_count} (excluded: ${excluded_count})" >&2
-    printf '%s' "$merge_result" | jq -r '.applied[] | "  applied: " + .' >&2
-    printf '%s' "$merge_result" | jq -r '.unmatched[] | "  exclusion matched no hook: " + .' >&2
-
-    printf '%s' "$merge_result" | jq -c '.settings'
-}
-
-# ---------------------------------------------------------------------------
 # start_rootless_dockerd
 #
 # Starts rootless dockerd in the background and polls until its socket is ready.
@@ -326,17 +230,15 @@ readonly MANAGED_SETTINGS_FILE=/etc/claude-code/managed-settings.json
 # ---------------------------------------------------------------------------
 # render_managed_settings <output_path>
 #
-# Renders Foundry's worker policy — $CLAUDE_SETTINGS_JSON (deny lists, model)
-# with the operator's host hooks merged in by merge_host_hooks — to
-# <output_path>.  The parent directory is made mode 0755 and the file mode 0644:
+# Renders Foundry's worker policy — $CLAUDE_SETTINGS_JSON (deny lists, model) —
+# to <output_path>.  The parent directory is made mode 0755 and the file mode 0644:
 # world-readable, because Claude Code starts without a managed source it cannot
 # read, so a root-only file would silently drop the policy.  When run as root
 # (production) both are chowned root:root, so the unprivileged worker can read
 # but never write, chmod or replace them.
 #
 # Fails closed: an empty, missing or non-object $CLAUDE_SETTINGS_JSON emits
-# the bootstrap-failure sentinel (stage=managed-settings); a failed host-hook
-# merge emits stage=host-settings.  Either returns non-zero.
+# the bootstrap-failure sentinel (stage=managed-settings) and returns non-zero.
 # ---------------------------------------------------------------------------
 render_managed_settings() {
     local output_path="$1"
@@ -359,12 +261,6 @@ render_managed_settings() {
         echo "ERROR: CLAUDE_SETTINGS_JSON is not a JSON object." >&2
         fail_bootstrap "managed-settings" "CLAUDE_SETTINGS_JSON is not a JSON object; the worker policy cannot be rendered"
         return 1
-    fi
-
-    # The host settings file is mounted read-only at a staging path (never ~/.claude/settings.json);
-    # only its hooks are merged in, minus the operator's exclusion list.
-    if [[ -n "${FOUNDRY_HOST_SETTINGS_FILE:-}" ]]; then
-        settings_json="$(merge_host_hooks "$settings_json" "$FOUNDRY_HOST_SETTINGS_FILE" "${FOUNDRY_HOST_HOOK_EXCLUSIONS:-[]}")" || return 1
     fi
 
     # allowManagedHooksOnly would also block the target repository's own hooks; managed hooks
@@ -449,7 +345,7 @@ verify_managed_settings() {
 # ---------------------------------------------------------------------------
 if [[ "$(id -u)" -eq 0 ]]; then
     render_managed_settings "$MANAGED_SETTINGS_FILE" || exit 1
-    unset CLAUDE_SETTINGS_JSON FOUNDRY_HOST_SETTINGS_FILE FOUNDRY_HOST_HOOK_EXCLUSIONS
+    unset CLAUDE_SETTINGS_JSON
     # Docker derives HOME from the starting user (root); point it, and the
     # login names, at node's passwd entry so ~ resolves as before.
     _node_home="$(getent passwd node | cut -d: -f6)"

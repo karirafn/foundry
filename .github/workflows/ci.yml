@@ -210,7 +210,7 @@ jobs:
             foundry-worker:ci bash -s <<'SCRIPT'
           set -euo pipefail
           [ "$(id -u)" = "0" ] || { echo "FAIL: the worker image does not start as root (uid $(id -u))"; exit 1; }
-          for f in fail_bootstrap merge_host_hooks render_managed_settings; do
+          for f in fail_bootstrap render_managed_settings; do
             src="$(sed -n "/^${f}()/,/^}/p" /entrypoint.sh)"
             [ -n "$src" ] || { echo "FAIL: could not extract $f from /entrypoint.sh"; exit 1; }
             eval "$src"

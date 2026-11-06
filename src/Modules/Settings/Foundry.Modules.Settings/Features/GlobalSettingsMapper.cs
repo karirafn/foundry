@@ -43,12 +43,9 @@ internal static class GlobalSettingsMapper
             settings.WorkerResourceLimits.MemoryLimitMb,
             settings.WorkerResourceLimits.CpuLimit,
             settings.WorkerResourceLimits.PidsLimit,
-            [.. settings.WorkerMounts.Mounts.Select(m => new WorkerMountEntry(m.ContainerPath, m.HostPath, m.ReadOnly))],
             settings.ClaudeCodeSettings.Model,
             settings.ClaudeCodeSettings.BlockCiCdEdits,
             settings.ClaudeCodeSettings.AdditionalDenyRules,
-            settings.HostHooks.HostSettingsPath,
-            settings.HostHooks.ExcludedCommands,
             settings.WebhookPublicBaseUrl,
             settings.BackstopIntervalMinutes);
     }

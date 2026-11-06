@@ -31,12 +31,9 @@ function buildResponse(overrides: Partial<GlobalSettingsResponse> = {}): GlobalS
     memoryLimitMb: 8192,
     cpuLimit: 2,
     pidsLimit: 512,
-    mounts: [],
     model: '',
     blockCiCdEdits: true,
     additionalDenyRules: [],
-    hostSettingsPath: '',
-    excludedHookCommands: [],
     ...overrides,
   };
 }

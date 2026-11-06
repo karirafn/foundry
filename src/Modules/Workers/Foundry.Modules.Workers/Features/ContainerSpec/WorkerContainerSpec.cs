@@ -3,7 +3,6 @@ namespace Foundry.Modules.Workers.Features.ContainerSpec;
 internal sealed record WorkerContainerSpec(
     string Image,
     IReadOnlyDictionary<string, string> EnvironmentVariables,
-    IReadOnlyList<BindMount> BindMounts,
     IReadOnlyDictionary<string, string> Labels,
     IReadOnlyList<string> Command)
 {

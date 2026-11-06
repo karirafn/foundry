@@ -24,11 +24,6 @@ internal sealed class DockerWorkerOrchestrator(IDockerContainerRuntime runtime) 
     private const int DockerErrorMessageMaxLength = 500;
     private const int ContainerOutputMaxBytes = 65_536;
 
-    internal static string FormatBind(BindMount mount) =>
-        mount.ReadOnly
-            ? $"{mount.HostPath}:{mount.ContainerPath}:ro"
-            : $"{mount.HostPath}:{mount.ContainerPath}";
-
     internal static DeviceMapping MapDevice(string devicePath) =>
         new()
         {
@@ -130,7 +125,6 @@ internal sealed class DockerWorkerOrchestrator(IDockerContainerRuntime runtime) 
                 Labels = new Dictionary<string, string>(spec.Labels),
                 HostConfig = new HostConfig
                 {
-                    Binds = [.. spec.BindMounts.Select(FormatBind)],
                     Memory = spec.MemoryLimitMb * BytesPerMegabyte,
                     NanoCPUs = (long)(spec.CpuLimit * NanoCpusPerCpu),
                     PidsLimit = spec.PidsLimit,

@@ -55,17 +55,9 @@ public sealed class NullGlobalSettingsQueries : IGlobalSettingsQueries
     public Task<WorkerResourceLimitsSnapshot> GetWorkerResourceLimitsAsync(CancellationToken cancellationToken)
         => Task.FromResult(new WorkerResourceLimitsSnapshot(8192, 2.0, 512));
 
-    public Task<IReadOnlyList<WorkerMountEntry>> GetWorkerMountsAsync(CancellationToken cancellationToken)
-        => Task.FromResult<IReadOnlyList<WorkerMountEntry>>([]);
-
-
     public Task<ClaudeCodeSettingsSnapshot> GetClaudeCodeSettingsAsync(CancellationToken cancellationToken)
 
         => Task.FromResult(new ClaudeCodeSettingsSnapshot(string.Empty, true, []));
-
-    public Task<HostHooksSnapshot> GetHostHooksAsync(CancellationToken cancellationToken)
-
-        => Task.FromResult(new HostHooksSnapshot(string.Empty, []));
 
     public Task<IReadOnlyList<string>> GetAllowedProviderHostsAsync(CancellationToken cancellationToken)
         => Task.FromResult<IReadOnlyList<string>>([]);
