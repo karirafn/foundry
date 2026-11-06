@@ -28,7 +28,7 @@ internal sealed record WorkerRoleImage(string Tag, string? ImageId, DateTimeOffs
 /// <param name="TaskPrompt">The role's task prompt template, placeholders unfilled.</param>
 /// <param name="Skills">The role plugin's skills.</param>
 /// <param name="Agents">The role plugin's agents.</param>
-/// <param name="VerdictSchema">The JSON schema of the role's verdict; <see langword="null"/> for generative roles.</param>
+/// <param name="VerdictSchema">The JSON schema of the role's verdict; <see langword="null"/> when the role has none.</param>
 internal sealed record WorkerRoleCard(
     string Name,
     string? Purpose,

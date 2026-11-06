@@ -1,3 +1,5 @@
+using System.Text.Json.Nodes;
+
 using Foundry.Modules.Credentials.Contracts;
 using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Monitoring.Contracts;
@@ -12,6 +14,7 @@ using Foundry.Modules.Workers.Domain.Entities.States;
 using Foundry.Modules.Workers.Domain.ValueObjects;
 using Foundry.Modules.Workers.Features.Orchestration;
 using Foundry.Modules.Workers.Features.Outcome;
+using Foundry.Modules.Workers.Features.Verdicts;
 using Foundry.Modules.Workers.Features.ContainerSpec;
 using Foundry.Modules.Workers.Features.Dispatch;
 using Foundry.Shared;
@@ -145,6 +148,7 @@ public abstract class WorkerDispatchServiceTestBase : IAsyncDisposable
         services.AddSingleton(resolvedTimeProvider);
         services.AddScoped<WorkerOutcomeApplier>();
         services.AddScoped<WorkerRunMonitor>();
+        services.AddWorkerVerdicts();
         services.AddSingleton<ILogger<WorkerOutcomeApplier>>(CreateLogger<WorkerOutcomeApplier>(logger));
         services.AddSingleton<ILogger<WorkerRunMonitor>>(CreateLogger<WorkerRunMonitor>(logger));
 
@@ -291,6 +295,8 @@ public abstract class WorkerDispatchServiceTestBase : IAsyncDisposable
             => new ContainerOutputParseResult.NormalExit();
 
         public RunResultSummary? ParseRunResultSummary(string? log) => null;
+
+        public JsonObject? ParseStructuredOutput(string? log) => null;
     }
 
     protected sealed class StubGlobalSettingsQueries(int maxConcurrent = 3, int timeoutMinutes = 120)

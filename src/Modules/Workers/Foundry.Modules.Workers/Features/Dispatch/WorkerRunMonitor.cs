@@ -7,6 +7,7 @@ using Foundry.Modules.Workers.Domain.Entities.States;
 using Foundry.Modules.Workers.Domain.ValueObjects;
 using Foundry.Modules.Workers.Features.Orchestration;
 using Foundry.Modules.Workers.Features.Outcome;
+using Foundry.Modules.Workers.Features.Verdicts;
 using Foundry.Shared;
 using Foundry.Shared.Infrastructure;
 
@@ -30,6 +31,7 @@ internal sealed class WorkerRunMonitor(
     IWebhookStatusQueries webhookStatusQueries,
     IPostExitProviderQueries postExitProviderQueries,
     IContainerOutputParser containerOutputParser,
+    RunVerdictReader verdictReader,
     TimeProvider timeProvider,
     ILogger<WorkerRunMonitor> logger)
 {
@@ -262,7 +264,13 @@ internal sealed class WorkerRunMonitor(
             return;
         }
 
-        await outcomeApplier.ApplyAsync(outcome, activeRun, cancellationToken);
+        // Only a run that exited 0 finished its turn and can carry a verdict; any other exit keeps
+        // today's failure classification. The verdict is recorded and never changes the outcome.
+        RunVerdict? verdict = status.ExitCode == 0
+            ? verdictReader.Read(activeRun.Role, containerOutput)
+            : null;
+
+        await outcomeApplier.ApplyAsync(outcome, activeRun, verdict, cancellationToken);
     }
 
     private async Task ApplyTimeoutOutcomeAsync(

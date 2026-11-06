@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Text.Json.Nodes;
 
 using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Monitoring.Contracts;
@@ -1241,6 +1242,8 @@ public sealed class ResolveAsync
             => new ContainerOutputParseResult.NormalExit();
 
         public RunResultSummary? ParseRunResultSummary(string? log) => null;
+
+        public JsonObject? ParseStructuredOutput(string? log) => null;
     }
 
     private sealed class UsageLimitedParser(DateTimeOffset resetsAt) : IContainerOutputParser
@@ -1249,6 +1252,8 @@ public sealed class ResolveAsync
             => new ContainerOutputParseResult.UsageLimited(resetsAt);
 
         public RunResultSummary? ParseRunResultSummary(string? log) => null;
+
+        public JsonObject? ParseStructuredOutput(string? log) => null;
     }
 
     private sealed class NoResultLineParser : IContainerOutputParser
@@ -1257,6 +1262,8 @@ public sealed class ResolveAsync
             => new ContainerOutputParseResult.NoResultLine();
 
         public RunResultSummary? ParseRunResultSummary(string? log) => null;
+
+        public JsonObject? ParseStructuredOutput(string? log) => null;
     }
 
     private sealed class TransientApiErrorParser : IContainerOutputParser
@@ -1265,6 +1272,8 @@ public sealed class ResolveAsync
             => new ContainerOutputParseResult.TransientApiError();
 
         public RunResultSummary? ParseRunResultSummary(string? log) => null;
+
+        public JsonObject? ParseStructuredOutput(string? log) => null;
     }
 
     private sealed class CreditsExhaustedParser : IContainerOutputParser
@@ -1273,5 +1282,7 @@ public sealed class ResolveAsync
             => new ContainerOutputParseResult.CreditsExhausted();
 
         public RunResultSummary? ParseRunResultSummary(string? log) => null;
+
+        public JsonObject? ParseStructuredOutput(string? log) => null;
     }
 }
