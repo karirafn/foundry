@@ -352,7 +352,7 @@ public sealed class HandleAsync : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenNoCustomMountsConfigured_BindMountsIsEmpty()
+    public async Task WhenOrchestratorSucceeds_ContainerSpecHasNoHostSettingsEnvVars()
     {
         // Arrange
         StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c2");
@@ -365,200 +365,9 @@ public sealed class HandleAsync : IAsyncDisposable
         // Assert
         WorkerContainerSpec? spec = orchestrator.LastSpec;
         spec.ShouldNotBeNull();
-        spec.BindMounts.ShouldBeEmpty();
-    }
-
-    [Fact]
-    public async Task WhenReadOnlyMountConfigured_BindMountsContainsReadOnlyMount()
-    {
-        // Arrange
-        string hostDir = Path.Combine(Path.GetTempPath(), $"foundry-mount-test-{Guid.NewGuid()}");
-        Directory.CreateDirectory(hostDir);
-
-        try
-        {
-            StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c-ro-mounts");
-            IssueClaimedHandler sut = BuildHandler(
-                orchestrator: orchestrator,
-                settingsQueries: new StubGlobalSettingsQueries(
-                    mounts: [new WorkerMountEntry("/container/config", hostDir, ReadOnly: true)]));
-            IssueClaimed @event = BuildEvent();
-
-            // Act
-            await sut.HandleAsync(@event, TestContext.Current.CancellationToken);
-
-            // Assert
-            WorkerContainerSpec? spec = orchestrator.LastSpec;
-            spec.ShouldNotBeNull();
-            spec.BindMounts.ShouldContain(m => m.ContainerPath == "/container/config" && m.ReadOnly);
-        }
-        finally
-        {
-            Directory.Delete(hostDir, recursive: true);
-        }
-    }
-
-    [Fact]
-    public async Task WhenMountsConfigured_BindMountsContainsOnlyConfiguredMounts()
-    {
-        // Arrange
-        string hostDir = Path.Combine(Path.GetTempPath(), $"foundry-mount-only-test-{Guid.NewGuid()}");
-        Directory.CreateDirectory(hostDir);
-
-        try
-        {
-            StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c-mounts-only");
-            IssueClaimedHandler sut = BuildHandler(
-                orchestrator: orchestrator,
-                settingsQueries: new StubGlobalSettingsQueries(
-                    mounts: [new WorkerMountEntry("/container/config", hostDir, ReadOnly: true)]));
-            IssueClaimed @event = BuildEvent();
-
-            // Act
-            await sut.HandleAsync(@event, TestContext.Current.CancellationToken);
-
-            // Assert
-            WorkerContainerSpec? spec = orchestrator.LastSpec;
-            spec.ShouldNotBeNull();
-            spec.BindMounts.Count.ShouldBe(1);
-            spec.BindMounts.ShouldContain(m => m.ContainerPath == "/container/config" && m.ReadOnly);
-        }
-        finally
-        {
-            Directory.Delete(hostDir, recursive: true);
-        }
-    }
-
-    [Fact]
-    public async Task WhenMountHostPathDoesNotExist_CreatesFailedRunWithMissingPathError()
-    {
-        // Arrange
-        string nonExistentPath = Path.Combine(Path.GetTempPath(), $"foundry-nonexistent-{Guid.NewGuid()}");
-        IssueClaimedHandler sut = BuildHandler(
-            settingsQueries: new StubGlobalSettingsQueries(
-                mounts: [new WorkerMountEntry("/container/config", nonExistentPath, ReadOnly: true)]));
-        IssueClaimed @event = BuildEvent();
-
-        // Act
-        await sut.HandleAsync(@event, TestContext.Current.CancellationToken);
-        _dbContext.ChangeTracker.Clear();
-
-        // Assert
-        WorkerRun? run = await _dbContext.Set<WorkerRun>().SingleOrDefaultAsync(TestContext.Current.CancellationToken);
-        FailedRun failedRun = run.ShouldBeOfType<FailedRun>();
-        FailureReason.ContainerError error = failedRun.Reason.ShouldBeOfType<FailureReason.ContainerError>();
-        error.Message.ShouldContain(nonExistentPath);
-    }
-
-    [Fact]
-    public async Task WhenWritableMountHostPathDoesNotExist_CreatesFailedRunWithMissingPathError()
-    {
-        // Arrange
-        string nonExistentPath = Path.Combine(Path.GetTempPath(), $"foundry-nonexistent-{Guid.NewGuid()}");
-        IssueClaimedHandler sut = BuildHandler(
-            settingsQueries: new StubGlobalSettingsQueries(
-                mounts: [new WorkerMountEntry("/container/workspace", nonExistentPath, ReadOnly: false)]));
-        IssueClaimed @event = BuildEvent();
-
-        // Act
-        await sut.HandleAsync(@event, TestContext.Current.CancellationToken);
-        _dbContext.ChangeTracker.Clear();
-
-        // Assert
-        WorkerRun? run = await _dbContext.Set<WorkerRun>().SingleOrDefaultAsync(TestContext.Current.CancellationToken);
-        FailedRun failedRun = run.ShouldBeOfType<FailedRun>();
-        FailureReason.ContainerError error = failedRun.Reason.ShouldBeOfType<FailureReason.ContainerError>();
-        error.Message.ShouldContain(nonExistentPath);
-    }
-
-    [Fact]
-    public async Task WhenWritableMountConfigured_BindMountsContainsWritableMount()
-    {
-        // Arrange
-        string hostDir = Path.Combine(Path.GetTempPath(), $"foundry-writable-test-{Guid.NewGuid()}");
-        Directory.CreateDirectory(hostDir);
-
-        try
-        {
-            StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c-rw-mounts");
-            IssueClaimedHandler sut = BuildHandler(
-                orchestrator: orchestrator,
-                settingsQueries: new StubGlobalSettingsQueries(
-                    mounts: [new WorkerMountEntry("/container/workspace", hostDir, ReadOnly: false)]));
-            IssueClaimed @event = BuildEvent();
-
-            // Act
-            await sut.HandleAsync(@event, TestContext.Current.CancellationToken);
-
-            // Assert
-            WorkerContainerSpec? spec = orchestrator.LastSpec;
-            spec.ShouldNotBeNull();
-            spec.BindMounts.ShouldContain(m => m.ContainerPath == "/container/workspace" && !m.ReadOnly);
-        }
-        finally
-        {
-            Directory.Delete(hostDir, recursive: true);
-        }
-    }
-
-    [Fact]
-    public async Task WhenNoMountsConfigured_BindMountsIsEmpty()
-    {
-        // Arrange
-        StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c-mounts-empty");
-        IssueClaimedHandler sut = BuildHandler(
-            orchestrator: orchestrator,
-            settingsQueries: new StubGlobalSettingsQueries(mounts: []));
-        IssueClaimed @event = BuildEvent();
-
-        // Act
-        await sut.HandleAsync(@event, TestContext.Current.CancellationToken);
-
-        // Assert
-        WorkerContainerSpec? spec = orchestrator.LastSpec;
-        spec.ShouldNotBeNull();
-        spec.BindMounts.ShouldBeEmpty();
-    }
-
-    [Fact]
-    public async Task WhenReadOnlyAndWritableMountsConfigured_BindMountsKeepsEachAccessMode()
-    {
-        // Arrange
-        string readOnlyDir = Path.Combine(Path.GetTempPath(), $"foundry-mixed-ro-{Guid.NewGuid()}");
-        string writableDir = Path.Combine(Path.GetTempPath(), $"foundry-mixed-rw-{Guid.NewGuid()}");
-        Directory.CreateDirectory(readOnlyDir);
-        Directory.CreateDirectory(writableDir);
-
-        try
-        {
-            StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c-mixed-mounts");
-            IssueClaimedHandler sut = BuildHandler(
-                orchestrator: orchestrator,
-                settingsQueries: new StubGlobalSettingsQueries(
-                    mounts:
-                    [
-                        new WorkerMountEntry("/container/config", readOnlyDir, ReadOnly: true),
-                        new WorkerMountEntry("/container/workspace", writableDir, ReadOnly: false),
-                    ]));
-            IssueClaimed @event = BuildEvent();
-
-            // Act
-            await sut.HandleAsync(@event, TestContext.Current.CancellationToken);
-
-            // Assert
-            WorkerContainerSpec? spec = orchestrator.LastSpec;
-            spec.ShouldNotBeNull();
-            spec.BindMounts.ShouldBe(
-                [
-                    new BindMount(readOnlyDir, "/container/config", ReadOnly: true),
-                    new BindMount(writableDir, "/container/workspace", ReadOnly: false),
-                ]);
-        }
-        finally
-        {
-            Directory.Delete(readOnlyDir, recursive: true);
-            Directory.Delete(writableDir, recursive: true);
-        }
+        spec.ShouldSatisfyAllConditions(
+            () => spec.EnvironmentVariables.ShouldNotContainKey("FOUNDRY_HOST_SETTINGS_FILE"),
+            () => spec.EnvironmentVariables.ShouldNotContainKey("FOUNDRY_HOST_HOOK_EXCLUSIONS"));
     }
 
     [Fact]
@@ -788,117 +597,6 @@ public sealed class HandleAsync : IAsyncDisposable
             () => doc.RootElement.GetProperty("model").GetString().ShouldBe("claude-test-model"),
             () => rules.ShouldNotContain("Edit(**/Dockerfile)"),
             () => rules.ShouldContain("Bash(rm:*)"));
-    }
-
-    [Fact]
-    public async Task WhenHostSettingsPathConfigured_MountsFileReadOnlyAtStagingPath()
-    {
-        // Arrange
-        StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c-host-hooks");
-        StubGlobalSettingsQueries settingsQueries = new()
-        {
-            HostHooks = new HostHooksSnapshot("/home/operator/.claude/settings.json", []),
-        };
-        IssueClaimedHandler sut = BuildHandler(orchestrator: orchestrator, settingsQueries: settingsQueries);
-
-        // Act
-        await sut.HandleAsync(BuildEvent(), TestContext.Current.CancellationToken);
-
-        // Assert
-        WorkerContainerSpec? spec = orchestrator.LastSpec;
-        spec.ShouldNotBeNull();
-        spec.BindMounts.ShouldHaveSingleItem().ShouldBe(
-            new BindMount("/home/operator/.claude/settings.json", "/run/foundry/host-settings.json", ReadOnly: true));
-    }
-
-    [Fact]
-    public async Task WhenHostSettingsPathConfigured_SetsStagingPathAndExclusionsEnvVars()
-    {
-        // Arrange
-        StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c-host-hooks-env");
-        StubGlobalSettingsQueries settingsQueries = new()
-        {
-            HostHooks = new HostHooksSnapshot("/home/operator/.claude/settings.json", ["bash ~/.claude/hooks/win.sh", "notify \"done\""]),
-        };
-        IssueClaimedHandler sut = BuildHandler(orchestrator: orchestrator, settingsQueries: settingsQueries);
-
-        // Act
-        await sut.HandleAsync(BuildEvent(), TestContext.Current.CancellationToken);
-
-        // Assert
-        WorkerContainerSpec? spec = orchestrator.LastSpec;
-        spec.ShouldNotBeNull();
-        string[]? exclusions = JsonSerializer.Deserialize<string[]>(spec.EnvironmentVariables["FOUNDRY_HOST_HOOK_EXCLUSIONS"]);
-        spec.ShouldSatisfyAllConditions(
-            () => spec.EnvironmentVariables["FOUNDRY_HOST_SETTINGS_FILE"].ShouldBe("/run/foundry/host-settings.json"),
-            () => exclusions.ShouldBe(["bash ~/.claude/hooks/win.sh", "notify \"done\""]));
-    }
-
-    [Fact]
-    public async Task WhenNoHostSettingsPathConfigured_AddsNoMountAndNoHostHookEnvVars()
-    {
-        // Arrange
-        StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c-no-host-hooks");
-        StubGlobalSettingsQueries settingsQueries = new()
-        {
-            HostHooks = new HostHooksSnapshot(string.Empty, ["notify"]),
-        };
-        IssueClaimedHandler sut = BuildHandler(orchestrator: orchestrator, settingsQueries: settingsQueries);
-
-        // Act
-        await sut.HandleAsync(BuildEvent(), TestContext.Current.CancellationToken);
-
-        // Assert
-        WorkerContainerSpec? spec = orchestrator.LastSpec;
-        spec.ShouldNotBeNull();
-        spec.ShouldSatisfyAllConditions(
-            () => spec.BindMounts.ShouldBeEmpty(),
-            () => spec.EnvironmentVariables.ShouldNotContainKey("FOUNDRY_HOST_SETTINGS_FILE"),
-            () => spec.EnvironmentVariables.ShouldNotContainKey("FOUNDRY_HOST_HOOK_EXCLUSIONS"));
-    }
-
-    [Fact]
-    public async Task WhenHostSettingsPathConfigured_ClaudeSettingsJsonHasNoHooks()
-    {
-        // Arrange
-        StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c-host-hooks-json");
-        StubGlobalSettingsQueries settingsQueries = new()
-        {
-            HostHooks = new HostHooksSnapshot("/home/operator/.claude/settings.json", []),
-        };
-        IssueClaimedHandler sut = BuildHandler(orchestrator: orchestrator, settingsQueries: settingsQueries);
-
-        // Act
-        await sut.HandleAsync(BuildEvent(), TestContext.Current.CancellationToken);
-
-        // Assert
-        WorkerContainerSpec? spec = orchestrator.LastSpec;
-        spec.ShouldNotBeNull();
-        using JsonDocument doc = JsonDocument.Parse(spec.EnvironmentVariables["CLAUDE_SETTINGS_JSON"]);
-        doc.RootElement.TryGetProperty("hooks", out _).ShouldBeFalse();
-    }
-
-    [Fact]
-    public async Task WhenHostSettingsPathIsSensitive_FailsRunWithoutStartingContainer()
-    {
-        // Arrange
-        StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c-host-hooks-sensitive");
-        StubGlobalSettingsQueries settingsQueries = new()
-        {
-            HostHooks = new HostHooksSnapshot("/etc/claude/settings.json", []),
-        };
-        IssueClaimedHandler sut = BuildHandler(orchestrator: orchestrator, settingsQueries: settingsQueries);
-
-        // Act
-        await sut.HandleAsync(BuildEvent(), TestContext.Current.CancellationToken);
-        _dbContext.ChangeTracker.Clear();
-
-        // Assert
-        WorkerRun? run = await _dbContext.Set<WorkerRun>().SingleOrDefaultAsync(TestContext.Current.CancellationToken);
-        FailedRun failedRun = run.ShouldBeOfType<FailedRun>();
-        failedRun.ShouldSatisfyAllConditions(
-            () => orchestrator.LastSpec.ShouldBeNull(),
-            () => failedRun.Reason.ShouldBeOfType<FailureReason.ContainerError>().Message.ShouldContain("/etc/claude/settings.json"));
     }
 
     [Fact]
@@ -1532,12 +1230,9 @@ public sealed class HandleAsync : IAsyncDisposable
         bool installsDocker = false,
         bool installsDotnet = false,
         string imageTag = "stub-image:v1",
-        WorkerResourceLimitsSnapshot? limits = null,
-        IReadOnlyList<WorkerMountEntry>? mounts = null) : IGlobalSettingsQueries
+        WorkerResourceLimitsSnapshot? limits = null) : IGlobalSettingsQueries
     {
         public ClaudeCodeSettingsSnapshot ClaudeCodeSettings { get; set; } = new(string.Empty, true, []);
-
-        public HostHooksSnapshot HostHooks { get; set; } = new(string.Empty, []);
 
         public Task<GlobalSettingsSummary?> GetSettingsAsync(CancellationToken cancellationToken)
             => Task.FromResult<GlobalSettingsSummary?>(null);
@@ -1582,17 +1277,9 @@ public sealed class HandleAsync : IAsyncDisposable
         public Task<WorkerResourceLimitsSnapshot> GetWorkerResourceLimitsAsync(CancellationToken cancellationToken)
             => Task.FromResult(limits ?? new WorkerResourceLimitsSnapshot(8192, 2.0, 512));
 
-        public Task<IReadOnlyList<WorkerMountEntry>> GetWorkerMountsAsync(CancellationToken cancellationToken)
-            => Task.FromResult<IReadOnlyList<WorkerMountEntry>>(mounts ?? []);
-
-
         public Task<ClaudeCodeSettingsSnapshot> GetClaudeCodeSettingsAsync(CancellationToken cancellationToken)
 
             => Task.FromResult(ClaudeCodeSettings);
-
-        public Task<HostHooksSnapshot> GetHostHooksAsync(CancellationToken cancellationToken)
-
-            => Task.FromResult(HostHooks);
 
         public Task<IReadOnlyList<string>> GetAllowedProviderHostsAsync(CancellationToken cancellationToken)
             => Task.FromResult<IReadOnlyList<string>>([]);

@@ -696,7 +696,7 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        /** Updates the worker resource limits, host mounts, and host hooks source */
+        /** Updates the worker resource limits */
         put: operations["UpdateWorkerEnvironment"];
         post?: never;
         delete?: never;
@@ -921,12 +921,9 @@ export interface components {
             cpuLimit: number | string;
             /** Format: int32 */
             pidsLimit: number | string;
-            mounts: components["schemas"]["WorkerMountEntry"][];
             model: string;
             blockCiCdEdits: boolean;
             additionalDenyRules: string[];
-            hostSettingsPath: string;
-            excludedHookCommands: string[];
             webhookPublicBaseUrl?: null | string;
             /**
              * Format: int32
@@ -1207,11 +1204,6 @@ export interface components {
             /** Format: int32 */
             backstopIntervalMinutes: number | string;
         };
-        UpdateWorkerEnvironmentMountRequest: {
-            containerPath: string;
-            hostPath: string;
-            readOnly: boolean;
-        };
         UpdateWorkerEnvironmentRequestBody: {
             /** Format: int32 */
             memoryLimitMb: number | string;
@@ -1219,9 +1211,6 @@ export interface components {
             cpuLimit: number | string;
             /** Format: int32 */
             pidsLimit: number | string;
-            mounts: components["schemas"]["UpdateWorkerEnvironmentMountRequest"][];
-            hostSettingsPath: string;
-            excludedHookCommands: string[];
         };
         UpdateWorkerImageConfigurationRequestBody: {
             imageTag: string;
@@ -1282,11 +1271,6 @@ export interface components {
             reason?: null | string;
             detail?: null | string;
             isRegistered?: boolean;
-        };
-        WorkerMountEntry: {
-            containerPath: string;
-            hostPath: string;
-            readOnly: boolean;
         };
         WorkerRunDetail: {
             /** Format: uuid */

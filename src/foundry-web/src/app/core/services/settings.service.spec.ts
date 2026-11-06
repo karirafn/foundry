@@ -2175,14 +2175,10 @@ describe('SettingsService — isColdBuildBlocking', () => {
 
 describe('SettingsService — worker environment', () => {
   const ENV_URL = '/api/settings/worker-environment';
-  const MOUNT = { containerPath: '/work/skills', hostPath: '/srv/skills', readOnly: true };
   const ENV = {
     memoryLimitMb: 4096,
     cpuLimit: 1.5,
     pidsLimit: 256,
-    mounts: [MOUNT],
-    hostSettingsPath: '/home/user/.claude/settings.json',
-    excludedHookCommands: ['bash ~/.claude/hooks/windows-check.sh'],
   };
   let service: SettingsService;
   let httpMock: HttpTestingController;
@@ -2208,20 +2204,6 @@ describe('SettingsService — worker environment', () => {
 
     // Assert
     expect(environment).toEqual(ENV);
-  });
-
-  it('should default the host hooks source when the response omits it', async () => {
-    // Arrange
-    const loading = service.loadSettings();
-    flushLoadSettings(httpMock, { hostSettingsPath: undefined, excludedHookCommands: undefined });
-    await loading;
-
-    // Act
-    const environment = service.workerEnvironment();
-
-    // Assert
-    expect(environment?.hostSettingsPath).toBe('');
-    expect(environment?.excludedHookCommands).toEqual([]);
   });
 
   it('should PUT the environment to /api/settings/worker-environment', () => {
@@ -2264,13 +2246,13 @@ describe('SettingsService — worker environment', () => {
 
     // Act
     httpMock.expectOne(ENV_URL).flush(
-      { detail: "Mount path '/etc' is sensitive.", type: 'tag:foundry,2026:problems/Settings.SensitiveMountContainerPath' },
+      { detail: 'CPU limit 64 is not allowed.', type: 'tag:foundry,2026:problems/Settings.InvalidCpuLimit' },
       { status: 400, statusText: 'Bad Request' },
     );
 
     // Assert
-    expect(service.saveWorkerEnvironmentError()).toBe("Mount path '/etc' is sensitive.");
-    expect(service.saveWorkerEnvironmentErrorCode()).toBe('Settings.SensitiveMountContainerPath');
+    expect(service.saveWorkerEnvironmentError()).toBe('CPU limit 64 is not allowed.');
+    expect(service.saveWorkerEnvironmentErrorCode()).toBe('Settings.InvalidCpuLimit');
     expect(service.saveWorkerEnvironmentSuccess()).toBe(false);
     expect(service.savingWorkerEnvironment()).toBe(false);
   });

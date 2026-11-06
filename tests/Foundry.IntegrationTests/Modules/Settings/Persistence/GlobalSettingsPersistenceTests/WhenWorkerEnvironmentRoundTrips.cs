@@ -36,9 +36,7 @@ public sealed class WhenWorkerEnvironmentRoundTrips : IAsyncDisposable
 
         // Assert
         reloaded.ShouldNotBeNull();
-        reloaded.ShouldSatisfyAllConditions(
-            () => reloaded.WorkerResourceLimits.ShouldBe(WorkerResourceLimits.Default),
-            () => reloaded.WorkerMounts.ShouldBe(WorkerMounts.Default));
+        reloaded.WorkerResourceLimits.ShouldBe(WorkerResourceLimits.Default);
     }
 
     [Fact]
@@ -47,11 +45,8 @@ public sealed class WhenWorkerEnvironmentRoundTrips : IAsyncDisposable
         // Arrange
         WorkerResourceLimits limits = WorkerResourceLimits.Create(4096, 1.5, 256)
             .Match(v => v, e => throw new InvalidOperationException(e.Message));
-        WorkerMounts mounts = WorkerMounts.Create(
-                [new WorkerMount("/data", "/srv/data", true), new WorkerMount("/cache", "/srv/cache", false)])
-            .Match(v => v, e => throw new InvalidOperationException(e.Message));
         GlobalSettings seed = GlobalSettings.Create();
-        seed.UpdateWorkerEnvironment(limits, mounts);
+        seed.UpdateWorkerEnvironment(limits);
         GlobalSettingsId id = await SeedAsync(seed);
 
         // Act
@@ -59,17 +54,15 @@ public sealed class WhenWorkerEnvironmentRoundTrips : IAsyncDisposable
 
         // Assert
         reloaded.ShouldNotBeNull();
-        reloaded.ShouldSatisfyAllConditions(
-            () => reloaded.WorkerResourceLimits.ShouldBe(limits),
-            () => reloaded.WorkerMounts.ShouldBe(mounts));
+        reloaded.WorkerResourceLimits.ShouldBe(limits);
     }
 
     [Fact]
-    public async Task MountsChange_IsDetectedAndPersisted()
+    public async Task LimitsChange_IsDetectedAndPersisted()
     {
         // Arrange
         GlobalSettingsId id = await SeedAsync(GlobalSettings.Create());
-        WorkerMounts mounts = WorkerMounts.Create([new WorkerMount("/data", "/srv/data", false)])
+        WorkerResourceLimits limits = WorkerResourceLimits.Create(2048, 1.0, 128)
             .Match(v => v, e => throw new InvalidOperationException(e.Message));
 
         using (IServiceScope scope = _factory.Services.CreateScope())
@@ -77,7 +70,7 @@ public sealed class WhenWorkerEnvironmentRoundTrips : IAsyncDisposable
             DbContext dbContext = scope.ServiceProvider.GetRequiredService<DbContext>();
             GlobalSettings tracked = await dbContext.Set<GlobalSettings>()
                 .FirstAsync(s => s.Id == id, TestContext.Current.CancellationToken);
-            tracked.UpdateWorkerEnvironment(WorkerResourceLimits.Default, mounts);
+            tracked.UpdateWorkerEnvironment(limits);
 
             // Act
             await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
@@ -86,7 +79,7 @@ public sealed class WhenWorkerEnvironmentRoundTrips : IAsyncDisposable
         // Assert
         GlobalSettings? reloaded = await ReloadAsync(id);
         reloaded.ShouldNotBeNull();
-        reloaded.WorkerMounts.ShouldBe(mounts);
+        reloaded.WorkerResourceLimits.ShouldBe(limits);
     }
 
     private async Task<GlobalSettingsId> SeedAsync(GlobalSettings settings)

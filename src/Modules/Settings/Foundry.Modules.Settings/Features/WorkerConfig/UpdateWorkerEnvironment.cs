@@ -14,15 +14,10 @@ namespace Foundry.Modules.Settings.Features.WorkerConfig;
 
 internal static class UpdateWorkerEnvironment
 {
-    internal sealed record MountRequest(string ContainerPath, string HostPath, bool ReadOnly);
-
     internal sealed record Command(
         int MemoryLimitMb,
         double CpuLimit,
-        int PidsLimit,
-        IReadOnlyList<MountRequest> Mounts,
-        string HostSettingsPath,
-        IReadOnlyList<string> ExcludedHookCommands) : ICommand<GlobalSettingsSummary>;
+        int PidsLimit) : ICommand<GlobalSettingsSummary>;
 
     internal sealed class Handler(DbContext dbContext)
         : ICommandHandler<Command, GlobalSettingsSummary>
@@ -49,27 +44,7 @@ internal static class UpdateWorkerEnvironment
                 return Result<GlobalSettingsSummary>.Fail(((Result<WorkerResourceLimits>.Failure)limitsResult).Error);
             }
 
-            Result<WorkerMounts> mountsResult = WorkerMounts.Create(
-                [.. command.Mounts.Select(ToMount)]);
-
-            if (mountsResult is not Result<WorkerMounts>.Success mountsSuccess)
-            {
-                return Result<GlobalSettingsSummary>.Fail(((Result<WorkerMounts>.Failure)mountsResult).Error);
-            }
-
-            // System.Text.Json does not enforce non-nullable annotations, so a null exclusion element can arrive.
-            Result<HostHooks> hostHooksResult = HostHooks.Create(
-                command.HostSettingsPath,
-                [.. command.ExcludedHookCommands.Select(excluded => excluded ?? string.Empty)]);
-
-            if (hostHooksResult is not Result<HostHooks>.Success hostHooksSuccess)
-            {
-                return Result<GlobalSettingsSummary>.Fail(((Result<HostHooks>.Failure)hostHooksResult).Error);
-            }
-
-            bool environmentChanged = settings.UpdateWorkerEnvironment(limitsSuccess.Value, mountsSuccess.Value);
-            bool hostHooksChanged = settings.UpdateHostHooks(hostHooksSuccess.Value);
-            bool changed = environmentChanged || hostHooksChanged;
+            bool changed = settings.UpdateWorkerEnvironment(limitsSuccess.Value);
 
             if (changed)
             {
@@ -80,21 +55,12 @@ internal static class UpdateWorkerEnvironment
         }
     }
 
-    // System.Text.Json does not enforce non-nullable annotations, so a null element or path can arrive.
-    private static WorkerMount ToMount(MountRequest? request) =>
-        request is null
-            ? new WorkerMount(string.Empty, string.Empty, ReadOnly: false)
-            : new WorkerMount(request.ContainerPath ?? string.Empty, request.HostPath ?? string.Empty, request.ReadOnly);
-
     internal static class Endpoint
     {
         private sealed record RequestBody(
             int MemoryLimitMb,
             double CpuLimit,
-            int PidsLimit,
-            IReadOnlyList<MountRequest> Mounts,
-            string HostSettingsPath,
-            IReadOnlyList<string> ExcludedHookCommands);
+            int PidsLimit);
 
         public static void Map(RouteGroupBuilder group)
         {
@@ -106,10 +72,7 @@ internal static class UpdateWorkerEnvironment
                     Command command = new(
                         body.MemoryLimitMb,
                         body.CpuLimit,
-                        body.PidsLimit,
-                        body.Mounts ?? [],
-                        body.HostSettingsPath ?? string.Empty,
-                        body.ExcludedHookCommands ?? []);
+                        body.PidsLimit);
 
                     Result<GlobalSettingsSummary> result = await handler.HandleAsync(command, cancellationToken);
 
@@ -122,7 +85,7 @@ internal static class UpdateWorkerEnvironment
                         });
                 })
                 .WithName("UpdateWorkerEnvironment")
-                .WithSummary("Updates the worker resource limits, host mounts, and host hooks source")
+                .WithSummary("Updates the worker resource limits")
                 .Produces<GlobalSettingsSummary>()
                 .ProducesProblem(StatusCodes.Status404NotFound)
                 .ProducesProblem(StatusCodes.Status400BadRequest);

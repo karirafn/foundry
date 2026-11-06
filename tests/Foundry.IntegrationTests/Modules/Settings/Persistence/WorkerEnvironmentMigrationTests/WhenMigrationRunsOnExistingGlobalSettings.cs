@@ -23,7 +23,6 @@ public sealed class WhenMigrationRunsOnExistingGlobalSettings : IAsyncLifetime, 
     private const string PreviousMigrationId = "20261030193511_AddWorkerImageTagAndBuildToggle";
     private const string TargetMigrationId = "20261102083801_AddWorkerResourceLimitsAndMounts";
     private const string SelectLimitsSql = "SELECT worker_resource_limits FROM global_settings;";
-    private const string SelectMountsSql = "SELECT worker_mounts FROM global_settings;";
 
     private const int FrozenMemoryLimitMb = 8192;
     private const double FrozenCpuLimit = 2.0;
@@ -78,20 +77,6 @@ public sealed class WhenMigrationRunsOnExistingGlobalSettings : IAsyncLifetime, 
         string json = await LoadColumnAsync(SelectLimitsSql);
         WorkerResourceLimits limits = JsonSerializer.Deserialize<WorkerResourceLimits>(json)!;
         (limits.MemoryLimitMb, limits.CpuLimit, limits.PidsLimit).ShouldBe((FrozenMemoryLimitMb, FrozenCpuLimit, FrozenPidsLimit));
-    }
-
-    [Fact]
-    public async Task BackfilledWorkerMounts_AreTheDefaultMounts()
-    {
-        // Arrange
-        await InsertPreUpgradeGlobalSettingsRowAsync();
-
-        // Act
-        await _dbContext.Database.MigrateAsync(TargetMigrationId, TestContext.Current.CancellationToken);
-
-        // Assert
-        string json = await LoadColumnAsync(SelectMountsSql);
-        JsonSerializer.Deserialize<WorkerMounts>(json)!.Mounts.ShouldBeEmpty();
     }
 
     /// <summary>

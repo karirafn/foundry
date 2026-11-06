@@ -9,9 +9,6 @@ import {
 import { SettingsWorkerEnvironmentComponent } from './settings-worker-environment';
 
 const ENV_URL = '/api/settings/worker-environment';
-const SKILLS_MOUNT = { containerPath: '/work/skills', hostPath: '/srv/skills', readOnly: true };
-const HOST_SETTINGS_PATH = '/home/you/.claude/settings.json';
-const WINDOWS_CHECK_HOOK = 'bash ~/.claude/hooks/windows-path-check.sh';
 
 interface Page {
   fixture: ComponentFixture<SettingsWorkerEnvironmentComponent>;
@@ -48,11 +45,6 @@ function saveButton(el: HTMLElement): HTMLButtonElement {
   return el.querySelector('button[type="submit"]') as HTMLButtonElement;
 }
 
-function click(page: Page, selector: string): void {
-  (page.el.querySelector(selector) as HTMLElement).click();
-  page.fixture.detectChanges();
-}
-
 function text(el: HTMLElement, id: string): string {
   return el.querySelector(`#${id}`)?.textContent?.trim() ?? '';
 }
@@ -69,24 +61,6 @@ describe('SettingsWorkerEnvironmentComponent', () => {
     // Assert
     expect([input(page.el, 'memoryLimitMb').value, input(page.el, 'cpuLimit').value, input(page.el, 'pidsLimit').value])
       .toEqual(['4096', '1.5', '256']);
-  });
-
-  it('should render one row per loaded mount', async () => {
-    // Arrange / Act
-    const page = await loadPage({ mounts: [SKILLS_MOUNT] });
-
-    // Assert
-    expect(input(page.el, 'containerPath-0').value).toBe('/work/skills');
-    expect(input(page.el, 'hostPath-0').value).toBe('/srv/skills');
-    expect(input(page.el, 'readOnly-0').checked).toBe(true);
-  });
-
-  it('should show the empty-state copy when there are no mounts', async () => {
-    // Arrange / Act
-    const page = await loadPage();
-
-    // Assert
-    expect(page.el.textContent).toContain('No mounts configured');
   });
 
   it('should disable Save while the form is pristine', async () => {
@@ -109,119 +83,21 @@ describe('SettingsWorkerEnvironmentComponent', () => {
     expect(page.fixture.componentInstance.hasUnsavedChanges()).toBe(true);
   });
 
-  it('should add a read-only mount row and focus its container path', async () => {
-    // Arrange
-    const page = await loadPage();
-
-    // Act
-    click(page, '#addMount');
-    await page.fixture.whenStable();
-
-    // Assert
-    expect(input(page.el, 'readOnly-0').checked).toBe(true);
-    expect(document.activeElement).toBe(input(page.el, 'containerPath-0'));
-  });
-
-  it('should remove a mount row and focus Add mount when the list empties', async () => {
-    // Arrange
-    const page = await loadPage({ mounts: [SKILLS_MOUNT] });
-
-    // Act
-    click(page, '#removeMount-0');
-    await page.fixture.whenStable();
-
-    // Assert
-    expect(input(page.el, 'containerPath-0')).toBeNull();
-    expect(document.activeElement).toBe(page.el.querySelector('#addMount'));
-  });
-
-  it('should label the remove button with the container path', async () => {
-    // Arrange / Act
-    const page = await loadPage({ mounts: [SKILLS_MOUNT] });
-
-    // Assert
-    expect(page.el.querySelector('#removeMount-0')?.getAttribute('aria-label')).toBe('Remove mount /work/skills');
-  });
-
-  it('should label the remove button with the row number while the container path is empty', async () => {
-    // Arrange
-    const page = await loadPage();
-
-    // Act
-    click(page, '#addMount');
-
-    // Assert
-    expect(page.el.querySelector('#removeMount-0')?.getAttribute('aria-label')).toBe('Remove mount 1');
-  });
-
-  it('should group each mount row under a per-row label', async () => {
-    // Arrange / Act
-    const page = await loadPage({ mounts: [SKILLS_MOUNT] });
-    const group: Element = page.el.querySelector('[role="group"]') as Element;
-
-    // Assert
-    expect(text(page.el, group.getAttribute('aria-labelledby') as string)).toBe('Mount 1');
-  });
-
-  it('should describe each host path input with the shared path guidance and its error', async () => {
-    // Arrange / Act
-    const page = await loadPage({ mounts: [SKILLS_MOUNT] });
-
-    // Assert
-    expect(input(page.el, 'hostPath-0').getAttribute('aria-describedby')).toBe('hostPathGuidance hostPath-0-error');
-    expect(text(page.el, 'hostPathGuidance')).toContain('C:');
-  });
-
   it('should mark inputs required and expose the numeric bounds', async () => {
     // Arrange / Act
-    const page = await loadPage({ mounts: [SKILLS_MOUNT] });
+    const page = await loadPage();
 
     // Assert
-    expect(['memoryLimitMb', 'cpuLimit', 'pidsLimit', 'containerPath-0', 'hostPath-0']
+    expect(['memoryLimitMb', 'cpuLimit', 'pidsLimit']
       .every((id) => input(page.el, id).getAttribute('aria-required') === 'true')).toBe(true);
     expect([input(page.el, 'memoryLimitMb').min, input(page.el, 'memoryLimitMb').max, input(page.el, 'cpuLimit').min, input(page.el, 'cpuLimit').max, input(page.el, 'pidsLimit').min, input(page.el, 'pidsLimit').max])
       .toEqual(['512', '65536', '0.5', '32', '64', '8192']);
   });
 
-  it('should hint that an unchecked read-only box leaves the host directory writable', async () => {
-    // Arrange / Act
-    const page = await loadPage({ mounts: [SKILLS_MOUNT] });
-
-    // Assert
-    expect(input(page.el, 'readOnly-0').getAttribute('aria-describedby')).toBe('readOnly-0-hint');
-    expect(text(page.el, 'readOnly-0-hint')).toContain('can modify this host directory');
-  });
-
-  it('should focus the next row remove button after removing a non-last row', async () => {
-    // Arrange
-    const page = await loadPage({ mounts: [SKILLS_MOUNT, { containerPath: '/work/b', hostPath: '/srv/b', readOnly: true }] });
-
-    // Act
-    click(page, '#removeMount-0');
-    await page.fixture.whenStable();
-
-    // Assert
-    expect(document.activeElement).toBe(page.el.querySelector('#removeMount-0'));
-    expect(input(page.el, 'containerPath-0').value).toBe('/work/b');
-  });
-
-  it('should focus the previous row remove button after removing the last row', async () => {
-    // Arrange
-    const page = await loadPage({ mounts: [SKILLS_MOUNT, { containerPath: '/work/b', hostPath: '/srv/b', readOnly: true }] });
-
-    // Act
-    click(page, '#removeMount-1');
-    await page.fixture.whenStable();
-
-    // Assert
-    expect(document.activeElement).toBe(page.el.querySelector('#removeMount-0'));
-  });
-
   it('should keep Save enabled for an invalid dirty form and reveal errors on submit without a PUT', async () => {
     // Arrange
     const page = await loadPage();
-    click(page, '#addMount');
-    await page.fixture.whenStable();
+    type(page, 'memoryLimitMb', '100');
 
     // Act
     const enabled: boolean = !saveButton(page.el).disabled;
@@ -231,9 +107,8 @@ describe('SettingsWorkerEnvironmentComponent', () => {
 
     // Assert
     expect(enabled).toBe(true);
-    expect(text(page.el, 'containerPath-0-error')).toBe('Container path is required.');
-    expect(text(page.el, 'hostPath-0-error')).toBe('Host path is required.');
-    expect(document.activeElement).toBe(input(page.el, 'containerPath-0'));
+    expect(text(page.el, 'memoryLimitMb-error')).toContain('between 512 and 65536 MB');
+    expect(document.activeElement).toBe(input(page.el, 'memoryLimitMb'));
   });
 
   it('should disable the form while saving so edits cannot be lost', async () => {
@@ -254,22 +129,6 @@ describe('SettingsWorkerEnvironmentComponent', () => {
     expect(disabled).toBe(true);
     expect(announced).toBe('Saving worker environment...');
     expect((page.el.querySelector('fieldset') as HTMLFieldSetElement).disabled).toBe(false);
-  });
-
-  it('should keep the existing row elements after a save that echoes the submitted values', async () => {
-    // Arrange
-    const page = await loadPage({ mounts: [SKILLS_MOUNT] });
-    type(page, 'pidsLimit', '1024');
-    const before: HTMLInputElement = input(page.el, 'containerPath-0');
-
-    // Act
-    saveButton(page.el).click();
-    page.httpMock.expectOne(ENV_URL).flush({ ...API_KEY_RESPONSE, pidsLimit: 1024, mounts: [SKILLS_MOUNT] });
-    await page.fixture.whenStable();
-    page.fixture.detectChanges();
-
-    // Assert
-    expect(input(page.el, 'containerPath-0')).toBe(before);
   });
 
   it('should summarise a field-keyed server error and focus the offending control', async () => {
@@ -294,7 +153,7 @@ describe('SettingsWorkerEnvironmentComponent', () => {
 
   it('should clear only the edited control server error', async () => {
     // Arrange
-    const page = await loadPage({ mounts: [SKILLS_MOUNT] });
+    const page = await loadPage();
     type(page, 'cpuLimit', '4');
     saveButton(page.el).click();
     page.httpMock.expectOne(ENV_URL).flush(
@@ -356,72 +215,21 @@ describe('SettingsWorkerEnvironmentComponent', () => {
     expect(text(page.el, 'pidsLimit-error')).toBe('PIDs must be a whole number.');
   });
 
-  it('should reject a relative container path', async () => {
-    // Arrange
-    const page = await loadPage({ mounts: [SKILLS_MOUNT] });
-
-    // Act
-    type(page, 'containerPath-0', 'work/skills');
-    blur(page, 'containerPath-0');
-
-    // Assert
-    expect(text(page.el, 'containerPath-0-error')).toBe('Container path must start with /.');
-  });
-
-  it('should accept a Windows drive-rooted host path', async () => {
-    // Arrange
-    const page = await loadPage({ mounts: [SKILLS_MOUNT] });
-
-    // Act
-    type(page, 'hostPath-0', 'C:\\dev\\ai\\skills');
-    blur(page, 'hostPath-0');
-
-    // Assert
-    expect(text(page.el, 'hostPath-0-error')).toBe('');
-  });
-
-  it('should reject a host path with a parent segment', async () => {
-    // Arrange
-    const page = await loadPage({ mounts: [SKILLS_MOUNT] });
-
-    // Act
-    type(page, 'hostPath-0', 'C:\\dev\\..\\secrets');
-    blur(page, 'hostPath-0');
-
-    // Assert
-    expect(text(page.el, 'hostPath-0-error')).toBe("Path must not contain '..' segments.");
-  });
-
-  it('should flag a duplicate container path on the later row', async () => {
-    // Arrange
-    const page = await loadPage({ mounts: [SKILLS_MOUNT, { containerPath: '/work/other', hostPath: '/srv/o', readOnly: false }] });
-
-    // Act
-    type(page, 'containerPath-1', '/work/skills/');
-    blur(page, 'containerPath-1');
-
-    // Assert
-    expect(text(page.el, 'containerPath-1-error')).toContain('already used');
-  });
-
   it('should PUT the edited environment on submit', async () => {
     // Arrange
-    const page = await loadPage({ mounts: [SKILLS_MOUNT] });
+    const page = await loadPage();
     type(page, 'memoryLimitMb', '4096');
 
     // Act
     saveButton(page.el).click();
     const req = page.httpMock.expectOne(ENV_URL);
-    req.flush({ ...API_KEY_RESPONSE, memoryLimitMb: 4096, mounts: [SKILLS_MOUNT] });
+    req.flush({ ...API_KEY_RESPONSE, memoryLimitMb: 4096 });
 
     // Assert
     expect(req.request.body).toEqual({
       memoryLimitMb: 4096,
       cpuLimit: 2,
       pidsLimit: 512,
-      mounts: [SKILLS_MOUNT],
-      hostSettingsPath: '',
-      excludedHookCommands: [],
     });
   });
 
@@ -439,44 +247,6 @@ describe('SettingsWorkerEnvironmentComponent', () => {
     // Assert
     expect(page.el.querySelector('[role="status"]')?.textContent).toContain('Worker environment saved successfully');
     expect(page.fixture.componentInstance.hasUnsavedChanges()).toBe(false);
-  });
-
-  it('should attach a sensitive-path error to the matching row control', async () => {
-    // Arrange
-    const page = await loadPage({ mounts: [SKILLS_MOUNT] });
-    type(page, 'containerPath-0', '/etc');
-
-    // Act
-    saveButton(page.el).click();
-    page.httpMock.expectOne(ENV_URL).flush(
-      { detail: "Container path '/etc' is a sensitive location.", type: 'tag:foundry,2026:problems/Settings.SensitiveMountContainerPath' },
-      { status: 400, statusText: 'Bad Request' },
-    );
-    await page.fixture.whenStable();
-    page.fixture.detectChanges();
-
-    // Assert
-    expect(text(page.el, 'containerPath-0-error')).toContain('sensitive location');
-    expect(input(page.el, 'containerPath-0').getAttribute('aria-invalid')).toBe('true');
-  });
-
-  it('should attach an invalid-characters error to the matching row control', async () => {
-    // Arrange
-    const page = await loadPage({ mounts: [SKILLS_MOUNT] });
-    type(page, 'containerPath-0', '/skills:ro');
-
-    // Act
-    saveButton(page.el).click();
-    page.httpMock.expectOne(ENV_URL).flush(
-      { detail: "Mount path '/skills:ro' contains invalid characters.", type: 'tag:foundry,2026:problems/Settings.InvalidMountPathCharacters' },
-      { status: 400, statusText: 'Bad Request' },
-    );
-    await page.fixture.whenStable();
-    page.fixture.detectChanges();
-
-    // Assert
-    expect(text(page.el, 'containerPath-0-error')).toContain('invalid characters');
-    expect(input(page.el, 'containerPath-0').getAttribute('aria-invalid')).toBe('true');
   });
 
   it('should attach a limit error to its limit control', async () => {
@@ -532,174 +302,5 @@ describe('SettingsWorkerEnvironmentComponent', () => {
     // Assert
     expect(button.disabled).toBe(true);
     expect(button.textContent?.trim()).toBe('Saving...');
-  });
-
-  describe('host hooks', () => {
-    it('should seed the host settings path and one row per excluded hook command', async () => {
-      // Arrange / Act
-      const page = await loadPage({ hostSettingsPath: HOST_SETTINGS_PATH, excludedHookCommands: [WINDOWS_CHECK_HOOK] });
-
-      // Assert
-      expect(input(page.el, 'hostSettingsPath').value).toBe(HOST_SETTINGS_PATH);
-      expect(input(page.el, 'excludedHookCommand-0').value).toBe(WINDOWS_CHECK_HOOK);
-    });
-
-    it('should replace the old placeholder with the host hooks section', async () => {
-      // Arrange / Act
-      const page = await loadPage();
-
-      // Assert
-      expect(page.el.textContent).toContain('Host hooks');
-      expect(page.el.textContent).not.toContain('will be configurable here later');
-      expect(page.el.textContent).toContain('No exclusions. Every hook in the host settings file runs in workers.');
-    });
-
-    it('should describe the host settings input with the guidance and its error', async () => {
-      // Arrange / Act
-      const page = await loadPage();
-
-      // Assert
-      expect(input(page.el, 'hostSettingsPath').getAttribute('aria-describedby')).toBe('hostHooksGuidance hostSettingsPath-error');
-    });
-
-    it('should accept a Windows host settings path', async () => {
-      // Arrange
-      const page = await loadPage();
-
-      // Act
-      type(page, 'hostSettingsPath', 'C:\\Users\\you\\.claude\\settings.json');
-      blur(page, 'hostSettingsPath');
-
-      // Assert
-      expect(text(page.el, 'hostSettingsPath-error')).toBe('');
-      expect(saveButton(page.el).disabled).toBe(false);
-    });
-
-    it('should reject a relative host settings path', async () => {
-      // Arrange
-      const page = await loadPage();
-
-      // Act
-      type(page, 'hostSettingsPath', '.claude/settings.json');
-      blur(page, 'hostSettingsPath');
-
-      // Assert
-      expect(text(page.el, 'hostSettingsPath-error')).toContain('absolute path');
-      expect(input(page.el, 'hostSettingsPath').getAttribute('aria-invalid')).toBe('true');
-    });
-
-    it('should reject a host settings path with a parent segment', async () => {
-      // Arrange
-      const page = await loadPage();
-
-      // Act
-      type(page, 'hostSettingsPath', '/home/you/../root/settings.json');
-      blur(page, 'hostSettingsPath');
-
-      // Assert
-      expect(text(page.el, 'hostSettingsPath-error')).toContain("'..'");
-    });
-
-    it('should add an exclusion row and focus it', async () => {
-      // Arrange
-      const page = await loadPage();
-
-      // Act
-      click(page, '#addExclusion');
-      await page.fixture.whenStable();
-
-      // Assert
-      expect(document.activeElement).toBe(input(page.el, 'excludedHookCommand-0'));
-    });
-
-    it('should remove an exclusion row and focus Add exclusion when the list empties', async () => {
-      // Arrange
-      const page = await loadPage({ excludedHookCommands: [WINDOWS_CHECK_HOOK] });
-
-      // Act
-      click(page, '#removeExclusion-0');
-      await page.fixture.whenStable();
-
-      // Assert
-      expect(page.el.querySelector('#excludedHookCommand-0')).toBeNull();
-      expect(document.activeElement).toBe(page.el.querySelector('#addExclusion'));
-    });
-
-    it('should label the remove button with the excluded command', async () => {
-      // Arrange / Act
-      const page = await loadPage({ excludedHookCommands: [WINDOWS_CHECK_HOOK] });
-
-      // Assert
-      expect(page.el.querySelector('#removeExclusion-0')?.getAttribute('aria-label'))
-        .toBe(`Remove excluded hook command ${WINDOWS_CHECK_HOOK}`);
-    });
-
-    it('should require a non-blank excluded command', async () => {
-      // Arrange
-      const page = await loadPage();
-      click(page, '#addExclusion');
-
-      // Act
-      type(page, 'excludedHookCommand-0', '   ');
-      blur(page, 'excludedHookCommand-0');
-
-      // Assert
-      expect(text(page.el, 'excludedHookCommand-0-error')).toBe('Excluded hook command is required.');
-    });
-
-    it('should PUT the trimmed host settings path and exclusions on submit', async () => {
-      // Arrange
-      const page = await loadPage();
-      type(page, 'hostSettingsPath', `  ${HOST_SETTINGS_PATH}  `);
-      click(page, '#addExclusion');
-      type(page, 'excludedHookCommand-0', ` ${WINDOWS_CHECK_HOOK} `);
-
-      // Act
-      saveButton(page.el).click();
-      const req = page.httpMock.expectOne(ENV_URL);
-      req.flush({ ...API_KEY_RESPONSE, hostSettingsPath: HOST_SETTINGS_PATH, excludedHookCommands: [WINDOWS_CHECK_HOOK] });
-      await page.fixture.whenStable();
-      page.fixture.detectChanges();
-
-      // Assert
-      expect(req.request.body).toEqual(expect.objectContaining({
-        hostSettingsPath: HOST_SETTINGS_PATH,
-        excludedHookCommands: [WINDOWS_CHECK_HOOK],
-      }));
-      expect(page.fixture.componentInstance.hasUnsavedChanges()).toBe(false);
-    });
-
-    it('should attach a host settings path server error to the path control', async () => {
-      // Arrange
-      const page = await loadPage();
-      type(page, 'hostSettingsPath', '/etc/claude/settings.json');
-
-      // Act
-      saveButton(page.el).click();
-      page.httpMock.expectOne(ENV_URL).flush(
-        {
-          detail: "Host settings file path '/etc/claude/settings.json' targets a sensitive system directory and is not allowed.",
-          type: 'tag:foundry,2026:problems/Settings.SensitiveHostSettingsPath',
-        },
-        { status: 400, statusText: 'Bad Request' },
-      );
-      await page.fixture.whenStable();
-      page.fixture.detectChanges();
-
-      // Assert
-      expect(text(page.el, 'hostSettingsPath-error')).toContain('sensitive system directory');
-      expect(input(page.el, 'hostSettingsPath').getAttribute('aria-invalid')).toBe('true');
-    });
-
-    it('should report unsaved changes after editing only the exclusions', async () => {
-      // Arrange
-      const page = await loadPage({ excludedHookCommands: [WINDOWS_CHECK_HOOK] });
-
-      // Act
-      type(page, 'excludedHookCommand-0', 'notify-send done');
-
-      // Assert
-      expect(page.fixture.componentInstance.hasUnsavedChanges()).toBe(true);
-    });
   });
 });

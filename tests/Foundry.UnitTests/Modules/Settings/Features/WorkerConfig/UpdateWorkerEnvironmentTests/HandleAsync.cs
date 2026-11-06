@@ -58,24 +58,17 @@ public sealed class HandleAsync : IAsyncLifetime
     private static UpdateWorkerEnvironment.Command CreateCommand(
         int memoryLimitMb = ValidMemoryLimitMb,
         double cpuLimit = ValidCpuLimit,
-        int pidsLimit = ValidPidsLimit,
-        params UpdateWorkerEnvironment.MountRequest[] mounts) =>
-        new(memoryLimitMb, cpuLimit, pidsLimit, mounts, string.Empty, []);
-
-    private static UpdateWorkerEnvironment.Command CreateHostHooksCommand(
-        string hostSettingsPath,
-        params string[] excludedHookCommands) =>
-        new(ValidMemoryLimitMb, ValidCpuLimit, ValidPidsLimit, [], hostSettingsPath, excludedHookCommands);
+        int pidsLimit = ValidPidsLimit) =>
+        new(memoryLimitMb, cpuLimit, pidsLimit);
 
     [Fact]
-    public async Task WhenValid_ReturnsSummaryWithNewLimitsAndMounts()
+    public async Task WhenValid_ReturnsSummaryWithNewLimits()
     {
         // Arrange
         await SeedSettingsAsync();
         await using FoundryDbContext dbContext = CreateDbContext();
         UpdateWorkerEnvironment.Handler sut = new(dbContext);
-        UpdateWorkerEnvironment.Command command = CreateCommand(
-            mounts: new UpdateWorkerEnvironment.MountRequest("/skills", "/home/user/skills", true));
+        UpdateWorkerEnvironment.Command command = CreateCommand();
 
         // Act
         Result<GlobalSettingsSummary> result = await sut.HandleAsync(command, TestContext.Current.CancellationToken);
@@ -85,20 +78,18 @@ public sealed class HandleAsync : IAsyncLifetime
         summary.ShouldSatisfyAllConditions(
             () => summary.MemoryLimitMb.ShouldBe(ValidMemoryLimitMb),
             () => summary.CpuLimit.ShouldBe(ValidCpuLimit),
-            () => summary.PidsLimit.ShouldBe(ValidPidsLimit),
-            () => summary.Mounts.ShouldBe([new WorkerMountEntry("/skills", "/home/user/skills", true)]));
+            () => summary.PidsLimit.ShouldBe(ValidPidsLimit));
     }
 
     [Fact]
-    public async Task WhenValid_PersistsLimitsAndMounts()
+    public async Task WhenValid_PersistsLimits()
     {
         // Arrange
         await SeedSettingsAsync();
         await using (FoundryDbContext dbContext = CreateDbContext())
         {
             UpdateWorkerEnvironment.Handler sut = new(dbContext);
-            UpdateWorkerEnvironment.Command command = CreateCommand(
-                mounts: new UpdateWorkerEnvironment.MountRequest("/cache", "/var/cache/foundry", false));
+            UpdateWorkerEnvironment.Command command = CreateCommand(memoryLimitMb: 2048);
 
             // Act
             await sut.HandleAsync(command, TestContext.Current.CancellationToken);
@@ -109,9 +100,7 @@ public sealed class HandleAsync : IAsyncLifetime
         GlobalSettings persisted = await verifyDb.Set<GlobalSettings>()
             .AsNoTracking()
             .SingleAsync(TestContext.Current.CancellationToken);
-        persisted.ShouldSatisfyAllConditions(
-            () => persisted.WorkerResourceLimits.MemoryLimitMb.ShouldBe(ValidMemoryLimitMb),
-            () => persisted.WorkerMounts.Mounts.Single().ContainerPath.ShouldBe("/cache"));
+        persisted.WorkerResourceLimits.MemoryLimitMb.ShouldBe(2048);
     }
 
     [Fact]
@@ -153,186 +142,5 @@ public sealed class HandleAsync : IAsyncLifetime
 
         // Assert
         ((Result<GlobalSettingsSummary>.Failure)result).Error.Code.ShouldBe(expectedCode);
-    }
-
-    [Fact]
-    public async Task WhenMountElementIsNull_ReturnsMountError()
-    {
-        // Arrange
-        await SeedSettingsAsync();
-        await using FoundryDbContext db = CreateDbContext();
-        UpdateWorkerEnvironment.Handler handler = new(db);
-
-        // Act
-        Result<GlobalSettingsSummary> result = await handler.HandleAsync(
-            CreateCommand(mounts: [null!]),
-            TestContext.Current.CancellationToken);
-
-        // Assert
-        result.ShouldBeOfType<Result<GlobalSettingsSummary>.Failure>().Error.Code
-            .ShouldBe(SettingsErrors.MountContainerPathNotAbsoluteCode);
-    }
-
-    [Fact]
-    public async Task WhenMountHostPathIsNull_ReturnsHostPathError()
-    {
-        // Arrange
-        await SeedSettingsAsync();
-        await using FoundryDbContext db = CreateDbContext();
-        UpdateWorkerEnvironment.Handler handler = new(db);
-
-        // Act
-        Result<GlobalSettingsSummary> result = await handler.HandleAsync(
-            CreateCommand(mounts: new UpdateWorkerEnvironment.MountRequest("/skills", null!, true)),
-            TestContext.Current.CancellationToken);
-
-        // Assert
-        result.ShouldBeOfType<Result<GlobalSettingsSummary>.Failure>().Error.Code
-            .ShouldBe(SettingsErrors.MountHostPathNotAbsoluteCode);
-    }
-
-    [Fact]
-    public async Task WhenContainerPathNotAbsolute_ReturnsMountError()
-    {
-        // Arrange
-        await SeedSettingsAsync();
-        await using FoundryDbContext dbContext = CreateDbContext();
-        UpdateWorkerEnvironment.Handler sut = new(dbContext);
-        UpdateWorkerEnvironment.Command command = CreateCommand(
-            mounts: new UpdateWorkerEnvironment.MountRequest("skills", "/home/user/skills", true));
-
-        // Act
-        Result<GlobalSettingsSummary> result = await sut.HandleAsync(command, TestContext.Current.CancellationToken);
-
-        // Assert
-        ((Result<GlobalSettingsSummary>.Failure)result).Error.Code
-            .ShouldBe(SettingsErrors.MountContainerPathNotAbsoluteCode);
-    }
-
-    [Fact]
-    public async Task WhenContainerPathDuplicated_ReturnsDuplicateError()
-    {
-        // Arrange
-        await SeedSettingsAsync();
-        await using FoundryDbContext dbContext = CreateDbContext();
-        UpdateWorkerEnvironment.Handler sut = new(dbContext);
-        UpdateWorkerEnvironment.Command command = CreateCommand(
-            mounts:
-            [
-                new UpdateWorkerEnvironment.MountRequest("/skills", "/home/user/a", true),
-                new UpdateWorkerEnvironment.MountRequest("/skills", "/home/user/b", true),
-            ]);
-
-        // Act
-        Result<GlobalSettingsSummary> result = await sut.HandleAsync(command, TestContext.Current.CancellationToken);
-
-        // Assert
-        ((Result<GlobalSettingsSummary>.Failure)result).Error.Code
-            .ShouldBe(SettingsErrors.DuplicateMountContainerPathCode);
-    }
-
-    [Fact]
-    public async Task WhenHostHooksValid_ReturnsSummaryAndPersistsCanonicalValues()
-    {
-        // Arrange
-        await SeedSettingsAsync();
-        await using (FoundryDbContext dbContext = CreateDbContext())
-        {
-            UpdateWorkerEnvironment.Handler sut = new(dbContext);
-            UpdateWorkerEnvironment.Command command = CreateHostHooksCommand(
-                " /home/user/.claude/settings.json ",
-                " notify ",
-                "notify",
-                "lint");
-
-            // Act
-            Result<GlobalSettingsSummary> result = await sut.HandleAsync(command, TestContext.Current.CancellationToken);
-
-            // Assert
-            GlobalSettingsSummary summary = result.Match(v => v, e => throw new InvalidOperationException(e.Message));
-            summary.ShouldSatisfyAllConditions(
-                () => summary.HostSettingsPath.ShouldBe("/home/user/.claude/settings.json"),
-                () => summary.ExcludedHookCommands.ShouldBe(["notify", "lint"]));
-        }
-
-        await using FoundryDbContext verifyDb = CreateDbContext();
-        GlobalSettings persisted = await verifyDb.Set<GlobalSettings>()
-            .AsNoTracking()
-            .SingleAsync(TestContext.Current.CancellationToken);
-        persisted.HostHooks.ShouldSatisfyAllConditions(
-            () => persisted.HostHooks.HostSettingsPath.ShouldBe("/home/user/.claude/settings.json"),
-            () => persisted.HostHooks.ExcludedCommands.ShouldBe(["notify", "lint"]));
-    }
-
-    [Fact]
-    public async Task WhenHostSettingsPathIsRelative_ReturnsNotAbsoluteErrorAndPersistsNothing()
-    {
-        // Arrange
-        await SeedSettingsAsync();
-        await using (FoundryDbContext dbContext = CreateDbContext())
-        {
-            UpdateWorkerEnvironment.Handler sut = new(dbContext);
-
-            // Act
-            Result<GlobalSettingsSummary> result = await sut.HandleAsync(
-                CreateHostHooksCommand("settings.json"),
-                TestContext.Current.CancellationToken);
-
-            // Assert
-            result.ShouldBeOfType<Result<GlobalSettingsSummary>.Failure>().Error.Code
-                .ShouldBe(SettingsErrors.HostSettingsPathNotAbsoluteCode);
-        }
-
-        await using FoundryDbContext verifyDb = CreateDbContext();
-        GlobalSettings persisted = await verifyDb.Set<GlobalSettings>()
-            .AsNoTracking()
-            .SingleAsync(TestContext.Current.CancellationToken);
-        persisted.HostHooks.ShouldBe(HostHooks.Default);
-    }
-
-    [Fact]
-    public async Task WhenExcludedHookCommandIsNull_ReturnsEmptyExclusionError()
-    {
-        // Arrange
-        await SeedSettingsAsync();
-        await using FoundryDbContext dbContext = CreateDbContext();
-        UpdateWorkerEnvironment.Handler sut = new(dbContext);
-        UpdateWorkerEnvironment.Command command = CreateHostHooksCommand(string.Empty, [null!]);
-
-        // Act
-        Result<GlobalSettingsSummary> result = await sut.HandleAsync(command, TestContext.Current.CancellationToken);
-
-        // Assert
-        result.ShouldBeOfType<Result<GlobalSettingsSummary>.Failure>().Error.Code
-            .ShouldBe(SettingsErrors.EmptyExcludedHookCommandCode);
-    }
-
-    [Fact]
-    public async Task WhenOnlyHostHooksChange_PersistsThem()
-    {
-        // Arrange
-        await SeedSettingsAsync();
-        await using (FoundryDbContext dbContext = CreateDbContext())
-        {
-            UpdateWorkerEnvironment.Handler sut = new(dbContext);
-            await sut.HandleAsync(CreateCommand(), TestContext.Current.CancellationToken);
-        }
-
-        await using (FoundryDbContext dbContext = CreateDbContext())
-        {
-            UpdateWorkerEnvironment.Handler sut = new(dbContext);
-
-            // Act
-            await sut.HandleAsync(
-                CreateHostHooksCommand("/home/user/.claude/settings.json"),
-                TestContext.Current.CancellationToken);
-        }
-
-        // Assert
-        await using FoundryDbContext verifyDb = CreateDbContext();
-        GlobalSettings persisted = await verifyDb.Set<GlobalSettings>()
-            .AsNoTracking()
-            .SingleAsync(TestContext.Current.CancellationToken);
-        persisted.HostHooks.HostSettingsPath.ShouldBe("/home/user/.claude/settings.json");
     }
 }

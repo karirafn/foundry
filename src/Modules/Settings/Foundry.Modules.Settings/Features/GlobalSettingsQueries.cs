@@ -165,18 +165,6 @@ internal sealed class GlobalSettingsQueries(DbContext dbContext) : IGlobalSettin
         return new WorkerResourceLimitsSnapshot(limits.MemoryLimitMb, limits.CpuLimit, limits.PidsLimit);
     }
 
-    public async Task<IReadOnlyList<WorkerMountEntry>> GetWorkerMountsAsync(CancellationToken cancellationToken)
-    {
-        // WorkerMounts is stored as a JSON blob and cannot be projected
-        // into a SQL column — the full entity must be loaded and the value read in memory.
-        GlobalSettings? settings = await dbContext.Set<GlobalSettings>()
-            .AsNoTracking()
-            .FirstOrDefaultAsync(cancellationToken);
-
-        WorkerMounts mounts = settings?.WorkerMounts ?? WorkerMounts.Default;
-        return [.. mounts.Mounts.Select(m => new WorkerMountEntry(m.ContainerPath, m.HostPath, m.ReadOnly))];
-    }
-
     public async Task<ClaudeCodeSettingsSnapshot> GetClaudeCodeSettingsAsync(CancellationToken cancellationToken)
     {
         // ClaudeCodeSettings is stored as a JSON blob and cannot be projected
@@ -187,18 +175,6 @@ internal sealed class GlobalSettingsQueries(DbContext dbContext) : IGlobalSettin
 
         ClaudeCodeSettings claudeCode = settings?.ClaudeCodeSettings ?? ClaudeCodeSettings.Default;
         return new ClaudeCodeSettingsSnapshot(claudeCode.Model, claudeCode.BlockCiCdEdits, claudeCode.AdditionalDenyRules);
-    }
-
-    public async Task<HostHooksSnapshot> GetHostHooksAsync(CancellationToken cancellationToken)
-    {
-        // HostHooks is stored as a JSON blob and cannot be projected
-        // into a SQL column — the full entity must be loaded and the value read in memory.
-        GlobalSettings? settings = await dbContext.Set<GlobalSettings>()
-            .AsNoTracking()
-            .FirstOrDefaultAsync(cancellationToken);
-
-        HostHooks hostHooks = settings?.HostHooks ?? HostHooks.Default;
-        return new HostHooksSnapshot(hostHooks.HostSettingsPath, hostHooks.ExcludedCommands);
     }
 
     public async Task<IReadOnlyList<string>> GetAllowedProviderHostsAsync(CancellationToken cancellationToken)

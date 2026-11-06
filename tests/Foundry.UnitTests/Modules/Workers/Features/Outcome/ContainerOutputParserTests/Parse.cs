@@ -334,7 +334,6 @@ public sealed class Parse
     [InlineData("clone")]
     [InlineData("auth")]
     [InlineData("branch")]
-    [InlineData("host-settings")]
     [InlineData("managed-settings")]
     public void WhenBootstrapSentinelWithKnownStage_ReturnsWorkerBootstrapFailed(string stage)
     {
@@ -361,20 +360,6 @@ public sealed class Parse
         // Assert
         result.ShouldBeOfType<ContainerOutputParseResult.WorkerBootstrapFailed>()
             .Detail.ShouldContain("rebuild the worker image");
-    }
-
-    [Fact]
-    public void WhenHostSettingsSentinelPresent_DetailNamesTheHostSettingsFile()
-    {
-        // Arrange
-        string log = "FOUNDRY_BOOTSTRAP_FAILED stage=host-settings detail=host settings file /run/foundry/host-settings.json is not valid JSON";
-
-        // Act
-        ContainerOutputParseResult result = _sut.Parse(log);
-
-        // Assert
-        result.ShouldBeOfType<ContainerOutputParseResult.WorkerBootstrapFailed>()
-            .Detail.ShouldContain("host settings file /run/foundry/host-settings.json");
     }
 
     [Fact]

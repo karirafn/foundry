@@ -17,69 +17,35 @@ public sealed class UpdateWorkerEnvironment
         WorkerResourceLimits.Create(CustomMemoryLimitMb, CustomCpuLimit, CustomPidsLimit)
             .Match(v => v, e => throw new InvalidOperationException(e.Message));
 
-    private static WorkerMounts CreateMounts() =>
-        WorkerMounts.Create([new WorkerMount("/data", "/srv/data", true)])
-            .Match(v => v, e => throw new InvalidOperationException(e.Message));
-
     [Fact]
-    public void WhenCreated_ExposesDefaultLimitsAndMounts()
+    public void WhenCreated_ExposesDefaultLimits()
     {
         // Arrange
         // Act
         GlobalSettings settings = GlobalSettings.Create();
 
         // Assert
-        settings.ShouldSatisfyAllConditions(
-            () => settings.WorkerResourceLimits.ShouldBe(WorkerResourceLimits.Default),
-            () => settings.WorkerMounts.ShouldBe(WorkerMounts.Default));
+        settings.WorkerResourceLimits.ShouldBe(WorkerResourceLimits.Default);
     }
 
     [Fact]
-    public void WhenValuesChanged_ReturnsTrueAndSetsBoth()
+    public void WhenLimitsChanged_ReturnsTrueAndSetsLimits()
     {
         // Arrange
         GlobalSettings settings = GlobalSettings.Create();
         WorkerResourceLimits limits = CreateLimits();
-        WorkerMounts mounts = CreateMounts();
 
         // Act
-        bool changed = settings.UpdateWorkerEnvironment(limits, mounts);
+        bool changed = settings.UpdateWorkerEnvironment(limits);
 
         // Assert
         settings.ShouldSatisfyAllConditions(
             () => changed.ShouldBeTrue(),
-            () => settings.WorkerResourceLimits.ShouldBe(limits),
-            () => settings.WorkerMounts.ShouldBe(mounts));
+            () => settings.WorkerResourceLimits.ShouldBe(limits));
     }
 
     [Fact]
-    public void WhenOnlyMountsChange_ReturnsTrue()
-    {
-        // Arrange
-        GlobalSettings settings = GlobalSettings.Create();
-
-        // Act
-        bool changed = settings.UpdateWorkerEnvironment(WorkerResourceLimits.Default, CreateMounts());
-
-        // Assert
-        changed.ShouldBeTrue();
-    }
-
-    [Fact]
-    public void WhenOnlyLimitsChange_ReturnsTrue()
-    {
-        // Arrange
-        GlobalSettings settings = GlobalSettings.Create();
-
-        // Act
-        bool changed = settings.UpdateWorkerEnvironment(CreateLimits(), WorkerMounts.Default);
-
-        // Assert
-        changed.ShouldBeTrue();
-    }
-
-    [Fact]
-    public async Task WhenValuesChanged_BumpsUpdatedAt()
+    public async Task WhenLimitsChanged_BumpsUpdatedAt()
     {
         // Arrange
         GlobalSettings settings = GlobalSettings.Create();
@@ -87,23 +53,21 @@ public sealed class UpdateWorkerEnvironment
         await Task.Delay(5, TestContext.Current.CancellationToken);
 
         // Act
-        settings.UpdateWorkerEnvironment(CreateLimits(), CreateMounts());
+        settings.UpdateWorkerEnvironment(CreateLimits());
 
         // Assert
         settings.UpdatedAt.ShouldBeGreaterThan(before);
     }
 
     [Fact]
-    public void WhenValuesEqualCurrent_ReturnsFalseAndLeavesUpdatedAtUnchanged()
+    public void WhenLimitsEqualCurrent_ReturnsFalseAndLeavesUpdatedAtUnchanged()
     {
         // Arrange
         GlobalSettings settings = GlobalSettings.Create();
         DateTimeOffset before = settings.UpdatedAt;
-        WorkerMounts equalMounts = WorkerMounts.Create([])
-            .Match(v => v, e => throw new InvalidOperationException(e.Message));
 
         // Act
-        bool changed = settings.UpdateWorkerEnvironment(WorkerResourceLimits.Default, equalMounts);
+        bool changed = settings.UpdateWorkerEnvironment(WorkerResourceLimits.Default);
 
         // Assert
         settings.ShouldSatisfyAllConditions(

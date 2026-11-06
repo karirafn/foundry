@@ -38,7 +38,6 @@ internal static class WorkerSettingsBuilder
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
     };
 
-    // Hooks are not emitted here: the entrypoint merges them from the host settings file at container start.
     public static string Build(ClaudeCodeSettingsSnapshot claudeCode)
     {
         string[] denyRules =

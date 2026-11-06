@@ -85,7 +85,6 @@ public sealed class WhenStartedWithRootlessDindAllowanceSet : IAsyncLifetime
         WorkerContainerSpec spec = WorkerHardeningSpec.Apply(new(
             Image: Image,
             EnvironmentVariables: new Dictionary<string, string>(),
-            BindMounts: [],
             Labels: new Dictionary<string, string> { [WorkerRunIdLabel] = _runId.Value.ToString() },
             Command: ["true"])
         {
