@@ -26,6 +26,12 @@ RUN if [ "$INSTALL_DOTNET" = "true" ]; then \
 # it is only loaded when the entrypoint opts in, gated on csharp-ls being on PATH.
 COPY claude-plugins/csharp-lsp /opt/claude-plugins/csharp-lsp
 
+# Worker roles (ADR 0095): each role's Claude Code plugin and prompts, plus the shared plugin loaded
+# for every role. The entrypoint loads the run's role and shared with --plugin-dir. Read-only to
+# node so a run cannot rewrite the instructions it or a later run is given.
+COPY roles /opt/foundry/roles
+RUN chmod -R a-w,a+rX /opt/foundry/roles
+
 # Conditional Angular CLI install
 ARG INSTALL_ANGULAR=false
 RUN if [ "$INSTALL_ANGULAR" = "true" ]; then \
