@@ -7,6 +7,7 @@ using Foundry.Modules.Workers.Domain.ValueObjects;
 using Foundry.Modules.Workers.Features.ContainerSpec;
 using Foundry.Modules.Workers.Features.Dispatch;
 using Foundry.Modules.Workers.Features.Orchestration;
+using Foundry.Modules.Workers.Features.Roles;
 using Foundry.Shared;
 using Foundry.Testing;
 using Foundry.UnitTests.Fakes.Workers;
@@ -138,6 +139,40 @@ public sealed class RoleCatalogGate : WorkerDispatchServiceTestBase
 
         // Assert
         dispatcher.Captured.Count(e => e is WorkerCapacityAvailable).ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task WhenTheRoleCatalogBecomesUnavailableAgainAfterResuming_LogsTheSkipAtInformationASecondTime()
+    {
+        // Arrange
+        CapturingLogger logger = new();
+        TestOnlyUnloadableRoleCatalogStore catalogStore = new();
+        WorkerDispatchService sut = BuildService(
+            new NullWorkerOrchestrator(),
+            logger: logger,
+            roleCatalog: catalogStore);
+        await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
+        catalogStore.Publish(StubWorkerRoleCatalogStore.Catalog());
+        await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
+        catalogStore.Unload();
+
+        // Act
+        await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
+
+        // Assert
+        logger.Entries
+            .Count(e => e.Level == LogLevel.Information && e.Message == SkipMessage)
+            .ShouldBe(2);
+    }
+
+    // The production store never returns to null once published, so only this test double can model a relapse.
+    private sealed class TestOnlyUnloadableRoleCatalogStore : IWorkerRoleCatalogStore
+    {
+        public WorkerRoleCatalog? Current { get; private set; }
+
+        public void Publish(WorkerRoleCatalog catalog) => Current = catalog;
+
+        public void Unload() => Current = null;
     }
 
     private sealed class NullWorkerOrchestrator : IWorkerOrchestrator
