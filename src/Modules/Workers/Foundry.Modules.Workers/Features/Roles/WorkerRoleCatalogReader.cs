@@ -21,6 +21,9 @@ internal static class WorkerRoleCatalogReader
     internal const string TaskPromptPath = "prompts/task.md";
     internal const string VerdictSchemaPath = "verdict.schema.json";
 
+    /// <summary>The <c>$defs</c> every role's verdict schema may reference (e.g. <c>#/$defs/questions</c>), under <c>shared/</c>.</summary>
+    internal const string SharedVerdictDefinitionsPath = "verdict.defs.json";
+
     // Role files are small text; the cap keeps a stray large file from being held in memory for the API.
     internal const int MaxFileBytes = 256 * 1024;
 
@@ -116,6 +119,14 @@ internal static class WorkerRoleCatalogReader
             return Result<WorkerRoleCatalogContent>.Fail(((Result<RolePlugin>.Failure)sharedResult).Error);
         }
 
+        string sharedVerdictDefinitions = $"{WorkerRole.SharedFolder}/{SharedVerdictDefinitionsPath}";
+
+        if (files.TryGetValue(sharedVerdictDefinitions, out string? definitions)
+            && CheckJsonObject(sharedVerdictDefinitions, definitions) is { } definitionsError)
+        {
+            return Fail(definitionsError);
+        }
+
         List<WorkerRoleDefinition> roles = [];
 
         foreach (WorkerRole role in WorkerRole.All)
@@ -172,12 +183,38 @@ internal static class WorkerRoleCatalogReader
 
         files.TryGetValue($"{role.Name}/{VerdictSchemaPath}", out string? verdictSchema);
 
+        if (verdictSchema is not null && CheckJsonObject($"{role.Name}/{VerdictSchemaPath}", verdictSchema) is { } schemaError)
+        {
+            return Fail<WorkerRoleDefinition>(schemaError);
+        }
+
         return Result<WorkerRoleDefinition>.Ok(new WorkerRoleDefinition(
             role,
             plugin.Value,
             systemPrompt,
             taskPrompt,
             verdictSchema is null ? null : Normalize(verdictSchema)));
+    }
+
+    /// <summary>
+    /// Returns an error when <paramref name="content"/> is not a JSON object. The entrypoint passes a role's verdict
+    /// schema to <c>claude --json-schema</c> with the shared definitions merged in, so either file breaking fails the
+    /// image build rather than every run of the role.
+    /// </summary>
+    private static string? CheckJsonObject(string path, string content)
+    {
+        try
+        {
+            using JsonDocument document = JsonDocument.Parse(content);
+
+            return document.RootElement.ValueKind == JsonValueKind.Object
+                ? null
+                : $"'{RolesFolder}/{path}' is not a JSON object.";
+        }
+        catch (JsonException)
+        {
+            return $"'{RolesFolder}/{path}' is not valid JSON.";
+        }
     }
 
     private static string? CheckPlaceholders(

@@ -1,3 +1,5 @@
+using System.Text.Json.Nodes;
+
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Contracts.Queries;
 using Foundry.Modules.Workers.Contracts;
@@ -240,6 +242,8 @@ public sealed class RunResultSummaryCapture : WorkerDispatchServiceTestBase
             => new ContainerOutputParseResult.NormalExit();
 
         public RunResultSummary? ParseRunResultSummary(string? log) => runResultSummary;
+
+        public JsonObject? ParseStructuredOutput(string? log) => null;
     }
 
     private sealed class ExitedWorkerOrchestrator(WorkerStatus status, string? logs) : IWorkerOrchestrator

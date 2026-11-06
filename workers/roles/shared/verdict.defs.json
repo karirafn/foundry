@@ -1,0 +1,25 @@
+{
+  "$defs": {
+    "questions": {
+      "description": "Questions a person must answer before the work can continue. Each names one decision and the context it needs.",
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["question", "context"],
+        "properties": {
+          "question": {
+            "description": "One question, answerable on its own.",
+            "type": "string",
+            "minLength": 1
+          },
+          "context": {
+            "description": "What you found that raises the question, and the options you see.",
+            "type": "string"
+          }
+        }
+      }
+    }
+  }
+}

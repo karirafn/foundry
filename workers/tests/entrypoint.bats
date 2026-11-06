@@ -2197,3 +2197,104 @@ EOF
     [[ "$output" == *"WORKER_ROLE is required"* ]]
     [ ! -f "$BATS_TEST_TMPDIR/claude_called" ]
 }
+
+# ---------------------------------------------------------------------------
+# Verdict schemas (ADR 0094): a role's optional verdict.schema.json is passed to
+# both claude invocations with --json-schema, with the shared $defs merged in.
+# ---------------------------------------------------------------------------
+
+# write_verdict_fixture — gives the implement fixture role a verdict schema that
+# references the shared questions definition, and writes that definition.
+write_verdict_fixture() {
+    printf '%s\n' '{"type":"object","required":["outcome"],"properties":{"outcome":{"enum":["done","needs_input"]},"questions":{"$ref":"#/$defs/questions"}}}' \
+        > "$FOUNDRY_ROLES_DIR/implement/verdict.schema.json"
+    printf '%s\n' '{"$defs":{"questions":{"type":"array","minItems":1}}}' \
+        > "$FOUNDRY_ROLES_DIR/shared/verdict.defs.json"
+}
+
+# The schema the entrypoint must pass: the role schema with the shared $defs merged in.
+expected_verdict_schema() {
+    jq -c '.["$defs"] = {"questions":{"type":"array","minItems":1}}' "$FOUNDRY_ROLES_DIR/implement/verdict.schema.json"
+}
+
+@test "verdict: claude receives the role's verdict schema with the shared definitions via --json-schema" {
+    set_required_env
+    make_fake_git
+    make_fake_claude_record_args
+    write_verdict_fixture
+
+    run bash "$ENTRYPOINT"
+
+    [ "$status" -eq 0 ]
+    local args
+    args="$(head -n 1 "$BATS_TEST_TMPDIR/claude_args")"
+    [[ "$args" == *"--json-schema $(expected_verdict_schema)"* ]]
+    [[ "$args" == *"--output-format stream-json --verbose"* ]]
+}
+
+@test "verdict: the transient-error resume passes the same --json-schema" {
+    set_required_env
+    make_fake_git
+    make_fake_claude_record_args_transient_then_success
+    write_verdict_fixture
+
+    run bash "$ENTRYPOINT"
+
+    [ "$status" -eq 0 ]
+    local resume_args
+    resume_args="$(sed -n 2p "$BATS_TEST_TMPDIR/claude_args")"
+    [[ "$resume_args" =~ (^| )-c( |$) ]]
+    [[ "$resume_args" == *"--json-schema $(expected_verdict_schema)"* ]]
+    [[ "$resume_args" == *"--output-format stream-json --verbose"* ]]
+}
+
+@test "verdict: a role without verdict.schema.json gets no --json-schema" {
+    set_required_env
+    make_fake_git
+    make_fake_claude_record_args_transient_then_success
+
+    run bash "$ENTRYPOINT"
+
+    [ "$status" -eq 0 ]
+    [ "$(wc -l < "$BATS_TEST_TMPDIR/claude_args")" -eq 2 ]
+    ! grep -q -- "--json-schema" "$BATS_TEST_TMPDIR/claude_args"
+}
+
+@test "verdict: a role schema without shared definitions is passed as-is" {
+    set_required_env
+    make_fake_git
+    make_fake_claude_record_args
+    printf '%s\n' '{"type":"object","required":["outcome"]}' > "$FOUNDRY_ROLES_DIR/implement/verdict.schema.json"
+
+    run bash "$ENTRYPOINT"
+
+    [ "$status" -eq 0 ]
+    [[ "$(head -n 1 "$BATS_TEST_TMPDIR/claude_args")" == *'--json-schema {"type":"object","required":["outcome"]}'* ]]
+}
+
+@test "verdict: a verdict schema that is not valid JSON fails bootstrap at stage=role before cloning" {
+    set_required_env
+    make_fake_git
+    make_fake_claude
+    printf '%s\n' '{"type":' > "$FOUNDRY_ROLES_DIR/implement/verdict.schema.json"
+
+    run bash "$ENTRYPOINT"
+
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"FOUNDRY_BOOTSTRAP_FAILED stage=role"* ]]
+    [ ! -f "$BATS_TEST_TMPDIR/claude_called" ]
+}
+
+@test "verdict: shared verdict definitions that are not valid JSON fail bootstrap at stage=role" {
+    set_required_env
+    make_fake_git
+    make_fake_claude
+    write_verdict_fixture
+    printf '%s\n' 'not json' > "$FOUNDRY_ROLES_DIR/shared/verdict.defs.json"
+
+    run bash "$ENTRYPOINT"
+
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"FOUNDRY_BOOTSTRAP_FAILED stage=role"* ]]
+    [ ! -f "$BATS_TEST_TMPDIR/claude_called" ]
+}

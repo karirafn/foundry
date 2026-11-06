@@ -10,6 +10,7 @@ using Foundry.Shared;
 using Foundry.Shared.Infrastructure;
 
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
@@ -27,11 +28,53 @@ file static class WorkerRunValueConverters
         value => BranchName.From(value));
 }
 
+file static class RunVerdictValueConverters
+{
+    private static readonly JsonSerializerOptions QuestionsJsonOptions = new(JsonSerializerDefaults.Web);
+
+    // Stored as the verdict schema's own tokens so the column reads the same as the run's structured_output.
+    internal static readonly ValueConverter<RunVerdictStatus, string> StatusConverter = new(
+        status => ToStored(status),
+        value => FromStored(value));
+
+    internal static readonly ValueConverter<IReadOnlyList<RunVerdictQuestion>?, string> QuestionsConverter = new(
+        questions => JsonSerializer.Serialize(questions, QuestionsJsonOptions),
+        json => DeserializeQuestions(json));
+
+    internal static readonly ValueComparer<IReadOnlyList<RunVerdictQuestion>?> QuestionsComparer = new(
+        (left, right) => left == null ? right == null : right != null && left.SequenceEqual(right),
+        questions => questions == null ? 0 : questions.Aggregate(0, (hash, question) => HashCode.Combine(hash, question)),
+        questions => questions == null ? null : questions.ToList());
+
+    private static string ToStored(RunVerdictStatus status) => status switch
+    {
+        RunVerdictStatus.Done => "done",
+        RunVerdictStatus.NeedsInput => "needs_input",
+        RunVerdictStatus.Missing => "missing",
+        RunVerdictStatus.Invalid => "invalid",
+        _ => throw new ArgumentOutOfRangeException(nameof(status), status, "Unknown verdict status."),
+    };
+
+    private static RunVerdictStatus FromStored(string value) => value switch
+    {
+        "done" => RunVerdictStatus.Done,
+        "needs_input" => RunVerdictStatus.NeedsInput,
+        "missing" => RunVerdictStatus.Missing,
+        "invalid" => RunVerdictStatus.Invalid,
+        _ => throw new InvalidOperationException($"Unknown stored verdict status: {value}"),
+    };
+
+    private static List<RunVerdictQuestion> DeserializeQuestions(string json) =>
+        JsonSerializer.Deserialize<List<RunVerdictQuestion>>(json, QuestionsJsonOptions)
+            ?? throw new InvalidOperationException("Failed to deserialize the verdict questions.");
+}
+
 public sealed class WorkerRunConfiguration : IEntityTypeConfiguration<WorkerRun>
 {
     private const int DiscriminatorMaxLength = 20;
     private const int RoleMaxLength = 50;
     private const int ImageMaxLength = 500;
+    private const int VerdictStatusMaxLength = 20;
 
     public void Configure(EntityTypeBuilder<WorkerRun> builder)
     {
@@ -87,6 +130,20 @@ public sealed class WorkerRunConfiguration : IEntityTypeConfiguration<WorkerRun>
             .HasMaxLength(ImageMaxLength)
             .IsUnicode(false)
             .HasColumnName("image");
+
+        builder.Property(r => r.VerdictStatus)
+            .HasConversion(RunVerdictValueConverters.StatusConverter)
+            .HasMaxLength(VerdictStatusMaxLength)
+            .IsUnicode(false)
+            .HasColumnName("verdict_status");
+
+        builder.Property(r => r.VerdictQuestions)
+            .HasConversion(RunVerdictValueConverters.QuestionsConverter, RunVerdictValueConverters.QuestionsComparer)
+            .HasMaxLength(int.MaxValue)
+            .HasColumnType("TEXT")
+            .HasColumnName("verdict_questions");
+
+        builder.Ignore(r => r.Verdict);
 
         builder.HasDiscriminator<string>("state")
             .HasValue<StartingRun>("starting")

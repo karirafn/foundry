@@ -6,6 +6,7 @@ using Foundry.Modules.Workers.Contracts;
 using Foundry.Modules.Workers.Domain.Entities;
 using Foundry.Modules.Workers.Domain.Entities.States;
 using Foundry.Modules.Workers.Domain.ValueObjects;
+using Foundry.Modules.Workers.Features.Roles;
 using Foundry.Shared;
 using Foundry.Shared.Infrastructure;
 
@@ -21,17 +22,22 @@ namespace Foundry.Modules.Workers.Features.Dispatch;
 /// Periodic dispatch loop. Each tick reconciles orphaned runs once (after startup), delegates
 /// per-run monitoring to <see cref="WorkerRunMonitor"/>, auto-resumes an expired usage-limit
 /// pause, and — when every dispatch gate passes — reserves a slot and publishes
-/// <see cref="WorkerCapacityAvailable"/>.
+/// <see cref="WorkerCapacityAvailable"/>. The role catalog is in-memory and empty until the startup
+/// image build publishes it, so the persisted build status alone cannot tell dispatch it is ready.
 /// </summary>
 internal sealed class WorkerDispatchService(
     IServiceScopeFactory scopeFactory,
     ILogger<WorkerDispatchService> logger,
     TimeProvider timeProvider) : PeriodicBackgroundService(logger)
 {
+    private const string RoleCatalogNotLoadedMessage = "Dispatch skipped: worker role catalog is not loaded.";
+    private const string RoleCatalogLoadedMessage = "Dispatch resumed: worker role catalog is loaded.";
+
     private static readonly TimeSpan Interval = TimeSpan.FromSeconds(10);
 
     // Safe without locking — PeriodicTimer loop is single-threaded
     private bool _reconciled;
+    private bool _roleCatalogSkipLogged;
 
     protected override TimeSpan TickInterval => Interval;
 
@@ -106,6 +112,14 @@ internal sealed class WorkerDispatchService(
                 imageBuildStatus);
             return;
         }
+
+        if (scope.ServiceProvider.GetRequiredService<IWorkerRoleCatalogStore>().Current is null)
+        {
+            LogRoleCatalogNotLoaded();
+            return;
+        }
+
+        LogRoleCatalogLoadedIfResuming();
 
         int slotOccupancy = await dbContext.GetSlotOccupancyCountAsync(cancellationToken);
         int maxConcurrent = await settingsQueries.GetMaxConcurrentAsync(cancellationToken);
@@ -210,6 +224,31 @@ internal sealed class WorkerDispatchService(
             fullyUnpaused);
 
         return fullyUnpaused;
+    }
+
+    private void LogRoleCatalogNotLoaded()
+    {
+        // Information on the transition, not every tick: operators and the composed-host smoke test
+        // wait on the first line, and repeating it every interval floods the log during a long outage.
+        if (_roleCatalogSkipLogged)
+        {
+            logger.LogDebug(RoleCatalogNotLoadedMessage);
+            return;
+        }
+
+        logger.LogInformation(RoleCatalogNotLoadedMessage);
+        _roleCatalogSkipLogged = true;
+    }
+
+    private void LogRoleCatalogLoadedIfResuming()
+    {
+        if (!_roleCatalogSkipLogged)
+        {
+            return;
+        }
+
+        logger.LogInformation(RoleCatalogLoadedMessage);
+        _roleCatalogSkipLogged = false;
     }
 
     private async Task TryDispatchAsync(

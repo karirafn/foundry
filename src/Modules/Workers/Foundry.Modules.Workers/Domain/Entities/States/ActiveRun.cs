@@ -114,9 +114,10 @@ public sealed class ActiveRun : WorkerRun
         int exitCode,
         BranchName? branchName,
         PullRequestUrl? pullRequestUrl,
-        RunResultSummary? resultSummary = null)
+        RunResultSummary? resultSummary = null,
+        RunVerdict? verdict = null)
     {
-        CompletedRun completed = CompletedRun.FromActive(this, exitCode, branchName, pullRequestUrl, resultSummary);
+        CompletedRun completed = CompletedRun.FromActive(this, exitCode, branchName, pullRequestUrl, resultSummary, verdict);
         AddDomainEvent(new WorkerRunCompletedEvent(Id, IssueId, branchName?.Value, pullRequestUrl?.Value));
         return completed;
     }
@@ -125,9 +126,10 @@ public sealed class ActiveRun : WorkerRun
         FailureReason reason,
         BranchName? branchNameOrNull,
         string? containerOutput = null,
-        RunResultSummary? resultSummary = null)
+        RunResultSummary? resultSummary = null,
+        RunVerdict? verdict = null)
     {
-        FailedRun failed = FailedRun.FromActive(this, reason, containerOutput, resultSummary);
+        FailedRun failed = FailedRun.FromActive(this, reason, containerOutput, resultSummary, verdict);
         AddDomainEvent(new WorkerRunFailedEvent(Id, IssueId, reason.Summary, reason.CategoryToken, branchNameOrNull?.Value));
         return failed;
     }

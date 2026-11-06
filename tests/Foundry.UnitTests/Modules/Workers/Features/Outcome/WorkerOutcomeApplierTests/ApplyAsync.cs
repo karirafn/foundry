@@ -46,6 +46,83 @@ public sealed class ApplyAsync : WorkerDispatchServiceTestBase
         orchestrator.StopAndRemoveCalls.ShouldBe([ContainerId]);
     }
 
+    [Theory]
+    [MemberData(nameof(TerminalOutcomes))]
+    public async Task WhenAVerdictIsGiven_RecordsItOnTheTerminalRunWithItsQuestions(string outcomeName)
+    {
+        // Arrange
+        SeedActiveRun(ContainerId, Branch);
+        await using FoundryDbContext db = CreateDbContext();
+        ActiveRun activeRun = await db.Set<ActiveRun>().SingleAsync(TestContext.Current.CancellationToken);
+        WorkerOutcomeApplier sut = BuildApplier(db, new RecordingOrchestrator());
+        RunVerdict verdict = RunVerdict.NeedsInput(
+        [
+            new RunVerdictQuestion("Which database?", "The issue names both SQLite and Postgres."),
+            new RunVerdictQuestion("Keep the old endpoint?", string.Empty),
+        ]);
+
+        // Act
+        await sut.ApplyAsync(BuildOutcome(outcomeName), activeRun, verdict, TestContext.Current.CancellationToken);
+
+        // Assert
+        await using FoundryDbContext assertDb = CreateDbContext();
+        WorkerRun run = await assertDb.Set<WorkerRun>().SingleAsync(TestContext.Current.CancellationToken);
+        run.ShouldSatisfyAllConditions(
+            () => run.VerdictStatus.ShouldBe(RunVerdictStatus.NeedsInput),
+            () => run.Verdict.ShouldBe(verdict),
+            () => run.VerdictQuestions.ShouldNotBeNull().Count.ShouldBe(2));
+    }
+
+    [Theory]
+    [InlineData(RunVerdictStatus.Done)]
+    [InlineData(RunVerdictStatus.Missing)]
+    [InlineData(RunVerdictStatus.Invalid)]
+    public async Task WhenAVerdictWithoutQuestionsIsGiven_RecordsItsStatusAndNoQuestions(RunVerdictStatus status)
+    {
+        // Arrange
+        SeedActiveRun(ContainerId, Branch);
+        await using FoundryDbContext db = CreateDbContext();
+        ActiveRun activeRun = await db.Set<ActiveRun>().SingleAsync(TestContext.Current.CancellationToken);
+        WorkerOutcomeApplier sut = BuildApplier(db, new RecordingOrchestrator());
+        RunVerdict verdict = status switch
+        {
+            RunVerdictStatus.Done => RunVerdict.Done(),
+            RunVerdictStatus.Missing => RunVerdict.Missing(),
+            _ => RunVerdict.Invalid(),
+        };
+
+        // Act
+        await sut.ApplyAsync(BuildOutcome("Review"), activeRun, verdict, TestContext.Current.CancellationToken);
+
+        // Assert
+        await using FoundryDbContext assertDb = CreateDbContext();
+        WorkerRun run = await assertDb.Set<WorkerRun>().SingleAsync(TestContext.Current.CancellationToken);
+        run.ShouldSatisfyAllConditions(
+            () => run.ShouldBeOfType<CompletedRun>().PullRequestUrl.ShouldNotBeNull(),
+            () => run.VerdictStatus.ShouldBe(status),
+            () => run.VerdictQuestions.ShouldBeNull());
+    }
+
+    [Fact]
+    public async Task WhenNoVerdictIsGiven_RecordsNone()
+    {
+        // Arrange
+        SeedActiveRun(ContainerId, Branch);
+        await using FoundryDbContext db = CreateDbContext();
+        ActiveRun activeRun = await db.Set<ActiveRun>().SingleAsync(TestContext.Current.CancellationToken);
+        WorkerOutcomeApplier sut = BuildApplier(db, new RecordingOrchestrator());
+
+        // Act
+        await sut.ApplyAsync(BuildOutcome("Completed"), activeRun, TestContext.Current.CancellationToken);
+
+        // Assert
+        await using FoundryDbContext assertDb = CreateDbContext();
+        WorkerRun run = await assertDb.Set<WorkerRun>().SingleAsync(TestContext.Current.CancellationToken);
+        run.ShouldSatisfyAllConditions(
+            () => run.VerdictStatus.ShouldBeNull(),
+            () => run.Verdict.ShouldBeNull());
+    }
+
     [Fact]
     public async Task WhenOutcomeIsIndeterminate_ThrowsWithoutTouchingContainer()
     {

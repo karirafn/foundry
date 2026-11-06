@@ -68,9 +68,10 @@ public sealed class FailedRun : WorkerRun
         ActiveRun active,
         FailureReason reason,
         string? containerOutput = null,
-        RunResultSummary? resultSummary = null)
+        RunResultSummary? resultSummary = null,
+        RunVerdict? verdict = null)
     {
-        return new FailedRun(
+        FailedRun failed = new(
             active.Id,
             active.IssueId,
             active.CreatedAt,
@@ -84,5 +85,8 @@ public sealed class FailedRun : WorkerRun
         {
             CancelRequestedAt = active.CancelRequestedAt,
         };
+
+        failed.RecordVerdict(verdict);
+        return failed;
     }
 }
