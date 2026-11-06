@@ -23,6 +23,10 @@ namespace Foundry.UnitTests.Modules.Workers.Features.Dispatch.WorkerDispatchServ
 
 public sealed class RoleCatalogGate : WorkerDispatchServiceTestBase
 {
+    // Literal on purpose: the composed-host smoke test waits on this exact text.
+    private const string SkipMessage = "Dispatch skipped: worker role catalog is not loaded.";
+    private const string ResumeMessage = "Dispatch resumed: worker role catalog is loaded.";
+
     [Fact]
     public async Task WhenTheRoleCatalogIsNotLoaded_DoesNotDispatchWorkerCapacityAvailable()
     {
@@ -70,9 +74,49 @@ public sealed class RoleCatalogGate : WorkerDispatchServiceTestBase
         await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
 
         // Assert
-        logger.Entries.ShouldContain(e =>
-            e.Level == LogLevel.Information
-            && e.Message == "Dispatch skipped: worker role catalog is not loaded.");
+        logger.Entries.ShouldContain(e => e.Level == LogLevel.Information && e.Message == SkipMessage);
+    }
+
+    [Fact]
+    public async Task WhenTheRoleCatalogStaysUnloadedAcrossTicks_LogsTheSkipAtInformationOnce()
+    {
+        // Arrange
+        CapturingLogger logger = new();
+        WorkerDispatchService sut = BuildService(
+            new NullWorkerOrchestrator(),
+            logger: logger,
+            roleCatalog: StubWorkerRoleCatalogStore.Empty());
+
+        // Act
+        await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
+        await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
+
+        // Assert
+        logger.Entries
+            .Count(e => e.Level == LogLevel.Information && e.Message == SkipMessage)
+            .ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task WhenTheRoleCatalogIsPublishedAfterASkippedTick_LogsTheResumeAtInformationOnce()
+    {
+        // Arrange
+        CapturingLogger logger = new();
+        StubWorkerRoleCatalogStore catalogStore = StubWorkerRoleCatalogStore.Empty();
+        WorkerDispatchService sut = BuildService(
+            new NullWorkerOrchestrator(),
+            logger: logger,
+            roleCatalog: catalogStore);
+        await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
+        catalogStore.Publish(StubWorkerRoleCatalogStore.Catalog());
+
+        // Act
+        await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
+
+        // Assert
+        logger.Entries
+            .Count(e => e.Level == LogLevel.Information && e.Message == ResumeMessage)
+            .ShouldBe(1);
     }
 
     [Fact]

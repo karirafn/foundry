@@ -31,11 +31,13 @@ internal sealed class WorkerDispatchService(
     TimeProvider timeProvider) : PeriodicBackgroundService(logger)
 {
     internal const string RoleCatalogNotLoadedMessage = "Dispatch skipped: worker role catalog is not loaded.";
+    private const string RoleCatalogLoadedMessage = "Dispatch resumed: worker role catalog is loaded.";
 
     private static readonly TimeSpan Interval = TimeSpan.FromSeconds(10);
 
     // Safe without locking — PeriodicTimer loop is single-threaded
     private bool _reconciled;
+    private bool _roleCatalogSkipLogged;
 
     protected override TimeSpan TickInterval => Interval;
 
@@ -113,10 +115,11 @@ internal sealed class WorkerDispatchService(
 
         if (scope.ServiceProvider.GetRequiredService<IWorkerRoleCatalogStore>().Current is null)
         {
-            // Information, not Debug: operators and the composed-host smoke test wait on this line.
-            logger.LogInformation(RoleCatalogNotLoadedMessage);
+            LogRoleCatalogNotLoaded();
             return;
         }
+
+        LogRoleCatalogLoadedIfResuming();
 
         int slotOccupancy = await dbContext.GetSlotOccupancyCountAsync(cancellationToken);
         int maxConcurrent = await settingsQueries.GetMaxConcurrentAsync(cancellationToken);
@@ -179,6 +182,31 @@ internal sealed class WorkerDispatchService(
     /// Returns <c>true</c> when dispatch is now fully unpaused (safe for the caller to
     /// bypass the stale pause-state gate), <c>false</c> when a manual pause still holds.
     /// </summary>
+    private void LogRoleCatalogNotLoaded()
+    {
+        // Information on the transition, not every tick: operators and the composed-host smoke test
+        // wait on the first line, and repeating it every interval floods the log during a long outage.
+        if (_roleCatalogSkipLogged)
+        {
+            logger.LogDebug(RoleCatalogNotLoadedMessage);
+            return;
+        }
+
+        logger.LogInformation(RoleCatalogNotLoadedMessage);
+        _roleCatalogSkipLogged = true;
+    }
+
+    private void LogRoleCatalogLoadedIfResuming()
+    {
+        if (!_roleCatalogSkipLogged)
+        {
+            return;
+        }
+
+        logger.LogInformation(RoleCatalogLoadedMessage);
+        _roleCatalogSkipLogged = false;
+    }
+
     private async Task<bool> TryAutoResumeAsync(
         DbContext dbContext,
         IIntegrationEventDispatcher integrationEventDispatcher,
