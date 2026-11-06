@@ -6,46 +6,35 @@ using Foundry.Shared;
 
 namespace Foundry.Modules.Settings.Domain.ValueObjects;
 
+/// <summary>
+/// The Claude Code policy applied to every worker. The model is not here: it is a per-role setting (ADR 0095).
+/// </summary>
 public sealed partial record ClaudeCodeSettings
 {
-    internal const int MaxModelLength = 200;
-
     private const string DenyRulePattern = @"^(Bash|Edit|Read|Write|MultiEdit|Glob|Grep)\(.+\)\z";
 
     [JsonConstructor]
-    private ClaudeCodeSettings(string model, bool blockCiCdEdits = true, IReadOnlyList<string>? additionalDenyRules = null)
+    private ClaudeCodeSettings(bool blockCiCdEdits = true, IReadOnlyList<string>? additionalDenyRules = null)
     {
-        Model = model;
         BlockCiCdEdits = blockCiCdEdits;
         AdditionalDenyRules = additionalDenyRules ?? [];
     }
 
     public static readonly ClaudeCodeSettings Default = Create(
-        model: string.Empty,
         blockCiCdEdits: true,
         additionalDenyRules: [])
         .Match(
             onSuccess: v => v,
             onFailure: e => throw new InvalidOperationException($"ClaudeCodeSettings.Default is invalid: {e.Message}"));
 
-    public string Model { get; }
-
     public bool BlockCiCdEdits { get; }
 
     public IReadOnlyList<string> AdditionalDenyRules { get; }
 
     public static Result<ClaudeCodeSettings> Create(
-        string model,
         bool blockCiCdEdits,
         IReadOnlyList<string> additionalDenyRules)
     {
-        string trimmedModel = model.Trim();
-
-        if (trimmedModel.Length > MaxModelLength)
-        {
-            return Result<ClaudeCodeSettings>.Fail(SettingsErrors.ModelTooLong);
-        }
-
         HashSet<string> seenRules = new(StringComparer.Ordinal);
         List<string> canonicalRules = [];
 
@@ -62,19 +51,17 @@ public sealed partial record ClaudeCodeSettings
             }
         }
 
-        return Result<ClaudeCodeSettings>.Ok(new ClaudeCodeSettings(trimmedModel, blockCiCdEdits, canonicalRules.AsReadOnly()));
+        return Result<ClaudeCodeSettings>.Ok(new ClaudeCodeSettings(blockCiCdEdits, canonicalRules.AsReadOnly()));
     }
 
     public bool Equals(ClaudeCodeSettings? other) =>
         other is not null
-        && Model == other.Model
         && BlockCiCdEdits == other.BlockCiCdEdits
         && AdditionalDenyRules.SequenceEqual(other.AdditionalDenyRules);
 
     public override int GetHashCode()
     {
         HashCode hash = new();
-        hash.Add(Model);
         hash.Add(BlockCiCdEdits);
         foreach (string rule in AdditionalDenyRules)
         {

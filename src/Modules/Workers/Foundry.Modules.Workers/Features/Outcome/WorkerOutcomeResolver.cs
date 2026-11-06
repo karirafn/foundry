@@ -245,7 +245,7 @@ internal sealed class WorkerOutcomeResolver(
 
         // exit != 0, or the container is gone
         ContainerOutputParseResult parseResult = containerOutputParser.Parse(containerOutput);
-        FailureReason failureReason = ClassifyNonZeroFailureReason(parseResult, status);
+        FailureReason failureReason = ClassifyNonZeroFailureReason(parseResult, status, run.Role);
 
         return hasCommits
             ? new WorkerOutcome.ContinuableFailure(run.BranchName, failureReason, containerOutput, summary)
@@ -299,7 +299,7 @@ internal sealed class WorkerOutcomeResolver(
         RunResultSummary? summary)
     {
         ContainerOutputParseResult parseResult = containerOutputParser.Parse(containerOutput);
-        FailureReason? classified = TryClassifyParseResult(parseResult);
+        FailureReason? classified = TryClassifyParseResult(parseResult, run.Role);
 
         if (classified is not null)
         {
@@ -342,9 +342,10 @@ internal sealed class WorkerOutcomeResolver(
 
     private static FailureReason ClassifyNonZeroFailureReason(
         ContainerOutputParseResult parseResult,
-        WorkerStatus? status)
+        WorkerStatus? status,
+        WorkerRole role)
     {
-        if (TryClassifyParseResult(parseResult) is { } classified)
+        if (TryClassifyParseResult(parseResult, role) is { } classified)
         {
             return classified;
         }
@@ -362,7 +363,7 @@ internal sealed class WorkerOutcomeResolver(
     /// <see cref="FailureReason"/>; returns <see langword="null"/> when the parse carries no category.
     /// Shared by the non-zero and the exit-0 paths so both classify a failure identically.
     /// </summary>
-    private static FailureReason? TryClassifyParseResult(ContainerOutputParseResult parseResult)
+    private static FailureReason? TryClassifyParseResult(ContainerOutputParseResult parseResult, WorkerRole role)
     {
         return parseResult switch
         {
@@ -372,6 +373,7 @@ internal sealed class WorkerOutcomeResolver(
             ContainerOutputParseResult.CreditsExhausted => new FailureReason.CreditsExhausted(),
             ContainerOutputParseResult.AuthInvalid => new FailureReason.AuthInvalid(),
             ContainerOutputParseResult.TransientApiError => new FailureReason.TransientApiError(),
+            ContainerOutputParseResult.ModelUnavailable => new FailureReason.ModelUnavailable(role.Name),
             _ => null,
         };
     }

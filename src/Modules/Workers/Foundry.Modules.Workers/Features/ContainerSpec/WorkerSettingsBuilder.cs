@@ -38,7 +38,9 @@ internal static class WorkerSettingsBuilder
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
     };
 
-    public static string Build(ClaudeCodeSettingsSnapshot claudeCode)
+    /// <param name="claudeCode">The Claude Code policy applied to every worker.</param>
+    /// <param name="model">The role's model setting; empty leaves the model unset so the CLI's account default applies.</param>
+    public static string Build(ClaudeCodeSettingsSnapshot claudeCode, string model)
     {
         string[] denyRules =
         [
@@ -49,7 +51,7 @@ internal static class WorkerSettingsBuilder
 
         SettingsDocument document = new()
         {
-            Model = string.IsNullOrWhiteSpace(claudeCode.Model) ? null : claudeCode.Model,
+            Model = string.IsNullOrWhiteSpace(model) ? null : model.Trim(),
             Permissions = new() { Deny = denyRules },
             Attribution = new(),
         };

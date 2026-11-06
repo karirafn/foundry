@@ -43,7 +43,6 @@ public sealed class WhenClaudeCodeSettingsRoundTrips : IAsyncDisposable
     {
         // Arrange
         ClaudeCodeSettings settings = ClaudeCodeSettings.Create(
-                "claude-opus-4-1",
                 false,
                 ["Bash(rm:*)", "Read(./secrets/**)"])
             .Match(v => v, e => throw new InvalidOperationException(e.Message));

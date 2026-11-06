@@ -12,6 +12,7 @@ using Foundry.Modules.Workers.Features.ImageBuild;
 using Foundry.Modules.Workers.Features.Orchestration;
 using Foundry.Modules.Workers.Features.Outcome;
 using Foundry.Modules.Workers.Features.Roles;
+using Foundry.Modules.Workers.Features.Roles.Models;
 using Foundry.Modules.Workers.Features.Runs;
 using Foundry.Modules.Workers.Infrastructure;
 using Foundry.Shared.Infrastructure;
@@ -27,6 +28,8 @@ public static class WorkersModule
 {
     // This period is process-global — all health-check publishers ride this cadence.
     private const int HealthCheckPublisherPeriodSeconds = 15;
+    private const int ModelsApiTimeoutSeconds = 30;
+    private const int ModelsApiMaxResponseBytes = 4 * 1024 * 1024;
 
     public static IServiceCollection AddWorkersModule(this IServiceCollection services)
     {
@@ -54,6 +57,14 @@ public static class WorkersModule
         services.AddSingleton<IProbeOutcomeClassifier, ProbeOutcomeClassifier>();
         services.AddSingleton<IWorkerImageRebuildQueue, WorkerImageRebuildQueue>();
         services.AddSingleton<IWorkerRoleCatalogStore, WorkerRoleCatalogStore>();
+        services.AddHttpClient<IClaudeModelsApi, AnthropicModelsClient>(client =>
+        {
+            client.BaseAddress = AnthropicModelsClient.BaseAddress;
+            client.Timeout = TimeSpan.FromSeconds(ModelsApiTimeoutSeconds);
+            client.MaxResponseContentBufferSize = ModelsApiMaxResponseBytes;
+        });
+        services.AddSingleton<IClaudeModelCatalog, ClaudeModelCatalog>();
+        services.AddCommandHandler<UpdateWorkerRoleModel.Command, WorkerRoleModelResponse, UpdateWorkerRoleModel.Handler>();
 
         services.AddIntegrationEventHandler<IssueClaimed, IssueClaimedHandler>();
         services.AddIntegrationEventHandler<ClaimSkipped, ClaimSkippedHandler>();

@@ -410,7 +410,6 @@ public sealed class ToSummary
         // Arrange
         GlobalSettings settings = CreateDefaultSettings();
         ClaudeCodeSettings claudeCode = new ClaudeCodeSettingsBuilder()
-            .WithModel("claude-opus-4-1")
             .WithBlockCiCdEdits(false)
             .WithAdditionalDenyRules(["Bash(rm:*)"])
             .Build()
@@ -422,7 +421,6 @@ public sealed class ToSummary
 
         // Assert
         result.ShouldSatisfyAllConditions(
-            () => result.Model.ShouldBe(settings.ClaudeCodeSettings.Model),
             () => result.BlockCiCdEdits.ShouldBe(settings.ClaudeCodeSettings.BlockCiCdEdits),
             () => result.AdditionalDenyRules.ShouldBe(settings.ClaudeCodeSettings.AdditionalDenyRules));
     }

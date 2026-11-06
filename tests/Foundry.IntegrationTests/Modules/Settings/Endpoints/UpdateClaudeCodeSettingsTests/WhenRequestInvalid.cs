@@ -49,22 +49,6 @@ public sealed class WhenRequestInvalid : IAsyncDisposable
             TestContext.Current.CancellationToken);
 
     [Fact]
-    public async Task WhenModelTooLong_ReturnsBadRequest()
-    {
-        // Arrange
-        await SeedDefaultSettingsAsync();
-        object body = new UpdateClaudeCodeSettingsRequestBuilder()
-            .WithModel(new string('m', 201))
-            .Build();
-
-        // Act
-        HttpResponseMessage response = await PutAsync(body);
-
-        // Assert
-        await AssertProblemAsync(response, "Settings.ModelTooLong");
-    }
-
-    [Fact]
     public async Task WhenAdditionalDenyRuleMalformed_ReturnsBadRequest()
     {
         // Arrange

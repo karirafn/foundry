@@ -139,6 +139,16 @@ internal sealed class IssueClaimedHandler(
         }
     }
 
+    /// <summary>The role's model setting (ADR 0095); empty when it was never set, so the CLI's account default applies.</summary>
+    private async Task<string> GetRoleModelAsync(WorkerRole role, CancellationToken cancellationToken)
+    {
+        WorkerRoleSettings? settings = await dbContext.Set<WorkerRoleSettings>()
+            .AsNoTracking()
+            .FirstOrDefaultAsync(candidate => candidate.Role == role, cancellationToken);
+
+        return settings?.Model ?? string.Empty;
+    }
+
     private async Task<Result<WorkerContainerSpec>> BuildSpecAsync(
         StartingRun startingRun,
         ClaimedIssueDispatch claimed,
@@ -174,6 +184,7 @@ internal sealed class IssueClaimedHandler(
         bool installsDotnet = await settingsQueries.GetWorkerImageInstallsDotnetAsync(cancellationToken);
         string imageTag = await settingsQueries.GetWorkerImageTagAsync(cancellationToken);
         ClaudeCodeSettingsSnapshot claudeCode = await settingsQueries.GetClaudeCodeSettingsAsync(cancellationToken);
+        string model = await GetRoleModelAsync(role.Role, cancellationToken);
         WorkerResourceLimitsSnapshot limits = await settingsQueries.GetWorkerResourceLimitsAsync(cancellationToken);
 
         Result<string> systemPromptResult = SystemPromptBuilder.Build(
@@ -225,7 +236,7 @@ internal sealed class IssueClaimedHandler(
             ["SYSTEM_PROMPT"] = systemPrompt,
             ["WORKER_PROMPT"] = workerPrompt,
             ["WORKER_ROLE"] = role.Role.Name,
-            ["CLAUDE_SETTINGS_JSON"] = WorkerSettingsBuilder.Build(claudeCode),
+            ["CLAUDE_SETTINGS_JSON"] = WorkerSettingsBuilder.Build(claudeCode, model),
         };
 
         List<VolumeMount> volumeMounts = [];

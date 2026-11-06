@@ -11,63 +11,6 @@ namespace Foundry.UnitTests.Modules.Settings.Domain.ValueObjects.ClaudeCodeSetti
 
 public sealed class Create
 {
-    [Fact]
-    public void WhenModelHasSurroundingWhitespace_TrimsIt()
-    {
-        // Arrange
-        ClaudeCodeSettingsBuilder builder = new ClaudeCodeSettingsBuilder().WithModel("  claude-opus-4  ");
-
-        // Act
-        Result<ClaudeCodeSettings> result = builder.Build();
-
-        // Assert
-        result.ShouldBeOfType<Result<ClaudeCodeSettings>.Success>().Value.Model.ShouldBe("claude-opus-4");
-    }
-
-    [Fact]
-    public void WhenModelIsOnlyWhitespace_CollapsesToUnset()
-    {
-        // Arrange
-        ClaudeCodeSettingsBuilder builder = new ClaudeCodeSettingsBuilder().WithModel("   ");
-
-        // Act
-        Result<ClaudeCodeSettings> result = builder.Build();
-
-        // Assert
-        result.ShouldBeOfType<Result<ClaudeCodeSettings>.Success>().Value.Model.ShouldBeEmpty();
-    }
-
-    [Fact]
-    public void WhenModelIsExactlyMaxLength_ReturnsSuccess()
-    {
-        // Arrange
-        ClaudeCodeSettingsBuilder builder = new ClaudeCodeSettingsBuilder()
-            .WithModel(new string('m', ClaudeCodeSettings.MaxModelLength));
-
-        // Act
-        Result<ClaudeCodeSettings> result = builder.Build();
-
-        // Assert
-        result.IsSuccess.ShouldBeTrue();
-    }
-
-    [Fact]
-    public void WhenModelExceedsMaxLength_FailsWithModelTooLongCodeNamingTheCap()
-    {
-        // Arrange
-        ClaudeCodeSettingsBuilder builder = new ClaudeCodeSettingsBuilder()
-            .WithModel(new string('m', ClaudeCodeSettings.MaxModelLength + 1));
-
-        // Act
-        Result<ClaudeCodeSettings> result = builder.Build();
-
-        // Assert
-        Error error = result.ShouldBeOfType<Result<ClaudeCodeSettings>.Failure>().Error;
-        error.ShouldSatisfyAllConditions(
-            () => error.Code.ShouldBe(SettingsErrors.ModelTooLongCode),
-            () => error.Message.ShouldContain("200"));
-    }
-
     [Theory]
     [InlineData("")]
     [InlineData("   ")]

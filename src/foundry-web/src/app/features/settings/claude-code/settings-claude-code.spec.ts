@@ -14,7 +14,7 @@ import {
   CREDENTIALS_OAUTH_RELOGIN_NEEDED,
 } from '../testing/settings-page-harness';
 import { SettingsClaudeCodeComponent } from './settings-claude-code';
-import { DENY_RULE_PATTERN, MODEL_MAX_LENGTH } from './settings-claude-code.validators';
+import { DENY_RULE_PATTERN } from './settings-claude-code.validators';
 
 describe('SettingsClaudeCodeComponent', () => {
   afterEach(() => {
@@ -876,53 +876,6 @@ describe('SettingsClaudeCodeComponent', () => {
       return page.el.querySelector(`#${id}`)?.textContent?.trim() ?? '';
     }
 
-    it('should seed the model field from the loaded settings', async () => {
-      // Arrange & Act
-      const page = await loadPage({ model: 'claude-opus-4' });
-
-      // Assert
-      expect(field(page, 'model').value).toBe('claude-opus-4');
-    });
-
-    it('should accept a model of the maximum length followed by whitespace and submit it trimmed', async () => {
-      // Arrange
-      const page = await loadPage();
-      const model = 'x'.repeat(MODEL_MAX_LENGTH);
-
-      // Act
-      type(page, 'model', `${model}   `);
-      saveButton(page).click();
-
-      // Assert
-      const request = page.httpMock.expectOne(CLAUDE_CODE_URL);
-      expect(request.request.body.model).toBe(model);
-      request.flush({ ...API_KEY_RESPONSE, model });
-    });
-
-    it('should show a length error when the model exceeds the maximum', async () => {
-      // Arrange
-      const page = await loadPage();
-
-      // Act
-      type(page, 'model', 'x'.repeat(MODEL_MAX_LENGTH + 1));
-      blur(page, 'model');
-
-      // Assert
-      expect(text(page, 'model-error')).toBe('Model must be 200 characters or fewer.');
-    });
-
-    it('should accept an empty model', async () => {
-      // Arrange
-      const page = await loadPage({ model: 'claude-opus-4' });
-
-      // Act
-      type(page, 'model', '');
-      blur(page, 'model');
-
-      // Assert
-      expect(text(page, 'model-error')).toBe('');
-    });
-
     it('should list the seven CI/CD rules read-only when blocking is enabled', async () => {
       // Arrange & Act
       const page = await loadPage({ blockCiCdEdits: true });
@@ -1084,7 +1037,7 @@ describe('SettingsClaudeCodeComponent', () => {
       const page = await loadPage();
 
       // Act
-      type(page, 'model', 'claude-opus-4');
+      click(page, '#blockCiCdEdits');
 
       // Assert
       expect(saveButton(page).disabled).toBe(false);
@@ -1092,11 +1045,11 @@ describe('SettingsClaudeCodeComponent', () => {
 
     it('should disable Save again when the edit is reverted', async () => {
       // Arrange
-      const page = await loadPage({ model: 'a' });
-      type(page, 'model', 'b');
+      const page = await loadPage();
+      click(page, '#blockCiCdEdits');
 
       // Act
-      type(page, 'model', 'a');
+      click(page, '#blockCiCdEdits');
 
       // Assert
       expect(saveButton(page).disabled).toBe(true);
@@ -1107,7 +1060,7 @@ describe('SettingsClaudeCodeComponent', () => {
       const page = await loadPage();
 
       // Act
-      type(page, 'model', 'claude-opus-4');
+      click(page, '#blockCiCdEdits');
 
       // Assert
       expect(page.fixture.componentInstance.hasUnsavedChanges()).toBe(true);
@@ -1124,7 +1077,6 @@ describe('SettingsClaudeCodeComponent', () => {
     it('should submit the form values to the claude-code endpoint', async () => {
       // Arrange
       const page = await loadPage();
-      type(page, 'model', 'claude-opus-4');
       click(page, '#blockCiCdEdits');
       click(page, '#addRule');
       type(page, 'denyRule-0', 'Bash(rm:*)');
@@ -1135,7 +1087,6 @@ describe('SettingsClaudeCodeComponent', () => {
       // Assert
       const request = page.httpMock.expectOne(CLAUDE_CODE_URL);
       expect(request.request.body).toEqual({
-        model: 'claude-opus-4',
         blockCiCdEdits: false,
         additionalDenyRules: ['Bash(rm:*)'],
       });
@@ -1146,7 +1097,7 @@ describe('SettingsClaudeCodeComponent', () => {
       // Arrange
       const page = await loadPage();
       click(page, '#addRule');
-      type(page, 'model', 'claude-opus-4');
+      click(page, '#blockCiCdEdits');
 
       // Act
       saveButton(page).click();
@@ -1160,11 +1111,11 @@ describe('SettingsClaudeCodeComponent', () => {
     it('should show a saved status after a successful save', async () => {
       // Arrange
       const page = await loadPage();
-      type(page, 'model', 'claude-opus-4');
+      click(page, '#blockCiCdEdits');
       saveButton(page).click();
 
       // Act
-      page.httpMock.expectOne(CLAUDE_CODE_URL).flush({ ...API_KEY_RESPONSE, model: 'claude-opus-4' });
+      page.httpMock.expectOne(CLAUDE_CODE_URL).flush({ ...API_KEY_RESPONSE, blockCiCdEdits: false });
       await page.fixture.whenStable();
       page.fixture.detectChanges();
 
@@ -1172,26 +1123,6 @@ describe('SettingsClaudeCodeComponent', () => {
       expect(page.el.querySelector('form.claude-code .general-settings__save-success')?.textContent?.trim()).toBe(
         'Claude Code settings saved',
       );
-    });
-
-    it('should attach a ModelTooLong server error to the model control', async () => {
-      // Arrange
-      const page = await loadPage();
-      type(page, 'model', 'claude-opus-4');
-      saveButton(page).click();
-
-      // Act
-      page.httpMock.expectOne(CLAUDE_CODE_URL).flush(
-        { detail: 'Model is too long.', type: 'tag:foundry,2026:problems/Settings.ModelTooLong' },
-        { status: 400, statusText: 'Bad Request' },
-      );
-      await page.fixture.whenStable();
-      page.fixture.detectChanges();
-      await page.fixture.whenStable();
-
-      // Assert
-      expect(text(page, 'model-error')).toBe('Model is too long.');
-      expect(document.activeElement).toBe(field(page, 'model'));
     });
 
     it('should attach an InvalidDenyRule server error to the matching row', async () => {
@@ -1220,7 +1151,7 @@ describe('SettingsClaudeCodeComponent', () => {
     it('should attach an InvalidDenyRule error to the exact row when another rule is a prefix of it', async () => {
       // Arrange
       const page = await loadPage({ additionalDenyRules: ['Bash(a)', 'Bash(a))'] });
-      type(page, 'model', 'claude-opus-4');
+      click(page, '#blockCiCdEdits');
       saveButton(page).click();
 
       // Act
@@ -1240,7 +1171,7 @@ describe('SettingsClaudeCodeComponent', () => {
     it('should show a form-level error when the offending rule matches no row exactly', async () => {
       // Arrange
       const page = await loadPage({ additionalDenyRules: ['Bash(a)'] });
-      type(page, 'model', 'claude-opus-4');
+      click(page, '#blockCiCdEdits');
       saveButton(page).click();
 
       // Act
@@ -1261,7 +1192,7 @@ describe('SettingsClaudeCodeComponent', () => {
     it('should clear a stale form-level error after a later successful save', async () => {
       // Arrange
       const page = await loadPage();
-      type(page, 'model', 'claude-opus-4');
+      click(page, '#blockCiCdEdits');
       saveButton(page).click();
       page.httpMock.expectOne(CLAUDE_CODE_URL).flush(
         { detail: 'Settings not found.', type: 'tag:foundry,2026:problems/Settings.NotFound' },
@@ -1272,7 +1203,7 @@ describe('SettingsClaudeCodeComponent', () => {
 
       // Act
       saveButton(page).click();
-      page.httpMock.expectOne(CLAUDE_CODE_URL).flush({ ...API_KEY_RESPONSE, model: 'claude-opus-4' });
+      page.httpMock.expectOne(CLAUDE_CODE_URL).flush({ ...API_KEY_RESPONSE, blockCiCdEdits: false });
       await page.fixture.whenStable();
       page.fixture.detectChanges();
 
@@ -1288,18 +1219,10 @@ describe('SettingsClaudeCodeComponent', () => {
       expect(page.el.querySelector('ul.claude-code__rule-list')?.getAttribute('role')).toBe('list');
     });
 
-    it('should state the CLI default hint only once in the model section', async () => {
-      // Arrange & Act
-      const page = await loadPage();
-
-      // Assert
-      expect(page.el.textContent?.match(/Leave empty to use the CLI default\./g)?.length).toBe(1);
-    });
-
     it('should show a form-level error for an error without a field', async () => {
       // Arrange
       const page = await loadPage();
-      type(page, 'model', 'claude-opus-4');
+      click(page, '#blockCiCdEdits');
       saveButton(page).click();
 
       // Act
