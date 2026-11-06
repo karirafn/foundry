@@ -15,7 +15,6 @@ namespace Foundry.UnitTests.Modules.Settings.Features.WorkerConfig.UpdateClaudeC
 
 public sealed class HandleAsync : IAsyncLifetime
 {
-    private const string ValidModel = "claude-opus-4-1";
     private const string ValidRule = "Bash(rm -rf:*)";
 
     private readonly SqliteConnection _connection;
@@ -54,13 +53,12 @@ public sealed class HandleAsync : IAsyncLifetime
     }
 
     private static UpdateClaudeCodeSettings.Command CreateCommand(
-        string model = ValidModel,
         bool blockCiCdEdits = false,
         params string[] additionalDenyRules) =>
-        new(model, blockCiCdEdits, additionalDenyRules);
+        new(blockCiCdEdits, additionalDenyRules);
 
     [Fact]
-    public async Task WhenValid_ReturnsSummaryWithNewModelToggleAndRules()
+    public async Task WhenValid_ReturnsSummaryWithNewToggleAndRules()
     {
         // Arrange
         await SeedSettingsAsync();
@@ -74,7 +72,6 @@ public sealed class HandleAsync : IAsyncLifetime
         // Assert
         GlobalSettingsSummary summary = result.Match(v => v, e => throw new InvalidOperationException(e.Message));
         summary.ShouldSatisfyAllConditions(
-            () => summary.Model.ShouldBe(ValidModel),
             () => summary.BlockCiCdEdits.ShouldBeFalse(),
             () => summary.AdditionalDenyRules.ShouldBe([ValidRule]));
     }
@@ -100,7 +97,6 @@ public sealed class HandleAsync : IAsyncLifetime
             .AsNoTracking()
             .SingleAsync(TestContext.Current.CancellationToken);
         persisted.ShouldSatisfyAllConditions(
-            () => persisted.ClaudeCodeSettings.Model.ShouldBe(ValidModel),
             () => persisted.ClaudeCodeSettings.BlockCiCdEdits.ShouldBeFalse(),
             () => persisted.ClaudeCodeSettings.AdditionalDenyRules.ShouldBe([ValidRule]));
     }
@@ -120,23 +116,6 @@ public sealed class HandleAsync : IAsyncLifetime
         // Assert
         result.ShouldBeOfType<Result<GlobalSettingsSummary>.Failure>().Error.Code
             .ShouldBe(SettingsErrors.NotFoundCode);
-    }
-
-    [Fact]
-    public async Task WhenModelTooLong_ReturnsModelTooLong()
-    {
-        // Arrange
-        await SeedSettingsAsync();
-        await using FoundryDbContext dbContext = CreateDbContext();
-        UpdateClaudeCodeSettings.Handler sut = new(dbContext);
-        UpdateClaudeCodeSettings.Command command = CreateCommand(model: new string('m', 201));
-
-        // Act
-        Result<GlobalSettingsSummary> result = await sut.HandleAsync(command, TestContext.Current.CancellationToken);
-
-        // Assert
-        result.ShouldBeOfType<Result<GlobalSettingsSummary>.Failure>().Error.Code
-            .ShouldBe(SettingsErrors.ModelTooLongCode);
     }
 
     [Fact]
@@ -182,9 +161,7 @@ public sealed class HandleAsync : IAsyncLifetime
         await using (FoundryDbContext dbContext = CreateDbContext())
         {
             UpdateClaudeCodeSettings.Handler sut = new(dbContext);
-            UpdateClaudeCodeSettings.Command command = CreateCommand(
-                model: string.Empty,
-                blockCiCdEdits: true);
+            UpdateClaudeCodeSettings.Command command = CreateCommand(blockCiCdEdits: true);
 
             // Act
             await sut.HandleAsync(command, TestContext.Current.CancellationToken);

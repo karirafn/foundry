@@ -347,6 +347,97 @@ public sealed class HandleAsync : IAsyncDisposable
         rebasePending.FeedbackCutoffAt.ShouldBeLessThan(laterCommentCreatedAt);
     }
 
+    private RevisionInProgressIssue SeedNonFeedbackRevisionInProgressIssue(
+        MonitoredRepositoryId repositoryId,
+        string triggerKind)
+    {
+        IssueBuilder builder = new IssueBuilder()
+            .WithMonitoredRepositoryId(repositoryId)
+            .WithIssueNumber(4)
+            .WithBranchName("feat/issue-4")
+            .WithPullRequestUrl("https://github.com/owner/repo/pull/4");
+        RevisionInProgressIssue revisionInProgress = triggerKind switch
+        {
+            nameof(RevisionTrigger.FailedChecks) => builder.ChecksPending()
+                .FixChecks([new FailingCheck("ci/build", "failure", null)])
+                .Claim(WorkerRunId.New()),
+            nameof(RevisionTrigger.RebaseConflict) => builder.RebasePending()
+                .ResolveConflict()
+                .Claim(WorkerRunId.New()),
+            _ => throw new ArgumentOutOfRangeException(nameof(triggerKind), triggerKind, null),
+        };
+        _dbContext.Set<Issue>().Add(revisionInProgress);
+        _dbContext.SaveChanges();
+        _dbContext.ChangeTracker.Clear();
+        return revisionInProgress;
+    }
+
+    [Theory]
+    [InlineData(nameof(RevisionTrigger.FailedChecks), true)]
+    [InlineData(nameof(RevisionTrigger.FailedChecks), false)]
+    [InlineData(nameof(RevisionTrigger.RebaseConflict), true)]
+    [InlineData(nameof(RevisionTrigger.RebaseConflict), false)]
+    public async Task WhenNonFeedbackRevisionCompletes_FeedbackCutoffIsRunStartedAt(string triggerKind, bool withPullRequest)
+    {
+        // Arrange — a reviewer comments after the run started but before it finished
+        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
+        RevisionInProgressIssue revisionInProgress = SeedNonFeedbackRevisionInProgressIssue(repositoryId, triggerKind);
+        DateTimeOffset runStartedAt = new(2024, 6, 1, 12, 0, 0, TimeSpan.Zero);
+        DateTimeOffset commentDuringRunAt = runStartedAt.AddMinutes(5);
+
+        WorkerRunCompleted @event = new(
+            WorkerRunId: revisionInProgress.WorkerRunId,
+            IssueId: revisionInProgress.Id.Value,
+            BranchName: withPullRequest ? revisionInProgress.BranchName : null,
+            PullRequestUrl: withPullRequest ? revisionInProgress.PullRequestUrl : null,
+            MergeState: withPullRequest ? WorkerRunMergeState.Open : WorkerRunMergeState.None,
+            RunStartedAt: runStartedAt);
+
+        // Act
+        await _sut.HandleAsync(@event, CancellationToken.None);
+
+        // Assert — the mid-run comment falls after the cutoff, so the next review pass reads it
+        _dbContext.ChangeTracker.Clear();
+        Issue? issue = await _dbContext.Set<Issue>()
+            .FirstOrDefaultAsync(
+                i => i.MonitoredRepositoryId == repositoryId,
+                TestContext.Current.CancellationToken);
+        RebasePendingIssue rebasePending = issue.ShouldBeOfType<RebasePendingIssue>();
+        rebasePending.ShouldSatisfyAllConditions(
+            () => rebasePending.FeedbackCutoffAt.ShouldBe(runStartedAt),
+            () => rebasePending.FeedbackCutoffAt.ShouldBeLessThan(commentDuringRunAt));
+    }
+
+    [Fact]
+    public async Task WhenNonFeedbackRevisionCompletesWithoutRunStartedAt_FeedbackCutoffFallsBackToUtcNow()
+    {
+        // Arrange — an event serialized before RunStartedAt existed
+        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
+        RevisionInProgressIssue revisionInProgress =
+            SeedNonFeedbackRevisionInProgressIssue(repositoryId, nameof(RevisionTrigger.FailedChecks));
+        DateTimeOffset before = DateTimeOffset.UtcNow;
+
+        WorkerRunCompleted @event = new(
+            WorkerRunId: revisionInProgress.WorkerRunId,
+            IssueId: revisionInProgress.Id.Value,
+            BranchName: revisionInProgress.BranchName,
+            PullRequestUrl: revisionInProgress.PullRequestUrl,
+            MergeState: WorkerRunMergeState.Open,
+            RunStartedAt: null);
+
+        // Act
+        await _sut.HandleAsync(@event, CancellationToken.None);
+
+        // Assert
+        DateTimeOffset after = DateTimeOffset.UtcNow;
+        _dbContext.ChangeTracker.Clear();
+        Issue? issue = await _dbContext.Set<Issue>()
+            .FirstOrDefaultAsync(
+                i => i.MonitoredRepositoryId == repositoryId,
+                TestContext.Current.CancellationToken);
+        issue.ShouldBeOfType<RebasePendingIssue>().FeedbackCutoffAt.ShouldBeInRange(before, after);
+    }
+
     [Fact]
     public async Task WhenInProgressIssueWithMergedStateAndNullBranchName_DoesNotTransition()
     {

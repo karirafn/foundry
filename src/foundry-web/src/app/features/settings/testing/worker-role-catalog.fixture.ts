@@ -1,4 +1,4 @@
-import { WorkerRoleCard, WorkerRoleCatalog } from '../worker-roles/worker-role.service';
+import { WorkerRoleCard, WorkerRoleCatalog, WorkerRoleModelOptions } from '../worker-roles/worker-role.service';
 
 export const ROLE_PROMPT_SLOT = '{rolePrompt}';
 
@@ -25,6 +25,7 @@ export function buildWorkerRole(overrides: Partial<WorkerRoleCard> = {}): Worker
       },
     ],
     verdictSchema: null,
+    model: '',
     ...overrides,
   };
 }
@@ -79,6 +80,21 @@ export function buildWorkerRoleCatalog(
       },
     ],
     rolePromptSlot: ROLE_PROMPT_SLOT,
+    ...overrides,
+  };
+}
+
+export function buildModelOptions(
+  overrides: Partial<WorkerRoleModelOptions> = {},
+): WorkerRoleModelOptions {
+  return {
+    aliases: ['fable', 'opus', 'sonnet', 'haiku', 'opus[1m]', 'sonnet[1m]'],
+    models: [
+      { id: 'claude-opus-4-5-20251101', displayName: 'Claude Opus 4.5', deprecated: false },
+      { id: 'claude-3-7-sonnet-20250219', displayName: 'Claude Sonnet 3.7', deprecated: true },
+    ],
+    refreshedAt: '2026-11-06T12:00:00Z',
+    refreshError: null,
     ...overrides,
   };
 }

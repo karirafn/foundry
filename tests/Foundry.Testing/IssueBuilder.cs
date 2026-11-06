@@ -43,6 +43,7 @@ public sealed class IssueBuilder
     private IReadOnlyList<ReviewComment> _reviewComments = [new ReviewComment("Please fix.")];
     private int _omittedCommentCount;
     private DateTimeOffset? _newestCommentAt;
+    private DateTimeOffset _runStartedAt = DateTimeOffset.UtcNow;
     private IReadOnlyList<FailingCheck> _failingChecks =
     [
         new FailingCheck("ci/build", "failure", "https://github.com/owner/repo/actions/runs/1"),
@@ -102,6 +103,8 @@ public sealed class IssueBuilder
 
     public IssueBuilder WithNewestCommentAt(DateTimeOffset value) { _newestCommentAt = value; return this; }
 
+    public IssueBuilder WithRunStartedAt(DateTimeOffset value) { _runStartedAt = value; return this; }
+
     public IssueBuilder WithFailingChecks(IEnumerable<FailingCheck> value) { _failingChecks = [.. value]; return this; }
 
     public DetectedIssue Detected() =>
@@ -142,7 +145,7 @@ public sealed class IssueBuilder
     public RebasePendingIssue RebasePending() =>
         InProgress().MarkRebasePending(_branchName, _pullRequestUrl, _feedbackCutoffAt);
 
-    public RebasePendingIssue RebasePendingFromRevision() => RevisionInProgress().MarkRebasePending();
+    public RebasePendingIssue RebasePendingFromRevision() => RevisionInProgress().MarkRebasePending(_runStartedAt);
 
     /// <summary>
     /// Builds a <see cref="RebasePendingIssue"/> that has already dispatched <paramref name="conflicts"/>
@@ -153,7 +156,7 @@ public sealed class IssueBuilder
         RebasePendingIssue rebasePending = RebasePending();
         for (int i = 0; i < conflicts; i++)
         {
-            rebasePending = rebasePending.ResolveConflict().Claim(_workerRunId).MarkRebasePending();
+            rebasePending = rebasePending.ResolveConflict().Claim(_workerRunId).MarkRebasePending(_runStartedAt);
         }
 
         return rebasePending;
@@ -168,7 +171,7 @@ public sealed class IssueBuilder
     /// (i.e., ChecksFixAttempts = 1). Used to test the second-attempt code path in FixChecks scenarios.
     /// </summary>
     public ChecksPendingIssue ChecksPendingFromFixChecks() =>
-        ChecksPending().FixChecks(_failingChecks).Claim(_workerRunId).MarkRebasePending().MarkChecksPending(_rebaseOutcome);
+        ChecksPending().FixChecks(_failingChecks).Claim(_workerRunId).MarkRebasePending(_runStartedAt).MarkChecksPending(_rebaseOutcome);
 
     /// <summary>
     /// Builds a <see cref="ChecksPendingIssue"/> that has exhausted all FixChecks dispatch
@@ -177,7 +180,7 @@ public sealed class IssueBuilder
     /// than dispatching another fix revision.
     /// </summary>
     public ChecksPendingIssue ChecksPendingAtCap() =>
-        ChecksPendingFromFixChecks().FixChecks(_failingChecks).Claim(_workerRunId).MarkRebasePending().MarkChecksPending(_rebaseOutcome);
+        ChecksPendingFromFixChecks().FixChecks(_failingChecks).Claim(_workerRunId).MarkRebasePending(_runStartedAt).MarkChecksPending(_rebaseOutcome);
 
     public ReviewIssue ReviewFromChecksPending() => ChecksPending().ToReview(_checksOutcome);
 

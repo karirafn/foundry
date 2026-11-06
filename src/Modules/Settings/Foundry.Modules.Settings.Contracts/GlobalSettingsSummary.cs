@@ -23,7 +23,6 @@ public sealed record GlobalSettingsSummary(
     int MemoryLimitMb,
     double CpuLimit,
     int PidsLimit,
-    string Model,
     bool BlockCiCdEdits,
     IReadOnlyList<string> AdditionalDenyRules,
     string? WebhookPublicBaseUrl = null,

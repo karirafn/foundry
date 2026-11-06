@@ -1,4 +1,6 @@
 using Foundry.Modules.Settings.Contracts.Queries;
+using Foundry.Modules.Workers.Domain.Entities;
+using Foundry.Modules.Workers.Domain.ValueObjects;
 using Foundry.Modules.Workers.Features.ContainerSpec;
 using Foundry.Shared;
 using Foundry.Shared.Infrastructure.Http;
@@ -7,6 +9,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Routing;
+using Microsoft.EntityFrameworkCore;
 
 namespace Foundry.Modules.Workers.Features.Roles;
 
@@ -29,6 +32,10 @@ internal sealed record WorkerRoleImage(string Tag, string? ImageId, DateTimeOffs
 /// <param name="Skills">The role plugin's skills.</param>
 /// <param name="Agents">The role plugin's agents.</param>
 /// <param name="VerdictSchema">The JSON schema of the role's verdict; <see langword="null"/> when the role has none.</param>
+/// <param name="Model">
+/// The role's model setting: a Claude Code alias or a model ID; empty for the CLI's account default. The only editable
+/// part of a role (ADR 0095).
+/// </param>
 internal sealed record WorkerRoleCard(
     string Name,
     string? Purpose,
@@ -36,7 +43,8 @@ internal sealed record WorkerRoleCard(
     string TaskPrompt,
     IReadOnlyList<RolePluginComponent> Skills,
     IReadOnlyList<RolePluginComponent> Agents,
-    string? VerdictSchema);
+    string? VerdictSchema,
+    string Model);
 
 /// <summary>The plugin loaded for every role.</summary>
 internal sealed record SharedRolePlugin(
@@ -63,7 +71,10 @@ internal static class GetWorkerRoleCatalog
         "Worker.RoleCatalogNotLoaded",
         "The worker role catalog is not loaded yet. It is read during the worker image build; wait for the build to finish.");
 
-    internal static WorkerRoleCatalogResponse ToResponse(WorkerRoleCatalog catalog, int timeoutMinutes)
+    internal static WorkerRoleCatalogResponse ToResponse(
+        WorkerRoleCatalog catalog,
+        int timeoutMinutes,
+        IReadOnlyDictionary<WorkerRole, string> models)
     {
         WorkerImageProvenance image = catalog.Image;
 
@@ -77,7 +88,8 @@ internal static class GetWorkerRoleCatalog
                     role.TaskPromptTemplate,
                     role.Plugin.Skills,
                     role.Plugin.Agents,
-                    role.VerdictSchema)),
+                    role.VerdictSchema,
+                    models.GetValueOrDefault(role.Role, string.Empty))),
             ],
             new SharedRolePlugin(
                 catalog.Content.Shared.Description,
@@ -94,6 +106,7 @@ internal static class GetWorkerRoleCatalog
             group.MapGet("/", static async (
                     IWorkerRoleCatalogStore store,
                     IGlobalSettingsQueries settingsQueries,
+                    DbContext dbContext,
                     CancellationToken cancellationToken) =>
                 {
                     WorkerRoleCatalog? catalog = store.Current;
@@ -106,7 +119,11 @@ internal static class GetWorkerRoleCatalog
 
                     int timeoutMinutes = await settingsQueries.GetTimeoutMinutesAsync(cancellationToken);
 
-                    return TypedResults.Ok(ToResponse(catalog, timeoutMinutes));
+                    Dictionary<WorkerRole, string> models = await dbContext.Set<WorkerRoleSettings>()
+                        .AsNoTracking()
+                        .ToDictionaryAsync(settings => settings.Role, settings => settings.Model, cancellationToken);
+
+                    return TypedResults.Ok(ToResponse(catalog, timeoutMinutes, models));
                 })
                 .WithName("GetWorkerRoleCatalog")
                 .WithSummary("Returns the worker roles of the running worker image, read-only, with the system-prompt sections Foundry adds")
@@ -124,6 +141,8 @@ internal static class WorkerRoleEndpoints
             .WithTags("Worker Roles");
 
         GetWorkerRoleCatalog.Endpoint.Map(group);
+        GetWorkerRoleModels.Endpoint.Map(group);
+        UpdateWorkerRoleModel.Endpoint.Map(group);
 
         return routes;
     }

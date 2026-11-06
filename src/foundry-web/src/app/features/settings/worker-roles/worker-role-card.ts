@@ -9,6 +9,7 @@ import {
 import { DatePipe, NgTemplateOutlet } from '@angular/common';
 import { PromptAssemblyComponent } from './prompt-assembly';
 import { PromptTextComponent } from './prompt-text';
+import { WorkerRoleModelComponent } from './worker-role-model';
 import { RolePluginComponent, WorkerRoleCard, WorkerRoleCatalog } from './worker-role.service';
 
 const SHORT_COMMIT_LENGTH = 7;
@@ -18,11 +19,11 @@ interface PluginEntry {
   readonly shared: boolean;
 }
 
-/** One read-only card per worker role: prompts, prompt assembly, plugin skills/agents and verdict schema. */
+/** One card per worker role: its editable model, then read-only prompts, prompt assembly, plugin skills/agents and verdict schema. */
 @Component({
   selector: 'fd-worker-role-card',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [DatePipe, NgTemplateOutlet, PromptAssemblyComponent, PromptTextComponent],
+  imports: [DatePipe, NgTemplateOutlet, PromptAssemblyComponent, PromptTextComponent, WorkerRoleModelComponent],
   template: `
     <article class="role-card" [attr.aria-labelledby]="titleId()">
       <header class="role-card__header">
@@ -65,6 +66,8 @@ interface PluginEntry {
           </div>
         </dl>
       </header>
+
+      <fd-worker-role-model class="role-card__block" [role]="role()" />
 
       <section class="role-card__block">
         <h4 class="role-card__block-title">Role prompt</h4>

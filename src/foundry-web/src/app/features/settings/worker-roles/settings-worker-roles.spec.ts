@@ -4,14 +4,17 @@ import { HttpTestingController, provideHttpClientTesting } from '@angular/common
 import { SettingsWorkerRolesComponent } from './settings-worker-roles';
 import {
   ROLE_PROMPT_SLOT,
+  buildModelOptions,
   buildWorkerRole,
   buildWorkerRoleCatalog,
 } from '../testing/worker-role-catalog.fixture';
-import { WorkerRoleCatalog } from './worker-role.service';
+import { WorkerRoleCatalog, WorkerRoleModelOptions } from './worker-role.service';
 
 const API_URL = '/api/worker-roles';
+const MODELS_URL = '/api/worker-roles/models';
 
-function setup() {
+/** The role view refreshes the model list on open; `'pending'` leaves that request for the test to answer. */
+function setup(models: WorkerRoleModelOptions | 'pending' = buildModelOptions()) {
   TestBed.configureTestingModule({
     imports: [SettingsWorkerRolesComponent],
     providers: [provideHttpClient(), provideHttpClientTesting()],
@@ -19,11 +22,17 @@ function setup() {
   const fixture = TestBed.createComponent(SettingsWorkerRolesComponent);
   const httpMock = TestBed.inject(HttpTestingController);
   fixture.detectChanges();
+  if (models !== 'pending') {
+    httpMock.expectOne((req) => req.url === MODELS_URL).flush(models);
+  }
   return { fixture, httpMock, el: fixture.nativeElement as HTMLElement };
 }
 
-function setupLoaded(catalog: WorkerRoleCatalog = buildWorkerRoleCatalog()) {
-  const ctx = setup();
+function setupLoaded(
+  catalog: WorkerRoleCatalog = buildWorkerRoleCatalog(),
+  models: WorkerRoleModelOptions | 'pending' = buildModelOptions(),
+) {
+  const ctx = setup(models);
   ctx.httpMock.expectOne(API_URL).flush(catalog);
   ctx.fixture.detectChanges();
   return ctx;
@@ -679,6 +688,205 @@ describe('SettingsWorkerRolesComponent', () => {
 
       // Assert
       expect(cards(el)[0].querySelector('.role-card__schema')!.textContent).toBe('not { json');
+    });
+  });
+
+  describe('role model', () => {
+    function modelSelect(el: HTMLElement): HTMLSelectElement {
+      return cards(el)[0].querySelector<HTMLSelectElement>('select.role-model__select')!;
+    }
+
+    function optionLabels(select: HTMLSelectElement): string[] {
+      return Array.from(select.options).map((option) => text(option));
+    }
+
+    function choose(fixture: { detectChanges(): void }, select: HTMLSelectElement, value: string): void {
+      select.value = value;
+      select.dispatchEvent(new Event('change'));
+      fixture.detectChanges();
+    }
+
+    function saveButton(el: HTMLElement): HTMLButtonElement {
+      return cards(el)[0].querySelector<HTMLButtonElement>('.role-model__save')!;
+    }
+
+    it('should refresh the model list from the Models API when the view opens', () => {
+      // Arrange
+      const { httpMock } = setup('pending');
+
+      // Act
+      const request = httpMock.expectOne((req) => req.url === MODELS_URL);
+
+      // Assert
+      expect(request.request.params.get('refresh')).toBe('true');
+      request.flush(buildModelOptions());
+      httpMock.expectOne(API_URL).flush(buildWorkerRoleCatalog());
+    });
+
+    it('should offer Default, the aliases and every listed model with deprecated ones marked', () => {
+      // Arrange / Act
+      const { el } = setupLoaded();
+
+      // Assert
+      expect(optionLabels(modelSelect(el))).toEqual([
+        'Default (account default)',
+        'fable',
+        'opus',
+        'sonnet',
+        'haiku',
+        'opus[1m]',
+        'sonnet[1m]',
+        'Claude Opus 4.5 (claude-opus-4-5-20251101)',
+        'Claude Sonnet 3.7 (claude-3-7-sonnet-20250219), deprecated',
+      ]);
+      expect(modelSelect(el).value).toBe('');
+    });
+
+    it('should select the saved model', () => {
+      // Arrange / Act
+      const { el } = setupLoaded(
+        buildWorkerRoleCatalog({ roles: [buildWorkerRole({ model: 'claude-opus-4-5-20251101' })] }),
+      );
+
+      // Assert
+      expect(modelSelect(el).value).toBe('claude-opus-4-5-20251101');
+      expect(saveButton(el).disabled).toBe(true);
+    });
+
+    it('should save the chosen model for the role and confirm it', () => {
+      // Arrange
+      const { el, fixture, httpMock } = setupLoaded();
+      choose(fixture, modelSelect(el), 'opus[1m]');
+
+      // Act
+      saveButton(el).click();
+      const request = httpMock.expectOne('/api/worker-roles/implement/model');
+      request.flush({ role: 'implement', model: 'opus[1m]' });
+      fixture.detectChanges();
+
+      // Assert
+      expect(request.request.method).toBe('PUT');
+      expect(request.request.body).toEqual({ model: 'opus[1m]' });
+      expect(modelSelect(el).value).toBe('opus[1m]');
+      expect(text(cards(el)[0].querySelector('.role-model__status'))).toBe('Model saved');
+      expect(saveButton(el).disabled).toBe(true);
+    });
+
+    it('should save Default as an empty model', () => {
+      // Arrange
+      const { el, fixture, httpMock } = setupLoaded(
+        buildWorkerRoleCatalog({ roles: [buildWorkerRole({ model: 'opus' })] }),
+      );
+      choose(fixture, modelSelect(el), '');
+
+      // Act
+      saveButton(el).click();
+
+      // Assert
+      const request = httpMock.expectOne('/api/worker-roles/implement/model');
+      expect(request.request.body).toEqual({ model: '' });
+      request.flush({ role: 'implement', model: '' });
+    });
+
+    it('should show a rejected save under the model field', () => {
+      // Arrange
+      const { el, fixture, httpMock } = setupLoaded();
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+      choose(fixture, modelSelect(el), 'claude-opus-4-5-20251101');
+      saveButton(el).click();
+
+      // Act
+      httpMock.expectOne('/api/worker-roles/implement/model').flush(
+        {
+          detail: "'claude-opus-4-5-20251101' is not a Claude Code alias or a model listed by the Models API.",
+          type: 'tag:foundry,2026:problems/Worker.RoleModelNotListed',
+        },
+        { status: 400, statusText: 'Bad Request' },
+      );
+      fixture.detectChanges();
+
+      // Assert
+      const error = cards(el)[0].querySelector('.role-model__error')!;
+      expect(text(error)).toContain('is not a Claude Code alias');
+      expect(modelSelect(el).getAttribute('aria-invalid')).toBe('true');
+      expect(modelSelect(el).getAttribute('aria-describedby')).toContain(error.id);
+    });
+
+    it('should mark a saved model the list no longer offers as unavailable and keep it selected', () => {
+      // Arrange / Act
+      const { el } = setupLoaded(
+        buildWorkerRoleCatalog({ roles: [buildWorkerRole({ model: 'claude-retired-1' })] }),
+      );
+
+      // Assert
+      expect(optionLabels(modelSelect(el))).toContain('claude-retired-1 (unavailable)');
+      expect(modelSelect(el).value).toBe('claude-retired-1');
+    });
+
+    it('should still offer Default, the aliases and the saved model when the list could not be refreshed', () => {
+      // Arrange / Act
+      const { el } = setupLoaded(
+        buildWorkerRoleCatalog({ roles: [buildWorkerRole({ model: 'claude-opus-4-5-20251101' })] }),
+        buildModelOptions({
+          models: [],
+          refreshedAt: null,
+          refreshError: 'The Models API could not be reached.',
+        }),
+      );
+
+      // Assert
+      const labels = optionLabels(modelSelect(el));
+      expect(labels[0]).toBe('Default (account default)');
+      expect(labels).toContain('opus');
+      expect(labels).toContain('claude-opus-4-5-20251101 (saved, not in the current list)');
+      expect(modelSelect(el).value).toBe('claude-opus-4-5-20251101');
+      expect(text(cards(el)[0].querySelector('.role-model__refresh-error'))).toContain(
+        'The model list could not be refreshed: The Models API could not be reached.',
+      );
+    });
+
+    it('should fall back to the built-in aliases when the model request fails', () => {
+      // Arrange
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+      const { el, fixture, httpMock } = setup('pending');
+      httpMock
+        .expectOne((req) => req.url === MODELS_URL)
+        .flush(null, { status: 500, statusText: 'Server Error' });
+      httpMock.expectOne(API_URL).flush(buildWorkerRoleCatalog());
+
+      // Act
+      fixture.detectChanges();
+
+      // Assert
+      expect(optionLabels(modelSelect(el))).toEqual([
+        'Default (account default)',
+        'fable',
+        'opus',
+        'sonnet',
+        'haiku',
+        'opus[1m]',
+        'sonnet[1m]',
+      ]);
+      expect(text(cards(el)[0].querySelector('.role-model__refresh-error'))).toContain(
+        'could not be refreshed',
+      );
+    });
+
+    it('should retry the model list refresh', () => {
+      // Arrange
+      const { el, fixture, httpMock } = setupLoaded(
+        buildWorkerRoleCatalog(),
+        buildModelOptions({ models: [], refreshError: 'HTTP 503' }),
+      );
+
+      // Act
+      cards(el)[0].querySelector<HTMLButtonElement>('.role-model__retry')!.click();
+      httpMock.expectOne((req) => req.url === MODELS_URL).flush(buildModelOptions());
+      fixture.detectChanges();
+
+      // Assert
+      expect(cards(el)[0].querySelector('.role-model__refresh-error')).toBeNull();
+      expect(optionLabels(modelSelect(el))).toContain('Claude Opus 4.5 (claude-opus-4-5-20251101)');
     });
   });
 });

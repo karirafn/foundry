@@ -70,6 +70,11 @@ internal sealed partial class ContainerOutputParser(ILogger<ContainerOutputParse
                 : new ContainerOutputParseResult.CreditsExhausted();
         }
 
+        if (IsModelUnavailable(isError, resultText))
+        {
+            return new ContainerOutputParseResult.ModelUnavailable();
+        }
+
         if (IsAuthInvalid(apiErrorStatus, isError, resultText, node))
         {
             return new ContainerOutputParseResult.AuthInvalid();
@@ -250,6 +255,35 @@ internal sealed partial class ContainerOutputParser(ILogger<ContainerOutputParse
 
         return errorType is not null
             && string.Equals(errorType, "authentication_error", StringComparison.Ordinal);
+    }
+
+    // The CLI does not validate the model until its first request. When the API rejects it, the result line carries
+    // is_error: true and a result text such as
+    // "There's an issue with the selected model (claude-x). It may not exist or you may not have access to it. Run
+    // /model to pick a different model." Matched only when is_error is true, so an agent's summary quoting the
+    // phrase is never mistaken for it. Both the straight and the typographic apostrophe are accepted.
+    private static readonly string[] ModelUnavailablePhrases =
+    [
+        "There's an issue with the selected model",
+        "There\u2019s an issue with the selected model",
+    ];
+
+    private static bool IsModelUnavailable(bool isError, string? resultText)
+    {
+        if (!isError || resultText is null)
+        {
+            return false;
+        }
+
+        foreach (string phrase in ModelUnavailablePhrases)
+        {
+            if (resultText.Contains(phrase, StringComparison.Ordinal))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static bool IsTransientApiError(int? apiErrorStatus, bool isError, string? resultText)

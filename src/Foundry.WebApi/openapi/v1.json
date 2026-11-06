@@ -1748,6 +1748,97 @@
         }
       }
     },
+    "/api/worker-roles/models": {
+      "get": {
+        "tags": [
+          "Worker Roles"
+        ],
+        "summary": "Returns the Claude Code aliases and the models the workers' credential can use; refresh=true fetches the list from the Models API now",
+        "operationId": "GetWorkerRoleModels",
+        "parameters": [
+          {
+            "name": "refresh",
+            "in": "query",
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkerRoleModelOptionsResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/worker-roles/{role}/model": {
+      "put": {
+        "tags": [
+          "Worker Roles"
+        ],
+        "summary": "Sets a worker role's model: empty for the CLI's account default, a Claude Code alias, or a model ID listed by the Models API",
+        "operationId": "UpdateWorkerRoleModel",
+        "parameters": [
+          {
+            "name": "role",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateWorkerRoleModelRequestBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkerRoleModelResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/settings": {
       "get": {
         "tags": [
@@ -2050,7 +2141,7 @@
         "tags": [
           "Settings"
         ],
-        "summary": "Updates the Claude Code model and deny rules",
+        "summary": "Updates the Claude Code deny rules",
         "operationId": "UpdateClaudeCodeSettings",
         "requestBody": {
           "content": {
@@ -2729,7 +2820,6 @@
           "memoryLimitMb",
           "cpuLimit",
           "pidsLimit",
-          "model",
           "blockCiCdEdits",
           "additionalDenyRules"
         ],
@@ -2854,9 +2944,6 @@
               "string"
             ],
             "format": "int32"
-          },
-          "model": {
-            "type": "string"
           },
           "blockCiCdEdits": {
             "type": "boolean"
@@ -4036,15 +4123,11 @@
       },
       "UpdateClaudeCodeSettingsRequestBody": {
         "required": [
-          "model",
           "blockCiCdEdits",
           "additionalDenyRules"
         ],
         "type": "object",
         "properties": {
-          "model": {
-            "type": "string"
-          },
           "blockCiCdEdits": {
             "type": "boolean"
           },
@@ -4231,6 +4314,20 @@
               "string"
             ],
             "format": "int32"
+          }
+        }
+      },
+      "UpdateWorkerRoleModelRequestBody": {
+        "required": [
+          "model"
+        ],
+        "type": "object",
+        "properties": {
+          "model": {
+            "type": [
+              "null",
+              "string"
+            ]
           }
         }
       },
@@ -4446,7 +4543,8 @@
           "taskPrompt",
           "skills",
           "agents",
-          "verdictSchema"
+          "verdictSchema",
+          "model"
         ],
         "type": "object",
         "properties": {
@@ -4482,6 +4580,9 @@
               "null",
               "string"
             ]
+          },
+          "model": {
+            "type": "string"
           }
         }
       },
@@ -4549,6 +4650,76 @@
           },
           "verified": {
             "type": "boolean"
+          }
+        }
+      },
+      "WorkerRoleModelOption": {
+        "required": [
+          "id",
+          "displayName",
+          "deprecated"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "deprecated": {
+            "type": "boolean"
+          }
+        }
+      },
+      "WorkerRoleModelOptionsResponse": {
+        "required": [
+          "aliases",
+          "models",
+          "refreshedAt",
+          "refreshError"
+        ],
+        "type": "object",
+        "properties": {
+          "aliases": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "models": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WorkerRoleModelOption"
+            }
+          },
+          "refreshedAt": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
+          },
+          "refreshError": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "WorkerRoleModelResponse": {
+        "required": [
+          "role",
+          "model"
+        ],
+        "type": "object",
+        "properties": {
+          "role": {
+            "type": "string"
+          },
+          "model": {
+            "type": "string"
           }
         }
       },

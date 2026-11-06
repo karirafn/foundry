@@ -373,59 +373,89 @@ internal sealed class CredentialsOrchestrator(IDockerContainerRuntime runtime) :
 
     public async Task<Result<OAuthSessionStatus>> CheckOAuthSessionAsync(CancellationToken cancellationToken)
     {
-        string credentialsPath = $"{CredentialVolumeConstants.ContainerPath}/{OAuthCredentialFile.FileName}";
-
         try
         {
-            string helperId = await StartCredentialHelperContainerAsync(cancellationToken);
-
-            try
-            {
-                OAuthSessionStatus status = OAuthCredentialFile.Classify(
-                    await runtime.ReadFileAsync(helperId, credentialsPath, cancellationToken),
-                    DateTimeOffset.UtcNow);
-
-                if (status is not OAuthSessionStatus.Expired)
-                {
-                    return status;
-                }
-
-                // The access token has expired. Let the CLI refresh it, exactly as a worker would:
-                // `claude auth status` refreshes an expired token under the shared .storage-write
-                // lock and persists the rotated refresh token to the volume. On invalid_grant the CLI
-                // clears the stored tokens; on a network error it leaves the file untouched. The
-                // exit code and stdout carry neither signal, so the file is read again instead.
-                await runtime.ExecCaptureStdoutAsync(
-                    helperId,
-                    [
-                        "timeout",
-                        SessionRefreshTimeoutSeconds.ToString(CultureInfo.InvariantCulture),
-                        "claude",
-                        "auth",
-                        "status",
-                        "--json",
-                    ],
-                    [],
-                    AuthStatusOutputMaxBytes,
-                    cancellationToken);
-
-                return OAuthCredentialFile.Classify(
-                    await runtime.ReadFileAsync(helperId, credentialsPath, cancellationToken),
-                    DateTimeOffset.UtcNow);
-            }
-            finally
-            {
-                await StopAndRemoveAsync(helperId, cancellationToken);
-            }
+            string? json = await ReadCredentialFileRefreshingAsync(cancellationToken);
+            return OAuthCredentialFile.Classify(json, DateTimeOffset.UtcNow);
         }
         catch (DockerApiException ex)
         {
-            string redacted = SecretRedactor.Redact(ex.Message);
-            string message = redacted.Length > DockerErrorMessageMaxLength
-                ? redacted[..DockerErrorMessageMaxLength]
-                : redacted;
-            return Result<OAuthSessionStatus>.Fail(new Error("Docker.SessionCheckFailed", message));
+            return Result<OAuthSessionStatus>.Fail(new Error("Docker.SessionCheckFailed", RedactDockerMessage(ex)));
         }
+    }
+
+    public async Task<Result<string>> ReadOAuthAccessTokenAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            string? json = await ReadCredentialFileRefreshingAsync(cancellationToken);
+            DateTimeOffset now = DateTimeOffset.UtcNow;
+
+            if (OAuthCredentialFile.ReadActiveAccessToken(json, now) is { } token)
+            {
+                return token;
+            }
+
+            OAuthSessionStatus status = OAuthCredentialFile.Classify(json, now);
+            return Result<string>.Fail(new Error(
+                "Credentials.OAuthTokenUnavailable",
+                $"No usable Claude OAuth access token is stored (session: {status.GetType().Name}). Sign in again in Settings."));
+        }
+        catch (DockerApiException ex)
+        {
+            return Result<string>.Fail(new Error("Docker.CredentialReadFailed", RedactDockerMessage(ex)));
+        }
+    }
+
+    /// <summary>
+    /// Reads <c>.credentials.json</c> from the credential volume. When the access token has expired, lets the CLI
+    /// refresh it, exactly as a worker would: `claude auth status` refreshes an expired token under the shared
+    /// .storage-write lock and persists the rotated refresh token to the volume. On invalid_grant the CLI clears
+    /// the stored tokens; on a network error it leaves the file untouched. The exit code and stdout carry neither
+    /// signal, so the file is read again instead.
+    /// </summary>
+    private async Task<string?> ReadCredentialFileRefreshingAsync(CancellationToken cancellationToken)
+    {
+        string credentialsPath = $"{CredentialVolumeConstants.ContainerPath}/{OAuthCredentialFile.FileName}";
+        string helperId = await StartCredentialHelperContainerAsync(cancellationToken);
+
+        try
+        {
+            string? json = await runtime.ReadFileAsync(helperId, credentialsPath, cancellationToken);
+
+            if (OAuthCredentialFile.Classify(json, DateTimeOffset.UtcNow) is not OAuthSessionStatus.Expired)
+            {
+                return json;
+            }
+
+            await runtime.ExecCaptureStdoutAsync(
+                helperId,
+                [
+                    "timeout",
+                    SessionRefreshTimeoutSeconds.ToString(CultureInfo.InvariantCulture),
+                    "claude",
+                    "auth",
+                    "status",
+                    "--json",
+                ],
+                [],
+                AuthStatusOutputMaxBytes,
+                cancellationToken);
+
+            return await runtime.ReadFileAsync(helperId, credentialsPath, cancellationToken);
+        }
+        finally
+        {
+            await StopAndRemoveAsync(helperId, cancellationToken);
+        }
+    }
+
+    private static string RedactDockerMessage(DockerApiException ex)
+    {
+        string redacted = SecretRedactor.Redact(ex.Message);
+        return redacted.Length > DockerErrorMessageMaxLength
+            ? redacted[..DockerErrorMessageMaxLength]
+            : redacted;
     }
 
     public async Task SeedOnboardingAsync(CancellationToken cancellationToken)

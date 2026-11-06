@@ -153,7 +153,7 @@ public sealed class ResolveRebase
         RevisionQueuedIssue revisionQueued = rebasePending.ResolveRebase(new RebaseOutcome.Conflict())
             .ShouldBeOfType<RevisionQueuedIssue>();
         RevisionInProgressIssue revisionInProgress = revisionQueued.Claim(workerRunId);
-        RebasePendingIssue rebasePendingAgain = revisionInProgress.MarkUnchangedRebasePending();
+        RebasePendingIssue rebasePendingAgain = revisionInProgress.MarkUnchangedRebasePending(DateTimeOffset.UtcNow);
         ChecksPendingIssue checksPending = rebasePendingAgain.ResolveRebase(new RebaseOutcome.Disabled())
             .ShouldBeOfType<ChecksPendingIssue>();
         ReviewIssue review = checksPending.ToReview(new ChecksOutcome.Passed());

@@ -15,7 +15,6 @@ namespace Foundry.Modules.Settings.Features.WorkerConfig;
 internal static class UpdateClaudeCodeSettings
 {
     internal sealed record Command(
-        string Model,
         bool BlockCiCdEdits,
         IReadOnlyList<string> AdditionalDenyRules) : ICommand<GlobalSettingsSummary>;
 
@@ -36,7 +35,6 @@ internal static class UpdateClaudeCodeSettings
 
             // System.Text.Json does not enforce non-nullable annotations, so a null rule element can arrive.
             Result<ClaudeCodeSettings> claudeCodeResult = ClaudeCodeSettings.Create(
-                command.Model,
                 command.BlockCiCdEdits,
                 [.. command.AdditionalDenyRules.Select(rule => rule ?? string.Empty)]);
 
@@ -59,7 +57,6 @@ internal static class UpdateClaudeCodeSettings
     internal static class Endpoint
     {
         private sealed record RequestBody(
-            string Model,
             bool BlockCiCdEdits,
             IReadOnlyList<string> AdditionalDenyRules);
 
@@ -71,7 +68,6 @@ internal static class UpdateClaudeCodeSettings
                     CancellationToken cancellationToken) =>
                 {
                     Command command = new(
-                        body.Model ?? string.Empty,
                         body.BlockCiCdEdits,
                         body.AdditionalDenyRules ?? []);
 
@@ -86,7 +82,7 @@ internal static class UpdateClaudeCodeSettings
                         });
                 })
                 .WithName("UpdateClaudeCodeSettings")
-                .WithSummary("Updates the Claude Code model and deny rules")
+                .WithSummary("Updates the Claude Code deny rules")
                 .Produces<GlobalSettingsSummary>()
                 .ProducesProblem(StatusCodes.Status404NotFound)
                 .ProducesProblem(StatusCodes.Status400BadRequest);

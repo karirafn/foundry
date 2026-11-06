@@ -1,7 +1,5 @@
 import { AbstractControl, ValidationErrors } from '@angular/forms';
 
-export const MODEL_MAX_LENGTH = 200;
-
 // Identical to the server's deny-rule pattern in ClaudeCodeSettings.Create.
 export const DENY_RULE_PATTERN = /^(Bash|Edit|Read|Write|MultiEdit|Glob|Grep)\(.+\)$/;
 
@@ -15,12 +13,6 @@ export const CI_CD_DENY_RULES: readonly string[] = [
   'Edit(**/compose.yml)',
   'Edit(**/compose.yaml)',
 ];
-
-// The server trims the model before capping its length, so the client caps the trimmed value too.
-export function trimmedMaxLengthValidator(control: AbstractControl): ValidationErrors | null {
-  const value: string = control.value ?? '';
-  return value.trim().length > MODEL_MAX_LENGTH ? { modelTooLong: true } : null;
-}
 
 export function denyRuleFormatValidator(control: AbstractControl): ValidationErrors | null {
   const value: string = control.value;
