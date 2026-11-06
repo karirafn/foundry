@@ -22,8 +22,8 @@ namespace Foundry.Modules.Workers.Features.Dispatch;
 /// Periodic dispatch loop. Each tick reconciles orphaned runs once (after startup), delegates
 /// per-run monitoring to <see cref="WorkerRunMonitor"/>, auto-resumes an expired usage-limit
 /// pause, and — when every dispatch gate passes — reserves a slot and publishes
-/// <see cref="WorkerCapacityAvailable"/>. Dispatch also waits until the worker role catalog
-/// has been published, since the in-memory catalog is empty after a restart until the startup image build completes.
+/// <see cref="WorkerCapacityAvailable"/>. The role catalog is in-memory and empty until the startup
+/// image build publishes it, so the persisted build status alone cannot tell dispatch it is ready.
 /// </summary>
 internal sealed class WorkerDispatchService(
     IServiceScopeFactory scopeFactory,
