@@ -17,9 +17,11 @@ using Foundry.Modules.Workers.Features.Outcome;
 using Foundry.Modules.Workers.Features.Verdicts;
 using Foundry.Modules.Workers.Features.ContainerSpec;
 using Foundry.Modules.Workers.Features.Dispatch;
+using Foundry.Modules.Workers.Features.Roles;
 using Foundry.Shared;
 using Foundry.Shared.Infrastructure;
 using Foundry.Testing;
+using Foundry.UnitTests.Fakes.Workers;
 using Foundry.WebApi.Persistence;
 
 using DomainWorkerRunFailed = Foundry.Modules.Workers.Domain.Events.WorkerRunFailed;
@@ -93,7 +95,8 @@ public abstract class WorkerDispatchServiceTestBase : IAsyncDisposable
         CapturingLogger? logger = null,
         TimeProvider? timeProvider = null,
         IWebhookStatusQueries? webhookStatusQueries = null,
-        RunningBranchCompareGate? compareGate = null)
+        RunningBranchCompareGate? compareGate = null,
+        IWorkerRoleCatalogStore? roleCatalog = null)
     {
         TimeProvider resolvedTimeProvider = timeProvider ?? TimeProvider.System;
         SqliteConnection connection = _connection;
@@ -142,6 +145,7 @@ public abstract class WorkerDispatchServiceTestBase : IAsyncDisposable
 
         services.AddScoped<ICredentialGate>(_ => credentialGate ?? new AlwaysCanDispatchCredentialGate());
         services.AddSingleton(compareGate ?? new RunningBranchCompareGate());
+        services.AddSingleton<IWorkerRoleCatalogStore>(roleCatalog ?? StubWorkerRoleCatalogStore.With());
         services.AddScoped<IWebhookStatusQueries>(
             _ => webhookStatusQueries ?? new StubWebhookStatusQueries(isActive: false));
 
