@@ -44,12 +44,14 @@ export const SETTINGS_ROUTES: Routes = [
         canDeactivate: [unsavedChangesGuard],
       },
       {
-        path: 'prompts',
-        title: 'Prompts',
+        path: 'roles',
+        title: 'Worker roles',
         loadComponent: () =>
-          import('./prompts/settings-prompts').then((m) => m.SettingsPromptsComponent),
-        canDeactivate: [unsavedChangesGuard],
+          import('./worker-roles/settings-worker-roles').then(
+            (m) => m.SettingsWorkerRolesComponent,
+          ),
       },
+      { path: 'prompts', redirectTo: 'roles', pathMatch: 'full' },
       {
         path: 'provider-hosts',
         title: 'Provider hosts',

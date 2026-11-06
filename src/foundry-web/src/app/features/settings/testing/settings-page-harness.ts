@@ -79,9 +79,6 @@ export const BASE_RESPONSE: Partial<GlobalSettingsResponse> = {
   ...IMAGE_FLAGS_DEFAULTS,
   ...WORKER_ENVIRONMENT_DEFAULTS,
   ...CLAUDE_CODE_DEFAULTS,
-  systemPromptTemplate: '',
-  workerPromptTemplate: '',
-  branchNamingInstruction: '',
 };
 
 export const API_KEY_RESPONSE = {

@@ -41,7 +41,6 @@ public sealed class GlobalSettings : AggregateRoot<GlobalSettingsId>
         WorkerImageConfiguration = WorkerImageConfiguration.Default;
         WorkerResourceLimits = WorkerResourceLimits.Default;
         ClaudeCodeSettings = ClaudeCodeSettings.Default;
-        WorkerPrompts = WorkerPrompts.Default;
         ImageBuildState = new ImageBuildState.Idle();
         CreatedAt = createdAt;
         UpdatedAt = createdAt;
@@ -66,8 +65,6 @@ public sealed class GlobalSettings : AggregateRoot<GlobalSettingsId>
     /// forwards to Foundry's webhook-only port. <see langword="null"/> when webhooks are not configured.
     /// </summary>
     public string? WebhookPublicBaseUrl { get; private set; }
-
-    public WorkerPrompts WorkerPrompts { get; private set; } = null!;
 
     public DateTimeOffset? UsageLimitResetsAt { get; private set; }
 
@@ -209,12 +206,6 @@ public sealed class GlobalSettings : AggregateRoot<GlobalSettingsId>
         BackstopIntervalMinutes = backstopIntervalMinutes;
         UpdatedAt = DateTimeOffset.UtcNow;
         return Result.Ok();
-    }
-
-    public void UpdatePrompts(WorkerPrompts prompts)
-    {
-        WorkerPrompts = prompts;
-        UpdatedAt = DateTimeOffset.UtcNow;
     }
 
     public bool UpdateWorkerImageConfiguration(WorkerImageConfiguration config)

@@ -6,6 +6,7 @@ using Docker.DotNet.Models;
 using Foundry.Modules.Settings.Contracts;
 using Foundry.Modules.Settings.Contracts.Queries;
 using Foundry.Modules.Workers.Contracts;
+using Foundry.Modules.Workers.Features.Roles;
 using Foundry.Shared;
 using Foundry.Shared.Infrastructure.Docker;
 
@@ -20,6 +21,7 @@ internal sealed class WorkerImageRebuildService(
     IServiceScopeFactory scopeFactory,
     IImageOperations imageOperations,
     IHostEnvironment hostEnvironment,
+    IWorkerRoleCatalogStore roleCatalogStore,
     ILogger<WorkerImageRebuildService> logger) : BackgroundService, IHostedLifecycleService
 {
     internal const string ImageBuildCategory = "image-build";
@@ -53,9 +55,10 @@ internal sealed class WorkerImageRebuildService(
         IServiceScopeFactory scopeFactory,
         IImageOperations imageOperations,
         IHostEnvironment hostEnvironment,
+        IWorkerRoleCatalogStore roleCatalogStore,
         ILogger<WorkerImageRebuildService> logger,
         ImageBuildRetryPolicy retryPolicy)
-        : this(rebuildQueue, scopeFactory, imageOperations, hostEnvironment, logger)
+        : this(rebuildQueue, scopeFactory, imageOperations, hostEnvironment, roleCatalogStore, logger)
     {
         _retryPolicy = retryPolicy;
     }
@@ -197,6 +200,7 @@ internal sealed class WorkerImageRebuildService(
             contextPath);
 
         string? errorTail = null;
+        WorkerRoleCatalogContent? catalogContent = null;
 
         try
         {
@@ -205,96 +209,22 @@ internal sealed class WorkerImageRebuildService(
             await BuildContextTar.WriteAsync(contextPath, tarStream, cancellationToken);
             tarStream.Seek(0, SeekOrigin.Begin);
 
-            // Build the shared base image first; the worker image depends on it.
-            ImageBuildParameters baseParameters = new()
+            // The role catalog is read from the same tar bytes the image is built from, so the role cards and
+            // dispatch always match the roles baked into the image (ADR 0095).
+            Result<WorkerRoleCatalogContent> catalogResult =
+                await WorkerRoleCatalogReader.ReadFromTarAsync(tarStream, cancellationToken);
+
+            if (catalogResult is Result<WorkerRoleCatalogContent>.Success catalogSuccess)
             {
-                Tags = [BaseImageTag],
-                BuildArgs = new Dictionary<string, string>(),
-                Dockerfile = BaseDockerfile,
-            };
-
-            BuildProgress baseProgress = new(logger);
-
-            await imageOperations.BuildImageFromDockerfileAsync(
-                baseParameters,
-                tarStream,
-                authConfigs: null,
-                headers: null,
-                baseProgress,
-                cancellationToken);
-
-            if (baseProgress.HasError)
-            {
-                // LastError is already redacted and capped by BuildProgress.Report().
-                errorTail = TruncateTail(baseProgress.LastError);
+                catalogContent = catalogSuccess.Value;
+                tarStream.Seek(0, SeekOrigin.Begin);
+                errorTail = await BuildImagesAsync(tarStream, imageTag, buildArgs, cancellationToken);
             }
             else
             {
-                // Base image succeeded — rewind tar stream and build the worker image.
-                tarStream.Seek(0, SeekOrigin.Begin);
-
-                Dictionary<string, string> workerBuildArgs = new(buildArgs)
-                {
-                    ["BASE_IMAGE"] = BaseImageTag,
-                };
-
-                ImageBuildParameters workerParameters = new()
-                {
-                    Tags = [imageTag],
-                    BuildArgs = workerBuildArgs,
-                    Dockerfile = "Dockerfile",
-                };
-
-                BuildProgress workerProgress = new(logger);
-
-                await imageOperations.BuildImageFromDockerfileAsync(
-                    workerParameters,
-                    tarStream,
-                    authConfigs: null,
-                    headers: null,
-                    workerProgress,
-                    cancellationToken);
-
-                if (workerProgress.HasError)
-                {
-                    // LastError is already redacted and capped by BuildProgress.Report().
-                    errorTail = TruncateTail(workerProgress.LastError);
-                }
-                else
-                {
-                    // Worker image succeeded — rewind tar stream and build the login image.
-                    // The login image must exist for the guided `docker run` login command to work.
-                    // A login-image build failure fails the whole rebuild so the command is never broken.
-                    tarStream.Seek(0, SeekOrigin.Begin);
-
-                    Dictionary<string, string> loginBuildArgs = new()
-                    {
-                        ["BASE_IMAGE"] = BaseImageTag,
-                    };
-
-                    ImageBuildParameters loginParameters = new()
-                    {
-                        Tags = [LoginImageName],
-                        BuildArgs = loginBuildArgs,
-                        Dockerfile = LoginDockerfile,
-                    };
-
-                    BuildProgress loginProgress = new(logger);
-
-                    await imageOperations.BuildImageFromDockerfileAsync(
-                        loginParameters,
-                        tarStream,
-                        authConfigs: null,
-                        headers: null,
-                        loginProgress,
-                        cancellationToken);
-
-                    if (loginProgress.HasError)
-                    {
-                        // LastError is already redacted and capped by BuildProgress.Report().
-                        errorTail = TruncateTail(loginProgress.LastError);
-                    }
-                }
+                errorTail = TruncateTail(
+                    $"Worker role catalog is invalid: {((Result<WorkerRoleCatalogContent>.Failure)catalogResult).Error.Message}");
+                logger.LogError("Worker image build skipped: {Error}", errorTail);
             }
         }
         catch (OperationCanceledException)
@@ -307,6 +237,14 @@ internal sealed class WorkerImageRebuildService(
         {
             errorTail = TruncateTail(SecretRedactor.Redact(ex.Message));
             logger.LogError("Worker image build failed with an unhandled exception: {Error}", errorTail);
+        }
+
+        if (errorTail is null && catalogContent is not null)
+        {
+            (string? imageId, _) = await TryInspectImageAsync(imageTag, cancellationToken);
+            roleCatalogStore.Publish(new WorkerRoleCatalog(
+                catalogContent,
+                new WorkerImageProvenance(imageTag, imageId, DateTimeOffset.UtcNow, FoundryCommit.Value, Verified: true)));
         }
 
         if (errorTail is null)
@@ -366,6 +304,131 @@ internal sealed class WorkerImageRebuildService(
         }
     }
 
+    private async Task<string?> BuildImagesAsync(
+        Stream tarStream,
+        string imageTag,
+        IReadOnlyDictionary<string, string> buildArgs,
+        CancellationToken cancellationToken)
+    {
+        string? errorTail = null;
+
+        // Build the shared base image first; the worker image depends on it.
+        ImageBuildParameters baseParameters = new()
+        {
+            Tags = [BaseImageTag],
+            BuildArgs = new Dictionary<string, string>(),
+            Dockerfile = BaseDockerfile,
+        };
+
+        BuildProgress baseProgress = new(logger);
+
+        await imageOperations.BuildImageFromDockerfileAsync(
+            baseParameters,
+            tarStream,
+            authConfigs: null,
+            headers: null,
+            baseProgress,
+            cancellationToken);
+
+        if (baseProgress.HasError)
+        {
+            // LastError is already redacted and capped by BuildProgress.Report().
+            errorTail = TruncateTail(baseProgress.LastError);
+        }
+        else
+        {
+            // Base image succeeded — rewind tar stream and build the worker image.
+            tarStream.Seek(0, SeekOrigin.Begin);
+
+            Dictionary<string, string> workerBuildArgs = new(buildArgs)
+            {
+                ["BASE_IMAGE"] = BaseImageTag,
+            };
+
+            ImageBuildParameters workerParameters = new()
+            {
+                Tags = [imageTag],
+                BuildArgs = workerBuildArgs,
+                Dockerfile = "Dockerfile",
+            };
+
+            BuildProgress workerProgress = new(logger);
+
+            await imageOperations.BuildImageFromDockerfileAsync(
+                workerParameters,
+                tarStream,
+                authConfigs: null,
+                headers: null,
+                workerProgress,
+                cancellationToken);
+
+            if (workerProgress.HasError)
+            {
+                // LastError is already redacted and capped by BuildProgress.Report().
+                errorTail = TruncateTail(workerProgress.LastError);
+            }
+            else
+            {
+                // Worker image succeeded — rewind tar stream and build the login image.
+                // The login image must exist for the guided `docker run` login command to work.
+                // A login-image build failure fails the whole rebuild so the command is never broken.
+                tarStream.Seek(0, SeekOrigin.Begin);
+
+                Dictionary<string, string> loginBuildArgs = new()
+                {
+                    ["BASE_IMAGE"] = BaseImageTag,
+                };
+
+                ImageBuildParameters loginParameters = new()
+                {
+                    Tags = [LoginImageName],
+                    BuildArgs = loginBuildArgs,
+                    Dockerfile = LoginDockerfile,
+                };
+
+                BuildProgress loginProgress = new(logger);
+
+                await imageOperations.BuildImageFromDockerfileAsync(
+                    loginParameters,
+                    tarStream,
+                    authConfigs: null,
+                    headers: null,
+                    loginProgress,
+                    cancellationToken);
+
+                if (loginProgress.HasError)
+                {
+                    // LastError is already redacted and capped by BuildProgress.Report().
+                    errorTail = TruncateTail(loginProgress.LastError);
+                }
+            }
+        }
+
+        return errorTail;
+    }
+
+    private async Task<(string? ImageId, DateTimeOffset? CreatedAt)> TryInspectImageAsync(
+        string imageTag,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            ImageInspectResponse image = await imageOperations.InspectImageAsync(imageTag, cancellationToken);
+            return (string.IsNullOrEmpty(image.ID) ? null : image.ID, image.Created == default ? null : image.Created);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+#pragma warning disable CA1031 // The image ID only annotates the role catalog; an inspect failure must not fail a build that succeeded.
+        catch (Exception ex) when (ex is not OperationCanceledException)
+#pragma warning restore CA1031
+        {
+            logger.LogWarning("Could not inspect worker image '{Image}' for its ID: {Error}", imageTag, SecretRedactor.Redact(ex.Message));
+            return (null, null);
+        }
+    }
+
     private async Task InspectImageAsync(
         string imageTag,
         GlobalSettingsSummary settings,
@@ -378,7 +441,30 @@ internal sealed class WorkerImageRebuildService(
 
         try
         {
-            await imageOperations.InspectImageAsync(imageTag, cancellationToken);
+            ImageInspectResponse image = await imageOperations.InspectImageAsync(imageTag, cancellationToken);
+
+            // The operator supplied the image, so the catalog can only be read from disk: it is marked unverified
+            // because nothing proves the image carries the same roles (ADR 0095).
+            Result<WorkerRoleCatalogContent> catalogResult =
+                WorkerRoleCatalogReader.ReadFromDirectory(ResolveContextPath(ContextPath));
+
+            if (catalogResult is not Result<WorkerRoleCatalogContent>.Success catalogSuccess)
+            {
+                string catalogError = TruncateTail(
+                    $"Worker role catalog is invalid: {((Result<WorkerRoleCatalogContent>.Failure)catalogResult).Error.Message}");
+                logger.LogError("Worker image '{Image}' not marked available: {Error}", imageTag, catalogError);
+                await DispatchInspectFailureAsync(catalogError, settings, integrationEventDispatcher, imageTag, cancellationToken);
+                return;
+            }
+
+            roleCatalogStore.Publish(new WorkerRoleCatalog(
+                catalogSuccess.Value,
+                new WorkerImageProvenance(
+                    imageTag,
+                    string.IsNullOrEmpty(image.ID) ? null : image.ID,
+                    image.Created == default ? DateTimeOffset.UtcNow : image.Created,
+                    FoundryCommit.Value,
+                    Verified: false)));
 
             CancellationTokenSource? oldCts;
             lock (_stateLock)

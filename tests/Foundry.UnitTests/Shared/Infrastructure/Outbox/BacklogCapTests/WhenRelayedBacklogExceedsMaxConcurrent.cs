@@ -271,9 +271,6 @@ public sealed class WhenRelayedBacklogExceedsMaxConcurrent : IAsyncDisposable
         public Task<int> GetPollIntervalSecondsAsync(CancellationToken cancellationToken)
             => Task.FromResult(30);
 
-        public Task<(string SystemPromptTemplate, string WorkerPromptTemplate, string BranchNamingInstruction)> GetPromptTemplatesAsync(
-            CancellationToken cancellationToken)
-            => Task.FromResult(("", "", ""));
 
         public Task<DispatchPauseState> GetDispatchPauseStateAsync(CancellationToken cancellationToken)
             => Task.FromResult(new DispatchPauseState(null, false, true));

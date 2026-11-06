@@ -48,9 +48,6 @@ function buildSettingsResponse(overrides: Record<string, unknown> = {}): Record<
     timeoutMinutes: 60,
     probeIntervalMinutes: 60,
     pollIntervalSeconds: 30,
-    systemPromptTemplate: null,
-    workerPromptTemplate: null,
-    branchNamingInstruction: null,
     usageLimitResetsAt: null,
     isDispatchPaused: false,
     autoResumeOnUsageReset: true,
@@ -565,202 +562,6 @@ describe('SettingsService', () => {
 
     // Assert
     expect(service.authSettings()!.mode).toBe('oauth');
-  });
-
-  // Cycle 14: loadSettings populates prompt template signals
-  it('should start with null systemPromptTemplate and workerPromptTemplate', () => {
-    // Arrange
-    // (service initialized by test setup)
-
-    // Act
-    // (no action — testing initial state)
-
-    // Assert
-    expect(service.systemPromptTemplate()).toBeNull();
-    expect(service.workerPromptTemplate()).toBeNull();
-  });
-
-  it('should start with null branchNamingInstruction', () => {
-    // Arrange / Act — (no action — testing initial state)
-
-    // Assert
-    expect(service.branchNamingInstruction()).toBeNull();
-  });
-
-  it('should populate systemPromptTemplate from loadSettings response', () => {
-    // Arrange
-    // (service initialized by test setup)
-
-    // Act
-    service.loadSettings();
-    flushLoadSettings(httpMock, { systemPromptTemplate: 'You are a helpful assistant.' });
-
-    // Assert
-    expect(service.systemPromptTemplate()).toBe('You are a helpful assistant.');
-    expect(service.workerPromptTemplate()).toBeNull();
-  });
-
-  it('should populate workerPromptTemplate from loadSettings response', () => {
-    // Arrange
-    // (service initialized by test setup)
-
-    // Act
-    service.loadSettings();
-    flushLoadSettings(httpMock, { workerPromptTemplate: 'Fix the issue.' });
-
-    // Assert
-    expect(service.systemPromptTemplate()).toBeNull();
-    expect(service.workerPromptTemplate()).toBe('Fix the issue.');
-  });
-
-  it('should populate branchNamingInstruction from loadSettings response', () => {
-    // Arrange
-    // (service initialized by test setup)
-
-    // Act
-    service.loadSettings();
-    flushLoadSettings(httpMock, { branchNamingInstruction: 'feat/{issueNumber}-description' });
-
-    // Assert
-    expect(service.branchNamingInstruction()).toBe('feat/{issueNumber}-description');
-  });
-
-  // Cycle 15: updatePromptTemplates calls PUT /api/settings/prompts
-  it('should PUT to /api/settings/prompts when updatePromptTemplates is called', () => {
-    // Arrange
-    // (service initialized by test setup)
-
-    // Act
-    service.updatePromptTemplates({ systemPromptTemplate: 'sys', workerPromptTemplate: 'worker', branchNamingInstruction: 'feat/branch' });
-    const req = httpMock.expectOne('/api/settings/prompts');
-
-    // Assert
-    expect(req.request.method).toBe('PUT');
-    expect(req.request.body).toEqual({ systemPromptTemplate: 'sys', workerPromptTemplate: 'worker', branchNamingInstruction: 'feat/branch' });
-    req.flush(buildSettingsResponse({ systemPromptTemplate: 'sys', workerPromptTemplate: 'worker', branchNamingInstruction: 'feat/branch' }));
-  });
-
-  it('should set savingPrompts to true while updatePromptTemplates is in flight', () => {
-    // Arrange
-    // (service initialized by test setup)
-
-    // Act
-    service.updatePromptTemplates({ systemPromptTemplate: 'sys', workerPromptTemplate: 'worker', branchNamingInstruction: 'feat/branch' });
-
-    // Assert — before flush
-    expect(service.savingPrompts()).toBe(true);
-    httpMock.expectOne('/api/settings/prompts').flush(buildSettingsResponse({ systemPromptTemplate: 'sys', branchNamingInstruction: 'feat/branch' }));
-  });
-
-  it('should update prompt template signals and set savePromptsSuccess to true after updatePromptTemplates succeeds', () => {
-    // Arrange
-    service.updatePromptTemplates({ systemPromptTemplate: 'sys', workerPromptTemplate: 'worker', branchNamingInstruction: 'feat/branch' });
-    httpMock.expectOne('/api/settings/prompts').flush(buildSettingsResponse({
-      systemPromptTemplate: 'sys',
-      workerPromptTemplate: 'worker',
-      branchNamingInstruction: 'feat/branch',
-    }));
-
-    // Assert
-    expect(service.savingPrompts()).toBe(false);
-    expect(service.savePromptsSuccess()).toBe(true);
-    expect(service.savePromptsError()).toBeNull();
-    expect(service.systemPromptTemplate()).toBe('sys');
-    expect(service.workerPromptTemplate()).toBe('worker');
-    expect(service.branchNamingInstruction()).toBe('feat/branch');
-  });
-
-  // Cycle 16: updatePromptTemplates error handling
-  it('should set savePromptsError when updatePromptTemplates fails', () => {
-    // Arrange
-    service.updatePromptTemplates({ systemPromptTemplate: 'sys', workerPromptTemplate: 'worker', branchNamingInstruction: 'feat/branch' });
-    httpMock.expectOne('/api/settings/prompts').flush('Bad Request', {
-      status: 400,
-      statusText: 'Bad Request',
-    });
-
-    // Assert
-    expect(service.savePromptsError()).not.toBeNull();
-    expect(service.savingPrompts()).toBe(false);
-    expect(service.savePromptsSuccess()).toBe(false);
-  });
-
-  it('should set savePromptsError to a fixed user-facing string when updatePromptTemplates fails with no detail', () => {
-    // Arrange
-    service.updatePromptTemplates({ systemPromptTemplate: 'sys', workerPromptTemplate: 'worker', branchNamingInstruction: 'feat/branch' });
-    httpMock.expectOne('/api/settings/prompts').flush('Bad Request', {
-      status: 400,
-      statusText: 'Bad Request',
-    });
-
-    // Assert
-    expect(service.savePromptsError()).toBe('Failed to save prompt templates');
-  });
-
-  it('should surface the server detail message when updatePromptTemplates fails with a ProblemDetails body', () => {
-    // Arrange
-    service.updatePromptTemplates({ systemPromptTemplate: 'sys', workerPromptTemplate: 'worker', branchNamingInstruction: 'feat/branch' });
-    httpMock.expectOne('/api/settings/prompts').flush(
-      { type: 'tag:foundry,2026:problems/Settings.WorkerPromptMissingIssueNumber', title: 'Bad Request', status: 400, detail: 'The worker prompt template must contain the {issueNumber} placeholder.' },
-      { status: 400, statusText: 'Bad Request' }
-    );
-
-    // Assert
-    expect(service.savePromptsError()).toBe('The worker prompt template must contain the {issueNumber} placeholder.');
-    expect(service.savingPrompts()).toBe(false);
-    expect(service.savePromptsSuccess()).toBe(false);
-  });
-
-  it('should fall back to the generic constant when updatePromptTemplates fails with a non-detail error body', () => {
-    // Arrange
-    service.updatePromptTemplates({ systemPromptTemplate: 'sys', workerPromptTemplate: 'worker', branchNamingInstruction: 'feat/branch' });
-    httpMock.expectOne('/api/settings/prompts').flush(
-      { title: 'Bad Request' },
-      { status: 400, statusText: 'Bad Request' }
-    );
-
-    // Assert
-    expect(service.savePromptsError()).toBe('Failed to save prompt templates');
-  });
-
-  it('should clear savePromptsError and savePromptsSuccess when updatePromptTemplates is called again', () => {
-    // Arrange — put signals into dirty state
-    service.updatePromptTemplates({ systemPromptTemplate: 'bad', workerPromptTemplate: 'worker', branchNamingInstruction: 'feat/branch' });
-    httpMock.expectOne('/api/settings/prompts').flush('Server Error', {
-      status: 500,
-      statusText: 'Internal Server Error',
-    });
-    expect(service.savePromptsError()).not.toBeNull();
-
-    // Act — call again
-    service.updatePromptTemplates({ systemPromptTemplate: 'good', workerPromptTemplate: 'worker', branchNamingInstruction: 'feat/branch' });
-
-    // Assert — cleared before request completes
-    expect(service.savePromptsError()).toBeNull();
-    expect(service.savePromptsSuccess()).toBe(false);
-    expect(service.savingPrompts()).toBe(true);
-    httpMock.expectOne('/api/settings/prompts').flush(buildSettingsResponse({ systemPromptTemplate: 'good', branchNamingInstruction: 'feat/branch' }));
-  });
-
-  it('should reset prompt signals in loadSettings', () => {
-    // Arrange — put signals into dirty state
-    service.updatePromptTemplates({ systemPromptTemplate: 'sys', workerPromptTemplate: 'worker', branchNamingInstruction: 'feat/branch' });
-    httpMock.expectOne('/api/settings/prompts').flush(buildSettingsResponse({
-      systemPromptTemplate: 'sys',
-      workerPromptTemplate: 'worker',
-      branchNamingInstruction: 'feat/branch',
-    }));
-    expect(service.savePromptsSuccess()).toBe(true);
-
-    // Act
-    service.loadSettings();
-
-    // Assert — cleared before the response arrives
-    expect(service.savePromptsSuccess()).toBe(false);
-    expect(service.savingPrompts()).toBe(false);
-    expect(service.savePromptsError()).toBeNull();
-
-    flushLoadSettings(httpMock);
   });
 
   // Dispatch integration: loadSettings calls dispatchService.updateFromSettings
@@ -1502,9 +1303,6 @@ describe('SettingsService — SignalR login session', () => {
     return {
       maxConcurrent: 3,
       timeoutMinutes: 60,
-      systemPromptTemplate: null,
-      workerPromptTemplate: null,
-      branchNamingInstruction: null,
       usageLimitResetsAt: null,
       isDispatchPaused: false,
       autoResumeOnUsageReset: true,
@@ -1722,9 +1520,6 @@ describe('SettingsService — SignalR re-sync', () => {
     return {
       maxConcurrent: 3,
       timeoutMinutes: 60,
-      systemPromptTemplate: null,
-      workerPromptTemplate: null,
-      branchNamingInstruction: null,
       usageLimitResetsAt: null,
       isDispatchPaused: false,
       autoResumeOnUsageReset: true,
@@ -1899,9 +1694,6 @@ describe('SettingsService — retry fields', () => {
     return {
       maxConcurrent: 3,
       timeoutMinutes: 60,
-      systemPromptTemplate: null,
-      workerPromptTemplate: null,
-      branchNamingInstruction: null,
       usageLimitResetsAt: null,
       isDispatchPaused: false,
       autoResumeOnUsageReset: true,
@@ -2039,9 +1831,6 @@ describe('SettingsService — isColdBuildBlocking', () => {
     return {
       maxConcurrent: 3,
       timeoutMinutes: 60,
-      systemPromptTemplate: null,
-      workerPromptTemplate: null,
-      branchNamingInstruction: null,
       usageLimitResetsAt: null,
       isDispatchPaused: false,
       autoResumeOnUsageReset: true,

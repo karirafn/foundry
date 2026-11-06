@@ -13,6 +13,7 @@ using Foundry.Modules.Workers.Domain.Entities.States;
 using Foundry.Modules.Workers.Domain.ValueObjects;
 using Foundry.Modules.Workers.Features.ContainerSpec;
 using Foundry.Modules.Workers.Features.Orchestration;
+using Foundry.Modules.Workers.Features.Roles;
 using Foundry.Shared;
 using Foundry.Shared.Infrastructure;
 
@@ -29,6 +30,7 @@ internal sealed class IssueClaimedHandler(
     IGlobalSettingsQueries settingsQueries,
     ICredentialQueries credentialQueries,
     IPostExitProviderQueries postExitProviderQueries,
+    IWorkerRoleCatalogStore roleCatalog,
     ILogger<IssueClaimedHandler> logger) : IIntegrationEventHandler<IssueClaimed>
 {
     public async Task HandleAsync(IssueClaimed @event, CancellationToken cancellationToken)
@@ -63,7 +65,12 @@ internal sealed class IssueClaimedHandler(
             dbContext.Set<DispatchReservation>().Remove(reservation);
         }
 
-        StartingRun startingRun = StartingRun.Begin(claimed.IssueId, claimed.WorkerRunId);
+        // Every claimed issue runs the implement role: revision, continuation and rebase-conflict runs included.
+        WorkerRole role = WorkerRole.Implement;
+        WorkerRoleCatalog? catalog = roleCatalog.Current;
+        string image = catalog?.Image.Reference ?? await settingsQueries.GetWorkerImageTagAsync(cancellationToken);
+
+        StartingRun startingRun = StartingRun.Begin(claimed.IssueId, claimed.WorkerRunId, role, image);
         dbContext.Set<WorkerRun>().Add(startingRun);
         await dbContext.SaveChangesAsync(cancellationToken);
 
@@ -85,7 +92,7 @@ internal sealed class IssueClaimedHandler(
             return;
         }
 
-        Result<WorkerContainerSpec> specResult = await BuildSpecAsync(startingRun, claimed, cancellationToken);
+        Result<WorkerContainerSpec> specResult = await BuildSpecAsync(startingRun, claimed, catalog, cancellationToken);
 
         if (specResult is Result<WorkerContainerSpec>.Failure specFailure)
         {
@@ -135,8 +142,18 @@ internal sealed class IssueClaimedHandler(
     private async Task<Result<WorkerContainerSpec>> BuildSpecAsync(
         StartingRun startingRun,
         ClaimedIssueDispatch claimed,
+        WorkerRoleCatalog? catalog,
         CancellationToken cancellationToken)
     {
+        WorkerRoleDefinition? role = catalog?.Content.Find(startingRun.Role);
+
+        if (role is null)
+        {
+            return Result<WorkerContainerSpec>.Fail(new Error(
+                "Worker.RoleUnavailable",
+                $"The worker role '{startingRun.Role.Name}' is not loaded. Its catalog is read during the worker image build; wait for the image build to succeed."));
+        }
+
         if (string.IsNullOrEmpty(claimed.AccountToken))
         {
             return Result<WorkerContainerSpec>.Fail(
@@ -152,9 +169,6 @@ internal sealed class IssueClaimedHandler(
 
         string gitPat = claimed.AccountToken;
 
-        (string systemPromptTemplate, string workerPromptTemplate, string branchNamingInstruction) =
-            await settingsQueries.GetPromptTemplatesAsync(cancellationToken);
-
         int timeoutMinutes = await settingsQueries.GetTimeoutMinutesAsync(cancellationToken);
         bool installsDocker = await settingsQueries.GetWorkerImageInstallsDockerAsync(cancellationToken);
         bool installsDotnet = await settingsQueries.GetWorkerImageInstallsDotnetAsync(cancellationToken);
@@ -164,8 +178,7 @@ internal sealed class IssueClaimedHandler(
 
         Result<string> systemPromptResult = SystemPromptBuilder.Build(
             claimed.IssueNumber,
-            branchNamingInstruction,
-            systemPromptTemplate,
+            role.SystemPromptTemplate,
             claimed.Context,
             claimed.IssueApiUrl,
             timeoutMinutes,
@@ -179,8 +192,8 @@ internal sealed class IssueClaimedHandler(
 
         string systemPrompt = systemPromptSuccess.Value;
 
-        string workerPrompt = workerPromptTemplate
-            .Replace("{issueNumber}", claimed.IssueNumber.ToString(CultureInfo.InvariantCulture), StringComparison.Ordinal);
+        string workerPrompt = role.TaskPromptTemplate
+            .Replace(RolePromptPlaceholders.IssueNumber, claimed.IssueNumber.ToString(CultureInfo.InvariantCulture), StringComparison.Ordinal);
 
         string? authMode = await credentialQueries.GetAuthModeAsync(cancellationToken);
 
@@ -211,6 +224,7 @@ internal sealed class IssueClaimedHandler(
             ["BRANCH_NAME"] = claimed.BranchName.Value,
             ["SYSTEM_PROMPT"] = systemPrompt,
             ["WORKER_PROMPT"] = workerPrompt,
+            ["WORKER_ROLE"] = role.Role.Name,
             ["CLAUDE_SETTINGS_JSON"] = WorkerSettingsBuilder.Build(claudeCode),
         };
 

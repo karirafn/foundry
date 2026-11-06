@@ -1,0 +1,39 @@
+using Foundry.Modules.Workers.Domain.ValueObjects;
+
+using Shouldly;
+
+using Xunit;
+
+namespace Foundry.UnitTests.Modules.Workers.Domain.ValueObjects.WorkerRoleTests;
+
+public sealed class FromStored
+{
+    [Fact]
+    public void WhenTheNameIsAKnownRole_ReturnsThatRole()
+    {
+        // Act
+        WorkerRole role = WorkerRole.FromStored("implement");
+
+        // Assert
+        role.ShouldBeSameAs(WorkerRole.Implement);
+    }
+
+    [Fact]
+    public void WhenTheNameIsNoLongerARole_KeepsTheRecordedName()
+    {
+        // Act
+        WorkerRole role = WorkerRole.FromStored("retired-role");
+
+        // Assert
+        role.ShouldSatisfyAllConditions(
+            () => role.Name.ShouldBe("retired-role"),
+            () => WorkerRole.All.ShouldNotContain(role));
+    }
+
+    [Fact]
+    public void TheSharedPluginFolder_IsNeverARole()
+    {
+        // Assert
+        WorkerRole.All.ShouldNotContain(role => role.Name == WorkerRole.SharedFolder);
+    }
+}

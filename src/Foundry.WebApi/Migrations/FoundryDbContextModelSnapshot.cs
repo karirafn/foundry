@@ -497,11 +497,6 @@ namespace Foundry.WebApi.Migrations
                         .HasColumnType("TEXT")
                         .HasColumnName("worker_image_configuration");
 
-                    b.Property<string>("WorkerPrompts")
-                        .IsRequired()
-                        .HasColumnType("TEXT")
-                        .HasColumnName("worker_prompts");
-
                     b.Property<string>("WorkerResourceLimits")
                         .IsRequired()
                         .HasColumnType("TEXT")
@@ -537,9 +532,24 @@ namespace Foundry.WebApi.Migrations
                         .HasColumnType("TEXT")
                         .HasColumnName("created_at");
 
+                    b.Property<string>("Image")
+                        .HasMaxLength(500)
+                        .IsUnicode(false)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("image");
+
                     b.Property<Guid>("IssueId")
                         .HasColumnType("TEXT")
                         .HasColumnName("issue_id");
+
+                    b.Property<string>("Role")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(50)
+                        .IsUnicode(false)
+                        .HasColumnType("TEXT")
+                        .HasDefaultValue("implement")
+                        .HasColumnName("role");
 
                     b.Property<string>("state")
                         .IsRequired()

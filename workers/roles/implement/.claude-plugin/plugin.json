@@ -1,0 +1,5 @@
+{
+  "name": "foundry-role-implement",
+  "description": "Implements an issue test-first on the branch Foundry provides, then opens or reuses its pull request.",
+  "version": "1.0.0"
+}

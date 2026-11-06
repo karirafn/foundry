@@ -14,8 +14,10 @@ using Foundry.Modules.Workers.Features.Orchestration;
 using Foundry.Modules.Workers.Features.Outcome;
 using Foundry.Modules.Workers.Features.ContainerSpec;
 using Foundry.Modules.Workers.Features.Dispatch;
+using Foundry.Modules.Workers.Features.Roles;
 using Foundry.Shared;
 using Foundry.Shared.Infrastructure;
+using Foundry.UnitTests.Fakes.Workers;
 using Foundry.WebApi.Persistence;
 
 using Microsoft.Data.Sqlite;
@@ -107,6 +109,7 @@ public sealed class PreContainerFailureBridging : IAsyncDisposable
             new StubGlobalSettingsQueries(),
             new StubCredentialQueries(("ANTHROPIC_API_KEY", "test-key")),
             postExitProviderQueries ?? new BranchCreationFailsQueries(),
+            StubWorkerRoleCatalogStore.With(),
             NullLogger<IssueClaimedHandler>.Instance);
     }
 
@@ -339,9 +342,6 @@ public sealed class PreContainerFailureBridging : IAsyncDisposable
         public Task<int> GetPollIntervalSecondsAsync(CancellationToken cancellationToken)
             => Task.FromResult(30);
 
-        public Task<(string SystemPromptTemplate, string WorkerPromptTemplate, string BranchNamingInstruction)> GetPromptTemplatesAsync(
-            CancellationToken cancellationToken)
-            => Task.FromResult(("", "", ""));
 
         public Task<DispatchPauseState> GetDispatchPauseStateAsync(CancellationToken cancellationToken)
             => Task.FromResult(new DispatchPauseState(null, false, true));

@@ -12,9 +12,11 @@ using Foundry.Modules.Workers.Domain.Entities.States;
 using Foundry.Modules.Workers.Domain.ValueObjects;
 using Foundry.Modules.Workers.Features.ContainerSpec;
 using Foundry.Modules.Workers.Features.Dispatch;
+using Foundry.Modules.Workers.Features.Roles;
 using Foundry.Modules.Workers.Features.Orchestration;
 using Foundry.Shared;
 using Foundry.Testing;
+using Foundry.UnitTests.Fakes.Workers;
 using Foundry.WebApi.Persistence;
 
 using Microsoft.Data.Sqlite;
@@ -62,6 +64,7 @@ public sealed class ConsumesReservation : IAsyncDisposable
             new StubGlobalSettingsQueries(),
             new StubCredentialQueries(("ANTHROPIC_API_KEY", "test-api-key")),
             _providerQueries,
+            StubWorkerRoleCatalogStore.With(),
             NullLogger<IssueClaimedHandler>.Instance);
     }
 
@@ -269,9 +272,6 @@ public sealed class ConsumesReservation : IAsyncDisposable
         public Task<int> GetPollIntervalSecondsAsync(CancellationToken cancellationToken)
             => Task.FromResult(30);
 
-        public Task<(string SystemPromptTemplate, string WorkerPromptTemplate, string BranchNamingInstruction)> GetPromptTemplatesAsync(
-            CancellationToken cancellationToken)
-            => Task.FromResult(("", "", ""));
 
         public Task<DispatchPauseState> GetDispatchPauseStateAsync(CancellationToken cancellationToken)
             => Task.FromResult(new DispatchPauseState(null, false, true));

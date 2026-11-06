@@ -16,7 +16,6 @@ import {
   LoginPhase,
   LoginSessionUpdate,
   OAuthCredentialInfo,
-  UpdatePromptTemplatesRequest,
   WorkerEnvironment,
   WorkerImageFlags,
   WorkerLimits,
@@ -28,7 +27,6 @@ import { SystemSignalRService } from './system-signalr.service';
 const LOAD_SETTINGS_ERROR = 'Failed to load settings';
 const SAVE_SETTINGS_ERROR = 'Failed to save settings';
 const SAVE_LIMITS_ERROR = 'Failed to save worker limits';
-const SAVE_PROMPTS_ERROR = 'Failed to save prompt templates';
 const SAVE_DISPATCH_ERROR = 'Failed to save dispatch settings';
 const SAVE_WEBHOOKS_ERROR = 'Failed to save webhook settings';
 const SAVE_IMAGE_FLAGS_ERROR = 'Failed to save worker image settings';
@@ -103,24 +101,6 @@ export class SettingsService {
 
   private readonly _saveLimitsErrorSignal: WritableSignal<string | null> = signal(null);
   readonly saveLimitsError: Signal<string | null> = this._saveLimitsErrorSignal.asReadonly();
-
-  private readonly _systemPromptTemplateSignal: WritableSignal<string | null> = signal(null);
-  readonly systemPromptTemplate: Signal<string | null> = this._systemPromptTemplateSignal.asReadonly();
-
-  private readonly _workerPromptTemplateSignal: WritableSignal<string | null> = signal(null);
-  readonly workerPromptTemplate: Signal<string | null> = this._workerPromptTemplateSignal.asReadonly();
-
-  private readonly _branchNamingInstructionSignal: WritableSignal<string | null> = signal(null);
-  readonly branchNamingInstruction: Signal<string | null> = this._branchNamingInstructionSignal.asReadonly();
-
-  private readonly _savingPromptsSignal: WritableSignal<boolean> = signal(false);
-  readonly savingPrompts: Signal<boolean> = this._savingPromptsSignal.asReadonly();
-
-  private readonly _savePromptsSuccessSignal: WritableSignal<boolean> = signal(false);
-  readonly savePromptsSuccess: Signal<boolean> = this._savePromptsSuccessSignal.asReadonly();
-
-  private readonly _savePromptsErrorSignal: WritableSignal<string | null> = signal(null);
-  readonly savePromptsError: Signal<string | null> = this._savePromptsErrorSignal.asReadonly();
 
   private readonly _savingDispatchSignal: WritableSignal<boolean> = signal(false);
   readonly savingDispatch: Signal<boolean> = this._savingDispatchSignal.asReadonly();
@@ -243,7 +223,6 @@ export class SettingsService {
     this._saveErrorSignal.set(null);
     this._switchErrorSignal.set(null);
     this._saveLimitsErrorSignal.set(null);
-    this._savePromptsErrorSignal.set(null);
     this._saveDispatchErrorSignal.set(null);
     this._saveImageFlagsErrorSignal.set(null);
     this._saveHostsErrorSignal.set(null);
@@ -257,13 +236,11 @@ export class SettingsService {
     this._savingClaudeCodeSignal.set(false);
     this.saveSuccess.set(false);
     this._saveLimitsSuccessSignal.set(false);
-    this._savePromptsSuccessSignal.set(false);
     this._saveDispatchSuccessSignal.set(false);
     this._saveImageFlagsSuccessSignal.set(false);
     this._saveHostsSuccessSignal.set(false);
     this.saving.set(false);
     this._savingLimitsSignal.set(false);
-    this._savingPromptsSignal.set(false);
     this._savingDispatchSignal.set(false);
     this._savingImageFlagsSignal.set(false);
     this._savingHostsSignal.set(false);
@@ -279,9 +256,6 @@ export class SettingsService {
           this._settingsSignal.set(settings);
           this.authSettings.set(this._mapToAuthSettings(credentials));
           this._workerLimitsSignal.set({ maxConcurrent: settings.maxConcurrent, timeoutMinutes: settings.timeoutMinutes });
-          this._systemPromptTemplateSignal.set(settings.systemPromptTemplate);
-          this._workerPromptTemplateSignal.set(settings.workerPromptTemplate);
-          this._branchNamingInstructionSignal.set(settings.branchNamingInstruction);
           this._allowedProviderHostsSignal.set(settings.allowedProviderHosts ?? []);
           this._dispatchService.updateFromSettings(settings);
           this._workerImageFlagsSignal.set(this._mapToWorkerImageFlags(settings));
@@ -405,27 +379,6 @@ export class SettingsService {
         console.error(err);
         this._saveLimitsErrorSignal.set(SAVE_LIMITS_ERROR);
         this._savingLimitsSignal.set(false);
-      },
-    });
-  }
-
-  updatePromptTemplates(request: UpdatePromptTemplatesRequest): void {
-    this._savePromptsErrorSignal.set(null);
-    this._savePromptsSuccessSignal.set(false);
-    this._savingPromptsSignal.set(true);
-
-    this._http.put<GlobalSettingsResponse>('/api/settings/prompts', request).subscribe({
-      next: (response) => {
-        this._systemPromptTemplateSignal.set(response.systemPromptTemplate);
-        this._workerPromptTemplateSignal.set(response.workerPromptTemplate);
-        this._branchNamingInstructionSignal.set(response.branchNamingInstruction);
-        this._savingPromptsSignal.set(false);
-        this._savePromptsSuccessSignal.set(true);
-      },
-      error: (err: HttpErrorResponse) => {
-        console.error(err);
-        this._savePromptsErrorSignal.set(extractErrorMessage(err) ?? SAVE_PROMPTS_ERROR);
-        this._savingPromptsSignal.set(false);
       },
     });
   }

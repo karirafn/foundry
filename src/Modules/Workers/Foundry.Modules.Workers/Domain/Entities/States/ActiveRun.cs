@@ -25,8 +25,10 @@ public sealed class ActiveRun : WorkerRun
         ContainerId containerId,
         BranchName branchName,
         MonitoredRepositoryId monitoredRepositoryId,
-        DateTimeOffset startedAt)
-        : base(id, issueId, createdAt)
+        DateTimeOffset startedAt,
+        WorkerRole role,
+        string? image)
+        : base(id, issueId, createdAt, role, image)
     {
         ContainerId = containerId;
         BranchName = branchName;
@@ -103,7 +105,9 @@ public sealed class ActiveRun : WorkerRun
             containerId,
             branchName,
             monitoredRepositoryId,
-            DateTimeOffset.UtcNow);
+            DateTimeOffset.UtcNow,
+            starting.Role,
+            starting.Image);
     }
 
     public CompletedRun Complete(

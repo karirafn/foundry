@@ -1,0 +1,43 @@
+@use '../../../../styles/controls' as *;
+@use 'worker-roles' as *;
+
+:host {
+  display: block;
+}
+
+.prompt-text {
+  background: var(--fd-bg-page);
+  border: 1px solid var(--fd-border-muted);
+  border-radius: var(--fd-radius-sm);
+  color: var(--fd-text-primary);
+  font-family: var(--fd-font-mono);
+  font-size: 0.8125rem;
+  line-height: 1.5;
+  margin: 0;
+  padding: var(--fd-spacing-sm) var(--fd-spacing-md);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+
+  &:focus-visible {
+    @include focus-ring;
+  }
+
+  code {
+    font-family: inherit;
+  }
+
+  &--scrollable {
+    max-block-size: 24rem;
+    overflow: auto;
+  }
+
+  &__placeholder {
+    @include placeholder-chip;
+  }
+
+  @container role-card (max-width: 30rem) {
+    & {
+      padding: var(--fd-spacing-sm);
+    }
+  }
+}

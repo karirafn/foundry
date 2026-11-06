@@ -21,8 +21,10 @@ public sealed class FailedRun : WorkerRun
         DateTimeOffset failedAt,
         BranchName? branchName,
         string? containerOutput,
-        RunResultSummary? resultSummary)
-        : base(id, issueId, createdAt)
+        RunResultSummary? resultSummary,
+        WorkerRole role,
+        string? image)
+        : base(id, issueId, createdAt, role, image)
     {
         Reason = reason;
         FailedAt = failedAt;
@@ -57,7 +59,9 @@ public sealed class FailedRun : WorkerRun
             DateTimeOffset.UtcNow,
             branchName: null,
             containerOutput: null,
-            resultSummary: null);
+            resultSummary: null,
+            starting.Role,
+            starting.Image);
     }
 
     internal static FailedRun FromActive(
@@ -74,7 +78,9 @@ public sealed class FailedRun : WorkerRun
             DateTimeOffset.UtcNow,
             active.BranchName,
             containerOutput,
-            resultSummary)
+            resultSummary,
+            active.Role,
+            active.Image)
         {
             CancelRequestedAt = active.CancelRequestedAt,
         };

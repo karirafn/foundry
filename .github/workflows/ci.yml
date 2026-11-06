@@ -168,6 +168,23 @@ jobs:
             || { echo "FAIL: rq-cli must not be installed in /usr/local/bin"; exit 1; }
           echo "PASS: rq-cli absent"
 
+      - name: Image contract check — worker roles baked and read-only to node
+        if: github.event_name == 'push' || steps.changes.outputs.workers == 'true'
+        run: |
+          for role_file in \
+            implement/.claude-plugin/plugin.json \
+            implement/prompts/system.md \
+            implement/prompts/task.md \
+            shared/.claude-plugin/plugin.json; do
+            docker run --rm foundry-worker:ci test -f "/opt/foundry/roles/$role_file" \
+              || { echo "FAIL: /opt/foundry/roles/$role_file missing from the image"; exit 1; }
+          done
+          echo "PASS: implement and shared role files baked into /opt/foundry/roles"
+
+          docker run --rm --user node foundry-worker:ci bash -c '! touch /opt/foundry/roles/probe 2>/dev/null && ! touch /opt/foundry/roles/implement/prompts/system.md 2>/dev/null' \
+            || { echo "FAIL: /opt/foundry/roles must not be writable by node"; exit 1; }
+          echo "PASS: /opt/foundry/roles not writable by node"
+
       - name: Image contract check — verify iproute2/procps present, fuse-overlayfs absent, setuid only on newuidmap/newgidmap
         if: github.event_name == 'push' || steps.changes.outputs.workers == 'true'
         run: |

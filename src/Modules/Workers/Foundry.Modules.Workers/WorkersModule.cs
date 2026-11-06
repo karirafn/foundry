@@ -11,6 +11,7 @@ using Foundry.Modules.Workers.Features.Health;
 using Foundry.Modules.Workers.Features.ImageBuild;
 using Foundry.Modules.Workers.Features.Orchestration;
 using Foundry.Modules.Workers.Features.Outcome;
+using Foundry.Modules.Workers.Features.Roles;
 using Foundry.Modules.Workers.Features.Runs;
 using Foundry.Modules.Workers.Infrastructure;
 using Foundry.Shared.Infrastructure;
@@ -52,6 +53,7 @@ public static class WorkersModule
         services.AddSingleton<IContainerOutputParser, ContainerOutputParser>();
         services.AddSingleton<IProbeOutcomeClassifier, ProbeOutcomeClassifier>();
         services.AddSingleton<IWorkerImageRebuildQueue, WorkerImageRebuildQueue>();
+        services.AddSingleton<IWorkerRoleCatalogStore, WorkerRoleCatalogStore>();
 
         services.AddIntegrationEventHandler<IssueClaimed, IssueClaimedHandler>();
         services.AddIntegrationEventHandler<ClaimSkipped, ClaimSkippedHandler>();
@@ -83,6 +85,7 @@ public static class WorkersModule
     {
         app.MapWorkerEndpoints();
         app.MapSystemEndpoints();
+        app.MapWorkerRoleEndpoints();
         return app;
     }
 }

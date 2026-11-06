@@ -21,8 +21,10 @@ public sealed class CompletedRun : WorkerRun
         DateTimeOffset completedAt,
         BranchName? branchName,
         PullRequestUrl? pullRequestUrl,
-        RunResultSummary? resultSummary)
-        : base(id, issueId, createdAt)
+        RunResultSummary? resultSummary,
+        WorkerRole role,
+        string? image)
+        : base(id, issueId, createdAt, role, image)
     {
         ExitCode = exitCode;
         CompletedAt = completedAt;
@@ -62,7 +64,9 @@ public sealed class CompletedRun : WorkerRun
             DateTimeOffset.UtcNow,
             branchName,
             pullRequestUrl,
-            resultSummary)
+            resultSummary,
+            active.Role,
+            active.Image)
         {
             CancelRequestedAt = active.CancelRequestedAt,
         };

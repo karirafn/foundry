@@ -63,7 +63,7 @@ The entrypoint writes it to `/home/node/.claude/settings.json` before Claude Cod
 
 The Claude Code model and additional deny rules, including the CI/CD edit protection toggle, are managed on the Claude Code settings page in the dashboard and stored in Global Settings.
 
-> **Security model note:** the system prompt template is an operator-controlled setting, edited in the dashboard (Settings → Prompts) and stored in Global Settings. Operators are trusted — a malicious operator can weaken or override guidance in the system prompt template. The non-configurable safety preamble (prepended automatically) provides a baseline, but it is instructional guidance, not a cryptographic enforcement mechanism. Do not rely on it alone to contain an adversarial operator.
+> **Security model note:** worker prompts ship in the worker image with each Worker Role (`workers/roles/<role>/`, shown read-only in Settings → Worker roles), so a prompt change is a reviewed pull request that takes effect at the next restart. Anyone who can merge to the repository is trusted — they can weaken or override guidance in a role prompt. The non-configurable safety preamble (prepended automatically) provides a baseline, but it is instructional guidance, not a cryptographic enforcement mechanism. Do not rely on it alone to contain an adversarial operator.
 
 ## Running
 

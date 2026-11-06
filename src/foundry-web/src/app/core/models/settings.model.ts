@@ -81,9 +81,6 @@ export interface GlobalSettingsResponse {
   timeoutMinutes: number;
   probeIntervalMinutes: number;
   pollIntervalSeconds: number;
-  systemPromptTemplate: string;
-  workerPromptTemplate: string;
-  branchNamingInstruction: string;
   usageLimitResetsAt: string | null;
   isDispatchPaused: boolean;
   autoResumeOnUsageReset: boolean;
@@ -109,12 +106,6 @@ export interface GlobalSettingsResponse {
   webhookPublicBaseUrl?: string | null;
   /** Poll interval for repositories whose webhook is active. */
   backstopIntervalMinutes?: number;
-}
-
-export interface UpdatePromptTemplatesRequest {
-  systemPromptTemplate: string;
-  workerPromptTemplate: string;
-  branchNamingInstruction: string;
 }
 
 export interface DispatchSettings {

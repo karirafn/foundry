@@ -1,0 +1,191 @@
+@use '../../../../styles/controls' as *;
+@use 'worker-roles' as *;
+
+:host {
+  container: role-card / inline-size;
+  display: block;
+}
+
+.role-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--fd-spacing-lg);
+
+  code {
+    font-family: var(--fd-font-mono);
+  }
+
+  &__header {
+    display: flex;
+    flex-direction: column;
+    gap: var(--fd-spacing-sm);
+  }
+
+  &__title {
+    color: var(--fd-text-primary);
+    font-family: var(--fd-font-mono);
+    font-size: 1rem;
+    font-weight: 600;
+    margin: 0;
+  }
+
+  &__purpose {
+    color: var(--fd-text-secondary);
+    font-size: 0.875rem;
+    margin: 0;
+  }
+
+  &__unverified {
+    @include warning-callout;
+    align-items: flex-start;
+    display: flex;
+    gap: var(--fd-spacing-sm);
+    margin: 0;
+  }
+
+  &__unverified-icon,
+  &__unverified-lead {
+    color: var(--fd-text-warning);
+  }
+
+  &__unverified-icon {
+    flex-shrink: 0;
+  }
+
+  &__unverified-lead {
+    font-weight: 600;
+  }
+
+  &__meta {
+    display: flex;
+    flex-wrap: wrap;
+    font-size: 0.8125rem;
+    gap: var(--fd-spacing-xs) var(--fd-spacing-xl);
+    margin: 0;
+
+    @container role-card (max-width: 30rem) {
+      flex-direction: column;
+    }
+  }
+
+  &__meta-item {
+    min-inline-size: 0;
+  }
+
+  &__meta dt {
+    color: var(--fd-text-secondary);
+    display: inline;
+    margin-inline-end: var(--fd-spacing-xs);
+  }
+
+  &__meta dd {
+    color: var(--fd-text-primary);
+    display: inline;
+    margin: 0;
+    overflow-wrap: anywhere;
+  }
+
+  &__block {
+    border-block-start: 1px solid var(--fd-border-default);
+    display: flex;
+    flex-direction: column;
+    gap: var(--fd-spacing-sm);
+    padding-block-start: var(--fd-spacing-lg);
+  }
+
+  &__block-title {
+    color: var(--fd-text-primary);
+    font-size: 0.875rem;
+    font-weight: 600;
+    margin: 0;
+  }
+
+  &__sub-title {
+    color: var(--fd-text-secondary);
+    font-size: 0.8125rem;
+    font-weight: 600;
+    margin: var(--fd-spacing-sm) 0 0;
+  }
+
+  &__hint {
+    color: var(--fd-text-secondary);
+    font-size: 0.75rem;
+    margin: 0;
+  }
+
+  &__placeholder-sample {
+    @include placeholder-chip;
+  }
+
+  &__skills,
+  &__agents {
+    display: flex;
+    flex-direction: column;
+    gap: var(--fd-spacing-xs);
+  }
+
+  &__list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--fd-spacing-xs);
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+
+  &__details {
+    @include role-disclosure;
+
+    @container role-card (max-width: 30rem) {
+      &[open] > :not(summary) {
+        margin-inline: 0;
+      }
+    }
+  }
+
+  &__summary-name {
+    font-weight: 500;
+  }
+
+  &__summary-description {
+    color: var(--fd-text-secondary);
+    grid-column: 2 / -1;
+  }
+
+  &__badge {
+    border: 1px solid var(--fd-border-default);
+    border-radius: 999px;
+    color: var(--fd-text-secondary);
+    font-size: 0.6875rem;
+    font-weight: 500;
+    line-height: 1.4;
+    padding-inline: var(--fd-spacing-sm);
+    white-space: nowrap;
+  }
+
+  &__shared {
+    border-color: var(--fd-text-link);
+    color: var(--fd-text-link);
+  }
+
+  &__path {
+    margin-block: var(--fd-spacing-xs);
+  }
+
+  &__schema {
+    background: var(--fd-bg-page);
+    border: 1px solid var(--fd-border-muted);
+    border-radius: var(--fd-radius-sm);
+    color: var(--fd-text-primary);
+    font-family: var(--fd-font-mono);
+    font-size: 0.8125rem;
+    margin: 0;
+    max-block-size: 24rem;
+    overflow: auto;
+    padding: var(--fd-spacing-sm) var(--fd-spacing-md);
+
+    &:focus-visible {
+      @include focus-ring;
+    }
+  }
+}
