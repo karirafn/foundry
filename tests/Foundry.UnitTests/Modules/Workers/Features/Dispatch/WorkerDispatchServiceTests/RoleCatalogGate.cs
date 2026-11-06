@@ -86,13 +86,14 @@ public sealed class RoleCatalogGate : WorkerDispatchServiceTestBase
             integrationEventDispatcher: dispatcher,
             roleCatalog: catalogStore);
         await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
+        dispatcher.Captured.ShouldBeEmpty();
         catalogStore.Publish(StubWorkerRoleCatalogStore.Catalog());
 
         // Act
         await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
 
         // Assert
-        dispatcher.Captured.ShouldContain(e => e is WorkerCapacityAvailable);
+        dispatcher.Captured.Count(e => e is WorkerCapacityAvailable).ShouldBe(1);
     }
 
     private sealed class NullWorkerOrchestrator : IWorkerOrchestrator
