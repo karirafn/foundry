@@ -11,9 +11,10 @@ using Microsoft.Extensions.Logging;
 namespace Foundry.Modules.Credentials.Features.Usage;
 
 /// <summary>
-/// Process-wide singleton coordinator that runs the usage-report container at most once
-/// concurrently (single-flight JOIN semantics) and routes the outcome to the appropriate
-/// state transitions and broadcast.
+/// Process-wide singleton coordinator that runs a usage poll at most once concurrently
+/// (single-flight JOIN semantics) and routes the outcome to the appropriate state transitions and
+/// broadcast. A poll runs <c>claude -p "/usage"</c> and, only when its report carries no rate limits,
+/// the probe-turn fallback after it — sequentially, inside the same single-flight task (ADR 0097).
 /// <para>
 /// Singleton lifetime: <see cref="_gate"/> provides process-wide single-flight state via an
 /// in-flight task tracked under a <see cref="Lock"/>. Scoped dependencies (<see cref="DbContext"/>)
@@ -189,10 +190,12 @@ internal sealed class UsagePollCoordinator(
         string accountEmail = account.OAuthAccountEmail!;
         DateTimeOffset capturedAt = DateTimeOffset.UtcNow;
 
-        UsageReportSpec spec = new(UsageReportSpec.DefaultTimeoutSeconds);
-        Result<string> orchestratorResult = await orchestrator.RunUsageReportAsync(spec, cancellationToken);
+        // Primary source: the /usage report (ADR 0097).
+        Result<string> usageResult = await orchestrator.RunUsageReportAsync(
+            new UsageReportSpec(UsageReportCommand.UsageCommand, UsageReportSpec.DefaultTimeoutSeconds),
+            cancellationToken);
 
-        if (orchestratorResult is Result<string>.Failure failure)
+        if (usageResult is Result<string>.Failure failure)
         {
             logger.LogWarning(
                 "Usage report orchestrator failed: {Error}. Retaining last good snapshot, if any.",
@@ -200,7 +203,7 @@ internal sealed class UsagePollCoordinator(
             return HandleFailure(accountEmail, capturedAt);
         }
 
-        string log = ((Result<string>.Success)orchestratorResult).Value;
+        string log = ((Result<string>.Success)usageResult).Value;
         UsageParseResult parseResult = UsageReportParser.Parse(log, accountEmail, capturedAt);
 
         return parseResult switch
@@ -208,9 +211,39 @@ internal sealed class UsagePollCoordinator(
             UsageParseResult.Parsed parsed => HandleParsed(parsed.Snapshot),
             UsageParseResult.NoUsageReport => HandleNoUsageReport(),
             UsageParseResult.Unparseable => HandleUnparseable(log, capturedAt),
+            UsageParseResult.RateLimitsMissing missing =>
+                await RunProbeTurnFallbackAsync(missing.ExtraCredits, UsageReportParser.ReadClaudeCodeVersion(log)),
             _ => throw new System.Diagnostics.UnreachableException(
                 $"Unexpected UsageParseResult: {parseResult.GetType().Name}"),
         };
+
+        // Fallback: /usage print mode returned no rate_limits (a known CLI-version regression).
+        // Runs the probe turn sequentially inside this same single-flight poll, never concurrently.
+        async Task<UsageSnapshot?> RunProbeTurnFallbackAsync(UsageExtraCredits? extraCredits, string? cliVersion)
+        {
+            logger.LogWarning(
+                "Usage report from Claude Code CLI {CliVersion} carried no rate limits; falling back to a probe turn for the session and weekly meters.",
+                cliVersion ?? "(unknown version)");
+
+            Result<string> probeResult = await orchestrator.RunUsageReportAsync(
+                new UsageReportSpec(UsageReportCommand.ProbeTurn, UsageReportSpec.DefaultTimeoutSeconds),
+                cancellationToken);
+
+            if (probeResult is Result<string>.Failure probeFailure)
+            {
+                logger.LogWarning(
+                    "Usage probe-turn orchestrator failed: {Error}. Retaining last good snapshot, if any.",
+                    probeFailure.Error.Message);
+                return HandleFailure(accountEmail, capturedAt);
+            }
+
+            string probeLog = ((Result<string>.Success)probeResult).Value;
+
+            // /usage already showed the account is reportable, so a probe without windows is a failure, not a clear.
+            return ProbeTurnUsageParser.Parse(probeLog, accountEmail, capturedAt) is UsageParseResult.Parsed probeParsed
+                ? HandleParsed(probeParsed.Snapshot with { ExtraUsage = extraCredits })
+                : HandleUnparseable(probeLog, capturedAt);
+        }
 
         // Local function — avoids making the async method large while keeping the broadcast inline.
         UsageSnapshot? HandleParsed(UsageSnapshot snapshot)
@@ -222,12 +255,9 @@ internal sealed class UsagePollCoordinator(
             // token does not suppress the push to connected clients.
             _ = TryBroadcastAsync(current, CancellationToken.None);
 
-            logger.LogDebug(
-                "Usage poll succeeded. Snapshot captured at {CapturedAt}.",
-                snapshot.CapturedAt);
-
             logger.LogInformation(
-                "Usage poll succeeded. Snapshot captured at {CapturedAt}.",
+                "Usage poll succeeded from {Source}. Snapshot captured at {CapturedAt}.",
+                snapshot.Source,
                 snapshot.CapturedAt);
 
             return current;

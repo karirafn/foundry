@@ -29,6 +29,7 @@ function buildSnapshot(overrides: Partial<UsageSnapshot> = {}): UsageSnapshot {
     capturedAt: '2026-10-30T01:00:00Z',
     accountEmail: 'test@example.com',
     lastRefreshFailedAt: null,
+    source: 'usageReport',
     ...overrides,
   };
 }
@@ -444,7 +445,7 @@ describe('UsageWidgetComponent', () => {
   it('should not render the credits row when extraUsage.isEnabled is false', () => {
     // Arrange
     const snapshot = buildSnapshot({
-      extraUsage: { isEnabled: false, monthlyLimit: 50000, usedCredits: 16568, utilization: 0.33, currency: 'USD' },
+      extraUsage: { isEnabled: false, monthlyLimit: 50000, usedCredits: 16568, utilization: null, currency: 'USD', percent: 33.136, severity: 'normal' },
     });
 
     // Act
@@ -459,7 +460,7 @@ describe('UsageWidgetComponent', () => {
   it('should render the credits row with formatted currency when extraUsage.isEnabled is true', () => {
     // Arrange — minor-unit: 50000 = $500.00, 16568 = $165.68 (verified against issue Notes line 103)
     const snapshot = buildSnapshot({
-      extraUsage: { isEnabled: true, monthlyLimit: 50000, usedCredits: 16568, utilization: 0.33, currency: 'USD' },
+      extraUsage: { isEnabled: true, monthlyLimit: 50000, usedCredits: 16568, utilization: null, currency: 'USD', percent: 33.136, severity: 'normal' },
     });
 
     // Act
@@ -473,6 +474,40 @@ describe('UsageWidgetComponent', () => {
     // The value text should contain the formatted amounts
     expect(creditsValue?.textContent).toContain('165');  // $165.68
     expect(creditsValue?.textContent).toContain('500');  // $500.00
+  });
+
+  // Amount-only credits (no monthly limit) render the spent amount without "of <limit>"
+  it('should render only the spent amount when extraUsage has no monthly limit', () => {
+    // Arrange
+    const snapshot = buildSnapshot({
+      extraUsage: { isEnabled: true, monthlyLimit: null, usedCredits: 16568, utilization: null, currency: 'USD', percent: null, severity: null },
+    });
+
+    // Act
+    const fixture = setup(snapshot);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    const creditsValue = el.querySelector('.usage-popover__credits-value');
+    expect(creditsValue?.textContent).toContain('165');
+    expect(creditsValue?.textContent).not.toContain(' of ');
+  });
+
+  // A window without a reset time renders no "Resets" line
+  it('should not render a reset line for a limit whose resetsAt is null', () => {
+    // Arrange
+    const snapshot = buildSnapshot({
+      limits: [
+        { kind: 'session', percent: 0, resetsAt: null, modelDisplayName: null, severity: 'normal', isActive: true },
+      ],
+    });
+
+    // Act
+    const fixture = setup(snapshot);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    expect(el.querySelector('.usage-popover__reset')).toBeNull();
   });
 
   // Behavior c — "As of" capture line rendered when not failed
@@ -705,7 +740,7 @@ describe('UsageWidgetComponent', () => {
   it('should not render credits in the inline meters section', () => {
     // Arrange
     const snapshot = buildSnapshot({
-      extraUsage: { isEnabled: true, monthlyLimit: 50000, usedCredits: 16568, utilization: 0.33, currency: 'USD' },
+      extraUsage: { isEnabled: true, monthlyLimit: 50000, usedCredits: 16568, utilization: null, currency: 'USD', percent: 33.136, severity: 'normal' },
     });
 
     // Act

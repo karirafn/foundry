@@ -7,6 +7,7 @@ const FIXTURE_SNAPSHOT = {
   capturedAt: '2025-01-15T12:00:00+00:00',
   lastRefreshFailedAt: null,
   extraUsage: null,
+  source: 'usageReport',
   limits: [
     {
       kind: 'session',
@@ -39,12 +40,15 @@ const FIXTURE_WITH_EXTRA_USAGE = {
   accountEmail: 'user@example.com',
   capturedAt: '2025-01-15T12:00:00+00:00',
   lastRefreshFailedAt: '2025-01-15T11:55:00+00:00',
+  source: 'probeTurn',
   extraUsage: {
     isEnabled: true,
     monthlyLimit: 50000,
     usedCredits: 16568,
-    utilization: 0.33136,
+    utilization: null,
     currency: 'USD',
+    percent: 33.136,
+    severity: 'normal',
   },
   limits: [],
 } as const satisfies UsageSnapshot;
@@ -118,8 +122,11 @@ describe('UsageSnapshot interface', () => {
     expect(extra.isEnabled).toBe(true);
     expect(extra.monthlyLimit).toBe(50000);
     expect(extra.usedCredits).toBe(16568);
-    expect(extra.utilization).toBeCloseTo(0.33136);
+    expect(extra.utilization).toBeNull();
     expect(extra.currency).toBe('USD');
+    expect(extra.percent).toBeCloseTo(33.136);
+    expect(extra.severity).toBe('normal');
+    expect(snapshot.source).toBe('probeTurn');
   });
 
   // Cycle 6: lastRefreshFailedAt as a non-null string

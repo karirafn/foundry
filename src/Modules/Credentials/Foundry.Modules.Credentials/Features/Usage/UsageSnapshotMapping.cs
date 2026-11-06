@@ -5,7 +5,7 @@ namespace Foundry.Modules.Credentials.Features.Usage;
 /// <summary>
 /// Maps <see cref="UsageSnapshot"/> domain records to the public wire DTO
 /// <see cref="UsageSnapshotResponse"/>. Internal so the WebApi host can access it
-/// via <c>InternalsVisibleTo</c> — step 9's SignalR broadcaster reuses this mapper.
+/// via <c>InternalsVisibleTo</c> — the SignalR broadcaster reuses this mapper.
 /// </summary>
 internal static class UsageSnapshotMapping
 {
@@ -15,7 +15,16 @@ internal static class UsageSnapshotMapping
             ExtraUsage: snapshot.ExtraUsage?.ToResponse(),
             CapturedAt: snapshot.CapturedAt,
             AccountEmail: snapshot.AccountEmail,
-            LastRefreshFailedAt: snapshot.LastRefreshFailedAt);
+            LastRefreshFailedAt: snapshot.LastRefreshFailedAt,
+            Source: snapshot.Source?.ToWireValue());
+
+    private static string ToWireValue(this UsageSnapshotSource source) =>
+        source switch
+        {
+            UsageSnapshotSource.UsageReport => "usageReport",
+            UsageSnapshotSource.ProbeTurn => "probeTurn",
+            _ => throw new ArgumentOutOfRangeException(nameof(source), source, "Unknown usage snapshot source."),
+        };
 
     private static UsageRateLimitResponse ToResponse(UsageRateLimit limit) =>
         new(
@@ -32,5 +41,7 @@ internal static class UsageSnapshotMapping
             MonthlyLimit: extra.MonthlyLimit,
             UsedCredits: extra.UsedCredits,
             Utilization: extra.Utilization,
-            Currency: extra.Currency);
+            Currency: extra.Currency,
+            Percent: extra.Percent,
+            Severity: extra.Severity);
 }

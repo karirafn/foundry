@@ -1,7 +1,8 @@
 export interface UsageRateLimit {
   readonly kind: string;
   readonly percent: number;
-  readonly resetsAt: string;
+  /** Null when the server reports no reset time for the window. */
+  readonly resetsAt: string | null;
   readonly modelDisplayName: string | null;
   /** Anthropic-assigned severity: 'normal' | 'warning' | 'critical' or any future value. */
   readonly severity: string;
@@ -10,10 +11,16 @@ export interface UsageRateLimit {
 
 export interface UsageExtraCredits {
   readonly isEnabled: boolean;
-  readonly monthlyLimit: number;
+  /** Minor units of currency. Null when the plan reports no monthly limit (amount-only). */
+  readonly monthlyLimit: number | null;
   readonly usedCredits: number;
-  readonly utilization: number;
+  /** Server-reported utilization, 0-100, when it sends one. */
+  readonly utilization: number | null;
   readonly currency: string;
+  /** Server-computed share of the monthly limit, 0-100+; null when amount-only. */
+  readonly percent: number | null;
+  /** Server-computed severity of the credit spend; null when amount-only. */
+  readonly severity: string | null;
 }
 
 export interface UsageSnapshot {
@@ -26,7 +33,15 @@ export interface UsageSnapshot {
   readonly capturedAt: string | null;
   readonly accountEmail: string;
   readonly lastRefreshFailedAt: string | null;
+  /**
+   * Which CLI output the figures came from: 'usageReport' (/usage) or 'probeTurn' (the fallback).
+   * Null when usage is unavailable.
+   */
+  readonly source: UsageSnapshotSource | null;
 }
+
+/** Known values of {@link UsageSnapshot.source}. */
+export type UsageSnapshotSource = 'usageReport' | 'probeTurn';
 
 /** Severity values known at authoring time. The client must accept unrecognised values (falls back to neutral). */
 export const KNOWN_SEVERITY_VALUES = ['normal', 'warning', 'critical'] as const;

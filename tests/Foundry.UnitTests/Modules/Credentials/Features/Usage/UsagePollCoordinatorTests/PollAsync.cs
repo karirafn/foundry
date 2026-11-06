@@ -28,18 +28,37 @@ public sealed class PollAsync : IAsyncDisposable
     private readonly ServiceProvider _serviceProvider;
 
     /// <summary>
-    /// Minimal stream-json from a real turn: system init + assistant message +
-    /// rate_limit_event with session and weekly_all windows — sufficient for a successful parse.
-    /// Reflects the real data source (rate_limit_event) used by the usage-report container.
+    /// Minimal stream-json from <c>claude -p "/usage"</c>: system init + the synthetic assistant
+    /// message carrying a <c>usage_report</c> with populated <c>rate_limits</c> — a successful parse.
     /// </summary>
     private const string ValidUsageLog = """
+        {"type":"system","subtype":"init","cwd":"/workspace","session_id":"abc123","tools":[],"mcp_servers":[],"model":"claude-opus-4-8","permissionMode":"default","apiKeySource":"none","claude_code_version":"2.1.316"}
+        {"type":"assistant","message":{"id":"msg_01","type":"message","role":"assistant","model":"<synthetic>","content":[{"type":"text","text":"Current session"}]},"parent_tool_use_id":null,"session_id":"abc123","usage_report":{"session":{},"rate_limits":{"limits":[{"kind":"session","group":"session","percent":14,"resets_at":"2026-11-06T13:00:00Z","severity":"normal","is_active":false},{"kind":"weekly_all","group":"weekly","percent":65,"resets_at":"2026-11-10T09:00:00Z","severity":"normal","is_active":true}],"extra_usage":{"is_enabled":true,"monthly_limit":50000,"used_credits":16568,"utilization":null,"currency":"USD"}}}}
+        {"type":"result","subtype":"success","is_error":false,"duration_ms":100,"duration_api_ms":0,"num_turns":0,"result":"","total_cost_usd":0,"session_id":"abc123"}
+        """;
+
+    /// <summary>
+    /// <c>/usage</c> output whose <c>usage_report.rate_limits.limits</c> is null but which still
+    /// reports extra-usage credits → RateLimitsMissing, triggering the probe-turn fallback.
+    /// </summary>
+    private const string RateLimitsMissingLog = """
+        {"type":"system","subtype":"init","cwd":"/workspace","session_id":"abc123","tools":[],"mcp_servers":[],"model":"claude-opus-4-8","permissionMode":"default","apiKeySource":"none","claude_code_version":"2.1.399"}
+        {"type":"assistant","message":{"id":"msg_01","type":"message","role":"assistant","model":"<synthetic>","content":[{"type":"text","text":"Current session"}]},"parent_tool_use_id":null,"session_id":"abc123","usage_report":{"session":{},"rate_limits":{"limits":null,"extra_usage":{"is_enabled":true,"monthly_limit":50000,"used_credits":16568,"utilization":null,"currency":"USD"}}}}
+        {"type":"result","subtype":"success","is_error":false,"duration_ms":100,"duration_api_ms":0,"num_turns":0,"result":"","total_cost_usd":0,"session_id":"abc123"}
+        """;
+
+    /// <summary>
+    /// Minimal stream-json from the fallback probe turn: system init + assistant message +
+    /// rate_limit_event with session and weekly_all windows.
+    /// </summary>
+    private const string ProbeTurnLog = """
         {"type":"system","subtype":"init","cwd":"/workspace","session_id":"abc123","tools":[],"mcp_servers":[],"model":"claude-opus-4-8","permissionMode":"default","apiKeySource":"none"}
         {"type":"assistant","message":{"id":"msg_01","type":"message","role":"assistant","content":[{"type":"text","text":"ok"}],"stop_reason":"end_turn","usage":{"input_tokens":10,"output_tokens":3}},"session_id":"abc123"}
         {"type":"rate_limit_event","rate_limit_info":{"status":"active","resetsAt":1793527200,"rateLimitType":"seven_day","unifiedWindows":{"five_hour":{"utilization":0.14,"resetsAt":1793399400},"seven_day":{"utilization":0.65,"resetsAt":1793527200}}},"uuid":"abc","session_id":"abc123"}
         {"type":"result","subtype":"success","is_error":false,"duration_ms":100,"duration_api_ms":80,"num_turns":1,"result":"ok","total_cost_usd":0.001,"session_id":"abc123"}
         """;
 
-    /// <summary>A log where no rate_limit_event is emitted → NoUsageReport (no API turn / API-key mode).</summary>
+    /// <summary>A log where no line carries a usage_report or rate_limit_event → NoUsageReport (API-key mode).</summary>
     private const string NoUsageReportLog = """
         {"type":"system","subtype":"init","cwd":"/workspace","session_id":"abc123","tools":[],"mcp_servers":[],"model":"claude-opus-4-8","permissionMode":"default","apiKeySource":"none"}
         {"type":"assistant","message":{"id":"msg_01","type":"message","role":"assistant","content":[{"type":"text","text":"ok"}],"stop_reason":"end_turn","usage":{"input_tokens":10,"output_tokens":3}},"session_id":"abc123"}
@@ -870,5 +889,163 @@ public sealed class PollAsync : IAsyncDisposable
             // Assert — no broadcast
             broadcaster.Sent.ShouldBeEmpty();
         }
+    }
+
+    // ---------------------------------------------------------------------------
+    // Two-source poll: /usage first, probe turn as fallback (ADR 0097)
+    // ---------------------------------------------------------------------------
+
+    private async Task<(UsageSnapshot? Result, CapturingUsageSnapshotBroadcaster Broadcaster, UsageSnapshotState State)> RunPollAsync(
+        FakeCredentialsOrchestrator orchestrator,
+        UsageSnapshot? prior = null,
+        ILogger<UsagePollCoordinator>? logger = null)
+    {
+        UsageSnapshotState sharedState = new();
+        CapturingUsageSnapshotBroadcaster broadcaster = new();
+
+        ServiceProvider sp = BuildServiceProvider(
+            _connection,
+            orchestrator,
+            new FakeLoginSessionState(),
+            broadcaster,
+            sharedState);
+        await using (sp)
+        {
+            await SeedOAuthAccountAsync(sp);
+
+            if (prior is not null)
+            {
+                sharedState.SetSnapshot(prior);
+            }
+
+            UsagePollCoordinator sut = BuildCoordinator(sp, logger);
+            UsageSnapshot? result = await sut.PollAsync(TestContext.Current.CancellationToken);
+            return (result, broadcaster, sharedState);
+        }
+    }
+
+    [Fact]
+    public async Task WhenUsageReportParsed_RunsOnlyTheUsageCommandAndStoresUsageReportSnapshot()
+    {
+        // Arrange
+        FakeCredentialsOrchestrator orchestrator = new FakeCredentialsOrchestrator()
+            .WithUsageReportLogs(ValidUsageLog)
+            .WithProbeTurnLogs(ProbeTurnLog);
+
+        // Act
+        (UsageSnapshot? result, _, _) = await RunPollAsync(orchestrator);
+
+        // Assert
+        orchestrator.UsageReportCommands.ShouldBe([UsageReportCommand.UsageCommand]);
+        UsageSnapshot snapshot = result.ShouldNotBeNull();
+        snapshot.ShouldSatisfyAllConditions(
+            () => snapshot.Source.ShouldBe(UsageSnapshotSource.UsageReport),
+            () => snapshot.ExtraUsage.ShouldNotBeNull().UsedCredits.ShouldBe(16568),
+            () => snapshot.Limits.Select(l => l.Severity).ShouldBe(["normal", "normal"]));
+    }
+
+    [Fact]
+    public async Task WhenRateLimitsMissing_RunsProbeTurnAfterUsageCommandAndKeepsCredits()
+    {
+        // Arrange
+        FakeCredentialsOrchestrator orchestrator = new FakeCredentialsOrchestrator()
+            .WithUsageReportLogs(RateLimitsMissingLog)
+            .WithProbeTurnLogs(ProbeTurnLog);
+
+        // Act
+        (UsageSnapshot? result, CapturingUsageSnapshotBroadcaster broadcaster, UsageSnapshotState state) =
+            await RunPollAsync(orchestrator);
+
+        // Assert — sequential: /usage, then the probe turn, within the one poll
+        orchestrator.UsageReportCommands.ShouldBe([UsageReportCommand.UsageCommand, UsageReportCommand.ProbeTurn]);
+        UsageSnapshot snapshot = result.ShouldNotBeNull();
+        snapshot.ShouldSatisfyAllConditions(
+            () => snapshot.Source.ShouldBe(UsageSnapshotSource.ProbeTurn),
+            () => snapshot.Limits.Select(l => l.Kind).ShouldBe(["session", "weekly_all"]),
+            () => snapshot.ExtraUsage.ShouldNotBeNull().MonthlyLimit.ShouldBe(50000),
+            () => snapshot.LastRefreshFailedAt.ShouldBeNull());
+        ((IUsageSnapshotState)state).Current.ShouldBe(snapshot);
+        broadcaster.Sent.ShouldHaveSingleItem().ShouldBe(snapshot);
+    }
+
+    [Fact]
+    public async Task WhenRateLimitsMissing_LogsWarningNamingTheCliVersion()
+    {
+        // Arrange
+        FakeCredentialsOrchestrator orchestrator = new FakeCredentialsOrchestrator()
+            .WithUsageReportLogs(RateLimitsMissingLog)
+            .WithProbeTurnLogs(ProbeTurnLog);
+        WarningCapturingLogger logger = new();
+
+        // Act
+        await RunPollAsync(orchestrator, logger: logger);
+
+        // Assert
+        logger.Warnings.ShouldContain(w => w.Contains("2.1.399") && w.Contains("probe turn"));
+    }
+
+    [Fact]
+    public async Task WhenRateLimitsMissingAndProbeTurnFails_IsAFailedPollRetainingLastSnapshot()
+    {
+        // Arrange
+        FakeCredentialsOrchestrator orchestrator = new FakeCredentialsOrchestrator()
+            .WithUsageReportLogs(RateLimitsMissingLog)
+            .WithProbeTurnFailure(new Error("Docker.UsageReportStartFailed", "container failed"));
+        UsageSnapshot prior = new UsageSnapshotBuilder().Build();
+
+        // Act
+        (UsageSnapshot? result, _, _) = await RunPollAsync(orchestrator, prior);
+
+        // Assert
+        UsageSnapshot snapshot = result.ShouldNotBeNull();
+        snapshot.ShouldSatisfyAllConditions(
+            () => snapshot.Limits.ShouldBe(prior.Limits),
+            () => snapshot.Source.ShouldBe(prior.Source),
+            () => snapshot.LastRefreshFailedAt.ShouldNotBeNull());
+    }
+
+    [Theory]
+    [InlineData(nameof(MalformedJsonLog))]
+    [InlineData(nameof(NoUsageReportLog))]
+    public async Task WhenRateLimitsMissingAndProbeTurnHasNoWindows_IsAFailedPoll(string probeLogName)
+    {
+        // Arrange — /usage proved the account reportable, so a probe with no windows is a failure, not a clear
+        string probeLog = probeLogName == nameof(MalformedJsonLog) ? MalformedJsonLog : NoUsageReportLog;
+        FakeCredentialsOrchestrator orchestrator = new FakeCredentialsOrchestrator()
+            .WithUsageReportLogs(RateLimitsMissingLog)
+            .WithProbeTurnLogs(probeLog);
+        UsageSnapshot prior = new UsageSnapshotBuilder().Build();
+
+        // Act
+        (UsageSnapshot? result, _, _) = await RunPollAsync(orchestrator, prior);
+
+        // Assert
+        UsageSnapshot snapshot = result.ShouldNotBeNull();
+        snapshot.ShouldSatisfyAllConditions(
+            () => snapshot.Limits.ShouldBe(prior.Limits),
+            () => snapshot.LastRefreshFailedAt.ShouldNotBeNull());
+    }
+
+    [Theory]
+    [InlineData(nameof(MalformedJsonLog))]
+    [InlineData(nameof(NoUsageReportLog))]
+    [InlineData("failure")]
+    public async Task WhenUsageCommandDoesNotReportMissingRateLimits_RunsNoFallback(string outcome)
+    {
+        // Arrange
+        FakeCredentialsOrchestrator orchestrator = new FakeCredentialsOrchestrator()
+            .WithProbeTurnLogs(ProbeTurnLog);
+        _ = outcome switch
+        {
+            nameof(MalformedJsonLog) => orchestrator.WithUsageReportLogs(MalformedJsonLog),
+            nameof(NoUsageReportLog) => orchestrator.WithUsageReportLogs(NoUsageReportLog),
+            _ => orchestrator.WithUsageReportFailure(new Error("Docker.UsageReportStartFailed", "container failed")),
+        };
+
+        // Act
+        await RunPollAsync(orchestrator);
+
+        // Assert
+        orchestrator.UsageReportCommands.ShouldBe([UsageReportCommand.UsageCommand]);
     }
 }

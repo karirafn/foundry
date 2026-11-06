@@ -46,11 +46,12 @@ internal interface ICredentialsOrchestrator
         CancellationToken cancellationToken);
 
     /// <summary>
-    /// Runs a short-lived transient container to capture the Claude subscription usage report
-    /// via <c>claude -p "/usage" --output-format stream-json --verbose</c>.
+    /// Runs a short-lived transient container capturing Claude subscription usage, running the CLI
+    /// command chosen by <see cref="UsageReportSpec.Command"/>: <c>claude -p "/usage"</c> or the
+    /// probe turn, both with <c>--output-format stream-json --verbose</c>.
     /// Returns the captured stream-json logs on success, or a <see cref="Result{T}.Failure"/>
     /// when Docker-level errors prevent the container from starting.
-    /// Parsing the logs is performed separately by <c>UsageReportParser</c>.
+    /// Parsing is performed separately by <c>UsageReportParser</c> / <c>ProbeTurnUsageParser</c>.
     /// </summary>
     Task<Result<string>> RunUsageReportAsync(
         UsageReportSpec spec,

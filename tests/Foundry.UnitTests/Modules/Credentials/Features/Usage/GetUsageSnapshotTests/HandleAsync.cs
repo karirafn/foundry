@@ -130,4 +130,97 @@ public sealed class HandleAsync
         UsageSnapshotResponse dto = ok.Value.ShouldNotBeNull();
         dto.LastRefreshFailedAt.ShouldBe(failedAt);
     }
+
+    // ---------------------------------------------------------------------------
+    // Source and extra-usage credits
+    // ---------------------------------------------------------------------------
+
+    [Theory]
+    [InlineData(nameof(UsageSnapshotSource.UsageReport), "usageReport")]
+    [InlineData(nameof(UsageSnapshotSource.ProbeTurn), "probeTurn")]
+    public void WhenSnapshotExists_DtoCarriesSourceAsCamelCaseString(string sourceName, string expected)
+    {
+        // Arrange
+        UsageSnapshotSource source = Enum.Parse<UsageSnapshotSource>(sourceName);
+        UsageSnapshotState state = new();
+        ((IUsageSnapshotStateMutator)state).SetSnapshot(new UsageSnapshotBuilder().WithSource(source).Build());
+
+        // Act
+        IResult result = GetUsageSnapshot.Endpoint.Handle(state);
+
+        // Assert
+        UsageSnapshotResponse dto = result.ShouldBeOfType<Ok<UsageSnapshotResponse>>().Value.ShouldNotBeNull();
+        dto.Source.ShouldBe(expected);
+    }
+
+    [Fact]
+    public void WhenFailedBeforeFirstSuccess_DtoSourceIsNull()
+    {
+        // Arrange
+        UsageSnapshotState state = new();
+        ((IUsageSnapshotStateMutator)state).MarkRefreshFailed("user@example.com", DateTimeOffset.UnixEpoch);
+
+        // Act
+        IResult result = GetUsageSnapshot.Endpoint.Handle(state);
+
+        // Assert
+        UsageSnapshotResponse dto = result.ShouldBeOfType<Ok<UsageSnapshotResponse>>().Value.ShouldNotBeNull();
+        dto.Source.ShouldBeNull();
+    }
+
+    [Fact]
+    public void WhenExtraUsageHasALimit_DtoCarriesServerComputedPercentAndSeverity()
+    {
+        // Arrange
+        UsageSnapshotState state = new();
+        UsageSnapshot snapshot = new UsageSnapshotBuilder()
+            .WithExtraUsage(new UsageExtraCredits(
+                IsEnabled: true,
+                MonthlyLimit: 50000,
+                UsedCredits: 45000,
+                Utilization: null,
+                Currency: "USD"))
+            .Build();
+        ((IUsageSnapshotStateMutator)state).SetSnapshot(snapshot);
+
+        // Act
+        IResult result = GetUsageSnapshot.Endpoint.Handle(state);
+
+        // Assert
+        UsageSnapshotResponse dto = result.ShouldBeOfType<Ok<UsageSnapshotResponse>>().Value.ShouldNotBeNull();
+        UsageExtraCreditsResponse extra = dto.ExtraUsage.ShouldNotBeNull();
+        extra.ShouldSatisfyAllConditions(
+            () => extra.MonthlyLimit.ShouldBe(50000),
+            () => extra.UsedCredits.ShouldBe(45000),
+            () => extra.Utilization.ShouldBeNull(),
+            () => extra.Percent.ShouldBe(90m),
+            () => extra.Severity.ShouldBe("warning"));
+    }
+
+    [Fact]
+    public void WhenExtraUsageHasNoLimit_DtoPercentAndSeverityAreNull()
+    {
+        // Arrange
+        UsageSnapshotState state = new();
+        UsageSnapshot snapshot = new UsageSnapshotBuilder()
+            .WithExtraUsage(new UsageExtraCredits(
+                IsEnabled: true,
+                MonthlyLimit: null,
+                UsedCredits: 1200,
+                Utilization: null,
+                Currency: "USD"))
+            .Build();
+        ((IUsageSnapshotStateMutator)state).SetSnapshot(snapshot);
+
+        // Act
+        IResult result = GetUsageSnapshot.Endpoint.Handle(state);
+
+        // Assert
+        UsageExtraCreditsResponse extra = result.ShouldBeOfType<Ok<UsageSnapshotResponse>>()
+            .Value.ShouldNotBeNull().ExtraUsage.ShouldNotBeNull();
+        extra.ShouldSatisfyAllConditions(
+            () => extra.MonthlyLimit.ShouldBeNull(),
+            () => extra.Percent.ShouldBeNull(),
+            () => extra.Severity.ShouldBeNull());
+    }
 }

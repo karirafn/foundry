@@ -419,6 +419,7 @@ describe('SystemSignalRService', () => {
       capturedAt: '2026-10-30T01:00:00Z',
       accountEmail: 'user@example.com',
       lastRefreshFailedAt: null,
+      source: 'usageReport',
     };
     let received: UsageSnapshot | null | undefined;
     svc.usageSnapshotUpdated.subscribe((s) => (received = s));

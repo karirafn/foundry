@@ -85,6 +85,7 @@ public sealed class WhenSnapshotExists : IAsyncDisposable
         root.GetProperty("accountEmail").GetString().ShouldBe("user@example.com");
         root.GetProperty("capturedAt").GetDateTimeOffset().ShouldBe(capturedAt);
         root.GetProperty("lastRefreshFailedAt").ValueKind.ShouldBe(JsonValueKind.Null);
+        root.GetProperty("source").GetString().ShouldBe("usageReport");
 
         // limits array
         JsonElement limits = root.GetProperty("limits");
@@ -148,7 +149,7 @@ public sealed class WhenSnapshotExists : IAsyncDisposable
             IsEnabled: true,
             MonthlyLimit: 50000L,
             UsedCredits: 16568L,
-            Utilization: 0.33136m,
+            Utilization: null,
             Currency: "USD");
 
         UsageSnapshot snapshot = new UsageSnapshotBuilder()
@@ -175,5 +176,55 @@ public sealed class WhenSnapshotExists : IAsyncDisposable
         extraUsage.GetProperty("monthlyLimit").GetInt64().ShouldBe(50000L);
         extraUsage.GetProperty("usedCredits").GetInt64().ShouldBe(16568L);
         extraUsage.GetProperty("currency").GetString().ShouldBe("USD");
+        extraUsage.GetProperty("utilization").ValueKind.ShouldBe(JsonValueKind.Null);
+        extraUsage.GetProperty("percent").GetDecimal().ShouldBe(33.136m);
+        extraUsage.GetProperty("severity").GetString().ShouldBe("normal");
+    }
+
+    [Fact]
+    public async Task WhenFallbackSnapshotHasAmountOnlyCreditsAndNoReset_SerializesNulls()
+    {
+        // Arrange
+        UsageSnapshot snapshot = new UsageSnapshotBuilder()
+            .WithSource(UsageSnapshotSource.ProbeTurn)
+            .WithLimits(
+            [
+                new UsageRateLimit(
+                    Kind: "session",
+                    Percent: 0m,
+                    ResetsAt: null,
+                    ModelDisplayName: null,
+                    Severity: "normal",
+                    IsActive: true),
+            ])
+            .WithExtraUsage(new UsageExtraCredits(
+                IsEnabled: true,
+                MonthlyLimit: null,
+                UsedCredits: 1200L,
+                Utilization: null,
+                Currency: "USD"))
+            .Build();
+
+        SeedSnapshot(snapshot);
+
+        // Act
+        HttpResponseMessage response = await _client.GetAsync(
+            new Uri("/api/credentials/usage", UriKind.Relative),
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        string json = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+        using JsonDocument doc = JsonDocument.Parse(json);
+        JsonElement root = doc.RootElement;
+
+        root.GetProperty("source").GetString().ShouldBe("probeTurn");
+        root.GetProperty("limits")[0].GetProperty("resetsAt").ValueKind.ShouldBe(JsonValueKind.Null);
+
+        JsonElement extraUsage = root.GetProperty("extraUsage");
+        extraUsage.GetProperty("monthlyLimit").ValueKind.ShouldBe(JsonValueKind.Null);
+        extraUsage.GetProperty("percent").ValueKind.ShouldBe(JsonValueKind.Null);
+        extraUsage.GetProperty("severity").ValueKind.ShouldBe(JsonValueKind.Null);
     }
 }

@@ -57,6 +57,7 @@ public sealed class WhenFailedBeforeFirstSuccess : IAsyncDisposable
             () => root.GetProperty("limits").GetArrayLength().ShouldBe(0),
             () => root.GetProperty("extraUsage").ValueKind.ShouldBe(JsonValueKind.Null),
             () => root.GetProperty("accountEmail").GetString().ShouldBe("user@example.com"),
-            () => root.GetProperty("lastRefreshFailedAt").GetDateTimeOffset().ShouldBe(failedAt));
+            () => root.GetProperty("lastRefreshFailedAt").GetDateTimeOffset().ShouldBe(failedAt),
+            () => root.GetProperty("source").ValueKind.ShouldBe(JsonValueKind.Null));
     }
 }

@@ -120,6 +120,7 @@ function buildTestSnapshot(overrides: Partial<UsageSnapshot> = {}): UsageSnapsho
     capturedAt: '2026-10-30T01:00:00Z',
     accountEmail: 'ops@acme.com',
     lastRefreshFailedAt: null,
+    source: 'usageReport',
     ...overrides,
   };
 }
