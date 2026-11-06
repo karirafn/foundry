@@ -10,6 +10,7 @@ Each Worker Role's configuration lives in the Foundry repository under `workers/
 
 - **Versioned with the build**: the image is rebuilt from the checkout at every Foundry startup, the same checkout the API's verdict schemas are compiled from. Prompts, skills and schemas therefore always come from one commit. A merged role change takes effect at the next restart, and a run records which role and image it used.
 - **Prompts leave settings**: `WorkerPrompts` is removed from `GlobalSettings`. Prompt changes go through pull-request review like any other change. The safety preamble stays in code (`SystemPromptBuilder`).
+- **Model is the one per-role setting**: each role's model is an operator setting stored in the database and keyed by role name. It is an operational cost and plan choice, not instruction content, and no verdict schema depends on it. It is chosen from the documented Claude Code aliases plus the model IDs returned by `GET /v1/models`, which works with the workers' OAuth token. An empty value means the CLI's account default. The global `ClaudeCodeSettings.Model` is removed, so there is no role-to-global fallback chain.
 - **Improvements are pull requests**: an agent never edits role configuration at runtime. A proposed improvement is a pull request against the Foundry repository, which the operator merges.
 
 ## Considered Options

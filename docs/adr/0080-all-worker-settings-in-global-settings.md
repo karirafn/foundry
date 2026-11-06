@@ -8,7 +8,7 @@ status: accepted
 
 > **2026-11-06 — Amended:** the Decision's Hooks clause and the `WorkerMounts` part of its Shape clause are replaced by [ADR 0093](0093-workers-receive-no-host-claude-code-configuration.md), which removes host hooks and worker mounts.
 
-> **2026-11-06 — Amended:** the `WorkerPrompts` part of the Decision's Shape clause (system and worker templates, branch naming, edited in the dashboard) is replaced by [ADR 0095](0095-worker-roles-ship-in-the-worker-image.md). Role prompts move into the worker image.
+> **2026-11-06 — Amended:** the `WorkerPrompts` part of the Decision's Shape clause (system and worker templates, branch naming, edited in the dashboard) is replaced by [ADR 0095](0095-worker-roles-ship-in-the-worker-image.md). Role prompts move into the worker image. The `model` field of `ClaudeCodeSettings` is also replaced by ADR 0095, which gives each role its own model setting.
 
 ## Context
 
