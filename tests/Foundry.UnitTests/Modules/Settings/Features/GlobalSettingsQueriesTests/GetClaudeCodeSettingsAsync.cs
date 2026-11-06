@@ -48,8 +48,7 @@ public sealed class GetClaudeCodeSettingsAsync : IAsyncDisposable
         {
             GlobalSettings settings = GlobalSettings.Create();
             ClaudeCodeSettings claudeCode = new ClaudeCodeSettingsBuilder()
-                .WithModel("claude-opus-4-1")
-                .WithBlockCiCdEdits(false)
+                    .WithBlockCiCdEdits(false)
                 .WithAdditionalDenyRules(["Bash(rm:*)", "Read(./secrets/**)"])
                 .Build()
                 .Match(v => v, e => throw new InvalidOperationException(e.Message));
@@ -66,7 +65,6 @@ public sealed class GetClaudeCodeSettingsAsync : IAsyncDisposable
 
         // Assert
         result.ShouldSatisfyAllConditions(
-            () => result.Model.ShouldBe("claude-opus-4-1"),
             () => result.BlockCiCdEdits.ShouldBeFalse(),
             () => result.AdditionalDenyRules.ShouldBe(["Bash(rm:*)", "Read(./secrets/**)"]));
     }
@@ -83,7 +81,6 @@ public sealed class GetClaudeCodeSettingsAsync : IAsyncDisposable
 
         // Assert
         result.ShouldSatisfyAllConditions(
-            () => result.Model.ShouldBe(ClaudeCodeSettings.Default.Model),
             () => result.BlockCiCdEdits.ShouldBe(ClaudeCodeSettings.Default.BlockCiCdEdits),
             () => result.AdditionalDenyRules.ShouldBeEmpty());
     }

@@ -252,6 +252,9 @@ public sealed class PollAsync : IAsyncDisposable
 
         public Task EnsureCredentialVolumeAsync(CancellationToken cancellationToken)
             => Task.CompletedTask;
+
+        public Task<Result<string>> ReadOAuthAccessTokenAsync(CancellationToken cancellationToken)
+            => Task.FromResult(Result<string>.Ok("token"));
     }
 
     // ---------------------------------------------------------------------------
@@ -687,6 +690,9 @@ public sealed class PollAsync : IAsyncDisposable
 
         public Task EnsureCredentialVolumeAsync(CancellationToken cancellationToken)
             => Task.CompletedTask;
+
+        public Task<Result<string>> ReadOAuthAccessTokenAsync(CancellationToken cancellationToken)
+            => Task.FromResult(Result<string>.Ok("token"));
     }
 
     [Fact]

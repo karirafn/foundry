@@ -9,14 +9,13 @@ namespace Foundry.UnitTests.Modules.Settings.Domain.ValueObjects.ClaudeCodeSetti
 public sealed class Default
 {
     [Fact]
-    public void HasNoModelBlocksCiCdEditsAndHasNoAdditionalRules()
+    public void BlocksCiCdEditsAndHasNoAdditionalRules()
     {
         // Arrange & Act
         ClaudeCodeSettings settings = ClaudeCodeSettings.Default;
 
         // Assert
         settings.ShouldSatisfyAllConditions(
-            () => settings.Model.ShouldBeEmpty(),
             () => settings.BlockCiCdEdits.ShouldBeTrue(),
             () => settings.AdditionalDenyRules.ShouldBeEmpty());
     }

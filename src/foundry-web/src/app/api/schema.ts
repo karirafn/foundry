@@ -586,6 +586,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/worker-roles/models": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Returns the Claude Code aliases and the models the workers' credential can use; refresh=true fetches the list from the Models API now */
+        get: operations["GetWorkerRoleModels"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/worker-roles/{role}/model": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Sets a worker role's model: empty for the CLI's account default, a Claude Code alias, or a model ID listed by the Models API */
+        put: operations["UpdateWorkerRoleModel"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/settings": {
         parameters: {
             query?: never;
@@ -713,7 +747,7 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        /** Updates the Claude Code model and deny rules */
+        /** Updates the Claude Code deny rules */
         put: operations["UpdateClaudeCodeSettings"];
         post?: never;
         delete?: never;
@@ -918,7 +952,6 @@ export interface components {
             cpuLimit: number | string;
             /** Format: int32 */
             pidsLimit: number | string;
-            model: string;
             blockCiCdEdits: boolean;
             additionalDenyRules: string[];
             webhookPublicBaseUrl?: null | string;
@@ -1191,7 +1224,6 @@ export interface components {
             apiKey: null | string;
         };
         UpdateClaudeCodeSettingsRequestBody: {
-            model: string;
             blockCiCdEdits: boolean;
             additionalDenyRules: string[];
         };
@@ -1236,6 +1268,9 @@ export interface components {
             maxConcurrent: number | string;
             /** Format: int32 */
             timeoutMinutes: number | string;
+        };
+        UpdateWorkerRoleModelRequestBody: {
+            model: null | string;
         };
         UsageExtraCreditsResponse: {
             isEnabled: boolean;
@@ -1291,6 +1326,7 @@ export interface components {
             skills: components["schemas"]["RolePluginComponent"][];
             agents: components["schemas"]["RolePluginComponent"][];
             verdictSchema: null | string;
+            model: string;
         };
         WorkerRoleCatalogResponse: {
             image: components["schemas"]["WorkerRoleImage"];
@@ -1306,6 +1342,22 @@ export interface components {
             builtAt: string;
             commit: null | string;
             verified: boolean;
+        };
+        WorkerRoleModelOption: {
+            id: string;
+            displayName: string;
+            deprecated: boolean;
+        };
+        WorkerRoleModelOptionsResponse: {
+            aliases: string[];
+            models: components["schemas"]["WorkerRoleModelOption"][];
+            /** Format: date-time */
+            refreshedAt: null | string;
+            refreshError: null | string;
+        };
+        WorkerRoleModelResponse: {
+            role: string;
+            model: string;
         };
         WorkerRunDetail: {
             /** Format: uuid */
@@ -2660,6 +2712,72 @@ export interface operations {
             };
             /** @description Service Unavailable */
             503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    GetWorkerRoleModels: {
+        parameters: {
+            query?: {
+                refresh?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkerRoleModelOptionsResponse"];
+                };
+            };
+        };
+    };
+    UpdateWorkerRoleModel: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                role: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateWorkerRoleModelRequestBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkerRoleModelResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not Found */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };

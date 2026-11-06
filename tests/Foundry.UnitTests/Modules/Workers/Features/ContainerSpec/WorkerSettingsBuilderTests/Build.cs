@@ -11,11 +11,11 @@ namespace Foundry.UnitTests.Modules.Workers.Features.ContainerSpec.WorkerSetting
 
 public sealed class Build
 {
-    private static ClaudeCodeSettingsSnapshot Snapshot(
+    private static RunInput Snapshot(
         string model = "",
         bool blockCiCdEdits = true,
         params string[] additionalDenyRules) =>
-        new(model, blockCiCdEdits, additionalDenyRules);
+        new(new ClaudeCodeSettingsSnapshot(blockCiCdEdits, additionalDenyRules), model);
 
     private static string[] DenyRules(string json)
     {
@@ -35,10 +35,10 @@ public sealed class Build
     public void WhenBlockCiCdEditsTrueAndNothingElseSet_ReturnsJsonWithBaseAndCiCdRules()
     {
         // Arrange
-        ClaudeCodeSettingsSnapshot snapshot = Snapshot();
+        RunInput snapshot = Snapshot();
 
         // Act
-        string json = WorkerSettingsBuilder.Build(snapshot);
+        string json = WorkerSettingsBuilder.Build(snapshot.ClaudeCode, snapshot.Model);
 
         // Assert
         using JsonDocument doc = JsonDocument.Parse(json);
@@ -73,10 +73,10 @@ public sealed class Build
     public void WhenModelIsSet_IncludesModelInJson()
     {
         // Arrange
-        ClaudeCodeSettingsSnapshot snapshot = Snapshot(model: "claude-opus-4-5");
+        RunInput snapshot = Snapshot(model: "claude-opus-4-5");
 
         // Act
-        string json = WorkerSettingsBuilder.Build(snapshot);
+        string json = WorkerSettingsBuilder.Build(snapshot.ClaudeCode, snapshot.Model);
 
         // Assert
         using JsonDocument doc = JsonDocument.Parse(json);
@@ -85,13 +85,28 @@ public sealed class Build
     }
 
     [Fact]
+    public void WhenModelIsAnAlias_PassesItThrough()
+    {
+        // Arrange
+        RunInput snapshot = Snapshot(model: "opus[1m]");
+
+        // Act
+        string json = WorkerSettingsBuilder.Build(snapshot.ClaudeCode, snapshot.Model);
+
+        // Assert
+        using JsonDocument doc = JsonDocument.Parse(json);
+
+        doc.RootElement.GetProperty("model").GetString().ShouldBe("opus[1m]");
+    }
+
+    [Fact]
     public void WhenModelIsEmpty_OmitsModelFromJson()
     {
         // Arrange
-        ClaudeCodeSettingsSnapshot snapshot = Snapshot(model: string.Empty);
+        RunInput snapshot = Snapshot(model: string.Empty);
 
         // Act
-        string json = WorkerSettingsBuilder.Build(snapshot);
+        string json = WorkerSettingsBuilder.Build(snapshot.ClaudeCode, snapshot.Model);
 
         // Assert
         using JsonDocument doc = JsonDocument.Parse(json);
@@ -103,11 +118,11 @@ public sealed class Build
     public void WhenAdditionalDenyRulesProvided_AppendsThemAfterBaseAndCiCdRules()
     {
         // Arrange
-        ClaudeCodeSettingsSnapshot snapshot = Snapshot(
+        RunInput snapshot = Snapshot(
             additionalDenyRules: ["Bash(rm -rf:*)", "Bash(curl:*)"]);
 
         // Act
-        string json = WorkerSettingsBuilder.Build(snapshot);
+        string json = WorkerSettingsBuilder.Build(snapshot.ClaudeCode, snapshot.Model);
 
         // Assert
         string[] rules = DenyRules(json);
@@ -121,10 +136,10 @@ public sealed class Build
     public void WhenCalled_NeverEmitsHooksSection()
     {
         // Arrange
-        ClaudeCodeSettingsSnapshot snapshot = Snapshot(model: "claude-opus-4-5", additionalDenyRules: "Bash(rm -rf:*)");
+        RunInput snapshot = Snapshot(model: "claude-opus-4-5", additionalDenyRules: "Bash(rm -rf:*)");
 
         // Act
-        string json = WorkerSettingsBuilder.Build(snapshot);
+        string json = WorkerSettingsBuilder.Build(snapshot.ClaudeCode, snapshot.Model);
 
         // Assert
         using JsonDocument doc = JsonDocument.Parse(json);
@@ -136,10 +151,10 @@ public sealed class Build
     public void WhenBlockCiCdEditsTrue_BaseDenyListContainsBranchDeletionRules()
     {
         // Arrange
-        ClaudeCodeSettingsSnapshot snapshot = Snapshot();
+        RunInput snapshot = Snapshot();
 
         // Act
-        string json = WorkerSettingsBuilder.Build(snapshot);
+        string json = WorkerSettingsBuilder.Build(snapshot.ClaudeCode, snapshot.Model);
 
         // Assert
         string[] rules = DenyRules(json);
@@ -154,10 +169,10 @@ public sealed class Build
     public void WhenBlockCiCdEditsTrue_IncludesAllCiCdDenyRules()
     {
         // Arrange
-        ClaudeCodeSettingsSnapshot snapshot = Snapshot(blockCiCdEdits: true);
+        RunInput snapshot = Snapshot(blockCiCdEdits: true);
 
         // Act
-        string json = WorkerSettingsBuilder.Build(snapshot);
+        string json = WorkerSettingsBuilder.Build(snapshot.ClaudeCode, snapshot.Model);
 
         // Assert
         string[] rules = DenyRules(json);
@@ -176,10 +191,10 @@ public sealed class Build
     public void WhenBlockCiCdEditsTrue_CiCdRulesArePathGlobsMatchingAnyDepth()
     {
         // Arrange
-        ClaudeCodeSettingsSnapshot snapshot = Snapshot(blockCiCdEdits: true);
+        RunInput snapshot = Snapshot(blockCiCdEdits: true);
 
         // Act
-        string json = WorkerSettingsBuilder.Build(snapshot);
+        string json = WorkerSettingsBuilder.Build(snapshot.ClaudeCode, snapshot.Model);
 
         // Assert — Claude Code skips Edit rules using the Bash-only ":*" prefix syntax as invalid.
         string[] editRules = [.. DenyRules(json).Where(rule => rule.StartsWith("Edit(", StringComparison.Ordinal))];
@@ -192,10 +207,10 @@ public sealed class Build
     public void WhenBlockCiCdEditsFalse_CiCdRulesAbsentFromOutput()
     {
         // Arrange
-        ClaudeCodeSettingsSnapshot snapshot = Snapshot(blockCiCdEdits: false);
+        RunInput snapshot = Snapshot(blockCiCdEdits: false);
 
         // Act
-        string json = WorkerSettingsBuilder.Build(snapshot);
+        string json = WorkerSettingsBuilder.Build(snapshot.ClaudeCode, snapshot.Model);
 
         // Assert
         string[] rules = DenyRules(json);
@@ -215,10 +230,10 @@ public sealed class Build
     public void WhenBlockCiCdEditsFalse_BaseRulesStillPresent()
     {
         // Arrange
-        ClaudeCodeSettingsSnapshot snapshot = Snapshot(blockCiCdEdits: false);
+        RunInput snapshot = Snapshot(blockCiCdEdits: false);
 
         // Act
-        string json = WorkerSettingsBuilder.Build(snapshot);
+        string json = WorkerSettingsBuilder.Build(snapshot.ClaudeCode, snapshot.Model);
 
         // Assert
         string[] rules = DenyRules(json);
@@ -240,12 +255,12 @@ public sealed class Build
     public void WhenBlockCiCdEditsFalseAndAdditionalRulesSet_OrderIsBaseThenAdditional()
     {
         // Arrange
-        ClaudeCodeSettingsSnapshot snapshot = Snapshot(
+        RunInput snapshot = Snapshot(
             blockCiCdEdits: false,
             additionalDenyRules: "Bash(rm -rf:*)");
 
         // Act
-        string json = WorkerSettingsBuilder.Build(snapshot);
+        string json = WorkerSettingsBuilder.Build(snapshot.ClaudeCode, snapshot.Model);
 
         // Assert
         string[] rules = DenyRules(json);
@@ -259,10 +274,10 @@ public sealed class Build
     public void WhenAllSourcesPopulated_OrderIsBaseThenCiCdThenAdditional()
     {
         // Arrange
-        ClaudeCodeSettingsSnapshot snapshot = Snapshot(additionalDenyRules: "Bash(rm -rf:*)");
+        RunInput snapshot = Snapshot(additionalDenyRules: "Bash(rm -rf:*)");
 
         // Act
-        string json = WorkerSettingsBuilder.Build(snapshot);
+        string json = WorkerSettingsBuilder.Build(snapshot.ClaudeCode, snapshot.Model);
 
         // Assert
         string[] rules = DenyRules(json);
@@ -279,12 +294,12 @@ public sealed class Build
     public void WhenModelAndRulesAllSet_ProducesCorrectJson()
     {
         // Arrange
-        ClaudeCodeSettingsSnapshot snapshot = Snapshot(
+        RunInput snapshot = Snapshot(
             model: "claude-sonnet-4-5",
             additionalDenyRules: "Bash(rm -rf:*)");
 
         // Act
-        string json = WorkerSettingsBuilder.Build(snapshot);
+        string json = WorkerSettingsBuilder.Build(snapshot.ClaudeCode, snapshot.Model);
 
         // Assert
         using JsonDocument doc = JsonDocument.Parse(json);
@@ -305,10 +320,10 @@ public sealed class Build
     public void WhenCalled_SuppressesAiAttributionWithObjectForm(string model, bool blockCiCdEdits)
     {
         // Arrange
-        ClaudeCodeSettingsSnapshot snapshot = Snapshot(model, blockCiCdEdits, "Bash(rm -rf:*)");
+        RunInput snapshot = Snapshot(model, blockCiCdEdits, "Bash(rm -rf:*)");
 
         // Act
-        string json = WorkerSettingsBuilder.Build(snapshot);
+        string json = WorkerSettingsBuilder.Build(snapshot.ClaudeCode, snapshot.Model);
 
         // Assert — the object form, not `false`, so a CLI older than v2.1.281 does not skip the whole file.
         using JsonDocument doc = JsonDocument.Parse(json);
@@ -321,4 +336,6 @@ public sealed class Build
             () => attribution.GetProperty("sessionUrl").ValueKind.ShouldBe(JsonValueKind.False),
             () => attribution.EnumerateObject().Count().ShouldBe(3));
     }
+
+    private sealed record RunInput(ClaudeCodeSettingsSnapshot ClaudeCode, string Model);
 }

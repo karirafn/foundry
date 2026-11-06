@@ -65,7 +65,6 @@ const mockSettingsResponse: GlobalSettingsResponse = {
   memoryLimitMb: 8192,
   cpuLimit: 2,
   pidsLimit: 512,
-  model: '',
   blockCiCdEdits: true,
   additionalDenyRules: [],
 };

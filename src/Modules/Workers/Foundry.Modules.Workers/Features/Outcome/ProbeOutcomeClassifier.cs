@@ -17,6 +17,7 @@ internal sealed class ProbeOutcomeClassifier(IContainerOutputParser parser) : IP
             ContainerOutputParseResult.UsageLimited usageLimited => new ProbeOutcome.UsageLimited(usageLimited.ResetsAt),
             ContainerOutputParseResult.AuthInvalid => new ProbeOutcome.InfrastructureFailure(),
             ContainerOutputParseResult.TransientApiError => new ProbeOutcome.InfrastructureFailure(),
+            ContainerOutputParseResult.ModelUnavailable => new ProbeOutcome.InfrastructureFailure(),
             ContainerOutputParseResult.ParseFailure => new ProbeOutcome.InfrastructureFailure(),
             ContainerOutputParseResult.NoResultLine => new ProbeOutcome.InfrastructureFailure(),
             ContainerOutputParseResult.WorkerBootstrapFailed => new ProbeOutcome.InfrastructureFailure(),

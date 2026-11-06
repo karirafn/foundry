@@ -31,18 +31,14 @@ import { OAuthPanelComponent } from '../oauth-panel/oauth-panel';
 import { UnsavedChanges } from '../guards/unsaved-changes.guard';
 import {
   CI_CD_DENY_RULES,
-  MODEL_MAX_LENGTH,
   denyRuleFormatValidator,
-  trimmedMaxLengthValidator,
 } from './settings-claude-code.validators';
 
 const SERVER_ERROR_KEY = 'server';
 const SAVING_TEXT = 'Saving Claude Code settings...';
 const SAVED_TEXT = 'Claude Code settings saved';
 const QUOTED_RULE_PATTERN = /'(.*)'/s;
-const MODEL_TOO_LONG_CODE = 'Settings.ModelTooLong';
 const INVALID_DENY_RULE_CODE = 'Settings.InvalidDenyRule';
-const MODEL_TOO_LONG_TEXT = `Model must be ${MODEL_MAX_LENGTH} characters or fewer.`;
 const RULE_REQUIRED_TEXT = 'Deny rule is required.';
 const RULE_FORMAT_TEXT =
   'Use Tool(pattern), e.g. Edit(.github/workflows/**). Allowed tools: Bash, Edit, Read, Write, MultiEdit, Glob, Grep.';
@@ -227,31 +223,6 @@ const RULE_FORMAT_TEXT =
           <legend class="sr-only">Claude Code configuration</legend>
 
           <section class="general-settings__section">
-            <h2 class="general-settings__section-title">Model</h2>
-            <p class="general-settings__section-description">
-              Pin the Claude model workers run.
-            </p>
-            <div class="general-settings__field">
-              <label class="general-settings__field-label" for="model">Model</label>
-              <input
-                id="model"
-                type="text"
-                class="general-settings__text-input"
-                formControlName="model"
-                autocomplete="off"
-                autocapitalize="off"
-                autocorrect="off"
-                spellcheck="false"
-                placeholder="claude-sonnet-4-5"
-                aria-describedby="model-hint model-error"
-                [attr.aria-invalid]="_modelInvalid() || null"
-              />
-              <span id="model-hint" class="general-settings__field-hint">Leave empty to use the CLI default.</span>
-              <span id="model-error" class="general-settings__field-error" role="alert">{{ _modelError() }}</span>
-            </div>
-          </section>
-
-          <section class="general-settings__section">
             <h2 class="general-settings__section-title">CI/CD file protection</h2>
             <p class="general-settings__section-description">
               Keep workers from editing pipeline and container-build files.
@@ -375,7 +346,6 @@ export class SettingsClaudeCodeComponent implements UnsavedChanges {
   protected readonly ciCdDenyRules: readonly string[] = CI_CD_DENY_RULES;
 
   protected readonly form = this._fb.group({
-    model: this._fb.control('', [trimmedMaxLengthValidator]),
     blockCiCdEdits: this._fb.control(true),
     denyRules: this._fb.array<FormControl<string>>([]),
   });
@@ -558,8 +528,7 @@ export class SettingsClaudeCodeComponent implements UnsavedChanges {
       return;
     }
     this._clearServerErrors();
-    const { model, ...rest } = this._readForm();
-    this.settingsService.updateClaudeCodeSettings({ model: model.trim(), ...rest });
+    this.settingsService.updateClaudeCodeSettings(this._readForm());
   }
 
   protected _addRule(): void {
@@ -582,19 +551,6 @@ export class SettingsClaudeCodeComponent implements UnsavedChanges {
 
   protected _removeLabel(index: number): string {
     return `Remove deny rule ${this.denyRules.at(index)?.value || index + 1}`;
-  }
-
-  protected _modelInvalid(): boolean {
-    return this._modelError() !== '';
-  }
-
-  protected _modelError(): string {
-    const control: FormControl<string> = this.form.controls.model;
-    const errors = control.errors;
-    if (errors?.[SERVER_ERROR_KEY]) {
-      return errors[SERVER_ERROR_KEY];
-    }
-    return control.touched && errors?.['modelTooLong'] ? MODEL_TOO_LONG_TEXT : '';
   }
 
   protected _ruleInvalid(index: number): boolean {
@@ -620,8 +576,8 @@ export class SettingsClaudeCodeComponent implements UnsavedChanges {
   }
 
   private _readForm(): ClaudeCodeSettings {
-    const { model, blockCiCdEdits, denyRules } = this.form.getRawValue();
-    return { model, blockCiCdEdits, additionalDenyRules: denyRules };
+    const { blockCiCdEdits, denyRules } = this.form.getRawValue();
+    return { blockCiCdEdits, additionalDenyRules: denyRules };
   }
 
   private _createRule(rule: string): FormControl<string> {
@@ -637,7 +593,7 @@ export class SettingsClaudeCodeComponent implements UnsavedChanges {
     }
     this.denyRules.clear({ emitEvent: false });
     settings.additionalDenyRules.forEach((rule) => this.denyRules.push(this._createRule(rule), { emitEvent: false }));
-    this.form.patchValue({ model: settings.model, blockCiCdEdits: settings.blockCiCdEdits }, { emitEvent: false });
+    this.form.patchValue({ blockCiCdEdits: settings.blockCiCdEdits }, { emitEvent: false });
     this.form.markAsPristine();
     this.form.markAsUntouched();
     this.form.updateValueAndValidity();
@@ -645,9 +601,7 @@ export class SettingsClaudeCodeComponent implements UnsavedChanges {
   }
 
   private _showServerError(code: string | null, detail: string): void {
-    if (code === MODEL_TOO_LONG_CODE) {
-      this.form.controls.model.setErrors({ [SERVER_ERROR_KEY]: detail });
-    } else if (!(code === INVALID_DENY_RULE_CODE && this._attachToRuleRow(detail))) {
+    if (!(code === INVALID_DENY_RULE_CODE && this._attachToRuleRow(detail))) {
       this._summaryError.set(detail);
       this._cdr.markForCheck();
       return;
@@ -668,14 +622,14 @@ export class SettingsClaudeCodeComponent implements UnsavedChanges {
   }
 
   private _clearServerErrors(): void {
-    [this.form.controls.model, ...this.denyRules.controls]
+    this.denyRules.controls
       .filter((control) => control.errors?.[SERVER_ERROR_KEY])
       .forEach((control) => control.updateValueAndValidity({ emitEvent: false }));
     this._summaryError.set('');
   }
 
   private _attentionSummary(): string {
-    const count: number = [this.form.controls.model, ...this.denyRules.controls].filter(
+    const count: number = this.denyRules.controls.filter(
       (control) => control.errors?.[SERVER_ERROR_KEY]
     ).length;
     if (count === 0) {
@@ -698,7 +652,6 @@ export class SettingsClaudeCodeComponent implements UnsavedChanges {
 
 function settingsEqual(left: ClaudeCodeSettings, right: ClaudeCodeSettings): boolean {
   return (
-    left.model === right.model &&
     left.blockCiCdEdits === right.blockCiCdEdits &&
     left.additionalDenyRules.length === right.additionalDenyRules.length &&
     left.additionalDenyRules.every((rule, index) => rule === right.additionalDenyRules[index])

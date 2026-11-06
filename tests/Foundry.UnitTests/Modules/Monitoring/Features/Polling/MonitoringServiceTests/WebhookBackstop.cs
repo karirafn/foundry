@@ -607,7 +607,7 @@ public sealed class WebhookBackstop : IAsyncDisposable
 
         public Task<ClaudeCodeSettingsSnapshot> GetClaudeCodeSettingsAsync(CancellationToken cancellationToken)
 
-            => Task.FromResult(new ClaudeCodeSettingsSnapshot(string.Empty, true, []));
+            => Task.FromResult(new ClaudeCodeSettingsSnapshot(true, []));
 
         public Task<IReadOnlyList<string>> GetAllowedProviderHostsAsync(CancellationToken cancellationToken)
             => Task.FromResult<IReadOnlyList<string>>([]);

@@ -3,7 +3,7 @@ import { SpinnerComponent } from '../../../shared/components/spinner/spinner';
 import { WorkerRoleCardComponent } from './worker-role-card';
 import { WorkerRoleCatalog, WorkerRoleService } from './worker-role.service';
 
-/** Read-only view of the worker role catalog shipped in the worker image (ADR 0095). */
+/** The worker role catalog shipped in the worker image, with each role's editable model (ADR 0095). */
 @Component({
   selector: 'fd-settings-worker-roles',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -13,8 +13,8 @@ import { WorkerRoleCatalog, WorkerRoleService } from './worker-role.service';
       <section class="general-settings__section" aria-labelledby="worker-roles-title">
         <h2 id="worker-roles-title" class="general-settings__section-title">Worker roles</h2>
         <p class="general-settings__section-description">
-          Roles ship in the worker image and are read-only here. Each card shows the prompts, plugin
-          skills and agents a role runs with, as read from the image.
+          Roles ship in the worker image. Each card shows the prompts, plugin skills and agents a role
+          runs with, as read from the image. The model is the one setting you can change per role.
         </p>
 
         @switch (roleService.status()) {
@@ -98,6 +98,8 @@ export class SettingsWorkerRolesComponent implements OnInit {
 
   ngOnInit(): void {
     this.roleService.load();
+    // The model list is refreshed from the Models API each time the role view opens.
+    this.roleService.loadModelOptions(true);
   }
 
   protected reload(): void {
