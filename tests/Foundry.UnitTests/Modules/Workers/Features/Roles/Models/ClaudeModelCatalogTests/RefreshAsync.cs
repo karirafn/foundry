@@ -24,11 +24,11 @@ public sealed class RefreshAsync
     {
         ServiceCollection services = new();
         services.AddScoped<IClaudeApiCredentialReader>(_ => _credentials);
+        services.AddSingleton<IClaudeModelsApi>(_api);
         ServiceProvider provider = services.BuildServiceProvider();
 
         return new ClaudeModelCatalog(
             provider.GetRequiredService<IServiceScopeFactory>(),
-            _api,
             new FixedTimeProvider(Now),
             NullLogger<ClaudeModelCatalog>.Instance);
     }

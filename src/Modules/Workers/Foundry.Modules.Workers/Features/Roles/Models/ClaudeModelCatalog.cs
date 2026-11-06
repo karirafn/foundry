@@ -39,7 +39,6 @@ internal interface IClaudeModelCatalog
 
 internal sealed partial class ClaudeModelCatalog(
     IServiceScopeFactory scopeFactory,
-    IClaudeModelsApi modelsApi,
     TimeProvider timeProvider,
     ILogger<ClaudeModelCatalog> logger) : IClaudeModelCatalog
 {
@@ -124,6 +123,9 @@ internal sealed partial class ClaudeModelCatalog(
         {
             await using AsyncServiceScope scope = scopeFactory.CreateAsyncScope();
             IClaudeApiCredentialReader credentialReader = scope.ServiceProvider.GetRequiredService<IClaudeApiCredentialReader>();
+
+            // The typed HttpClient is resolved per fetch so this singleton never pins one handler.
+            IClaudeModelsApi modelsApi = scope.ServiceProvider.GetRequiredService<IClaudeModelsApi>();
 
             Result<ClaudeApiCredential> credential = await credentialReader.ReadAsync(CancellationToken.None);
 
