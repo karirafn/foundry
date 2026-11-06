@@ -31,7 +31,7 @@ internal sealed record WorkerRoleImage(string Tag, string? ImageId, DateTimeOffs
 /// <param name="TaskPrompt">The role's task prompt template, placeholders unfilled.</param>
 /// <param name="Skills">The role plugin's skills.</param>
 /// <param name="Agents">The role plugin's agents.</param>
-/// <param name="VerdictSchema">The JSON schema of the role's verdict; <see langword="null"/> for generative roles.</param>
+/// <param name="VerdictSchema">The JSON schema of the role's verdict; <see langword="null"/> when the role has none.</param>
 /// <param name="Model">
 /// The role's model setting: a Claude Code alias or a model ID; empty for the CLI's account default. The only editable
 /// part of a role (ADR 0095).

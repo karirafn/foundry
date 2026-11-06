@@ -9,8 +9,37 @@ here is one role, baked into the worker image at `/opt/foundry/roles/<role>/`:
   Placeholders: `{issueNumber}`, `{issueContent}`.
 - `prompts/task.md`: the role's task prompt template. It must contain `{issueNumber}`.
 - `skills/<skill>/SKILL.md`, `agents/<agent>.md` (optional): the plugin's skills and agents.
-- `verdict.schema.json` (judgment roles only): the JSON schema the role's verdict is validated against.
+- `verdict.schema.json` (optional, for any role): the JSON schema of the verdict the role returns (ADR 0094).
 
 `shared/` is a plugin loaded for every role. The entrypoint loads the run's role and `shared` with
 `--plugin-dir`. Role names come from Foundry's code (`WorkerRole`); a role without a folder fails the
 unit tests and the startup image build. A change here takes effect at the next Foundry restart.
+
+## Verdicts
+
+When a role has a `verdict.schema.json`, the entrypoint passes it to both `claude` invocations (the
+first run and the transient-error `claude -c` resume) with `--json-schema`, and the run's final
+stream-json `result` event carries the verdict as `structured_output`. Foundry reads the last result
+event's `structured_output` and parses it with the role's typed verdict parser
+(`IWorkerVerdictParser`). The schema and its parser are one contract: change them in the same pull
+request.
+
+A role schema may reference the definitions in `shared/verdict.defs.json` by `#/$defs/<name>`. The
+entrypoint merges that file's `$defs` into the role schema (the role's own `$defs` win on a name
+clash), so `claude` receives one self-contained schema. A role schema or `shared/verdict.defs.json`
+that is not a JSON object fails the unit tests, the startup image build and the run's bootstrap.
+
+Shared definitions:
+
+- `questions`: questions a person must answer before the work can continue. An array of at least one
+  `{"question": string, "context": string}` object, with a non-empty `question` and no other
+  properties. Every role that asks questions references this one definition
+  (`{"$ref": "#/$defs/questions"}`), and Foundry reads it with `VerdictQuestionsReader`.
+
+For a run that exits 0, Foundry records the verdict's status on the worker run: `done`,
+`needs_input` (with its questions), `missing` (no `structured_output`, e.g. a run that hit
+`--max-turns`) or `invalid` (fails the typed parse). The verdict is recorded only; the run's outcome
+is still decided from facts (merge request, commits, exit code).
+
+`implement/verdict.schema.json` requires `outcome` (`done` or `needs_input`), and `questions` when
+`outcome` is `needs_input`.

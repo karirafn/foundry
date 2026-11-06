@@ -1,3 +1,5 @@
+using System.Text.Json.Nodes;
+
 using Foundry.Modules.Credentials.Contracts;
 using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Monitoring.Contracts;
@@ -12,12 +14,15 @@ using Foundry.Modules.Workers.Domain.Entities.States;
 using Foundry.Modules.Workers.Domain.ValueObjects;
 using Foundry.Modules.Workers.Features.Orchestration;
 using Foundry.Modules.Workers.Features.Outcome;
+using Foundry.Modules.Workers.Features.Roles;
+using Foundry.Modules.Workers.Features.Verdicts;
 using Foundry.Modules.Workers.Features.ContainerSpec;
 using Foundry.Modules.Workers.Features.Dispatch;
 using Foundry.Shared;
 using Foundry.Shared.Infrastructure;
 using Foundry.Shared.Infrastructure.Outbox;
 using Foundry.Testing;
+using Foundry.UnitTests.Fakes.Workers;
 using Foundry.WebApi.Persistence;
 
 using Microsoft.Data.Sqlite;
@@ -89,6 +94,7 @@ public sealed class OutboxHarvestDispatch : IAsyncDisposable
             prRetryDelay: TimeSpan.Zero));
         services.AddScoped<ICredentialGate, AlwaysCanDispatchCredentialGate>();
         services.AddSingleton<RunningBranchCompareGate>();
+        services.AddSingleton<IWorkerRoleCatalogStore>(StubWorkerRoleCatalogStore.With());
         services.AddScoped<IWebhookStatusQueries>(_ => new StubWebhookStatusQueries());
 
         return services.BuildServiceProvider();
@@ -277,11 +283,13 @@ public sealed class OutboxHarvestDispatch : IAsyncDisposable
             prRetryDelay: TimeSpan.Zero));
         services.AddScoped<ICredentialGate, AlwaysCanDispatchCredentialGate>();
         services.AddSingleton<RunningBranchCompareGate>();
+        services.AddSingleton<IWorkerRoleCatalogStore>(StubWorkerRoleCatalogStore.With());
         services.AddScoped<IWebhookStatusQueries>(_ => new StubWebhookStatusQueries());
         services.AddSingleton<IWorkerOrchestrator>(_ => orchestrator);
         services.AddSingleton(TimeProvider.System);
         services.AddScoped<WorkerOutcomeApplier>();
         services.AddScoped<WorkerRunMonitor>();
+        services.AddWorkerVerdicts();
         services.AddSingleton(typeof(ILogger<>), typeof(NullLogger<>));
 
         ServiceProvider sp = services.BuildServiceProvider();
@@ -387,6 +395,8 @@ public sealed class OutboxHarvestDispatch : IAsyncDisposable
             => new ContainerOutputParseResult.NormalExit();
 
         public RunResultSummary? ParseRunResultSummary(string? log) => null;
+
+        public JsonObject? ParseStructuredOutput(string? log) => null;
     }
 
     private sealed class AlwaysCanDispatchCredentialGate : ICredentialGate

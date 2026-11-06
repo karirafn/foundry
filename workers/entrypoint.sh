@@ -158,6 +158,57 @@ prepare_role_plugins() {
 }
 
 # ---------------------------------------------------------------------------
+# prepare_role_verdict_schema <roles_dir> <role>
+#
+# Resolves the run's verdict schema (ADR 0094) into the VERDICT_SCHEMA_ARGS
+# array that both claude invocations (the initial -p run and the transient-error
+# -c resume) expand verbatim: --json-schema with the role's verdict.schema.json,
+# or nothing when the role has no schema.
+#
+# A role schema references shared definitions (e.g. "#/$defs/questions") from
+# <roles_dir>/shared/verdict.defs.json; their $defs are merged into the role
+# schema (the role's own $defs win on a name clash) so the CLI receives one
+# self-contained schema, compacted to a single line.
+#
+# Fails closed: a schema (or the shared definitions) that is not a JSON object
+# emits the bootstrap-failure sentinel (stage=role) and returns non-zero.
+# ---------------------------------------------------------------------------
+prepare_role_verdict_schema() {
+    local roles_dir="$1"
+    local role="$2"
+    VERDICT_SCHEMA_ARGS=()
+
+    local schema_file="$roles_dir/$role/verdict.schema.json"
+    if [[ ! -f "$schema_file" ]]; then
+        return 0
+    fi
+
+    local defs_file="$roles_dir/shared/verdict.defs.json"
+    local defs_json='{}'
+    if [[ -f "$defs_file" ]]; then
+        if ! defs_json="$(jq -ce 'if type == "object" then . else error("not an object") end' "$defs_file" 2>/dev/null)"; then
+            echo "ERROR: $defs_file is not a JSON object." >&2
+            fail_bootstrap "role" "shared verdict definitions $defs_file are not a JSON object; rebuild the worker image"
+            return 1
+        fi
+    fi
+
+    local schema
+    if ! schema="$(jq -ce --argjson shared "$defs_json" '
+            if type != "object" then error("not an object") else . end
+            | if ($shared["$defs"] // {}) == {} then .
+              else .["$defs"] = (($shared["$defs"] // {}) + (.["$defs"] // {})) end
+        ' "$schema_file" 2>/dev/null)"; then
+        echo "ERROR: $schema_file is not a JSON object." >&2
+        fail_bootstrap "role" "verdict schema $schema_file is not a JSON object; rebuild the worker image"
+        return 1
+    fi
+
+    VERDICT_SCHEMA_ARGS=(--json-schema "$schema")
+    echo "Verdict schema: $role" >&2
+}
+
+# ---------------------------------------------------------------------------
 # start_rootless_dockerd
 #
 # Starts rootless dockerd in the background and polls until its socket is ready.
@@ -428,6 +479,7 @@ unset _cred_dir
 # image (ADR 0095); FOUNDRY_ROLES_DIR only redirects it for the bats suite.
 readonly WORKER_ROLES_DIR="${FOUNDRY_ROLES_DIR:-/opt/foundry/roles}"
 prepare_role_plugins "$WORKER_ROLES_DIR" "$WORKER_ROLE" || exit 1
+prepare_role_verdict_schema "$WORKER_ROLES_DIR" "$WORKER_ROLE" || exit 1
 
 # Guard: SYSTEM_PROMPT must not exceed the Linux kernel MAX_ARG_STRLEN limit.
 # A single argv/env string above this ceiling makes execve fail with E2BIG,
@@ -612,7 +664,9 @@ prepare_csharp_lsp /workspace
 # is piped through tee: each line reaches the container log as it is produced
 # while a copy is kept for transient-error classification.  stderr streams
 # through live.  --verbose is mandatory: the CLI rejects stream-json with
-# --print unless --verbose is also set.
+# --print unless --verbose is also set.  When the role has a verdict schema,
+# --json-schema (VERDICT_SCHEMA_ARGS) makes the final result event carry the
+# role's verdict as structured_output (ADR 0094).
 # set -e is toggled off around the pipeline so we can inspect claude's exit
 # status (PIPESTATUS[0], not tee's).
 #
@@ -633,6 +687,7 @@ claude -p "$WORKER_PROMPT" \
     --verbose \
     --max-turns 200 \
     "${ROLE_PLUGIN_ARGS[@]}" \
+    "${VERDICT_SCHEMA_ARGS[@]}" \
     "${CSHARP_LSP_PLUGIN_ARGS[@]}" | tee "$CLAUDE_OUTPUT_FILE"
 first_status=${PIPESTATUS[0]}
 set -e
@@ -643,7 +698,8 @@ if is_transient_api_error "$(cat "$CLAUDE_OUTPUT_FILE")"; then
     # intentionally omitted: -c restores the original session (system prompt
     # included) and re-appending would duplicate it.  The C# LSP decision is
     # reused as-is (plugins are not part of the session); no second restore.
-    # The role plugins are passed again for the same reason.
+    # The role plugins and the verdict schema are passed again for the same
+    # reason, so the resume's result event carries the role's verdict too.
     set +e
     claude -c -p "$WORKER_PROMPT" \
         --dangerously-skip-permissions \
@@ -651,6 +707,7 @@ if is_transient_api_error "$(cat "$CLAUDE_OUTPUT_FILE")"; then
         --verbose \
         --max-turns 200 \
         "${ROLE_PLUGIN_ARGS[@]}" \
+        "${VERDICT_SCHEMA_ARGS[@]}" \
         "${CSHARP_LSP_PLUGIN_ARGS[@]}" | tee "$CLAUDE_OUTPUT_FILE"
     resume_status=${PIPESTATUS[0]}
     set -e

@@ -14,6 +14,7 @@ using Foundry.Modules.Workers.Features.Outcome;
 using Foundry.Modules.Workers.Features.Roles;
 using Foundry.Modules.Workers.Features.Roles.Models;
 using Foundry.Modules.Workers.Features.Runs;
+using Foundry.Modules.Workers.Features.Verdicts;
 using Foundry.Modules.Workers.Infrastructure;
 using Foundry.Shared.Infrastructure;
 using Foundry.Shared.Infrastructure.Docker;
@@ -54,6 +55,7 @@ public static class WorkersModule
         services.AddIntegrationEventHandler<DockerAvailabilityChanged, DockerAvailabilityChangedBroadcastHandler>();
         services.AddSingleton<IWorkerOrchestrator, DockerWorkerOrchestrator>();
         services.AddSingleton<IContainerOutputParser, ContainerOutputParser>();
+        services.AddWorkerVerdicts();
         services.AddSingleton<IProbeOutcomeClassifier, ProbeOutcomeClassifier>();
         services.AddSingleton<IWorkerImageRebuildQueue, WorkerImageRebuildQueue>();
         services.AddSingleton<IWorkerRoleCatalogStore, WorkerRoleCatalogStore>();

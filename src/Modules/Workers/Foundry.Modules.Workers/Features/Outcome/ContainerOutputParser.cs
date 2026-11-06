@@ -134,6 +134,26 @@ internal sealed partial class ContainerOutputParser(ILogger<ContainerOutputParse
             tokens);
     }
 
+    public JsonObject? ParseStructuredOutput(string? log)
+    {
+        if (string.IsNullOrWhiteSpace(log))
+        {
+            return null;
+        }
+
+        if (log.Length > MaxLogLength)
+        {
+            log = log[^MaxLogLength..];
+        }
+
+        // No MaxJsonLineLength cap here: a verdict with several questions makes the result line long,
+        // and the line is bounded by the MaxLogLength tail anyway. Only the last result event is read,
+        // so a transient-retry resume's verdict wins over the first run's.
+        (string Line, JsonObject Node)? resultLine = ExtractLastResultLine(log);
+
+        return resultLine?.Node["structured_output"] as JsonObject;
+    }
+
     private const int MaxLoggedResultTextLength = 200;
 
     // Sanitize untrusted worker output before logging to prevent log injection.

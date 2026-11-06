@@ -54,9 +54,10 @@ public sealed class CompletedRun : WorkerRun
         int exitCode,
         BranchName? branchName,
         PullRequestUrl? pullRequestUrl,
-        RunResultSummary? resultSummary = null)
+        RunResultSummary? resultSummary = null,
+        RunVerdict? verdict = null)
     {
-        return new CompletedRun(
+        CompletedRun completed = new(
             active.Id,
             active.IssueId,
             active.CreatedAt,
@@ -70,5 +71,8 @@ public sealed class CompletedRun : WorkerRun
         {
             CancelRequestedAt = active.CancelRequestedAt,
         };
+
+        completed.RecordVerdict(verdict);
+        return completed;
     }
 }

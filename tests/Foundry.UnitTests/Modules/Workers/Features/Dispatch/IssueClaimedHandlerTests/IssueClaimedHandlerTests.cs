@@ -1030,7 +1030,7 @@ public sealed class HandleAsync : IAsyncDisposable
         FailedRun failedRun = (await _dbContext.Set<WorkerRun>().SingleOrDefaultAsync(TestContext.Current.CancellationToken))
             .ShouldBeOfType<FailedRun>();
         failedRun.ShouldSatisfyAllConditions(
-            () => failedRun.Reason.ShouldBeOfType<FailureReason.ContainerError>().Message.ShouldContain("'implement' is not loaded"),
+            () => failedRun.Reason.ShouldBeOfType<FailureReason.ContainerError>().Message.ShouldContain("dispatch ran before the worker role catalog loaded"),
             () => failedRun.Role.ShouldBe(WorkerRole.Implement),
             () => failedRun.Image.ShouldBe("foundry-worker:local"));
     }

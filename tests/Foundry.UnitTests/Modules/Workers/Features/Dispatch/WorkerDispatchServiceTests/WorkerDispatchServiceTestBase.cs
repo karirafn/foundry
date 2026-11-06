@@ -1,3 +1,5 @@
+using System.Text.Json.Nodes;
+
 using Foundry.Modules.Credentials.Contracts;
 using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Monitoring.Contracts;
@@ -12,11 +14,14 @@ using Foundry.Modules.Workers.Domain.Entities.States;
 using Foundry.Modules.Workers.Domain.ValueObjects;
 using Foundry.Modules.Workers.Features.Orchestration;
 using Foundry.Modules.Workers.Features.Outcome;
+using Foundry.Modules.Workers.Features.Verdicts;
 using Foundry.Modules.Workers.Features.ContainerSpec;
 using Foundry.Modules.Workers.Features.Dispatch;
+using Foundry.Modules.Workers.Features.Roles;
 using Foundry.Shared;
 using Foundry.Shared.Infrastructure;
 using Foundry.Testing;
+using Foundry.UnitTests.Fakes.Workers;
 using Foundry.WebApi.Persistence;
 
 using DomainWorkerRunFailed = Foundry.Modules.Workers.Domain.Events.WorkerRunFailed;
@@ -90,7 +95,8 @@ public abstract class WorkerDispatchServiceTestBase : IAsyncDisposable
         CapturingLogger? logger = null,
         TimeProvider? timeProvider = null,
         IWebhookStatusQueries? webhookStatusQueries = null,
-        RunningBranchCompareGate? compareGate = null)
+        RunningBranchCompareGate? compareGate = null,
+        IWorkerRoleCatalogStore? roleCatalog = null)
     {
         TimeProvider resolvedTimeProvider = timeProvider ?? TimeProvider.System;
         SqliteConnection connection = _connection;
@@ -139,12 +145,14 @@ public abstract class WorkerDispatchServiceTestBase : IAsyncDisposable
 
         services.AddScoped<ICredentialGate>(_ => credentialGate ?? new AlwaysCanDispatchCredentialGate());
         services.AddSingleton(compareGate ?? new RunningBranchCompareGate());
+        services.AddSingleton<IWorkerRoleCatalogStore>(roleCatalog ?? StubWorkerRoleCatalogStore.With());
         services.AddScoped<IWebhookStatusQueries>(
             _ => webhookStatusQueries ?? new StubWebhookStatusQueries(isActive: false));
 
         services.AddSingleton(resolvedTimeProvider);
         services.AddScoped<WorkerOutcomeApplier>();
         services.AddScoped<WorkerRunMonitor>();
+        services.AddWorkerVerdicts();
         services.AddSingleton<ILogger<WorkerOutcomeApplier>>(CreateLogger<WorkerOutcomeApplier>(logger));
         services.AddSingleton<ILogger<WorkerRunMonitor>>(CreateLogger<WorkerRunMonitor>(logger));
 
@@ -291,6 +299,8 @@ public abstract class WorkerDispatchServiceTestBase : IAsyncDisposable
             => new ContainerOutputParseResult.NormalExit();
 
         public RunResultSummary? ParseRunResultSummary(string? log) => null;
+
+        public JsonObject? ParseStructuredOutput(string? log) => null;
     }
 
     protected sealed class StubGlobalSettingsQueries(int maxConcurrent = 3, int timeoutMinutes = 120)
