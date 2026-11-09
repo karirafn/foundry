@@ -41,7 +41,8 @@ public sealed class ContinuationQueuedIssue : QueuedIssue
             source.Author,
             source.Url,
             source.Labels,
-            source.DetectedAt);
+            source.DetectedAt,
+            source.KindClassification);
         queued.BranchName = source.BranchName;
         queued.FailureReason = source.FailureReason.Length > FailureReasonMaxLength
             ? source.FailureReason[..FailureReasonMaxLength]

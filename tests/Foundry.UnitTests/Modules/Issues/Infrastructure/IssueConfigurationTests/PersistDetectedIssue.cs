@@ -74,7 +74,7 @@ public sealed class PersistDetectedIssue : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenDetectedIssuePersistedWithNonDefaultIssueKind_ReloadsWithCorrectIssueKind()
+    public async Task WhenDetectedIssuePersistedAsLabelled_ReloadsWithLabelledKind()
     {
         // Arrange
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
@@ -83,7 +83,7 @@ public sealed class PersistDetectedIssue : IAsyncDisposable
             .WithIssueNumber(77)
             .WithTitle("Fix the crash")
             .WithLabels(["foundry", "bug"])
-            .WithIssueKind(IssueKind.Bug)
+            .WithKindClassification(new KindClassification.Labelled(IssueKind.Bug))
             .Detected();
 
         _dbContext.Set<Issue>().Add(issue);
@@ -97,11 +97,11 @@ public sealed class PersistDetectedIssue : IAsyncDisposable
 
         // Assert
         DetectedIssue detected = result.ShouldBeOfType<DetectedIssue>();
-        detected.IssueKind.ShouldBe(IssueKind.Bug);
+        detected.KindClassification.ShouldBe(new KindClassification.Labelled(IssueKind.Bug));
     }
 
     [Fact]
-    public async Task WhenDetectedIssuePersistedWithoutIssueKind_ReloadsAsFeature()
+    public async Task WhenDetectedIssuePersistedAsUnclassified_ReloadsAsUnclassified()
     {
         // Arrange
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
@@ -110,7 +110,7 @@ public sealed class PersistDetectedIssue : IAsyncDisposable
             .WithIssueNumber(78)
             .WithTitle("Add a feature")
             .WithLabels(["foundry"])
-            .WithIssueKind(IssueKind.Feature)
+            .WithKindClassification(KindClassification.Unclassified)
             .Detected();
 
         _dbContext.Set<Issue>().Add(issue);
@@ -124,7 +124,7 @@ public sealed class PersistDetectedIssue : IAsyncDisposable
 
         // Assert
         DetectedIssue detected = result.ShouldBeOfType<DetectedIssue>();
-        detected.IssueKind.ShouldBe(IssueKind.Feature);
+        detected.KindClassification.ShouldBe(KindClassification.Unclassified);
     }
 
     [Fact]

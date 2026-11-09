@@ -426,7 +426,8 @@ internal sealed class RepositoryPoller(
                     repository.Id,
                     issue.Number,
                     issue.Title,
-                    issue.Labels));
+                    issue.Labels,
+                    issue.IssueKindLabel));
                 changed = true;
             }
         }

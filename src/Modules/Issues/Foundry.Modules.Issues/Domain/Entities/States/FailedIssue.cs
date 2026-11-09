@@ -39,7 +39,8 @@ public sealed class FailedIssue : Issue
             source.Author,
             source.Url,
             source.Labels,
-            source.DetectedAt);
+            source.DetectedAt,
+            source.KindClassification);
         failed.WorkerRunId = source.WorkerRunId;
         failed.FailureReason = failureReason;
         failed.FailureCategory = failureCategory;
@@ -61,7 +62,8 @@ public sealed class FailedIssue : Issue
             source.Author,
             source.Url,
             source.Labels,
-            source.DetectedAt);
+            source.DetectedAt,
+            source.KindClassification);
         failed.WorkerRunId = source.WorkerRunId;
         failed.FailureReason = failureReason;
         failed.FailureCategory = failureCategory;

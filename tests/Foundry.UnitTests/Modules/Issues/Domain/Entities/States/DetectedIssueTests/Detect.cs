@@ -32,7 +32,8 @@ public sealed class Detect
             author,
             url,
             labels,
-            detectedAt);
+            detectedAt,
+            KindClassification.Unclassified);
 
         // Assert
         issue.ShouldSatisfyAllConditions(
@@ -55,9 +56,9 @@ public sealed class Detect
 
         // Act
         DetectedIssue a = DetectedIssue.Detect(
-            repositoryId, 1, "Title", author, url, [], DateTimeOffset.UtcNow);
+            repositoryId, 1, "Title", author, url, [], DateTimeOffset.UtcNow, KindClassification.Unclassified);
         DetectedIssue b = DetectedIssue.Detect(
-            repositoryId, 2, "Title", author, url, [], DateTimeOffset.UtcNow);
+            repositoryId, 2, "Title", author, url, [], DateTimeOffset.UtcNow, KindClassification.Unclassified);
 
         // Assert
         a.Id.ShouldNotBe(b.Id);
@@ -73,14 +74,14 @@ public sealed class Detect
 
         // Act
         DetectedIssue issue = DetectedIssue.Detect(
-            repositoryId, 1, "Title", author, url, [], DateTimeOffset.UtcNow);
+            repositoryId, 1, "Title", author, url, [], DateTimeOffset.UtcNow, KindClassification.Unclassified);
 
         // Assert
         issue.BlockedBy.ShouldBeEmpty();
     }
 
     [Fact]
-    public void WhenIssueKindProvided_SetsIssueKindOnIssue()
+    public void WhenLabelledClassificationProvided_SetsClassificationOnIssue()
     {
         // Arrange
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
@@ -96,14 +97,14 @@ public sealed class Detect
             url: url,
             labels: [],
             detectedAt: DateTimeOffset.UtcNow,
-            issueKind: IssueKind.Bug);
+            kindClassification: new KindClassification.Labelled(IssueKind.Bug));
 
         // Assert
-        issue.IssueKind.ShouldBe(IssueKind.Bug);
+        issue.KindClassification.ShouldBe(new KindClassification.Labelled(IssueKind.Bug));
     }
 
     [Fact]
-    public void WhenIssueKindNotProvided_DefaultsToFeature()
+    public void WhenUnclassifiedProvided_SetsUnclassified()
     {
         // Arrange
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
@@ -112,9 +113,9 @@ public sealed class Detect
 
         // Act
         DetectedIssue issue = DetectedIssue.Detect(
-            repositoryId, 1, "Title", author, url, [], DateTimeOffset.UtcNow);
+            repositoryId, 1, "Title", author, url, [], DateTimeOffset.UtcNow, KindClassification.Unclassified);
 
         // Assert
-        issue.IssueKind.ShouldBe(IssueKind.Feature);
+        issue.KindClassification.ShouldBe(KindClassification.Unclassified);
     }
 }

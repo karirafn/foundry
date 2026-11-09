@@ -1,5 +1,6 @@
 using Foundry.Modules.Issues.Domain.Entities;
 using Foundry.Modules.Issues.Domain.Entities.States;
+using Foundry.Modules.Issues.Domain.ValueObjects;
 using Foundry.Testing;
 using Foundry.WebApi.Persistence;
 
@@ -57,5 +58,31 @@ public sealed class PersistFreshQueuedIssue : IAsyncDisposable
 
         // Assert
         result.ShouldBeOfType<FreshQueuedIssue>();
+    }
+
+    [Fact]
+    public async Task WhenLabelledFreshQueuedIssuePersisted_ReloadsWithLabelledClassification()
+    {
+        // Arrange
+        KindClassification labelled = new KindClassification.Labelled(IssueKind.Documentation);
+        FreshQueuedIssue queued = new IssueBuilder()
+            .WithIssueNumber(8)
+            .WithKindClassification(labelled)
+            .FreshQueued();
+
+        _dbContext.Set<Issue>().Add(queued);
+        await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+        _dbContext.ChangeTracker.Clear();
+
+        // Act
+        Issue? result = await _dbContext
+            .Set<Issue>()
+            .FindAsync([queued.Id], TestContext.Current.CancellationToken);
+
+        // Assert
+        FreshQueuedIssue reloaded = result.ShouldBeOfType<FreshQueuedIssue>();
+        reloaded.ShouldSatisfyAllConditions(
+            () => reloaded.KindClassification.ShouldBe(labelled),
+            () => reloaded.DispatchBranchName.Value.ShouldStartWith("docs/8-"));
     }
 }

@@ -62,7 +62,8 @@ public sealed class ChecksPendingIssue : Issue
             source.Author,
             source.Url,
             source.Labels,
-            source.DetectedAt);
+            source.DetectedAt,
+            source.KindClassification);
         checksPending.WorkerRunId = source.WorkerRunId;
         checksPending.BranchName = source.BranchName;
         checksPending.PullRequestUrl = source.PullRequestUrl;

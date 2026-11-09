@@ -52,7 +52,8 @@ public sealed class RevisionFailedIssue : Issue
             source.Author,
             source.Url,
             source.Labels,
-            source.DetectedAt);
+            source.DetectedAt,
+            source.KindClassification);
         failed.WorkerRunId = source.WorkerRunId;
         failed.BranchName = source.BranchName;
         failed.PullRequestUrl = source.PullRequestUrl;

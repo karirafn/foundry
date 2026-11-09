@@ -24,7 +24,8 @@ public sealed class BlockedIssue : Issue
             detected.Author,
             detected.Url,
             detected.Labels,
-            detected.DetectedAt);
+            detected.DetectedAt,
+            detected.KindClassification);
         blocked.SetBlockedBy(blockers);
         return blocked;
     }
@@ -39,7 +40,8 @@ public sealed class BlockedIssue : Issue
             queued.Author,
             queued.Url,
             queued.Labels,
-            queued.DetectedAt);
+            queued.DetectedAt,
+            queued.KindClassification);
         blocked.SetBlockedBy(blockers);
         return blocked;
     }

@@ -20,7 +20,8 @@ public sealed class Create
             repositoryId,
             IssueNumber: 42,
             Title: "Updated title",
-            Labels: ["enhancement"]);
+            Labels: ["enhancement"],
+            IssueKindLabel: null);
 
         // Assert
         @event.ShouldBeAssignableTo<IIntegrationEvent>();

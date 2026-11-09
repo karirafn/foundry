@@ -40,7 +40,8 @@ public sealed class RevisionInProgressIssue : Issue
             source.Author,
             source.Url,
             source.Labels,
-            source.DetectedAt);
+            source.DetectedAt,
+            source.KindClassification);
         revisionInProgress.WorkerRunId = workerRunId;
         revisionInProgress.BranchName = source.BranchName;
         revisionInProgress.PullRequestUrl = source.PullRequestUrl;

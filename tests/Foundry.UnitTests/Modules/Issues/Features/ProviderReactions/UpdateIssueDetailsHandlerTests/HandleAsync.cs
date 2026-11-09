@@ -1,5 +1,6 @@
 using Foundry.Modules.Issues.Domain.Entities;
 using Foundry.Modules.Issues.Domain.Entities.States;
+using Foundry.Modules.Issues.Domain.ValueObjects;
 using Foundry.Modules.Issues.Features.ProviderReactions;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Shared;
@@ -61,7 +62,8 @@ public sealed class HandleAsync : IAsyncDisposable
             MonitoredRepositoryId: repositoryId,
             IssueNumber: 5,
             Title: "Updated title",
-            Labels: ["new-label"]);
+            Labels: ["new-label"],
+            IssueKindLabel: null);
 
         // Act
         await _sut.HandleAsync(@event, TestContext.Current.CancellationToken);
@@ -80,6 +82,71 @@ public sealed class HandleAsync : IAsyncDisposable
     }
 
     [Fact]
+    public async Task WhenKindLabelAdded_ReclassifiesAsLabelled()
+    {
+        // Arrange
+        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
+        DetectedIssue issue = new IssueBuilder()
+            .WithMonitoredRepositoryId(repositoryId)
+            .WithIssueNumber(5)
+            .WithKindClassification(KindClassification.Unclassified)
+            .Detected();
+
+        _dbContext.Set<Issue>().Add(issue);
+        await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+        _dbContext.ChangeTracker.Clear();
+
+        IssueDetailsChanged @event = new(
+            MonitoredRepositoryId: repositoryId,
+            IssueNumber: 5,
+            Title: "Title",
+            Labels: ["foundry", "bug"],
+            IssueKindLabel: "bug");
+
+        // Act
+        await _sut.HandleAsync(@event, TestContext.Current.CancellationToken);
+
+        // Assert
+        _dbContext.ChangeTracker.Clear();
+        Issue loaded = await _dbContext.Set<Issue>()
+            .SingleAsync(i => i.MonitoredRepositoryId == repositoryId, TestContext.Current.CancellationToken);
+        loaded.KindClassification.ShouldBe(new KindClassification.Labelled(IssueKind.Bug));
+    }
+
+    [Fact]
+    public async Task WhenOnlyKindLabelRemoved_ReclassifiesAsUnclassified()
+    {
+        // Arrange
+        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
+        DetectedIssue issue = new IssueBuilder()
+            .WithMonitoredRepositoryId(repositoryId)
+            .WithIssueNumber(5)
+            .WithLabels(["foundry", "bug"])
+            .WithKindClassification(new KindClassification.Labelled(IssueKind.Bug))
+            .Detected();
+
+        _dbContext.Set<Issue>().Add(issue);
+        await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+        _dbContext.ChangeTracker.Clear();
+
+        IssueDetailsChanged @event = new(
+            MonitoredRepositoryId: repositoryId,
+            IssueNumber: 5,
+            Title: "Title",
+            Labels: ["foundry"],
+            IssueKindLabel: null);
+
+        // Act
+        await _sut.HandleAsync(@event, TestContext.Current.CancellationToken);
+
+        // Assert
+        _dbContext.ChangeTracker.Clear();
+        Issue loaded = await _dbContext.Set<Issue>()
+            .SingleAsync(i => i.MonitoredRepositoryId == repositoryId, TestContext.Current.CancellationToken);
+        loaded.KindClassification.ShouldBe(KindClassification.Unclassified);
+    }
+
+    [Fact]
     public async Task WhenIssueDoesNotExist_DoesNotThrow()
     {
         // Arrange
@@ -88,7 +155,8 @@ public sealed class HandleAsync : IAsyncDisposable
             MonitoredRepositoryId: repositoryId,
             IssueNumber: 999,
             Title: "Title",
-            Labels: []);
+            Labels: [],
+            IssueKindLabel: null);
 
         // Act
         Task act = _sut.HandleAsync(@event, CancellationToken.None);
@@ -118,7 +186,8 @@ public sealed class HandleAsync : IAsyncDisposable
             MonitoredRepositoryId: targetRepo,
             IssueNumber: 5,
             Title: "Updated title",
-            Labels: []);
+            Labels: [],
+            IssueKindLabel: null);
 
         // Act
         await _sut.HandleAsync(@event, TestContext.Current.CancellationToken);

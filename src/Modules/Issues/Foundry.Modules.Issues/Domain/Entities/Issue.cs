@@ -17,7 +17,18 @@ public abstract class Issue : AggregateRoot<IssueId>, IStateMachine<Issue>
     {
     }
 
-    public IssueKind IssueKind { get; protected set; } = IssueKind.Feature;
+    // The persisted shape of KindClassification: the labelled kind, or null when Unclassified.
+    private IssueKind? _labelledKind;
+
+    public KindClassification KindClassification
+    {
+        get => _labelledKind is null
+            ? KindClassification.Unclassified
+            : new KindClassification.Labelled(_labelledKind);
+        private set => _labelledKind = value is KindClassification.Labelled labelled
+            ? labelled.Kind
+            : null;
+    }
 
     public MonitoredRepositoryId MonitoredRepositoryId { get; private set; }
 
@@ -72,10 +83,11 @@ public abstract class Issue : AggregateRoot<IssueId>, IStateMachine<Issue>
             : blockers.Take(MaxBlockers).ToList();
     }
 
-    public void UpdateDetails(string title, IReadOnlyList<string> labels)
+    public void UpdateDetails(string title, IReadOnlyList<string> labels, KindClassification kindClassification)
     {
         Title = title;
         Labels = labels;
+        KindClassification = kindClassification;
     }
 
     protected void SetSharedProperties(
@@ -85,7 +97,8 @@ public abstract class Issue : AggregateRoot<IssueId>, IStateMachine<Issue>
         IssueAuthor author,
         ProviderUrl url,
         IReadOnlyList<string> labels,
-        DateTimeOffset detectedAt)
+        DateTimeOffset detectedAt,
+        KindClassification kindClassification)
     {
         MonitoredRepositoryId = monitoredRepositoryId;
         IssueNumber = issueNumber;
@@ -94,5 +107,6 @@ public abstract class Issue : AggregateRoot<IssueId>, IStateMachine<Issue>
         Url = url;
         Labels = labels;
         DetectedAt = detectedAt;
+        KindClassification = kindClassification;
     }
 }

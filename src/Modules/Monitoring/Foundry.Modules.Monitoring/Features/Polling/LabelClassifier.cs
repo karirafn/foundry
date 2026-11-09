@@ -16,7 +16,7 @@ internal static class LabelClassifier
         DocumentationLabel,
     ];
 
-    public static string ClassifyKind(IReadOnlyList<string> labels)
+    public static string? ClassifyKind(IReadOnlyList<string> labels)
     {
         foreach (string kind in PriorityOrder)
         {
@@ -26,7 +26,7 @@ internal static class LabelClassifier
             }
         }
 
-        return FeatureLabel;
+        return null;
     }
 
     private static bool MatchesKind(string label, string kind)

@@ -9,16 +9,16 @@ namespace Foundry.UnitTests.Modules.Monitoring.Features.Polling.LabelClassifierT
 public sealed class ClassifyKind
 {
     [Fact]
-    public void WhenNoRecognizedLabels_ReturnsFeature()
+    public void WhenNoRecognizedLabels_ReturnsNull()
     {
         // Arrange
         string[] labels = ["foundry", "some-other-label"];
 
         // Act
-        string result = LabelClassifier.ClassifyKind(labels);
+        string? result = LabelClassifier.ClassifyKind(labels);
 
         // Assert
-        result.ShouldBe("feature");
+        result.ShouldBeNull();
     }
 
     [Fact]
@@ -28,7 +28,7 @@ public sealed class ClassifyKind
         string[] labels = ["bug"];
 
         // Act
-        string result = LabelClassifier.ClassifyKind(labels);
+        string? result = LabelClassifier.ClassifyKind(labels);
 
         // Assert
         result.ShouldBe("bug");
@@ -41,7 +41,7 @@ public sealed class ClassifyKind
         string[] labels = ["feature"];
 
         // Act
-        string result = LabelClassifier.ClassifyKind(labels);
+        string? result = LabelClassifier.ClassifyKind(labels);
 
         // Assert
         result.ShouldBe("feature");
@@ -54,7 +54,7 @@ public sealed class ClassifyKind
         string[] labels = ["refactor"];
 
         // Act
-        string result = LabelClassifier.ClassifyKind(labels);
+        string? result = LabelClassifier.ClassifyKind(labels);
 
         // Assert
         result.ShouldBe("refactor");
@@ -67,7 +67,7 @@ public sealed class ClassifyKind
         string[] labels = ["documentation"];
 
         // Act
-        string result = LabelClassifier.ClassifyKind(labels);
+        string? result = LabelClassifier.ClassifyKind(labels);
 
         // Assert
         result.ShouldBe("documentation");
@@ -80,7 +80,7 @@ public sealed class ClassifyKind
         string[] labels = ["feature", "bug"];
 
         // Act
-        string result = LabelClassifier.ClassifyKind(labels);
+        string? result = LabelClassifier.ClassifyKind(labels);
 
         // Assert
         result.ShouldBe("bug");
@@ -93,23 +93,23 @@ public sealed class ClassifyKind
         string[] labels = ["BUG"];
 
         // Act
-        string result = LabelClassifier.ClassifyKind(labels);
+        string? result = LabelClassifier.ClassifyKind(labels);
 
         // Assert
         result.ShouldBe("bug");
     }
 
     [Fact]
-    public void WhenLabelsEmpty_ReturnsFeature()
+    public void WhenLabelsEmpty_ReturnsNull()
     {
         // Arrange
         string[] labels = [];
 
         // Act
-        string result = LabelClassifier.ClassifyKind(labels);
+        string? result = LabelClassifier.ClassifyKind(labels);
 
         // Assert
-        result.ShouldBe("feature");
+        result.ShouldBeNull();
     }
 
     [Fact]
@@ -119,7 +119,7 @@ public sealed class ClassifyKind
         string[] labels = ["type::bug"];
 
         // Act
-        string result = LabelClassifier.ClassifyKind(labels);
+        string? result = LabelClassifier.ClassifyKind(labels);
 
         // Assert
         result.ShouldBe("bug");
@@ -132,7 +132,7 @@ public sealed class ClassifyKind
         string[] labels = ["type::feature"];
 
         // Act
-        string result = LabelClassifier.ClassifyKind(labels);
+        string? result = LabelClassifier.ClassifyKind(labels);
 
         // Assert
         result.ShouldBe("feature");
@@ -145,7 +145,7 @@ public sealed class ClassifyKind
         string[] labels = ["type::refactor"];
 
         // Act
-        string result = LabelClassifier.ClassifyKind(labels);
+        string? result = LabelClassifier.ClassifyKind(labels);
 
         // Assert
         result.ShouldBe("refactor");
@@ -158,7 +158,7 @@ public sealed class ClassifyKind
         string[] labels = ["type::documentation"];
 
         // Act
-        string result = LabelClassifier.ClassifyKind(labels);
+        string? result = LabelClassifier.ClassifyKind(labels);
 
         // Assert
         result.ShouldBe("documentation");
@@ -171,7 +171,7 @@ public sealed class ClassifyKind
         string[] labels = ["type::BUG"];
 
         // Act
-        string result = LabelClassifier.ClassifyKind(labels);
+        string? result = LabelClassifier.ClassifyKind(labels);
 
         // Assert
         result.ShouldBe("bug");
@@ -184,7 +184,7 @@ public sealed class ClassifyKind
         string[] labels = ["feature", "type::bug"];
 
         // Act
-        string result = LabelClassifier.ClassifyKind(labels);
+        string? result = LabelClassifier.ClassifyKind(labels);
 
         // Assert
         result.ShouldBe("bug");

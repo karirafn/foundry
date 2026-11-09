@@ -51,7 +51,8 @@ public sealed class ReviewIssue : Issue
             source.Author,
             source.Url,
             source.Labels,
-            source.DetectedAt);
+            source.DetectedAt,
+            source.KindClassification);
         review.WorkerRunId = source.WorkerRunId;
         review.BranchName = branchName;
         review.PullRequestUrl = pullRequestUrl;
@@ -72,7 +73,8 @@ public sealed class ReviewIssue : Issue
             source.Author,
             source.Url,
             source.Labels,
-            source.DetectedAt);
+            source.DetectedAt,
+            source.KindClassification);
         review.WorkerRunId = source.WorkerRunId;
         review.BranchName = source.BranchName;
         review.PullRequestUrl = source.PullRequestUrl;
@@ -94,7 +96,8 @@ public sealed class ReviewIssue : Issue
             source.Author,
             source.Url,
             source.Labels,
-            source.DetectedAt);
+            source.DetectedAt,
+            source.KindClassification);
         review.WorkerRunId = source.WorkerRunId;
         review.BranchName = source.BranchName;
         review.PullRequestUrl = source.PullRequestUrl;

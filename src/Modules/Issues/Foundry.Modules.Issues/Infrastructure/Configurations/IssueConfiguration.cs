@@ -155,14 +155,15 @@ public sealed class IssueConfiguration : IEntityTypeConfiguration<Issue>
 
         ValueConverter<IssueKind, string> issueKindConverter = new(
             kind => kind.Value,
-            value => IssueKind.FromLabel(value));
+            value => ParseStoredIssueKind(value));
 
-        builder.Property(i => i.IssueKind)
-            .HasConversion(issueKindConverter)
+        // KindClassification is stored as its labelled kind; a null column is Unclassified.
+        builder.Ignore(i => i.KindClassification);
+        builder.Property<IssueKind?>("_labelledKind")
+            .HasConversion((ValueConverter)issueKindConverter)
             .HasMaxLength(IssueKindMaxLength)
             .IsUnicode(false)
-            .IsRequired()
-            .HasDefaultValueSql("'feature'")
+            .IsRequired(false)
             .HasColumnName("issue_kind");
 
         builder.HasDiscriminator<string>("state")
@@ -191,4 +192,8 @@ public sealed class IssueConfiguration : IEntityTypeConfiguration<Issue>
             .IsUnique()
             .HasDatabaseName("ix_issues_monitored_repository_id_issue_number");
     }
+
+    private static IssueKind ParseStoredIssueKind(string value) =>
+        IssueKind.FromLabel(value)
+            ?? throw new InvalidOperationException($"Stored issue kind '{value}' is not a known issue kind.");
 }

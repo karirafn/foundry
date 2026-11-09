@@ -64,7 +64,8 @@ public sealed class RebasePendingIssue : Issue
             source.Author,
             source.Url,
             source.Labels,
-            source.DetectedAt);
+            source.DetectedAt,
+            source.KindClassification);
         rebasePending.WorkerRunId = source.WorkerRunId;
         rebasePending.BranchName = branchName;
         rebasePending.PullRequestUrl = pullRequestUrl;
@@ -87,7 +88,8 @@ public sealed class RebasePendingIssue : Issue
             source.Author,
             source.Url,
             source.Labels,
-            source.DetectedAt);
+            source.DetectedAt,
+            source.KindClassification);
         rebasePending.WorkerRunId = source.WorkerRunId;
         rebasePending.BranchName = source.BranchName;
         rebasePending.PullRequestUrl = source.PullRequestUrl;

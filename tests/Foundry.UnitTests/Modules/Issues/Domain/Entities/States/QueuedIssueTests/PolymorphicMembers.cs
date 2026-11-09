@@ -78,7 +78,7 @@ public sealed class PolymorphicMembers
         // Arrange
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
         FreshQueuedIssue queued = new IssueBuilder().WithMonitoredRepositoryId(repositoryId).FreshQueued();
-        BranchName expected = BranchName.Generate(queued.IssueKind.BranchPrefix, queued.IssueNumber, queued.Title);
+        BranchName expected = BranchName.Generate(queued.KindClassification, queued.IssueNumber, queued.Title);
 
         // Act
         BranchName branchName = queued.DispatchBranchName;
@@ -131,7 +131,7 @@ public sealed class PolymorphicMembers
         // Arrange
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
         FreshQueuedIssue queued = new IssueBuilder().WithMonitoredRepositoryId(repositoryId).FreshQueued();
-        BranchName branchName = BranchName.Generate(queued.IssueKind.BranchPrefix, queued.IssueNumber, queued.Title);
+        BranchName branchName = BranchName.Generate(queued.KindClassification, queued.IssueNumber, queued.Title);
 
         // Act
         DispatchContext context = queued.Context;

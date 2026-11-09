@@ -258,9 +258,10 @@ public sealed class PollAsync : IAsyncDisposable
 
         // Assert
         result.IsSuccess.ShouldBeTrue();
-        _dispatcher.DispatchedEvents
+        IssueDetailsChanged changed = _dispatcher.DispatchedEvents
             .OfType<IssueDetailsChanged>()
             .ShouldHaveSingleItem();
+        changed.IssueKindLabel.ShouldBe("bug");
     }
 
     [Fact]

@@ -53,7 +53,8 @@ public sealed class RevisionQueuedIssue : QueuedIssue
             source.Author,
             source.Url,
             source.Labels,
-            source.DetectedAt);
+            source.DetectedAt,
+            source.KindClassification);
         revisionQueued.BranchName = source.BranchName;
         revisionQueued.PullRequestUrl = source.PullRequestUrl;
         revisionQueued.Trigger = new RevisionTrigger.ReviewFeedback(comments, omittedCommentCount, newestCommentAt);
@@ -76,7 +77,8 @@ public sealed class RevisionQueuedIssue : QueuedIssue
             source.Author,
             source.Url,
             source.Labels,
-            source.DetectedAt);
+            source.DetectedAt,
+            source.KindClassification);
         revisionQueued.BranchName = source.BranchName;
         revisionQueued.PullRequestUrl = source.PullRequestUrl;
         revisionQueued.Trigger = new RevisionTrigger.ReviewFeedback(comments, omittedCommentCount, newestCommentAt);
@@ -97,7 +99,8 @@ public sealed class RevisionQueuedIssue : QueuedIssue
             source.Author,
             source.Url,
             source.Labels,
-            source.DetectedAt);
+            source.DetectedAt,
+            source.KindClassification);
         revisionQueued.BranchName = source.BranchName;
         revisionQueued.PullRequestUrl = source.PullRequestUrl;
         revisionQueued.Trigger = new RevisionTrigger.FailedChecks(failingChecks);
@@ -116,7 +119,8 @@ public sealed class RevisionQueuedIssue : QueuedIssue
             source.Author,
             source.Url,
             source.Labels,
-            source.DetectedAt);
+            source.DetectedAt,
+            source.KindClassification);
         revisionQueued.BranchName = source.BranchName;
         revisionQueued.PullRequestUrl = source.PullRequestUrl;
         revisionQueued.Trigger = new RevisionTrigger.RebaseConflict();
@@ -135,7 +139,8 @@ public sealed class RevisionQueuedIssue : QueuedIssue
             source.Author,
             source.Url,
             source.Labels,
-            source.DetectedAt);
+            source.DetectedAt,
+            source.KindClassification);
         revisionQueued.BranchName = source.BranchName;
         revisionQueued.PullRequestUrl = source.PullRequestUrl;
         revisionQueued.Trigger = source.Trigger;
