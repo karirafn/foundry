@@ -683,6 +683,68 @@ describe('IssueDetailComponent', () => {
     expect(summary?.textContent?.trim()).toBe('Worker bootstrap failed: container died');
   });
 
+  // Worker run section: a completed run with a stored log shows it, keeping each line's timestamp
+  it('should render the stored log with timestamped lines for a completed run with hasStoredLog', () => {
+    // Arrange
+    const reviewDetail: IssueDetail = {
+      ...mockDetail,
+      state: 'review',
+      stateDetails: { ...mockStateDetails, workerRunId: 'run-completed' },
+    };
+    const getLog = vi.fn(() => of(
+      '2026-11-09T10:00:00.000000000Z PR opened\n2026-11-09T10:20:00.000000000Z exiting',
+    ));
+    const mockWorkerRunServiceCompleted = {
+      getDetail: () => of({
+        workerRunId: 'run-completed',
+        issueId: 'issue-1',
+        state: 'completed',
+        failureCategory: null,
+        failureSummary: null,
+        resultText: null,
+        subtype: null,
+        isError: null,
+        durationMs: null,
+        numTurns: null,
+        totalCostUsd: null,
+        inputTokens: null,
+        outputTokens: null,
+        lastActivityAt: null,
+        hasStoredLog: true,
+      }),
+      getLog,
+    };
+
+    TestBed.resetTestingModule();
+    TestBed.configureTestingModule({
+      imports: [IssueDetailComponent],
+      providers: [
+        IssueService,
+        WorkerSignalRService,
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        { provide: IssueSignalRService, useValue: mockIssueSignalRService },
+        { provide: WorkerRunService, useValue: mockWorkerRunServiceCompleted },
+        { provide: WORKER_HUB_FACTORY, useValue: () => mockWorkerHub },
+      ],
+    });
+    const fixture = TestBed.createComponent(IssueDetailComponent);
+    fixture.componentRef.setInput('detail', reviewDetail);
+    fixture.componentRef.setInput('loading', false);
+    fixture.componentRef.setInput('error', null);
+    fixture.detectChanges();
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    expect(getLog).toHaveBeenCalledWith('run-completed');
+    const lines = Array.from(el.querySelectorAll('fd-log-view .log-view__line'))
+      .map((line) => line.textContent);
+    expect(lines).toEqual([
+      '2026-11-09T10:00:00.000000000Z PR opened',
+      '2026-11-09T10:20:00.000000000Z exiting',
+    ]);
+  });
+
   // Transient retry block — AC1: active retry shows attempt chip and next-attempt time
   it('should render the "Attempt N of M" chip and next-attempt time when transientRetry is present and not exhausted', () => {
     // Arrange

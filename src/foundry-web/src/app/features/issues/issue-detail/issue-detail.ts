@@ -288,7 +288,7 @@ import {
               </div>
             }
 
-            @if (wr.state === 'failed' && wr.hasStoredLog) {
+            @if (wr.hasStoredLog) {
               <fd-log-view
                 mode="static"
                 [lines]="_staticLogLines()"
@@ -453,7 +453,7 @@ export class IssueDetailComponent {
           return;
         }
 
-        if (wr.state === 'failed' && wr.hasStoredLog) {
+        if (wr.hasStoredLog) {
           this._workerRunService.getLog(workerRunId).subscribe((text) => {
             this._staticLogLinesSignal.set(text ? text.split('\n') : []);
           });

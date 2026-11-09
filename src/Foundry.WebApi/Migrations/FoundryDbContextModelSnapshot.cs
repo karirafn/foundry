@@ -1552,6 +1552,13 @@ namespace Foundry.WebApi.Migrations
                         .HasColumnType("TEXT")
                         .HasColumnName("completed_at");
 
+                    b.Property<string>("ContainerOutput")
+                        .ValueGeneratedOnUpdateSometimes()
+                        .HasMaxLength(2147483647)
+                        .IsUnicode(true)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("container_output");
+
                     b.Property<int>("ExitCode")
                         .HasColumnType("INTEGER")
                         .HasColumnName("exit_code");
@@ -1597,6 +1604,7 @@ namespace Foundry.WebApi.Migrations
                         .HasColumnName("cancel_requested_at");
 
                     b.Property<string>("ContainerOutput")
+                        .ValueGeneratedOnUpdateSometimes()
                         .HasMaxLength(2147483647)
                         .IsUnicode(true)
                         .HasColumnType("TEXT")

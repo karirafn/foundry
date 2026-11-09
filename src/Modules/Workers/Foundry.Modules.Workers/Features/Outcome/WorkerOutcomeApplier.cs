@@ -66,7 +66,8 @@ internal sealed class WorkerOutcomeApplier(
                     completed.BranchName,
                     completed.PullRequestUrl,
                     completed.Summary,
-                    verdict);
+                    verdict,
+                    completed.ContainerOutput);
                 // Enqueue before TransitionAsync: the trailing harvest SaveChangesAsync inside
                 // TransitionAsync drains the outbox collector atomically with the state change.
                 await TryDispatchAsync(
@@ -95,7 +96,8 @@ internal sealed class WorkerOutcomeApplier(
                     review.BranchName,
                     review.PullRequestUrl,
                     review.Summary,
-                    verdict);
+                    verdict,
+                    review.ContainerOutput);
                 await TryDispatchAsync(
                     [new WorkerRunCompletedEvent(
                         activeRun.Id,
@@ -122,7 +124,8 @@ internal sealed class WorkerOutcomeApplier(
                     unchanged.BranchName,
                     null,
                     unchanged.Summary,
-                    verdict);
+                    verdict,
+                    unchanged.ContainerOutput);
                 await TryDispatchAsync(
                     [new WorkerRunCompletedEvent(
                         activeRun.Id,

@@ -62,6 +62,30 @@ public sealed class WhenRunLogRequested : IAsyncDisposable
         return failed;
     }
 
+    private async Task<CompletedRun> SeedCompletedRunAsync(string? containerOutput)
+    {
+        // No POST endpoint exists for worker runs — seed directly through DbContext.
+        using IServiceScope scope = _factory.Services.CreateScope();
+        DbContext dbContext = scope.ServiceProvider.GetRequiredService<DbContext>();
+
+        StartingRun starting = StartingRun.Begin(IssueId.New(), WorkerRunId.New());
+        ActiveRun active = starting.Activate(
+            ContainerId.From("container-completed-log-test"),
+            BranchName.From("feat/101-completed"),
+            MonitoredRepositoryId.New());
+
+        CompletedRun completed = active.Complete(
+            exitCode: 0,
+            branchName: active.BranchName,
+            pullRequestUrl: PullRequestUrl.From("https://github.com/owner/repo/pull/101"),
+            containerOutput: containerOutput);
+
+        dbContext.Set<WorkerRun>().Add(completed);
+        await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        return completed;
+    }
+
     private async Task<ActiveRun> SeedActiveRunAsync()
     {
         // No POST endpoint exists for worker runs — seed directly through DbContext.
@@ -157,6 +181,41 @@ public sealed class WhenRunLogRequested : IAsyncDisposable
     {
         // Arrange
         FailedRun run = await SeedFailedRunAsync(containerOutput: null);
+
+        // Act
+        HttpResponseMessage response = await _client.GetAsync(
+            new Uri($"/api/workers/runs/{run.Id.Value}/log", UriKind.Relative),
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        response.StatusCode.ShouldBe(HttpStatusCode.NoContent);
+    }
+
+    [Fact]
+    public async Task WhenCompletedRunHasStoredLog_Returns200WithTimestampedLines()
+    {
+        // Arrange
+        CompletedRun run = await SeedCompletedRunAsync(
+            containerOutput: "2026-11-09T10:00:00.000000000Z PR opened\n2026-11-09T10:20:00.000000000Z exiting\n");
+
+        // Act
+        HttpResponseMessage response = await _client.GetAsync(
+            new Uri($"/api/workers/runs/{run.Id.Value}/log", UriKind.Relative),
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        string content = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+        content.ShouldSatisfyAllConditions(
+            () => content.ShouldContain("2026-11-09T10:00:00.000000000Z PR opened"),
+            () => content.ShouldContain("2026-11-09T10:20:00.000000000Z exiting"));
+    }
+
+    [Fact]
+    public async Task WhenCompletedRunHasNoStoredLog_Returns204()
+    {
+        // Arrange
+        CompletedRun run = await SeedCompletedRunAsync(containerOutput: null);
 
         // Act
         HttpResponseMessage response = await _client.GetAsync(

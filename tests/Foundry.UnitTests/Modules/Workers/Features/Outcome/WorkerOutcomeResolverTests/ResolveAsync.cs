@@ -1130,6 +1130,7 @@ public sealed class ResolveAsync
         // Act
         WorkerOutcome? outcome = await sut.TryResolveExistingPullRequestAsync(
             CreateActiveRun(),
+            containerOutput: null,
             summary: null,
             TestContext.Current.CancellationToken);
 
@@ -1150,6 +1151,7 @@ public sealed class ResolveAsync
         // Act
         WorkerOutcome? outcome = await sut.TryResolveExistingPullRequestAsync(
             CreateActiveRun(),
+            containerOutput: null,
             summary: null,
             TestContext.Current.CancellationToken);
 
@@ -1171,6 +1173,7 @@ public sealed class ResolveAsync
         // Act
         WorkerOutcome? outcome = await sut.TryResolveExistingPullRequestAsync(
             CreateActiveRun(),
+            containerOutput: null,
             summary: null,
             TestContext.Current.CancellationToken);
 
@@ -1190,11 +1193,96 @@ public sealed class ResolveAsync
         // Act
         WorkerOutcome? outcome = await sut.TryResolveExistingPullRequestAsync(
             CreateActiveRun(),
+            containerOutput: null,
             summary: null,
             TestContext.Current.CancellationToken);
 
         // Assert
         outcome.ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task TryResolveExistingPullRequest_WhenOpenMr_CarriesContainerOutput()
+    {
+        // Arrange
+        IPostExitProviderQueries queries = new ScriptedProviderQueries(
+            commitsResult: Result<bool>.Ok(true),
+            fallbackMrResult: Result<MergeRequestByBranch>.Ok(new MergeRequestByBranch(MergeRequestPresence.Open, PrUrl)));
+        WorkerOutcomeResolver sut = BuildResolver(queries);
+
+        // Act
+        WorkerOutcome? outcome = await sut.TryResolveExistingPullRequestAsync(
+            CreateActiveRun(),
+            containerOutput: "cancelled run output",
+            summary: null,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        outcome.ShouldBeOfType<WorkerOutcome.Review>().ContainerOutput.ShouldBe("cancelled run output");
+    }
+
+    // -------------------------------------------------------------------------
+    // Completed outcomes carry the container output
+    // -------------------------------------------------------------------------
+
+    [Fact]
+    public async Task WhenMrIsMerged_CompletedCarriesContainerOutput()
+    {
+        // Arrange
+        IPostExitProviderQueries queries = new ScriptedProviderQueries(
+            commitsResult: Result<bool>.Ok(true),
+            fallbackMrResult: Result<MergeRequestByBranch>.Ok(new MergeRequestByBranch(MergeRequestPresence.Merged, PrUrl)));
+        WorkerOutcomeResolver sut = BuildResolver(queries);
+
+        // Act
+        WorkerOutcome outcome = await sut.ResolveAsync(
+            CreateActiveRun(),
+            status: Exited(0),
+            containerOutput: "merged run output",
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        outcome.ShouldBeOfType<WorkerOutcome.Completed>().ContainerOutput.ShouldBe("merged run output");
+    }
+
+    [Fact]
+    public async Task WhenMrIsOpen_ReviewCarriesContainerOutput()
+    {
+        // Arrange
+        IPostExitProviderQueries queries = new ScriptedProviderQueries(
+            commitsResult: Result<bool>.Ok(true),
+            fallbackMrResult: Result<MergeRequestByBranch>.Ok(new MergeRequestByBranch(MergeRequestPresence.Open, PrUrl)));
+        WorkerOutcomeResolver sut = BuildResolver(queries);
+
+        // Act
+        WorkerOutcome outcome = await sut.ResolveAsync(
+            CreateActiveRun(),
+            status: Exited(0),
+            containerOutput: "review run output",
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        outcome.ShouldBeOfType<WorkerOutcome.Review>().ContainerOutput.ShouldBe("review run output");
+    }
+
+    [Fact]
+    public async Task WhenNoMrAndExitZeroWithNoCommits_UnchangedCarriesContainerOutput()
+    {
+        // Arrange
+        IPostExitProviderQueries queries = new ScriptedProviderQueries(
+            commitsResult: Result<bool>.Ok(false),
+            fallbackMrResult: Result<MergeRequestByBranch>.Ok(new MergeRequestByBranch(MergeRequestPresence.None, null)));
+        WorkerOutcomeResolver sut = BuildResolver(queries);
+
+        // Act
+        WorkerOutcome outcome = await sut.ResolveAsync(
+            CreateActiveRun(),
+            status: Exited(0),
+            containerOutput: "unchanged run output",
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        outcome.ShouldBeOfType<WorkerOutcome.Unchanged>().ContainerOutput.ShouldBe("unchanged run output");
     }
 
     // -------------------------------------------------------------------------

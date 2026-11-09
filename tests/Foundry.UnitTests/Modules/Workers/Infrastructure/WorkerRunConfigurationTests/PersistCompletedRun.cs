@@ -50,7 +50,8 @@ public sealed class PersistCompletedRun : IAsyncDisposable
         CompletedRun run = active.Complete(
             exitCode: 0,
             branchName: BranchName.From("feat/my-feature"),
-            pullRequestUrl: PullRequestUrl.From("https://github.com/owner/repo/pull/1"));
+            pullRequestUrl: PullRequestUrl.From("https://github.com/owner/repo/pull/1"),
+            containerOutput: "2026-11-09T10:00:00.000000000Z first\n2026-11-09T10:20:00.000000000Z last\n");
 
         _dbContext.Set<WorkerRun>().Add(run);
         await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
@@ -69,7 +70,8 @@ public sealed class PersistCompletedRun : IAsyncDisposable
             () => reloaded.ExitCode.ShouldBe(0),
             () => reloaded.CompletedAt.ShouldBe(run.CompletedAt),
             () => reloaded.BranchName.ShouldBe(BranchName.From("feat/my-feature")),
-            () => reloaded.PullRequestUrl.ShouldBe(PullRequestUrl.From("https://github.com/owner/repo/pull/1")));
+            () => reloaded.PullRequestUrl.ShouldBe(PullRequestUrl.From("https://github.com/owner/repo/pull/1")),
+            () => reloaded.ContainerOutput.ShouldBe("2026-11-09T10:00:00.000000000Z first\n2026-11-09T10:20:00.000000000Z last\n"));
     }
 
     [Fact]
@@ -94,6 +96,7 @@ public sealed class PersistCompletedRun : IAsyncDisposable
         CompletedRun reloaded = result.ShouldBeOfType<CompletedRun>();
         reloaded.ShouldSatisfyAllConditions(
             () => reloaded.BranchName.ShouldBeNull(),
-            () => reloaded.PullRequestUrl.ShouldBeNull());
+            () => reloaded.PullRequestUrl.ShouldBeNull(),
+            () => reloaded.ContainerOutput.ShouldBeNull());
     }
 }

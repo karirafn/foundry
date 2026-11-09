@@ -242,6 +242,12 @@ public sealed class CompletedRunConfiguration : IEntityTypeConfiguration<Complet
             .IsUnicode(false)
             .HasColumnName("pull_request_url");
 
+        builder.Property(r => r.ContainerOutput)
+            .HasMaxLength(int.MaxValue)
+            .IsUnicode(true)
+            .HasColumnType("TEXT")
+            .HasColumnName("container_output");
+
         builder.Property(r => r.CancelRequestedAt)
             .HasColumnName(WorkerRunValueConverters.CancelRequestedAtColumn);
 

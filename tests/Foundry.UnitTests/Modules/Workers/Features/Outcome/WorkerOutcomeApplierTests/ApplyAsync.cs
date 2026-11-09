@@ -123,6 +123,47 @@ public sealed class ApplyAsync : WorkerDispatchServiceTestBase
             () => run.Verdict.ShouldBeNull());
     }
 
+    public static TheoryData<string> CompletingOutcomes => ["Completed", "Review", "Unchanged"];
+
+    [Theory]
+    [MemberData(nameof(CompletingOutcomes))]
+    public async Task WhenOutcomeCompletesTheRun_PersistsTheContainerOutput(string outcomeName)
+    {
+        // Arrange
+        SeedActiveRun(ContainerId, Branch);
+        await using FoundryDbContext db = CreateDbContext();
+        ActiveRun activeRun = await db.Set<ActiveRun>().SingleAsync(TestContext.Current.CancellationToken);
+        WorkerOutcomeApplier sut = BuildApplier(db, new RecordingOrchestrator());
+        const string containerOutput = "2026-11-09T10:00:00.000000000Z line one\n2026-11-09T10:20:00.000000000Z line two\n";
+
+        // Act
+        await sut.ApplyAsync(BuildOutcome(outcomeName, containerOutput), activeRun, TestContext.Current.CancellationToken);
+
+        // Assert
+        await using FoundryDbContext assertDb = CreateDbContext();
+        WorkerRun run = await assertDb.Set<WorkerRun>().SingleAsync(TestContext.Current.CancellationToken);
+        run.ShouldBeOfType<CompletedRun>().ContainerOutput.ShouldBe(containerOutput);
+    }
+
+    [Theory]
+    [MemberData(nameof(CompletingOutcomes))]
+    public async Task WhenOutcomeCompletesTheRunWithoutOutput_CompletesWithNullContainerOutput(string outcomeName)
+    {
+        // Arrange
+        SeedActiveRun(ContainerId, Branch);
+        await using FoundryDbContext db = CreateDbContext();
+        ActiveRun activeRun = await db.Set<ActiveRun>().SingleAsync(TestContext.Current.CancellationToken);
+        WorkerOutcomeApplier sut = BuildApplier(db, new RecordingOrchestrator());
+
+        // Act
+        await sut.ApplyAsync(BuildOutcome(outcomeName), activeRun, TestContext.Current.CancellationToken);
+
+        // Assert
+        await using FoundryDbContext assertDb = CreateDbContext();
+        WorkerRun run = await assertDb.Set<WorkerRun>().SingleAsync(TestContext.Current.CancellationToken);
+        run.ShouldBeOfType<CompletedRun>().ContainerOutput.ShouldBeNull();
+    }
+
     [Fact]
     public async Task WhenOutcomeIsIndeterminate_ThrowsWithoutTouchingContainer()
     {
@@ -153,16 +194,16 @@ public sealed class ApplyAsync : WorkerDispatchServiceTestBase
             new NullDomainEventDispatcher(),
             NullLogger<WorkerOutcomeApplier>.Instance);
 
-    private static WorkerOutcome BuildOutcome(string name)
+    private static WorkerOutcome BuildOutcome(string name, string? containerOutput = null)
     {
         BranchName branch = BranchName.From(Branch);
         PullRequestUrl pullRequestUrl = PullRequestUrl.From("https://github.com/acme/repo/pull/1");
 
         return name switch
         {
-            "Completed" => new WorkerOutcome.Completed(branch, pullRequestUrl, null),
-            "Review" => new WorkerOutcome.Review(branch, pullRequestUrl, null),
-            "Unchanged" => new WorkerOutcome.Unchanged(branch, null),
+            "Completed" => new WorkerOutcome.Completed(branch, pullRequestUrl, containerOutput, null),
+            "Review" => new WorkerOutcome.Review(branch, pullRequestUrl, containerOutput, null),
+            "Unchanged" => new WorkerOutcome.Unchanged(branch, containerOutput, null),
             "ContinuableFailure" => new WorkerOutcome.ContinuableFailure(branch, new FailureReason.TimedOut(), null, null),
             "Failure" => new WorkerOutcome.Failure(new FailureReason.TimedOut(), null, null),
             _ => throw new ArgumentOutOfRangeException(nameof(name), name, null),

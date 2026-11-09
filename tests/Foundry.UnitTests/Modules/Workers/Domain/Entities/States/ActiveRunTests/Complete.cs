@@ -117,7 +117,21 @@ public sealed class Complete
         // Assert
         completed.ShouldSatisfyAllConditions(
             () => completed.BranchName.ShouldBeNull(),
-            () => completed.PullRequestUrl.ShouldBeNull());
+            () => completed.PullRequestUrl.ShouldBeNull(),
+            () => completed.ContainerOutput.ShouldBeNull());
+    }
+
+    [Fact]
+    public void WhenContainerOutputProvided_SetsContainerOutput()
+    {
+        // Arrange
+        ActiveRun active = CreateActiveRun();
+
+        // Act
+        CompletedRun completed = active.Complete(0, null, null, containerOutput: "2026-11-09T10:00:00Z done\n");
+
+        // Assert
+        completed.ContainerOutput.ShouldBe("2026-11-09T10:00:00Z done\n");
     }
 
     [Fact]
