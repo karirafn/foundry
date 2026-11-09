@@ -63,6 +63,8 @@ internal static class SystemPromptBuilder
         bool installsDocker,
         bool installsDotnet)
     {
+        ArgumentException.ThrowIfNullOrWhiteSpace(principles);
+
         string issueNumberStr = issueNumber.ToString(CultureInfo.InvariantCulture);
         string issueContent = BuildIssueContent(issueNumberStr, EncodeForXmlData(issueApiUrl));
 

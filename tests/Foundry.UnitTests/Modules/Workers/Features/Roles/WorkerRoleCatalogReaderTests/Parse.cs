@@ -19,6 +19,9 @@ public sealed class Parse
         ["shared/prompts/principles.md"] = "\uFEFFEngineering principles.\r\n\r\nDesign:\r\n- Safe defaults.\r\n",
     };
 
+    private static string FillToBytes(string unit, int bytes) =>
+        string.Concat(Enumerable.Repeat(unit, bytes / System.Text.Encoding.UTF8.GetByteCount(unit)));
+
     [Fact]
     public void WhenEveryRoleAndTheSharedPluginArePresent_ReadsPromptsAndPurpose()
     {
@@ -126,6 +129,42 @@ public sealed class Parse
         error.ShouldSatisfyAllConditions(
             () => error.Code.ShouldBe(WorkerRoleCatalogReader.InvalidCatalogCode),
             () => error.Message.ShouldContain("roles/shared/prompts/principles.md"));
+    }
+
+    [Theory]
+    [InlineData("a")]
+    [InlineData("\u00e9")]
+    public void WhenThePrinciplesAreExactlyAtTheByteCap_Passes(string unit)
+    {
+        // Arrange
+        Dictionary<string, string> files = ValidFiles();
+        files["shared/prompts/principles.md"] = FillToBytes(unit, WorkerRoleCatalogReader.MaxPrinciplesBytes);
+
+        // Act
+        Result<WorkerRoleCatalogContent> result = WorkerRoleCatalogReader.Parse(files);
+
+        // Assert
+        result.ShouldBeOfType<Result<WorkerRoleCatalogContent>.Success>();
+    }
+
+    [Theory]
+    [InlineData("a")]
+    [InlineData("\u00e9")]
+    public void WhenThePrinciplesExceedTheByteCapByOneByte_FailsNamingTheFileAndTheCap(string unit)
+    {
+        // Arrange
+        Dictionary<string, string> files = ValidFiles();
+        files["shared/prompts/principles.md"] = FillToBytes(unit, WorkerRoleCatalogReader.MaxPrinciplesBytes) + "a";
+
+        // Act
+        Result<WorkerRoleCatalogContent> result = WorkerRoleCatalogReader.Parse(files);
+
+        // Assert
+        Error error = result.ShouldBeOfType<Result<WorkerRoleCatalogContent>.Failure>().Error;
+        error.ShouldSatisfyAllConditions(
+            () => error.Code.ShouldBe(WorkerRoleCatalogReader.InvalidCatalogCode),
+            () => error.Message.ShouldContain("roles/shared/prompts/principles.md"),
+            () => error.Message.ShouldContain(WorkerRoleCatalogReader.MaxPrinciplesBytes.ToString(System.Globalization.CultureInfo.InvariantCulture)));
     }
 
     [Theory]

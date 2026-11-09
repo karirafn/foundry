@@ -1317,6 +1317,43 @@ public sealed class Build
     }
 
     [Fact]
+    public void WhenPrinciplesAloneExceedBudget_BuildReturnsFailureWithSystemPromptTooLargeCode()
+    {
+        // Arrange
+        string oversizedPrinciples = new string('P', 200_000);
+
+        // Act
+        Result<string> buildResult = SystemPromptBuilder.Build(
+            oversizedPrinciples,
+            1, DefaultSystemPromptTemplate,
+            new DispatchContext.Fresh("feat/1-title"),
+            "https://api.github.com/repos/owner/repo/issues/1",
+            timeoutMinutes: 120, installsDocker: false, installsDotnet: false);
+
+        // Assert
+        Result<string>.Failure failure = buildResult.ShouldBeOfType<Result<string>.Failure>();
+        failure.Error.Code.ShouldBe("Worker.SystemPromptTooLarge");
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    [InlineData(" \n\t ")]
+    public void WhenPrinciplesAreBlank_ThrowsArgumentException(string principles)
+    {
+        // Act
+        Action act = () => SystemPromptBuilder.Build(
+            principles,
+            1, DefaultSystemPromptTemplate,
+            new DispatchContext.Fresh("feat/1-title"),
+            "https://api.github.com/repos/owner/repo/issues/1",
+            timeoutMinutes: 120, installsDocker: false, installsDotnet: false);
+
+        // Assert
+        Should.Throw<ArgumentException>(act);
+    }
+
+    [Fact]
     public void WhenBothUpstreamAndSizeOmissions_BothSentencesRenderDistinctly()
     {
         // Arrange — upstream OmittedCommentCount > 0 AND a size-driven drop.

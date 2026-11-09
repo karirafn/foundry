@@ -30,6 +30,10 @@ internal static class WorkerRoleCatalogReader
     // Role files are small text; the cap keeps a stray large file from being held in memory for the API.
     internal const int MaxFileBytes = 256 * 1024;
 
+    // The principles ride in every run's system prompt, so a cap far below SystemPromptBuilder.MaxSystemPromptBytes
+    // fails an oversized file at parse time instead of failing every dispatch.
+    internal const int MaxPrinciplesBytes = 8 * 1024;
+
     internal const string InvalidCatalogCode = "Worker.RoleCatalogInvalid";
 
     private const string SkillsFolder = "skills/";
@@ -138,6 +142,14 @@ internal static class WorkerRoleCatalogReader
         if (principles is null)
         {
             return Fail($"'{RolesFolder}/{WorkerRole.SharedFolder}/{PrinciplesPath}' is missing or blank.");
+        }
+
+        int principlesBytes = Encoding.UTF8.GetByteCount(principles);
+
+        if (principlesBytes > MaxPrinciplesBytes)
+        {
+            return Fail(
+                $"'{RolesFolder}/{WorkerRole.SharedFolder}/{PrinciplesPath}' is {principlesBytes} bytes, over the {MaxPrinciplesBytes}-byte cap.");
         }
 
         if (CheckPlaceholders($"'{RolesFolder}/{WorkerRole.SharedFolder}/{PrinciplesPath}'", principles, NoPlaceholders)
