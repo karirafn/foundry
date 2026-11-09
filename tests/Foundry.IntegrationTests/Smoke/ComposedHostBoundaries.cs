@@ -2,6 +2,7 @@ using Docker.DotNet;
 
 using Foundry.Modules.Credentials.Infrastructure.Orchestration;
 using Foundry.Modules.Monitoring.Features.Providers;
+using Foundry.Modules.Workers.Features.Dispatch;
 using Foundry.Modules.Workers.Features.Orchestration;
 
 using Microsoft.Extensions.DependencyInjection;
@@ -29,6 +30,8 @@ internal sealed class ComposedHostBoundaries : IDisposable
         FoundryWebAppFactory.WithHostedServices(services =>
         {
             services.AddSingleton<ILoggerProvider>(Logs);
+            // Dispatch reports the gate that held a tick only at Debug; the test waits on that signal.
+            services.AddLogging(logging => logging.AddFilter<CapturedLogs>(typeof(WorkerDispatchService).FullName, LogLevel.Debug));
 
             services.RemoveAll<IImageOperations>();
             services.AddSingleton<IImageOperations>(ImageBuild);

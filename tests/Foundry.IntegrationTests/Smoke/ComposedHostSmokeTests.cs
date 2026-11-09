@@ -37,7 +37,7 @@ public sealed class ComposedHostSmokeTests : IAsyncDisposable
     private static readonly TimeSpan PhaseTimeout = TimeSpan.FromMinutes(3);
 
     private static readonly string DispatchCategory = typeof(WorkerDispatchService).FullName!;
-    private const string RoleCatalogNotLoadedLog = "Dispatch skipped: worker role catalog is not loaded.";
+    private const string ImageBuildNotReadyLog = "Dispatch skipped: worker image build is not ready (ImageBuildStatus=Building).";
 
     private readonly ComposedHostBoundaries _boundaries = new();
     private readonly FoundryWebAppFactory _factory;
@@ -74,18 +74,18 @@ public sealed class ComposedHostSmokeTests : IAsyncDisposable
             DescribeStateAsync,
             ct);
 
-        // Opening the credential gate lets the next dispatch tick reach the role catalog gate.
+        // Opening the credential gate lets the next dispatch tick reach the image build gate.
         await SeedClaudeApiKeyAsync(ct);
 
         await Eventually.WaitUntilAsync(
-            async () => _boundaries.Logs.Contains(DispatchCategory, RoleCatalogNotLoadedLog) || await GetIssueAsync(ct) is FailedIssue,
+            async () => _boundaries.Logs.Contains(DispatchCategory, ImageBuildNotReadyLog) || await GetIssueAsync(ct) is FailedIssue,
             PhaseTimeout,
-            "dispatch skips the queued issue because the worker role catalog is not loaded",
+            "dispatch skips the queued issue because the startup worker image build is still running",
             DescribeStateAsync,
             ct);
 
         (await GetIssueAsync(ct)).ShouldBeOfType<FreshQueuedIssue>(
-            "dispatch must hold a queued issue until the worker role catalog is loaded, not fail it");
+            "dispatch must hold a queued issue until the worker image is built, not fail it");
 
         // The startup build completes and publishes the role catalog from the real workers/ build context.
         _boundaries.ImageBuild.Release();
