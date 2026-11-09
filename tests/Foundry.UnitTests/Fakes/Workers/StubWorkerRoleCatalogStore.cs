@@ -11,6 +11,7 @@ internal sealed class StubWorkerRoleCatalogStore(WorkerRoleCatalog? current) : I
 {
     internal const string DefaultSystemPrompt = "You are implementing issue #{issueNumber}.\n\n{issueContent}";
     internal const string DefaultTaskPrompt = "Implement issue #{issueNumber}.";
+    internal const string DefaultPrinciples = "Engineering principles.";
     internal const string DefaultImageTag = "stub-image:v1";
 
     public WorkerRoleCatalog? Current { get; private set; } = current;
@@ -20,8 +21,9 @@ internal sealed class StubWorkerRoleCatalogStore(WorkerRoleCatalog? current) : I
         string systemPrompt = DefaultSystemPrompt,
         string taskPrompt = DefaultTaskPrompt,
         string imageTag = DefaultImageTag,
-        string? imageId = null) =>
-        new(Catalog(systemPrompt, taskPrompt, imageTag, imageId));
+        string? imageId = null,
+        string principles = DefaultPrinciples) =>
+        new(Catalog(systemPrompt, taskPrompt, imageTag, imageId, principles));
 
     /// <summary>A store whose catalog has not been loaded, as before the first image build.</summary>
     public static StubWorkerRoleCatalogStore Empty() => new(null);
@@ -30,14 +32,16 @@ internal sealed class StubWorkerRoleCatalogStore(WorkerRoleCatalog? current) : I
         string systemPrompt = DefaultSystemPrompt,
         string taskPrompt = DefaultTaskPrompt,
         string imageTag = DefaultImageTag,
-        string? imageId = null)
+        string? imageId = null,
+        string principles = DefaultPrinciples)
     {
         RolePlugin implementPlugin = new(WorkerRole.Implement.Name, "Implements an issue.", [], []);
         RolePlugin sharedPlugin = new(WorkerRole.SharedFolder, "Shared.", [], []);
 
         WorkerRoleCatalogContent content = new(
             [new WorkerRoleDefinition(WorkerRole.Implement, implementPlugin, systemPrompt, taskPrompt, VerdictSchema: null)],
-            sharedPlugin);
+            sharedPlugin,
+            principles);
 
         return new WorkerRoleCatalog(
             content,

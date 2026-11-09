@@ -16,6 +16,7 @@ public sealed class Parse
         ["implement/prompts/system.md"] = "You are implementing issue #{issueNumber}.\r\n\r\n{issueContent}\r\n",
         ["implement/prompts/task.md"] = "Implement issue #{issueNumber}.\n",
         ["shared/.claude-plugin/plugin.json"] = """{"name":"shared","description":"Loaded for every role."}""",
+        ["shared/prompts/principles.md"] = "\uFEFFEngineering principles.\r\n\r\nDesign:\r\n- Safe defaults.\r\n",
     };
 
     [Fact]
@@ -32,7 +33,8 @@ public sealed class Parse
             () => implement.SystemPromptTemplate.ShouldBe("You are implementing issue #{issueNumber}.\n\n{issueContent}"),
             () => implement.TaskPromptTemplate.ShouldBe("Implement issue #{issueNumber}."),
             () => implement.VerdictSchema.ShouldBeNull(),
-            () => catalog.Shared.Description.ShouldBe("Loaded for every role."));
+            () => catalog.Shared.Description.ShouldBe("Loaded for every role."),
+            () => catalog.Principles.ShouldBe("Engineering principles.\n\nDesign:\n- Safe defaults."));
     }
 
     [Fact]
@@ -99,6 +101,50 @@ public sealed class Parse
         // Assert
         Error error = result.ShouldBeOfType<Result<WorkerRoleCatalogContent>.Failure>().Error;
         error.Message.ShouldContain("placeholders Foundry does not fill");
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData(" \r\n ")]
+    public void WhenThePrinciplesAreMissingOrBlank_FailsNamingTheFile(string? principles)
+    {
+        // Arrange
+        Dictionary<string, string> files = ValidFiles();
+        files.Remove("shared/prompts/principles.md");
+
+        if (principles is not null)
+        {
+            files["shared/prompts/principles.md"] = principles;
+        }
+
+        // Act
+        Result<WorkerRoleCatalogContent> result = WorkerRoleCatalogReader.Parse(files);
+
+        // Assert
+        Error error = result.ShouldBeOfType<Result<WorkerRoleCatalogContent>.Failure>().Error;
+        error.ShouldSatisfyAllConditions(
+            () => error.Code.ShouldBe(WorkerRoleCatalogReader.InvalidCatalogCode),
+            () => error.Message.ShouldContain("roles/shared/prompts/principles.md"));
+    }
+
+    [Theory]
+    [InlineData("Apply {branchNamingInstruction}.")]
+    [InlineData("Issue #{issueNumber}.")]
+    public void WhenThePrinciplesContainAPlaceholder_FailsNamingTheFile(string principles)
+    {
+        // Arrange
+        Dictionary<string, string> files = ValidFiles();
+        files["shared/prompts/principles.md"] = principles;
+
+        // Act
+        Result<WorkerRoleCatalogContent> result = WorkerRoleCatalogReader.Parse(files);
+
+        // Assert
+        Error error = result.ShouldBeOfType<Result<WorkerRoleCatalogContent>.Failure>().Error;
+        error.ShouldSatisfyAllConditions(
+            () => error.Message.ShouldContain("placeholders Foundry does not fill"),
+            () => error.Message.ShouldContain("roles/shared/prompts/principles.md"));
     }
 
     [Fact]

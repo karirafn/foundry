@@ -54,6 +54,7 @@ public sealed class WhenRequested : IAsyncDisposable
             ["implement/prompts/task.md"] = "Implement issue #{issueNumber}.",
             ["implement/skills/tdd/SKILL.md"] = "---\nname: tdd\ndescription: Test first.\n---\nBody.",
             ["shared/.claude-plugin/plugin.json"] = """{"name":"shared"}""",
+            ["shared/prompts/principles.md"] = "Engineering principles.",
         }).ShouldBeOfType<Result<WorkerRoleCatalogContent>.Success>().Value;
 
         _factory.Services.GetRequiredService<IWorkerRoleCatalogStore>().Publish(new WorkerRoleCatalog(
