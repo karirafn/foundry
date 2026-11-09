@@ -1,4 +1,5 @@
 using Foundry.Modules.Monitoring.Contracts;
+using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Modules.Monitoring.Features.Webhooks;
 
 using Shouldly;
@@ -158,5 +159,83 @@ public sealed class TakeDue
         early.ShouldBeEmpty();
         wake.ShouldBe(T0.AddMinutes(2));
         due.ShouldBe([reviewKey]);
+    }
+
+    [Fact]
+    public void WhenDeadlineArrivesLessThanOneIntervalAfterPreviousRun_RunsAtTheDeadline()
+    {
+        // Arrange — the key ran at T0; a deadline nudge for T0 + 10 s is scheduled right after
+        NudgeScheduler scheduler = new();
+        scheduler.Add(new Nudge(Key), T0);
+        scheduler.TakeDue(T0, IntervalFor);
+        DateTimeOffset deadline = T0.AddSeconds(10);
+        scheduler.Add(new Nudge(Key, deadline), T0.AddSeconds(1));
+
+        // Act
+        IReadOnlyList<NudgeKey> due = scheduler.TakeDue(deadline, IntervalFor);
+
+        // Assert
+        due.ShouldBe([Key]);
+    }
+
+    [Fact]
+    public void WhenDeadlineNudgeRuns_DoesNotStampTheRateCapWindow()
+    {
+        // Arrange — a deadline run at T0 + 10 s, then a webhook nudge one second later
+        NudgeScheduler scheduler = new();
+        DateTimeOffset deadline = T0.AddSeconds(10);
+        scheduler.Add(new Nudge(Key, deadline), T0);
+        scheduler.TakeDue(deadline, IntervalFor);
+        scheduler.Add(new Nudge(Key), deadline.AddSeconds(1));
+
+        // Act
+        IReadOnlyList<NudgeKey> due = scheduler.TakeDue(deadline.AddSeconds(1), IntervalFor);
+
+        // Assert — no webhook-originated run preceded it, so nothing caps it
+        due.ShouldBe([Key]);
+    }
+
+    [Fact]
+    public void WhenDeadlineMergesWithCappedWebhookNudge_RunsOnceImmediatelyAndConsumesIt()
+    {
+        // Arrange — a webhook run at T0, a capped webhook nudge waiting for T0 + 30 s, a deadline at T0 + 10 s
+        NudgeScheduler scheduler = new();
+        scheduler.Add(new Nudge(Key), T0);
+        scheduler.TakeDue(T0, IntervalFor);
+        scheduler.Add(new Nudge(Key), T0.AddSeconds(5));
+        DateTimeOffset deadline = T0.AddSeconds(10);
+        scheduler.Add(new Nudge(Key, deadline), T0.AddSeconds(6));
+
+        // Act
+        IReadOnlyList<NudgeKey> atDeadline = scheduler.TakeDue(deadline, IntervalFor);
+        IReadOnlyList<NudgeKey> atIntervalEnd = scheduler.TakeDue(T0 + Interval, IntervalFor);
+        scheduler.Add(new Nudge(Key), T0 + Interval);
+        IReadOnlyList<NudgeKey> nextWebhook = scheduler.TakeDue(T0 + Interval, IntervalFor);
+
+        // Assert — the deadline run consumed the capped nudge and left the cap window at T0
+        atDeadline.ShouldBe([Key]);
+        atIntervalEnd.ShouldBeEmpty();
+        nextWebhook.ShouldBe([Key]);
+    }
+
+    [Fact]
+    public void WhenRebaseStepSchedulesLandingRecheck_RunsAfterLandingPollDelayNotOnePollIntervalLater()
+    {
+        // Arrange — a 5-minute poll interval; the rebase pass ran at T0 and requested the rebase
+        TimeSpan pollInterval = TimeSpan.FromMinutes(5);
+        NudgeKey rebaseKey = new(RepoId, NudgePass.Rebase, 7);
+        NudgeScheduler scheduler = new();
+        scheduler.Add(new Nudge(rebaseKey), T0);
+        scheduler.TakeDue(T0, _ => pollInterval);
+        DateTimeOffset recheckAt = T0 + PendingRebase.LandingPollDelay;
+        scheduler.Add(new Nudge(rebaseKey, recheckAt), T0);
+
+        // Act
+        DateTimeOffset? wake = scheduler.NextWakeAt;
+        IReadOnlyList<NudgeKey> due = scheduler.TakeDue(recheckAt + NudgeScheduler.CoalescingWindow, _ => pollInterval);
+
+        // Assert
+        wake.ShouldBe(recheckAt);
+        due.ShouldBe([rebaseKey]);
     }
 }

@@ -7,10 +7,13 @@ namespace Foundry.Modules.Monitoring.Features.Webhooks;
 /// owned and driven only by <see cref="Polling.MonitoringService"/>.
 /// <list type="bullet">
 /// <item>Nudges for the same <see cref="NudgeKey"/> that are pending together run once.</item>
-/// <item>A key runs at most once per rate interval (the repository's normal effective poll interval):
-/// a nudge less than one interval after the key's previous run coalesces into a single trailing run at
-/// the end of that interval; a nudge exactly one interval later runs immediately.</item>
-/// <item>A not-before (deadline) nudge waits until its deadline, then behaves like a fresh nudge.</item>
+/// <item>An event-triggered nudge runs a key at most once per rate interval (the repository's normal
+/// effective poll interval): a nudge less than one interval after the key's previous event-triggered run
+/// coalesces into a single trailing run at the end of that interval; a nudge exactly one interval later
+/// runs immediately.</item>
+/// <item>A not-before (deadline) nudge runs at its deadline, outside the rate cap, and does not stamp the
+/// cap window; a capped event-triggered nudge pending for the same key runs with it. Each deadline producer
+/// bounds its own re-arming.</item>
 /// </list>
 /// </summary>
 internal sealed class NudgeScheduler
@@ -24,7 +27,7 @@ internal sealed class NudgeScheduler
     /// <summary>Last-run records older than this are forgotten; any rate interval is far shorter.</summary>
     private static readonly TimeSpan LastRunRetention = TimeSpan.FromDays(1);
 
-    private readonly Dictionary<NudgeKey, DateTimeOffset> _pending = [];
+    private readonly Dictionary<NudgeKey, PendingNudge> _pending = [];
     private readonly Dictionary<NudgeKey, DateTimeOffset> _lastRun = [];
     private readonly List<Nudge> _deferred = [];
 
@@ -38,27 +41,30 @@ internal sealed class NudgeScheduler
 
     public void Add(Nudge nudge, DateTimeOffset receivedAt)
     {
-        if (nudge.NotBefore is { } notBefore && notBefore > receivedAt)
+        if (nudge.NotBefore is { } notBefore)
         {
-            // Identical deferred nudges (e.g. repeated review passes over the same held comment) run once anyway.
-            if (_deferred.Contains(nudge))
+            if (notBefore > receivedAt)
             {
+                // Identical deferred nudges (e.g. repeated review passes over the same held comment) run once anyway.
+                if (_deferred.Contains(nudge))
+                {
+                    return;
+                }
+
+                _deferred.Add(nudge);
+                NextWakeAt = Earliest(NextWakeAt, notBefore);
                 return;
             }
 
-            _deferred.Add(nudge);
-            NextWakeAt = Earliest(NextWakeAt, notBefore);
+            AddPending(nudge.Key, notBefore, deadlineReached: true);
             return;
         }
 
-        if (_pending.TryAdd(nudge.Key, receivedAt))
-        {
-            NextWakeAt = Earliest(NextWakeAt, receivedAt);
-        }
+        AddPending(nudge.Key, receivedAt, deadlineReached: false);
     }
 
     /// <summary>
-    /// Removes and returns every key due at <paramref name="now"/>, recording each as run.
+    /// Removes and returns every key due at <paramref name="now"/>, recording each event-triggered run.
     /// <paramref name="rateIntervalFor"/> yields the repository's rate interval, or <see langword="null"/>
     /// when the repository is no longer monitored (its nudges are dropped).
     /// </summary>
@@ -72,14 +78,14 @@ internal sealed class NudgeScheduler
             if (deferred.NotBefore is { } notBefore && notBefore <= now)
             {
                 _deferred.RemoveAt(i);
-                _pending.TryAdd(deferred.Key, notBefore);
+                AddPending(deferred.Key, notBefore, deadlineReached: true);
             }
         }
 
         List<NudgeKey> due = [];
         DateTimeOffset? nextWake = null;
 
-        foreach ((NudgeKey key, DateTimeOffset receivedAt) in _pending.ToList())
+        foreach ((NudgeKey key, PendingNudge pending) in _pending.ToList())
         {
             if (rateIntervalFor(key.RepositoryId) is not { } interval)
             {
@@ -87,7 +93,15 @@ internal sealed class NudgeScheduler
                 continue;
             }
 
-            DateTimeOffset dueAt = DueAt(key, receivedAt, interval);
+            if (pending.DeadlineReached)
+            {
+                // A deadline run leaves the cap window alone, so an event arriving just after it is not deferred.
+                _pending.Remove(key);
+                due.Add(key);
+                continue;
+            }
+
+            DateTimeOffset dueAt = DueAt(key, pending.ReceivedAt, interval);
             if (dueAt <= now)
             {
                 _pending.Remove(key);
@@ -114,6 +128,23 @@ internal sealed class NudgeScheduler
         return due;
     }
 
+    private void AddPending(NudgeKey key, DateTimeOffset receivedAt, bool deadlineReached)
+    {
+        if (_pending.TryGetValue(key, out PendingNudge existing))
+        {
+            if (deadlineReached && !existing.DeadlineReached)
+            {
+                _pending[key] = existing with { DeadlineReached = true };
+                NextWakeAt = Earliest(NextWakeAt, receivedAt);
+            }
+
+            return;
+        }
+
+        _pending[key] = new PendingNudge(receivedAt, deadlineReached);
+        NextWakeAt = Earliest(NextWakeAt, receivedAt);
+    }
+
     private DateTimeOffset DueAt(NudgeKey key, DateTimeOffset receivedAt, TimeSpan interval)
     {
         if (_lastRun.TryGetValue(key, out DateTimeOffset lastRun) && lastRun + interval > receivedAt)
@@ -126,4 +157,7 @@ internal sealed class NudgeScheduler
 
     private static DateTimeOffset Earliest(DateTimeOffset? current, DateTimeOffset candidate)
         => current is { } value && value <= candidate ? value : candidate;
+
+    /// <param name="DeadlineReached">A not-before nudge whose deadline passed contributed to this entry.</param>
+    private readonly record struct PendingNudge(DateTimeOffset ReceivedAt, bool DeadlineReached);
 }
