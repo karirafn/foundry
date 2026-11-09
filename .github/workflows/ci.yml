@@ -27,6 +27,7 @@ jobs:
               - 'src/**/*.csproj'
               - 'src/Foundry.WebApi/openapi/**'
               - 'tests/**'
+              - 'workers/**'  # the composed-host smoke test builds the role catalog from workers/
               - 'Directory.Build.props'
               - 'Directory.Packages.props'
               - '*.sln'

@@ -74,11 +74,13 @@ if (!isDocGeneration)
     builder.Services.AddHostedService<OutboxRelayService>();
 }
 
+// Settings first: hosted lifecycle services start in registration order, and the startup image rebuild
+// (Workers) needs the GlobalSettings row SettingsSeeder creates on a fresh database.
+builder.Services.AddSettingsModule();
 builder.Services.AddCredentialsModule();
 builder.Services.AddIssuesModule();
 builder.Services.AddMonitoringModule();
 builder.Services.AddWorkersModule();
-builder.Services.AddSettingsModule();
 builder.Services.AddOpenApi(options =>
 {
     // Qualifies nested schema types by their outermost declaring type (e.g. "OuterSimpleName").

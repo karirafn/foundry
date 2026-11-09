@@ -24,4 +24,8 @@
     <ProjectReference Include="..\Foundry.Testing\Foundry.Testing.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <None Include="Smoke/Fixtures/*.jsonl" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
 </Project>
