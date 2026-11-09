@@ -5,7 +5,7 @@ here is one role, baked into the worker image at `/opt/foundry/roles/<role>/`:
 
 - `.claude-plugin/plugin.json`: the role's Claude Code plugin manifest. Its `description` is the role's
   purpose on the dashboard's role card.
-- `prompts/system.md`: the role's system prompt template, appended after Foundry's safety preamble.
+- `prompts/system.md`: the role's system prompt template, appended after Foundry's safety preamble and the Worker Principles.
   Placeholders: `{issueNumber}`, `{issueContent}`.
 - `prompts/task.md`: the role's task prompt template. It must contain `{issueNumber}`.
 - `skills/<skill>/SKILL.md`, `agents/<agent>.md` (optional): the plugin's skills and agents.
@@ -14,6 +14,12 @@ here is one role, baked into the worker image at `/opt/foundry/roles/<role>/`:
 `shared/` is a plugin loaded for every role. The entrypoint loads the run's role and `shared` with
 `--plugin-dir`. Role names come from Foundry's code (`WorkerRole`); a role without a folder fails the
 unit tests and the startup image build. A change here takes effect at the next Foundry restart.
+
+`shared/prompts/principles.md` holds the engineering standards (the Worker Principles) that Foundry places
+in every role's system prompt, after the safety preamble and before the role prompt. They yield to the
+target repository's own conventions. The file is required and takes no placeholders: a missing, blank or
+placeholder-bearing file fails the unit tests and the startup image build. A role's own prompt says how
+it uses them (implement: "Apply the engineering principles above to every change.").
 
 ## Verdicts
 
