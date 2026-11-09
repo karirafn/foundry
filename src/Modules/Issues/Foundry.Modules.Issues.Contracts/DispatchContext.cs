@@ -12,12 +12,24 @@ public abstract record DispatchContext
     {
     }
 
-    public sealed record Fresh(string BranchName) : DispatchContext;
+    /// <summary>The worker role the run is dispatched under; derived from the queued state's context variant.</summary>
+    public abstract DispatchRole Role { get; }
+
+    public sealed record Fresh(string BranchName) : DispatchContext
+    {
+        public override DispatchRole Role => DispatchRole.Implement;
+    }
 
     public sealed record Revision(
         string BranchName,
         string PullRequestUrl,
-        RevisionTrigger Trigger) : DispatchContext;
+        RevisionTrigger Trigger) : DispatchContext
+    {
+        public override DispatchRole Role => DispatchRole.Implement;
+    }
 
-    public sealed record Continuation(string BranchName, string? FailureReason = null) : DispatchContext;
+    public sealed record Continuation(string BranchName, string? FailureReason = null) : DispatchContext
+    {
+        public override DispatchRole Role => DispatchRole.Implement;
+    }
 }

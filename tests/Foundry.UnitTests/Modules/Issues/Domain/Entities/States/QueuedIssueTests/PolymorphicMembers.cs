@@ -206,6 +206,47 @@ public sealed class PolymorphicMembers
             () => continuation.FailureReason.ShouldBe(continuationQueued.FailureReason));
     }
 
+    // Role
+
+    [Fact]
+    public void WhenFreshQueuedIssue_ContextRoleIsImplement()
+    {
+        // Arrange
+        FreshQueuedIssue queued = new IssueBuilder().FreshQueued();
+
+        // Act
+        DispatchRole role = queued.Context.Role;
+
+        // Assert
+        role.ShouldBe(DispatchRole.Implement);
+    }
+
+    [Fact]
+    public void WhenRevisionQueuedIssue_ContextRoleIsImplement()
+    {
+        // Arrange
+        RevisionQueuedIssue revisionQueued = new IssueBuilder().RevisionQueued();
+
+        // Act
+        DispatchRole role = revisionQueued.Context.Role;
+
+        // Assert
+        role.ShouldBe(DispatchRole.Implement);
+    }
+
+    [Fact]
+    public void WhenContinuationQueuedIssue_ContextRoleIsImplement()
+    {
+        // Arrange
+        ContinuationQueuedIssue continuationQueued = new IssueBuilder().ContinuableFailed().Retry();
+
+        // Act
+        DispatchRole role = continuationQueued.Context.Role;
+
+        // Assert
+        role.ShouldBe(DispatchRole.Implement);
+    }
+
     // Claim — typed return and domain event
 
     [Fact]
