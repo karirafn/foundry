@@ -1,4 +1,4 @@
-Engineering principles. Follow the repository's own conventions where they differ.
+Engineering principles. The repository's own style, testing and design conventions win where they differ; the safety rules above always apply.
 
 Testing (where a test runner exists):
 - Each behaviour change is driven by a test written first and seen failing for the expected reason.

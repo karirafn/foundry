@@ -56,7 +56,7 @@ internal sealed record SharedRolePlugin(
 /// <param name="Image">The image the catalog belongs to.</param>
 /// <param name="Roles">One card per role.</param>
 /// <param name="Shared">The plugin loaded for every role.</param>
-/// <param name="PromptSections">the system-prompt sections Foundry adds, in assembly order.</param>
+/// <param name="PromptSections">The system-prompt sections Foundry adds, in assembly order.</param>
 /// <param name="RolePromptSlot">The marker standing for the role's system prompt in <paramref name="PromptSections"/>.</param>
 internal sealed record WorkerRoleCatalogResponse(
     WorkerRoleImage Image,

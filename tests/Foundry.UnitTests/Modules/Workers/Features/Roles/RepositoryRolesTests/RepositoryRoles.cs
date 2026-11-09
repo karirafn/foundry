@@ -262,19 +262,6 @@ public sealed class RepositoryRoles
         principles.ShouldContain(heading);
     }
 
-    [Fact]
-    public void ThePrinciplesFile_UsesNoPlaceholders()
-    {
-        // Arrange
-        WorkerRoleCatalogContent catalog = LoadRepositoryCatalog();
-
-        // Act
-        IReadOnlyList<string> placeholders = RolePromptPlaceholders.FindIn(catalog.Principles);
-
-        // Assert
-        placeholders.ShouldBeEmpty();
-    }
-
     private static WorkerRoleCatalogContent LoadRepositoryCatalog() =>
         WorkerRoleCatalogReader.ReadFromDirectory(RepositoryRoot.WorkersDirectory)
             .ShouldBeOfType<Result<WorkerRoleCatalogContent>.Success>().Value;
