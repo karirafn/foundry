@@ -30,6 +30,7 @@ internal sealed class IssueClaimedHandler(
     IGlobalSettingsQueries settingsQueries,
     ICredentialQueries credentialQueries,
     IPostExitProviderQueries postExitProviderQueries,
+    IFailingJobLogQueries failingJobLogQueries,
     IWorkerRoleCatalogStore roleCatalog,
     ILogger<IssueClaimedHandler> logger) : IIntegrationEventHandler<IssueClaimed>
 {
@@ -149,6 +150,55 @@ internal sealed class IssueClaimedHandler(
         return settings?.Model ?? string.Empty;
     }
 
+    // Logs are read at dispatch rather than stored with the trigger, so log text never reaches the database. A log
+    // that cannot be read leaves its check listed without one: a missing log never blocks a revision.
+    private async Task<IReadOnlyList<FailingJobLog>> ReadFailingJobLogsAsync(
+        ClaimedIssueDispatch claimed,
+        CancellationToken cancellationToken)
+    {
+        if (claimed.Context is not DispatchContext.Revision { Trigger: RevisionTrigger.FailedChecks failedChecks })
+        {
+            return [];
+        }
+
+        List<FailingJobLog> logs = [];
+        foreach (FailingCheck check in failedChecks.FailingChecks)
+        {
+            Result<CiJobLog> result;
+            try
+            {
+                result = await failingJobLogQueries.GetFailingJobLogAsync(
+                    claimed.MonitoredRepositoryId,
+                    check,
+                    cancellationToken);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
+            {
+                logger.LogWarning(
+                    ex,
+                    "Reading the log of failing check {CheckName} for issue #{IssueNumber} threw; listing it without a log.",
+                    check.Name,
+                    claimed.IssueNumber);
+                continue;
+            }
+
+            if (result is Result<CiJobLog>.Success { Value: CiJobLog.Available available })
+            {
+                logs.Add(new FailingJobLog(check.Name, available.Text));
+            }
+            else if (result is Result<CiJobLog>.Failure failure)
+            {
+                logger.LogWarning(
+                    "Could not read the log of failing check {CheckName} for issue #{IssueNumber}; listing it without a log: {Error}",
+                    check.Name,
+                    claimed.IssueNumber,
+                    failure.Error.Message);
+            }
+        }
+
+        return logs;
+    }
+
     private async Task<Result<WorkerContainerSpec>> BuildSpecAsync(
         StartingRun startingRun,
         ClaimedIssueDispatch claimed,
@@ -184,6 +234,7 @@ internal sealed class IssueClaimedHandler(
         ClaudeCodeSettingsSnapshot claudeCode = await settingsQueries.GetClaudeCodeSettingsAsync(cancellationToken);
         string model = await GetRoleModelAsync(role.Role, cancellationToken);
         WorkerResourceLimitsSnapshot limits = await settingsQueries.GetWorkerResourceLimitsAsync(cancellationToken);
+        IReadOnlyList<FailingJobLog> failingJobLogs = await ReadFailingJobLogsAsync(claimed, cancellationToken);
 
         Result<string> systemPromptResult = SystemPromptBuilder.Build(
             principles: content.Principles,
@@ -193,7 +244,8 @@ internal sealed class IssueClaimedHandler(
             claimed.IssueApiUrl,
             timeoutMinutes,
             installsDocker,
-            installsDotnet);
+            installsDotnet,
+            failingJobLogs);
 
         if (systemPromptResult is not Result<string>.Success systemPromptSuccess)
         {

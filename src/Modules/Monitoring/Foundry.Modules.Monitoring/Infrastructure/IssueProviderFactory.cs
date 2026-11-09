@@ -8,6 +8,7 @@ namespace Foundry.Modules.Monitoring.Infrastructure;
 
 internal sealed class IssueProviderFactory(
     GitHubHttpClient gitHubHttpClient,
+    GitHubJobLogClient gitHubJobLogClient,
     GitLabHttpClient gitLabHttpClient,
     ActionableFeedbackPolicy feedbackPolicy) : IIssueProviderFactory
 {
@@ -16,7 +17,7 @@ internal sealed class IssueProviderFactory(
         return credential switch
         {
             GitHubCredential gitHub => new GitHubIssueProvider(
-                gitHubHttpClient, feedbackPolicy, token, gitHub.ApiBaseUrl),
+                gitHubHttpClient, gitHubJobLogClient, feedbackPolicy, token, gitHub.ApiBaseUrl),
             GitLabCredential gitLab => new GitLabIssueProvider(
                 gitLabHttpClient, feedbackPolicy, token, gitLab.ApiBaseUrl),
             _ => throw new NotSupportedException(

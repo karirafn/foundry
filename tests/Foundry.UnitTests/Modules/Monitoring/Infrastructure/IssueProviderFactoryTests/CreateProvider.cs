@@ -31,7 +31,7 @@ public sealed class CreateProvider
         GitHubHttpClient gitHubHttpClient = new(httpClient, NullLogger<GitHubHttpClient>.Instance, cache, new InMemoryProviderRateBudget(), TimeProvider.System);
         GitLabHttpClient gitLabHttpClient = new(httpClient, NullLogger<GitLabHttpClient>.Instance, cache, new InMemoryProviderRateBudget(), TimeProvider.System);
         return new IssueProviderFactory(
-            gitHubHttpClient, gitLabHttpClient, new ActionableFeedbackPolicy(TimeProvider.System));
+            gitHubHttpClient, new GitHubJobLogClient(httpClient), gitLabHttpClient, new ActionableFeedbackPolicy(TimeProvider.System));
     }
 
     [Fact]

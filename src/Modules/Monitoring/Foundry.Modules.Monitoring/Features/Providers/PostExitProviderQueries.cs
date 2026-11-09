@@ -1,9 +1,12 @@
+using System.Diagnostics;
+
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Contracts.Commands;
 using Foundry.Modules.Monitoring.Contracts.Queries;
 using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Features.CredentialResolution;
+using Foundry.Modules.Monitoring.Features.Providers.Checks;
 using Foundry.Shared;
 
 using Microsoft.EntityFrameworkCore;
@@ -13,7 +16,8 @@ namespace Foundry.Modules.Monitoring.Features.Providers;
 internal sealed class PostExitProviderQueries(
     DbContext dbContext,
     IIssueProviderFactory providerFactory,
-    ICredentialResolver credentialResolver) : IPostExitProviderQueries, IWorkBranchCommands, IIssueBlockerQueries
+    ICredentialResolver credentialResolver)
+    : IPostExitProviderQueries, IWorkBranchCommands, IIssueBlockerQueries, IFailingJobLogQueries
 {
     public async Task<Result<IReadOnlyList<int>>> GetOpenBlockersAsync(
         MonitoredRepositoryId repositoryId,
@@ -105,6 +109,42 @@ internal sealed class PostExitProviderQueries(
 
         (IIssueProvider provider, MonitoredRepository repo) = resolvedSuccess.Value;
         return await provider.GetBranchCommitSummaryAsync(repo.Slug, branchName, cancellationToken);
+    }
+
+    public async Task<Result<CiJobLog>> GetFailingJobLogAsync(
+        MonitoredRepositoryId repositoryId,
+        FailingCheck check,
+        CancellationToken cancellationToken)
+    {
+        Result<(IIssueProvider Provider, MonitoredRepository Repo)> resolved =
+            await ResolveAsync(repositoryId, cancellationToken);
+
+        if (resolved is not Result<(IIssueProvider, MonitoredRepository)>.Success resolvedSuccess)
+        {
+            Error error = ((Result<(IIssueProvider, MonitoredRepository)>.Failure)resolved).Error;
+            return Result<CiJobLog>.Fail(error);
+        }
+
+        (IIssueProvider provider, MonitoredRepository repo) = resolvedSuccess.Value;
+        Result<CiJobLookup> lookup = await provider.ResolveCiJobAsync(repo.Slug, check, cancellationToken);
+
+        if (lookup is Result<CiJobLookup>.Failure lookupFailure)
+        {
+            return Result<CiJobLog>.Fail(lookupFailure.Error);
+        }
+
+        if (lookup is not Result<CiJobLookup>.Success { Value: CiJobLookup.Found found })
+        {
+            return Result<CiJobLog>.Ok(new CiJobLog.NotACiJob());
+        }
+
+        Result<string> log = await provider.GetJobLogAsync(repo.Slug, found.JobId, cancellationToken);
+        return log switch
+        {
+            Result<string>.Success success => Result<CiJobLog>.Ok(new CiJobLog.Available(success.Value)),
+            Result<string>.Failure failure => Result<CiJobLog>.Fail(failure.Error),
+            _ => throw new UnreachableException(),
+        };
     }
 
     private async Task<Result<(IIssueProvider Provider, MonitoredRepository Repo)>> ResolveAsync(

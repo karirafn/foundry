@@ -1,6 +1,9 @@
+using System.Text.RegularExpressions;
+
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Features.Providers;
+using Foundry.Modules.Monitoring.Features.Providers.Checks;
 using ProviderChecks = Foundry.Modules.Monitoring.Features.Providers.Checks.Checks;
 using Foundry.Modules.Monitoring.Features.Providers.Feedback;
 using Foundry.Modules.Monitoring.Features.Providers.Rebase;
@@ -8,8 +11,9 @@ using Foundry.Shared;
 
 namespace Foundry.Modules.Monitoring.Infrastructure.GitHub;
 
-internal sealed class GitHubIssueProvider(
+internal sealed partial class GitHubIssueProvider(
     GitHubHttpClient httpClient,
+    GitHubJobLogClient jobLogClient,
     ActionableFeedbackPolicy feedbackPolicy,
     string token,
     Uri apiBaseUrl) : IIssueProvider
@@ -227,6 +231,56 @@ internal sealed class GitHubIssueProvider(
         return httpClient.GetChecksAsync(apiBaseUrl, slug, pullRequestUrl, token, cancellationToken);
     }
 
+    // Check-to-job mapping. GitHub's docs do not state that a check run ID equals an Actions job ID, so the ID is
+    // never taken from the check itself. A check created by GitHub Actions links (details_url) to its job page,
+    // https://{host}/{owner}/{repo}/actions/runs/{run_id}/job/{job_id}. The run ID from that link selects the run;
+    // "List jobs for a workflow run" (GET /repos/{owner}/{repo}/actions/runs/{run_id}/jobs) then names the job whose
+    // html_url is that same page — its `id` is the job ID "Download job logs for a workflow run"
+    // (GET /repos/{owner}/{repo}/actions/jobs/{job_id}/logs) takes. When no html_url matches, a single job with
+    // the check's name is used: an Actions check run carries its job's name. Any other check — a commit status, a
+    // third-party check app, a run in another repository — is not a job whose log Foundry can read.
+    public async Task<Result<CiJobLookup>> ResolveCiJobAsync(
+        RepositorySlug slug,
+        FailingCheck check,
+        CancellationToken cancellationToken)
+    {
+        if (!TryParseActionsRunId(slug, check.DetailsUrl, out long runId))
+        {
+            return Result<CiJobLookup>.Ok(new CiJobLookup.NotACiJob());
+        }
+
+        Result<IReadOnlyList<WorkflowRunJob>> jobsResult =
+            await httpClient.ListWorkflowRunJobsAsync(apiBaseUrl, slug, runId, token, cancellationToken);
+
+        if (jobsResult is not Result<IReadOnlyList<WorkflowRunJob>>.Success jobsSuccess)
+        {
+            return Result<CiJobLookup>.Fail(((Result<IReadOnlyList<WorkflowRunJob>>.Failure)jobsResult).Error);
+        }
+
+        IReadOnlyList<WorkflowRunJob> jobs = jobsSuccess.Value;
+        WorkflowRunJob? job = jobs.FirstOrDefault(candidate => IsSamePage(candidate.HtmlUrl, check.DetailsUrl));
+
+        if (job is null)
+        {
+            List<WorkflowRunJob> sameName = jobs
+                .Where(candidate => string.Equals(candidate.Name, check.Name, StringComparison.Ordinal))
+                .ToList();
+            job = sameName.Count == 1 ? sameName[0] : null;
+        }
+
+        return job is null
+            ? Result<CiJobLookup>.Ok(new CiJobLookup.NotACiJob())
+            : Result<CiJobLookup>.Ok(new CiJobLookup.Found(job.Id));
+    }
+
+    public Task<Result<string>> GetJobLogAsync(
+        RepositorySlug slug,
+        long jobId,
+        CancellationToken cancellationToken)
+    {
+        return jobLogClient.GetJobLogAsync(apiBaseUrl, slug, jobId, token, cancellationToken);
+    }
+
     public Task<Result<PullRequestRebaseState>> GetRebaseStateAsync(
         RepositorySlug slug,
         string pullRequestUrl,
@@ -250,4 +304,32 @@ internal sealed class GitHubIssueProvider(
     {
         return httpClient.GetDefaultBranchAsync(apiBaseUrl, slug, token, cancellationToken);
     }
+
+    private static bool TryParseActionsRunId(RepositorySlug slug, string? detailsUrl, out long runId)
+    {
+        runId = 0;
+        if (!Uri.TryCreate(detailsUrl, UriKind.Absolute, out Uri? uri))
+        {
+            return false;
+        }
+
+        Match match = ActionsJobPagePattern().Match(uri.AbsolutePath);
+        return match.Success
+            && string.Equals(Uri.UnescapeDataString(match.Groups["owner"].Value), slug.Owner, StringComparison.OrdinalIgnoreCase)
+            && string.Equals(Uri.UnescapeDataString(match.Groups["repo"].Value), slug.Name, StringComparison.OrdinalIgnoreCase)
+            && long.TryParse(match.Groups["run"].Value, out runId);
+    }
+
+    // Compares host and path only: a details URL may carry a query (e.g. ?pr=12) the job's html_url lacks.
+    private static bool IsSamePage(string? jobHtmlUrl, string? detailsUrl) =>
+        Uri.TryCreate(jobHtmlUrl, UriKind.Absolute, out Uri? jobPage)
+        && Uri.TryCreate(detailsUrl, UriKind.Absolute, out Uri? checkPage)
+        && string.Equals(jobPage.Host, checkPage.Host, StringComparison.OrdinalIgnoreCase)
+        && string.Equals(
+            jobPage.AbsolutePath.TrimEnd('/'),
+            checkPage.AbsolutePath.TrimEnd('/'),
+            StringComparison.OrdinalIgnoreCase);
+
+    [GeneratedRegex(@"^/(?<owner>[^/]+)/(?<repo>[^/]+)/actions/runs/(?<run>\d+)/job/\d+/?$")]
+    private static partial Regex ActionsJobPagePattern();
 }
