@@ -107,7 +107,7 @@ public sealed class HandleAsync : IAsyncDisposable
 
         public Task<ClaudeCodeSettingsSnapshot> GetClaudeCodeSettingsAsync(CancellationToken cancellationToken)
 
-            => Task.FromResult(new ClaudeCodeSettingsSnapshot(true, []));
+            => Task.FromResult(new ClaudeCodeSettingsSnapshot([]));
 
         public Task<IReadOnlyList<string>> GetAllowedProviderHostsAsync(CancellationToken cancellationToken)
             => Task.FromResult<IReadOnlyList<string>>([]);

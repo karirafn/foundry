@@ -2820,7 +2820,6 @@
           "memoryLimitMb",
           "cpuLimit",
           "pidsLimit",
-          "blockCiCdEdits",
           "additionalDenyRules"
         ],
         "type": "object",
@@ -2944,9 +2943,6 @@
               "string"
             ],
             "format": "int32"
-          },
-          "blockCiCdEdits": {
-            "type": "boolean"
           },
           "additionalDenyRules": {
             "type": "array",
@@ -4123,14 +4119,10 @@
       },
       "UpdateClaudeCodeSettingsRequestBody": {
         "required": [
-          "blockCiCdEdits",
           "additionalDenyRules"
         ],
         "type": "object",
         "properties": {
-          "blockCiCdEdits": {
-            "type": "boolean"
-          },
           "additionalDenyRules": {
             "type": "array",
             "items": {

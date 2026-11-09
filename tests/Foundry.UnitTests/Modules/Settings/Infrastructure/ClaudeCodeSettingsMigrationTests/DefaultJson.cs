@@ -13,11 +13,13 @@ namespace Foundry.UnitTests.Modules.Settings.Infrastructure.ClaudeCodeSettingsMi
 public sealed class DefaultJson
 {
     [Fact]
-    public void WhenFrozenLiteralHasItsModelRemoved_MatchesDefaultSerialization()
+    public void WhenFrozenLiteralHasItsRemovedKeysDropped_MatchesDefaultSerialization()
     {
-        // Arrange — AddWorkerRoleModelAndRemoveGlobalModel removes Model from the stored JSON (ADR 0095)
+        // Arrange — AddWorkerRoleModelAndRemoveGlobalModel removes Model from the stored JSON (ADR 0095);
+        // BlockCiCdEdits has no migration and is dropped on the next save (ADR 0100)
         JsonObject migrated = JsonNode.Parse(AddClaudeCodeSettings.DefaultClaudeCodeSettingsJson)!.AsObject();
         migrated.Remove("Model");
+        migrated.Remove("BlockCiCdEdits");
 
         // Act
         string json = JsonSerializer.Serialize(ClaudeCodeSettings.Default);

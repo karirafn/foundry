@@ -822,15 +822,6 @@ describe('SettingsClaudeCodeComponent', () => {
 
   describe('Claude Code configuration', () => {
     const CLAUDE_CODE_URL = '/api/settings/claude-code';
-    const CI_CD_RULES = [
-      'Edit(**/.github/workflows/**)',
-      'Edit(**/.gitlab-ci.yml)',
-      'Edit(**/Dockerfile)',
-      'Edit(**/docker-compose*.yml)',
-      'Edit(**/docker-compose.yaml)',
-      'Edit(**/compose.yml)',
-      'Edit(**/compose.yaml)',
-    ];
 
     interface Page {
       fixture: ComponentFixture<SettingsClaudeCodeComponent>;
@@ -876,46 +867,49 @@ describe('SettingsClaudeCodeComponent', () => {
       return page.el.querySelector(`#${id}`)?.textContent?.trim() ?? '';
     }
 
-    it('should list the seven CI/CD rules read-only when blocking is enabled', async () => {
+    function makeDirty(page: Page): void {
+      click(page, '#addRule');
+      type(page, `denyRule-${page.el.querySelectorAll('.claude-code__row').length - 1}`, 'Bash(dirty:*)');
+    }
+
+    it('should render no CI/CD edit-blocking control or CI/CD copy', async () => {
       // Arrange & Act
-      const page = await loadPage({ blockCiCdEdits: true });
+      const page = await loadPage({ additionalDenyRules: ['Bash(a)'] });
 
       // Assert
-      const rules = Array.from(page.el.querySelectorAll('.claude-code__rule-item code')).map((c) => c.textContent);
-      expect(rules).toEqual(CI_CD_RULES);
+      expect(page.el.querySelector('#blockCiCdEdits')).toBeNull();
+      expect(page.el.textContent).not.toContain('CI/CD');
     });
 
-    it('should show the soft-guidance note instead of the rule list when blocking is disabled', async () => {
+    it('should describe additional deny rules as on top of the built-in rules', async () => {
+      // Arrange & Act
+      const page = await loadPage();
+
+      // Assert
+      expect(text(page, 'denyRulesGuidance')).toContain("Foundry's built-in rules");
+    });
+
+    it('should show the built-in-only empty-state copy', async () => {
+      // Arrange & Act
+      const page = await loadPage();
+
+      // Assert
+      const emptyState = page.el.querySelector('.claude-code__empty')?.textContent?.replace(/\s+/g, ' ').trim();
+      expect(emptyState).toBe(
+        "No additional deny rules. Workers run with Foundry's built-in deny rules only. Add a rule to deny more tools or paths.",
+      );
+    });
+
+    it('should use a secrets path as the format-error example', async () => {
       // Arrange
-      const page = await loadPage({ blockCiCdEdits: true });
+      const page = await loadPage({ additionalDenyRules: ['Bash(a)'] });
 
       // Act
-      click(page, '#blockCiCdEdits');
+      type(page, 'denyRule-0', 'rm -rf');
+      blur(page, 'denyRule-0');
 
       // Assert
-      expect(page.el.querySelectorAll('.claude-code__rule-item').length).toBe(0);
-      expect(text(page, 'blockCiCdEdits-detail')).toContain('system prompt still instructs workers');
-    });
-
-    it('should render the soft-guidance note as a warning callout with a visible text lead', async () => {
-      // Arrange & Act
-      const page = await loadPage({ blockCiCdEdits: false });
-
-      // Assert
-      const callout = page.el.querySelector('#blockCiCdEdits-detail .general-settings__callout--warning') as HTMLElement;
-      expect(callout).toBeTruthy();
-      expect(callout.querySelector('.general-settings__callout-lead')?.textContent?.trim()).toBe('Warning:');
-      expect(callout.querySelector('.general-settings__callout-icon')?.getAttribute('aria-hidden')).toBe('true');
-      expect(page.el.querySelector('.general-settings__field-hint--warning')).toBeNull();
-    });
-
-    it('should keep the CI/CD detail region mounted with a stable id', async () => {
-      // Arrange
-      const page = await loadPage({ blockCiCdEdits: false });
-
-      // Act & Assert
-      expect(field(page, 'blockCiCdEdits').getAttribute('aria-describedby')).toBe('blockCiCdEdits-detail');
-      expect(page.el.querySelector('#blockCiCdEdits-detail')).toBeTruthy();
+      expect(text(page, 'denyRule-0-error')).toContain('Edit(secrets/**)');
     });
 
     it('should render one input per seeded additional deny rule', async () => {
@@ -1037,7 +1031,7 @@ describe('SettingsClaudeCodeComponent', () => {
       const page = await loadPage();
 
       // Act
-      click(page, '#blockCiCdEdits');
+      makeDirty(page);
 
       // Assert
       expect(saveButton(page).disabled).toBe(false);
@@ -1046,10 +1040,10 @@ describe('SettingsClaudeCodeComponent', () => {
     it('should disable Save again when the edit is reverted', async () => {
       // Arrange
       const page = await loadPage();
-      click(page, '#blockCiCdEdits');
+      click(page, '#addRule');
 
       // Act
-      click(page, '#blockCiCdEdits');
+      click(page, '#removeRule-0');
 
       // Assert
       expect(saveButton(page).disabled).toBe(true);
@@ -1060,7 +1054,7 @@ describe('SettingsClaudeCodeComponent', () => {
       const page = await loadPage();
 
       // Act
-      click(page, '#blockCiCdEdits');
+      makeDirty(page);
 
       // Assert
       expect(page.fixture.componentInstance.hasUnsavedChanges()).toBe(true);
@@ -1077,7 +1071,6 @@ describe('SettingsClaudeCodeComponent', () => {
     it('should submit the form values to the claude-code endpoint', async () => {
       // Arrange
       const page = await loadPage();
-      click(page, '#blockCiCdEdits');
       click(page, '#addRule');
       type(page, 'denyRule-0', 'Bash(rm:*)');
 
@@ -1086,10 +1079,7 @@ describe('SettingsClaudeCodeComponent', () => {
 
       // Assert
       const request = page.httpMock.expectOne(CLAUDE_CODE_URL);
-      expect(request.request.body).toEqual({
-        blockCiCdEdits: false,
-        additionalDenyRules: ['Bash(rm:*)'],
-      });
+      expect(request.request.body).toEqual({ additionalDenyRules: ['Bash(rm:*)'] });
       request.flush({ ...API_KEY_RESPONSE });
     });
 
@@ -1097,7 +1087,6 @@ describe('SettingsClaudeCodeComponent', () => {
       // Arrange
       const page = await loadPage();
       click(page, '#addRule');
-      click(page, '#blockCiCdEdits');
 
       // Act
       saveButton(page).click();
@@ -1111,11 +1100,11 @@ describe('SettingsClaudeCodeComponent', () => {
     it('should show a saved status after a successful save', async () => {
       // Arrange
       const page = await loadPage();
-      click(page, '#blockCiCdEdits');
+      makeDirty(page);
       saveButton(page).click();
 
       // Act
-      page.httpMock.expectOne(CLAUDE_CODE_URL).flush({ ...API_KEY_RESPONSE, blockCiCdEdits: false });
+      page.httpMock.expectOne(CLAUDE_CODE_URL).flush({ ...API_KEY_RESPONSE });
       await page.fixture.whenStable();
       page.fixture.detectChanges();
 
@@ -1151,7 +1140,7 @@ describe('SettingsClaudeCodeComponent', () => {
     it('should attach an InvalidDenyRule error to the exact row when another rule is a prefix of it', async () => {
       // Arrange
       const page = await loadPage({ additionalDenyRules: ['Bash(a)', 'Bash(a))'] });
-      click(page, '#blockCiCdEdits');
+      makeDirty(page);
       saveButton(page).click();
 
       // Act
@@ -1171,7 +1160,7 @@ describe('SettingsClaudeCodeComponent', () => {
     it('should show a form-level error when the offending rule matches no row exactly', async () => {
       // Arrange
       const page = await loadPage({ additionalDenyRules: ['Bash(a)'] });
-      click(page, '#blockCiCdEdits');
+      makeDirty(page);
       saveButton(page).click();
 
       // Act
@@ -1192,7 +1181,7 @@ describe('SettingsClaudeCodeComponent', () => {
     it('should clear a stale form-level error after a later successful save', async () => {
       // Arrange
       const page = await loadPage();
-      click(page, '#blockCiCdEdits');
+      makeDirty(page);
       saveButton(page).click();
       page.httpMock.expectOne(CLAUDE_CODE_URL).flush(
         { detail: 'Settings not found.', type: 'tag:foundry,2026:problems/Settings.NotFound' },
@@ -1203,7 +1192,7 @@ describe('SettingsClaudeCodeComponent', () => {
 
       // Act
       saveButton(page).click();
-      page.httpMock.expectOne(CLAUDE_CODE_URL).flush({ ...API_KEY_RESPONSE, blockCiCdEdits: false });
+      page.httpMock.expectOne(CLAUDE_CODE_URL).flush({ ...API_KEY_RESPONSE });
       await page.fixture.whenStable();
       page.fixture.detectChanges();
 
@@ -1211,18 +1200,10 @@ describe('SettingsClaudeCodeComponent', () => {
       expect(page.el.querySelector('form.claude-code .general-settings__save-error')?.textContent?.trim()).toBe('');
     });
 
-    it('should mark the read-only CI/CD rule list as a list for assistive technology', async () => {
-      // Arrange & Act
-      const page = await loadPage();
-
-      // Assert
-      expect(page.el.querySelector('ul.claude-code__rule-list')?.getAttribute('role')).toBe('list');
-    });
-
     it('should show a form-level error for an error without a field', async () => {
       // Arrange
       const page = await loadPage();
-      click(page, '#blockCiCdEdits');
+      makeDirty(page);
       saveButton(page).click();
 
       // Act
