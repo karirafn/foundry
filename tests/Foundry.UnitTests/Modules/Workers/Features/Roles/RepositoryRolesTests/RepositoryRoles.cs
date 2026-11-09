@@ -216,19 +216,17 @@ public sealed class RepositoryRoles
         }
     }
 
-    [Theory]
-    [InlineData("- Write a failing test for each behaviour and run it to see it fail for the right reason.")]
-    [InlineData("- Write the minimum code to make that test pass.")]
-    [InlineData("- Refactor while the tests stay green.")]
-    [InlineData("- Fix a bug by starting with a test that reproduces it.")]
-    [InlineData("- Make no production change without a test that drove it.")]
-    public void TheRenderedImplementRolePrompt_ContainsTheTestDrivenDevelopmentSection(string rule)
+    [Fact]
+    public void WhenTheImplementRolePromptIsRendered_PlacesTheRepositoryPrinciplesBeforeTheApplyLine()
     {
         // Arrange
-        WorkerRoleDefinition implement = LoadRepositoryCatalog().Find(WorkerRole.Implement).ShouldNotBeNull();
+        const string applyLine = "Apply the engineering principles above to every change.";
+        WorkerRoleCatalogContent catalog = LoadRepositoryCatalog();
+        WorkerRoleDefinition implement = catalog.Find(WorkerRole.Implement).ShouldNotBeNull();
 
         // Act
         Result<string> result = SystemPromptBuilder.Build(
+            catalog.Principles,
             42,
             implement.SystemPromptTemplate,
             new DispatchContext.Fresh("feat/42-title"),
@@ -240,10 +238,41 @@ public sealed class RepositoryRoles
         // Assert
         string prompt = result.ShouldBeOfType<Result<string>.Success>().Value;
         prompt.ShouldSatisfyAllConditions(
-            () => prompt.ShouldContain("Test-driven development:"),
-            () => prompt.ShouldContain(rule),
+            () => prompt.Split(catalog.Principles).Length.ShouldBe(2),
+            () => prompt.IndexOf(catalog.Principles, StringComparison.Ordinal)
+                .ShouldBeLessThan(prompt.IndexOf(applyLine, StringComparison.Ordinal)),
+            () => prompt.ShouldNotContain("Test-driven development:"),
             () => prompt.ShouldNotContain(RolePromptPlaceholders.IssueNumber),
             () => prompt.ShouldNotContain(RolePromptPlaceholders.IssueContent));
+    }
+
+    [Theory]
+    [InlineData("Testing (where a test runner exists):")]
+    [InlineData("Design:")]
+    [InlineData("Domain modelling (where the code models a business domain):")]
+    public void ThePrinciplesFile_CarriesTheScopingHeadings(string heading)
+    {
+        // Arrange
+        WorkerRoleCatalogContent catalog = LoadRepositoryCatalog();
+
+        // Act
+        string principles = catalog.Principles;
+
+        // Assert
+        principles.ShouldContain(heading);
+    }
+
+    [Fact]
+    public void ThePrinciplesFile_UsesNoPlaceholders()
+    {
+        // Arrange
+        WorkerRoleCatalogContent catalog = LoadRepositoryCatalog();
+
+        // Act
+        IReadOnlyList<string> placeholders = RolePromptPlaceholders.FindIn(catalog.Principles);
+
+        // Assert
+        placeholders.ShouldBeEmpty();
     }
 
     private static WorkerRoleCatalogContent LoadRepositoryCatalog() =>

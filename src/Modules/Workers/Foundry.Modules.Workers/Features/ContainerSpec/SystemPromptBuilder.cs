@@ -53,6 +53,7 @@ internal static class SystemPromptBuilder
         """;
 
     public static Result<string> Build(
+        string principles,
         int issueNumber,
         string systemPromptTemplate,
         DispatchContext context,
@@ -70,7 +71,7 @@ internal static class SystemPromptBuilder
 
         string prePrSection = installsDocker ? "\n\n" + BuildPrePrSection() : string.Empty;
         string csharpLspSection = installsDotnet ? "\n\n" + BuildCSharpLspSection() : string.Empty;
-        string prompt = SafetyPreamble + "\n\n" + basePrompt + "\n\n" + TaskListInstruction + csharpLspSection + prePrSection + "\n\n" + BuildChecksSection(timeoutMinutes);
+        string prompt = SafetyPreamble + "\n\n" + principles + "\n\n" + basePrompt + "\n\n" + TaskListInstruction + csharpLspSection + prePrSection + "\n\n" + BuildChecksSection(timeoutMinutes);
 
         string contextSection = context switch
         {
