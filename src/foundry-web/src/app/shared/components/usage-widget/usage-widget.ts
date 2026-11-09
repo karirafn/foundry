@@ -1,7 +1,7 @@
 import { afterNextRender, ChangeDetectionStrategy, Component, computed, ElementRef, inject, OnDestroy, signal } from '@angular/core';
 import { NgClass } from '@angular/common';
 import { UsageService } from '../../../core/services/usage.service';
-import { UsageSnapshot } from '../../../core/models/usage.model';
+import { UsageExtraCredits, UsageSnapshot } from '../../../core/models/usage.model';
 
 /** Maps a known severity string to its BEM modifier class; anything else → neutral. */
 function mapSeverityClass(severity: string): string {
@@ -77,6 +77,21 @@ export interface UsageCreditsVm {
   readonly usedFormatted: string;
   /** Null when the plan reports no monthly limit (amount-only credits). */
   readonly limitFormatted: string | null;
+  /** Trigger amount, e.g. "$120.00 / $500.00", or the spent amount alone when amount-only. */
+  readonly amountLabel: string;
+  /** Null when amount-only — the template renders no bar and no percent. */
+  readonly meter: UsageCreditsMeterVm | null;
+  /** Trigger accessible-name fragment, e.g. "Extra usage $120.00 of $500.00, 24%". */
+  readonly accessibleSummary: string;
+}
+
+export interface UsageCreditsMeterVm {
+  /** Bar fill, clamped to 0-100. */
+  readonly percent: number;
+  /** The real (unclamped) percent, rounded, e.g. "112%". */
+  readonly percentLabel: string;
+  readonly severityClass: string;
+  readonly accessibleName: string;
 }
 
 export interface UsageWidgetVm {
@@ -85,6 +100,8 @@ export interface UsageWidgetVm {
   readonly collapsedMeter: UsageMeterVm | null;
   readonly allLimits: readonly UsageMeterVm[];
   readonly credits: UsageCreditsVm | null;
+  /** True when the figures came from the probe-turn fallback rather than the /usage report. */
+  readonly limitedDetail: boolean;
   readonly accountEmail: string;
   readonly capturedRelative: string;
   readonly failed: boolean;
@@ -133,6 +150,33 @@ function buildMeterVm(
   };
 }
 
+function buildCreditsVm(extraUsage: UsageExtraCredits | null): UsageCreditsVm | null {
+  if (extraUsage?.isEnabled !== true) {
+    return null;
+  }
+  const usedFormatted = formatCurrency(extraUsage.usedCredits, extraUsage.currency);
+  const limitFormatted =
+    extraUsage.monthlyLimit === null ? null : formatCurrency(extraUsage.monthlyLimit, extraUsage.currency);
+  const amountLabel = limitFormatted === null ? usedFormatted : `${usedFormatted} / ${limitFormatted}`;
+  const amountSpoken = limitFormatted === null ? usedFormatted : `${usedFormatted} of ${limitFormatted}`;
+
+  let meter: UsageCreditsMeterVm | null = null;
+  let accessibleSummary = `Extra usage ${amountSpoken}`;
+  if (extraUsage.percent !== null) {
+    const percentLabel = `${Math.round(extraUsage.percent)}%`;
+    const severity = extraUsage.severity ?? '';
+    accessibleSummary = `${accessibleSummary}, ${percentLabel}`;
+    meter = {
+      percent: Math.min(100, Math.max(0, extraUsage.percent)),
+      percentLabel,
+      severityClass: mapSeverityClass(severity),
+      accessibleName: `Extra usage, ${percentLabel}, ${mapSeverityWord(severity).toLowerCase()}`,
+    };
+  }
+
+  return { usedFormatted, limitFormatted, amountLabel, meter, accessibleSummary };
+}
+
 function formatShortDateTime(iso: string): string {
   return new Intl.DateTimeFormat(undefined, {
     dateStyle: 'short',
@@ -151,6 +195,7 @@ function buildUnavailableVm(snapshot: UsageSnapshot): UsageWidgetVm {
     collapsedMeter: null,
     allLimits: [],
     credits: null,
+    limitedDetail: false,
     accountEmail: snapshot.accountEmail,
     capturedRelative: '',
     failed: true,
@@ -181,15 +226,7 @@ function buildWidgetVm(snapshot: UsageSnapshot): UsageWidgetVm {
             allLimits[0]
           ));
 
-  const extraUsage = snapshot.extraUsage;
-  const credits: UsageCreditsVm | null =
-    extraUsage?.isEnabled === true
-      ? {
-          usedFormatted: formatCurrency(extraUsage.usedCredits, extraUsage.currency),
-          limitFormatted:
-            extraUsage.monthlyLimit === null ? null : formatCurrency(extraUsage.monthlyLimit, extraUsage.currency),
-        }
-      : null;
+  const credits = buildCreditsVm(snapshot.extraUsage);
 
   const failed = snapshot.lastRefreshFailedAt !== null;
 
@@ -216,6 +253,7 @@ function buildWidgetVm(snapshot: UsageSnapshot): UsageWidgetVm {
     collapsedMeter,
     allLimits,
     credits,
+    limitedDetail: snapshot.source === 'probeTurn',
     accountEmail: snapshot.accountEmail,
     capturedRelative,
     failed,
@@ -226,7 +264,10 @@ function buildWidgetVm(snapshot: UsageSnapshot): UsageWidgetVm {
 
 let _nextId = 0;
 
+/** Mirrors `@container app-header-nav (max-width: 240px)` in usage-widget.scss. */
 const COLLAPSE_THRESHOLD_PX = 240;
+/** Mirrors `@container app-header-nav (max-width: 360px)` in usage-widget.scss. */
+const CREDITS_HIDE_THRESHOLD_PX = 360;
 
 @Component({
   selector: 'fd-usage-widget',
@@ -243,6 +284,7 @@ export class UsageWidgetComponent implements OnDestroy {
   readonly popoverId = `usage-popover-${_nextId++}`;
   readonly isOpen = signal(false);
   readonly isCollapsed = signal(false);
+  readonly isCreditsHidden = signal(false);
 
   readonly refreshState = this._usageService.refreshState;
 
@@ -287,7 +329,9 @@ export class UsageWidgetComponent implements OnDestroy {
         if (entry === undefined) {
           return;
         }
-        this.isCollapsed.set(entry.contentRect.width <= COLLAPSE_THRESHOLD_PX);
+        const width = entry.contentRect.width;
+        this.isCollapsed.set(width <= COLLAPSE_THRESHOLD_PX);
+        this.isCreditsHidden.set(width <= CREDITS_HIDE_THRESHOLD_PX);
       });
       this._resizeObserver.observe(queryContainer);
     });
@@ -317,6 +361,9 @@ export class UsageWidgetComponent implements OnDestroy {
     const parts = vm.inlineMeters.map(
       (m) => `${m.label} ${m.percentLabel} ${m.severityWord.toLowerCase()}`
     );
+    if (vm.credits !== null && !this.isCreditsHidden()) {
+      parts.push(vm.credits.accessibleSummary);
+    }
     if (parts.length === 0) {
       if (vm.collapsedMeter !== null) {
         const c = vm.collapsedMeter;

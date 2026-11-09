@@ -58,6 +58,47 @@
   }
 }
 
+// ─── Extra-usage credits column (wide layout) ───────────────────────────────
+// A second column beside Session/Weekly: amount on line 1, bar + percent on line 2,
+// so the trigger keeps its fixed 28px height instead of growing a third row.
+
+.usage-widget__divider {
+  align-self: stretch;
+  inline-size: 1px;
+  background: var(--fd-border-default);
+  flex-shrink: 0;
+}
+
+.usage-widget__credits {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  row-gap: 2px;
+  min-inline-size: 0;
+}
+
+.usage-widget__credits-head {
+  display: flex;
+  align-items: center;
+  gap: var(--fd-spacing-xs);
+  white-space: nowrap;
+}
+
+.usage-widget__credits-amount {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--fd-text-primary);
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
+// The bar fills the column width left of the percent, never narrower than the limit bars.
+.usage-widget__credits-meter .usage-meter__track {
+  flex: 1 1 auto;
+  inline-size: auto;
+  min-inline-size: var(--usage-meter-track-size);
+}
+
 // ─── Unavailable chip (no successful poll yet, last attempt failed) ─────────
 
 .usage-widget__unavailable {
@@ -167,6 +208,16 @@
 }
 
 // ─── Container-query collapse ────────────────────────────────────────────────
+// Width bands of the app-header-nav container (mirrored in usage-widget.ts for the
+// trigger aria-label): > 360px Session + Weekly + credits; 241–360px Session + Weekly;
+// ≤ 240px the single collapsed figure. Credits drop first, alongside the agents-chip (360px).
+
+@container app-header-nav (max-width: 360px) {
+  .usage-widget__divider,
+  .usage-widget__credits {
+    display: none;
+  }
+}
 
 @container app-header-nav (max-width: 240px) {
   .usage-widget__inline {
@@ -321,9 +372,8 @@
 
 .usage-popover__credits {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--fd-spacing-sm);
+  flex-direction: column;
+  gap: 2px;
   margin-block-start: var(--fd-spacing-sm);
   padding-block-start: var(--fd-spacing-sm);
   border-block-start: 1px solid var(--fd-border-muted);
@@ -332,6 +382,11 @@
 .usage-popover__credits-label {
   font-size: 0.8125rem;
   color: var(--fd-text-primary);
+}
+
+.usage-popover__credits-sep {
+  font-size: 0.75rem;
+  color: var(--fd-text-secondary);
 }
 
 .usage-popover__credits-value {
@@ -375,6 +430,14 @@
     cursor: progress;
     color: var(--fd-text-secondary);
   }
+}
+
+// Probe-turn fallback note — muted, under the as-of line.
+.usage-popover__source-note {
+  // Same contrast rationale as .usage-popover__asof — secondary, not tertiary.
+  color: var(--fd-text-secondary);
+  font-size: 0.75rem;
+  margin: calc(-1 * var(--fd-spacing-xs)) 0 var(--fd-spacing-sm);
 }
 
 .usage-popover__refresh-status {
