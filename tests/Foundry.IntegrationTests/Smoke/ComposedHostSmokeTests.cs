@@ -5,11 +5,13 @@ using Foundry.Modules.Issues.Domain.Entities;
 using Foundry.Modules.Issues.Domain.Entities.States;
 using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
+using Foundry.Modules.Settings.Domain.Entities;
 using Foundry.Modules.Workers.Domain.Entities;
 using Foundry.Modules.Workers.Domain.Entities.States;
 using Foundry.Modules.Workers.Domain.ValueObjects;
 using Foundry.Modules.Workers.Features.ContainerSpec;
 using Foundry.Modules.Workers.Features.Dispatch;
+using Foundry.Modules.Workers.Features.Roles;
 using Foundry.Testing;
 
 using Microsoft.EntityFrameworkCore;
@@ -69,6 +71,7 @@ public sealed class ComposedHostSmokeTests : IAsyncDisposable
             async () => await GetIssueAsync(ct) is QueuedIssue or FailedIssue,
             PhaseTimeout,
             "the monitoring startup poll queues the issue",
+            DescribeStateAsync,
             ct);
 
         // Opening the credential gate lets the next dispatch tick reach the role catalog gate.
@@ -78,6 +81,7 @@ public sealed class ComposedHostSmokeTests : IAsyncDisposable
             async () => _boundaries.Logs.Contains(DispatchCategory, RoleCatalogNotLoadedLog) || await GetIssueAsync(ct) is FailedIssue,
             PhaseTimeout,
             "dispatch skips the queued issue because the worker role catalog is not loaded",
+            DescribeStateAsync,
             ct);
 
         (await GetIssueAsync(ct)).ShouldBeOfType<FreshQueuedIssue>(
@@ -90,6 +94,7 @@ public sealed class ComposedHostSmokeTests : IAsyncDisposable
             async () => await GetWorkerRunAsync(ct) is ActiveRun,
             PhaseTimeout,
             "dispatch claims the issue and starts its worker container",
+            DescribeStateAsync,
             ct);
 
         WorkerContainerSpec spec = _boundaries.Containers.StartedSpecs.ShouldHaveSingleItem();
@@ -111,6 +116,7 @@ public sealed class ComposedHostSmokeTests : IAsyncDisposable
             async () => await GetIssueAsync(ct) is ChecksPendingIssue or FailedIssue,
             PhaseTimeout,
             "post-exit tracking records the pull request and the issue reaches checks-pending",
+            DescribeStateAsync,
             ct);
 
         WorkerRun finishedRun = (await GetWorkerRunAsync(ct)).ShouldNotBeNull();
@@ -166,6 +172,37 @@ public sealed class ComposedHostSmokeTests : IAsyncDisposable
         await using AsyncServiceScope scope = _factory.Services.CreateAsyncScope();
         DbContext dbContext = scope.ServiceProvider.GetRequiredService<DbContext>();
         return await dbContext.Set<WorkerRun>().AsNoTracking().SingleOrDefaultAsync(ct);
+    }
+
+    /// <summary>Every dispatch gate's input and the host's recent log, for a phase that timed out.</summary>
+    private async Task<string> DescribeStateAsync()
+    {
+        await using AsyncServiceScope scope = _factory.Services.CreateAsyncScope();
+        DbContext dbContext = scope.ServiceProvider.GetRequiredService<DbContext>();
+
+        Issue? issue = await dbContext.Set<Issue>().AsNoTracking().SingleOrDefaultAsync();
+        WorkerRun? run = await dbContext.Set<WorkerRun>().AsNoTracking().SingleOrDefaultAsync();
+        ClaudeAccount? account = await dbContext.Set<ClaudeAccount>().AsNoTracking().SingleOrDefaultAsync();
+        GlobalSettings? settings = await dbContext.Set<GlobalSettings>().AsNoTracking().SingleOrDefaultAsync();
+        bool catalogLoaded = scope.ServiceProvider.GetRequiredService<IWorkerRoleCatalogStore>().Current is not null;
+
+        IEnumerable<string> recentLogs = _boundaries.Logs.Entries
+            .Where(entry => entry.Level >= LogLevel.Information && entry.Category.StartsWith("Foundry.", StringComparison.Ordinal))
+            .TakeLast(60)
+            .Select(entry => $"  {entry.Level} {entry.Category}: {entry.Message}{(entry.Exception is null ? string.Empty : $" [{entry.Exception.GetType().Name}: {entry.Exception.Message}]")}");
+
+        return string.Join(
+            Environment.NewLine,
+            [
+                $"Issue: {issue?.GetType().Name ?? "none"}",
+                $"Worker run: {run?.GetType().Name ?? "none"}",
+                $"Claude account: {(account is null ? "none" : $"{account.AuthMode}, {account.Validity}, {account.SpendState}, CanDispatch={account.CanDispatch}")}",
+                $"Settings: {(settings is null ? "none" : $"{settings.ImageBuildState}, IsDispatchPaused={settings.IsDispatchPaused}, UsageLimitResetsAt={settings.UsageLimitResetsAt}")}",
+                $"Role catalog loaded: {catalogLoaded}",
+                $"Worker containers started: {_boundaries.Containers.StartedSpecs.Count}",
+                "Recent host log:",
+                .. recentLogs,
+            ]);
     }
 
     private static Task<string> ReadFixtureAsync(CancellationToken ct) =>
