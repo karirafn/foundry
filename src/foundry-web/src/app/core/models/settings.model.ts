@@ -60,7 +60,6 @@ export interface WorkerEnvironment {
 }
 
 export interface ClaudeCodeSettings {
-  blockCiCdEdits: boolean;
   additionalDenyRules: string[];
 }
 
@@ -98,7 +97,6 @@ export interface GlobalSettingsResponse {
   memoryLimitMb: number;
   cpuLimit: number;
   pidsLimit: number;
-  blockCiCdEdits: boolean;
   additionalDenyRules: string[];
   /** Public https base URL the operator's tunnel forwards to the webhook port (ADR 0085). */
   webhookPublicBaseUrl?: string | null;

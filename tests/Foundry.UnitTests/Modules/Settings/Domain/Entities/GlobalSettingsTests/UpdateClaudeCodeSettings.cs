@@ -14,7 +14,6 @@ public sealed class UpdateClaudeCodeSettings
 
     private static ClaudeCodeSettings CreateCustom() =>
         new ClaudeCodeSettingsBuilder()
-            .WithBlockCiCdEdits(false)
             .WithAdditionalDenyRules([CustomDenyRule])
             .Build()
             .Match(v => v, e => throw new InvalidOperationException(e.Message));

@@ -21,17 +21,6 @@ internal static class WorkerSettingsBuilder
         "Bash(git push * :*)",
     ];
 
-    private static readonly string[] CiCdDenyList =
-    [
-        "Edit(**/.github/workflows/**)",
-        "Edit(**/.gitlab-ci.yml)",
-        "Edit(**/Dockerfile)",
-        "Edit(**/docker-compose*.yml)",
-        "Edit(**/docker-compose.yaml)",
-        "Edit(**/compose.yml)",
-        "Edit(**/compose.yaml)",
-    ];
-
     private static readonly JsonSerializerOptions SerializerOptions = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
@@ -45,7 +34,6 @@ internal static class WorkerSettingsBuilder
         string[] denyRules =
         [
             ..BaseDenyList,
-            ..(claudeCode.BlockCiCdEdits ? CiCdDenyList : []),
             ..claudeCode.AdditionalDenyRules,
         ];
 

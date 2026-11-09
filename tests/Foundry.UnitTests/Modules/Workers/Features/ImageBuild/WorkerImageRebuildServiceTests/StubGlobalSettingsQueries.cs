@@ -39,7 +39,6 @@ internal sealed class StubGlobalSettingsQueries(
         MemoryLimitMb: 8192,
         CpuLimit: 2.0,
         PidsLimit: 512,
-        BlockCiCdEdits: true,
         AdditionalDenyRules: []);
 
     public Task<GlobalSettingsSummary?> GetSettingsAsync(CancellationToken cancellationToken)
@@ -87,7 +86,7 @@ internal sealed class StubGlobalSettingsQueries(
 
     public Task<ClaudeCodeSettingsSnapshot> GetClaudeCodeSettingsAsync(CancellationToken cancellationToken)
 
-        => Task.FromResult(new ClaudeCodeSettingsSnapshot(true, []));
+        => Task.FromResult(new ClaudeCodeSettingsSnapshot([]));
 
     public Task<IReadOnlyList<string>> GetAllowedProviderHostsAsync(CancellationToken cancellationToken)
         => Task.FromResult<IReadOnlyList<string>>([]);

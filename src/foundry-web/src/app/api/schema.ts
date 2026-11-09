@@ -952,7 +952,6 @@ export interface components {
             cpuLimit: number | string;
             /** Format: int32 */
             pidsLimit: number | string;
-            blockCiCdEdits: boolean;
             additionalDenyRules: string[];
             webhookPublicBaseUrl?: null | string;
             /**
@@ -1224,7 +1223,6 @@ export interface components {
             apiKey: null | string;
         };
         UpdateClaudeCodeSettingsRequestBody: {
-            blockCiCdEdits: boolean;
             additionalDenyRules: string[];
         };
         UpdateDispatchSettingsRequestBody: {

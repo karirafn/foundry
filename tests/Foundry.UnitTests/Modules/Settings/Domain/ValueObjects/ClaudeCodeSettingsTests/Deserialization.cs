@@ -15,7 +15,7 @@ public sealed class Deserialization
     public void WhenRuleListIsNull_DeserializesToEmptyRules()
     {
         // Arrange
-        const string json = """{"BlockCiCdEdits":true,"AdditionalDenyRules":null}""";
+        const string json = """{"AdditionalDenyRules":null}""";
 
         // Act
         ClaudeCodeSettings settings = JsonSerializer.Deserialize<ClaudeCodeSettings>(json)!;
@@ -28,7 +28,7 @@ public sealed class Deserialization
     public void WhenRuleListIsNull_EqualsAndHashCodeMatchEmptyRuleInstance()
     {
         // Arrange
-        const string json = """{"BlockCiCdEdits":true,"AdditionalDenyRules":null}""";
+        const string json = """{"AdditionalDenyRules":null}""";
 
         // Act
         ClaudeCodeSettings settings = JsonSerializer.Deserialize<ClaudeCodeSettings>(json)!;
@@ -40,29 +40,43 @@ public sealed class Deserialization
     }
 
     [Fact]
-    public void WhenBlockCiCdEditsIsMissing_FailsClosedWithProtectionOn()
+    public void WhenLegacyJsonCarriesBlockCiCdEdits_IgnoresIt()
     {
-        // Arrange
-        const string json = """{"AdditionalDenyRules":[]}""";
+        // Arrange — rows written before the CI/CD edit-blocking setting was removed (ADR 0100)
+        const string json = """{"BlockCiCdEdits":true,"AdditionalDenyRules":["Bash(rm:*)"]}""";
 
         // Act
         ClaudeCodeSettings settings = JsonSerializer.Deserialize<ClaudeCodeSettings>(json)!;
 
         // Assert
-        settings.BlockCiCdEdits.ShouldBeTrue();
+        settings.ShouldBe(ClaudeCodeSettings.Create(["Bash(rm:*)"]).ValueOrThrow());
+    }
+
+    [Fact]
+    public void WhenLegacyJsonIsReserialized_WritesNoBlockCiCdEdits()
+    {
+        // Arrange
+        const string json = """{"BlockCiCdEdits":false,"AdditionalDenyRules":[]}""";
+        ClaudeCodeSettings settings = JsonSerializer.Deserialize<ClaudeCodeSettings>(json)!;
+
+        // Act
+        string reserialized = JsonSerializer.Serialize(settings);
+
+        // Assert
+        reserialized.ShouldNotContain("BlockCiCdEdits");
     }
 
     [Fact]
     public void WhenLegacyJsonCarriesAGlobalModel_IgnoresIt()
     {
         // Arrange — rows written before the model moved to the worker roles (ADR 0095)
-        const string json = """{"Model":"opus","BlockCiCdEdits":false,"AdditionalDenyRules":["Bash(rm:*)"]}""";
+        const string json = """{"Model":"opus","AdditionalDenyRules":["Bash(rm:*)"]}""";
 
         // Act
         ClaudeCodeSettings settings = JsonSerializer.Deserialize<ClaudeCodeSettings>(json)!;
 
         // Assert
-        settings.ShouldBe(ClaudeCodeSettings.Create(false, ["Bash(rm:*)"]).ValueOrThrow());
+        settings.ShouldBe(ClaudeCodeSettings.Create(["Bash(rm:*)"]).ValueOrThrow());
     }
 
     [Fact]
@@ -80,7 +94,7 @@ public sealed class Deserialization
     {
         // Arrange
         ClaudeCodeSettings original = ClaudeCodeSettings
-            .Create(false, ["Bash(rm:*)"])
+            .Create(["Bash(rm:*)"])
             .ValueOrThrow();
 
         // Act

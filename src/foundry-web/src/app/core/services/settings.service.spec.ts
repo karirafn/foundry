@@ -2061,7 +2061,7 @@ describe('SettingsService — worker environment', () => {
 
 describe('SettingsService — claude code settings', () => {
   const CLAUDE_CODE_URL = '/api/settings/claude-code';
-  const CLAUDE_CODE = { blockCiCdEdits: false, additionalDenyRules: ['Bash(rm:*)'] };
+  const CLAUDE_CODE = { additionalDenyRules: ['Bash(rm:*)'] };
   let service: SettingsService;
   let httpMock: HttpTestingController;
 
@@ -2099,6 +2099,7 @@ describe('SettingsService — claude code settings', () => {
     // Assert
     expect(req.request.method).toBe('PUT');
     expect(req.request.body).toEqual(CLAUDE_CODE);
+    expect(req.request.body).not.toHaveProperty('blockCiCdEdits');
     expect(service.claudeCodeSettings()!.additionalDenyRules).toEqual(['Bash(curl:*)']);
     expect(service.saveClaudeCodeSuccess()).toBe(true);
     expect(service.savingClaudeCode()).toBe(false);

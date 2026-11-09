@@ -14,9 +14,7 @@ namespace Foundry.Modules.Settings.Features.WorkerConfig;
 
 internal static class UpdateClaudeCodeSettings
 {
-    internal sealed record Command(
-        bool BlockCiCdEdits,
-        IReadOnlyList<string> AdditionalDenyRules) : ICommand<GlobalSettingsSummary>;
+    internal sealed record Command(IReadOnlyList<string> AdditionalDenyRules) : ICommand<GlobalSettingsSummary>;
 
     internal sealed class Handler(DbContext dbContext)
         : ICommandHandler<Command, GlobalSettingsSummary>
@@ -35,7 +33,6 @@ internal static class UpdateClaudeCodeSettings
 
             // System.Text.Json does not enforce non-nullable annotations, so a null rule element can arrive.
             Result<ClaudeCodeSettings> claudeCodeResult = ClaudeCodeSettings.Create(
-                command.BlockCiCdEdits,
                 [.. command.AdditionalDenyRules.Select(rule => rule ?? string.Empty)]);
 
             if (claudeCodeResult is not Result<ClaudeCodeSettings>.Success claudeCodeSuccess)
@@ -56,9 +53,7 @@ internal static class UpdateClaudeCodeSettings
 
     internal static class Endpoint
     {
-        private sealed record RequestBody(
-            bool BlockCiCdEdits,
-            IReadOnlyList<string> AdditionalDenyRules);
+        private sealed record RequestBody(IReadOnlyList<string> AdditionalDenyRules);
 
         public static void Map(RouteGroupBuilder group)
         {
@@ -67,9 +62,7 @@ internal static class UpdateClaudeCodeSettings
                     ICommandHandler<Command, GlobalSettingsSummary> handler,
                     CancellationToken cancellationToken) =>
                 {
-                    Command command = new(
-                        body.BlockCiCdEdits,
-                        body.AdditionalDenyRules ?? []);
+                    Command command = new(body.AdditionalDenyRules ?? []);
 
                     Result<GlobalSettingsSummary> result = await handler.HandleAsync(command, cancellationToken);
 

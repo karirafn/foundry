@@ -536,7 +536,7 @@ public sealed class Build
     }
 
     [Fact]
-    public void WhenBuilt_SafetyPreambleContainsCiCdGuidance()
+    public void WhenBuilt_SafetyPreambleScopeLineCarriesNoCiCdRestriction()
     {
         // Arrange
         const string systemPromptTemplate = "Template content.";
@@ -551,8 +551,11 @@ public sealed class Build
             timeoutMinutes: 120, installsDocker: false, installsDotnet: false);
         string result = buildResult.ShouldBeOfType<Result<string>.Success>().Value;
 
-        // Assert
-        result.ShouldContain(".github/workflows");
+        // Assert — CI/CD files are published like any other file; pull request review is the gate (ADR 0100).
+        result.ShouldSatisfyAllConditions(
+            () => result.ShouldContain("- Scope restriction: Only modify files relevant to the issue.\n"),
+            () => result.ShouldNotContain(".github/workflows"),
+            () => result.ShouldNotContain(".gitlab-ci.yml"));
     }
 
     [Fact]
@@ -1591,26 +1594,6 @@ public sealed class Build
         // Assert — the subordination clause appears in the checks section
         result.ShouldContain("Do not edit CI/CD configuration files to make checks pass");
         result.ShouldContain("safety rules");
-    }
-
-    [Fact]
-    public void WhenBuilt_CiCdRestrictionAndChecksSectionBothPresent()
-    {
-        // Arrange — AC5: .github/workflows restriction survives alongside checks section
-
-        // Act
-        Result<string> buildResult = SystemPromptBuilder.Build(
-            Principles,
-            1, "Template content.",
-            new DispatchContext.Fresh("feat/1-title"),
-            "https://api.github.com/repos/owner/repo/issues/1",
-            timeoutMinutes: 120, installsDocker: false, installsDotnet: false);
-        string result = buildResult.ShouldBeOfType<Result<string>.Success>().Value;
-
-        // Assert — both the existing CI/CD preamble restriction and the new checks section are present
-        result.ShouldSatisfyAllConditions(
-            () => result.ShouldContain(".github/workflows"),
-            () => result.ShouldContain("gh pr checks"));
     }
 
     [Fact]

@@ -9,14 +9,7 @@ namespace Foundry.Testing;
 /// </summary>
 public sealed class ClaudeCodeSettingsBuilder
 {
-    private bool _blockCiCdEdits = true;
     private List<string> _additionalDenyRules = [];
-
-    public ClaudeCodeSettingsBuilder WithBlockCiCdEdits(bool blockCiCdEdits)
-    {
-        _blockCiCdEdits = blockCiCdEdits;
-        return this;
-    }
 
     public ClaudeCodeSettingsBuilder WithAdditionalDenyRules(IEnumerable<string> additionalDenyRules)
     {
@@ -25,5 +18,5 @@ public sealed class ClaudeCodeSettingsBuilder
     }
 
     public Result<ClaudeCodeSettings> Build() =>
-        ClaudeCodeSettings.Create(_blockCiCdEdits, _additionalDenyRules);
+        ClaudeCodeSettings.Create(_additionalDenyRules);
 }
