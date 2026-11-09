@@ -597,7 +597,7 @@ public sealed class HandleAsync : IAsyncDisposable
         StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c-settings-custom");
         StubGlobalSettingsQueries settingsQueries = new()
         {
-            ClaudeCodeSettings = new ClaudeCodeSettingsSnapshot(false, ["Bash(rm:*)"]),
+            ClaudeCodeSettings = new ClaudeCodeSettingsSnapshot(["Bash(rm:*)"]),
         };
         WorkerRoleSettings roleSettings = WorkerRoleSettings.Create(WorkerRole.Implement);
         roleSettings.ChangeModel("claude-test-model");
@@ -1415,7 +1415,7 @@ public sealed class HandleAsync : IAsyncDisposable
         string imageTag = "stub-image:v1",
         WorkerResourceLimitsSnapshot? limits = null) : IGlobalSettingsQueries
     {
-        public ClaudeCodeSettingsSnapshot ClaudeCodeSettings { get; set; } = new(true, []);
+        public ClaudeCodeSettingsSnapshot ClaudeCodeSettings { get; set; } = new([]);
 
         public Task<GlobalSettingsSummary?> GetSettingsAsync(CancellationToken cancellationToken)
             => Task.FromResult<GlobalSettingsSummary?>(null);

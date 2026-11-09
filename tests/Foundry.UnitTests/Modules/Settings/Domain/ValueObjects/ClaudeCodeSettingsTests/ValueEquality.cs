@@ -44,15 +44,4 @@ public sealed class ValueEquality
         // Act & Assert
         first.ShouldNotBe(second);
     }
-
-    [Fact]
-    public void WhenBlockCiCdEditsDiffers_InstancesAreNotEqual()
-    {
-        // Arrange
-        ClaudeCodeSettings first = new ClaudeCodeSettingsBuilder().WithBlockCiCdEdits(true).Build().ValueOrThrow();
-        ClaudeCodeSettings second = new ClaudeCodeSettingsBuilder().WithBlockCiCdEdits(false).Build().ValueOrThrow();
-
-        // Act & Assert
-        first.ShouldNotBe(second);
-    }
 }

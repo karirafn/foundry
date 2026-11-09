@@ -410,7 +410,6 @@ public sealed class ToSummary
         // Arrange
         GlobalSettings settings = CreateDefaultSettings();
         ClaudeCodeSettings claudeCode = new ClaudeCodeSettingsBuilder()
-            .WithBlockCiCdEdits(false)
             .WithAdditionalDenyRules(["Bash(rm:*)"])
             .Build()
             .Match(v => v, e => throw new InvalidOperationException(e.Message));
@@ -420,8 +419,6 @@ public sealed class ToSummary
         GlobalSettingsSummary result = GlobalSettingsMapper.ToSummary(settings);
 
         // Assert
-        result.ShouldSatisfyAllConditions(
-            () => result.BlockCiCdEdits.ShouldBe(settings.ClaudeCodeSettings.BlockCiCdEdits),
-            () => result.AdditionalDenyRules.ShouldBe(settings.ClaudeCodeSettings.AdditionalDenyRules));
+        result.AdditionalDenyRules.ShouldBe(settings.ClaudeCodeSettings.AdditionalDenyRules);
     }
 }

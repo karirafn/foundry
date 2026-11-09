@@ -161,7 +161,7 @@ internal sealed class GlobalSettingsQueries(DbContext dbContext) : IGlobalSettin
             .FirstOrDefaultAsync(cancellationToken);
 
         ClaudeCodeSettings claudeCode = settings?.ClaudeCodeSettings ?? ClaudeCodeSettings.Default;
-        return new ClaudeCodeSettingsSnapshot(claudeCode.BlockCiCdEdits, claudeCode.AdditionalDenyRules);
+        return new ClaudeCodeSettingsSnapshot(claudeCode.AdditionalDenyRules);
     }
 
     public async Task<IReadOnlyList<string>> GetAllowedProviderHostsAsync(CancellationToken cancellationToken)

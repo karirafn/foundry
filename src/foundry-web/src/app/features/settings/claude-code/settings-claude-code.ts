@@ -29,10 +29,7 @@ import { DispatchService } from '../../../core/services/dispatch.service';
 import { ApiKeyStatus, AuthMode, ClaudeCodeSettings, OAuthStatus } from '../../../core/models/settings.model';
 import { OAuthPanelComponent } from '../oauth-panel/oauth-panel';
 import { UnsavedChanges } from '../guards/unsaved-changes.guard';
-import {
-  CI_CD_DENY_RULES,
-  denyRuleFormatValidator,
-} from './settings-claude-code.validators';
+import { denyRuleFormatValidator } from './settings-claude-code.validators';
 
 const SERVER_ERROR_KEY = 'server';
 const SAVING_TEXT = 'Saving Claude Code settings...';
@@ -41,7 +38,7 @@ const QUOTED_RULE_PATTERN = /'(.*)'/s;
 const INVALID_DENY_RULE_CODE = 'Settings.InvalidDenyRule';
 const RULE_REQUIRED_TEXT = 'Deny rule is required.';
 const RULE_FORMAT_TEXT =
-  'Use Tool(pattern), e.g. Edit(.github/workflows/**). Allowed tools: Bash, Edit, Read, Write, MultiEdit, Glob, Grep.';
+  'Use Tool(pattern), e.g. Edit(secrets/**). Allowed tools: Bash, Edit, Read, Write, MultiEdit, Glob, Grep.';
 
 @Component({
   selector: 'fd-settings-claude-code',
@@ -223,51 +220,16 @@ const RULE_FORMAT_TEXT =
           <legend class="sr-only">Claude Code configuration</legend>
 
           <section class="general-settings__section">
-            <h2 class="general-settings__section-title">CI/CD file protection</h2>
-            <p class="general-settings__section-description">
-              Keep workers from editing pipeline and container-build files.
-            </p>
-            <label class="general-settings__checkbox-label" for="blockCiCdEdits">
-              <input
-                type="checkbox"
-                id="blockCiCdEdits"
-                formControlName="blockCiCdEdits"
-                aria-describedby="blockCiCdEdits-detail"
-              />
-              Block edits to CI/CD files
-            </label>
-            <div id="blockCiCdEdits-detail" class="claude-code__cicd-detail">
-              @if (form.controls.blockCiCdEdits.value) {
-                <p class="general-settings__field-hint">These deny rules are applied to every worker:</p>
-                <ul class="claude-code__rule-list" role="list">
-                  @for (rule of ciCdDenyRules; track rule) {
-                    <li class="claude-code__rule-item"><code>{{ rule }}</code></li>
-                  }
-                </ul>
-              } @else {
-                <p class="general-settings__callout general-settings__callout--warning">
-                  <span class="general-settings__callout-icon" aria-hidden="true">⚠</span>
-                  <span>
-                    <strong class="general-settings__callout-lead">Warning:</strong>
-                    CI/CD files are not blocked by permission rules. The system prompt still instructs workers
-                    to leave CI/CD files alone, but this is soft guidance a worker can override.
-                  </span>
-                </p>
-              }
-            </div>
-          </section>
-
-          <section class="general-settings__section">
             <h2 class="general-settings__section-title">Additional deny rules</h2>
             <p id="denyRulesGuidance" class="general-settings__section-description">
-              Extra permission deny rules applied to every worker, on top of the base and CI/CD rules. Each rule is
+              Extra permission deny rules applied to every worker, on top of Foundry's built-in rules. Each rule is
               a tool pattern such as <code>Bash(rm:*)</code> or <code>Edit(secrets/**)</code>.
             </p>
 
             <div formArrayName="denyRules">
               @if (denyRules.length === 0) {
                 <p class="general-settings__field-hint claude-code__empty">
-                  No additional deny rules. Workers run with the base and CI/CD deny rules only. Add a rule to deny
+                  No additional deny rules. Workers run with Foundry's built-in deny rules only. Add a rule to deny
                   more tools or paths.
                 </p>
               }
@@ -343,10 +305,7 @@ export class SettingsClaudeCodeComponent implements UnsavedChanges {
   private readonly _fb = inject(NonNullableFormBuilder);
   private readonly _cdr = inject(ChangeDetectorRef);
 
-  protected readonly ciCdDenyRules: readonly string[] = CI_CD_DENY_RULES;
-
   protected readonly form = this._fb.group({
-    blockCiCdEdits: this._fb.control(true),
     denyRules: this._fb.array<FormControl<string>>([]),
   });
 
@@ -576,8 +535,8 @@ export class SettingsClaudeCodeComponent implements UnsavedChanges {
   }
 
   private _readForm(): ClaudeCodeSettings {
-    const { blockCiCdEdits, denyRules } = this.form.getRawValue();
-    return { blockCiCdEdits, additionalDenyRules: denyRules };
+    const { denyRules } = this.form.getRawValue();
+    return { additionalDenyRules: denyRules };
   }
 
   private _createRule(rule: string): FormControl<string> {
@@ -593,7 +552,6 @@ export class SettingsClaudeCodeComponent implements UnsavedChanges {
     }
     this.denyRules.clear({ emitEvent: false });
     settings.additionalDenyRules.forEach((rule) => this.denyRules.push(this._createRule(rule), { emitEvent: false }));
-    this.form.patchValue({ blockCiCdEdits: settings.blockCiCdEdits }, { emitEvent: false });
     this.form.markAsPristine();
     this.form.markAsUntouched();
     this.form.updateValueAndValidity();
@@ -652,7 +610,6 @@ export class SettingsClaudeCodeComponent implements UnsavedChanges {
 
 function settingsEqual(left: ClaudeCodeSettings, right: ClaudeCodeSettings): boolean {
   return (
-    left.blockCiCdEdits === right.blockCiCdEdits &&
     left.additionalDenyRules.length === right.additionalDenyRules.length &&
     left.additionalDenyRules.every((rule, index) => rule === right.additionalDenyRules[index])
   );

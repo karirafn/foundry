@@ -67,7 +67,6 @@ export const WORKER_ENVIRONMENT_DEFAULTS = {
 };
 
 export const CLAUDE_CODE_DEFAULTS = {
-  blockCiCdEdits: true,
   additionalDenyRules: [] as string[],
 };
 

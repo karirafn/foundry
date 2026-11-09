@@ -188,24 +188,6 @@ body {
     border: 0;
   }
 
-  &__cicd-detail {
-    margin-top: var(--fd-spacing-sm);
-  }
-
-  &__rule-list {
-    margin: 0;
-    padding: var(--fd-spacing-sm) var(--fd-spacing-md);
-    list-style: none;
-    background: var(--fd-bg-page);
-    border: 1px solid var(--fd-border-default);
-    border-radius: var(--fd-radius-md);
-  }
-
-  &__rule-item {
-    font-family: var(--fd-font-mono);
-    overflow-wrap: anywhere;
-  }
-
   &__row {
     display: grid;
     grid-template-columns: 1fr auto;

@@ -14,26 +14,19 @@ public sealed partial record ClaudeCodeSettings
     private const string DenyRulePattern = @"^(Bash|Edit|Read|Write|MultiEdit|Glob|Grep)\(.+\)\z";
 
     [JsonConstructor]
-    private ClaudeCodeSettings(bool blockCiCdEdits = true, IReadOnlyList<string>? additionalDenyRules = null)
+    private ClaudeCodeSettings(IReadOnlyList<string>? additionalDenyRules = null)
     {
-        BlockCiCdEdits = blockCiCdEdits;
         AdditionalDenyRules = additionalDenyRules ?? [];
     }
 
-    public static readonly ClaudeCodeSettings Default = Create(
-        blockCiCdEdits: true,
-        additionalDenyRules: [])
+    public static readonly ClaudeCodeSettings Default = Create(additionalDenyRules: [])
         .Match(
             onSuccess: v => v,
             onFailure: e => throw new InvalidOperationException($"ClaudeCodeSettings.Default is invalid: {e.Message}"));
 
-    public bool BlockCiCdEdits { get; }
-
     public IReadOnlyList<string> AdditionalDenyRules { get; }
 
-    public static Result<ClaudeCodeSettings> Create(
-        bool blockCiCdEdits,
-        IReadOnlyList<string> additionalDenyRules)
+    public static Result<ClaudeCodeSettings> Create(IReadOnlyList<string> additionalDenyRules)
     {
         HashSet<string> seenRules = new(StringComparer.Ordinal);
         List<string> canonicalRules = [];
@@ -51,18 +44,16 @@ public sealed partial record ClaudeCodeSettings
             }
         }
 
-        return Result<ClaudeCodeSettings>.Ok(new ClaudeCodeSettings(blockCiCdEdits, canonicalRules.AsReadOnly()));
+        return Result<ClaudeCodeSettings>.Ok(new ClaudeCodeSettings(canonicalRules.AsReadOnly()));
     }
 
     public bool Equals(ClaudeCodeSettings? other) =>
         other is not null
-        && BlockCiCdEdits == other.BlockCiCdEdits
         && AdditionalDenyRules.SequenceEqual(other.AdditionalDenyRules);
 
     public override int GetHashCode()
     {
         HashCode hash = new();
-        hash.Add(BlockCiCdEdits);
         foreach (string rule in AdditionalDenyRules)
         {
             hash.Add(rule);

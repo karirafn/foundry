@@ -13,9 +13,8 @@ public sealed class Build
 {
     private static RunInput Snapshot(
         string model = "",
-        bool blockCiCdEdits = true,
         params string[] additionalDenyRules) =>
-        new(new ClaudeCodeSettingsSnapshot(blockCiCdEdits, additionalDenyRules), model);
+        new(new ClaudeCodeSettingsSnapshot(additionalDenyRules), model);
 
     private static string[] DenyRules(string json)
     {
@@ -32,7 +31,7 @@ public sealed class Build
     }
 
     [Fact]
-    public void WhenBlockCiCdEditsTrueAndNothingElseSet_ReturnsJsonWithBaseAndCiCdRules()
+    public void WhenNothingElseSet_ReturnsJsonWithBaseRulesOnly()
     {
         // Arrange
         RunInput snapshot = Snapshot();
@@ -49,24 +48,32 @@ public sealed class Build
 
         string[] rules = DenyRules(json);
 
-        rules.Length.ShouldBe(17);
-        rules.ShouldContain("Bash(git push --force:*)");
-        rules.ShouldContain("Bash(git push * main)");
-        rules.ShouldContain("Bash(git push * master)");
-        rules.ShouldContain("Bash(npm publish:*)");
-        rules.ShouldContain("Bash(npx -y:*)");
-        rules.ShouldContain("Bash(git branch -D:*)");
-        rules.ShouldContain("Bash(git branch -d:*)");
-        rules.ShouldContain("Bash(git push --delete:*)");
-        rules.ShouldContain("Bash(git push * HEAD:*)");
-        rules.ShouldContain("Bash(git push * :*)");
-        rules.ShouldContain("Edit(**/.github/workflows/**)");
-        rules.ShouldContain("Edit(**/.gitlab-ci.yml)");
-        rules.ShouldContain("Edit(**/Dockerfile)");
-        rules.ShouldContain("Edit(**/docker-compose*.yml)");
-        rules.ShouldContain("Edit(**/docker-compose.yaml)");
-        rules.ShouldContain("Edit(**/compose.yml)");
-        rules.ShouldContain("Edit(**/compose.yaml)");
+        rules.ShouldBe(
+        [
+            "Bash(git push --force:*)",
+            "Bash(git push * main)",
+            "Bash(git push * master)",
+            "Bash(npm publish:*)",
+            "Bash(npx -y:*)",
+            "Bash(git branch -D:*)",
+            "Bash(git branch -d:*)",
+            "Bash(git push --delete:*)",
+            "Bash(git push * HEAD:*)",
+            "Bash(git push * :*)",
+        ]);
+    }
+
+    [Fact]
+    public void WhenCalled_InjectsNoCiCdEditRules()
+    {
+        // Arrange
+        RunInput snapshot = Snapshot();
+
+        // Act
+        string json = WorkerSettingsBuilder.Build(snapshot.ClaudeCode, snapshot.Model);
+
+        // Assert — CI/CD files are published like any other file; pull request review is the gate (ADR 0100).
+        DenyRules(json).ShouldNotContain(rule => rule.StartsWith("Edit(", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -115,7 +122,7 @@ public sealed class Build
     }
 
     [Fact]
-    public void WhenAdditionalDenyRulesProvided_AppendsThemAfterBaseAndCiCdRules()
+    public void WhenAdditionalDenyRulesProvided_AppendsThemAfterBaseRules()
     {
         // Arrange
         RunInput snapshot = Snapshot(
@@ -127,9 +134,23 @@ public sealed class Build
         // Assert
         string[] rules = DenyRules(json);
 
-        rules.Length.ShouldBe(19);
-        rules[17].ShouldBe("Bash(rm -rf:*)");
-        rules[18].ShouldBe("Bash(curl:*)");
+        rules.Length.ShouldBe(12);
+        rules[9].ShouldBe("Bash(git push * :*)");
+        rules[10].ShouldBe("Bash(rm -rf:*)");
+        rules[11].ShouldBe("Bash(curl:*)");
+    }
+
+    [Fact]
+    public void WhenOperatorListsCiCdGlobsInAdditionalRules_KeepsThem()
+    {
+        // Arrange
+        RunInput snapshot = Snapshot(additionalDenyRules: "Edit(**/.github/workflows/**)");
+
+        // Act
+        string json = WorkerSettingsBuilder.Build(snapshot.ClaudeCode, snapshot.Model);
+
+        // Assert
+        DenyRules(json)[^1].ShouldBe("Edit(**/.github/workflows/**)");
     }
 
     [Fact]
@@ -148,7 +169,7 @@ public sealed class Build
     }
 
     [Fact]
-    public void WhenBlockCiCdEditsTrue_BaseDenyListContainsBranchDeletionRules()
+    public void WhenCalled_BaseDenyListContainsBranchDeletionRules()
     {
         // Arrange
         RunInput snapshot = Snapshot();
@@ -163,131 +184,6 @@ public sealed class Build
             () => rules.ShouldContain("Bash(git branch -D:*)"),
             () => rules.ShouldContain("Bash(git branch -d:*)"),
             () => rules.ShouldContain("Bash(git push --delete:*)"));
-    }
-
-    [Fact]
-    public void WhenBlockCiCdEditsTrue_IncludesAllCiCdDenyRules()
-    {
-        // Arrange
-        RunInput snapshot = Snapshot(blockCiCdEdits: true);
-
-        // Act
-        string json = WorkerSettingsBuilder.Build(snapshot.ClaudeCode, snapshot.Model);
-
-        // Assert
-        string[] rules = DenyRules(json);
-
-        rules.ShouldSatisfyAllConditions(
-            () => rules.ShouldContain("Edit(**/.github/workflows/**)"),
-            () => rules.ShouldContain("Edit(**/.gitlab-ci.yml)"),
-            () => rules.ShouldContain("Edit(**/Dockerfile)"),
-            () => rules.ShouldContain("Edit(**/docker-compose*.yml)"),
-            () => rules.ShouldContain("Edit(**/docker-compose.yaml)"),
-            () => rules.ShouldContain("Edit(**/compose.yml)"),
-            () => rules.ShouldContain("Edit(**/compose.yaml)"));
-    }
-
-    [Fact]
-    public void WhenBlockCiCdEditsTrue_CiCdRulesArePathGlobsMatchingAnyDepth()
-    {
-        // Arrange
-        RunInput snapshot = Snapshot(blockCiCdEdits: true);
-
-        // Act
-        string json = WorkerSettingsBuilder.Build(snapshot.ClaudeCode, snapshot.Model);
-
-        // Assert — Claude Code skips Edit rules using the Bash-only ":*" prefix syntax as invalid.
-        string[] editRules = [.. DenyRules(json).Where(rule => rule.StartsWith("Edit(", StringComparison.Ordinal))];
-
-        editRules.Length.ShouldBe(7);
-        editRules.ShouldAllBe(rule => rule.StartsWith("Edit(**/", StringComparison.Ordinal) && !rule.Contains(":*"));
-    }
-
-    [Fact]
-    public void WhenBlockCiCdEditsFalse_CiCdRulesAbsentFromOutput()
-    {
-        // Arrange
-        RunInput snapshot = Snapshot(blockCiCdEdits: false);
-
-        // Act
-        string json = WorkerSettingsBuilder.Build(snapshot.ClaudeCode, snapshot.Model);
-
-        // Assert
-        string[] rules = DenyRules(json);
-
-        rules.Length.ShouldBe(10);
-        rules.ShouldSatisfyAllConditions(
-            () => rules.ShouldNotContain("Edit(**/.github/workflows/**)"),
-            () => rules.ShouldNotContain("Edit(**/.gitlab-ci.yml)"),
-            () => rules.ShouldNotContain("Edit(**/Dockerfile)"),
-            () => rules.ShouldNotContain("Edit(**/docker-compose*.yml)"),
-            () => rules.ShouldNotContain("Edit(**/docker-compose.yaml)"),
-            () => rules.ShouldNotContain("Edit(**/compose.yml)"),
-            () => rules.ShouldNotContain("Edit(**/compose.yaml)"));
-    }
-
-    [Fact]
-    public void WhenBlockCiCdEditsFalse_BaseRulesStillPresent()
-    {
-        // Arrange
-        RunInput snapshot = Snapshot(blockCiCdEdits: false);
-
-        // Act
-        string json = WorkerSettingsBuilder.Build(snapshot.ClaudeCode, snapshot.Model);
-
-        // Assert
-        string[] rules = DenyRules(json);
-
-        rules.ShouldSatisfyAllConditions(
-            () => rules.ShouldContain("Bash(git push --force:*)"),
-            () => rules.ShouldContain("Bash(git push * main)"),
-            () => rules.ShouldContain("Bash(git push * master)"),
-            () => rules.ShouldContain("Bash(npm publish:*)"),
-            () => rules.ShouldContain("Bash(npx -y:*)"),
-            () => rules.ShouldContain("Bash(git branch -D:*)"),
-            () => rules.ShouldContain("Bash(git branch -d:*)"),
-            () => rules.ShouldContain("Bash(git push --delete:*)"),
-            () => rules.ShouldContain("Bash(git push * HEAD:*)"),
-            () => rules.ShouldContain("Bash(git push * :*)"));
-    }
-
-    [Fact]
-    public void WhenBlockCiCdEditsFalseAndAdditionalRulesSet_OrderIsBaseThenAdditional()
-    {
-        // Arrange
-        RunInput snapshot = Snapshot(
-            blockCiCdEdits: false,
-            additionalDenyRules: "Bash(rm -rf:*)");
-
-        // Act
-        string json = WorkerSettingsBuilder.Build(snapshot.ClaudeCode, snapshot.Model);
-
-        // Assert
-        string[] rules = DenyRules(json);
-
-        rules.Length.ShouldBe(11);
-        rules[9].ShouldBe("Bash(git push * :*)");
-        rules[10].ShouldBe("Bash(rm -rf:*)");
-    }
-
-    [Fact]
-    public void WhenAllSourcesPopulated_OrderIsBaseThenCiCdThenAdditional()
-    {
-        // Arrange
-        RunInput snapshot = Snapshot(additionalDenyRules: "Bash(rm -rf:*)");
-
-        // Act
-        string json = WorkerSettingsBuilder.Build(snapshot.ClaudeCode, snapshot.Model);
-
-        // Assert
-        string[] rules = DenyRules(json);
-
-        rules.Length.ShouldBe(18);
-        rules[0].ShouldBe("Bash(git push --force:*)");
-        rules[9].ShouldBe("Bash(git push * :*)");
-        rules[10].ShouldBe("Edit(**/.github/workflows/**)");
-        rules[16].ShouldBe("Edit(**/compose.yaml)");
-        rules[17].ShouldBe("Bash(rm -rf:*)");
     }
 
     [Fact]
@@ -308,19 +204,19 @@ public sealed class Build
 
         string[] rules = DenyRules(json);
 
-        rules.Length.ShouldBe(18);
+        rules.Length.ShouldBe(11);
         rules.ShouldContain("Bash(git push --force:*)");
         rules.ShouldContain("Bash(npx -y:*)");
-        rules[17].ShouldBe("Bash(rm -rf:*)");
+        rules[10].ShouldBe("Bash(rm -rf:*)");
     }
 
     [Theory]
-    [InlineData("", true)]
-    [InlineData("claude-opus-4-5", false)]
-    public void WhenCalled_SuppressesAiAttributionWithObjectForm(string model, bool blockCiCdEdits)
+    [InlineData("")]
+    [InlineData("claude-opus-4-5")]
+    public void WhenCalled_SuppressesAiAttributionWithObjectForm(string model)
     {
         // Arrange
-        RunInput snapshot = Snapshot(model, blockCiCdEdits, "Bash(rm -rf:*)");
+        RunInput snapshot = Snapshot(model, "Bash(rm -rf:*)");
 
         // Act
         string json = WorkerSettingsBuilder.Build(snapshot.ClaudeCode, snapshot.Model);

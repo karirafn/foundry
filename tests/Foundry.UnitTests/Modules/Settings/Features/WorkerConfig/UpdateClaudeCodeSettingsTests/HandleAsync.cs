@@ -52,13 +52,11 @@ public sealed class HandleAsync : IAsyncLifetime
         await seedDb.SaveChangesAsync(TestContext.Current.CancellationToken);
     }
 
-    private static UpdateClaudeCodeSettings.Command CreateCommand(
-        bool blockCiCdEdits = false,
-        params string[] additionalDenyRules) =>
-        new(blockCiCdEdits, additionalDenyRules);
+    private static UpdateClaudeCodeSettings.Command CreateCommand(params string[] additionalDenyRules) =>
+        new(additionalDenyRules);
 
     [Fact]
-    public async Task WhenValid_ReturnsSummaryWithNewToggleAndRules()
+    public async Task WhenValid_ReturnsSummaryWithNewRules()
     {
         // Arrange
         await SeedSettingsAsync();
@@ -71,9 +69,7 @@ public sealed class HandleAsync : IAsyncLifetime
 
         // Assert
         GlobalSettingsSummary summary = result.Match(v => v, e => throw new InvalidOperationException(e.Message));
-        summary.ShouldSatisfyAllConditions(
-            () => summary.BlockCiCdEdits.ShouldBeFalse(),
-            () => summary.AdditionalDenyRules.ShouldBe([ValidRule]));
+        summary.AdditionalDenyRules.ShouldBe([ValidRule]);
     }
 
     [Fact]
@@ -96,9 +92,7 @@ public sealed class HandleAsync : IAsyncLifetime
         GlobalSettings persisted = await verifyDb.Set<GlobalSettings>()
             .AsNoTracking()
             .SingleAsync(TestContext.Current.CancellationToken);
-        persisted.ShouldSatisfyAllConditions(
-            () => persisted.ClaudeCodeSettings.BlockCiCdEdits.ShouldBeFalse(),
-            () => persisted.ClaudeCodeSettings.AdditionalDenyRules.ShouldBe([ValidRule]));
+        persisted.ClaudeCodeSettings.AdditionalDenyRules.ShouldBe([ValidRule]);
     }
 
     [Fact]
@@ -161,7 +155,7 @@ public sealed class HandleAsync : IAsyncLifetime
         await using (FoundryDbContext dbContext = CreateDbContext())
         {
             UpdateClaudeCodeSettings.Handler sut = new(dbContext);
-            UpdateClaudeCodeSettings.Command command = CreateCommand(blockCiCdEdits: true);
+            UpdateClaudeCodeSettings.Command command = CreateCommand();
 
             // Act
             await sut.HandleAsync(command, TestContext.Current.CancellationToken);

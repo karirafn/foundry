@@ -61,7 +61,7 @@ The entrypoint writes it to `/home/node/.claude/settings.json` before Claude Cod
 - `Bash(git push * HEAD:*)`
 - `Bash(git push * :*)`
 
-The additional deny rules, including the CI/CD edit protection toggle, are managed on the Claude Code settings page in the dashboard and stored in Global Settings. The model is set per Worker Role in Settings → Worker roles, chosen from Default (the account default), the Claude Code aliases and the models the Anthropic Models API lists for the workers' credential.
+The additional deny rules are managed on the Claude Code settings page in the dashboard and stored in Global Settings. The model is set per Worker Role in Settings → Worker roles, chosen from Default (the account default), the Claude Code aliases and the models the Anthropic Models API lists for the workers' credential.
 
 > **Security model note:** worker prompts ship in the worker image with each Worker Role (`workers/roles/<role>/`, shown in Settings → Worker roles, where only the model can be changed), so a prompt change is a reviewed pull request that takes effect at the next restart. Anyone who can merge to the repository is trusted — they can weaken or override guidance in a role prompt. The non-configurable safety preamble (prepended automatically) provides a baseline, but it is instructional guidance, not a cryptographic enforcement mechanism. Do not rely on it alone to contain an adversarial operator.
 

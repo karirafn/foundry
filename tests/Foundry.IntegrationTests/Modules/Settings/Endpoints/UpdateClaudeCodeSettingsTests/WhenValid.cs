@@ -54,7 +54,6 @@ public sealed class WhenValid : IAsyncDisposable
         // Arrange
         await SeedDefaultSettingsAsync();
         object body = new UpdateClaudeCodeSettingsRequestBuilder()
-            .WithBlockCiCdEdits(false)
             .WithAdditionalDenyRule("Bash(rm:*)")
             .Build();
 
@@ -68,9 +67,7 @@ public sealed class WhenValid : IAsyncDisposable
                 FoundryWebAppFactory.JsonOptions,
                 TestContext.Current.CancellationToken))
             .ShouldNotBeNull();
-        summary.ShouldSatisfyAllConditions(
-            () => summary.BlockCiCdEdits.ShouldBeFalse(),
-            () => summary.AdditionalDenyRules.ShouldBe(["Bash(rm:*)"]));
+        summary.AdditionalDenyRules.ShouldBe(["Bash(rm:*)"]);
     }
 
     [Fact]
