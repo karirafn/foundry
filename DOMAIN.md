@@ -295,10 +295,16 @@ Two states deserve explicit note:
 
 ## Issue Kind
 
-A value object on the base `Issue` type classifying the nature of the work — `Feature`, `Bug`, `Refactor`, `Documentation`, etc.
-Extracted during issue detection by a provider-agnostic classifier: each label is normalized by stripping any `scope::` prefix, then the suffix is matched against the kind names — so flat (`feature`) and scoped (`type::feature`) labels both classify on either provider.
-Falls back to `Feature` when no recognized label is present.
-Used by `BranchName.Generate()` to derive the branch prefix (`feat/`, `fix/`, `refactor/`, `docs/`).
+A value object classifying the nature of the work — `Feature`, `Bug`, `Refactor`, `Documentation`.
+Extracted during issue detection by a provider-agnostic classifier (`LabelClassifier`): each label is normalized by stripping any `scope::` prefix, then the suffix is matched against the kind names in priority order (bug, feature, refactor, documentation) — so flat (`feature`) and scoped (`type::feature`) labels both classify on either provider.
+When no recognized label is present the classifier returns no kind (`IssueDetected.IssueKindLabel` and `IssueDetailsChanged.IssueKindLabel` are `null`); `IssueKind.FromLabel` returns `null` for an unrecognized label rather than defaulting.
+
+### Kind Classification
+
+The closed value object on the base `Issue` recording whether a label decided the issue's kind: `Labelled(IssueKind)` when a kind label matched, otherwise `Unclassified`.
+Set at detection and carried through every state transition with the other shared issue properties (`SetSharedProperties`). Re-derived from the labels whenever they change (`UpdateDetails`): `Labelled` when a kind label is present, otherwise back to `Unclassified` — an already-generated branch name is unaffected.
+Persisted in `issues.issue_kind`: the labelled kind, or `NULL` for `Unclassified`. Rows that existed before the classification was introduced are read as `Labelled` with their stored kind.
+The `Feature` fallback is applied only by `BranchName.Generate(KindClassification, …)`, which derives the branch prefix (`feat/`, `fix/`, `refactor/`, `docs/`) and resolves `Unclassified` to `IssueKind.Feature` (`feat/`).
 
 ## Monitored Repository
 
@@ -625,7 +631,7 @@ Hard-deleted when the provider-side issue is closed or loses its trigger label (
 
 The first-time dispatch tier — the lowest-priority of the three queued variants (`TierRank = 2`).
 An issue reaches this state from three paths: `DetectedIssue` with no blockers, an unblocked `BlockedIssue` (all blockers resolved), or a retried `FailedIssue` / `UnchangedIssue`.
-`DispatchBranchName` is generated fresh from the issue kind prefix, number, and title (`BranchName.Generate(IssueKind.BranchPrefix, IssueNumber, Title)`).
+`DispatchBranchName` is generated fresh from the kind classification, number, and title (`BranchName.Generate(KindClassification, IssueNumber, Title)`; an `Unclassified` issue gets `feat/`).
 `Context` is `DispatchContext.Fresh(branchName)` — instructs the worker to start a new implementation on a new branch.
 Transitions: `Claim()` → `InProgressIssue` (worker assigned); `Block()` → `BlockedIssue` (blockers detected).
 

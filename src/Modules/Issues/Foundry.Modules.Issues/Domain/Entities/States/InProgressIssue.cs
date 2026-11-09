@@ -27,7 +27,8 @@ public sealed class InProgressIssue : Issue
             queued.Author,
             queued.Url,
             queued.Labels,
-            queued.DetectedAt);
+            queued.DetectedAt,
+            queued.KindClassification);
         inProgress.WorkerRunId = workerRunId;
         return inProgress;
     }
@@ -117,7 +118,8 @@ public sealed class InProgressIssue : Issue
             source.Author,
             source.Url,
             source.Labels,
-            source.DetectedAt);
+            source.DetectedAt,
+            source.KindClassification);
         inProgress.WorkerRunId = workerRunId;
         return inProgress;
     }

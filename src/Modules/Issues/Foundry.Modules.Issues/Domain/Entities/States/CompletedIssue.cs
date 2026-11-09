@@ -32,7 +32,8 @@ public sealed class CompletedIssue : Issue
             source.Author,
             source.Url,
             source.Labels,
-            source.DetectedAt);
+            source.DetectedAt,
+            source.KindClassification);
         completed.BranchName = source.BranchName;
         completed.PullRequestUrl = source.PullRequestUrl;
         completed.CompletedAt = completedAt;
@@ -49,7 +50,8 @@ public sealed class CompletedIssue : Issue
             source.Author,
             source.Url,
             source.Labels,
-            source.DetectedAt);
+            source.DetectedAt,
+            source.KindClassification);
         completed.BranchName = source.BranchName;
         completed.PullRequestUrl = source.PullRequestUrl;
         completed.CompletedAt = completedAt;
@@ -66,7 +68,8 @@ public sealed class CompletedIssue : Issue
             source.Author,
             source.Url,
             source.Labels,
-            source.DetectedAt);
+            source.DetectedAt,
+            source.KindClassification);
         completed.BranchName = source.BranchName;
         completed.PullRequestUrl = source.PullRequestUrl;
         completed.CompletedAt = completedAt;
@@ -87,7 +90,8 @@ public sealed class CompletedIssue : Issue
             source.Author,
             source.Url,
             source.Labels,
-            source.DetectedAt);
+            source.DetectedAt,
+            source.KindClassification);
         completed.BranchName = branchName;
         completed.PullRequestUrl = pullRequestUrl;
         completed.CompletedAt = completedAt;

@@ -55,7 +55,8 @@ public sealed class TransitionAsync : IAsyncDisposable
             author: ValidAuthor,
             url: ValidUrl,
             labels: ["foundry"],
-            detectedAt: DateTimeOffset.UtcNow);
+            detectedAt: DateTimeOffset.UtcNow,
+            kindClassification: KindClassification.Unclassified);
 
     [Fact]
     public async Task WhenTransitioned_NewVariantRowExistsInDatabase()

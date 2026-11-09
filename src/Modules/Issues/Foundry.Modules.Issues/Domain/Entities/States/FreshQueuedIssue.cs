@@ -1,5 +1,6 @@
 using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Issues.Domain.Entities;
+using Foundry.Modules.Issues.Domain.ValueObjects;
 using Foundry.Modules.Workers.Contracts;
 using Foundry.Shared;
 
@@ -19,7 +20,7 @@ public sealed class FreshQueuedIssue : QueuedIssue
     public override int TierRank => 2;
 
     public override BranchName DispatchBranchName =>
-        BranchName.Generate(IssueKind.BranchPrefix, IssueNumber, Title);
+        BranchName.Generate(KindClassification, IssueNumber, Title);
 
     public override DispatchContext Context =>
         new DispatchContext.Fresh(DispatchBranchName.Value);
@@ -34,7 +35,8 @@ public sealed class FreshQueuedIssue : QueuedIssue
             detected.Author,
             detected.Url,
             detected.Labels,
-            detected.DetectedAt);
+            detected.DetectedAt,
+            detected.KindClassification);
         return queued;
     }
 
@@ -48,7 +50,8 @@ public sealed class FreshQueuedIssue : QueuedIssue
             blocked.Author,
             blocked.Url,
             blocked.Labels,
-            blocked.DetectedAt);
+            blocked.DetectedAt,
+            blocked.KindClassification);
         return queued;
     }
 
@@ -62,7 +65,8 @@ public sealed class FreshQueuedIssue : QueuedIssue
             source.Author,
             source.Url,
             source.Labels,
-            source.DetectedAt);
+            source.DetectedAt,
+            source.KindClassification);
         return queued;
     }
 

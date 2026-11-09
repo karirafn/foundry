@@ -27,7 +27,8 @@ public sealed class UnchangedIssue : Issue
             source.Author,
             source.Url,
             source.Labels,
-            source.DetectedAt);
+            source.DetectedAt,
+            source.KindClassification);
         unchanged.WorkerRunId = source.WorkerRunId;
         return unchanged;
     }

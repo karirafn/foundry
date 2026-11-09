@@ -39,11 +39,12 @@ internal sealed class IssueTestDbContext(DbContextOptions<IssueTestDbContext> op
                             ? Array.Empty<string>()
                             : v.Split(',', StringSplitOptions.RemoveEmptyEntries)));
 
-            builder.Property(x => x.IssueKind)
+            builder.Ignore(x => x.KindClassification);
+            builder.Property<IssueKind?>("_labelledKind")
                 .HasConversion(
-                    new ValueConverter<IssueKind, string>(
+                    (ValueConverter)new ValueConverter<IssueKind, string>(
                         kind => kind.Value,
-                        value => IssueKind.FromLabel(value)));
+                        value => IssueKind.FromLabel(value)!));
 
             builder.HasDiscriminator<string>("State")
                 .HasValue<DetectedIssue>("detected")

@@ -1,4 +1,5 @@
 using Foundry.Modules.Issues.Domain.Entities;
+using Foundry.Modules.Issues.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Shared;
 
@@ -21,7 +22,10 @@ internal sealed class UpdateIssueDetailsHandler(
             return;
         }
 
-        issue.UpdateDetails(@event.Title, @event.Labels);
+        issue.UpdateDetails(
+            @event.Title,
+            @event.Labels,
+            KindClassification.FromKindLabel(@event.IssueKindLabel));
         await db.SaveChangesAsync(cancellationToken);
     }
 }

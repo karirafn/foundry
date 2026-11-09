@@ -91,15 +91,6 @@ namespace Foundry.WebApi.Migrations
                         .HasColumnType("TEXT")
                         .HasColumnName("detected_at");
 
-                    b.Property<string>("IssueKind")
-                        .IsRequired()
-                        .ValueGeneratedOnAdd()
-                        .HasMaxLength(50)
-                        .IsUnicode(false)
-                        .HasColumnType("TEXT")
-                        .HasColumnName("issue_kind")
-                        .HasDefaultValueSql("'feature'");
-
                     b.Property<int>("IssueNumber")
                         .HasColumnType("INTEGER")
                         .HasColumnName("issue_number");
@@ -127,6 +118,12 @@ namespace Foundry.WebApi.Migrations
                         .IsUnicode(false)
                         .HasColumnType("TEXT")
                         .HasColumnName("url");
+
+                    b.Property<string>("_labelledKind")
+                        .HasMaxLength(50)
+                        .IsUnicode(false)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("issue_kind");
 
                     b.Property<string>("state")
                         .IsRequired()

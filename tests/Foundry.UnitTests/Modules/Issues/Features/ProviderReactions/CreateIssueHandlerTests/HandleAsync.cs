@@ -72,7 +72,7 @@ public sealed class HandleAsync : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenIssueDetectedWithBugKindLabel_SetsIssueKindToBug()
+    public async Task WhenIssueDetectedWithBugKindLabel_ClassifiesAsLabelledBug()
     {
         // Arrange
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
@@ -95,7 +95,33 @@ public sealed class HandleAsync : IAsyncDisposable
         DetectedIssue detected = _dbContext.Set<Issue>()
             .OfType<DetectedIssue>()
             .ShouldHaveSingleItem();
-        detected.IssueKind.ShouldBe(IssueKind.Bug);
+        detected.KindClassification.ShouldBe(new KindClassification.Labelled(IssueKind.Bug));
+    }
+
+    [Fact]
+    public async Task WhenIssueDetectedWithoutKindLabel_ClassifiesAsUnclassified()
+    {
+        // Arrange
+        IssueDetected @event = new(
+            MonitoredRepositoryId: MonitoredRepositoryId.New(),
+            IssueNumber: 1,
+            Title: "Something",
+            Author: "octocat",
+            Url: "https://github.com/owner/repo/issues/1",
+            Labels: ["foundry"],
+            IssueKindLabel: null,
+            DetectedAt: DateTimeOffset.UtcNow);
+
+        IIntegrationEventHandler<IssueDetected> sut = new CreateIssueHandler(_dbContext, NullLogger<CreateIssueHandler>.Instance);
+
+        // Act
+        await sut.HandleAsync(@event, CancellationToken.None);
+
+        // Assert
+        DetectedIssue detected = _dbContext.Set<Issue>()
+            .OfType<DetectedIssue>()
+            .ShouldHaveSingleItem();
+        detected.KindClassification.ShouldBe(KindClassification.Unclassified);
     }
 
     [Fact]

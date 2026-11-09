@@ -83,7 +83,8 @@ public sealed class OutboxHarvestTransitionAsync : IAsyncDisposable
             author: author,
             url: url,
             labels: ["foundry"],
-            detectedAt: DateTimeOffset.UtcNow);
+            detectedAt: DateTimeOffset.UtcNow,
+            kindClassification: KindClassification.Unclassified);
     }
 
     [Fact]

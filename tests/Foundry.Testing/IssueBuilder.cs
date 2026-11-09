@@ -27,7 +27,7 @@ public sealed class IssueBuilder
     private ProviderUrl _url = ProviderUrl.Create("https://github.com/owner/repo/issues/1").ValueOrThrow();
     private IReadOnlyList<string> _labels = ["foundry"];
     private DateTimeOffset _detectedAt = DateTimeOffset.UtcNow;
-    private IssueKind _issueKind = IssueKind.Feature;
+    private KindClassification _kindClassification = KindClassification.Unclassified;
 
     private WorkerRunId _workerRunId = WorkerRunId.New();
     private string _branchName = "feat/1-test";
@@ -68,12 +68,7 @@ public sealed class IssueBuilder
 
     public IssueBuilder WithDetectedAt(DateTimeOffset value) { _detectedAt = value; return this; }
 
-    /// <remarks>
-    /// Only affects <see cref="Detected"/>. Production sets <c>IssueKind</c> at detection
-    /// alone (<c>SetSharedProperties</c> does not carry it), so terminals beyond
-    /// <see cref="Detected"/> reset it to <see cref="IssueKind.Feature"/>.
-    /// </remarks>
-    public IssueBuilder WithIssueKind(IssueKind value) { _issueKind = value; return this; }
+    public IssueBuilder WithKindClassification(KindClassification value) { _kindClassification = value; return this; }
 
     public IssueBuilder WithWorkerRunId(WorkerRunId value) { _workerRunId = value; return this; }
 
@@ -116,7 +111,7 @@ public sealed class IssueBuilder
             _url,
             _labels,
             _detectedAt,
-            _issueKind);
+            _kindClassification);
 
     public FreshQueuedIssue FreshQueued() => Detected().Enqueue();
 

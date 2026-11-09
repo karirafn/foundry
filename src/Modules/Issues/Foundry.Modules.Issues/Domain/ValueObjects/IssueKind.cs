@@ -16,7 +16,7 @@ public sealed record IssueKind
         BranchPrefix = branchPrefix;
     }
 
-    public static IssueKind FromLabel(string label)
+    public static IssueKind? FromLabel(string label)
     {
         return label.ToLowerInvariant() switch
         {
@@ -24,7 +24,7 @@ public sealed record IssueKind
             "bug" => Bug,
             "refactor" => Refactor,
             "documentation" => Documentation,
-            _ => Feature,
+            _ => null,
         };
     }
 

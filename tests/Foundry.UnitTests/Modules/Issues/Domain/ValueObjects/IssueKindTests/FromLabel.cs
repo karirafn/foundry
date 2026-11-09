@@ -9,15 +9,15 @@ namespace Foundry.UnitTests.Modules.Issues.Domain.ValueObjects.IssueKindTests;
 public sealed class FromLabel
 {
     [Fact]
-    public void WhenLabelIsUnrecognized_ReturnsFeature()
+    public void WhenLabelIsUnrecognized_ReturnsNull()
     {
         // Arrange
 
         // Act
-        IssueKind result = IssueKind.FromLabel("unknown");
+        IssueKind? result = IssueKind.FromLabel("unknown");
 
         // Assert
-        result.ShouldBe(IssueKind.Feature);
+        result.ShouldBeNull();
     }
 
     [Fact]
@@ -26,7 +26,7 @@ public sealed class FromLabel
         // Arrange
 
         // Act
-        IssueKind result = IssueKind.FromLabel("feature");
+        IssueKind? result = IssueKind.FromLabel("feature");
 
         // Assert
         result.ShouldBe(IssueKind.Feature);
@@ -38,7 +38,7 @@ public sealed class FromLabel
         // Arrange
 
         // Act
-        IssueKind result = IssueKind.FromLabel("bug");
+        IssueKind? result = IssueKind.FromLabel("bug");
 
         // Assert
         result.ShouldBe(IssueKind.Bug);
@@ -50,7 +50,7 @@ public sealed class FromLabel
         // Arrange
 
         // Act
-        IssueKind result = IssueKind.FromLabel("refactor");
+        IssueKind? result = IssueKind.FromLabel("refactor");
 
         // Assert
         result.ShouldBe(IssueKind.Refactor);
@@ -62,7 +62,7 @@ public sealed class FromLabel
         // Arrange
 
         // Act
-        IssueKind result = IssueKind.FromLabel("documentation");
+        IssueKind? result = IssueKind.FromLabel("documentation");
 
         // Assert
         result.ShouldBe(IssueKind.Documentation);
@@ -74,7 +74,7 @@ public sealed class FromLabel
         // Arrange
 
         // Act
-        IssueKind result = IssueKind.FromLabel("BUG");
+        IssueKind? result = IssueKind.FromLabel("BUG");
 
         // Assert
         result.ShouldBe(IssueKind.Bug);

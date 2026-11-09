@@ -6,4 +6,5 @@ public sealed record IssueDetailsChanged(
     MonitoredRepositoryId MonitoredRepositoryId,
     int IssueNumber,
     string Title,
-    IReadOnlyList<string> Labels) : IIntegrationEvent;
+    IReadOnlyList<string> Labels,
+    string? IssueKindLabel) : IIntegrationEvent;

@@ -6,4 +6,4 @@ internal sealed record ProviderIssue(
     string Author,
     string Url,
     IReadOnlyList<string> Labels,
-    string IssueKindLabel);
+    string? IssueKindLabel);
