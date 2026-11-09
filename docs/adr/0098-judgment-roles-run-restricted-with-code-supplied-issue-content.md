@@ -1,5 +1,7 @@
 # Judgment Roles Run Restricted, with Issue Content Supplied by Code
 
+> **2026-11-09 — Amended:** the Decision's clause that a `Restricted` run uses `GIT_PAT` for a shallow clone and then unsets it is replaced by [ADR 0100](0100-workers-hold-no-provider-credential-and-foundry-publishes.md): every role clones from a base bundle prepared by the Publisher, and no worker container spec contains a provider credential.
+
 ## Context
 
 [ADR 0094](0094-code-decides-claude-judges-only-what-code-cannot.md) requires that a step which only classifies runs without command-execution tools (`--restricted`). Every worker container is currently set up for implementation work: the account PAT is injected as `GH_TOKEN`/`GITLAB_TOKEN`, a branch is created on the provider before the run, the CLI runs with `--dangerously-skip-permissions`, and the prompt tells the agent to read the issue itself from `ISSUE_API_URL`. On CLI 2.1.319, `--restricted` removes Bash, the other code-running tools and WebFetch, confines the file tools to the working directories, and refuses `bypassPermissions`. A restricted agent can therefore neither skip permissions nor fetch the issue it is asked to judge.

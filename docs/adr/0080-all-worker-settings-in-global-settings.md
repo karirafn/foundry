@@ -10,6 +10,8 @@ status: accepted
 
 > **2026-11-06 — Amended:** the `WorkerPrompts` part of the Decision's Shape clause (system and worker templates, branch naming, edited in the dashboard) is replaced by [ADR 0095](0095-worker-roles-ship-in-the-worker-image.md). Role prompts move into the worker image. The `model` field of `ClaudeCodeSettings` is also replaced by ADR 0095, which gives each role its own model setting.
 
+> **2026-11-09 — Amended:** the `BlockCiCdEdits` toggle in the Decision's Shape clause and the CI/CD deny rules clause are replaced by [ADR 0100](0100-workers-hold-no-provider-credential-and-foundry-publishes.md), which removes CI/CD edit blocking; workers may change CI/CD files and human review is the gate.
+
 ## Context
 
 [ADR 0019](0019-worker-image-flags-in-settings.md) moved the worker image toolchain flags into `GlobalSettings` but deliberately kept the other worker settings — image tag, mounts, CPU/memory/PID limits, Claude Code settings (model, deny rules, hooks), branch naming, and the prompt-template fallbacks — in `IConfiguration` (`Workers` section of appsettings plus user secrets).
