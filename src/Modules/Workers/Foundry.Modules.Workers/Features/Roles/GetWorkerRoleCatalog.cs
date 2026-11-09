@@ -52,11 +52,11 @@ internal sealed record SharedRolePlugin(
     IReadOnlyList<RolePluginComponent> Skills,
     IReadOnlyList<RolePluginComponent> Agents);
 
-/// <summary>The role catalog of the running worker image, with the hardcoded system-prompt sections.</summary>
+/// <summary>The role catalog of the running worker image, with the system-prompt sections Foundry adds.</summary>
 /// <param name="Image">The image the catalog belongs to.</param>
 /// <param name="Roles">One card per role.</param>
 /// <param name="Shared">The plugin loaded for every role.</param>
-/// <param name="PromptSections">Foundry's hardcoded system-prompt sections, in assembly order.</param>
+/// <param name="PromptSections">the system-prompt sections Foundry adds, in assembly order.</param>
 /// <param name="RolePromptSlot">The marker standing for the role's system prompt in <paramref name="PromptSections"/>.</param>
 internal sealed record WorkerRoleCatalogResponse(
     WorkerRoleImage Image,
@@ -95,7 +95,7 @@ internal static class GetWorkerRoleCatalog
                 catalog.Content.Shared.Description,
                 catalog.Content.Shared.Skills,
                 catalog.Content.Shared.Agents),
-            SystemPromptBuilder.DescribeSections(timeoutMinutes),
+            SystemPromptBuilder.DescribeSections(catalog.Content.Principles, timeoutMinutes),
             SystemPromptBuilder.RolePromptSlot);
     }
 

@@ -4,6 +4,7 @@ using System.Text;
 
 using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Monitoring.Contracts;
+using Foundry.Modules.Workers.Domain.ValueObjects;
 using Foundry.Modules.Workers.Features.Roles;
 using Foundry.Shared;
 
@@ -115,13 +116,18 @@ internal static class SystemPromptBuilder
     /// computed from settings are filled; run-specific values are left as <c>{placeholder}</c> markers. The dashboard's
     /// role cards show these so the operator sees everything that shapes a run.
     /// </summary>
-    internal static IReadOnlyList<PromptSectionDescriptor> DescribeSections(int timeoutMinutes)
+    internal static IReadOnlyList<PromptSectionDescriptor> DescribeSections(string principles, int timeoutMinutes)
     {
         const string BranchName = "{branchName}";
 
         return
         [
             new("safety-preamble", "Safety rules", PromptSectionCondition.Always, SafetyPreamble),
+            new(
+                "principles",
+                $"Worker principles ({WorkerRole.SharedFolder}/{WorkerRoleCatalogReader.PrinciplesPath})",
+                PromptSectionCondition.Always,
+                principles),
             new("role-prompt", "Role system prompt (prompts/system.md)", PromptSectionCondition.Always, RolePromptSlot),
             new(
                 "issue-content",

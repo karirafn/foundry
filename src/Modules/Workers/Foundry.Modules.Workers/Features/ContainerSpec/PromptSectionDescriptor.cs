@@ -25,5 +25,5 @@ internal enum PromptSectionCondition
     RebaseConflict,
 }
 
-/// <summary>A hardcoded section of the worker system prompt, as shown on the dashboard's role cards.</summary>
+/// <summary>A system-prompt section Foundry adds to the worker prompt, as shown on the dashboard's role cards.</summary>
 internal sealed record PromptSectionDescriptor(string Key, string Title, PromptSectionCondition Condition, string Content);
