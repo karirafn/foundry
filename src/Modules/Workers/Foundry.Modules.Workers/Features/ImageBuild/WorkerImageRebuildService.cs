@@ -10,6 +10,7 @@ using Foundry.Modules.Workers.Features.Roles;
 using Foundry.Shared;
 using Foundry.Shared.Infrastructure.Docker;
 
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -166,8 +167,9 @@ internal sealed class WorkerImageRebuildService(
     {
         await using AsyncServiceScope scope = scopeFactory.CreateAsyncScope();
         IGlobalSettingsQueries settingsQueries = scope.ServiceProvider.GetRequiredService<IGlobalSettingsQueries>();
-        IIntegrationEventDispatcher integrationEventDispatcher =
-            scope.ServiceProvider.GetRequiredService<IIntegrationEventDispatcher>();
+        ImageBuildEventPublisher publisher = new(
+            scope.ServiceProvider.GetRequiredService<IIntegrationEventDispatcher>(),
+            scope.ServiceProvider.GetRequiredService<DbContext>());
 
         GlobalSettingsSummary? settings = await settingsQueries.GetSettingsAsync(cancellationToken);
 
@@ -181,11 +183,11 @@ internal sealed class WorkerImageRebuildService(
         bool buildEnabled = await settingsQueries.GetWorkerImageBuildEnabledAsync(cancellationToken);
         string imageTag = await settingsQueries.GetWorkerImageTagAsync(cancellationToken);
 
-        await integrationEventDispatcher.DispatchAsync([new ImageBuildRequested()], cancellationToken);
+        await publisher.PublishAsync(new ImageBuildRequested(), cancellationToken);
 
         if (!buildEnabled)
         {
-            await InspectImageAsync(imageTag, settings, integrationEventDispatcher, cancellationToken);
+            await InspectImageAsync(imageTag, settings, publisher, cancellationToken);
             return;
         }
 
@@ -258,7 +260,7 @@ internal sealed class WorkerImageRebuildService(
 
             await CancelAndDisposeAsync(oldCts);
 
-            await integrationEventDispatcher.DispatchAsync([new ImageBuildSucceeded()], cancellationToken);
+            await publisher.PublishAsync(new ImageBuildSucceeded(), cancellationToken);
 
             logger.LogInformation("Worker image '{Image}' built successfully.", imageTag);
         }
@@ -283,8 +285,8 @@ internal sealed class WorkerImageRebuildService(
 
             DateTimeOffset nextRetryAt = DateTimeOffset.UtcNow + backoff;
 
-            await integrationEventDispatcher.DispatchAsync(
-                [new ImageBuildOutcomeFailed(errorTail, nextRetryAt, nextAttempt)],
+            await publisher.PublishAsync(
+                new ImageBuildOutcomeFailed(errorTail, nextRetryAt, nextAttempt),
                 cancellationToken);
 
             logger.LogError(
@@ -432,7 +434,7 @@ internal sealed class WorkerImageRebuildService(
     private async Task InspectImageAsync(
         string imageTag,
         GlobalSettingsSummary settings,
-        IIntegrationEventDispatcher integrationEventDispatcher,
+        ImageBuildEventPublisher publisher,
         CancellationToken cancellationToken)
     {
         logger.LogInformation(
@@ -453,7 +455,7 @@ internal sealed class WorkerImageRebuildService(
                 string catalogError = TruncateTail(
                     $"Worker role catalog is invalid: {((Result<WorkerRoleCatalogContent>.Failure)catalogResult).Error.Message}");
                 logger.LogError("Worker image '{Image}' not marked available: {Error}", imageTag, catalogError);
-                await DispatchInspectFailureAsync(catalogError, settings, integrationEventDispatcher, imageTag, cancellationToken);
+                await DispatchInspectFailureAsync(catalogError, settings, publisher, imageTag, cancellationToken);
                 return;
             }
 
@@ -475,7 +477,7 @@ internal sealed class WorkerImageRebuildService(
 
             await CancelAndDisposeAsync(oldCts);
 
-            await integrationEventDispatcher.DispatchAsync([new ImageBuildSucceeded()], cancellationToken);
+            await publisher.PublishAsync(new ImageBuildSucceeded(), cancellationToken);
 
             logger.LogInformation(
                 "Worker image '{Image}' found on the Docker host; marked as available.",
@@ -488,7 +490,7 @@ internal sealed class WorkerImageRebuildService(
         catch (DockerImageNotFoundException)
         {
             string errorTail = TruncateTail($"image '{imageTag}' not found on the Docker host");
-            await DispatchInspectFailureAsync(errorTail, settings, integrationEventDispatcher, imageTag, cancellationToken);
+            await DispatchInspectFailureAsync(errorTail, settings, publisher, imageTag, cancellationToken);
         }
 #pragma warning disable CA1031 // Docker inspect failures must be surfaced as status notifications, not exceptions, to avoid crashing the BackgroundService consumer loop.
         catch (Exception ex) when (ex is not OperationCanceledException)
@@ -496,14 +498,14 @@ internal sealed class WorkerImageRebuildService(
         {
             string errorTail = TruncateTail(SecretRedactor.Redact(ex.Message));
             logger.LogError("Worker image inspect failed with an unhandled exception: {Error}", errorTail);
-            await DispatchInspectFailureAsync(errorTail, settings, integrationEventDispatcher, imageTag, cancellationToken);
+            await DispatchInspectFailureAsync(errorTail, settings, publisher, imageTag, cancellationToken);
         }
     }
 
     private async Task DispatchInspectFailureAsync(
         string errorTail,
         GlobalSettingsSummary settings,
-        IIntegrationEventDispatcher integrationEventDispatcher,
+        ImageBuildEventPublisher publisher,
         string imageTag,
         CancellationToken cancellationToken)
     {
@@ -523,8 +525,8 @@ internal sealed class WorkerImageRebuildService(
 
         DateTimeOffset nextRetryAt = DateTimeOffset.UtcNow + backoff;
 
-        await integrationEventDispatcher.DispatchAsync(
-            [new ImageBuildOutcomeFailed(errorTail, nextRetryAt, nextAttempt)],
+        await publisher.PublishAsync(
+            new ImageBuildOutcomeFailed(errorTail, nextRetryAt, nextAttempt),
             cancellationToken);
 
         logger.LogError(
@@ -621,6 +623,20 @@ internal sealed class WorkerImageRebuildService(
             {
                 logger.LogDebug("Docker build: {Status}", message.Status);
             }
+        }
+    }
+
+    /// <summary>
+    /// The dispatcher only enqueues into the scoped collector; saving the scope's context is what harvests the
+    /// event into the outbox, so each event is persisted as soon as it is raised — <see cref="ImageBuildRequested"/>
+    /// must be durable before the build runs for the readiness gate to see <c>Building</c> during it.
+    /// </summary>
+    private sealed class ImageBuildEventPublisher(IIntegrationEventDispatcher dispatcher, DbContext dbContext)
+    {
+        public async Task PublishAsync(IIntegrationEvent @event, CancellationToken cancellationToken)
+        {
+            await dispatcher.DispatchAsync([@event], cancellationToken);
+            await dbContext.SaveChangesAsync(cancellationToken);
         }
     }
 }

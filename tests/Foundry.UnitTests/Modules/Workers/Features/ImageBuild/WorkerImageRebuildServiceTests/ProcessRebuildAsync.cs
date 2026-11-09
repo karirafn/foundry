@@ -33,6 +33,7 @@ public sealed class ProcessRebuildAsync
         IWorkerRoleCatalogStore? roleCatalogStore = null)
     {
         ServiceCollection services = new();
+        services.AddEmptyDbContext();
         services.AddScoped<IGlobalSettingsQueries>(_ =>
             settingsQueries ?? new StubGlobalSettingsQueries(
                 settingsExists: true,

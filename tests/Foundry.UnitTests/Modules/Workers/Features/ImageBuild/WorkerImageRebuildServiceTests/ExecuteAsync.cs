@@ -28,6 +28,7 @@ public sealed class ExecuteAsync
         CapturingLogger logger)
     {
         ServiceCollection services = new();
+        services.AddEmptyDbContext();
         services.AddScoped<IGlobalSettingsQueries>(_ => new StubGlobalSettingsQueries());
         services.AddScoped<IIntegrationEventDispatcher>(_ => dispatcher);
 
