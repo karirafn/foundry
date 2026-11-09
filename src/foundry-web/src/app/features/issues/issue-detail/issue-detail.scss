@@ -1,3 +1,12 @@
+@use '../../../../styles/badge' as *;
+
+// The chips in this template use the shared badge classes. Emulated view encapsulation
+// keeps fd-state-badge's stylesheet off this component's elements, so emit them here.
+// Included before .issue-detail so the chip modifiers below can override badge colours.
+// Only the state modifiers this template renders (the failure-chip fallback and the
+// failure-category / revision chips) are emitted, to stay within the style budget.
+@include badge($states: (failed, usage-limited, revision-in-progress));
+
 @keyframes shimmer {
   0% {
     background-position: -400px 0;
@@ -331,13 +340,6 @@
     margin-bottom: var(--fd-spacing-sm);
   }
 
-  &__failure-chip {
-    font-size: 11px;
-    font-weight: 600;
-    letter-spacing: 0.03em;
-    text-transform: uppercase;
-  }
-
   &__failure-summary {
     color: var(--fd-text-secondary);
     font-size: 0.8125rem;
@@ -394,8 +396,8 @@
     margin-top: var(--fd-spacing-xs);
   }
 
-  // Typography for __retry-chip is inherited from the base .badge class
-  // (font-size, font-weight, letter-spacing, text-transform are all defined there).
+  // Shape, typography and colours for __retry-chip and __revision-chip come from the
+  // shared badge mixin (src/styles/_badge.scss) included at the top of this file.
 
   &__retry-message {
     color: var(--fd-text-secondary);

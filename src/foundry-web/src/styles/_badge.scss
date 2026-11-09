@@ -1,0 +1,75 @@
+@use 'sass:list';
+@use 'sass:map';
+
+/// Badge pill and its state, failure-category and retry variants — the single source
+/// for every `.badge` chip. Components include this mixin rather than relying on
+/// fd-state-badge's stylesheet, because emulated view encapsulation scopes that
+/// stylesheet to fd-state-badge's own template.
+
+/// State modifier → background colour token.
+$badge-state-backgrounds: (
+  detected: var(--fd-state-detected),
+  queued: var(--fd-state-queued),
+  blocked: var(--fd-state-blocked),
+  in-progress: var(--fd-state-in-progress),
+  review: var(--fd-state-review),
+  rebase-pending: var(--fd-state-queued),
+  checks-pending: var(--fd-state-queued),
+  unchanged: var(--fd-state-unchanged),
+  failed: var(--fd-state-failed),
+  continuable-failed: var(--fd-state-failed),
+  continuation-queued: var(--fd-state-queued),
+  completed: var(--fd-state-completed),
+  revision-queued: var(--fd-state-queued),
+  revision-in-progress: var(--fd-state-in-progress),
+  revision-failed: var(--fd-state-failed),
+  usage-limited: var(--fd-state-usage-limited),
+);
+
+/// Outlined modifier → (border colour, text colour).
+$badge-outlined-variants: (
+  failure-non-zero-exit: (var(--fd-state-failed), var(--fd-text-error)),
+  failure-timed-out: (var(--fd-text-warning), var(--fd-text-warning)),
+  failure-container-error: (var(--fd-state-failed), var(--fd-text-error)),
+  failure-provider-error: (var(--fd-text-link), var(--fd-text-link)),
+  failure-bootstrap: (var(--fd-state-failed), var(--fd-text-error)),
+  failure-cancelled: (var(--fd-text-secondary), var(--fd-text-secondary)),
+  failure-credits-exhausted: (var(--fd-text-warning), var(--fd-text-warning)),
+  failure-model-unavailable: (var(--fd-text-warning), var(--fd-text-warning)),
+  retrying: (var(--fd-text-warning), var(--fd-text-warning)),
+  retry-exhausted: (var(--fd-state-failed), var(--fd-text-error)),
+);
+
+/// Emits `.badge` and its modifiers. Pass `$states` to emit only the state modifiers a
+/// template uses, keeping the component stylesheet within its size budget.
+@mixin badge($states: map.keys($badge-state-backgrounds)) {
+  .badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 9999px;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: #ffffff;
+    white-space: nowrap;
+
+    @each $state in $states {
+      @if not map.has-key($badge-state-backgrounds, $state) {
+        @error "Unknown badge state '#{$state}'.";
+      }
+
+      &--#{$state} {
+        background-color: map.get($badge-state-backgrounds, $state);
+      }
+    }
+
+    @each $variant, $colors in $badge-outlined-variants {
+      &--#{$variant} {
+        background: transparent;
+        border: 1px solid list.nth($colors, 1);
+        color: list.nth($colors, 2);
+      }
+    }
+  }
+}
