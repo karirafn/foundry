@@ -65,8 +65,8 @@ internal sealed class IssueClaimedHandler(
             dbContext.Set<DispatchReservation>().Remove(reservation);
         }
 
-        // Every claimed issue runs the implement role: revision, continuation and rebase-conflict runs included.
-        WorkerRole role = WorkerRole.Implement;
+        // The run's role comes from the queued state's dispatch context, never from a constant here.
+        WorkerRole role = DispatchRoleMapping.ToWorkerRole(claimed.Context.Role);
         WorkerRoleCatalog? catalog = roleCatalog.Current;
         string image = catalog?.Image.Reference ?? await settingsQueries.GetWorkerImageTagAsync(cancellationToken);
 

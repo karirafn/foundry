@@ -122,6 +122,23 @@ public sealed class HandleAsync : IAsyncDisposable
     }
 
     [Fact]
+    public async Task WhenClaimed_RunRoleComesFromDispatchContextRole()
+    {
+        // Arrange
+        IssueClaimedHandler sut = BuildHandler();
+        DispatchContext context = new DispatchContext.Continuation("feat/42-test-issue", "timed out");
+        IssueClaimed @event = BuildEvent(context: context);
+
+        // Act
+        await sut.HandleAsync(@event, TestContext.Current.CancellationToken);
+        _dbContext.ChangeTracker.Clear();
+
+        // Assert
+        WorkerRun run = await _dbContext.Set<WorkerRun>().SingleAsync(TestContext.Current.CancellationToken);
+        run.Role.ShouldBe(DispatchRoleMapping.ToWorkerRole(context.Role));
+    }
+
+    [Fact]
     public async Task WhenOrchestratorSucceeds_ActiveRunHasCorrectContainerId()
     {
         // Arrange
