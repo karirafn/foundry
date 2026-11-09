@@ -30,6 +30,10 @@ public sealed class FoundryWebAppFactory : WebApplicationFactory<Program>, IAsyn
 
     private readonly SqliteConnection _connection;
     private readonly Action<IServiceCollection>? _serviceOverrides;
+
+    // Set only by the composed-host mode, which keeps every hosted service running.
+    private readonly FileInfo? _databaseFile;
+
     private DirectoryInfo? _persistentKeysDirectory;
     private string? _legacyApplicationName;
 
@@ -46,7 +50,19 @@ public sealed class FoundryWebAppFactory : WebApplicationFactory<Program>, IAsyn
         _serviceOverrides = serviceOverrides;
     }
 
+    private FoundryWebAppFactory(Action<IServiceCollection> serviceOverrides, FileInfo databaseFile)
+    {
+        // Concurrent hosted services cannot share one SqliteConnection, so this mode runs on a database
+        // file that every DbContext opens its own connection to, as production does.
+        _connection = new SqliteConnection(new SqliteConnectionStringBuilder { DataSource = databaseFile.FullName }.ToString());
+        _connection.Open();
+        _serviceOverrides = serviceOverrides;
+        _databaseFile = databaseFile;
+    }
+
     public SqliteConnection Connection => _connection;
+
+    private bool KeepsHostedServices => _databaseFile is not null;
 
     public static FoundryWebAppFactory WithPersistentDataProtection(
         DirectoryInfo keysDirectory,
@@ -60,6 +76,13 @@ public sealed class FoundryWebAppFactory : WebApplicationFactory<Program>, IAsyn
     public static FoundryWebAppFactory WithOverrides(Action<IServiceCollection> serviceOverrides) =>
         new(serviceOverrides);
 
+    /// <summary>
+    /// The composed host: every hosted service runs at its production cadence against a fresh database
+    /// file, and <paramref name="boundaryFakes"/> replaces only the external boundaries.
+    /// </summary>
+    public static FoundryWebAppFactory WithHostedServices(Action<IServiceCollection> boundaryFakes) =>
+        new(boundaryFakes, new FileInfo(Path.Combine(Path.GetTempPath(), $"foundry-smoke-{Guid.NewGuid():N}.db")));
+
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.ConfigureServices(services =>
@@ -67,16 +90,27 @@ public sealed class FoundryWebAppFactory : WebApplicationFactory<Program>, IAsyn
             services.RemoveAll<DbContextOptions<FoundryDbContext>>();
             services.AddDbContext<FoundryDbContext>((sp, options) =>
             {
-                options.UseSqlite(_connection);
+                if (KeepsHostedServices)
+                {
+                    options.UseSqlite(_connection.ConnectionString);
+                }
+                else
+                {
+                    options.UseSqlite(_connection);
+                }
+
                 options.AddInterceptors(sp.GetRequiredService<OutboxSaveChangesInterceptor>());
             });
 
-            services.RemoveAll<IHostedService>();
+            if (!KeepsHostedServices)
+            {
+                services.RemoveAll<IHostedService>();
 
-            // Re-register OutboxRelayService as a plain singleton so integration tests can resolve
-            // it and call TickForTest to drive one relay pass deterministically, without starting
-            // the background timer loop (R1 from the outbox design).
-            services.AddSingleton<OutboxRelayService>();
+                // Re-register OutboxRelayService as a plain singleton so integration tests can resolve
+                // it and call TickForTest to drive one relay pass deterministically, without starting
+                // the background timer loop (R1 from the outbox design).
+                services.AddSingleton<OutboxRelayService>();
+            }
 
             // Ephemeral keys by default so tests do not depend on a persistent key store;
             // a persistent key ring lets a test seed ciphertext before the host boots.
@@ -103,7 +137,17 @@ public sealed class FoundryWebAppFactory : WebApplicationFactory<Program>, IAsyn
 
     async ValueTask IAsyncDisposable.DisposeAsync()
     {
-        await _connection.DisposeAsync();
+        if (_databaseFile is null)
+        {
+            await _connection.DisposeAsync();
+            await base.DisposeAsync();
+            return;
+        }
+
+        // The host stops first so no hosted service still writes to the file when it is deleted.
         await base.DisposeAsync();
+        await _connection.DisposeAsync();
+        SqliteConnection.ClearAllPools();
+        _databaseFile.Delete();
     }
 }
