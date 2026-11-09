@@ -4,6 +4,7 @@ using System.Text;
 
 using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Monitoring.Contracts;
+using Foundry.Modules.Workers.Domain.ValueObjects;
 using Foundry.Modules.Workers.Features.Roles;
 using Foundry.Shared;
 
@@ -53,6 +54,7 @@ internal static class SystemPromptBuilder
         """;
 
     public static Result<string> Build(
+        string principles,
         int issueNumber,
         string systemPromptTemplate,
         DispatchContext context,
@@ -61,6 +63,8 @@ internal static class SystemPromptBuilder
         bool installsDocker,
         bool installsDotnet)
     {
+        ArgumentException.ThrowIfNullOrWhiteSpace(principles);
+
         string issueNumberStr = issueNumber.ToString(CultureInfo.InvariantCulture);
         string issueContent = BuildIssueContent(issueNumberStr, EncodeForXmlData(issueApiUrl));
 
@@ -70,7 +74,7 @@ internal static class SystemPromptBuilder
 
         string prePrSection = installsDocker ? "\n\n" + BuildPrePrSection() : string.Empty;
         string csharpLspSection = installsDotnet ? "\n\n" + BuildCSharpLspSection() : string.Empty;
-        string prompt = SafetyPreamble + "\n\n" + basePrompt + "\n\n" + TaskListInstruction + csharpLspSection + prePrSection + "\n\n" + BuildChecksSection(timeoutMinutes);
+        string prompt = SafetyPreamble + "\n\n" + principles + "\n\n" + basePrompt + "\n\n" + TaskListInstruction + csharpLspSection + prePrSection + "\n\n" + BuildChecksSection(timeoutMinutes);
 
         string contextSection = context switch
         {
@@ -114,13 +118,18 @@ internal static class SystemPromptBuilder
     /// computed from settings are filled; run-specific values are left as <c>{placeholder}</c> markers. The dashboard's
     /// role cards show these so the operator sees everything that shapes a run.
     /// </summary>
-    internal static IReadOnlyList<PromptSectionDescriptor> DescribeSections(int timeoutMinutes)
+    internal static IReadOnlyList<PromptSectionDescriptor> DescribeSections(string principles, int timeoutMinutes)
     {
         const string BranchName = "{branchName}";
 
         return
         [
             new("safety-preamble", "Safety rules", PromptSectionCondition.Always, SafetyPreamble),
+            new(
+                "principles",
+                $"Worker principles ({WorkerRole.SharedFolder}/{WorkerRoleCatalogReader.PrinciplesPath})",
+                PromptSectionCondition.Always,
+                principles),
             new("role-prompt", "Role system prompt (prompts/system.md)", PromptSectionCondition.Always, RolePromptSlot),
             new(
                 "issue-content",

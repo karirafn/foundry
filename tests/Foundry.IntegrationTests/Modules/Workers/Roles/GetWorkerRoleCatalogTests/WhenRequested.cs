@@ -54,6 +54,7 @@ public sealed class WhenRequested : IAsyncDisposable
             ["implement/prompts/task.md"] = "Implement issue #{issueNumber}.",
             ["implement/skills/tdd/SKILL.md"] = "---\nname: tdd\ndescription: Test first.\n---\nBody.",
             ["shared/.claude-plugin/plugin.json"] = """{"name":"shared"}""",
+            ["shared/prompts/principles.md"] = "Engineering principles.",
         }).ShouldBeOfType<Result<WorkerRoleCatalogContent>.Success>().Value;
 
         _factory.Services.GetRequiredService<IWorkerRoleCatalogStore>().Publish(new WorkerRoleCatalog(
@@ -75,6 +76,7 @@ public sealed class WhenRequested : IAsyncDisposable
         JsonElement root = document.RootElement;
         JsonElement role = root.GetProperty("roles")[0];
         JsonElement firstSection = root.GetProperty("promptSections")[0];
+        JsonElement principlesSection = root.GetProperty("promptSections")[1];
         root.ShouldSatisfyAllConditions(
             () => root.GetProperty("image").GetProperty("commit").GetString().ShouldBe("71c3f21"),
             () => root.GetProperty("image").GetProperty("verified").GetBoolean().ShouldBeTrue(),
@@ -85,6 +87,9 @@ public sealed class WhenRequested : IAsyncDisposable
             () => role.GetProperty("verdictSchema").ValueKind.ShouldBe(JsonValueKind.Null),
             () => firstSection.GetProperty("key").GetString().ShouldBe("safety-preamble"),
             () => firstSection.GetProperty("condition").GetString().ShouldBe("Always"),
+            () => principlesSection.GetProperty("key").GetString().ShouldBe("principles"),
+            () => principlesSection.GetProperty("condition").GetString().ShouldBe("Always"),
+            () => principlesSection.GetProperty("content").GetString().ShouldBe(content.Principles),
             () => root.GetProperty("rolePromptSlot").GetString().ShouldBe("{rolePrompt}"));
     }
 }

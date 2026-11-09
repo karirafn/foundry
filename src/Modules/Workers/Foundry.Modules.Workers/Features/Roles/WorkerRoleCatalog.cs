@@ -20,8 +20,14 @@ internal sealed record WorkerRoleDefinition(
     string TaskPromptTemplate,
     string? VerdictSchema);
 
-/// <summary>The roles read from one build context, plus the shared plugin loaded for every role.</summary>
-internal sealed record WorkerRoleCatalogContent(IReadOnlyList<WorkerRoleDefinition> Roles, RolePlugin Shared)
+/// <summary>
+/// The roles read from one build context, plus the shared plugin loaded for every role and the Worker Principles
+/// placed in every role's system prompt.
+/// </summary>
+internal sealed record WorkerRoleCatalogContent(
+    IReadOnlyList<WorkerRoleDefinition> Roles,
+    RolePlugin Shared,
+    string Principles)
 {
     public WorkerRoleDefinition? Find(WorkerRole role) =>
         Roles.FirstOrDefault(definition => definition.Role == role);

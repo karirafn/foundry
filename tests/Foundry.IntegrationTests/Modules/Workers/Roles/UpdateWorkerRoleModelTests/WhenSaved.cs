@@ -146,6 +146,7 @@ public sealed class WhenSaved : IAsyncDisposable
             ["implement/prompts/system.md"] = "You are implementing issue #{issueNumber}.\n\n{issueContent}",
             ["implement/prompts/task.md"] = "Implement issue #{issueNumber}.",
             ["shared/.claude-plugin/plugin.json"] = """{"name":"shared"}""",
+            ["shared/prompts/principles.md"] = "Engineering principles.",
         }).ShouldBeOfType<Result<WorkerRoleCatalogContent>.Success>().Value;
         _factory.Services.GetRequiredService<IWorkerRoleCatalogStore>().Publish(new WorkerRoleCatalog(
             content,

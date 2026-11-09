@@ -738,6 +738,22 @@ public sealed class HandleAsync : IAsyncDisposable
     }
 
     [Fact]
+    public async Task WhenDispatched_IncludesTheCatalogPrinciplesInSystemPromptEnvVar()
+    {
+        // Arrange
+        StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c-principles");
+        StubWorkerRoleCatalogStore store = StubWorkerRoleCatalogStore.With(principles: "Catalog principles marker.");
+        IssueClaimedHandler sut = BuildHandler(orchestrator: orchestrator, roleCatalog: store);
+
+        // Act
+        await sut.HandleAsync(BuildEvent(), TestContext.Current.CancellationToken);
+
+        // Assert
+        WorkerContainerSpec spec = orchestrator.LastSpec.ShouldNotBeNull();
+        spec.EnvironmentVariables["SYSTEM_PROMPT"].ShouldContain(store.Current!.Content.Principles);
+    }
+
+    [Fact]
     public async Task WhenRoleHasTaskPromptTemplate_UsesItInWorkerPromptEnvVar()
     {
         // Arrange

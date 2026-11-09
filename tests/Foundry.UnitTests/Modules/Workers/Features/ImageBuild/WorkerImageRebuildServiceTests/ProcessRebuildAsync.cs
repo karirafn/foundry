@@ -1174,13 +1174,7 @@ public sealed class ProcessRebuildAsync
         }
     }
 
-    /// <summary>
-    /// Creates a temporary directory tree that matches what <see cref="WorkerImageRebuildService"/> expects.
-    /// The service resolves <c>solutionRoot/workers</c> as the Docker build context, where
-    /// <c>solutionRoot = contentRoot/../../</c>. Returns the <c>contentRootPath</c> to pass to
-    /// <see cref="BuildService"/> and the root temp directory to delete in <c>finally</c>.
-    /// </summary>
-    /// <summary>Writes the minimal valid role catalog (the implement role and the shared plugin) under <c>workersDir/roles</c>.</summary>
+    /// <summary>Writes the minimal valid role catalog (the implement role, the shared plugin and the Worker Principles) under <c>workersDir/roles</c>.</summary>
     private static void WriteRoleFixture(string workersDir)
     {
         string implement = Path.Combine(workersDir, "roles", "implement");
@@ -1188,12 +1182,20 @@ public sealed class ProcessRebuildAsync
         Directory.CreateDirectory(Path.Combine(implement, ".claude-plugin"));
         Directory.CreateDirectory(Path.Combine(implement, "prompts"));
         Directory.CreateDirectory(Path.Combine(shared, ".claude-plugin"));
+        Directory.CreateDirectory(Path.Combine(shared, "prompts"));
         File.WriteAllText(Path.Combine(implement, ".claude-plugin", "plugin.json"), """{"name":"implement","description":"Implements."}""");
         File.WriteAllText(Path.Combine(implement, "prompts", "system.md"), "You are implementing issue #{issueNumber}.\n\n{issueContent}");
         File.WriteAllText(Path.Combine(implement, "prompts", "task.md"), "Implement issue #{issueNumber}.");
         File.WriteAllText(Path.Combine(shared, ".claude-plugin", "plugin.json"), """{"name":"shared"}""");
+        File.WriteAllText(Path.Combine(shared, "prompts", "principles.md"), "Engineering principles.");
     }
 
+    /// <summary>
+    /// Creates a temporary directory tree that matches what <see cref="WorkerImageRebuildService"/> expects.
+    /// The service resolves <c>solutionRoot/workers</c> as the Docker build context, where
+    /// <c>solutionRoot = contentRoot/../../</c>. Returns the <c>contentRootPath</c> to pass to
+    /// <see cref="BuildService"/> and the root temp directory to delete in <c>finally</c>.
+    /// </summary>
     private static (string ContentRootPath, string TempRoot) CreateTempContextTree()
     {
         string tempRoot = Path.Combine(Path.GetTempPath(), $"foundry-test-{Guid.NewGuid()}");

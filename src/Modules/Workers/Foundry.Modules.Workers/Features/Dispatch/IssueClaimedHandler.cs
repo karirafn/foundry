@@ -155,9 +155,7 @@ internal sealed class IssueClaimedHandler(
         WorkerRoleCatalog? catalog,
         CancellationToken cancellationToken)
     {
-        WorkerRoleDefinition? role = catalog?.Content.Find(startingRun.Role);
-
-        if (role is null)
+        if (catalog?.Content is not { } content || content.Find(startingRun.Role) is not { } role)
         {
             return Result<WorkerContainerSpec>.Fail(new Error(
                 "Worker.RoleUnavailable",
@@ -188,8 +186,9 @@ internal sealed class IssueClaimedHandler(
         WorkerResourceLimitsSnapshot limits = await settingsQueries.GetWorkerResourceLimitsAsync(cancellationToken);
 
         Result<string> systemPromptResult = SystemPromptBuilder.Build(
-            claimed.IssueNumber,
-            role.SystemPromptTemplate,
+            principles: content.Principles,
+            issueNumber: claimed.IssueNumber,
+            systemPromptTemplate: role.SystemPromptTemplate,
             claimed.Context,
             claimed.IssueApiUrl,
             timeoutMinutes,

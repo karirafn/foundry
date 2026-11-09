@@ -24,8 +24,15 @@ internal static class WorkerRoleCatalogReader
     /// <summary>The <c>$defs</c> every role's verdict schema may reference (e.g. <c>#/$defs/questions</c>), under <c>shared/</c>.</summary>
     internal const string SharedVerdictDefinitionsPath = "verdict.defs.json";
 
+    /// <summary>The Worker Principles, under <c>shared/</c>: placed in every role's system prompt.</summary>
+    internal const string PrinciplesPath = "prompts/principles.md";
+
     // Role files are small text; the cap keeps a stray large file from being held in memory for the API.
     internal const int MaxFileBytes = 256 * 1024;
+
+    // The principles ride in every run's system prompt, so a cap far below SystemPromptBuilder.MaxSystemPromptBytes
+    // fails an oversized file at parse time instead of failing every dispatch.
+    internal const int MaxPrinciplesBytes = 8 * 1024;
 
     internal const string InvalidCatalogCode = "Worker.RoleCatalogInvalid";
 
@@ -33,6 +40,9 @@ internal static class WorkerRoleCatalogReader
     private const string SkillFileName = "SKILL.md";
     private const string AgentsFolder = "agents/";
     private const string FrontmatterFence = "---";
+
+    // The builder fills placeholders in role templates only, so any placeholder in the principles would reach the worker literally.
+    private static readonly IReadOnlyList<string> NoPlaceholders = [];
 
     private static readonly EnumerationOptions IncludeHiddenEntries = new()
     {
@@ -127,6 +137,27 @@ internal static class WorkerRoleCatalogReader
             return Fail(definitionsError);
         }
 
+        string? principles = ReadPrompt(files, WorkerRole.SharedFolder, PrinciplesPath);
+
+        if (principles is null)
+        {
+            return Fail($"'{RolesFolder}/{WorkerRole.SharedFolder}/{PrinciplesPath}' is missing or blank.");
+        }
+
+        int principlesBytes = Encoding.UTF8.GetByteCount(principles);
+
+        if (principlesBytes > MaxPrinciplesBytes)
+        {
+            return Fail(
+                $"'{RolesFolder}/{WorkerRole.SharedFolder}/{PrinciplesPath}' is {principlesBytes} bytes, over the {MaxPrinciplesBytes}-byte cap.");
+        }
+
+        if (CheckPlaceholders($"'{RolesFolder}/{WorkerRole.SharedFolder}/{PrinciplesPath}'", principles, NoPlaceholders)
+            is { } principlesError)
+        {
+            return Fail(principlesError);
+        }
+
         List<WorkerRoleDefinition> roles = [];
 
         foreach (WorkerRole role in WorkerRole.All)
@@ -141,7 +172,7 @@ internal static class WorkerRoleCatalogReader
             roles.Add(definition.Value);
         }
 
-        return Result<WorkerRoleCatalogContent>.Ok(new WorkerRoleCatalogContent(roles, shared.Value));
+        return Result<WorkerRoleCatalogContent>.Ok(new WorkerRoleCatalogContent(roles, shared.Value, principles));
     }
 
     private static Result<WorkerRoleDefinition> ReadRole(IReadOnlyDictionary<string, string> files, WorkerRole role)
@@ -167,8 +198,11 @@ internal static class WorkerRoleCatalogReader
         }
 
         string? placeholderError =
-            CheckPlaceholders(role, SystemPromptPath, systemPrompt, RolePromptPlaceholders.SystemPrompt)
-            ?? CheckPlaceholders(role, TaskPromptPath, taskPrompt, RolePromptPlaceholders.TaskPrompt);
+            CheckPlaceholders(
+                $"Role '{role.Name}' {SystemPromptPath}",
+                systemPrompt,
+                RolePromptPlaceholders.SystemPrompt)
+            ?? CheckPlaceholders($"Role '{role.Name}' {TaskPromptPath}", taskPrompt, RolePromptPlaceholders.TaskPrompt);
 
         if (placeholderError is not null)
         {
@@ -217,17 +251,13 @@ internal static class WorkerRoleCatalogReader
         }
     }
 
-    private static string? CheckPlaceholders(
-        WorkerRole role,
-        string promptPath,
-        string template,
-        IReadOnlyList<string> allowed)
+    private static string? CheckPlaceholders(string file, string template, IReadOnlyList<string> allowed)
     {
         string[] unknown = [.. RolePromptPlaceholders.FindIn(template).Where(placeholder => !allowed.Contains(placeholder))];
 
         return unknown.Length == 0
             ? null
-            : $"Role '{role.Name}' {promptPath} uses placeholders Foundry does not fill: {string.Join(", ", unknown)}.";
+            : $"{file} uses placeholders Foundry does not fill: {string.Join(", ", unknown)}.";
     }
 
     private static string? ReadPrompt(IReadOnlyDictionary<string, string> files, string folder, string promptPath)

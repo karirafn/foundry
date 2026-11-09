@@ -36,7 +36,8 @@ public sealed class ReadFromTarAsync
         fromTarImplement.ShouldSatisfyAllConditions(
             () => fromTarImplement.SystemPromptTemplate.ShouldBe(fromDiskImplement.SystemPromptTemplate),
             () => fromTarImplement.TaskPromptTemplate.ShouldBe(fromDiskImplement.TaskPromptTemplate),
-            () => fromTarImplement.Plugin.Description.ShouldBe(fromDiskImplement.Plugin.Description));
+            () => fromTarImplement.Plugin.Description.ShouldBe(fromDiskImplement.Plugin.Description),
+            () => tarCatalog.Principles.ShouldBe(diskCatalog.Principles));
     }
 
     [Fact]
