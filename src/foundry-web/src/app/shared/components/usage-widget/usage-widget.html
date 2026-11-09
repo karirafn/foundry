@@ -41,6 +41,25 @@
         }
       </div>
 
+      <!-- Extra-usage credits column — second column beside Session/Weekly; hidden at mid and narrow width -->
+      @if (vm.credits; as cr) {
+        <span class="usage-widget__divider" aria-hidden="true"></span>
+        <div class="usage-widget__credits">
+          <div class="usage-widget__credits-head">
+            <span class="usage-meter__label">Extra</span>
+            <span class="usage-widget__credits-amount">{{ cr.amountLabel }}</span>
+          </div>
+          @if (cr.meter; as m) {
+            <div class="usage-meter usage-widget__credits-meter" [ngClass]="m.severityClass">
+              <div class="usage-meter__track" role="img" [attr.aria-label]="m.accessibleName">
+                <div class="usage-meter__fill" [style.inline-size.%]="m.percent" aria-hidden="true"></div>
+              </div>
+              <span class="usage-meter__percent">{{ m.percentLabel }}</span>
+            </div>
+          }
+        </div>
+      }
+
       <!-- Collapsed single figure — shown only at narrow width; hidden when no limits -->
       @if (vm.collapsedMeter; as cm) {
         <div class="usage-widget__collapsed">
@@ -93,6 +112,9 @@
           {{ refreshState() === 'refreshing' ? 'Refreshing…' : 'Refresh' }}
         </button>
       </div>
+      @if (vm.limitedDetail) {
+        <p class="usage-popover__source-note">Limited detail: Claude Code's usage report returned no limits.</p>
+      }
       <!-- Live region — always rendered so screen readers announce changes (WCAG 4.1.3); collapses via :empty.
            Keep the interpolation tight against the tags: whitespace would defeat :empty. -->
       <p class="usage-popover__refresh-status" role="status">{{ refreshStatusText() }}</p>
@@ -135,12 +157,27 @@
       </div>
 
       <!-- Credits row (only when isEnabled) -->
-      @if (vm.credits) {
+      @if (vm.credits; as cr) {
         <div class="usage-popover__credits">
-          <span class="usage-popover__credits-label">Extra usage</span>
-          <span class="usage-popover__credits-value"
-            >{{ vm.credits.usedFormatted }}@if (vm.credits.limitFormatted) { of {{ vm.credits.limitFormatted }}}</span
-          >
+          <div class="usage-popover__limit-head">
+            <span class="usage-popover__credits-label">Extra usage</span>
+            <span class="usage-popover__limit-value">
+              <span class="usage-popover__credits-value"
+                >{{ cr.usedFormatted }}@if (cr.limitFormatted) { of {{ cr.limitFormatted }}}</span
+              >
+              @if (cr.meter; as m) {
+                <span class="usage-popover__credits-sep" aria-hidden="true">·</span>
+                <span class="usage-meter__percent">{{ m.percentLabel }}</span>
+              }
+            </span>
+          </div>
+          @if (cr.meter; as m) {
+            <div class="usage-meter usage-meter--popover" [ngClass]="m.severityClass">
+              <div class="usage-meter__track" role="img" [attr.aria-label]="m.accessibleName">
+                <div class="usage-meter__fill" [style.inline-size.%]="m.percent" aria-hidden="true"></div>
+              </div>
+            </div>
+          }
         </div>
       }
     </div>

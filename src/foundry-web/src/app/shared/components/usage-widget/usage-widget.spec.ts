@@ -982,4 +982,299 @@ describe('UsageWidgetComponent', () => {
       expect(el.querySelector('.usage-widget--failed')).toBeNull();
     });
   });
+
+  describe('extra-usage credits column', () => {
+    const credits = (overrides: Partial<NonNullable<UsageSnapshot['extraUsage']>> = {}) => ({
+      isEnabled: true,
+      monthlyLimit: 50000,
+      usedCredits: 12000,
+      utilization: null,
+      currency: 'USD',
+      percent: 24,
+      severity: 'normal',
+      ...overrides,
+    });
+
+    it('should render a credits column with the amount over the limit when extra usage is enabled', () => {
+      // Arrange / Act
+      const fixture = setup(buildSnapshot({ extraUsage: credits() }));
+      const el = fixture.nativeElement as HTMLElement;
+
+      // Assert
+      const column = el.querySelector('.usage-widget__trigger .usage-widget__credits');
+      expect(column).not.toBeNull();
+      const amount = column?.querySelector('.usage-widget__credits-amount')?.textContent ?? '';
+      expect(amount).toMatch(/120.*\/.*500/);
+      expect(el.querySelector('.usage-widget__trigger .usage-widget__divider')).not.toBeNull();
+    });
+
+    it('should render the credits bar coloured by the credits severity with its own accessible name', () => {
+      // Arrange / Act
+      const fixture = setup(buildSnapshot({ extraUsage: credits({ percent: 85, severity: 'warning' }) }));
+      const el = fixture.nativeElement as HTMLElement;
+
+      // Assert
+      const meter = el.querySelector('.usage-widget__credits .usage-meter');
+      expect(meter?.classList.contains('usage-meter--warning')).toBe(true);
+      const track = meter?.querySelector('.usage-meter__track');
+      expect(track?.getAttribute('role')).toBe('img');
+      const name = track?.getAttribute('aria-label') ?? '';
+      expect(name).toContain('Extra usage');
+      expect(name).toContain('85%');
+      const fill = meter?.querySelector('.usage-meter__fill') as HTMLElement | null;
+      expect(fill?.style.inlineSize).toBe('85%');
+      expect(meter?.querySelector('.usage-meter__percent')?.textContent?.trim()).toBe('85%');
+    });
+
+    it('should map an unknown credits severity to the neutral class', () => {
+      // Arrange / Act
+      const fixture = setup(buildSnapshot({ extraUsage: credits({ severity: 'mystery' }) }));
+      const el = fixture.nativeElement as HTMLElement;
+
+      // Assert
+      const meter = el.querySelector('.usage-widget__credits .usage-meter');
+      expect(meter?.classList.contains('usage-meter--neutral')).toBe(true);
+    });
+
+    it('should clamp the credits bar at 100% while the label shows the real percent', () => {
+      // Arrange / Act
+      const fixture = setup(
+        buildSnapshot({ extraUsage: credits({ usedCredits: 56000, percent: 112, severity: 'critical' }) })
+      );
+      const el = fixture.nativeElement as HTMLElement;
+
+      // Assert
+      const meter = el.querySelector('.usage-widget__credits .usage-meter');
+      expect(meter?.classList.contains('usage-meter--critical')).toBe(true);
+      const fill = meter?.querySelector('.usage-meter__fill') as HTMLElement | null;
+      expect(fill?.style.inlineSize).toBe('100%');
+      expect(meter?.querySelector('.usage-meter__percent')?.textContent?.trim()).toBe('112%');
+    });
+
+    it('should round a fractional credits percent for display', () => {
+      // Arrange / Act
+      const fixture = setup(buildSnapshot({ extraUsage: credits({ usedCredits: 16568, percent: 33.136 }) }));
+      const el = fixture.nativeElement as HTMLElement;
+
+      // Assert
+      expect(el.querySelector('.usage-widget__credits .usage-meter__percent')?.textContent?.trim()).toBe('33%');
+    });
+
+    it('should render the amount only, with no bar, when the credits percent is null', () => {
+      // Arrange / Act
+      const fixture = setup(
+        buildSnapshot({ extraUsage: credits({ monthlyLimit: null, percent: null, severity: null }) })
+      );
+      const el = fixture.nativeElement as HTMLElement;
+
+      // Assert
+      const column = el.querySelector('.usage-widget__credits');
+      expect(column).not.toBeNull();
+      const amount = column?.querySelector('.usage-widget__credits-amount')?.textContent ?? '';
+      expect(amount).toContain('120');
+      expect(amount).not.toContain('/');
+      expect(column?.querySelector('.usage-meter')).toBeNull();
+    });
+
+    it('should render no credits column when extraUsage is null', () => {
+      // Arrange / Act
+      const fixture = setup(buildSnapshot({ extraUsage: null }));
+      const el = fixture.nativeElement as HTMLElement;
+
+      // Assert
+      expect(el.querySelector('.usage-widget__credits')).toBeNull();
+      expect(el.querySelector('.usage-widget__divider')).toBeNull();
+    });
+
+    it('should render no credits column when extra usage is disabled', () => {
+      // Arrange / Act
+      const fixture = setup(buildSnapshot({ extraUsage: credits({ isEnabled: false }) }));
+      const el = fixture.nativeElement as HTMLElement;
+
+      // Assert
+      expect(el.querySelector('.usage-widget__credits')).toBeNull();
+      expect(el.querySelector('.usage-widget__divider')).toBeNull();
+    });
+
+    it('should include the credits in the trigger accessible name when shown inline', () => {
+      // Arrange / Act
+      const fixture = setup(buildSnapshot({ extraUsage: credits() }));
+      const el = fixture.nativeElement as HTMLElement;
+
+      // Assert
+      const label = el.querySelector('.usage-widget__trigger')?.getAttribute('aria-label') ?? '';
+      expect(label).toMatch(/Extra usage \S*120\S* of \S*500\S*, 24%/);
+      expect(label).toContain('42%');
+    });
+
+    it('should include amount-only credits in the trigger accessible name', () => {
+      // Arrange / Act
+      const fixture = setup(
+        buildSnapshot({ extraUsage: credits({ monthlyLimit: null, percent: null, severity: null }) })
+      );
+      const el = fixture.nativeElement as HTMLElement;
+
+      // Assert
+      const label = el.querySelector('.usage-widget__trigger')?.getAttribute('aria-label') ?? '';
+      expect(label).toMatch(/Extra usage \S*120\S*\./);
+      expect(label).not.toContain(' of ');
+    });
+
+    it('should leave the credits out of the trigger accessible name when the credits column is hidden', () => {
+      // Arrange
+      const fixture = setup(buildSnapshot({ extraUsage: credits() }));
+      const component = fixture.componentInstance;
+
+      // Act — mid-width band, as the ResizeObserver would report
+      component.isCreditsHidden.set(true);
+      fixture.detectChanges();
+      const el = fixture.nativeElement as HTMLElement;
+
+      // Assert
+      const label = el.querySelector('.usage-widget__trigger')?.getAttribute('aria-label') ?? '';
+      expect(label).not.toContain('Extra usage');
+      expect(label).toContain('42%');
+      expect(label).toContain('78%');
+    });
+
+    it('should keep the active limit as the collapsed figure even with credits present', () => {
+      // Arrange
+      const fixture = setup(buildSnapshot({ extraUsage: credits({ percent: 112, severity: 'critical' }) }));
+      const component = fixture.componentInstance;
+
+      // Act
+      component.isCreditsHidden.set(true);
+      component.isCollapsed.set(true);
+      fixture.detectChanges();
+      const el = fixture.nativeElement as HTMLElement;
+
+      // Assert — session (isActive) is the collapsed figure; credits never are
+      expect(el.querySelector('.usage-widget__collapsed .usage-meter__percent')?.textContent?.trim()).toBe('42%');
+      const label = el.querySelector('.usage-widget__trigger')?.getAttribute('aria-label') ?? '';
+      expect(label).toContain('42%');
+      expect(label).not.toContain('Extra usage');
+      expect(label).not.toContain('112%');
+    });
+
+    it('should render the credits bar and percent in the popover credits row when percent is set', () => {
+      // Arrange / Act
+      const fixture = setup(buildSnapshot({ extraUsage: credits({ percent: 85, severity: 'warning' }) }));
+      const el = fixture.nativeElement as HTMLElement;
+
+      // Assert
+      const row = el.querySelector('.usage-popover__credits');
+      expect(row?.querySelector('.usage-meter__percent')?.textContent?.trim()).toBe('85%');
+      const meter = row?.querySelector('.usage-meter');
+      expect(meter?.classList.contains('usage-meter--warning')).toBe(true);
+      expect(meter?.querySelector('.usage-meter__track')?.getAttribute('role')).toBe('img');
+    });
+
+    it('should render no bar or percent in the popover credits row when percent is null', () => {
+      // Arrange / Act
+      const fixture = setup(
+        buildSnapshot({ extraUsage: credits({ monthlyLimit: null, percent: null, severity: null }) })
+      );
+      const el = fixture.nativeElement as HTMLElement;
+
+      // Assert
+      const row = el.querySelector('.usage-popover__credits');
+      expect(row).not.toBeNull();
+      expect(row?.querySelector('.usage-meter')).toBeNull();
+      expect(row?.querySelector('.usage-meter__percent')).toBeNull();
+    });
+  });
+
+  describe('usage source note', () => {
+    const NOTE = "Limited detail: Claude Code's usage report returned no limits.";
+
+    it('should show the limited-detail note when the snapshot came from the probe turn', () => {
+      // Arrange / Act
+      const fixture = setup(buildSnapshot({ source: 'probeTurn' }));
+      const el = fixture.nativeElement as HTMLElement;
+
+      // Assert
+      expect(el.querySelector('.usage-popover__source-note')?.textContent?.trim()).toBe(NOTE);
+    });
+
+    it('should show the note and the credits column together for a probe-turn snapshot with credits', () => {
+      // Arrange / Act
+      const fixture = setup(
+        buildSnapshot({
+          source: 'probeTurn',
+          extraUsage: { isEnabled: true, monthlyLimit: 50000, usedCredits: 12000, utilization: null, currency: 'USD', percent: 24, severity: 'normal' },
+        })
+      );
+      const el = fixture.nativeElement as HTMLElement;
+
+      // Assert
+      expect(el.querySelector('.usage-popover__source-note')).not.toBeNull();
+      expect(el.querySelector('.usage-widget__credits')).not.toBeNull();
+    });
+
+    it('should not show the note when the snapshot came from the usage report', () => {
+      // Arrange / Act
+      const fixture = setup(buildSnapshot({ source: 'usageReport' }));
+      const el = fixture.nativeElement as HTMLElement;
+
+      // Assert
+      expect(el.querySelector('.usage-popover__source-note')).toBeNull();
+    });
+  });
+
+  describe('width bands (mirrors the app-header-nav container queries)', () => {
+    let observerCallback: ResizeObserverCallback | null = null;
+    const originalResizeObserver = globalThis.ResizeObserver;
+
+    beforeEach(() => {
+      observerCallback = null;
+      globalThis.ResizeObserver = class {
+        constructor(cb: ResizeObserverCallback) {
+          observerCallback = cb;
+        }
+        observe(): void {}
+        unobserve(): void {}
+        disconnect(): void {}
+      } as unknown as typeof ResizeObserver;
+    });
+
+    afterEach(() => {
+      globalThis.ResizeObserver = originalResizeObserver;
+    });
+
+    function setupInNav() {
+      TestBed.resetTestingModule();
+      TestBed.configureTestingModule({
+        imports: [UsageWidgetComponent],
+        providers: [{ provide: UsageService, useValue: createMockUsageService(buildSnapshot()) }],
+      });
+      const fixture = TestBed.createComponent(UsageWidgetComponent);
+      document.createElement('nav').appendChild(fixture.nativeElement as HTMLElement);
+      fixture.detectChanges();
+      return fixture;
+    }
+
+    function resize(width: number): void {
+      observerCallback?.([{ contentRect: { width } } as ResizeObserverEntry], {} as ResizeObserver);
+    }
+
+    it.each([
+      [500, false, false],
+      [361, false, false],
+      [360, true, false],
+      [241, true, false],
+      [240, true, true],
+      [180, true, true],
+    ])('at %ipx hides credits=%s and collapses=%s', (width, creditsHidden, collapsed) => {
+      // Arrange
+      const fixture = setupInNav();
+      expect(observerCallback).not.toBeNull();
+
+      // Act
+      resize(width);
+
+      // Assert
+      expect(fixture.componentInstance.isCreditsHidden()).toBe(creditsHidden);
+      expect(fixture.componentInstance.isCollapsed()).toBe(collapsed);
+    });
+  });
 });
