@@ -17,9 +17,10 @@ unit tests and the startup image build. A change here takes effect at the next F
 
 `shared/prompts/principles.md` holds the engineering standards (the Worker Principles) that Foundry places
 in every role's system prompt, after the safety preamble and before the role prompt. They yield to the
-target repository's style, testing and design conventions, never to the safety rules. The file is required and takes no placeholders: a missing, blank or
-placeholder-bearing file fails the unit tests and the startup image build. A role's own prompt says how
-it uses them (implement: "Apply the engineering principles above to every change.").
+target repository's style, testing and design conventions, never to the safety rules. The file is
+required, takes no placeholders and stays within 8 KiB (UTF-8 bytes): a missing, blank,
+placeholder-bearing or oversized file fails the unit tests and the startup image build. A role's own
+prompt says how it uses them (implement: "Apply the engineering principles above to every change.").
 
 ## Verdicts
 

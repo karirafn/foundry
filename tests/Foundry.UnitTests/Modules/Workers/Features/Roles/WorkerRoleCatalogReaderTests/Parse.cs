@@ -1,3 +1,6 @@
+using System.Globalization;
+using System.Text;
+
 using Foundry.Modules.Workers.Domain.ValueObjects;
 using Foundry.Modules.Workers.Features.Roles;
 using Foundry.Shared;
@@ -20,7 +23,7 @@ public sealed class Parse
     };
 
     private static string FillToBytes(string unit, int bytes) =>
-        string.Concat(Enumerable.Repeat(unit, bytes / System.Text.Encoding.UTF8.GetByteCount(unit)));
+        string.Concat(Enumerable.Repeat(unit, bytes / Encoding.UTF8.GetByteCount(unit)));
 
     [Fact]
     public void WhenEveryRoleAndTheSharedPluginArePresent_ReadsPromptsAndPurpose()
@@ -164,7 +167,7 @@ public sealed class Parse
         error.ShouldSatisfyAllConditions(
             () => error.Code.ShouldBe(WorkerRoleCatalogReader.InvalidCatalogCode),
             () => error.Message.ShouldContain("roles/shared/prompts/principles.md"),
-            () => error.Message.ShouldContain(WorkerRoleCatalogReader.MaxPrinciplesBytes.ToString(System.Globalization.CultureInfo.InvariantCulture)));
+            () => error.Message.ShouldContain(WorkerRoleCatalogReader.MaxPrinciplesBytes.ToString(CultureInfo.InvariantCulture)));
     }
 
     [Theory]
