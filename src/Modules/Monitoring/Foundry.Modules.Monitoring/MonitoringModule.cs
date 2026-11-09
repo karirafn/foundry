@@ -52,6 +52,10 @@ public static class MonitoringModule
         services.AddHttpClient<GitHubHttpClient>(client =>
             client.MaxResponseContentBufferSize = MaxResponseContentBufferSize);
         services.AddTransient<IGitHubWriteProber>(sp => sp.GetRequiredService<GitHubHttpClient>());
+        // Job-log downloads follow GitHub's redirect themselves so the token never reaches the storage host.
+        services.AddHttpClient<GitHubJobLogClient>(client =>
+                client.MaxResponseContentBufferSize = MaxResponseContentBufferSize)
+            .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler { AllowAutoRedirect = false });
         services.AddHttpClient<GitLabHttpClient>(client =>
             client.MaxResponseContentBufferSize = MaxResponseContentBufferSize);
 
@@ -70,6 +74,7 @@ public static class MonitoringModule
         services.AddScoped<IPostExitProviderQueries, PostExitProviderQueries>();
         services.AddScoped<IWorkBranchCommands, PostExitProviderQueries>();
         services.AddScoped<IIssueBlockerQueries, PostExitProviderQueries>();
+        services.AddScoped<IFailingJobLogQueries, PostExitProviderQueries>();
         services.AddScoped<RepositoryPoller>();
         services.AddScoped<RebaseStep>();
 

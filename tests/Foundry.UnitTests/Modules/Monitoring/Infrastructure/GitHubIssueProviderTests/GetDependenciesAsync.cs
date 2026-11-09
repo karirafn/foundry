@@ -36,7 +36,7 @@ public sealed class GetDependenciesAsync
             NullLogger<GitHubHttpClient>.Instance,
             new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))), new InMemoryProviderRateBudget(), TimeProvider.System);
         return new GitHubIssueProvider(
-            gitHubHttpClient, new ActionableFeedbackPolicy(TimeProvider.System), ValidToken, ValidBaseUrl);
+            gitHubHttpClient, new GitHubJobLogClient(httpClient), new ActionableFeedbackPolicy(TimeProvider.System), ValidToken, ValidBaseUrl);
     }
 
     // --- After GetIssuesAsync, GetDependenciesAsync returns cached blockers with zero extra HTTP requests ---

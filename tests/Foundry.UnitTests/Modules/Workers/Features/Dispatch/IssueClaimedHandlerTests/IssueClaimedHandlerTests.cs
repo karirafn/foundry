@@ -60,7 +60,8 @@ public sealed class HandleAsync : IAsyncDisposable
         IGlobalSettingsQueries? settingsQueries = null,
         ICredentialQueries? credentialQueries = null,
         IPostExitProviderQueries? postExitProviderQueries = null,
-        IWorkerRoleCatalogStore? roleCatalog = null)
+        IWorkerRoleCatalogStore? roleCatalog = null,
+        IFailingJobLogQueries? failingJobLogQueries = null)
     {
         return new IssueClaimedHandler(
             _dbContext,
@@ -69,6 +70,7 @@ public sealed class HandleAsync : IAsyncDisposable
             settingsQueries ?? new StubGlobalSettingsQueries(),
             credentialQueries ?? new StubCredentialQueries(("ANTHROPIC_API_KEY", "test-api-key")),
             postExitProviderQueries ?? new StubPostExitProviderQueries(branchCreationSucceeds: true),
+            failingJobLogQueries ?? new StubFailingJobLogQueries(),
             roleCatalog ?? StubWorkerRoleCatalogStore.With(),
             NullLogger<IssueClaimedHandler>.Instance);
     }
@@ -697,6 +699,74 @@ public sealed class HandleAsync : IAsyncDisposable
 
         // Assert
         orchestrator.LastSpec.ShouldBeNull();
+    }
+
+    private static DispatchContext.Revision FailedChecksRevision(params FailingCheck[] checks) =>
+        new("feat/42-fix", "https://github.com/owner/repo/pull/10", new RevisionTrigger.FailedChecks(checks));
+
+    [Fact]
+    public async Task WhenFailedChecksRevision_RendersEachReadableJobLogIntoTheSystemPrompt()
+    {
+        // Arrange
+        StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c-job-logs");
+        StubFailingJobLogQueries logQueries = new StubFailingJobLogQueries().WithLog("ci/build", "error CS0103: name missing");
+        IssueClaimedHandler sut = BuildHandler(orchestrator: orchestrator, failingJobLogQueries: logQueries);
+        IssueClaimed @event = BuildEvent(
+            branchName: "feat/42-fix",
+            context: FailedChecksRevision(
+                new FailingCheck("ci/build", "failure", "https://github.com/owner/repo/actions/runs/1/job/2"),
+                new FailingCheck("codecov", "failure", "https://codecov.io/x")));
+
+        // Act
+        await sut.HandleAsync(@event, TestContext.Current.CancellationToken);
+
+        // Assert
+        string prompt = orchestrator.LastSpec.ShouldNotBeNull().EnvironmentVariables["SYSTEM_PROMPT"];
+        prompt.ShouldSatisfyAllConditions(
+            () => prompt.ShouldContain("<failing-job-log name=\"ci/build\">\nerror CS0103: name missing\n</failing-job-log>"),
+            () => prompt.ShouldNotContain("<failing-job-log name=\"codecov\">"),
+            () => prompt.ShouldContain("- codecov (failure) https://codecov.io/x"),
+            () => logQueries.RequestedChecks.Select(check => check.Name).ShouldBe(["ci/build", "codecov"]));
+    }
+
+    [Fact]
+    public async Task WhenAJobLogReadFails_DispatchesWithTheCheckListedWithoutALog()
+    {
+        // Arrange
+        StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c-job-log-failed");
+        StubFailingJobLogQueries logQueries = new StubFailingJobLogQueries()
+            .WithFailure("ci/build")
+            .WithException("ci/lint");
+        IssueClaimedHandler sut = BuildHandler(orchestrator: orchestrator, failingJobLogQueries: logQueries);
+        IssueClaimed @event = BuildEvent(
+            branchName: "feat/42-fix",
+            context: FailedChecksRevision(
+                new FailingCheck("ci/build", "failure", null),
+                new FailingCheck("ci/lint", "failure", null)));
+
+        // Act
+        await sut.HandleAsync(@event, TestContext.Current.CancellationToken);
+
+        // Assert
+        string prompt = orchestrator.LastSpec.ShouldNotBeNull().EnvironmentVariables["SYSTEM_PROMPT"];
+        prompt.ShouldSatisfyAllConditions(
+            () => prompt.ShouldContain("- ci/build (failure)"),
+            () => prompt.ShouldContain("- ci/lint (failure)"),
+            () => prompt.ShouldNotContain("<failing-job-log"));
+    }
+
+    [Fact]
+    public async Task WhenNotAFailedChecksRevision_ReadsNoJobLogs()
+    {
+        // Arrange
+        StubFailingJobLogQueries logQueries = new();
+        IssueClaimedHandler sut = BuildHandler(failingJobLogQueries: logQueries);
+
+        // Act
+        await sut.HandleAsync(BuildEvent(), TestContext.Current.CancellationToken);
+
+        // Assert
+        logQueries.RequestedChecks.ShouldBeEmpty();
     }
 
     [Fact]

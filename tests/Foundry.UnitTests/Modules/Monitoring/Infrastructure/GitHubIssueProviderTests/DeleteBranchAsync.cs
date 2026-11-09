@@ -32,7 +32,7 @@ public sealed class DeleteBranchAsync
         HttpClient httpClient = new(handler);
         GitHubHttpClient gitHubHttpClient = new(httpClient, NullLogger<GitHubHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))), new InMemoryProviderRateBudget(), TimeProvider.System);
         return new GitHubIssueProvider(
-            gitHubHttpClient, new ActionableFeedbackPolicy(TimeProvider.System), "ghp_token", ValidBaseUrl);
+            gitHubHttpClient, new GitHubJobLogClient(httpClient), new ActionableFeedbackPolicy(TimeProvider.System), "ghp_token", ValidBaseUrl);
     }
 
     [Fact]

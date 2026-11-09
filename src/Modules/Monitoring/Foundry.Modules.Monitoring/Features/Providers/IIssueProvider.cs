@@ -1,5 +1,6 @@
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
+using Foundry.Modules.Monitoring.Features.Providers.Checks;
 using ProviderChecks = Foundry.Modules.Monitoring.Features.Providers.Checks.Checks;
 using Foundry.Modules.Monitoring.Features.Providers.Feedback;
 using Foundry.Modules.Monitoring.Features.Providers.Rebase;
@@ -100,6 +101,28 @@ internal interface IIssueProvider
         RepositorySlug slug,
         string pullRequestUrl,
         CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Resolves the CI job a failing check stands for, so its log can be read with <see cref="GetJobLogAsync"/>.
+    /// A check that is not a CI job the provider exposes logs for (a commit status, a third-party check app)
+    /// answers <see cref="CiJobLookup.NotACiJob"/>.
+    /// </summary>
+    /// <remarks>Providers without job logs keep this default, which answers
+    /// <see cref="CiJobLookup.NotACiJob"/> without any provider call.</remarks>
+    Task<Result<CiJobLookup>> ResolveCiJobAsync(
+        RepositorySlug slug,
+        FailingCheck check,
+        CancellationToken cancellationToken)
+        => Task.FromResult(Result<CiJobLookup>.Ok(new CiJobLookup.NotACiJob()));
+
+    /// <summary>Reads the full log text of the CI job <paramref name="jobId"/>.</summary>
+    /// <remarks>Providers without job logs keep this default, which fails with
+    /// <see cref="JobLogErrors.NotSupportedCode"/> without any provider call.</remarks>
+    Task<Result<string>> GetJobLogAsync(
+        RepositorySlug slug,
+        long jobId,
+        CancellationToken cancellationToken)
+        => Task.FromResult(Result<string>.Fail(JobLogErrors.NotSupported()));
 
     /// <summary>
     /// Reads the pull request branch head and how far it is behind its base branch, for the post-run rebase
