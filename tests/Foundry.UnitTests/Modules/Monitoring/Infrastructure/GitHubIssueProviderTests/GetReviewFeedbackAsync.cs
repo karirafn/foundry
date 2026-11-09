@@ -45,7 +45,7 @@ public sealed class GetReviewFeedbackAsync
             new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))),
             new InMemoryProviderRateBudget(),
             tp);
-        return new GitHubIssueProvider(gitHubHttpClient, new ActionableFeedbackPolicy(tp), ValidToken, ValidBaseUrl);
+        return new GitHubIssueProvider(gitHubHttpClient, new GitHubJobLogClient(httpClient), new ActionableFeedbackPolicy(tp), ValidToken, ValidBaseUrl);
     }
 
     private static string BuildGraphQlJson(string commentBody, string createdAt)

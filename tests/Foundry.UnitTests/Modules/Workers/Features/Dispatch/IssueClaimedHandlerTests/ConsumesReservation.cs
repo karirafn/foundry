@@ -64,6 +64,7 @@ public sealed class ConsumesReservation : IAsyncDisposable
             new StubGlobalSettingsQueries(),
             new StubCredentialQueries(("ANTHROPIC_API_KEY", "test-api-key")),
             _providerQueries,
+            new StubFailingJobLogQueries(),
             StubWorkerRoleCatalogStore.With(),
             NullLogger<IssueClaimedHandler>.Instance);
     }

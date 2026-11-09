@@ -1,6 +1,9 @@
+using System.Text.RegularExpressions;
+
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Features.Providers;
+using Foundry.Modules.Monitoring.Features.Providers.Checks;
 using ProviderChecks = Foundry.Modules.Monitoring.Features.Providers.Checks.Checks;
 using Foundry.Modules.Monitoring.Features.Providers.Feedback;
 using Foundry.Modules.Monitoring.Features.Providers.Rebase;
@@ -9,7 +12,7 @@ using Foundry.Shared;
 
 namespace Foundry.Modules.Monitoring.Infrastructure.GitLab;
 
-internal sealed class GitLabIssueProvider(
+internal sealed partial class GitLabIssueProvider(
     GitLabHttpClient httpClient,
     ActionableFeedbackPolicy feedbackPolicy,
     string token,
@@ -251,4 +254,44 @@ internal sealed class GitLabIssueProvider(
     {
         return httpClient.GetDefaultBranchAsync(apiBaseUrl, slug, token, cancellationToken);
     }
+
+    // Check-to-job mapping. A GitLab CI job's web page is https://{host}/{project path}/-/jobs/{job_id}, and the
+    // {job_id} in it is the `id` that "Get a log file" (GET /projects/:id/jobs/:job_id/trace) takes — the Jobs API
+    // returns that same page as the job's `web_url`. No provider call is needed. A link to any other page, or to a
+    // job of another project, is not a job whose log Foundry reads through this repository.
+    public Task<Result<CiJobLookup>> ResolveCiJobAsync(
+        RepositorySlug slug,
+        FailingCheck check,
+        CancellationToken cancellationToken)
+    {
+        CiJobLookup lookup = TryParseJobId(slug, check.DetailsUrl, out long jobId)
+            ? new CiJobLookup.Found(jobId)
+            : new CiJobLookup.NotACiJob();
+        return Task.FromResult(Result<CiJobLookup>.Ok(lookup));
+    }
+
+    public Task<Result<string>> GetJobLogAsync(
+        RepositorySlug slug,
+        long jobId,
+        CancellationToken cancellationToken)
+    {
+        return httpClient.GetJobTraceAsync(apiBaseUrl, slug, jobId, token, cancellationToken);
+    }
+
+    private static bool TryParseJobId(RepositorySlug slug, string? detailsUrl, out long jobId)
+    {
+        jobId = 0;
+        if (!Uri.TryCreate(detailsUrl, UriKind.Absolute, out Uri? uri))
+        {
+            return false;
+        }
+
+        Match match = JobPagePattern().Match(uri.AbsolutePath);
+        return match.Success
+            && string.Equals(Uri.UnescapeDataString(match.Groups["path"].Value), slug.FullPath, StringComparison.OrdinalIgnoreCase)
+            && long.TryParse(match.Groups["job"].Value, out jobId);
+    }
+
+    [GeneratedRegex(@"^/(?<path>.+)/-/jobs/(?<job>\d+)/?$")]
+    private static partial Regex JobPagePattern();
 }

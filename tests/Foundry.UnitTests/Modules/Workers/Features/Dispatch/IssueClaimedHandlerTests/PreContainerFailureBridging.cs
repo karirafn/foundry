@@ -17,6 +17,7 @@ using Foundry.Modules.Workers.Features.Dispatch;
 using Foundry.Modules.Workers.Features.Roles;
 using Foundry.Shared;
 using Foundry.Shared.Infrastructure;
+using Foundry.Testing;
 using Foundry.UnitTests.Fakes.Workers;
 using Foundry.WebApi.Persistence;
 
@@ -109,6 +110,7 @@ public sealed class PreContainerFailureBridging : IAsyncDisposable
             new StubGlobalSettingsQueries(),
             new StubCredentialQueries(("ANTHROPIC_API_KEY", "test-key")),
             postExitProviderQueries ?? new BranchCreationFailsQueries(),
+            new StubFailingJobLogQueries(),
             StubWorkerRoleCatalogStore.With(),
             NullLogger<IssueClaimedHandler>.Instance);
     }
