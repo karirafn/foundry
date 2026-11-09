@@ -308,7 +308,7 @@ internal sealed class WorkerRunMonitor(
 
         // A transient merge-request lookup failure is treated as "no PR" (accepted risk): the run may
         // land in a retryable failed state while a PR is open.
-        WorkerOutcome outcome = await resolver.TryResolveExistingPullRequestAsync(activeRun, summary, cancellationToken)
+        WorkerOutcome outcome = await resolver.TryResolveExistingPullRequestAsync(activeRun, containerOutput, summary, cancellationToken)
             ?? await StoppedRunOutcomeBuilder.BuildAsync(
                 activeRun,
                 new FailureReason.Cancelled(),

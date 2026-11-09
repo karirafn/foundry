@@ -86,7 +86,8 @@ public sealed class GetWorkerRunDetailAsync : IAsyncDisposable
 
     private async Task<CompletedRun> SeedCompletedRunAsync(
         WorkerRunId? runId = null,
-        RunResultSummary? resultSummary = null)
+        RunResultSummary? resultSummary = null,
+        string? containerOutput = null)
     {
         IssueId issueId = IssueId.New();
         WorkerRunId id = runId ?? WorkerRunId.New();
@@ -100,7 +101,8 @@ public sealed class GetWorkerRunDetailAsync : IAsyncDisposable
             exitCode: 0,
             branchName: BranchName.From("feat/3-completed-run"),
             pullRequestUrl: null,
-            resultSummary: resultSummary);
+            resultSummary: resultSummary,
+            containerOutput: containerOutput);
 
         _dbContext.Set<WorkerRun>().Add(completed);
         await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
@@ -202,6 +204,40 @@ public sealed class GetWorkerRunDetailAsync : IAsyncDisposable
         // Arrange
         WorkerRunQueries sut = new(_dbContext);
         FailedRun run = await SeedFailedRunAsync(containerOutput: "some container output");
+
+        // Act
+        Result<WorkerRunDetail> result = await sut.GetWorkerRunDetailAsync(
+            run.Id.Value,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        WorkerRunDetail detail = result.ShouldBeOfType<Result<WorkerRunDetail>.Success>().Value;
+        detail.HasStoredLog.ShouldBeTrue();
+    }
+
+    [Fact]
+    public async Task WhenCompletedRunHasNoContainerOutput_HasStoredLogIsFalse()
+    {
+        // Arrange
+        WorkerRunQueries sut = new(_dbContext);
+        CompletedRun run = await SeedCompletedRunAsync(containerOutput: null);
+
+        // Act
+        Result<WorkerRunDetail> result = await sut.GetWorkerRunDetailAsync(
+            run.Id.Value,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        WorkerRunDetail detail = result.ShouldBeOfType<Result<WorkerRunDetail>.Success>().Value;
+        detail.HasStoredLog.ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task WhenCompletedRunHasContainerOutput_HasStoredLogIsTrue()
+    {
+        // Arrange
+        WorkerRunQueries sut = new(_dbContext);
+        CompletedRun run = await SeedCompletedRunAsync(containerOutput: "some container output");
 
         // Act
         Result<WorkerRunDetail> result = await sut.GetWorkerRunDetailAsync(

@@ -17,6 +17,7 @@ internal abstract record WorkerOutcome
     internal sealed record Completed(
         BranchName BranchName,
         PullRequestUrl PullRequestUrl,
+        string? ContainerOutput,
         RunResultSummary? Summary) : WorkerOutcome;
 
     /// <summary>
@@ -25,6 +26,7 @@ internal abstract record WorkerOutcome
     internal sealed record Review(
         BranchName BranchName,
         PullRequestUrl PullRequestUrl,
+        string? ContainerOutput,
         RunResultSummary? Summary) : WorkerOutcome;
 
     /// <summary>
@@ -47,7 +49,10 @@ internal abstract record WorkerOutcome
     /// <summary>
     /// The container exited cleanly with no commits — the issue is unchanged.
     /// </summary>
-    internal sealed record Unchanged(BranchName BranchName, RunResultSummary? Summary) : WorkerOutcome;
+    internal sealed record Unchanged(
+        BranchName BranchName,
+        string? ContainerOutput,
+        RunResultSummary? Summary) : WorkerOutcome;
 
     /// <summary>
     /// A transient or unknown provider error; the caller should not transition state and may retry.

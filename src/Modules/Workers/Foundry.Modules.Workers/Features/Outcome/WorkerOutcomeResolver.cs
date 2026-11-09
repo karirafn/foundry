@@ -87,8 +87,8 @@ internal sealed class WorkerOutcomeResolver(
 
         return mr.Presence switch
         {
-            MergeRequestPresence.Merged => ResolveMerged(run, mr, summary),
-            MergeRequestPresence.Open => ResolveOpen(run, mr, summary),
+            MergeRequestPresence.Merged => ResolveMerged(run, mr, containerOutput, summary),
+            MergeRequestPresence.Open => ResolveOpen(run, mr, containerOutput, summary),
             MergeRequestPresence.Closed => await ResolveClosedAsync(run, containerOutput, summary, cancellationToken),
             MergeRequestPresence.None => await ResolveNoMrAsync(run, status, containerOutput, cancellationToken),
             _ => throw new UnreachableException($"Unknown {nameof(MergeRequestPresence)}: {mr.Presence}"),
@@ -102,6 +102,7 @@ internal sealed class WorkerOutcomeResolver(
     /// </summary>
     public async Task<WorkerOutcome?> TryResolveExistingPullRequestAsync(
         ActiveRun run,
+        string? containerOutput,
         RunResultSummary? summary,
         CancellationToken cancellationToken)
     {
@@ -117,13 +118,17 @@ internal sealed class WorkerOutcomeResolver(
 
         return mr.Presence switch
         {
-            MergeRequestPresence.Merged => ResolveMerged(run, mr, summary),
-            MergeRequestPresence.Open => ResolveOpen(run, mr, summary),
+            MergeRequestPresence.Merged => ResolveMerged(run, mr, containerOutput, summary),
+            MergeRequestPresence.Open => ResolveOpen(run, mr, containerOutput, summary),
             _ => null,
         };
     }
 
-    private static WorkerOutcome ResolveMerged(ActiveRun run, MergeRequestByBranch mr, RunResultSummary? summary)
+    private static WorkerOutcome ResolveMerged(
+        ActiveRun run,
+        MergeRequestByBranch mr,
+        string? containerOutput,
+        RunResultSummary? summary)
     {
         // Guard: Merged with null WebUrl — never build a CompletedIssue without a PR URL
         if (mr.WebUrl is null)
@@ -132,10 +137,14 @@ internal sealed class WorkerOutcomeResolver(
                 new Error(MergedMissingUrlCode, "Merged MR has no web URL; cannot complete the issue."));
         }
 
-        return new WorkerOutcome.Completed(run.BranchName, PullRequestUrl.From(mr.WebUrl), summary);
+        return new WorkerOutcome.Completed(run.BranchName, PullRequestUrl.From(mr.WebUrl), containerOutput, summary);
     }
 
-    private static WorkerOutcome ResolveOpen(ActiveRun run, MergeRequestByBranch mr, RunResultSummary? summary)
+    private static WorkerOutcome ResolveOpen(
+        ActiveRun run,
+        MergeRequestByBranch mr,
+        string? containerOutput,
+        RunResultSummary? summary)
     {
         // Guard: Open with null WebUrl — treat as indeterminate; real providers always supply a URL
         if (mr.WebUrl is null)
@@ -144,7 +153,7 @@ internal sealed class WorkerOutcomeResolver(
                 new Error(OpenMrMissingUrlCode, "Open MR has no web URL; cannot produce a Review outcome."));
         }
 
-        return new WorkerOutcome.Review(run.BranchName, PullRequestUrl.From(mr.WebUrl), summary);
+        return new WorkerOutcome.Review(run.BranchName, PullRequestUrl.From(mr.WebUrl), containerOutput, summary);
     }
 
     private async Task<WorkerOutcome> ResolveClosedAsync(
@@ -276,8 +285,8 @@ internal sealed class WorkerOutcomeResolver(
                 // a Closed MR must go through the commit-check path, only Open yields Review.
                 return mr.Presence switch
                 {
-                    MergeRequestPresence.Merged => ResolveMerged(run, mr, summary),
-                    MergeRequestPresence.Open => ResolveOpen(run, mr, summary),
+                    MergeRequestPresence.Merged => ResolveMerged(run, mr, containerOutput, summary),
+                    MergeRequestPresence.Open => ResolveOpen(run, mr, containerOutput, summary),
                     MergeRequestPresence.Closed => await ResolveClosedAsync(run, containerOutput, summary, cancellationToken),
                     _ => throw new UnreachableException($"Unknown {nameof(MergeRequestPresence)}: {mr.Presence}"),
                 };
@@ -314,7 +323,7 @@ internal sealed class WorkerOutcomeResolver(
         }
 
         // Exit 0 with no commits — the issue is unchanged (nothing to submit)
-        return new WorkerOutcome.Unchanged(run.BranchName, summary);
+        return new WorkerOutcome.Unchanged(run.BranchName, containerOutput, summary);
     }
 
     /// <summary>

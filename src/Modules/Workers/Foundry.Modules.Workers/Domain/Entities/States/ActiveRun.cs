@@ -115,9 +115,17 @@ public sealed class ActiveRun : WorkerRun
         BranchName? branchName,
         PullRequestUrl? pullRequestUrl,
         RunResultSummary? resultSummary = null,
-        RunVerdict? verdict = null)
+        RunVerdict? verdict = null,
+        string? containerOutput = null)
     {
-        CompletedRun completed = CompletedRun.FromActive(this, exitCode, branchName, pullRequestUrl, resultSummary, verdict);
+        CompletedRun completed = CompletedRun.FromActive(
+            this,
+            exitCode,
+            branchName,
+            pullRequestUrl,
+            resultSummary,
+            verdict,
+            containerOutput);
         AddDomainEvent(new WorkerRunCompletedEvent(Id, IssueId, branchName?.Value, pullRequestUrl?.Value));
         return completed;
     }

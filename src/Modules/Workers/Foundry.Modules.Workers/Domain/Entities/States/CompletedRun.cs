@@ -41,6 +41,12 @@ public sealed class CompletedRun : WorkerRun
 
     public PullRequestUrl? PullRequestUrl { get; private set; }
 
+    /// <summary>
+    /// The redacted, Docker-timestamped container log tail, kept so a slow or stalled run can be
+    /// diagnosed after its container is removed.
+    /// </summary>
+    public string? ContainerOutput { get; private set; }
+
     public RunResultSummary? ResultSummary { get; private set; }
 
     /// <summary>
@@ -55,7 +61,8 @@ public sealed class CompletedRun : WorkerRun
         BranchName? branchName,
         PullRequestUrl? pullRequestUrl,
         RunResultSummary? resultSummary = null,
-        RunVerdict? verdict = null)
+        RunVerdict? verdict = null,
+        string? containerOutput = null)
     {
         CompletedRun completed = new(
             active.Id,
@@ -70,6 +77,7 @@ public sealed class CompletedRun : WorkerRun
             active.Image)
         {
             CancelRequestedAt = active.CancelRequestedAt,
+            ContainerOutput = containerOutput,
         };
 
         completed.RecordVerdict(verdict);

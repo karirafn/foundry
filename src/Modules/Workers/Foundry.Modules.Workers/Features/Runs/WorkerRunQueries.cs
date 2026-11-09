@@ -96,12 +96,16 @@ internal sealed class WorkerRunQueries(DbContext db) : IWorkerRunQueries
             return new WorkerRunLogResult.RunNotFound();
         }
 
-        if (run is not FailedRun { ContainerOutput.Length: > 0 } failedRun)
+        string? containerOutput = run switch
         {
-            return new WorkerRunLogResult.NoLog();
-        }
+            CompletedRun completed => completed.ContainerOutput,
+            FailedRun failed => failed.ContainerOutput,
+            _ => null,
+        };
 
-        return new WorkerRunLogResult.LogAvailable(failedRun.ContainerOutput);
+        return string.IsNullOrEmpty(containerOutput)
+            ? new WorkerRunLogResult.NoLog()
+            : new WorkerRunLogResult.LogAvailable(containerOutput);
     }
 
     private static WorkerRunDetail MapToDetail(WorkerRun run) =>
@@ -149,7 +153,7 @@ internal sealed class WorkerRunQueries(DbContext db) : IWorkerRunQueries
             InputTokens: run.ResultSummary?.Tokens.BillableInputTokens,
             OutputTokens: run.ResultSummary?.OutputTokens,
             LastActivityAt: null,
-            HasStoredLog: false,
+            HasStoredLog: run is { ContainerOutput.Length: > 0 },
             CancelRequestedAt: run.CancelRequestedAt);
 
     private static WorkerRunDetail MapFailed(FailedRun run) =>
