@@ -46,6 +46,7 @@ public sealed class BackoffBehavior
         ImageBuildRetryPolicy? testOnlyRetryPolicy = null)
     {
         ServiceCollection services = new();
+        services.AddEmptyDbContext();
         services.AddScoped<IGlobalSettingsQueries>(_ => new StubGlobalSettingsQueries());
         services.AddScoped<IIntegrationEventDispatcher>(_ =>
             dispatcher ?? new NullIntegrationEventDispatcher());

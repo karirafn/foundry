@@ -21,6 +21,7 @@ public sealed class StartingAsync
         bool settingsExists = true)
     {
         ServiceCollection services = new();
+        services.AddEmptyDbContext();
         services.AddScoped<IGlobalSettingsQueries>(_ => new StubGlobalSettingsQueries(settingsExists));
         services.AddScoped<IIntegrationEventDispatcher>(_ => new NullIntegrationEventDispatcher());
 
