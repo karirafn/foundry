@@ -90,6 +90,7 @@ public static class WorkersModule
         services.AddHostedService<WorkerImageRebuildService>();
         services.AddHostedService<StaleStartingRunService>();
         services.AddHostedService<StaleReservationService>();
+        services.AddHostedService<RunTranscriptRetentionService>();
 
         return services;
     }

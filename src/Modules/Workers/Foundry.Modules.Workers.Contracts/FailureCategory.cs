@@ -20,6 +20,7 @@ public sealed record FailureCategory
     public const string ModelUnavailableToken = "model_unavailable";
     public const string PrClosedToken = "pr_closed";
     public const string CancelledToken = "cancelled";
+    public const string TurnLimitToken = "turn_limit";
 
     public static readonly FailureCategory NonZeroExit = new(NonZeroExitToken);
     public static readonly FailureCategory TimedOut = new(TimedOutToken);
@@ -33,6 +34,7 @@ public sealed record FailureCategory
     public static readonly FailureCategory ModelUnavailable = new(ModelUnavailableToken);
     public static readonly FailureCategory PrClosed = new(PrClosedToken);
     public static readonly FailureCategory Cancelled = new(CancelledToken);
+    public static readonly FailureCategory TurnLimit = new(TurnLimitToken);
 
     private static readonly FrozenDictionary<string, FailureCategory> KnownCategories =
         new Dictionary<string, FailureCategory>(StringComparer.Ordinal)
@@ -49,6 +51,7 @@ public sealed record FailureCategory
             { ModelUnavailableToken, ModelUnavailable },
             { PrClosedToken, PrClosed },
             { CancelledToken, Cancelled },
+            { TurnLimitToken, TurnLimit },
         }.ToFrozenDictionary(StringComparer.Ordinal);
 
     public string Value { get; }

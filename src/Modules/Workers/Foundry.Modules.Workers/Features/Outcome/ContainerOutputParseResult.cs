@@ -16,6 +16,9 @@ internal abstract record ContainerOutputParseResult
 
     internal sealed record NoResultLine : ContainerOutputParseResult;
 
+    // claude emitted at least one stream-json event, so bootstrap passed, but no result line followed.
+    internal sealed record AgentStartedNoResultLine : ContainerOutputParseResult;
+
     internal sealed record AuthInvalid : ContainerOutputParseResult;
 
     internal sealed record TransientApiError : ContainerOutputParseResult;
@@ -23,4 +26,6 @@ internal abstract record ContainerOutputParseResult
     internal sealed record CreditsExhausted : ContainerOutputParseResult;
 
     internal sealed record ModelUnavailable : ContainerOutputParseResult;
+
+    internal sealed record TurnLimitReached : ContainerOutputParseResult;
 }

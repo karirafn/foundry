@@ -274,6 +274,9 @@ public sealed class TimeoutDetection : WorkerDispatchServiceTestBase
             CancellationToken cancellationToken)
             => Task.FromResult<IReadOnlyList<(ContainerId, WorkerRunId)>>([]);
 
+        public Task<string?> GetFullLogAsync(string containerId, CancellationToken cancellationToken)
+            => Task.FromResult<string?>(null);
+
         public Task<string?> GetLogsAsync(string containerId, int tailLines, CancellationToken cancellationToken)
             => Task.FromResult<string?>(null);
 
@@ -336,6 +339,9 @@ public sealed class TimeoutDetection : WorkerDispatchServiceTestBase
         public Task<IReadOnlyList<(ContainerId ContainerId, WorkerRunId WorkerRunId)>> ListByLabelAsync(
             CancellationToken cancellationToken)
             => Task.FromResult<IReadOnlyList<(ContainerId, WorkerRunId)>>([]);
+
+        public Task<string?> GetFullLogAsync(string containerId, CancellationToken cancellationToken)
+            => Task.FromResult<string?>(null);
 
         public Task<string?> GetLogsAsync(string containerId, int tailLines, CancellationToken cancellationToken)
         {

@@ -43,7 +43,13 @@ public abstract class WorkerRunLogResult
     /// <summary>The run exists but has no stored log output (e.g. active or completed without output).</summary>
     public sealed class NoLog : WorkerRunLogResult;
 
-    /// <summary>The run is a failed run with stored container output.</summary>
+    /// <summary>The run has a stored Run Transcript, already rendered.</summary>
+    public sealed class TranscriptAvailable(string transcript) : WorkerRunLogResult
+    {
+        public string Transcript { get; } = transcript;
+    }
+
+    /// <summary>The run is a finished run with stored container output but no Run Transcript.</summary>
     public sealed class LogAvailable(string logText) : WorkerRunLogResult
     {
         public string LogText { get; } = logText;

@@ -34,7 +34,7 @@ jobs:
 
       - name: Setup .NET
         if: github.event_name == 'push' || steps.changes.outputs.api == 'true'
-        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68  # v6.0.0
+        uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73  # v6.1.0
         with:
           dotnet-version: 10.0.x
 
@@ -120,13 +120,7 @@ jobs:
 
       - name: Run BATS suite
         if: github.event_name == 'push' || steps.changes.outputs.workers == 'true'
-        run: |
-          # The full-entrypoint test runs entrypoint.sh on the host, which clones
-          # into the container's hardcoded /workspace. Provision it writable so the
-          # bare runner can exercise that path (in the worker image it is node-owned).
-          sudo mkdir -p /workspace
-          sudo chown "$(id -u):$(id -g)" /workspace
-          bats workers/tests/entrypoint.bats
+        run: bats workers/tests/entrypoint.bats
 
       - name: Build base image
         if: github.event_name == 'push' || steps.changes.outputs.workers == 'true'
@@ -430,7 +424,7 @@ jobs:
 
       - name: Setup .NET
         if: github.event_name == 'push' || github.event_name == 'workflow_dispatch' || steps.changes.outputs.login == 'true'
-        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68  # v6.0.0
+        uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73  # v6.1.0
         with:
           dotnet-version: 10.0.x
 
