@@ -383,6 +383,7 @@ internal sealed class WorkerOutcomeResolver(
             ContainerOutputParseResult.AuthInvalid => new FailureReason.AuthInvalid(),
             ContainerOutputParseResult.TransientApiError => new FailureReason.TransientApiError(),
             ContainerOutputParseResult.ModelUnavailable => new FailureReason.ModelUnavailable(role.Name),
+            ContainerOutputParseResult.TurnLimitReached => new FailureReason.TurnLimitReached(),
             _ => null,
         };
     }
