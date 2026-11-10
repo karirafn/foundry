@@ -96,6 +96,17 @@ internal sealed class WorkerRunQueries(DbContext db) : IWorkerRunQueries
             return new WorkerRunLogResult.RunNotFound();
         }
 
+        string? transcript = await db.Set<WorkerRunTranscript>()
+            .AsNoTracking()
+            .Where(t => t.Id == id)
+            .Select(t => t.Transcript)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        if (transcript is not null)
+        {
+            return new WorkerRunLogResult.TranscriptAvailable(transcript);
+        }
+
         string? containerOutput = run switch
         {
             CompletedRun completed => completed.ContainerOutput,

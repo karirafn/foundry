@@ -1065,20 +1065,30 @@ Captured by Foundry (not the worker) from the Docker API after the container sto
 Best-effort — null when the container is already gone, never started, or the Docker API call fails.
 Docker timestamps are enabled (`--timestamps` flag) so each output line carries an RFC 3339 prefix, providing a unified timeline.
 
-Stored output of a completed or failed run is served by `GET /api/workers/runs/{workerRunId}/log` (200 with the stored output rendered as an Agent Transcript when available, 204 when absent, 404 when the run is unknown) and rendered in the dashboard by the shared `fd-log-view` component (static source mode) in the issue detail panel.
+Stored output of a completed or failed run is served by `GET /api/workers/runs/{workerRunId}/log` (200 with the run's Run Transcript when one is stored, else the stored output rendered as an Agent Transcript; 204 when neither exists; 404 when the run is unknown) and rendered in the dashboard by the shared `fd-log-view` component (static source mode) in the issue detail panel.
 
 Running workers stream live output via the `WorkerHub.StreamLog(workerRunId)` method on `/hubs/workers` — the hub method returns an `IAsyncEnumerable<string>` of redacted log lines, rendered as an Agent Transcript, with backlog replay followed by live follow.
 The dashboard's `fd-log-view` component subscribes to this stream (stream source mode) and renders the transcript lines in arrival order.
 
+## Run Transcript
+
+The Agent Transcript of a worker run's full container log, rendered by `AgentTranscriptFormatter.FormatLog` when the run completes (exited, timed out or cancelled), before the container is removed, so a run can be diagnosed after its container is gone.
+Where the Container Output keeps only the tail for outcome classification, the Run Transcript covers the whole run, including both sessions of a run resumed after a transient API error.
+Stored one row per run in `worker_run_transcripts` (`worker_run_id` primary key and foreign key to `worker_runs`, `transcript`, `captured_at`), written in the same save as the run's terminal transition and never loaded with the `WorkerRun` entity.
+Capped at 256 KB of UTF-8 (`WorkerRunTranscript.MaxTranscriptBytes`): a longer transcript keeps its head and tail, cut on line boundaries, with a marker line in between stating how many lines and bytes were omitted; a transcript exactly at the cap is stored whole.
+Best-effort — when the full-log fetch or the rendering fails, or the container is already gone, no row is written and the run's outcome, terminal transition and Container Output are unaffected.
+Deleted 30 days after `captured_at` by `RunTranscriptRetentionService`, a throttled sweep deleting in bounded batches (a full batch re-arms the sweep, an underfull one restores the throttled cadence); the run row, its Container Output and its summary stay.
+Served by `GET /api/workers/runs/{workerRunId}/log` as stored, in preference to rendering the Container Output tail.
+
 ## Agent Transcript
 
-The readable, summary-only rendering of a worker's stream-json container log, shown in both log views (the live `WorkerHub.StreamLog` stream and the stored failed-run log) instead of raw JSON.
+The readable, summary-only rendering of a worker's stream-json container log, shown in both log views (the live `WorkerHub.StreamLog` stream and the stored run log) instead of raw JSON, and persisted per run as the Run Transcript.
 Produced server-side by `AgentTranscriptFormatter` — one formatter shared by both views, so the event vocabulary is interpreted only in C#.
 It emits one line per meaningful event: a tool call with an input summary (Bash `command` collapsed and truncated, Edit/Write/Read `file_path`, Agent `subagent_type` + `description`, Skill name), the tool's success or failure with its duration, assistant text, subagent start and finish (`task_started` / `task_notification`), session start, and the final `result`.
 Events from inside a subagent are indented and labelled with the subagent type.
 `tool_result` bodies are never rendered — only a truncated error message when a tool fails — and thinking, `system/thinking_tokens`, hooks, task progress, rate-limit and unknown events are omitted; non-JSON lines (bootstrap output, stderr, sentinels) pass through unchanged, and the Docker timestamp prefix is kept.
 Secret redaction (`SecretRedactor`) applies to every raw line before it reaches the formatter, and again to each rendered line.
-The full, raw event stream remains available only in `docker logs`.
+The full, raw event stream remains available only in `docker logs` while the container exists.
 
 ## First-Run Wizard
 

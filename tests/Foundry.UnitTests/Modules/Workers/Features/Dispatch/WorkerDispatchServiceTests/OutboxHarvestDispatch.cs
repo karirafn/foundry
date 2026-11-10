@@ -441,6 +441,9 @@ public sealed class OutboxHarvestDispatch : IAsyncDisposable
             yield break;
         }
 
+        public Task<string?> GetFullLogAsync(string containerId, CancellationToken cancellationToken)
+            => Task.FromResult<string?>(null);
+
         public Task<string?> GetLogsAsync(string containerId, int tailLines, CancellationToken cancellationToken)
             => Task.FromResult(containerOutput);
 
@@ -481,6 +484,9 @@ public sealed class OutboxHarvestDispatch : IAsyncDisposable
             await Task.CompletedTask;
             yield break;
         }
+
+        public Task<string?> GetFullLogAsync(string containerId, CancellationToken cancellationToken)
+            => Task.FromResult<string?>(null);
 
         public Task<string?> GetLogsAsync(string containerId, int tailLines, CancellationToken cancellationToken)
             => Task.FromResult<string?>(null);

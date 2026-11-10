@@ -610,6 +610,29 @@ namespace Foundry.WebApi.Migrations
                     b.UseTphMappingStrategy();
                 });
 
+            modelBuilder.Entity("Foundry.Modules.Workers.Domain.Entities.WorkerRunTranscript", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("worker_run_id");
+
+                    b.Property<string>("CapturedAt")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("captured_at");
+
+                    b.Property<string>("Transcript")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("transcript");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CapturedAt");
+
+                    b.ToTable("worker_run_transcripts", (string)null);
+                });
+
             modelBuilder.Entity("Foundry.Shared.Infrastructure.Outbox.OutboxMessage", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1828,6 +1851,15 @@ namespace Foundry.WebApi.Migrations
                     b.HasOne("Foundry.Modules.Monitoring.Domain.Entities.MonitoredRepository", null)
                         .WithMany()
                         .HasForeignKey("MonitoredRepositoryId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Foundry.Modules.Workers.Domain.Entities.WorkerRunTranscript", b =>
+                {
+                    b.HasOne("Foundry.Modules.Workers.Domain.Entities.WorkerRun", null)
+                        .WithOne()
+                        .HasForeignKey("Foundry.Modules.Workers.Domain.Entities.WorkerRunTranscript", "Id")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });
