@@ -109,6 +109,9 @@ public sealed class SinglePublishGuarantee : WorkerDispatchServiceTestBase
             yield break;
         }
 
+        public Task<string?> GetFullLogAsync(string containerId, CancellationToken cancellationToken)
+            => Task.FromResult<string?>(null);
+
         public Task<string?> GetLogsAsync(string containerId, int tailLines, CancellationToken cancellationToken)
             => Task.FromResult<string?>(null);
 
@@ -150,6 +153,9 @@ public sealed class SinglePublishGuarantee : WorkerDispatchServiceTestBase
             await Task.CompletedTask;
             yield break;
         }
+
+        public Task<string?> GetFullLogAsync(string containerId, CancellationToken cancellationToken)
+            => Task.FromResult<string?>(null);
 
         public Task<string?> GetLogsAsync(string containerId, int tailLines, CancellationToken cancellationToken)
             => Task.FromResult<string?>(null);

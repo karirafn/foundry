@@ -36,6 +36,8 @@ internal static class GetWorkerRunLog
                                 .ToProblem(StatusCodes.Status404NotFound),
                         WorkerRunLogResult.NoLog =>
                             TypedResults.NoContent(),
+                        WorkerRunLogResult.TranscriptAvailable stored =>
+                            TypedResults.Text(stored.Transcript, contentType: "text/plain; charset=utf-8"),
                         WorkerRunLogResult.LogAvailable log =>
                             TypedResults.Text(
                                 AgentTranscriptFormatter.FormatLog(log.LogText),
@@ -45,7 +47,7 @@ internal static class GetWorkerRunLog
                     };
                 })
                 .WithName("GetWorkerRunLog")
-                .WithSummary("Gets persisted container log for a failed worker run")
+                .WithSummary("Gets the stored log of a completed or failed worker run")
                 .Produces<string>(contentType: "text/plain")
                 .Produces(StatusCodes.Status204NoContent)
                 .ProducesProblem(StatusCodes.Status404NotFound);

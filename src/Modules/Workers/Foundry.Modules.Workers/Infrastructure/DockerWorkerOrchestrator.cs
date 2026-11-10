@@ -275,6 +275,13 @@ internal sealed class DockerWorkerOrchestrator(IDockerContainerRuntime runtime) 
             : redacted;
     }
 
+    public async Task<string?> GetFullLogAsync(string containerId, CancellationToken cancellationToken)
+    {
+        string? raw = await runtime.GetAllLogsAsync(containerId, cancellationToken);
+
+        return raw is null ? null : SecretRedactor.Redact(raw);
+    }
+
     public async Task StopContainerAsync(string containerId, CancellationToken cancellationToken)
     {
         await runtime.StopAsync(containerId, 10, cancellationToken);
