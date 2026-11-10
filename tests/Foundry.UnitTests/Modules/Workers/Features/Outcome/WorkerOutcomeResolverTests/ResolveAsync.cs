@@ -843,6 +843,54 @@ public sealed class ResolveAsync
     }
 
     // -------------------------------------------------------------------------
+    // Turn-limit result line: a named reason telling the operator to split the issue
+    // -------------------------------------------------------------------------
+
+    private const string TurnLimitLog = """
+        {"type":"result","subtype":"error_max_turns","is_error":true,"num_turns":301}
+        """;
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1)]
+    public async Task WhenNoMrAndNoCommitsAndTurnLimitReached_ReturnsFailureWithTurnLimitReached(int exitCode)
+    {
+        // Arrange
+        ActiveRun run = CreateActiveRun();
+        WorkerOutcomeResolver sut = BuildResolverWithRealParser(NoMrQueries(hasCommits: false));
+
+        // Act
+        WorkerOutcome outcome = await sut.ResolveAsync(
+            run,
+            status: Exited(exitCode),
+            containerOutput: TurnLimitLog,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        WorkerOutcome.Failure failure = outcome.ShouldBeOfType<WorkerOutcome.Failure>();
+        failure.FailureReason.ShouldBeOfType<FailureReason.TurnLimitReached>();
+    }
+
+    [Fact]
+    public async Task WhenNoMrAndCommitsAndTurnLimitReached_ReturnsContinuableFailureWithTurnLimitReached()
+    {
+        // Arrange
+        ActiveRun run = CreateActiveRun();
+        WorkerOutcomeResolver sut = BuildResolverWithRealParser(NoMrQueries(hasCommits: true));
+
+        // Act
+        WorkerOutcome outcome = await sut.ResolveAsync(
+            run,
+            status: Exited(1),
+            containerOutput: TurnLimitLog,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        WorkerOutcome.ContinuableFailure failure = outcome.ShouldBeOfType<WorkerOutcome.ContinuableFailure>();
+        failure.FailureReason.ShouldBeOfType<FailureReason.TurnLimitReached>();
+    }
+
+    // -------------------------------------------------------------------------
     // External-kill classification (no result line) — real parser so the
     // no-result-line path is observable.
     // -------------------------------------------------------------------------

@@ -20,6 +20,15 @@ describe('failure-category', () => {
     expect(display?.cssClass).toBe('badge--failure-model-unavailable');
   });
 
+  it('should return display for turn_limit', () => {
+    // Arrange / Act
+    const display = getFailureCategoryDisplay('turn_limit');
+
+    // Assert
+    expect(display?.label).toBe('TURN LIMIT');
+    expect(display?.cssClass).toBe('badge--failure-turn-limit');
+  });
+
   it('should return display for cancelled', () => {
     // Arrange / Act
     const display = getFailureCategoryDisplay('cancelled');

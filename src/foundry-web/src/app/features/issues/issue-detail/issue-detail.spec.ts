@@ -683,6 +683,65 @@ describe('IssueDetailComponent', () => {
     expect(summary?.textContent?.trim()).toBe('Worker bootstrap failed: container died');
   });
 
+  // Worker run section: a turn-limited run shows its chip beside the split-the-issue summary
+  it('should render the turn limit chip and its summary when the worker run failed on the turn limit', () => {
+    // Arrange
+    const failedDetail: IssueDetail = {
+      ...mockDetail,
+      state: 'failed',
+      stateDetails: { ...mockStateDetails, workerRunId: 'run-turn-limit' },
+    };
+    const turnLimitSummary = 'Reached the turn limit before finishing. Split the issue into smaller issues, then retry.';
+    const mockWorkerRunServiceTurnLimit = {
+      getDetail: () => of({
+        workerRunId: 'run-turn-limit',
+        issueId: 'issue-1',
+        state: 'failed',
+        failureCategory: 'turn_limit',
+        failureSummary: turnLimitSummary,
+        resultText: null,
+        subtype: 'error_max_turns',
+        isError: true,
+        durationMs: 5000,
+        numTurns: 301,
+        totalCostUsd: null,
+        inputTokens: null,
+        outputTokens: null,
+        lastActivityAt: null,
+        hasStoredLog: false,
+      }),
+      getLog: () => of(null),
+    };
+
+    TestBed.resetTestingModule();
+    TestBed.configureTestingModule({
+      imports: [IssueDetailComponent],
+      providers: [
+        IssueService,
+        WorkerSignalRService,
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        { provide: IssueSignalRService, useValue: mockIssueSignalRService },
+        { provide: WorkerRunService, useValue: mockWorkerRunServiceTurnLimit },
+        { provide: WORKER_HUB_FACTORY, useValue: () => mockWorkerHub },
+      ],
+    });
+    const fixture = TestBed.createComponent(IssueDetailComponent);
+    fixture.componentRef.setInput('detail', failedDetail);
+    fixture.componentRef.setInput('loading', false);
+    fixture.componentRef.setInput('error', null);
+    fixture.detectChanges();
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    const chip = el.querySelector('.issue-detail__failure-chip');
+    expect(chip?.classList).toContain('badge--failure-turn-limit');
+    expect(chip?.textContent?.trim()).toBe('TURN LIMIT');
+    expect(chip?.getAttribute('aria-label')).toBe('Failure category: TURN LIMIT');
+    const summary = el.querySelector('.issue-detail__failure-summary');
+    expect(summary?.textContent?.trim()).toBe(turnLimitSummary);
+  });
+
   // Worker run section: a completed run with a stored log shows it, keeping each line's timestamp
   it('should render the stored log with timestamped lines for a completed run with hasStoredLog', () => {
     // Arrange

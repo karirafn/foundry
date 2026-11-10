@@ -13,6 +13,7 @@ internal sealed class ProbeOutcomeClassifier(IContainerOutputParser parser) : IP
         return result switch
         {
             ContainerOutputParseResult.NormalExit => new ProbeOutcome.Available(),
+            ContainerOutputParseResult.TurnLimitReached => new ProbeOutcome.Available(),
             ContainerOutputParseResult.CreditsExhausted => new ProbeOutcome.CreditsStillBlocked(),
             ContainerOutputParseResult.UsageLimited usageLimited => new ProbeOutcome.UsageLimited(usageLimited.ResetsAt),
             ContainerOutputParseResult.AuthInvalid => new ProbeOutcome.InfrastructureFailure(),

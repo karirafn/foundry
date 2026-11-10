@@ -23,4 +23,6 @@ internal abstract record ContainerOutputParseResult
     internal sealed record CreditsExhausted : ContainerOutputParseResult;
 
     internal sealed record ModelUnavailable : ContainerOutputParseResult;
+
+    internal sealed record TurnLimitReached : ContainerOutputParseResult;
 }

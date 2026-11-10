@@ -17,6 +17,7 @@ internal sealed partial class ContainerOutputParser(ILogger<ContainerOutputParse
     // stream-json's result event carries today's json keys plus model_usage_since_last_result,
     // so a real result line with a multi-paragraph summary routinely exceeds the former 4 KB cap.
     private const int MaxJsonLineLength = 16_384; // 16 KB
+    private const string MaxTurnsSubtype = "error_max_turns";
 
     private static readonly FrozenSet<string> UsageLimitReasons = new HashSet<string>(StringComparer.Ordinal)
     {
@@ -83,6 +84,13 @@ internal sealed partial class ContainerOutputParser(ILogger<ContainerOutputParse
         if (IsTransientApiError(apiErrorStatus, isError, resultText))
         {
             return new ContainerOutputParseResult.TransientApiError();
+        }
+
+        // Checked after every cause above: the turn limit is only the cutoff, so a run that also reports a
+        // usage, auth or API fault is classified by that cause.
+        if (string.Equals(ReadString(node["subtype"]), MaxTurnsSubtype, StringComparison.Ordinal))
+        {
+            return new ContainerOutputParseResult.TurnLimitReached();
         }
 
         if (isError)

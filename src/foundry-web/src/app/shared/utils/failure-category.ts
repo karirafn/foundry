@@ -7,6 +7,7 @@ export type FailureCategoryToken =
   | 'worker_bootstrap_failed'
   | 'credits_exhausted'
   | 'model_unavailable'
+  | 'turn_limit'
   | 'cancelled';
 
 interface FailureCategoryDisplay {
@@ -23,6 +24,7 @@ export const FAILURE_CATEGORY_DISPLAY = {
   worker_bootstrap_failed: { label: 'BOOTSTRAP FAILED', cssClass: 'badge--failure-bootstrap' },
   credits_exhausted: { label: 'CREDITS EXHAUSTED', cssClass: 'badge--failure-credits-exhausted' },
   model_unavailable: { label: 'MODEL UNAVAILABLE', cssClass: 'badge--failure-model-unavailable' },
+  turn_limit: { label: 'TURN LIMIT', cssClass: 'badge--failure-turn-limit' },
   cancelled: { label: 'CANCELLED', cssClass: 'badge--failure-cancelled' },
 } as const satisfies Record<FailureCategoryToken, FailureCategoryDisplay>;
 
