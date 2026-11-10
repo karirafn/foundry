@@ -1394,6 +1394,32 @@ EOF
     [[ "$args" =~ (^| )--verbose( |$) ]]
 }
 
+@test "max-turns: the first claude run is given a 300-turn budget" {
+    set_required_env
+    make_fake_git
+    make_fake_claude_record_args
+
+    run bash "$ENTRYPOINT"
+
+    [ "$status" -eq 0 ]
+    local args
+    args="$(head -n 1 "$BATS_TEST_TMPDIR/claude_args")"
+    [[ "$args" =~ (^| )--max-turns\ 300( |$) ]]
+}
+
+@test "max-turns: the transient-retry resume gets the same 300-turn budget" {
+    set_required_env
+    make_fake_git
+    make_fake_claude_transient_then_success
+
+    run bash "$ENTRYPOINT"
+
+    local args
+    args="$(cat "$BATS_TEST_TMPDIR/claude_resume_args")"
+    [[ "$args" =~ (^| )-c( |$) ]]
+    [[ "$args" =~ (^| )--max-turns\ 300( |$) ]]
+}
+
 @test "stream-json: every claude invocation that passes stream-json also passes --verbose" {
     set_required_env
     make_fake_git
