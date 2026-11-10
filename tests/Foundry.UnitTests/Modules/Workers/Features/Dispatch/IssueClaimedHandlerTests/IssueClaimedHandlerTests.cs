@@ -17,6 +17,7 @@ using Foundry.Modules.Workers.Features.ContainerSpec;
 using Foundry.Modules.Workers.Features.Dispatch;
 using Foundry.Modules.Workers.Features.Roles;
 using Foundry.Shared;
+using Foundry.Shared.Infrastructure.Outbox;
 using Foundry.Testing;
 using Foundry.UnitTests.Fakes.Workers;
 using Foundry.WebApi.Persistence;
@@ -33,6 +34,8 @@ namespace Foundry.UnitTests.Modules.Workers.Features.Dispatch.IssueClaimedHandle
 
 public sealed class HandleAsync : IAsyncDisposable
 {
+    private const string EmptyGitPatMessage = "No Git PAT configured for this account. Set the account token in Settings.";
+
     private readonly SqliteConnection _connection;
     private readonly FoundryDbContext _dbContext;
 
@@ -61,7 +64,8 @@ public sealed class HandleAsync : IAsyncDisposable
         ICredentialQueries? credentialQueries = null,
         IPostExitProviderQueries? postExitProviderQueries = null,
         IWorkerRoleCatalogStore? roleCatalog = null,
-        IFailingJobLogQueries? failingJobLogQueries = null)
+        IFailingJobLogQueries? failingJobLogQueries = null,
+        IRepositoryDispatchQueries? repositoryDispatchQueries = null)
     {
         return new IssueClaimedHandler(
             _dbContext,
@@ -72,6 +76,7 @@ public sealed class HandleAsync : IAsyncDisposable
             postExitProviderQueries ?? new StubPostExitProviderQueries(branchCreationSucceeds: true),
             failingJobLogQueries ?? new StubFailingJobLogQueries(),
             roleCatalog ?? StubWorkerRoleCatalogStore.With(),
+            repositoryDispatchQueries ?? StubRepositoryDispatchQueries.WithToken("ghp_test_token"),
             NullLogger<IssueClaimedHandler>.Instance);
     }
 
@@ -81,7 +86,6 @@ public sealed class HandleAsync : IAsyncDisposable
         int issueNumber = 42,
         string title = "Test Issue",
         string repositorySlug = "owner/repo",
-        string? accountToken = "ghp_test_token",
         string branchName = "feat/42-test-issue",
         MonitoredRepositoryId? monitoredRepositoryId = null,
         DispatchContext? context = null,
@@ -96,7 +100,6 @@ public sealed class HandleAsync : IAsyncDisposable
             title,
             repositorySlug,
             new Uri(cloneUrl ?? $"https://github.com/{repositorySlug}.git"),
-            accountToken,
             BranchName.From(branchName),
             monitoredRepositoryId ?? MonitoredRepositoryId.New(),
             provider ?? new WorkerProvider.GitHub(),
@@ -184,12 +187,12 @@ public sealed class HandleAsync : IAsyncDisposable
         StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c1");
         IssueClaimedHandler sut = BuildHandler(
             orchestrator: orchestrator,
-            credentialQueries: new StubCredentialQueries(("ANTHROPIC_API_KEY", "test-api-key")));
+            credentialQueries: new StubCredentialQueries(("ANTHROPIC_API_KEY", "test-api-key")),
+            repositoryDispatchQueries: StubRepositoryDispatchQueries.WithToken("ghp_my_token"));
         IssueClaimed @event = BuildEvent(
             issueNumber: 7,
             title: "My Issue",
-            repositorySlug: "org/repo",
-            accountToken: "ghp_my_token");
+            repositorySlug: "org/repo");
 
         // Act
         await sut.HandleAsync(@event, TestContext.Current.CancellationToken);
@@ -434,8 +437,8 @@ public sealed class HandleAsync : IAsyncDisposable
     public async Task WhenAccountTokenIsNull_CreatesFailedRunWithEmptyPatError()
     {
         // Arrange
-        IssueClaimedHandler sut = BuildHandler();
-        IssueClaimed @event = BuildEvent(accountToken: null);
+        IssueClaimedHandler sut = BuildHandler(repositoryDispatchQueries: StubRepositoryDispatchQueries.WithToken(null));
+        IssueClaimed @event = BuildEvent();
 
         // Act
         await sut.HandleAsync(@event, TestContext.Current.CancellationToken);
@@ -444,15 +447,15 @@ public sealed class HandleAsync : IAsyncDisposable
         // Assert
         WorkerRun? run = await _dbContext.Set<WorkerRun>().SingleOrDefaultAsync(TestContext.Current.CancellationToken);
         FailedRun failedRun = run.ShouldBeOfType<FailedRun>();
-        failedRun.Reason.ShouldBeOfType<FailureReason.ContainerError>();
+        failedRun.Reason.ShouldBe(new FailureReason.ContainerError(EmptyGitPatMessage));
     }
 
     [Fact]
     public async Task WhenAccountTokenIsEmpty_CreatesFailedRunWithEmptyPatError()
     {
         // Arrange
-        IssueClaimedHandler sut = BuildHandler();
-        IssueClaimed @event = BuildEvent(accountToken: string.Empty);
+        IssueClaimedHandler sut = BuildHandler(repositoryDispatchQueries: StubRepositoryDispatchQueries.WithToken(string.Empty));
+        IssueClaimed @event = BuildEvent();
 
         // Act
         await sut.HandleAsync(@event, TestContext.Current.CancellationToken);
@@ -461,7 +464,81 @@ public sealed class HandleAsync : IAsyncDisposable
         // Assert
         WorkerRun? run = await _dbContext.Set<WorkerRun>().SingleOrDefaultAsync(TestContext.Current.CancellationToken);
         FailedRun failedRun = run.ShouldBeOfType<FailedRun>();
-        failedRun.Reason.ShouldBeOfType<FailureReason.ContainerError>();
+        failedRun.Reason.ShouldBe(new FailureReason.ContainerError(EmptyGitPatMessage));
+    }
+
+    [Fact]
+    public async Task WhenDispatchInfoCannotBeResolved_FailsWithTheEmptyPatError()
+    {
+        // Arrange — the account was removed or its token is unreadable.
+        IssueClaimedHandler sut = BuildHandler(repositoryDispatchQueries: new StubRepositoryDispatchQueries(null));
+
+        // Act
+        await sut.HandleAsync(BuildEvent(), TestContext.Current.CancellationToken);
+        _dbContext.ChangeTracker.Clear();
+
+        // Assert
+        WorkerRun run = await _dbContext.Set<WorkerRun>().SingleAsync(TestContext.Current.CancellationToken);
+        run.ShouldBeOfType<FailedRun>().Reason.ShouldBe(new FailureReason.ContainerError(EmptyGitPatMessage));
+    }
+
+    [Fact]
+    public async Task WhenHandled_ResolvesTheAccountTokenForTheEventsRepository()
+    {
+        // Arrange
+        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
+        StubRepositoryDispatchQueries dispatchQueries = StubRepositoryDispatchQueries.WithToken("ghp_current_token");
+        StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c-resolved");
+        IssueClaimedHandler sut = BuildHandler(orchestrator: orchestrator, repositoryDispatchQueries: dispatchQueries);
+
+        // Act
+        await sut.HandleAsync(BuildEvent(monitoredRepositoryId: repositoryId), TestContext.Current.CancellationToken);
+
+        // Assert
+        WorkerContainerSpec? spec = orchestrator.LastSpec;
+        spec.ShouldNotBeNull();
+        spec.ShouldSatisfyAllConditions(
+            () => dispatchQueries.RequestedRepositories.ShouldBe([repositoryId]),
+            () => spec.EnvironmentVariables["GIT_PAT"].ShouldBe("ghp_current_token"));
+    }
+
+    [Fact]
+    public async Task WhenRedeliveredPayloadStillCarriesAnAccountToken_ResolvesTheTokenByRepository()
+    {
+        // Arrange — an IssueClaimed row written before the token left the event.
+        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
+        string legacyJson = $$"""
+            {
+                "Dispatch": {
+                    "IssueId": {"Value": "{{Guid.NewGuid()}}"},
+                    "WorkerRunId": "{{Guid.NewGuid()}}",
+                    "IssueNumber": 7,
+                    "Title": "Fix the bug",
+                    "RepositorySlug": "owner/repo",
+                    "CloneUrl": "https://github.com/owner/repo.git",
+                    "AccountToken": "ghp_stale_claim_time_token",
+                    "BranchName": {"Value": "feat/7-fix"},
+                    "MonitoredRepositoryId": {"Value": "{{repositoryId.Value}}"},
+                    "Provider": {"$type": "github"},
+                    "Context": {"$type": "fresh", "BranchName": "feat/7-fix"},
+                    "IssueApiUrl": "https://api.github.com/repos/owner/repo/issues/7"
+                }
+            }
+            """;
+        IssueClaimed @event = JsonSerializer.Deserialize<IssueClaimed>(legacyJson, OutboxSerializerOptions.Default)!;
+        StubRepositoryDispatchQueries dispatchQueries = StubRepositoryDispatchQueries.WithToken("ghp_current_token");
+        StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c-legacy");
+        IssueClaimedHandler sut = BuildHandler(orchestrator: orchestrator, repositoryDispatchQueries: dispatchQueries);
+
+        // Act
+        await sut.HandleAsync(@event, TestContext.Current.CancellationToken);
+
+        // Assert
+        WorkerContainerSpec? spec = orchestrator.LastSpec;
+        spec.ShouldNotBeNull();
+        spec.ShouldSatisfyAllConditions(
+            () => dispatchQueries.RequestedRepositories.ShouldBe([repositoryId]),
+            () => spec.EnvironmentVariables["GIT_PAT"].ShouldBe("ghp_current_token"));
     }
 
     [Fact]
@@ -847,9 +924,10 @@ public sealed class HandleAsync : IAsyncDisposable
     {
         // Arrange
         StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c-gh-token");
-        IssueClaimedHandler sut = BuildHandler(orchestrator: orchestrator);
+        IssueClaimedHandler sut = BuildHandler(
+            orchestrator: orchestrator,
+            repositoryDispatchQueries: StubRepositoryDispatchQueries.WithToken("ghp_test_token"));
         IssueClaimed @event = BuildEvent(
-            accountToken: "ghp_test_token",
             provider: new WorkerProvider.GitHub());
 
         // Act
@@ -866,9 +944,10 @@ public sealed class HandleAsync : IAsyncDisposable
     {
         // Arrange
         StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c-gl-no-gh-token");
-        IssueClaimedHandler sut = BuildHandler(orchestrator: orchestrator);
+        IssueClaimedHandler sut = BuildHandler(
+            orchestrator: orchestrator,
+            repositoryDispatchQueries: StubRepositoryDispatchQueries.WithToken("glpat_test_token"));
         IssueClaimed @event = BuildEvent(
-            accountToken: "glpat_test_token",
             provider: new WorkerProvider.GitLab(),
             cloneUrl: "https://gitlab.com/owner/repo.git");
 
@@ -886,9 +965,10 @@ public sealed class HandleAsync : IAsyncDisposable
     {
         // Arrange
         StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c-gl-token");
-        IssueClaimedHandler sut = BuildHandler(orchestrator: orchestrator);
+        IssueClaimedHandler sut = BuildHandler(
+            orchestrator: orchestrator,
+            repositoryDispatchQueries: StubRepositoryDispatchQueries.WithToken("glpat_test_token"));
         IssueClaimed @event = BuildEvent(
-            accountToken: "glpat_test_token",
             provider: new WorkerProvider.GitLab(),
             cloneUrl: "https://gitlab.com/owner/repo.git");
 
@@ -906,9 +986,10 @@ public sealed class HandleAsync : IAsyncDisposable
     {
         // Arrange
         StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c-gh-no-gl-token");
-        IssueClaimedHandler sut = BuildHandler(orchestrator: orchestrator);
+        IssueClaimedHandler sut = BuildHandler(
+            orchestrator: orchestrator,
+            repositoryDispatchQueries: StubRepositoryDispatchQueries.WithToken("ghp_test_token"));
         IssueClaimed @event = BuildEvent(
-            accountToken: "ghp_test_token",
             provider: new WorkerProvider.GitHub());
 
         // Act
