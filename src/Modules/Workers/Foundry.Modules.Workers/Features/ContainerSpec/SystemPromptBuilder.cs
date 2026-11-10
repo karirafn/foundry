@@ -223,9 +223,11 @@ internal static partial class SystemPromptBuilder
         return $"""
             {PrePrSectionMarker}
 
-            Check whether a Docker daemon is available by inspecting the DOCKER_HOST environment variable.
+            First, commit every change you made for the issue on the provided branch, leaving out scratch and generated files.
 
-            When the branch has no commits beyond the default branch there is nothing to review: report that and exit.
+            If the branch still has no commits beyond the default branch after that commit, there is nothing to push: report that and exit.
+
+            Check whether a Docker daemon is available by inspecting the DOCKER_HOST environment variable.
 
             - If DOCKER_HOST is not set: push the branch, then open (or reuse) the pull request anyway. State in the pull request description that integration tests were not run locally and are verified by CI.
             - If DOCKER_HOST is set: run the repository's full test suite, including integration tests. Fix failures you can within your time budget. A reused pull request needs the latest commits pushed, so push the branch, then open (or reuse) the pull request whenever the branch has commits, even when integration tests still fail. When integration tests still fail:
