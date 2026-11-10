@@ -1060,12 +1060,12 @@ This phase is covered by the same daemon-unreachable defer: when `ListByLabelAsy
 
 ## Container Output
 
-The captured tail of a failed worker container's stdout/stderr, stored on `FailedRun` as a nullable string.
+The captured tail of a finished worker container's stdout/stderr, stored on both `CompletedRun` and `FailedRun` as a nullable string.
 Captured by Foundry (not the worker) from the Docker API after the container stops but before removal; when the tail exceeds the 64 KB cap the head is dropped so the final `result` event survives (see Worker Outcome Detection).
 Best-effort — null when the container is already gone, never started, or the Docker API call fails.
 Docker timestamps are enabled (`--timestamps` flag) so each output line carries an RFC 3339 prefix, providing a unified timeline.
 
-Failed-run output is served by `GET /api/workers/runs/{workerRunId}/log` (200 with the stored output rendered as an Agent Transcript when available, 204 when absent, 404 when the run is unknown) and rendered in the dashboard by the shared `fd-log-view` component (static source mode) in the issue detail panel.
+Stored output of a completed or failed run is served by `GET /api/workers/runs/{workerRunId}/log` (200 with the stored output rendered as an Agent Transcript when available, 204 when absent, 404 when the run is unknown) and rendered in the dashboard by the shared `fd-log-view` component (static source mode) in the issue detail panel.
 
 Running workers stream live output via the `WorkerHub.StreamLog(workerRunId)` method on `/hubs/workers` — the hub method returns an `IAsyncEnumerable<string>` of redacted log lines, rendered as an Agent Transcript, with backlog replay followed by live follow.
 The dashboard's `fd-log-view` component subscribes to this stream (stream source mode) and renders the transcript lines in arrival order.
