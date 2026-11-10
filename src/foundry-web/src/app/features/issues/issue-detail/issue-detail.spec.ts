@@ -742,6 +742,67 @@ describe('IssueDetailComponent', () => {
     expect(summary?.textContent?.trim()).toBe(turnLimitSummary);
   });
 
+  // Worker run section: auth and transient Claude API failures show their own chip
+  for (const { category, label, cssClass } of [
+    { category: 'auth_invalid', label: 'AUTH FAILED', cssClass: 'badge--failure-auth-invalid' },
+    { category: 'transient_api_error', label: 'CLAUDE API ERROR', cssClass: 'badge--failure-transient-api-error' },
+  ]) {
+    it(`should render the ${label} chip when the worker run failed with ${category}`, () => {
+      // Arrange
+      const failedDetail: IssueDetail = {
+        ...mockDetail,
+        state: 'failed',
+        stateDetails: { ...mockStateDetails, workerRunId: 'run-category' },
+      };
+      const mockWorkerRunServiceCategory = {
+        getDetail: () => of({
+          workerRunId: 'run-category',
+          issueId: 'issue-1',
+          state: 'failed',
+          failureCategory: category,
+          failureSummary: 'Worker failed',
+          resultText: null,
+          subtype: null,
+          isError: true,
+          durationMs: 5000,
+          numTurns: null,
+          totalCostUsd: null,
+          inputTokens: null,
+          outputTokens: null,
+          lastActivityAt: null,
+          hasStoredLog: false,
+        }),
+        getLog: () => of(null),
+      };
+
+      TestBed.resetTestingModule();
+      TestBed.configureTestingModule({
+        imports: [IssueDetailComponent],
+        providers: [
+          IssueService,
+          WorkerSignalRService,
+          provideHttpClient(),
+          provideHttpClientTesting(),
+          { provide: IssueSignalRService, useValue: mockIssueSignalRService },
+          { provide: WorkerRunService, useValue: mockWorkerRunServiceCategory },
+          { provide: WORKER_HUB_FACTORY, useValue: () => mockWorkerHub },
+        ],
+      });
+      const fixture = TestBed.createComponent(IssueDetailComponent);
+      fixture.componentRef.setInput('detail', failedDetail);
+      fixture.componentRef.setInput('loading', false);
+      fixture.componentRef.setInput('error', null);
+      fixture.detectChanges();
+      const el = fixture.nativeElement as HTMLElement;
+
+      // Assert
+      const chip = el.querySelector('.issue-detail__failure-chip');
+      expect(chip?.classList).toContain(cssClass);
+      expect(chip?.textContent?.trim()).toBe(label);
+      expect(chip?.getAttribute('aria-label')).toBe(`Failure category: ${label}`);
+    });
+  }
+
   // Worker run section: a completed run with a stored log shows it, keeping each line's timestamp
   it('should render the stored log with timestamped lines for a completed run with hasStoredLog', () => {
     // Arrange
