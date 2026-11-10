@@ -38,16 +38,15 @@ internal sealed partial class ContainerOutputParser(ILogger<ContainerOutputParse
             return new ContainerOutputParseResult.NoResultLine();
         }
 
-        if (log.Length > MaxLogLength)
-        {
-            log = log[^MaxLogLength..];
-        }
+        log = Tail(log);
 
         (string Line, JsonObject Node)? resultLine = ExtractLastResultLine(log);
 
         if (resultLine is null)
         {
-            return BootstrapSentinelOrNoResultLine(log);
+            return ContainsAgentEvent(log)
+                ? new ContainerOutputParseResult.AgentStartedNoResultLine()
+                : BootstrapSentinelOrNoResultLine(log);
         }
 
         if (resultLine.Value.Line.Length > MaxJsonLineLength)
@@ -110,10 +109,7 @@ internal sealed partial class ContainerOutputParser(ILogger<ContainerOutputParse
             return null;
         }
 
-        if (log.Length > MaxLogLength)
-        {
-            log = log[^MaxLogLength..];
-        }
+        log = Tail(log);
 
         (string Line, JsonObject Node)? resultLine = ExtractLastResultLine(log);
 
@@ -149,10 +145,7 @@ internal sealed partial class ContainerOutputParser(ILogger<ContainerOutputParse
             return null;
         }
 
-        if (log.Length > MaxLogLength)
-        {
-            log = log[^MaxLogLength..];
-        }
+        log = Tail(log);
 
         // No MaxJsonLineLength cap here: a verdict with several questions makes the result line long,
         // and the line is bounded by the MaxLogLength tail anyway. Only the last result event is read,
@@ -359,6 +352,18 @@ internal sealed partial class ContainerOutputParser(ILogger<ContainerOutputParse
     // session), and the last one wins.
     private static (string Line, JsonObject Node)? ExtractLastResultLine(string log)
     {
+        return FindLastEvent(log, TryParseResultEvent);
+    }
+
+    // claude is the last process the entrypoint starts and bootstrap output goes to stderr, so any
+    // stream-json event in the output proves bootstrap passed.
+    private static bool ContainsAgentEvent(string log)
+    {
+        return FindLastEvent(log, TryParseEvent) is not null;
+    }
+
+    private static (string Line, JsonObject Node)? FindLastEvent(string log, Func<string, JsonObject?> tryParse)
+    {
         ReadOnlySpan<char> span = log.AsSpan().TrimEnd();
         int end = span.Length;
 
@@ -374,7 +379,7 @@ internal sealed partial class ContainerOutputParser(ILogger<ContainerOutputParse
 
             string? jsonLine = StripDockerTimestampAndExtractJson(candidate);
 
-            if (jsonLine is not null && TryParseResultEvent(jsonLine) is { } node)
+            if (jsonLine is not null && tryParse(jsonLine) is { } node)
             {
                 return (jsonLine, node);
             }
@@ -391,6 +396,15 @@ internal sealed partial class ContainerOutputParser(ILogger<ContainerOutputParse
             return null;
         }
 
+        return TryParseEvent(jsonLine) is { } obj
+            && string.Equals(ReadString(obj["type"]), "result", StringComparison.Ordinal)
+                ? obj
+                : null;
+    }
+
+    // A stream-json event is a JSON object with a string "type"; anything else is not claude's output.
+    private static JsonObject? TryParseEvent(string jsonLine)
+    {
         JsonNode? node;
 
         try
@@ -402,10 +416,30 @@ internal sealed partial class ContainerOutputParser(ILogger<ContainerOutputParse
             return null;
         }
 
-        return node is JsonObject obj
-            && string.Equals(ReadString(obj["type"]), "result", StringComparison.Ordinal)
-                ? obj
-                : null;
+        return node is JsonObject obj && ReadString(obj["type"]) is not null
+            ? obj
+            : null;
+    }
+
+    // Cuts the log to its last MaxLogLength characters. A cut that lands mid-line leaves a partial
+    // first line, which is dropped so no line-anchored match can start at the cut.
+    private static string Tail(string log)
+    {
+        if (log.Length <= MaxLogLength)
+        {
+            return log;
+        }
+
+        int cut = log.Length - MaxLogLength;
+
+        if (log[cut - 1] == '\n')
+        {
+            return log[cut..];
+        }
+
+        int firstNewline = log.IndexOf('\n', cut);
+
+        return firstNewline < 0 ? string.Empty : log[(firstNewline + 1)..];
     }
 
     private static string? StripDockerTimestampAndExtractJson(ReadOnlySpan<char> candidate)
@@ -573,7 +607,7 @@ internal sealed partial class ContainerOutputParser(ILogger<ContainerOutputParse
             return new ContainerOutputParseResult.NoResultLine();
         }
 
-        string detail = match.Value.Trim();
+        string detail = match.Groups["marker"].Value.Trim();
 
         if (detail.Length > MaxBootstrapDetailLength)
         {
@@ -599,9 +633,11 @@ internal sealed partial class ContainerOutputParser(ILogger<ContainerOutputParse
         matchTimeoutMilliseconds: 1000)]
     private static partial Regex WallClockResetTimePattern();
 
+    // Anchored to the start of a line (after the optional Docker timestamp), so text that merely quotes
+    // the marker, such as a shell command echoing it, is not the entrypoint emitting it.
     [GeneratedRegex(
-        @"FOUNDRY_BOOTSTRAP_FAILED stage=(?:clone|auth|branch|managed-settings|role)[^\n]*",
-        RegexOptions.ExplicitCapture,
+        @"^(?:\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2}) )?(?<marker>FOUNDRY_BOOTSTRAP_FAILED stage=(?:clone|auth|branch|managed-settings|role)[^\n]*)",
+        RegexOptions.ExplicitCapture | RegexOptions.Multiline,
         matchTimeoutMilliseconds: 1000)]
     private static partial Regex BootstrapSentinelPattern();
 }
