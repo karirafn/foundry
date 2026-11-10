@@ -676,6 +676,9 @@ prepare_csharp_lsp /workspace
 # resume's result event becomes the last result in the log — if it also fails
 # transiently, Foundry's outer retry bound (#368) still applies.
 # ---------------------------------------------------------------------------
+# The turn budget is a cost breaker for a runaway run; the transient-error resume
+# gets the same budget, so both read it from here (#798).
+readonly CLAUDE_MAX_TURNS=300
 CLAUDE_OUTPUT_FILE="$(mktemp)"
 trap 'rm -f "${CLAUDE_OUTPUT_FILE:-}"' EXIT
 
@@ -685,7 +688,7 @@ claude -p "$WORKER_PROMPT" \
     --dangerously-skip-permissions \
     --output-format stream-json \
     --verbose \
-    --max-turns 200 \
+    --max-turns "$CLAUDE_MAX_TURNS" \
     "${ROLE_PLUGIN_ARGS[@]}" \
     "${VERDICT_SCHEMA_ARGS[@]}" \
     "${CSHARP_LSP_PLUGIN_ARGS[@]}" | tee "$CLAUDE_OUTPUT_FILE"
@@ -705,7 +708,7 @@ if is_transient_api_error "$(cat "$CLAUDE_OUTPUT_FILE")"; then
         --dangerously-skip-permissions \
         --output-format stream-json \
         --verbose \
-        --max-turns 200 \
+        --max-turns "$CLAUDE_MAX_TURNS" \
         "${ROLE_PLUGIN_ARGS[@]}" \
         "${VERDICT_SCHEMA_ARGS[@]}" \
         "${CSHARP_LSP_PLUGIN_ARGS[@]}" | tee "$CLAUDE_OUTPUT_FILE"

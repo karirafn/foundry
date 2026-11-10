@@ -25,7 +25,7 @@ claude -p "$WORKER_PROMPT" \
     --dangerously-skip-permissions \
     --output-format stream-json \
     --verbose \
-    --max-turns 200 \
+    --max-turns 300 \
     --json-schema "$SCHEMA"
 ```
 

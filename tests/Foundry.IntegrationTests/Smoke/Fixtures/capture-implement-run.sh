@@ -37,7 +37,7 @@ system_prompt="You are a Foundry worker in a fixture capture run."
         --dangerously-skip-permissions \
         --output-format stream-json \
         --verbose \
-        --max-turns 200 \
+        --max-turns 300 \
         --json-schema "$schema" < /dev/null > "$raw_file"
 )
 
