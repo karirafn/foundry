@@ -8,6 +8,9 @@ export type FailureCategoryToken =
   | 'credits_exhausted'
   | 'model_unavailable'
   | 'turn_limit'
+  | 'auth_invalid'
+  | 'transient_api_error'
+  | 'pr_closed'
   | 'cancelled';
 
 interface FailureCategoryDisplay {
@@ -25,6 +28,9 @@ export const FAILURE_CATEGORY_DISPLAY = {
   credits_exhausted: { label: 'CREDITS EXHAUSTED', cssClass: 'badge--failure-credits-exhausted' },
   model_unavailable: { label: 'MODEL UNAVAILABLE', cssClass: 'badge--failure-model-unavailable' },
   turn_limit: { label: 'TURN LIMIT', cssClass: 'badge--failure-turn-limit' },
+  auth_invalid: { label: 'AUTH FAILED', cssClass: 'badge--failure-auth-invalid' },
+  transient_api_error: { label: 'CLAUDE API ERROR', cssClass: 'badge--failure-transient-api-error' },
+  pr_closed: { label: 'PR CLOSED', cssClass: 'badge--failure-pr-closed' },
   cancelled: { label: 'CANCELLED', cssClass: 'badge--failure-cancelled' },
 } as const satisfies Record<FailureCategoryToken, FailureCategoryDisplay>;
 
