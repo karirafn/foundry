@@ -361,7 +361,12 @@ internal sealed class WorkerOutcomeResolver(
 
         if (parseResult is ContainerOutputParseResult.NoResultLine)
         {
-            return ClassifyNoResultLine(status);
+            return ClassifyNoResultLine(status, agentStarted: false);
+        }
+
+        if (parseResult is ContainerOutputParseResult.AgentStartedNoResultLine)
+        {
+            return ClassifyNoResultLine(status, agentStarted: true);
         }
 
         return new FailureReason.NonZeroExit(status?.ExitCode ?? -1);
@@ -383,15 +388,17 @@ internal sealed class WorkerOutcomeResolver(
             ContainerOutputParseResult.AuthInvalid => new FailureReason.AuthInvalid(),
             ContainerOutputParseResult.TransientApiError => new FailureReason.TransientApiError(),
             ContainerOutputParseResult.ModelUnavailable => new FailureReason.ModelUnavailable(role.Name),
+            ContainerOutputParseResult.TurnLimitReached => new FailureReason.TurnLimitReached(),
             _ => null,
         };
     }
 
     /// <summary>
     /// Classifies a run that ended without a result line. Containers killed or removed outside
-    /// Foundry are container errors; anything else is a bootstrap failure (no result line produced).
+    /// Foundry are container errors. Otherwise a run whose agent started is a plain non-zero exit,
+    /// and one whose agent never started is a bootstrap failure.
     /// </summary>
-    private static FailureReason ClassifyNoResultLine(WorkerStatus? status)
+    private static FailureReason ClassifyNoResultLine(WorkerStatus? status, bool agentStarted)
     {
         if (status is null)
         {
@@ -409,6 +416,8 @@ internal sealed class WorkerOutcomeResolver(
             return new FailureReason.ContainerError(TerminatedOutsideFoundryMessage);
         }
 
-        return new FailureReason.WorkerBootstrapFailed(HeuristicBootstrapDetail);
+        return agentStarted
+            ? new FailureReason.NonZeroExit(status.ExitCode ?? -1)
+            : new FailureReason.WorkerBootstrapFailed(HeuristicBootstrapDetail);
     }
 }

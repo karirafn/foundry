@@ -36,6 +36,10 @@ $badge-outlined-variants: (
   failure-cancelled: (var(--fd-text-secondary), var(--fd-text-secondary)),
   failure-credits-exhausted: (var(--fd-text-warning), var(--fd-text-warning)),
   failure-model-unavailable: (var(--fd-text-warning), var(--fd-text-warning)),
+  failure-turn-limit: (var(--fd-text-warning), var(--fd-text-warning)),
+  failure-auth-invalid: (var(--fd-text-warning), var(--fd-text-warning)),
+  failure-transient-api-error: (var(--fd-state-failed), var(--fd-text-error)),
+  failure-pr-closed: (var(--fd-text-secondary), var(--fd-text-secondary)),
   retrying: (var(--fd-text-warning), var(--fd-text-warning)),
   retry-exhausted: (var(--fd-state-failed), var(--fd-text-error)),
 );

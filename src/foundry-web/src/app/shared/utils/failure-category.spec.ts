@@ -20,6 +20,42 @@ describe('failure-category', () => {
     expect(display?.cssClass).toBe('badge--failure-model-unavailable');
   });
 
+  it('should return display for turn_limit', () => {
+    // Arrange / Act
+    const display = getFailureCategoryDisplay('turn_limit');
+
+    // Assert
+    expect(display?.label).toBe('TURN LIMIT');
+    expect(display?.cssClass).toBe('badge--failure-turn-limit');
+  });
+
+  it('should return display for auth_invalid', () => {
+    // Arrange / Act
+    const display = getFailureCategoryDisplay('auth_invalid');
+
+    // Assert
+    expect(display?.label).toBe('AUTH FAILED');
+    expect(display?.cssClass).toBe('badge--failure-auth-invalid');
+  });
+
+  it('should return display for transient_api_error', () => {
+    // Arrange / Act
+    const display = getFailureCategoryDisplay('transient_api_error');
+
+    // Assert
+    expect(display?.label).toBe('CLAUDE API ERROR');
+    expect(display?.cssClass).toBe('badge--failure-transient-api-error');
+  });
+
+  it('should return display for pr_closed', () => {
+    // Arrange / Act
+    const display = getFailureCategoryDisplay('pr_closed');
+
+    // Assert
+    expect(display?.label).toBe('PR CLOSED');
+    expect(display?.cssClass).toBe('badge--failure-pr-closed');
+  });
+
   it('should return display for cancelled', () => {
     // Arrange / Act
     const display = getFailureCategoryDisplay('cancelled');

@@ -7,10 +7,28 @@ namespace Foundry.Shared.Infrastructure;
 
 public static class DbContextTransitionExtensions
 {
+    public static Task TransitionAsync<TFrom, TTo>(
+        this DbContext db,
+        TFrom old,
+        TTo next,
+        IDomainEventDispatcher dispatcher,
+        CancellationToken cancellationToken = default)
+        where TFrom : class, IStateMachine, IDomainEventSource
+        where TTo : class, IStateMachine
+    {
+        return db.TransitionAsync(old, next, alongside: [], dispatcher, cancellationToken);
+    }
+
+    /// <summary>
+    /// Transitions <paramref name="old"/> to <paramref name="next"/>, adding <paramref name="alongside"/>
+    /// in the same save as <paramref name="next"/>. Entities keyed to the state row must be added here
+    /// rather than before the call: they would be added while <paramref name="old"/> is being removed.
+    /// </summary>
     public static async Task TransitionAsync<TFrom, TTo>(
         this DbContext db,
         TFrom old,
         TTo next,
+        IReadOnlyCollection<object> alongside,
         IDomainEventDispatcher dispatcher,
         CancellationToken cancellationToken = default)
         where TFrom : class, IStateMachine, IDomainEventSource
@@ -23,6 +41,12 @@ public static class DbContextTransitionExtensions
         await db.SaveChangesAsync(cancellationToken);
 
         db.Add(next);
+
+        foreach (object entity in alongside)
+        {
+            db.Add(entity);
+        }
+
         await db.SaveChangesAsync(cancellationToken);
 
         // Dispatch domain events inside the transaction. Any integration events enqueued

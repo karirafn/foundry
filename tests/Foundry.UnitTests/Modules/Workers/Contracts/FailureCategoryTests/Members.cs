@@ -129,6 +129,18 @@ public sealed class Members
     }
 
     [Fact]
+    public void TurnLimit_ValueIsTurnLimit()
+    {
+        // Arrange
+
+        // Act
+        FailureCategory category = FailureCategory.TurnLimit;
+
+        // Assert
+        category.Value.ShouldBe("turn_limit");
+    }
+
+    [Fact]
     public void PrClosed_ValueMatchesToken()
     {
         // Arrange

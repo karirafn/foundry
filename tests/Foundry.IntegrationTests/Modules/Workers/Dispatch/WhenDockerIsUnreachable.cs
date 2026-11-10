@@ -170,6 +170,9 @@ public sealed class WhenDockerIsUnreachable : IAsyncDisposable
             CancellationToken cancellationToken)
             => throw ConnectivityError();
 
+        public Task<string?> GetFullLogAsync(string containerId, CancellationToken cancellationToken)
+            => Task.FromResult<string?>(null);
+
         public Task<string?> GetLogsAsync(string containerId, int tailLines, CancellationToken cancellationToken)
             => throw ConnectivityError();
 

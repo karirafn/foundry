@@ -303,6 +303,68 @@ describe('StateBadgeComponent', () => {
     expect(el.querySelector('span')?.textContent?.trim()).toBe('BOOTSTRAP FAILED');
   });
 
+  it('should display "TURN LIMIT" with its badge class and aria-label when failureClassification is turn_limit and state is failed', () => {
+    // Arrange / Act
+    const fixture = createComponent('failed', 'turn_limit');
+    const span = (fixture.nativeElement as HTMLElement).querySelector('span');
+
+    // Assert
+    expect(span?.textContent?.trim()).toBe('TURN LIMIT');
+    expect(span?.classList).toContain('badge--failure-turn-limit');
+    expect(span?.getAttribute('aria-label')).toBe('State: turn limit');
+  });
+
+  it('should display "TURN LIMIT" when failureClassification is turn_limit and state is continuable_failed', () => {
+    // Arrange / Act
+    const fixture = createComponent('continuable_failed', 'turn_limit');
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    expect(el.querySelector('span')?.textContent?.trim()).toBe('TURN LIMIT');
+  });
+
+  it('should display the plain state label when failureClassification is turn_limit and state is not failed', () => {
+    // Arrange / Act
+    const fixture = createComponent('in_progress', 'turn_limit');
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    expect(el.querySelector('span')?.textContent?.trim()).toBe('IN PROGRESS');
+  });
+
+  it('should display "AUTH FAILED" with its badge class and aria-label when failureClassification is auth_invalid and state is failed', () => {
+    // Arrange / Act
+    const fixture = createComponent('failed', 'auth_invalid');
+    const span = (fixture.nativeElement as HTMLElement).querySelector('span');
+
+    // Assert
+    expect(span?.textContent?.trim()).toBe('AUTH FAILED');
+    expect(span?.classList).toContain('badge--failure-auth-invalid');
+    expect(span?.getAttribute('aria-label')).toBe('State: auth failed');
+  });
+
+  it('should display "CLAUDE API ERROR" with its badge class and aria-label when failureClassification is transient_api_error and state is failed', () => {
+    // Arrange / Act
+    const fixture = createComponent('failed', 'transient_api_error');
+    const span = (fixture.nativeElement as HTMLElement).querySelector('span');
+
+    // Assert
+    expect(span?.textContent?.trim()).toBe('CLAUDE API ERROR');
+    expect(span?.classList).toContain('badge--failure-transient-api-error');
+    expect(span?.getAttribute('aria-label')).toBe('State: claude api error');
+  });
+
+  it('should display "PR CLOSED" with its badge class and aria-label when failureClassification is pr_closed and state is continuable_failed', () => {
+    // Arrange / Act
+    const fixture = createComponent('continuable_failed', 'pr_closed');
+    const span = (fixture.nativeElement as HTMLElement).querySelector('span');
+
+    // Assert
+    expect(span?.textContent?.trim()).toBe('PR CLOSED');
+    expect(span?.classList).toContain('badge--failure-pr-closed');
+    expect(span?.getAttribute('aria-label')).toBe('State: pr closed');
+  });
+
   it('should display "FAILED" when failureClassification is unknown and state is failed', () => {
     // Arrange / Act
     const fixture = createComponent('failed', 'some_unknown_category');
