@@ -417,6 +417,9 @@ public sealed class PauseGate : WorkerDispatchServiceTestBase
             CancellationToken cancellationToken)
             => Task.FromResult<IReadOnlyList<(ContainerId, WorkerRunId)>>([]);
 
+        public Task<string?> GetFullLogAsync(string containerId, CancellationToken cancellationToken)
+            => Task.FromResult<string?>(null);
+
         public Task<string?> GetLogsAsync(string containerId, int tailLines, CancellationToken cancellationToken)
             => Task.FromResult<string?>(null);
 

@@ -71,6 +71,9 @@ internal sealed class FakeWorkerContainers : IWorkerOrchestrator
         => Task.FromResult<IReadOnlyList<(ContainerId, WorkerRunId)>>(
             [.. _containers.Select(pair => (ContainerId.From(pair.Key), pair.Value.WorkerRunId))]);
 
+    public Task<string?> GetFullLogAsync(string containerId, CancellationToken cancellationToken)
+        => Task.FromResult<string?>(null);
+
     public Task<string?> GetLogsAsync(string containerId, int tailLines, CancellationToken cancellationToken)
         => Task.FromResult(_containers.TryGetValue(containerId, out Container? container) ? container.Log : null);
 

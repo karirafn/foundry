@@ -17,6 +17,7 @@ namespace Foundry.Modules.Workers.Domain.ValueObjects;
 [JsonDerivedType(typeof(CreditsExhausted), typeDiscriminator: FailureReason.CreditsExhaustedToken)]
 [JsonDerivedType(typeof(ModelUnavailable), typeDiscriminator: FailureReason.ModelUnavailableToken)]
 [JsonDerivedType(typeof(Cancelled), typeDiscriminator: FailureReason.CancelledToken)]
+[JsonDerivedType(typeof(TurnLimitReached), typeDiscriminator: FailureReason.TurnLimitToken)]
 public abstract record FailureReason
 {
     public const string NonZeroExitToken = FailureCategory.NonZeroExitToken;
@@ -30,6 +31,7 @@ public abstract record FailureReason
     public const string CreditsExhaustedToken = FailureCategory.CreditsExhaustedToken;
     public const string ModelUnavailableToken = FailureCategory.ModelUnavailableToken;
     public const string CancelledToken = FailureCategory.CancelledToken;
+    public const string TurnLimitToken = FailureCategory.TurnLimitToken;
 
     private FailureReason()
     {
@@ -48,6 +50,7 @@ public abstract record FailureReason
         CreditsExhausted => CreditsExhaustedToken,
         ModelUnavailable => ModelUnavailableToken,
         Cancelled => CancelledToken,
+        TurnLimitReached => TurnLimitToken,
         _ => throw new UnreachableException($"Unknown {nameof(FailureReason)} variant: {GetType().Name}"),
     };
 
@@ -65,6 +68,7 @@ public abstract record FailureReason
         ModelUnavailable modelUnavailable =>
             $"The selected model is unavailable to this account. Pick another model in the '{modelUnavailable.Role}' worker role's model setting",
         Cancelled => "Worker run cancelled",
+        TurnLimitReached => "Reached the turn limit before finishing. Split the issue into smaller issues, then retry.",
         _ => throw new UnreachableException($"Unknown {nameof(FailureReason)} variant: {GetType().Name}"),
     };
 
@@ -96,4 +100,10 @@ public abstract record FailureReason
     /// A user cancelled the run from the dashboard; the container was stopped.
     /// </summary>
     public sealed record Cancelled : FailureReason;
+
+    /// <summary>
+    /// The CLI exhausted its <c>--max-turns</c> budget before finishing. The fix is to split the issue, so retry
+    /// stays manual rather than repeating a full run's cost.
+    /// </summary>
+    public sealed record TurnLimitReached : FailureReason;
 }

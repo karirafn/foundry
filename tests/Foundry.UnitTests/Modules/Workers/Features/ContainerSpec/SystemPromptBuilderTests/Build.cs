@@ -15,6 +15,10 @@ public sealed class Build
 {
     private const string Principles = "PRINCIPLES_MARKER Engineering principles.";
     private const string PrePrSectionEndFragment = "leave enough time to open the pull request";
+    private const string PrePrCommitInstruction =
+        "First, commit every change you made for the issue on the provided branch, leaving out scratch and generated files.";
+    private const string PrePrNothingToPushExit =
+        "If the branch still has no commits beyond the default branch after that commit, there is nothing to push: report that and exit.";
     private const string DefaultSystemPromptTemplate =
         "You are implementing GitHub issue #{issueNumber}.\n\n{issueContent}";
 
@@ -1953,7 +1957,7 @@ public sealed class Build
     }
 
     [Fact]
-    public void WhenInstallsDockerTrue_PrePrSectionReportsAndExitsWhenBranchHasNoCommits()
+    public void WhenInstallsDockerTrue_PrePrSectionCommitsIssueChangesBeforeTestingOrPushing()
     {
         // Arrange
 
@@ -1961,7 +1965,48 @@ public sealed class Build
         string section = BuildPrePrSection();
 
         // Assert
-        section.ShouldContain("When the branch has no commits beyond the default branch there is nothing to review: report that and exit");
+        int commitIndex = section.IndexOf(PrePrCommitInstruction, StringComparison.Ordinal);
+        int testSuiteIndex = section.IndexOf("run the repository's full test suite", StringComparison.Ordinal);
+        int pushIndex = section.IndexOf("push the branch", StringComparison.Ordinal);
+        section.ShouldSatisfyAllConditions(
+            () => commitIndex.ShouldBeGreaterThan(-1),
+            () => testSuiteIndex.ShouldBeGreaterThan(commitIndex),
+            () => pushIndex.ShouldBeGreaterThan(commitIndex));
+    }
+
+    [Fact]
+    public void WhenInstallsDockerTrue_PrePrSectionExitsOnlyAfterCommitWhenBranchStillHasNoCommits()
+    {
+        // Arrange
+
+        // Act
+        string section = BuildPrePrSection();
+
+        // Assert
+        int commitIndex = section.IndexOf(PrePrCommitInstruction, StringComparison.Ordinal);
+        int exitIndex = section.IndexOf(PrePrNothingToPushExit, StringComparison.Ordinal);
+        section.ShouldSatisfyAllConditions(
+            () => commitIndex.ShouldBeGreaterThan(-1),
+            () => exitIndex.ShouldBeGreaterThan(commitIndex),
+            () => section.ShouldNotContain("nothing to review"));
+    }
+
+    [Fact]
+    public void WhenInstallsDockerTrue_PrePrSectionExitConditionRefersToBranchCommitsNotChangesOrWorkingTree()
+    {
+        // Arrange
+
+        // Act
+        string section = BuildPrePrSection();
+
+        // Assert
+        int exitIndex = section.IndexOf(PrePrNothingToPushExit, StringComparison.Ordinal);
+        exitIndex.ShouldBeGreaterThan(-1);
+        string exitLine = section[exitIndex..].Split('\n')[0];
+        exitLine.ShouldSatisfyAllConditions(
+            () => exitLine.ShouldContain("no commits beyond the default branch"),
+            () => exitLine.ShouldNotContain("working tree"),
+            () => exitLine.ShouldNotContain("change"));
     }
 
     [Fact]

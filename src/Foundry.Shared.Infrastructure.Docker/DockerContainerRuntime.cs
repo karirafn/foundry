@@ -14,6 +14,9 @@ internal sealed class DockerContainerRuntime(
     IVolumeOperations volumeOperations,
     IExecOperations execOperations) : IDockerContainerRuntime
 {
+    // The Docker logs API's tail value for "no tail limit".
+    private const string AllLines = "all";
+
     public async Task<string> CreateAndStartAsync(
         CreateContainerParameters createParams,
         CancellationToken cancellationToken)
@@ -174,9 +177,24 @@ internal sealed class DockerContainerRuntime(
         }
     }
 
-    public async Task<string?> GetLogsAsync(
+    public Task<string?> GetLogsAsync(
         string containerId,
         int tailLines,
+        CancellationToken cancellationToken)
+    {
+        return ReadLogsAsync(containerId, tailLines.ToString(CultureInfo.InvariantCulture), cancellationToken);
+    }
+
+    public Task<string?> GetAllLogsAsync(
+        string containerId,
+        CancellationToken cancellationToken)
+    {
+        return ReadLogsAsync(containerId, AllLines, cancellationToken);
+    }
+
+    private async Task<string?> ReadLogsAsync(
+        string containerId,
+        string tail,
         CancellationToken cancellationToken)
     {
         ContainerLogsParameters logsParams = new()
@@ -185,7 +203,7 @@ internal sealed class DockerContainerRuntime(
             ShowStdout = true,
             ShowStderr = true,
             Timestamps = true,
-            Tail = tailLines.ToString(CultureInfo.InvariantCulture),
+            Tail = tail,
         };
 
         try

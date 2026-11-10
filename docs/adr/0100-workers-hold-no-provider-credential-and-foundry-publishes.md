@@ -1,5 +1,7 @@
 # Workers Hold No Provider Credential; Foundry Publishes Their Work
 
+> **2026-11-10 — Amended:** in Decision, the **Hand-off by bundle only** clause's Run bundle range and the **The token holder never runs git in agent-written state** clause's fast-forward-only push, and its divergence merge for a rebased tip, are replaced by [ADR 0101](0101-worker-branches-catch-up-by-rebase-and-foundry-pushes-with-a-lease.md). The `<base>..HEAD` range was false from the start: once a run merges or rebases onto the default branch, the range includes the default branch's commits, and the author rewrite would give them new SHAs.
+
 ## Context
 
 Implementation workers receive the account PAT as `GIT_PAT` for the clone and as `GH_TOKEN`/`GITLAB_TOKEN` for the whole run, and the agent pushes, opens the pull request, reads the issue, watches CI and fetches CI logs itself. The branch, force-push, comment and CI/CD-file rules exist only as prompt text (`SafetyPreamble`) and per-tool deny globs, so a prompt injection in issue or repository content holds a credential that reaches every repository the PAT can write. [ADR 0094](0094-code-decides-claude-judges-only-what-code-cannot.md) assigns every provider side effect to code; agent-driven publishing was the largest remaining exception. [ADR 0098](0098-judgment-roles-run-restricted-with-code-supplied-issue-content.md) already removed the token from restricted roles but kept a clone-then-unset of `GIT_PAT` inside the worker.
