@@ -163,4 +163,17 @@ public sealed class Classify
         // Assert
         result.ShouldBeOfType<ProbeOutcome.InfrastructureFailure>();
     }
+
+    [Fact]
+    public void WhenLogsShowAgentStartedWithoutResultLine_ReturnsInfrastructureFailure()
+    {
+        // Arrange
+        string logs = """{"type":"system","subtype":"init","model":"claude-opus-5-5"}""";
+
+        // Act
+        ProbeOutcome result = _sut.Classify(logs);
+
+        // Assert
+        result.ShouldBeOfType<ProbeOutcome.InfrastructureFailure>();
+    }
 }
