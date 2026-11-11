@@ -1189,6 +1189,13 @@ public sealed class ProcessRebuildAsync
         File.WriteAllText(Path.Combine(implement, "prompts", "task.md"), "Implement issue #{issueNumber}.");
         File.WriteAllText(Path.Combine(shared, ".claude-plugin", "plugin.json"), """{"name":"shared"}""");
         File.WriteAllText(Path.Combine(shared, "prompts", "principles.md"), "Engineering principles.");
+
+        string triage = Path.Combine(workersDir, "roles", "triage");
+        Directory.CreateDirectory(Path.Combine(triage, ".claude-plugin"));
+        Directory.CreateDirectory(Path.Combine(triage, "prompts"));
+        File.WriteAllText(Path.Combine(triage, ".claude-plugin", "plugin.json"), """{"name":"triage","description":"Triages."}""");
+        File.WriteAllText(Path.Combine(triage, "prompts", "system.md"), "You are triaging issue #{issueNumber}.\n\n{issueContent}");
+        File.WriteAllText(Path.Combine(triage, "prompts", "task.md"), "Triage issue #{issueNumber}.");
     }
 
     /// <summary>

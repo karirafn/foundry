@@ -102,7 +102,7 @@ internal sealed partial class AgentActivityProjection
         return true;
     }
 
-    public AgentActivity Snapshot(WorkerRunId workerRunId, Guid issueId)
+    public AgentActivity Snapshot(WorkerRunId workerRunId, Guid issueId, string role)
     {
         List<AgentTaskItem> tasks = _tasks.Select(t => t.ToItem()).ToList();
 
@@ -128,6 +128,7 @@ internal sealed partial class AgentActivityProjection
         return new AgentActivity(
             WorkerRunId: workerRunId,
             IssueId: issueId,
+            Role: role,
             LastEventAt: LastEventAt,
             Tasks: tasks,
             CurrentTask: currentTask,

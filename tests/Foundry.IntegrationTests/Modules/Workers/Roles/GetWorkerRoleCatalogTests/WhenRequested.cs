@@ -53,6 +53,9 @@ public sealed class WhenRequested : IAsyncDisposable
             ["implement/prompts/system.md"] = "You are implementing issue #{issueNumber}.\n\n{issueContent}",
             ["implement/prompts/task.md"] = "Implement issue #{issueNumber}.",
             ["implement/skills/tdd/SKILL.md"] = "---\nname: tdd\ndescription: Test first.\n---\nBody.",
+            ["triage/.claude-plugin/plugin.json"] = """{"name":"triage","description":"Triages an issue."}""",
+            ["triage/prompts/system.md"] = "You are triaging issue #{issueNumber}.\n\n{issueContent}",
+            ["triage/prompts/task.md"] = "Triage issue #{issueNumber}.",
             ["shared/.claude-plugin/plugin.json"] = """{"name":"shared"}""",
             ["shared/prompts/principles.md"] = "Engineering principles.",
         }).ShouldBeOfType<Result<WorkerRoleCatalogContent>.Success>().Value;
@@ -74,7 +77,8 @@ public sealed class WhenRequested : IAsyncDisposable
         using JsonDocument document = JsonDocument.Parse(
             await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
         JsonElement root = document.RootElement;
-        JsonElement role = root.GetProperty("roles")[0];
+        JsonElement triage = root.GetProperty("roles")[0];
+        JsonElement role = root.GetProperty("roles")[1];
         JsonElement firstSection = root.GetProperty("promptSections")[0];
         JsonElement principlesSection = root.GetProperty("promptSections")[1];
         root.ShouldSatisfyAllConditions(
@@ -82,6 +86,9 @@ public sealed class WhenRequested : IAsyncDisposable
             () => root.GetProperty("image").GetProperty("verified").GetBoolean().ShouldBeTrue(),
             () => role.GetProperty("name").GetString().ShouldBe("implement"),
             () => role.GetProperty("purpose").GetString().ShouldBe("Implements an issue."),
+            () => role.GetProperty("capability").GetString().ShouldBe("full"),
+            () => triage.GetProperty("name").GetString().ShouldBe("triage"),
+            () => triage.GetProperty("capability").GetString().ShouldBe("restricted"),
             () => role.GetProperty("systemPrompt").GetString().ShouldNotBeNull().ShouldContain("{issueContent}"),
             () => role.GetProperty("skills")[0].GetProperty("description").GetString().ShouldBe("Test first."),
             () => role.GetProperty("verdictSchema").ValueKind.ShouldBe(JsonValueKind.Null),

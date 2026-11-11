@@ -6,6 +6,7 @@ export function buildWorkerRole(overrides: Partial<WorkerRoleCard> = {}): Worker
   return {
     name: 'implement',
     purpose: 'Implements the issue and opens a pull request.',
+    capability: 'full',
     systemPrompt: 'You are implementing issue #{issueNumber} in {repository}.',
     taskPrompt: 'Implement issue #{issueNumber}.\n\n{issueContent}',
     skills: [

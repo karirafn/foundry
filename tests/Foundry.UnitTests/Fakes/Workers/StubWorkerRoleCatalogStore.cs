@@ -22,8 +22,9 @@ internal sealed class StubWorkerRoleCatalogStore(WorkerRoleCatalog? current) : I
         string taskPrompt = DefaultTaskPrompt,
         string imageTag = DefaultImageTag,
         string? imageId = null,
-        string principles = DefaultPrinciples) =>
-        new(Catalog(systemPrompt, taskPrompt, imageTag, imageId, principles));
+        string principles = DefaultPrinciples,
+        WorkerCapability capability = WorkerCapability.Full) =>
+        new(Catalog(systemPrompt, taskPrompt, imageTag, imageId, principles, capability));
 
     /// <summary>A store whose catalog has not been loaded, as before the first image build.</summary>
     public static StubWorkerRoleCatalogStore Empty() => new(null);
@@ -33,13 +34,14 @@ internal sealed class StubWorkerRoleCatalogStore(WorkerRoleCatalog? current) : I
         string taskPrompt = DefaultTaskPrompt,
         string imageTag = DefaultImageTag,
         string? imageId = null,
-        string principles = DefaultPrinciples)
+        string principles = DefaultPrinciples,
+        WorkerCapability capability = WorkerCapability.Full)
     {
         RolePlugin implementPlugin = new(WorkerRole.Implement.Name, "Implements an issue.", [], []);
         RolePlugin sharedPlugin = new(WorkerRole.SharedFolder, "Shared.", [], []);
 
         WorkerRoleCatalogContent content = new(
-            [new WorkerRoleDefinition(WorkerRole.Implement, implementPlugin, systemPrompt, taskPrompt, VerdictSchema: null)],
+            [new WorkerRoleDefinition(WorkerRole.Implement, capability, implementPlugin, systemPrompt, taskPrompt, VerdictSchema: null)],
             sharedPlugin,
             principles);
 

@@ -129,7 +129,7 @@ public sealed class WhenSaved : IAsyncDisposable
     public async Task WhenRoleIsUnknown_ReturnsNotFound()
     {
         // Act
-        HttpResponseMessage response = await PutModelAsync("triage", "opus");
+        HttpResponseMessage response = await PutModelAsync("review", "opus");
 
         // Assert
         response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
@@ -145,6 +145,9 @@ public sealed class WhenSaved : IAsyncDisposable
             ["implement/.claude-plugin/plugin.json"] = """{"name":"implement","description":"Implements an issue."}""",
             ["implement/prompts/system.md"] = "You are implementing issue #{issueNumber}.\n\n{issueContent}",
             ["implement/prompts/task.md"] = "Implement issue #{issueNumber}.",
+            ["triage/.claude-plugin/plugin.json"] = """{"name":"triage","description":"Triages an issue."}""",
+            ["triage/prompts/system.md"] = "You are triaging issue #{issueNumber}.\n\n{issueContent}",
+            ["triage/prompts/task.md"] = "Triage issue #{issueNumber}.",
             ["shared/.claude-plugin/plugin.json"] = """{"name":"shared"}""",
             ["shared/prompts/principles.md"] = "Engineering principles.",
         }).ShouldBeOfType<Result<WorkerRoleCatalogContent>.Success>().Value;
@@ -161,7 +164,7 @@ public sealed class WhenSaved : IAsyncDisposable
         // Assert
         using JsonDocument document = JsonDocument.Parse(
             await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
-        document.RootElement.GetProperty("roles")[0].GetProperty("model").GetString().ShouldBe("sonnet");
+        document.RootElement.GetProperty("roles")[1].GetProperty("model").GetString().ShouldBe("sonnet");
     }
 
     private sealed class StubCredentialReader : IClaudeApiCredentialReader

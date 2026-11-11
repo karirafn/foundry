@@ -17,7 +17,7 @@ internal sealed class PostExitProviderQueries(
     DbContext dbContext,
     IIssueProviderFactory providerFactory,
     ICredentialResolver credentialResolver)
-    : IPostExitProviderQueries, IWorkBranchCommands, IIssueBlockerQueries, IFailingJobLogQueries
+    : IPostExitProviderQueries, IWorkBranchCommands, IIssueBlockerQueries, IFailingJobLogQueries, IIssueContentQueries
 {
     public async Task<Result<IReadOnlyList<int>>> GetOpenBlockersAsync(
         MonitoredRepositoryId repositoryId,
@@ -143,6 +143,40 @@ internal sealed class PostExitProviderQueries(
         {
             Result<string>.Success success => Result<CiJobLog>.Ok(new CiJobLog.Available(success.Value)),
             Result<string>.Failure failure => Result<CiJobLog>.Fail(failure.Error),
+            _ => throw new UnreachableException(),
+        };
+    }
+
+    public async Task<Result<IssueContent>> GetIssueContentAsync(
+        MonitoredRepositoryId repositoryId,
+        int issueNumber,
+        CancellationToken cancellationToken)
+    {
+        Result<(IIssueProvider Provider, MonitoredRepository Repo)> resolved =
+            await ResolveAsync(repositoryId, cancellationToken);
+
+        if (resolved is not Result<(IIssueProvider, MonitoredRepository)>.Success resolvedSuccess)
+        {
+            Error error = ((Result<(IIssueProvider, MonitoredRepository)>.Failure)resolved).Error;
+            return Result<IssueContent>.Fail(error);
+        }
+
+        (IIssueProvider provider, MonitoredRepository repo) = resolvedSuccess.Value;
+        Result<ProviderIssueContent> content = await provider.GetIssueContentAsync(repo.Slug, issueNumber, cancellationToken);
+
+        return content switch
+        {
+            Result<ProviderIssueContent>.Success success => Result<IssueContent>.Ok(new IssueContent(
+                success.Value.Title,
+                success.Value.Body,
+                [
+                    .. success.Value.Comments.Select(comment => new IssueContentComment(
+                        comment.Id?.Value,
+                        comment.AuthorLogin,
+                        comment.Body,
+                        comment.CreatedAt)),
+                ])),
+            Result<ProviderIssueContent>.Failure failure => Result<IssueContent>.Fail(failure.Error),
             _ => throw new UnreachableException(),
         };
     }

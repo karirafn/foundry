@@ -4,6 +4,7 @@ using System.Text;
 using System.Text.Json;
 
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
+using Foundry.Modules.Monitoring.Features.Providers;
 using Foundry.Modules.Monitoring.Features.Providers.Comments;
 using Foundry.Modules.Monitoring.Features.Providers.Feedback;
 using Foundry.Shared;
@@ -81,6 +82,43 @@ internal sealed partial class GitHubHttpClient
         }
 
         return Result<IReadOnlyList<ProviderComment>>.Ok(comments);
+    }
+
+    /// <summary>
+    /// Reads an issue's title and body (<c>GET /repos/{owner}/{repo}/issues/{issue_number}</c>). A missing body is empty.
+    /// </summary>
+    public async Task<Result<ProviderIssueText>> GetIssueTextAsync(
+        Uri apiBaseUrl,
+        RepositorySlug slug,
+        int issueNumber,
+        string token,
+        CancellationToken cancellationToken)
+    {
+        if (apiBaseUrl.Scheme is not "https")
+        {
+            return Result<ProviderIssueText>.Fail(GitHubErrors.InvalidBaseUrl);
+        }
+
+        string owner = Uri.EscapeDataString(slug.Owner);
+        string repo = Uri.EscapeDataString(slug.Name);
+        Uri requestUri = new(EnsureTrailingSlash(apiBaseUrl), $"repos/{owner}/{repo}/issues/{issueNumber}");
+
+        using HttpRequestMessage request = new(HttpMethod.Get, requestUri);
+        AddGitHubHeaders(request, token);
+
+        using HttpResponseMessage response = await httpClient.SendAsync(request, cancellationToken);
+
+        if (!response.IsSuccessStatusCode)
+        {
+            return Result<ProviderIssueText>.Fail(ErrorFromNonSuccess(response));
+        }
+
+        RecordRestHeadroom(response);
+
+        string body = await response.Content.ReadAsStringAsync(cancellationToken);
+        GitHubIssueTextDto? issue = JsonSerializer.Deserialize<GitHubIssueTextDto>(body, JsonOptions);
+
+        return Result<ProviderIssueText>.Ok(new ProviderIssueText(issue?.Title ?? string.Empty, issue?.Body ?? string.Empty));
     }
 
     /// <summary>
@@ -177,6 +215,8 @@ internal sealed partial class GitHubHttpClient
         string? Body,
         DateTimeOffset CreatedAt,
         GitHubCommentUserDto? User);
+
+    private sealed record GitHubIssueTextDto(string? Title, string? Body);
 
     private sealed record GitHubCommentUserDto(string? Login, string? Type);
 

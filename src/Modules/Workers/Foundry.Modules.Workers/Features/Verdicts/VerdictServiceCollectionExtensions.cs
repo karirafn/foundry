@@ -8,6 +8,7 @@ internal static class VerdictServiceCollectionExtensions
     public static IServiceCollection AddWorkerVerdicts(this IServiceCollection services)
     {
         services.AddSingleton<IWorkerVerdictParser, ImplementVerdictParser>();
+        services.AddSingleton<IWorkerVerdictParser, TriageVerdictParser>();
         services.AddSingleton<RunVerdictReader>();
         return services;
     }

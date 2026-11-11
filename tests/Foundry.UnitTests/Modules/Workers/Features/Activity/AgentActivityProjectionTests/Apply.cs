@@ -346,5 +346,15 @@ public sealed class Apply
 
     private void ApplySystem(string line) => _sut.Apply(line, ReceivedAt);
 
-    private AgentActivity Snapshot() => _sut.Snapshot(WorkerRunId.New(), Guid.NewGuid());
+    [Fact]
+    public void Snapshot_CarriesTheRoleOfTheRun()
+    {
+        // Act
+        AgentActivity activity = _sut.Snapshot(WorkerRunId.New(), Guid.NewGuid(), "triage");
+
+        // Assert
+        activity.Role.ShouldBe("triage");
+    }
+
+    private AgentActivity Snapshot() => _sut.Snapshot(WorkerRunId.New(), Guid.NewGuid(), "implement");
 }

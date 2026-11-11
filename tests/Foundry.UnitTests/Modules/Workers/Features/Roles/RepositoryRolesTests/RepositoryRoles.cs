@@ -185,6 +185,55 @@ public sealed class RepositoryRoles
         verdict.Status.ShouldBe(expected);
     }
 
+    [Fact]
+    public void TheTriageRole_HasAVerdictSchema()
+    {
+        // Act
+        WorkerRoleCatalogContent catalog = LoadRepositoryCatalog();
+
+        // Assert
+        catalog.Find(WorkerRole.Triage).ShouldNotBeNull().VerdictSchema.ShouldNotBeNull();
+    }
+
+    [Fact]
+    public void TheTriageVerdictSchema_MatchesTheTypedTriageVerdict()
+    {
+        // Arrange
+        JsonObject schema = ReadJsonObject(Path.Combine(RolesDirectory, WorkerRole.Triage.Name, WorkerRoleCatalogReader.VerdictSchemaPath));
+
+        // Act
+        string[] outcomes = [.. schema["properties"]![TriageVerdict.OutcomeProperty]!["enum"]!.AsArray().Select(node => node!.GetValue<string>())];
+        string[] kinds = [.. schema["properties"]![TriageVerdict.KindProperty]!["enum"]!.AsArray().Select(node => node!.GetValue<string>())];
+        string[] required = [.. schema["required"]!.AsArray().Select(node => node!.GetValue<string>())];
+        string? conditionalOutcome = schema["if"]?["properties"]?[TriageVerdict.OutcomeProperty]?["const"]?.GetValue<string>();
+        string[] conditionallyRequired = [.. schema["then"]!["required"]!.AsArray().Select(node => node!.GetValue<string>())];
+
+        // Assert
+        schema.ShouldSatisfyAllConditions(
+            () => outcomes.ShouldBe([TriageVerdict.ReadyToken, TriageVerdict.NeedsInputToken]),
+            () => kinds.ShouldBe(TriageVerdict.KindTokens.Keys, ignoreOrder: true),
+            () => required.ShouldBe([TriageVerdict.OutcomeProperty, TriageVerdict.KindProperty], ignoreOrder: true),
+            () => conditionalOutcome.ShouldBe(TriageVerdict.NeedsInputToken),
+            () => conditionallyRequired.ShouldBe([TriageVerdict.QuestionsProperty]),
+            () => schema["properties"]![TriageVerdict.QuestionsProperty]!["$ref"]!.GetValue<string>().ShouldBe("#/$defs/questions"),
+            () => schema["properties"]!.AsObject().Select(pair => pair.Key).ShouldBe(
+                [TriageVerdict.OutcomeProperty, TriageVerdict.KindProperty, TriageVerdict.QuestionsProperty],
+                ignoreOrder: true),
+            () => schema["additionalProperties"]!.GetValue<bool>().ShouldBeFalse());
+    }
+
+    [Theory]
+    [InlineData("""{"outcome":"ready","kind":"documentation"}""", RunVerdictStatus.Done)]
+    [InlineData("""{"outcome":"needs_input","kind":"bug","questions":[{"question":"Which page?","context":"None is named."}]}""", RunVerdictStatus.NeedsInput)]
+    public void ASampleMatchingTheTriageVerdictSchema_ParsesWithTheTriageVerdictParser(string sample, RunVerdictStatus expected)
+    {
+        // Act
+        RunVerdict verdict = new TriageVerdictParser().Parse(JsonNode.Parse(sample)!.AsObject());
+
+        // Assert
+        verdict.Status.ShouldBe(expected);
+    }
+
     private static JsonObject ReadJsonObject(string path) =>
         JsonNode.Parse(File.ReadAllText(path))!.AsObject();
 

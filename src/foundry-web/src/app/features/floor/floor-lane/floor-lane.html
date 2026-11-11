@@ -16,7 +16,12 @@
       }
     </h2>
     @if (lane().issue; as issue) {
-      <p class="floor-lane__repo">{{ issue.repositorySlug }}</p>
+      <p class="floor-lane__repo">
+        @if (lane().activity.role; as role) {
+          <fd-role-tag [role]="role" />
+        }
+        {{ issue.repositorySlug }}
+      </p>
     }
     @if (stale()) {
       <p class="floor-lane__stale-note">Connection lost — showing last known state</p>

@@ -36,6 +36,8 @@ export interface AgentTokenTotals {
 export interface AgentActivity {
   readonly workerRunId: string;
   readonly issueId: string;
+  /** The run's Worker Role name; null on older payloads that predate the field. */
+  readonly role: string | null;
   readonly lastEventAt: string | null;
   readonly tasks: readonly AgentTaskItem[];
   readonly currentTask: AgentTaskItem | null;

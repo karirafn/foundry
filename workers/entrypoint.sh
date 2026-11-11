@@ -209,6 +209,46 @@ prepare_role_verdict_schema() {
 }
 
 # ---------------------------------------------------------------------------
+# prepare_capability_profile <capability>
+#
+# Resolves the run's capability profile (ADR 0098) — never its role name — into
+# the CAPABILITY_CLAUDE_ARGS array both claude invocations (the initial -p run
+# and the transient-error -c resume) expand verbatim, and the CLONE_DEPTH_ARGS
+# array the clone expands:
+#   full       — --dangerously-skip-permissions; a full clone.
+#   restricted — --restricted --strict-mcp-config, never the permission skip;
+#                a shallow clone of the default branch.  The provider tokens
+#                and the branch are unset so no push credential or branch
+#                reaches the run even if they were set.
+#
+# Fails closed: any other value emits the bootstrap-failure sentinel
+# (stage=role) and returns non-zero.
+# ---------------------------------------------------------------------------
+prepare_capability_profile() {
+    local capability="$1"
+    CAPABILITY_CLAUDE_ARGS=()
+    CLONE_DEPTH_ARGS=()
+
+    case "$capability" in
+        full)
+            CAPABILITY_CLAUDE_ARGS=(--dangerously-skip-permissions)
+            ;;
+        restricted)
+            CAPABILITY_CLAUDE_ARGS=(--restricted --strict-mcp-config)
+            CLONE_DEPTH_ARGS=(--depth 1 --single-branch)
+            unset GH_TOKEN GITLAB_TOKEN BRANCH_NAME
+            ;;
+        *)
+            echo "ERROR: WORKER_CAPABILITY '$capability' is not a worker capability (restricted or full)." >&2
+            fail_bootstrap "role" "WORKER_CAPABILITY is not a worker capability"
+            return 1
+            ;;
+    esac
+
+    echo "Worker capability: $capability" >&2
+}
+
+# ---------------------------------------------------------------------------
 # start_rootless_dockerd
 #
 # Starts rootless dockerd in the background and polls until its socket is ready.
@@ -473,6 +513,7 @@ unset _cred_dir
 : "${SYSTEM_PROMPT:?SYSTEM_PROMPT is required}"
 : "${ISSUE_NUMBER:?ISSUE_NUMBER is required}"
 : "${WORKER_ROLE:?WORKER_ROLE is required}"
+: "${WORKER_CAPABILITY:?WORKER_CAPABILITY is required}"
 
 # Resolve the run's role plugins before any clone/auth work so a role this image
 # does not carry fails fast at stage=role.  The roles directory is baked into the
@@ -484,6 +525,7 @@ readonly WORKER_ROLES_DIR="${FOUNDRY_ROLES_DIR:-/opt/foundry/roles}"
 readonly WORKSPACE_DIR="${FOUNDRY_WORKSPACE_DIR:-/workspace}"
 prepare_role_plugins "$WORKER_ROLES_DIR" "$WORKER_ROLE" || exit 1
 prepare_role_verdict_schema "$WORKER_ROLES_DIR" "$WORKER_ROLE" || exit 1
+prepare_capability_profile "$WORKER_CAPABILITY" || exit 1
 
 # Guard: SYSTEM_PROMPT must not exceed the Linux kernel MAX_ARG_STRLEN limit.
 # A single argv/env string above this ceiling makes execve fail with E2BIG,
@@ -520,7 +562,7 @@ trap 'fail_bootstrap "$BOOTSTRAP_STAGE" "bootstrap failed at stage $BOOTSTRAP_ST
 
 # GIT_ASKPASS is scoped to this one command — not exported — so push falls
 # through to the gh/glab credential helpers set up below.
-GIT_ASKPASS="$ASKPASS_FILE" git clone "$CLONE_AUTH_URL" "$WORKSPACE_DIR"
+GIT_ASKPASS="$ASKPASS_FILE" git clone "${CLONE_DEPTH_ARGS[@]}" "$CLONE_AUTH_URL" "$WORKSPACE_DIR"
 
 rm -f "$ASKPASS_FILE"
 unset ASKPASS_FILE
@@ -696,7 +738,7 @@ trap 'rm -f "${CLAUDE_OUTPUT_FILE:-}"' EXIT
 set +e
 claude -p "$WORKER_PROMPT" \
     --append-system-prompt "$SYSTEM_PROMPT" \
-    --dangerously-skip-permissions \
+    "${CAPABILITY_CLAUDE_ARGS[@]}" \
     --output-format stream-json \
     --verbose \
     --max-turns "$CLAUDE_MAX_TURNS" \
@@ -716,7 +758,7 @@ if is_transient_api_error "$(cat "$CLAUDE_OUTPUT_FILE")"; then
     # reason, so the resume's result event carries the role's verdict too.
     set +e
     claude -c -p "$WORKER_PROMPT" \
-        --dangerously-skip-permissions \
+        "${CAPABILITY_CLAUDE_ARGS[@]}" \
         --output-format stream-json \
         --verbose \
         --max-turns "$CLAUDE_MAX_TURNS" \

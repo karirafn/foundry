@@ -65,7 +65,8 @@ public sealed class HandleAsync : IAsyncDisposable
         IPostExitProviderQueries? postExitProviderQueries = null,
         IWorkerRoleCatalogStore? roleCatalog = null,
         IFailingJobLogQueries? failingJobLogQueries = null,
-        IRepositoryDispatchQueries? repositoryDispatchQueries = null)
+        IRepositoryDispatchQueries? repositoryDispatchQueries = null,
+        IIssueContentQueries? issueContentQueries = null)
     {
         return new IssueClaimedHandler(
             _dbContext,
@@ -77,6 +78,7 @@ public sealed class HandleAsync : IAsyncDisposable
             failingJobLogQueries ?? new StubFailingJobLogQueries(),
             roleCatalog ?? StubWorkerRoleCatalogStore.With(),
             repositoryDispatchQueries ?? StubRepositoryDispatchQueries.WithToken("ghp_test_token"),
+            issueContentQueries ?? new StubIssueContentQueries(),
             NullLogger<IssueClaimedHandler>.Instance);
     }
 
@@ -1381,13 +1383,194 @@ public sealed class HandleAsync : IAsyncDisposable
             () => systemPrompt.ShouldContain("120 minutes of wall-clock budget"));
     }
 
+    private IssueClaimedHandler BuildRestrictedHandler(
+        StubWorkerOrchestrator orchestrator,
+        StubPostExitProviderQueries? postExitProviderQueries = null,
+        IIssueContentQueries? issueContentQueries = null,
+        IGlobalSettingsQueries? settingsQueries = null) =>
+        BuildHandler(
+            orchestrator: orchestrator,
+            settingsQueries: settingsQueries,
+            postExitProviderQueries: postExitProviderQueries,
+            roleCatalog: StubWorkerRoleCatalogStore.With(
+                systemPrompt: "You are triaging issue #{issueNumber}.\n\n{issueContent}",
+                capability: WorkerCapability.Restricted),
+            issueContentQueries: issueContentQueries);
+
+    [Fact]
+    public async Task WhenTheRoleIsRestricted_CreatesNoBranchOnTheProvider()
+    {
+        // Arrange
+        StubPostExitProviderQueries provider = new(branchCreationSucceeds: true);
+        IssueClaimedHandler sut = BuildRestrictedHandler(new StubWorkerOrchestrator(succeeds: true), provider);
+
+        // Act
+        await sut.HandleAsync(BuildEvent(), TestContext.Current.CancellationToken);
+        _dbContext.ChangeTracker.Clear();
+
+        // Assert
+        provider.CreateBranchCallCount.ShouldBe(0);
+        (await _dbContext.Set<WorkerRun>().SingleAsync(TestContext.Current.CancellationToken)).ShouldBeOfType<ActiveRun>();
+    }
+
+    [Fact]
+    public async Task WhenTheRoleIsFull_CreatesTheBranchOnTheProvider()
+    {
+        // Arrange
+        StubPostExitProviderQueries provider = new(branchCreationSucceeds: true);
+        IssueClaimedHandler sut = BuildHandler(postExitProviderQueries: provider);
+
+        // Act
+        await sut.HandleAsync(BuildEvent(), TestContext.Current.CancellationToken);
+
+        // Assert
+        provider.CreateBranchCallCount.ShouldBe(1);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task WhenTheRoleIsRestricted_ContainerSpecCarriesNoProviderTokenAndNoBranch(bool gitHub)
+    {
+        // Arrange
+        StubWorkerOrchestrator orchestrator = new(succeeds: true);
+        IssueClaimedHandler sut = BuildRestrictedHandler(orchestrator);
+        WorkerProvider provider = gitHub ? new WorkerProvider.GitHub() : new WorkerProvider.GitLab();
+
+        // Act
+        await sut.HandleAsync(BuildEvent(provider: provider), TestContext.Current.CancellationToken);
+
+        // Assert
+        WorkerContainerSpec spec = orchestrator.LastSpec.ShouldNotBeNull();
+        spec.EnvironmentVariables.ShouldSatisfyAllConditions(
+            () => spec.EnvironmentVariables.ShouldNotContainKey("GH_TOKEN"),
+            () => spec.EnvironmentVariables.ShouldNotContainKey("GITLAB_TOKEN"),
+            () => spec.EnvironmentVariables.ShouldNotContainKey("BRANCH_NAME"),
+            () => spec.EnvironmentVariables["GIT_PAT"].ShouldBe("ghp_test_token"));
+    }
+
+    [Fact]
+    public async Task WhenTheRoleIsRestricted_ContainerSpecCarriesTheRestrictedCapabilityForTheEntrypoint()
+    {
+        // Arrange
+        StubWorkerOrchestrator orchestrator = new(succeeds: true);
+        IssueClaimedHandler sut = BuildRestrictedHandler(orchestrator);
+
+        // Act
+        await sut.HandleAsync(BuildEvent(), TestContext.Current.CancellationToken);
+
+        // Assert
+        orchestrator.LastSpec.ShouldNotBeNull().EnvironmentVariables["WORKER_CAPABILITY"].ShouldBe("restricted");
+    }
+
+    [Fact]
+    public async Task WhenTheRoleIsFull_ContainerSpecCarriesTheFullCapabilityForTheEntrypoint()
+    {
+        // Arrange
+        StubWorkerOrchestrator orchestrator = new(succeeds: true);
+        IssueClaimedHandler sut = BuildHandler(orchestrator: orchestrator);
+
+        // Act
+        await sut.HandleAsync(BuildEvent(), TestContext.Current.CancellationToken);
+
+        // Assert
+        orchestrator.LastSpec.ShouldNotBeNull().EnvironmentVariables["WORKER_CAPABILITY"].ShouldBe("full");
+    }
+
+    [Fact]
+    public async Task WhenTheRoleIsRestricted_SystemPromptRendersTheIssueContentReadFromTheProvider()
+    {
+        // Arrange
+        StubWorkerOrchestrator orchestrator = new(succeeds: true);
+        StubIssueContentQueries issueContent = new(Result<IssueContent>.Ok(new IssueContent(
+            "Add retry <now>",
+            "Retry webhook delivery.",
+            [new IssueContentComment(11, "bob", "Which webhooks?", DateTimeOffset.UnixEpoch)])));
+        IssueClaimedHandler sut = BuildRestrictedHandler(orchestrator, issueContentQueries: issueContent);
+        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
+
+        // Act
+        await sut.HandleAsync(
+            BuildEvent(issueNumber: 7, monitoredRepositoryId: repositoryId),
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        string systemPrompt = orchestrator.LastSpec.ShouldNotBeNull().EnvironmentVariables["SYSTEM_PROMPT"];
+        systemPrompt.ShouldSatisfyAllConditions(
+            () => systemPrompt.ShouldContain("You are triaging issue #7."),
+            () => systemPrompt.ShouldContain("<issue-title>Add retry &lt;now&gt;</issue-title>"),
+            () => systemPrompt.ShouldContain("Retry webhook delivery."),
+            () => systemPrompt.ShouldContain("Which webhooks?"),
+            () => systemPrompt.ShouldNotContain("read the full issue from the provider"),
+            () => issueContent.Requests.ShouldBe([(repositoryId, 7)]));
+    }
+
+    [Fact]
+    public async Task WhenTheRoleIsRestricted_SystemPromptLeavesOutTheImplementOnlySections()
+    {
+        // Arrange
+        StubWorkerOrchestrator orchestrator = new(succeeds: true);
+        IssueClaimedHandler sut = BuildRestrictedHandler(
+            orchestrator,
+            settingsQueries: new StubGlobalSettingsQueries(installsDocker: true));
+
+        // Act
+        await sut.HandleAsync(BuildEvent(), TestContext.Current.CancellationToken);
+
+        // Assert
+        string systemPrompt = orchestrator.LastSpec.ShouldNotBeNull().EnvironmentVariables["SYSTEM_PROMPT"];
+        systemPrompt.ShouldSatisfyAllConditions(
+            () => systemPrompt.ShouldStartWith(SystemPromptBuilder.RestrictedSafetyPreamble),
+            () => systemPrompt.ShouldNotContain(SystemPromptBuilder.PrePrSectionMarker),
+            () => systemPrompt.ShouldNotContain("After pushing and opening"),
+            () => systemPrompt.ShouldNotContain("<branch-name>"));
+    }
+
+    [Fact]
+    public async Task WhenTheRoleIsFull_ReadsNoIssueContent()
+    {
+        // Arrange
+        StubIssueContentQueries issueContent = new();
+        IssueClaimedHandler sut = BuildHandler(issueContentQueries: issueContent);
+
+        // Act
+        await sut.HandleAsync(BuildEvent(), TestContext.Current.CancellationToken);
+
+        // Assert
+        issueContent.Requests.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task WhenTheRoleIsRestrictedAndTheIssueCannotBeRead_FailsTheRunWithoutStartingAContainer()
+    {
+        // Arrange
+        StubWorkerOrchestrator orchestrator = new(succeeds: true);
+        StubIssueContentQueries issueContent = new(
+            Result<IssueContent>.Fail(new Error("GitHub.Unexpected", "The provider returned 502.")));
+        IssueClaimedHandler sut = BuildRestrictedHandler(orchestrator, issueContentQueries: issueContent);
+
+        // Act
+        await sut.HandleAsync(BuildEvent(), TestContext.Current.CancellationToken);
+        _dbContext.ChangeTracker.Clear();
+
+        // Assert
+        WorkerRun run = await _dbContext.Set<WorkerRun>().SingleAsync(TestContext.Current.CancellationToken);
+        run.ShouldSatisfyAllConditions(
+            () => run.ShouldBeOfType<FailedRun>().Reason.ShouldBeOfType<FailureReason.ProviderError>()
+                .Message.ShouldContain("The provider returned 502."),
+            () => orchestrator.LastSpec.ShouldBeNull());
+    }
+
     private sealed class StubPostExitProviderQueries(bool branchCreationSucceeds) : IPostExitProviderQueries
     {
+        public int CreateBranchCallCount { get; private set; }
+
         public Task<Result<bool>> CreateBranchAsync(
             MonitoredRepositoryId repositoryId,
             string branchName,
             CancellationToken cancellationToken)
         {
+            CreateBranchCallCount++;
             Result<bool> result = branchCreationSucceeds
                 ? Result<bool>.Ok(true)
                 : Result<bool>.Fail(new Error("Provider.BranchCreationFailed", "Branch creation failed"));

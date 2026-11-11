@@ -1713,6 +1713,7 @@ describe('IssueDetailComponent — cancel run', () => {
   function runDetail(overrides: Record<string, unknown> = {}) {
     return {
       workerRunId: 'run-cancel',
+      role: 'implement',
       issueId: 'abc123',
       state: 'running',
       failureCategory: null,
@@ -2008,5 +2009,88 @@ describe('IssueDetailComponent — retry fresh', () => {
     // Assert
     expect(retryIssueFresh).not.toHaveBeenCalled();
     expect(dialog()?.open).toBe(false);
+  });
+});
+
+describe('IssueDetailComponent — run role tag', () => {
+  function runDetail(overrides: Record<string, unknown> = {}) {
+    return {
+      workerRunId: 'run-role',
+      issueId: 'abc123',
+      role: 'triage',
+      state: 'failed',
+      failureCategory: 'timeout',
+      failureSummary: 'The run exceeded the 60 minute timeout.',
+      resultText: 'Partial work done.',
+      subtype: null,
+      isError: null,
+      durationMs: null,
+      numTurns: null,
+      totalCostUsd: null,
+      inputTokens: null,
+      outputTokens: null,
+      lastActivityAt: null,
+      hasStoredLog: false,
+      cancelRequestedAt: null,
+      ...overrides,
+    };
+  }
+
+  function setup(run: ReturnType<typeof runDetail> | null) {
+    TestBed.resetTestingModule();
+    TestBed.configureTestingModule({
+      imports: [IssueDetailComponent],
+      providers: [
+        { provide: IssueService, useValue: { retrying: signal(false), retryError: signal(null), retrySuccess: signal(null) } },
+        WorkerSignalRService,
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        { provide: IssueSignalRService, useValue: mockIssueSignalRService },
+        { provide: WorkerRunService, useValue: { getDetail: () => of(run), getLog: () => of(null) } },
+        { provide: WORKER_HUB_FACTORY, useValue: () => mockWorkerHub },
+      ],
+    });
+    const fixture = TestBed.createComponent(IssueDetailComponent);
+    fixture.componentRef.setInput('detail', {
+      ...mockDetail,
+      state: 'failed',
+      stateDetails: { ...mockStateDetails, workerRunId: 'run-role' },
+    });
+    fixture.componentRef.setInput('loading', false);
+    fixture.componentRef.setInput('error', null);
+    fixture.detectChanges();
+    return fixture.nativeElement as HTMLElement;
+  }
+
+  afterEach(() => TestBed.resetTestingModule());
+
+  it('should show a Run header with the run role tag', () => {
+    // Act
+    const el = setup(runDetail());
+
+    // Assert
+    const header = el.querySelector('.issue-detail__worker-run .issue-detail__run-header');
+    expect(header?.querySelector('.issue-detail__field-key')?.textContent?.trim()).toBe('Run');
+    expect(header?.querySelector('fd-role-tag')?.textContent).toBe('Role: triage');
+  });
+
+  it('should place the Run header above the failure category and result', () => {
+    // Act
+    const el = setup(runDetail());
+
+    // Assert
+    const block = el.querySelector('.issue-detail__worker-run');
+    expect(block?.firstElementChild?.classList.contains('issue-detail__run-header')).toBe(true);
+    expect(block?.querySelector('.issue-detail__failure-category')).not.toBeNull();
+    expect(block?.querySelector('.issue-detail__result-text')).not.toBeNull();
+  });
+
+  it('should show no role tag when the run detail is unavailable', () => {
+    // Act
+    const el = setup(null);
+
+    // Assert
+    expect(el.querySelector('.issue-detail__run-header')).toBeNull();
+    expect(el.querySelector('fd-role-tag')).toBeNull();
   });
 });

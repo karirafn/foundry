@@ -224,6 +224,7 @@ internal static class WorkerRoleCatalogReader
 
         return Result<WorkerRoleDefinition>.Ok(new WorkerRoleDefinition(
             role,
+            role.Capability,
             plugin.Value,
             systemPrompt,
             taskPrompt,

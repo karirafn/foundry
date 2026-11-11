@@ -6,6 +6,7 @@ import { WorkerRunDetail } from './worker-run.model';
 
 const mockDetail: WorkerRunDetail = {
   workerRunId: 'run-abc',
+  role: 'implement',
   issueId: 'issue-1',
   state: 'failed',
   failureCategory: 'non_zero_exit',

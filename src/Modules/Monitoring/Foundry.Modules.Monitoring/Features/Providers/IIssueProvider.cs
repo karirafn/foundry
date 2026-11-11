@@ -57,6 +57,19 @@ internal interface IIssueProvider
         => Task.FromResult(Result<IReadOnlyList<ProviderComment>>.Fail(IssueFeedbackErrors.NotSupported()));
 
     /// <summary>
+    /// Reads an issue's title, body and every comment on its thread (paged, oldest first), whoever wrote them,
+    /// leaving out provider system notes. Restricted worker runs get the issue from this read rather than from
+    /// the provider (ADR 0098).
+    /// </summary>
+    /// <remarks>Providers without an issue-content reader keep this default, which fails with
+    /// <see cref="IssueContentErrors.NotSupportedCode"/> without any provider call.</remarks>
+    Task<Result<ProviderIssueContent>> GetIssueContentAsync(
+        RepositorySlug slug,
+        int issueNumber,
+        CancellationToken cancellationToken)
+        => Task.FromResult(Result<ProviderIssueContent>.Fail(IssueContentErrors.NotSupported()));
+
+    /// <summary>
     /// Posts <paramref name="body"/> to <paramref name="thread"/> with the account PAT and returns the
     /// provider's ID of the new comment, which the caller records with <see cref="PostedCommentRegistry"/>
     /// so no comment reader treats it as feedback. A failure is <see cref="CommentPostErrors.TransientCode"/>

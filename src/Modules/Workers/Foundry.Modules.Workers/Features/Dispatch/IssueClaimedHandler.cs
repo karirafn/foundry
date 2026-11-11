@@ -33,6 +33,7 @@ internal sealed class IssueClaimedHandler(
     IFailingJobLogQueries failingJobLogQueries,
     IWorkerRoleCatalogStore roleCatalog,
     IRepositoryDispatchQueries repositoryDispatchQueries,
+    IIssueContentQueries issueContentQueries,
     ILogger<IssueClaimedHandler> logger) : IIntegrationEventHandler<IssueClaimed>
 {
     public async Task HandleAsync(IssueClaimed @event, CancellationToken cancellationToken)
@@ -76,25 +77,42 @@ internal sealed class IssueClaimedHandler(
         dbContext.Set<WorkerRun>().Add(startingRun);
         await dbContext.SaveChangesAsync(cancellationToken);
 
-        Result<bool> branchResult = await postExitProviderQueries.CreateBranchAsync(
-            claimed.MonitoredRepositoryId,
-            claimed.BranchName.Value,
-            cancellationToken);
+        // The profile comes from the role's definition, never its name (ADR 0098). A role the catalog does not hold is
+        // failed by BuildSpecAsync; until then it is treated as Full, as every run was before profiles.
+        bool restricted = catalog?.Content.Find(role) is { Capability: WorkerCapability.Restricted };
+        IssueContent? issueContent = null;
 
-        if (branchResult is Result<bool>.Failure branchFailure)
+        if (restricted)
         {
-            FailedRun branchFailedRun = startingRun.Fail(new FailureReason.ProviderError(branchFailure.Error.Message));
-            await dbContext.TransitionAsync(startingRun, branchFailedRun, domainEventDispatcher, cancellationToken);
-
-            logger.LogWarning(
-                "Worker run {WorkerRunId} aborted for issue #{IssueNumber}: branch pre-creation failed: {Error}",
-                startingRun.Id,
+            // A restricted run gets no branch and cannot reach the provider, so the issue it judges is read here.
+            Result<IssueContent> contentResult = await issueContentQueries.GetIssueContentAsync(
+                claimed.MonitoredRepositoryId,
                 claimed.IssueNumber,
-                branchFailure.Error.Message);
-            return;
+                cancellationToken);
+
+            if (contentResult is Result<IssueContent>.Failure contentFailure)
+            {
+                await FailBeforeContainerAsync(startingRun, claimed, "reading the issue content failed", contentFailure.Error, cancellationToken);
+                return;
+            }
+
+            issueContent = ((Result<IssueContent>.Success)contentResult).Value;
+        }
+        else
+        {
+            Result<bool> branchResult = await postExitProviderQueries.CreateBranchAsync(
+                claimed.MonitoredRepositoryId,
+                claimed.BranchName.Value,
+                cancellationToken);
+
+            if (branchResult is Result<bool>.Failure branchFailure)
+            {
+                await FailBeforeContainerAsync(startingRun, claimed, "branch pre-creation failed", branchFailure.Error, cancellationToken);
+                return;
+            }
         }
 
-        Result<WorkerContainerSpec> specResult = await BuildSpecAsync(startingRun, claimed, catalog, cancellationToken);
+        Result<WorkerContainerSpec> specResult = await BuildSpecAsync(startingRun, claimed, catalog, issueContent, cancellationToken);
 
         if (specResult is Result<WorkerContainerSpec>.Failure specFailure)
         {
@@ -139,6 +157,24 @@ internal sealed class IssueClaimedHandler(
                 claimed.IssueNumber,
                 failure.Error.Message);
         }
+    }
+
+    private async Task FailBeforeContainerAsync(
+        StartingRun startingRun,
+        ClaimedIssueDispatch claimed,
+        string step,
+        Error error,
+        CancellationToken cancellationToken)
+    {
+        FailedRun failedRun = startingRun.Fail(new FailureReason.ProviderError(error.Message));
+        await dbContext.TransitionAsync(startingRun, failedRun, domainEventDispatcher, cancellationToken);
+
+        logger.LogWarning(
+            "Worker run {WorkerRunId} aborted for issue #{IssueNumber}: {Step}: {Error}",
+            startingRun.Id,
+            claimed.IssueNumber,
+            step,
+            error.Message);
     }
 
     /// <summary>The role's model setting (ADR 0095); empty when it was never set, so the CLI's account default applies.</summary>
@@ -204,6 +240,7 @@ internal sealed class IssueClaimedHandler(
         StartingRun startingRun,
         ClaimedIssueDispatch claimed,
         WorkerRoleCatalog? catalog,
+        IssueContent? issueContent,
         CancellationToken cancellationToken)
     {
         if (catalog?.Content is not { } content || content.Find(startingRun.Role) is not { } role)
@@ -240,17 +277,26 @@ internal sealed class IssueClaimedHandler(
         WorkerResourceLimitsSnapshot limits = await settingsQueries.GetWorkerResourceLimitsAsync(cancellationToken);
         IReadOnlyList<FailingJobLog> failingJobLogs = await ReadFailingJobLogsAsync(claimed, cancellationToken);
 
-        Result<string> systemPromptResult = SystemPromptBuilder.Build(
-            principles: content.Principles,
-            issueNumber: claimed.IssueNumber,
-            systemPromptTemplate: role.SystemPromptTemplate,
-            claimed.Context,
-            claimed.IssueApiUrl,
-            timeoutMinutes,
-            installsDocker,
-            installsDotnet,
-            failingJobLogs,
-            claimed.Clarifications ?? []);
+        bool restricted = role.Capability == WorkerCapability.Restricted;
+
+        Result<string> systemPromptResult = restricted
+            ? SystemPromptBuilder.BuildRestricted(
+                principles: content.Principles,
+                issueNumber: claimed.IssueNumber,
+                systemPromptTemplate: role.SystemPromptTemplate,
+                issueContent ?? throw new UnreachableException("A restricted run reaches its container spec only with its issue content."),
+                installsDotnet)
+            : SystemPromptBuilder.Build(
+                principles: content.Principles,
+                issueNumber: claimed.IssueNumber,
+                systemPromptTemplate: role.SystemPromptTemplate,
+                claimed.Context,
+                claimed.IssueApiUrl,
+                timeoutMinutes,
+                installsDocker,
+                installsDotnet,
+                failingJobLogs,
+                claimed.Clarifications ?? []);
 
         if (systemPromptResult is not Result<string>.Success systemPromptSuccess)
         {
@@ -288,12 +334,18 @@ internal sealed class IssueClaimedHandler(
             ["CLONE_URL"] = claimed.CloneUrl.ToString(),
             ["ISSUE_NUMBER"] = claimed.IssueNumber.ToString(CultureInfo.InvariantCulture),
             ["ISSUE_API_URL"] = claimed.IssueApiUrl,
-            ["BRANCH_NAME"] = claimed.BranchName.Value,
             ["SYSTEM_PROMPT"] = systemPrompt,
             ["WORKER_PROMPT"] = workerPrompt,
             ["WORKER_ROLE"] = role.Role.Name,
+            ["WORKER_CAPABILITY"] = role.Capability.ToName(),
             ["CLAUDE_SETTINGS_JSON"] = WorkerSettingsBuilder.Build(claudeCode, model),
         };
+
+        // A restricted run gets no branch and no provider token: GIT_PAT only clones, and the entrypoint unsets it.
+        if (!restricted)
+        {
+            envVars["BRANCH_NAME"] = claimed.BranchName.Value;
+        }
 
         List<VolumeMount> volumeMounts = [];
 
@@ -311,11 +363,13 @@ internal sealed class IssueClaimedHandler(
 
         switch (claimed.Provider)
         {
-            case WorkerProvider.GitHub:
+            case WorkerProvider.GitHub when !restricted:
                 envVars["GH_TOKEN"] = gitPat;
                 break;
-            case WorkerProvider.GitLab:
+            case WorkerProvider.GitLab when !restricted:
                 envVars["GITLAB_TOKEN"] = gitPat;
+                break;
+            case WorkerProvider.GitHub or WorkerProvider.GitLab:
                 break;
             default:
                 throw new UnreachableException($"Unhandled WorkerProvider variant: {claimed.Provider.GetType().Name}");

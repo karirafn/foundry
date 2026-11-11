@@ -107,6 +107,7 @@ internal sealed class AgentActivityFollowerService(
             _followers[run.Id] = RunFollower.Start(
                 run.Id,
                 run.IssueId.Value,
+                run.Role.Name,
                 run.ContainerId.Value,
                 orchestrator,
                 timeProvider,
@@ -152,27 +153,31 @@ internal sealed class AgentActivityFollowerService(
         private bool _changed;
         private volatile bool _faulted;
 
-        private RunFollower(WorkerRunId workerRunId, Guid issueId)
+        private RunFollower(WorkerRunId workerRunId, Guid issueId, string role)
         {
             WorkerRunId = workerRunId;
             IssueId = issueId;
+            Role = role;
         }
 
         public WorkerRunId WorkerRunId { get; }
 
         public Guid IssueId { get; }
 
+        public string Role { get; }
+
         public bool IsFaulted => _faulted;
 
         public static RunFollower Start(
             WorkerRunId workerRunId,
             Guid issueId,
+            string role,
             string containerId,
             IWorkerOrchestrator orchestrator,
             TimeProvider timeProvider,
             ILogger logger)
         {
-            RunFollower follower = new(workerRunId, issueId);
+            RunFollower follower = new(workerRunId, issueId, role);
             follower._pump = Task.Run(() => follower.PumpAsync(containerId, orchestrator, timeProvider, logger));
             return follower;
         }
@@ -187,7 +192,7 @@ internal sealed class AgentActivityFollowerService(
                 }
 
                 _changed = false;
-                return _projection.Snapshot(WorkerRunId, IssueId);
+                return _projection.Snapshot(WorkerRunId, IssueId, Role);
             }
         }
 

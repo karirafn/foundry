@@ -1,0 +1,5 @@
+{
+  "name": "foundry-role-triage",
+  "description": "Judges whether an issue is ready to implement and classifies it, reading the issue Foundry supplies and the repository checkout. Returns a verdict only.",
+  "version": "1.0.0"
+}

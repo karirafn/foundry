@@ -34,6 +34,7 @@ function buildActivity(workerRunId: string, issueId: string): AgentActivity {
   return {
     workerRunId,
     issueId,
+    role: 'implement',
     lastEventAt: null,
     tasks: [],
     currentTask: null,

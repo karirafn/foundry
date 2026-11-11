@@ -3,6 +3,7 @@ export type WorkerRunState = 'starting' | 'running' | 'completed' | 'failed';
 export interface WorkerRunDetail {
   readonly workerRunId: string;
   readonly issueId: string;
+  readonly role: string;
   readonly state: WorkerRunState;
   readonly failureCategory: string | null;
   readonly failureSummary: string | null;

@@ -1,5 +1,6 @@
 import { ChangeDetectionStrategy, Component, InputSignal, Signal, computed, input } from '@angular/core';
 import { AGENT_SILENCE_THRESHOLD_MINUTES, ActiveSubagent, AgentTaskItem } from '../../../core/models/agent-activity.model';
+import { RoleTagComponent } from '../../../shared/components/role-tag/role-tag';
 import { SafeHrefPipe } from '../../../shared/pipes/safe-href.pipe';
 import {
   FLOOR_SUBAGENT_VISIBLE_LIMIT,
@@ -34,7 +35,7 @@ function groupSubagents(label: string, noun: string, subagents: readonly ActiveS
 /** One Floor lane: a single active run's live Agent Activity. */
 @Component({
   selector: 'fd-floor-lane',
-  imports: [SafeHrefPipe],
+  imports: [RoleTagComponent, SafeHrefPipe],
   templateUrl: './floor-lane.html',
   styleUrl: './floor-lane.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,

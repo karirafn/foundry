@@ -12,9 +12,13 @@ internal sealed record RolePlugin(
     IReadOnlyList<RolePluginComponent> Skills,
     IReadOnlyList<RolePluginComponent> Agents);
 
-/// <summary>Everything a role folder contributes to a run: its plugin, prompt templates and verdict schema.</summary>
+/// <summary>
+/// Everything a role contributes to a run: its plugin, prompt templates and verdict schema from its folder, and its
+/// <see cref="WorkerCapability"/> from code.
+/// </summary>
 internal sealed record WorkerRoleDefinition(
     WorkerRole Role,
+    WorkerCapability Capability,
     RolePlugin Plugin,
     string SystemPromptTemplate,
     string TaskPromptTemplate,

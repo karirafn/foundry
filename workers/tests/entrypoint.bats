@@ -47,6 +47,7 @@ setup() {
     make_role_fixture "$BATS_TEST_TMPDIR/roles" implement shared
     export FOUNDRY_ROLES_DIR="$BATS_TEST_TMPDIR/roles"
     export WORKER_ROLE="implement"
+    export WORKER_CAPABILITY="full"
 
     # The suite also runs inside a live worker, whose /workspace is the agent's own
     # checkout (and whose image restores any solution found there).  Redirect the
@@ -2400,5 +2401,213 @@ expected_verdict_schema() {
 
     [ "$status" -ne 0 ]
     [[ "$output" == *"FOUNDRY_BOOTSTRAP_FAILED stage=role"* ]]
+    [ ! -f "$BATS_TEST_TMPDIR/claude_called" ]
+}
+
+# ---------------------------------------------------------------------------
+# Capability profile tests (ADR 0098)
+#
+# The entrypoint chooses the claude flags, the clone depth and the provider
+# credentials from WORKER_CAPABILITY, never from WORKER_ROLE.
+# ---------------------------------------------------------------------------
+
+# Write a fake claude that records, per invocation, its argv to claude_args and
+# whether each provider credential reached it to claude_env.  The first call
+# fails transiently and the second (-c resume) succeeds, so both invocations run.
+make_fake_claude_record_args_and_env_transient_then_success() {
+    local args_file="$BATS_TEST_TMPDIR/claude_args"
+    local env_file="$BATS_TEST_TMPDIR/claude_env"
+    cat > "$FAKE_BIN_DIR/claude" <<FAKE
+#!/bin/bash
+printf '%s\n' "\$*" >> "${args_file}"
+printf 'GH_TOKEN=%s GITLAB_TOKEN=%s GIT_PAT=%s BRANCH_NAME=%s\n' \
+    "\${GH_TOKEN-unset}" "\${GITLAB_TOKEN-unset}" "\${GIT_PAT-unset}" "\${BRANCH_NAME-unset}" >> "${env_file}"
+if [ "\$(wc -l < "${args_file}")" -eq 1 ]; then
+    printf '%s\n' '{"is_error":true,"api_error_status":503,"result":"API Error","type":"result"}'
+    exit 1
+fi
+printf '%s\n' '{"is_error":false,"result":"Completed","subtype":"success","type":"result"}'
+exit 0
+FAKE
+    chmod +x "$FAKE_BIN_DIR/claude"
+}
+
+# Write a fake git that records every invocation's argv to git_args.
+make_fake_git_record_args() {
+    local args_file="$BATS_TEST_TMPDIR/git_args"
+    cat > "$FAKE_BIN_DIR/git" <<FAKE
+#!/bin/bash
+printf '%s\n' "\$*" >> "${args_file}"
+case "\${1:-}" in
+    clone) mkdir -p "\$FOUNDRY_WORKSPACE_DIR" ;;
+esac
+exit 0
+FAKE
+    chmod +x "$FAKE_BIN_DIR/git"
+}
+
+# Fake gh/glab that record they were asked to set up push credentials.
+make_fake_provider_clis_record_calls() {
+    local calls_file="$BATS_TEST_TMPDIR/provider_cli_calls"
+    local cli
+    for cli in gh glab; do
+        cat > "$FAKE_BIN_DIR/$cli" <<FAKE
+#!/bin/bash
+printf '%s %s\n' "$cli" "\$*" >> "${calls_file}"
+exit 0
+FAKE
+        chmod +x "$FAKE_BIN_DIR/$cli"
+    done
+}
+
+@test "capability: a restricted run starts both claude invocations with --restricted --strict-mcp-config" {
+    set_required_env
+    export WORKER_CAPABILITY="restricted"
+    make_fake_git
+    make_fake_claude_record_args_and_env_transient_then_success
+
+    run bash "$ENTRYPOINT"
+
+    [ "$status" -eq 0 ]
+    [ "$(wc -l < "$BATS_TEST_TMPDIR/claude_args")" -eq 2 ]
+    local first resume
+    first="$(sed -n 1p "$BATS_TEST_TMPDIR/claude_args")"
+    resume="$(sed -n 2p "$BATS_TEST_TMPDIR/claude_args")"
+    [[ "$first" =~ (^| )--restricted( |$) ]]
+    [[ "$first" =~ (^| )--strict-mcp-config( |$) ]]
+    [[ "$resume" =~ (^| )-c( |$) ]]
+    [[ "$resume" =~ (^| )--restricted( |$) ]]
+    [[ "$resume" =~ (^| )--strict-mcp-config( |$) ]]
+}
+
+@test "capability: a restricted run never passes --dangerously-skip-permissions" {
+    set_required_env
+    export WORKER_CAPABILITY="restricted"
+    make_fake_git
+    make_fake_claude_record_args_and_env_transient_then_success
+
+    run bash "$ENTRYPOINT"
+
+    [ "$status" -eq 0 ]
+    [ "$(wc -l < "$BATS_TEST_TMPDIR/claude_args")" -eq 2 ]
+    ! grep -q -- "--dangerously-skip-permissions" "$BATS_TEST_TMPDIR/claude_args"
+}
+
+@test "capability: a restricted run passes the role's verdict schema to both claude invocations" {
+    set_required_env
+    export WORKER_CAPABILITY="restricted"
+    make_fake_git
+    make_fake_claude_record_args_and_env_transient_then_success
+    printf '%s\n' '{"type":"object","required":["outcome"]}' > "$FOUNDRY_ROLES_DIR/implement/verdict.schema.json"
+
+    run bash "$ENTRYPOINT"
+
+    [ "$status" -eq 0 ]
+    [[ "$(sed -n 1p "$BATS_TEST_TMPDIR/claude_args")" == *'--json-schema {"type":"object","required":["outcome"]}'* ]]
+    [[ "$(sed -n 2p "$BATS_TEST_TMPDIR/claude_args")" == *'--json-schema {"type":"object","required":["outcome"]}'* ]]
+}
+
+@test "capability: a restricted run reaches claude with no provider token, no GIT_PAT and no branch" {
+    set_required_env
+    export WORKER_CAPABILITY="restricted"
+    export GH_TOKEN="ghp_leaked"
+    export GITLAB_TOKEN="glpat-leaked"
+    export BRANCH_NAME="feat/1-leaked"
+    make_fake_git
+    make_fake_provider_clis_record_calls
+    make_fake_claude_record_args_and_env_transient_then_success
+
+    run bash "$ENTRYPOINT"
+
+    [ "$status" -eq 0 ]
+    [ "$(sort -u "$BATS_TEST_TMPDIR/claude_env")" = "GH_TOKEN=unset GITLAB_TOKEN=unset GIT_PAT=unset BRANCH_NAME=unset" ]
+    [ ! -f "$BATS_TEST_TMPDIR/provider_cli_calls" ]
+}
+
+@test "capability: a restricted run shallow-clones the default branch and switches to no branch" {
+    set_required_env
+    export WORKER_CAPABILITY="restricted"
+    export BRANCH_NAME="feat/1-leaked"
+    make_fake_git_record_args
+    make_fake_claude_record_args
+
+    run bash "$ENTRYPOINT"
+
+    [ "$status" -eq 0 ]
+    local clone
+    clone="$(grep '^clone ' "$BATS_TEST_TMPDIR/git_args")"
+    [[ "$clone" =~ (^| )--depth\ 1( |$) ]]
+    [[ "$clone" =~ (^| )--single-branch( |$) ]]
+    [[ "$clone" != *"--branch"* ]]
+    ! grep -q '^switch ' "$BATS_TEST_TMPDIR/git_args"
+}
+
+@test "capability: a full run keeps --dangerously-skip-permissions and no restricted flags on both invocations" {
+    set_required_env
+    make_fake_git
+    make_fake_claude_record_args_and_env_transient_then_success
+
+    run bash "$ENTRYPOINT"
+
+    [ "$status" -eq 0 ]
+    [ "$(wc -l < "$BATS_TEST_TMPDIR/claude_args")" -eq 2 ]
+    [ "$(grep -c -- "--dangerously-skip-permissions" "$BATS_TEST_TMPDIR/claude_args")" -eq 2 ]
+    ! grep -q -- "--restricted" "$BATS_TEST_TMPDIR/claude_args"
+    ! grep -q -- "--strict-mcp-config" "$BATS_TEST_TMPDIR/claude_args"
+}
+
+@test "capability: a full run passes the same flags in the same order as before" {
+    set_required_env
+    make_fake_git
+    make_fake_claude_record_args_and_env_transient_then_success
+
+    run bash "$ENTRYPOINT"
+
+    [ "$status" -eq 0 ]
+    local plugins="--plugin-dir $FOUNDRY_ROLES_DIR/implement --plugin-dir $FOUNDRY_ROLES_DIR/shared"
+    [ "$(sed -n 1p "$BATS_TEST_TMPDIR/claude_args")" = "-p test-prompt --append-system-prompt test-system --dangerously-skip-permissions --output-format stream-json --verbose --max-turns 300 $plugins" ]
+    [ "$(sed -n 2p "$BATS_TEST_TMPDIR/claude_args")" = "-c -p test-prompt --dangerously-skip-permissions --output-format stream-json --verbose --max-turns 300 $plugins" ]
+}
+
+@test "capability: a full run keeps its provider token and a full clone" {
+    set_required_env
+    export GH_TOKEN="ghp_push"
+    make_fake_git_record_args
+    make_fake_provider_clis_record_calls
+    make_fake_claude_record_args_and_env_transient_then_success
+
+    run bash "$ENTRYPOINT"
+
+    [ "$status" -eq 0 ]
+    grep -q '^GH_TOKEN=ghp_push ' "$BATS_TEST_TMPDIR/claude_env"
+    grep -q '^gh auth setup-git' "$BATS_TEST_TMPDIR/provider_cli_calls"
+    ! grep '^clone ' "$BATS_TEST_TMPDIR/git_args" | grep -q -- "--depth"
+}
+
+@test "capability: a missing WORKER_CAPABILITY stops the entrypoint before cloning" {
+    set_required_env
+    unset WORKER_CAPABILITY
+    make_fake_git_record_args
+    make_fake_claude
+
+    run bash "$ENTRYPOINT"
+
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"WORKER_CAPABILITY is required"* ]]
+    [ ! -f "$BATS_TEST_TMPDIR/git_args" ]
+    [ ! -f "$BATS_TEST_TMPDIR/claude_called" ]
+}
+
+@test "capability: an unknown WORKER_CAPABILITY fails bootstrap at stage=role before cloning" {
+    set_required_env
+    export WORKER_CAPABILITY="admin"
+    make_fake_git_record_args
+    make_fake_claude
+
+    run bash "$ENTRYPOINT"
+
+    echo "OUT: $output" >&3
+    [[ "$output" == *"FOUNDRY_BOOTSTRAP_FAILED stage=role"* ]]
+    [ ! -f "$BATS_TEST_TMPDIR/git_args" ]
     [ ! -f "$BATS_TEST_TMPDIR/claude_called" ]
 }

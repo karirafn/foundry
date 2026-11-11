@@ -4,6 +4,7 @@ using System.Text.Json;
 using System.Text.RegularExpressions;
 
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
+using Foundry.Modules.Monitoring.Features.Providers;
 using Foundry.Modules.Monitoring.Features.Providers.Comments;
 using Foundry.Modules.Monitoring.Features.Providers.Feedback;
 using Foundry.Shared;
@@ -14,6 +15,43 @@ internal sealed partial class GitLabHttpClient
 {
     private const int IssueNotesPerPage = 100;
     private const int MaxIssueNotePages = 10;
+
+    /// <summary>
+    /// Reads an issue's title and description (<c>GET /projects/:id/issues/:issue_iid</c>). A missing description is empty.
+    /// </summary>
+    public async Task<Result<ProviderIssueText>> GetIssueTextAsync(
+        Uri apiBaseUrl,
+        RepositorySlug slug,
+        int issueIid,
+        string token,
+        CancellationToken cancellationToken)
+    {
+        if (apiBaseUrl.Scheme is not "https")
+        {
+            return Result<ProviderIssueText>.Fail(GitLabErrors.InvalidBaseUrl);
+        }
+
+        string encodedPath = Uri.EscapeDataString(slug.FullPath);
+        Uri requestUri = new(EnsureTrailingSlash(apiBaseUrl), $"projects/{encodedPath}/issues/{issueIid}");
+
+        using HttpRequestMessage request = new(HttpMethod.Get, requestUri);
+        AddCommonHeaders(request, token);
+
+        using HttpResponseMessage response = await httpClient.SendAsync(request, cancellationToken);
+
+        if (!response.IsSuccessStatusCode)
+        {
+            return Result<ProviderIssueText>.Fail(ErrorFromNonSuccess(response));
+        }
+
+        RecordRestHeadroom(response);
+
+        string body = await response.Content.ReadAsStringAsync(cancellationToken);
+        GitLabIssueTextDto? issue = JsonSerializer.Deserialize<GitLabIssueTextDto>(body, JsonOptions);
+
+        return Result<ProviderIssueText>.Ok(
+            new ProviderIssueText(issue?.Title ?? string.Empty, issue?.Description ?? string.Empty));
+    }
 
     /// <summary>
     /// Lists an issue's notes (<c>GET /projects/:id/issues/:issue_iid/notes</c>), oldest first. GitLab has no
@@ -174,4 +212,6 @@ internal sealed partial class GitLabHttpClient
     private static partial Regex AccessTokenBotUsername();
 
     private sealed record GitLabNoteWriteDto(string Body);
+
+    private sealed record GitLabIssueTextDto(string? Title, string? Description);
 }

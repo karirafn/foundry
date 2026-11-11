@@ -4,10 +4,12 @@ namespace Foundry.Modules.Workers.Contracts;
 /// Live, in-memory projection of a running worker's stream-json events, broadcast to the
 /// dashboard as the run progresses. Presentation-only: never persisted, rebuilt from the
 /// container log after a restart. Text fields are summaries, never tool result bodies.
+/// <c>Role</c> is the Worker Role the run was dispatched with.
 /// </summary>
 public sealed record AgentActivity(
     WorkerRunId WorkerRunId,
     Guid IssueId,
+    string Role,
     DateTimeOffset? LastEventAt,
     IReadOnlyList<AgentTaskItem> Tasks,
     AgentTaskItem? CurrentTask,
