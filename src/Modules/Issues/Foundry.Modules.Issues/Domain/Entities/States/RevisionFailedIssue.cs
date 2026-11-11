@@ -45,15 +45,7 @@ public sealed class RevisionFailedIssue : Issue
         DateTimeOffset failedAt)
     {
         RevisionFailedIssue failed = new(source.Id);
-        failed.SetSharedProperties(
-            source.MonitoredRepositoryId,
-            source.IssueNumber,
-            source.Title,
-            source.Author,
-            source.Url,
-            source.Labels,
-            source.DetectedAt,
-            source.KindClassification);
+        failed.CopySharedPropertiesFrom(source);
         failed.WorkerRunId = source.WorkerRunId;
         failed.BranchName = source.BranchName;
         failed.PullRequestUrl = source.PullRequestUrl;

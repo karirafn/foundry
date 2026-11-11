@@ -165,6 +165,9 @@ public sealed class NudgeCallCap : IAsyncDisposable
 
     private sealed class FixedIssueQueries(IReadOnlyList<ChecksPendingIssueInfo> checksPending) : IIssueQueries
     {
+        public Task<IReadOnlyList<AwaitingInputIssueInfo>> GetAwaitingInputIssuesAsync(MonitoredRepositoryId repositoryId, CancellationToken cancellationToken) =>
+            Task.FromResult<IReadOnlyList<AwaitingInputIssueInfo>>([]);
+
         public Task<IReadOnlySet<int>> GetKnownIssueNumbersAsync(
             MonitoredRepositoryId repositoryId,
             CancellationToken cancellationToken)

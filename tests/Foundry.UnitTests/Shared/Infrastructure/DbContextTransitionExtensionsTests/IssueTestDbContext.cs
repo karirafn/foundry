@@ -40,6 +40,8 @@ internal sealed class IssueTestDbContext(DbContextOptions<IssueTestDbContext> op
                             : v.Split(',', StringSplitOptions.RemoveEmptyEntries)));
 
             builder.Ignore(x => x.KindClassification);
+            builder.Ignore(x => x.Clarifications);
+            builder.Ignore(x => x.OpenClarification);
             builder.Property<IssueKind?>("_labelledKind")
                 .HasConversion(
                     (ValueConverter)new ValueConverter<IssueKind, string>(

@@ -182,4 +182,24 @@ public sealed class IssueBuilder
     public UnchangedIssue Unchanged() => InProgress().MarkUnchanged();
 
     public CompletedIssue Completed() => Review().Complete(_completedAt);
+
+    /// <summary>The default questions an awaiting-input terminal asks.</summary>
+    public static IReadOnlyList<InputQuestion> DefaultQuestions { get; } =
+        [new InputQuestion("Which database?", "Two are configured.")];
+
+    /// <summary>An implement run that opened a pull request and then asked: resumes as a revision.</summary>
+    public AwaitingInputIssue AwaitingInput() =>
+        InProgress().MarkAwaitingInput(_branchName, _pullRequestUrl, branchHasCommits: true, DefaultQuestions, _runStartedAt);
+
+    /// <summary>An implement run that asked without opening a pull request: resumes as a continuation or fresh.</summary>
+    public AwaitingInputIssue AwaitingInputWithoutPullRequest(bool branchHasCommits) =>
+        InProgress().MarkAwaitingInput(_branchName, pullRequestUrl: null, branchHasCommits, DefaultQuestions, _runStartedAt);
+
+    /// <summary>An awaiting-input issue whose questions were posted at <paramref name="postedAt"/>.</summary>
+    public AwaitingInputIssue AwaitingInputPosted(DateTimeOffset postedAt, bool withPullRequest = true)
+    {
+        AwaitingInputIssue awaiting = withPullRequest ? AwaitingInput() : AwaitingInputWithoutPullRequest(branchHasCommits: true);
+        awaiting.RecordQuestionPosted(commentId: 1001, postedAt, commentUrl: null);
+        return awaiting;
+    }
 }

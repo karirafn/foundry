@@ -617,6 +617,9 @@ public sealed class WebhookBackstop : IAsyncDisposable
 
     private sealed class StubIssueQueries(IReadOnlySet<int> dispatchCandidates) : IIssueQueries
     {
+        public Task<IReadOnlyList<AwaitingInputIssueInfo>> GetAwaitingInputIssuesAsync(MonitoredRepositoryId repositoryId, CancellationToken cancellationToken) =>
+            Task.FromResult<IReadOnlyList<AwaitingInputIssueInfo>>([]);
+
         public Task<IReadOnlySet<int>> GetKnownIssueNumbersAsync(
             MonitoredRepositoryId repositoryId,
             CancellationToken cancellationToken)

@@ -44,15 +44,7 @@ public sealed class ReviewIssue : Issue
         DateTimeOffset feedbackCutoffAt)
     {
         ReviewIssue review = new(source.Id);
-        review.SetSharedProperties(
-            source.MonitoredRepositoryId,
-            source.IssueNumber,
-            source.Title,
-            source.Author,
-            source.Url,
-            source.Labels,
-            source.DetectedAt,
-            source.KindClassification);
+        review.CopySharedPropertiesFrom(source);
         review.WorkerRunId = source.WorkerRunId;
         review.BranchName = branchName;
         review.PullRequestUrl = pullRequestUrl;
@@ -66,15 +58,7 @@ public sealed class ReviewIssue : Issue
         DateTimeOffset feedbackCutoffAt)
     {
         ReviewIssue review = new(source.Id);
-        review.SetSharedProperties(
-            source.MonitoredRepositoryId,
-            source.IssueNumber,
-            source.Title,
-            source.Author,
-            source.Url,
-            source.Labels,
-            source.DetectedAt,
-            source.KindClassification);
+        review.CopySharedPropertiesFrom(source);
         review.WorkerRunId = source.WorkerRunId;
         review.BranchName = source.BranchName;
         review.PullRequestUrl = source.PullRequestUrl;
@@ -89,15 +73,7 @@ public sealed class ReviewIssue : Issue
         ChecksOutcome checksOutcome)
     {
         ReviewIssue review = new(source.Id);
-        review.SetSharedProperties(
-            source.MonitoredRepositoryId,
-            source.IssueNumber,
-            source.Title,
-            source.Author,
-            source.Url,
-            source.Labels,
-            source.DetectedAt,
-            source.KindClassification);
+        review.CopySharedPropertiesFrom(source);
         review.WorkerRunId = source.WorkerRunId;
         review.BranchName = source.BranchName;
         review.PullRequestUrl = source.PullRequestUrl;

@@ -23,6 +23,9 @@ internal enum PromptSectionCondition
 
     /// <summary>A revision run resolving a conflict from Foundry's post-run rebase.</summary>
     RebaseConflict,
+
+    /// <summary>The issue has a clarification log: earlier runs asked a person questions (ADR 0096).</summary>
+    Clarifications,
 }
 
 /// <summary>A system-prompt section Foundry adds to the worker prompt, as shown on the dashboard's role cards.</summary>

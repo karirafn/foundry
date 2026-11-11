@@ -20,7 +20,7 @@ using Xunit;
 
 namespace Foundry.UnitTests.Modules.Workers.Features.Outcome.WorkerOutcomeResolverTests;
 
-public sealed class ResolveAsync
+public sealed partial class ResolveAsync
 {
     private const string DefaultBranchName = "feat/1-my-feature";
     private const string PrUrl = "https://github.com/owner/repo/pull/42";

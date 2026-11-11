@@ -1,5 +1,6 @@
 using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Issues.Domain.Entities;
+using Foundry.Modules.Issues.Domain.ValueObjects;
 
 namespace Foundry.Modules.Issues.Domain.Entities.States;
 
@@ -25,15 +26,7 @@ public sealed class CompletedIssue : Issue
     internal static CompletedIssue FromReview(ReviewIssue source, DateTimeOffset completedAt)
     {
         CompletedIssue completed = new(source.Id);
-        completed.SetSharedProperties(
-            source.MonitoredRepositoryId,
-            source.IssueNumber,
-            source.Title,
-            source.Author,
-            source.Url,
-            source.Labels,
-            source.DetectedAt,
-            source.KindClassification);
+        completed.CopySharedPropertiesFrom(source);
         completed.BranchName = source.BranchName;
         completed.PullRequestUrl = source.PullRequestUrl;
         completed.CompletedAt = completedAt;
@@ -43,15 +36,7 @@ public sealed class CompletedIssue : Issue
     internal static CompletedIssue FromRebasePending(RebasePendingIssue source, DateTimeOffset completedAt)
     {
         CompletedIssue completed = new(source.Id);
-        completed.SetSharedProperties(
-            source.MonitoredRepositoryId,
-            source.IssueNumber,
-            source.Title,
-            source.Author,
-            source.Url,
-            source.Labels,
-            source.DetectedAt,
-            source.KindClassification);
+        completed.CopySharedPropertiesFrom(source);
         completed.BranchName = source.BranchName;
         completed.PullRequestUrl = source.PullRequestUrl;
         completed.CompletedAt = completedAt;
@@ -61,17 +46,23 @@ public sealed class CompletedIssue : Issue
     internal static CompletedIssue FromChecksPending(ChecksPendingIssue source, DateTimeOffset completedAt)
     {
         CompletedIssue completed = new(source.Id);
-        completed.SetSharedProperties(
-            source.MonitoredRepositoryId,
-            source.IssueNumber,
-            source.Title,
-            source.Author,
-            source.Url,
-            source.Labels,
-            source.DetectedAt,
-            source.KindClassification);
+        completed.CopySharedPropertiesFrom(source);
         completed.BranchName = source.BranchName;
         completed.PullRequestUrl = source.PullRequestUrl;
+        completed.CompletedAt = completedAt;
+        return completed;
+    }
+
+    internal static CompletedIssue FromAwaitingInput(AwaitingInputIssue source, DateTimeOffset completedAt)
+    {
+        CompletedIssue completed = new(source.Id);
+        completed.CopySharedPropertiesFrom(source);
+        (completed.BranchName, completed.PullRequestUrl) = source.ResumeTarget switch
+        {
+            ResumeTarget.Revision revision => (revision.BranchName, revision.PullRequestUrl),
+            ResumeTarget.Continuation continuation => (continuation.BranchName, string.Empty),
+            _ => (string.Empty, string.Empty),
+        };
         completed.CompletedAt = completedAt;
         return completed;
     }
@@ -83,15 +74,7 @@ public sealed class CompletedIssue : Issue
         DateTimeOffset completedAt)
     {
         CompletedIssue completed = new(source.Id);
-        completed.SetSharedProperties(
-            source.MonitoredRepositoryId,
-            source.IssueNumber,
-            source.Title,
-            source.Author,
-            source.Url,
-            source.Labels,
-            source.DetectedAt,
-            source.KindClassification);
+        completed.CopySharedPropertiesFrom(source);
         completed.BranchName = branchName;
         completed.PullRequestUrl = pullRequestUrl;
         completed.CompletedAt = completedAt;

@@ -74,6 +74,9 @@ public sealed class IssueConfiguration : IEntityTypeConfiguration<Issue>
             t.HasCheckConstraint(
                 "ck_issues_rebase_pending_fields",
                 "state <> 'rebase_pending' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND pull_request_url IS NOT NULL AND entered_rebase_pending_at IS NOT NULL AND feedback_cutoff_at IS NOT NULL)");
+            t.HasCheckConstraint(
+                "ck_issues_awaiting_input_fields",
+                "state <> 'awaiting_input' OR (worker_run_id IS NOT NULL AND resume_target IS NOT NULL AND question_post IS NOT NULL)");
         });
 
         builder.HasKey(i => i.Id);
@@ -146,6 +149,15 @@ public sealed class IssueConfiguration : IEntityTypeConfiguration<Issue>
             .HasDefaultValueSql("'[]'")
             .HasColumnName("blocked_by");
 
+        builder.Property(i => i.Clarifications)
+            .HasConversion(AwaitingInputJsonConversion.ClarificationsConverter, AwaitingInputJsonConversion.ClarificationsComparer)
+            .HasMaxLength(int.MaxValue)
+            .HasColumnType("TEXT")
+            .HasDefaultValueSql("'[]'")
+            .HasColumnName("clarifications");
+
+        builder.Ignore(i => i.OpenClarification);
+
         builder.Property(i => i.DetectedAt)
             .HasConversion(
                 dto => dto.UtcDateTime.ToString("O"),
@@ -182,6 +194,7 @@ public sealed class IssueConfiguration : IEntityTypeConfiguration<Issue>
             .HasValue<RevisionFailedIssue>("revision_failed")
             .HasValue<ChecksPendingIssue>("checks_pending")
             .HasValue<RebasePendingIssue>("rebase_pending")
+            .HasValue<AwaitingInputIssue>("awaiting_input")
             .IsComplete(true);
 
         builder.Property<string>("state")

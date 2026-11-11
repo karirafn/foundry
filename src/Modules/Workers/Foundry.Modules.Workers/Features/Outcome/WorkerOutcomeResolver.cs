@@ -63,12 +63,29 @@ internal sealed class WorkerOutcomeResolver(
     /// </param>
     /// <param name="containerOutput">The captured container log, when available.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
-    public async Task<WorkerOutcome> ResolveAsync(
+    public Task<WorkerOutcome> ResolveAsync(
         ActiveRun run,
         WorkerStatus? status,
         string? containerOutput,
         CancellationToken cancellationToken)
+        => ResolveAsync(run, status, containerOutput, verdict: null, cancellationToken);
+
+    /// <summary>
+    /// Resolves the outcome as <see cref="ResolveAsync(ActiveRun, WorkerStatus?, string?, CancellationToken)"/> does,
+    /// and yields <see cref="WorkerOutcome.NeedsInput"/> when a run that exited 0 returned a <c>needs_input</c>
+    /// <paramref name="verdict"/> (ADR 0096). A merged merge request still completes the issue, a closed one still
+    /// fails it, and any other exit code still goes through failure classification.
+    /// </summary>
+    public async Task<WorkerOutcome> ResolveAsync(
+        ActiveRun run,
+        WorkerStatus? status,
+        string? containerOutput,
+        RunVerdict? verdict,
+        CancellationToken cancellationToken)
     {
+        IReadOnlyList<RunVerdictQuestion>? askedQuestions =
+            status?.ExitCode == 0 && verdict is { Status: RunVerdictStatus.NeedsInput } ? verdict.Questions : null;
+
         // Step 5a — MR-state first
         Result<MergeRequestByBranch> mrResult = await postExitProviderQueries.GetMergeRequestByBranchAsync(
             run.MonitoredRepositoryId,
@@ -88,9 +105,9 @@ internal sealed class WorkerOutcomeResolver(
         return mr.Presence switch
         {
             MergeRequestPresence.Merged => ResolveMerged(run, mr, containerOutput, summary),
-            MergeRequestPresence.Open => ResolveOpen(run, mr, containerOutput, summary),
+            MergeRequestPresence.Open => ResolveOpen(run, mr, containerOutput, summary, askedQuestions),
             MergeRequestPresence.Closed => await ResolveClosedAsync(run, containerOutput, summary, cancellationToken),
-            MergeRequestPresence.None => await ResolveNoMrAsync(run, status, containerOutput, cancellationToken),
+            MergeRequestPresence.None => await ResolveNoMrAsync(run, status, containerOutput, askedQuestions, cancellationToken),
             _ => throw new UnreachableException($"Unknown {nameof(MergeRequestPresence)}: {mr.Presence}"),
         };
     }
@@ -119,7 +136,7 @@ internal sealed class WorkerOutcomeResolver(
         return mr.Presence switch
         {
             MergeRequestPresence.Merged => ResolveMerged(run, mr, containerOutput, summary),
-            MergeRequestPresence.Open => ResolveOpen(run, mr, containerOutput, summary),
+            MergeRequestPresence.Open => ResolveOpen(run, mr, containerOutput, summary, askedQuestions: null),
             _ => null,
         };
     }
@@ -144,7 +161,8 @@ internal sealed class WorkerOutcomeResolver(
         ActiveRun run,
         MergeRequestByBranch mr,
         string? containerOutput,
-        RunResultSummary? summary)
+        RunResultSummary? summary,
+        IReadOnlyList<RunVerdictQuestion>? askedQuestions)
     {
         // Guard: Open with null WebUrl — treat as indeterminate; real providers always supply a URL
         if (mr.WebUrl is null)
@@ -153,7 +171,11 @@ internal sealed class WorkerOutcomeResolver(
                 new Error(OpenMrMissingUrlCode, "Open MR has no web URL; cannot produce a Review outcome."));
         }
 
-        return new WorkerOutcome.Review(run.BranchName, PullRequestUrl.From(mr.WebUrl), containerOutput, summary);
+        PullRequestUrl pullRequestUrl = PullRequestUrl.From(mr.WebUrl);
+
+        return askedQuestions is null
+            ? new WorkerOutcome.Review(run.BranchName, pullRequestUrl, containerOutput, summary)
+            : new WorkerOutcome.NeedsInput(run.BranchName, pullRequestUrl, BranchHasCommits: true, askedQuestions, containerOutput, summary);
     }
 
     private async Task<WorkerOutcome> ResolveClosedAsync(
@@ -210,6 +232,7 @@ internal sealed class WorkerOutcomeResolver(
         ActiveRun run,
         WorkerStatus? status,
         string? containerOutput,
+        IReadOnlyList<RunVerdictQuestion>? askedQuestions,
         CancellationToken cancellationToken)
     {
         int? exitCode = status?.ExitCode;
@@ -244,12 +267,12 @@ internal sealed class WorkerOutcomeResolver(
 
         if (exitCode == 0 && hasCommits)
         {
-            return await RepollForMrAsync(run, containerOutput, summary, cancellationToken);
+            return await RepollForMrAsync(run, containerOutput, summary, askedQuestions, cancellationToken);
         }
 
         if (exitCode == 0 && !hasCommits)
         {
-            return ResolveExitZeroNoCommits(run, containerOutput, summary);
+            return ResolveExitZeroNoCommits(run, containerOutput, summary, askedQuestions);
         }
 
         // exit != 0, or the container is gone
@@ -265,6 +288,7 @@ internal sealed class WorkerOutcomeResolver(
         ActiveRun run,
         string? containerOutput,
         RunResultSummary? summary,
+        IReadOnlyList<RunVerdictQuestion>? askedQuestions,
         CancellationToken cancellationToken)
     {
         for (int attempt = 0; attempt < prRetryAttempts; attempt++)
@@ -286,11 +310,17 @@ internal sealed class WorkerOutcomeResolver(
                 return mr.Presence switch
                 {
                     MergeRequestPresence.Merged => ResolveMerged(run, mr, containerOutput, summary),
-                    MergeRequestPresence.Open => ResolveOpen(run, mr, containerOutput, summary),
+                    MergeRequestPresence.Open => ResolveOpen(run, mr, containerOutput, summary, askedQuestions),
                     MergeRequestPresence.Closed => await ResolveClosedAsync(run, containerOutput, summary, cancellationToken),
                     _ => throw new UnreachableException($"Unknown {nameof(MergeRequestPresence)}: {mr.Presence}"),
                 };
             }
+        }
+
+        // A run that asked before opening a merge request left its commits for a continuation to resume.
+        if (askedQuestions is not null)
+        {
+            return new WorkerOutcome.NeedsInput(run.BranchName, null, BranchHasCommits: true, askedQuestions, containerOutput, summary);
         }
 
         // Branch was pushed but no MR appeared after retries; preserve the branch so the run is
@@ -305,7 +335,8 @@ internal sealed class WorkerOutcomeResolver(
     private WorkerOutcome ResolveExitZeroNoCommits(
         ActiveRun run,
         string? containerOutput,
-        RunResultSummary? summary)
+        RunResultSummary? summary,
+        IReadOnlyList<RunVerdictQuestion>? askedQuestions)
     {
         ContainerOutputParseResult parseResult = containerOutputParser.Parse(containerOutput);
         FailureReason? classified = TryClassifyParseResult(parseResult, run.Role);
@@ -320,6 +351,11 @@ internal sealed class WorkerOutcomeResolver(
         if (summary is { IsError: true })
         {
             return new WorkerOutcome.Failure(ErrorResultFailureReason(summary), containerOutput, summary);
+        }
+
+        if (askedQuestions is not null)
+        {
+            return new WorkerOutcome.NeedsInput(run.BranchName, null, BranchHasCommits: false, askedQuestions, containerOutput, summary);
         }
 
         // Exit 0 with no commits — the issue is unchanged (nothing to submit)

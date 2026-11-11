@@ -222,6 +222,9 @@ public sealed class OutboxHarvestPollAsync : IAsyncDisposable
     private sealed class PassThroughIssueQueries(
         IReadOnlyList<ReviewIssueInfo>? reviewIssues = null) : IIssueQueries
     {
+        public Task<IReadOnlyList<AwaitingInputIssueInfo>> GetAwaitingInputIssuesAsync(MonitoredRepositoryId repositoryId, CancellationToken cancellationToken) =>
+            Task.FromResult<IReadOnlyList<AwaitingInputIssueInfo>>([]);
+
         public Task<IReadOnlySet<int>> GetKnownIssueNumbersAsync(
             MonitoredRepositoryId repositoryId,
             CancellationToken cancellationToken)

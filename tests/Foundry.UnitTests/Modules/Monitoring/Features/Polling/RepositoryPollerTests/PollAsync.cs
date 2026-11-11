@@ -1821,6 +1821,9 @@ public sealed class PollAsync : IAsyncDisposable
 
     private sealed class StubIssueQueries : IIssueQueries
     {
+        public Task<IReadOnlyList<AwaitingInputIssueInfo>> GetAwaitingInputIssuesAsync(MonitoredRepositoryId repositoryId, CancellationToken cancellationToken) =>
+            Task.FromResult<IReadOnlyList<AwaitingInputIssueInfo>>([]);
+
         private readonly IReadOnlySet<int> _knownNumbers;
         private readonly IReadOnlyDictionary<int, IssueSnapshot> _snapshots;
         private readonly IReadOnlyList<ReviewIssueInfo> _reviewIssues;

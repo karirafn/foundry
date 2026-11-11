@@ -30,6 +30,10 @@ public interface IIssueQueries
         MonitoredRepositoryId repositoryId,
         CancellationToken cancellationToken);
 
+    Task<IReadOnlyList<AwaitingInputIssueInfo>> GetAwaitingInputIssuesAsync(
+        MonitoredRepositoryId repositoryId,
+        CancellationToken cancellationToken);
+
     Task<IReadOnlySet<int>> GetUntrackableIssueNumbersAsync(
         MonitoredRepositoryId repositoryId,
         CancellationToken cancellationToken);

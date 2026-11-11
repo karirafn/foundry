@@ -7,8 +7,8 @@ namespace Foundry.Modules.Workers.Features.Verdicts;
 
 /// <summary>
 /// Reads a finished run's verdict (ADR 0094): extracts the last result event's <c>structured_output</c> generically,
-/// then parses it with the run role's typed verdict parser. Recording only: the run's outcome is decided from facts
-/// (merge request, commits, exit code) and does not depend on the verdict.
+/// then parses it with the run role's typed verdict parser. The run's outcome is decided from facts (merge request,
+/// commits, exit code); only a schema-valid <c>needs_input</c> verdict on an exit-0 run changes it (ADR 0096).
 /// </summary>
 internal sealed class RunVerdictReader(
     IContainerOutputParser containerOutputParser,
