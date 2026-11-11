@@ -1,5 +1,6 @@
 using Foundry.Modules.Issues.Domain.Entities;
 using Foundry.Modules.Issues.Domain.Entities.States;
+using Foundry.Modules.Issues.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Workers.Contracts;
 using Foundry.Shared;
@@ -49,9 +50,16 @@ internal sealed class ProviderPullRequestClosedHandler(
                 break;
             }
 
+            case AwaitingInputIssue { ResumeTarget: ResumeTarget.Revision } awaitingInputIssue:
+            {
+                ContinuableFailedIssue failed = awaitingInputIssue.Fail(FailureReason, FailureCategory.PrClosed, now);
+                await db.TransitionAsync(awaitingInputIssue, failed, domainEventDispatcher, cancellationToken);
+                break;
+            }
+
             default:
                 logger.LogWarning(
-                    "ProviderPullRequestClosed received for repository {RepositoryId} issue {IssueNumber} but it is not a ReviewIssue, ChecksPendingIssue or RebasePendingIssue (state: {State}); ignoring.",
+                    "ProviderPullRequestClosed received for repository {RepositoryId} issue {IssueNumber} but it is not a ReviewIssue, ChecksPendingIssue, RebasePendingIssue or AwaitingInputIssue on a pull request (state: {State}); ignoring.",
                     @event.RepositoryId,
                     @event.IssueNumber,
                     issue?.GetType().Name ?? "not found");

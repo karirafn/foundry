@@ -49,7 +49,23 @@ export interface FailingCheck {
   detailsUrl?: string | null;
 }
 
-export type RevisionTriggerKind = 'review_feedback' | 'failed_checks' | 'rebase_conflict';
+export type RevisionTriggerKind = 'review_feedback' | 'failed_checks' | 'rebase_conflict' | 'input_provided';
+
+export interface InputQuestion {
+  question: string;
+  context: string;
+}
+
+export type QuestionPostStatus = 'pending' | 'posted' | 'failed';
+
+export interface AwaitingInputDetails {
+  questions: InputQuestion[];
+  postStatus: QuestionPostStatus;
+  postedAt: string | null;
+  commentUrl: string | null;
+  postFailureReason: string | null;
+  nextPostAttemptAt: string | null;
+}
 
 export interface IssueStateDetails {
   workerRunId: string | null;
@@ -68,6 +84,7 @@ export interface IssueStateDetails {
   rebaseConflictAttempts?: number | null;
   rebaseOutcome?: string | null;
   rebaseSkippedReason?: string | null;
+  awaitingInput?: AwaitingInputDetails | null;
 }
 
 export interface IssueDetail extends IssueSummary {

@@ -445,3 +445,12 @@
   }
 
 }
+
+.issue-detail__question {
+  display: flex;
+  flex-direction: column;
+}
+
+.issue-detail__question-post--failed {
+  color: var(--fd-text-warning);
+}

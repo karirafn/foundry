@@ -1,5 +1,6 @@
 using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Issues.Domain.Entities;
+using Foundry.Modules.Issues.Domain.ValueObjects;
 using Foundry.Modules.Workers.Contracts;
 using Foundry.Shared;
 
@@ -34,19 +35,25 @@ public sealed class ContinuationQueuedIssue : QueuedIssue
     internal static ContinuationQueuedIssue FromContinuableFailed(ContinuableFailedIssue source)
     {
         ContinuationQueuedIssue queued = new(source.Id);
-        queued.SetSharedProperties(
-            source.MonitoredRepositoryId,
-            source.IssueNumber,
-            source.Title,
-            source.Author,
-            source.Url,
-            source.Labels,
-            source.DetectedAt,
-            source.KindClassification);
+        queued.CopySharedPropertiesFrom(source);
         queued.BranchName = source.BranchName;
         queued.FailureReason = source.FailureReason.Length > FailureReasonMaxLength
             ? source.FailureReason[..FailureReasonMaxLength]
             : source.FailureReason;
+        return queued;
+    }
+
+    internal static ContinuationQueuedIssue FromAwaitingInput(
+        AwaitingInputIssue source,
+        ResumeTarget.Continuation target,
+        string input,
+        DateTimeOffset answeredAt)
+    {
+        ContinuationQueuedIssue queued = new(source.Id);
+        queued.CopySharedPropertiesFrom(source);
+        queued.AnswerClarification(input, answeredAt);
+        queued.BranchName = target.BranchName;
+        queued.FailureReason = string.Empty;
         return queued;
     }
 

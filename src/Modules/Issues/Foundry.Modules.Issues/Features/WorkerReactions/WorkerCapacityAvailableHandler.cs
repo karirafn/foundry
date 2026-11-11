@@ -160,7 +160,13 @@ internal sealed class WorkerCapacityAvailableHandler(
             return true;
         }
 
-        return await dbContext.Set<RebasePendingIssue>()
+        if (await dbContext.Set<RebasePendingIssue>()
+                .AnyAsync(i => i.WorkerRunId == workerRunId, cancellationToken))
+        {
+            return true;
+        }
+
+        return await dbContext.Set<AwaitingInputIssue>()
             .AnyAsync(i => i.WorkerRunId == workerRunId, cancellationToken);
     }
 }

@@ -164,6 +164,50 @@ import {
             </div>
           }
 
+          @if (s.awaitingInput; as awaiting) {
+            <div class="issue-detail__failing-checks issue-detail__awaiting-input">
+              <span class="issue-detail__field-key" id="awaiting-input-heading">Open Questions</span>
+              <ul class="issue-detail__failing-list" aria-labelledby="awaiting-input-heading">
+                @for (q of awaiting.questions; track $index) {
+                  <li class="issue-detail__question">
+                    <span class="issue-detail__field-value issue-detail__question-text">{{ q.question }}</span>
+                    @if (q.context) {
+                      <span class="issue-detail__field-key issue-detail__question-context">{{ q.context }}</span>
+                    }
+                  </li>
+                }
+              </ul>
+              <div class="issue-detail__failing-item issue-detail__question-post" role="status" aria-live="polite">
+                @switch (awaiting.postStatus) {
+                  @case ('posted') {
+                    <span class="issue-detail__field-value">
+                      Posted {{ awaiting.postedAt | date: 'medium' }} — waiting for a reply.
+                    </span>
+                    @if (awaiting.commentUrl | safeHref; as commentHref) {
+                      <a
+                        class="issue-detail__failing-link issue-detail__question-link"
+                        [href]="commentHref"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >View question</a>
+                    }
+                  }
+                  @case ('failed') {
+                    <span class="issue-detail__field-value issue-detail__question-post--failed">
+                      Posting the questions failed: {{ awaiting.postFailureReason }}.
+                      @if (awaiting.nextPostAttemptAt) {
+                        Next attempt at {{ awaiting.nextPostAttemptAt | date: 'medium' }}.
+                      }
+                    </span>
+                  }
+                  @default {
+                    <span class="issue-detail__field-value">Posting the questions…</span>
+                  }
+                }
+              </div>
+            </div>
+          }
+
           <!-- Live region sits outside the grid so it does not create a phantom grid track
                when empty. It remains permanently mounted so screen readers detect content
                changes when retry data populates. -->
@@ -224,6 +268,16 @@ import {
                       Fixing checks — a worker is running.
                     } @else {
                       Fix run queued — checks failed on the PR.
+                    }
+                  </span>
+                } @else if (s.revisionTriggerKind === 'input_provided') {
+                  <span class="badge issue-detail__revision-chip badge--revision-in-progress"
+                    >Resuming after input</span>
+                  <span class="issue-detail__revision-message issue-detail__field-value">
+                    @if (d.state === 'revision_in_progress') {
+                      A worker is applying the answers to the open questions.
+                    } @else {
+                      Queued to apply the answers to the open questions.
                     }
                   </span>
                 } @else if (s.revisionTriggerKind === 'rebase_conflict') {

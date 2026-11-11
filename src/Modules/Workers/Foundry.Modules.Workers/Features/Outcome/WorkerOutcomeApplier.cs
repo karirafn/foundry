@@ -49,7 +49,7 @@ internal sealed class WorkerOutcomeApplier(
 
     /// <summary>
     /// Applies <paramref name="outcome"/> as <see cref="ApplyAsync(WorkerOutcome, ActiveRun, CancellationToken)"/> does, and
-    /// records <paramref name="verdict"/> on the terminal run. The verdict is recorded only: it never changes the outcome.
+    /// records <paramref name="verdict"/> on the terminal run. The applier only records the verdict; the resolver already turned a <c>needs_input</c> verdict into its outcome.
     /// </summary>
     public async Task ApplyAsync(
         WorkerOutcome outcome,
@@ -157,6 +157,37 @@ internal sealed class WorkerOutcomeApplier(
                     "Worker run {WorkerRunId} completed with no commits (unchanged, branch: {BranchName}).",
                     activeRun.Id,
                     unchanged.BranchName.Value);
+                break;
+            }
+
+            case WorkerOutcome.NeedsInput needsInput:
+            {
+                CompletedRun needsInputRun = activeRun.Complete(
+                    0,
+                    needsInput.BranchName,
+                    needsInput.PullRequestUrl,
+                    needsInput.Summary,
+                    verdict,
+                    needsInput.ContainerOutput);
+                await TryDispatchAsync(
+                    [new WorkerRunCompletedEvent(
+                        activeRun.Id,
+                        activeRun.IssueId.Value,
+                        needsInput.BranchName.Value,
+                        needsInput.PullRequestUrl?.Value,
+                        needsInput.PullRequestUrl is null ? WorkerRunMergeState.None : WorkerRunMergeState.Open,
+                        RunStartedAt: activeRun.StartedAt,
+                        InputRequest: new WorkerInputRequest(
+                            [.. needsInput.Questions.Select(q => new InputQuestion(q.Question, q.Context))],
+                            needsInput.BranchHasCommits))],
+                    activeRun.Id,
+                    cancellationToken);
+                await dbContext.TransitionAsync(activeRun, needsInputRun, domainEventDispatcher, cancellationToken);
+                logger.LogInformation(
+                    "Worker run {WorkerRunId} stopped to ask {QuestionCount} question(s) (branch: {BranchName}).",
+                    activeRun.Id,
+                    needsInput.Questions.Count,
+                    needsInput.BranchName.Value);
                 break;
             }
 

@@ -2,6 +2,7 @@ using Foundry.Modules.Credentials.Contracts;
 using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Issues.Domain.Events;
 using Foundry.Modules.Issues.Features;
+using Foundry.Modules.Issues.Features.AwaitingInput;
 using Foundry.Modules.Issues.Features.Claiming;
 using Foundry.Modules.Issues.Features.CredentialReactions;
 using Foundry.Modules.Issues.Features.Dependencies;
@@ -28,6 +29,7 @@ public static class IssuesModule
         services.AddScoped<InFlightWorkerCountQuery>();
         services.AddScoped<DispatchCandidateSelector>();
         services.AddScoped<IssueClaimer>();
+        services.AddScoped<IAwaitingInputCommands, AwaitingInputCommands>();
         services.AddScoped<IssueDependencyApplier>();
         services.AddHostedService<TransientRetryService>();
 
@@ -46,6 +48,7 @@ public static class IssuesModule
         services.AddIntegrationEventHandler<PullRequestChangesRequested, PullRequestChangesRequestedHandler>();
         services.AddIntegrationEventHandler<ChecksVerdictResolved, ChecksVerdictResolvedHandler>();
         services.AddIntegrationEventHandler<RebaseResolved, RebaseResolvedHandler>();
+        services.AddIntegrationEventHandler<AwaitingInputArrived, AwaitingInputArrivedHandler>();
         services.AddIntegrationEventHandler<DispatchResumed, DispatchResumedHandler>();
         services.AddIntegrationEventHandler<CredentialsValidated, CredentialsValidatedHandler>();
         services.AddIntegrationEventHandler<CreditsRestored, CreditsRestoredHandler>();
@@ -66,6 +69,8 @@ public static class IssuesModule
         AddIssueStateChangedHandler<IssueChecksPending>(services);
         services.AddScoped<IDomainEventHandler<IssueChecksPending>, IssueChecksPendingNudgeBridge>();
         AddIssueStateChangedHandler<IssueRebasePending>(services);
+        AddIssueStateChangedHandler<IssueAwaitingInput>(services);
+        services.AddScoped<IDomainEventHandler<IssueAwaitingInput>, IssueAwaitingInputNudgeBridge>();
         services.AddScoped<IDomainEventHandler<IssueRebasePending>, IssueRebasePendingNudgeBridge>();
 
         return services;

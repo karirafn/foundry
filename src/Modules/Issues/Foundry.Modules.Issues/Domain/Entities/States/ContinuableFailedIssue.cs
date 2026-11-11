@@ -1,5 +1,6 @@
 using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Issues.Domain.Entities;
+using Foundry.Modules.Issues.Domain.ValueObjects;
 using Foundry.Modules.Workers.Contracts;
 
 using FailureCategoryVO = Foundry.Modules.Workers.Contracts.FailureCategory;
@@ -39,17 +40,27 @@ public sealed class ContinuableFailedIssue : Issue
         DateTimeOffset failedAt)
     {
         ContinuableFailedIssue failed = new(source.Id);
-        failed.SetSharedProperties(
-            source.MonitoredRepositoryId,
-            source.IssueNumber,
-            source.Title,
-            source.Author,
-            source.Url,
-            source.Labels,
-            source.DetectedAt,
-            source.KindClassification);
+        failed.CopySharedPropertiesFrom(source);
         failed.WorkerRunId = source.WorkerRunId;
         failed.BranchName = branchName;
+        failed.FailureReason = failureReason;
+        failed.FailureCategory = failureCategory;
+        failed.FailedAt = failedAt;
+        return failed;
+    }
+
+    internal static ContinuableFailedIssue FromAwaitingInput(
+        AwaitingInputIssue source,
+        ResumeTarget.Revision target,
+        string failureReason,
+        FailureCategoryVO failureCategory,
+        DateTimeOffset failedAt)
+    {
+        ContinuableFailedIssue failed = new(source.Id);
+        failed.CopySharedPropertiesFrom(source);
+        failed.WorkerRunId = source.WorkerRunId;
+        failed.BranchName = target.BranchName;
+        failed.PullRequestUrl = target.PullRequestUrl;
         failed.FailureReason = failureReason;
         failed.FailureCategory = failureCategory;
         failed.FailedAt = failedAt;
@@ -63,15 +74,7 @@ public sealed class ContinuableFailedIssue : Issue
         DateTimeOffset failedAt)
     {
         ContinuableFailedIssue failed = new(source.Id);
-        failed.SetSharedProperties(
-            source.MonitoredRepositoryId,
-            source.IssueNumber,
-            source.Title,
-            source.Author,
-            source.Url,
-            source.Labels,
-            source.DetectedAt,
-            source.KindClassification);
+        failed.CopySharedPropertiesFrom(source);
         failed.WorkerRunId = source.WorkerRunId;
         failed.BranchName = source.BranchName;
         failed.PullRequestUrl = source.PullRequestUrl;
@@ -88,15 +91,7 @@ public sealed class ContinuableFailedIssue : Issue
         DateTimeOffset failedAt)
     {
         ContinuableFailedIssue failed = new(source.Id);
-        failed.SetSharedProperties(
-            source.MonitoredRepositoryId,
-            source.IssueNumber,
-            source.Title,
-            source.Author,
-            source.Url,
-            source.Labels,
-            source.DetectedAt,
-            source.KindClassification);
+        failed.CopySharedPropertiesFrom(source);
         failed.WorkerRunId = source.WorkerRunId;
         failed.BranchName = source.BranchName;
         failed.PullRequestUrl = source.PullRequestUrl;
@@ -113,15 +108,7 @@ public sealed class ContinuableFailedIssue : Issue
         DateTimeOffset failedAt)
     {
         ContinuableFailedIssue failed = new(source.Id);
-        failed.SetSharedProperties(
-            source.MonitoredRepositoryId,
-            source.IssueNumber,
-            source.Title,
-            source.Author,
-            source.Url,
-            source.Labels,
-            source.DetectedAt,
-            source.KindClassification);
+        failed.CopySharedPropertiesFrom(source);
         failed.WorkerRunId = source.WorkerRunId;
         failed.BranchName = source.BranchName;
         failed.PullRequestUrl = source.PullRequestUrl;

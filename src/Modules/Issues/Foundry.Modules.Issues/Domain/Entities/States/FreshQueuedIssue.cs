@@ -28,45 +28,29 @@ public sealed class FreshQueuedIssue : QueuedIssue
     internal static FreshQueuedIssue FromDetected(DetectedIssue detected)
     {
         FreshQueuedIssue queued = new(detected.Id);
-        queued.SetSharedProperties(
-            detected.MonitoredRepositoryId,
-            detected.IssueNumber,
-            detected.Title,
-            detected.Author,
-            detected.Url,
-            detected.Labels,
-            detected.DetectedAt,
-            detected.KindClassification);
+        queued.CopySharedPropertiesFrom(detected);
         return queued;
     }
 
     internal static FreshQueuedIssue FromBlocked(BlockedIssue blocked)
     {
         FreshQueuedIssue queued = new(blocked.Id);
-        queued.SetSharedProperties(
-            blocked.MonitoredRepositoryId,
-            blocked.IssueNumber,
-            blocked.Title,
-            blocked.Author,
-            blocked.Url,
-            blocked.Labels,
-            blocked.DetectedAt,
-            blocked.KindClassification);
+        queued.CopySharedPropertiesFrom(blocked);
         return queued;
     }
 
     internal static FreshQueuedIssue FromRetry(Issue source)
     {
         FreshQueuedIssue queued = new(source.Id);
-        queued.SetSharedProperties(
-            source.MonitoredRepositoryId,
-            source.IssueNumber,
-            source.Title,
-            source.Author,
-            source.Url,
-            source.Labels,
-            source.DetectedAt,
-            source.KindClassification);
+        queued.CopySharedPropertiesFrom(source);
+        return queued;
+    }
+
+    internal static FreshQueuedIssue FromAwaitingInput(AwaitingInputIssue source, string input, DateTimeOffset answeredAt)
+    {
+        FreshQueuedIssue queued = new(source.Id);
+        queued.CopySharedPropertiesFrom(source);
+        queued.AnswerClarification(input, answeredAt);
         return queued;
     }
 

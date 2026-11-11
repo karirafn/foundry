@@ -6,6 +6,7 @@ export type IssueState =
   | 'review'
   | 'rebase_pending'
   | 'checks_pending'
+  | 'awaiting_input'
   | 'unchanged'
   | 'failed'
   | 'continuable_failed'

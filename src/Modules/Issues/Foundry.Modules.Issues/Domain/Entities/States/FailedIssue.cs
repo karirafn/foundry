@@ -32,15 +32,7 @@ public sealed class FailedIssue : Issue
         DateTimeOffset failedAt)
     {
         FailedIssue failed = new(source.Id);
-        failed.SetSharedProperties(
-            source.MonitoredRepositoryId,
-            source.IssueNumber,
-            source.Title,
-            source.Author,
-            source.Url,
-            source.Labels,
-            source.DetectedAt,
-            source.KindClassification);
+        failed.CopySharedPropertiesFrom(source);
         failed.WorkerRunId = source.WorkerRunId;
         failed.FailureReason = failureReason;
         failed.FailureCategory = failureCategory;
@@ -55,15 +47,7 @@ public sealed class FailedIssue : Issue
         DateTimeOffset failedAt)
     {
         FailedIssue failed = new(source.Id);
-        failed.SetSharedProperties(
-            source.MonitoredRepositoryId,
-            source.IssueNumber,
-            source.Title,
-            source.Author,
-            source.Url,
-            source.Labels,
-            source.DetectedAt,
-            source.KindClassification);
+        failed.CopySharedPropertiesFrom(source);
         failed.WorkerRunId = source.WorkerRunId;
         failed.FailureReason = failureReason;
         failed.FailureCategory = failureCategory;

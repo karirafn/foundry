@@ -28,6 +28,7 @@ const CONDITION_TAGS: Readonly<Record<PromptSectionCondition, ConditionTag>> = {
   Continuation: { label: 'Continuation run', kind: 'run' },
   Revision: { label: 'Revision run', kind: 'run' },
   RebaseConflict: { label: 'Rebase conflict', kind: 'run' },
+  Clarifications: { label: 'Clarification log', kind: 'run' },
 };
 
 interface SectionView {

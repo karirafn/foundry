@@ -676,6 +676,9 @@ public sealed class RunAsync : IAsyncDisposable
     private sealed class StubIssueQueries(
         IReadOnlyList<RebasePendingIssueInfo> rebasePendingIssues) : IIssueQueries
     {
+        public Task<IReadOnlyList<AwaitingInputIssueInfo>> GetAwaitingInputIssuesAsync(MonitoredRepositoryId repositoryId, CancellationToken cancellationToken) =>
+            Task.FromResult<IReadOnlyList<AwaitingInputIssueInfo>>([]);
+
         public Task<IReadOnlySet<int>> GetKnownIssueNumbersAsync(
             MonitoredRepositoryId repositoryId,
             CancellationToken cancellationToken)
