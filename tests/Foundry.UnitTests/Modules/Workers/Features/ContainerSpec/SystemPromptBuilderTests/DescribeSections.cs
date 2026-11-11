@@ -28,7 +28,7 @@ public sealed class DescribeSections
             ("task-list", PromptSectionCondition.Always),
             ("csharp-lsp", PromptSectionCondition.DotnetImage),
             ("pre-pr", PromptSectionCondition.DockerImage),
-            ("checks", PromptSectionCondition.Always),
+            ("publishing", PromptSectionCondition.Always),
             ("fresh", PromptSectionCondition.Fresh),
             ("continuation", PromptSectionCondition.Continuation),
             ("review-feedback", PromptSectionCondition.Revision),
@@ -40,16 +40,16 @@ public sealed class DescribeSections
     }
 
     [Fact]
-    public void WhenDescribed_TheChecksSectionShowsTheTimeoutAndFixPushCapFromSettings()
+    public void WhenDescribed_ThePublishingSectionShowsTheTimeoutFromSettings()
     {
         // Act
-        PromptSectionDescriptor checks = SystemPromptBuilder.DescribeSections(Principles, timeoutMinutes: 75)
-            .Single(section => section.Key == "checks");
+        PromptSectionDescriptor publishing = SystemPromptBuilder.DescribeSections(Principles, timeoutMinutes: 75)
+            .Single(section => section.Key == "publishing");
 
         // Assert
-        checks.Content.ShouldSatisfyAllConditions(
-            () => checks.Content.ShouldContain("roughly 75 minutes of wall-clock budget"),
-            () => checks.Content.ShouldContain($"at most {SystemPromptBuilder.ChecksMaxFixPushes} fix pushes"));
+        publishing.Content.ShouldSatisfyAllConditions(
+            () => publishing.Content.ShouldStartWith(SystemPromptBuilder.PublishingSectionMarker),
+            () => publishing.Content.ShouldContain("roughly 75 minutes of wall-clock budget"));
     }
 
     [Fact]

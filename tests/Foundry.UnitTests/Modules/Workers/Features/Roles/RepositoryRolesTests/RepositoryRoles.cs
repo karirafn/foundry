@@ -109,17 +109,51 @@ public sealed class RepositoryRoles
         // Act
         string[] outcomes = [.. schema["properties"]![ImplementVerdict.OutcomeProperty]!["enum"]!.AsArray().Select(node => node!.GetValue<string>())];
         string[] required = [.. schema["required"]!.AsArray().Select(node => node!.GetValue<string>())];
-        string? conditionalOutcome = schema["if"]?["properties"]?[ImplementVerdict.OutcomeProperty]?["const"]?.GetValue<string>();
-        string[] conditionallyRequired = [.. schema["then"]!["required"]!.AsArray().Select(node => node!.GetValue<string>())];
+        Dictionary<string, string[]> requiredByOutcome = schema["allOf"]!.AsArray().ToDictionary(
+            condition => condition!["if"]!["properties"]![ImplementVerdict.OutcomeProperty]!["const"]!.GetValue<string>(),
+            condition => condition!["then"]!["required"]!.AsArray().Select(node => node!.GetValue<string>()).ToArray());
+        string[] properties = [.. schema["properties"]!.AsObject().Select(pair => pair.Key)];
 
         // Assert
         schema.ShouldSatisfyAllConditions(
             () => outcomes.ShouldBe([ImplementVerdict.DoneToken, ImplementVerdict.NeedsInputToken]),
             () => required.ShouldBe([ImplementVerdict.OutcomeProperty]),
-            () => conditionalOutcome.ShouldBe(ImplementVerdict.NeedsInputToken),
-            () => conditionallyRequired.ShouldBe([ImplementVerdict.QuestionsProperty]),
+            () => properties.ShouldBe(
+                [ImplementVerdict.OutcomeProperty, ImplementVerdict.QuestionsProperty, ImplementVerdict.PullRequestProperty],
+                ignoreOrder: true),
+            () => requiredByOutcome.Count.ShouldBe(2),
+            () => requiredByOutcome[ImplementVerdict.NeedsInputToken].ShouldBe([ImplementVerdict.QuestionsProperty]),
+            () => requiredByOutcome[ImplementVerdict.DoneToken].ShouldBe([ImplementVerdict.PullRequestProperty]),
             () => schema["properties"]![ImplementVerdict.QuestionsProperty]!["$ref"]!.GetValue<string>().ShouldBe("#/$defs/questions"),
             () => schema["additionalProperties"]!.GetValue<bool>().ShouldBeFalse());
+    }
+
+    [Fact]
+    public void TheImplementVerdictPullRequestSchema_MatchesTheTypedPullRequest()
+    {
+        // Arrange
+        JsonObject schema = ReadJsonObject(Path.Combine(RolesDirectory, WorkerRole.Implement.Name, WorkerRoleCatalogReader.VerdictSchemaPath));
+
+        // Act
+        JsonNode pullRequest = schema["properties"]![ImplementVerdict.PullRequestProperty]!;
+        JsonNode summary = pullRequest["properties"]![ImplementVerdict.SummaryProperty]!;
+        JsonNode body = pullRequest["properties"]![ImplementVerdict.BodyProperty]!;
+        string[] required = [.. pullRequest["required"]!.AsArray().Select(node => node!.GetValue<string>())];
+        string[] properties = [.. pullRequest["properties"]!.AsObject().Select(pair => pair.Key)];
+
+        // Assert
+        pullRequest.ShouldSatisfyAllConditions(
+            () => pullRequest["type"]!.GetValue<string>().ShouldBe("object"),
+            () => pullRequest["additionalProperties"]!.GetValue<bool>().ShouldBeFalse(),
+            () => required.ShouldBe([ImplementVerdict.SummaryProperty, ImplementVerdict.BodyProperty], ignoreOrder: true),
+            () => properties.ShouldBe([ImplementVerdict.SummaryProperty, ImplementVerdict.BodyProperty], ignoreOrder: true),
+            () => summary["type"]!.GetValue<string>().ShouldBe("string"),
+            () => summary["minLength"]!.GetValue<int>().ShouldBe(1),
+            () => summary["maxLength"]!.GetValue<int>().ShouldBe(PullRequestSummary.MaxLength),
+            () => summary["pattern"]!.GetValue<string>().ShouldBe(@"^[^\r\n]+$"),
+            () => body["type"]!.GetValue<string>().ShouldBe("string"),
+            () => body["minLength"]!.GetValue<int>().ShouldBe(1),
+            () => body["maxLength"]!.GetValue<int>().ShouldBe(PullRequestDescription.MaxLength));
     }
 
     [Fact]
@@ -175,7 +209,8 @@ public sealed class RepositoryRoles
     }
 
     [Theory]
-    [InlineData("""{"outcome":"done"}""", RunVerdictStatus.Done)]
+    [InlineData("""{"outcome":"done","pullRequest":{"summary":"add retry to webhook delivery","body":"Adds retry."}}""", RunVerdictStatus.Done)]
+    [InlineData("""{"outcome":"done"}""", RunVerdictStatus.Invalid)]
     [InlineData("""{"outcome":"needs_input","questions":[{"question":"Which database?","context":"The issue names two."}]}""", RunVerdictStatus.NeedsInput)]
     public void ASampleMatchingTheImplementVerdictSchema_ParsesWithTheImplementVerdictParser(string sample, RunVerdictStatus expected)
     {
@@ -297,6 +332,40 @@ public sealed class RepositoryRoles
             () => prompt.ShouldContain("Foundry read the issue's title, body and comments"),
             () => prompt.ShouldContain("<issue-title>Add retry</issue-title>"),
             () => prompt.ShouldNotContain("read the full issue from the provider"));
+    }
+
+    [Fact]
+    public void TheImplementTaskPrompt_AsksForTheImplementationCommittedOnTheProvidedBranchNotAPushOrPullRequest()
+    {
+        // Arrange
+        WorkerRoleDefinition implement = LoadRepositoryCatalog().Find(WorkerRole.Implement).ShouldNotBeNull();
+
+        // Act
+        string task = implement.TaskPromptTemplate;
+
+        // Assert
+        task.ShouldSatisfyAllConditions(
+            () => task.ShouldContain("commit", Case.Insensitive),
+            () => task.ShouldContain("branch Foundry provides"),
+            () => task.ShouldNotContain("push", Case.Insensitive),
+            () => task.ShouldNotContain("pull request", Case.Insensitive));
+    }
+
+    [Theory]
+    [MemberData(nameof(RoleNames))]
+    public void NoRolePrompt_AsksTheAgentToPushOrOpenAPullRequest(string roleName)
+    {
+        // Arrange
+        string[] prompts =
+        [
+            File.ReadAllText(Path.Combine(RolesDirectory, roleName, WorkerRoleCatalogReader.SystemPromptPath)),
+            File.ReadAllText(Path.Combine(RolesDirectory, roleName, WorkerRoleCatalogReader.TaskPromptPath)),
+        ];
+
+        // Assert
+        prompts.ShouldSatisfyAllConditions(
+            () => prompts.ShouldAllBe(prompt => !prompt.Contains("push", StringComparison.OrdinalIgnoreCase)),
+            () => prompts.ShouldAllBe(prompt => !prompt.Contains("open a pull request", StringComparison.OrdinalIgnoreCase)));
     }
 
     [Theory]

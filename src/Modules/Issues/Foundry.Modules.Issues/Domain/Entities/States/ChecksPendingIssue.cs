@@ -14,8 +14,6 @@ public sealed class ChecksPendingIssue : Issue
     /// <summary>
     /// Maximum number of FailedChecks revision containers Foundry will dispatch across the lifetime
     /// of an issue before transitioning it back to review instead of retrying.
-    /// Distinct from <c>SystemPromptBuilder.ChecksMaxFixPushes</c>, which is the per-container
-    /// in-run fix-push budget instructed to the worker.
     /// </summary>
     public const int ChecksMaxFixPushes = 2;
 

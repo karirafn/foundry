@@ -25,7 +25,7 @@ scratch_dir="$(mktemp -d)"
 raw_file="$(mktemp)"
 trap 'rm -rf "$scratch_dir" "$raw_file"' EXIT
 
-worker_prompt="This is a fixture capture run: there is no repository and no issue to work on. Do not use any tools other than the one that reports your verdict. Reply with one short sentence, then report the outcome done."
+worker_prompt="This is a fixture capture run: there is no repository and no issue to work on. Do not use any tools other than the one that reports your verdict. Reply with one short sentence, then report the outcome done with a pull request summary and body describing this capture run."
 system_prompt="You are a Foundry worker in a fixture capture run."
 
 # The same output flags as workers/entrypoint.sh's first claude invocation. The role plugins and the
