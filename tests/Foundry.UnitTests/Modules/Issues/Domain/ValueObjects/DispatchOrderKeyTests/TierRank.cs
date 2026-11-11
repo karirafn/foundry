@@ -40,10 +40,23 @@ public sealed class TierRank
     }
 
     [Fact]
-    public void WhenFreshQueued_TierRankIsTwo()
+    public void WhenFreshQueued_TierRankIsThree()
     {
         // Arrange
         FreshQueuedIssue queued = new IssueBuilder().FreshQueued();
+
+        // Act
+        int tierRank = queued.TierRank;
+
+        // Assert
+        tierRank.ShouldBe(3);
+    }
+
+    [Fact]
+    public void WhenTriageQueued_TierRankIsTwoBetweenContinuationAndFresh()
+    {
+        // Arrange
+        TriageQueuedIssue queued = new IssueBuilder().TriageQueued();
 
         // Act
         int tierRank = queued.TierRank;

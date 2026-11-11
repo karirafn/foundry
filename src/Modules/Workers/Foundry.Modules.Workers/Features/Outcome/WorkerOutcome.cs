@@ -1,6 +1,7 @@
 using Foundry.Modules.Workers.Domain.Entities;
 using Foundry.Modules.Workers.Domain.Entities.States;
 using Foundry.Modules.Workers.Domain.ValueObjects;
+using Foundry.Modules.Workers.Features.Verdicts;
 using Foundry.Shared;
 
 namespace Foundry.Modules.Workers.Features.Outcome;
@@ -64,6 +65,15 @@ internal abstract record WorkerOutcome
         PullRequestUrl? PullRequestUrl,
         bool BranchHasCommits,
         IReadOnlyList<RunVerdictQuestion> Questions,
+        string? ContainerOutput,
+        RunResultSummary? Summary) : WorkerOutcome;
+
+    /// <summary>
+    /// A triage run exited 0 with a schema-valid verdict (ADR 0097). It leaves no branch or merge request: the verdict
+    /// is its whole outcome.
+    /// </summary>
+    internal sealed record TriageCompleted(
+        TriageVerdict Verdict,
         string? ContainerOutput,
         RunResultSummary? Summary) : WorkerOutcome;
 

@@ -103,7 +103,8 @@ internal sealed class WorkerCapacityAvailableHandler(
     ///   <see cref="States.ReviewIssue"/>, <see cref="States.UnchangedIssue"/>,
     ///   <see cref="States.FailedIssue"/>, <see cref="States.ContinuableFailedIssue"/>,
     ///   <see cref="States.RevisionFailedIssue"/>, <see cref="States.ChecksPendingIssue"/>,
-    ///   <see cref="States.RebasePendingIssue"/>.
+    ///   <see cref="States.RebasePendingIssue"/>, <see cref="States.TriageInProgressIssue"/>,
+    ///   <see cref="States.TriageFailedIssue"/>, <see cref="States.AwaitingInputIssue"/>.
     /// When adding a new <see cref="Domain.Entities.Issue"/> subtype that carries <c>WorkerRunId</c>,
     /// add a corresponding <c>AnyAsync</c> check here and update
     /// <c>WorkerRunIdGuardExhaustivenessTests.GuardedTypes</c> in the unit-test project.
@@ -161,6 +162,18 @@ internal sealed class WorkerCapacityAvailableHandler(
         }
 
         if (await dbContext.Set<RebasePendingIssue>()
+                .AnyAsync(i => i.WorkerRunId == workerRunId, cancellationToken))
+        {
+            return true;
+        }
+
+        if (await dbContext.Set<TriageInProgressIssue>()
+                .AnyAsync(i => i.WorkerRunId == workerRunId, cancellationToken))
+        {
+            return true;
+        }
+
+        if (await dbContext.Set<TriageFailedIssue>()
                 .AnyAsync(i => i.WorkerRunId == workerRunId, cancellationToken))
         {
             return true;

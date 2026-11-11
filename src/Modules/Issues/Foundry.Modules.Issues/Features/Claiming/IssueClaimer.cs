@@ -26,7 +26,7 @@ internal sealed class IssueClaimer(
         CancellationToken cancellationToken)
     {
         QueuedIssue issue = candidate.Issue;
-        BranchName branchName = issue.DispatchBranchName;
+        BranchName? branchName = issue.DispatchBranchName;
         Issue claimed = issue.Claim(workerRunId);
 
         string issueApiUrl = candidate.DispatchInfo.IssueApiUrlBase

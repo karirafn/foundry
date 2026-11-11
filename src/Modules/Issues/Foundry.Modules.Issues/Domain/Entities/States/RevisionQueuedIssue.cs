@@ -22,7 +22,7 @@ public sealed class RevisionQueuedIssue : QueuedIssue
 
     public override int TierRank => 0;
 
-    public override BranchNameValue DispatchBranchName => BranchNameValue.From(BranchName);
+    public override BranchNameValue? DispatchBranchName => BranchNameValue.From(BranchName);
 
     public override DispatchContext Context =>
         new DispatchContext.Revision(BranchName, PullRequestUrl, Trigger);

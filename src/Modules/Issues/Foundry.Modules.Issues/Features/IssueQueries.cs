@@ -61,8 +61,9 @@ internal sealed class IssueQueries(
         CancellationToken cancellationToken)
     {
         // EF Core cannot translate a C# instance method call into SQL, so the type-pattern
-        // Where clause is kept explicit here. Only the three concrete states that
-        // ProcessIssueDependenciesHandler acts on are included — FreshQueuedIssue is used
+        // Where clause is kept explicit here. Only the concrete states that ProcessIssueDependenciesHandler
+        // acts on are included, the triage states among them so their blockers are current when a ready verdict
+        // sends the issue through the dependency check (ADR 0097) — FreshQueuedIssue is used
         // explicitly (never the QueuedIssue base type) because RevisionQueuedIssue and
         // ContinuationQueuedIssue both derive from QueuedIssue but are not acted on.
         List<int> numbers = await db.Set<Issue>()
@@ -70,6 +71,9 @@ internal sealed class IssueQueries(
             .Where(i => i.MonitoredRepositoryId == repositoryId)
             .Where(i =>
                 i is DetectedIssue ||
+                i is TriageQueuedIssue ||
+                i is TriageInProgressIssue ||
+                i is TriageFailedIssue ||
                 i is FreshQueuedIssue ||
                 i is BlockedIssue)
             .Select(i => i.IssueNumber)
@@ -96,6 +100,7 @@ internal sealed class IssueQueries(
                 i is QueuedIssue ||
                 i is BlockedIssue ||
                 i is FailedIssue ||
+                i is TriageFailedIssue ||
                 i is ContinuableFailedIssue ||
                 i is RevisionFailedIssue ||
                 i is UnchangedIssue)
@@ -313,6 +318,7 @@ internal sealed class IssueQueries(
             FailedIssue failed => failed.FailureCategory.Value,
             ContinuableFailedIssue continuableFailed => continuableFailed.FailureCategory.Value,
             RevisionFailedIssue revisionFailed => revisionFailed.FailureCategory.Value,
+            TriageFailedIssue triageFailed => triageFailed.FailureCategory.Value,
             _ => null,
         };
 
@@ -370,7 +376,9 @@ internal sealed class IssueQueries(
             Url: issue.Url.Value.ToString(),
             Author: issue.Author.Value,
             Labels: issue.Labels,
-            StateDetails: stateDetails);
+            StateDetails: stateDetails,
+            Kind: BuildKindDetails(issue),
+            Triage: BuildTriageDetails(issue));
     }
 
     private static string GetStateDiscriminator(Issue issue) =>
@@ -392,6 +400,9 @@ internal sealed class IssueQueries(
             ChecksPendingIssue => "checks_pending",
             RebasePendingIssue => "rebase_pending",
             AwaitingInputIssue => "awaiting_input",
+            TriageQueuedIssue => "triage_queued",
+            TriageInProgressIssue => "triage_in_progress",
+            TriageFailedIssue => "triage_failed",
             _ => throw new InvalidOperationException($"Unknown issue type: {issue.GetType().Name}")
         };
 
@@ -403,6 +414,7 @@ internal sealed class IssueQueries(
         {
             FailedIssue failed => failed.FailureCategory,
             ContinuableFailedIssue continuableFailed => continuableFailed.FailureCategory,
+            TriageFailedIssue triageFailed => triageFailed.FailureCategory,
             _ => null
         };
 
@@ -432,6 +444,7 @@ internal sealed class IssueQueries(
         {
             FailedIssue failed => failed.FailedAt,
             ContinuableFailedIssue continuableFailed => continuableFailed.FailedAt,
+            TriageFailedIssue triageFailed => triageFailed.FailedAt,
             _ => throw new InvalidOperationException($"Unexpected transient issue type: {issue.GetType().Name}")
         };
 
@@ -442,6 +455,42 @@ internal sealed class IssueQueries(
             NextAttemptDueAt: isExhausted ? null : failedAt + TransientRetrySchedule.ComputeBackoff(consecutiveRuns));
     }
 
+    private static IssueKindDetails BuildKindDetails(Issue issue) =>
+        issue.KindClassification switch
+        {
+            KindClassification.Labelled labelled => new IssueKindDetails(
+                IssueKindDetails.LabelledSource,
+                labelled.Kind.Value,
+                issue.ConflictingTriageKind?.Value),
+            KindClassification.Triaged triaged => new IssueKindDetails(IssueKindDetails.TriagedSource, triaged.Kind.Value, null),
+            _ => new IssueKindDetails(IssueKindDetails.UnclassifiedSource, null, null),
+        };
+
+    private static TriageVerdictDetails? BuildTriageDetails(Issue issue) =>
+        issue.TriageVerdict switch
+        {
+            TriageVerdict.Ready ready => new TriageVerdictDetails(
+                TriageVerdictDetails.ReadyOutcome,
+                ready.Kind.Value,
+                [],
+                ready.DecidedAt),
+            TriageVerdict.NeedsInput needsInput => new TriageVerdictDetails(
+                TriageVerdictDetails.NeedsInputOutcome,
+                needsInput.Kind.Value,
+                [.. needsInput.Questions.Select(q => q.Question)],
+                needsInput.DecidedAt),
+            _ => null,
+        };
+
+    private static string ResumeTargetName(ResumeTarget target) =>
+        target switch
+        {
+            ResumeTarget.Revision => "revision",
+            ResumeTarget.Continuation => "continuation",
+            ResumeTarget.Retriage => "retriage",
+            _ => "fresh",
+        };
+
     private static AwaitingInputDetails BuildAwaitingInputDetails(AwaitingInputIssue issue) =>
         issue.QuestionPost switch
         {
@@ -451,21 +500,24 @@ internal sealed class IssueQueries(
                 posted.PostedAt,
                 posted.CommentUrl,
                 PostFailureReason: null,
-                NextPostAttemptAt: null),
+                NextPostAttemptAt: null,
+                ResumeTargetName(issue.ResumeTarget)),
             QuestionPost.Failed failed => new AwaitingInputDetails(
                 issue.Questions,
                 "failed",
                 PostedAt: null,
                 CommentUrl: null,
                 failed.Reason,
-                failed.NextAttemptAt),
+                failed.NextAttemptAt,
+                ResumeTargetName(issue.ResumeTarget)),
             _ => new AwaitingInputDetails(
                 issue.Questions,
                 "pending",
                 PostedAt: null,
                 CommentUrl: null,
                 PostFailureReason: null,
-                NextPostAttemptAt: null),
+                NextPostAttemptAt: null,
+                ResumeTargetName(issue.ResumeTarget)),
         };
 
     private static IssueStateDetails? BuildStateDetails(Issue issue, TransientRetryDetails? transientRetry) =>
@@ -615,6 +667,26 @@ internal sealed class IssueQueries(
                 CompletedAt: null,
                 BlockedBy: null,
                 TransientRetry: null),
+
+            TriageInProgressIssue triageInProgress => new IssueStateDetails(
+                WorkerRunId: triageInProgress.WorkerRunId.Value,
+                BranchName: null,
+                FeedbackCutoffAt: null,
+                FailureReason: null,
+                FailedAt: null,
+                CompletedAt: null,
+                BlockedBy: null,
+                TransientRetry: null),
+
+            TriageFailedIssue triageFailed => new IssueStateDetails(
+                WorkerRunId: triageFailed.WorkerRunId.Value,
+                BranchName: null,
+                FeedbackCutoffAt: null,
+                FailureReason: triageFailed.FailureReason,
+                FailedAt: triageFailed.FailedAt,
+                CompletedAt: null,
+                BlockedBy: null,
+                TransientRetry: transientRetry),
 
             AwaitingInputIssue awaitingInput => new IssueStateDetails(
                 WorkerRunId: awaitingInput.WorkerRunId.Value,

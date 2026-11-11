@@ -17,25 +17,32 @@ public sealed class FreshQueuedIssue : QueuedIssue
     {
     }
 
-    public override int TierRank => 2;
+    public override int TierRank => 3;
 
-    public override BranchName DispatchBranchName =>
-        BranchName.Generate(KindClassification, IssueNumber, Title);
+    public override BranchName? DispatchBranchName => GeneratedBranchName;
 
     public override DispatchContext Context =>
-        new DispatchContext.Fresh(DispatchBranchName.Value);
+        new DispatchContext.Fresh(GeneratedBranchName.Value);
 
-    internal static FreshQueuedIssue FromDetected(DetectedIssue detected)
-    {
-        FreshQueuedIssue queued = new(detected.Id);
-        queued.CopySharedPropertiesFrom(detected);
-        return queued;
-    }
+    private BranchName GeneratedBranchName =>
+        BranchName.Generate(KindClassification, IssueNumber, Title);
 
     internal static FreshQueuedIssue FromBlocked(BlockedIssue blocked)
     {
         FreshQueuedIssue queued = new(blocked.Id);
         queued.CopySharedPropertiesFrom(blocked);
+        return queued;
+    }
+
+    internal static FreshQueuedIssue FromTriage(Issue source, TriageVerdict.Ready? verdict)
+    {
+        FreshQueuedIssue queued = new(source.Id);
+        queued.CopySharedPropertiesFrom(source);
+        if (verdict is not null)
+        {
+            queued.RecordTriageVerdict(verdict);
+        }
+
         return queued;
     }
 
@@ -64,6 +71,14 @@ public sealed class FreshQueuedIssue : QueuedIssue
         BlockedIssue blocked = BlockedIssue.FromQueued(this, blockers);
         AddDomainEvent(new Events.IssueBlocked(Id, MonitoredRepositoryId));
         return blocked;
+    }
+
+    /// <summary>Re-triage: an operator sends the queued issue back to triage.</summary>
+    public TriageQueuedIssue Retriage()
+    {
+        TriageQueuedIssue queued = TriageQueuedIssue.FromRetriage(this);
+        AddDomainEvent(new Events.IssueTriageQueued(Id, MonitoredRepositoryId));
+        return queued;
     }
 
     public override InProgressIssue Claim(WorkerRunId workerRunId)

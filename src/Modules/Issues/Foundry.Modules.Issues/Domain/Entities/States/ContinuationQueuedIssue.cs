@@ -23,7 +23,7 @@ public sealed class ContinuationQueuedIssue : QueuedIssue
 
     public override int TierRank => 1;
 
-    public override BranchNameValue DispatchBranchName => BranchNameValue.From(BranchName);
+    public override BranchNameValue? DispatchBranchName => BranchNameValue.From(BranchName);
 
     public override DispatchContext Context =>
         new DispatchContext.Continuation(BranchName, FailureReason);

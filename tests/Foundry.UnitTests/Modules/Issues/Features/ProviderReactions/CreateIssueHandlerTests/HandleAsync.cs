@@ -4,6 +4,7 @@ using Foundry.Modules.Issues.Domain.ValueObjects;
 using Foundry.Modules.Issues.Features.ProviderReactions;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Shared;
+using Foundry.Testing;
 using Foundry.WebApi.Persistence;
 
 using Microsoft.Data.Sqlite;
@@ -41,7 +42,7 @@ public sealed class HandleAsync : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenIssueDetectedEventReceived_PersistsDetectedIssue()
+    public async Task WhenIssueDetectedEventReceived_QueuesItForTriage()
     {
         // Arrange
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
@@ -55,14 +56,14 @@ public sealed class HandleAsync : IAsyncDisposable
             IssueKindLabel: "bug",
             DetectedAt: DateTimeOffset.UtcNow);
 
-        IIntegrationEventHandler<IssueDetected> sut = new CreateIssueHandler(_dbContext, NullLogger<CreateIssueHandler>.Instance);
+        IIntegrationEventHandler<IssueDetected> sut = new CreateIssueHandler(_dbContext, new NullDomainEventDispatcher(), NullLogger<CreateIssueHandler>.Instance);
 
         // Act
         await sut.HandleAsync(@event, CancellationToken.None);
 
         // Assert
-        DetectedIssue detected = _dbContext.Set<Issue>()
-            .OfType<DetectedIssue>()
+        TriageQueuedIssue detected = _dbContext.Set<Issue>()
+            .OfType<TriageQueuedIssue>()
             .ShouldHaveSingleItem();
         detected.ShouldSatisfyAllConditions(
             () => detected.MonitoredRepositoryId.ShouldBe(repositoryId),
@@ -86,14 +87,14 @@ public sealed class HandleAsync : IAsyncDisposable
             IssueKindLabel: "bug",
             DetectedAt: DateTimeOffset.UtcNow);
 
-        IIntegrationEventHandler<IssueDetected> sut = new CreateIssueHandler(_dbContext, NullLogger<CreateIssueHandler>.Instance);
+        IIntegrationEventHandler<IssueDetected> sut = new CreateIssueHandler(_dbContext, new NullDomainEventDispatcher(), NullLogger<CreateIssueHandler>.Instance);
 
         // Act
         await sut.HandleAsync(@event, CancellationToken.None);
 
         // Assert
-        DetectedIssue detected = _dbContext.Set<Issue>()
-            .OfType<DetectedIssue>()
+        TriageQueuedIssue detected = _dbContext.Set<Issue>()
+            .OfType<TriageQueuedIssue>()
             .ShouldHaveSingleItem();
         detected.KindClassification.ShouldBe(new KindClassification.Labelled(IssueKind.Bug));
     }
@@ -112,14 +113,14 @@ public sealed class HandleAsync : IAsyncDisposable
             IssueKindLabel: null,
             DetectedAt: DateTimeOffset.UtcNow);
 
-        IIntegrationEventHandler<IssueDetected> sut = new CreateIssueHandler(_dbContext, NullLogger<CreateIssueHandler>.Instance);
+        IIntegrationEventHandler<IssueDetected> sut = new CreateIssueHandler(_dbContext, new NullDomainEventDispatcher(), NullLogger<CreateIssueHandler>.Instance);
 
         // Act
         await sut.HandleAsync(@event, CancellationToken.None);
 
         // Assert
-        DetectedIssue detected = _dbContext.Set<Issue>()
-            .OfType<DetectedIssue>()
+        TriageQueuedIssue detected = _dbContext.Set<Issue>()
+            .OfType<TriageQueuedIssue>()
             .ShouldHaveSingleItem();
         detected.KindClassification.ShouldBe(KindClassification.Unclassified);
     }
@@ -139,14 +140,14 @@ public sealed class HandleAsync : IAsyncDisposable
             IssueKindLabel: "feature",
             DetectedAt: DateTimeOffset.UtcNow);
 
-        IIntegrationEventHandler<IssueDetected> sut = new CreateIssueHandler(_dbContext, NullLogger<CreateIssueHandler>.Instance);
+        IIntegrationEventHandler<IssueDetected> sut = new CreateIssueHandler(_dbContext, new NullDomainEventDispatcher(), NullLogger<CreateIssueHandler>.Instance);
 
         // Act
         await sut.HandleAsync(@event, CancellationToken.None);
 
         // Assert
-        DetectedIssue detected = _dbContext.Set<Issue>()
-            .OfType<DetectedIssue>()
+        TriageQueuedIssue detected = _dbContext.Set<Issue>()
+            .OfType<TriageQueuedIssue>()
             .ShouldHaveSingleItem();
         detected.ShouldSatisfyAllConditions(
             () => detected.MonitoredRepositoryId.ShouldBe(repositoryId),

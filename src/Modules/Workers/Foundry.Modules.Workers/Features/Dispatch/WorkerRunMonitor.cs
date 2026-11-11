@@ -364,9 +364,15 @@ internal sealed class WorkerRunMonitor(
         DateTimeOffset now,
         CancellationToken cancellationToken)
     {
+        // A run without a branch (a restricted role) has no commits to observe.
+        if (activeRun.BranchName is not { } branchName)
+        {
+            return;
+        }
+
         Result<BranchCommitSummary> commitResult = await postExitProviderQueries.GetBranchCommitSummaryAsync(
             activeRun.MonitoredRepositoryId,
-            activeRun.BranchName.Value,
+            branchName.Value,
             cancellationToken);
 
         switch (commitResult)
@@ -502,7 +508,8 @@ internal sealed class WorkerRunMonitor(
                 _webhookActive[run.MonitoredRepositoryId] = active;
             }
 
-            return gate.ShouldCompare(run.Id, run.MonitoredRepositoryId, run.BranchName.Value, active);
+            return run.BranchName is { } branchName
+                && gate.ShouldCompare(run.Id, run.MonitoredRepositoryId, branchName.Value, active);
         }
     }
 }

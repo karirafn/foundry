@@ -42,6 +42,8 @@ internal sealed class IssueTestDbContext(DbContextOptions<IssueTestDbContext> op
             builder.Ignore(x => x.KindClassification);
             builder.Ignore(x => x.Clarifications);
             builder.Ignore(x => x.OpenClarification);
+            builder.Ignore(x => x.TriageVerdict);
+            builder.Ignore(x => x.ConflictingTriageKind);
             builder.Property<IssueKind?>("_labelledKind")
                 .HasConversion(
                     (ValueConverter)new ValueConverter<IssueKind, string>(
@@ -50,7 +52,8 @@ internal sealed class IssueTestDbContext(DbContextOptions<IssueTestDbContext> op
 
             builder.HasDiscriminator<string>("State")
                 .HasValue<DetectedIssue>("detected")
-                .HasValue<FreshQueuedIssue>("queued");
+                .HasValue<FreshQueuedIssue>("queued")
+                .HasValue<TriageQueuedIssue>("triage_queued");
         });
     }
 }

@@ -44,6 +44,16 @@ public sealed class ToWorkerRole
     }
 
     [Fact]
+    public void WhenTriage_MapsToTriageWorkerRole()
+    {
+        // Act
+        WorkerRole role = DispatchRoleMapping.ToWorkerRole(DispatchRole.Triage);
+
+        // Assert
+        role.ShouldBe(WorkerRole.Triage);
+    }
+
+    [Fact]
     public void WhenUndefinedDispatchRole_Throws()
     {
         // Arrange

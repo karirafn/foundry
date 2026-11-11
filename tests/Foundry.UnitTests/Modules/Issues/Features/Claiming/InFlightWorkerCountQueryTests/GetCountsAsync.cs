@@ -135,6 +135,30 @@ public sealed class GetCountsAsync : IAsyncDisposable
         counts[repoId].ShouldBe(2);
     }
 
+    [Fact]
+    public async Task WhenATriageRunIsInFlight_ItCountsAgainstTheRepositoryLimit()
+    {
+        // Arrange
+        MonitoredRepositoryId repoId = MonitoredRepositoryId.New();
+        await SeedInProgressAsync(repoId, issueNumber: 1);
+        TriageInProgressIssue triaging = new IssueBuilder()
+            .WithMonitoredRepositoryId(repoId)
+            .WithIssueNumber(2)
+            .TriageInProgress();
+        _dbContext.Set<Issue>().Add(triaging);
+        await _dbContext.SaveChangesAsync(CancellationToken.None);
+        _dbContext.ChangeTracker.Clear();
+
+        InFlightWorkerCountQuery sut = BuildSut();
+
+        // Act
+        IReadOnlyDictionary<MonitoredRepositoryId, int> counts =
+            await sut.GetCountsAsync(CancellationToken.None);
+
+        // Assert
+        counts[repoId].ShouldBe(2);
+    }
+
     // Cycle 5: two repos each with one in-flight → separate counts
     [Fact]
     public async Task WhenTwoReposEachWithOneInFlight_ReturnsCountPerRepo()

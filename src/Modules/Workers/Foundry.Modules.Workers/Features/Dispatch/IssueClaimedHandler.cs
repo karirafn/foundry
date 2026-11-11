@@ -98,11 +98,22 @@ internal sealed class IssueClaimedHandler(
 
             issueContent = ((Result<IssueContent>.Success)contentResult).Value;
         }
+        else if (claimed.BranchName is not { } branchName)
+        {
+            // Only a restricted run is dispatched without a branch; a full run without one cannot start.
+            await FailBeforeContainerAsync(
+                startingRun,
+                claimed,
+                "branch pre-creation failed",
+                new Error("Worker.MissingBranch", $"The '{role.Name}' run was claimed without a branch."),
+                cancellationToken);
+            return;
+        }
         else
         {
             Result<bool> branchResult = await postExitProviderQueries.CreateBranchAsync(
                 claimed.MonitoredRepositoryId,
-                claimed.BranchName.Value,
+                branchName.Value,
                 cancellationToken);
 
             if (branchResult is Result<bool>.Failure branchFailure)
@@ -285,7 +296,8 @@ internal sealed class IssueClaimedHandler(
                 issueNumber: claimed.IssueNumber,
                 systemPromptTemplate: role.SystemPromptTemplate,
                 issueContent ?? throw new UnreachableException("A restricted run reaches its container spec only with its issue content."),
-                installsDotnet)
+                installsDotnet,
+                claimed.Clarifications ?? [])
             : SystemPromptBuilder.Build(
                 principles: content.Principles,
                 issueNumber: claimed.IssueNumber,
@@ -342,9 +354,9 @@ internal sealed class IssueClaimedHandler(
         };
 
         // A restricted run gets no branch and no provider token: GIT_PAT only clones, and the entrypoint unsets it.
-        if (!restricted)
+        if (!restricted && claimed.BranchName is { } branchName)
         {
-            envVars["BRANCH_NAME"] = claimed.BranchName.Value;
+            envVars["BRANCH_NAME"] = branchName.Value;
         }
 
         List<VolumeMount> volumeMounts = [];

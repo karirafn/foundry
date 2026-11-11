@@ -61,6 +61,20 @@ public sealed class AwaitingInputIssue : Issue
         return awaiting;
     }
 
+    /// <summary>
+    /// Triage needs answers before the first implement run (ADR 0097): the verdict is recorded, its questions open a
+    /// clarification round, and input sends the issue back to triage.
+    /// </summary>
+    internal static AwaitingInputIssue FromTriageInProgress(TriageInProgressIssue source, TriageVerdict.NeedsInput verdict)
+    {
+        AwaitingInputIssue awaiting = new(source.Id);
+        awaiting.CopySharedPropertiesFrom(source);
+        awaiting.SetBlockedBy(source.BlockedBy);
+        awaiting.RecordTriageVerdict(verdict);
+        awaiting.Enter(source.WorkerRunId, new ResumeTarget.Retriage(), verdict.Questions, verdict.DecidedAt);
+        return awaiting;
+    }
+
     private void Enter(
         WorkerRunId workerRunId,
         ResumeTarget resumeTarget,
@@ -121,6 +135,11 @@ public sealed class AwaitingInputIssue : Issue
                     answeredAt);
                 AddDomainEvent(new Events.IssueContinuationQueued(Id, MonitoredRepositoryId));
                 return continuationQueued;
+
+            case ResumeTarget.Retriage:
+                TriageQueuedIssue triageQueued = TriageQueuedIssue.FromAwaitingInput(this, input, answeredAt);
+                AddDomainEvent(new Events.IssueTriageQueued(Id, MonitoredRepositoryId));
+                return triageQueued;
 
             default:
                 FreshQueuedIssue freshQueued = FreshQueuedIssue.FromAwaitingInput(this, input, answeredAt);

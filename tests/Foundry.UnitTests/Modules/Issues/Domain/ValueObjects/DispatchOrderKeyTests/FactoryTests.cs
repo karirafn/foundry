@@ -13,7 +13,7 @@ namespace Foundry.UnitTests.Modules.Issues.Domain.ValueObjects.DispatchOrderKeyT
 public sealed class FactoryTests
 {
     [Fact]
-    public void WhenFreshQueued_BuildsKeyWithTierRankTwo()
+    public void WhenFreshQueued_BuildsKeyWithTierRankThree()
     {
         // Arrange
         int issueNumber = 42;
@@ -25,7 +25,7 @@ public sealed class FactoryTests
 
         // Assert
         key.ShouldSatisfyAllConditions(
-            () => key.TierRank.ShouldBe(2),
+            () => key.TierRank.ShouldBe(3),
             () => key.Position.ShouldBe(3),
             () => key.IssueNumber.ShouldBe(42),
             () => key.Id.ShouldBe(freshQueued.Id));

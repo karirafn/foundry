@@ -84,7 +84,7 @@ internal abstract record TriageVerdict(TriageIssueKind Kind)
 
 /// <summary>
 /// Records a triage verdict: <c>ready</c> as <see cref="RunVerdictStatus.Done"/>, <c>needs_input</c> with its questions.
-/// Nothing acts on it yet: the triage lifecycle does.
+/// The run's outcome comes from the typed <see cref="TriageVerdict"/> itself (ADR 0097).
 /// </summary>
 internal sealed class TriageVerdictParser : IWorkerVerdictParser
 {

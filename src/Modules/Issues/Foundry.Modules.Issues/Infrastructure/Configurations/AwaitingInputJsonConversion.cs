@@ -20,6 +20,7 @@ internal static class AwaitingInputJsonConversion
     private const string RevisionKind = "revision";
     private const string ContinuationKind = "continuation";
     private const string FreshKind = "fresh";
+    private const string RetriageKind = "retriage";
     private const string PendingKind = "pending";
     private const string PostedKind = "posted";
     private const string FailedKind = "failed";
@@ -58,6 +59,7 @@ internal static class AwaitingInputJsonConversion
             ResumeTarget.Revision revision => new ResumeTargetDto(RevisionKind, revision.BranchName, revision.PullRequestUrl),
             ResumeTarget.Continuation continuation => new ResumeTargetDto(ContinuationKind, continuation.BranchName, null),
             ResumeTarget.Fresh => new ResumeTargetDto(FreshKind, null, null),
+            ResumeTarget.Retriage => new ResumeTargetDto(RetriageKind, null, null),
             _ => throw new UnreachableException($"Unknown ResumeTarget variant: {target.GetType().Name}"),
         };
 
@@ -74,6 +76,7 @@ internal static class AwaitingInputJsonConversion
             RevisionKind => new ResumeTarget.Revision(Required(dto.BranchName), Required(dto.PullRequestUrl)),
             ContinuationKind => new ResumeTarget.Continuation(Required(dto.BranchName)),
             FreshKind => new ResumeTarget.Fresh(),
+            RetriageKind => new ResumeTarget.Retriage(),
             _ => throw new UnreachableException($"Unknown ResumeTarget kind: '{dto.Kind}'"),
         };
     }

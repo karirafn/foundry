@@ -13,7 +13,33 @@ public sealed record IssueDetail(
     string Url,
     string Author,
     IReadOnlyList<string> Labels,
-    IssueStateDetails? StateDetails);
+    IssueStateDetails? StateDetails,
+    IssueKindDetails Kind,
+    TriageVerdictDetails? Triage);
+
+/// <summary>
+/// How the issue's kind was decided (ADR 0097): <paramref name="Source"/> is <c>labelled</c>, <c>triaged</c> or
+/// <c>unclassified</c>, and <paramref name="Kind"/> is <see langword="null"/> only when unclassified.
+/// <paramref name="ConflictingTriageKind"/> is set only when a label decided and triage judged a different kind;
+/// nothing acts on it.
+/// </summary>
+public sealed record IssueKindDetails(string Source, string? Kind, string? ConflictingTriageKind)
+{
+    public const string LabelledSource = "labelled";
+    public const string TriagedSource = "triaged";
+    public const string UnclassifiedSource = "unclassified";
+}
+
+/// <summary>The issue's latest triage verdict: <paramref name="Outcome"/> is <c>ready</c> or <c>needs_input</c>.</summary>
+public sealed record TriageVerdictDetails(
+    string Outcome,
+    string Kind,
+    IReadOnlyList<string> Questions,
+    DateTimeOffset DecidedAt)
+{
+    public const string ReadyOutcome = "ready";
+    public const string NeedsInputOutcome = "needs_input";
+}
 
 public sealed record IssueStateDetails(
     Guid? WorkerRunId,
@@ -37,6 +63,8 @@ public sealed record IssueStateDetails(
 /// An awaiting-input issue's open questions and how their post stands (ADR 0096): <paramref name="PostStatus"/> is
 /// <c>pending</c>, <c>posted</c> (with <paramref name="CommentUrl"/> when known) or <c>failed</c> (with
 /// <paramref name="PostFailureReason"/> and, for a transient failure, <paramref name="NextPostAttemptAt"/>).
+/// <paramref name="ResumeTarget"/> is where input sends the issue: <c>revision</c>, <c>continuation</c>, <c>fresh</c> or
+/// <c>retriage</c>.
 /// </summary>
 public sealed record AwaitingInputDetails(
     IReadOnlyList<InputQuestion> Questions,
@@ -44,7 +72,8 @@ public sealed record AwaitingInputDetails(
     DateTimeOffset? PostedAt,
     string? CommentUrl,
     string? PostFailureReason,
-    DateTimeOffset? NextPostAttemptAt);
+    DateTimeOffset? NextPostAttemptAt,
+    string ResumeTarget);
 
 public sealed record TransientRetryDetails(
     int AttemptNumber,

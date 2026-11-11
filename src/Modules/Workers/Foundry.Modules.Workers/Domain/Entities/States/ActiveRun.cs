@@ -23,7 +23,7 @@ public sealed class ActiveRun : WorkerRun
         IssueId issueId,
         DateTimeOffset createdAt,
         ContainerId containerId,
-        BranchName branchName,
+        BranchName? branchName,
         MonitoredRepositoryId monitoredRepositoryId,
         DateTimeOffset startedAt,
         WorkerRole role,
@@ -40,7 +40,8 @@ public sealed class ActiveRun : WorkerRun
 
     public DateTimeOffset StartedAt { get; private set; }
 
-    public BranchName BranchName { get; private set; }
+    /// <summary>The branch the run works on, or <see langword="null"/> for a run that gets none (a restricted role).</summary>
+    public BranchName? BranchName { get; private set; }
 
     public MonitoredRepositoryId MonitoredRepositoryId { get; private set; }
 
@@ -95,7 +96,7 @@ public sealed class ActiveRun : WorkerRun
     internal static ActiveRun FromStarting(
         StartingRun starting,
         ContainerId containerId,
-        BranchName branchName,
+        BranchName? branchName,
         MonitoredRepositoryId monitoredRepositoryId)
     {
         return new ActiveRun(

@@ -13,8 +13,9 @@ namespace Foundry.Modules.Issues.Features.Dependencies;
 /// <summary>
 /// Applies an issue's detected open blockers: records <see cref="Issue.BlockedBy"/>, detects
 /// cycles over the committed dependency graph augmented with the new edges, and performs the
-/// <see cref="DetectedIssue"/>/<see cref="FreshQueuedIssue"/>/<see cref="BlockedIssue"/> state
-/// transition. Shared by the poll-path dependency pass and the claim-time blocker re-check so
+/// <see cref="FreshQueuedIssue"/>/<see cref="BlockedIssue"/> state transition, and sends a
+/// <see cref="DetectedIssue"/> to triage. Triage states only record their blockers, which decide where
+/// a ready verdict sends the issue. Shared by the poll-path dependency pass and the claim-time blocker re-check so
 /// both enforce the same rule: an issue with open blockers is never queued.
 /// </summary>
 internal sealed class IssueDependencyApplier(
@@ -54,17 +55,12 @@ internal sealed class IssueDependencyApplier(
 
         switch (issue)
         {
-            case DetectedIssue detected when issue.BlockedBy.Count == 0:
-            {
-                FreshQueuedIssue queued = detected.Enqueue();
-                await db.TransitionAsync(detected, queued, dispatcher, cancellationToken);
-                break;
-            }
-
+            // An issue still detected (one created before triage existed) is triaged first, blockers or not: triage
+            // comes before the dependency check (ADR 0097), and its blockers are carried for when it is ready.
             case DetectedIssue detected:
             {
-                BlockedIssue blocked = detected.Block(issue.BlockedBy);
-                await db.TransitionAsync(detected, blocked, dispatcher, cancellationToken);
+                TriageQueuedIssue triageQueued = detected.QueueTriage();
+                await db.TransitionAsync(detected, triageQueued, dispatcher, cancellationToken);
                 break;
             }
 

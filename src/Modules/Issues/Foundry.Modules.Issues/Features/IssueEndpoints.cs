@@ -16,6 +16,9 @@ internal static class IssueEndpoints
         GetIssueById.Endpoint.Map(group);
         RetryIssue.Endpoint.Map(group);
         RetryIssueFresh.Endpoint.Map(group);
+        RetryTriage.Endpoint.Map(group);
+        SkipTriage.Endpoint.Map(group);
+        Retriage.Endpoint.Map(group);
 
         return routes;
     }

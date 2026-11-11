@@ -1,5 +1,6 @@
 using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Issues.Domain.Entities;
+using Foundry.Modules.Issues.Domain.ValueObjects;
 
 namespace Foundry.Modules.Issues.Domain.Entities.States;
 
@@ -14,20 +15,33 @@ public sealed class BlockedIssue : Issue
     {
     }
 
-    internal static BlockedIssue FromDetected(DetectedIssue detected, IReadOnlyList<int> blockers)
-    {
-        BlockedIssue blocked = new(detected.Id);
-        blocked.CopySharedPropertiesFrom(detected);
-        blocked.SetBlockedBy(blockers);
-        return blocked;
-    }
-
     internal static BlockedIssue FromQueued(FreshQueuedIssue queued, IReadOnlyList<int> blockers)
     {
         BlockedIssue blocked = new(queued.Id);
         blocked.CopySharedPropertiesFrom(queued);
         blocked.SetBlockedBy(blockers);
         return blocked;
+    }
+
+    internal static BlockedIssue FromTriage(Issue source, TriageVerdict.Ready? verdict)
+    {
+        BlockedIssue blocked = new(source.Id);
+        blocked.CopySharedPropertiesFrom(source);
+        blocked.SetBlockedBy(source.BlockedBy);
+        if (verdict is not null)
+        {
+            blocked.RecordTriageVerdict(verdict);
+        }
+
+        return blocked;
+    }
+
+    /// <summary>Re-triage: an operator sends the blocked issue back to triage; its blockers stay recorded.</summary>
+    public TriageQueuedIssue Retriage()
+    {
+        TriageQueuedIssue queued = TriageQueuedIssue.FromRetriage(this);
+        AddDomainEvent(new Events.IssueTriageQueued(Id, MonitoredRepositoryId));
+        return queued;
     }
 
     public FreshQueuedIssue Unblock()

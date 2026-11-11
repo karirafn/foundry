@@ -5,6 +5,7 @@ using Foundry.Modules.Workers.Domain.ValueObjects;
 using Foundry.Modules.Workers.Features.ContainerSpec;
 using Foundry.Modules.Workers.Features.Orchestration;
 using Foundry.Modules.Workers.Features.Outcome;
+using Foundry.Modules.Workers.Features.Verdicts;
 using Foundry.Shared;
 using Foundry.UnitTests.Modules.Workers.Features.Dispatch.WorkerDispatchServiceTests;
 using Foundry.WebApi.Persistence;
@@ -187,6 +188,37 @@ public sealed class ApplyAsync : WorkerDispatchServiceTestBase
     }
 
     [Fact]
+    public async Task WhenATriageRunCompletes_PublishesTriageRunCompletedInsteadOfWorkerRunCompleted()
+    {
+        // Arrange
+        SeedActiveRun(ContainerId, Branch);
+        CapturingIntegrationEventDispatcher dispatcher = new();
+        RecordingOrchestrator orchestrator = new();
+        await using FoundryDbContext db = CreateDbContext();
+        ActiveRun activeRun = await db.Set<ActiveRun>().SingleAsync(TestContext.Current.CancellationToken);
+        WorkerOutcomeApplier sut = BuildApplier(db, orchestrator, dispatcher);
+        WorkerOutcome outcome = new WorkerOutcome.TriageCompleted(
+            new TriageVerdict.NeedsInput(
+                TriageIssueKind.Refactor,
+                [new RunVerdictQuestion("Which module?", "Two are named.")]),
+            ContainerOutput: null,
+            Summary: null);
+
+        // Act
+        await sut.ApplyAsync(outcome, activeRun, TestContext.Current.CancellationToken);
+
+        // Assert
+        TriageRunCompleted completed = dispatcher.Captured.OfType<TriageRunCompleted>().ShouldHaveSingleItem();
+        completed.ShouldSatisfyAllConditions(
+            () => completed.IssueId.ShouldBe(activeRun.IssueId.Value),
+            () => completed.WorkerRunId.ShouldBe(activeRun.Id),
+            () => completed.Result.ShouldBeOfType<TriageResult.NeedsInput>().Kind.ShouldBe(TriageKind.Refactor),
+            () => ((TriageResult.NeedsInput)completed.Result).Questions.ShouldBe([new InputQuestion("Which module?", "Two are named.")]),
+            () => dispatcher.Captured.OfType<WorkerRunCompleted>().ShouldBeEmpty(),
+            () => orchestrator.StopAndRemoveCalls.ShouldBe([ContainerId]));
+    }
+
+    [Fact]
     public async Task WhenOutcomeIsIndeterminate_ThrowsWithoutTouchingContainer()
     {
         // Arrange
@@ -217,6 +249,7 @@ public sealed class ApplyAsync : WorkerDispatchServiceTestBase
             integrationEventDispatcher ?? new NullIntegrationEventDispatcher(),
             new NullIntegrationEventProcessor(),
             new NullDomainEventDispatcher(),
+            TimeProvider.System,
             NullLogger<WorkerOutcomeApplier>.Instance);
 
     private static WorkerOutcome BuildOutcome(string name, string? containerOutput = null)

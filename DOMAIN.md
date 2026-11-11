@@ -11,10 +11,10 @@ Monitors repositories across multiple providers for issues with a trigger label,
 
 ## Worker
 
-A Claude Code Docker container dispatched to implement a single issue.
+A Claude Code Docker container dispatched to do one job on a single issue, set by its [Worker Role](#worker-role): an implement run implements the issue, a triage run judges whether it is ready to implement (see [TriageQueuedIssue](#triagequeuedissue)).
 Ephemeral — created on demand, destroyed after completion.
 Has no identity independent of its WorkerRun — the container is the execution mechanism, not a separate domain concept.
-Workers clone the repo, implement the issue, push a branch, and open a PR. Foundry discovers each run's outcome by polling the container and querying the provider after the container exits.
+Implement workers clone the repo, implement the issue, push a branch, and open a PR; a triage worker reads the issue and returns only a verdict. Foundry discovers each run's outcome by polling the container and querying the provider after the container exits.
 Foundry's worker policy (the generated deny lists, `model` and the attribution suppression — `attribution` set to `{"commit": "", "pr": "", "sessionUrl": false}`, which removes Claude Code's own instruction to add AI attribution to commits and pull request descriptions; it does not stop the model writing a `Co-Authored-By` trailer or a "Generated with Claude Code" footer itself) lives in Claude Code's managed settings, `/etc/claude-code/managed-settings.json`: the container starts as root only to render that file (`root:root`, world-readable, not writable by the worker), then drops to the unprivileged `node` user before any other work, so the policy is immutable to the worker. A start that skipped the root phase, or an empty generated policy, fails bootstrap (`WorkerBootstrapFailed`, stage `managed-settings`, detail telling the operator to rebuild the worker image). The worker's user settings file `~/.claude/settings.json` is never written and is deleted at every start ([ADR 0086](docs/adr/0086-worker-policy-in-root-rendered-managed-settings.md)).
 
 ## Worker Authentication
@@ -271,8 +271,9 @@ A change found by a **scheduled** poll (other than the startup catch-up, see [Mo
 ## Issue
 
 A provider-side issue tagged for Foundry processing.
-Modeled as a polymorphic aggregate — each lifecycle state is a distinct type (`DetectedIssue`, `BlockedIssue`, `FreshQueuedIssue`, `ContinuationQueuedIssue`, `RevisionQueuedIssue`, `InProgressIssue`, `RevisionInProgressIssue`, `RebasePendingIssue`, `ChecksPendingIssue`, `ReviewIssue`, `AwaitingInputIssue`, `UnchangedIssue`, `CompletedIssue`, `FailedIssue`, `ContinuableFailedIssue`, `RevisionFailedIssue`).
-Every variant carries the shared properties, including the append-only [clarification log](#clarification), through every transition.
+Modeled as a polymorphic aggregate — each lifecycle state is a distinct type (`DetectedIssue`, `TriageQueuedIssue`, `TriageInProgressIssue`, `TriageFailedIssue`, `BlockedIssue`, `FreshQueuedIssue`, `ContinuationQueuedIssue`, `RevisionQueuedIssue`, `InProgressIssue`, `RevisionInProgressIssue`, `RebasePendingIssue`, `ChecksPendingIssue`, `ReviewIssue`, `AwaitingInputIssue`, `UnchangedIssue`, `CompletedIssue`, `FailedIssue`, `ContinuableFailedIssue`, `RevisionFailedIssue`).
+Every variant carries the shared properties, including the append-only [clarification log](#clarification) and the latest [Triage Verdict](#triage-verdict), through every transition.
+Every new issue is triaged once before its first implement run, and before the dependency check: `Detected → TriageQueued → TriageInProgress →` the dependency check (`FreshQueued` or `Blocked`) or `AwaitingInput` ([ADR 0097](docs/adr/0097-every-new-issue-is-triaged-before-dispatch.md)).
 State transitions are methods on each variant that return the next variant type, enforcing valid transitions at compile time.
 
 ### Issue Lifecycle Partition
@@ -284,9 +285,9 @@ The lifecycle splits into two partitions defined by `IssueStateRegistry` (server
 
 The dashboard renders Active states in four display groups, classified by one rule — the relationship between the issue and a worker:
 
-- **In progress** — a worker is actually running right now (`in_progress`, `revision_in_progress`). Exactly `LIVE_STATES`.
-- **Needs attention** — requires a user action to progress (`review`, `awaiting_input`, `unchanged`, `failed`, `continuable_failed`, `revision_failed`).
-- **Waiting** — waiting for a worker or for Foundry; advances with no user action (`detected`, `queued`, `blocked`, `revision_queued`, `continuation_queued`, `rebase_pending`, `checks_pending`).
+- **In progress** — a worker is actually running right now: implementing, revising or triaging (`in_progress`, `revision_in_progress`, `triage_in_progress`). Exactly `LIVE_STATES`.
+- **Needs attention** — requires a user action to progress (`review`, `awaiting_input`, `unchanged`, `failed`, `continuable_failed`, `revision_failed`, `triage_failed`).
+- **Waiting** — waiting for a worker or for Foundry; advances with no user action (`detected`, `triage_queued`, `queued`, `blocked`, `revision_queued`, `continuation_queued`, `rebase_pending`, `checks_pending`).
 - **Resolved** — done (`completed`).
 
 Two states deserve explicit note:
@@ -294,6 +295,47 @@ Two states deserve explicit note:
 - `unchanged` is Active/Needs-attention because the worker produced no changes and the user must decide whether to retry — it cannot resolve itself.
 - `blocked` is Waiting because a `BlockedIssue` auto-transitions to `FreshQueuedIssue` when its blockers close on the provider; no user action is required.
 - `awaiting_input` is Needs-attention (label "Awaiting input") because it advances only when a person answers the posted questions.
+- `triage_failed` is Needs-attention (label "Triage failed"): a transient failure retries itself, anything else waits for Retry triage or Skip triage ([ADR 0014](docs/adr/0014-remove-immediate-requeue-always-pause.md)).
+
+## TriageQueuedIssue
+
+`triage_queued`: an issue waiting for a worker to triage it ([ADR 0097](docs/adr/0097-every-new-issue-is-triaged-before-dispatch.md)). A [Queued Issue](#queued-issue) with `TierRank = 2`, between continuation and fresh. Display group: Waiting, label "Triage queued".
+
+- **Ways in** — every new issue (`DetectedIssue.QueueTriage()`, on creation; an issue still `detected` from before triage existed is sent there by the dependency pass), input arriving on an `AwaitingInputIssue` with a `Retriage` [resume target](#awaitinginputissue), Retry triage from `TriageFailedIssue`, and [Re-triage](#re-triage) from `FreshQueued` or `Blocked`.
+- Triage comes before the dependency check: its open blockers are recorded (the dependency pass keeps them current in all three triage states) but never hold it back. Revision, continuation and rebase-conflict runs never go through triage.
+- `Context` is `DispatchContext.Triage`, whose role maps to `WorkerRole.Triage`; `DispatchBranchName` is `null`, so no branch name is generated and the run gets none.
+- **Way out** — `Claim()` → `TriageInProgressIssue`. Hard-deleted on untrack like every queued state.
+
+## TriageInProgressIssue
+
+`triage_in_progress`: an issue a triage worker is reading. Carries `WorkerRunId`. Display group: In progress, label "Triaging".
+Counts against the global slots and the [Repository Worker Limit](#repository-worker-limit) like every running worker.
+
+- **Ways out** — the run's outcome step dispatches by role: a triage run that exits 0 with a schema-valid verdict publishes `TriageRunCompleted(IssueId, WorkerRunId, TriageResult, DecidedAt)` with `TriageResult = Ready(kind) | NeedsInput(kind, questions)` instead of `WorkerRunCompleted`, and the merge-request lookup never runs.
+  - `Ready` → `MarkReady(verdict)` records the [Triage Verdict](#triage-verdict) and goes through the dependency check: `FreshQueued` with no open blockers, `Blocked` otherwise.
+  - `NeedsInput` → `MarkNeedsInput(verdict)` records the verdict and enters `AwaitingInputIssue` (`FromTriageInProgress`) with the `Retriage` resume target; its questions are posted on the issue thread.
+  - Any other end — a missing or invalid verdict (`FailureReason.VerdictInvalid`, category `verdict_invalid`: a step failure, never a fallback to facts, [ADR 0094](docs/adr/0094-code-decides-claude-judges-only-what-code-cannot.md)), a non-zero exit, a timeout or a cancellation — goes through `WorkerRunFailed` to `TriageFailedIssue`.
+- A `TriageRunCompleted` for an issue no longer in triage with that run (a redelivery, or the issue moved on) is ignored; with the inbox dedup this makes it replay-safe.
+
+## TriageFailedIssue
+
+`triage_failed`: an issue whose triage run failed. Carries `WorkerRunId`, `FailureReason`, `FailureCategory` and `FailedAt`. Display group: Needs attention.
+Not a `FailedIssue`, whose `Retry()` returns `FreshQueuedIssue` and would skip triage.
+
+- **Ways out** — `RetryTriage()` → `TriageQueuedIssue` (`POST /api/issues/{id}/retry-triage`); [Skip triage](#skip-triage) (`POST /api/issues/{id}/skip-triage`); a `TransientApiError` retries automatically back to `TriageQueuedIssue` through `TransientRetryService`, with the same `MaxTransientRetries` and backoff. Any other reason parks it. Hard-deleted on untrack, like the other failed states.
+
+## Triage Verdict
+
+The latest verdict a triage run returned for an issue (`Issue.TriageVerdict`, column `triage_verdict`, `null` until first triaged): `Ready(kind, decidedAt)` or `NeedsInput(kind, questions, decidedAt)`. Carried through every transition; a later triage replaces it.
+Its kind decides the issue's [Kind Classification](#kind-classification) only while no label does. Exposed on the issue detail as `triage: {outcome, kind, questions, decidedAt}`.
+
+## Re-triage
+
+The operator action that sends a `FreshQueuedIssue` or `BlockedIssue` back to `TriageQueuedIssue` (`POST /api/issues/{id}/retriage`; any other state is 409), keeping its recorded blockers. There is no automatic re-triage once an issue is ready: an edit to a queued or blocked issue does not trigger triage again.
+
+## Skip triage
+
+The operator action that sends a `TriageFailedIssue` through the dependency check without a readiness verdict (`FreshQueued` with no open blockers, `Blocked` otherwise), its kind left as it is: an unclassified issue stays `Unclassified` and gets `feat/`. Any other state is 409. It is fail-open on purpose, for a broken triage role.
 
 ## AwaitingInputIssue
 
@@ -301,15 +343,15 @@ Two states deserve explicit note:
 It waits for input on the thread where the question was posted. Display group: Needs attention, label "Awaiting input".
 
 - **Way in** — an implement run that exits 0 with a schema-valid `needs_input` verdict resolves to `WorkerOutcome.NeedsInput` (a merged pull request still completes the issue and the verdict is ignored; a non-zero exit still goes through failure classification), and `WorkerRunCompleted` carries the questions. `InProgressIssue.MarkAwaitingInput` and `RevisionInProgressIssue.MarkAwaitingInput` open a [clarification](#clarification) round.
-- **Resume target** — recorded at entry from what the asking run left: `Revision(branch, pr)` for an open pull request (always for a revision run), `Continuation(branch)` for commits without a pull request, `Fresh` when nothing was pushed (column `resume_target`).
+- **Resume target** — recorded at entry from what the asking run left: `Revision(branch, pr)` for an open pull request (always for a revision run), `Continuation(branch)` for commits without a pull request, `Fresh` when nothing was pushed, or `Retriage` when a triage run asked (see [TriageInProgressIssue](#triageinprogressissue)) (column `resume_target`).
 - **Question post** — the closed union `Pending | Posted(commentId, postedAt, commentUrl) | Failed(reason, nextAttemptAt, attempts)` (column `question_post`). The state is committed first; the awaiting-input step of each poll (and its `AwaitingInput` [nudge](#nudge)) then posts the questions on the pull request when there is one, otherwise on the issue, and records the comment in the [posted-comment registry](#posted-comment-registry) in the same save that marks it `Posted`. A transient failure retries with exponential backoff (1 minute doubling, capped at 1 hour); a permanent one is not retried automatically.
-- **Ways out** — [input arrived](#input-arrived) resumes along the resume target: `RevisionQueued` with `RevisionTrigger.InputProvided`, `ContinuationQueued` on the branch with an empty failure reason, or `FreshQueued`. As in the review pass, a closed provider issue completes it and a pull request closed without merging fails it continuably (`PrClosed`).
+- **Ways out** — [input arrived](#input-arrived) resumes along the resume target: `RevisionQueued` with `RevisionTrigger.InputProvided`, `ContinuationQueued` on the branch with an empty failure reason, or `FreshQueued`, or `TriageQueued` for `Retriage` (the triage prompt renders the clarification log). As in the review pass, a closed provider issue completes it and a pull request closed without merging fails it continuably (`PrClosed`).
 
 ## Clarification
 
 One round on an issue's append-only clarification log (`Issue.Clarifications`, column `clarifications`): the questions, the input that arrived, and when each happened (`askedAt`, `answeredAt`).
 A round is open until input arrives; a round left when the issue moved on without input (closed, or its pull request closed) stays unanswered.
-Every implement prompt (fresh, continuation, revision) renders the log in its own section, so an answer lasts as long as the issue does; with an empty log the prompt is unchanged.
+Every implement prompt (fresh, continuation, revision) and every triage prompt renders the log in its own section, so an answer lasts as long as the issue does; with an empty log the prompt is unchanged.
 
 ## Input Arrived
 
@@ -324,10 +366,10 @@ When no recognized label is present the classifier returns no kind (`IssueDetect
 
 ### Kind Classification
 
-The closed value object on the base `Issue` recording whether a label decided the issue's kind: `Labelled(IssueKind)` when a kind label matched, otherwise `Unclassified`.
-Set at detection and carried through every state transition with the other shared issue properties (`SetSharedProperties`). Re-derived from the labels whenever they change (`UpdateDetails`): `Labelled` when a kind label is present, otherwise back to `Unclassified` — an already-generated branch name is unaffected.
-Persisted in `issues.issue_kind`: the labelled kind, or `NULL` for `Unclassified`. Rows that existed before the classification was introduced are read as `Labelled` with their stored kind.
-The `Feature` fallback is applied only by `BranchName.Generate(KindClassification, …)`, which derives the branch prefix (`feat/`, `fix/`, `refactor/`, `docs/`) and resolves `Unclassified` to `IssueKind.Feature` (`feat/`).
+The closed value object on the base `Issue` recording how the issue's kind was decided: `Labelled(IssueKind)` when a kind label matched, `Triaged(IssueKind)` when no label did and a [Triage Verdict](#triage-verdict) judged it, otherwise `Unclassified`.
+Precedence: a label beats triage. It is derived from two halves carried through every state transition: the label half, set at detection and re-derived from the labels whenever they change (`UpdateDetails`), and the latest triage verdict's kind. A label change re-derives only the label half, so a label added later beats `Triaged`, and removing the last kind label from a triaged issue leaves it `Triaged` — an already-generated branch name is unaffected. When a label decided and triage judged a different kind, the triage kind is exposed as `conflictingTriageKind` on the issue detail's `kind: {source, kind, conflictingTriageKind}`; nothing acts on it.
+The label half is persisted in `issues.issue_kind`: the labelled kind, or `NULL` for no label. Rows that existed before the classification was introduced are read as `Labelled` with their stored kind.
+The `Feature` fallback is applied only by `BranchName.Generate(KindClassification, …)`, which derives the branch prefix (`feat/`, `fix/`, `refactor/`, `docs/`) and resolves `Unclassified` to `IssueKind.Feature` (`feat/`); `Triaged` uses the triaged kind.
 
 ## Monitored Repository
 
@@ -389,8 +431,8 @@ Polling is independent of position.
 The maximum number of workers that may run concurrently for a single monitored repository.
 Modeled as `MaxConcurrentWorkers` — a non-nullable `int` on `MonitoredRepository`, constrained to the range 1..20, defaulting to 1 (see [ADR 0074](docs/adr/0074-per-repository-capacity-in-candidate-selection.md)).
 Enforced in `DispatchCandidateSelector` (Issues module) — not at the Workers-side dispatch gate — because the gate receives an anonymous capacity token and cannot see which repository will spend it; see ADR 0074 for the architectural rationale.
-The in-flight count against this limit is `count(InProgressIssue) + count(RevisionInProgressIssue)` grouped by repository, computed Issues-side as its own query.
-Issues in review (`ReviewIssue`) do not count; both fresh and revision in-progress workers count.
+The in-flight count against this limit is `count(InProgressIssue) + count(RevisionInProgressIssue) + count(TriageInProgressIssue)` grouped by repository, computed Issues-side as its own query (`InFlightWorkerCountQuery`).
+Issues in review (`ReviewIssue`) do not count; fresh, revision and triage workers all count, so the limit means "workers", not "implement runs".
 This count is independent of the global `MaxConcurrent` gate and of the Workers-side [Worker Slot Occupancy](#worker-slot-occupancy) (which counts reservations, starting runs, and active runs but carries no repository identity).
 Lowering the limit below the current in-flight count does not preempt running workers — the repository drains to the new limit as its workers finish.
 
@@ -399,7 +441,7 @@ Lowering the limit below the current in-flight count does not preempt running wo
 The total order that governs which queued issue is claimed next and the order the dashboard list query serves queued issues in.
 The comparison primitive is the four-tuple `DispatchOrderKey` — `(TierRank, Position, IssueNumber, Id)`, evaluated in that precedence:
 
-- **TierRank** — a property of the queued state variant that encodes dispatch-priority class: revision (0) < continuation (1) < fresh (2). Lower rank is claimed first; this is the primary ordering criterion.
+- **TierRank** — a property of the queued state variant that encodes dispatch-priority class: revision (0) < continuation (1) < triage (2) < fresh (3). Lower rank is claimed first; this is the primary ordering criterion.
 - **Position** — the `EligibleRepository.Position` of the repository that owns the issue, supplied externally into the key. Lower position is preferred within a tier.
 - **IssueNumber** — the provider's issue number (the per-project `iid` on GitLab), lowest first within the same repository and tier, reflecting author intent rather than when Foundry noticed the issue (see [ADR 0092](docs/adr/0092-order-same-repository-queued-issues-by-issue-number.md)). `DetectedAt` is not a key component.
 - **Id** — guarantees a deterministic total order when all other fields are equal.
@@ -441,13 +483,14 @@ Queue Position 1 identifies the **Next up** issue: the one the dispatcher claims
 ## Dispatch Context
 
 The sealed union describing the nature of the work being dispatched to a worker — assembled on the aggregate, not in the handler.
-Three variants:
+Four variants:
 
 - **`Fresh`** — a new implementation attempt; carries `BranchName`.
 - **`Revision`** — a revision cycle; carries `BranchName`, `PullRequestUrl`, and a polymorphic [Revision Trigger](#revision-trigger) describing why the revision was queued.
 - **`Continuation`** — resuming an existing branch after a failed run; carries `BranchName` and optional `FailureReason`.
+- **`Triage`** — a triage run ([ADR 0097](docs/adr/0097-every-new-issue-is-triaged-before-dispatch.md)); carries nothing, and its `Role` is `DispatchRole.Triage`. The run gets no branch.
 
-`DispatchContext` is assembled by the concrete `QueuedIssue` subtype overriding the abstract `Context` property — `FreshQueuedIssue` returns `Fresh`, `RevisionQueuedIssue` returns `Revision`, `ContinuationQueuedIssue` returns `Continuation`.
+`DispatchContext` is assembled by the concrete `QueuedIssue` subtype overriding the abstract `Context` property — `FreshQueuedIssue` returns `Fresh`, `RevisionQueuedIssue` returns `Revision`, `ContinuationQueuedIssue` returns `Continuation`, `TriageQueuedIssue` returns `Triage`.
 The handler and claimer treat `Context` as an opaque value — they forward it into `ClaimedIssueDispatch` without switching on it.
 Survives the outbox round-trip via `[JsonPolymorphic]` / `[JsonDerivedType]` annotations (see [ADR 0051](docs/adr/0051-dispatch-context-union-and-typed-dispatch-seam.md)).
 
@@ -544,11 +587,11 @@ Redelivery is idempotent — if the reservation was already deleted (by the swee
 
 ## Queued Issue
 
-The abstract intermediate in the Issue hierarchy covering all three queued state variants: `FreshQueuedIssue`, `RevisionQueuedIssue`, and `ContinuationQueuedIssue`.
+The abstract intermediate in the Issue hierarchy covering all four queued state variants: `FreshQueuedIssue`, `TriageQueuedIssue`, `RevisionQueuedIssue`, and `ContinuationQueuedIssue`.
 Defined as `abstract QueuedIssue : Issue`, it carries the members shared by every claimable state:
 
 - **`TierRank`** (abstract, computed) — the dispatch-priority rank, overridden by each concrete variant.
-- **`DispatchBranchName`** (abstract, computed) — the branch name the worker should operate on.
+- **`DispatchBranchName`** (abstract, computed) — the branch name the worker should operate on, or `null` for a triage run, which gets none.
 - **`Context`** (abstract, computed) — the `DispatchContext` union value describing the nature of the work.
 - **`Claim(Guid workerRunId)`** (abstract) — transitions the aggregate to its in-progress state with covariant return type on each override.
 
@@ -610,7 +653,7 @@ A failed claim-time read skips the candidate for that dispatch without changing 
 A blocker added after an issue is claimed is not detected; add blockers before applying the trigger label.
 When the provider does not expose dependency links (e.g. GitLab Free tier), the provider degrades gracefully — it treats the issue as having no dependencies and logs once, rather than failing the poll.
 Circular dependencies are detected by a domain service and flagged via a `CircularDependencyDetected` domain event.
-A cycle does not exempt an issue from blocking: a `DetectedIssue` or `FreshQueuedIssue` in a cycle still transitions to `BlockedIssue`, and the event is still raised.
+A cycle does not exempt an issue from blocking: a `FreshQueuedIssue` in a cycle still transitions to `BlockedIssue`, and the event is still raised. A triage state only records its blockers; they decide where a ready verdict sends it.
 The cycle is resolved by breaking it in the provider, after which the dependency pass unblocks the issue.
 A blocker is *resolved* when it is closed in the provider — the provider client filters out closed blockers at the anti-corruption boundary so domain logic never sees them.
 The provider client also scopes "blocked by" links to the same repository or project at this boundary — GitHub by `repository.full_name`, GitLab by the linked issue's numeric `project_id` — so cross-project and cross-repository links never reach domain logic.
@@ -620,10 +663,10 @@ When a blocker's state is missing or unrecognized, it is treated as still blocki
 ## Blocked Issue
 
 A lifecycle state for an issue that has unresolved dependencies.
-A `DetectedIssue` with blockers transitions to `BlockedIssue` instead of `FreshQueuedIssue`.
+A triaged issue (a ready verdict or Skip triage) with open blockers transitions to `BlockedIssue` instead of `FreshQueuedIssue`.
 A `FreshQueuedIssue` that gains blockers is demoted to `BlockedIssue` — whether the blockers are found by the dependency pass or by the claim-time re-check (see Issue Dependency).
-A `DetectedIssue` or `FreshQueuedIssue` whose blockers form a cycle is blocked like any other; `CircularDependencyDetected` is raised alongside the transition.
-When all blockers are resolved — that is, closed in the provider, or the link removed (including one that broke a cycle) — a `BlockedIssue` transitions to `FreshQueuedIssue` on the next dependency pass.
+A `FreshQueuedIssue` whose blockers form a cycle is blocked like any other; `CircularDependencyDetected` is raised alongside the transition.
+When all blockers are resolved — that is, closed in the provider, or the link removed (including one that broke a cycle) — a `BlockedIssue` transitions to `FreshQueuedIssue` on the next dependency pass, without being triaged again. [Re-triage](#re-triage) sends it back to triage; a ready verdict while its blockers are still open returns it to `BlockedIssue`.
 
 ## Rebase Pending Issue
 
@@ -653,11 +696,11 @@ Hard-deleted when the provider-side issue is closed or loses its trigger label (
 
 ## Fresh Queued Issue
 
-The first-time dispatch tier — the lowest-priority of the three queued variants (`TierRank = 2`).
-An issue reaches this state from three paths: `DetectedIssue` with no blockers, an unblocked `BlockedIssue` (all blockers resolved), or a retried `FailedIssue` / `UnchangedIssue`.
+The first-time dispatch tier — the lowest-priority of the four queued variants (`TierRank = 3`).
+An issue reaches this state from four paths: a ready triage verdict or Skip triage with no open blockers, an unblocked `BlockedIssue` (all blockers resolved; it is not triaged again), or a retried `FailedIssue` / `UnchangedIssue`.
 `DispatchBranchName` is generated fresh from the kind classification, number, and title (`BranchName.Generate(KindClassification, IssueNumber, Title)`; an `Unclassified` issue gets `feat/`).
 `Context` is `DispatchContext.Fresh(branchName)` — instructs the worker to start a new implementation on a new branch.
-Transitions: `Claim()` → `InProgressIssue` (worker assigned); `Block()` → `BlockedIssue` (blockers detected).
+Transitions: `Claim()` → `InProgressIssue` (worker assigned); `Block()` → `BlockedIssue` (blockers detected); `Retriage()` → `TriageQueuedIssue` ([Re-triage](#re-triage)).
 
 ## Revision Queued Issue
 

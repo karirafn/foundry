@@ -8,13 +8,16 @@ public static class BranchNameGeneration
     {
         /// <summary>
         /// The only place an unclassified issue resolves to <see cref="IssueKind.Feature"/>:
-        /// the classification itself stays honest about no label having decided the kind.
+        /// the classification itself stays honest about nothing having decided the kind.
         /// </summary>
         public static BranchName Generate(KindClassification classification, int issueNumber, string title)
         {
-            IssueKind kind = classification is KindClassification.Labelled labelled
-                ? labelled.Kind
-                : IssueKind.Feature;
+            IssueKind kind = classification switch
+            {
+                KindClassification.Labelled labelled => labelled.Kind,
+                KindClassification.Triaged triaged => triaged.Kind,
+                _ => IssueKind.Feature,
+            };
 
             return BranchName.Generate(kind.BranchPrefix, issueNumber, title);
         }

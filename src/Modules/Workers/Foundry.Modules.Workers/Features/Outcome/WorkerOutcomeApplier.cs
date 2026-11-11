@@ -7,12 +7,14 @@ using Foundry.Modules.Workers.Domain.Entities.States;
 using Foundry.Modules.Workers.Domain.ValueObjects;
 using Foundry.Modules.Workers.Features.Dispatch;
 using Foundry.Modules.Workers.Features.Orchestration;
+using Foundry.Modules.Workers.Features.Verdicts;
 using Foundry.Shared;
 using Foundry.Shared.Infrastructure;
 
 using DispatchPausedEvent = Foundry.Modules.Workers.Contracts.DispatchPaused;
 using WorkerAuthenticationFailedEvent = Foundry.Modules.Workers.Contracts.WorkerAuthenticationFailed;
 using WorkerCreditsExhaustedEvent = Foundry.Modules.Workers.Contracts.WorkerCreditsExhausted;
+using TriageRunCompletedEvent = Foundry.Modules.Workers.Contracts.TriageRunCompleted;
 using WorkerRunCompletedEvent = Foundry.Modules.Workers.Contracts.WorkerRunCompleted;
 
 using Microsoft.EntityFrameworkCore;
@@ -31,6 +33,7 @@ internal sealed class WorkerOutcomeApplier(
     IIntegrationEventDispatcher integrationEventDispatcher,
     IIntegrationEventProcessor integrationEventProcessor,
     IDomainEventDispatcher domainEventDispatcher,
+    TimeProvider timeProvider,
     ILogger<WorkerOutcomeApplier> logger)
 {
     /// <summary>
@@ -191,6 +194,32 @@ internal sealed class WorkerOutcomeApplier(
                 break;
             }
 
+            case WorkerOutcome.TriageCompleted triage:
+            {
+                // A triage run publishes its verdict instead of WorkerRunCompleted: it has no branch or merge request.
+                CompletedRun triageRun = activeRun.Complete(
+                    0,
+                    branchName: null,
+                    pullRequestUrl: null,
+                    triage.Summary,
+                    verdict,
+                    triage.ContainerOutput);
+                await TryDispatchAsync(
+                    [new TriageRunCompletedEvent(
+                        activeRun.IssueId.Value,
+                        activeRun.Id,
+                        ToTriageResult(triage.Verdict),
+                        timeProvider.GetUtcNow())],
+                    activeRun.Id,
+                    cancellationToken);
+                await dbContext.TransitionAsync(activeRun, triageRun, alongside, domainEventDispatcher, cancellationToken);
+                logger.LogInformation(
+                    "Worker run {WorkerRunId} triaged its issue: {Outcome}.",
+                    activeRun.Id,
+                    triage.Verdict.GetType().Name);
+                break;
+            }
+
             case WorkerOutcome.ContinuableFailure continuable:
             {
                 FailedRun continuableFailed = activeRun.Fail(
@@ -238,6 +267,24 @@ internal sealed class WorkerOutcomeApplier(
 
         await TryStopAndRemoveAsync(activeRun.ContainerId.Value, activeRun.Id, cancellationToken);
     }
+
+    private static TriageResult ToTriageResult(TriageVerdict verdict) => verdict switch
+    {
+        TriageVerdict.Ready ready => new TriageResult.Ready(ToTriageKind(ready.Kind)),
+        TriageVerdict.NeedsInput needsInput => new TriageResult.NeedsInput(
+            ToTriageKind(needsInput.Kind),
+            [.. needsInput.Questions.Select(q => new InputQuestion(q.Question, q.Context))]),
+        _ => throw new UnreachableException($"Unhandled triage verdict: {verdict.GetType().Name}"),
+    };
+
+    private static TriageKind ToTriageKind(TriageIssueKind kind) => kind switch
+    {
+        TriageIssueKind.Feature => TriageKind.Feature,
+        TriageIssueKind.Bug => TriageKind.Bug,
+        TriageIssueKind.Refactor => TriageKind.Refactor,
+        TriageIssueKind.Documentation => TriageKind.Documentation,
+        _ => throw new UnreachableException($"Unhandled triage kind: {kind}"),
+    };
 
     private async Task ApplyFailureSideEffectsAsync(
         ActiveRun activeRun,

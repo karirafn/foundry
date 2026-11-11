@@ -25,12 +25,12 @@ public abstract class QueuedIssue : Issue
     public abstract int TierRank { get; }
 
     /// <summary>
-    /// The branch name the worker should operate on.
+    /// The branch name the worker should operate on, or <see langword="null"/> for a run that gets no branch (triage).
     /// </summary>
-    public abstract BranchName DispatchBranchName { get; }
+    public abstract BranchName? DispatchBranchName { get; }
 
     /// <summary>
-    /// The dispatch context describing the nature of the work (fresh, revision, or continuation).
+    /// The dispatch context describing the nature of the work (fresh, revision, continuation, or triage).
     /// </summary>
     public abstract DispatchContext Context { get; }
 
