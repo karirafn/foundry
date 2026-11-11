@@ -1,5 +1,7 @@
 #!/usr/bin/env bats
-# Tests for publisher/publisher.sh (ADR 0100).
+# Tests for publisher/publisher.sh (ADR 0100, ADR 0101).
+
+bats_require_minimum_version 1.5.0
 #
 # The publisher runs real git against a local "remote" repository: a git wrapper first on PATH maps the
 # https clone URL the publisher builds to that repository, records each invocation's arguments and the
@@ -22,7 +24,7 @@ setup() {
 
     export CLONE_URL="https://git.example.test/owner/repo"
     export GIT_PAT="ghp_publisher_token"
-    unset RUN_BRANCH
+    unset RUN_BRANCH RUN_ID BASE_DEFAULT_SHA BASE_BRANCH_SHA AUTHOR_NAME AUTHOR_EMAIL
 
     REMOTE="$BATS_TEST_TMPDIR/remote.git"
     make_remote main
@@ -58,6 +60,11 @@ for arg in "\$@"; do
     if [ "\$arg" = "$AUTH_URL" ]; then
         if [ -n "\${FAKE_GIT_UNREACHABLE:-}" ]; then
             echo "fatal: unable to access '$AUTH_URL': Could not resolve host: git.example.test" >&2
+            exit 128
+        fi
+        if [ -n "\${FAKE_GIT_AUTH_FAILED:-}" ]; then
+            echo "remote: Invalid username or token." >&2
+            echo "fatal: Authentication failed for '$AUTH_URL'" >&2
             exit 128
         fi
         arg="$REMOTE"
@@ -114,6 +121,14 @@ bundle_heads() {
     bundle_heads | grep -qx "$(remote_sha feat/7-work) refs/heads/feat/7-work"
     bundle_heads | grep -qx "$(remote_sha main) refs/heads/main"
     grep -qx "FOUNDRY_BASE default_branch=main default_sha=$(remote_sha main) branch_sha=$(remote_sha feat/7-work)" <<< "$output"
+}
+
+@test "prepare creates out/ world-writable so the worker can write its run bundle" {
+    run sh "$PUBLISHER" prepare
+
+    [ "$status" -eq 0 ]
+    [ -d "$FOUNDRY_HANDOFF_DIR/out" ]
+    [ "$(stat -c '%a' "$FOUNDRY_HANDOFF_DIR/out")" = "777" ]
 }
 
 @test "prepare without RUN_BRANCH bundles no other branch" {
@@ -236,4 +251,543 @@ bundle_heads() {
 
     [ "$status" -eq 64 ]
     [ ! -f "$BATS_TEST_TMPDIR/git_args" ]
+}
+
+# ---------------------------------------------------------------------------
+# Publish mode (ADR 0100, ADR 0101)
+#
+# A test run: start_run records the run's base the way Prepare does, a worker
+# repository cloned from the remote stands in for the worker's /workspace, and
+# worker_bundle writes out/run.bundle with the entrypoint's range
+# (HEAD --not origin/<branch> origin/HEAD).  Remote-side changes during the run
+# are made through the seed repository.
+# ---------------------------------------------------------------------------
+
+RUN_BRANCH_NAME="feat/7-work"
+ACCOUNT_NAME="Account Owner"
+ACCOUNT_EMAIL="owner@example.test"
+ROBOT="$(printf '\360\237\244\226')"
+
+# start_run — records the run's base (BASE_DEFAULT_SHA, and BASE_BRANCH_SHA when the
+# run branch exists on the remote) and clones the worker repository on the run branch.
+start_run() {
+    export RUN_BRANCH="$RUN_BRANCH_NAME" RUN_ID="run-42"
+    export AUTHOR_NAME="$ACCOUNT_NAME" AUTHOR_EMAIL="$ACCOUNT_EMAIL"
+    export BASE_DEFAULT_SHA
+    BASE_DEFAULT_SHA="$(remote_sha main)"
+    if "$REAL_GIT" -C "$REMOTE" rev-parse --verify --quiet "refs/heads/$RUN_BRANCH" > /dev/null; then
+        export BASE_BRANCH_SHA
+        BASE_BRANCH_SHA="$(remote_sha "$RUN_BRANCH")"
+    else
+        export BASE_BRANCH_SHA=""
+    fi
+    WORKER="$BATS_TEST_TMPDIR/worker"
+    "$REAL_GIT" clone --quiet "$REMOTE" "$WORKER"
+    wgit switch --quiet "$RUN_BRANCH" 2> /dev/null || wgit switch --quiet -c "$RUN_BRANCH"
+}
+
+# wgit <args...> — git in the worker repository as the worker's identity.
+wgit() {
+    "$REAL_GIT" -C "$WORKER" -c user.name="Foundry Worker" -c user.email=foundry-worker@foundry.invalid "$@"
+}
+
+# wcommit <file> <content> <message> — a worker commit writing <content> to <file>.
+wcommit() {
+    printf '%s\n' "$2" > "$WORKER/$1"
+    wgit add "$1"
+    printf '%s\n' "$3" | wgit commit --quiet -F -
+}
+
+# seed_commit <branch> <file> <content> <message> — a commit pushed to the remote's
+# <branch> through the seed repository (a human pushing, or the default branch moving).
+seed_commit() {
+    local seed="$BATS_TEST_TMPDIR/seed"
+    "$REAL_GIT" -C "$seed" fetch --quiet "$REMOTE" "+refs/heads/*:refs/remotes/r/*"
+    "$REAL_GIT" -C "$seed" switch --quiet --detach "r/$1"
+    printf '%s\n' "$3" > "$seed/$2"
+    "$REAL_GIT" -C "$seed" add "$2"
+    "$REAL_GIT" -C "$seed" -c user.name=Human -c user.email=human@example.test commit --quiet -m "$4"
+    "$REAL_GIT" -C "$seed" push --quiet "$REMOTE" "HEAD:refs/heads/$1"
+}
+
+# worker_bundle — writes out/run.bundle the way the entrypoint does.
+worker_bundle() {
+    mkdir -p "$FOUNDRY_HANDOFF_DIR/out"
+    local range=(HEAD --not)
+    if wgit rev-parse --verify --quiet "refs/remotes/origin/$RUN_BRANCH" > /dev/null; then
+        range+=("refs/remotes/origin/$RUN_BRANCH")
+    fi
+    range+=(refs/remotes/origin/HEAD)
+    wgit bundle create --quiet "$FOUNDRY_HANDOFF_DIR/out/run.bundle" "${range[@]}"
+}
+
+publish() {
+    run --separate-stderr sh "$PUBLISHER" publish
+    # Exactly one result line, and it is the last thing on stdout.
+    [ "$(grep -c '^FOUNDRY_PUBLISH ' <<< "$output")" -eq 1 ]
+    [[ "${lines[${#lines[@]}-1]}" == "FOUNDRY_PUBLISH "* ]]
+}
+
+result_line() {
+    printf '%s\n' "${lines[${#lines[@]}-1]}"
+}
+
+# message <rev> — the exact commit message of <rev> on the remote.
+message() {
+    "$REAL_GIT" -C "$REMOTE" cat-file commit "$1" | sed '1,/^$/d'
+}
+
+remote_git() {
+    "$REAL_GIT" -C "$REMOTE" "$@"
+}
+
+push_lines() {
+    grep -E '(^| )push( |$)' "$BATS_TEST_TMPDIR/git_args" || true
+}
+
+@test "publish: a fresh run is pushed fast-forward to a new branch" {
+    start_run
+    wcommit a.txt a "first"
+    wcommit b.txt b "second"
+    worker_bundle
+
+    publish
+
+    [ "$status" -eq 0 ]
+    [ "$(result_line)" = "FOUNDRY_PUBLISH result=published head=$(remote_sha "$RUN_BRANCH") commits=2" ]
+    [ "$(remote_git log --format=%s "$RUN_BRANCH" --not main)" = "$(printf '%s\n' second first)" ]
+    [ "$(remote_git rev-parse "$RUN_BRANCH~2")" = "$BASE_DEFAULT_SHA" ]
+}
+
+@test "publish: an existing branch's run is pushed fast-forward on top of it" {
+    add_remote_branch "$RUN_BRANCH_NAME"
+    start_run
+    wcommit a.txt a "continued"
+    worker_bundle
+
+    publish
+
+    [ "$status" -eq 0 ]
+    [ "$(result_line)" = "FOUNDRY_PUBLISH result=published head=$(remote_sha "$RUN_BRANCH") commits=2" ]
+    [ "$(remote_git rev-parse "$RUN_BRANCH~1")" = "$BASE_BRANCH_SHA" ]
+}
+
+@test "publish: a fast-forward publish never force-pushes and pushes only the run's branch" {
+    add_remote_branch "$RUN_BRANCH_NAME"
+    start_run
+    wcommit a.txt a "continued"
+    worker_bundle
+
+    publish
+
+    [ "$status" -eq 0 ]
+    [ "$(push_lines | wc -l)" -eq 1 ]
+    ! push_lines | grep -qE -- '--force| \+'
+    push_lines | grep -qE ":refs/heads/$RUN_BRANCH_NAME\$"
+}
+
+@test "publish: each pushed run commit is listed oldest first before the result line" {
+    start_run
+    wcommit a.txt a "first"
+    wcommit b.txt b "second
+
+body line"
+    worker_bundle
+
+    publish
+
+    [ "$status" -eq 0 ]
+    local head
+    head="$(remote_sha "$RUN_BRANCH")"
+    [ "$(grep '^FOUNDRY_RUN_COMMIT ' <<< "$output")" = "$(printf 'FOUNDRY_RUN_COMMIT %s first\nFOUNDRY_RUN_COMMIT %s second\n' "$(remote_git rev-parse "$head~1")" "$head")" ]
+}
+
+@test "publish: no run bundle is nothing to publish" {
+    start_run
+
+    publish
+
+    [ "$status" -eq 0 ]
+    [ "$(result_line)" = "FOUNDRY_PUBLISH result=nothing_to_publish" ]
+    [ -z "$(push_lines)" ]
+}
+
+@test "publish: a bundle with no commits beyond the base is nothing to publish" {
+    add_remote_branch "$RUN_BRANCH_NAME"
+    start_run
+    mkdir -p "$FOUNDRY_HANDOFF_DIR/out"
+    wgit bundle create --quiet "$FOUNDRY_HANDOFF_DIR/out/run.bundle" HEAD --not origin/HEAD
+
+    publish
+
+    [ "$status" -eq 0 ]
+    [ "$(result_line)" = "FOUNDRY_PUBLISH result=nothing_to_publish" ]
+    [ -z "$(push_lines)" ]
+    [ "$(remote_sha "$RUN_BRANCH")" = "$BASE_BRANCH_SHA" ]
+}
+
+@test "publish: a run tip that does not descend from the run's base fails as invalid" {
+    start_run
+    wgit switch --quiet --orphan unrelated
+    wcommit a.txt a "unrelated history"
+    worker_bundle
+
+    publish
+
+    [ "$status" -eq 1 ]
+    [ "$(result_line)" = "FOUNDRY_PUBLISH result=failed kind=permanent reason=invalid: run tip does not descend from the run's base" ]
+    [ -z "$(push_lines)" ]
+}
+
+@test "publish: a corrupt run bundle fails as invalid" {
+    start_run
+    mkdir -p "$FOUNDRY_HANDOFF_DIR/out"
+    printf 'not a bundle\n' > "$FOUNDRY_HANDOFF_DIR/out/run.bundle"
+
+    publish
+
+    [ "$status" -eq 1 ]
+    [[ "$(result_line)" == "FOUNDRY_PUBLISH result=failed kind=permanent reason=invalid: "* ]]
+    [ -z "$(push_lines)" ]
+}
+
+@test "publish: a run bundle that is a symlink is never read" {
+    start_run
+    mkdir -p "$FOUNDRY_HANDOFF_DIR/out"
+    ln -s /etc/passwd "$FOUNDRY_HANDOFF_DIR/out/run.bundle"
+
+    publish
+
+    [ "$status" -eq 1 ]
+    [[ "$(result_line)" == "FOUNDRY_PUBLISH result=failed kind=permanent reason=invalid: "* ]]
+}
+
+@test "publish: invalid run inputs fail permanently before any git transfer" {
+    start_run
+    wcommit a.txt a "first"
+    worker_bundle
+    local name value
+    for name in RUN_ID BASE_DEFAULT_SHA BASE_BRANCH_SHA RUN_BRANCH AUTHOR_EMAIL AUTHOR_NAME; do
+        case "$name" in
+            RUN_ID) value='run 42;rm' ;;
+            BASE_DEFAULT_SHA) value='HEAD~1' ;;
+            BASE_BRANCH_SHA) value='not-a-sha' ;;
+            RUN_BRANCH) value='feat/7..x' ;;
+            AUTHOR_EMAIL) value='owner@example.test> evil' ;;
+            AUTHOR_NAME) value='' ;;
+        esac
+        rm -f "$BATS_TEST_TMPDIR/git_args"
+        run --separate-stderr env "$name=$value" sh "$PUBLISHER" publish
+        [ "$status" -eq 1 ]
+        [[ "${lines[${#lines[@]}-1]}" == "FOUNDRY_PUBLISH result=failed kind=permanent reason=invalid: "* ]]
+        [ -z "$(push_lines)" ]
+        ! grep -q ' ls-remote ' "$BATS_TEST_TMPDIR/git_args" 2> /dev/null
+    done
+}
+
+@test "publish: author and committer of every run commit become the account identity, dates kept" {
+    start_run
+    wcommit a.txt a "first"
+    wcommit b.txt b "second"
+    worker_bundle
+    local original
+    original="$(wgit log --format='%at %ct' HEAD --not origin/HEAD)"
+
+    publish
+
+    [ "$status" -eq 0 ]
+    [ "$(remote_git log --format='%an <%ae>|%cn <%ce>' "$RUN_BRANCH" --not main | sort -u)" = "$ACCOUNT_NAME <$ACCOUNT_EMAIL>|$ACCOUNT_NAME <$ACCOUNT_EMAIL>" ]
+    [ "$(remote_git log --format='%at %ct' "$RUN_BRANCH" --not main)" = "$original" ]
+}
+
+@test "publish: a message whose body is only a Co-Authored-By trailer keeps just its subject" {
+    start_run
+    wcommit a.txt a "Add the widget
+
+Co-Authored-By: Claude <noreply@anthropic.com>"
+    worker_bundle
+
+    publish
+
+    [ "$status" -eq 0 ]
+    [ "$(message "$RUN_BRANCH")" = "Add the widget" ]
+}
+
+@test "publish: every Co-Authored-By trailer is stripped, whoever it names and however it is cased" {
+    start_run
+    wcommit a.txt a "Fix the parser
+
+Handles empty input.
+
+Co-authored-by: Jane Human <jane@example.test>
+co-authored-by: claude <noreply@anthropic.com>
+CO-AUTHORED-BY: Someone <s@example.test>
+Reviewed-by: Kept Reviewer <kept@example.test>"
+    worker_bundle
+
+    publish
+
+    [ "$status" -eq 0 ]
+    [ "$(message "$RUN_BRANCH")" = "$(printf 'Fix the parser\n\nHandles empty input.\n\nReviewed-by: Kept Reviewer <kept@example.test>')" ]
+}
+
+@test "publish: the Claude Code footer is stripped with and without the robot emoji" {
+    start_run
+    wcommit a.txt a "With emoji
+
+Body text.
+
+$ROBOT Generated with [Claude Code](https://claude.com/claude-code)
+
+Co-Authored-By: Claude <noreply@anthropic.com>"
+    wcommit b.txt b "Without emoji
+
+Generated with [Claude Code](https://claude.ai/code)"
+    worker_bundle
+
+    publish
+
+    [ "$status" -eq 0 ]
+    [ "$(message "$RUN_BRANCH~1")" = "$(printf 'With emoji\n\nBody text.')" ]
+    [ "$(message "$RUN_BRANCH")" = "Without emoji" ]
+}
+
+@test "publish: lines that only mention Claude Code or co-authors are kept" {
+    start_run
+    local text="Document the attribution rules
+
+The Generated with [Claude Code](https://claude.com/claude-code) footer is stripped.
+A Co-Authored-By: trailer is stripped too.
+Run claude -p with Generated with flags."
+    wcommit a.txt a "$text"
+    worker_bundle
+
+    publish
+
+    [ "$status" -eq 0 ]
+    [ "$(message "$RUN_BRANCH")" = "$text" ]
+}
+
+@test "publish: a commit that is only attribution keeps its subject" {
+    start_run
+    wcommit a.txt a "Co-Authored-By: Claude <noreply@anthropic.com>"
+    worker_bundle
+
+    publish
+
+    [ "$status" -eq 0 ]
+    [ "$(message "$RUN_BRANCH")" = "Co-Authored-By: Claude <noreply@anthropic.com>" ]
+}
+
+@test "publish: a merge commit inside the run commits is rewritten and stays a merge" {
+    add_remote_branch "$RUN_BRANCH_NAME"
+    start_run
+    wgit switch --quiet -c topic
+    wcommit topic.txt t "topic work"
+    wgit switch --quiet "$RUN_BRANCH"
+    wcommit main-line.txt m "branch work"
+    wgit merge --quiet --no-ff --no-edit -m "Merge topic
+
+Co-Authored-By: Claude <noreply@anthropic.com>" topic
+    worker_bundle
+
+    publish
+
+    [ "$status" -eq 0 ]
+    local head
+    head="$(remote_sha "$RUN_BRANCH")"
+    [ "$(remote_git rev-list --parents -n 1 "$head" | wc -w)" -eq 3 ]
+    [ "$(message "$head")" = "Merge topic" ]
+    [ "$(remote_git log --format='%an|%cn' "$head" --not main "$BASE_BRANCH_SHA" | sort -u)" = "$ACCOUNT_NAME|$ACCOUNT_NAME" ]
+    [ "$(remote_git log --format=%s "$head^2" -1)" = "topic work" ]
+    [ "$(remote_git log --format=%s "$head^1" -1)" = "branch work" ]
+    [ "$(remote_git rev-parse "$head^1~1")" = "$BASE_BRANCH_SHA" ]
+    [ "$(result_line)" = "FOUNDRY_PUBLISH result=published head=$head commits=4" ]
+}
+
+@test "publish: after the run merges the default branch every default-branch commit keeps its SHA" {
+    add_remote_branch "$RUN_BRANCH_NAME"
+    seed_commit main main1.txt one "main moved once"
+    seed_commit main main2.txt two "main moved twice"
+    start_run
+    wgit merge --quiet --no-edit origin/HEAD
+    wcommit a.txt a "after merge"
+    worker_bundle
+
+    publish
+
+    [ "$status" -eq 0 ]
+    local head
+    head="$(remote_sha "$RUN_BRANCH")"
+    # The default branch's commits are untouched: its head is still an ancestor, by SHA.
+    remote_git merge-base --is-ancestor "$BASE_DEFAULT_SHA" "$head"
+    [ "$(remote_git rev-parse "$head~1^2")" = "$BASE_DEFAULT_SHA" ]
+    [ "$(remote_git rev-parse "$head~1^1")" = "$BASE_BRANCH_SHA" ]
+    # Only the run's own commits were rewritten: nothing on the branch beyond main
+    # duplicates a default-branch commit.
+    [ "$(remote_git log --format=%s "$head" --not main | sort)" = "$(printf '%s\n' "after merge" "Merge remote-tracking branch 'origin/HEAD' into $RUN_BRANCH_NAME" "work on $RUN_BRANCH_NAME" | sort)" ]
+    [ "$(grep -c '^FOUNDRY_RUN_COMMIT ' <<< "$output")" -eq 2 ]
+}
+
+@test "publish: a remote branch that moved during the run is merged cleanly and the merge pushed" {
+    add_remote_branch "$RUN_BRANCH_NAME"
+    start_run
+    wcommit run.txt run "run work"
+    worker_bundle
+    seed_commit "$RUN_BRANCH_NAME" human.txt human "human work"
+    local human
+    human="$(remote_sha "$RUN_BRANCH")"
+
+    publish
+
+    [ "$status" -eq 0 ]
+    local head
+    head="$(remote_sha "$RUN_BRANCH")"
+    [ "$(result_line)" = "FOUNDRY_PUBLISH result=published head=$head commits=4" ]
+    [ "$(remote_git rev-list --parents -n 1 "$head" | wc -w)" -eq 3 ]
+    [ "$(remote_git rev-parse "$head^2")" = "$human" ]
+    [ "$(remote_git log --format=%s -1 "$head^1")" = "run work" ]
+    [ "$(remote_git log --format='%an <%ae>|%cn <%ce>' -1 "$head")" = "$ACCOUNT_NAME <$ACCOUNT_EMAIL>|$ACCOUNT_NAME <$ACCOUNT_EMAIL>" ]
+    # The merge is Foundry's, not a run commit.
+    [ "$(grep '^FOUNDRY_RUN_COMMIT ' <<< "$output")" = "FOUNDRY_RUN_COMMIT $(remote_git rev-parse "$head^1") run work" ]
+    ! push_lines | grep -qE -- '--force| \+'
+}
+
+@test "publish: a remote branch that moved with a conflicting change diverges to a side branch" {
+    add_remote_branch "$RUN_BRANCH_NAME"
+    start_run
+    wcommit shared.txt "run version" "run work"
+    worker_bundle
+    seed_commit "$RUN_BRANCH_NAME" shared.txt "human version" "human work"
+    local human
+    human="$(remote_sha "$RUN_BRANCH")"
+
+    publish
+
+    [ "$status" -eq 0 ]
+    local side="$RUN_BRANCH_NAME-run-run-42"
+    [ "$(result_line)" = "FOUNDRY_PUBLISH result=diverged branch=$RUN_BRANCH_NAME side_branch=$side head=$(remote_sha "$side")" ]
+    [ "$(remote_sha "$RUN_BRANCH")" = "$human" ]
+    [ "$(remote_git log --format=%s -1 "$side")" = "run work" ]
+    [ "$(remote_git rev-parse "$side~1")" = "$BASE_BRANCH_SHA" ]
+    ! push_lines | grep -qE -- '--force| \+'
+}
+
+# rebase_run — the default branch moves before Prepare, and the worker rebases the
+# run branch onto it (ADR 0101), then commits once more.
+rebase_run() {
+    add_remote_branch "$RUN_BRANCH_NAME"
+    seed_commit main main1.txt one "main moved"
+    start_run
+    wgit rebase --quiet origin/HEAD
+    wcommit a.txt a "after rebase"
+    worker_bundle
+}
+
+@test "publish: a rebased run tip is pushed with a lease on the run's base" {
+    rebase_run
+
+    publish
+
+    [ "$status" -eq 0 ]
+    local head
+    head="$(remote_sha "$RUN_BRANCH")"
+    [ "$(result_line)" = "FOUNDRY_PUBLISH result=published head=$head commits=2" ]
+    [ "$(remote_git rev-parse "$head~2")" = "$BASE_DEFAULT_SHA" ]
+    [ "$(remote_git log --format=%s "$head" --not main)" = "$(printf '%s\n' "after rebase" "work on $RUN_BRANCH_NAME")" ]
+    ! remote_git merge-base --is-ancestor "$BASE_BRANCH_SHA" "$head"
+    [ "$(push_lines | wc -l)" -eq 1 ]
+    push_lines | grep -qF -- "--force-with-lease=refs/heads/$RUN_BRANCH_NAME:$BASE_BRANCH_SHA"
+    push_lines | grep -qE ":refs/heads/$RUN_BRANCH_NAME\$"
+}
+
+@test "publish: a rebased run tip whose remote branch moved diverges to a side branch" {
+    rebase_run
+    seed_commit "$RUN_BRANCH_NAME" human.txt human "human work"
+    local human
+    human="$(remote_sha "$RUN_BRANCH")"
+
+    publish
+
+    [ "$status" -eq 0 ]
+    local side="$RUN_BRANCH_NAME-run-run-42"
+    [ "$(result_line)" = "FOUNDRY_PUBLISH result=diverged branch=$RUN_BRANCH_NAME side_branch=$side head=$(remote_sha "$side")" ]
+    [ "$(remote_sha "$RUN_BRANCH")" = "$human" ]
+    ! push_lines | grep -qE -- '--force| \+'
+}
+
+@test "publish: a provider that refuses the lease push diverges with reason force-push-protected" {
+    rebase_run
+    cat > "$REMOTE/hooks/pre-receive" <<'HOOK'
+#!/bin/sh
+while read -r old new ref; do
+    if [ "$old" != 0000000000000000000000000000000000000000 ] && ! git merge-base --is-ancestor "$old" "$new"; then
+        echo "GitLab: You are not allowed to force push code to a protected branch on this project." >&2
+        exit 1
+    fi
+done
+HOOK
+    chmod +x "$REMOTE/hooks/pre-receive"
+
+    publish
+
+    [ "$status" -eq 0 ]
+    local side="$RUN_BRANCH_NAME-run-run-42"
+    [ "$(result_line)" = "FOUNDRY_PUBLISH result=diverged branch=$RUN_BRANCH_NAME side_branch=$side head=$(remote_sha "$side") reason=force-push-protected" ]
+    [ "$(remote_sha "$RUN_BRANCH")" = "$BASE_BRANCH_SHA" ]
+}
+
+@test "publish: publishing the same run bundle again is idempotent" {
+    start_run
+    wcommit a.txt a "first"
+    worker_bundle
+    publish
+    [ "$status" -eq 0 ]
+    local first
+    first="$(result_line)"
+
+    publish
+
+    [ "$status" -eq 0 ]
+    [ "$(result_line)" = "$first" ]
+}
+
+@test "publish: an unreachable provider is a transient failure that never shows the token" {
+    start_run
+    wcommit a.txt a "first"
+    worker_bundle
+    export FAKE_GIT_UNREACHABLE=1
+
+    publish
+
+    [ "$status" -eq 1 ]
+    [[ "$(result_line)" == "FOUNDRY_PUBLISH result=failed kind=transient reason="*"Could not resolve host"* ]]
+    [[ "$output" != *"ghp_publisher_token"* ]]
+    [[ "$stderr" != *"ghp_publisher_token"* ]]
+}
+
+@test "publish: an authentication failure is a permanent failure" {
+    start_run
+    wcommit a.txt a "first"
+    worker_bundle
+    export FAKE_GIT_AUTH_FAILED=1
+
+    publish
+
+    [ "$status" -eq 1 ]
+    [[ "$(result_line)" == "FOUNDRY_PUBLISH result=failed kind=permanent reason="*"Authentication failed"* ]]
+}
+
+@test "publish: the token reaches git only through GIT_ASKPASS and the scratch repository has hooks off" {
+    start_run
+    wcommit a.txt a "first"
+    worker_bundle
+
+    publish
+
+    [ "$status" -eq 0 ]
+    [ "$(cat "$BATS_TEST_TMPDIR/askpass_answer")" = "ghp_publisher_token" ]
+    ! grep -q "ghp_publisher_token" "$BATS_TEST_TMPDIR/git_args"
+    [ "$("$REAL_GIT" -C "$FOUNDRY_WORK_DIR/repo" config core.hooksPath)" = "/dev/null" ]
+    [ "$(sort -u "$BATS_TEST_TMPDIR/git_env")" = "GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null" ]
 }
