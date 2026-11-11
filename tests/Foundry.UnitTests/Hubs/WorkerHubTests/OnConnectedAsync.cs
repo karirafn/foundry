@@ -239,6 +239,12 @@ public sealed class OnConnectedAsync
             int maxAttempts,
             CancellationToken cancellationToken)
             => Task.FromResult(0);
+
+        public Task<IReadOnlyDictionary<Guid, WorkerRunPublishPhase>> GetPublishPhasesForIssuesAsync(
+            IReadOnlyCollection<Guid> issueIds,
+            CancellationToken cancellationToken)
+            => Task.FromResult<IReadOnlyDictionary<Guid, WorkerRunPublishPhase>>(
+                new Dictionary<Guid, WorkerRunPublishPhase>());
     }
 
     private sealed class SpyHubCallerClients : IHubCallerClients
