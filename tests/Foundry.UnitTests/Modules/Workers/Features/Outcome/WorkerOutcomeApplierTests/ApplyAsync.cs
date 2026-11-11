@@ -23,7 +23,7 @@ public sealed class ApplyAsync : WorkerDispatchServiceTestBase
     private const string ContainerId = "container-apply";
     private const string Branch = "feat/1-apply";
 
-    public static TheoryData<string> TerminalOutcomes => ["Completed", "Review", "Unchanged", "ContinuableFailure", "Failure"];
+    public static TheoryData<string> TerminalOutcomes => ["Completed", "Review", "NeedsInput", "Unchanged", "ContinuableFailure", "Failure"];
 
     [Theory]
     [MemberData(nameof(TerminalOutcomes))]
@@ -165,6 +165,28 @@ public sealed class ApplyAsync : WorkerDispatchServiceTestBase
     }
 
     [Fact]
+    public async Task WhenOutcomeNeedsInput_PublishesTheQuestionsAndWhatTheRunLeftOnWorkerRunCompleted()
+    {
+        // Arrange
+        SeedActiveRun(ContainerId, Branch);
+        CapturingIntegrationEventDispatcher dispatcher = new();
+        await using FoundryDbContext db = CreateDbContext();
+        ActiveRun activeRun = await db.Set<ActiveRun>().SingleAsync(TestContext.Current.CancellationToken);
+        WorkerOutcomeApplier sut = BuildApplier(db, new RecordingOrchestrator(), dispatcher);
+
+        // Act
+        await sut.ApplyAsync(BuildOutcome("NeedsInput"), activeRun, TestContext.Current.CancellationToken);
+
+        // Assert
+        WorkerRunCompleted completed = dispatcher.Captured.OfType<WorkerRunCompleted>().ShouldHaveSingleItem();
+        completed.ShouldSatisfyAllConditions(
+            () => completed.MergeState.ShouldBe(WorkerRunMergeState.Open),
+            () => completed.PullRequestUrl.ShouldBe("https://github.com/acme/repo/pull/1"),
+            () => completed.InputRequest.ShouldNotBeNull().BranchHasCommits.ShouldBeTrue(),
+            () => completed.InputRequest!.Questions.ShouldBe([new InputQuestion("Which database?", "Two are configured.")]));
+    }
+
+    [Fact]
     public async Task WhenOutcomeIsIndeterminate_ThrowsWithoutTouchingContainer()
     {
         // Arrange
@@ -185,11 +207,14 @@ public sealed class ApplyAsync : WorkerDispatchServiceTestBase
         orchestrator.StopAndRemoveCalls.ShouldBeEmpty();
     }
 
-    private static WorkerOutcomeApplier BuildApplier(FoundryDbContext db, IWorkerOrchestrator orchestrator)
+    private static WorkerOutcomeApplier BuildApplier(
+        FoundryDbContext db,
+        IWorkerOrchestrator orchestrator,
+        IIntegrationEventDispatcher? integrationEventDispatcher = null)
         => new(
             db,
             orchestrator,
-            new NullIntegrationEventDispatcher(),
+            integrationEventDispatcher ?? new NullIntegrationEventDispatcher(),
             new NullIntegrationEventProcessor(),
             new NullDomainEventDispatcher(),
             NullLogger<WorkerOutcomeApplier>.Instance);
@@ -203,6 +228,13 @@ public sealed class ApplyAsync : WorkerDispatchServiceTestBase
         {
             "Completed" => new WorkerOutcome.Completed(branch, pullRequestUrl, containerOutput, null),
             "Review" => new WorkerOutcome.Review(branch, pullRequestUrl, containerOutput, null),
+            "NeedsInput" => new WorkerOutcome.NeedsInput(
+                branch,
+                pullRequestUrl,
+                BranchHasCommits: true,
+                [new RunVerdictQuestion("Which database?", "Two are configured.")],
+                containerOutput,
+                null),
             "Unchanged" => new WorkerOutcome.Unchanged(branch, containerOutput, null),
             "ContinuableFailure" => new WorkerOutcome.ContinuableFailure(branch, new FailureReason.TimedOut(), null, null),
             "Failure" => new WorkerOutcome.Failure(new FailureReason.TimedOut(), null, null),
