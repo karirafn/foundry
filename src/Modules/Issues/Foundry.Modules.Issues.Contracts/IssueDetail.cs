@@ -41,6 +41,11 @@ public sealed record TriageVerdictDetails(
     public const string NeedsInputOutcome = "needs_input";
 }
 
+/// <summary>
+/// The current state's fields. <paramref name="BranchUrl"/>, <paramref name="SideBranchName"/> and
+/// <paramref name="SideBranchUrl"/> are set only for <c>branch_diverged</c>: the issue branch and the side branch the
+/// run's work was pushed to, with their web URLs on the provider.
+/// </summary>
 public sealed record IssueStateDetails(
     Guid? WorkerRunId,
     string? BranchName,
@@ -57,7 +62,10 @@ public sealed record IssueStateDetails(
     string? RebaseOutcome = null,
     string? RebaseSkippedReason = null,
     int? RebaseConflictAttempts = null,
-    AwaitingInputDetails? AwaitingInput = null);
+    AwaitingInputDetails? AwaitingInput = null,
+    string? BranchUrl = null,
+    string? SideBranchName = null,
+    string? SideBranchUrl = null);
 
 /// <summary>
 /// An awaiting-input issue's open questions and how their post stands (ADR 0096): <paramref name="PostStatus"/> is

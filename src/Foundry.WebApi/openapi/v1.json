@@ -3549,6 +3549,24 @@
                 "$ref": "#/components/schemas/AwaitingInputDetails"
               }
             ]
+          },
+          "branchUrl": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "sideBranchName": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "sideBranchUrl": {
+            "type": [
+              "null",
+              "string"
+            ]
           }
         }
       },
@@ -3642,6 +3660,12 @@
             ]
           },
           "providerType": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "publishPhase": {
             "type": [
               "null",
               "string"

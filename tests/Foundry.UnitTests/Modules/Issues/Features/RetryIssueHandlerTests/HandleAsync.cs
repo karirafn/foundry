@@ -283,6 +283,45 @@ public sealed class HandleAsync : IAsyncDisposable
     }
 
     [Fact]
+    public async Task WhenBranchDivergedIssue_QueuesAContinuationOnTheIssueBranch()
+    {
+        // Arrange
+        BranchDivergedIssue diverged = new IssueBuilder()
+            .WithIssueNumber(5)
+            .WithBranchName("feat/5-issue-5")
+            .BranchDiverged("feat/5-issue-5-run-abc");
+        _dbContext.Set<Issue>().Add(diverged);
+        await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+        _dbContext.ChangeTracker.Clear();
+
+        // Act
+        Result<IssueDetail> result = await _sut.HandleAsync(new RetryIssue.Command(diverged.Id), CancellationToken.None);
+
+        // Assert
+        result.ShouldBeOfType<Result<IssueDetail>.Success>();
+        _dbContext.ChangeTracker.Clear();
+        Issue issue = await _dbContext.Set<Issue>()
+            .SingleAsync(i => i.Id == diverged.Id, TestContext.Current.CancellationToken);
+        issue.ShouldBeOfType<ContinuationQueuedIssue>().BranchName.ShouldBe("feat/5-issue-5");
+    }
+
+    [Fact]
+    public async Task WhenPublishFailedIssue_ReturnsWrongStateBecauseRetryWouldAbandonTheRun()
+    {
+        // Arrange
+        PublishFailedIssue publishFailed = new IssueBuilder().WithIssueNumber(6).PublishFailed();
+        _dbContext.Set<Issue>().Add(publishFailed);
+        await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+        _dbContext.ChangeTracker.Clear();
+
+        // Act
+        Result<IssueDetail> result = await _sut.HandleAsync(new RetryIssue.Command(publishFailed.Id), CancellationToken.None);
+
+        // Assert
+        result.ShouldBeOfType<Result<IssueDetail>.Failure>().Error.Code.ShouldBe(IssueErrors.WrongStateCode);
+    }
+
+    [Fact]
     public async Task WhenIssueInWrongState_ReturnsWrongStateError()
     {
         // Arrange

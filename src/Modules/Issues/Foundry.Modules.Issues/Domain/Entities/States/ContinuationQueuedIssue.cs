@@ -43,6 +43,17 @@ public sealed class ContinuationQueuedIssue : QueuedIssue
         return queued;
     }
 
+    internal static ContinuationQueuedIssue FromBranchDiverged(BranchDivergedIssue source)
+    {
+        ContinuationQueuedIssue queued = new(source.Id);
+        queued.CopySharedPropertiesFrom(source);
+        queued.BranchName = source.BranchName;
+        string reason =
+            $"The previous run's work conflicted with commits pushed to {source.BranchName} during the run and was pushed to {source.SideBranchName} instead.";
+        queued.FailureReason = reason.Length > FailureReasonMaxLength ? reason[..FailureReasonMaxLength] : reason;
+        return queued;
+    }
+
     internal static ContinuationQueuedIssue FromAwaitingInput(
         AwaitingInputIssue source,
         ResumeTarget.Continuation target,

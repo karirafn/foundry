@@ -41,12 +41,13 @@ internal static class RetryIssue
                 ContinuableFailedIssue continuableFailed => continuableFailed.Retry(),
                 RevisionFailedIssue revisionFailed => revisionFailed.Retry(),
                 UnchangedIssue unchanged => unchanged.Retry(),
+                BranchDivergedIssue diverged => diverged.Retry(),
                 _ => null,
             };
 
             if (next is null)
             {
-                return Result<IssueDetail>.Fail(IssueErrors.WrongState(command.IssueId, "failed, continuable_failed, revision_failed, or unchanged"));
+                return Result<IssueDetail>.Fail(IssueErrors.WrongState(command.IssueId, "failed, continuable_failed, revision_failed, unchanged, or branch_diverged"));
             }
 
             await db.TransitionAsync(issue, next, domainEventDispatcher, cancellationToken);

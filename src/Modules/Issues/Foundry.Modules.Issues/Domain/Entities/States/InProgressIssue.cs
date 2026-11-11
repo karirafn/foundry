@@ -121,6 +121,35 @@ public sealed class InProgressIssue : Issue
         return failed;
     }
 
+    /// <summary>
+    /// The run's publish retries ran out (ADR 0100); its unpublished work waits for Retry publish.
+    /// </summary>
+    public PublishFailedIssue MarkPublishFailed(string branchName, string failureReason, DateTimeOffset failedAt)
+    {
+        PublishFailedIssue publishFailed = PublishFailedIssue.FromInProgress(this, branchName, failureReason, failedAt);
+        AddDomainEvent(new Events.IssuePublishFailed(Id, MonitoredRepositoryId));
+        return publishFailed;
+    }
+
+    /// <summary>
+    /// The run's work could not be merged into the branch someone pushed to during the run, so it went to
+    /// <paramref name="sideBranchName"/> (ADR 0100).
+    /// </summary>
+    public BranchDivergedIssue MarkBranchDiverged(string branchName, string sideBranchName, string? pullRequestUrl)
+    {
+        BranchDivergedIssue diverged = BranchDivergedIssue.FromInProgress(this, branchName, sideBranchName, pullRequestUrl);
+        AddDomainEvent(new Events.IssueBranchDiverged(Id, MonitoredRepositoryId));
+        return diverged;
+    }
+
+    internal static InProgressIssue FromPublishFailed(PublishFailedIssue source)
+    {
+        InProgressIssue inProgress = new(source.Id);
+        inProgress.CopySharedPropertiesFrom(source);
+        inProgress.WorkerRunId = source.WorkerRunId;
+        return inProgress;
+    }
+
     internal static InProgressIssue FromContinuationQueued(ContinuationQueuedIssue source, WorkerRunId workerRunId)
     {
         InProgressIssue inProgress = new(source.Id);
