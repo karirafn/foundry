@@ -43,7 +43,8 @@ internal sealed class IssueClaimer(
             issue.MonitoredRepositoryId,
             candidate.DispatchInfo.Provider,
             issue.Context,
-            issueApiUrl);
+            issueApiUrl,
+            issue.Clarifications);
 
         await integrationEventDispatcher.DispatchAsync([new IssueClaimed(dispatch)], cancellationToken);
 

@@ -45,6 +45,22 @@ public sealed class FeedbackCutoff
 
     [Theory]
     [MemberData(nameof(Transitions))]
+    public void WhenInputProvidedTrigger_CutoffIsRunStartedAtSoTheAnswerIsNotReadAgain(string transition)
+    {
+        // Arrange
+        AwaitingInputIssue awaiting = new IssueBuilder().AwaitingInputPosted(RunStartedAt.AddHours(-2));
+        RevisionInProgressIssue revisionInProgress = ((RevisionQueuedIssue)awaiting.ProvideInput("Use Postgres.", RunStartedAt.AddHours(-1)))
+            .Claim(WorkerRunId.New());
+
+        // Act
+        DateTimeOffset cutoff = Complete(revisionInProgress, transition);
+
+        // Assert
+        cutoff.ShouldBe(RunStartedAt);
+    }
+
+    [Theory]
+    [MemberData(nameof(Transitions))]
     public void WhenRebaseConflictTrigger_CutoffIsRunStartedAt(string transition)
     {
         // Arrange

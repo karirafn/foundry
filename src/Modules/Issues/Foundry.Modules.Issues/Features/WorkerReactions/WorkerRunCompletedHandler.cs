@@ -35,6 +35,28 @@ internal sealed class WorkerRunCompletedHandler(
                 return;
             }
 
+            // A run that stopped to ask a person waits for input; a merged pull request never carries a request, since
+            // the run's outcome resolved it as complete first (ADR 0096).
+            if (@event.InputRequest is { } inputRequest && @event.MergeState != WorkerRunMergeState.Merged)
+            {
+                if (@event.BranchName is null)
+                {
+                    logger.LogError(
+                        "WorkerRunCompleted for issue {IssueId} carries an input request but no BranchName; skipping transition.",
+                        @event.IssueId);
+                    return;
+                }
+
+                AwaitingInputIssue awaiting = inProgress.MarkAwaitingInput(
+                    @event.BranchName,
+                    @event.MergeState == WorkerRunMergeState.Open ? @event.PullRequestUrl : null,
+                    inputRequest.BranchHasCommits,
+                    inputRequest.Questions,
+                    DateTimeOffset.UtcNow);
+                await db.TransitionAsync(inProgress, awaiting, domainEventDispatcher, cancellationToken);
+                return;
+            }
+
             switch (@event.MergeState)
             {
                 case WorkerRunMergeState.Merged:
@@ -92,6 +114,15 @@ internal sealed class WorkerRunCompletedHandler(
                     @event.IssueId,
                     @event.WorkerRunId,
                     revisionInProgress.WorkerRunId);
+                return;
+            }
+
+            if (@event.InputRequest is { } revisionInputRequest)
+            {
+                AwaitingInputIssue revisionAwaiting = revisionInProgress.MarkAwaitingInput(
+                    revisionInputRequest.Questions,
+                    DateTimeOffset.UtcNow);
+                await db.TransitionAsync(revisionInProgress, revisionAwaiting, domainEventDispatcher, cancellationToken);
                 return;
             }
 

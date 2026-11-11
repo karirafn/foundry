@@ -9,6 +9,7 @@ namespace Foundry.Modules.Issues.Contracts;
 [JsonDerivedType(typeof(ReviewFeedback), "review_feedback")]
 [JsonDerivedType(typeof(FailedChecks), "failed_checks")]
 [JsonDerivedType(typeof(RebaseConflict), "rebase_conflict")]
+[JsonDerivedType(typeof(InputProvided), "input_provided")]
 public abstract record RevisionTrigger
 {
     private RevisionTrigger()
@@ -38,5 +39,14 @@ public abstract record RevisionTrigger
     public sealed record RebaseConflict : RevisionTrigger
     {
         public override string Discriminator => "rebase_conflict";
+    }
+
+    /// <summary>
+    /// A person answered the questions an earlier run asked (ADR 0096). Payload-free: the answer lives on the issue's
+    /// clarification log, which every implement prompt renders.
+    /// </summary>
+    public sealed record InputProvided : RevisionTrigger
+    {
+        public override string Discriminator => "input_provided";
     }
 }

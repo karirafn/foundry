@@ -57,15 +57,7 @@ public sealed class RebasePendingIssue : Issue
         DateTimeOffset feedbackCutoffAt)
     {
         RebasePendingIssue rebasePending = new(source.Id);
-        rebasePending.SetSharedProperties(
-            source.MonitoredRepositoryId,
-            source.IssueNumber,
-            source.Title,
-            source.Author,
-            source.Url,
-            source.Labels,
-            source.DetectedAt,
-            source.KindClassification);
+        rebasePending.CopySharedPropertiesFrom(source);
         rebasePending.WorkerRunId = source.WorkerRunId;
         rebasePending.BranchName = branchName;
         rebasePending.PullRequestUrl = pullRequestUrl;
@@ -81,15 +73,7 @@ public sealed class RebasePendingIssue : Issue
         DateTimeOffset feedbackCutoffAt)
     {
         RebasePendingIssue rebasePending = new(source.Id);
-        rebasePending.SetSharedProperties(
-            source.MonitoredRepositoryId,
-            source.IssueNumber,
-            source.Title,
-            source.Author,
-            source.Url,
-            source.Labels,
-            source.DetectedAt,
-            source.KindClassification);
+        rebasePending.CopySharedPropertiesFrom(source);
         rebasePending.WorkerRunId = source.WorkerRunId;
         rebasePending.BranchName = source.BranchName;
         rebasePending.PullRequestUrl = source.PullRequestUrl;

@@ -295,7 +295,8 @@ internal sealed class IssueClaimedHandler(
                 timeoutMinutes,
                 installsDocker,
                 installsDotnet,
-                failingJobLogs);
+                failingJobLogs,
+                claimed.Clarifications ?? []);
 
         if (systemPromptResult is not Result<string>.Success systemPromptSuccess)
         {

@@ -236,10 +236,17 @@ internal sealed class WorkerRunMonitor(
         // Completed even when the wall-clock timeout has passed.
         string? containerOutput = await TryGetLogsAsync(activeRun, cancellationToken);
 
+        // Only a run that exited 0 finished its turn and can carry a verdict; any other exit keeps
+        // today's failure classification. A needs_input verdict moves the issue to awaiting input (ADR 0096).
+        RunVerdict? verdict = status.ExitCode == 0
+            ? verdictReader.Read(activeRun.Role, containerOutput)
+            : null;
+
         WorkerOutcome outcome = await resolver.ResolveAsync(
             activeRun,
             status,
             containerOutput,
+            verdict,
             cancellationToken);
 
         if (outcome is WorkerOutcome.Indeterminate indeterminate)
@@ -265,12 +272,6 @@ internal sealed class WorkerRunMonitor(
                 indeterminate.Error);
             return;
         }
-
-        // Only a run that exited 0 finished its turn and can carry a verdict; any other exit keeps
-        // today's failure classification. The verdict is recorded and never changes the outcome.
-        RunVerdict? verdict = status.ExitCode == 0
-            ? verdictReader.Read(activeRun.Role, containerOutput)
-            : null;
 
         WorkerRunTranscript? transcript = await TryCaptureTranscriptAsync(activeRun, cancellationToken);
 

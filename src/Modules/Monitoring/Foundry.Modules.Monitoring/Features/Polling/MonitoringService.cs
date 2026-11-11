@@ -1,6 +1,7 @@
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
+using Foundry.Modules.Monitoring.Features.AwaitingInput;
 using Foundry.Modules.Monitoring.Features.CredentialResolution;
 using Foundry.Modules.Monitoring.Features.Providers;
 using Foundry.Modules.Monitoring.Features.Rebase;
@@ -207,6 +208,7 @@ internal sealed class MonitoringService : PeriodicBackgroundService
 
         // Optional: hosts (and tests) without the rebase step poll exactly as before.
         RebaseStep? rebaseStep = scope.ServiceProvider.GetService<RebaseStep>();
+        AwaitingInputStep? awaitingInputStep = scope.ServiceProvider.GetService<AwaitingInputStep>();
 
         int pollIntervalSeconds = await settingsQueries.GetPollIntervalSecondsAsync(cancellationToken);
         TimeSpan pollInterval = TimeSpan.FromSeconds(pollIntervalSeconds);
@@ -254,6 +256,13 @@ internal sealed class MonitoringService : PeriodicBackgroundService
             if (rebaseStep is not null)
             {
                 await rebaseStep.RunAsync(repo, resolvedProvider.Provider, issueNumber: null, now, cancellationToken);
+            }
+
+            // The scheduled poll is also the awaiting-input step's backstop (ADR 0096): it posts questions whose
+            // nudge was lost and reads replies the webhooks do not announce.
+            if (awaitingInputStep is not null)
+            {
+                await awaitingInputStep.RunAsync(repo, resolvedProvider.Provider, issueNumber: null, now, cancellationToken);
             }
 
             if (pollResult is Result<PollChanges>.Failure pollFailure)
@@ -306,6 +315,7 @@ internal sealed class MonitoringService : PeriodicBackgroundService
         RepositoryPoller poller = scope.ServiceProvider.GetRequiredService<RepositoryPoller>();
         IGlobalSettingsQueries settingsQueries = scope.ServiceProvider.GetRequiredService<IGlobalSettingsQueries>();
         RebaseStep? rebaseStep = scope.ServiceProvider.GetService<RebaseStep>();
+        AwaitingInputStep? awaitingInputStep = scope.ServiceProvider.GetService<AwaitingInputStep>();
 
         TimeSpan pollInterval = TimeSpan.FromSeconds(await settingsQueries.GetPollIntervalSecondsAsync(cancellationToken));
 
@@ -329,7 +339,15 @@ internal sealed class MonitoringService : PeriodicBackgroundService
 
             foreach (NudgeKey key in group)
             {
-                await RunNudgedPassAsync(poller, rebaseStep, repo, resolvedProvider.Provider, key, now, cancellationToken);
+                await RunNudgedPassAsync(
+                    poller,
+                    rebaseStep,
+                    awaitingInputStep,
+                    repo,
+                    resolvedProvider.Provider,
+                    key,
+                    now,
+                    cancellationToken);
             }
         }
     }
@@ -337,6 +355,7 @@ internal sealed class MonitoringService : PeriodicBackgroundService
     private async Task RunNudgedPassAsync(
         RepositoryPoller poller,
         RebaseStep? rebaseStep,
+        AwaitingInputStep? awaitingInputStep,
         MonitoredRepository repo,
         IIssueProvider provider,
         NudgeKey key,
@@ -400,6 +419,14 @@ internal sealed class MonitoringService : PeriodicBackgroundService
                 if (rebaseStep is not null)
                 {
                     await rebaseStep.RunAsync(repo, provider, key.IssueNumber, now, cancellationToken);
+                }
+
+                break;
+
+            case NudgePass.AwaitingInput:
+                if (awaitingInputStep is not null)
+                {
+                    await awaitingInputStep.RunAsync(repo, provider, key.IssueNumber, now, cancellationToken);
                 }
 
                 break;

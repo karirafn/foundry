@@ -55,6 +55,19 @@ internal abstract record WorkerOutcome
         RunResultSummary? Summary) : WorkerOutcome;
 
     /// <summary>
+    /// The run exited 0 with a schema-valid <c>needs_input</c> verdict (ADR 0096): it stopped to ask a person.
+    /// <see cref="PullRequestUrl"/> is the open merge request the run left, or <see langword="null"/> when there is
+    /// none; <see cref="BranchHasCommits"/> tells whether the run pushed anything.
+    /// </summary>
+    internal sealed record NeedsInput(
+        BranchName BranchName,
+        PullRequestUrl? PullRequestUrl,
+        bool BranchHasCommits,
+        IReadOnlyList<RunVerdictQuestion> Questions,
+        string? ContainerOutput,
+        RunResultSummary? Summary) : WorkerOutcome;
+
+    /// <summary>
     /// A transient or unknown provider error; the caller should not transition state and may retry.
     /// </summary>
     internal sealed record Indeterminate(Error Error) : WorkerOutcome;

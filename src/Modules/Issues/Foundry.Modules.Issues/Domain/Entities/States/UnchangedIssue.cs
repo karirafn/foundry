@@ -20,15 +20,7 @@ public sealed class UnchangedIssue : Issue
     internal static UnchangedIssue FromInProgress(InProgressIssue source)
     {
         UnchangedIssue unchanged = new(source.Id);
-        unchanged.SetSharedProperties(
-            source.MonitoredRepositoryId,
-            source.IssueNumber,
-            source.Title,
-            source.Author,
-            source.Url,
-            source.Labels,
-            source.DetectedAt,
-            source.KindClassification);
+        unchanged.CopySharedPropertiesFrom(source);
         unchanged.WorkerRunId = source.WorkerRunId;
         return unchanged;
     }

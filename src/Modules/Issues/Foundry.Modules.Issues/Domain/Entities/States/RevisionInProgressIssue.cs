@@ -33,15 +33,7 @@ public sealed class RevisionInProgressIssue : Issue
     internal static RevisionInProgressIssue FromRevisionQueued(RevisionQueuedIssue source, WorkerRunId workerRunId)
     {
         RevisionInProgressIssue revisionInProgress = new(source.Id);
-        revisionInProgress.SetSharedProperties(
-            source.MonitoredRepositoryId,
-            source.IssueNumber,
-            source.Title,
-            source.Author,
-            source.Url,
-            source.Labels,
-            source.DetectedAt,
-            source.KindClassification);
+        revisionInProgress.CopySharedPropertiesFrom(source);
         revisionInProgress.WorkerRunId = workerRunId;
         revisionInProgress.BranchName = source.BranchName;
         revisionInProgress.PullRequestUrl = source.PullRequestUrl;
@@ -114,6 +106,14 @@ public sealed class RevisionInProgressIssue : Issue
         Trigger is RevisionTrigger.ReviewFeedback { NewestConsumedCommentAt: DateTimeOffset newestConsumedCommentAt }
             ? newestConsumedCommentAt
             : runStartedAt;
+
+    /// <summary>The revision run stopped to ask a person (ADR 0096): its pull request is open, so input resumes a revision.</summary>
+    public AwaitingInputIssue MarkAwaitingInput(IReadOnlyList<InputQuestion> questions, DateTimeOffset askedAt)
+    {
+        AwaitingInputIssue awaiting = AwaitingInputIssue.FromRevisionInProgress(this, questions, askedAt);
+        AddDomainEvent(new Events.IssueAwaitingInput(Id, MonitoredRepositoryId, IssueNumber));
+        return awaiting;
+    }
 
     public RevisionFailedIssue MarkFailed(
         string failureReason,

@@ -145,6 +145,32 @@ internal sealed class IssueQueries(
             .ToListAsync(cancellationToken);
     }
 
+    public async Task<IReadOnlyList<AwaitingInputIssueInfo>> GetAwaitingInputIssuesAsync(
+        MonitoredRepositoryId repositoryId,
+        CancellationToken cancellationToken)
+    {
+        // The resume target and post status are JSON columns, so the projection runs in memory.
+        List<AwaitingInputIssue> issues = await db.Set<AwaitingInputIssue>()
+            .AsNoTracking()
+            .Where(i => i.MonitoredRepositoryId == repositoryId)
+            .ToListAsync(cancellationToken);
+
+        return issues
+            .Select(i => new AwaitingInputIssueInfo(
+                i.Id,
+                i.IssueNumber,
+                i.Url.Value.ToString(),
+                i.LinkedPullRequestUrl,
+                i.Questions,
+                i.QuestionPost switch
+                {
+                    QuestionPost.Posted posted => new AwaitingInputPostState.Posted(posted.PostedAt),
+                    QuestionPost.Failed failed => new AwaitingInputPostState.Unposted(failed.NextAttemptAt),
+                    _ => new AwaitingInputPostState.Unposted(DateTimeOffset.MinValue),
+                }))
+            .ToList();
+    }
+
     public async Task<IReadOnlyList<IssueSummary>> GetIssueSummariesAsync(
         MonitoredRepositoryId? repositoryId,
         CancellationToken cancellationToken)
@@ -365,6 +391,7 @@ internal sealed class IssueQueries(
             RevisionFailedIssue => "revision_failed",
             ChecksPendingIssue => "checks_pending",
             RebasePendingIssue => "rebase_pending",
+            AwaitingInputIssue => "awaiting_input",
             _ => throw new InvalidOperationException($"Unknown issue type: {issue.GetType().Name}")
         };
 
@@ -414,6 +441,32 @@ internal sealed class IssueQueries(
             IsExhausted: isExhausted,
             NextAttemptDueAt: isExhausted ? null : failedAt + TransientRetrySchedule.ComputeBackoff(consecutiveRuns));
     }
+
+    private static AwaitingInputDetails BuildAwaitingInputDetails(AwaitingInputIssue issue) =>
+        issue.QuestionPost switch
+        {
+            QuestionPost.Posted posted => new AwaitingInputDetails(
+                issue.Questions,
+                "posted",
+                posted.PostedAt,
+                posted.CommentUrl,
+                PostFailureReason: null,
+                NextPostAttemptAt: null),
+            QuestionPost.Failed failed => new AwaitingInputDetails(
+                issue.Questions,
+                "failed",
+                PostedAt: null,
+                CommentUrl: null,
+                failed.Reason,
+                failed.NextAttemptAt),
+            _ => new AwaitingInputDetails(
+                issue.Questions,
+                "pending",
+                PostedAt: null,
+                CommentUrl: null,
+                PostFailureReason: null,
+                NextPostAttemptAt: null),
+        };
 
     private static IssueStateDetails? BuildStateDetails(Issue issue, TransientRetryDetails? transientRetry) =>
         issue switch
@@ -562,6 +615,22 @@ internal sealed class IssueQueries(
                 CompletedAt: null,
                 BlockedBy: null,
                 TransientRetry: null),
+
+            AwaitingInputIssue awaitingInput => new IssueStateDetails(
+                WorkerRunId: awaitingInput.WorkerRunId.Value,
+                BranchName: awaitingInput.ResumeTarget switch
+                {
+                    ResumeTarget.Revision revision => revision.BranchName,
+                    ResumeTarget.Continuation continuation => continuation.BranchName,
+                    _ => null,
+                },
+                FeedbackCutoffAt: null,
+                FailureReason: null,
+                FailedAt: null,
+                CompletedAt: null,
+                BlockedBy: null,
+                TransientRetry: null,
+                AwaitingInput: BuildAwaitingInputDetails(awaitingInput)),
 
             _ => null
         };

@@ -3,6 +3,7 @@ using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Contracts.Commands;
 using Foundry.Modules.Monitoring.Contracts.Queries;
 using Foundry.Modules.Monitoring.Domain.Services;
+using Foundry.Modules.Monitoring.Features.AwaitingInput;
 using Foundry.Modules.Monitoring.Features.Accounts;
 using Foundry.Modules.Monitoring.Features.Accounts.Rotation;
 using Foundry.Modules.Monitoring.Features.Accounts.Tokens;
@@ -80,6 +81,7 @@ public static class MonitoringModule
         services.AddScoped<IIssueContentQueries, PostExitProviderQueries>();
         services.AddScoped<RepositoryPoller>();
         services.AddScoped<RebaseStep>();
+        services.AddScoped<AwaitingInputStep>();
 
         services.AddQueryHandler<GetAccounts.Query, IReadOnlyList<CredentialSummary>, GetAccounts.Handler>();
         services.AddQueryHandler<GetTokenRequirements.Query, TokenRequirements, GetTokenRequirements.Handler>();
@@ -114,6 +116,7 @@ public static class MonitoringModule
         services.AddIntegrationEventHandler<WebhookPublicBaseUrlChanged, WebhookPublicBaseUrlChangedHandler>();
         services.AddIntegrationEventHandler<IssueEnteredChecksPending, IssueEnteredChecksPendingHandler>();
         services.AddIntegrationEventHandler<IssueEnteredRebasePending, IssueEnteredRebasePendingHandler>();
+        services.AddIntegrationEventHandler<IssueEnteredAwaitingInput, IssueEnteredAwaitingInputHandler>();
 
         services.AddHostedService(sp => new MonitoringService(
             sp.GetRequiredService<IServiceScopeFactory>(),

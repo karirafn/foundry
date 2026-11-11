@@ -55,15 +55,7 @@ public sealed class ChecksPendingIssue : Issue
         RebaseOutcome rebaseOutcome)
     {
         ChecksPendingIssue checksPending = new(source.Id);
-        checksPending.SetSharedProperties(
-            source.MonitoredRepositoryId,
-            source.IssueNumber,
-            source.Title,
-            source.Author,
-            source.Url,
-            source.Labels,
-            source.DetectedAt,
-            source.KindClassification);
+        checksPending.CopySharedPropertiesFrom(source);
         checksPending.WorkerRunId = source.WorkerRunId;
         checksPending.BranchName = source.BranchName;
         checksPending.PullRequestUrl = source.PullRequestUrl;

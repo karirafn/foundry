@@ -2417,6 +2417,54 @@
           }
         }
       },
+      "AwaitingInputDetails": {
+        "required": [
+          "questions",
+          "postStatus",
+          "postedAt",
+          "commentUrl",
+          "postFailureReason",
+          "nextPostAttemptAt"
+        ],
+        "type": "object",
+        "properties": {
+          "questions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/InputQuestion"
+            }
+          },
+          "postStatus": {
+            "type": "string"
+          },
+          "postedAt": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
+          },
+          "commentUrl": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "postFailureReason": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "nextPostAttemptAt": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
+          }
+        }
+      },
       "BranchRulesOutcome": {
         "required": [
           "kind"
@@ -2974,6 +3022,21 @@
           "Failed"
         ]
       },
+      "InputQuestion": {
+        "required": [
+          "question",
+          "context"
+        ],
+        "type": "object",
+        "properties": {
+          "question": {
+            "type": "string"
+          },
+          "context": {
+            "type": "string"
+          }
+        }
+      },
       "IssueDetail": {
         "required": [
           "id",
@@ -3184,6 +3247,16 @@
               "string"
             ],
             "format": "int32"
+          },
+          "awaitingInput": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/AwaitingInputDetails"
+              }
+            ]
           }
         }
       },
@@ -3387,7 +3460,8 @@
           "Fresh",
           "Continuation",
           "Revision",
-          "RebaseConflict"
+          "RebaseConflict",
+          "Clarifications"
         ]
       },
       "PromptSectionDescriptor": {

@@ -2,6 +2,7 @@ using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Issues.Domain.Entities.States;
 using Foundry.Modules.Issues.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Contracts;
+using Foundry.Modules.Workers.Contracts;
 using Foundry.Shared;
 
 namespace Foundry.Modules.Issues.Domain.Entities;
@@ -45,6 +46,16 @@ public abstract class Issue : AggregateRoot<IssueId>, IStateMachine<Issue>
     public DateTimeOffset DetectedAt { get; private set; }
 
     public IReadOnlyList<int> BlockedBy { get; private set; } = [];
+
+    /// <summary>
+    /// The issue's append-only clarification log (ADR 0096): every round a run asked a person, oldest first. Carried
+    /// through every transition with the shared properties, so an answer lasts as long as the issue does.
+    /// </summary>
+    public IReadOnlyList<Clarification> Clarifications { get; private set; } = [];
+
+    /// <summary>The round still waiting for input, or <see langword="null"/> when every round is answered.</summary>
+    public Clarification? OpenClarification =>
+        Clarifications.Count > 0 && Clarifications[^1].IsOpen ? Clarifications[^1] : null;
 
     /// <summary>
     /// The URL of the pull request this issue carries, or <c>null</c> when the current state has none.
@@ -108,5 +119,35 @@ public abstract class Issue : AggregateRoot<IssueId>, IStateMachine<Issue>
         Labels = labels;
         DetectedAt = detectedAt;
         KindClassification = kindClassification;
+    }
+
+    /// <summary>Carries every shared property, the clarification log included, from the state being left.</summary>
+    private protected void CopySharedPropertiesFrom(Issue source)
+    {
+        SetSharedProperties(
+            source.MonitoredRepositoryId,
+            source.IssueNumber,
+            source.Title,
+            source.Author,
+            source.Url,
+            source.Labels,
+            source.DetectedAt,
+            source.KindClassification);
+        Clarifications = source.Clarifications;
+    }
+
+    private protected void AskClarification(IReadOnlyList<InputQuestion> questions, DateTimeOffset askedAt)
+    {
+        // A round left open when its issue moved on without input (closed, or its pull request closed) stays open in
+        // the log; the new round is appended after it.
+        Clarifications = [.. Clarifications, Clarification.Ask(questions, askedAt)];
+    }
+
+    private protected void AnswerClarification(string input, DateTimeOffset answeredAt)
+    {
+        Clarification open = OpenClarification
+            ?? throw new InvalidOperationException("No clarification round is open.");
+
+        Clarifications = [.. Clarifications.Take(Clarifications.Count - 1), open.Answer(input, answeredAt)];
     }
 }

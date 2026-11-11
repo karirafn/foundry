@@ -34,6 +34,8 @@ public sealed class DescribeSections
             ("review-feedback", PromptSectionCondition.Revision),
             ("failing-checks", PromptSectionCondition.Revision),
             ("rebase-conflict", PromptSectionCondition.RebaseConflict),
+            ("input-provided", PromptSectionCondition.Revision),
+            ("clarifications", PromptSectionCondition.Clarifications),
         ]);
     }
 

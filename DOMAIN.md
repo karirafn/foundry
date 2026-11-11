@@ -271,7 +271,8 @@ A change found by a **scheduled** poll (other than the startup catch-up, see [Mo
 ## Issue
 
 A provider-side issue tagged for Foundry processing.
-Modeled as a polymorphic aggregate — each lifecycle state is a distinct type (`DetectedIssue`, `BlockedIssue`, `FreshQueuedIssue`, `ContinuationQueuedIssue`, `RevisionQueuedIssue`, `InProgressIssue`, `RevisionInProgressIssue`, `RebasePendingIssue`, `ChecksPendingIssue`, `ReviewIssue`, `UnchangedIssue`, `CompletedIssue`, `FailedIssue`, `ContinuableFailedIssue`, `RevisionFailedIssue`).
+Modeled as a polymorphic aggregate — each lifecycle state is a distinct type (`DetectedIssue`, `BlockedIssue`, `FreshQueuedIssue`, `ContinuationQueuedIssue`, `RevisionQueuedIssue`, `InProgressIssue`, `RevisionInProgressIssue`, `RebasePendingIssue`, `ChecksPendingIssue`, `ReviewIssue`, `AwaitingInputIssue`, `UnchangedIssue`, `CompletedIssue`, `FailedIssue`, `ContinuableFailedIssue`, `RevisionFailedIssue`).
+Every variant carries the shared properties, including the append-only [clarification log](#clarification), through every transition.
 State transitions are methods on each variant that return the next variant type, enforcing valid transitions at compile time.
 
 ### Issue Lifecycle Partition
@@ -284,7 +285,7 @@ The lifecycle splits into two partitions defined by `IssueStateRegistry` (server
 The dashboard renders Active states in four display groups, classified by one rule — the relationship between the issue and a worker:
 
 - **In progress** — a worker is actually running right now (`in_progress`, `revision_in_progress`). Exactly `LIVE_STATES`.
-- **Needs attention** — requires a user action to progress (`review`, `unchanged`, `failed`, `continuable_failed`, `revision_failed`).
+- **Needs attention** — requires a user action to progress (`review`, `awaiting_input`, `unchanged`, `failed`, `continuable_failed`, `revision_failed`).
 - **Waiting** — waiting for a worker or for Foundry; advances with no user action (`detected`, `queued`, `blocked`, `revision_queued`, `continuation_queued`, `rebase_pending`, `checks_pending`).
 - **Resolved** — done (`completed`).
 
@@ -292,6 +293,28 @@ Two states deserve explicit note:
 
 - `unchanged` is Active/Needs-attention because the worker produced no changes and the user must decide whether to retry — it cannot resolve itself.
 - `blocked` is Waiting because a `BlockedIssue` auto-transitions to `FreshQueuedIssue` when its blockers close on the provider; no user action is required.
+- `awaiting_input` is Needs-attention (label "Awaiting input") because it advances only when a person answers the posted questions.
+
+## AwaitingInputIssue
+
+`awaiting_input`: an issue whose run stopped to ask a person one or more questions ([ADR 0096](docs/adr/0096-awaiting-input-replies-detected-by-recorded-ids-and-branch-head.md)).
+It waits for input on the thread where the question was posted. Display group: Needs attention, label "Awaiting input".
+
+- **Way in** — an implement run that exits 0 with a schema-valid `needs_input` verdict resolves to `WorkerOutcome.NeedsInput` (a merged pull request still completes the issue and the verdict is ignored; a non-zero exit still goes through failure classification), and `WorkerRunCompleted` carries the questions. `InProgressIssue.MarkAwaitingInput` and `RevisionInProgressIssue.MarkAwaitingInput` open a [clarification](#clarification) round.
+- **Resume target** — recorded at entry from what the asking run left: `Revision(branch, pr)` for an open pull request (always for a revision run), `Continuation(branch)` for commits without a pull request, `Fresh` when nothing was pushed (column `resume_target`).
+- **Question post** — the closed union `Pending | Posted(commentId, postedAt, commentUrl) | Failed(reason, nextAttemptAt, attempts)` (column `question_post`). The state is committed first; the awaiting-input step of each poll (and its `AwaitingInput` [nudge](#nudge)) then posts the questions on the pull request when there is one, otherwise on the issue, and records the comment in the [posted-comment registry](#posted-comment-registry) in the same save that marks it `Posted`. A transient failure retries with exponential backoff (1 minute doubling, capped at 1 hour); a permanent one is not retried automatically.
+- **Ways out** — [input arrived](#input-arrived) resumes along the resume target: `RevisionQueued` with `RevisionTrigger.InputProvided`, `ContinuationQueued` on the branch with an empty failure reason, or `FreshQueued`. As in the review pass, a closed provider issue completes it and a pull request closed without merging fails it continuably (`PrClosed`).
+
+## Clarification
+
+One round on an issue's append-only clarification log (`Issue.Clarifications`, column `clarifications`): the questions, the input that arrived, and when each happened (`askedAt`, `answeredAt`).
+A round is open until input arrives; a round left when the issue moved on without input (closed, or its pull request closed) stays unanswered.
+Every implement prompt (fresh, continuation, revision) renders the log in its own section, so an answer lasts as long as the issue does; with an empty log the prompt is unchanged.
+
+## Input Arrived
+
+After the question's post time, a new eligible comment on the question's thread whose ID Foundry did not post: not a bot, not a system note, not in a resolved thread, not in the [posted-comment registry](#posted-comment-registry), whoever the author is (the PAT owner's own reply counts).
+Settled after the 2-minute quiet period of `ActionableFeedbackPolicy`; comments still inside it schedule a follow-up `AwaitingInput` nudge. The issue thread is read with the [issue-thread reader](#issue-thread-reader), a pull request thread with `GetReviewFeedbackAsync`, both with the post time as the cutoff. Several comments that settle together are joined, oldest first, into the round's input (`AwaitingInputArrived`).
 
 ## Issue Kind
 
@@ -431,11 +454,12 @@ Survives the outbox round-trip via `[JsonPolymorphic]` / `[JsonDerivedType]` ann
 ## Revision Trigger
 
 Why a revision run was queued — a polymorphic value carried by `RevisionQueuedIssue`, `RevisionInProgressIssue`, and `RevisionFailedIssue` (and surfaced on `DispatchContext.Revision`) in place of comment-specific fields.
-Three variants:
+Four variants:
 
 - **`ReviewFeedback`** — a human reviewer requested changes; carries `Comments`, `OmittedCommentCount`, and `NewestConsumedCommentAt`.
 - **`FailedChecks`** — the PR's provider checks went red within the fix budget; carries the `FailingChecks`.
 - **`RebaseConflict`** (`$type` `rebase_conflict`) — the post-run rebase conflicted with the default branch within the conflict budget (see [Rebase Conflict Attempts](#rebase-conflict-attempts)); payload-free. The worker fetches `origin`, merges `origin/HEAD` into the branch and resolves the conflicts in a merge commit, runs the tests and pushes to the same branch — it never rebases or force-pushes, and discovers the conflicting paths from `git merge` itself.
+- **`InputProvided`** (`$type` `input_provided`) — a person answered the questions an earlier run asked (see [AwaitingInputIssue](#awaitinginputissue)); payload-free. The answer lives on the issue's [clarification log](#clarification), which every implement prompt renders. It consumes no review comments, so the next review cutoff anchors to the run's start time and the answer comment is not read again as feedback.
 
 Modelling the trigger as a closed union makes a half-populated revision (comments *and* failing checks, or neither) unrepresentable, and lets the `SystemPromptBuilder` switch on the kind rather than null-checking fields.
 Persisted as a single `revision_trigger` JSON column and survives the outbox round-trip via `[JsonPolymorphic]` / `[JsonDerivedType]` annotations (see [ADR 0078](docs/adr/0078-revision-trigger-polymorphic-union.md)).

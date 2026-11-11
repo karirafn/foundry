@@ -22,6 +22,7 @@ const ALL_LIFECYCLE_STATES: ReadonlySet<IssueState> = new Set<IssueState>([
   'review',
   'rebase_pending',
   'checks_pending',
+  'awaiting_input',
   'unchanged',
   'failed',
   'continuable_failed',
@@ -45,6 +46,7 @@ describe('issue-lifecycle model', () => {
       'review',
       'rebase_pending',
   'checks_pending',
+      'awaiting_input',
       'unchanged',
       'failed',
       'continuable_failed',
@@ -228,6 +230,14 @@ describe('issue-lifecycle model', () => {
     // Act / Assert
     expect(waiting).toBeDefined();
     expect(waiting!.states).toContain('checks_pending');
+  });
+
+  it('should place awaiting_input in the Needs attention group as an active state', () => {
+    // Arrange / Act / Assert
+    expect(groupFor('awaiting_input').id).toBe('needs_attention');
+    expect(groupFor('awaiting_input').label).toBe('Needs attention');
+    expect(ACTIVE_STATES.has('awaiting_input')).toBe(true);
+    expect(isResolvedState('awaiting_input')).toBe(false);
   });
 
   it('should place rebase_pending in the Waiting group', () => {

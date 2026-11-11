@@ -1,5 +1,6 @@
 using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Issues.Domain.Entities;
+using Foundry.Modules.Issues.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Workers.Contracts;
 using Foundry.Shared;
@@ -46,15 +47,7 @@ public sealed class RevisionQueuedIssue : QueuedIssue
         DateTimeOffset? newestCommentAt = null)
     {
         RevisionQueuedIssue revisionQueued = new(source.Id);
-        revisionQueued.SetSharedProperties(
-            source.MonitoredRepositoryId,
-            source.IssueNumber,
-            source.Title,
-            source.Author,
-            source.Url,
-            source.Labels,
-            source.DetectedAt,
-            source.KindClassification);
+        revisionQueued.CopySharedPropertiesFrom(source);
         revisionQueued.BranchName = source.BranchName;
         revisionQueued.PullRequestUrl = source.PullRequestUrl;
         revisionQueued.Trigger = new RevisionTrigger.ReviewFeedback(comments, omittedCommentCount, newestCommentAt);
@@ -70,15 +63,7 @@ public sealed class RevisionQueuedIssue : QueuedIssue
         DateTimeOffset? newestCommentAt = null)
     {
         RevisionQueuedIssue revisionQueued = new(source.Id);
-        revisionQueued.SetSharedProperties(
-            source.MonitoredRepositoryId,
-            source.IssueNumber,
-            source.Title,
-            source.Author,
-            source.Url,
-            source.Labels,
-            source.DetectedAt,
-            source.KindClassification);
+        revisionQueued.CopySharedPropertiesFrom(source);
         revisionQueued.BranchName = source.BranchName;
         revisionQueued.PullRequestUrl = source.PullRequestUrl;
         revisionQueued.Trigger = new RevisionTrigger.ReviewFeedback(comments, omittedCommentCount, newestCommentAt);
@@ -92,15 +77,7 @@ public sealed class RevisionQueuedIssue : QueuedIssue
         IReadOnlyList<FailingCheck> failingChecks)
     {
         RevisionQueuedIssue revisionQueued = new(source.Id);
-        revisionQueued.SetSharedProperties(
-            source.MonitoredRepositoryId,
-            source.IssueNumber,
-            source.Title,
-            source.Author,
-            source.Url,
-            source.Labels,
-            source.DetectedAt,
-            source.KindClassification);
+        revisionQueued.CopySharedPropertiesFrom(source);
         revisionQueued.BranchName = source.BranchName;
         revisionQueued.PullRequestUrl = source.PullRequestUrl;
         revisionQueued.Trigger = new RevisionTrigger.FailedChecks(failingChecks);
@@ -112,15 +89,7 @@ public sealed class RevisionQueuedIssue : QueuedIssue
     internal static RevisionQueuedIssue FromRebaseConflict(RebasePendingIssue source)
     {
         RevisionQueuedIssue revisionQueued = new(source.Id);
-        revisionQueued.SetSharedProperties(
-            source.MonitoredRepositoryId,
-            source.IssueNumber,
-            source.Title,
-            source.Author,
-            source.Url,
-            source.Labels,
-            source.DetectedAt,
-            source.KindClassification);
+        revisionQueued.CopySharedPropertiesFrom(source);
         revisionQueued.BranchName = source.BranchName;
         revisionQueued.PullRequestUrl = source.PullRequestUrl;
         revisionQueued.Trigger = new RevisionTrigger.RebaseConflict();
@@ -132,20 +101,29 @@ public sealed class RevisionQueuedIssue : QueuedIssue
     internal static RevisionQueuedIssue FromRevisionFailed(RevisionFailedIssue source)
     {
         RevisionQueuedIssue revisionQueued = new(source.Id);
-        revisionQueued.SetSharedProperties(
-            source.MonitoredRepositoryId,
-            source.IssueNumber,
-            source.Title,
-            source.Author,
-            source.Url,
-            source.Labels,
-            source.DetectedAt,
-            source.KindClassification);
+        revisionQueued.CopySharedPropertiesFrom(source);
         revisionQueued.BranchName = source.BranchName;
         revisionQueued.PullRequestUrl = source.PullRequestUrl;
         revisionQueued.Trigger = source.Trigger;
         revisionQueued.ChecksFixAttempts = source.ChecksFixAttempts;
         revisionQueued.RebaseConflictAttempts = source.RebaseConflictAttempts;
+        return revisionQueued;
+    }
+
+    internal static RevisionQueuedIssue FromAwaitingInput(
+        AwaitingInputIssue source,
+        ResumeTarget.Revision target,
+        string input,
+        DateTimeOffset answeredAt)
+    {
+        RevisionQueuedIssue revisionQueued = new(source.Id);
+        revisionQueued.CopySharedPropertiesFrom(source);
+        revisionQueued.AnswerClarification(input, answeredAt);
+        revisionQueued.BranchName = target.BranchName;
+        revisionQueued.PullRequestUrl = target.PullRequestUrl;
+        revisionQueued.Trigger = new RevisionTrigger.InputProvided();
+        revisionQueued.ChecksFixAttempts = 0;
+        revisionQueued.RebaseConflictAttempts = 0;
         return revisionQueued;
     }
 

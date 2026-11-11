@@ -1,5 +1,6 @@
 using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Issues.Domain.Entities;
+using Foundry.Modules.Issues.Domain.ValueObjects;
 using Foundry.Modules.Workers.Contracts;
 
 namespace Foundry.Modules.Issues.Domain.Entities.States;
@@ -20,15 +21,7 @@ public sealed class InProgressIssue : Issue
     internal static InProgressIssue FromQueued(FreshQueuedIssue queued, WorkerRunId workerRunId)
     {
         InProgressIssue inProgress = new(queued.Id);
-        inProgress.SetSharedProperties(
-            queued.MonitoredRepositoryId,
-            queued.IssueNumber,
-            queued.Title,
-            queued.Author,
-            queued.Url,
-            queued.Labels,
-            queued.DetectedAt,
-            queued.KindClassification);
+        inProgress.CopySharedPropertiesFrom(queued);
         inProgress.WorkerRunId = workerRunId;
         return inProgress;
     }
@@ -63,6 +56,26 @@ public sealed class InProgressIssue : Issue
             rebasePending.IssueNumber,
             rebasePending.EnteredRebasePendingAt));
         return rebasePending;
+    }
+
+    /// <summary>
+    /// The run stopped to ask a person (ADR 0096). The resume target comes from what the run left: its open pull
+    /// request, its commits, or nothing.
+    /// </summary>
+    public AwaitingInputIssue MarkAwaitingInput(
+        string branchName,
+        string? pullRequestUrl,
+        bool branchHasCommits,
+        IReadOnlyList<InputQuestion> questions,
+        DateTimeOffset askedAt)
+    {
+        AwaitingInputIssue awaiting = AwaitingInputIssue.FromInProgress(
+            this,
+            ResumeTarget.FromRunFacts(branchName, pullRequestUrl, branchHasCommits),
+            questions,
+            askedAt);
+        AddDomainEvent(new Events.IssueAwaitingInput(Id, MonitoredRepositoryId, IssueNumber));
+        return awaiting;
     }
 
     public UnchangedIssue MarkUnchanged()
@@ -111,15 +124,7 @@ public sealed class InProgressIssue : Issue
     internal static InProgressIssue FromContinuationQueued(ContinuationQueuedIssue source, WorkerRunId workerRunId)
     {
         InProgressIssue inProgress = new(source.Id);
-        inProgress.SetSharedProperties(
-            source.MonitoredRepositoryId,
-            source.IssueNumber,
-            source.Title,
-            source.Author,
-            source.Url,
-            source.Labels,
-            source.DetectedAt,
-            source.KindClassification);
+        inProgress.CopySharedPropertiesFrom(source);
         inProgress.WorkerRunId = workerRunId;
         return inProgress;
     }

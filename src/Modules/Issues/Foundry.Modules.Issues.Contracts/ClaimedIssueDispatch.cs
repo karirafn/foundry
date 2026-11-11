@@ -5,6 +5,10 @@ using Foundry.Shared;
 
 namespace Foundry.Modules.Issues.Contracts;
 
+/// <param name="Clarifications">
+/// The issue's clarification log (ADR 0096), rendered into the run's prompt. Optional only so claims enqueued before
+/// the log existed still deserialize; <see langword="null"/> reads as an empty log.
+/// </param>
 public sealed record ClaimedIssueDispatch(
     IssueId IssueId,
     WorkerRunId WorkerRunId,
@@ -16,4 +20,5 @@ public sealed record ClaimedIssueDispatch(
     MonitoredRepositoryId MonitoredRepositoryId,
     WorkerProvider Provider,
     DispatchContext Context,
-    string IssueApiUrl);
+    string IssueApiUrl,
+    IReadOnlyList<Clarification>? Clarifications = null);
