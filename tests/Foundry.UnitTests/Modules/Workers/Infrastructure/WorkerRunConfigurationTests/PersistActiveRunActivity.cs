@@ -69,36 +69,6 @@ public sealed class PersistActiveRunActivity : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenActiveRunHasBranchCommitCount_RoundTrips()
-    {
-        // Arrange
-        IssueId issueId = IssueId.New();
-        StartingRun starting = StartingRun.Begin(issueId, WorkerRunId.New());
-        ActiveRun run = starting.Activate(
-            ContainerId.From("container-commits"),
-            BranchName.From("feat/2-commits"),
-            MonitoredRepositoryId.New());
-
-        DateTimeOffset observedAt = new DateTimeOffset(2026, 6, 29, 13, 0, 0, TimeSpan.Zero);
-        run.RecordBranchCommitCount(3, "abc123def456", observedAt);
-
-        _dbContext.Set<WorkerRun>().Add(run);
-        await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
-        _dbContext.ChangeTracker.Clear();
-
-        // Act
-        WorkerRun? result = await _dbContext
-            .Set<WorkerRun>()
-            .FindAsync([run.Id], TestContext.Current.CancellationToken);
-
-        // Assert
-        ActiveRun reloaded = result.ShouldBeOfType<ActiveRun>();
-        reloaded.ShouldSatisfyAllConditions(
-            () => reloaded.BranchCommitCount.ShouldBe(3),
-            () => reloaded.LastObservedCommitSha.ShouldBe("abc123def456"));
-    }
-
-    [Fact]
     public async Task WhenActiveRunHasNoActivity_LastActivityAtIsNull()
     {
         // Arrange

@@ -25,7 +25,7 @@ public sealed class SinglePublishGuarantee : WorkerDispatchServiceTestBase
         // Arrange — exited container with no commits → Failure outcome → null branch
         SeedActiveRun("container-terminal-once");
         CapturingIntegrationEventDispatcher capturingDispatcher = new();
-        WorkerDispatchService sut = BuildService(
+        DispatchAndPublishTicker sut = BuildService(
             orchestrator: new ExitedContainerOrchestrator(exitCode: 1),
             integrationEventDispatcher: capturingDispatcher);
 
@@ -44,7 +44,7 @@ public sealed class SinglePublishGuarantee : WorkerDispatchServiceTestBase
         // Arrange — exited container with commits → ContinuableFailure → non-null branch
         SeedActiveRun("container-continuable-once", branchName: "feat/44-partial");
         CapturingIntegrationEventDispatcher capturingDispatcher = new();
-        WorkerDispatchService sut = BuildService(
+        DispatchAndPublishTicker sut = BuildService(
             orchestrator: new ExitedContainerOrchestrator(exitCode: 1),
             postExitProviderQueries: new StubPostExitProviderQueries(hasCommits: true),
             integrationEventDispatcher: capturingDispatcher);
@@ -65,7 +65,7 @@ public sealed class SinglePublishGuarantee : WorkerDispatchServiceTestBase
         // Arrange — running container that times out → single event regardless of commit state
         SeedActiveRun("container-timeout-once-only");
         CapturingIntegrationEventDispatcher capturingDispatcher = new();
-        WorkerDispatchService sut = BuildService(
+        DispatchAndPublishTicker sut = BuildService(
             orchestrator: new RunningContainerOrchestrator(),
             settingsQueries: new StubGlobalSettingsQueries(timeoutMinutes: 0),
             integrationEventDispatcher: capturingDispatcher);

@@ -34,7 +34,7 @@ public sealed class WatchdogBranchRouting : WorkerDispatchServiceTestBase
         SeedActiveRun("container-timeout-with-commits", branchName: "feat/7-partial-work");
         StubPostExitProviderQueries postExitQueries = new(hasCommits: true);
         CapturingIntegrationEventDispatcher capturingDispatcher = new();
-        WorkerDispatchService sut = BuildService(
+        DispatchAndPublishTicker sut = BuildService(
             orchestrator: new RunningStubOrchestrator(),
             settingsQueries: new StubGlobalSettingsQueries(timeoutMinutes: 0),
             postExitProviderQueries: postExitQueries,
@@ -57,7 +57,7 @@ public sealed class WatchdogBranchRouting : WorkerDispatchServiceTestBase
         SeedActiveRun("container-timeout-no-commits", branchName: "feat/8-no-commits");
         StubPostExitProviderQueries postExitQueries = new(hasCommits: false);
         CapturingIntegrationEventDispatcher capturingDispatcher = new();
-        WorkerDispatchService sut = BuildService(
+        DispatchAndPublishTicker sut = BuildService(
             orchestrator: new RunningStubOrchestrator(),
             settingsQueries: new StubGlobalSettingsQueries(timeoutMinutes: 0),
             postExitProviderQueries: postExitQueries,
@@ -80,7 +80,7 @@ public sealed class WatchdogBranchRouting : WorkerDispatchServiceTestBase
         SeedActiveRun("container-timeout-commits-check-fails", branchName: "feat/9-check-fails");
         FailingBranchCommitsCheckQueries postExitQueries = new();
         CapturingIntegrationEventDispatcher capturingDispatcher = new();
-        WorkerDispatchService sut = BuildService(
+        DispatchAndPublishTicker sut = BuildService(
             orchestrator: new RunningStubOrchestrator(),
             settingsQueries: new StubGlobalSettingsQueries(timeoutMinutes: 0),
             postExitProviderQueries: postExitQueries,
@@ -105,7 +105,7 @@ public sealed class WatchdogBranchRouting : WorkerDispatchServiceTestBase
         SeedActiveRun("container-orphan-with-commits", branchName: "feat/10-orphan-commits");
         StubPostExitProviderQueries postExitQueries = new(hasCommits: true);
         CapturingIntegrationEventDispatcher capturingDispatcher = new();
-        WorkerDispatchService sut = BuildService(
+        DispatchAndPublishTicker sut = BuildService(
             orchestrator: new NullStatusOrchestrator(),
             postExitProviderQueries: postExitQueries,
             integrationEventDispatcher: capturingDispatcher);
@@ -127,7 +127,7 @@ public sealed class WatchdogBranchRouting : WorkerDispatchServiceTestBase
         SeedActiveRun("container-orphan-no-commits", branchName: "feat/11-orphan-no-commits");
         StubPostExitProviderQueries postExitQueries = new(hasCommits: false);
         CapturingIntegrationEventDispatcher capturingDispatcher = new();
-        WorkerDispatchService sut = BuildService(
+        DispatchAndPublishTicker sut = BuildService(
             orchestrator: new NullStatusOrchestrator(),
             postExitProviderQueries: postExitQueries,
             integrationEventDispatcher: capturingDispatcher);
@@ -149,7 +149,7 @@ public sealed class WatchdogBranchRouting : WorkerDispatchServiceTestBase
         SeedActiveRun("container-orphan-check-fails", branchName: "feat/12-orphan-check-fails");
         FailingBranchCommitsCheckQueries postExitQueries = new();
         CapturingIntegrationEventDispatcher capturingDispatcher = new();
-        WorkerDispatchService sut = BuildService(
+        DispatchAndPublishTicker sut = BuildService(
             orchestrator: new NullStatusOrchestrator(),
             postExitProviderQueries: postExitQueries,
             integrationEventDispatcher: capturingDispatcher);
@@ -173,7 +173,7 @@ public sealed class WatchdogBranchRouting : WorkerDispatchServiceTestBase
         SeedActiveRun("container-missing-with-commits", branchName: "feat/13-missing-commits");
         StubPostExitProviderQueries postExitQueries = new(hasCommits: true);
         CapturingIntegrationEventDispatcher capturingDispatcher = new();
-        WorkerDispatchService sut = BuildService(
+        DispatchAndPublishTicker sut = BuildService(
             orchestrator: new NullStatusOrchestrator(),
             postExitProviderQueries: postExitQueries,
             integrationEventDispatcher: capturingDispatcher);
@@ -195,7 +195,7 @@ public sealed class WatchdogBranchRouting : WorkerDispatchServiceTestBase
         SeedActiveRun("container-missing-no-commits", branchName: "feat/14-missing-no-commits");
         StubPostExitProviderQueries postExitQueries = new(hasCommits: false);
         CapturingIntegrationEventDispatcher capturingDispatcher = new();
-        WorkerDispatchService sut = BuildService(
+        DispatchAndPublishTicker sut = BuildService(
             orchestrator: new NullStatusOrchestrator(),
             postExitProviderQueries: postExitQueries,
             integrationEventDispatcher: capturingDispatcher);
@@ -217,7 +217,7 @@ public sealed class WatchdogBranchRouting : WorkerDispatchServiceTestBase
         SeedActiveRun("container-missing-check-fails", branchName: "feat/15-missing-check-fails");
         FailingBranchCommitsCheckQueries postExitQueries = new();
         CapturingIntegrationEventDispatcher capturingDispatcher = new();
-        WorkerDispatchService sut = BuildService(
+        DispatchAndPublishTicker sut = BuildService(
             orchestrator: new NullStatusOrchestrator(),
             postExitProviderQueries: postExitQueries,
             integrationEventDispatcher: capturingDispatcher);
@@ -240,7 +240,7 @@ public sealed class WatchdogBranchRouting : WorkerDispatchServiceTestBase
         // Arrange — resolver maps null-exit with no MR and no commits → NonZeroExit(-1)
         SeedActiveRun("container-orphan-category");
         CapturingIntegrationEventDispatcher capturingDispatcher = new();
-        WorkerDispatchService sut = BuildService(
+        DispatchAndPublishTicker sut = BuildService(
             orchestrator: new NullStatusOrchestrator(),
             integrationEventDispatcher: capturingDispatcher);
 
@@ -260,7 +260,7 @@ public sealed class WatchdogBranchRouting : WorkerDispatchServiceTestBase
         // Arrange
         SeedActiveRun("container-timeout-category");
         CapturingIntegrationEventDispatcher capturingDispatcher = new();
-        WorkerDispatchService sut = BuildService(
+        DispatchAndPublishTicker sut = BuildService(
             orchestrator: new RunningStubOrchestrator(),
             settingsQueries: new StubGlobalSettingsQueries(timeoutMinutes: 0),
             integrationEventDispatcher: capturingDispatcher);
@@ -285,7 +285,7 @@ public sealed class WatchdogBranchRouting : WorkerDispatchServiceTestBase
 
         // Build a sut where reconciliation has already run (_reconciled=true) so the monitor
         // path fires on the second tick.
-        WorkerDispatchService sut = BuildService(
+        DispatchAndPublishTicker sut = BuildService(
             orchestrator: new SecondTickNullStatusOrchestrator(),
             integrationEventDispatcher: capturingDispatcher);
 

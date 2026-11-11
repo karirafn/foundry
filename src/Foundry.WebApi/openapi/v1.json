@@ -1812,6 +1812,68 @@
         }
       }
     },
+    "/api/workers/runs/{workerRunId}/publish-retry": {
+      "post": {
+        "tags": [
+          "Workers"
+        ],
+        "summary": "Reruns Publish for a run whose publish retries were exhausted",
+        "operationId": "RequestWorkerRunPublishRetry",
+        "parameters": [
+          {
+            "name": "workerRunId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "Accepted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RequestPublishRetryResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/workers/run-totals": {
       "get": {
         "tags": [
@@ -4009,6 +4071,18 @@
           }
         }
       },
+      "RequestPublishRetryResponse": {
+        "required": [
+          "workerRunId"
+        ],
+        "type": "object",
+        "properties": {
+          "workerRunId": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      },
       "RequestRunCancellationResponse": {
         "required": [
           "workerRunId",
@@ -5206,6 +5280,104 @@
               "string"
             ],
             "format": "date-time"
+          },
+          "publish": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/WorkerRunPublishDetail"
+              }
+            ]
+          },
+          "publishRetry": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/WorkerRunPublishRetryDetail"
+              }
+            ]
+          },
+          "discardsAt": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
+          }
+        }
+      },
+      "WorkerRunPublishDetail": {
+        "required": [
+          "headSha",
+          "headCommitUrl",
+          "pullRequestUrl",
+          "branchCommitCount"
+        ],
+        "type": "object",
+        "properties": {
+          "headSha": {
+            "type": "string"
+          },
+          "headCommitUrl": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "pullRequestUrl": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "branchCommitCount": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          }
+        }
+      },
+      "WorkerRunPublishRetryDetail": {
+        "required": [
+          "attemptNumber",
+          "maxAttempts",
+          "nextAttemptAt",
+          "reason"
+        ],
+        "type": "object",
+        "properties": {
+          "attemptNumber": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "maxAttempts": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "nextAttemptAt": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
+          },
+          "reason": {
+            "type": "string"
           }
         }
       }

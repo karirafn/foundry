@@ -23,4 +23,27 @@ internal sealed class FakePublisher(PrepareOutcome? outcome = null) : IPublisher
 
         return Task.FromResult(outcome ?? prepared);
     }
+
+    private readonly List<PublishRequest> _publishRequests = [];
+
+    private readonly Queue<PublishResult> _publishResults = new();
+
+    public IReadOnlyList<PublishRequest> PublishRequests => _publishRequests;
+
+    /// <summary>Scripts the next Publish results, in order; once they run out every publish has nothing to publish.</summary>
+    public FakePublisher WithPublishResults(params PublishResult[] results)
+    {
+        foreach (PublishResult result in results)
+        {
+            _publishResults.Enqueue(result);
+        }
+
+        return this;
+    }
+
+    public Task<PublishResult> PublishAsync(PublishRequest request, CancellationToken cancellationToken)
+    {
+        _publishRequests.Add(request);
+        return Task.FromResult(_publishResults.TryDequeue(out PublishResult? result) ? result : new PublishResult.NothingToPublish());
+    }
 }

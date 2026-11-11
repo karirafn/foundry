@@ -20,7 +20,7 @@ namespace Foundry.UnitTests.Modules.Workers.Features.Dispatch.WorkerDispatchServ
 
 public sealed class PostExitDiscovery : WorkerDispatchServiceTestBase
 {
-    private WorkerDispatchService BuildService(
+    private DispatchAndPublishTicker BuildService(
         IPostExitProviderQueries postExitProviderQueries,
         WorkerStatus exitedStatus,
         IIntegrationEventDispatcher? integrationEventDispatcher = null)
@@ -41,7 +41,7 @@ public sealed class PostExitDiscovery : WorkerDispatchServiceTestBase
         IPostExitProviderQueries queries = new StubPostExitProviderQueries(
             hasCommits: true,
             mergeRequest: new MergeRequestByBranch(MergeRequestPresence.Open, "https://github.com/owner/repo/pull/42"));
-        WorkerDispatchService sut = BuildService(queries, exitedStatus);
+        DispatchAndPublishTicker sut = BuildService(queries, exitedStatus);
 
         // Act
         await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
@@ -62,7 +62,7 @@ public sealed class PostExitDiscovery : WorkerDispatchServiceTestBase
             hasCommits: true,
             mergeRequest: new MergeRequestByBranch(MergeRequestPresence.Open, "https://github.com/owner/repo/pull/42"));
         CapturingIntegrationEventDispatcher capturingDispatcher = new();
-        WorkerDispatchService sut = BuildService(queries, exitedStatus, capturingDispatcher);
+        DispatchAndPublishTicker sut = BuildService(queries, exitedStatus, capturingDispatcher);
 
         // Act
         await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
@@ -83,7 +83,7 @@ public sealed class PostExitDiscovery : WorkerDispatchServiceTestBase
         SeedActiveRun("container-success-no-commits");
         WorkerStatus exitedStatus = new(IsRunning: false, ExitCode: 0, FinishedAt: DateTimeOffset.UtcNow);
         IPostExitProviderQueries queries = new StubPostExitProviderQueries(hasCommits: false);
-        WorkerDispatchService sut = BuildService(queries, exitedStatus);
+        DispatchAndPublishTicker sut = BuildService(queries, exitedStatus);
 
         // Act
         await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
@@ -102,7 +102,7 @@ public sealed class PostExitDiscovery : WorkerDispatchServiceTestBase
         WorkerStatus exitedStatus = new(IsRunning: false, ExitCode: 0, FinishedAt: DateTimeOffset.UtcNow);
         IPostExitProviderQueries queries = new StubPostExitProviderQueries(hasCommits: false);
         CapturingIntegrationEventDispatcher capturingDispatcher = new();
-        WorkerDispatchService sut = BuildService(queries, exitedStatus, capturingDispatcher);
+        DispatchAndPublishTicker sut = BuildService(queries, exitedStatus, capturingDispatcher);
 
         // Act
         await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
@@ -121,7 +121,7 @@ public sealed class PostExitDiscovery : WorkerDispatchServiceTestBase
         SeedActiveRun("container-success-no-pr");
         WorkerStatus exitedStatus = new(IsRunning: false, ExitCode: 0, FinishedAt: DateTimeOffset.UtcNow);
         IPostExitProviderQueries queries = new StubPostExitProviderQueries(hasCommits: true);
-        WorkerDispatchService sut = BuildService(queries, exitedStatus);
+        DispatchAndPublishTicker sut = BuildService(queries, exitedStatus);
 
         // Act
         await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
@@ -140,7 +140,7 @@ public sealed class PostExitDiscovery : WorkerDispatchServiceTestBase
         WorkerStatus exitedStatus = new(IsRunning: false, ExitCode: 0, FinishedAt: DateTimeOffset.UtcNow);
         IPostExitProviderQueries queries = new StubPostExitProviderQueries(hasCommits: true);
         CapturingIntegrationEventDispatcher capturingDispatcher = new();
-        WorkerDispatchService sut = BuildService(queries, exitedStatus, capturingDispatcher);
+        DispatchAndPublishTicker sut = BuildService(queries, exitedStatus, capturingDispatcher);
 
         // Act
         await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
@@ -159,7 +159,7 @@ public sealed class PostExitDiscovery : WorkerDispatchServiceTestBase
         SeedActiveRun("container-nonzero-with-commits");
         WorkerStatus exitedStatus = new(IsRunning: false, ExitCode: 1, FinishedAt: DateTimeOffset.UtcNow);
         IPostExitProviderQueries queries = new StubPostExitProviderQueries(hasCommits: true);
-        WorkerDispatchService sut = BuildService(queries, exitedStatus);
+        DispatchAndPublishTicker sut = BuildService(queries, exitedStatus);
 
         // Act
         await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
@@ -178,7 +178,7 @@ public sealed class PostExitDiscovery : WorkerDispatchServiceTestBase
         WorkerStatus exitedStatus = new(IsRunning: false, ExitCode: 1, FinishedAt: DateTimeOffset.UtcNow);
         IPostExitProviderQueries queries = new StubPostExitProviderQueries(hasCommits: true);
         CapturingIntegrationEventDispatcher capturingDispatcher = new();
-        WorkerDispatchService sut = BuildService(queries, exitedStatus, capturingDispatcher);
+        DispatchAndPublishTicker sut = BuildService(queries, exitedStatus, capturingDispatcher);
 
         // Act
         await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
@@ -197,7 +197,7 @@ public sealed class PostExitDiscovery : WorkerDispatchServiceTestBase
         SeedActiveRun("container-nonzero-no-commits");
         WorkerStatus exitedStatus = new(IsRunning: false, ExitCode: 1, FinishedAt: DateTimeOffset.UtcNow);
         IPostExitProviderQueries queries = new StubPostExitProviderQueries(hasCommits: false);
-        WorkerDispatchService sut = BuildService(queries, exitedStatus);
+        DispatchAndPublishTicker sut = BuildService(queries, exitedStatus);
 
         // Act
         await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
@@ -216,7 +216,7 @@ public sealed class PostExitDiscovery : WorkerDispatchServiceTestBase
         WorkerStatus exitedStatus = new(IsRunning: false, ExitCode: 1, FinishedAt: DateTimeOffset.UtcNow);
         IPostExitProviderQueries queries = new StubPostExitProviderQueries(hasCommits: false);
         CapturingIntegrationEventDispatcher capturingDispatcher = new();
-        WorkerDispatchService sut = BuildService(queries, exitedStatus, capturingDispatcher);
+        DispatchAndPublishTicker sut = BuildService(queries, exitedStatus, capturingDispatcher);
 
         // Act
         await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
@@ -236,7 +236,7 @@ public sealed class PostExitDiscovery : WorkerDispatchServiceTestBase
         WorkerStatus exitedStatus = new(IsRunning: false, ExitCode: 0, FinishedAt: DateTimeOffset.UtcNow);
         IPostExitProviderQueries queries = new StubPostExitProviderQueries(hasCommits: true);
         CapturingIntegrationEventDispatcher capturingDispatcher = new();
-        WorkerDispatchService sut = BuildService(queries, exitedStatus, capturingDispatcher);
+        DispatchAndPublishTicker sut = BuildService(queries, exitedStatus, capturingDispatcher);
 
         // Act
         await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
@@ -255,7 +255,7 @@ public sealed class PostExitDiscovery : WorkerDispatchServiceTestBase
         SeedActiveRun("container-commits-check-failure");
         WorkerStatus exitedStatus = new(IsRunning: false, ExitCode: 0, FinishedAt: DateTimeOffset.UtcNow);
         IPostExitProviderQueries queries = new FailingCommitsCheckQueries();
-        WorkerDispatchService sut = BuildService(queries, exitedStatus);
+        DispatchAndPublishTicker sut = BuildService(queries, exitedStatus);
 
         // Act
         await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);

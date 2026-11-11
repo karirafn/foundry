@@ -20,7 +20,7 @@ namespace Foundry.UnitTests.Modules.Workers.Features.Dispatch.WorkerDispatchServ
 
 public sealed class MonitorActiveRuns : WorkerDispatchServiceTestBase
 {
-    private WorkerDispatchService BuildService(MonitoringStubWorkerOrchestrator orchestrator)
+    private DispatchAndPublishTicker BuildService(MonitoringStubWorkerOrchestrator orchestrator)
     {
         // Delegates to base.BuildService — accesses inherited instance state.
         return base.BuildService(orchestrator);
@@ -33,7 +33,7 @@ public sealed class MonitorActiveRuns : WorkerDispatchServiceTestBase
         // on the second tick the monitoring loop finds the container missing.
         // Resolver maps null-exit with no MR and no commits → NonZeroExit(-1).
         MonitoringStubWorkerOrchestrator orchestrator = new(status: null);
-        WorkerDispatchService sut = BuildService(orchestrator);
+        DispatchAndPublishTicker sut = BuildService(orchestrator);
 
         // First tick: no active runs exist yet, so reconciliation has nothing to process
         await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
@@ -58,7 +58,7 @@ public sealed class MonitorActiveRuns : WorkerDispatchServiceTestBase
         // Arrange — the real parser sees no output (no result line), so a vanished container is
         // classified as removed outside Foundry rather than a bootstrap failure.
         MonitoringStubWorkerOrchestrator orchestrator = new(status: null);
-        WorkerDispatchService sut = base.BuildService(
+        DispatchAndPublishTicker sut = base.BuildService(
             orchestrator,
             containerOutputParser: new ContainerOutputParser(NullLogger<ContainerOutputParser>.Instance));
         await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
@@ -81,7 +81,7 @@ public sealed class MonitorActiveRuns : WorkerDispatchServiceTestBase
         SeedActiveRun("exited-container");
         WorkerStatus exitedStatus = new(IsRunning: false, ExitCode: 0, FinishedAt: DateTimeOffset.UtcNow);
         MonitoringStubWorkerOrchestrator orchestrator = new(status: exitedStatus);
-        WorkerDispatchService sut = BuildService(orchestrator);
+        DispatchAndPublishTicker sut = BuildService(orchestrator);
 
         // Act
         await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
@@ -100,7 +100,7 @@ public sealed class MonitorActiveRuns : WorkerDispatchServiceTestBase
         SeedActiveRun("failed-container");
         WorkerStatus failedStatus = new(IsRunning: false, ExitCode: 1, FinishedAt: DateTimeOffset.UtcNow);
         MonitoringStubWorkerOrchestrator orchestrator = new(status: failedStatus);
-        WorkerDispatchService sut = BuildService(orchestrator);
+        DispatchAndPublishTicker sut = BuildService(orchestrator);
 
         // Act
         await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
@@ -120,7 +120,7 @@ public sealed class MonitorActiveRuns : WorkerDispatchServiceTestBase
         SeedActiveRun("running-container");
         WorkerStatus runningStatus = new(IsRunning: true, ExitCode: null, FinishedAt: null);
         MonitoringStubWorkerOrchestrator orchestrator = new(status: runningStatus);
-        WorkerDispatchService sut = BuildService(orchestrator);
+        DispatchAndPublishTicker sut = BuildService(orchestrator);
 
         // Act
         await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);

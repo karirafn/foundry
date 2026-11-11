@@ -23,7 +23,7 @@ public sealed class LoginGate : WorkerDispatchServiceTestBase
     {
         // Arrange
         CapturingIntegrationEventDispatcher dispatcher = new();
-        WorkerDispatchService sut = BuildService(
+        DispatchAndPublishTicker sut = BuildService(
             new NullWorkerOrchestrator(),
             integrationEventDispatcher: dispatcher,
             credentialGate: new CannotDispatchCredentialGate());
@@ -41,7 +41,7 @@ public sealed class LoginGate : WorkerDispatchServiceTestBase
         // Arrange — no DB rows; if the tick reads ActiveRun it would be fine, but
         // we validate it returns before any dispatch logic by checking no WorkerCapacityAvailable
         CapturingIntegrationEventDispatcher dispatcher = new();
-        WorkerDispatchService sut = BuildService(
+        DispatchAndPublishTicker sut = BuildService(
             new NullWorkerOrchestrator(),
             integrationEventDispatcher: dispatcher,
             credentialGate: new CannotDispatchCredentialGate());
@@ -60,7 +60,7 @@ public sealed class LoginGate : WorkerDispatchServiceTestBase
     {
         // Arrange
         CapturingIntegrationEventDispatcher dispatcher = new();
-        WorkerDispatchService sut = BuildService(
+        DispatchAndPublishTicker sut = BuildService(
             new NullWorkerOrchestrator(),
             integrationEventDispatcher: dispatcher,
             credentialGate: new CanDispatchCredentialGate());

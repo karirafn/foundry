@@ -27,7 +27,7 @@ public sealed class IntegrationEventDispatchErrors : WorkerDispatchServiceTestBa
         WorkerStatus exitedStatus = new(IsRunning: false, ExitCode: 0, FinishedAt: DateTimeOffset.UtcNow);
         StubWorkerOrchestrator orchestrator = new(status: exitedStatus);
         ThrowingIntegrationEventDispatcher dispatcher = new();
-        WorkerDispatchService sut = BuildService(orchestrator, integrationEventDispatcher: dispatcher);
+        DispatchAndPublishTicker sut = BuildService(orchestrator, integrationEventDispatcher: dispatcher);
 
         // Act — must not throw even though dispatcher throws
         Task act = sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
@@ -53,7 +53,7 @@ public sealed class IntegrationEventDispatchErrors : WorkerDispatchServiceTestBa
         WorkerStatus failedStatus = new(IsRunning: false, ExitCode: 1, FinishedAt: DateTimeOffset.UtcNow);
         StubWorkerOrchestrator orchestrator = new(status: failedStatus);
         ThrowingIntegrationEventDispatcher dispatcher = new();
-        WorkerDispatchService sut = BuildService(orchestrator, integrationEventDispatcher: dispatcher);
+        DispatchAndPublishTicker sut = BuildService(orchestrator, integrationEventDispatcher: dispatcher);
 
         // Act — dispatcher throws inside TransitionAsync → transaction rolls back → tick throws
         Task act = sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
@@ -73,7 +73,7 @@ public sealed class IntegrationEventDispatchErrors : WorkerDispatchServiceTestBa
         SeedActiveRun("orphaned-dispatch-error");
         StubWorkerOrchestrator orchestrator = new(status: null);
         ThrowingIntegrationEventDispatcher dispatcher = new();
-        WorkerDispatchService sut = BuildService(orchestrator, integrationEventDispatcher: dispatcher);
+        DispatchAndPublishTicker sut = BuildService(orchestrator, integrationEventDispatcher: dispatcher);
 
         // Act — dispatcher throws inside TransitionAsync → transaction rolls back → tick throws
         Task act = sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
@@ -91,7 +91,7 @@ public sealed class IntegrationEventDispatchErrors : WorkerDispatchServiceTestBa
         // Arrange — no active runs so the capacity-available path is reached
         ThrowingAllIntegrationEventDispatcher dispatcher = new();
         StubWorkerOrchestrator orchestrator = new(status: null);
-        WorkerDispatchService sut = BuildService(orchestrator, integrationEventDispatcher: dispatcher);
+        DispatchAndPublishTicker sut = BuildService(orchestrator, integrationEventDispatcher: dispatcher);
 
         // Act — must not throw even though the capacity-available dispatch throws
         Task act = sut.ExecuteTickAsync(TestContext.Current.CancellationToken);

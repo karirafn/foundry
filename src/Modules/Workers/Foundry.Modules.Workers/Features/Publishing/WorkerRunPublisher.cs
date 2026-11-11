@@ -46,8 +46,6 @@ internal sealed class WorkerRunPublisher(
 {
     internal const string MissingTokenReason = "No account token is configured for the repository.";
 
-    internal const string MissingBaseReason = "The run has no base recorded at Prepare, so its commits cannot be checked.";
-
     /// <summary>Runs every publish step still to do for <paramref name="run"/>.</summary>
     public async Task PublishAsync(PublishingRun run, CancellationToken cancellationToken)
     {
@@ -93,10 +91,12 @@ internal sealed class WorkerRunPublisher(
 
     private async Task<bool> PushAsync(PublishingRun run, CancellationToken cancellationToken)
     {
+        // A run dispatched before runs were prepared has no base to check a Run bundle against; it pushed its own work.
         if (run.Base is not { } runBase)
         {
-            await FailPublishAsync(run, MissingBaseReason, transient: false, cancellationToken);
-            return false;
+            run.RecordPublished(new PublishResult.NothingToPublish(), timeProvider.GetUtcNow());
+            await dbContext.SaveChangesAsync(cancellationToken);
+            return true;
         }
 
         // Resolved at publish time rather than carried on any event: outbox payloads are plaintext (#800).

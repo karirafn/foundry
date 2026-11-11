@@ -26,7 +26,7 @@ public sealed class Reconciliation : WorkerDispatchServiceTestBase
         // Arrange — resolver maps null-exit with no MR and no commits → NonZeroExit(-1)
         SeedActiveRun("orphaned-container");
         ReconciliationStubWorkerOrchestrator orchestrator = new(probe: new WorkerStatusProbe.NotFound());
-        WorkerDispatchService sut = BuildService(orchestrator);
+        DispatchAndPublishTicker sut = BuildService(orchestrator);
 
         // Act
         await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
@@ -46,7 +46,7 @@ public sealed class Reconciliation : WorkerDispatchServiceTestBase
         SeedActiveRun("running-container");
         WorkerStatus runningStatus = new(IsRunning: true, ExitCode: null, FinishedAt: null);
         ReconciliationStubWorkerOrchestrator orchestrator = new(probe: new WorkerStatusProbe.Available(runningStatus));
-        WorkerDispatchService sut = BuildService(orchestrator);
+        DispatchAndPublishTicker sut = BuildService(orchestrator);
 
         // Act
         await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
@@ -64,7 +64,7 @@ public sealed class Reconciliation : WorkerDispatchServiceTestBase
         SeedActiveRun("exited-zero-container");
         WorkerStatus exitedStatus = new(IsRunning: false, ExitCode: 0, FinishedAt: DateTimeOffset.UtcNow);
         ReconciliationStubWorkerOrchestrator orchestrator = new(probe: new WorkerStatusProbe.Available(exitedStatus));
-        WorkerDispatchService sut = BuildService(orchestrator);
+        DispatchAndPublishTicker sut = BuildService(orchestrator);
 
         // Act
         await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
@@ -82,7 +82,7 @@ public sealed class Reconciliation : WorkerDispatchServiceTestBase
         SeedActiveRun("exited-nonzero-container");
         WorkerStatus exitedStatus = new(IsRunning: false, ExitCode: 2, FinishedAt: DateTimeOffset.UtcNow);
         ReconciliationStubWorkerOrchestrator orchestrator = new(probe: new WorkerStatusProbe.Available(exitedStatus));
-        WorkerDispatchService sut = BuildService(orchestrator);
+        DispatchAndPublishTicker sut = BuildService(orchestrator);
 
         // Act
         await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
@@ -102,7 +102,7 @@ public sealed class Reconciliation : WorkerDispatchServiceTestBase
         SeedActiveRun("exited-on-reconcile-container");
         WorkerStatus exitedStatus = new(IsRunning: false, ExitCode: 0, FinishedAt: DateTimeOffset.UtcNow);
         ReconciliationStubWorkerOrchestrator orchestrator = new(probe: new WorkerStatusProbe.Available(exitedStatus));
-        WorkerDispatchService sut = BuildService(orchestrator);
+        DispatchAndPublishTicker sut = BuildService(orchestrator);
 
         // Act
         await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
@@ -117,7 +117,7 @@ public sealed class Reconciliation : WorkerDispatchServiceTestBase
         // Arrange — seed run, first tick will reconcile (container missing → FailedRun)
         // Then seed another active run; second tick should NOT reconcile it (it stays Active)
         ReconciliationStubWorkerOrchestrator orchestrator = new(probe: new WorkerStatusProbe.NotFound());
-        WorkerDispatchService sut = BuildService(orchestrator);
+        DispatchAndPublishTicker sut = BuildService(orchestrator);
 
         // First tick: reconciles the orphaned run (no active runs seeded yet, so nothing happens)
         await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
@@ -141,7 +141,7 @@ public sealed class Reconciliation : WorkerDispatchServiceTestBase
         // Arrange — active run exists, first tick: reconcile probe returns Unreachable → _reconciled stays false
         SeedActiveRun("unreachable-reconcile-container");
         ReconciliationStubWorkerOrchestrator orchestrator = ReconciliationStubWorkerOrchestrator.WithUnreachableDaemon();
-        WorkerDispatchService sut = BuildService(orchestrator);
+        DispatchAndPublishTicker sut = BuildService(orchestrator);
 
         // Act — first tick: reconcile sees Unreachable → _reconciled must NOT be latched
         await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
@@ -161,7 +161,7 @@ public sealed class Reconciliation : WorkerDispatchServiceTestBase
         SeedActiveRun("container-a");
         SeedActiveRun("container-b");
         ReconciliationStubWorkerOrchestrator orchestrator = new(probe: new WorkerStatusProbe.NotFound());
-        WorkerDispatchService sut = BuildService(orchestrator);
+        DispatchAndPublishTicker sut = BuildService(orchestrator);
 
         // Act
         bool result = await sut.ReconcileOrphanedRunsForTestAsync(TestContext.Current.CancellationToken);
@@ -176,7 +176,7 @@ public sealed class Reconciliation : WorkerDispatchServiceTestBase
         // Arrange — one active run, probe returns Unreachable
         SeedActiveRun("container-unreachable");
         ReconciliationStubWorkerOrchestrator orchestrator = ReconciliationStubWorkerOrchestrator.WithUnreachableDaemon();
-        WorkerDispatchService sut = BuildService(orchestrator);
+        DispatchAndPublishTicker sut = BuildService(orchestrator);
 
         // Act
         bool result = await sut.ReconcileOrphanedRunsForTestAsync(TestContext.Current.CancellationToken);

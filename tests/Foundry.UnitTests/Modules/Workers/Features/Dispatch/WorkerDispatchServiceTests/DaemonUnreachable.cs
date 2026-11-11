@@ -26,7 +26,7 @@ public sealed class DaemonUnreachable : WorkerDispatchServiceTestBase
         // Arrange — active run exists, daemon returns Unreachable
         SeedActiveRun("unreachable-container");
         DaemonUnreachableStubOrchestrator orchestrator = new(new WorkerStatusProbe.Unreachable());
-        WorkerDispatchService sut = BuildService(orchestrator);
+        DispatchAndPublishTicker sut = BuildService(orchestrator);
 
         // Trigger reconciliation on the first tick so the second tick exercises the monitoring path.
         // First tick: no active runs seeded yet for reconcile (we seed after), so reconcile marks done.
@@ -50,7 +50,7 @@ public sealed class DaemonUnreachable : WorkerDispatchServiceTestBase
         // Arrange
         SeedActiveRun("unreachable-container-2");
         DaemonUnreachableStubOrchestrator orchestrator = new(new WorkerStatusProbe.Unreachable());
-        WorkerDispatchService sut = BuildService(orchestrator);
+        DispatchAndPublishTicker sut = BuildService(orchestrator);
 
         // Act — first tick: reconcile sees Unreachable probe; second tick: monitor sees same
         await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
@@ -74,7 +74,7 @@ public sealed class DaemonUnreachable : WorkerDispatchServiceTestBase
         DaemonUnreachableStubOrchestrator orchestrator = new(
             unreachableCallCount: 2,
             recoveredProbe: new WorkerStatusProbe.Available(exitedStatus));
-        WorkerDispatchService sut = BuildService(orchestrator);
+        DispatchAndPublishTicker sut = BuildService(orchestrator);
 
         // Act — first tick: reconcile + monitor both see Unreachable → run stays Active
         await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
