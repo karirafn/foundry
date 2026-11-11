@@ -89,7 +89,7 @@ Cross-module writes flow through a transactional outbox, so a committed state ch
 
 Dispatched via Docker socket (`IWorkerOrchestrator` abstraction). Workers push to `<prefix>/<issue-number>-<slug>` branches (e.g. `feat/42-add-retry`) and open a PR. Foundry tracks outcomes by polling the container and querying the provider after the container exits.
 
-Every worker container is hardened (ADR 0088, single source `WorkerHardeningSpec`): `CapDrop: [ALL]` with only `SETUID`/`SETGID` added back for the entrypoint's root-render-then-`setpriv` drop, `no-new-privileges`, the daemon's default seccomp profile, and a read-only root filesystem with tmpfs at `/tmp`, `/var/tmp`, `/etc/claude-code` and anonymous volumes (removed with the container) at `/workspace`, `/home/node`. Docker-enabled workers layer `RootlessDindRunSpec` on top. Anything a worker needs writable must live under one of those paths.
+Every worker container is hardened (ADR 0088, single source `WorkerHardeningSpec`): `CapDrop: [ALL]` with only `SETUID`/`SETGID` added back for the entrypoint's root-render-then-`setpriv` drop, `no-new-privileges`, the daemon's default seccomp profile, and a read-only root filesystem with a tmpfs at `/etc/claude-code` and anonymous volumes (removed with the container) at `/workspace`, `/home/node`, `/tmp`, `/var/tmp`. Docker-enabled workers layer `RootlessDindRunSpec` on top. Anything a worker needs writable must live under one of those paths.
 
 ## Code Style
 

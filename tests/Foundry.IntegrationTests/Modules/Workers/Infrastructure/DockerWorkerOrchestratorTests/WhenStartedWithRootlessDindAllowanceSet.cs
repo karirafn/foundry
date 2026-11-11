@@ -22,8 +22,23 @@ namespace Foundry.IntegrationTests.Modules.Workers.Infrastructure.DockerWorkerOr
 /// </summary>
 public sealed class WhenStartedWithRootlessDindAllowanceSet : IAsyncLifetime
 {
-    private const string Image = "busybox:latest";
+    // Alpine rather than busybox: like the worker image, it ships /tmp and /var/tmp as sticky 1777 directories, which
+    // the anonymous volumes inherit. Busybox has no /var/tmp, so the daemon would create the mount point as 0755.
+    private const string ImageRepository = "alpine";
+    private const string ImageTag = "latest";
+    private const string Image = $"{ImageRepository}:{ImageTag}";
     private const string WorkerRunIdLabel = "foundry.worker-run-id";
+    private static readonly string[] TempDirectories = ["/tmp", "/var/tmp"];
+
+    // Probes the temp directories as an unprivileged user, as the worker's node user would use them: it must be able
+    // to write there and run what it wrote (the entrypoint's GIT_ASKPASS helper).
+    private const string TempDirectoryProbe =
+        "for p in /tmp /var/tmp; do "
+        + "stat -c 'mode=%n:%a' \"$p\"; "
+        + "awk -v p=\"$p\" '$2 == p { print \"fstype=\" p \":\" $3 }' /proc/mounts; "
+        + "su -s /bin/sh nobody -c "
+        + "\"f=\\$(mktemp -p $p) && printf '#!/bin/sh\\necho ok\\n' > \\$f && chmod 700 \\$f && \\$f\" >/dev/null "
+        + "&& echo \"unprivileged-exec=$p\"; done";
 
     private readonly WorkerRunId _runId = WorkerRunId.New();
 
@@ -81,27 +96,7 @@ public sealed class WhenStartedWithRootlessDindAllowanceSet : IAsyncLifetime
         // Arrange
         Assert.SkipUnless(_daemonReachable, "Docker daemon is not reachable.");
         DockerWorkerOrchestrator sut = _sut.ShouldNotBeNull();
-        // Composed as IssueClaimedHandler composes it: the hardened baseline, then the DinD relaxations.
-        WorkerContainerSpec spec = WorkerHardeningSpec.Apply(new(
-            Image: Image,
-            EnvironmentVariables: new Dictionary<string, string>(),
-            Labels: new Dictionary<string, string> { [WorkerRunIdLabel] = _runId.Value.ToString() },
-            Command: ["true"])
-        {
-            MemoryLimitMb = 512,
-            CpuLimit = 1.0,
-            PidsLimit = 256,
-        }) with
-        {
-            Capabilities = RootlessDindRunSpec.Capabilities,
-            SecurityOptions = RootlessDindRunSpec.SecurityOptions,
-            Devices = RootlessDindRunSpec.Devices,
-            UnmaskSystemPaths = RootlessDindRunSpec.UnmaskSystemPaths,
-            VolumeMounts =
-            [
-                new VolumeMount(WorkerVolumeNames.DataRootVolumeName(_runId), RootlessDindRunSpec.DataRootContainerPath),
-            ],
-        };
+        WorkerContainerSpec spec = BuildDindSpec(["true"]);
 
         // Act
         Result<ContainerId> result = await sut.StartAsync(spec, TestContext.Current.CancellationToken);
@@ -121,6 +116,104 @@ public sealed class WhenStartedWithRootlessDindAllowanceSet : IAsyncLifetime
             () => inspect.HostConfig.ReadonlyPaths.ShouldNotBeNull().ShouldBeEmpty(),
             () => inspect.HostConfig.CapDrop.ShouldNotBeNull().ShouldContain(c => c.Equals("ALL", StringComparison.OrdinalIgnoreCase)),
             () => inspect.HostConfig.ReadonlyRootfs.ShouldBeTrue());
+    }
+
+    [Fact]
+    public async Task WhenStartedWithRootlessDindAllowanceSet_TempDirectoriesAreStickyAnonymousVolumes()
+    {
+        // Arrange
+        Assert.SkipUnless(_daemonReachable, "Docker daemon is not reachable.");
+        DockerWorkerOrchestrator sut = _sut.ShouldNotBeNull();
+
+        // Act
+        string containerId = await StartAndWaitForExitAsync(sut, BuildDindSpec(["/bin/sh", "-c", TempDirectoryProbe]));
+        string output = await sut.GetLogsAsync(containerId, tailLines: 100, TestContext.Current.CancellationToken) ?? string.Empty;
+
+        // Assert
+        ContainerInspectResponse inspect = await _dockerClient!.Containers.InspectContainerAsync(
+            containerId,
+            TestContext.Current.CancellationToken);
+        string[] lines = [.. output
+            .Split('\n', StringSplitOptions.RemoveEmptyEntries)
+            .Select(l => DockerLogLine.StripTimestamp(l).Trim())];
+
+        inspect.ShouldSatisfyAllConditions(
+            [
+                () => inspect.HostConfig.Tmpfs.ShouldNotBeNull().Keys.ShouldNotContain(k => TempDirectories.Contains(k)),
+                () => inspect.Mounts
+                    .Where(m => m.Type == "volume" && TempDirectories.Contains(m.Destination))
+                    .Select(m => m.Destination)
+                    .ShouldBe(TempDirectories, ignoreOrder: true),
+                .. TempDirectories.SelectMany<string, Action>(p =>
+                [
+                    () => lines.ShouldContain($"mode={p}:1777", output),
+                    () => lines.ShouldContain(l => l.StartsWith($"fstype={p}:", StringComparison.Ordinal), output),
+                    () => lines.ShouldNotContain($"fstype={p}:tmpfs", output),
+                    () => lines.ShouldContain($"unprivileged-exec={p}", output),
+                ]),
+            ]);
+    }
+
+    [Fact]
+    public async Task WhenRemoved_TempDirectoryVolumesAreDeletedWithTheContainer()
+    {
+        // Arrange
+        Assert.SkipUnless(_daemonReachable, "Docker daemon is not reachable.");
+        DockerWorkerOrchestrator sut = _sut.ShouldNotBeNull();
+        string containerId = await StartAndWaitForExitAsync(sut, BuildDindSpec(["true"]));
+        ContainerInspectResponse inspect = await _dockerClient!.Containers.InspectContainerAsync(
+            containerId,
+            TestContext.Current.CancellationToken);
+        List<string> tempVolumes = [.. inspect.Mounts
+            .Where(m => m.Type == "volume" && TempDirectories.Contains(m.Destination))
+            .Select(m => m.Name)];
+        tempVolumes.Count.ShouldBe(TempDirectories.Length);
+
+        // Act
+        await sut.StopAndRemoveAsync(containerId, TestContext.Current.CancellationToken);
+
+        // Assert
+        foreach (string volume in tempVolumes)
+        {
+            await Should.ThrowAsync<DockerApiException>(
+                () => _dockerClient.Volumes.InspectAsync(volume, TestContext.Current.CancellationToken));
+        }
+    }
+
+    // Composed as IssueClaimedHandler composes it: the hardened baseline, then the DinD relaxations.
+    private WorkerContainerSpec BuildDindSpec(IReadOnlyList<string> command) =>
+        WorkerHardeningSpec.Apply(new(
+            Image: Image,
+            EnvironmentVariables: new Dictionary<string, string>(),
+            Labels: new Dictionary<string, string> { [WorkerRunIdLabel] = _runId.Value.ToString() },
+            Command: command)
+        {
+            MemoryLimitMb = 512,
+            CpuLimit = 1.0,
+            PidsLimit = 256,
+        }) with
+        {
+            Capabilities = RootlessDindRunSpec.Capabilities,
+            SecurityOptions = RootlessDindRunSpec.SecurityOptions,
+            Devices = RootlessDindRunSpec.Devices,
+            UnmaskSystemPaths = RootlessDindRunSpec.UnmaskSystemPaths,
+            VolumeMounts =
+            [
+                new VolumeMount(WorkerVolumeNames.DataRootVolumeName(_runId), RootlessDindRunSpec.DataRootContainerPath),
+            ],
+        };
+
+    private async Task<string> StartAndWaitForExitAsync(DockerWorkerOrchestrator sut, WorkerContainerSpec spec)
+    {
+        Result<ContainerId> result = await sut.StartAsync(spec, TestContext.Current.CancellationToken);
+        string failureMessage = result is Result<ContainerId>.Failure failure
+            ? $"{failure.Error.Code}: {failure.Error.Message}"
+            : string.Empty;
+        string containerId = result.ShouldBeOfType<Result<ContainerId>.Success>(failureMessage).Value.Value;
+
+        await _dockerClient!.Containers.WaitContainerAsync(containerId, TestContext.Current.CancellationToken);
+
+        return containerId;
     }
 
     // Found by label rather than by id: a container that was created but failed to start never
@@ -235,8 +328,8 @@ public sealed class WhenStartedWithRootlessDindAllowanceSet : IAsyncLifetime
         await _dockerClient!.Images.CreateImageAsync(
             new ImagesCreateParameters
             {
-                FromImage = "busybox",
-                Tag = "latest",
+                FromImage = ImageRepository,
+                Tag = ImageTag,
             },
             authConfig: null,
             progress: new Progress<JSONMessage>(),
