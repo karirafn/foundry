@@ -1,12 +1,15 @@
+using System.Diagnostics;
 using System.Text.RegularExpressions;
 
 using Foundry.Modules.Monitoring.Contracts;
+using Foundry.Modules.Monitoring.Contracts.Commands;
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Features.Providers;
 using Foundry.Modules.Monitoring.Features.Providers.Checks;
 using Foundry.Modules.Monitoring.Features.Providers.Comments;
 using ProviderChecks = Foundry.Modules.Monitoring.Features.Providers.Checks.Checks;
 using Foundry.Modules.Monitoring.Features.Providers.Feedback;
+using Foundry.Modules.Monitoring.Features.Providers.Publishing;
 using Foundry.Modules.Monitoring.Features.Providers.Rebase;
 using Foundry.Modules.Monitoring.Infrastructure.GitHub;
 using Foundry.Shared;
@@ -141,6 +144,53 @@ internal sealed partial class GitLabIssueProvider(
         CancellationToken cancellationToken)
     {
         return httpClient.PostNoteAsync(apiBaseUrl, slug, thread, body, token, cancellationToken);
+    }
+
+    public async Task<Result<string>> CreatePullRequestAsync(
+        RepositorySlug slug,
+        string sourceBranch,
+        string title,
+        string body,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(title))
+        {
+            return Result<string>.Fail(RunPublishingErrors.Permanent("A merge request title must not be empty."));
+        }
+
+        Result<string> defaultBranchResult = await GetDefaultBranchAsync(slug, cancellationToken);
+
+        if (defaultBranchResult is not Result<string>.Success defaultBranchSuccess)
+        {
+            return defaultBranchResult;
+        }
+
+        Result<PullRequestCreation> creation = await httpClient.CreateMergeRequestAsync(
+            apiBaseUrl, slug, defaultBranchSuccess.Value, sourceBranch, title, body, token, cancellationToken);
+
+        return creation switch
+        {
+            Result<PullRequestCreation>.Success { Value: PullRequestCreation.Opened opened } =>
+                Result<string>.Ok(opened.WebUrl),
+            Result<PullRequestCreation>.Success { Value: PullRequestCreation.AlreadyOpen } =>
+                await FindOpenMergeRequestAsync(slug, sourceBranch, cancellationToken),
+            Result<PullRequestCreation>.Failure failure => Result<string>.Fail(failure.Error),
+            _ => throw new UnreachableException(),
+        };
+    }
+
+    public Task<Result<CommitIdentity>> GetAuthenticatedIdentityAsync(CancellationToken cancellationToken)
+    {
+        return httpClient.GetAuthenticatedIdentityAsync(apiBaseUrl, token, cancellationToken);
+    }
+
+    public Task<Result<bool>> IsAncestorAsync(
+        RepositorySlug slug,
+        string ancestorRef,
+        string branchName,
+        CancellationToken cancellationToken)
+    {
+        return httpClient.IsAncestorAsync(apiBaseUrl, slug, ancestorRef, branchName, token, cancellationToken);
     }
 
     public async Task<Result<BranchProtection>> GetBranchProtectionAsync(
@@ -302,6 +352,24 @@ internal sealed partial class GitLabIssueProvider(
     {
         // GitLab's rebase endpoint has no expected-head guard; the merge request IID is the pull request id.
         return httpClient.RequestRebaseAsync(apiBaseUrl, slug, pullRequestId, token, cancellationToken);
+    }
+
+    private async Task<Result<string>> FindOpenMergeRequestAsync(
+        RepositorySlug slug,
+        string sourceBranch,
+        CancellationToken cancellationToken)
+    {
+        Result<IReadOnlyList<string>> open = await httpClient.ListOpenMergeRequestUrlsAsync(
+            apiBaseUrl, slug, sourceBranch, token, cancellationToken);
+
+        return open switch
+        {
+            Result<IReadOnlyList<string>>.Success { Value: [string url, ..] } => Result<string>.Ok(url),
+            Result<IReadOnlyList<string>>.Success => Result<string>.Fail(RunPublishingErrors.Permanent(
+                $"GitLab reports a merge request already exists for '{sourceBranch}' on {slug}, but none is open.")),
+            Result<IReadOnlyList<string>>.Failure failure => Result<string>.Fail(failure.Error),
+            _ => throw new UnreachableException(),
+        };
     }
 
     private Task<Result<string>> GetDefaultBranchAsync(

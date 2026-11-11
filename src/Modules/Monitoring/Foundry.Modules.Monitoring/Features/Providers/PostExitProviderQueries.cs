@@ -181,46 +181,11 @@ internal sealed class PostExitProviderQueries(
         };
     }
 
-    private async Task<Result<(IIssueProvider Provider, MonitoredRepository Repo)>> ResolveAsync(
+    private Task<Result<(IIssueProvider Provider, MonitoredRepository Repo)>> ResolveAsync(
         MonitoredRepositoryId repositoryId,
-        CancellationToken cancellationToken)
-    {
-        MonitoredRepository? repo = await dbContext.Set<MonitoredRepository>()
-            .AsNoTracking()
-            .FirstOrDefaultAsync(r => r.Id == repositoryId, cancellationToken);
-
-        if (repo is null)
-        {
-            return Result<(IIssueProvider, MonitoredRepository)>.Fail(
-                PostExitProviderQueriesErrors.RepositoryNotFound(repositoryId));
-        }
-
-        Credential? credential = await credentialResolver.ResolveAsync(
-            repo.Host,
-            repo.Slug,
-            cancellationToken);
-
-        if (credential is null)
-        {
-            return Result<(IIssueProvider, MonitoredRepository)>.Fail(
-                PostExitProviderQueriesErrors.CredentialNotFound(repositoryId));
-        }
-
-        if (credential.Token is ProviderToken.Unreadable)
-        {
-            return Result<(IIssueProvider, MonitoredRepository)>.Fail(
-                PostExitProviderQueriesErrors.CredentialTokenUnreadable(credential.Id));
-        }
-
-        if (credential.Token is not ProviderToken.Present present)
-        {
-            return Result<(IIssueProvider, MonitoredRepository)>.Fail(
-                PostExitProviderQueriesErrors.CredentialTokenNotConfigured(credential.Id));
-        }
-
-        IIssueProvider provider = providerFactory.CreateProvider(credential, present.Value);
-        return Result<(IIssueProvider, MonitoredRepository)>.Ok((provider, repo));
-    }
+        CancellationToken cancellationToken) =>
+        RepositoryProviderResolution.ResolveAsync(
+            dbContext, credentialResolver, providerFactory, repositoryId, cancellationToken);
 }
 
 internal static class PostExitProviderQueriesErrors

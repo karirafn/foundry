@@ -1,5 +1,4 @@
 using System.Globalization;
-using System.Net;
 using System.Text;
 using System.Text.Json;
 
@@ -200,14 +199,8 @@ internal sealed partial class GitHubHttpClient
 
     private static Error ClassifyCommentPostFailure(HttpResponseMessage response, RepositorySlug slug, int number)
     {
-        int statusCode = (int)response.StatusCode;
-        string message = $"Posting a comment on {slug}#{number} returned {statusCode}.";
-
-        bool transient = statusCode >= 500
-            || response.StatusCode is HttpStatusCode.TooManyRequests or HttpStatusCode.RequestTimeout
-            || (response.StatusCode is HttpStatusCode.Forbidden && IsRateLimited(response));
-
-        return transient ? CommentPostErrors.Transient(message) : CommentPostErrors.Permanent(message);
+        string message = $"Posting a comment on {slug}#{number} returned {(int)response.StatusCode}.";
+        return IsRetryableStatus(response) ? CommentPostErrors.Transient(message) : CommentPostErrors.Permanent(message);
     }
 
     private sealed record GitHubIssueCommentDto(

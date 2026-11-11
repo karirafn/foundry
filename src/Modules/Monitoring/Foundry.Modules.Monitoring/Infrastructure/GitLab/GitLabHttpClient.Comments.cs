@@ -1,4 +1,3 @@
-using System.Net;
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
@@ -198,14 +197,8 @@ internal sealed partial class GitLabHttpClient
 
     private static Error ClassifyNotePostFailure(HttpResponseMessage response, RepositorySlug slug, string resource, int iid)
     {
-        int statusCode = (int)response.StatusCode;
-        string message = $"Posting a note on {slug} {resource}/{iid} returned {statusCode}.";
-
-        bool transient = statusCode >= 500
-            || response.StatusCode is HttpStatusCode.TooManyRequests or HttpStatusCode.RequestTimeout
-            || (response.StatusCode is HttpStatusCode.Forbidden && IsRateLimited(response));
-
-        return transient ? CommentPostErrors.Transient(message) : CommentPostErrors.Permanent(message);
+        string message = $"Posting a note on {slug} {resource}/{iid} returned {(int)response.StatusCode}.";
+        return IsRetryableStatus(response) ? CommentPostErrors.Transient(message) : CommentPostErrors.Permanent(message);
     }
 
     [GeneratedRegex(@"^(project|group)_\d+_bot(_[0-9a-f]+)?\d*$")]
