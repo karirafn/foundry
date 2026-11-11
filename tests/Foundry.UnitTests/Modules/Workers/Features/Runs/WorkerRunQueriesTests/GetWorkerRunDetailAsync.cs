@@ -111,6 +111,27 @@ public sealed class GetWorkerRunDetailAsync : IAsyncDisposable
         return completed;
     }
 
+    [Theory]
+    [InlineData("implement")]
+    [InlineData("triage")]
+    public async Task WhenRunExists_ReturnsTheRoleItWasDispatchedWith(string roleName)
+    {
+        // Arrange
+        WorkerRunQueries sut = new(_dbContext);
+        StartingRun run = StartingRun.Begin(IssueId.New(), WorkerRunId.New(), WorkerRole.FromStored(roleName));
+        _dbContext.Set<WorkerRun>().Add(run);
+        await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+        _dbContext.ChangeTracker.Clear();
+
+        // Act
+        Result<WorkerRunDetail> result = await sut.GetWorkerRunDetailAsync(
+            run.Id.Value,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        result.ShouldBeOfType<Result<WorkerRunDetail>.Success>().Value.Role.ShouldBe(roleName);
+    }
+
     [Fact]
     public async Task WhenRunDoesNotExist_ReturnsNotFound()
     {

@@ -1,0 +1,27 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["outcome", "kind"],
+  "properties": {
+    "outcome": {
+      "description": "ready when a person could implement the issue as written; needs_input when it cannot be implemented without answers from a person.",
+      "type": "string",
+      "enum": ["ready", "needs_input"]
+    },
+    "kind": {
+      "description": "What kind of change the issue asks for.",
+      "type": "string",
+      "enum": ["feature", "bug", "refactor", "documentation"]
+    },
+    "questions": {
+      "$ref": "#/$defs/questions"
+    }
+  },
+  "if": {
+    "properties": { "outcome": { "const": "needs_input" } },
+    "required": ["outcome"]
+  },
+  "then": {
+    "required": ["questions"]
+  }
+}

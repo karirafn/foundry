@@ -68,6 +68,13 @@
   color: var(--fd-text-secondary);
 }
 
+.floor-lane__repo {
+  display: flex;
+  align-items: center;
+  gap: var(--fd-spacing-sm);
+  flex-wrap: wrap;
+}
+
 .floor-lane__stale-note {
   margin: 0;
   font-size: 0.8125rem;

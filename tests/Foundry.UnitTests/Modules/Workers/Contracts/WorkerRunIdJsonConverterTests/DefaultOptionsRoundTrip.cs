@@ -40,6 +40,7 @@ public sealed class DefaultOptionsRoundTrip
         WorkerRunDetail detail = new(
             id,
             Guid.NewGuid(),
+            "implement",
             "failed",
             "non_zero_exit",
             null,

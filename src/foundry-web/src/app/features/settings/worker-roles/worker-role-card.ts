@@ -10,9 +10,51 @@ import { DatePipe, NgTemplateOutlet } from '@angular/common';
 import { PromptAssemblyComponent } from './prompt-assembly';
 import { PromptTextComponent } from './prompt-text';
 import { WorkerRoleModelComponent } from './worker-role-model';
-import { RolePluginComponent, WorkerRoleCard, WorkerRoleCatalog } from './worker-role.service';
+import {
+  RolePluginComponent,
+  WorkerCapability,
+  WorkerRoleCard,
+  WorkerRoleCatalog,
+} from './worker-role.service';
 
 const SHORT_COMMIT_LENGTH = 7;
+
+interface CapabilityProfile {
+  readonly label: string;
+  readonly modifier: WorkerCapability;
+  readonly hint: string;
+}
+
+interface CapabilityDisplay {
+  readonly label: string;
+  readonly classes: string;
+  /** Restricted roles carry a lock icon. */
+  readonly locked: boolean;
+  readonly hint: string | null;
+}
+
+/** Keyed by every `WorkerCapability`, so the compiler demands an entry for any new value. */
+const CAPABILITY_PROFILES: Record<WorkerCapability, CapabilityProfile> = {
+  restricted: {
+    label: 'Restricted',
+    modifier: 'restricted',
+    hint: 'Runs read-only: no command tools, no provider token and no branch. It returns a verdict only.',
+  },
+  full: {
+    label: 'Full access',
+    modifier: 'full',
+    hint: 'Runs with command tools and the account token, on its own branch.',
+  },
+};
+
+const CAPABILITY_BADGE_CLASSES = 'role-card__badge role-card__capability';
+
+const UNKNOWN_CAPABILITY: CapabilityDisplay = {
+  label: 'Unknown capability',
+  classes: CAPABILITY_BADGE_CLASSES,
+  locked: false,
+  hint: null,
+};
 
 interface PluginEntry {
   readonly component: RolePluginComponent;
@@ -23,13 +65,47 @@ interface PluginEntry {
 @Component({
   selector: 'fd-worker-role-card',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [DatePipe, NgTemplateOutlet, PromptAssemblyComponent, PromptTextComponent, WorkerRoleModelComponent],
+  imports: [
+    DatePipe,
+    NgTemplateOutlet,
+    PromptAssemblyComponent,
+    PromptTextComponent,
+    WorkerRoleModelComponent,
+  ],
   template: `
     <article class="role-card" [attr.aria-labelledby]="titleId()">
       <header class="role-card__header">
-        <h3 class="role-card__title" [id]="titleId()">{{ role().name }}</h3>
+        <div class="role-card__title-row">
+          <h3 class="role-card__title" [id]="titleId()">{{ role().name }}</h3>
+          <span [class]="capability().classes">
+            <span class="sr-only">Capability: </span>
+            @if (capability().locked) {
+              <svg
+                class="role-card__capability-icon"
+                xmlns="http://www.w3.org/2000/svg"
+                width="11"
+                height="11"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2.5"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+                focusable="false"
+              >
+                <rect x="4" y="11" width="16" height="10" rx="2" ry="2" />
+                <path d="M8 11V7a4 4 0 0 1 8 0v4" />
+              </svg>
+            }
+            {{ capability().label }}
+          </span>
+        </div>
         @if (role().purpose) {
           <p class="role-card__purpose">{{ role().purpose }}</p>
+        }
+        @if (capability().hint; as hint) {
+          <p class="role-card__hint role-card__capability-hint">{{ hint }}</p>
         }
         @if (!catalog().image.verified) {
           <p class="role-card__unverified" role="note">
@@ -171,6 +247,10 @@ export class WorkerRoleCardComponent {
     () => `worker-role-${this.role().name.replace(/[^A-Za-z0-9_-]/g, '-')}-title`,
   );
 
+  protected readonly capability: Signal<CapabilityDisplay> = computed(() =>
+    toCapabilityDisplay(this.role().capability),
+  );
+
   protected readonly shortCommit: Signal<string> = computed(() => {
     const commit = this.catalog().image.commit;
     return commit ? commit.slice(0, SHORT_COMMIT_LENGTH) : 'unknown';
@@ -209,4 +289,22 @@ function formatVerdictSchema(schema: string | null): string | null {
   } catch {
     return schema;
   }
+}
+
+function isWorkerCapability(value: string): value is WorkerCapability {
+  return Object.hasOwn(CAPABILITY_PROFILES, value);
+}
+
+/** Maps the card's capability to its badge and hint; a value this build doesn't know gets a neutral badge and no hint. */
+function toCapabilityDisplay(capability: string): CapabilityDisplay {
+  if (!isWorkerCapability(capability)) {
+    return UNKNOWN_CAPABILITY;
+  }
+  const profile = CAPABILITY_PROFILES[capability];
+  return {
+    label: profile.label,
+    classes: `${CAPABILITY_BADGE_CLASSES} role-card__capability--${profile.modifier}`,
+    locked: profile.modifier === 'restricted',
+    hint: profile.hint,
+  };
 }

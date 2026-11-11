@@ -22,6 +22,17 @@ required, takes no placeholders and stays within 8 KiB (UTF-8 bytes): a missing,
 placeholder-bearing or oversized file fails the unit tests and the startup image build. A role's own
 prompt says how it uses them (implement: "Apply the engineering principles above to every change.").
 
+## Capability profiles
+
+Each role declares the `WorkerCapability` it runs under in Foundry's code (`WorkerRole`), never in its folder
+(ADR 0098). The container spec and the entrypoint branch on the profile (`WORKER_CAPABILITY`), never on the role name:
+
+- `full` (`implement`): the account token, a branch pre-created on the provider, `--dangerously-skip-permissions`, and
+  the issue as an `ISSUE_API_URL` pointer the agent reads itself.
+- `restricted` (`triage`): `--restricted --strict-mcp-config` and never the permission skip, no provider token, no
+  branch, and a shallow clone of the default branch. Foundry reads the issue title, body and comments and renders them
+  into `{issueContent}` as XML-encoded untrusted data. The run returns its verdict only.
+
 ## Verdicts
 
 When a role has a `verdict.schema.json`, the entrypoint passes it to both `claude` invocations (the
@@ -50,3 +61,6 @@ is still decided from facts (merge request, commits, exit code).
 
 `implement/verdict.schema.json` requires `outcome` (`done` or `needs_input`), and `questions` when
 `outcome` is `needs_input`.
+
+`triage/verdict.schema.json` requires `outcome` (`ready` or `needs_input`) and `kind` (`feature`, `bug`, `refactor` or
+`documentation`), and `questions` when `outcome` is `needs_input`. Foundry records `ready` as `done`.

@@ -1323,6 +1323,7 @@ export interface components {
         WorkerRoleCard: {
             name: string;
             purpose: null | string;
+            capability: string;
             systemPrompt: string;
             taskPrompt: string;
             skills: components["schemas"]["RolePluginComponent"][];
@@ -1366,6 +1367,7 @@ export interface components {
             workerRunId: string;
             /** Format: uuid */
             issueId: string;
+            role: string;
             state: string;
             failureCategory: null | string;
             failureSummary: null | string;

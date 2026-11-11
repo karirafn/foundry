@@ -10,6 +10,7 @@ function buildActivity(overrides: Partial<AgentActivity> = {}): AgentActivity {
   return {
     workerRunId: 'run-1',
     issueId: 'issue-1',
+    role: 'implement',
     lastEventAt: '2026-01-01T11:59:30Z',
     tasks: [
       { id: '1', subject: 'Read the issue', activeForm: null, status: 'completed' },
@@ -63,6 +64,27 @@ describe('FloorLaneComponent', () => {
     expect(el.querySelector('.floor-lane__title')?.textContent).toContain('#42');
     expect(el.querySelector('.floor-lane__title')?.textContent).toContain('Add the Floor');
     expect(el.querySelector('.floor-lane__repo')?.textContent).toContain('owner/repo');
+  });
+
+  it('should show the run role tag before the repository slug', () => {
+    // Act
+    const { el } = render({ activity: buildActivity({ role: 'triage' }) });
+
+    // Assert
+    const repo = el.querySelector('.floor-lane__repo');
+    const tag = repo?.firstElementChild;
+    expect(tag?.tagName.toLowerCase()).toBe('fd-role-tag');
+    expect(tag?.textContent).toBe('Role: triage');
+    expect(repo?.textContent?.replace(/\s+/g, ' ').trim()).toBe('Role: triage owner/repo');
+  });
+
+  it('should show no role tag when the activity carries no role', () => {
+    // Act
+    const { el } = render({ activity: buildActivity({ role: null }) });
+
+    // Assert
+    expect(el.querySelector('fd-role-tag')).toBeNull();
+    expect(el.querySelector('.floor-lane__repo')?.textContent?.trim()).toBe('owner/repo');
   });
 
   it('should highlight the current task and show N of M done', () => {

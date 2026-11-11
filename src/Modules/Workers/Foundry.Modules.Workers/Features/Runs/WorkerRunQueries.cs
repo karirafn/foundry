@@ -133,6 +133,7 @@ internal sealed class WorkerRunQueries(DbContext db) : IWorkerRunQueries
         new(
             WorkerRunId: run.Id,
             IssueId: run.IssueId.Value,
+            Role: run.Role.Name,
             State: "running",
             FailureCategory: null,
             FailureSummary: null,
@@ -152,6 +153,7 @@ internal sealed class WorkerRunQueries(DbContext db) : IWorkerRunQueries
         new(
             WorkerRunId: run.Id,
             IssueId: run.IssueId.Value,
+            Role: run.Role.Name,
             State: "completed",
             FailureCategory: null,
             FailureSummary: null,
@@ -171,6 +173,7 @@ internal sealed class WorkerRunQueries(DbContext db) : IWorkerRunQueries
         new(
             WorkerRunId: run.Id,
             IssueId: run.IssueId.Value,
+            Role: run.Role.Name,
             State: "failed",
             FailureCategory: run.Reason.CategoryToken,
             FailureSummary: run.Reason.Summary,
@@ -190,6 +193,7 @@ internal sealed class WorkerRunQueries(DbContext db) : IWorkerRunQueries
         new(
             WorkerRunId: run.Id,
             IssueId: run.IssueId.Value,
+            Role: run.Role.Name,
             State: "starting",
             FailureCategory: null,
             FailureSummary: null,

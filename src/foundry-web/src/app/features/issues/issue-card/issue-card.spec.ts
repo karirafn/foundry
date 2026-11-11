@@ -9,6 +9,7 @@ function buildAgentActivity(overrides: Partial<AgentActivity> = {}): AgentActivi
   return {
     workerRunId: 'run-1',
     issueId: 'abc123',
+    role: 'implement',
     lastEventAt: new Date().toISOString(),
     tasks: [],
     currentTask: null,

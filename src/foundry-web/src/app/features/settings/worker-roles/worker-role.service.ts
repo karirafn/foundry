@@ -5,6 +5,8 @@ import { extractErrorCode, extractErrorMessage } from '../../../core/http/extrac
 
 export type WorkerRoleCatalog = components['schemas']['WorkerRoleCatalogResponse'];
 export type WorkerRoleCard = components['schemas']['WorkerRoleCard'];
+/** The capability profile a role runs under; `WorkerRoleCard.capability` is typed `string` so unknown values stay possible. */
+export type WorkerCapability = 'restricted' | 'full';
 export type WorkerRoleImage = components['schemas']['WorkerRoleImage'];
 export type RolePluginComponent = components['schemas']['RolePluginComponent'];
 export type PromptSectionDescriptor = components['schemas']['PromptSectionDescriptor'];

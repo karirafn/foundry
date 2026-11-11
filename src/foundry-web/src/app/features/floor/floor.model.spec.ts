@@ -12,6 +12,7 @@ function buildActivity(overrides: Partial<AgentActivity> = {}): AgentActivity {
   return {
     workerRunId: 'run-1',
     issueId: 'issue-1',
+    role: 'implement',
     lastEventAt: null,
     tasks: [],
     currentTask: null,

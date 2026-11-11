@@ -67,6 +67,7 @@ public sealed class ConsumesReservation : IAsyncDisposable
             new StubFailingJobLogQueries(),
             StubWorkerRoleCatalogStore.With(),
             StubRepositoryDispatchQueries.WithToken("ghp_test_token"),
+            new StubIssueContentQueries(),
             NullLogger<IssueClaimedHandler>.Instance);
     }
 

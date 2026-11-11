@@ -105,6 +105,35 @@ internal sealed partial class GitLabIssueProvider(
             : rawResult;
     }
 
+    public async Task<Result<ProviderIssueContent>> GetIssueContentAsync(
+        RepositorySlug slug,
+        int issueNumber,
+        CancellationToken cancellationToken)
+    {
+        Result<ProviderIssueText> textResult = await httpClient.GetIssueTextAsync(
+            apiBaseUrl, slug, issueNumber, token, cancellationToken);
+
+        if (textResult is not Result<ProviderIssueText>.Success text)
+        {
+            return Result<ProviderIssueContent>.Fail(((Result<ProviderIssueText>.Failure)textResult).Error);
+        }
+
+        Result<IReadOnlyList<ProviderComment>> commentsResult = await httpClient.GetIssueNotesAsync(
+            apiBaseUrl, slug, issueNumber, token, cancellationToken);
+
+        if (commentsResult is not Result<IReadOnlyList<ProviderComment>>.Success comments)
+        {
+            return Result<ProviderIssueContent>.Fail(((Result<IReadOnlyList<ProviderComment>>.Failure)commentsResult).Error);
+        }
+
+        return Result<ProviderIssueContent>.Ok(new ProviderIssueContent(
+            text.Value.Title,
+            text.Value.Body,
+            [.. comments.Value
+                .Where(comment => !comment.IsSystem)
+                .OrderBy(comment => comment.CreatedAt)]));
+    }
+
     public Task<Result<ProviderCommentId>> PostCommentAsync(
         RepositorySlug slug,
         CommentThread thread,

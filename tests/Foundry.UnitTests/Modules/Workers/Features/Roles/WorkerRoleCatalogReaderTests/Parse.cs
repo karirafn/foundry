@@ -18,6 +18,9 @@ public sealed class Parse
         ["implement/.claude-plugin/plugin.json"] = """{"name":"implement","description":"Implements an issue."}""",
         ["implement/prompts/system.md"] = "You are implementing issue #{issueNumber}.\r\n\r\n{issueContent}\r\n",
         ["implement/prompts/task.md"] = "Implement issue #{issueNumber}.\n",
+        ["triage/.claude-plugin/plugin.json"] = """{"name":"triage","description":"Triages an issue."}""",
+        ["triage/prompts/system.md"] = "You are triaging issue #{issueNumber}.\n\n{issueContent}\n",
+        ["triage/prompts/task.md"] = "Triage issue #{issueNumber}.\n",
         ["shared/.claude-plugin/plugin.json"] = """{"name":"shared","description":"Loaded for every role."}""",
         ["shared/prompts/principles.md"] = "\uFEFFEngineering principles.\r\n\r\nDesign:\r\n- Safe defaults.\r\n",
     };
@@ -41,6 +44,19 @@ public sealed class Parse
             () => implement.VerdictSchema.ShouldBeNull(),
             () => catalog.Shared.Description.ShouldBe("Loaded for every role."),
             () => catalog.Principles.ShouldBe("Engineering principles.\n\nDesign:\n- Safe defaults."));
+    }
+
+    [Fact]
+    public void WhenTheCatalogLoads_EachRoleCarriesTheCapabilityDeclaredInCode()
+    {
+        // Act
+        WorkerRoleCatalogContent catalog = WorkerRoleCatalogReader.Parse(ValidFiles())
+            .ShouldBeOfType<Result<WorkerRoleCatalogContent>.Success>().Value;
+
+        // Assert
+        catalog.ShouldSatisfyAllConditions(
+            () => catalog.Find(WorkerRole.Triage).ShouldNotBeNull().Capability.ShouldBe(WorkerCapability.Restricted),
+            () => catalog.Find(WorkerRole.Implement).ShouldNotBeNull().Capability.ShouldBe(WorkerCapability.Full));
     }
 
     [Fact]

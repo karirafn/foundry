@@ -4560,6 +4560,7 @@
         "required": [
           "name",
           "purpose",
+          "capability",
           "systemPrompt",
           "taskPrompt",
           "skills",
@@ -4577,6 +4578,9 @@
               "null",
               "string"
             ]
+          },
+          "capability": {
+            "type": "string"
           },
           "systemPrompt": {
             "type": "string"
@@ -4748,6 +4752,7 @@
         "required": [
           "workerRunId",
           "issueId",
+          "role",
           "state",
           "failureCategory",
           "failureSummary",
@@ -4772,6 +4777,9 @@
           "issueId": {
             "type": "string",
             "format": "uuid"
+          },
+          "role": {
+            "type": "string"
           },
           "state": {
             "type": "string"

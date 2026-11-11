@@ -27,6 +27,7 @@ internal sealed record WorkerRoleImage(string Tag, string? ImageId, DateTimeOffs
 /// <summary>A read-only role card: everything a role contributes to a run.</summary>
 /// <param name="Name">The role name, as recorded on worker runs.</param>
 /// <param name="Purpose">The role plugin's description.</param>
+/// <param name="Capability">The capability profile the role runs under: <c>restricted</c> or <c>full</c> (ADR 0098).</param>
 /// <param name="SystemPrompt">The role's system prompt template, placeholders unfilled.</param>
 /// <param name="TaskPrompt">The role's task prompt template, placeholders unfilled.</param>
 /// <param name="Skills">The role plugin's skills.</param>
@@ -39,6 +40,7 @@ internal sealed record WorkerRoleImage(string Tag, string? ImageId, DateTimeOffs
 internal sealed record WorkerRoleCard(
     string Name,
     string? Purpose,
+    string Capability,
     string SystemPrompt,
     string TaskPrompt,
     IReadOnlyList<RolePluginComponent> Skills,
@@ -84,6 +86,7 @@ internal static class GetWorkerRoleCatalog
                 .. catalog.Content.Roles.Select(role => new WorkerRoleCard(
                     role.Role.Name,
                     role.Plugin.Description,
+                    role.Capability.ToName(),
                     role.SystemPromptTemplate,
                     role.TaskPromptTemplate,
                     role.Plugin.Skills,

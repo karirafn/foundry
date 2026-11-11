@@ -21,6 +21,7 @@ import { WorkerRunService } from '../../workers/worker-run.service';
 import { WorkerSignalRService } from '../../../core/services/worker-signalr.service';
 import { WorkerRunDetail } from '../../workers/worker-run.model';
 import { LogViewComponent } from '../../../shared/components/log-view/log-view';
+import { RoleTagComponent } from '../../../shared/components/role-tag/role-tag';
 import { ConfirmDialogComponent } from '../../../shared/components/confirm-dialog/confirm-dialog';
 import { rebaseOutcomeLabel } from '../rebase-outcome.format';
 import { getFailureCategoryDisplay } from '../../../shared/utils/failure-category';
@@ -37,7 +38,7 @@ import {
   selector: 'fd-issue-detail',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [DatePipe, SafeHrefPipe, LogViewComponent, ConfirmDialogComponent],
+  imports: [DatePipe, SafeHrefPipe, LogViewComponent, ConfirmDialogComponent, RoleTagComponent],
   template: `
     @if (error()) {
       <div class="issue-detail__error" role="alert">
@@ -261,6 +262,11 @@ import {
 
         @if (_workerRun(); as wr) {
           <div class="issue-detail__worker-run">
+            <div class="issue-detail__run-header">
+              <span class="issue-detail__field-key">Run</span>
+              <fd-role-tag [role]="wr.role" />
+            </div>
+
             @if (wr.failureCategory) {
               <div class="issue-detail__failure-category">
                 <span

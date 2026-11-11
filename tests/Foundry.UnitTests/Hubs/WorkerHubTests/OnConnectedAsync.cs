@@ -154,6 +154,7 @@ public sealed class OnConnectedAsync
         return new AgentActivity(
             WorkerRunId: WorkerRunId.New(),
             IssueId: Guid.NewGuid(),
+            Role: "implement",
             LastEventAt: DateTimeOffset.UtcNow,
             Tasks: [],
             CurrentTask: null,

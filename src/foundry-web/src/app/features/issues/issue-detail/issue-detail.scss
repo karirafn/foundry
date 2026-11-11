@@ -332,6 +332,13 @@
     border-top: 1px solid var(--fd-border-muted);
   }
 
+  &__run-header {
+    display: flex;
+    align-items: center;
+    gap: var(--fd-spacing-sm);
+    margin-bottom: var(--fd-spacing-sm);
+  }
+
   &__failure-category {
     display: flex;
     align-items: center;

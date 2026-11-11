@@ -4,10 +4,12 @@ namespace Foundry.Modules.Workers.Contracts;
 /// <remarks>
 /// <c>InputTokens</c> is billable input (uncached + cache-read + cache-write);
 /// <see langword="null"/> when any bucket is unknown, e.g. a run that predates cache-column persistence.
+/// <para><c>Role</c> is the Worker Role the run was dispatched with (e.g. <c>implement</c>, <c>triage</c>).</para>
 /// </remarks>
 public sealed record WorkerRunDetail(
     WorkerRunId WorkerRunId,
     Guid IssueId,
+    string Role,
     string State,
     string? FailureCategory,
     string? FailureSummary,

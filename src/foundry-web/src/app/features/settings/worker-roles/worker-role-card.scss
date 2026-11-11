@@ -21,6 +21,18 @@
     gap: var(--fd-spacing-sm);
   }
 
+  &__title-row {
+    align-items: center;
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--fd-spacing-sm);
+
+    @container role-card (max-width: 30rem) {
+      align-items: flex-start;
+      flex-direction: column;
+    }
+  }
+
   &__title {
     color: var(--fd-text-primary);
     font-family: var(--fd-font-mono);
@@ -166,6 +178,21 @@
   &__shared {
     border-color: var(--fd-text-link);
     color: var(--fd-text-link);
+  }
+
+  &__capability {
+    align-items: center;
+    display: inline-flex;
+    gap: var(--fd-spacing-xs);
+  }
+
+  &__capability--restricted {
+    border-color: var(--fd-border-control);
+    color: var(--fd-text-primary);
+  }
+
+  &__capability-icon {
+    flex-shrink: 0;
   }
 
   &__path {
