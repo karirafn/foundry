@@ -13,6 +13,7 @@ using Foundry.Modules.Workers.Domain.Entities.States;
 using Foundry.Modules.Workers.Domain.ValueObjects;
 using Foundry.Modules.Workers.Features.ContainerSpec;
 using Foundry.Modules.Workers.Features.Orchestration;
+using Foundry.Modules.Workers.Features.Publisher;
 using Foundry.Modules.Workers.Features.Roles;
 using Foundry.Shared;
 using Foundry.Shared.Infrastructure;
@@ -26,6 +27,7 @@ namespace Foundry.Modules.Workers.Features.Dispatch;
 internal sealed class IssueClaimedHandler(
     DbContext dbContext,
     IWorkerOrchestrator orchestrator,
+    IPublisher publisher,
     IDomainEventDispatcher domainEventDispatcher,
     IGlobalSettingsQueries settingsQueries,
     ICredentialQueries credentialQueries,
@@ -36,6 +38,9 @@ internal sealed class IssueClaimedHandler(
     IIssueContentQueries issueContentQueries,
     ILogger<IssueClaimedHandler> logger) : IIntegrationEventHandler<IssueClaimed>
 {
+    private static readonly Error EmptyGitPatError =
+        new("Worker.EmptyGitPat", "No Git PAT configured for this account. Set the account token in Settings.");
+
     public async Task HandleAsync(IssueClaimed @event, CancellationToken cancellationToken)
     {
         ClaimedIssueDispatch claimed = @event.Dispatch;
@@ -123,7 +128,10 @@ internal sealed class IssueClaimedHandler(
             }
         }
 
-        Result<WorkerContainerSpec> specResult = await BuildSpecAsync(startingRun, claimed, catalog, issueContent, cancellationToken);
+        string? gitPat = await ResolveGitPatAsync(claimed, cancellationToken);
+        Result<WorkerContainerSpec> specResult = gitPat is null
+            ? Result<WorkerContainerSpec>.Fail(EmptyGitPatError)
+            : await BuildSpecAsync(startingRun, claimed, catalog, issueContent, gitPat, cancellationToken);
 
         if (specResult is Result<WorkerContainerSpec>.Failure specFailure)
         {
@@ -138,12 +146,39 @@ internal sealed class IssueClaimedHandler(
             return;
         }
 
-        if (specResult is not Result<WorkerContainerSpec>.Success specSuccess)
+        if (specResult is not Result<WorkerContainerSpec>.Success specSuccess || gitPat is null)
         {
             return;
         }
 
         WorkerContainerSpec spec = specSuccess.Value;
+
+        // The Publisher fetches with the token and leaves a base bundle for the worker, so the worker's own spec
+        // carries no GIT_PAT (ADR 0100). Without a base bundle no worker starts.
+        PrepareOutcome prepareOutcome = await publisher.PrepareAsync(
+            new PrepareRequest(
+                startingRun.Id,
+                claimed.CloneUrl,
+                gitPat,
+                RunBranchToPrepare(claimed, restricted),
+                new WorkerResourceLimitsSnapshot(spec.MemoryLimitMb, spec.CpuLimit, spec.PidsLimit)),
+            cancellationToken);
+
+        if (prepareOutcome is PrepareOutcome.Failed prepareFailure)
+        {
+            FailedRun failedRun = startingRun.Fail(prepareFailure.Reason);
+            await dbContext.TransitionAsync(startingRun, failedRun, domainEventDispatcher, cancellationToken);
+
+            logger.LogWarning(
+                "Worker run {WorkerRunId} aborted for issue #{IssueNumber}: preparing the run's base failed: {Error}",
+                startingRun.Id,
+                claimed.IssueNumber,
+                prepareFailure.Reason.Summary);
+            return;
+        }
+
+        startingRun.RecordPreparedBase(((PrepareOutcome.Prepared)prepareOutcome).Base);
+
         Result<ContainerId> startResult = await orchestrator.StartAsync(spec, cancellationToken);
 
         if (startResult is Result<ContainerId>.Success success)
@@ -247,11 +282,27 @@ internal sealed class IssueClaimedHandler(
         return logs;
     }
 
+    // Resolved at use time rather than carried on the event: outbox payloads are plaintext, the stored token is not.
+    private async Task<string?> ResolveGitPatAsync(ClaimedIssueDispatch claimed, CancellationToken cancellationToken)
+    {
+        RepositoryDispatchInfo? dispatchInfo = await repositoryDispatchQueries.GetDispatchInfoAsync(
+            claimed.MonitoredRepositoryId,
+            cancellationToken);
+
+        return dispatchInfo?.AccountToken is { Length: > 0 } gitPat ? gitPat : null;
+    }
+
+    // A Continuation or Revision resumes the branch's earlier work, so its branch goes into the base bundle. A Fresh
+    // run creates its branch from the default branch, and a restricted run gets no branch at all.
+    private static BranchName? RunBranchToPrepare(ClaimedIssueDispatch claimed, bool restricted) =>
+        !restricted && claimed.Context is DispatchContext.Continuation or DispatchContext.Revision ? claimed.BranchName : null;
+
     private async Task<Result<WorkerContainerSpec>> BuildSpecAsync(
         StartingRun startingRun,
         ClaimedIssueDispatch claimed,
         WorkerRoleCatalog? catalog,
         IssueContent? issueContent,
+        string gitPat,
         CancellationToken cancellationToken)
     {
         if (catalog?.Content is not { } content || content.Find(startingRun.Role) is not { } role)
@@ -259,17 +310,6 @@ internal sealed class IssueClaimedHandler(
             return Result<WorkerContainerSpec>.Fail(new Error(
                 "Worker.RoleUnavailable",
                 $"The worker role '{startingRun.Role.Name}' is not loaded: dispatch ran before the worker role catalog loaded. Retry the issue."));
-        }
-
-        // Resolved at use time rather than carried on the event: outbox payloads are plaintext, the stored token is not.
-        RepositoryDispatchInfo? dispatchInfo = await repositoryDispatchQueries.GetDispatchInfoAsync(
-            claimed.MonitoredRepositoryId,
-            cancellationToken);
-
-        if (dispatchInfo?.AccountToken is not { Length: > 0 } gitPat)
-        {
-            return Result<WorkerContainerSpec>.Fail(
-                new Error("Worker.EmptyGitPat", "No Git PAT configured for this account. Set the account token in Settings."));
         }
 
         if (!Uri.TryCreate(claimed.IssueApiUrl, UriKind.Absolute, out Uri? issueApiUri)
@@ -342,7 +382,6 @@ internal sealed class IssueClaimedHandler(
 
         Dictionary<string, string> envVars = new()
         {
-            ["GIT_PAT"] = gitPat,
             ["CLONE_URL"] = claimed.CloneUrl.ToString(),
             ["ISSUE_NUMBER"] = claimed.IssueNumber.ToString(CultureInfo.InvariantCulture),
             ["ISSUE_API_URL"] = claimed.IssueApiUrl,
@@ -353,13 +392,17 @@ internal sealed class IssueClaimedHandler(
             ["CLAUDE_SETTINGS_JSON"] = WorkerSettingsBuilder.Build(claudeCode, model),
         };
 
-        // A restricted run gets no branch and no provider token: GIT_PAT only clones, and the entrypoint unsets it.
+        // A restricted run gets no branch and no provider token.
         if (!restricted && claimed.BranchName is { } branchName)
         {
             envVars["BRANCH_NAME"] = branchName.Value;
         }
 
-        List<VolumeMount> volumeMounts = [];
+        // Read-only: the worker only clones the base bundle the Publisher left there.
+        List<VolumeMount> volumeMounts =
+        [
+            new VolumeMount(WorkerVolumeNames.HandOffVolumeName(startingRun.Id), WorkerVolumeNames.HandOffContainerPath, ReadOnly: true),
+        ];
 
         if (isOAuthMode)
         {

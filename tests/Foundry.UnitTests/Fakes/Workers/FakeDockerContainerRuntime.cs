@@ -31,6 +31,7 @@ internal sealed class FakeDockerContainerRuntime : IDockerContainerRuntime
     private readonly List<string> _callLog = [];
     private string[] _streamLogLines = [];
     private readonly List<string> _allRemovedVolumeNames = [];
+    private long _waitExitCode;
 
     // Captured call arguments
     public CreateContainerParameters? LastCreateAndStartParameters { get; private set; }
@@ -50,7 +51,7 @@ internal sealed class FakeDockerContainerRuntime : IDockerContainerRuntime
     public string? LastReadFilePath { get; private set; }
 
     /// <summary>
-    /// Ordered log of exec, read, stop and remove calls: <c>exec:&lt;argv&gt;</c>, <c>read:&lt;path&gt;</c>,
+    /// Ordered log of exec, read, wait, stop and remove calls: <c>exec:&lt;argv&gt;</c>, <c>read:&lt;path&gt;</c>, <c>wait:&lt;id&gt;</c>,
     /// <c>stop:&lt;id&gt;</c>, <c>remove:&lt;id&gt;</c>.
     /// </summary>
     public IReadOnlyList<string> CallLog => _callLog;
@@ -63,6 +64,7 @@ internal sealed class FakeDockerContainerRuntime : IDockerContainerRuntime
     public string? LastGetLogsContainerId { get; private set; }
     public int LastGetLogsTailLines { get; private set; }
     public string? LastGetAllLogsContainerId { get; private set; }
+    public string? LastWaitContainerId { get; private set; }
 
     // ── Scripting fluent API ──────────────────────────────────────────────────
 
@@ -103,6 +105,12 @@ internal sealed class FakeDockerContainerRuntime : IDockerContainerRuntime
                 },
             },
         };
+        return this;
+    }
+
+    public FakeDockerContainerRuntime WithWaitExitCode(long exitCode)
+    {
+        _waitExitCode = exitCode;
         return this;
     }
 
@@ -217,6 +225,15 @@ internal sealed class FakeDockerContainerRuntime : IDockerContainerRuntime
     {
         LastListParameters = parameters;
         return Task.FromResult(_listResponse);
+    }
+
+    public Task<long> WaitAsync(
+        string containerId,
+        CancellationToken cancellationToken)
+    {
+        LastWaitContainerId = containerId;
+        _callLog.Add($"wait:{containerId}");
+        return Task.FromResult(_waitExitCode);
     }
 
     public async IAsyncEnumerable<string> StreamLogsAsync(

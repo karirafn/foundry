@@ -45,6 +45,24 @@ public abstract class WorkerRun : AggregateRoot<WorkerRunId>, IStateMachine<Work
     /// <summary>The run's recorded verdict, or <see langword="null"/> when none was recorded.</summary>
     public RunVerdict? Verdict => VerdictStatus is { } status ? RunVerdict.FromStored(status, VerdictQuestions) : null;
 
+    /// <summary>The default branch's head the run started from (ADR 0100); <see langword="null"/> before it was prepared.</summary>
+    public CommitSha? BaseDefaultBranchHead { get; private set; }
+
+    /// <summary>The run's existing branch head it started from; <see langword="null"/> for a run with none.</summary>
+    public CommitSha? BaseRunBranchHead { get; private set; }
+
+    /// <summary>
+    /// The run's base as the Publisher's Prepare mode reported it, or <see langword="null"/> for a run that never
+    /// reached Prepare (or was recorded before runs had a base).
+    /// </summary>
+    public RunBase? Base => BaseDefaultBranchHead is { } defaultBranchHead ? new RunBase(defaultBranchHead, BaseRunBranchHead) : null;
+
+    protected void RecordBase(RunBase? runBase)
+    {
+        BaseDefaultBranchHead = runBase?.DefaultBranchHead;
+        BaseRunBranchHead = runBase?.RunBranchHead;
+    }
+
     protected void RecordVerdict(RunVerdict? verdict)
     {
         VerdictStatus = verdict?.Status;

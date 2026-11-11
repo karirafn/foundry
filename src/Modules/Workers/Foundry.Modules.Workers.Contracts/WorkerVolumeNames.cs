@@ -22,4 +22,13 @@ public static class WorkerVolumeNames
     public const string DataRootContainerPath = "/home/node/.local/share/docker";
 
     public static string DataRootVolumeName(WorkerRunId runId) => $"{DataRootVolumeNamePrefix}{runId.Value}";
+
+    /// <summary>
+    /// The per-run Hand-off volume (ADR 0100), shared by the Publisher and the worker. It holds only the run's
+    /// bundles (<c>in/base.bundle</c>, later <c>out/run.bundle</c>), never a working repository.
+    /// </summary>
+    public const string HandOffVolumeNamePrefix = "foundry-handoff-";
+    public const string HandOffContainerPath = "/handoff";
+
+    public static string HandOffVolumeName(WorkerRunId runId) => $"{HandOffVolumeNamePrefix}{runId.Value}";
 }

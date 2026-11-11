@@ -46,6 +46,27 @@ public sealed class ReapOrphanedDataRootVolumes
     }
 
     [Fact]
+    public async Task WhenHandOffVolumeRunIdNotInActiveSet_RemovesItLikeADataRootVolume()
+    {
+        // Arrange
+        WorkerRunId orphanedRunId = WorkerRunId.New();
+        WorkerRunId activeRunId = WorkerRunId.New();
+        string orphaned = WorkerVolumeNames.HandOffVolumeName(orphanedRunId);
+        string active = WorkerVolumeNames.HandOffVolumeName(activeRunId);
+
+        FakeDockerContainerRuntime runtime = new FakeDockerContainerRuntime()
+            .WithVolumeListResponse([(orphaned, VolumeLabels(orphanedRunId)), (active, VolumeLabels(activeRunId))]);
+
+        DockerWorkerOrchestrator sut = BuildSut(runtime);
+
+        // Act
+        await sut.ReapOrphanedDataRootVolumesAsync(new HashSet<WorkerRunId> { activeRunId }, CancellationToken.None);
+
+        // Assert
+        runtime.AllRemovedVolumeNames.ShouldBe([orphaned]);
+    }
+
+    [Fact]
     public async Task WhenVolumeRunIdIsInActiveSet_DoesNotRemoveVolume()
     {
         // Arrange
@@ -250,6 +271,9 @@ public sealed class ReapOrphanedDataRootVolumes
             ContainersListParameters parameters,
             CancellationToken cancellationToken)
             => _inner.ListAsync(parameters, cancellationToken);
+
+        public Task<long> WaitAsync(string containerId, CancellationToken cancellationToken)
+            => _inner.WaitAsync(containerId, cancellationToken);
 
         public IAsyncEnumerable<string> StreamLogsAsync(
             string containerId,

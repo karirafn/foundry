@@ -13,6 +13,7 @@ using Foundry.Modules.Workers.Domain.Entities;
 using Foundry.Modules.Workers.Domain.Entities.States;
 using Foundry.Modules.Workers.Domain.ValueObjects;
 using Foundry.Modules.Workers.Features.Orchestration;
+using Foundry.Modules.Workers.Features.Publisher;
 using Foundry.Modules.Workers.Features.ContainerSpec;
 using Foundry.Modules.Workers.Features.Dispatch;
 using Foundry.Modules.Workers.Features.Roles;
@@ -66,11 +67,13 @@ public sealed class HandleAsync : IAsyncDisposable
         IWorkerRoleCatalogStore? roleCatalog = null,
         IFailingJobLogQueries? failingJobLogQueries = null,
         IRepositoryDispatchQueries? repositoryDispatchQueries = null,
-        IIssueContentQueries? issueContentQueries = null)
+        IIssueContentQueries? issueContentQueries = null,
+        IPublisher? publisher = null)
     {
         return new IssueClaimedHandler(
             _dbContext,
             orchestrator ?? new StubWorkerOrchestrator(succeeds: true, containerId: "container-default"),
+            publisher ?? new FakePublisher(),
             new NullDomainEventDispatcher(),
             settingsQueries ?? new StubGlobalSettingsQueries(),
             credentialQueries ?? new StubCredentialQueries(("ANTHROPIC_API_KEY", "test-api-key")),
@@ -205,7 +208,7 @@ public sealed class HandleAsync : IAsyncDisposable
         spec.ShouldNotBeNull();
         spec.ShouldSatisfyAllConditions(
             () => spec.EnvironmentVariables["ANTHROPIC_API_KEY"].ShouldBe("test-api-key"),
-            () => spec.EnvironmentVariables["GIT_PAT"].ShouldBe("ghp_my_token"),
+            () => spec.EnvironmentVariables.ShouldNotContainKey("GIT_PAT"),
             () => spec.EnvironmentVariables["CLONE_URL"].ShouldBe("https://github.com/org/repo.git"),
             () => spec.EnvironmentVariables["ISSUE_NUMBER"].ShouldBe("7"),
             () => spec.EnvironmentVariables.ShouldNotContainKey("CLAUDE_CODE_OAUTH_TOKEN"));
@@ -324,7 +327,7 @@ public sealed class HandleAsync : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenApiKeyModeConfigured_ContainerSpecHasNoVolumeMounts()
+    public async Task WhenApiKeyModeConfigured_ContainerSpecMountsOnlyTheHandOffVolume()
     {
         // Arrange
         StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c8-apikey-vol");
@@ -339,7 +342,7 @@ public sealed class HandleAsync : IAsyncDisposable
         // Assert
         WorkerContainerSpec? spec = orchestrator.LastSpec;
         spec.ShouldNotBeNull();
-        spec.VolumeMounts.ShouldBeEmpty();
+        spec.VolumeMounts.ShouldHaveSingleItem().ContainerPath.ShouldBe(WorkerVolumeNames.HandOffContainerPath);
     }
 
     [Fact]
@@ -492,7 +495,8 @@ public sealed class HandleAsync : IAsyncDisposable
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
         StubRepositoryDispatchQueries dispatchQueries = StubRepositoryDispatchQueries.WithToken("ghp_current_token");
         StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c-resolved");
-        IssueClaimedHandler sut = BuildHandler(orchestrator: orchestrator, repositoryDispatchQueries: dispatchQueries);
+        FakePublisher publisher = new();
+        IssueClaimedHandler sut = BuildHandler(orchestrator: orchestrator, repositoryDispatchQueries: dispatchQueries, publisher: publisher);
 
         // Act
         await sut.HandleAsync(BuildEvent(monitoredRepositoryId: repositoryId), TestContext.Current.CancellationToken);
@@ -502,7 +506,8 @@ public sealed class HandleAsync : IAsyncDisposable
         spec.ShouldNotBeNull();
         spec.ShouldSatisfyAllConditions(
             () => dispatchQueries.RequestedRepositories.ShouldBe([repositoryId]),
-            () => spec.EnvironmentVariables["GIT_PAT"].ShouldBe("ghp_current_token"));
+            () => publisher.Requests.ShouldHaveSingleItem().GitPat.ShouldBe("ghp_current_token"),
+            () => spec.EnvironmentVariables.ShouldNotContainKey("GIT_PAT"));
     }
 
     [Fact]
@@ -531,7 +536,8 @@ public sealed class HandleAsync : IAsyncDisposable
         IssueClaimed @event = JsonSerializer.Deserialize<IssueClaimed>(legacyJson, OutboxSerializerOptions.Default)!;
         StubRepositoryDispatchQueries dispatchQueries = StubRepositoryDispatchQueries.WithToken("ghp_current_token");
         StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c-legacy");
-        IssueClaimedHandler sut = BuildHandler(orchestrator: orchestrator, repositoryDispatchQueries: dispatchQueries);
+        FakePublisher publisher = new();
+        IssueClaimedHandler sut = BuildHandler(orchestrator: orchestrator, repositoryDispatchQueries: dispatchQueries, publisher: publisher);
 
         // Act
         await sut.HandleAsync(@event, TestContext.Current.CancellationToken);
@@ -541,7 +547,8 @@ public sealed class HandleAsync : IAsyncDisposable
         spec.ShouldNotBeNull();
         spec.ShouldSatisfyAllConditions(
             () => dispatchQueries.RequestedRepositories.ShouldBe([repositoryId]),
-            () => spec.EnvironmentVariables["GIT_PAT"].ShouldBe("ghp_current_token"));
+            () => publisher.Requests.ShouldHaveSingleItem().GitPat.ShouldBe("ghp_current_token"),
+            () => spec.EnvironmentVariables.ShouldNotContainKey("GIT_PAT"));
     }
 
     [Fact]
@@ -1501,7 +1508,7 @@ public sealed class HandleAsync : IAsyncDisposable
             () => spec.EnvironmentVariables.ShouldNotContainKey("GH_TOKEN"),
             () => spec.EnvironmentVariables.ShouldNotContainKey("GITLAB_TOKEN"),
             () => spec.EnvironmentVariables.ShouldNotContainKey("BRANCH_NAME"),
-            () => spec.EnvironmentVariables["GIT_PAT"].ShouldBe("ghp_test_token"));
+            () => spec.EnvironmentVariables.ShouldNotContainKey("GIT_PAT"));
     }
 
     [Fact]
@@ -1645,6 +1652,155 @@ public sealed class HandleAsync : IAsyncDisposable
             CancellationToken cancellationToken)
             => Task.FromResult(
                 Result<BranchCommitSummary>.Fail(new Error("Provider.NoCommit", "No commit found")));
+    }
+
+    // ── Publisher Prepare (ADR 0100) ─────────────────────────────────────────────
+
+    [Theory]
+    [InlineData(false, true)]
+    [InlineData(false, false)]
+    [InlineData(true, true)]
+    [InlineData(true, false)]
+    public async Task WhenAnyRoleIsDispatched_ContainerSpecCarriesNoGitPat(bool restricted, bool gitHub)
+    {
+        // Arrange
+        StubWorkerOrchestrator orchestrator = new(succeeds: true);
+        IssueClaimedHandler sut = restricted ? BuildRestrictedHandler(orchestrator) : BuildHandler(orchestrator: orchestrator);
+        WorkerProvider provider = gitHub ? new WorkerProvider.GitHub() : new WorkerProvider.GitLab();
+
+        // Act
+        await sut.HandleAsync(BuildEvent(provider: provider), TestContext.Current.CancellationToken);
+
+        // Assert
+        WorkerContainerSpec spec = orchestrator.LastSpec.ShouldNotBeNull();
+        spec.EnvironmentVariables.ShouldNotContainKey("GIT_PAT");
+    }
+
+    [Fact]
+    public async Task WhenDispatched_PreparesTheRunsBaseWithTheAccountToken()
+    {
+        // Arrange
+        FakePublisher publisher = new();
+        IssueClaimedHandler sut = BuildHandler(publisher: publisher);
+        WorkerRunId runId = WorkerRunId.New();
+
+        // Act
+        await sut.HandleAsync(BuildEvent(workerRunId: runId, repositorySlug: "org/repo"), TestContext.Current.CancellationToken);
+
+        // Assert
+        PrepareRequest request = publisher.Requests.ShouldHaveSingleItem();
+        request.ShouldSatisfyAllConditions(
+            () => request.RunId.ShouldBe(runId),
+            () => request.CloneUrl.ShouldBe(new Uri("https://github.com/org/repo.git")),
+            () => request.GitPat.ShouldBe("ghp_test_token"));
+    }
+
+    public static TheoryData<DispatchContext, bool> PrepareContexts => new()
+    {
+        { new DispatchContext.Fresh("feat/42-test-issue"), false },
+        { new DispatchContext.Continuation("feat/42-test-issue", "timed out"), true },
+        { new DispatchContext.Revision("feat/42-test-issue", "https://github.com/owner/repo/pull/1", new RevisionTrigger.InputProvided()), true },
+    };
+
+    [Theory]
+    [MemberData(nameof(PrepareContexts))]
+    public async Task WhenDispatched_PreparesTheRunBranchOnlyForContinuationAndRevision(DispatchContext context, bool preparesRunBranch)
+    {
+        // Arrange
+        FakePublisher publisher = new();
+        IssueClaimedHandler sut = BuildHandler(publisher: publisher);
+
+        // Act
+        await sut.HandleAsync(BuildEvent(context: context), TestContext.Current.CancellationToken);
+
+        // Assert
+        publisher.Requests.ShouldHaveSingleItem().RunBranch.ShouldBe(preparesRunBranch ? BranchName.From("feat/42-test-issue") : null);
+    }
+
+    [Fact]
+    public async Task WhenTheRoleIsRestricted_PreparesOnlyTheDefaultBranchEvenForAContinuation()
+    {
+        // Arrange
+        FakePublisher publisher = new();
+        IssueClaimedHandler sut = BuildHandler(
+            publisher: publisher,
+            roleCatalog: StubWorkerRoleCatalogStore.With(
+                systemPrompt: "You are triaging issue #{issueNumber}.\n\n{issueContent}",
+                capability: WorkerCapability.Restricted));
+
+        // Act
+        await sut.HandleAsync(
+            BuildEvent(context: new DispatchContext.Continuation("feat/42-test-issue")),
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        publisher.Requests.ShouldHaveSingleItem().RunBranch.ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task WhenPrepared_WorkerMountsTheRunsHandOffVolumeReadOnly()
+    {
+        // Arrange
+        StubWorkerOrchestrator orchestrator = new(succeeds: true);
+        IssueClaimedHandler sut = BuildHandler(orchestrator: orchestrator);
+        WorkerRunId runId = WorkerRunId.New();
+
+        // Act
+        await sut.HandleAsync(BuildEvent(workerRunId: runId), TestContext.Current.CancellationToken);
+
+        // Assert
+        orchestrator.LastSpec.ShouldNotBeNull().VolumeMounts.ShouldContain(
+            new VolumeMount(WorkerVolumeNames.HandOffVolumeName(runId), WorkerVolumeNames.HandOffContainerPath, ReadOnly: true));
+    }
+
+    [Fact]
+    public async Task WhenPrepared_ActiveRunPersistsTheReportedBase()
+    {
+        // Arrange
+        IssueClaimedHandler sut = BuildHandler();
+
+        // Act
+        await sut.HandleAsync(
+            BuildEvent(context: new DispatchContext.Continuation("feat/42-test-issue")),
+            TestContext.Current.CancellationToken);
+        _dbContext.ChangeTracker.Clear();
+
+        // Assert
+        WorkerRun run = await _dbContext.Set<WorkerRun>().SingleAsync(TestContext.Current.CancellationToken);
+        run.ShouldBeOfType<ActiveRun>().Base.ShouldBe(new RunBase(FakePublisher.DefaultBranchHead, FakePublisher.RunBranchHead));
+    }
+
+    [Fact]
+    public async Task WhenPrepareFails_RunFailsWithItsReasonAndNoWorkerStarts()
+    {
+        // Arrange
+        StubWorkerOrchestrator orchestrator = new(succeeds: true);
+        FailureReason reason = new FailureReason.WorkerBootstrapFailed(
+            "FOUNDRY_BOOTSTRAP_FAILED stage=clone detail=the run's branch feat/42-test-issue does not exist on the remote");
+        IssueClaimedHandler sut = BuildHandler(orchestrator: orchestrator, publisher: new FakePublisher(new PrepareOutcome.Failed(reason)));
+
+        // Act
+        await sut.HandleAsync(BuildEvent(), TestContext.Current.CancellationToken);
+        _dbContext.ChangeTracker.Clear();
+
+        // Assert
+        WorkerRun run = await _dbContext.Set<WorkerRun>().SingleAsync(TestContext.Current.CancellationToken);
+        run.ShouldBeOfType<FailedRun>().Reason.ShouldBe(reason);
+        orchestrator.LastSpec.ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task WhenTheAccountHasNoToken_NothingIsPrepared()
+    {
+        // Arrange
+        FakePublisher publisher = new();
+        IssueClaimedHandler sut = BuildHandler(repositoryDispatchQueries: new StubRepositoryDispatchQueries(null), publisher: publisher);
+
+        // Act
+        await sut.HandleAsync(BuildEvent(), TestContext.Current.CancellationToken);
+
+        // Assert
+        publisher.Requests.ShouldBeEmpty();
     }
 
     private sealed class StubWorkerOrchestrator : IWorkerOrchestrator

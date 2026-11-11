@@ -51,7 +51,7 @@ public sealed class FailedRun : WorkerRun
 
     internal static FailedRun FromStarting(StartingRun starting, FailureReason reason)
     {
-        return new FailedRun(
+        FailedRun failed = new(
             starting.Id,
             starting.IssueId,
             starting.CreatedAt,
@@ -62,6 +62,8 @@ public sealed class FailedRun : WorkerRun
             resultSummary: null,
             starting.Role,
             starting.Image);
+        failed.RecordBase(starting.Base);
+        return failed;
     }
 
     internal static FailedRun FromActive(
@@ -87,6 +89,7 @@ public sealed class FailedRun : WorkerRun
         };
 
         failed.RecordVerdict(verdict);
+        failed.RecordBase(active.Base);
         return failed;
     }
 }

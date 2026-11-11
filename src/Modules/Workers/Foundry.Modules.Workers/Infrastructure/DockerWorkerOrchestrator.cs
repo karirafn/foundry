@@ -59,6 +59,52 @@ internal sealed class DockerWorkerOrchestrator(IDockerContainerRuntime runtime) 
         return mounts.Count > 0 ? mounts : null;
     }
 
+    /// <summary>The Engine API create request for a spec; shared by worker and Publisher containers.</summary>
+    internal static CreateContainerParameters ToCreateParameters(WorkerContainerSpec spec) =>
+        new()
+        {
+            Image = spec.Image,
+            Cmd = [.. spec.Command],
+            Env = [.. spec.EnvironmentVariables.Select(kv => $"{kv.Key}={kv.Value}")],
+            Labels = new Dictionary<string, string>(spec.Labels),
+            HostConfig = new HostConfig
+            {
+                Memory = spec.MemoryLimitMb * BytesPerMegabyte,
+                NanoCPUs = (long)(spec.CpuLimit * NanoCpusPerCpu),
+                PidsLimit = spec.PidsLimit,
+                SecurityOpt = spec.SecurityOptions.Count > 0
+                    ? [.. spec.SecurityOptions]
+                    : null,
+                Devices = spec.Devices.Count > 0
+                    ? [.. spec.Devices.Select(MapDevice)]
+                    : null,
+                Mounts = MapMounts(spec),
+                Tmpfs = spec.TmpfsMounts.Count > 0
+                    ? new Dictionary<string, string>(spec.TmpfsMounts)
+                    : null,
+                ReadonlyRootfs = spec.ReadOnlyRootFilesystem,
+                CapDrop = spec.DroppedCapabilities.Count > 0
+                    ? [.. spec.DroppedCapabilities]
+                    : null,
+                CapAdd = spec.Capabilities.Count > 0
+                    ? [.. spec.Capabilities]
+                    : null,
+                // An empty list turns off the daemon's default /proc masking while null keeps it,
+                // so the two must never collapse into one another.
+                MaskedPaths = spec.UnmaskSystemPaths ? [] : null,
+                ReadonlyPaths = spec.UnmaskSystemPaths ? [] : null,
+            },
+        };
+
+    /// <summary>A Docker error message fit for a failure reason: secrets redacted, length capped.</summary>
+    internal static string RedactDockerError(string message)
+    {
+        string redacted = SecretRedactor.Redact(message);
+        return redacted.Length > DockerErrorMessageMaxLength
+            ? redacted[..DockerErrorMessageMaxLength]
+            : redacted;
+    }
+
     public async Task EnsureCredentialVolumeAsync(CancellationToken cancellationToken)
     {
         await runtime.CreateVolumeAsync(
@@ -117,42 +163,7 @@ internal sealed class DockerWorkerOrchestrator(IDockerContainerRuntime runtime) 
         {
             await EnsureDataRootVolumeAsync(spec, cancellationToken);
 
-            CreateContainerParameters createParams = new()
-            {
-                Image = spec.Image,
-                Cmd = [.. spec.Command],
-                Env = [.. spec.EnvironmentVariables.Select(kv => $"{kv.Key}={kv.Value}")],
-                Labels = new Dictionary<string, string>(spec.Labels),
-                HostConfig = new HostConfig
-                {
-                    Memory = spec.MemoryLimitMb * BytesPerMegabyte,
-                    NanoCPUs = (long)(spec.CpuLimit * NanoCpusPerCpu),
-                    PidsLimit = spec.PidsLimit,
-                    SecurityOpt = spec.SecurityOptions.Count > 0
-                        ? [.. spec.SecurityOptions]
-                        : null,
-                    Devices = spec.Devices.Count > 0
-                        ? [.. spec.Devices.Select(MapDevice)]
-                        : null,
-                    Mounts = MapMounts(spec),
-                    Tmpfs = spec.TmpfsMounts.Count > 0
-                        ? new Dictionary<string, string>(spec.TmpfsMounts)
-                        : null,
-                    ReadonlyRootfs = spec.ReadOnlyRootFilesystem,
-                    CapDrop = spec.DroppedCapabilities.Count > 0
-                        ? [.. spec.DroppedCapabilities]
-                        : null,
-                    CapAdd = spec.Capabilities.Count > 0
-                        ? [.. spec.Capabilities]
-                        : null,
-                    // An empty list turns off the daemon's default /proc masking while null keeps it,
-                    // so the two must never collapse into one another.
-                    MaskedPaths = spec.UnmaskSystemPaths ? [] : null,
-                    ReadonlyPaths = spec.UnmaskSystemPaths ? [] : null,
-                },
-            };
-
-            string containerId = await runtime.CreateAndStartAsync(createParams, cancellationToken);
+            string containerId = await runtime.CreateAndStartAsync(ToCreateParameters(spec), cancellationToken);
             return Result<ContainerId>.Ok(ContainerId.From(containerId));
         }
         catch (DockerApiException ex)
@@ -161,11 +172,7 @@ internal sealed class DockerWorkerOrchestrator(IDockerContainerRuntime runtime) 
             // leaves the data-root volume orphaned. Recovery happens automatically on the next
             // StaleStartingRunService tick: the run id will not appear in the active-slot set,
             // so ReapOrphanedDataRootVolumesAsync removes the volume without manual intervention.
-            string redacted = SecretRedactor.Redact(ex.Message);
-            string message = redacted.Length > DockerErrorMessageMaxLength
-                ? redacted[..DockerErrorMessageMaxLength]
-                : redacted;
-            return Result<ContainerId>.Fail(new Error("Docker.StartFailed", message));
+            return Result<ContainerId>.Fail(new Error("Docker.StartFailed", RedactDockerError(ex.Message)));
         }
     }
 
@@ -174,7 +181,7 @@ internal sealed class DockerWorkerOrchestrator(IDockerContainerRuntime runtime) 
         string? workerRunId = await ReadWorkerRunIdAsync(containerId, cancellationToken);
         await runtime.StopAsync(containerId, 10, cancellationToken);
         await runtime.RemoveAsync(containerId, cancellationToken);
-        await TryDeleteDataRootVolumeAsync(workerRunId, cancellationToken);
+        await TryDeleteRunVolumesAsync(workerRunId, cancellationToken);
     }
 
     public async Task<WorkerStatusProbe> GetStatusAsync(
@@ -291,7 +298,7 @@ internal sealed class DockerWorkerOrchestrator(IDockerContainerRuntime runtime) 
     {
         string? workerRunId = await ReadWorkerRunIdAsync(containerId, cancellationToken);
         await runtime.RemoveAsync(containerId, cancellationToken);
-        await TryDeleteDataRootVolumeAsync(workerRunId, cancellationToken);
+        await TryDeleteRunVolumesAsync(workerRunId, cancellationToken);
     }
 
     public async Task ReapOrphanedDataRootVolumesAsync(
@@ -303,7 +310,7 @@ internal sealed class DockerWorkerOrchestrator(IDockerContainerRuntime runtime) 
 
         // Reap is keyed on the label, not the name prefix, because the label is the authoritative
         // ownership marker. The label "foundry.worker-run-id" is only ever placed on worker
-        // containers and data-root volumes, so querying by it is a sufficient filter. Volumes
+        // containers, data-root volumes and Hand-off volumes, so querying by it is a sufficient filter. Volumes
         // that carry the label but have an unparseable or missing run-id are skipped — they were
         // not created by this orchestrator in a recognisable way and are left untouched.
         foreach ((string name, IReadOnlyDictionary<string, string> labels) in volumes)
@@ -351,7 +358,9 @@ internal sealed class DockerWorkerOrchestrator(IDockerContainerRuntime runtime) 
         return response.Config.Labels.TryGetValue(WorkerRunLabelKey, out string? runId) ? runId : null;
     }
 
-    private async Task TryDeleteDataRootVolumeAsync(
+    // The run's container is gone, so neither of its per-run volumes is mounted any more: the rootless daemon's
+    // data-root and the Hand-off volume (ADR 0100).
+    private async Task TryDeleteRunVolumesAsync(
         string? workerRunId,
         CancellationToken cancellationToken)
     {
@@ -360,14 +369,17 @@ internal sealed class DockerWorkerOrchestrator(IDockerContainerRuntime runtime) 
             return;
         }
 
-        string volumeName = WorkerVolumeNames.DataRootVolumeName(WorkerRunId.From(guid));
-        try
+        WorkerRunId runId = WorkerRunId.From(guid);
+        foreach (string volumeName in (string[])[WorkerVolumeNames.DataRootVolumeName(runId), WorkerVolumeNames.HandOffVolumeName(runId)])
         {
-            await runtime.RemoveVolumeAsync(volumeName, force: false, cancellationToken);
-        }
-        catch (DockerApiException)
-        {
-            // Best-effort teardown — swallow Docker errors on volume removal.
+            try
+            {
+                await runtime.RemoveVolumeAsync(volumeName, force: false, cancellationToken);
+            }
+            catch (DockerApiException)
+            {
+                // Best-effort teardown — swallow Docker errors on volume removal.
+            }
         }
     }
 }

@@ -2,7 +2,8 @@ namespace Foundry.Modules.Workers.Features.ContainerSpec;
 
 /// <summary>
 /// Single source of the Linux hardening every worker container runs under (ADR 0088). The rootless
-/// Docker-in-Docker profile (<see cref="RootlessDindRunSpec"/>) relaxes parts of it and documents each relaxation.
+/// Docker-in-Docker profile (<see cref="RootlessDindRunSpec"/>) relaxes parts of it and documents each relaxation;
+/// the Publisher (ADR 0100) runs under it with no capability added back.
 /// </summary>
 internal static class WorkerHardeningSpec
 {
@@ -36,14 +37,28 @@ internal static class WorkerHardeningSpec
     };
 
     /// <summary>
-    /// Disk-backed writable paths for the clone, the worker's home (package caches, build output, tool config) and
-    /// the temp directories, which agents fill with worktrees, tool installs and caches. On tmpfs those pages would
-    /// count against the worker's memory limit, so a full temp directory meant an OOM kill or ENOSPC (#821).
+    /// The temp directories, which agents fill with worktrees, tool installs and caches. On tmpfs those pages would
+    /// count against the container's memory limit, so a full temp directory meant an OOM kill or ENOSPC (#821).
     /// Anonymous volumes inherit the image's content, ownership and mode on first mount (so <c>/tmp</c> and
-    /// <c>/var/tmp</c> stay sticky <c>1777</c> and allow exec for the entrypoint's <c>GIT_ASKPASS</c> helper) and are
+    /// <c>/var/tmp</c> stay sticky <c>1777</c> and allow exec for the Publisher's <c>GIT_ASKPASS</c> helper) and are
     /// removed with the container.
     /// </summary>
-    public static readonly IReadOnlyList<string> ScratchVolumePaths = ["/workspace", "/home/node", "/tmp", "/var/tmp"];
+    public static readonly IReadOnlyList<string> TempScratchVolumePaths = ["/tmp", "/var/tmp"];
+
+    /// <summary>
+    /// Disk-backed writable paths for the clone, the worker's home (package caches, build output, tool config) and
+    /// the temp directories (<see cref="TempScratchVolumePaths"/>).
+    /// </summary>
+    public static readonly IReadOnlyList<string> ScratchVolumePaths = ["/workspace", "/home/node", .. TempScratchVolumePaths];
+
+    /// <summary>Where the Publisher keeps its scratch repository, on an anonymous volume removed with it.</summary>
+    public const string PublisherWorkPath = "/work";
+
+    /// <summary>
+    /// The Publisher runs as an unprivileged user from the start, so it needs no capability back; it writes only its
+    /// scratch repository, the temp directories and the Hand-off volume.
+    /// </summary>
+    public static readonly IReadOnlyList<string> PublisherScratchVolumePaths = [PublisherWorkPath, .. TempScratchVolumePaths];
 
     public static WorkerContainerSpec Apply(WorkerContainerSpec spec) =>
         spec with
@@ -54,5 +69,16 @@ internal static class WorkerHardeningSpec
             ReadOnlyRootFilesystem = ReadOnlyRootFilesystem,
             TmpfsMounts = TmpfsMounts,
             ScratchVolumePaths = ScratchVolumePaths,
+        };
+
+    public static WorkerContainerSpec ApplyToPublisher(WorkerContainerSpec spec) =>
+        spec with
+        {
+            DroppedCapabilities = DroppedCapabilities,
+            Capabilities = [],
+            SecurityOptions = SecurityOptions,
+            ReadOnlyRootFilesystem = ReadOnlyRootFilesystem,
+            TmpfsMounts = new Dictionary<string, string>(),
+            ScratchVolumePaths = PublisherScratchVolumePaths,
         };
 }

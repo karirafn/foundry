@@ -20,7 +20,7 @@ public sealed class RemoveAsync
     // ── StopAndRemoveAsync ────────────────────────────────────────────────────
 
     [Fact]
-    public async Task StopAndRemoveAsync_WhenContainerHasWorkerRunIdLabel_DeletesDataRootVolume()
+    public async Task StopAndRemoveAsync_WhenContainerHasWorkerRunIdLabel_DeletesTheRunsDataRootAndHandOffVolumes()
     {
         // Arrange
         WorkerRunId runId = WorkerRunId.New();
@@ -32,7 +32,9 @@ public sealed class RemoveAsync
         await sut.StopAndRemoveAsync("container-abc", CancellationToken.None);
 
         // Assert
-        runtime.LastRemovedVolumeName.ShouldBe(WorkerVolumeNames.DataRootVolumeName(runId));
+        runtime.AllRemovedVolumeNames.ShouldBe(
+            [WorkerVolumeNames.DataRootVolumeName(runId), WorkerVolumeNames.HandOffVolumeName(runId)],
+            ignoreOrder: true);
     }
 
     [Fact]
@@ -74,7 +76,7 @@ public sealed class RemoveAsync
     // ── RemoveContainerAsync ──────────────────────────────────────────────────
 
     [Fact]
-    public async Task RemoveContainerAsync_WhenContainerHasWorkerRunIdLabel_DeletesDataRootVolume()
+    public async Task RemoveContainerAsync_WhenContainerHasWorkerRunIdLabel_DeletesTheRunsDataRootAndHandOffVolumes()
     {
         // Arrange
         WorkerRunId runId = WorkerRunId.New();
@@ -86,7 +88,9 @@ public sealed class RemoveAsync
         await sut.RemoveContainerAsync("container-xyz", CancellationToken.None);
 
         // Assert
-        runtime.LastRemovedVolumeName.ShouldBe(WorkerVolumeNames.DataRootVolumeName(runId));
+        runtime.AllRemovedVolumeNames.ShouldBe(
+            [WorkerVolumeNames.DataRootVolumeName(runId), WorkerVolumeNames.HandOffVolumeName(runId)],
+            ignoreOrder: true);
     }
 
     [Fact]

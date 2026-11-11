@@ -11,6 +11,7 @@ using Foundry.Modules.Workers.Domain.Entities;
 using Foundry.Modules.Workers.Domain.Entities.States;
 using Foundry.Modules.Workers.Domain.ValueObjects;
 using Foundry.Modules.Workers.Features.Orchestration;
+using Foundry.Modules.Workers.Features.Publisher;
 using Foundry.Modules.Workers.Features.Outcome;
 using Foundry.Modules.Workers.Features.ContainerSpec;
 using Foundry.Modules.Workers.Features.Dispatch;
@@ -106,6 +107,7 @@ public sealed class PreContainerFailureBridging : IAsyncDisposable
         return new IssueClaimedHandler(
             _dbContext,
             orchestrator ?? new AlwaysFailingOrchestrator(),
+            new FakePublisher(),
             domainDispatcher,
             new StubGlobalSettingsQueries(),
             new StubCredentialQueries(("ANTHROPIC_API_KEY", "test-key")),

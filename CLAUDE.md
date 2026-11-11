@@ -91,6 +91,8 @@ Dispatched via Docker socket (`IWorkerOrchestrator` abstraction). Workers push t
 
 Every worker container is hardened (ADR 0088, single source `WorkerHardeningSpec`): `CapDrop: [ALL]` with only `SETUID`/`SETGID` added back for the entrypoint's root-render-then-`setpriv` drop, `no-new-privileges`, the daemon's default seccomp profile, and a read-only root filesystem with a tmpfs at `/etc/claude-code` and anonymous volumes (removed with the container) at `/workspace`, `/home/node`, `/tmp`, `/var/tmp`. Docker-enabled workers layer `RootlessDindRunSpec` on top. Anything a worker needs writable must live under one of those paths.
 
+No worker container spec carries `GIT_PAT` (ADR 0100). Before each run the model-free **Publisher** container (`workers/publisher/`, alpine + git, hardened by `WorkerHardeningSpec.ApplyToPublisher`) fetches the repository with the token and writes `in/base.bundle` to the run's Hand-off volume (`foundry-handoff-<runId>`, mounted read-only at `/handoff` in the worker); the entrypoint clones from that bundle. The Publisher reports the run's base on one `FOUNDRY_BASE` stdout line, persisted on the run.
+
 ## Code Style
 
 See `.editorconfig`. Key rules:
