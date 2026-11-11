@@ -2,7 +2,7 @@ import { DestroyRef, Injectable, Signal, WritableSignal, computed, inject, signa
 import { HttpClient, HttpErrorResponse, HttpParams } from '@angular/common/http';
 import { Subscription } from 'rxjs';
 import { IssueSignalRService } from '../../core/services/issue-signalr.service';
-import { IssueDetail, IssueState, IssueSummary, LIVE_STATES, QUEUED_TIER_STATES } from './issue.model';
+import { IssueDetail, IssueState, IssueSummary, LIVE_STATES, PublishPhase, QUEUED_TIER_STATES } from './issue.model';
 import type { TokenTotal } from '../workers/run-totals.model';
 import {
   DEFAULT_SELECTED_GROUPS,
@@ -20,7 +20,8 @@ import {
 import { components } from '../../api/schema';
 
 type PagedIssues = components['schemas']['PagedIssues'];
-type GeneratedIssueSummary = components['schemas']['IssueSummary'];
+// publishPhase (#787) is read defensively until the generated schema carries it.
+type GeneratedIssueSummary = components['schemas']['IssueSummary'] & { publishPhase?: string | null };
 type GeneratedTokenTotal = components['schemas']['TokenTotal'];
 
 interface IssueCountsResponse {
@@ -81,6 +82,11 @@ const COUNTS_DEBOUNCE_MS = 300;
 // for these infrequent operator actions; 30 s is low enough to reflect a Position reorder within
 // one interval and high enough that idle traffic is one GET /api/issues per 30 s.
 const RECONCILE_SAFETY_NET_MS = 30_000;
+
+// Narrows the wire value to a known publish phase; anything else reads as no phase.
+function toPublishPhase(value: string | null | undefined): PublishPhase | null {
+  return value === 'publishing' || value === 'retrying' ? value : null;
+}
 
 function isDispatchableQueued(issue: IssueSummary): boolean {
   return (
@@ -598,6 +604,7 @@ export class IssueService {
       },
       pullRequestUrl: i.pullRequestUrl ?? null,
       providerType: i.providerType ?? null,
+      publishPhase: toPublishPhase(i.publishPhase),
     };
   }
 

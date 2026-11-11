@@ -1,0 +1,101 @@
+@use '../../../../styles/badge' as *;
+
+// Only the outlined chip modifiers are used here; no state backgrounds are emitted.
+@include badge($states: ());
+
+:host {
+  display: block;
+}
+
+// Mirrors the issue-detail retry/revision callouts (emulated encapsulation keeps those styles
+// on fd-issue-detail's own elements).
+.publish-status {
+  margin-top: var(--fd-spacing-md);
+  padding: var(--fd-spacing-sm) var(--fd-spacing-md);
+  border: 1px solid var(--fd-border-warning);
+  border-radius: var(--fd-radius-sm);
+  background: var(--fd-bg-warning-subtle);
+
+  &--neutral {
+    border-color: var(--fd-border-default);
+    background: var(--fd-bg-card-hover);
+  }
+
+  &--error {
+    border-color: var(--fd-state-failed);
+    background: var(--fd-bg-error-subtle);
+  }
+
+  &--empty {
+    // Collapse visually but keep the live region in the accessibility tree, so screen readers
+    // detect content changes when a publish variant appears.
+    padding: 0;
+    margin: 0;
+    border: none;
+    height: 0;
+    overflow: hidden;
+  }
+
+  &__key {
+    text-transform: uppercase;
+    color: var(--fd-text-secondary);
+    font-size: 0.75rem;
+    letter-spacing: 0.05em;
+  }
+
+  &__callout {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: var(--fd-spacing-sm);
+    margin-top: var(--fd-spacing-xs);
+  }
+
+  &__message {
+    color: var(--fd-text-secondary);
+    font-size: 0.8125rem;
+  }
+
+  &__guidance {
+    margin: var(--fd-spacing-sm) 0 0;
+  }
+
+  &__fields {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: var(--fd-spacing-md) var(--fd-spacing-lg);
+    margin-top: var(--fd-spacing-sm);
+
+    @media (max-width: 767px) {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  &__field {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+  }
+
+  // Side branch names carry a run ID, so they wrap anywhere.
+  &__branch {
+    font-family: var(--fd-font-mono);
+    font-size: 0.8125rem;
+    overflow-wrap: anywhere;
+  }
+
+  &__branch-link {
+    color: var(--fd-text-link);
+    text-decoration: none;
+
+    &:hover {
+      text-decoration: underline;
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--fd-text-link);
+      outline-offset: 2px;
+    }
+  }
+}

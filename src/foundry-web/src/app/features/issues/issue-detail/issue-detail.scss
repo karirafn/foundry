@@ -4,8 +4,9 @@
 // keeps fd-state-badge's stylesheet off this component's elements, so emit them here.
 // Included before .issue-detail so the chip modifiers below can override badge colours.
 // Only the state modifiers this template renders (the failure-chip fallback and the
-// failure-category / revision chips) are emitted, to stay within the style budget.
-@include badge($states: (failed, usage-limited, revision-in-progress));
+// failure-category / revision chips) are emitted, to stay within the style budget. The publish
+// chips render inside fd-publish-status, so their outlined modifiers are left out here.
+@include badge($states: (failed, usage-limited, revision-in-progress), $exclude-outlined: (publishing, branch-diverged));
 
 @keyframes shimmer {
   0% {

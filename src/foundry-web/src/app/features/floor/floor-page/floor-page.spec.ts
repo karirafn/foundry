@@ -228,4 +228,120 @@ describe('FloorPageComponent', () => {
     // Assert
     expect(el.querySelector('.floor-lane--stale')).not.toBeNull();
   });
+
+  // Publishing slots (#787)
+  it('should render a publishing card and a retrying card in place of starting slots', async () => {
+    // Arrange
+    const { fixture, httpMock, captured, el } = await setup();
+    flushIssues(httpMock, [
+      issueItem('issue-1', 1, 'in_progress'),
+      { ...issueItem('issue-42', 42, 'in_progress'), title: 'Add retry', publishPhase: 'publishing' },
+      { ...issueItem('issue-57', 57, 'revision_in_progress'), title: 'Fix login redirect', publishPhase: 'retrying' },
+    ]);
+    captured.onAgentActivity!(buildActivity('run-1', 'issue-1'));
+    fixture.detectChanges();
+
+    // Act — three occupied slots: one agent lane and two publishing runs.
+    flushCapacity(httpMock, 1, 4);
+    fixture.detectChanges();
+
+    // Assert
+    const cards = Array.from(el.querySelectorAll('.floor__slot--publishing'));
+    expect(cards.length).toBe(2);
+    expect(cards[0].classList.contains('floor__slot--publish-retrying')).toBe(false);
+    expect(cards[0].textContent).toContain('Publishing');
+    expect(cards[0].textContent).toContain('#42');
+    expect(cards[0].textContent).toContain('Add retry');
+    expect(cards[0].textContent).toContain("Pushing the run's commits");
+    expect(cards[0].querySelector('a')?.getAttribute('href')).toBe('https://github.com/owner/repo/issues/42');
+    expect(cards[1].classList.contains('floor__slot--publish-retrying')).toBe(true);
+    expect(cards[1].textContent).toContain('Retrying publish');
+    expect(cards[1].textContent).toContain('#57');
+    expect(cards[1].textContent).toContain('Publishing failed; Foundry retries automatically');
+    expect(el.querySelectorAll('.floor__slot--starting').length).toBe(0);
+    expect(el.querySelectorAll('fd-floor-lane').length).toBe(1);
+  });
+
+  it('should place publishing cards after the agent lanes and before the starting slots', async () => {
+    // Arrange
+    const { fixture, httpMock, captured, el } = await setup();
+    flushIssues(httpMock, [
+      issueItem('issue-1', 1, 'in_progress'),
+      { ...issueItem('issue-42', 42, 'in_progress'), publishPhase: 'publishing' },
+    ]);
+    captured.onAgentActivity!(buildActivity('run-1', 'issue-1'));
+    fixture.detectChanges();
+
+    // Act — three occupied: lane, publishing, starting.
+    flushCapacity(httpMock, 1, 4);
+    fixture.detectChanges();
+
+    // Assert
+    const items = Array.from(el.querySelectorAll('.floor__lanes > li'));
+    expect(items[0].querySelector('fd-floor-lane')).not.toBeNull();
+    expect(items[1].querySelector('.floor__slot--publishing')).not.toBeNull();
+    expect(items[2].querySelector('.floor__slot--starting')).not.toBeNull();
+  });
+
+  it('should include the publishing count in the summary only when above zero', async () => {
+    // Arrange
+    const { fixture, httpMock, captured, el } = await setup();
+    flushIssues(httpMock, [
+      issueItem('issue-1', 1, 'in_progress'),
+      issueItem('issue-2', 2, 'in_progress'),
+      { ...issueItem('issue-42', 42, 'in_progress'), publishPhase: 'publishing' },
+    ]);
+    captured.onAgentActivity!(buildActivity('run-1', 'issue-1'));
+    captured.onAgentActivity!(buildActivity('run-2', 'issue-2'));
+    fixture.detectChanges();
+
+    // Act
+    flushCapacity(httpMock, 1, 4);
+    fixture.detectChanges();
+
+    // Assert
+    expect(el.querySelector('.floor__summary')?.textContent).toContain('2 runs active · 1 publishing · 1 free slot of 4');
+  });
+
+  it('should leave the publishing count out of the summary when nothing is publishing', async () => {
+    // Arrange
+    const { fixture, httpMock, captured, el } = await setup();
+    flushIssues(httpMock, [issueItem('issue-1', 1, 'in_progress')]);
+    captured.onAgentActivity!(buildActivity('run-1', 'issue-1'));
+    fixture.detectChanges();
+
+    // Act
+    flushCapacity(httpMock, 2);
+    fixture.detectChanges();
+
+    // Assert
+    expect(el.querySelector('.floor__summary')?.textContent).not.toContain('publishing');
+  });
+
+  it('should hide the empty message while a run is publishing', async () => {
+    // Arrange
+    const { fixture, httpMock, el } = await setup();
+
+    // Act
+    flushIssues(httpMock, [{ ...issueItem('issue-42', 42, 'in_progress'), publishPhase: 'publishing' }]);
+    flushCapacity(httpMock, 2);
+    fixture.detectChanges();
+
+    // Assert
+    expect(el.querySelector('.floor__empty')).toBeNull();
+    expect(el.querySelectorAll('.floor__slot--publishing').length).toBe(1);
+  });
+
+  it('should show the empty message when there are no lanes, starting or publishing slots', async () => {
+    // Arrange
+    const { fixture, httpMock, el } = await setup();
+
+    // Act
+    flushIssues(httpMock, []);
+    flushCapacity(httpMock, 3);
+    fixture.detectChanges();
+
+    // Assert
+    expect(el.querySelector('.floor__empty')?.textContent).toContain('No agents are working right now.');
+  });
 });

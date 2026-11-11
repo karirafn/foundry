@@ -499,4 +499,63 @@ describe('StateBadgeComponent', () => {
       expect(span?.classList.contains('badge--triage-failed')).toBe(true);
     });
   }
+
+  // Publish phase override (#787)
+  function createWithPublishPhase(state: IssueState, publishPhase: 'publishing' | 'retrying' | null) {
+    TestBed.configureTestingModule({ imports: [StateBadgeComponent] });
+    const fixture = TestBed.createComponent(StateBadgeComponent);
+    fixture.componentRef.setInput('state', state);
+    fixture.componentRef.setInput('publishPhase', publishPhase);
+    fixture.detectChanges();
+    return (fixture.nativeElement as HTMLElement).querySelector('span');
+  }
+
+  it('should display "PUBLISHING" with badge--publishing for in_progress while publishing', () => {
+    // Arrange / Act
+    const span = createWithPublishPhase('in_progress', 'publishing');
+
+    // Assert
+    expect(span?.textContent?.trim()).toBe('PUBLISHING');
+    expect(span?.getAttribute('aria-label')).toBe('State: publishing');
+    expect(span?.classList.contains('badge--publishing')).toBe(true);
+  });
+
+  it('should display "REV PUBLISHING" for revision_in_progress while publishing', () => {
+    // Arrange / Act
+    const span = createWithPublishPhase('revision_in_progress', 'publishing');
+
+    // Assert
+    expect(span?.textContent?.trim()).toBe('REV PUBLISHING');
+    expect(span?.getAttribute('aria-label')).toBe('State: revision publishing');
+    expect(span?.classList.contains('badge--publishing')).toBe(true);
+  });
+
+  it('should display "PUBLISH RETRY" with badge--retrying while retrying', () => {
+    // Arrange / Act
+    const span = createWithPublishPhase('in_progress', 'retrying');
+
+    // Assert
+    expect(span?.textContent?.trim()).toBe('PUBLISH RETRY');
+    expect(span?.getAttribute('aria-label')).toBe('State: publish retrying');
+    expect(span?.classList.contains('badge--retrying')).toBe(true);
+  });
+
+  for (const state of ['review', 'failed', 'queued', 'publish_failed'] as const) {
+    it(`should not override the label of non-working state ${state}`, () => {
+      // Arrange / Act
+      const span = createWithPublishPhase(state, 'publishing');
+
+      // Assert
+      expect(span?.textContent?.trim()).not.toContain('PUBLISHING');
+      expect(span?.classList.contains('badge--publishing')).toBe(false);
+    });
+  }
+
+  it('should display the plain working label when publishPhase is null', () => {
+    // Arrange / Act
+    const span = createWithPublishPhase('in_progress', null);
+
+    // Assert
+    expect(span?.textContent?.trim()).toBe('IN PROGRESS');
+  });
 });

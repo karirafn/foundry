@@ -154,7 +154,6 @@ const SECTION_HEADING_ID_PREFIX = 'issue-section-heading-';
                       [issue]="issue"
                       [expanded]="issueService.expandedIssueId() === issue.id"
                       [lastActivityAt]="isLiveIssue(issue.state) ? workerSignalR.activityForIssue(issue.id) : null"
-                      [commitCount]="isLiveIssue(issue.state) ? workerSignalR.commitCountForIssue(issue.id) : null"
                       [agentActivity]="isLiveIssue(issue.state) ? workerSignalR.agentActivityForIssue(issue.id) : null"
                       [isNextUp]="issueService.nextUpIssueId() === issue.id"
                       [queuePosition]="issueService.queuePositions().get(issue.id) ?? null"

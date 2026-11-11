@@ -142,3 +142,35 @@ describe('triage state sets', () => {
     expect([...RETRIAGEABLE_STATES].sort()).toEqual(['blocked', 'queued']);
   });
 });
+
+describe('publish state display (#787)', () => {
+  it('should give publish_failed its label, aria label and badge class', () => {
+    // Arrange / Act / Assert
+    expect(STATE_LABELS.publish_failed).toBe('PUBLISH FAILED');
+    expect(STATE_ARIA_LABELS.publish_failed).toBe('publish failed');
+    expect(STATE_CSS_CLASSES.publish_failed).toBe('badge--publish-failed');
+  });
+
+  it('should give branch_diverged its label, aria label and badge class', () => {
+    // Arrange / Act / Assert
+    expect(STATE_LABELS.branch_diverged).toBe('BRANCH DIVERGED');
+    expect(STATE_ARIA_LABELS.branch_diverged).toBe('branch diverged');
+    expect(STATE_CSS_CLASSES.branch_diverged).toBe('badge--branch-diverged');
+  });
+
+  it('should make branch_diverged retryable through Retry Issue', () => {
+    // Arrange / Act / Assert
+    expect(RETRYABLE_STATES.has('branch_diverged')).toBe(true);
+  });
+
+  it('should not make publish_failed retryable through Retry Issue, which would abandon the unpublished run', () => {
+    // Arrange / Act / Assert
+    expect(RETRYABLE_STATES.has('publish_failed')).toBe(false);
+  });
+
+  it('should give neither publish state a card accent', () => {
+    // Arrange / Act / Assert
+    expect(cardAccentFor('publish_failed')).toBeNull();
+    expect(cardAccentFor('branch_diverged')).toBeNull();
+  });
+});

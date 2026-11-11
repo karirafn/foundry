@@ -18,7 +18,8 @@ import { IssueService } from '../../issues/issue.service';
 import { IssueSummary } from '../../issues/issue.model';
 import { DispatchCapacity, DispatchCapacityService } from '../dispatch-capacity.service';
 import { FloorLaneComponent } from '../floor-lane/floor-lane';
-import { FLOOR_QUEUE_LIMIT, FloorLane, buildFloorLanes } from '../floor.model';
+import { FLOOR_QUEUE_LIMIT, FloorLane, PublishingSlot, buildFloorLanes, buildPublishingSlots } from '../floor.model';
+import { SafeHrefPipe } from '../../../shared/pipes/safe-href.pipe';
 import { RoleTagComponent } from '../../../shared/components/role-tag/role-tag';
 
 /** Clock cadence for "time since last event"; token totals already arrive at most every 2 s per run. */
@@ -29,7 +30,7 @@ const CAPACITY_REFRESH_MS = 30_000;
 /** The Floor: one lane per active run, free dispatch slots, and the next queued issues. */
 @Component({
   selector: 'fd-floor-page',
-  imports: [FloorLaneComponent, ConnectionIndicatorComponent, RoleTagComponent],
+  imports: [FloorLaneComponent, ConnectionIndicatorComponent, RoleTagComponent, SafeHrefPipe],
   templateUrl: './floor-page.html',
   styleUrl: './floor-page.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -57,13 +58,19 @@ export class FloorPageComponent implements OnInit {
   protected readonly capacity: Signal<DispatchCapacity | null> = this._capacityService.capacity;
   protected readonly capacityError: Signal<string | null> = this._capacityService.loadError;
 
+  /** Runs whose agent has exited and whose commits Foundry is publishing (or retrying to publish). */
+  protected readonly publishingSlots: Signal<PublishingSlot[]> = computed(() =>
+    buildPublishingSlots(this._issueService.issues()));
+
   /**
    * Slots the server counts as occupied (reservations, starting runs) whose run has not reported
-   * Agent Activity yet.
+   * Agent Activity yet. A publishing run holds its dispatch slot until publishing finishes, so it is
+   * not counted as starting.
    */
   protected readonly startingSlots: Signal<readonly number[]> = computed(() => {
     const occupied = this.capacity()?.occupiedSlots ?? 0;
-    return Array.from({ length: Math.max(0, occupied - this.lanes().length) }, (_, i) => i);
+    const starting = occupied - this.lanes().length - this.publishingSlots().length;
+    return Array.from({ length: Math.max(0, starting) }, (_, i) => i);
   });
 
   /** One placeholder per free dispatch slot, as counted by the server. */
@@ -72,13 +79,15 @@ export class FloorPageComponent implements OnInit {
 
   protected readonly summary: Signal<string> = computed(() => {
     const working = this.lanes().length;
+    const publishing = this.publishingSlots().length;
     const workingText = working === 1 ? '1 run active' : `${working} runs active`;
+    const activeText = publishing > 0 ? `${workingText} · ${publishing} publishing` : workingText;
     const capacity = this.capacity();
     if (capacity === null) {
-      return workingText;
+      return activeText;
     }
     const free = capacity.freeSlots === 1 ? '1 free slot' : `${capacity.freeSlots} free slots`;
-    return `${workingText} · ${free} of ${capacity.maxConcurrent}`;
+    return `${activeText} · ${free} of ${capacity.maxConcurrent}`;
   });
 
   // ADR 0067: eligibleQueuedIssues() preserves the server's dispatch order.

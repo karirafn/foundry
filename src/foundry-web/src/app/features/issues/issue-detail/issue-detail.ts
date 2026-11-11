@@ -28,9 +28,11 @@ import { SafeHrefPipe } from '../../../shared/pipes/safe-href.pipe';
 import { IssueService, TriageAction } from '../issue.service';
 import { WorkerRunService } from '../../workers/worker-run.service';
 import { WorkerSignalRService } from '../../../core/services/worker-signalr.service';
-import { WorkerRunDetail } from '../../workers/worker-run.model';
+import { PUBLISH_RUN_STATES, WorkerRunDetail, WorkerRunState } from '../../workers/worker-run.model';
 import { LogViewComponent } from '../../../shared/components/log-view/log-view';
 import { RoleTagComponent } from '../../../shared/components/role-tag/role-tag';
+import { PublishStatusComponent } from '../publish-status/publish-status';
+import { PublishFactsComponent } from '../publish-facts/publish-facts';
 import { ConfirmDialogComponent } from '../../../shared/components/confirm-dialog/confirm-dialog';
 import { rebaseOutcomeLabel } from '../rebase-outcome.format';
 import { getFailureCategoryDisplay } from '../../../shared/utils/failure-category';
@@ -75,7 +77,15 @@ interface TriageCallout {
   selector: 'fd-issue-detail',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [DatePipe, SafeHrefPipe, LogViewComponent, ConfirmDialogComponent, RoleTagComponent],
+  imports: [
+    DatePipe,
+    SafeHrefPipe,
+    LogViewComponent,
+    ConfirmDialogComponent,
+    RoleTagComponent,
+    PublishStatusComponent,
+    PublishFactsComponent,
+  ],
   template: `
     @if (error()) {
       <div class="issue-detail__error" role="alert">
@@ -94,8 +104,10 @@ interface TriageCallout {
       </div>
     } @else if (detail(); as d) {
       <div
+        #contentRegion
         class="issue-detail__content"
         role="region"
+        tabindex="-1"
         [attr.aria-label]="'Issue details for #' + d.issueNumber"
       >
         @if (d.url | safeHref; as safeIssueUrl) {
@@ -370,6 +382,15 @@ interface TriageCallout {
               </div>
             }
           </div>
+
+          <!-- Publish callout: publishing, retrying, exhausted or branch diverged. Its live region
+               is permanently mounted inside fd-publish-status. -->
+          <fd-publish-status
+            [issueState]="d.state"
+            [run]="_workerRun()"
+            [stateDetails]="s"
+            [providerType]="d.providerType ?? ''"
+          />
         }
 
         <!-- Triage callout. Permanently mounted like the retry and revision live regions so
@@ -445,6 +466,13 @@ interface TriageCallout {
 
         @if (_workerRun(); as wr) {
           <div class="issue-detail__worker-run">
+            @if (wr.publish; as published) {
+              <fd-publish-facts
+                [facts]="published"
+                [branchName]="d.stateDetails?.branchName ?? null"
+                [providerType]="d.providerType ?? ''"
+              />
+            }
             <div class="issue-detail__run-header">
               <span class="issue-detail__field-key">Run</span>
               <fd-role-tag [role]="wr.role" />
@@ -477,23 +505,27 @@ interface TriageCallout {
               </div>
             }
 
-            @if (wr.hasStoredLog) {
-              <fd-log-view
-                mode="static"
-                [lines]="_staticLogLines()"
-                label="Run Log"
-              />
-            } @else if (wr.state === 'running') {
-              <fd-log-view
-                mode="stream"
-                [logStream]="_liveLogStream()"
-                label="Live Log"
-              />
+            <!-- Publish states show no log view: the agent has stopped. -->
+            @if (!_isPublishRunState(wr.state)) {
+              @if (wr.hasStoredLog) {
+                <fd-log-view
+                  mode="static"
+                  [lines]="_staticLogLines()"
+                  label="Run Log"
+                />
+              } @else if (wr.state === 'running') {
+                <fd-log-view
+                  mode="stream"
+                  [logStream]="_liveLogStream()"
+                  label="Live Log"
+                />
+              }
             }
           </div>
         }
 
-        @if (_isWorking(d.state)) {
+        <!-- Cancel run is hidden while the run publishes, so a push is never cut off mid-way. -->
+        @if (_isWorking(d.state) && !d.publishPhase && _showsCancel()) {
           <div class="issue-detail__actions">
             <button
               class="issue-detail__cancel-btn"
@@ -518,13 +550,41 @@ interface TriageCallout {
             [message]="
               d.state === 'triage_in_progress'
                 ? 'The issue moves to Triage failed, where you can retry or skip triage.'
-                : 'Commits on the branch are kept; Retry continues from them.'
+                : _implementCancelMessage
             "
             confirmLabel="Stop worker"
             cancelLabel="Keep running"
             [destructive]="true"
             (confirmed)="confirmCancel()"
             (dismissed)="_confirmCancelOpen.set(false)"
+          />
+        }
+
+        @if (d.state === 'publish_failed') {
+          <div class="issue-detail__actions">
+            <button
+              class="issue-detail__retry-btn"
+              type="button"
+              [disabled]="_publishRetryPending()"
+              [attr.aria-label]="'Retry publishing for issue #' + d.issueNumber"
+              (click)="openPublishRetryConfirm()"
+            >{{ _publishRetryPending() ? 'Retrying publish…' : 'Retry publish' }}</button>
+            <span
+              class="issue-detail__retry-error"
+              aria-live="assertive"
+              aria-atomic="true"
+            >{{ _publishRetryError() ?? '' }}</span>
+          </div>
+          <!-- Not destructive, but pushing triggers CI with repository secrets, so confirm first. -->
+          <fd-confirm-dialog
+            [open]="_confirmPublishRetryOpen()"
+            title="Retry publishing?"
+            [message]="_publishRetryMessage(d.stateDetails?.branchName ?? null)"
+            confirmLabel="Retry publish"
+            cancelLabel="Not now"
+            [destructive]="false"
+            (confirmed)="confirmPublishRetry()"
+            (dismissed)="_confirmPublishRetryOpen.set(false)"
           />
         }
 
@@ -639,6 +699,12 @@ interface TriageCallout {
           aria-live="polite"
           aria-atomic="true"
         >{{ _issueService.triageActionSuccess() ?? '' }}</span>
+        <!-- Likewise outside the Retry publish row, which unmounts once the publish restarts. -->
+        <span
+          class="issue-detail__publish-retry-success-announcement sr-only"
+          aria-live="polite"
+          aria-atomic="true"
+        >{{ _publishRetrySuccess() ?? '' }}</span>
       </div>
     }
   `,
@@ -708,6 +774,35 @@ export class IssueDetailComponent {
     return wr === null || wr.state === 'starting' ? 'Starting…' : null;
   });
 
+  /** Cancel run shows while the run starts or runs, or before its detail has loaded. */
+  protected readonly _showsCancel: Signal<boolean> = computed(() => {
+    const state = this._workerRun()?.state;
+    return state === undefined || state === 'starting' || state === 'running';
+  });
+
+  // On SIGTERM the worker bundles its work and the Publisher pushes it.
+  protected readonly _implementCancelMessage = "Foundry publishes the run's commits to the branch; Retry continues from them.";
+
+  protected readonly _confirmPublishRetryOpen: WritableSignal<boolean> = signal(false);
+
+  // Pending, error and success are local to this view, like the cancel signals.
+  private readonly _publishRetryPendingSignal: WritableSignal<boolean> = signal(false);
+  protected readonly _publishRetryPending: Signal<boolean> = this._publishRetryPendingSignal.asReadonly();
+
+  private readonly _publishRetryErrorSignal: WritableSignal<string | null> = signal(null);
+  protected readonly _publishRetryError: Signal<string | null> = this._publishRetryErrorSignal.asReadonly();
+
+  // Not reset by the detail-reload effect, so it survives the IssueUpdated reload it causes.
+  private readonly _publishRetrySuccessSignal: WritableSignal<string | null> = signal(null);
+  protected readonly _publishRetrySuccess: Signal<string | null> = this._publishRetrySuccessSignal.asReadonly();
+
+  private readonly _contentRegion: Signal<ElementRef<HTMLElement> | undefined> =
+    viewChild<ElementRef<HTMLElement>>('contentRegion');
+
+  // Set when a publish retry is accepted; once the Retry publish button unmounts, focus moves to
+  // the content region so it does not fall back to <body>.
+  private _focusContentWhenPublishRetryGone = false;
+
   constructor() {
     // A successful triage action reloads the detail into a new state that no longer has the
     // clicked button; remember to move focus to the triage callout once that reload lands
@@ -728,10 +823,16 @@ export class IssueDetailComponent {
       this._confirmRetryFreshOpen.set(false);
       this._confirmSkipTriageOpen.set(false);
       this._confirmRetriageOpen.set(false);
+      this._confirmPublishRetryOpen.set(false);
+      this._publishRetryErrorSignal.set(null);
 
       if (d !== null && untracked(() => this._focusTriageRegionAfterReload)) {
         this._focusTriageRegionAfterReload = false;
         afterNextRender(() => this._triageRegion()?.nativeElement.focus(), { injector: this._injector });
+      }
+
+      if (d !== null) {
+        this._focusContentIfPublishRetryGone(d.state);
       }
 
       if (workerRunId === null) {
@@ -744,7 +845,8 @@ export class IssueDetailComponent {
       this._workerRunService.getDetail(workerRunId).subscribe((wr) => {
         this._workerRunSignal.set(wr);
 
-        if (wr === null) {
+        // Publish states show no log view, so there is no log to fetch or stream.
+        if (wr === null || PUBLISH_RUN_STATES.has(wr.state)) {
           return;
         }
 
@@ -779,6 +881,54 @@ export class IssueDetailComponent {
         this._cancelErrorSignal.set(error);
       }
     });
+  }
+
+  openPublishRetryConfirm(): void {
+    this._publishRetryErrorSignal.set(null);
+    this._confirmPublishRetryOpen.set(true);
+  }
+
+  confirmPublishRetry(): void {
+    this._confirmPublishRetryOpen.set(false);
+    const workerRunId = this.detail()?.stateDetails?.workerRunId ?? this._workerRun()?.workerRunId;
+
+    if (!workerRunId) {
+      return;
+    }
+
+    this._publishRetryPendingSignal.set(true);
+    this._publishRetrySuccessSignal.set(null);
+    this._workerRunService.requestPublishRetry(workerRunId).subscribe((error) => {
+      this._publishRetryPendingSignal.set(false);
+      if (error !== null) {
+        this._publishRetryErrorSignal.set(error);
+        return;
+      }
+      this._publishRetrySuccessSignal.set('Publish retry started. Issue status is updating.');
+      this._focusContentWhenPublishRetryGone = true;
+      // The IssueUpdated reload may already have moved the issue on.
+      const current = this.detail();
+      if (current !== null) {
+        this._focusContentIfPublishRetryGone(current.state);
+      }
+    });
+  }
+
+  private _focusContentIfPublishRetryGone(state: string): void {
+    if (!this._focusContentWhenPublishRetryGone || state === 'publish_failed') {
+      return;
+    }
+    this._focusContentWhenPublishRetryGone = false;
+    afterNextRender(() => this._contentRegion()?.nativeElement.focus(), { injector: this._injector });
+  }
+
+  protected _publishRetryMessage(branchName: string | null): string {
+    const target = branchName ?? 'the issue branch';
+    return `Foundry pushes the run's commits to ${target} and opens or updates the pull request. CI runs on the push.`;
+  }
+
+  protected _isPublishRunState(state: WorkerRunState): boolean {
+    return PUBLISH_RUN_STATES.has(state);
   }
 
   retryIssue(id: string): void {
