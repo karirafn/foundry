@@ -309,7 +309,8 @@ internal sealed class IssueQueries(
             PullRequestUrl: issue.LinkedPullRequestUrl,
             RebaseOutcome: rebaseOutcome?.Discriminator,
             RebaseSkippedReason: (rebaseOutcome as RebaseOutcome.Skipped)?.Reason,
-            ProviderType: displayInfo?.ProviderType);
+            ProviderType: displayInfo?.ProviderType,
+            RevisionTriggerKind: GetRevisionTriggerKind(issue));
     }
 
     private static string? GetFailureCategory(Issue issue) =>
@@ -319,6 +320,15 @@ internal sealed class IssueQueries(
             ContinuableFailedIssue continuableFailed => continuableFailed.FailureCategory.Value,
             RevisionFailedIssue revisionFailed => revisionFailed.FailureCategory.Value,
             TriageFailedIssue triageFailed => triageFailed.FailureCategory.Value,
+            _ => null,
+        };
+
+    private static string? GetRevisionTriggerKind(Issue issue) =>
+        issue switch
+        {
+            RevisionQueuedIssue revisionQueued => revisionQueued.Trigger.Discriminator,
+            RevisionInProgressIssue revisionInProgress => revisionInProgress.Trigger.Discriminator,
+            RevisionFailedIssue revisionFailed => revisionFailed.Trigger.Discriminator,
             _ => null,
         };
 

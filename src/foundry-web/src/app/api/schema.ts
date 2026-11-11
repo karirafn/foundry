@@ -1098,6 +1098,7 @@ export interface components {
             rebaseOutcome?: null | string;
             rebaseSkippedReason?: null | string;
             providerType?: null | string;
+            revisionTriggerKind?: null | string;
         };
         MoveRepositoryRequestBody: {
             /** Format: int32 */

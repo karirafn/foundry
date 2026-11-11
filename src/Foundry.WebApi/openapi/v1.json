@@ -3584,6 +3584,12 @@
               "null",
               "string"
             ]
+          },
+          "revisionTriggerKind": {
+            "type": [
+              "null",
+              "string"
+            ]
           }
         }
       },
