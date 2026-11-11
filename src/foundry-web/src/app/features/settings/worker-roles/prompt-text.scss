@@ -35,7 +35,7 @@
     @include placeholder-chip;
   }
 
-  @container role-card (max-width: 30rem) {
+  @container role-content (max-width: 30rem) {
     & {
       padding: var(--fd-spacing-sm);
     }

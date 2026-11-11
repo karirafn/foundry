@@ -51,6 +51,13 @@ export const SETTINGS_ROUTES: Routes = [
             (m) => m.SettingsWorkerRolesComponent,
           ),
       },
+      {
+        path: 'roles/:roleName',
+        title: 'Worker role',
+        loadComponent: () =>
+          import('./worker-roles/role-detail/role-detail').then((m) => m.RoleDetailComponent),
+        canDeactivate: [unsavedChangesGuard],
+      },
       { path: 'prompts', redirectTo: 'roles', pathMatch: 'full' },
       {
         path: 'provider-hosts',

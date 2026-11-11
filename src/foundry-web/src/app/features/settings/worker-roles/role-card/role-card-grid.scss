@@ -1,0 +1,13 @@
+:host {
+  display: block;
+}
+
+// min(100%, …) keeps a card from overflowing a container narrower than 18rem, so no media query is needed.
+.role-card-grid {
+  display: grid;
+  gap: var(--fd-spacing-md);
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 18rem), 1fr));
+  list-style: none;
+  margin: var(--fd-spacing-lg) 0 0;
+  padding: 0;
+}

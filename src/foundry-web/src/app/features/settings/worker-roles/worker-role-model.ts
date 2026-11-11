@@ -38,7 +38,7 @@ interface UnlistedModel {
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="role-model" [attr.aria-labelledby]="ids().heading">
-      <h4 class="role-model__title" [id]="ids().heading">Model</h4>
+      <h3 class="role-model__title" [id]="ids().heading">Model</h3>
       <p class="role-model__hint" [id]="ids().hint">
         The model this role's runs use. Default leaves it to the Claude Code account default; an
         alias follows the newest model of its family; a model ID pins a version.
@@ -166,6 +166,11 @@ export class WorkerRoleModelComponent {
     }
     return this._roleService.savedModel() === this.role().name && !this.dirty() ? 'Model saved' : '';
   });
+
+  /** A save the root service is already finishing is not a change to discard. */
+  hasUnsavedChanges(): boolean {
+    return this.dirty() && !this.saving();
+  }
 
   protected select(value: string): void {
     this.selected.set(value);

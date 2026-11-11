@@ -1,0 +1,26 @@
+:host {
+  display: inline-flex;
+}
+
+.role-capability {
+  align-items: center;
+  border: 1px solid var(--fd-border-default);
+  border-radius: 999px;
+  color: var(--fd-text-secondary);
+  display: inline-flex;
+  font-size: 0.6875rem;
+  font-weight: 500;
+  gap: var(--fd-spacing-xs);
+  line-height: 1.4;
+  padding-inline: var(--fd-spacing-sm);
+  white-space: nowrap;
+
+  &--restricted {
+    border-color: var(--fd-border-control);
+    color: var(--fd-text-primary);
+  }
+
+  &__icon {
+    flex-shrink: 0;
+  }
+}

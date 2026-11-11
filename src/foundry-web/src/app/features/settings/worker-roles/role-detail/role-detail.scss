@@ -1,0 +1,309 @@
+@use '../../../../../styles/controls' as *;
+@use '../worker-roles' as *;
+
+:host {
+  container: role-detail / inline-size;
+  display: block;
+}
+
+code {
+  font-family: var(--fd-font-mono);
+}
+
+.role-detail {
+  background: var(--fd-bg-card);
+  border: 1px solid var(--fd-border-default);
+  border-radius: var(--fd-radius-md);
+  display: flex;
+  flex-direction: column;
+  gap: var(--fd-spacing-lg);
+  padding: var(--fd-spacing-xl);
+
+  &__back-link {
+    align-items: center;
+    align-self: flex-start;
+    color: var(--fd-text-link);
+    display: inline-flex;
+    font-size: 0.875rem;
+    min-height: 44px;
+    padding: var(--fd-spacing-xs) 0;
+    text-decoration: none;
+
+    &:hover {
+      text-decoration: underline;
+    }
+
+    &:focus-visible {
+      @include focus-ring;
+      border-radius: var(--fd-radius-sm);
+    }
+  }
+
+  &__back-link--button,
+  &__retry-btn {
+    align-items: center;
+    background: transparent;
+    border: 1px solid var(--fd-border-default);
+    border-radius: var(--fd-radius-sm);
+    color: var(--fd-text-primary);
+    cursor: pointer;
+    display: inline-flex;
+    font-size: 0.875rem;
+    min-height: 44px;
+    padding: var(--fd-spacing-xs) var(--fd-spacing-lg);
+    text-decoration: none;
+
+    &:hover {
+      background: var(--fd-bg-card-hover);
+      border-color: var(--fd-text-secondary);
+      text-decoration: none;
+    }
+
+    &:focus-visible {
+      @include focus-ring;
+    }
+  }
+
+  &__back-link--button {
+    align-self: center;
+  }
+
+  &__loading {
+    align-items: center;
+    display: flex;
+    gap: var(--fd-spacing-sm);
+    justify-content: center;
+    padding: var(--fd-spacing-2xl);
+  }
+
+  &__callout {
+    @include warning-callout(var(--fd-spacing-sm) var(--fd-spacing-md));
+    align-items: flex-start;
+    display: flex;
+    gap: var(--fd-spacing-sm);
+    margin: 0;
+
+    &:focus-visible {
+      @include focus-ring;
+    }
+  }
+
+  &__callout-icon,
+  &__callout-lead {
+    color: var(--fd-text-warning);
+  }
+
+  &__callout-icon {
+    flex-shrink: 0;
+  }
+
+  &__callout-lead {
+    font-weight: 600;
+  }
+
+  &__actions {
+    align-items: center;
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--fd-spacing-md);
+  }
+
+  &__load-error,
+  &__not-found {
+    align-items: center;
+    display: flex;
+    flex-direction: column;
+    gap: var(--fd-spacing-md);
+    padding: var(--fd-spacing-2xl);
+    text-align: center;
+  }
+
+  &__load-error &__actions {
+    justify-content: center;
+  }
+
+  &__load-error-message {
+    color: var(--fd-text-error);
+    font-size: 0.875rem;
+    margin: 0;
+  }
+
+  &__not-found-heading {
+    color: var(--fd-text-primary);
+    font-size: 1rem;
+    font-weight: 600;
+    margin: 0;
+  }
+
+  &__not-found-description {
+    color: var(--fd-text-secondary);
+    font-size: 0.875rem;
+    margin: 0;
+    overflow-wrap: anywhere;
+  }
+
+  &__load-error-message,
+  &__not-found-heading,
+  &__heading {
+    &:focus-visible {
+      @include focus-ring;
+    }
+  }
+
+  &__header {
+    display: flex;
+    flex-direction: column;
+    gap: var(--fd-spacing-xs);
+  }
+
+  &__title-row {
+    align-items: center;
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--fd-spacing-sm);
+  }
+
+  &__heading {
+    color: var(--fd-text-primary);
+    font-family: var(--fd-font-mono);
+    font-size: 1.25rem;
+    font-weight: 600;
+    margin: 0;
+    overflow-wrap: anywhere;
+  }
+
+  &__purpose {
+    color: var(--fd-text-secondary);
+    font-size: 0.875rem;
+    margin: 0;
+  }
+
+  &__capability-hint,
+  &__hint {
+    color: var(--fd-text-secondary);
+    font-size: 0.75rem;
+    margin: 0;
+  }
+
+  // Mobile first: the rail stacks above the content.
+  &__body {
+    display: grid;
+    gap: var(--fd-spacing-xl);
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  &__rail {
+    border-block-end: 1px solid var(--fd-border-default);
+    display: flex;
+    flex-direction: column;
+    gap: var(--fd-spacing-lg);
+    min-inline-size: 0;
+    padding-block-end: var(--fd-spacing-xl);
+  }
+
+  &__rail-block + &__rail-block {
+    border-block-start: 1px solid var(--fd-border-muted);
+    padding-block-start: var(--fd-spacing-lg);
+  }
+
+  &__rail-block {
+    display: flex;
+    flex-direction: column;
+    gap: var(--fd-spacing-sm);
+  }
+
+  &__rail-title,
+  &__block-title {
+    color: var(--fd-text-primary);
+    font-size: 0.875rem;
+    font-weight: 600;
+    margin: 0;
+  }
+
+  &__facts {
+    display: grid;
+    font-size: 0.8125rem;
+    gap: var(--fd-spacing-xs) var(--fd-spacing-md);
+    grid-template-columns: auto minmax(0, 1fr);
+    margin: 0;
+
+    div {
+      display: contents;
+    }
+
+    dt {
+      color: var(--fd-text-secondary);
+    }
+
+    dd {
+      color: var(--fd-text-primary);
+      font-variant-numeric: tabular-nums;
+      margin: 0;
+    }
+  }
+
+  &__content {
+    container: role-content / inline-size;
+    display: flex;
+    flex-direction: column;
+    gap: var(--fd-spacing-xl);
+    max-inline-size: 80ch;
+    min-inline-size: 0;
+  }
+
+  &__block {
+    border-block-start: 1px solid var(--fd-border-default);
+    display: flex;
+    flex-direction: column;
+    gap: var(--fd-spacing-sm);
+    padding-block-start: var(--fd-spacing-lg);
+  }
+
+  &__placeholder-sample {
+    @include placeholder-chip;
+  }
+
+  &__disclosure {
+    @include role-disclosure;
+  }
+
+  &__schema {
+    background: var(--fd-bg-page);
+    border: 1px solid var(--fd-border-muted);
+    border-radius: var(--fd-radius-sm);
+    color: var(--fd-text-primary);
+    font-family: var(--fd-font-mono);
+    font-size: 0.8125rem;
+    margin: 0;
+    max-block-size: 24rem;
+    overflow: auto;
+    padding: var(--fd-spacing-sm) var(--fd-spacing-md);
+
+    &:focus-visible {
+      @include focus-ring;
+    }
+  }
+
+  @container role-detail (min-width: 52rem) {
+    &__body {
+      column-gap: var(--fd-spacing-2xl);
+      grid-template-columns: 18rem minmax(0, 1fr);
+    }
+
+    &__rail {
+      align-self: start;
+      border-block-end: none;
+      border-inline-end: 1px solid var(--fd-border-default);
+      padding-block-end: 0;
+      padding-inline-end: var(--fd-spacing-xl);
+    }
+
+    // Sticky only beside the content and when the viewport can show the whole rail (about 42rem at worst).
+    @media (min-height: 50rem) {
+      &__rail {
+        inset-block-start: var(--fd-spacing-lg);
+        position: sticky;
+      }
+    }
+  }
+}

@@ -1,0 +1,90 @@
+@use '../worker-roles' as *;
+
+:host {
+  display: block;
+}
+
+code {
+  font-family: var(--fd-font-mono);
+}
+
+.role-plugins {
+  display: flex;
+  flex-direction: column;
+  gap: var(--fd-spacing-sm);
+
+  &__title {
+    color: var(--fd-text-primary);
+    font-size: 0.875rem;
+    font-weight: 600;
+    margin: 0;
+  }
+
+  &__sub-title {
+    color: var(--fd-text-secondary);
+    font-size: 0.8125rem;
+    font-weight: 600;
+    margin: var(--fd-spacing-sm) 0 0;
+  }
+
+  &__hint {
+    color: var(--fd-text-secondary);
+    font-size: 0.75rem;
+    margin: 0;
+  }
+
+  &__skills,
+  &__agents {
+    display: flex;
+    flex-direction: column;
+    gap: var(--fd-spacing-xs);
+  }
+
+  &__list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--fd-spacing-xs);
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+
+  &__plugin {
+    @include role-disclosure;
+
+    @container role-content (max-width: 30rem) {
+      &[open] > :not(summary) {
+        margin-inline: 0;
+      }
+    }
+  }
+
+  &__summary-name {
+    font-weight: 500;
+  }
+
+  &__summary-description {
+    color: var(--fd-text-secondary);
+    grid-column: 2 / -1;
+  }
+
+  &__badge {
+    border: 1px solid var(--fd-border-default);
+    border-radius: 999px;
+    color: var(--fd-text-secondary);
+    font-size: 0.6875rem;
+    font-weight: 500;
+    line-height: 1.4;
+    padding-inline: var(--fd-spacing-sm);
+    white-space: nowrap;
+  }
+
+  &__shared {
+    border-color: var(--fd-text-link);
+    color: var(--fd-text-link);
+  }
+
+  &__path {
+    margin-block: var(--fd-spacing-xs);
+  }
+}
