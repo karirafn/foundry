@@ -1,6 +1,7 @@
 using System.Text;
 
 using Foundry.Modules.Issues.Contracts;
+using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Workers.Features.ContainerSpec;
 using Foundry.Shared;
 
@@ -27,7 +28,7 @@ public sealed class FailingJobLogs
                 "feat/1-fix",
                 "https://github.com/o/r/pull/1",
                 new RevisionTrigger.FailedChecks(checks)),
-            "https://api.github.com/repos/o/r/issues/1",
+            new IssueContent("Fix", "Body.", []),
             timeoutMinutes: 120,
             installsDocker: false,
             installsDotnet: false,

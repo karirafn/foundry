@@ -27,8 +27,9 @@ prompt says how it uses them (implement: "Apply the engineering principles above
 Each role declares the `WorkerCapability` it runs under in Foundry's code (`WorkerRole`), never in its folder
 (ADR 0098). The container spec and the entrypoint branch on the profile (`WORKER_CAPABILITY`), never on the role name:
 
-- `full` (`implement`): the account token, a branch pre-created on the provider, `--dangerously-skip-permissions`, and
-  the issue as an `ISSUE_API_URL` pointer the agent reads itself.
+- `full` (`implement`): the account token, a branch pre-created on the provider and `--dangerously-skip-permissions`.
+  Foundry reads the issue title, body and comments at dispatch and renders them into `{issueContent}` as XML-encoded
+  untrusted data (ADR 0100); when the thread does not fit the prompt budget, the oldest comments are dropped first.
 - `restricted` (`triage`): `--restricted --strict-mcp-config` and never the permission skip, no provider token, no
   branch, and a shallow clone of the default branch. Foundry reads the issue title, body and comments and renders them
   into `{issueContent}` as XML-encoded untrusted data. The run returns its verdict only.

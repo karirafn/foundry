@@ -96,7 +96,6 @@ public sealed class HandleAsync : IAsyncDisposable
         DispatchContext? context = null,
         WorkerProvider? provider = null,
         string? cloneUrl = null,
-        string? issueApiUrl = null,
         bool withoutBranch = false)
     {
         ClaimedIssueDispatch dispatch = new(
@@ -110,7 +109,7 @@ public sealed class HandleAsync : IAsyncDisposable
             monitoredRepositoryId ?? MonitoredRepositoryId.New(),
             provider ?? new WorkerProvider.GitHub(),
             context ?? new DispatchContext.Fresh(branchName),
-            issueApiUrl ?? $"https://api.github.com/repos/{repositorySlug}/issues/{issueNumber}");
+            $"https://api.github.com/repos/{repositorySlug}/issues/{issueNumber}");
         return new IssueClaimed(dispatch);
     }
 
@@ -1110,58 +1109,6 @@ public sealed class HandleAsync : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenDispatched_ContainerSpecHasIssueApiUrlEnvVar()
-    {
-        // Arrange
-        StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c-issue-api-url");
-        IssueClaimedHandler sut = BuildHandler(orchestrator: orchestrator);
-        string issueApiUrl = "https://api.github.com/repos/owner/repo/issues/42";
-        IssueClaimed @event = BuildEvent(issueApiUrl: issueApiUrl);
-
-        // Act
-        await sut.HandleAsync(@event, TestContext.Current.CancellationToken);
-
-        // Assert
-        WorkerContainerSpec? spec = orchestrator.LastSpec;
-        spec.ShouldNotBeNull();
-        spec.EnvironmentVariables["ISSUE_API_URL"].ShouldBe(issueApiUrl);
-    }
-
-    [Fact]
-    public async Task WhenIssueApiUrlIsNotHttps_CreatesFailedRunWithContainerError()
-    {
-        // Arrange
-        IssueClaimedHandler sut = BuildHandler();
-        IssueClaimed @event = BuildEvent(issueApiUrl: "http://api.github.com/repos/owner/repo/issues/42");
-
-        // Act
-        await sut.HandleAsync(@event, TestContext.Current.CancellationToken);
-        _dbContext.ChangeTracker.Clear();
-
-        // Assert
-        WorkerRun? run = await _dbContext.Set<WorkerRun>().SingleOrDefaultAsync(TestContext.Current.CancellationToken);
-        FailedRun failedRun = run.ShouldBeOfType<FailedRun>();
-        failedRun.Reason.ShouldBeOfType<FailureReason.ContainerError>();
-    }
-
-    [Fact]
-    public async Task WhenIssueApiUrlIsNotAbsolute_CreatesFailedRunWithContainerError()
-    {
-        // Arrange
-        IssueClaimedHandler sut = BuildHandler();
-        IssueClaimed @event = BuildEvent(issueApiUrl: "not-a-url");
-
-        // Act
-        await sut.HandleAsync(@event, TestContext.Current.CancellationToken);
-        _dbContext.ChangeTracker.Clear();
-
-        // Assert
-        WorkerRun? run = await _dbContext.Set<WorkerRun>().SingleOrDefaultAsync(TestContext.Current.CancellationToken);
-        FailedRun failedRun = run.ShouldBeOfType<FailedRun>();
-        failedRun.Reason.ShouldBeOfType<FailureReason.ContainerError>();
-    }
-
-    [Fact]
     public async Task WhenDockerDisabled_RootlessDindAllowancesAreAbsentAndWorkerIsHardened()
     {
         // Arrange
@@ -1589,20 +1536,6 @@ public sealed class HandleAsync : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenTheRoleIsFull_ReadsNoIssueContent()
-    {
-        // Arrange
-        StubIssueContentQueries issueContent = new();
-        IssueClaimedHandler sut = BuildHandler(issueContentQueries: issueContent);
-
-        // Act
-        await sut.HandleAsync(BuildEvent(), TestContext.Current.CancellationToken);
-
-        // Assert
-        issueContent.Requests.ShouldBeEmpty();
-    }
-
-    [Fact]
     public async Task WhenTheRoleIsRestrictedAndTheIssueCannotBeRead_FailsTheRunWithoutStartingAContainer()
     {
         // Arrange
@@ -1620,6 +1553,87 @@ public sealed class HandleAsync : IAsyncDisposable
         run.ShouldSatisfyAllConditions(
             () => run.ShouldBeOfType<FailedRun>().Reason.ShouldBeOfType<FailureReason.ProviderError>()
                 .Message.ShouldContain("The provider returned 502."),
+            () => orchestrator.LastSpec.ShouldBeNull());
+    }
+
+    public static TheoryData<DispatchContext> FullRunContexts =>
+        new()
+        {
+            new DispatchContext.Fresh("feat/42-test-issue"),
+            new DispatchContext.Continuation("feat/42-test-issue", "container exited"),
+            new DispatchContext.Revision(
+                "feat/42-test-issue",
+                "https://github.com/owner/repo/pull/1",
+                new RevisionTrigger.ReviewFeedback([new ReviewComment("Rename it.")], 0, null)),
+        };
+
+    [Theory]
+    [MemberData(nameof(FullRunContexts))]
+    public async Task WhenTheRoleIsFull_SystemPromptRendersTheIssueContentReadFromTheProvider(DispatchContext context)
+    {
+        // Arrange
+        StubWorkerOrchestrator orchestrator = new(succeeds: true);
+        StubIssueContentQueries issueContent = new(Result<IssueContent>.Ok(new IssueContent(
+            "Add retry <now>",
+            "Retry webhook delivery.",
+            [new IssueContentComment(11, "bob", "Which webhooks?", DateTimeOffset.UnixEpoch)])));
+        IssueClaimedHandler sut = BuildHandler(orchestrator: orchestrator, issueContentQueries: issueContent);
+        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
+
+        // Act
+        await sut.HandleAsync(
+            BuildEvent(issueNumber: 42, monitoredRepositoryId: repositoryId, context: context),
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        string systemPrompt = orchestrator.LastSpec.ShouldNotBeNull().EnvironmentVariables["SYSTEM_PROMPT"];
+        systemPrompt.ShouldSatisfyAllConditions(
+            () => systemPrompt.ShouldContain("You are implementing issue #42."),
+            () => systemPrompt.ShouldContain("<issue-title>Add retry &lt;now&gt;</issue-title>"),
+            () => systemPrompt.ShouldContain("Retry webhook delivery."),
+            () => systemPrompt.ShouldContain("Which webhooks?"),
+            () => systemPrompt.ShouldNotContain("read the full issue from the provider"),
+            () => systemPrompt.ShouldNotContain("https://api.github.com/repos/owner/repo/issues/42"),
+            () => issueContent.Requests.ShouldBe([(repositoryId, 42)]));
+    }
+
+    [Fact]
+    public async Task WhenTheRoleIsFull_ContainerSpecCarriesNoIssueApiUrl()
+    {
+        // Arrange
+        StubWorkerOrchestrator orchestrator = new(succeeds: true);
+        IssueClaimedHandler sut = BuildHandler(orchestrator: orchestrator);
+
+        // Act
+        await sut.HandleAsync(BuildEvent(), TestContext.Current.CancellationToken);
+
+        // Assert
+        orchestrator.LastSpec.ShouldNotBeNull().EnvironmentVariables.ShouldNotContainKey("ISSUE_API_URL");
+    }
+
+    [Fact]
+    public async Task WhenTheRoleIsFullAndTheIssueCannotBeRead_FailsTheRunWithAProviderErrorBeforeCreatingABranch()
+    {
+        // Arrange
+        StubWorkerOrchestrator orchestrator = new(succeeds: true);
+        StubPostExitProviderQueries provider = new(branchCreationSucceeds: true);
+        StubIssueContentQueries issueContent = new(
+            Result<IssueContent>.Fail(new Error("GitHub.Unexpected", "The provider returned 502.")));
+        IssueClaimedHandler sut = BuildHandler(
+            orchestrator: orchestrator,
+            postExitProviderQueries: provider,
+            issueContentQueries: issueContent);
+
+        // Act
+        await sut.HandleAsync(BuildEvent(), TestContext.Current.CancellationToken);
+        _dbContext.ChangeTracker.Clear();
+
+        // Assert
+        WorkerRun run = await _dbContext.Set<WorkerRun>().SingleAsync(TestContext.Current.CancellationToken);
+        run.ShouldSatisfyAllConditions(
+            () => run.ShouldBeOfType<FailedRun>().Reason.ShouldBeOfType<FailureReason.ProviderError>()
+                .Message.ShouldContain("The provider returned 502."),
+            () => provider.CreateBranchCallCount.ShouldBe(0),
             () => orchestrator.LastSpec.ShouldBeNull());
     }
 

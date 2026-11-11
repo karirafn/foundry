@@ -14,7 +14,7 @@ public sealed class ClarificationLog
 {
     private const string Principles = "Engineering principles.";
     private const string Template = "You are implementing GitHub issue #{issueNumber}.\n\n{issueContent}";
-    private const string IssueApiUrl = "https://api.github.com/repos/o/r/issues/1";
+    private static readonly IssueContent Issue = new("Add retry", "Retry webhook delivery.", []);
 
     private static readonly DateTimeOffset AskedAt = new(2026, 11, 11, 10, 0, 0, TimeSpan.Zero);
 
@@ -39,7 +39,7 @@ public sealed class ClarificationLog
             1,
             Template,
             context,
-            IssueApiUrl,
+            Issue,
             timeoutMinutes: 120,
             installsDocker: false,
             installsDotnet: false,
@@ -71,7 +71,7 @@ public sealed class ClarificationLog
             1,
             Template,
             context,
-            IssueApiUrl,
+            Issue,
             timeoutMinutes: 120,
             installsDocker: false,
             installsDotnet: false).ShouldBeOfType<Result<string>.Success>().Value;

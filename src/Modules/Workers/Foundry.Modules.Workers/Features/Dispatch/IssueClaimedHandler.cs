@@ -85,37 +85,40 @@ internal sealed class IssueClaimedHandler(
         // The profile comes from the role's definition, never its name (ADR 0098). A role the catalog does not hold is
         // failed by BuildSpecAsync; until then it is treated as Full, as every run was before profiles.
         bool restricted = catalog?.Content.Find(role) is { Capability: WorkerCapability.Restricted };
-        IssueContent? issueContent = null;
 
-        if (restricted)
+        // Every run gets the issue from this read rather than from the provider (ADR 0098, ADR 0100): the run works
+        // from this dispatch-time snapshot, and no run starts without it.
+        Result<IssueContent> contentResult = await issueContentQueries.GetIssueContentAsync(
+            claimed.MonitoredRepositoryId,
+            claimed.IssueNumber,
+            cancellationToken);
+
+        if (contentResult is not Result<IssueContent>.Success { Value: { } issueContent })
         {
-            // A restricted run gets no branch and cannot reach the provider, so the issue it judges is read here.
-            Result<IssueContent> contentResult = await issueContentQueries.GetIssueContentAsync(
-                claimed.MonitoredRepositoryId,
-                claimed.IssueNumber,
-                cancellationToken);
-
-            if (contentResult is Result<IssueContent>.Failure contentFailure)
-            {
-                await FailBeforeContainerAsync(startingRun, claimed, "reading the issue content failed", contentFailure.Error, cancellationToken);
-                return;
-            }
-
-            issueContent = ((Result<IssueContent>.Success)contentResult).Value;
-        }
-        else if (claimed.BranchName is not { } branchName)
-        {
-            // Only a restricted run is dispatched without a branch; a full run without one cannot start.
             await FailBeforeContainerAsync(
                 startingRun,
                 claimed,
-                "branch pre-creation failed",
-                new Error("Worker.MissingBranch", $"The '{role.Name}' run was claimed without a branch."),
+                "reading the issue content failed",
+                ((Result<IssueContent>.Failure)contentResult).Error,
                 cancellationToken);
             return;
         }
-        else
+
+        // A restricted run gets no branch.
+        if (!restricted)
         {
+            if (claimed.BranchName is not { } branchName)
+            {
+                // Only a restricted run is dispatched without a branch; a full run without one cannot start.
+                await FailBeforeContainerAsync(
+                    startingRun,
+                    claimed,
+                    "branch pre-creation failed",
+                    new Error("Worker.MissingBranch", $"The '{role.Name}' run was claimed without a branch."),
+                    cancellationToken);
+                return;
+            }
+
             Result<bool> branchResult = await postExitProviderQueries.CreateBranchAsync(
                 claimed.MonitoredRepositoryId,
                 branchName.Value,
@@ -301,7 +304,7 @@ internal sealed class IssueClaimedHandler(
         StartingRun startingRun,
         ClaimedIssueDispatch claimed,
         WorkerRoleCatalog? catalog,
-        IssueContent? issueContent,
+        IssueContent issueContent,
         string gitPat,
         CancellationToken cancellationToken)
     {
@@ -310,13 +313,6 @@ internal sealed class IssueClaimedHandler(
             return Result<WorkerContainerSpec>.Fail(new Error(
                 "Worker.RoleUnavailable",
                 $"The worker role '{startingRun.Role.Name}' is not loaded: dispatch ran before the worker role catalog loaded. Retry the issue."));
-        }
-
-        if (!Uri.TryCreate(claimed.IssueApiUrl, UriKind.Absolute, out Uri? issueApiUri)
-            || issueApiUri.Scheme != Uri.UriSchemeHttps)
-        {
-            return Result<WorkerContainerSpec>.Fail(
-                new Error("Worker.InvalidIssueApiUrl", "ISSUE_API_URL must be an absolute https URI."));
         }
 
         int timeoutMinutes = await settingsQueries.GetTimeoutMinutesAsync(cancellationToken);
@@ -335,7 +331,7 @@ internal sealed class IssueClaimedHandler(
                 principles: content.Principles,
                 issueNumber: claimed.IssueNumber,
                 systemPromptTemplate: role.SystemPromptTemplate,
-                issueContent ?? throw new UnreachableException("A restricted run reaches its container spec only with its issue content."),
+                issueContent,
                 installsDotnet,
                 claimed.Clarifications ?? [])
             : SystemPromptBuilder.Build(
@@ -343,7 +339,7 @@ internal sealed class IssueClaimedHandler(
                 issueNumber: claimed.IssueNumber,
                 systemPromptTemplate: role.SystemPromptTemplate,
                 claimed.Context,
-                claimed.IssueApiUrl,
+                issueContent,
                 timeoutMinutes,
                 installsDocker,
                 installsDotnet,
@@ -384,7 +380,6 @@ internal sealed class IssueClaimedHandler(
         {
             ["CLONE_URL"] = claimed.CloneUrl.ToString(),
             ["ISSUE_NUMBER"] = claimed.IssueNumber.ToString(CultureInfo.InvariantCulture),
-            ["ISSUE_API_URL"] = claimed.IssueApiUrl,
             ["SYSTEM_PROMPT"] = systemPrompt,
             ["WORKER_PROMPT"] = workerPrompt,
             ["WORKER_ROLE"] = role.Role.Name,
