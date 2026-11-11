@@ -1081,6 +1081,27 @@ public sealed class HandleAsync : IAsyncDisposable
     }
 
     [Fact]
+    public async Task WhenDockerEnabled_TempDirectoriesAreScratchVolumesNotTmpfs()
+    {
+        // Arrange
+        StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c-dind-tmp");
+        IssueClaimedHandler sut = BuildHandler(
+            orchestrator: orchestrator,
+            settingsQueries: new StubGlobalSettingsQueries(installsDocker: true));
+        IssueClaimed @event = BuildEvent();
+
+        // Act
+        await sut.HandleAsync(@event, TestContext.Current.CancellationToken);
+
+        // Assert
+        WorkerContainerSpec? spec = orchestrator.LastSpec;
+        spec.ShouldNotBeNull();
+        spec.ShouldSatisfyAllConditions(
+            () => spec.TmpfsMounts.Keys.ShouldBe(["/etc/claude-code"]),
+            () => spec.ScratchVolumePaths.ShouldBe(["/workspace", "/home/node", "/tmp", "/var/tmp"], ignoreOrder: true));
+    }
+
+    [Fact]
     public async Task WhenDispatched_ContainerSpecHasIssueApiUrlEnvVar()
     {
         // Arrange
@@ -1155,8 +1176,8 @@ public sealed class HandleAsync : IAsyncDisposable
             () => spec.SecurityOptions.ShouldBe(["no-new-privileges:true"]),
             () => spec.SecurityOptions.ShouldNotContain(o => o.StartsWith("seccomp=", StringComparison.Ordinal)),
             () => spec.ReadOnlyRootFilesystem.ShouldBeTrue(),
-            () => spec.TmpfsMounts.Keys.ShouldBe(["/tmp", "/var/tmp", "/etc/claude-code"], ignoreOrder: true),
-            () => spec.ScratchVolumePaths.ShouldBe(["/workspace", "/home/node"], ignoreOrder: true),
+            () => spec.TmpfsMounts.Keys.ShouldBe(["/etc/claude-code"]),
+            () => spec.ScratchVolumePaths.ShouldBe(["/workspace", "/home/node", "/tmp", "/var/tmp"], ignoreOrder: true),
             () => spec.Devices.ShouldBeEmpty(),
             () => spec.UnmaskSystemPaths.ShouldBeFalse(),
             () => spec.VolumeMounts.ShouldNotContain(m =>
