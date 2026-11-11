@@ -478,6 +478,10 @@ unset _cred_dir
 # does not carry fails fast at stage=role.  The roles directory is baked into the
 # image (ADR 0095); FOUNDRY_ROLES_DIR only redirects it for the bats suite.
 readonly WORKER_ROLES_DIR="${FOUNDRY_ROLES_DIR:-/opt/foundry/roles}"
+
+# The repository is always cloned to /workspace in the container; FOUNDRY_WORKSPACE_DIR
+# only redirects the root for the bats suite, which also runs inside a live worker.
+readonly WORKSPACE_DIR="${FOUNDRY_WORKSPACE_DIR:-/workspace}"
 prepare_role_plugins "$WORKER_ROLES_DIR" "$WORKER_ROLE" || exit 1
 prepare_role_verdict_schema "$WORKER_ROLES_DIR" "$WORKER_ROLE" || exit 1
 
@@ -516,7 +520,7 @@ trap 'fail_bootstrap "$BOOTSTRAP_STAGE" "bootstrap failed at stage $BOOTSTRAP_ST
 
 # GIT_ASKPASS is scoped to this one command — not exported — so push falls
 # through to the gh/glab credential helpers set up below.
-GIT_ASKPASS="$ASKPASS_FILE" git clone "$CLONE_AUTH_URL" /workspace
+GIT_ASKPASS="$ASKPASS_FILE" git clone "$CLONE_AUTH_URL" "$WORKSPACE_DIR"
 
 rm -f "$ASKPASS_FILE"
 unset ASKPASS_FILE
@@ -527,9 +531,9 @@ trap - EXIT
 # Push auth uses GH_TOKEN / GITLAB_TOKEN via the gh/glab credential helpers.
 unset GIT_PAT
 
-git -C /workspace remote set-url origin "$CLONE_URL"
+git -C "$WORKSPACE_DIR" remote set-url origin "$CLONE_URL"
 
-cd /workspace
+cd "$WORKSPACE_DIR"
 
 BOOTSTRAP_STAGE="auth"
 if [[ -n "${GH_TOKEN:-}" ]]; then
@@ -656,7 +660,7 @@ is_transient_api_error() {
 # repo-controlled MSBuild evaluation sees exactly the environment the agent sees.
 readonly CSHARP_LSP_RESTORE_TIMEOUT_SECONDS=300
 readonly CSHARP_LSP_PLUGIN_DIR=/opt/claude-plugins/csharp-lsp
-prepare_csharp_lsp /workspace
+prepare_csharp_lsp "$WORKSPACE_DIR"
 
 # ---------------------------------------------------------------------------
 # Invoke claude in headless stream-json mode.  stream-json emits one event per
@@ -676,6 +680,9 @@ prepare_csharp_lsp /workspace
 # resume's result event becomes the last result in the log — if it also fails
 # transiently, Foundry's outer retry bound (#368) still applies.
 # ---------------------------------------------------------------------------
+# The turn budget is a cost breaker for a runaway run; the transient-error resume
+# gets the same budget, so both read it from here (#798).
+readonly CLAUDE_MAX_TURNS=300
 CLAUDE_OUTPUT_FILE="$(mktemp)"
 trap 'rm -f "${CLAUDE_OUTPUT_FILE:-}"' EXIT
 
@@ -685,7 +692,7 @@ claude -p "$WORKER_PROMPT" \
     --dangerously-skip-permissions \
     --output-format stream-json \
     --verbose \
-    --max-turns 200 \
+    --max-turns "$CLAUDE_MAX_TURNS" \
     "${ROLE_PLUGIN_ARGS[@]}" \
     "${VERDICT_SCHEMA_ARGS[@]}" \
     "${CSHARP_LSP_PLUGIN_ARGS[@]}" | tee "$CLAUDE_OUTPUT_FILE"
@@ -705,7 +712,7 @@ if is_transient_api_error "$(cat "$CLAUDE_OUTPUT_FILE")"; then
         --dangerously-skip-permissions \
         --output-format stream-json \
         --verbose \
-        --max-turns 200 \
+        --max-turns "$CLAUDE_MAX_TURNS" \
         "${ROLE_PLUGIN_ARGS[@]}" \
         "${VERDICT_SCHEMA_ARGS[@]}" \
         "${CSHARP_LSP_PLUGIN_ARGS[@]}" | tee "$CLAUDE_OUTPUT_FILE"

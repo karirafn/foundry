@@ -12,7 +12,6 @@ public sealed record ClaimedIssueDispatch(
     string Title,
     string RepositorySlug,
     Uri CloneUrl,
-    string? AccountToken,
     BranchName BranchName,
     MonitoredRepositoryId MonitoredRepositoryId,
     WorkerProvider Provider,

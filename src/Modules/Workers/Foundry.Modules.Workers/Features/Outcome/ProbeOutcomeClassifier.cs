@@ -13,6 +13,7 @@ internal sealed class ProbeOutcomeClassifier(IContainerOutputParser parser) : IP
         return result switch
         {
             ContainerOutputParseResult.NormalExit => new ProbeOutcome.Available(),
+            ContainerOutputParseResult.TurnLimitReached => new ProbeOutcome.Available(),
             ContainerOutputParseResult.CreditsExhausted => new ProbeOutcome.CreditsStillBlocked(),
             ContainerOutputParseResult.UsageLimited usageLimited => new ProbeOutcome.UsageLimited(usageLimited.ResetsAt),
             ContainerOutputParseResult.AuthInvalid => new ProbeOutcome.InfrastructureFailure(),
@@ -20,6 +21,7 @@ internal sealed class ProbeOutcomeClassifier(IContainerOutputParser parser) : IP
             ContainerOutputParseResult.ModelUnavailable => new ProbeOutcome.InfrastructureFailure(),
             ContainerOutputParseResult.ParseFailure => new ProbeOutcome.InfrastructureFailure(),
             ContainerOutputParseResult.NoResultLine => new ProbeOutcome.InfrastructureFailure(),
+            ContainerOutputParseResult.AgentStartedNoResultLine => new ProbeOutcome.InfrastructureFailure(),
             ContainerOutputParseResult.WorkerBootstrapFailed => new ProbeOutcome.InfrastructureFailure(),
             _ => throw new UnreachableException($"Unhandled {nameof(ContainerOutputParseResult)}: {result}"),
         };

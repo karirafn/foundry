@@ -32,6 +32,7 @@ internal sealed class IssueClaimedHandler(
     IPostExitProviderQueries postExitProviderQueries,
     IFailingJobLogQueries failingJobLogQueries,
     IWorkerRoleCatalogStore roleCatalog,
+    IRepositoryDispatchQueries repositoryDispatchQueries,
     ILogger<IssueClaimedHandler> logger) : IIntegrationEventHandler<IssueClaimed>
 {
     public async Task HandleAsync(IssueClaimed @event, CancellationToken cancellationToken)
@@ -212,7 +213,12 @@ internal sealed class IssueClaimedHandler(
                 $"The worker role '{startingRun.Role.Name}' is not loaded: dispatch ran before the worker role catalog loaded. Retry the issue."));
         }
 
-        if (string.IsNullOrEmpty(claimed.AccountToken))
+        // Resolved at use time rather than carried on the event: outbox payloads are plaintext, the stored token is not.
+        RepositoryDispatchInfo? dispatchInfo = await repositoryDispatchQueries.GetDispatchInfoAsync(
+            claimed.MonitoredRepositoryId,
+            cancellationToken);
+
+        if (dispatchInfo?.AccountToken is not { Length: > 0 } gitPat)
         {
             return Result<WorkerContainerSpec>.Fail(
                 new Error("Worker.EmptyGitPat", "No Git PAT configured for this account. Set the account token in Settings."));
@@ -224,8 +230,6 @@ internal sealed class IssueClaimedHandler(
             return Result<WorkerContainerSpec>.Fail(
                 new Error("Worker.InvalidIssueApiUrl", "ISSUE_API_URL must be an absolute https URI."));
         }
-
-        string gitPat = claimed.AccountToken;
 
         int timeoutMinutes = await settingsQueries.GetTimeoutMinutesAsync(cancellationToken);
         bool installsDocker = await settingsQueries.GetWorkerImageInstallsDockerAsync(cancellationToken);

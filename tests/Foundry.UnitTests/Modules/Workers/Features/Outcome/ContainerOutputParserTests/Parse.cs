@@ -1139,7 +1139,7 @@ public sealed class Parse
     }
 
     [Fact]
-    public void WhenJsonEventsButNoResultEvent_ReturnsNoResultLine()
+    public void WhenJsonEventsButNoResultEvent_ReturnsAgentStartedNoResultLine()
     {
         // Arrange — run killed before claude emitted its result
         string log = """
@@ -1151,13 +1151,13 @@ public sealed class Parse
         ContainerOutputParseResult result = _sut.Parse(log);
 
         // Assert
-        result.ShouldBeOfType<ContainerOutputParseResult.NoResultLine>();
+        result.ShouldBeOfType<ContainerOutputParseResult.AgentStartedNoResultLine>();
     }
 
     [Fact]
-    public void WhenJsonEventsButNoResultEventAndBootstrapSentinel_ReturnsWorkerBootstrapFailed()
+    public void WhenJsonEventsButNoResultEventAndBootstrapSentinel_ReturnsAgentStartedNoResultLine()
     {
-        // Arrange
+        // Arrange — claude starts only after bootstrap passes, so any event outranks a marker line
         string log = """
             FOUNDRY_BOOTSTRAP_FAILED stage=clone detail=bootstrap failed at stage clone
             {"type":"system","subtype":"init","model":"claude-opus-5-5"}
@@ -1167,7 +1167,116 @@ public sealed class Parse
         ContainerOutputParseResult result = _sut.Parse(log);
 
         // Assert
+        result.ShouldBeOfType<ContainerOutputParseResult.AgentStartedNoResultLine>();
+    }
+
+    [Fact]
+    public void WhenToolResultQuotesBootstrapSentinel_ReturnsAgentStartedNoResultLine()
+    {
+        // Arrange — the agent ran the entrypoint's Bats tests, whose output quotes the marker
+        string log = """
+            2026-11-01T10:00:00.000000001Z {"type":"system","subtype":"init","model":"claude-opus-5-5"}
+            2026-11-01T10:16:00.000000001Z {"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"t1","content":"ok"}]},"tool_use_result":{"stdout":"ok 3 fails fast\nFOUNDRY_BOOTSTRAP_FAILED stage=managed-settings detail=managed settings file is missing\n","stderr":""}}
+            """;
+
+        // Act
+        ContainerOutputParseResult result = _sut.Parse(log);
+
+        // Assert
+        result.ShouldBeOfType<ContainerOutputParseResult.AgentStartedNoResultLine>();
+    }
+
+    [Fact]
+    public void WhenJsonObjectLacksStringType_IsNotTreatedAsAgentEvent()
+    {
+        // Arrange
+        string log = """
+            {"type":42}
+            {"level":"info"}
+            FOUNDRY_BOOTSTRAP_FAILED stage=auth detail=token rejected
+            """;
+
+        // Act
+        ContainerOutputParseResult result = _sut.Parse(log);
+
+        // Assert
         result.ShouldBeOfType<ContainerOutputParseResult.WorkerBootstrapFailed>();
+    }
+
+    [Fact]
+    public void WhenBootstrapSentinelIsEmbeddedMidLine_ReturnsNoResultLine()
+    {
+        // Arrange
+        string log = """
+            Cloning repository...
+            echo FOUNDRY_BOOTSTRAP_FAILED stage=clone detail=quoted, not emitted
+            """;
+
+        // Act
+        ContainerOutputParseResult result = _sut.Parse(log);
+
+        // Assert
+        result.ShouldBeOfType<ContainerOutputParseResult.NoResultLine>();
+    }
+
+    [Fact]
+    public void WhenBootstrapSentinelHasDockerTimestamp_DetailExcludesTimestamp()
+    {
+        // Arrange
+        string log = """
+            2026-11-01T10:00:00.000000001Z Cloning repository...
+            2026-11-01T10:00:01.000000001Z FOUNDRY_BOOTSTRAP_FAILED stage=clone detail=unable to reach remote
+            """;
+
+        // Act
+        ContainerOutputParseResult result = _sut.Parse(log);
+
+        // Assert
+        result.ShouldBeOfType<ContainerOutputParseResult.WorkerBootstrapFailed>()
+            .Detail.ShouldBe("FOUNDRY_BOOTSTRAP_FAILED stage=clone detail=unable to reach remote");
+    }
+
+    [Fact]
+    public void WhenLogExceedsCapAndCutLandsMidLine_PartialFirstLineIsDropped()
+    {
+        // Arrange — the 64 KB cut lands inside "echo FOUNDRY_…", so the tail starts with the marker text
+        const string cutLine = "FOUNDRY_BOOTSTRAP_FAILED stage=clone detail=quoted, not emitted";
+        string filler = "\n" + new string('x', 65_536 - cutLine.Length - 2) + "\n";
+        string log = "echo " + cutLine + filler;
+
+        // Act
+        ContainerOutputParseResult result = _sut.Parse(log);
+
+        // Assert
+        result.ShouldBeOfType<ContainerOutputParseResult.NoResultLine>();
+    }
+
+    [Fact]
+    public void WhenLogExceedsCapAndCutLandsOnLineStart_FirstLineIsKept()
+    {
+        // Arrange — the character before the 64 KB cut is a newline, so the tail's first line is whole
+        const string markerLine = "FOUNDRY_BOOTSTRAP_FAILED stage=clone detail=unable to reach remote";
+        string filler = "\n" + new string('x', 65_536 - markerLine.Length - 2) + "\n";
+        string log = "earlier output\n" + markerLine + filler;
+
+        // Act
+        ContainerOutputParseResult result = _sut.Parse(log);
+
+        // Assert
+        result.ShouldBeOfType<ContainerOutputParseResult.WorkerBootstrapFailed>();
+    }
+
+    [Fact]
+    public void WhenTailIsOnePartialJsonLineLongerThanCap_ReturnsNoResultLine()
+    {
+        // Arrange
+        string log = "{\"type\":\"assistant\",\"text\":\"" + new string('x', 70_000) + "\"}";
+
+        // Act
+        ContainerOutputParseResult result = _sut.Parse(log);
+
+        // Assert
+        result.ShouldBeOfType<ContainerOutputParseResult.NoResultLine>();
     }
 
     [Fact]

@@ -66,6 +66,7 @@ public sealed class ConsumesReservation : IAsyncDisposable
             _providerQueries,
             new StubFailingJobLogQueries(),
             StubWorkerRoleCatalogStore.With(),
+            StubRepositoryDispatchQueries.WithToken("ghp_test_token"),
             NullLogger<IssueClaimedHandler>.Instance);
     }
 
@@ -78,7 +79,6 @@ public sealed class ConsumesReservation : IAsyncDisposable
             "Test Issue",
             "owner/repo",
             new Uri("https://github.com/owner/repo.git"),
-            "ghp_test_token",
             BranchName.From("feat/42-test-issue"),
             MonitoredRepositoryId.New(),
             new WorkerProvider.GitHub(),
@@ -215,6 +215,9 @@ public sealed class ConsumesReservation : IAsyncDisposable
         public Task<IReadOnlyList<(ContainerId ContainerId, WorkerRunId WorkerRunId)>> ListByLabelAsync(
             CancellationToken cancellationToken)
             => Task.FromResult<IReadOnlyList<(ContainerId, WorkerRunId)>>([]);
+
+        public Task<string?> GetFullLogAsync(string containerId, CancellationToken cancellationToken)
+            => Task.FromResult<string?>(null);
 
         public Task<string?> GetLogsAsync(string containerId, int tailLines, CancellationToken cancellationToken)
             => Task.FromResult<string?>(null);

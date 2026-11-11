@@ -61,6 +61,21 @@ public sealed class Classify
     }
 
     [Fact]
+    public void WhenLogsProduceTurnLimitReached_ReturnsAvailable()
+    {
+        // Arrange — the API answered every turn, so the account is usable
+        string logs = """
+            {"type":"result","subtype":"error_max_turns","is_error":true,"num_turns":2}
+            """;
+
+        // Act
+        ProbeOutcome result = _sut.Classify(logs);
+
+        // Assert
+        result.ShouldBeOfType<ProbeOutcome.Available>();
+    }
+
+    [Fact]
     public void WhenLogsAreNull_ReturnsInfrastructureFailure()
     {
         // Arrange / Act
@@ -141,6 +156,19 @@ public sealed class Classify
     {
         // Arrange — bootstrap sentinel triggers WorkerBootstrapFailed
         string logs = "FOUNDRY_BOOTSTRAP_FAILED stage=clone failed to clone repo";
+
+        // Act
+        ProbeOutcome result = _sut.Classify(logs);
+
+        // Assert
+        result.ShouldBeOfType<ProbeOutcome.InfrastructureFailure>();
+    }
+
+    [Fact]
+    public void WhenLogsShowAgentStartedWithoutResultLine_ReturnsInfrastructureFailure()
+    {
+        // Arrange
+        string logs = """{"type":"system","subtype":"init","model":"claude-opus-5-5"}""";
 
         // Act
         ProbeOutcome result = _sut.Classify(logs);

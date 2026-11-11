@@ -24,7 +24,6 @@ public sealed class Create
             Title: "Fix the bug",
             RepositorySlug: "org/repo",
             CloneUrl: new Uri("https://github.com/org/repo.git"),
-            AccountToken: "ghp_test_token",
             BranchName: BranchName.From("feat/42"),
             MonitoredRepositoryId: repositoryId,
             Provider: new WorkerProvider.GitHub(),

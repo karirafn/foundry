@@ -12,6 +12,7 @@ using Foundry.Modules.Monitoring.Features.Eligibility;
 using Foundry.Modules.Workers.Contracts;
 using Foundry.Shared;
 using Foundry.Shared.Infrastructure;
+using Foundry.Shared.Infrastructure.Outbox;
 using Foundry.Testing;
 using Foundry.WebApi.Persistence;
 
@@ -144,8 +145,25 @@ public sealed class HandleAsyncDispatchPayload : IAsyncDisposable
             () => dispatch.IssueNumber.ShouldBe(7),
             () => dispatch.Title.ShouldBe("Fix the bug"),
             () => dispatch.RepositorySlug.ShouldBe("myorg/myrepo"),
-            () => dispatch.AccountToken.ShouldBe("ghp_my_github_token"),
             () => dispatch.CloneUrl.ToString().ShouldBe("https://github.com/myorg/myrepo.git"));
+    }
+
+    [Fact]
+    public async Task WhenQueuedIssueClaimed_OutboxPayloadDoesNotCarryTheAccountToken()
+    {
+        // Arrange
+        (MonitoredRepository repository, _) =
+            await SeedRepositoryAsync("myorg/myrepo", token: "ghp_my_github_token");
+        await SeedQueuedIssueAsync(repository.Id, issueNumber: 7);
+
+        // Act
+        await _sut.HandleAsync(new WorkerCapacityAvailable(WorkerRunId.New()), TestContext.Current.CancellationToken);
+
+        // Assert
+        IssueClaimed claimed = _dispatcher.DispatchedEvents
+            .OfType<IssueClaimed>()
+            .ShouldHaveSingleItem();
+        OutboxMessage.Create(claimed, DateTimeOffset.UtcNow).Payload.ShouldNotContain("ghp_my_github_token");
     }
 
     private sealed class CapturingIntegrationEventDispatcher : IIntegrationEventDispatcher

@@ -112,6 +112,7 @@ public sealed class PreContainerFailureBridging : IAsyncDisposable
             postExitProviderQueries ?? new BranchCreationFailsQueries(),
             new StubFailingJobLogQueries(),
             StubWorkerRoleCatalogStore.With(),
+            StubRepositoryDispatchQueries.WithToken("ghp_test_token"),
             NullLogger<IssueClaimedHandler>.Instance);
     }
 
@@ -124,7 +125,6 @@ public sealed class PreContainerFailureBridging : IAsyncDisposable
             "Test",
             "owner/repo",
             new Uri("https://github.com/owner/repo.git"),
-            "ghp_test",
             BranchName.From("feat/1-test"),
             MonitoredRepositoryId.New(),
             new WorkerProvider.GitHub(),
@@ -248,6 +248,9 @@ public sealed class PreContainerFailureBridging : IAsyncDisposable
             await Task.CompletedTask;
             yield break;
         }
+
+        public Task<string?> GetFullLogAsync(string containerId, CancellationToken cancellationToken)
+            => Task.FromResult<string?>(null);
 
         public Task<string?> GetLogsAsync(string containerId, int tailLines, CancellationToken cancellationToken)
             => Task.FromResult<string?>(null);

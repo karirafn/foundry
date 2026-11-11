@@ -105,6 +105,34 @@ public sealed class WhenRunLogRequested : IAsyncDisposable
         return active;
     }
 
+    private async Task SeedTranscriptAsync(WorkerRunId runId, string transcript)
+    {
+        using IServiceScope scope = _factory.Services.CreateScope();
+        DbContext dbContext = scope.ServiceProvider.GetRequiredService<DbContext>();
+
+        dbContext.Set<WorkerRunTranscript>().Add(WorkerRunTranscript.Capture(runId, transcript, DateTimeOffset.UtcNow));
+        await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+    }
+
+    [Fact]
+    public async Task WhenRunHasRunTranscript_Returns200WithTheTranscriptAsStored()
+    {
+        // Arrange — the stored transcript is raw-looking JSON so re-rendering it would change it
+        const string transcript = """2026-11-10T10:00:00.000000000Z {"type":"assistant","message":{"content":[]}}""";
+        CompletedRun run = await SeedCompletedRunAsync(containerOutput: "2026-11-10T10:00:00Z tail line\n");
+        await SeedTranscriptAsync(run.Id, transcript);
+
+        // Act
+        HttpResponseMessage response = await _client.GetAsync(
+            new Uri($"/api/workers/runs/{run.Id.Value}/log", UriKind.Relative),
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        string content = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+        content.ShouldBe(transcript);
+    }
+
     [Fact]
     public async Task WhenRunDoesNotExist_Returns404AsProblemDetails()
     {

@@ -57,6 +57,22 @@ internal sealed class WorkerOutcomeApplier(
         RunVerdict? verdict,
         CancellationToken cancellationToken)
     {
+        await ApplyAsync(outcome, activeRun, verdict, transcript: null, cancellationToken);
+    }
+
+    /// <summary>
+    /// Applies <paramref name="outcome"/> and <paramref name="verdict"/>, and stores <paramref name="transcript"/>, when
+    /// captured, in the same save as the terminal transition.
+    /// </summary>
+    public async Task ApplyAsync(
+        WorkerOutcome outcome,
+        ActiveRun activeRun,
+        RunVerdict? verdict,
+        WorkerRunTranscript? transcript,
+        CancellationToken cancellationToken)
+    {
+        IReadOnlyCollection<object> alongside = transcript is null ? [] : [transcript];
+
         switch (outcome)
         {
             case WorkerOutcome.Completed completed:
@@ -80,7 +96,7 @@ internal sealed class WorkerOutcomeApplier(
                         RunStartedAt: activeRun.StartedAt)],
                     activeRun.Id,
                     cancellationToken);
-                await dbContext.TransitionAsync(activeRun, completedRun, domainEventDispatcher, cancellationToken);
+                await dbContext.TransitionAsync(activeRun, completedRun, alongside, domainEventDispatcher, cancellationToken);
                 logger.LogInformation(
                     "Worker run {WorkerRunId} completed (merged, PR: {PrUrl}, branch: {BranchName}).",
                     activeRun.Id,
@@ -108,7 +124,7 @@ internal sealed class WorkerOutcomeApplier(
                         RunStartedAt: activeRun.StartedAt)],
                     activeRun.Id,
                     cancellationToken);
-                await dbContext.TransitionAsync(activeRun, reviewRun, domainEventDispatcher, cancellationToken);
+                await dbContext.TransitionAsync(activeRun, reviewRun, alongside, domainEventDispatcher, cancellationToken);
                 logger.LogInformation(
                     "Worker run {WorkerRunId} completed with open PR: {PrUrl} (branch: {BranchName}).",
                     activeRun.Id,
@@ -136,7 +152,7 @@ internal sealed class WorkerOutcomeApplier(
                         RunStartedAt: activeRun.StartedAt)],
                     activeRun.Id,
                     cancellationToken);
-                await dbContext.TransitionAsync(activeRun, unchangedRun, domainEventDispatcher, cancellationToken);
+                await dbContext.TransitionAsync(activeRun, unchangedRun, alongside, domainEventDispatcher, cancellationToken);
                 logger.LogInformation(
                     "Worker run {WorkerRunId} completed with no commits (unchanged, branch: {BranchName}).",
                     activeRun.Id,
@@ -155,6 +171,7 @@ internal sealed class WorkerOutcomeApplier(
                 await dbContext.TransitionAsync(
                     activeRun,
                     continuableFailed,
+                    alongside,
                     domainEventDispatcher,
                     cancellationToken);
                 await ApplyFailureSideEffectsAsync(activeRun, continuable.FailureReason, cancellationToken);
@@ -174,7 +191,7 @@ internal sealed class WorkerOutcomeApplier(
                     failure.ContainerOutput,
                     failure.Summary,
                     verdict);
-                await dbContext.TransitionAsync(activeRun, failedRun, domainEventDispatcher, cancellationToken);
+                await dbContext.TransitionAsync(activeRun, failedRun, alongside, domainEventDispatcher, cancellationToken);
                 await ApplyFailureSideEffectsAsync(activeRun, failure.FailureReason, cancellationToken);
                 logger.LogWarning(
                     "Worker run {WorkerRunId} failed (reason: {Reason}).",

@@ -39,7 +39,6 @@ internal sealed class IssueClaimer(
             claimed.Title,
             candidate.DispatchInfo.RepositorySlug,
             candidate.DispatchInfo.CloneUrl,
-            candidate.DispatchInfo.AccountToken,
             branchName,
             issue.MonitoredRepositoryId,
             candidate.DispatchInfo.Provider,

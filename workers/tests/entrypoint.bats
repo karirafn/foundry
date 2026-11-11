@@ -48,15 +48,45 @@ setup() {
     export FOUNDRY_ROLES_DIR="$BATS_TEST_TMPDIR/roles"
     export WORKER_ROLE="implement"
 
+    # The suite also runs inside a live worker, whose /workspace is the agent's own
+    # checkout (and whose image restores any solution found there).  Redirect the
+    # entrypoint's clone target to a per-test directory the fake git clone creates.
+    export FOUNDRY_WORKSPACE_DIR="$BATS_TEST_TMPDIR/workspace"
+
+    # Inside a live worker the passwd home holds the rootless dockerd's runtime dir, so
+    # answer `getent passwd <uid>` with a per-test home (see make_fake_getent).
+    make_fake_getent "$BATS_TEST_TMPDIR/passwd-home"
+
     # Derive the expected runtime home the same way production does — via the
-    # OS passwd database — so tests remain correct even when the runner sets a
+    # passwd database — so tests remain correct even when the runner sets a
     # custom $HOME that differs from the passwd entry.
     EXPECTED_RUNTIME_HOME="$(getent passwd "$(id -u)" | cut -d: -f6)"
 
     # Load start_rootless_dockerd directly from the entrypoint — no path redirect
-    # needed because XDG_RUNTIME_DIR is now a passwd-sourced path that the test
-    # user already owns.
+    # needed because XDG_RUNTIME_DIR is a passwd-sourced path, and the fake passwd
+    # home is a per-test directory the test user owns.
     load_function
+}
+
+# Fake `getent` that answers `passwd <current uid>` with a home of $1 and defers to the
+# real binary for every other query, so the passwd-derived runtime dir never resolves
+# to the live worker's (whose rootless dockerd keeps its socket and state there).
+make_fake_getent() {
+    local fake_home="$1"
+    local real_getent uid entry
+    real_getent="$(command -v getent)"
+    uid="$(id -u)"
+    entry="$(id -un):x:${uid}:$(id -g)::${fake_home}:/bin/bash"
+    /bin/mkdir -p "$fake_home"
+    cat > "$FAKE_BIN_DIR/getent" <<EOF
+#!/bin/bash
+if [[ "\$#" -eq 2 && "\$1" == "passwd" && "\$2" == "${uid}" ]]; then
+    printf '%s\\n' '${entry}'
+    exit 0
+fi
+exec "${real_getent}" "\$@"
+EOF
+    chmod +x "$FAKE_BIN_DIR/getent"
 }
 
 # Fake `stat` that answers for the managed settings file only and defers to the real
@@ -341,7 +371,7 @@ make_fake_git() {
 #!/bin/bash
 # Fake git: handle the subcommands entrypoint uses, ignore the rest
 case "${1:-}" in
-    clone)  mkdir -p /workspace ;;
+    clone)  mkdir -p "$FOUNDRY_WORKSPACE_DIR" ;;
     -C)
         # git -C <dir> <subcommand> [args...] — ignore, just exit 0
         ;;
@@ -368,6 +398,16 @@ EOF
     run bash "$ENTRYPOINT"
 
     [ -f "$BATS_TEST_TMPDIR/claude_called" ]
+}
+
+# A hardcoded `prepare_csharp_lsp /workspace` would pass every other test silently
+# (find on a missing path yields no targets), so pin the literal to the one default.
+@test "entrypoint names /workspace only as the WORKSPACE_DIR default" {
+    local count
+    count="$(grep -v '^[[:space:]]*#' "$ENTRYPOINT" | grep -o '/workspace' | wc -l)"
+
+    [ "$count" -eq 1 ]
+    grep -qx 'readonly WORKSPACE_DIR="${FOUNDRY_WORKSPACE_DIR:-/workspace}"' "$ENTRYPOINT"
 }
 
 # ---------------------------------------------------------------------------
@@ -412,7 +452,7 @@ make_fake_git_switch_fail() {
     cat > "$FAKE_BIN_DIR/git" <<'EOF'
 #!/bin/bash
 case "${1:-}" in
-    clone)  mkdir -p /workspace ;;
+    clone)  mkdir -p "$FOUNDRY_WORKSPACE_DIR" ;;
     -C)     true ;;
     switch) exit 1 ;;
     *)      true ;;
@@ -1394,6 +1434,32 @@ EOF
     [[ "$args" =~ (^| )--verbose( |$) ]]
 }
 
+@test "max-turns: the first claude run is given a 300-turn budget" {
+    set_required_env
+    make_fake_git
+    make_fake_claude_record_args
+
+    run bash "$ENTRYPOINT"
+
+    [ "$status" -eq 0 ]
+    local args
+    args="$(head -n 1 "$BATS_TEST_TMPDIR/claude_args")"
+    [[ "$args" =~ (^| )--max-turns\ 300( |$) ]]
+}
+
+@test "max-turns: the transient-retry resume gets the same 300-turn budget" {
+    set_required_env
+    make_fake_git
+    make_fake_claude_transient_then_success
+
+    run bash "$ENTRYPOINT"
+
+    local args
+    args="$(cat "$BATS_TEST_TMPDIR/claude_resume_args")"
+    [[ "$args" =~ (^| )-c( |$) ]]
+    [[ "$args" =~ (^| )--max-turns\ 300( |$) ]]
+}
+
 @test "stream-json: every claude invocation that passes stream-json also passes --verbose" {
     set_required_env
     make_fake_git
@@ -1836,23 +1902,6 @@ EOF
     chmod +x "$FAKE_BIN_DIR/dotnet"
 }
 
-# Fake find that redirects a search rooted at the hardcoded clone target
-# /workspace to $FAKE_WORKSPACE_DIR, so full-entrypoint tests can supply a
-# fixture tree without touching the runner's /workspace.
-make_fake_find_workspace() {
-    local real_find
-    real_find="$(command -v find)"
-    cat > "$FAKE_BIN_DIR/find" <<EOF
-#!/bin/bash
-if [[ "\${1:-}" == "/workspace" && -n "\${FAKE_WORKSPACE_DIR:-}" ]]; then
-    shift
-    exec "${real_find}" "\${FAKE_WORKSPACE_DIR}" "\$@"
-fi
-exec "${real_find}" "\$@"
-EOF
-    chmod +x "$FAKE_BIN_DIR/find"
-}
-
 # Creates empty files (and their parent directories) under $1.
 make_fixture_tree() {
     local root="$1"
@@ -2017,10 +2066,8 @@ EOF
     make_fake_git
     make_fake_csharp_ls
     make_fake_dotnet
-    make_fake_find_workspace
     make_fake_claude_record_args_transient_then_success
-    export FAKE_WORKSPACE_DIR="$BATS_TEST_TMPDIR/repo"
-    make_fixture_tree "$FAKE_WORKSPACE_DIR" src/App.slnx
+    make_fixture_tree "$FOUNDRY_WORKSPACE_DIR" src/App.slnx
 
     run bash "$ENTRYPOINT"
 
@@ -2043,10 +2090,8 @@ EOF
     make_fake_git
     make_fake_csharp_ls
     make_fake_dotnet
-    make_fake_find_workspace
     make_fake_claude_record_args_transient_then_success
-    export FAKE_WORKSPACE_DIR="$BATS_TEST_TMPDIR/repo"
-    make_fixture_tree "$FAKE_WORKSPACE_DIR" App.sln
+    make_fixture_tree "$FOUNDRY_WORKSPACE_DIR" App.sln
     export FAKE_DOTNET_FAIL_MATCH="App.sln"
 
     run bash "$ENTRYPOINT"
@@ -2062,10 +2107,8 @@ EOF
     set_required_env
     make_fake_git
     make_fake_dotnet
-    make_fake_find_workspace
     make_fake_claude_record_args_transient_then_success
-    export FAKE_WORKSPACE_DIR="$BATS_TEST_TMPDIR/repo"
-    make_fixture_tree "$FAKE_WORKSPACE_DIR" App.sln
+    make_fixture_tree "$FOUNDRY_WORKSPACE_DIR" App.sln
     local safe_path
     safe_path="$(make_sanitized_path_without csharp-ls)"
 
@@ -2082,10 +2125,8 @@ EOF
     make_fake_git
     make_fake_csharp_ls
     make_fake_dotnet
-    make_fake_find_workspace
     make_fake_claude_record_args_transient_then_success
-    export FAKE_WORKSPACE_DIR="$BATS_TEST_TMPDIR/repo"
-    make_fixture_tree "$FAKE_WORKSPACE_DIR" App.sln
+    make_fixture_tree "$FOUNDRY_WORKSPACE_DIR" App.sln
     export GH_TOKEN="test-gh-token"
     local order_file="$BATS_TEST_TMPDIR/order"
     cat > "$FAKE_BIN_DIR/gh" <<EOF

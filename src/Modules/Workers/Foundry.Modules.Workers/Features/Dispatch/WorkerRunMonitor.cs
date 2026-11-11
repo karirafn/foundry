@@ -3,10 +3,12 @@ using System.Diagnostics;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Contracts.Queries;
 using Foundry.Modules.Workers.Contracts;
+using Foundry.Modules.Workers.Domain.Entities;
 using Foundry.Modules.Workers.Domain.Entities.States;
 using Foundry.Modules.Workers.Domain.ValueObjects;
 using Foundry.Modules.Workers.Features.Orchestration;
 using Foundry.Modules.Workers.Features.Outcome;
+using Foundry.Modules.Workers.Features.Runs;
 using Foundry.Modules.Workers.Features.Verdicts;
 using Foundry.Shared;
 using Foundry.Shared.Infrastructure;
@@ -270,7 +272,9 @@ internal sealed class WorkerRunMonitor(
             ? verdictReader.Read(activeRun.Role, containerOutput)
             : null;
 
-        await outcomeApplier.ApplyAsync(outcome, activeRun, verdict, cancellationToken);
+        WorkerRunTranscript? transcript = await TryCaptureTranscriptAsync(activeRun, cancellationToken);
+
+        await outcomeApplier.ApplyAsync(outcome, activeRun, verdict, transcript, cancellationToken);
     }
 
     private async Task ApplyTimeoutOutcomeAsync(
@@ -288,7 +292,9 @@ internal sealed class WorkerRunMonitor(
             postExitProviderQueries,
             cancellationToken);
 
-        await outcomeApplier.ApplyAsync(timeoutOutcome, activeRun, cancellationToken);
+        WorkerRunTranscript? transcript = await TryCaptureTranscriptAsync(activeRun, cancellationToken);
+
+        await outcomeApplier.ApplyAsync(timeoutOutcome, activeRun, verdict: null, transcript, cancellationToken);
     }
 
     /// <summary>
@@ -317,7 +323,9 @@ internal sealed class WorkerRunMonitor(
                 postExitProviderQueries,
                 cancellationToken);
 
-        await outcomeApplier.ApplyAsync(outcome, activeRun, cancellationToken);
+        WorkerRunTranscript? transcript = await TryCaptureTranscriptAsync(activeRun, cancellationToken);
+
+        await outcomeApplier.ApplyAsync(outcome, activeRun, verdict: null, transcript, cancellationToken);
 
         logger.LogWarning(
             "Worker run {WorkerRunId} cancel requested at {CancelRequestedAt}; container stopped and run marked as {OutcomeType}.",
@@ -426,6 +434,40 @@ internal sealed class WorkerRunMonitor(
             logger.LogWarning(
                 ex,
                 "Failed to capture logs for container {ContainerId} (WorkerRun {WorkerRunId}).",
+                activeRun.ContainerId.Value,
+                activeRun.Id);
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Renders the container's full log as the run's Run Transcript, read before the applier removes the
+    /// container. Best-effort: a failed fetch or render yields no transcript and leaves the outcome as is.
+    /// </summary>
+    private async Task<WorkerRunTranscript?> TryCaptureTranscriptAsync(
+        ActiveRun activeRun,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            string? fullLog = await orchestrator.GetFullLogAsync(activeRun.ContainerId.Value, cancellationToken);
+
+            if (string.IsNullOrWhiteSpace(fullLog))
+            {
+                return null;
+            }
+
+            string rendered = AgentTranscriptFormatter.FormatLog(fullLog);
+
+            return WorkerRunTranscript.Capture(activeRun.Id, rendered, timeProvider.GetUtcNow());
+        }
+#pragma warning disable CA1031 // Best-effort transcript capture before transition; a Docker or rendering failure must not prevent the terminal transition.
+        catch (Exception ex) when (ex is not OperationCanceledException)
+#pragma warning restore CA1031
+        {
+            logger.LogWarning(
+                ex,
+                "Failed to capture the run transcript for container {ContainerId} (WorkerRun {WorkerRunId}).",
                 activeRun.ContainerId.Value,
                 activeRun.Id);
             return null;
