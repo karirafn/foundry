@@ -53,7 +53,8 @@ public sealed class GetPullRequestReviewFeedbackAsync
         string reviewBody = "review summary",
         string reviewSubmittedAt = "2026-06-01T12:00:00Z",
         string reviewAuthorLogin = "carol",
-        string reviewAuthorTypename = "User")
+        string reviewAuthorTypename = "User",
+        long? reviewDatabaseId = 3001)
     {
         string pathJson = threadCommentPath is not null ? $"\"{threadCommentPath}\"" : "null";
         string lineJson = threadCommentLine.HasValue
@@ -67,6 +68,9 @@ public sealed class GetPullRequestReviewFeedbackAsync
             : "null";
         string threadDatabaseIdJson = threadCommentDatabaseId.HasValue
             ? threadCommentDatabaseId.Value.ToString(System.Globalization.CultureInfo.InvariantCulture)
+            : "null";
+        string reviewDatabaseIdJson = reviewDatabaseId.HasValue
+            ? reviewDatabaseId.Value.ToString(System.Globalization.CultureInfo.InvariantCulture)
             : "null";
 
         return $$"""
@@ -108,6 +112,7 @@ public sealed class GetPullRequestReviewFeedbackAsync
                     "reviews": {
                       "nodes": [
                         {
+                          "databaseId": {{reviewDatabaseIdJson}},
                           "body": "{{reviewBody}}",
                           "submittedAt": "{{reviewSubmittedAt}}",
                           "author": { "login": "{{reviewAuthorLogin}}", "__typename": "{{reviewAuthorTypename}}" }
@@ -953,5 +958,72 @@ public sealed class GetPullRequestReviewFeedbackAsync
         result.IsFailure.ShouldBeTrue();
         Result<IReadOnlyList<ProviderComment>>.Failure failure = result.ShouldBeOfType<Result<IReadOnlyList<ProviderComment>>.Failure>();
         failure.Error.Code.ShouldBe("GitHub.InvalidPullRequestUrl");
+    }
+
+    [Fact]
+    public async Task WhenEverySurfaceHasADatabaseId_EachCommentCarriesItsProviderId()
+    {
+        // Arrange
+        string json = BuildThreeSurfaceJson(
+            conversationCommentDatabaseId: 1001,
+            threadCommentDatabaseId: 2001,
+            reviewDatabaseId: 3001);
+        FakeHandler handler = new(HttpStatusCode.OK, json);
+        GitHubHttpClient sut = BuildSut(handler);
+
+        // Act
+        Result<IReadOnlyList<ProviderComment>> result = await sut.GetPullRequestReviewFeedbackAsync(
+            ValidBaseUrl,
+            ValidSlug,
+            pullRequestUrl: ValidPrUrl,
+            token: "ghp_token",
+            CancellationToken.None);
+
+        // Assert
+        Dictionary<CommentOrigin, long?> idsByOrigin = result.ValueOrThrow().ToDictionary(c => c.Origin, c => c.Id?.Value);
+        idsByOrigin.ShouldSatisfyAllConditions(
+            () => idsByOrigin[CommentOrigin.Conversation].ShouldBe(1001),
+            () => idsByOrigin[CommentOrigin.ReviewThread].ShouldBe(2001),
+            () => idsByOrigin[CommentOrigin.ReviewSummary].ShouldBe(3001));
+    }
+
+    [Fact]
+    public async Task WhenCalled_RequestsTheReviewDatabaseId()
+    {
+        // Arrange
+        FakeHandler handler = new(HttpStatusCode.OK, BuildThreeSurfaceJson());
+        GitHubHttpClient sut = BuildSut(handler);
+
+        // Act
+        await sut.GetPullRequestReviewFeedbackAsync(
+            ValidBaseUrl,
+            ValidSlug,
+            pullRequestUrl: ValidPrUrl,
+            token: "ghp_token",
+            CancellationToken.None);
+
+        // Assert
+        string body = handler.LastRequestBody.ShouldNotBeNull();
+        body.ShouldMatch(@"reviews\(first: 50\) \{\\n\s*nodes \{\\n\s*databaseId");
+    }
+
+    [Fact]
+    public async Task WhenDatabaseIdIsAbsent_CommentHasNoId()
+    {
+        // Arrange
+        string json = BuildThreeSurfaceJson(conversationCommentDatabaseId: null);
+        FakeHandler handler = new(HttpStatusCode.OK, json);
+        GitHubHttpClient sut = BuildSut(handler);
+
+        // Act
+        Result<IReadOnlyList<ProviderComment>> result = await sut.GetPullRequestReviewFeedbackAsync(
+            ValidBaseUrl,
+            ValidSlug,
+            pullRequestUrl: ValidPrUrl,
+            token: "ghp_token",
+            CancellationToken.None);
+
+        // Assert
+        result.ValueOrThrow().Single(c => c.Origin == CommentOrigin.Conversation).Id.ShouldBeNull();
     }
 }

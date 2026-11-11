@@ -7,6 +7,7 @@ using Foundry.Modules.Monitoring.Features.Eligibility;
 using Foundry.Modules.Monitoring.Features.Polling;
 using Foundry.Modules.Monitoring.Features.Webhooks;
 using Foundry.Modules.Monitoring.Features.Providers;
+using Foundry.Modules.Monitoring.Features.Providers.Comments;
 using Foundry.Modules.Monitoring.Infrastructure.GitHub;
 using Foundry.Shared;
 using Foundry.Testing;
@@ -103,6 +104,7 @@ public sealed class PollCallInvariance : IAsyncDisposable
             new NullIntegrationEventDispatcher(),
             eligibilityEvaluator,
             new WebhookNudgeQueue(NullLogger<WebhookNudgeQueue>.Instance),
+            new PostedCommentRegistry(_dbContext),
             NullLogger<RepositoryPoller>.Instance);
     }
 

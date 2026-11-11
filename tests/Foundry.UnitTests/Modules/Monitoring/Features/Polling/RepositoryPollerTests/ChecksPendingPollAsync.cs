@@ -5,6 +5,7 @@ using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Features.Eligibility;
 using Foundry.Modules.Monitoring.Features.Providers;
 using Foundry.Modules.Monitoring.Features.Providers.Checks;
+using Foundry.Modules.Monitoring.Features.Providers.Comments;
 using Foundry.Modules.Monitoring.Features.Providers.Feedback;
 using Foundry.Modules.Monitoring.Features.Polling;
 using Foundry.Modules.Monitoring.Features.Webhooks;
@@ -77,6 +78,7 @@ public sealed class ChecksPendingPollAsync : IAsyncDisposable
             _dispatcher,
             _eligibilityEvaluator,
             new WebhookNudgeQueue(NullLogger<WebhookNudgeQueue>.Instance),
+            new PostedCommentRegistry(_dbContext),
             NullLogger<RepositoryPoller>.Instance);
     }
 
@@ -666,6 +668,7 @@ public sealed class ChecksPendingPollAsync : IAsyncDisposable
             RepositorySlug slug,
             string pullRequestUrl,
             DateTimeOffset since,
+            PostedCommentIds postedComments,
             CancellationToken cancellationToken)
             => Task.FromResult(Result<ReviewFeedback>.Ok(new ReviewFeedback([], OmittedCommentCount: 0, NewestCommentAt: null)));
 

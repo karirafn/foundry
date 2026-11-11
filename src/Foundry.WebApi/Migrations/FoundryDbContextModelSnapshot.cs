@@ -415,6 +415,25 @@ namespace Foundry.WebApi.Migrations
                     b.ToTable("pending_rebases", (string)null);
                 });
 
+            modelBuilder.Entity("Foundry.Modules.Monitoring.Domain.Entities.PostedComment", b =>
+                {
+                    b.Property<Guid>("MonitoredRepositoryId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("monitored_repository_id");
+
+                    b.Property<long>("CommentId")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("comment_id");
+
+                    b.Property<DateTimeOffset>("PostedAt")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("posted_at");
+
+                    b.HasKey("MonitoredRepositoryId", "CommentId");
+
+                    b.ToTable("posted_comments", (string)null);
+                });
+
             modelBuilder.Entity("Foundry.Modules.Settings.Domain.Entities.GlobalSettings", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1824,6 +1843,15 @@ namespace Foundry.WebApi.Migrations
                 });
 
             modelBuilder.Entity("Foundry.Modules.Monitoring.Domain.Entities.PendingRebase", b =>
+                {
+                    b.HasOne("Foundry.Modules.Monitoring.Domain.Entities.MonitoredRepository", null)
+                        .WithMany()
+                        .HasForeignKey("MonitoredRepositoryId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Foundry.Modules.Monitoring.Domain.Entities.PostedComment", b =>
                 {
                     b.HasOne("Foundry.Modules.Monitoring.Domain.Entities.MonitoredRepository", null)
                         .WithMany()

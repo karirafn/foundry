@@ -1,6 +1,7 @@
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Features.Providers.Checks;
+using Foundry.Modules.Monitoring.Features.Providers.Comments;
 using ProviderChecks = Foundry.Modules.Monitoring.Features.Providers.Checks.Checks;
 using Foundry.Modules.Monitoring.Features.Providers.Feedback;
 using Foundry.Modules.Monitoring.Features.Providers.Rebase;
@@ -29,11 +30,47 @@ internal interface IIssueProvider
         string pullRequestUrl,
         CancellationToken cancellationToken);
 
+    /// <summary>
+    /// Reads the actionable feedback on a pull/merge request thread (see <see cref="ActionableFeedbackPolicy"/>),
+    /// never a comment in <paramref name="postedComments"/>.
+    /// </summary>
     Task<Result<ReviewFeedback>> GetReviewFeedbackAsync(
         RepositorySlug slug,
         string pullRequestUrl,
         DateTimeOffset since,
+        PostedCommentIds postedComments,
         CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Reads an issue's own comment thread: every comment created after <paramref name="since"/>, oldest
+    /// first, except those in <paramref name="postedComments"/>. Bot and system comments are kept and
+    /// flagged so callers decide; pull/merge request threads are read with <see cref="GetReviewFeedbackAsync"/>.
+    /// </summary>
+    /// <remarks>Providers without an issue-thread reader keep this default, which fails with
+    /// <see cref="IssueFeedbackErrors.NotSupportedCode"/> without any provider call.</remarks>
+    Task<Result<IReadOnlyList<ProviderComment>>> GetIssueFeedbackAsync(
+        RepositorySlug slug,
+        int issueNumber,
+        DateTimeOffset since,
+        PostedCommentIds postedComments,
+        CancellationToken cancellationToken)
+        => Task.FromResult(Result<IReadOnlyList<ProviderComment>>.Fail(IssueFeedbackErrors.NotSupported()));
+
+    /// <summary>
+    /// Posts <paramref name="body"/> to <paramref name="thread"/> with the account PAT and returns the
+    /// provider's ID of the new comment, which the caller records with <see cref="PostedCommentRegistry"/>
+    /// so no comment reader treats it as feedback. A failure is <see cref="CommentPostErrors.TransientCode"/>
+    /// (5xx, timeout, rate limit) or <see cref="CommentPostErrors.PermanentCode"/> (any other 4xx, an invalid
+    /// request); this call never retries.
+    /// </summary>
+    /// <remarks>Providers without comment posting keep this default, which fails permanently without any
+    /// provider call.</remarks>
+    Task<Result<ProviderCommentId>> PostCommentAsync(
+        RepositorySlug slug,
+        CommentThread thread,
+        string body,
+        CancellationToken cancellationToken)
+        => Task.FromResult(Result<ProviderCommentId>.Fail(CommentPostErrors.NotSupported()));
 
     Task<Result<BranchProtection>> GetBranchProtectionAsync(
         RepositorySlug slug,

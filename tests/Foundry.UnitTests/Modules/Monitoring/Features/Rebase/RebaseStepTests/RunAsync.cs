@@ -4,6 +4,7 @@ using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Features.Providers;
 using Foundry.Modules.Monitoring.Features.Providers.Checks;
+using Foundry.Modules.Monitoring.Features.Providers.Comments;
 using Foundry.Modules.Monitoring.Features.Providers.Feedback;
 using Foundry.Modules.Monitoring.Features.Providers.Rebase;
 using Foundry.Modules.Monitoring.Features.Rebase;
@@ -822,6 +823,7 @@ public sealed class RunAsync : IAsyncDisposable
             RepositorySlug slug,
             string pullRequestUrl,
             DateTimeOffset since,
+            PostedCommentIds postedComments,
             CancellationToken cancellationToken)
             => throw new NotSupportedException();
 

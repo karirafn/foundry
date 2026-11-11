@@ -49,7 +49,8 @@ public sealed class GetPullRequestReviewFeedbackAsync
         int? newLine = null,
         string createdAt = "2026-06-01T00:00:00Z",
         string updatedAt = "2026-06-01T00:00:00Z",
-        string authorUsername = "alice")
+        string authorUsername = "alice",
+        long id = 1)
     {
         string positionJson;
         if (newPath is null && newLine is null)
@@ -67,6 +68,7 @@ public sealed class GetPullRequestReviewFeedbackAsync
 
         return $$"""
             {
+              "id": {{id}},
               "body": "{{body}}",
               "resolvable": {{resolvable.ToString().ToLowerInvariant()}},
               "resolved": {{resolved.ToString().ToLowerInvariant()}},
@@ -687,5 +689,24 @@ public sealed class GetPullRequestReviewFeedbackAsync
             .Range(startIndex, count)
             .Select(i => $"{{\"notes\":[{{\"body\":\"Comment {i}\",\"resolvable\":true,\"resolved\":false,\"system\":false,\"created_at\":\"2026-06-01T00:00:00Z\",\"updated_at\":\"2026-06-01T00:00:00Z\",\"author\":{{\"username\":\"user{i}\"}},\"position\":null}}]}}");
         return $"[{string.Join(",", discussions)}]";
+    }
+
+    [Fact]
+    public async Task WhenNoteHasAnId_CommentCarriesIt()
+    {
+        // Arrange
+        FakeHandler handler = new(HttpStatusCode.OK, BuildDiscussionJson(BuildNoteJson(id: 302)));
+        GitLabHttpClient sut = BuildSut(handler);
+
+        // Act
+        Result<IReadOnlyList<ProviderComment>> result = await sut.GetPullRequestReviewFeedbackAsync(
+            ValidBaseUrl,
+            ValidSlug,
+            ValidMrUrl,
+            "glpat-token",
+            CancellationToken.None);
+
+        // Assert
+        result.ValueOrThrow().ShouldHaveSingleItem().Id.ShouldBe(ProviderCommentId.Create(302).ValueOrThrow());
     }
 }

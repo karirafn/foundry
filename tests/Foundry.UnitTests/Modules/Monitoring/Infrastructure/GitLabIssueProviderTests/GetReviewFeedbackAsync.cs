@@ -3,6 +3,7 @@ using System.Net;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Features.Providers;
+using Foundry.Modules.Monitoring.Features.Providers.Comments;
 using Foundry.Modules.Monitoring.Features.Providers.Feedback;
 using Foundry.Modules.Monitoring.Infrastructure;
 using Foundry.Modules.Monitoring.Infrastructure.GitLab;
@@ -78,6 +79,7 @@ public sealed class GetReviewFeedbackAsync
             ValidSlug,
             ValidMrUrl,
             Since,
+            PostedCommentIds.None,
             CancellationToken.None);
 
         // Assert
@@ -117,6 +119,7 @@ public sealed class GetReviewFeedbackAsync
             ValidSlug,
             ValidMrUrl,
             Since,
+            PostedCommentIds.None,
             CancellationToken.None);
 
         // Assert
@@ -155,6 +158,7 @@ public sealed class GetReviewFeedbackAsync
             ValidSlug,
             ValidMrUrl,
             Since,
+            PostedCommentIds.None,
             CancellationToken.None);
 
         // Assert
@@ -203,6 +207,7 @@ public sealed class GetReviewFeedbackAsync
             ValidSlug,
             ValidMrUrl,
             Since,
+            PostedCommentIds.None,
             CancellationToken.None);
 
         // Assert
@@ -247,11 +252,51 @@ public sealed class GetReviewFeedbackAsync
             ValidSlug,
             ValidMrUrl,
             Since,
+            PostedCommentIds.None,
             CancellationToken.None);
 
         // Assert
         result.IsSuccess.ShouldBeTrue();
         Result<ReviewFeedback>.Success success = result.ShouldBeOfType<Result<ReviewFeedback>.Success>();
         success.Value.Comments.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task WhenNoteIsInPostedRegistry_SkipsIt()
+    {
+        // Arrange
+        string json = """
+            [
+              {
+                "notes": [
+                  {
+                    "id": 302,
+                    "body": "Foundry's own question",
+                    "resolvable": false,
+                    "resolved": false,
+                    "system": false,
+                    "created_at": "2026-06-01T00:00:00Z",
+                    "updated_at": "2026-06-01T00:00:00Z",
+                    "author": { "username": "alice" },
+                    "position": null
+                  }
+                ]
+              }
+            ]
+            """;
+        FakeHandler handler = new(HttpStatusCode.OK, json);
+        GitLabIssueProvider sut = BuildSut(handler);
+        PostedCommentIds registry = new([ProviderCommentId.Create(302).ValueOrThrow()]);
+
+        // Act
+        Result<ReviewFeedback> result = await sut.GetReviewFeedbackAsync(
+            ValidSlug,
+            ValidMrUrl,
+            Since,
+            registry,
+            CancellationToken.None);
+
+        // Assert
+        result.ValueOrThrow().Comments.ShouldBeEmpty();
     }
 }

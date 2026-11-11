@@ -7,6 +7,7 @@ using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Features.Eligibility;
 using Foundry.Modules.Monitoring.Features.Providers;
 using Foundry.Modules.Monitoring.Features.Providers.Checks;
+using Foundry.Modules.Monitoring.Features.Providers.Comments;
 using Foundry.Modules.Monitoring.Features.Providers.Feedback;
 using Foundry.Modules.Monitoring.Features.Webhooks;
 using Foundry.Shared;
@@ -23,6 +24,7 @@ internal sealed class RepositoryPoller(
     IIntegrationEventDispatcher integrationEventDispatcher,
     IRepositoryEligibilityEvaluator eligibilityEvaluator,
     WebhookNudgeQueue nudgeQueue,
+    PostedCommentRegistry postedCommentRegistry,
     ILogger<RepositoryPoller> logger)
 {
     /// <summary>
@@ -445,6 +447,10 @@ internal sealed class RepositoryPoller(
             repository.Id,
             cancellationToken);
 
+        PostedCommentIds postedComments = reviewIssues.Count > 0
+            ? await postedCommentRegistry.LoadAsync(repository.Id, cancellationToken)
+            : PostedCommentIds.None;
+
         bool changed = false;
 
         // HTTP calls are sequential: GitHub has no batch issue/PR status endpoint,
@@ -499,6 +505,7 @@ internal sealed class RepositoryPoller(
                 repository.Slug,
                 reviewIssue.PullRequestUrl,
                 reviewIssue.FeedbackCutoffAt,
+                postedComments,
                 cancellationToken);
 
             if (feedbackResult is not Result<ReviewFeedback>.Success feedbackSuccess)

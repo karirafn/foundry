@@ -6,6 +6,7 @@ using Foundry.Modules.Monitoring.Features.CredentialResolution;
 using Foundry.Modules.Monitoring.Features.Eligibility;
 using Foundry.Modules.Monitoring.Features.Providers;
 using Foundry.Modules.Monitoring.Features.Providers.Checks;
+using Foundry.Modules.Monitoring.Features.Providers.Comments;
 using Foundry.Modules.Monitoring.Features.Providers.Feedback;
 using Foundry.Modules.Monitoring.Features.Polling;
 using Foundry.Modules.Monitoring.Features.Webhooks;
@@ -108,6 +109,7 @@ public sealed class ExecuteTickAsync : IAsyncDisposable
         }
 
         services.AddSingleton(new WebhookNudgeQueue(NullLogger<WebhookNudgeQueue>.Instance));
+        services.AddScoped<PostedCommentRegistry>();
         services.AddScoped<RepositoryPoller>();
 
         // Default: poll interval of 30 seconds (mirrors GlobalSettings default).
@@ -437,6 +439,7 @@ public sealed class ExecuteTickAsync : IAsyncDisposable
                 RepositorySlug slug,
                 string pullRequestUrl,
                 DateTimeOffset since,
+                PostedCommentIds postedComments,
                 CancellationToken cancellationToken)
             {
                 return Task.FromResult(Result<ReviewFeedback>.Ok(new ReviewFeedback([], OmittedCommentCount: 0, NewestCommentAt: null)));

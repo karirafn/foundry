@@ -4,6 +4,7 @@ using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Features.Eligibility;
 using Foundry.Modules.Monitoring.Features.Providers;
 using Foundry.Modules.Monitoring.Features.Providers.Checks;
+using Foundry.Modules.Monitoring.Features.Providers.Comments;
 using Foundry.Modules.Monitoring.Features.Providers.Feedback;
 using Foundry.Shared;
 using Foundry.Testing;
@@ -362,7 +363,7 @@ public sealed class EvaluateAndApplyAsync
             throw new NotSupportedException();
 
         public Task<Result<ReviewFeedback>> GetReviewFeedbackAsync(
-            RepositorySlug slug, string pullRequestUrl, DateTimeOffset since, CancellationToken cancellationToken) =>
+            RepositorySlug slug, string pullRequestUrl, DateTimeOffset since, PostedCommentIds postedComments, CancellationToken cancellationToken) =>
             throw new NotSupportedException();
 
         public Task<Result<BranchProtection>> GetBranchProtectionAsync(
