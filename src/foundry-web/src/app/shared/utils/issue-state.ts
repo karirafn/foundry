@@ -17,7 +17,9 @@ export type IssueState =
   | 'revision_failed'
   | 'triage_queued'
   | 'triage_in_progress'
-  | 'triage_failed';
+  | 'triage_failed'
+  | 'publish_failed'
+  | 'branch_diverged';
 
 // Display-only cap for the "attempt n of MAX" label on the fixing-checks revision callout.
 // Mirrors the server-side ChecksPendingIssue.ChecksMaxFixPushes value.
@@ -40,11 +42,15 @@ export const WORKING_STATES: ReadonlySet<IssueState> = new Set<IssueState>([
 // review is intentionally excluded: it has its own feedback flow.
 // triage_failed is intentionally excluded: its retry is a separate endpoint (Retry triage), and
 // Retry Issue would skip triage.
+// branch_diverged is included: Retry Issue continues from the issue branch.
+// publish_failed is intentionally excluded: Retry Issue would abandon the unpublished run, so the
+// issue offers Retry publish instead.
 export const RETRYABLE_STATES: ReadonlySet<IssueState> = new Set<IssueState>([
   'failed',
   'continuable_failed',
   'revision_failed',
   'unchanged',
+  'branch_diverged',
 ]);
 
 // Revision states: a revision worker is queued or actively running.

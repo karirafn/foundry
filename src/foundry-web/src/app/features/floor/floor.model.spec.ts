@@ -2,6 +2,7 @@ import { AgentActivity, InFlightTool } from '../../core/models/agent-activity.mo
 import { IssueSummary } from '../issues/issue.model';
 import {
   buildFloorLanes,
+  buildPublishingSlots,
   formatElapsed,
   formatTokenCount,
   laneStepText,
@@ -91,6 +92,48 @@ describe('buildFloorLanes', () => {
 
     // Assert
     expect(lanes.map((l) => l.issueId)).toEqual(['issue-1']);
+  });
+
+  it('should drop the agent lane of an issue that is publishing, which shows as a publishing slot instead', () => {
+    // Arrange
+    const publishing = buildIssue({ publishPhase: 'publishing' });
+
+    // Act
+    const lanes = buildFloorLanes([buildActivity()], [publishing], true, noTools);
+
+    // Assert
+    expect(lanes).toEqual([]);
+  });
+});
+
+describe('buildPublishingSlots', () => {
+  it('should build one slot per working issue with a publish phase, keeping the phase', () => {
+    // Arrange
+    const publishing = buildIssue({ id: 'a', publishPhase: 'publishing' });
+    const retrying = buildIssue({ id: 'b', state: 'revision_in_progress', publishPhase: 'retrying' });
+    const running = buildIssue({ id: 'c', publishPhase: null });
+    const noField = buildIssue({ id: 'd' });
+
+    // Act
+    const slots = buildPublishingSlots([publishing, retrying, running, noField]);
+
+    // Assert
+    expect(slots).toEqual([
+      { issue: publishing, phase: 'publishing' },
+      { issue: retrying, phase: 'retrying' },
+    ]);
+  });
+
+  it('should skip an issue with a publish phase that is not in a working state', () => {
+    // Arrange
+    const exhausted = buildIssue({ state: 'publish_failed', publishPhase: 'retrying' });
+    const review = buildIssue({ id: 'r', state: 'review', publishPhase: 'publishing' });
+
+    // Act
+    const slots = buildPublishingSlots([exhausted, review]);
+
+    // Assert
+    expect(slots).toEqual([]);
   });
 });
 

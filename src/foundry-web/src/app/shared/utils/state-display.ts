@@ -20,6 +20,8 @@ export const STATE_LABELS: Record<IssueState, string> = {
   triage_queued: 'TRIAGE QUEUED',
   triage_in_progress: 'TRIAGING',
   triage_failed: 'TRIAGE FAILED',
+  publish_failed: 'PUBLISH FAILED',
+  branch_diverged: 'BRANCH DIVERGED',
 };
 
 export const STATE_ARIA_LABELS: Record<IssueState, string> = {
@@ -42,6 +44,8 @@ export const STATE_ARIA_LABELS: Record<IssueState, string> = {
   triage_queued: 'triage queued',
   triage_in_progress: 'triaging',
   triage_failed: 'triage failed',
+  publish_failed: 'publish failed',
+  branch_diverged: 'branch diverged',
 };
 
 export const STATE_CSS_CLASSES: Record<IssueState, string> = {
@@ -64,6 +68,8 @@ export const STATE_CSS_CLASSES: Record<IssueState, string> = {
   triage_queued: 'badge--triage-queued',
   triage_in_progress: 'badge--triage-in-progress',
   triage_failed: 'badge--triage-failed',
+  publish_failed: 'badge--publish-failed',
+  branch_diverged: 'badge--branch-diverged',
 };
 
 export function cardAccentFor(state: IssueState): 'working' | 'ready' | null {

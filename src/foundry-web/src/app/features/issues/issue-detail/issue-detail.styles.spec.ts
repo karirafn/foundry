@@ -42,3 +42,47 @@ describe('issue-detail stylesheet badge chips', () => {
     },
   );
 });
+
+describe('publish badge styles (#787)', () => {
+  const publishStatusPath = 'src/app/features/issues/publish-status/publish-status.scss';
+  const stateBadgePath = 'src/app/shared/components/state-badge/state-badge.scss';
+
+  it.each(['.badge--publishing', '.badge--retrying', '.badge--retry-exhausted', '.badge--branch-diverged'])(
+    'styles the %s chip in fd-publish-status identically to fd-state-badge',
+    (selector) => {
+      // Act
+      const publishStatusBody = ruleBody(compiledCss(publishStatusPath), selector);
+      const stateBadgeBody = ruleBody(compiledCss(stateBadgePath), selector);
+
+      // Assert
+      expect(publishStatusBody).toBe(stateBadgeBody);
+    },
+  );
+
+  it('outlines the publishing chip in the working accent with activity text', () => {
+    // Act
+    const body = ruleBody(compiledCss(stateBadgePath), '.badge--publishing');
+
+    // Assert
+    expect(body).toContain('background: transparent');
+    expect(body).toContain('border: 1px solid var(--fd-accent-working)');
+    expect(body).toContain('color: var(--fd-text-activity)');
+  });
+
+  it('outlines the branch-diverged chip in warning colours', () => {
+    // Act
+    const body = ruleBody(compiledCss(stateBadgePath), '.badge--branch-diverged');
+
+    // Assert
+    expect(body).toContain('border: 1px solid var(--fd-text-warning)');
+    expect(body).toContain('color: var(--fd-text-warning)');
+  });
+
+  it('fills the publish-failed chip with the failed state colour', () => {
+    // Act
+    const body = ruleBody(compiledCss(stateBadgePath), '.badge--publish-failed');
+
+    // Assert
+    expect(body).toContain('background-color: var(--fd-state-failed)');
+  });
+});

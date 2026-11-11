@@ -99,6 +99,21 @@ describe('IssueService', () => {
     expect(loaded.providerType).toBe('gitlab');
   });
 
+  it('should carry publishPhase through loadIssues so the card and Floor can show the publish phase', () => {
+    // Arrange
+    const publishing: IssueSummary = { ...mockSummary, state: 'in_progress', publishPhase: 'retrying' };
+    const running: IssueSummary = { ...mockSummary, id: 'b0000000-0000-0000-0000-000000000002', state: 'in_progress' };
+
+    // Act
+    service.loadIssues();
+    httpMock.expectOne('/api/issues').flush({ items: [publishing, running], nextCursor: null });
+
+    // Assert
+    const [first, second] = service.issues();
+    expect(first.publishPhase).toBe('retrying');
+    expect(second.publishPhase).toBeNull();
+  });
+
   // Cycle 2: loadIssues with repositoryId appends query param
   it('should append repositoryId query param when provided to loadIssues', () => {
     // Arrange — no additional setup

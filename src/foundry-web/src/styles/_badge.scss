@@ -28,6 +28,7 @@ $badge-state-backgrounds: (
   triage-in-progress: var(--fd-state-in-progress),
   triage-failed: var(--fd-state-failed),
   usage-limited: var(--fd-state-usage-limited),
+  publish-failed: var(--fd-state-failed),
 );
 
 /// Outlined modifier → (border colour, text colour).
@@ -45,13 +46,26 @@ $badge-outlined-variants: (
   failure-transient-api-error: (var(--fd-state-failed), var(--fd-text-error)),
   failure-pr-closed: (var(--fd-text-secondary), var(--fd-text-secondary)),
   failure-verdict-invalid: (var(--fd-state-failed), var(--fd-text-error)),
+  failure-publish-failed: (var(--fd-state-failed), var(--fd-text-error)),
+  failure-publish-expired: (var(--fd-state-failed), var(--fd-text-error)),
   retrying: (var(--fd-text-warning), var(--fd-text-warning)),
   retry-exhausted: (var(--fd-state-failed), var(--fd-text-error)),
+  // Publishing is active work, but the agent has stopped.
+  publishing: (var(--fd-accent-working), var(--fd-text-activity)),
+  // Attention needed, but the run's work is safe on a side branch.
+  branch-diverged: (var(--fd-text-warning), var(--fd-text-warning)),
 );
 
 /// Emits `.badge` and its modifiers. Pass `$states` to emit only the state modifiers a
-/// template uses, keeping the component stylesheet within its size budget.
-@mixin badge($states: map.keys($badge-state-backgrounds)) {
+/// template uses, and `$exclude-outlined` to leave out outlined modifiers it never renders,
+/// keeping the component stylesheet within its size budget.
+@mixin badge($states: map.keys($badge-state-backgrounds), $exclude-outlined: ()) {
+  @each $excluded in $exclude-outlined {
+    @if not map.has-key($badge-outlined-variants, $excluded) {
+      @error "Unknown outlined badge variant '#{$excluded}'.";
+    }
+  }
+
   .badge {
     display: inline-block;
     padding: 2px 8px;
@@ -74,10 +88,12 @@ $badge-outlined-variants: (
     }
 
     @each $variant, $colors in $badge-outlined-variants {
-      &--#{$variant} {
-        background: transparent;
-        border: 1px solid list.nth($colors, 1);
-        color: list.nth($colors, 2);
+      @if not list.index($exclude-outlined, $variant) {
+        &--#{$variant} {
+          background: transparent;
+          border: 1px solid list.nth($colors, 1);
+          color: list.nth($colors, 2);
+        }
       }
     }
   }

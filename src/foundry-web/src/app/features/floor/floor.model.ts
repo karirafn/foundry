@@ -1,5 +1,5 @@
 import { ActiveSubagent, AgentActivity, InFlightTool } from '../../core/models/agent-activity.model';
-import { IssueSummary, LIVE_STATES } from '../issues/issue.model';
+import { IssueSummary, LIVE_STATES, PublishPhase } from '../issues/issue.model';
 
 /** One Floor lane: an active run's live Agent Activity with its issue (null until the issue list loads). */
 export interface FloorLane {
@@ -34,10 +34,32 @@ export function buildFloorLanes(
     if (issuesLoaded && (issue === null || !LIVE_STATES.has(issue.state))) {
       continue;
     }
+    // The agent has exited once the run publishes; the run shows as a publishing slot instead.
+    if (issue !== null && issue.publishPhase != null) {
+      continue;
+    }
     lanes.push({ issueId: activity.issueId, issue, activity, recentTools: recentToolsFor(activity.workerRunId) });
   }
 
   return lanes;
+}
+
+/** A run whose agent has exited and whose commits Foundry is publishing, or retrying to publish. */
+export interface PublishingSlot {
+  readonly issue: IssueSummary;
+  readonly phase: PublishPhase;
+}
+
+/** One slot per working issue whose run is publishing; such a run still holds its dispatch slot. */
+export function buildPublishingSlots(issues: readonly IssueSummary[]): PublishingSlot[] {
+  const slots: PublishingSlot[] = [];
+  for (const issue of issues) {
+    const phase = issue.publishPhase ?? null;
+    if (phase !== null && LIVE_STATES.has(issue.state)) {
+      slots.push({ issue, phase });
+    }
+  }
+  return slots;
 }
 
 /** Splits active subagents into top-level (parallel) and nested (spawned by another subagent). */

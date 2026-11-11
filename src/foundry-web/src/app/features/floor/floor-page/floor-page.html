@@ -11,7 +11,7 @@
     <p class="floor__error" role="alert">{{ error }}</p>
   }
 
-  @if (lanes().length === 0 && startingSlots().length === 0) {
+  @if (lanes().length === 0 && startingSlots().length === 0 && publishingSlots().length === 0) {
     <p class="floor__empty">No agents are working right now.</p>
   }
 
@@ -19,6 +19,31 @@
     @for (lane of lanes(); track lane.issueId) {
       <li class="floor__lane-item">
         <fd-floor-lane [lane]="lane" [now]="now()" [stale]="stale()" />
+      </li>
+    }
+    <!-- Not live regions: the page summary already changes, and announcing every slot would be noisy. -->
+    @for (slot of publishingSlots(); track slot.issue.id) {
+      <li class="floor__lane-item">
+        <div
+          class="floor__slot floor__slot--publishing"
+          [class.floor__slot--publish-retrying]="slot.phase === 'retrying'"
+        >
+          <span class="floor__slot-label">{{ slot.phase === 'retrying' ? 'Retrying publish' : 'Publishing' }}</span>
+          <span class="floor__slot-issue">
+            @if (slot.issue.url | safeHref; as issueUrl) {
+              <a class="floor__slot-link" [href]="issueUrl" target="_blank" rel="noopener noreferrer">
+                <span class="floor__queue-number">#{{ slot.issue.issueNumber }}</span>
+                <span class="floor__queue-title">{{ slot.issue.title }}</span>
+              </a>
+            } @else {
+              <span class="floor__queue-number">#{{ slot.issue.issueNumber }}</span>
+              <span class="floor__queue-title">{{ slot.issue.title }}</span>
+            }
+          </span>
+          <span class="floor__slot-hint">{{
+            slot.phase === 'retrying' ? 'Publishing failed; Foundry retries automatically' : "Pushing the run's commits"
+          }}</span>
+        </div>
       </li>
     }
     @for (slot of startingSlots(); track slot) {

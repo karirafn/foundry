@@ -13,6 +13,9 @@ export interface RunStats {
   outputTokens: TokenTotal;
 }
 
+/** Publish phase of a working issue's run; null while the agent runs or once publishing finished. */
+export type PublishPhase = 'publishing' | 'retrying';
+
 export interface IssueSummary {
   id: string;
   issueNumber: number;
@@ -29,6 +32,11 @@ export interface IssueSummary {
   rebaseSkippedReason?: string | null;
   pullRequestUrl?: string | null;
   providerType?: string | null;
+  /**
+   * The publish phase of the issue's run, non-null only while the issue is in_progress or
+   * revision_in_progress: Foundry is publishing the run's commits, or retrying a failed publish.
+   */
+  publishPhase?: PublishPhase | null;
 }
 
 export interface EligibilityViolation {
@@ -107,6 +115,11 @@ export interface IssueStateDetails {
   rebaseOutcome?: string | null;
   rebaseSkippedReason?: string | null;
   awaitingInput?: AwaitingInputDetails | null;
+  /** Set when the state is branch_diverged: the issue branch on the provider (URL built by the API). */
+  branchUrl?: string | null;
+  /** Set when the state is branch_diverged: the side branch Foundry pushed the run's work to. */
+  sideBranchName?: string | null;
+  sideBranchUrl?: string | null;
 }
 
 export interface IssueDetail extends IssueSummary {
