@@ -14,7 +14,10 @@ export type IssueState =
   | 'completed'
   | 'revision_queued'
   | 'revision_in_progress'
-  | 'revision_failed';
+  | 'revision_failed'
+  | 'triage_queued'
+  | 'triage_in_progress'
+  | 'triage_failed';
 
 // Display-only cap for the "attempt n of MAX" label on the fixing-checks revision callout.
 // Mirrors the server-side ChecksPendingIssue.ChecksMaxFixPushes value.
@@ -24,13 +27,19 @@ export const MAX_CHECKS_FIX_ATTEMPTS = 2;
 // Mirrors the server-side RebasePendingIssue.MaxRebaseConflictAttempts value.
 export const MAX_REBASE_CONFLICT_ATTEMPTS = 2;
 
-// Live states: issues with an active worker running (in progress or under revision).
+// Live states: a worker is running: implementing, revising or triaging.
 // continuation_queued is intentionally excluded: it is a queued tier, not an active worker state.
-export const WORKING_STATES: ReadonlySet<IssueState> = new Set<IssueState>(['in_progress', 'revision_in_progress']);
+export const WORKING_STATES: ReadonlySet<IssueState> = new Set<IssueState>([
+  'in_progress',
+  'revision_in_progress',
+  'triage_in_progress',
+]);
 
 // Retryable states: the backend accepts a manual retry request for these.
 // unchanged is included because a run that produced no changes can be retried.
 // review is intentionally excluded: it has its own feedback flow.
+// triage_failed is intentionally excluded: its retry is a separate endpoint (Retry triage), and
+// Retry Issue would skip triage.
 export const RETRYABLE_STATES: ReadonlySet<IssueState> = new Set<IssueState>([
   'failed',
   'continuable_failed',
@@ -44,4 +53,11 @@ export const RETRYABLE_STATES: ReadonlySet<IssueState> = new Set<IssueState>([
 export const REVISION_STATES: ReadonlySet<IssueState> = new Set<IssueState>([
   'revision_queued',
   'revision_in_progress',
+]);
+
+// Re-triageable states: the backend accepts a Re-triage request for these, sending the issue
+// back through triage.
+export const RETRIAGEABLE_STATES: ReadonlySet<IssueState> = new Set<IssueState>([
+  'queued',
+  'blocked',
 ]);

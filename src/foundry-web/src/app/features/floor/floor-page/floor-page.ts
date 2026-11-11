@@ -19,6 +19,7 @@ import { IssueSummary } from '../../issues/issue.model';
 import { DispatchCapacity, DispatchCapacityService } from '../dispatch-capacity.service';
 import { FloorLaneComponent } from '../floor-lane/floor-lane';
 import { FLOOR_QUEUE_LIMIT, FloorLane, buildFloorLanes } from '../floor.model';
+import { RoleTagComponent } from '../../../shared/components/role-tag/role-tag';
 
 /** Clock cadence for "time since last event"; token totals already arrive at most every 2 s per run. */
 const CLOCK_INTERVAL_MS = 5_000;
@@ -28,7 +29,7 @@ const CAPACITY_REFRESH_MS = 30_000;
 /** The Floor: one lane per active run, free dispatch slots, and the next queued issues. */
 @Component({
   selector: 'fd-floor-page',
-  imports: [FloorLaneComponent, ConnectionIndicatorComponent],
+  imports: [FloorLaneComponent, ConnectionIndicatorComponent, RoleTagComponent],
   templateUrl: './floor-page.html',
   styleUrl: './floor-page.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,

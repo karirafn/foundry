@@ -11,7 +11,8 @@ export type FailureCategoryToken =
   | 'auth_invalid'
   | 'transient_api_error'
   | 'pr_closed'
-  | 'cancelled';
+  | 'cancelled'
+  | 'verdict_invalid';
 
 interface FailureCategoryDisplay {
   readonly label: string;
@@ -32,6 +33,7 @@ export const FAILURE_CATEGORY_DISPLAY = {
   transient_api_error: { label: 'CLAUDE API ERROR', cssClass: 'badge--failure-transient-api-error' },
   pr_closed: { label: 'PR CLOSED', cssClass: 'badge--failure-pr-closed' },
   cancelled: { label: 'CANCELLED', cssClass: 'badge--failure-cancelled' },
+  verdict_invalid: { label: 'INVALID VERDICT', cssClass: 'badge--failure-verdict-invalid' },
 } as const satisfies Record<FailureCategoryToken, FailureCategoryDisplay>;
 
 export function getFailureCategoryDisplay(token: string): FailureCategoryDisplay | null {

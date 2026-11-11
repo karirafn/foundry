@@ -182,6 +182,22 @@ describe('FloorPageComponent', () => {
     expect(numbers).toEqual(['#9', '#3', '#5']);
   });
 
+
+  it('should tag a triage_queued row in Up next with the triage role', async () => {
+    // Arrange
+    const { fixture, httpMock, el } = await setup();
+
+    // Act
+    flushIssues(httpMock, [issueItem('issue-51', 51, 'triage_queued'), issueItem('issue-48', 48, 'queued')]);
+    flushCapacity(httpMock, 3);
+    fixture.detectChanges();
+
+    // Assert
+    const items = Array.from(el.querySelectorAll('.floor__queue-item'));
+    expect(items.length).toBe(2);
+    expect(items[0].querySelector('fd-role-tag')?.textContent).toContain('triage');
+    expect(items[1].querySelector('fd-role-tag')).toBeNull();
+  });
   it('should show an empty state with free slots when no runs are active', async () => {
     // Arrange
     const { fixture, httpMock, el } = await setup();

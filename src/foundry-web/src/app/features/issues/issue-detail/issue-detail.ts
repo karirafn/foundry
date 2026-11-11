@@ -1,5 +1,8 @@
 import {
   ChangeDetectionStrategy,
+  ElementRef,
+  Injector,
+  afterNextRender,
   Component,
   InputSignal,
   OutputEmitterRef,
@@ -11,12 +14,18 @@ import {
   input,
   output,
   signal,
+  untracked,
+  viewChild,
 } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { Observable } from 'rxjs';
-import { IssueDetail, IssueStateDetails } from '../issue.model';
+import {
+  IssueDetail,
+  IssueKindClassification,
+  IssueStateDetails,
+} from '../issue.model';
 import { SafeHrefPipe } from '../../../shared/pipes/safe-href.pipe';
-import { IssueService } from '../issue.service';
+import { IssueService, TriageAction } from '../issue.service';
 import { WorkerRunService } from '../../workers/worker-run.service';
 import { WorkerSignalRService } from '../../../core/services/worker-signalr.service';
 import { WorkerRunDetail } from '../../workers/worker-run.model';
@@ -29,10 +38,38 @@ import {
   IssueState,
   MAX_CHECKS_FIX_ATTEMPTS,
   MAX_REBASE_CONFLICT_ATTEMPTS,
+  RETRIAGEABLE_STATES,
   RETRYABLE_STATES,
   REVISION_STATES,
   WORKING_STATES,
 } from '../../../shared/utils/issue-state';
+
+const KIND_LABELS: Readonly<Record<string, string>> = {
+  feature: 'Feature',
+  bug: 'Bug',
+  refactor: 'Refactor',
+  documentation: 'Documentation',
+};
+
+const KIND_SOURCE_NOTES: Readonly<Record<IssueKindClassification['source'], string>> = {
+  labelled: 'From label',
+  triaged: 'From triage',
+  unclassified: 'No kind label, and triage has not classified it',
+};
+
+// States still waiting for a triage worker.
+const TRIAGE_WAITING_STATES: ReadonlySet<string> = new Set<string>(['detected', 'triage_queued']);
+
+const RETRIAGE_MESSAGE =
+  'The issue leaves the queue and a triage worker reads it again. If it needs more detail, the questions are posted on the issue and it waits for a reply.';
+const RETRIAGE_BLOCKED_SUFFIX = ' If its blockers are still open afterwards, it returns to Blocked.';
+
+type TriageCalloutKind = 'waiting' | 'running' | 'failed' | 'needs_detail' | 'verdict' | 'not_triaged';
+
+interface TriageCallout {
+  readonly kind: TriageCalloutKind;
+  readonly tint: 'neutral' | 'failed' | 'warning';
+}
 
 @Component({
   selector: 'fd-issue-detail',
@@ -79,8 +116,30 @@ import {
           </div>
         }
 
-        @if (d.stateDetails; as s) {
-          <div class="issue-detail__fields">
+        <div class="issue-detail__fields">
+          @if (d.kind; as k) {
+            <div class="issue-detail__field issue-detail__field--kind">
+              <span class="issue-detail__field-key">Kind</span>
+              <span class="issue-detail__kind-line">
+                <span
+                  class="issue-detail__field-value issue-detail__kind-value"
+                  [class.issue-detail__kind-value--known]="k.source !== 'unclassified'"
+                  [class.issue-detail__kind-value--unclassified]="k.source === 'unclassified'"
+                >{{ k.source === 'unclassified' ? 'Unclassified' : _kindLabel(k.kind) }}</span>
+                <span class="issue-detail__kind-source">{{ _kindSourceNote(k.source) }}</span>
+              </span>
+              @if (k.conflictingTriageKind; as triageKind) {
+                <span class="issue-detail__kind-differs">
+                  <span class="badge issue-detail__chip issue-detail__chip--warning">Triage differs</span>
+                  <span class="issue-detail__field-value">
+                    Triage read it as {{ _kindPhrase(triageKind) }}. The label decides; nothing changes.
+                  </span>
+                </span>
+              }
+            </div>
+          }
+
+          @if (d.stateDetails; as s) {
             @if (s.branchName) {
               <div class="issue-detail__field">
                 <span class="issue-detail__field-key">Branch</span>
@@ -136,8 +195,10 @@ import {
                 <span class="issue-detail__field-value">{{ rebaseLabel }}</span>
               </div>
             }
-          </div>
+          }
+        </div>
 
+        @if (d.stateDetails; as s) {
           @if (s.checksOutcome === 'still_failing' && s.failingChecks?.length) {
             <div class="issue-detail__failing-checks">
               <span class="issue-detail__field-key" id="failing-checks-heading">Failing Checks</span>
@@ -167,7 +228,9 @@ import {
 
           @if (s.awaitingInput; as awaiting) {
             <div class="issue-detail__failing-checks issue-detail__awaiting-input">
-              <span class="issue-detail__field-key" id="awaiting-input-heading">Open Questions</span>
+              <span class="issue-detail__field-key" id="awaiting-input-heading">{{
+                awaiting.resumeTarget === 'retriage' ? 'Questions from triage' : 'Open Questions'
+              }}</span>
               <ul class="issue-detail__failing-list" aria-labelledby="awaiting-input-heading">
                 @for (q of awaiting.questions; track $index) {
                   <li class="issue-detail__question">
@@ -228,7 +291,9 @@ import {
                   <span class="badge issue-detail__retry-chip badge--retry-exhausted">Retry exhausted</span>
                   <span class="issue-detail__retry-message issue-detail__field-value">
                     Automatic retries exhausted after {{ retry.maxAttempts }} attempts.
-                    @if (d.state === 'failed' || d.state === 'continuable_failed' || d.state === 'revision_failed') {
+                    @if (d.state === 'triage_failed') {
+                      Use Retry triage to run it again.
+                    } @else if (d.state === 'failed' || d.state === 'continuable_failed' || d.state === 'revision_failed') {
                       Use Retry Issue to try again manually.
                     }
                   </span>
@@ -306,6 +371,70 @@ import {
             }
           </div>
         }
+
+        <!-- Triage callout. Permanently mounted like the retry and revision live regions so
+             screen readers detect triage transitions; it is also where focus goes after a
+             triage action succeeds. It sits outside the state-details block because the
+             waiting and not-triaged states carry no state details. -->
+        @let callout = _triageCallout(d);
+        <div
+          #triageRegion
+          class="issue-detail__triage-live-region"
+          [class.issue-detail__triage-state]="callout !== null"
+          [class.issue-detail__triage-state--neutral]="callout !== null && callout.tint === 'neutral'"
+          [class.issue-detail__triage-state--failed]="callout?.tint === 'failed'"
+          [class.issue-detail__triage-state--warning]="callout?.tint === 'warning'"
+          [class.issue-detail__triage-live-region--empty]="callout === null"
+          role="status"
+          aria-live="polite"
+          aria-atomic="true"
+          tabindex="-1"
+        >
+          @if (callout !== null) {
+            <span class="issue-detail__field-key">Triage</span>
+            <div class="issue-detail__triage-callout">
+              @switch (callout.kind) {
+                @case ('waiting') {
+                  <span class="issue-detail__field-value issue-detail__triage-message">Waiting for a worker to triage this issue.</span>
+                }
+                @case ('running') {
+                  <span class="issue-detail__field-value issue-detail__triage-message"
+                    >A triage worker is reading the issue and the repository.</span>
+                }
+                @case ('failed') {
+                  <span class="issue-detail__field-value issue-detail__triage-message">
+                    <strong>Triage did not finish.</strong>
+                    Retry triage to run it again, or skip triage to queue the issue without a readiness check.
+                  </span>
+                }
+                @case ('needs_detail') {
+                  <span class="issue-detail__field-value issue-detail__triage-message">
+                    Triage needs more detail. The questions are posted on the issue; once a reply settles,
+                    Foundry triages again.
+                  </span>
+                }
+                @case ('verdict') {
+                  @if (d.triage; as t) {
+                    <span
+                      class="badge issue-detail__chip"
+                      [class.issue-detail__chip--success]="t.outcome === 'ready'"
+                      [class.issue-detail__chip--warning]="t.outcome === 'needs_input'"
+                    >{{ t.outcome === 'ready' ? 'Ready' : 'Needs input' }}</span>
+                    <span class="issue-detail__field-value">{{ _kindLabel(t.kind) }}</span>
+                    <span class="issue-detail__field-value issue-detail__triage-message">Triaged {{ t.decidedAt | date: 'medium' }}</span>
+                    @if (t.outcome === 'needs_input') {
+                      <span class="issue-detail__field-value issue-detail__triage-message">{{ _questionsAsked(t.questions.length) }}</span>
+                    }
+                  }
+                }
+                @case ('not_triaged') {
+                  <span class="issue-detail__field-value issue-detail__triage-message"
+                    >Not triaged. This issue was queued without a readiness check.</span>
+                }
+              }
+            </div>
+          }
+        </div>
 
         <div class="issue-detail__fields issue-detail__fields--author">
           <div class="issue-detail__field issue-detail__field--full-width">
@@ -385,8 +514,12 @@ import {
           </div>
           <fd-confirm-dialog
             [open]="_confirmCancelOpen()"
-            title="Stop the worker?"
-            message="Commits on the branch are kept; Retry continues from them."
+            [title]="d.state === 'triage_in_progress' ? 'Stop the triage worker?' : 'Stop the worker?'"
+            [message]="
+              d.state === 'triage_in_progress'
+                ? 'The issue moves to Triage failed, where you can retry or skip triage.'
+                : 'Commits on the branch are kept; Retry continues from them.'
+            "
             confirmLabel="Stop worker"
             cancelLabel="Keep running"
             [destructive]="true"
@@ -437,6 +570,75 @@ import {
             />
           }
         }
+
+        @if (d.state === 'triage_failed') {
+          <div class="issue-detail__actions">
+            <button
+              class="issue-detail__retry-btn"
+              type="button"
+              [disabled]="_triagePending() !== null"
+              [attr.aria-label]="'Retry triage for issue #' + d.issueNumber"
+              (click)="retryTriage(d.id)"
+            >{{ _triagePending() === 'retry_triage' ? 'Retrying triage…' : 'Retry triage' }}</button>
+            <button
+              class="issue-detail__secondary-btn"
+              type="button"
+              [disabled]="_triagePending() !== null"
+              [attr.aria-label]="'Skip triage for issue #' + d.issueNumber"
+              (click)="_confirmSkipTriageOpen.set(true)"
+            >{{ _triagePending() === 'skip_triage' ? 'Skipping triage…' : 'Skip triage' }}</button>
+            <span
+              class="issue-detail__retry-error"
+              aria-live="assertive"
+              aria-atomic="true"
+            >{{ _issueService.triageActionError() ?? '' }}</span>
+          </div>
+          <fd-confirm-dialog
+            [open]="_confirmSkipTriageOpen()"
+            [title]="'Skip triage for #' + d.issueNumber + '?'"
+            message="The issue is queued without a readiness check. If it has open blockers, it waits as Blocked first. Its kind stays as it is now."
+            confirmLabel="Skip triage"
+            cancelLabel="Cancel"
+            [destructive]="false"
+            (confirmed)="confirmSkipTriage(d.id)"
+            (dismissed)="_confirmSkipTriageOpen.set(false)"
+          />
+        }
+
+        @if (_isRetriageable(d.state)) {
+          <div class="issue-detail__actions">
+            <button
+              class="issue-detail__retry-btn"
+              type="button"
+              [disabled]="_triagePending() !== null"
+              [attr.aria-label]="'Re-triage issue #' + d.issueNumber"
+              (click)="_confirmRetriageOpen.set(true)"
+            >{{ _triagePending() === 'retriage' ? 'Re-triaging…' : 'Re-triage' }}</button>
+            <span
+              class="issue-detail__retry-error"
+              aria-live="assertive"
+              aria-atomic="true"
+            >{{ _issueService.triageActionError() ?? '' }}</span>
+          </div>
+          <fd-confirm-dialog
+            [open]="_confirmRetriageOpen()"
+            [title]="'Triage #' + d.issueNumber + ' again?'"
+            [message]="_retriageMessage(d.state)"
+            confirmLabel="Re-triage"
+            cancelLabel="Cancel"
+            [destructive]="false"
+            (confirmed)="confirmRetriage(d.id)"
+            (dismissed)="_confirmRetriageOpen.set(false)"
+          />
+        }
+
+        <!-- Outside the action rows: a successful triage action reloads the detail into a state
+             without those rows, and the announcement must survive that. -->
+        <span
+          class="issue-detail__triage-success-announcement sr-only"
+          aria-live="polite"
+          aria-atomic="true"
+        >{{ _issueService.triageActionSuccess() ?? '' }}</span>
       </div>
     }
   `,
@@ -465,6 +667,23 @@ export class IssueDetailComponent {
 
   protected readonly _confirmRetryFreshOpen: WritableSignal<boolean> = signal(false);
 
+  protected readonly _confirmSkipTriageOpen: WritableSignal<boolean> = signal(false);
+
+  protected readonly _confirmRetriageOpen: WritableSignal<boolean> = signal(false);
+
+  protected readonly _triagePending: Signal<TriageAction | null> = computed(() =>
+    this._issueService.triageActionPending(),
+  );
+
+  private readonly _injector = inject(Injector);
+
+  private readonly _triageRegion: Signal<ElementRef<HTMLElement> | undefined> =
+    viewChild<ElementRef<HTMLElement>>('triageRegion');
+
+  // Set when a triage action succeeds; consumed by the detail effect once the reloaded detail
+  // arrives, which then focuses the triage callout.
+  private _focusTriageRegionAfterReload = false;
+
   // Set once the user confirmed a cancel in this view; reset whenever the issue detail reloads
   // (an IssueUpdated push reloads it), after which the persisted cancelRequestedAt takes over.
   private readonly _cancelSubmitted: WritableSignal<boolean> = signal(false);
@@ -490,6 +709,15 @@ export class IssueDetailComponent {
   });
 
   constructor() {
+    // A successful triage action reloads the detail into a new state that no longer has the
+    // clicked button; remember to move focus to the triage callout once that reload lands
+    // (WCAG 2.4.3). Registered before the detail effect so the flag is set first.
+    effect(() => {
+      if (this._issueService.triageActionSuccess() !== null) {
+        this._focusTriageRegionAfterReload = true;
+      }
+    });
+
     effect(() => {
       const d = this.detail();
       const workerRunId = d?.stateDetails?.workerRunId ?? null;
@@ -498,6 +726,13 @@ export class IssueDetailComponent {
       this._cancelErrorSignal.set(null);
       this._confirmCancelOpen.set(false);
       this._confirmRetryFreshOpen.set(false);
+      this._confirmSkipTriageOpen.set(false);
+      this._confirmRetriageOpen.set(false);
+
+      if (d !== null && untracked(() => this._focusTriageRegionAfterReload)) {
+        this._focusTriageRegionAfterReload = false;
+        afterNextRender(() => this._triageRegion()?.nativeElement.focus(), { injector: this._injector });
+      }
 
       if (workerRunId === null) {
         this._workerRunSignal.set(null);
@@ -553,6 +788,77 @@ export class IssueDetailComponent {
   confirmRetryFresh(id: string): void {
     this._confirmRetryFreshOpen.set(false);
     this._issueService.retryIssueFresh(id);
+  }
+
+  retryTriage(id: string): void {
+    this._issueService.retryTriage(id);
+  }
+
+  confirmSkipTriage(id: string): void {
+    this._confirmSkipTriageOpen.set(false);
+    this._issueService.skipTriage(id);
+  }
+
+  confirmRetriage(id: string): void {
+    this._confirmRetriageOpen.set(false);
+    this._issueService.retriage(id);
+  }
+
+  protected _isRetriageable(state: string): boolean {
+    return RETRIAGEABLE_STATES.has(state as IssueState);
+  }
+
+  protected _retriageMessage(state: string): string {
+    return state === 'blocked' ? RETRIAGE_MESSAGE + RETRIAGE_BLOCKED_SUFFIX : RETRIAGE_MESSAGE;
+  }
+
+  /** Display label for an issue kind; an unknown value shows as is. */
+  protected _kindLabel(kind: string | null): string {
+    if (kind === null) {
+      return 'Unclassified';
+    }
+    return KIND_LABELS[kind] ?? kind;
+  }
+
+  /** The kind as it reads mid-sentence, e.g. "a refactor" or "documentation". */
+  protected _kindPhrase(kind: string): string {
+    const lower = (KIND_LABELS[kind] ?? kind).toLowerCase();
+    return kind === 'documentation' ? lower : `a ${lower}`;
+  }
+
+  protected _kindSourceNote(source: IssueKindClassification['source']): string {
+    return KIND_SOURCE_NOTES[source] ?? '';
+  }
+
+  protected _questionsAsked(count: number): string {
+    return count === 1 ? '1 question asked' : `${count} questions asked`;
+  }
+
+  /**
+   * Which triage callout row (design §2b) applies to the issue, or null when it is empty. The
+   * triage states are checked before the verdict: during a re-triage the latest verdict predates
+   * the run and is stale, so it stays hidden.
+   */
+  protected _triageCallout(d: IssueDetail): TriageCallout | null {
+    if (TRIAGE_WAITING_STATES.has(d.state)) {
+      return { kind: 'waiting', tint: 'neutral' };
+    }
+    if (d.state === 'triage_in_progress') {
+      return { kind: 'running', tint: 'neutral' };
+    }
+    if (d.state === 'triage_failed') {
+      return { kind: 'failed', tint: 'failed' };
+    }
+    if (d.state === 'awaiting_input' && d.stateDetails?.awaitingInput?.resumeTarget === 'retriage') {
+      return { kind: 'needs_detail', tint: 'warning' };
+    }
+    if (d.triage) {
+      return { kind: 'verdict', tint: 'neutral' };
+    }
+    if (d.state === 'queued' || d.state === 'blocked') {
+      return { kind: 'not_triaged', tint: 'neutral' };
+    }
+    return null;
   }
 
   protected readonly _maxChecksFixAttempts = MAX_CHECKS_FIX_ATTEMPTS;

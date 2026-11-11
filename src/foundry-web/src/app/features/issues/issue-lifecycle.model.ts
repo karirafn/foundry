@@ -24,6 +24,9 @@ export const ACTIVE_STATES: ReadonlySet<IssueState> = new Set<IssueState>([
   'revision_queued',
   'revision_in_progress',
   'revision_failed',
+  'triage_queued',
+  'triage_in_progress',
+  'triage_failed',
 ]);
 
 export const RESOLVED_STATES: ReadonlySet<IssueState> = new Set<IssueState>([
@@ -47,17 +50,34 @@ export const STATE_GROUPS: readonly StateGroup[] = [
   {
     id: 'in_progress',
     label: 'In progress',
-    states: ['in_progress', 'revision_in_progress'],
+    states: ['in_progress', 'revision_in_progress', 'triage_in_progress'],
   },
   {
     id: 'needs_attention',
     label: 'Needs attention',
-    states: ['review', 'awaiting_input', 'unchanged', 'failed', 'continuable_failed', 'revision_failed'],
+    states: [
+      'review',
+      'awaiting_input',
+      'unchanged',
+      'failed',
+      'continuable_failed',
+      'revision_failed',
+      'triage_failed',
+    ],
   },
   {
     id: 'waiting',
     label: 'Waiting',
-    states: ['detected', 'queued', 'blocked', 'revision_queued', 'continuation_queued', 'rebase_pending', 'checks_pending'],
+    states: [
+      'detected',
+      'queued',
+      'blocked',
+      'revision_queued',
+      'continuation_queued',
+      'triage_queued',
+      'rebase_pending',
+      'checks_pending',
+    ],
   },
   {
     id: 'resolved',
@@ -108,13 +128,21 @@ export function groupRankFor(state: IssueState): number {
 // states in the same tier have equal rank. Tier index = rank.
 export const WITHIN_GROUP_ORDER: Readonly<Record<StateGroupId, readonly (readonly IssueState[])[]>> = {
   in_progress: [
-    ['in_progress', 'revision_in_progress'],
+    ['in_progress', 'revision_in_progress', 'triage_in_progress'],
   ],
   needs_attention: [
-    ['review', 'awaiting_input', 'unchanged', 'failed', 'continuable_failed', 'revision_failed'],
+    [
+      'review',
+      'awaiting_input',
+      'unchanged',
+      'failed',
+      'continuable_failed',
+      'revision_failed',
+      'triage_failed',
+    ],
   ],
   waiting: [
-    ['queued', 'revision_queued', 'continuation_queued'],
+    ['queued', 'revision_queued', 'continuation_queued', 'triage_queued'],
     ['detected', 'rebase_pending', 'checks_pending'],
     ['blocked'],
   ],

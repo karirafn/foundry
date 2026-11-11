@@ -2667,4 +2667,115 @@ describe('IssueCardComponent', () => {
       expect(label).toContain('silent 6 minutes, Bash running');
     });
   });
+
+  describe('triage states (#772)', () => {
+    const triagingIssue: IssueSummary = { ...mockIssue, state: 'triage_in_progress' };
+
+    it('should show just "active" for triage_in_progress, never a commit phrase', () => {
+      // Arrange
+      const recentAt = new Date(Date.now() - 2 * 60 * 1000).toISOString();
+
+      // Act — a commit count of 0 would read "no commits yet" on an implement run
+      const fixture = createComponent(triagingIssue, false, recentAt, 0);
+      const el = fixture.nativeElement as HTMLElement;
+
+      // Assert
+      const activity = el.querySelector('.issue-card__activity') as HTMLElement;
+      expect(activity.textContent?.trim()).toBe('active');
+    });
+
+    it('should show "active · silent Nm" for a silent triage run', () => {
+      // Arrange
+      const sevenMinutesAgo = new Date(Date.now() - 7 * 60 * 1000).toISOString();
+
+      // Act
+      const fixture = createComponent(triagingIssue, false, sevenMinutesAgo, 3);
+      const el = fixture.nativeElement as HTMLElement;
+
+      // Assert
+      const activity = el.querySelector('.issue-card__activity') as HTMLElement;
+      expect(activity.textContent?.trim()).toBe('active · silent 7m');
+    });
+
+    it('should leave the commit phrase out of the aria-label for a triage run', () => {
+      // Arrange
+      const recentAt = new Date(Date.now() - 2 * 60 * 1000).toISOString();
+
+      // Act
+      const fixture = createComponent(triagingIssue, false, recentAt, 0);
+      const label =
+        (fixture.nativeElement as HTMLElement).querySelector('.issue-card__toggle')?.getAttribute('aria-label') ?? '';
+
+      // Assert
+      expect(label).toContain('State: triaging');
+      expect(label).toContain('Active.');
+      expect(label).not.toContain('commit');
+    });
+
+    it('should include the silence in the aria-label for a silent triage run', () => {
+      // Arrange
+      const sevenMinutesAgo = new Date(Date.now() - 7 * 60 * 1000).toISOString();
+
+      // Act
+      const fixture = createComponent(triagingIssue, false, sevenMinutesAgo, 3);
+      const label =
+        (fixture.nativeElement as HTMLElement).querySelector('.issue-card__toggle')?.getAttribute('aria-label') ?? '';
+
+      // Assert
+      expect(label).toContain('Active, silent 7 minutes.');
+      expect(label).not.toContain('commit');
+    });
+
+    it('should give triage_in_progress the working accent', () => {
+      // Arrange / Act
+      const fixture = createComponent(triagingIssue);
+      const card = (fixture.nativeElement as HTMLElement).querySelector('.issue-card--working');
+
+      // Assert
+      expect(card).not.toBeNull();
+    });
+
+    it('should show the repository warning for triage_queued', () => {
+      // Arrange
+      const queued: IssueSummary = {
+        ...mockIssue,
+        state: 'triage_queued',
+        repositoryEligibilityStatus: 'ineligible',
+      };
+
+      // Act
+      const fixture = createComponent(queued);
+      const el = fixture.nativeElement as HTMLElement;
+
+      // Assert
+      expect(el.querySelector('.issue-card__repo-warning')).not.toBeNull();
+    });
+
+    it('should give triage_queued a queue position', () => {
+      // Arrange
+      const queued: IssueSummary = { ...mockIssue, state: 'triage_queued' };
+
+      // Act
+      const fixture = createComponent(queued, false, null, null, false, 2);
+      const el = fixture.nativeElement as HTMLElement;
+      const label = el.querySelector('.issue-card__toggle')?.getAttribute('aria-label') ?? '';
+
+      // Assert
+      expect(label).toContain('Queue position 2.');
+      expect(el.querySelector('.issue-card--has-gutter')).not.toBeNull();
+    });
+
+    it('should give triage_queued the Next up marker', () => {
+      // Arrange
+      const queued: IssueSummary = { ...mockIssue, state: 'triage_queued' };
+
+      // Act
+      const fixture = createComponent(queued, false, null, null, true, 1);
+      const label =
+        (fixture.nativeElement as HTMLElement).querySelector('.issue-card__toggle')?.getAttribute('aria-label') ?? '';
+
+      // Assert
+      expect(label).toContain('Next up.');
+    });
+  });
 });

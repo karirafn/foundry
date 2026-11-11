@@ -58,6 +58,9 @@ export interface InputQuestion {
 
 export type QuestionPostStatus = 'pending' | 'posted' | 'failed';
 
+/** Where an awaiting-input issue goes once a reply settles; `retriage` means triage asked. */
+export type ResumeTarget = 'revision' | 'continuation' | 'fresh' | 'retriage';
+
 export interface AwaitingInputDetails {
   questions: InputQuestion[];
   postStatus: QuestionPostStatus;
@@ -65,6 +68,25 @@ export interface AwaitingInputDetails {
   commentUrl: string | null;
   postFailureReason: string | null;
   nextPostAttemptAt: string | null;
+  resumeTarget: ResumeTarget;
+}
+
+export type IssueKind = 'feature' | 'bug' | 'refactor' | 'documentation';
+
+export interface IssueKindClassification {
+  source: 'labelled' | 'triaged' | 'unclassified';
+  /** Null only when source is 'unclassified'. */
+  kind: IssueKind | null;
+  /** Set only when source is 'labelled' and triage judged a different kind. */
+  conflictingTriageKind: IssueKind | null;
+}
+
+export interface TriageVerdictDetails {
+  outcome: 'ready' | 'needs_input';
+  kind: IssueKind;
+  questions: string[];
+  /** ISO-8601. */
+  decidedAt: string;
 }
 
 export interface IssueStateDetails {
@@ -91,15 +113,19 @@ export interface IssueDetail extends IssueSummary {
   author: string;
   labels: string[];
   stateDetails: IssueStateDetails | null;
+  kind: IssueKindClassification;
+  /** The latest triage verdict; null if the issue was never triaged. */
+  triage: TriageVerdictDetails | null;
 }
 
-// Live states: issues with an active worker running (in progress or under revision).
+// Live states: a worker is running: implementing, revising or triaging.
 // continuation_queued is intentionally excluded: it is a queued tier, not an active worker state.
 export const LIVE_STATES: ReadonlySet<IssueState> = WORKING_STATES;
 
-// The three queued tiers dispatched in Dispatch Order: revision > continuation > fresh.
+// The four queued tiers dispatched in Dispatch Order: revision > continuation > triage > fresh.
 export const QUEUED_TIER_STATES: ReadonlySet<IssueState> = new Set<IssueState>([
   'revision_queued',
   'continuation_queued',
+  'triage_queued',
   'queued',
 ]);

@@ -136,6 +136,15 @@ describe('failure-category', () => {
   });
 
   // Cycle 2: unknown category returns null
+  it('should return display for verdict_invalid', () => {
+    // Arrange / Act
+    const display = getFailureCategoryDisplay('verdict_invalid');
+
+    // Assert
+    expect(display?.label).toBe('INVALID VERDICT');
+    expect(display?.cssClass).toBe('badge--failure-verdict-invalid');
+  });
+
   it('should return null for an unknown category token', () => {
     // Arrange / Act
     const display = getFailureCategoryDisplay('unknown_future_category');
