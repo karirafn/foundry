@@ -1,0 +1,84 @@
+@use '../../../../../styles/controls' as *;
+@use '../../../../../styles/list-card' as *;
+
+:host {
+  display: block;
+  block-size: 100%;
+}
+
+.role-card {
+  @include list-card-frame;
+  block-size: 100%;
+  box-sizing: border-box;
+  position: relative;
+  row-gap: var(--fd-spacing-sm);
+
+  &__title-row {
+    @include list-card-title-row;
+    flex-wrap: wrap;
+  }
+
+  &__title {
+    flex: 1 1 auto;
+    font-size: inherit;
+    margin: 0;
+    min-inline-size: 0;
+  }
+
+  &__link {
+    @include list-card-title;
+    color: inherit;
+    text-decoration: none;
+
+    // Stretches the link over the whole card, so the card is one target and one tab stop.
+    &::after {
+      border-radius: inherit;
+      content: '';
+      inset: 0;
+      position: absolute;
+    }
+
+    &:focus-visible {
+      outline: none;
+
+      &::after {
+        @include focus-ring;
+      }
+    }
+  }
+
+  &:hover &__link {
+    text-decoration: underline;
+  }
+
+  &__purpose {
+    color: var(--fd-text-secondary);
+    font-size: 0.8125rem;
+    margin: 0;
+  }
+
+  &__facts {
+    @include list-card-strip;
+    column-gap: var(--fd-spacing-lg);
+    margin: 0;
+    margin-block-start: auto;
+  }
+
+  &__facts dt {
+    color: var(--fd-text-secondary);
+    display: inline;
+    margin-inline-end: var(--fd-spacing-xs);
+  }
+
+  &__facts dd {
+    color: var(--fd-text-primary);
+    display: inline;
+    font-variant-numeric: tabular-nums;
+    margin: 0;
+  }
+
+  &__model {
+    font-family: var(--fd-font-mono);
+    overflow-wrap: anywhere;
+  }
+}

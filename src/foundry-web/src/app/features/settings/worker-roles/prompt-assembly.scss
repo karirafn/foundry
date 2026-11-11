@@ -74,27 +74,20 @@
     @include role-disclosure;
   }
 
-  &__slot {
-    align-items: center;
-    border: 1px dashed var(--fd-border-control);
-    border-radius: var(--fd-radius-sm);
-    column-gap: var(--fd-spacing-sm);
-    display: grid;
-    font-size: 0.8125rem;
-    grid-template-columns: minmax(0, 1fr) auto;
-    min-block-size: 44px;
-    padding: var(--fd-spacing-xs) var(--fd-spacing-md);
+  // The one accent on the page: this role's own part of the assembly.
+  &__section--role {
+    border-color: var(--fd-border-control);
+    border-inline-start: 2px solid var(--fd-text-link);
+  }
+
+  &__role-tag {
+    margin-inline-start: var(--fd-spacing-sm);
   }
 
   &__summary-name {
     color: var(--fd-text-primary);
     font-weight: 500;
     overflow-wrap: anywhere;
-  }
-
-  &__slot-note {
-    color: var(--fd-text-secondary);
-    grid-column: 1;
   }
 
   &__condition {
@@ -127,12 +120,7 @@
     }
   }
 
-  &__slot &__condition {
-    grid-column: 2;
-    grid-row: 1 / span 2;
-  }
-
-  @container role-card (max-width: 30rem) {
+  @container role-content (max-width: 30rem) {
     &__item {
       grid-template-columns: 1.25rem minmax(0, 1fr);
     }

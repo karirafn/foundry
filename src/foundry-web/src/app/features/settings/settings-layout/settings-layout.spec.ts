@@ -411,6 +411,41 @@ describe('SettingsLayoutComponent', () => {
     hm.match('/api/worker-roles');
   });
 
+  it('should open a role details page at /settings/roles/:roleName and keep "Worker roles" active', async () => {
+    // Arrange
+    TestBed.resetTestingModule();
+    TestBed.configureTestingModule({
+      providers: [
+        SettingsService,
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        provideRouter([
+          { path: 'settings', children: SETTINGS_ROUTES },
+        ]),
+        { provide: SystemSignalRService, useValue: mockSystemSignalR },
+        { provide: RateBudgetService, useValue: mockRateBudgetService },
+      ],
+    });
+    const httpMock = TestBed.inject(HttpTestingController);
+
+    // Act
+    const harness = await RouterTestingHarness.create('/settings/roles/implement');
+    httpMock.expectOne('/api/settings').flush(SETTINGS_RESPONSE);
+    httpMock.expectOne('/api/credentials').flush(CREDENTIALS_RESPONSE);
+    harness.detectChanges();
+    await harness.fixture.whenStable();
+    harness.detectChanges();
+
+    // Assert
+    const rootEl = harness.fixture.nativeElement as HTMLElement;
+    expect(rootEl.querySelector('fd-role-detail')).not.toBeNull();
+    const activeLink = rootEl.querySelector('.settings-layout__nav-link--active');
+    expect(activeLink?.textContent?.trim()).toBe('Worker roles');
+    expect(activeLink?.getAttribute('aria-current')).toBe('page');
+    httpMock.match('/api/worker-roles');
+    httpMock.match((req) => req.url === '/api/worker-roles/models');
+  });
+
   it('should link the "Worker roles" nav item to the roles page', () => {
     // Arrange
     const { fixture, httpMock } = setup();
