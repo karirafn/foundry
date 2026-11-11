@@ -1071,6 +1071,65 @@ describe('IssueDetailComponent', () => {
     expect(el.querySelector('.issue-detail__rebase')).toBeFalsy();
   });
 
+  // --- Awaiting input: open questions and post status ---
+
+  it('should list the open questions of an awaiting_input issue', () => {
+    // Arrange
+    const awaitingDetail: IssueDetail = {
+      ...mockDetail,
+      state: 'awaiting_input',
+      stateDetails: {
+        ...mockStateDetails,
+        awaitingInput: {
+          questions: [{ question: 'Which database?', context: 'Two are configured.' }],
+          postStatus: 'pending',
+          postedAt: null,
+          commentUrl: null,
+          postFailureReason: null,
+          nextPostAttemptAt: null,
+        },
+      },
+    };
+
+    // Act
+    const fixture = createComponent(awaitingDetail);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    const section = el.querySelector('.issue-detail__awaiting-input');
+    expect(section?.textContent).toContain('Open Questions');
+    expect(section?.textContent).toContain('Which database?');
+    expect(section?.textContent).toContain('Two are configured.');
+    expect(section?.textContent).toContain('Posting the questions');
+  });
+
+  it('should link to the posted question once posted', () => {
+    // Arrange
+    const awaitingDetail: IssueDetail = {
+      ...mockDetail,
+      state: 'awaiting_input',
+      stateDetails: {
+        ...mockStateDetails,
+        awaitingInput: {
+          questions: [{ question: 'Which database?', context: '' }],
+          postStatus: 'posted',
+          postedAt: '2026-11-11T10:00:00Z',
+          commentUrl: 'https://github.com/owner/repo/pull/7#issuecomment-555',
+          postFailureReason: null,
+          nextPostAttemptAt: null,
+        },
+      },
+    };
+
+    // Act
+    const fixture = createComponent(awaitingDetail);
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    const link = el.querySelector<HTMLAnchorElement>('.issue-detail__question-link');
+    expect(link?.href).toBe('https://github.com/owner/repo/pull/7#issuecomment-555');
+  });
+
   // --- Surface 3: still_failing failing-checks list ---
 
   it('should render failing-checks section when checksOutcome is still_failing with non-empty failingChecks', () => {

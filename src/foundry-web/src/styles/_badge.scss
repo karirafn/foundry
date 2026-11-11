@@ -15,6 +15,7 @@ $badge-state-backgrounds: (
   review: var(--fd-state-review),
   rebase-pending: var(--fd-state-queued),
   checks-pending: var(--fd-state-queued),
+  awaiting-input: var(--fd-state-review),
   unchanged: var(--fd-state-unchanged),
   failed: var(--fd-state-failed),
   continuable-failed: var(--fd-state-failed),

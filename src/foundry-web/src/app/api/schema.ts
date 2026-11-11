@@ -833,6 +833,16 @@ export interface components {
             canPush: boolean;
             isMonitored: boolean;
         };
+        AwaitingInputDetails: {
+            questions: components["schemas"]["InputQuestion"][];
+            postStatus: string;
+            /** Format: date-time */
+            postedAt: null | string;
+            commentUrl: null | string;
+            postFailureReason: null | string;
+            /** Format: date-time */
+            nextPostAttemptAt: null | string;
+        };
         BranchRulesOutcome: {
             kind: string;
             reason?: null | string;
@@ -962,6 +972,10 @@ export interface components {
         };
         /** @enum {unknown} */
         ImageBuildStatus: "Idle" | "Building" | "Failed";
+        InputQuestion: {
+            question: string;
+            context: string;
+        };
         IssueDetail: {
             /** Format: uuid */
             id: string;
@@ -1004,6 +1018,7 @@ export interface components {
             rebaseSkippedReason?: null | string;
             /** Format: int32 */
             rebaseConflictAttempts?: null | number | string;
+            awaitingInput?: null | components["schemas"]["AwaitingInputDetails"];
         };
         IssueSummary: {
             /** Format: uuid */
@@ -1048,7 +1063,7 @@ export interface components {
             instance?: null | string;
         };
         /** @enum {unknown} */
-        PromptSectionCondition: "Always" | "DotnetImage" | "DockerImage" | "Fresh" | "Continuation" | "Revision" | "RebaseConflict";
+        PromptSectionCondition: "Always" | "DotnetImage" | "DockerImage" | "Fresh" | "Continuation" | "Revision" | "RebaseConflict" | "Clarifications";
         PromptSectionDescriptor: {
             key: string;
             title: string;
