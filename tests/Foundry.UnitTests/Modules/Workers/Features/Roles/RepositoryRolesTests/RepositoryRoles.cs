@@ -1,6 +1,7 @@
 using System.Text.Json.Nodes;
 
 using Foundry.Modules.Issues.Contracts;
+using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Workers.Domain.ValueObjects;
 using Foundry.Modules.Workers.Features.ContainerSpec;
 using Foundry.Modules.Workers.Features.Roles;
@@ -279,7 +280,7 @@ public sealed class RepositoryRoles
             42,
             implement.SystemPromptTemplate,
             new DispatchContext.Fresh("feat/42-title"),
-            "https://api.github.com/repos/owner/repo/issues/42",
+            new IssueContent("Add retry", "Retry webhook delivery.", []),
             timeoutMinutes: 120,
             installsDocker: false,
             installsDotnet: false);
@@ -292,7 +293,10 @@ public sealed class RepositoryRoles
                 .ShouldBeLessThan(prompt.IndexOf(applyLine, StringComparison.Ordinal)),
             () => prompt.ShouldNotContain("Test-driven development:"),
             () => prompt.ShouldNotContain(RolePromptPlaceholders.IssueNumber),
-            () => prompt.ShouldNotContain(RolePromptPlaceholders.IssueContent));
+            () => prompt.ShouldNotContain(RolePromptPlaceholders.IssueContent),
+            () => prompt.ShouldContain("Foundry read the issue's title, body and comments"),
+            () => prompt.ShouldContain("<issue-title>Add retry</issue-title>"),
+            () => prompt.ShouldNotContain("read the full issue from the provider"));
     }
 
     [Theory]

@@ -63,7 +63,10 @@ public sealed class DescribeSections
         // Assert
         sections.ShouldSatisfyAllConditions(
             () => sections.Single(s => s.Key == "fresh").Content.ShouldContain("<branch-name>{branchName}</branch-name>"),
-            () => sections.Single(s => s.Key == "issue-content").Content.ShouldContain("Issue #{issueNumber}."),
+            () => sections.Single(s => s.Key == "issue-content").Content.ShouldContain("<issue-title>{issueTitle}</issue-title>"),
+            () => sections.Single(s => s.Key == "issue-content").Content.ShouldContain("<issue-body>\n{issueBody}\n</issue-body>"),
+            () => sections.Single(s => s.Key == "issue-content").Content.ShouldContain("{issueComment}"),
+            () => sections.Single(s => s.Key == "issue-content").Content.ShouldNotContain("{issueApiUrl}"),
             () => sections.Single(s => s.Key == "review-feedback").Content.ShouldContain("- {reviewComment}"),
             () => sections.Single(s => s.Key == "failing-checks").Content.ShouldContain("- {checkName} ({conclusion}) {detailsUrl}"),
             () => sections.Single(s => s.Key == "rebase-conflict").Content.ShouldStartWith(SystemPromptBuilder.RebaseConflictSectionMarker),
