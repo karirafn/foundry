@@ -103,6 +103,7 @@ internal sealed class IssueQueries(
                 i is TriageFailedIssue ||
                 i is ContinuableFailedIssue ||
                 i is RevisionFailedIssue ||
+                i is BranchDivergedIssue ||
                 i is UnchangedIssue)
             .Select(i => i.IssueNumber)
             .ToListAsync(cancellationToken);
@@ -228,13 +229,53 @@ internal sealed class IssueQueries(
             issueIds,
             cancellationToken);
 
+        IReadOnlyDictionary<Guid, WorkerRunPublishPhase> publishPhases = await GetPublishPhasesAsync(issues, cancellationToken);
+
         return issues
             .Select(i => ToSummary(
                 i,
                 displayInfos.GetValueOrDefault(i.MonitoredRepositoryId),
                 eligibilityStatuses.TryGetValue(i.MonitoredRepositoryId.Value, out string? status) ? status : null,
-                runAggregates))
+                runAggregates,
+                publishPhases))
             .ToList();
+    }
+
+    // Only a working issue's run can be publishing, so the other issues are never asked about.
+    private async Task<IReadOnlyDictionary<Guid, WorkerRunPublishPhase>> GetPublishPhasesAsync(
+        IReadOnlyCollection<Issue> issues,
+        CancellationToken cancellationToken)
+    {
+        List<Guid> workingIssueIds = issues
+            .Where(IsWorking)
+            .Select(i => i.Id.Value)
+            .ToList();
+
+        if (workingIssueIds.Count == 0)
+        {
+            return new Dictionary<Guid, WorkerRunPublishPhase>();
+        }
+
+        return await workerRunQueries.GetPublishPhasesForIssuesAsync(workingIssueIds, cancellationToken);
+    }
+
+    private static bool IsWorking(Issue issue) => issue is InProgressIssue or RevisionInProgressIssue;
+
+    private static string? PublishPhaseName(
+        Issue issue,
+        IReadOnlyDictionary<Guid, WorkerRunPublishPhase> publishPhases)
+    {
+        if (!IsWorking(issue) || !publishPhases.TryGetValue(issue.Id.Value, out WorkerRunPublishPhase phase))
+        {
+            return null;
+        }
+
+        return phase switch
+        {
+            WorkerRunPublishPhase.Publishing => IssueSummary.PublishingPhase,
+            WorkerRunPublishPhase.Retrying => IssueSummary.RetryingPhase,
+            _ => null,
+        };
     }
 
     private static RunStats MapRunStats(RunAggregate aggregate) =>
@@ -277,18 +318,22 @@ internal sealed class IssueQueries(
             [issue.Id.Value],
             cancellationToken);
 
+        IReadOnlyDictionary<Guid, WorkerRunPublishPhase> publishPhases = await GetPublishPhasesAsync([issue], cancellationToken);
+
         return ToSummary(
             issue,
             displayInfos.GetValueOrDefault(issue.MonitoredRepositoryId),
             eligibilityStatus,
-            runAggregates);
+            runAggregates,
+            publishPhases);
     }
 
     private static IssueSummary ToSummary(
         Issue issue,
         RepositoryDisplayInfo? displayInfo,
         string? eligibilityStatus,
-        IReadOnlyDictionary<Guid, RunAggregate> runAggregates)
+        IReadOnlyDictionary<Guid, RunAggregate> runAggregates,
+        IReadOnlyDictionary<Guid, WorkerRunPublishPhase> publishPhases)
     {
         RebaseOutcome? rebaseOutcome = GetRebaseOutcome(issue);
 
@@ -309,7 +354,8 @@ internal sealed class IssueQueries(
             PullRequestUrl: issue.LinkedPullRequestUrl,
             RebaseOutcome: rebaseOutcome?.Discriminator,
             RebaseSkippedReason: (rebaseOutcome as RebaseOutcome.Skipped)?.Reason,
-            ProviderType: displayInfo?.ProviderType);
+            ProviderType: displayInfo?.ProviderType,
+            PublishPhase: PublishPhaseName(issue, publishPhases));
     }
 
     private static string? GetFailureCategory(Issue issue) =>
@@ -403,6 +449,8 @@ internal sealed class IssueQueries(
             TriageQueuedIssue => "triage_queued",
             TriageInProgressIssue => "triage_in_progress",
             TriageFailedIssue => "triage_failed",
+            PublishFailedIssue => "publish_failed",
+            BranchDivergedIssue => "branch_diverged",
             _ => throw new InvalidOperationException($"Unknown issue type: {issue.GetType().Name}")
         };
 
@@ -704,6 +752,32 @@ internal sealed class IssueQueries(
                 TransientRetry: null,
                 AwaitingInput: BuildAwaitingInputDetails(awaitingInput)),
 
+            PublishFailedIssue publishFailed => new IssueStateDetails(
+                WorkerRunId: publishFailed.WorkerRunId.Value,
+                BranchName: publishFailed.BranchName,
+                FeedbackCutoffAt: null,
+                FailureReason: publishFailed.FailureReason,
+                FailedAt: publishFailed.FailedAt,
+                CompletedAt: null,
+                BlockedBy: null,
+                TransientRetry: null,
+                RevisionTriggerKind: publishFailed.Trigger?.Discriminator,
+                ChecksFixAttempts: publishFailed.IsRevision ? publishFailed.ChecksFixAttempts : null,
+                RebaseConflictAttempts: publishFailed.IsRevision ? publishFailed.RebaseConflictAttempts : null),
+
+            BranchDivergedIssue diverged => new IssueStateDetails(
+                WorkerRunId: diverged.WorkerRunId.Value,
+                BranchName: diverged.BranchName,
+                FeedbackCutoffAt: null,
+                FailureReason: null,
+                FailedAt: null,
+                CompletedAt: null,
+                BlockedBy: null,
+                TransientRetry: null,
+                BranchUrl: ProviderBranchUrl.For(diverged.Url, diverged.BranchName),
+                SideBranchName: diverged.SideBranchName,
+                SideBranchUrl: ProviderBranchUrl.For(diverged.Url, diverged.SideBranchName)),
+
             _ => null
         };
 
@@ -855,12 +929,15 @@ internal sealed class IssueQueries(
 
         List<Issue> orderedIssues = [..eligibleQueued, ..ineligibleQueued, ..nonQueuedIssues];
 
+        IReadOnlyDictionary<Guid, WorkerRunPublishPhase> publishPhases = await GetPublishPhasesAsync(issues, cancellationToken);
+
         return orderedIssues
             .Select(i => ToSummary(
                 i,
                 displayInfos.GetValueOrDefault(i.MonitoredRepositoryId),
                 eligibilityStatuses.TryGetValue(i.MonitoredRepositoryId.Value, out string? status) ? status : null,
-                runAggregates))
+                runAggregates,
+                publishPhases))
             .ToList();
     }
 

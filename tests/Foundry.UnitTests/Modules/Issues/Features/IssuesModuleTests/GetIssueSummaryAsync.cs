@@ -117,6 +117,80 @@ public sealed class GetIssueSummaryAsync : IAsyncDisposable
             () => summary.ProviderType.ShouldBeNull());
     }
 
+    [Theory]
+    [InlineData(WorkerRunPublishPhase.Publishing, "publishing")]
+    [InlineData(WorkerRunPublishPhase.Retrying, "retrying")]
+    public async Task WhenInProgressRunIsPublishing_SummaryCarriesThePublishPhase(
+        WorkerRunPublishPhase phase,
+        string expected)
+    {
+        // Arrange
+        InProgressIssue inProgress = new IssueBuilder().InProgress();
+        _dbContext.Set<Issue>().Add(inProgress);
+        await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+        _workerRunQueries.SetPublishPhase(inProgress.Id.Value, phase);
+
+        // Act
+        IssueSummary? result = await _sut.GetIssueSummaryAsync(inProgress.Id, TestContext.Current.CancellationToken);
+
+        // Assert
+        result.ShouldNotBeNull().PublishPhase.ShouldBe(expected);
+    }
+
+    [Fact]
+    public async Task WhenRevisionRunIsPublishing_SummaryCarriesThePublishPhase()
+    {
+        // Arrange
+        RevisionInProgressIssue revision = new IssueBuilder().RevisionInProgress();
+        _dbContext.Set<Issue>().Add(revision);
+        await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+        _workerRunQueries.SetPublishPhase(revision.Id.Value, WorkerRunPublishPhase.Publishing);
+
+        // Act
+        IssueSummary? result = await _sut.GetIssueSummaryAsync(revision.Id, TestContext.Current.CancellationToken);
+
+        // Assert
+        result.ShouldNotBeNull().PublishPhase.ShouldBe("publishing");
+    }
+
+    [Fact]
+    public async Task WhenIssueIsNotWorking_SummaryHasNoPublishPhase()
+    {
+        // Arrange
+        PublishFailedIssue publishFailed = new IssueBuilder().PublishFailed();
+        _dbContext.Set<Issue>().Add(publishFailed);
+        await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+        _workerRunQueries.SetPublishPhase(publishFailed.Id.Value, WorkerRunPublishPhase.Retrying);
+
+        // Act
+        IssueSummary? result = await _sut.GetIssueSummaryAsync(publishFailed.Id, TestContext.Current.CancellationToken);
+
+        // Assert
+        IssueSummary summary = result.ShouldNotBeNull();
+        summary.ShouldSatisfyAllConditions(
+            () => summary.State.ShouldBe("publish_failed"),
+            () => summary.PublishPhase.ShouldBeNull());
+    }
+
+    [Fact]
+    public async Task WhenActiveListHasAPublishingRun_ItsSummaryCarriesThePublishPhase()
+    {
+        // Arrange
+        InProgressIssue inProgress = new IssueBuilder().InProgress();
+        _dbContext.Set<Issue>().Add(inProgress);
+        await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+        _workerRunQueries.SetPublishPhase(inProgress.Id.Value, WorkerRunPublishPhase.Retrying);
+
+        // Act
+        IReadOnlyList<IssueSummary> result = await _sut.GetActiveIssueSummariesAsync(
+            null,
+            null,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        result.ShouldHaveSingleItem().PublishPhase.ShouldBe("retrying");
+    }
+
     [Fact]
     public async Task WhenIssueHasNoWorkerRuns_RunStatsIsNull()
     {
@@ -323,6 +397,7 @@ public sealed class GetIssueSummaryAsync : IAsyncDisposable
     private sealed class StubWorkerRunQueries : IWorkerRunQueries
     {
         private readonly Dictionary<Guid, RunAggregate> _aggregates = [];
+        private readonly Dictionary<Guid, WorkerRunPublishPhase> _publishPhases = [];
 
         public void SetAggregate(Guid issueId, RunAggregate aggregate)
         {
@@ -363,9 +438,17 @@ public sealed class GetIssueSummaryAsync : IAsyncDisposable
             CancellationToken cancellationToken)
             => Task.FromResult<IReadOnlyCollection<WorkerActivity>>([]);
 
+        public void SetPublishPhase(Guid issueId, WorkerRunPublishPhase phase)
+        {
+            _publishPhases[issueId] = phase;
+        }
+
         public Task<IReadOnlyDictionary<Guid, WorkerRunPublishPhase>> GetPublishPhasesForIssuesAsync(
             IReadOnlyCollection<Guid> issueIds,
             CancellationToken cancellationToken)
-            => Task.FromResult<IReadOnlyDictionary<Guid, WorkerRunPublishPhase>>(new Dictionary<Guid, WorkerRunPublishPhase>());
+            => Task.FromResult<IReadOnlyDictionary<Guid, WorkerRunPublishPhase>>(
+                issueIds
+                    .Where(_publishPhases.ContainsKey)
+                    .ToDictionary(id => id, id => _publishPhases[id]));
     }
 }

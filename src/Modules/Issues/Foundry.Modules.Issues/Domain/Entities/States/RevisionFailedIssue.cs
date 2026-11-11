@@ -58,6 +58,27 @@ public sealed class RevisionFailedIssue : Issue
         return failed;
     }
 
+    internal static RevisionFailedIssue FromPublishFailed(
+        PublishFailedIssue source,
+        RevisionTrigger trigger,
+        string failureReason,
+        FailureCategoryVO failureCategory,
+        DateTimeOffset failedAt)
+    {
+        RevisionFailedIssue failed = new(source.Id);
+        failed.CopySharedPropertiesFrom(source);
+        failed.WorkerRunId = source.WorkerRunId;
+        failed.BranchName = source.BranchName;
+        failed.PullRequestUrl = source.PullRequestUrl;
+        failed.Trigger = trigger;
+        failed.ChecksFixAttempts = source.ChecksFixAttempts;
+        failed.RebaseConflictAttempts = source.RebaseConflictAttempts;
+        failed.FailureReason = failureReason;
+        failed.FailureCategory = failureCategory;
+        failed.FailedAt = failedAt;
+        return failed;
+    }
+
     public RevisionQueuedIssue Retry()
     {
         RevisionQueuedIssue revisionQueued = RevisionQueuedIssue.FromRevisionFailed(this);

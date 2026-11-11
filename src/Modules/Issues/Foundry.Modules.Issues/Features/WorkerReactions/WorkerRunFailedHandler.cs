@@ -56,6 +56,26 @@ internal sealed class WorkerRunFailedHandler(
                 return;
             }
 
+            // An exhausted publish leaves the run's work unpublished in its Hand-off volume, so the issue waits for
+            // Retry publish rather than failing: Retry Issue would start a new run and abandon that work (ADR 0100).
+            if (category == FailureCategory.PublishFailed)
+            {
+                if (@event.BranchName is null)
+                {
+                    logger.LogError(
+                        "WorkerRunFailed for issue {IssueId} reports a failed publish but no BranchName; skipping transition.",
+                        @event.IssueId);
+                    return;
+                }
+
+                PublishFailedIssue publishFailed = inProgress.MarkPublishFailed(
+                    @event.BranchName,
+                    @event.ReasonDescription,
+                    failedAt);
+                await db.TransitionAsync(inProgress, publishFailed, domainEventDispatcher, cancellationToken);
+                return;
+            }
+
             if (@event.BranchName is not null)
             {
                 ContinuableFailedIssue continuableFailed = inProgress.MarkContinuableFailed(
@@ -90,11 +110,40 @@ internal sealed class WorkerRunFailedHandler(
                 return;
             }
 
+            if (category == FailureCategory.PublishFailed)
+            {
+                PublishFailedIssue revisionPublishFailed = revisionInProgress.MarkPublishFailed(
+                    @event.ReasonDescription,
+                    failedAt);
+                await db.TransitionAsync(revisionInProgress, revisionPublishFailed, domainEventDispatcher, cancellationToken);
+                return;
+            }
+
             RevisionFailedIssue revisionFailed = revisionInProgress.MarkFailed(
                 @event.ReasonDescription,
                 category,
                 failedAt);
             await db.TransitionAsync(revisionInProgress, revisionFailed, domainEventDispatcher, cancellationToken);
+            return;
+        }
+
+        // The run waiting to publish ended without publishing (its time to live discarded the work); a repeated
+        // publish_failed for the same run changes nothing.
+        if (issue is PublishFailedIssue publishFailedIssue)
+        {
+            if (@event.WorkerRunId != publishFailedIssue.WorkerRunId || category == FailureCategory.PublishFailed)
+            {
+                logger.LogWarning(
+                    "WorkerRunFailed for issue {IssueId} with run id {EventRunId} and category {Category} does not end its unpublished run {CurrentRunId}; ignoring.",
+                    @event.IssueId,
+                    @event.WorkerRunId,
+                    category.Value,
+                    publishFailedIssue.WorkerRunId);
+                return;
+            }
+
+            Issue failed = publishFailedIssue.Fail(@event.ReasonDescription, category, failedAt);
+            await db.TransitionAsync(publishFailedIssue, failed, domainEventDispatcher, cancellationToken);
             return;
         }
 
