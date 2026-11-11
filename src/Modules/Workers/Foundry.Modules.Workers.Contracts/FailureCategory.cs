@@ -22,6 +22,8 @@ public sealed record FailureCategory
     public const string CancelledToken = "cancelled";
     public const string TurnLimitToken = "turn_limit";
     public const string VerdictInvalidToken = "verdict_invalid";
+    public const string PublishFailedToken = "publish_failed";
+    public const string PublishExpiredToken = "publish_expired";
 
     public static readonly FailureCategory NonZeroExit = new(NonZeroExitToken);
     public static readonly FailureCategory TimedOut = new(TimedOutToken);
@@ -37,6 +39,12 @@ public sealed record FailureCategory
     public static readonly FailureCategory Cancelled = new(CancelledToken);
     public static readonly FailureCategory TurnLimit = new(TurnLimitToken);
     public static readonly FailureCategory VerdictInvalid = new(VerdictInvalidToken);
+
+    /// <summary>Publishing the run's commits failed after every retry (ADR 0100); Retry publish reruns it.</summary>
+    public static readonly FailureCategory PublishFailed = new(PublishFailedToken);
+
+    /// <summary>The run's unpublished work was discarded when its Hand-off volume reached its time to live.</summary>
+    public static readonly FailureCategory PublishExpired = new(PublishExpiredToken);
 
     private static readonly FrozenDictionary<string, FailureCategory> KnownCategories =
         new Dictionary<string, FailureCategory>(StringComparer.Ordinal)
@@ -55,6 +63,8 @@ public sealed record FailureCategory
             { CancelledToken, Cancelled },
             { TurnLimitToken, TurnLimit },
             { VerdictInvalidToken, VerdictInvalid },
+            { PublishFailedToken, PublishFailed },
+            { PublishExpiredToken, PublishExpired },
         }.ToFrozenDictionary(StringComparer.Ordinal);
 
     public string Value { get; }
