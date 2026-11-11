@@ -1317,24 +1317,23 @@ public sealed class HandleAsync : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenDispatched_SystemPromptEnvVarContainsChecksSection()
+    public async Task WhenDispatched_SystemPromptEnvVarContainsPublishingSection()
     {
         // Arrange — timeout is 120 minutes (stub default)
-        StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c-checks-section");
+        StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c-publishing-section");
         IssueClaimedHandler sut = BuildHandler(orchestrator: orchestrator);
         IssueClaimed @event = BuildEvent();
 
         // Act
         await sut.HandleAsync(@event, TestContext.Current.CancellationToken);
 
-        // Assert — the checks section from SystemPromptBuilder is wired end-to-end
+        // Assert — the publishing section from SystemPromptBuilder is wired end-to-end
         WorkerContainerSpec? spec = orchestrator.LastSpec;
         spec.ShouldNotBeNull();
         string systemPrompt = spec.EnvironmentVariables["SYSTEM_PROMPT"];
         systemPrompt.ShouldSatisfyAllConditions(
-            () => systemPrompt.ShouldContain("gh pr checks"),
-            () => systemPrompt.ShouldContain("glab ci status"),
-            () => systemPrompt.ShouldContain("Foundry continues to monitor"),
+            () => systemPrompt.ShouldContain(SystemPromptBuilder.PublishingSectionMarker),
+            () => systemPrompt.ShouldNotContain("gh pr checks"),
             () => systemPrompt.ShouldContain("120 minutes of wall-clock budget"));
     }
 
