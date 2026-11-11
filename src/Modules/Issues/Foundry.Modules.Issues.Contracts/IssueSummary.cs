@@ -15,4 +15,5 @@ public sealed record IssueSummary(
     string? PullRequestUrl = null,
     string? RebaseOutcome = null,
     string? RebaseSkippedReason = null,
-    string? ProviderType = null);
+    string? ProviderType = null,
+    string? RevisionTriggerKind = null);

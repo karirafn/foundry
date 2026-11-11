@@ -1,9 +1,7 @@
-import { ChangeDetectionStrategy, Component, input, InputSignal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, Signal, computed, input, InputSignal } from '@angular/core';
 import { IssueState } from '../../utils/issue-state';
-import { STATE_LABELS, STATE_ARIA_LABELS, STATE_CSS_CLASSES } from '../../utils/state-display';
-import { getFailureCategoryDisplay } from '../../utils/failure-category';
-
-const FAILED_STATES: ReadonlySet<IssueState> = new Set<IssueState>(['failed', 'continuable_failed']);
+import { StateDisplay, resolveStateDisplay } from '../../utils/state-display';
+import { RevisionTriggerKind } from '../../utils/revision-trigger-kind';
 
 @Component({
   selector: 'fd-state-badge',
@@ -21,31 +19,24 @@ const FAILED_STATES: ReadonlySet<IssueState> = new Set<IssueState>(['failed', 'c
 export class StateBadgeComponent {
   readonly state: InputSignal<IssueState> = input.required<IssueState>();
   readonly failureClassification: InputSignal<string | undefined> = input<string | undefined>(undefined);
+  readonly revisionTriggerKind: InputSignal<RevisionTriggerKind | null | undefined> =
+    input<RevisionTriggerKind | null | undefined>(undefined);
 
-  private failureCategoryDisplay() {
-    const classification = this.failureClassification();
-    if (classification === undefined || !FAILED_STATES.has(this.state())) {
-      return null;
-    }
-    return getFailureCategoryDisplay(classification);
-  }
+  private readonly _display: Signal<StateDisplay> = computed(() =>
+    resolveStateDisplay(this.state(), {
+      failureClassification: this.failureClassification(),
+      revisionTriggerKind: this.revisionTriggerKind(),
+    }));
 
   label(): string {
-    const display = this.failureCategoryDisplay();
-    return display !== null ? display.label : STATE_LABELS[this.state()];
+    return this._display().label;
   }
 
   ariaLabel(): string {
-    const display = this.failureCategoryDisplay();
-    return display !== null
-      ? `State: ${display.label.toLowerCase()}`
-      : `State: ${STATE_ARIA_LABELS[this.state()]}`;
+    return `State: ${this._display().ariaLabel}`;
   }
 
   badgeClass(): string {
-    const display = this.failureCategoryDisplay();
-    return display !== null
-      ? `badge ${display.cssClass}`
-      : `badge ${STATE_CSS_CLASSES[this.state()]}`;
+    return `badge ${this._display().cssClass}`;
   }
 }

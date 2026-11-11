@@ -1,7 +1,7 @@
 import { Component, InputSignal, OutputEmitterRef, computed, inject, input, output } from '@angular/core';
 import { NgClass } from '@angular/common';
 import { IssueSummary, RunStats, LIVE_STATES, QUEUED_TIER_STATES } from '../issue.model';
-import { STATE_ARIA_LABELS, cardAccentFor } from '../../../shared/utils/state-display';
+import { cardAccentFor, resolveStateDisplay } from '../../../shared/utils/state-display';
 import { StateBadgeComponent } from '../../../shared/components/state-badge/state-badge';
 import { SafeHrefPipe } from '../../../shared/pipes/safe-href.pipe';
 import { TickerService } from '../../../core/services/ticker.service';
@@ -149,7 +149,11 @@ function isUntracked(tokens: TokenTotal): boolean {
           <span class="issue-card__separator" aria-hidden="true">·</span>
           <span class="issue-card__slug">{{ issue().repositorySlug }}</span>
           <div class="issue-card__badge">
-            <fd-state-badge [state]="issue().state" [failureClassification]="issue().failureClassification" />
+            <fd-state-badge
+              [state]="issue().state"
+              [failureClassification]="issue().failureClassification"
+              [revisionTriggerKind]="issue().revisionTriggerKind"
+            />
             @if (_checksOutcomeDisplay(); as outcome) {
               <span
                 class="badge issue-card__checks-badge"
@@ -442,7 +446,10 @@ export class IssueCardComponent {
     // Depend on ticker so the silence phrase re-evaluates on the same cadence as _activityLine.
     void this._ticker.tick();
     const issue = this.issue();
-    const stateLabel = STATE_ARIA_LABELS[issue.state] ?? issue.state;
+    const stateLabel = resolveStateDisplay(issue.state, {
+      failureClassification: issue.failureClassification,
+      revisionTriggerKind: issue.revisionTriggerKind,
+    }).ariaLabel;
     const nextUp = this.isNextUp() ? 'Next up. ' : '';
     const queuePositionPart = this._buildQueuePositionAriaClause();
     const base = `${nextUp}${queuePositionPart}Issue #${issue.issueNumber}: ${issue.title}. State: ${stateLabel}`;
