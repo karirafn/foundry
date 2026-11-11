@@ -18,7 +18,16 @@ import {
 } from '../run-stats.format';
 import type { TokenTotal } from '../../workers/run-totals.model';
 
-const REPO_WARNING_STATES = new Set<string>(['queued', 'detected', 'revision_queued', 'continuation_queued']);
+const REPO_WARNING_STATES = new Set<string>([
+  'queued',
+  'detected',
+  'revision_queued',
+  'continuation_queued',
+  'triage_queued',
+]);
+// A restricted triage run has no branch, so it never commits: its activity line drops the commit
+// phrase, which would otherwise always read "no commits yet".
+const NO_COMMIT_STATES: ReadonlySet<string> = new Set<string>(['triage_in_progress']);
 const EM_DASH = '—';
 
 // Re-export shared helpers so existing imports from this module continue to work.
@@ -399,8 +408,9 @@ export class IssueCardComponent {
     const count = this.commitCount();
     const silence = this._silenceText();
     const silencePart = silence !== null ? ` · ${silence.short}` : '';
-    // null count means pre-handshake: suppress commit phrase, show just "active"
-    if (count === null) {
+    // null count means pre-handshake: suppress commit phrase, show just "active".
+    // A triage run never commits, so it never shows the commit phrase either.
+    if (count === null || NO_COMMIT_STATES.has(this.issue().state)) {
       return silence !== null ? silence.short : '';
     }
     return `${commitPhrase(count)}${silencePart}`;
@@ -467,13 +477,17 @@ export class IssueCardComponent {
     }
     const agentLine = this._agentActivityLine();
     const agentPart = agentLine !== null ? ` Agent: ${agentLine}.` : '';
+    const silence = this._silenceText();
+    const silencePart = silence !== null ? `, ${silence.long}` : '';
+    if (NO_COMMIT_STATES.has(this.issue().state)) {
+      // A triage run never commits: "active", plus the silence when the run is silent.
+      return ` Active${silencePart}.${agentPart}`;
+    }
     const count = this.commitCount();
     if (count === null) {
       // Pre-handshake: no commit info yet
       return agentPart;
     }
-    const silence = this._silenceText();
-    const silencePart = silence !== null ? `, ${silence.long}` : '';
     return ` Active: ${commitPhrase(count)}${silencePart}.${agentPart}`;
   }
 

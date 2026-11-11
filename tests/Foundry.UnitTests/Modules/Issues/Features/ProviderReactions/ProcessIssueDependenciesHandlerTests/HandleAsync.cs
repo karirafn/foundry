@@ -134,7 +134,7 @@ public sealed class HandleAsync : IAsyncDisposable
 
     // Behavior (c): DetectedIssue + no blockers → FreshQueuedIssue
     [Fact]
-    public async Task WhenDetectedIssueHasNoBlockers_TransitionsToQueuedIssue()
+    public async Task WhenDetectedIssueHasNoBlockers_QueuesItForTriage()
     {
         // Arrange
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
@@ -154,11 +154,11 @@ public sealed class HandleAsync : IAsyncDisposable
             .FirstOrDefaultAsync(
                 i => i.MonitoredRepositoryId == repositoryId && i.IssueNumber == 2,
                 TestContext.Current.CancellationToken);
-        issue.ShouldBeOfType<FreshQueuedIssue>();
+        issue.ShouldBeOfType<TriageQueuedIssue>();
     }
 
     [Fact]
-    public async Task WhenDetectedIssueHasNoBlockers_RaisesIssueQueuedEvent()
+    public async Task WhenDetectedIssueHasNoBlockers_RaisesIssueTriageQueuedEvent()
     {
         // Arrange
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
@@ -174,13 +174,13 @@ public sealed class HandleAsync : IAsyncDisposable
 
         // Assert
         _dispatcher.DispatchedEvents
-            .OfType<IssueQueued>()
+            .OfType<IssueTriageQueued>()
             .ShouldHaveSingleItem();
     }
 
-    // Behavior (d): DetectedIssue + has blockers → BlockedIssue
+    // Behavior (d): DetectedIssue + has blockers → TriageQueuedIssue carrying them (triage comes before blockers)
     [Fact]
-    public async Task WhenDetectedIssueHasBlockers_TransitionsToBlockedIssue()
+    public async Task WhenDetectedIssueHasBlockers_QueuesItForTriageCarryingThem()
     {
         // Arrange
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
@@ -200,11 +200,11 @@ public sealed class HandleAsync : IAsyncDisposable
             .FirstOrDefaultAsync(
                 i => i.MonitoredRepositoryId == repositoryId && i.IssueNumber == 4,
                 TestContext.Current.CancellationToken);
-        issue.ShouldBeOfType<BlockedIssue>();
+        issue.ShouldBeOfType<TriageQueuedIssue>().BlockedBy.ShouldBe([7]);
     }
 
     [Fact]
-    public async Task WhenDetectedIssueHasBlockers_RaisesIssueBlockedEvent()
+    public async Task WhenDetectedIssueHasBlockers_RaisesIssueTriageQueuedEvent()
     {
         // Arrange
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
@@ -220,7 +220,7 @@ public sealed class HandleAsync : IAsyncDisposable
 
         // Assert
         _dispatcher.DispatchedEvents
-            .OfType<IssueBlocked>()
+            .OfType<IssueTriageQueued>()
             .ShouldHaveSingleItem();
     }
 
@@ -444,7 +444,7 @@ public sealed class HandleAsync : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenCycleIncludesDetectedIssue_TransitionsToBlockedIssue()
+    public async Task WhenCycleIncludesDetectedIssue_QueuesItForTriageAndRaisesCycle()
     {
         // Arrange — issue 1 is blocked by 2; issue 2 now reports 1 → cycle 1→2→1
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
@@ -459,7 +459,7 @@ public sealed class HandleAsync : IAsyncDisposable
         // Act
         await _sut.HandleAsync(@event, CancellationToken.None);
 
-        // Assert — a cycle no longer suppresses the transition: open blockers always block
+        // Assert — triage comes first; the blockers are carried and the cycle is still raised
         _dbContext.ChangeTracker.Clear();
         Issue? issue = await _dbContext.Set<Issue>()
             .FirstOrDefaultAsync(
@@ -467,9 +467,9 @@ public sealed class HandleAsync : IAsyncDisposable
                 TestContext.Current.CancellationToken);
 
         Issue reloaded = issue.ShouldNotBeNull();
-        reloaded.ShouldBeOfType<BlockedIssue>();
+        reloaded.ShouldBeOfType<TriageQueuedIssue>();
         reloaded.BlockedBy.ShouldBe([1]);
-        _dispatcher.DispatchedEvents.OfType<IssueBlocked>().ShouldHaveSingleItem();
+        _dispatcher.DispatchedEvents.OfType<IssueTriageQueued>().ShouldHaveSingleItem();
         _dispatcher.DispatchedEvents.OfType<CircularDependencyDetected>().ShouldHaveSingleItem();
     }
 

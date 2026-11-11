@@ -1,6 +1,8 @@
 using System.Text;
 
+using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Monitoring.Contracts;
+using Foundry.Modules.Workers.Contracts;
 using Foundry.Modules.Workers.Features.ContainerSpec;
 using Foundry.Shared;
 
@@ -43,6 +45,37 @@ public sealed class BuildRestricted
                 .ShouldBeLessThan(prompt.IndexOf("All of them.", StringComparison.Ordinal)),
             () => prompt.ShouldNotContain("{issueContent}"),
             () => prompt.ShouldNotContain("read the full issue from the provider"));
+    }
+
+    [Fact]
+    public void WhenTheIssueHasAClarificationLog_RendersItForTheRetriage()
+    {
+        // Arrange
+        Clarification answered = new(
+            [new InputQuestion("Which webhooks?", "Two kinds exist.")],
+            "Only <outgoing> ones.",
+            CreatedAt,
+            CreatedAt.AddHours(1));
+
+        // Act
+        string prompt = SystemPromptBuilder.BuildRestricted(Principles, 42, Template, Issue(), installsDotnet: false, [answered])
+            .ShouldBeOfType<Result<string>.Success>().Value;
+
+        // Assert
+        prompt.ShouldSatisfyAllConditions(
+            () => prompt.ShouldContain(SystemPromptBuilder.ClarificationSectionMarker),
+            () => prompt.ShouldContain("<question>Which webhooks?</question>"),
+            () => prompt.ShouldContain("<input>Only &lt;outgoing&gt; ones.</input>"));
+    }
+
+    [Fact]
+    public void WhenTheClarificationLogIsEmpty_LeavesTheSectionOut()
+    {
+        // Act
+        string prompt = BuildPrompt(Issue());
+
+        // Assert
+        prompt.ShouldNotContain(SystemPromptBuilder.ClarificationSectionMarker);
     }
 
     [Fact]

@@ -525,6 +525,192 @@
         }
       }
     },
+    "/api/issues/{id}/retry-triage": {
+      "post": {
+        "tags": [
+          "Issues"
+        ],
+        "summary": "Queues a triage-failed issue for triage again",
+        "operationId": "RetryTriage",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IssueDetail"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/issues/{id}/skip-triage": {
+      "post": {
+        "tags": [
+          "Issues"
+        ],
+        "summary": "Sends a triage-failed issue through the dependency check without a readiness verdict",
+        "operationId": "SkipTriage",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IssueDetail"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/issues/{id}/retriage": {
+      "post": {
+        "tags": [
+          "Issues"
+        ],
+        "summary": "Sends a queued or blocked issue back to triage",
+        "operationId": "Retriage",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IssueDetail"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/accounts": {
       "get": {
         "tags": [
@@ -2424,7 +2610,8 @@
           "postedAt",
           "commentUrl",
           "postFailureReason",
-          "nextPostAttemptAt"
+          "nextPostAttemptAt",
+          "resumeTarget"
         ],
         "type": "object",
         "properties": {
@@ -2462,6 +2649,9 @@
               "string"
             ],
             "format": "date-time"
+          },
+          "resumeTarget": {
+            "type": "string"
           }
         }
       },
@@ -3048,7 +3238,9 @@
           "url",
           "author",
           "labels",
-          "stateDetails"
+          "stateDetails",
+          "kind",
+          "triage"
         ],
         "type": "object",
         "properties": {
@@ -3097,6 +3289,44 @@
               {
                 "$ref": "#/components/schemas/IssueStateDetails"
               }
+            ]
+          },
+          "kind": {
+            "$ref": "#/components/schemas/IssueKindDetails"
+          },
+          "triage": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/TriageVerdictDetails"
+              }
+            ]
+          }
+        }
+      },
+      "IssueKindDetails": {
+        "required": [
+          "source",
+          "kind",
+          "conflictingTriageKind"
+        ],
+        "type": "object",
+        "properties": {
+          "source": {
+            "type": "string"
+          },
+          "kind": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "conflictingTriageKind": {
+            "type": [
+              "null",
+              "string"
             ]
           }
         }
@@ -4103,6 +4333,33 @@
               "null",
               "string"
             ],
+            "format": "date-time"
+          }
+        }
+      },
+      "TriageVerdictDetails": {
+        "required": [
+          "outcome",
+          "kind",
+          "questions",
+          "decidedAt"
+        ],
+        "type": "object",
+        "properties": {
+          "outcome": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "questions": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "decidedAt": {
+            "type": "string",
             "format": "date-time"
           }
         }

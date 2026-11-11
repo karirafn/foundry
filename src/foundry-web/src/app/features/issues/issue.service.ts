@@ -42,6 +42,38 @@ const RETRY_SUCCESS = 'Retry queued. Issue status is updating.';
 const RETRY_FRESH_ERROR = 'Failed to retry issue from a fresh branch.';
 const RETRY_FRESH_BRANCH_ERROR = 'Could not delete the branch on the provider. The issue was not requeued.';
 const RETRY_FRESH_SUCCESS = 'Branch discarded. Issue queued fresh; status is updating.';
+const TRIAGE_FAILED_CONFLICT_ERROR = 'This issue is no longer in Triage failed.';
+
+export type TriageAction = 'retry_triage' | 'skip_triage' | 'retriage';
+
+interface TriageActionCopy {
+  readonly path: string;
+  readonly success: string;
+  readonly conflictError: string;
+  readonly error: string;
+}
+
+const TRIAGE_ACTIONS: Readonly<Record<TriageAction, TriageActionCopy>> = {
+  retry_triage: {
+    path: 'retry-triage',
+    success: 'Triage queued again. Issue status is updating.',
+    conflictError: TRIAGE_FAILED_CONFLICT_ERROR,
+    error: 'Failed to retry triage.',
+  },
+  skip_triage: {
+    path: 'skip-triage',
+    success: 'Triage skipped. Issue status is updating.',
+    conflictError: TRIAGE_FAILED_CONFLICT_ERROR,
+    error: 'Failed to skip triage.',
+  },
+  retriage: {
+    path: 'retriage',
+    success: 'Re-triage queued. Issue status is updating.',
+    conflictError:
+      'Only queued or blocked issues can be re-triaged. It may have been dispatched already.',
+    error: 'Failed to re-triage the issue.',
+  },
+};
 const SAFE_ID_RE = /^[\w-]+$/;
 const COUNTS_DEBOUNCE_MS = 300;
 // Safety-net interval for queue-order reconcile — covers order inputs that raise no IssueUpdated
@@ -82,6 +114,17 @@ export class IssueService {
 
   private readonly _retrySuccessSignal: WritableSignal<string | null> = signal(null);
   readonly retrySuccess: Signal<string | null> = this._retrySuccessSignal.asReadonly();
+
+  private readonly _triageActionPendingSignal: WritableSignal<TriageAction | null> = signal(null);
+  readonly triageActionPending: Signal<TriageAction | null> =
+    this._triageActionPendingSignal.asReadonly();
+
+  private readonly _triageActionErrorSignal: WritableSignal<string | null> = signal(null);
+  readonly triageActionError: Signal<string | null> = this._triageActionErrorSignal.asReadonly();
+
+  private readonly _triageActionSuccessSignal: WritableSignal<string | null> = signal(null);
+  readonly triageActionSuccess: Signal<string | null> =
+    this._triageActionSuccessSignal.asReadonly();
 
   private readonly _countsSignal: WritableSignal<Record<string, number>> = signal({});
   readonly counts: Signal<Record<string, number>> = this._countsSignal.asReadonly();
@@ -355,6 +398,9 @@ export class IssueService {
     this._retryErrorSignal.set(null);
     this._retrySuccessSignal.set(null);
     this.retrying.set(false);
+    this._triageActionPendingSignal.set(null);
+    this._triageActionErrorSignal.set(null);
+    this._triageActionSuccessSignal.set(null);
 
     if (this.expandedIssueId() === id) {
       this.expandedIssueId.set(null);
@@ -406,6 +452,42 @@ export class IssueService {
         this._retryErrorSignal.set(err.status === 502 ? RETRY_FRESH_BRANCH_ERROR : RETRY_FRESH_ERROR);
       },
     });
+  }
+
+  /** Re-runs triage for an issue whose triage run failed (`triage_failed`). */
+  retryTriage(id: string): void {
+    this._runTriageAction(id, 'retry_triage');
+  }
+
+  /** Queues a `triage_failed` issue without a readiness check. */
+  skipTriage(id: string): void {
+    this._runTriageAction(id, 'skip_triage');
+  }
+
+  /** Sends a `queued` or `blocked` issue back through triage. */
+  retriage(id: string): void {
+    this._runTriageAction(id, 'retriage');
+  }
+
+  private _runTriageAction(id: string, action: TriageAction): void {
+    const copy = TRIAGE_ACTIONS[action];
+    this._triageActionErrorSignal.set(null);
+    this._triageActionSuccessSignal.set(null);
+    this._triageActionPendingSignal.set(action);
+    this._http
+      .post<IssueDetail>(`/api/issues/${encodeURIComponent(id)}/${copy.path}`, {})
+      .subscribe({
+        next: () => {
+          this._triageActionPendingSignal.set(null);
+          this._triageActionSuccessSignal.set(copy.success);
+          this.loadDetail(id);
+        },
+        error: (err: HttpErrorResponse) => {
+          console.error(err);
+          this._triageActionPendingSignal.set(null);
+          this._triageActionErrorSignal.set(err.status === 409 ? copy.conflictError : copy.error);
+        },
+      });
   }
 
   private _upsertIssue(updated: IssueSummary): void {

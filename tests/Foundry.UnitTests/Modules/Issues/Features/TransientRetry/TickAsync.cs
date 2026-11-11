@@ -119,6 +119,56 @@ public sealed class TickAsync : IAsyncDisposable
     }
 
     [Fact]
+    public async Task WhenTransientTriageFailureIsDueAndUnderCap_RetriesTriage()
+    {
+        // Arrange — failed 2 minutes ago (backoff 1 minute), 1 prior transient run
+        DateTimeOffset now = DateTimeOffset.UtcNow;
+        TriageFailedIssue failed = new IssueBuilder()
+            .WithIssueNumber(20)
+            .WithFailureCategory(FailureCategory.TransientApiError)
+            .WithFailedAt(now.AddMinutes(-2))
+            .TriageFailed();
+        _dbContext.Set<Issue>().Add(failed);
+        await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+        _dbContext.ChangeTracker.Clear();
+        TransientRetryService sut = BuildSut(workerRunQueries: new StubWorkerRunQueries(count: 1), now: now);
+
+        // Act
+        await sut.TickForTest(CancellationToken.None);
+
+        // Assert
+        _dbContext.ChangeTracker.Clear();
+        Issue? persisted = await _dbContext.Set<Issue>()
+            .FirstOrDefaultAsync(i => i.Id == failed.Id, TestContext.Current.CancellationToken);
+        persisted.ShouldBeOfType<TriageQueuedIssue>();
+    }
+
+    [Fact]
+    public async Task WhenATriageFailureIsNotTransient_ItStaysParked()
+    {
+        // Arrange
+        DateTimeOffset now = DateTimeOffset.UtcNow;
+        TriageFailedIssue failed = new IssueBuilder()
+            .WithIssueNumber(21)
+            .WithFailureCategory(FailureCategory.VerdictInvalid)
+            .WithFailedAt(now.AddHours(-2))
+            .TriageFailed();
+        _dbContext.Set<Issue>().Add(failed);
+        await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+        _dbContext.ChangeTracker.Clear();
+        TransientRetryService sut = BuildSut(workerRunQueries: new StubWorkerRunQueries(count: 0), now: now);
+
+        // Act
+        await sut.TickForTest(CancellationToken.None);
+
+        // Assert
+        _dbContext.ChangeTracker.Clear();
+        Issue? persisted = await _dbContext.Set<Issue>()
+            .FirstOrDefaultAsync(i => i.Id == failed.Id, TestContext.Current.CancellationToken);
+        persisted.ShouldBeOfType<TriageFailedIssue>();
+    }
+
+    [Fact]
     public async Task WhenTransientFailedIssueIsAtCap_StaysInFailedState()
     {
         // Arrange — failed 2 minutes ago (backoff 1 minute), 2 prior transient runs (at cap)

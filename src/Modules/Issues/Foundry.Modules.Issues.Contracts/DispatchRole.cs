@@ -8,4 +8,5 @@ namespace Foundry.Modules.Issues.Contracts;
 public enum DispatchRole
 {
     Implement = 0,
+    Triage = 1,
 }

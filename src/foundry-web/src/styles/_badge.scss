@@ -24,6 +24,9 @@ $badge-state-backgrounds: (
   revision-queued: var(--fd-state-queued),
   revision-in-progress: var(--fd-state-in-progress),
   revision-failed: var(--fd-state-failed),
+  triage-queued: var(--fd-state-queued),
+  triage-in-progress: var(--fd-state-in-progress),
+  triage-failed: var(--fd-state-failed),
   usage-limited: var(--fd-state-usage-limited),
 );
 
@@ -41,6 +44,7 @@ $badge-outlined-variants: (
   failure-auth-invalid: (var(--fd-text-warning), var(--fd-text-warning)),
   failure-transient-api-error: (var(--fd-state-failed), var(--fd-text-error)),
   failure-pr-closed: (var(--fd-text-secondary), var(--fd-text-secondary)),
+  failure-verdict-invalid: (var(--fd-state-failed), var(--fd-text-error)),
   retrying: (var(--fd-text-warning), var(--fd-text-warning)),
   retry-exhausted: (var(--fd-state-failed), var(--fd-text-error)),
 );

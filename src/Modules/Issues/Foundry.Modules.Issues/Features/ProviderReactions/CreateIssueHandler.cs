@@ -3,6 +3,7 @@ using Foundry.Modules.Issues.Domain.Entities.States;
 using Foundry.Modules.Issues.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Shared;
+using Foundry.Shared.Infrastructure;
 
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
@@ -12,6 +13,7 @@ namespace Foundry.Modules.Issues.Features.ProviderReactions;
 [IntegrationEventHandlerIdentity("Issues.CreateIssue")]
 internal sealed class CreateIssueHandler(
     DbContext db,
+    IDomainEventDispatcher domainEventDispatcher,
     ILogger<CreateIssueHandler> logger) : IIntegrationEventHandler<IssueDetected>
 {
     public async Task HandleAsync(IssueDetected @event, CancellationToken cancellationToken)
@@ -54,7 +56,12 @@ internal sealed class CreateIssueHandler(
             @event.DetectedAt,
             KindClassification.FromKindLabel(@event.IssueKindLabel));
 
-        db.Set<Issue>().Add(detected);
+        // Every new issue is triaged before its first implement run, and before the dependency check (ADR 0097).
+        TriageQueuedIssue triageQueued = detected.QueueTriage();
+
+        db.Set<Issue>().Add(triageQueued);
         await db.SaveChangesAsync(cancellationToken);
+        await domainEventDispatcher.DispatchAsync(detected.DomainEvents, cancellationToken);
+        detected.ClearDomainEvents();
     }
 }

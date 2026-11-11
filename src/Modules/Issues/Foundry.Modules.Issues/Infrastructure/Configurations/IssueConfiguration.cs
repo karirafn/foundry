@@ -77,6 +77,12 @@ public sealed class IssueConfiguration : IEntityTypeConfiguration<Issue>
             t.HasCheckConstraint(
                 "ck_issues_awaiting_input_fields",
                 "state <> 'awaiting_input' OR (worker_run_id IS NOT NULL AND resume_target IS NOT NULL AND question_post IS NOT NULL)");
+            t.HasCheckConstraint(
+                "ck_issues_triage_in_progress_worker_run_id",
+                "state <> 'triage_in_progress' OR worker_run_id IS NOT NULL");
+            t.HasCheckConstraint(
+                "ck_issues_triage_failed_fields",
+                "state <> 'triage_failed' OR (worker_run_id IS NOT NULL AND failure_reason IS NOT NULL AND failed_at IS NOT NULL)");
         });
 
         builder.HasKey(i => i.Id);
@@ -158,6 +164,16 @@ public sealed class IssueConfiguration : IEntityTypeConfiguration<Issue>
 
         builder.Ignore(i => i.OpenClarification);
 
+        builder.Property(i => i.TriageVerdict)
+            .HasConversion((ValueConverter)TriageVerdictJsonConversion.Converter, TriageVerdictJsonConversion.Comparer)
+            .HasMaxLength(int.MaxValue)
+            .IsUnicode(true)
+            .HasColumnType("TEXT")
+            .IsRequired(false)
+            .HasColumnName("triage_verdict");
+
+        builder.Ignore(i => i.ConflictingTriageKind);
+
         builder.Property(i => i.DetectedAt)
             .HasConversion(
                 dto => dto.UtcDateTime.ToString("O"),
@@ -169,7 +185,8 @@ public sealed class IssueConfiguration : IEntityTypeConfiguration<Issue>
             kind => kind.Value,
             value => ParseStoredIssueKind(value));
 
-        // KindClassification is stored as its labelled kind; a null column is Unclassified.
+        // KindClassification is derived: its label half is stored as the labelled kind (a null column is no label),
+        // its triage half is the triage verdict's kind.
         builder.Ignore(i => i.KindClassification);
         builder.Property<IssueKind?>("_labelledKind")
             .HasConversion((ValueConverter)issueKindConverter)
@@ -195,6 +212,9 @@ public sealed class IssueConfiguration : IEntityTypeConfiguration<Issue>
             .HasValue<ChecksPendingIssue>("checks_pending")
             .HasValue<RebasePendingIssue>("rebase_pending")
             .HasValue<AwaitingInputIssue>("awaiting_input")
+            .HasValue<TriageQueuedIssue>("triage_queued")
+            .HasValue<TriageInProgressIssue>("triage_in_progress")
+            .HasValue<TriageFailedIssue>("triage_failed")
             .IsComplete(true);
 
         builder.Property<string>("state")

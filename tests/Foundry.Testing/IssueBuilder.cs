@@ -9,7 +9,7 @@ namespace Foundry.Testing;
 
 /// <summary>
 /// Builds Issue lifecycle states via the real production transition path
-/// (DetectedIssue.Detect → Enqueue → Claim → …). Intent-named terminals
+/// (DetectedIssue.Detect → QueueTriage → … → Claim → …). Intent-named terminals
 /// replay the domain transitions rather than stamping properties directly.
 ///
 /// Domain-events note: each production transition raises its domain event on the
@@ -113,7 +113,23 @@ public sealed class IssueBuilder
             _detectedAt,
             _kindClassification);
 
-    public FreshQueuedIssue FreshQueued() => Detected().Enqueue();
+    public TriageQueuedIssue TriageQueued() => Detected().QueueTriage();
+
+    public TriageInProgressIssue TriageInProgress() => TriageQueued().Claim(_workerRunId);
+
+    public TriageFailedIssue TriageFailed() =>
+        TriageInProgress().MarkFailed(_failureReason, _failureCategory, _failedAt);
+
+    /// <summary>A queued issue that skipped triage: no verdict recorded, its kind as the labels decided.</summary>
+    public FreshQueuedIssue FreshQueued() => (FreshQueuedIssue)TriageFailed().SkipTriage();
+
+    /// <summary>A queued issue triage judged ready as <paramref name="kind"/>.</summary>
+    public FreshQueuedIssue FreshQueuedFromTriage(IssueKind kind) =>
+        (FreshQueuedIssue)TriageInProgress().MarkReady(new TriageVerdict.Ready(kind, _runStartedAt));
+
+    /// <summary>A triage run that asked the <see cref="DefaultQuestions"/>: resumes as a re-triage.</summary>
+    public AwaitingInputIssue AwaitingInputFromTriage(IssueKind kind) =>
+        TriageInProgress().MarkNeedsInput(new TriageVerdict.NeedsInput(kind, DefaultQuestions, _runStartedAt));
 
     public InProgressIssue InProgress() => FreshQueued().Claim(_workerRunId);
 

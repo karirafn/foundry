@@ -1,4 +1,5 @@
-import { cardAccentFor } from './state-display';
+import { STATE_ARIA_LABELS, STATE_CSS_CLASSES, STATE_LABELS, cardAccentFor } from './state-display';
+import { RETRIAGEABLE_STATES, RETRYABLE_STATES, WORKING_STATES } from './issue-state';
 import type { IssueState } from './issue-state';
 
 describe('cardAccentFor', () => {
@@ -96,5 +97,48 @@ describe('cardAccentFor', () => {
   it('should return null for rebase_pending', () => {
     // Arrange / Act / Assert
     expect(cardAccentFor('rebase_pending')).toBeNull();
+  });
+});
+
+describe('triage state display', () => {
+  it('should give the three triage states their labels, aria labels and badge classes', () => {
+    // Arrange / Act / Assert
+    expect(STATE_LABELS.triage_queued).toBe('TRIAGE QUEUED');
+    expect(STATE_LABELS.triage_in_progress).toBe('TRIAGING');
+    expect(STATE_LABELS.triage_failed).toBe('TRIAGE FAILED');
+    expect(STATE_ARIA_LABELS.triage_queued).toBe('triage queued');
+    expect(STATE_ARIA_LABELS.triage_in_progress).toBe('triaging');
+    expect(STATE_ARIA_LABELS.triage_failed).toBe('triage failed');
+    expect(STATE_CSS_CLASSES.triage_queued).toBe('badge--triage-queued');
+    expect(STATE_CSS_CLASSES.triage_in_progress).toBe('badge--triage-in-progress');
+    expect(STATE_CSS_CLASSES.triage_failed).toBe('badge--triage-failed');
+  });
+
+  it('should return "working" for triage_in_progress', () => {
+    // Arrange / Act / Assert
+    expect(cardAccentFor('triage_in_progress')).toBe('working');
+  });
+
+  it('should return null for triage_queued and triage_failed', () => {
+    // Arrange / Act / Assert
+    expect(cardAccentFor('triage_queued')).toBeNull();
+    expect(cardAccentFor('triage_failed')).toBeNull();
+  });
+});
+
+describe('triage state sets', () => {
+  it('should treat triage_in_progress as a working state', () => {
+    // Arrange / Act / Assert
+    expect(WORKING_STATES.has('triage_in_progress')).toBe(true);
+  });
+
+  it('should not make triage_failed retryable through Retry Issue', () => {
+    // Arrange / Act / Assert
+    expect(RETRYABLE_STATES.has('triage_failed')).toBe(false);
+  });
+
+  it('should allow re-triage only from queued and blocked', () => {
+    // Arrange / Act / Assert
+    expect([...RETRIAGEABLE_STATES].sort()).toEqual(['blocked', 'queued']);
   });
 });

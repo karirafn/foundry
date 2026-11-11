@@ -88,6 +88,10 @@ internal sealed class FakeGitHub : IIssueProviderFactory, IIssueProvider, IGitHu
     public Task<Result<bool>> CanPushAsync(RepositorySlug slug, CancellationToken cancellationToken)
         => Task.FromResult(Result<bool>.Ok(true));
 
+    // A triage run reads the issue through Foundry (ADR 0098).
+    public Task<Result<ProviderIssueContent>> GetIssueContentAsync(RepositorySlug slug, int issueNumber, CancellationToken cancellationToken)
+        => Task.FromResult(Result<ProviderIssueContent>.Ok(new ProviderIssueContent(Issue.Title, "Add a smoke-tested feature.", [])));
+
     // Checks stay pending so the issue rests in checks-pending once the run is tracked.
     public Task<Result<ProviderChecks>> GetChecksAsync(RepositorySlug slug, string pullRequestUrl, CancellationToken cancellationToken)
         => Task.FromResult(Result<ProviderChecks>.Ok(new ProviderChecks.Pending()));

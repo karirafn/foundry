@@ -2,6 +2,7 @@ using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Issues.Domain.Entities;
 using Foundry.Modules.Issues.Domain.Entities.States;
 using Foundry.Modules.Issues.Domain.Events;
+using Foundry.Modules.Issues.Domain.ValueObjects;
 using Foundry.Testing;
 
 using Shouldly;
@@ -50,6 +51,24 @@ public sealed class ProvideInput
         continuation.ShouldSatisfyAllConditions(
             () => continuation.BranchName.ShouldBe("feat/1-test"),
             () => continuation.FailureReason.ShouldBeEmpty());
+    }
+
+    [Fact]
+    public void WhenTriageAsked_QueuesTheIssueForTriageAgainWithTheRoundAnswered()
+    {
+        // Arrange
+        AwaitingInputIssue awaiting = new IssueBuilder().AwaitingInputFromTriage(IssueKind.Feature);
+        awaiting.RecordQuestionPosted(1, PostedAt, commentUrl: null);
+
+        // Act
+        QueuedIssue queued = awaiting.ProvideInput("Use the v2 API.", AnsweredAt);
+
+        // Assert
+        TriageQueuedIssue triageQueued = queued.ShouldBeOfType<TriageQueuedIssue>();
+        triageQueued.ShouldSatisfyAllConditions(
+            () => triageQueued.OpenClarification.ShouldBeNull(),
+            () => triageQueued.Clarifications.ShouldHaveSingleItem().Input.ShouldBe("Use the v2 API."),
+            () => awaiting.DomainEvents.ShouldHaveSingleItem().ShouldBeOfType<IssueTriageQueued>());
     }
 
     [Fact]

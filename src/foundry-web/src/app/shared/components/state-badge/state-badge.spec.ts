@@ -466,4 +466,37 @@ describe('StateBadgeComponent', () => {
     // Assert
     expect(el.querySelector('span')?.classList.contains('badge--rebase-pending')).toBe(true);
   });
+
+  // Triage states (#772)
+  const triageCases: { state: IssueState; label: string; aria: string; cssClass: string }[] = [
+    { state: 'triage_queued', label: 'TRIAGE QUEUED', aria: 'State: triage queued', cssClass: 'badge--triage-queued' },
+    { state: 'triage_in_progress', label: 'TRIAGING', aria: 'State: triaging', cssClass: 'badge--triage-in-progress' },
+    { state: 'triage_failed', label: 'TRIAGE FAILED', aria: 'State: triage failed', cssClass: 'badge--triage-failed' },
+  ];
+
+  for (const c of triageCases) {
+    it(`should display "${c.label}" with ${c.cssClass} and its aria-label for ${c.state}`, () => {
+      // Arrange / Act
+      const fixture = createComponent(c.state);
+      const span = (fixture.nativeElement as HTMLElement).querySelector('span');
+
+      // Assert
+      expect(span?.textContent?.trim()).toBe(c.label);
+      expect(span?.getAttribute('aria-label')).toBe(c.aria);
+      expect(span?.classList.contains(c.cssClass)).toBe(true);
+    });
+  }
+
+  for (const classification of ['non_zero_exit', 'timed_out', 'provider_error', 'usage_limited']) {
+    it(`should always display "TRIAGE FAILED" for triage_failed, even with failureClassification ${classification}`, () => {
+      // Arrange / Act
+      const fixture = createComponent('triage_failed', classification);
+      const span = (fixture.nativeElement as HTMLElement).querySelector('span');
+
+      // Assert
+      expect(span?.textContent?.trim()).toBe('TRIAGE FAILED');
+      expect(span?.getAttribute('aria-label')).toBe('State: triage failed');
+      expect(span?.classList.contains('badge--triage-failed')).toBe(true);
+    });
+  }
 });

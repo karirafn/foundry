@@ -33,7 +33,7 @@ public sealed class StartingRun : WorkerRun
 
     public ActiveRun Activate(
         ContainerId containerId,
-        BranchName branchName,
+        BranchName? branchName,
         MonitoredRepositoryId monitoredRepositoryId)
     {
         ActiveRun active = ActiveRun.FromStarting(this, containerId, branchName, monitoredRepositoryId);

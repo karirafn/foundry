@@ -67,7 +67,7 @@ public sealed class TransitionAsync : IAsyncDisposable
         _dbContext.Add(detected);
         await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
 
-        FreshQueuedIssue queued = detected.Enqueue();
+        TriageQueuedIssue queued = detected.QueueTriage();
         NullDomainEventDispatcher dispatcher = new();
 
         // Act
@@ -77,7 +77,7 @@ public sealed class TransitionAsync : IAsyncDisposable
         Issue? result = await _dbContext.Issues.FindAsync(
             [queued.Id],
             TestContext.Current.CancellationToken);
-        result.ShouldBeOfType<FreshQueuedIssue>();
+        result.ShouldBeOfType<TriageQueuedIssue>();
         result.Id.ShouldBe(queued.Id);
     }
 
@@ -90,7 +90,7 @@ public sealed class TransitionAsync : IAsyncDisposable
         _dbContext.Add(detected);
         await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
 
-        FreshQueuedIssue queued = detected.Enqueue();
+        TriageQueuedIssue queued = detected.QueueTriage();
         NullDomainEventDispatcher dispatcher = new();
 
         // Act
@@ -112,14 +112,14 @@ public sealed class TransitionAsync : IAsyncDisposable
         _dbContext.Add(detected);
         await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
 
-        FreshQueuedIssue queued = detected.Enqueue();
+        TriageQueuedIssue queued = detected.QueueTriage();
         CapturingDomainEventDispatcher dispatcher = new();
 
         // Act
         await _dbContext.TransitionAsync(detected, queued, dispatcher, TestContext.Current.CancellationToken);
 
         // Assert
-        dispatcher.DispatchedEvents.ShouldContain(e => e is IssueQueued);
+        dispatcher.DispatchedEvents.ShouldContain(e => e is IssueTriageQueued);
     }
 
     [Fact]
@@ -131,7 +131,7 @@ public sealed class TransitionAsync : IAsyncDisposable
         _dbContext.Add(detected);
         await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
 
-        FreshQueuedIssue queued = detected.Enqueue();
+        TriageQueuedIssue queued = detected.QueueTriage();
         NullDomainEventDispatcher dispatcher = new();
 
         // Act

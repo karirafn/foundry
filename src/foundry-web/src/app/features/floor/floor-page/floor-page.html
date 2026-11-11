@@ -54,6 +54,9 @@
             <span class="floor__queue-number">#{{ issue.issueNumber }}</span>
             <span class="floor__queue-title">{{ issue.title }}</span>
             <span class="floor__queue-repo">{{ issue.repositorySlug }}</span>
+            @if (issue.state === 'triage_queued') {
+              <fd-role-tag class="floor__queue-role" [role]="'triage'" />
+            }
           </li>
         }
       </ol>

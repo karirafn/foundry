@@ -158,7 +158,8 @@ internal static partial class SystemPromptBuilder
         int issueNumber,
         string systemPromptTemplate,
         IssueContent issue,
-        bool installsDotnet)
+        bool installsDotnet,
+        IReadOnlyList<Clarification>? clarifications = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(principles);
         ArgumentNullException.ThrowIfNull(issue);
@@ -166,12 +167,17 @@ internal static partial class SystemPromptBuilder
         string issueNumberStr = issueNumber.ToString(CultureInfo.InvariantCulture);
         string csharpLspSection = installsDotnet ? "\n\n" + BuildCSharpLspSection() : string.Empty;
 
+        // A re-triage after answered questions (ADR 0097) reads the clarification log, as an implement run does.
+        string clarificationSection = clarifications is { Count: > 0 }
+            ? "\n\n" + BuildClarificationSection(clarifications)
+            : string.Empty;
+
         string Assemble(string issueContent) =>
             (RestrictedSafetyPreamble + "\n\n" + principles + "\n\n"
                 + systemPromptTemplate
                     .Replace(RolePromptPlaceholders.IssueNumber, issueNumberStr, StringComparison.Ordinal)
                     .Replace(RolePromptPlaceholders.IssueContent, issueContent, StringComparison.Ordinal)
-                + "\n\n" + TaskListInstruction + csharpLspSection)
+                + "\n\n" + TaskListInstruction + csharpLspSection + clarificationSection)
             .Replace("\r\n", "\n", StringComparison.Ordinal);
 
         string encodedTitle = EncodeForXmlData(issue.Title);

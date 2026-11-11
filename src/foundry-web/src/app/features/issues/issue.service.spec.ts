@@ -242,6 +242,8 @@ describe('IssueService', () => {
       ...mockSummary,
       author: 'dev',
       labels: ['bug'],
+      kind: { source: 'unclassified', kind: null, conflictingTriageKind: null },
+      triage: null,
       stateDetails: {
         workerRunId: null,
         branchName: null,
@@ -273,6 +275,8 @@ describe('IssueService', () => {
       ...mockSummary,
       author: 'dev',
       labels: [],
+      kind: { source: 'unclassified', kind: null, conflictingTriageKind: null },
+      triage: null,
       stateDetails: {
         workerRunId: null,
         branchName: null,
@@ -399,6 +403,8 @@ describe('IssueService', () => {
       id: 'def456',
       author: 'dev',
       labels: [],
+      kind: { source: 'unclassified', kind: null, conflictingTriageKind: null },
+      triage: null,
       stateDetails: {
         workerRunId: null,
         branchName: null,
@@ -3296,5 +3302,181 @@ describe('IssueService (nextUpAnnouncement)', () => {
     expect(after).toContain('99');
     expect(after).toContain('Add retry');
     expect(after).not.toBe(before);
+  });
+});
+
+describe('IssueService (triage actions)', () => {
+  let service: IssueService;
+  let httpMock: HttpTestingController;
+
+  beforeEach(() => {
+    TestBed.configureTestingModule({
+      providers: [
+        IssueService,
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        { provide: IssueSignalRService, useValue: mockIssueSignalRService },
+      ],
+    });
+    service = TestBed.inject(IssueService);
+    httpMock = TestBed.inject(HttpTestingController);
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    httpMock.verify({ ignoreCancelled: true });
+    vi.restoreAllMocks();
+  });
+
+  const cases = [
+    {
+      action: 'retry_triage' as const,
+      call: (svc: IssueService, id: string) => svc.retryTriage(id),
+      path: 'retry-triage',
+      success: 'Triage queued again. Issue status is updating.',
+      conflict: 'This issue is no longer in Triage failed.',
+      generic: 'Failed to retry triage.',
+    },
+    {
+      action: 'skip_triage' as const,
+      call: (svc: IssueService, id: string) => svc.skipTriage(id),
+      path: 'skip-triage',
+      success: 'Triage skipped. Issue status is updating.',
+      conflict: 'This issue is no longer in Triage failed.',
+      generic: 'Failed to skip triage.',
+    },
+    {
+      action: 'retriage' as const,
+      call: (svc: IssueService, id: string) => svc.retriage(id),
+      path: 'retriage',
+      success: 'Re-triage queued. Issue status is updating.',
+      conflict:
+        'Only queued or blocked issues can be re-triaged. It may have been dispatched already.',
+      generic: 'Failed to re-triage the issue.',
+    },
+  ];
+
+  for (const c of cases) {
+    describe(c.action, () => {
+      it(`POSTs to /api/issues/{id}/${c.path} and marks the action pending while in flight`, () => {
+        // Act
+        c.call(service, 'abc123');
+
+        // Assert
+        expect(service.triageActionPending()).toBe(c.action);
+        const req = httpMock.expectOne(`/api/issues/abc123/${c.path}`);
+        expect(req.request.method).toBe('POST');
+        req.flush({});
+        httpMock.expectOne('/api/issues/abc123').flush({ ...mockSummary });
+      });
+
+      it('sets the success text, clears pending and reloads the detail on success', () => {
+        // Arrange
+        c.call(service, 'abc123');
+
+        // Act
+        httpMock.expectOne(`/api/issues/abc123/${c.path}`).flush({});
+
+        // Assert
+        expect(service.triageActionPending()).toBeNull();
+        expect(service.triageActionSuccess()).toBe(c.success);
+        expect(service.triageActionError()).toBeNull();
+        const reload = httpMock.expectOne('/api/issues/abc123');
+        expect(reload.request.method).toBe('GET');
+        reload.flush({ ...mockSummary });
+      });
+
+      it('sets the 409 message when the issue is in the wrong state', () => {
+        // Arrange
+        c.call(service, 'abc123');
+
+        // Act
+        httpMock
+          .expectOne(`/api/issues/abc123/${c.path}`)
+          .flush('Conflict', { status: 409, statusText: 'Conflict' });
+
+        // Assert
+        expect(service.triageActionPending()).toBeNull();
+        expect(service.triageActionError()).toBe(c.conflict);
+        expect(service.triageActionSuccess()).toBeNull();
+        httpMock.expectNone('/api/issues/abc123');
+      });
+
+      it('sets the generic message on any other error', () => {
+        // Arrange
+        c.call(service, 'abc123');
+
+        // Act
+        httpMock
+          .expectOne(`/api/issues/abc123/${c.path}`)
+          .flush('Server Error', { status: 500, statusText: 'Internal Server Error' });
+
+        // Assert
+        expect(service.triageActionPending()).toBeNull();
+        expect(service.triageActionError()).toBe(c.generic);
+      });
+
+      it('clears an earlier error and success message when started again', () => {
+        // Arrange — first call fails
+        c.call(service, 'abc123');
+        httpMock
+          .expectOne(`/api/issues/abc123/${c.path}`)
+          .flush('Server Error', { status: 500, statusText: 'Internal Server Error' });
+
+        // Act
+        c.call(service, 'abc123');
+
+        // Assert
+        expect(service.triageActionError()).toBeNull();
+        expect(service.triageActionSuccess()).toBeNull();
+        httpMock.expectOne(`/api/issues/abc123/${c.path}`).flush({});
+        httpMock.expectOne('/api/issues/abc123').flush({ ...mockSummary });
+      });
+    });
+  }
+
+  it('does not touch the Retry Issue signals', () => {
+    // Act
+    service.retryTriage('abc123');
+    httpMock
+      .expectOne('/api/issues/abc123/retry-triage')
+      .flush('Server Error', { status: 500, statusText: 'Internal Server Error' });
+
+    // Assert
+    expect(service.retrying()).toBe(false);
+    expect(service.retryError()).toBeNull();
+  });
+
+  it('toggleExpand clears pending, error and success', () => {
+    // Arrange
+    service.skipTriage('abc123');
+    httpMock
+      .expectOne('/api/issues/abc123/skip-triage')
+      .flush('Conflict', { status: 409, statusText: 'Conflict' });
+    service.retriage('abc123');
+
+    // Act
+    service.toggleExpand('abc123');
+
+    // Assert
+    expect(service.triageActionPending()).toBeNull();
+    expect(service.triageActionError()).toBeNull();
+    expect(service.triageActionSuccess()).toBeNull();
+    httpMock.match('/api/issues/abc123/retriage');
+    httpMock.expectOne('/api/issues/abc123').flush({ ...mockSummary });
+  });
+
+  it('toggleExpand clears a success message', () => {
+    // Arrange
+    service.retryTriage('abc123');
+    httpMock.expectOne('/api/issues/abc123/retry-triage').flush({});
+    httpMock.expectOne('/api/issues/abc123').flush({ ...mockSummary });
+
+    // Act
+    service.toggleExpand('abc123');
+
+    // Assert
+    expect(service.triageActionSuccess()).toBeNull();
+    httpMock.expectOne('/api/issues/abc123').flush({ ...mockSummary });
   });
 });

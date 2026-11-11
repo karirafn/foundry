@@ -5,7 +5,7 @@ import { provideHttpClientTesting, HttpTestingController } from '@angular/common
 import { of } from 'rxjs';
 import { IssueDetailComponent } from './issue-detail';
 import { IssueDetail, IssueStateDetails } from '../issue.model';
-import { IssueService } from '../issue.service';
+import { IssueService, TriageAction } from '../issue.service';
 import { IssueSignalRService } from '../../../core/services/issue-signalr.service';
 import { WorkerRunService } from '../../workers/worker-run.service';
 import { WorkerSignalRService, WORKER_HUB_FACTORY } from '../../../core/services/worker-signalr.service';
@@ -53,7 +53,18 @@ const mockDetail: IssueDetail = {
   author: 'dev',
   labels: ['enhancement', 'ui'],
   stateDetails: mockStateDetails,
+  kind: { source: 'labelled', kind: 'feature', conflictingTriageKind: null },
+  triage: null,
 };
+
+/** The triage-action signals every IssueService stand-in needs once the detail renders them. */
+function triageSignals() {
+  return {
+    triageActionPending: signal<TriageAction | null>(null),
+    triageActionError: signal<string | null>(null),
+    triageActionSuccess: signal<string | null>(null),
+  };
+}
 
 function createComponent(
   detail: IssueDetail | null,
@@ -604,7 +615,7 @@ describe('IssueDetailComponent', () => {
     TestBed.configureTestingModule({
       imports: [IssueDetailComponent],
       providers: [
-        { provide: IssueService, useValue: { retrying: signal(false), retryError: signal(null), retrySuccess: signal(null) } },
+        { provide: IssueService, useValue: { retrying: signal(false), retryError: signal(null), retrySuccess: signal(null), ...triageSignals() } },
         WorkerSignalRService,
         provideHttpClient(),
         provideHttpClientTesting(),
@@ -1087,6 +1098,7 @@ describe('IssueDetailComponent', () => {
           commentUrl: null,
           postFailureReason: null,
           nextPostAttemptAt: null,
+          resumeTarget: 'revision',
         },
       },
     };
@@ -1117,6 +1129,7 @@ describe('IssueDetailComponent', () => {
           commentUrl: 'https://github.com/owner/repo/pull/7#issuecomment-555',
           postFailureReason: null,
           nextPostAttemptAt: null,
+          resumeTarget: 'revision',
         },
       },
     };
@@ -1751,7 +1764,7 @@ describe('IssueDetailComponent — cancel run', () => {
     TestBed.configureTestingModule({
       imports: [IssueDetailComponent],
       providers: [
-        { provide: IssueService, useValue: { retrying: signal(false), retryError: signal(null), retrySuccess: signal(null) } },
+        { provide: IssueService, useValue: { retrying: signal(false), retryError: signal(null), retrySuccess: signal(null), ...triageSignals() } },
         WorkerSignalRService,
         provideHttpClient(),
         provideHttpClientTesting(),
@@ -1915,6 +1928,7 @@ describe('IssueDetailComponent — retry fresh', () => {
             retrying: signal(false),
             retryError: signal(null),
             retrySuccess: signal(null),
+            ...triageSignals(),
             retryIssue,
             retryIssueFresh,
           },
@@ -2041,7 +2055,7 @@ describe('IssueDetailComponent — run role tag', () => {
     TestBed.configureTestingModule({
       imports: [IssueDetailComponent],
       providers: [
-        { provide: IssueService, useValue: { retrying: signal(false), retryError: signal(null), retrySuccess: signal(null) } },
+        { provide: IssueService, useValue: { retrying: signal(false), retryError: signal(null), retrySuccess: signal(null), ...triageSignals() } },
         WorkerSignalRService,
         provideHttpClient(),
         provideHttpClientTesting(),
@@ -2092,5 +2106,654 @@ describe('IssueDetailComponent — run role tag', () => {
     // Assert
     expect(el.querySelector('.issue-detail__run-header')).toBeNull();
     expect(el.querySelector('fd-role-tag')).toBeNull();
+  });
+});
+
+describe('IssueDetailComponent — triage (#772)', () => {
+  const noKind: IssueDetail['kind'] = { source: 'unclassified', kind: null, conflictingTriageKind: null };
+
+  function verdict(overrides: Partial<NonNullable<IssueDetail['triage']>> = {}): NonNullable<IssueDetail['triage']> {
+    return {
+      outcome: 'ready',
+      kind: 'feature',
+      questions: [],
+      decidedAt: '2026-11-06T14:14:03Z',
+      ...overrides,
+    };
+  }
+
+  function issue(state: string, overrides: Partial<IssueDetail> = {}): IssueDetail {
+    return {
+      ...mockDetail,
+      state: state as IssueDetail['state'],
+      stateDetails: null,
+      kind: noKind,
+      triage: null,
+      ...overrides,
+    };
+  }
+
+  function failedDetails(overrides: Partial<IssueStateDetails> = {}): IssueStateDetails {
+    return {
+      ...mockStateDetails,
+      branchName: null,
+      completedAt: null,
+      workerRunId: 'run-triage',
+      failureReason: 'Verdict missing from output',
+      failedAt: '2026-11-06T14:20:11Z',
+      ...overrides,
+    };
+  }
+
+  function setup(detail: IssueDetail) {
+    const signals = triageSignals();
+    const service = {
+      retrying: signal(false),
+      retryError: signal(null),
+      retrySuccess: signal(null),
+      ...signals,
+      retryIssue: vi.fn(),
+      retryIssueFresh: vi.fn(),
+      retryTriage: vi.fn(),
+      skipTriage: vi.fn(),
+      retriage: vi.fn(),
+    };
+    TestBed.resetTestingModule();
+    TestBed.configureTestingModule({
+      imports: [IssueDetailComponent],
+      providers: [
+        { provide: IssueService, useValue: service },
+        WorkerSignalRService,
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        { provide: IssueSignalRService, useValue: mockIssueSignalRService },
+        {
+          provide: WorkerRunService,
+          useValue: { getDetail: () => of(null), getLog: () => of(null), requestCancel: vi.fn() },
+        },
+        { provide: WORKER_HUB_FACTORY, useValue: () => mockWorkerHub },
+      ],
+    });
+    const fixture = TestBed.createComponent(IssueDetailComponent);
+    fixture.componentRef.setInput('detail', detail);
+    fixture.componentRef.setInput('loading', false);
+    fixture.componentRef.setInput('error', null);
+    fixture.detectChanges();
+    const el = fixture.nativeElement as HTMLElement;
+    const region = () => el.querySelector('.issue-detail__triage-live-region') as HTMLElement;
+    const kindField = () => el.querySelector('.issue-detail__field--kind') as HTMLElement | null;
+    const button = (label: string) =>
+      Array.from(el.querySelectorAll<HTMLButtonElement>('.issue-detail__actions button')).find(
+        (b) => b.getAttribute('aria-label')?.startsWith(label),
+      ) ?? null;
+    const dialogs = () => Array.from(el.querySelectorAll<HTMLDialogElement>('dialog.confirm-dialog'));
+    const openDialog = () => dialogs().find((d) => d.open) ?? null;
+    return { fixture, el, service, region, kindField, button, dialogs, openDialog };
+  }
+
+  function text(node: Element | null): string {
+    return (node?.textContent ?? '').replace(/\s+/g, ' ').trim();
+  }
+
+  // --- 2a. Kind field ---
+
+  it('should render the Kind field first in the fields grid', () => {
+    // Arrange / Act
+    const { el } = setup(
+      issue('blocked', {
+        kind: { source: 'labelled', kind: 'bug', conflictingTriageKind: null },
+        stateDetails: { ...mockStateDetails, branchName: null, completedAt: null, blockedBy: [12, 14] },
+      }),
+    );
+
+    // Assert
+    const firstField = el.querySelector('.issue-detail__fields > .issue-detail__field');
+    expect(firstField?.classList.contains('issue-detail__field--kind')).toBe(true);
+    expect(text(firstField?.querySelector('.issue-detail__field-key') ?? null)).toBe('Kind');
+  });
+
+  it('should render the Kind field even when there are no state details', () => {
+    // Arrange / Act
+    const { kindField } = setup(issue('queued', { kind: { source: 'triaged', kind: 'feature', conflictingTriageKind: null } }));
+
+    // Assert
+    expect(kindField()).not.toBeNull();
+  });
+
+  it.each([
+    ['labelled', 'bug', 'Bug', 'From label'],
+    ['triaged', 'feature', 'Feature', 'From triage'],
+    ['triaged', 'refactor', 'Refactor', 'From triage'],
+    ['labelled', 'documentation', 'Documentation', 'From label'],
+    ['unclassified', null, 'Unclassified', 'No kind label, and triage has not classified it'],
+  ] as const)('should show a %s %s kind as "%s" with the note "%s"', (source, kind, label, note) => {
+    // Arrange / Act
+    const { kindField } = setup(issue('queued', { kind: { source, kind, conflictingTriageKind: null } }));
+
+    // Assert
+    expect(text(kindField()!.querySelector('.issue-detail__kind-value'))).toBe(label);
+    expect(text(kindField()!.querySelector('.issue-detail__kind-source'))).toBe(note);
+  });
+
+  it('should mark the Unclassified value as secondary text', () => {
+    // Arrange / Act
+    const { kindField } = setup(issue('queued'));
+
+    // Assert
+    expect(kindField()!.querySelector('.issue-detail__kind-value--unclassified')).not.toBeNull();
+  });
+
+  it('should show an unknown kind value as is', () => {
+    // Arrange / Act
+    const { kindField } = setup(
+      issue('queued', {
+        kind: { source: 'labelled', kind: 'chore' as IssueDetail['kind']['kind'], conflictingTriageKind: null },
+      }),
+    );
+
+    // Assert
+    expect(text(kindField()!.querySelector('.issue-detail__kind-value'))).toBe('chore');
+  });
+
+  it('should show the Triage differs line only when conflictingTriageKind is set', () => {
+    // Arrange / Act
+    const plain = setup(issue('queued', { kind: { source: 'labelled', kind: 'bug', conflictingTriageKind: null } }));
+    const plainDiffers = plain.el.querySelector('.issue-detail__kind-differs');
+    const differs = setup(issue('queued', { kind: { source: 'labelled', kind: 'bug', conflictingTriageKind: 'refactor' } }));
+    const line = differs.el.querySelector('.issue-detail__kind-differs');
+
+    // Assert
+    expect(plainDiffers).toBeNull();
+    expect(text(line?.querySelector('.issue-detail__chip') ?? null)).toBe('Triage differs');
+    expect(text(line)).toContain('Triage read it as a refactor. The label decides; nothing changes.');
+  });
+
+  // --- 2b. Triage callout ---
+
+  it('should keep the triage callout permanently mounted as a polite, focusable live region', () => {
+    // Arrange / Act
+    const { region } = setup(issue('completed'));
+
+    // Assert
+    expect(region()).not.toBeNull();
+    expect(region().getAttribute('role')).toBe('status');
+    expect(region().getAttribute('aria-live')).toBe('polite');
+    expect(region().getAttribute('aria-atomic')).toBe('true');
+    expect(region().getAttribute('tabindex')).toBe('-1');
+    expect(region().classList.contains('issue-detail__triage-live-region--empty')).toBe(true);
+    expect(text(region())).toBe('');
+  });
+
+  it.each([
+    ['detected', 'Waiting for a worker to triage this issue.', 'neutral'],
+    ['triage_queued', 'Waiting for a worker to triage this issue.', 'neutral'],
+    ['triage_in_progress', 'A triage worker is reading the issue and the repository.', 'neutral'],
+    [
+      'triage_failed',
+      'Triage did not finish. Retry triage to run it again, or skip triage to queue the issue without a readiness check.',
+      'failed',
+    ],
+    ['queued', 'Not triaged. This issue was queued without a readiness check.', 'neutral'],
+    ['blocked', 'Not triaged. This issue was queued without a readiness check.', 'neutral'],
+  ])('should show the %s callout', (state, message, tint) => {
+    // Arrange / Act
+    const { region } = setup(issue(state));
+
+    // Assert
+    expect(text(region().querySelector('.issue-detail__field-key'))).toBe('Triage');
+    expect(text(region())).toContain(message);
+    expect(region().classList.contains(`issue-detail__triage-state--${tint}`)).toBe(true);
+    expect(region().classList.contains('issue-detail__triage-live-region--empty')).toBe(false);
+  });
+
+  it('should lead the triage_failed callout with a bold "Triage did not finish."', () => {
+    // Arrange / Act
+    const { region } = setup(issue('triage_failed', { stateDetails: failedDetails() }));
+
+    // Assert
+    expect(text(region().querySelector('strong'))).toBe('Triage did not finish.');
+  });
+
+  it('should show the needs-more-detail callout with a warning tint for awaiting_input with a retriage resume target', () => {
+    // Arrange / Act
+    const { region } = setup(
+      issue('awaiting_input', {
+        triage: verdict({ outcome: 'needs_input', questions: ['Which API?'] }),
+        stateDetails: {
+          ...mockStateDetails,
+          branchName: null,
+          completedAt: null,
+          awaitingInput: {
+            questions: [{ question: 'Which API?', context: '' }],
+            postStatus: 'posted',
+            postedAt: '2026-11-06T14:15:00Z',
+            commentUrl: null,
+            postFailureReason: null,
+            nextPostAttemptAt: null,
+            resumeTarget: 'retriage',
+          },
+        },
+      }),
+    );
+
+    // Assert
+    expect(text(region())).toContain(
+      'Triage needs more detail. The questions are posted on the issue; once a reply settles, Foundry triages again.',
+    );
+    expect(region().classList.contains('issue-detail__triage-state--warning')).toBe(true);
+  });
+
+  it('should head the awaiting-input questions "Questions from triage" for a retriage resume target', () => {
+    // Arrange / Act
+    const awaiting = (resumeTarget: 'retriage' | 'revision') =>
+      setup(
+        issue('awaiting_input', {
+          stateDetails: {
+            ...mockStateDetails,
+            branchName: null,
+            completedAt: null,
+            awaitingInput: {
+              questions: [{ question: 'Which API?', context: '' }],
+              postStatus: 'pending',
+              postedAt: null,
+              commentUrl: null,
+              postFailureReason: null,
+              nextPostAttemptAt: null,
+              resumeTarget,
+            },
+          },
+        }),
+      ).el.querySelector('#awaiting-input-heading');
+    const triageHeading = text(awaiting('retriage'));
+    const revisionHeading = text(awaiting('revision'));
+
+    // Assert
+    expect(triageHeading).toBe('Questions from triage');
+    expect(revisionHeading).toBe('Open Questions');
+  });
+
+  it('should leave the callout empty for awaiting_input with a non-triage resume target and no verdict', () => {
+    // Arrange / Act
+    const { region } = setup(
+      issue('awaiting_input', {
+        stateDetails: {
+          ...mockStateDetails,
+          branchName: null,
+          completedAt: null,
+          awaitingInput: {
+            questions: [],
+            postStatus: 'pending',
+            postedAt: null,
+            commentUrl: null,
+            postFailureReason: null,
+            nextPostAttemptAt: null,
+            resumeTarget: 'continuation',
+          },
+        },
+      }),
+    );
+
+    // Assert
+    expect(text(region())).toBe('');
+    expect(region().classList.contains('issue-detail__triage-live-region--empty')).toBe(true);
+  });
+
+  it('should show a READY verdict with its kind and decision time', () => {
+    // Arrange / Act
+    const { region } = setup(issue('queued', { triage: verdict() }));
+
+    // Assert
+    const chip = region().querySelector('.issue-detail__chip');
+    expect(text(chip)).toBe('Ready');
+    expect(chip?.classList.contains('issue-detail__chip--success')).toBe(true);
+    expect(text(region())).toContain('Feature');
+    expect(text(region())).toMatch(/Triaged Nov 6, 2026/);
+    expect(text(region())).not.toContain('Not triaged');
+    expect(text(region())).not.toContain('question');
+    expect(region().classList.contains('issue-detail__triage-state--neutral')).toBe(true);
+  });
+
+  it.each([
+    [1, '1 question asked'],
+    [3, '3 questions asked'],
+  ])('should show a NEEDS INPUT verdict with %i question(s) asked', (count, phrase) => {
+    // Arrange / Act
+    const { region } = setup(
+      issue('in_progress', {
+        triage: verdict({ outcome: 'needs_input', kind: 'bug', questions: Array.from({ length: count }, (_, i) => `Q${i}`) }),
+        stateDetails: { ...mockStateDetails, completedAt: null, workerRunId: 'run-1' },
+      }),
+    );
+
+    // Assert
+    const chip = region().querySelector('.issue-detail__chip');
+    expect(text(chip)).toBe('Needs input');
+    expect(chip?.classList.contains('issue-detail__chip--warning')).toBe(true);
+    expect(text(region())).toContain('Bug');
+    expect(text(region())).toContain(phrase);
+  });
+
+  it.each(['triage_queued', 'triage_in_progress', 'triage_failed'])(
+    'should hide a stale verdict while the issue is %s',
+    (state) => {
+      // Arrange / Act
+      const { region } = setup(issue(state, { triage: verdict() }));
+
+      // Assert
+      expect(region().querySelector('.issue-detail__chip')).toBeNull();
+      expect(text(region())).not.toContain('Triaged');
+    },
+  );
+
+  it.each(['completed', 'review', 'failed'])('should leave the callout empty for %s with no verdict', (state) => {
+    // Arrange / Act
+    const { region } = setup(issue(state));
+
+    // Assert
+    expect(text(region())).toBe('');
+  });
+
+  // --- 2c. triage_failed detail ---
+
+  it('should show the failure reason and date for triage_failed, and no branch', () => {
+    // Arrange / Act
+    const { el } = setup(issue('triage_failed', { stateDetails: failedDetails() }));
+
+    // Assert
+    const keys = Array.from(el.querySelectorAll('.issue-detail__field-key')).map((k) => text(k));
+    expect(keys).toContain('Failure Reason');
+    expect(keys).toContain('Failed At');
+    expect(keys).not.toContain('Branch');
+    expect(text(el)).toContain('Verdict missing from output');
+  });
+
+  it('should tell the user to use Retry triage once automatic retries are exhausted', () => {
+    // Arrange / Act
+    const { el } = setup(
+      issue('triage_failed', {
+        stateDetails: failedDetails({
+          transientRetry: { attemptNumber: 3, maxAttempts: 3, isExhausted: true, nextAttemptDueAt: null },
+        }),
+      }),
+    );
+
+    // Assert
+    const retry = text(el.querySelector('.issue-detail__retry-live-region'));
+    expect(retry).toContain('Use Retry triage to run it again.');
+    expect(retry).not.toContain('Retry Issue');
+  });
+
+  it('should keep the Retry Issue hint for a plain failed issue', () => {
+    // Arrange / Act
+    const { el } = setup(
+      issue('failed', {
+        stateDetails: failedDetails({
+          transientRetry: { attemptNumber: 3, maxAttempts: 3, isExhausted: true, nextAttemptDueAt: null },
+        }),
+      }),
+    );
+
+    // Assert
+    expect(text(el.querySelector('.issue-detail__retry-live-region'))).toContain('Use Retry Issue to try again manually.');
+  });
+
+  // --- 3. Actions ---
+
+  it('should show Retry triage and Skip triage for triage_failed, and never Retry Issue', () => {
+    // Arrange / Act
+    const { el, button } = setup(issue('triage_failed', { stateDetails: failedDetails() }));
+
+    // Assert
+    const retry = button('Retry triage');
+    const skip = button('Skip triage');
+    expect(text(retry)).toBe('Retry triage');
+    expect(retry?.getAttribute('aria-label')).toBe('Retry triage for issue #42');
+    expect(retry?.classList.contains('issue-detail__retry-btn')).toBe(true);
+    expect(text(skip)).toBe('Skip triage');
+    expect(skip?.getAttribute('aria-label')).toBe('Skip triage for issue #42');
+    expect(skip?.classList.contains('issue-detail__secondary-btn')).toBe(true);
+    expect(button('Retry issue')).toBeNull();
+    expect(button('Re-triage')).toBeNull();
+    expect(Array.from(el.querySelectorAll('button')).some((b) => text(b) === 'Retry Issue')).toBe(false);
+  });
+
+  it('should retry triage straight away, with no confirmation', () => {
+    // Arrange
+    const { button, service, openDialog } = setup(issue('triage_failed', { stateDetails: failedDetails() }));
+
+    // Act
+    button('Retry triage')!.click();
+
+    // Assert
+    expect(service.retryTriage).toHaveBeenCalledWith('abc123');
+    expect(openDialog()).toBeNull();
+  });
+
+  it('should confirm Skip triage with the §3 copy before skipping', () => {
+    // Arrange
+    const { fixture, button, service, openDialog } = setup(issue('triage_failed', { stateDetails: failedDetails() }));
+
+    // Act
+    button('Skip triage')!.click();
+    fixture.detectChanges();
+
+    // Assert
+    const dialog = openDialog();
+    expect(service.skipTriage).not.toHaveBeenCalled();
+    expect(text(dialog!.querySelector('.confirm-dialog__title'))).toBe('Skip triage for #42?');
+    expect(text(dialog!.querySelector('.confirm-dialog__message'))).toBe(
+      'The issue is queued without a readiness check. If it has open blockers, it waits as Blocked first. Its kind stays as it is now.',
+    );
+    expect(text(dialog!.querySelector('.confirm-dialog__confirm'))).toBe('Skip triage');
+    expect(text(dialog!.querySelector('.confirm-dialog__cancel'))).toBe('Cancel');
+    expect(dialog!.querySelector('.confirm-dialog__confirm--destructive')).toBeNull();
+
+    // Act — confirm
+    (dialog!.querySelector('.confirm-dialog__confirm') as HTMLButtonElement).click();
+    fixture.detectChanges();
+
+    // Assert
+    expect(service.skipTriage).toHaveBeenCalledWith('abc123');
+  });
+
+  it('should not skip triage when the dialog is cancelled', () => {
+    // Arrange
+    const { fixture, button, service, openDialog } = setup(issue('triage_failed', { stateDetails: failedDetails() }));
+    button('Skip triage')!.click();
+    fixture.detectChanges();
+
+    // Act
+    (openDialog()!.querySelector('.confirm-dialog__cancel') as HTMLButtonElement).click();
+    fixture.detectChanges();
+
+    // Assert
+    expect(service.skipTriage).not.toHaveBeenCalled();
+    expect(openDialog()).toBeNull();
+  });
+
+  it.each(['queued', 'blocked'])('should show Re-triage for %s', (state) => {
+    // Arrange / Act
+    const { button } = setup(issue(state));
+
+    // Assert
+    const retriage = button('Re-triage');
+    expect(text(retriage)).toBe('Re-triage');
+    expect(retriage?.getAttribute('aria-label')).toBe('Re-triage issue #42');
+    expect(retriage?.classList.contains('issue-detail__retry-btn')).toBe(true);
+  });
+
+  it.each(['detected', 'triage_queued', 'triage_in_progress', 'triage_failed', 'failed', 'review', 'completed', 'awaiting_input'])(
+    'should not show Re-triage for %s',
+    (state) => {
+      // Arrange / Act
+      const { button } = setup(issue(state));
+
+      // Assert
+      expect(button('Re-triage')).toBeNull();
+    },
+  );
+
+  it('should confirm Re-triage from queued with the §3 copy', () => {
+    // Arrange
+    const { fixture, button, service, openDialog } = setup(issue('queued'));
+
+    // Act
+    button('Re-triage')!.click();
+    fixture.detectChanges();
+
+    // Assert
+    const dialog = openDialog()!;
+    expect(text(dialog.querySelector('.confirm-dialog__title'))).toBe('Triage #42 again?');
+    expect(text(dialog.querySelector('.confirm-dialog__message'))).toBe(
+      'The issue leaves the queue and a triage worker reads it again. If it needs more detail, the questions are posted on the issue and it waits for a reply.',
+    );
+    expect(text(dialog.querySelector('.confirm-dialog__confirm'))).toBe('Re-triage');
+    expect(text(dialog.querySelector('.confirm-dialog__cancel'))).toBe('Cancel');
+    expect(dialog.querySelector('.confirm-dialog__confirm--destructive')).toBeNull();
+    expect(service.retriage).not.toHaveBeenCalled();
+
+    // Act — confirm
+    (dialog.querySelector('.confirm-dialog__confirm') as HTMLButtonElement).click();
+
+    // Assert
+    expect(service.retriage).toHaveBeenCalledWith('abc123');
+  });
+
+  it('should add the blockers sentence to the Re-triage dialog from blocked', () => {
+    // Arrange
+    const { fixture, button, openDialog } = setup(issue('blocked'));
+
+    // Act
+    button('Re-triage')!.click();
+    fixture.detectChanges();
+
+    // Assert
+    expect(text(openDialog()!.querySelector('.confirm-dialog__message'))).toBe(
+      'The issue leaves the queue and a triage worker reads it again. If it needs more detail, the questions are posted on the issue and it waits for a reply. If its blockers are still open afterwards, it returns to Blocked.',
+    );
+  });
+
+  it.each([
+    ['retry_triage', 'Retrying triage…', 'Skip triage'],
+    ['skip_triage', 'Skipping triage…', 'Retry triage'],
+  ] as const)('should disable both triage buttons while %s is pending, labelling the one in progress', (action, pending, other) => {
+    // Arrange
+    const { fixture, el, service } = setup(issue('triage_failed', { stateDetails: failedDetails() }));
+
+    // Act
+    service.triageActionPending.set(action);
+    fixture.detectChanges();
+
+    // Assert
+    const buttons = Array.from(el.querySelectorAll<HTMLButtonElement>('.issue-detail__actions button'));
+    expect(buttons.map((b) => text(b))).toEqual(
+      action === 'retry_triage' ? [pending, other] : [other, pending],
+    );
+    expect(buttons.every((b) => b.disabled)).toBe(true);
+  });
+
+  it('should show "Re-triaging…" and disable Re-triage while it is pending', () => {
+    // Arrange
+    const { fixture, button, service } = setup(issue('queued'));
+
+    // Act
+    service.triageActionPending.set('retriage');
+    fixture.detectChanges();
+
+    // Assert
+    expect(text(button('Re-triage'))).toBe('Re-triaging…');
+    expect(button('Re-triage')?.disabled).toBe(true);
+  });
+
+  it('should show a triage action error in the assertive error span', () => {
+    // Arrange
+    const { fixture, el, service } = setup(issue('triage_failed', { stateDetails: failedDetails() }));
+
+    // Act
+    service.triageActionError.set('This issue is no longer in Triage failed.');
+    fixture.detectChanges();
+
+    // Assert
+    const error = el.querySelector('.issue-detail__actions .issue-detail__retry-error');
+    expect(error?.getAttribute('aria-live')).toBe('assertive');
+    expect(error?.getAttribute('aria-atomic')).toBe('true');
+    expect(text(error)).toBe('This issue is no longer in Triage failed.');
+  });
+
+  it('should announce a triage action success in a polite sr-only span that survives the reload', () => {
+    // Arrange
+    const { fixture, el, service } = setup(issue('queued'));
+
+    // Act — success, then the detail reloads into the new state (the Re-triage row is removed)
+    service.triageActionSuccess.set('Re-triage queued. Issue status is updating.');
+    fixture.componentRef.setInput('detail', issue('triage_queued'));
+    fixture.detectChanges();
+
+    // Assert
+    const announcement = el.querySelector('.issue-detail__triage-success-announcement');
+    expect(announcement?.classList.contains('sr-only')).toBe(true);
+    expect(announcement?.getAttribute('aria-live')).toBe('polite');
+    expect(text(announcement)).toBe('Re-triage queued. Issue status is updating.');
+  });
+
+  it('should move focus to the triage callout once the detail reloads after a successful action', async () => {
+    // Arrange
+    const { fixture, el, service, region } = setup(issue('queued'));
+    (el.querySelector('.issue-detail__retry-btn') as HTMLButtonElement).focus();
+
+    // Act — the action succeeds, then the reloaded detail arrives
+    service.triageActionSuccess.set('Re-triage queued. Issue status is updating.');
+    fixture.detectChanges();
+    fixture.componentRef.setInput('detail', issue('triage_queued'));
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    // Assert
+    expect(document.activeElement).toBe(region());
+    expect(el.querySelector('.issue-detail__retry-btn')).toBeNull();
+  });
+
+  it('should not move focus to the triage callout on an ordinary detail reload', async () => {
+    // Arrange
+    const { fixture, region } = setup(issue('queued'));
+
+    // Act
+    fixture.componentRef.setInput('detail', issue('triage_queued'));
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    // Assert
+    expect(document.activeElement).not.toBe(region());
+  });
+
+  // --- 2d. Cancel run on a triage run ---
+
+  it('should word the cancel dialog for a triage run', () => {
+    // Arrange
+    const { fixture, el } = setup(
+      issue('triage_in_progress', { stateDetails: { ...mockStateDetails, branchName: null, completedAt: null } }),
+    );
+
+    // Act
+    fixture.detectChanges();
+
+    // Assert — the dialog is rendered (closed) with the triage copy
+    const dialog = el.querySelector('dialog.confirm-dialog')!;
+    expect(el.querySelector('.issue-detail__cancel-btn')).not.toBeNull();
+    expect(text(dialog.querySelector('.confirm-dialog__title'))).toBe('Stop the triage worker?');
+    expect(text(dialog.querySelector('.confirm-dialog__message'))).toBe(
+      'The issue moves to Triage failed, where you can retry or skip triage.',
+    );
+    expect(text(dialog.querySelector('.confirm-dialog__confirm'))).toBe('Stop worker');
+    expect(text(dialog.querySelector('.confirm-dialog__cancel'))).toBe('Keep running');
+    expect(dialog.querySelector('.confirm-dialog__confirm--destructive')).not.toBeNull();
+  });
+
+  it('should keep the implement-run cancel copy for in_progress', () => {
+    // Arrange / Act
+    const { el } = setup(issue('in_progress', { stateDetails: { ...mockStateDetails, completedAt: null } }));
+
+    // Assert
+    expect(text(el.querySelector('dialog.confirm-dialog .confirm-dialog__title'))).toBe('Stop the worker?');
   });
 });

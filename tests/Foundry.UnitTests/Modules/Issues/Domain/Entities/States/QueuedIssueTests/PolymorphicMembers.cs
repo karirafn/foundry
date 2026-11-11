@@ -19,7 +19,7 @@ public sealed class PolymorphicMembers
     // TierRank
 
     [Fact]
-    public void WhenQueuedIssue_TierRankIsTwo()
+    public void WhenQueuedIssue_TierRankIsThree()
     {
         // Arrange
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
@@ -29,7 +29,7 @@ public sealed class PolymorphicMembers
         int tierRank = queued.TierRank;
 
         // Assert
-        tierRank.ShouldBe(2);
+        tierRank.ShouldBe(3);
     }
 
     [Fact]
@@ -70,6 +70,19 @@ public sealed class PolymorphicMembers
         tierRank.ShouldBe(1);
     }
 
+    [Fact]
+    public void WhenTriageQueuedIssue_TierRankIsTwo()
+    {
+        // Arrange
+        TriageQueuedIssue triageQueued = new IssueBuilder().TriageQueued();
+
+        // Act
+        int tierRank = triageQueued.TierRank;
+
+        // Assert
+        tierRank.ShouldBe(2);
+    }
+
     // DispatchBranchName
 
     [Fact]
@@ -81,7 +94,7 @@ public sealed class PolymorphicMembers
         BranchName expected = BranchName.Generate(queued.KindClassification, queued.IssueNumber, queued.Title);
 
         // Act
-        BranchName branchName = queued.DispatchBranchName;
+        BranchName? branchName = queued.DispatchBranchName;
 
         // Assert
         branchName.ShouldBe(expected);
@@ -99,7 +112,7 @@ public sealed class PolymorphicMembers
         BranchName expected = BranchName.From(revisionQueued.BranchName);
 
         // Act
-        BranchName branchName = revisionQueued.DispatchBranchName;
+        BranchName? branchName = revisionQueued.DispatchBranchName;
 
         // Assert
         branchName.ShouldBe(expected);
@@ -117,13 +130,39 @@ public sealed class PolymorphicMembers
         BranchName expected = BranchName.From(continuationQueued.BranchName);
 
         // Act
-        BranchName branchName = continuationQueued.DispatchBranchName;
+        BranchName? branchName = continuationQueued.DispatchBranchName;
 
         // Assert
         branchName.ShouldBe(expected);
     }
 
+    [Fact]
+    public void WhenTriageQueuedIssue_NoBranchNameIsGenerated()
+    {
+        // Arrange
+        TriageQueuedIssue triageQueued = new IssueBuilder().TriageQueued();
+
+        // Act
+        BranchName? branchName = triageQueued.DispatchBranchName;
+
+        // Assert
+        branchName.ShouldBeNull();
+    }
+
     // Context
+
+    [Fact]
+    public void WhenTriageQueuedIssue_ContextIsTriageUnderTheTriageRole()
+    {
+        // Arrange
+        TriageQueuedIssue triageQueued = new IssueBuilder().TriageQueued();
+
+        // Act
+        DispatchContext context = triageQueued.Context;
+
+        // Assert
+        context.ShouldBeOfType<DispatchContext.Triage>().Role.ShouldBe(DispatchRole.Triage);
+    }
 
     [Fact]
     public void WhenQueuedIssue_ContextIsFresh()

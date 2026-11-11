@@ -93,7 +93,8 @@ public sealed class HandleAsync : IAsyncDisposable
         DispatchContext? context = null,
         WorkerProvider? provider = null,
         string? cloneUrl = null,
-        string? issueApiUrl = null)
+        string? issueApiUrl = null,
+        bool withoutBranch = false)
     {
         ClaimedIssueDispatch dispatch = new(
             issueId ?? IssueId.New(),
@@ -102,7 +103,7 @@ public sealed class HandleAsync : IAsyncDisposable
             title,
             repositorySlug,
             new Uri(cloneUrl ?? $"https://github.com/{repositorySlug}.git"),
-            BranchName.From(branchName),
+            withoutBranch ? null : BranchName.From(branchName),
             monitoredRepositoryId ?? MonitoredRepositoryId.New(),
             provider ?? new WorkerProvider.GitHub(),
             context ?? new DispatchContext.Fresh(branchName),
@@ -1411,6 +1412,60 @@ public sealed class HandleAsync : IAsyncDisposable
         // Assert
         provider.CreateBranchCallCount.ShouldBe(0);
         (await _dbContext.Set<WorkerRun>().SingleAsync(TestContext.Current.CancellationToken)).ShouldBeOfType<ActiveRun>();
+    }
+
+    [Fact]
+    public async Task WhenTheContextIsTriage_StartsARestrictedTriageRunWithoutABranch()
+    {
+        // Arrange
+        StubWorkerOrchestrator orchestrator = new(succeeds: true);
+        StubPostExitProviderQueries provider = new(branchCreationSucceeds: true);
+        WorkerRoleCatalog implementOnly = StubWorkerRoleCatalogStore.Catalog();
+        WorkerRoleDefinition triage = new(
+            WorkerRole.Triage,
+            WorkerCapability.Restricted,
+            new RolePlugin(WorkerRole.Triage.Name, "Triages an issue.", [], []),
+            "You are triaging issue #{issueNumber}.\n\n{issueContent}",
+            "Triage issue #{issueNumber}.",
+            VerdictSchema: null);
+        WorkerRoleCatalog catalog = implementOnly with
+        {
+            Content = implementOnly.Content with { Roles = [.. implementOnly.Content.Roles, triage] },
+        };
+        IssueClaimedHandler sut = BuildHandler(
+            orchestrator: orchestrator,
+            postExitProviderQueries: provider,
+            roleCatalog: new StubWorkerRoleCatalogStore(catalog));
+
+        // Act
+        await sut.HandleAsync(
+            BuildEvent(context: new DispatchContext.Triage(), withoutBranch: true),
+            TestContext.Current.CancellationToken);
+        _dbContext.ChangeTracker.Clear();
+
+        // Assert
+        ActiveRun run = (await _dbContext.Set<WorkerRun>().SingleAsync(TestContext.Current.CancellationToken)).ShouldBeOfType<ActiveRun>();
+        run.ShouldSatisfyAllConditions(
+            () => run.Role.ShouldBe(WorkerRole.Triage),
+            () => run.BranchName.ShouldBeNull(),
+            () => provider.CreateBranchCallCount.ShouldBe(0),
+            () => orchestrator.LastSpec.ShouldNotBeNull().EnvironmentVariables.ShouldNotContainKey("BRANCH_NAME"));
+    }
+
+    [Fact]
+    public async Task WhenAFullRunIsClaimedWithoutABranch_FailsBeforeAnyContainerStarts()
+    {
+        // Arrange
+        StubWorkerOrchestrator orchestrator = new(succeeds: true);
+        IssueClaimedHandler sut = BuildHandler(orchestrator: orchestrator);
+
+        // Act
+        await sut.HandleAsync(BuildEvent(withoutBranch: true), TestContext.Current.CancellationToken);
+        _dbContext.ChangeTracker.Clear();
+
+        // Assert
+        (await _dbContext.Set<WorkerRun>().SingleAsync(TestContext.Current.CancellationToken)).ShouldBeOfType<FailedRun>();
+        orchestrator.LastSpec.ShouldBeNull();
     }
 
     [Fact]

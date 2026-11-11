@@ -6,6 +6,7 @@ namespace Foundry.Modules.Issues.Contracts;
 [JsonDerivedType(typeof(Fresh), "fresh")]
 [JsonDerivedType(typeof(Revision), "revision")]
 [JsonDerivedType(typeof(Continuation), "continuation")]
+[JsonDerivedType(typeof(Triage), "triage")]
 public abstract record DispatchContext
 {
     private DispatchContext()
@@ -31,5 +32,11 @@ public abstract record DispatchContext
     public sealed record Continuation(string BranchName, string? FailureReason = null) : DispatchContext
     {
         public override DispatchRole Role => DispatchRole.Implement;
+    }
+
+    /// <summary>A triage run (ADR 0097): it judges the issue and returns a verdict, and gets no branch.</summary>
+    public sealed record Triage : DispatchContext
+    {
+        public override DispatchRole Role => DispatchRole.Triage;
     }
 }

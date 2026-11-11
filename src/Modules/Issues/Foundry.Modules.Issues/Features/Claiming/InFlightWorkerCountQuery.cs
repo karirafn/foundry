@@ -7,12 +7,13 @@ namespace Foundry.Modules.Issues.Features.Claiming;
 
 /// <summary>
 /// Returns the number of actively running workers per repository.
-/// In-flight states are <see cref="InProgressIssue"/> and <see cref="RevisionInProgressIssue"/>;
+/// In-flight states are <see cref="InProgressIssue"/>, <see cref="RevisionInProgressIssue"/> and
+/// <see cref="TriageInProgressIssue"/>;
 /// issues in review do not count because they have no running container.
 /// </summary>
 /// <remarks>
 /// This query is independent of any dashboard issue set — it is not derived from a filtered
-/// view but counts directly from the two in-flight discriminator states, grouped by repository.
+/// view but counts directly from the three in-flight discriminator states, grouped by repository.
 /// <see cref="IssueClaimer.ClaimAsync"/> transitions in the same transaction as the claim,
 /// so the count is accurate on the next tick with no uncounted window.
 /// </remarks>
@@ -33,8 +34,15 @@ internal sealed class InFlightWorkerCountQuery(DbContext db)
             .Select(i => i.MonitoredRepositoryId.Value)
             .ToListAsync(cancellationToken);
 
+        // A triage run is a worker like any other: it counts against the Repository Worker Limit (ADR 0097).
+        List<Guid> triageInProgress = await db.Set<TriageInProgressIssue>()
+            .AsNoTracking()
+            .Select(i => i.MonitoredRepositoryId.Value)
+            .ToListAsync(cancellationToken);
+
         Dictionary<Guid, int> countByGuid = freshInProgress
             .Concat(revisionInProgress)
+            .Concat(triageInProgress)
             .CountBy(id => id)
             .ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
 

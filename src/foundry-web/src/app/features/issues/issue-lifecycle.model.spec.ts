@@ -31,6 +31,9 @@ const ALL_LIFECYCLE_STATES: ReadonlySet<IssueState> = new Set<IssueState>([
   'revision_queued',
   'revision_in_progress',
   'revision_failed',
+  'triage_queued',
+  'triage_in_progress',
+  'triage_failed',
 ]);
 
 describe('issue-lifecycle model', () => {
@@ -54,6 +57,9 @@ describe('issue-lifecycle model', () => {
       'revision_queued',
       'revision_in_progress',
       'revision_failed',
+      'triage_queued',
+      'triage_in_progress',
+      'triage_failed',
     ]);
 
     // Act / Assert
@@ -449,5 +455,46 @@ describe('StateGroupId', () => {
   it('should select every group except Resolved by default', () => {
     // Arrange / Act / Assert
     expect([...DEFAULT_SELECTED_GROUPS].sort()).toEqual(['in_progress', 'needs_attention', 'waiting']);
+  });
+});
+
+describe('triage states', () => {
+  it('should place triage_queued in the Waiting group, in the queued tier', () => {
+    // Arrange / Act
+    const group = groupFor('triage_queued');
+
+    // Assert
+    expect(group.id).toBe('waiting');
+    expect(WITHIN_GROUP_ORDER.waiting[0]).toContain('triage_queued');
+    expect(withinGroupRankFor('triage_queued')).toBe(withinGroupRankFor('queued'));
+  });
+
+  it('should place triage_in_progress in the In progress group, in the first tier', () => {
+    // Arrange / Act
+    const group = groupFor('triage_in_progress');
+
+    // Assert
+    expect(group.id).toBe('in_progress');
+    expect(WITHIN_GROUP_ORDER.in_progress[0]).toContain('triage_in_progress');
+  });
+
+  it('should place triage_failed in the Needs attention group, in the first tier', () => {
+    // Arrange / Act
+    const group = groupFor('triage_failed');
+
+    // Assert
+    expect(group.id).toBe('needs_attention');
+    expect(WITHIN_GROUP_ORDER.needs_attention[0]).toContain('triage_failed');
+  });
+
+  it('should treat all three triage states as active, not resolved', () => {
+    // Arrange
+    const triageStates: IssueState[] = ['triage_queued', 'triage_in_progress', 'triage_failed'];
+
+    // Act / Assert
+    for (const state of triageStates) {
+      expect(ACTIVE_STATES.has(state)).toBe(true);
+      expect(isResolvedState(state)).toBe(false);
+    }
   });
 });

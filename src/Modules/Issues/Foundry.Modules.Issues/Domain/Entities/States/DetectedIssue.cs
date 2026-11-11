@@ -39,29 +39,13 @@ public sealed class DetectedIssue : Issue
         return issue;
     }
 
-    public FreshQueuedIssue Enqueue()
+    /// <summary>
+    /// Every new issue is triaged before its first implement run, and before the dependency check (ADR 0097).
+    /// </summary>
+    public TriageQueuedIssue QueueTriage()
     {
-        if (BlockedBy.Count > 0)
-        {
-            throw new InvalidOperationException(
-                "Cannot enqueue an issue that has unresolved blockers.");
-        }
-
-        FreshQueuedIssue queued = FreshQueuedIssue.FromDetected(this);
-        AddDomainEvent(new Events.IssueQueued(Id, MonitoredRepositoryId));
+        TriageQueuedIssue queued = TriageQueuedIssue.FromDetected(this);
+        AddDomainEvent(new Events.IssueTriageQueued(Id, MonitoredRepositoryId));
         return queued;
     }
-
-    public BlockedIssue Block(IReadOnlyList<int> blockers)
-    {
-        if (blockers.Count == 0)
-        {
-            throw new InvalidOperationException("Cannot block an issue without specifying at least one blocker.");
-        }
-
-        BlockedIssue blocked = BlockedIssue.FromDetected(this, blockers);
-        AddDomainEvent(new Events.IssueBlocked(Id, MonitoredRepositoryId));
-        return blocked;
-    }
-
 }

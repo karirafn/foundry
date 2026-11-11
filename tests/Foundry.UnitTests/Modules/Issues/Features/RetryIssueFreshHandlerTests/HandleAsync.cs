@@ -202,7 +202,9 @@ public sealed class HandleAsync : IAsyncDisposable
                 Url: "https://github.com/owner/repo/issues/1",
                 Author: "octocat",
                 Labels: [],
-                StateDetails: null);
+                StateDetails: null,
+                Kind: new IssueKindDetails(IssueKindDetails.UnclassifiedSource, null, null),
+                Triage: null);
             return Task.FromResult(Result<IssueDetail>.Ok(detail));
         }
 

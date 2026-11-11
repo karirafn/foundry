@@ -98,6 +98,24 @@ internal sealed class WorkerRunFailedHandler(
             return;
         }
 
+        // A failed triage run never falls back to facts (ADR 0094): the issue waits in triage failed.
+        if (issue is TriageInProgressIssue triaging)
+        {
+            if (@event.WorkerRunId != triaging.WorkerRunId)
+            {
+                logger.LogWarning(
+                    "WorkerRunFailed for issue {IssueId} has run id {EventRunId} which does not match current run id {CurrentRunId}; ignoring stale event.",
+                    @event.IssueId,
+                    @event.WorkerRunId,
+                    triaging.WorkerRunId);
+                return;
+            }
+
+            TriageFailedIssue triageFailed = triaging.MarkFailed(@event.ReasonDescription, category, failedAt);
+            await db.TransitionAsync(triaging, triageFailed, domainEventDispatcher, cancellationToken);
+            return;
+        }
+
         logger.LogWarning(
             "WorkerRunFailed received for issue {IssueId} but it is not InProgress (state: {State}); ignoring.",
             @event.IssueId,

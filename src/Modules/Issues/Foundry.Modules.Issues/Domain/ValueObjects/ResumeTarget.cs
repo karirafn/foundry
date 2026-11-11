@@ -19,6 +19,9 @@ public abstract record ResumeTarget
     /// <summary>The run pushed nothing: input queues a fresh run.</summary>
     public sealed record Fresh : ResumeTarget;
 
+    /// <summary>Triage asked before the first implement run (ADR 0097): input queues the issue for triage again.</summary>
+    public sealed record Retriage : ResumeTarget;
+
     /// <summary>Derives the target from the facts at the asking run's exit.</summary>
     public static ResumeTarget FromRunFacts(string branchName, string? pullRequestUrl, bool branchHasCommits) =>
         pullRequestUrl is not null

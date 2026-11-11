@@ -35,6 +35,9 @@ public static class IssuesModule
 
         services.AddCommandHandler<RetryIssue.Command, IssueDetail, RetryIssue.Handler>();
         services.AddCommandHandler<RetryIssueFresh.Command, IssueDetail, RetryIssueFresh.Handler>();
+        services.AddCommandHandler<RetryTriage.Command, IssueDetail, RetryTriage.Handler>();
+        services.AddCommandHandler<SkipTriage.Command, IssueDetail, SkipTriage.Handler>();
+        services.AddCommandHandler<Retriage.Command, IssueDetail, Retriage.Handler>();
 
         services.AddIntegrationEventHandler<IssueDetected, CreateIssueHandler>();
         services.AddIntegrationEventHandler<IssueDetailsChanged, UpdateIssueDetailsHandler>();
@@ -42,6 +45,7 @@ public static class IssuesModule
         services.AddIntegrationEventHandler<WorkerCapacityAvailable, WorkerCapacityAvailableHandler>();
         services.AddIntegrationEventHandler<WorkerRunCompleted, WorkerRunCompletedHandler>();
         services.AddIntegrationEventHandler<WorkerRunFailed, WorkerRunFailedHandler>();
+        services.AddIntegrationEventHandler<TriageRunCompleted, TriageRunCompletedHandler>();
         services.AddIntegrationEventHandler<ProviderIssueClosed, ProviderIssueClosedHandler>();
         services.AddIntegrationEventHandler<ProviderIssueUntracked, ProviderIssueUntrackedHandler>();
         services.AddIntegrationEventHandler<ProviderPullRequestClosed, ProviderPullRequestClosedHandler>();
@@ -70,6 +74,9 @@ public static class IssuesModule
         services.AddScoped<IDomainEventHandler<IssueChecksPending>, IssueChecksPendingNudgeBridge>();
         AddIssueStateChangedHandler<IssueRebasePending>(services);
         AddIssueStateChangedHandler<IssueAwaitingInput>(services);
+        AddIssueStateChangedHandler<IssueTriageQueued>(services);
+        AddIssueStateChangedHandler<IssueTriageInProgress>(services);
+        AddIssueStateChangedHandler<IssueTriageFailed>(services);
         services.AddScoped<IDomainEventHandler<IssueAwaitingInput>, IssueAwaitingInputNudgeBridge>();
         services.AddScoped<IDomainEventHandler<IssueRebasePending>, IssueRebasePendingNudgeBridge>();
 

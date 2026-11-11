@@ -119,21 +119,6 @@
     font-size: 0.8125rem;
   }
 
-  &__pr-link {
-    color: var(--fd-text-link);
-    text-decoration: none;
-    font-size: 0.8125rem;
-
-    &:hover {
-      text-decoration: underline;
-    }
-
-    &:focus-visible {
-      outline: 2px solid var(--fd-text-link);
-      outline-offset: 2px;
-    }
-  }
-
   &__branch {
     font-family: var(--fd-font-mono);
     font-size: 0.8125rem;
@@ -189,11 +174,15 @@
   &__actions {
     margin-top: var(--fd-spacing-lg);
     display: flex;
+    flex-wrap: wrap;
     gap: var(--fd-spacing-md);
   }
 
+  // Every action button shares one shape; the retry and secondary buttons recolour it below.
   &__cancel-btn,
-  &__retry-fresh-btn {
+  &__retry-fresh-btn,
+  &__retry-btn,
+  &__secondary-btn {
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -234,32 +223,40 @@
   }
 
   &__retry-btn {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    min-height: 44px;
-    background: transparent;
-    border: 1px solid var(--fd-text-secondary);
-    border-radius: var(--fd-radius-sm);
+    border-color: var(--fd-text-secondary);
     color: var(--fd-text-primary);
-    cursor: pointer;
-    font-size: 0.875rem;
-    padding: var(--fd-spacing-xs) var(--fd-spacing-lg);
+  }
 
-    &:hover {
-      background: var(--fd-bg-card-hover);
-    }
+  &__secondary-btn {
+    border-color: var(--fd-border-control);
+    color: var(--fd-text-secondary);
+  }
 
-    &:disabled {
-      cursor: not-allowed;
-      color: var(--fd-text-tertiary);
-      border-color: var(--fd-text-tertiary);
-    }
+  // Outlined chip for the Kind "Triage differs" flag and the triage outcome. Its pill shape and
+  // type come from the badge mixin included above (`.badge`); this sets the outline colours.
+  &__chip {
+    border: 1px solid var(--fd-text-warning);
+    color: var(--fd-text-warning);
 
-    &:focus-visible {
-      outline: 2px solid var(--fd-text-link);
-      outline-offset: 2px;
+    &--success {
+      border-color: var(--fd-text-success);
+      color: var(--fd-text-success);
     }
+  }
+
+  &__kind-differs {
+    margin-top: var(--fd-spacing-xs);
+  }
+
+  // A classified kind reads as primary text; Unclassified keeps the secondary field-value colour.
+  &__kind-value--known {
+    color: var(--fd-text-primary);
+  }
+
+  &__kind-source {
+    margin-inline-start: var(--fd-spacing-sm);
+    color: var(--fd-text-secondary);
+    font-size: 0.75rem;
   }
 
   &__retry-error {
@@ -365,7 +362,9 @@
     word-break: break-word;
   }
 
-  &__retry-live-region {
+  &__retry-live-region,
+  &__revision-live-region,
+  &__triage-live-region {
     // The live region is a sibling of the fields grid, not a grid child, so it
     // never creates a phantom track or row-gap. When populated it sits below the
     // grid with a top margin that visually groups it with the failure fields.
@@ -374,7 +373,7 @@
     &--empty {
       // Collapse the empty live region visually without removing it from the
       // accessibility tree — display:none or [hidden] would prevent screen readers
-      // from detecting content changes when retry data populates.
+      // from detecting content changes when retry, revision or triage data populates.
       padding: 0;
       margin: 0;
       border: none;
@@ -383,19 +382,30 @@
     }
   }
 
-  &__retry-state {
+  &__retry-state,
+  &__revision-state,
+  &__triage-state {
     padding: var(--fd-spacing-sm) var(--fd-spacing-md);
     border: 1px solid var(--fd-border-warning);
     border-radius: var(--fd-radius-sm);
     background: var(--fd-bg-warning-subtle);
-
-    &--exhausted {
-      border-color: var(--fd-state-failed);
-      background: var(--fd-bg-error-subtle);
-    }
   }
 
-  &__retry-callout {
+  &__retry-state--exhausted,
+  &__triage-state--failed {
+    border-color: var(--fd-state-failed);
+    background: var(--fd-bg-error-subtle);
+  }
+
+  &__revision-state--review,
+  &__triage-state--neutral {
+    border-color: var(--fd-border-default);
+    background: var(--fd-bg-card-hover);
+  }
+
+  &__retry-callout,
+  &__revision-callout,
+  &__triage-callout {
     display: flex;
     align-items: center;
     flex-wrap: wrap;
@@ -406,46 +416,7 @@
   // Shape, typography and colours for __retry-chip and __revision-chip come from the
   // shared badge mixin (src/styles/_badge.scss) included at the top of this file.
 
-  &__retry-message {
-    color: var(--fd-text-secondary);
-    font-size: 0.8125rem;
-  }
-
-  &__revision-live-region {
-    margin-top: var(--fd-spacing-md);
-
-    &--empty {
-      // Collapse the empty live region visually without removing it from the
-      // accessibility tree — display:none or [hidden] would prevent screen readers
-      // from detecting content changes when revision data populates.
-      padding: 0;
-      margin: 0;
-      border: none;
-      height: 0;
-      overflow: hidden;
-    }
-  }
-
-  &__revision-state {
-    padding: var(--fd-spacing-sm) var(--fd-spacing-md);
-    border: 1px solid var(--fd-border-warning);
-    border-radius: var(--fd-radius-sm);
-    background: var(--fd-bg-warning-subtle);
-
-    &--review {
-      border-color: var(--fd-border-default);
-      background: var(--fd-bg-card-hover);
-    }
-  }
-
-  &__revision-callout {
-    display: flex;
-    align-items: center;
-    flex-wrap: wrap;
-    gap: var(--fd-spacing-sm);
-    margin-top: var(--fd-spacing-xs);
-  }
-
+  &__retry-message,
   &__revision-message {
     color: var(--fd-text-secondary);
     font-size: 0.8125rem;

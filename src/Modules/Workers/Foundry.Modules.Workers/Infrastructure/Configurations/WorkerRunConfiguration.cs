@@ -190,7 +190,6 @@ public sealed class ActiveRunConfiguration : IEntityTypeConfiguration<ActiveRun>
             .HasConversion(WorkerRunValueConverters.BranchNameConverter)
             .HasMaxLength(WorkerRunValueConverters.BranchNameMaxLength)
             .IsUnicode(false)
-            .IsRequired()
             .HasColumnName("branch_name");
 
         builder.Property(r => r.MonitoredRepositoryId)

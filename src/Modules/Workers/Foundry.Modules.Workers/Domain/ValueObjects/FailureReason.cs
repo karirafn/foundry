@@ -18,6 +18,7 @@ namespace Foundry.Modules.Workers.Domain.ValueObjects;
 [JsonDerivedType(typeof(ModelUnavailable), typeDiscriminator: FailureReason.ModelUnavailableToken)]
 [JsonDerivedType(typeof(Cancelled), typeDiscriminator: FailureReason.CancelledToken)]
 [JsonDerivedType(typeof(TurnLimitReached), typeDiscriminator: FailureReason.TurnLimitToken)]
+[JsonDerivedType(typeof(VerdictInvalid), typeDiscriminator: FailureReason.VerdictInvalidToken)]
 public abstract record FailureReason
 {
     public const string NonZeroExitToken = FailureCategory.NonZeroExitToken;
@@ -32,6 +33,7 @@ public abstract record FailureReason
     public const string ModelUnavailableToken = FailureCategory.ModelUnavailableToken;
     public const string CancelledToken = FailureCategory.CancelledToken;
     public const string TurnLimitToken = FailureCategory.TurnLimitToken;
+    public const string VerdictInvalidToken = FailureCategory.VerdictInvalidToken;
 
     private FailureReason()
     {
@@ -51,6 +53,7 @@ public abstract record FailureReason
         ModelUnavailable => ModelUnavailableToken,
         Cancelled => CancelledToken,
         TurnLimitReached => TurnLimitToken,
+        VerdictInvalid => VerdictInvalidToken,
         _ => throw new UnreachableException($"Unknown {nameof(FailureReason)} variant: {GetType().Name}"),
     };
 
@@ -69,6 +72,7 @@ public abstract record FailureReason
             $"The selected model is unavailable to this account. Pick another model in the '{modelUnavailable.Role}' worker role's model setting",
         Cancelled => "Worker run cancelled",
         TurnLimitReached => "Reached the turn limit before finishing. Split the issue into smaller issues, then retry.",
+        VerdictInvalid verdictInvalid => verdictInvalid.Detail,
         _ => throw new UnreachableException($"Unknown {nameof(FailureReason)} variant: {GetType().Name}"),
     };
 
@@ -106,4 +110,15 @@ public abstract record FailureReason
     /// stays manual rather than repeating a full run's cost.
     /// </summary>
     public sealed record TurnLimitReached : FailureReason;
+
+    /// <summary>
+    /// A run whose role decides by its verdict (ADR 0094) exited 0 without a usable one: the verdict was missing from
+    /// its output or failed the role's schema. A step failure, never a fallback to facts.
+    /// </summary>
+    public sealed record VerdictInvalid(string Detail) : FailureReason
+    {
+        public const string MissingDetail = "Verdict missing from output";
+
+        public const string InvalidDetail = "Verdict failed the role's schema";
+    }
 }

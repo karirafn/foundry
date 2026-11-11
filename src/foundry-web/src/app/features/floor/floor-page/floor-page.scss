@@ -131,6 +131,10 @@
   color: var(--fd-text-tertiary);
 }
 
+.floor__queue-role {
+  margin-left: var(--fd-spacing-sm);
+}
+
 // Phone width: a single column of lanes.
 @media (max-width: 767px) {
   .floor {

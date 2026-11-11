@@ -58,7 +58,7 @@ public sealed class OutboxHarvestTransitionAsync : IAsyncDisposable
         services.AddScoped<IIntegrationEventDispatcher, OutboxIntegrationEventDispatcher>();
 
         // Register the domain event dispatcher and the test bridge handler
-        services.AddScoped<IDomainEventHandler<IssueQueued>, IssueQueuedBridgeHandler>();
+        services.AddScoped<IDomainEventHandler<IssueTriageQueued>, IssueQueuedBridgeHandler>();
         services.AddScoped<IDomainEventDispatcher, DomainEventDispatcher>();
 
         services.AddDbContext<FoundryDbContext>((sp, options) =>
@@ -100,7 +100,7 @@ public sealed class OutboxHarvestTransitionAsync : IAsyncDisposable
         dbContext.Add(detected);
         await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
 
-        FreshQueuedIssue queued = detected.Enqueue();
+        TriageQueuedIssue queued = detected.QueueTriage();
 
         // Act
         await dbContext.TransitionAsync(detected, queued, domainEventDispatcher, TestContext.Current.CancellationToken);
@@ -109,7 +109,7 @@ public sealed class OutboxHarvestTransitionAsync : IAsyncDisposable
         dbContext.ChangeTracker.Clear();
         Issue? result = await dbContext.Set<Issue>()
             .FirstOrDefaultAsync(i => i.Id == queued.Id, TestContext.Current.CancellationToken);
-        result.ShouldBeOfType<FreshQueuedIssue>();
+        result.ShouldBeOfType<TriageQueuedIssue>();
 
         // Assert — exactly one outbox row written by the harvest save
         List<OutboxMessage> messages = await dbContext
@@ -131,7 +131,7 @@ public sealed class OutboxHarvestTransitionAsync : IAsyncDisposable
         await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         IssueId issueId = detected.Id;
-        FreshQueuedIssue queued = detected.Enqueue();
+        TriageQueuedIssue queued = detected.QueueTriage();
 
         // Act — should propagate the exception
         await Should.ThrowAsync<InvalidOperationException>(async () =>
@@ -143,7 +143,7 @@ public sealed class OutboxHarvestTransitionAsync : IAsyncDisposable
 
         // Assert — state change rolled back: the original DetectedIssue row is still present
         // (the Remove + SaveChanges inside the transaction was rolled back), and the row has
-        // not been replaced by a FreshQueuedIssue.
+        // not been replaced by a TriageQueuedIssue.
         dbContext.ChangeTracker.Clear();
         Issue? result = await dbContext.Set<Issue>()
             .FirstOrDefaultAsync(i => i.Id == issueId, TestContext.Current.CancellationToken);
@@ -169,9 +169,9 @@ public sealed class OutboxHarvestTransitionAsync : IAsyncDisposable
         dbContext.Add(detected);
         await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
 
-        // Call Enqueue() to get the FreshQueuedIssue, then clear domain events so the dispatcher
+        // Call QueueTriage() to get the TriageQueuedIssue, then clear domain events so the dispatcher
         // receives an empty list — the harvest save must still be a no-op for the outbox.
-        FreshQueuedIssue queued = detected.Enqueue();
+        TriageQueuedIssue queued = detected.QueueTriage();
         detected.ClearDomainEvents();
 
         // Act
@@ -181,7 +181,7 @@ public sealed class OutboxHarvestTransitionAsync : IAsyncDisposable
         dbContext.ChangeTracker.Clear();
         Issue? result = await dbContext.Set<Issue>()
             .FirstOrDefaultAsync(i => i.Id == queued.Id, TestContext.Current.CancellationToken);
-        result.ShouldBeOfType<FreshQueuedIssue>();
+        result.ShouldBeOfType<TriageQueuedIssue>();
 
         // Assert — no outbox rows
         List<OutboxMessage> messages = await dbContext
@@ -196,9 +196,9 @@ public sealed class OutboxHarvestTransitionAsync : IAsyncDisposable
     /// <c>WorkerRunFailedBridgeHandler</c> enqueue integration events inside the transaction.
     /// </summary>
     private sealed class IssueQueuedBridgeHandler(IIntegrationEventDispatcher integrationEventDispatcher)
-        : IDomainEventHandler<IssueQueued>
+        : IDomainEventHandler<IssueTriageQueued>
     {
-        public Task HandleAsync(IssueQueued @event, CancellationToken cancellationToken)
+        public Task HandleAsync(IssueTriageQueued @event, CancellationToken cancellationToken)
         {
             // Enqueue a synthetic integration event — content is not important for the harvest test.
             IssueDetected integrationEvent = new(

@@ -39,6 +39,10 @@ public sealed class ComposedHostSmokeTests : IAsyncDisposable
     private static readonly string DispatchCategory = typeof(WorkerDispatchService).FullName!;
     private const string ImageBuildNotReadyLog = "Dispatch skipped: worker image build is not ready (ImageBuildStatus=Building).";
 
+    // A triage run's final result event with a schema-valid ready verdict.
+    private const string TriageReadyTranscript =
+        """{"type":"result","subtype":"success","is_error":false,"result":"Ready","structured_output":{"outcome":"ready","kind":"feature"}}""";
+
     private readonly ComposedHostBoundaries _boundaries = new();
     private readonly FoundryWebAppFactory _factory;
 
@@ -84,21 +88,39 @@ public sealed class ComposedHostSmokeTests : IAsyncDisposable
             DescribeStateAsync,
             ct);
 
-        (await GetIssueAsync(ct)).ShouldBeOfType<FreshQueuedIssue>(
+        (await GetIssueAsync(ct)).ShouldBeOfType<TriageQueuedIssue>(
             "dispatch must hold a queued issue until the worker image is built, not fail it");
 
         // The startup build completes and publishes the role catalog from the real workers/ build context.
         _boundaries.ImageBuild.Release();
 
+        // Every new issue is triaged first (ADR 0097): a restricted triage run with no branch.
         await Eventually.WaitUntilAsync(
             async () => await GetWorkerRunAsync(ct) is ActiveRun,
             PhaseTimeout,
-            "dispatch claims the issue and starts its worker container",
+            "dispatch claims the issue for triage and starts its triage container",
             DescribeStateAsync,
             ct);
 
-        WorkerContainerSpec spec = _boundaries.Containers.StartedSpecs.ShouldHaveSingleItem();
-        WorkerRun activeRun = (await GetWorkerRunAsync(ct)).ShouldBeOfType<ActiveRun>();
+        WorkerContainerSpec triageSpec = _boundaries.Containers.StartedSpecs.ShouldHaveSingleItem();
+        triageSpec.ShouldSatisfyAllConditions(
+            () => triageSpec.EnvironmentVariables["WORKER_ROLE"].ShouldBe(WorkerRole.Triage.Name),
+            () => triageSpec.EnvironmentVariables.ShouldNotContainKey("BRANCH_NAME"));
+        (await GetIssueAsync(ct)).ShouldBeOfType<TriageInProgressIssue>();
+
+        // The triage run exits 0 with a ready verdict: the issue goes through the dependency check to the queue.
+        _boundaries.Containers.ExitAll(exitCode: 0, TriageReadyTranscript);
+
+        await Eventually.WaitUntilAsync(
+            async () => await GetWorkerRunAsync(WorkerRole.Implement, ct) is ActiveRun || await GetIssueAsync(ct) is TriageFailedIssue,
+            PhaseTimeout,
+            "a ready verdict queues the issue and dispatch starts its implement container",
+            DescribeStateAsync,
+            ct);
+
+        _boundaries.Containers.StartedSpecs.Count.ShouldBe(2);
+        WorkerContainerSpec spec = _boundaries.Containers.StartedSpecs.Last();
+        WorkerRun activeRun = (await GetWorkerRunAsync(WorkerRole.Implement, ct)).ShouldBeOfType<ActiveRun>();
         activeRun.ShouldSatisfyAllConditions(
             () => activeRun.Role.ShouldBe(WorkerRole.Implement),
             () => activeRun.Image.ShouldNotBeNullOrEmpty(),
@@ -119,7 +141,7 @@ public sealed class ComposedHostSmokeTests : IAsyncDisposable
             DescribeStateAsync,
             ct);
 
-        WorkerRun finishedRun = (await GetWorkerRunAsync(ct)).ShouldNotBeNull();
+        WorkerRun finishedRun = (await GetWorkerRunAsync(WorkerRole.Implement, ct)).ShouldNotBeNull();
         finishedRun.ShouldSatisfyAllConditions(
             () => finishedRun.ShouldBeOfType<CompletedRun>(),
             () => finishedRun.VerdictStatus.ShouldBe(RunVerdictStatus.Done));
@@ -174,6 +196,14 @@ public sealed class ComposedHostSmokeTests : IAsyncDisposable
         return await dbContext.Set<WorkerRun>().AsNoTracking().SingleOrDefaultAsync(ct);
     }
 
+    private async Task<WorkerRun?> GetWorkerRunAsync(WorkerRole role, CancellationToken ct)
+    {
+        await using AsyncServiceScope scope = _factory.Services.CreateAsyncScope();
+        DbContext dbContext = scope.ServiceProvider.GetRequiredService<DbContext>();
+        List<WorkerRun> runs = await dbContext.Set<WorkerRun>().AsNoTracking().ToListAsync(ct);
+        return runs.SingleOrDefault(run => run.Role == role);
+    }
+
     /// <summary>Every dispatch gate's input and the host's recent log, for a phase that timed out.</summary>
     private async Task<string> DescribeStateAsync()
     {
@@ -181,7 +211,7 @@ public sealed class ComposedHostSmokeTests : IAsyncDisposable
         DbContext dbContext = scope.ServiceProvider.GetRequiredService<DbContext>();
 
         Issue? issue = await dbContext.Set<Issue>().AsNoTracking().SingleOrDefaultAsync();
-        WorkerRun? run = await dbContext.Set<WorkerRun>().AsNoTracking().SingleOrDefaultAsync();
+        WorkerRun? run = (await dbContext.Set<WorkerRun>().AsNoTracking().ToListAsync()).MaxBy(candidate => candidate.CreatedAt);
         ClaudeAccount? account = await dbContext.Set<ClaudeAccount>().AsNoTracking().SingleOrDefaultAsync();
         GlobalSettings? settings = await dbContext.Set<GlobalSettings>().AsNoTracking().SingleOrDefaultAsync();
         bool catalogLoaded = scope.ServiceProvider.GetRequiredService<IWorkerRoleCatalogStore>().Current is not null;

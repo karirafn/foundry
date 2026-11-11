@@ -81,7 +81,7 @@ internal sealed class TransientRetryService : PeriodicBackgroundService
         DateTimeOffset coarseCutoff = now - InitialBackoff;
 
         // SQLite stores DateTimeOffset as TEXT; the comparison is evaluated in memory after ToListAsync.
-        // Load transient FailedIssue and ContinuableFailedIssue candidates separately by typed set.
+        // Load transient FailedIssue, ContinuableFailedIssue and TriageFailedIssue candidates separately by typed set.
         List<FailedIssue> failedCandidates = await db.Set<FailedIssue>()
             .AsNoTracking()
             .Where(i => i.FailureCategory == FailureCategory.TransientApiError)
@@ -92,10 +92,16 @@ internal sealed class TransientRetryService : PeriodicBackgroundService
             .Where(i => i.FailureCategory == FailureCategory.TransientApiError)
             .ToListAsync(cancellationToken);
 
+        List<TriageFailedIssue> triageCandidates = await db.Set<TriageFailedIssue>()
+            .AsNoTracking()
+            .Where(i => i.FailureCategory == FailureCategory.TransientApiError)
+            .ToListAsync(cancellationToken);
+
         // Apply coarse cutoff in memory (SQLite DateTimeOffset translation limitation).
         List<Issue> candidates = [
             ..failedCandidates.Where(i => i.FailedAt <= coarseCutoff),
             ..continuableCandidates.Where(i => i.FailedAt <= coarseCutoff),
+            ..triageCandidates.Where(i => i.FailedAt <= coarseCutoff),
         ];
 
         return candidates;
@@ -114,11 +120,15 @@ internal sealed class TransientRetryService : PeriodicBackgroundService
             Guid issueId = candidate.Id.Value;
 
             // Candidates are sourced exclusively from FindDueTransientFailuresAsync, which returns
-            // only FailedIssue / ContinuableFailedIssue — the failed-state guard that matters for
-            // the manual-retry race is on the reloaded `live` instance below.
-            DateTimeOffset failedAt = candidate is FailedIssue fi
-                ? fi.FailedAt
-                : ((ContinuableFailedIssue)candidate).FailedAt;
+            // only FailedIssue / ContinuableFailedIssue / TriageFailedIssue — the failed-state guard that
+            // matters for the manual-retry race is on the reloaded `live` instance below.
+            DateTimeOffset failedAt = candidate switch
+            {
+                FailedIssue failed => failed.FailedAt,
+                ContinuableFailedIssue continuableFailed => continuableFailed.FailedAt,
+                TriageFailedIssue triageFailed => triageFailed.FailedAt,
+                _ => throw new UnreachableException($"Unexpected transient retry candidate: {candidate.GetType().Name}"),
+            };
 
             int attempt = await workerRunQueries.CountConsecutiveTransientRunsAsync(
                 issueId,
@@ -143,7 +153,7 @@ internal sealed class TransientRetryService : PeriodicBackgroundService
             Issue? live = await db.Set<Issue>()
                 .FirstOrDefaultAsync(i => i.Id == candidate.Id, cancellationToken);
 
-            if (live is not (FailedIssue or ContinuableFailedIssue))
+            if (live is not (FailedIssue or ContinuableFailedIssue or TriageFailedIssue))
             {
                 // Issue was concurrently transitioned by a manual retry — skip without error.
                 return;
@@ -153,6 +163,8 @@ internal sealed class TransientRetryService : PeriodicBackgroundService
             {
                 FailedIssue failed => failed.Retry(),
                 ContinuableFailedIssue continuableFailed => continuableFailed.Retry(),
+                // A transient triage failure retries triage, never skips it (ADR 0097).
+                TriageFailedIssue triageFailed => triageFailed.RetryTriage(),
                 _ => throw new UnreachableException($"Unexpected issue state after guard: {live.GetType().Name}"),
             };
 

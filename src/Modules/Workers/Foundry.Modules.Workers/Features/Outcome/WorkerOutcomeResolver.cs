@@ -6,6 +6,7 @@ using Foundry.Modules.Workers.Domain.Entities;
 using Foundry.Modules.Workers.Domain.Entities.States;
 using Foundry.Modules.Workers.Domain.ValueObjects;
 using Foundry.Modules.Workers.Features.Orchestration;
+using Foundry.Modules.Workers.Features.Verdicts;
 using Foundry.Shared;
 using Foundry.Shared.Infrastructure.Docker;
 
@@ -36,6 +37,8 @@ internal sealed class WorkerOutcomeResolver(
     private const string ClosedMrMessage = "Merge request was closed without being merged";
 
     private const string NoPrAfterRetriesMessage = "No pull request found after retries";
+
+    internal const string MissingBranchMessage = "Worker run has no branch to resolve its outcome from";
 
     internal const string ErrorResultMessage = "Worker reported an error";
 
@@ -83,13 +86,29 @@ internal sealed class WorkerOutcomeResolver(
         RunVerdict? verdict,
         CancellationToken cancellationToken)
     {
+        // The outcome step dispatches by role: a triage run leaves no branch or merge request, only its verdict.
+        if (run.Role == WorkerRole.Triage)
+        {
+            return ResolveTriage(run, status, containerOutput);
+        }
+
+        if (run.BranchName is not { } branchName)
+        {
+            return new WorkerOutcome.Failure(
+                new FailureReason.ContainerError(MissingBranchMessage),
+                containerOutput,
+                containerOutputParser.ParseRunResultSummary(containerOutput));
+        }
+
+        BranchedRun branched = new(run, branchName);
+
         IReadOnlyList<RunVerdictQuestion>? askedQuestions =
             status?.ExitCode == 0 && verdict is { Status: RunVerdictStatus.NeedsInput } ? verdict.Questions : null;
 
         // Step 5a — MR-state first
         Result<MergeRequestByBranch> mrResult = await postExitProviderQueries.GetMergeRequestByBranchAsync(
-            run.MonitoredRepositoryId,
-            run.BranchName.Value,
+            branched.MonitoredRepositoryId,
+            branched.BranchName.Value,
             cancellationToken);
 
         if (mrResult is Result<MergeRequestByBranch>.Failure mrFailure)
@@ -104,10 +123,10 @@ internal sealed class WorkerOutcomeResolver(
 
         return mr.Presence switch
         {
-            MergeRequestPresence.Merged => ResolveMerged(run, mr, containerOutput, summary),
-            MergeRequestPresence.Open => ResolveOpen(run, mr, containerOutput, summary, askedQuestions),
-            MergeRequestPresence.Closed => await ResolveClosedAsync(run, containerOutput, summary, cancellationToken),
-            MergeRequestPresence.None => await ResolveNoMrAsync(run, status, containerOutput, askedQuestions, cancellationToken),
+            MergeRequestPresence.Merged => ResolveMerged(branched, mr, containerOutput, summary),
+            MergeRequestPresence.Open => ResolveOpen(branched, mr, containerOutput, summary, askedQuestions),
+            MergeRequestPresence.Closed => await ResolveClosedAsync(branched, containerOutput, summary, cancellationToken),
+            MergeRequestPresence.None => await ResolveNoMrAsync(branched, status, containerOutput, askedQuestions, cancellationToken),
             _ => throw new UnreachableException($"Unknown {nameof(MergeRequestPresence)}: {mr.Presence}"),
         };
     }
@@ -123,9 +142,17 @@ internal sealed class WorkerOutcomeResolver(
         RunResultSummary? summary,
         CancellationToken cancellationToken)
     {
+        // A run without a branch (a restricted role) has no merge request to find.
+        if (run.BranchName is not { } branchName)
+        {
+            return null;
+        }
+
+        BranchedRun branched = new(run, branchName);
+
         Result<MergeRequestByBranch> mrResult = await postExitProviderQueries.GetMergeRequestByBranchAsync(
-            run.MonitoredRepositoryId,
-            run.BranchName.Value,
+            branched.MonitoredRepositoryId,
+            branched.BranchName.Value,
             cancellationToken);
 
         if (mrResult is not Result<MergeRequestByBranch>.Success { Value: { WebUrl: not null } mr })
@@ -135,14 +162,55 @@ internal sealed class WorkerOutcomeResolver(
 
         return mr.Presence switch
         {
-            MergeRequestPresence.Merged => ResolveMerged(run, mr, containerOutput, summary),
-            MergeRequestPresence.Open => ResolveOpen(run, mr, containerOutput, summary, askedQuestions: null),
+            MergeRequestPresence.Merged => ResolveMerged(branched, mr, containerOutput, summary),
+            MergeRequestPresence.Open => ResolveOpen(branched, mr, containerOutput, summary, askedQuestions: null),
             _ => null,
         };
     }
 
+    /// <summary>
+    /// Resolves a triage run (ADR 0097) from its exit and its verdict alone: it has no branch, so the merge-request
+    /// lookup never runs. Only a run that exited 0 with a schema-valid verdict completes; a missing or invalid verdict
+    /// is a step failure (ADR 0094), and any other exit is classified as for every run.
+    /// </summary>
+    private WorkerOutcome ResolveTriage(ActiveRun run, WorkerStatus? status, string? containerOutput)
+    {
+        RunResultSummary? summary = containerOutputParser.ParseRunResultSummary(containerOutput);
+        ContainerOutputParseResult parseResult = containerOutputParser.Parse(containerOutput);
+
+        if (status?.ExitCode != 0)
+        {
+            return new WorkerOutcome.Failure(ClassifyNonZeroFailureReason(parseResult, status, run.Role), containerOutput, summary);
+        }
+
+        if (TryClassifyParseResult(parseResult, run.Role) is { } classified)
+        {
+            return new WorkerOutcome.Failure(classified, containerOutput, summary);
+        }
+
+        if (summary is { IsError: true })
+        {
+            return new WorkerOutcome.Failure(ErrorResultFailureReason(summary), containerOutput, summary);
+        }
+
+        if (containerOutputParser.ParseStructuredOutput(containerOutput) is not { } structuredOutput)
+        {
+            return new WorkerOutcome.Failure(
+                new FailureReason.VerdictInvalid(FailureReason.VerdictInvalid.MissingDetail),
+                containerOutput,
+                summary);
+        }
+
+        return TriageVerdict.TryParse(structuredOutput) is { } verdict
+            ? new WorkerOutcome.TriageCompleted(verdict, containerOutput, summary)
+            : new WorkerOutcome.Failure(
+                new FailureReason.VerdictInvalid(FailureReason.VerdictInvalid.InvalidDetail),
+                containerOutput,
+                summary);
+    }
+
     private static WorkerOutcome ResolveMerged(
-        ActiveRun run,
+        BranchedRun run,
         MergeRequestByBranch mr,
         string? containerOutput,
         RunResultSummary? summary)
@@ -158,7 +226,7 @@ internal sealed class WorkerOutcomeResolver(
     }
 
     private static WorkerOutcome ResolveOpen(
-        ActiveRun run,
+        BranchedRun run,
         MergeRequestByBranch mr,
         string? containerOutput,
         RunResultSummary? summary,
@@ -179,7 +247,7 @@ internal sealed class WorkerOutcomeResolver(
     }
 
     private async Task<WorkerOutcome> ResolveClosedAsync(
-        ActiveRun run,
+        BranchedRun run,
         string? containerOutput,
         RunResultSummary? summary,
         CancellationToken cancellationToken)
@@ -199,7 +267,7 @@ internal sealed class WorkerOutcomeResolver(
     /// when the query fails with a non-NotFound error.
     /// </summary>
     private async Task<WorkerOutcome> ResolveByCommitsAsync(
-        ActiveRun run,
+        BranchedRun run,
         string? containerOutput,
         RunResultSummary? summary,
         FailureReason failureReason,
@@ -229,7 +297,7 @@ internal sealed class WorkerOutcomeResolver(
     }
 
     private async Task<WorkerOutcome> ResolveNoMrAsync(
-        ActiveRun run,
+        BranchedRun run,
         WorkerStatus? status,
         string? containerOutput,
         IReadOnlyList<RunVerdictQuestion>? askedQuestions,
@@ -285,7 +353,7 @@ internal sealed class WorkerOutcomeResolver(
     }
 
     private async Task<WorkerOutcome> RepollForMrAsync(
-        ActiveRun run,
+        BranchedRun run,
         string? containerOutput,
         RunResultSummary? summary,
         IReadOnlyList<RunVerdictQuestion>? askedQuestions,
@@ -333,7 +401,7 @@ internal sealed class WorkerOutcomeResolver(
     }
 
     private WorkerOutcome ResolveExitZeroNoCommits(
-        ActiveRun run,
+        BranchedRun run,
         string? containerOutput,
         RunResultSummary? summary,
         IReadOnlyList<RunVerdictQuestion>? askedQuestions)
@@ -455,5 +523,13 @@ internal sealed class WorkerOutcomeResolver(
         return agentStarted
             ? new FailureReason.NonZeroExit(status.ExitCode ?? -1)
             : new FailureReason.WorkerBootstrapFailed(HeuristicBootstrapDetail);
+    }
+
+    /// <summary>A run resolved through its branch: the implement paths, which look up its merge request and commits.</summary>
+    private readonly record struct BranchedRun(ActiveRun Run, BranchName BranchName)
+    {
+        public MonitoredRepositoryId MonitoredRepositoryId => Run.MonitoredRepositoryId;
+
+        public WorkerRole Role => Run.Role;
     }
 }

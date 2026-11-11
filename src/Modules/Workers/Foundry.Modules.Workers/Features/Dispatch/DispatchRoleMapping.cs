@@ -15,6 +15,7 @@ internal static class DispatchRoleMapping
     public static WorkerRole ToWorkerRole(DispatchRole role) => role switch
     {
         DispatchRole.Implement => WorkerRole.Implement,
+        DispatchRole.Triage => WorkerRole.Triage,
         _ => throw new UnreachableException($"Unhandled DispatchRole: {role}"),
     };
 }

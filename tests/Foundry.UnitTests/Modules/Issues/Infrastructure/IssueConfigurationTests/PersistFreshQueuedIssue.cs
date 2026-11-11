@@ -83,6 +83,6 @@ public sealed class PersistFreshQueuedIssue : IAsyncDisposable
         FreshQueuedIssue reloaded = result.ShouldBeOfType<FreshQueuedIssue>();
         reloaded.ShouldSatisfyAllConditions(
             () => reloaded.KindClassification.ShouldBe(labelled),
-            () => reloaded.DispatchBranchName.Value.ShouldStartWith("docs/8-"));
+            () => reloaded.DispatchBranchName.ShouldNotBeNull().Value.ShouldStartWith("docs/8-"));
     }
 }

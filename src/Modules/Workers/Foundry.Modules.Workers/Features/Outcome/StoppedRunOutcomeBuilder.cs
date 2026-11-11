@@ -23,9 +23,15 @@ internal static class StoppedRunOutcomeBuilder
         IPostExitProviderQueries postExitProviderQueries,
         CancellationToken cancellationToken)
     {
+        // A run without a branch (a restricted role) has no commits to preserve.
+        if (run.BranchName is not { } branchName)
+        {
+            return new WorkerOutcome.Failure(failureReason, containerOutput, summary);
+        }
+
         Result<BranchCommitSummary> commitsResult = await postExitProviderQueries.GetBranchCommitSummaryAsync(
             run.MonitoredRepositoryId,
-            run.BranchName.Value,
+            branchName.Value,
             cancellationToken);
 
         if (commitsResult is Result<BranchCommitSummary>.Failure commitsFailure)
@@ -37,13 +43,13 @@ internal static class StoppedRunOutcomeBuilder
             }
 
             // Transient provider failure — preserve the branch to allow a future retry
-            return new WorkerOutcome.ContinuableFailure(run.BranchName, failureReason, containerOutput, summary);
+            return new WorkerOutcome.ContinuableFailure(branchName, failureReason, containerOutput, summary);
         }
 
         bool hasCommits = ((Result<BranchCommitSummary>.Success)commitsResult).Value.CommitCount > 0;
 
         return hasCommits
-            ? new WorkerOutcome.ContinuableFailure(run.BranchName, failureReason, containerOutput, summary)
+            ? new WorkerOutcome.ContinuableFailure(branchName, failureReason, containerOutput, summary)
             : new WorkerOutcome.Failure(failureReason, containerOutput, summary);
     }
 }
