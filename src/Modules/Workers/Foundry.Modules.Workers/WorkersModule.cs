@@ -12,6 +12,7 @@ using Foundry.Modules.Workers.Features.ImageBuild;
 using Foundry.Modules.Workers.Features.Orchestration;
 using Foundry.Modules.Workers.Features.Outcome;
 using Foundry.Modules.Workers.Features.Publisher;
+using Foundry.Modules.Workers.Features.Publishing;
 using Foundry.Modules.Workers.Features.Roles;
 using Foundry.Modules.Workers.Features.Roles.Models;
 using Foundry.Modules.Workers.Features.Runs;
@@ -86,7 +87,9 @@ public static class WorkersModule
         services.AddScoped<WorkerOutcomeResolver>();
         services.AddScoped<WorkerOutcomeApplier>();
         services.AddScoped<WorkerRunMonitor>();
+        services.AddScoped<WorkerRunPublisher>();
         services.AddHostedService<WorkerDispatchService>();
+        services.AddHostedService<RunPublishingService>();
         services.AddHostedService<AgentActivityFollowerService>();
         services.AddHostedService<WorkerImageRebuildService>();
         services.AddHostedService<StaleStartingRunService>();
