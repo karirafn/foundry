@@ -69,6 +69,7 @@
     display: flex;
     align-items: center;
     gap: var(--fd-spacing-xs);
+    flex-wrap: wrap;
     margin-bottom: var(--fd-spacing-sm);
   }
 
@@ -128,6 +129,8 @@
     display: flex;
     flex-shrink: 0;
     gap: var(--fd-spacing-xs);
+    flex-wrap: wrap;
+    max-width: 100%;
   }
 
   &__repo-warning {

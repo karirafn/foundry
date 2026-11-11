@@ -380,6 +380,100 @@ public sealed class GetIssueSummaryAsync : IAsyncDisposable
         summary.PullRequestUrl.ShouldBeNull();
     }
 
+    [Theory]
+    [InlineData("review_feedback", "revision_queued")]
+    [InlineData("review_feedback", "revision_in_progress")]
+    [InlineData("review_feedback", "revision_failed")]
+    [InlineData("failed_checks", "revision_queued")]
+    [InlineData("failed_checks", "revision_in_progress")]
+    [InlineData("failed_checks", "revision_failed")]
+    [InlineData("rebase_conflict", "revision_queued")]
+    [InlineData("rebase_conflict", "revision_in_progress")]
+    [InlineData("rebase_conflict", "revision_failed")]
+    [InlineData("input_provided", "revision_queued")]
+    [InlineData("input_provided", "revision_in_progress")]
+    [InlineData("input_provided", "revision_failed")]
+    public async Task WhenRevisionState_RevisionTriggerKindIsTheTriggerDiscriminator(string triggerKind, string state)
+    {
+        // Arrange
+        Issue issue = BuildRevisionState(new IssueBuilder(), triggerKind, state);
+        _dbContext.Set<Issue>().Add(issue);
+        await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+        _dbContext.ChangeTracker.Clear();
+
+        // Act
+        IssueSummary? result = await _sut.GetIssueSummaryAsync(issue.Id, TestContext.Current.CancellationToken);
+
+        // Assert
+        IssueSummary summary = result.ShouldNotBeNull();
+        summary.State.ShouldBe(state);
+        summary.RevisionTriggerKind.ShouldBe(triggerKind);
+    }
+
+    [Theory]
+    [InlineData("review")]
+    [InlineData("checks_pending")]
+    [InlineData("rebase_pending")]
+    [InlineData("continuable_failed")]
+    [InlineData("completed")]
+    public async Task WhenNonRevisionState_RevisionTriggerKindIsNull(string state)
+    {
+        // Arrange
+        Issue issue = BuildState(new IssueBuilder(), state);
+        _dbContext.Set<Issue>().Add(issue);
+        await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+        _dbContext.ChangeTracker.Clear();
+
+        // Act
+        IssueSummary? result = await _sut.GetIssueSummaryAsync(issue.Id, TestContext.Current.CancellationToken);
+
+        // Assert
+        IssueSummary summary = result.ShouldNotBeNull();
+        summary.State.ShouldBe(state);
+        summary.RevisionTriggerKind.ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task WhenAwaitingInput_RevisionTriggerKindIsNull()
+    {
+        // Arrange
+        AwaitingInputIssue issue = new IssueBuilder().AwaitingInput();
+        _dbContext.Set<Issue>().Add(issue);
+        await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+        _dbContext.ChangeTracker.Clear();
+
+        // Act
+        IssueSummary? result = await _sut.GetIssueSummaryAsync(issue.Id, TestContext.Current.CancellationToken);
+
+        // Assert
+        IssueSummary summary = result.ShouldNotBeNull();
+        summary.State.ShouldBe("awaiting_input");
+        summary.RevisionTriggerKind.ShouldBeNull();
+    }
+
+    private static Issue BuildRevisionState(IssueBuilder builder, string triggerKind, string state)
+    {
+        RevisionQueuedIssue queued = triggerKind switch
+        {
+            "review_feedback" => builder.RevisionQueued(),
+            "failed_checks" => builder.ChecksPending().FixChecks([new FailingCheck("ci/build", "failure", null)]),
+            "rebase_conflict" => builder.RebasePending().ResolveConflict(),
+            "input_provided" => (RevisionQueuedIssue)builder
+                .AwaitingInputPosted(DateTimeOffset.UtcNow.AddMinutes(-5))
+                .ProvideInput("Use SQLite.", DateTimeOffset.UtcNow),
+            _ => throw new ArgumentOutOfRangeException(nameof(triggerKind), triggerKind, null),
+        };
+
+        return state switch
+        {
+            "revision_queued" => queued,
+            "revision_in_progress" => queued.Claim(WorkerRunId.New()),
+            "revision_failed" => queued.Claim(WorkerRunId.New())
+                .MarkFailed("Container exited with code 1", FailureCategory.NonZeroExit, DateTimeOffset.UtcNow),
+            _ => throw new ArgumentOutOfRangeException(nameof(state), state, null),
+        };
+    }
+
     private static Issue BuildState(IssueBuilder builder, string state) =>
         state switch
         {

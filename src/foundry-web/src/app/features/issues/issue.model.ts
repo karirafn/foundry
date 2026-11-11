@@ -1,6 +1,7 @@
 import type { IssueState } from '../../shared/utils/issue-state';
 export type { IssueState } from '../../shared/utils/issue-state';
 import { WORKING_STATES } from '../../shared/utils/issue-state';
+import type { RevisionTriggerKind } from '../../shared/utils/revision-trigger-kind';
 import type { TokenTotal } from '../workers/run-totals.model';
 
 export interface RunStats {
@@ -32,6 +33,7 @@ export interface IssueSummary {
   rebaseSkippedReason?: string | null;
   pullRequestUrl?: string | null;
   providerType?: string | null;
+  revisionTriggerKind?: RevisionTriggerKind | null;
   /**
    * The publish phase of the issue's run, non-null only while the issue is in_progress or
    * revision_in_progress: Foundry is publishing the run's commits, or retrying a failed publish.
@@ -57,7 +59,7 @@ export interface FailingCheck {
   detailsUrl?: string | null;
 }
 
-export type RevisionTriggerKind = 'review_feedback' | 'failed_checks' | 'rebase_conflict' | 'input_provided';
+export type { RevisionTriggerKind } from '../../shared/utils/revision-trigger-kind';
 
 export interface InputQuestion {
   question: string;

@@ -1,8 +1,9 @@
 import { TestBed } from '@angular/core/testing';
 import { StateBadgeComponent } from './state-badge';
 import { IssueState } from '../../utils/issue-state';
+import { RevisionTriggerKind } from '../../utils/revision-trigger-kind';
 
-function createComponent(state: IssueState, failureClassification?: string) {
+function createComponent(state: IssueState, failureClassification?: string, revisionTriggerKind?: RevisionTriggerKind | null) {
   TestBed.configureTestingModule({
     imports: [StateBadgeComponent],
   });
@@ -10,6 +11,9 @@ function createComponent(state: IssueState, failureClassification?: string) {
   fixture.componentRef.setInput('state', state);
   if (failureClassification !== undefined) {
     fixture.componentRef.setInput('failureClassification', failureClassification);
+  }
+  if (revisionTriggerKind !== undefined) {
+    fixture.componentRef.setInput('revisionTriggerKind', revisionTriggerKind);
   }
   fixture.detectChanges();
   return fixture;
@@ -558,4 +562,27 @@ describe('StateBadgeComponent', () => {
     // Assert
     expect(span?.textContent?.trim()).toBe('IN PROGRESS');
   });
+
+  // Revision triggers (#832)
+  const triggerCases: { state: IssueState; kind: RevisionTriggerKind | null; label: string; aria: string; cssClass: string }[] = [
+    { state: 'revision_queued', kind: 'rebase_conflict', label: 'CONFLICT QUEUED', aria: 'State: conflict queued', cssClass: 'badge--revision-queued' },
+    { state: 'revision_in_progress', kind: 'rebase_conflict', label: 'RESOLVING CONFLICTS', aria: 'State: resolving conflicts', cssClass: 'badge--revision-in-progress' },
+    { state: 'revision_failed', kind: 'failed_checks', label: 'CHECKS FIX FAILED', aria: 'State: checks fix failed', cssClass: 'badge--revision-failed' },
+    { state: 'revision_in_progress', kind: 'input_provided', label: 'RESUMING', aria: 'State: resuming', cssClass: 'badge--revision-in-progress' },
+    { state: 'revision_queued', kind: 'review_feedback', label: 'REV QUEUED', aria: 'State: revision queued', cssClass: 'badge--revision-queued' },
+    { state: 'revision_queued', kind: null, label: 'REV QUEUED', aria: 'State: revision queued', cssClass: 'badge--revision-queued' },
+  ];
+
+  for (const c of triggerCases) {
+    it(`should display "${c.label}" with ${c.cssClass} and its aria-label for ${c.state} triggered by ${String(c.kind)}`, () => {
+      // Arrange / Act
+      const fixture = createComponent(c.state, undefined, c.kind);
+      const span = (fixture.nativeElement as HTMLElement).querySelector('span');
+
+      // Assert
+      expect(span?.textContent?.trim()).toBe(c.label);
+      expect(span?.getAttribute('aria-label')).toBe(c.aria);
+      expect(span?.classList.contains(c.cssClass)).toBe(true);
+    });
+  }
 });

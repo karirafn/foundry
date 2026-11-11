@@ -3665,6 +3665,12 @@
               "string"
             ]
           },
+          "revisionTriggerKind": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
           "publishPhase": {
             "type": [
               "null",

@@ -371,6 +371,43 @@ describe('IssueCardComponent', () => {
     expect(card?.getAttribute('aria-label')).toBe('Issue #42: Enable dark mode for dashboard. State: in progress');
   });
 
+  it('should announce the revision trigger state in aria-label', () => {
+    // Arrange
+    const issue: IssueSummary = { ...mockIssue, state: 'revision_queued', revisionTriggerKind: 'rebase_conflict', rebaseOutcome: 'conflict' };
+
+    // Act
+    const fixture = createComponent(issue);
+    const card = (fixture.nativeElement as HTMLElement).querySelector('.issue-card__toggle') as HTMLElement;
+
+    // Assert
+    expect(card.getAttribute('aria-label')).toBe('Issue #42: Enable dark mode for dashboard. State: conflict queued Rebase conflict.');
+  });
+
+  it('should announce the failure category in aria-label for a failed issue', () => {
+    // Arrange
+    const issue: IssueSummary = { ...mockIssue, state: 'failed', failureClassification: 'credits_exhausted' };
+
+    // Act
+    const fixture = createComponent(issue);
+    const card = (fixture.nativeElement as HTMLElement).querySelector('.issue-card__toggle') as HTMLElement;
+
+    // Assert
+    expect(card.getAttribute('aria-label')).toBe('Issue #42: Enable dark mode for dashboard. State: credits exhausted');
+  });
+
+  it('should pass the revision trigger kind to the state badge', () => {
+    // Arrange
+    const issue: IssueSummary = { ...mockIssue, state: 'revision_in_progress', revisionTriggerKind: 'rebase_conflict' };
+
+    // Act
+    const fixture = createComponent(issue);
+    const badge = (fixture.nativeElement as HTMLElement).querySelector('fd-state-badge span');
+
+    // Assert
+    expect(badge?.textContent?.trim()).toBe('RESOLVING CONFLICTS');
+    expect(badge?.getAttribute('aria-label')).toBe('State: resolving conflicts');
+  });
+
   it('should include repo warning in aria-label when issue is queued and repo is ineligible', () => {
     // Arrange
     const queuedIneligibleIssue: IssueSummary = {

@@ -1,17 +1,9 @@
-import { ChangeDetectionStrategy, Component, input, InputSignal } from '@angular/core';
-import { IssueState, WORKING_STATES } from '../../utils/issue-state';
-import { STATE_LABELS, STATE_ARIA_LABELS, STATE_CSS_CLASSES } from '../../utils/state-display';
-import { getFailureCategoryDisplay } from '../../utils/failure-category';
-
-const FAILED_STATES: ReadonlySet<IssueState> = new Set<IssueState>(['failed', 'continuable_failed']);
+import { ChangeDetectionStrategy, Component, Signal, computed, input, InputSignal } from '@angular/core';
+import { IssueState } from '../../utils/issue-state';
+import { StateDisplay, resolveStateDisplay } from '../../utils/state-display';
+import { RevisionTriggerKind } from '../../utils/revision-trigger-kind';
 
 export type BadgePublishPhase = 'publishing' | 'retrying';
-
-interface BadgeDisplay {
-  readonly label: string;
-  readonly aria: string;
-  readonly cssClass: string;
-}
 
 @Component({
   selector: 'fd-state-badge',
@@ -32,37 +24,25 @@ export class StateBadgeComponent {
   /** Overrides the label of a working state while Foundry publishes the run's commits. */
   readonly publishPhase: InputSignal<BadgePublishPhase | null> = input<BadgePublishPhase | null>(null);
 
-  private overrideDisplay(): BadgeDisplay | null {
-    const state = this.state();
-    const phase = this.publishPhase();
-    if (phase !== null && WORKING_STATES.has(state)) {
-      if (phase === 'retrying') {
-        return { label: 'PUBLISH RETRY', aria: 'publish retrying', cssClass: 'badge--retrying' };
-      }
-      return state === 'revision_in_progress'
-        ? { label: 'REV PUBLISHING', aria: 'revision publishing', cssClass: 'badge--publishing' }
-        : { label: 'PUBLISHING', aria: 'publishing', cssClass: 'badge--publishing' };
-    }
+  readonly revisionTriggerKind: InputSignal<RevisionTriggerKind | null | undefined> =
+    input<RevisionTriggerKind | null | undefined>(undefined);
 
-    const classification = this.failureClassification();
-    if (classification === undefined || !FAILED_STATES.has(state)) {
-      return null;
-    }
-    const display = getFailureCategoryDisplay(classification);
-    return display === null
-      ? null
-      : { label: display.label, aria: display.label.toLowerCase(), cssClass: display.cssClass };
-  }
+  private readonly _display: Signal<StateDisplay> = computed(() =>
+    resolveStateDisplay(this.state(), {
+      failureClassification: this.failureClassification(),
+      revisionTriggerKind: this.revisionTriggerKind(),
+      publishPhase: this.publishPhase(),
+    }));
 
   label(): string {
-    return this.overrideDisplay()?.label ?? STATE_LABELS[this.state()];
+    return this._display().label;
   }
 
   ariaLabel(): string {
-    return `State: ${this.overrideDisplay()?.aria ?? STATE_ARIA_LABELS[this.state()]}`;
+    return `State: ${this._display().ariaLabel}`;
   }
 
   badgeClass(): string {
-    return `badge ${this.overrideDisplay()?.cssClass ?? STATE_CSS_CLASSES[this.state()]}`;
+    return `badge ${this._display().cssClass}`;
   }
 }

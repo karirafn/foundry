@@ -21,6 +21,7 @@ public sealed record IssueSummary(
     string? RebaseOutcome = null,
     string? RebaseSkippedReason = null,
     string? ProviderType = null,
+    string? RevisionTriggerKind = null,
     string? PublishPhase = null)
 {
     public const string PublishingPhase = "publishing";
