@@ -604,6 +604,12 @@ namespace Foundry.WebApi.Migrations
                         .HasColumnType("TEXT")
                         .HasColumnName("created_at");
 
+                    b.Property<string>("DivergedSideBranch")
+                        .HasMaxLength(500)
+                        .IsUnicode(false)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("diverged_side_branch");
+
                     b.Property<string>("Image")
                         .HasMaxLength(500)
                         .IsUnicode(false)
@@ -613,6 +619,16 @@ namespace Foundry.WebApi.Migrations
                     b.Property<Guid>("IssueId")
                         .HasColumnType("TEXT")
                         .HasColumnName("issue_id");
+
+                    b.Property<int?>("PublishedBranchCommitCount")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("published_branch_commit_count");
+
+                    b.Property<string>("PublishedHead")
+                        .HasMaxLength(64)
+                        .IsUnicode(false)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("published_head");
 
                     b.Property<string>("Role")
                         .IsRequired()
@@ -2033,12 +2049,6 @@ namespace Foundry.WebApi.Migrations
                 {
                     b.HasBaseType("Foundry.Modules.Workers.Domain.Entities.WorkerRun");
 
-                    b.Property<int>("BranchCommitCount")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("INTEGER")
-                        .HasDefaultValue(0)
-                        .HasColumnName("branch_commit_count");
-
                     b.Property<string>("BranchName")
                         .ValueGeneratedOnUpdateSometimes()
                         .HasMaxLength(500)
@@ -2062,17 +2072,13 @@ namespace Foundry.WebApi.Migrations
                         .HasColumnType("TEXT")
                         .HasColumnName("last_activity_at");
 
-                    b.Property<string>("LastObservedCommitSha")
-                        .HasMaxLength(40)
-                        .IsUnicode(false)
-                        .HasColumnType("TEXT")
-                        .HasColumnName("last_observed_commit_sha");
-
                     b.Property<Guid>("MonitoredRepositoryId")
+                        .ValueGeneratedOnUpdateSometimes()
                         .HasColumnType("TEXT")
                         .HasColumnName("monitored_repository_id");
 
                     b.Property<DateTimeOffset>("StartedAt")
+                        .ValueGeneratedOnUpdateSometimes()
                         .HasColumnType("TEXT")
                         .HasColumnName("started_at");
 
@@ -2220,6 +2226,114 @@ namespace Foundry.WebApi.Migrations
                         });
 
                     b.HasDiscriminator().HasValue("starting");
+                });
+
+            modelBuilder.Entity("Foundry.Modules.Workers.Domain.Entities.States.UnpublishedRun", b =>
+                {
+                    b.HasBaseType("Foundry.Modules.Workers.Domain.Entities.WorkerRun");
+
+                    b.Property<string>("BranchName")
+                        .IsRequired()
+                        .ValueGeneratedOnUpdateSometimes()
+                        .HasMaxLength(500)
+                        .IsUnicode(false)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("branch_name");
+
+                    b.Property<DateTimeOffset?>("CancelRequestedAt")
+                        .ValueGeneratedOnUpdateSometimes()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("cancel_requested_at");
+
+                    b.Property<string>("ContainerOutput")
+                        .ValueGeneratedOnUpdateSometimes()
+                        .HasMaxLength(2147483647)
+                        .IsUnicode(true)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("container_output");
+
+                    b.Property<int?>("ExitCode")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("exit_status_code");
+
+                    b.Property<DateTimeOffset>("ExitedAt")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("exited_at");
+
+                    b.Property<int>("FailedPublishAttempts")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("failed_publish_attempts");
+
+                    b.Property<Guid>("MonitoredRepositoryId")
+                        .ValueGeneratedOnUpdateSometimes()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("monitored_repository_id");
+
+                    b.Property<bool>("OomKilled")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("exit_oom_killed");
+
+                    b.Property<string>("PendingTranscript")
+                        .HasMaxLength(2147483647)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("pending_transcript");
+
+                    b.Property<DateTimeOffset?>("PendingTranscriptCapturedAt")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("pending_transcript_captured_at");
+
+                    b.Property<DateTimeOffset?>("PublishedAt")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("published_at");
+
+                    b.Property<string>("PublishedCommitSubjects")
+                        .IsRequired()
+                        .HasMaxLength(2147483647)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("published_commit_subjects");
+
+                    b.Property<string>("PullRequestBody")
+                        .HasMaxLength(2147483647)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("pull_request_body");
+
+                    b.Property<DateTimeOffset?>("PullRequestSettledAt")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("pull_request_settled_at");
+
+                    b.Property<string>("PullRequestSummary")
+                        .HasMaxLength(1000)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("pull_request_summary");
+
+                    b.Property<DateTimeOffset>("StartedAt")
+                        .ValueGeneratedOnUpdateSometimes()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("started_at");
+
+                    b.Property<string>("StopReason")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .IsUnicode(false)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("stop_reason");
+
+                    b.ToTable(t =>
+                        {
+                            t.HasCheckConstraint("ck_worker_runs_active_container_id", "state <> 'active' OR container_id IS NOT NULL");
+
+                            t.HasCheckConstraint("ck_worker_runs_active_started_at", "state <> 'active' OR started_at IS NOT NULL");
+
+                            t.HasCheckConstraint("ck_worker_runs_completed_completed_at", "state <> 'completed' OR completed_at IS NOT NULL");
+
+                            t.HasCheckConstraint("ck_worker_runs_completed_exit_code", "state <> 'completed' OR exit_code IS NOT NULL");
+
+                            t.HasCheckConstraint("ck_worker_runs_failed_failed_at", "state <> 'failed' OR failed_at IS NOT NULL");
+
+                            t.HasCheckConstraint("ck_worker_runs_failed_reason", "state <> 'failed' OR reason IS NOT NULL");
+                        });
+
+                    b.HasDiscriminator().HasValue("UnpublishedRun");
                 });
 
             modelBuilder.Entity("Foundry.Modules.Issues.Domain.Entities.States.ContinuationQueuedIssue", b =>
@@ -2448,6 +2562,64 @@ namespace Foundry.WebApi.Migrations
                         });
 
                     b.HasDiscriminator().HasValue("triage_queued");
+                });
+
+            modelBuilder.Entity("Foundry.Modules.Workers.Domain.Entities.States.PublishFailedRun", b =>
+                {
+                    b.HasBaseType("Foundry.Modules.Workers.Domain.Entities.States.UnpublishedRun");
+
+                    b.Property<DateTimeOffset?>("NextPublishAttemptAt")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("next_publish_attempt_at");
+
+                    b.Property<DateTimeOffset>("PublishFailedAt")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("publish_failed_at");
+
+                    b.Property<string>("PublishFailureReason")
+                        .IsRequired()
+                        .HasMaxLength(2147483647)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("publish_failure_reason");
+
+                    b.ToTable(t =>
+                        {
+                            t.HasCheckConstraint("ck_worker_runs_active_container_id", "state <> 'active' OR container_id IS NOT NULL");
+
+                            t.HasCheckConstraint("ck_worker_runs_active_started_at", "state <> 'active' OR started_at IS NOT NULL");
+
+                            t.HasCheckConstraint("ck_worker_runs_completed_completed_at", "state <> 'completed' OR completed_at IS NOT NULL");
+
+                            t.HasCheckConstraint("ck_worker_runs_completed_exit_code", "state <> 'completed' OR exit_code IS NOT NULL");
+
+                            t.HasCheckConstraint("ck_worker_runs_failed_failed_at", "state <> 'failed' OR failed_at IS NOT NULL");
+
+                            t.HasCheckConstraint("ck_worker_runs_failed_reason", "state <> 'failed' OR reason IS NOT NULL");
+                        });
+
+                    b.HasDiscriminator().HasValue("publish_failed");
+                });
+
+            modelBuilder.Entity("Foundry.Modules.Workers.Domain.Entities.States.PublishingRun", b =>
+                {
+                    b.HasBaseType("Foundry.Modules.Workers.Domain.Entities.States.UnpublishedRun");
+
+                    b.ToTable(t =>
+                        {
+                            t.HasCheckConstraint("ck_worker_runs_active_container_id", "state <> 'active' OR container_id IS NOT NULL");
+
+                            t.HasCheckConstraint("ck_worker_runs_active_started_at", "state <> 'active' OR started_at IS NOT NULL");
+
+                            t.HasCheckConstraint("ck_worker_runs_completed_completed_at", "state <> 'completed' OR completed_at IS NOT NULL");
+
+                            t.HasCheckConstraint("ck_worker_runs_completed_exit_code", "state <> 'completed' OR exit_code IS NOT NULL");
+
+                            t.HasCheckConstraint("ck_worker_runs_failed_failed_at", "state <> 'failed' OR failed_at IS NOT NULL");
+
+                            t.HasCheckConstraint("ck_worker_runs_failed_reason", "state <> 'failed' OR reason IS NOT NULL");
+                        });
+
+                    b.HasDiscriminator().HasValue("publishing");
                 });
 
             modelBuilder.Entity("Foundry.Modules.Monitoring.Domain.Entities.CredentialNamespace", b =>
