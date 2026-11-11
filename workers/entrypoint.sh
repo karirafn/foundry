@@ -583,6 +583,13 @@ if [[ -n "${BRANCH_NAME:-}" ]]; then
     git switch -- "$BRANCH_NAME" || git switch -c "$BRANCH_NAME"
 fi
 
+# A fixed identity leaves the agent nothing to invent when it commits: without
+# one it improvised a Claude persona and credited Claude in trailers and PR text.
+# --global writes ~/.gitconfig, which lives on the writable /home/node volume.
+BOOTSTRAP_STAGE="git-identity"
+git config --global user.name "Foundry Worker"
+git config --global user.email foundry-worker@foundry.invalid
+
 # Disarm the bootstrap ERR trap — failures beyond this point (rootless-dockerd
 # startup, claude invocation) are out of scope for bootstrap classification.
 trap - ERR

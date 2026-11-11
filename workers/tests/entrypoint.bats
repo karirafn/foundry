@@ -584,6 +584,69 @@ EOF
     [ -f "$BATS_TEST_TMPDIR/claude_called" ]
 }
 
+# Write a fake git that handles clone like make_fake_git but passes
+# `git config --global` through to the real git, so the identity the entrypoint
+# sets lands in the per-test $HOME/.gitconfig and can be read back.
+make_fake_git_real_global_config() {
+    local real_git
+    real_git="$(command -v git)"
+    cat > "$FAKE_BIN_DIR/git" <<EOF
+#!/bin/bash
+if [[ "\${1:-}" == "config" && "\${2:-}" == "--global" ]]; then
+    exec "${real_git}" "\$@"
+fi
+case "\${1:-}" in
+    clone) mkdir -p "\$FOUNDRY_WORKSPACE_DIR" ;;
+    *)     true ;;
+esac
+exit 0
+EOF
+    chmod +x "$FAKE_BIN_DIR/git"
+}
+
+# Write a fake git where `git config --global` exits non-zero (bootstrap-failure: git-identity)
+make_fake_git_global_config_fail() {
+    cat > "$FAKE_BIN_DIR/git" <<'EOF'
+#!/bin/bash
+if [[ "${1:-}" == "config" && "${2:-}" == "--global" ]]; then
+    exit 1
+fi
+case "${1:-}" in
+    clone) mkdir -p "$FOUNDRY_WORKSPACE_DIR" ;;
+    *)     true ;;
+esac
+exit 0
+EOF
+    chmod +x "$FAKE_BIN_DIR/git"
+}
+
+@test "git identity: bootstrap sets the fixed global user.name and user.email" {
+    set_required_env
+    make_fake_git_real_global_config
+    make_fake_claude
+    unset GIT_CONFIG_GLOBAL GH_TOKEN GITLAB_TOKEN
+
+    run bash "$ENTRYPOINT"
+
+    [ "$status" -eq 0 ]
+    [ -f "$BATS_TEST_TMPDIR/claude_called" ]
+    [ "$(git config --global user.name)" = "Foundry Worker" ]
+    [ "$(git config --global user.email)" = "foundry-worker@foundry.invalid" ]
+}
+
+@test "git identity: a failing git config emits FOUNDRY_BOOTSTRAP_FAILED stage=git-identity and claude never runs" {
+    set_required_env
+    make_fake_git_global_config_fail
+    make_fake_claude
+    unset GH_TOKEN GITLAB_TOKEN
+
+    run bash "$ENTRYPOINT"
+
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"FOUNDRY_BOOTSTRAP_FAILED stage=git-identity"* ]]
+    [ ! -f "$BATS_TEST_TMPDIR/claude_called" ]
+}
+
 @test "gh hostname contains @ guard emits FOUNDRY_BOOTSTRAP_FAILED stage=auth" {
     set_required_env
     make_fake_git
