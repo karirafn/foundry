@@ -596,7 +596,7 @@ if [[ "\${1:-}" == "config" && "\${2:-}" == "--global" ]]; then
     exec "${real_git}" "\$@"
 fi
 case "\${1:-}" in
-    clone) mkdir -p /workspace ;;
+    clone) mkdir -p "\$FOUNDRY_WORKSPACE_DIR" ;;
     *)     true ;;
 esac
 exit 0
@@ -612,7 +612,7 @@ if [[ "${1:-}" == "config" && "${2:-}" == "--global" ]]; then
     exit 1
 fi
 case "${1:-}" in
-    clone) mkdir -p /workspace ;;
+    clone) mkdir -p "$FOUNDRY_WORKSPACE_DIR" ;;
     *)     true ;;
 esac
 exit 0
@@ -624,7 +624,7 @@ EOF
     set_required_env
     make_fake_git_real_global_config
     make_fake_claude
-    unset GIT_CONFIG_GLOBAL
+    unset GIT_CONFIG_GLOBAL GH_TOKEN GITLAB_TOKEN
 
     run bash "$ENTRYPOINT"
 
@@ -638,6 +638,7 @@ EOF
     set_required_env
     make_fake_git_global_config_fail
     make_fake_claude
+    unset GH_TOKEN GITLAB_TOKEN
 
     run bash "$ENTRYPOINT"
 
