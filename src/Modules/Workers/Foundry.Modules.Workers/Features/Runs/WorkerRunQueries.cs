@@ -304,12 +304,6 @@ internal sealed class WorkerRunQueries(DbContext db) : IWorkerRunQueries
         return activities;
     }
 
-    // Temporary stub so the Issues work builds before the Workers side lands; replaced by the real query.
-    public Task<IReadOnlyDictionary<Guid, WorkerRunPublishPhase>> GetPublishPhasesForIssuesAsync(
-        IReadOnlyCollection<Guid> issueIds,
-        CancellationToken cancellationToken)
-        => Task.FromResult<IReadOnlyDictionary<Guid, WorkerRunPublishPhase>>(new Dictionary<Guid, WorkerRunPublishPhase>());
-
     public async Task<int> CountConsecutiveTransientRunsAsync(
         Guid issueId,
         int maxAttempts,
