@@ -123,7 +123,11 @@ internal sealed class WorkerRunPublisher(
         if (identityResult is not Result<CommitIdentity>.Success { Value: { } identity })
         {
             Error error = ((Result<CommitIdentity>.Failure)identityResult).Error;
-            await FailPublishAsync(run, $"Reading the account identity failed: {error.Message}", transient: true, cancellationToken);
+            await FailPublishAsync(
+                run,
+                $"Reading the account identity failed: {error.Message}",
+                RunPublishingErrors.IsTransient(error),
+                cancellationToken);
             return false;
         }
 
@@ -182,7 +186,11 @@ internal sealed class WorkerRunPublisher(
 
         if (step is Result.Failure stepFailure)
         {
-            await FailPublishAsync(run, stepFailure.Error.Message, transient: true, cancellationToken);
+            await FailPublishAsync(
+                run,
+                stepFailure.Error.Message,
+                RunPublishingErrors.IsTransient(stepFailure.Error),
+                cancellationToken);
             return false;
         }
 
@@ -202,7 +210,7 @@ internal sealed class WorkerRunPublisher(
         Result<IssueDetail> issueResult = await issueQueries.GetIssueDetailAsync(run.IssueId, cancellationToken);
         if (issueResult is not Result<IssueDetail>.Success { Value: { } issue })
         {
-            return Result.Fail(new Error("Publish.IssueUnreadable", "Reading the issue for the pull request failed."));
+            return Result.Fail(RunPublishingErrors.Transient("Reading the issue for the pull request failed."));
         }
 
         PullRequestText text = PullRequestText.Build(

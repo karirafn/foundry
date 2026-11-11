@@ -1,4 +1,5 @@
 using Foundry.Modules.Monitoring.Contracts;
+using Foundry.Modules.Monitoring.Contracts.Commands;
 using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Features.Providers;
@@ -33,7 +34,7 @@ internal sealed class FakeGitHub : IIssueProviderFactory, IIssueProvider, IGitHu
 
     private volatile bool _pullRequestOpened;
 
-    public void OpenPullRequest() => _pullRequestOpened = true;
+    public string? OpenedPullRequestTitle { get; private set; }
 
     public IIssueProvider CreateProvider(Credential credential, string token) => this;
 
@@ -87,6 +88,22 @@ internal sealed class FakeGitHub : IIssueProviderFactory, IIssueProvider, IGitHu
 
     public Task<Result<bool>> CanPushAsync(RepositorySlug slug, CancellationToken cancellationToken)
         => Task.FromResult(Result<bool>.Ok(true));
+
+    // Foundry, not the worker, opens the pull request once the run is published (ADR 0100).
+    public Task<Result<string>> CreatePullRequestAsync(
+        RepositorySlug slug,
+        string sourceBranch,
+        string title,
+        string body,
+        CancellationToken cancellationToken)
+    {
+        OpenedPullRequestTitle = title;
+        _pullRequestOpened = true;
+        return Task.FromResult(Result<string>.Ok(PullRequestUrl));
+    }
+
+    public Task<Result<CommitIdentity>> GetAuthenticatedIdentityAsync(CancellationToken cancellationToken)
+        => Task.FromResult(Result<CommitIdentity>.Ok(new CommitIdentity("Smoke Owner", "1+smoke-owner@users.noreply.github.com")));
 
     // A triage run reads the issue through Foundry (ADR 0098).
     public Task<Result<ProviderIssueContent>> GetIssueContentAsync(RepositorySlug slug, int issueNumber, CancellationToken cancellationToken)

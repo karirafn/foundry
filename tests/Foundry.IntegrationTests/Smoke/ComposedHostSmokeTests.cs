@@ -130,8 +130,7 @@ public sealed class ComposedHostSmokeTests : IAsyncDisposable
             () => spec.EnvironmentVariables["WORKER_PROMPT"].ShouldNotBeNullOrWhiteSpace());
         (await GetIssueAsync(ct)).ShouldBeOfType<InProgressIssue>();
 
-        // The worker opens its pull request and exits 0 with a real claude stream-json transcript.
-        _boundaries.GitHub.OpenPullRequest();
+        // The worker exits 0 with a real claude stream-json transcript; Foundry publishes it and opens the pull request.
         _boundaries.Containers.ExitAll(exitCode: 0, await ReadFixtureAsync(ct));
 
         await Eventually.WaitUntilAsync(
@@ -146,6 +145,7 @@ public sealed class ComposedHostSmokeTests : IAsyncDisposable
             () => finishedRun.ShouldBeOfType<CompletedRun>(),
             () => finishedRun.VerdictStatus.ShouldBe(RunVerdictStatus.Done));
         (await GetIssueAsync(ct)).ShouldBeOfType<ChecksPendingIssue>();
+        _boundaries.GitHub.OpenedPullRequestTitle.ShouldNotBeNullOrWhiteSpace();
 
         _boundaries.Logs.Entries.Where(entry => entry.Level >= LogLevel.Error).ShouldBeEmpty();
     }
