@@ -24,16 +24,29 @@ namespace Foundry.IntegrationTests.Modules.Workers.Infrastructure.DockerWorkerOr
 /// </summary>
 public sealed class WhenStartedWithWorkerHardening : IAsyncLifetime
 {
-    private const string Image = "busybox:latest";
+    // Alpine rather than busybox: like the worker image, it ships /tmp and /var/tmp as sticky 1777 directories, which
+    // the anonymous volumes inherit. Busybox has no /var/tmp, so the daemon would create the mount point as 0755.
+    private const string ImageRepository = "alpine";
+    private const string ImageTag = "latest";
+    private const string Image = $"{ImageRepository}:{ImageTag}";
     private const string WorkerRunIdLabel = "foundry.worker-run-id";
+    private static readonly string[] TempDirectories = ["/tmp", "/var/tmp"];
 
     // The probe runs as the container's root user, which is the strongest position the hardening must hold against:
-    // root may still write the root-owned tmpfs and volumes, but not the image's root filesystem.
+    // root may still write the root-owned tmpfs and volumes, but not the image's root filesystem. The temp
+    // directories are also probed as an unprivileged user, as the worker's node user would use them: it must be
+    // able to write there and run what it wrote (the entrypoint's GIT_ASKPASS helper).
     private const string Probe =
         "grep -E '^(CapEff|NoNewPrivs|Seccomp):' /proc/self/status; "
         + "if touch /etc/foundry-probe 2>/dev/null; then echo rootfs=writable; else echo rootfs=readonly; fi; "
         + "for p in /tmp /var/tmp /etc/claude-code /workspace /home/node; do "
-        + "if touch \"$p/foundry-probe\"; then echo \"writable=$p\"; fi; done";
+        + "if touch \"$p/foundry-probe\"; then echo \"writable=$p\"; fi; done; "
+        + "for p in /tmp /var/tmp; do "
+        + "stat -c 'mode=%n:%a' \"$p\"; "
+        + "awk -v p=\"$p\" '$2 == p { print \"fstype=\" p \":\" $3 }' /proc/mounts; "
+        + "su -s /bin/sh nobody -c "
+        + "\"f=\\$(mktemp -p $p) && printf '#!/bin/sh\\necho ok\\n' > \\$f && chmod 700 \\$f && \\$f\" >/dev/null "
+        + "&& echo \"unprivileged-exec=$p\"; done";
 
     private readonly WorkerRunId _runId = WorkerRunId.New();
 
@@ -106,6 +119,55 @@ public sealed class WhenStartedWithWorkerHardening : IAsyncLifetime
             () => inspect.HostConfig.SecurityOpt.ShouldNotContain(o => o.StartsWith("seccomp=unconfined", StringComparison.Ordinal)),
             () => inspect.HostConfig.ReadonlyRootfs.ShouldBeTrue(),
             () => inspect.HostConfig.Tmpfs.ShouldNotBeNull().Keys.ShouldBe(WorkerHardeningSpec.TmpfsMounts.Keys, ignoreOrder: true));
+    }
+
+    [Fact]
+    public async Task WhenStartedWithWorkerHardening_TempDirectoriesAreAnonymousVolumesNotTmpfs()
+    {
+        // Arrange
+        Assert.SkipUnless(_daemonReachable, "Docker daemon is not reachable.");
+        DockerWorkerOrchestrator sut = _sut.ShouldNotBeNull();
+
+        // Act
+        string containerId = await StartAndWaitForExitAsync(sut);
+
+        // Assert
+        ContainerInspectResponse inspect = await _dockerClient!.Containers.InspectContainerAsync(
+            containerId,
+            TestContext.Current.CancellationToken);
+
+        inspect.ShouldSatisfyAllConditions(
+            () => inspect.HostConfig.Tmpfs.ShouldNotBeNull().Keys.ShouldNotContain(k => TempDirectories.Contains(k)),
+            () => inspect.Mounts
+                .Where(m => m.Type == "volume" && TempDirectories.Contains(m.Destination))
+                .Select(m => m.Destination)
+                .ShouldBe(TempDirectories, ignoreOrder: true));
+    }
+
+    [Fact]
+    public async Task WhenStartedWithWorkerHardening_TempDirectoriesAreStickyDiskBackedAndUsableUnprivileged()
+    {
+        // Arrange
+        Assert.SkipUnless(_daemonReachable, "Docker daemon is not reachable.");
+        DockerWorkerOrchestrator sut = _sut.ShouldNotBeNull();
+
+        // Act
+        string containerId = await StartAndWaitForExitAsync(sut);
+        string output = await sut.GetLogsAsync(containerId, tailLines: 100, TestContext.Current.CancellationToken) ?? string.Empty;
+
+        // Assert
+        string[] lines = [.. output
+            .Split('\n', StringSplitOptions.RemoveEmptyEntries)
+            .Select(l => DockerLogLine.StripTimestamp(l).Trim())];
+
+        lines.ShouldSatisfyAllConditions(
+            [.. TempDirectories.SelectMany<string, Action>(p =>
+            [
+                () => lines.ShouldContain($"mode={p}:1777", output),
+                () => lines.ShouldContain(l => l.StartsWith($"fstype={p}:", StringComparison.Ordinal), output),
+                () => lines.ShouldNotContain($"fstype={p}:tmpfs", output),
+                () => lines.ShouldContain($"unprivileged-exec={p}", output),
+            ])]);
     }
 
     [Fact]
@@ -292,8 +354,8 @@ public sealed class WhenStartedWithWorkerHardening : IAsyncLifetime
         await _dockerClient!.Images.CreateImageAsync(
             new ImagesCreateParameters
             {
-                FromImage = "busybox",
-                Tag = "latest",
+                FromImage = ImageRepository,
+                Tag = ImageTag,
             },
             authConfig: null,
             progress: new Progress<JSONMessage>(),

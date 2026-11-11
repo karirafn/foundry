@@ -79,4 +79,37 @@ public sealed class AllowanceSet
         // Assert
         devices.ShouldNotContain("/dev/fuse");
     }
+
+    [Theory]
+    [InlineData("/tmp")]
+    [InlineData("/var/tmp")]
+    public void WhenLayeredOnTheHardenedSet_TempDirectoryStaysAScratchVolumeNotATmpfs(string path)
+    {
+        // Arrange
+        WorkerContainerSpec hardened = WorkerHardeningSpec.Apply(new(
+            Image: "foundry-worker:local",
+            EnvironmentVariables: new Dictionary<string, string>(),
+            Labels: new Dictionary<string, string>(),
+            Command: ["/entrypoint.sh"])
+        {
+            MemoryLimitMb = 512,
+            CpuLimit = 1.0,
+            PidsLimit = 256,
+        });
+
+        // Act
+        // Composed as IssueClaimedHandler composes it: the hardened baseline, then the DinD relaxations.
+        WorkerContainerSpec dind = hardened with
+        {
+            Capabilities = RootlessDindRunSpec.Capabilities,
+            SecurityOptions = RootlessDindRunSpec.SecurityOptions,
+            Devices = RootlessDindRunSpec.Devices,
+            UnmaskSystemPaths = RootlessDindRunSpec.UnmaskSystemPaths,
+        };
+
+        // Assert
+        dind.ShouldSatisfyAllConditions(
+            () => dind.ScratchVolumePaths.ShouldContain(path),
+            () => dind.TmpfsMounts.Keys.ShouldNotContain(path));
+    }
 }

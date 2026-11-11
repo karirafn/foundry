@@ -27,22 +27,23 @@ internal static class WorkerHardeningSpec
     public const string ManagedSettingsDirectory = "/etc/claude-code";
 
     /// <summary>
-    /// Small, memory-backed writable paths. <c>/tmp</c> keeps exec because the entrypoint runs its clone
-    /// <c>GIT_ASKPASS</c> helper from there. <c>/etc/claude-code</c> is created root-owned, so only the root phase
-    /// can write the managed settings into it.
+    /// The only memory-backed writable path: the managed settings are a few kilobytes. <c>/etc/claude-code</c> is
+    /// created root-owned, so only the root phase can write the managed settings into it.
     /// </summary>
     public static readonly IReadOnlyDictionary<string, string> TmpfsMounts = new Dictionary<string, string>
     {
-        ["/tmp"] = "rw,nosuid,nodev,exec,mode=1777",
-        ["/var/tmp"] = "rw,nosuid,nodev,exec,mode=1777",
         [ManagedSettingsDirectory] = "rw,nosuid,nodev,noexec,mode=0755",
     };
 
     /// <summary>
-    /// Disk-backed writable paths for the clone and the worker's home (package caches, build output, tool config).
-    /// Anonymous volumes inherit the image's content and ownership on first mount and are removed with the container.
+    /// Disk-backed writable paths for the clone, the worker's home (package caches, build output, tool config) and
+    /// the temp directories, which agents fill with worktrees, tool installs and caches. On tmpfs those pages would
+    /// count against the worker's memory limit, so a full temp directory meant an OOM kill or ENOSPC (#821).
+    /// Anonymous volumes inherit the image's content, ownership and mode on first mount (so <c>/tmp</c> and
+    /// <c>/var/tmp</c> stay sticky <c>1777</c> and allow exec for the entrypoint's <c>GIT_ASKPASS</c> helper) and are
+    /// removed with the container.
     /// </summary>
-    public static readonly IReadOnlyList<string> ScratchVolumePaths = ["/workspace", "/home/node"];
+    public static readonly IReadOnlyList<string> ScratchVolumePaths = ["/workspace", "/home/node", "/tmp", "/var/tmp"];
 
     public static WorkerContainerSpec Apply(WorkerContainerSpec spec) =>
         spec with

@@ -110,25 +110,36 @@ public sealed class HardeningSet
             o => o.ShouldNotContain(x => x.StartsWith("uid=", StringComparison.Ordinal)));
     }
 
-    [Theory]
-    [InlineData("/tmp")]
-    [InlineData("/var/tmp")]
-    public void WhenRead_TempDirectoriesAreStickyWorldWritableTmpfs(string path)
+    [Fact]
+    public void WhenRead_ManagedSettingsDirectoryIsTheOnlyTmpfs()
     {
         // Arrange
 
         // Act
-        string options = WorkerHardeningSpec.TmpfsMounts[path];
+        IEnumerable<string> paths = WorkerHardeningSpec.TmpfsMounts.Keys;
 
         // Assert
-        options.Split(',').ShouldSatisfyAllConditions(
-            o => o.ShouldContain("mode=1777"),
-            o => o.ShouldContain("nosuid"),
-            o => o.ShouldContain("exec"));
+        paths.ShouldBe([WorkerHardeningSpec.ManagedSettingsDirectory]);
+    }
+
+    [Theory]
+    [InlineData("/tmp")]
+    [InlineData("/var/tmp")]
+    public void WhenRead_TempDirectoryIsAScratchVolumeNotATmpfs(string path)
+    {
+        // Arrange
+
+        // Act
+        IReadOnlyList<string> scratchVolumePaths = WorkerHardeningSpec.ScratchVolumePaths;
+
+        // Assert
+        scratchVolumePaths.ShouldSatisfyAllConditions(
+            () => scratchVolumePaths.ShouldContain(path),
+            () => WorkerHardeningSpec.TmpfsMounts.Keys.ShouldNotContain(path));
     }
 
     [Fact]
-    public void WhenRead_CloneAndHomeAreScratchVolumes()
+    public void WhenRead_CloneHomeAndTempDirectoriesAreScratchVolumes()
     {
         // Arrange
 
@@ -136,7 +147,7 @@ public sealed class HardeningSet
         IReadOnlyList<string> paths = WorkerHardeningSpec.ScratchVolumePaths;
 
         // Assert
-        paths.ShouldBe(["/workspace", "/home/node"], ignoreOrder: true);
+        paths.ShouldBe(["/workspace", "/home/node", "/tmp", "/var/tmp"], ignoreOrder: true);
     }
 
     [Fact]
