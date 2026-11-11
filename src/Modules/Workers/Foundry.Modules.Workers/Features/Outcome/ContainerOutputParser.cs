@@ -598,23 +598,27 @@ internal sealed partial class ContainerOutputParser(ILogger<ContainerOutputParse
 
     private const int MaxBootstrapDetailLength = 500;
 
-    private static ContainerOutputParseResult BootstrapSentinelOrNoResultLine(string log)
+    private static ContainerOutputParseResult BootstrapSentinelOrNoResultLine(string log) =>
+        FindBootstrapSentinel(log) is { } detail
+            ? new ContainerOutputParseResult.WorkerBootstrapFailed(detail)
+            : new ContainerOutputParseResult.NoResultLine();
+
+    /// <summary>
+    /// The first bootstrap-failure sentinel a container printed (the worker entrypoint or the Publisher), capped; or
+    /// <see langword="null"/> when it printed none.
+    /// </summary>
+    internal static string? FindBootstrapSentinel(string log)
     {
         Match match = BootstrapSentinelPattern().Match(log);
 
         if (!match.Success)
         {
-            return new ContainerOutputParseResult.NoResultLine();
+            return null;
         }
 
         string detail = match.Groups["marker"].Value.Trim();
 
-        if (detail.Length > MaxBootstrapDetailLength)
-        {
-            detail = detail[..MaxBootstrapDetailLength];
-        }
-
-        return new ContainerOutputParseResult.WorkerBootstrapFailed(detail);
+        return detail.Length > MaxBootstrapDetailLength ? detail[..MaxBootstrapDetailLength] : detail;
     }
 
     [GeneratedRegex(

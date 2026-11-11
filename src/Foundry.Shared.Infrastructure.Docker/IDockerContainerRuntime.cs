@@ -26,6 +26,11 @@ public interface IDockerContainerRuntime
         ContainersListParameters parameters,
         CancellationToken cancellationToken);
 
+    /// <summary>Waits until the container stops and returns its exit code.</summary>
+    Task<long> WaitAsync(
+        string containerId,
+        CancellationToken cancellationToken);
+
     // Logs
     IAsyncEnumerable<string> StreamLogsAsync(
         string containerId,

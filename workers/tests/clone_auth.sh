@@ -1,16 +1,16 @@
 #!/bin/bash
-# bash tests for make_clone_url and make_askpass_script in entrypoint.sh.
+# bash tests for make_clone_url and make_askpass_script in publisher/publisher.sh.
 # Run with: bash workers/tests/clone_auth.sh
 
 set -euo pipefail
 
-ENTRYPOINT="$(cd "$(dirname "$0")/.." && pwd)/entrypoint.sh"
+PUBLISHER="$(cd "$(dirname "$0")/.." && pwd)/publisher/publisher.sh"
 
 # ---------------------------------------------------------------------------
-# Load only the pure functions from entrypoint.sh by sourcing a filtered copy
+# Load only the pure functions from publisher.sh by sourcing a filtered copy
 # ---------------------------------------------------------------------------
 
-# Extract the two functions from the entrypoint into a temp file and source it.
+# Extract the two functions from the publisher script into a temp file and source it.
 # This avoids executing the top-level logic (env var checks, clone, etc.).
 TMPFILE="$(mktemp)"
 trap 'rm -f "$TMPFILE"' EXIT
@@ -30,7 +30,7 @@ awk '
       }
     }
   }
-' "$ENTRYPOINT" > "$TMPFILE"
+' "$PUBLISHER" > "$TMPFILE"
 
 . "$TMPFILE"
 

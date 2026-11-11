@@ -26,6 +26,10 @@ file static class WorkerRunValueConverters
     internal static readonly ValueConverter<BranchName, string> BranchNameConverter = new(
         bn => bn.Value,
         value => BranchName.From(value));
+
+    internal static readonly ValueConverter<CommitSha, string> CommitShaConverter = new(
+        sha => sha.Value,
+        value => CommitSha.From(value));
 }
 
 file static class RunVerdictValueConverters
@@ -75,6 +79,7 @@ public sealed class WorkerRunConfiguration : IEntityTypeConfiguration<WorkerRun>
     private const int RoleMaxLength = 50;
     private const int ImageMaxLength = 500;
     private const int VerdictStatusMaxLength = 20;
+    private const int CommitShaMaxLength = 64;
 
     public void Configure(EntityTypeBuilder<WorkerRun> builder)
     {
@@ -144,6 +149,20 @@ public sealed class WorkerRunConfiguration : IEntityTypeConfiguration<WorkerRun>
             .HasColumnName("verdict_questions");
 
         builder.Ignore(r => r.Verdict);
+
+        builder.Property(r => r.BaseDefaultBranchHead)
+            .HasConversion(WorkerRunValueConverters.CommitShaConverter)
+            .HasMaxLength(CommitShaMaxLength)
+            .IsUnicode(false)
+            .HasColumnName("base_default_branch_head");
+
+        builder.Property(r => r.BaseRunBranchHead)
+            .HasConversion(WorkerRunValueConverters.CommitShaConverter)
+            .HasMaxLength(CommitShaMaxLength)
+            .IsUnicode(false)
+            .HasColumnName("base_run_branch_head");
+
+        builder.Ignore(r => r.Base);
 
         builder.HasDiscriminator<string>("state")
             .HasValue<StartingRun>("starting")

@@ -31,6 +31,13 @@ public sealed class StartingRun : WorkerRun
         return new StartingRun(workerRunId, issueId, DateTimeOffset.UtcNow, role ?? WorkerRole.Implement, image);
     }
 
+    /// <summary>Records the base the Publisher prepared for the run (ADR 0100); later states carry it.</summary>
+    public void RecordPreparedBase(RunBase runBase)
+    {
+        ArgumentNullException.ThrowIfNull(runBase);
+        RecordBase(runBase);
+    }
+
     public ActiveRun Activate(
         ContainerId containerId,
         BranchName? branchName,

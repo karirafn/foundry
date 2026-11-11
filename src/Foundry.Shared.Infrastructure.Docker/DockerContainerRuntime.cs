@@ -94,6 +94,17 @@ internal sealed class DockerContainerRuntime(
             cancellationToken);
     }
 
+    public async Task<long> WaitAsync(
+        string containerId,
+        CancellationToken cancellationToken)
+    {
+        ContainerWaitResponse response = await containerOperations.WaitContainerAsync(
+            containerId,
+            cancellationToken);
+
+        return response.StatusCode;
+    }
+
     public async IAsyncEnumerable<string> StreamLogsAsync(
         string containerId,
         [EnumeratorCancellation] CancellationToken cancellationToken)

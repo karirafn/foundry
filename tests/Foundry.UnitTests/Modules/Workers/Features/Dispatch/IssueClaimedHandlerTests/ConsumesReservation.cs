@@ -14,6 +14,7 @@ using Foundry.Modules.Workers.Features.ContainerSpec;
 using Foundry.Modules.Workers.Features.Dispatch;
 using Foundry.Modules.Workers.Features.Roles;
 using Foundry.Modules.Workers.Features.Orchestration;
+using Foundry.Modules.Workers.Features.Publisher;
 using Foundry.Shared;
 using Foundry.Testing;
 using Foundry.UnitTests.Fakes.Workers;
@@ -60,6 +61,7 @@ public sealed class ConsumesReservation : IAsyncDisposable
         return new IssueClaimedHandler(
             _dbContext,
             _orchestrator,
+            new FakePublisher(),
             new NullDomainEventDispatcher(),
             new StubGlobalSettingsQueries(),
             new StubCredentialQueries(("ANTHROPIC_API_KEY", "test-api-key")),
