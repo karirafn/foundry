@@ -467,6 +467,7 @@ internal sealed partial class GitLabHttpClient(
                     bool threadResolved = note.Resolvable && note.Resolved;
 
                     providerComments.Add(new ProviderComment(
+                        Id: ProviderCommentId.FromProvider(note.Id),
                         Body: TruncateBody(note.Body),
                         AuthorLogin: note.Author?.Username ?? string.Empty,
                         AuthorIsBot: false,
@@ -1086,6 +1087,7 @@ internal sealed partial class GitLabHttpClient(
     private sealed record GitLabDiscussionDto(IReadOnlyList<GitLabNoteDto> Notes);
 
     private sealed record GitLabNoteDto(
+        long? Id,
         string Body,
         bool Resolvable,
         bool Resolved,

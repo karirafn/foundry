@@ -6,6 +6,7 @@ using Foundry.Modules.Monitoring.Features.Eligibility;
 using Foundry.Modules.Monitoring.Features.Polling;
 using Foundry.Modules.Monitoring.Features.Providers;
 using Foundry.Modules.Monitoring.Features.Providers.Checks;
+using Foundry.Modules.Monitoring.Features.Providers.Comments;
 using Foundry.Modules.Monitoring.Features.Webhooks;
 using Foundry.Shared;
 using Foundry.Testing;
@@ -143,6 +144,7 @@ public sealed class NudgeCallCap : IAsyncDisposable
             new NullIntegrationEventDispatcher(),
             new NeverCalledEligibilityEvaluator(),
             new WebhookNudgeQueue(NullLogger<WebhookNudgeQueue>.Instance),
+            new PostedCommentRegistry(_dbContext),
             NullLogger<RepositoryPoller>.Instance);
 
     /// <summary>Targeted listing and checks passes never evaluate eligibility.</summary>

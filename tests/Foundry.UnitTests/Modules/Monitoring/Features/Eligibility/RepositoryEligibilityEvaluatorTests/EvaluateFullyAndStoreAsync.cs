@@ -5,6 +5,7 @@ using Foundry.Modules.Monitoring.Features.CredentialResolution;
 using Foundry.Modules.Monitoring.Features.Eligibility;
 using Foundry.Modules.Monitoring.Features.Providers;
 using Foundry.Modules.Monitoring.Features.Providers.Checks;
+using Foundry.Modules.Monitoring.Features.Providers.Comments;
 using Foundry.Modules.Monitoring.Features.Providers.Feedback;
 using Foundry.Modules.Monitoring.Infrastructure;
 using Foundry.Modules.Monitoring.Infrastructure.GitHub;
@@ -635,6 +636,7 @@ public sealed class EvaluateFullyAndStoreAsync
                 RepositorySlug slug,
                 string pullRequestUrl,
                 DateTimeOffset since,
+                PostedCommentIds postedComments,
                 CancellationToken cancellationToken)
                 => Task.FromResult(Result<ReviewFeedback>.Ok(new ReviewFeedback([], OmittedCommentCount: 0, NewestCommentAt: null)));
 
@@ -738,6 +740,7 @@ public sealed class EvaluateFullyAndStoreAsync
             RepositorySlug slug,
             string pullRequestUrl,
             DateTimeOffset since,
+            PostedCommentIds postedComments,
             CancellationToken cancellationToken)
             => Task.FromResult(Result<ReviewFeedback>.Ok(new ReviewFeedback([], OmittedCommentCount: 0, NewestCommentAt: null)));
 
@@ -820,6 +823,7 @@ public sealed class EvaluateFullyAndStoreAsync
             RepositorySlug slug,
             string pullRequestUrl,
             DateTimeOffset since,
+            PostedCommentIds postedComments,
             CancellationToken cancellationToken)
             => Task.FromResult(Result<ReviewFeedback>.Ok(new ReviewFeedback([], OmittedCommentCount: 0, NewestCommentAt: null)));
 
@@ -904,6 +908,7 @@ public sealed class EvaluateFullyAndStoreAsync
                 RepositorySlug slug,
                 string pullRequestUrl,
                 DateTimeOffset since,
+                PostedCommentIds postedComments,
                 CancellationToken cancellationToken)
                 => Task.FromResult(Result<ReviewFeedback>.Ok(new ReviewFeedback([], OmittedCommentCount: 0, NewestCommentAt: null)));
 

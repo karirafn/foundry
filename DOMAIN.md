@@ -738,7 +738,7 @@ HTTP clients (`GitHubHttpClient`, `GitLabHttpClient`) are pure mappers; they pro
 ## Actionable Feedback
 
 A `ProviderComment` that survives all `ActionableFeedbackPolicy` filters and is included in the `ReviewFeedback` delivered to the worker.
-A comment is actionable when it is human-authored (not a bot, not a system note), created after `FeedbackCutoffAt`, older than the quiet-period boundary (`now - 2 minutes`), and belongs to the newest 50 by `createdAt`.
+A comment is actionable when it is not in the [posted-comment registry](#posted-comment-registry), human-authored (not a bot, not a system note), created after `FeedbackCutoffAt`, older than the quiet-period boundary (`now - 2 minutes`), and belongs to the newest 50 by `createdAt`.
 The policy is provider-agnostic; provider-specific mapping concerns (body truncation, file-path sanitisation) remain in the HTTP clients.
 
 ## Conversation Comment
@@ -750,14 +750,33 @@ Mapped to `ProviderComment` with `Origin = CommentOrigin.Conversation`.
 ## Provider Comment
 
 The internal raw mapping type (`ProviderComment`) produced by each HTTP client before policy filtering.
-Carries `Body`, `AuthorLogin`, `AuthorIsBot`, `IsSystem`, `CreatedAt`, `FilePath`, `Line`, `Origin`, and `ThreadResolved`.
+Carries `Id` (the provider comment ID; absent only when GitHub omits `databaseId`), `Body`, `AuthorLogin`, `AuthorIsBot`, `IsSystem`, `CreatedAt`, `FilePath`, `Line`, `Origin`, and `ThreadResolved`.
 Never crosses a module boundary — only the already-public `ReviewComment` does.
 
 ## Review Summary
 
 A PR review object with a non-empty body, independent of its approval state.
-On GitHub, sourced from `pullRequest.reviews { body submittedAt }` with no state filter — `APPROVED`, `COMMENTED`, and `CHANGES_REQUESTED` reviews are all eligible when they carry a body.
+On GitHub, sourced from `pullRequest.reviews { databaseId body submittedAt }` with no state filter — `APPROVED`, `COMMENTED`, and `CHANGES_REQUESTED` reviews are all eligible when they carry a body.
 Mapped to `ProviderComment` with `Origin = CommentOrigin.ReviewSummary`; `submittedAt` is used as `CreatedAt`.
+
+## Posted-Comment Registry
+
+The IDs of comments Foundry posted through the comment-post operation (`IIssueProvider.PostCommentAsync`), stored per monitored repository in `posted_comments` and keyed by repository and provider comment ID.
+Every comment reader excludes a registered comment **by ID rather than by author**: Foundry posts with the account PAT, so excluding by author would also drop the PAT owner's own replies, and excluding by a body marker would drop a human quoting the comment.
+`ActionableFeedbackPolicy` and the issue-thread reader (`GetIssueFeedbackAsync`) both take the repository's `PostedCommentIds` snapshot, loaded through `PostedCommentRegistry`.
+Matching applies to conversation comments only — the only surface Foundry posts to — because GitHub numbers reviews and review comments independently of issue comments.
+The caller of the comment-post operation records the returned ID with `PostedCommentRegistry.Record`, in the same save as the state change that tracks the post where it can; if that save fails, the comment can be read as feedback at most once.
+
+## Comment Post
+
+`IIssueProvider.PostCommentAsync` posts a body to a pull/merge request conversation or an issue thread (`CommentThread`) using the account PAT and returns the provider's comment ID (`ProviderCommentId`).
+A failure is either `CommentPost.Transient` (5xx, 408, 429, a rate-limited 403, a timeout or connection failure) or `CommentPost.Permanent` (any other 4xx, a blank body, a thread URL without a number); callers retry only transient failures and own the retry policy.
+
+## Issue-Thread Reader
+
+`IIssueProvider.GetIssueFeedbackAsync` returns an issue's own comments created after a cutoff, oldest first, minus the posted-comment registry — on GitHub from the issue-comments REST endpoint, on GitLab from the issue notes endpoint.
+Each `ProviderComment` carries its ID, author, body, creation time and bot/system flags; bot and system comments are kept and flagged so callers decide (GitLab flags system notes, and project/group access-token bot users by their generated username).
+Pull/merge request threads keep using `GetReviewFeedbackAsync`.
 
 ## Revision Context
 

@@ -4,6 +4,7 @@ using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Features.Providers;
 using Foundry.Modules.Monitoring.Features.Providers.Checks;
+using Foundry.Modules.Monitoring.Features.Providers.Comments;
 using ProviderChecks = Foundry.Modules.Monitoring.Features.Providers.Checks.Checks;
 using Foundry.Modules.Monitoring.Features.Providers.Feedback;
 using Foundry.Modules.Monitoring.Features.Providers.Rebase;
@@ -79,6 +80,7 @@ internal sealed partial class GitHubIssueProvider(
         RepositorySlug slug,
         string pullRequestUrl,
         DateTimeOffset since,
+        PostedCommentIds postedComments,
         CancellationToken cancellationToken)
     {
         Result<IReadOnlyList<ProviderComment>> rawResult = await httpClient.GetPullRequestReviewFeedbackAsync(
@@ -90,7 +92,32 @@ internal sealed partial class GitHubIssueProvider(
             return Result<ReviewFeedback>.Fail(error);
         }
 
-        return Result<ReviewFeedback>.Ok(feedbackPolicy.Apply(rawSuccess.Value, since));
+        return Result<ReviewFeedback>.Ok(feedbackPolicy.Apply(rawSuccess.Value, since, postedComments));
+    }
+
+    public async Task<Result<IReadOnlyList<ProviderComment>>> GetIssueFeedbackAsync(
+        RepositorySlug slug,
+        int issueNumber,
+        DateTimeOffset since,
+        PostedCommentIds postedComments,
+        CancellationToken cancellationToken)
+    {
+        Result<IReadOnlyList<ProviderComment>> rawResult = await httpClient.GetIssueCommentsAsync(
+            apiBaseUrl, slug, issueNumber, since, token, cancellationToken);
+
+        return rawResult is Result<IReadOnlyList<ProviderComment>>.Success rawSuccess
+            ? Result<IReadOnlyList<ProviderComment>>.Ok(
+                IssueFeedbackSelection.Apply(rawSuccess.Value, since, postedComments))
+            : rawResult;
+    }
+
+    public Task<Result<ProviderCommentId>> PostCommentAsync(
+        RepositorySlug slug,
+        CommentThread thread,
+        string body,
+        CancellationToken cancellationToken)
+    {
+        return httpClient.PostIssueCommentAsync(apiBaseUrl, slug, thread, body, token, cancellationToken);
     }
 
     public async Task<Result<BranchProtection>> GetBranchProtectionAsync(

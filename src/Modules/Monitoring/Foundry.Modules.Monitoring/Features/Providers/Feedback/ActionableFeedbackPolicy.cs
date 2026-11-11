@@ -1,4 +1,5 @@
 using Foundry.Modules.Monitoring.Contracts;
+using Foundry.Modules.Monitoring.Features.Providers.Comments;
 
 namespace Foundry.Modules.Monitoring.Features.Providers.Feedback;
 
@@ -8,12 +9,16 @@ internal sealed class ActionableFeedbackPolicy(TimeProvider timeProvider)
     internal static readonly TimeSpan QuietPeriod = TimeSpan.FromMinutes(2);
     private const int MaxComments = 50;
 
-    public ReviewFeedback Apply(IReadOnlyList<ProviderComment> comments, DateTimeOffset since)
+    public ReviewFeedback Apply(
+        IReadOnlyList<ProviderComment> comments,
+        DateTimeOffset since,
+        PostedCommentIds postedComments)
     {
         DateTimeOffset now = timeProvider.GetUtcNow();
         DateTimeOffset quietCutoff = now - QuietPeriod;
 
         List<ProviderComment> candidates = comments
+            .Where(c => !postedComments.Contains(c))
             .Where(c => !c.IsSystem)
             .Where(c => !c.AuthorIsBot)
             .Where(c => !c.ThreadResolved)
