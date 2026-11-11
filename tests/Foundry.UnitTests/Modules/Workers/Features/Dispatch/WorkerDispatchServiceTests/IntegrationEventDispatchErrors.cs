@@ -47,7 +47,7 @@ public sealed class IntegrationEventDispatchErrors : WorkerDispatchServiceTestBa
         // Arrange — exited with non-zero exit: WorkerRunFailed domain event is raised,
         // WorkerRunFailedBridgeHandler calls DispatchAsync which throws.
         // Because the bridge handler runs inside the TransitionAsync transaction, the throw
-        // rolls back the transaction — state change is reverted (run stays ActiveRun) and
+        // rolls back the transaction — the run stays in publishing (ADR 0100) and
         // the tick propagates the exception rather than silently swallowing it.
         SeedActiveRun("failed-dispatch-error");
         WorkerStatus failedStatus = new(IsRunning: false, ExitCode: 1, FinishedAt: DateTimeOffset.UtcNow);
@@ -59,10 +59,10 @@ public sealed class IntegrationEventDispatchErrors : WorkerDispatchServiceTestBa
         Task act = sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
         await Should.ThrowAsync<InvalidOperationException>(act);
 
-        // Assert — transaction rolled back; run remains ActiveRun (state change was not committed)
+        // Assert — the terminal transition rolled back; the run is still publishing
         await using FoundryDbContext assertDb = CreateDbContext();
         WorkerRun? run = await assertDb.Set<WorkerRun>().SingleOrDefaultAsync(TestContext.Current.CancellationToken);
-        run.ShouldBeOfType<ActiveRun>();
+        run.ShouldBeOfType<PublishingRun>();
     }
 
     [Fact]
@@ -79,10 +79,10 @@ public sealed class IntegrationEventDispatchErrors : WorkerDispatchServiceTestBa
         Task act = sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
         await Should.ThrowAsync<InvalidOperationException>(act);
 
-        // Assert — run stays ActiveRun (transaction was rolled back)
+        // Assert — the terminal transition rolled back; the run is still publishing
         await using FoundryDbContext assertDb = CreateDbContext();
         WorkerRun? run = await assertDb.Set<WorkerRun>().SingleOrDefaultAsync(TestContext.Current.CancellationToken);
-        run.ShouldBeOfType<ActiveRun>();
+        run.ShouldBeOfType<PublishingRun>();
     }
 
     [Fact]

@@ -106,7 +106,8 @@ public sealed class ActiveRun : WorkerRun, ITerminableRun
         RunExit exit,
         string? containerOutput,
         RunVerdict? verdict,
-        RunPullRequestText? pullRequestText)
+        RunPullRequestText? pullRequestText,
+        WorkerRunTranscript? transcript = null)
     {
         ArgumentNullException.ThrowIfNull(exit);
 
@@ -115,7 +116,7 @@ public sealed class ActiveRun : WorkerRun, ITerminableRun
             throw new InvalidOperationException($"Worker run '{Id.Value}' has no branch, so it has nothing to publish.");
         }
 
-        return PublishingRun.FromActive(this, branchName, exit, containerOutput, verdict, pullRequestText);
+        return PublishingRun.FromActive(this, branchName, exit, containerOutput, verdict, pullRequestText, transcript);
     }
 
     public CompletedRun Complete(

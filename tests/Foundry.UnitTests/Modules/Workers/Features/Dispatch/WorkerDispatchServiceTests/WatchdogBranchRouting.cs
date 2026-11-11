@@ -143,7 +143,7 @@ public sealed class WatchdogBranchRouting : WorkerDispatchServiceTestBase
     }
 
     [Fact]
-    public async Task WhenOrphanReconcileAndCommitsCheckFails_RunRemainsActive()
+    public async Task WhenOrphanReconcileAndCommitsCheckFails_RunWaitsInPublishing()
     {
         // Arrange — transient provider error: resolver returns Indeterminate → no transition, no event
         SeedActiveRun("container-orphan-check-fails", branchName: "feat/12-orphan-check-fails");
@@ -157,10 +157,10 @@ public sealed class WatchdogBranchRouting : WorkerDispatchServiceTestBase
         // Act
         await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
 
-        // Assert — run stays active and no failed event is dispatched
+        // Assert — the published run waits for a determinate outcome and no failed event is dispatched
         await using FoundryDbContext assertDb = CreateDbContext();
         WorkerRun? run = await assertDb.Set<WorkerRun>().SingleOrDefaultAsync(TestContext.Current.CancellationToken);
-        run.ShouldBeOfType<ActiveRun>();
+        run.ShouldBeOfType<PublishingRun>();
         capturingDispatcher.Captured.OfType<WorkerRunFailed>().ShouldBeEmpty();
     }
 
@@ -211,7 +211,7 @@ public sealed class WatchdogBranchRouting : WorkerDispatchServiceTestBase
     }
 
     [Fact]
-    public async Task WhenContainerNotFoundDuringMonitoringAndCommitsCheckFails_RunRemainsActive()
+    public async Task WhenContainerNotFoundDuringMonitoringAndCommitsCheckFails_RunWaitsInPublishing()
     {
         // Arrange — transient provider error: resolver returns Indeterminate → no transition, no event
         SeedActiveRun("container-missing-check-fails", branchName: "feat/15-missing-check-fails");
@@ -225,10 +225,10 @@ public sealed class WatchdogBranchRouting : WorkerDispatchServiceTestBase
         // Act
         await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
 
-        // Assert — run stays active and no failed event is dispatched
+        // Assert — the published run waits for a determinate outcome and no failed event is dispatched
         await using FoundryDbContext assertDb = CreateDbContext();
         WorkerRun? run = await assertDb.Set<WorkerRun>().SingleOrDefaultAsync(TestContext.Current.CancellationToken);
-        run.ShouldBeOfType<ActiveRun>();
+        run.ShouldBeOfType<PublishingRun>();
         capturingDispatcher.Captured.OfType<WorkerRunFailed>().ShouldBeEmpty();
     }
 

@@ -249,7 +249,7 @@ public sealed class PostExitDiscovery : WorkerDispatchServiceTestBase
     }
 
     [Fact]
-    public async Task WhenGetBranchCommitSummaryReturnsFailure_RunRemainsActive()
+    public async Task WhenGetBranchCommitSummaryReturnsFailure_RunWaitsInPublishing()
     {
         // Arrange
         SeedActiveRun("container-commits-check-failure");
@@ -263,7 +263,7 @@ public sealed class PostExitDiscovery : WorkerDispatchServiceTestBase
         // Assert
         await using FoundryDbContext assertDb = CreateDbContext();
         WorkerRun? run = await assertDb.Set<WorkerRun>().SingleOrDefaultAsync(TestContext.Current.CancellationToken);
-        run.ShouldBeOfType<ActiveRun>();
+        run.ShouldBeOfType<PublishingRun>();
     }
 
     private sealed class FailingCommitsCheckQueries : IPostExitProviderQueries

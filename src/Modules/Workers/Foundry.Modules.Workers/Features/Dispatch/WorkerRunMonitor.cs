@@ -69,7 +69,7 @@ internal sealed class WorkerRunMonitor(
                 {
                     if (activeRun.BranchName is not null)
                     {
-                        await BeginPublishingAsync(activeRun, ExitOf(status: null, RunStopReason.Exited), containerOutput: null, verdict: null, cancellationToken);
+                        await BeginPublishingAsync(activeRun, ExitOf(status: null, RunStopReason.Exited), containerOutput: null, verdict: null, cancellationToken, containerGone: true);
                         runsToRemove.Add(activeRun);
                         break;
                     }
@@ -171,7 +171,7 @@ internal sealed class WorkerRunMonitor(
     {
         if (activeRun.BranchName is not null)
         {
-            await BeginPublishingAsync(activeRun, ExitOf(status: null, RunStopReason.Exited), containerOutput: null, verdict: null, cancellationToken);
+            await BeginPublishingAsync(activeRun, ExitOf(status: null, RunStopReason.Exited), containerOutput: null, verdict: null, cancellationToken, containerGone: true);
             return;
         }
 
@@ -393,26 +393,33 @@ internal sealed class WorkerRunMonitor(
         RunExit exit,
         string? containerOutput,
         RunVerdict? verdict,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        bool containerGone = false)
     {
-        WorkerRunTranscript? transcript = await TryCaptureTranscriptAsync(activeRun, cancellationToken);
+        // A container that is gone has no log left to render.
+        WorkerRunTranscript? transcript = containerGone ? null : await TryCaptureTranscriptAsync(activeRun, cancellationToken);
 
         RunPullRequestText? pullRequestText = exit.FinishedCleanly
             ? RunPullRequestTextReader.Read(containerOutputParser.ParseStructuredOutput(containerOutput))
             : null;
 
-        PublishingRun publishing = activeRun.BeginPublishing(exit, containerOutput, verdict, pullRequestText);
+        PublishingRun publishing = activeRun.BeginPublishing(exit, containerOutput, verdict, pullRequestText, transcript);
 
-        // Enqueued before the transition so the outbox harvests it atomically with the state change.
-        await integrationEventDispatcher.DispatchAsync(
-            [new WorkerRunPublishPhaseChanged(activeRun.Id, activeRun.IssueId.Value, WorkerRunPublishPhase.Publishing)],
-            cancellationToken);
-        await dbContext.TransitionAsync(
-            activeRun,
-            publishing,
-            transcript is null ? [] : [transcript],
-            domainEventDispatcher,
-            cancellationToken);
+        // Enqueued before the transition so the outbox harvests it atomically with the state change. It only refreshes the
+        // issue list, so a failed dispatch must not hold the run in Running.
+        try
+        {
+            await integrationEventDispatcher.DispatchAsync(
+                [new WorkerRunPublishPhaseChanged(activeRun.Id, activeRun.IssueId.Value, WorkerRunPublishPhase.Publishing)],
+                cancellationToken);
+        }
+#pragma warning disable CA1031 // The phase change only refreshes the dashboard; the transition must still happen.
+        catch (Exception ex) when (ex is not OperationCanceledException)
+#pragma warning restore CA1031
+        {
+            logger.LogWarning(ex, "Failed to dispatch the publish phase change for WorkerRun {WorkerRunId}.", activeRun.Id);
+        }
+        await dbContext.TransitionAsync(activeRun, publishing, domainEventDispatcher, cancellationToken);
 
         await TryRemoveContainerKeepingHandOffAsync(activeRun, cancellationToken);
 

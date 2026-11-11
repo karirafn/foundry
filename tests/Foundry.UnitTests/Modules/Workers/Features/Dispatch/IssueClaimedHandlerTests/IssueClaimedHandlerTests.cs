@@ -929,26 +929,6 @@ public sealed class HandleAsync : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenGitHubProvider_ContainerSpecHasGhTokenEnvVar()
-    {
-        // Arrange
-        StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c-gh-token");
-        IssueClaimedHandler sut = BuildHandler(
-            orchestrator: orchestrator,
-            repositoryDispatchQueries: StubRepositoryDispatchQueries.WithToken("ghp_test_token"));
-        IssueClaimed @event = BuildEvent(
-            provider: new WorkerProvider.GitHub());
-
-        // Act
-        await sut.HandleAsync(@event, TestContext.Current.CancellationToken);
-
-        // Assert
-        WorkerContainerSpec? spec = orchestrator.LastSpec;
-        spec.ShouldNotBeNull();
-        spec.EnvironmentVariables["GH_TOKEN"].ShouldBe("ghp_test_token");
-    }
-
-    [Fact]
     public async Task WhenGitLabProvider_ContainerSpecHasNoGhTokenEnvVar()
     {
         // Arrange
@@ -969,25 +949,30 @@ public sealed class HandleAsync : IAsyncDisposable
         spec.EnvironmentVariables.ShouldNotContainKey("GH_TOKEN");
     }
 
-    [Fact]
-    public async Task WhenGitLabProvider_ContainerSpecHasGitLabTokenEnvVar()
+    [Theory]
+    [InlineData("github", "ghp_test_token")]
+    [InlineData("gitlab", "glpat_test_token")]
+    public async Task WhenAFullRunIsDispatched_ItsContainerSpecCarriesNoProviderCredential(string provider, string token)
     {
         // Arrange
-        StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c-gl-token");
+        StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c-no-token");
         IssueClaimedHandler sut = BuildHandler(
             orchestrator: orchestrator,
-            repositoryDispatchQueries: StubRepositoryDispatchQueries.WithToken("glpat_test_token"));
-        IssueClaimed @event = BuildEvent(
-            provider: new WorkerProvider.GitLab(),
-            cloneUrl: "https://gitlab.com/owner/repo.git");
+            repositoryDispatchQueries: StubRepositoryDispatchQueries.WithToken(token));
+        IssueClaimed @event = provider == "github"
+            ? BuildEvent(provider: new WorkerProvider.GitHub())
+            : BuildEvent(provider: new WorkerProvider.GitLab(), cloneUrl: "https://gitlab.com/owner/repo.git");
 
         // Act
         await sut.HandleAsync(@event, TestContext.Current.CancellationToken);
 
         // Assert
-        WorkerContainerSpec? spec = orchestrator.LastSpec;
-        spec.ShouldNotBeNull();
-        spec.EnvironmentVariables["GITLAB_TOKEN"].ShouldBe("glpat_test_token");
+        WorkerContainerSpec spec = orchestrator.LastSpec.ShouldNotBeNull();
+        spec.EnvironmentVariables.ShouldSatisfyAllConditions(
+            variables => variables.Keys.ShouldNotContain("GH_TOKEN"),
+            variables => variables.Keys.ShouldNotContain("GITLAB_TOKEN"),
+            variables => variables.Keys.ShouldNotContain("GIT_PAT"),
+            variables => variables.Values.ShouldNotContain(token));
     }
 
     [Fact]
@@ -1751,7 +1736,7 @@ public sealed class HandleAsync : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenPrepared_WorkerMountsTheRunsHandOffVolumeReadOnly()
+    public async Task WhenPrepared_WorkerMountsTheRunsHandOffVolumeWritableForItsRunBundle()
     {
         // Arrange
         StubWorkerOrchestrator orchestrator = new(succeeds: true);
@@ -1763,7 +1748,7 @@ public sealed class HandleAsync : IAsyncDisposable
 
         // Assert
         orchestrator.LastSpec.ShouldNotBeNull().VolumeMounts.ShouldContain(
-            new VolumeMount(WorkerVolumeNames.HandOffVolumeName(runId), WorkerVolumeNames.HandOffContainerPath, ReadOnly: true));
+            new VolumeMount(WorkerVolumeNames.HandOffVolumeName(runId), WorkerVolumeNames.HandOffContainerPath));
     }
 
     [Fact]

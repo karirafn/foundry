@@ -83,7 +83,7 @@ internal sealed class WorkerOutcomeApplier(
     /// <see cref="WorkerRunCompletedEvent"/> carries the publish facts.
     /// </summary>
     public Task ApplyAsync(WorkerOutcome outcome, PublishingRun publishingRun, CancellationToken cancellationToken) =>
-        ApplyCoreAsync(outcome, publishingRun, publishingRun.Verdict, transcript: null, cancellationToken);
+        ApplyCoreAsync(outcome, publishingRun, publishingRun.Verdict, publishingRun.TranscriptForTerminalState(), cancellationToken);
 
     private async Task ApplyCoreAsync<TRun>(
         WorkerOutcome outcome,

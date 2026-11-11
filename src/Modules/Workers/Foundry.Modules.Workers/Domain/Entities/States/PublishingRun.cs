@@ -29,8 +29,9 @@ public sealed class PublishingRun : UnpublishedRun, ITerminableRun
         RunExit exit,
         string? containerOutput,
         RunVerdict? verdict,
-        RunPullRequestText? pullRequestText)
-        : base(active, branchName, exit, containerOutput, pullRequestText)
+        RunPullRequestText? pullRequestText,
+        WorkerRunTranscript? transcript)
+        : base(active, branchName, exit, containerOutput, pullRequestText, transcript)
     {
         RecordVerdict(verdict);
     }
@@ -44,8 +45,9 @@ public sealed class PublishingRun : UnpublishedRun, ITerminableRun
         RunExit exit,
         string? containerOutput,
         RunVerdict? verdict,
-        RunPullRequestText? pullRequestText) =>
-        new(active, branchName, exit, containerOutput, verdict, pullRequestText);
+        RunPullRequestText? pullRequestText,
+        WorkerRunTranscript? transcript) =>
+        new(active, branchName, exit, containerOutput, verdict, pullRequestText, transcript);
 
     internal static PublishingRun FromPublishFailed(PublishFailedRun failed, bool resetAttempts)
     {

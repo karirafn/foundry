@@ -481,6 +481,14 @@ public sealed class UnpublishedRunConfiguration : IEntityTypeConfiguration<Unpub
         builder.Property(r => r.PullRequestSettledAt)
             .HasColumnName("pull_request_settled_at");
 
+        builder.Property(r => r.PendingTranscript)
+            .HasMaxLength(int.MaxValue)
+            .HasColumnType("TEXT")
+            .HasColumnName("pending_transcript");
+
+        builder.Property(r => r.PendingTranscriptCapturedAt)
+            .HasColumnName("pending_transcript_captured_at");
+
         builder.Ignore(r => r.Exit);
         builder.Ignore(r => r.DiscardsAt);
         builder.Ignore(r => r.PullRequestText);

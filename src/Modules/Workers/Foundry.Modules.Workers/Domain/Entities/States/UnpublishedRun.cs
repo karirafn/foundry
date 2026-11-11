@@ -29,7 +29,8 @@ public abstract class UnpublishedRun : WorkerRun, IResolvableRun
         BranchName branchName,
         RunExit exit,
         string? containerOutput,
-        RunPullRequestText? pullRequestText)
+        RunPullRequestText? pullRequestText,
+        WorkerRunTranscript? transcript)
         : base(active.Id, active.IssueId, active.CreatedAt, active.Role, active.Image)
     {
         StartedAt = active.StartedAt;
@@ -43,6 +44,8 @@ public abstract class UnpublishedRun : WorkerRun, IResolvableRun
         ContainerOutput = containerOutput;
         PullRequestSummary = pullRequestText?.Summary;
         PullRequestBody = pullRequestText?.Body;
+        PendingTranscript = transcript?.Transcript;
+        PendingTranscriptCapturedAt = transcript?.CapturedAt;
         RecordBase(active.Base);
     }
 
@@ -91,8 +94,22 @@ public abstract class UnpublishedRun : WorkerRun, IResolvableRun
     /// </summary>
     public DateTimeOffset? PullRequestSettledAt { get; private protected set; }
 
+    /// <summary>
+    /// The Run Transcript captured when the container ended, held on the run until it is terminal: a transcript row is
+    /// keyed to the run row, which every state transition replaces.
+    /// </summary>
+    public string? PendingTranscript { get; private set; }
+
+    public DateTimeOffset? PendingTranscriptCapturedAt { get; private set; }
+
     /// <summary>When an unpublished run's Hand-off volume is deleted and the run discarded.</summary>
     public DateTimeOffset DiscardsAt => ExitedAt + PublishRetryPolicy.HandOffTimeToLive;
+
+    /// <summary>The Run Transcript to store with the terminal state, or <see langword="null"/> when none was captured.</summary>
+    public WorkerRunTranscript? TranscriptForTerminalState() =>
+        PendingTranscript is { } transcript && PendingTranscriptCapturedAt is { } capturedAt
+            ? WorkerRunTranscript.Capture(Id, transcript, capturedAt)
+            : null;
 
     public RunPullRequestText? PullRequestText =>
         PullRequestSummary is null && PullRequestBody is null ? null : new RunPullRequestText(PullRequestSummary, PullRequestBody);
@@ -134,6 +151,8 @@ public abstract class UnpublishedRun : WorkerRun, IResolvableRun
         PublishedCommitSubjects = source.PublishedCommitSubjects;
         PublishedAt = source.PublishedAt;
         PullRequestSettledAt = source.PullRequestSettledAt;
+        PendingTranscript = source.PendingTranscript;
+        PendingTranscriptCapturedAt = source.PendingTranscriptCapturedAt;
         RecordBase(source.Base);
         RecordVerdict(source.Verdict);
         RecordPublishFacts(source.PublishedHead, source.PublishedBranchCommitCount, source.DivergedSideBranch);

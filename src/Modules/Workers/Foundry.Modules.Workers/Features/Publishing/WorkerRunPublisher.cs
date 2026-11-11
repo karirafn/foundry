@@ -80,7 +80,13 @@ internal sealed class WorkerRunPublisher(
     public async Task DiscardAsync(PublishFailedRun failed, CancellationToken cancellationToken)
     {
         FailedRun discarded = failed.Discard();
-        await dbContext.TransitionAsync(failed, discarded, domainEventDispatcher, cancellationToken);
+        WorkerRunTranscript? transcript = failed.TranscriptForTerminalState();
+        await dbContext.TransitionAsync(
+            failed,
+            discarded,
+            transcript is null ? [] : [transcript],
+            domainEventDispatcher,
+            cancellationToken);
         await orchestrator.DeleteHandOffVolumeAsync(failed.Id, cancellationToken);
 
         logger.LogWarning(
