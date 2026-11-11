@@ -15,6 +15,15 @@ internal interface IWorkerOrchestrator
 
     Task StopAndRemoveAsync(string containerId, CancellationToken cancellationToken);
 
+    /// <summary>
+    /// Stops and removes a worker whose run is publishing (ADR 0100): its per-run volumes go with it except the Hand-off
+    /// volume, which holds the Run bundle until the run is published or discarded.
+    /// </summary>
+    Task StopAndRemoveKeepingHandOffAsync(string containerId, CancellationToken cancellationToken);
+
+    /// <summary>Deletes a run's Hand-off volume once nothing needs its Run bundle any more. Best-effort.</summary>
+    Task DeleteHandOffVolumeAsync(WorkerRunId runId, CancellationToken cancellationToken);
+
     Task<WorkerStatusProbe> GetStatusAsync(string containerId, CancellationToken cancellationToken);
 
     IAsyncEnumerable<string> StreamLogsAsync(string containerId, CancellationToken cancellationToken);

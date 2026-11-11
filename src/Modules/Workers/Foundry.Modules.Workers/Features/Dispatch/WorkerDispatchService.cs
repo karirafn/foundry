@@ -61,13 +61,9 @@ internal sealed class WorkerDispatchService(
         ICredentialGate credentialGate =
             scope.ServiceProvider.GetRequiredService<ICredentialGate>();
         WorkerRunMonitor runMonitor = scope.ServiceProvider.GetRequiredService<WorkerRunMonitor>();
-        RunningBranchCompareGate compareGate =
-            scope.ServiceProvider.GetRequiredService<RunningBranchCompareGate>();
 
         List<ActiveRun> activeRuns = await dbContext.Set<ActiveRun>()
             .ToListAsync(cancellationToken);
-
-        compareGate.RetainRuns(activeRuns.Select(r => r.Id).ToList());
 
         int timeoutMinutes = await settingsQueries.GetTimeoutMinutesAsync(cancellationToken);
 

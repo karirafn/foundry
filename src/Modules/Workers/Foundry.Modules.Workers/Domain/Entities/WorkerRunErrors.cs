@@ -15,4 +15,9 @@ internal static class WorkerRunErrors
 
     internal static Error NotCancellable(WorkerRunId id) =>
         new(NotCancellableCode, $"Worker run '{id.Value}' is not running and cannot be cancelled.");
+
+    internal const string NotAwaitingPublishRetryCode = "WorkerRun.NotAwaitingPublishRetry";
+
+    internal static Error NotAwaitingPublishRetry(WorkerRunId id) =>
+        new(NotAwaitingPublishRetryCode, $"Worker run '{id.Value}' is not waiting for a publish retry.");
 }

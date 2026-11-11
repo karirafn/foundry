@@ -12,8 +12,7 @@ internal sealed class WorkerActivityObservedHandler(IWorkerActivityBroadcaster b
         WorkerActivity activity = new(
             WorkerRunId: @event.WorkerRunId,
             IssueId: @event.IssueId.Value,
-            LastActivityAt: @event.LastActivityAt,
-            CommitCount: @event.CommitCount);
+            LastActivityAt: @event.LastActivityAt);
 
         return broadcaster.BroadcastActivityAsync(activity, cancellationToken);
     }

@@ -74,6 +74,25 @@ internal sealed class WorkerOutcomeApplier(
         WorkerRunTranscript? transcript,
         CancellationToken cancellationToken)
     {
+        await ApplyCoreAsync(outcome, activeRun, verdict, transcript, cancellationToken);
+        await TryStopAndRemoveAsync(activeRun.ContainerId.Value, activeRun.Id, cancellationToken);
+    }
+
+    /// <summary>
+    /// Applies the outcome of a run whose commits were published (ADR 0100). Its container is already gone, and its
+    /// <see cref="WorkerRunCompletedEvent"/> carries the publish facts.
+    /// </summary>
+    public Task ApplyAsync(WorkerOutcome outcome, PublishingRun publishingRun, CancellationToken cancellationToken) =>
+        ApplyCoreAsync(outcome, publishingRun, publishingRun.Verdict, transcript: null, cancellationToken);
+
+    private async Task ApplyCoreAsync<TRun>(
+        WorkerOutcome outcome,
+        TRun activeRun,
+        RunVerdict? verdict,
+        WorkerRunTranscript? transcript,
+        CancellationToken cancellationToken)
+        where TRun : WorkerRun, ITerminableRun
+    {
         IReadOnlyCollection<object> alongside = transcript is null ? [] : [transcript];
 
         switch (outcome)
@@ -96,7 +115,8 @@ internal sealed class WorkerOutcomeApplier(
                         completed.BranchName.Value,
                         completed.PullRequestUrl.Value,
                         WorkerRunMergeState.Merged,
-                        RunStartedAt: activeRun.StartedAt)],
+                        RunStartedAt: activeRun.StartedAt,
+                        Publish: PublishFactsOf(activeRun, completed.PullRequestUrl.Value))],
                     activeRun.Id,
                     cancellationToken);
                 await dbContext.TransitionAsync(activeRun, completedRun, alongside, domainEventDispatcher, cancellationToken);
@@ -124,7 +144,8 @@ internal sealed class WorkerOutcomeApplier(
                         review.BranchName.Value,
                         review.PullRequestUrl.Value,
                         WorkerRunMergeState.Open,
-                        RunStartedAt: activeRun.StartedAt)],
+                        RunStartedAt: activeRun.StartedAt,
+                        Publish: PublishFactsOf(activeRun, review.PullRequestUrl.Value))],
                     activeRun.Id,
                     cancellationToken);
                 await dbContext.TransitionAsync(activeRun, reviewRun, alongside, domainEventDispatcher, cancellationToken);
@@ -152,7 +173,8 @@ internal sealed class WorkerOutcomeApplier(
                         unchanged.BranchName.Value,
                         null,
                         WorkerRunMergeState.None,
-                        RunStartedAt: activeRun.StartedAt)],
+                        RunStartedAt: activeRun.StartedAt,
+                        Publish: PublishFactsOf(activeRun, null))],
                     activeRun.Id,
                     cancellationToken);
                 await dbContext.TransitionAsync(activeRun, unchangedRun, alongside, domainEventDispatcher, cancellationToken);
@@ -182,7 +204,8 @@ internal sealed class WorkerOutcomeApplier(
                         RunStartedAt: activeRun.StartedAt,
                         InputRequest: new WorkerInputRequest(
                             [.. needsInput.Questions.Select(q => new InputQuestion(q.Question, q.Context))],
-                            needsInput.BranchHasCommits))],
+                            needsInput.BranchHasCommits),
+                        Publish: PublishFactsOf(activeRun, needsInput.PullRequestUrl?.Value))],
                     activeRun.Id,
                     cancellationToken);
                 await dbContext.TransitionAsync(activeRun, needsInputRun, domainEventDispatcher, cancellationToken);
@@ -265,8 +288,17 @@ internal sealed class WorkerOutcomeApplier(
                 throw new UnreachableException($"Unhandled outcome type {outcome.GetType().Name}");
         }
 
-        await TryStopAndRemoveAsync(activeRun.ContainerId.Value, activeRun.Id, cancellationToken);
     }
+
+    // Only a published run has publish facts; a run resolved straight from its container (a restricted role) has none.
+    private static RunPublishFacts? PublishFactsOf(WorkerRun run, string? pullRequestUrl) =>
+        run is UnpublishedRun unpublished
+            ? new RunPublishFacts(
+                unpublished.PublishedHead?.Value,
+                pullRequestUrl,
+                unpublished.DivergedSideBranch?.Value,
+                unpublished.PublishedBranchCommitCount ?? 0)
+            : null;
 
     private static TriageResult ToTriageResult(TriageVerdict verdict) => verdict switch
     {
@@ -287,7 +319,7 @@ internal sealed class WorkerOutcomeApplier(
     };
 
     private async Task ApplyFailureSideEffectsAsync(
-        ActiveRun activeRun,
+        ITerminableRun activeRun,
         FailureReason failureReason,
         CancellationToken cancellationToken)
     {
@@ -347,7 +379,7 @@ internal sealed class WorkerOutcomeApplier(
     /// can transition the account state and broadcast the dispatch-paused notification.
     /// </summary>
     private async Task PublishAuthFailedIfNeededAsync(
-        ActiveRun activeRun,
+        ITerminableRun activeRun,
         FailureReason failureReason,
         CancellationToken cancellationToken)
     {
@@ -377,7 +409,7 @@ internal sealed class WorkerOutcomeApplier(
     /// transition the account spend state and broadcast the dispatch-paused notification.
     /// </summary>
     private async Task PublishCreditsExhaustedIfNeededAsync(
-        ActiveRun activeRun,
+        ITerminableRun activeRun,
         FailureReason failureReason,
         CancellationToken cancellationToken)
     {

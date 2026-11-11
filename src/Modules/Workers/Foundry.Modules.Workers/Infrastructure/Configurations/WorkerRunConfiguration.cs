@@ -30,6 +30,10 @@ file static class WorkerRunValueConverters
     internal static readonly ValueConverter<CommitSha, string> CommitShaConverter = new(
         sha => sha.Value,
         value => CommitSha.From(value));
+
+    internal static readonly ValueConverter<MonitoredRepositoryId, Guid> MonitoredRepositoryIdConverter = new(
+        id => id.Value,
+        value => MonitoredRepositoryId.From(value));
 }
 
 file static class RunVerdictValueConverters
@@ -164,9 +168,26 @@ public sealed class WorkerRunConfiguration : IEntityTypeConfiguration<WorkerRun>
 
         builder.Ignore(r => r.Base);
 
+        builder.Property(r => r.PublishedHead)
+            .HasConversion(WorkerRunValueConverters.CommitShaConverter)
+            .HasMaxLength(CommitShaMaxLength)
+            .IsUnicode(false)
+            .HasColumnName("published_head");
+
+        builder.Property(r => r.PublishedBranchCommitCount)
+            .HasColumnName("published_branch_commit_count");
+
+        builder.Property(r => r.DivergedSideBranch)
+            .HasConversion(WorkerRunValueConverters.BranchNameConverter)
+            .HasMaxLength(WorkerRunValueConverters.BranchNameMaxLength)
+            .IsUnicode(false)
+            .HasColumnName("diverged_side_branch");
+
         builder.HasDiscriminator<string>("state")
             .HasValue<StartingRun>("starting")
             .HasValue<ActiveRun>("active")
+            .HasValue<PublishingRun>("publishing")
+            .HasValue<PublishFailedRun>("publish_failed")
             .HasValue<CompletedRun>("completed")
             .HasValue<FailedRun>("failed")
             .IsComplete(true);
@@ -183,15 +204,10 @@ public sealed class WorkerRunConfiguration : IEntityTypeConfiguration<WorkerRun>
 public sealed class ActiveRunConfiguration : IEntityTypeConfiguration<ActiveRun>
 {
     private const int ContainerIdMaxLength = 200;
-    private const int LastObservedCommitShaMaxLength = 40;
 
     private static readonly ValueConverter<ContainerId, string> ContainerIdConverter = new(
         id => id.Value,
         value => ContainerId.From(value));
-
-    private static readonly ValueConverter<MonitoredRepositoryId, Guid> MonitoredRepositoryIdConverter = new(
-        id => id.Value,
-        value => MonitoredRepositoryId.From(value));
 
     public void Configure(EntityTypeBuilder<ActiveRun> builder)
     {
@@ -212,20 +228,11 @@ public sealed class ActiveRunConfiguration : IEntityTypeConfiguration<ActiveRun>
             .HasColumnName("branch_name");
 
         builder.Property(r => r.MonitoredRepositoryId)
-            .HasConversion(MonitoredRepositoryIdConverter)
+            .HasConversion(WorkerRunValueConverters.MonitoredRepositoryIdConverter)
             .HasColumnName("monitored_repository_id");
 
         builder.Property(r => r.LastActivityAt)
             .HasColumnName("last_activity_at");
-
-        builder.Property(r => r.LastObservedCommitSha)
-            .HasMaxLength(LastObservedCommitShaMaxLength)
-            .IsUnicode(false)
-            .HasColumnName("last_observed_commit_sha");
-
-        builder.Property(r => r.BranchCommitCount)
-            .HasDefaultValue(0)
-            .HasColumnName("branch_commit_count");
 
         builder.Property(r => r.CancelRequestedAt)
             .HasColumnName(WorkerRunValueConverters.CancelRequestedAtColumn);
@@ -388,5 +395,137 @@ public sealed class FailedRunConfiguration : IEntityTypeConfiguration<FailedRun>
 
             summary.Ignore(s => s.Tokens);
         });
+    }
+}
+
+public sealed class UnpublishedRunConfiguration : IEntityTypeConfiguration<UnpublishedRun>
+{
+    private const int StopReasonMaxLength = 20;
+    private const int PullRequestSummaryMaxLength = 1000;
+
+    private static readonly JsonSerializerOptions SubjectsJsonOptions = new(JsonSerializerDefaults.Web);
+
+    private static readonly ValueConverter<RunStopReason, string> StopReasonConverter = new(
+        reason => ToStored(reason),
+        value => FromStored(value));
+
+    private static readonly ValueConverter<IReadOnlyList<string>, string> SubjectsConverter = new(
+        subjects => JsonSerializer.Serialize(subjects, SubjectsJsonOptions),
+        json => JsonSerializer.Deserialize<List<string>>(json, SubjectsJsonOptions) ?? new List<string>());
+
+    private static readonly ValueComparer<IReadOnlyList<string>> SubjectsComparer = new(
+        (left, right) => left == null ? right == null : right != null && left.SequenceEqual(right),
+        subjects => subjects.Aggregate(0, (hash, subject) => HashCode.Combine(hash, subject)),
+        subjects => subjects.ToList());
+
+    public void Configure(EntityTypeBuilder<UnpublishedRun> builder)
+    {
+        builder.Property(r => r.StartedAt)
+            .HasColumnName("started_at");
+
+        builder.Property(r => r.BranchName)
+            .HasConversion(WorkerRunValueConverters.BranchNameConverter)
+            .HasMaxLength(WorkerRunValueConverters.BranchNameMaxLength)
+            .IsUnicode(false)
+            .HasColumnName("branch_name");
+
+        builder.Property(r => r.MonitoredRepositoryId)
+            .HasConversion(WorkerRunValueConverters.MonitoredRepositoryIdConverter)
+            .HasColumnName("monitored_repository_id");
+
+        builder.Property(r => r.CancelRequestedAt)
+            .HasColumnName(WorkerRunValueConverters.CancelRequestedAtColumn);
+
+        builder.Property(r => r.ExitCode)
+            .HasColumnName("exit_status_code");
+
+        builder.Property(r => r.OomKilled)
+            .HasColumnName("exit_oom_killed");
+
+        builder.Property(r => r.StopReason)
+            .HasConversion(StopReasonConverter)
+            .HasMaxLength(StopReasonMaxLength)
+            .IsUnicode(false)
+            .HasColumnName("stop_reason");
+
+        builder.Property(r => r.ExitedAt)
+            .HasColumnName("exited_at");
+
+        builder.Property(r => r.ContainerOutput)
+            .HasMaxLength(int.MaxValue)
+            .IsUnicode(true)
+            .HasColumnType("TEXT")
+            .HasColumnName("container_output");
+
+        builder.Property(r => r.PullRequestSummary)
+            .HasMaxLength(PullRequestSummaryMaxLength)
+            .HasColumnName("pull_request_summary");
+
+        builder.Property(r => r.PullRequestBody)
+            .HasMaxLength(int.MaxValue)
+            .HasColumnType("TEXT")
+            .HasColumnName("pull_request_body");
+
+        builder.Property(r => r.FailedPublishAttempts)
+            .HasColumnName("failed_publish_attempts");
+
+        builder.Property(r => r.PublishedCommitSubjects)
+            .HasConversion(SubjectsConverter, SubjectsComparer)
+            .HasMaxLength(int.MaxValue)
+            .HasColumnType("TEXT")
+            .HasColumnName("published_commit_subjects");
+
+        builder.Property(r => r.PublishedAt)
+            .HasColumnName("published_at");
+
+        builder.Property(r => r.PullRequestSettledAt)
+            .HasColumnName("pull_request_settled_at");
+
+        builder.Ignore(r => r.Exit);
+        builder.Ignore(r => r.DiscardsAt);
+        builder.Ignore(r => r.PullRequestText);
+    }
+
+    private static string ToStored(RunStopReason reason) => reason switch
+    {
+        RunStopReason.Exited => "exited",
+        RunStopReason.TimedOut => "timed_out",
+        RunStopReason.Cancelled => "cancelled",
+        _ => throw new ArgumentOutOfRangeException(nameof(reason), reason, "Unknown stop reason."),
+    };
+
+    private static RunStopReason FromStored(string value) => value switch
+    {
+        "exited" => RunStopReason.Exited,
+        "timed_out" => RunStopReason.TimedOut,
+        "cancelled" => RunStopReason.Cancelled,
+        _ => throw new InvalidOperationException($"Unknown stored stop reason: {value}"),
+    };
+}
+
+public sealed class PublishingRunConfiguration : IEntityTypeConfiguration<PublishingRun>
+{
+    public void Configure(EntityTypeBuilder<PublishingRun> builder)
+    {
+        builder.Ignore(r => r.HasPublished);
+    }
+}
+
+public sealed class PublishFailedRunConfiguration : IEntityTypeConfiguration<PublishFailedRun>
+{
+    public void Configure(EntityTypeBuilder<PublishFailedRun> builder)
+    {
+        builder.Property(r => r.PublishFailureReason)
+            .HasMaxLength(int.MaxValue)
+            .HasColumnType("TEXT")
+            .HasColumnName("publish_failure_reason");
+
+        builder.Property(r => r.PublishFailedAt)
+            .HasColumnName("publish_failed_at");
+
+        builder.Property(r => r.NextPublishAttemptAt)
+            .HasColumnName("next_publish_attempt_at");
+
+        builder.Ignore(r => r.IsExhausted);
     }
 }

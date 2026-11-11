@@ -3,6 +3,7 @@ using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Workers.Contracts;
 using Foundry.Modules.Workers.Domain.Entities;
 using Foundry.Modules.Workers.Domain.ValueObjects;
+using Foundry.Modules.Workers.Features.Outcome;
 using Foundry.Shared;
 
 using WorkerActivityObservedEvent = Foundry.Modules.Workers.Domain.Events.WorkerActivityObserved;
@@ -11,7 +12,7 @@ using WorkerRunFailedEvent = Foundry.Modules.Workers.Domain.Events.WorkerRunFail
 
 namespace Foundry.Modules.Workers.Domain.Entities.States;
 
-public sealed class ActiveRun : WorkerRun
+public sealed class ActiveRun : WorkerRun, ITerminableRun
 {
     // Private parameterless constructor for EF Core materialization.
     private ActiveRun()
@@ -47,10 +48,6 @@ public sealed class ActiveRun : WorkerRun
 
     public DateTimeOffset? LastActivityAt { get; private set; }
 
-    public string? LastObservedCommitSha { get; private set; }
-
-    public int BranchCommitCount { get; private set; }
-
     /// <summary>
     /// When a user asked to cancel this run. The endpoint only records the request;
     /// <c>WorkerDispatchService</c> remains the single writer of run state and applies it.
@@ -78,19 +75,7 @@ public sealed class ActiveRun : WorkerRun
         }
 
         LastActivityAt = observedAt;
-        AddDomainEvent(new WorkerActivityObservedEvent(Id, IssueId, observedAt, BranchCommitCount));
-    }
-
-    public void RecordBranchCommitCount(int count, string? sha, DateTimeOffset observedAt)
-    {
-        if (count == BranchCommitCount && sha == LastObservedCommitSha)
-        {
-            return;
-        }
-
-        BranchCommitCount = count;
-        LastObservedCommitSha = sha;
-        AddDomainEvent(new WorkerActivityObservedEvent(Id, IssueId, observedAt, count));
+        AddDomainEvent(new WorkerActivityObservedEvent(Id, IssueId, observedAt));
     }
 
     internal static ActiveRun FromStarting(
@@ -111,6 +96,26 @@ public sealed class ActiveRun : WorkerRun
             starting.Image);
         active.RecordBase(starting.Base);
         return active;
+    }
+
+    /// <summary>
+    /// The container ended: Foundry publishes the run's commits before resolving its outcome (ADR 0100). Only a run
+    /// with a branch has commits to publish.
+    /// </summary>
+    public PublishingRun BeginPublishing(
+        RunExit exit,
+        string? containerOutput,
+        RunVerdict? verdict,
+        RunPullRequestText? pullRequestText)
+    {
+        ArgumentNullException.ThrowIfNull(exit);
+
+        if (BranchName is not { } branchName)
+        {
+            throw new InvalidOperationException($"Worker run '{Id.Value}' has no branch, so it has nothing to publish.");
+        }
+
+        return PublishingRun.FromActive(this, branchName, exit, containerOutput, verdict, pullRequestText);
     }
 
     public CompletedRun Complete(

@@ -55,6 +55,37 @@ public sealed class CompletedRun : WorkerRun
     /// </summary>
     public DateTimeOffset? CancelRequestedAt { get; private set; }
 
+    internal static CompletedRun FromPublishing(
+        PublishingRun publishing,
+        int exitCode,
+        BranchName? branchName,
+        PullRequestUrl? pullRequestUrl,
+        RunResultSummary? resultSummary,
+        RunVerdict? verdict,
+        string? containerOutput)
+    {
+        CompletedRun completed = new(
+            publishing.Id,
+            publishing.IssueId,
+            publishing.CreatedAt,
+            exitCode,
+            DateTimeOffset.UtcNow,
+            branchName,
+            pullRequestUrl,
+            resultSummary,
+            publishing.Role,
+            publishing.Image)
+        {
+            CancelRequestedAt = publishing.CancelRequestedAt,
+            ContainerOutput = containerOutput,
+        };
+
+        completed.RecordVerdict(verdict);
+        completed.RecordBase(publishing.Base);
+        completed.RecordPublishFacts(publishing.PublishedHead, publishing.PublishedBranchCommitCount, publishing.DivergedSideBranch);
+        return completed;
+    }
+
     internal static CompletedRun FromActive(
         ActiveRun active,
         int exitCode,

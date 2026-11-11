@@ -8,5 +8,4 @@ namespace Foundry.Modules.Workers.Domain.Events;
 internal sealed record WorkerActivityObserved(
     WorkerRunId WorkerRunId,
     IssueId IssueId,
-    DateTimeOffset LastActivityAt,
-    int CommitCount) : IDomainEvent;
+    DateTimeOffset LastActivityAt) : IDomainEvent;

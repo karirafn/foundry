@@ -29,8 +29,7 @@ internal sealed class WorkerRunMonitor(
     IDomainEventDispatcher domainEventDispatcher,
     WorkerOutcomeResolver resolver,
     WorkerOutcomeApplier outcomeApplier,
-    RunningBranchCompareGate compareGate,
-    IWebhookStatusQueries webhookStatusQueries,
+    IIntegrationEventDispatcher integrationEventDispatcher,
     IPostExitProviderQueries postExitProviderQueries,
     IContainerOutputParser containerOutputParser,
     RunVerdictReader verdictReader,
@@ -68,6 +67,13 @@ internal sealed class WorkerRunMonitor(
 
                 case WorkerStatusProbe.NotFound:
                 {
+                    if (activeRun.BranchName is not null)
+                    {
+                        await BeginPublishingAsync(activeRun, ExitOf(status: null, RunStopReason.Exited), containerOutput: null, verdict: null, cancellationToken);
+                        runsToRemove.Add(activeRun);
+                        break;
+                    }
+
                     WorkerOutcome outcome = await resolver.ResolveAsync(
                         activeRun,
                         status: null,
@@ -123,11 +129,9 @@ internal sealed class WorkerRunMonitor(
         int timeoutMinutes,
         CancellationToken cancellationToken)
     {
-        RunningBranchObservation branchObservation = new(compareGate, webhookStatusQueries);
-
         foreach (ActiveRun activeRun in activeRuns)
         {
-            await MonitorRunAsync(activeRun, timeoutMinutes, cancellationToken, branchObservation: branchObservation);
+            await MonitorRunAsync(activeRun, timeoutMinutes, cancellationToken);
         }
     }
 
@@ -135,8 +139,7 @@ internal sealed class WorkerRunMonitor(
         ActiveRun activeRun,
         int timeoutMinutes,
         CancellationToken cancellationToken,
-        WorkerStatusProbe? knownProbe = null,
-        RunningBranchObservation? branchObservation = null)
+        WorkerStatusProbe? knownProbe = null)
     {
         WorkerStatusProbe statusProbe = knownProbe
             ?? await orchestrator.GetStatusAsync(activeRun.ContainerId.Value, cancellationToken);
@@ -152,7 +155,7 @@ internal sealed class WorkerRunMonitor(
                 return;
 
             case WorkerStatusProbe.Available { Status.IsRunning: true }:
-                await HandleRunningAsync(activeRun, timeoutMinutes, branchObservation, cancellationToken);
+                await HandleRunningAsync(activeRun, timeoutMinutes, cancellationToken);
                 return;
 
             case WorkerStatusProbe.Available available:
@@ -166,6 +169,12 @@ internal sealed class WorkerRunMonitor(
 
     private async Task HandleNotFoundAsync(ActiveRun activeRun, CancellationToken cancellationToken)
     {
+        if (activeRun.BranchName is not null)
+        {
+            await BeginPublishingAsync(activeRun, ExitOf(status: null, RunStopReason.Exited), containerOutput: null, verdict: null, cancellationToken);
+            return;
+        }
+
         WorkerOutcome outcome = await resolver.ResolveAsync(
             activeRun,
             status: null,
@@ -195,7 +204,6 @@ internal sealed class WorkerRunMonitor(
     private async Task HandleRunningAsync(
         ActiveRun activeRun,
         int timeoutMinutes,
-        RunningBranchObservation? branchObservation,
         CancellationToken cancellationToken)
     {
         // A pending cancel request beats the timeout. Only a still-running container is
@@ -214,7 +222,14 @@ internal sealed class WorkerRunMonitor(
 
             string? containerOutput = await TryGetLogsAsync(activeRun, cancellationToken);
 
-            await ApplyTimeoutOutcomeAsync(activeRun, containerOutput, cancellationToken);
+            if (activeRun.BranchName is not null)
+            {
+                await BeginPublishingAsync(activeRun, ExitOf(status: null, RunStopReason.TimedOut), containerOutput, verdict: null, cancellationToken);
+            }
+            else
+            {
+                await ApplyTimeoutOutcomeAsync(activeRun, containerOutput, cancellationToken);
+            }
 
             logger.LogWarning(
                 "Worker run {WorkerRunId} timed out after {TimeoutMinutes} minutes; container stopped.",
@@ -223,7 +238,7 @@ internal sealed class WorkerRunMonitor(
             return;
         }
 
-        await ObserveRunningWorkerAsync(activeRun, branchObservation, cancellationToken);
+        await ObserveRunningWorkerAsync(activeRun, cancellationToken);
     }
 
     private async Task HandleExitedAsync(
@@ -241,6 +256,13 @@ internal sealed class WorkerRunMonitor(
         RunVerdict? verdict = status.ExitCode == 0
             ? verdictReader.Read(activeRun.Role, containerOutput)
             : null;
+
+        // A run with a branch publishes its commits first (ADR 0100); its outcome is resolved once they are on the branch.
+        if (activeRun.BranchName is not null)
+        {
+            await BeginPublishingAsync(activeRun, ExitOf(status, RunStopReason.Exited), containerOutput, verdict, cancellationToken);
+            return;
+        }
 
         WorkerOutcome outcome = await resolver.ResolveAsync(
             activeRun,
@@ -311,6 +333,17 @@ internal sealed class WorkerRunMonitor(
 
         string? containerOutput = await TryGetLogsAsync(activeRun, cancellationToken);
 
+        if (activeRun.BranchName is not null)
+        {
+            // On SIGTERM the worker committed and bundled its work; Foundry publishes it, so Retry continues from it.
+            await BeginPublishingAsync(activeRun, ExitOf(status: null, RunStopReason.Cancelled), containerOutput, verdict: null, cancellationToken);
+            logger.LogWarning(
+                "Worker run {WorkerRunId} cancel requested at {CancelRequestedAt}; container stopped and its commits are being published.",
+                activeRun.Id,
+                activeRun.CancelRequestedAt);
+            return;
+        }
+
         RunResultSummary? summary = containerOutputParser.ParseRunResultSummary(containerOutput);
 
         // A transient merge-request lookup failure is treated as "no PR" (accepted risk): the run may
@@ -335,21 +368,13 @@ internal sealed class WorkerRunMonitor(
             outcome.GetType().Name);
     }
 
-    private async Task ObserveRunningWorkerAsync(
-        ActiveRun activeRun,
-        RunningBranchObservation? branchObservation,
-        CancellationToken cancellationToken)
+    private async Task ObserveRunningWorkerAsync(ActiveRun activeRun, CancellationToken cancellationToken)
     {
         DateTimeOffset now = timeProvider.GetUtcNow();
 
         // Container is provably alive — the caller has already confirmed this via GetStatusAsync.
         // Record activity unconditionally; do not gate on log growth (claude buffers all output until exit).
         activeRun.RecordActivity(now);
-
-        if (branchObservation is null || await branchObservation.ShouldCompareAsync(activeRun, cancellationToken))
-        {
-            await RecordBranchCommitsAsync(activeRun, now, cancellationToken);
-        }
 
         if (activeRun.DomainEvents.Count > 0)
         {
@@ -359,43 +384,63 @@ internal sealed class WorkerRunMonitor(
         }
     }
 
-    private async Task RecordBranchCommitsAsync(
+    /// <summary>
+    /// Moves a run whose container ended into publishing (ADR 0100): its transcript and exit facts are kept on the run,
+    /// and its container is removed while the Hand-off volume with the Run bundle stays for the Publisher.
+    /// </summary>
+    private async Task BeginPublishingAsync(
         ActiveRun activeRun,
-        DateTimeOffset now,
+        RunExit exit,
+        string? containerOutput,
+        RunVerdict? verdict,
         CancellationToken cancellationToken)
     {
-        // A run without a branch (a restricted role) has no commits to observe.
-        if (activeRun.BranchName is not { } branchName)
-        {
-            return;
-        }
+        WorkerRunTranscript? transcript = await TryCaptureTranscriptAsync(activeRun, cancellationToken);
 
-        Result<BranchCommitSummary> commitResult = await postExitProviderQueries.GetBranchCommitSummaryAsync(
-            activeRun.MonitoredRepositoryId,
-            branchName.Value,
+        RunPullRequestText? pullRequestText = exit.FinishedCleanly
+            ? RunPullRequestTextReader.Read(containerOutputParser.ParseStructuredOutput(containerOutput))
+            : null;
+
+        PublishingRun publishing = activeRun.BeginPublishing(exit, containerOutput, verdict, pullRequestText);
+
+        // Enqueued before the transition so the outbox harvests it atomically with the state change.
+        await integrationEventDispatcher.DispatchAsync(
+            [new WorkerRunPublishPhaseChanged(activeRun.Id, activeRun.IssueId.Value, WorkerRunPublishPhase.Publishing)],
+            cancellationToken);
+        await dbContext.TransitionAsync(
+            activeRun,
+            publishing,
+            transcript is null ? [] : [transcript],
+            domainEventDispatcher,
             cancellationToken);
 
-        switch (commitResult)
+        await TryRemoveContainerKeepingHandOffAsync(activeRun, cancellationToken);
+
+        logger.LogInformation(
+            "Worker run {WorkerRunId} ended ({StopReason}, exit code {ExitCode}); publishing its commits.",
+            activeRun.Id,
+            exit.StopReason,
+            exit.ExitCode);
+    }
+
+    private RunExit ExitOf(WorkerStatus? status, RunStopReason stopReason) =>
+        new(status?.ExitCode, status?.OomKilled ?? false, stopReason, timeProvider.GetUtcNow());
+
+    private async Task TryRemoveContainerKeepingHandOffAsync(ActiveRun activeRun, CancellationToken cancellationToken)
+    {
+        try
         {
-            case Result<BranchCommitSummary>.Success { Value: BranchCommitSummary summary }:
-                activeRun.RecordBranchCommitCount(summary.CommitCount, summary.LatestSha, now);
-                break;
-
-            case Result<BranchCommitSummary>.Failure { Error: { Kind: ErrorKind.NotFound } }:
-                // Branch is gone — reset the count to 0 so the UI reflects the deleted branch.
-                activeRun.RecordBranchCommitCount(0, null, now);
-                break;
-
-            case Result<BranchCommitSummary>.Failure failure:
-                // Transient provider error: leave the persisted count unchanged.
-                // Do not call RecordBranchCommitCount — the aggregate must not raise a WorkerActivity
-                // broadcast for an error state, and the last known count remains accurate.
-                logger.LogWarning(
-                    "Provider returned a non-NotFound failure for run {WorkerRunId}: {Error}. "
-                    + "Leaving persisted commit count unchanged.",
-                    activeRun.Id,
-                    failure.Error);
-                break;
+            await orchestrator.StopAndRemoveKeepingHandOffAsync(activeRun.ContainerId.Value, cancellationToken);
+        }
+#pragma warning disable CA1031 // Best-effort removal after the run moved to publishing; the orphaned-container reaper removes a leftover.
+        catch (Exception ex) when (ex is not OperationCanceledException)
+#pragma warning restore CA1031
+        {
+            logger.LogWarning(
+                ex,
+                "Failed to remove container {ContainerId} for WorkerRun {WorkerRunId} after it moved to publishing.",
+                activeRun.ContainerId.Value,
+                activeRun.Id);
         }
     }
 
@@ -488,28 +533,5 @@ internal sealed class WorkerRunMonitor(
             + "deferring until next tick.",
             runId,
             containerId);
-    }
-
-    /// <summary>
-    /// Per-pass view of the running-branch compare policy (issue #660): skips the compare for a run whose
-    /// repository has an <c>Active</c> webhook unless a push is pending, so push webhooks replace polling.
-    /// </summary>
-    private sealed class RunningBranchObservation(
-        RunningBranchCompareGate gate,
-        IWebhookStatusQueries webhookStatusQueries)
-    {
-        private readonly Dictionary<MonitoredRepositoryId, bool> _webhookActive = [];
-
-        public async Task<bool> ShouldCompareAsync(ActiveRun run, CancellationToken cancellationToken)
-        {
-            if (!_webhookActive.TryGetValue(run.MonitoredRepositoryId, out bool active))
-            {
-                active = await webhookStatusQueries.IsWebhookActiveAsync(run.MonitoredRepositoryId, cancellationToken);
-                _webhookActive[run.MonitoredRepositoryId] = active;
-            }
-
-            return run.BranchName is { } branchName
-                && gate.ShouldCompare(run.Id, run.MonitoredRepositoryId, branchName.Value, active);
-        }
     }
 }

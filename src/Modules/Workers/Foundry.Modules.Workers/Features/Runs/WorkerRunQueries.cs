@@ -111,6 +111,7 @@ internal sealed class WorkerRunQueries(DbContext db) : IWorkerRunQueries
         {
             CompletedRun completed => completed.ContainerOutput,
             FailedRun failed => failed.ContainerOutput,
+            UnpublishedRun unpublished => unpublished.ContainerOutput,
             _ => null,
         };
 
@@ -123,11 +124,55 @@ internal sealed class WorkerRunQueries(DbContext db) : IWorkerRunQueries
         run switch
         {
             ActiveRun active => MapActive(active),
-            CompletedRun completed => MapCompleted(completed),
-            FailedRun failed => MapFailed(failed),
+            PublishingRun publishing => MapUnpublished(publishing, "publishing", publishRetry: null),
+            PublishFailedRun publishFailed => MapUnpublished(publishFailed, "publish_failed", PublishRetryOf(publishFailed)),
+            CompletedRun completed => MapCompleted(completed) with { Publish = PublishOf(completed, completed.PullRequestUrl?.Value) },
+            FailedRun failed => MapFailed(failed) with { Publish = PublishOf(failed, pullRequestUrl: null) },
             StartingRun starting => MapStarting(starting),
             _ => throw new UnreachableException($"Unknown {nameof(WorkerRun)} subtype: {run.GetType().Name}"),
         };
+
+    private static WorkerRunDetail MapUnpublished(UnpublishedRun run, string state, WorkerRunPublishRetryDetail? publishRetry)
+    {
+        // The result summary is parsed when the outcome is resolved; until then the run shows no telemetry.
+        return new(
+            WorkerRunId: run.Id,
+            IssueId: run.IssueId.Value,
+            Role: run.Role.Name,
+            State: state,
+            FailureCategory: null,
+            FailureSummary: null,
+            ResultText: null,
+            Subtype: null,
+            IsError: null,
+            DurationMs: null,
+            NumTurns: null,
+            TotalCostUsd: null,
+            InputTokens: null,
+            OutputTokens: null,
+            LastActivityAt: null,
+            HasStoredLog: run is { ContainerOutput.Length: > 0 },
+            CancelRequestedAt: run.CancelRequestedAt,
+            Publish: PublishOf(run, pullRequestUrl: null),
+            PublishRetry: publishRetry,
+            DiscardsAt: run.DiscardsAt);
+    }
+
+    private static WorkerRunPublishRetryDetail PublishRetryOf(PublishFailedRun run) =>
+        new(
+            AttemptNumber: run.IsExhausted ? run.FailedPublishAttempts : run.FailedPublishAttempts + 1,
+            MaxAttempts: PublishRetryPolicy.MaxAttempts,
+            NextAttemptAt: run.NextPublishAttemptAt,
+            Reason: run.PublishFailureReason);
+
+    private static WorkerRunPublishDetail? PublishOf(WorkerRun run, string? pullRequestUrl) =>
+        run.PublishedHead is { } head
+            ? new WorkerRunPublishDetail(
+                head.Value,
+                ProviderUrls.CommitUrl(pullRequestUrl, head),
+                pullRequestUrl,
+                run.PublishedBranchCommitCount ?? 0)
+            : null;
 
     private static WorkerRunDetail MapActive(ActiveRun run) =>
         new(
@@ -209,6 +254,42 @@ internal sealed class WorkerRunQueries(DbContext db) : IWorkerRunQueries
             HasStoredLog: false,
             CancelRequestedAt: null);
 
+    public async Task<IReadOnlyDictionary<Guid, WorkerRunPublishPhase>> GetPublishPhasesForIssuesAsync(
+        IReadOnlyCollection<Guid> issueIds,
+        CancellationToken cancellationToken)
+    {
+        if (issueIds.Count == 0)
+        {
+            return new Dictionary<Guid, WorkerRunPublishPhase>();
+        }
+
+        List<IssueId> ids = issueIds.Select(IssueId.From).ToList();
+
+        List<UnpublishedRun> runs = await db.Set<UnpublishedRun>()
+            .AsNoTracking()
+            .Where(r => ids.Contains(r.IssueId))
+            .ToListAsync(cancellationToken);
+
+        // An exhausted publish waits for an operator in Needs attention, so it is no publish phase of work in progress.
+        Dictionary<Guid, WorkerRunPublishPhase> phases = [];
+        foreach (UnpublishedRun run in runs)
+        {
+            WorkerRunPublishPhase? phase = run switch
+            {
+                PublishingRun => WorkerRunPublishPhase.Publishing,
+                PublishFailedRun { IsExhausted: false } => WorkerRunPublishPhase.Retrying,
+                _ => null,
+            };
+
+            if (phase is { } known)
+            {
+                phases[run.IssueId.Value] = known;
+            }
+        }
+
+        return phases;
+    }
+
     public async Task<IReadOnlyCollection<WorkerActivity>> GetActiveRunActivityAsync(
         CancellationToken cancellationToken)
     {
@@ -217,8 +298,7 @@ internal sealed class WorkerRunQueries(DbContext db) : IWorkerRunQueries
             .Select(r => new WorkerActivity(
                 r.Id,
                 r.IssueId.Value,
-                r.LastActivityAt ?? r.StartedAt,
-                r.BranchCommitCount))
+                r.LastActivityAt ?? r.StartedAt))
             .ToListAsync(cancellationToken);
 
         return activities;

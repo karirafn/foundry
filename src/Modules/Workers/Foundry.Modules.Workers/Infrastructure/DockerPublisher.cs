@@ -19,6 +19,9 @@ internal sealed class DockerPublisher(IDockerContainerRuntime runtime, ILogger<D
     /// <summary>Bounds a Prepare that hangs (a stalled provider), so the dispatch fails rather than waiting forever.</summary>
     private static readonly TimeSpan PrepareTimeout = TimeSpan.FromMinutes(15);
 
+    /// <summary>Bounds a Publish that hangs; the attempt fails transiently and is retried with backoff.</summary>
+    private static readonly TimeSpan PublishTimeout = TimeSpan.FromMinutes(15);
+
     public async Task<PrepareOutcome> PrepareAsync(PrepareRequest request, CancellationToken cancellationToken)
     {
         WorkerContainerSpec spec = PublisherContainerSpec.ForPrepare(request);
@@ -29,7 +32,7 @@ internal sealed class DockerPublisher(IDockerContainerRuntime runtime, ILogger<D
             await CreateHandOffVolumeAsync(request.RunId, cancellationToken);
             containerId = await runtime.CreateAndStartAsync(DockerWorkerOrchestrator.ToCreateParameters(spec), cancellationToken);
 
-            long? exitCode = await WaitWithinTimeoutAsync(containerId, cancellationToken);
+            long? exitCode = await WaitWithinTimeoutAsync(containerId, PrepareTimeout, cancellationToken);
 
             if (exitCode is null)
             {
@@ -54,10 +57,46 @@ internal sealed class DockerPublisher(IDockerContainerRuntime runtime, ILogger<D
         }
     }
 
-    private async Task<long?> WaitWithinTimeoutAsync(string containerId, CancellationToken cancellationToken)
+    public async Task<PublishResult> PublishAsync(PublishRequest request, CancellationToken cancellationToken)
+    {
+        WorkerContainerSpec spec = PublisherContainerSpec.ForPublish(request);
+        string? containerId = null;
+
+        try
+        {
+            containerId = await runtime.CreateAndStartAsync(DockerWorkerOrchestrator.ToCreateParameters(spec), cancellationToken);
+
+            long? exitCode = await WaitWithinTimeoutAsync(containerId, PublishTimeout, cancellationToken);
+
+            if (exitCode is null)
+            {
+                return new PublishResult.Failed(
+                    $"The Publisher did not publish the run within {PublishTimeout.TotalMinutes:0} minutes.",
+                    Transient: true);
+            }
+
+            string? log = await runtime.GetAllLogsAsync(containerId, cancellationToken);
+            return PublishOutputParser.Parse(exitCode.Value, log);
+        }
+        catch (DockerApiException ex)
+        {
+            return new PublishResult.Failed(
+                $"The Publisher could not run: {DockerWorkerOrchestrator.RedactDockerError(ex.Message)}",
+                Transient: true);
+        }
+        finally
+        {
+            if (containerId is not null)
+            {
+                await TryRemoveAsync(containerId);
+            }
+        }
+    }
+
+    private async Task<long?> WaitWithinTimeoutAsync(string containerId, TimeSpan limit, CancellationToken cancellationToken)
     {
         using CancellationTokenSource timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        timeout.CancelAfter(PrepareTimeout);
+        timeout.CancelAfter(limit);
 
         try
         {
