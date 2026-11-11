@@ -443,7 +443,7 @@ public sealed class ProcessRebuildAsync
             await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
 
             // Assert — worker build (index 1) must use the tag from DB, not from options
-            sequenced.AllParameters.Count.ShouldBe(3);
+            sequenced.AllParameters.Count.ShouldBe(4);
             ImageBuildParameters workerParams = sequenced.AllParameters[1];
             workerParams.Tags.ShouldContain(dbTag);
         }
@@ -471,11 +471,12 @@ public sealed class ProcessRebuildAsync
             // Act
             await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
 
-            // Assert — base image (Dockerfile.base) must be first; login image must be last
-            sequenced.AllParameters.Count.ShouldBe(3);
+            // Assert — base image (Dockerfile.base) must be first; the Publisher image must be last
+            sequenced.AllParameters.Count.ShouldBe(4);
             sequenced.AllParameters[0].Dockerfile.ShouldBe(WorkerImageRebuildService.BaseDockerfile);
             sequenced.AllParameters[1].Dockerfile.ShouldBe("Dockerfile");
             sequenced.AllParameters[2].Dockerfile.ShouldBe(WorkerImageRebuildService.LoginDockerfile);
+            sequenced.AllParameters[3].Dockerfile.ShouldBe(WorkerImageRebuildService.PublisherDockerfile);
         }
         finally
         {
@@ -560,7 +561,7 @@ public sealed class ProcessRebuildAsync
             await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
 
             // Assert — worker build (index 1) receives INSTALL_DOTNET from config
-            sequenced.AllParameters.Count.ShouldBe(3);
+            sequenced.AllParameters.Count.ShouldBe(4);
             ImageBuildParameters workerParams = sequenced.AllParameters[1];
             workerParams.BuildArgs.ShouldContainKey("INSTALL_DOTNET");
             workerParams.BuildArgs["INSTALL_DOTNET"].ShouldBe("true");
@@ -588,7 +589,7 @@ public sealed class ProcessRebuildAsync
             await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
 
             // Assert — worker build (index 1) receives BASE_IMAGE arg pointing at the base tag
-            sequenced.AllParameters.Count.ShouldBe(3);
+            sequenced.AllParameters.Count.ShouldBe(4);
             ImageBuildParameters workerParams = sequenced.AllParameters[1];
             workerParams.BuildArgs.ShouldContainKey("BASE_IMAGE");
             workerParams.BuildArgs["BASE_IMAGE"].ShouldBe(WorkerImageRebuildService.BaseImageTag);
@@ -618,7 +619,7 @@ public sealed class ProcessRebuildAsync
             await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
 
             // Assert — login image (Dockerfile.login) must follow the worker image build
-            sequenced.AllParameters.Count.ShouldBe(3);
+            sequenced.AllParameters.Count.ShouldBe(4);
             sequenced.AllParameters[2].Dockerfile.ShouldBe(WorkerImageRebuildService.LoginDockerfile);
         }
         finally
@@ -644,7 +645,7 @@ public sealed class ProcessRebuildAsync
             await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
 
             // Assert — login image tag must match the constant used by the login-command query
-            sequenced.AllParameters.Count.ShouldBe(3);
+            sequenced.AllParameters.Count.ShouldBe(4);
             ImageBuildParameters loginParams = sequenced.AllParameters[2];
             loginParams.Tags.ShouldContain(WorkerImageRebuildService.LoginImageName);
         }
@@ -671,7 +672,7 @@ public sealed class ProcessRebuildAsync
             await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
 
             // Assert — login image build receives BASE_IMAGE build arg
-            sequenced.AllParameters.Count.ShouldBe(3);
+            sequenced.AllParameters.Count.ShouldBe(4);
             ImageBuildParameters loginParams = sequenced.AllParameters[2];
             loginParams.BuildArgs.ShouldContainKey("BASE_IMAGE");
             loginParams.BuildArgs["BASE_IMAGE"].ShouldBe(WorkerImageRebuildService.BaseImageTag);
@@ -756,6 +757,90 @@ public sealed class ProcessRebuildAsync
 
             // Assert
             dispatcher.Published[1].ShouldBeOfType<ImageBuildOutcomeFailed>();
+        }
+        finally
+        {
+            Directory.Delete(tempRoot, true);
+        }
+    }
+
+    // Publisher image build tests (ADR 0100)
+
+    [Fact]
+    public async Task WhenBuildSucceeds_BuildsThePublisherImageFromItsDockerfileWithoutBuildArgs()
+    {
+        // Arrange
+        (string contentRoot, string tempRoot) = CreateTempContextTree();
+
+        try
+        {
+            SequencedImageOperations sequenced = new();
+            WorkerImageRebuildService sut = BuildService(
+                sequenced,
+                contentRootPath: contentRoot);
+
+            // Act
+            await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
+
+            // Assert — the token-holding image takes no operator build args
+            ImageBuildParameters publisherParams = sequenced.AllParameters
+                .Where(p => p.Dockerfile == WorkerImageRebuildService.PublisherDockerfile)
+                .ShouldHaveSingleItem();
+            publisherParams.ShouldSatisfyAllConditions(
+                () => publisherParams.Tags.ShouldBe([WorkerImageNames.PublisherImageName]),
+                () => publisherParams.BuildArgs.ShouldBeEmpty());
+        }
+        finally
+        {
+            Directory.Delete(tempRoot, true);
+        }
+    }
+
+    [Fact]
+    public async Task WhenPublisherBuildFails_PublishesOutcomeFailed()
+    {
+        // Arrange — without the Publisher image no worker can start, so the rebuild fails as a whole.
+        (string contentRoot, string tempRoot) = CreateTempContextTree();
+
+        try
+        {
+            CapturingIntegrationEventDispatcher dispatcher = new();
+            SequencedImageOperations sequenced = new(failOnFourthCall: true);
+            WorkerImageRebuildService sut = BuildService(
+                sequenced,
+                dispatcher: dispatcher,
+                contentRootPath: contentRoot);
+
+            // Act
+            await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
+
+            // Assert
+            dispatcher.Published[1].ShouldBeOfType<ImageBuildOutcomeFailed>().ErrorTail.ShouldBe("build 4 failed");
+        }
+        finally
+        {
+            Directory.Delete(tempRoot, true);
+        }
+    }
+
+    [Fact]
+    public async Task WhenLoginBuildFails_DoesNotBuildThePublisherImage()
+    {
+        // Arrange
+        (string contentRoot, string tempRoot) = CreateTempContextTree();
+
+        try
+        {
+            SequencedImageOperations sequenced = new(failOnThirdCall: true);
+            WorkerImageRebuildService sut = BuildService(
+                sequenced,
+                contentRootPath: contentRoot);
+
+            // Act
+            await sut.ProcessRebuildAsync(TestContext.Current.CancellationToken);
+
+            // Assert
+            sequenced.AllParameters.Count.ShouldBe(3);
         }
         finally
         {
@@ -1380,7 +1465,8 @@ public sealed class ProcessRebuildAsync
     private sealed class SequencedImageOperations(
         bool failOnFirstCall = false,
         bool failOnSecondCall = false,
-        bool failOnThirdCall = false) : IImageOperations
+        bool failOnThirdCall = false,
+        bool failOnFourthCall = false) : IImageOperations
     {
         private readonly List<ImageBuildParameters> _allParameters = [];
 
@@ -1399,7 +1485,8 @@ public sealed class ProcessRebuildAsync
 
             bool shouldFail = (failOnFirstCall && callIndex == 0)
                 || (failOnSecondCall && callIndex == 1)
-                || (failOnThirdCall && callIndex == 2);
+                || (failOnThirdCall && callIndex == 2)
+                || (failOnFourthCall && callIndex == 3);
 
             if (shouldFail)
             {

@@ -11,6 +11,7 @@ using Foundry.Modules.Workers.Features.Health;
 using Foundry.Modules.Workers.Features.ImageBuild;
 using Foundry.Modules.Workers.Features.Orchestration;
 using Foundry.Modules.Workers.Features.Outcome;
+using Foundry.Modules.Workers.Features.Publisher;
 using Foundry.Modules.Workers.Features.Roles;
 using Foundry.Modules.Workers.Features.Roles.Models;
 using Foundry.Modules.Workers.Features.Runs;
@@ -54,6 +55,7 @@ public static class WorkersModule
             options.Period = TimeSpan.FromSeconds(HealthCheckPublisherPeriodSeconds));
         services.AddIntegrationEventHandler<DockerAvailabilityChanged, DockerAvailabilityChangedBroadcastHandler>();
         services.AddSingleton<IWorkerOrchestrator, DockerWorkerOrchestrator>();
+        services.AddSingleton<IPublisher, DockerPublisher>();
         services.AddSingleton<IContainerOutputParser, ContainerOutputParser>();
         services.AddWorkerVerdicts();
         services.AddSingleton<IProbeOutcomeClassifier, ProbeOutcomeClassifier>();

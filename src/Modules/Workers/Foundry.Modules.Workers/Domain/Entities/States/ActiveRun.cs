@@ -99,7 +99,7 @@ public sealed class ActiveRun : WorkerRun
         BranchName? branchName,
         MonitoredRepositoryId monitoredRepositoryId)
     {
-        return new ActiveRun(
+        ActiveRun active = new(
             starting.Id,
             starting.IssueId,
             starting.CreatedAt,
@@ -109,6 +109,8 @@ public sealed class ActiveRun : WorkerRun
             DateTimeOffset.UtcNow,
             starting.Role,
             starting.Image);
+        active.RecordBase(starting.Base);
+        return active;
     }
 
     public CompletedRun Complete(

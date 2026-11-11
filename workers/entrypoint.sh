@@ -2,41 +2,6 @@
 set -euo pipefail
 
 # ---------------------------------------------------------------------------
-# make_clone_url <clone_url>
-#
-# Converts a plain HTTPS clone URL into an authenticated URL using the oauth2
-# username scheme understood by both GitHub and GitLab:
-#   https://host/path[.git] → https://oauth2@host/path.git
-#
-# The token is NOT embedded in the URL. GIT_ASKPASS delivers it at clone time.
-# ---------------------------------------------------------------------------
-make_clone_url() {
-    local url="$1"
-    if [[ "$url" != https://* ]]; then
-        echo "ERROR: make_clone_url requires an https:// URL; got: $url" >&2
-        return 1
-    fi
-    # Strip the scheme, insert oauth2@ user, ensure .git suffix
-    local without_scheme="${url#https://}"
-    local with_user="https://oauth2@${without_scheme}"
-    if [[ "$with_user" != *.git ]]; then
-        with_user="${with_user}.git"
-    fi
-    printf '%s' "$with_user"
-}
-
-# ---------------------------------------------------------------------------
-# make_askpass_script
-#
-# Returns a minimal sh script string suitable for use as GIT_ASKPASS.
-# When git invokes the script for the password, it prints $GIT_PAT.
-# Using printf avoids a trailing newline that some git versions misread.
-# ---------------------------------------------------------------------------
-make_askpass_script() {
-    printf '%s' 'printf "%s" "$GIT_PAT"'
-}
-
-# ---------------------------------------------------------------------------
 # fail_bootstrap <stage> <detail>
 #
 # Prints the bootstrap-failure sentinel line to stderr so Foundry's log parser
@@ -213,13 +178,11 @@ prepare_role_verdict_schema() {
 #
 # Resolves the run's capability profile (ADR 0098) — never its role name — into
 # the CAPABILITY_CLAUDE_ARGS array both claude invocations (the initial -p run
-# and the transient-error -c resume) expand verbatim, and the CLONE_DEPTH_ARGS
-# array the clone expands:
-#   full       — --dangerously-skip-permissions; a full clone.
-#   restricted — --restricted --strict-mcp-config, never the permission skip;
-#                a shallow clone of the default branch.  The provider tokens
-#                and the branch are unset so no push credential or branch
-#                reaches the run even if they were set.
+# and the transient-error -c resume) expand verbatim:
+#   full       — --dangerously-skip-permissions.
+#   restricted — --restricted --strict-mcp-config, never the permission skip.
+#                The provider tokens and the branch are unset so no push
+#                credential or branch reaches the run even if they were set.
 #
 # Fails closed: any other value emits the bootstrap-failure sentinel
 # (stage=role) and returns non-zero.
@@ -227,7 +190,6 @@ prepare_role_verdict_schema() {
 prepare_capability_profile() {
     local capability="$1"
     CAPABILITY_CLAUDE_ARGS=()
-    CLONE_DEPTH_ARGS=()
 
     case "$capability" in
         full)
@@ -235,7 +197,6 @@ prepare_capability_profile() {
             ;;
         restricted)
             CAPABILITY_CLAUDE_ARGS=(--restricted --strict-mcp-config)
-            CLONE_DEPTH_ARGS=(--depth 1 --single-branch)
             unset GH_TOKEN GITLAB_TOKEN BRANCH_NAME
             ;;
         *)
@@ -508,7 +469,6 @@ if [[ -z "${ANTHROPIC_API_KEY:-}" ]] && [[ -z "$_cred_dir" || ! -f "$_cred_dir/.
 fi
 unset _cred_dir
 : "${CLONE_URL:?CLONE_URL is required}"
-: "${GIT_PAT:?GIT_PAT is required}"
 : "${WORKER_PROMPT:?WORKER_PROMPT is required}"
 : "${SYSTEM_PROMPT:?SYSTEM_PROMPT is required}"
 : "${ISSUE_NUMBER:?ISSUE_NUMBER is required}"
@@ -541,17 +501,12 @@ if [[ "$sys_prompt_bytes" -ge "$MAX_SYSTEM_PROMPT_BYTES" ]]; then
 fi
 unset sys_prompt_bytes
 
-# Authenticate the clone via GIT_ASKPASS so the token never appears in the
-# clone URL, on a command line, or in git's output.  The clone URL uses the
-# oauth2 username (accepted by both GitHub and GitLab); GIT_ASKPASS delivers
-# the password ($GIT_PAT) when git prompts for credentials.
-CLONE_AUTH_URL="$(make_clone_url "$CLONE_URL")"
-
-ASKPASS_FILE="$(mktemp)"
-# Ensure the temp file is removed on every exit path (including clone failure)
-trap 'rm -f "${ASKPASS_FILE:-}"' EXIT
-printf '%s\n' "#!/bin/sh" "$(make_askpass_script)" > "$ASKPASS_FILE"
-chmod 700 "$ASKPASS_FILE"
+# The worker holds no provider credential (ADR 0100): the Publisher fetched the
+# repository before this container started and left it as a git bundle on the
+# run's Hand-off volume, which is cloned here.  FOUNDRY_HANDOFF_DIR only
+# redirects the volume's mount point for the bats suite.
+readonly HANDOFF_DIR="${FOUNDRY_HANDOFF_DIR:-/handoff}"
+readonly BASE_BUNDLE="$HANDOFF_DIR/in/base.bundle"
 
 # Arm the bootstrap ERR trap before the first bootstrap step.
 # Each step updates BOOTSTRAP_STAGE so the trap reports the correct stage.
@@ -560,20 +515,19 @@ chmod 700 "$ASKPASS_FILE"
 BOOTSTRAP_STAGE="clone"
 trap 'fail_bootstrap "$BOOTSTRAP_STAGE" "bootstrap failed at stage $BOOTSTRAP_STAGE"' ERR
 
-# GIT_ASKPASS is scoped to this one command — not exported — so push falls
-# through to the gh/glab credential helpers set up below.
-GIT_ASKPASS="$ASKPASS_FILE" git clone "${CLONE_DEPTH_ARGS[@]}" "$CLONE_AUTH_URL" "$WORKSPACE_DIR"
+if [[ ! -r "$BASE_BUNDLE" ]]; then
+    echo "ERROR: the base bundle $BASE_BUNDLE is missing; the Publisher did not prepare this run." >&2
+    fail_bootstrap "clone" "the base bundle $BASE_BUNDLE is missing"
+    exit 1
+fi
 
-rm -f "$ASKPASS_FILE"
-unset ASKPASS_FILE
-trap - EXIT
-
-# GIT_PAT is no longer needed after clone — unset it before invoking claude
-# so the token is not visible in the container's environment during the run.
-# Push auth uses GH_TOKEN / GITLAB_TOKEN via the gh/glab credential helpers.
-unset GIT_PAT
-
+# The bundle's HEAD is the default branch, so the clone checks it out.  origin
+# is then pointed at the credential-less clone URL, and origin/HEAD at the
+# default branch, so `git merge origin/HEAD` works without a fetch.
+git clone --quiet "$BASE_BUNDLE" "$WORKSPACE_DIR"
+DEFAULT_BRANCH="$(git -C "$WORKSPACE_DIR" symbolic-ref --short HEAD)"
 git -C "$WORKSPACE_DIR" remote set-url origin "$CLONE_URL"
+git -C "$WORKSPACE_DIR" remote set-head origin "$DEFAULT_BRANCH"
 
 cd "$WORKSPACE_DIR"
 
@@ -705,7 +659,7 @@ is_transient_api_error() {
 }
 
 # Restore the repo and decide on the C# LSP plugin immediately before claude
-# starts: after `unset GIT_PAT` and the gh/glab credential-helper setup, so the
+# starts: after the gh/glab credential-helper setup, so the
 # repo-controlled MSBuild evaluation sees exactly the environment the agent sees.
 readonly CSHARP_LSP_RESTORE_TIMEOUT_SECONDS=300
 readonly CSHARP_LSP_PLUGIN_DIR=/opt/claude-plugins/csharp-lsp

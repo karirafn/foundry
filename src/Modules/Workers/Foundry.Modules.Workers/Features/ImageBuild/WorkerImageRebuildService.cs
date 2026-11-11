@@ -28,6 +28,7 @@ internal sealed class WorkerImageRebuildService(
     internal const string ImageBuildCategory = "image-build";
     internal const string BaseDockerfile = "Dockerfile.base";
     internal const string LoginDockerfile = "Dockerfile.login";
+    internal const string PublisherDockerfile = "publisher/Dockerfile";
 
     private const string DocGenerationEntryAssemblyName = "GetDocument.Insider";
 
@@ -35,6 +36,7 @@ internal sealed class WorkerImageRebuildService(
     // can compose the login command without a cross-module circular dependency.
     internal const string BaseImageTag = WorkerImageNames.BaseImageTag;
     internal const string LoginImageName = WorkerImageNames.LoginImageName;
+    internal const string PublisherImageName = WorkerImageNames.PublisherImageName;
 
     private const int LogTailLines = 200;
     private const string ContextPath = "workers";
@@ -403,10 +405,43 @@ internal sealed class WorkerImageRebuildService(
                     // LastError is already redacted and capped by BuildProgress.Report().
                     errorTail = TruncateTail(loginProgress.LastError);
                 }
+                else
+                {
+                    errorTail = await BuildPublisherImageAsync(tarStream, cancellationToken);
+                }
             }
         }
 
         return errorTail;
+    }
+
+    /// <summary>
+    /// The Publisher image (ADR 0100) every dispatch prepares its run's base with: without it no worker starts, so its
+    /// failure fails the whole rebuild like the worker images'.
+    /// </summary>
+    private async Task<string?> BuildPublisherImageAsync(Stream tarStream, CancellationToken cancellationToken)
+    {
+        tarStream.Seek(0, SeekOrigin.Begin);
+
+        ImageBuildParameters publisherParameters = new()
+        {
+            Tags = [PublisherImageName],
+            BuildArgs = new Dictionary<string, string>(),
+            Dockerfile = PublisherDockerfile,
+        };
+
+        BuildProgress publisherProgress = new(logger);
+
+        await imageOperations.BuildImageFromDockerfileAsync(
+            publisherParameters,
+            tarStream,
+            authConfigs: null,
+            headers: null,
+            publisherProgress,
+            cancellationToken);
+
+        // LastError is already redacted and capped by BuildProgress.Report().
+        return publisherProgress.HasError ? TruncateTail(publisherProgress.LastError) : null;
     }
 
     private async Task<(string? ImageId, DateTimeOffset? CreatedAt)> TryInspectImageAsync(

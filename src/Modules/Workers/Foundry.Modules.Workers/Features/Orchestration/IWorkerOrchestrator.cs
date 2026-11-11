@@ -30,5 +30,6 @@ internal interface IWorkerOrchestrator
 
     Task RemoveContainerAsync(string containerId, CancellationToken cancellationToken);
 
+    /// <summary>Removes every per-run volume (data-root and Hand-off) whose run is not in <paramref name="activeRunIds"/>.</summary>
     Task ReapOrphanedDataRootVolumesAsync(IReadOnlySet<WorkerRunId> activeRunIds, CancellationToken cancellationToken);
 }

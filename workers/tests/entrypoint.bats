@@ -54,6 +54,12 @@ setup() {
     # entrypoint's clone target to a per-test directory the fake git clone creates.
     export FOUNDRY_WORKSPACE_DIR="$BATS_TEST_TMPDIR/workspace"
 
+    # The entrypoint clones the base bundle the Publisher leaves on the Hand-off volume.
+    # Fake-git tests only need it to exist; the bundle tests write a real one.
+    export FOUNDRY_HANDOFF_DIR="$BATS_TEST_TMPDIR/handoff"
+    /bin/mkdir -p "$FOUNDRY_HANDOFF_DIR/in"
+    : > "$FOUNDRY_HANDOFF_DIR/in/base.bundle"
+
     # Inside a live worker the passwd home holds the rootless dockerd's runtime dir, so
     # answer `getent passwd <uid>` with a per-test home (see make_fake_getent).
     make_fake_getent "$BATS_TEST_TMPDIR/passwd-home"
@@ -390,7 +396,6 @@ EOF
     # Minimal required env vars for the entrypoint
     export ANTHROPIC_API_KEY="test-key"
     export CLONE_URL="https://github.com/example/repo"
-    export GIT_PAT="test-pat"
     export WORKER_PROMPT="test-prompt"
     export SYSTEM_PROMPT="test-system"
     export ISSUE_NUMBER="1"
@@ -419,7 +424,6 @@ EOF
 set_required_env() {
     export ANTHROPIC_API_KEY="test-key"
     export CLONE_URL="https://github.com/example/repo"
-    export GIT_PAT="test-pat"
     export WORKER_PROMPT="test-prompt"
     export SYSTEM_PROMPT="test-system"
     export ISSUE_NUMBER="1"
@@ -899,7 +903,6 @@ set_required_env_no_auth() {
     unset ANTHROPIC_API_KEY
     unset CLAUDE_CODE_OAUTH_TOKEN
     export CLONE_URL="https://github.com/example/repo"
-    export GIT_PAT="test-pat"
     export WORKER_PROMPT="test-prompt"
     export SYSTEM_PROMPT="test-system"
     export ISSUE_NUMBER="1"
@@ -1603,7 +1606,6 @@ EOF
     export CLAUDE_CONFIG_DIR="$cred_dir"
     unset ANTHROPIC_API_KEY
     export CLONE_URL="https://github.com/example/repo"
-    export GIT_PAT="test-pat"
     export WORKER_PROMPT="test-prompt"
     export SYSTEM_PROMPT="test-system"
     export ISSUE_NUMBER="1"
@@ -2184,7 +2186,7 @@ EOF
     ! grep -q -- "--plugin-dir /opt/claude-plugins/csharp-lsp" "$BATS_TEST_TMPDIR/claude_args"
 }
 
-@test "csharp lsp entrypoint: the restore runs after GIT_PAT is unset and gh setup, immediately before claude" {
+@test "csharp lsp entrypoint: the restore runs after gh setup, with no GIT_PAT, immediately before claude" {
     set_required_env
     make_fake_git
     make_fake_csharp_ls
@@ -2524,7 +2526,7 @@ FAKE
     [ ! -f "$BATS_TEST_TMPDIR/provider_cli_calls" ]
 }
 
-@test "capability: a restricted run shallow-clones the default branch and switches to no branch" {
+@test "capability: a restricted run clones the base bundle and switches to no branch" {
     set_required_env
     export WORKER_CAPABILITY="restricted"
     export BRANCH_NAME="feat/1-leaked"
@@ -2534,11 +2536,7 @@ FAKE
     run bash "$ENTRYPOINT"
 
     [ "$status" -eq 0 ]
-    local clone
-    clone="$(grep '^clone ' "$BATS_TEST_TMPDIR/git_args")"
-    [[ "$clone" =~ (^| )--depth\ 1( |$) ]]
-    [[ "$clone" =~ (^| )--single-branch( |$) ]]
-    [[ "$clone" != *"--branch"* ]]
+    [ "$(grep '^clone ' "$BATS_TEST_TMPDIR/git_args")" = "clone --quiet $FOUNDRY_HANDOFF_DIR/in/base.bundle $FOUNDRY_WORKSPACE_DIR" ]
     ! grep -q '^switch ' "$BATS_TEST_TMPDIR/git_args"
 }
 
@@ -2569,7 +2567,7 @@ FAKE
     [ "$(sed -n 2p "$BATS_TEST_TMPDIR/claude_args")" = "-c -p test-prompt --dangerously-skip-permissions --output-format stream-json --verbose --max-turns 300 $plugins" ]
 }
 
-@test "capability: a full run keeps its provider token and a full clone" {
+@test "capability: a full run keeps its provider token and clones the base bundle" {
     set_required_env
     export GH_TOKEN="ghp_push"
     make_fake_git_record_args
@@ -2581,7 +2579,7 @@ FAKE
     [ "$status" -eq 0 ]
     grep -q '^GH_TOKEN=ghp_push ' "$BATS_TEST_TMPDIR/claude_env"
     grep -q '^gh auth setup-git' "$BATS_TEST_TMPDIR/provider_cli_calls"
-    ! grep '^clone ' "$BATS_TEST_TMPDIR/git_args" | grep -q -- "--depth"
+    [ "$(grep '^clone ' "$BATS_TEST_TMPDIR/git_args")" = "clone --quiet $FOUNDRY_HANDOFF_DIR/in/base.bundle $FOUNDRY_WORKSPACE_DIR" ]
 }
 
 @test "capability: a missing WORKER_CAPABILITY stops the entrypoint before cloning" {
@@ -2610,4 +2608,142 @@ FAKE
     [[ "$output" == *"FOUNDRY_BOOTSTRAP_FAILED stage=role"* ]]
     [ ! -f "$BATS_TEST_TMPDIR/git_args" ]
     [ ! -f "$BATS_TEST_TMPDIR/claude_called" ]
+}
+
+# ---------------------------------------------------------------------------
+# Base bundle clone tests (ADR 0100)
+#
+# The worker holds no provider credential: it clones the base bundle the
+# Publisher wrote to the Hand-off volume.  These tests run the real git against
+# a real bundle; only claude is faked.
+# ---------------------------------------------------------------------------
+
+# make_base_bundle [run_branch] — writes $FOUNDRY_HANDOFF_DIR/in/base.bundle the
+# way the Publisher does: HEAD and the default branch "main", plus run_branch
+# (one commit ahead) when given.
+make_base_bundle() {
+    local seed="$BATS_TEST_TMPDIR/seed"
+    command git init --quiet -b main "$seed"
+    command git -C "$seed" -c user.name=t -c user.email=t@t commit --quiet --allow-empty -m base
+    local refs=(HEAD refs/heads/main)
+    if [[ -n "${1:-}" ]]; then
+        command git -C "$seed" switch --quiet -c "$1"
+        command git -C "$seed" -c user.name=t -c user.email=t@t commit --quiet --allow-empty -m "work on $1"
+        command git -C "$seed" switch --quiet main
+        refs+=("refs/heads/$1")
+    fi
+    command git -C "$seed" bundle create "$FOUNDRY_HANDOFF_DIR/in/base.bundle" "${refs[@]}" > /dev/null 2>&1
+}
+
+seed_sha() {
+    command git -C "$BATS_TEST_TMPDIR/seed" rev-parse "$1"
+}
+
+workspace_git() {
+    command git -C "$FOUNDRY_WORKSPACE_DIR" "$@"
+}
+
+@test "bundle: the entrypoint clones the base bundle into the workspace" {
+    set_required_env
+    make_base_bundle
+    make_fake_claude
+
+    run bash "$ENTRYPOINT"
+
+    [ "$status" -eq 0 ]
+    [ "$(workspace_git rev-parse HEAD)" = "$(seed_sha main)" ]
+    [ -f "$BATS_TEST_TMPDIR/claude_called" ]
+}
+
+@test "bundle: origin is the credential-less clone URL" {
+    set_required_env
+    make_base_bundle
+    make_fake_claude
+
+    run bash "$ENTRYPOINT"
+
+    [ "$status" -eq 0 ]
+    [ "$(workspace_git remote get-url origin)" = "https://github.com/example/repo" ]
+    [ "$(workspace_git config --get-all remote.origin.url)" = "https://github.com/example/repo" ]
+}
+
+@test "bundle: origin/HEAD points at the default branch, so origin/HEAD merges without a fetch" {
+    set_required_env
+    make_base_bundle
+    make_fake_claude
+
+    run bash "$ENTRYPOINT"
+
+    [ "$status" -eq 0 ]
+    [ "$(workspace_git symbolic-ref refs/remotes/origin/HEAD)" = "refs/remotes/origin/main" ]
+    [ "$(workspace_git rev-parse origin/HEAD)" = "$(seed_sha main)" ]
+}
+
+@test "bundle: an existing run branch in the bundle is checked out" {
+    set_required_env
+    export BRANCH_NAME="feat/1-continue"
+    make_base_bundle "feat/1-continue"
+    make_fake_claude
+
+    run bash "$ENTRYPOINT"
+
+    [ "$status" -eq 0 ]
+    [ "$(workspace_git symbolic-ref --short HEAD)" = "feat/1-continue" ]
+    [ "$(workspace_git rev-parse HEAD)" = "$(seed_sha feat/1-continue)" ]
+}
+
+@test "bundle: a fresh run's branch is created from the default branch" {
+    set_required_env
+    export BRANCH_NAME="feat/1-fresh"
+    make_base_bundle
+    make_fake_claude
+
+    run bash "$ENTRYPOINT"
+
+    [ "$status" -eq 0 ]
+    [ "$(workspace_git symbolic-ref --short HEAD)" = "feat/1-fresh" ]
+    [ "$(workspace_git rev-parse HEAD)" = "$(seed_sha main)" ]
+}
+
+@test "bundle: the entrypoint needs no GIT_PAT and claude never sees one" {
+    set_required_env
+    unset GIT_PAT
+    make_base_bundle
+    make_fake_claude_record_args_and_env_transient_then_success
+
+    run bash "$ENTRYPOINT"
+
+    [ "$status" -eq 0 ]
+    [ "$(wc -l < "$BATS_TEST_TMPDIR/claude_env")" -eq 2 ]
+    [ "$(grep -c ' GIT_PAT=unset ' "$BATS_TEST_TMPDIR/claude_env")" -eq 2 ]
+    ! grep -q 'GIT_PAT' "$ENTRYPOINT"
+}
+
+@test "bundle: a missing base bundle fails bootstrap at stage=clone before claude" {
+    set_required_env
+    rm -f "$FOUNDRY_HANDOFF_DIR/in/base.bundle"
+    make_fake_claude
+
+    run bash "$ENTRYPOINT"
+
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"FOUNDRY_BOOTSTRAP_FAILED stage=clone"* ]]
+    [ ! -f "$BATS_TEST_TMPDIR/claude_called" ]
+}
+
+@test "bundle: a corrupt base bundle fails bootstrap at stage=clone before claude" {
+    set_required_env
+    printf 'not a bundle\n' > "$FOUNDRY_HANDOFF_DIR/in/base.bundle"
+    make_fake_claude
+
+    run bash "$ENTRYPOINT"
+
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"FOUNDRY_BOOTSTRAP_FAILED stage=clone"* ]]
+    [ ! -f "$BATS_TEST_TMPDIR/claude_called" ]
+}
+
+@test "entrypoint names /handoff only as the HANDOFF_DIR default" {
+    [ "$(grep -v '^[[:space:]]*#' "$ENTRYPOINT" | grep -o '/handoff' | wc -l)" -eq 1 ]
+    grep -qx 'readonly HANDOFF_DIR="${FOUNDRY_HANDOFF_DIR:-/handoff}"' "$ENTRYPOINT"
 }

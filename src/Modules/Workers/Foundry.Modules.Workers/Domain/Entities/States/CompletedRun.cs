@@ -81,6 +81,7 @@ public sealed class CompletedRun : WorkerRun
         };
 
         completed.RecordVerdict(verdict);
+        completed.RecordBase(active.Base);
         return completed;
     }
 }
