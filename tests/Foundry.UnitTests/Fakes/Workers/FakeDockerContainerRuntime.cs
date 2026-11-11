@@ -24,6 +24,7 @@ internal sealed class FakeDockerContainerRuntime : IDockerContainerRuntime
     private IList<ContainerListResponse> _listResponse = [];
     private IReadOnlyList<(string Name, IReadOnlyDictionary<string, string> Labels)> _volumeListResponse = [];
     private string? _getLogsResult;
+    private string? _getAllLogsResult;
     private string _execCaptureStdout = "";
     private string? _readFileResult;
     private Queue<string?>? _readFileResults;
@@ -61,6 +62,7 @@ internal sealed class FakeDockerContainerRuntime : IDockerContainerRuntime
     public string? LastStreamLogsContainerId { get; private set; }
     public string? LastGetLogsContainerId { get; private set; }
     public int LastGetLogsTailLines { get; private set; }
+    public string? LastGetAllLogsContainerId { get; private set; }
 
     // ── Scripting fluent API ──────────────────────────────────────────────────
 
@@ -113,6 +115,12 @@ internal sealed class FakeDockerContainerRuntime : IDockerContainerRuntime
     public FakeDockerContainerRuntime WithGetLogsResult(string? result)
     {
         _getLogsResult = result;
+        return this;
+    }
+
+    public FakeDockerContainerRuntime WithGetAllLogsResult(string? result)
+    {
+        _getAllLogsResult = result;
         return this;
     }
 
@@ -231,6 +239,14 @@ internal sealed class FakeDockerContainerRuntime : IDockerContainerRuntime
         LastGetLogsContainerId = containerId;
         LastGetLogsTailLines = tailLines;
         return Task.FromResult(_getLogsResult);
+    }
+
+    public Task<string?> GetAllLogsAsync(
+        string containerId,
+        CancellationToken cancellationToken)
+    {
+        LastGetAllLogsContainerId = containerId;
+        return Task.FromResult(_getAllLogsResult);
     }
 
     public Task CreateVolumeAsync(

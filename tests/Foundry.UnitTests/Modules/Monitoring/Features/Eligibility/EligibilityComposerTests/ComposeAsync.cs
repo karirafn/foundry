@@ -4,6 +4,7 @@ using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Features.Eligibility;
 using Foundry.Modules.Monitoring.Features.Providers;
 using Foundry.Modules.Monitoring.Features.Providers.Checks;
+using Foundry.Modules.Monitoring.Features.Providers.Comments;
 using Foundry.Modules.Monitoring.Features.Providers.Feedback;
 using Foundry.Shared;
 using Foundry.Testing;
@@ -147,7 +148,7 @@ public sealed class ComposeAsync
             => Task.FromResult(Result<PullRequestStatus>.Ok(new PullRequestStatus(false, false)));
 
         public Task<Result<ReviewFeedback>> GetReviewFeedbackAsync(
-            RepositorySlug slug, string pullRequestUrl, DateTimeOffset since, CancellationToken cancellationToken)
+            RepositorySlug slug, string pullRequestUrl, DateTimeOffset since, PostedCommentIds postedComments, CancellationToken cancellationToken)
             => Task.FromResult(Result<ReviewFeedback>.Ok(new ReviewFeedback([], OmittedCommentCount: 0, NewestCommentAt: null)));
 
 

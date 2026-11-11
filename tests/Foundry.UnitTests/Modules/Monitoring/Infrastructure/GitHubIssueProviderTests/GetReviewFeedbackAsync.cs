@@ -3,6 +3,7 @@ using System.Net;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Features.Providers;
+using Foundry.Modules.Monitoring.Features.Providers.Comments;
 using Foundry.Modules.Monitoring.Features.Providers.Feedback;
 using Foundry.Modules.Monitoring.Infrastructure;
 using Foundry.Modules.Monitoring.Infrastructure.GitHub;
@@ -88,6 +89,7 @@ public sealed class GetReviewFeedbackAsync
             ValidSlug,
             ValidPrUrl,
             Since,
+            PostedCommentIds.None,
             CancellationToken.None);
 
         // Assert
@@ -110,6 +112,7 @@ public sealed class GetReviewFeedbackAsync
             ValidSlug,
             ValidPrUrl,
             Since,
+            PostedCommentIds.None,
             CancellationToken.None);
 
         // Assert
@@ -159,6 +162,7 @@ public sealed class GetReviewFeedbackAsync
             ValidSlug,
             ValidPrUrl,
             Since,
+            PostedCommentIds.None,
             CancellationToken.None);
 
         // Assert
@@ -208,11 +212,33 @@ public sealed class GetReviewFeedbackAsync
             ValidSlug,
             ValidPrUrl,
             Since,
+            PostedCommentIds.None,
             CancellationToken.None);
 
         // Assert
         result.IsSuccess.ShouldBeTrue();
         Result<ReviewFeedback>.Success success = result.ShouldBeOfType<Result<ReviewFeedback>.Success>();
         success.Value.Comments.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task WhenCommentIsInPostedRegistry_SkipsIt()
+    {
+        // Arrange — the fixture's conversation comment has databaseId 100
+        string json = BuildGraphQlJson("Foundry's own question", "2026-06-01T00:00:00Z");
+        FakeHandler handler = new(HttpStatusCode.OK, json);
+        GitHubIssueProvider sut = BuildSut(handler);
+        PostedCommentIds registry = new([ProviderCommentId.Create(100).ValueOrThrow()]);
+
+        // Act
+        Result<ReviewFeedback> result = await sut.GetReviewFeedbackAsync(
+            ValidSlug,
+            ValidPrUrl,
+            Since,
+            registry,
+            CancellationToken.None);
+
+        // Assert
+        result.ValueOrThrow().Comments.ShouldBeEmpty();
     }
 }

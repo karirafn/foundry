@@ -259,6 +259,9 @@ public sealed class ReapOrphanedDataRootVolumes
         public Task<string?> GetLogsAsync(string containerId, int tailLines, CancellationToken cancellationToken)
             => _inner.GetLogsAsync(containerId, tailLines, cancellationToken);
 
+        public Task<string?> GetAllLogsAsync(string containerId, CancellationToken cancellationToken)
+            => _inner.GetAllLogsAsync(containerId, cancellationToken);
+
         public Task CreateVolumeAsync(
             VolumesCreateParameters parameters,
             CancellationToken cancellationToken)

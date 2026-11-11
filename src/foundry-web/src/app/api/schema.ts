@@ -491,7 +491,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Gets persisted container log for a failed worker run */
+        /** Gets the stored log of a completed or failed worker run */
         get: operations["GetWorkerRunLog"];
         put?: never;
         post?: never;

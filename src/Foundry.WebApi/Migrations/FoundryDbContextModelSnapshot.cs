@@ -415,6 +415,25 @@ namespace Foundry.WebApi.Migrations
                     b.ToTable("pending_rebases", (string)null);
                 });
 
+            modelBuilder.Entity("Foundry.Modules.Monitoring.Domain.Entities.PostedComment", b =>
+                {
+                    b.Property<Guid>("MonitoredRepositoryId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("monitored_repository_id");
+
+                    b.Property<long>("CommentId")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("comment_id");
+
+                    b.Property<DateTimeOffset>("PostedAt")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("posted_at");
+
+                    b.HasKey("MonitoredRepositoryId", "CommentId");
+
+                    b.ToTable("posted_comments", (string)null);
+                });
+
             modelBuilder.Entity("Foundry.Modules.Settings.Domain.Entities.GlobalSettings", b =>
                 {
                     b.Property<Guid>("Id")
@@ -608,6 +627,29 @@ namespace Foundry.WebApi.Migrations
                     b.HasDiscriminator<string>("state").IsComplete(true).HasValue("WorkerRun");
 
                     b.UseTphMappingStrategy();
+                });
+
+            modelBuilder.Entity("Foundry.Modules.Workers.Domain.Entities.WorkerRunTranscript", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("worker_run_id");
+
+                    b.Property<string>("CapturedAt")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("captured_at");
+
+                    b.Property<string>("Transcript")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("transcript");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CapturedAt");
+
+                    b.ToTable("worker_run_transcripts", (string)null);
                 });
 
             modelBuilder.Entity("Foundry.Shared.Infrastructure.Outbox.OutboxMessage", b =>
@@ -1828,6 +1870,24 @@ namespace Foundry.WebApi.Migrations
                     b.HasOne("Foundry.Modules.Monitoring.Domain.Entities.MonitoredRepository", null)
                         .WithMany()
                         .HasForeignKey("MonitoredRepositoryId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Foundry.Modules.Monitoring.Domain.Entities.PostedComment", b =>
+                {
+                    b.HasOne("Foundry.Modules.Monitoring.Domain.Entities.MonitoredRepository", null)
+                        .WithMany()
+                        .HasForeignKey("MonitoredRepositoryId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Foundry.Modules.Workers.Domain.Entities.WorkerRunTranscript", b =>
+                {
+                    b.HasOne("Foundry.Modules.Workers.Domain.Entities.WorkerRun", null)
+                        .WithOne()
+                        .HasForeignKey("Foundry.Modules.Workers.Domain.Entities.WorkerRunTranscript", "Id")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });

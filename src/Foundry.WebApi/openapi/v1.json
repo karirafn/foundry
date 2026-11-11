@@ -1524,7 +1524,7 @@
         "tags": [
           "Workers"
         ],
-        "summary": "Gets persisted container log for a failed worker run",
+        "summary": "Gets the stored log of a completed or failed worker run",
         "operationId": "GetWorkerRunLog",
         "parameters": [
           {

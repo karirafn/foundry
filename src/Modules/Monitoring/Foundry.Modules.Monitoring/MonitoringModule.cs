@@ -12,6 +12,7 @@ using Foundry.Modules.Monitoring.Features.NamespaceDerivation;
 using Foundry.Modules.Monitoring.Features.Polling;
 using Foundry.Modules.Monitoring.Features.Rebase;
 using Foundry.Modules.Monitoring.Features.Providers;
+using Foundry.Modules.Monitoring.Features.Providers.Comments;
 using Foundry.Modules.Monitoring.Features.Providers.Feedback;
 using Foundry.Modules.Monitoring.Features.RateBudget;
 using Foundry.Modules.Monitoring.Features.Repositories;
@@ -48,6 +49,7 @@ public static class MonitoringModule
         services.TryAddSingleton<TimeProvider>(_ => TimeProvider.System);
         services.TryAddSingleton<ActionableFeedbackPolicy>();
         services.AddScoped<ProviderHostGuard>();
+        services.AddScoped<PostedCommentRegistry>();
 
         services.AddHttpClient<GitHubHttpClient>(client =>
             client.MaxResponseContentBufferSize = MaxResponseContentBufferSize);

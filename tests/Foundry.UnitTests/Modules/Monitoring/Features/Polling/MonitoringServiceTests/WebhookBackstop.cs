@@ -6,6 +6,7 @@ using Foundry.Modules.Monitoring.Features.CredentialResolution;
 using Foundry.Modules.Monitoring.Features.Eligibility;
 using Foundry.Modules.Monitoring.Features.Providers;
 using Foundry.Modules.Monitoring.Features.Providers.Checks;
+using Foundry.Modules.Monitoring.Features.Providers.Comments;
 using Foundry.Modules.Monitoring.Features.Providers.Feedback;
 using Foundry.Modules.Monitoring.Features.Polling;
 using Foundry.Modules.Monitoring.Features.Webhooks;
@@ -524,6 +525,7 @@ public sealed class WebhookBackstop : IAsyncDisposable
             : GitHubCredential.Create("my-org", "ghp_test_token", BaseUrl.Create("https://github.com").ValueOrThrow(), serverToken);
         services.AddScoped<ICredentialResolver>(_ => new StubCredentialResolverWithFixedCredential(credential));
         services.AddSingleton(new WebhookNudgeQueue(NullLogger<WebhookNudgeQueue>.Instance));
+        services.AddScoped<PostedCommentRegistry>();
         services.AddScoped<RepositoryPoller>();
         services.AddScoped<IGlobalSettingsQueries>(_ => new StubSettingsQueries(30));
 

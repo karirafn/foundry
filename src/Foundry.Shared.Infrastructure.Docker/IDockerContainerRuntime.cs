@@ -36,6 +36,11 @@ public interface IDockerContainerRuntime
         int tailLines,
         CancellationToken cancellationToken);
 
+    /// <summary>Reads the container's whole log, not limited to a tail; <c>null</c> when the container is gone.</summary>
+    Task<string?> GetAllLogsAsync(
+        string containerId,
+        CancellationToken cancellationToken);
+
     // Volumes
     Task CreateVolumeAsync(
         VolumesCreateParameters parameters,

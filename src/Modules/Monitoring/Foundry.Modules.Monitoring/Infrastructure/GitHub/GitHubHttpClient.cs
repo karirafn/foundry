@@ -123,6 +123,7 @@ internal sealed partial class GitHubHttpClient(
               }
               reviews(first: 50) {
                 nodes {
+                  databaseId
                   body
                   submittedAt
                   author { login __typename }
@@ -871,6 +872,7 @@ internal sealed partial class GitHubHttpClient(
                 }
 
                 providerComments.Add(new ProviderComment(
+                    Id: ProviderCommentId.FromProvider(comment.DatabaseId),
                     Body: body,
                     AuthorLogin: authorLogin,
                     AuthorIsBot: authorIsBot,
@@ -912,6 +914,7 @@ internal sealed partial class GitHubHttpClient(
             }
 
             providerComments.Add(new ProviderComment(
+                Id: ProviderCommentId.FromProvider(node.DatabaseId),
                 Body: body,
                 AuthorLogin: authorLogin,
                 AuthorIsBot: authorIsBot,
@@ -938,6 +941,7 @@ internal sealed partial class GitHubHttpClient(
             string body = TruncateBody(review.Body);
 
             providerComments.Add(new ProviderComment(
+                Id: ProviderCommentId.FromProvider(review.DatabaseId),
                 Body: body,
                 AuthorLogin: authorLogin,
                 AuthorIsBot: authorIsBot,
@@ -1875,6 +1879,7 @@ internal sealed partial class GitHubHttpClient(
     private sealed record GraphQlReviewConnection(IReadOnlyList<GraphQlReviewNode> Nodes);
 
     private sealed record GraphQlReviewNode(
+        long? DatabaseId,
         string? Body,
         DateTimeOffset? SubmittedAt,
         GraphQlCommentAuthor? Author);

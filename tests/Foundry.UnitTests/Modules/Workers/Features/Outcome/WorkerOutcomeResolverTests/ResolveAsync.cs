@@ -1142,6 +1142,109 @@ public sealed class ResolveAsync
         failure.FailureReason.ShouldBeOfType<FailureReason.WorkerBootstrapFailed>();
     }
 
+    private const string AgentStartedOutputQuotingBootstrapSentinel = """
+        2026-11-01T10:00:01.000000001Z {"type":"system","subtype":"init","model":"claude-opus-5-5"}
+        2026-11-01T10:16:00.000000001Z {"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"t1","content":"ok"}]},"tool_use_result":{"stdout":"not ok 3 managed settings\nFOUNDRY_BOOTSTRAP_FAILED stage=managed-settings detail=managed settings file is missing\n","stderr":""}}
+        """;
+
+    private const string AgentStartedOutput = """
+        2026-11-01T10:00:01.000000001Z {"type":"system","subtype":"init","model":"claude-opus-5-5"}
+        2026-11-01T10:29:00.000000001Z {"type":"assistant","message":{"content":[{"type":"text","text":"running tests"}]}}
+        """;
+
+    [Fact]
+    public async Task WhenAgentStartedAndToolResultQuotesBootstrapSentinel_ReturnsNonZeroExit()
+    {
+        // Arrange
+        WorkerOutcomeResolver sut = BuildResolverWithRealParser(NoMrQueries(hasCommits: false));
+
+        // Act
+        WorkerOutcome outcome = await sut.ResolveAsync(
+            CreateActiveRun(),
+            status: Exited(1),
+            containerOutput: AgentStartedOutputQuotingBootstrapSentinel,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        WorkerOutcome.Failure failure = outcome.ShouldBeOfType<WorkerOutcome.Failure>();
+        failure.FailureReason.ShouldBe(new FailureReason.NonZeroExit(1));
+    }
+
+    [Fact]
+    public async Task WhenAgentStartedAndCrashedWithoutResultLine_ReturnsNonZeroExit()
+    {
+        // Arrange
+        WorkerOutcomeResolver sut = BuildResolverWithRealParser(NoMrQueries(hasCommits: false));
+
+        // Act
+        WorkerOutcome outcome = await sut.ResolveAsync(
+            CreateActiveRun(),
+            status: Exited(134),
+            containerOutput: AgentStartedOutput,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        WorkerOutcome.Failure failure = outcome.ShouldBeOfType<WorkerOutcome.Failure>();
+        failure.FailureReason.ShouldBe(new FailureReason.NonZeroExit(134));
+        failure.FailureReason.Summary.ShouldBe("Non-zero exit code: 134");
+    }
+
+    [Fact]
+    public async Task WhenAgentStartedAndOomKilled_ReturnsOutOfMemoryContainerError()
+    {
+        // Arrange
+        WorkerOutcomeResolver sut = BuildResolverWithRealParser(NoMrQueries(hasCommits: false));
+
+        // Act
+        WorkerOutcome outcome = await sut.ResolveAsync(
+            CreateActiveRun(),
+            status: Exited(137, oomKilled: true),
+            containerOutput: AgentStartedOutput,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        WorkerOutcome.Failure failure = outcome.ShouldBeOfType<WorkerOutcome.Failure>();
+        failure.FailureReason.ShouldBe(new FailureReason.ContainerError("Worker ran out of memory"));
+    }
+
+    [Theory]
+    [InlineData(137)]
+    [InlineData(143)]
+    public async Task WhenAgentStartedAndKilledOutsideFoundry_ReturnsTerminatedContainerError(int exitCode)
+    {
+        // Arrange
+        WorkerOutcomeResolver sut = BuildResolverWithRealParser(NoMrQueries(hasCommits: false));
+
+        // Act
+        WorkerOutcome outcome = await sut.ResolveAsync(
+            CreateActiveRun(),
+            status: Exited(exitCode),
+            containerOutput: AgentStartedOutput,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        WorkerOutcome.Failure failure = outcome.ShouldBeOfType<WorkerOutcome.Failure>();
+        failure.FailureReason.ShouldBe(new FailureReason.ContainerError("Worker container was terminated outside Foundry"));
+    }
+
+    [Fact]
+    public async Task WhenAgentStartedAndContainerNotFound_ReturnsRemovedContainerError()
+    {
+        // Arrange
+        WorkerOutcomeResolver sut = BuildResolverWithRealParser(NoMrQueries(hasCommits: false));
+
+        // Act
+        WorkerOutcome outcome = await sut.ResolveAsync(
+            CreateActiveRun(),
+            status: null,
+            containerOutput: AgentStartedOutput,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        WorkerOutcome.Failure failure = outcome.ShouldBeOfType<WorkerOutcome.Failure>();
+        failure.FailureReason.ShouldBe(new FailureReason.ContainerError("Worker container was removed outside Foundry"));
+    }
+
     [Fact]
     public async Task WhenKilledWithOpenMr_ReturnsReview()
     {

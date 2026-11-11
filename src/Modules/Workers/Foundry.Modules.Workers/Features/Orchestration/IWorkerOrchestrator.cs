@@ -23,6 +23,9 @@ internal interface IWorkerOrchestrator
 
     Task<string?> GetLogsAsync(string containerId, int tailLines, CancellationToken cancellationToken);
 
+    /// <summary>The container's whole redacted log, not limited to a tail; <c>null</c> when the container is gone.</summary>
+    Task<string?> GetFullLogAsync(string containerId, CancellationToken cancellationToken);
+
     Task StopContainerAsync(string containerId, CancellationToken cancellationToken);
 
     Task RemoveContainerAsync(string containerId, CancellationToken cancellationToken);

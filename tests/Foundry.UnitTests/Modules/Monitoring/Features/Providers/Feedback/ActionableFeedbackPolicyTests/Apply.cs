@@ -1,4 +1,8 @@
+using Foundry.Modules.Monitoring.Domain.ValueObjects;
+using Foundry.Modules.Monitoring.Features.Providers.Comments;
 using Foundry.Modules.Monitoring.Features.Providers.Feedback;
+
+using Foundry.Testing;
 
 using Shouldly;
 
@@ -34,7 +38,7 @@ public sealed class Apply
         ActionableFeedbackPolicy sut = BuildSut();
 
         // Act
-        ReviewFeedback result = sut.Apply([oldComment, midComment, newComment], Since);
+        ReviewFeedback result = sut.Apply([oldComment, midComment, newComment], Since, PostedCommentIds.None);
 
         // Assert
         result.NewestCommentAt.ShouldBe(newest);
@@ -47,7 +51,7 @@ public sealed class Apply
         ActionableFeedbackPolicy sut = BuildSut();
 
         // Act
-        ReviewFeedback result = sut.Apply([], Since);
+        ReviewFeedback result = sut.Apply([], Since, PostedCommentIds.None);
 
         // Assert
         result.ShouldSatisfyAllConditions(
@@ -77,7 +81,7 @@ public sealed class Apply
         ActionableFeedbackPolicy sut = BuildSut(fixedNow);
 
         // Act
-        ReviewFeedback result = sut.Apply(comments, since);
+        ReviewFeedback result = sut.Apply(comments, since, PostedCommentIds.None);
 
         // Assert
         result.ShouldSatisfyAllConditions(
@@ -104,7 +108,7 @@ public sealed class Apply
         ActionableFeedbackPolicy sut = BuildSut(fixedNow);
 
         // Act
-        ReviewFeedback result = sut.Apply([comment1, comment2], since);
+        ReviewFeedback result = sut.Apply([comment1, comment2], since, PostedCommentIds.None);
 
         // Assert
         result.Comments.ShouldBeEmpty();
@@ -124,7 +128,7 @@ public sealed class Apply
         ActionableFeedbackPolicy sut = BuildSut();
 
         // Act
-        ReviewFeedback result = sut.Apply([selfComment], Since);
+        ReviewFeedback result = sut.Apply([selfComment], Since, PostedCommentIds.None);
 
         // Assert
         result.Comments.Count.ShouldBe(1);
@@ -144,7 +148,7 @@ public sealed class Apply
         ActionableFeedbackPolicy sut = BuildSut();
 
         // Act
-        ReviewFeedback result = sut.Apply([editedAfterCutoff], Since);
+        ReviewFeedback result = sut.Apply([editedAfterCutoff], Since, PostedCommentIds.None);
 
         // Assert
         result.Comments.ShouldBeEmpty();
@@ -164,7 +168,7 @@ public sealed class Apply
         ActionableFeedbackPolicy sut = BuildSut();
 
         // Act
-        ReviewFeedback result = sut.Apply([atBoundary, beforeBoundary], Since);
+        ReviewFeedback result = sut.Apply([atBoundary, beforeBoundary], Since, PostedCommentIds.None);
 
         // Assert
         result.Comments.ShouldBeEmpty();
@@ -182,7 +186,7 @@ public sealed class Apply
         ActionableFeedbackPolicy sut = BuildSut();
 
         // Act
-        ReviewFeedback result = sut.Apply([afterBoundary], Since);
+        ReviewFeedback result = sut.Apply([afterBoundary], Since, PostedCommentIds.None);
 
         // Assert
         result.Comments.Count.ShouldBe(1);
@@ -202,7 +206,7 @@ public sealed class Apply
         ActionableFeedbackPolicy sut = BuildSut();
 
         // Act
-        ReviewFeedback result = sut.Apply([resolvedThreadComment], Since);
+        ReviewFeedback result = sut.Apply([resolvedThreadComment], Since, PostedCommentIds.None);
 
         // Assert
         result.Comments.ShouldBeEmpty();
@@ -220,7 +224,7 @@ public sealed class Apply
         ActionableFeedbackPolicy sut = BuildSut();
 
         // Act
-        ReviewFeedback result = sut.Apply([botComment], Since);
+        ReviewFeedback result = sut.Apply([botComment], Since, PostedCommentIds.None);
 
         // Assert
         result.Comments.ShouldBeEmpty();
@@ -238,7 +242,7 @@ public sealed class Apply
         ActionableFeedbackPolicy sut = BuildSut();
 
         // Act
-        ReviewFeedback result = sut.Apply([systemNote], Since);
+        ReviewFeedback result = sut.Apply([systemNote], Since, PostedCommentIds.None);
 
         // Assert
         result.Comments.ShouldBeEmpty();
@@ -257,7 +261,7 @@ public sealed class Apply
         ActionableFeedbackPolicy sut = BuildSut();
 
         // Act
-        ReviewFeedback result = sut.Apply([heldNewest, actionable, heldOlder], Since);
+        ReviewFeedback result = sut.Apply([heldNewest, actionable, heldOlder], Since, PostedCommentIds.None);
 
         // Assert
         result.ShouldSatisfyAllConditions(
@@ -274,7 +278,7 @@ public sealed class Apply
         ActionableFeedbackPolicy sut = BuildSut();
 
         // Act
-        ReviewFeedback result = sut.Apply([actionable], Since);
+        ReviewFeedback result = sut.Apply([actionable], Since, PostedCommentIds.None);
 
         // Assert
         result.HeldBackUntil.ShouldBeNull();
@@ -291,7 +295,7 @@ public sealed class Apply
         ActionableFeedbackPolicy sut = BuildSut();
 
         // Act
-        ReviewFeedback result = sut.Apply([bot, system, resolved], Now.AddMinutes(-10));
+        ReviewFeedback result = sut.Apply([bot, system, resolved], Now.AddMinutes(-10), PostedCommentIds.None);
 
         // Assert
         result.HeldBackUntil.ShouldBeNull();
@@ -306,11 +310,11 @@ public sealed class Apply
         ProviderComment heldOlder = new ProviderCommentBuilder().WithCreatedAt(older).WithBody("first").Build();
         ProviderComment heldNewest = new ProviderCommentBuilder().WithCreatedAt(newest).WithBody("second").Build();
 
-        ReviewFeedback first = BuildSut().Apply([heldOlder, heldNewest], Since);
+        ReviewFeedback first = BuildSut().Apply([heldOlder, heldNewest], Since, PostedCommentIds.None);
         DateTimeOffset dueAt = first.HeldBackUntil.ShouldNotBeNull();
 
         // Act
-        ReviewFeedback followUp = BuildSut(dueAt).Apply([heldOlder, heldNewest], Since);
+        ReviewFeedback followUp = BuildSut(dueAt).Apply([heldOlder, heldNewest], Since, PostedCommentIds.None);
 
         // Assert
         followUp.ShouldSatisfyAllConditions(
@@ -318,5 +322,74 @@ public sealed class Apply
             () => followUp.Comments.Select(c => c.Body).ShouldBe(["first", "second"]),
             () => followUp.NewestCommentAt.ShouldBe(newest),
             () => followUp.HeldBackUntil.ShouldBeNull());
+    }
+
+    [Fact]
+    public void WhenCommentIdIsInPostedRegistry_SkipsItWhoeverItsAuthorIs()
+    {
+        // Arrange — Foundry posts with the PAT owner's account, so the registered comment looks human
+        ProviderComment posted = new ProviderCommentBuilder().WithId(500).WithAuthorLogin("octocat").WithBody("posted").WithCreatedAt(Since.AddHours(1)).Build();
+        ProviderComment reply = new ProviderCommentBuilder().WithId(501).WithAuthorLogin("octocat").WithBody("reply").WithCreatedAt(Since.AddHours(2)).Build();
+        PostedCommentIds registry = new([ProviderCommentId.Create(500).ValueOrThrow()]);
+
+        ActionableFeedbackPolicy sut = BuildSut();
+
+        // Act
+        ReviewFeedback result = sut.Apply([posted, reply], Since, registry);
+
+        // Assert
+        result.Comments.Select(c => c.Body).ShouldBe(["reply"]);
+    }
+
+    [Fact]
+    public void WhenPostedCommentIsInsideQuietPeriod_HeldBackUntilIsNull()
+    {
+        // Arrange — a registered comment never becomes actionable, so it must not schedule a follow-up
+        ProviderComment posted = new ProviderCommentBuilder().WithId(500).WithCreatedAt(Now.AddSeconds(-5)).Build();
+        PostedCommentIds registry = new([ProviderCommentId.Create(500).ValueOrThrow()]);
+
+        ActionableFeedbackPolicy sut = BuildSut();
+
+        // Act
+        ReviewFeedback result = sut.Apply([posted], Now.AddMinutes(-10), registry);
+
+        // Assert
+        result.HeldBackUntil.ShouldBeNull();
+    }
+
+    [Theory]
+    [InlineData(nameof(CommentOrigin.ReviewThread))]
+    [InlineData(nameof(CommentOrigin.ReviewSummary))]
+    public void WhenRegisteredIdMatchesCommentOutsideConversation_KeepsIt(string originName)
+    {
+
+        // Arrange — GitHub numbers reviews and review comments apart from issue comments
+        CommentOrigin origin = Enum.Parse<CommentOrigin>(originName);
+        ProviderComment review = new ProviderCommentBuilder().WithId(500).WithOrigin(origin).WithCreatedAt(Since.AddHours(1)).Build();
+        PostedCommentIds registry = new([ProviderCommentId.Create(500).ValueOrThrow()]);
+
+        ActionableFeedbackPolicy sut = BuildSut();
+
+        // Act
+        ReviewFeedback result = sut.Apply([review], Since, registry);
+
+        // Assert
+        result.Comments.Count.ShouldBe(1);
+    }
+
+    [Fact]
+    public void WhenCommentHasNoId_KeepsIt()
+    {
+        // Arrange
+        ProviderComment comment = new ProviderCommentBuilder().WithId(null).WithCreatedAt(Since.AddHours(1)).Build();
+        PostedCommentIds registry = new([ProviderCommentId.Create(500).ValueOrThrow()]);
+
+        ActionableFeedbackPolicy sut = BuildSut();
+
+        // Act
+        ReviewFeedback result = sut.Apply([comment], Since, registry);
+
+        // Assert
+        result.Comments.Count.ShouldBe(1);
     }
 }

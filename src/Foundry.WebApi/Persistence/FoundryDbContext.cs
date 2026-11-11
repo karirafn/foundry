@@ -55,6 +55,7 @@ public sealed class FoundryDbContext(
         modelBuilder.ApplyConfiguration(new CredentialConfiguration(_dataProtectionProvider));
         modelBuilder.ApplyConfiguration(new CredentialNamespaceConfiguration());
         modelBuilder.ApplyConfiguration(new PendingRebaseConfiguration());
+        modelBuilder.ApplyConfiguration(new PostedCommentConfiguration());
 
         modelBuilder.ApplyConfiguration(new GlobalSettingsConfiguration());
 
