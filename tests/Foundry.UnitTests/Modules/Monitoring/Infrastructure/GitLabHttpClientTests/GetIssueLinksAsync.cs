@@ -107,11 +107,12 @@ public sealed class GetIssueLinksAsync
     }
 
     [Fact]
-    public async Task WhenALinkBelongsToAnotherProject_LeavesItOutAndKeepsOneWithoutAProjectId()
+    public async Task WhenALinkBelongsToAnotherProject_LeavesItOutAndDropsOneWithoutAProjectId()
     {
         // Arrange
         // Derived: the docs example element with project_id 5 (a project other than the lookup's 4) on the first
-        // element and no project_id on the third.
+        // element and no project_id on the third; GitLab always sends project_id, so a missing one is not trusted
+        // as same-project.
         string links = """
             [{"iid":14,"project_id":5,"state":"opened","link_type":"relates_to"},
              {"iid":8,"project_id":4,"state":"closed","link_type":"is_blocked_by"},
@@ -125,7 +126,7 @@ public sealed class GetIssueLinksAsync
         // Assert
         IReadOnlyList<IssueReference> references =
             result.ShouldBeOfType<Result<IReadOnlyList<IssueReference>>.Success>().Value;
-        references.Select(reference => reference.Number).ShouldBe([8, 29]);
+        references.Select(reference => reference.Number).ShouldBe([8]);
     }
 
     [Theory]

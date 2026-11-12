@@ -70,7 +70,7 @@ internal sealed partial class GitLabHttpClient
         List<GitLabIssueLinkDto> dtos = JsonSerializer.Deserialize<List<GitLabIssueLinkDto>>(body, JsonOptions) ?? [];
 
         IReadOnlyList<IssueReference> references = dtos
-            .Where(dto => dto.ProjectId is null || dto.ProjectId == projectId)
+            .Where(dto => dto.ProjectId == projectId)
             .Select(dto => (dto.Iid, Relation: RelationOf(dto.LinkType)))
             .Where(link => link.Relation is not null)
             .Select(link => new IssueReference(link.Iid, link.Relation!.Value))
