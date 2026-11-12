@@ -2,6 +2,7 @@ using System.Text.Json.Nodes;
 
 using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Monitoring.Contracts;
+using Foundry.Modules.Workers.Contracts;
 using Foundry.Modules.Workers.Domain.ValueObjects;
 using Foundry.Modules.Workers.Features.ContainerSpec;
 using Foundry.Modules.Workers.Features.Roles;
@@ -266,17 +267,29 @@ public sealed class RepositoryRoles
         string[] required = [.. schema["required"]!.AsArray().Select(node => node!.GetValue<string>())];
         string? conditionalOutcome = schema["if"]?["properties"]?[TriageVerdict.OutcomeProperty]?["const"]?.GetValue<string>();
         string[] conditionallyRequired = [.. schema["then"]!["required"]!.AsArray().Select(node => node!.GetValue<string>())];
+        JsonNode blockedBy = schema["properties"]![TriageVerdict.BlockedByProperty]!;
+        JsonNode blockerProperties = blockedBy["items"]!["properties"]!;
 
         // Assert
         schema.ShouldSatisfyAllConditions(
-            () => outcomes.ShouldBe([TriageVerdict.ReadyToken, TriageVerdict.NeedsInputToken]),
+            () => outcomes.ShouldBe([TriageVerdict.ReadyToken, TriageVerdict.NeedsInputToken, TriageVerdict.BlockedToken]),
+            () => schema.ContainsKey("else").ShouldBeFalse(),
+            () => schema["then"]!.AsObject().Select(pair => pair.Key).ShouldBe(["required"]),
+            () => blockedBy["type"]!.GetValue<string>().ShouldBe("array"),
+            () => blockedBy["minItems"]!.GetValue<int>().ShouldBe(1),
+            () => blockedBy["maxItems"]!.GetValue<int>().ShouldBe(TriageResult.Blocked.MaxBlockers),
+            () => blockedBy["items"]!["additionalProperties"]!.GetValue<bool>().ShouldBeFalse(),
+            () => blockedBy["items"]!["required"]!.AsArray().Select(node => node!.GetValue<string>()).ShouldBe(["issue", "reason"], ignoreOrder: true),
+            () => blockerProperties["issue"]!["type"]!.GetValue<string>().ShouldBe("integer"),
+            () => blockerProperties["reason"]!["minLength"]!.GetValue<int>().ShouldBe(1),
+            () => blockerProperties["reason"]!["maxLength"]!.GetValue<int>().ShouldBe(TriageBlocker.ReasonMaxLength),
             () => kinds.ShouldBe(TriageVerdict.KindTokens.Keys, ignoreOrder: true),
             () => required.ShouldBe([TriageVerdict.OutcomeProperty, TriageVerdict.KindProperty], ignoreOrder: true),
             () => conditionalOutcome.ShouldBe(TriageVerdict.NeedsInputToken),
             () => conditionallyRequired.ShouldBe([TriageVerdict.QuestionsProperty]),
             () => schema["properties"]![TriageVerdict.QuestionsProperty]!["$ref"]!.GetValue<string>().ShouldBe("#/$defs/questions"),
             () => schema["properties"]!.AsObject().Select(pair => pair.Key).ShouldBe(
-                [TriageVerdict.OutcomeProperty, TriageVerdict.KindProperty, TriageVerdict.QuestionsProperty],
+                [TriageVerdict.OutcomeProperty, TriageVerdict.KindProperty, TriageVerdict.QuestionsProperty, TriageVerdict.BlockedByProperty],
                 ignoreOrder: true),
             () => schema["additionalProperties"]!.GetValue<bool>().ShouldBeFalse());
     }
@@ -284,6 +297,7 @@ public sealed class RepositoryRoles
     [Theory]
     [InlineData("""{"outcome":"ready","kind":"documentation"}""", RunVerdictStatus.Done)]
     [InlineData("""{"outcome":"needs_input","kind":"bug","questions":[{"question":"Which page?","context":"None is named.","recommendation":"The home page."}]}""", RunVerdictStatus.NeedsInput)]
+    [InlineData("""{"outcome":"blocked","kind":"feature","blockedBy":[{"issue":15,"reason":"The retry policy lands there."}]}""", RunVerdictStatus.Done)]
     public void ASampleMatchingTheTriageVerdictSchema_ParsesWithTheTriageVerdictParser(string sample, RunVerdictStatus expected)
     {
         // Act
@@ -479,6 +493,28 @@ public sealed class RepositoryRoles
             () => lines.ShouldContain("- Use the referenced issues and the open-issue list for related work and precedent."),
             () => lines.ShouldContain(
                 "- Ask only what the code, its docs and the supplied issues leave open: intent, priority or a product choice."));
+    }
+
+    [Fact]
+    public void TheTriageSystemPrompt_ReturnsBlockedWhenTheWorkNeedsAnOpenIssueFirst()
+    {
+        // Arrange
+        string prompt = ReadSystemPrompt(WorkerRole.Triage.Name);
+        const string AcceptanceSentence =
+            "When the work needs an open issue to land first (a referenced issue with `state=\"open\"`, or an entry in the open-issue list), "
+            + "return `blocked` and name each such issue with the reason the work needs it. Judge readiness only when nothing it needs is open.";
+        const string BlockerLimits =
+            "Name only issues from the referenced issues and the open-issue list shown above, each once, at most 50, each with a short reason.";
+
+        // Act
+        string[] paragraphs = prompt.Split("\n\n");
+
+        // Assert
+        paragraphs.ShouldSatisfyAllConditions(
+            () => paragraphs.ShouldContain(AcceptanceSentence),
+            () => paragraphs.ShouldContain(BlockerLimits),
+            () => Array.IndexOf(paragraphs, AcceptanceSentence).ShouldBe(
+                Array.FindIndex(paragraphs, paragraph => paragraph.StartsWith("Foundry holds this issue until", StringComparison.Ordinal)) + 1));
     }
 
     [Theory]

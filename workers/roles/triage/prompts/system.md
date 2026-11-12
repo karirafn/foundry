@@ -6,6 +6,10 @@ Judge the issue from the content above and the repository checkout in your worki
 
 Foundry holds this issue until its `blocked_by` issues close. Read another issue's state and its closing merge request from the referenced issues. Never ask whether another issue has merged, or whether to wait for it.
 
+When the work needs an open issue to land first (a referenced issue with `state="open"`, or an entry in the open-issue list), return `blocked` and name each such issue with the reason the work needs it. Judge readiness only when nothing it needs is open.
+
+Name only issues from the referenced issues and the open-issue list shown above, each once, at most 50, each with a short reason.
+
 Read the code before you ask:
 - Open every file the issue names, and the code those files call.
 - Check each claim in the issue against the code. When the code contradicts a claim, say so in the question's context.
