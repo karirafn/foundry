@@ -154,12 +154,48 @@ public sealed class HandleAsync : IAsyncDisposable
         await AssertSingleIssueIsStillTriageBlockedAsync();
     }
 
-    private async Task AssertSingleIssueIsStillTriageBlockedAsync()
+    [Fact]
+    public async Task WhenEventIsFromAnotherTriageRun_LogsThatItIsFromAnotherRun()
     {
-        List<Issue> issues = await _dbContext.Set<Issue>()
-            .AsNoTracking()
-            .ToListAsync(TestContext.Current.CancellationToken);
-        issues.ShouldHaveSingleItem().ShouldBeOfType<TriageBlockedIssue>();
+        // Arrange
+        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
+        TriageVerdict.Blocked verdict = new(
+            IssueKind.Feature,
+            [new TriageBlocker(BlockerNumber, "Needs it first.")],
+            DecidedAt);
+        Seed(new IssueBuilder()
+            .WithMonitoredRepositoryId(repositoryId)
+            .WithIssueNumber(7)
+            .TriageBlockedFromTriage(verdict));
+
+        // Act
+        await _sut.HandleAsync(EventFor(repositoryId, 7, Guid.NewGuid()), CancellationToken.None);
+
+        // Assert
+        _logger.Entries.ShouldContain(entry => entry.Message.Contains("another run"));
+    }
+
+    [Fact]
+    public async Task WhenBlockerIsNotNamedByTheVerdict_LogsThatTheVerdictDoesNotNameIt()
+    {
+        // Arrange
+        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
+        TriageVerdict.Blocked verdict = new(
+            IssueKind.Feature,
+            [new TriageBlocker(BlockerNumber + 1, "Needs it first.")],
+            DecidedAt);
+        WorkerRunId runId = WorkerRunId.New();
+        Seed(new IssueBuilder()
+            .WithMonitoredRepositoryId(repositoryId)
+            .WithIssueNumber(7)
+            .WithWorkerRunId(runId)
+            .TriageBlockedFromTriage(verdict));
+
+        // Act
+        await _sut.HandleAsync(EventFor(repositoryId, 7, runId.Value), CancellationToken.None);
+
+        // Assert
+        _logger.Entries.ShouldContain(entry => entry.Message.Contains("not named by the verdict"));
     }
 
     [Fact]
@@ -211,5 +247,13 @@ public sealed class HandleAsync : IAsyncDisposable
 
         // Assert
         _logger.Entries.ShouldContain(entry => entry.Level == LogLevel.Information);
+    }
+
+    private async Task AssertSingleIssueIsStillTriageBlockedAsync()
+    {
+        List<Issue> issues = await _dbContext.Set<Issue>()
+            .AsNoTracking()
+            .ToListAsync(TestContext.Current.CancellationToken);
+        issues.ShouldHaveSingleItem().ShouldBeOfType<TriageBlockedIssue>();
     }
 }

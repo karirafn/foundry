@@ -51,7 +51,9 @@ internal static class TriageVerdictJsonConversion
 
     // A row that cannot form a verdict reads as no verdict: this converter runs while a repository's issues
     // materialise together, so a throw here would make every one of them unreadable, and an EF value converter has no
-    // logger to report through.
+    // logger to report through. The stored text stays in the column until the issue's next state change, which copies
+    // the null verdict into a new row and so drops the unreadable text. A SQL filter on TriageVerdict == null does not
+    // match such a row, because the column itself is not NULL.
     private static TriageVerdict? Deserialize(string json)
     {
         try

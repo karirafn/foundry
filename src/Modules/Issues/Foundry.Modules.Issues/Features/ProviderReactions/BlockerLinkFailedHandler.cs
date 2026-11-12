@@ -1,3 +1,5 @@
+using System.Diagnostics;
+
 using Foundry.Modules.Issues.Domain.Entities;
 using Foundry.Modules.Issues.Domain.Entities.States;
 using Foundry.Modules.Monitoring.Contracts;
@@ -39,13 +41,17 @@ internal sealed class BlockerLinkFailedHandler(
 
         WorkerRunId workerRunId = WorkerRunId.From(@event.WorkerRunId);
 
-        if (!blocked.WasLinkRefusedForTriageRun(workerRunId, @event.BlockerNumber))
+        LinkRefusalMatch match = blocked.MatchRefusedLink(workerRunId, @event.BlockerNumber);
+
+        if (match != LinkRefusalMatch.Matches)
         {
             logger.LogInformation(
-                "BlockerLinkFailed from run {WorkerRunId} for repository {RepositoryId} issue {IssueNumber} does not describe its blocked state; ignoring.",
+                "BlockerLinkFailed from run {WorkerRunId} for repository {RepositoryId} issue {IssueNumber} blocker {BlockerNumber} was ignored: {Mismatch}.",
                 workerRunId.Value,
                 @event.MonitoredRepositoryId,
-                @event.IssueNumber);
+                @event.IssueNumber,
+                @event.BlockerNumber,
+                DescribeMismatch(match));
             return;
         }
 
@@ -56,4 +62,12 @@ internal sealed class BlockerLinkFailedHandler(
             @event.FailedAt);
         await db.TransitionAsync(blocked, failed, domainEventDispatcher, cancellationToken);
     }
+
+    private static string DescribeMismatch(LinkRefusalMatch match) =>
+        match switch
+        {
+            LinkRefusalMatch.FromAnotherRun => "the refusal is from another run than the one behind the issue's verdict",
+            LinkRefusalMatch.BlockerNotNamed => "the blocker is not named by the verdict",
+            _ => throw new UnreachableException($"A {match} refusal is not a mismatch."),
+        };
 }

@@ -73,14 +73,21 @@ public sealed class TriageBlockedIssue : Issue
     }
 
     /// <summary>
-    /// Whether a refused link is the one the triage run behind this state's verdict wrote. A refusal reported by an
-    /// earlier or later run, or for an issue that waits on blockers found before triage, describes a state this issue
-    /// no longer holds.
+    /// How a refused link relates to this state: whether it is the one the triage run behind this state's verdict
+    /// wrote. A refusal reported by an earlier or later run, or for an issue that waits on blockers found before
+    /// triage, describes a state this issue no longer holds.
     /// </summary>
-    public bool WasLinkRefusedForTriageRun(WorkerRunId workerRunId, int blockerIssueNumber) =>
-        WorkerRunId == workerRunId
-        && TriageVerdict is TriageVerdict.Blocked verdict
-        && verdict.ReasonFor(blockerIssueNumber) is not null;
+    public LinkRefusalMatch MatchRefusedLink(WorkerRunId workerRunId, int blockerIssueNumber)
+    {
+        if (WorkerRunId != workerRunId || TriageVerdict is not TriageVerdict.Blocked verdict)
+        {
+            return LinkRefusalMatch.FromAnotherRun;
+        }
+
+        return verdict.ReasonFor(blockerIssueNumber) is null
+            ? LinkRefusalMatch.BlockerNotNamed
+            : LinkRefusalMatch.Matches;
+    }
 
     /// <summary>
     /// The tracker refused to link a blocker triage named: triage fails, so the person sees why and retries or skips
