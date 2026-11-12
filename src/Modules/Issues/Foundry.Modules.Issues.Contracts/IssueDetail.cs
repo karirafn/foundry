@@ -30,7 +30,9 @@ public sealed record IssueKindDetails(string Source, string? Kind, string? Confl
     public const string UnclassifiedSource = "unclassified";
 }
 
-/// <summary>The issue's latest triage verdict: <paramref name="Outcome"/> is <c>ready</c> or <c>needs_input</c>.</summary>
+/// <summary>
+/// The issue's latest triage verdict: <paramref name="Outcome"/> is <c>ready</c>, <c>needs_input</c> or <c>blocked</c>.
+/// </summary>
 public sealed record TriageVerdictDetails(
     string Outcome,
     string Kind,
@@ -39,6 +41,7 @@ public sealed record TriageVerdictDetails(
 {
     public const string ReadyOutcome = "ready";
     public const string NeedsInputOutcome = "needs_input";
+    public const string BlockedOutcome = "blocked";
 }
 
 /// <summary>
@@ -53,7 +56,7 @@ public sealed record IssueStateDetails(
     string? FailureReason,
     DateTimeOffset? FailedAt,
     DateTimeOffset? CompletedAt,
-    IReadOnlyList<int>? BlockedBy,
+    IReadOnlyList<BlockerDetails>? BlockedBy,
     TransientRetryDetails? TransientRetry,
     string? ChecksOutcome = null,
     IReadOnlyList<FailingCheck>? FailingChecks = null,
@@ -82,6 +85,12 @@ public sealed record AwaitingInputDetails(
     string? PostFailureReason,
     DateTimeOffset? NextPostAttemptAt,
     string ResumeTarget);
+
+/// <summary>
+/// An open issue blocking this one. <paramref name="Reason"/> is the triage verdict's reason for a blocker it named,
+/// and <see langword="null"/> for a blocker a person linked or when the latest verdict names none.
+/// </summary>
+public sealed record BlockerDetails(int IssueNumber, string? Reason);
 
 public sealed record TransientRetryDetails(
     int AttemptNumber,

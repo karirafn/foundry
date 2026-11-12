@@ -1,8 +1,11 @@
 using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Issues.Domain.Entities;
+using Foundry.Modules.Issues.Domain.Entities.States;
+using Foundry.Modules.Issues.Domain.ValueObjects;
 using Foundry.Modules.Issues.Features;
 using Foundry.Modules.Issues.Features.Claiming;
 using Foundry.Modules.Monitoring.Contracts;
+using Foundry.Modules.Workers.Contracts;
 using Foundry.Shared;
 using Foundry.Testing;
 using Foundry.WebApi.Persistence;
@@ -68,6 +71,82 @@ public sealed class GetIssueDetailAsync_TriageBlocked : IAsyncDisposable
         IssueDetail detail = result.ShouldBeOfType<Result<IssueDetail>.Success>().Value;
         detail.ShouldSatisfyAllConditions(
             () => detail.State.ShouldBe("triage_blocked"),
-            () => detail.StateDetails.ShouldNotBeNull().BlockedBy.ShouldBe([3, 5]));
+            () => detail.StateDetails.ShouldNotBeNull().BlockedBy.ShouldNotBeNull().Select(b => b.IssueNumber).ShouldBe([3, 5]));
+    }
+
+    [Fact]
+    public async Task WhenTriageBlockedByAVerdict_ServesTheBlockedOutcomeWithNoQuestions()
+    {
+        // Arrange
+        TriageVerdict.Blocked verdict = new(
+            IssueKind.Feature,
+            [new TriageBlocker(3, "Needs the retry queue.")],
+            DateTimeOffset.UtcNow);
+        TriageBlockedIssue blocked = new IssueBuilder()
+            .WithMonitoredRepositoryId(RepositoryId)
+            .TriageBlockedFromTriage(verdict);
+        _dbContext.Set<Issue>().Add(blocked);
+        await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+        _dbContext.ChangeTracker.Clear();
+
+        // Act
+        Result<IssueDetail> result = await _sut.GetIssueDetailAsync(blocked.Id, TestContext.Current.CancellationToken);
+
+        // Assert
+        TriageVerdictDetails triage = result.ShouldBeOfType<Result<IssueDetail>.Success>().Value.Triage.ShouldNotBeNull();
+        triage.ShouldSatisfyAllConditions(
+            () => triage.Outcome.ShouldBe(TriageVerdictDetails.BlockedOutcome),
+            () => triage.Kind.ShouldBe(verdict.Kind.Value),
+            () => triage.Questions.ShouldBeEmpty());
+    }
+
+    [Fact]
+    public async Task WhenBlockedAfterAReadyVerdict_ServesNoReasons()
+    {
+        // Arrange
+        FreshQueuedIssue queued = new IssueBuilder()
+            .WithMonitoredRepositoryId(RepositoryId)
+            .FreshQueuedFromTriage(IssueKind.Feature);
+        BlockedIssue blocked = queued.Block([3, 5]);
+        _dbContext.Set<Issue>().Add(blocked);
+        await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+        _dbContext.ChangeTracker.Clear();
+
+        // Act
+        Result<IssueDetail> result = await _sut.GetIssueDetailAsync(blocked.Id, TestContext.Current.CancellationToken);
+
+        // Assert
+        IReadOnlyList<BlockerDetails> blockers = result
+            .ShouldBeOfType<Result<IssueDetail>.Success>()
+            .Value.StateDetails.ShouldNotBeNull()
+            .BlockedBy.ShouldNotBeNull();
+        blockers.Select(b => (b.IssueNumber, b.Reason)).ShouldBe([(3, (string?)null), (5, (string?)null)]);
+    }
+
+    [Fact]
+    public async Task WhenTriageBlockedByAVerdict_ServesEachNamedBlockersReasonAndNoReasonForALinkedOne()
+    {
+        // Arrange
+        TriageInProgressIssue inProgress = new IssueBuilder().WithMonitoredRepositoryId(RepositoryId).TriageInProgress();
+        inProgress.SetBlockedBy([7]);
+        TriageVerdict.Blocked verdict = new(
+            IssueKind.Feature,
+            [new TriageBlocker(3, "Needs the retry queue."), new TriageBlocker(5, "Needs the schema.")],
+            DateTimeOffset.UtcNow);
+        TriageBlockedIssue blocked = inProgress.MarkBlocked(verdict);
+        _dbContext.Set<Issue>().Add(blocked);
+        await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+        _dbContext.ChangeTracker.Clear();
+
+        // Act
+        Result<IssueDetail> result = await _sut.GetIssueDetailAsync(blocked.Id, TestContext.Current.CancellationToken);
+
+        // Assert
+        IReadOnlyList<BlockerDetails> blockers = result
+            .ShouldBeOfType<Result<IssueDetail>.Success>()
+            .Value.StateDetails.ShouldNotBeNull()
+            .BlockedBy.ShouldNotBeNull();
+        blockers.Select(b => (b.IssueNumber, b.Reason)).ShouldBe(
+            [(3, "Needs the retry queue."), (5, "Needs the schema."), (7, (string?)null)]);
     }
 }
