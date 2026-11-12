@@ -410,7 +410,7 @@ internal sealed partial class GitLabHttpClient(
 
         return Result<MergeRequestSnapshot>.Ok(new MergeRequestSnapshot(
             new PullRequestStatus(isClosed, isMerged),
-            Checks.FromGitLab(dto?.HeadPipeline?.Status)));
+            Checks.FromGitLab(dto?.HeadPipeline?.Status, [])));
     }
 
     public async Task<Result<IReadOnlyList<ProviderComment>>> GetPullRequestReviewFeedbackAsync(
@@ -910,7 +910,7 @@ internal sealed partial class GitLabHttpClient(
             JsonSerializer.Deserialize<GitLabMergeRequestWithPipelineDto>(body, JsonOptions);
 
         string? pipelineStatus = dto?.HeadPipeline?.Status;
-        return Result<Checks>.Ok(Checks.FromGitLab(pipelineStatus));
+        return Result<Checks>.Ok(Checks.FromGitLab(pipelineStatus, []));
     }
 
     private GitLabUserDto? DeserializeUserDto(string responseBody, Uri apiBaseUrl, int statusCode)

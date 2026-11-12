@@ -1,4 +1,6 @@
 // IDE0065: alias placed inside namespace to avoid CS0118 — 'Checks' is also the enclosing namespace segment.
+using Foundry.Shared;
+
 using Shouldly;
 
 using Xunit;
@@ -16,7 +18,7 @@ public sealed class FromGitLab
     {
         // Arrange
         // Act
-        ProviderChecks result = ProviderChecks.FromGitLab(null);
+        ProviderChecks result = ProviderChecks.FromGitLab(null, []);
 
         // Assert
         result.ShouldBeOfType<ProviderChecks.NoneDetected>();
@@ -29,23 +31,24 @@ public sealed class FromGitLab
     {
         // Arrange
         // Act
-        ProviderChecks result = ProviderChecks.FromGitLab(status);
+        ProviderChecks result = ProviderChecks.FromGitLab(status, []);
 
         // Assert
         result.ShouldBeOfType<ProviderChecks.Green>();
     }
 
     [Fact]
-    public void WhenPipelineStatusIsFailed_ReturnsRedWithEmptyFailingList()
+    public void WhenPipelineStatusIsFailed_ReturnsRedWithFailingChecks()
     {
         // Arrange
+        FailingCheck failing = new("lint", "failed", "https://gitlab.example.com/jobs/1");
+
         // Act
-        ProviderChecks result = ProviderChecks.FromGitLab("failed");
+        ProviderChecks result = ProviderChecks.FromGitLab("failed", [failing]);
 
         // Assert
         ProviderChecks.Red red = result.ShouldBeOfType<ProviderChecks.Red>();
-        // GitLab does not expose per-job failure details at the pipeline level.
-        red.FailingChecks.ShouldBeEmpty();
+        red.FailingChecks.ShouldContain(failing);
     }
 
     [Theory]
@@ -60,7 +63,7 @@ public sealed class FromGitLab
     {
         // Arrange
         // Act
-        ProviderChecks result = ProviderChecks.FromGitLab(status);
+        ProviderChecks result = ProviderChecks.FromGitLab(status, []);
 
         // Assert
         result.ShouldBeOfType<ProviderChecks.Pending>();
@@ -74,7 +77,7 @@ public sealed class FromGitLab
     {
         // Arrange
         // Act
-        ProviderChecks result = ProviderChecks.FromGitLab(status);
+        ProviderChecks result = ProviderChecks.FromGitLab(status, []);
 
         // Assert
         result.ShouldBeOfType<ProviderChecks.Unfinished>();
@@ -88,7 +91,7 @@ public sealed class FromGitLab
     {
         // Arrange
         // Act
-        ProviderChecks result = ProviderChecks.FromGitLab(status);
+        ProviderChecks result = ProviderChecks.FromGitLab(status, []);
 
         // Assert
         // Unknown statuses map to Pending so the gate waits rather than falsely resolving.
