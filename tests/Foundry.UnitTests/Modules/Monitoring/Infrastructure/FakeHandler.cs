@@ -6,6 +6,7 @@ namespace Foundry.UnitTests.Modules.Monitoring.Infrastructure;
 internal sealed class FakeHandler(HttpStatusCode statusCode, string responseBody) : DelegatingHandler
 {
     private readonly List<(string PathContains, HttpStatusCode StatusCode, string Body)> _routes = [];
+    private readonly List<(string PathContains, Func<Exception> ExceptionFactory)> _throwingRoutes = [];
     private readonly List<HttpRequestMessage> _allRequests = [];
 
     public HttpRequestMessage? LastRequest { get; private set; }
@@ -19,12 +20,28 @@ internal sealed class FakeHandler(HttpStatusCode statusCode, string responseBody
         return this;
     }
 
+    public FakeHandler WithThrowingRoute(string pathContains, Func<Exception> exceptionFactory)
+    {
+        _throwingRoutes.Add((pathContains, exceptionFactory));
+        return this;
+    }
+
     protected override async Task<HttpResponseMessage> SendAsync(
         HttpRequestMessage request,
         CancellationToken cancellationToken)
     {
         LastRequest = request;
         _allRequests.Add(request);
+
+        string requestPath = request.RequestUri?.AbsolutePath ?? string.Empty;
+
+        foreach ((string pathContains, Func<Exception> exceptionFactory) in _throwingRoutes)
+        {
+            if (requestPath.Contains(pathContains, StringComparison.Ordinal))
+            {
+                throw exceptionFactory();
+            }
+        }
 
         if (request.Content is not null)
         {

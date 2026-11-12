@@ -22,11 +22,13 @@ internal sealed partial class GitLabIssueProvider(
     string token,
     Uri apiBaseUrl) : IIssueProvider
 {
-    // Checks verdicts read alongside a merge request status, keyed by merge request URL. GitLab returns
-    // both from one GET, so the checks pass (status, then checks, for the same open merge request) costs
-    // one fetch per merge request instead of two. Each entry is consumed once by GetChecksAsync, so a
-    // verdict is never served from an earlier pass. The provider is scoped to one poll tick.
-    private readonly Dictionary<string, ProviderChecks> _checksReadWithStatus = new(StringComparer.Ordinal);
+    // Merge request snapshots read for a status, keyed by merge request URL. GitLab returns the status and
+    // the head pipeline from one GET, so the checks pass (status, then checks, for the same open merge
+    // request) fetches the merge request once instead of twice. The snapshot holds only the head pipeline;
+    // its failed jobs are read when GetChecksAsync consumes the verdict, so status reads never pay for them.
+    // Each entry is consumed once, so a verdict is never served from an earlier pass. The provider is
+    // scoped to one poll tick.
+    private readonly Dictionary<string, MergeRequestSnapshot> _snapshotsReadWithStatus = new(StringComparer.Ordinal);
 
     public Task<Result<IssueListing>> GetIssuesAsync(
         RepositorySlug slug,
@@ -65,11 +67,11 @@ internal sealed partial class GitLabIssueProvider(
 
         if (snapshot is not Result<MergeRequestSnapshot>.Success success)
         {
-            _checksReadWithStatus.Remove(pullRequestUrl);
+            _snapshotsReadWithStatus.Remove(pullRequestUrl);
             return Result<PullRequestStatus>.Fail(((Result<MergeRequestSnapshot>.Failure)snapshot).Error);
         }
 
-        _checksReadWithStatus[pullRequestUrl] = success.Value.Checks;
+        _snapshotsReadWithStatus[pullRequestUrl] = success.Value;
         return Result<PullRequestStatus>.Ok(success.Value.Status);
     }
 
@@ -326,9 +328,15 @@ internal sealed partial class GitLabIssueProvider(
         string pullRequestUrl,
         CancellationToken cancellationToken)
     {
-        if (_checksReadWithStatus.Remove(pullRequestUrl, out ProviderChecks? checks))
+        if (_snapshotsReadWithStatus.Remove(pullRequestUrl, out MergeRequestSnapshot? snapshot))
         {
-            return Task.FromResult(Result<ProviderChecks>.Ok(checks));
+            return httpClient.GetPipelineChecksAsync(
+                apiBaseUrl,
+                slug,
+                snapshot.HeadPipelineId,
+                snapshot.HeadPipelineStatus,
+                token,
+                cancellationToken);
         }
 
         return httpClient.GetChecksAsync(apiBaseUrl, slug, pullRequestUrl, token, cancellationToken);

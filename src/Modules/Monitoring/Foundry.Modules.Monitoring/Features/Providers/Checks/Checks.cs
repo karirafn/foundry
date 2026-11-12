@@ -72,14 +72,13 @@ internal abstract record Checks
     /// <summary>
     /// Maps a GitLab <c>head_pipeline.status</c> value to a <see cref="Checks"/> verdict.
     /// An unrecognized status maps to <see cref="Pending"/> so the gate waits rather than falsely resolving.
-    /// GitLab does not expose per-job failure details at the pipeline level, so <see cref="Red"/> carries an empty list.
     /// </summary>
-    internal static Checks FromGitLab(string? pipelineStatus) =>
+    internal static Checks FromGitLab(string? pipelineStatus, IReadOnlyList<FailingCheck> failing) =>
         pipelineStatus switch
         {
             null => new NoneDetected(),
             "success" or "skipped" => new Green(),
-            "failed" => new Red([]),
+            "failed" => new Red(failing),
             "created" or "waiting_for_resource" or "preparing" or "pending"
                 or "running" or "scheduled" or "waiting_for_callback" => new Pending(),
             "canceled" or "canceling" or "manual" => new Unfinished(),

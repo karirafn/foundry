@@ -364,8 +364,10 @@ internal sealed partial class GitLabHttpClient(
 
     /// <summary>
     /// Reads one merge request — <c>GET projects/:id/merge_requests/:iid</c> — and returns both its
-    /// open/closed/merged status and the checks verdict of its <c>head_pipeline</c>, so a checks pass
-    /// needs a single fetch per merge request. Any non-success response is a failure.
+    /// open/closed/merged status and the id and status of its <c>head_pipeline</c>, so a checks pass
+    /// needs a single fetch per merge request. The pipeline's failed jobs are read later, by
+    /// <see cref="GetPipelineChecksAsync"/>, only when the checks verdict is consumed. Any non-success
+    /// response is a failure.
     /// </summary>
     public async Task<Result<MergeRequestSnapshot>> GetMergeRequestSnapshotAsync(
         Uri apiBaseUrl,
@@ -410,7 +412,8 @@ internal sealed partial class GitLabHttpClient(
 
         return Result<MergeRequestSnapshot>.Ok(new MergeRequestSnapshot(
             new PullRequestStatus(isClosed, isMerged),
-            Checks.FromGitLab(dto?.HeadPipeline?.Status)));
+            dto?.HeadPipeline?.Id,
+            dto?.HeadPipeline?.Status));
     }
 
     public async Task<Result<IReadOnlyList<ProviderComment>>> GetPullRequestReviewFeedbackAsync(
@@ -888,12 +891,7 @@ internal sealed partial class GitLabHttpClient(
 
         // 401/403 without rate-limit exhaustion signals an auth failure — return Unreadable
         // rather than propagating a Result failure so callers can proceed with degraded behaviour.
-        if (response.StatusCode is HttpStatusCode.Unauthorized)
-        {
-            return Result<Checks>.Ok(new Checks.Unreadable());
-        }
-
-        if (response.StatusCode is HttpStatusCode.Forbidden && !IsRateLimited(response))
+        if (IsAuthFailure(response))
         {
             return Result<Checks>.Ok(new Checks.Unreadable());
         }
@@ -909,8 +907,13 @@ internal sealed partial class GitLabHttpClient(
         GitLabMergeRequestWithPipelineDto? dto =
             JsonSerializer.Deserialize<GitLabMergeRequestWithPipelineDto>(body, JsonOptions);
 
-        string? pipelineStatus = dto?.HeadPipeline?.Status;
-        return Result<Checks>.Ok(Checks.FromGitLab(pipelineStatus));
+        return await GetPipelineChecksAsync(
+            apiBaseUrl,
+            slug,
+            dto?.HeadPipeline?.Id,
+            dto?.HeadPipeline?.Status,
+            token,
+            cancellationToken);
     }
 
     private GitLabUserDto? DeserializeUserDto(string responseBody, Uri apiBaseUrl, int statusCode)
@@ -1070,7 +1073,7 @@ internal sealed partial class GitLabHttpClient(
         string State,
         GitLabPipelineDto? HeadPipeline);
 
-    private sealed record GitLabPipelineDto(string? Status);
+    private sealed record GitLabPipelineDto(long? Id, string? Status);
 
     private sealed record GitLabDiscussionDto(IReadOnlyList<GitLabNoteDto> Notes);
 
