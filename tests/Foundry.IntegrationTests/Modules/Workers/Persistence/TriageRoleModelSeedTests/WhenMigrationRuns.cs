@@ -10,7 +10,7 @@ using Xunit;
 
 namespace Foundry.IntegrationTests.Modules.Workers.Persistence.TriageRoleModelSeedTests;
 
-/// <summary>Runs the real SeedTriageRoleModel migration: the triage role starts on Sonnet (issue #771).</summary>
+/// <summary>Runs the real SeedTriageRoleModel migration: the triage role starts on Sonnet.</summary>
 public sealed class WhenMigrationRuns : IAsyncLifetime, IAsyncDisposable
 {
     private const string PreviousMigrationId = "20261111074431_AddPostedCommentRegistry";
@@ -45,10 +45,10 @@ public sealed class WhenMigrationRuns : IAsyncLifetime, IAsyncDisposable
     }
 
     [Fact]
-    public async Task OnAFreshDatabase_TheTriageRoleModelIsSonnet()
+    public async Task OnAFreshDatabaseMigratedToTheSeed_TheTriageRoleModelIsSonnet()
     {
         // Act
-        await _dbContext.Database.MigrateAsync(TestContext.Current.CancellationToken);
+        await _dbContext.Database.MigrateAsync(TargetMigrationId, TestContext.Current.CancellationToken);
 
         // Assert
         (await ScalarAsync("SELECT model FROM worker_role_settings WHERE role = 'triage';")).ShouldBe("sonnet");
