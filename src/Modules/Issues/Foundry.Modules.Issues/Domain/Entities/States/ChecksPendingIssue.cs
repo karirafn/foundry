@@ -88,6 +88,10 @@ public sealed class ChecksPendingIssue : Issue
         return revisionQueued;
     }
 
+    internal bool CanFixChecks(IReadOnlyList<FailingCheck> failingChecks) =>
+        failingChecks.Count > 0
+        && ChecksFixAttempts < ChecksMaxFixPushes;
+
     public RevisionQueuedIssue FixChecks(IReadOnlyList<FailingCheck> failingChecks)
     {
         RevisionQueuedIssue revisionQueued = RevisionQueuedIssue.FromChecksPendingFix(this, failingChecks);
