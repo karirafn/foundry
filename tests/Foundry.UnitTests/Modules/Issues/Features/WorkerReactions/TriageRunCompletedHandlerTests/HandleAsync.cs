@@ -74,8 +74,8 @@ public sealed class HandleAsync : IAsyncDisposable
         TriageQueuedIssue other = new IssueBuilder()
             .WithMonitoredRepositoryId(repositoryId)
             .WithIssueNumber(issueNumber)
+            .WithBlockedBy(blockedBy)
             .TriageQueued();
-        other.SetBlockedBy(blockedBy);
         _dbContext.Set<Issue>().Add(other);
         _dbContext.SaveChanges();
         _dbContext.ChangeTracker.Clear();
@@ -116,9 +116,10 @@ public sealed class HandleAsync : IAsyncDisposable
     {
         // Arrange
         WorkerRunId workerRunId = WorkerRunId.New();
-        TriageQueuedIssue queued = new IssueBuilder().TriageQueued();
-        queued.SetBlockedBy([5]);
-        TriageInProgressIssue triaging = Seed(queued.Claim(workerRunId));
+        TriageInProgressIssue triaging = Seed(new IssueBuilder()
+            .WithWorkerRunId(workerRunId)
+            .WithBlockedBy([5])
+            .TriageInProgress());
 
         // Act
         await _sut.HandleAsync(
@@ -243,6 +244,85 @@ public sealed class HandleAsync : IAsyncDisposable
         // Assert
         TriageFailedIssue failed = (await ReloadAsync(triaging)).ShouldBeOfType<TriageFailedIssue>();
         failed.FailureReason.ShouldContain("#30");
+    }
+
+    [Fact]
+    public async Task WhenANamedBlockerIsTheIssueItself_TheIssueFailsOnThatCycle()
+    {
+        // Arrange
+        WorkerRunId workerRunId = WorkerRunId.New();
+        TriageInProgressIssue triaging = Seed(new IssueBuilder()
+            .WithWorkerRunId(workerRunId)
+            .WithIssueNumber(10)
+            .TriageInProgress());
+
+        // Act
+        await _sut.HandleAsync(
+            new TriageRunCompleted(
+                triaging.Id.Value,
+                workerRunId,
+                new TriageResult.Blocked(TriageKind.Feature, [new TriageBlocker(10, "Needs itself.")]),
+                DecidedAt),
+            CancellationToken.None);
+
+        // Assert
+        TriageFailedIssue failed = (await ReloadAsync(triaging)).ShouldBeOfType<TriageFailedIssue>();
+        failed.ShouldSatisfyAllConditions(
+            () => failed.FailureCategory.ShouldBe(FailureCategory.BlockerCycle),
+            () => failed.FailureReason.ShouldContain("#10 → #10"),
+            () => _dispatcher.DispatchedEvents.OfType<TriageBlockersNamed>().ShouldBeEmpty());
+    }
+
+    [Fact]
+    public async Task WhenANamedBlockerReachesTheIssueThroughSeveralStoredIssues_TheIssueFailsOnTheWholeCycle()
+    {
+        // Arrange
+        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
+        WorkerRunId workerRunId = WorkerRunId.New();
+        TriageInProgressIssue triaging = Seed(new IssueBuilder()
+            .WithMonitoredRepositoryId(repositoryId)
+            .WithWorkerRunId(workerRunId)
+            .WithIssueNumber(10)
+            .TriageInProgress());
+        SeedBlockedBy(repositoryId, issueNumber: 20, blockedBy: [30]);
+        SeedBlockedBy(repositoryId, issueNumber: 30, blockedBy: [10]);
+
+        // Act
+        await _sut.HandleAsync(
+            new TriageRunCompleted(
+                triaging.Id.Value,
+                workerRunId,
+                new TriageResult.Blocked(TriageKind.Feature, [new TriageBlocker(20, "Needs its client.")]),
+                DecidedAt),
+            CancellationToken.None);
+
+        // Assert
+        TriageFailedIssue failed = (await ReloadAsync(triaging)).ShouldBeOfType<TriageFailedIssue>();
+        failed.FailureReason.ShouldContain("#10 → #20 → #30 → #10");
+    }
+
+    [Fact]
+    public async Task WhenANamedBlockerIsAlreadyRecorded_TheBlockersAreMergedWithoutDuplicates()
+    {
+        // Arrange
+        WorkerRunId workerRunId = WorkerRunId.New();
+        TriageInProgressIssue triaging = Seed(new IssueBuilder()
+            .WithWorkerRunId(workerRunId)
+            .WithIssueNumber(10)
+            .WithBlockedBy([5, 15])
+            .TriageInProgress());
+
+        // Act
+        await _sut.HandleAsync(
+            new TriageRunCompleted(
+                triaging.Id.Value,
+                workerRunId,
+                new TriageResult.Blocked(TriageKind.Feature, [new TriageBlocker(15, "Needs its schema.")]),
+                DecidedAt),
+            CancellationToken.None);
+
+        // Assert
+        (await ReloadAsync(triaging)).ShouldBeOfType<TriageBlockedIssue>().BlockedBy.ShouldBe([15, 5]);
     }
 
     [Fact]

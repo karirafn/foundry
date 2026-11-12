@@ -28,6 +28,7 @@ public sealed class IssueBuilder
     private IReadOnlyList<string> _labels = ["foundry"];
     private DateTimeOffset _detectedAt = DateTimeOffset.UtcNow;
     private KindClassification _kindClassification = KindClassification.Unclassified;
+    private IReadOnlyList<int> _blockedBy = [];
 
     private WorkerRunId _workerRunId = WorkerRunId.New();
     private string _branchName = "feat/1-test";
@@ -102,8 +103,12 @@ public sealed class IssueBuilder
 
     public IssueBuilder WithFailingChecks(IEnumerable<FailingCheck> value) { _failingChecks = [.. value]; return this; }
 
-    public DetectedIssue Detected() =>
-        DetectedIssue.Detect(
+    /// <summary>Records blockers on the issue from detection, which every later state carries forward.</summary>
+    public IssueBuilder WithBlockedBy(IEnumerable<int> value) { _blockedBy = [.. value]; return this; }
+
+    public DetectedIssue Detected()
+    {
+        DetectedIssue detected = DetectedIssue.Detect(
             _monitoredRepositoryId,
             _issueNumber,
             _title,
@@ -112,6 +117,14 @@ public sealed class IssueBuilder
             _labels,
             _detectedAt,
             _kindClassification);
+
+        if (_blockedBy.Count > 0)
+        {
+            detected.SetBlockedBy(_blockedBy);
+        }
+
+        return detected;
+    }
 
     public TriageQueuedIssue TriageQueued() => Detected().QueueTriage();
 

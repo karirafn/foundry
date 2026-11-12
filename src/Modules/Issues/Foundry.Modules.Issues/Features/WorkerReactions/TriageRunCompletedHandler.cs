@@ -67,18 +67,10 @@ internal sealed class TriageRunCompletedHandler(
             triaging.MonitoredRepositoryId,
             cancellationToken);
 
-        IReadOnlyList<DependencyEdge> graph =
-        [
-            .. storedEdges,
-            .. blocked.BlockedBy.Select((TriageBlocker blocker) => new DependencyEdge(triaging.IssueNumber, blocker.IssueNumber)),
-        ];
-
-        DependencyCycle? cycle = blocked.BlockedBy
-            .Select((TriageBlocker blocker) => DependencyCycleDetector.FindCycleClosedBy(
-                graph,
-                triaging.IssueNumber,
-                blocker.IssueNumber))
-            .FirstOrDefault((DependencyCycle? found) => found is not null);
+        DependencyCycle? cycle = DependencyCycleDetector.FindFirstCycleClosedBy(
+            storedEdges,
+            triaging.IssueNumber,
+            [.. blocked.BlockedBy.Select((TriageBlocker blocker) => blocker.IssueNumber)]);
 
         return cycle is null
             ? triaging.MarkBlocked(new TriageVerdict.Blocked(ToIssueKind(blocked.Kind), blocked.BlockedBy, decidedAt))

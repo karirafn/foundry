@@ -8,7 +8,7 @@ using Xunit;
 
 namespace Foundry.UnitTests.Modules.Issues.Domain.Services.DependencyCycleDetectorTests;
 
-public sealed class FindCycleClosedBy
+public sealed class FindFirstCycleClosedBy
 {
     private const int Issue = 42;
     private const int Blocker = 15;
@@ -24,7 +24,7 @@ public sealed class FindCycleClosedBy
         ];
 
         // Act
-        DependencyCycle? cycle = DependencyCycleDetector.FindCycleClosedBy(edges, Issue, Blocker);
+        DependencyCycle? cycle = DependencyCycleDetector.FindFirstCycleClosedBy(edges, Issue, [Blocker]);
 
         // Assert
         cycle.ShouldNotBeNull().Path.ShouldBe([42, 15, 31, 42]);
@@ -40,7 +40,7 @@ public sealed class FindCycleClosedBy
         ];
 
         // Act
-        DependencyCycle? cycle = DependencyCycleDetector.FindCycleClosedBy(edges, Issue, Blocker);
+        DependencyCycle? cycle = DependencyCycleDetector.FindFirstCycleClosedBy(edges, Issue, [Blocker]);
 
         // Assert
         cycle.ShouldBeNull();
@@ -57,7 +57,7 @@ public sealed class FindCycleClosedBy
         ];
 
         // Act
-        DependencyCycle? cycle = DependencyCycleDetector.FindCycleClosedBy(edges, Issue, Blocker);
+        DependencyCycle? cycle = DependencyCycleDetector.FindFirstCycleClosedBy(edges, Issue, [Blocker]);
 
         // Assert
         cycle.ShouldBeNull();
@@ -74,7 +74,7 @@ public sealed class FindCycleClosedBy
         ];
 
         // Act
-        DependencyCycle? cycle = DependencyCycleDetector.FindCycleClosedBy(edges, Issue, Blocker);
+        DependencyCycle? cycle = DependencyCycleDetector.FindFirstCycleClosedBy(edges, Issue, [Blocker]);
 
         // Assert
         cycle.ShouldBeNull();
@@ -94,7 +94,7 @@ public sealed class FindCycleClosedBy
         ];
 
         // Act
-        DependencyCycle? cycle = DependencyCycleDetector.FindCycleClosedBy(edges, Issue, Blocker);
+        DependencyCycle? cycle = DependencyCycleDetector.FindFirstCycleClosedBy(edges, Issue, [Blocker]);
 
         // Assert
         cycle.ShouldNotBeNull().Path.ShouldBe([42, 15, 33, 42]);
@@ -110,22 +110,39 @@ public sealed class FindCycleClosedBy
         ];
 
         // Act
-        DependencyCycle? cycle = DependencyCycleDetector.FindCycleClosedBy(edges, Issue, Blocker);
+        DependencyCycle? cycle = DependencyCycleDetector.FindFirstCycleClosedBy(edges, Issue, [Blocker]);
 
         // Assert
         cycle.ShouldNotBeNull().Path.ShouldBe([42, 15, 42]);
     }
 
     [Fact]
-    public void WhenTheIssueIsItsOwnBlocker_ReturnsNull()
+    public void WhenSeveralBlockersCloseACycle_ReturnsTheFirstInTheGivenOrder()
+    {
+        // Arrange
+        IReadOnlyList<DependencyEdge> edges =
+        [
+            new DependencyEdge(IssueNumber: 15, BlockedByIssueNumber: 42),
+            new DependencyEdge(IssueNumber: 16, BlockedByIssueNumber: 42),
+        ];
+
+        // Act
+        DependencyCycle? cycle = DependencyCycleDetector.FindFirstCycleClosedBy(edges, Issue, [16, 15]);
+
+        // Assert
+        cycle.ShouldNotBeNull().Path.ShouldBe([42, 16, 42]);
+    }
+
+    [Fact]
+    public void WhenTheIssueIsItsOwnBlocker_ReturnsTheSelfCycle()
     {
         // Arrange
         IReadOnlyList<DependencyEdge> edges = [];
 
         // Act
-        DependencyCycle? cycle = DependencyCycleDetector.FindCycleClosedBy(edges, Issue, Issue);
+        DependencyCycle? cycle = DependencyCycleDetector.FindFirstCycleClosedBy(edges, Issue, [Issue]);
 
         // Assert
-        cycle.ShouldBeNull();
+        cycle.ShouldNotBeNull().Path.ShouldBe([42, 42]);
     }
 }

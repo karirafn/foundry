@@ -33,16 +33,40 @@ public static class DependencyCycleDetector
     }
 
     /// <summary>
-    /// The shortest cycle that linking <paramref name="blockerNumber"/> as a blocker of <paramref name="issueNumber"/>
-    /// closes, as the path issue → blocker → … → issue; null when the blocker cannot reach the issue through the
-    /// existing edges, or when the blocker is the issue itself.
+    /// The shortest cycle closed by the first of <paramref name="blockerNumbers"/>, in the given order, that would
+    /// close one when linked as a blocker of <paramref name="issueNumber"/>, as the path issue → blocker → … → issue;
+    /// null when no blocker can reach the issue through <paramref name="storedEdges"/> and the other new links.
     /// </summary>
-    public static DependencyCycle? FindCycleClosedBy(
-        IReadOnlyList<DependencyEdge> edges,
+    public static DependencyCycle? FindFirstCycleClosedBy(
+        IReadOnlyList<DependencyEdge> storedEdges,
+        int issueNumber,
+        IReadOnlyList<int> blockerNumbers)
+    {
+        IReadOnlyList<DependencyEdge> edges =
+        [
+            .. storedEdges,
+            .. blockerNumbers.Select((int blocker) => new DependencyEdge(issueNumber, blocker)),
+        ];
+        Dictionary<int, List<int>> adjacency = BuildAdjacency(edges);
+
+        foreach (int blockerNumber in blockerNumbers)
+        {
+            DependencyCycle? cycle = FindCycleClosedBy(adjacency, issueNumber, blockerNumber);
+
+            if (cycle is not null)
+            {
+                return cycle;
+            }
+        }
+
+        return null;
+    }
+
+    private static DependencyCycle? FindCycleClosedBy(
+        Dictionary<int, List<int>> adjacency,
         int issueNumber,
         int blockerNumber)
     {
-        Dictionary<int, List<int>> adjacency = BuildAdjacency(edges);
         Dictionary<int, int> predecessors = [];
         Queue<int> queue = new([blockerNumber]);
         HashSet<int> visited = [blockerNumber];
@@ -66,16 +90,19 @@ public static class DependencyCycleDetector
             return null;
         }
 
-        List<int> pathFromBlocker = [issueNumber];
+        List<int> pathToBlocker = [issueNumber];
 
-        while (pathFromBlocker[0] != blockerNumber)
+        while (pathToBlocker[^1] != blockerNumber)
         {
-            pathFromBlocker.Insert(0, predecessors[pathFromBlocker[0]]);
+            pathToBlocker.Add(predecessors[pathToBlocker[^1]]);
         }
 
-        return DependencyCycle.Create([issueNumber, ..pathFromBlocker]).Match<DependencyCycle?>(
+        pathToBlocker.Reverse();
+
+        return DependencyCycle.Create([issueNumber, .. pathToBlocker]).Match<DependencyCycle>(
             (DependencyCycle cycle) => cycle,
-            (Error _) => null);
+            (Error error) => throw new InvalidOperationException(
+                $"The detector built an invalid dependency cycle: {error.Message}"));
     }
 
     private static void DfsIterative(

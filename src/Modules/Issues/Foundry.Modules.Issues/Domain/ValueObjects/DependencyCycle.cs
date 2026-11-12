@@ -10,7 +10,7 @@ public sealed record DependencyCycle
 {
     private const string ArrowSeparator = " → ";
 
-    private const int MinimumPathLength = 3;
+    private const int MinimumPathLength = 2;
 
     private DependencyCycle(IReadOnlyList<int> path) => Path = path;
 
@@ -26,6 +26,11 @@ public sealed record DependencyCycle
             return Result<DependencyCycle>.Fail(DependencyCycleErrors.PathTooShort);
         }
 
+        if (path[0] != path[^1])
+        {
+            return Result<DependencyCycle>.Fail(DependencyCycleErrors.PathNotClosed);
+        }
+
         return new DependencyCycle(path);
     }
 
@@ -36,5 +41,9 @@ public static class DependencyCycleErrors
 {
     public static readonly Error PathTooShort = new(
         "DependencyCycle.PathTooShort",
-        "A dependency cycle needs a closed path of at least three entries.");
+        "A dependency cycle needs a closed path of at least two entries.");
+
+    public static readonly Error PathNotClosed = new(
+        "DependencyCycle.PathNotClosed",
+        "A dependency cycle must end at the issue it starts at.");
 }
