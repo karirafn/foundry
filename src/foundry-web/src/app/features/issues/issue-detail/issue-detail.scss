@@ -115,11 +115,7 @@
     letter-spacing: 0.05em;
   }
 
-  &__field-value {
-    color: var(--fd-text-secondary);
-    font-size: 0.8125rem;
-  }
-
+  &__field-value,
   &__branch {
     font-family: var(--fd-font-mono);
     font-size: 0.8125rem;
@@ -161,8 +157,7 @@
 
   &__violations {
     margin: 0;
-    padding: 0;
-    padding-left: var(--fd-spacing-lg);
+    padding: 0 0 0 var(--fd-spacing-lg);
     color: var(--fd-text-secondary);
     font-size: 0.8125rem;
     line-height: 1.6;
@@ -245,7 +240,8 @@
     }
   }
 
-  &__kind-differs {
+  &__kind-differs,
+  &__question-recommendation {
     margin-top: var(--fd-spacing-xs);
   }
 
@@ -417,21 +413,11 @@
   // Shape, typography and colours for __retry-chip and __revision-chip come from the
   // shared badge mixin (src/styles/_badge.scss) included at the top of this file.
 
-  &__retry-message,
-  &__revision-message {
-    color: var(--fd-text-secondary);
-    font-size: 0.8125rem;
-  }
-
 }
 
 .issue-detail__question {
   display: flex;
   flex-direction: column;
-}
-
-.issue-detail__question-recommendation {
-  margin-top: var(--fd-spacing-xs);
 }
 
 .issue-detail__question-recommendation-label {
