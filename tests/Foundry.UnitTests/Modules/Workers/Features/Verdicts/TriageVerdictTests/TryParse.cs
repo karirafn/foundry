@@ -83,6 +83,48 @@ public sealed class TryParse
     }
 
     [Theory]
+    [InlineData("\\u202e")]
+    [InlineData("\\u200b\\u200d\\ufeff")]
+    [InlineData("\\u2066\\u2069 \\u00ad")]
+    [InlineData("\\udb40\\udc41\\udb40\\udc7f")]
+    public void WhenABlockerReasonHoldsOnlyFormatCharacters_ReturnsNull(string rawReason)
+    {
+        // Act
+        TriageVerdict? verdict = TriageVerdict.TryParse(Json(
+            $$"""{"outcome":"blocked","kind":"feature","blockedBy":[{"issue":15,"reason":"{{rawReason}}"}]}"""));
+
+        // Assert
+        verdict.ShouldBeNull();
+    }
+
+    [Theory]
+    [InlineData("Needs the \\u202eauth module.", "Needs the auth module.")]
+    [InlineData("Needs\\u2066 the\\u200b auth\\u2069 module.", "Needs the auth module.")]
+    [InlineData("Needs the auth\\udb40\\udc41 module.", "Needs the auth module.")]
+    [InlineData("Needs the auth \\ud83d\\ude00 module.", "Needs the auth \U0001F600 module.")]
+    public void WhenABlockerReasonHoldsFormatCharacters_RemovesThemAndKeepsOtherText(string rawReason, string expected)
+    {
+        // Act
+        TriageVerdict? verdict = TriageVerdict.TryParse(Json(
+            $$"""{"outcome":"blocked","kind":"feature","blockedBy":[{"issue":15,"reason":"{{rawReason}}"}]}"""));
+
+        // Assert
+        verdict.ShouldBe(new TriageVerdict.Blocked(TriageIssueKind.Feature, [new TriageBlocker(15, expected)]));
+    }
+
+    [Theory]
+    [InlineData("""{"outcome":"blocked","kind":"feature","blockedBy":[{"issue":15,"reason":"Needs \ud800 the module."}]}""")]
+    [InlineData("""{"outcome":"needs_input","kind":"bug","questions":[{"question":"Which \udc00 endpoint?","context":"c","recommendation":"r"}]}""")]
+    public void WhenAStringHoldsALoneSurrogate_ReturnsNullWithoutThrowing(string json)
+    {
+        // Act
+        TriageVerdict? verdict = TriageVerdict.TryParse(Json(json));
+
+        // Assert
+        verdict.ShouldBeNull();
+    }
+
+    [Theory]
     [InlineData("""{"outcome":"ready","kind":"feature","blockedBy":[{"issue":15,"reason":"x"}]}""", nameof(TriageVerdict.Ready))]
     [InlineData("""{"outcome":"needs_input","kind":"feature","questions":[{"question":"Q?","context":"c","recommendation":"r"}],"blockedBy":[{"issue":15,"reason":"x"}]}""", nameof(TriageVerdict.NeedsInput))]
     public void WhenAWellFormedBlockedByAccompaniesAnotherOutcome_ItIsIgnored(string json, string expectedType)

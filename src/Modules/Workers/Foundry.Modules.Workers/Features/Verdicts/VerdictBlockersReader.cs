@@ -1,3 +1,5 @@
+using System.Globalization;
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
@@ -8,8 +10,8 @@ namespace Foundry.Modules.Workers.Features.Verdicts;
 
 /// <summary>
 /// Reads the triage <c>blockedBy</c> definition: an array of at least one <c>{issue, reason}</c> object, with an
-/// integer issue number and a reason that is non-blank once its whitespace and control characters collapse to single
-/// spaces, and no other properties. The blocker carries the collapsed reason.
+/// integer issue number and a reason that is non-blank once its format characters are removed and its whitespace and
+/// control characters collapse to single spaces, and no other properties. The blocker carries the normalized reason.
 /// </summary>
 internal static partial class VerdictBlockersReader
 {
@@ -45,12 +47,29 @@ internal static partial class VerdictBlockersReader
     }
 
     // The reason is posted publicly inside a code span, where a blank line or control character would break the
-    // span, so it is reduced to one trimmed line before anything else sees it.
+    // span, and a format character (bidi override or isolate, zero-width or tag character) would reorder the line
+    // or render it blank. It is reduced to one trimmed line without format characters before anything else sees it.
     private static string? ReadReason(JsonNode? node) =>
         VerdictQuestionsReader.ReadString(node) is { } text
-        && NonSpaceRun().Replace(text, " ").Trim() is { Length: > 0 } normalized
+        && NonSpaceRun().Replace(WithoutFormatCharacters(text), " ").Trim() is { Length: > 0 } normalized
             ? normalized
             : null;
+
+    // Runes rather than chars, because the tag block U+E0000-E007F is a surrogate pair in UTF-16.
+    private static string WithoutFormatCharacters(string text)
+    {
+        StringBuilder builder = new(text.Length);
+
+        foreach (Rune rune in text.EnumerateRunes())
+        {
+            if (Rune.GetUnicodeCategory(rune) != UnicodeCategory.Format)
+            {
+                builder.Append(rune.ToString());
+            }
+        }
+
+        return builder.ToString();
+    }
 
     [GeneratedRegex(@"[\s\p{Cc}]+")]
     private static partial Regex NonSpaceRun();
