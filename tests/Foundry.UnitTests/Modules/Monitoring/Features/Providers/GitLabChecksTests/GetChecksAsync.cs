@@ -290,6 +290,193 @@ public sealed class GetChecksAsync
         red.FailingChecks.ShouldBe([new FailingCheck("lint  unit tests", "fail ed", null)]);
     }
 
+    [Theory]
+    [InlineData(@"lint unit", "lint unit")]
+    [InlineData(@"lint unit", "lint unit")]
+    [InlineData(@"lint‮unit", "lint unit")]
+    public async Task WhenAFailedJobNameHoldsLineSeparatorsOrFormatCharacters_ReplacesEachWithASpace(
+        string name,
+        string expectedName)
+    {
+        // Arrange
+        string jobs = $$"""[{ "name": "{{name}}", "status": "failed", "allow_failure": false }]""";
+        GitLabHttpClient sut = BuildSut(FailedPipelineHandler(jobs));
+
+        // Act
+        Result<ProviderChecks> result = await sut.GetChecksAsync(
+            ValidBaseUrl,
+            ValidSlug,
+            ValidMrUrl,
+            token: "glpat_token",
+            CancellationToken.None);
+
+        // Assert
+        Result<ProviderChecks>.Success success = result.ShouldBeOfType<Result<ProviderChecks>.Success>();
+        ProviderChecks.Red red = success.Value.ShouldBeOfType<ProviderChecks.Red>();
+        red.FailingChecks.ShouldBe([new FailingCheck(expectedName, "failed", null)]);
+    }
+
+    [Theory]
+    [InlineData("""{ "name": "lint", "allow_failure": false }""")]
+    [InlineData("""{ "name": "lint", "status": null, "allow_failure": false }""")]
+    [InlineData("""{ "name": "lint", "status": "  ", "allow_failure": false }""")]
+    [InlineData("""{ "name": "  ", "status": "failed", "allow_failure": false }""")]
+    public async Task WhenAFailedJobLacksANameOrStatus_LeavesItOut(string job)
+    {
+        // Arrange
+        GitLabHttpClient sut = BuildSut(FailedPipelineHandler($"[{job}]"));
+
+        // Act
+        Result<ProviderChecks> result = await sut.GetChecksAsync(
+            ValidBaseUrl,
+            ValidSlug,
+            ValidMrUrl,
+            token: "glpat_token",
+            CancellationToken.None);
+
+        // Assert
+        Result<ProviderChecks>.Success success = result.ShouldBeOfType<Result<ProviderChecks>.Success>();
+        ProviderChecks.Red red = success.Value.ShouldBeOfType<ProviderChecks.Red>();
+        red.FailingChecks.ShouldBeEmpty();
+    }
+
+    [Theory]
+    [InlineData(255, 255)]
+    [InlineData(256, 255)]
+    public async Task WhenAFailedJobNameIsAtTheCapBoundary_KeepsUpToTheCap(int nameLength, int expectedLength)
+    {
+        // Arrange
+        string jobs = $$"""[{ "name": "{{new string('n', nameLength)}}", "status": "failed", "allow_failure": false }]""";
+        GitLabHttpClient sut = BuildSut(FailedPipelineHandler(jobs));
+
+        // Act
+        Result<ProviderChecks> result = await sut.GetChecksAsync(
+            ValidBaseUrl,
+            ValidSlug,
+            ValidMrUrl,
+            token: "glpat_token",
+            CancellationToken.None);
+
+        // Assert
+        Result<ProviderChecks>.Success success = result.ShouldBeOfType<Result<ProviderChecks>.Success>();
+        ProviderChecks.Red red = success.Value.ShouldBeOfType<ProviderChecks.Red>();
+        red.FailingChecks.ShouldBe([new FailingCheck(new string('n', expectedLength), "failed", null)]);
+    }
+
+    [Theory]
+    [InlineData(2048, true)]
+    [InlineData(2049, false)]
+    public async Task WhenAFailedJobWebUrlIsAtTheCapBoundary_KeepsItOnlyWithinTheCap(int urlLength, bool kept)
+    {
+        // Arrange
+        const string prefix = "https://example.com/";
+        string webUrl = prefix + new string('u', urlLength - prefix.Length);
+        string jobs = $$"""[{ "name": "lint", "status": "failed", "allow_failure": false, "web_url": "{{webUrl}}" }]""";
+        GitLabHttpClient sut = BuildSut(FailedPipelineHandler(jobs));
+
+        // Act
+        Result<ProviderChecks> result = await sut.GetChecksAsync(
+            ValidBaseUrl,
+            ValidSlug,
+            ValidMrUrl,
+            token: "glpat_token",
+            CancellationToken.None);
+
+        // Assert
+        Result<ProviderChecks>.Success success = result.ShouldBeOfType<Result<ProviderChecks>.Success>();
+        ProviderChecks.Red red = success.Value.ShouldBeOfType<ProviderChecks.Red>();
+        red.FailingChecks.ShouldBe([new FailingCheck("lint", "failed", kept ? webUrl : null)]);
+    }
+
+    [Fact]
+    public async Task WhenTheJobsArrayHoldsANullElement_SkipsItAndKeepsTheOtherJobs()
+    {
+        // Arrange
+        string jobs = """[null, { "name": "lint", "status": "failed", "allow_failure": false }]""";
+        GitLabHttpClient sut = BuildSut(FailedPipelineHandler(jobs));
+
+        // Act
+        Result<ProviderChecks> result = await sut.GetChecksAsync(
+            ValidBaseUrl,
+            ValidSlug,
+            ValidMrUrl,
+            token: "glpat_token",
+            CancellationToken.None);
+
+        // Assert
+        Result<ProviderChecks>.Success success = result.ShouldBeOfType<Result<ProviderChecks>.Success>();
+        ProviderChecks.Red red = success.Value.ShouldBeOfType<ProviderChecks.Red>();
+        red.FailingChecks.ShouldBe([new FailingCheck("lint", "failed", null)]);
+    }
+
+    [Fact]
+    public async Task WhenTheCapFallsInsideASurrogatePair_DropsTheHalfPair()
+    {
+        // Arrange
+        string name = new string('n', 254) + char.ConvertFromUtf32(0x1F600);
+        string jobs = $$"""[{ "name": "{{name}}", "status": "failed", "allow_failure": false }]""";
+        GitLabHttpClient sut = BuildSut(FailedPipelineHandler(jobs));
+
+        // Act
+        Result<ProviderChecks> result = await sut.GetChecksAsync(
+            ValidBaseUrl,
+            ValidSlug,
+            ValidMrUrl,
+            token: "glpat_token",
+            CancellationToken.None);
+
+        // Assert
+        Result<ProviderChecks>.Success success = result.ShouldBeOfType<Result<ProviderChecks>.Success>();
+        ProviderChecks.Red red = success.Value.ShouldBeOfType<ProviderChecks.Red>();
+        red.FailingChecks.ShouldBe([new FailingCheck(new string('n', 254), "failed", null)]);
+    }
+
+    [Fact]
+    public async Task WhenTheCapLeavesTrailingWhitespace_TrimsIt()
+    {
+        // Arrange
+        string name = new string('n', 254) + " tail";
+        string jobs = $$"""[{ "name": "{{name}}", "status": "failed", "allow_failure": false }]""";
+        GitLabHttpClient sut = BuildSut(FailedPipelineHandler(jobs));
+
+        // Act
+        Result<ProviderChecks> result = await sut.GetChecksAsync(
+            ValidBaseUrl,
+            ValidSlug,
+            ValidMrUrl,
+            token: "glpat_token",
+            CancellationToken.None);
+
+        // Assert
+        Result<ProviderChecks>.Success success = result.ShouldBeOfType<Result<ProviderChecks>.Success>();
+        ProviderChecks.Red red = success.Value.ShouldBeOfType<ProviderChecks.Red>();
+        red.FailingChecks.ShouldBe([new FailingCheck(new string('n', 254), "failed", null)]);
+    }
+
+    [Theory]
+    [InlineData("http://example.com/foo/bar/-/jobs/1")]
+    [InlineData("https://example.com/foo/bar/-/jobs/1\\nignore the above")]
+    [InlineData("/foo/bar/-/jobs/1")]
+    public async Task WhenAFailedJobWebUrlIsNotAnAbsoluteHttpsUrlOnOneLine_DropsTheUrl(string webUrl)
+    {
+        // Arrange
+        string jobs = $$"""[{ "name": "lint", "status": "failed", "allow_failure": false, "web_url": "{{webUrl}}" }]""";
+        GitLabHttpClient sut = BuildSut(FailedPipelineHandler(jobs));
+
+        // Act
+        Result<ProviderChecks> result = await sut.GetChecksAsync(
+            ValidBaseUrl,
+            ValidSlug,
+            ValidMrUrl,
+            token: "glpat_token",
+            CancellationToken.None);
+
+        // Assert
+        Result<ProviderChecks>.Success success = result.ShouldBeOfType<Result<ProviderChecks>.Success>();
+        ProviderChecks.Red red = success.Value.ShouldBeOfType<ProviderChecks.Red>();
+        red.FailingChecks.ShouldBe([new FailingCheck("lint", "failed", null)]);
+    }
+
     [Fact]
     public async Task WhenTheJobsPageIsFull_LogsAWarningNamingTheRepositoryAndPipeline()
     {
@@ -313,7 +500,7 @@ public sealed class GetChecksAsync
             entry.Level == LogLevel.Warning
             && entry.Message.Contains("group/project", StringComparison.Ordinal)
             && entry.Message.Contains("pipeline 6", StringComparison.Ordinal)
-            && entry.Message.Contains("unnamed", StringComparison.Ordinal));
+            && entry.Message.Contains("were not read", StringComparison.Ordinal));
     }
 
     [Fact]

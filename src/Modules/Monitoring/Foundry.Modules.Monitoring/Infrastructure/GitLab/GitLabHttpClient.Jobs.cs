@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Text.Json;
@@ -16,10 +17,10 @@ internal sealed partial class GitLabHttpClient
     private const string FailedPipelineStatus = "failed";
     private const int FailedJobsPerPage = 100;
 
-    // GitLab bounds a job name at 255 characters. The caps protect the stored failing-check payloads (outbox
-    // message, revision trigger) from a misbehaving server. An over-long URL is dropped rather than cut, since a
-    // cut URL would resolve to a different page.
-    private const int MaxJobNameLength = 255;
+    // GitLab bounds a job name at 255 characters, and the job status uses the same cap. The caps protect the stored
+    // failing-check payloads (outbox message, revision trigger) from a misbehaving server. An over-long URL is
+    // dropped rather than cut, since a cut URL would resolve to a different page.
+    private const int MaxFieldLength = 255;
     private const int MaxWebUrlLength = 2048;
 
     /// <summary>Reads the log of CI job <paramref name="jobId"/> (<c>GET /projects/:id/jobs/:job_id/trace</c>).</summary>
@@ -151,13 +152,15 @@ internal sealed partial class GitLabHttpClient
         if (jobs.Count == FailedJobsPerPage)
         {
             logger.LogWarning(
-                "GitLab returned a full page of failed jobs for pipeline {PipelineId} in {Repository};"
-                + " further failed jobs may be unnamed.",
+                "GitLab returned a full jobs page ({PageSize} failed jobs) for pipeline {PipelineId} in {Repository};"
+                + " further failed jobs were not read.",
+                FailedJobsPerPage,
                 failedPipelineId,
                 slug.FullPath);
         }
 
         List<FailingCheck> failingChecks = jobs
+            .Where(job => job is not null)
             .Where(job => !job.AllowFailure)
             .Select(ToFailingCheck)
             .OfType<FailingCheck>()
@@ -168,16 +171,31 @@ internal sealed partial class GitLabHttpClient
 
     private static FailingCheck? ToFailingCheck(GitLabJobDto job)
     {
-        string name = Sanitize(job.Name, MaxJobNameLength);
-        string status = Sanitize(job.Status, MaxJobNameLength);
+        string name = Sanitize(job.Name, MaxFieldLength);
+        string status = Sanitize(job.Status, MaxFieldLength);
 
         if (name.Length == 0 || status.Length == 0)
         {
             return null;
         }
 
-        string? webUrl = job.WebUrl?.Length > MaxWebUrlLength ? null : job.WebUrl;
-        return new FailingCheck(name, status, webUrl);
+        return new FailingCheck(name, status, ValidWebUrl(job.WebUrl));
+    }
+
+    // The URL reaches the dispatched prompt, so only an absolute https URL on a single line is kept. The host is not
+    // pinned, because the job's project path alone identifies the job.
+    private static string? ValidWebUrl(string? webUrl)
+    {
+        if (webUrl is null
+            || webUrl.Length > MaxWebUrlLength
+            || !Uri.TryCreate(webUrl, UriKind.Absolute, out Uri? uri)
+            || uri.Scheme != Uri.UriSchemeHttps
+            || webUrl.Any(IsLineBreakingOrInvisible))
+        {
+            return null;
+        }
+
+        return webUrl;
     }
 
     // Job names are free text a CI file author controls (a YAML key may hold a newline), and they land inside the
@@ -196,13 +214,30 @@ internal sealed partial class GitLabHttpClient
             {
                 for (int index = 0; index < source.Length; index++)
                 {
-                    span[index] = char.IsControl(source[index]) ? ' ' : source[index];
+                    span[index] = IsLineBreakingOrInvisible(source[index]) ? ' ' : source[index];
                 }
             });
 
         string trimmed = flattened.Trim();
-        return trimmed.Length > maxLength ? trimmed[..maxLength] : trimmed;
+        return trimmed.Length > maxLength ? CutAt(trimmed, maxLength) : trimmed;
     }
+
+    // A cut that lands between the halves of a surrogate pair would leave a lone surrogate, and one that lands
+    // after a space would leave trailing whitespace.
+    private static string CutAt(string text, int maxLength)
+    {
+        string cut = text[..maxLength];
+        return char.IsHighSurrogate(cut[^1]) ? cut[..^1].TrimEnd() : cut.TrimEnd();
+    }
+
+    // Beyond control characters, the Unicode line and paragraph separators break a line-oriented block just as a
+    // newline does, and format characters such as the bidi override reorder how the text reads.
+    private static bool IsLineBreakingOrInvisible(char character) =>
+        char.IsControl(character)
+        || char.GetUnicodeCategory(character) is
+            UnicodeCategory.LineSeparator
+            or UnicodeCategory.ParagraphSeparator
+            or UnicodeCategory.Format;
 
     private static bool IsAuthFailure(HttpResponseMessage response) =>
         response.StatusCode is HttpStatusCode.Unauthorized
