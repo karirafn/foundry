@@ -105,7 +105,11 @@ public sealed class ComposedHostSmokeTests : IAsyncDisposable
         WorkerContainerSpec triageSpec = _boundaries.Containers.StartedSpecs.ShouldHaveSingleItem();
         triageSpec.ShouldSatisfyAllConditions(
             () => triageSpec.EnvironmentVariables["WORKER_ROLE"].ShouldBe(WorkerRole.Triage.Name),
-            () => triageSpec.EnvironmentVariables.ShouldNotContainKey("BRANCH_NAME"));
+            () => triageSpec.EnvironmentVariables.ShouldNotContainKey("BRANCH_NAME"),
+            () => triageSpec.EnvironmentVariables["SYSTEM_PROMPT"]
+                .ShouldContain($"<referenced-issue number=\"{FakeGitHub.BlockerNumber}\" relation=\"blocked_by\""),
+            () => triageSpec.EnvironmentVariables["SYSTEM_PROMPT"]
+                .ShouldContain($"<open-issue number=\"{FakeGitHub.RelatedOpenIssueNumber}\">"));
         (await GetIssueAsync(ct)).ShouldBeOfType<TriageInProgressIssue>();
 
         // The triage run exits 0 with a ready verdict: the issue goes through the dependency check to the queue.

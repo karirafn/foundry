@@ -5,6 +5,7 @@ using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Features.Providers;
 using Foundry.Modules.Monitoring.Features.Providers.Comments;
 using Foundry.Modules.Monitoring.Features.Providers.Feedback;
+using Foundry.Modules.Monitoring.Features.Providers.TrackerReads;
 using Foundry.Modules.Monitoring.Infrastructure.GitHub;
 using Foundry.Shared;
 
@@ -22,6 +23,8 @@ internal sealed class FakeGitHub : IIssueProviderFactory, IIssueProvider, IGitHu
     internal const string Owner = "smoke-owner";
     internal const string Slug = Owner + "/smoke-repo";
     internal const int IssueNumber = 42;
+    internal const int BlockerNumber = 7;
+    internal const int RelatedOpenIssueNumber = 8;
     internal const string PullRequestUrl = "https://github.com/" + Slug + "/pull/43";
 
     private static readonly ProviderIssue Issue = new(
@@ -108,6 +111,27 @@ internal sealed class FakeGitHub : IIssueProviderFactory, IIssueProvider, IGitHu
     // A triage run reads the issue through Foundry (ADR 0098).
     public Task<Result<ProviderIssueContent>> GetIssueContentAsync(RepositorySlug slug, int issueNumber, CancellationToken cancellationToken)
         => Task.FromResult(Result<ProviderIssueContent>.Ok(new ProviderIssueContent(Issue.Title, "Add a smoke-tested feature.", [])));
+
+    // The Tracker Context reads at dispatch. Values follow the shapes the real GitHub client maps from live
+    // captures: REST dependencies/blocked_by (X-GitHub-Api-Version 2026-03-10) lists issues by number, and the
+    // GraphQL issueOrPullRequest read (rateLimit inside data) carries title, state, labels, closing pull request
+    // state and body; the open-issue list is the GraphQL issues(states: OPEN) nodes of number and title.
+    public Task<Result<IReadOnlyList<IssueReference>>> GetIssueLinksAsync(RepositorySlug slug, int issueNumber, CancellationToken cancellationToken)
+        => Task.FromResult(Result<IReadOnlyList<IssueReference>>.Ok([new IssueReference(BlockerNumber, IssueRelation.BlockedBy)]));
+
+    public Task<Result<ProviderReferencedIssue>> GetReferencedIssueAsync(RepositorySlug slug, int issueNumber, CancellationToken cancellationToken)
+        => Task.FromResult(Result<ProviderReferencedIssue>.Ok(new ProviderReferencedIssue(
+            "Smoke: the blocking issue",
+            IsOpen: false,
+            ["feature"],
+            ClosingMergeRequestState.Merged,
+            "The blocking issue's body.")));
+
+    // Includes the dispatched issue so the reader's self-exclusion shows.
+    public Task<Result<IReadOnlyList<OpenIssue>>> GetOpenIssuesAsync(RepositorySlug slug, CancellationToken cancellationToken)
+        => Task.FromResult(Result<IReadOnlyList<OpenIssue>>.Ok([
+            new OpenIssue(IssueNumber, Issue.Title),
+            new OpenIssue(RelatedOpenIssueNumber, "Smoke: a related open issue")]));
 
     // Checks stay pending so the issue rests in checks-pending once the run is tracked.
     public Task<Result<ProviderChecks>> GetChecksAsync(RepositorySlug slug, string pullRequestUrl, CancellationToken cancellationToken)
