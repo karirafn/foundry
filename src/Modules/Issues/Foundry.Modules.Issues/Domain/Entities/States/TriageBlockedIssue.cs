@@ -9,8 +9,9 @@ namespace Foundry.Modules.Issues.Domain.Entities.States;
 /// An issue that hasn't been triaged and has open blockers (ADR 0102), or one triage found blocked. It waits
 /// untriaged, so triage judges it against the code its blockers wrote; when they close it moves to
 /// <see cref="TriageQueuedIssue"/>, and when the tracker refuses to link a blocker triage named it moves to
-/// <see cref="TriageFailedIssue"/>. Unlike a
-/// <see cref="BlockedIssue"/>, which has been triaged or skipped triage and moves to <see cref="FreshQueuedIssue"/>.
+/// <see cref="TriageFailedIssue"/>.
+/// A <see cref="BlockedIssue"/> differs: it has been triaged or skipped triage, and moves to
+/// <see cref="FreshQueuedIssue"/> when its blockers close.
 /// It is not a <see cref="QueuedIssue"/>: it is never a dispatch candidate and holds no worker slot.
 /// </summary>
 public sealed class TriageBlockedIssue : Issue
