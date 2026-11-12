@@ -340,10 +340,11 @@ public sealed class RepositoryRoles
         const string applyLine = "Apply the engineering principles above to every change.";
         WorkerRoleCatalogContent catalog = LoadRepositoryCatalog();
         WorkerRoleDefinition implement = catalog.Find(WorkerRole.Implement).ShouldNotBeNull();
+        string principles = catalog.PrinciplesFor(WorkerRole.Implement);
 
         // Act
         Result<string> result = SystemPromptBuilder.Build(
-            catalog.Principles,
+            principles,
             42,
             implement.SystemPromptTemplate,
             new DispatchContext.Fresh("feat/42-title"),
@@ -355,8 +356,8 @@ public sealed class RepositoryRoles
         // Assert
         string prompt = result.ShouldBeOfType<Result<string>.Success>().Value;
         prompt.ShouldSatisfyAllConditions(
-            () => prompt.Split(catalog.Principles).Length.ShouldBe(2),
-            () => prompt.IndexOf(catalog.Principles, StringComparison.Ordinal)
+            () => prompt.Split(principles).Length.ShouldBe(2),
+            () => prompt.IndexOf(principles, StringComparison.Ordinal)
                 .ShouldBeLessThan(prompt.IndexOf(applyLine, StringComparison.Ordinal)),
             () => prompt.ShouldNotContain("Test-driven development:"),
             () => prompt.ShouldNotContain(RolePromptPlaceholders.IssueNumber),
@@ -401,19 +402,62 @@ public sealed class RepositoryRoles
     }
 
     [Theory]
-    [InlineData("Testing (where a test runner exists):")]
-    [InlineData("Design:")]
-    [InlineData("Domain modelling (where the code models a business domain):")]
-    public void ThePrinciplesFile_CarriesTheScopingHeadings(string heading)
+    [InlineData(PrincipleSection.Testing, "Testing (where a test runner exists):")]
+    [InlineData(PrincipleSection.Design, "Design:")]
+    [InlineData(PrincipleSection.Code, "Code:")]
+    [InlineData(PrincipleSection.DomainModelling, "Domain modelling (where the code models a business domain):")]
+    public void EachPrincipleSectionFile_OpensWithItsScopingHeading(PrincipleSection section, string heading)
     {
         // Arrange
         WorkerRoleCatalogContent catalog = LoadRepositoryCatalog();
 
         // Act
-        string principles = catalog.Principles;
+        string text = catalog.Principles.TextOf(section);
 
         // Assert
-        principles.ShouldContain(heading);
+        text.ShouldStartWith(heading + "\n");
+    }
+
+    [Fact]
+    public void TheFramingFile_HoldsOnlyTheFramingLine()
+    {
+        // Arrange
+        WorkerRoleCatalogContent catalog = LoadRepositoryCatalog();
+
+        // Act
+        string framing = catalog.Principles.Framing;
+
+        // Assert
+        framing.ShouldBe(
+            "Engineering principles. The repository's own style, testing and design conventions win where they differ; the safety rules above always apply.");
+    }
+
+    [Fact]
+    public void WhenTheTriageRolePromptIsRendered_CarriesOnlyTheDesignAndDomainModellingPrinciples()
+    {
+        // Arrange
+        const string judgeLine = "Judge the work against the engineering principles above.";
+        WorkerRoleCatalogContent catalog = LoadRepositoryCatalog();
+        WorkerRoleDefinition triage = catalog.Find(WorkerRole.Triage).ShouldNotBeNull();
+        string principles = catalog.PrinciplesFor(WorkerRole.Triage);
+
+        // Act
+        Result<string> result = SystemPromptBuilder.BuildRestricted(
+            principles,
+            42,
+            triage.SystemPromptTemplate,
+            new IssueContent("Add retry", "Retry webhook delivery.", []),
+            installsDotnet: false);
+
+        // Assert
+        string prompt = result.ShouldBeOfType<Result<string>.Success>().Value;
+        prompt.ShouldSatisfyAllConditions(
+            () => prompt.ShouldContain(catalog.Principles.Framing + "\n\n" + catalog.Principles.TextOf(PrincipleSection.Design)),
+            () => prompt.ShouldContain(catalog.Principles.TextOf(PrincipleSection.DomainModelling)),
+            () => prompt.ShouldNotContain(catalog.Principles.TextOf(PrincipleSection.Testing)),
+            () => prompt.ShouldNotContain(catalog.Principles.TextOf(PrincipleSection.Code)),
+            () => prompt.IndexOf(principles, StringComparison.Ordinal)
+                .ShouldBeLessThan(prompt.IndexOf(judgeLine, StringComparison.Ordinal)));
     }
 
     private static WorkerRoleCatalogContent LoadRepositoryCatalog() =>

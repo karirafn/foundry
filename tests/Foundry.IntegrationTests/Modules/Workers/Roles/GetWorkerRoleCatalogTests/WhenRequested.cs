@@ -58,6 +58,10 @@ public sealed class WhenRequested : IAsyncDisposable
             ["triage/prompts/task.md"] = "Triage issue #{issueNumber}.",
             ["shared/.claude-plugin/plugin.json"] = """{"name":"shared"}""",
             ["shared/prompts/principles.md"] = "Engineering principles.",
+            ["shared/prompts/principles/testing.md"] = "Testing:",
+            ["shared/prompts/principles/design.md"] = "Design:",
+            ["shared/prompts/principles/code.md"] = "Code:",
+            ["shared/prompts/principles/domain.md"] = "Domain modelling:",
         }).ShouldBeOfType<Result<WorkerRoleCatalogContent>.Success>().Value;
 
         _factory.Services.GetRequiredService<IWorkerRoleCatalogStore>().Publish(new WorkerRoleCatalog(
@@ -96,7 +100,18 @@ public sealed class WhenRequested : IAsyncDisposable
             () => firstSection.GetProperty("condition").GetString().ShouldBe("Always"),
             () => principlesSection.GetProperty("key").GetString().ShouldBe("principles"),
             () => principlesSection.GetProperty("condition").GetString().ShouldBe("Always"),
-            () => principlesSection.GetProperty("content").GetString().ShouldBe(content.Principles),
-            () => root.GetProperty("rolePromptSlot").GetString().ShouldBe("{rolePrompt}"));
+            () => principlesSection.GetProperty("content").GetString().ShouldBe("{principles}"),
+            () => root.GetProperty("rolePromptSlot").GetString().ShouldBe("{rolePrompt}"),
+            () => root.GetProperty("principlesSlot").GetString().ShouldBe("{principles}"),
+            () => Names(root.GetProperty("principleSections")).ShouldBe(["Testing", "Design", "Code", "Domain modelling"]),
+            () => Names(role.GetProperty("principleSections")).ShouldBe(["Testing", "Design", "Code", "Domain modelling"]),
+            () => role.GetProperty("principles").GetString().ShouldBe(
+                "Engineering principles.\n\nTesting:\n\nDesign:\n\nCode:\n\nDomain modelling:"),
+            () => Names(triage.GetProperty("principleSections")).ShouldBe(["Design", "Domain modelling"]),
+            () => triage.GetProperty("principles").GetString().ShouldBe(
+                "Engineering principles.\n\nDesign:\n\nDomain modelling:"));
     }
+
+    private static string[] Names(JsonElement array) =>
+        [.. array.EnumerateArray().Select(element => element.GetString().ShouldNotBeNull())];
 }

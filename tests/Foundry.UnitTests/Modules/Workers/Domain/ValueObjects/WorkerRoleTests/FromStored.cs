@@ -41,6 +41,18 @@ public sealed class FromStored
     }
 
     [Fact]
+    public void WhenTheNameIsNoLongerARole_DeclaresNoPrincipleSections()
+    {
+        // Act
+        WorkerRole role = WorkerRole.FromStored("retired-role");
+
+        // Assert
+        role.PrincipleSections.ShouldSatisfyAllConditions(
+            () => role.PrincipleSections.IsEmpty.ShouldBeTrue(),
+            () => role.PrincipleSections.ShouldBe(PrincipleSectionSet.None));
+    }
+
+    [Fact]
     public void TheTriageRole_IsKnownByName()
     {
         // Act

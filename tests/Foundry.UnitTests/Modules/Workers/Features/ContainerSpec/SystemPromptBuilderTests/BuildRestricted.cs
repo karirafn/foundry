@@ -120,6 +120,17 @@ public sealed class BuildRestricted
     }
 
     [Fact]
+    public void WhenTheRoleSelectsNoPrincipleSection_EmitsNoPrinciplesBlockAndNoExtraBlankLines()
+    {
+        // Act
+        string prompt = SystemPromptBuilder.BuildRestricted(string.Empty, 42, Template, Issue(), installsDotnet: false)
+            .ShouldBeOfType<Result<string>.Success>().Value;
+
+        // Assert
+        prompt.ShouldStartWith(SystemPromptBuilder.RestrictedSafetyPreamble + "\n\nYou are triaging issue #42.\n\n");
+    }
+
+    [Fact]
     public void WhenBuilt_LeavesOutEveryImplementOnlySection()
     {
         // Act

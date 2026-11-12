@@ -361,6 +361,22 @@ describe('RoleDetailComponent', () => {
       expect(text(slot.querySelector('fd-role-tag'))).toBe('Role: implement');
     });
 
+    it("should show the role's own principles and the sections it selects in the principles slot", async () => {
+      // Act
+      const { el } = await openRole({
+        name: 'implement',
+        principleSections: ['Design', 'Domain modelling'],
+        principles: 'Engineering principles.\n\nDesign:\n- Safe defaults.',
+      });
+
+      // Assert
+      const slot = Array.from(el().querySelectorAll<HTMLDetailsElement>('details.prompt-assembly__section')).find(
+        (d) => text(d.querySelector('.prompt-assembly__title-text')) === 'Worker principles',
+      )!;
+      expect(text(slot.querySelector('.prompt-assembly__note'))).toBe('Includes: Design, Domain modelling');
+      expect(slot.querySelector('pre')!.textContent).toBe('Engineering principles.\n\nDesign:\n- Safe defaults.');
+    });
+
     it('should show the task prompt verbatim after the assembly', async () => {
       // Act
       const { el } = await openLoaded();

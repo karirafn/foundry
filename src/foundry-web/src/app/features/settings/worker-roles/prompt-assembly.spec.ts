@@ -1,17 +1,41 @@
 import { TestBed } from '@angular/core/testing';
 import { PromptAssemblyComponent } from './prompt-assembly';
-import { ROLE_PROMPT_SLOT, buildWorkerRoleCatalog } from '../testing/worker-role-catalog.fixture';
+import {
+  IMPLEMENT_PRINCIPLES,
+  PRINCIPLES_SLOT,
+  PRINCIPLE_SECTIONS,
+  ROLE_PROMPT_SLOT,
+  buildWorkerRoleCatalog,
+} from '../testing/worker-role-catalog.fixture';
 import { PromptSectionDescriptor } from './worker-role.service';
 
 const ROLE_SYSTEM_PROMPT = 'You are implementing issue #{issueNumber} in {repository}.';
 
-function render(sections: readonly PromptSectionDescriptor[] = buildWorkerRoleCatalog().promptSections) {
+interface RenderOptions {
+  readonly rolePrincipleSections?: readonly string[];
+  readonly rolePrinciplesText?: string;
+}
+
+function render(
+  sections: readonly PromptSectionDescriptor[] = buildWorkerRoleCatalog().promptSections,
+  options: RenderOptions = {},
+) {
   TestBed.configureTestingModule({ imports: [PromptAssemblyComponent] });
   const fixture = TestBed.createComponent(PromptAssemblyComponent);
   fixture.componentRef.setInput('sections', sections);
   fixture.componentRef.setInput('rolePromptSlot', ROLE_PROMPT_SLOT);
+  fixture.componentRef.setInput('principlesSlot', PRINCIPLES_SLOT);
+  fixture.componentRef.setInput('principleSections', PRINCIPLE_SECTIONS);
   fixture.componentRef.setInput('roleName', 'implement');
   fixture.componentRef.setInput('roleSystemPrompt', ROLE_SYSTEM_PROMPT);
+  fixture.componentRef.setInput(
+    'rolePrincipleSections',
+    options.rolePrincipleSections ?? PRINCIPLE_SECTIONS,
+  );
+  fixture.componentRef.setInput(
+    'rolePrinciplesText',
+    options.rolePrinciplesText ?? IMPLEMENT_PRINCIPLES,
+  );
   fixture.detectChanges();
   return { fixture, el: fixture.nativeElement as HTMLElement };
 }
@@ -45,7 +69,7 @@ describe('PromptAssemblyComponent', () => {
 
     // Assert
     expect(text(el.querySelector('.prompt-assembly__hint'))).toBe(
-      'Foundry assembles the system prompt from these sections, in order. Conditional sections are included only when their condition holds for the run. This role\'s own prompt starts open.',
+      "Foundry assembles the system prompt from these sections, in order. Conditional sections are included only when their condition holds for the run. Worker principles list the sections this role receives. This role's own prompt starts open.",
     );
   });
 
@@ -57,6 +81,7 @@ describe('PromptAssemblyComponent', () => {
     const names = Array.from(el.querySelectorAll('li .prompt-assembly__title-text'));
     expect(names.map((n) => text(n))).toEqual([
       'Base instructions',
+      'Worker principles',
       'Role prompt',
       '.NET toolchain',
       'Docker',
@@ -72,9 +97,9 @@ describe('PromptAssemblyComponent', () => {
     const { el } = render();
 
     // Assert
-    const items = Array.from(el.querySelectorAll('li'));
+    const items = Array.from(el.querySelectorAll('li.prompt-assembly__item'));
     const ordinals = items.map((li) => li.querySelector(':scope > span[aria-hidden="true"]'));
-    expect(ordinals.map((o) => text(o))).toEqual(['1', '2', '3', '4', '5', '6', '7', '8']);
+    expect(ordinals.map((o) => text(o))).toEqual(['1', '2', '3', '4', '5', '6', '7', '8', '9']);
   });
 
   it('should label each condition with a human tag', () => {
@@ -84,6 +109,7 @@ describe('PromptAssemblyComponent', () => {
     // Assert
     const tags = Array.from(el.querySelectorAll('.prompt-assembly__condition'));
     expect(tags.map((t) => text(t))).toEqual([
+      'Always',
       'Always',
       'Always',
       '.NET image',
@@ -102,6 +128,7 @@ describe('PromptAssemblyComponent', () => {
     // Assert
     const tags = Array.from(el.querySelectorAll('.prompt-assembly__condition'));
     expect(tags.map((t) => t.className.match(/condition--(\w+)/)![1])).toEqual([
+      'always',
       'always',
       'always',
       'image',
@@ -128,7 +155,7 @@ describe('PromptAssemblyComponent', () => {
     const { el } = render();
 
     // Assert
-    expect(sections(el)).toHaveLength(8);
+    expect(sections(el)).toHaveLength(9);
     expect(sections(el).every((d) => d.querySelector(':scope > summary') !== null)).toBe(true);
   });
 
@@ -159,7 +186,7 @@ describe('PromptAssemblyComponent', () => {
 
     // Assert
     const others = sections(el).filter((d) => d !== roleSlot(el));
-    expect(others).toHaveLength(7);
+    expect(others).toHaveLength(8);
     expect(others.some((d) => d.open)).toBe(false);
   });
 
@@ -256,5 +283,128 @@ describe('PromptAssemblyComponent', () => {
 
     // Assert
     expect(text(el.querySelector('button'))).toBe('Expand all');
+  });
+
+  describe('worker principles', () => {
+    const TRIAGE_PRINCIPLES = 'Engineering principles.\n\nDesign:\n- Safe defaults.';
+
+    function principlesSlot(el: HTMLElement): HTMLDetailsElement | undefined {
+      return sections(el).find(
+        (d) => text(d.querySelector('.prompt-assembly__title-text')) === 'Worker principles',
+      );
+    }
+
+    it('should start the principles section collapsed, with no role tag or accent', () => {
+      // Act
+      const { el } = render();
+
+      // Assert
+      const slot = principlesSlot(el)!;
+      expect(slot.open).toBe(false);
+      expect(slot.classList.contains('prompt-assembly__section--role')).toBe(false);
+      expect(slot.querySelector('fd-role-tag')).toBeNull();
+    });
+
+    it('should name the selected sections in the summary, so the selection is heard while collapsed', () => {
+      // Act
+      const { el } = render(undefined, {
+        rolePrincipleSections: ['Design', 'Domain modelling'],
+        rolePrinciplesText: TRIAGE_PRINCIPLES,
+      });
+
+      // Assert
+      const summary = principlesSlot(el)!.querySelector('summary')!;
+      expect(text(summary.querySelector('.prompt-assembly__note'))).toBe(
+        'Includes: Design, Domain modelling',
+      );
+      expect(text(summary)).toContain('Includes: Design, Domain modelling');
+    });
+
+    it('should list the selected sections in the fixed order, whatever order the role gives', () => {
+      // Act
+      const { el } = render(undefined, { rolePrincipleSections: ['Domain modelling', 'Testing'] });
+
+      // Assert
+      expect(text(principlesSlot(el)!.querySelector('.prompt-assembly__note'))).toBe(
+        'Includes: Testing, Domain modelling',
+      );
+    });
+
+    it("should show the role's own assembled principles text in the body", () => {
+      // Act
+      const { el } = render(undefined, {
+        rolePrincipleSections: ['Design', 'Domain modelling'],
+        rolePrinciplesText: TRIAGE_PRINCIPLES,
+      });
+
+      // Assert
+      const slot = principlesSlot(el)!;
+      expect(slot.querySelector('fd-principle-sections')).not.toBeNull();
+      expect(slot.querySelector('pre')!.textContent).toBe(TRIAGE_PRINCIPLES);
+      expect(slot.textContent).not.toContain(PRINCIPLES_SLOT);
+    });
+
+    describe('when the role selects no section', () => {
+      function renderEmpty() {
+        return render(undefined, { rolePrincipleSections: [], rolePrinciplesText: '' });
+      }
+
+      function staticRow(el: HTMLElement): HTMLElement {
+        return el.querySelector<HTMLElement>('.prompt-assembly__static')!;
+      }
+
+      it('should keep the row in place as a static row that cannot open', () => {
+        // Act
+        const { el } = renderEmpty();
+
+        // Assert
+        const row = staticRow(el);
+        expect(row.tagName).toBe('DIV');
+        expect(row.getAttribute('tabindex')).toBeNull();
+        expect(row.getAttribute('aria-expanded')).toBeNull();
+        expect(text(row.querySelector('.prompt-assembly__title-text'))).toBe('Worker principles');
+        expect(principlesSlot(el)).toBeUndefined();
+        expect(sections(el)).toHaveLength(8);
+      });
+
+      it('should tag the row Not included and say why', () => {
+        // Act
+        const { el } = renderEmpty();
+
+        // Assert
+        const row = staticRow(el);
+        const tag = row.querySelector('.prompt-assembly__condition')!;
+        expect(text(tag)).toBe('Not included');
+        expect(tag.classList.contains('prompt-assembly__condition--excluded')).toBe(true);
+        expect(text(row.querySelector('.prompt-assembly__note'))).toBe(
+          'This role declares no principle sections, so its prompt has none.',
+        );
+      });
+
+      it('should number only the included sections', () => {
+        // Act
+        const { el } = renderEmpty();
+
+        // Assert
+        const ordinals = Array.from(el.querySelectorAll('li.prompt-assembly__item')).map((li) =>
+          text(li.querySelector(':scope > span[aria-hidden="true"]')),
+        );
+        expect(ordinals).toEqual(['1', '', '2', '3', '4', '5', '6', '7', '8']);
+      });
+
+      it('should leave the static row out of Expand all', () => {
+        // Arrange
+        const { el, fixture } = renderEmpty();
+        const button = el.querySelector<HTMLButtonElement>('button')!;
+
+        // Act
+        button.click();
+        fixture.detectChanges();
+
+        // Assert
+        expect(sections(el).every((d) => d.open)).toBe(true);
+        expect(text(button)).toBe('Collapse all');
+      });
+    });
   });
 });
