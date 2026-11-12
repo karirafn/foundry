@@ -14,6 +14,10 @@ internal sealed partial class GitLabHttpClient
     private const string BlocksLinkType = "blocks";
     private const string RelatesToLinkType = "relates_to";
     private const int OpenIssuesPerPage = 100;
+    private const string OpenedState = "opened";
+    private const string LockedState = "locked";
+    private const string MergedState = "merged";
+    private const string ClosedState = "closed";
 
     /// <summary>
     /// Reads the links of <paramref name="issueNumber"/> (<c>GET /projects/:id/issues/:issue_iid/links</c>),
@@ -117,6 +121,108 @@ internal sealed partial class GitLabHttpClient
         return Result<IReadOnlyList<OpenIssue>>.Ok(issues);
     }
 
+    /// <summary>
+    /// Reads one same-project issue (<c>GET /projects/:id/issues/:issue_iid</c>) and the merge requests that close
+    /// it on merge (<c>GET /projects/:id/issues/:issue_iid/closed_by</c>). It never reads
+    /// <c>related_merge_requests</c>, which lists merge requests that merely mention the issue.
+    /// </summary>
+    public async Task<Result<ProviderReferencedIssue>> GetReferencedIssueAsync(
+        Uri apiBaseUrl,
+        RepositorySlug slug,
+        int issueNumber,
+        string token,
+        CancellationToken cancellationToken)
+    {
+        string encodedPath = Uri.EscapeDataString(slug.FullPath);
+        string issuePath = $"projects/{encodedPath}/issues/{issueNumber}";
+
+        Result<GitLabReferencedIssueDto> issueResult = await ReadJsonAsync<GitLabReferencedIssueDto>(
+            apiBaseUrl, issuePath, token, cancellationToken);
+
+        if (issueResult is not Result<GitLabReferencedIssueDto>.Success issueSuccess)
+        {
+            return Result<ProviderReferencedIssue>.Fail(((Result<GitLabReferencedIssueDto>.Failure)issueResult).Error);
+        }
+
+        Result<List<GitLabClosingMergeRequestDto>> closedByResult =
+            await ReadJsonAsync<List<GitLabClosingMergeRequestDto>>(
+                apiBaseUrl, $"{issuePath}/closed_by", token, cancellationToken);
+
+        if (closedByResult is not Result<List<GitLabClosingMergeRequestDto>>.Success closedBySuccess)
+        {
+            return Result<ProviderReferencedIssue>.Fail(
+                ((Result<List<GitLabClosingMergeRequestDto>>.Failure)closedByResult).Error);
+        }
+
+        GitLabReferencedIssueDto issue = issueSuccess.Value;
+
+        return Result<ProviderReferencedIssue>.Ok(new ProviderReferencedIssue(
+            issue.Title,
+            string.Equals(issue.State, OpenedState, StringComparison.Ordinal),
+            issue.Labels ?? [],
+            StrongestClosingState(closedBySuccess.Value),
+            issue.Description ?? string.Empty));
+    }
+
+    private async Task<Result<T>> ReadJsonAsync<T>(
+        Uri apiBaseUrl,
+        string relativePath,
+        string token,
+        CancellationToken cancellationToken)
+        where T : class
+    {
+        if (apiBaseUrl.Scheme is not "https")
+        {
+            return Result<T>.Fail(GitLabErrors.InvalidBaseUrl);
+        }
+
+        Uri requestUri = new(EnsureTrailingSlash(apiBaseUrl), relativePath);
+
+        using HttpRequestMessage request = new(HttpMethod.Get, requestUri);
+        AddCommonHeaders(request, token);
+
+        using HttpResponseMessage response = await httpClient.SendAsync(request, cancellationToken);
+
+        if (!response.IsSuccessStatusCode)
+        {
+            return Result<T>.Fail(ErrorFromNonSuccess(response));
+        }
+
+        RecordRestHeadroom(response);
+
+        string body = await response.Content.ReadAsStringAsync(cancellationToken);
+
+        T? value = JsonSerializer.Deserialize<T>(body, JsonOptions);
+
+        return value is null
+            ? Result<T>.Fail(GitLabErrors.ProviderError($"GitLab returned an empty body for {relativePath}."))
+            : Result<T>.Ok(value);
+    }
+
+    private static ClosingMergeRequestState StrongestClosingState(
+        IReadOnlyList<GitLabClosingMergeRequestDto> closingMergeRequests)
+    {
+        return closingMergeRequests
+            .Select(mergeRequest => mergeRequest.State switch
+            {
+                MergedState => ClosingMergeRequestState.Merged,
+                OpenedState or LockedState => ClosingMergeRequestState.Open,
+                ClosedState => ClosingMergeRequestState.Closed,
+                _ => ClosingMergeRequestState.None,
+            })
+            .DefaultIfEmpty(ClosingMergeRequestState.None)
+            .MaxBy(ClosingStatePrecedence);
+    }
+
+    // Merged outranks open, which outranks closed, which outranks none.
+    private static int ClosingStatePrecedence(ClosingMergeRequestState state) => state switch
+    {
+        ClosingMergeRequestState.Merged => 3,
+        ClosingMergeRequestState.Open => 2,
+        ClosingMergeRequestState.Closed => 1,
+        _ => 0,
+    };
+
     private static IssueRelation? RelationOf(string linkType)
     {
         return linkType switch
@@ -129,4 +235,12 @@ internal sealed partial class GitLabHttpClient
     }
 
     private sealed record GitLabOpenIssueDto(int Iid, string Title);
+
+    private sealed record GitLabReferencedIssueDto(
+        string Title,
+        string? Description,
+        string State,
+        IReadOnlyList<string>? Labels);
+
+    private sealed record GitLabClosingMergeRequestDto(string State);
 }

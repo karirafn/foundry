@@ -61,6 +61,14 @@ internal sealed partial class GitLabIssueProvider(
         return httpClient.GetOpenIssuesAsync(apiBaseUrl, slug, token, cancellationToken);
     }
 
+    public Task<Result<ProviderReferencedIssue>> GetReferencedIssueAsync(
+        RepositorySlug slug,
+        int issueNumber,
+        CancellationToken cancellationToken)
+    {
+        return httpClient.GetReferencedIssueAsync(apiBaseUrl, slug, issueNumber, token, cancellationToken);
+    }
+
     public Task<Result<bool>> IsIssueClosedAsync(
         RepositorySlug slug,
         int issueNumber,
