@@ -6,8 +6,10 @@ using Foundry.Modules.Workers.Contracts;
 namespace Foundry.Modules.Issues.Domain.Entities.States;
 
 /// <summary>
-/// An issue that hasn't been triaged and has open blockers (ADR 0102). It waits untriaged, so triage judges it
-/// against the code its blockers wrote; when they close it moves to <see cref="TriageQueuedIssue"/>. Unlike a
+/// An issue that hasn't been triaged and has open blockers (ADR 0102), or one triage found blocked. It waits
+/// untriaged, so triage judges it against the code its blockers wrote; when they close it moves to
+/// <see cref="TriageQueuedIssue"/>, and when the tracker refuses to link a blocker triage named it moves to
+/// <see cref="TriageFailedIssue"/>. Unlike a
 /// <see cref="BlockedIssue"/>, which has been triaged or skipped triage and moves to <see cref="FreshQueuedIssue"/>.
 /// It is not a <see cref="QueuedIssue"/>: it is never a dispatch candidate and holds no worker slot.
 /// </summary>
@@ -55,5 +57,26 @@ public sealed class TriageBlockedIssue : Issue
         TriageQueuedIssue queued = TriageQueuedIssue.FromTriageBlocked(this);
         AddDomainEvent(new Events.IssueTriageQueued(Id, MonitoredRepositoryId));
         return queued;
+    }
+
+    /// <summary>
+    /// The tracker refused to link a blocker triage named: triage fails, so the person sees why and retries or skips
+    /// triage. The verdict and the blockers stay on the failed issue.
+    /// </summary>
+    public TriageFailedIssue FailBlockerLink(
+        WorkerRunId workerRunId,
+        int blockerIssueNumber,
+        string rejection,
+        DateTimeOffset failedAt)
+    {
+        string failureReason = $"The tracker rejected linking #{blockerIssueNumber} as a blocker: {rejection}";
+        TriageFailedIssue failed = TriageFailedIssue.FromTriageBlocked(
+            this,
+            workerRunId,
+            failureReason,
+            FailureCategory.BlockerLinkFailed,
+            failedAt);
+        AddDomainEvent(new Events.IssueTriageFailed(Id, MonitoredRepositoryId));
+        return failed;
     }
 }

@@ -7,9 +7,9 @@ using FailureCategoryVO = Foundry.Modules.Workers.Contracts.FailureCategory;
 namespace Foundry.Modules.Issues.Domain.Entities.States;
 
 /// <summary>
-/// An issue whose triage run failed (ADR 0097): a non-zero exit, a timeout, a cancellation, or a missing or invalid
-/// verdict. A transient failure retries automatically; anything else parks under Needs attention until an operator
-/// retries or skips triage. Not a <see cref="FailedIssue"/>, whose retry would skip triage.
+/// An issue whose triage failed (ADR 0097): a non-zero exit, a timeout, a cancellation, a missing or invalid
+/// verdict, a blocker that would close a dependency cycle, or a blocker the tracker refused to link. A transient
+/// failure retries automatically; anything else parks under Needs attention until an operator retries or skips triage. Not a <see cref="FailedIssue"/>, whose retry would skip triage.
 /// </summary>
 public sealed class TriageFailedIssue : Issue
 {
@@ -40,6 +40,23 @@ public sealed class TriageFailedIssue : Issue
         failed.CopySharedPropertiesFrom(source);
         failed.SetBlockedBy(source.BlockedBy);
         failed.WorkerRunId = source.WorkerRunId;
+        failed.FailureReason = failureReason;
+        failed.FailureCategory = failureCategory;
+        failed.FailedAt = failedAt;
+        return failed;
+    }
+
+    internal static TriageFailedIssue FromTriageBlocked(
+        TriageBlockedIssue source,
+        WorkerRunId workerRunId,
+        string failureReason,
+        FailureCategoryVO failureCategory,
+        DateTimeOffset failedAt)
+    {
+        TriageFailedIssue failed = new(source.Id);
+        failed.CopySharedPropertiesFrom(source);
+        failed.SetBlockedBy(source.BlockedBy);
+        failed.WorkerRunId = workerRunId;
         failed.FailureReason = failureReason;
         failed.FailureCategory = failureCategory;
         failed.FailedAt = failedAt;

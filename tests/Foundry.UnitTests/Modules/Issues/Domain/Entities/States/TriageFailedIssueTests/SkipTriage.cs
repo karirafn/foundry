@@ -48,4 +48,23 @@ public sealed class SkipTriage
         // Assert
         next.ShouldBeOfType<BlockedIssue>().BlockedBy.ShouldBe([9]);
     }
+
+    [Fact]
+    public void WhenTheFailureWasARejectedBlockerLink_BlocksItOnTheNamedBlockers()
+    {
+        // Arrange
+        TriageVerdict.Blocked verdict = new(
+            IssueKind.Feature,
+            [new TriageBlocker(15, "Needs the retry policy."), new TriageBlocker(31, "Needs the queue.")],
+            DateTimeOffset.UnixEpoch);
+        TriageFailedIssue failed = new IssueBuilder()
+            .TriageBlockedFromTriage(verdict)
+            .FailBlockerLink(WorkerRunId.New(), 15, "issue is locked", DateTimeOffset.UnixEpoch);
+
+        // Act
+        Issue next = failed.SkipTriage();
+
+        // Assert
+        next.ShouldBeOfType<BlockedIssue>().BlockedBy.ShouldBe([15, 31]);
+    }
 }
