@@ -25,10 +25,17 @@ public enum TriageKind
     Documentation,
 }
 
-/// <summary>A triage run's verdict: <see cref="Ready"/> to implement as written, or <see cref="NeedsInput"/> first.</summary>
+/// <summary>An open issue triage named as one the issue depends on, with the model's reason.</summary>
+public sealed record TriageBlocker(int IssueNumber, string Reason);
+
+/// <summary>
+/// A triage run's verdict: <see cref="Ready"/> to implement as written, <see cref="NeedsInput"/> first, or
+/// <see cref="Blocked"/> until the open issues it depends on close.
+/// </summary>
 [JsonPolymorphic(TypeDiscriminatorPropertyName = "$type")]
 [JsonDerivedType(typeof(Ready), "ready")]
 [JsonDerivedType(typeof(NeedsInput), "needs_input")]
+[JsonDerivedType(typeof(Blocked), "blocked")]
 public abstract record TriageResult
 {
     private TriageResult()
@@ -38,4 +45,6 @@ public abstract record TriageResult
     public sealed record Ready(TriageKind Kind) : TriageResult;
 
     public sealed record NeedsInput(TriageKind Kind, IReadOnlyList<InputQuestion> Questions) : TriageResult;
+
+    public sealed record Blocked(TriageKind Kind, IReadOnlyList<TriageBlocker> BlockedBy) : TriageResult;
 }

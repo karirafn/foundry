@@ -13,6 +13,7 @@ internal sealed partial class GitLabHttpClient
     private const string BlocksLinkType = "blocks";
     private const string RelatesToLinkType = "relates_to";
     private const int OpenIssuesPerPage = 100;
+    private const int IssueLinksPerPage = 100;
     private const string OpenedState = "opened";
     private const string LockedState = "locked";
     private const string MergedState = "merged";
@@ -41,11 +42,23 @@ internal sealed partial class GitLabHttpClient
             return Result<IReadOnlyList<IssueReference>>.Fail(((Result<int>.Failure)projectIdResult).Error);
         }
 
-        int projectId = projectIdSuccess.Value;
+        return await ReadIssueLinksAsync(
+            apiBaseUrl, slug, projectIdSuccess.Value, issueNumber, token, cancellationToken);
+    }
 
-        // Only the first page is read: the reference selection keeps at most 10 issues, so later pages add nothing.
+    private async Task<Result<IReadOnlyList<IssueReference>>> ReadIssueLinksAsync(
+        Uri apiBaseUrl,
+        RepositorySlug slug,
+        int projectId,
+        int issueNumber,
+        string token,
+        CancellationToken cancellationToken)
+    {
+        // One page of up to 100 links is read, GitLab's largest page. The reference selection keeps at most 10
+        // issues, and a blocker read-back looks for one link in that page, so an issue with more than 100 links
+        // can read as unconfirmed when the blocker sits beyond the first page.
         string encodedPath = Uri.EscapeDataString(slug.FullPath);
-        string relativePath = $"projects/{encodedPath}/issues/{issueNumber}/links";
+        string relativePath = $"projects/{encodedPath}/issues/{issueNumber}/links?per_page={IssueLinksPerPage}";
         Uri requestUri = new(EnsureTrailingSlash(apiBaseUrl), relativePath);
 
         using HttpRequestMessage request = new(HttpMethod.Get, requestUri);

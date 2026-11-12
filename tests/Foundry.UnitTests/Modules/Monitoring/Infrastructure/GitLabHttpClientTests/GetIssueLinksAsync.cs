@@ -175,6 +175,20 @@ public sealed class GetIssueLinksAsync
     }
 
     [Fact]
+    public async Task WhenReading_RequestsTheLargestPageOfLinks()
+    {
+        // Arrange
+        FakeHandler handler = HandlerWithLinks(HttpStatusCode.OK, CapturedLinks);
+        GitLabHttpClient sut = BuildSut(handler);
+
+        // Act
+        await ReadLinksAsync(sut);
+
+        // Assert
+        handler.LastRequest!.RequestUri!.PathAndQuery.ShouldEndWith($"{LinksPathSuffix}?per_page=100");
+    }
+
+    [Fact]
     public async Task WhenTheBaseUrlIsNotHttps_FailsWithoutCallingGitLab()
     {
         // Arrange

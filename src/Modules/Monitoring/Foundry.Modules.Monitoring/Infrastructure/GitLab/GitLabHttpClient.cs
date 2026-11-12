@@ -1132,8 +1132,20 @@ internal static class GitLabErrors
         "GitLab.MissingMergeRequestState",
         "A merge request in the response has a missing or empty state field.");
 
+    private const string UnexpectedStatusCodeCode = "GitLab.UnexpectedStatusCode";
+    private const string UnexpectedStatusCodePrefix = "GitLab API returned unexpected status code ";
+
     public static Error UnexpectedStatusCode(int statusCode) =>
-        new("GitLab.UnexpectedStatusCode", $"GitLab API returned unexpected status code {statusCode}.");
+        new(UnexpectedStatusCodeCode, $"{UnexpectedStatusCodePrefix}{statusCode}.");
+
+    public static bool TryGetStatusCode(Error error, out int statusCode)
+    {
+        statusCode = 0;
+
+        return string.Equals(error.Code, UnexpectedStatusCodeCode, StringComparison.Ordinal)
+            && error.Message.StartsWith(UnexpectedStatusCodePrefix, StringComparison.Ordinal)
+            && int.TryParse(error.Message[UnexpectedStatusCodePrefix.Length..].TrimEnd('.'), out statusCode);
+    }
 
     public static Error ProviderError(string message) =>
         new("GitLab.ProviderError", message);

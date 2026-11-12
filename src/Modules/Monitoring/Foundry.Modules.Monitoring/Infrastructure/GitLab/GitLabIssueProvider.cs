@@ -172,6 +172,15 @@ internal sealed partial class GitLabIssueProvider(
         return httpClient.PostNoteAsync(apiBaseUrl, slug, thread, body, token, cancellationToken);
     }
 
+    public Task<Result> AddBlockerAsync(
+        RepositorySlug slug,
+        int issueNumber,
+        int blockerNumber,
+        CancellationToken cancellationToken)
+    {
+        return httpClient.AddBlockerAsync(apiBaseUrl, slug, issueNumber, blockerNumber, token, cancellationToken);
+    }
+
     public async Task<Result<string>> CreatePullRequestAsync(
         RepositorySlug slug,
         string sourceBranch,

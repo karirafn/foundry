@@ -1,6 +1,7 @@
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Contracts.Commands;
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
+using Foundry.Modules.Monitoring.Features.Providers.BlockerLinks;
 using Foundry.Modules.Monitoring.Features.Providers.Checks;
 using Foundry.Modules.Monitoring.Features.Providers.Comments;
 using ProviderChecks = Foundry.Modules.Monitoring.Features.Providers.Checks.Checks;
@@ -119,6 +120,21 @@ internal interface IIssueProvider
         string body,
         CancellationToken cancellationToken)
         => Task.FromResult(Result<ProviderCommentId>.Fail(CommentPostErrors.NotSupported()));
+
+    /// <summary>
+    /// Records that <paramref name="blockerNumber"/> blocks <paramref name="issueNumber"/>. A failure is
+    /// <see cref="BlockerLinkErrors.TransientCode"/> (5xx, 429, a rate-limited 403, a transport failure) or
+    /// <see cref="BlockerLinkErrors.PermanentCode"/> (any other 4xx); this call never retries. A duplicate-link
+    /// response is success only when a read-back of the issue's links shows the blocking relation.
+    /// </summary>
+    /// <remarks>Providers without blocker links keep this default, which fails permanently without any
+    /// provider call.</remarks>
+    Task<Result> AddBlockerAsync(
+        RepositorySlug slug,
+        int issueNumber,
+        int blockerNumber,
+        CancellationToken cancellationToken)
+        => Task.FromResult(Result.Fail(BlockerLinkErrors.NotSupported()));
 
     /// <summary>
     /// Opens a pull/merge request from <paramref name="sourceBranch"/> into the repository's default branch and
