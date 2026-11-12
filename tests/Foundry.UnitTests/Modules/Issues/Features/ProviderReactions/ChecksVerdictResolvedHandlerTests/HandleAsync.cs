@@ -269,6 +269,33 @@ public sealed class HandleAsync : IAsyncDisposable
     }
 
     [Fact]
+    public async Task WhenChecksPendingAndOutcomeStillFailingWithNoNamedCheckAndUnderCap_TransitionsToReviewIssueWithEmptyFailingChecks()
+    {
+        // Arrange
+        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
+        SeedChecksPendingIssue(repositoryId, issueNumber: 1);
+
+        ChecksVerdictResolved @event = new(
+            RepositoryId: repositoryId,
+            IssueNumber: 1,
+            Outcome: "still_failing",
+            FailingChecks: []);
+
+        // Act
+        await _sut.HandleAsync(@event, CancellationToken.None);
+
+        // Assert
+        _dbContext.ChangeTracker.Clear();
+        Issue? issue = await _dbContext.Set<Issue>()
+            .FirstOrDefaultAsync(
+                i => i.MonitoredRepositoryId == repositoryId,
+                TestContext.Current.CancellationToken);
+        ReviewIssue reviewIssue = issue.ShouldBeOfType<ReviewIssue>();
+        ChecksOutcome.StillFailing stillFailing = reviewIssue.ChecksOutcome.ShouldBeOfType<ChecksOutcome.StillFailing>();
+        stillFailing.FailingChecks.ShouldBeEmpty();
+    }
+
+    [Fact]
     public async Task WhenChecksPendingAndOutcomeStillFailingAndUnderCap_DispatchesIssueRevisionQueuedEvent()
     {
         // Arrange

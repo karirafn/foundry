@@ -46,7 +46,7 @@ internal sealed class ChecksVerdictResolvedHandler(
         };
 
         if (outcome is ChecksOutcome.StillFailing
-            && checksPendingIssue.ChecksFixAttempts < ChecksPendingIssue.ChecksMaxFixPushes)
+            && checksPendingIssue.CanFixChecks(@event.FailingChecks))
         {
             RevisionQueuedIssue revisionQueued = checksPendingIssue.FixChecks(@event.FailingChecks);
             await db.TransitionAsync(checksPendingIssue, revisionQueued, domainEventDispatcher, cancellationToken);
