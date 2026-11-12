@@ -5,8 +5,9 @@
 // Included before .issue-detail so the chip modifiers below can override badge colours.
 // Only the state modifiers this template renders (the failure-chip fallback and the
 // failure-category / revision chips) are emitted, to stay within the style budget. The publish
-// chips render inside fd-publish-status, so their outlined modifiers are left out here.
-@include badge($states: (failed, usage-limited, revision-in-progress), $exclude-outlined: (publishing, branch-diverged, reverted-oversized, reverted-binary));
+// chips render inside fd-publish-status, so their outlined modifiers are left out here. The blocker
+// failure categories belong to the issue's state badge, never to a run's failure chip.
+@include badge($states: (failed, usage-limited, revision-in-progress), $exclude-outlined: (publishing, branch-diverged, reverted-oversized, reverted-binary, failure-blocker-link-failed, failure-blocker-cycle));
 
 @keyframes shimmer {
   0% {
