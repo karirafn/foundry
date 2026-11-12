@@ -30,8 +30,6 @@ internal sealed partial class GitHubHttpClient(
     private const string ApiVersion = "2026-03-10";
     private const string AllZerosSha = "0000000000000000000000000000000000000000";
     private const string FineGrainedPatPrefix = "github_pat_";
-    private const int MaxCommentBodyLength = 4000;
-    private const string TruncatedSuffix = "[truncated]";
     private const int MaxRepositoryPages = 5;
     private const int RepositoriesPerPage = 100;
     private const int MaxIssuePages = 20;
@@ -851,7 +849,6 @@ internal sealed partial class GitHubHttpClient(
             {
                 string authorLogin = comment.Author?.Login ?? string.Empty;
                 bool authorIsBot = string.Equals(comment.Author?.Typename, "Bot", StringComparison.Ordinal);
-                string body = TruncateBody(comment.Body);
                 int? line = comment.Line ?? comment.OriginalLine;
                 string? sanitizedPath = SanitizeFilePath(comment.Path);
 
@@ -873,7 +870,7 @@ internal sealed partial class GitHubHttpClient(
 
                 providerComments.Add(new ProviderComment(
                     Id: ProviderCommentId.FromProvider(comment.DatabaseId),
-                    Body: body,
+                    Body: comment.Body,
                     AuthorLogin: authorLogin,
                     AuthorIsBot: authorIsBot,
                     IsSystem: false,
@@ -892,7 +889,6 @@ internal sealed partial class GitHubHttpClient(
         {
             string authorLogin = node.Author?.Login ?? string.Empty;
             bool authorIsBot = string.Equals(node.Author?.Typename, "Bot", StringComparison.Ordinal);
-            string body = TruncateBody(node.Body);
 
             // Skip the conversation-surface copy when the inline copy (with FilePath/Line) was
             // already collected from reviewThreads. The id-based check is authoritative; the
@@ -915,7 +911,7 @@ internal sealed partial class GitHubHttpClient(
 
             providerComments.Add(new ProviderComment(
                 Id: ProviderCommentId.FromProvider(node.DatabaseId),
-                Body: body,
+                Body: node.Body,
                 AuthorLogin: authorLogin,
                 AuthorIsBot: authorIsBot,
                 IsSystem: false,
@@ -938,11 +934,10 @@ internal sealed partial class GitHubHttpClient(
 
             string authorLogin = review.Author?.Login ?? string.Empty;
             bool authorIsBot = string.Equals(review.Author?.Typename, "Bot", StringComparison.Ordinal);
-            string body = TruncateBody(review.Body);
 
             providerComments.Add(new ProviderComment(
                 Id: ProviderCommentId.FromProvider(review.DatabaseId),
-                Body: body,
+                Body: review.Body,
                 AuthorLogin: authorLogin,
                 AuthorIsBot: authorIsBot,
                 IsSystem: false,
@@ -1542,16 +1537,6 @@ internal sealed partial class GitHubHttpClient(
 
         prNumber = 0;
         return false;
-    }
-
-    private static string TruncateBody(string body)
-    {
-        if (body.Length <= MaxCommentBodyLength)
-        {
-            return body;
-        }
-
-        return string.Concat(body.AsSpan(0, MaxCommentBodyLength), TruncatedSuffix);
     }
 
     private GitHubUserDto? DeserializeUserDto(string responseBody, Uri apiBaseUrl, int statusCode)

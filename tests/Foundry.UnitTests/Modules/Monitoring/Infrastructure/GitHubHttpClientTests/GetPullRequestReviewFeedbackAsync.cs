@@ -532,7 +532,7 @@ public sealed class GetPullRequestReviewFeedbackAsync
     }
 
     [Fact]
-    public async Task WhenCommentBodyExceeds4000Chars_TruncatesBodyWithSuffix()
+    public async Task WhenCommentBodyIsLong_ReturnsItWhole()
     {
         // Arrange
         string longBody = new('x', 4100);
@@ -574,8 +574,7 @@ public sealed class GetPullRequestReviewFeedbackAsync
         result.IsSuccess.ShouldBeTrue();
         IReadOnlyList<ProviderComment> comments = result.ShouldBeOfType<Result<IReadOnlyList<ProviderComment>>.Success>().Value;
         ProviderComment comment = comments[0];
-        comment.Body.ShouldEndWith("[truncated]");
-        comment.Body.Length.ShouldBeLessThanOrEqualTo(4000 + "[truncated]".Length);
+        comment.Body.ShouldBe(longBody);
     }
 
     [Fact]
@@ -676,11 +675,11 @@ public sealed class GetPullRequestReviewFeedbackAsync
     }
 
     [Fact]
-    public async Task WhenThreadCommentBodyIsExactly4000Chars_BodyIsNotTruncated()
+    public async Task WhenThreadCommentBodyIsLong_ReturnsItWhole()
     {
-        // Arrange — exactly 4000 characters should pass through unchanged
-        string exactBody = new('x', 4000);
-        string json = BuildThreeSurfaceJson(threadCommentBody: exactBody);
+        // Arrange
+        string longBody = new('x', 4100);
+        string json = BuildThreeSurfaceJson(threadCommentBody: longBody);
         FakeHandler handler = new(HttpStatusCode.OK, json);
         GitHubHttpClient sut = BuildSut(handler);
 
@@ -696,16 +695,15 @@ public sealed class GetPullRequestReviewFeedbackAsync
         result.IsSuccess.ShouldBeTrue();
         IReadOnlyList<ProviderComment> comments = result.ShouldBeOfType<Result<IReadOnlyList<ProviderComment>>.Success>().Value;
         ProviderComment threadComment = comments.Single(c => c.Origin == CommentOrigin.ReviewThread);
-        threadComment.Body.Length.ShouldBe(4000);
-        threadComment.Body.ShouldNotEndWith("[truncated]");
+        threadComment.Body.ShouldBe(longBody);
     }
 
     [Fact]
-    public async Task WhenReviewBodyIsExactly4000Chars_BodyIsNotTruncated()
+    public async Task WhenReviewBodyIsLong_ReturnsItWhole()
     {
-        // Arrange — review-summary body at exactly 4000 characters should not be truncated
-        string exactBody = new('x', 4000);
-        string json = BuildThreeSurfaceJson(reviewBody: exactBody);
+        // Arrange
+        string longBody = new('x', 4100);
+        string json = BuildThreeSurfaceJson(reviewBody: longBody);
         FakeHandler handler = new(HttpStatusCode.OK, json);
         GitHubHttpClient sut = BuildSut(handler);
 
@@ -721,8 +719,7 @@ public sealed class GetPullRequestReviewFeedbackAsync
         result.IsSuccess.ShouldBeTrue();
         IReadOnlyList<ProviderComment> comments = result.ShouldBeOfType<Result<IReadOnlyList<ProviderComment>>.Success>().Value;
         ProviderComment reviewSummary = comments.Single(c => c.Origin == CommentOrigin.ReviewSummary);
-        reviewSummary.Body.Length.ShouldBe(4000);
-        reviewSummary.Body.ShouldNotEndWith("[truncated]");
+        reviewSummary.Body.ShouldBe(longBody);
     }
 
     [Fact]

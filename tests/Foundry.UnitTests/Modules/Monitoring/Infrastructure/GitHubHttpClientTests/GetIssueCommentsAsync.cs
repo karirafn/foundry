@@ -70,6 +70,22 @@ public sealed class GetIssueCommentsAsync
     }
 
     [Fact]
+    public async Task WhenCommentBodyIsLong_ReturnsItWhole()
+    {
+        // Arrange
+        string longBody = new('x', 4100);
+        FakeHandler handler = new(HttpStatusCode.OK, $"[{CommentJson(9001, "alice", "User", longBody)}]");
+        GitHubHttpClient sut = BuildSut(handler);
+
+        // Act
+        Result<IReadOnlyList<ProviderComment>> result = await sut.GetIssueCommentsAsync(
+            ValidBaseUrl, ValidSlug, 7, Since, ValidToken, CancellationToken.None);
+
+        // Assert
+        result.ValueOrThrow().ShouldHaveSingleItem().Body.ShouldBe(longBody);
+    }
+
+    [Fact]
     public async Task WhenAuthorIsABot_FlagsIt()
     {
         // Arrange

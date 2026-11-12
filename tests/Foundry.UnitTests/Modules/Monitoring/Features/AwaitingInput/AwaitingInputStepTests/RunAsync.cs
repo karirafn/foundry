@@ -216,6 +216,24 @@ public sealed class RunAsync : IAsyncDisposable
     }
 
     [Fact]
+    public async Task WhenAnEligibleReplyIsLong_InputArrivesWhole()
+    {
+        // Arrange
+        string longReply = new('x', 4100);
+        Seed(Builder().AwaitingInputPosted(PostedAt, withPullRequest: false));
+        _provider.IssueComments =
+        [
+            new ProviderCommentBuilder().WithId(2002).WithAuthorLogin("operator").WithBody(longReply).WithCreatedAt(PostedAt.AddMinutes(5)).Build(),
+        ];
+
+        // Act
+        await RunStepAsync();
+
+        // Assert
+        _dispatcher.Events.OfType<AwaitingInputArrived>().ShouldHaveSingleItem().Input.ShouldBe(longReply);
+    }
+
+    [Fact]
     public async Task WhenAReplyIsStillInsideTheQuietPeriod_NoInputArrivesAndAFollowUpIsNudged()
     {
         // Arrange

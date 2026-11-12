@@ -63,7 +63,7 @@ internal sealed partial class GitHubHttpClient
             {
                 comments.Add(new ProviderComment(
                     Id: ProviderCommentId.FromProvider(comment.Id),
-                    Body: TruncateBody(comment.Body ?? string.Empty),
+                    Body: comment.Body ?? string.Empty,
                     AuthorLogin: comment.User?.Login ?? string.Empty,
                     AuthorIsBot: string.Equals(comment.User?.Type, "Bot", StringComparison.Ordinal),
                     IsSystem: false,
