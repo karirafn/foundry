@@ -38,6 +38,20 @@ public sealed class StartingRun : WorkerRun
         RecordBase(runBase);
     }
 
+    /// <summary>Records the open issues Foundry supplied in the run's Tracker Context before prompt fitting; later states carry them.</summary>
+    public void RecordSuppliedOpenIssues(TrackerContext trackerContext)
+    {
+        ArgumentNullException.ThrowIfNull(trackerContext);
+
+        IEnumerable<int> openReferencedNumbers = trackerContext.ReferencedIssues
+            .Where(referenced => referenced.IsOpen)
+            .Select(referenced => referenced.Number);
+        IEnumerable<int> indexNumbers = (trackerContext.OpenIssues ?? [])
+            .Select(openIssue => openIssue.Number);
+
+        StoreSuppliedOpenIssueNumbers([.. openReferencedNumbers.Concat(indexNumbers).Distinct()]);
+    }
+
     public ActiveRun Activate(
         ContainerId containerId,
         BranchName? branchName,

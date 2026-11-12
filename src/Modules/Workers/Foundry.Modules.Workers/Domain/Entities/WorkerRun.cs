@@ -69,6 +69,17 @@ public abstract class WorkerRun : AggregateRoot<WorkerRunId>, IStateMachine<Work
     /// <summary>The files the Diff gate reverted before it pushed the run (#788); empty when it reverted none.</summary>
     public IReadOnlyList<RevertedFile> RevertedFiles { get; private set; } = [];
 
+    /// <summary>
+    /// The numbers of the open issues Foundry supplied in the run's Tracker Context at dispatch, before prompt fitting;
+    /// <see langword="null"/> for a run that recorded none.
+    /// </summary>
+    public IReadOnlyList<int>? SuppliedOpenIssueNumbers { get; private set; }
+
+    protected void StoreSuppliedOpenIssueNumbers(IReadOnlyList<int>? suppliedOpenIssueNumbers)
+    {
+        SuppliedOpenIssueNumbers = suppliedOpenIssueNumbers;
+    }
+
     protected void RecordPublishFacts(
         CommitSha? pushedHead,
         int? branchCommitCount,
@@ -94,6 +105,7 @@ public abstract class WorkerRun : AggregateRoot<WorkerRunId>, IStateMachine<Work
         ArgumentNullException.ThrowIfNull(source);
 
         RecordBase(source.Base);
+        StoreSuppliedOpenIssueNumbers(source.SuppliedOpenIssueNumbers);
     }
 
     protected void RecordVerdict(RunVerdict? verdict)
