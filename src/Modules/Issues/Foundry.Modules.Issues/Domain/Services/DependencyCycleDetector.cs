@@ -1,4 +1,6 @@
 using Foundry.Modules.Issues.Contracts;
+using Foundry.Modules.Issues.Domain.ValueObjects;
+using Foundry.Shared;
 
 namespace Foundry.Modules.Issues.Domain.Services;
 
@@ -28,6 +30,52 @@ public static class DependencyCycleDetector
         }
 
         return cycles;
+    }
+
+    /// <summary>
+    /// The shortest cycle that linking <paramref name="blockerNumber"/> as a blocker of <paramref name="issueNumber"/>
+    /// closes, as the path issue → blocker → … → issue; null when the blocker cannot reach the issue through the
+    /// existing edges, or when the blocker is the issue itself.
+    /// </summary>
+    public static DependencyCycle? FindCycleClosedBy(
+        IReadOnlyList<DependencyEdge> edges,
+        int issueNumber,
+        int blockerNumber)
+    {
+        Dictionary<int, List<int>> adjacency = BuildAdjacency(edges);
+        Dictionary<int, int> predecessors = [];
+        Queue<int> queue = new([blockerNumber]);
+        HashSet<int> visited = [blockerNumber];
+
+        while (queue.Count > 0 && !visited.Contains(issueNumber))
+        {
+            int current = queue.Dequeue();
+
+            foreach (int neighbour in adjacency.GetValueOrDefault(current, []))
+            {
+                if (visited.Add(neighbour))
+                {
+                    predecessors[neighbour] = current;
+                    queue.Enqueue(neighbour);
+                }
+            }
+        }
+
+        if (!visited.Contains(issueNumber))
+        {
+            return null;
+        }
+
+        List<int> pathFromBlocker = [issueNumber];
+
+        while (pathFromBlocker[0] != blockerNumber)
+        {
+            pathFromBlocker.Insert(0, predecessors[pathFromBlocker[0]]);
+        }
+
+        return DependencyCycle.Create([issueNumber, ..pathFromBlocker]).Match<DependencyCycle?>(
+            (DependencyCycle cycle) => cycle,
+            (Error _) => null);
     }
 
     private static void DfsIterative(
