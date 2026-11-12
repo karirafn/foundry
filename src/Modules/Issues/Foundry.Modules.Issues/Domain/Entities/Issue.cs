@@ -80,9 +80,6 @@ public abstract class Issue : AggregateRoot<IssueId>, IStateMachine<Issue>
     private protected static string? NullIfEmpty(string value) =>
         string.IsNullOrEmpty(value) ? null : value;
 
-    // GitHub limits dependencies to 50 per direction; cap silently to match.
-    internal const int MaxBlockers = 50;
-
     /// <summary>
     /// Returns true for states that can be safely hard-deleted when a provider untrack event is received.
     /// Active states (in_progress, revision_in_progress, triage_in_progress, review) return false — a live worker is running or
@@ -106,9 +103,9 @@ public abstract class Issue : AggregateRoot<IssueId>, IStateMachine<Issue>
 
     internal void SetBlockedBy(IReadOnlyList<int> blockers)
     {
-        BlockedBy = blockers.Count <= MaxBlockers
+        BlockedBy = blockers.Count <= TriageVerdict.Blocked.MaxBlockers
             ? blockers
-            : blockers.Take(MaxBlockers).ToList();
+            : blockers.Take(TriageVerdict.Blocked.MaxBlockers).ToList();
     }
 
     public void UpdateDetails(string title, IReadOnlyList<string> labels, KindClassification kindClassification)

@@ -35,19 +35,14 @@ public static class DependencyCycleDetector
     /// <summary>
     /// The shortest cycle closed by the first of <paramref name="blockerNumbers"/>, in the given order, that would
     /// close one when linked as a blocker of <paramref name="issueNumber"/>, as the path issue → blocker → … → issue;
-    /// null when no blocker can reach the issue through <paramref name="storedEdges"/> and the other new links.
+    /// null when no blocker is the issue itself or can reach it through <paramref name="storedEdges"/>.
     /// </summary>
     public static DependencyCycle? FindFirstCycleClosedBy(
         IReadOnlyList<DependencyEdge> storedEdges,
         int issueNumber,
         IReadOnlyList<int> blockerNumbers)
     {
-        IReadOnlyList<DependencyEdge> edges =
-        [
-            .. storedEdges,
-            .. blockerNumbers.Select((int blocker) => new DependencyEdge(issueNumber, blocker)),
-        ];
-        Dictionary<int, List<int>> adjacency = BuildAdjacency(edges);
+        Dictionary<int, List<int>> adjacency = BuildAdjacency(storedEdges);
 
         foreach (int blockerNumber in blockerNumbers)
         {
@@ -67,6 +62,11 @@ public static class DependencyCycleDetector
         int issueNumber,
         int blockerNumber)
     {
+        if (blockerNumber == issueNumber)
+        {
+            return CycleOf([issueNumber, issueNumber]);
+        }
+
         Dictionary<int, int> predecessors = [];
         Queue<int> queue = new([blockerNumber]);
         HashSet<int> visited = [blockerNumber];
@@ -99,7 +99,12 @@ public static class DependencyCycleDetector
 
         pathToBlocker.Reverse();
 
-        return DependencyCycle.Create([issueNumber, .. pathToBlocker]).Match<DependencyCycle>(
+        return CycleOf([issueNumber, .. pathToBlocker]);
+    }
+
+    private static DependencyCycle CycleOf(IReadOnlyList<int> path)
+    {
+        return DependencyCycle.Create(path).Match<DependencyCycle>(
             (DependencyCycle cycle) => cycle,
             (Error error) => throw new InvalidOperationException(
                 $"The detector built an invalid dependency cycle: {error.Message}"));

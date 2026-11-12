@@ -1,4 +1,3 @@
-using Foundry.Modules.Issues.Domain.Entities;
 using Foundry.Modules.Workers.Contracts;
 
 namespace Foundry.Modules.Issues.Domain.ValueObjects;
@@ -71,12 +70,15 @@ public abstract record TriageVerdict
             BlockedBy = [.. blockers];
         }
 
+        // GitHub limits dependencies to 50 per direction; an issue records no more blockers than that.
+        public const int MaxBlockers = 50;
+
         /// <summary>The longest reason a blocker may carry; it is stored, relayed and later shown in a public comment.</summary>
         public const int ReasonMaxLength = 500;
 
         /// <summary>
         /// Why <paramref name="blockers"/> cannot form a blocked verdict, or <c>null</c> when they can. An issue records
-        /// at most <see cref="Issue.MaxBlockers"/> blockers, so a verdict naming more would promise links the issue
+        /// at most <see cref="MaxBlockers"/> blockers, so a verdict naming more would promise links the issue
         /// never holds.
         /// </summary>
         public static string? RejectionOf(IReadOnlyList<TriageBlocker> blockers)
@@ -88,9 +90,9 @@ public abstract record TriageVerdict
                 return "A blocked triage verdict must name at least one blocker.";
             }
 
-            if (blockers.Count > Issue.MaxBlockers)
+            if (blockers.Count > MaxBlockers)
             {
-                return $"A blocked triage verdict may name at most {Issue.MaxBlockers} blockers.";
+                return $"A blocked triage verdict may name at most {MaxBlockers} blockers.";
             }
 
             if (blockers.Select(b => b.IssueNumber).Distinct().Count() != blockers.Count)
