@@ -114,7 +114,7 @@ public sealed class WhenMixedStatesSeeded : IAsyncDisposable
             TestContext.Current.CancellationToken);
         counts.ShouldNotBeNull();
         counts.ShouldSatisfyAllConditions(
-            () => counts.Counts.Count.ShouldBe(21),
+            () => counts.Counts.Count.ShouldBe(22),
             () => counts.Counts["detected"].ShouldBe(3),
             () => counts.Counts["completed"].ShouldBe(2),
             () => counts.Counts["unchanged"].ShouldBe(1),
