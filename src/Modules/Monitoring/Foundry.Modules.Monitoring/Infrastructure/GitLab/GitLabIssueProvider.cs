@@ -11,6 +11,7 @@ using ProviderChecks = Foundry.Modules.Monitoring.Features.Providers.Checks.Chec
 using Foundry.Modules.Monitoring.Features.Providers.Feedback;
 using Foundry.Modules.Monitoring.Features.Providers.Publishing;
 using Foundry.Modules.Monitoring.Features.Providers.Rebase;
+using Foundry.Modules.Monitoring.Features.Providers.TrackerReads;
 using Foundry.Modules.Monitoring.Infrastructure.GitHub;
 using Foundry.Shared;
 
@@ -43,6 +44,29 @@ internal sealed partial class GitLabIssueProvider(
         CancellationToken cancellationToken)
     {
         return httpClient.GetDependenciesAsync(apiBaseUrl, slug, issueNumber, token, cancellationToken);
+    }
+
+    public Task<Result<IReadOnlyList<IssueReference>>> GetIssueLinksAsync(
+        RepositorySlug slug,
+        int issueNumber,
+        CancellationToken cancellationToken)
+    {
+        return httpClient.GetIssueLinksAsync(apiBaseUrl, slug, issueNumber, token, cancellationToken);
+    }
+
+    public Task<Result<IReadOnlyList<OpenIssue>>> GetOpenIssuesAsync(
+        RepositorySlug slug,
+        CancellationToken cancellationToken)
+    {
+        return httpClient.GetOpenIssuesAsync(apiBaseUrl, slug, token, cancellationToken);
+    }
+
+    public Task<Result<ProviderReferencedIssue>> GetReferencedIssueAsync(
+        RepositorySlug slug,
+        int issueNumber,
+        CancellationToken cancellationToken)
+    {
+        return httpClient.GetReferencedIssueAsync(apiBaseUrl, slug, issueNumber, token, cancellationToken);
     }
 
     public Task<Result<bool>> IsIssueClosedAsync(

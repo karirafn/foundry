@@ -192,6 +192,40 @@ public sealed class ExecuteGraphQlAsync
         Result<TestData>.Failure failure = result.ShouldBeOfType<Result<TestData>.Failure>();
         failure.Error.Code.ShouldBe("GitHub.GraphQlError");
         failure.Error.Message.ShouldContain("Could not resolve repository");
+        failure.Error.Kind.ShouldBe(ErrorKind.NotFound);
+    }
+
+    [Fact]
+    public async Task When200WithNotFoundAndAnotherErrorType_ReturnsGraphQlErrorFailureThatIsNotNotFound()
+    {
+        // Arrange
+        string responseJson = """
+            {
+              "data": null,
+              "errors": [
+                { "message": "Could not resolve repository", "type": "NOT_FOUND" },
+                { "message": "Resource not accessible", "type": "FORBIDDEN" }
+              ]
+            }
+            """;
+        FakeHandler handler = new(HttpStatusCode.OK, responseJson);
+        using HttpClient httpClient = new(handler);
+        GitHubHttpClient sut = new(
+            httpClient,
+            NullLogger<GitHubHttpClient>.Instance,
+            new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))), new InMemoryProviderRateBudget(), TimeProvider.System);
+
+        // Act
+        Result<TestData> result = await sut.ExecuteGraphQlAsync<TestData>(
+            GitHubComBaseUrl,
+            "query { viewer { login } }",
+            new { },
+            "ghp_token",
+            CancellationToken.None);
+
+        // Assert
+        Result<TestData>.Failure failure = result.ShouldBeOfType<Result<TestData>.Failure>();
+        failure.Error.Kind.ShouldNotBe(ErrorKind.NotFound);
     }
 
     [Fact]

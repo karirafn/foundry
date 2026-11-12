@@ -9,6 +9,7 @@ using Foundry.Modules.Monitoring.Features.Providers.Feedback;
 using Foundry.Modules.Monitoring.Features.Providers.Publishing;
 using Foundry.Shared;
 using Foundry.Testing;
+using Foundry.UnitTests.Fakes.Monitoring;
 using Foundry.UnitTests.Modules.Monitoring.Features.Providers.Feedback;
 using Foundry.WebApi.Persistence;
 
@@ -37,7 +38,7 @@ public abstract class RunPublishingCommandsTestBase : IAsyncDisposable
 
         Sut = new RunPublishingCommands(
             DbContext,
-            new SingleProviderFactory(Provider),
+            new SingleIssueProviderFactory(Provider),
             new CredentialResolver(DbContext, NullLogger<CredentialResolver>.Instance),
             new PostedCommentRegistry(DbContext),
             new FakeTimeProvider(Now));
@@ -69,11 +70,6 @@ public abstract class RunPublishingCommandsTestBase : IAsyncDisposable
         await DbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         return repo.Id;
-    }
-
-    private sealed class SingleProviderFactory(IIssueProvider provider) : IIssueProviderFactory
-    {
-        public IIssueProvider CreateProvider(Credential credential, string token) => provider;
     }
 
     // Only the publishing operations are exercised; the rest are never reached by RunPublishingCommands.

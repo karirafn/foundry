@@ -345,7 +345,11 @@ internal sealed partial class GitHubHttpClient(
 
             string rawMessage = string.Join("; ", errors.Select(e => e.Message));
             string safeMessage = TruncateWithEllipsis(RedactSecrets(rawMessage), MaxBranchErrorBodyLength);
-            return Result<TData>.Fail(GitHubErrors.GraphQlError(safeMessage));
+            Error graphQlError = GitHubErrors.GraphQlError(safeMessage);
+            bool onlyNotFound = errors.All(
+                e => string.Equals(e.Type, "NOT_FOUND", StringComparison.OrdinalIgnoreCase));
+
+            return Result<TData>.Fail(onlyNotFound ? graphQlError with { Kind = ErrorKind.NotFound } : graphQlError);
         }
 
         if (envelope?.Data is null)
@@ -354,7 +358,10 @@ internal sealed partial class GitHubHttpClient(
                 GitHubErrors.ProviderError("GraphQL response contained neither data nor errors."));
         }
 
-        if (envelope.RateLimit is { } rateLimit)
+        // GitHub returns a queried rateLimit block inside "data", not beside it.
+        GraphQlRateLimit? reportedRateLimit = envelope.RateLimit ?? (envelope.Data as IReportsRateLimit)?.RateLimit;
+
+        if (reportedRateLimit is { } rateLimit)
         {
             logger.LogDebug(
                 "GitHub GraphQL cost={Cost} remaining={Remaining}",
@@ -1910,8 +1917,10 @@ internal static class GitHubErrors
     public static Error ProviderError(string message) =>
         new("GitHub.ProviderError", message);
 
+    public const string GraphQlErrorCode = "GitHub.GraphQlError";
+
     public static Error GraphQlError(string message) =>
-        new("GitHub.GraphQlError", message);
+        new(GraphQlErrorCode, message);
 
     // Sentinel used internally by GetChecksAsync to signal 401/403 auth failure.
     // Never surfaced as a Result<T>.Fail to callers — mapped to Checks.Unreadable before returning.

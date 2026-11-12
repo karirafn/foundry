@@ -9,6 +9,7 @@ using Foundry.Modules.Monitoring.Features.Providers.Comments;
 using Foundry.Modules.Monitoring.Features.Providers.Feedback;
 using Foundry.Shared;
 using Foundry.Testing;
+using Foundry.UnitTests.Fakes.Monitoring;
 using Foundry.WebApi.Persistence;
 
 using Microsoft.Data.Sqlite;
@@ -41,7 +42,7 @@ public sealed class GetFailingJobLogAsync : IAsyncDisposable
 
         _sut = new PostExitProviderQueries(
             _dbContext,
-            new SingleProviderFactory(_provider),
+            new SingleIssueProviderFactory(_provider),
             new CredentialResolver(_dbContext, NullLogger<CredentialResolver>.Instance));
     }
 
@@ -133,11 +134,6 @@ public sealed class GetFailingJobLogAsync : IAsyncDisposable
 
         // Assert
         result.ShouldBeOfType<Result<CiJobLog>.Failure>();
-    }
-
-    private sealed class SingleProviderFactory(IIssueProvider provider) : IIssueProviderFactory
-    {
-        public IIssueProvider CreateProvider(Credential credential, string token) => provider;
     }
 
     // Only the job-log members are exercised; the rest are never reached by GetFailingJobLogAsync.

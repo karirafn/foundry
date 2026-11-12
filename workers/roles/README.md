@@ -6,7 +6,7 @@ here is one role, baked into the worker image at `/opt/foundry/roles/<role>/`:
 - `.claude-plugin/plugin.json`: the role's Claude Code plugin manifest. Its `description` is the role's
   purpose on the dashboard's role card.
 - `prompts/system.md`: the role's system prompt template, appended after Foundry's safety preamble and the Worker Principles.
-  Placeholders: `{issueNumber}`, `{issueContent}`.
+  Placeholders: `{issueNumber}`, `{issueContent}` (the issue's content followed by its Tracker Context, see `DOMAIN.md`).
 - `prompts/task.md`: the role's task prompt template. It must contain `{issueNumber}`.
 - `skills/<skill>/SKILL.md`, `agents/<agent>.md` (optional): the plugin's skills and agents.
 - `verdict.schema.json` (optional, for any role): the JSON schema of the verdict the role returns (ADR 0094).
@@ -35,9 +35,15 @@ Each role declares the `WorkerCapability` it runs under in Foundry's code (`Work
 - `full` (`implement`): the account token, a branch pre-created on the provider and `--dangerously-skip-permissions`.
   Foundry reads the issue title, body and comments at dispatch and renders them into `{issueContent}` as XML-encoded
   untrusted data (ADR 0100); when the thread does not fit the prompt budget, the oldest comments are dropped first.
+  Foundry also reads the Referenced Issues and the Open-Issue Index (the Tracker Context) and renders them after the
+  issue content as XML-encoded untrusted data; when the prompt does not fit, Referenced Issue bodies and then the
+  open-issue list are shed before the issue's own content.
 - `restricted` (`triage`): `--restricted --strict-mcp-config` and never the permission skip, no provider token, no
   branch, and a shallow clone of the default branch. Foundry reads the issue title, body and comments and renders them
-  into `{issueContent}` as XML-encoded untrusted data. The run returns its verdict only.
+  into `{issueContent}` as XML-encoded untrusted data. Foundry also reads the Referenced Issues and the Open-Issue
+  Index and renders them after the issue content as XML-encoded untrusted data; when the prompt does not fit,
+  Referenced Issue bodies and then the open-issue list are shed before the issue's own content. The run returns its
+  verdict only.
 
 ## Verdicts
 

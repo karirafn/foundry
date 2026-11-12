@@ -11,6 +11,7 @@ using ProviderChecks = Foundry.Modules.Monitoring.Features.Providers.Checks.Chec
 using Foundry.Modules.Monitoring.Features.Providers.Feedback;
 using Foundry.Modules.Monitoring.Features.Providers.Publishing;
 using Foundry.Modules.Monitoring.Features.Providers.Rebase;
+using Foundry.Modules.Monitoring.Features.Providers.TrackerReads;
 using Foundry.Shared;
 
 namespace Foundry.Modules.Monitoring.Infrastructure.GitHub;
@@ -61,6 +62,29 @@ internal sealed partial class GitHubIssueProvider(
 
         // Issue was fetched but had no same-repo non-closed blockers.
         return Task.FromResult(Result<IReadOnlyList<int>>.Ok((IReadOnlyList<int>)[]));
+    }
+
+    public Task<Result<IReadOnlyList<IssueReference>>> GetIssueLinksAsync(
+        RepositorySlug slug,
+        int issueNumber,
+        CancellationToken cancellationToken)
+    {
+        return httpClient.GetIssueLinksAsync(apiBaseUrl, slug, issueNumber, token, cancellationToken);
+    }
+
+    public Task<Result<ProviderReferencedIssue>> GetReferencedIssueAsync(
+        RepositorySlug slug,
+        int issueNumber,
+        CancellationToken cancellationToken)
+    {
+        return httpClient.GetReferencedIssueAsync(apiBaseUrl, slug, issueNumber, token, cancellationToken);
+    }
+
+    public Task<Result<IReadOnlyList<OpenIssue>>> GetOpenIssuesAsync(
+        RepositorySlug slug,
+        CancellationToken cancellationToken)
+    {
+        return httpClient.GetOpenIssuesAsync(apiBaseUrl, slug, token, cancellationToken);
     }
 
     public Task<Result<bool>> IsIssueClosedAsync(

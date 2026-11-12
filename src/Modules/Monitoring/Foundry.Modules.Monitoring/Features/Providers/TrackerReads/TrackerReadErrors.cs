@@ -1,0 +1,32 @@
+using Foundry.Shared;
+
+namespace Foundry.Modules.Monitoring.Features.Providers.TrackerReads;
+
+/// <summary>Provider-neutral errors for the tracker reads on <see cref="IIssueProvider"/>.</summary>
+internal static class TrackerReadErrors
+{
+    public const string NotSupportedCode = "TrackerRead.NotSupported";
+
+    public const string NotAnIssueCode = "TrackerRead.NotAnIssue";
+
+    public const string NotFoundCode = "TrackerRead.NotFound";
+
+    public const string ReadThrewCode = "TrackerRead.Threw";
+
+    public const string ConfidentialCode = "TrackerRead.Confidential";
+
+    public static Error Confidential() =>
+        new(ConfidentialCode, "The issue is confidential, so its content is not read.");
+
+    public static Error NotAnIssue() =>
+        new(NotAnIssueCode, "The number names something other than an issue, such as a pull request.");
+
+    public static Error NotFound() =>
+        new(NotFoundCode, "The tracker has no issue with this number.") { Kind = ErrorKind.NotFound };
+
+    public static Error ReadThrew(Exception exception) =>
+        new(ReadThrewCode, $"The tracker read threw {exception.GetType().Name}: {exception.Message}");
+
+    public static Error NotSupported() =>
+        new(NotSupportedCode, "This provider does not support reading the tracker around an issue.");
+}

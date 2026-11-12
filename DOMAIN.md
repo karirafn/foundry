@@ -533,6 +533,22 @@ Four variants:
 The handler and claimer treat `Context` as an opaque value — they forward it into `ClaimedIssueDispatch` without switching on it.
 Survives the outbox round-trip via `[JsonPolymorphic]` / `[JsonDerivedType]` annotations (see [ADR 0051](docs/adr/0051-dispatch-context-union-and-typed-dispatch-seam.md)).
 
+## Tracker Context
+
+The issues Foundry reads from the provider at dispatch, alongside the issue's own content.
+It holds the [Referenced Issues](#referenced-issue) and the [Open-Issue Index](#open-issue-index), rendered into every role's prompt as untrusted data ([ADR 0104](docs/adr/0104-runs-receive-the-tracker-context-from-code.md)).
+
+## Referenced Issue
+
+A same-project issue that the issue links to, or mentions as `#N` in its body or comments.
+Each one carries its relation (`blocked_by`, `blocks`, `relates_to` or `mention`), title, state, labels, closing merge request state and body, with the body capped at 16 KiB.
+`blocked_by` is an [Issue Dependency](#issue-dependency).
+"Referenced" follows GitHub's and GitLab's own "referenced" / cross-reference wording.
+
+## Open-Issue Index
+
+The number and title of each open issue in the repository, excluding the issue itself.
+
 ## Revision Trigger
 
 Why a revision run was queued — a polymorphic value carried by `RevisionQueuedIssue`, `RevisionInProgressIssue`, and `RevisionFailedIssue` (and surfaced on `DispatchContext.Revision`) in place of comment-specific fields.
