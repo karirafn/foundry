@@ -15,6 +15,8 @@ public sealed class FailBlockerLink
     private static readonly DateTimeOffset DecidedAt = new(2026, 11, 11, 12, 0, 0, TimeSpan.Zero);
     private static readonly DateTimeOffset FailedAt = new(2026, 11, 11, 12, 5, 0, TimeSpan.Zero);
 
+    private const string RejectionPrefix = "The tracker rejected linking #15 as a blocker: ";
+
     private static TriageVerdict.Blocked VerdictNaming(params int[] issueNumbers) =>
         new(
             IssueKind.Feature,
@@ -54,6 +56,55 @@ public sealed class FailBlockerLink
             () => failed.FailureReason.Length.ShouldBeLessThanOrEqualTo(TriageBlockedIssue.FailureReasonMaxLength),
             () => failed.FailureReason.ShouldNotContain('\n'),
             () => failed.FailureReason.ShouldStartWith("The tracker rejected linking #15 as a blocker: first line x"));
+    }
+
+    [Fact]
+    public void WhenTheFailureReasonIsExactlyAtTheLimit_KeepsItWhole()
+    {
+        // Arrange
+        TriageBlockedIssue blocked = new IssueBuilder().TriageBlockedFromTriage(VerdictNaming(15));
+        string rejection = new('x', TriageBlockedIssue.FailureReasonMaxLength - RejectionPrefix.Length);
+
+        // Act
+        TriageFailedIssue failed = blocked.FailBlockerLink(WorkerRunId.New(), 15, rejection, FailedAt);
+
+        // Assert
+        failed.FailureReason.ShouldSatisfyAllConditions(
+            () => failed.FailureReason.Length.ShouldBe(TriageBlockedIssue.FailureReasonMaxLength),
+            () => failed.FailureReason.ShouldEndWith("x"));
+    }
+
+    [Fact]
+    public void WhenTheFailureReasonIsOneOverTheLimit_CapsItWithAnEllipsis()
+    {
+        // Arrange
+        TriageBlockedIssue blocked = new IssueBuilder().TriageBlockedFromTriage(VerdictNaming(15));
+        string rejection = new('x', TriageBlockedIssue.FailureReasonMaxLength - RejectionPrefix.Length + 1);
+
+        // Act
+        TriageFailedIssue failed = blocked.FailBlockerLink(WorkerRunId.New(), 15, rejection, FailedAt);
+
+        // Assert
+        failed.FailureReason.ShouldSatisfyAllConditions(
+            () => failed.FailureReason.Length.ShouldBe(TriageBlockedIssue.FailureReasonMaxLength),
+            () => failed.FailureReason.ShouldEndWith("x…"));
+    }
+
+    [Fact]
+    public void WhenTheCutWouldSplitASurrogatePair_DropsTheHalfPairBeforeTheEllipsis()
+    {
+        // Arrange
+        TriageBlockedIssue blocked = new IssueBuilder().TriageBlockedFromTriage(VerdictNaming(15));
+        int lastKeptIndex = TriageBlockedIssue.FailureReasonMaxLength - 2;
+        string rejection = new string('x', lastKeptIndex - RejectionPrefix.Length) + "\U0001F600" + "yyy";
+
+        // Act
+        TriageFailedIssue failed = blocked.FailBlockerLink(WorkerRunId.New(), 15, rejection, FailedAt);
+
+        // Assert
+        failed.FailureReason.ShouldSatisfyAllConditions(
+            () => char.IsSurrogate(failed.FailureReason[^2]).ShouldBeFalse(),
+            () => failed.FailureReason.ShouldEndWith("x…"));
     }
 
     [Fact]

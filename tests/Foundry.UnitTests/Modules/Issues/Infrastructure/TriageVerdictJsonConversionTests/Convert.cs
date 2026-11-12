@@ -53,6 +53,36 @@ public sealed class Convert
     }
 
     [Fact]
+    public void ABlockedRowNamingExactlyTheBlockerCap_ReadsABlockedVerdict()
+    {
+        // Arrange
+        string blockedBy = string.Join(
+            ',',
+            Enumerable.Range(1, TriageVerdict.Blocked.MaxBlockers).Select(number => $$"""{"issue":{{number}},"reason":"Needs it."}"""));
+        string stored = $$"""{"outcome":"blocked","kind":"bug","blockedBy":[{{blockedBy}}],"decidedAt":"2026-11-11T10:00:00+00:00"}""";
+
+        // Act
+        TriageVerdict read = Deserialize(stored);
+
+        // Assert
+        read.ShouldBeOfType<TriageVerdict.Blocked>().BlockedBy.Count.ShouldBe(TriageVerdict.Blocked.MaxBlockers);
+    }
+
+    [Fact]
+    public void ABlockedRowWithAReasonExactlyAtTheCap_ReadsABlockedVerdict()
+    {
+        // Arrange
+        string reason = new('a', TriageVerdict.Blocked.ReasonMaxLength);
+        string stored = $$"""{"outcome":"blocked","kind":"bug","blockedBy":[{"issue":15,"reason":"{{reason}}"}],"decidedAt":"2026-11-11T10:00:00+00:00"}""";
+
+        // Act
+        TriageVerdict read = Deserialize(stored);
+
+        // Assert
+        read.ShouldBeOfType<TriageVerdict.Blocked>().ReasonFor(15).ShouldBe(reason);
+    }
+
+    [Fact]
     public void ABlockedVerdict_StoresTheDocumentedShape()
     {
         // Arrange
