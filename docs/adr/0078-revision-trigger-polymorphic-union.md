@@ -1,6 +1,6 @@
 # Revision Trigger as a Polymorphic Union
 
-> **2026-11-12 — Amended:** the Decision clause "the handler calls `ChecksPendingIssue.FixChecks(failingChecks)` when the counter is below `ChecksMaxFixPushes`" is corrected: the handler now dispatches a fix only when `ChecksPendingIssue.CanFixChecks` holds (below the cap and at least one failing check named).
+> **2026-11-12 — Amended:** the Decision clause on when the handler calls `ChecksPendingIssue.FixChecks(failingChecks)` (the `still_failing` verdict with the counter below `ChecksPendingIssue.ChecksMaxFixPushes`) is corrected: the handler now dispatches a fix only when `ChecksPendingIssue.CanFixChecks` holds (below the cap and at least one failing check named).
 > A red verdict naming none goes to review with `ChecksOutcome.StillFailing` and an empty list, and `FixChecks` rejects an empty list.
 > A later decision changed the rule; the original clause neither drifted nor was false when written.
 
