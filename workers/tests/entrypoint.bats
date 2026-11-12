@@ -2340,6 +2340,21 @@ assert_top_level_combinator_fails_bootstrap() {
     assert_top_level_combinator_fails_bootstrap oneOf
 }
 
+@test "verdict: a verdict schema with several top-level combinators names each one in the bootstrap failure" {
+    set_required_env
+    make_fake_git
+    make_fake_claude
+    printf '%s\n' '{"type":"object","required":["outcome"],"allOf":[{"required":["outcome"]}],"oneOf":[{"required":["outcome"]}]}' > "$FOUNDRY_ROLES_DIR/implement/verdict.schema.json"
+
+    run bash "$ENTRYPOINT"
+
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"FOUNDRY_BOOTSTRAP_FAILED stage=role"* ]]
+    [[ "$output" == *"has a top-level allOf, oneOf"* ]]
+    [ ! -f "$BATS_TEST_TMPDIR/claude_called" ]
+    [ ! -d "$FOUNDRY_WORKSPACE_DIR" ]
+}
+
 # ---------------------------------------------------------------------------
 # Capability profile tests (ADR 0098)
 #
