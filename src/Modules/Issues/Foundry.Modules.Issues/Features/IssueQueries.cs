@@ -62,7 +62,8 @@ internal sealed class IssueQueries(
     {
         // EF Core cannot translate a C# instance method call into SQL, so the type-pattern
         // Where clause is kept explicit here. Only the concrete states that ProcessIssueDependenciesHandler
-        // acts on are included, the triage states among them so their blockers are current when a ready verdict
+        // acts on are included: TriageBlockedIssue and BlockedIssue so their closing blockers release them (ADR 0102),
+        // the other triage states so their blockers are current when a ready verdict
         // sends the issue through the dependency check (ADR 0097) — FreshQueuedIssue is used
         // explicitly (never the QueuedIssue base type) because RevisionQueuedIssue and
         // ContinuationQueuedIssue both derive from QueuedIssue but are not acted on.
@@ -75,7 +76,8 @@ internal sealed class IssueQueries(
                 i is TriageInProgressIssue ||
                 i is TriageFailedIssue ||
                 i is FreshQueuedIssue ||
-                i is BlockedIssue)
+                i is BlockedIssue ||
+                i is TriageBlockedIssue)
             .Select(i => i.IssueNumber)
             .ToListAsync(cancellationToken);
 
@@ -99,6 +101,7 @@ internal sealed class IssueQueries(
                 i is DetectedIssue ||
                 i is QueuedIssue ||
                 i is BlockedIssue ||
+                i is TriageBlockedIssue ||
                 i is FailedIssue ||
                 i is TriageFailedIssue ||
                 i is ContinuableFailedIssue ||
@@ -443,6 +446,7 @@ internal sealed class IssueQueries(
             DetectedIssue => "detected",
             FreshQueuedIssue => "queued",
             BlockedIssue => "blocked",
+            TriageBlockedIssue => "triage_blocked",
             InProgressIssue => "in_progress",
             ReviewIssue => "review",
             UnchangedIssue => "unchanged",
@@ -590,6 +594,16 @@ internal sealed class IssueQueries(
                 FailedAt: null,
                 CompletedAt: null,
                 BlockedBy: blocked.BlockedBy,
+                TransientRetry: null),
+
+            TriageBlockedIssue triageBlocked => new IssueStateDetails(
+                WorkerRunId: null,
+                BranchName: null,
+                FeedbackCutoffAt: null,
+                FailureReason: null,
+                FailedAt: null,
+                CompletedAt: null,
+                BlockedBy: triageBlocked.BlockedBy,
                 TransientRetry: null),
 
             InProgressIssue inProgress => new IssueStateDetails(

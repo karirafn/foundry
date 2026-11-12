@@ -40,12 +40,21 @@ public sealed class DetectedIssue : Issue
     }
 
     /// <summary>
-    /// Every new issue is triaged before its first implement run, and before the dependency check (ADR 0097).
+    /// Every new issue is triaged before its first implement run (ADR 0097), but not before its blockers close: an
+    /// issue with open blockers waits untriaged, so triage judges it against the code they wrote (ADR 0102).
     /// </summary>
     public TriageQueuedIssue QueueTriage()
     {
         TriageQueuedIssue queued = TriageQueuedIssue.FromDetected(this);
         AddDomainEvent(new Events.IssueTriageQueued(Id, MonitoredRepositoryId));
         return queued;
+    }
+
+    /// <summary>A new issue with open <paramref name="blockers"/> waits untriaged until they close (ADR 0102).</summary>
+    public TriageBlockedIssue BlockTriage(IReadOnlyList<int> blockers)
+    {
+        TriageBlockedIssue blocked = TriageBlockedIssue.Untriaged(this, blockers);
+        AddDomainEvent(new Events.IssueTriageBlocked(Id, MonitoredRepositoryId));
+        return blocked;
     }
 }

@@ -296,9 +296,9 @@ A change found by a **scheduled** poll (other than the startup catch-up, see [Mo
 ## Issue
 
 A provider-side issue tagged for Foundry processing.
-Modeled as a polymorphic aggregate — each lifecycle state is a distinct type (`DetectedIssue`, `TriageQueuedIssue`, `TriageInProgressIssue`, `TriageFailedIssue`, `BlockedIssue`, `FreshQueuedIssue`, `ContinuationQueuedIssue`, `RevisionQueuedIssue`, `InProgressIssue`, `RevisionInProgressIssue`, `RebasePendingIssue`, `ChecksPendingIssue`, `ReviewIssue`, `AwaitingInputIssue`, `UnchangedIssue`, `CompletedIssue`, `FailedIssue`, `ContinuableFailedIssue`, `RevisionFailedIssue`).
+Modeled as a polymorphic aggregate — each lifecycle state is a distinct type (`DetectedIssue`, `TriageQueuedIssue`, `TriageBlockedIssue`, `TriageInProgressIssue`, `TriageFailedIssue`, `BlockedIssue`, `FreshQueuedIssue`, `ContinuationQueuedIssue`, `RevisionQueuedIssue`, `InProgressIssue`, `RevisionInProgressIssue`, `RebasePendingIssue`, `ChecksPendingIssue`, `ReviewIssue`, `AwaitingInputIssue`, `UnchangedIssue`, `CompletedIssue`, `FailedIssue`, `ContinuableFailedIssue`, `RevisionFailedIssue`).
 Every variant carries the shared properties, including the append-only [clarification log](#clarification) and the latest [Triage Verdict](#triage-verdict), through every transition.
-Every new issue is triaged once before its first implement run, and before the dependency check: `Detected → TriageQueued → TriageInProgress →` the dependency check (`FreshQueued` or `Blocked`) or `AwaitingInput` ([ADR 0097](docs/adr/0097-every-new-issue-is-triaged-before-dispatch.md)).
+Every new issue is triaged once before its first implement run, and only once its blockers close: `Detected → (TriageBlocked →) TriageQueued → TriageInProgress →` the dependency check (`FreshQueued` or `Blocked`) or `AwaitingInput` ([ADR 0097](docs/adr/0097-every-new-issue-is-triaged-before-dispatch.md), ordering amended by [ADR 0102](docs/adr/0102-triage-runs-once-blockers-clear.md)).
 State transitions are methods on each variant that return the next variant type, enforcing valid transitions at compile time.
 
 ### Issue Lifecycle Partition
@@ -312,13 +312,14 @@ The dashboard renders Active states in four display groups, classified by one ru
 
 - **In progress** — a worker is actually running right now: implementing, revising or triaging (`in_progress`, `revision_in_progress`, `triage_in_progress`). Exactly `LIVE_STATES`.
 - **Needs attention** — requires a user action to progress (`review`, `awaiting_input`, `unchanged`, `failed`, `continuable_failed`, `revision_failed`, `triage_failed`, `publish_failed`, `branch_diverged`).
-- **Waiting** — waiting for a worker or for Foundry; advances with no user action (`detected`, `triage_queued`, `queued`, `blocked`, `revision_queued`, `continuation_queued`, `rebase_pending`, `checks_pending`).
+- **Waiting** — waiting for a worker or for Foundry; advances with no user action (`detected`, `triage_queued`, `queued`, `blocked`, `triage_blocked`, `revision_queued`, `continuation_queued`, `rebase_pending`, `checks_pending`).
 - **Resolved** — done (`completed`).
 
 Two states deserve explicit note:
 
 - `unchanged` is Active/Needs-attention because the worker produced no changes and the user must decide whether to retry — it cannot resolve itself.
 - `blocked` is Waiting because a `BlockedIssue` auto-transitions to `FreshQueuedIssue` when its blockers close on the provider; no user action is required.
+- `triage_blocked` is Waiting for the same reason: a `TriageBlockedIssue` auto-transitions to `TriageQueuedIssue` when its blockers close.
 - `awaiting_input` is Needs-attention (label "Awaiting input") because it advances only when a person answers the posted questions.
 - `triage_failed` is Needs-attention (label "Triage failed"): a transient failure retries itself, anything else waits for Retry triage or Skip triage ([ADR 0014](docs/adr/0014-remove-immediate-requeue-always-pause.md)).
 
@@ -326,10 +327,18 @@ Two states deserve explicit note:
 
 `triage_queued`: an issue waiting for a worker to triage it ([ADR 0097](docs/adr/0097-every-new-issue-is-triaged-before-dispatch.md)). A [Queued Issue](#queued-issue) with `TierRank = 2`, between continuation and fresh. Display group: Waiting, label "Triage queued".
 
-- **Ways in** — every new issue (`DetectedIssue.QueueTriage()`, on creation; an issue still `detected` from before triage existed is sent there by the dependency pass), input arriving on an `AwaitingInputIssue` with a `Retriage` [resume target](#awaitinginputissue), Retry triage from `TriageFailedIssue`, and [Re-triage](#re-triage) from `FreshQueued` or `Blocked`.
-- Triage comes before the dependency check: its open blockers are recorded (the dependency pass keeps them current in all three triage states) but never hold it back. Revision, continuation and rebase-conflict runs never go through triage.
+- **Ways in** — every new issue (`DetectedIssue.QueueTriage()`, on creation; an issue still `detected` from before triage existed is sent there by the dependency pass when it has no open blockers), a [TriageBlockedIssue](#triageblockedissue) whose blockers closed, input arriving on an `AwaitingInputIssue` with a `Retriage` [resume target](#awaitinginputissue), Retry triage from `TriageFailedIssue`, and [Re-triage](#re-triage) from `FreshQueued` or `Blocked`.
+- Triage waits for open blockers (ADR 0102): when the dependency pass or the claim-time re-check finds open blockers, `Block()` → `TriageBlockedIssue`. Re-triage or an answered question while blockers are open therefore lands here first and then moves to `TriageBlocked`. The dependency pass keeps blockers current in `TriageInProgress`, `TriageFailed` and `AwaitingInput` too, where they are only recorded. Revision, continuation and rebase-conflict runs never go through triage.
 - `Context` is `DispatchContext.Triage`, whose role maps to `WorkerRole.Triage`; `DispatchBranchName` is `null`, so no branch name is generated and the run gets none.
-- **Way out** — `Claim()` → `TriageInProgressIssue`. Hard-deleted on untrack like every queued state.
+- **Ways out** — `Claim()` → `TriageInProgressIssue`; `Block()` → `TriageBlockedIssue`. Hard-deleted on untrack like every queued state.
+
+## TriageBlockedIssue
+
+`triage_blocked`: an issue that hasn't been triaged and has open blockers ([ADR 0102](docs/adr/0102-triage-runs-once-blockers-clear.md)). When its blockers close, it moves to `TriageQueued`. A [Blocked Issue](#blocked-issue) has already been triaged or skipped triage, and moves to `FreshQueued`. Display group: Waiting, label "Triage blocked".
+
+- Not a [Queued Issue](#queued-issue): it is never a dispatch candidate and holds no worker slot. Triage waits so the run judges the issue against the code its blockers wrote, not code that doesn't exist yet.
+- **Ways in** — the dependency pass applying open blockers to a `DetectedIssue` (`BlockTriage()`) or a `TriageQueuedIssue` (`Block()`), or the claim-time re-check finding them on a `TriageQueuedIssue`. Raises `IssueTriageBlocked`.
+- **Way out** — `Unblock()` → `TriageQueuedIssue`, raising `IssueTriageQueued`, when the dependency pass finds its blockers closed or unlinked (the only exit, as for `BlockedIssue`). No operator actions. Hard-deleted on untrack.
 
 ## TriageInProgressIssue
 
@@ -356,7 +365,7 @@ Its kind decides the issue's [Kind Classification](#kind-classification) only wh
 
 ## Re-triage
 
-The operator action that sends a `FreshQueuedIssue` or `BlockedIssue` back to `TriageQueuedIssue` (`POST /api/issues/{id}/retriage`; any other state is 409), keeping its recorded blockers. There is no automatic re-triage once an issue is ready: an edit to a queued or blocked issue does not trigger triage again.
+The operator action that sends a `FreshQueuedIssue` or `BlockedIssue` back to `TriageQueuedIssue` (`POST /api/issues/{id}/retriage`; any other state is 409), keeping its recorded blockers. While those blockers are open it then waits as a [TriageBlockedIssue](#triageblockedissue), and is triaged once they close. There is no automatic re-triage once an issue is ready: an edit to a queued or blocked issue does not trigger triage again.
 
 ## Skip triage
 
@@ -671,14 +680,14 @@ A directed "blocked by" relationship between two issues within the same reposito
 Stored as a collection of blocking issue numbers on the Issue aggregate — the blocking issue may or may not be tracked by Foundry.
 Both GitHub (REST API v2026-03-10) and GitLab (Issue Links API, Premium+) expose dependencies via structured APIs.
 Foundry fetches dependencies during the detection poll cycle and reconciles them on each subsequent poll.
-Because the poll can lag behind the provider (GitLab sends no webhook when an issue link is created), Foundry also re-reads a `FreshQueuedIssue`'s open blockers live from the provider immediately before claiming it, so an issue with an open blocker is never dispatched regardless of webhook delivery.
-A claim-time hit is applied exactly as the poll path applies detected dependencies — the issue transitions to `BlockedIssue` and the next candidate in dispatch order is tried within the same capacity event; when every candidate is blocked or unreadable, the claim is skipped and the capacity reservation is released.
+Because the poll can lag behind the provider (GitLab sends no webhook when an issue link is created), and a new issue is queued for triage on creation before its first dependency pass, Foundry also re-reads a `FreshQueuedIssue`'s or `TriageQueuedIssue`'s open blockers live from the provider immediately before claiming it, so an issue with an open blocker is never dispatched regardless of webhook delivery.
+A claim-time hit is applied exactly as the poll path applies detected dependencies — the issue transitions to `BlockedIssue` (or `TriageBlockedIssue` for a triage candidate) and the next candidate in dispatch order is tried within the same capacity event; when every candidate is blocked or unreadable, the claim is skipped and the capacity reservation is released.
 A failed claim-time read skips the candidate for that dispatch without changing its state; the next dispatch tick retries it.
 `RevisionQueuedIssue` and `ContinuationQueuedIssue` are not re-checked — they run on an existing branch or pull request.
 A blocker added after an issue is claimed is not detected; add blockers before applying the trigger label.
 When the provider does not expose dependency links (e.g. GitLab Free tier), the provider degrades gracefully — it treats the issue as having no dependencies and logs once, rather than failing the poll.
 Circular dependencies are detected by a domain service and flagged via a `CircularDependencyDetected` domain event.
-A cycle does not exempt an issue from blocking: a `FreshQueuedIssue` in a cycle still transitions to `BlockedIssue`, and the event is still raised. A triage state only records its blockers; they decide where a ready verdict sends it.
+A cycle does not exempt an issue from blocking: a `FreshQueuedIssue` in a cycle still transitions to `BlockedIssue`, an untriaged one to `TriageBlockedIssue`, and the event is still raised. A running or failed triage, or an issue awaiting input, only records its blockers; they decide where a ready verdict sends it.
 The cycle is resolved by breaking it in the provider, after which the dependency pass unblocks the issue.
 A blocker is *resolved* when it is closed in the provider — the provider client filters out closed blockers at the anti-corruption boundary so domain logic never sees them.
 The provider client also scopes "blocked by" links to the same repository or project at this boundary — GitHub by `repository.full_name`, GitLab by the linked issue's numeric `project_id` — so cross-project and cross-repository links never reach domain logic.
@@ -687,11 +696,11 @@ When a blocker's state is missing or unrecognized, it is treated as still blocki
 
 ## Blocked Issue
 
-A lifecycle state for an issue that has unresolved dependencies.
+A lifecycle state for a triaged issue that has unresolved dependencies (an untriaged one waits as a [TriageBlockedIssue](#triageblockedissue)).
 A triaged issue (a ready verdict or Skip triage) with open blockers transitions to `BlockedIssue` instead of `FreshQueuedIssue`.
 A `FreshQueuedIssue` that gains blockers is demoted to `BlockedIssue` — whether the blockers are found by the dependency pass or by the claim-time re-check (see Issue Dependency).
 A `FreshQueuedIssue` whose blockers form a cycle is blocked like any other; `CircularDependencyDetected` is raised alongside the transition.
-When all blockers are resolved — that is, closed in the provider, or the link removed (including one that broke a cycle) — a `BlockedIssue` transitions to `FreshQueuedIssue` on the next dependency pass, without being triaged again. [Re-triage](#re-triage) sends it back to triage; a ready verdict while its blockers are still open returns it to `BlockedIssue`.
+When all blockers are resolved — that is, closed in the provider, or the link removed (including one that broke a cycle) — a `BlockedIssue` transitions to `FreshQueuedIssue` on the next dependency pass, without being triaged again. [Re-triage](#re-triage) sends it back to triage, where it waits as a `TriageBlockedIssue` while its blockers are open and is triaged once they close.
 
 ## Rebase Pending Issue
 

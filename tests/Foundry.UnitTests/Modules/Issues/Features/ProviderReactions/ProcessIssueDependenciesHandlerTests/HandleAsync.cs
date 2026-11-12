@@ -2,6 +2,7 @@ using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Issues.Domain.Entities;
 using Foundry.Modules.Issues.Domain.Entities.States;
 using Foundry.Modules.Issues.Domain.Events;
+using Foundry.Modules.Issues.Domain.ValueObjects;
 using Foundry.Modules.Issues.Features.ProviderReactions;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Shared;
@@ -178,9 +179,9 @@ public sealed class HandleAsync : IAsyncDisposable
             .ShouldHaveSingleItem();
     }
 
-    // Behavior (d): DetectedIssue + has blockers → TriageQueuedIssue carrying them (triage comes before blockers)
+    // Behavior (d): DetectedIssue + has blockers → TriageBlockedIssue carrying them (triage waits for blockers, ADR 0102)
     [Fact]
-    public async Task WhenDetectedIssueHasBlockers_QueuesItForTriageCarryingThem()
+    public async Task WhenDetectedIssueHasBlockers_WaitsUntriagedCarryingThem()
     {
         // Arrange
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
@@ -200,11 +201,11 @@ public sealed class HandleAsync : IAsyncDisposable
             .FirstOrDefaultAsync(
                 i => i.MonitoredRepositoryId == repositoryId && i.IssueNumber == 4,
                 TestContext.Current.CancellationToken);
-        issue.ShouldBeOfType<TriageQueuedIssue>().BlockedBy.ShouldBe([7]);
+        issue.ShouldBeOfType<TriageBlockedIssue>().BlockedBy.ShouldBe([7]);
     }
 
     [Fact]
-    public async Task WhenDetectedIssueHasBlockers_RaisesIssueTriageQueuedEvent()
+    public async Task WhenDetectedIssueHasBlockers_RaisesIssueTriageBlockedEvent()
     {
         // Arrange
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
@@ -220,7 +221,7 @@ public sealed class HandleAsync : IAsyncDisposable
 
         // Assert
         _dispatcher.DispatchedEvents
-            .OfType<IssueTriageQueued>()
+            .OfType<IssueTriageBlocked>()
             .ShouldHaveSingleItem();
     }
 
@@ -444,7 +445,7 @@ public sealed class HandleAsync : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenCycleIncludesDetectedIssue_QueuesItForTriageAndRaisesCycle()
+    public async Task WhenCycleIncludesDetectedIssue_WaitsUntriagedAndRaisesCycle()
     {
         // Arrange — issue 1 is blocked by 2; issue 2 now reports 1 → cycle 1→2→1
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
@@ -459,7 +460,7 @@ public sealed class HandleAsync : IAsyncDisposable
         // Act
         await _sut.HandleAsync(@event, CancellationToken.None);
 
-        // Assert — triage comes first; the blockers are carried and the cycle is still raised
+        // Assert — triage waits for the blockers; they are carried and the cycle is still raised
         _dbContext.ChangeTracker.Clear();
         Issue? issue = await _dbContext.Set<Issue>()
             .FirstOrDefaultAsync(
@@ -467,9 +468,9 @@ public sealed class HandleAsync : IAsyncDisposable
                 TestContext.Current.CancellationToken);
 
         Issue reloaded = issue.ShouldNotBeNull();
-        reloaded.ShouldBeOfType<TriageQueuedIssue>();
+        reloaded.ShouldBeOfType<TriageBlockedIssue>();
         reloaded.BlockedBy.ShouldBe([1]);
-        _dispatcher.DispatchedEvents.OfType<IssueTriageQueued>().ShouldHaveSingleItem();
+        _dispatcher.DispatchedEvents.OfType<IssueTriageBlocked>().ShouldHaveSingleItem();
         _dispatcher.DispatchedEvents.OfType<CircularDependencyDetected>().ShouldHaveSingleItem();
     }
 
@@ -557,5 +558,137 @@ public sealed class HandleAsync : IAsyncDisposable
 
         issue.ShouldNotBeNull().ShouldBeOfType<FreshQueuedIssue>().BlockedBy.ShouldBeEmpty();
         _dispatcher.DispatchedEvents.OfType<CircularDependencyDetected>().ShouldBeEmpty();
+    }
+
+    private void SeedIssue(Issue issue)
+    {
+        _dbContext.Set<Issue>().Add(issue);
+        _dbContext.SaveChanges();
+        _dbContext.ChangeTracker.Clear();
+    }
+
+    private async Task<Issue> ReloadAsync(MonitoredRepositoryId repositoryId, int issueNumber)
+    {
+        _dbContext.ChangeTracker.Clear();
+        Issue? issue = await _dbContext.Set<Issue>()
+            .FirstOrDefaultAsync(
+                i => i.MonitoredRepositoryId == repositoryId && i.IssueNumber == issueNumber,
+                TestContext.Current.CancellationToken);
+        return issue.ShouldNotBeNull();
+    }
+
+    private static IssueBuilder IssueIn(MonitoredRepositoryId repositoryId, int issueNumber) =>
+        new IssueBuilder().WithMonitoredRepositoryId(repositoryId).WithIssueNumber(issueNumber);
+
+    [Fact]
+    public async Task WhenTriageQueuedIssueHasBlockers_WaitsUntriaged()
+    {
+        // Arrange
+        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
+        SeedIssue(IssueIn(repositoryId, 30).TriageQueued());
+
+        // Act
+        await _sut.HandleAsync(new IssueDependenciesDetected(repositoryId, 30, [31]), CancellationToken.None);
+
+        // Assert
+        Issue issue = await ReloadAsync(repositoryId, 30);
+        issue.ShouldBeOfType<TriageBlockedIssue>().BlockedBy.ShouldBe([31]);
+        _dispatcher.DispatchedEvents.OfType<IssueTriageBlocked>().ShouldHaveSingleItem();
+    }
+
+    [Fact]
+    public async Task WhenTriageQueuedIssueHasNoBlockers_StaysQueuedForTriage()
+    {
+        // Arrange
+        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
+        SeedIssue(IssueIn(repositoryId, 32).TriageQueued());
+
+        // Act
+        await _sut.HandleAsync(new IssueDependenciesDetected(repositoryId, 32, []), CancellationToken.None);
+
+        // Assert
+        Issue issue = await ReloadAsync(repositoryId, 32);
+        issue.ShouldBeOfType<TriageQueuedIssue>();
+        _dispatcher.DispatchedEvents.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task WhenTriageBlockedIssueHasNoMoreBlockers_GoesToTriage()
+    {
+        // Arrange
+        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
+        SeedIssue(IssueIn(repositoryId, 33).TriageBlocked([34]));
+
+        // Act
+        await _sut.HandleAsync(new IssueDependenciesDetected(repositoryId, 33, []), CancellationToken.None);
+
+        // Assert
+        Issue issue = await ReloadAsync(repositoryId, 33);
+        issue.ShouldBeOfType<TriageQueuedIssue>().BlockedBy.ShouldBeEmpty();
+        _dispatcher.DispatchedEvents.OfType<IssueTriageQueued>().ShouldHaveSingleItem();
+    }
+
+    [Fact]
+    public async Task WhenTriageBlockedIssueStillHasBlockers_StaysAndRecordsThem()
+    {
+        // Arrange
+        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
+        SeedIssue(IssueIn(repositoryId, 35).TriageBlocked([36]));
+
+        // Act
+        await _sut.HandleAsync(new IssueDependenciesDetected(repositoryId, 35, [37]), CancellationToken.None);
+
+        // Assert
+        Issue issue = await ReloadAsync(repositoryId, 35);
+        issue.ShouldBeOfType<TriageBlockedIssue>().BlockedBy.ShouldBe([37]);
+        _dispatcher.DispatchedEvents.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task WhenTriageInProgressIssueHasBlockers_OnlyRecordsThem()
+    {
+        // Arrange
+        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
+        SeedIssue(IssueIn(repositoryId, 38).TriageInProgress());
+
+        // Act
+        await _sut.HandleAsync(new IssueDependenciesDetected(repositoryId, 38, [39]), CancellationToken.None);
+
+        // Assert
+        Issue issue = await ReloadAsync(repositoryId, 38);
+        issue.ShouldBeOfType<TriageInProgressIssue>().BlockedBy.ShouldBe([39]);
+        _dispatcher.DispatchedEvents.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task WhenTriageFailedIssueHasBlockers_OnlyRecordsThem()
+    {
+        // Arrange
+        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
+        SeedIssue(IssueIn(repositoryId, 40).TriageFailed());
+
+        // Act
+        await _sut.HandleAsync(new IssueDependenciesDetected(repositoryId, 40, [41]), CancellationToken.None);
+
+        // Assert
+        Issue issue = await ReloadAsync(repositoryId, 40);
+        issue.ShouldBeOfType<TriageFailedIssue>().BlockedBy.ShouldBe([41]);
+        _dispatcher.DispatchedEvents.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task WhenAwaitingInputIssueHasBlockers_OnlyRecordsThem()
+    {
+        // Arrange
+        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
+        SeedIssue(IssueIn(repositoryId, 42).AwaitingInputFromTriage(IssueKind.Feature));
+
+        // Act
+        await _sut.HandleAsync(new IssueDependenciesDetected(repositoryId, 42, [43]), CancellationToken.None);
+
+        // Assert
+        Issue issue = await ReloadAsync(repositoryId, 42);
+        issue.ShouldBeOfType<AwaitingInputIssue>().BlockedBy.ShouldBe([43]);
+        _dispatcher.DispatchedEvents.ShouldBeEmpty();
     }
 }

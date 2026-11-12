@@ -96,6 +96,7 @@ public abstract class Issue : AggregateRoot<IssueId>, IStateMachine<Issue>
         this is DetectedIssue
             or QueuedIssue
             or BlockedIssue
+            or TriageBlockedIssue
             or FailedIssue
             or TriageFailedIssue
             or ContinuableFailedIssue

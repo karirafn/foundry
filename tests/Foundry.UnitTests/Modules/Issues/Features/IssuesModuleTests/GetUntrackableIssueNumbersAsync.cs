@@ -477,6 +477,34 @@ public sealed class GetUntrackableIssueNumbersAsync : IAsyncDisposable
         result.ShouldBeEmpty();
     }
 
+    [Fact]
+    public async Task WhenTriageBlockedIssueExists_ReturnsItsNumber()
+    {
+        // Arrange
+        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
+        SeedTriageBlockedIssue(repositoryId, issueNumber: 4);
+
+        // Act
+        IReadOnlySet<int> result = await _sut.GetUntrackableIssueNumbersAsync(
+            repositoryId,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        result.ShouldBe([4], ignoreOrder: true);
+    }
+
+    private TriageBlockedIssue SeedTriageBlockedIssue(MonitoredRepositoryId repositoryId, int issueNumber)
+    {
+        TriageBlockedIssue blocked = new IssueBuilder()
+            .WithMonitoredRepositoryId(repositoryId)
+            .WithIssueNumber(issueNumber)
+            .WithDetectedAt(Now)
+            .TriageBlocked([99]);
+        _dbContext.Set<Issue>().Add(blocked);
+        _dbContext.SaveChanges();
+        return blocked;
+    }
+
     // Cross-reference test: the query's resting-state set and Issue.IsRestingState() must agree
     // across all known issue types, so future state additions that update one but not the other
     // fail here.
@@ -500,6 +528,7 @@ public sealed class GetUntrackableIssueNumbersAsync : IAsyncDisposable
         SeedReviewIssue(repositoryId, issueNumber: 111);
         SeedUnchangedIssue(repositoryId, issueNumber: 112);
         SeedCompletedIssue(repositoryId, issueNumber: 113);
+        SeedTriageBlockedIssue(repositoryId, issueNumber: 114);
 
         // Act
         IReadOnlySet<int> queryResult = await _sut.GetUntrackableIssueNumbersAsync(

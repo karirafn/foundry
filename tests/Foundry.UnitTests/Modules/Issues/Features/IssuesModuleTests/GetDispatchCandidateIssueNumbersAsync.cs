@@ -303,4 +303,25 @@ public sealed class GetDispatchCandidateIssueNumbersAsync : IAsyncDisposable
         // Assert
         result.ShouldBe([10], ignoreOrder: true);
     }
+
+    [Fact]
+    public async Task WhenTriageBlockedIssueExists_ReturnsItsNumber()
+    {
+        // Arrange
+        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
+        _dbContext.Set<Issue>().Add(new IssueBuilder()
+            .WithMonitoredRepositoryId(repositoryId)
+            .WithIssueNumber(4)
+            .WithDetectedAt(Now)
+            .TriageBlocked([99]));
+        await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        // Act
+        IReadOnlySet<int> result = await _sut.GetDispatchCandidateIssueNumbersAsync(
+            repositoryId,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        result.ShouldBe([4], ignoreOrder: true);
+    }
 }
