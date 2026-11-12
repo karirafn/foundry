@@ -117,6 +117,18 @@ public sealed class AddIssuesModule : IAsyncDisposable
     }
 
     [Fact]
+    public void WhenServicesRegistered_BlockerLinkFailedHandlerResolvable()
+    {
+        // Arrange & Act
+        using IServiceScope scope = _serviceProvider.CreateScope();
+
+        // Assert
+        IIntegrationEventHandler<BlockerLinkFailed> handler =
+            scope.ServiceProvider.GetRequiredService<IIntegrationEventHandler<BlockerLinkFailed>>();
+        handler.ShouldBeOfType<BlockerLinkFailedHandler>();
+    }
+
+    [Fact]
     public void WhenServicesRegistered_WorkerCapacityAvailableHandlerResolvable()
     {
         // Arrange & Act

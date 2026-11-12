@@ -44,6 +44,7 @@ public static class IssuesModule
         services.AddIntegrationEventHandler<IssueDetected, CreateIssueHandler>();
         services.AddIntegrationEventHandler<IssueDetailsChanged, UpdateIssueDetailsHandler>();
         services.AddIntegrationEventHandler<IssueDependenciesDetected, ProcessIssueDependenciesHandler>();
+        services.AddIntegrationEventHandler<BlockerLinkFailed, BlockerLinkFailedHandler>();
         services.AddIntegrationEventHandler<WorkerCapacityAvailable, WorkerCapacityAvailableHandler>();
         services.AddIntegrationEventHandler<WorkerRunCompleted, WorkerRunCompletedHandler>();
         services.AddIntegrationEventHandler<WorkerRunFailed, WorkerRunFailedHandler>();
