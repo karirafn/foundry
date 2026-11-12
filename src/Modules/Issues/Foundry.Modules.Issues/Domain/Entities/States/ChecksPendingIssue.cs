@@ -94,6 +94,11 @@ public sealed class ChecksPendingIssue : Issue
 
     public RevisionQueuedIssue FixChecks(IReadOnlyList<FailingCheck> failingChecks)
     {
+        if (failingChecks.Count == 0)
+        {
+            throw new ArgumentException("A checks fix must name at least one failing check.", nameof(failingChecks));
+        }
+
         RevisionQueuedIssue revisionQueued = RevisionQueuedIssue.FromChecksPendingFix(this, failingChecks);
         AddDomainEvent(new Events.IssueRevisionQueued(Id, MonitoredRepositoryId));
         return revisionQueued;

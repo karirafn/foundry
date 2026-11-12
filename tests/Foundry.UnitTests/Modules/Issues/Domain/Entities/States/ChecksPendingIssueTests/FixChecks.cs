@@ -20,6 +20,22 @@ public sealed class FixChecks
     ];
 
     [Fact]
+    public void WhenNoFailingCheckIsNamed_ThrowsWithoutRaisingADomainEvent()
+    {
+        // Arrange
+        ChecksPendingIssue checksPending = new IssueBuilder()
+            .ChecksPending();
+
+        // Act
+        Action act = () => checksPending.FixChecks([]);
+
+        // Assert
+        ArgumentException exception = Should.Throw<ArgumentException>(act);
+        exception.ParamName.ShouldBe("failingChecks");
+        checksPending.DomainEvents.ShouldBeEmpty();
+    }
+
+    [Fact]
     public void WhenFixChecksCalledOnFirstAttempt_ReturnsRevisionQueuedIssueWithSameId()
     {
         // Arrange
