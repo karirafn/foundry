@@ -1,5 +1,3 @@
-using System.Diagnostics;
-
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Domain.Entities;
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
@@ -10,6 +8,8 @@ using Foundry.Shared;
 using Microsoft.EntityFrameworkCore;
 
 namespace Foundry.Modules.Monitoring.Features.Providers.BlockerLinks;
+
+using ResolvedProvider = (IIssueProvider Provider, MonitoredRepository Repo);
 
 /// <summary>
 /// Writes blocker links and the triage comment to a monitored repository's provider. Failures carry
@@ -38,7 +38,7 @@ internal sealed class BlockerLinkWriter(
         try
         {
             return await success.Value.Provider.AddBlockerAsync(
-                success.Value.Repository.Slug, issueNumber, blockerNumber, cancellationToken);
+                success.Value.Repo.Slug, issueNumber, blockerNumber, cancellationToken);
         }
         catch (Exception ex) when (BlockerLinkErrors.IsTransportFailure(ex, cancellationToken))
         {
@@ -63,7 +63,7 @@ internal sealed class BlockerLinkWriter(
         try
         {
             posted = await success.Value.Provider.PostCommentAsync(
-                success.Value.Repository.Slug, new CommentThread.Issue(issueNumber), body, cancellationToken);
+                success.Value.Repo.Slug, new CommentThread.Issue(issueNumber), body, cancellationToken);
         }
         catch (Exception ex) when (BlockerLinkErrors.IsTransportFailure(ex, cancellationToken))
         {
@@ -88,23 +88,9 @@ internal sealed class BlockerLinkWriter(
     private static string UnreachableMessage(MonitoredRepositoryId repositoryId, Exception exception) =>
         $"The provider for repository '{repositoryId.Value}' could not be reached: {exception.GetType().Name}.";
 
-    private async Task<Result<ResolvedProvider>> ResolveAsync(
+    private Task<Result<ResolvedProvider>> ResolveAsync(
         MonitoredRepositoryId repositoryId,
-        CancellationToken cancellationToken)
-    {
-        Result<(IIssueProvider Provider, MonitoredRepository Repo)> resolved =
-            await RepositoryProviderResolution.ResolveAsync(
-                dbContext, credentialResolver, providerFactory, repositoryId, cancellationToken);
-
-        return resolved switch
-        {
-            // An unknown repository or an unusable credential needs an operator, so no retry can fix it.
-            Result<(IIssueProvider, MonitoredRepository)>.Success success =>
-                Result<ResolvedProvider>.Ok(new ResolvedProvider(success.Value.Item1, success.Value.Item2)),
-            Result<(IIssueProvider, MonitoredRepository)>.Failure failure => Result<ResolvedProvider>.Fail(failure.Error),
-            _ => throw new UnreachableException(),
-        };
-    }
-
-    private sealed record ResolvedProvider(IIssueProvider Provider, MonitoredRepository Repository);
+        CancellationToken cancellationToken) =>
+        RepositoryProviderResolution.ResolveAsync(
+            dbContext, credentialResolver, providerFactory, repositoryId, cancellationToken);
 }

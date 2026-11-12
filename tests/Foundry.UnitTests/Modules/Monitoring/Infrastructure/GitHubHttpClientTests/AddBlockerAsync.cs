@@ -1,5 +1,4 @@
 using System.Net;
-using System.Text;
 
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Features.Providers.BlockerLinks;
@@ -56,7 +55,7 @@ public sealed class AddBlockerAsync
 
     private static RepositorySlug ValidSlug => RepositorySlug.Create("owner/repo").ValueOrThrow();
 
-    private static GitHubHttpClient BuildSut(ScriptedHandler handler) =>
+    private static GitHubHttpClient BuildSut(MethodRoutedFakeHandler handler) =>
         new(
             new HttpClient(handler),
             NullLogger<GitHubHttpClient>.Instance,
@@ -72,7 +71,7 @@ public sealed class AddBlockerAsync
     public async Task WhenTheBlockerExists_PostsItsIdToTheBlockedByEndpointAndSucceeds()
     {
         // Arrange
-        ScriptedHandler handler = new ScriptedHandler()
+        MethodRoutedFakeHandler handler = new MethodRoutedFakeHandler()
             .Respond(HttpMethod.Get, BlockerPath, HttpStatusCode.OK, BlockerIssueJson)
             .Respond(HttpMethod.Post, DependenciesPath, HttpStatusCode.Created, CreatedJson);
         GitHubHttpClient sut = BuildSut(handler);
@@ -94,7 +93,7 @@ public sealed class AddBlockerAsync
     public async Task WhenGitHubRejectsTheLinkAndTheBlockerIsNotRecorded_FailsPermanentWithGitHubsMessage()
     {
         // Arrange
-        ScriptedHandler handler = new ScriptedHandler()
+        MethodRoutedFakeHandler handler = new MethodRoutedFakeHandler()
             .Respond(HttpMethod.Get, BlockerPath, HttpStatusCode.OK, BlockerIssueJson)
             .Respond(HttpMethod.Post, DependenciesPath, HttpStatusCode.UnprocessableEntity, ValidationFailedJson)
             .Respond(HttpMethod.Get, DependenciesPath, HttpStatusCode.OK, "[]")
@@ -116,7 +115,7 @@ public sealed class AddBlockerAsync
     public async Task WhenGitHubRejectsTheLinkAsDuplicateAndTheReadBackShowsTheBlocker_Succeeds()
     {
         // Arrange
-        ScriptedHandler handler = new ScriptedHandler()
+        MethodRoutedFakeHandler handler = new MethodRoutedFakeHandler()
             .Respond(HttpMethod.Get, BlockerPath, HttpStatusCode.OK, BlockerIssueJson)
             .Respond(HttpMethod.Post, DependenciesPath, HttpStatusCode.UnprocessableEntity, ValidationFailedJson)
             .Respond(HttpMethod.Get, DependenciesPath, HttpStatusCode.OK, RecordedBlockedByJson)
@@ -138,7 +137,7 @@ public sealed class AddBlockerAsync
     public async Task WhenGitHubsRejectionBodyIsNotTheDocumentedShape_FailsPermanentInsteadOfThrowing(string body)
     {
         // Arrange
-        ScriptedHandler handler = new ScriptedHandler()
+        MethodRoutedFakeHandler handler = new MethodRoutedFakeHandler()
             .Respond(HttpMethod.Get, BlockerPath, HttpStatusCode.OK, BlockerIssueJson)
             .Respond(HttpMethod.Post, DependenciesPath, HttpStatusCode.UnprocessableEntity, body)
             .Respond(HttpMethod.Get, DependenciesPath, HttpStatusCode.OK, "[]")
@@ -159,7 +158,7 @@ public sealed class AddBlockerAsync
     public async Task WhenGitHubsRejectionBodyIsNotJson_NamesTheStatusInTheMessage()
     {
         // Arrange
-        ScriptedHandler handler = new ScriptedHandler()
+        MethodRoutedFakeHandler handler = new MethodRoutedFakeHandler()
             .Respond(HttpMethod.Get, BlockerPath, HttpStatusCode.OK, BlockerIssueJson)
             .Respond(HttpMethod.Post, DependenciesPath, HttpStatusCode.UnprocessableEntity, "<html>nope</html>")
             .Respond(HttpMethod.Get, DependenciesPath, HttpStatusCode.OK, "[]")
@@ -182,7 +181,7 @@ public sealed class AddBlockerAsync
     public async Task WhenTheIdReadSucceedsWithoutAValidIssue_FailsPermanentAndMakesNoPost(string body)
     {
         // Arrange
-        ScriptedHandler handler = new ScriptedHandler()
+        MethodRoutedFakeHandler handler = new MethodRoutedFakeHandler()
             .Respond(HttpMethod.Get, BlockerPath, HttpStatusCode.OK, body);
         GitHubHttpClient sut = BuildSut(handler);
 
@@ -195,11 +194,35 @@ public sealed class AddBlockerAsync
             () => handler.Requests.ShouldNotContain(request => request.Method == HttpMethod.Post));
     }
 
+    [Theory]
+    [InlineData(HttpStatusCode.Forbidden, "<html>forbidden</html>", "GitHub returned 403.")]
+    [InlineData(HttpStatusCode.NotFound, "", "GitHub returned 404.")]
+    [InlineData(HttpStatusCode.UnprocessableEntity, "{}", "GitHub returned 422.")]
+    public async Task WhenGitHubsRefusalCarriesNoMessage_NamesOnlyTheStatusWithoutRestatingTheLink(
+        HttpStatusCode status,
+        string body,
+        string expectedMessage)
+    {
+        // Arrange
+        MethodRoutedFakeHandler handler = new MethodRoutedFakeHandler()
+            .Respond(HttpMethod.Get, BlockerPath, HttpStatusCode.OK, BlockerIssueJson)
+            .Respond(HttpMethod.Post, DependenciesPath, status, body)
+            .Respond(HttpMethod.Get, DependenciesPath, HttpStatusCode.OK, "[]")
+            .Respond(HttpMethod.Get, BlockingPath, HttpStatusCode.OK, "[]");
+        GitHubHttpClient sut = BuildSut(handler);
+
+        // Act
+        Result result = await AddAsync(sut);
+
+        // Assert
+        result.ShouldBeOfType<Result.Failure>().Error.Message.ShouldBe(expectedMessage);
+    }
+
     [Fact]
     public async Task WhenGitHubRejectsAsDuplicateWithANonJsonBodyAndTheReadBackShowsTheBlocker_Succeeds()
     {
         // Arrange
-        ScriptedHandler handler = new ScriptedHandler()
+        MethodRoutedFakeHandler handler = new MethodRoutedFakeHandler()
             .Respond(HttpMethod.Get, BlockerPath, HttpStatusCode.OK, BlockerIssueJson)
             .Respond(HttpMethod.Post, DependenciesPath, HttpStatusCode.UnprocessableEntity, "<html>nope</html>")
             .Respond(HttpMethod.Get, DependenciesPath, HttpStatusCode.OK, RecordedBlockedByJson)
@@ -218,7 +241,7 @@ public sealed class AddBlockerAsync
     {
         // Arrange
         string longMessage = $$"""{"message":"first line\nsecond line {{new string('x', 1000)}}"}""";
-        ScriptedHandler handler = new ScriptedHandler()
+        MethodRoutedFakeHandler handler = new MethodRoutedFakeHandler()
             .Respond(HttpMethod.Get, BlockerPath, HttpStatusCode.OK, BlockerIssueJson)
             .Respond(HttpMethod.Post, DependenciesPath, HttpStatusCode.UnprocessableEntity, longMessage)
             .Respond(HttpMethod.Get, DependenciesPath, HttpStatusCode.OK, "[]")
@@ -242,7 +265,7 @@ public sealed class AddBlockerAsync
         // Arrange
         string emoji = char.ConvertFromUtf32(0x1F600);
         string body = $$"""{"message":"{{new string('a', 498)}}{{emoji}}{{new string('b', 10)}}"}""";
-        ScriptedHandler handler = new ScriptedHandler()
+        MethodRoutedFakeHandler handler = new MethodRoutedFakeHandler()
             .Respond(HttpMethod.Get, BlockerPath, HttpStatusCode.OK, BlockerIssueJson)
             .Respond(HttpMethod.Post, DependenciesPath, HttpStatusCode.UnprocessableEntity, body)
             .Respond(HttpMethod.Get, DependenciesPath, HttpStatusCode.OK, "[]")
@@ -263,7 +286,7 @@ public sealed class AddBlockerAsync
     public async Task WhenThePostAnswersARetryableStatus_FailsTransient(HttpStatusCode status)
     {
         // Arrange
-        ScriptedHandler handler = new ScriptedHandler()
+        MethodRoutedFakeHandler handler = new MethodRoutedFakeHandler()
             .Respond(HttpMethod.Get, BlockerPath, HttpStatusCode.OK, BlockerIssueJson)
             .Respond(HttpMethod.Post, DependenciesPath, status, "{}");
         GitHubHttpClient sut = BuildSut(handler);
@@ -279,7 +302,7 @@ public sealed class AddBlockerAsync
     public async Task WhenThePostIsForbiddenByTheRateLimit_FailsTransient()
     {
         // Arrange
-        ScriptedHandler handler = new ScriptedHandler()
+        MethodRoutedFakeHandler handler = new MethodRoutedFakeHandler()
             .Respond(HttpMethod.Get, BlockerPath, HttpStatusCode.OK, BlockerIssueJson)
             .Respond(HttpMethod.Post, DependenciesPath, HttpStatusCode.Forbidden, """{"message":"API rate limit exceeded"}""");
         handler.ResponseHeaders["X-RateLimit-Remaining"] = "0";
@@ -298,7 +321,7 @@ public sealed class AddBlockerAsync
     public async Task WhenThePostAnswersNotFoundOrGone_FailsPermanent(HttpStatusCode status)
     {
         // Arrange
-        ScriptedHandler handler = new ScriptedHandler()
+        MethodRoutedFakeHandler handler = new MethodRoutedFakeHandler()
             .Respond(HttpMethod.Get, BlockerPath, HttpStatusCode.OK, BlockerIssueJson)
             .Respond(HttpMethod.Post, DependenciesPath, status, """{"message":"Not Found"}""");
         GitHubHttpClient sut = BuildSut(handler);
@@ -310,6 +333,49 @@ public sealed class AddBlockerAsync
         result.ShouldBeOfType<Result.Failure>().Error.Code.ShouldBe(BlockerLinkErrors.PermanentCode);
     }
 
+    [Fact]
+    public async Task WhenGitHubsRejectionHasAnErrorDetailButNoMessage_StartsTheMessageWithTheDetail()
+    {
+        // Arrange
+        MethodRoutedFakeHandler handler = new MethodRoutedFakeHandler()
+            .Respond(HttpMethod.Get, BlockerPath, HttpStatusCode.OK, BlockerIssueJson)
+            .Respond(
+                HttpMethod.Post,
+                DependenciesPath,
+                HttpStatusCode.UnprocessableEntity,
+                """{"errors":[{"message":"Issue is already blocked by this issue"}]}""")
+            .Respond(HttpMethod.Get, DependenciesPath, HttpStatusCode.OK, "[]")
+            .Respond(HttpMethod.Get, BlockingPath, HttpStatusCode.OK, "[]");
+        GitHubHttpClient sut = BuildSut(handler);
+
+        // Act
+        Result result = await AddAsync(sut);
+
+        // Assert
+        result.ShouldBeOfType<Result.Failure>().Error.Message.ShouldBe("Issue is already blocked by this issue");
+    }
+
+    [Fact]
+    public async Task WhenThePostIsRefusedWithAMessage_FailsPermanentWithGitHubsMessageAlone()
+    {
+        // Arrange
+        MethodRoutedFakeHandler handler = new MethodRoutedFakeHandler()
+            .Respond(HttpMethod.Get, BlockerPath, HttpStatusCode.OK, BlockerIssueJson)
+            .Respond(
+                HttpMethod.Post,
+                DependenciesPath,
+                HttpStatusCode.Forbidden,
+                """{"message":"Resource not accessible by integration"}""");
+        GitHubHttpClient sut = BuildSut(handler);
+
+        // Act
+        Result result = await AddAsync(sut);
+
+        // Assert
+        result.ShouldBeOfType<Result.Failure>().Error.Message
+            .ShouldBe("Resource not accessible by integration");
+    }
+
     [Theory]
     [InlineData(HttpStatusCode.NotFound, BlockerLinkErrors.PermanentCode)]
     [InlineData(HttpStatusCode.Gone, BlockerLinkErrors.PermanentCode)]
@@ -317,7 +383,7 @@ public sealed class AddBlockerAsync
     public async Task WhenTheIdReadFails_ClassifiesTheStatusAndMakesNoPost(HttpStatusCode status, string expectedCode)
     {
         // Arrange
-        ScriptedHandler handler = new ScriptedHandler()
+        MethodRoutedFakeHandler handler = new MethodRoutedFakeHandler()
             .Respond(HttpMethod.Get, BlockerPath, status, """{"message":"Not Found"}""");
         GitHubHttpClient sut = BuildSut(handler);
 
@@ -334,7 +400,7 @@ public sealed class AddBlockerAsync
     public async Task WhenTheIdReadCannotConnect_FailsTransient()
     {
         // Arrange
-        ScriptedHandler handler = new ScriptedHandler().FailToConnect(HttpMethod.Get, BlockerPath);
+        MethodRoutedFakeHandler handler = new MethodRoutedFakeHandler().FailToConnect(HttpMethod.Get, BlockerPath);
         GitHubHttpClient sut = BuildSut(handler);
 
         // Act
@@ -348,7 +414,7 @@ public sealed class AddBlockerAsync
     public async Task WhenThePostCannotConnect_FailsTransient()
     {
         // Arrange
-        ScriptedHandler handler = new ScriptedHandler()
+        MethodRoutedFakeHandler handler = new MethodRoutedFakeHandler()
             .Respond(HttpMethod.Get, BlockerPath, HttpStatusCode.OK, BlockerIssueJson)
             .FailToConnect(HttpMethod.Post, DependenciesPath);
         GitHubHttpClient sut = BuildSut(handler);
@@ -364,7 +430,7 @@ public sealed class AddBlockerAsync
     public async Task WhenTheBaseUrlIsNotHttps_FailsPermanentWithoutACall()
     {
         // Arrange
-        ScriptedHandler handler = new();
+        MethodRoutedFakeHandler handler = new();
         GitHubHttpClient sut = BuildSut(handler);
 
         // Act
@@ -380,7 +446,7 @@ public sealed class AddBlockerAsync
     public async Task WhenTheReadBackAfterARejectionFails_FailsTransient()
     {
         // Arrange
-        ScriptedHandler handler = new ScriptedHandler()
+        MethodRoutedFakeHandler handler = new MethodRoutedFakeHandler()
             .Respond(HttpMethod.Get, BlockerPath, HttpStatusCode.OK, BlockerIssueJson)
             .Respond(HttpMethod.Post, DependenciesPath, HttpStatusCode.UnprocessableEntity, ValidationFailedJson)
             .Respond(HttpMethod.Get, DependenciesPath, HttpStatusCode.InternalServerError, "{}");
@@ -397,7 +463,7 @@ public sealed class AddBlockerAsync
     public async Task WhenTheReadBackCannotConnect_FailsTransient()
     {
         // Arrange
-        ScriptedHandler handler = new ScriptedHandler()
+        MethodRoutedFakeHandler handler = new MethodRoutedFakeHandler()
             .Respond(HttpMethod.Get, BlockerPath, HttpStatusCode.OK, BlockerIssueJson)
             .Respond(HttpMethod.Post, DependenciesPath, HttpStatusCode.UnprocessableEntity, ValidationFailedJson)
             .FailToConnect(HttpMethod.Get, DependenciesPath);
@@ -414,7 +480,7 @@ public sealed class AddBlockerAsync
     public async Task WhenTheBlockersIdExceedsInt32_PostsItWhole()
     {
         // Arrange
-        ScriptedHandler handler = new ScriptedHandler()
+        MethodRoutedFakeHandler handler = new MethodRoutedFakeHandler()
             .Respond(HttpMethod.Get, BlockerPath, HttpStatusCode.OK, LargeIdBlockerIssueJson)
             .Respond(HttpMethod.Post, DependenciesPath, HttpStatusCode.Created, CreatedJson);
         GitHubHttpClient sut = BuildSut(handler);
@@ -424,61 +490,5 @@ public sealed class AddBlockerAsync
 
         // Assert
         handler.Requests[1].Body.ShouldBe("""{"issue_id":4294967297}""");
-    }
-
-    internal sealed record RecordedRequest(HttpMethod Method, string Path, string? Body, string? ApiVersion, string? Token);
-
-    internal sealed class ScriptedHandler : HttpMessageHandler
-    {
-        private readonly List<(HttpMethod Method, string Path, HttpStatusCode Status, string Body)> _responses = [];
-        private readonly List<(HttpMethod Method, string Path)> _failures = [];
-        private readonly List<RecordedRequest> _requests = [];
-
-        public IReadOnlyList<RecordedRequest> Requests => _requests;
-
-        public Dictionary<string, string> ResponseHeaders { get; } = [];
-
-        public ScriptedHandler FailToConnect(HttpMethod method, string path)
-        {
-            _failures.Add((method, path));
-            return this;
-        }
-
-        public ScriptedHandler Respond(HttpMethod method, string path, HttpStatusCode status, string body)
-        {
-            _responses.Add((method, path, status, body));
-            return this;
-        }
-
-        protected override async Task<HttpResponseMessage> SendAsync(
-            HttpRequestMessage request,
-            CancellationToken cancellationToken)
-        {
-            string path = request.RequestUri!.AbsolutePath;
-            string? body = request.Content is null ? null : await request.Content.ReadAsStringAsync(cancellationToken);
-            string? apiVersion = request.Headers.TryGetValues("X-GitHub-Api-Version", out IEnumerable<string>? values)
-                ? values.Single()
-                : null;
-            _requests.Add(new RecordedRequest(request.Method, path, body, apiVersion, request.Headers.Authorization?.Parameter));
-
-            if (_failures.Any(failure => failure.Method == request.Method && failure.Path == path))
-            {
-                throw new HttpRequestException("connection refused");
-            }
-
-            (HttpMethod Method, string Path, HttpStatusCode Status, string Body) match = _responses
-                .First(response => response.Method == request.Method && response.Path == path);
-            HttpResponseMessage response = new(match.Status)
-            {
-                Content = new StringContent(match.Body, Encoding.UTF8, "application/json"),
-            };
-
-            foreach (KeyValuePair<string, string> header in ResponseHeaders)
-            {
-                response.Headers.TryAddWithoutValidation(header.Key, header.Value);
-            }
-
-            return response;
-        }
     }
 }

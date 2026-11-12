@@ -12,6 +12,7 @@ namespace Foundry.Modules.Monitoring.Infrastructure.GitHub;
 
 internal sealed partial class GitHubHttpClient
 {
+    private const string ProviderName = "GitHub";
     private const string IdProperty = "id";
     private const string MessageProperty = "message";
     private const string ErrorsProperty = "errors";
@@ -21,7 +22,9 @@ internal sealed partial class GitHubHttpClient
     /// blocker's id (<c>GET /repos/{owner}/{repo}/issues/{blocker}</c>), then posts it to
     /// <c>POST /repos/{owner}/{repo}/issues/{issue_number}/dependencies/blocked_by</c>. A <c>422</c> counts as
     /// success only when a read-back of the issue's links shows the blocker, because GitHub documents no
-    /// duplicate-link response.
+    /// duplicate-link response. GitHub documents <c>422</c> as "Validation failed, or the endpoint has been
+    /// spammed", and the status cannot tell the two apart: a spam <c>422</c> with no recorded link fails
+    /// permanently, and Retry triage links it again.
     /// </summary>
     public async Task<Result> AddBlockerAsync(
         Uri apiBaseUrl,
@@ -82,7 +85,7 @@ internal sealed partial class GitHubHttpClient
                     apiBaseUrl, slug, issueNumber, blockerNumber, token, rejectionBody, cancellationToken);
             }
 
-            return ClassifyBlockerLinkFailure(response, $"Linking blocker #{blockerNumber} to {slug}#{issueNumber}");
+            return await ClassifyBlockerLinkFailureAsync(response, ProviderName, cancellationToken);
         }
     }
 
@@ -112,7 +115,8 @@ internal sealed partial class GitHubHttpClient
         {
             if (!response.IsSuccessStatusCode)
             {
-                return Result<long>.Fail(ClassifyBlockerLinkFailure(response, $"Reading {slug}#{issueNumber}"));
+                return Result<long>.Fail(
+                    await ClassifyBlockerLinkFailureAsync(response, $"Reading {slug}#{issueNumber}", cancellationToken));
             }
 
             string body = await response.Content.ReadAsStringAsync(cancellationToken);
@@ -174,22 +178,30 @@ internal sealed partial class GitHubHttpClient
 
         return recorded
             ? Result.Ok()
-            : BlockerLinkErrors.Permanent(DescribeRejection(rejectionBody, slug, issueNumber, blockerNumber));
+            : BlockerLinkErrors.Permanent(DescribeRefusal(rejectionBody, $"{ProviderName} returned 422."));
     }
 
-    private static Error ClassifyBlockerLinkFailure(HttpResponseMessage response, string action)
+    private static async Task<Error> ClassifyBlockerLinkFailureAsync(
+        HttpResponseMessage response,
+        string subject,
+        CancellationToken cancellationToken)
     {
-        string message = $"{action} returned {(int)response.StatusCode}.";
-        return IsRetryableStatus(response) ? BlockerLinkErrors.Transient(message) : BlockerLinkErrors.Permanent(message);
+        string status = $"{subject} returned {(int)response.StatusCode}.";
+
+        if (IsRetryableStatus(response))
+        {
+            return BlockerLinkErrors.Transient(status);
+        }
+
+        string body = await response.Content.ReadAsStringAsync(cancellationToken);
+        return BlockerLinkErrors.Permanent(DescribeRefusal(body, status));
     }
 
-    private static string DescribeRejection(string responseBody, RepositorySlug slug, int issueNumber, int blockerNumber)
+    private static string DescribeRefusal(string responseBody, string statusMessage)
     {
         string described = SingleLineText.Cap(ParseRejection(responseBody));
 
-        return described.Length > 0
-            ? described
-            : $"Linking blocker #{blockerNumber} to {slug}#{issueNumber} returned 422.";
+        return described.Length > 0 ? described : statusMessage;
     }
 
     private static string ParseRejection(string responseBody)
@@ -207,7 +219,7 @@ internal sealed partial class GitHubHttpClient
             string message = ReadString(root, MessageProperty);
             string detail = FirstErrorDetail(root);
 
-            return detail.Length == 0 ? message : $"{message}: {detail}";
+            return string.Join(": ", new[] { message, detail }.Where(part => part.Length > 0));
         }
         catch (JsonException)
         {
