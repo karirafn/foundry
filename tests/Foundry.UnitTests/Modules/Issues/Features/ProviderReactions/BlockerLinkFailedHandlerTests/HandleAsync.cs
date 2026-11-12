@@ -73,11 +73,12 @@ public sealed class HandleAsync : IAsyncDisposable
             IssueKind.Feature,
             [new TriageBlocker(BlockerNumber, "Needs it first.")],
             DecidedAt);
+        WorkerRunId runId = WorkerRunId.New();
         Seed(new IssueBuilder()
             .WithMonitoredRepositoryId(repositoryId)
             .WithIssueNumber(7)
+            .WithWorkerRunId(runId)
             .TriageBlockedFromTriage(verdict));
-        WorkerRunId runId = WorkerRunId.New();
 
         // Act
         await _sut.HandleAsync(EventFor(repositoryId, 7, runId.Value), CancellationToken.None);
@@ -93,7 +94,97 @@ public sealed class HandleAsync : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenIssueIsInAnotherState_LeavesItUnchangedAndLogsInformation()
+    public async Task WhenEventIsFromAnotherTriageRun_LeavesTheIssueTriageBlocked()
+    {
+        // Arrange
+        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
+        TriageVerdict.Blocked verdict = new(
+            IssueKind.Feature,
+            [new TriageBlocker(BlockerNumber, "Needs it first.")],
+            DecidedAt);
+        Seed(new IssueBuilder()
+            .WithMonitoredRepositoryId(repositoryId)
+            .WithIssueNumber(7)
+            .TriageBlockedFromTriage(verdict));
+
+        // Act
+        await _sut.HandleAsync(EventFor(repositoryId, 7, Guid.NewGuid()), CancellationToken.None);
+
+        // Assert
+        await AssertSingleIssueIsStillTriageBlockedAsync();
+    }
+
+    [Fact]
+    public async Task WhenBlockerIsNotNamedByTheVerdict_LeavesTheIssueTriageBlocked()
+    {
+        // Arrange
+        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
+        TriageVerdict.Blocked verdict = new(
+            IssueKind.Feature,
+            [new TriageBlocker(BlockerNumber + 1, "Needs it first.")],
+            DecidedAt);
+        WorkerRunId runId = WorkerRunId.New();
+        Seed(new IssueBuilder()
+            .WithMonitoredRepositoryId(repositoryId)
+            .WithIssueNumber(7)
+            .WithWorkerRunId(runId)
+            .TriageBlockedFromTriage(verdict));
+
+        // Act
+        await _sut.HandleAsync(EventFor(repositoryId, 7, runId.Value), CancellationToken.None);
+
+        // Assert
+        await AssertSingleIssueIsStillTriageBlockedAsync();
+    }
+
+    [Fact]
+    public async Task WhenIssueWaitsOnBlockersFoundBeforeTriage_LeavesTheIssueTriageBlocked()
+    {
+        // Arrange
+        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
+        Seed(new IssueBuilder()
+            .WithMonitoredRepositoryId(repositoryId)
+            .WithIssueNumber(7)
+            .TriageBlocked([BlockerNumber]));
+
+        // Act
+        await _sut.HandleAsync(EventFor(repositoryId, 7, Guid.NewGuid()), CancellationToken.None);
+
+        // Assert
+        await AssertSingleIssueIsStillTriageBlockedAsync();
+    }
+
+    private async Task AssertSingleIssueIsStillTriageBlockedAsync()
+    {
+        List<Issue> issues = await _dbContext.Set<Issue>()
+            .AsNoTracking()
+            .ToListAsync(TestContext.Current.CancellationToken);
+        issues.ShouldHaveSingleItem().ShouldBeOfType<TriageBlockedIssue>();
+    }
+
+    [Fact]
+    public async Task WhenIssueIsInAnotherState_KeepsItsFailureCategory()
+    {
+        // Arrange
+        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
+        Seed(new IssueBuilder()
+            .WithMonitoredRepositoryId(repositoryId)
+            .WithIssueNumber(7)
+            .WithFailureCategory(FailureCategory.NonZeroExit)
+            .TriageFailed());
+
+        // Act
+        await _sut.HandleAsync(EventFor(repositoryId, 7, Guid.NewGuid()), CancellationToken.None);
+
+        // Assert
+        List<Issue> issues = await _dbContext.Set<Issue>()
+            .AsNoTracking()
+            .ToListAsync(TestContext.Current.CancellationToken);
+        issues.ShouldHaveSingleItem().ShouldBeOfType<TriageFailedIssue>().FailureCategory.ShouldBe(FailureCategory.NonZeroExit);
+    }
+
+    [Fact]
+    public async Task WhenIssueIsInAnotherState_LogsInformation()
     {
         // Arrange
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
@@ -106,9 +197,7 @@ public sealed class HandleAsync : IAsyncDisposable
         await _sut.HandleAsync(EventFor(repositoryId, 7, Guid.NewGuid()), CancellationToken.None);
 
         // Assert
-        _logger.Entries.ShouldSatisfyAllConditions(
-            () => _logger.Entries.ShouldContain(entry => entry.Level == LogLevel.Information),
-            () => _dbContext.Set<Issue>().AsNoTracking().ToList().ShouldHaveSingleItem().ShouldBeOfType<TriageFailedIssue>().FailureCategory.ShouldNotBe(FailureCategory.BlockerLinkFailed));
+        _logger.Entries.ShouldContain(entry => entry.Level == LogLevel.Information);
     }
 
     [Fact]

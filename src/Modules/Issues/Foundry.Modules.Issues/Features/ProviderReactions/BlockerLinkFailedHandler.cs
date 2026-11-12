@@ -10,6 +10,11 @@ using Microsoft.Extensions.Logging;
 
 namespace Foundry.Modules.Issues.Features.ProviderReactions;
 
+/// <summary>
+/// Fails triage when the provider refused to link a blocker triage named. The event is delivered after the fact, so
+/// it is acted on only while the issue still waits on the blockers that run named; an issue that has since been
+/// triaged again, or that waits on blockers found before triage, no longer has a link to refuse and stays as it is.
+/// </summary>
 [IntegrationEventHandlerIdentity("Issues.BlockerLinkFailed")]
 internal sealed class BlockerLinkFailedHandler(
     DbContext db,
@@ -32,8 +37,20 @@ internal sealed class BlockerLinkFailedHandler(
             return;
         }
 
+        WorkerRunId workerRunId = WorkerRunId.From(@event.WorkerRunId);
+
+        if (!blocked.WasLinkRefusedForTriageRun(workerRunId, @event.BlockerNumber))
+        {
+            logger.LogInformation(
+                "BlockerLinkFailed from run {WorkerRunId} for repository {RepositoryId} issue {IssueNumber} does not describe its blocked state; ignoring.",
+                workerRunId.Value,
+                @event.MonitoredRepositoryId,
+                @event.IssueNumber);
+            return;
+        }
+
         TriageFailedIssue failed = blocked.FailBlockerLink(
-            new WorkerRunId(@event.WorkerRunId),
+            workerRunId,
             @event.BlockerNumber,
             @event.ProviderMessage,
             @event.FailedAt);

@@ -40,6 +40,23 @@ public sealed class FailBlockerLink
     }
 
     [Fact]
+    public void WhenTheRejectionIsLongAndMultiline_RecordsASingleLineWithinTheFailureReasonLimit()
+    {
+        // Arrange
+        TriageBlockedIssue blocked = new IssueBuilder().TriageBlockedFromTriage(VerdictNaming(15));
+        string rejection = "first line\n" + new string('x', 2000);
+
+        // Act
+        TriageFailedIssue failed = blocked.FailBlockerLink(WorkerRunId.New(), 15, rejection, FailedAt);
+
+        // Assert
+        failed.FailureReason.ShouldSatisfyAllConditions(
+            () => failed.FailureReason.Length.ShouldBeLessThanOrEqualTo(TriageBlockedIssue.FailureReasonMaxLength),
+            () => failed.FailureReason.ShouldNotContain('\n'),
+            () => failed.FailureReason.ShouldStartWith("The tracker rejected linking #15 as a blocker: first line x"));
+    }
+
+    [Fact]
     public void WhenTheTrackerRejectsALink_KeepsTheBlockersAndTheVerdict()
     {
         // Arrange
