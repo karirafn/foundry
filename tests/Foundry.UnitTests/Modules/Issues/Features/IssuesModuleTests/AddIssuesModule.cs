@@ -213,6 +213,18 @@ public sealed class AddIssuesModule : IAsyncDisposable
     }
 
     [Fact]
+    public void WhenServicesRegistered_TriageBlockersNamedHandlerResolvable()
+    {
+        // Arrange & Act
+        using IServiceScope scope = _serviceProvider.CreateScope();
+
+        // Assert
+        IEnumerable<IDomainEventHandler<TriageBlockersNamed>> handlers =
+            scope.ServiceProvider.GetServices<IDomainEventHandler<TriageBlockersNamed>>();
+        handlers.ShouldContain(handler => handler is TriageBlockersFoundBridge);
+    }
+
+    [Fact]
     public void WhenServicesRegistered_IssueCompletedHandlerResolvable()
     {
         // Arrange & Act

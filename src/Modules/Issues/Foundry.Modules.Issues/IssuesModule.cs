@@ -88,6 +88,7 @@ public static class IssuesModule
         AddIssueStateChangedHandler<IssueBranchDiverged>(services);
         services.AddScoped<IDomainEventHandler<IssueAwaitingInput>, IssueAwaitingInputNudgeBridge>();
         services.AddScoped<IDomainEventHandler<IssueRebasePending>, IssueRebasePendingNudgeBridge>();
+        services.AddScoped<IDomainEventHandler<TriageBlockersNamed>, TriageBlockersFoundBridge>();
 
         return services;
     }
