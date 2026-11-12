@@ -54,7 +54,7 @@ public sealed class HandleAsync : IAsyncDisposable
 
     private static readonly IReadOnlyList<FailingCheck> DefaultFailingChecks =
     [
-        new FailingCheck("ci/build", "failure", "https://github.com/owner/repo/actions/runs/1"),
+        new FailingCheck("ci/build", "FAILURE", "https://github.com/owner/repo/actions/runs/1"),
     ];
 
     private ChecksPendingIssue SeedChecksPendingIssue(
@@ -206,8 +206,8 @@ public sealed class HandleAsync : IAsyncDisposable
 
         IReadOnlyList<FailingCheck> failingChecks =
         [
-            new FailingCheck("ci/build", "failure", "https://github.com/owner/repo/actions/runs/1"),
-            new FailingCheck("ci/lint", "failure", null),
+            new FailingCheck("ci/build", "FAILURE", "https://github.com/owner/repo/actions/runs/1"),
+            new FailingCheck("ci/lint", "FAILURE", null),
         ];
 
         ChecksVerdictResolved @event = new(
@@ -243,8 +243,8 @@ public sealed class HandleAsync : IAsyncDisposable
 
         IReadOnlyList<FailingCheck> failingChecks =
         [
-            new FailingCheck("ci/build", "failure", "https://github.com/owner/repo/actions/runs/1"),
-            new FailingCheck("ci/lint", "failure", null),
+            new FailingCheck("ci/build", "FAILURE", "https://github.com/owner/repo/actions/runs/1"),
+            new FailingCheck("ci/lint", "FAILURE", null),
         ];
 
         ChecksVerdictResolved @event = new(
@@ -318,7 +318,7 @@ public sealed class HandleAsync : IAsyncDisposable
             .ShouldHaveSingleItem()
             .Message;
         message.ShouldContain(repositoryId.ToString());
-        message.ShouldContain("7");
+        message.ShouldContain("issue 7 ");
     }
 
     [Fact]

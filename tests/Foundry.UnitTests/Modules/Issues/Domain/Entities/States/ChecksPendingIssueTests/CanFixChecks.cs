@@ -12,7 +12,7 @@ public sealed class CanFixChecks
 {
     private static readonly IReadOnlyList<FailingCheck> FailingChecks =
     [
-        new FailingCheck("ci/build", "failure", "https://github.com/owner/repo/actions/runs/1"),
+        new FailingCheck("ci/build", "FAILURE", "https://github.com/owner/repo/actions/runs/1"),
     ];
 
     [Fact]

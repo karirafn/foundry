@@ -45,10 +45,10 @@ internal sealed class ChecksVerdictResolvedHandler(
                 $"Unknown ChecksOutcome discriminator '{@event.Outcome}' on ChecksVerdictResolved for repository {@event.RepositoryId} issue {@event.IssueNumber}."),
         };
 
-        if (outcome is ChecksOutcome.StillFailing
-            && checksPendingIssue.CanFixChecks(@event.FailingChecks))
+        if (outcome is ChecksOutcome.StillFailing stillFailing
+            && checksPendingIssue.CanFixChecks(stillFailing.FailingChecks))
         {
-            RevisionQueuedIssue revisionQueued = checksPendingIssue.FixChecks(@event.FailingChecks);
+            RevisionQueuedIssue revisionQueued = checksPendingIssue.FixChecks(stillFailing.FailingChecks);
             await db.TransitionAsync(checksPendingIssue, revisionQueued, domainEventDispatcher, cancellationToken);
             return;
         }
