@@ -18,6 +18,7 @@ const ALL_LIFECYCLE_STATES: ReadonlySet<IssueState> = new Set<IssueState>([
   'detected',
   'queued',
   'blocked',
+  'triage_blocked',
   'in_progress',
   'review',
   'rebase_pending',
@@ -48,6 +49,7 @@ describe('issue-lifecycle model', () => {
       'detected',
       'queued',
       'blocked',
+      'triage_blocked',
       'in_progress',
       'review',
       'rebase_pending',
@@ -522,4 +524,21 @@ describe('publish lifecycle states (#787, #788)', () => {
       expect(isResolvedState(state)).toBe(false);
     });
   }
+});
+
+describe('triage_blocked (ADR 0102)', () => {
+  it('should place triage_blocked in the Waiting group, in the blocked tier', () => {
+    // Arrange / Act
+    const group = groupFor('triage_blocked');
+
+    // Assert
+    expect(group.id).toBe('waiting');
+    expect(withinGroupRankFor('triage_blocked')).toBe(withinGroupRankFor('blocked'));
+  });
+
+  it('should treat triage_blocked as active, not resolved', () => {
+    // Arrange / Act / Assert
+    expect(ACTIVE_STATES.has('triage_blocked')).toBe(true);
+    expect(isResolvedState('triage_blocked')).toBe(false);
+  });
 });

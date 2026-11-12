@@ -2,6 +2,7 @@ export type IssueState =
   | 'detected'
   | 'queued'
   | 'blocked'
+  | 'triage_blocked'
   | 'in_progress'
   | 'review'
   | 'rebase_pending'
