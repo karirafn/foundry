@@ -1,5 +1,7 @@
 using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Issues.Domain.Entities;
+using Foundry.Modules.Issues.Domain.ValueObjects;
+using Foundry.Modules.Workers.Contracts;
 
 namespace Foundry.Modules.Issues.Domain.Entities.States;
 
@@ -31,6 +33,21 @@ public sealed class TriageBlockedIssue : Issue
         blocked.CopySharedPropertiesFrom(source);
         blocked.SetBlockedBy(blockers);
         return blocked;
+    }
+
+    internal static TriageBlockedIssue FromTriageInProgress(TriageInProgressIssue source, TriageVerdict.Blocked verdict)
+    {
+        TriageBlockedIssue blocked = new(source.Id);
+        blocked.CopySharedPropertiesFrom(source);
+        blocked.RecordTriageVerdict(verdict);
+        blocked.SetBlockedBy(NamedThenRecorded(verdict, source.BlockedBy));
+        return blocked;
+    }
+
+    private static List<int> NamedThenRecorded(TriageVerdict.Blocked verdict, IReadOnlyList<int> recorded)
+    {
+        List<int> named = [.. verdict.BlockedBy.Select((TriageBlocker blocker) => blocker.IssueNumber)];
+        return [.. named, .. recorded.Except(named)];
     }
 
     public TriageQueuedIssue Unblock()

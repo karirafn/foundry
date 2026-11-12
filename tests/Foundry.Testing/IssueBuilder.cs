@@ -134,6 +134,10 @@ public sealed class IssueBuilder
     public AwaitingInputIssue AwaitingInputFromTriage(IssueKind kind) =>
         TriageInProgress().MarkNeedsInput(new TriageVerdict.NeedsInput(kind, DefaultQuestions, _runStartedAt));
 
+    /// <summary>A triage run that named the blockers of <paramref name="verdict"/>: waits untriaged on them.</summary>
+    public TriageBlockedIssue TriageBlockedFromTriage(TriageVerdict.Blocked verdict) =>
+        TriageInProgress().MarkBlocked(verdict);
+
     public InProgressIssue InProgress() => FreshQueued().Claim(_workerRunId);
 
     public ReviewIssue Review() =>
