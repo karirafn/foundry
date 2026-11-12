@@ -291,14 +291,13 @@ public sealed class GetChecksAsync
     }
 
     [Theory]
-    [InlineData(@"lint unit", "lint unit")]
-    [InlineData(@"lint unit", "lint unit")]
-    [InlineData(@"lint‮unit", "lint unit")]
-    public async Task WhenAFailedJobNameHoldsLineSeparatorsOrFormatCharacters_ReplacesEachWithASpace(
-        string name,
-        string expectedName)
+    [InlineData(0x2028)]
+    [InlineData(0x2029)]
+    [InlineData(0x202E)]
+    public async Task WhenAFailedJobNameHoldsLineSeparatorsOrFormatCharacters_ReplacesEachWithASpace(int codePoint)
     {
         // Arrange
+        string name = "lint" + char.ConvertFromUtf32(codePoint) + "unit";
         string jobs = $$"""[{ "name": "{{name}}", "status": "failed", "allow_failure": false }]""";
         GitLabHttpClient sut = BuildSut(FailedPipelineHandler(jobs));
 
@@ -313,7 +312,7 @@ public sealed class GetChecksAsync
         // Assert
         Result<ProviderChecks>.Success success = result.ShouldBeOfType<Result<ProviderChecks>.Success>();
         ProviderChecks.Red red = success.Value.ShouldBeOfType<ProviderChecks.Red>();
-        red.FailingChecks.ShouldBe([new FailingCheck(expectedName, "failed", null)]);
+        red.FailingChecks.ShouldBe([new FailingCheck("lint unit", "failed", null)]);
     }
 
     [Theory]
