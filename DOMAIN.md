@@ -550,7 +550,9 @@ Persisted as a single `revision_trigger` JSON column and survives the outbox rou
 
 The number of `FailedChecks` revisions dispatched since the last human review feedback, carried on `ChecksPendingIssue` and threaded through the revision states so it survives `ChecksPending → RevisionQueued → RevisionInProgress → ChecksPending`.
 `ChecksPendingIssue.FixChecks` increments it; any `ReviewFeedback` revision (`ReviewIssue.Revise` / `ChecksPendingIssue.Revise`) resets it to 0.
-When a red verdict arrives and the count is below the cap (`ChecksMaxFixPushes`, = 2), the issue re-queues as a `FailedChecks` revision; at the cap it transitions to `ReviewIssue` with `ChecksOutcome.StillFailing`.
+When a red verdict arrives that names at least one failing check and the count is below the cap (`ChecksMaxFixPushes`, = 2), the issue re-queues as a `FailedChecks` revision.
+At the cap it transitions to `ReviewIssue` with `ChecksOutcome.StillFailing`.
+A red verdict naming no failing check also transitions to `ReviewIssue` with `ChecksOutcome.StillFailing` and spends no attempt.
 
 ## Rebase Conflict Attempts
 

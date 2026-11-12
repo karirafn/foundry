@@ -1,5 +1,9 @@
 # Revision Trigger as a Polymorphic Union
 
+> **2026-11-12 — Amended:** the Decision clause "the handler calls `ChecksPendingIssue.FixChecks(failingChecks)` when the counter is below `ChecksMaxFixPushes`" is corrected: the handler now dispatches a fix only when `ChecksPendingIssue.CanFixChecks` holds (below the cap and at least one failing check named).
+> A red verdict naming none goes to review with `ChecksOutcome.StillFailing` and an empty list, and `FixChecks` rejects an empty list.
+> A later decision changed the rule; the original clause neither drifted nor was false when written.
+
 ## Context
 
 Revision lifecycle states (`revision_queued`, `revision_in_progress`, `revision_failed`) previously carried three flat columns — `review_comments TEXT`, `omitted_comment_count INTEGER`, `newest_consumed_comment_at TEXT` — to represent the reason a revision was dispatched. Adding `FailedChecks` as a second dispatch reason (from [ADR 0077](0077-gate-review-on-provider-checks-at-the-issue-level.md)) would have required nullable columns for each reason type and a separate discriminator column, producing a sparse row and coupling every future dispatch reason to a schema change.
