@@ -101,9 +101,11 @@ internal sealed class WorkerOutcomeResolver(
         }
 
         BranchedRun branched = new(run, branchName);
+        RunResultSummary? summary = containerOutputParser.ParseRunResultSummary(containerOutput);
+        bool succeeded = Succeeded(status, summary);
 
         IReadOnlyList<RunVerdictQuestion>? askedQuestions =
-            status?.ExitCode == 0 && verdict is { Status: RunVerdictStatus.NeedsInput } ? verdict.Questions : null;
+            succeeded && verdict is { Status: RunVerdictStatus.NeedsInput } ? verdict.Questions : null;
 
         // Step 5a — MR-state first
         Result<MergeRequestByBranch> mrResult = await postExitProviderQueries.GetMergeRequestByBranchAsync(
@@ -119,14 +121,27 @@ internal sealed class WorkerOutcomeResolver(
         }
 
         MergeRequestByBranch mr = ((Result<MergeRequestByBranch>.Success)mrResult).Value;
-        RunResultSummary? summary = containerOutputParser.ParseRunResultSummary(containerOutput);
 
         return mr.Presence switch
         {
             MergeRequestPresence.Merged => ResolveMerged(branched, mr, containerOutput, summary),
-            MergeRequestPresence.Open => ResolveOpen(branched, mr, containerOutput, summary, askedQuestions),
+
+            // An open merge request does not mean the run addressed anything: a revision run that failed must not
+            // return its issue to review as if its feedback were handled.
+            MergeRequestPresence.Open when succeeded => ResolveOpen(branched, mr, containerOutput, summary, askedQuestions),
+            MergeRequestPresence.Open => new WorkerOutcome.ContinuableFailure(
+                branched.BranchName,
+                ClassifyFailure(status, containerOutput, summary, run.Role),
+                containerOutput,
+                summary),
             MergeRequestPresence.Closed => await ResolveClosedAsync(branched, containerOutput, summary, cancellationToken),
-            MergeRequestPresence.None => await ResolveNoMrAsync(branched, status, containerOutput, askedQuestions, cancellationToken),
+            MergeRequestPresence.None => await ResolveNoMrAsync(
+                branched,
+                status,
+                containerOutput,
+                summary,
+                askedQuestions,
+                cancellationToken),
             _ => throw new UnreachableException($"Unknown {nameof(MergeRequestPresence)}: {mr.Presence}"),
         };
     }
@@ -176,21 +191,15 @@ internal sealed class WorkerOutcomeResolver(
     private WorkerOutcome ResolveTriage(IResolvableRun run, WorkerStatus? status, string? containerOutput)
     {
         RunResultSummary? summary = containerOutputParser.ParseRunResultSummary(containerOutput);
-        ContainerOutputParseResult parseResult = containerOutputParser.Parse(containerOutput);
 
-        if (status?.ExitCode != 0)
+        if (!Succeeded(status, summary))
         {
-            return new WorkerOutcome.Failure(ClassifyNonZeroFailureReason(parseResult, status, run.Role), containerOutput, summary);
+            return new WorkerOutcome.Failure(ClassifyFailure(status, containerOutput, summary, run.Role), containerOutput, summary);
         }
 
-        if (TryClassifyParseResult(parseResult, run.Role) is { } classified)
+        if (TryClassifyParseResult(containerOutputParser.Parse(containerOutput), run.Role) is { } classified)
         {
             return new WorkerOutcome.Failure(classified, containerOutput, summary);
-        }
-
-        if (summary is { IsError: true })
-        {
-            return new WorkerOutcome.Failure(ErrorResultFailureReason(summary), containerOutput, summary);
         }
 
         if (containerOutputParser.ParseStructuredOutput(containerOutput) is not { } structuredOutput)
@@ -300,11 +309,10 @@ internal sealed class WorkerOutcomeResolver(
         BranchedRun run,
         WorkerStatus? status,
         string? containerOutput,
+        RunResultSummary? summary,
         IReadOnlyList<RunVerdictQuestion>? askedQuestions,
         CancellationToken cancellationToken)
     {
-        int? exitCode = status?.ExitCode;
-
         // Step 5b — no MR fallback
         Result<BranchCommitSummary> commitsResult = await postExitProviderQueries.GetBranchCommitSummaryAsync(
             run.MonitoredRepositoryId,
@@ -331,21 +339,14 @@ internal sealed class WorkerOutcomeResolver(
             hasCommits = ((Result<BranchCommitSummary>.Success)commitsResult).Value.CommitCount > 0;
         }
 
-        RunResultSummary? summary = containerOutputParser.ParseRunResultSummary(containerOutput);
-
-        if (exitCode == 0 && hasCommits)
+        if (Succeeded(status, summary))
         {
-            return await RepollForMrAsync(run, containerOutput, summary, askedQuestions, cancellationToken);
+            return hasCommits
+                ? await RepollForMrAsync(run, containerOutput, summary, askedQuestions, cancellationToken)
+                : ResolveSucceededNoCommits(run, containerOutput, summary, askedQuestions);
         }
 
-        if (exitCode == 0 && !hasCommits)
-        {
-            return ResolveExitZeroNoCommits(run, containerOutput, summary, askedQuestions);
-        }
-
-        // exit != 0, or the container is gone
-        ContainerOutputParseResult parseResult = containerOutputParser.Parse(containerOutput);
-        FailureReason failureReason = ClassifyNonZeroFailureReason(parseResult, status, run.Role);
+        FailureReason failureReason = ClassifyFailure(status, containerOutput, summary, run.Role);
 
         return hasCommits
             ? new WorkerOutcome.ContinuableFailure(run.BranchName, failureReason, containerOutput, summary)
@@ -400,7 +401,7 @@ internal sealed class WorkerOutcomeResolver(
             summary);
     }
 
-    private WorkerOutcome ResolveExitZeroNoCommits(
+    private WorkerOutcome ResolveSucceededNoCommits(
         BranchedRun run,
         string? containerOutput,
         RunResultSummary? summary,
@@ -414,13 +415,6 @@ internal sealed class WorkerOutcomeResolver(
             return new WorkerOutcome.Failure(classified, containerOutput, summary);
         }
 
-        // The CLI can exit 0 while its result line reports is_error (e.g. an expired OAuth session).
-        // Such a run did no work; recording it as Unchanged would hide the failure from retry.
-        if (summary is { IsError: true })
-        {
-            return new WorkerOutcome.Failure(ErrorResultFailureReason(summary), containerOutput, summary);
-        }
-
         if (askedQuestions is not null)
         {
             return new WorkerOutcome.NeedsInput(run.BranchName, null, BranchHasCommits: false, askedQuestions, containerOutput, summary);
@@ -431,49 +425,60 @@ internal sealed class WorkerOutcomeResolver(
     }
 
     /// <summary>
-    /// Builds the generic failure reason for an exit-0 run whose result line reports
-    /// <c>is_error</c> but whose output matches no known failure category.
+    /// Whether the run succeeded: its container exited 0 and its result line does not report <c>is_error</c>.
+    /// The CLI can exit 0 while reporting <c>is_error</c> (e.g. an expired OAuth session); such a run did no work.
     /// </summary>
-    private static FailureReason.ContainerError ErrorResultFailureReason(RunResultSummary summary)
-    {
-        string? resultText = summary.ResultText?.Trim();
+    private static bool Succeeded(WorkerStatus? status, RunResultSummary? summary)
+        => status?.ExitCode == 0 && summary is not { IsError: true };
 
-        if (string.IsNullOrEmpty(resultText))
-        {
-            return new FailureReason.ContainerError(ErrorResultMessage);
-        }
-
-        string redacted = SecretRedactor.Redact(resultText).ReplaceLineEndings(" ");
-
-        if (redacted.Length > MaxErrorResultTextLength)
-        {
-            redacted = redacted[..MaxErrorResultTextLength];
-        }
-
-        return new FailureReason.ContainerError($"{ErrorResultMessage}: {redacted}");
-    }
-
-    private static FailureReason ClassifyNonZeroFailureReason(
-        ContainerOutputParseResult parseResult,
+    /// <summary>
+    /// Classifies a run that did not succeed. A specific category from the output wins, so a usage, credit or auth
+    /// failure is never reported as a generic error.
+    /// </summary>
+    private FailureReason ClassifyFailure(
         WorkerStatus? status,
+        string? containerOutput,
+        RunResultSummary? summary,
         WorkerRole role)
     {
+        ContainerOutputParseResult parseResult = containerOutputParser.Parse(containerOutput);
+
         if (TryClassifyParseResult(parseResult, role) is { } classified)
         {
             return classified;
         }
 
-        if (parseResult is ContainerOutputParseResult.NoResultLine)
+        string? errorText = summary is { IsError: true } ? RedactedResultText(summary) : null;
+
+        if (status?.ExitCode == 0)
         {
-            return ClassifyNoResultLine(status, agentStarted: false);
+            return new FailureReason.ContainerError(errorText is null ? ErrorResultMessage : $"{ErrorResultMessage}: {errorText}");
         }
 
-        if (parseResult is ContainerOutputParseResult.AgentStartedNoResultLine)
+        return parseResult switch
         {
-            return ClassifyNoResultLine(status, agentStarted: true);
+            ContainerOutputParseResult.NoResultLine => ClassifyNoResultLine(status, agentStarted: false),
+            ContainerOutputParseResult.AgentStartedNoResultLine => ClassifyNoResultLine(status, agentStarted: true),
+            _ => new FailureReason.NonZeroExit(status?.ExitCode ?? -1, errorText),
+        };
+    }
+
+    /// <summary>
+    /// The result line's text made safe to persist as a failure reason: secrets redacted, one line, and bounded
+    /// by <see cref="MaxErrorResultTextLength"/>. <see langword="null"/> when the result line has no text.
+    /// </summary>
+    private static string? RedactedResultText(RunResultSummary summary)
+    {
+        string? resultText = summary.ResultText?.Trim();
+
+        if (string.IsNullOrEmpty(resultText))
+        {
+            return null;
         }
 
-        return new FailureReason.NonZeroExit(status?.ExitCode ?? -1);
+        string redacted = SecretRedactor.Redact(resultText).ReplaceLineEndings(" ");
+
+        return redacted.Length > MaxErrorResultTextLength ? redacted[..MaxErrorResultTextLength] : redacted;
     }
 
     /// <summary>
