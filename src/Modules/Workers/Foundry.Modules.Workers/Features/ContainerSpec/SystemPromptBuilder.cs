@@ -512,14 +512,15 @@ internal static partial class SystemPromptBuilder
             new("role-prompt", "Role system prompt (prompts/system.md)", PromptSectionCondition.Always, RolePromptSlot),
             new(
                 "issue-content",
-                $"Issue content read by Foundry at dispatch (fills {RolePromptPlaceholders.IssueContent})",
+                $"Issue content and Tracker Context read by Foundry at dispatch (fills {RolePromptPlaceholders.IssueContent})",
                 PromptSectionCondition.Always,
                 RenderIssueContent(
                     FullIssueContentLead,
                     "{issueTitle}",
                     "{issueBody}",
                     ["<issue-comment id=\"{commentId}\" author=\"{commentAuthor}\" created-at=\"{commentCreatedAt}\">\n{issueComment}\n</issue-comment>\n"],
-                    0)),
+                    0)
+                + "\n\n" + DescribeTrackerContext()),
             new("task-list", "Task list", PromptSectionCondition.Always, TaskListInstruction),
             new("csharp-lsp", "C# code navigation", PromptSectionCondition.DotnetImage, BuildCSharpLspSection()),
             new("pre-pr", "Before you exit", PromptSectionCondition.DockerImage, BuildPrePrSection()),

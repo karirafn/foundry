@@ -73,35 +73,60 @@ internal static partial class SystemPromptBuilder
         || trackerContext.OpenIssues is null
         || trackerContext.OpenIssues.Count > 0;
 
-    private static string RenderReferencedIssues(IReadOnlyList<ReferencedIssue> referencedIssues)
+    private static string DescribeTrackerContext() =>
+        string.Join(
+            '\n',
+            TrackerContextLead,
+            WrapReferencedIssues(
+                [RenderReferencedIssueElement(
+                    "{referencedIssueNumber}",
+                    "{relation}",
+                    "{state}",
+                    "{closingMergeRequest}",
+                    "{labels}",
+                    "{referencedIssueTitle}",
+                    "{referencedIssueBody}")]),
+            OpenIssuesLead,
+            WrapOpenIssues([RenderOpenIssueElement("{openIssueNumber}", "{openIssueTitle}")]));
+
+    private static string RenderReferencedIssues(IReadOnlyList<ReferencedIssue> referencedIssues) =>
+        WrapReferencedIssues(referencedIssues.Select(RenderReferencedIssue).ToList());
+
+    private static string WrapReferencedIssues(IReadOnlyList<string> elements)
     {
         StringBuilder sb = new("<referenced-issues>\n");
 
-        foreach (ReferencedIssue referencedIssue in referencedIssues)
+        foreach (string element in elements)
         {
-            sb.Append(RenderReferencedIssue(referencedIssue)).Append('\n');
+            sb.Append(element).Append('\n');
         }
 
         return sb.Append("</referenced-issues>").ToString();
     }
 
-    private static string RenderReferencedIssue(ReferencedIssue referencedIssue)
-    {
-        string state = referencedIssue.IsOpen ? "open" : "closed";
-        string labels = EncodeForXmlAttribute(string.Join(", ", referencedIssue.Labels));
-        string attributes = string.Create(
-            CultureInfo.InvariantCulture,
-            $"number=\"{referencedIssue.Number}\" " +
-            $"relation=\"{RelationName(referencedIssue.Relation)}\" " +
-            $"state=\"{state}\" " +
-            $"closing-merge-request=\"{ClosingMergeRequestName(referencedIssue.ClosingMergeRequest)}\" " +
-            $"labels=\"{labels}\"");
+    private static string RenderReferencedIssue(ReferencedIssue referencedIssue) =>
+        RenderReferencedIssueElement(
+            referencedIssue.Number.ToString(CultureInfo.InvariantCulture),
+            RelationName(referencedIssue.Relation),
+            referencedIssue.IsOpen ? "open" : "closed",
+            ClosingMergeRequestName(referencedIssue.ClosingMergeRequest),
+            EncodeForXmlAttribute(string.Join(", ", referencedIssue.Labels)),
+            EncodeForXmlData(referencedIssue.Title),
+            EncodeForXmlData(CapReferencedIssueBody(referencedIssue.Body)));
 
-        return $"<referenced-issue {attributes}>\n" +
-            $"<title>{EncodeForXmlData(referencedIssue.Title)}</title>\n" +
-            $"<body>\n{EncodeForXmlData(CapReferencedIssueBody(referencedIssue.Body))}\n</body>\n" +
-            "</referenced-issue>";
-    }
+    private static string RenderReferencedIssueElement(
+        string number,
+        string relation,
+        string state,
+        string closingMergeRequest,
+        string labels,
+        string title,
+        string body) =>
+        $"<referenced-issue number=\"{number}\" relation=\"{relation}\" state=\"{state}\" " +
+        $"closing-merge-request=\"{closingMergeRequest}\" labels=\"{labels}\">\n" +
+        $"<title>{title}</title>\n" +
+        $"<body>\n{body}\n</body>\n" +
+        "</referenced-issue>";
 
     private static string CapReferencedIssueBody(string body)
     {
@@ -115,18 +140,28 @@ internal static partial class SystemPromptBuilder
         return TruncateToUtf8Bytes(normalised, quota) + TruncationMarker;
     }
 
-    private static string RenderOpenIssues(IReadOnlyList<OpenIssue> openIssues)
+    private static string RenderOpenIssues(IReadOnlyList<OpenIssue> openIssues) =>
+        WrapOpenIssues(
+            openIssues
+                .Select(openIssue => RenderOpenIssueElement(
+                    openIssue.Number.ToString(CultureInfo.InvariantCulture),
+                    EncodeForXmlData(openIssue.Title)))
+                .ToList());
+
+    private static string WrapOpenIssues(IReadOnlyList<string> elements)
     {
         StringBuilder sb = new("<open-issues>\n");
 
-        foreach (OpenIssue openIssue in openIssues)
+        foreach (string element in elements)
         {
-            sb.Append(CultureInfo.InvariantCulture, $"<open-issue number=\"{openIssue.Number}\">");
-            sb.Append(EncodeForXmlData(openIssue.Title)).Append("</open-issue>\n");
+            sb.Append(element).Append('\n');
         }
 
         return sb.Append("</open-issues>").ToString();
     }
+
+    private static string RenderOpenIssueElement(string number, string title) =>
+        $"<open-issue number=\"{number}\">{title}</open-issue>";
 
     private static string RelationName(IssueRelation relation) => relation switch
     {

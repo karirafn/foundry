@@ -68,6 +68,27 @@ public sealed class DescribeSections
     }
 
     [Fact]
+    public void WhenDescribed_TheIssueContentSectionShowsTheTrackerContextWithPlaceholders()
+    {
+        // Act
+        PromptSectionDescriptor issueContent = SystemPromptBuilder.DescribeSections(timeoutMinutes: 120)
+            .Single(section => section.Key == "issue-content");
+
+        // Assert
+        issueContent.ShouldSatisfyAllConditions(
+            () => issueContent.Title.ShouldBe(
+                "Issue content and Tracker Context read by Foundry at dispatch (fills {issueContent})"),
+            () => issueContent.Content.ShouldContain(
+                "<referenced-issue number=\"{referencedIssueNumber}\" relation=\"{relation}\" "
+                + "state=\"{state}\" closing-merge-request=\"{closingMergeRequest}\" labels=\"{labels}\">"),
+            () => issueContent.Content.ShouldContain("<title>{referencedIssueTitle}</title>"),
+            () => issueContent.Content.ShouldContain("<body>\n{referencedIssueBody}\n</body>"),
+            () => issueContent.Content.ShouldContain("<open-issue number=\"{openIssueNumber}\">{openIssueTitle}</open-issue>"),
+            () => issueContent.Content.IndexOf("</issue-content>", StringComparison.Ordinal)
+                .ShouldBeLessThan(issueContent.Content.IndexOf("<referenced-issues>", StringComparison.Ordinal)));
+    }
+
+    [Fact]
     public void WhenDescribed_TheSafetyPreambleIsTheOneEveryPromptStartsWith()
     {
         // Act
