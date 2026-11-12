@@ -929,6 +929,11 @@ export interface components {
             nextPostAttemptAt: null | string;
             resumeTarget: string;
         };
+        BlockerDetails: {
+            /** Format: int32 */
+            issueNumber: number | string;
+            reason: null | string;
+        };
         BranchRulesOutcome: {
             kind: string;
             reason?: null | string;
@@ -1101,7 +1106,7 @@ export interface components {
             failedAt: null | string;
             /** Format: date-time */
             completedAt: null | string;
-            blockedBy: null | (number | string)[];
+            blockedBy: null | components["schemas"]["BlockerDetails"][];
             transientRetry: null | components["schemas"]["TransientRetryDetails"];
             checksOutcome?: null | string;
             failingChecks?: null | components["schemas"]["FailingCheck"][];
