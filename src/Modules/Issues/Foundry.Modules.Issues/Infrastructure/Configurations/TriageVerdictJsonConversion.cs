@@ -15,6 +15,7 @@ internal static class TriageVerdictJsonConversion
 {
     private const string ReadyOutcome = "ready";
     private const string NeedsInputOutcome = "needs_input";
+    private const string BlockedOutcome = "blocked";
 
     public static ValueConverter<TriageVerdict, string> Converter { get; } = new(
         verdict => Serialize(verdict),
@@ -29,12 +30,19 @@ internal static class TriageVerdictJsonConversion
     {
         TriageVerdictDto dto = verdict switch
         {
-            TriageVerdict.Ready ready => new TriageVerdictDto(ReadyOutcome, ready.Kind.Value, null, ready.DecidedAt),
+            TriageVerdict.Ready ready => new TriageVerdictDto(ReadyOutcome, ready.Kind.Value, null, null, ready.DecidedAt),
             TriageVerdict.NeedsInput needsInput => new TriageVerdictDto(
                 NeedsInputOutcome,
                 needsInput.Kind.Value,
                 [.. needsInput.Questions.Select(q => new QuestionDto(q.Question, q.Context, q.Recommendation))],
+                null,
                 needsInput.DecidedAt),
+            TriageVerdict.Blocked blocked => new TriageVerdictDto(
+                BlockedOutcome,
+                blocked.Kind.Value,
+                null,
+                [.. blocked.BlockedBy.Select(b => new BlockedByDto(b.IssueNumber, b.Reason))],
+                blocked.DecidedAt),
             _ => throw new UnreachableException($"Unknown TriageVerdict variant: {verdict.GetType().Name}"),
         };
 
@@ -56,6 +64,10 @@ internal static class TriageVerdictJsonConversion
                 kind,
                 [.. (dto.Questions ?? []).Select(q => new InputQuestion(q.Question, q.Context, q.Recommendation))],
                 dto.DecidedAt),
+            BlockedOutcome => new TriageVerdict.Blocked(
+                kind,
+                [.. (dto.BlockedBy ?? []).Select(b => new TriageBlocker(b.Issue, b.Reason))],
+                dto.DecidedAt),
             _ => throw new UnreachableException($"Unknown triage verdict outcome: '{dto.Outcome}'"),
         };
     }
@@ -63,8 +75,15 @@ internal static class TriageVerdictJsonConversion
     private sealed record TriageVerdictDto(
         [property: JsonPropertyName("outcome")] string Outcome,
         [property: JsonPropertyName("kind")] string Kind,
-        [property: JsonPropertyName("questions")] IReadOnlyList<QuestionDto>? Questions,
+        [property: JsonPropertyName("questions"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        IReadOnlyList<QuestionDto>? Questions,
+        [property: JsonPropertyName("blockedBy"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        IReadOnlyList<BlockedByDto>? BlockedBy,
         [property: JsonPropertyName("decidedAt")] DateTimeOffset DecidedAt);
+
+    private sealed record BlockedByDto(
+        [property: JsonPropertyName("issue")] int Issue,
+        [property: JsonPropertyName("reason")] string Reason);
 
     private sealed record QuestionDto(
         [property: JsonPropertyName("question")] string Question,
