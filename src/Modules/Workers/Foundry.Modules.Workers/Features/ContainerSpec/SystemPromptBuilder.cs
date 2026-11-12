@@ -65,8 +65,11 @@ internal static partial class SystemPromptBuilder
     /// <summary>
     /// Builds the system prompt of a <see cref="Domain.ValueObjects.WorkerCapability.Full"/> run. The issue read at
     /// dispatch is rendered into <c>{issueContent}</c> as XML-encoded untrusted data (ADR 0100), so the agent never
-    /// reads it from the provider. The issue body is always kept; when the issue's comments do not fit the room the
-    /// rest of the prompt leaves, the oldest whole comments are dropped first behind an omission note.
+    /// reads it from the provider. The issue body is always kept. When the prompt exceeds the size budget, content is
+    /// shed in this order, each only as far as needed: the oldest whole comments, behind an omission note; then the
+    /// revision's own payload, which is the failing checks with their job logs or the reviewers' comments; then the
+    /// input of older clarification rounds, oldest round first; then the input of the newest answered round. A cut
+    /// input ends in <c>[truncated]</c>, and a round's questions and context are never cut.
     /// </summary>
     /// <param name="principles">The role's assembled Worker Principles; empty when the role selects no section.</param>
     public static Result<string> Build(
@@ -87,14 +90,20 @@ internal static partial class SystemPromptBuilder
         string issueNumberStr = issueNumber.ToString(CultureInfo.InvariantCulture);
         string prePrSection = installsDocker ? "\n\n" + BuildPrePrSection() : string.Empty;
         string csharpLspSection = installsDotnet ? "\n\n" + BuildCSharpLspSection() : string.Empty;
-        string clarificationSection = clarifications is { Count: > 0 }
-            ? "\n\n" + BuildClarificationSection(clarifications)
-            : string.Empty;
+        IReadOnlyList<Clarification> log = clarifications ?? [];
 
         // Line endings are normalised to \n so bytes measured == bytes delivered, regardless of whether AppendLine
         // used \r\n on the host.
-        string Assemble(string issueContent)
+        string Assemble(
+            string issueContent,
+            IReadOnlyList<Clarification> fittedLog,
+            DispatchContext dispatchContext,
+            IReadOnlyList<FailingJobLog> jobLogs)
         {
+            string clarificationSection = fittedLog.Count > 0
+                ? "\n\n" + BuildClarificationSection(fittedLog)
+                : string.Empty;
+
             string basePrompt = systemPromptTemplate
                 .Replace(RolePromptPlaceholders.IssueNumber, issueNumberStr, StringComparison.Ordinal)
                 .Replace(RolePromptPlaceholders.IssueContent, issueContent, StringComparison.Ordinal);
@@ -103,12 +112,13 @@ internal static partial class SystemPromptBuilder
                 + csharpLspSection + prePrSection + "\n\n" + BuildPublishingSection(timeoutMinutes) + clarificationSection;
 
             // A revision section budgets its own feedback against the prompt it extends, so it returns the full prompt.
-            string fullPrompt = context switch
+            string fullPrompt = dispatchContext switch
             {
-                DispatchContext.Revision revision => BuildRevisionContextSection(prompt, revision, failingJobLogs ?? []),
+                DispatchContext.Revision revision => BuildRevisionContextSection(prompt, revision, jobLogs),
                 DispatchContext.Continuation continuation => prompt + "\n\n" + BuildContinuationSection(continuation),
                 DispatchContext.Fresh fresh => prompt + "\n\n" + BuildCheckoutInstruction(fresh.BranchName),
-                _ => throw new UnreachableException($"Unhandled DispatchContext variant: {context.GetType().Name}"),
+                _ => throw new UnreachableException(
+                    $"Unhandled DispatchContext variant: {dispatchContext.GetType().Name}"),
             };
 
             return fullPrompt.Replace("\r\n", "\n", StringComparison.Ordinal);
@@ -117,20 +127,39 @@ internal static partial class SystemPromptBuilder
         string encodedTitle = EncodeForXmlData(issue.Title);
         string encodedBody = EncodeForXmlData(issue.Body.Replace("\r\n", "\n", StringComparison.Ordinal));
 
+        IReadOnlyList<FailingJobLog> jobLogs = failingJobLogs ?? [];
+
+        // The log is fitted against a prompt with no comments and no revision payload, so it is cut only when it
+        // cannot fit with both gone; the payload and the comments are shed before any input.
+        IReadOnlyList<Clarification> fittedLog = FitLog(
+            log,
+            minimalLog => Encoding.UTF8.GetByteCount(Assemble(
+                RenderIssueContent(FullIssueContentLead, encodedTitle, encodedBody, [], 0),
+                minimalLog,
+                WithoutPayload(context),
+                [])));
+
         // The issue thread gets only the room the rest of the prompt leaves, so a revision's feedback outranks it.
         // One byte under the ceiling, as the check below is exclusive; the reserve holds the omission note.
-        int scaffoldBytes = Encoding.UTF8.GetByteCount(
-            Assemble(RenderIssueContent(FullIssueContentLead, encodedTitle, encodedBody, [], 0)));
+        int scaffoldBytes = Encoding.UTF8.GetByteCount(Assemble(
+            RenderIssueContent(FullIssueContentLead, encodedTitle, encodedBody, [], 0),
+            fittedLog,
+            context,
+            jobLogs));
         List<string> admitted = AdmitNewestComments(
             issue.Comments,
             MaxSystemPromptBytes - 1 - scaffoldBytes - OmissionNoteReservedBytes);
 
-        string normalised = Assemble(RenderIssueContent(
-            FullIssueContentLead,
-            encodedTitle,
-            encodedBody,
-            admitted,
-            issue.Comments.Count - admitted.Count));
+        string normalised = Assemble(
+            RenderIssueContent(
+                FullIssueContentLead,
+                encodedTitle,
+                encodedBody,
+                admitted,
+                issue.Comments.Count - admitted.Count),
+            fittedLog,
+            context,
+            jobLogs);
 
         int byteCount = Encoding.UTF8.GetByteCount(normalised);
 
@@ -200,7 +229,7 @@ internal static partial class SystemPromptBuilder
                 EncodeForXmlData(MinimalForm(issue.Body)),
                 [],
                 0),
-            WithInputs(log, log.Select(round => round.Input is { } input ? MinimalForm(input) : null).ToList())));
+            WithMinimalInputs(log)));
 
         // One byte under the ceiling, as Build's check is exclusive; the reserve holds the omission note.
         int slackBytes = MaxSystemPromptBytes - 1 - scaffoldBytes - OmissionNoteReservedBytes;
@@ -379,6 +408,52 @@ internal static partial class SystemPromptBuilder
 
         return -1;
     }
+
+    private static List<Clarification> WithMinimalInputs(IReadOnlyList<Clarification> log) =>
+        WithInputs(log, log.Select(round => round.Input is { } input ? MinimalForm(input) : null).ToList());
+
+    // Fits every answered input into the room the scaffold leaves, newest answered round first and the older rounds
+    // newer to older, so the oldest round is cut first. The scaffold is measured with every input at its minimal form.
+    private static List<Clarification> FitLog(
+        IReadOnlyList<Clarification> log,
+        Func<IReadOnlyList<Clarification>, int> measureScaffoldBytes)
+    {
+        // One byte under the ceiling, as Build's check is exclusive; the reserve holds the omission note.
+        int slackBytes = MaxSystemPromptBytes - 1 - OmissionNoteReservedBytes
+            - measureScaffoldBytes(WithMinimalInputs(log));
+
+        string?[] fittedInputs = new string?[log.Count];
+        int newestAnswered = FindNewestAnswered(log);
+
+        if (newestAnswered >= 0)
+        {
+            fittedInputs[newestAnswered] = Allot(log[newestAnswered].Input!, ref slackBytes);
+        }
+
+        for (int i = log.Count - 1; i >= 0; i--)
+        {
+            if (i != newestAnswered && log[i].Input is { } input)
+            {
+                fittedInputs[i] = Allot(input, ref slackBytes);
+            }
+        }
+
+        return WithInputs(log, fittedInputs);
+    }
+
+    // The revision payload is shed before any clarification input, so the log is fitted against a prompt without it.
+    private static DispatchContext WithoutPayload(DispatchContext context) => context switch
+    {
+        DispatchContext.Revision { Trigger: RevisionTrigger.ReviewFeedback feedback } revision => revision with
+        {
+            Trigger = feedback with { Comments = [] },
+        },
+        DispatchContext.Revision { Trigger: RevisionTrigger.FailedChecks failed } revision => revision with
+        {
+            Trigger = failed with { FailingChecks = [] },
+        },
+        _ => context,
+    };
 
     // Copies each round with its fitted input; questions and context pass through untouched.
     private static List<Clarification> WithInputs(IReadOnlyList<Clarification> log, IReadOnlyList<string?> fittedInputs)
@@ -634,12 +709,9 @@ internal static partial class SystemPromptBuilder
 
             if (quotaForBody > 0)
             {
-                // Truncate the raw body first (rune-boundary safe), then encode.
-                // Encoding only expands characters, so the final encoded form may exceed quotaForBody
-                // by at most a constant factor, which the Build() byte-count backstop already catches.
-                string truncatedRawBody = TruncateToUtf8Bytes(newestComment.Body, quotaForBody);
-                string encodedTruncatedBody = EncodeForXmlData(truncatedRawBody);
-                candidateComments.Add(prefix + encodedTruncatedBody + marker);
+                // The fitter cuts the raw body on a rune boundary until its encoded form fits, then appends the marker.
+                candidateComments.Add(
+                    prefix + EncodeForXmlData(FitToEncodedBytes(newestComment.Body, quotaForBody + markerBytes)));
             }
             else if (quotaForBody >= 0)
             {
