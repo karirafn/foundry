@@ -35,7 +35,7 @@ npx ng serve
 | `ServiceDefaults` | OpenTelemetry, health checks, resilience defaults |
 | `WebApi` | ASP.NET Core Minimal API backend |
 | `Contracts` | Shared DTOs (sealed records) |
-| `foundry-web` | Angular 21 SPA (prefix: `fd`) |
+| `foundry-web` | Angular 22 SPA (prefix: `fd`) |
 
 ### Test Projects
 

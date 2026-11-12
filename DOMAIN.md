@@ -311,7 +311,7 @@ The lifecycle splits into two partitions defined by `IssueStateRegistry` (server
 The dashboard renders Active states in four display groups, classified by one rule — the relationship between the issue and a worker:
 
 - **In progress** — a worker is actually running right now: implementing, revising or triaging (`in_progress`, `revision_in_progress`, `triage_in_progress`). Exactly `LIVE_STATES`.
-- **Needs attention** — requires a user action to progress (`review`, `awaiting_input`, `unchanged`, `failed`, `continuable_failed`, `revision_failed`, `triage_failed`).
+- **Needs attention** — requires a user action to progress (`review`, `awaiting_input`, `unchanged`, `failed`, `continuable_failed`, `revision_failed`, `triage_failed`, `publish_failed`, `branch_diverged`).
 - **Waiting** — waiting for a worker or for Foundry; advances with no user action (`detected`, `triage_queued`, `queued`, `blocked`, `revision_queued`, `continuation_queued`, `rebase_pending`, `checks_pending`).
 - **Resolved** — done (`completed`).
 
@@ -921,7 +921,7 @@ Value object — `Name` is the last segment, `Owner` is everything before it (a 
 
 ## Worker Role
 
-The job a worker run is dispatched to do ([ADR 0095](docs/adr/0095-worker-roles-ship-in-the-worker-image.md)): `triage` (judges whether an issue is ready to implement and classifies it) and `implement`; `review` is planned. Nothing dispatches `triage` yet.
+The job a worker run is dispatched to do ([ADR 0095](docs/adr/0095-worker-roles-ship-in-the-worker-image.md)): `triage` (judges whether an issue is ready to implement and classifies it) and `implement`; `review` is planned. Every new issue is dispatched to `triage` before its first `implement` run (see [TriageQueuedIssue](#triagequeuedissue)).
 Each role brings its own Claude Code plugin (skills, agents), prompt and an optional verdict schema from `workers/roles/<role>/` (plus `workers/roles/shared/`, loaded for every role). These folders are baked into the worker image at `/opt/foundry/roles/`.
 Foundry's code picks the role, starts the run and acts on the verdict ([ADR 0094](docs/adr/0094-code-decides-claude-judges-only-what-code-cannot.md)). A WorkerRun has exactly one role. Fresh, revision, continuation and rebase-conflict runs all use `implement`. Their context sections stay in `SystemPromptBuilder`.
 "Step", "stage" and "phase" already have other meanings here, so they are not used for this concept.
