@@ -9,6 +9,7 @@ using Foundry.Testing;
 using Foundry.UnitTests.Modules.Monitoring.Infrastructure;
 
 using Microsoft.Extensions.Caching.Memory;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 
@@ -37,10 +38,10 @@ public sealed class GetChecksAsync
             .WithRoute($"/pipelines/{GitLabJobsByPipelineExample.PipelineId}/jobs", HttpStatusCode.OK, jobsJson);
     }
 
-    private static GitLabHttpClient BuildSut(FakeHandler handler) =>
+    private static GitLabHttpClient BuildSut(FakeHandler handler, ILogger<GitLabHttpClient>? logger = null) =>
         new(
             new HttpClient(handler),
-            NullLogger<GitLabHttpClient>.Instance,
+            logger ?? NullLogger<GitLabHttpClient>.Instance,
             new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))),
             new InMemoryProviderRateBudget(),
             TimeProvider.System);
@@ -196,6 +197,27 @@ public sealed class GetChecksAsync
         Result<ProviderChecks>.Success success = result.ShouldBeOfType<Result<ProviderChecks>.Success>();
         ProviderChecks.Red red = success.Value.ShouldBeOfType<ProviderChecks.Red>();
         (red.FailingChecks.Count, handler.AllRequests.Count).ShouldBe((0, 1));
+    }
+
+    [Fact]
+    public async Task WhenHeadPipelineFailedWithoutId_LogsAWarning()
+    {
+        // Arrange
+        string json = """{ "iid": 42, "state": "opened", "head_pipeline": { "status": "failed" } }""";
+        FakeHandler handler = new(HttpStatusCode.OK, json);
+        CapturingLogger<GitLabHttpClient> logger = new();
+        GitLabHttpClient sut = BuildSut(handler, logger);
+
+        // Act
+        await sut.GetChecksAsync(
+            ValidBaseUrl,
+            ValidSlug,
+            ValidMrUrl,
+            token: "glpat_token",
+            CancellationToken.None);
+
+        // Assert
+        logger.Entries.ShouldContain(entry => entry.Level == LogLevel.Warning && entry.Message.Contains("carries no id"));
     }
 
     [Fact]
