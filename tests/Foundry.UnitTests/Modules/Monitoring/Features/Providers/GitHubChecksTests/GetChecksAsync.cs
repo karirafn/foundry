@@ -84,6 +84,7 @@ public sealed class GetChecksAsync
     public async Task WhenRollupStateIsFailure_ReturnsRedWithFailingChecks()
     {
         // Arrange
+        // The FAILURE conclusion is the token GitHub returns, as in the captured response of the test below.
         string json = """
             {
               "data": {
@@ -101,7 +102,7 @@ public sealed class GetChecksAsync
                                   {
                                     "__typename": "CheckRun",
                                     "name": "ci / build",
-                                    "conclusion": "failure",
+                                    "conclusion": "FAILURE",
                                     "detailsUrl": "https://github.com/owner/repo/actions/runs/1"
                                   }
                                 ]
@@ -134,8 +135,57 @@ public sealed class GetChecksAsync
         red.FailingChecks.Count.ShouldBe(1);
         red.FailingChecks[0].ShouldSatisfyAllConditions(
             () => red.FailingChecks[0].Name.ShouldBe("ci / build"),
-            () => red.FailingChecks[0].Conclusion.ShouldBe("failure"),
+            () => red.FailingChecks[0].Conclusion.ShouldBe("FAILURE"),
             () => red.FailingChecks[0].DetailsUrl.ShouldBe("https://github.com/owner/repo/actions/runs/1"));
+    }
+
+    [Fact]
+    public async Task WhenRollupIsTheCapturedGitHubResponse_NamesOnlyTheFailedCheckRun()
+    {
+        // Arrange
+        // The rollup is captured verbatim from GitHub's GraphQL API: pullRequest.commits(last:1).nodes.commit.statusCheckRollup
+        // on a pull request in this repository, 2026-11-12, selecting __typename,
+        // CheckRun { name conclusion } and StatusContext { context state }.
+        string json = """
+            {
+              "data": {
+                "rateLimit": { "cost": 1, "remaining": 4999 },
+                "repository": {
+                  "pullRequest": {
+                    "commits": {
+                      "nodes": [
+                        {
+                          "commit": {
+                            "statusCheckRollup": {"contexts":{"nodes":[
+                              {"__typename":"CheckRun","conclusion":"SKIPPED","name":"auto-merge"},
+                              {"__typename":"CheckRun","conclusion":"SUCCESS","name":"api"},
+                              {"__typename":"CheckRun","conclusion":"FAILURE","name":"web"},
+                              {"__typename":"CheckRun","conclusion":"SUCCESS","name":"workers"}
+                            ]},"state":"FAILURE"}
+                          }
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+            """;
+        FakeHandler handler = new(HttpStatusCode.OK, json);
+        GitHubHttpClient sut = BuildSut(handler);
+
+        // Act
+        Result<ProviderChecks> result = await sut.GetChecksAsync(
+            ValidBaseUrl,
+            ValidSlug,
+            ValidPullRequestUrl,
+            token: "ghp_token",
+            CancellationToken.None);
+
+        // Assert
+        Result<ProviderChecks>.Success success = result.ShouldBeOfType<Result<ProviderChecks>.Success>();
+        ProviderChecks.Red red = success.Value.ShouldBeOfType<ProviderChecks.Red>();
+        red.FailingChecks.Select(check => (check.Name, check.Conclusion)).ShouldBe([("web", "FAILURE")]);
     }
 
     [Fact]
@@ -288,9 +338,10 @@ public sealed class GetChecksAsync
     }
 
     [Fact]
-    public async Task WhenRollupHasStatusContextFailure_ReturnsRedWithContextInFailingChecks()
+    public async Task WhenRollupHasStatusContextInErrorState_ReturnsRedWithContextInFailingChecks()
     {
         // Arrange
+        // The ERROR token is a StatusState value: https://docs.github.com/en/graphql/reference/commits (StatusState).
         string json = """
             {
               "data": {
@@ -302,13 +353,13 @@ public sealed class GetChecksAsync
                         {
                           "commit": {
                             "statusCheckRollup": {
-                              "state": "FAILURE",
+                              "state": "ERROR",
                               "contexts": {
                                 "nodes": [
                                   {
                                     "__typename": "StatusContext",
                                     "context": "ci/jenkins",
-                                    "state": "failure",
+                                    "state": "ERROR",
                                     "targetUrl": "https://jenkins.example.com/job/1"
                                   }
                                 ]
@@ -341,7 +392,7 @@ public sealed class GetChecksAsync
         red.FailingChecks.Count.ShouldBe(1);
         red.FailingChecks[0].ShouldSatisfyAllConditions(
             () => red.FailingChecks[0].Name.ShouldBe("ci/jenkins"),
-            () => red.FailingChecks[0].Conclusion.ShouldBe("failure"),
+            () => red.FailingChecks[0].Conclusion.ShouldBe("ERROR"),
             () => red.FailingChecks[0].DetailsUrl.ShouldBe("https://jenkins.example.com/job/1"));
     }
 }

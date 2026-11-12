@@ -12,7 +12,7 @@ using Foundry.WebApi.Persistence;
 
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Logging;
 
 using Shouldly;
 
@@ -25,6 +25,7 @@ public sealed class HandleAsync : IAsyncDisposable
     private readonly SqliteConnection _connection;
     private readonly FoundryDbContext _dbContext;
     private readonly CapturingDomainEventDispatcher _dispatcher;
+    private readonly CapturingLogger<ChecksVerdictResolvedHandler> _logger = new();
     private readonly IIntegrationEventHandler<ChecksVerdictResolved> _sut;
 
     public HandleAsync()
@@ -42,7 +43,7 @@ public sealed class HandleAsync : IAsyncDisposable
         _sut = new ChecksVerdictResolvedHandler(
             _dbContext,
             _dispatcher,
-            NullLogger<ChecksVerdictResolvedHandler>.Instance);
+            _logger);
     }
 
     async ValueTask IAsyncDisposable.DisposeAsync()
@@ -53,7 +54,7 @@ public sealed class HandleAsync : IAsyncDisposable
 
     private static readonly IReadOnlyList<FailingCheck> DefaultFailingChecks =
     [
-        new FailingCheck("ci/build", "failure", "https://github.com/owner/repo/actions/runs/1"),
+        new FailingCheck("ci/build", "FAILURE", "https://github.com/owner/repo/actions/runs/1"),
     ];
 
     private ChecksPendingIssue SeedChecksPendingIssue(
@@ -205,8 +206,8 @@ public sealed class HandleAsync : IAsyncDisposable
 
         IReadOnlyList<FailingCheck> failingChecks =
         [
-            new FailingCheck("ci/build", "failure", "https://github.com/owner/repo/actions/runs/1"),
-            new FailingCheck("ci/lint", "failure", null),
+            new FailingCheck("ci/build", "FAILURE", "https://github.com/owner/repo/actions/runs/1"),
+            new FailingCheck("ci/lint", "FAILURE", null),
         ];
 
         ChecksVerdictResolved @event = new(
@@ -242,8 +243,8 @@ public sealed class HandleAsync : IAsyncDisposable
 
         IReadOnlyList<FailingCheck> failingChecks =
         [
-            new FailingCheck("ci/build", "failure", "https://github.com/owner/repo/actions/runs/1"),
-            new FailingCheck("ci/lint", "failure", null),
+            new FailingCheck("ci/build", "FAILURE", "https://github.com/owner/repo/actions/runs/1"),
+            new FailingCheck("ci/lint", "FAILURE", null),
         ];
 
         ChecksVerdictResolved @event = new(
@@ -266,6 +267,78 @@ public sealed class HandleAsync : IAsyncDisposable
         stillFailing.FailingChecks.Count.ShouldBe(2);
         stillFailing.FailingChecks[0].Name.ShouldBe("ci/build");
         stillFailing.FailingChecks[1].Name.ShouldBe("ci/lint");
+    }
+
+    [Fact]
+    public async Task WhenChecksPendingAndOutcomeStillFailingWithNoNamedCheckAndUnderCap_TransitionsToReviewIssueWithEmptyFailingChecks()
+    {
+        // Arrange
+        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
+        SeedChecksPendingIssue(repositoryId, issueNumber: 1);
+
+        ChecksVerdictResolved @event = new(
+            RepositoryId: repositoryId,
+            IssueNumber: 1,
+            Outcome: "still_failing",
+            FailingChecks: []);
+
+        // Act
+        await _sut.HandleAsync(@event, CancellationToken.None);
+
+        // Assert
+        _dbContext.ChangeTracker.Clear();
+        Issue? issue = await _dbContext.Set<Issue>()
+            .FirstOrDefaultAsync(
+                i => i.MonitoredRepositoryId == repositoryId,
+                TestContext.Current.CancellationToken);
+        ReviewIssue reviewIssue = issue.ShouldBeOfType<ReviewIssue>();
+        ChecksOutcome.StillFailing stillFailing = reviewIssue.ChecksOutcome.ShouldBeOfType<ChecksOutcome.StillFailing>();
+        stillFailing.FailingChecks.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task WhenStillFailingNamesNoCheck_LogsInformationNamingRepositoryAndIssue()
+    {
+        // Arrange
+        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
+        SeedChecksPendingIssue(repositoryId, issueNumber: 7);
+
+        ChecksVerdictResolved @event = new(
+            RepositoryId: repositoryId,
+            IssueNumber: 7,
+            Outcome: "still_failing",
+            FailingChecks: []);
+
+        // Act
+        await _sut.HandleAsync(@event, CancellationToken.None);
+
+        // Assert
+        string message = _logger.Entries
+            .Where(entry => entry.Level == LogLevel.Information)
+            .ShouldHaveSingleItem()
+            .Message;
+        message.ShouldContain(repositoryId.ToString());
+        message.ShouldContain("issue 7 ");
+    }
+
+    [Fact]
+    public async Task WhenStillFailingNamesChecksAtCap_DoesNotLogInformation()
+    {
+        // Arrange
+        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
+        SeedChecksPendingIssueAtFixCap(repositoryId, issueNumber: 1);
+
+        ChecksVerdictResolved @event = new(
+            RepositoryId: repositoryId,
+            IssueNumber: 1,
+            Outcome: "still_failing",
+            FailingChecks: DefaultFailingChecks);
+
+        // Act
+        await _sut.HandleAsync(@event, CancellationToken.None);
+
+        // Assert
+        _logger.Entries.ShouldNotContain(entry => entry.Level == LogLevel.Information);
     }
 
     [Fact]

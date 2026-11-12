@@ -1,5 +1,3 @@
-using System.Diagnostics;
-
 using Foundry.Shared;
 
 namespace Foundry.Modules.Monitoring.Features.Providers.Checks;
@@ -49,6 +47,26 @@ internal abstract record Checks
             "PENDING" or "EXPECTED" => new Pending(),
             // Unknown state: wait conservatively rather than falsely resolving.
             _ => new Pending(),
+        };
+
+    /// <summary>
+    /// Whether a GitHub <c>CheckRun.conclusion</c> (<c>CheckConclusionState</c>) names a failed check run.
+    /// </summary>
+    internal static bool IsGitHubCheckRunFailure(string? conclusion) =>
+        conclusion?.ToUpperInvariant() switch
+        {
+            "FAILURE" or "TIMED_OUT" or "CANCELLED" or "ACTION_REQUIRED" or "STARTUP_FAILURE" => true,
+            _ => false,
+        };
+
+    /// <summary>
+    /// Whether a GitHub <c>StatusContext.state</c> (<c>StatusState</c>) names a failed status context.
+    /// </summary>
+    internal static bool IsGitHubStatusContextFailure(string? state) =>
+        state?.ToUpperInvariant() switch
+        {
+            "FAILURE" or "ERROR" => true,
+            _ => false,
         };
 
     /// <summary>

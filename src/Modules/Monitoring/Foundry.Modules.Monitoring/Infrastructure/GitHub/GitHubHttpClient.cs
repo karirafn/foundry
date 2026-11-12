@@ -692,36 +692,20 @@ internal sealed partial class GitHubHttpClient(
         List<FailingCheck> failing = [];
         foreach (PrChecksContextUnionNode node in contextNodes)
         {
-            if (string.Equals(node.Typename, "CheckRun", StringComparison.Ordinal))
+            if (string.Equals(node.Typename, "CheckRun", StringComparison.Ordinal)
+                && Checks.IsGitHubCheckRunFailure(node.Conclusion))
             {
-                if (IsFailingConclusion(node.Conclusion))
-                {
-                    failing.Add(new FailingCheck(node.Name ?? string.Empty, node.Conclusion ?? string.Empty, node.DetailsUrl));
-                }
+                failing.Add(new FailingCheck(node.Name ?? string.Empty, node.Conclusion ?? string.Empty, node.DetailsUrl));
             }
-            else if (string.Equals(node.Typename, "StatusContext", StringComparison.Ordinal))
+            else if (string.Equals(node.Typename, "StatusContext", StringComparison.Ordinal)
+                && Checks.IsGitHubStatusContextFailure(node.State))
             {
-                if (IsFailingState(node.State))
-                {
-                    failing.Add(new FailingCheck(node.Context ?? string.Empty, node.State ?? string.Empty, node.TargetUrl));
-                }
+                failing.Add(new FailingCheck(node.Context ?? string.Empty, node.State ?? string.Empty, node.TargetUrl));
             }
         }
 
         return failing;
     }
-
-    private static bool IsFailingConclusion(string? conclusion) =>
-        conclusion is not null &&
-        conclusion switch
-        {
-            "failure" or "timed_out" or "cancelled" or "action_required" or "startup_failure" => true,
-            _ => false,
-        };
-
-    private static bool IsFailingState(string? state) =>
-        state is not null &&
-        string.Equals(state, "failure", StringComparison.OrdinalIgnoreCase);
 
     // Wraps ExecuteGraphQlAsync and maps 401/403 (non-rate-limited) to a sentinel error code
     // so GetChecksAsync can convert it to Checks.Unreadable without returning a Result failure.

@@ -34,14 +34,6 @@ internal sealed class ChecksVerdictResolvedHandler(
             return;
         }
 
-        if (@event.Outcome == "still_failing"
-            && checksPendingIssue.ChecksFixAttempts < ChecksPendingIssue.ChecksMaxFixPushes)
-        {
-            RevisionQueuedIssue revisionQueued = checksPendingIssue.FixChecks(@event.FailingChecks);
-            await db.TransitionAsync(checksPendingIssue, revisionQueued, domainEventDispatcher, cancellationToken);
-            return;
-        }
-
         ChecksOutcome outcome = @event.Outcome switch
         {
             "passed" => new ChecksOutcome.Passed(),
@@ -52,6 +44,22 @@ internal sealed class ChecksVerdictResolvedHandler(
             _ => throw new UnreachableException(
                 $"Unknown ChecksOutcome discriminator '{@event.Outcome}' on ChecksVerdictResolved for repository {@event.RepositoryId} issue {@event.IssueNumber}."),
         };
+
+        if (outcome is ChecksOutcome.StillFailing stillFailing
+            && checksPendingIssue.CanFixChecks(stillFailing.FailingChecks))
+        {
+            RevisionQueuedIssue revisionQueued = checksPendingIssue.FixChecks(stillFailing.FailingChecks);
+            await db.TransitionAsync(checksPendingIssue, revisionQueued, domainEventDispatcher, cancellationToken);
+            return;
+        }
+
+        if (outcome is ChecksOutcome.StillFailing { FailingChecks.Count: 0 })
+        {
+            logger.LogInformation(
+                "Checks failed for repository {RepositoryId} issue {IssueNumber} but no failing check could be identified; no fix was attempted.",
+                @event.RepositoryId,
+                @event.IssueNumber);
+        }
 
         ReviewIssue reviewIssue = checksPendingIssue.ToReview(outcome);
         await db.TransitionAsync(checksPendingIssue, reviewIssue, domainEventDispatcher, cancellationToken);

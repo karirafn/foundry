@@ -15,9 +15,25 @@ public sealed class FixChecks
 {
     private static readonly IReadOnlyList<FailingCheck> FailingChecks =
     [
-        new FailingCheck("ci/build", "failure", "https://github.com/owner/repo/actions/runs/1"),
-        new FailingCheck("ci/lint", "failure", null),
+        new FailingCheck("ci/build", "FAILURE", "https://github.com/owner/repo/actions/runs/1"),
+        new FailingCheck("ci/lint", "FAILURE", null),
     ];
+
+    [Fact]
+    public void WhenNoFailingCheckIsNamed_ThrowsWithoutRaisingADomainEvent()
+    {
+        // Arrange
+        ChecksPendingIssue checksPending = new IssueBuilder()
+            .ChecksPending();
+
+        // Act
+        Action act = () => checksPending.FixChecks([]);
+
+        // Assert
+        ArgumentException exception = Should.Throw<ArgumentException>(act);
+        exception.ParamName.ShouldBe("failingChecks");
+        checksPending.DomainEvents.ShouldBeEmpty();
+    }
 
     [Fact]
     public void WhenFixChecksCalledOnFirstAttempt_ReturnsRevisionQueuedIssueWithSameId()

@@ -88,8 +88,17 @@ public sealed class ChecksPendingIssue : Issue
         return revisionQueued;
     }
 
+    internal bool CanFixChecks(IReadOnlyList<FailingCheck> failingChecks) =>
+        failingChecks.Count > 0
+        && ChecksFixAttempts < ChecksMaxFixPushes;
+
     public RevisionQueuedIssue FixChecks(IReadOnlyList<FailingCheck> failingChecks)
     {
+        if (failingChecks.Count == 0)
+        {
+            throw new ArgumentException("A checks fix must name at least one failing check.", nameof(failingChecks));
+        }
+
         RevisionQueuedIssue revisionQueued = RevisionQueuedIssue.FromChecksPendingFix(this, failingChecks);
         AddDomainEvent(new Events.IssueRevisionQueued(Id, MonitoredRepositoryId));
         return revisionQueued;
