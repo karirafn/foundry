@@ -29,8 +29,6 @@ internal sealed partial class GitLabHttpClient(
     IProviderRateBudget rateBudget,
     TimeProvider timeProvider)
 {
-    private const int MaxCommentBodyLength = 4000;
-    private const string TruncatedSuffix = "[truncated]";
     private const int MaxRepositoryPages = 5;
     private const int RepositoriesPerPage = 100;
     private const int MaxIssuePages = 20;
@@ -468,7 +466,7 @@ internal sealed partial class GitLabHttpClient(
 
                     providerComments.Add(new ProviderComment(
                         Id: ProviderCommentId.FromProvider(note.Id),
-                        Body: TruncateBody(note.Body),
+                        Body: note.Body,
                         AuthorLogin: note.Author?.Username ?? string.Empty,
                         AuthorIsBot: false,
                         IsSystem: note.System,
@@ -958,16 +956,6 @@ internal sealed partial class GitLabHttpClient(
 
         mrIid = 0;
         return false;
-    }
-
-    private static string TruncateBody(string body)
-    {
-        if (body.Length <= MaxCommentBodyLength)
-        {
-            return body;
-        }
-
-        return string.Concat(body.AsSpan(0, MaxCommentBodyLength), TruncatedSuffix);
     }
 
     private static string? SanitizeFilePath(string? path)

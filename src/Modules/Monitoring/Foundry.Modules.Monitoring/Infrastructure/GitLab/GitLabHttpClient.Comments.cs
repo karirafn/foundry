@@ -95,7 +95,7 @@ internal sealed partial class GitLabHttpClient
                 string authorLogin = note.Author?.Username ?? string.Empty;
                 comments.Add(new ProviderComment(
                     Id: ProviderCommentId.FromProvider(note.Id),
-                    Body: TruncateBody(note.Body),
+                    Body: note.Body,
                     AuthorLogin: authorLogin,
                     AuthorIsBot: IsAccessTokenBot(authorLogin),
                     IsSystem: note.System,
