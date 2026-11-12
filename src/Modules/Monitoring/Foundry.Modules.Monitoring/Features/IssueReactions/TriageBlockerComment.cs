@@ -21,8 +21,8 @@ internal static class TriageBlockerComment
             [Opening, .. blockers.Select(blocker => $"- #{blocker.IssueNumber}: {Flatten(blocker.Reason)}"), Closing]);
 
     // The reason is model output derived from issue content and is posted publicly, so it stays on its own
-    // line and cannot forge further list entries.
-    private static string Flatten(string reason)
+    // line and cannot forge further list entries. Provider messages recorded on the issue take the same form.
+    internal static string Flatten(string reason)
     {
         string flattened = reason.Trim().ReplaceLineEndings(" ");
         if (flattened.Length <= MaxReasonLength)
