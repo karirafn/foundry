@@ -18,6 +18,7 @@ namespace Foundry.WebApi.Migrations
         /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
+            // An operator-chosen 'opus' also reverts, since the row carries nothing to tell it from the one Up wrote.
             migrationBuilder.Sql("UPDATE worker_role_settings SET model = 'sonnet' WHERE role = 'triage' AND model = 'opus';");
         }
     }

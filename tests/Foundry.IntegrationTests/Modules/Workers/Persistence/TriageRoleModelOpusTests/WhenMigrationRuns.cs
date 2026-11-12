@@ -14,6 +14,8 @@ namespace Foundry.IntegrationTests.Modules.Workers.Persistence.TriageRoleModelOp
 public sealed class WhenMigrationRuns : IAsyncLifetime, IAsyncDisposable
 {
     private const string PreviousMigrationId = "20261111180400_AddWorkerRunPublishing";
+    private const string TriageRole = "triage";
+    private const string OtherRole = "implement";
     private const string TargetMigrationId = "20261112120624_MoveTriageRoleModelToOpus";
 
     private readonly string _dbPath = Path.Combine(Path.GetTempPath(), $"migration-test-{Guid.NewGuid():N}.db");
@@ -49,7 +51,7 @@ public sealed class WhenMigrationRuns : IAsyncLifetime, IAsyncDisposable
     {
         // Arrange
         await _dbContext.Database.MigrateAsync(PreviousMigrationId, TestContext.Current.CancellationToken);
-        await ExecuteAsync("UPDATE worker_role_settings SET model = 'sonnet' WHERE role = 'triage';");
+        await SetTriageModelAsync("sonnet");
 
         // Act
         await _dbContext.Database.MigrateAsync(TargetMigrationId, TestContext.Current.CancellationToken);
@@ -59,13 +61,14 @@ public sealed class WhenMigrationRuns : IAsyncLifetime, IAsyncDisposable
     }
 
     [Theory]
+    [InlineData("")]
     [InlineData("haiku")]
     [InlineData("opus[1m]")]
     public async Task OnADatabaseWithAnOperatorChosenTriageModel_KeepsIt(string model)
     {
         // Arrange
         await _dbContext.Database.MigrateAsync(PreviousMigrationId, TestContext.Current.CancellationToken);
-        await ExecuteAsync($"UPDATE worker_role_settings SET model = '{model}' WHERE role = 'triage';");
+        await SetTriageModelAsync(model);
 
         // Act
         await _dbContext.Database.MigrateAsync(TargetMigrationId, TestContext.Current.CancellationToken);
@@ -77,11 +80,11 @@ public sealed class WhenMigrationRuns : IAsyncLifetime, IAsyncDisposable
     [Theory]
     [InlineData("opus", "sonnet")]
     [InlineData("haiku", "haiku")]
-    public async Task WhenRolledBack_OnlyAnOpusTriageModelReturnsToSonnet(string modelAfterUp, string expectedAfterDown)
+    public async Task OnRollback_OnlyAnOpusTriageModelReturnsToSonnet(string modelAfterUp, string expectedAfterDown)
     {
         // Arrange
         await _dbContext.Database.MigrateAsync(TargetMigrationId, TestContext.Current.CancellationToken);
-        await ExecuteAsync($"UPDATE worker_role_settings SET model = '{modelAfterUp}' WHERE role = 'triage';");
+        await SetTriageModelAsync(modelAfterUp);
 
         // Act
         await _dbContext.Database.MigrateAsync(PreviousMigrationId, TestContext.Current.CancellationToken);
@@ -90,12 +93,42 @@ public sealed class WhenMigrationRuns : IAsyncLifetime, IAsyncDisposable
         (await ScalarAsync("SELECT model FROM worker_role_settings WHERE role = 'triage';")).ShouldBe(expectedAfterDown);
     }
 
-    private async Task ExecuteAsync(string sql)
+    [Fact]
+    public async Task OnADatabaseWithAnotherRoleOnSonnet_KeepsIt()
     {
-#pragma warning disable CA2100 // Test-only constant SQL.
+        // Arrange
+        await _dbContext.Database.MigrateAsync(PreviousMigrationId, TestContext.Current.CancellationToken);
+        await SetModelAsync(OtherRole, "sonnet");
+
+        // Act
+        await _dbContext.Database.MigrateAsync(TargetMigrationId, TestContext.Current.CancellationToken);
+
+        // Assert
+        (await ScalarAsync($"SELECT model FROM worker_role_settings WHERE role = '{OtherRole}';")).ShouldBe("sonnet");
+    }
+
+    [Fact]
+    public async Task OnRollback_AnotherRoleOnOpusKeepsIt()
+    {
+        // Arrange
+        await _dbContext.Database.MigrateAsync(TargetMigrationId, TestContext.Current.CancellationToken);
+        await SetModelAsync(OtherRole, "opus");
+
+        // Act
+        await _dbContext.Database.MigrateAsync(PreviousMigrationId, TestContext.Current.CancellationToken);
+
+        // Assert
+        (await ScalarAsync($"SELECT model FROM worker_role_settings WHERE role = '{OtherRole}';")).ShouldBe("opus");
+    }
+
+    private Task SetTriageModelAsync(string model) => SetModelAsync(TriageRole, model);
+
+    private async Task SetModelAsync(string role, string model)
+    {
         using SqliteCommand command = _connection.CreateCommand();
-        command.CommandText = sql;
-#pragma warning restore CA2100
+        command.CommandText = "INSERT INTO worker_role_settings (role, model) VALUES ($role, $model) ON CONFLICT(role) DO UPDATE SET model = excluded.model;";
+        command.Parameters.AddWithValue("$model", model);
+        command.Parameters.AddWithValue("$role", role);
         await command.ExecuteNonQueryAsync(TestContext.Current.CancellationToken);
     }
 
