@@ -24,6 +24,9 @@ internal static partial class SystemPromptBuilder
     // Large enough to hold both sentences simultaneously with room to spare.
     private const int OmissionNoteReservedBytes = 512;
 
+    // Ends every text cut to fit the prompt budget.
+    private const string TruncationMarker = " [truncated]";
+
     // Unique heading that opens the pre-PR section. Tests anchor on this constant so any
     // wording change surfaces as a compile error rather than a silent assertion miss.
     internal const string PrePrSectionMarker = "Before you exit:";
@@ -127,7 +130,7 @@ internal static partial class SystemPromptBuilder
         string encodedTitle = EncodeForXmlData(issue.Title);
         string encodedBody = EncodeForXmlData(issue.Body.Replace("\r\n", "\n", StringComparison.Ordinal));
 
-        IReadOnlyList<FailingJobLog> jobLogs = failingJobLogs ?? [];
+        IReadOnlyList<FailingJobLog> resolvedJobLogs = failingJobLogs ?? [];
 
         // The log is fitted against a prompt with no comments and no revision payload, so it is cut only when it
         // cannot fit with both gone; the payload and the comments are shed before any input.
@@ -145,7 +148,7 @@ internal static partial class SystemPromptBuilder
             RenderIssueContent(FullIssueContentLead, encodedTitle, encodedBody, [], 0),
             fittedLog,
             context,
-            jobLogs));
+            resolvedJobLogs));
         List<string> admitted = AdmitNewestComments(
             issue.Comments,
             MaxSystemPromptBytes - 1 - scaffoldBytes - OmissionNoteReservedBytes);
@@ -159,7 +162,7 @@ internal static partial class SystemPromptBuilder
                 issue.Comments.Count - admitted.Count),
             fittedLog,
             context,
-            jobLogs);
+            resolvedJobLogs);
 
         int byteCount = Encoding.UTF8.GetByteCount(normalised);
 
@@ -231,27 +234,19 @@ internal static partial class SystemPromptBuilder
                 0),
             WithMinimalInputs(log)));
 
-        // One byte under the ceiling, as Build's check is exclusive; the reserve holds the omission note.
+        // One byte under the ceiling, as Build's check is exclusive. The omission-note reserve is held back even with
+        // no comments, so the slack does not depend on whether a later step drops any.
         int slackBytes = MaxSystemPromptBytes - 1 - scaffoldBytes - OmissionNoteReservedBytes;
 
         // Keep-priority: the newest answered input, then the body, then older inputs newest first, then the comments.
         string?[] fittedInputs = new string?[log.Count];
         int newestAnswered = FindNewestAnswered(log);
 
-        if (newestAnswered >= 0)
-        {
-            fittedInputs[newestAnswered] = Allot(log[newestAnswered].Input!, ref slackBytes);
-        }
+        AllotNewestInput(log, newestAnswered, fittedInputs, ref slackBytes);
 
         string encodedBody = EncodeForXmlData(Allot(issue.Body, ref slackBytes));
 
-        for (int i = log.Count - 1; i >= 0; i--)
-        {
-            if (i != newestAnswered && log[i].Input is { } input)
-            {
-                fittedInputs[i] = Allot(input, ref slackBytes);
-            }
-        }
+        AllotOlderInputs(log, newestAnswered, fittedInputs, ref slackBytes);
 
         List<string> admitted = AdmitNewestComments(issue.Comments, slackBytes);
 
@@ -348,8 +343,6 @@ internal static partial class SystemPromptBuilder
             + $"{EncodeForXmlData(comment.Body.Replace("\r\n", "\n", StringComparison.Ordinal))}\n</issue-comment>\n";
     }
 
-    private const string TruncationMarker = " [truncated]";
-
     private static int EncodedByteCount(string raw) => Encoding.UTF8.GetByteCount(EncodeForXmlData(raw));
 
     // Returns the raw text whole when its encoded form fits, otherwise a raw cut plus the marker. The cut happens
@@ -383,7 +376,7 @@ internal static partial class SystemPromptBuilder
 
     // The least a text can shrink to: nothing for an empty text, otherwise the marker alone. Measuring the scaffold
     // with every sheddable text at this floor keeps the sum of the cuts under the ceiling.
-    private static string MinimalForm(string raw) => FitToEncodedBytes(raw, 0);
+    private static string MinimalForm(string raw) => raw.Length == 0 ? string.Empty : TruncationMarker;
 
     // Fits the text into its minimal form plus whatever slack remains, then spends that slack.
     private static string Allot(string raw, ref int slackBytes)
@@ -418,18 +411,39 @@ internal static partial class SystemPromptBuilder
         IReadOnlyList<Clarification> log,
         Func<IReadOnlyList<Clarification>, int> measureScaffoldBytes)
     {
-        // One byte under the ceiling, as Build's check is exclusive; the reserve holds the omission note.
+        // One byte under the ceiling, as Build's check is exclusive. The omission-note reserve is held back even with
+        // no comments, so the slack does not depend on whether a later step drops any.
         int slackBytes = MaxSystemPromptBytes - 1 - OmissionNoteReservedBytes
             - measureScaffoldBytes(WithMinimalInputs(log));
 
         string?[] fittedInputs = new string?[log.Count];
         int newestAnswered = FindNewestAnswered(log);
 
+        AllotNewestInput(log, newestAnswered, fittedInputs, ref slackBytes);
+        AllotOlderInputs(log, newestAnswered, fittedInputs, ref slackBytes);
+
+        return WithInputs(log, fittedInputs);
+    }
+
+    private static void AllotNewestInput(
+        IReadOnlyList<Clarification> log,
+        int newestAnswered,
+        string?[] fittedInputs,
+        ref int slackBytes)
+    {
         if (newestAnswered >= 0)
         {
             fittedInputs[newestAnswered] = Allot(log[newestAnswered].Input!, ref slackBytes);
         }
+    }
 
+    // Newer to older, so the oldest round is the first to be cut.
+    private static void AllotOlderInputs(
+        IReadOnlyList<Clarification> log,
+        int newestAnswered,
+        string?[] fittedInputs,
+        ref int slackBytes)
+    {
         for (int i = log.Count - 1; i >= 0; i--)
         {
             if (i != newestAnswered && log[i].Input is { } input)
@@ -437,8 +451,6 @@ internal static partial class SystemPromptBuilder
                 fittedInputs[i] = Allot(input, ref slackBytes);
             }
         }
-
-        return WithInputs(log, fittedInputs);
     }
 
     // The revision payload is shed before any clarification input, so the log is fitted against a prompt without it.
@@ -697,13 +709,12 @@ internal static partial class SystemPromptBuilder
         if (candidateComments.Count == 0 && reviewFeedback.Comments.Count > 0)
         {
             ReviewComment newestComment = reviewFeedback.Comments[^1];
-            string marker = " [truncated]";
             string prefix = newestComment.FilePath is not null && newestComment.Line is not null
                 ? $"- {EncodeForXmlData(newestComment.FilePath)}:{newestComment.Line} — "
                 : "- ";
 
             int prefixBytes = Encoding.UTF8.GetByteCount(prefix.Replace("\r\n", "\n", StringComparison.Ordinal));
-            int markerBytes = Encoding.UTF8.GetByteCount(marker);
+            int markerBytes = Encoding.UTF8.GetByteCount(TruncationMarker);
             int newlineBytes = 1; // \n
             int quotaForBody = budgetForComments - prefixBytes - markerBytes - newlineBytes;
 
@@ -715,7 +726,7 @@ internal static partial class SystemPromptBuilder
             }
             else if (quotaForBody >= 0)
             {
-                candidateComments.Add(prefix + marker);
+                candidateComments.Add(prefix + TruncationMarker);
             }
 
             // The newest comment was counted in sizeOmittedCount since no comment fit;
