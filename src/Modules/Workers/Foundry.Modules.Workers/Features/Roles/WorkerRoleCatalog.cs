@@ -25,16 +25,70 @@ internal sealed record WorkerRoleDefinition(
     string? VerdictSchema);
 
 /// <summary>
-/// The roles read from one build context, plus the shared plugin loaded for every role and the Worker Principles
-/// placed in every role's system prompt.
+/// The roles read from one build context, plus the shared plugin loaded for every role and the Worker Principles each
+/// role selects its sections from.
 /// </summary>
 internal sealed record WorkerRoleCatalogContent(
     IReadOnlyList<WorkerRoleDefinition> Roles,
     RolePlugin Shared,
-    string Principles)
+    WorkerPrinciples Principles)
 {
     public WorkerRoleDefinition? Find(WorkerRole role) =>
         Roles.FirstOrDefault(definition => definition.Role == role);
+
+    /// <summary>The Worker Principles <paramref name="role"/>'s system prompt carries.</summary>
+    public string PrinciplesFor(WorkerRole role) => Principles.AssembleFor(role.PrincipleSections);
+}
+
+/// <summary>
+/// The Worker Principles read from <c>shared/prompts/</c>: the framing line and one text per
+/// <see cref="PrincipleSection"/>. Every section is required, so any role's selection can be assembled.
+/// </summary>
+internal sealed class WorkerPrinciples
+{
+    private const string Separator = "\n\n";
+
+    private readonly IReadOnlyDictionary<PrincipleSection, string> _sections;
+
+    public WorkerPrinciples(string framing, IReadOnlyDictionary<PrincipleSection, string> sections)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(framing);
+        ArgumentNullException.ThrowIfNull(sections);
+
+        foreach (PrincipleSection section in PrincipleSectionNames.All)
+        {
+            if (!sections.TryGetValue(section, out string? text) || string.IsNullOrWhiteSpace(text))
+            {
+                throw new ArgumentException($"The '{section.ToName()}' principle section has no text.", nameof(sections));
+            }
+        }
+
+        Framing = framing;
+        _sections = sections;
+    }
+
+    public string Framing { get; }
+
+    public string TextOf(PrincipleSection section) => _sections[section];
+
+    /// <summary>
+    /// The framing line followed by the selected sections in the fixed order. An empty selection yields an empty
+    /// string: no framing introducing principles that never follow.
+    /// </summary>
+    public string AssembleFor(PrincipleSectionSet selection)
+    {
+        ArgumentNullException.ThrowIfNull(selection);
+
+        if (selection.IsEmpty)
+        {
+            return string.Empty;
+        }
+
+        return string.Join(Separator, [Framing, .. selection.InOrder.Select(TextOf)]);
+    }
+
+    /// <summary>The largest text any role can receive: the framing followed by every section.</summary>
+    public string AssembleAll() => AssembleFor(PrincipleSectionSet.Of([.. PrincipleSectionNames.All]));
 }
 
 /// <summary>

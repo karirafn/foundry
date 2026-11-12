@@ -1412,6 +1412,8 @@ export interface components {
             agents: components["schemas"]["RolePluginComponent"][];
             verdictSchema: null | string;
             model: string;
+            principleSections: string[];
+            principles: string;
         };
         WorkerRoleCatalogResponse: {
             image: components["schemas"]["WorkerRoleImage"];
@@ -1419,6 +1421,8 @@ export interface components {
             shared: components["schemas"]["SharedRolePlugin"];
             promptSections: components["schemas"]["PromptSectionDescriptor"][];
             rolePromptSlot: string;
+            principlesSlot: string;
+            principleSections: string[];
         };
         WorkerRoleImage: {
             tag: string;

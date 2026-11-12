@@ -4903,7 +4903,9 @@
           "skills",
           "agents",
           "verdictSchema",
-          "model"
+          "model",
+          "principleSections",
+          "principles"
         ],
         "type": "object",
         "properties": {
@@ -4945,6 +4947,15 @@
           },
           "model": {
             "type": "string"
+          },
+          "principleSections": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "principles": {
+            "type": "string"
           }
         }
       },
@@ -4954,7 +4965,9 @@
           "roles",
           "shared",
           "promptSections",
-          "rolePromptSlot"
+          "rolePromptSlot",
+          "principlesSlot",
+          "principleSections"
         ],
         "type": "object",
         "properties": {
@@ -4978,6 +4991,15 @@
           },
           "rolePromptSlot": {
             "type": "string"
+          },
+          "principlesSlot": {
+            "type": "string"
+          },
+          "principleSections": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           }
         }
       },

@@ -255,6 +255,11 @@ public sealed class OutboxHarvestProcessRebuildAsync : IAsyncDisposable
         File.WriteAllText(Path.Combine(implement, "prompts", "task.md"), "Implement issue #{issueNumber}.");
         File.WriteAllText(Path.Combine(shared, ".claude-plugin", "plugin.json"), """{"name":"shared"}""");
         File.WriteAllText(Path.Combine(shared, "prompts", "principles.md"), "Engineering principles.");
+        Directory.CreateDirectory(Path.Combine(shared, "prompts", "principles"));
+        foreach (string section in (string[])["testing", "design", "code", "domain"])
+        {
+            File.WriteAllText(Path.Combine(shared, "prompts", "principles", section + ".md"), section + " principles.");
+        }
 
         string triage = Path.Combine(workersDir, "roles", "triage");
         Directory.CreateDirectory(Path.Combine(triage, ".claude-plugin"));

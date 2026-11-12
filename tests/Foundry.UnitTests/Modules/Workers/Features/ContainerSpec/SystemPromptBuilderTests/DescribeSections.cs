@@ -8,15 +8,11 @@ namespace Foundry.UnitTests.Modules.Workers.Features.ContainerSpec.SystemPromptB
 
 public sealed class DescribeSections
 {
-    private const string Principles = "PRINCIPLES_MARKER Engineering principles.";
-
     [Fact]
     public void WhenDescribed_ListsEverySectionInAssemblyOrderWithItsCondition()
     {
         // Act
-        IReadOnlyList<PromptSectionDescriptor> sections = SystemPromptBuilder.DescribeSections(
-            Principles,
-            timeoutMinutes: 120);
+        IReadOnlyList<PromptSectionDescriptor> sections = SystemPromptBuilder.DescribeSections(timeoutMinutes: 120);
 
         // Assert
         sections.Select(section => (section.Key, section.Condition)).ShouldBe(
@@ -43,7 +39,7 @@ public sealed class DescribeSections
     public void WhenDescribed_TheChecksSectionShowsTheTimeoutAndFixPushCapFromSettings()
     {
         // Act
-        PromptSectionDescriptor checks = SystemPromptBuilder.DescribeSections(Principles, timeoutMinutes: 75)
+        PromptSectionDescriptor checks = SystemPromptBuilder.DescribeSections(timeoutMinutes: 75)
             .Single(section => section.Key == "checks");
 
         // Assert
@@ -56,9 +52,7 @@ public sealed class DescribeSections
     public void WhenDescribed_RunSpecificValuesAreLeftAsPlaceholders()
     {
         // Act
-        IReadOnlyList<PromptSectionDescriptor> sections = SystemPromptBuilder.DescribeSections(
-            Principles,
-            timeoutMinutes: 120);
+        IReadOnlyList<PromptSectionDescriptor> sections = SystemPromptBuilder.DescribeSections(timeoutMinutes: 120);
 
         // Assert
         sections.ShouldSatisfyAllConditions(
@@ -77,20 +71,20 @@ public sealed class DescribeSections
     public void WhenDescribed_TheSafetyPreambleIsTheOneEveryPromptStartsWith()
     {
         // Act
-        PromptSectionDescriptor preamble = SystemPromptBuilder.DescribeSections(Principles, timeoutMinutes: 120)[0];
+        PromptSectionDescriptor preamble = SystemPromptBuilder.DescribeSections(timeoutMinutes: 120)[0];
 
         // Assert
         preamble.Content.ShouldBe(SystemPromptBuilder.SafetyPreamble);
     }
 
     [Fact]
-    public void WhenDescribed_ThePrinciplesSectionCarriesTheSuppliedText()
+    public void WhenDescribed_ThePrinciplesSectionIsASlotForEachRolesOwnPrinciples()
     {
         // Act
-        PromptSectionDescriptor principles = SystemPromptBuilder.DescribeSections(Principles, timeoutMinutes: 120)
+        PromptSectionDescriptor principles = SystemPromptBuilder.DescribeSections(timeoutMinutes: 120)
             .Single(section => section.Key == "principles");
 
         // Assert
-        principles.Content.ShouldBe(Principles);
+        principles.Content.ShouldBe(SystemPromptBuilder.PrinciplesSlot);
     }
 }

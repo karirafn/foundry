@@ -893,20 +893,83 @@ public sealed class HandleAsync : IAsyncDisposable
         spec.EnvironmentVariables["SYSTEM_PROMPT"].ShouldContain("Custom system prompt for issue #99.");
     }
 
-    [Fact]
-    public async Task WhenDispatched_IncludesTheCatalogPrinciplesInSystemPromptEnvVar()
+    public static TheoryData<DispatchContext> EveryImplementContext =>
+        new()
+        {
+            new DispatchContext.Fresh("feat/42-test-issue"),
+            new DispatchContext.Continuation("feat/42-test-issue", "container exited"),
+            new DispatchContext.Revision(
+                "feat/42-test-issue",
+                "https://github.com/owner/repo/pull/1",
+                new RevisionTrigger.ReviewFeedback([new ReviewComment("Rename it.")], 0, null)),
+            new DispatchContext.Revision(
+                "feat/42-test-issue",
+                "https://github.com/owner/repo/pull/1",
+                new RevisionTrigger.FailedChecks([new FailingCheck("ci/build", "failure", null)])),
+            new DispatchContext.Revision(
+                "feat/42-test-issue",
+                "https://github.com/owner/repo/pull/1",
+                new RevisionTrigger.RebaseConflict()),
+            new DispatchContext.Revision(
+                "feat/42-test-issue",
+                "https://github.com/owner/repo/pull/1",
+                new RevisionTrigger.InputProvided()),
+        };
+
+    [Theory]
+    [MemberData(nameof(EveryImplementContext))]
+    public async Task WhenAnImplementRunIsDispatched_SystemPromptCarriesTheImplementRolesPrinciples(DispatchContext context)
     {
         // Arrange
         StubWorkerOrchestrator orchestrator = new(succeeds: true, containerId: "c-principles");
-        StubWorkerRoleCatalogStore store = StubWorkerRoleCatalogStore.With(principles: "Catalog principles marker.");
+        StubWorkerRoleCatalogStore store = StubWorkerRoleCatalogStore.With();
         IssueClaimedHandler sut = BuildHandler(orchestrator: orchestrator, roleCatalog: store);
 
         // Act
-        await sut.HandleAsync(BuildEvent(), TestContext.Current.CancellationToken);
+        await sut.HandleAsync(BuildEvent(context: context), TestContext.Current.CancellationToken);
 
         // Assert
-        WorkerContainerSpec spec = orchestrator.LastSpec.ShouldNotBeNull();
-        spec.EnvironmentVariables["SYSTEM_PROMPT"].ShouldContain(store.Current!.Content.Principles);
+        string systemPrompt = orchestrator.LastSpec.ShouldNotBeNull().EnvironmentVariables["SYSTEM_PROMPT"];
+        systemPrompt.ShouldSatisfyAllConditions(
+            () => systemPrompt.ShouldContain(store.Current!.Content.PrinciplesFor(WorkerRole.Implement)),
+            () => systemPrompt.ShouldContain(StubWorkerRoleCatalogStore.FramingMarker),
+            () => systemPrompt.ShouldContain(StubWorkerRoleCatalogStore.TestingMarker),
+            () => systemPrompt.ShouldContain(StubWorkerRoleCatalogStore.DesignMarker),
+            () => systemPrompt.ShouldContain(StubWorkerRoleCatalogStore.CodeMarker),
+            () => systemPrompt.ShouldContain(StubWorkerRoleCatalogStore.DomainMarker));
+    }
+
+    [Fact]
+    public async Task WhenATriageRunIsDispatched_SystemPromptCarriesOnlyTheFramingDesignAndDomainModelling()
+    {
+        // Arrange
+        StubWorkerOrchestrator orchestrator = new(succeeds: true);
+        WorkerRoleCatalog implementOnly = StubWorkerRoleCatalogStore.Catalog();
+        WorkerRoleDefinition triage = new(
+            WorkerRole.Triage,
+            WorkerCapability.Restricted,
+            new RolePlugin(WorkerRole.Triage.Name, "Triages an issue.", [], []),
+            "You are triaging issue #{issueNumber}.\n\n{issueContent}",
+            "Triage issue #{issueNumber}.",
+            VerdictSchema: null);
+        WorkerRoleCatalog catalog = implementOnly with
+        {
+            Content = implementOnly.Content with { Roles = [.. implementOnly.Content.Roles, triage] },
+        };
+        IssueClaimedHandler sut = BuildHandler(orchestrator: orchestrator, roleCatalog: new StubWorkerRoleCatalogStore(catalog));
+
+        // Act
+        await sut.HandleAsync(
+            BuildEvent(context: new DispatchContext.Triage(), withoutBranch: true),
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        string systemPrompt = orchestrator.LastSpec.ShouldNotBeNull().EnvironmentVariables["SYSTEM_PROMPT"];
+        systemPrompt.ShouldSatisfyAllConditions(
+            () => systemPrompt.ShouldContain(
+                $"{StubWorkerRoleCatalogStore.FramingMarker}\n\n{StubWorkerRoleCatalogStore.DesignMarker}\n\n{StubWorkerRoleCatalogStore.DomainMarker}"),
+            () => systemPrompt.ShouldNotContain(StubWorkerRoleCatalogStore.TestingMarker),
+            () => systemPrompt.ShouldNotContain(StubWorkerRoleCatalogStore.CodeMarker));
     }
 
     [Fact]

@@ -90,6 +90,30 @@
     overflow-wrap: anywhere;
   }
 
+  // The second line under a title: which principle sections the role receives, or why it receives none.
+  &__note {
+    color: var(--fd-text-secondary);
+    display: block;
+    font-size: 0.75rem;
+    font-weight: 400;
+    overflow-wrap: anywhere;
+  }
+
+  // A section this role's prompt never carries: shaped like a summary row, but nothing to open.
+  &__static {
+    align-items: center;
+    column-gap: var(--fd-spacing-sm);
+    display: grid;
+    font-size: 0.8125rem;
+    grid-template-columns: 0.75rem minmax(0, 1fr) auto;
+    min-block-size: 44px;
+    padding: var(--fd-spacing-xs) var(--fd-spacing-md);
+
+    > .prompt-assembly__summary-name {
+      grid-column: 2;
+    }
+  }
+
   &__condition {
     border: 1px solid transparent;
     border-radius: 999px;
@@ -110,6 +134,12 @@
 
     &--run {
       --condition-tag-color: var(--fd-text-activity);
+    }
+
+    &--excluded {
+      border-color: var(--fd-border-default);
+      border-style: dashed;
+      color: var(--fd-text-secondary);
     }
 
     &--image,

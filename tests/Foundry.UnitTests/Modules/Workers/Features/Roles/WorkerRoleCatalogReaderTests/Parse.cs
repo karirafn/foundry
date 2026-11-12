@@ -22,7 +22,11 @@ public sealed class Parse
         ["triage/prompts/system.md"] = "You are triaging issue #{issueNumber}.\n\n{issueContent}\n",
         ["triage/prompts/task.md"] = "Triage issue #{issueNumber}.\n",
         ["shared/.claude-plugin/plugin.json"] = """{"name":"shared","description":"Loaded for every role."}""",
-        ["shared/prompts/principles.md"] = "\uFEFFEngineering principles.\r\n\r\nDesign:\r\n- Safe defaults.\r\n",
+        ["shared/prompts/principles.md"] = "\uFEFFEngineering principles.\r\n",
+        ["shared/prompts/principles/testing.md"] = "Testing:\r\n- Tests first.\r\n",
+        ["shared/prompts/principles/design.md"] = "Design:\n- Safe defaults.\n",
+        ["shared/prompts/principles/code.md"] = "Code:\n- Comments explain why.\n",
+        ["shared/prompts/principles/domain.md"] = "Domain modelling:\n- Domain terms.\n",
     };
 
     private static string FillToBytes(string unit, int bytes) =>
@@ -43,7 +47,11 @@ public sealed class Parse
             () => implement.TaskPromptTemplate.ShouldBe("Implement issue #{issueNumber}."),
             () => implement.VerdictSchema.ShouldBeNull(),
             () => catalog.Shared.Description.ShouldBe("Loaded for every role."),
-            () => catalog.Principles.ShouldBe("Engineering principles.\n\nDesign:\n- Safe defaults."));
+            () => catalog.Principles.Framing.ShouldBe("Engineering principles."),
+            () => catalog.Principles.TextOf(PrincipleSection.Testing).ShouldBe("Testing:\n- Tests first."),
+            () => catalog.Principles.TextOf(PrincipleSection.Design).ShouldBe("Design:\n- Safe defaults."),
+            () => catalog.Principles.TextOf(PrincipleSection.Code).ShouldBe("Code:\n- Comments explain why."),
+            () => catalog.Principles.TextOf(PrincipleSection.DomainModelling).ShouldBe("Domain modelling:\n- Domain terms."));
     }
 
     [Fact]
@@ -125,20 +133,22 @@ public sealed class Parse
         error.Message.ShouldContain("placeholders Foundry does not fill");
     }
 
+    public static TheoryData<string> EveryPrinciplesFile() =>
+    [
+        "shared/prompts/principles.md",
+        "shared/prompts/principles/testing.md",
+        "shared/prompts/principles/design.md",
+        "shared/prompts/principles/code.md",
+        "shared/prompts/principles/domain.md",
+    ];
+
     [Theory]
-    [InlineData(null)]
-    [InlineData("")]
-    [InlineData(" \r\n ")]
-    public void WhenThePrinciplesAreMissingOrBlank_FailsNamingTheFile(string? principles)
+    [MemberData(nameof(EveryPrinciplesFile))]
+    public void WhenAPrinciplesFileIsMissing_FailsNamingTheFile(string path)
     {
         // Arrange
         Dictionary<string, string> files = ValidFiles();
-        files.Remove("shared/prompts/principles.md");
-
-        if (principles is not null)
-        {
-            files["shared/prompts/principles.md"] = principles;
-        }
+        files.Remove(path);
 
         // Act
         Result<WorkerRoleCatalogContent> result = WorkerRoleCatalogReader.Parse(files);
@@ -147,33 +157,70 @@ public sealed class Parse
         Error error = result.ShouldBeOfType<Result<WorkerRoleCatalogContent>.Failure>().Error;
         error.ShouldSatisfyAllConditions(
             () => error.Code.ShouldBe(WorkerRoleCatalogReader.InvalidCatalogCode),
-            () => error.Message.ShouldContain("roles/shared/prompts/principles.md"));
+            () => error.Message.ShouldContain($"roles/{path}"));
     }
 
     [Theory]
-    [InlineData("a")]
-    [InlineData("\u00e9")]
-    public void WhenThePrinciplesAreExactlyAtTheByteCap_Passes(string unit)
+    [MemberData(nameof(EveryPrinciplesFile))]
+    public void WhenAPrinciplesFileIsBlank_FailsNamingTheFile(string path)
     {
         // Arrange
         Dictionary<string, string> files = ValidFiles();
-        files["shared/prompts/principles.md"] = FillToBytes(unit, WorkerRoleCatalogReader.MaxPrinciplesBytes);
+        files[path] = " \r\n ";
 
         // Act
         Result<WorkerRoleCatalogContent> result = WorkerRoleCatalogReader.Parse(files);
 
         // Assert
-        result.ShouldBeOfType<Result<WorkerRoleCatalogContent>.Success>();
+        Error error = result.ShouldBeOfType<Result<WorkerRoleCatalogContent>.Failure>().Error;
+        error.ShouldSatisfyAllConditions(
+            () => error.Code.ShouldBe(WorkerRoleCatalogReader.InvalidCatalogCode),
+            () => error.Message.ShouldContain($"roles/{path}"));
+    }
+
+    [Theory]
+    [MemberData(nameof(EveryPrinciplesFile))]
+    public void WhenAPrinciplesFileContainsAPlaceholder_FailsNamingTheFile(string path)
+    {
+        // Arrange
+        Dictionary<string, string> files = ValidFiles();
+        files[path] = "Issue #{issueNumber}.";
+
+        // Act
+        Result<WorkerRoleCatalogContent> result = WorkerRoleCatalogReader.Parse(files);
+
+        // Assert
+        Error error = result.ShouldBeOfType<Result<WorkerRoleCatalogContent>.Failure>().Error;
+        error.ShouldSatisfyAllConditions(
+            () => error.Message.ShouldContain("placeholders Foundry does not fill"),
+            () => error.Message.ShouldContain($"roles/{path}"));
     }
 
     [Theory]
     [InlineData("a")]
     [InlineData("\u00e9")]
-    public void WhenThePrinciplesExceedTheByteCapByOneByte_FailsNamingTheFileAndTheCap(string unit)
+    public void WhenTheFramingAndEverySectionAreExactlyAtTheByteCap_Passes(string unit)
     {
         // Arrange
         Dictionary<string, string> files = ValidFiles();
-        files["shared/prompts/principles.md"] = FillToBytes(unit, WorkerRoleCatalogReader.MaxPrinciplesBytes) + "a";
+        files["shared/prompts/principles.md"] = FillExactly(unit, FramingRoomUnderTheCap(files));
+
+        // Act
+        Result<WorkerRoleCatalogContent> result = WorkerRoleCatalogReader.Parse(files);
+
+        // Assert
+        WorkerRoleCatalogContent catalog = result.ShouldBeOfType<Result<WorkerRoleCatalogContent>.Success>().Value;
+        Encoding.UTF8.GetByteCount(catalog.Principles.AssembleAll()).ShouldBe(WorkerRoleCatalogReader.MaxPrinciplesBytes);
+    }
+
+    [Theory]
+    [InlineData("a")]
+    [InlineData("\u00e9")]
+    public void WhenTheFramingAndEverySectionExceedTheByteCapByOneByte_FailsNamingTheFilesAndTheCap(string unit)
+    {
+        // Arrange
+        Dictionary<string, string> files = ValidFiles();
+        files["shared/prompts/principles.md"] = FillExactly(unit, FramingRoomUnderTheCap(files)) + "a";
 
         // Act
         Result<WorkerRoleCatalogContent> result = WorkerRoleCatalogReader.Parse(files);
@@ -183,26 +230,44 @@ public sealed class Parse
         error.ShouldSatisfyAllConditions(
             () => error.Code.ShouldBe(WorkerRoleCatalogReader.InvalidCatalogCode),
             () => error.Message.ShouldContain("roles/shared/prompts/principles.md"),
+            () => error.Message.ShouldContain("roles/shared/prompts/principles/"),
             () => error.Message.ShouldContain(WorkerRoleCatalogReader.MaxPrinciplesBytes.ToString(CultureInfo.InvariantCulture)));
     }
 
-    [Theory]
-    [InlineData("Apply {branchNamingInstruction}.")]
-    [InlineData("Issue #{issueNumber}.")]
-    public void WhenThePrinciplesContainAPlaceholder_FailsNamingTheFile(string principles)
+    [Fact]
+    public void WhenOnlyTheSectionsTogetherExceedTheByteCap_Fails()
     {
-        // Arrange
+        // Arrange: no single file is over the cap, but every role's largest possible text is.
         Dictionary<string, string> files = ValidFiles();
-        files["shared/prompts/principles.md"] = principles;
+        string quarter = FillToBytes("a", WorkerRoleCatalogReader.MaxPrinciplesBytes / 4);
+        files["shared/prompts/principles/testing.md"] = quarter;
+        files["shared/prompts/principles/design.md"] = quarter;
+        files["shared/prompts/principles/code.md"] = quarter;
+        files["shared/prompts/principles/domain.md"] = quarter;
 
         // Act
         Result<WorkerRoleCatalogContent> result = WorkerRoleCatalogReader.Parse(files);
 
         // Assert
-        Error error = result.ShouldBeOfType<Result<WorkerRoleCatalogContent>.Failure>().Error;
-        error.ShouldSatisfyAllConditions(
-            () => error.Message.ShouldContain("placeholders Foundry does not fill"),
-            () => error.Message.ShouldContain("roles/shared/prompts/principles.md"));
+        result.ShouldBeOfType<Result<WorkerRoleCatalogContent>.Failure>().Error
+            .Message.ShouldContain(WorkerRoleCatalogReader.MaxPrinciplesBytes.ToString(CultureInfo.InvariantCulture));
+    }
+
+    // Fills with the multi-byte unit, then pads with single bytes, so any byte count is reached exactly.
+    private static string FillExactly(string unit, int bytes)
+    {
+        string filled = FillToBytes(unit, bytes);
+        return filled + new string('a', bytes - Encoding.UTF8.GetByteCount(filled));
+    }
+
+    // The bytes the framing line may take so the framing with every section, as assembled, is exactly the cap.
+    private static int FramingRoomUnderTheCap(Dictionary<string, string> files)
+    {
+        files["shared/prompts/principles.md"] = "x";
+        WorkerPrinciples principles = WorkerRoleCatalogReader.Parse(files)
+            .ShouldBeOfType<Result<WorkerRoleCatalogContent>.Success>().Value.Principles;
+
+        return WorkerRoleCatalogReader.MaxPrinciplesBytes - (Encoding.UTF8.GetByteCount(principles.AssembleAll()) - 1);
     }
 
     [Fact]
