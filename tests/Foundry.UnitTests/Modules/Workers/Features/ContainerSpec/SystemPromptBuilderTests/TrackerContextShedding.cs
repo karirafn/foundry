@@ -71,6 +71,20 @@ public sealed class TrackerContextShedding
             trackerContext: trackerContext)
             .ShouldBeOfType<Result<string>.Success>().Value;
 
+    private static string BuildRestricted(
+        IssueContent issue,
+        TrackerContext? trackerContext,
+        IReadOnlyList<Clarification>? clarifications = null) =>
+        SystemPromptBuilder.BuildRestricted(
+            Principles,
+            42,
+            Template,
+            issue,
+            installsDotnet: false,
+            clarifications: clarifications,
+            trackerContext: trackerContext)
+            .ShouldBeOfType<Result<string>.Success>().Value;
+
     private static IReadOnlyList<OpenIssue> OpenIssues(int count, int titleLength) =>
         Enumerable.Range(1, count).Select(number => new OpenIssue(number, new string('t', titleLength))).ToList();
 
@@ -317,6 +331,183 @@ public sealed class TrackerContextShedding
         }
 
         return whole;
+    }
+
+    [Fact]
+    public void BuildRestricted_WhenReferencedIssueBodiesOverflowTheBudget_DropsBodiesFromTheLastSelectedBackAndKeepsEveryComment()
+    {
+        // Arrange
+        IssueContent issue = IssueWithComments(3);
+        TrackerContext trackerContext = ContextWithReferencedIssues(ReferencedIssueCount);
+
+        // Act
+        string prompt = BuildRestricted(issue, trackerContext);
+
+        // Assert
+        int kept = KeptBodyCount(prompt);
+        int dropped = ReferencedIssueCount - kept;
+        prompt.ShouldSatisfyAllConditions(
+            () => Encoding.UTF8.GetByteCount(prompt).ShouldBeLessThan(SystemPromptBuilder.MaxSystemPromptBytes),
+            () => kept.ShouldBeInRange(1, ReferencedIssueCount - 1),
+            () => Enumerable.Range(1, kept)
+                .ShouldAllBe(number => prompt.Contains(BodyRun(number), StringComparison.Ordinal)),
+            () => Enumerable.Range(1, ReferencedIssueCount)
+                .ShouldAllBe(number => prompt.Contains($"<title>Referenced title {number}</title>", StringComparison.Ordinal)),
+            () => prompt.ShouldContain(
+                $"Note: the bodies of {dropped} referenced issue(s) were omitted to fit the prompt size budget."),
+            () => Enumerable.Range(1, 3)
+                .ShouldAllBe(number => prompt.Contains($"COMMENT_{number} text", StringComparison.Ordinal)));
+    }
+
+    [Fact]
+    public void BuildRestricted_WhenTheIndexFitsOnceTheBodiesAreDropped_KeepsTheIndexWholeAndShedsBodiesFirst()
+    {
+        // Arrange
+        IssueContent issue = IssueWithComments(1);
+        TrackerContext trackerContext = ContextWithReferencedIssues(ReferencedIssueCount, OpenIssues(100, 200));
+
+        // Act
+        string prompt = BuildRestricted(issue, trackerContext);
+
+        // Assert
+        prompt.ShouldSatisfyAllConditions(
+            () => KeptBodyCount(prompt).ShouldBeLessThan(ReferencedIssueCount),
+            () => prompt.ShouldContain("<open-issue number=\"100\">"),
+            () => prompt.ShouldNotContain("the open-issue list was omitted"));
+    }
+
+    [Fact]
+    public void BuildRestricted_WhenTheIndexAloneOverflowsTheBudget_DropsItBehindANote()
+    {
+        // Arrange
+        IssueContent issue = IssueWithComments(1);
+        TrackerContext trackerContext = ContextWithReferencedIssues(ReferencedIssueCount, OpenIssues(100, 1_500));
+
+        // Act
+        string prompt = BuildRestricted(issue, trackerContext);
+
+        // Assert
+        prompt.ShouldSatisfyAllConditions(
+            () => Encoding.UTF8.GetByteCount(prompt).ShouldBeLessThan(SystemPromptBuilder.MaxSystemPromptBytes),
+            () => prompt.ShouldNotContain("<open-issues>"),
+            () => prompt.ShouldContain("Note: the open-issue list was omitted to fit the prompt size budget."));
+    }
+
+    [Fact]
+    public void BuildRestricted_WhenTheCommentsOverflowTheBudget_DropsTheOldestCommentOnlyOnceTheTrackerContextIsMinimal()
+    {
+        // Arrange
+        // The filler differs from every body's character, so a body run never matches inside a comment.
+        IssueContent issue = new(
+            "Fix the bug",
+            "The bug body.",
+            Enumerable.Range(1, 3)
+                .Select(i => new IssueContentComment(i, "bob", $"COMMENT_{i} " + new string('z', 50_000), CreatedAt.AddHours(i)))
+                .ToList());
+        TrackerContext trackerContext = ContextWithReferencedIssues(ReferencedIssueCount, OpenIssues(100, 200));
+
+        // Act
+        string prompt = BuildRestricted(issue, trackerContext);
+
+        // Assert
+        prompt.ShouldSatisfyAllConditions(
+            () => Encoding.UTF8.GetByteCount(prompt).ShouldBeLessThan(SystemPromptBuilder.MaxSystemPromptBytes),
+            () => prompt.ShouldNotContain("COMMENT_1 "),
+            () => prompt.ShouldContain("COMMENT_3 "),
+            () => KeptBodyCount(prompt).ShouldBe(0),
+            () => prompt.ShouldNotContain("<open-issues>"));
+    }
+
+    [Fact]
+    public void BuildRestricted_WhenTheInputsAndTheBodyFillTheBudget_KeepsThemWholeAndLeavesTheTrackerContextMinimal()
+    {
+        // Arrange
+        string body = new string('B', 60_000);
+        string olderInput = new('o', 30_000);
+        string newestInput = new('n', 20_000);
+        IssueContent issue = new("Fix the bug", body, []);
+        TrackerContext trackerContext = ContextWithReferencedIssues(ReferencedIssueCount, OpenIssues(100, 200));
+
+        // Act
+        string prompt = BuildRestricted(issue, trackerContext, [Round(olderInput), Round(newestInput, 1)]);
+
+        // Assert
+        List<string> inputs = RenderedInputs(prompt);
+        prompt.ShouldSatisfyAllConditions(
+            () => prompt.ShouldContain($"<issue-body>\n{body}\n</issue-body>"),
+            () => inputs[0].ShouldBe(olderInput),
+            () => inputs[1].ShouldBe(newestInput),
+            () => KeptBodyCount(prompt).ShouldBe(0),
+            () => prompt.ShouldNotContain("<open-issues>"));
+    }
+
+    [Fact]
+    public void BuildRestricted_WhenTheLogOverflows_CutsOlderInputsOnlyAfterTheTrackerContextAndTheCommentsAreShed()
+    {
+        // Arrange
+        string olderInput = new('o', 100_000);
+        string newestInput = new('n', 20_000);
+        IssueContent issue = new(
+            "Fix the bug",
+            "BODY_MARKER whole.",
+            [new IssueContentComment(1, "bob", "COMMENT_1 text", CreatedAt)]);
+        TrackerContext trackerContext = ContextWithReferencedIssues(ReferencedIssueCount, OpenIssues(100, 200));
+
+        // Act
+        string prompt = BuildRestricted(issue, trackerContext, [Round(olderInput), Round(newestInput, 1)]);
+
+        // Assert
+        List<string> inputs = RenderedInputs(prompt);
+        prompt.ShouldSatisfyAllConditions(
+            () => KeptBodyCount(prompt).ShouldBe(0),
+            () => prompt.ShouldNotContain("<open-issues>"),
+            () => prompt.ShouldNotContain("COMMENT_1 text"),
+            () => prompt.ShouldContain("BODY_MARKER whole."),
+            () => inputs[0].ShouldEndWith(" [truncated]"),
+            () => inputs[1].ShouldBe(newestInput));
+    }
+
+    [Fact]
+    public void BuildRestricted_WhenTheOlderInputsAreExhausted_CutsTheBodyAndKeepsTheNewestInputWhole()
+    {
+        // Arrange
+        string newestInput = new('n', 40_000);
+        IssueContent issue = new("Fix the bug", new string('B', 200_000), []);
+        TrackerContext trackerContext = ContextWithReferencedIssues(ReferencedIssueCount, OpenIssues(100, 200));
+
+        // Act
+        string prompt = BuildRestricted(
+            issue,
+            trackerContext,
+            [Round(new string('o', 60_000)), Round(newestInput, 1)]);
+
+        // Assert
+        prompt.ShouldSatisfyAllConditions(
+            () => KeptBodyCount(prompt).ShouldBe(0),
+            () => prompt.ShouldNotContain("<open-issues>"),
+            () => prompt.ShouldContain("<input> [truncated]</input>"),
+            () => prompt.ShouldContain(" [truncated]\n</issue-body>"),
+            () => prompt.ShouldContain($"<input>{newestInput}</input>"));
+    }
+
+    [Fact]
+    public void BuildRestricted_WhenTheNewestInputAloneOverflows_CutsItLastBesideAMinimalTrackerContext()
+    {
+        // Arrange
+        string input = new('z', SystemPromptBuilder.MaxSystemPromptBytes + 10_000);
+        IssueContent issue = IssueWithComments(1);
+        TrackerContext trackerContext = ContextWithReferencedIssues(ReferencedIssueCount, OpenIssues(100, 200));
+
+        // Act
+        string prompt = BuildRestricted(issue, trackerContext, [Round(input)]);
+
+        // Assert
+        prompt.ShouldSatisfyAllConditions(
+            () => Encoding.UTF8.GetByteCount(prompt).ShouldBeLessThan(SystemPromptBuilder.MaxSystemPromptBytes),
+            () => RenderedInputs(prompt).ShouldHaveSingleItem().ShouldEndWith(" [truncated]"),
+            () => prompt.ShouldContain("<issue-body>\n [truncated]\n</issue-body>"),
+            () => KeptBodyCount(prompt).ShouldBe(0),
+            () => prompt.ShouldNotContain("<open-issues>"));
     }
 
     [Fact]

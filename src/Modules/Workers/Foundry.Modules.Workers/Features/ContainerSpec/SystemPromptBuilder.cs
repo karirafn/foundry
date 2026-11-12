@@ -202,11 +202,13 @@ internal static partial class SystemPromptBuilder
     /// Builds the system prompt of a <see cref="Domain.ValueObjects.WorkerCapability.Restricted"/> run: the restricted
     /// safety rules, the Worker Principles, the role prompt with <paramref name="issue"/> rendered into
     /// <c>{issueContent}</c> as XML-encoded untrusted data, the task-list instruction and, on .NET images, the C# code
-    /// navigation section. None of the implement-only sections (pre-PR, publishing, fresh, revision, continuation) appear.
-    /// When the prompt does not fit the size budget, content is shed in this order, each step only as far as needed:
-    /// the oldest whole comments are dropped; the input of older clarification rounds is cut, oldest round first; the
-    /// issue body is cut; the input of the newest answered round is cut. A cut text ends in <c>[truncated]</c>, and a
-    /// round's questions and context are never cut.
+    /// navigation section, followed by the Tracker Context. None of the implement-only sections (pre-PR, publishing,
+    /// fresh, revision, continuation) appear. When the prompt does not fit the size budget, content is shed in this
+    /// order, each step only as far as needed: the bodies of the Referenced Issues, last selected first, each element
+    /// keeping its attributes and title behind one omission note; the Open-Issue Index, behind an omission note; the
+    /// oldest whole comments, behind an omission note; the input of older clarification rounds, oldest round first; the
+    /// issue body; the input of the newest answered round. A cut text ends in <c>[truncated]</c>, and a round's
+    /// questions and context are never cut.
     /// </summary>
     /// <param name="principles">The role's assembled Worker Principles; empty when the role selects no section.</param>
     public static Result<string> BuildRestricted(
@@ -227,13 +229,13 @@ internal static partial class SystemPromptBuilder
         // A re-triage after answered questions (ADR 0097) reads the clarification log, as an implement run does.
         IReadOnlyList<Clarification> log = clarifications ?? [];
 
-        string Assemble(string issueContent, IReadOnlyList<Clarification> fittedLog) =>
+        string Assemble(string issueContent, IReadOnlyList<Clarification> fittedLog, TrackerFit trackerFit) =>
             (RestrictedSafetyPreamble + "\n\n" + PrinciplesBlock(principles)
                 + systemPromptTemplate
                     .Replace(RolePromptPlaceholders.IssueNumber, issueNumberStr, StringComparison.Ordinal)
                     .Replace(
                         RolePromptPlaceholders.IssueContent,
-                        WithTrackerContext(issueContent, trackerContext, TrackerFit.Whole),
+                        WithTrackerContext(issueContent, trackerContext, trackerFit),
                         StringComparison.Ordinal)
                 + "\n\n" + TaskListInstruction + csharpLspSection
                 + (fittedLog.Count > 0 ? "\n\n" + BuildClarificationSection(fittedLog) : string.Empty))
@@ -247,13 +249,15 @@ internal static partial class SystemPromptBuilder
                 EncodeForXmlData(MinimalForm(issue.Body)),
                 [],
                 0),
-            WithMinimalInputs(log)));
+            WithMinimalInputs(log),
+            TrackerFit.Minimal));
 
         // One byte under the ceiling, as Build's check is exclusive. The omission-note reserve is held back even with
         // no comments, so the slack does not depend on whether a later step drops any.
         int slackBytes = MaxSystemPromptBytes - 1 - scaffoldBytes - OmissionNoteReservedBytes;
 
-        // Keep-priority: the newest answered input, then the body, then older inputs newest first, then the comments.
+        // Keep-priority: the newest answered input, then the body, then older inputs newest first, then the comments,
+        // then the Tracker Context: its index, then the bodies of its Referenced Issues in selection order.
         string?[] fittedInputs = new string?[log.Count];
         int newestAnswered = FindNewestAnswered(log);
 
@@ -265,6 +269,14 @@ internal static partial class SystemPromptBuilder
 
         List<string> admitted = AdmitNewestComments(issue.Comments, ref slackBytes);
 
+        // A dropped comment forfeits the room it did not fill, so the Tracker Context is minimal before any comment goes.
+        if (admitted.Count < issue.Comments.Count)
+        {
+            slackBytes = 0;
+        }
+
+        TrackerFit trackerFit = AllotTrackerContext(trackerContext, ref slackBytes);
+
         string prompt = Assemble(
             RenderIssueContent(
                 RestrictedIssueContentLead,
@@ -272,7 +284,8 @@ internal static partial class SystemPromptBuilder
                 encodedBody,
                 admitted,
                 issue.Comments.Count - admitted.Count),
-            WithInputs(log, fittedInputs));
+            WithInputs(log, fittedInputs),
+            trackerFit);
         int byteCount = Encoding.UTF8.GetByteCount(prompt);
 
         if (byteCount >= MaxSystemPromptBytes)
