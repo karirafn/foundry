@@ -51,8 +51,6 @@ $badge-outlined-variants: (
   failure-verdict-invalid: (var(--fd-state-failed), var(--fd-text-error)),
   failure-publish-failed: (var(--fd-state-failed), var(--fd-text-error)),
   failure-publish-expired: (var(--fd-state-failed), var(--fd-text-error)),
-  failure-blocker-link-failed: (var(--fd-text-link), var(--fd-text-link)),
-  failure-blocker-cycle: (var(--fd-text-warning), var(--fd-text-warning)),
   retrying: (var(--fd-text-warning), var(--fd-text-warning)),
   retry-exhausted: (var(--fd-state-failed), var(--fd-text-error)),
   // Publishing is active work, but the agent has stopped.

@@ -186,26 +186,6 @@ describe('publish failure categories (#787)', () => {
   });
 });
 
-describe('blocker failure categories (#860)', () => {
-  it('should map blocker_link_failed to "BLOCKER LINK FAILED"', () => {
-    // Arrange / Act
-    const display = getFailureCategoryDisplay('blocker_link_failed');
-
-    // Assert
-    expect(display?.label).toBe('BLOCKER LINK FAILED');
-    expect(display?.cssClass).toBe('badge--failure-blocker-link-failed');
-  });
-
-  it('should map blocker_cycle to "BLOCKER CYCLE"', () => {
-    // Arrange / Act
-    const display = getFailureCategoryDisplay('blocker_cycle');
-
-    // Assert
-    expect(display?.label).toBe('BLOCKER CYCLE');
-    expect(display?.cssClass).toBe('badge--failure-blocker-cycle');
-  });
-});
-
 describe('discard failure category (#788)', () => {
   it('should map run_discarded to "RUN DISCARDED"', () => {
     // Arrange / Act
