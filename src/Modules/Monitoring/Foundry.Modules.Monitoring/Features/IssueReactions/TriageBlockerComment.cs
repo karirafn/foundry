@@ -19,9 +19,16 @@ internal static class TriageBlockerComment
             '\n',
             [
                 Opening,
-                .. blockers.Select(blocker => $"- #{blocker.IssueNumber}: {AsCodeSpan(SingleLineText.Cap(blocker.Reason))}"),
+                .. blockers.Select(DescribeBlocker),
                 Closing,
             ]);
+
+    private static string DescribeBlocker(TriageBlocker blocker)
+    {
+        string reason = SingleLineText.Cap(blocker.Reason);
+
+        return reason.Length > 0 ? $"- #{blocker.IssueNumber}: {AsCodeSpan(reason)}" : $"- #{blocker.IssueNumber}";
+    }
 
     // The reason is model output derived from issue content and is posted publicly. Inside a CommonMark code span
     // a mention, link, image or HTML tag stays literal text and cannot notify anyone or swallow later lines.

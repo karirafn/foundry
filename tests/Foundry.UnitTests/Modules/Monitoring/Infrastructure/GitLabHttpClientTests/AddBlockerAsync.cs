@@ -184,6 +184,27 @@ public sealed class AddBlockerAsync
             () => error.Message.ShouldContain(expectedFragment));
     }
 
+    [Theory]
+    [InlineData("<html>Bad Gateway</html>")]
+    [InlineData("")]
+    [InlineData("""{"error":"x"}""")]
+    public async Task WhenGitLabsRefusalCarriesNoMessage_FallsBackToTheStatusOnlyText(string body)
+    {
+        // Arrange
+        SequentialFakeHandler handler = new(
+        [
+            (HttpStatusCode.OK, ProjectLookup),
+            (HttpStatusCode.UnprocessableEntity, body),
+        ]);
+        GitLabHttpClient sut = BuildSut(handler);
+
+        // Act
+        Result result = await AddAsync(sut);
+
+        // Assert
+        result.ShouldBeOfType<Result.Failure>().Error.Message.ShouldBe("Linking #15 as blocking #42 returned 422.");
+    }
+
     [Fact]
     public async Task WhenGitLabsMessageIsLong_CapsTheProviderMessageAt500Characters()
     {
@@ -292,7 +313,10 @@ public sealed class AddBlockerAsync
     [InlineData(HttpStatusCode.NotFound, BlockerLinkErrors.PermanentCode)]
     [InlineData(HttpStatusCode.Forbidden, BlockerLinkErrors.PermanentCode)]
     [InlineData(HttpStatusCode.TooManyRequests, BlockerLinkErrors.TransientCode)]
-    public async Task WhenTheReadBackFailsWithAClientStatus_ClassifiesTheStatus(
+    [InlineData(HttpStatusCode.RequestTimeout, BlockerLinkErrors.TransientCode)]
+    [InlineData(HttpStatusCode.InternalServerError, BlockerLinkErrors.TransientCode)]
+    [InlineData(HttpStatusCode.BadGateway, BlockerLinkErrors.TransientCode)]
+    public async Task WhenTheReadBackFailsWithAnErrorStatus_ClassifiesTheStatus(
         HttpStatusCode status,
         string expectedCode)
     {

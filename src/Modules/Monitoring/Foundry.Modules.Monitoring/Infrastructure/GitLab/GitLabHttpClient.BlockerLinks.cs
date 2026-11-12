@@ -92,8 +92,8 @@ internal sealed partial class GitLabHttpClient
         }
 
         string detail = await ReadRefusalAsync(response, cancellationToken);
-        Error refused = BlockerLinkErrors.Permanent(
-            $"Linking #{blockerNumber} as blocking #{issueNumber} returned {(int)response.StatusCode}: {detail}");
+        string status = $"Linking #{blockerNumber} as blocking #{issueNumber} returned {(int)response.StatusCode}";
+        Error refused = BlockerLinkErrors.Permanent(detail.Length > 0 ? $"{status}: {detail}" : $"{status}.");
 
         // GitLab also answers 409 when the issues are already linked with another type, so only the read-back
         // shows whether the blocking link exists.
@@ -155,7 +155,7 @@ internal sealed partial class GitLabHttpClient
             : Result.Fail(notRecorded);
     }
 
-    // Classifies a failed GET like the link POST: 429, 5xx and a rate-limited 403 retry; any other status will
+    // Classifies a failed GET like the link POST: 408, 429, 5xx and a rate-limited 403 retry; any other status will
     // fail the same way again.
     private static Error ClassifyReadFailure(Error failure, string action)
     {

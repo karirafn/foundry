@@ -86,6 +86,22 @@ public sealed class TriageBlockerCommentTests
     }
 
     [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    [InlineData("\r\n")]
+    public void Compose_WhenTheReasonIsEmptyAfterTrimming_ListsTheBlockerWithoutAColonOrCodeSpan(string reason)
+    {
+        // Arrange
+        List<TriageBlocker> blockers = [new TriageBlocker(15, reason)];
+
+        // Act
+        string comment = TriageBlockerComment.Compose(blockers);
+
+        // Assert
+        comment.Split('\n')[1].ShouldBe("- #15");
+    }
+
+    [Theory]
     [InlineData("ping @user and @org/team")]
     [InlineData("see [x](https://e.example) and ![](https://e.example/i.png)")]
     [InlineData("a <b>bold</b> <!-- hidden")]
