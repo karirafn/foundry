@@ -130,6 +130,89 @@ public sealed class AddBlockerAsync
         result.IsSuccess.ShouldBeTrue();
     }
 
+    [Theory]
+    [InlineData("<html>Unprocessable</html>")]
+    [InlineData("")]
+    [InlineData("""{"message":"Validation failed","errors":["issue is invalid"]}""")]
+    [InlineData("""{"message":42,"errors":[{"message":7}]}""")]
+    public async Task WhenGitHubsRejectionBodyIsNotTheDocumentedShape_FailsPermanentInsteadOfThrowing(string body)
+    {
+        // Arrange
+        ScriptedHandler handler = new ScriptedHandler()
+            .Respond(HttpMethod.Get, BlockerPath, HttpStatusCode.OK, BlockerIssueJson)
+            .Respond(HttpMethod.Post, DependenciesPath, HttpStatusCode.UnprocessableEntity, body)
+            .Respond(HttpMethod.Get, DependenciesPath, HttpStatusCode.OK, "[]")
+            .Respond(HttpMethod.Get, BlockingPath, HttpStatusCode.OK, "[]");
+        GitHubHttpClient sut = BuildSut(handler);
+
+        // Act
+        Result result = await AddAsync(sut);
+
+        // Assert
+        Error error = result.ShouldBeOfType<Result.Failure>().Error;
+        error.ShouldSatisfyAllConditions(
+            () => error.Code.ShouldBe(BlockerLinkErrors.PermanentCode),
+            () => error.Message.ShouldNotBeNullOrWhiteSpace());
+    }
+
+    [Fact]
+    public async Task WhenGitHubsRejectionBodyIsNotJson_NamesTheStatusInTheMessage()
+    {
+        // Arrange
+        ScriptedHandler handler = new ScriptedHandler()
+            .Respond(HttpMethod.Get, BlockerPath, HttpStatusCode.OK, BlockerIssueJson)
+            .Respond(HttpMethod.Post, DependenciesPath, HttpStatusCode.UnprocessableEntity, "<html>nope</html>")
+            .Respond(HttpMethod.Get, DependenciesPath, HttpStatusCode.OK, "[]")
+            .Respond(HttpMethod.Get, BlockingPath, HttpStatusCode.OK, "[]");
+        GitHubHttpClient sut = BuildSut(handler);
+
+        // Act
+        Result result = await AddAsync(sut);
+
+        // Assert
+        result.ShouldBeOfType<Result.Failure>().Error.Message.ShouldContain("422");
+    }
+
+    [Theory]
+    [InlineData("<html>bad gateway</html>")]
+    [InlineData("null")]
+    [InlineData("{}")]
+    [InlineData("""{"id":0,"number":15}""")]
+    [InlineData("""{"id":"abc"}""")]
+    public async Task WhenTheIdReadSucceedsWithoutAValidIssue_FailsPermanentAndMakesNoPost(string body)
+    {
+        // Arrange
+        ScriptedHandler handler = new ScriptedHandler()
+            .Respond(HttpMethod.Get, BlockerPath, HttpStatusCode.OK, body);
+        GitHubHttpClient sut = BuildSut(handler);
+
+        // Act
+        Result result = await AddAsync(sut);
+
+        // Assert
+        result.ShouldSatisfyAllConditions(
+            () => result.ShouldBeOfType<Result.Failure>().Error.Code.ShouldBe(BlockerLinkErrors.PermanentCode),
+            () => handler.Requests.ShouldNotContain(request => request.Method == HttpMethod.Post));
+    }
+
+    [Fact]
+    public async Task WhenGitHubRejectsAsDuplicateWithANonJsonBodyAndTheReadBackShowsTheBlocker_Succeeds()
+    {
+        // Arrange
+        ScriptedHandler handler = new ScriptedHandler()
+            .Respond(HttpMethod.Get, BlockerPath, HttpStatusCode.OK, BlockerIssueJson)
+            .Respond(HttpMethod.Post, DependenciesPath, HttpStatusCode.UnprocessableEntity, "<html>nope</html>")
+            .Respond(HttpMethod.Get, DependenciesPath, HttpStatusCode.OK, RecordedBlockedByJson)
+            .Respond(HttpMethod.Get, BlockingPath, HttpStatusCode.OK, "[]");
+        GitHubHttpClient sut = BuildSut(handler);
+
+        // Act
+        Result result = await AddAsync(sut);
+
+        // Assert
+        result.IsSuccess.ShouldBeTrue();
+    }
+
     [Fact]
     public async Task WhenGitHubsMessageIsLongAndMultiLine_FlattensItToOneLineCappedAt500Characters()
     {
@@ -151,6 +234,26 @@ public sealed class AddBlockerAsync
             () => message.Length.ShouldBe(500),
             () => message.ShouldStartWith("first line second line "),
             () => message.ShouldNotContain('\n'));
+    }
+
+    [Fact]
+    public async Task WhenGitHubsMessageIsCutInsideASurrogatePair_DropsTheWholePair()
+    {
+        // Arrange
+        string emoji = char.ConvertFromUtf32(0x1F600);
+        string body = $$"""{"message":"{{new string('a', 498)}}{{emoji}}{{new string('b', 10)}}"}""";
+        ScriptedHandler handler = new ScriptedHandler()
+            .Respond(HttpMethod.Get, BlockerPath, HttpStatusCode.OK, BlockerIssueJson)
+            .Respond(HttpMethod.Post, DependenciesPath, HttpStatusCode.UnprocessableEntity, body)
+            .Respond(HttpMethod.Get, DependenciesPath, HttpStatusCode.OK, "[]")
+            .Respond(HttpMethod.Get, BlockingPath, HttpStatusCode.OK, "[]");
+        GitHubHttpClient sut = BuildSut(handler);
+
+        // Act
+        Result result = await AddAsync(sut);
+
+        // Assert
+        result.ShouldBeOfType<Result.Failure>().Error.Message.ShouldBe($"{new string('a', 498)}…");
     }
 
     [Theory]

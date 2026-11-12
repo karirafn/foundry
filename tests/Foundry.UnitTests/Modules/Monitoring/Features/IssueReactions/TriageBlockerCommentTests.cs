@@ -26,8 +26,8 @@ public sealed class TriageBlockerCommentTests
         comment.ShouldBe(string.Join(
             "\n",
             "Triage found this issue needs these open issues first, and linked them as blockers:",
-            "- #27: The schema it needs is not merged.",
-            "- #15: It owns the shared client.",
+            "- #27: `The schema it needs is not merged.`",
+            "- #15: `It owns the shared client.`",
             "Triage runs again once they close. Remove a link to stop waiting on that issue."));
     }
 
@@ -41,7 +41,7 @@ public sealed class TriageBlockerCommentTests
         string comment = TriageBlockerComment.Compose(blockers);
 
         // Assert
-        comment.Split('\n')[1].ShouldBe($"- #27: {new string('a', 499)}…");
+        comment.Split('\n')[1].ShouldBe($"- #27: `{new string('a', 499)}…`");
     }
 
     [Fact]
@@ -55,7 +55,7 @@ public sealed class TriageBlockerCommentTests
         string comment = TriageBlockerComment.Compose(blockers);
 
         // Assert
-        comment.Split('\n')[1].ShouldBe($"- #27: {new string('a', 498)}…");
+        comment.Split('\n')[1].ShouldBe($"- #27: `{new string('a', 498)}…`");
     }
 
     [Fact]
@@ -69,7 +69,7 @@ public sealed class TriageBlockerCommentTests
         string comment = TriageBlockerComment.Compose(blockers);
 
         // Assert
-        comment.Split('\n')[1].ShouldBe($"- #27: {reason}");
+        comment.Split('\n')[1].ShouldBe($"- #27: `{reason}`");
     }
 
     [Fact]
@@ -82,6 +82,54 @@ public sealed class TriageBlockerCommentTests
         string comment = TriageBlockerComment.Compose(blockers);
 
         // Assert
-        comment.Split('\n')[1].ShouldBe("- #27: First line. Second line. - #99: forged");
+        comment.Split('\n')[1].ShouldBe("- #27: `First line. Second line. - #99: forged`");
+    }
+
+    [Theory]
+    [InlineData("ping @user and @org/team")]
+    [InlineData("see [x](https://e.example) and ![](https://e.example/i.png)")]
+    [InlineData("a <b>bold</b> <!-- hidden")]
+    public void Compose_RendersTheReasonInsideACodeSpanSoMentionsLinksAndHtmlAreInert(string reason)
+    {
+        // Arrange
+        List<TriageBlocker> blockers = [new TriageBlocker(27, reason)];
+
+        // Act
+        string comment = TriageBlockerComment.Compose(blockers);
+
+        // Assert
+        comment.Split('\n')[1].ShouldBe($"- #27: `{reason}`");
+    }
+
+    [Theory]
+    [InlineData("run `make` first", "- #27: ``run `make` first``")]
+    [InlineData("a ``b`` c", "- #27: ```a ``b`` c```")]
+    public void Compose_WhenTheReasonContainsBackticks_FencesItWithALongerRun(string reason, string expectedLine)
+    {
+        // Arrange
+        List<TriageBlocker> blockers = [new TriageBlocker(27, reason)];
+
+        // Act
+        string comment = TriageBlockerComment.Compose(blockers);
+
+        // Assert
+        comment.Split('\n')[1].ShouldBe(expectedLine);
+    }
+
+    [Theory]
+    [InlineData("`make` first", "- #27: `` `make` first ``")]
+    [InlineData("run `make`", "- #27: `` run `make` ``")]
+    public void Compose_WhenTheReasonStartsOrEndsWithABacktick_PadsTheCodeSpanWithASpace(
+        string reason,
+        string expectedLine)
+    {
+        // Arrange
+        List<TriageBlocker> blockers = [new TriageBlocker(27, reason)];
+
+        // Act
+        string comment = TriageBlockerComment.Compose(blockers);
+
+        // Assert
+        comment.Split('\n')[1].ShouldBe(expectedLine);
     }
 }

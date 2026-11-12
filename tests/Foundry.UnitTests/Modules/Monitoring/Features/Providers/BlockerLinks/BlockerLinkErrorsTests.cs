@@ -1,3 +1,5 @@
+using System.Text.Json;
+
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Features.Providers;
 using Foundry.Modules.Monitoring.Features.Providers.BlockerLinks;
@@ -30,6 +32,60 @@ public sealed class BlockerLinkErrorsTests
         result.ShouldSatisfyAllConditions(
             () => result.ShouldBeOfType<Result.Failure>().Error.Code.ShouldBe(BlockerLinkErrors.PermanentCode),
             () => counting.TotalCalls.ShouldBe(0));
+    }
+
+    [Fact]
+    public void WhenAnHttpRequestExceptionIsThrown_IsTransportFailure()
+    {
+        // Arrange
+        HttpRequestException exception = new("connection refused");
+
+        // Act
+        bool result = BlockerLinkErrors.IsTransportFailure(exception, CancellationToken.None);
+
+        // Assert
+        result.ShouldBeTrue();
+    }
+
+    [Fact]
+    public void WhenARequestTimesOutWithoutTheCallerCancelling_IsTransportFailure()
+    {
+        // Arrange
+        TaskCanceledException exception = new();
+
+        // Act
+        bool result = BlockerLinkErrors.IsTransportFailure(exception, CancellationToken.None);
+
+        // Assert
+        result.ShouldBeTrue();
+    }
+
+    [Fact]
+    public void WhenTheCallerCancelled_IsNotTransportFailure()
+    {
+        // Arrange
+        using CancellationTokenSource cancellation = new();
+        cancellation.Cancel();
+        TaskCanceledException exception = new();
+
+        // Act
+        bool result = BlockerLinkErrors.IsTransportFailure(exception, cancellation.Token);
+
+        // Assert
+        result.ShouldBeFalse();
+    }
+
+    [Fact]
+    public void WhenAParseExceptionIsThrown_IsNotTransportFailure()
+    {
+        // Arrange
+        JsonException exception = new("bad json");
+
+        // Act
+        bool result = BlockerLinkErrors.IsTransportFailure(exception, CancellationToken.None);
+
+        // Assert
+        result.ShouldBeFalse();
     }
 
     [Fact]

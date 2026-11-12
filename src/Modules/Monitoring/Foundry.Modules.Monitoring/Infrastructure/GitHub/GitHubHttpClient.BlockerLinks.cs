@@ -5,7 +5,6 @@ using System.Text.Json;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Features.Providers.BlockerLinks;
-using Foundry.Modules.Monitoring.Features.Providers.Comments;
 using Foundry.Modules.Monitoring.Features.Providers.TrackerReads;
 using Foundry.Shared;
 
@@ -13,7 +12,9 @@ namespace Foundry.Modules.Monitoring.Infrastructure.GitHub;
 
 internal sealed partial class GitHubHttpClient
 {
-    private const int MaxProviderMessageLength = 500;
+    private const string IdProperty = "id";
+    private const string MessageProperty = "message";
+    private const string ErrorsProperty = "errors";
 
     /// <summary>
     /// Records that <paramref name="issueNumber"/> is blocked by <paramref name="blockerNumber"/>: reads the
@@ -61,7 +62,7 @@ internal sealed partial class GitHubHttpClient
         {
             response = await httpClient.SendAsync(request, cancellationToken);
         }
-        catch (Exception ex) when (CommentPostErrors.IsTransportFailure(ex, cancellationToken))
+        catch (Exception ex) when (BlockerLinkErrors.IsTransportFailure(ex, cancellationToken))
         {
             return BlockerLinkErrors.Transient(
                 $"Linking blocker #{blockerNumber} to {slug}#{issueNumber} did not complete: {ex.GetType().Name}.");
@@ -76,9 +77,9 @@ internal sealed partial class GitHubHttpClient
 
             if (response.StatusCode is HttpStatusCode.UnprocessableEntity)
             {
-                string rejection = await response.Content.ReadAsStringAsync(cancellationToken);
+                string rejectionBody = await response.Content.ReadAsStringAsync(cancellationToken);
                 return await ConfirmByReadBackAsync(
-                    apiBaseUrl, slug, issueNumber, blockerNumber, token, DescribeRejection(rejection), cancellationToken);
+                    apiBaseUrl, slug, issueNumber, blockerNumber, token, rejectionBody, cancellationToken);
             }
 
             return ClassifyBlockerLinkFailure(response, $"Linking blocker #{blockerNumber} to {slug}#{issueNumber}");
@@ -101,7 +102,7 @@ internal sealed partial class GitHubHttpClient
         {
             response = await httpClient.SendAsync(request, cancellationToken);
         }
-        catch (Exception ex) when (CommentPostErrors.IsTransportFailure(ex, cancellationToken))
+        catch (Exception ex) when (BlockerLinkErrors.IsTransportFailure(ex, cancellationToken))
         {
             return Result<long>.Fail(BlockerLinkErrors.Transient(
                 $"Reading {slug}#{issueNumber} did not complete: {ex.GetType().Name}."));
@@ -115,7 +116,30 @@ internal sealed partial class GitHubHttpClient
             }
 
             string body = await response.Content.ReadAsStringAsync(cancellationToken);
-            return Result<long>.Ok(JsonSerializer.Deserialize<GitHubBlockerIdDto>(body, JsonOptions)!.Id);
+            return TryReadIssueId(body, out long issueId)
+                ? Result<long>.Ok(issueId)
+                : Result<long>.Fail(BlockerLinkErrors.Permanent(
+                    $"Reading {slug}#{issueNumber} returned a response that is not an issue."));
+        }
+    }
+
+    private static bool TryReadIssueId(string body, out long issueId)
+    {
+        issueId = 0;
+
+        try
+        {
+            using JsonDocument document = JsonDocument.Parse(body);
+
+            return document.RootElement.ValueKind is JsonValueKind.Object
+                && document.RootElement.TryGetProperty(IdProperty, out JsonElement id)
+                && id.ValueKind is JsonValueKind.Number
+                && id.TryGetInt64(out issueId)
+                && issueId > 0;
+        }
+        catch (JsonException)
+        {
+            return false;
         }
     }
 
@@ -125,7 +149,7 @@ internal sealed partial class GitHubHttpClient
         int issueNumber,
         int blockerNumber,
         string token,
-        string rejection,
+        string rejectionBody,
         CancellationToken cancellationToken)
     {
         Result<IReadOnlyList<IssueReference>> links;
@@ -133,7 +157,7 @@ internal sealed partial class GitHubHttpClient
         {
             links = await GetIssueLinksAsync(apiBaseUrl, slug, issueNumber, token, cancellationToken);
         }
-        catch (Exception ex) when (CommentPostErrors.IsTransportFailure(ex, cancellationToken))
+        catch (Exception ex) when (BlockerLinkErrors.IsTransportFailure(ex, cancellationToken))
         {
             return BlockerLinkErrors.Transient(
                 $"Reading the links of {slug}#{issueNumber} to confirm the blocker did not complete: {ex.GetType().Name}.");
@@ -148,7 +172,9 @@ internal sealed partial class GitHubHttpClient
         bool recorded = success.Value.Any(
             link => link.Number == blockerNumber && link.Relation is IssueRelation.BlockedBy);
 
-        return recorded ? Result.Ok() : BlockerLinkErrors.Permanent(rejection);
+        return recorded
+            ? Result.Ok()
+            : BlockerLinkErrors.Permanent(DescribeRejection(rejectionBody, slug, issueNumber, blockerNumber));
     }
 
     private static Error ClassifyBlockerLinkFailure(HttpResponseMessage response, string action)
@@ -157,21 +183,66 @@ internal sealed partial class GitHubHttpClient
         return IsRetryableStatus(response) ? BlockerLinkErrors.Transient(message) : BlockerLinkErrors.Permanent(message);
     }
 
-    private static string DescribeRejection(string responseBody)
+    private static string DescribeRejection(string responseBody, RepositorySlug slug, int issueNumber, int blockerNumber)
     {
-        GitHubErrorEnvelopeDto? envelope = JsonSerializer.Deserialize<GitHubErrorEnvelopeDto>(responseBody, JsonOptions);
-        string? detail = envelope?.Errors?.Select(error => error.Message).FirstOrDefault(message => message is not null);
-        string message = detail is null ? envelope?.Message ?? string.Empty : $"{envelope?.Message}: {detail}";
-        string flattened = message.Trim().ReplaceLineEndings(" ");
+        string described = SingleLineText.Cap(ParseRejection(responseBody));
 
-        return flattened.Length <= MaxProviderMessageLength ? flattened : flattened[..MaxProviderMessageLength];
+        return described.Length > 0
+            ? described
+            : $"Linking blocker #{blockerNumber} to {slug}#{issueNumber} returned 422.";
     }
 
-    private sealed record GitHubBlockerIdDto(long Id);
+    private static string ParseRejection(string responseBody)
+    {
+        try
+        {
+            using JsonDocument document = JsonDocument.Parse(responseBody);
+            JsonElement root = document.RootElement;
+
+            if (root.ValueKind is not JsonValueKind.Object)
+            {
+                return string.Empty;
+            }
+
+            string message = ReadString(root, MessageProperty);
+            string detail = FirstErrorDetail(root);
+
+            return detail.Length == 0 ? message : $"{message}: {detail}";
+        }
+        catch (JsonException)
+        {
+            return string.Empty;
+        }
+    }
+
+    private static string FirstErrorDetail(JsonElement root)
+    {
+        if (!root.TryGetProperty(ErrorsProperty, out JsonElement errors) || errors.ValueKind is not JsonValueKind.Array)
+        {
+            return string.Empty;
+        }
+
+        foreach (JsonElement error in errors.EnumerateArray())
+        {
+            string detail = error.ValueKind is JsonValueKind.String
+                ? error.GetString() ?? string.Empty
+                : ReadString(error, MessageProperty);
+
+            if (detail.Length > 0)
+            {
+                return detail;
+            }
+        }
+
+        return string.Empty;
+    }
+
+    private static string ReadString(JsonElement element, string property) =>
+        element.ValueKind is JsonValueKind.Object
+        && element.TryGetProperty(property, out JsonElement value)
+        && value.ValueKind is JsonValueKind.String
+            ? value.GetString() ?? string.Empty
+            : string.Empty;
 
     private sealed record GitHubBlockedByWriteDto(long IssueId);
-
-    private sealed record GitHubErrorEnvelopeDto(string? Message, List<GitHubErrorDetailDto>? Errors);
-
-    private sealed record GitHubErrorDetailDto(string? Message);
 }

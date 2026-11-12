@@ -40,7 +40,7 @@ internal sealed class BlockerLinkWriter(
             return await success.Value.Provider.AddBlockerAsync(
                 success.Value.Repository.Slug, issueNumber, blockerNumber, cancellationToken);
         }
-        catch (Exception ex) when (IsTransportFailure(ex, cancellationToken))
+        catch (Exception ex) when (BlockerLinkErrors.IsTransportFailure(ex, cancellationToken))
         {
             return Result.Fail(BlockerLinkErrors.Transient(UnreachableMessage(repositoryId, ex)));
         }
@@ -65,7 +65,7 @@ internal sealed class BlockerLinkWriter(
             posted = await success.Value.Provider.PostCommentAsync(
                 success.Value.Repository.Slug, new CommentThread.Issue(issueNumber), body, cancellationToken);
         }
-        catch (Exception ex) when (IsTransportFailure(ex, cancellationToken))
+        catch (Exception ex) when (BlockerLinkErrors.IsTransportFailure(ex, cancellationToken))
         {
             return Result.Fail(CommentPostErrors.Transient(UnreachableMessage(repositoryId, ex)));
         }
@@ -87,10 +87,6 @@ internal sealed class BlockerLinkWriter(
 
     private static string UnreachableMessage(MonitoredRepositoryId repositoryId, Exception exception) =>
         $"The provider for repository '{repositoryId.Value}' could not be reached: {exception.GetType().Name}.";
-
-    private static bool IsTransportFailure(Exception exception, CancellationToken cancellationToken) =>
-        exception is HttpRequestException
-        || (exception is TaskCanceledException && !cancellationToken.IsCancellationRequested);
 
     private async Task<Result<ResolvedProvider>> ResolveAsync(
         MonitoredRepositoryId repositoryId,

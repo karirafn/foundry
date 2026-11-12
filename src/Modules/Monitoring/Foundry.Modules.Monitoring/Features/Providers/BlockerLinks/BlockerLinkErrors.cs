@@ -22,4 +22,12 @@ internal static class BlockerLinkErrors
 
     public static bool IsTransient(Error error) =>
         string.Equals(error.Code, TransientCode, StringComparison.Ordinal);
+
+    /// <summary>
+    /// Whether an exception from calling a provider is a transport failure (connection error, timeout) that
+    /// carries no provider verdict. A parse or programming error is not one, so it surfaces instead of retrying.
+    /// </summary>
+    public static bool IsTransportFailure(Exception exception, CancellationToken cancellationToken) =>
+        exception is HttpRequestException
+        || (exception is TaskCanceledException && !cancellationToken.IsCancellationRequested);
 }

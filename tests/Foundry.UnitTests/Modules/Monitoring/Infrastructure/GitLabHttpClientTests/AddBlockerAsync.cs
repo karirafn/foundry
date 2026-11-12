@@ -1,4 +1,5 @@
 using System.Net;
+using System.Text.Json;
 
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Features.Providers.BlockerLinks;
@@ -201,8 +202,29 @@ public sealed class AddBlockerAsync
         // Assert
         string message = result.ShouldBeOfType<Result.Failure>().Error.Message;
         message.ShouldSatisfyAllConditions(
-            () => message.ShouldContain(new string('x', 500)),
-            () => message.ShouldNotContain(new string('x', 501)));
+            () => message.ShouldEndWith($"{new string('x', 499)}…"),
+            () => message.ShouldNotContain(new string('x', 500)));
+    }
+
+    [Fact]
+    public async Task WhenGitLabsMessageIsCutInsideASurrogatePair_DropsTheWholePair()
+    {
+        // Arrange
+        string emoji = char.ConvertFromUtf32(0x1F600);
+        SequentialFakeHandler handler = new(
+        [
+            (HttpStatusCode.OK, ProjectLookup),
+            (
+                HttpStatusCode.UnprocessableEntity,
+                $$"""{"message":"{{new string('a', 498)}}{{emoji}}{{new string('b', 10)}}"}"""),
+        ]);
+        GitLabHttpClient sut = BuildSut(handler);
+
+        // Act
+        Result result = await AddAsync(sut);
+
+        // Assert
+        result.ShouldBeOfType<Result.Failure>().Error.Message.ShouldEndWith($"{new string('a', 498)}…");
     }
 
     [Fact]
@@ -242,6 +264,66 @@ public sealed class AddBlockerAsync
 
         // Assert
         result.ShouldBeOfType<Result.Failure>().Error.Code.ShouldBe(BlockerLinkErrors.TransientCode);
+    }
+
+    [Theory]
+    [InlineData(HttpStatusCode.BadGateway, BlockerLinkErrors.TransientCode)]
+    [InlineData(HttpStatusCode.TooManyRequests, BlockerLinkErrors.TransientCode)]
+    [InlineData(HttpStatusCode.NotFound, BlockerLinkErrors.PermanentCode)]
+    [InlineData(HttpStatusCode.Forbidden, BlockerLinkErrors.PermanentCode)]
+    public async Task WhenTheProjectLookupFails_ClassifiesTheStatusAndMakesNoLinkCall(
+        HttpStatusCode status,
+        string expectedCode)
+    {
+        // Arrange
+        SequentialFakeHandler handler = new([(status, string.Empty)]);
+        GitLabHttpClient sut = BuildSut(handler);
+
+        // Act
+        Result result = await AddAsync(sut);
+
+        // Assert
+        handler.ShouldSatisfyAllConditions(
+            () => result.ShouldBeOfType<Result.Failure>().Error.Code.ShouldBe(expectedCode),
+            () => handler.Requests.Count.ShouldBe(1));
+    }
+
+    [Theory]
+    [InlineData(HttpStatusCode.NotFound, BlockerLinkErrors.PermanentCode)]
+    [InlineData(HttpStatusCode.Forbidden, BlockerLinkErrors.PermanentCode)]
+    [InlineData(HttpStatusCode.TooManyRequests, BlockerLinkErrors.TransientCode)]
+    public async Task WhenTheReadBackFailsWithAClientStatus_ClassifiesTheStatus(
+        HttpStatusCode status,
+        string expectedCode)
+    {
+        // Arrange
+        SequentialFakeHandler handler = new(
+        [
+            (HttpStatusCode.OK, ProjectLookup),
+            (HttpStatusCode.Created, CreatedLink),
+            (status, string.Empty),
+        ]);
+        GitLabHttpClient sut = BuildSut(handler);
+
+        // Act
+        Result result = await AddAsync(sut);
+
+        // Assert
+        result.ShouldBeOfType<Result.Failure>().Error.Code.ShouldBe(expectedCode);
+    }
+
+    [Fact]
+    public async Task WhenTheProjectLookupAnswersWithInvalidJson_ThrowsInsteadOfReportingATransientFailure()
+    {
+        // Arrange
+        SequentialFakeHandler handler = new([(HttpStatusCode.OK, "<html>proxy</html>")]);
+        GitLabHttpClient sut = BuildSut(handler);
+
+        // Act
+        Task<Result> act = AddAsync(sut);
+
+        // Assert
+        await Should.ThrowAsync<JsonException>(act);
     }
 
     [Fact]

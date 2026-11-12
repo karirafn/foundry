@@ -5,7 +5,6 @@ using System.Text.Json;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Features.Providers.BlockerLinks;
-using Foundry.Modules.Monitoring.Features.Providers.Comments;
 using Foundry.Modules.Monitoring.Features.Providers.TrackerReads;
 using Foundry.Shared;
 
@@ -14,7 +13,7 @@ namespace Foundry.Modules.Monitoring.Infrastructure.GitLab;
 internal sealed partial class GitLabHttpClient
 {
     private const string MessageProperty = "message";
-    private const int MaxRefusalLength = 500;
+    private const int MinServerErrorStatus = 500;
 
     /// <summary>
     /// Records that <paramref name="blockerNumber"/> blocks <paramref name="issueNumber"/>
@@ -38,7 +37,7 @@ internal sealed partial class GitLabHttpClient
         {
             return await LinkBlockerAsync(apiBaseUrl, slug, issueNumber, blockerNumber, token, cancellationToken);
         }
-        catch (Exception ex) when (CommentPostErrors.IsTransportFailure(ex, cancellationToken))
+        catch (Exception ex) when (BlockerLinkErrors.IsTransportFailure(ex, cancellationToken))
         {
             return Result.Fail(BlockerLinkErrors.Transient(
                 $"Linking #{blockerNumber} as blocking #{issueNumber} did not complete: {ex.GetType().Name}."));
@@ -57,7 +56,8 @@ internal sealed partial class GitLabHttpClient
 
         if (projectIdResult is not Result<int>.Success projectIdSuccess)
         {
-            return Result.Fail(((Result<int>.Failure)projectIdResult).Error);
+            return Result.Fail(ClassifyReadFailure(
+                ((Result<int>.Failure)projectIdResult).Error, $"Looking up the project of {slug}"));
         }
 
         string encodedPath = Uri.EscapeDataString(slug.FullPath);
@@ -122,7 +122,7 @@ internal sealed partial class GitLabHttpClient
             // GitLab sends message as a string, an array of strings, or an object keyed by attribute.
             string text = message.ValueKind is JsonValueKind.String ? message.GetString() ?? string.Empty : message.GetRawText();
 
-            return text.Length > MaxRefusalLength ? text[..MaxRefusalLength] : text;
+            return SingleLineText.Cap(text);
         }
         catch (JsonException)
         {
@@ -143,17 +143,28 @@ internal sealed partial class GitLabHttpClient
         Result<IReadOnlyList<IssueReference>> linksResult =
             await ReadIssueLinksAsync(apiBaseUrl, slug, projectId, issueNumber, token, cancellationToken);
 
-        // The link call is idempotent, so a failed read-back retries safely.
         if (linksResult is not Result<IReadOnlyList<IssueReference>>.Success links)
         {
-            return Result.Fail(BlockerLinkErrors.Transient(
-                $"Reading back the links of #{issueNumber} failed: " +
-                ((Result<IReadOnlyList<IssueReference>>.Failure)linksResult).Error.Message));
+            return Result.Fail(ClassifyReadFailure(
+                ((Result<IReadOnlyList<IssueReference>>.Failure)linksResult).Error,
+                $"Reading back the links of #{issueNumber}"));
         }
 
         return links.Value.Contains(new IssueReference(blockerNumber, IssueRelation.BlockedBy))
             ? Result.Ok()
             : Result.Fail(notRecorded);
+    }
+
+    // Classifies a failed GET like the link POST: 429, 5xx and a rate-limited 403 retry; any other status will
+    // fail the same way again.
+    private static Error ClassifyReadFailure(Error failure, string action)
+    {
+        string message = $"{action} failed: {failure.Message}";
+        bool retryable = string.Equals(failure.Code, GitLabErrors.RateLimitExhausted.Code, StringComparison.Ordinal)
+            || (GitLabErrors.TryGetStatusCode(failure, out int status)
+                && (status >= MinServerErrorStatus || status is (int)HttpStatusCode.RequestTimeout));
+
+        return retryable ? BlockerLinkErrors.Transient(message) : BlockerLinkErrors.Permanent(message);
     }
 
     private sealed record GitLabIssueLinkWriteDto(int TargetProjectId, int TargetIssueIid, string LinkType);

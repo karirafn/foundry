@@ -79,7 +79,7 @@ internal sealed class TriageBlockersFoundHandler(
                     @event.IssueNumber,
                     @event.WorkerRunId.Value,
                     blocker.IssueNumber,
-                    TriageBlockerComment.Flatten(error.Message),
+                    SingleLineText.Cap(error.Message),
                     timeProvider.GetUtcNow()),
             ],
             cancellationToken);
