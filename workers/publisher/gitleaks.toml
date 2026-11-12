@@ -1,0 +1,9 @@
+# Foundry's own secret-scanner configuration for the Publisher's Diff gate (#788, ADR 0100).
+#
+# The Publisher always passes this file with --config, so a repository's .gitleaks.toml, .gitleaksignore or
+# inline gitleaks:allow comment never applies: the agent could have written any of them. It extends gitleaks'
+# default rules unchanged. Add a Foundry-wide rule or allowlist here, never per repository.
+title = "Foundry diff gate"
+
+[extend]
+useDefault = true

@@ -24,14 +24,18 @@ internal static class WorkerRoleCatalogReader
     /// <summary>The <c>$defs</c> every role's verdict schema may reference (e.g. <c>#/$defs/questions</c>), under <c>shared/</c>.</summary>
     internal const string SharedVerdictDefinitionsPath = "verdict.defs.json";
 
-    /// <summary>The Worker Principles, under <c>shared/</c>: placed in every role's system prompt.</summary>
+    /// <summary>The Worker Principles framing line, under <c>shared/</c>: opens every non-empty principles block.</summary>
     internal const string PrinciplesPath = "prompts/principles.md";
+
+    /// <summary>The folder of the Principle Section files, under <c>shared/</c>: one file per section.</summary>
+    internal const string PrincipleSectionsFolder = "prompts/principles";
 
     // Role files are small text; the cap keeps a stray large file from being held in memory for the API.
     internal const int MaxFileBytes = 256 * 1024;
 
-    // The principles ride in every run's system prompt, so a cap far below SystemPromptBuilder.MaxSystemPromptBytes
-    // fails an oversized file at parse time instead of failing every dispatch.
+    // The principles ride in the system prompt of every role that selects a section, so a cap on the framing with
+    // every section, far below SystemPromptBuilder.MaxSystemPromptBytes, fails oversized files at parse time instead
+    // of failing every dispatch.
     internal const int MaxPrinciplesBytes = 8 * 1024;
 
     internal const string InvalidCatalogCode = "Worker.RoleCatalogInvalid";
@@ -137,25 +141,11 @@ internal static class WorkerRoleCatalogReader
             return Fail(definitionsError);
         }
 
-        string? principles = ReadPrompt(files, WorkerRole.SharedFolder, PrinciplesPath);
+        Result<WorkerPrinciples> principlesResult = ReadPrinciples(files);
 
-        if (principles is null)
+        if (principlesResult is not Result<WorkerPrinciples>.Success principles)
         {
-            return Fail($"'{RolesFolder}/{WorkerRole.SharedFolder}/{PrinciplesPath}' is missing or blank.");
-        }
-
-        int principlesBytes = Encoding.UTF8.GetByteCount(principles);
-
-        if (principlesBytes > MaxPrinciplesBytes)
-        {
-            return Fail(
-                $"'{RolesFolder}/{WorkerRole.SharedFolder}/{PrinciplesPath}' is {principlesBytes} bytes, over the {MaxPrinciplesBytes}-byte cap.");
-        }
-
-        if (CheckPlaceholders($"'{RolesFolder}/{WorkerRole.SharedFolder}/{PrinciplesPath}'", principles, NoPlaceholders)
-            is { } principlesError)
-        {
-            return Fail(principlesError);
+            return Result<WorkerRoleCatalogContent>.Fail(((Result<WorkerPrinciples>.Failure)principlesResult).Error);
         }
 
         List<WorkerRoleDefinition> roles = [];
@@ -172,8 +162,68 @@ internal static class WorkerRoleCatalogReader
             roles.Add(definition.Value);
         }
 
-        return Result<WorkerRoleCatalogContent>.Ok(new WorkerRoleCatalogContent(roles, shared.Value, principles));
+        return Result<WorkerRoleCatalogContent>.Ok(new WorkerRoleCatalogContent(roles, shared.Value, principles.Value));
     }
+
+    /// <summary>
+    /// Reads the framing file and every Principle Section file. Each must be present, non-blank and free of
+    /// placeholders, and the framing with every section, the largest text a role can receive, stays under the cap.
+    /// </summary>
+    private static Result<WorkerPrinciples> ReadPrinciples(IReadOnlyDictionary<string, string> files)
+    {
+        Result<string> framingResult = ReadPrinciplesFile(files, PrinciplesPath);
+
+        if (framingResult is not Result<string>.Success framing)
+        {
+            return Result<WorkerPrinciples>.Fail(((Result<string>.Failure)framingResult).Error);
+        }
+
+        Dictionary<PrincipleSection, string> sections = [];
+
+        foreach (PrincipleSection section in PrincipleSectionNames.All)
+        {
+            Result<string> sectionResult = ReadPrinciplesFile(files, PrincipleSectionPath(section));
+
+            if (sectionResult is not Result<string>.Success text)
+            {
+                return Result<WorkerPrinciples>.Fail(((Result<string>.Failure)sectionResult).Error);
+            }
+
+            sections[section] = text.Value;
+        }
+
+        WorkerPrinciples principles = new(framing.Value, sections);
+        int principlesBytes = Encoding.UTF8.GetByteCount(principles.AssembleAll());
+
+        if (principlesBytes > MaxPrinciplesBytes)
+        {
+            return Fail<WorkerPrinciples>(
+                $"'{RolesFolder}/{WorkerRole.SharedFolder}/{PrinciplesPath}' with every section under "
+                + $"'{RolesFolder}/{WorkerRole.SharedFolder}/{PrincipleSectionsFolder}/' is {principlesBytes} bytes, "
+                + $"over the {MaxPrinciplesBytes}-byte cap.");
+        }
+
+        return Result<WorkerPrinciples>.Ok(principles);
+    }
+
+    private static Result<string> ReadPrinciplesFile(IReadOnlyDictionary<string, string> files, string path)
+    {
+        string file = $"'{RolesFolder}/{WorkerRole.SharedFolder}/{path}'";
+        string? text = ReadPrompt(files, WorkerRole.SharedFolder, path);
+
+        if (text is null)
+        {
+            return Fail<string>($"{file} is missing or blank.");
+        }
+
+        return CheckPlaceholders(file, text, NoPlaceholders) is { } placeholderError
+            ? Fail<string>(placeholderError)
+            : Result<string>.Ok(text);
+    }
+
+    /// <summary>The path of <paramref name="section"/>'s file, relative to <c>shared/</c>.</summary>
+    internal static string PrincipleSectionPath(PrincipleSection section) =>
+        $"{PrincipleSectionsFolder}/{section.ToFileName()}";
 
     private static Result<WorkerRoleDefinition> ReadRole(IReadOnlyDictionary<string, string> files, WorkerRole role)
     {

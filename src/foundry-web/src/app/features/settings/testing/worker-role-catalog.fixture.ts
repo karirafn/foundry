@@ -1,6 +1,15 @@
 import { WorkerRoleCard, WorkerRoleCatalog, WorkerRoleModelOptions } from '../worker-roles/worker-role.service';
 
 export const ROLE_PROMPT_SLOT = '{rolePrompt}';
+export const PRINCIPLES_SLOT = '{principles}';
+export const PRINCIPLE_SECTIONS: readonly string[] = [
+  'Testing',
+  'Design',
+  'Code',
+  'Domain modelling',
+];
+export const IMPLEMENT_PRINCIPLES =
+  'Engineering principles.\n\nTesting:\n- Tests first.\n\nDesign:\n- Safe defaults.\n\nCode:\n- Explain why.\n\nDomain modelling:\n- Domain terms.';
 
 export function buildWorkerRole(overrides: Partial<WorkerRoleCard> = {}): WorkerRoleCard {
   return {
@@ -27,6 +36,8 @@ export function buildWorkerRole(overrides: Partial<WorkerRoleCard> = {}): Worker
     ],
     verdictSchema: null,
     model: '',
+    principleSections: [...PRINCIPLE_SECTIONS],
+    principles: IMPLEMENT_PRINCIPLES,
     ...overrides,
   };
 }
@@ -62,6 +73,12 @@ export function buildWorkerRoleCatalog(
         condition: 'Always',
         content: 'Work on {branchName}.',
       },
+      {
+        key: 'principles',
+        title: 'Worker principles',
+        condition: 'Always',
+        content: PRINCIPLES_SLOT,
+      },
       { key: 'role', title: 'Role prompt', condition: 'Always', content: ROLE_PROMPT_SLOT },
       {
         key: 'dotnet',
@@ -81,6 +98,8 @@ export function buildWorkerRoleCatalog(
       },
     ],
     rolePromptSlot: ROLE_PROMPT_SLOT,
+    principlesSlot: PRINCIPLES_SLOT,
+    principleSections: [...PRINCIPLE_SECTIONS],
     ...overrides,
   };
 }

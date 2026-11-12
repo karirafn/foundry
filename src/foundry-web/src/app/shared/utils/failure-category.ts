@@ -14,7 +14,8 @@ export type FailureCategoryToken =
   | 'cancelled'
   | 'verdict_invalid'
   | 'publish_failed'
-  | 'publish_expired';
+  | 'publish_expired'
+  | 'run_discarded';
 
 interface FailureCategoryDisplay {
   readonly label: string;
@@ -38,6 +39,7 @@ export const FAILURE_CATEGORY_DISPLAY = {
   verdict_invalid: { label: 'INVALID VERDICT', cssClass: 'badge--failure-verdict-invalid' },
   publish_failed: { label: 'PUBLISH FAILED', cssClass: 'badge--failure-publish-failed' },
   publish_expired: { label: 'PUBLISH EXPIRED', cssClass: 'badge--failure-publish-expired' },
+  run_discarded: { label: 'RUN DISCARDED', cssClass: 'badge--failure-cancelled' },
 } as const satisfies Record<FailureCategoryToken, FailureCategoryDisplay>;
 
 export function getFailureCategoryDisplay(token: string): FailureCategoryDisplay | null {

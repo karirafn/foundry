@@ -326,14 +326,14 @@ internal sealed class IssueClaimedHandler(
 
         Result<string> systemPromptResult = restricted
             ? SystemPromptBuilder.BuildRestricted(
-                principles: content.Principles,
+                principles: content.PrinciplesFor(role.Role),
                 issueNumber: claimed.IssueNumber,
                 systemPromptTemplate: role.SystemPromptTemplate,
                 issueContent,
                 installsDotnet,
                 claimed.Clarifications ?? [])
             : SystemPromptBuilder.Build(
-                principles: content.Principles,
+                principles: content.PrinciplesFor(role.Role),
                 issueNumber: claimed.IssueNumber,
                 systemPromptTemplate: role.SystemPromptTemplate,
                 claimed.Context,

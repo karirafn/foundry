@@ -1874,6 +1874,68 @@
         }
       }
     },
+    "/api/workers/runs/{workerRunId}/discard": {
+      "post": {
+        "tags": [
+          "Workers"
+        ],
+        "summary": "Discards a run holding unpublished work: its commits are deleted and nothing is pushed",
+        "operationId": "RequestWorkerRunDiscard",
+        "parameters": [
+          {
+            "name": "workerRunId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "Accepted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RequestRunDiscardResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/workers/run-totals": {
       "get": {
         "tags": [
@@ -4130,6 +4192,18 @@
           }
         }
       },
+      "RequestRunDiscardResponse": {
+        "required": [
+          "workerRunId"
+        ],
+        "type": "object",
+        "properties": {
+          "workerRunId": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      },
       "RolePluginComponent": {
         "required": [
           "name",
@@ -5001,7 +5075,9 @@
           "skills",
           "agents",
           "verdictSchema",
-          "model"
+          "model",
+          "principleSections",
+          "principles"
         ],
         "type": "object",
         "properties": {
@@ -5043,6 +5119,15 @@
           },
           "model": {
             "type": "string"
+          },
+          "principleSections": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "principles": {
+            "type": "string"
           }
         }
       },
@@ -5052,7 +5137,9 @@
           "roles",
           "shared",
           "promptSections",
-          "rolePromptSlot"
+          "rolePromptSlot",
+          "principlesSlot",
+          "principleSections"
         ],
         "type": "object",
         "properties": {
@@ -5076,6 +5163,15 @@
           },
           "rolePromptSlot": {
             "type": "string"
+          },
+          "principlesSlot": {
+            "type": "string"
+          },
+          "principleSections": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           }
         }
       },
@@ -5337,6 +5433,18 @@
               "string"
             ],
             "format": "date-time"
+          },
+          "secretFindings": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WorkerRunSecretFinding"
+            }
+          },
+          "revertedFiles": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WorkerRunRevertedFile"
+            }
           }
         }
       },
@@ -5407,6 +5515,58 @@
             "format": "date-time"
           },
           "reason": {
+            "type": "string"
+          }
+        }
+      },
+      "WorkerRunRevertedFile": {
+        "required": [
+          "path",
+          "reason",
+          "sizeBytes"
+        ],
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "sizeBytes": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int64"
+          }
+        }
+      },
+      "WorkerRunSecretFinding": {
+        "required": [
+          "path",
+          "line",
+          "commitSha",
+          "ruleId"
+        ],
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string"
+          },
+          "line": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "commitSha": {
+            "type": "string"
+          },
+          "ruleId": {
             "type": "string"
           }
         }

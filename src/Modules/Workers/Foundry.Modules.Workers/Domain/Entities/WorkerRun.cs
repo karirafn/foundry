@@ -66,11 +66,21 @@ public abstract class WorkerRun : AggregateRoot<WorkerRunId>, IStateMachine<Work
     /// <summary>The side branch the run's work went to because its own branch diverged; <see langword="null"/> otherwise.</summary>
     public BranchName? DivergedSideBranch { get; private set; }
 
-    protected void RecordPublishFacts(CommitSha? pushedHead, int? branchCommitCount, BranchName? divergedSideBranch)
+    /// <summary>The files the Diff gate reverted before it pushed the run (#788); empty when it reverted none.</summary>
+    public IReadOnlyList<RevertedFile> RevertedFiles { get; private set; } = [];
+
+    protected void RecordPublishFacts(
+        CommitSha? pushedHead,
+        int? branchCommitCount,
+        BranchName? divergedSideBranch,
+        IReadOnlyList<RevertedFile> revertedFiles)
     {
+        ArgumentNullException.ThrowIfNull(revertedFiles);
+
         PublishedHead = pushedHead;
         PublishedBranchCommitCount = branchCommitCount;
         DivergedSideBranch = divergedSideBranch;
+        RevertedFiles = revertedFiles;
     }
 
     protected void RecordBase(RunBase? runBase)

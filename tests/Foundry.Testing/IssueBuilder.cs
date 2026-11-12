@@ -161,6 +161,14 @@ public sealed class IssueBuilder
     public PublishFailedIssue PublishFailedFromRevision() =>
         RevisionInProgress().MarkPublishFailed(_failureReason, _failedAt);
 
+    /// <summary>An implement run whose publish the Diff gate blocked (#788).</summary>
+    public PublishBlockedIssue PublishBlocked() =>
+        InProgress().MarkPublishBlocked(_branchName, _failedAt);
+
+    /// <summary>A revision run whose publish the Diff gate blocked (#788).</summary>
+    public PublishBlockedIssue PublishBlockedFromRevision() =>
+        RevisionInProgress().MarkPublishBlocked(_failedAt);
+
     /// <summary>An implement run whose work went to <paramref name="sideBranchName"/> because merging it conflicted.</summary>
     public BranchDivergedIssue BranchDiverged(string sideBranchName = "feat/1-test-run-1") =>
         InProgress().MarkBranchDiverged(_branchName, sideBranchName, pullRequestUrl: null);

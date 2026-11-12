@@ -176,6 +176,47 @@ describe('publish state display (#787)', () => {
   });
 });
 
+describe('secret-blocked state display (#788)', () => {
+  it('should give publish_blocked the SECRET DETECTED label, aria label and badge class', () => {
+    // Arrange / Act / Assert
+    expect(STATE_LABELS.publish_blocked).toBe('SECRET DETECTED');
+    expect(STATE_ARIA_LABELS.publish_blocked).toBe('secret detected, nothing pushed');
+    expect(STATE_CSS_CLASSES.publish_blocked).toBe('badge--publish-blocked');
+  });
+
+  it('should resolve publish_blocked to the SECRET DETECTED display', () => {
+    // Arrange / Act
+    const display = resolveStateDisplay('publish_blocked');
+
+    // Assert
+    expect(display).toEqual({
+      label: 'SECRET DETECTED',
+      ariaLabel: 'secret detected, nothing pushed',
+      cssClass: 'badge--publish-blocked',
+    });
+  });
+
+  it('should not make publish_blocked retryable through Retry Issue', () => {
+    // Arrange / Act / Assert
+    expect(RETRYABLE_STATES.has('publish_blocked')).toBe(false);
+  });
+
+  it('should give publish_blocked no card accent', () => {
+    // Arrange / Act / Assert
+    expect(cardAccentFor('publish_blocked')).toBeNull();
+  });
+
+  it('should show RUN DISCARDED for a failed issue whose run was discarded', () => {
+    // Arrange / Act
+    const display = resolveStateDisplay('failed', { failureClassification: 'run_discarded' });
+
+    // Assert
+    expect(display.label).toBe('RUN DISCARDED');
+    expect(display.ariaLabel).toBe('run discarded');
+    expect(display.cssClass).toBe('badge--failure-cancelled');
+  });
+});
+
 describe('resolveStateDisplay', () => {
   const triggerCases: { kind: RevisionTriggerKind; state: IssueState; label: string; ariaLabel: string }[] = [
     { kind: 'rebase_conflict', state: 'revision_queued', label: 'CONFLICT QUEUED', ariaLabel: 'conflict queued' },

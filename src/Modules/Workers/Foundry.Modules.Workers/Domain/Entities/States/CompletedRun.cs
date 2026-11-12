@@ -82,7 +82,11 @@ public sealed class CompletedRun : WorkerRun
 
         completed.RecordVerdict(verdict);
         completed.RecordBase(publishing.Base);
-        completed.RecordPublishFacts(publishing.PublishedHead, publishing.PublishedBranchCommitCount, publishing.DivergedSideBranch);
+        completed.RecordPublishFacts(
+            publishing.PublishedHead,
+            publishing.PublishedBranchCommitCount,
+            publishing.DivergedSideBranch,
+            publishing.RevertedFiles);
         return completed;
     }
 

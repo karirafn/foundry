@@ -15,12 +15,17 @@ here is one role, baked into the worker image at `/opt/foundry/roles/<role>/`:
 `--plugin-dir`. Role names come from Foundry's code (`WorkerRole`); a role without a folder fails the
 unit tests and the startup image build. A change here takes effect at the next Foundry restart.
 
-`shared/prompts/principles.md` holds the engineering standards (the Worker Principles) that Foundry places
-in every role's system prompt, after the safety preamble and before the role prompt. They yield to the
-target repository's style, testing and design conventions, never to the safety rules. The file is
-required, takes no placeholders and stays within 8 KiB (UTF-8 bytes): a missing, blank,
-placeholder-bearing or oversized file fails the unit tests and the startup image build. A role's own
-prompt says how it uses them (implement: "Apply the engineering principles above to every change.").
+The engineering standards (the Worker Principles) live under `shared/prompts/`. `principles.md` holds only the
+framing line; the standards themselves are split into Principle Sections, one file each under
+`shared/prompts/principles/`: `testing.md`, `design.md`, `code.md` and `domain.md` (Domain modelling). Each role
+declares in Foundry's code (`WorkerRole`) which sections its system prompt carries, never in its folder: implement
+carries all four, triage carries Design and Domain modelling. Foundry places the framing line followed by the role's
+sections, in the fixed order Testing, Design, Code, Domain modelling, after the safety preamble and before the role
+prompt; a role with no sections gets neither the framing nor any principles. They yield to the target repository's
+style, testing and design conventions, never to the safety rules. Every file is required and takes no placeholders,
+and the framing line with all four sections together stays within 8 KiB (UTF-8 bytes): a missing, blank or
+placeholder-bearing file, or files over the combined cap, fail the unit tests and the startup image build. A role's
+own prompt says how it uses them (implement: "Apply the engineering principles above to every change.").
 
 ## Capability profiles
 

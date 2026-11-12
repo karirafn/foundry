@@ -11,7 +11,11 @@ internal sealed class StubWorkerRoleCatalogStore(WorkerRoleCatalog? current) : I
 {
     internal const string DefaultSystemPrompt = "You are implementing issue #{issueNumber}.\n\n{issueContent}";
     internal const string DefaultTaskPrompt = "Implement issue #{issueNumber}.";
-    internal const string DefaultPrinciples = "Engineering principles.";
+    internal const string FramingMarker = "FRAMING_MARKER Engineering principles.";
+    internal const string TestingMarker = "TESTING_MARKER Testing:";
+    internal const string DesignMarker = "DESIGN_MARKER Design:";
+    internal const string CodeMarker = "CODE_MARKER Code:";
+    internal const string DomainMarker = "DOMAIN_MARKER Domain modelling:";
     internal const string DefaultImageTag = "stub-image:v1";
 
     public WorkerRoleCatalog? Current { get; private set; } = current;
@@ -22,7 +26,7 @@ internal sealed class StubWorkerRoleCatalogStore(WorkerRoleCatalog? current) : I
         string taskPrompt = DefaultTaskPrompt,
         string imageTag = DefaultImageTag,
         string? imageId = null,
-        string principles = DefaultPrinciples,
+        WorkerPrinciples? principles = null,
         WorkerCapability capability = WorkerCapability.Full) =>
         new(Catalog(systemPrompt, taskPrompt, imageTag, imageId, principles, capability));
 
@@ -34,7 +38,7 @@ internal sealed class StubWorkerRoleCatalogStore(WorkerRoleCatalog? current) : I
         string taskPrompt = DefaultTaskPrompt,
         string imageTag = DefaultImageTag,
         string? imageId = null,
-        string principles = DefaultPrinciples,
+        WorkerPrinciples? principles = null,
         WorkerCapability capability = WorkerCapability.Full)
     {
         RolePlugin implementPlugin = new(WorkerRole.Implement.Name, "Implements an issue.", [], []);
@@ -43,12 +47,24 @@ internal sealed class StubWorkerRoleCatalogStore(WorkerRoleCatalog? current) : I
         WorkerRoleCatalogContent content = new(
             [new WorkerRoleDefinition(WorkerRole.Implement, capability, implementPlugin, systemPrompt, taskPrompt, VerdictSchema: null)],
             sharedPlugin,
-            principles);
+            principles ?? DefaultPrinciples());
 
         return new WorkerRoleCatalog(
             content,
             new WorkerImageProvenance(imageTag, imageId, DateTimeOffset.UnixEpoch, Commit: "abc1234", Verified: true));
     }
+
+    /// <summary>Principles whose framing and every section carry a distinct marker, so a test can tell which ones a prompt holds.</summary>
+    public static WorkerPrinciples DefaultPrinciples() =>
+        new(
+            FramingMarker,
+            new Dictionary<PrincipleSection, string>
+            {
+                [PrincipleSection.Testing] = TestingMarker,
+                [PrincipleSection.Design] = DesignMarker,
+                [PrincipleSection.Code] = CodeMarker,
+                [PrincipleSection.DomainModelling] = DomainMarker,
+            });
 
     public void Publish(WorkerRoleCatalog catalog) => Current = catalog;
 }

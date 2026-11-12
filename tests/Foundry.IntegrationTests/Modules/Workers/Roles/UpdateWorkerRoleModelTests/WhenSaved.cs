@@ -150,6 +150,10 @@ public sealed class WhenSaved : IAsyncDisposable
             ["triage/prompts/task.md"] = "Triage issue #{issueNumber}.",
             ["shared/.claude-plugin/plugin.json"] = """{"name":"shared"}""",
             ["shared/prompts/principles.md"] = "Engineering principles.",
+            ["shared/prompts/principles/testing.md"] = "Testing:",
+            ["shared/prompts/principles/design.md"] = "Design:",
+            ["shared/prompts/principles/code.md"] = "Code:",
+            ["shared/prompts/principles/domain.md"] = "Domain modelling:",
         }).ShouldBeOfType<Result<WorkerRoleCatalogContent>.Success>().Value;
         _factory.Services.GetRequiredService<IWorkerRoleCatalogStore>().Publish(new WorkerRoleCatalog(
             content,

@@ -1,3 +1,5 @@
+using System.Text.Json;
+
 using Foundry.Modules.Workers.Domain.ValueObjects;
 
 using Shouldly;
@@ -44,5 +46,35 @@ public sealed class NonZeroExit
 
         // Assert
         a.ShouldNotBe(b);
+    }
+
+    [Fact]
+    public void WhenPersistedWithoutDetail_DeserialisesWithNoDetailAndUnchangedSummary()
+    {
+        // Arrange — the JSON a NonZeroExit reason was persisted as before it carried a detail
+        const string persisted = """{"$type":"non_zero_exit","ExitCode":1}""";
+
+        // Act
+        FailureReason? reason = JsonSerializer.Deserialize<FailureReason>(persisted);
+
+        // Assert
+        FailureReason.NonZeroExit nonZeroExit = reason.ShouldBeOfType<FailureReason.NonZeroExit>();
+        nonZeroExit.ShouldSatisfyAllConditions(
+            () => nonZeroExit.ExitCode.ShouldBe(1),
+            () => nonZeroExit.Detail.ShouldBeNull(),
+            () => nonZeroExit.Summary.ShouldBe("Non-zero exit code: 1"));
+    }
+
+    [Fact]
+    public void WhenSerialisedWithDetail_RoundTripsDetail()
+    {
+        // Arrange
+        FailureReason reason = new FailureReason.NonZeroExit(ExitCode: 1, Detail: "API Error: 400");
+
+        // Act
+        FailureReason? roundTripped = JsonSerializer.Deserialize<FailureReason>(JsonSerializer.Serialize(reason));
+
+        // Assert
+        roundTripped.ShouldBe(reason);
     }
 }

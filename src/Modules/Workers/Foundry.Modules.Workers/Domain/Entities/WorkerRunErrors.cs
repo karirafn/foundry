@@ -20,4 +20,9 @@ internal static class WorkerRunErrors
 
     internal static Error NotAwaitingPublishRetry(WorkerRunId id) =>
         new(NotAwaitingPublishRetryCode, $"Worker run '{id.Value}' is not waiting for a publish retry.");
+
+    internal const string NotHoldingUnpublishedWorkCode = "WorkerRun.NotHoldingUnpublishedWork";
+
+    internal static Error NotHoldingUnpublishedWork(WorkerRunId id) =>
+        new(NotHoldingUnpublishedWorkCode, $"Worker run '{id.Value}' is not holding unpublished work that waits for an operator.");
 }

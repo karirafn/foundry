@@ -1,0 +1,60 @@
+:host {
+  display: block;
+}
+
+.principle-sections {
+  display: grid;
+  font-size: 0.8125rem;
+  gap: var(--fd-spacing-xs) var(--fd-spacing-md);
+  grid-template-columns: auto minmax(0, 1fr);
+  margin: 0 0 var(--fd-spacing-sm);
+
+  &__group {
+    display: contents;
+  }
+
+  &__label {
+    color: var(--fd-text-secondary);
+  }
+
+  &__value {
+    margin: 0;
+  }
+
+  &__pills {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--fd-spacing-xs);
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+
+  &__pill {
+    border: 1px solid var(--fd-border-default);
+    border-radius: 999px;
+    font-size: 0.6875rem;
+    font-weight: 500;
+    line-height: 1.4;
+    padding-inline: var(--fd-spacing-sm);
+    white-space: nowrap;
+
+    &--included {
+      border-color: var(--fd-text-link);
+      color: var(--fd-text-link);
+    }
+
+    &--excluded {
+      border-style: dashed;
+      color: var(--fd-text-secondary);
+    }
+  }
+
+  @container role-content (max-width: 30rem) {
+    grid-template-columns: minmax(0, 1fr);
+
+    &__value {
+      margin-block-end: var(--fd-spacing-xs);
+    }
+  }
+}

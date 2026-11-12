@@ -24,6 +24,7 @@ public sealed record FailureCategory
     public const string VerdictInvalidToken = "verdict_invalid";
     public const string PublishFailedToken = "publish_failed";
     public const string PublishExpiredToken = "publish_expired";
+    public const string RunDiscardedToken = "run_discarded";
 
     public static readonly FailureCategory NonZeroExit = new(NonZeroExitToken);
     public static readonly FailureCategory TimedOut = new(TimedOutToken);
@@ -46,6 +47,9 @@ public sealed record FailureCategory
     /// <summary>The run's unpublished work was discarded when its Hand-off volume reached its time to live.</summary>
     public static readonly FailureCategory PublishExpired = new(PublishExpiredToken);
 
+    /// <summary>An operator discarded a run holding unpublished work (#788); Retry Issue starts a new run.</summary>
+    public static readonly FailureCategory RunDiscarded = new(RunDiscardedToken);
+
     private static readonly FrozenDictionary<string, FailureCategory> KnownCategories =
         new Dictionary<string, FailureCategory>(StringComparer.Ordinal)
         {
@@ -65,6 +69,7 @@ public sealed record FailureCategory
             { VerdictInvalidToken, VerdictInvalid },
             { PublishFailedToken, PublishFailed },
             { PublishExpiredToken, PublishExpired },
+            { RunDiscardedToken, RunDiscarded },
         }.ToFrozenDictionary(StringComparer.Ordinal);
 
     public string Value { get; }

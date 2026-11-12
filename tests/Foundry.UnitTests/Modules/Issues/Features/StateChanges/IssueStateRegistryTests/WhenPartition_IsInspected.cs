@@ -18,7 +18,7 @@ public sealed class WhenPartition_IsInspected
         IReadOnlySet<string> active = IssueStateRegistry.Active;
 
         // Assert
-        active.Count.ShouldBe(20);
+        active.Count.ShouldBe(21);
     }
 
     [Fact]
@@ -54,6 +54,7 @@ public sealed class WhenPartition_IsInspected
     [InlineData("triage_in_progress")]
     [InlineData("triage_failed")]
     [InlineData("publish_failed")]
+    [InlineData("publish_blocked")]
     [InlineData("branch_diverged")]
     public void Active_ContainsExpectedName(string name)
     {

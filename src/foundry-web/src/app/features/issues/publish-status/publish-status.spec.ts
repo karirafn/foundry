@@ -38,6 +38,8 @@ function run(state: WorkerRunState, overrides: Partial<WorkerRunDetail> = {}): W
     publish: null,
     publishRetry: null,
     discardsAt: null,
+    secretFindings: [],
+    revertedFiles: [],
     ...overrides,
   };
 }
@@ -244,6 +246,108 @@ describe('PublishStatusComponent', () => {
       expect(gitlab.text()).toContain(
         "Merge the run's branch into the issue branch on GitLab. Foundry continues automatically once the merge lands, or use Retry Issue.",
       );
+    });
+  });
+
+  describe('blocked (#788)', () => {
+    const twoFindings = [
+      { path: 'src/Api/appsettings.json', line: 14, commitSha: 'abc1234', ruleId: 'aws-access-key-id' },
+      { path: 'scripts/deploy.sh', line: 3, commitSha: 'abc1234', ruleId: 'generic-api-key' },
+    ];
+
+    it('should show the Push blocked chip and the plural count with the branch name, with error styling', () => {
+      // Arrange / Act
+      const { el, region, text } = render('publish_blocked', run('publish_blocked', { secretFindings: twoFindings }));
+
+      // Assert
+      const chip = el.querySelector('.publish-status__chip');
+      expect(chip?.textContent?.trim()).toBe('Push blocked');
+      expect(chip?.classList.contains('badge--retry-exhausted')).toBe(true);
+      expect(text()).toContain(
+        "The diff gate found 2 possible secrets in the run's changes, so nothing was pushed to feat/42-add-retry.",
+      );
+      expect(region.classList.contains('publish-status--error')).toBe(true);
+      expect(region.classList.contains('publish-status--empty')).toBe(false);
+    });
+
+    it('should use the singular for one finding', () => {
+      // Arrange / Act
+      const { text } = render('publish_blocked', run('publish_blocked', { secretFindings: [twoFindings[0]] }));
+
+      // Assert
+      expect(text()).toContain("The diff gate found 1 possible secret in the run's changes");
+    });
+
+    it('should fall back to "the issue branch" when the branch name is unknown', () => {
+      // Arrange / Act
+      const { text } = render('publish_blocked', run('publish_blocked', { secretFindings: twoFindings }), {
+        ...stateDetails,
+        branchName: null,
+      });
+
+      // Assert
+      expect(text()).toContain('so nothing was pushed to the issue branch.');
+    });
+
+    it('should list the findings under a labelled Findings heading', () => {
+      // Arrange / Act
+      const { el } = render('publish_blocked', run('publish_blocked', { secretFindings: twoFindings }));
+
+      // Assert
+      const findings = el.querySelector('fd-secret-findings');
+      expect(findings).not.toBeNull();
+      const list = findings!.querySelector('ul') as HTMLElement;
+      const heading = findings!.querySelector(`#${list.getAttribute('aria-labelledby')}`);
+      expect(heading?.textContent?.trim()).toBe('Findings');
+      expect(list.querySelectorAll('li').length).toBe(2);
+    });
+
+    it('should explain that Foundry never publishes a detected secret and what to do', () => {
+      // Arrange / Act
+      const { text } = render('publish_blocked', run('publish_blocked', { secretFindings: twoFindings }));
+
+      // Assert
+      expect(text()).toContain(
+        'Foundry never publishes a run with a detected secret. Discard the run, then retry the issue to start a new '
+        + 'worker from the branch. If a finding is a real credential, rotate it: the worker had it in its workspace.',
+      );
+    });
+
+    it('should show the automatic discard sentence only when discardsAt is set', () => {
+      // Arrange
+      const discardsAt = '2026-11-16T15:04:12Z';
+
+      // Act
+      const withTtl = render('publish_blocked', run('publish_blocked', { secretFindings: twoFindings, discardsAt }));
+
+      // Assert
+      expect(withTtl.text()).toContain(`If no one acts, the run is discarded automatically on ${medium(discardsAt)}.`);
+    });
+
+    it('should leave out the automatic discard sentence when discardsAt is not set', () => {
+      // Arrange / Act
+      const { text } = render('publish_blocked', run('publish_blocked', { secretFindings: twoFindings }));
+
+      // Assert
+      expect(text()).not.toContain('discarded automatically');
+    });
+
+    it('should offer no way to publish anyway or reveal a matched value', () => {
+      // Arrange / Act
+      const { el } = render('publish_blocked', run('publish_blocked', { secretFindings: twoFindings }));
+
+      // Assert
+      expect(el.querySelectorAll('button, a').length).toBe(0);
+    });
+
+    it('should show the blocked variant before the run detail loads', () => {
+      // Arrange / Act
+      const { el, text } = render('publish_blocked', null);
+
+      // Assert
+      expect(el.querySelector('.publish-status__chip')?.textContent?.trim()).toBe('Push blocked');
+      expect(text()).toContain('so nothing was pushed to feat/42-add-retry.');
+      expect(el.querySelector('fd-secret-findings')).toBeNull();
     });
   });
 });

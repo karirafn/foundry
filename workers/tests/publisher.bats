@@ -22,6 +22,14 @@ setup() {
     export FOUNDRY_WORK_DIR="$BATS_TEST_TMPDIR/work"
     mkdir -p "$FOUNDRY_HANDOFF_DIR" "$FOUNDRY_WORK_DIR"
 
+    # Publish mode scans with Foundry's own scanner configuration, the file the image copies to /etc/foundry.
+    export FOUNDRY_GITLEAKS_CONFIG
+    FOUNDRY_GITLEAKS_CONFIG="$(cd "$(dirname "$BATS_TEST_FILENAME")/.." && pwd)/publisher/gitleaks.toml"
+    command -v gitleaks > /dev/null || {
+        echo "gitleaks must be on PATH to run the publisher suite" >&2
+        return 1
+    }
+
     export CLONE_URL="https://git.example.test/owner/repo"
     export GIT_PAT="ghp_publisher_token"
     unset RUN_BRANCH RUN_ID BASE_DEFAULT_SHA BASE_BRANCH_SHA AUTHOR_NAME AUTHOR_EMAIL
@@ -790,4 +798,380 @@ HOOK
     ! grep -q "ghp_publisher_token" "$BATS_TEST_TMPDIR/git_args"
     [ "$("$REAL_GIT" -C "$FOUNDRY_WORK_DIR/repo" config core.hooksPath)" = "/dev/null" ]
     [ "$(sort -u "$BATS_TEST_TMPDIR/git_env")" = "GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null" ]
+}
+
+# ---------------------------------------------------------------------------
+# Diff gate (#788): a detected secret blocks the push; oversized and binary
+# files are reverted by one code-authored commit.
+# ---------------------------------------------------------------------------
+
+# Values the scanner's default rules detect. Built at run time so this file
+# itself holds no literal a scanner would flag.
+GITHUB_PAT="ghp_$(printf '%s' 8zN2kQw7RtY5uXc3VbM1aSd9FgH4jKl6PoIq)"
+AWS_KEY_ID="AKIA$(printf '%s' 5ZQ7XKD3MNP2RT4W)"
+DIFF_GATE_MAX_FILE_BYTES=5242880
+
+# wcommit_bytes <file> <message> — a worker commit of <file> as already written.
+wcommit_bytes() {
+    wgit add -- "$1"
+    wgit commit --quiet -m "$2"
+}
+
+# write_binary <path> — a small file git detects as binary (it holds a NUL byte).
+write_binary() {
+    mkdir -p "$(dirname "$WORKER/$1")"
+    printf 'PNG\000\001\002binary %s' "${2:-}" > "$WORKER/$1"
+}
+
+# write_oversized <path> — a text file one byte over the size limit.
+write_oversized() {
+    mkdir -p "$(dirname "$WORKER/$1")"
+    head -c "$((DIFF_GATE_MAX_FILE_BYTES + 1))" /dev/zero | tr '\0' 'a' > "$WORKER/$1"
+}
+
+secret_findings() {
+    grep '^FOUNDRY_SECRET_FINDING ' <<< "$output" || true
+}
+
+reverted_files() {
+    grep '^FOUNDRY_REVERTED_FILE ' <<< "$output" || true
+}
+
+@test "publish: a run commit adding a secret pushes nothing and reports the finding without its value" {
+    start_run
+    mkdir -p "$WORKER/config"
+    wcommit config/app.env "$(printf 'NAME=demo\nTOKEN=%s' "$GITHUB_PAT")" "add config"
+    worker_bundle
+
+    publish
+
+    [ "$status" -eq 0 ]
+    [ "$(result_line)" = "FOUNDRY_PUBLISH result=secret_detected findings=1" ]
+    [[ "$(secret_findings)" =~ ^FOUNDRY_SECRET_FINDING\ commit=[0-9a-f]{40}\ line=2\ rule=github-pat\ path=config/app.env$ ]]
+    [ -z "$(push_lines)" ]
+    ! remote_git rev-parse --verify --quiet "refs/heads/$RUN_BRANCH" > /dev/null
+    [[ "$output" != *"$GITHUB_PAT"* ]]
+    [[ "$stderr" != *"$GITHUB_PAT"* ]]
+    [ -z "$(grep '^FOUNDRY_RUN_COMMIT ' <<< "$output" || true)" ]
+}
+
+@test "publish: a secret finding names the run commit as rewritten, never the worker's commit" {
+    start_run
+    wcommit app.env "TOKEN=$GITHUB_PAT" "add config"
+    local worker_sha
+    worker_sha="$(wgit rev-parse HEAD)"
+    worker_bundle
+
+    publish
+
+    [ "$status" -eq 0 ]
+    local commit
+    commit="$(secret_findings | sed -n 's/.* commit=\([0-9a-f]*\) .*/\1/p')"
+    [ -n "$commit" ]
+    [ "$commit" != "$worker_sha" ]
+    [ "$("$REAL_GIT" -C "$FOUNDRY_WORK_DIR/repo" show -s --format=%an "$commit")" = "$ACCOUNT_NAME" ]
+}
+
+@test "publish: every secret in the run commits is reported, one line each" {
+    start_run
+    wcommit a.env "TOKEN=$GITHUB_PAT" "first"
+    wcommit b.env "KEY=$AWS_KEY_ID" "second"
+    worker_bundle
+
+    publish
+
+    [ "$status" -eq 0 ]
+    [ "$(result_line)" = "FOUNDRY_PUBLISH result=secret_detected findings=2" ]
+    secret_findings | grep -qE ' rule=github-pat path=a\.env$'
+    secret_findings | grep -qE ' rule=aws-access-token path=b\.env$'
+}
+
+@test "publish: a secret added in one run commit and removed in a later one still blocks the push" {
+    start_run
+    wcommit app.env "TOKEN=$GITHUB_PAT" "add secret"
+    wcommit app.env "TOKEN=from-the-environment" "remove secret"
+    worker_bundle
+
+    publish
+
+    [ "$status" -eq 0 ]
+    [ "$(result_line)" = "FOUNDRY_PUBLISH result=secret_detected findings=1" ]
+    [ -z "$(push_lines)" ]
+}
+
+@test "publish: a repository's scanner config, ignore file and inline allow comments are not honoured" {
+    start_run
+    printf '%s\n' '[allowlist]' 'paths = [".*"]' > "$WORKER/.gitleaks.toml"
+    wcommit allowed.env "TOKEN=$GITHUB_PAT # gitleaks:allow" "allowed inline"
+    local fingerprint
+    fingerprint="$(wgit rev-parse HEAD):allowed.env:github-pat:1"
+    printf '%s\n' "$fingerprint" "allowed.env:github-pat:1" > "$WORKER/.gitleaksignore"
+    wgit add .gitleaks.toml .gitleaksignore
+    wgit commit --quiet -m "scanner configuration"
+    worker_bundle
+
+    publish
+
+    [ "$status" -eq 0 ]
+    [ "$(result_line)" = "FOUNDRY_PUBLISH result=secret_detected findings=1" ]
+    secret_findings | grep -qE ' rule=github-pat path=allowed\.env$'
+}
+
+@test "publish: a secret on the default branch that the run merged in is not scanned" {
+    add_remote_branch "$RUN_BRANCH_NAME"
+    seed_commit main legacy.env "TOKEN=$GITHUB_PAT" "legacy secret on main"
+    start_run
+    wgit merge --quiet --no-edit origin/HEAD
+    wcommit a.txt a "run work"
+    worker_bundle
+
+    publish
+
+    [ "$status" -eq 0 ]
+    [[ "$(result_line)" == "FOUNDRY_PUBLISH result=published "* ]]
+    [ -z "$(secret_findings)" ]
+}
+
+@test "publish: a scanner that fails is a failed publish, never a clean scan" {
+    start_run
+    wcommit a.txt a "first"
+    worker_bundle
+    cat > "$FAKE_BIN_DIR/gitleaks" <<'SCANNER'
+#!/bin/sh
+echo "ERR [git] fatal: something went wrong" >&2
+exit 0
+SCANNER
+    chmod +x "$FAKE_BIN_DIR/gitleaks"
+
+    publish
+
+    [ "$status" -eq 1 ]
+    [[ "$(result_line)" == "FOUNDRY_PUBLISH result=failed kind=transient reason=the secret scan failed"* ]]
+    [ -z "$(push_lines)" ]
+}
+
+@test "publish: a clean run is scanned with Foundry's configuration over the run commits only" {
+    start_run
+    wcommit a.txt a "first"
+    worker_bundle
+    cat > "$FAKE_BIN_DIR/gitleaks" <<SCANNER
+#!/bin/sh
+printf '%s\n' "\$*" > "$BATS_TEST_TMPDIR/gitleaks_args"
+exec "$(command -v gitleaks)" "\$@"
+SCANNER
+    chmod +x "$FAKE_BIN_DIR/gitleaks"
+
+    publish
+
+    [ "$status" -eq 0 ]
+    local args
+    args="$(cat "$BATS_TEST_TMPDIR/gitleaks_args")"
+    [[ "$args" == *"--config $FOUNDRY_GITLEAKS_CONFIG"* ]]
+    [[ "$args" == *"--ignore-gitleaks-allow"* ]]
+    [[ "$args" == *"--gitleaks-ignore-path /dev/null"* ]]
+    [[ "$args" == *"--redact"* ]]
+    [[ "$args" == *"--not $BASE_DEFAULT_SHA $BASE_DEFAULT_SHA"* ]]
+}
+
+@test "publish: a binary file the run added is removed by one code-authored revert commit and listed" {
+    start_run
+    write_binary assets/logo.png
+    wcommit_bytes assets/logo.png "add logo"
+    wcommit a.txt a "text work"
+    worker_bundle
+
+    publish
+
+    [ "$status" -eq 0 ]
+    local head
+    head="$(remote_sha "$RUN_BRANCH")"
+    [ "$(result_line)" = "FOUNDRY_PUBLISH result=published head=$head commits=3" ]
+    [ "$(remote_git show -s --format=%s "$head")" = "chore: revert files blocked by the Foundry diff gate" ]
+    [ "$(remote_git show -s --format='%an <%ae>|%cn <%ce>' "$head")" = "$ACCOUNT_NAME <$ACCOUNT_EMAIL>|$ACCOUNT_NAME <$ACCOUNT_EMAIL>" ]
+    ! remote_git cat-file -e "$head:assets/logo.png" 2> /dev/null
+    remote_git cat-file -e "$head:a.txt"
+    [ "$(reverted_files)" = "FOUNDRY_REVERTED_FILE reason=binary size=$(wc -c < "$WORKER/assets/logo.png") path=assets/logo.png" ]
+}
+
+@test "publish: the revert commit is not listed among the run commits" {
+    start_run
+    write_binary logo.png
+    wcommit_bytes logo.png "add logo"
+    worker_bundle
+
+    publish
+
+    [ "$status" -eq 0 ]
+    [ "$(grep -c '^FOUNDRY_RUN_COMMIT ' <<< "$output")" -eq 1 ]
+    grep -q '^FOUNDRY_RUN_COMMIT [0-9a-f]* add logo$' <<< "$output"
+}
+
+@test "publish: an oversized text file is reverted with reason oversized and its size" {
+    start_run
+    write_oversized data/dump.sql
+    wcommit_bytes data/dump.sql "add dump"
+    worker_bundle
+
+    publish
+
+    [ "$status" -eq 0 ]
+    [ "$(reverted_files)" = "FOUNDRY_REVERTED_FILE reason=oversized size=$((DIFF_GATE_MAX_FILE_BYTES + 1)) path=data/dump.sql" ]
+    ! remote_git cat-file -e "$(remote_sha "$RUN_BRANCH"):data/dump.sql" 2> /dev/null
+}
+
+@test "publish: a file exactly at the size limit is published" {
+    start_run
+    head -c "$DIFF_GATE_MAX_FILE_BYTES" /dev/zero | tr '\0' 'a' > "$WORKER/limit.txt"
+    wcommit_bytes limit.txt "at the limit"
+    worker_bundle
+
+    publish
+
+    [ "$status" -eq 0 ]
+    [ -z "$(reverted_files)" ]
+    [ "$(remote_git show -s --format=%s "$(remote_sha "$RUN_BRANCH")")" = "at the limit" ]
+}
+
+@test "publish: a file both oversized and binary is reported once, as binary" {
+    start_run
+    { printf 'BIN\000'; head -c "$DIFF_GATE_MAX_FILE_BYTES" /dev/zero; } > "$WORKER/big.bin"
+    wcommit_bytes big.bin "add big binary"
+    worker_bundle
+
+    publish
+
+    [ "$status" -eq 0 ]
+    [ "$(reverted_files)" = "FOUNDRY_REVERTED_FILE reason=binary size=$((DIFF_GATE_MAX_FILE_BYTES + 4)) path=big.bin" ]
+}
+
+@test "publish: a changed file is restored to its content at the run's base" {
+    add_remote_branch "$RUN_BRANCH_NAME"
+    seed_commit "$RUN_BRANCH_NAME" notes.txt "original notes" "notes"
+    start_run
+    write_binary notes.txt
+    wcommit_bytes notes.txt "make notes binary"
+    worker_bundle
+
+    publish
+
+    [ "$status" -eq 0 ]
+    [ "$(remote_git show "$(remote_sha "$RUN_BRANCH"):notes.txt")" = "original notes" ]
+    reverted_files | grep -qx "FOUNDRY_REVERTED_FILE reason=binary size=[0-9]* path=notes.txt"
+}
+
+@test "publish: a rebased run restores a reverted file to the default branch, keeping the default branch's change" {
+    seed_commit main shared.txt "main v1" "shared v1"
+    add_remote_branch "$RUN_BRANCH_NAME"
+    seed_commit main shared.txt "main v2" "shared v2"
+    start_run
+    wgit rebase --quiet origin/HEAD
+    write_binary shared.txt
+    wcommit_bytes shared.txt "make shared binary"
+    worker_bundle
+
+    publish
+
+    [ "$status" -eq 0 ]
+    [ "$(remote_git show "$(remote_sha "$RUN_BRANCH"):shared.txt")" = "main v2" ]
+}
+
+@test "publish: a binary file the run deleted is not gated" {
+    seed_commit main old.bin "placeholder" "old"
+    local seed="$BATS_TEST_TMPDIR/seed"
+    printf 'X\000Y' > "$seed/old.bin"
+    "$REAL_GIT" -C "$seed" add old.bin
+    "$REAL_GIT" -C "$seed" -c user.name=t -c user.email=t@t commit --quiet -m "binary on main"
+    "$REAL_GIT" -C "$seed" push --quiet "$REMOTE" HEAD:refs/heads/main
+    start_run
+    wgit rm --quiet old.bin
+    wgit commit --quiet -m "remove binary"
+    worker_bundle
+
+    publish
+
+    [ "$status" -eq 0 ]
+    [ -z "$(reverted_files)" ]
+    [ "$(remote_git show -s --format=%s "$(remote_sha "$RUN_BRANCH")")" = "remove binary" ]
+}
+
+@test "publish: a binary file on the default branch that the run merged in is not reverted" {
+    add_remote_branch "$RUN_BRANCH_NAME"
+    local seed="$BATS_TEST_TMPDIR/seed"
+    "$REAL_GIT" -C "$seed" fetch --quiet "$REMOTE" "+refs/heads/*:refs/remotes/r/*"
+    "$REAL_GIT" -C "$seed" switch --quiet --detach r/main
+    printf 'X\000Y' > "$seed/main.bin"
+    "$REAL_GIT" -C "$seed" add main.bin
+    "$REAL_GIT" -C "$seed" -c user.name=t -c user.email=t@t commit --quiet -m "binary on main"
+    "$REAL_GIT" -C "$seed" push --quiet "$REMOTE" HEAD:refs/heads/main
+    start_run
+    wgit merge --quiet --no-edit origin/HEAD
+    wcommit a.txt a "run work"
+    worker_bundle
+
+    publish
+
+    [ "$status" -eq 0 ]
+    [ -z "$(reverted_files)" ]
+    remote_git cat-file -e "$(remote_sha "$RUN_BRANCH"):main.bin"
+}
+
+@test "publish: CI/CD files are published like any other file" {
+    start_run
+    mkdir -p "$WORKER/.github/workflows"
+    wcommit .github/workflows/ci.yml "on: push" "ci"
+    wcommit .gitlab-ci.yml "stages: [build]" "gitlab ci"
+    wcommit Dockerfile "FROM alpine" "dockerfile"
+    wcommit docker-compose.dev.yml "services: {}" "compose"
+    worker_bundle
+
+    publish
+
+    [ "$status" -eq 0 ]
+    [ -z "$(reverted_files)" ]
+    [ "$(remote_git show -s --format=%s "$(remote_sha "$RUN_BRANCH")")" = "compose" ]
+}
+
+@test "publish: a run whose only change is reverted still pushes the revert commit" {
+    start_run
+    write_binary only.bin
+    wcommit_bytes only.bin "only a binary"
+    worker_bundle
+
+    publish
+
+    [ "$status" -eq 0 ]
+    local head
+    head="$(remote_sha "$RUN_BRANCH")"
+    [ "$(remote_git show -s --format=%s "$head")" = "chore: revert files blocked by the Foundry diff gate" ]
+    [ "$(remote_git rev-parse "$head^{tree}")" = "$(remote_git rev-parse "main^{tree}")" ]
+}
+
+@test "publish: a path with spaces is reverted and reported whole" {
+    start_run
+    write_binary "docs/my image.png"
+    wcommit_bytes "docs/my image.png" "add image"
+    worker_bundle
+
+    publish
+
+    [ "$status" -eq 0 ]
+    reverted_files | grep -qx "FOUNDRY_REVERTED_FILE reason=binary size=[0-9]* path=docs/my image.png"
+    ! remote_git cat-file -e "$(remote_sha "$RUN_BRANCH"):docs/my image.png" 2> /dev/null
+}
+
+@test "publish: publishing a run with reverted files again is idempotent" {
+    start_run
+    write_binary logo.png
+    wcommit_bytes logo.png "add logo"
+    worker_bundle
+    publish
+    [ "$status" -eq 0 ]
+    local first
+    first="$output"
+
+    publish
+
+    [ "$status" -eq 0 ]
+    [ "$output" = "$first" ]
+    [ "$(push_lines | wc -l)" -eq 1 ]
 }

@@ -185,3 +185,14 @@ describe('publish failure categories (#787)', () => {
     expect(display?.cssClass).toBe('badge--failure-publish-failed');
   });
 });
+
+describe('discard failure category (#788)', () => {
+  it('should map run_discarded to "RUN DISCARDED"', () => {
+    // Arrange / Act
+    const display = getFailureCategoryDisplay('run_discarded');
+
+    // Assert
+    expect(display?.label).toBe('RUN DISCARDED');
+    expect(display?.cssClass).toBe('badge--failure-cancelled');
+  });
+});

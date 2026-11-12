@@ -183,11 +183,20 @@ public sealed class WorkerRunConfiguration : IEntityTypeConfiguration<WorkerRun>
             .IsUnicode(false)
             .HasColumnName("diverged_side_branch");
 
+        builder.Property(r => r.RevertedFiles)
+            .HasConversion(DiffGateValueConverters.RevertedFilesConverter, DiffGateValueConverters.RevertedFilesComparer)
+            .HasMaxLength(int.MaxValue)
+            .HasColumnType("TEXT")
+            .IsRequired()
+            .HasDefaultValue(Array.Empty<RevertedFile>())
+            .HasColumnName("reverted_files");
+
         builder.HasDiscriminator<string>("state")
             .HasValue<StartingRun>("starting")
             .HasValue<ActiveRun>("active")
             .HasValue<PublishingRun>("publishing")
             .HasValue<PublishFailedRun>("publish_failed")
+            .HasValue<PublishBlockedRun>("publish_blocked")
             .HasValue<CompletedRun>("completed")
             .HasValue<FailedRun>("failed")
             .IsComplete(true);
@@ -536,4 +545,75 @@ public sealed class PublishFailedRunConfiguration : IEntityTypeConfiguration<Pub
 
         builder.Ignore(r => r.IsExhausted);
     }
+}
+
+public sealed class PublishBlockedRunConfiguration : IEntityTypeConfiguration<PublishBlockedRun>
+{
+    public void Configure(EntityTypeBuilder<PublishBlockedRun> builder)
+    {
+        builder.Property(r => r.SecretFindings)
+            .HasConversion(DiffGateValueConverters.SecretFindingsConverter, DiffGateValueConverters.SecretFindingsComparer)
+            .HasMaxLength(int.MaxValue)
+            .HasColumnType("TEXT")
+            .HasColumnName("secret_findings");
+
+        builder.Property(r => r.PublishBlockedAt)
+            .HasColumnName("publish_blocked_at");
+    }
+}
+
+// The Diff gate's facts are stored as JSON through explicit row shapes, so a domain rename never changes stored data and
+// a finding row has no field for a matched value.
+file static class DiffGateValueConverters
+{
+    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+
+    internal static readonly ValueConverter<IReadOnlyList<RevertedFile>, string> RevertedFilesConverter = new(
+        files => JsonSerializer.Serialize(files.Select(ToRow).ToList(), JsonOptions),
+        json => FromRows(JsonSerializer.Deserialize<List<RevertedFileRow>>(json, JsonOptions)));
+
+    internal static readonly ValueComparer<IReadOnlyList<RevertedFile>> RevertedFilesComparer = new(
+        (left, right) => left == null ? right == null : right != null && left.SequenceEqual(right),
+        files => files.Aggregate(0, (hash, file) => HashCode.Combine(hash, file)),
+        files => files.ToList());
+
+    internal static readonly ValueConverter<IReadOnlyList<SecretFinding>, string> SecretFindingsConverter = new(
+        findings => JsonSerializer.Serialize(findings.Select(ToRow).ToList(), JsonOptions),
+        json => FromRows(JsonSerializer.Deserialize<List<SecretFindingRow>>(json, JsonOptions)));
+
+    internal static readonly ValueComparer<IReadOnlyList<SecretFinding>> SecretFindingsComparer = new(
+        (left, right) => left == null ? right == null : right != null && left.SequenceEqual(right),
+        findings => findings.Aggregate(0, (hash, finding) => HashCode.Combine(hash, finding)),
+        findings => findings.ToList());
+
+    private static RevertedFileRow ToRow(RevertedFile file) => new(
+        file.Path,
+        file.Reason switch
+        {
+            RevertedFileReason.Oversized => "oversized",
+            RevertedFileReason.Binary => "binary",
+            _ => throw new ArgumentOutOfRangeException(nameof(file), file.Reason, "Unknown reverted-file reason."),
+        },
+        file.SizeBytes);
+
+    private static List<RevertedFile> FromRows(List<RevertedFileRow>? rows) =>
+        rows?.Select(row => new RevertedFile(
+            row.Path,
+            row.Reason switch
+            {
+                "oversized" => RevertedFileReason.Oversized,
+                "binary" => RevertedFileReason.Binary,
+                _ => throw new InvalidOperationException($"Unknown stored reverted-file reason: {row.Reason}"),
+            },
+            row.SizeBytes)).ToList() ?? [];
+
+    private static SecretFindingRow ToRow(SecretFinding finding) =>
+        new(finding.Path, finding.Line, finding.Commit.Value, finding.RuleId);
+
+    private static List<SecretFinding> FromRows(List<SecretFindingRow>? rows) =>
+        rows?.Select(row => new SecretFinding(row.Path, row.Line, CommitSha.From(row.Commit), row.RuleId)).ToList() ?? [];
+
+    private sealed record RevertedFileRow(string Path, string Reason, long SizeBytes);
+
+    private sealed record SecretFindingRow(string Path, int Line, string Commit, string RuleId);
 }

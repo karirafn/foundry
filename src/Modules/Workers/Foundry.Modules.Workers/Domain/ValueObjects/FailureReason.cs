@@ -21,6 +21,7 @@ namespace Foundry.Modules.Workers.Domain.ValueObjects;
 [JsonDerivedType(typeof(VerdictInvalid), typeDiscriminator: FailureReason.VerdictInvalidToken)]
 [JsonDerivedType(typeof(PublishFailed), typeDiscriminator: FailureReason.PublishFailedToken)]
 [JsonDerivedType(typeof(PublishExpired), typeDiscriminator: FailureReason.PublishExpiredToken)]
+[JsonDerivedType(typeof(RunDiscarded), typeDiscriminator: FailureReason.RunDiscardedToken)]
 public abstract record FailureReason
 {
     public const string NonZeroExitToken = FailureCategory.NonZeroExitToken;
@@ -38,6 +39,7 @@ public abstract record FailureReason
     public const string VerdictInvalidToken = FailureCategory.VerdictInvalidToken;
     public const string PublishFailedToken = FailureCategory.PublishFailedToken;
     public const string PublishExpiredToken = FailureCategory.PublishExpiredToken;
+    public const string RunDiscardedToken = FailureCategory.RunDiscardedToken;
 
     private FailureReason()
     {
@@ -60,12 +62,14 @@ public abstract record FailureReason
         VerdictInvalid => VerdictInvalidToken,
         PublishFailed => PublishFailedToken,
         PublishExpired => PublishExpiredToken,
+        RunDiscarded => RunDiscardedToken,
         _ => throw new UnreachableException($"Unknown {nameof(FailureReason)} variant: {GetType().Name}"),
     };
 
     public string Summary => this switch
     {
-        NonZeroExit nonZeroExit => $"Non-zero exit code: {nonZeroExit.ExitCode}",
+        NonZeroExit { Detail: null } nonZeroExit => $"Non-zero exit code: {nonZeroExit.ExitCode}",
+        NonZeroExit nonZeroExit => $"Non-zero exit code: {nonZeroExit.ExitCode}: {nonZeroExit.Detail}",
         TimedOut => "Worker run timed out",
         ContainerError containerError => $"Container error: {containerError.Message}",
         UsageLimited => "Usage limit reached",
@@ -81,10 +85,15 @@ public abstract record FailureReason
         VerdictInvalid verdictInvalid => verdictInvalid.Detail,
         PublishFailed publishFailed => $"Publishing the run's commits failed: {publishFailed.Detail}",
         PublishExpired => "The run's unpublished commits were discarded: they were not published within the Hand-off volume's time to live",
+        RunDiscarded => "The run was discarded: its unpublished commits were deleted and nothing was pushed",
         _ => throw new UnreachableException($"Unknown {nameof(FailureReason)} variant: {GetType().Name}"),
     };
 
-    public sealed record NonZeroExit(int ExitCode) : FailureReason;
+    /// <summary>
+    /// The container exited non-zero. <see cref="Detail"/> carries what the CLI reported in an <c>is_error</c>
+    /// result line, so the failure names its cause; reasons persisted before it existed have none.
+    /// </summary>
+    public sealed record NonZeroExit(int ExitCode, string? Detail = null) : FailureReason;
 
     public sealed record TimedOut : FailureReason;
 
@@ -138,4 +147,7 @@ public abstract record FailureReason
 
     /// <summary>The run's Hand-off volume reached its time to live before its commits were published.</summary>
     public sealed record PublishExpired : FailureReason;
+
+    /// <summary>An operator discarded a run holding unpublished work: its commits were deleted and nothing was pushed.</summary>
+    public sealed record RunDiscarded : FailureReason;
 }

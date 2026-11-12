@@ -1215,22 +1215,23 @@ public sealed class Build
         failure.Error.Code.ShouldBe("Worker.SystemPromptTooLarge");
     }
 
-    [Theory]
-    [InlineData("")]
-    [InlineData("   ")]
-    [InlineData(" \n\t ")]
-    public void WhenPrinciplesAreBlank_ThrowsArgumentException(string principles)
+    [Fact]
+    public void WhenTheRoleSelectsNoPrincipleSection_EmitsNoPrinciplesBlockAndNoExtraBlankLines()
     {
         // Act
-        Action act = () => SystemPromptBuilder.Build(
-            principles,
-            1, DefaultSystemPromptTemplate,
+        Result<string> buildResult = SystemPromptBuilder.Build(
+            string.Empty,
+            1,
+            "TEMPLATE_MARKER",
             new DispatchContext.Fresh("feat/1-title"),
             Issue,
-            timeoutMinutes: 120, installsDocker: false, installsDotnet: false);
+            timeoutMinutes: 120,
+            installsDocker: false,
+            installsDotnet: false);
 
         // Assert
-        Should.Throw<ArgumentException>(act);
+        string result = buildResult.ShouldBeOfType<Result<string>.Success>().Value;
+        result.ShouldStartWith(SystemPromptBuilder.SafetyPreamble + "\n\nTEMPLATE_MARKER\n\n");
     }
 
     [Fact]

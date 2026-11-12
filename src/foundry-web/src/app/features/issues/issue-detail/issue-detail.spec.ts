@@ -608,6 +608,8 @@ describe('IssueDetailComponent', () => {
         outputTokens: 2000,
         lastActivityAt: null,
         hasStoredLog: false,
+        secretFindings: [],
+        revertedFiles: [],
       }),
       getLog: () => of(null),
     };
@@ -663,6 +665,8 @@ describe('IssueDetailComponent', () => {
         outputTokens: null,
         lastActivityAt: null,
         hasStoredLog: false,
+        secretFindings: [],
+        revertedFiles: [],
       }),
       getLog: () => of(null),
     };
@@ -721,6 +725,8 @@ describe('IssueDetailComponent', () => {
         outputTokens: null,
         lastActivityAt: null,
         hasStoredLog: false,
+        secretFindings: [],
+        revertedFiles: [],
       }),
       getLog: () => of(null),
     };
@@ -783,6 +789,8 @@ describe('IssueDetailComponent', () => {
           outputTokens: null,
           lastActivityAt: null,
           hasStoredLog: false,
+          secretFindings: [],
+          revertedFiles: [],
         }),
         getLog: () => of(null),
       };
@@ -843,6 +851,8 @@ describe('IssueDetailComponent', () => {
         outputTokens: null,
         lastActivityAt: null,
         hasStoredLog: true,
+        secretFindings: [],
+        revertedFiles: [],
       }),
       getLog,
     };
@@ -1746,6 +1756,8 @@ describe('IssueDetailComponent — cancel run', () => {
       publish: null,
       publishRetry: null,
       discardsAt: null,
+      secretFindings: [],
+      revertedFiles: [],
       ...overrides,
     };
   }
@@ -2053,6 +2065,8 @@ describe('IssueDetailComponent — run role tag', () => {
       publish: null,
       publishRetry: null,
       discardsAt: null,
+      secretFindings: [],
+      revertedFiles: [],
       ...overrides,
     };
   }
@@ -2788,6 +2802,8 @@ describe('IssueDetailComponent — publishing (#787)', () => {
       publish: null,
       publishRetry: null,
       discardsAt: null,
+      secretFindings: [],
+      revertedFiles: [],
       ...overrides,
     };
   }
@@ -3039,5 +3055,330 @@ describe('IssueDetailComponent — publishing (#787)', () => {
     expect(content?.getAttribute('tabindex')).toBe('-1');
     expect(document.activeElement).toBe(content);
     ctx.el.remove();
+  });
+});
+
+describe('IssueDetailComponent — diff gate (#788)', () => {
+  const findings = [
+    { path: 'src/Api/appsettings.json', line: 14, commitSha: 'abc1234', ruleId: 'aws-access-key-id' },
+    { path: 'scripts/deploy.sh', line: 3, commitSha: 'abc1234', ruleId: 'generic-api-key' },
+  ];
+
+  function runDetail(overrides: Partial<WorkerRunDetail> = {}): WorkerRunDetail {
+    return {
+      workerRunId: 'run-gate',
+      role: 'implement',
+      issueId: 'abc123',
+      state: 'publish_blocked',
+      failureCategory: null,
+      failureSummary: null,
+      resultText: null,
+      subtype: null,
+      isError: null,
+      durationMs: null,
+      numTurns: null,
+      totalCostUsd: null,
+      inputTokens: null,
+      outputTokens: null,
+      lastActivityAt: null,
+      hasStoredLog: true,
+      cancelRequestedAt: null,
+      publish: null,
+      publishRetry: null,
+      discardsAt: null,
+      secretFindings: [],
+      revertedFiles: [],
+      ...overrides,
+    };
+  }
+
+  const blockedRun = (): WorkerRunDetail => runDetail({
+    secretFindings: findings,
+    discardsAt: '2026-11-16T15:04:12Z',
+  });
+
+  const exhaustedRun = (): WorkerRunDetail => runDetail({
+    state: 'publish_failed',
+    publishRetry: { attemptNumber: 5, maxAttempts: 5, nextAttemptAt: null, reason: 'the provider rejected the push' },
+    discardsAt: '2026-11-20T10:00:00Z',
+  });
+
+  function issueInState(state: string, overrides: Partial<IssueDetail> = {}): IssueDetail {
+    return {
+      ...mockDetail,
+      state: state as IssueDetail['state'],
+      providerType: 'github',
+      stateDetails: { ...mockStateDetails, workerRunId: 'run-gate', branchName: 'feat/42-add-retry', completedAt: null },
+      ...overrides,
+    };
+  }
+
+  function setup(detail: IssueDetail, run: WorkerRunDetail | null, discardResult: string | null = null) {
+    const requestDiscard = vi.fn((): Observable<string | null> => of(discardResult));
+    const requestPublishRetry = vi.fn((): Observable<string | null> => of(null));
+    TestBed.resetTestingModule();
+    TestBed.configureTestingModule({
+      imports: [IssueDetailComponent],
+      providers: [
+        { provide: IssueService, useValue: { retrying: signal(false), retryError: signal(null), retrySuccess: signal(null), ...triageSignals() } },
+        WorkerSignalRService,
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        { provide: IssueSignalRService, useValue: mockIssueSignalRService },
+        {
+          provide: WorkerRunService,
+          useValue: {
+            getDetail: () => of(run),
+            getLog: vi.fn(() => of('line')),
+            requestCancel: vi.fn(() => of(null)),
+            requestPublishRetry,
+            requestDiscard,
+          },
+        },
+        { provide: WORKER_HUB_FACTORY, useValue: () => mockWorkerHub },
+      ],
+    });
+    const fixture = TestBed.createComponent(IssueDetailComponent);
+    fixture.componentRef.setInput('detail', detail);
+    fixture.componentRef.setInput('loading', false);
+    fixture.componentRef.setInput('error', null);
+    fixture.detectChanges();
+    const el = fixture.nativeElement as HTMLElement;
+    const actionButtons = () =>
+      Array.from(el.querySelectorAll<HTMLButtonElement>('.issue-detail__actions button'));
+    const discardButton = () => actionButtons().find((b) => b.classList.contains('issue-detail__discard-btn')) ?? null;
+    const publishButton = () =>
+      actionButtons().find((b) => b.getAttribute('aria-label')?.startsWith('Retry publishing')) ?? null;
+    const discardDialog = () =>
+      Array.from(el.querySelectorAll<HTMLDialogElement>('dialog.confirm-dialog'))
+        .find((d) => d.querySelector('.confirm-dialog__title')?.textContent?.trim() === 'Discard this run?') ?? null;
+    return { fixture, el, requestDiscard, requestPublishRetry, actionButtons, discardButton, publishButton, discardDialog };
+  }
+
+  function confirmDiscard(ctx: ReturnType<typeof setup>): void {
+    ctx.discardButton()!.click();
+    ctx.fixture.detectChanges();
+    (ctx.discardDialog()!.querySelector('.confirm-dialog__confirm') as HTMLButtonElement).click();
+    ctx.fixture.detectChanges();
+  }
+
+  // Blocked state
+  it('should show the blocked callout with the findings in the publish region', () => {
+    // Arrange / Act
+    const { el } = setup(issueInState('publish_blocked'), blockedRun());
+
+    // Assert
+    const status = el.querySelector('fd-publish-status');
+    expect(status?.textContent).toContain('Push blocked');
+    expect(status?.querySelectorAll('fd-secret-findings li').length).toBe(2);
+  });
+
+  it('should offer exactly one action, Discard run, for a secret-blocked issue', () => {
+    // Arrange / Act
+    const { el, actionButtons, discardButton } = setup(issueInState('publish_blocked'), blockedRun());
+
+    // Assert
+    expect(actionButtons().map((b) => b.textContent?.trim())).toEqual(['Discard run']);
+    expect(discardButton()?.getAttribute('aria-label')).toBe('Discard run for issue #42');
+    expect(el.querySelector('[aria-label="Retry issue #42"]')).toBeNull();
+  });
+
+  it('should render no control to publish anyway or reveal a secret', () => {
+    // Arrange / Act
+    const { el } = setup(issueInState('publish_blocked'), blockedRun());
+
+    // Assert
+    const labels = Array.from(el.querySelectorAll('button, a, summary'))
+      .map((b) => `${b.textContent ?? ''} ${b.getAttribute('aria-label') ?? ''}`);
+    for (const label of labels) {
+      expect(label).not.toMatch(/publish anyway|reveal|show secret|false positive|copy/i);
+    }
+  });
+
+  it('should show no log view for a secret-blocked run', () => {
+    // Arrange / Act
+    const { el } = setup(issueInState('publish_blocked'), blockedRun());
+
+    // Assert
+    expect(el.querySelector('fd-log-view')).toBeNull();
+  });
+
+  it('should show Retry publish then Discard run for an exhausted publish', () => {
+    // Arrange / Act
+    const { actionButtons } = setup(issueInState('publish_failed'), exhaustedRun());
+
+    // Assert
+    expect(actionButtons().map((b) => b.textContent?.trim())).toEqual(['Retry publish', 'Discard run']);
+  });
+
+  it.each(['in_progress', 'review', 'failed', 'branch_diverged'])('should not offer Discard run for %s', (state) => {
+    // Arrange / Act
+    const { discardButton } = setup(issueInState(state), runDetail({ state: 'completed' }));
+
+    // Assert
+    expect(discardButton()).toBeNull();
+  });
+
+  // Confirm dialog
+  it('should open a destructive confirm dialog instead of discarding immediately', () => {
+    // Arrange
+    const { fixture, requestDiscard, discardButton, discardDialog } = setup(issueInState('publish_blocked'), blockedRun());
+
+    // Act
+    discardButton()!.click();
+    fixture.detectChanges();
+
+    // Assert
+    const dialog = discardDialog();
+    expect(dialog?.open).toBe(true);
+    expect(dialog?.querySelector('.confirm-dialog__message')?.textContent?.trim()).toBe(
+      "The run's commits are deleted from this host and nothing is pushed. The issue moves to Failed, where Retry "
+      + 'Issue starts a new worker from the branch on GitHub. This cannot be undone.',
+    );
+    expect(dialog?.querySelector('.confirm-dialog__confirm')?.textContent?.trim()).toBe('Discard run');
+    expect(dialog?.querySelector('.confirm-dialog__cancel')?.textContent?.trim()).toBe('Keep run');
+    expect(dialog?.querySelector('.confirm-dialog__confirm--destructive')).not.toBeNull();
+    expect(requestDiscard).not.toHaveBeenCalled();
+  });
+
+  it('should name GitLab in the dialog for a GitLab issue', () => {
+    // Arrange
+    const { fixture, discardButton, discardDialog } = setup(
+      issueInState('publish_blocked', { providerType: 'gitlab' }), blockedRun());
+
+    // Act
+    discardButton()!.click();
+    fixture.detectChanges();
+
+    // Assert
+    expect(discardDialog()?.querySelector('.confirm-dialog__message')?.textContent).toContain('from the branch on GitLab.');
+  });
+
+  it('should call the service once confirmed', () => {
+    // Arrange
+    const ctx = setup(issueInState('publish_blocked'), blockedRun());
+
+    // Act
+    confirmDiscard(ctx);
+
+    // Assert
+    expect(ctx.requestDiscard).toHaveBeenCalledWith('run-gate');
+    expect(ctx.discardDialog()?.open).toBe(false);
+  });
+
+  it('should not call the service when the dialog is dismissed', () => {
+    // Arrange
+    const ctx = setup(issueInState('publish_blocked'), blockedRun());
+    ctx.discardButton()!.click();
+    ctx.fixture.detectChanges();
+
+    // Act
+    (ctx.discardDialog()!.querySelector('.confirm-dialog__cancel') as HTMLButtonElement).click();
+    ctx.fixture.detectChanges();
+
+    // Assert
+    expect(ctx.requestDiscard).not.toHaveBeenCalled();
+    expect(ctx.discardDialog()?.open).toBe(false);
+  });
+
+  // Pending
+  it('should disable the button and read "Discarding…" while pending, disabling Retry publish too', () => {
+    // Arrange
+    const ctx = setup(issueInState('publish_failed'), exhaustedRun());
+    ctx.requestDiscard.mockReturnValue(new Subject<string | null>());
+
+    // Act
+    confirmDiscard(ctx);
+
+    // Assert
+    expect(ctx.discardButton()?.disabled).toBe(true);
+    expect(ctx.discardButton()?.textContent?.trim()).toBe('Discarding…');
+    expect(ctx.publishButton()?.disabled).toBe(true);
+  });
+
+  // Errors
+  it.each([
+    'This run is no longer waiting to publish.',
+    'The run was not found.',
+    'Failed to discard the run.',
+  ])('should show the error "%s" in the assertive region and restore the button', (message) => {
+    // Arrange
+    const ctx = setup(issueInState('publish_blocked'), blockedRun(), message);
+
+    // Act
+    confirmDiscard(ctx);
+
+    // Assert
+    expect(ctx.discardButton()?.disabled).toBe(false);
+    expect(ctx.discardButton()?.textContent?.trim()).toBe('Discard run');
+    const error = ctx.discardButton()?.parentElement?.querySelector('.issue-detail__retry-error');
+    expect(error?.textContent).toContain(message);
+    expect(error?.getAttribute('aria-live')).toBe('assertive');
+  });
+
+  // Success
+  it('should announce success and keep the announcement across a detail reload', () => {
+    // Arrange
+    const ctx = setup(issueInState('publish_blocked'), blockedRun());
+
+    // Act
+    confirmDiscard(ctx);
+    ctx.fixture.componentRef.setInput('detail', issueInState('failed'));
+    ctx.fixture.detectChanges();
+
+    // Assert
+    const announcement = ctx.el.querySelector('.issue-detail__discard-success-announcement');
+    expect(announcement?.textContent?.trim()).toBe('Run discarded. Issue status is updating.');
+    expect(announcement?.getAttribute('aria-live')).toBe('polite');
+    expect(announcement?.classList.contains('sr-only')).toBe(true);
+    expect(ctx.discardButton()).toBeNull();
+  });
+
+  it('should move focus to the content region once the button unmounts after success', async () => {
+    // Arrange
+    const ctx = setup(issueInState('publish_blocked'), blockedRun());
+    document.body.appendChild(ctx.el);
+
+    // Act
+    confirmDiscard(ctx);
+    ctx.fixture.componentRef.setInput('detail', issueInState('failed'));
+    ctx.fixture.detectChanges();
+    await ctx.fixture.whenStable();
+
+    // Assert
+    const content = ctx.el.querySelector('.issue-detail__content');
+    expect(document.activeElement).toBe(content);
+    ctx.el.remove();
+  });
+
+  // Reverted files
+  it('should render the reverted files after the published facts in the run block', () => {
+    // Arrange / Act
+    const { el } = setup(issueInState('review'), runDetail({
+      state: 'completed',
+      publish: { headSha: 'abcdef1234567890', headCommitUrl: null, pullRequestUrl: null, branchCommitCount: 2 },
+      revertedFiles: [
+        { path: 'assets/demo.mp4', reason: 'oversized', sizeBytes: 50_541_363 },
+        { path: 'tools/protoc.exe', reason: 'binary', sizeBytes: 3_250_586 },
+      ],
+    }));
+
+    // Assert
+    const runBlock = el.querySelector('.issue-detail__worker-run');
+    const reverted = runBlock?.querySelector('fd-reverted-files');
+    expect(reverted).not.toBeNull();
+    expect(reverted?.previousElementSibling?.tagName.toLowerCase()).toBe('fd-publish-facts');
+    expect(reverted?.querySelectorAll('li').length).toBe(2);
+  });
+
+  it('should not render reverted files when the list is empty', () => {
+    // Arrange / Act
+    const { el } = setup(issueInState('review'), runDetail({
+      state: 'completed',
+      publish: { headSha: 'abcdef1234567890', headCommitUrl: null, pullRequestUrl: null, branchCommitCount: 2 },
+    }));
+
+    // Assert
+    expect(el.querySelector('fd-reverted-files')).toBeNull();
   });
 });

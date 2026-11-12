@@ -28,6 +28,11 @@ internal sealed class FakeWorkerOrchestrator : IWorkerOrchestrator
     public int ReapOrphanedDataRootVolumesCallCount { get; private set; }
     public IReadOnlySet<WorkerRunId>? LastReapActiveRunIds { get; private set; }
 
+    private readonly List<WorkerRunId> _deletedHandOffVolumes = [];
+
+    /// <summary>The runs whose Hand-off volume was deleted, in order.</summary>
+    public IReadOnlyList<WorkerRunId> DeletedHandOffVolumes => _deletedHandOffVolumes;
+
     /// <summary>Scripts <see cref="GetStatusAsync"/> to return a container that exited with the given code.</summary>
     public FakeWorkerOrchestrator WithExitedContainer(int exitCode = 0)
     {
@@ -62,6 +67,12 @@ internal sealed class FakeWorkerOrchestrator : IWorkerOrchestrator
 
     public Task EnsureCredentialVolumeAsync(CancellationToken cancellationToken)
         => Task.CompletedTask;
+
+    public Task DeleteHandOffVolumeAsync(WorkerRunId runId, CancellationToken cancellationToken)
+    {
+        _deletedHandOffVolumes.Add(runId);
+        return Task.CompletedTask;
+    }
 
     public Task<Result<ContainerId>> StartAsync(
         WorkerContainerSpec spec,

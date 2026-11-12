@@ -1,0 +1,102 @@
+@use '../../../../styles/badge' as *;
+
+// Only the reverted-reason chips are used here; no state backgrounds are emitted.
+@include badge(
+  $states: (),
+  $exclude-outlined: (
+    failure-non-zero-exit,
+    failure-timed-out,
+    failure-container-error,
+    failure-provider-error,
+    failure-bootstrap,
+    failure-cancelled,
+    failure-credits-exhausted,
+    failure-model-unavailable,
+    failure-turn-limit,
+    failure-auth-invalid,
+    failure-transient-api-error,
+    failure-pr-closed,
+    failure-verdict-invalid,
+    failure-publish-failed,
+    failure-publish-expired,
+    retrying,
+    retry-exhausted,
+    publishing,
+    branch-diverged
+  )
+);
+
+:host {
+  display: block;
+  margin-bottom: var(--fd-spacing-md);
+}
+
+.reverted-files {
+  &__key {
+    text-transform: uppercase;
+    color: var(--fd-text-secondary);
+    font-size: 0.75rem;
+    letter-spacing: 0.05em;
+  }
+
+  &__note {
+    margin: var(--fd-spacing-xs) 0 0;
+    color: var(--fd-text-secondary);
+    font-size: 0.8125rem;
+  }
+
+  &__list {
+    list-style: none;
+    margin: var(--fd-spacing-xs) 0 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: var(--fd-spacing-xs);
+  }
+
+  &__row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    align-items: baseline;
+    gap: 2px var(--fd-spacing-md);
+    font-size: 0.8125rem;
+
+    // Below 768px the path takes its own row; chip and size sit under it.
+    @media (max-width: 767px) {
+      grid-template-columns: auto auto;
+      justify-content: start;
+    }
+  }
+
+  &__path {
+    font-family: var(--fd-font-mono);
+    color: var(--fd-text-primary);
+    overflow-wrap: anywhere;
+    min-width: 0;
+
+    @media (max-width: 767px) {
+      grid-column: 1 / -1;
+    }
+  }
+
+  &__size {
+    color: var(--fd-text-secondary);
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+  }
+
+  &__overflow {
+    margin-top: var(--fd-spacing-xs);
+
+    summary {
+      cursor: pointer;
+      font-size: 0.8125rem;
+      color: var(--fd-text-link);
+
+      &:focus-visible {
+        outline: 2px solid var(--fd-text-link);
+        outline-offset: 2px;
+      }
+    }
+  }
+}

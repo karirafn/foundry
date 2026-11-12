@@ -460,6 +460,7 @@ internal sealed class IssueQueries(
             TriageInProgressIssue => "triage_in_progress",
             TriageFailedIssue => "triage_failed",
             PublishFailedIssue => "publish_failed",
+            PublishBlockedIssue => "publish_blocked",
             BranchDivergedIssue => "branch_diverged",
             _ => throw new InvalidOperationException($"Unknown issue type: {issue.GetType().Name}")
         };
@@ -774,6 +775,19 @@ internal sealed class IssueQueries(
                 RevisionTriggerKind: publishFailed.Trigger?.Discriminator,
                 ChecksFixAttempts: publishFailed.IsRevision ? publishFailed.ChecksFixAttempts : null,
                 RebaseConflictAttempts: publishFailed.IsRevision ? publishFailed.RebaseConflictAttempts : null),
+
+            PublishBlockedIssue blocked => new IssueStateDetails(
+                WorkerRunId: blocked.WorkerRunId.Value,
+                BranchName: blocked.BranchName,
+                FeedbackCutoffAt: null,
+                FailureReason: null,
+                FailedAt: null,
+                CompletedAt: null,
+                BlockedBy: null,
+                TransientRetry: null,
+                RevisionTriggerKind: blocked.Trigger?.Discriminator,
+                ChecksFixAttempts: blocked.IsRevision ? blocked.ChecksFixAttempts : null,
+                RebaseConflictAttempts: blocked.IsRevision ? blocked.RebaseConflictAttempts : null),
 
             BranchDivergedIssue diverged => new IssueStateDetails(
                 WorkerRunId: diverged.WorkerRunId.Value,
