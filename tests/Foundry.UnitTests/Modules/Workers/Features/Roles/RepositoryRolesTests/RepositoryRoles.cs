@@ -25,6 +25,8 @@ public sealed class RepositoryRoles
     private static readonly string RolesDirectory =
         Path.Combine(RepositoryRoot.WorkersDirectory, WorkerRoleCatalogReader.RolesFolder);
 
+    private static readonly string[] ForbiddenTopLevelKeywords = ["allOf", "anyOf", "oneOf"];
+
     public static TheoryData<string> RoleNames => [.. WorkerRole.All.Select(role => role.Name)];
 
     [Theory]
@@ -101,6 +103,26 @@ public sealed class RepositoryRoles
     }
 
     [Fact]
+    public void NoRoleVerdictSchema_HasATopLevelAllOfAnyOfOrOneOf()
+    {
+        // Arrange
+        WorkerRoleCatalogContent catalog = LoadRepositoryCatalog();
+
+        // Act
+        string[] offenders =
+        [
+            .. catalog.Roles
+                .Where(role => role.VerdictSchema is not null)
+                .SelectMany(role => ForbiddenTopLevelKeywords
+                    .Where(keyword => JsonNode.Parse(role.VerdictSchema!)!.AsObject().ContainsKey(keyword))
+                    .Select(keyword => $"{role.Role.Name}: {keyword}")),
+        ];
+
+        // Assert
+        offenders.ShouldBeEmpty();
+    }
+
+    [Fact]
     public void TheImplementVerdictSchema_MatchesTheTypedImplementVerdict()
     {
         // Arrange
@@ -109,9 +131,9 @@ public sealed class RepositoryRoles
         // Act
         string[] outcomes = [.. schema["properties"]![ImplementVerdict.OutcomeProperty]!["enum"]!.AsArray().Select(node => node!.GetValue<string>())];
         string[] required = [.. schema["required"]!.AsArray().Select(node => node!.GetValue<string>())];
-        Dictionary<string, string[]> requiredByOutcome = schema["allOf"]!.AsArray().ToDictionary(
-            condition => condition!["if"]!["properties"]![ImplementVerdict.OutcomeProperty]!["const"]!.GetValue<string>(),
-            condition => condition!["then"]!["required"]!.AsArray().Select(node => node!.GetValue<string>()).ToArray());
+        string? conditionalOutcome = schema["if"]?["properties"]?[ImplementVerdict.OutcomeProperty]?["const"]?.GetValue<string>();
+        string[] requiredWhenConditional = [.. schema["then"]!["required"]!.AsArray().Select(node => node!.GetValue<string>())];
+        string[] requiredOtherwise = [.. schema["else"]!["required"]!.AsArray().Select(node => node!.GetValue<string>())];
         string[] properties = [.. schema["properties"]!.AsObject().Select(pair => pair.Key)];
 
         // Assert
@@ -121,9 +143,9 @@ public sealed class RepositoryRoles
             () => properties.ShouldBe(
                 [ImplementVerdict.OutcomeProperty, ImplementVerdict.QuestionsProperty, ImplementVerdict.PullRequestProperty],
                 ignoreOrder: true),
-            () => requiredByOutcome.Count.ShouldBe(2),
-            () => requiredByOutcome[ImplementVerdict.NeedsInputToken].ShouldBe([ImplementVerdict.QuestionsProperty]),
-            () => requiredByOutcome[ImplementVerdict.DoneToken].ShouldBe([ImplementVerdict.PullRequestProperty]),
+            () => conditionalOutcome.ShouldBe(ImplementVerdict.NeedsInputToken),
+            () => requiredWhenConditional.ShouldBe([ImplementVerdict.QuestionsProperty]),
+            () => requiredOtherwise.ShouldBe([ImplementVerdict.PullRequestProperty]),
             () => schema["properties"]![ImplementVerdict.QuestionsProperty]!["$ref"]!.GetValue<string>().ShouldBe("#/$defs/questions"),
             () => schema["additionalProperties"]!.GetValue<bool>().ShouldBeFalse());
     }

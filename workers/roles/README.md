@@ -60,8 +60,9 @@ For a run that exits 0, Foundry records the verdict's status on the worker run: 
 `--max-turns`) or `invalid` (fails the typed parse). The verdict is recorded only; the run's outcome
 is still decided from facts (merge request, commits, exit code).
 
-`implement/verdict.schema.json` requires `outcome` (`done` or `needs_input`), and `questions` when
-`outcome` is `needs_input`.
+`implement/verdict.schema.json` requires `outcome` (`done` or `needs_input`), `questions` when
+`outcome` is `needs_input`, and `pullRequest` otherwise (`done`), expressed as one top-level
+`if`/`then`/`else`.
 
 `triage/verdict.schema.json` requires `outcome` (`ready` or `needs_input`) and `kind` (`feature`, `bug`, `refactor` or
 `documentation`), and `questions` when `outcome` is `needs_input`. Foundry records `ready` as `done`.
