@@ -334,20 +334,22 @@ Two states deserve explicit note:
 
 ## TriageBlockedIssue
 
-`triage_blocked`: an issue that hasn't been triaged and has open blockers ([ADR 0102](docs/adr/0102-triage-runs-once-blockers-clear.md)). When its blockers close, it moves to `TriageQueued`. A [Blocked Issue](#blocked-issue) has already been triaged or skipped triage, and moves to `FreshQueued`. Display group: Waiting, label "Triage blocked".
+`triage_blocked`: an issue that hasn't been triaged and has open blockers, or one a triage run found blocked ([ADR 0102](docs/adr/0102-triage-runs-once-blockers-clear.md), [ADR 0103](docs/adr/0103-triage-defers-on-open-dependencies-by-linking-blockers.md)). When its blockers close, it moves to `TriageQueued`. A [Blocked Issue](#blocked-issue) has already been triaged or skipped triage, and moves to `FreshQueued`. Display group: Waiting, label "Triage blocked".
 
 - Not a [Queued Issue](#queued-issue): it is never a dispatch candidate and holds no worker slot. Triage waits so the run judges the issue against the code its blockers wrote, not code that doesn't exist yet.
 - **Ways in** — the dependency pass applying open blockers to a `DetectedIssue` (`BlockTriage()`) or a `TriageQueuedIssue` (`Block()`), or the claim-time re-check finding them on a `TriageQueuedIssue`. Raises `IssueTriageBlocked`.
-- **Way out** — `Unblock()` → `TriageQueuedIssue`, raising `IssueTriageQueued`, when the dependency pass finds its blockers closed or unlinked (the only exit, as for `BlockedIssue`). No operator actions. Hard-deleted on untrack.
+  - A `blocked` triage verdict: `TriageInProgressIssue.MarkBlocked(verdict)` (`FromTriageInProgress`) records the [Triage Verdict](#triage-verdict) and sets the blockers to the ones the verdict names, then those already recorded. Raises `IssueTriageBlocked` and `TriageBlockersNamed`, which the Issues bridge turns into the `TriageBlockersFound` integration event; Monitoring links each named blocker on the provider and posts the [Blocker Reason](#blocker-reason) comment.
+- **Ways out** — `Unblock()` → `TriageQueuedIssue`, raising `IssueTriageQueued`, when the dependency pass finds its blockers closed or unlinked (as for `BlockedIssue`); `FailBlockerLink(workerRunId, blockerIssueNumber, rejection, failedAt)` → `TriageFailedIssue` with `FailureCategory.BlockerLinkFailed` and `IssueTriageFailed`, when the provider permanently refuses to link a blocker the verdict named (`BlockerLinkFailed`, handled by `BlockerLinkFailedHandler`; ignored when the issue is no longer `TriageBlocked`). The verdict and blockers stay on the failed issue. No operator actions. Hard-deleted on untrack.
 
 ## TriageInProgressIssue
 
 `triage_in_progress`: an issue a triage worker is reading. Carries `WorkerRunId`. Display group: In progress, label "Triaging".
 Counts against the global slots and the [Repository Worker Limit](#repository-worker-limit) like every running worker.
 
-- **Ways out** — the run's outcome step dispatches by role: a triage run that exits 0 with a schema-valid verdict publishes `TriageRunCompleted(IssueId, WorkerRunId, TriageResult, DecidedAt)` with `TriageResult = Ready(kind) | NeedsInput(kind, questions)` instead of `WorkerRunCompleted`, and the merge-request lookup never runs.
+- **Ways out** — the run's outcome step dispatches by role: a triage run that exits 0 with a schema-valid verdict publishes `TriageRunCompleted(IssueId, WorkerRunId, TriageResult, DecidedAt)` with `TriageResult = Ready(kind) | NeedsInput(kind, questions) | Blocked(kind, blockedBy)` instead of `WorkerRunCompleted`, and the merge-request lookup never runs.
   - `Ready` → `MarkReady(verdict)` records the [Triage Verdict](#triage-verdict) and goes through the dependency check: `FreshQueued` with no open blockers, `Blocked` otherwise.
   - `NeedsInput` → `MarkNeedsInput(verdict)` records the verdict and enters `AwaitingInputIssue` (`FromTriageInProgress`) with the `Retriage` resume target; its questions are posted on the issue thread.
+  - `Blocked` → the handler first builds the dependency graph from the stored edges of the repository's other issues plus an edge from this issue to each named blocker, and asks `DependencyCycleDetector.FindCycleClosedBy` whether any named blocker closes a cycle. None does → `MarkBlocked(verdict)` records the verdict and enters `TriageBlockedIssue` (`FromTriageInProgress`), and the named blockers are linked on the provider (see [TriageBlockedIssue](#triageblockedissue)). One does → the `blocker_cycle` route: `FailOnBlockerCycle(cycle, failedAt)` → `TriageFailedIssue` with `FailureCategory.BlockerCycle`, no link written, and a reason that names the cycle and tells the person to remove one of its links before retrying triage.
   - Any other end — a missing or invalid verdict (`FailureReason.VerdictInvalid`, category `verdict_invalid`: a step failure, never a fallback to facts, [ADR 0094](docs/adr/0094-code-decides-claude-judges-only-what-code-cannot.md)), a non-zero exit, a timeout or a cancellation — goes through `WorkerRunFailed` to `TriageFailedIssue`.
 - A `TriageRunCompleted` for an issue no longer in triage with that run (a redelivery, or the issue moved on) is ignored; with the inbox dedup this makes it replay-safe.
 
@@ -356,12 +358,13 @@ Counts against the global slots and the [Repository Worker Limit](#repository-wo
 `triage_failed`: an issue whose triage run failed. Carries `WorkerRunId`, `FailureReason`, `FailureCategory` and `FailedAt`. Display group: Needs attention.
 Not a `FailedIssue`, whose `Retry()` returns `FreshQueuedIssue` and would skip triage.
 
+- **Causes** — beyond a failed run (non-zero exit, timeout, cancellation, `verdict_invalid`): `blocker_cycle` (`FailureCategory.BlockerCycle`) when a blocker a `blocked` verdict names would close a dependency cycle (from `TriageInProgressIssue.FailOnBlockerCycle`), and `blocker_link_failed` (`FailureCategory.BlockerLinkFailed`) when the provider permanently refused to link a named blocker (from `TriageBlockedIssue.FailBlockerLink`, via `FromTriageBlocked`, which takes the run id from the `BlockerLinkFailed` event). Neither is transient, so both park until Retry triage or Skip triage.
 - **Ways out** — `RetryTriage()` → `TriageQueuedIssue` (`POST /api/issues/{id}/retry-triage`); [Skip triage](#skip-triage) (`POST /api/issues/{id}/skip-triage`); a `TransientApiError` retries automatically back to `TriageQueuedIssue` through `TransientRetryService`, with the same `MaxTransientRetries` and backoff. Any other reason parks it. Hard-deleted on untrack, like the other failed states.
 
 ## Triage Verdict
 
-The latest verdict a triage run returned for an issue (`Issue.TriageVerdict`, column `triage_verdict`, `null` until first triaged): `Ready(kind, decidedAt)` or `NeedsInput(kind, questions, decidedAt)`. Carried through every transition; a later triage replaces it.
-Its kind decides the issue's [Kind Classification](#kind-classification) only while no label does. Exposed on the issue detail as `triage: {outcome, kind, questions, decidedAt}`.
+The latest verdict a triage run returned for an issue (`Issue.TriageVerdict`, column `triage_verdict`, `null` until first triaged): `Ready(kind, decidedAt)`, `NeedsInput(kind, questions, decidedAt)` or `Blocked(kind, blockedBy, decidedAt)`, where `blockedBy` is a non-empty list of `TriageBlocker(issueNumber, reason)` naming each open issue once, each with a [Blocker Reason](#blocker-reason). Carried through every transition; a later triage replaces it.
+Its kind decides the issue's [Kind Classification](#kind-classification) only while no label does. Exposed on the issue detail as `triage: {outcome, kind, questions, decidedAt}`, where `outcome` is `ready`, `needs_input` or `blocked` (a `blocked` verdict carries no questions; its blockers and reasons appear as `blockedBy: [{issueNumber, reason}]` on the state details, `reason` being `null` for a blocker a person linked or when the latest verdict names none).
 
 ## Re-triage
 
@@ -725,6 +728,11 @@ A `FreshQueuedIssue` that gains blockers is demoted to `BlockedIssue` — whethe
 A `FreshQueuedIssue` whose blockers form a cycle is blocked like any other; `CircularDependencyDetected` is raised alongside the transition.
 When all blockers are resolved — that is, closed in the provider, or the link removed (including one that broke a cycle) — a `BlockedIssue` transitions to `FreshQueuedIssue` on the next dependency pass, without being triaged again. [Re-triage](#re-triage) sends it back to triage, where it waits as a `TriageBlockedIssue` while its blockers are open and is triaged once they close.
 
+## Blocker Reason
+
+The one-sentence reason a triage run gives for each open issue it names in a `blocked` verdict (`TriageBlocker.Reason`, never blank).
+It is shown in the posted comment and next to the blocker on the dashboard.
+
 ## Rebase Pending Issue
 
 A lifecycle state (`rebase_pending`, Active / Waiting) for an issue whose worker run left an open pull request: Foundry is rebasing the worker branch onto the default branch through the provider before the checks gate ([ADR 0087](docs/adr/0087-foundry-rebases-worker-branches-through-the-provider-after-each-run.md)). The agent never rebases or force-pushes.
@@ -890,6 +898,7 @@ Every comment reader excludes a registered comment **by ID rather than by author
 `ActionableFeedbackPolicy` and the issue-thread reader (`GetIssueFeedbackAsync`) both take the repository's `PostedCommentIds` snapshot, loaded through `PostedCommentRegistry`.
 Matching applies to conversation comments only — the only surface Foundry posts to — because GitHub numbers reviews and review comments independently of issue comments.
 The caller of the comment-post operation records the returned ID with `PostedCommentRegistry.Record`, in the same save as the state change that tracks the post where it can; if that save fails, the comment can be read as feedback at most once.
+The blocker comment is one such registered post: after linking the blockers a `blocked` triage verdict names, `TriageBlockersFoundHandler` posts a single issue-thread comment through `BlockerLinkWriter.PostIssueCommentAsync`, which registers the returned ID at once, so the comment is never read back as feedback. It lists each blocker with its [Blocker Reason](#blocker-reason) in a code span.
 
 ## Comment Post
 
