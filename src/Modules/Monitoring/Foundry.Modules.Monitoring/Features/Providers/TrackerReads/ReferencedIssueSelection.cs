@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Globalization;
 using System.Text.RegularExpressions;
 
@@ -21,19 +22,27 @@ internal static partial class ReferencedIssueSelection
         IEnumerable<IssueReference> mentions = MentionedNumbers(content)
             .Select(number => new IssueReference(number, IssueRelation.Mention));
 
-        // IssueRelation declares the strongest relation first and Mention last, and OrderBy is stable, so one
-        // ordering puts links ahead of mentions, keeps provider and first-mention order within a relation, and
-        // lets DistinctBy keep each number at its strongest relation.
+        // OrderBy is stable, so one ordering puts links ahead of mentions, keeps provider and first-mention order
+        // within a relation, and lets DistinctBy keep each number at its strongest relation.
         return
         [
             .. links
                 .Concat(mentions)
                 .Where(reference => reference.Number != issueNumber)
-                .OrderBy(reference => reference.Relation)
+                .OrderBy(reference => RankOf(reference.Relation))
                 .DistinctBy(reference => reference.Number)
                 .Take(MaxReferencedIssues),
         ];
     }
+
+    private static int RankOf(IssueRelation relation) => relation switch
+    {
+        IssueRelation.BlockedBy => 0,
+        IssueRelation.Blocks => 1,
+        IssueRelation.RelatesTo => 2,
+        IssueRelation.Mention => 3,
+        _ => throw new UnreachableException(),
+    };
 
     private static IEnumerable<int> MentionedNumbers(IssueContent content) =>
         new[] { content.Body }
