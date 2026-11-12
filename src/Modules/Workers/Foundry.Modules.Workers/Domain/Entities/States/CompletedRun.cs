@@ -81,7 +81,7 @@ public sealed class CompletedRun : WorkerRun
         };
 
         completed.RecordVerdict(verdict);
-        completed.RecordBase(publishing.Base);
+        completed.CarryDispatchFactsFrom(publishing);
         completed.RecordPublishFacts(
             publishing.PublishedHead,
             publishing.PublishedBranchCommitCount,
@@ -116,7 +116,7 @@ public sealed class CompletedRun : WorkerRun
         };
 
         completed.RecordVerdict(verdict);
-        completed.RecordBase(active.Base);
+        completed.CarryDispatchFactsFrom(active);
         return completed;
     }
 }

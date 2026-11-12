@@ -89,6 +89,13 @@ public abstract class WorkerRun : AggregateRoot<WorkerRunId>, IStateMachine<Work
         BaseRunBranchHead = runBase?.RunBranchHead;
     }
 
+    protected void CarryDispatchFactsFrom(WorkerRun source)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+
+        RecordBase(source.Base);
+    }
+
     protected void RecordVerdict(RunVerdict? verdict)
     {
         VerdictStatus = verdict?.Status;

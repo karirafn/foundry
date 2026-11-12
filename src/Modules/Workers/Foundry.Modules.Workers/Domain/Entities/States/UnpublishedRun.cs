@@ -48,7 +48,7 @@ public abstract class UnpublishedRun : WorkerRun, IResolvableRun
         PullRequestBody = pullRequestText?.Body;
         PendingTranscript = transcript?.Transcript;
         PendingTranscriptCapturedAt = transcript?.CapturedAt;
-        RecordBase(active.Base);
+        CarryDispatchFactsFrom(active);
     }
 
     public DateTimeOffset StartedAt { get; private set; }
@@ -163,7 +163,7 @@ public abstract class UnpublishedRun : WorkerRun, IResolvableRun
         PullRequestSettledAt = source.PullRequestSettledAt;
         PendingTranscript = source.PendingTranscript;
         PendingTranscriptCapturedAt = source.PendingTranscriptCapturedAt;
-        RecordBase(source.Base);
+        CarryDispatchFactsFrom(source);
         RecordVerdict(source.Verdict);
         RecordPublishFacts(source.PublishedHead, source.PublishedBranchCommitCount, source.DivergedSideBranch, source.RevertedFiles);
     }

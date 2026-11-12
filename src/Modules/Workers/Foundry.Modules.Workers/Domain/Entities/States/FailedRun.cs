@@ -62,7 +62,7 @@ public sealed class FailedRun : WorkerRun
             resultSummary: null,
             starting.Role,
             starting.Image);
-        failed.RecordBase(starting.Base);
+        failed.CarryDispatchFactsFrom(starting);
         return failed;
     }
 
@@ -89,7 +89,7 @@ public sealed class FailedRun : WorkerRun
         };
 
         failed.RecordVerdict(verdict);
-        failed.RecordBase(unpublished.Base);
+        failed.CarryDispatchFactsFrom(unpublished);
         failed.RecordPublishFacts(
             unpublished.PublishedHead,
             unpublished.PublishedBranchCommitCount,
@@ -121,7 +121,7 @@ public sealed class FailedRun : WorkerRun
         };
 
         failed.RecordVerdict(verdict);
-        failed.RecordBase(active.Base);
+        failed.CarryDispatchFactsFrom(active);
         return failed;
     }
 }
