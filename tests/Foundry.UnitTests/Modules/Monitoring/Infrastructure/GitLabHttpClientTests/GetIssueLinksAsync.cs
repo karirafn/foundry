@@ -132,7 +132,7 @@ public sealed class GetIssueLinksAsync
     [Theory]
     [InlineData(HttpStatusCode.Forbidden)]
     [InlineData(HttpStatusCode.NotFound)]
-    public async Task WhenTheLinksCannotBeAccessed_ReturnsNoLinks(HttpStatusCode status)
+    public async Task WhenTheLinksCannotBeAccessed_FailsTheReadWithTheStatus(HttpStatusCode status)
     {
         // Arrange
         GitLabHttpClient sut = BuildSut(HandlerWithLinks(status, string.Empty));
@@ -141,9 +141,8 @@ public sealed class GetIssueLinksAsync
         Result<IReadOnlyList<IssueReference>> result = await ReadLinksAsync(sut);
 
         // Assert
-        IReadOnlyList<IssueReference> references =
-            result.ShouldBeOfType<Result<IReadOnlyList<IssueReference>>.Success>().Value;
-        references.ShouldBeEmpty();
+        Error error = result.ShouldBeOfType<Result<IReadOnlyList<IssueReference>>.Failure>().Error;
+        error.Message.ShouldContain(((int)status).ToString(System.Globalization.CultureInfo.InvariantCulture));
     }
 
     [Fact]

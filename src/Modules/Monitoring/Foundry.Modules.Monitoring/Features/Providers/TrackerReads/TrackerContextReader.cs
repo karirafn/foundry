@@ -64,6 +64,16 @@ internal sealed class TrackerContextReader(
         IReadOnlyList<IssueReference> links = linksRead is Result<IReadOnlyList<IssueReference>>.Success linked
             ? linked.Value
             : [];
+        if (linksRead is Result<IReadOnlyList<IssueReference>>.Failure linksFailure)
+        {
+            logger.LogWarning(
+                "Reading the links of issue #{IssueNumber} in {Repository} for the tracker context failed: {ErrorCode} {Error}",
+                issueNumber,
+                repo.Slug,
+                linksFailure.Error.Code,
+                linksFailure.Error.Message);
+        }
+
         List<ReferencedIssue> referencedIssues = [];
         List<int> unreadableIssueNumbers = [];
         foreach (IssueReference reference in ReferencedIssueSelection.Select(issueNumber, issueContent, links))
@@ -82,8 +92,16 @@ internal sealed class TrackerContextReader(
                     issue.ClosingMergeRequest,
                     issue.Body));
             }
-            else if (read is not Result<ProviderReferencedIssue>.Failure { Error.Code: TrackerReadErrors.NotAnIssueCode })
+            else if (read is Result<ProviderReferencedIssue>.Failure failure && !IsDroppedSilently(failure.Error))
             {
+                logger.LogWarning(
+                    "Reading issue #{ReferencedIssueNumber}, referenced by issue #{IssueNumber} in {Repository}, "
+                    + "for the tracker context failed: {ErrorCode} {Error}",
+                    reference.Number,
+                    issueNumber,
+                    repo.Slug,
+                    failure.Error.Code,
+                    failure.Error.Message);
                 unreadableIssueNumbers.Add(reference.Number);
             }
         }
@@ -97,6 +115,10 @@ internal sealed class TrackerContextReader(
             linksRead is Result<IReadOnlyList<IssueReference>>.Failure,
             openIssues);
     }
+
+    // A bare "#123456" in prose usually names nothing, or a pull request; neither is worth a note or a warning.
+    private static bool IsDroppedSilently(Error error) =>
+        error.Code is TrackerReadErrors.NotAnIssueCode or TrackerReadErrors.NotFoundCode;
 
     private TrackerContext UnreadableContext(int issueNumber, IssueContent issueContent)
     {

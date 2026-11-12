@@ -124,7 +124,9 @@ internal sealed partial class GitHubHttpClient
 
         if (result is not Result<ReferencedIssueData>.Success success)
         {
-            return Result<ProviderReferencedIssue>.Fail(((Result<ReferencedIssueData>.Failure)result).Error);
+            Error error = ((Result<ReferencedIssueData>.Failure)result).Error;
+
+            return Result<ProviderReferencedIssue>.Fail(IsMissingIssue(error) ? TrackerReadErrors.NotFound() : error);
         }
 
         ReferencedIssueNode? node = success.Value.Repository?.IssueOrPullRequest;
@@ -151,6 +153,11 @@ internal sealed partial class GitHubHttpClient
             StrongestClosingState(node.ClosedByPullRequestsReferences?.Nodes ?? []),
             node.Body ?? string.Empty));
     }
+
+    // A 404 from the GraphQL endpoint itself is a misconfigured base URL, not a missing issue, so only the
+    // NOT_FOUND GraphQL error type counts.
+    private static bool IsMissingIssue(Error error) =>
+        error is { Code: GitHubErrors.GraphQlErrorCode, Kind: ErrorKind.NotFound };
 
     private static ClosingMergeRequestState StrongestClosingState(
         IReadOnlyList<ReferencedIssueClosingPullRequest> closingPullRequests)
@@ -187,6 +194,7 @@ internal sealed partial class GitHubHttpClient
     {
         string owner = Uri.EscapeDataString(slug.Owner);
         string repo = Uri.EscapeDataString(slug.Name);
+        // Only the first page is read: the reference selection keeps at most 10 issues, so later pages add nothing.
         string relativePath = $"repos/{owner}/{repo}/issues/{issueNumber}/dependencies/{segment}?per_page={DependenciesPerPage}";
         Uri requestUri = new(EnsureTrailingSlash(apiBaseUrl), relativePath);
 

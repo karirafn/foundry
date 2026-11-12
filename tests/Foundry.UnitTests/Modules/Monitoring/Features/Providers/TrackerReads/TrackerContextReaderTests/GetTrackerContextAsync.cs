@@ -15,6 +15,7 @@ using Foundry.WebApi.Persistence;
 
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
 using Shouldly;
@@ -56,6 +57,13 @@ public sealed class GetTrackerContextAsync : IAsyncDisposable
         await _dbContext.DisposeAsync();
         await _connection.DisposeAsync();
     }
+
+    private ITrackerContextQueries SutWith(ILogger<TrackerContextReader> logger) =>
+        new TrackerContextReader(
+            _dbContext,
+            new SingleIssueProviderFactory(_provider),
+            new CredentialResolver(_dbContext, NullLogger<CredentialResolver>.Instance),
+            logger);
 
     private async Task<MonitoredRepositoryId> SeedRepoAsync()
     {
@@ -245,6 +253,113 @@ public sealed class GetTrackerContextAsync : IAsyncDisposable
         context.ShouldSatisfyAllConditions(
             () => context.ReferencedIssues.ShouldBeEmpty(),
             () => context.UnreadableIssueNumbers.ShouldBeEmpty());
+    }
+
+    [Fact]
+    public async Task WhenAReferenceIsNotFound_LeavesItOutWithoutANoteOrAWarning()
+    {
+        // Arrange
+        CapturingLogger<TrackerContextReader> logger = new();
+        ITrackerContextQueries sut = SutWith(logger);
+        IssueContent content = new IssueContentBuilder().WithBody("Blocked on #123456.").Build();
+        _provider.ReferencedIssues[123456] = Result<ProviderReferencedIssue>.Fail(TrackerReadErrors.NotFound());
+
+        // Act
+        TrackerContext context = await sut.GetTrackerContextAsync(
+            await SeedRepoAsync(), IssueNumber, content, TestContext.Current.CancellationToken);
+
+        // Assert
+        context.ShouldSatisfyAllConditions(
+            () => context.ReferencedIssues.ShouldBeEmpty(),
+            () => context.UnreadableIssueNumbers.ShouldBeEmpty(),
+            () => logger.Entries.ShouldBeEmpty());
+    }
+
+    [Theory]
+    [InlineData("GitHub.UnexpectedStatusCode", "GitHub API returned unexpected status code 403.")]
+    [InlineData("GitHub.UnexpectedStatusCode", "GitHub API returned unexpected status code 503.")]
+    public async Task WhenAReferenceFailsForAnotherReason_ListsItAsUnreadableAndWarnsWithTheErrorAndTheNumbers(
+        string code,
+        string message)
+    {
+        // Arrange
+        CapturingLogger<TrackerContextReader> logger = new();
+        ITrackerContextQueries sut = SutWith(logger);
+        IssueContent content = new IssueContentBuilder().WithBody("Blocked on #9.").Build();
+        _provider.ReferencedIssues[9] = Result<ProviderReferencedIssue>.Fail(new Error(code, message));
+
+        // Act
+        TrackerContext context = await sut.GetTrackerContextAsync(
+            await SeedRepoAsync(), IssueNumber, content, TestContext.Current.CancellationToken);
+
+        // Assert
+        context.ShouldSatisfyAllConditions(
+            () => context.UnreadableIssueNumbers.ShouldBe([9]),
+            () => logger.Entries.ShouldContain(entry =>
+                entry.Level == LogLevel.Warning
+                && entry.Message.Contains("owner/repo", StringComparison.Ordinal)
+                && entry.Message.Contains("#7", StringComparison.Ordinal)
+                && entry.Message.Contains("#9", StringComparison.Ordinal)
+                && entry.Message.Contains(code, StringComparison.Ordinal)
+                && entry.Message.Contains(message, StringComparison.Ordinal)));
+    }
+
+    [Fact]
+    public async Task WhenAReferenceIsNotAnIssue_DoesNotWarn()
+    {
+        // Arrange
+        CapturingLogger<TrackerContextReader> logger = new();
+        ITrackerContextQueries sut = SutWith(logger);
+        IssueContent content = new IssueContentBuilder().WithBody("Fixed by #868.").Build();
+        _provider.ReferencedIssues[868] = Result<ProviderReferencedIssue>.Fail(TrackerReadErrors.NotAnIssue());
+
+        // Act
+        await sut.GetTrackerContextAsync(
+            await SeedRepoAsync(), IssueNumber, content, TestContext.Current.CancellationToken);
+
+        // Assert
+        logger.Entries.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task WhenTheLinksReadFails_WarnsWithTheRepositoryTheIssueAndTheError()
+    {
+        // Arrange
+        CapturingLogger<TrackerContextReader> logger = new();
+        ITrackerContextQueries sut = SutWith(logger);
+        _provider.Links = Result<IReadOnlyList<IssueReference>>.Fail(new Error("GitHub.Unexpected", "boom"));
+
+        // Act
+        await sut.GetTrackerContextAsync(
+            await SeedRepoAsync(), IssueNumber, Content, TestContext.Current.CancellationToken);
+
+        // Assert
+        logger.Entries.ShouldContain(entry =>
+            entry.Level == LogLevel.Warning
+            && entry.Message.Contains("owner/repo", StringComparison.Ordinal)
+            && entry.Message.Contains("#7", StringComparison.Ordinal)
+            && entry.Message.Contains("GitHub.Unexpected", StringComparison.Ordinal)
+            && entry.Message.Contains("boom", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task WhenTheLinksReadThrows_WarnsWithTheRepositoryTheIssueAndTheException()
+    {
+        // Arrange
+        CapturingLogger<TrackerContextReader> logger = new();
+        ITrackerContextQueries sut = SutWith(logger);
+        _provider.LinksException = new HttpRequestException("connection reset");
+
+        // Act
+        await sut.GetTrackerContextAsync(
+            await SeedRepoAsync(), IssueNumber, Content, TestContext.Current.CancellationToken);
+
+        // Assert
+        logger.Entries.ShouldContain(entry =>
+            entry.Level == LogLevel.Warning
+            && entry.Message.Contains("owner/repo", StringComparison.Ordinal)
+            && entry.Message.Contains("#7", StringComparison.Ordinal)
+            && entry.Message.Contains("connection reset", StringComparison.Ordinal));
     }
 
     [Fact]

@@ -205,6 +205,23 @@ public sealed class GetReferencedIssueAsync
     }
 
     [Fact]
+    public async Task WhenTheIssueIsNotFound_FailsTheReadAsNotFoundWithoutReadingClosedBy()
+    {
+        // Arrange
+        // docs.gitlab.com/api/issues "Single project issue": a number with no issue in the project answers 404 Not Found.
+        FakeHandler handler = new FakeHandler(HttpStatusCode.NotFound, """{"message":"404 Not found"}""");
+
+        // Act
+        Result<ProviderReferencedIssue> result = await ReadResultAsync(handler);
+
+        // Assert
+        Error error = result.ShouldBeOfType<Result<ProviderReferencedIssue>.Failure>().Error;
+        error.ShouldSatisfyAllConditions(
+            () => error.Code.ShouldBe(TrackerReadErrors.NotFoundCode),
+            () => handler.AllRequests.ShouldNotContain(request => request.RequestUri!.AbsolutePath.EndsWith(ClosedByPathSuffix)));
+    }
+
+    [Fact]
     public async Task WhenTheClosedByCallFails_FailsTheReadWithTheStatus()
     {
         // Arrange

@@ -9,6 +9,8 @@ internal static class TrackerReadErrors
 
     public const string NotAnIssueCode = "TrackerRead.NotAnIssue";
 
+    public const string NotFoundCode = "TrackerRead.NotFound";
+
     public const string ReadThrewCode = "TrackerRead.Threw";
 
     public const string ConfidentialCode = "TrackerRead.Confidential";
@@ -18,6 +20,9 @@ internal static class TrackerReadErrors
 
     public static Error NotAnIssue() =>
         new(NotAnIssueCode, "The number names something other than an issue, such as a pull request.");
+
+    public static Error NotFound() =>
+        new(NotFoundCode, "The tracker has no issue with this number.") { Kind = ErrorKind.NotFound };
 
     public static Error ReadThrew(Exception exception) =>
         new(ReadThrewCode, $"The tracker read threw {exception.GetType().Name}: {exception.Message}");

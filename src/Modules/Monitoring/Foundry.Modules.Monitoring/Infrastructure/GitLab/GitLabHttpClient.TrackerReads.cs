@@ -1,4 +1,3 @@
-using System.Net;
 using System.Text.Json;
 
 using Foundry.Modules.Monitoring.Contracts;
@@ -44,6 +43,7 @@ internal sealed partial class GitLabHttpClient
 
         int projectId = projectIdSuccess.Value;
 
+        // Only the first page is read: the reference selection keeps at most 10 issues, so later pages add nothing.
         string encodedPath = Uri.EscapeDataString(slug.FullPath);
         string relativePath = $"projects/{encodedPath}/issues/{issueNumber}/links";
         Uri requestUri = new(EnsureTrailingSlash(apiBaseUrl), relativePath);
@@ -52,12 +52,6 @@ internal sealed partial class GitLabHttpClient
         AddCommonHeaders(request, token);
 
         using HttpResponseMessage response = await httpClient.SendAsync(request, cancellationToken);
-
-        if (response.StatusCode is HttpStatusCode.Forbidden or HttpStatusCode.NotFound)
-        {
-            RecordRestHeadroom(response);
-            return Result<IReadOnlyList<IssueReference>>.Ok([]);
-        }
 
         if (!response.IsSuccessStatusCode)
         {
@@ -141,7 +135,10 @@ internal sealed partial class GitLabHttpClient
 
         if (issueResult is not Result<GitLabReferencedIssueDto>.Success issueSuccess)
         {
-            return Result<ProviderReferencedIssue>.Fail(((Result<GitLabReferencedIssueDto>.Failure)issueResult).Error);
+            Error error = ((Result<GitLabReferencedIssueDto>.Failure)issueResult).Error;
+
+            return Result<ProviderReferencedIssue>.Fail(
+                error.Kind is ErrorKind.NotFound ? TrackerReadErrors.NotFound() : error);
         }
 
         if (issueSuccess.Value.Confidential)

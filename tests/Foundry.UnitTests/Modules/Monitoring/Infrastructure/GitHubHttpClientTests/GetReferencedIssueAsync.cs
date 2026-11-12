@@ -95,7 +95,7 @@ public sealed class GetReferencedIssueAsync
     }
 
     [Fact]
-    public async Task WhenGitHubAnswersWithANotFoundEnvelope_FailsTheReadWithoutNotAnIssue()
+    public async Task WhenGitHubAnswersWithANotFoundEnvelope_FailsTheReadAsNotFound()
     {
         // Arrange
         // Captured 2026-11-12 with the issueOrPullRequest(number: 999999) query on karirafn/foundry.
@@ -110,8 +110,25 @@ public sealed class GetReferencedIssueAsync
         // Assert
         Error error = result.ShouldBeOfType<Result<ProviderReferencedIssue>.Failure>().Error;
         error.ShouldSatisfyAllConditions(
-            () => error.Code.ShouldNotBe(TrackerReadErrors.NotAnIssueCode),
-            () => error.Message.ShouldContain("Could not resolve to an issue or pull request"));
+            () => error.Code.ShouldBe(TrackerReadErrors.NotFoundCode),
+            () => error.Kind.ShouldBe(ErrorKind.NotFound));
+    }
+
+    [Fact]
+    public async Task WhenGitHubAnswersWithAnotherGraphQlError_FailsTheReadWithoutNotFound()
+    {
+        // Arrange
+        string forbidden = """
+            {"data":{"repository":{"issueOrPullRequest":null}},"errors":[{"type":"FORBIDDEN","path":["repository","issueOrPullRequest"],"message":"Resource not accessible by personal access token"}]}
+            """;
+        GitHubHttpClient sut = BuildSut(new FakeHandler(HttpStatusCode.OK, forbidden));
+
+        // Act
+        Result<ProviderReferencedIssue> result = await ReadAsync(sut, 999999);
+
+        // Assert
+        Error error = result.ShouldBeOfType<Result<ProviderReferencedIssue>.Failure>().Error;
+        error.Code.ShouldNotBe(TrackerReadErrors.NotFoundCode);
     }
 
     [Fact]
