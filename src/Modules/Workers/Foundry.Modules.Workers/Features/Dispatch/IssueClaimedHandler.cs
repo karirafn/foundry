@@ -188,6 +188,7 @@ internal sealed class IssueClaimedHandler(
         }
 
         startingRun.RecordPreparedBase(((PrepareOutcome.Prepared)prepareOutcome).Base);
+        startingRun.RecordSuppliedOpenIssues(trackerContext);
 
         Result<ContainerId> startResult = await orchestrator.StartAsync(spec, cancellationToken);
 

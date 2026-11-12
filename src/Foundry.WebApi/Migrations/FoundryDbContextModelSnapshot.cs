@@ -650,6 +650,11 @@ namespace Foundry.WebApi.Migrations
                         .HasDefaultValue("implement")
                         .HasColumnName("role");
 
+                    b.Property<string>("SuppliedOpenIssueNumbers")
+                        .HasMaxLength(2147483647)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("supplied_open_issues");
+
                     b.Property<string>("VerdictQuestions")
                         .HasMaxLength(2147483647)
                         .HasColumnType("TEXT")
