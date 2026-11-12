@@ -51,7 +51,7 @@ import {
 
 let nextBlockersLabelId = 0;
 
-const KIND_LABELS:Readonly<Record<string, string>> = {
+const KIND_LABELS: Readonly<Record<string, string>> = {
   feature: 'Feature',
   bug: 'Bug',
   refactor: 'Refactor',
@@ -785,8 +785,6 @@ export class IssueDetailComponent {
   readonly error: InputSignal<string | null> = input.required<string | null>();
   readonly retry: OutputEmitterRef<void> = output<void>();
 
-  protected readonly _maxChecksFixAttempts = MAX_CHECKS_FIX_ATTEMPTS;
-  protected readonly _maxRebaseConflictAttempts = MAX_REBASE_CONFLICT_ATTEMPTS;
   // The side pane can render two details at once, so the id cannot be a fixed string.
   protected readonly _blockersLabelId = `issue-detail-blockers-label-${nextBlockersLabelId++}`;
 
@@ -1146,6 +1144,8 @@ export class IssueDetailComponent {
     return null;
   }
 
+  protected readonly _maxChecksFixAttempts = MAX_CHECKS_FIX_ATTEMPTS;
+  protected readonly _maxRebaseConflictAttempts = MAX_REBASE_CONFLICT_ATTEMPTS;
 
   protected _isWorking(state: string): boolean {
     return WORKING_STATES.has(state as IssueState);
