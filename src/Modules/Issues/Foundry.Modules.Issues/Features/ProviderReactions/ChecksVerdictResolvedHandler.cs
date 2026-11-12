@@ -53,6 +53,14 @@ internal sealed class ChecksVerdictResolvedHandler(
             return;
         }
 
+        if (outcome is ChecksOutcome.StillFailing { FailingChecks.Count: 0 })
+        {
+            logger.LogInformation(
+                "Checks failed for repository {RepositoryId} issue {IssueNumber} but no failing check could be identified; no fix was attempted.",
+                @event.RepositoryId,
+                @event.IssueNumber);
+        }
+
         ReviewIssue reviewIssue = checksPendingIssue.ToReview(outcome);
         await db.TransitionAsync(checksPendingIssue, reviewIssue, domainEventDispatcher, cancellationToken);
     }
