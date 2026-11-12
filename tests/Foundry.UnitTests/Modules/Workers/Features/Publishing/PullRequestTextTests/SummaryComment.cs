@@ -16,7 +16,7 @@ public sealed class SummaryComment
         PullRequestDescription description = PullRequestDescription.TryCreate("Addresses the review: renames the option.")!;
 
         // Act
-        string comment = PullRequestText.SummaryComment(description, ["fix: rename the option"]);
+        string comment = PullRequestText.SummaryComment(description, ["fix: rename the option"], []);
 
         // Assert
         comment.ShouldBe("Addresses the review: renames the option.");
@@ -26,7 +26,7 @@ public sealed class SummaryComment
     public void WhenTheDescriptionIsMissing_TheCommentListsTheCommitSubjects()
     {
         // Act
-        string comment = PullRequestText.SummaryComment(null, ["fix: rename the option", "test: cover the rename"]);
+        string comment = PullRequestText.SummaryComment(null, ["fix: rename the option", "test: cover the rename"], []);
 
         // Assert
         comment.ShouldBe("## Changes\n\n- fix: rename the option\n- test: cover the rename");
@@ -36,7 +36,7 @@ public sealed class SummaryComment
     public void WhenTheDescriptionAndCommitSubjectsAreMissing_TheCommentIsTheNeutralSentence()
     {
         // Act
-        string comment = PullRequestText.SummaryComment(null, []);
+        string comment = PullRequestText.SummaryComment(null, [], []);
 
         // Assert
         comment.ShouldBe(PullRequestText.NoChangesListedSentence);

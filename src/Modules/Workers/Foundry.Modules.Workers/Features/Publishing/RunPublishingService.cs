@@ -8,7 +8,7 @@ using Microsoft.Extensions.Logging;
 namespace Foundry.Modules.Workers.Features.Publishing;
 
 /// <summary>
-/// The publishing loop (ADR 0100): discards unpublished runs past their Hand-off time to live, starts due publish
+/// The publishing loop (ADR 0100): discards unpublished runs (failed or blocked) past their Hand-off time to live, starts due publish
 /// retries, and publishes every publishing run. A separate loop from dispatch, so a slow push never delays monitoring.
 /// </summary>
 internal sealed class RunPublishingService(
@@ -30,6 +30,13 @@ internal sealed class RunPublishingService(
         DateTimeOffset now = timeProvider.GetUtcNow();
 
         // Filtered in memory: SQLite cannot translate DateTimeOffset comparisons.
+        List<PublishBlockedRun> blockedRuns = await dbContext.Set<PublishBlockedRun>().ToListAsync(cancellationToken);
+
+        foreach (PublishBlockedRun blocked in blockedRuns.Where(blocked => blocked.DiscardsAt <= now))
+        {
+            await runPublisher.DiscardAsync(blocked, cancellationToken);
+        }
+
         List<PublishFailedRun> failedRuns = await dbContext.Set<PublishFailedRun>().ToListAsync(cancellationToken);
 
         foreach (PublishFailedRun failed in failedRuns)

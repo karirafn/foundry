@@ -35,6 +35,7 @@ const ALL_LIFECYCLE_STATES: ReadonlySet<IssueState> = new Set<IssueState>([
   'triage_in_progress',
   'triage_failed',
   'publish_failed',
+  'publish_blocked',
   'branch_diverged',
 ]);
 
@@ -63,6 +64,7 @@ describe('issue-lifecycle model', () => {
       'triage_in_progress',
       'triage_failed',
       'publish_failed',
+      'publish_blocked',
       'branch_diverged',
     ]);
 
@@ -503,8 +505,8 @@ describe('triage states', () => {
   });
 });
 
-describe('publish lifecycle states (#787)', () => {
-  for (const state of ['publish_failed', 'branch_diverged'] as const) {
+describe('publish lifecycle states (#787, #788)', () => {
+  for (const state of ['publish_failed', 'publish_blocked', 'branch_diverged'] as const) {
     it(`should place ${state} in the Needs attention group, in the first tier`, () => {
       // Arrange / Act
       const group = groupFor(state);

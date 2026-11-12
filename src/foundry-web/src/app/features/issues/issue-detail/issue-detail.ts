@@ -33,6 +33,8 @@ import { LogViewComponent } from '../../../shared/components/log-view/log-view';
 import { RoleTagComponent } from '../../../shared/components/role-tag/role-tag';
 import { PublishStatusComponent } from '../publish-status/publish-status';
 import { PublishFactsComponent } from '../publish-facts/publish-facts';
+import { RevertedFilesComponent } from '../reverted-files/reverted-files';
+import { providerDisplayName } from '../../../shared/utils/provider.util';
 import { ConfirmDialogComponent } from '../../../shared/components/confirm-dialog/confirm-dialog';
 import { rebaseOutcomeLabel } from '../rebase-outcome.format';
 import { getFailureCategoryDisplay } from '../../../shared/utils/failure-category';
@@ -62,6 +64,12 @@ const KIND_SOURCE_NOTES: Readonly<Record<IssueKindClassification['source'], stri
 // States still waiting for a triage worker.
 const TRIAGE_WAITING_STATES: ReadonlySet<string> = new Set<string>(['detected', 'triage_queued']);
 
+// Issue states whose run holds unpublished work that Discard run can delete.
+const UNPUBLISHED_WORK_STATES: ReadonlySet<string> = new Set<string>(['publish_failed', 'publish_blocked']);
+
+// Issue states that show Retry publish.
+const PUBLISH_RETRY_STATES: ReadonlySet<string> = new Set<string>(['publish_failed']);
+
 const RETRIAGE_MESSAGE =
   'The issue leaves the queue and a triage worker reads it again. If it needs more detail, the questions are posted on the issue and it waits for a reply.';
 const RETRIAGE_BLOCKED_SUFFIX = ' If its blockers are still open afterwards, it returns to Blocked.';
@@ -85,6 +93,7 @@ interface TriageCallout {
     RoleTagComponent,
     PublishStatusComponent,
     PublishFactsComponent,
+    RevertedFilesComponent,
   ],
   template: `
     @if (error()) {
@@ -383,7 +392,7 @@ interface TriageCallout {
             }
           </div>
 
-          <!-- Publish callout: publishing, retrying, exhausted or branch diverged. Its live region
+          <!-- Publish callout: publishing, retrying, exhausted, blocked or branch diverged. Its live region
                is permanently mounted inside fd-publish-status. -->
           <fd-publish-status
             [issueState]="d.state"
@@ -473,6 +482,9 @@ interface TriageCallout {
                 [providerType]="d.providerType ?? ''"
               />
             }
+            @if (wr.revertedFiles.length > 0) {
+              <fd-reverted-files [files]="wr.revertedFiles" />
+            }
             <div class="issue-detail__run-header">
               <span class="issue-detail__field-key">Run</span>
               <fd-role-tag [role]="wr.role" />
@@ -560,31 +572,54 @@ interface TriageCallout {
           />
         }
 
-        @if (d.state === 'publish_failed') {
+        <!-- A run holding unpublished work: publishing exhausted, or blocked by a detected secret.
+             There is deliberately no way to publish a blocked run or reveal a matched value. -->
+        @if (_holdsUnpublishedWork(d.state)) {
           <div class="issue-detail__actions">
+            @if (d.state === 'publish_failed') {
+              <button
+                class="issue-detail__retry-btn"
+                type="button"
+                [disabled]="_publishRetryPending() || _discardPending()"
+                [attr.aria-label]="'Retry publishing for issue #' + d.issueNumber"
+                (click)="openPublishRetryConfirm()"
+              >{{ _publishRetryPending() ? 'Retrying publish…' : 'Retry publish' }}</button>
+            }
             <button
-              class="issue-detail__retry-btn"
+              class="issue-detail__cancel-btn issue-detail__discard-btn"
               type="button"
-              [disabled]="_publishRetryPending()"
-              [attr.aria-label]="'Retry publishing for issue #' + d.issueNumber"
-              (click)="openPublishRetryConfirm()"
-            >{{ _publishRetryPending() ? 'Retrying publish…' : 'Retry publish' }}</button>
+              [disabled]="_discardPending() || _publishRetryPending()"
+              [attr.aria-label]="'Discard run for issue #' + d.issueNumber"
+              (click)="openDiscardConfirm()"
+            >{{ _discardPending() ? 'Discarding…' : 'Discard run' }}</button>
             <span
               class="issue-detail__retry-error"
               aria-live="assertive"
               aria-atomic="true"
-            >{{ _publishRetryError() ?? '' }}</span>
+            >{{ _publishRetryError() ?? _discardError() ?? '' }}</span>
           </div>
-          <!-- Not destructive, but pushing triggers CI with repository secrets, so confirm first. -->
+          @if (d.state === 'publish_failed') {
+            <!-- Not destructive, but pushing triggers CI with repository secrets, so confirm first. -->
+            <fd-confirm-dialog
+              [open]="_confirmPublishRetryOpen()"
+              title="Retry publishing?"
+              [message]="_publishRetryMessage(d.stateDetails?.branchName ?? null)"
+              confirmLabel="Retry publish"
+              cancelLabel="Not now"
+              [destructive]="false"
+              (confirmed)="confirmPublishRetry()"
+              (dismissed)="_confirmPublishRetryOpen.set(false)"
+            />
+          }
           <fd-confirm-dialog
-            [open]="_confirmPublishRetryOpen()"
-            title="Retry publishing?"
-            [message]="_publishRetryMessage(d.stateDetails?.branchName ?? null)"
-            confirmLabel="Retry publish"
-            cancelLabel="Not now"
-            [destructive]="false"
-            (confirmed)="confirmPublishRetry()"
-            (dismissed)="_confirmPublishRetryOpen.set(false)"
+            [open]="_confirmDiscardOpen()"
+            title="Discard this run?"
+            [message]="_discardMessage(d.providerType ?? '')"
+            confirmLabel="Discard run"
+            cancelLabel="Keep run"
+            [destructive]="true"
+            (confirmed)="confirmDiscard()"
+            (dismissed)="_confirmDiscardOpen.set(false)"
           />
         }
 
@@ -705,6 +740,12 @@ interface TriageCallout {
           aria-live="polite"
           aria-atomic="true"
         >{{ _publishRetrySuccess() ?? '' }}</span>
+        <!-- Likewise outside the Discard run row, which unmounts once the issue moves to Failed. -->
+        <span
+          class="issue-detail__discard-success-announcement sr-only"
+          aria-live="polite"
+          aria-atomic="true"
+        >{{ _discardSuccess() ?? '' }}</span>
       </div>
     }
   `,
@@ -796,12 +837,25 @@ export class IssueDetailComponent {
   private readonly _publishRetrySuccessSignal: WritableSignal<string | null> = signal(null);
   protected readonly _publishRetrySuccess: Signal<string | null> = this._publishRetrySuccessSignal.asReadonly();
 
+  protected readonly _confirmDiscardOpen: WritableSignal<boolean> = signal(false);
+
+  private readonly _discardPendingSignal: WritableSignal<boolean> = signal(false);
+  protected readonly _discardPending: Signal<boolean> = this._discardPendingSignal.asReadonly();
+
+  private readonly _discardErrorSignal: WritableSignal<string | null> = signal(null);
+  protected readonly _discardError: Signal<string | null> = this._discardErrorSignal.asReadonly();
+
+  // Not reset by the detail-reload effect, so it survives the IssueUpdated reload it causes.
+  private readonly _discardSuccessSignal: WritableSignal<string | null> = signal(null);
+  protected readonly _discardSuccess: Signal<string | null> = this._discardSuccessSignal.asReadonly();
+
   private readonly _contentRegion: Signal<ElementRef<HTMLElement> | undefined> =
     viewChild<ElementRef<HTMLElement>>('contentRegion');
 
-  // Set when a publish retry is accepted; once the Retry publish button unmounts, focus moves to
-  // the content region so it does not fall back to <body>.
-  private _focusContentWhenPublishRetryGone = false;
+  // Set when a publish retry or discard is accepted: the issue states in which the clicked button
+  // is still mounted. Once the issue leaves them the button unmounts, and focus moves to the
+  // content region so it does not fall back to <body>.
+  private _focusContentUnlessStateIn: ReadonlySet<string> | null = null;
 
   constructor() {
     // A successful triage action reloads the detail into a new state that no longer has the
@@ -825,6 +879,8 @@ export class IssueDetailComponent {
       this._confirmRetriageOpen.set(false);
       this._confirmPublishRetryOpen.set(false);
       this._publishRetryErrorSignal.set(null);
+      this._confirmDiscardOpen.set(false);
+      this._discardErrorSignal.set(null);
 
       if (d !== null && untracked(() => this._focusTriageRegionAfterReload)) {
         this._focusTriageRegionAfterReload = false;
@@ -832,7 +888,7 @@ export class IssueDetailComponent {
       }
 
       if (d !== null) {
-        this._focusContentIfPublishRetryGone(d.state);
+        this._focusContentIfActionGone(d.state);
       }
 
       if (workerRunId === null) {
@@ -885,6 +941,7 @@ export class IssueDetailComponent {
 
   openPublishRetryConfirm(): void {
     this._publishRetryErrorSignal.set(null);
+    this._discardErrorSignal.set(null);
     this._confirmPublishRetryOpen.set(true);
   }
 
@@ -905,21 +962,61 @@ export class IssueDetailComponent {
         return;
       }
       this._publishRetrySuccessSignal.set('Publish retry started. Issue status is updating.');
-      this._focusContentWhenPublishRetryGone = true;
-      // The IssueUpdated reload may already have moved the issue on.
-      const current = this.detail();
-      if (current !== null) {
-        this._focusContentIfPublishRetryGone(current.state);
-      }
+      this._focusContentOnceStateLeaves(PUBLISH_RETRY_STATES);
     });
   }
 
-  private _focusContentIfPublishRetryGone(state: string): void {
-    if (!this._focusContentWhenPublishRetryGone || state === 'publish_failed') {
+  openDiscardConfirm(): void {
+    this._discardErrorSignal.set(null);
+    this._publishRetryErrorSignal.set(null);
+    this._confirmDiscardOpen.set(true);
+  }
+
+  confirmDiscard(): void {
+    this._confirmDiscardOpen.set(false);
+    const workerRunId = this.detail()?.stateDetails?.workerRunId ?? this._workerRun()?.workerRunId;
+
+    if (!workerRunId) {
       return;
     }
-    this._focusContentWhenPublishRetryGone = false;
+
+    this._discardPendingSignal.set(true);
+    this._discardSuccessSignal.set(null);
+    this._workerRunService.requestDiscard(workerRunId).subscribe((error) => {
+      this._discardPendingSignal.set(false);
+      if (error !== null) {
+        this._discardErrorSignal.set(error);
+        return;
+      }
+      this._discardSuccessSignal.set('Run discarded. Issue status is updating.');
+      this._focusContentOnceStateLeaves(UNPUBLISHED_WORK_STATES);
+    });
+  }
+
+  private _focusContentOnceStateLeaves(states: ReadonlySet<string>): void {
+    this._focusContentUnlessStateIn = states;
+    // The IssueUpdated reload may already have moved the issue on.
+    const current = this.detail();
+    if (current !== null) {
+      this._focusContentIfActionGone(current.state);
+    }
+  }
+
+  private _focusContentIfActionGone(state: string): void {
+    if (this._focusContentUnlessStateIn === null || this._focusContentUnlessStateIn.has(state)) {
+      return;
+    }
+    this._focusContentUnlessStateIn = null;
     afterNextRender(() => this._contentRegion()?.nativeElement.focus(), { injector: this._injector });
+  }
+
+  protected _holdsUnpublishedWork(state: string): boolean {
+    return UNPUBLISHED_WORK_STATES.has(state);
+  }
+
+  protected _discardMessage(providerType: string): string {
+    return "The run's commits are deleted from this host and nothing is pushed. The issue moves to Failed, where "
+      + `Retry Issue starts a new worker from the branch on ${providerDisplayName(providerType) || 'the provider'}. This cannot be undone.`;
   }
 
   protected _publishRetryMessage(branchName: string | null): string {

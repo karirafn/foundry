@@ -67,6 +67,17 @@ public sealed class RevisionInProgressIssue : Issue
     }
 
     /// <summary>
+    /// The Diff gate found possible secrets in the revision's commits, so nothing was pushed (#788); the unpublished
+    /// work waits for an operator to discard it.
+    /// </summary>
+    public PublishBlockedIssue MarkPublishBlocked(DateTimeOffset blockedAt)
+    {
+        PublishBlockedIssue blocked = PublishBlockedIssue.FromRevisionInProgress(this, blockedAt);
+        AddDomainEvent(new Events.IssuePublishBlocked(Id, MonitoredRepositoryId));
+        return blocked;
+    }
+
+    /// <summary>
     /// The revision's work could not be merged into the branch someone pushed to during the run, so it went to
     /// <paramref name="sideBranchName"/> (ADR 0100).
     /// </summary>

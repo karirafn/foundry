@@ -32,6 +32,7 @@ internal static class IssueStateRegistry
         ["triage_in_progress"] = typeof(TriageInProgressIssue),
         ["triage_failed"] = typeof(TriageFailedIssue),
         ["publish_failed"] = typeof(PublishFailedIssue),
+        ["publish_blocked"] = typeof(PublishBlockedIssue),
         ["branch_diverged"] = typeof(BranchDivergedIssue),
     }.ToFrozenDictionary(StringComparer.Ordinal);
 

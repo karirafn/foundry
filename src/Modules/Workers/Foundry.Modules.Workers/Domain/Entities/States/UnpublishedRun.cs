@@ -5,6 +5,8 @@ using Foundry.Modules.Workers.Domain.ValueObjects;
 using Foundry.Modules.Workers.Features.Outcome;
 using Foundry.Shared;
 
+using WorkerRunFailedEvent = Foundry.Modules.Workers.Domain.Events.WorkerRunFailed;
+
 namespace Foundry.Modules.Workers.Domain.Entities.States;
 
 /// <summary>
@@ -114,16 +116,24 @@ public abstract class UnpublishedRun : WorkerRun, IResolvableRun
     public RunPullRequestText? PullRequestText =>
         PullRequestSummary is null && PullRequestBody is null ? null : new RunPullRequestText(PullRequestSummary, PullRequestBody);
 
+    /// <summary>Ends the run without publishing: its unpublished work is discarded for <paramref name="reason"/>.</summary>
+    private protected FailedRun DiscardWith(FailureReason reason)
+    {
+        FailedRun failed = FailedRun.FromUnpublished(this, reason, ContainerOutput, resultSummary: null, Verdict);
+        AddDomainEvent(new WorkerRunFailedEvent(Id, IssueId, reason.Summary, reason.CategoryToken, BranchName.Value));
+        return failed;
+    }
+
     private protected void RecordPublishResult(PublishResult result, DateTimeOffset publishedAt)
     {
         switch (result)
         {
             case PublishResult.Published published:
-                RecordPublishFacts(published.Head, published.BranchCommitCount, divergedSideBranch: null);
+                RecordPublishFacts(published.Head, published.BranchCommitCount, divergedSideBranch: null, published.RevertedFiles);
                 PublishedCommitSubjects = published.CommitSubjects;
                 break;
             case PublishResult.Diverged diverged:
-                RecordPublishFacts(pushedHead: null, branchCommitCount: null, diverged.SideBranch);
+                RecordPublishFacts(pushedHead: null, branchCommitCount: null, diverged.SideBranch, diverged.RevertedFiles);
                 break;
             case PublishResult.NothingToPublish:
                 break;
@@ -155,6 +165,6 @@ public abstract class UnpublishedRun : WorkerRun, IResolvableRun
         PendingTranscriptCapturedAt = source.PendingTranscriptCapturedAt;
         RecordBase(source.Base);
         RecordVerdict(source.Verdict);
-        RecordPublishFacts(source.PublishedHead, source.PublishedBranchCommitCount, source.DivergedSideBranch);
+        RecordPublishFacts(source.PublishedHead, source.PublishedBranchCommitCount, source.DivergedSideBranch, source.RevertedFiles);
     }
 }

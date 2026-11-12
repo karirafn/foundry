@@ -93,6 +93,21 @@ public sealed class PublishingRun : UnpublishedRun, ITerminableRun
         return PublishFailedRun.FromPublishing(this, attempts, reason, failedAt, nextAttemptAt);
     }
 
+    /// <summary>
+    /// The Diff gate found possible secrets in the Run commits, so nothing was pushed (#788). The run waits, keeping its
+    /// Hand-off volume, until it is discarded.
+    /// </summary>
+    public PublishBlockedRun BlockPublish(IReadOnlyList<SecretFinding> findings, DateTimeOffset blockedAt)
+    {
+        ArgumentNullException.ThrowIfNull(findings);
+        if (findings.Count == 0)
+        {
+            throw new ArgumentException("A blocked publish has at least one finding.", nameof(findings));
+        }
+
+        return PublishBlockedRun.FromPublishing(this, findings, blockedAt);
+    }
+
     public CompletedRun Complete(
         int exitCode,
         BranchName? branchName,

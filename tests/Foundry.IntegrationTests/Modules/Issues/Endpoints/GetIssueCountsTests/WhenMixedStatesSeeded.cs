@@ -114,7 +114,7 @@ public sealed class WhenMixedStatesSeeded : IAsyncDisposable
             TestContext.Current.CancellationToken);
         counts.ShouldNotBeNull();
         counts.ShouldSatisfyAllConditions(
-            () => counts.Counts.Count.ShouldBe(21),
+            () => counts.Counts.Count.ShouldBe(22),
             () => counts.Counts["detected"].ShouldBe(3),
             () => counts.Counts["completed"].ShouldBe(2),
             () => counts.Counts["unchanged"].ShouldBe(1),
@@ -132,6 +132,7 @@ public sealed class WhenMixedStatesSeeded : IAsyncDisposable
             () => counts.Counts["rebase_pending"].ShouldBe(0),
             () => counts.Counts["awaiting_input"].ShouldBe(0),
             () => counts.Counts["publish_failed"].ShouldBe(0),
+            () => counts.Counts["publish_blocked"].ShouldBe(0),
             () => counts.Counts["branch_diverged"].ShouldBe(0));
     }
 }

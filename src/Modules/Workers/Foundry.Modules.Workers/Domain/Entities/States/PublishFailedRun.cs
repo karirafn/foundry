@@ -1,7 +1,5 @@
 using Foundry.Modules.Workers.Domain.ValueObjects;
 
-using WorkerRunFailedEvent = Foundry.Modules.Workers.Domain.Events.WorkerRunFailed;
-
 namespace Foundry.Modules.Workers.Domain.Entities.States;
 
 /// <summary>
@@ -9,7 +7,7 @@ namespace Foundry.Modules.Workers.Domain.Entities.States;
 /// dispatch slot; once exhausted it waits for an operator's Retry publish, keeping its Hand-off volume until the time
 /// to live discards it.
 /// </summary>
-public sealed class PublishFailedRun : UnpublishedRun
+public sealed class PublishFailedRun : UnpublishedRun, IDiscardableRun
 {
     // Private parameterless constructor for EF Core materialization.
     private PublishFailedRun()
@@ -72,12 +70,16 @@ public sealed class PublishFailedRun : UnpublishedRun
         return PublishingRun.FromPublishFailed(this, resetAttempts: true);
     }
 
-    /// <summary>The Hand-off volume reached its time to live: the unpublished work is discarded and the run fails.</summary>
-    public FailedRun Discard()
+    public FailedRun Discard() => DiscardWith(new FailureReason.PublishExpired());
+
+    /// <remarks>Only once the retries are exhausted: until then the run is still publishing on its own.</remarks>
+    public FailedRun DiscardOnRequest()
     {
-        FailureReason reason = new FailureReason.PublishExpired();
-        FailedRun failed = FailedRun.FromUnpublished(this, reason, ContainerOutput, resultSummary: null, Verdict);
-        AddDomainEvent(new WorkerRunFailedEvent(Id, IssueId, reason.Summary, reason.CategoryToken, BranchName.Value));
-        return failed;
+        if (!IsExhausted)
+        {
+            throw new InvalidOperationException($"Worker run '{Id.Value}' is still retrying its publish.");
+        }
+
+        return DiscardWith(new FailureReason.RunDiscarded());
     }
 }

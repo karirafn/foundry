@@ -25,6 +25,8 @@ const mockDetail: WorkerRunDetail = {
   publish: null,
   publishRetry: null,
   discardsAt: null,
+  secretFindings: [],
+  revertedFiles: [],
 };
 
 function setup() {
@@ -241,6 +243,63 @@ describe('WorkerRunService', () => {
 
     // Assert
     expect(result).toBe('Failed to retry publish.');
+    errorSpy.mockRestore();
+  });
+
+  // requestDiscard (#788)
+  it('should POST to the discard endpoint and emit null on 202', () => {
+    // Arrange
+    const { svc, controller } = setup();
+    let result: string | null | undefined = undefined;
+
+    // Act
+    svc.requestDiscard('run-abc').subscribe((r) => (result = r));
+    const req = controller.expectOne('/api/workers/runs/run-abc/discard');
+    req.flush({ workerRunId: 'run-abc' }, { status: 202, statusText: 'Accepted' });
+
+    // Assert
+    expect(req.request.method).toBe('POST');
+    expect(result).toBeNull();
+  });
+
+  it('should emit a not-waiting message when discard returns 409', () => {
+    // Arrange
+    const { svc, controller } = setup();
+    let result: string | null | undefined = undefined;
+
+    // Act
+    svc.requestDiscard('run-abc').subscribe((r) => (result = r));
+    controller.expectOne('/api/workers/runs/run-abc/discard').flush(null, { status: 409, statusText: 'Conflict' });
+
+    // Assert
+    expect(result).toBe('This run is no longer waiting to publish.');
+  });
+
+  it('should emit a not-found message when discard returns 404', () => {
+    // Arrange
+    const { svc, controller } = setup();
+    let result: string | null | undefined = undefined;
+
+    // Act
+    svc.requestDiscard('run-abc').subscribe((r) => (result = r));
+    controller.expectOne('/api/workers/runs/run-abc/discard').flush(null, { status: 404, statusText: 'Not Found' });
+
+    // Assert
+    expect(result).toBe('The run was not found.');
+  });
+
+  it('should emit a generic message when discard fails otherwise', () => {
+    // Arrange
+    const { svc, controller } = setup();
+    let result: string | null | undefined = undefined;
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+    // Act
+    svc.requestDiscard('run-abc').subscribe((r) => (result = r));
+    controller.expectOne('/api/workers/runs/run-abc/discard').flush(null, { status: 500, statusText: 'Server Error' });
+
+    // Assert
+    expect(result).toBe('Failed to discard the run.');
     errorSpy.mockRestore();
   });
 });

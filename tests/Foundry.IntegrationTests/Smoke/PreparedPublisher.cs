@@ -20,6 +20,6 @@ internal sealed class PreparedPublisher : IPublisher
     {
         ArgumentNullException.ThrowIfNull(request);
 
-        return Task.FromResult<PublishResult>(new PublishResult.Published(Head, 1, ["feat: smoke-tested feature"]));
+        return Task.FromResult<PublishResult>(new PublishResult.Published(Head, 1, ["feat: smoke-tested feature"], []));
     }
 }

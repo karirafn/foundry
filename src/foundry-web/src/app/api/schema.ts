@@ -586,6 +586,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/workers/runs/{workerRunId}/discard": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Discards a run holding unpublished work: its commits are deleted and nothing is pushed */
+        post: operations["RequestWorkerRunDiscard"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/workers/run-totals": {
         parameters: {
             query?: never;
@@ -1231,6 +1248,10 @@ export interface components {
             /** Format: date-time */
             cancelRequestedAt: string;
         };
+        RequestRunDiscardResponse: {
+            /** Format: uuid */
+            workerRunId: string;
+        };
         RolePluginComponent: {
             name: string;
             description: null | string;
@@ -1504,6 +1525,8 @@ export interface components {
             publishRetry?: null | components["schemas"]["WorkerRunPublishRetryDetail"];
             /** Format: date-time */
             discardsAt?: null | string;
+            secretFindings?: components["schemas"]["WorkerRunSecretFinding"][];
+            revertedFiles?: components["schemas"]["WorkerRunRevertedFile"][];
         };
         WorkerRunPublishDetail: {
             headSha: string;
@@ -1520,6 +1543,19 @@ export interface components {
             /** Format: date-time */
             nextAttemptAt: null | string;
             reason: string;
+        };
+        WorkerRunRevertedFile: {
+            path: string;
+            reason: string;
+            /** Format: int64 */
+            sizeBytes: number | string;
+        };
+        WorkerRunSecretFinding: {
+            path: string;
+            /** Format: int32 */
+            line: number | string;
+            commitSha: string;
+            ruleId: string;
         };
     };
     responses: never;
@@ -2920,6 +2956,55 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RequestPublishRetryResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    RequestWorkerRunDiscard: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workerRunId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Accepted */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RequestRunDiscardResponse"];
                 };
             };
             /** @description Not Found */

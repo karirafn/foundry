@@ -28,6 +28,7 @@ export const ACTIVE_STATES: ReadonlySet<IssueState> = new Set<IssueState>([
   'triage_in_progress',
   'triage_failed',
   'publish_failed',
+  'publish_blocked',
   'branch_diverged',
 ]);
 
@@ -66,6 +67,7 @@ export const STATE_GROUPS: readonly StateGroup[] = [
       'revision_failed',
       'triage_failed',
       'publish_failed',
+      'publish_blocked',
       'branch_diverged',
     ],
   },
@@ -144,6 +146,7 @@ export const WITHIN_GROUP_ORDER: Readonly<Record<StateGroupId, readonly (readonl
       'revision_failed',
       'triage_failed',
       'publish_failed',
+      'publish_blocked',
       'branch_diverged',
     ],
   ],

@@ -24,6 +24,7 @@ public sealed class WhenEntityType_IsMapped
     [InlineData("completed", typeof(CompletedIssue))]
     [InlineData("unchanged", typeof(UnchangedIssue))]
     [InlineData("publish_failed", typeof(PublishFailedIssue))]
+    [InlineData("publish_blocked", typeof(PublishBlockedIssue))]
     [InlineData("branch_diverged", typeof(BranchDivergedIssue))]
     public void GetEntityType_ReturnsCorrectType(string name, Type expectedType)
     {

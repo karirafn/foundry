@@ -87,6 +87,9 @@ public sealed class IssueConfiguration : IEntityTypeConfiguration<Issue>
                 "ck_issues_publish_failed_fields",
                 "state <> 'publish_failed' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND failure_reason IS NOT NULL AND failed_at IS NOT NULL)");
             t.HasCheckConstraint(
+                "ck_issues_publish_blocked_fields",
+                "state <> 'publish_blocked' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND publish_blocked_at IS NOT NULL)");
+            t.HasCheckConstraint(
                 "ck_issues_branch_diverged_fields",
                 "state <> 'branch_diverged' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND side_branch_name IS NOT NULL)");
         });
@@ -222,6 +225,7 @@ public sealed class IssueConfiguration : IEntityTypeConfiguration<Issue>
             .HasValue<TriageInProgressIssue>("triage_in_progress")
             .HasValue<TriageFailedIssue>("triage_failed")
             .HasValue<PublishFailedIssue>("publish_failed")
+            .HasValue<PublishBlockedIssue>("publish_blocked")
             .HasValue<BranchDivergedIssue>("branch_diverged")
             .IsComplete(true);
 

@@ -5,25 +5,29 @@ import { WorkerRunDetail } from '../../workers/worker-run.model';
 import { WORKING_STATES } from '../../../shared/utils/issue-state';
 import { providerDisplayName } from '../../../shared/utils/provider.util';
 import { SafeHrefPipe } from '../../../shared/pipes/safe-href.pipe';
+import { SecretFindingsComponent } from '../secret-findings/secret-findings';
 
-type PublishVariant = 'publishing' | 'retrying' | 'exhausted' | 'diverged';
+type PublishVariant = 'publishing' | 'retrying' | 'exhausted' | 'blocked' | 'diverged';
 
 const VARIANT_TINT: Readonly<Record<PublishVariant, 'neutral' | 'warning' | 'error'>> = {
   publishing: 'neutral',
   retrying: 'warning',
   exhausted: 'error',
+  blocked: 'error',
   diverged: 'warning',
 };
 
+let nextId = 0;
+
 /**
  * The issue's publish callout: Foundry publishing the run's commits, retrying a failed publish,
- * publishing exhausted, or the branch diverged. Display only. The region stays mounted (collapsed
+ * publishing exhausted, the push blocked by a detected secret, or the branch diverged. Display only. The region stays mounted (collapsed
  * when no variant applies) so screen readers announce each change of variant once.
  */
 @Component({
   selector: 'fd-publish-status',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [DatePipe, SafeHrefPipe],
+  imports: [DatePipe, SafeHrefPipe, SecretFindingsComponent],
   template: `
     @let v = variant();
     <div
@@ -82,6 +86,17 @@ const VARIANT_TINT: Readonly<Record<PublishVariant, 'neutral' | 'warning' | 'err
                 }
               </span>
             }
+            @case ('blocked') {
+              <span class="badge publish-status__chip badge--retry-exhausted">Push blocked</span>
+              <span class="publish-status__message">
+                The diff gate found {{ secretCountText() }} in the run's changes, so nothing was pushed to
+                @if (branchName(); as branch) {
+                  <span class="publish-status__branch">{{ branch }}</span>.
+                } @else {
+                  the issue branch.
+                }
+              </span>
+            }
             @case ('diverged') {
               <span class="badge publish-status__chip badge--branch-diverged">Branch diverged</span>
               <span class="publish-status__message">
@@ -91,6 +106,22 @@ const VARIANT_TINT: Readonly<Record<PublishVariant, 'neutral' | 'warning' | 'err
             }
           }
         </div>
+
+        @if (v === 'blocked') {
+          @if (run()?.secretFindings; as findings) {
+            @if (findings.length > 0) {
+              <fd-secret-findings [findings]="findings" [headingId]="findingsHeadingId" />
+            }
+          }
+          <p class="publish-status__message publish-status__guidance">
+            Foundry never publishes a run with a detected secret. Discard the run, then retry the issue to
+            start a new worker from the branch. If a finding is a real credential, rotate it: the worker had
+            it in its workspace.
+            @if (run()?.discardsAt; as discardsAt) {
+              If no one acts, the run is discarded automatically on {{ discardsAt | date: 'medium' }}.
+            }
+          </p>
+        }
 
         @if (v === 'diverged') {
           <div class="publish-status__fields">
@@ -147,6 +178,9 @@ export class PublishStatusComponent {
     if (state === 'publish_failed') {
       return 'exhausted';
     }
+    if (state === 'publish_blocked') {
+      return 'blocked';
+    }
     if (!WORKING_STATES.has(state)) {
       return null;
     }
@@ -163,6 +197,16 @@ export class PublishStatusComponent {
   protected readonly tint: Signal<'neutral' | 'warning' | 'error' | null> = computed(() => {
     const v = this.variant();
     return v === null ? null : VARIANT_TINT[v];
+  });
+
+  protected readonly findingsHeadingId: string = `publish-status-findings-${nextId++}`;
+
+  protected readonly secretCountText: Signal<string> = computed(() => {
+    const count = this.run()?.secretFindings?.length ?? 0;
+    if (count === 0) {
+      return 'possible secrets';
+    }
+    return count === 1 ? '1 possible secret' : `${count} possible secrets`;
   });
 
   protected readonly branchName: Signal<string | null> = computed(() => this.stateDetails().branchName);

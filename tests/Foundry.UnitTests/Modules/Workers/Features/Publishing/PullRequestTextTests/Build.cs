@@ -24,7 +24,7 @@ public sealed class Build
     {
         // Act
         PullRequestText text = PullRequestText.Build(
-            Enum.Parse<PullRequestKind>(kindName), Summary, Description, IssueTitle, 42, []);
+            Enum.Parse<PullRequestKind>(kindName), Summary, Description, IssueTitle, 42, [], []);
 
         // Assert
         text.Title.ShouldBe($"{type}: add retry to webhook delivery");
@@ -34,7 +34,7 @@ public sealed class Build
     public void WhenTheSummaryIsMissing_TheTitleFallsBackToTheIssueTitle()
     {
         // Act
-        PullRequestText text = PullRequestText.Build(PullRequestKind.Bug, null, Description, IssueTitle, 42, []);
+        PullRequestText text = PullRequestText.Build(PullRequestKind.Bug, null, Description, IssueTitle, 42, [], []);
 
         // Assert
         text.Title.ShouldBe("fix: Retry webhook delivery");
@@ -45,7 +45,7 @@ public sealed class Build
     {
         // Act
         PullRequestText text = PullRequestText.Build(
-            PullRequestKind.Feature, null, Description, "  Retry   webhook\r\n delivery\t", 42, []);
+            PullRequestKind.Feature, null, Description, "  Retry   webhook\r\n delivery\t", 42, [], []);
 
         // Assert
         text.Title.ShouldBe("feat: Retry webhook delivery");
@@ -58,7 +58,7 @@ public sealed class Build
         string issueTitle = string.Join(' ', Enumerable.Repeat("webhook", 20));
 
         // Act
-        PullRequestText text = PullRequestText.Build(PullRequestKind.Feature, null, Description, issueTitle, 42, []);
+        PullRequestText text = PullRequestText.Build(PullRequestKind.Feature, null, Description, issueTitle, 42, [], []);
 
         // Assert
         string summary = text.Title["feat: ".Length..];
@@ -72,7 +72,7 @@ public sealed class Build
     public void WhenTheIssueTitleIsBlank_TheFallbackTitleNamesTheIssue()
     {
         // Act
-        PullRequestText text = PullRequestText.Build(PullRequestKind.Feature, null, null, "   ", 42, []);
+        PullRequestText text = PullRequestText.Build(PullRequestKind.Feature, null, null, "   ", 42, [], []);
 
         // Assert
         text.Title.ShouldBe("feat: resolve issue #42");
@@ -82,7 +82,7 @@ public sealed class Build
     public void WhenTheVerdictHasADescription_TheBodyIsTheDescriptionThenTheClosesLine()
     {
         // Act
-        PullRequestText text = PullRequestText.Build(PullRequestKind.Feature, Summary, Description, IssueTitle, 42, ["feat: add retry"]);
+        PullRequestText text = PullRequestText.Build(PullRequestKind.Feature, Summary, Description, IssueTitle, 42, ["feat: add retry"], []);
 
         // Assert
         text.Body.ShouldBe("## Summary\n\nAdds retry to webhook delivery.\n\nCloses #42");
@@ -93,7 +93,7 @@ public sealed class Build
     {
         // Act
         PullRequestText text = PullRequestText.Build(
-            PullRequestKind.Feature, Summary, null, IssueTitle, 7, ["feat: add retry", "  ", " test: cover retry "]);
+            PullRequestKind.Feature, Summary, null, IssueTitle, 7, ["feat: add retry", "  ", " test: cover retry "], []);
 
         // Assert
         text.Body.ShouldBe("## Changes\n\n- feat: add retry\n- test: cover retry\n\nCloses #7");
@@ -103,7 +103,7 @@ public sealed class Build
     public void WhenTheDescriptionAndCommitSubjectsAreMissing_TheBodyIsANeutralSentenceThenTheClosesLine()
     {
         // Act
-        PullRequestText text = PullRequestText.Build(PullRequestKind.Feature, null, null, IssueTitle, 7, []);
+        PullRequestText text = PullRequestText.Build(PullRequestKind.Feature, null, null, IssueTitle, 7, [], []);
 
         // Assert
         text.Body.ShouldBe($"{PullRequestText.NoChangesListedSentence}\n\nCloses #7");
