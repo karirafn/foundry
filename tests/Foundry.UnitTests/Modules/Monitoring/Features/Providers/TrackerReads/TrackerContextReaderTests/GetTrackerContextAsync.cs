@@ -1,0 +1,250 @@
+using Foundry.Modules.Monitoring.Contracts;
+using Foundry.Modules.Monitoring.Contracts.Queries;
+using Foundry.Modules.Monitoring.Domain.Entities;
+using Foundry.Modules.Monitoring.Domain.ValueObjects;
+using Foundry.Modules.Monitoring.Features.CredentialResolution;
+using Foundry.Modules.Monitoring.Features.Providers;
+using Foundry.Modules.Monitoring.Features.Providers.Checks;
+using Foundry.Modules.Monitoring.Features.Providers.Comments;
+using Foundry.Modules.Monitoring.Features.Providers.Feedback;
+using Foundry.Modules.Monitoring.Features.Providers.TrackerReads;
+using Foundry.Shared;
+using Foundry.Testing;
+using Foundry.UnitTests.Fakes.Monitoring;
+using Foundry.WebApi.Persistence;
+
+using Microsoft.Data.Sqlite;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging.Abstractions;
+
+using Shouldly;
+
+using Xunit;
+
+using ProviderChecks = Foundry.Modules.Monitoring.Features.Providers.Checks.Checks;
+
+namespace Foundry.UnitTests.Modules.Monitoring.Features.Providers.TrackerReads.TrackerContextReaderTests;
+
+public sealed class GetTrackerContextAsync : IAsyncDisposable
+{
+    private const int IssueNumber = 7;
+    private const int OpenIssueCap = 100;
+
+    private static readonly IssueContent Content = new("Add retry", "Retry webhook delivery.", []);
+
+    private readonly SqliteConnection _connection;
+    private readonly FoundryDbContext _dbContext;
+    private readonly TrackerReadsProvider _provider = new();
+    private readonly ITrackerContextQueries _sut;
+
+    public GetTrackerContextAsync()
+    {
+        _connection = new SqliteConnection("Data Source=:memory:");
+        _connection.Open();
+        _dbContext = new FoundryDbContext(new DbContextOptionsBuilder<FoundryDbContext>().UseSqlite(_connection).Options);
+        _dbContext.Database.EnsureCreated();
+
+        _sut = new TrackerContextReader(
+            _dbContext,
+            new SingleIssueProviderFactory(_provider),
+            new CredentialResolver(_dbContext, NullLogger<CredentialResolver>.Instance),
+            NullLogger<TrackerContextReader>.Instance);
+    }
+
+    async ValueTask IAsyncDisposable.DisposeAsync()
+    {
+        await _dbContext.DisposeAsync();
+        await _connection.DisposeAsync();
+    }
+
+    private async Task<MonitoredRepositoryId> SeedRepoAsync()
+    {
+        GitHubCredential credential = GitHubCredential.Create("my-org", "ghp_test_token", BaseUrl.Create("https://github.com").ValueOrThrow());
+        credential.SetNamespaces([Namespace.Create("owner").ValueOrThrow()]);
+        _dbContext.Set<Credential>().Add(credential);
+
+        MonitoredRepository repo = MonitoredRepository.Create(
+            RepositorySlug.Create("owner/repo").ValueOrThrow(), "github.com", null).ValueOrThrow();
+        _dbContext.Set<MonitoredRepository>().Add(repo);
+        await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        return repo.Id;
+    }
+
+    private async Task<TrackerContext> ReadAsync(CancellationToken? cancellationToken = null) =>
+        await _sut.GetTrackerContextAsync(
+            await SeedRepoAsync(), IssueNumber, Content, cancellationToken ?? TestContext.Current.CancellationToken);
+
+    [Fact]
+    public async Task WhenTheProviderListsOpenIssues_ReturnsThemInOrderWithNoReferencedIssuesOrNotes()
+    {
+        // Arrange
+        _provider.OpenIssues = Result<IReadOnlyList<OpenIssue>>.Ok(
+            [new OpenIssue(30, "Newest"), new OpenIssue(20, "Middle"), new OpenIssue(10, "Oldest")]);
+
+        // Act
+        TrackerContext context = await ReadAsync();
+
+        // Assert
+        context.ShouldSatisfyAllConditions(
+            () => context.OpenIssues.ShouldBe(
+                [new OpenIssue(30, "Newest"), new OpenIssue(20, "Middle"), new OpenIssue(10, "Oldest")]),
+            () => context.ReferencedIssues.ShouldBeEmpty(),
+            () => context.UnreadableIssueNumbers.ShouldBeEmpty(),
+            () => context.LinksUnreadable.ShouldBeFalse());
+    }
+
+    [Fact]
+    public async Task WhenTheProviderListsTheIssueItself_LeavesItOut()
+    {
+        // Arrange
+        _provider.OpenIssues = Result<IReadOnlyList<OpenIssue>>.Ok(
+            [new OpenIssue(8, "Newer"), new OpenIssue(IssueNumber, "Itself"), new OpenIssue(6, "Older")]);
+
+        // Act
+        TrackerContext context = await ReadAsync();
+
+        // Assert
+        context.OpenIssues.ShouldBe([new OpenIssue(8, "Newer"), new OpenIssue(6, "Older")]);
+    }
+
+    [Fact]
+    public async Task WhenTheProviderListsMoreOpenIssuesThanTheCap_KeepsTheFirstOnesInOrder()
+    {
+        // Arrange
+        List<OpenIssue> listed = [.. Enumerable.Range(1000, OpenIssueCap + 1).Select(number => new OpenIssue(number, $"Issue {number}"))];
+        _provider.OpenIssues = Result<IReadOnlyList<OpenIssue>>.Ok(listed);
+
+        // Act
+        TrackerContext context = await ReadAsync();
+
+        // Assert
+        context.OpenIssues.ShouldBe(listed.Take(OpenIssueCap));
+    }
+
+    [Fact]
+    public async Task WhenTheOpenIssueReadFails_LeavesTheIndexNull()
+    {
+        // Arrange
+        _provider.OpenIssues = Result<IReadOnlyList<OpenIssue>>.Fail(new Error("GitHub.Unexpected", "boom"));
+
+        // Act
+        TrackerContext context = await ReadAsync();
+
+        // Assert
+        context.OpenIssues.ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task WhenTheProviderDoesNotSupportTheOpenIssueRead_LeavesTheIndexNull()
+    {
+        // Arrange
+        UnsupportedProvider provider = new();
+        ITrackerContextQueries sut = new TrackerContextReader(
+            _dbContext,
+            new SingleIssueProviderFactory(provider),
+            new CredentialResolver(_dbContext, NullLogger<CredentialResolver>.Instance),
+            NullLogger<TrackerContextReader>.Instance);
+
+        // Act
+        TrackerContext context = await sut.GetTrackerContextAsync(
+            await SeedRepoAsync(), IssueNumber, Content, TestContext.Current.CancellationToken);
+
+        // Assert
+        context.OpenIssues.ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task WhenTheProviderThrows_LeavesTheIndexNullAndDoesNotThrow()
+    {
+        // Arrange
+        _provider.OpenIssuesException = new HttpRequestException("connection reset");
+
+        // Act
+        TrackerContext context = await ReadAsync();
+
+        // Assert
+        context.OpenIssues.ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task WhenTheCallersTokenIsCancelled_PropagatesTheCancellation()
+    {
+        // Arrange
+        using CancellationTokenSource cancellation = new();
+        _provider.CancelOnRead = cancellation;
+
+        // Act
+        Task<TrackerContext> read = ReadAsync(cancellation.Token);
+
+        // Assert
+        await Should.ThrowAsync<OperationCanceledException>(async () => await read);
+    }
+
+    // Only the open-issue read is exercised; the rest are never reached by GetTrackerContextAsync.
+    private class ThrowingProvider : IIssueProvider
+    {
+        public Task<Result<IssueListing>> GetIssuesAsync(RepositorySlug slug, CancellationToken cancellationToken) =>
+            throw new NotSupportedException();
+
+        public Task<Result<IReadOnlyList<int>>> GetDependenciesAsync(RepositorySlug slug, int issueNumber, CancellationToken cancellationToken) =>
+            throw new NotSupportedException();
+
+        public Task<Result<bool>> IsIssueClosedAsync(RepositorySlug slug, int issueNumber, CancellationToken cancellationToken) =>
+            throw new NotSupportedException();
+
+        public Task<Result<PullRequestStatus>> GetPullRequestStatusAsync(RepositorySlug slug, string pullRequestUrl, CancellationToken cancellationToken) =>
+            throw new NotSupportedException();
+
+        public Task<Result<ReviewFeedback>> GetReviewFeedbackAsync(RepositorySlug slug, string pullRequestUrl, DateTimeOffset since, PostedCommentIds postedComments, CancellationToken cancellationToken) =>
+            throw new NotSupportedException();
+
+        public Task<Result<BranchProtection>> GetBranchProtectionAsync(RepositorySlug slug, CancellationToken cancellationToken) =>
+            throw new NotSupportedException();
+
+        public Task<Result> ApplyBranchRulesAsync(RepositorySlug slug, CancellationToken cancellationToken) =>
+            throw new NotSupportedException();
+
+        public Task<Result<bool>> CreateBranchAsync(RepositorySlug slug, string branchName, CancellationToken cancellationToken) =>
+            throw new NotSupportedException();
+
+        public Task<Result<bool>> DeleteBranchAsync(RepositorySlug slug, string branchName, CancellationToken cancellationToken) =>
+            throw new NotSupportedException();
+
+        public Task<Result<MergeRequestByBranch>> GetMergeRequestByBranchAsync(RepositorySlug slug, string branchName, CancellationToken cancellationToken) =>
+            throw new NotSupportedException();
+
+        public Task<Result<BranchCommitSummary>> GetBranchCommitSummaryAsync(RepositorySlug slug, string branchName, CancellationToken cancellationToken) =>
+            throw new NotSupportedException();
+
+        public Task<Result<bool>> CanPushAsync(RepositorySlug slug, CancellationToken cancellationToken) =>
+            throw new NotSupportedException();
+
+        public Task<Result<ProviderChecks>> GetChecksAsync(RepositorySlug slug, string pullRequestUrl, CancellationToken cancellationToken) =>
+            throw new NotSupportedException();
+    }
+
+    private sealed class UnsupportedProvider : ThrowingProvider;
+
+    private sealed class TrackerReadsProvider : ThrowingProvider, IIssueProvider
+    {
+        public Result<IReadOnlyList<OpenIssue>> OpenIssues { get; set; } = Result<IReadOnlyList<OpenIssue>>.Ok([]);
+
+        public Exception? OpenIssuesException { get; set; }
+
+        public CancellationTokenSource? CancelOnRead { get; set; }
+
+        public async Task<Result<IReadOnlyList<OpenIssue>>> GetOpenIssuesAsync(RepositorySlug slug, CancellationToken cancellationToken)
+        {
+            if (CancelOnRead is not null)
+            {
+                await CancelOnRead.CancelAsync();
+                cancellationToken.ThrowIfCancellationRequested();
+            }
+
+            return OpenIssuesException is { } exception
+                ? throw exception
+                : OpenIssues;
+        }
+    }
+}

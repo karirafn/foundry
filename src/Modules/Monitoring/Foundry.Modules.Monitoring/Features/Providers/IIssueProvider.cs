@@ -6,6 +6,7 @@ using Foundry.Modules.Monitoring.Features.Providers.Comments;
 using ProviderChecks = Foundry.Modules.Monitoring.Features.Providers.Checks.Checks;
 using Foundry.Modules.Monitoring.Features.Providers.Feedback;
 using Foundry.Modules.Monitoring.Features.Providers.Rebase;
+using Foundry.Modules.Monitoring.Features.Providers.TrackerReads;
 using Foundry.Shared;
 
 namespace Foundry.Modules.Monitoring.Features.Providers;
@@ -69,6 +70,16 @@ internal interface IIssueProvider
         int issueNumber,
         CancellationToken cancellationToken)
         => Task.FromResult(Result<ProviderIssueContent>.Fail(IssueContentErrors.NotSupported()));
+
+    /// <summary>
+    /// Reads the repository's open issues, newest first, at most 100, never a pull/merge request.
+    /// </summary>
+    /// <remarks>Providers without an open-issue reader keep this default, which fails with
+    /// <see cref="TrackerReadErrors.NotSupportedCode"/> without any provider call.</remarks>
+    Task<Result<IReadOnlyList<OpenIssue>>> GetOpenIssuesAsync(
+        RepositorySlug slug,
+        CancellationToken cancellationToken)
+        => Task.FromResult(Result<IReadOnlyList<OpenIssue>>.Fail(TrackerReadErrors.NotSupported()));
 
     /// <summary>
     /// Posts <paramref name="body"/> to <paramref name="thread"/> with the account PAT and returns the
