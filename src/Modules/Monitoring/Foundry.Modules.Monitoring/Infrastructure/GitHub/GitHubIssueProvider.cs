@@ -72,6 +72,14 @@ internal sealed partial class GitHubIssueProvider(
         return httpClient.GetIssueLinksAsync(apiBaseUrl, slug, issueNumber, token, cancellationToken);
     }
 
+    public Task<Result<ProviderReferencedIssue>> GetReferencedIssueAsync(
+        RepositorySlug slug,
+        int issueNumber,
+        CancellationToken cancellationToken)
+    {
+        return httpClient.GetReferencedIssueAsync(apiBaseUrl, slug, issueNumber, token, cancellationToken);
+    }
+
     public Task<Result<IReadOnlyList<OpenIssue>>> GetOpenIssuesAsync(
         RepositorySlug slug,
         CancellationToken cancellationToken)
