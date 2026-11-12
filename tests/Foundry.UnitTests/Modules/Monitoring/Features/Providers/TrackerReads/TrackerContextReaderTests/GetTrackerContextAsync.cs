@@ -71,9 +71,150 @@ public sealed class GetTrackerContextAsync : IAsyncDisposable
         return repo.Id;
     }
 
-    private async Task<TrackerContext> ReadAsync(CancellationToken? cancellationToken = null) =>
+    private async Task<TrackerContext> ReadAsync(
+        CancellationToken? cancellationToken = null,
+        IssueContent? content = null) =>
         await _sut.GetTrackerContextAsync(
-            await SeedRepoAsync(), IssueNumber, Content, cancellationToken ?? TestContext.Current.CancellationToken);
+            await SeedRepoAsync(),
+            IssueNumber,
+            content ?? Content,
+            cancellationToken ?? TestContext.Current.CancellationToken);
+
+    private static ProviderReferencedIssue ReferencedRead(string title, string body = "Body") =>
+        new(title, true, ["bug"], ClosingMergeRequestState.Open, body);
+
+    [Fact]
+    public async Task WhenTheIssueLinksAndMentionsOthers_ListsOneReferencedIssuePerSelectedReferenceInOrder()
+    {
+        // Arrange
+        _provider.Links = Result<IReadOnlyList<IssueReference>>.Ok([new IssueReference(5, IssueRelation.BlockedBy)]);
+        _provider.ReferencedIssues[5] = Result<ProviderReferencedIssue>.Ok(ReferencedRead("Linked", "Linked body"));
+        _provider.ReferencedIssues[9] = Result<ProviderReferencedIssue>.Ok(
+            new ProviderReferencedIssue("Mentioned", false, [], ClosingMergeRequestState.Merged, "Mentioned body"));
+        IssueContent content = new IssueContentBuilder().WithBody("See #9.").Build();
+
+        // Act
+        TrackerContext context = await ReadAsync(content: content);
+
+        // Assert
+        context.ReferencedIssues.Count.ShouldBe(2);
+        ReferencedIssue linked = context.ReferencedIssues[0];
+        ReferencedIssue mentioned = context.ReferencedIssues[1];
+        linked.ShouldSatisfyAllConditions(
+            () => linked.Number.ShouldBe(5),
+            () => linked.Relation.ShouldBe(IssueRelation.BlockedBy),
+            () => linked.Title.ShouldBe("Linked"),
+            () => linked.IsOpen.ShouldBeTrue(),
+            () => linked.Labels.ShouldBe(["bug"]),
+            () => linked.ClosingMergeRequest.ShouldBe(ClosingMergeRequestState.Open),
+            () => linked.Body.ShouldBe("Linked body"));
+        mentioned.ShouldSatisfyAllConditions(
+            () => mentioned.Number.ShouldBe(9),
+            () => mentioned.Relation.ShouldBe(IssueRelation.Mention),
+            () => mentioned.Title.ShouldBe("Mentioned"),
+            () => mentioned.IsOpen.ShouldBeFalse(),
+            () => mentioned.Labels.ShouldBeEmpty(),
+            () => mentioned.ClosingMergeRequest.ShouldBe(ClosingMergeRequestState.Merged),
+            () => mentioned.Body.ShouldBe("Mentioned body"));
+    }
+
+    [Fact]
+    public async Task WhenAReferenceReadFailsOrThrows_LeavesItOutListsItAsUnreadableAndStillReadsTheRest()
+    {
+        // Arrange
+        _provider.Links = Result<IReadOnlyList<IssueReference>>.Ok(
+            [
+                new IssueReference(5, IssueRelation.BlockedBy),
+                new IssueReference(6, IssueRelation.Blocks),
+                new IssueReference(8, IssueRelation.RelatesTo),
+                new IssueReference(9, IssueRelation.RelatesTo),
+            ]);
+        _provider.ReferencedIssues[5] = Result<ProviderReferencedIssue>.Fail(new Error("GitHub.Forbidden", "no access"));
+        _provider.ReferencedIssues[6] = Result<ProviderReferencedIssue>.Ok(ReferencedRead("Readable"));
+        _provider.ThrowingReferencedIssues.Add(8);
+        _provider.OpenIssues = Result<IReadOnlyList<OpenIssue>>.Ok([new OpenIssue(30, "Newest")]);
+
+        // Act
+        TrackerContext context = await ReadAsync();
+
+        // Assert
+        context.ShouldSatisfyAllConditions(
+            () => context.ReferencedIssues.Select(issue => issue.Number).ShouldBe([6]),
+            () => context.UnreadableIssueNumbers.ShouldBe([5, 8, 9]),
+            () => context.OpenIssues.ShouldNotBeNull().Select(openIssue => openIssue.Number).ShouldBe([30]));
+    }
+
+    [Fact]
+    public async Task WhenAReferenceIsNotAnIssue_LeavesItOutWithoutListingItAsUnreadable()
+    {
+        // Arrange
+        IssueContent content = new IssueContentBuilder().WithBody("Fixed by #868, blocked on #123456.").Build();
+        _provider.ReferencedIssues[868] = Result<ProviderReferencedIssue>.Fail(TrackerReadErrors.NotAnIssue());
+        _provider.ReferencedIssues[123456] = Result<ProviderReferencedIssue>.Fail(TrackerReadErrors.NotAnIssue());
+
+        // Act
+        TrackerContext context = await ReadAsync(content: content);
+
+        // Assert
+        context.ShouldSatisfyAllConditions(
+            () => context.ReferencedIssues.ShouldBeEmpty(),
+            () => context.UnreadableIssueNumbers.ShouldBeEmpty());
+    }
+
+    [Fact]
+    public async Task WhenTheLinksReadFails_FlagsItAndStillReadsTheMentions()
+    {
+        // Arrange
+        _provider.Links = Result<IReadOnlyList<IssueReference>>.Fail(new Error("GitHub.Unexpected", "boom"));
+        _provider.ReferencedIssues[9] = Result<ProviderReferencedIssue>.Ok(ReferencedRead("Mentioned"));
+        IssueContent content = new IssueContentBuilder().WithBody("See #9.").Build();
+
+        // Act
+        TrackerContext context = await ReadAsync(content: content);
+
+        // Assert
+        context.ShouldSatisfyAllConditions(
+            () => context.LinksUnreadable.ShouldBeTrue(),
+            () => context.ReferencedIssues.Select(issue => issue.Number).ShouldBe([9]));
+    }
+
+    [Fact]
+    public async Task WhenTheLinksReadThrows_FlagsItAndStillReadsTheMentions()
+    {
+        // Arrange
+        _provider.LinksException = new HttpRequestException("connection reset");
+        _provider.ReferencedIssues[9] = Result<ProviderReferencedIssue>.Ok(ReferencedRead("Mentioned"));
+        IssueContent content = new IssueContentBuilder().WithBody("See #9.").Build();
+
+        // Act
+        TrackerContext context = await ReadAsync(content: content);
+
+        // Assert
+        context.ShouldSatisfyAllConditions(
+            () => context.LinksUnreadable.ShouldBeTrue(),
+            () => context.ReferencedIssues.Select(issue => issue.Number).ShouldBe([9]));
+    }
+
+    [Fact]
+    public async Task WhenTheRepositoryCannotBeResolved_FlagsTheLinksListsEveryMentionAsUnreadableAndLeavesTheIndexNull()
+    {
+        // Arrange
+        IssueContent content = new IssueContentBuilder().WithBody("See #9 and #4.").Build();
+
+        // Act
+        TrackerContext context = await _sut.GetTrackerContextAsync(
+            new MonitoredRepositoryId(Guid.NewGuid()),
+            IssueNumber,
+            content,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        context.ShouldSatisfyAllConditions(
+            () => context.LinksUnreadable.ShouldBeTrue(),
+            () => context.ReferencedIssues.ShouldBeEmpty(),
+            () => context.UnreadableIssueNumbers.ShouldBe([9, 4]),
+            () => context.OpenIssues.ShouldBeNull());
+    }
 
     [Fact]
     public async Task WhenTheProviderListsOpenIssues_ReturnsThemInOrderWithNoReferencedIssuesOrNotes()
@@ -231,6 +372,32 @@ public sealed class GetTrackerContextAsync : IAsyncDisposable
         public Result<IReadOnlyList<OpenIssue>> OpenIssues { get; set; } = Result<IReadOnlyList<OpenIssue>>.Ok([]);
 
         public Exception? OpenIssuesException { get; set; }
+
+        public Result<IReadOnlyList<IssueReference>> Links { get; set; } = Result<IReadOnlyList<IssueReference>>.Ok([]);
+
+        public Exception? LinksException { get; set; }
+
+        public Dictionary<int, Result<ProviderReferencedIssue>> ReferencedIssues { get; } = [];
+
+        public Task<Result<IReadOnlyList<IssueReference>>> GetIssueLinksAsync(
+            RepositorySlug slug,
+            int issueNumber,
+            CancellationToken cancellationToken) =>
+            LinksException is { } exception
+                ? throw exception
+                : Task.FromResult(Links);
+
+        public HashSet<int> ThrowingReferencedIssues { get; } = [];
+
+        public Task<Result<ProviderReferencedIssue>> GetReferencedIssueAsync(
+            RepositorySlug slug,
+            int issueNumber,
+            CancellationToken cancellationToken) =>
+            ThrowingReferencedIssues.Contains(issueNumber)
+                ? throw new HttpRequestException("connection reset")
+                : Task.FromResult(ReferencedIssues.GetValueOrDefault(
+                    issueNumber,
+                    Result<ProviderReferencedIssue>.Fail(new Error("GitHub.NotFound", "not found"))));
 
         public CancellationTokenSource? CancelOnRead { get; set; }
 

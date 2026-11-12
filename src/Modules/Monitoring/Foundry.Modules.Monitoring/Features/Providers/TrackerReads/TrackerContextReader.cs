@@ -35,14 +35,67 @@ internal sealed class TrackerContextReader(
                 "Resolving the provider for the tracker context of issue #{IssueNumber} failed: {Error}",
                 issueNumber,
                 ((Result<(IIssueProvider, MonitoredRepository)>.Failure)resolved).Error.Message);
-            return new TrackerContext([], [], false, null);
+            return new TrackerContext(
+                [],
+                [.. ReferencedIssueSelection.Select(issueNumber, issueContent, []).Select(reference => reference.Number)],
+                true,
+                null);
         }
 
         (IIssueProvider provider, MonitoredRepository repo) = resolvedSuccess.Value;
+        Result<IReadOnlyList<IssueReference>> linksRead = await ReadAsync(
+            () => provider.GetIssueLinksAsync(repo.Slug, issueNumber, cancellationToken),
+            cancellationToken);
+        IReadOnlyList<IssueReference> links = linksRead is Result<IReadOnlyList<IssueReference>>.Success linked
+            ? linked.Value
+            : [];
+        List<ReferencedIssue> referencedIssues = [];
+        List<int> unreadableIssueNumbers = [];
+        foreach (IssueReference reference in ReferencedIssueSelection.Select(issueNumber, issueContent, links))
+        {
+            Result<ProviderReferencedIssue> read = await ReadAsync(
+                () => provider.GetReferencedIssueAsync(repo.Slug, reference.Number, cancellationToken),
+                cancellationToken);
+            if (read is Result<ProviderReferencedIssue>.Success { Value: { } issue })
+            {
+                referencedIssues.Add(new ReferencedIssue(
+                    reference.Number,
+                    reference.Relation,
+                    issue.Title,
+                    issue.IsOpen,
+                    issue.Labels,
+                    issue.ClosingMergeRequest,
+                    issue.Body));
+            }
+            else if (read is not Result<ProviderReferencedIssue>.Failure { Error.Code: TrackerReadErrors.NotAnIssueCode })
+            {
+                unreadableIssueNumbers.Add(reference.Number);
+            }
+        }
+
         IReadOnlyList<OpenIssue>? openIssues =
             await ReadOpenIssuesAsync(provider, repo.Slug, issueNumber, cancellationToken);
 
-        return new TrackerContext([], [], false, openIssues);
+        return new TrackerContext(
+            referencedIssues,
+            unreadableIssueNumbers,
+            linksRead is Result<IReadOnlyList<IssueReference>>.Failure,
+            openIssues);
+    }
+
+    private static async Task<Result<T>> ReadAsync<T>(
+        Func<Task<Result<T>>> read,
+        CancellationToken cancellationToken)
+        where T : notnull
+    {
+        try
+        {
+            return await read();
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
+        {
+            return Result<T>.Fail(TrackerReadErrors.ReadThrew(ex));
+        }
     }
 
     private async Task<IReadOnlyList<OpenIssue>?> ReadOpenIssuesAsync(
