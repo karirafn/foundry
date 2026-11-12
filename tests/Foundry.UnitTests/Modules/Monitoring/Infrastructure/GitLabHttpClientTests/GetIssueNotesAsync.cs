@@ -123,6 +123,23 @@ public sealed class GetIssueNotesAsync
     }
 
     [Fact]
+    public async Task WhenNoteBodyExceeds4000Chars_ReturnsBodyWhole()
+    {
+        // Arrange
+        string longBody = new('x', 4100);
+        FakeHandler handler = new(HttpStatusCode.OK, $"[{NoteJson(77, "alice", body: longBody)}]");
+        GitLabHttpClient sut = BuildSut(handler);
+
+        // Act
+        Result<IReadOnlyList<ProviderComment>> result = await sut.GetIssueNotesAsync(
+            ValidBaseUrl, ValidSlug, 3, ValidToken, CancellationToken.None);
+
+        // Assert
+        ProviderComment comment = result.ValueOrThrow().ShouldHaveSingleItem();
+        comment.Body.ShouldBe(longBody);
+    }
+
+    [Fact]
     public async Task WhenProviderFails_ReturnsFailure()
     {
         // Arrange

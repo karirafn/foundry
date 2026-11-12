@@ -615,7 +615,7 @@ public sealed class GetPullRequestReviewFeedbackAsync
     }
 
     [Fact]
-    public async Task WhenCommentBodyExceeds4000Chars_TruncatesBodyWithSuffix()
+    public async Task WhenCommentBodyExceeds4000Chars_ReturnsBodyWhole()
     {
         // Arrange
         string longBody = new('x', 4100);
@@ -634,8 +634,7 @@ public sealed class GetPullRequestReviewFeedbackAsync
         // Assert
         Result<IReadOnlyList<ProviderComment>>.Success success =
             result.ShouldBeOfType<Result<IReadOnlyList<ProviderComment>>.Success>();
-        success.Value[0].Body.ShouldEndWith("[truncated]");
-        success.Value[0].Body.Length.ShouldBeLessThanOrEqualTo(4000 + "[truncated]".Length);
+        success.Value[0].Body.ShouldBe(longBody);
     }
 
     [Fact]

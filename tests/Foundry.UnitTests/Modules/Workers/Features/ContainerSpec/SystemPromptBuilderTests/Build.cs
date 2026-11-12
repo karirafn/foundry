@@ -2,6 +2,7 @@ using System.Text;
 
 using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Monitoring.Contracts;
+using Foundry.Modules.Workers.Contracts;
 using Foundry.Modules.Workers.Features.ContainerSpec;
 using Foundry.Shared;
 
@@ -2152,4 +2153,352 @@ public sealed class Build
         // Assert
         result.ShouldContain("<branch-name>feat/&lt;evil&gt;&amp;</branch-name>");
     }
+
+    private static readonly DateTimeOffset RoundAskedAt = new(2026, 11, 11, 10, 0, 0, TimeSpan.Zero);
+
+    private static Clarification Round(string? input, int dayOffset = 0)
+    {
+        DateTimeOffset askedAt = RoundAskedAt.AddDays(dayOffset);
+        InputQuestion[] questions = [new InputQuestion("Which webhooks?", "Two kinds exist.", null)];
+
+        return input is null
+            ? Clarification.Ask(questions, askedAt)
+            : new Clarification(questions, input, askedAt, askedAt.AddHours(1));
+    }
+
+    private static string BuildWithLog(
+        IssueContent issue,
+        IReadOnlyList<Clarification> log,
+        DispatchContext? context = null) =>
+        SystemPromptBuilder.Build(
+            Principles,
+            1,
+            DefaultSystemPromptTemplate,
+            context ?? new DispatchContext.Fresh("feat/1-fix"),
+            issue,
+            timeoutMinutes: 120,
+            installsDocker: false,
+            installsDotnet: false,
+            clarifications: log).ShouldBeOfType<Result<string>.Success>().Value;
+
+    [Fact]
+    public void WhenTheLogIsPresentAndTheCommentsOverflow_DropsTheOldestCommentsAndKeepsEveryInputWhole()
+    {
+        // Arrange
+        DateTimeOffset createdAt = new(2026, 6, 1, 10, 0, 0, TimeSpan.Zero);
+        IssueContent issue = new(
+            "Fix the bug",
+            "The bug body.",
+            [
+                new IssueContentComment(1, "bob", "OLDEST " + new string('a', 50_000), createdAt),
+                new IssueContentComment(2, "bob", "MIDDLE " + new string('b', 50_000), createdAt.AddHours(1)),
+                new IssueContentComment(3, "bob", "NEWEST " + new string('c', 50_000), createdAt.AddHours(2)),
+            ]);
+        string olderInput = "OLDER-ANSWER " + new string('x', 2_000);
+        string newestInput = "NEWEST-ANSWER " + new string('y', 2_000);
+
+        // Act
+        string prompt = BuildWithLog(issue, [Round(olderInput), Round(newestInput, 1)]);
+
+        // Assert
+        prompt.ShouldSatisfyAllConditions(
+            () => prompt.ShouldNotContain("OLDEST "),
+            () => prompt.ShouldContain("NEWEST "),
+            () => prompt.ShouldContain(olderInput),
+            () => prompt.ShouldContain(newestInput),
+            () => prompt.ShouldNotContain("[truncated]"));
+    }
+
+    [Fact]
+    public void WhenTheLogOverflowsAfterTheCommentsAreGone_CutsTheOldestInputFirstAndKeepsTheBodyAndNewestInputWhole()
+    {
+        // Arrange
+        string oldestInput = new string('a', 60_000);
+        string middleInput = new string('b', 60_000);
+        string newestInput = new string('n', 10_000);
+
+        // Act
+        string prompt = BuildWithLog(
+            Issue,
+            [Round(oldestInput), Round(middleInput, 1), Round(newestInput, 2)]);
+
+        // Assert
+        prompt.ShouldSatisfyAllConditions(
+            () => Encoding.UTF8.GetByteCount(prompt).ShouldBeLessThan(SystemPromptBuilder.MaxSystemPromptBytes),
+            () => prompt.ShouldContain("a [truncated]</input>"),
+            () => prompt.ShouldNotContain(oldestInput),
+            () => prompt.ShouldContain(middleInput),
+            () => prompt.ShouldContain(newestInput),
+            () => prompt.ShouldContain("The bug body."));
+    }
+
+    [Fact]
+    public void WhenASingleInputExceedsTheCeiling_CutsTheInputAndKeepsTheBodyWhole()
+    {
+        // Arrange
+        string hugeInput = new string('h', SystemPromptBuilder.MaxSystemPromptBytes + 10_000);
+
+        // Act
+        string prompt = BuildWithLog(Issue, [Round(hugeInput)]);
+
+        // Assert
+        prompt.ShouldSatisfyAllConditions(
+            () => Encoding.UTF8.GetByteCount(prompt).ShouldBeLessThan(SystemPromptBuilder.MaxSystemPromptBytes),
+            () => prompt.ShouldContain("h [truncated]</input>"),
+            () => prompt.ShouldContain("The bug body."));
+    }
+
+    [Fact]
+    public void WhenTheLastRoundIsUnanswered_ProtectsTheNewestAnsweredRoundAndCutsTheOlderInputFirst()
+    {
+        // Arrange
+        string olderInput = new string('o', 70_000);
+        string newestAnswered = new string('n', 70_000);
+
+        // Act
+        string prompt = BuildWithLog(Issue, [Round(olderInput), Round(newestAnswered, 1), Round(null, 2)]);
+
+        // Assert
+        prompt.ShouldSatisfyAllConditions(
+            () => Encoding.UTF8.GetByteCount(prompt).ShouldBeLessThan(SystemPromptBuilder.MaxSystemPromptBytes),
+            () => prompt.ShouldContain("o [truncated]</input>"),
+            () => prompt.ShouldContain(newestAnswered),
+            () => prompt.ShouldContain(SystemPromptBuilder.UnansweredClarificationNote));
+    }
+
+    [Fact]
+    public void WhenARevisionsFeedbackFillsThePrompt_KeepsTheNewestInputWholeAndDropsTheOldestFeedback()
+    {
+        // Arrange
+        string newestInput = new string('n', 60_000);
+        string feedbackBody = new string('f', 30_000);
+        List<ReviewComment> comments = Enumerable.Range(1, 6)
+            .Select(i => new ReviewComment($"Feedback {i}: {feedbackBody}"))
+            .ToList();
+        DispatchContext.Revision revision = new(
+            "feat/1-fix",
+            "https://github.com/org/repo/pull/1",
+            new RevisionTrigger.ReviewFeedback(comments, 0, null));
+
+        // Act
+        string prompt = BuildWithLog(Issue, [Round(newestInput)], revision);
+
+        // Assert
+        prompt.ShouldSatisfyAllConditions(
+            () => Encoding.UTF8.GetByteCount(prompt).ShouldBeLessThan(SystemPromptBuilder.MaxSystemPromptBytes),
+            () => prompt.ShouldContain(newestInput),
+            () => prompt.ShouldContain("Feedback 6:"),
+            () => prompt.ShouldNotContain("Feedback 1:"),
+            () => prompt.ShouldContain("further comment(s) were omitted to fit the prompt size budget"));
+    }
+
+    [Theory]
+    [InlineData('&', "&amp;")]
+    [InlineData('<', "&lt;")]
+    public void WhenASingleReviewCommentIsMadeOfEncodedCharacters_CutsItUnderTheCeilingWithoutAPartialEntity(
+        char character,
+        string entity)
+    {
+        // Arrange
+        string hugeComment = new string(character, 200_000);
+        DispatchContext.Revision revision = new(
+            "feat/1-fix",
+            "https://github.com/org/repo/pull/1",
+            new RevisionTrigger.ReviewFeedback([new ReviewComment(hugeComment)], 0, null));
+
+        // Act
+        Result<string> buildResult = SystemPromptBuilder.Build(
+            Principles,
+            1, DefaultSystemPromptTemplate, revision,
+            Issue, timeoutMinutes: 120, installsDocker: false, installsDotnet: false);
+
+        // Assert
+        string prompt = buildResult.ShouldBeOfType<Result<string>.Success>().Value;
+        int open = prompt.IndexOf("<review-feedback>", StringComparison.Ordinal);
+        int close = prompt.IndexOf("</review-feedback>", StringComparison.Ordinal);
+        string feedback = prompt[open..close];
+        feedback.ShouldSatisfyAllConditions(
+            () => Encoding.UTF8.GetByteCount(prompt).ShouldBeLessThan(SystemPromptBuilder.MaxSystemPromptBytes),
+            () => feedback.ShouldContain(entity + " [truncated]"),
+            () => feedback.Replace(entity, string.Empty, StringComparison.Ordinal).ShouldNotContain("&"));
+    }
+
+    [Fact]
+    public void WhenAReviewCommentExceeds4000CharactersAndFitsTheBudget_RendersItWholeInsideTheReviewFeedback()
+    {
+        // Arrange
+        string longComment = "LONG-COMMENT " + new string('r', 6_000) + " END-OF-COMMENT";
+        DispatchContext.Revision revision = new(
+            "feat/1-fix",
+            "https://github.com/org/repo/pull/1",
+            new RevisionTrigger.ReviewFeedback([new ReviewComment(longComment)], 0, null));
+
+        // Act
+        Result<string> buildResult = SystemPromptBuilder.Build(
+            Principles,
+            1, DefaultSystemPromptTemplate, revision,
+            Issue, timeoutMinutes: 120, installsDocker: false, installsDotnet: false);
+        string prompt = buildResult.ShouldBeOfType<Result<string>.Success>().Value;
+
+        // Assert
+        int open = prompt.IndexOf("<review-feedback>", StringComparison.Ordinal);
+        int close = prompt.IndexOf("</review-feedback>", StringComparison.Ordinal);
+        prompt[open..close].ShouldSatisfyAllConditions(
+            () => prompt[open..close].ShouldContain(longComment),
+            () => prompt[open..close].ShouldNotContain("[truncated]"));
+    }
+
+    [Fact]
+    public void WhenTheRevisionPayloadAndTheLogBothOverflow_ShedsThePayloadBeforeCuttingAnyInput()
+    {
+        // Arrange
+        string olderInput = new string('o', 100_000);
+        string newestInput = new string('n', 20_000);
+        string feedbackBody = new string('f', 40_000);
+        List<ReviewComment> comments = Enumerable.Range(1, 3)
+            .Select(i => new ReviewComment($"Feedback {i}: {feedbackBody}"))
+            .ToList();
+        DispatchContext.Revision revision = new(
+            "feat/1-fix",
+            "https://github.com/org/repo/pull/1",
+            new RevisionTrigger.ReviewFeedback(comments, 0, null));
+
+        // Act
+        string prompt = BuildWithLog(Issue, [Round(olderInput), Round(newestInput, 1)], revision);
+
+        // Assert
+        List<string> inputs = RenderedInputs(prompt);
+        prompt.ShouldSatisfyAllConditions(
+            () => Encoding.UTF8.GetByteCount(prompt).ShouldBeLessThan(SystemPromptBuilder.MaxSystemPromptBytes),
+            () => prompt.ShouldNotContain("Feedback 1:"),
+            () => prompt.ShouldNotContain("Feedback 2:"),
+            () => prompt.ShouldNotContain("Feedback 3:"),
+            () => prompt.ShouldContain("further comment(s) were omitted to fit the prompt size budget"),
+            () => inputs.Count.ShouldBe(2),
+            () => inputs[0].ShouldEndWith(TruncationMarker),
+            () => olderInput.ShouldStartWith(inputs[0][..^TruncationMarker.Length]),
+            () => inputs[1].ShouldBe(newestInput));
+    }
+
+    [Fact]
+    public void WhenAnInputFillsTheRoomUpToTheBudgetExactly_RendersItWholeWithNoMarker()
+    {
+        // Arrange
+        string input = new string('x', ExactFitInputLength());
+
+        // Act
+        string prompt = BuildWithLog(Issue, [Round(input)]);
+
+        // Assert
+        prompt.ShouldSatisfyAllConditions(
+            () => Encoding.UTF8.GetByteCount(prompt).ShouldBe(MaxFittingPromptBytes),
+            () => RenderedInputs(prompt).ShouldHaveSingleItem().ShouldBe(input));
+    }
+
+    [Fact]
+    public void WhenAnInputIsOneByteOverTheRoomTheBudgetLeaves_CutsItAndMarksIt()
+    {
+        // Arrange
+        string input = new string('x', ExactFitInputLength() + 1);
+
+        // Act
+        string prompt = BuildWithLog(Issue, [Round(input)]);
+
+        // Assert
+        string rendered = RenderedInputs(prompt).ShouldHaveSingleItem();
+        prompt.ShouldSatisfyAllConditions(
+            () => Encoding.UTF8.GetByteCount(prompt).ShouldBeLessThanOrEqualTo(MaxFittingPromptBytes),
+            () => rendered.ShouldEndWith(TruncationMarker),
+            () => input.ShouldStartWith(rendered[..^TruncationMarker.Length]));
+    }
+
+    [Fact]
+    public void WhenTheBudgetCannotHoldEvenTheCutMarker_NoteCountsEveryOmittedComment()
+    {
+        // Arrange
+        int budgetBelowMarker = 5;
+
+        // Act
+        string prompt = BuildRevisionWithCommentBudget(budgetBelowMarker, commentCount: 3);
+
+        // Assert
+        prompt.ShouldSatisfyAllConditions(
+            () => prompt.ShouldContain("3 further comment(s) were omitted to fit the prompt size budget"),
+            () => prompt.ShouldNotContain(TruncationMarker));
+    }
+
+    [Fact]
+    public void WhenTheBudgetHoldsExactlyTheCutMarker_ShowsTheMarkerAndCountsTheRest()
+    {
+        // Arrange
+        int budgetForPrefixMarkerAndNewline = "- ".Length + TruncationMarker.Length + 1;
+
+        // Act
+        string prompt = BuildRevisionWithCommentBudget(budgetForPrefixMarkerAndNewline, commentCount: 3);
+
+        // Assert
+        prompt.ShouldSatisfyAllConditions(
+            () => prompt.ShouldContain($"- {TruncationMarker}"),
+            () => prompt.ShouldContain("2 further comment(s) were omitted to fit the prompt size budget"));
+    }
+
+    [Fact]
+    public void WhenTheBudgetHoldsPartOfTheNewestComment_ShowsItCutAndCountsTheRest()
+    {
+        // Arrange
+        int budgetWithRoomForBody = 100;
+
+        // Act
+        string prompt = BuildRevisionWithCommentBudget(budgetWithRoomForBody, commentCount: 3);
+
+        // Assert
+        prompt.ShouldSatisfyAllConditions(
+            () => prompt.ShouldContain($"aaaa{TruncationMarker}"),
+            () => prompt.ShouldContain("2 further comment(s) were omitted to fit the prompt size budget"));
+    }
+
+    private const string TruncationMarker = " [truncated]";
+    private const int OmissionNoteReserveBytes = 512;
+
+    // Sizes the template so the room left for comments equals the requested budget, measured off a prompt whose
+    // comments are one byte each ("- c\n" = 4 bytes per line).
+    private static string BuildRevisionWithCommentBudget(int commentBudgetBytes, int commentCount)
+    {
+        const int measuredLineBytes = 4;
+        DispatchContext.Revision Revision(string body) => new(
+            "feat/1-fix",
+            "https://github.com/org/repo/pull/1",
+            new RevisionTrigger.ReviewFeedback(
+                Enumerable.Range(0, commentCount).Select(_ => new ReviewComment(body)).ToList(),
+                0,
+                null));
+        Result<string> measured = SystemPromptBuilder.Build(
+            Principles,
+            1, "x", Revision("c"),
+            Issue, timeoutMinutes: 120, installsDocker: false, installsDotnet: false);
+        int measuredBytes = Encoding.UTF8.GetByteCount(measured.ShouldBeOfType<Result<string>.Success>().Value);
+        int fixedBytes = measuredBytes - (commentCount * measuredLineBytes);
+        string template = "x" + new string(
+            'y',
+            SystemPromptBuilder.MaxSystemPromptBytes - fixedBytes - OmissionNoteReserveBytes - commentBudgetBytes);
+
+        Result<string> built = SystemPromptBuilder.Build(
+            Principles,
+            1, template, Revision(new string('a', 1_000)),
+            Issue, timeoutMinutes: 120, installsDocker: false, installsDotnet: false);
+        return built.ShouldBeOfType<Result<string>.Success>().Value;
+    }
+
+    // The builder keeps one byte under the exclusive ceiling plus a reserve for the omission note.
+    private static int MaxFittingPromptBytes => SystemPromptBuilder.MaxSystemPromptBytes - 1 - OmissionNoteReserveBytes;
+
+    // The input length whose prompt lands exactly on the budget, measured off the prompt with an empty answered input.
+    private static int ExactFitInputLength() =>
+        MaxFittingPromptBytes - Encoding.UTF8.GetByteCount(BuildWithLog(Issue, [Round(string.Empty)]));
+
+    private static List<string> RenderedInputs(string prompt) =>
+        prompt.Split("<input>")
+            .Skip(1)
+            .Select(section => section[..section.IndexOf("</input>", StringComparison.Ordinal)])
+            .ToList();
 }
