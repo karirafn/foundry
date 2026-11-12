@@ -28,6 +28,15 @@ public sealed class GetChecksAsync
     private static RepositorySlug ValidSlug =>
         RepositorySlug.Create("group/project").ValueOrThrow();
 
+    private static FakeHandler FailedPipelineHandler(string jobsJson)
+    {
+        string mergeRequestJson =
+            $$"""{ "iid": 42, "state": "opened", "head_pipeline": { "id": {{GitLabJobsByPipelineExample.PipelineId}}, "status": "failed" } }""";
+
+        return new FakeHandler(HttpStatusCode.OK, mergeRequestJson)
+            .WithRoute($"/pipelines/{GitLabJobsByPipelineExample.PipelineId}/jobs", HttpStatusCode.OK, jobsJson);
+    }
+
     private static GitLabHttpClient BuildSut(FakeHandler handler) =>
         new(
             new HttpClient(handler),
@@ -59,7 +68,116 @@ public sealed class GetChecksAsync
     }
 
     [Fact]
-    public async Task WhenHeadPipelineStatusIsFailed_ReturnsRed()
+    public async Task WhenHeadPipelineFailed_NamesTheFailedJobsAsFailingChecks()
+    {
+        // Arrange
+        FakeHandler handler = FailedPipelineHandler(GitLabJobsByPipelineExample.OneFailedJob());
+        GitLabHttpClient sut = BuildSut(handler);
+
+        // Act
+        Result<ProviderChecks> result = await sut.GetChecksAsync(
+            ValidBaseUrl,
+            ValidSlug,
+            ValidMrUrl,
+            token: "glpat_token",
+            CancellationToken.None);
+
+        // Assert
+        Result<ProviderChecks>.Success success = result.ShouldBeOfType<Result<ProviderChecks>.Success>();
+        ProviderChecks.Red red = success.Value.ShouldBeOfType<ProviderChecks.Red>();
+        red.FailingChecks.ShouldBe([new FailingCheck("rspec:other", "failed", "https://example.com/foo/bar/-/jobs/6")]);
+    }
+
+    [Fact]
+    public async Task WhenHeadPipelineFailed_ReadsFailedJobsOfThatPipelineInOneRequest()
+    {
+        // Arrange
+        FakeHandler handler = FailedPipelineHandler(GitLabJobsByPipelineExample.OneFailedJob());
+        GitLabHttpClient sut = BuildSut(handler);
+
+        // Act
+        await sut.GetChecksAsync(
+            ValidBaseUrl,
+            ValidSlug,
+            ValidMrUrl,
+            token: "glpat_token",
+            CancellationToken.None);
+
+        // Assert
+        handler.AllRequests.Count.ShouldBe(2);
+        HttpRequestMessage jobsRequest = handler.LastRequest.ShouldNotBeNull();
+        (jobsRequest.RequestUri!.AbsolutePath, jobsRequest.RequestUri.Query).ShouldBe(
+            ("/api/v4/projects/group%2Fproject/pipelines/6/jobs", "?scope[]=failed&per_page=100"));
+    }
+
+    [Fact]
+    public async Task WhenHeadPipelineFailed_LeavesOutFailedJobsAllowedToFail()
+    {
+        // Arrange
+        FakeHandler handler = FailedPipelineHandler(GitLabJobsByPipelineExample.FailedJobPlusAllowFailureJob());
+        GitLabHttpClient sut = BuildSut(handler);
+
+        // Act
+        Result<ProviderChecks> result = await sut.GetChecksAsync(
+            ValidBaseUrl,
+            ValidSlug,
+            ValidMrUrl,
+            token: "glpat_token",
+            CancellationToken.None);
+
+        // Assert
+        Result<ProviderChecks>.Success success = result.ShouldBeOfType<Result<ProviderChecks>.Success>();
+        ProviderChecks.Red red = success.Value.ShouldBeOfType<ProviderChecks.Red>();
+        red.FailingChecks.ShouldBe([new FailingCheck("rspec:other", "failed", "https://example.com/foo/bar/-/jobs/6")]);
+    }
+
+    [Fact]
+    public async Task WhenHeadPipelineFailedWithNoFailedJobs_ReturnsRedNamingNothing()
+    {
+        // Arrange
+        FakeHandler handler = FailedPipelineHandler("[]");
+        GitLabHttpClient sut = BuildSut(handler);
+
+        // Act
+        Result<ProviderChecks> result = await sut.GetChecksAsync(
+            ValidBaseUrl,
+            ValidSlug,
+            ValidMrUrl,
+            token: "glpat_token",
+            CancellationToken.None);
+
+        // Assert
+        Result<ProviderChecks>.Success success = result.ShouldBeOfType<Result<ProviderChecks>.Success>();
+        ProviderChecks.Red red = success.Value.ShouldBeOfType<ProviderChecks.Red>();
+        red.FailingChecks.ShouldBeEmpty();
+    }
+
+    [Theory]
+    [InlineData("success")]
+    [InlineData("running")]
+    [InlineData("canceled")]
+    [InlineData("manual")]
+    public async Task WhenHeadPipelineIsNotFailed_ReadsNoJobs(string pipelineStatus)
+    {
+        // Arrange
+        string json = $$"""{ "iid": 42, "state": "opened", "head_pipeline": { "id": 6, "status": "{{pipelineStatus}}" } }""";
+        FakeHandler handler = new(HttpStatusCode.OK, json);
+        GitLabHttpClient sut = BuildSut(handler);
+
+        // Act
+        Result<ProviderChecks> result = await sut.GetChecksAsync(
+            ValidBaseUrl,
+            ValidSlug,
+            ValidMrUrl,
+            token: "glpat_token",
+            CancellationToken.None);
+
+        // Assert
+        handler.AllRequests.Count.ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task WhenHeadPipelineFailedWithoutId_ReturnsRedNamingNothingAndReadsNoJobs()
     {
         // Arrange
         string json = """{ "iid": 42, "state": "opened", "head_pipeline": { "status": "failed" } }""";
@@ -75,9 +193,9 @@ public sealed class GetChecksAsync
             CancellationToken.None);
 
         // Assert
-        result.IsSuccess.ShouldBeTrue();
         Result<ProviderChecks>.Success success = result.ShouldBeOfType<Result<ProviderChecks>.Success>();
-        success.Value.ShouldBeOfType<ProviderChecks.Red>();
+        ProviderChecks.Red red = success.Value.ShouldBeOfType<ProviderChecks.Red>();
+        (red.FailingChecks.Count, handler.AllRequests.Count).ShouldBe((0, 1));
     }
 
     [Fact]

@@ -909,8 +909,13 @@ internal sealed partial class GitLabHttpClient(
         GitLabMergeRequestWithPipelineDto? dto =
             JsonSerializer.Deserialize<GitLabMergeRequestWithPipelineDto>(body, JsonOptions);
 
-        string? pipelineStatus = dto?.HeadPipeline?.Status;
-        return Result<Checks>.Ok(Checks.FromGitLab(pipelineStatus, []));
+        return await GetPipelineChecksAsync(
+            apiBaseUrl,
+            slug,
+            dto?.HeadPipeline?.Id,
+            dto?.HeadPipeline?.Status,
+            token,
+            cancellationToken);
     }
 
     private GitLabUserDto? DeserializeUserDto(string responseBody, Uri apiBaseUrl, int statusCode)
@@ -1070,7 +1075,7 @@ internal sealed partial class GitLabHttpClient(
         string State,
         GitLabPipelineDto? HeadPipeline);
 
-    private sealed record GitLabPipelineDto(string? Status);
+    private sealed record GitLabPipelineDto(long? Id, string? Status);
 
     private sealed record GitLabDiscussionDto(IReadOnlyList<GitLabNoteDto> Notes);
 

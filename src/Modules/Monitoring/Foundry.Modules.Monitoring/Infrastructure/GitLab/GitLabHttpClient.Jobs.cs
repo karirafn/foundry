@@ -1,13 +1,20 @@
 using System.Net.Http.Headers;
+using System.Text.Json;
 
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Features.Providers;
+using Foundry.Modules.Monitoring.Features.Providers.Checks;
 using Foundry.Shared;
+
+using Microsoft.Extensions.Logging;
 
 namespace Foundry.Modules.Monitoring.Infrastructure.GitLab;
 
 internal sealed partial class GitLabHttpClient
 {
+    private const string FailedPipelineStatus = "failed";
+    private const int FailedJobsPerPage = 100;
+
     /// <summary>Reads the log of CI job <paramref name="jobId"/> (<c>GET /projects/:id/jobs/:job_id/trace</c>).</summary>
     public async Task<Result<string>> GetJobTraceAsync(
         Uri apiBaseUrl,
@@ -39,4 +46,54 @@ internal sealed partial class GitLabHttpClient
         RecordRestHeadroom(response);
         return Result<string>.Ok(await response.Content.ReadAsStringAsync(cancellationToken));
     }
+
+    /// <summary>
+    /// Classifies a merge request's head pipeline as checks. A failed pipeline's failed jobs that must pass
+    /// (<c>allow_failure</c> false) become its failing checks (<c>GET /projects/:id/pipelines/:pipeline_id/jobs</c>).
+    /// </summary>
+    public async Task<Result<Checks>> GetPipelineChecksAsync(
+        Uri apiBaseUrl,
+        RepositorySlug slug,
+        long? pipelineId,
+        string? pipelineStatus,
+        string token,
+        CancellationToken cancellationToken)
+    {
+        if (pipelineStatus is not FailedPipelineStatus)
+        {
+            return Result<Checks>.Ok(Checks.FromGitLab(pipelineStatus, []));
+        }
+
+        if (pipelineId is not long failedPipelineId)
+        {
+            logger.LogWarning(
+                "GitLab head pipeline of {Repository} is failed but carries no id; its failed jobs cannot be read.",
+                slug.FullPath);
+            return Result<Checks>.Ok(Checks.FromGitLab(pipelineStatus, []));
+        }
+
+        string encodedPath = Uri.EscapeDataString(slug.FullPath);
+        Uri requestUri = new(
+            EnsureTrailingSlash(apiBaseUrl),
+            $"projects/{encodedPath}/pipelines/{failedPipelineId}/jobs?scope[]=failed&per_page={FailedJobsPerPage}");
+
+        using HttpRequestMessage request = new(HttpMethod.Get, requestUri);
+        AddCommonHeaders(request, token);
+
+        using HttpResponseMessage response = await httpClient.SendAsync(request, cancellationToken);
+
+        RecordRestHeadroom(response);
+
+        string body = await response.Content.ReadAsStringAsync(cancellationToken);
+        IReadOnlyList<GitLabJobDto> jobs = JsonSerializer.Deserialize<List<GitLabJobDto>>(body, JsonOptions) ?? [];
+
+        List<FailingCheck> failingChecks = jobs
+            .Where(job => !job.AllowFailure)
+            .Select(job => new FailingCheck(job.Name, job.Status, job.WebUrl))
+            .ToList();
+
+        return Result<Checks>.Ok(Checks.FromGitLab(pipelineStatus, failingChecks));
+    }
+
+    private sealed record GitLabJobDto(string Name, string Status, bool AllowFailure, string? WebUrl);
 }
