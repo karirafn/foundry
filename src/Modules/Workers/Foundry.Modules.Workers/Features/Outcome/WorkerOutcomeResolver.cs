@@ -220,7 +220,7 @@ internal sealed class WorkerOutcomeResolver(
 
         return verdict is TriageVerdict.Blocked blocked
             && blocked.RejectionAgainst(run.SuppliedOpenIssueNumbers) is { } rejection
-                ? new WorkerOutcome.Failure(rejection, containerOutput, summary)
+                ? new WorkerOutcome.Failure(rejection, containerOutput, summary, RunVerdict.Invalid())
                 : new WorkerOutcome.TriageCompleted(verdict, containerOutput, summary);
     }
 

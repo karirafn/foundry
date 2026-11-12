@@ -78,7 +78,7 @@ public sealed class PersistSuppliedOpenIssues : IAsyncDisposable
 
         // Act
         string? stored = await _dbContext.Database
-            .SqlQueryRaw<string>("SELECT supplied_open_issues AS Value FROM worker_runs")
+            .SqlQueryRaw<string>("SELECT supplied_open_issue_numbers AS Value FROM worker_runs")
             .SingleOrDefaultAsync(TestContext.Current.CancellationToken);
 
         // Assert

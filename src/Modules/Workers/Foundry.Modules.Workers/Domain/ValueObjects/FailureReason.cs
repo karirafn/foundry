@@ -138,6 +138,8 @@ public abstract record FailureReason
 
         public const string InvalidDetail = "Verdict failed the role's schema";
 
+        public const string NoSuppliedSetDetail = "Blocked verdict cannot be checked: the run recorded no supplied open issues";
+
         public static VerdictInvalid BlockerNotSupplied(int issueNumber) =>
             new($"Blocked verdict names issue #{issueNumber}, which is not an open issue supplied to the run");
 

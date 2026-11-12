@@ -74,19 +74,35 @@ public sealed class RecordSuppliedOpenIssues
     }
 
     [Fact]
-    public void WhenAnIssueIsUnreadable_ItIsLeftOut()
+    public void WhenAnUnreadableIssueIsListedOpenInTheIndex_ItIsStillSupplied()
     {
         // Arrange
         TrackerContext trackerContext = new TrackerContextBuilder()
             .WithReferencedIssue(3, isOpen: true)
             .WithUnreadableIssueNumbers([9])
+            .WithOpenIssueNumbers(9)
             .Build();
 
         // Act
         StartingRun starting = RunSupplied(trackerContext);
 
         // Assert
-        starting.SuppliedOpenIssueNumbers.ShouldBe([3]);
+        starting.SuppliedOpenIssueNumbers.ShouldBe([3, 9]);
+    }
+
+    [Fact]
+    public void WhenTheIndexListsANumberTwice_ItIsStoredOnce()
+    {
+        // Arrange
+        TrackerContext trackerContext = new TrackerContextBuilder()
+            .WithOpenIssueNumbers(11, 12, 11)
+            .Build();
+
+        // Act
+        StartingRun starting = RunSupplied(trackerContext);
+
+        // Assert
+        starting.SuppliedOpenIssueNumbers.ShouldBe([11, 12]);
     }
 
     [Fact]

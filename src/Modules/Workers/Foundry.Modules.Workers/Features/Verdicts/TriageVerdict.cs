@@ -51,13 +51,19 @@ internal abstract record TriageVerdict(TriageIssueKind Kind)
     {
         /// <summary>
         /// Why this verdict cannot stand for a run that was supplied <paramref name="suppliedOpenIssueNumbers"/>, or
-        /// <see langword="null"/> when it can: a blocker must be one of the supplied open issues.
+        /// <see langword="null"/> when it can: a blocker must be one of the supplied open issues. A run with no recorded
+        /// set (<see langword="null"/>, dispatched before the set was recorded) rejects every blocked verdict.
         /// </summary>
         public FailureReason.VerdictInvalid? RejectionAgainst(IReadOnlyCollection<int>? suppliedOpenIssueNumbers)
         {
             if (BlockedBy.Count > TriageResult.Blocked.MaxBlockers)
             {
                 return FailureReason.VerdictInvalid.BlockersExceedCap(TriageResult.Blocked.MaxBlockers);
+            }
+
+            if (suppliedOpenIssueNumbers is null)
+            {
+                return new FailureReason.VerdictInvalid(FailureReason.VerdictInvalid.NoSuppliedSetDetail);
             }
 
             HashSet<int> named = [];
@@ -74,7 +80,7 @@ internal abstract record TriageVerdict(TriageIssueKind Kind)
                     return FailureReason.VerdictInvalid.BlockerDuplicated(blocker.IssueNumber);
                 }
 
-                if (suppliedOpenIssueNumbers?.Contains(blocker.IssueNumber) != true)
+                if (!suppliedOpenIssueNumbers.Contains(blocker.IssueNumber))
                 {
                     return FailureReason.VerdictInvalid.BlockerNotSupplied(blocker.IssueNumber);
                 }
@@ -100,7 +106,11 @@ internal abstract record TriageVerdict(TriageIssueKind Kind)
         }
     }
 
-    /// <summary>Returns the verdict, or <see langword="null"/> when <paramref name="output"/> breaks the schema.</summary>
+    /// <summary>
+    /// Returns the verdict, or <see langword="null"/> when <paramref name="output"/> breaks the schema. A well-formed
+    /// <c>blockedBy</c> beside a <c>ready</c> or <c>needs_input</c> outcome is ignored, as <c>questions</c> is
+    /// beside the other outcomes; a malformed one breaks the verdict under any outcome.
+    /// </summary>
     public static TriageVerdict? TryParse(JsonObject output)
     {
         ArgumentNullException.ThrowIfNull(output);

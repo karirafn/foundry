@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using System.Text.RegularExpressions;
 
 using Foundry.Modules.Workers.Contracts;
 
@@ -7,9 +8,10 @@ namespace Foundry.Modules.Workers.Features.Verdicts;
 
 /// <summary>
 /// Reads the triage <c>blockedBy</c> definition: an array of at least one <c>{issue, reason}</c> object, with an
-/// integer issue number and a non-empty reason and no other properties.
+/// integer issue number and a reason that is non-blank once its whitespace and control characters collapse to single
+/// spaces, and no other properties. The blocker carries the collapsed reason.
 /// </summary>
-internal static class VerdictBlockersReader
+internal static partial class VerdictBlockersReader
 {
     internal const string IssueProperty = "issue";
     internal const string ReasonProperty = "reason";
@@ -31,7 +33,7 @@ internal static class VerdictBlockersReader
             if (item is not JsonObject entry
                 || entry.Count != PropertyCount
                 || ReadInteger(entry[IssueProperty]) is not { } issue
-                || VerdictQuestionsReader.ReadString(entry[ReasonProperty]) is not { Length: > 0 } reason)
+                || ReadReason(entry[ReasonProperty]) is not { } reason)
             {
                 return null;
             }
@@ -41,6 +43,17 @@ internal static class VerdictBlockersReader
 
         return blockers;
     }
+
+    // The reason is posted publicly inside a code span, where a blank line or control character would break the
+    // span, so it is reduced to one trimmed line before anything else sees it.
+    private static string? ReadReason(JsonNode? node) =>
+        VerdictQuestionsReader.ReadString(node) is { } text
+        && NonSpaceRun().Replace(text, " ").Trim() is { Length: > 0 } normalized
+            ? normalized
+            : null;
+
+    [GeneratedRegex(@"[\s\p{Cc}]+")]
+    private static partial Regex NonSpaceRun();
 
     private static int? ReadInteger(JsonNode? node) =>
         node is JsonValue value

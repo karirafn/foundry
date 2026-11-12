@@ -273,7 +273,7 @@ internal sealed class WorkerOutcomeApplier(
                     branchNameOrNull: null,
                     failure.ContainerOutput,
                     failure.Summary,
-                    verdict);
+                    failure.Verdict ?? verdict);
                 await dbContext.TransitionAsync(activeRun, failedRun, alongside, domainEventDispatcher, cancellationToken);
                 await ApplyFailureSideEffectsAsync(activeRun, failure.FailureReason, cancellationToken);
                 logger.LogWarning(
@@ -307,7 +307,7 @@ internal sealed class WorkerOutcomeApplier(
             ToTriageKind(needsInput.Kind),
             [.. needsInput.Questions.Select(q => new InputQuestion(q.Question, q.Context, q.Recommendation))]),
         TriageVerdict.Blocked blocked => new TriageResult.Blocked(ToTriageKind(blocked.Kind), blocked.BlockedBy),
-        _ => throw new UnreachableException($"Unhandled triage verdict:{verdict.GetType().Name}"),
+        _ => throw new UnreachableException($"Unhandled triage verdict: {verdict.GetType().Name}"),
     };
 
     private static TriageKind ToTriageKind(TriageIssueKind kind) => kind switch

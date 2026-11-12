@@ -132,7 +132,7 @@ public sealed partial class ResolveAsync
     }
 
     [Fact]
-    public async Task WhenABlockedVerdictRunHasNoSuppliedSet_FailsNamingTheNumber()
+    public async Task WhenABlockedVerdictRunHasNoRecordedSuppliedSet_FailsWithoutBlamingTheModel()
     {
         // Arrange
         WorkerOutcomeResolver sut = BuildTriageResolver();
@@ -148,7 +148,26 @@ public sealed partial class ResolveAsync
 
         // Assert
         outcome.ShouldBeOfType<WorkerOutcome.Failure>().FailureReason
-            .ShouldBe(FailureReason.VerdictInvalid.BlockerNotSupplied(15));
+            .ShouldBe(new FailureReason.VerdictInvalid(FailureReason.VerdictInvalid.NoSuppliedSetDetail));
+    }
+
+    [Fact]
+    public async Task WhenABlockedVerdictIsRejected_TheFailureVoidsTheRecordedVerdict()
+    {
+        // Arrange
+        WorkerOutcomeResolver sut = BuildTriageResolver();
+        string output = BlockedOutput([(99, BlockerReason)]);
+
+        // Act
+        WorkerOutcome outcome = await sut.ResolveAsync(
+            CreateTriageRunSupplied(15),
+            Exited(0),
+            output,
+            RunVerdict.Done(),
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        outcome.ShouldBeOfType<WorkerOutcome.Failure>().Verdict.ShouldBe(RunVerdict.Invalid());
     }
 
     [Fact]

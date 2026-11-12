@@ -56,7 +56,47 @@ public sealed class TryParse
     }
 
     [Theory]
+    [InlineData("""{"outcome":"blocked","kind":"feature","blockedBy":[{"issue":15,"reason":"   "}]}""")]
+    [InlineData("""{"outcome":"blocked","kind":"feature","blockedBy":[{"issue":15,"reason":"\n\n"}]}""")]
+    [InlineData("""{"outcome":"blocked","kind":"feature","blockedBy":[{"issue":15,"reason":"\t\u0007 \r\n"}]}""")]
+    public void WhenABlockerReasonIsBlankAfterNormalization_ReturnsNull(string json)
+    {
+        // Act
+        TriageVerdict? verdict = TriageVerdict.TryParse(Json(json));
+
+        // Assert
+        verdict.ShouldBeNull();
+    }
+
+    [Theory]
+    [InlineData("Needs the auth\\n\\nmodule.", "Needs the auth module.")]
+    [InlineData("  Needs\\tthe   auth module.\\r\\n", "Needs the auth module.")]
+    [InlineData("Needs the\\u0007 auth\\u001b module.", "Needs the auth module.")]
+    public void WhenABlockerReasonSpansLinesOrHoldsControlCharacters_NormalizesItToOneLine(string rawReason, string expected)
+    {
+        // Act
+        TriageVerdict? verdict = TriageVerdict.TryParse(Json(
+            $$"""{"outcome":"blocked","kind":"feature","blockedBy":[{"issue":15,"reason":"{{rawReason}}"}]}"""));
+
+        // Assert
+        verdict.ShouldBe(new TriageVerdict.Blocked(TriageIssueKind.Feature, [new TriageBlocker(15, expected)]));
+    }
+
+    [Theory]
+    [InlineData("""{"outcome":"ready","kind":"feature","blockedBy":[{"issue":15,"reason":"x"}]}""", nameof(TriageVerdict.Ready))]
+    [InlineData("""{"outcome":"needs_input","kind":"feature","questions":[{"question":"Q?","context":"c","recommendation":"r"}],"blockedBy":[{"issue":15,"reason":"x"}]}""", nameof(TriageVerdict.NeedsInput))]
+    public void WhenAWellFormedBlockedByAccompaniesAnotherOutcome_ItIsIgnored(string json, string expectedType)
+    {
+        // Act
+        TriageVerdict? verdict = TriageVerdict.TryParse(Json(json));
+
+        // Assert
+        verdict.ShouldNotBeNull().GetType().Name.ShouldBe(expectedType);
+    }
+
+    [Theory]
     [InlineData("""{"outcome":"blocked","kind":"feature"}""")]
+
     [InlineData("""{"outcome":"blocked","kind":"feature","blockedBy":[]}""")]
     [InlineData("""{"outcome":"blocked","kind":"feature","blockedBy":null}""")]
     [InlineData("""{"outcome":"blocked","kind":"feature","blockedBy":{"issue":15,"reason":"x"}}""")]

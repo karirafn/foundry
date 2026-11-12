@@ -28,7 +28,11 @@ public enum TriageKind
 /// <summary>An open issue triage named as one the issue depends on, with the model's reason.</summary>
 public sealed record TriageBlocker(int IssueNumber, string Reason)
 {
-    /// <summary>The longest reason a blocker may carry; it is stored, relayed and later shown in a public comment.</summary>
+    /// <summary>
+    /// The longest reason a blocker may carry; it is stored, relayed and later shown in a public comment. It counts
+    /// UTF-16 code units while the verdict schema's <c>maxLength</c> counts code points, so a reason heavy in astral
+    /// characters can pass the schema and still be rejected here, failing the run as an invalid verdict.
+    /// </summary>
     public const int ReasonMaxLength = 500;
 }
 

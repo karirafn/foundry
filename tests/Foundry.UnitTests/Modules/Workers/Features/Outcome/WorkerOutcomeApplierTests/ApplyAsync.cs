@@ -105,6 +105,31 @@ public sealed class ApplyAsync : WorkerDispatchServiceTestBase
     }
 
     [Fact]
+    public async Task WhenAFailureCarriesItsOwnVerdict_RecordsItInPlaceOfTheOneGiven()
+    {
+        // Arrange
+        SeedActiveRun(ContainerId, Branch);
+        await using FoundryDbContext db = CreateDbContext();
+        ActiveRun activeRun = await db.Set<ActiveRun>().SingleAsync(TestContext.Current.CancellationToken);
+        WorkerOutcomeApplier sut = BuildApplier(db, new RecordingOrchestrator());
+        WorkerOutcome outcome = new WorkerOutcome.Failure(
+            FailureReason.VerdictInvalid.BlockersExceedCap(1),
+            ContainerOutput: null,
+            Summary: null,
+            Verdict: RunVerdict.Invalid());
+
+        // Act
+        await sut.ApplyAsync(outcome, activeRun, RunVerdict.Done(), TestContext.Current.CancellationToken);
+
+        // Assert
+        await using FoundryDbContext assertDb = CreateDbContext();
+        WorkerRun run = await assertDb.Set<WorkerRun>().SingleAsync(TestContext.Current.CancellationToken);
+        run.ShouldSatisfyAllConditions(
+            () => run.ShouldBeOfType<FailedRun>(),
+            () => run.VerdictStatus.ShouldBe(RunVerdictStatus.Invalid));
+    }
+
+    [Fact]
     public async Task WhenNoVerdictIsGiven_RecordsNone()
     {
         // Arrange

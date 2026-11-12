@@ -165,13 +165,16 @@ public sealed class WorkerRunConfiguration : IEntityTypeConfiguration<WorkerRun>
             .HasColumnType("TEXT")
             .HasColumnName("verdict_questions");
 
+        // The stored list is bounded by what Foundry supplies at dispatch: at most the open-issue index cap
+        // (TrackerContextReader.MaxOpenIssues, 100) plus the referenced-issue cap
+        // (ReferencedIssueSelection.MaxReferencedIssues, 10), never anything the model returns.
         builder.Property(r => r.SuppliedOpenIssueNumbers)
             .HasConversion(
                 WorkerRunValueConverters.SuppliedOpenIssuesConverter,
                 WorkerRunValueConverters.SuppliedOpenIssuesComparer)
             .HasMaxLength(int.MaxValue)
             .HasColumnType("TEXT")
-            .HasColumnName("supplied_open_issues");
+            .HasColumnName("supplied_open_issue_numbers");
 
         builder.Ignore(r => r.Verdict);
 

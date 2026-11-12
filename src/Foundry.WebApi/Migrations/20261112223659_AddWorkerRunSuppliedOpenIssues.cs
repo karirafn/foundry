@@ -11,7 +11,7 @@ namespace Foundry.WebApi.Migrations
         protected override void Up(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.AddColumn<string>(
-                name: "supplied_open_issues",
+                name: "supplied_open_issue_numbers",
                 table: "worker_runs",
                 type: "TEXT",
                 maxLength: 2147483647,
@@ -22,7 +22,7 @@ namespace Foundry.WebApi.Migrations
         protected override void Down(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.DropColumn(
-                name: "supplied_open_issues",
+                name: "supplied_open_issue_numbers",
                 table: "worker_runs");
         }
     }

@@ -93,5 +93,5 @@ is still decided from facts (merge request, commits, exit code).
 `refactor` or `documentation`), and `questions` when `outcome` is `needs_input`. A `blocked` verdict carries `blockedBy`:
 one to 50 `{issue, reason}` objects naming open issues that must land first, each with a reason of 1 to 500 characters.
 The schema's conditional stays flat (`needs_input` requires `questions`); the typed parser requires a non-empty
-`blockedBy` for `blocked`, and the resolver rejects an issue outside the run's supplied open issues, a duplicate or an
+`blockedBy` for `blocked`, collapses each reason to one line (a reason blank after that breaks the verdict), and the resolver rejects an issue outside the run's supplied open issues, a duplicate or an
 over-cap list as `verdict_invalid`. Foundry records `ready` and `blocked` as `done`.
