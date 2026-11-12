@@ -28,6 +28,19 @@ public sealed class ImplementsIIssueStateChanged
     }
 
     [Fact]
+    public void IssueTriageBlocked_ImplementsIIssueStateChanged()
+    {
+        // Arrange
+        IssueTriageBlocked @event = new(AnyIssueId, AnyRepositoryId);
+
+        // Act
+        IIssueStateChanged stateChanged = @event;
+
+        // Assert
+        stateChanged.ShouldNotBeNull();
+    }
+
+    [Fact]
     public void IssueBlocked_ImplementsIIssueStateChanged()
     {
         // Arrange

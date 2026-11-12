@@ -1994,6 +1994,52 @@ namespace Foundry.WebApi.Migrations
                     b.HasDiscriminator().HasValue("revision_in_progress");
                 });
 
+            modelBuilder.Entity("Foundry.Modules.Issues.Domain.Entities.States.TriageBlockedIssue", b =>
+                {
+                    b.HasBaseType("Foundry.Modules.Issues.Domain.Entities.Issue");
+
+                    b.ToTable(t =>
+                        {
+                            t.HasCheckConstraint("ck_issues_awaiting_input_fields", "state <> 'awaiting_input' OR (worker_run_id IS NOT NULL AND resume_target IS NOT NULL AND question_post IS NOT NULL)");
+
+                            t.HasCheckConstraint("ck_issues_branch_diverged_fields", "state <> 'branch_diverged' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND side_branch_name IS NOT NULL)");
+
+                            t.HasCheckConstraint("ck_issues_checks_pending_fields", "state <> 'checks_pending' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND pull_request_url IS NOT NULL AND entered_checks_pending_at IS NOT NULL AND feedback_cutoff_at IS NOT NULL)");
+
+                            t.HasCheckConstraint("ck_issues_completed_completed_at", "state <> 'completed' OR completed_at IS NOT NULL");
+
+                            t.HasCheckConstraint("ck_issues_continuable_failed_fields", "state <> 'continuable_failed' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND failure_reason IS NOT NULL AND failed_at IS NOT NULL)");
+
+                            t.HasCheckConstraint("ck_issues_continuation_queued_branch_name", "state <> 'continuation_queued' OR branch_name IS NOT NULL");
+
+                            t.HasCheckConstraint("ck_issues_failed_fields", "state <> 'failed' OR (worker_run_id IS NOT NULL AND failure_reason IS NOT NULL AND failed_at IS NOT NULL)");
+
+                            t.HasCheckConstraint("ck_issues_in_progress_worker_run_id", "state <> 'in_progress' OR worker_run_id IS NOT NULL");
+
+                            t.HasCheckConstraint("ck_issues_publish_blocked_fields", "state <> 'publish_blocked' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND publish_blocked_at IS NOT NULL)");
+
+                            t.HasCheckConstraint("ck_issues_publish_failed_fields", "state <> 'publish_failed' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND failure_reason IS NOT NULL AND failed_at IS NOT NULL)");
+
+                            t.HasCheckConstraint("ck_issues_rebase_pending_fields", "state <> 'rebase_pending' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND pull_request_url IS NOT NULL AND entered_rebase_pending_at IS NOT NULL AND feedback_cutoff_at IS NOT NULL)");
+
+                            t.HasCheckConstraint("ck_issues_review_fields", "state <> 'review' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND pull_request_url IS NOT NULL AND feedback_cutoff_at IS NOT NULL)");
+
+                            t.HasCheckConstraint("ck_issues_revision_failed_fields", "state <> 'revision_failed' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND pull_request_url IS NOT NULL AND revision_trigger IS NOT NULL AND failure_reason IS NOT NULL AND failed_at IS NOT NULL)");
+
+                            t.HasCheckConstraint("ck_issues_revision_in_progress_fields", "state <> 'revision_in_progress' OR (worker_run_id IS NOT NULL AND branch_name IS NOT NULL AND pull_request_url IS NOT NULL AND revision_trigger IS NOT NULL)");
+
+                            t.HasCheckConstraint("ck_issues_revision_queued_fields", "state <> 'revision_queued' OR (branch_name IS NOT NULL AND pull_request_url IS NOT NULL AND revision_trigger IS NOT NULL)");
+
+                            t.HasCheckConstraint("ck_issues_triage_failed_fields", "state <> 'triage_failed' OR (worker_run_id IS NOT NULL AND failure_reason IS NOT NULL AND failed_at IS NOT NULL)");
+
+                            t.HasCheckConstraint("ck_issues_triage_in_progress_worker_run_id", "state <> 'triage_in_progress' OR worker_run_id IS NOT NULL");
+
+                            t.HasCheckConstraint("ck_issues_unchanged_worker_run_id", "state <> 'unchanged' OR worker_run_id IS NOT NULL");
+                        });
+
+                    b.HasDiscriminator().HasValue("triage_blocked");
+                });
+
             modelBuilder.Entity("Foundry.Modules.Issues.Domain.Entities.States.TriageFailedIssue", b =>
                 {
                     b.HasBaseType("Foundry.Modules.Issues.Domain.Entities.Issue");

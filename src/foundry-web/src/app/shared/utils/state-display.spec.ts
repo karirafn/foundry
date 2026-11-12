@@ -318,3 +318,24 @@ describe('resolveStateDisplay', () => {
     expect(display).toEqual({ label: 'TRIAGE FAILED', ariaLabel: 'triage failed', cssClass: 'badge--triage-failed' });
   });
 });
+
+describe('triage_blocked display (ADR 0102)', () => {
+  it('should give triage_blocked its label, aria label and badge class', () => {
+    // Arrange / Act / Assert
+    expect(STATE_LABELS.triage_blocked).toBe('TRIAGE BLOCKED');
+    expect(STATE_ARIA_LABELS.triage_blocked).toBe('triage blocked');
+    expect(STATE_CSS_CLASSES.triage_blocked).toBe('badge--triage-blocked');
+  });
+
+  it('should give triage_blocked no card accent', () => {
+    // Arrange / Act / Assert
+    expect(cardAccentFor('triage_blocked')).toBeNull();
+  });
+
+  it('should offer no operator action set for triage_blocked', () => {
+    // Arrange / Act / Assert
+    expect(WORKING_STATES.has('triage_blocked')).toBe(false);
+    expect(RETRYABLE_STATES.has('triage_blocked')).toBe(false);
+    expect(RETRIAGEABLE_STATES.has('triage_blocked')).toBe(false);
+  });
+});

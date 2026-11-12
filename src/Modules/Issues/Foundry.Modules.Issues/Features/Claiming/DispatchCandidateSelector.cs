@@ -14,9 +14,9 @@ namespace Foundry.Modules.Issues.Features.Claiming;
 /// <summary>
 /// Selects the best <see cref="DispatchCandidate"/> from all claimable issues across eligible
 /// repositories, applying capacity-aware ordering (ADR 0074) and per-repository dispatch-info
-/// memoization. Each <see cref="FreshQueuedIssue"/> candidate's open blockers are re-read from the
-/// provider before it is selected; a candidate that gained a blocker is transitioned to
-/// <see cref="BlockedIssue"/> and the next candidate in dispatch order is tried.
+/// memoization. Each <see cref="FreshQueuedIssue"/> and <see cref="TriageQueuedIssue"/> candidate's open blockers are re-read from the
+/// provider before it is selected; a candidate that gained a blocker is transitioned to <see cref="BlockedIssue"/> or
+/// <see cref="TriageBlockedIssue"/> and the next candidate in dispatch order is tried.
 /// </summary>
 internal sealed class DispatchCandidateSelector(
     DbContext db,
@@ -111,11 +111,13 @@ internal sealed class DispatchCandidateSelector(
 
                 // Claim-time blocker re-check: the recorded BlockedBy may predate a blocker added
                 // on the provider (GitLab sends no webhook for issue links), so re-read it live for
-                // fresh work. Revisions and continuations run on an existing branch/PR and are not
+                // fresh work and for triage, which waits for open blockers to close (ADR 0102) — this also covers an
+                // issue created with blockers before its first dependency pass. Revisions and continuations run on an
+                // existing branch/PR and are not
                 // re-gated.
-                if (candidate is FreshQueuedIssue fresh)
+                if (candidate is FreshQueuedIssue or TriageQueuedIssue)
                 {
-                    BlockerCheck check = await CheckBlockersAsync(fresh, cancellationToken);
+                    BlockerCheck check = await CheckBlockersAsync(candidate, cancellationToken);
 
                     if (check == BlockerCheck.ReadFailed)
                     {
@@ -128,11 +130,11 @@ internal sealed class DispatchCandidateSelector(
 
                     if (check == BlockerCheck.Blocked)
                     {
-                        // The issue is now a BlockedIssue and no longer holds a dispatch slot, so
+                        // The issue is now blocked and no longer holds a dispatch slot, so
                         // re-walk the capacity-aware order without it: the next same-repository
                         // issue may only now fit within the repository's headroom.
                         blocked++;
-                        keyedCandidates.RemoveAll(k => ReferenceEquals(k.Issue, fresh));
+                        keyedCandidates.RemoveAll(k => ReferenceEquals(k.Issue, candidate));
                         ordered = CapacityAwareDispatchOrder.Order(keyedCandidates, headroom);
                         reordered = true;
                         break;
@@ -153,7 +155,7 @@ internal sealed class DispatchCandidateSelector(
     }
 
     private async Task<BlockerCheck> CheckBlockersAsync(
-        FreshQueuedIssue candidate,
+        QueuedIssue candidate,
         CancellationToken cancellationToken)
     {
         Result<IReadOnlyList<int>> blockers = await issueBlockerQueries.GetOpenBlockersAsync(
@@ -176,7 +178,7 @@ internal sealed class DispatchCandidateSelector(
             return BlockerCheck.Clear;
         }
 
-        // Transition to BlockedIssue (committed) so the issue is not re-selected on the next tick
+        // Transition to BlockedIssue or TriageBlockedIssue (committed) so the issue is not re-selected on the next tick
         // or on redelivery of this capacity event.
         await dependencyApplier.ApplyAsync(candidate, blockersSuccess.Value, cancellationToken);
         logger.LogInformation(
