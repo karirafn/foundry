@@ -255,22 +255,68 @@ public sealed class TrackerContextShedding
     public void Build_WhenFailingChecksAndTheTrackerContextOverflow_RendersTheJobLogsWholeWhileShedding()
     {
         // Arrange
-        string[] logTails = Enumerable.Range(0, 4).Select(i => new string((char)('P' + i), 16 * 1024)).ToArray();
-        List<FailingJobLog> jobLogs = logTails.Select((tail, i) => new FailingJobLog($"ci/job-{i}", tail)).ToList();
-        List<FailingCheck> checks = jobLogs.Select(log => new FailingCheck(log.Name, "failure", null)).ToList();
-        DispatchContext.Revision revision = new(
-            "feat/42-fix",
-            "https://github.com/org/repo/pull/42",
-            new RevisionTrigger.FailedChecks(checks));
-        TrackerContext trackerContext = ContextWithReferencedIssues(ReferencedIssueCount);
+        // Bodies shorter than the reserve let a tracker that overdraws it show.
+        TrackerContext trackerContext = WithBodiesOfLength(ContextWithReferencedIssues(ReferencedIssueCount), 300);
+        int largestWholeLength = LargestJobLogLengthRenderedWhole(WithBodiesOfLength(trackerContext, 1));
 
         // Act
-        string prompt = Build(IssueWithComments(1), trackerContext, revision, jobLogs);
+        string prompt = Build(
+            IssueWithComments(1),
+            trackerContext,
+            FailedChecksRevision(),
+            JobLogsOfLength(largestWholeLength));
 
         // Assert
         prompt.ShouldSatisfyAllConditions(
             () => KeptBodyCount(prompt).ShouldBeLessThan(ReferencedIssueCount),
-            () => logTails.ShouldAllBe(tail => prompt.Contains(tail, StringComparison.Ordinal)));
+            () => JobLogsRenderedWhole(prompt, largestWholeLength).ShouldBeTrue());
+    }
+
+    // Each log is capped per job, so enough of them are needed to reach the prompt budget.
+    private const int JobLogCount = 12;
+
+    private static DispatchContext.Revision FailedChecksRevision() =>
+        new(
+            "feat/42-fix",
+            "https://github.com/org/repo/pull/42",
+            new RevisionTrigger.FailedChecks(
+                Enumerable.Range(0, JobLogCount).Select(i => new FailingCheck($"ci/job-{i}", "failure", null)).ToList()));
+
+    private static List<FailingJobLog> JobLogsOfLength(int length) =>
+        Enumerable.Range(0, JobLogCount)
+            .Select(i => new FailingJobLog($"ci/job-{i}", new string((char)('P' + i), length)))
+            .ToList();
+
+    private static bool JobLogsRenderedWhole(string prompt, int length) =>
+        Enumerable.Range(0, JobLogCount)
+            .All(i => prompt.Contains(new string((char)('P' + i), length), StringComparison.Ordinal));
+
+    // The longest job logs that still render whole beside the given context, found by measuring built output.
+    private static int LargestJobLogLengthRenderedWhole(TrackerContext trackerContext)
+    {
+        int whole = 1;
+        int overflowing = 100_000;
+
+        while (overflowing - whole > 1)
+        {
+            int length = (whole + overflowing) / 2;
+            string prompt = Build(
+                IssueWithComments(1),
+                trackerContext,
+                FailedChecksRevision(),
+                JobLogsOfLength(length));
+
+            if (JobLogsRenderedWhole(prompt, length))
+            {
+                whole = length;
+            }
+            else
+            {
+                overflowing = length;
+            }
+        }
+
+        return whole;
     }
 
     [Fact]
