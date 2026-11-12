@@ -19,7 +19,7 @@ public sealed class RecordPublished
         PublishingRun run = PublishingRunFixture.Publishing();
 
         // Act
-        run.RecordPublished(new PublishResult.Published(Head, 3, ["feat: a", "fix: b"]), PublishingRunFixture.ExitedAt);
+        run.RecordPublished(new PublishResult.Published(Head, 3, ["feat: a", "fix: b"], []), PublishingRunFixture.ExitedAt);
 
         // Assert
         run.ShouldSatisfyAllConditions(
@@ -38,7 +38,7 @@ public sealed class RecordPublished
         BranchName side = BranchName.From("feat/42-add-retry-run-1");
 
         // Act
-        run.RecordPublished(new PublishResult.Diverged(PublishingRunFixture.Branch, side, Head), PublishingRunFixture.ExitedAt);
+        run.RecordPublished(new PublishResult.Diverged(PublishingRunFixture.Branch, side, Head, []), PublishingRunFixture.ExitedAt);
 
         // Assert
         run.ShouldSatisfyAllConditions(
@@ -62,7 +62,7 @@ public sealed class RecordPublished
     {
         // Arrange
         PublishingRun run = PublishingRunFixture.Publishing();
-        run.RecordPublished(new PublishResult.Published(Head, 2, []), PublishingRunFixture.ExitedAt);
+        run.RecordPublished(new PublishResult.Published(Head, 2, [], []), PublishingRunFixture.ExitedAt);
 
         // Act
         CompletedRun completed = run.Complete(0, PublishingRunFixture.Branch, PullRequestUrl.From("https://github.com/o/r/pull/7"));

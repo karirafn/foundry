@@ -23,6 +23,7 @@ export const STATE_LABELS: Record<IssueState, string> = {
   triage_in_progress: 'TRIAGING',
   triage_failed: 'TRIAGE FAILED',
   publish_failed: 'PUBLISH FAILED',
+  publish_blocked: 'SECRET DETECTED',
   branch_diverged: 'BRANCH DIVERGED',
 };
 
@@ -47,6 +48,7 @@ export const STATE_ARIA_LABELS: Record<IssueState, string> = {
   triage_in_progress: 'triaging',
   triage_failed: 'triage failed',
   publish_failed: 'publish failed',
+  publish_blocked: 'secret detected, nothing pushed',
   branch_diverged: 'branch diverged',
 };
 
@@ -71,6 +73,7 @@ export const STATE_CSS_CLASSES: Record<IssueState, string> = {
   triage_in_progress: 'badge--triage-in-progress',
   triage_failed: 'badge--triage-failed',
   publish_failed: 'badge--publish-failed',
+  publish_blocked: 'badge--publish-blocked',
   branch_diverged: 'badge--branch-diverged',
 };
 

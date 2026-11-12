@@ -229,4 +229,43 @@ public sealed class Publish : IAsyncDisposable
         ContinuableFailedIssue failed = (await ReloadAsync(inProgress)).ShouldBeOfType<ContinuableFailedIssue>();
         failed.FailureCategory.ShouldBe(FailureCategory.PublishExpired);
     }
+
+    [Fact]
+    public async Task WhenABlockedImplementRunIsDiscarded_FailsContinuablyAsRunDiscarded()
+    {
+        // Arrange
+        PublishBlockedIssue blocked = Seed(new IssueBuilder().WithBranchName("feat/1-test").PublishBlocked());
+        WorkerRunFailed @event = new(
+            blocked.WorkerRunId,
+            blocked.Id.Value,
+            "The run was discarded",
+            FailureCategory.RunDiscardedToken,
+            "feat/1-test");
+
+        // Act
+        await _sut.HandleAsync(@event, TestContext.Current.CancellationToken);
+
+        // Assert
+        ContinuableFailedIssue failed = (await ReloadAsync(blocked)).ShouldBeOfType<ContinuableFailedIssue>();
+        failed.FailureCategory.ShouldBe(FailureCategory.RunDiscarded);
+    }
+
+    [Fact]
+    public async Task WhenAnotherRunFailsForABlockedIssue_LeavesItBlocked()
+    {
+        // Arrange
+        PublishBlockedIssue blocked = Seed(new IssueBuilder().PublishBlocked());
+        WorkerRunFailed @event = new(
+            WorkerRunId.New(),
+            blocked.Id.Value,
+            "The run was discarded",
+            FailureCategory.RunDiscardedToken,
+            "feat/1-test");
+
+        // Act
+        await _sut.HandleAsync(@event, TestContext.Current.CancellationToken);
+
+        // Assert
+        (await ReloadAsync(blocked)).ShouldBeOfType<PublishBlockedIssue>();
+    }
 }

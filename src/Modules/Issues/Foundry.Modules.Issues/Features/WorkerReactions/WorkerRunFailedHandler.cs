@@ -147,6 +147,25 @@ internal sealed class WorkerRunFailedHandler(
             return;
         }
 
+        // The run whose publish the Diff gate blocked ended without publishing: an operator discarded it, or its time to
+        // live did (#788).
+        if (issue is PublishBlockedIssue publishBlockedIssue)
+        {
+            if (@event.WorkerRunId != publishBlockedIssue.WorkerRunId)
+            {
+                logger.LogWarning(
+                    "WorkerRunFailed for issue {IssueId} has run id {EventRunId} which does not match its blocked run {CurrentRunId}; ignoring.",
+                    @event.IssueId,
+                    @event.WorkerRunId,
+                    publishBlockedIssue.WorkerRunId);
+                return;
+            }
+
+            Issue discarded = publishBlockedIssue.Fail(@event.ReasonDescription, category, failedAt);
+            await db.TransitionAsync(publishBlockedIssue, discarded, domainEventDispatcher, cancellationToken);
+            return;
+        }
+
         // A failed triage run never falls back to facts (ADR 0094): the issue waits in triage failed.
         if (issue is TriageInProgressIssue triaging)
         {

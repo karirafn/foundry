@@ -29,19 +29,26 @@ internal sealed partial record PullRequestText(string Title, string Body)
 
     private const string Ellipsis = "…";
 
+    private const string RevertedFilesHeading = "## Files reverted by Foundry";
+
+    private const string RevertedFilesExplanation =
+        "Foundry's diff gate reverted these files in a separate commit before pushing, because binary files and files over its size limit are not published. Add them yourself if they belong in the change.";
+
     public static PullRequestText Build(
         PullRequestKind kind,
         PullRequestSummary? summary,
         PullRequestDescription? description,
         string issueTitle,
         int issueNumber,
-        IReadOnlyList<string> commitSubjects)
+        IReadOnlyList<string> commitSubjects,
+        IReadOnlyList<RevertedFile> revertedFiles)
     {
         ArgumentNullException.ThrowIfNull(issueTitle);
         ArgumentNullException.ThrowIfNull(commitSubjects);
+        ArgumentNullException.ThrowIfNull(revertedFiles);
 
         string title = $"{TypeOf(kind)}: {summary?.Value ?? SummaryFromIssueTitle(issueTitle, issueNumber)}";
-        string body = SummaryComment(description, commitSubjects)
+        string body = SummaryComment(description, commitSubjects, revertedFiles)
             + "\n\nCloses #" + issueNumber.ToString(CultureInfo.InvariantCulture);
 
         return new PullRequestText(title, body);
@@ -49,13 +56,19 @@ internal sealed partial record PullRequestText(string Title, string Body)
 
     /// <summary>
     /// The body of the summary comment posted on an existing pull request after a later run: the description, or the
-    /// commit-subject fallback. It carries no closing keyword, as the pull request body already links the issue.
+    /// commit-subject fallback, then the files the Diff gate reverted. It carries no closing keyword, as the pull request
+    /// body already links the issue.
     /// </summary>
-    public static string SummaryComment(PullRequestDescription? description, IReadOnlyList<string> commitSubjects)
+    public static string SummaryComment(
+        PullRequestDescription? description,
+        IReadOnlyList<string> commitSubjects,
+        IReadOnlyList<RevertedFile> revertedFiles)
     {
         ArgumentNullException.ThrowIfNull(commitSubjects);
+        ArgumentNullException.ThrowIfNull(revertedFiles);
 
-        return description?.Value ?? BodyFromCommitSubjects(commitSubjects);
+        string summary = description?.Value ?? BodyFromCommitSubjects(commitSubjects);
+        return revertedFiles.Count == 0 ? summary : summary + "\n\n" + RevertedFilesSection(revertedFiles);
     }
 
     private static string TypeOf(PullRequestKind kind) => kind switch
@@ -126,6 +139,67 @@ internal sealed partial record PullRequestText(string Title, string Body)
         }
 
         return "## Changes\n\n" + string.Join('\n', subjects.Select(subject => "- " + subject));
+    }
+
+    // The pull request is where a reviewer learns that the run's change is missing these files (#788).
+    private static string RevertedFilesSection(IReadOnlyList<RevertedFile> revertedFiles)
+    {
+        StringBuilder section = new(RevertedFilesHeading);
+        section.Append("\n\n").Append(RevertedFilesExplanation).Append('\n');
+
+        foreach (RevertedFile file in revertedFiles)
+        {
+            section.Append("\n- ")
+                .Append(CodeSpan(file.Path))
+                .Append(": ")
+                .Append(ReasonOf(file.Reason))
+                .Append(" (")
+                .Append(FileSize(file.SizeBytes))
+                .Append(')');
+        }
+
+        return section.ToString();
+    }
+
+    private static string ReasonOf(RevertedFileReason reason) => reason switch
+    {
+        RevertedFileReason.Oversized => "too large",
+        RevertedFileReason.Binary => "binary",
+        _ => throw new UnreachableException($"Unhandled {nameof(RevertedFileReason)}: {reason}"),
+    };
+
+    // A fence one backtick longer than the longest run inside the path keeps it one code span.
+    private static string CodeSpan(string text)
+    {
+        int longestRun = 0;
+        int run = 0;
+        foreach (char c in text)
+        {
+            run = c == '`' ? run + 1 : 0;
+            longestRun = Math.Max(longestRun, run);
+        }
+
+        string fence = new('`', longestRun + 1);
+        string padding = text.StartsWith('`') || text.EndsWith('`') ? " " : string.Empty;
+        return fence + padding + text + padding + fence;
+    }
+
+    // Base 1024, one decimal, a trailing ".0" dropped: 940 B, 12.4 KB, 3.1 MB.
+    private static string FileSize(long bytes)
+    {
+        string[] units = ["B", "KB", "MB", "GB", "TB"];
+        double value = bytes;
+        int unit = 0;
+        while (value >= 1024 && unit < units.Length - 1)
+        {
+            value /= 1024;
+            unit++;
+        }
+
+        string number = unit == 0
+            ? bytes.ToString(CultureInfo.InvariantCulture)
+            : Math.Round(value, 1, MidpointRounding.AwayFromZero).ToString("0.#", CultureInfo.InvariantCulture);
+        return number + " " + units[unit];
     }
 
     [GeneratedRegex(@"\s+", RegexOptions.None, matchTimeoutMilliseconds: 1000)]

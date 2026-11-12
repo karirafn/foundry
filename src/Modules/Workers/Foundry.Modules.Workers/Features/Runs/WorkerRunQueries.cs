@@ -120,17 +120,37 @@ internal sealed class WorkerRunQueries(DbContext db) : IWorkerRunQueries
             : new WorkerRunLogResult.LogAvailable(containerOutput);
     }
 
-    private static WorkerRunDetail MapToDetail(WorkerRun run) =>
-        run switch
+    private static WorkerRunDetail MapToDetail(WorkerRun run)
+    {
+        WorkerRunDetail detail = run switch
         {
             ActiveRun active => MapActive(active),
             PublishingRun publishing => MapUnpublished(publishing, "publishing", publishRetry: null),
             PublishFailedRun publishFailed => MapUnpublished(publishFailed, "publish_failed", PublishRetryOf(publishFailed)),
+            PublishBlockedRun blocked => MapUnpublished(blocked, "publish_blocked", publishRetry: null) with
+            {
+                SecretFindings = [.. blocked.SecretFindings.Select(finding =>
+                    new WorkerRunSecretFinding(finding.Path, finding.Line, finding.Commit.Value, finding.RuleId))],
+            },
             CompletedRun completed => MapCompleted(completed) with { Publish = PublishOf(completed, completed.PullRequestUrl?.Value) },
             FailedRun failed => MapFailed(failed) with { Publish = PublishOf(failed, pullRequestUrl: null) },
             StartingRun starting => MapStarting(starting),
             _ => throw new UnreachableException($"Unknown {nameof(WorkerRun)} subtype: {run.GetType().Name}"),
         };
+
+        return detail with { RevertedFiles = [.. run.RevertedFiles.Select(RevertedFileOf)] };
+    }
+
+    private static WorkerRunRevertedFile RevertedFileOf(RevertedFile file) =>
+        new(
+            file.Path,
+            file.Reason switch
+            {
+                RevertedFileReason.Oversized => "oversized",
+                RevertedFileReason.Binary => "binary",
+                _ => throw new UnreachableException($"Unknown {nameof(RevertedFileReason)}: {file.Reason}"),
+            },
+            file.SizeBytes);
 
     private static WorkerRunDetail MapUnpublished(UnpublishedRun run, string state, WorkerRunPublishRetryDetail? publishRetry)
     {

@@ -41,13 +41,15 @@ public sealed class PublishAsync : WorkerDispatchServiceTestBase
 
     private readonly RecordingRunPublishingCommands _commands = new();
 
+    private readonly FakeWorkerOrchestrator _orchestrator = new();
+
     [Fact]
     public async Task ARunThatFinishedWithNoPullRequest_GetsOneOpenedByCode()
     {
         // Arrange
         SeedPublishingRun(new RunExit(0, OomKilled: false, RunStopReason.Exited, DateTimeOffset.UtcNow));
         FakePublisher publisher = new FakePublisher().WithPublishResults(
-            new PublishResult.Published(Head, 2, ["feat: add retry"]));
+            new PublishResult.Published(Head, 2, ["feat: add retry"], []));
 
         // Act
         await RunPublisherAsync(publisher, new StubPostExitProviderQueries(hasCommits: true));
@@ -81,7 +83,7 @@ public sealed class PublishAsync : WorkerDispatchServiceTestBase
     {
         // Arrange
         SeedPublishingRun(new RunExit(0, OomKilled: false, RunStopReason.Exited, DateTimeOffset.UtcNow));
-        FakePublisher publisher = new FakePublisher().WithPublishResults(new PublishResult.Published(Head, 3, ["fix: b"]));
+        FakePublisher publisher = new FakePublisher().WithPublishResults(new PublishResult.Published(Head, 3, ["fix: b"], []));
         StubPostExitProviderQueries provider = new(
             hasCommits: true,
             mergeRequest: new MergeRequestByBranch(MergeRequestPresence.Open, "https://github.com/owner/repo/pull/7"));
@@ -105,7 +107,7 @@ public sealed class PublishAsync : WorkerDispatchServiceTestBase
     {
         // Arrange
         SeedPublishingRun(new RunExit(1, OomKilled: false, RunStopReason.Exited, DateTimeOffset.UtcNow));
-        FakePublisher publisher = new FakePublisher().WithPublishResults(new PublishResult.Published(Head, 1, ["wip"]));
+        FakePublisher publisher = new FakePublisher().WithPublishResults(new PublishResult.Published(Head, 1, ["wip"], []));
 
         // Act
         await RunPublisherAsync(publisher, new StubPostExitProviderQueries(hasCommits: true));
@@ -165,7 +167,8 @@ public sealed class PublishAsync : WorkerDispatchServiceTestBase
         FakePublisher publisher = new FakePublisher().WithPublishResults(new PublishResult.Diverged(
             BranchName.From(Branch),
             BranchName.From($"{Branch}-run-1"),
-            Head));
+            Head,
+            []));
 
         // Act
         await RunPublisherAsync(publisher, new StubPostExitProviderQueries());
@@ -174,6 +177,71 @@ public sealed class PublishAsync : WorkerDispatchServiceTestBase
         _commands.Opened.ShouldBeEmpty();
         _events.Captured.OfType<WorkerRunCompletedEvent>().ShouldHaveSingleItem()
             .Publish.ShouldNotBeNull().DivergedSideBranch.ShouldBe($"{Branch}-run-1");
+    }
+
+    [Fact]
+    public async Task ADetectedSecret_BlocksThePublishKeepsTheHandOffVolumeAndOpensNoPullRequest()
+    {
+        // Arrange
+        SeedPublishingRun(new RunExit(0, OomKilled: false, RunStopReason.Exited, DateTimeOffset.UtcNow));
+        SecretFinding finding = new("src/appsettings.json", 14, Head, "aws-access-token");
+        FakePublisher publisher = new FakePublisher().WithPublishResults(new PublishResult.SecretDetected([finding]));
+
+        // Act
+        await RunPublisherAsync(publisher, new StubPostExitProviderQueries(hasCommits: true));
+
+        // Assert
+        await using FoundryDbContext db = CreateDbContext();
+        PublishBlockedRun blocked = (await db.Set<WorkerRun>().SingleAsync(TestContext.Current.CancellationToken))
+            .ShouldBeOfType<PublishBlockedRun>();
+        blocked.SecretFindings.ShouldBe([finding]);
+        _commands.Opened.ShouldBeEmpty();
+        _orchestrator.DeletedHandOffVolumes.ShouldBeEmpty();
+        _events.Captured.OfType<WorkerRunPublishBlocked>().ShouldHaveSingleItem().ShouldSatisfyAllConditions(
+            published => published.FindingCount.ShouldBe(1),
+            published => published.BranchName.ShouldBe(Branch));
+        _events.Captured.OfType<WorkerRunFailedEvent>().ShouldBeEmpty();
+        (await db.GetSlotOccupancyCountAsync(TestContext.Current.CancellationToken)).ShouldBe(0);
+    }
+
+    [Fact]
+    public async Task FilesTheDiffGateReverted_AreListedInTheOpenedPullRequestAndKeptOnTheTerminalRun()
+    {
+        // Arrange
+        SeedPublishingRun(new RunExit(0, OomKilled: false, RunStopReason.Exited, DateTimeOffset.UtcNow));
+        RevertedFile reverted = new("assets/demo.mp4", RevertedFileReason.Oversized, 50_540_134);
+        FakePublisher publisher = new FakePublisher().WithPublishResults(
+            new PublishResult.Published(Head, 3, ["feat: add retry"], [reverted]));
+
+        // Act
+        await RunPublisherAsync(publisher, new StubPostExitProviderQueries(hasCommits: true));
+
+        // Assert
+        _commands.Opened.ShouldHaveSingleItem().Body.ShouldContain("- `assets/demo.mp4`: too large (48.2 MB)");
+        await using FoundryDbContext db = CreateDbContext();
+        (await db.Set<WorkerRun>().SingleAsync(TestContext.Current.CancellationToken))
+            .RevertedFiles.ShouldBe([reverted]);
+    }
+
+    [Fact]
+    public async Task FilesTheDiffGateReverted_AreListedInTheSummaryCommentOfALaterRun()
+    {
+        // Arrange
+        SeedPublishingRun(new RunExit(0, OomKilled: false, RunStopReason.Exited, DateTimeOffset.UtcNow));
+        FakePublisher publisher = new FakePublisher().WithPublishResults(new PublishResult.Published(
+            Head,
+            3,
+            ["fix: b"],
+            [new RevertedFile("tools/protoc.exe", RevertedFileReason.Binary, 3_250_585)]));
+        StubPostExitProviderQueries provider = new(
+            hasCommits: true,
+            mergeRequest: new MergeRequestByBranch(MergeRequestPresence.Open, "https://github.com/owner/repo/pull/7"));
+
+        // Act
+        await RunPublisherAsync(publisher, provider);
+
+        // Assert
+        _commands.Summaries.ShouldHaveSingleItem().Body.ShouldContain("## Files reverted by Foundry");
     }
 
     private void SeedPublishingRun(RunExit exit)
@@ -214,7 +282,7 @@ public sealed class PublishAsync : WorkerDispatchServiceTestBase
                 domainEvents,
                 TimeProvider.System,
                 NullLogger<WorkerOutcomeApplier>.Instance),
-            new FakeWorkerOrchestrator(),
+            _orchestrator,
             _events,
             domainEvents,
             TimeProvider.System,

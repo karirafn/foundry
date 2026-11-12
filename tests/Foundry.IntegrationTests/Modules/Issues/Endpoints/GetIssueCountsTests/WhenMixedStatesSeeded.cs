@@ -132,6 +132,7 @@ public sealed class WhenMixedStatesSeeded : IAsyncDisposable
             () => counts.Counts["rebase_pending"].ShouldBe(0),
             () => counts.Counts["awaiting_input"].ShouldBe(0),
             () => counts.Counts["publish_failed"].ShouldBe(0),
+            () => counts.Counts["publish_blocked"].ShouldBe(0),
             () => counts.Counts["branch_diverged"].ShouldBe(0));
     }
 }

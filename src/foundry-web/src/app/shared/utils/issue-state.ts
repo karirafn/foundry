@@ -19,6 +19,7 @@ export type IssueState =
   | 'triage_in_progress'
   | 'triage_failed'
   | 'publish_failed'
+  | 'publish_blocked'
   | 'branch_diverged';
 
 // Display-only cap for the "attempt n of MAX" label on the fixing-checks revision callout.
@@ -45,6 +46,8 @@ export const WORKING_STATES: ReadonlySet<IssueState> = new Set<IssueState>([
 // branch_diverged is included: Retry Issue continues from the issue branch.
 // publish_failed is intentionally excluded: Retry Issue would abandon the unpublished run, so the
 // issue offers Retry publish instead.
+// publish_blocked is intentionally excluded: the run must be discarded first (Discard run), after
+// which the issue is failed and Retry Issue applies.
 export const RETRYABLE_STATES: ReadonlySet<IssueState> = new Set<IssueState>([
   'failed',
   'continuable_failed',

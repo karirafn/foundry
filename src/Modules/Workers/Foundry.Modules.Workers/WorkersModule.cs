@@ -41,6 +41,7 @@ public static class WorkersModule
         services.AddScoped<IWorkerLogStream, WorkerLogStream>();
         services.AddCommandHandler<RequestRunCancellation.Command, RequestRunCancellation.Response, RequestRunCancellation.Handler>();
         services.AddCommandHandler<RequestPublishRetry.Command, RequestPublishRetry.Response, RequestPublishRetry.Handler>();
+        services.AddCommandHandler<RequestRunDiscard.Command, RequestRunDiscard.Response, RequestRunDiscard.Handler>();
         services.AddSingleton<AgentActivityStore>();
         services.AddSingleton<IAgentActivityQueries>(sp => sp.GetRequiredService<AgentActivityStore>());
 

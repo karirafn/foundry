@@ -48,6 +48,7 @@ public static class IssuesModule
         services.AddIntegrationEventHandler<WorkerRunCompleted, WorkerRunCompletedHandler>();
         services.AddIntegrationEventHandler<WorkerRunFailed, WorkerRunFailedHandler>();
         services.AddIntegrationEventHandler<WorkerRunPublishRetryRequested, WorkerRunPublishRetryRequestedHandler>();
+        services.AddIntegrationEventHandler<WorkerRunPublishBlocked, WorkerRunPublishBlockedHandler>();
         services.AddIntegrationEventHandler<WorkerRunPublishPhaseChanged, WorkerRunPublishPhaseChangedHandler>();
         services.AddIntegrationEventHandler<TriageRunCompleted, TriageRunCompletedHandler>();
         services.AddIntegrationEventHandler<ProviderIssueClosed, ProviderIssueClosedHandler>();
@@ -82,6 +83,7 @@ public static class IssuesModule
         AddIssueStateChangedHandler<IssueTriageInProgress>(services);
         AddIssueStateChangedHandler<IssueTriageFailed>(services);
         AddIssueStateChangedHandler<IssuePublishFailed>(services);
+        AddIssueStateChangedHandler<IssuePublishBlocked>(services);
         AddIssueStateChangedHandler<IssueBranchDiverged>(services);
         services.AddScoped<IDomainEventHandler<IssueAwaitingInput>, IssueAwaitingInputNudgeBridge>();
         services.AddScoped<IDomainEventHandler<IssueRebasePending>, IssueRebasePendingNudgeBridge>();

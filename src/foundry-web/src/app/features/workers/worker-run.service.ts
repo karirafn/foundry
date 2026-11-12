@@ -59,6 +59,27 @@ export class WorkerRunService {
     );
   }
 
+  /**
+   * Asks the backend to discard a run holding unpublished work: a secret-blocked run or one whose
+   * publish retries are exhausted. Resolves to `null` once the discard is accepted (202), or to a
+   * user-facing error message.
+   */
+  requestDiscard(workerRunId: string): Observable<string | null> {
+    return this._http.post(`/api/workers/runs/${workerRunId}/discard`, null).pipe(
+      map(() => null),
+      catchError((err: HttpErrorResponse) => {
+        if (err.status === 409) {
+          return of('This run is no longer waiting to publish.');
+        }
+        if (err.status === 404) {
+          return of('The run was not found.');
+        }
+        console.error(err);
+        return of('Failed to discard the run.');
+      }),
+    );
+  }
+
   getLog(workerRunId: string): Observable<string | null> {
     return this._http.get(`/api/workers/runs/${workerRunId}/log`, {
       responseType: 'text',

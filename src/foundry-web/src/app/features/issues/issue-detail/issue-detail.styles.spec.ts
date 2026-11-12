@@ -86,3 +86,48 @@ describe('publish badge styles (#787)', () => {
     expect(body).toContain('background-color: var(--fd-state-failed)');
   });
 });
+
+describe('diff gate badge styles (#788)', () => {
+  const stateBadgePath = 'src/app/shared/components/state-badge/state-badge.scss';
+  const revertedFilesPath = 'src/app/features/issues/reverted-files/reverted-files.scss';
+
+  it('fills the publish-blocked chip with the failed state colour', () => {
+    // Act
+    const body = ruleBody(compiledCss(stateBadgePath), '.badge--publish-blocked');
+
+    // Assert
+    expect(body).toContain('background-color: var(--fd-state-failed)');
+  });
+
+  it('outlines the reverted-oversized chip in warning colours', () => {
+    // Act
+    const body = ruleBody(compiledCss(stateBadgePath), '.badge--reverted-oversized');
+
+    // Assert
+    expect(body).toContain('background: transparent');
+    expect(body).toContain('border: 1px solid var(--fd-text-warning)');
+    expect(body).toContain('color: var(--fd-text-warning)');
+  });
+
+  it('outlines the reverted-binary chip in the secondary text colour', () => {
+    // Act
+    const body = ruleBody(compiledCss(stateBadgePath), '.badge--reverted-binary');
+
+    // Assert
+    expect(body).toContain('background: transparent');
+    expect(body).toContain('border: 1px solid var(--fd-text-secondary)');
+    expect(body).toContain('color: var(--fd-text-secondary)');
+  });
+
+  it.each(['.badge--reverted-oversized', '.badge--reverted-binary'])(
+    'styles the %s chip in fd-reverted-files identically to fd-state-badge',
+    (selector) => {
+      // Act
+      const revertedBody = ruleBody(compiledCss(revertedFilesPath), selector);
+      const stateBadgeBody = ruleBody(compiledCss(stateBadgePath), selector);
+
+      // Assert
+      expect(revertedBody).toBe(stateBadgeBody);
+    },
+  );
+});

@@ -77,21 +77,14 @@ internal sealed class WorkerRunPublisher(
     /// The Hand-off volume of an unpublished run reached its time to live: it is deleted and the run discarded, and its
     /// issue resumes from whatever the branch holds.
     /// </summary>
-    public async Task DiscardAsync(PublishFailedRun failed, CancellationToken cancellationToken)
+    public async Task DiscardAsync<TRun>(TRun run, CancellationToken cancellationToken)
+        where TRun : UnpublishedRun, IDiscardableRun
     {
-        FailedRun discarded = failed.Discard();
-        WorkerRunTranscript? transcript = failed.TranscriptForTerminalState();
-        await dbContext.TransitionAsync(
-            failed,
-            discarded,
-            transcript is null ? [] : [transcript],
-            domainEventDispatcher,
-            cancellationToken);
-        await orchestrator.DeleteHandOffVolumeAsync(failed.Id, cancellationToken);
+        await RunDiscarder.DiscardAsync(dbContext, orchestrator, domainEventDispatcher, run, run.Discard(), cancellationToken);
 
         logger.LogWarning(
             "Worker run {WorkerRunId} was discarded: its commits were not published within {TimeToLive}.",
-            failed.Id,
+            run.Id,
             PublishRetryPolicy.HandOffTimeToLive);
     }
 
@@ -140,6 +133,12 @@ internal sealed class WorkerRunPublisher(
         if (result is PublishResult.Failed failed)
         {
             await FailPublishAsync(run, failed.Reason, failed.Transient, cancellationToken);
+            return false;
+        }
+
+        if (result is PublishResult.SecretDetected secretDetected)
+        {
+            await BlockPublishAsync(run, secretDetected.Findings, cancellationToken);
             return false;
         }
 
@@ -219,7 +218,8 @@ internal sealed class WorkerRunPublisher(
             PullRequestDescription.TryCreate(run.PullRequestBody),
             issue.Title,
             issue.IssueNumber,
-            run.PublishedCommitSubjects);
+            run.PublishedCommitSubjects,
+            run.RevertedFiles);
 
         Result<string> opened = await runPublishingCommands.OpenPullRequestAsync(
             run.MonitoredRepositoryId,
@@ -245,7 +245,8 @@ internal sealed class WorkerRunPublisher(
     {
         string body = PullRequestText.SummaryComment(
             PullRequestDescription.TryCreate(run.PullRequestBody),
-            run.PublishedCommitSubjects);
+            run.PublishedCommitSubjects,
+            run.RevertedFiles);
 
         Result posted = await runPublishingCommands.PostRunSummaryAsync(
             run.MonitoredRepositoryId,
@@ -329,6 +330,28 @@ internal sealed class WorkerRunPublisher(
                     : new WorkerStatus(IsRunning: false, run.ExitCode, run.ExitedAt, run.OomKilled);
                 return await resolver.ResolveAsync(run, status, run.ContainerOutput, run.Verdict, cancellationToken);
         }
+    }
+
+    // The findings are stored on the run; the event and the log carry only their number, never what they matched.
+    private async Task BlockPublishAsync(
+        PublishingRun run,
+        IReadOnlyList<SecretFinding> findings,
+        CancellationToken cancellationToken)
+    {
+        PublishBlockedRun blocked = run.BlockPublish(findings, timeProvider.GetUtcNow());
+
+        await integrationEventDispatcher.DispatchAsync(
+            [
+                new WorkerRunPublishPhaseChanged(run.Id, run.IssueId.Value, Phase: null),
+                new WorkerRunPublishBlocked(run.Id, run.IssueId.Value, run.BranchName.Value, findings.Count),
+            ],
+            cancellationToken);
+        await dbContext.TransitionAsync(run, blocked, domainEventDispatcher, cancellationToken);
+
+        logger.LogWarning(
+            "Publishing worker run {WorkerRunId} was blocked: the diff gate found {FindingCount} possible secret(s), so nothing was pushed.",
+            run.Id,
+            findings.Count);
     }
 
     private async Task FailPublishAsync(PublishingRun run, string reason, bool transient, CancellationToken cancellationToken)
