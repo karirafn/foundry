@@ -24,7 +24,7 @@ namespace Foundry.UnitTests.Modules.Workers.Features.Dispatch.WorkerDispatchServ
 
 public sealed class CapacityGate : WorkerDispatchServiceTestBase
 {
-    private WorkerDispatchService BuildService(
+    private DispatchAndPublishTicker BuildService(
         CapturingIntegrationEventDispatcher dispatcher,
         int maxConcurrent)
     {
@@ -51,7 +51,7 @@ public sealed class CapacityGate : WorkerDispatchServiceTestBase
         // Arrange
         SeedStartingRun();
         CapturingIntegrationEventDispatcher dispatcher = new();
-        WorkerDispatchService sut = BuildService(dispatcher, maxConcurrent: 1);
+        DispatchAndPublishTicker sut = BuildService(dispatcher, maxConcurrent: 1);
 
         // Act
         await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
@@ -67,7 +67,7 @@ public sealed class CapacityGate : WorkerDispatchServiceTestBase
         SeedStartingRun();
         SeedActiveRun("container-active-123");
         CapturingIntegrationEventDispatcher dispatcher = new();
-        WorkerDispatchService sut = BuildService(dispatcher, maxConcurrent: 2);
+        DispatchAndPublishTicker sut = BuildService(dispatcher, maxConcurrent: 2);
 
         // Act
         await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
@@ -82,7 +82,7 @@ public sealed class CapacityGate : WorkerDispatchServiceTestBase
         // Arrange — one StartingRun; MaxConcurrent = 2 means one slot remains
         SeedStartingRun();
         CapturingIntegrationEventDispatcher dispatcher = new();
-        WorkerDispatchService sut = BuildService(dispatcher, maxConcurrent: 2);
+        DispatchAndPublishTicker sut = BuildService(dispatcher, maxConcurrent: 2);
 
         // Act
         await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);

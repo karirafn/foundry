@@ -41,7 +41,7 @@ public sealed class GetActiveRunActivityAsync : IAsyncDisposable
         await _connection.DisposeAsync();
     }
 
-    private async Task<ActiveRun> SeedActiveRunAsync(IssueId? issueId = null, int commitCount = 0)
+    private async Task<ActiveRun> SeedActiveRunAsync(IssueId? issueId = null)
     {
         IssueId id = issueId ?? IssueId.New();
         StartingRun starting = StartingRun.Begin(id, WorkerRunId.New());
@@ -49,11 +49,6 @@ public sealed class GetActiveRunActivityAsync : IAsyncDisposable
             ContainerId.From("container-active"),
             BranchName.From("feat/1-active"),
             MonitoredRepositoryId.New());
-
-        if (commitCount > 0)
-        {
-            active.RecordBranchCommitCount(commitCount, "abc123", DateTimeOffset.UtcNow);
-        }
 
         _dbContext.Set<WorkerRun>().Add(active);
         await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
@@ -143,22 +138,6 @@ public sealed class GetActiveRunActivityAsync : IAsyncDisposable
         activity.ShouldSatisfyAllConditions(
             () => activity.WorkerRunId.ShouldBe(run.Id),
             () => activity.IssueId.ShouldBe(issueId.Value));
-    }
-
-    [Fact]
-    public async Task WhenActiveRunHasCommits_MapsCommitCount()
-    {
-        // Arrange
-        ActiveRun run = await SeedActiveRunAsync(commitCount: 3);
-        WorkerRunQueries sut = new(_dbContext);
-
-        // Act
-        IReadOnlyCollection<WorkerActivity> result = await sut.GetActiveRunActivityAsync(
-            TestContext.Current.CancellationToken);
-
-        // Assert
-        WorkerActivity activity = result.ShouldHaveSingleItem();
-        activity.CommitCount.ShouldBe(3);
     }
 
     [Fact]

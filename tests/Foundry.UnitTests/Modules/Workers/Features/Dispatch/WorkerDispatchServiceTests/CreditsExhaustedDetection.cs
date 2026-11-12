@@ -28,7 +28,7 @@ public sealed class CreditsExhaustedDetection : WorkerDispatchServiceTestBase
         {"type":"result","api_error_status":429}
         """;
 
-    private WorkerDispatchService BuildServiceWithParser(
+    private DispatchAndPublishTicker BuildServiceWithParser(
         string? containerLogs,
         WorkerStatus exitedStatus,
         IIntegrationEventDispatcher? integrationEventDispatcher = null)
@@ -57,7 +57,7 @@ public sealed class CreditsExhaustedDetection : WorkerDispatchServiceTestBase
         SeedGlobalSettings();
         SeedActiveRun("container-credits-exhausted-reason");
         WorkerStatus exitedStatus = new(IsRunning: false, ExitCode: 1, FinishedAt: DateTimeOffset.UtcNow);
-        WorkerDispatchService sut = BuildServiceWithParser(Credits429OnlyOutput, exitedStatus);
+        DispatchAndPublishTicker sut = BuildServiceWithParser(Credits429OnlyOutput, exitedStatus);
 
         // Act
         await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
@@ -78,7 +78,7 @@ public sealed class CreditsExhaustedDetection : WorkerDispatchServiceTestBase
         ActiveRun activeRun = SeedActiveRun("container-credits-exhausted-event");
         WorkerStatus exitedStatus = new(IsRunning: false, ExitCode: 1, FinishedAt: DateTimeOffset.UtcNow);
         CapturingIntegrationEventDispatcher dispatcher = new();
-        WorkerDispatchService sut = BuildServiceWithParser(
+        DispatchAndPublishTicker sut = BuildServiceWithParser(
             Credits429OnlyOutput,
             exitedStatus,
             integrationEventDispatcher: dispatcher);
@@ -102,7 +102,7 @@ public sealed class CreditsExhaustedDetection : WorkerDispatchServiceTestBase
         SeedGlobalSettings();
         SeedActiveRun("container-credits-exhausted-no-resets-at");
         WorkerStatus exitedStatus = new(IsRunning: false, ExitCode: 1, FinishedAt: DateTimeOffset.UtcNow);
-        WorkerDispatchService sut = BuildServiceWithParser(Credits429OnlyOutput, exitedStatus);
+        DispatchAndPublishTicker sut = BuildServiceWithParser(Credits429OnlyOutput, exitedStatus);
 
         // Act
         await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
@@ -127,7 +127,7 @@ public sealed class CreditsExhaustedDetection : WorkerDispatchServiceTestBase
         IContainerOutputParser outputParser = new ContainerOutputParser(NullLogger<ContainerOutputParser>.Instance);
         ExitedWorkerOrchestrator orchestrator = new(exitedStatus, Credits429OnlyOutput);
 
-        WorkerDispatchService sut = base.BuildService(
+        DispatchAndPublishTicker sut = base.BuildService(
             orchestrator,
             integrationEventDispatcher: dispatcher,
             containerOutputParser: outputParser,

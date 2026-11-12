@@ -53,6 +53,13 @@ entrypoint merges that file's `$defs` into the role schema (the role's own `$def
 clash), so `claude` receives one self-contained schema. A role schema or `shared/verdict.defs.json`
 that is not a JSON object fails the unit tests, the startup image build and the run's bootstrap.
 
+`claude` sends the schema to the Claude API as a tool's `input_schema`. The API rejects `allOf`,
+`anyOf` and `oneOf` at the top level of an `input_schema` (nested, for example inside a property,
+they are accepted). Express a condition on the whole verdict with one top-level `if`/`then`/`else`,
+which is accepted. A role schema with a top-level `allOf`, `anyOf` or `oneOf` fails the unit tests
+and the run's bootstrap (`worker_bootstrap_failed`, `stage=role`, naming the file and keyword)
+before cloning.
+
 Shared definitions:
 
 - `questions`: questions a person must answer before the work can continue. An array of at least one
@@ -65,8 +72,9 @@ For a run that exits 0, Foundry records the verdict's status on the worker run: 
 `--max-turns`) or `invalid` (fails the typed parse). The verdict is recorded only; the run's outcome
 is still decided from facts (merge request, commits, exit code).
 
-`implement/verdict.schema.json` requires `outcome` (`done` or `needs_input`), and `questions` when
-`outcome` is `needs_input`.
+`implement/verdict.schema.json` requires `outcome` (`done` or `needs_input`), `questions` when
+`outcome` is `needs_input`, and `pullRequest` otherwise (`done`), expressed as one top-level
+`if`/`then`/`else`.
 
 `triage/verdict.schema.json` requires `outcome` (`ready` or `needs_input`) and `kind` (`feature`, `bug`, `refactor` or
 `documentation`), and `questions` when `outcome` is `needs_input`. Foundry records `ready` as `done`.

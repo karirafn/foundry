@@ -48,7 +48,7 @@ public sealed class BootstrapFailureDetection : WorkerDispatchServiceTestBase
     private static string OversizedJsonResultOutput =>
         "Some output from claude\n" + $$$"""{"type":"result","result":"{{{new string('x', 4_100)}}}"}""";
 
-    private WorkerDispatchService BuildServiceWithParser(
+    private DispatchAndPublishTicker BuildServiceWithParser(
         string? containerLogs,
         WorkerStatus exitedStatus,
         IIntegrationEventDispatcher? integrationEventDispatcher = null)
@@ -68,7 +68,7 @@ public sealed class BootstrapFailureDetection : WorkerDispatchServiceTestBase
         // Arrange
         SeedActiveRun("container-bootstrap-sentinel");
         WorkerStatus exitedStatus = new(IsRunning: false, ExitCode: 1, FinishedAt: DateTimeOffset.UtcNow);
-        WorkerDispatchService sut = BuildServiceWithParser(BootstrapSentinelOutput, exitedStatus);
+        DispatchAndPublishTicker sut = BuildServiceWithParser(BootstrapSentinelOutput, exitedStatus);
 
         // Act
         await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
@@ -88,7 +88,7 @@ public sealed class BootstrapFailureDetection : WorkerDispatchServiceTestBase
         SeedActiveRun("container-bootstrap-sentinel-event");
         WorkerStatus exitedStatus = new(IsRunning: false, ExitCode: 1, FinishedAt: DateTimeOffset.UtcNow);
         CapturingIntegrationEventDispatcher dispatcher = new();
-        WorkerDispatchService sut = BuildServiceWithParser(
+        DispatchAndPublishTicker sut = BuildServiceWithParser(
             BootstrapSentinelOutput,
             exitedStatus,
             integrationEventDispatcher: dispatcher);
@@ -109,7 +109,7 @@ public sealed class BootstrapFailureDetection : WorkerDispatchServiceTestBase
         // Arrange
         SeedActiveRun("container-no-result-line");
         WorkerStatus exitedStatus = new(IsRunning: false, ExitCode: 1, FinishedAt: DateTimeOffset.UtcNow);
-        WorkerDispatchService sut = BuildServiceWithParser(NoResultLineOutput, exitedStatus);
+        DispatchAndPublishTicker sut = BuildServiceWithParser(NoResultLineOutput, exitedStatus);
 
         // Act
         await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
@@ -127,7 +127,7 @@ public sealed class BootstrapFailureDetection : WorkerDispatchServiceTestBase
         // Arrange
         SeedActiveRun("container-json-result-nonzero");
         WorkerStatus exitedStatus = new(IsRunning: false, ExitCode: 2, FinishedAt: DateTimeOffset.UtcNow);
-        WorkerDispatchService sut = BuildServiceWithParser(ValidJsonResultOutput, exitedStatus);
+        DispatchAndPublishTicker sut = BuildServiceWithParser(ValidJsonResultOutput, exitedStatus);
 
         // Act
         await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
@@ -155,7 +155,7 @@ public sealed class BootstrapFailureDetection : WorkerDispatchServiceTestBase
 
         SeedActiveRun("container-spoof-sentinel-with-result");
         WorkerStatus exitedStatus = new(IsRunning: false, ExitCode: 1, FinishedAt: DateTimeOffset.UtcNow);
-        WorkerDispatchService sut = BuildServiceWithParser(spoofedOutput, exitedStatus);
+        DispatchAndPublishTicker sut = BuildServiceWithParser(spoofedOutput, exitedStatus);
 
         // Act
         await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
@@ -174,7 +174,7 @@ public sealed class BootstrapFailureDetection : WorkerDispatchServiceTestBase
         // Arrange
         SeedActiveRun("container-oversized-json");
         WorkerStatus exitedStatus = new(IsRunning: false, ExitCode: 3, FinishedAt: DateTimeOffset.UtcNow);
-        WorkerDispatchService sut = BuildServiceWithParser(OversizedJsonResultOutput, exitedStatus);
+        DispatchAndPublishTicker sut = BuildServiceWithParser(OversizedJsonResultOutput, exitedStatus);
 
         // Act
         await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
@@ -194,7 +194,7 @@ public sealed class BootstrapFailureDetection : WorkerDispatchServiceTestBase
         SeedActiveRun("container-nonzero-event-description");
         WorkerStatus exitedStatus = new(IsRunning: false, ExitCode: 5, FinishedAt: DateTimeOffset.UtcNow);
         CapturingIntegrationEventDispatcher dispatcher = new();
-        WorkerDispatchService sut = BuildServiceWithParser(
+        DispatchAndPublishTicker sut = BuildServiceWithParser(
             ValidJsonResultOutput,
             exitedStatus,
             integrationEventDispatcher: dispatcher);
@@ -216,7 +216,7 @@ public sealed class BootstrapFailureDetection : WorkerDispatchServiceTestBase
         SeedActiveRun("container-bootstrap-category");
         WorkerStatus exitedStatus = new(IsRunning: false, ExitCode: 1, FinishedAt: DateTimeOffset.UtcNow);
         CapturingIntegrationEventDispatcher dispatcher = new();
-        WorkerDispatchService sut = BuildServiceWithParser(
+        DispatchAndPublishTicker sut = BuildServiceWithParser(
             BootstrapSentinelOutput,
             exitedStatus,
             integrationEventDispatcher: dispatcher);
@@ -238,7 +238,7 @@ public sealed class BootstrapFailureDetection : WorkerDispatchServiceTestBase
         SeedActiveRun("container-nonzero-exit-category");
         WorkerStatus exitedStatus = new(IsRunning: false, ExitCode: 2, FinishedAt: DateTimeOffset.UtcNow);
         CapturingIntegrationEventDispatcher dispatcher = new();
-        WorkerDispatchService sut = BuildServiceWithParser(
+        DispatchAndPublishTicker sut = BuildServiceWithParser(
             ValidJsonResultOutput,
             exitedStatus,
             integrationEventDispatcher: dispatcher);
@@ -259,7 +259,7 @@ public sealed class BootstrapFailureDetection : WorkerDispatchServiceTestBase
         // Arrange
         SeedActiveRun("container-bootstrap-secret");
         WorkerStatus exitedStatus = new(IsRunning: false, ExitCode: 1, FinishedAt: DateTimeOffset.UtcNow);
-        WorkerDispatchService sut = BuildServiceWithParser(SecretSentinelOutput, exitedStatus);
+        DispatchAndPublishTicker sut = BuildServiceWithParser(SecretSentinelOutput, exitedStatus);
 
         // Act
         await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);

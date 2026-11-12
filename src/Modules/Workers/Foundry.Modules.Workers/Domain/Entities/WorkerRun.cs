@@ -57,6 +57,22 @@ public abstract class WorkerRun : AggregateRoot<WorkerRunId>, IStateMachine<Work
     /// </summary>
     public RunBase? Base => BaseDefaultBranchHead is { } defaultBranchHead ? new RunBase(defaultBranchHead, BaseRunBranchHead) : null;
 
+    /// <summary>The branch head Foundry pushed when it published the run (ADR 0100); <see langword="null"/> when it pushed nothing.</summary>
+    public CommitSha? PublishedHead { get; private set; }
+
+    /// <summary>The commits the run's branch held beyond the default branch once the run was published.</summary>
+    public int? PublishedBranchCommitCount { get; private set; }
+
+    /// <summary>The side branch the run's work went to because its own branch diverged; <see langword="null"/> otherwise.</summary>
+    public BranchName? DivergedSideBranch { get; private set; }
+
+    protected void RecordPublishFacts(CommitSha? pushedHead, int? branchCommitCount, BranchName? divergedSideBranch)
+    {
+        PublishedHead = pushedHead;
+        PublishedBranchCommitCount = branchCommitCount;
+        DivergedSideBranch = divergedSideBranch;
+    }
+
     protected void RecordBase(RunBase? runBase)
     {
         BaseDefaultBranchHead = runBase?.DefaultBranchHead;

@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using System.Globalization;
 
 using Foundry.Modules.Credentials.Contracts.Queries;
@@ -134,7 +133,7 @@ internal sealed class IssueClaimedHandler(
         string? gitPat = await ResolveGitPatAsync(claimed, cancellationToken);
         Result<WorkerContainerSpec> specResult = gitPat is null
             ? Result<WorkerContainerSpec>.Fail(EmptyGitPatError)
-            : await BuildSpecAsync(startingRun, claimed, catalog, issueContent, gitPat, cancellationToken);
+            : await BuildSpecAsync(startingRun, claimed, catalog, issueContent, cancellationToken);
 
         if (specResult is Result<WorkerContainerSpec>.Failure specFailure)
         {
@@ -305,7 +304,6 @@ internal sealed class IssueClaimedHandler(
         ClaimedIssueDispatch claimed,
         WorkerRoleCatalog? catalog,
         IssueContent issueContent,
-        string gitPat,
         CancellationToken cancellationToken)
     {
         if (catalog?.Content is not { } content || content.Find(startingRun.Role) is not { } role)
@@ -387,16 +385,17 @@ internal sealed class IssueClaimedHandler(
             ["CLAUDE_SETTINGS_JSON"] = WorkerSettingsBuilder.Build(claudeCode, model),
         };
 
-        // A restricted run gets no branch and no provider token.
+        // A restricted run gets no branch.
         if (!restricted && claimed.BranchName is { } branchName)
         {
             envVars["BRANCH_NAME"] = branchName.Value;
         }
 
-        // Read-only: the worker only clones the base bundle the Publisher left there.
+        // The worker clones the base bundle from the Hand-off volume and leaves its Run bundle there (ADR 0100). It holds
+        // no provider credential, so the Publisher, not the worker, pushes that bundle.
         List<VolumeMount> volumeMounts =
         [
-            new VolumeMount(WorkerVolumeNames.HandOffVolumeName(startingRun.Id), WorkerVolumeNames.HandOffContainerPath, ReadOnly: true),
+            new VolumeMount(WorkerVolumeNames.HandOffVolumeName(startingRun.Id), WorkerVolumeNames.HandOffContainerPath),
         ];
 
         if (isOAuthMode)
@@ -409,20 +408,6 @@ internal sealed class IssueClaimedHandler(
         else
         {
             envVars[authVar!.Value.Key] = authVar.Value.Value;
-        }
-
-        switch (claimed.Provider)
-        {
-            case WorkerProvider.GitHub when !restricted:
-                envVars["GH_TOKEN"] = gitPat;
-                break;
-            case WorkerProvider.GitLab when !restricted:
-                envVars["GITLAB_TOKEN"] = gitPat;
-                break;
-            case WorkerProvider.GitHub or WorkerProvider.GitLab:
-                break;
-            default:
-                throw new UnreachableException($"Unhandled WorkerProvider variant: {claimed.Provider.GetType().Name}");
         }
 
         Dictionary<string, string> labels = new()

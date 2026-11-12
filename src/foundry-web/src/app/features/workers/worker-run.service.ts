@@ -39,6 +39,26 @@ export class WorkerRunService {
     );
   }
 
+  /**
+   * Asks the backend to retry publishing a run whose publish retries are exhausted. Resolves to
+   * `null` once the retry is accepted (202), or to a user-facing error message.
+   */
+  requestPublishRetry(workerRunId: string): Observable<string | null> {
+    return this._http.post(`/api/workers/runs/${workerRunId}/publish-retry`, null).pipe(
+      map(() => null),
+      catchError((err: HttpErrorResponse) => {
+        if (err.status === 409) {
+          return of('This run is no longer waiting to publish.');
+        }
+        if (err.status === 404) {
+          return of('The run was not found.');
+        }
+        console.error(err);
+        return of('Failed to retry publish.');
+      }),
+    );
+  }
+
   getLog(workerRunId: string): Observable<string | null> {
     return this._http.get(`/api/workers/runs/${workerRunId}/log`, {
       responseType: 'text',

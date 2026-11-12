@@ -25,7 +25,7 @@ public sealed class ContainerOutputCapture : WorkerDispatchServiceTestBase
         SeedActiveRun("container-nonzero-output");
         WorkerStatus failedStatus = new(IsRunning: false, ExitCode: 1, FinishedAt: DateTimeOffset.UtcNow);
         LogCapturingStub orchestrator = new(status: failedStatus, logs: "error: something went wrong");
-        WorkerDispatchService sut = BuildService(orchestrator);
+        DispatchAndPublishTicker sut = BuildService(orchestrator);
 
         // Act
         await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
@@ -43,7 +43,7 @@ public sealed class ContainerOutputCapture : WorkerDispatchServiceTestBase
         // Arrange — seed ActiveRun; first tick: reconciliation sees null status → FailedRun
         SeedActiveRun("container-not-found-output");
         LogCapturingStub orchestrator = new(status: null, logs: "should-not-be-captured");
-        WorkerDispatchService sut = BuildService(orchestrator);
+        DispatchAndPublishTicker sut = BuildService(orchestrator);
 
         // Act
         await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
@@ -62,7 +62,7 @@ public sealed class ContainerOutputCapture : WorkerDispatchServiceTestBase
         SeedActiveRun("container-logs-throw");
         WorkerStatus failedStatus = new(IsRunning: false, ExitCode: 1, FinishedAt: DateTimeOffset.UtcNow);
         LogCapturingStub orchestrator = new(status: failedStatus, logs: null, getLogsThrows: true);
-        WorkerDispatchService sut = BuildService(orchestrator);
+        DispatchAndPublishTicker sut = BuildService(orchestrator);
 
         // Act — must not throw even though GetLogsAsync throws
         await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
@@ -80,7 +80,7 @@ public sealed class ContainerOutputCapture : WorkerDispatchServiceTestBase
         // Arrange — first tick: reconciliation finds container not found → fails as orphaned
         SeedActiveRun("orphaned-container-output");
         LogCapturingStub orchestrator = new(status: null, logs: "should-not-be-captured");
-        WorkerDispatchService sut = BuildService(orchestrator);
+        DispatchAndPublishTicker sut = BuildService(orchestrator);
 
         // Act
         await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
@@ -100,7 +100,7 @@ public sealed class ContainerOutputCapture : WorkerDispatchServiceTestBase
         WorkerStatus failedStatus = new(IsRunning: false, ExitCode: 1, FinishedAt: DateTimeOffset.UtcNow);
         string oversizedOutput = new('x', 65537);
         LogCapturingStub orchestrator = new(status: failedStatus, logs: oversizedOutput);
-        WorkerDispatchService sut = BuildService(orchestrator);
+        DispatchAndPublishTicker sut = BuildService(orchestrator);
 
         // Act
         await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
@@ -122,7 +122,7 @@ public sealed class ContainerOutputCapture : WorkerDispatchServiceTestBase
         const string tail = """{"type":"result","subtype":"success","is_error":false,"result":"TAIL"}""";
         string oversizedOutput = "HEAD" + new string('x', 70_000) + "\n" + tail;
         LogCapturingStub orchestrator = new(status: failedStatus, logs: oversizedOutput);
-        WorkerDispatchService sut = BuildService(orchestrator);
+        DispatchAndPublishTicker sut = BuildService(orchestrator);
 
         // Act
         await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
@@ -144,7 +144,7 @@ public sealed class ContainerOutputCapture : WorkerDispatchServiceTestBase
         SeedActiveRun("container-log-order");
         WorkerStatus failedStatus = new(IsRunning: false, ExitCode: 1, FinishedAt: DateTimeOffset.UtcNow);
         LogCapturingStub orchestrator = new(status: failedStatus, logs: "exit output");
-        WorkerDispatchService sut = BuildService(orchestrator);
+        DispatchAndPublishTicker sut = BuildService(orchestrator);
 
         // Act
         await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);

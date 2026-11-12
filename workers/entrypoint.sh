@@ -135,8 +135,11 @@ prepare_role_plugins() {
 # schema (the role's own $defs win on a name clash) so the CLI receives one
 # self-contained schema, compacted to a single line.
 #
-# Fails closed: a schema (or the shared definitions) that is not a JSON object
-# emits the bootstrap-failure sentinel (stage=role) and returns non-zero.
+# Fails closed: a schema (or the shared definitions) that is not a JSON object, or
+# a schema with a top-level allOf, anyOf or oneOf, emits the bootstrap-failure
+# sentinel (stage=role) and returns non-zero. The CLI sends the schema to the API
+# as a tool input_schema, which rejects those keywords at the top level (nested
+# ones are accepted).
 # ---------------------------------------------------------------------------
 prepare_role_verdict_schema() {
     local roles_dir="$1"
@@ -169,6 +172,14 @@ prepare_role_verdict_schema() {
         return 1
     fi
 
+    local forbidden
+    forbidden="$(jq -r '[keys[] | select(. == "allOf" or . == "anyOf" or . == "oneOf")] | join(", ")' <<<"$schema")"
+    if [[ -n "$forbidden" ]]; then
+        echo "ERROR: $schema_file has a top-level $forbidden." >&2
+        fail_bootstrap "role" "verdict schema $schema_file has a top-level $forbidden, which the Claude API rejects in a tool input_schema; express conditions with a top-level if/then/else and rebuild the worker image"
+        return 1
+    fi
+
     VERDICT_SCHEMA_ARGS=(--json-schema "$schema")
     echo "Verdict schema: $role" >&2
 }
@@ -181,8 +192,9 @@ prepare_role_verdict_schema() {
 # and the transient-error -c resume) expand verbatim:
 #   full       — --dangerously-skip-permissions.
 #   restricted — --restricted --strict-mcp-config, never the permission skip.
-#                The provider tokens and the branch are unset so no push
-#                credential or branch reaches the run even if they were set.
+#                The branch is unset so no branch reaches the run (and no Run
+#                bundle is written) even if one was set.  Provider tokens are
+#                unset for every capability before this runs (ADR 0100).
 #
 # Fails closed: any other value emits the bootstrap-failure sentinel
 # (stage=role) and returns non-zero.
@@ -197,7 +209,7 @@ prepare_capability_profile() {
             ;;
         restricted)
             CAPABILITY_CLAUDE_ARGS=(--restricted --strict-mcp-config)
-            unset GH_TOKEN GITLAB_TOKEN BRANCH_NAME
+            unset BRANCH_NAME
             ;;
         *)
             echo "ERROR: WORKER_CAPABILITY '$capability' is not a worker capability (restricted or full)." >&2
@@ -424,7 +436,7 @@ verify_managed_settings() {
 # Root phase: render the managed settings, then drop to node.
 #
 # The image starts as root only so this phase can write the root-owned managed
-# file.  Nothing else — clone, auth, dockerd, claude — runs as root: the script
+# file.  Nothing else — clone, dockerd, claude — runs as root: the script
 # re-executes itself as node with no inheritable capabilities.  Foundry starts the
 # container with every capability dropped except SETUID/SETGID for this drop
 # (ADR 0088); the bounding set is not narrowed further here because a Docker-
@@ -475,7 +487,12 @@ unset _cred_dir
 : "${WORKER_ROLE:?WORKER_ROLE is required}"
 : "${WORKER_CAPABILITY:?WORKER_CAPABILITY is required}"
 
-# Resolve the run's role plugins before any clone/auth work so a role this image
+# No worker holds a provider credential, for any capability (ADR 0100): Foundry
+# sets none, and any that leaked into the environment is dropped here so neither
+# claude nor a repository build script it starts can push or call the provider.
+unset GH_TOKEN GITLAB_TOKEN GIT_PAT
+
+# Resolve the run's role plugins before any clone work so a role this image
 # does not carry fails fast at stage=role.  The roles directory is baked into the
 # image (ADR 0095); FOUNDRY_ROLES_DIR only redirects it for the bats suite.
 readonly WORKER_ROLES_DIR="${FOUNDRY_ROLES_DIR:-/opt/foundry/roles}"
@@ -492,7 +509,7 @@ prepare_capability_profile "$WORKER_CAPABILITY" || exit 1
 # producing an opaque "Argument list too long" error before claude starts.
 # The C# builder caps at 120 000 bytes (design ceiling); this shell guard is
 # the last-line-of-defence at the true kernel limit so any drift or caller
-# bypass is caught with an explicit diagnostic before any clone/auth work.
+# bypass is caught with an explicit diagnostic before any clone work.
 readonly MAX_SYSTEM_PROMPT_BYTES=131071
 sys_prompt_bytes=$(printf '%s' "$SYSTEM_PROMPT" | wc -c)
 if [[ "$sys_prompt_bytes" -ge "$MAX_SYSTEM_PROMPT_BYTES" ]]; then
@@ -530,44 +547,6 @@ git -C "$WORKSPACE_DIR" remote set-url origin "$CLONE_URL"
 git -C "$WORKSPACE_DIR" remote set-head origin "$DEFAULT_BRANCH"
 
 cd "$WORKSPACE_DIR"
-
-BOOTSTRAP_STAGE="auth"
-if [[ -n "${GH_TOKEN:-}" ]]; then
-    GH_HOST="${CLONE_URL#https://}"
-    GH_HOST="${GH_HOST%%/*}"
-    if [[ -z "$GH_HOST" ]]; then
-        echo "WARNING: could not derive hostname from CLONE_URL; skipping gh auth setup-git" >&2
-    elif [[ "$GH_HOST" == *@* ]]; then
-        echo "ERROR: derived hostname contains '@' — CLONE_URL may embed credentials in the URL. Aborting gh auth setup-git." >&2
-        fail_bootstrap "auth" "derived hostname contains @ — CLONE_URL may embed credentials"
-        exit 1
-    elif command -v gh > /dev/null 2>&1; then
-        gh auth setup-git --hostname "$GH_HOST" --force
-    else
-        echo "ERROR: GH_TOKEN is set but the gh CLI is not present in this image." >&2
-        fail_bootstrap "auth" "gh CLI not present but GH_TOKEN is set — git push and gh pr create cannot authenticate"
-        exit 1
-    fi
-fi
-
-if [[ -n "${GITLAB_TOKEN:-}" ]]; then
-    GL_HOST="${CLONE_URL#https://}"
-    GL_HOST="${GL_HOST%%/*}"
-    if [[ -z "$GL_HOST" ]]; then
-        echo "WARNING: could not derive hostname from CLONE_URL; skipping glab credential helper setup" >&2
-    elif [[ "$GL_HOST" == *@* ]]; then
-        echo "ERROR: derived hostname contains '@' — CLONE_URL may embed credentials in the URL. Aborting glab credential helper setup." >&2
-        fail_bootstrap "auth" "derived hostname contains @ — CLONE_URL may embed credentials"
-        exit 1
-    elif command -v glab > /dev/null 2>&1; then
-        export GITLAB_HOST="https://${GL_HOST}"
-        git config credential."https://${GL_HOST}".helper "!glab auth git-credential"
-    else
-        echo "ERROR: GITLAB_TOKEN is set but the glab CLI is not present in this image." >&2
-        fail_bootstrap "auth" "glab CLI not present but GITLAB_TOKEN is set — git push and glab mr create cannot authenticate"
-        exit 1
-    fi
-fi
 
 BOOTSTRAP_STAGE="branch"
 if [[ -n "${BRANCH_NAME:-}" ]]; then
@@ -659,23 +638,128 @@ is_transient_api_error() {
 }
 
 # Restore the repo and decide on the C# LSP plugin immediately before claude
-# starts: after the gh/glab credential-helper setup, so the
-# repo-controlled MSBuild evaluation sees exactly the environment the agent sees.
+# starts, after every bootstrap step, so the repo-controlled MSBuild evaluation
+# sees exactly the environment the agent sees.
 readonly CSHARP_LSP_RESTORE_TIMEOUT_SECONDS=300
 readonly CSHARP_LSP_PLUGIN_DIR=/opt/claude-plugins/csharp-lsp
 prepare_csharp_lsp "$WORKSPACE_DIR"
 
 # ---------------------------------------------------------------------------
+# Run bundle (ADR 0100, ADR 0101)
+#
+# The worker holds no provider credential, so it never pushes.  When claude
+# exits — or the container is stopped with SIGTERM — finalize_run commits any
+# uncommitted non-ignored changes and writes the run's commits to
+# $HANDOFF_DIR/out/run.bundle, which the Publisher pushes.  Only runs with a
+# branch (full-capability implement runs) do this; restricted runs have none.
+#
+# Nothing here may change the run's exit status: every problem is a warning
+# on stderr and the entrypoint still exits with claude's status.
+# ---------------------------------------------------------------------------
+readonly SWEEP_COMMIT_MESSAGE="wip: uncommitted changes at run end"
+
+# workspace_git <args...> — git in the workspace with the repository's hooks
+# and commit signing off, so agent-written configuration cannot block the sweep.
+workspace_git() {
+    git -C "$WORKSPACE_DIR" -c core.hooksPath=/dev/null -c commit.gpgSign=false "$@"
+}
+
+# sweep_work_tree — when the work tree is dirty, commits every tracked change
+# and untracked non-ignored file (git add -A honours .gitignore) as one commit.
+sweep_work_tree() {
+    local porcelain
+    if ! porcelain="$(workspace_git status --porcelain)"; then
+        echo "WARNING: could not read the work tree status; no sweep commit made" >&2
+        return 1
+    fi
+    if [[ -z "$porcelain" ]]; then
+        return 0
+    fi
+    if ! workspace_git add -A >&2 \
+        || ! workspace_git -c user.name="Foundry Worker" -c user.email=foundry-worker@foundry.invalid \
+            commit --quiet --no-verify -m "$SWEEP_COMMIT_MESSAGE" >&2; then
+        echo "WARNING: could not commit the uncommitted changes at run end; they are not in the run bundle" >&2
+        return 1
+    fi
+    echo "Swept uncommitted changes into one commit" >&2
+}
+
+# write_run_bundle — writes $HANDOFF_DIR/out/run.bundle holding exactly the Run
+# commits: HEAD --not origin/<branch> origin/HEAD, or HEAD --not origin/HEAD for
+# a Fresh run whose branch is not in the base bundle.  Excluding origin/HEAD
+# keeps every default-branch commit the run merged or rebased onto out of the
+# bundle.  No bundle is written (and any stale one is removed) when the range is
+# empty.  Written beside its final name and renamed, so the Publisher never reads
+# a partial bundle; world-readable, because the Publisher runs as another user.
+write_run_bundle() {
+    local out_dir="$HANDOFF_DIR/out"
+    local bundle="$out_dir/run.bundle"
+
+    mkdir -p "$out_dir" 2> /dev/null || true
+    if [[ ! -d "$out_dir" || ! -w "$out_dir" ]]; then
+        echo "WARNING: $out_dir is missing or not writable; no run bundle written" >&2
+        return 1
+    fi
+    if ! rm -f "$bundle"; then
+        echo "WARNING: could not remove a stale $bundle; no run bundle written" >&2
+        return 1
+    fi
+
+    local range=(HEAD --not)
+    if workspace_git rev-parse --verify --quiet "refs/remotes/origin/${BRANCH_NAME}^{commit}" > /dev/null; then
+        range+=("refs/remotes/origin/$BRANCH_NAME")
+    fi
+    range+=(refs/remotes/origin/HEAD)
+
+    local count
+    if ! count="$(workspace_git rev-list --count "${range[@]}")" || [[ ! "$count" =~ ^[0-9]+$ ]]; then
+        echo "WARNING: could not count the run's commits; no run bundle written" >&2
+        return 1
+    fi
+    if (( count == 0 )); then
+        echo "Run bundle: none (no run commits)" >&2
+        return 0
+    fi
+
+    local bundle_tmp
+    if ! bundle_tmp="$(mktemp "$out_dir/.run.bundle.XXXXXX")"; then
+        echo "WARNING: could not create a temp file in $out_dir; no run bundle written" >&2
+        return 1
+    fi
+    if ! workspace_git bundle create --quiet "$bundle_tmp" "${range[@]}" >&2 \
+        || ! chmod 0644 "$bundle_tmp" \
+        || ! mv -f "$bundle_tmp" "$bundle"; then
+        rm -f "$bundle_tmp"
+        echo "WARNING: writing the run bundle failed; no run bundle written" >&2
+        return 1
+    fi
+    echo "Run bundle: ${count} commit(s)" >&2
+}
+
+# finalize_run — the sweep then the bundle, for runs with a branch only.
+finalize_run() {
+    if [[ -z "${BRANCH_NAME:-}" ]]; then
+        return 0
+    fi
+    sweep_work_tree || true
+    write_run_bundle || true
+}
+
+# ---------------------------------------------------------------------------
 # Invoke claude in headless stream-json mode.  stream-json emits one event per
 # line as the run progresses (the final line is the "result" event), so stdout
-# is piped through tee: each line reaches the container log as it is produced
-# while a copy is kept for transient-error classification.  stderr streams
-# through live.  --verbose is mandatory: the CLI rejects stream-json with
-# --print unless --verbose is also set.  When the role has a verdict schema,
-# --json-schema (VERDICT_SCHEMA_ARGS) makes the final result event carry the
-# role's verdict as structured_output (ADR 0094).
-# set -e is toggled off around the pipeline so we can inspect claude's exit
-# status (PIPESTATUS[0], not tee's).
+# is streamed through tee via a FIFO: each line reaches the container log as it
+# is produced while a copy is kept for transient-error classification.  stderr
+# streams through live.  --verbose is mandatory: the CLI rejects stream-json
+# with --print unless --verbose is also set.  When the role has a verdict
+# schema, --json-schema (VERDICT_SCHEMA_ARGS) makes the final result event carry
+# the role's verdict as structured_output (ADR 0094).
+#
+# claude runs in the background and the shell waits on it, so the SIGTERM trap
+# (docker stop at a timeout or cancel) runs while claude is still alive: it
+# forwards TERM to claude, waits for it (bounded by CLAUDE_STOP_TIMEOUT_SECONDS,
+# then KILL), sweeps and bundles, and exits 143.  The exit status is claude's
+# own, read from `wait` on its PID rather than from the pipeline.
 #
 # If the first run classifies as a transient API error (mirrors
 # ContainerOutputParser.IsTransientApiError), resume the interrupted session
@@ -686,11 +770,50 @@ prepare_csharp_lsp "$WORKSPACE_DIR"
 # The turn budget is a cost breaker for a runaway run; the transient-error resume
 # gets the same budget, so both read it from here (#798).
 readonly CLAUDE_MAX_TURNS=300
-CLAUDE_OUTPUT_FILE="$(mktemp)"
-trap 'rm -f "${CLAUDE_OUTPUT_FILE:-}"' EXIT
+# How long a stopped claude gets to exit before it is killed, leaving the rest of
+# the container's stop grace period for the sweep and the bundle.
+readonly CLAUDE_STOP_TIMEOUT_SECONDS=20
+CLAUDE_TMP_DIR="$(mktemp -d)"
+CLAUDE_OUTPUT_FILE="$CLAUDE_TMP_DIR/output"
+CLAUDE_STDOUT_FIFO="$CLAUDE_TMP_DIR/stdout.fifo"
+CLAUDE_PID=""
+trap 'rm -rf "${CLAUDE_TMP_DIR:-}"' EXIT
 
-set +e
-claude -p "$WORKER_PROMPT" \
+# run_claude <args...> — runs claude with <args>, its stdout teed to the
+# container log and CLAUDE_OUTPUT_FILE, and sets CLAUDE_STATUS to its exit status.
+run_claude() {
+    rm -f "$CLAUDE_STDOUT_FIFO"
+    mkfifo "$CLAUDE_STDOUT_FIFO"
+    tee "$CLAUDE_OUTPUT_FILE" < "$CLAUDE_STDOUT_FIFO" &
+    local tee_pid=$!
+    claude "$@" > "$CLAUDE_STDOUT_FIFO" &
+    CLAUDE_PID=$!
+    CLAUDE_STATUS=0
+    wait "$CLAUDE_PID" || CLAUDE_STATUS=$?
+    CLAUDE_PID=""
+    wait "$tee_pid" || true
+}
+
+# on_sigterm — stops claude, then sweeps and bundles the run, and exits 143.
+# shellcheck disable=SC2329 # invoked by the TERM trap below.
+on_sigterm() {
+    trap '' TERM
+    echo "SIGTERM received: stopping claude, then sweeping and bundling the run" >&2
+    if [[ -n "$CLAUDE_PID" ]]; then
+        kill -TERM "$CLAUDE_PID" 2> /dev/null || true
+        # A watchdog kills a claude that ignores TERM; killing the watchdog
+        # subshell first means its pending kill never runs.
+        ( sleep "$CLAUDE_STOP_TIMEOUT_SECONDS" && kill -KILL "$CLAUDE_PID" 2> /dev/null ) &
+        local watchdog_pid=$!
+        wait "$CLAUDE_PID" 2> /dev/null || true
+        kill "$watchdog_pid" 2> /dev/null || true
+    fi
+    finalize_run
+    exit 143
+}
+trap on_sigterm TERM
+
+run_claude -p "$WORKER_PROMPT" \
     --append-system-prompt "$SYSTEM_PROMPT" \
     "${CAPABILITY_CLAUDE_ARGS[@]}" \
     --output-format stream-json \
@@ -698,9 +821,8 @@ claude -p "$WORKER_PROMPT" \
     --max-turns "$CLAUDE_MAX_TURNS" \
     "${ROLE_PLUGIN_ARGS[@]}" \
     "${VERDICT_SCHEMA_ARGS[@]}" \
-    "${CSHARP_LSP_PLUGIN_ARGS[@]}" | tee "$CLAUDE_OUTPUT_FILE"
-first_status=${PIPESTATUS[0]}
-set -e
+    "${CSHARP_LSP_PLUGIN_ARGS[@]}"
+run_status=$CLAUDE_STATUS
 
 if is_transient_api_error "$(cat "$CLAUDE_OUTPUT_FILE")"; then
     echo "Transient API error detected — resuming session once via claude -c" >&2
@@ -710,18 +832,19 @@ if is_transient_api_error "$(cat "$CLAUDE_OUTPUT_FILE")"; then
     # reused as-is (plugins are not part of the session); no second restore.
     # The role plugins and the verdict schema are passed again for the same
     # reason, so the resume's result event carries the role's verdict too.
-    set +e
-    claude -c -p "$WORKER_PROMPT" \
+    run_claude -c -p "$WORKER_PROMPT" \
         "${CAPABILITY_CLAUDE_ARGS[@]}" \
         --output-format stream-json \
         --verbose \
         --max-turns "$CLAUDE_MAX_TURNS" \
         "${ROLE_PLUGIN_ARGS[@]}" \
         "${VERDICT_SCHEMA_ARGS[@]}" \
-        "${CSHARP_LSP_PLUGIN_ARGS[@]}" | tee "$CLAUDE_OUTPUT_FILE"
-    resume_status=${PIPESTATUS[0]}
-    set -e
-    exit "$resume_status"
+        "${CSHARP_LSP_PLUGIN_ARGS[@]}"
+    run_status=$CLAUDE_STATUS
 fi
 
-exit "$first_status"
+# claude has exited: a stop request from here on must not cut the sweep or the
+# bundle short.
+trap '' TERM
+finalize_run
+exit "$run_status"

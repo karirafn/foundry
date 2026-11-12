@@ -66,6 +66,34 @@ public sealed class FailedRun : WorkerRun
         return failed;
     }
 
+    internal static FailedRun FromUnpublished(
+        UnpublishedRun unpublished,
+        FailureReason reason,
+        string? containerOutput,
+        RunResultSummary? resultSummary,
+        RunVerdict? verdict)
+    {
+        FailedRun failed = new(
+            unpublished.Id,
+            unpublished.IssueId,
+            unpublished.CreatedAt,
+            reason,
+            DateTimeOffset.UtcNow,
+            unpublished.BranchName,
+            containerOutput,
+            resultSummary,
+            unpublished.Role,
+            unpublished.Image)
+        {
+            CancelRequestedAt = unpublished.CancelRequestedAt,
+        };
+
+        failed.RecordVerdict(verdict);
+        failed.RecordBase(unpublished.Base);
+        failed.RecordPublishFacts(unpublished.PublishedHead, unpublished.PublishedBranchCommitCount, unpublished.DivergedSideBranch);
+        return failed;
+    }
+
     internal static FailedRun FromActive(
         ActiveRun active,
         FailureReason reason,

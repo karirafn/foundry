@@ -65,7 +65,6 @@ export class WorkerSignalRService {
   // which propagates to all computed/template reads that depend on it.
   private readonly _activityByRunIdSignal: WritableSignal<ReadonlyMap<string, string>> = signal(new Map());
   private readonly _activityByIssueIdSignal: WritableSignal<ReadonlyMap<string, string>> = signal(new Map());
-  private readonly _commitCountByIssueIdSignal: WritableSignal<ReadonlyMap<string, number>> = signal(new Map());
 
   private readonly _agentActivityByIssueIdSignal: WritableSignal<ReadonlyMap<string, AgentActivity>> = signal(new Map());
   private readonly _recentToolsByRunIdSignal: WritableSignal<ReadonlyMap<string, readonly InFlightTool[]>> = signal(new Map());
@@ -99,10 +98,6 @@ export class WorkerSignalRService {
       const nextByIssueId = new Map(this._activityByIssueIdSignal());
       nextByIssueId.set(activity.issueId, activity.lastActivityAt);
       this._activityByIssueIdSignal.set(nextByIssueId);
-
-      const nextCommitCount = new Map(this._commitCountByIssueIdSignal());
-      nextCommitCount.set(activity.issueId, activity.commitCount);
-      this._commitCountByIssueIdSignal.set(nextCommitCount);
     });
 
     this._hub.on<AgentActivity>('AgentActivity', (activity) => {
@@ -171,11 +166,6 @@ export class WorkerSignalRService {
 
   activityForIssue(issueId: string): string | null {
     return this._activityByIssueIdSignal().get(issueId) ?? null;
-  }
-
-  /** Returns the observed commit count for the issue, or null if no WorkerActivity has arrived yet. */
-  commitCountForIssue(issueId: string): number | null {
-    return this._commitCountByIssueIdSignal().get(issueId) ?? null;
   }
 
   /** Returns the live Agent Activity projection for the issue's active run, or null if none has arrived. */

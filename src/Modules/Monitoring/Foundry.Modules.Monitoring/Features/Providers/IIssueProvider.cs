@@ -1,4 +1,5 @@
 using Foundry.Modules.Monitoring.Contracts;
+using Foundry.Modules.Monitoring.Contracts.Commands;
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
 using Foundry.Modules.Monitoring.Features.Providers.Checks;
 using Foundry.Modules.Monitoring.Features.Providers.Comments;
@@ -84,6 +85,51 @@ internal interface IIssueProvider
         string body,
         CancellationToken cancellationToken)
         => Task.FromResult(Result<ProviderCommentId>.Fail(CommentPostErrors.NotSupported()));
+
+    /// <summary>
+    /// Opens a pull/merge request from <paramref name="sourceBranch"/> into the repository's default branch and
+    /// returns its web URL. When the provider refuses because one is already open for the branch, returns that
+    /// one's URL, so a retried publish is idempotent. A failure is
+    /// <see cref="RunPublishingErrors.TransientCode"/> or <see cref="RunPublishingErrors.PermanentCode"/>, except
+    /// that a failed default-branch read keeps the provider's own error; this call never retries.
+    /// </summary>
+    /// <remarks>Providers without pull request creation keep this default, which fails permanently without any
+    /// provider call.</remarks>
+    Task<Result<string>> CreatePullRequestAsync(
+        RepositorySlug slug,
+        string sourceBranch,
+        string title,
+        string body,
+        CancellationToken cancellationToken)
+        => Task.FromResult(Result<string>.Fail(
+            RunPublishingErrors.Permanent("This provider does not support opening pull requests.")));
+
+    /// <summary>
+    /// The commit identity of the account whose token this provider holds (see
+    /// <see cref="IRunPublishingCommands.GetCommitIdentityAsync"/> for the per-provider rule).
+    /// A failure is <see cref="RunPublishingErrors.TransientCode"/> or <see cref="RunPublishingErrors.PermanentCode"/>.
+    /// </summary>
+    /// <remarks>Providers without an identity read keep this default, which fails permanently without any
+    /// provider call.</remarks>
+    Task<Result<CommitIdentity>> GetAuthenticatedIdentityAsync(CancellationToken cancellationToken)
+        => Task.FromResult(Result<CommitIdentity>.Fail(
+            RunPublishingErrors.Permanent("This provider does not support reading the account identity.")));
+
+    /// <summary>
+    /// Whether <paramref name="ancestorRef"/> (a branch or commit) is an ancestor of, or equal to, the head of
+    /// <paramref name="branchName"/>. A missing ref fails with <see cref="RunPublishingErrors.RefNotFoundCode"/>;
+    /// any other failure is <see cref="RunPublishingErrors.TransientCode"/> or
+    /// <see cref="RunPublishingErrors.PermanentCode"/>.
+    /// </summary>
+    /// <remarks>Providers without an ancestry read keep this default, which fails permanently without any
+    /// provider call.</remarks>
+    Task<Result<bool>> IsAncestorAsync(
+        RepositorySlug slug,
+        string ancestorRef,
+        string branchName,
+        CancellationToken cancellationToken)
+        => Task.FromResult(Result<bool>.Fail(
+            RunPublishingErrors.Permanent("This provider does not support comparing refs.")));
 
     Task<Result<BranchProtection>> GetBranchProtectionAsync(
         RepositorySlug slug,

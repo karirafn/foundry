@@ -2,12 +2,13 @@ import { TestBed } from '@angular/core/testing';
 import { signal } from '@angular/core';
 import { provideHttpClient } from '@angular/common/http';
 import { provideHttpClientTesting, HttpTestingController } from '@angular/common/http/testing';
-import { of } from 'rxjs';
+import { Observable, Subject, of } from 'rxjs';
 import { IssueDetailComponent } from './issue-detail';
 import { IssueDetail, IssueStateDetails } from '../issue.model';
 import { IssueService, TriageAction } from '../issue.service';
 import { IssueSignalRService } from '../../../core/services/issue-signalr.service';
 import { WorkerRunService } from '../../workers/worker-run.service';
+import { WorkerRunDetail } from '../../workers/worker-run.model';
 import { WorkerSignalRService, WORKER_HUB_FACTORY } from '../../../core/services/worker-signalr.service';
 import { MAX_CHECKS_FIX_ATTEMPTS, MAX_REBASE_CONFLICT_ATTEMPTS, RETRYABLE_STATES } from '../../../shared/utils/issue-state';
 
@@ -382,7 +383,7 @@ describe('IssueDetailComponent', () => {
   it('should cover the expected set of retryable states', () => {
     // Arrange + Assert — pin membership so an unreviewed addition is caught
     expect([...RETRYABLE_STATES].sort()).toEqual(
-      ['continuable_failed', 'failed', 'revision_failed', 'unchanged'],
+      ['branch_diverged', 'continuable_failed', 'failed', 'revision_failed', 'unchanged'],
     );
   });
 
@@ -1742,6 +1743,9 @@ describe('IssueDetailComponent — cancel run', () => {
       lastActivityAt: null,
       hasStoredLog: false,
       cancelRequestedAt: null,
+      publish: null,
+      publishRetry: null,
+      discardsAt: null,
       ...overrides,
     };
   }
@@ -1825,7 +1829,7 @@ describe('IssueDetailComponent — cancel run', () => {
     // Assert
     expect(dialog()?.open).toBe(true);
     expect(dialog()?.textContent).toContain('Stop the worker?');
-    expect(dialog()?.textContent).toContain('Commits on the branch are kept; Retry continues from them.');
+    expect(dialog()?.textContent).toContain("Foundry publishes the run's commits to the branch; Retry continues from them.");
     expect(requestCancel).not.toHaveBeenCalled();
   });
 
@@ -2046,6 +2050,9 @@ describe('IssueDetailComponent — run role tag', () => {
       lastActivityAt: null,
       hasStoredLog: false,
       cancelRequestedAt: null,
+      publish: null,
+      publishRetry: null,
+      discardsAt: null,
       ...overrides,
     };
   }
@@ -2755,5 +2762,282 @@ describe('IssueDetailComponent — triage (#772)', () => {
 
     // Assert
     expect(text(el.querySelector('dialog.confirm-dialog .confirm-dialog__title'))).toBe('Stop the worker?');
+  });
+});
+
+describe('IssueDetailComponent — publishing (#787)', () => {
+  function runDetail(overrides: Partial<WorkerRunDetail> = {}): WorkerRunDetail {
+    return {
+      workerRunId: 'run-pub',
+      role: 'implement',
+      issueId: 'abc123',
+      state: 'publishing',
+      failureCategory: null,
+      failureSummary: null,
+      resultText: null,
+      subtype: null,
+      isError: null,
+      durationMs: null,
+      numTurns: null,
+      totalCostUsd: null,
+      inputTokens: null,
+      outputTokens: null,
+      lastActivityAt: null,
+      hasStoredLog: true,
+      cancelRequestedAt: null,
+      publish: null,
+      publishRetry: null,
+      discardsAt: null,
+      ...overrides,
+    };
+  }
+
+  function issueInState(state: string, overrides: Partial<IssueDetail> = {}): IssueDetail {
+    return {
+      ...mockDetail,
+      state: state as IssueDetail['state'],
+      providerType: 'github',
+      stateDetails: { ...mockStateDetails, workerRunId: 'run-pub', branchName: 'feat/42-add-retry', completedAt: null },
+      ...overrides,
+    };
+  }
+
+  const exhaustedRun = (): WorkerRunDetail => runDetail({
+    state: 'publish_failed',
+    publishRetry: { attemptNumber: 5, maxAttempts: 5, nextAttemptAt: null, reason: 'the provider rejected the push' },
+    discardsAt: '2026-11-20T10:00:00Z',
+  });
+
+  function setup(detail: IssueDetail, run: WorkerRunDetail | null, publishRetryResult: string | null = null) {
+    const requestPublishRetry = vi.fn((): Observable<string | null> => of(publishRetryResult));
+    const getLog = vi.fn(() => of('line'));
+    TestBed.resetTestingModule();
+    TestBed.configureTestingModule({
+      imports: [IssueDetailComponent],
+      providers: [
+        { provide: IssueService, useValue: { retrying: signal(false), retryError: signal(null), retrySuccess: signal(null), ...triageSignals() } },
+        WorkerSignalRService,
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        { provide: IssueSignalRService, useValue: mockIssueSignalRService },
+        {
+          provide: WorkerRunService,
+          useValue: { getDetail: () => of(run), getLog, requestCancel: vi.fn(() => of(null)), requestPublishRetry },
+        },
+        { provide: WORKER_HUB_FACTORY, useValue: () => mockWorkerHub },
+      ],
+    });
+    const fixture = TestBed.createComponent(IssueDetailComponent);
+    fixture.componentRef.setInput('detail', detail);
+    fixture.componentRef.setInput('loading', false);
+    fixture.componentRef.setInput('error', null);
+    fixture.detectChanges();
+    const el = fixture.nativeElement as HTMLElement;
+    const publishButton = () =>
+      Array.from(el.querySelectorAll<HTMLButtonElement>('.issue-detail__retry-btn'))
+        .find((b) => b.getAttribute('aria-label')?.startsWith('Retry publishing')) ?? null;
+    const publishDialog = () =>
+      Array.from(el.querySelectorAll<HTMLDialogElement>('dialog.confirm-dialog'))
+        .find((d) => d.querySelector('.confirm-dialog__title')?.textContent?.trim() === 'Retry publishing?') ?? null;
+    return { fixture, el, requestPublishRetry, getLog, publishButton, publishDialog };
+  }
+
+  function confirmPublishRetry(ctx: ReturnType<typeof setup>): void {
+    ctx.publishButton()!.click();
+    ctx.fixture.detectChanges();
+    (ctx.publishDialog()!.querySelector('.confirm-dialog__confirm') as HTMLButtonElement).click();
+    ctx.fixture.detectChanges();
+  }
+
+  // Cancel run
+  it.each(['publishing', 'publish_failed'] as const)('should hide Cancel run while the run is %s', (runState) => {
+    // Arrange / Act
+    const phase = runState === 'publishing' ? 'publishing' : 'retrying';
+    const { el } = setup(issueInState('in_progress', { publishPhase: phase }), runDetail({ state: runState }));
+
+    // Assert
+    expect(el.querySelector('.issue-detail__cancel-btn')).toBeNull();
+  });
+
+  it('should show Cancel run before the run detail has loaded', () => {
+    // Arrange / Act
+    const { el } = setup(issueInState('in_progress'), null);
+
+    // Assert
+    expect(el.querySelector('.issue-detail__cancel-btn')).not.toBeNull();
+  });
+
+  // Log view
+  it.each(['publishing', 'publish_failed'] as const)('should show no log view while the run is %s', (runState) => {
+    // Arrange / Act
+    const { el, getLog } = setup(issueInState('in_progress'), runDetail({ state: runState }));
+
+    // Assert
+    expect(el.querySelector('fd-log-view')).toBeNull();
+    expect(getLog).not.toHaveBeenCalled();
+  });
+
+  it('should show no log view for an issue whose publish is exhausted', () => {
+    // Arrange / Act
+    const { el } = setup(issueInState('publish_failed'), exhaustedRun());
+
+    // Assert
+    expect(el.querySelector('fd-log-view')).toBeNull();
+  });
+
+  // Placement
+  it('should render the publish callout in the state-details block', () => {
+    // Arrange / Act
+    const { el } = setup(issueInState('in_progress', { publishPhase: 'publishing' }), runDetail());
+
+    // Assert
+    const status = el.querySelector('fd-publish-status');
+    expect(status).not.toBeNull();
+    expect(status?.textContent).toContain("Foundry is publishing the run's commits to feat/42-add-retry.");
+  });
+
+  it('should render the published facts first in the run block when the run published', () => {
+    // Arrange / Act
+    const { el } = setup(issueInState('review'), runDetail({
+      state: 'completed',
+      publish: { headSha: 'abcdef1234567890', headCommitUrl: null, pullRequestUrl: null, branchCommitCount: 2 },
+    }));
+
+    // Assert
+    const runBlock = el.querySelector('.issue-detail__worker-run');
+    expect(runBlock?.firstElementChild?.tagName.toLowerCase()).toBe('fd-publish-facts');
+  });
+
+  it('should not render published facts when the run has not published', () => {
+    // Arrange / Act
+    const { el } = setup(issueInState('in_progress'), runDetail({ state: 'running' }));
+
+    // Assert
+    expect(el.querySelector('fd-publish-facts')).toBeNull();
+  });
+
+  // Retry publish
+  it('should show Retry publish only for publish_failed, with its aria-label', () => {
+    // Arrange / Act
+    const { publishButton } = setup(issueInState('publish_failed'), exhaustedRun());
+
+    // Assert
+    expect(publishButton()?.textContent?.trim()).toBe('Retry publish');
+    expect(publishButton()?.getAttribute('aria-label')).toBe('Retry publishing for issue #42');
+  });
+
+  it('should not offer Retry Issue for publish_failed', () => {
+    // Arrange / Act
+    const { el } = setup(issueInState('publish_failed'), exhaustedRun());
+
+    // Assert
+    expect(el.querySelector('[aria-label="Retry issue #42"]')).toBeNull();
+  });
+
+  it('should offer Retry Issue for branch_diverged', () => {
+    // Arrange / Act
+    const { el, publishButton } = setup(issueInState('branch_diverged'), runDetail({ state: 'completed' }));
+
+    // Assert
+    expect(el.querySelector('[aria-label="Retry issue #42"]')).not.toBeNull();
+    expect(publishButton()).toBeNull();
+  });
+
+  it('should open a non-destructive confirm dialog instead of retrying immediately', () => {
+    // Arrange
+    const { fixture, requestPublishRetry, publishButton, publishDialog } = setup(issueInState('publish_failed'), exhaustedRun());
+
+    // Act
+    publishButton()!.click();
+    fixture.detectChanges();
+
+    // Assert
+    const dialog = publishDialog();
+    expect(dialog?.open).toBe(true);
+    expect(dialog?.querySelector('.confirm-dialog__message')?.textContent?.trim()).toBe(
+      "Foundry pushes the run's commits to feat/42-add-retry and opens or updates the pull request. CI runs on the push.",
+    );
+    expect(dialog?.querySelector('.confirm-dialog__confirm')?.textContent?.trim()).toBe('Retry publish');
+    expect(dialog?.querySelector('.confirm-dialog__cancel')?.textContent?.trim()).toBe('Not now');
+    expect(dialog?.querySelector('.confirm-dialog__confirm--destructive')).toBeNull();
+    expect(requestPublishRetry).not.toHaveBeenCalled();
+  });
+
+  it('should call the service once confirmed', () => {
+    // Arrange
+    const ctx = setup(issueInState('publish_failed'), exhaustedRun());
+
+    // Act
+    confirmPublishRetry(ctx);
+
+    // Assert
+    expect(ctx.requestPublishRetry).toHaveBeenCalledWith('run-pub');
+    expect(ctx.publishDialog()?.open).toBe(false);
+  });
+
+  it('should disable the button and read "Retrying publish…" while pending', () => {
+    // Arrange
+    const ctx = setup(issueInState('publish_failed'), exhaustedRun());
+    ctx.requestPublishRetry.mockReturnValue(new Subject<string | null>());
+
+    // Act
+    confirmPublishRetry(ctx);
+
+    // Assert
+    expect(ctx.publishButton()?.disabled).toBe(true);
+    expect(ctx.publishButton()?.textContent?.trim()).toBe('Retrying publish…');
+  });
+
+  it.each([
+    'This run is no longer waiting to publish.',
+    'The run was not found.',
+    'Failed to retry publish.',
+  ])('should show the error "%s" and restore the button', (message) => {
+    // Arrange
+    const ctx = setup(issueInState('publish_failed'), exhaustedRun(), message);
+
+    // Act
+    confirmPublishRetry(ctx);
+
+    // Assert
+    expect(ctx.publishButton()?.disabled).toBe(false);
+    expect(ctx.publishButton()?.textContent?.trim()).toBe('Retry publish');
+    const error = ctx.publishButton()?.parentElement?.querySelector('.issue-detail__retry-error');
+    expect(error?.textContent).toContain(message);
+    expect(error?.getAttribute('aria-live')).toBe('assertive');
+  });
+
+  it('should announce success and keep the announcement across a detail reload', () => {
+    // Arrange
+    const ctx = setup(issueInState('publish_failed'), exhaustedRun());
+
+    // Act
+    confirmPublishRetry(ctx);
+    ctx.fixture.componentRef.setInput('detail', issueInState('in_progress', { publishPhase: 'publishing' }));
+    ctx.fixture.detectChanges();
+
+    // Assert
+    const announcement = ctx.el.querySelector('.issue-detail__publish-retry-success-announcement');
+    expect(announcement?.textContent?.trim()).toBe('Publish retry started. Issue status is updating.');
+    expect(announcement?.getAttribute('aria-live')).toBe('polite');
+    expect(ctx.publishButton()).toBeNull();
+  });
+
+  it('should move focus to the content region once the button unmounts after success', async () => {
+    // Arrange
+    const ctx = setup(issueInState('publish_failed'), exhaustedRun());
+    document.body.appendChild(ctx.el);
+
+    // Act
+    confirmPublishRetry(ctx);
+    ctx.fixture.componentRef.setInput('detail', issueInState('in_progress', { publishPhase: 'publishing' }));
+    ctx.fixture.detectChanges();
+    await ctx.fixture.whenStable();
+
+    // Assert
+    const content = ctx.el.querySelector('.issue-detail__content');
+    expect(content?.getAttribute('tabindex')).toBe('-1');
+    expect(document.activeElement).toBe(content);
+    ctx.el.remove();
   });
 });

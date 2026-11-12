@@ -52,7 +52,7 @@ public sealed class DispatchPausedEventDispatch : WorkerDispatchServiceTestBase
         db.SaveChanges();
     }
 
-    private WorkerDispatchService BuildServiceWithParser(
+    private DispatchAndPublishTicker BuildServiceWithParser(
         string? containerLogs,
         WorkerStatus exitedStatus,
         IIntegrationEventProcessor? integrationEventProcessor = null)
@@ -74,7 +74,7 @@ public sealed class DispatchPausedEventDispatch : WorkerDispatchServiceTestBase
         SeedActiveRun("container-dispatch-paused-new");
         WorkerStatus exitedStatus = new(IsRunning: false, ExitCode: 1, FinishedAt: DateTimeOffset.UtcNow);
         CapturingIntegrationEventProcessor processor = new();
-        WorkerDispatchService sut = BuildServiceWithParser(
+        DispatchAndPublishTicker sut = BuildServiceWithParser(
             UsageLimitedFutureOutput,
             exitedStatus,
             integrationEventProcessor: processor);
@@ -97,7 +97,7 @@ public sealed class DispatchPausedEventDispatch : WorkerDispatchServiceTestBase
         SeedActiveRun("container-dispatch-paused-past");
         WorkerStatus exitedStatus = new(IsRunning: false, ExitCode: 1, FinishedAt: DateTimeOffset.UtcNow);
         CapturingIntegrationEventProcessor processor = new();
-        WorkerDispatchService sut = BuildServiceWithParser(
+        DispatchAndPublishTicker sut = BuildServiceWithParser(
             UsageLimitedPastOutput,
             exitedStatus,
             integrationEventProcessor: processor);
@@ -137,7 +137,7 @@ public sealed class DispatchPausedEventDispatch : WorkerDispatchServiceTestBase
         string shorterOutput =
             $$$"""{"type":"result","terminal_reason":"blocking_limit","result":"resets at {{{shorterReset:O}}}"}""";
 
-        WorkerDispatchService sut = BuildServiceWithParser(
+        DispatchAndPublishTicker sut = BuildServiceWithParser(
             shorterOutput,
             exitedStatus,
             integrationEventProcessor: processor);
@@ -156,7 +156,7 @@ public sealed class DispatchPausedEventDispatch : WorkerDispatchServiceTestBase
         SeedActiveRun("container-dispatch-paused-no-settings");
         WorkerStatus exitedStatus = new(IsRunning: false, ExitCode: 1, FinishedAt: DateTimeOffset.UtcNow);
         CapturingIntegrationEventProcessor processor = new();
-        WorkerDispatchService sut = BuildServiceWithParser(
+        DispatchAndPublishTicker sut = BuildServiceWithParser(
             UsageLimitedFutureOutput,
             exitedStatus,
             integrationEventProcessor: processor);

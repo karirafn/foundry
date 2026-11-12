@@ -35,6 +35,27 @@ internal sealed class WorkerRunCompletedHandler(
                 return;
             }
 
+            // The run's work is on a side branch, not the issue branch, so nothing the run did can move the issue on
+            // until a person merges it (ADR 0100); divergence wins over the verdict and the merge state.
+            if (@event.Publish?.DivergedSideBranch is { } sideBranchName)
+            {
+                if (@event.BranchName is null)
+                {
+                    logger.LogError(
+                        "WorkerRunCompleted for issue {IssueId} reports a diverged side branch but no BranchName; skipping transition.",
+                        @event.IssueId);
+                    return;
+                }
+
+                BranchDivergedIssue diverged = inProgress.MarkBranchDiverged(
+                    @event.BranchName,
+                    sideBranchName,
+                    @event.Publish.PullRequestUrl
+                        ?? (@event.MergeState == WorkerRunMergeState.Open ? @event.PullRequestUrl : null));
+                await db.TransitionAsync(inProgress, diverged, domainEventDispatcher, cancellationToken);
+                return;
+            }
+
             // A run that stopped to ask a person waits for input; a merged pull request never carries a request, since
             // the run's outcome resolved it as complete first (ADR 0096).
             if (@event.InputRequest is { } inputRequest && @event.MergeState != WorkerRunMergeState.Merged)
@@ -114,6 +135,13 @@ internal sealed class WorkerRunCompletedHandler(
                     @event.IssueId,
                     @event.WorkerRunId,
                     revisionInProgress.WorkerRunId);
+                return;
+            }
+
+            if (@event.Publish?.DivergedSideBranch is { } revisionSideBranchName)
+            {
+                BranchDivergedIssue revisionDiverged = revisionInProgress.MarkBranchDiverged(revisionSideBranchName);
+                await db.TransitionAsync(revisionInProgress, revisionDiverged, domainEventDispatcher, cancellationToken);
                 return;
             }
 

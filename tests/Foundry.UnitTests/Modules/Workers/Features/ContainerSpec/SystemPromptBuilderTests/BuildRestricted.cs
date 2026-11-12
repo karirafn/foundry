@@ -144,7 +144,7 @@ public sealed class BuildRestricted
             () => prompt.ShouldNotContain("push", Case.Insensitive),
             () => prompt.ShouldNotContain("commit", Case.Insensitive),
             () => prompt.ShouldNotContain(SystemPromptBuilder.PrePrSectionMarker),
-            () => prompt.ShouldNotContain("After pushing and opening"),
+            () => prompt.ShouldNotContain(SystemPromptBuilder.PublishingSectionMarker),
             () => prompt.ShouldNotContain("<branch-name>"),
             () => prompt.ShouldNotContain("You are resuming work"),
             () => prompt.ShouldNotContain("You are addressing review feedback"),

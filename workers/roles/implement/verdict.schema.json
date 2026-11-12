@@ -10,6 +10,27 @@
     },
     "questions": {
       "$ref": "#/$defs/questions"
+    },
+    "pullRequest": {
+      "description": "The text Foundry publishes your work with: the pull request it opens, or a summary comment on the existing one.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["summary", "body"],
+      "properties": {
+        "summary": {
+          "description": "One line summarising the change, without a type prefix; Foundry adds it.",
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 72,
+          "pattern": "^[^\\r\\n]+$"
+        },
+        "body": {
+          "description": "Markdown description of the change for reviewers. Foundry links the issue itself.",
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 20000
+        }
+      }
     }
   },
   "if": {
@@ -18,5 +39,8 @@
   },
   "then": {
     "required": ["questions"]
+  },
+  "else": {
+    "required": ["pullRequest"]
   }
 }

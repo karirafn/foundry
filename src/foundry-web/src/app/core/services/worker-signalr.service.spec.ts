@@ -268,7 +268,6 @@ describe('WorkerSignalRService', () => {
       workerRunId: 'run-1',
       issueId: 'issue-1',
       lastActivityAt: '2026-01-01T00:00:00Z',
-      commitCount: 3,
     };
 
     // Act
@@ -291,8 +290,8 @@ describe('WorkerSignalRService', () => {
   it('should replace workerActivity signal when a new WorkerActivity arrives', () => {
     // Arrange
     const { svc, captured } = setup();
-    const first: WorkerActivity = { workerRunId: 'run-1', issueId: 'issue-1', lastActivityAt: '2026-01-01T00:00:00Z', commitCount: 0 };
-    const second: WorkerActivity = { workerRunId: 'run-1', issueId: 'issue-1', lastActivityAt: '2026-01-01T00:01:00Z', commitCount: 1 };
+    const first: WorkerActivity = { workerRunId: 'run-1', issueId: 'issue-1', lastActivityAt: '2026-01-01T00:00:00Z' };
+    const second: WorkerActivity = { workerRunId: 'run-1', issueId: 'issue-1', lastActivityAt: '2026-01-01T00:01:00Z' };
     captured.onWorkerActivity!(first);
 
     // Act
@@ -332,7 +331,6 @@ describe('WorkerSignalRService', () => {
       workerRunId: 'run-A',
       issueId: 'issue-A',
       lastActivityAt: '2026-06-01T12:00:00Z',
-      commitCount: 2,
     };
 
     // Act
@@ -357,7 +355,6 @@ describe('WorkerSignalRService', () => {
       workerRunId: 'run-B',
       issueId: 'issue-B',
       lastActivityAt: '2026-06-01T13:00:00Z',
-      commitCount: 5,
     };
 
     // Act
@@ -376,13 +373,11 @@ describe('WorkerSignalRService', () => {
       workerRunId: 'run-A',
       issueId: 'issue-A',
       lastActivityAt: '2026-06-01T12:00:00Z',
-      commitCount: 1,
     };
     const activityB: WorkerActivity = {
       workerRunId: 'run-B',
       issueId: 'issue-B',
       lastActivityAt: '2026-06-01T14:00:00Z',
-      commitCount: 3,
     };
 
     // Act
@@ -403,126 +398,6 @@ describe('WorkerSignalRService', () => {
     expect((svc.reconnected as unknown as { next?: unknown }).next).toBeUndefined();
   });
 
-  // Cycle 8: commitCount is parsed from an incoming WorkerActivity
-  it('should return null from commitCountForIssue for an unknown issueId before any activity arrives', () => {
-    // Arrange / Act
-    const { svc } = setup();
-
-    // Assert — null signals pre-handshake state (unknown), distinct from observed 0
-    expect(svc.commitCountForIssue('unknown-issue')).toBeNull();
-  });
-
-  it('should return commitCount from commitCountForIssue after WorkerActivity is received', () => {
-    // Arrange
-    const { svc, captured } = setup();
-    const activity: WorkerActivity = {
-      workerRunId: 'run-C',
-      issueId: 'issue-C',
-      lastActivityAt: '2026-06-01T15:00:00Z',
-      commitCount: 7,
-    };
-
-    // Act
-    captured.onWorkerActivity!(activity);
-
-    // Assert
-    expect(svc.commitCountForIssue('issue-C')).toBe(7);
-  });
-
-  it('should update commitCount when a new WorkerActivity replaces the previous one for the same issue', () => {
-    // Arrange
-    const { svc, captured } = setup();
-    const first: WorkerActivity = {
-      workerRunId: 'run-D',
-      issueId: 'issue-D',
-      lastActivityAt: '2026-06-01T16:00:00Z',
-      commitCount: 2,
-    };
-    const second: WorkerActivity = {
-      workerRunId: 'run-D',
-      issueId: 'issue-D',
-      lastActivityAt: '2026-06-01T16:01:00Z',
-      commitCount: 4,
-    };
-    captured.onWorkerActivity!(first);
-
-    // Act
-    captured.onWorkerActivity!(second);
-
-    // Assert
-    expect(svc.commitCountForIssue('issue-D')).toBe(4);
-  });
-
-  it('should independently track commitCount for two different issues', () => {
-    // Arrange
-    const { svc, captured } = setup();
-    const activityE: WorkerActivity = {
-      workerRunId: 'run-E',
-      issueId: 'issue-E',
-      lastActivityAt: '2026-06-01T17:00:00Z',
-      commitCount: 1,
-    };
-    const activityF: WorkerActivity = {
-      workerRunId: 'run-F',
-      issueId: 'issue-F',
-      lastActivityAt: '2026-06-01T18:00:00Z',
-      commitCount: 9,
-    };
-
-    // Act
-    captured.onWorkerActivity!(activityE);
-    captured.onWorkerActivity!(activityF);
-
-    // Assert
-    expect(svc.commitCountForIssue('issue-E')).toBe(1);
-    expect(svc.commitCountForIssue('issue-F')).toBe(9);
-  });
-
-  // Finding 3: commitCountForIssue returns null for unknown issues (pre-handshake)
-  it('should return null from commitCountForIssue for an unknown issueId (pre-handshake state)', () => {
-    // Arrange / Act
-    const { svc } = setup();
-
-    // Assert — null distinguishes "not yet observed" from observed 0
-    expect(svc.commitCountForIssue('unknown-issue')).toBeNull();
-  });
-
-  it('should return 0 from commitCountForIssue when WorkerActivity arrives with commitCount 0', () => {
-    // Arrange
-    const { svc, captured } = setup();
-    const activity: WorkerActivity = {
-      workerRunId: 'run-G',
-      issueId: 'issue-G',
-      lastActivityAt: '2026-06-01T19:00:00Z',
-      commitCount: 0,
-    };
-
-    // Act
-    captured.onWorkerActivity!(activity);
-
-    // Assert — 0 is a real observed value, not null
-    expect(svc.commitCountForIssue('issue-G')).toBe(0);
-  });
-
-  // Finding 2: commitCountForIssue and activityForIssue are reactive — reading via workerActivity signal
-  it('should reflect new commitCount reactively after WorkerActivity arrives', () => {
-    // Arrange
-    const { svc, captured } = setup();
-    const initialNull = svc.commitCountForIssue('issue-H');
-
-    // Act
-    captured.onWorkerActivity!({
-      workerRunId: 'run-H',
-      issueId: 'issue-H',
-      lastActivityAt: '2026-06-01T20:00:00Z',
-      commitCount: 5,
-    });
-
-    // Assert — value changes after push, no external tick needed
-    expect(initialNull).toBeNull();
-    expect(svc.commitCountForIssue('issue-H')).toBe(5);
-  });
-
   it('should reflect new activityAt reactively after WorkerActivity arrives', () => {
     // Arrange
     const { svc, captured } = setup();
@@ -533,7 +408,6 @@ describe('WorkerSignalRService', () => {
       workerRunId: 'run-I',
       issueId: 'issue-I',
       lastActivityAt: '2026-06-01T21:00:00Z',
-      commitCount: 2,
     });
 
     // Assert

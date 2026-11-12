@@ -31,6 +31,8 @@ internal static class IssueStateRegistry
         ["triage_queued"] = typeof(TriageQueuedIssue),
         ["triage_in_progress"] = typeof(TriageInProgressIssue),
         ["triage_failed"] = typeof(TriageFailedIssue),
+        ["publish_failed"] = typeof(PublishFailedIssue),
+        ["branch_diverged"] = typeof(BranchDivergedIssue),
     }.ToFrozenDictionary(StringComparer.Ordinal);
 
     private static readonly FrozenDictionary<string, Type> ResolvedMap = new Dictionary<string, Type>

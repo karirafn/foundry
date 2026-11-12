@@ -34,8 +34,7 @@ public sealed class HandleAsync
         WorkerActivityObserved @event = new(
             WorkerRunId.New(),
             IssueId.New(),
-            DateTimeOffset.UtcNow,
-            CommitCount: 0);
+            DateTimeOffset.UtcNow);
 
         // Act
         await sut.HandleAsync(@event, CancellationToken.None);
@@ -54,8 +53,7 @@ public sealed class HandleAsync
         WorkerActivityObserved @event = new(
             workerRunId,
             IssueId.New(),
-            DateTimeOffset.UtcNow,
-            CommitCount: 0);
+            DateTimeOffset.UtcNow);
 
         // Act
         await sut.HandleAsync(@event, CancellationToken.None);
@@ -75,8 +73,7 @@ public sealed class HandleAsync
         WorkerActivityObserved @event = new(
             WorkerRunId.New(),
             issueId,
-            DateTimeOffset.UtcNow,
-            CommitCount: 0);
+            DateTimeOffset.UtcNow);
 
         // Act
         await sut.HandleAsync(@event, CancellationToken.None);
@@ -96,8 +93,7 @@ public sealed class HandleAsync
         WorkerActivityObserved @event = new(
             WorkerRunId.New(),
             IssueId.New(),
-            lastActivityAt,
-            CommitCount: 0);
+            lastActivityAt);
 
         // Act
         await sut.HandleAsync(@event, CancellationToken.None);
@@ -105,25 +101,5 @@ public sealed class HandleAsync
         // Assert
         WorkerActivity activity = broadcaster.Broadcasts.ShouldHaveSingleItem();
         activity.LastActivityAt.ShouldBe(lastActivityAt);
-    }
-
-    [Fact]
-    public async Task WhenHandled_BroadcastsCommitCount()
-    {
-        // Arrange
-        CapturingWorkerActivityBroadcaster broadcaster = new();
-        WorkerActivityObservedHandler sut = new(broadcaster);
-        WorkerActivityObserved @event = new(
-            WorkerRunId.New(),
-            IssueId.New(),
-            DateTimeOffset.UtcNow,
-            CommitCount: 5);
-
-        // Act
-        await sut.HandleAsync(@event, CancellationToken.None);
-
-        // Assert
-        WorkerActivity activity = broadcaster.Broadcasts.ShouldHaveSingleItem();
-        activity.CommitCount.ShouldBe(5);
     }
 }

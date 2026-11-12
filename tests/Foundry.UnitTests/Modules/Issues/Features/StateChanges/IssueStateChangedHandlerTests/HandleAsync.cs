@@ -2,7 +2,9 @@ using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Issues.Domain.Events;
 using Foundry.Modules.Issues.Features;
 using Foundry.Modules.Issues.Features.StateChanges;
+using Foundry.Modules.Issues.Features.WorkerReactions;
 using Foundry.Modules.Monitoring.Contracts;
+using Foundry.Modules.Workers.Contracts;
 using Foundry.Shared;
 
 using Shouldly;
@@ -73,6 +75,35 @@ public sealed class HandleAsync
 
         // Act
         await _sut.HandleAsync(@event, CancellationToken.None);
+
+        // Assert
+        _broadcaster.BroadcastedSummary.ShouldBe(expectedSummary);
+    }
+
+    [Fact]
+    public async Task WhenPublishPhaseChanged_BroadcastsIssueSummary()
+    {
+        // Arrange
+        IssueId issueId = IssueId.New();
+        IssueSummary expectedSummary = new(
+            Id: issueId.Value,
+            IssueNumber: 1,
+            Title: "Test Issue",
+            State: "in_progress",
+            RepositorySlug: "owner/repo",
+            DetectedAt: DateTimeOffset.UtcNow,
+            Url: "https://github.com/owner/repo/issues/1",
+            FailureClassification: null,
+            RepositoryEligibilityStatus: null,
+            RunStats: null,
+            PublishPhase: "publishing");
+        _issueQueries.SetSummary(issueId, expectedSummary);
+        IIntegrationEventHandler<WorkerRunPublishPhaseChanged> handler = new WorkerRunPublishPhaseChangedHandler(_sut);
+
+        // Act
+        await handler.HandleAsync(
+            new WorkerRunPublishPhaseChanged(WorkerRunId.New(), issueId.Value, WorkerRunPublishPhase.Publishing),
+            CancellationToken.None);
 
         // Assert
         _broadcaster.BroadcastedSummary.ShouldBe(expectedSummary);

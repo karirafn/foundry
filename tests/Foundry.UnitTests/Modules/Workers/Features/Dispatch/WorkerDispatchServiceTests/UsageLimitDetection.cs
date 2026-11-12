@@ -36,7 +36,7 @@ public sealed class UsageLimitDetection : WorkerDispatchServiceTestBase
         {"type":"result","api_error_status":429}
         """;
 
-    private WorkerDispatchService BuildServiceWithParser(
+    private DispatchAndPublishTicker BuildServiceWithParser(
         string? containerLogs,
         WorkerStatus exitedStatus,
         IIntegrationEventDispatcher? integrationEventDispatcher = null)
@@ -65,7 +65,7 @@ public sealed class UsageLimitDetection : WorkerDispatchServiceTestBase
         SeedGlobalSettings();
         SeedActiveRun("container-usage-limited-future");
         WorkerStatus exitedStatus = new(IsRunning: false, ExitCode: 1, FinishedAt: DateTimeOffset.UtcNow);
-        WorkerDispatchService sut = BuildServiceWithParser(UsageLimitedFutureOutput, exitedStatus);
+        DispatchAndPublishTicker sut = BuildServiceWithParser(UsageLimitedFutureOutput, exitedStatus);
 
         // Act
         await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
@@ -84,7 +84,7 @@ public sealed class UsageLimitDetection : WorkerDispatchServiceTestBase
         SeedGlobalSettings();
         SeedActiveRun("container-usage-limited-pause");
         WorkerStatus exitedStatus = new(IsRunning: false, ExitCode: 1, FinishedAt: DateTimeOffset.UtcNow);
-        WorkerDispatchService sut = BuildServiceWithParser(UsageLimitedFutureOutput, exitedStatus);
+        DispatchAndPublishTicker sut = BuildServiceWithParser(UsageLimitedFutureOutput, exitedStatus);
 
         // Act
         await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
@@ -107,7 +107,7 @@ public sealed class UsageLimitDetection : WorkerDispatchServiceTestBase
         SeedActiveRun("container-usage-limited-no-commits");
         WorkerStatus exitedStatus = new(IsRunning: false, ExitCode: 1, FinishedAt: DateTimeOffset.UtcNow);
         CapturingIntegrationEventDispatcher dispatcher = new();
-        WorkerDispatchService sut = BuildServiceWithParser(
+        DispatchAndPublishTicker sut = BuildServiceWithParser(
             UsageLimitedFutureOutput,
             exitedStatus,
             integrationEventDispatcher: dispatcher);
@@ -130,7 +130,7 @@ public sealed class UsageLimitDetection : WorkerDispatchServiceTestBase
         SeedGlobalSettings();
         SeedActiveRun("container-usage-limited-429-only");
         WorkerStatus exitedStatus = new(IsRunning: false, ExitCode: 1, FinishedAt: DateTimeOffset.UtcNow);
-        WorkerDispatchService sut = BuildServiceWithParser(Credits429OnlyOutput, exitedStatus);
+        DispatchAndPublishTicker sut = BuildServiceWithParser(Credits429OnlyOutput, exitedStatus);
 
         // Act
         await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
@@ -150,7 +150,7 @@ public sealed class UsageLimitDetection : WorkerDispatchServiceTestBase
         SeedGlobalSettings();
         SeedActiveRun("container-usage-limited-429-sets-resets-at");
         WorkerStatus exitedStatus = new(IsRunning: false, ExitCode: 1, FinishedAt: DateTimeOffset.UtcNow);
-        WorkerDispatchService sut = BuildServiceWithParser(Credits429OnlyOutput, exitedStatus);
+        DispatchAndPublishTicker sut = BuildServiceWithParser(Credits429OnlyOutput, exitedStatus);
 
         // Act
         await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
@@ -169,7 +169,7 @@ public sealed class UsageLimitDetection : WorkerDispatchServiceTestBase
         // Arrange — deliberately NO SeedGlobalSettings() call
         SeedActiveRun("container-no-settings-row");
         WorkerStatus exitedStatus = new(IsRunning: false, ExitCode: 1, FinishedAt: DateTimeOffset.UtcNow);
-        WorkerDispatchService sut = BuildServiceWithParser(UsageLimitedFutureOutput, exitedStatus);
+        DispatchAndPublishTicker sut = BuildServiceWithParser(UsageLimitedFutureOutput, exitedStatus);
 
         // Act
         await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
@@ -192,7 +192,7 @@ public sealed class UsageLimitDetection : WorkerDispatchServiceTestBase
         SeedActiveRun("container-usage-limited-category");
         WorkerStatus exitedStatus = new(IsRunning: false, ExitCode: 1, FinishedAt: DateTimeOffset.UtcNow);
         CapturingIntegrationEventDispatcher dispatcher = new();
-        WorkerDispatchService sut = BuildServiceWithParser(
+        DispatchAndPublishTicker sut = BuildServiceWithParser(
             UsageLimitedFutureOutput,
             exitedStatus,
             integrationEventDispatcher: dispatcher);
@@ -218,7 +218,7 @@ public sealed class UsageLimitDetection : WorkerDispatchServiceTestBase
         string earlierOutput = $$$"""{"type":"result","terminal_reason":"blocking_limit","result":"resets at {{{earlierReset:O}}}"}""";
 
         WorkerStatus exitedStatus = new(IsRunning: false, ExitCode: 1, FinishedAt: DateTimeOffset.UtcNow);
-        WorkerDispatchService sut1 = BuildServiceWithParser(earlierOutput, exitedStatus);
+        DispatchAndPublishTicker sut1 = BuildServiceWithParser(earlierOutput, exitedStatus);
         await sut1.ExecuteTickAsync(TestContext.Current.CancellationToken);
 
         // Seed a second run — second tick: reconciliation already ran, monitoring sees the new run
@@ -227,7 +227,7 @@ public sealed class UsageLimitDetection : WorkerDispatchServiceTestBase
         DateTimeOffset laterReset = DateTimeOffset.UtcNow.AddDays(5);
         string laterOutput = $$$"""{"type":"result","terminal_reason":"blocking_limit","result":"resets at {{{laterReset:O}}}"}""";
 
-        WorkerDispatchService sut2 = BuildServiceWithParser(laterOutput, exitedStatus);
+        DispatchAndPublishTicker sut2 = BuildServiceWithParser(laterOutput, exitedStatus);
 
         // Act
         await sut2.ExecuteTickAsync(TestContext.Current.CancellationToken);

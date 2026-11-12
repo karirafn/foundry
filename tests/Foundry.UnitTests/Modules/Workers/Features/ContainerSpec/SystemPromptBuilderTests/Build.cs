@@ -14,11 +14,8 @@ namespace Foundry.UnitTests.Modules.Workers.Features.ContainerSpec.SystemPromptB
 public sealed class Build
 {
     private const string Principles = "PRINCIPLES_MARKER Engineering principles.";
-    private const string PrePrSectionEndFragment = "leave enough time to open the pull request";
-    private const string PrePrCommitInstruction =
-        "First, commit every change you made for the issue on the provided branch, leaving out scratch and generated files.";
-    private const string PrePrNothingToPushExit =
-        "If the branch still has no commits beyond the default branch after that commit, there is nothing to push: report that and exit.";
+    private const string PrePrCommitInstruction = PrePrSection.CommitInstruction;
+    private const string PrePrNothingToPublishExit = PrePrSection.NothingToPublishExit;
     private static readonly IssueContent Issue = new("Fix the bug", "The bug body.", []);
 
     private const string DefaultSystemPromptTemplate =
@@ -150,7 +147,7 @@ public sealed class Build
             () => result.ShouldContain("<branch-name>feat/123-fix-thing</branch-name>"),
             () => result.ShouldContain("<review-feedback>"),
             () => result.ShouldContain("</review-feedback>"),
-            () => result.ShouldContain("Push your changes to the same branch. Do not create a new PR."),
+            () => result.ShouldEndWith("</review-feedback>\nCommit your changes on that branch."),
             () => result.ShouldNotContain("resuming work"));
     }
 
@@ -437,7 +434,7 @@ public sealed class Build
     }
 
     [Fact]
-    public void WhenBuilt_SafetyPreambleRestrictsPushesToTheBranchFoundryProvides()
+    public void WhenBuilt_SafetyPreambleCarriesNoBranchRestriction()
     {
         // Act
         Result<string> buildResult = SystemPromptBuilder.Build(
@@ -449,9 +446,8 @@ public sealed class Build
             timeoutMinutes: 120, installsDocker: false, installsDotnet: false);
         string result = buildResult.ShouldBeOfType<Result<string>.Success>().Value;
 
-        // Assert
-        result.ShouldContain(
-            "- Branch restriction: Push only to the branch Foundry provides. Never push to main, master, or any protected branch.");
+        // Assert — the Publisher pushes only to the run's branch (ADR 0100), so the prompt no longer restricts it.
+        result.ShouldNotContain("Branch restriction");
     }
 
     [Fact]
@@ -732,7 +728,7 @@ public sealed class Build
     }
 
     [Fact]
-    public void WhenContinuationContextProvided_IncludesNoPrInstruction()
+    public void WhenContinuationContextProvided_EndsWithTheCommitInstruction()
     {
         // Arrange
         DispatchContext.Continuation continuation = new("feat/103-my-feature");
@@ -742,8 +738,7 @@ public sealed class Build
         string result = buildResult.ShouldBeOfType<Result<string>.Success>().Value;
 
         // Assert
-        result.ShouldContain("Push your changes to the same branch.");
-        result.ShouldContain("If a pull request already exists for this branch, do not create a new one.");
+        result.ShouldEndWith("- Then continue from where the previous session left off\n\nCommit your changes on that branch.");
     }
 
     [Fact]
@@ -888,7 +883,7 @@ public sealed class Build
     }
 
     [Fact]
-    public void WhenBuilt_SafetyPreambleContainsSelfCommentInstruction()
+    public void WhenBuilt_SafetyPreambleCarriesNoSelfCommentInstruction()
     {
         // Arrange
         const string systemPromptTemplate = "Template content.";
@@ -903,8 +898,8 @@ public sealed class Build
             timeoutMinutes: 120, installsDocker: false, installsDotnet: false);
         string result = buildResult.ShouldBeOfType<Result<string>.Success>().Value;
 
-        // Assert
-        result.ShouldContain("Do not post comments, reviews, or replies on your own pull request.");
+        // Assert — the run holds no provider credential to comment with (ADR 0100).
+        result.ShouldNotContain("Do not post comments, reviews, or replies on your own pull request.");
     }
 
     [Fact]
@@ -1291,11 +1286,11 @@ public sealed class Build
     }
 
     // =========================================================
-    // Checks section tests (AC1–AC3, AC5)
+    // Publishing section tests (ADR 0100)
     // =========================================================
 
     [Fact]
-    public void WhenBuiltForFreshContext_ChecksSectionPresent()
+    public void WhenBuiltForFreshContext_PublishingSectionPresent()
     {
         // Arrange
 
@@ -1310,15 +1305,13 @@ public sealed class Build
 
         // Assert — AC1 key phrases
         result.ShouldSatisfyAllConditions(
-            () => result.ShouldContain("gh pr checks"),
-            () => result.ShouldContain("glab ci status"),
-            () => result.ShouldContain($"{SystemPromptBuilder.ChecksWatchMinutes} minutes"),
-            () => result.ShouldContain($"{SystemPromptBuilder.ChecksMaxFixPushes} fix push"),
-            () => result.ShouldContain("Foundry continues to monitor"));
+            () => result.ShouldContain(SystemPromptBuilder.PublishingSectionMarker),
+            () => result.ShouldContain("Foundry pushes the branch and opens or updates the pull request"),
+            () => result.ShouldContain("commit your work and exit before it runs out"));
     }
 
     [Fact]
-    public void WhenBuiltForContinuationContext_ChecksSectionPresent()
+    public void WhenBuiltForContinuationContext_PublishingSectionPresent()
     {
         // Arrange
         DispatchContext.Continuation continuation = new("feat/103-my-feature");
@@ -1333,15 +1326,13 @@ public sealed class Build
 
         // Assert — AC1 key phrases
         result.ShouldSatisfyAllConditions(
-            () => result.ShouldContain("gh pr checks"),
-            () => result.ShouldContain("glab ci status"),
-            () => result.ShouldContain($"{SystemPromptBuilder.ChecksWatchMinutes} minutes"),
-            () => result.ShouldContain($"{SystemPromptBuilder.ChecksMaxFixPushes} fix push"),
-            () => result.ShouldContain("Foundry continues to monitor"));
+            () => result.ShouldContain(SystemPromptBuilder.PublishingSectionMarker),
+            () => result.ShouldContain("Foundry pushes the branch and opens or updates the pull request"),
+            () => result.ShouldContain("commit your work and exit before it runs out"));
     }
 
     [Fact]
-    public void WhenBuiltForRevisionContext_ChecksSectionPresent()
+    public void WhenBuiltForRevisionContext_PublishingSectionPresent()
     {
         // Arrange
         DispatchContext.Revision revision = new(
@@ -1359,17 +1350,15 @@ public sealed class Build
 
         // Assert — AC1 key phrases
         result.ShouldSatisfyAllConditions(
-            () => result.ShouldContain("gh pr checks"),
-            () => result.ShouldContain("glab ci status"),
-            () => result.ShouldContain($"{SystemPromptBuilder.ChecksWatchMinutes} minutes"),
-            () => result.ShouldContain($"{SystemPromptBuilder.ChecksMaxFixPushes} fix push"),
-            () => result.ShouldContain("Foundry continues to monitor"));
+            () => result.ShouldContain(SystemPromptBuilder.PublishingSectionMarker),
+            () => result.ShouldContain("Foundry pushes the branch and opens or updates the pull request"),
+            () => result.ShouldContain("commit your work and exit before it runs out"));
     }
 
     [Fact]
-    public void WhenOperatorCustomTemplateSupplied_ChecksSectionStillPresent()
+    public void WhenOperatorCustomTemplateSupplied_PublishingSectionStillPresent()
     {
-        // Arrange — AC3: checks section is in non-overridable builder output, not the template
+        // Arrange — AC3: the publishing section is in non-overridable builder output, not the template
         // Act
         Result<string> buildResult = SystemPromptBuilder.Build(
             Principles,
@@ -1379,10 +1368,10 @@ public sealed class Build
             timeoutMinutes: 120, installsDocker: false, installsDotnet: false);
         string result = buildResult.ShouldBeOfType<Result<string>.Success>().Value;
 
-        // Assert — checks section appears regardless of operator template
+        // Assert — the publishing section appears regardless of operator template
         result.ShouldSatisfyAllConditions(
-            () => result.ShouldContain("gh pr checks"),
-            () => result.ShouldContain("Foundry continues to monitor"));
+            () => result.ShouldContain(SystemPromptBuilder.PublishingSectionMarker),
+            () => result.ShouldContain("commit your work and exit before it runs out"));
     }
 
     [Fact]
@@ -1404,9 +1393,9 @@ public sealed class Build
     }
 
     [Fact]
-    public void WhenBuiltForRevisionContext_ChecksSectionAppearsBeforeRevisionHeader()
+    public void WhenBuiltForRevisionContext_PublishingSectionAppearsBeforeRevisionHeader()
     {
-        // Arrange — Fix 4: lock the ordering of checks section relative to the revision header
+        // Arrange — Fix 4: lock the ordering of the publishing section relative to the revision header
         DispatchContext.Revision revision = new(
             "feat/1-fix",
             "https://github.com/org/repo/pull/1",
@@ -1420,23 +1409,23 @@ public sealed class Build
             timeoutMinutes: 120, installsDocker: false, installsDotnet: false);
         string result = buildResult.ShouldBeOfType<Result<string>.Success>().Value;
 
-        // Assert — the checks section (from the shared floor) appears before the revision feedback block
-        int checksSectionIndex = result.IndexOf("gh pr checks", StringComparison.Ordinal);
+        // Assert — the publishing section (from the shared floor) appears before the revision feedback block
+        int publishingSectionIndex = result.IndexOf(SystemPromptBuilder.PublishingSectionMarker, StringComparison.Ordinal);
         int revisionHeaderIndex = result.IndexOf("You are addressing review feedback on an existing PR.", StringComparison.Ordinal);
 
-        checksSectionIndex.ShouldBeGreaterThan(0);
+        publishingSectionIndex.ShouldBeGreaterThan(0);
         revisionHeaderIndex.ShouldBeGreaterThan(0);
-        checksSectionIndex.ShouldBeLessThan(revisionHeaderIndex);
+        publishingSectionIndex.ShouldBeLessThan(revisionHeaderIndex);
     }
 
     [Fact]
     public void WhenRevisionWithManyComments_PromptStaysUnderByteCeiling()
     {
-        // Arrange — the revision byte budget must account for the appended checks section.
+        // Arrange — the revision byte budget must account for the appended publishing section.
         // Construct a revision whose comment content pushes the prompt near the ceiling.
         // 50 comments with bodies large enough to fill most of the comment budget.
         // Each comment body: ~2000 ASCII bytes — 50 × ~2000 = ~100_000 bytes of raw comment content,
-        // which combined with the fixed floor (safety preamble + template + checks section + revision scaffold)
+        // which combined with the fixed floor (safety preamble + template + publishing section + revision scaffold)
         // approaches but stays under the 120_000-byte ceiling.
         string body = new string('b', 2000);
         List<ReviewComment> comments = Enumerable.Range(1, 50)
@@ -1457,26 +1446,6 @@ public sealed class Build
         // Assert — build succeeds and result stays within the ADR 0071 120,000-byte ceiling
         string result = buildResult.ShouldBeOfType<Result<string>.Success>().Value;
         Encoding.UTF8.GetByteCount(result).ShouldBeLessThan(SystemPromptBuilder.MaxSystemPromptBytes);
-    }
-
-    [Fact]
-    public void WhenBuiltForChecksSection_CiCdSubordinationClausePresent()
-    {
-        // Arrange — Fix 1: the checks section must explicitly subordinate itself to the safety rules
-        // so the worker knows not to edit CI/CD files to make checks pass.
-
-        // Act
-        Result<string> buildResult = SystemPromptBuilder.Build(
-            Principles,
-            1, DefaultSystemPromptTemplate,
-            new DispatchContext.Fresh("feat/1-title"),
-            Issue,
-            timeoutMinutes: 120, installsDocker: false, installsDotnet: false);
-        string result = buildResult.ShouldBeOfType<Result<string>.Success>().Value;
-
-        // Assert — the subordination clause appears in the checks section
-        result.ShouldContain("Do not edit CI/CD configuration files to make checks pass");
-        result.ShouldContain("safety rules");
     }
 
     [Fact]
@@ -1507,8 +1476,8 @@ public sealed class Build
             () => result.ShouldContain("ci/build"),
             () => result.ShouldContain("ci/lint"),
             () => result.ShouldContain("</failing-checks>"),
-            () => result.ShouldContain("gh run view --log-failed"),
-            () => result.ShouldContain("glab ci trace"));
+            () => result.ShouldNotContain("gh run view --log-failed"),
+            () => result.ShouldNotContain("glab ci trace"));
     }
 
     [Fact]
@@ -1534,14 +1503,14 @@ public sealed class Build
         // Assert
         result.ShouldSatisfyAllConditions(
             () => result.ShouldContain("<branch-name>feat/42-fix</branch-name>"),
-            () => result.ShouldContain("Push your changes to the same branch"),
-            () => result.ShouldContain("Do not create a new PR"));
+            () => result.ShouldEndWith(
+                "fix the root cause of the failures, and commit the fix on that branch."));
     }
 
     [Fact]
-    public void WhenBuiltForFailedChecksTrigger_ChecksSectionAlsoPresent()
+    public void WhenBuiltForFailedChecksTrigger_PublishingSectionAlsoPresent()
     {
-        // Arrange — the check-watching section must appear alongside the fix instructions
+        // Arrange — the publishing section must appear alongside the fix instructions
         DispatchContext.Revision revision = new(
             "feat/1-fix",
             "https://github.com/org/repo/pull/1",
@@ -1558,11 +1527,11 @@ public sealed class Build
             timeoutMinutes: 120, installsDocker: false, installsDotnet: false);
         string result = buildResult.ShouldBeOfType<Result<string>.Success>().Value;
 
-        // Assert — checks-watching section is still present for the FailedChecks trigger
+        // Assert — the publishing section is still present for the FailedChecks trigger
         result.ShouldSatisfyAllConditions(
-            () => result.ShouldContain("gh pr checks"),
-            () => result.ShouldContain("glab ci status"),
-            () => result.ShouldContain("Foundry continues to monitor"));
+            () => result.ShouldContain(SystemPromptBuilder.PublishingSectionMarker),
+            () => result.ShouldContain("Foundry pushes the branch and opens or updates the pull request"),
+            () => result.ShouldContain("commit your work and exit before it runs out"));
     }
 
     [Fact]
@@ -1675,7 +1644,7 @@ public sealed class Build
     }
 
     [Fact]
-    public void WhenInstallsDockerTrue_PrePrSectionOpensPullRequestWheneverBranchHasCommitsEvenWhenTestsFail()
+    public void WhenInstallsDockerTrue_PrePrSectionKeepsWorkCommittedEvenWhenTestsFail()
     {
         // Arrange
 
@@ -1692,12 +1661,11 @@ public sealed class Build
         result.ShouldSatisfyAllConditions(
             () => result.ShouldContain("DOCKER_HOST"),
             () => result.ShouldContain("integration tests"),
-            () => result.ShouldContain(
-                "open (or reuse) the pull request whenever the branch has commits, even when integration tests still fail"));
+            () => result.ShouldContain("Keep your work committed even when integration tests still fail."));
     }
 
     [Fact]
-    public void WhenInstallsDockerTrue_PrePrSectionContainsVerifiedByCiAndOpenAnywayPhrasing()
+    public void WhenInstallsDockerTrue_PrePrSectionReportsIntegrationTestsVerifiedByCiWhenDockerIsUnavailable()
     {
         // Arrange
 
@@ -1711,9 +1679,8 @@ public sealed class Build
         string result = buildResult.ShouldBeOfType<Result<string>.Success>().Value;
 
         // Assert — DOCKER_HOST-unset branch
-        result.ShouldSatisfyAllConditions(
-            () => result.ShouldContain("verified by CI"),
-            () => result.ShouldContain("open (or reuse) the pull request anyway"));
+        result.ShouldContain(
+            "If DOCKER_HOST is not set: state in your verdict's description that integration tests were not run locally and are verified by CI.");
     }
 
     [Fact]
@@ -1732,7 +1699,7 @@ public sealed class Build
 
         // Assert
         result.ShouldSatisfyAllConditions(
-            () => result.ShouldContain("List each still-failing test in the pull request description"),
+            () => result.ShouldContain("List each still-failing test in your verdict's description"),
             () => result.ShouldContain("new (passes on the default branch)"),
             () => result.ShouldContain("pre-existing (fails the same way on the default branch)"),
             () => result.ShouldContain("not compared (the default-branch comparison could not be completed)"));
@@ -1761,7 +1728,7 @@ public sealed class Build
     }
 
     [Fact]
-    public void WhenInstallsDockerTrue_PrePrSectionPushesBranchBeforeOpeningPullRequestOnEveryPath()
+    public void WhenInstallsDockerTrue_PrePrSectionComparesInSeparateWorktree()
     {
         // Arrange
 
@@ -1770,31 +1737,14 @@ public sealed class Build
 
         // Assert
         section.ShouldSatisfyAllConditions(
-            () => section.ShouldContain("push the branch, then open (or reuse) the pull request anyway"),
-            () => section.ShouldContain("push the branch, then open (or reuse) the pull request whenever"),
-            () => section.ShouldContain("A reused pull request needs the latest commits pushed"),
-            () => section.ShouldNotContain("Before you open (or reuse) the pull request, push the branch"));
-    }
-
-    [Fact]
-    public void WhenInstallsDockerTrue_PrePrSectionComparesInSeparateWorktreeAfterOpeningPullRequest()
-    {
-        // Arrange
-
-        // Act
-        string section = BuildPrePrSection();
-
-        // Assert
-        section.ShouldSatisfyAllConditions(
-            () => section.ShouldContain("After opening the pull request"),
             () => section.ShouldContain("in a separate `git worktree` of the default branch"),
             () => section.ShouldContain("so the feature working tree stays on the feature branch"),
-            () => section.ShouldContain("update the pull request description to group the failures as"),
+            () => section.ShouldContain("Then group the failures in the description as"),
             () => section.ShouldNotContain("check out the default branch"));
     }
 
     [Fact]
-    public void WhenInstallsDockerTrue_PrePrSectionRunsComparisonOnlyWhileChecksWatchBudgetRemains()
+    public void WhenInstallsDockerTrue_PrePrSectionRunsComparisonOnlyWhileBudgetRemains()
     {
         // Arrange
 
@@ -1803,8 +1753,7 @@ public sealed class Build
 
         // Assert
         section.ShouldSatisfyAllConditions(
-            () => section.ShouldContain(
-                $"only while at least {SystemPromptBuilder.ChecksWatchMinutes} minutes of budget remain"),
+            () => section.ShouldContain("Compare only while enough budget remains to finish before the timeout"),
             () => section.ShouldContain("otherwise skip it and mark remaining failures as not compared"),
             () => section.ShouldNotContain("When time is short"));
     }
@@ -1836,7 +1785,7 @@ public sealed class Build
     }
 
     [Fact]
-    public void WhenInstallsDockerTrue_PrePrSectionCommitsIssueChangesBeforeTestingOrPushing()
+    public void WhenInstallsDockerTrue_PrePrSectionCommitsIssueChangesBeforeTesting()
     {
         // Arrange
 
@@ -1846,11 +1795,9 @@ public sealed class Build
         // Assert
         int commitIndex = section.IndexOf(PrePrCommitInstruction, StringComparison.Ordinal);
         int testSuiteIndex = section.IndexOf("run the repository's full test suite", StringComparison.Ordinal);
-        int pushIndex = section.IndexOf("push the branch", StringComparison.Ordinal);
         section.ShouldSatisfyAllConditions(
             () => commitIndex.ShouldBeGreaterThan(-1),
-            () => testSuiteIndex.ShouldBeGreaterThan(commitIndex),
-            () => pushIndex.ShouldBeGreaterThan(commitIndex));
+            () => testSuiteIndex.ShouldBeGreaterThan(commitIndex));
     }
 
     [Fact]
@@ -1863,7 +1810,7 @@ public sealed class Build
 
         // Assert
         int commitIndex = section.IndexOf(PrePrCommitInstruction, StringComparison.Ordinal);
-        int exitIndex = section.IndexOf(PrePrNothingToPushExit, StringComparison.Ordinal);
+        int exitIndex = section.IndexOf(PrePrNothingToPublishExit, StringComparison.Ordinal);
         section.ShouldSatisfyAllConditions(
             () => commitIndex.ShouldBeGreaterThan(-1),
             () => exitIndex.ShouldBeGreaterThan(commitIndex),
@@ -1879,7 +1826,7 @@ public sealed class Build
         string section = BuildPrePrSection();
 
         // Assert
-        int exitIndex = section.IndexOf(PrePrNothingToPushExit, StringComparison.Ordinal);
+        int exitIndex = section.IndexOf(PrePrNothingToPublishExit, StringComparison.Ordinal);
         exitIndex.ShouldBeGreaterThan(-1);
         string exitLine = section[exitIndex..].Split('\n')[0];
         exitLine.ShouldSatisfyAllConditions(
@@ -1904,7 +1851,7 @@ public sealed class Build
     }
 
     [Fact]
-    public void WhenInstallsDockerTrue_PrePrSectionAppearsBeforeChecksSectionAndRevisionHeader()
+    public void WhenInstallsDockerTrue_PrePrSectionAppearsBeforePublishingSectionAndRevisionHeader()
     {
         // Arrange
         DispatchContext.Revision revision = new(
@@ -1920,16 +1867,16 @@ public sealed class Build
             timeoutMinutes: 120, installsDocker: true, installsDotnet: false);
         string result = buildResult.ShouldBeOfType<Result<string>.Success>().Value;
 
-        // Assert — pre-PR section before checks section, both before revision header
+        // Assert — pre-PR section before the publishing section, both before revision header
         int prePrIndex = result.IndexOf(SystemPromptBuilder.PrePrSectionMarker, StringComparison.Ordinal);
-        int checksIndex = result.IndexOf("gh pr checks", StringComparison.Ordinal);
+        int publishingIndex = result.IndexOf(SystemPromptBuilder.PublishingSectionMarker, StringComparison.Ordinal);
         int revisionHeaderIndex = result.IndexOf("You are addressing review feedback on an existing PR.", StringComparison.Ordinal);
 
         prePrIndex.ShouldBeGreaterThan(0);
-        checksIndex.ShouldBeGreaterThan(0);
+        publishingIndex.ShouldBeGreaterThan(0);
         revisionHeaderIndex.ShouldBeGreaterThan(0);
-        prePrIndex.ShouldBeLessThan(checksIndex);
-        checksIndex.ShouldBeLessThan(revisionHeaderIndex);
+        prePrIndex.ShouldBeLessThan(publishingIndex);
+        publishingIndex.ShouldBeLessThan(revisionHeaderIndex);
     }
 
     [Fact]
@@ -1947,7 +1894,7 @@ public sealed class Build
         string result = buildResult.ShouldBeOfType<Result<string>.Success>().Value;
 
         // Assert — budget reminder is specific to the pre-PR section
-        result.ShouldContain("leave enough time to open the pull request and watch its checks");
+        result.ShouldContain("leave enough time to commit your work and report your verdict");
     }
 
     [Fact]
@@ -2034,12 +1981,7 @@ public sealed class Build
             new DispatchContext.Fresh("feat/1-title"),
             Issue,
             timeoutMinutes: 120, installsDocker: true, installsDotnet: false);
-        string result = buildResult.ShouldBeOfType<Result<string>.Success>().Value;
-        int start = result.IndexOf(SystemPromptBuilder.PrePrSectionMarker, StringComparison.Ordinal);
-        int end = result.IndexOf(PrePrSectionEndFragment, start, StringComparison.Ordinal);
-        start.ShouldBeGreaterThan(-1);
-        end.ShouldBeGreaterThan(start);
-        return result[start..end];
+        return PrePrSection.Extract(buildResult.ShouldBeOfType<Result<string>.Success>().Value);
     }
     // =========================================================
     // C# LSP section tests (Issue #670)
@@ -2168,26 +2110,25 @@ public sealed class Build
         section.ShouldSatisfyAllConditions(
             () => section.ShouldContain("<branch-name>feat/42-fix</branch-name>"),
             () => section.ShouldContain("Check out that existing branch"),
-            () => section.ShouldContain("git fetch origin"),
-            () => section.ShouldContain("git merge origin/HEAD"),
+            () => section.ShouldContain("1. Merge the default branch into it with `git merge origin/HEAD`."),
             () => section.ShouldContain("preserving both the branch's intent and the default branch's changes"),
-            () => section.ShouldContain("Run the tests"),
-            () => section.ShouldContain("Push to the same branch"),
-            () => section.ShouldContain("Do not create a new PR."),
-            () => section.ShouldContain("Do not rebase and do not force-push"));
+            () => section.ShouldContain("3. Run the tests, fix anything the merge broke, and commit the fixes."),
+            () => section.ShouldNotContain("git fetch origin"),
+            () => section.ShouldNotContain("push", Case.Insensitive),
+            () => section.ShouldContain("Do not rebase: resolve the conflicts in a merge commit only."));
     }
 
     [Fact]
-    public void WhenBuiltForRebaseConflictTrigger_ChecksSectionPrecedesConflictSection()
+    public void WhenBuiltForRebaseConflictTrigger_PublishingSectionPrecedesConflictSection()
     {
         // Act
         string result = BuildRebaseConflictPrompt();
 
         // Assert
-        int checksSectionIndex = result.IndexOf("gh pr checks", StringComparison.Ordinal);
+        int publishingSectionIndex = result.IndexOf(SystemPromptBuilder.PublishingSectionMarker, StringComparison.Ordinal);
         int conflictSectionIndex = result.IndexOf(SystemPromptBuilder.RebaseConflictSectionMarker, StringComparison.Ordinal);
-        checksSectionIndex.ShouldBeGreaterThan(-1);
-        conflictSectionIndex.ShouldBeGreaterThan(checksSectionIndex);
+        publishingSectionIndex.ShouldBeGreaterThan(-1);
+        conflictSectionIndex.ShouldBeGreaterThan(publishingSectionIndex);
     }
 
     [Fact]

@@ -32,7 +32,7 @@ public sealed class RunTranscriptCapture : WorkerDispatchServiceTestBase
         // Arrange
         ActiveRun seeded = SeedActiveRun("container-transcript-exited");
         TranscriptStub orchestrator = new(ExitedWithFailure, tail: "tail output", fullLog: FullLog);
-        WorkerDispatchService sut = BuildService(orchestrator);
+        DispatchAndPublishTicker sut = BuildService(orchestrator);
 
         // Act
         await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
@@ -52,7 +52,7 @@ public sealed class RunTranscriptCapture : WorkerDispatchServiceTestBase
         // Arrange
         SeedActiveRun("container-transcript-tail");
         TranscriptStub orchestrator = new(ExitedWithFailure, tail: "tail output", fullLog: FullLog);
-        WorkerDispatchService sut = BuildService(orchestrator);
+        DispatchAndPublishTicker sut = BuildService(orchestrator);
 
         // Act
         await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
@@ -68,7 +68,7 @@ public sealed class RunTranscriptCapture : WorkerDispatchServiceTestBase
         // Arrange
         SeedActiveRun("container-transcript-throws");
         TranscriptStub orchestrator = new(ExitedWithFailure, tail: "tail output", fullLog: null, fullLogThrows: true);
-        WorkerDispatchService sut = BuildService(orchestrator);
+        DispatchAndPublishTicker sut = BuildService(orchestrator);
 
         // Act
         await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
@@ -87,7 +87,7 @@ public sealed class RunTranscriptCapture : WorkerDispatchServiceTestBase
         // Arrange
         SeedActiveRun("container-transcript-timeout");
         TranscriptStub orchestrator = new(Running, tail: "tail output", fullLog: FullLog);
-        WorkerDispatchService sut = BuildService(
+        DispatchAndPublishTicker sut = BuildService(
             orchestrator,
             settingsQueries: new StubGlobalSettingsQueries(maxConcurrent: 3, timeoutMinutes: 0));
 
@@ -112,7 +112,7 @@ public sealed class RunTranscriptCapture : WorkerDispatchServiceTestBase
         }
 
         TranscriptStub orchestrator = new(Running, tail: "tail output", fullLog: FullLog);
-        WorkerDispatchService sut = BuildService(orchestrator);
+        DispatchAndPublishTicker sut = BuildService(orchestrator);
 
         // Act
         await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
@@ -128,7 +128,7 @@ public sealed class RunTranscriptCapture : WorkerDispatchServiceTestBase
         // Arrange
         SeedActiveRun("container-transcript-gone");
         TranscriptStub orchestrator = new(status: null, tail: null, fullLog: FullLog);
-        WorkerDispatchService sut = BuildService(orchestrator);
+        DispatchAndPublishTicker sut = BuildService(orchestrator);
 
         // Act
         await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);

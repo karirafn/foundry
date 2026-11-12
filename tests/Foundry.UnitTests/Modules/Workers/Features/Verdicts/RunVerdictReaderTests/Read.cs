@@ -27,7 +27,7 @@ public sealed class Read
         // Act
         RunVerdict? verdict = _sut.Read(
             WorkerRole.Implement,
-            Log("""{"type":"result","result":"Done","structured_output":{"outcome":"done"}}"""));
+            Log("""{"type":"result","result":"Done","structured_output":{"outcome":"done","pullRequest":{"summary":"add retry","body":"Adds retry."}}}"""));
 
         // Assert
         verdict.ShouldBe(RunVerdict.Done());

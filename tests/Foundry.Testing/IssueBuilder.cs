@@ -153,6 +153,22 @@ public sealed class IssueBuilder
     public RevisionFailedIssue RevisionFailed() =>
         RevisionInProgress().MarkFailed(_failureReason, _failureCategory, _failedAt);
 
+    /// <summary>An implement run whose publish retries ran out (ADR 0100).</summary>
+    public PublishFailedIssue PublishFailed() =>
+        InProgress().MarkPublishFailed(_branchName, _failureReason, _failedAt);
+
+    /// <summary>A revision run whose publish retries ran out (ADR 0100).</summary>
+    public PublishFailedIssue PublishFailedFromRevision() =>
+        RevisionInProgress().MarkPublishFailed(_failureReason, _failedAt);
+
+    /// <summary>An implement run whose work went to <paramref name="sideBranchName"/> because merging it conflicted.</summary>
+    public BranchDivergedIssue BranchDiverged(string sideBranchName = "feat/1-test-run-1") =>
+        InProgress().MarkBranchDiverged(_branchName, sideBranchName, pullRequestUrl: null);
+
+    /// <summary>A revision run whose work went to <paramref name="sideBranchName"/> because merging it conflicted.</summary>
+    public BranchDivergedIssue BranchDivergedFromRevision(string sideBranchName = "feat/1-test-run-1") =>
+        RevisionInProgress().MarkBranchDiverged(sideBranchName);
+
     public RebasePendingIssue RebasePending() =>
         InProgress().MarkRebasePending(_branchName, _pullRequestUrl, _feedbackCutoffAt);
 

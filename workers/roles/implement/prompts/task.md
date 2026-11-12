@@ -1,1 +1,1 @@
-Implement issue #{issueNumber}. Make the changes on the branch Foundry provides, commit, and push to the remote. Open a pull request for your branch, or reuse the existing one if a pull request already exists.
+Implement issue #{issueNumber}. Make the changes on the branch Foundry provides and commit them there; Foundry publishes your commits after you finish.

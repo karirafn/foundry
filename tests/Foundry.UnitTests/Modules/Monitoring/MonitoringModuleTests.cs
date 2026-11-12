@@ -1,4 +1,5 @@
 using Foundry.Modules.Monitoring;
+using Foundry.Modules.Monitoring.Contracts.Commands;
 using Foundry.Modules.Monitoring.Contracts.Queries;
 using Foundry.Modules.Monitoring.Features.CredentialResolution;
 using Foundry.Modules.Monitoring.Features.Polling;
@@ -73,6 +74,25 @@ public sealed class MonitoringModuleTests
         using IServiceScope scope = provider.CreateScope();
         IRepositorySlugQueries queries = scope.ServiceProvider.GetRequiredService<IRepositorySlugQueries>();
         queries.ShouldNotBeNull();
+    }
+
+    [Fact]
+    public void AddMonitoringModule_RegistersIRunPublishingCommandsScoped()
+    {
+        // Arrange
+        ServiceCollection services = new();
+        services.AddHttpClient();
+        services.AddDbContext<DbContext, FoundryDbContext>(opts =>
+            opts.UseSqlite(new SqliteConnectionStringBuilder { DataSource = ":memory:" }.ToString()));
+
+        // Act
+        services.AddMonitoringModule();
+        ServiceProvider provider = services.BuildServiceProvider();
+
+        // Assert
+        using IServiceScope scope = provider.CreateScope();
+        IRunPublishingCommands commands = scope.ServiceProvider.GetRequiredService<IRunPublishingCommands>();
+        commands.ShouldBeSameAs(scope.ServiceProvider.GetRequiredService<IRunPublishingCommands>());
     }
 
     [Fact]

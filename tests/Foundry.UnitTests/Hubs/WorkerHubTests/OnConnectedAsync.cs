@@ -38,14 +38,12 @@ public sealed class OnConnectedAsync
         WorkerActivity activity1 = new(
             WorkerRunId: WorkerRunId.New(),
             IssueId: Guid.NewGuid(),
-            LastActivityAt: DateTimeOffset.UtcNow,
-            CommitCount: 2);
+            LastActivityAt: DateTimeOffset.UtcNow);
 
         WorkerActivity activity2 = new(
             WorkerRunId: WorkerRunId.New(),
             IssueId: Guid.NewGuid(),
-            LastActivityAt: DateTimeOffset.UtcNow,
-            CommitCount: 5);
+            LastActivityAt: DateTimeOffset.UtcNow);
 
         SpyWorkerRunQueries queries = new([activity1, activity2]);
         SpyHubCallerClients clients = new();
@@ -68,8 +66,7 @@ public sealed class OnConnectedAsync
         WorkerActivity activity = new(
             WorkerRunId: WorkerRunId.New(),
             IssueId: Guid.NewGuid(),
-            LastActivityAt: DateTimeOffset.UtcNow,
-            CommitCount: 1);
+            LastActivityAt: DateTimeOffset.UtcNow);
 
         SpyWorkerRunQueries queries = new([activity]);
         SpyHubCallerClients clients = new();
@@ -90,8 +87,7 @@ public sealed class OnConnectedAsync
         WorkerActivity activity = new(
             WorkerRunId: WorkerRunId.New(),
             IssueId: Guid.NewGuid(),
-            LastActivityAt: DateTimeOffset.UtcNow,
-            CommitCount: 3);
+            LastActivityAt: DateTimeOffset.UtcNow);
 
         SpyWorkerRunQueries queries = new([activity]);
         SpyHubCallerClients clients = new();
@@ -135,8 +131,7 @@ public sealed class OnConnectedAsync
         WorkerActivity activity = new(
             WorkerRunId: WorkerRunId.New(),
             IssueId: Guid.NewGuid(),
-            LastActivityAt: DateTimeOffset.UtcNow,
-            CommitCount: 1);
+            LastActivityAt: DateTimeOffset.UtcNow);
         AgentActivityStore store = new();
         store.Set(CreateAgentActivity());
         SpyHubCallerClients clients = new();
@@ -239,6 +234,12 @@ public sealed class OnConnectedAsync
             int maxAttempts,
             CancellationToken cancellationToken)
             => Task.FromResult(0);
+
+        public Task<IReadOnlyDictionary<Guid, WorkerRunPublishPhase>> GetPublishPhasesForIssuesAsync(
+            IReadOnlyCollection<Guid> issueIds,
+            CancellationToken cancellationToken)
+            => Task.FromResult<IReadOnlyDictionary<Guid, WorkerRunPublishPhase>>(
+                new Dictionary<Guid, WorkerRunPublishPhase>());
     }
 
     private sealed class SpyHubCallerClients : IHubCallerClients

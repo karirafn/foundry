@@ -443,15 +443,6 @@ EOF
     chmod +x "$FAKE_BIN_DIR/git"
 }
 
-# Write a fake gh that exits non-zero (bootstrap-failure: auth)
-make_fake_gh_fail() {
-    cat > "$FAKE_BIN_DIR/gh" <<'EOF'
-#!/bin/bash
-exit 1
-EOF
-    chmod +x "$FAKE_BIN_DIR/gh"
-}
-
 # Write a fake git where switch exits non-zero (bootstrap-failure: branch)
 make_fake_git_switch_fail() {
     cat > "$FAKE_BIN_DIR/git" <<'EOF'
@@ -498,20 +489,6 @@ EOF
 
     [[ "$output" != *"stage=auth"* ]]
     [[ "$output" != *"stage=branch"* ]]
-}
-
-@test "auth failure emits FOUNDRY_BOOTSTRAP_FAILED stage=auth" {
-    set_required_env
-    make_fake_git
-
-    # Provide GH_TOKEN so the gh auth path is taken; fake gh fails
-    export GH_TOKEN="test-gh-token"
-    make_fake_gh_fail
-
-    run bash "$ENTRYPOINT"
-
-    [ "$status" -ne 0 ]
-    [[ "$output" == *"FOUNDRY_BOOTSTRAP_FAILED stage=auth"* ]]
 }
 
 @test "branch-switch failure emits FOUNDRY_BOOTSTRAP_FAILED stage=branch" {
@@ -652,45 +629,15 @@ EOF
     [ ! -f "$BATS_TEST_TMPDIR/claude_called" ]
 }
 
-@test "gh hostname contains @ guard emits FOUNDRY_BOOTSTRAP_FAILED stage=auth" {
-    set_required_env
-    make_fake_git
-
-    # Craft a CLONE_URL whose hostname-derivation produces a string containing @
-    export CLONE_URL="https://oauth2@github.example.com/org/repo"
-    export GH_TOKEN="test-gh-token"
-
-    run bash "$ENTRYPOINT"
-
-    [ "$status" -ne 0 ]
-    [[ "$output" == *"FOUNDRY_BOOTSTRAP_FAILED stage=auth"* ]]
-}
-
-@test "glab hostname contains @ guard emits FOUNDRY_BOOTSTRAP_FAILED stage=auth" {
-    set_required_env
-    make_fake_git
-
-    # Craft a CLONE_URL whose hostname-derivation produces a string containing @
-    export CLONE_URL="https://oauth2@gitlab.example.com/org/repo"
-    export GITLAB_TOKEN="test-gitlab-token"
-
-    run bash "$ENTRYPOINT"
-
-    [ "$status" -ne 0 ]
-    [[ "$output" == *"FOUNDRY_BOOTSTRAP_FAILED stage=auth"* ]]
-}
-
 # ---------------------------------------------------------------------------
-# Helper: build a sanitized PATH that excludes the system gh and glab binaries
-# while retaining all other tools the entrypoint needs.
-# Required because gh and glab may already be installed on the test host (they
-# are present in the worker image by design); the absent-CLI tests must prevent
-# command -v from finding them. Placing FAKE_BIN_DIR first is insufficient when
-# no fake is written — command -v walks PATH until it finds an executable match.
-# This helper symlinks all /usr/bin and /bin executables EXCEPT gh and glab into
-# a per-test sanitized dir and prepends it, so the real binaries are shadowed.
+# Helper: build a sanitized PATH that excludes the named binaries (e.g.
+# csharp-ls) while retaining all other tools the entrypoint needs.
+# Placing FAKE_BIN_DIR first is insufficient when no fake is written —
+# command -v walks PATH until it finds an executable match.  This helper
+# symlinks all /usr/bin and /bin executables EXCEPT the named ones into a
+# per-test sanitized dir and prepends it, so the real binaries are shadowed.
 make_sanitized_path_without() {
-    # Args: names to exclude (e.g. "gh" or "glab")
+    # Args: names to exclude (e.g. "csharp-ls")
     local exclude_dir="$BATS_TEST_TMPDIR/sanitized-bin"
     mkdir -p "$exclude_dir"
     local excluded=("$@")
@@ -708,61 +655,6 @@ make_sanitized_path_without() {
         done
     done
     printf '%s' "$FAKE_BIN_DIR:$exclude_dir"
-}
-
-@test "missing gh CLI with GH_TOKEN set emits FOUNDRY_BOOTSTRAP_FAILED stage=auth and exits non-zero" {
-    set_required_env
-    make_fake_git
-
-    # GH_TOKEN set but gh absent: build a PATH that excludes the gh binary so
-    # command -v gh finds nothing even when gh is installed on the test host.
-    export GH_TOKEN="test-gh-token"
-    local safe_path
-    safe_path="$(make_sanitized_path_without gh)"
-
-    run env PATH="$safe_path" bash "$ENTRYPOINT"
-
-    [ "$status" -ne 0 ]
-    [[ "$output" == *"FOUNDRY_BOOTSTRAP_FAILED stage=auth"* ]]
-}
-
-@test "missing glab CLI with GITLAB_TOKEN set emits FOUNDRY_BOOTSTRAP_FAILED stage=auth and exits non-zero" {
-    set_required_env
-    make_fake_git
-
-    # GITLAB_TOKEN set but glab absent: build a PATH that excludes the glab binary.
-    export GITLAB_TOKEN="test-gitlab-token"
-    local safe_path
-    safe_path="$(make_sanitized_path_without glab)"
-
-    run env PATH="$safe_path" bash "$ENTRYPOINT"
-
-    [ "$status" -ne 0 ]
-    [[ "$output" == *"FOUNDRY_BOOTSTRAP_FAILED stage=auth"* ]]
-}
-
-# Write a fake gh that exits 0 (CLI present, auth succeeds)
-make_fake_gh_success() {
-    cat > "$FAKE_BIN_DIR/gh" <<'EOF'
-#!/bin/bash
-exit 0
-EOF
-    chmod +x "$FAKE_BIN_DIR/gh"
-}
-
-@test "gh CLI present with GH_TOKEN: no bootstrap failure and claude is invoked" {
-    set_required_env
-    make_fake_git
-    make_fake_claude
-    make_fake_gh_success
-
-    export GH_TOKEN="test-gh-token"
-
-    run bash "$ENTRYPOINT"
-
-    [ "$status" -eq 0 ]
-    [[ "$output" != *"FOUNDRY_BOOTSTRAP_FAILED"* ]]
-    [ -f "$BATS_TEST_TMPDIR/claude_called" ]
 }
 
 @test "invalid BRANCH_NAME characters guard emits FOUNDRY_BOOTSTRAP_FAILED stage=branch" {
@@ -2186,14 +2078,14 @@ EOF
     ! grep -q -- "--plugin-dir /opt/claude-plugins/csharp-lsp" "$BATS_TEST_TMPDIR/claude_args"
 }
 
-@test "csharp lsp entrypoint: the restore runs after gh setup, with no GIT_PAT, immediately before claude" {
+@test "csharp lsp entrypoint: the restore runs with no GIT_PAT and no provider CLI, immediately before claude" {
     set_required_env
     make_fake_git
     make_fake_csharp_ls
     make_fake_dotnet
     make_fake_claude_record_args_transient_then_success
     make_fixture_tree "$FOUNDRY_WORKSPACE_DIR" App.sln
-    export GH_TOKEN="test-gh-token"
+    export GH_TOKEN="test-gh-token" GIT_PAT="ghp_leaked"
     local order_file="$BATS_TEST_TMPDIR/order"
     cat > "$FAKE_BIN_DIR/gh" <<EOF
 #!/bin/bash
@@ -2205,7 +2097,7 @@ EOF
     run bash "$ENTRYPOINT"
 
     [ "$status" -eq 0 ]
-    [ "$(cat "$order_file")" = "$(printf '%s\n' gh 'dotnet GIT_PAT=unset' claude claude)" ]
+    [ "$(cat "$order_file")" = "$(printf '%s\n' 'dotnet GIT_PAT=unset' claude claude)" ]
 }
 
 # ---------------------------------------------------------------------------
@@ -2406,6 +2298,63 @@ expected_verdict_schema() {
     [ ! -f "$BATS_TEST_TMPDIR/claude_called" ]
 }
 
+assert_top_level_combinator_fails_bootstrap() {
+    local keyword="$1"
+    local schema_file="$FOUNDRY_ROLES_DIR/implement/verdict.schema.json"
+    set_required_env
+    make_fake_git
+    make_fake_claude
+    printf '{"type":"object","required":["outcome"],"%s":[{"required":["outcome"]}]}\n' "$keyword" > "$schema_file"
+
+    run bash "$ENTRYPOINT"
+
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"FOUNDRY_BOOTSTRAP_FAILED stage=role"* ]]
+    [[ "$output" == *"$schema_file has a top-level $keyword"* ]]
+    [ ! -f "$BATS_TEST_TMPDIR/claude_called" ]
+    [ ! -d "$FOUNDRY_WORKSPACE_DIR" ]
+}
+
+@test "verdict: a nested allOf under a top-level if/then/else passes to claude unchanged" {
+    set_required_env
+    make_fake_git
+    make_fake_claude_record_args
+    local schema='{"type":"object","required":["outcome"],"properties":{"outcome":{"allOf":[{"enum":["done","needs_input"]}]}},"if":{"properties":{"outcome":{"const":"needs_input"}},"required":["outcome"]},"then":{"required":["questions"]},"else":{"required":["pullRequest"]}}'
+    printf '%s\n' "$schema" > "$FOUNDRY_ROLES_DIR/implement/verdict.schema.json"
+
+    run bash "$ENTRYPOINT"
+
+    [ "$status" -eq 0 ]
+    [[ "$(head -n 1 "$BATS_TEST_TMPDIR/claude_args")" == *"--json-schema $schema"* ]]
+}
+
+@test "verdict: a verdict schema with a top-level allOf fails bootstrap at stage=role before cloning" {
+    assert_top_level_combinator_fails_bootstrap allOf
+}
+
+@test "verdict: a verdict schema with a top-level anyOf fails bootstrap at stage=role before cloning" {
+    assert_top_level_combinator_fails_bootstrap anyOf
+}
+
+@test "verdict: a verdict schema with a top-level oneOf fails bootstrap at stage=role before cloning" {
+    assert_top_level_combinator_fails_bootstrap oneOf
+}
+
+@test "verdict: a verdict schema with several top-level combinators names each one in the bootstrap failure" {
+    set_required_env
+    make_fake_git
+    make_fake_claude
+    printf '%s\n' '{"type":"object","required":["outcome"],"allOf":[{"required":["outcome"]}],"oneOf":[{"required":["outcome"]}]}' > "$FOUNDRY_ROLES_DIR/implement/verdict.schema.json"
+
+    run bash "$ENTRYPOINT"
+
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"FOUNDRY_BOOTSTRAP_FAILED stage=role"* ]]
+    [[ "$output" == *"has a top-level allOf, oneOf"* ]]
+    [ ! -f "$BATS_TEST_TMPDIR/claude_called" ]
+    [ ! -d "$FOUNDRY_WORKSPACE_DIR" ]
+}
+
 # ---------------------------------------------------------------------------
 # Capability profile tests (ADR 0098)
 #
@@ -2567,9 +2516,10 @@ FAKE
     [ "$(sed -n 2p "$BATS_TEST_TMPDIR/claude_args")" = "-c -p test-prompt --dangerously-skip-permissions --output-format stream-json --verbose --max-turns 300 $plugins" ]
 }
 
-@test "capability: a full run keeps its provider token and clones the base bundle" {
+@test "capability: a full run reaches claude with no provider token and clones the base bundle" {
     set_required_env
-    export GH_TOKEN="ghp_push"
+    export GH_TOKEN="ghp_leaked" GITLAB_TOKEN="glpat-leaked" GIT_PAT="ghp_leaked"
+    export BRANCH_NAME="feat/1-work"
     make_fake_git_record_args
     make_fake_provider_clis_record_calls
     make_fake_claude_record_args_and_env_transient_then_success
@@ -2577,9 +2527,14 @@ FAKE
     run bash "$ENTRYPOINT"
 
     [ "$status" -eq 0 ]
-    grep -q '^GH_TOKEN=ghp_push ' "$BATS_TEST_TMPDIR/claude_env"
-    grep -q '^gh auth setup-git' "$BATS_TEST_TMPDIR/provider_cli_calls"
+    [ "$(sort -u "$BATS_TEST_TMPDIR/claude_env")" = "GH_TOKEN=unset GITLAB_TOKEN=unset GIT_PAT=unset BRANCH_NAME=feat/1-work" ]
+    [ ! -f "$BATS_TEST_TMPDIR/provider_cli_calls" ]
+    ! grep -q 'credential' "$BATS_TEST_TMPDIR/git_args"
     [ "$(grep '^clone ' "$BATS_TEST_TMPDIR/git_args")" = "clone --quiet $FOUNDRY_HANDOFF_DIR/in/base.bundle $FOUNDRY_WORKSPACE_DIR" ]
+}
+
+@test "capability: the entrypoint sets up no provider credential helper" {
+    ! grep -Eq 'gh auth setup-git|glab auth git-credential|credential\.' "$ENTRYPOINT"
 }
 
 @test "capability: a missing WORKER_CAPABILITY stops the entrypoint before cloning" {
@@ -2716,7 +2671,8 @@ workspace_git() {
     [ "$status" -eq 0 ]
     [ "$(wc -l < "$BATS_TEST_TMPDIR/claude_env")" -eq 2 ]
     [ "$(grep -c ' GIT_PAT=unset ' "$BATS_TEST_TMPDIR/claude_env")" -eq 2 ]
-    ! grep -q 'GIT_PAT' "$ENTRYPOINT"
+    # The only mention is the defensive unset.
+    [ "$(grep -v '^[[:space:]]*#' "$ENTRYPOINT" | grep 'GIT_PAT')" = "unset GH_TOKEN GITLAB_TOKEN GIT_PAT" ]
 }
 
 @test "bundle: a missing base bundle fails bootstrap at stage=clone before claude" {
@@ -2746,4 +2702,337 @@ workspace_git() {
 @test "entrypoint names /handoff only as the HANDOFF_DIR default" {
     [ "$(grep -v '^[[:space:]]*#' "$ENTRYPOINT" | grep -o '/handoff' | wc -l)" -eq 1 ]
     grep -qx 'readonly HANDOFF_DIR="${FOUNDRY_HANDOFF_DIR:-/handoff}"' "$ENTRYPOINT"
+}
+
+# ---------------------------------------------------------------------------
+# Run bundle tests (ADR 0100, ADR 0101)
+#
+# When claude exits — or the container is stopped with SIGTERM — the entrypoint
+# commits any uncommitted non-ignored changes and writes out/run.bundle holding
+# only the run's commits: HEAD --not origin/<branch> origin/HEAD.  These tests
+# run the real git against a real base bundle; claude is a stub that runs the
+# commands in $BATS_TEST_TMPDIR/claude_actions in the workspace.
+# ---------------------------------------------------------------------------
+
+# make_fake_claude_actions <exit_code> — a claude stub that records its provider
+# environment to claude_env, runs the bash script $BATS_TEST_TMPDIR/claude_actions
+# (if any) in its cwd, then exits with <exit_code>.
+make_fake_claude_actions() {
+    local exit_code="${1:-0}"
+    cat > "$FAKE_BIN_DIR/claude" <<FAKE
+#!/bin/bash
+printf 'GH_TOKEN=%s GITLAB_TOKEN=%s GIT_PAT=%s\n' "\${GH_TOKEN-unset}" "\${GITLAB_TOKEN-unset}" "\${GIT_PAT-unset}" >> "$BATS_TEST_TMPDIR/claude_env"
+if [ -f "$BATS_TEST_TMPDIR/claude_actions" ]; then
+    bash -e "$BATS_TEST_TMPDIR/claude_actions"
+fi
+printf '%s\n' '{"is_error":false,"result":"Completed","subtype":"success","type":"result"}'
+exit ${exit_code}
+FAKE
+    chmod +x "$FAKE_BIN_DIR/claude"
+}
+
+# claude_actions <script> — what the stub claude does in the workspace.
+claude_actions() {
+    printf '%s\n' "$1" > "$BATS_TEST_TMPDIR/claude_actions"
+}
+
+run_bundle() {
+    printf '%s' "$FOUNDRY_HANDOFF_DIR/out/run.bundle"
+}
+
+# bundle_prerequisites — the SHAs the run bundle requires (its "-<sha>" header lines).
+bundle_prerequisites() {
+    sed -n '/^$/q;p' "$(run_bundle)" | sed -n 's/^-\([0-9a-f]*\).*/\1/p'
+}
+
+# bundle_run_commits <exclude>... — the subjects of the commits the bundle carries
+# beyond <exclude>, fetched into the seed repository.
+bundle_run_commits() {
+    command git -C "$BATS_TEST_TMPDIR/seed" fetch --quiet "$(run_bundle)" "HEAD:refs/bundle-tip"
+    command git -C "$BATS_TEST_TMPDIR/seed" log --format=%s refs/bundle-tip --not "$@"
+}
+
+prepare_run_bundle_test() {
+    set_required_env
+    unset GH_TOKEN GITLAB_TOKEN GIT_PAT
+    /bin/mkdir -p "$FOUNDRY_HANDOFF_DIR/out"
+}
+
+@test "run bundle: a fresh run's commits are bundled as HEAD --not origin/HEAD" {
+    prepare_run_bundle_test
+    export BRANCH_NAME="feat/1-fresh"
+    make_base_bundle
+    make_fake_claude_actions 0
+    claude_actions 'echo a > a.txt; git add a.txt; git commit -qm "first"; echo b > b.txt; git add b.txt; git commit -qm "second"'
+
+    run bash "$ENTRYPOINT"
+
+    [ "$status" -eq 0 ]
+    [ -f "$(run_bundle)" ]
+    [ "$(bundle_prerequisites)" = "$(seed_sha main)" ]
+    [ "$(bundle_run_commits main)" = "$(printf '%s\n' second first)" ]
+    [[ "$output" == *"Run bundle: 2 commit(s)"* ]]
+}
+
+@test "run bundle: an existing branch's run bundles only the commits beyond origin/<branch>" {
+    prepare_run_bundle_test
+    export BRANCH_NAME="feat/1-continue"
+    make_base_bundle "feat/1-continue"
+    make_fake_claude_actions 0
+    claude_actions 'git commit -q --allow-empty -m "continued"'
+
+    run bash "$ENTRYPOINT"
+
+    [ "$status" -eq 0 ]
+    [ "$(bundle_run_commits main feat/1-continue)" = "continued" ]
+    bundle_prerequisites | grep -qx "$(seed_sha feat/1-continue)"
+    [[ "$output" == *"Run bundle: 1 commit(s)"* ]]
+}
+
+@test "run bundle: a default-branch commit the run merged in is not part of the bundle" {
+    prepare_run_bundle_test
+    export BRANCH_NAME="feat/1-continue"
+    make_base_bundle "feat/1-continue"
+    # The default branch moves on after the run branch forked, and the base
+    # bundle carries both heads.
+    local seed="$BATS_TEST_TMPDIR/seed"
+    command git -C "$seed" -c user.name=t -c user.email=t@t commit --quiet --allow-empty -m "main moved"
+    command git -C "$seed" bundle create "$FOUNDRY_HANDOFF_DIR/in/base.bundle" HEAD refs/heads/main refs/heads/feat/1-continue > /dev/null 2>&1
+    make_fake_claude_actions 0
+    claude_actions 'git merge -q --no-edit origin/HEAD; git commit -q --allow-empty -m "after merge"'
+
+    run bash "$ENTRYPOINT"
+
+    [ "$status" -eq 0 ]
+    # The merged-in default-branch head is a prerequisite, not bundled content.
+    bundle_prerequisites | grep -qx "$(seed_sha main)"
+    [ "$(bundle_run_commits main feat/1-continue | sed -n 1p)" = "after merge" ]
+    [ "$(bundle_run_commits main feat/1-continue | wc -l)" -eq 2 ]
+    [[ "$(bundle_run_commits main feat/1-continue | sed -n 2p)" == "Merge "* ]]
+}
+
+@test "run bundle: no run commits and a clean tree writes no bundle" {
+    prepare_run_bundle_test
+    export BRANCH_NAME="feat/1-fresh"
+    make_base_bundle
+    make_fake_claude_actions 0
+
+    run bash "$ENTRYPOINT"
+
+    [ "$status" -eq 0 ]
+    [ ! -e "$(run_bundle)" ]
+    [[ "$output" == *"Run bundle: none (no run commits)"* ]]
+    [ -z "$(ls -A "$FOUNDRY_HANDOFF_DIR/out")" ]
+}
+
+@test "run bundle: the sweep commits tracked and untracked non-ignored changes and leaves ignored files out" {
+    prepare_run_bundle_test
+    export BRANCH_NAME="feat/1-fresh"
+    make_base_bundle
+    make_fake_claude_actions 0
+    claude_actions 'printf "*.log\n" > .gitignore; echo one > tracked.txt; git add .gitignore tracked.txt; git commit -qm "work"
+echo two >> tracked.txt; echo new > untracked.txt; echo noise > build.log'
+
+    run bash "$ENTRYPOINT"
+
+    [ "$status" -eq 0 ]
+    [ "$(workspace_git log -1 --format=%s)" = "wip: uncommitted changes at run end" ]
+    [ "$(workspace_git show --name-only --format= HEAD | sort)" = "$(printf '%s\n' tracked.txt untracked.txt)" ]
+    [ -z "$(workspace_git status --porcelain)" ]
+    [ -f "$FOUNDRY_WORKSPACE_DIR/build.log" ]
+    [ "$(bundle_run_commits main)" = "$(printf '%s\n' "wip: uncommitted changes at run end" work)" ]
+    [[ "$output" == *"Run bundle: 2 commit(s)"* ]]
+}
+
+@test "run bundle: the sweep alone produces a bundle when the agent never committed" {
+    prepare_run_bundle_test
+    export BRANCH_NAME="feat/1-fresh"
+    make_base_bundle
+    make_fake_claude_actions 0
+    claude_actions 'echo new > untracked.txt'
+
+    run bash "$ENTRYPOINT"
+
+    [ "$status" -eq 0 ]
+    [ "$(bundle_run_commits main)" = "wip: uncommitted changes at run end" ]
+}
+
+@test "run bundle: the sweep runs no repository hook" {
+    prepare_run_bundle_test
+    export BRANCH_NAME="feat/1-fresh"
+    make_base_bundle
+    make_fake_claude_actions 0
+    claude_actions "mkdir -p .git/hooks; printf '#!/bin/sh\nexit 1\n' > .git/hooks/pre-commit; chmod +x .git/hooks/pre-commit; echo new > untracked.txt"
+
+    run bash "$ENTRYPOINT"
+
+    [ "$status" -eq 0 ]
+    [ "$(workspace_git log -1 --format=%s)" = "wip: uncommitted changes at run end" ]
+}
+
+@test "run bundle: a clean tree gets no sweep commit" {
+    prepare_run_bundle_test
+    export BRANCH_NAME="feat/1-fresh"
+    make_base_bundle
+    make_fake_claude_actions 0
+    claude_actions 'git commit -q --allow-empty -m "only"'
+
+    run bash "$ENTRYPOINT"
+
+    [ "$status" -eq 0 ]
+    [ "$(workspace_git log -1 --format=%s)" = "only" ]
+}
+
+@test "run bundle: the bundle is written world-readable and atomically, leaving no temp file" {
+    prepare_run_bundle_test
+    export BRANCH_NAME="feat/1-fresh"
+    make_base_bundle
+    make_fake_claude_actions 0
+    claude_actions 'git commit -q --allow-empty -m "only"'
+
+    run bash "$ENTRYPOINT"
+
+    [ "$status" -eq 0 ]
+    [ "$(stat -c '%a' "$(run_bundle)")" = "644" ]
+    [ "$(ls -A "$FOUNDRY_HANDOFF_DIR/out")" = "run.bundle" ]
+}
+
+@test "run bundle: a stale out/run.bundle is removed when the run has no commits" {
+    prepare_run_bundle_test
+    export BRANCH_NAME="feat/1-fresh"
+    make_base_bundle
+    make_fake_claude_actions 0
+    claude_actions "echo planted > '$FOUNDRY_HANDOFF_DIR/out/run.bundle'"
+
+    run bash "$ENTRYPOINT"
+
+    [ "$status" -eq 0 ]
+    [ ! -e "$(run_bundle)" ]
+}
+
+@test "run bundle: a failing claude is still swept and bundled and its exit status kept" {
+    prepare_run_bundle_test
+    export BRANCH_NAME="feat/1-fresh"
+    make_base_bundle
+    make_fake_claude_actions 3
+    claude_actions 'echo new > untracked.txt'
+
+    run bash "$ENTRYPOINT"
+
+    [ "$status" -eq 3 ]
+    [ "$(bundle_run_commits main)" = "wip: uncommitted changes at run end" ]
+}
+
+@test "run bundle: the transient-error resume is bundled once, after the resume" {
+    prepare_run_bundle_test
+    export BRANCH_NAME="feat/1-fresh"
+    make_base_bundle
+    cat > "$FAKE_BIN_DIR/claude" <<FAKE
+#!/bin/bash
+echo call >> "$BATS_TEST_TMPDIR/claude_calls"
+n="\$(wc -l < "$BATS_TEST_TMPDIR/claude_calls")"
+git commit -q --allow-empty -m "call \$n"
+if [ "\$n" -eq 1 ]; then
+    printf '%s\n' '{"is_error":true,"api_error_status":503,"result":"API Error","type":"result"}'
+    exit 1
+fi
+printf '%s\n' '{"is_error":false,"result":"Completed","subtype":"success","type":"result"}'
+exit 0
+FAKE
+    chmod +x "$FAKE_BIN_DIR/claude"
+
+    run bash "$ENTRYPOINT"
+
+    [ "$status" -eq 0 ]
+    [ "$(bundle_run_commits main)" = "$(printf '%s\n' 'call 2' 'call 1')" ]
+    [ "$(grep -c 'Run bundle:' <<< "$output")" -eq 1 ]
+}
+
+@test "run bundle: an unwritable out/ is a warning and the run keeps claude's status" {
+    prepare_run_bundle_test
+    export BRANCH_NAME="feat/1-fresh"
+    make_base_bundle
+    rm -rf "$FOUNDRY_HANDOFF_DIR/out"
+    chmod 0555 "$FOUNDRY_HANDOFF_DIR"
+    make_fake_claude_actions 0
+    claude_actions 'git commit -q --allow-empty -m "only"'
+
+    run bash "$ENTRYPOINT"
+    chmod 0755 "$FOUNDRY_HANDOFF_DIR"
+
+    [ "$status" -eq 0 ]
+    [ ! -e "$(run_bundle)" ]
+    [[ "$output" == *"WARNING: "*"run bundle"* ]]
+}
+
+@test "run bundle: a restricted run sweeps nothing and writes no bundle" {
+    prepare_run_bundle_test
+    export WORKER_CAPABILITY="restricted"
+    export BRANCH_NAME="feat/1-leaked"
+    make_base_bundle
+    make_fake_claude_actions 0
+    claude_actions 'echo new > untracked.txt; git commit -q --allow-empty -m "only"'
+
+    run bash "$ENTRYPOINT"
+
+    [ "$status" -eq 0 ]
+    [ ! -e "$(run_bundle)" ]
+    [ "$(workspace_git log -1 --format=%s)" = "only" ]
+    [ -n "$(workspace_git status --porcelain)" ]
+}
+
+@test "run bundle: claude runs with no provider token and no credential helper configured" {
+    prepare_run_bundle_test
+    export GH_TOKEN="ghp_leaked" GITLAB_TOKEN="glpat-leaked" GIT_PAT="ghp_leaked"
+    export BRANCH_NAME="feat/1-fresh"
+    make_base_bundle
+    make_fake_provider_clis_record_calls
+    make_fake_claude_actions 0
+
+    run bash "$ENTRYPOINT"
+
+    [ "$status" -eq 0 ]
+    [ "$(cat "$BATS_TEST_TMPDIR/claude_env")" = "GH_TOKEN=unset GITLAB_TOKEN=unset GIT_PAT=unset" ]
+    [ ! -f "$BATS_TEST_TMPDIR/provider_cli_calls" ]
+    [ -z "$(workspace_git config --get-regexp '^credential' || true)" ]
+    [ -z "$(command git config --global --get-regexp '^credential' || true)" ]
+}
+
+# wait_for_file <path> — polls up to ~10 s for <path> to exist.
+wait_for_file() {
+    local i
+    for i in $(seq 1 100); do
+        [ -e "$1" ] && return 0
+        sleep 0.1
+    done
+    return 1
+}
+
+@test "run bundle: SIGTERM stops claude, then sweeps and bundles before exiting" {
+    prepare_run_bundle_test
+    export BRANCH_NAME="feat/1-fresh"
+    make_base_bundle
+    cat > "$FAKE_BIN_DIR/claude" <<FAKE
+#!/bin/bash
+git commit -q --allow-empty -m "before stop"
+echo dirty > untracked.txt
+trap 'kill "\$sleeper" 2>/dev/null; echo term > "$BATS_TEST_TMPDIR/claude_got_term"; exit 143' TERM
+sleep 30 &
+sleeper=\$!
+touch "$BATS_TEST_TMPDIR/claude_started"
+wait "\$sleeper"
+FAKE
+    chmod +x "$FAKE_BIN_DIR/claude"
+
+    bash "$ENTRYPOINT" > "$BATS_TEST_TMPDIR/stdout" 2> "$BATS_TEST_TMPDIR/stderr" 3>&- &
+    local pid=$!
+    wait_for_file "$BATS_TEST_TMPDIR/claude_started"
+    kill -TERM "$pid"
+    local exit_status=0
+    wait "$pid" || exit_status=$?
+
+    [ "$exit_status" -eq 143 ]
+    [ -f "$BATS_TEST_TMPDIR/claude_got_term" ]
+    [ "$(bundle_run_commits main)" = "$(printf '%s\n' "wip: uncommitted changes at run end" "before stop")" ]
+    grep -q "Run bundle: 2 commit(s)" "$BATS_TEST_TMPDIR/stderr"
 }

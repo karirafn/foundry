@@ -10,6 +10,7 @@ using Foundry.Modules.Workers.Domain.ValueObjects;
 using Foundry.Modules.Workers.Features.Orchestration;
 using Foundry.Modules.Workers.Features.ContainerSpec;
 using Foundry.Modules.Workers.Features.Dispatch;
+using Foundry.Modules.Workers.Features.Publishing;
 using Foundry.Shared;
 using Foundry.WebApi.Persistence;
 
@@ -80,9 +81,11 @@ public sealed class WhenMergedMrAndBranchDeleted : IAsyncDisposable
 
         IServiceScopeFactory scopeFactory = _factory.Services.GetRequiredService<IServiceScopeFactory>();
         using WorkerDispatchService sut = new(scopeFactory, NullLogger<WorkerDispatchService>.Instance, TimeProvider.System);
+        using RunPublishingService publishing = new(scopeFactory, NullLogger<RunPublishingService>.Instance, TimeProvider.System);
 
-        // Act
+        // Act — the exited run publishes first (ADR 0100), then resolves its outcome
         await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
+        await publishing.ExecuteTickAsync(TestContext.Current.CancellationToken);
 
         // Assert
         using IServiceScope assertScope = _factory.Services.CreateScope();

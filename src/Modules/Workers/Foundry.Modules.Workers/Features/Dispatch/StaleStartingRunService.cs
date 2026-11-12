@@ -79,8 +79,9 @@ internal sealed class StaleStartingRunService : PeriodicBackgroundService
             return;
         }
 
-        // Reap containers whose run id falls outside slot occupancy (starting ∪ active).
-        IReadOnlySet<WorkerRunId> slotRunIds = await db.GetSlotOccupancyRunIdsAsync(cancellationToken);
+        // Reap containers and volumes whose run neither occupies a slot nor holds unpublished work (ADR 0100): reaping a
+        // publishing run's leftover container would delete the Hand-off volume with its Run bundle.
+        IReadOnlySet<WorkerRunId> slotRunIds = await db.GetVolumeRetainingRunIdsAsync(cancellationToken);
 
         foreach ((ContainerId containerId, WorkerRunId workerRunId) in labelledContainers)
         {

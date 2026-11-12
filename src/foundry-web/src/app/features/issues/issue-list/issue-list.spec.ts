@@ -1908,6 +1908,39 @@ describe('IssueListComponent', () => {
     expect(tierChips.length).toBe(0);
   });
 
+  // Publish phase (#787): the card's badge receives the issue's publish phase
+  it('should pass the publish phase through to the card badge', () => {
+    // Arrange
+    const publishing: IssueSummary = { ...mockSummary, id: 'pub-1', state: 'in_progress', publishPhase: 'publishing' };
+    const retrying: IssueSummary = { ...mockSummary, id: 'pub-2', state: 'in_progress', issueNumber: 2, publishPhase: 'retrying' };
+    const { fixture, httpMock } = setupComponent();
+    fixture.detectChanges();
+    flushInit(httpMock, [publishing, retrying]);
+
+    // Act
+    fixture.detectChanges();
+
+    // Assert
+    const el = fixture.nativeElement as HTMLElement;
+    const labels = Array.from(el.querySelectorAll('fd-state-badge span')).map((b) => b.textContent?.trim());
+    expect(labels).toEqual(['PUBLISHING', 'PUBLISH RETRY']);
+  });
+
+  it('should not bind a live commit count on the card', () => {
+    // Arrange
+    const live: IssueSummary = { ...mockSummary, id: 'live-1', state: 'in_progress' };
+    const { fixture, httpMock } = setupComponent();
+    fixture.detectChanges();
+    flushInit(httpMock, [live]);
+
+    // Act
+    fixture.detectChanges();
+
+    // Assert
+    const card = fixture.debugElement.query((d) => d.name === 'fd-issue-card');
+    expect('commitCount' in (card.componentInstance as object)).toBe(false);
+  });
+
   // Step 4a: blocked card renders AFTER the ineligible-queue divider (AC5 regression lock)
   it('should render the ineligible-queue divider and place the blocked card after it', () => {
     // Arrange — eligible queued (rank 0), ineligible queued (rank 0, triggers divider), blocked (rank 2)

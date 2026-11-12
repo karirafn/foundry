@@ -43,7 +43,7 @@ public sealed class CancelDetection : WorkerDispatchServiceTestBase
         return run.ShouldNotBeNull();
     }
 
-    private WorkerDispatchService BuildService(
+    private DispatchAndPublishTicker BuildService(
         CancelStubOrchestrator orchestrator,
         StubPostExitProviderQueries? providerQueries = null,
         int timeoutMinutes = 120,
@@ -62,7 +62,7 @@ public sealed class CancelDetection : WorkerDispatchServiceTestBase
         // Arrange
         SeedActiveRun("container-no-cancel");
         CancelStubOrchestrator orchestrator = CancelStubOrchestrator.Running();
-        WorkerDispatchService sut = BuildService(orchestrator);
+        DispatchAndPublishTicker sut = BuildService(orchestrator);
 
         // Act
         await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
@@ -78,7 +78,7 @@ public sealed class CancelDetection : WorkerDispatchServiceTestBase
         // Arrange
         SeedCancelRequestedRun();
         CancelStubOrchestrator orchestrator = CancelStubOrchestrator.Running();
-        WorkerDispatchService sut = BuildService(
+        DispatchAndPublishTicker sut = BuildService(
             orchestrator,
             new StubPostExitProviderQueries(hasCommits: false));
 
@@ -99,7 +99,7 @@ public sealed class CancelDetection : WorkerDispatchServiceTestBase
         // Arrange
         SeedCancelRequestedRun();
         CapturingIntegrationEventDispatcher dispatcher = new();
-        WorkerDispatchService sut = BuildService(
+        DispatchAndPublishTicker sut = BuildService(
             CancelStubOrchestrator.Running(),
             new StubPostExitProviderQueries(hasCommits: false),
             integrationEventDispatcher: dispatcher);
@@ -120,7 +120,7 @@ public sealed class CancelDetection : WorkerDispatchServiceTestBase
         // Arrange
         SeedCancelRequestedRun();
         CapturingIntegrationEventDispatcher dispatcher = new();
-        WorkerDispatchService sut = BuildService(
+        DispatchAndPublishTicker sut = BuildService(
             CancelStubOrchestrator.Running(),
             new StubPostExitProviderQueries(hasCommits: true),
             integrationEventDispatcher: dispatcher);
@@ -141,7 +141,7 @@ public sealed class CancelDetection : WorkerDispatchServiceTestBase
         // Arrange
         SeedCancelRequestedRun();
         CapturingIntegrationEventDispatcher dispatcher = new();
-        WorkerDispatchService sut = BuildService(
+        DispatchAndPublishTicker sut = BuildService(
             CancelStubOrchestrator.Running(),
             new StubPostExitProviderQueries(hasCommitsError: new Error("Provider.Unavailable", "boom")),
             integrationEventDispatcher: dispatcher);
@@ -161,7 +161,7 @@ public sealed class CancelDetection : WorkerDispatchServiceTestBase
         SeedCancelRequestedRun();
         CapturingIntegrationEventDispatcher dispatcher = new();
         Error notFound = new("Provider.BranchNotFound", "Branch not found") { Kind = ErrorKind.NotFound };
-        WorkerDispatchService sut = BuildService(
+        DispatchAndPublishTicker sut = BuildService(
             CancelStubOrchestrator.Running(),
             new StubPostExitProviderQueries(hasCommitsError: notFound),
             integrationEventDispatcher: dispatcher);
@@ -180,7 +180,7 @@ public sealed class CancelDetection : WorkerDispatchServiceTestBase
         // Arrange
         SeedCancelRequestedRun("container-cancel-order");
         CancelStubOrchestrator orchestrator = CancelStubOrchestrator.Running(logs: "partial output");
-        WorkerDispatchService sut = BuildService(orchestrator);
+        DispatchAndPublishTicker sut = BuildService(orchestrator);
 
         // Act
         await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
@@ -197,7 +197,7 @@ public sealed class CancelDetection : WorkerDispatchServiceTestBase
         // Arrange
         SeedCancelRequestedRun();
         CapturingIntegrationEventDispatcher dispatcher = new();
-        WorkerDispatchService sut = BuildService(
+        DispatchAndPublishTicker sut = BuildService(
             CancelStubOrchestrator.Running(),
             new StubPostExitProviderQueries(
                 hasCommits: true,
@@ -221,7 +221,7 @@ public sealed class CancelDetection : WorkerDispatchServiceTestBase
     {
         // Arrange — timeoutMinutes: 0 means the run is also past its timeout
         SeedCancelRequestedRun();
-        WorkerDispatchService sut = BuildService(CancelStubOrchestrator.Running(), timeoutMinutes: 0);
+        DispatchAndPublishTicker sut = BuildService(CancelStubOrchestrator.Running(), timeoutMinutes: 0);
 
         // Act
         await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
@@ -237,7 +237,7 @@ public sealed class CancelDetection : WorkerDispatchServiceTestBase
         // Arrange — container exited 0 with an open PR before the tick
         SeedCancelRequestedRun();
         CancelStubOrchestrator orchestrator = CancelStubOrchestrator.Exited(exitCode: 0);
-        WorkerDispatchService sut = BuildService(
+        DispatchAndPublishTicker sut = BuildService(
             orchestrator,
             new StubPostExitProviderQueries(
                 hasCommits: true,
@@ -256,7 +256,7 @@ public sealed class CancelDetection : WorkerDispatchServiceTestBase
     {
         // Arrange
         SeedCancelRequestedRun();
-        WorkerDispatchService sut = BuildService(
+        DispatchAndPublishTicker sut = BuildService(
             CancelStubOrchestrator.Exited(exitCode: 1),
             new StubPostExitProviderQueries(hasCommits: false));
 
@@ -273,7 +273,7 @@ public sealed class CancelDetection : WorkerDispatchServiceTestBase
     {
         // Arrange
         SeedCancelRequestedRun();
-        WorkerDispatchService sut = BuildService(
+        DispatchAndPublishTicker sut = BuildService(
             CancelStubOrchestrator.Missing(),
             new StubPostExitProviderQueries(hasCommits: false));
 
@@ -291,7 +291,7 @@ public sealed class CancelDetection : WorkerDispatchServiceTestBase
         // Arrange
         SeedCancelRequestedRun();
         CancelStubOrchestrator orchestrator = CancelStubOrchestrator.Unreachable();
-        WorkerDispatchService sut = BuildService(orchestrator);
+        DispatchAndPublishTicker sut = BuildService(orchestrator);
 
         // Act — first tick: daemon unreachable
         await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
@@ -318,7 +318,7 @@ public sealed class CancelDetection : WorkerDispatchServiceTestBase
         SeedCancelRequestedRun();
         CancelStubOrchestrator orchestrator = CancelStubOrchestrator.Running();
         orchestrator.StopContainerThrows = true;
-        WorkerDispatchService sut = BuildService(orchestrator);
+        DispatchAndPublishTicker sut = BuildService(orchestrator);
 
         // Act
         await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);

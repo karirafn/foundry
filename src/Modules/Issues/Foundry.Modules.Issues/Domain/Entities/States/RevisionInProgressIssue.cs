@@ -43,6 +43,40 @@ public sealed class RevisionInProgressIssue : Issue
         return revisionInProgress;
     }
 
+    internal static RevisionInProgressIssue FromPublishFailed(PublishFailedIssue source, RevisionTrigger trigger)
+    {
+        RevisionInProgressIssue revisionInProgress = new(source.Id);
+        revisionInProgress.CopySharedPropertiesFrom(source);
+        revisionInProgress.WorkerRunId = source.WorkerRunId;
+        revisionInProgress.BranchName = source.BranchName;
+        revisionInProgress.PullRequestUrl = source.PullRequestUrl;
+        revisionInProgress.Trigger = trigger;
+        revisionInProgress.ChecksFixAttempts = source.ChecksFixAttempts;
+        revisionInProgress.RebaseConflictAttempts = source.RebaseConflictAttempts;
+        return revisionInProgress;
+    }
+
+    /// <summary>
+    /// The revision's publish retries ran out (ADR 0100); its unpublished work waits for Retry publish.
+    /// </summary>
+    public PublishFailedIssue MarkPublishFailed(string failureReason, DateTimeOffset failedAt)
+    {
+        PublishFailedIssue publishFailed = PublishFailedIssue.FromRevisionInProgress(this, failureReason, failedAt);
+        AddDomainEvent(new Events.IssuePublishFailed(Id, MonitoredRepositoryId));
+        return publishFailed;
+    }
+
+    /// <summary>
+    /// The revision's work could not be merged into the branch someone pushed to during the run, so it went to
+    /// <paramref name="sideBranchName"/> (ADR 0100).
+    /// </summary>
+    public BranchDivergedIssue MarkBranchDiverged(string sideBranchName)
+    {
+        BranchDivergedIssue diverged = BranchDivergedIssue.FromRevisionInProgress(this, sideBranchName);
+        AddDomainEvent(new Events.IssueBranchDiverged(Id, MonitoredRepositoryId));
+        return diverged;
+    }
+
     // MarkInReview and MarkUnchanged perform the same state transition — both return the issue to ReviewIssue
     // carrying the existing BranchName and PullRequestUrl forward. The two-name distinction is intentional:
     // MarkInReview signals that the revision produced (or updated) a PR; MarkUnchanged signals that the worker

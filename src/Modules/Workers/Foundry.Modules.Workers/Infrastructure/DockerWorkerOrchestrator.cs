@@ -24,6 +24,13 @@ internal sealed class DockerWorkerOrchestrator(IDockerContainerRuntime runtime) 
     private const int DockerErrorMessageMaxLength = 500;
     private const int ContainerOutputMaxBytes = 65_536;
 
+    /// <summary>
+    /// How long a stopped worker gets between SIGTERM and SIGKILL. The entrypoint uses it to stop claude, commit the
+    /// uncommitted work and write the Run bundle (ADR 0100), so it must outlast a large repository's sweep and bundle,
+    /// yet stay under the Docker client's 100-second request timeout.
+    /// </summary>
+    internal const int WorkerStopGracePeriodSeconds = 90;
+
     internal static DeviceMapping MapDevice(string devicePath) =>
         new()
         {
@@ -179,9 +186,29 @@ internal sealed class DockerWorkerOrchestrator(IDockerContainerRuntime runtime) 
     public async Task StopAndRemoveAsync(string containerId, CancellationToken cancellationToken)
     {
         string? workerRunId = await ReadWorkerRunIdAsync(containerId, cancellationToken);
-        await runtime.StopAsync(containerId, 10, cancellationToken);
+        await runtime.StopAsync(containerId, WorkerStopGracePeriodSeconds, cancellationToken);
         await runtime.RemoveAsync(containerId, cancellationToken);
-        await TryDeleteRunVolumesAsync(workerRunId, cancellationToken);
+        await TryDeleteRunVolumesAsync(workerRunId, includeHandOff: true, cancellationToken);
+    }
+
+    public async Task StopAndRemoveKeepingHandOffAsync(string containerId, CancellationToken cancellationToken)
+    {
+        string? workerRunId = await ReadWorkerRunIdAsync(containerId, cancellationToken);
+        await runtime.StopAsync(containerId, WorkerStopGracePeriodSeconds, cancellationToken);
+        await runtime.RemoveAsync(containerId, cancellationToken);
+        await TryDeleteRunVolumesAsync(workerRunId, includeHandOff: false, cancellationToken);
+    }
+
+    public async Task DeleteHandOffVolumeAsync(WorkerRunId runId, CancellationToken cancellationToken)
+    {
+        try
+        {
+            await runtime.RemoveVolumeAsync(WorkerVolumeNames.HandOffVolumeName(runId), force: true, cancellationToken);
+        }
+        catch (DockerApiException)
+        {
+            // Best-effort: the orphan sweep removes a Hand-off volume whose run no longer holds one.
+        }
     }
 
     public async Task<WorkerStatusProbe> GetStatusAsync(
@@ -291,14 +318,14 @@ internal sealed class DockerWorkerOrchestrator(IDockerContainerRuntime runtime) 
 
     public async Task StopContainerAsync(string containerId, CancellationToken cancellationToken)
     {
-        await runtime.StopAsync(containerId, 10, cancellationToken);
+        await runtime.StopAsync(containerId, WorkerStopGracePeriodSeconds, cancellationToken);
     }
 
     public async Task RemoveContainerAsync(string containerId, CancellationToken cancellationToken)
     {
         string? workerRunId = await ReadWorkerRunIdAsync(containerId, cancellationToken);
         await runtime.RemoveAsync(containerId, cancellationToken);
-        await TryDeleteRunVolumesAsync(workerRunId, cancellationToken);
+        await TryDeleteRunVolumesAsync(workerRunId, includeHandOff: true, cancellationToken);
     }
 
     public async Task ReapOrphanedDataRootVolumesAsync(
@@ -362,6 +389,7 @@ internal sealed class DockerWorkerOrchestrator(IDockerContainerRuntime runtime) 
     // data-root and the Hand-off volume (ADR 0100).
     private async Task TryDeleteRunVolumesAsync(
         string? workerRunId,
+        bool includeHandOff,
         CancellationToken cancellationToken)
     {
         if (string.IsNullOrEmpty(workerRunId) || !Guid.TryParse(workerRunId, out Guid guid))
@@ -370,7 +398,10 @@ internal sealed class DockerWorkerOrchestrator(IDockerContainerRuntime runtime) 
         }
 
         WorkerRunId runId = WorkerRunId.From(guid);
-        foreach (string volumeName in (string[])[WorkerVolumeNames.DataRootVolumeName(runId), WorkerVolumeNames.HandOffVolumeName(runId)])
+        string[] volumeNames = includeHandOff
+            ? [WorkerVolumeNames.DataRootVolumeName(runId), WorkerVolumeNames.HandOffVolumeName(runId)]
+            : [WorkerVolumeNames.DataRootVolumeName(runId)];
+        foreach (string volumeName in volumeNames)
         {
             try
             {

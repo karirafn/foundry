@@ -23,27 +23,23 @@ namespace Foundry.UnitTests.Modules.Workers.Features.Dispatch.WorkerDispatchServ
 
 /// <summary>
 /// Verifies that the reconciliation tick records activity from container liveness (not log growth)
-/// and records commits from the provider on still-running workers.
+/// on still-running workers; no commit count is observed while a run works (ADR 0100).
 /// </summary>
 public sealed class RunningWorkerActivityTracking : WorkerDispatchServiceTestBase
 {
-    private WorkerDispatchService BuildService(
+    private DispatchAndPublishTicker BuildService(
         IWorkerOrchestrator orchestrator,
         IPostExitProviderQueries? postExitProviderQueries = null,
         IDomainEventDispatcher? domainEventDispatcher = null,
         CapturingLogger? logger = null,
-        TimeProvider? timeProvider = null,
-        IWebhookStatusQueries? webhookStatusQueries = null,
-        RunningBranchCompareGate? compareGate = null)
+        TimeProvider? timeProvider = null)
     {
         return base.BuildService(
             orchestrator,
             postExitProviderQueries: postExitProviderQueries,
             domainEventDispatcher: domainEventDispatcher,
             logger: logger,
-            timeProvider: timeProvider,
-            webhookStatusQueries: webhookStatusQueries,
-            compareGate: compareGate);
+            timeProvider: timeProvider);
     }
 
     [Fact]
@@ -53,7 +49,7 @@ public sealed class RunningWorkerActivityTracking : WorkerDispatchServiceTestBas
         SeedActiveRun("running-activity-alive");
         WorkerStatus runningStatus = new(IsRunning: true, ExitCode: null, FinishedAt: null);
         ConstantStatusOrchestrator orchestrator = new(runningStatus);
-        WorkerDispatchService sut = BuildService(orchestrator);
+        DispatchAndPublishTicker sut = BuildService(orchestrator);
 
         // Tick 1: reconciliation
         await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
@@ -76,7 +72,7 @@ public sealed class RunningWorkerActivityTracking : WorkerDispatchServiceTestBas
         WorkerStatus runningStatus = new(IsRunning: true, ExitCode: null, FinishedAt: null);
         // ScriptedLogsOrchestrator returns null for both ticks — no log output
         ScriptedLogsOrchestrator orchestrator = new(runningStatus, firstLogs: null, secondLogs: null);
-        WorkerDispatchService sut = BuildService(orchestrator);
+        DispatchAndPublishTicker sut = BuildService(orchestrator);
 
         // Tick 1: reconciliation
         await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
@@ -100,7 +96,7 @@ public sealed class RunningWorkerActivityTracking : WorkerDispatchServiceTestBas
         WorkerStatus runningStatus = new(IsRunning: true, ExitCode: null, FinishedAt: null);
         ConstantStatusOrchestrator orchestrator = new(runningStatus);
         SteppingTimeProvider timeProvider = new();
-        WorkerDispatchService sut = BuildService(orchestrator, timeProvider: timeProvider);
+        DispatchAndPublishTicker sut = BuildService(orchestrator, timeProvider: timeProvider);
 
         // Tick 1: reconciliation
         await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
@@ -125,91 +121,13 @@ public sealed class RunningWorkerActivityTracking : WorkerDispatchServiceTestBas
     }
 
     [Fact]
-    public async Task WhenRunningWorkerHasNewCommit_BranchCommitCountRecorded()
-    {
-        // Arrange
-        SeedActiveRun("running-commit-record");
-        WorkerStatus runningStatus = new(IsRunning: true, ExitCode: null, FinishedAt: null);
-        BranchCommitSummary commit = new(CommitCount: 1, LatestSha: "sha-abc123");
-        ConstantStatusOrchestrator orchestrator = new(runningStatus);
-        ScriptedCommitProviderQueries queries = new(firstSummary: null, secondSummary: commit);
-        WorkerDispatchService sut = BuildService(orchestrator, queries);
-
-        // Tick 1: reconciliation — no commit yet
-        await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
-
-        // Act — Tick 2: new commit observed
-        await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
-
-        // Assert
-        await using FoundryDbContext assertDb = CreateDbContext();
-        WorkerRun? run = await assertDb.Set<WorkerRun>().SingleOrDefaultAsync(TestContext.Current.CancellationToken);
-        ActiveRun activeRun = run.ShouldBeOfType<ActiveRun>();
-        activeRun.BranchCommitCount.ShouldBe(1);
-        activeRun.LastObservedCommitSha.ShouldBe("sha-abc123");
-    }
-
-    [Fact]
-    public async Task WhenRunningWorkerSameCommitTwice_BranchCommitCountUpdatedNoEvent()
-    {
-        // Arrange — same SHA returned on both tick 2 and tick 3
-        SeedActiveRun("running-commit-dedup");
-        WorkerStatus runningStatus = new(IsRunning: true, ExitCode: null, FinishedAt: null);
-        BranchCommitSummary commit = new(CommitCount: 1, LatestSha: "sha-dedup");
-        // Both ticks return the same commit
-        ConstantStatusOrchestrator orchestrator = new(runningStatus);
-        ConstantCommitProviderQueries queries = new(commit);
-        WorkerDispatchService sut = BuildService(orchestrator, queries);
-
-        // Tick 1: reconciliation
-        await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
-
-        // Tick 2: first time seeing commit — count set, event raised
-        await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
-
-        // Act — Tick 3: same commit SHA again — count updated, no new event
-        await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
-
-        // Assert — count remains 1 (same SHA, no rebase)
-        await using FoundryDbContext assertDb = CreateDbContext();
-        WorkerRun? run = await assertDb.Set<WorkerRun>().SingleOrDefaultAsync(TestContext.Current.CancellationToken);
-        ActiveRun activeRun = run.ShouldBeOfType<ActiveRun>();
-        activeRun.BranchCommitCount.ShouldBe(1);
-    }
-
-    [Fact]
-    public async Task WhenCommitProviderReturnsFailure_ActivityStillRecordedFromContainerAlive()
-    {
-        // Arrange — provider fails; activity comes from container-alive, not from logs
-        SeedActiveRun("running-provider-fail");
-        WorkerStatus runningStatus = new(IsRunning: true, ExitCode: null, FinishedAt: null);
-        // No log output — activity must be from container liveness only
-        ConstantStatusOrchestrator orchestrator = new(runningStatus);
-        FailingCommitProviderQueries queries = new();
-        WorkerDispatchService sut = BuildService(orchestrator, queries);
-
-        // Tick 1: reconciliation
-        await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
-
-        // Act — Tick 2: provider fails, but container is alive
-        await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
-
-        // Assert — activity recorded from container-alive; commit count stays zero; no exception thrown
-        await using FoundryDbContext assertDb = CreateDbContext();
-        WorkerRun? run = await assertDb.Set<WorkerRun>().SingleOrDefaultAsync(TestContext.Current.CancellationToken);
-        ActiveRun activeRun = run.ShouldBeOfType<ActiveRun>();
-        activeRun.LastActivityAt.ShouldNotBeNull();
-        activeRun.BranchCommitCount.ShouldBe(0);
-    }
-
-    [Fact]
     public async Task WhenRunningWorkerHasNoNewOutputAndNoNewCommit_RunRemainsActivePersisted()
     {
         // Arrange — no change on tick 2
         SeedActiveRun("running-no-change");
         WorkerStatus runningStatus = new(IsRunning: true, ExitCode: null, FinishedAt: null);
         ScriptedLogsOrchestrator orchestrator = new(runningStatus, firstLogs: null, secondLogs: null);
-        WorkerDispatchService sut = BuildService(orchestrator);
+        DispatchAndPublishTicker sut = BuildService(orchestrator);
 
         // Tick 1: reconciliation
         await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
@@ -223,320 +141,7 @@ public sealed class RunningWorkerActivityTracking : WorkerDispatchServiceTestBas
         run.ShouldBeOfType<ActiveRun>();
     }
 
-    [Fact]
-    public async Task WhenCommitProviderReturnsNotFound_BranchCommitCountSetToZero()
-    {
-        // Arrange — run already has a commit count (from tick 2), then provider returns NotFound on tick 3
-        SeedActiveRun("running-notfound");
-        WorkerStatus runningStatus = new(IsRunning: true, ExitCode: null, FinishedAt: null);
-        BranchCommitSummary priorCommit = new(CommitCount: 3, LatestSha: "sha-prior");
-        ScriptedLogsOrchestrator orchestrator = new(runningStatus, firstLogs: null, secondLogs: null);
-        // Tick 1 (reconcile): fail → count stays 0.
-        // Tick 2: success → count 3.
-        // Tick 3: NotFound → count reset to 0.
-        SuccessThenNotFoundCommitProviderQueries queries = new(priorCommit);
-        WorkerDispatchService sut = BuildService(orchestrator, queries);
-
-        // Tick 1: reconciliation — commit query fails, count stays 0
-        await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
-
-        // Tick 2: commit arrives, count = 3
-        await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
-
-        // Act — Tick 3: NotFound — count must reset to 0
-        await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
-
-        // Assert — commit count is 0 (NotFound treated as branch gone)
-        await using FoundryDbContext assertDb = CreateDbContext();
-        WorkerRun? run = await assertDb.Set<WorkerRun>().SingleOrDefaultAsync(TestContext.Current.CancellationToken);
-        ActiveRun activeRun = run.ShouldBeOfType<ActiveRun>();
-        activeRun.BranchCommitCount.ShouldBe(0);
-    }
-
-    [Fact]
-    public async Task WhenCommitProviderReturnsGenericError_BranchCommitCountUnchanged()
-    {
-        // Arrange — run has an existing commit count (tick 1 succeeds via constant queries),
-        //           then tick 2 provider fails with a generic (non-NotFound) error.
-        //           The count from tick 1 must survive untouched.
-        //           Uses ConstantCommitProviderQueries for tick 1 success (count=2),
-        //           then a ConstantFailingCommitProviderQueries for tick 2 failure.
-        SeedActiveRun("running-generic-err");
-        WorkerStatus runningStatus = new(IsRunning: true, ExitCode: null, FinishedAt: null);
-        BranchCommitSummary commit = new(CommitCount: 2, LatestSha: "sha-prior");
-        ScriptedLogsOrchestrator orchestrator = new(runningStatus, firstLogs: null, secondLogs: null);
-
-        // Tick 1: success → count 2.
-        // Tick 2: generic error → count must stay 2.
-        ScriptedThenFailingCommitProviderQueries queries = new(commit);
-        CapturingLogger capturingLogger = new();
-        WorkerDispatchService sut = BuildService(orchestrator, queries, logger: capturingLogger);
-
-        // Tick 1: commit arrives (count → 2); provider succeeds on first call
-        await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
-        int warningsAfterTick1 = capturingLogger.Entries.Count(e => e.Level == LogLevel.Warning);
-
-        // Act — Tick 2: provider fails with generic error
-        await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
-
-        // Assert — count unchanged from tick 1
-        await using FoundryDbContext assertDb = CreateDbContext();
-        WorkerRun? run = await assertDb.Set<WorkerRun>().SingleOrDefaultAsync(TestContext.Current.CancellationToken);
-        ActiveRun activeRun = run.ShouldBeOfType<ActiveRun>();
-        activeRun.BranchCommitCount.ShouldBe(2);
-
-        // Assert — exactly one warning logged for tick 2's generic provider error
-        int warningsAfterTick2 = capturingLogger.Entries.Count(e => e.Level == LogLevel.Warning);
-        (warningsAfterTick2 - warningsAfterTick1).ShouldBe(1, "exactly one warning per generic provider failure");
-    }
-
-    [Fact]
-    public async Task WhenBranchIsRebased_CommitCountDecreases()
-    {
-        // Arrange — first commit has count 5, then rebase reduces it to 2
-        SeedActiveRun("running-rebase");
-        WorkerStatus runningStatus = new(IsRunning: true, ExitCode: null, FinishedAt: null);
-        BranchCommitSummary firstCommit = new(CommitCount: 5, LatestSha: "sha-before-rebase");
-        BranchCommitSummary rebasedCommit = new(CommitCount: 2, LatestSha: "sha-after-rebase");
-        ScriptedLogsOrchestrator orchestrator = new(runningStatus, firstLogs: null, secondLogs: null);
-        // Tick 1 returns firstCommit, tick 2 returns rebasedCommit
-        ScriptedCommitProviderQueries queries = new(firstSummary: firstCommit, secondSummary: rebasedCommit);
-        WorkerDispatchService sut = BuildService(orchestrator, queries);
-
-        // Tick 1: reconciliation — first commit observed
-        await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
-
-        // Act — Tick 2: rebase, fewer commits
-        await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
-
-        // Assert — count decreased
-        await using FoundryDbContext assertDb = CreateDbContext();
-        WorkerRun? run = await assertDb.Set<WorkerRun>().SingleOrDefaultAsync(TestContext.Current.CancellationToken);
-        ActiveRun activeRun = run.ShouldBeOfType<ActiveRun>();
-        activeRun.BranchCommitCount.ShouldBe(2);
-        activeRun.LastObservedCommitSha.ShouldBe("sha-after-rebase");
-    }
-
-    [Fact]
-    public async Task WhenShaUnchangedOnSecondTick_OnlyOneWorkerActivityEventDispatchedPerTick()
-    {
-        // Arrange — same commit SHA returned on every tick; container always running.
-        // RecordActivity fires once per tick (container-alive). RecordBranchCommitCount fires once
-        // when the SHA first appears, then guards on subsequent ticks (same count + SHA).
-        SeedActiveRun("running-sha-unchanged");
-        WorkerStatus runningStatus = new(IsRunning: true, ExitCode: null, FinishedAt: null);
-        BranchCommitSummary commit = new(CommitCount: 1, LatestSha: "sha-stable");
-        ScriptedLogsOrchestrator orchestrator = new(runningStatus, firstLogs: null, secondLogs: null);
-        ConstantCommitProviderQueries queries = new(commit);
-        CapturingDomainEventDispatcher capturingDispatcher = new();
-        WorkerDispatchService sut = BuildService(orchestrator, queries, capturingDispatcher);
-
-        // Tick 1: reconciliation + observation — RecordActivity fires (1 event),
-        //         RecordBranchCommitCount fires first time (SHA changed: null → sha-stable, 1 event).
-        //         Total after tick 1: 2 events.
-        await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
-        int eventsAfterTick1 = capturingDispatcher.DispatchedEvents
-            .Count(e => e is WorkerActivityObserved);
-
-        // Tick 2: commit seen again with same SHA — RecordActivity fires (1 event),
-        //         RecordBranchCommitCount guards (same count + SHA, 0 events).
-        //         Total after tick 2: eventsAfterTick1 + 1.
-        await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
-        int eventsAfterTick2 = capturingDispatcher.DispatchedEvents
-            .Count(e => e is WorkerActivityObserved);
-
-        // Act — Tick 3: same SHA again — only RecordActivity fires (1 event).
-        await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
-
-        // Assert — each tick with an unchanged SHA raises exactly one WorkerActivityObserved
-        //          (from RecordActivity only, not from RecordBranchCommitCount).
-        int eventsAfterTick3 = capturingDispatcher.DispatchedEvents
-            .Count(e => e is WorkerActivityObserved);
-        (eventsAfterTick2 - eventsAfterTick1).ShouldBe(1, "tick 2 (unchanged SHA) adds exactly one event via RecordActivity");
-        (eventsAfterTick3 - eventsAfterTick2).ShouldBe(1, "tick 3 (unchanged SHA) adds exactly one event via RecordActivity");
-    }
-
-    [Fact]
-    public async Task WhenHostRestartWithPersistedSha_NoCommitEventRaisedForAlreadySeenSha()
-    {
-        // Arrange — seed an ActiveRun that already has a LastObservedCommitSha persisted
-        //           (simulates a host restart where the service's in-memory state is lost).
-        //           RecordBranchCommitCount guards on (count == persisted && sha == persisted)
-        //           so no commit-path event fires after restart.
-        //           RecordActivity fires per tick (container-alive), but with a distinct event count.
-        const string persistedSha = "sha-already-seen";
-        ActiveRun runWithHistory = new ActiveRunBuilder()
-            .WithContainerId(ContainerId.From("container-restart"))
-            .WithBranchName(BranchName.From("feat/1-restart"))
-            .WithObservedCommit(count: 3, sha: persistedSha);
-        await using (FoundryDbContext seedDb = CreateDbContext())
-        {
-            seedDb.Set<WorkerRun>().Add(runWithHistory);
-            await seedDb.SaveChangesAsync(TestContext.Current.CancellationToken);
-        }
-
-        WorkerStatus runningStatus = new(IsRunning: true, ExitCode: null, FinishedAt: null);
-        BranchCommitSummary sameCommit = new(CommitCount: 3, LatestSha: persistedSha);
-        ConstantStatusOrchestrator orchestrator = new(runningStatus);
-        ConstantCommitProviderQueries queries = new(sameCommit);
-        CapturingDomainEventDispatcher capturingDispatcher = new();
-        WorkerDispatchService sut = BuildService(orchestrator, queries, capturingDispatcher);
-
-        // Act — two ticks after restart; each calls ObserveRunningWorkerAsync
-        await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
-        await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
-
-        // Assert — every WorkerActivityObserved has CommitCount == 3 (the persisted SHA),
-        //          meaning RecordBranchCommitCount did NOT fire a separate event with a new count.
-        //          All events come from RecordActivity (container-alive) carrying the existing count.
-        IReadOnlyList<WorkerActivityObserved> activityEvents = capturingDispatcher.DispatchedEvents
-            .OfType<WorkerActivityObserved>()
-            .ToList();
-        activityEvents.ShouldNotBeEmpty("RecordActivity fires on each observation");
-        activityEvents.ShouldAllBe(e => e.CommitCount == 3, "commit count unchanged — no commit-path event fired");
-    }
-
     // ─── push-webhook driven compares (issue #660) ────────────────────────────
-
-    [Fact]
-    public async Task WhenWebhookIsNotActive_CompareRunsOnEveryTick()
-    {
-        // Arrange
-        SeedActiveRun("push-not-active");
-        ConstantStatusOrchestrator orchestrator = new(new WorkerStatus(IsRunning: true, ExitCode: null, FinishedAt: null));
-        CountingCommitProviderQueries queries = new(new BranchCommitSummary(CommitCount: 1, LatestSha: "sha-1"));
-        WorkerDispatchService sut = BuildService(
-            orchestrator,
-            queries,
-            webhookStatusQueries: new StubWebhookStatusQueries(isActive: false));
-
-        // Act
-        await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
-        await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
-        await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
-
-        // Assert — exactly as before: one compare per tick
-        queries.CompareCount.ShouldBe(3);
-    }
-
-    [Fact]
-    public async Task WhenWebhookIsActiveAndNoPushArrives_CompareRunsOnlyOnFirstObservation()
-    {
-        // Arrange
-        SeedActiveRun("push-active-no-push");
-        ConstantStatusOrchestrator orchestrator = new(new WorkerStatus(IsRunning: true, ExitCode: null, FinishedAt: null));
-        CountingCommitProviderQueries queries = new(new BranchCommitSummary(CommitCount: 1, LatestSha: "sha-1"));
-        WorkerDispatchService sut = BuildService(
-            orchestrator,
-            queries,
-            webhookStatusQueries: new StubWebhookStatusQueries(isActive: true));
-
-        // Act
-        await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
-        await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
-        await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
-
-        // Assert — the first observation covers pushes that arrived before the run was running;
-        //          after that the per-tick compare is skipped.
-        queries.CompareCount.ShouldBe(1);
-
-        await using FoundryDbContext assertDb = CreateDbContext();
-        ActiveRun run = (await assertDb.Set<WorkerRun>().SingleAsync(TestContext.Current.CancellationToken)).ShouldBeOfType<ActiveRun>();
-        run.BranchCommitCount.ShouldBe(1);
-        run.LastActivityAt.ShouldNotBeNull("liveness is still recorded on every tick");
-    }
-
-    [Fact]
-    public async Task WhenWebhookIsActiveAndBranchIsPushed_NextTickComparesAndRecordsCount()
-    {
-        // Arrange
-        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
-        SeedActiveRun("push-active-pushed", branchName: "feat/7-push", monitoredRepositoryId: repositoryId);
-        ConstantStatusOrchestrator orchestrator = new(new WorkerStatus(IsRunning: true, ExitCode: null, FinishedAt: null));
-        CountingCommitProviderQueries queries = new(new BranchCommitSummary(CommitCount: 0, LatestSha: null));
-        RunningBranchCompareGate gate = new();
-        CapturingDomainEventDispatcher dispatcher = new();
-        WorkerDispatchService sut = BuildService(
-            orchestrator,
-            queries,
-            dispatcher,
-            webhookStatusQueries: new StubWebhookStatusQueries(isActive: true),
-            compareGate: gate);
-
-        await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
-        await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
-        queries.CompareCount.ShouldBe(1);
-
-        // Act — the worker pushes; the push webhook reaches Workers via ProviderBranchPushed
-        queries.Summary = new BranchCommitSummary(CommitCount: 2, LatestSha: "sha-pushed");
-        await new ProviderBranchPushedHandler(gate).HandleAsync(
-            new ProviderBranchPushed(repositoryId, "feat/7-push"),
-            TestContext.Current.CancellationToken);
-        await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
-
-        // Assert — one compare for the push, count recorded with a WorkerActivityObserved
-        queries.CompareCount.ShouldBe(2);
-        await using FoundryDbContext assertDb = CreateDbContext();
-        ActiveRun run = (await assertDb.Set<WorkerRun>().SingleAsync(TestContext.Current.CancellationToken)).ShouldBeOfType<ActiveRun>();
-        run.BranchCommitCount.ShouldBe(2);
-        run.LastObservedCommitSha.ShouldBe("sha-pushed");
-        dispatcher.DispatchedEvents.OfType<WorkerActivityObserved>().ShouldContain(e => e.CommitCount == 2);
-    }
-
-    [Fact]
-    public async Task WhenSeveralPushesArriveWithinOneTick_OnlyOneCompareRuns()
-    {
-        // Arrange
-        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
-        SeedActiveRun("push-burst", branchName: "feat/8-burst", monitoredRepositoryId: repositoryId);
-        ConstantStatusOrchestrator orchestrator = new(new WorkerStatus(IsRunning: true, ExitCode: null, FinishedAt: null));
-        CountingCommitProviderQueries queries = new(new BranchCommitSummary(CommitCount: 1, LatestSha: "sha-1"));
-        RunningBranchCompareGate gate = new();
-        WorkerDispatchService sut = BuildService(
-            orchestrator,
-            queries,
-            webhookStatusQueries: new StubWebhookStatusQueries(isActive: true),
-            compareGate: gate);
-
-        await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
-        queries.CompareCount.ShouldBe(1);
-
-        // Act — three pushes within the 10 s cadence, then two ticks
-        gate.RecordPush(repositoryId, "feat/8-burst");
-        gate.RecordPush(repositoryId, "feat/8-burst");
-        gate.RecordPush(repositoryId, "feat/8-burst");
-        await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
-        await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
-
-        // Assert — the burst coalesced into one compare
-        queries.CompareCount.ShouldBe(2);
-    }
-
-    [Fact]
-    public async Task WhenPushTargetsAnotherBranch_RunIsNotCompared()
-    {
-        // Arrange
-        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
-        SeedActiveRun("push-other-branch", branchName: "feat/9-mine", monitoredRepositoryId: repositoryId);
-        ConstantStatusOrchestrator orchestrator = new(new WorkerStatus(IsRunning: true, ExitCode: null, FinishedAt: null));
-        CountingCommitProviderQueries queries = new(new BranchCommitSummary(CommitCount: 1, LatestSha: "sha-1"));
-        RunningBranchCompareGate gate = new();
-        WorkerDispatchService sut = BuildService(
-            orchestrator,
-            queries,
-            webhookStatusQueries: new StubWebhookStatusQueries(isActive: true),
-            compareGate: gate);
-
-        await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
-
-        // Act
-        gate.RecordPush(repositoryId, "main");
-        gate.RecordPush(MonitoredRepositoryId.New(), "feat/9-mine");
-        await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
-
-        // Assert
-        queries.CompareCount.ShouldBe(1);
-    }
 
     // ─── orchestrator / query stubs ──────────────────────────────────────────
 
