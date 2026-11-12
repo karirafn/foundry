@@ -120,7 +120,7 @@ public sealed class IssueContentRendering
             () => prompt.ShouldContain("comment-40 "),
             () => prompt.ShouldNotContain("comment-01 "),
             () => prompt.ShouldMatch(@"Note: \d+ earlier comment\(s\) were omitted to fit the prompt size budget\."),
-            () => prompt.ShouldEndWith("Check out and push to that branch."));
+            () => prompt.ShouldEndWith("Check out that branch and commit your work on it."));
     }
 
     [Fact]

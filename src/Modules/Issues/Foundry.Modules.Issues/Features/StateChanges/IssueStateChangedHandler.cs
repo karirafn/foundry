@@ -5,9 +5,13 @@ namespace Foundry.Modules.Issues.Features.StateChanges;
 
 internal sealed class IssueStateChangedHandler(IIssueQueries issueQueries, IIssueBroadcaster broadcaster)
 {
-    public async Task HandleAsync(IIssueStateChanged @event, CancellationToken cancellationToken)
+    public Task HandleAsync(IIssueStateChanged @event, CancellationToken cancellationToken)
+        => BroadcastSummaryAsync(@event.IssueId, cancellationToken);
+
+    /// <summary>Broadcasts the issue's current summary, or nothing when the issue no longer exists.</summary>
+    public async Task BroadcastSummaryAsync(IssueId issueId, CancellationToken cancellationToken)
     {
-        IssueSummary? summary = await issueQueries.GetIssueSummaryAsync(@event.IssueId, cancellationToken);
+        IssueSummary? summary = await issueQueries.GetIssueSummaryAsync(issueId, cancellationToken);
 
         if (summary is null)
         {

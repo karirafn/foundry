@@ -15,6 +15,7 @@ using Foundry.Modules.Monitoring.Features.Rebase;
 using Foundry.Modules.Monitoring.Features.Providers;
 using Foundry.Modules.Monitoring.Features.Providers.Comments;
 using Foundry.Modules.Monitoring.Features.Providers.Feedback;
+using Foundry.Modules.Monitoring.Features.Providers.Publishing;
 using Foundry.Modules.Monitoring.Features.RateBudget;
 using Foundry.Modules.Monitoring.Features.Repositories;
 using Foundry.Modules.Monitoring.Features.Webhooks;
@@ -79,6 +80,7 @@ public static class MonitoringModule
         services.AddScoped<IIssueBlockerQueries, PostExitProviderQueries>();
         services.AddScoped<IFailingJobLogQueries, PostExitProviderQueries>();
         services.AddScoped<IIssueContentQueries, PostExitProviderQueries>();
+        services.AddScoped<IRunPublishingCommands, RunPublishingCommands>();
         services.AddScoped<RepositoryPoller>();
         services.AddScoped<RebaseStep>();
         services.AddScoped<AwaitingInputStep>();

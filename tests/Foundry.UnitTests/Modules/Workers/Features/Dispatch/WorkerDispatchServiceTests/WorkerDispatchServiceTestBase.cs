@@ -17,6 +17,9 @@ using Foundry.Modules.Workers.Features.Outcome;
 using Foundry.Modules.Workers.Features.Verdicts;
 using Foundry.Modules.Workers.Features.ContainerSpec;
 using Foundry.Modules.Workers.Features.Dispatch;
+using Foundry.Modules.Workers.Features.Publisher;
+using Foundry.Modules.Workers.Features.Publishing;
+using Foundry.Modules.Monitoring.Contracts.Commands;
 using Foundry.Modules.Workers.Features.Roles;
 using Foundry.Shared;
 using Foundry.Shared.Infrastructure;
@@ -83,7 +86,7 @@ public abstract class WorkerDispatchServiceTestBase : IAsyncDisposable
         return activeRun;
     }
 
-    internal WorkerDispatchService BuildService(
+    internal DispatchAndPublishTicker BuildService(
         IWorkerOrchestrator orchestrator,
         IIntegrationEventDispatcher? integrationEventDispatcher = null,
         IIntegrationEventProcessor? integrationEventProcessor = null,
@@ -94,9 +97,9 @@ public abstract class WorkerDispatchServiceTestBase : IAsyncDisposable
         IDomainEventDispatcher? domainEventDispatcher = null,
         CapturingLogger? logger = null,
         TimeProvider? timeProvider = null,
-        IWebhookStatusQueries? webhookStatusQueries = null,
-        RunningBranchCompareGate? compareGate = null,
-        IWorkerRoleCatalogStore? roleCatalog = null)
+        IWorkerRoleCatalogStore? roleCatalog = null,
+        FakePublisher? publisher = null,
+        RecordingRunPublishingCommands? runPublishingCommands = null)
     {
         TimeProvider resolvedTimeProvider = timeProvider ?? TimeProvider.System;
         SqliteConnection connection = _connection;
@@ -144,26 +147,31 @@ public abstract class WorkerDispatchServiceTestBase : IAsyncDisposable
             prRetryDelay: TimeSpan.Zero));
 
         services.AddScoped<ICredentialGate>(_ => credentialGate ?? new AlwaysCanDispatchCredentialGate());
-        services.AddSingleton(compareGate ?? new RunningBranchCompareGate());
         services.AddSingleton<IWorkerRoleCatalogStore>(roleCatalog ?? StubWorkerRoleCatalogStore.With());
-        services.AddScoped<IWebhookStatusQueries>(
-            _ => webhookStatusQueries ?? new StubWebhookStatusQueries(isActive: false));
 
         services.AddSingleton(resolvedTimeProvider);
         services.AddScoped<WorkerOutcomeApplier>();
         services.AddScoped<WorkerRunMonitor>();
+        services.AddScoped<WorkerRunPublisher>();
+        services.AddScoped<IPublisher>(_ => publisher ?? new FakePublisher());
+        services.AddScoped<IRepositoryDispatchQueries>(_ => StubRepositoryDispatchQueries.WithToken("ghp_test"));
+        services.AddScoped<IRunPublishingCommands>(_ => runPublishingCommands ?? new RecordingRunPublishingCommands());
+        services.AddScoped<IIssueQueries>(_ => new StubIssueQueries());
         services.AddWorkerVerdicts();
         services.AddSingleton<ILogger<WorkerOutcomeApplier>>(CreateLogger<WorkerOutcomeApplier>(logger));
         services.AddSingleton<ILogger<WorkerRunMonitor>>(CreateLogger<WorkerRunMonitor>(logger));
+        services.AddSingleton<ILogger<WorkerRunPublisher>>(CreateLogger<WorkerRunPublisher>(logger));
 
         ServiceProvider sp = services.BuildServiceProvider();
 
         ILogger<WorkerDispatchService> serviceLogger = CreateLogger<WorkerDispatchService>(logger);
 
-        return new WorkerDispatchService(
-            sp.GetRequiredService<IServiceScopeFactory>(),
-            serviceLogger,
-            resolvedTimeProvider);
+        return new DispatchAndPublishTicker(
+            new WorkerDispatchService(sp.GetRequiredService<IServiceScopeFactory>(), serviceLogger, resolvedTimeProvider),
+            new RunPublishingService(
+                sp.GetRequiredService<IServiceScopeFactory>(),
+                CreateLogger<RunPublishingService>(logger),
+                resolvedTimeProvider));
     }
 
     private static ILogger<T> CreateLogger<T>(CapturingLogger? logger)

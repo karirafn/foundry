@@ -33,7 +33,7 @@ public sealed class RoleCatalogGate : WorkerDispatchServiceTestBase
     {
         // Arrange
         CapturingIntegrationEventDispatcher dispatcher = new();
-        WorkerDispatchService sut = BuildService(
+        DispatchAndPublishTicker sut = BuildService(
             new NullWorkerOrchestrator(),
             integrationEventDispatcher: dispatcher,
             roleCatalog: StubWorkerRoleCatalogStore.Empty());
@@ -49,7 +49,7 @@ public sealed class RoleCatalogGate : WorkerDispatchServiceTestBase
     public async Task WhenTheRoleCatalogIsNotLoaded_WritesNoDispatchReservation()
     {
         // Arrange
-        WorkerDispatchService sut = BuildService(
+        DispatchAndPublishTicker sut = BuildService(
             new NullWorkerOrchestrator(),
             roleCatalog: StubWorkerRoleCatalogStore.Empty());
 
@@ -66,7 +66,7 @@ public sealed class RoleCatalogGate : WorkerDispatchServiceTestBase
     {
         // Arrange
         CapturingLogger logger = new();
-        WorkerDispatchService sut = BuildService(
+        DispatchAndPublishTicker sut = BuildService(
             new NullWorkerOrchestrator(),
             logger: logger,
             roleCatalog: StubWorkerRoleCatalogStore.Empty());
@@ -83,7 +83,7 @@ public sealed class RoleCatalogGate : WorkerDispatchServiceTestBase
     {
         // Arrange
         CapturingLogger logger = new();
-        WorkerDispatchService sut = BuildService(
+        DispatchAndPublishTicker sut = BuildService(
             new NullWorkerOrchestrator(),
             logger: logger,
             roleCatalog: StubWorkerRoleCatalogStore.Empty());
@@ -104,7 +104,7 @@ public sealed class RoleCatalogGate : WorkerDispatchServiceTestBase
         // Arrange
         CapturingLogger logger = new();
         StubWorkerRoleCatalogStore catalogStore = StubWorkerRoleCatalogStore.Empty();
-        WorkerDispatchService sut = BuildService(
+        DispatchAndPublishTicker sut = BuildService(
             new NullWorkerOrchestrator(),
             logger: logger,
             roleCatalog: catalogStore);
@@ -126,7 +126,7 @@ public sealed class RoleCatalogGate : WorkerDispatchServiceTestBase
         // Arrange
         CapturingIntegrationEventDispatcher dispatcher = new();
         StubWorkerRoleCatalogStore catalogStore = StubWorkerRoleCatalogStore.Empty();
-        WorkerDispatchService sut = BuildService(
+        DispatchAndPublishTicker sut = BuildService(
             new NullWorkerOrchestrator(),
             integrationEventDispatcher: dispatcher,
             roleCatalog: catalogStore);
@@ -147,7 +147,7 @@ public sealed class RoleCatalogGate : WorkerDispatchServiceTestBase
         // Arrange
         CapturingLogger logger = new();
         TestOnlyUnloadableRoleCatalogStore catalogStore = new();
-        WorkerDispatchService sut = BuildService(
+        DispatchAndPublishTicker sut = BuildService(
             new NullWorkerOrchestrator(),
             logger: logger,
             roleCatalog: catalogStore);

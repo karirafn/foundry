@@ -1,6 +1,6 @@
 import { Component, InputSignal, OutputEmitterRef, computed, inject, input, output } from '@angular/core';
 import { NgClass } from '@angular/common';
-import { IssueSummary, RunStats, LIVE_STATES, QUEUED_TIER_STATES } from '../issue.model';
+import { IssueSummary, RunStats, LIVE_STATES, PublishPhase, QUEUED_TIER_STATES } from '../issue.model';
 import { cardAccentFor, resolveStateDisplay } from '../../../shared/utils/state-display';
 import { StateBadgeComponent } from '../../../shared/components/state-badge/state-badge';
 import { SafeHrefPipe } from '../../../shared/pipes/safe-href.pipe';
@@ -25,9 +25,6 @@ const REPO_WARNING_STATES = new Set<string>([
   'continuation_queued',
   'triage_queued',
 ]);
-// A restricted triage run has no branch, so it never commits: its activity line drops the commit
-// phrase, which would otherwise always read "no commits yet".
-const NO_COMMIT_STATES: ReadonlySet<string> = new Set<string>(['triage_in_progress']);
 const EM_DASH = '—';
 
 // Re-export shared helpers so existing imports from this module continue to work.
@@ -91,13 +88,6 @@ function silentMinutes(since: string): number | null {
   return diffMinutes >= AGENT_SILENCE_THRESHOLD_MINUTES ? diffMinutes : null;
 }
 
-function commitPhrase(count: number): string {
-  if (count === 0) {
-    return 'no commits yet';
-  }
-  return count === 1 ? '1 commit' : `${count} commits`;
-}
-
 function hasVisiblePills(stats: RunStats): boolean {
   return (
     stats.runCount > 1 ||
@@ -152,6 +142,7 @@ function isUntracked(tokens: TokenTotal): boolean {
             <fd-state-badge
               [state]="issue().state"
               [failureClassification]="issue().failureClassification"
+              [publishPhase]="_publishPhase()"
               [revisionTriggerKind]="issue().revisionTriggerKind"
             />
             @if (_checksOutcomeDisplay(); as outcome) {
@@ -285,6 +276,9 @@ function isUntracked(tokens: TokenTotal): boolean {
           @if (_isChecksPending()) {
             <span class="issue-card__checks-status" aria-hidden="true">Waiting on checks</span>
           }
+          @if (_publishStatusText(); as publishStatus) {
+            <span class="issue-card__checks-status" aria-hidden="true">{{ publishStatus }}</span>
+          }
           <span class="issue-card__footer-links">
             @if (issue().pullRequestUrl | safeHref; as safePrUrl) {
               <a
@@ -334,7 +328,6 @@ export class IssueCardComponent {
   readonly issue: InputSignal<IssueSummary> = input.required<IssueSummary>();
   readonly expanded: InputSignal<boolean> = input.required<boolean>();
   readonly lastActivityAt: InputSignal<string | null> = input<string | null>(null);
-  readonly commitCount: InputSignal<number | null> = input<number | null>(null);
   readonly agentActivity: InputSignal<AgentActivity | null> = input<AgentActivity | null>(null);
   readonly isNextUp: InputSignal<boolean> = input<boolean>(false);
   readonly queuePosition: InputSignal<number | null> = input<number | null>(null);
@@ -371,10 +364,36 @@ export class IssueCardComponent {
     return [accentClass, hasGutter].filter(Boolean).join(' ');
   });
 
+  /**
+   * The run's publish phase, set only on a working issue. While it is set the agent has exited, so
+   * the agent and activity lines are hidden: lastActivityAt stays in the hub map and the silence
+   * timer would otherwise keep growing.
+   */
+  protected readonly _publishPhase = computed((): PublishPhase | null => {
+    const issue = this.issue();
+    return LIVE_STATES.has(issue.state) ? (issue.publishPhase ?? null) : null;
+  });
+
+  /** Footer status while publishing, e.g. "Publishing commits"; null otherwise. */
+  protected readonly _publishStatusText = computed((): string | null => {
+    switch (this._publishPhase()) {
+      case 'publishing':
+        return 'Publishing commits';
+      case 'retrying':
+        return 'Publish failed, retrying';
+      default:
+        return null;
+    }
+  });
+
+  /** Live-run lines (agent and activity) show only while the agent runs. */
+  private readonly _showsLiveRunLines = computed(
+    () => LIVE_STATES.has(this.issue().state) && this._publishPhase() === null);
+
   /** One-line Agent Activity summary, e.g. "developer · Running tests (3/7)". */
   readonly _agentActivityLine = computed((): string | null => {
     const activity = this.agentActivity();
-    if (activity === null || !LIVE_STATES.has(this.issue().state)) {
+    if (activity === null || !this._showsLiveRunLines()) {
       return null;
     }
     return agentActivitySummary(activity);
@@ -406,24 +425,18 @@ export class IssueCardComponent {
   readonly _activityLine = computed(() => {
     // Depend on ticker to re-evaluate every ~30s
     void this._ticker.tick();
-    if (this._silenceSince() === null || !LIVE_STATES.has(this.issue().state)) {
+    if (this._silenceSince() === null || !this._showsLiveRunLines()) {
       return null;
     }
-    const count = this.commitCount();
+    // No commit count while running: it appears only after publishing, in the run's Published facts.
     const silence = this._silenceText();
-    const silencePart = silence !== null ? ` · ${silence.short}` : '';
-    // null count means pre-handshake: suppress commit phrase, show just "active".
-    // A triage run never commits, so it never shows the commit phrase either.
-    if (count === null || NO_COMMIT_STATES.has(this.issue().state)) {
-      return silence !== null ? silence.short : '';
-    }
-    return `${commitPhrase(count)}${silencePart}`;
+    return silence !== null ? silence.short : '';
   });
 
   /** Whether the activity line should render at all (live state + lastActivityAt present). */
   readonly _activityLineVisible = computed(() => this._activityLine() !== null);
 
-  /** Visual text for the activity line (e.g. "active · 3 commits · silent 7m"). */
+  /** Visual text for the activity line (e.g. "active · silent 7m · Bash running"). */
   readonly _activityLineText = computed(() => {
     const detail = this._activityLine();
     return detail ? `active · ${detail}` : 'active';
@@ -461,8 +474,9 @@ export class IssueCardComponent {
     const rebasePart = rebase ? ` ${rebase.label}.` : '';
     const waitingPart = this._isChecksPending() ? ' Waiting on checks.' : '';
     const runStatsPart = this._buildRunStatsAriaText();
+    const publishPart = this._buildPublishAriaText();
     const activityPart = this._buildActivityAriaText();
-    return `${base}${warningPart}${checksPart}${rebasePart}${waitingPart}${runStatsPart}${activityPart}`;
+    return `${base}${warningPart}${checksPart}${rebasePart}${waitingPart}${runStatsPart}${publishPart}${activityPart}`;
   });
 
   private _buildQueuePositionAriaClause(): string {
@@ -479,23 +493,25 @@ export class IssueCardComponent {
   }
 
   private _buildActivityAriaText(): string {
-    if (this._silenceSince() === null || !LIVE_STATES.has(this.issue().state)) {
+    if (this._activityLine() === null) {
       return '';
     }
     const agentLine = this._agentActivityLine();
     const agentPart = agentLine !== null ? ` Agent: ${agentLine}.` : '';
     const silence = this._silenceText();
     const silencePart = silence !== null ? `, ${silence.long}` : '';
-    if (NO_COMMIT_STATES.has(this.issue().state)) {
-      // A triage run never commits: "active", plus the silence when the run is silent.
-      return ` Active${silencePart}.${agentPart}`;
+    return ` Active${silencePart}.${agentPart}`;
+  }
+
+  private _buildPublishAriaText(): string {
+    switch (this._publishPhase()) {
+      case 'publishing':
+        return ' Publishing commits.';
+      case 'retrying':
+        return ' Publish failed, retrying automatically.';
+      default:
+        return '';
     }
-    const count = this.commitCount();
-    if (count === null) {
-      // Pre-handshake: no commit info yet
-      return agentPart;
-    }
-    return ` Active: ${commitPhrase(count)}${silencePart}.${agentPart}`;
   }
 
   private _buildRunStatsAriaText(): string {

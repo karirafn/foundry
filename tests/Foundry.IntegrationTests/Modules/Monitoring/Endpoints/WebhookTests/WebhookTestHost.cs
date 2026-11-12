@@ -22,9 +22,12 @@ internal static class WebhookTestHost
     internal const int WebhookPort = 5099;
     internal const int MainPort = 5000;
 
-    internal static FoundryWebAppFactory CreateFactory() =>
+    internal static FoundryWebAppFactory CreateFactory(Action<IServiceCollection>? extraServices = null) =>
         FoundryWebAppFactory.WithOverrides(services =>
-            services.Configure<WebhookIngressOptions>(options => options.Port = WebhookPort));
+        {
+            services.Configure<WebhookIngressOptions>(options => options.Port = WebhookPort);
+            extraServices?.Invoke(services);
+        });
 
     internal static async Task<HttpContext> SendAsync(
         FoundryWebAppFactory factory,

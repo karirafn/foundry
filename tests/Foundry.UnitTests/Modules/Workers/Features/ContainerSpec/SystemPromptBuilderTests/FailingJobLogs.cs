@@ -60,15 +60,16 @@ public sealed class FailingJobLogs
     }
 
     [Fact]
-    public void WhenAJobLogIsAvailable_KeepsTheAgentLogInstructions()
+    public void WhenAJobLogIsAvailable_PointsTheAgentAtTheSuppliedLogsRatherThanAProviderCli()
     {
         // Act
         string prompt = BuildPromptText([Build], [new FailingJobLog("ci/build", "boom")]);
 
-        // Assert
+        // Assert — the run holds no provider credential to fetch logs with (ADR 0100).
         prompt.ShouldSatisfyAllConditions(
-            () => prompt.ShouldContain("gh run view --log-failed"),
-            () => prompt.ShouldContain("glab ci trace"));
+            () => prompt.ShouldContain("Use the failing checks and any job logs above to understand what is broken"),
+            () => prompt.ShouldNotContain("gh run view --log-failed"),
+            () => prompt.ShouldNotContain("glab ci trace"));
     }
 
     [Fact]

@@ -35,7 +35,7 @@ public sealed class RunVerdictCapture : WorkerDispatchServiceTestBase
         """;
 
     private const string DoneLog =
-        """{"type":"result","subtype":"success","is_error":false,"result":"Done","structured_output":{"outcome":"done"}}""";
+        """{"type":"result","subtype":"success","is_error":false,"result":"Done","structured_output":{"outcome":"done","pullRequest":{"summary":"add retry","body":"Adds retry."}}}""";
 
     private const string MissingLog =
         """{"type":"result","subtype":"success","is_error":false,"result":"Done"}""";
@@ -59,7 +59,7 @@ public sealed class RunVerdictCapture : WorkerDispatchServiceTestBase
     {
         // Arrange
         SeedActiveRun("container-verdict-review");
-        WorkerDispatchService sut = BuildVerdictService(
+        DispatchAndPublishTicker sut = BuildVerdictService(
             exitCode: 0,
             log,
             new StubPostExitProviderQueries(
@@ -83,7 +83,7 @@ public sealed class RunVerdictCapture : WorkerDispatchServiceTestBase
     {
         // Arrange
         SeedActiveRun("container-verdict-questions");
-        WorkerDispatchService sut = BuildVerdictService(
+        DispatchAndPublishTicker sut = BuildVerdictService(
             exitCode: 0,
             NeedsInputLog,
             new StubPostExitProviderQueries(
@@ -107,7 +107,7 @@ public sealed class RunVerdictCapture : WorkerDispatchServiceTestBase
     {
         // Arrange
         SeedActiveRun("container-verdict-unchanged");
-        WorkerDispatchService sut = BuildVerdictService(exitCode: 0, log, new StubPostExitProviderQueries(hasCommits: false));
+        DispatchAndPublishTicker sut = BuildVerdictService(exitCode: 0, log, new StubPostExitProviderQueries(hasCommits: false));
 
         // Act
         await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
@@ -126,7 +126,7 @@ public sealed class RunVerdictCapture : WorkerDispatchServiceTestBase
     {
         // Arrange
         SeedActiveRun("container-verdict-failed");
-        WorkerDispatchService sut = BuildVerdictService(exitCode: 1, NeedsInputLog, new StubPostExitProviderQueries(hasCommits: false));
+        DispatchAndPublishTicker sut = BuildVerdictService(exitCode: 1, NeedsInputLog, new StubPostExitProviderQueries(hasCommits: false));
 
         // Act
         await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
@@ -140,7 +140,7 @@ public sealed class RunVerdictCapture : WorkerDispatchServiceTestBase
             () => run.VerdictQuestions.ShouldBeNull());
     }
 
-    private WorkerDispatchService BuildVerdictService(int exitCode, string log, IPostExitProviderQueries queries)
+    private DispatchAndPublishTicker BuildVerdictService(int exitCode, string log, IPostExitProviderQueries queries)
     {
         WorkerStatus exitedStatus = new(IsRunning: false, ExitCode: exitCode, FinishedAt: DateTimeOffset.UtcNow);
 

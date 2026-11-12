@@ -21,7 +21,7 @@ public sealed class Create
         DateTimeOffset lastActivityAt = DateTimeOffset.UtcNow;
 
         // Act
-        WorkerActivityObserved domainEvent = new(workerRunId, issueId, lastActivityAt, CommitCount: 0);
+        WorkerActivityObserved domainEvent = new(workerRunId, issueId, lastActivityAt);
 
         // Assert
         domainEvent.ShouldBeAssignableTo<IDomainEvent>();
@@ -34,16 +34,14 @@ public sealed class Create
         WorkerRunId workerRunId = WorkerRunId.New();
         IssueId issueId = IssueId.New();
         DateTimeOffset lastActivityAt = new(2026, 6, 29, 10, 0, 0, TimeSpan.Zero);
-        int commitCount = 3;
 
         // Act
-        WorkerActivityObserved domainEvent = new(workerRunId, issueId, lastActivityAt, commitCount);
+        WorkerActivityObserved domainEvent = new(workerRunId, issueId, lastActivityAt);
 
         // Assert
         domainEvent.ShouldSatisfyAllConditions(
             () => domainEvent.WorkerRunId.ShouldBe(workerRunId),
             () => domainEvent.IssueId.ShouldBe(issueId),
-            () => domainEvent.LastActivityAt.ShouldBe(lastActivityAt),
-            () => domainEvent.CommitCount.ShouldBe(commitCount));
+            () => domainEvent.LastActivityAt.ShouldBe(lastActivityAt));
     }
 }

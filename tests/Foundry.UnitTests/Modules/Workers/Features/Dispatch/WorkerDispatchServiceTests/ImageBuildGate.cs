@@ -25,7 +25,7 @@ public sealed class ImageBuildGate : WorkerDispatchServiceTestBase
     {
         // Arrange
         CapturingIntegrationEventDispatcher dispatcher = new();
-        WorkerDispatchService sut = BuildService(
+        DispatchAndPublishTicker sut = BuildService(
             new NullWorkerOrchestrator(),
             integrationEventDispatcher: dispatcher,
             settingsQueries: new ConfigurableImageBuildStatusQueries(ImageBuildStatus.Building));
@@ -42,7 +42,7 @@ public sealed class ImageBuildGate : WorkerDispatchServiceTestBase
     {
         // Arrange
         CapturingIntegrationEventDispatcher dispatcher = new();
-        WorkerDispatchService sut = BuildService(
+        DispatchAndPublishTicker sut = BuildService(
             new NullWorkerOrchestrator(),
             integrationEventDispatcher: dispatcher,
             settingsQueries: new ConfigurableImageBuildStatusQueries(ImageBuildStatus.Failed));
@@ -59,7 +59,7 @@ public sealed class ImageBuildGate : WorkerDispatchServiceTestBase
     {
         // Arrange
         CapturingIntegrationEventDispatcher dispatcher = new();
-        WorkerDispatchService sut = BuildService(
+        DispatchAndPublishTicker sut = BuildService(
             new NullWorkerOrchestrator(),
             integrationEventDispatcher: dispatcher,
             settingsQueries: new ConfigurableImageBuildStatusQueries(ImageBuildStatus.Idle));

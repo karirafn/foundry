@@ -18,6 +18,9 @@ using Foundry.Modules.Workers.Features.Roles;
 using Foundry.Modules.Workers.Features.Verdicts;
 using Foundry.Modules.Workers.Features.ContainerSpec;
 using Foundry.Modules.Workers.Features.Dispatch;
+using Foundry.Modules.Workers.Features.Publisher;
+using Foundry.Modules.Workers.Features.Publishing;
+using Foundry.Modules.Monitoring.Contracts.Commands;
 using Foundry.Shared;
 using Foundry.Shared.Infrastructure;
 using Foundry.Shared.Infrastructure.Outbox;
@@ -93,7 +96,6 @@ public sealed class OutboxHarvestDispatch : IAsyncDisposable
             sp.GetRequiredService<IContainerOutputParser>(),
             prRetryDelay: TimeSpan.Zero));
         services.AddScoped<ICredentialGate, AlwaysCanDispatchCredentialGate>();
-        services.AddSingleton<RunningBranchCompareGate>();
         services.AddSingleton<IWorkerRoleCatalogStore>(StubWorkerRoleCatalogStore.With());
         services.AddScoped<IWebhookStatusQueries>(_ => new StubWebhookStatusQueries());
 
@@ -115,7 +117,7 @@ public sealed class OutboxHarvestDispatch : IAsyncDisposable
         }
 
         IWorkerOrchestrator orchestrator = new ExitedOrchestrator(exitCode: 0);
-        WorkerDispatchService sut = BuildService(orchestrator);
+        DispatchAndPublishTicker sut = BuildService(orchestrator);
 
         // Act
         await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
@@ -150,7 +152,7 @@ public sealed class OutboxHarvestDispatch : IAsyncDisposable
         }
 
         IWorkerOrchestrator orchestrator = new NullOrchestrator();
-        WorkerDispatchService sut = BuildService(orchestrator, usePastResetsAt: true);
+        DispatchAndPublishTicker sut = BuildService(orchestrator, usePastResetsAt: true);
 
         // Act
         await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
@@ -168,7 +170,7 @@ public sealed class OutboxHarvestDispatch : IAsyncDisposable
     {
         // Arrange — no active runs; tick reaches capacity-available dispatch, then SaveChangesAsync
         IWorkerOrchestrator orchestrator = new NullOrchestrator();
-        WorkerDispatchService sut = BuildService(orchestrator);
+        DispatchAndPublishTicker sut = BuildService(orchestrator);
 
         // Act
         await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
@@ -197,7 +199,7 @@ public sealed class OutboxHarvestDispatch : IAsyncDisposable
         IWorkerOrchestrator orchestrator = new ExitedOrchestrator(
             exitCode: 1,
             containerOutput: AuthInvalidOutput);
-        WorkerDispatchService sut = BuildService(orchestrator);
+        DispatchAndPublishTicker sut = BuildService(orchestrator);
 
         // Act
         await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
@@ -226,7 +228,7 @@ public sealed class OutboxHarvestDispatch : IAsyncDisposable
         IWorkerOrchestrator orchestrator = new ExitedOrchestrator(
             exitCode: 1,
             containerOutput: Credits429OnlyOutput);
-        WorkerDispatchService sut = BuildService(orchestrator);
+        DispatchAndPublishTicker sut = BuildService(orchestrator);
 
         // Act
         await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
@@ -251,7 +253,7 @@ public sealed class OutboxHarvestDispatch : IAsyncDisposable
         {"type":"result","api_error_status":429}
         """;
 
-    private WorkerDispatchService BuildService(
+    private DispatchAndPublishTicker BuildService(
         IWorkerOrchestrator orchestrator,
         bool usePastResetsAt = false)
     {
@@ -282,21 +284,30 @@ public sealed class OutboxHarvestDispatch : IAsyncDisposable
             sp.GetRequiredService<IContainerOutputParser>(),
             prRetryDelay: TimeSpan.Zero));
         services.AddScoped<ICredentialGate, AlwaysCanDispatchCredentialGate>();
-        services.AddSingleton<RunningBranchCompareGate>();
         services.AddSingleton<IWorkerRoleCatalogStore>(StubWorkerRoleCatalogStore.With());
         services.AddScoped<IWebhookStatusQueries>(_ => new StubWebhookStatusQueries());
         services.AddSingleton<IWorkerOrchestrator>(_ => orchestrator);
         services.AddSingleton(TimeProvider.System);
         services.AddScoped<WorkerOutcomeApplier>();
+        services.AddScoped<WorkerRunPublisher>();
+        services.AddScoped<IPublisher>(_ => new FakePublisher());
+        services.AddScoped<IRepositoryDispatchQueries>(_ => StubRepositoryDispatchQueries.WithToken("ghp_test"));
+        services.AddScoped<IRunPublishingCommands>(_ => new RecordingRunPublishingCommands());
+        services.AddScoped<IIssueQueries>(_ => new StubIssueQueries());
         services.AddScoped<WorkerRunMonitor>();
         services.AddWorkerVerdicts();
         services.AddSingleton(typeof(ILogger<>), typeof(NullLogger<>));
 
         ServiceProvider sp = services.BuildServiceProvider();
-        return new WorkerDispatchService(
-            sp.GetRequiredService<IServiceScopeFactory>(),
-            NullLogger<WorkerDispatchService>.Instance,
-            TimeProvider.System);
+        return new DispatchAndPublishTicker(
+            new WorkerDispatchService(
+                sp.GetRequiredService<IServiceScopeFactory>(),
+                NullLogger<WorkerDispatchService>.Instance,
+                TimeProvider.System),
+            new RunPublishingService(
+                sp.GetRequiredService<IServiceScopeFactory>(),
+                NullLogger<RunPublishingService>.Instance,
+                TimeProvider.System));
     }
 
     private static ActiveRun SeedActiveRun(string containerId)

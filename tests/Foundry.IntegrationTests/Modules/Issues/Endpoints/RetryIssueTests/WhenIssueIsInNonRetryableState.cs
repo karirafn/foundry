@@ -88,7 +88,7 @@ public sealed class WhenIssueIsInNonRetryableState : IAsyncDisposable
 
         string? detail = node["detail"]?.GetValue<string>();
         detail.ShouldNotBeNull();
-        detail.ShouldBe(IssueErrors.WrongState(inProgress.Id, "failed, continuable_failed, revision_failed, or unchanged").Message);
+        detail.ShouldBe(IssueErrors.WrongState(inProgress.Id, "failed, continuable_failed, revision_failed, unchanged, or branch_diverged").Message);
     }
 
     [Fact]

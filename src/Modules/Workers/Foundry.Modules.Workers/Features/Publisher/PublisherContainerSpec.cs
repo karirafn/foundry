@@ -1,3 +1,4 @@
+using Foundry.Modules.Settings.Contracts;
 using Foundry.Modules.Workers.Contracts;
 using Foundry.Modules.Workers.Features.ContainerSpec;
 
@@ -27,9 +28,39 @@ internal static class PublisherContainerSpec
             environment["RUN_BRANCH"] = runBranch.Value;
         }
 
+        return Build(request.RunId, environment, "prepare", request.Limits);
+    }
+
+    public static WorkerContainerSpec ForPublish(PublishRequest request)
+    {
+        Dictionary<string, string> environment = new()
+        {
+            ["CLONE_URL"] = request.CloneUrl.ToString(),
+            ["GIT_PAT"] = request.GitPat,
+            ["RUN_BRANCH"] = request.RunBranch.Value,
+            ["RUN_ID"] = request.RunId.Value.ToString(),
+            ["BASE_DEFAULT_SHA"] = request.Base.DefaultBranchHead.Value,
+            ["AUTHOR_NAME"] = request.Identity.Name,
+            ["AUTHOR_EMAIL"] = request.Identity.Email,
+        };
+
+        if (request.Base.RunBranchHead is { } runBranchHead)
+        {
+            environment["BASE_BRANCH_SHA"] = runBranchHead.Value;
+        }
+
+        return Build(request.RunId, environment, "publish", request.Limits);
+    }
+
+    private static WorkerContainerSpec Build(
+        WorkerRunId runId,
+        Dictionary<string, string> environment,
+        string mode,
+        WorkerResourceLimitsSnapshot limits)
+    {
         Dictionary<string, string> labels = new()
         {
-            [RunIdLabelKey] = request.RunId.Value.ToString(),
+            [RunIdLabelKey] = runId.Value.ToString(),
             [TransientLabelKey] = "true",
         };
 
@@ -37,12 +68,12 @@ internal static class PublisherContainerSpec
             WorkerImageNames.PublisherImageName,
             environment,
             labels,
-            ["prepare"])
+            [mode])
         {
-            MemoryLimitMb = request.Limits.MemoryLimitMb,
-            CpuLimit = request.Limits.CpuLimit,
-            PidsLimit = request.Limits.PidsLimit,
-            VolumeMounts = [new VolumeMount(WorkerVolumeNames.HandOffVolumeName(request.RunId), WorkerVolumeNames.HandOffContainerPath)],
+            MemoryLimitMb = limits.MemoryLimitMb,
+            CpuLimit = limits.CpuLimit,
+            PidsLimit = limits.PidsLimit,
+            VolumeMounts = [new VolumeMount(WorkerVolumeNames.HandOffVolumeName(runId), WorkerVolumeNames.HandOffContainerPath)],
         });
     }
 }

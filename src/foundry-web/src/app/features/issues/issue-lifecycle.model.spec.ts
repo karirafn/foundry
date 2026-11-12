@@ -34,6 +34,8 @@ const ALL_LIFECYCLE_STATES: ReadonlySet<IssueState> = new Set<IssueState>([
   'triage_queued',
   'triage_in_progress',
   'triage_failed',
+  'publish_failed',
+  'branch_diverged',
 ]);
 
 describe('issue-lifecycle model', () => {
@@ -60,6 +62,8 @@ describe('issue-lifecycle model', () => {
       'triage_queued',
       'triage_in_progress',
       'triage_failed',
+      'publish_failed',
+      'branch_diverged',
     ]);
 
     // Act / Assert
@@ -497,4 +501,23 @@ describe('triage states', () => {
       expect(isResolvedState(state)).toBe(false);
     }
   });
+});
+
+describe('publish lifecycle states (#787)', () => {
+  for (const state of ['publish_failed', 'branch_diverged'] as const) {
+    it(`should place ${state} in the Needs attention group, in the first tier`, () => {
+      // Arrange / Act
+      const group = groupFor(state);
+
+      // Assert
+      expect(group.id).toBe('needs_attention');
+      expect(WITHIN_GROUP_ORDER.needs_attention[0]).toContain(state);
+    });
+
+    it(`should treat ${state} as active, not resolved`, () => {
+      // Arrange / Act / Assert
+      expect(ACTIVE_STATES.has(state)).toBe(true);
+      expect(isResolvedState(state)).toBe(false);
+    });
+  }
 });

@@ -67,20 +67,20 @@ internal sealed class WorkerOutcomeResolver(
     /// <param name="containerOutput">The captured container log, when available.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     public Task<WorkerOutcome> ResolveAsync(
-        ActiveRun run,
+        IResolvableRun run,
         WorkerStatus? status,
         string? containerOutput,
         CancellationToken cancellationToken)
         => ResolveAsync(run, status, containerOutput, verdict: null, cancellationToken);
 
     /// <summary>
-    /// Resolves the outcome as <see cref="ResolveAsync(ActiveRun, WorkerStatus?, string?, CancellationToken)"/> does,
+    /// Resolves the outcome as <see cref="ResolveAsync(IResolvableRun, WorkerStatus?, string?, CancellationToken)"/> does,
     /// and yields <see cref="WorkerOutcome.NeedsInput"/> when a run that exited 0 returned a <c>needs_input</c>
     /// <paramref name="verdict"/> (ADR 0096). A merged merge request still completes the issue, a closed one still
     /// fails it, and any other exit code still goes through failure classification.
     /// </summary>
     public async Task<WorkerOutcome> ResolveAsync(
-        ActiveRun run,
+        IResolvableRun run,
         WorkerStatus? status,
         string? containerOutput,
         RunVerdict? verdict,
@@ -137,7 +137,7 @@ internal sealed class WorkerOutcomeResolver(
     /// A provider failure is treated as "no merge request" — the caller decides how to proceed.
     /// </summary>
     public async Task<WorkerOutcome?> TryResolveExistingPullRequestAsync(
-        ActiveRun run,
+        IResolvableRun run,
         string? containerOutput,
         RunResultSummary? summary,
         CancellationToken cancellationToken)
@@ -173,7 +173,7 @@ internal sealed class WorkerOutcomeResolver(
     /// lookup never runs. Only a run that exited 0 with a schema-valid verdict completes; a missing or invalid verdict
     /// is a step failure (ADR 0094), and any other exit is classified as for every run.
     /// </summary>
-    private WorkerOutcome ResolveTriage(ActiveRun run, WorkerStatus? status, string? containerOutput)
+    private WorkerOutcome ResolveTriage(IResolvableRun run, WorkerStatus? status, string? containerOutput)
     {
         RunResultSummary? summary = containerOutputParser.ParseRunResultSummary(containerOutput);
         ContainerOutputParseResult parseResult = containerOutputParser.Parse(containerOutput);
@@ -526,7 +526,7 @@ internal sealed class WorkerOutcomeResolver(
     }
 
     /// <summary>A run resolved through its branch: the implement paths, which look up its merge request and commits.</summary>
-    private readonly record struct BranchedRun(ActiveRun Run, BranchName BranchName)
+    private readonly record struct BranchedRun(IResolvableRun Run, BranchName BranchName)
     {
         public MonitoredRepositoryId MonitoredRepositoryId => Run.MonitoredRepositoryId;
 

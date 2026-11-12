@@ -19,6 +19,8 @@ namespace Foundry.Modules.Workers.Domain.ValueObjects;
 [JsonDerivedType(typeof(Cancelled), typeDiscriminator: FailureReason.CancelledToken)]
 [JsonDerivedType(typeof(TurnLimitReached), typeDiscriminator: FailureReason.TurnLimitToken)]
 [JsonDerivedType(typeof(VerdictInvalid), typeDiscriminator: FailureReason.VerdictInvalidToken)]
+[JsonDerivedType(typeof(PublishFailed), typeDiscriminator: FailureReason.PublishFailedToken)]
+[JsonDerivedType(typeof(PublishExpired), typeDiscriminator: FailureReason.PublishExpiredToken)]
 public abstract record FailureReason
 {
     public const string NonZeroExitToken = FailureCategory.NonZeroExitToken;
@@ -34,6 +36,8 @@ public abstract record FailureReason
     public const string CancelledToken = FailureCategory.CancelledToken;
     public const string TurnLimitToken = FailureCategory.TurnLimitToken;
     public const string VerdictInvalidToken = FailureCategory.VerdictInvalidToken;
+    public const string PublishFailedToken = FailureCategory.PublishFailedToken;
+    public const string PublishExpiredToken = FailureCategory.PublishExpiredToken;
 
     private FailureReason()
     {
@@ -54,6 +58,8 @@ public abstract record FailureReason
         Cancelled => CancelledToken,
         TurnLimitReached => TurnLimitToken,
         VerdictInvalid => VerdictInvalidToken,
+        PublishFailed => PublishFailedToken,
+        PublishExpired => PublishExpiredToken,
         _ => throw new UnreachableException($"Unknown {nameof(FailureReason)} variant: {GetType().Name}"),
     };
 
@@ -73,6 +79,8 @@ public abstract record FailureReason
         Cancelled => "Worker run cancelled",
         TurnLimitReached => "Reached the turn limit before finishing. Split the issue into smaller issues, then retry.",
         VerdictInvalid verdictInvalid => verdictInvalid.Detail,
+        PublishFailed publishFailed => $"Publishing the run's commits failed: {publishFailed.Detail}",
+        PublishExpired => "The run's unpublished commits were discarded: they were not published within the Hand-off volume's time to live",
         _ => throw new UnreachableException($"Unknown {nameof(FailureReason)} variant: {GetType().Name}"),
     };
 
@@ -121,4 +129,13 @@ public abstract record FailureReason
 
         public const string InvalidDetail = "Verdict failed the role's schema";
     }
+
+    /// <summary>
+    /// Publishing the run's commits failed (ADR 0100), permanently or after every retry. The run keeps its Hand-off
+    /// volume, so Retry publish can run it again.
+    /// </summary>
+    public sealed record PublishFailed(string Detail) : FailureReason;
+
+    /// <summary>The run's Hand-off volume reached its time to live before its commits were published.</summary>
+    public sealed record PublishExpired : FailureReason;
 }

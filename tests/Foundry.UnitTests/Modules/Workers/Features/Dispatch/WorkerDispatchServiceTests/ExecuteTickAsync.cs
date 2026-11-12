@@ -20,7 +20,7 @@ namespace Foundry.UnitTests.Modules.Workers.Features.Dispatch.WorkerDispatchServ
 
 public sealed class ExecuteTickAsync : WorkerDispatchServiceTestBase
 {
-    private WorkerDispatchService BuildService(
+    private DispatchAndPublishTicker BuildService(
         CapturingIntegrationEventDispatcher dispatcher,
         int maxConcurrent = 3)
     {
@@ -37,7 +37,7 @@ public sealed class ExecuteTickAsync : WorkerDispatchServiceTestBase
     {
         // Arrange
         CapturingIntegrationEventDispatcher dispatcher = new();
-        WorkerDispatchService sut = BuildService(dispatcher);
+        DispatchAndPublishTicker sut = BuildService(dispatcher);
 
         // Act
         await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
@@ -51,7 +51,7 @@ public sealed class ExecuteTickAsync : WorkerDispatchServiceTestBase
     {
         // Arrange
         CapturingIntegrationEventDispatcher dispatcher = new();
-        WorkerDispatchService sut = BuildService(dispatcher);
+        DispatchAndPublishTicker sut = BuildService(dispatcher);
 
         // Act
         await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
@@ -78,7 +78,7 @@ public sealed class ExecuteTickAsync : WorkerDispatchServiceTestBase
 
         CapturingIntegrationEventDispatcher dispatcher = new();
         // MaxConcurrent = 1, already have 1 active run
-        WorkerDispatchService sut = BuildService(dispatcher, maxConcurrent: 1);
+        DispatchAndPublishTicker sut = BuildService(dispatcher, maxConcurrent: 1);
 
         // Act
         await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
@@ -92,7 +92,7 @@ public sealed class ExecuteTickAsync : WorkerDispatchServiceTestBase
     {
         // Arrange
         CapturingIntegrationEventDispatcher dispatcher = new();
-        WorkerDispatchService sut = BuildService(dispatcher);
+        DispatchAndPublishTicker sut = BuildService(dispatcher);
 
         // Act
         Exception? exception = await Record.ExceptionAsync(
@@ -116,7 +116,7 @@ public sealed class ExecuteTickAsync : WorkerDispatchServiceTestBase
         }
 
         CapturingIntegrationEventDispatcher dispatcher = new();
-        WorkerDispatchService sut = BuildService(dispatcher, maxConcurrent: 3);
+        DispatchAndPublishTicker sut = BuildService(dispatcher, maxConcurrent: 3);
 
         // Act
         await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);

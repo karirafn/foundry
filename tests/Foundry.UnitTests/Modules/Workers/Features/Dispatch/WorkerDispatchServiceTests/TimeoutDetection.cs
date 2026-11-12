@@ -20,7 +20,7 @@ namespace Foundry.UnitTests.Modules.Workers.Features.Dispatch.WorkerDispatchServ
 
 public sealed class TimeoutDetection : WorkerDispatchServiceTestBase
 {
-    private WorkerDispatchService BuildService(
+    private DispatchAndPublishTicker BuildService(
         TimeoutStubWorkerOrchestrator orchestrator,
         int timeoutMinutes = 120)
     {
@@ -36,7 +36,7 @@ public sealed class TimeoutDetection : WorkerDispatchServiceTestBase
         // Arrange — use TimeoutMinutes = 0 so any run started in the past is immediately timed out
         SeedActiveRun();
         TimeoutStubWorkerOrchestrator orchestrator = new(isRunning: true);
-        WorkerDispatchService sut = BuildService(orchestrator, timeoutMinutes: 0);
+        DispatchAndPublishTicker sut = BuildService(orchestrator, timeoutMinutes: 0);
 
         // Act
         await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
@@ -54,7 +54,7 @@ public sealed class TimeoutDetection : WorkerDispatchServiceTestBase
         // Arrange — use TimeoutMinutes = 0 so any run started in the past is immediately timed out
         SeedActiveRun("container-timeout-test");
         TimeoutStubWorkerOrchestrator orchestrator = new(isRunning: true);
-        WorkerDispatchService sut = BuildService(orchestrator, timeoutMinutes: 0);
+        DispatchAndPublishTicker sut = BuildService(orchestrator, timeoutMinutes: 0);
 
         // Act
         await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
@@ -69,7 +69,7 @@ public sealed class TimeoutDetection : WorkerDispatchServiceTestBase
         // Arrange
         SeedActiveRun("container-timeout-output");
         TimeoutStubWorkerOrchestrator orchestrator = new(isRunning: true, logs: "timeout output captured");
-        WorkerDispatchService sut = BuildService(orchestrator, timeoutMinutes: 0);
+        DispatchAndPublishTicker sut = BuildService(orchestrator, timeoutMinutes: 0);
 
         // Act
         await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
@@ -87,7 +87,7 @@ public sealed class TimeoutDetection : WorkerDispatchServiceTestBase
         // Arrange
         SeedActiveRun("container-timeout-stop");
         TimeoutStubWorkerOrchestrator orchestrator = new(isRunning: true);
-        WorkerDispatchService sut = BuildService(orchestrator, timeoutMinutes: 0);
+        DispatchAndPublishTicker sut = BuildService(orchestrator, timeoutMinutes: 0);
 
         // Act
         await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
@@ -102,7 +102,7 @@ public sealed class TimeoutDetection : WorkerDispatchServiceTestBase
         // Arrange
         SeedActiveRun("container-timeout-remove");
         TimeoutStubWorkerOrchestrator orchestrator = new(isRunning: true);
-        WorkerDispatchService sut = BuildService(orchestrator, timeoutMinutes: 0);
+        DispatchAndPublishTicker sut = BuildService(orchestrator, timeoutMinutes: 0);
 
         // Act
         await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
@@ -117,7 +117,7 @@ public sealed class TimeoutDetection : WorkerDispatchServiceTestBase
         // Arrange
         SeedActiveRun("container-timeout-order");
         TimeoutStubWorkerOrchestrator orchestrator = new(isRunning: true, logs: "some output");
-        WorkerDispatchService sut = BuildService(orchestrator, timeoutMinutes: 0);
+        DispatchAndPublishTicker sut = BuildService(orchestrator, timeoutMinutes: 0);
 
         // Act
         await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
@@ -133,7 +133,7 @@ public sealed class TimeoutDetection : WorkerDispatchServiceTestBase
         // Arrange
         SeedActiveRun("container-timeout-remove-order");
         TimeoutStubWorkerOrchestrator orchestrator = new(isRunning: true, logs: "some output");
-        WorkerDispatchService sut = BuildService(orchestrator, timeoutMinutes: 0);
+        DispatchAndPublishTicker sut = BuildService(orchestrator, timeoutMinutes: 0);
 
         // Act
         await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
@@ -148,7 +148,7 @@ public sealed class TimeoutDetection : WorkerDispatchServiceTestBase
         // Arrange
         SeedActiveRun("container-timeout-remove-throws");
         TimeoutStubWorkerOrchestrator orchestrator = new(isRunning: true, removeContainerThrows: true);
-        WorkerDispatchService sut = BuildService(orchestrator, timeoutMinutes: 0);
+        DispatchAndPublishTicker sut = BuildService(orchestrator, timeoutMinutes: 0);
 
         // Act — must not throw even though RemoveContainerAsync throws
         await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
@@ -165,7 +165,7 @@ public sealed class TimeoutDetection : WorkerDispatchServiceTestBase
         // Arrange
         SeedActiveRun("container-timeout-stop-throws");
         TimeoutStubWorkerOrchestrator orchestrator = new(isRunning: true, logs: "output after stop failure", stopContainerThrows: true);
-        WorkerDispatchService sut = BuildService(orchestrator, timeoutMinutes: 0);
+        DispatchAndPublishTicker sut = BuildService(orchestrator, timeoutMinutes: 0);
 
         // Act — must not throw even though StopContainerAsync throws
         await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
@@ -189,7 +189,7 @@ public sealed class TimeoutDetection : WorkerDispatchServiceTestBase
         StubPostExitProviderQueries postExitQueries = new(
             hasCommits: true,
             mergeRequest: new MergeRequestByBranch(MergeRequestPresence.Merged, prUrl));
-        WorkerDispatchService sut = base.BuildService(
+        DispatchAndPublishTicker sut = base.BuildService(
             orchestrator,
             settingsQueries: new StubGlobalSettingsQueries(timeoutMinutes: 0),
             postExitProviderQueries: postExitQueries);
@@ -211,7 +211,7 @@ public sealed class TimeoutDetection : WorkerDispatchServiceTestBase
         TimeoutStubWorkerOrchestrator orchestrator = new(isRunning: true);
         Error notFoundError = new Error("Provider.NotFound", "Branch not found") { Kind = ErrorKind.NotFound };
         StubPostExitProviderQueries postExitQueries = new(hasCommitsError: notFoundError);
-        WorkerDispatchService sut = base.BuildService(
+        DispatchAndPublishTicker sut = base.BuildService(
             orchestrator,
             settingsQueries: new StubGlobalSettingsQueries(timeoutMinutes: 0),
             postExitProviderQueries: postExitQueries);
@@ -232,7 +232,7 @@ public sealed class TimeoutDetection : WorkerDispatchServiceTestBase
         // Arrange — use a very large timeout so no run will time out
         SeedActiveRun();
         TimeoutStubWorkerOrchestrator orchestrator = new(isRunning: true);
-        WorkerDispatchService sut = BuildService(orchestrator, timeoutMinutes: 99999);
+        DispatchAndPublishTicker sut = BuildService(orchestrator, timeoutMinutes: 99999);
 
         // Act
         await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);

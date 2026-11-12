@@ -165,3 +165,23 @@ describe('failure-category', () => {
     }
   });
 });
+
+describe('publish failure categories (#787)', () => {
+  it('should map publish_expired to "PUBLISH EXPIRED"', () => {
+    // Arrange / Act
+    const display = getFailureCategoryDisplay('publish_expired');
+
+    // Assert
+    expect(display?.label).toBe('PUBLISH EXPIRED');
+    expect(display?.cssClass).toBe('badge--failure-publish-expired');
+  });
+
+  it('should map publish_failed to "PUBLISH FAILED"', () => {
+    // Arrange / Act
+    const display = getFailureCategoryDisplay('publish_failed');
+
+    // Assert
+    expect(display?.label).toBe('PUBLISH FAILED');
+    expect(display?.cssClass).toBe('badge--failure-publish-failed');
+  });
+});

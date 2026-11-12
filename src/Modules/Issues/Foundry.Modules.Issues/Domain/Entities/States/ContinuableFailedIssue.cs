@@ -118,6 +118,23 @@ public sealed class ContinuableFailedIssue : Issue
         return failed;
     }
 
+    internal static ContinuableFailedIssue FromPublishFailed(
+        PublishFailedIssue source,
+        string failureReason,
+        FailureCategoryVO failureCategory,
+        DateTimeOffset failedAt)
+    {
+        ContinuableFailedIssue failed = new(source.Id);
+        failed.CopySharedPropertiesFrom(source);
+        failed.WorkerRunId = source.WorkerRunId;
+        failed.BranchName = source.BranchName;
+        failed.PullRequestUrl = source.PullRequestUrl;
+        failed.FailureReason = failureReason;
+        failed.FailureCategory = failureCategory;
+        failed.FailedAt = failedAt;
+        return failed;
+    }
+
     public ContinuationQueuedIssue Retry()
     {
         ContinuationQueuedIssue queued = ContinuationQueuedIssue.FromContinuableFailed(this);

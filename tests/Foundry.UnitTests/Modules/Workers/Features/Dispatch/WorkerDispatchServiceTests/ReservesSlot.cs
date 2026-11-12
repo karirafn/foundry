@@ -19,7 +19,7 @@ namespace Foundry.UnitTests.Modules.Workers.Features.Dispatch.WorkerDispatchServ
 
 public sealed class ReservesSlot : WorkerDispatchServiceTestBase
 {
-    private WorkerDispatchService BuildService(int maxConcurrent = 3)
+    private DispatchAndPublishTicker BuildService(int maxConcurrent = 3)
     {
         StubGlobalSettingsQueries settingsQueries = new(maxConcurrent: maxConcurrent, timeoutMinutes: 120);
 
@@ -32,7 +32,7 @@ public sealed class ReservesSlot : WorkerDispatchServiceTestBase
     public async Task WhenCapacityAvailable_PersistsExactlyOneReservation()
     {
         // Arrange
-        WorkerDispatchService sut = BuildService(maxConcurrent: 3);
+        DispatchAndPublishTicker sut = BuildService(maxConcurrent: 3);
 
         // Act
         await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
@@ -50,7 +50,7 @@ public sealed class ReservesSlot : WorkerDispatchServiceTestBase
         // Arrange
         CapturingIntegrationEventDispatcher dispatcher = new();
         StubGlobalSettingsQueries settingsQueries = new(maxConcurrent: 3, timeoutMinutes: 120);
-        WorkerDispatchService sut = base.BuildService(
+        DispatchAndPublishTicker sut = base.BuildService(
             new NullWorkerOrchestrator(),
             integrationEventDispatcher: dispatcher,
             settingsQueries: settingsQueries);
@@ -84,7 +84,7 @@ public sealed class ReservesSlot : WorkerDispatchServiceTestBase
             await seedDb.SaveChangesAsync(TestContext.Current.CancellationToken);
         }
 
-        WorkerDispatchService sut = BuildService(maxConcurrent: 1);
+        DispatchAndPublishTicker sut = BuildService(maxConcurrent: 1);
 
         // Act
         await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
@@ -111,7 +111,7 @@ public sealed class ReservesSlot : WorkerDispatchServiceTestBase
 
         CapturingIntegrationEventDispatcher dispatcher = new();
         StubGlobalSettingsQueries settingsQueries = new(maxConcurrent: 1, timeoutMinutes: 120);
-        WorkerDispatchService sut = base.BuildService(
+        DispatchAndPublishTicker sut = base.BuildService(
             new NullWorkerOrchestrator(),
             integrationEventDispatcher: dispatcher,
             settingsQueries: settingsQueries);

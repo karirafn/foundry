@@ -569,6 +569,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/workers/runs/{workerRunId}/publish-retry": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Reruns Publish for a run whose publish retries were exhausted */
+        post: operations["RequestWorkerRunPublishRetry"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/workers/run-totals": {
         parameters: {
             query?: never;
@@ -1078,6 +1095,9 @@ export interface components {
             /** Format: int32 */
             rebaseConflictAttempts?: null | number | string;
             awaitingInput?: null | components["schemas"]["AwaitingInputDetails"];
+            branchUrl?: null | string;
+            sideBranchName?: null | string;
+            sideBranchUrl?: null | string;
         };
         IssueSummary: {
             /** Format: uuid */
@@ -1099,6 +1119,7 @@ export interface components {
             rebaseSkippedReason?: null | string;
             providerType?: null | string;
             revisionTriggerKind?: null | string;
+            publishPhase?: null | string;
         };
         MoveRepositoryRequestBody: {
             /** Format: int32 */
@@ -1199,6 +1220,10 @@ export interface components {
         };
         RepositoryWebhookSecret: {
             secret: string;
+        };
+        RequestPublishRetryResponse: {
+            /** Format: uuid */
+            workerRunId: string;
         };
         RequestRunCancellationResponse: {
             /** Format: uuid */
@@ -1471,6 +1496,26 @@ export interface components {
             hasStoredLog: boolean;
             /** Format: date-time */
             cancelRequestedAt: null | string;
+            publish?: null | components["schemas"]["WorkerRunPublishDetail"];
+            publishRetry?: null | components["schemas"]["WorkerRunPublishRetryDetail"];
+            /** Format: date-time */
+            discardsAt?: null | string;
+        };
+        WorkerRunPublishDetail: {
+            headSha: string;
+            headCommitUrl: null | string;
+            pullRequestUrl: null | string;
+            /** Format: int32 */
+            branchCommitCount: number | string;
+        };
+        WorkerRunPublishRetryDetail: {
+            /** Format: int32 */
+            attemptNumber: number | string;
+            /** Format: int32 */
+            maxAttempts: number | string;
+            /** Format: date-time */
+            nextAttemptAt: null | string;
+            reason: string;
         };
     };
     responses: never;
@@ -2822,6 +2867,55 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RequestRunCancellationResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    RequestWorkerRunPublishRetry: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workerRunId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Accepted */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RequestPublishRetryResponse"];
                 };
             };
             /** @description Not Found */

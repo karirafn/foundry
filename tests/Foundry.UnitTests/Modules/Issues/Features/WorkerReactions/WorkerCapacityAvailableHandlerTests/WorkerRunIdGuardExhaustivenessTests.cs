@@ -54,6 +54,8 @@ public sealed class WorkerRunIdGuardExhaustivenessTests : IAsyncDisposable
         typeof(AwaitingInputIssue),
         typeof(TriageInProgressIssue),
         typeof(TriageFailedIssue),
+        typeof(PublishFailedIssue),
+        typeof(BranchDivergedIssue),
     };
 
     public WorkerRunIdGuardExhaustivenessTests()

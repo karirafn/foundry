@@ -80,6 +80,37 @@
   border-left: 3px solid var(--fd-text-tertiary);
 }
 
+// A publishing run: the agent has exited and Foundry pushes its commits. It holds a dispatch slot.
+.floor__slot--publishing {
+  align-items: flex-start;
+  text-align: start;
+  border-style: solid;
+  border-left: 3px solid var(--fd-accent-working);
+}
+
+.floor__slot--publish-retrying {
+  border-left-color: var(--fd-border-warning);
+}
+
+.floor__slot-issue {
+  font-size: 0.875rem;
+  overflow-wrap: anywhere;
+}
+
+.floor__slot-link {
+  color: inherit;
+  text-decoration: none;
+
+  &:hover {
+    text-decoration: underline;
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--fd-text-link);
+    outline-offset: 2px;
+  }
+}
+
 .floor__slot-label {
   font-size: 0.875rem;
   font-weight: 600;

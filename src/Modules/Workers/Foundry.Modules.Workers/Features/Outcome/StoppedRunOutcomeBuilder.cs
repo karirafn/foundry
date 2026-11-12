@@ -16,7 +16,7 @@ namespace Foundry.Modules.Workers.Features.Outcome;
 internal static class StoppedRunOutcomeBuilder
 {
     public static async Task<WorkerOutcome> BuildAsync(
-        ActiveRun run,
+        IResolvableRun run,
         FailureReason failureReason,
         string? containerOutput,
         RunResultSummary? summary,

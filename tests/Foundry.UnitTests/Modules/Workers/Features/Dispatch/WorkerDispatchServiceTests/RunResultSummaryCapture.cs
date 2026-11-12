@@ -28,7 +28,7 @@ namespace Foundry.UnitTests.Modules.Workers.Features.Dispatch.WorkerDispatchServ
 /// </summary>
 public sealed class RunResultSummaryCapture : WorkerDispatchServiceTestBase
 {
-    private WorkerDispatchService BuildService(
+    private DispatchAndPublishTicker BuildService(
         IWorkerOrchestrator orchestrator,
         IContainerOutputParser containerOutputParser,
         IPostExitProviderQueries? postExitProviderQueries = null)
@@ -53,7 +53,7 @@ public sealed class RunResultSummaryCapture : WorkerDispatchServiceTestBase
             hasCommits: true,
             mergeRequest: new MergeRequestByBranch(MergeRequestPresence.Open, "https://github.com/owner/repo/pull/1"));
         ExitedWorkerOrchestrator orchestrator = new(exitedStatus, logs: "some output");
-        WorkerDispatchService sut = BuildService(orchestrator, parser, queries);
+        DispatchAndPublishTicker sut = BuildService(orchestrator, parser, queries);
 
         // Act
         await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
@@ -78,7 +78,7 @@ public sealed class RunResultSummaryCapture : WorkerDispatchServiceTestBase
         ScriptedContainerOutputParser parser = new(runResultSummary: summary);
         StubPostExitProviderQueries queries = new(hasCommits: false);
         ExitedWorkerOrchestrator orchestrator = new(exitedStatus, logs: "error output");
-        WorkerDispatchService sut = BuildService(orchestrator, parser, queries);
+        DispatchAndPublishTicker sut = BuildService(orchestrator, parser, queries);
 
         // Act
         await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
@@ -100,7 +100,7 @@ public sealed class RunResultSummaryCapture : WorkerDispatchServiceTestBase
         ScriptedContainerOutputParser parser = new(runResultSummary: null);
         StubPostExitProviderQueries queries = new(hasCommits: false);
         ExitedWorkerOrchestrator orchestrator = new(exitedStatus, logs: "no result line");
-        WorkerDispatchService sut = BuildService(orchestrator, parser, queries);
+        DispatchAndPublishTicker sut = BuildService(orchestrator, parser, queries);
 
         // Act — must not throw when ParseRunResultSummary returns null
         await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
@@ -124,7 +124,7 @@ public sealed class RunResultSummaryCapture : WorkerDispatchServiceTestBase
         ScriptedContainerOutputParser parser = new(runResultSummary: summary);
         StubPostExitProviderQueries queries = new(hasCommits: false);
         ExitedWorkerOrchestrator orchestrator = new(exitedStatus, logs: "output");
-        WorkerDispatchService sut = BuildService(orchestrator, parser, queries);
+        DispatchAndPublishTicker sut = BuildService(orchestrator, parser, queries);
 
         // Act
         await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
@@ -150,7 +150,7 @@ public sealed class RunResultSummaryCapture : WorkerDispatchServiceTestBase
         // has commits but no PR
         StubPostExitProviderQueries queries = new(hasCommits: true);
         ExitedWorkerOrchestrator orchestrator = new(exitedStatus, logs: "output");
-        WorkerDispatchService sut = BuildService(orchestrator, parser, queries);
+        DispatchAndPublishTicker sut = BuildService(orchestrator, parser, queries);
 
         // Act
         await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
@@ -176,7 +176,7 @@ public sealed class RunResultSummaryCapture : WorkerDispatchServiceTestBase
         ExitedWorkerOrchestrator orchestrator = new(
             new WorkerStatus(IsRunning: true, ExitCode: null, FinishedAt: null),
             logs: "timeout output");
-        WorkerDispatchService sut = base.BuildService(
+        DispatchAndPublishTicker sut = base.BuildService(
             orchestrator,
             containerOutputParser: parser,
             settingsQueries: settingsQueries);
@@ -212,7 +212,7 @@ public sealed class RunResultSummaryCapture : WorkerDispatchServiceTestBase
             hasCommits: true,
             mergeRequest: new MergeRequestByBranch(MergeRequestPresence.Open, "https://github.com/owner/repo/pull/1"));
         ExitedWorkerOrchestrator orchestrator = new(exitedStatus, logs);
-        WorkerDispatchService sut = BuildService(orchestrator, parser, queries);
+        DispatchAndPublishTicker sut = BuildService(orchestrator, parser, queries);
 
         // Act
         await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);

@@ -33,7 +33,7 @@ claude -p "$WORKER_PROMPT" \
   `workers/roles/shared/verdict.defs.json` merged in, by the same `jq` program as the entrypoint's
   `prepare_role_verdict_schema`.
 - `$WORKER_PROMPT` and `$SYSTEM_PROMPT` are short synthetic prompts asking for a one-sentence reply
-  and the verdict `done`, and the CLI runs in an empty scratch directory, so no repository or issue
+  and the verdict `done` with its `pullRequest` text, and the CLI runs in an empty scratch directory, so no repository or issue
   content can enter the transcript.
 - The role and C# LSP plugin arguments are omitted: they add tools, not output format.
 
@@ -54,3 +54,7 @@ Applied by the script's `jq` filter:
 
 Everything else — event order, the assistant and tool-result events, and the final `result` event
 with its `usage`, `modelUsage` and `structured_output` — is the CLI's output unchanged.
+
+Exception: when the implement verdict gained its required `pullRequest` field (#787), the verdict in
+the `StructuredOutput` tool input, the `result` text and `structured_output` was extended by hand with
+a `pullRequest` object instead of re-capturing. Re-capture with the script to replace it.

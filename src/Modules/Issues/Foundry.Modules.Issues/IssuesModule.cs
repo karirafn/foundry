@@ -3,6 +3,7 @@ using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Issues.Domain.Events;
 using Foundry.Modules.Issues.Features;
 using Foundry.Modules.Issues.Features.AwaitingInput;
+using Foundry.Modules.Issues.Features.BranchDivergence;
 using Foundry.Modules.Issues.Features.Claiming;
 using Foundry.Modules.Issues.Features.CredentialReactions;
 using Foundry.Modules.Issues.Features.Dependencies;
@@ -32,6 +33,7 @@ public static class IssuesModule
         services.AddScoped<IAwaitingInputCommands, AwaitingInputCommands>();
         services.AddScoped<IssueDependencyApplier>();
         services.AddHostedService<TransientRetryService>();
+        services.AddHostedService<BranchDivergedResumeService>();
 
         services.AddCommandHandler<RetryIssue.Command, IssueDetail, RetryIssue.Handler>();
         services.AddCommandHandler<RetryIssueFresh.Command, IssueDetail, RetryIssueFresh.Handler>();
@@ -45,6 +47,8 @@ public static class IssuesModule
         services.AddIntegrationEventHandler<WorkerCapacityAvailable, WorkerCapacityAvailableHandler>();
         services.AddIntegrationEventHandler<WorkerRunCompleted, WorkerRunCompletedHandler>();
         services.AddIntegrationEventHandler<WorkerRunFailed, WorkerRunFailedHandler>();
+        services.AddIntegrationEventHandler<WorkerRunPublishRetryRequested, WorkerRunPublishRetryRequestedHandler>();
+        services.AddIntegrationEventHandler<WorkerRunPublishPhaseChanged, WorkerRunPublishPhaseChangedHandler>();
         services.AddIntegrationEventHandler<TriageRunCompleted, TriageRunCompletedHandler>();
         services.AddIntegrationEventHandler<ProviderIssueClosed, ProviderIssueClosedHandler>();
         services.AddIntegrationEventHandler<ProviderIssueUntracked, ProviderIssueUntrackedHandler>();
@@ -77,6 +81,8 @@ public static class IssuesModule
         AddIssueStateChangedHandler<IssueTriageQueued>(services);
         AddIssueStateChangedHandler<IssueTriageInProgress>(services);
         AddIssueStateChangedHandler<IssueTriageFailed>(services);
+        AddIssueStateChangedHandler<IssuePublishFailed>(services);
+        AddIssueStateChangedHandler<IssueBranchDiverged>(services);
         services.AddScoped<IDomainEventHandler<IssueAwaitingInput>, IssueAwaitingInputNudgeBridge>();
         services.AddScoped<IDomainEventHandler<IssueRebasePending>, IssueRebasePendingNudgeBridge>();
 

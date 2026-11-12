@@ -22,6 +22,8 @@ export const STATE_LABELS: Record<IssueState, string> = {
   triage_queued: 'TRIAGE QUEUED',
   triage_in_progress: 'TRIAGING',
   triage_failed: 'TRIAGE FAILED',
+  publish_failed: 'PUBLISH FAILED',
+  branch_diverged: 'BRANCH DIVERGED',
 };
 
 export const STATE_ARIA_LABELS: Record<IssueState, string> = {
@@ -44,6 +46,8 @@ export const STATE_ARIA_LABELS: Record<IssueState, string> = {
   triage_queued: 'triage queued',
   triage_in_progress: 'triaging',
   triage_failed: 'triage failed',
+  publish_failed: 'publish failed',
+  branch_diverged: 'branch diverged',
 };
 
 export const STATE_CSS_CLASSES: Record<IssueState, string> = {
@@ -66,6 +70,8 @@ export const STATE_CSS_CLASSES: Record<IssueState, string> = {
   triage_queued: 'badge--triage-queued',
   triage_in_progress: 'badge--triage-in-progress',
   triage_failed: 'badge--triage-failed',
+  publish_failed: 'badge--publish-failed',
+  branch_diverged: 'badge--branch-diverged',
 };
 
 export function cardAccentFor(state: IssueState): 'working' | 'ready' | null {
@@ -88,6 +94,8 @@ export interface StateDisplay {
 export interface StateDisplayOptions {
   readonly failureClassification?: string | null;
   readonly revisionTriggerKind?: RevisionTriggerKind | null;
+  /** Set while Foundry publishes a working run's commits, or retries a failed publish. */
+  readonly publishPhase?: 'publishing' | 'retrying' | null;
 }
 
 type RevisionState = Extract<IssueState, 'revision_queued' | 'revision_in_progress' | 'revision_failed'>;
@@ -140,6 +148,11 @@ function triggerLabelFor(state: IssueState, kind: RevisionTriggerKind | null | u
  * Precedence: failure category, then revision trigger, then the plain state.
  */
 export function resolveStateDisplay(state: IssueState, options: StateDisplayOptions = {}): StateDisplay {
+  const publish = publishDisplayFor(state, options.publishPhase);
+  if (publish !== null) {
+    return publish;
+  }
+
   const classification = options.failureClassification;
   if (classification != null && FAILURE_CATEGORY_STATES.has(state)) {
     const failure = getFailureCategoryDisplay(classification);
@@ -154,4 +167,19 @@ export function resolveStateDisplay(state: IssueState, options: StateDisplayOpti
   }
 
   return { label: STATE_LABELS[state], ariaLabel: STATE_ARIA_LABELS[state], cssClass: STATE_CSS_CLASSES[state] };
+}
+
+function publishDisplayFor(
+  state: IssueState,
+  phase: 'publishing' | 'retrying' | null | undefined,
+): StateDisplay | null {
+  if (phase == null || !WORKING_STATES.has(state)) {
+    return null;
+  }
+  if (phase === 'retrying') {
+    return { label: 'PUBLISH RETRY', ariaLabel: 'publish retrying', cssClass: 'badge--retrying' };
+  }
+  return state === 'revision_in_progress'
+    ? { label: 'REV PUBLISHING', ariaLabel: 'revision publishing', cssClass: 'badge--publishing' }
+    : { label: 'PUBLISHING', ariaLabel: 'publishing', cssClass: 'badge--publishing' };
 }

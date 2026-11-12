@@ -25,7 +25,7 @@ public sealed class TerminalContainerCleanup : WorkerDispatchServiceTestBase
         SeedActiveRun("container-exit-zero");
         WorkerStatus exitedStatus = new(IsRunning: false, ExitCode: 0, FinishedAt: DateTimeOffset.UtcNow);
         TerminalCleanupStub orchestrator = new(status: exitedStatus);
-        WorkerDispatchService sut = BuildService(orchestrator);
+        DispatchAndPublishTicker sut = BuildService(orchestrator);
 
         // Act
         await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
@@ -44,7 +44,7 @@ public sealed class TerminalContainerCleanup : WorkerDispatchServiceTestBase
         SeedActiveRun("container-exit-nonzero");
         WorkerStatus exitedStatus = new(IsRunning: false, ExitCode: 2, FinishedAt: DateTimeOffset.UtcNow);
         TerminalCleanupStub orchestrator = new(status: exitedStatus);
-        WorkerDispatchService sut = BuildService(orchestrator);
+        DispatchAndPublishTicker sut = BuildService(orchestrator);
 
         // Act
         await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
@@ -62,7 +62,7 @@ public sealed class TerminalContainerCleanup : WorkerDispatchServiceTestBase
         // Arrange — seed ActiveRun; reconciliation on first tick finds container missing → FailedRun + TryStopAsync
         SeedActiveRun("container-not-found");
         TerminalCleanupStub orchestrator = new(status: null);
-        WorkerDispatchService sut = BuildService(orchestrator);
+        DispatchAndPublishTicker sut = BuildService(orchestrator);
 
         // Act
         await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
@@ -78,7 +78,7 @@ public sealed class TerminalContainerCleanup : WorkerDispatchServiceTestBase
         SeedActiveRun("container-stop-throws");
         WorkerStatus exitedStatus = new(IsRunning: false, ExitCode: 0, FinishedAt: DateTimeOffset.UtcNow);
         TerminalCleanupStub orchestrator = new(status: exitedStatus, stopThrows: true);
-        WorkerDispatchService sut = BuildService(orchestrator);
+        DispatchAndPublishTicker sut = BuildService(orchestrator);
 
         // Act — must not throw even though StopAsync throws
         await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);

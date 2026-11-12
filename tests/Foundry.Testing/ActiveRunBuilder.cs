@@ -55,16 +55,4 @@ public sealed class ActiveRunBuilder
         return starting.Activate(_containerId, _branchName, _monitoredRepositoryId);
     }
 
-    /// <summary>
-    /// Builds an <see cref="ActiveRun"/> that has had
-    /// <see cref="ActiveRun.RecordBranchCommitCount"/> replayed with the given count and SHA,
-    /// simulating a run that has already observed a commit.
-    /// </summary>
-    public ActiveRun WithObservedCommit(int count, string sha)
-    {
-        ActiveRun run = Build();
-        run.RecordBranchCommitCount(count, sha, DateTimeOffset.UtcNow);
-        run.ClearDomainEvents();
-        return run;
-    }
 }

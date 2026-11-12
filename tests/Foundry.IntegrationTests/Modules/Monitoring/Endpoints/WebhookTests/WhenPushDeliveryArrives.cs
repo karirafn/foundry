@@ -6,7 +6,7 @@ using Foundry.Modules.Workers.Contracts;
 using Foundry.Modules.Workers.Domain.Entities;
 using Foundry.Modules.Workers.Domain.Entities.States;
 using Foundry.Modules.Workers.Domain.ValueObjects;
-using Foundry.Modules.Workers.Features.Dispatch;
+using Foundry.Shared.Infrastructure;
 using Foundry.Shared;
 
 using Microsoft.AspNetCore.Http;
@@ -20,14 +20,25 @@ using Xunit;
 namespace Foundry.IntegrationTests.Modules.Monitoring.Endpoints.WebhookTests;
 
 /// <summary>
-/// Push deliveries (issue #660): a push to the branch of a running worker reaches Workers as the ephemeral
+/// Push deliveries (issue #660): a push to the branch of a running worker is published as the ephemeral
 /// <c>ProviderBranchPushed</c>; any other push is dropped by the relevance filter. Neither enqueues a nudge.
 /// </summary>
 public sealed class WhenPushDeliveryArrives : IAsyncDisposable
 {
     private const string RunBranch = "feat/42-push-tracking";
 
-    private readonly FoundryWebAppFactory _factory = WebhookTestHost.CreateFactory();
+    private readonly ProviderBranchPushLog _pushes = new();
+
+    private readonly FoundryWebAppFactory _factory;
+
+    public WhenPushDeliveryArrives()
+    {
+        _factory = WebhookTestHost.CreateFactory(services =>
+        {
+            services.AddSingleton(_pushes);
+            services.AddIntegrationEventHandler<ProviderBranchPushed, ProviderBranchPushRecorder>();
+        });
+    }
 
     async ValueTask IAsyncDisposable.DisposeAsync()
     {
@@ -35,7 +46,7 @@ public sealed class WhenPushDeliveryArrives : IAsyncDisposable
     }
 
     [Fact]
-    public async Task WhenGitHubPushTargetsRunningWorkerBranch_RecordsPushForWorkers()
+    public async Task WhenGitHubPushTargetsRunningWorkerBranch_PublishesTheBranchPush()
     {
         // Arrange
         MonitoredRepository repository = await WebhookTestHost.SeedRepositoryAsync(_factory, "owner/repo", registered: true);
@@ -51,7 +62,7 @@ public sealed class WhenPushDeliveryArrives : IAsyncDisposable
 
         // Assert
         response.Response.StatusCode.ShouldBe(StatusCodes.Status202Accepted);
-        Gate.IsPushPending(repository.Id, RunBranch).ShouldBeTrue();
+        _pushes.Contains(repository.Id, RunBranch).ShouldBeTrue();
         WebhookTestHost.DrainNudges(_factory).ShouldBeEmpty();
     }
 
@@ -72,7 +83,7 @@ public sealed class WhenPushDeliveryArrives : IAsyncDisposable
 
         // Assert
         response.Response.StatusCode.ShouldBe(StatusCodes.Status202Accepted);
-        Gate.IsPushPending(repository.Id, "main").ShouldBeFalse();
+        _pushes.Contains(repository.Id, "main").ShouldBeFalse();
         WebhookTestHost.DrainNudges(_factory).ShouldBeEmpty();
     }
 
@@ -92,7 +103,7 @@ public sealed class WhenPushDeliveryArrives : IAsyncDisposable
             repository.WebhookSecret);
 
         // Assert
-        Gate.IsPushPending(repository.Id, RunBranch).ShouldBeFalse();
+        _pushes.Contains(repository.Id, RunBranch).ShouldBeFalse();
     }
 
     [Fact]
@@ -111,11 +122,11 @@ public sealed class WhenPushDeliveryArrives : IAsyncDisposable
             repository.WebhookSecret);
 
         // Assert
-        Gate.IsPushPending(repository.Id, RunBranch).ShouldBeFalse();
+        _pushes.Contains(repository.Id, RunBranch).ShouldBeFalse();
     }
 
     [Fact]
-    public async Task WhenGitLabPushHookTargetsRunningWorkerBranch_RecordsPushForWorkers()
+    public async Task WhenGitLabPushHookTargetsRunningWorkerBranch_PublishesTheBranchPush()
     {
         // Arrange
         MonitoredRepository repository = await WebhookTestHost.SeedRepositoryAsync(
@@ -138,7 +149,7 @@ public sealed class WhenPushDeliveryArrives : IAsyncDisposable
 
         // Assert
         response.Response.StatusCode.ShouldBe(StatusCodes.Status202Accepted);
-        Gate.IsPushPending(repository.Id, RunBranch).ShouldBeTrue();
+        _pushes.Contains(repository.Id, RunBranch).ShouldBeTrue();
         WebhookTestHost.DrainNudges(_factory).ShouldBeEmpty();
     }
 
@@ -195,8 +206,6 @@ public sealed class WhenPushDeliveryArrives : IAsyncDisposable
         // Assert
         active.ShouldBeFalse();
     }
-
-    private RunningBranchCompareGate Gate => _factory.Services.GetRequiredService<RunningBranchCompareGate>();
 
     private static string GitHubPushBody(string slug, string pushedRef) => $$$"""
         {"ref":"{{{pushedRef}}}","before":"0000","after":"1111","repository":{"full_name":"{{{slug}}}"}}

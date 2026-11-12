@@ -28,6 +28,14 @@ public interface IWorkerRunQueries
 
     Task<IReadOnlyCollection<WorkerActivity>> GetActiveRunActivityAsync(
         CancellationToken cancellationToken);
+
+    /// <summary>
+    /// The publish phase of each issue's run that is publishing or retrying a publish (ADR 0100), keyed by issue ID.
+    /// Issues whose run is in neither phase are absent.
+    /// </summary>
+    Task<IReadOnlyDictionary<Guid, WorkerRunPublishPhase>> GetPublishPhasesForIssuesAsync(
+        IReadOnlyCollection<Guid> issueIds,
+        CancellationToken cancellationToken);
 }
 
 /// <summary>

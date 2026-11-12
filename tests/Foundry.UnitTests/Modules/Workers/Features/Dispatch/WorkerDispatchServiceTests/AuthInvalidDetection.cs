@@ -43,7 +43,7 @@ public sealed class AuthInvalidDetection : WorkerDispatchServiceTestBase
         {"type":"result","subtype":"success","is_error":true,"num_turns":1,"api_error_status":null,"duration_ms":117,"result":"Failed to authenticate: OAuth session expired and could not be refreshed"}
         """;
 
-    private WorkerDispatchService BuildServiceWithParser(
+    private DispatchAndPublishTicker BuildServiceWithParser(
         string? containerLogs,
         WorkerStatus exitedStatus,
         IIntegrationEventDispatcher? integrationEventDispatcher = null)
@@ -72,7 +72,7 @@ public sealed class AuthInvalidDetection : WorkerDispatchServiceTestBase
         SeedGlobalSettings();
         SeedActiveRun("container-auth-invalid-reason");
         WorkerStatus exitedStatus = new(IsRunning: false, ExitCode: 1, FinishedAt: DateTimeOffset.UtcNow);
-        WorkerDispatchService sut = BuildServiceWithParser(AuthInvalidOutput, exitedStatus);
+        DispatchAndPublishTicker sut = BuildServiceWithParser(AuthInvalidOutput, exitedStatus);
 
         // Act
         await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
@@ -93,7 +93,7 @@ public sealed class AuthInvalidDetection : WorkerDispatchServiceTestBase
         SeedActiveRun("container-auth-invalid-category");
         WorkerStatus exitedStatus = new(IsRunning: false, ExitCode: 1, FinishedAt: DateTimeOffset.UtcNow);
         CapturingIntegrationEventDispatcher dispatcher = new();
-        WorkerDispatchService sut = BuildServiceWithParser(
+        DispatchAndPublishTicker sut = BuildServiceWithParser(
             AuthInvalidOutput,
             exitedStatus,
             integrationEventDispatcher: dispatcher);
@@ -116,7 +116,7 @@ public sealed class AuthInvalidDetection : WorkerDispatchServiceTestBase
         ActiveRun activeRun = SeedActiveRun("container-auth-invalid-event");
         WorkerStatus exitedStatus = new(IsRunning: false, ExitCode: 1, FinishedAt: DateTimeOffset.UtcNow);
         CapturingIntegrationEventDispatcher dispatcher = new();
-        WorkerDispatchService sut = BuildServiceWithParser(
+        DispatchAndPublishTicker sut = BuildServiceWithParser(
             AuthInvalidOutput,
             exitedStatus,
             integrationEventDispatcher: dispatcher);
@@ -140,7 +140,7 @@ public sealed class AuthInvalidDetection : WorkerDispatchServiceTestBase
         ActiveRun activeRun = SeedActiveRun("container-auth-invalid-exit-zero");
         WorkerStatus exitedStatus = new(IsRunning: false, ExitCode: 0, FinishedAt: DateTimeOffset.UtcNow);
         CapturingIntegrationEventDispatcher dispatcher = new();
-        WorkerDispatchService sut = BuildServiceWithParser(
+        DispatchAndPublishTicker sut = BuildServiceWithParser(
             AuthInvalidIsErrorExitZeroOutput,
             exitedStatus,
             integrationEventDispatcher: dispatcher);
@@ -169,7 +169,7 @@ public sealed class AuthInvalidDetection : WorkerDispatchServiceTestBase
         ActiveRun activeRun = SeedActiveRun("container-failed-to-authenticate");
         WorkerStatus exitedStatus = new(IsRunning: false, ExitCode: 1, FinishedAt: DateTimeOffset.UtcNow);
         CapturingIntegrationEventDispatcher dispatcher = new();
-        WorkerDispatchService sut = BuildServiceWithParser(
+        DispatchAndPublishTicker sut = BuildServiceWithParser(
             FailedToAuthenticateOutput,
             exitedStatus,
             integrationEventDispatcher: dispatcher);
@@ -200,7 +200,7 @@ public sealed class AuthInvalidDetection : WorkerDispatchServiceTestBase
         // Arrange — deliberately NO SeedGlobalSettings() call
         SeedActiveRun("container-auth-invalid-no-settings");
         WorkerStatus exitedStatus = new(IsRunning: false, ExitCode: 1, FinishedAt: DateTimeOffset.UtcNow);
-        WorkerDispatchService sut = BuildServiceWithParser(AuthInvalidOutput, exitedStatus);
+        DispatchAndPublishTicker sut = BuildServiceWithParser(AuthInvalidOutput, exitedStatus);
 
         // Act
         await sut.ExecuteTickAsync(TestContext.Current.CancellationToken);
@@ -218,7 +218,7 @@ public sealed class AuthInvalidDetection : WorkerDispatchServiceTestBase
     {
         // Arrange
         CapturingIntegrationEventDispatcher dispatcher = new();
-        WorkerDispatchService sut = BuildService(
+        DispatchAndPublishTicker sut = BuildService(
             new NullWorkerOrchestrator(),
             integrationEventDispatcher: dispatcher,
             credentialGate: new CannotDispatchCredentialGate());

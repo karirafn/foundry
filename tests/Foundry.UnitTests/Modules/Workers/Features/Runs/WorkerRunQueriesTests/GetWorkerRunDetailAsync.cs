@@ -367,35 +367,4 @@ public sealed class GetWorkerRunDetailAsync : IAsyncDisposable
         WorkerRunDetail detail = result.ShouldBeOfType<Result<WorkerRunDetail>.Success>().Value;
         detail.State.ShouldBe("completed");
     }
-
-    [Fact]
-    public async Task WhenActiveRunHasBranchCommitCount_ReturnsRunningState()
-    {
-        // Arrange
-        WorkerRunId id = WorkerRunId.New();
-        IssueId issueId = IssueId.New();
-        StartingRun starting = StartingRun.Begin(issueId, id);
-        ActiveRun active = starting.Activate(
-            ContainerId.From("container-with-commits"),
-            BranchName.From("feat/4-commits"),
-            MonitoredRepositoryId.New());
-
-        DateTimeOffset observedAt = DateTimeOffset.UtcNow;
-        active.RecordBranchCommitCount(2, "abc123", observedAt);
-
-        _dbContext.Set<WorkerRun>().Add(active);
-        await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
-        _dbContext.ChangeTracker.Clear();
-
-        WorkerRunQueries sut = new(_dbContext);
-
-        // Act
-        Result<WorkerRunDetail> result = await sut.GetWorkerRunDetailAsync(
-            active.Id.Value,
-            TestContext.Current.CancellationToken);
-
-        // Assert
-        WorkerRunDetail detail = result.ShouldBeOfType<Result<WorkerRunDetail>.Success>().Value;
-        detail.State.ShouldBe("running");
-    }
 }
