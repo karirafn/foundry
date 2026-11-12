@@ -42,6 +42,11 @@ public sealed class IntegrationEventPayloadCredentialTests
 
     private static IEnumerable<string> SerializedPropertyPaths(Type eventType)
     {
+        // Options that have not yet serialized anything are still mutable with no resolver, so GetTypeInfo throws.
+        // Serializing freezes them with the default reflection resolver; freeze them the same way here so the test
+        // does not depend on an earlier test having serialized through the shared options.
+        OutboxSerializerOptions.Default.MakeReadOnly(populateMissingResolver: true);
+
         HashSet<Type> visited = [];
         Stack<(JsonTypeInfo Info, string Path)> pending = new();
         pending.Push((OutboxSerializerOptions.Default.GetTypeInfo(eventType), eventType.Name));
