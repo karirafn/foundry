@@ -58,12 +58,14 @@ internal static partial class SystemPromptBuilder
             TrackerFit withIndex = fit with { IndexKept = true };
             int cost = TrackerBytes(trackerContext, withIndex) - fittedBytes;
 
-            if (cost <= slackBytes)
+            if (cost > slackBytes)
             {
-                fit = withIndex;
-                fittedBytes += cost;
-                slackBytes -= cost;
+                return fit;
             }
+
+            fit = withIndex;
+            fittedBytes += cost;
+            slackBytes -= cost;
         }
 
         for (int kept = 1; kept <= trackerContext.ReferencedIssues.Count; kept++)

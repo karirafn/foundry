@@ -163,6 +163,7 @@ public sealed class TrackerContextShedding
         // Assert
         prompt.ShouldSatisfyAllConditions(
             () => Encoding.UTF8.GetByteCount(prompt).ShouldBeLessThan(SystemPromptBuilder.MaxSystemPromptBytes),
+            () => KeptBodyCount(prompt).ShouldBe(0),
             () => prompt.ShouldNotContain("<open-issues>"),
             () => prompt.ShouldContain("Note: the open-issue list was omitted to fit the prompt size budget."));
     }
@@ -415,6 +416,7 @@ public sealed class TrackerContextShedding
         // Assert
         prompt.ShouldSatisfyAllConditions(
             () => Encoding.UTF8.GetByteCount(prompt).ShouldBeLessThan(SystemPromptBuilder.MaxSystemPromptBytes),
+            () => KeptBodyCount(prompt).ShouldBe(0),
             () => prompt.ShouldNotContain("<open-issues>"),
             () => prompt.ShouldContain("Note: the open-issue list was omitted to fit the prompt size budget."));
     }
