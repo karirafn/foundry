@@ -208,6 +208,7 @@ public sealed class IssueConfiguration : IEntityTypeConfiguration<Issue>
             .HasValue<DetectedIssue>("detected")
             .HasValue<FreshQueuedIssue>("queued")
             .HasValue<BlockedIssue>("blocked")
+            .HasValue<TriageBlockedIssue>("triage_blocked")
             .HasValue<InProgressIssue>("in_progress")
             .HasValue<ReviewIssue>("review")
             .HasValue<UnchangedIssue>("unchanged")

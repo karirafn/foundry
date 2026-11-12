@@ -201,6 +201,18 @@ public sealed class AddIssuesModule : IAsyncDisposable
     }
 
     [Fact]
+    public void WhenServicesRegistered_IssueTriageBlockedHandlerResolvable()
+    {
+        // Arrange & Act
+        using IServiceScope scope = _serviceProvider.CreateScope();
+
+        // Assert
+        IDomainEventHandler<IssueTriageBlocked> handler =
+            scope.ServiceProvider.GetRequiredService<IDomainEventHandler<IssueTriageBlocked>>();
+        handler.ShouldBeOfType<IssueStateChangedAdapter<IssueTriageBlocked>>();
+    }
+
+    [Fact]
     public void WhenServicesRegistered_IssueCompletedHandlerResolvable()
     {
         // Arrange & Act

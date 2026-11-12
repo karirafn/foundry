@@ -12,6 +12,7 @@ public sealed class WhenName_IsKnown
     [InlineData("detected")]
     [InlineData("queued")]
     [InlineData("blocked")]
+    [InlineData("triage_blocked")]
     [InlineData("in_progress")]
     [InlineData("review")]
     [InlineData("failed")]

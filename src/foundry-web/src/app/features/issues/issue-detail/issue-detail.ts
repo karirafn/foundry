@@ -72,9 +72,9 @@ const PUBLISH_RETRY_STATES: ReadonlySet<string> = new Set<string>(['publish_fail
 
 const RETRIAGE_MESSAGE =
   'The issue leaves the queue and a triage worker reads it again. If it needs more detail, the questions are posted on the issue and it waits for a reply.';
-const RETRIAGE_BLOCKED_SUFFIX = ' If its blockers are still open afterwards, it returns to Blocked.';
+const RETRIAGE_BLOCKED_SUFFIX = ' While its blockers are open it waits untriaged, and triage runs once they close.';
 
-type TriageCalloutKind = 'waiting' | 'running' | 'failed' | 'needs_detail' | 'verdict' | 'not_triaged';
+type TriageCalloutKind = 'waiting' | 'waiting_on_blockers' | 'running' | 'failed' | 'needs_detail' | 'verdict' | 'not_triaged';
 
 interface TriageCallout {
   readonly kind: TriageCalloutKind;
@@ -426,6 +426,9 @@ interface TriageCallout {
               @switch (callout.kind) {
                 @case ('waiting') {
                   <span class="issue-detail__field-value issue-detail__triage-message">Waiting for a worker to triage this issue.</span>
+                }
+                @case ('waiting_on_blockers') {
+                  <span class="issue-detail__field-value issue-detail__triage-message">Waiting for its blockers to close. Triage runs once they do.</span>
                 }
                 @case ('running') {
                   <span class="issue-detail__field-value issue-detail__triage-message"
@@ -1089,6 +1092,10 @@ export class IssueDetailComponent {
   protected _triageCallout(d: IssueDetail): TriageCallout | null {
     if (TRIAGE_WAITING_STATES.has(d.state)) {
       return { kind: 'waiting', tint: 'neutral' };
+    }
+    // Before the verdict check: an untriaged issue waiting on blockers has no verdict to show (ADR 0102).
+    if (d.state === 'triage_blocked') {
+      return { kind: 'waiting_on_blockers', tint: 'neutral' };
     }
     if (d.state === 'triage_in_progress') {
       return { kind: 'running', tint: 'neutral' };

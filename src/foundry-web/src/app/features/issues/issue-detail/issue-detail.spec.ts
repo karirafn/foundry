@@ -2308,6 +2308,7 @@ describe('IssueDetailComponent — triage (#772)', () => {
   it.each([
     ['detected', 'Waiting for a worker to triage this issue.', 'neutral'],
     ['triage_queued', 'Waiting for a worker to triage this issue.', 'neutral'],
+    ['triage_blocked', 'Waiting for its blockers to close. Triage runs once they do.', 'neutral'],
     ['triage_in_progress', 'A triage worker is reading the issue and the repository.', 'neutral'],
     [
       'triage_failed',
@@ -2325,6 +2326,41 @@ describe('IssueDetailComponent — triage (#772)', () => {
     expect(text(region())).toContain(message);
     expect(region().classList.contains(`issue-detail__triage-state--${tint}`)).toBe(true);
     expect(region().classList.contains('issue-detail__triage-live-region--empty')).toBe(false);
+  });
+
+  it('should show a triage_blocked issue its blockers', () => {
+    // Arrange / Act
+    const { el } = setup(
+      issue('triage_blocked', {
+        stateDetails: { ...mockStateDetails, branchName: null, completedAt: null, blockedBy: [12, 14] },
+      }),
+    );
+
+    // Assert
+    const blockedBy = Array.from(el.querySelectorAll('.issue-detail__field')).find(
+      (field) => text(field.querySelector('.issue-detail__field-key')) === 'Blocked By',
+    );
+    expect(text(blockedBy?.querySelector('.issue-detail__field-value') ?? null)).toBe('12, 14');
+  });
+
+  it('should offer no operator actions for a triage_blocked issue', () => {
+    // Arrange / Act
+    const { el } = setup(
+      issue('triage_blocked', {
+        stateDetails: { ...mockStateDetails, branchName: null, completedAt: null, blockedBy: [12, 14] },
+      }),
+    );
+
+    // Assert
+    expect(el.querySelector('.issue-detail__actions')).toBeNull();
+  });
+
+  it('should show the triage_blocked callout ahead of a recorded verdict', () => {
+    // Arrange / Act
+    const { region } = setup(issue('triage_blocked', { triage: verdict() }));
+
+    // Assert
+    expect(text(region())).toContain('Waiting for its blockers to close. Triage runs once they do.');
   });
 
   it('should lead the triage_failed callout with a bold "Triage did not finish."', () => {
@@ -2640,7 +2676,7 @@ describe('IssueDetailComponent — triage (#772)', () => {
     expect(service.retriage).toHaveBeenCalledWith('abc123');
   });
 
-  it('should add the blockers sentence to the Re-triage dialog from blocked', () => {
+  it('should tell the Re-triage dialog from blocked that triage waits for open blockers', () => {
     // Arrange
     const { fixture, button, openDialog } = setup(issue('blocked'));
 
@@ -2650,7 +2686,7 @@ describe('IssueDetailComponent — triage (#772)', () => {
 
     // Assert
     expect(text(openDialog()!.querySelector('.confirm-dialog__message'))).toBe(
-      'The issue leaves the queue and a triage worker reads it again. If it needs more detail, the questions are posted on the issue and it waits for a reply. If its blockers are still open afterwards, it returns to Blocked.',
+      'The issue leaves the queue and a triage worker reads it again. If it needs more detail, the questions are posted on the issue and it waits for a reply. While its blockers are open it waits untriaged, and triage runs once they close.',
     );
   });
 

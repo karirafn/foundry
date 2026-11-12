@@ -482,6 +482,111 @@ public sealed class SelectAsync : IAsyncDisposable
         _domainEventDispatcher.DispatchedEvents.OfType<CircularDependencyDetected>().ShouldHaveSingleItem();
     }
 
+    private TriageQueuedIssue SeedTriageQueuedIssue(MonitoredRepositoryId repositoryId, int issueNumber)
+    {
+        TriageQueuedIssue queued = new IssueBuilder()
+            .WithMonitoredRepositoryId(repositoryId)
+            .WithIssueNumber(issueNumber)
+            .WithTitle($"Issue {issueNumber}")
+            .TriageQueued();
+        _dbContext.Set<Issue>().Add(queued);
+        _dbContext.SaveChanges();
+        _dbContext.ChangeTracker.Clear();
+        return queued;
+    }
+
+    // Claim-time blocker re-check for triage candidates (ADR 0102)
+    [Fact]
+    public async Task WhenTriageCandidateHasNoOpenBlockers_ReturnsSelectedAfterReadingBlockers()
+    {
+        // Arrange
+        MonitoredRepositoryId repoId = MonitoredRepositoryId.New();
+        TriageQueuedIssue queued = SeedTriageQueuedIssue(repoId, issueNumber: 7);
+        StubIssueBlockerQueries blockerQueries = new();
+
+        DispatchCandidateSelector sut = BuildSelector(issueBlockerQueries: blockerQueries);
+
+        // Act
+        SelectionOutcome outcome = await sut.SelectAsync(CancellationToken.None);
+
+        // Assert
+        outcome.ShouldBeOfType<SelectionOutcome.Selected>().Candidate.Issue.Id.ShouldBe(queued.Id);
+        blockerQueries.RequestedIssueNumbers.ShouldBe([7]);
+    }
+
+    [Fact]
+    public async Task WhenTriageCandidateGainedBlocker_WaitsUntriagedAndSelectsNextSameRepositoryCandidate()
+    {
+        // Arrange — MaxConcurrentWorkers 1: issue 2 only fits once issue 1 releases its slot
+        MonitoredRepositoryId repoId = MonitoredRepositoryId.New();
+        SeedTriageQueuedIssue(repoId, issueNumber: 1);
+        TriageQueuedIssue next = SeedTriageQueuedIssue(repoId, issueNumber: 2);
+        StubIssueBlockerQueries blockerQueries = new StubIssueBlockerQueries().WithBlockers(1, 99);
+
+        DispatchCandidateSelector sut = BuildSelector(
+            repositoryEligibilityQuery: new StubRepositoryEligibilityQuery(
+                [new EligibleRepository(repoId.Value, Position: 0, MaxConcurrentWorkers: 1)]),
+            issueBlockerQueries: blockerQueries);
+
+        // Act
+        SelectionOutcome outcome = await sut.SelectAsync(CancellationToken.None);
+
+        // Assert
+        outcome.ShouldBeOfType<SelectionOutcome.Selected>().Candidate.Issue.Id.ShouldBe(next.Id);
+
+        _dbContext.ChangeTracker.Clear();
+        Issue blocked = await _dbContext.Set<Issue>()
+            .SingleAsync(i => i.IssueNumber == 1, TestContext.Current.CancellationToken);
+        blocked.ShouldBeOfType<TriageBlockedIssue>().BlockedBy.ShouldBe([99]);
+        _domainEventDispatcher.DispatchedEvents.OfType<IssueTriageBlocked>().ShouldHaveSingleItem();
+    }
+
+    [Fact]
+    public async Task WhenEveryTriageCandidateGainedBlocker_ReturnsAllCandidatesSkippedWithBlockedCount()
+    {
+        // Arrange
+        MonitoredRepositoryId repoId = MonitoredRepositoryId.New();
+        SeedTriageQueuedIssue(repoId, issueNumber: 1);
+        StubIssueBlockerQueries blockerQueries = new StubIssueBlockerQueries().WithBlockers(1, 50);
+
+        DispatchCandidateSelector sut = BuildSelector(issueBlockerQueries: blockerQueries);
+
+        // Act
+        SelectionOutcome outcome = await sut.SelectAsync(CancellationToken.None);
+
+        // Assert
+        outcome.ShouldBe(new SelectionOutcome.AllCandidatesSkipped(
+            Unresolvable: 0,
+            Blocked: 1,
+            BlockerReadFailed: 0));
+    }
+
+    [Fact]
+    public async Task WhenTriageCandidateBlockerReadFails_SkipsItWithoutStateChange()
+    {
+        // Arrange
+        MonitoredRepositoryId repoId = MonitoredRepositoryId.New();
+        TriageQueuedIssue queued = SeedTriageQueuedIssue(repoId, issueNumber: 1);
+        StubIssueBlockerQueries blockerQueries = new StubIssueBlockerQueries().WithFailure(1);
+
+        DispatchCandidateSelector sut = BuildSelector(issueBlockerQueries: blockerQueries);
+
+        // Act
+        SelectionOutcome outcome = await sut.SelectAsync(CancellationToken.None);
+
+        // Assert
+        outcome.ShouldBe(new SelectionOutcome.AllCandidatesSkipped(
+            Unresolvable: 0,
+            Blocked: 0,
+            BlockerReadFailed: 1));
+
+        _dbContext.ChangeTracker.Clear();
+        Issue unchanged = await _dbContext.Set<Issue>()
+            .SingleAsync(i => i.Id == queued.Id, TestContext.Current.CancellationToken);
+        unchanged.ShouldBeOfType<TriageQueuedIssue>();
+        _domainEventDispatcher.DispatchedEvents.ShouldBeEmpty();
+    }
+
     // Stub that returns exactly the provided eligible repositories (with positions).
     private sealed class StubRepositoryEligibilityQuery(IReadOnlyCollection<EligibleRepository> eligibleRepositories)
         : IRepositoryEligibilityQuery

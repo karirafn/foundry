@@ -115,6 +115,9 @@ public sealed class IssueBuilder
 
     public TriageQueuedIssue TriageQueued() => Detected().QueueTriage();
 
+    /// <summary>A new issue waiting untriaged for its <paramref name="blockers"/> to close (ADR 0102).</summary>
+    public TriageBlockedIssue TriageBlocked(IReadOnlyList<int> blockers) => Detected().BlockTriage(blockers);
+
     public TriageInProgressIssue TriageInProgress() => TriageQueued().Claim(_workerRunId);
 
     public TriageFailedIssue TriageFailed() =>

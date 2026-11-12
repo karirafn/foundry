@@ -65,6 +65,7 @@ public static class IssuesModule
         services.AddScoped<IssueStateChangedHandler>();
         AddIssueStateChangedHandler<IssueQueued>(services);
         AddIssueStateChangedHandler<IssueBlocked>(services);
+        AddIssueStateChangedHandler<IssueTriageBlocked>(services);
         AddIssueStateChangedHandler<IssueCompleted>(services);
         AddIssueStateChangedHandler<IssueFailed>(services);
         AddIssueStateChangedHandler<IssueInReview>(services);
