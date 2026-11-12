@@ -13,7 +13,7 @@ namespace Foundry.IntegrationTests.Modules.Workers.Persistence.TriageRoleModelOp
 /// <summary>Runs the real MoveTriageRoleModelToOpus migration: only the seeded Sonnet value moves to Opus, so an operator's choice stays.</summary>
 public sealed class WhenMigrationRuns : IAsyncLifetime, IAsyncDisposable
 {
-    private const string PreviousMigrationId = "20261111180400_AddWorkerRunPublishing";
+    private const string PreviousMigrationId = "20261112113556_AddDiffGate";
     private const string TriageRole = "triage";
     private const string OtherRole = "implement";
     private const string TargetMigrationId = "20261112120624_MoveTriageRoleModelToOpus";
