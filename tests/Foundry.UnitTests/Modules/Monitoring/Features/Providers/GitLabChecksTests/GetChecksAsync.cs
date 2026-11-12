@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Net;
 
 using Foundry.Modules.Monitoring.Domain.ValueObjects;
@@ -29,13 +30,13 @@ public sealed class GetChecksAsync
     private static RepositorySlug ValidSlug =>
         RepositorySlug.Create("group/project").ValueOrThrow();
 
-    private static FakeHandler FailedPipelineHandler(string jobsJson)
+    private static FakeHandler FailedPipelineHandler(string jobsJson, HttpStatusCode jobsStatus = HttpStatusCode.OK)
     {
         string mergeRequestJson =
             $$"""{ "iid": 42, "state": "opened", "head_pipeline": { "id": {{GitLabJobsByPipelineExample.PipelineId}}, "status": "failed" } }""";
 
         return new FakeHandler(HttpStatusCode.OK, mergeRequestJson)
-            .WithRoute($"/pipelines/{GitLabJobsByPipelineExample.PipelineId}/jobs", HttpStatusCode.OK, jobsJson);
+            .WithRoute($"/pipelines/{GitLabJobsByPipelineExample.PipelineId}/jobs", jobsStatus, jobsJson);
     }
 
     private static GitLabHttpClient BuildSut(FakeHandler handler, ILogger<GitLabHttpClient>? logger = null) =>
@@ -152,6 +153,177 @@ public sealed class GetChecksAsync
         ProviderChecks.Red red = success.Value.ShouldBeOfType<ProviderChecks.Red>();
         red.FailingChecks.ShouldBeEmpty();
     }
+
+    [Theory]
+    [InlineData(HttpStatusCode.Unauthorized)]
+    [InlineData(HttpStatusCode.Forbidden)]
+    public async Task WhenJobsReadIsRefusedAsAuthFailure_ReturnsUnreadable(HttpStatusCode jobsStatus)
+    {
+        // Arrange
+        FakeHandler handler = FailedPipelineHandler(string.Empty, jobsStatus);
+        GitLabHttpClient sut = BuildSut(handler);
+
+        // Act
+        Result<ProviderChecks> result = await sut.GetChecksAsync(
+            ValidBaseUrl,
+            ValidSlug,
+            ValidMrUrl,
+            token: "glpat_token",
+            CancellationToken.None);
+
+        // Assert
+        Result<ProviderChecks>.Success success = result.ShouldBeOfType<Result<ProviderChecks>.Success>();
+        success.Value.ShouldBeOfType<ProviderChecks.Unreadable>();
+    }
+
+    [Theory]
+    [InlineData(HttpStatusCode.InternalServerError)]
+    [InlineData(HttpStatusCode.BadGateway)]
+    [InlineData(HttpStatusCode.ServiceUnavailable)]
+    public async Task WhenJobsReadFailsOnTheServer_FailsTheChecksRead(HttpStatusCode jobsStatus)
+    {
+        // Arrange
+        FakeHandler handler = FailedPipelineHandler(string.Empty, jobsStatus);
+        GitLabHttpClient sut = BuildSut(handler);
+
+        // Act
+        Result<ProviderChecks> result = await sut.GetChecksAsync(
+            ValidBaseUrl,
+            ValidSlug,
+            ValidMrUrl,
+            token: "glpat_token",
+            CancellationToken.None);
+
+        // Assert
+        Result<ProviderChecks>.Failure failure = result.ShouldBeOfType<Result<ProviderChecks>.Failure>();
+        failure.Error.Code.ShouldBe("GitLab.UnexpectedStatusCode");
+    }
+
+    [Fact]
+    public async Task WhenJobsReadIsTooManyRequests_FailsWithRateLimitExhausted()
+    {
+        // Arrange
+        FakeHandler handler = FailedPipelineHandler(string.Empty, HttpStatusCode.TooManyRequests);
+        GitLabHttpClient sut = BuildSut(handler);
+
+        // Act
+        Result<ProviderChecks> result = await sut.GetChecksAsync(
+            ValidBaseUrl,
+            ValidSlug,
+            ValidMrUrl,
+            token: "glpat_token",
+            CancellationToken.None);
+
+        // Assert
+        Result<ProviderChecks>.Failure failure = result.ShouldBeOfType<Result<ProviderChecks>.Failure>();
+        failure.Error.Code.ShouldBe("GitLab.RateLimitExhausted");
+    }
+
+    [Fact]
+    public async Task WhenJobsReadIsForbiddenByRateLimit_FailsWithRateLimitExhausted()
+    {
+        // Arrange
+        FakeHandler handler = FailedPipelineHandler(string.Empty, HttpStatusCode.Forbidden);
+        handler.ResponseHeaders["RateLimit-Remaining"] = "0";
+        GitLabHttpClient sut = BuildSut(handler);
+
+        // Act
+        Result<ProviderChecks> result = await sut.GetChecksAsync(
+            ValidBaseUrl,
+            ValidSlug,
+            ValidMrUrl,
+            token: "glpat_token",
+            CancellationToken.None);
+
+        // Assert
+        Result<ProviderChecks>.Failure failure = result.ShouldBeOfType<Result<ProviderChecks>.Failure>();
+        failure.Error.Code.ShouldBe("GitLab.RateLimitExhausted");
+    }
+
+    [Theory]
+    [InlineData(HttpStatusCode.BadRequest)]
+    [InlineData(HttpStatusCode.NotFound)]
+    [InlineData(HttpStatusCode.Gone)]
+    public async Task WhenJobsReadIsRejectedAsAClientError_ReturnsRedNamingNothingAndLogsTheStatus(
+        HttpStatusCode jobsStatus)
+    {
+        // Arrange
+        FakeHandler handler = FailedPipelineHandler(string.Empty, jobsStatus);
+        CapturingLogger<GitLabHttpClient> logger = new();
+        GitLabHttpClient sut = BuildSut(handler, logger);
+
+        // Act
+        Result<ProviderChecks> result = await sut.GetChecksAsync(
+            ValidBaseUrl,
+            ValidSlug,
+            ValidMrUrl,
+            token: "glpat_token",
+            CancellationToken.None);
+
+        // Assert
+        Result<ProviderChecks>.Success success = result.ShouldBeOfType<Result<ProviderChecks>.Success>();
+        ProviderChecks.Red red = success.Value.ShouldBeOfType<ProviderChecks.Red>();
+        red.FailingChecks.ShouldBeEmpty();
+        logger.Entries.ShouldContain(entry =>
+            entry.Level == LogLevel.Warning
+            && entry.Message.Contains(((int)jobsStatus).ToString(CultureInfo.InvariantCulture), StringComparison.Ordinal));
+    }
+
+    [Theory]
+    [MemberData(nameof(TransportFailures))]
+    public async Task WhenJobsReadFailsInTransport_FailsTheChecksRead(Func<Exception> transportFailure)
+    {
+        // Arrange
+        FakeHandler handler = FailedPipelineHandler(string.Empty)
+            .WithThrowingRoute($"/pipelines/{GitLabJobsByPipelineExample.PipelineId}/jobs", transportFailure);
+        GitLabHttpClient sut = BuildSut(handler);
+
+        // Act
+        Result<ProviderChecks> result = await sut.GetChecksAsync(
+            ValidBaseUrl,
+            ValidSlug,
+            ValidMrUrl,
+            token: "glpat_token",
+            CancellationToken.None);
+
+        // Assert
+        Result<ProviderChecks>.Failure failure = result.ShouldBeOfType<Result<ProviderChecks>.Failure>();
+        failure.Error.Code.ShouldBe("GitLab.ProviderError");
+    }
+
+    [Fact]
+    public async Task WhenCallerCancelsDuringJobsRead_PropagatesTheCancellation()
+    {
+        // Arrange
+        using CancellationTokenSource cancellation = new();
+        FakeHandler handler = FailedPipelineHandler(string.Empty)
+            .WithThrowingRoute(
+                $"/pipelines/{GitLabJobsByPipelineExample.PipelineId}/jobs",
+                () =>
+                {
+                    cancellation.Cancel();
+                    return new TaskCanceledException();
+                });
+        GitLabHttpClient sut = BuildSut(handler);
+
+        // Act
+        Task<Result<ProviderChecks>> read = sut.GetChecksAsync(
+            ValidBaseUrl,
+            ValidSlug,
+            ValidMrUrl,
+            token: "glpat_token",
+            cancellation.Token);
+
+        // Assert
+        await Should.ThrowAsync<OperationCanceledException>(async () => await read);
+    }
+
+    public static TheoryData<Func<Exception>> TransportFailures =>
+        new()
+        {
+            () => new HttpRequestException("connection reset"),
+            () => new TaskCanceledException(),
+        };
 
     [Theory]
     [InlineData("success")]

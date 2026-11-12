@@ -888,12 +888,7 @@ internal sealed partial class GitLabHttpClient(
 
         // 401/403 without rate-limit exhaustion signals an auth failure — return Unreadable
         // rather than propagating a Result failure so callers can proceed with degraded behaviour.
-        if (response.StatusCode is HttpStatusCode.Unauthorized)
-        {
-            return Result<Checks>.Ok(new Checks.Unreadable());
-        }
-
-        if (response.StatusCode is HttpStatusCode.Forbidden && !IsRateLimited(response))
+        if (IsAuthFailure(response))
         {
             return Result<Checks>.Ok(new Checks.Unreadable());
         }

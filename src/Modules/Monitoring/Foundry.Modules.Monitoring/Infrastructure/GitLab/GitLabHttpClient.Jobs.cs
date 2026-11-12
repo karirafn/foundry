@@ -1,3 +1,4 @@
+using System.Net;
 using System.Net.Http.Headers;
 using System.Text.Json;
 
@@ -80,7 +81,47 @@ internal sealed partial class GitLabHttpClient
         using HttpRequestMessage request = new(HttpMethod.Get, requestUri);
         AddCommonHeaders(request, token);
 
-        using HttpResponseMessage response = await httpClient.SendAsync(request, cancellationToken);
+        try
+        {
+            using HttpResponseMessage response = await httpClient.SendAsync(request, cancellationToken);
+            return await ClassifyFailedJobsAsync(response, slug, failedPipelineId, pipelineStatus, cancellationToken);
+        }
+        catch (Exception ex) when (ex is HttpRequestException
+            || (ex is TaskCanceledException && !cancellationToken.IsCancellationRequested))
+        {
+            return Result<Checks>.Fail(GitLabErrors.ProviderError(
+                $"The GitLab jobs read for pipeline {failedPipelineId} could not complete: {ex.GetType().Name}."));
+        }
+    }
+
+    private async Task<Result<Checks>> ClassifyFailedJobsAsync(
+        HttpResponseMessage response,
+        RepositorySlug slug,
+        long failedPipelineId,
+        string pipelineStatus,
+        CancellationToken cancellationToken)
+    {
+        if (IsAuthFailure(response))
+        {
+            return Result<Checks>.Ok(new Checks.Unreadable());
+        }
+
+        if (IsPlainClientError(response))
+        {
+            RecordRestHeadroom(response);
+            logger.LogWarning(
+                "GitLab answered {StatusCode} reading the failed jobs of pipeline {PipelineId} in {Repository};"
+                + " the failing checks cannot be named.",
+                (int)response.StatusCode,
+                failedPipelineId,
+                slug.FullPath);
+            return Result<Checks>.Ok(Checks.FromGitLab(pipelineStatus, []));
+        }
+
+        if (!response.IsSuccessStatusCode)
+        {
+            return Result<Checks>.Fail(ErrorFromNonSuccess(response));
+        }
 
         RecordRestHeadroom(response);
 
@@ -94,6 +135,17 @@ internal sealed partial class GitLabHttpClient
 
         return Result<Checks>.Ok(Checks.FromGitLab(pipelineStatus, failingChecks));
     }
+
+    private static bool IsAuthFailure(HttpResponseMessage response) =>
+        response.StatusCode is HttpStatusCode.Unauthorized
+        || (response.StatusCode is HttpStatusCode.Forbidden && !IsRateLimited(response));
+
+    private static bool IsPlainClientError(HttpResponseMessage response) =>
+        (int)response.StatusCode is >= 400 and < 500
+        && response.StatusCode is not (
+            HttpStatusCode.Unauthorized
+            or HttpStatusCode.Forbidden
+            or HttpStatusCode.TooManyRequests);
 
     private sealed record GitLabJobDto(string Name, string Status, bool AllowFailure, string? WebUrl);
 }
