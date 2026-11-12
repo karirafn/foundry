@@ -35,6 +35,7 @@ internal sealed class IssueClaimedHandler(
     IWorkerRoleCatalogStore roleCatalog,
     IRepositoryDispatchQueries repositoryDispatchQueries,
     IIssueContentQueries issueContentQueries,
+    ITrackerContextQueries trackerContextQueries,
     ILogger<IssueClaimedHandler> logger) : IIntegrationEventHandler<IssueClaimed>
 {
     private static readonly Error EmptyGitPatError =
@@ -103,6 +104,13 @@ internal sealed class IssueClaimedHandler(
             return;
         }
 
+        // The tracker read never fails: whatever it could not read is named in the context it returns.
+        TrackerContext trackerContext = await trackerContextQueries.GetTrackerContextAsync(
+            claimed.MonitoredRepositoryId,
+            claimed.IssueNumber,
+            issueContent,
+            cancellationToken);
+
         // A restricted run gets no branch.
         if (!restricted)
         {
@@ -133,7 +141,7 @@ internal sealed class IssueClaimedHandler(
         string? gitPat = await ResolveGitPatAsync(claimed, cancellationToken);
         Result<WorkerContainerSpec> specResult = gitPat is null
             ? Result<WorkerContainerSpec>.Fail(EmptyGitPatError)
-            : await BuildSpecAsync(startingRun, claimed, catalog, issueContent, cancellationToken);
+            : await BuildSpecAsync(startingRun, claimed, catalog, issueContent, trackerContext, cancellationToken);
 
         if (specResult is Result<WorkerContainerSpec>.Failure specFailure)
         {
@@ -304,6 +312,7 @@ internal sealed class IssueClaimedHandler(
         ClaimedIssueDispatch claimed,
         WorkerRoleCatalog? catalog,
         IssueContent issueContent,
+        TrackerContext trackerContext,
         CancellationToken cancellationToken)
     {
         if (catalog?.Content is not { } content || content.Find(startingRun.Role) is not { } role)
@@ -331,7 +340,8 @@ internal sealed class IssueClaimedHandler(
                 systemPromptTemplate: role.SystemPromptTemplate,
                 issueContent,
                 installsDotnet,
-                claimed.Clarifications ?? [])
+                claimed.Clarifications ?? [],
+                trackerContext: trackerContext)
             : SystemPromptBuilder.Build(
                 principles: content.PrinciplesFor(role.Role),
                 issueNumber: claimed.IssueNumber,
@@ -342,7 +352,8 @@ internal sealed class IssueClaimedHandler(
                 installsDocker,
                 installsDotnet,
                 failingJobLogs,
-                claimed.Clarifications ?? []);
+                claimed.Clarifications ?? [],
+                trackerContext: trackerContext);
 
         if (systemPromptResult is not Result<string>.Success systemPromptSuccess)
         {

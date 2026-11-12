@@ -68,6 +68,7 @@ public sealed class HandleAsync : IAsyncDisposable
         IFailingJobLogQueries? failingJobLogQueries = null,
         IRepositoryDispatchQueries? repositoryDispatchQueries = null,
         IIssueContentQueries? issueContentQueries = null,
+        ITrackerContextQueries? trackerContextQueries = null,
         IPublisher? publisher = null)
     {
         return new IssueClaimedHandler(
@@ -82,6 +83,7 @@ public sealed class HandleAsync : IAsyncDisposable
             roleCatalog ?? StubWorkerRoleCatalogStore.With(),
             repositoryDispatchQueries ?? StubRepositoryDispatchQueries.WithToken("ghp_test_token"),
             issueContentQueries ?? new StubIssueContentQueries(),
+            trackerContextQueries ?? new StubTrackerContextQueries(),
             NullLogger<IssueClaimedHandler>.Instance);
     }
 
@@ -1385,11 +1387,63 @@ public sealed class HandleAsync : IAsyncDisposable
             () => systemPrompt.ShouldContain("120 minutes of wall-clock budget"));
     }
 
+    [Fact]
+    public async Task WhenTheRoleIsFull_SystemPromptCarriesTheOpenIssuesTheTrackerContextReturned()
+    {
+        // Arrange
+        StubWorkerOrchestrator orchestrator = new(succeeds: true);
+        StubTrackerContextQueries trackerContext = new(new TrackerContext([], [], false, [new OpenIssue(901, "Tracked elsewhere")]));
+        IssueClaimedHandler sut = BuildHandler(orchestrator: orchestrator, trackerContextQueries: trackerContext);
+
+        // Act
+        await sut.HandleAsync(BuildEvent(issueNumber: 42), TestContext.Current.CancellationToken);
+
+        // Assert
+        string systemPrompt = orchestrator.LastSpec.ShouldNotBeNull().EnvironmentVariables["SYSTEM_PROMPT"];
+        systemPrompt.ShouldContain("<open-issue number=\"901\">Tracked elsewhere</open-issue>");
+    }
+
+    [Fact]
+    public async Task WhenTheRoleIsRestricted_SystemPromptCarriesTheOpenIssuesTheTrackerContextReturned()
+    {
+        // Arrange
+        StubWorkerOrchestrator orchestrator = new(succeeds: true);
+        StubTrackerContextQueries trackerContext = new(new TrackerContext([], [], false, [new OpenIssue(901, "Tracked elsewhere")]));
+        IssueClaimedHandler sut = BuildRestrictedHandler(orchestrator, trackerContextQueries: trackerContext);
+
+        // Act
+        await sut.HandleAsync(BuildEvent(issueNumber: 7), TestContext.Current.CancellationToken);
+
+        // Assert
+        string systemPrompt = orchestrator.LastSpec.ShouldNotBeNull().EnvironmentVariables["SYSTEM_PROMPT"];
+        systemPrompt.ShouldContain("<open-issue number=\"901\">Tracked elsewhere</open-issue>");
+    }
+
+    [Fact]
+    public async Task WhenDispatched_AsksTheTrackerContextOnceWithTheRepositoryTheIssueNumberAndTheContentRead()
+    {
+        // Arrange
+        IssueContent content = new("Add retry", "Retry webhook delivery.", []);
+        StubIssueContentQueries issueContent = new(Result<IssueContent>.Ok(content));
+        StubTrackerContextQueries trackerContext = new();
+        IssueClaimedHandler sut = BuildHandler(issueContentQueries: issueContent, trackerContextQueries: trackerContext);
+        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
+
+        // Act
+        await sut.HandleAsync(
+            BuildEvent(issueNumber: 42, monitoredRepositoryId: repositoryId),
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        trackerContext.Requests.ShouldBe([(repositoryId, 42, content)]);
+    }
+
     private IssueClaimedHandler BuildRestrictedHandler(
         StubWorkerOrchestrator orchestrator,
         StubPostExitProviderQueries? postExitProviderQueries = null,
         IIssueContentQueries? issueContentQueries = null,
-        IGlobalSettingsQueries? settingsQueries = null) =>
+        IGlobalSettingsQueries? settingsQueries = null,
+        ITrackerContextQueries? trackerContextQueries = null) =>
         BuildHandler(
             orchestrator: orchestrator,
             settingsQueries: settingsQueries,
@@ -1397,7 +1451,8 @@ public sealed class HandleAsync : IAsyncDisposable
             roleCatalog: StubWorkerRoleCatalogStore.With(
                 systemPrompt: "You are triaging issue #{issueNumber}.\n\n{issueContent}",
                 capability: WorkerCapability.Restricted),
-            issueContentQueries: issueContentQueries);
+            issueContentQueries: issueContentQueries,
+            trackerContextQueries: trackerContextQueries);
 
     [Fact]
     public async Task WhenTheRoleIsRestricted_CreatesNoBranchOnTheProvider()
