@@ -48,7 +48,12 @@ entrypoint merges that file's `$defs` into the role schema (the role's own `$def
 clash), so `claude` receives one self-contained schema. A role schema or `shared/verdict.defs.json`
 that is not a JSON object fails the unit tests, the startup image build and the run's bootstrap.
 
-`claude` sends the schema to the Claude API as a tool's `input_schema`. The API rejects `allOf`, `anyOf` and `oneOf` at the top level of an `input_schema` (nested, for example inside a property, they are accepted). Express a condition on the whole verdict with one top-level `if`/`then`/`else`, which is accepted. A role schema with a top-level `allOf`, `anyOf` or `oneOf` fails the unit tests and the run's bootstrap (`worker_bootstrap_failed`, `stage=role`, naming the file and keyword) before cloning.
+`claude` sends the schema to the Claude API as a tool's `input_schema`. The API rejects `allOf`,
+`anyOf` and `oneOf` at the top level of an `input_schema` (nested, for example inside a property,
+they are accepted). Express a condition on the whole verdict with one top-level `if`/`then`/`else`,
+which is accepted. A role schema with a top-level `allOf`, `anyOf` or `oneOf` fails the unit tests
+and the run's bootstrap (`worker_bootstrap_failed`, `stage=role`, naming the file and keyword)
+before cloning.
 
 Shared definitions:
 
