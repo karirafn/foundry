@@ -62,11 +62,6 @@
     &:hover {
       text-decoration: underline;
     }
-
-    &:focus-visible {
-      outline: 2px solid var(--fd-text-link);
-      outline-offset: 2px;
-    }
   }
 
   &__labels {
@@ -148,11 +143,6 @@
       background: var(--fd-bg-card-hover);
       border-color: var(--fd-text-secondary);
     }
-
-    &:focus-visible {
-      outline: 2px solid var(--fd-text-link);
-      outline-offset: 2px;
-    }
   }
 
   &__violations {
@@ -200,16 +190,20 @@
       color: var(--fd-text-tertiary);
       border-color: var(--fd-text-tertiary);
     }
+  }
 
+  // Every link and button in this template shares one keyboard focus ring.
+  &__issue-link,
+  &__error-retry,
+  &__cancel-btn,
+  &__retry-fresh-btn,
+  &__retry-btn,
+  &__secondary-btn,
+  &__failing-link {
     &:focus-visible {
       outline: 2px solid var(--fd-text-link);
       outline-offset: 2px;
     }
-  }
-
-  &__cancel-hint {
-    color: var(--fd-text-secondary);
-    font-size: 0.8125rem;
   }
 
   &__cancel-note {
@@ -246,7 +240,9 @@
   }
 
   // A classified kind reads as primary text; Unclassified keeps the secondary field-value colour.
-  &__kind-value--known {
+  // A blocker number reads as primary text too; its monospace face comes from the field-value class.
+  &__kind-value--known,
+  &__blocker-number {
     color: var(--fd-text-primary);
   }
 
@@ -268,7 +264,9 @@
     border-top: 1px solid var(--fd-border-muted);
   }
 
-  &__failing-list {
+  // The Blocked By rows reuse the failing-check list's reset and row shape.
+  &__failing-list,
+  &__blockers {
     list-style: none;
     margin: var(--fd-spacing-sm) 0 0;
     padding: 0;
@@ -277,11 +275,25 @@
     gap: var(--fd-spacing-sm);
   }
 
-  &__failing-item {
+  &__failing-item,
+  &__blocker {
     display: flex;
     align-items: center;
     flex-wrap: wrap;
     gap: var(--fd-spacing-sm);
+  }
+
+  &__blockers {
+    margin: 0;
+    gap: var(--fd-spacing-xs);
+  }
+
+  &__blocker {
+    align-items: baseline;
+  }
+
+  &__blocker-reason {
+    overflow-wrap: anywhere;
   }
 
   &__failing-name {
@@ -313,11 +325,6 @@
     &:hover {
       text-decoration: underline;
     }
-
-    &:focus-visible {
-      outline: 2px solid var(--fd-text-link);
-      outline-offset: 2px;
-    }
   }
 
   &__worker-run {
@@ -341,7 +348,9 @@
     margin-bottom: var(--fd-spacing-sm);
   }
 
-  &__failure-summary {
+  &__cancel-hint,
+  &__failure-summary,
+  &__blocker-reason {
     color: var(--fd-text-secondary);
     font-size: 0.8125rem;
   }

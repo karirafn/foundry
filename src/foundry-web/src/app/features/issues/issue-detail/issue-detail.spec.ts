@@ -2385,7 +2385,22 @@ describe('IssueDetailComponent — triage (#772)', () => {
     expect(region().classList.contains('issue-detail__triage-live-region--empty')).toBe(false);
   });
 
-  it('should show a triage_blocked issue its blockers', () => {
+  it('should render each blocker as its own list item with its number', () => {
+    // Arrange / Act
+    const { el } = setup(
+      issue('triage_blocked', {
+        stateDetails: { ...mockStateDetails, branchName: null, completedAt: null, blockedBy: [{ issueNumber: 12, reason: null }, { issueNumber: 14, reason: null }] },
+      }),
+    );
+
+    // Assert
+    const numbers = Array.from(el.querySelectorAll('ul.issue-detail__blockers > li')).map((li) =>
+      text(li.querySelector('.issue-detail__blocker-number')),
+    );
+    expect(numbers).toEqual(['#12', '#14']);
+  });
+
+  it('should show the triage reason only on the blockers that have one', () => {
     // Arrange / Act
     const { el } = setup(
       issue('triage_blocked', {
@@ -2394,10 +2409,51 @@ describe('IssueDetailComponent — triage (#772)', () => {
     );
 
     // Assert
-    const blockedBy = Array.from(el.querySelectorAll('.issue-detail__field')).find(
-      (field) => text(field.querySelector('.issue-detail__field-key')) === 'Blocked By',
+    const reasons = Array.from(el.querySelectorAll('ul.issue-detail__blockers > li')).map((li) =>
+      li.querySelector('.issue-detail__blocker-reason') === null ? null : text(li.querySelector('.issue-detail__blocker-reason')),
     );
-    expect(text(blockedBy?.querySelector('.issue-detail__field-value') ?? null)).toBe('12, 14');
+    expect(reasons).toEqual([null, 'Triage: waits on the schema']);
+  });
+
+  it('should expose the blockers as a labelled list', () => {
+    // Arrange / Act
+    const { el } = setup(
+      issue('triage_blocked', {
+        stateDetails: { ...mockStateDetails, branchName: null, completedAt: null, blockedBy: [{ issueNumber: 12, reason: null }] },
+      }),
+    );
+
+    // Assert
+    const list = el.querySelector('ul.issue-detail__blockers');
+    expect([list?.getAttribute('role'), list?.getAttribute('aria-label')]).toEqual(['list', 'Blocked by']);
+  });
+
+  it('should span the Blocked By field across the full width', () => {
+    // Arrange / Act
+    const { el } = setup(
+      issue('triage_blocked', {
+        stateDetails: { ...mockStateDetails, branchName: null, completedAt: null, blockedBy: [{ issueNumber: 12, reason: null }] },
+      }),
+    );
+
+    // Assert
+    const field = el.querySelector('ul.issue-detail__blockers')?.closest('.issue-detail__field');
+    expect(field?.classList.contains('issue-detail__field--full-width')).toBe(true);
+  });
+
+  it.each([
+    ['null', null],
+    ['empty', []],
+  ])('should hide the Blocked By field when blockedBy is %s', (_label, blockedBy) => {
+    // Arrange / Act
+    const { el } = setup(
+      issue('triage_blocked', {
+        stateDetails: { ...mockStateDetails, branchName: null, completedAt: null, blockedBy },
+      }),
+    );
+
+    // Assert
+    expect(el.querySelector('ul.issue-detail__blockers')).toBeNull();
   });
 
   it('should offer no operator actions for a triage_blocked issue', () => {

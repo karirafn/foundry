@@ -183,9 +183,18 @@ interface TriageCallout {
             }
 
             @if (s.blockedBy?.length) {
-              <div class="issue-detail__field">
+              <div class="issue-detail__field issue-detail__field--full-width">
                 <span class="issue-detail__field-key">Blocked By</span>
-                <span class="issue-detail__field-value">{{ _blockerNumbers() }}</span>
+                <ul class="issue-detail__blockers" role="list" aria-label="Blocked by">
+                  @for (b of s.blockedBy; track b.issueNumber) {
+                    <li class="issue-detail__blocker">
+                      <span class="issue-detail__field-value issue-detail__blocker-number">#{{ b.issueNumber }}</span>
+                      @if (b.reason) {
+                        <span class="issue-detail__blocker-reason">Triage: {{ b.reason }}</span>
+                      }
+                    </li>
+                  }
+                </ul>
               </div>
             }
 
@@ -786,10 +795,6 @@ export class IssueDetailComponent {
 
   protected readonly _triagePending: Signal<TriageAction | null> = computed(() =>
     this._issueService.triageActionPending(),
-  );
-
-  protected readonly _blockerNumbers: Signal<string> = computed(() =>
-    (this.detail()?.stateDetails?.blockedBy ?? []).map((blocker) => blocker.issueNumber).join(', '),
   );
 
   private readonly _injector = inject(Injector);
