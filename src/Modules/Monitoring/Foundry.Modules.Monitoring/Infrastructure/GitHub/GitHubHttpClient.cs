@@ -354,7 +354,10 @@ internal sealed partial class GitHubHttpClient(
                 GitHubErrors.ProviderError("GraphQL response contained neither data nor errors."));
         }
 
-        if (envelope.RateLimit is { } rateLimit)
+        // GitHub returns a queried rateLimit block inside "data", not beside it.
+        GraphQlRateLimit? reportedRateLimit = envelope.RateLimit ?? (envelope.Data as IReportsRateLimit)?.RateLimit;
+
+        if (reportedRateLimit is { } rateLimit)
         {
             logger.LogDebug(
                 "GitHub GraphQL cost={Cost} remaining={Remaining}",
