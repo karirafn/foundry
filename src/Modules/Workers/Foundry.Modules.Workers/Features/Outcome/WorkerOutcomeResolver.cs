@@ -210,12 +210,18 @@ internal sealed class WorkerOutcomeResolver(
                 summary);
         }
 
-        return TriageVerdict.TryParse(structuredOutput) is { } verdict
-            ? new WorkerOutcome.TriageCompleted(verdict, containerOutput, summary)
-            : new WorkerOutcome.Failure(
+        if (TriageVerdict.TryParse(structuredOutput) is not { } verdict)
+        {
+            return new WorkerOutcome.Failure(
                 new FailureReason.VerdictInvalid(FailureReason.VerdictInvalid.InvalidDetail),
                 containerOutput,
                 summary);
+        }
+
+        return verdict is TriageVerdict.Blocked blocked
+            && blocked.RejectionAgainst(run.SuppliedOpenIssueNumbers) is { } rejection
+                ? new WorkerOutcome.Failure(rejection, containerOutput, summary)
+                : new WorkerOutcome.TriageCompleted(verdict, containerOutput, summary);
     }
 
     private static WorkerOutcome ResolveMerged(

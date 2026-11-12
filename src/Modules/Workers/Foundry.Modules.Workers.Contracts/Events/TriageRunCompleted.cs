@@ -26,7 +26,11 @@ public enum TriageKind
 }
 
 /// <summary>An open issue triage named as one the issue depends on, with the model's reason.</summary>
-public sealed record TriageBlocker(int IssueNumber, string Reason);
+public sealed record TriageBlocker(int IssueNumber, string Reason)
+{
+    /// <summary>The longest reason a blocker may carry; it is stored, relayed and later shown in a public comment.</summary>
+    public const int ReasonMaxLength = 500;
+}
 
 /// <summary>
 /// A triage run's verdict: <see cref="Ready"/> to implement as written, <see cref="NeedsInput"/> first, or
@@ -46,5 +50,9 @@ public abstract record TriageResult
 
     public sealed record NeedsInput(TriageKind Kind, IReadOnlyList<InputQuestion> Questions) : TriageResult;
 
-    public sealed record Blocked(TriageKind Kind, IReadOnlyList<TriageBlocker> BlockedBy) : TriageResult;
+    public sealed record Blocked(TriageKind Kind, IReadOnlyList<TriageBlocker> BlockedBy) : TriageResult
+    {
+        // GitHub limits dependencies to 50 per direction; an issue records no more blockers than that.
+        public const int MaxBlockers = 50;
+    }
 }

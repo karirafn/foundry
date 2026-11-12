@@ -137,6 +137,18 @@ public abstract record FailureReason
         public const string MissingDetail = "Verdict missing from output";
 
         public const string InvalidDetail = "Verdict failed the role's schema";
+
+        public static VerdictInvalid BlockerNotSupplied(int issueNumber) =>
+            new($"Blocked verdict names issue #{issueNumber}, which is not an open issue supplied to the run");
+
+        public static VerdictInvalid BlockersExceedCap(int maxBlockers) =>
+            new($"Blocked verdict names more than {maxBlockers} blockers");
+
+        public static VerdictInvalid BlockerReasonTooLong(int issueNumber, int maxLength) =>
+            new($"Blocked verdict's reason for issue #{issueNumber} is longer than {maxLength} characters");
+
+        public static VerdictInvalid BlockerDuplicated(int issueNumber) =>
+            new($"Blocked verdict names issue #{issueNumber} more than once");
     }
 
     /// <summary>

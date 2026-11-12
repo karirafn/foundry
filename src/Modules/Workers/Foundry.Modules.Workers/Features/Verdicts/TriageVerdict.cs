@@ -49,6 +49,40 @@ internal abstract record TriageVerdict(TriageIssueKind Kind)
     /// <summary>The issue cannot start until the open issues it depends on close.</summary>
     internal sealed record Blocked(TriageIssueKind Kind, IReadOnlyList<TriageBlocker> BlockedBy) : TriageVerdict(Kind)
     {
+        /// <summary>
+        /// Why this verdict cannot stand for a run that was supplied <paramref name="suppliedOpenIssueNumbers"/>, or
+        /// <see langword="null"/> when it can: a blocker must be one of the supplied open issues.
+        /// </summary>
+        public FailureReason.VerdictInvalid? RejectionAgainst(IReadOnlyCollection<int>? suppliedOpenIssueNumbers)
+        {
+            if (BlockedBy.Count > TriageResult.Blocked.MaxBlockers)
+            {
+                return FailureReason.VerdictInvalid.BlockersExceedCap(TriageResult.Blocked.MaxBlockers);
+            }
+
+            HashSet<int> named = [];
+
+            foreach (TriageBlocker blocker in BlockedBy)
+            {
+                if (blocker.Reason.Length > TriageBlocker.ReasonMaxLength)
+                {
+                    return FailureReason.VerdictInvalid.BlockerReasonTooLong(blocker.IssueNumber, TriageBlocker.ReasonMaxLength);
+                }
+
+                if (!named.Add(blocker.IssueNumber))
+                {
+                    return FailureReason.VerdictInvalid.BlockerDuplicated(blocker.IssueNumber);
+                }
+
+                if (suppliedOpenIssueNumbers?.Contains(blocker.IssueNumber) != true)
+                {
+                    return FailureReason.VerdictInvalid.BlockerNotSupplied(blocker.IssueNumber);
+                }
+            }
+
+            return null;
+        }
+
         public bool Equals(Blocked? other) =>
             other is not null && Kind == other.Kind && BlockedBy.SequenceEqual(other.BlockedBy);
 

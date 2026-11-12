@@ -18,4 +18,7 @@ internal interface IResolvableRun
     BranchName? BranchName { get; }
 
     MonitoredRepositoryId MonitoredRepositoryId { get; }
+
+    /// <summary>The open issues supplied to the run at dispatch; <see langword="null"/> when none were recorded.</summary>
+    IReadOnlyList<int>? SuppliedOpenIssueNumbers { get; }
 }
