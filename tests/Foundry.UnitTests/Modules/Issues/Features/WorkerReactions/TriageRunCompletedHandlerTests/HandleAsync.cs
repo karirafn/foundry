@@ -184,6 +184,30 @@ public sealed class HandleAsync : IAsyncDisposable
     }
 
     [Fact]
+    public async Task WhenTheResultNamesMoreBlockersThanAVerdictAllows_TheIssueFailsTriageAsAnInvalidVerdict()
+    {
+        // Arrange
+        WorkerRunId workerRunId = WorkerRunId.New();
+        TriageInProgressIssue triaging = Seed(new IssueBuilder()
+            .WithWorkerRunId(workerRunId)
+            .WithIssueNumber(10)
+            .TriageInProgress());
+        TriageBlocker[] blockers = [.. Enumerable.Range(100, 51).Select(number => new TriageBlocker(number, "Needs it."))];
+
+        // Act
+        await _sut.HandleAsync(
+            new TriageRunCompleted(triaging.Id.Value, workerRunId, new TriageResult.Blocked(TriageKind.Feature, blockers), DecidedAt),
+            CancellationToken.None);
+
+        // Assert
+        TriageFailedIssue failed = (await ReloadAsync(triaging)).ShouldBeOfType<TriageFailedIssue>();
+        failed.ShouldSatisfyAllConditions(
+            () => failed.FailureCategory.ShouldBe(FailureCategory.VerdictInvalid),
+            () => failed.FailedAt.ShouldBe(DecidedAt),
+            () => _dispatcher.DispatchedEvents.OfType<TriageBlockersNamed>().ShouldBeEmpty());
+    }
+
+    [Fact]
     public async Task WhenOnlyTheSecondNamedBlockerClosesACycle_TheIssueFailsOnThatCycle()
     {
         // Arrange

@@ -110,6 +110,58 @@ public sealed class Blocked
     }
 
     [Fact]
+    public void WhenMoreBlockersAreNamedThanAnIssueRecords_Throws()
+    {
+        // Arrange
+        TriageBlocker[] blockers = [.. Enumerable.Range(1, 51).Select(number => new TriageBlocker(number, "Needs it."))];
+
+        // Act
+        ArgumentException exception = Should.Throw<ArgumentException>(() => new TriageVerdict.Blocked(IssueKind.Feature, blockers, DecidedAt));
+
+        // Assert
+        exception.ParamName.ShouldBe("blockers");
+    }
+
+    [Fact]
+    public void WhenExactlyTheMostBlockersAnIssueRecordsAreNamed_ExposesAllOfThem()
+    {
+        // Arrange
+        TriageBlocker[] blockers = [.. Enumerable.Range(1, 50).Select(number => new TriageBlocker(number, "Needs it."))];
+
+        // Act
+        TriageVerdict.Blocked verdict = new(IssueKind.Feature, blockers, DecidedAt);
+
+        // Assert
+        verdict.BlockedBy.Count.ShouldBe(50);
+    }
+
+    [Fact]
+    public void WhenAReasonIsTooLong_Throws()
+    {
+        // Arrange
+        TriageBlocker[] blockers = [new TriageBlocker(15, new string('a', 501))];
+
+        // Act
+        ArgumentException exception = Should.Throw<ArgumentException>(() => new TriageVerdict.Blocked(IssueKind.Feature, blockers, DecidedAt));
+
+        // Assert
+        exception.ParamName.ShouldBe("blockers");
+    }
+
+    [Fact]
+    public void WhenAReasonIsExactlyTheLongestAllowed_ExposesIt()
+    {
+        // Arrange
+        string reason = new('a', 500);
+
+        // Act
+        TriageVerdict.Blocked verdict = new(IssueKind.Feature, [new TriageBlocker(15, reason)], DecidedAt);
+
+        // Assert
+        verdict.ReasonFor(15).ShouldBe(reason);
+    }
+
+    [Fact]
     public void WhenTheSameIssueIsNamedTwice_Throws()
     {
         // Arrange

@@ -81,7 +81,7 @@ public abstract class Issue : AggregateRoot<IssueId>, IStateMachine<Issue>
         string.IsNullOrEmpty(value) ? null : value;
 
     // GitHub limits dependencies to 50 per direction; cap silently to match.
-    private const int MaxBlockers = 50;
+    internal const int MaxBlockers = 50;
 
     /// <summary>
     /// Returns true for states that can be safely hard-deleted when a provider untrack event is received.

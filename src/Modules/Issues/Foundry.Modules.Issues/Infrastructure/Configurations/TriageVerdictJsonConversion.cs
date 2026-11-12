@@ -17,8 +17,8 @@ internal static class TriageVerdictJsonConversion
     private const string NeedsInputOutcome = "needs_input";
     private const string BlockedOutcome = "blocked";
 
-    public static ValueConverter<TriageVerdict, string> Converter { get; } = new(
-        verdict => Serialize(verdict),
+    public static ValueConverter<TriageVerdict?, string> Converter { get; } = new(
+        verdict => Serialize(verdict!),
         json => Deserialize(json));
 
     public static ValueComparer<TriageVerdict> Comparer { get; } = new(
@@ -49,13 +49,29 @@ internal static class TriageVerdictJsonConversion
         return JsonSerializer.Serialize(dto, (JsonSerializerOptions?)null);
     }
 
-    private static TriageVerdict Deserialize(string json)
+    // A row that cannot form a verdict reads as no verdict: this converter runs while a repository's issues
+    // materialise together, so a throw here would make every one of them unreadable, and an EF value converter has no
+    // logger to report through.
+    private static TriageVerdict? Deserialize(string json)
     {
-        TriageVerdictDto dto = JsonSerializer.Deserialize<TriageVerdictDto>(json, (JsonSerializerOptions?)null)
-            ?? throw new UnreachableException("Stored triage_verdict JSON deserialised to null.");
+        try
+        {
+            return Parse(json);
+        }
+        catch (Exception exception) when (exception is JsonException or ArgumentException)
+        {
+            return null;
+        }
+    }
 
-        IssueKind kind = IssueKind.FromLabel(dto.Kind)
-            ?? throw new UnreachableException($"Stored triage verdict kind '{dto.Kind}' is not a known issue kind.");
+    private static TriageVerdict? Parse(string json)
+    {
+        TriageVerdictDto? dto = JsonSerializer.Deserialize<TriageVerdictDto>(json, (JsonSerializerOptions?)null);
+
+        if (dto is null || IssueKind.FromLabel(dto.Kind) is not IssueKind kind)
+        {
+            return null;
+        }
 
         return dto.Outcome switch
         {
@@ -68,7 +84,7 @@ internal static class TriageVerdictJsonConversion
                 kind,
                 [.. (dto.BlockedBy ?? []).Select(b => new TriageBlocker(b.Issue, b.Reason))],
                 dto.DecidedAt),
-            _ => throw new UnreachableException($"Unknown triage verdict outcome: '{dto.Outcome}'"),
+            _ => null,
         };
     }
 

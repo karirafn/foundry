@@ -1,3 +1,4 @@
+using Foundry.Modules.Issues.Domain.Entities;
 using Foundry.Modules.Workers.Contracts;
 
 namespace Foundry.Modules.Issues.Domain.ValueObjects;
@@ -62,22 +63,49 @@ public abstract record TriageVerdict
         {
             ArgumentNullException.ThrowIfNull(blockers);
 
+            if (RejectionOf(blockers) is string rejection)
+            {
+                throw new ArgumentException(rejection, nameof(blockers));
+            }
+
+            BlockedBy = [.. blockers];
+        }
+
+        /// <summary>The longest reason a blocker may carry; it is stored, relayed and later shown in a public comment.</summary>
+        public const int ReasonMaxLength = 500;
+
+        /// <summary>
+        /// Why <paramref name="blockers"/> cannot form a blocked verdict, or <c>null</c> when they can. An issue records
+        /// at most <see cref="Issue.MaxBlockers"/> blockers, so a verdict naming more would promise links the issue
+        /// never holds.
+        /// </summary>
+        public static string? RejectionOf(IReadOnlyList<TriageBlocker> blockers)
+        {
+            ArgumentNullException.ThrowIfNull(blockers);
+
             if (blockers.Count == 0)
             {
-                throw new ArgumentException("A blocked triage verdict must name at least one blocker.", nameof(blockers));
+                return "A blocked triage verdict must name at least one blocker.";
+            }
+
+            if (blockers.Count > Issue.MaxBlockers)
+            {
+                return $"A blocked triage verdict may name at most {Issue.MaxBlockers} blockers.";
             }
 
             if (blockers.Select(b => b.IssueNumber).Distinct().Count() != blockers.Count)
             {
-                throw new ArgumentException("A blocked triage verdict must name each blocker once.", nameof(blockers));
+                return "A blocked triage verdict must name each blocker once.";
             }
 
             if (blockers.Any(b => string.IsNullOrWhiteSpace(b.Reason)))
             {
-                throw new ArgumentException("Every blocker of a blocked triage verdict needs a reason.", nameof(blockers));
+                return "Every blocker of a blocked triage verdict needs a reason.";
             }
 
-            BlockedBy = [.. blockers];
+            return blockers.Any(b => b.Reason.Length > ReasonMaxLength)
+                ? $"A blocker's reason may be at most {ReasonMaxLength} characters."
+                : null;
         }
 
         public IReadOnlyList<TriageBlocker> BlockedBy { get; }

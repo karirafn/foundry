@@ -63,6 +63,11 @@ internal sealed class TriageRunCompletedHandler(
         DateTimeOffset decidedAt,
         CancellationToken cancellationToken)
     {
+        if (TriageVerdict.Blocked.RejectionOf(blocked.BlockedBy) is string rejection)
+        {
+            return triaging.MarkFailed(rejection, FailureCategory.VerdictInvalid, decidedAt);
+        }
+
         IReadOnlyList<DependencyEdge> storedEdges = await issueQueries.GetDependencyGraphAsync(
             triaging.MonitoredRepositoryId,
             cancellationToken);
