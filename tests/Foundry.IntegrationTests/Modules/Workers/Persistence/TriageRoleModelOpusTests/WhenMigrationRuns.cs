@@ -57,7 +57,7 @@ public sealed class WhenMigrationRuns : IAsyncLifetime, IAsyncDisposable
         await _dbContext.Database.MigrateAsync(TargetMigrationId, TestContext.Current.CancellationToken);
 
         // Assert
-        (await ScalarAsync("SELECT model FROM worker_role_settings WHERE role = 'triage';")).ShouldBe("opus");
+        (await ReadModelAsync(TriageRole)).ShouldBe("opus");
     }
 
     [Theory]
@@ -74,7 +74,7 @@ public sealed class WhenMigrationRuns : IAsyncLifetime, IAsyncDisposable
         await _dbContext.Database.MigrateAsync(TargetMigrationId, TestContext.Current.CancellationToken);
 
         // Assert
-        (await ScalarAsync("SELECT model FROM worker_role_settings WHERE role = 'triage';")).ShouldBe(model);
+        (await ReadModelAsync(TriageRole)).ShouldBe(model);
     }
 
     [Theory]
@@ -90,7 +90,7 @@ public sealed class WhenMigrationRuns : IAsyncLifetime, IAsyncDisposable
         await _dbContext.Database.MigrateAsync(PreviousMigrationId, TestContext.Current.CancellationToken);
 
         // Assert
-        (await ScalarAsync("SELECT model FROM worker_role_settings WHERE role = 'triage';")).ShouldBe(expectedAfterDown);
+        (await ReadModelAsync(TriageRole)).ShouldBe(expectedAfterDown);
     }
 
     [Fact]
@@ -104,7 +104,7 @@ public sealed class WhenMigrationRuns : IAsyncLifetime, IAsyncDisposable
         await _dbContext.Database.MigrateAsync(TargetMigrationId, TestContext.Current.CancellationToken);
 
         // Assert
-        (await ScalarAsync($"SELECT model FROM worker_role_settings WHERE role = '{OtherRole}';")).ShouldBe("sonnet");
+        (await ReadModelAsync(OtherRole)).ShouldBe("sonnet");
     }
 
     [Fact]
@@ -118,7 +118,7 @@ public sealed class WhenMigrationRuns : IAsyncLifetime, IAsyncDisposable
         await _dbContext.Database.MigrateAsync(PreviousMigrationId, TestContext.Current.CancellationToken);
 
         // Assert
-        (await ScalarAsync($"SELECT model FROM worker_role_settings WHERE role = '{OtherRole}';")).ShouldBe("opus");
+        (await ReadModelAsync(OtherRole)).ShouldBe("opus");
     }
 
     private Task SetTriageModelAsync(string model) => SetModelAsync(TriageRole, model);
@@ -132,12 +132,11 @@ public sealed class WhenMigrationRuns : IAsyncLifetime, IAsyncDisposable
         await command.ExecuteNonQueryAsync(TestContext.Current.CancellationToken);
     }
 
-    private async Task<string?> ScalarAsync(string sql)
+    private async Task<string?> ReadModelAsync(string role)
     {
-#pragma warning disable CA2100 // Test-only constant SQL.
         using SqliteCommand command = _connection.CreateCommand();
-        command.CommandText = sql;
-#pragma warning restore CA2100
+        command.CommandText = "SELECT model FROM worker_role_settings WHERE role = $role;";
+        command.Parameters.AddWithValue("$role", role);
         return (await command.ExecuteScalarAsync(TestContext.Current.CancellationToken))?.ToString();
     }
 }
