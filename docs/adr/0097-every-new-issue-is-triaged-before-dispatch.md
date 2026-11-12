@@ -2,6 +2,8 @@
 
 > **2026-11-12 — Amended:** the "Triage comes before blockers" clause in Decision, and the dependency-check position in the flow line above it, are replaced by [ADR 0102](0102-triage-runs-once-blockers-clear.md): a new issue with open blockers waits untriaged and is triaged once they close.
 
+> **2026-11-12 — Amended:** the flow line in Decision gains a third route, added by [ADR 0103](0103-triage-defers-on-open-dependencies-by-linking-blockers.md): a `blocked` verdict moves the issue to `TriageBlockedIssue` and links the named blockers in the tracker.
+
 ## Context
 
 Implement runs are expensive, and an issue that is too vague to implement wastes a whole run before anyone sees the gap. [ADR 0094](0094-code-decides-claude-judges-only-what-code-cannot.md) names "is this issue described well enough to implement" as a judgment for Claude, and [ADR 0096](0096-awaiting-input-replies-detected-by-recorded-ids-and-branch-head.md) already gives Foundry a way to ask a person a question and resume work when they answer. The `triage` Worker Role needed a place in the issue lifecycle.
