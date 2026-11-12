@@ -233,6 +233,29 @@ public sealed class GetTrackerContextAsync : IAsyncDisposable
     }
 
     [Fact]
+    public async Task WhenCreatingTheProviderThrows_FlagsTheLinksListsEveryMentionAsUnreadableAndLeavesTheIndexNull()
+    {
+        // Arrange
+        ITrackerContextQueries sut = new TrackerContextReader(
+            _dbContext,
+            new ThrowingProviderFactory(),
+            new CredentialResolver(_dbContext, NullLogger<CredentialResolver>.Instance),
+            NullLogger<TrackerContextReader>.Instance);
+        IssueContent content = new IssueContentBuilder().WithBody("See #9 and #4.").Build();
+
+        // Act
+        TrackerContext context = await sut.GetTrackerContextAsync(
+            await SeedRepoAsync(), IssueNumber, content, TestContext.Current.CancellationToken);
+
+        // Assert
+        context.ShouldSatisfyAllConditions(
+            () => context.LinksUnreadable.ShouldBeTrue(),
+            () => context.ReferencedIssues.ShouldBeEmpty(),
+            () => context.UnreadableIssueNumbers.ShouldBe([9, 4]),
+            () => context.OpenIssues.ShouldBeNull());
+    }
+
+    [Fact]
     public async Task WhenTheProviderListsOpenIssues_ReturnsThemInOrderWithNoReferencedIssuesOrNotes()
     {
         // Arrange
@@ -382,6 +405,12 @@ public sealed class GetTrackerContextAsync : IAsyncDisposable
     }
 
     private sealed class UnsupportedProvider : ThrowingProvider;
+
+    private sealed class ThrowingProviderFactory : IIssueProviderFactory
+    {
+        public IIssueProvider CreateProvider(Credential credential, string token) =>
+            throw new InvalidOperationException("no provider");
+    }
 
     private sealed class TrackerReadsProvider : ThrowingProvider, IIssueProvider
     {

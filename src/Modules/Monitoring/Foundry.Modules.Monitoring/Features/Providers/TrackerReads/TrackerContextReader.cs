@@ -1,3 +1,5 @@
+using System.Text.RegularExpressions;
+
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Contracts.Queries;
 using Foundry.Modules.Monitoring.Domain.Entities;
@@ -25,6 +27,23 @@ internal sealed class TrackerContextReader(
         IssueContent issueContent,
         CancellationToken cancellationToken)
     {
+        try
+        {
+            return await ReadTrackerContextAsync(repositoryId, issueNumber, issueContent, cancellationToken);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
+        {
+            logger.LogWarning(ex, "Reading the tracker context of issue #{IssueNumber} threw.", issueNumber);
+            return UnreadableContext(issueNumber, issueContent);
+        }
+    }
+
+    private async Task<TrackerContext> ReadTrackerContextAsync(
+        MonitoredRepositoryId repositoryId,
+        int issueNumber,
+        IssueContent issueContent,
+        CancellationToken cancellationToken)
+    {
         Result<(IIssueProvider Provider, MonitoredRepository Repo)> resolved =
             await RepositoryProviderResolution.ResolveAsync(
                 dbContext, credentialResolver, providerFactory, repositoryId, cancellationToken);
@@ -35,11 +54,7 @@ internal sealed class TrackerContextReader(
                 "Resolving the provider for the tracker context of issue #{IssueNumber} failed: {Error}",
                 issueNumber,
                 ((Result<(IIssueProvider, MonitoredRepository)>.Failure)resolved).Error.Message);
-            return new TrackerContext(
-                [],
-                [.. ReferencedIssueSelection.Select(issueNumber, issueContent, []).Select(reference => reference.Number)],
-                true,
-                null);
+            return UnreadableContext(issueNumber, issueContent);
         }
 
         (IIssueProvider provider, MonitoredRepository repo) = resolvedSuccess.Value;
@@ -81,6 +96,23 @@ internal sealed class TrackerContextReader(
             unreadableIssueNumbers,
             linksRead is Result<IReadOnlyList<IssueReference>>.Failure,
             openIssues);
+    }
+
+    private TrackerContext UnreadableContext(int issueNumber, IssueContent issueContent)
+    {
+        try
+        {
+            return new TrackerContext(
+                [],
+                [.. ReferencedIssueSelection.Select(issueNumber, issueContent, []).Select(reference => reference.Number)],
+                true,
+                null);
+        }
+        catch (RegexMatchTimeoutException ex)
+        {
+            logger.LogWarning(ex, "Selecting the mentions of issue #{IssueNumber} threw.", issueNumber);
+            return new TrackerContext([], [], true, null);
+        }
     }
 
     private static async Task<Result<T>> ReadAsync<T>(
