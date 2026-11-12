@@ -272,7 +272,33 @@ public sealed class GetTrackerContextAsync : IAsyncDisposable
         context.ShouldSatisfyAllConditions(
             () => context.ReferencedIssues.ShouldBeEmpty(),
             () => context.UnreadableIssueNumbers.ShouldBeEmpty(),
-            () => logger.Entries.ShouldBeEmpty());
+            () => logger.Entries.ShouldNotContain(entry => entry.Level >= LogLevel.Warning));
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task WhenAReferenceIsDroppedSilently_LogsADebugEntryWithTheRepositoryTheNumbersAndTheErrorCode(
+        bool notFound)
+    {
+        // Arrange
+        CapturingLogger<TrackerContextReader> logger = new();
+        ITrackerContextQueries sut = SutWith(logger);
+        IssueContent content = new IssueContentBuilder().WithBody("Blocked on #123456.").Build();
+        Error dropped = notFound ? TrackerReadErrors.NotFound() : TrackerReadErrors.NotAnIssue();
+        _provider.ReferencedIssues[123456] = Result<ProviderReferencedIssue>.Fail(dropped);
+
+        // Act
+        await sut.GetTrackerContextAsync(
+            await SeedRepoAsync(), IssueNumber, content, TestContext.Current.CancellationToken);
+
+        // Assert
+        logger.Entries.ShouldContain(entry =>
+            entry.Level == LogLevel.Debug
+            && entry.Message.Contains("owner/repo", StringComparison.Ordinal)
+            && entry.Message.Contains("#7", StringComparison.Ordinal)
+            && entry.Message.Contains("#123456", StringComparison.Ordinal)
+            && entry.Message.Contains(dropped.Code, StringComparison.Ordinal));
     }
 
     [Theory]
@@ -318,7 +344,7 @@ public sealed class GetTrackerContextAsync : IAsyncDisposable
             await SeedRepoAsync(), IssueNumber, content, TestContext.Current.CancellationToken);
 
         // Assert
-        logger.Entries.ShouldBeEmpty();
+        logger.Entries.ShouldNotContain(entry => entry.Level >= LogLevel.Warning);
     }
 
     [Fact]

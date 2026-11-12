@@ -92,7 +92,17 @@ internal sealed class TrackerContextReader(
                     issue.ClosingMergeRequest,
                     issue.Body));
             }
-            else if (read is Result<ProviderReferencedIssue>.Failure failure && !IsDroppedSilently(failure.Error))
+            else if (read is Result<ProviderReferencedIssue>.Failure droppedFailure && IsDroppedSilently(droppedFailure.Error))
+            {
+                logger.LogDebug(
+                    "Dropped issue #{ReferencedIssueNumber}, referenced by issue #{IssueNumber} in {Repository}, "
+                    + "from the tracker context: {ErrorCode}",
+                    reference.Number,
+                    issueNumber,
+                    repo.Slug,
+                    droppedFailure.Error.Code);
+            }
+            else if (read is Result<ProviderReferencedIssue>.Failure failure)
             {
                 logger.LogWarning(
                     "Reading issue #{ReferencedIssueNumber}, referenced by issue #{IssueNumber} in {Repository}, "
