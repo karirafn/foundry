@@ -8,6 +8,7 @@ using Foundry.Modules.Monitoring.Infrastructure.GitLab;
 using Foundry.Modules.Monitoring.Infrastructure.RateBudget;
 using Foundry.Shared;
 using Foundry.Testing;
+using Foundry.UnitTests.Modules.Monitoring.Features.Providers.GitLabChecksTests;
 
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -29,6 +30,8 @@ public sealed class ChecksPassMergeRequestFetch
 {
     private const string MergeRequestUrl = "https://gitlab.com/group/project/-/merge_requests/7";
     private const string OpenMergeRequestWithGreenPipeline = """{"iid":7,"state":"opened","head_pipeline":{"status":"success"}}""";
+
+    private const string OpenMergeRequestWithFailedPipeline = """{"iid":7,"state":"opened","head_pipeline":{"id":6,"status":"failed"}}""";
 
     private static RepositorySlug Slug => RepositorySlug.Create("group/project").ValueOrThrow();
 
@@ -80,6 +83,61 @@ public sealed class ChecksPassMergeRequestFetch
         // Assert
         checks.ShouldBeOfType<Result<ProviderChecks>.Success>().Value.ShouldBeOfType<ProviderChecks.Red>();
         handler.AllRequests.Count.ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task WhenStatusThenChecksForFailedPipeline_NamesFailingJobAfterTwoRequests()
+    {
+        // Arrange
+        FakeHandler handler = new FakeHandler(HttpStatusCode.OK, OpenMergeRequestWithFailedPipeline)
+            .WithRoute("/pipelines/6/jobs", HttpStatusCode.OK, GitLabJobsByPipelineExample.OneFailedJob());
+        GitLabIssueProvider sut = CreateProvider(handler);
+        await sut.GetPullRequestStatusAsync(Slug, MergeRequestUrl, CancellationToken.None);
+
+        // Act
+        Result<ProviderChecks> checks = await sut.GetChecksAsync(Slug, MergeRequestUrl, CancellationToken.None);
+
+        // Assert
+        ProviderChecks.Red red = checks
+            .ShouldBeOfType<Result<ProviderChecks>.Success>().Value
+            .ShouldBeOfType<ProviderChecks.Red>();
+        red.FailingChecks.Select(check => check.Name).ShouldBe(["rspec:other"]);
+        handler.AllRequests.Count.ShouldBe(2);
+        handler.AllRequests[1].RequestUri!.AbsolutePath.ShouldEndWith("/pipelines/6/jobs");
+    }
+
+    [Fact]
+    public async Task WhenStatusReadAlone_MakesOneRequestAndNoJobsRead()
+    {
+        // Arrange
+        FakeHandler handler = new FakeHandler(HttpStatusCode.OK, OpenMergeRequestWithFailedPipeline)
+            .WithRoute("/pipelines/6/jobs", HttpStatusCode.OK, GitLabJobsByPipelineExample.OneFailedJob());
+        GitLabIssueProvider sut = CreateProvider(handler);
+
+        // Act
+        await sut.GetPullRequestStatusAsync(Slug, MergeRequestUrl, CancellationToken.None);
+
+        // Assert
+        handler.AllRequests.Count.ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task WhenJobsReadFailsOnCachedPath_StatusSucceedsChecksFailAndNextChecksRereadsMergeRequest()
+    {
+        // Arrange
+        FakeHandler handler = new FakeHandler(HttpStatusCode.OK, OpenMergeRequestWithFailedPipeline)
+            .WithRoute("/pipelines/6/jobs", HttpStatusCode.ServiceUnavailable, "{}");
+        GitLabIssueProvider sut = CreateProvider(handler);
+        Result<PullRequestStatus> status = await sut.GetPullRequestStatusAsync(Slug, MergeRequestUrl, CancellationToken.None);
+        Result<ProviderChecks> firstChecks = await sut.GetChecksAsync(Slug, MergeRequestUrl, CancellationToken.None);
+
+        // Act
+        await sut.GetChecksAsync(Slug, MergeRequestUrl, CancellationToken.None);
+
+        // Assert
+        status.ShouldBeOfType<Result<PullRequestStatus>.Success>();
+        firstChecks.ShouldBeOfType<Result<ProviderChecks>.Failure>();
+        handler.AllRequests.Count(request => request.RequestUri!.AbsolutePath.EndsWith("/merge_requests/7", StringComparison.Ordinal)).ShouldBe(2);
     }
 
     [Fact]

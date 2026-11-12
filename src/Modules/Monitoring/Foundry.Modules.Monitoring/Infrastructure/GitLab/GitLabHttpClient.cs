@@ -364,8 +364,10 @@ internal sealed partial class GitLabHttpClient(
 
     /// <summary>
     /// Reads one merge request — <c>GET projects/:id/merge_requests/:iid</c> — and returns both its
-    /// open/closed/merged status and the checks verdict of its <c>head_pipeline</c>, so a checks pass
-    /// needs a single fetch per merge request. Any non-success response is a failure.
+    /// open/closed/merged status and the id and status of its <c>head_pipeline</c>, so a checks pass
+    /// needs a single fetch per merge request. The pipeline's failed jobs are read later, by
+    /// <see cref="GetPipelineChecksAsync"/>, only when the checks verdict is consumed. Any non-success
+    /// response is a failure.
     /// </summary>
     public async Task<Result<MergeRequestSnapshot>> GetMergeRequestSnapshotAsync(
         Uri apiBaseUrl,
@@ -410,7 +412,8 @@ internal sealed partial class GitLabHttpClient(
 
         return Result<MergeRequestSnapshot>.Ok(new MergeRequestSnapshot(
             new PullRequestStatus(isClosed, isMerged),
-            Checks.FromGitLab(dto?.HeadPipeline?.Status, [])));
+            dto?.HeadPipeline?.Id,
+            dto?.HeadPipeline?.Status));
     }
 
     public async Task<Result<IReadOnlyList<ProviderComment>>> GetPullRequestReviewFeedbackAsync(
