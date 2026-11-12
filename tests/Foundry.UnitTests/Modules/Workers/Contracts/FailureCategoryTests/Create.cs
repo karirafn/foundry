@@ -22,6 +22,8 @@ public sealed class Create
     [InlineData(FailureCategory.TurnLimitToken)]
     [InlineData(FailureCategory.CancelledToken)]
     [InlineData(FailureCategory.PrClosedToken)]
+    [InlineData(FailureCategory.BlockerCycleToken)]
+    [InlineData(FailureCategory.BlockerLinkFailedToken)]
     public void WhenKnownToken_ReturnsSuccess(string token)
     {
         // Arrange
@@ -46,6 +48,8 @@ public sealed class Create
     [InlineData(FailureCategory.TurnLimitToken)]
     [InlineData(FailureCategory.CancelledToken)]
     [InlineData(FailureCategory.PrClosedToken)]
+    [InlineData(FailureCategory.BlockerCycleToken)]
+    [InlineData(FailureCategory.BlockerLinkFailedToken)]
     public void WhenKnownToken_ValueMatchesToken(string token)
     {
         // Arrange
@@ -101,6 +105,8 @@ public sealed class Create
     [InlineData(FailureCategory.TurnLimitToken)]
     [InlineData(FailureCategory.CancelledToken)]
     [InlineData(FailureCategory.PrClosedToken)]
+    [InlineData(FailureCategory.BlockerCycleToken)]
+    [InlineData(FailureCategory.BlockerLinkFailedToken)]
     public void WhenKnownToken_ReturnsCanonicalStaticMember(string token)
     {
         // Arrange

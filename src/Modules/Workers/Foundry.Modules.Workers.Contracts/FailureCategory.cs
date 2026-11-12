@@ -25,6 +25,8 @@ public sealed record FailureCategory
     public const string PublishFailedToken = "publish_failed";
     public const string PublishExpiredToken = "publish_expired";
     public const string RunDiscardedToken = "run_discarded";
+    public const string BlockerCycleToken = "blocker_cycle";
+    public const string BlockerLinkFailedToken = "blocker_link_failed";
 
     public static readonly FailureCategory NonZeroExit = new(NonZeroExitToken);
     public static readonly FailureCategory TimedOut = new(TimedOutToken);
@@ -50,6 +52,12 @@ public sealed record FailureCategory
     /// <summary>An operator discarded a run holding unpublished work (#788); Retry Issue starts a new run.</summary>
     public static readonly FailureCategory RunDiscarded = new(RunDiscardedToken);
 
+    /// <summary>Triage's blocker would close a dependency cycle through the issue, so nothing was linked.</summary>
+    public static readonly FailureCategory BlockerCycle = new(BlockerCycleToken);
+
+    /// <summary>The provider refused to link a blocker triage named.</summary>
+    public static readonly FailureCategory BlockerLinkFailed = new(BlockerLinkFailedToken);
+
     private static readonly FrozenDictionary<string, FailureCategory> KnownCategories =
         new Dictionary<string, FailureCategory>(StringComparer.Ordinal)
         {
@@ -70,6 +78,8 @@ public sealed record FailureCategory
             { PublishFailedToken, PublishFailed },
             { PublishExpiredToken, PublishExpired },
             { RunDiscardedToken, RunDiscarded },
+            { BlockerCycleToken, BlockerCycle },
+            { BlockerLinkFailedToken, BlockerLinkFailed },
         }.ToFrozenDictionary(StringComparer.Ordinal);
 
     public string Value { get; }

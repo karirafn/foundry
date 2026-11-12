@@ -153,6 +153,30 @@ public sealed class Members
     }
 
     [Fact]
+    public void BlockerCycle_ValueMatchesToken()
+    {
+        // Arrange
+
+        // Act
+        FailureCategory category = FailureCategory.BlockerCycle;
+
+        // Assert
+        category.Value.ShouldBe(FailureCategory.BlockerCycleToken);
+    }
+
+    [Fact]
+    public void BlockerLinkFailed_ValueMatchesToken()
+    {
+        // Arrange
+
+        // Act
+        FailureCategory category = FailureCategory.BlockerLinkFailed;
+
+        // Assert
+        category.Value.ShouldBe(FailureCategory.BlockerLinkFailedToken);
+    }
+
+    [Fact]
     public void WhenTwoInstancesHaveSameToken_AreEqual()
     {
         // Arrange
