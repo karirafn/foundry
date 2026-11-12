@@ -465,6 +465,57 @@ public sealed class RepositoryRoles
                 .ShouldBeLessThan(prompt.IndexOf(judgeLine, StringComparison.Ordinal)));
     }
 
+    [Fact]
+    public void TheTriageSystemPrompt_PointsAtTheSuppliedIssuesForPrecedentAndQuestions()
+    {
+        // Arrange
+        string prompt = ReadSystemPrompt(WorkerRole.Triage.Name);
+
+        // Act
+        string[] lines = prompt.Split('\n');
+
+        // Assert
+        lines.ShouldSatisfyAllConditions(
+            () => lines.ShouldContain("- Use the referenced issues and the open-issue list for related work and precedent."),
+            () => lines.ShouldContain(
+                "- Ask only what the code, its docs and the supplied issues leave open: intent, priority or a product choice."));
+    }
+
+    [Theory]
+    [InlineData("triage")]
+    [InlineData("implement")]
+    public void RoleSystemPrompt_StatesFoundryHoldsTheIssueUntilItsBlockersClose(string roleName)
+    {
+        // Arrange
+        const string statement =
+            "Foundry holds this issue until its `blocked_by` issues close. Read another issue's state and its closing merge request from the referenced issues. Never ask whether another issue has merged, or whether to wait for it.";
+
+        // Act
+        string prompt = ReadSystemPrompt(roleName);
+
+        // Assert
+        prompt.ShouldContain(statement);
+    }
+
+    [Fact]
+    public void TheImplementSystemPrompt_NamesTheReferencedIssuesAndPointsAtThemForPrecedent()
+    {
+        // Arrange
+        string prompt = ReadSystemPrompt(WorkerRole.Implement.Name);
+
+        // Act
+        string[] lines = prompt.Split('\n');
+
+        // Assert
+        lines.ShouldSatisfyAllConditions(
+            () => lines[0].ShouldContain("Foundry read the issue's title, body and comments, and the issues it references, when it dispatched this run"),
+            () => lines.ShouldContain("Use the referenced issues and the open-issue list for related work and precedent."));
+    }
+
+    private static string ReadSystemPrompt(string roleName) =>
+        File.ReadAllText(Path.Combine(RolesDirectory, roleName, WorkerRoleCatalogReader.SystemPromptPath))
+            .Replace("\r\n", "\n", StringComparison.Ordinal);
+
     private static WorkerRoleCatalogContent LoadRepositoryCatalog() =>
         WorkerRoleCatalogReader.ReadFromDirectory(RepositoryRoot.WorkersDirectory)
             .ShouldBeOfType<Result<WorkerRoleCatalogContent>.Success>().Value;
