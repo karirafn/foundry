@@ -163,7 +163,7 @@ public sealed class PublishingInstructions
             timeoutMinutes: 120,
             installsDocker: installsDocker,
             installsDotnet: true,
-            clarifications: [new Clarification([new InputQuestion("Which?", "Context.")], "This one.", DateTimeOffset.UnixEpoch, DateTimeOffset.UnixEpoch)]);
+            clarifications: [new Clarification([new InputQuestion("Which?", "Context.", "This one.")], "This one.", DateTimeOffset.UnixEpoch, DateTimeOffset.UnixEpoch)]);
 
         return result.ShouldBeOfType<Result<string>.Success>().Value;
     }

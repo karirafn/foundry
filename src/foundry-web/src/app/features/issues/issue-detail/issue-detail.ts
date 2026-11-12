@@ -259,6 +259,9 @@ interface TriageCallout {
                     @if (q.context) {
                       <span class="issue-detail__field-key issue-detail__question-context">{{ q.context }}</span>
                     }
+                    @if (q.recommendation) {
+                      <span class="issue-detail__field-value issue-detail__question-recommendation"><strong class="issue-detail__question-recommendation-label">Recommended:</strong> {{ q.recommendation }}</span>
+                    }
                   </li>
                 }
               </ul>

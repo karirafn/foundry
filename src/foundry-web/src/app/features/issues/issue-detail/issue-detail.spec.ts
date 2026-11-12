@@ -4,7 +4,7 @@ import { provideHttpClient } from '@angular/common/http';
 import { provideHttpClientTesting, HttpTestingController } from '@angular/common/http/testing';
 import { Observable, Subject, of } from 'rxjs';
 import { IssueDetailComponent } from './issue-detail';
-import { IssueDetail, IssueStateDetails } from '../issue.model';
+import { InputQuestion, IssueDetail, IssueStateDetails } from '../issue.model';
 import { IssueService, TriageAction } from '../issue.service';
 import { IssueSignalRService } from '../../../core/services/issue-signalr.service';
 import { WorkerRunService } from '../../workers/worker-run.service';
@@ -1125,6 +1125,63 @@ describe('IssueDetailComponent', () => {
     expect(section?.textContent).toContain('Two are configured.');
     expect(section?.textContent).toContain('Posting the questions');
   });
+
+  function awaitingWithQuestion(question: InputQuestion): IssueDetail {
+    return {
+      ...mockDetail,
+      state: 'awaiting_input',
+      stateDetails: {
+        ...mockStateDetails,
+        awaitingInput: {
+          questions: [question],
+          postStatus: 'pending',
+          postedAt: null,
+          commentUrl: null,
+          postFailureReason: null,
+          nextPostAttemptAt: null,
+          resumeTarget: 'revision',
+        },
+      },
+    };
+  }
+
+  it('should show the recommendation of a question after its context', () => {
+    // Act
+    const fixture = createComponent(
+      awaitingWithQuestion({
+        question: 'Which database?',
+        context: 'Two are configured.',
+        recommendation: 'Postgres, since production runs it.',
+      }),
+    );
+    const el = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    const recommendation = el.querySelector('.issue-detail__question-recommendation');
+    expect(recommendation?.textContent).toContain('Recommended:');
+    expect(recommendation?.textContent).toContain('Postgres, since production runs it.');
+    expect(recommendation?.previousElementSibling?.classList).toContain(
+      'issue-detail__question-context',
+    );
+  });
+
+  it.each([null, undefined, ''])(
+    'should render no recommendation when it is %j',
+    (recommendation) => {
+      // Act
+      const fixture = createComponent(
+        awaitingWithQuestion({
+          question: 'Which database?',
+          context: 'Two are configured.',
+          recommendation,
+        }),
+      );
+      const el = fixture.nativeElement as HTMLElement;
+
+      // Assert
+      expect(el.querySelector('.issue-detail__question-recommendation')).toBeFalsy();
+    },
+  );
 
   it('should link to the posted question once posted', () => {
     // Arrange

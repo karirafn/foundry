@@ -37,10 +37,10 @@ public sealed class Parse
     {
         // Act
         RunVerdict verdict = _sut.Parse(Json(
-            """{"outcome":"needs_input","kind":"feature","questions":[{"question":"Which page?","context":"None is named."}]}"""));
+            """{"outcome":"needs_input","kind":"feature","questions":[{"question":"Which page?","context":"None is named.","recommendation":"The home page."}]}"""));
 
         // Assert
-        verdict.ShouldBe(RunVerdict.NeedsInput([new RunVerdictQuestion("Which page?", "None is named.")]));
+        verdict.ShouldBe(RunVerdict.NeedsInput([new RunVerdictQuestion("Which page?", "None is named.", "The home page.")]));
     }
 
     [Fact]

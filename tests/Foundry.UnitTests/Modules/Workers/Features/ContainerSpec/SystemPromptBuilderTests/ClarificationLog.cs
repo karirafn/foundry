@@ -19,7 +19,7 @@ public sealed class ClarificationLog
     private static readonly DateTimeOffset AskedAt = new(2026, 11, 11, 10, 0, 0, TimeSpan.Zero);
 
     private static readonly Clarification Answered =
-        Clarification.Ask([new InputQuestion("Which database?", "Two are configured.")], AskedAt)
+        Clarification.Ask([new InputQuestion("Which database?", "Two are configured.", "Use <sqlite>.")], AskedAt)
             .Answer("Use <postgres>.", AskedAt.AddHours(1));
 
     public static TheoryData<DispatchContext> Contexts() =>
@@ -87,10 +87,45 @@ public sealed class ClarificationLog
         // Act
         string prompt = BuildPrompt(
             new DispatchContext.Fresh("feat/1-fix"),
-            [Clarification.Ask([new InputQuestion("Which database?", "Two are configured.")], AskedAt)]);
+            [Clarification.Ask([new InputQuestion("Which database?", "Two are configured.", null)], AskedAt)]);
 
         // Assert
         prompt.ShouldContain(SystemPromptBuilder.UnansweredClarificationNote);
+    }
+
+    [Theory]
+    [MemberData(nameof(Contexts))]
+    public void WhenAQuestionHasARecommendation_RendersItAfterTheQuestionAndContext(DispatchContext context)
+    {
+        // Act
+        string prompt = BuildPrompt(context, [Answered]).ReplaceLineEndings("\n");
+
+        // Assert
+        prompt.ShouldContain(
+            "<question>Which database?</question>\n<context>Two are configured.</context>\n<recommendation>Use &lt;sqlite&gt;.</recommendation>\n");
+    }
+
+    [Fact]
+    public void WhenAQuestionHasNoRecommendation_LeavesTheRecommendationOut()
+    {
+        // Act
+        string prompt = BuildPrompt(
+            new DispatchContext.Fresh("feat/1-fix"),
+            [Clarification.Ask([new InputQuestion("Which database?", "Two are configured.", null)], AskedAt)]);
+
+        // Assert
+        prompt.ShouldNotContain("<recommendation>");
+    }
+
+    [Theory]
+    [MemberData(nameof(Contexts))]
+    public void TheLeadSentence_SaysAnUnaddressedQuestionTakesItsRecommendation(DispatchContext context)
+    {
+        // Act
+        string prompt = BuildPrompt(context, [Answered]);
+
+        // Assert
+        prompt.ShouldContain("A question the input leaves unaddressed takes its recommendation.");
     }
 
     [Fact]

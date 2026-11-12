@@ -19,8 +19,12 @@ public enum RunVerdictStatus
     Invalid,
 }
 
-/// <summary>One question a run asks a person, with the context it needs (the shared <c>questions</c> definition).</summary>
-public sealed record RunVerdictQuestion(string Question, string Context);
+/// <summary>
+/// One question a run asks a person, with the context it needs and the one option it recommends (the shared
+/// <c>questions</c> definition). <paramref name="Recommendation"/> is null only for a question recorded before runs
+/// returned recommendations.
+/// </summary>
+public sealed record RunVerdictQuestion(string Question, string Context, string? Recommendation);
 
 /// <summary>The verdict a worker run returned, as Foundry recorded it.</summary>
 public sealed record RunVerdict

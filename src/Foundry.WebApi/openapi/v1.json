@@ -3339,7 +3339,8 @@
       "InputQuestion": {
         "required": [
           "question",
-          "context"
+          "context",
+          "recommendation"
         ],
         "type": "object",
         "properties": {
@@ -3348,6 +3349,12 @@
           },
           "context": {
             "type": "string"
+          },
+          "recommendation": {
+            "type": [
+              "null",
+              "string"
+            ]
           }
         }
       },

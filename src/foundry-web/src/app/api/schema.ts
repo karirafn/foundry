@@ -1061,6 +1061,7 @@ export interface components {
         InputQuestion: {
             question: string;
             context: string;
+            recommendation: null | string;
         };
         IssueDetail: {
             /** Format: uuid */

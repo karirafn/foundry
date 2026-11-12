@@ -39,10 +39,10 @@ public sealed class Read
         // Act
         RunVerdict? verdict = _sut.Read(
             WorkerRole.Implement,
-            Log("""{"type":"result","result":"Blocked","structured_output":{"outcome":"needs_input","questions":[{"question":"Which?","context":"Two options."}]}}"""));
+            Log("""{"type":"result","result":"Blocked","structured_output":{"outcome":"needs_input","questions":[{"question":"Which?","context":"Two options.","recommendation":"The first."}]}}"""));
 
         // Assert
-        verdict.ShouldBe(RunVerdict.NeedsInput([new RunVerdictQuestion("Which?", "Two options.")]));
+        verdict.ShouldBe(RunVerdict.NeedsInput([new RunVerdictQuestion("Which?", "Two options.", "The first.")]));
     }
 
     [Fact]

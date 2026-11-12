@@ -203,7 +203,7 @@ internal sealed class WorkerOutcomeApplier(
                         needsInput.PullRequestUrl is null ? WorkerRunMergeState.None : WorkerRunMergeState.Open,
                         RunStartedAt: activeRun.StartedAt,
                         InputRequest: new WorkerInputRequest(
-                            [.. needsInput.Questions.Select(q => new InputQuestion(q.Question, q.Context))],
+                            [.. needsInput.Questions.Select(q => new InputQuestion(q.Question, q.Context, q.Recommendation))],
                             needsInput.BranchHasCommits),
                         Publish: PublishFactsOf(activeRun, needsInput.PullRequestUrl?.Value))],
                     activeRun.Id,
@@ -305,7 +305,7 @@ internal sealed class WorkerOutcomeApplier(
         TriageVerdict.Ready ready => new TriageResult.Ready(ToTriageKind(ready.Kind)),
         TriageVerdict.NeedsInput needsInput => new TriageResult.NeedsInput(
             ToTriageKind(needsInput.Kind),
-            [.. needsInput.Questions.Select(q => new InputQuestion(q.Question, q.Context))]),
+            [.. needsInput.Questions.Select(q => new InputQuestion(q.Question, q.Context, q.Recommendation))]),
         _ => throw new UnreachableException($"Unhandled triage verdict: {verdict.GetType().Name}"),
     };
 

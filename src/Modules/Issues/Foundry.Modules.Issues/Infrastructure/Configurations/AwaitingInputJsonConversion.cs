@@ -125,7 +125,7 @@ internal static class AwaitingInputJsonConversion
     private static string SerializeClarifications(IReadOnlyList<Clarification> log) =>
         JsonSerializer.Serialize(
             log.Select(round => new ClarificationDto(
-                [.. round.Questions.Select(q => new QuestionDto(q.Question, q.Context))],
+                [.. round.Questions.Select(q => new QuestionDto(q.Question, q.Context, q.Recommendation))],
                 round.Input,
                 round.AskedAt,
                 round.AnsweredAt)).ToList(),
@@ -134,7 +134,7 @@ internal static class AwaitingInputJsonConversion
     private static List<Clarification> DeserializeClarifications(string json) =>
         (JsonSerializer.Deserialize<List<ClarificationDto>>(json, (JsonSerializerOptions?)null) ?? [])
             .Select(dto => new Clarification(
-                [.. dto.Questions.Select(q => new InputQuestion(q.Question, q.Context))],
+                [.. dto.Questions.Select(q => new InputQuestion(q.Question, q.Context, q.Recommendation))],
                 dto.Input,
                 dto.AskedAt,
                 dto.AnsweredAt))
@@ -170,5 +170,6 @@ internal static class AwaitingInputJsonConversion
 
     private sealed record QuestionDto(
         [property: JsonPropertyName("question")] string Question,
-        [property: JsonPropertyName("context")] string Context);
+        [property: JsonPropertyName("context")] string Context,
+        [property: JsonPropertyName("recommendation")] string? Recommendation);
 }

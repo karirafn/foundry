@@ -66,8 +66,8 @@ public sealed class WhenRunTransitions : IAsyncDisposable
         WorkerRunId runId = WorkerRunId.New();
         RunVerdict verdict = RunVerdict.NeedsInput(
         [
-            new RunVerdictQuestion("Which database?", "The issue names both SQLite and Postgres."),
-            new RunVerdictQuestion("Keep the v1 endpoint?", string.Empty),
+            new RunVerdictQuestion("Which database?", "The issue names both SQLite and Postgres.", "Postgres."),
+            new RunVerdictQuestion("Keep the v1 endpoint?", string.Empty, "Yes."),
         ]);
         ActiveRun active = StartingRun.Begin(IssueId.New(), runId, WorkerRole.Implement, image: null).Activate(
             ContainerId.From("container-verdict"),

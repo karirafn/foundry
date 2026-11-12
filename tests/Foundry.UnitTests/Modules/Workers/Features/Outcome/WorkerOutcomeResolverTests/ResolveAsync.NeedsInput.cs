@@ -14,7 +14,7 @@ namespace Foundry.UnitTests.Modules.Workers.Features.Outcome.WorkerOutcomeResolv
 public sealed partial class ResolveAsync
 {
     private static readonly RunVerdict NeedsInputVerdict =
-        RunVerdict.NeedsInput([new RunVerdictQuestion("Which database?", "Two are configured.")]);
+        RunVerdict.NeedsInput([new RunVerdictQuestion("Which database?", "Two are configured.", "Postgres.")]);
 
     [Fact]
     public async Task WhenExitZeroWithNeedsInputAndOpenMr_ReturnsNeedsInputOnThePullRequest()

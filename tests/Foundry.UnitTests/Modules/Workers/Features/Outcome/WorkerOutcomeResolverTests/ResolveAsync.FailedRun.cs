@@ -130,7 +130,7 @@ public sealed partial class ResolveAsync
     {
         // Arrange
         WorkerOutcomeResolver sut = BuildResolverWithRealParser(OpenMrQueries());
-        RunVerdict verdict = RunVerdict.NeedsInput([new RunVerdictQuestion("Which database?", "Two are configured.")]);
+        RunVerdict verdict = RunVerdict.NeedsInput([new RunVerdictQuestion("Which database?", "Two are configured.", "Postgres.")]);
 
         // Act
         WorkerOutcome outcome = await sut.ResolveAsync(

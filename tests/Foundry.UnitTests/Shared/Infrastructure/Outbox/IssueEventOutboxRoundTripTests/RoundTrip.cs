@@ -51,7 +51,7 @@ public sealed class RoundTrip
             null,
             WorkerRunMergeState.None,
             Now,
-            new WorkerInputRequest([new InputQuestion("Which database?", "Two are configured.")], BranchHasCommits: true));
+            new WorkerInputRequest([new InputQuestion("Which database?", "Two are configured.", "Postgres.")], BranchHasCommits: true));
 
         // Act
         WorkerRunCompleted? deserialized = RoundTripThroughOutbox(original);
@@ -67,7 +67,7 @@ public sealed class RoundTrip
     public void WhenAClaimCarriesAClarificationLog_RoundTripsThroughOutbox()
     {
         // Arrange
-        Clarification answered = Clarification.Ask([new InputQuestion("Which database?", "Two are configured.")], Now)
+        Clarification answered = Clarification.Ask([new InputQuestion("Which database?", "Two are configured.", "Postgres.")], Now)
             .Answer("Use Postgres.", Now.AddHours(1));
         IssueClaimed original = new(new ClaimedIssueDispatch(
             IssueId.New(),

@@ -387,6 +387,11 @@ One round on an issue's append-only clarification log (`Issue.Clarifications`, c
 A round is open until input arrives; a round left when the issue moved on without input (closed, or its pull request closed) stays unanswered.
 Every implement prompt (fresh, continuation, revision) and every triage prompt renders the log in its own section, so an answer lasts as long as the issue does; with an empty log the prompt is unchanged.
 
+## Recommendation
+
+The single option a run proposes for one of its questions, with its reason (`InputQuestion.Recommendation`, the shared verdict definition's required, non-empty `recommendation`). A reply that leaves the question unaddressed accepts it, so a bare "ok" accepts every recommendation and a reply answering by number accepts the rest.
+Code never applies it: the posted question comment shows it as **Recommended:**, the issue detail shows it after the question's context, and the clarification log renders it as `<recommendation>` with the rule stated, so the next run reads the reply and the recommendation together. Null only for questions stored before runs returned recommendations; those render without it, and their comment keeps the plain reply instruction.
+
 ## Input Arrived
 
 After the question's post time, a new eligible comment on the question's thread whose ID Foundry did not post: not a bot, not a system note, not in a resolved thread, not in the [posted-comment registry](#posted-comment-registry), whoever the author is (the PAT owner's own reply counts).

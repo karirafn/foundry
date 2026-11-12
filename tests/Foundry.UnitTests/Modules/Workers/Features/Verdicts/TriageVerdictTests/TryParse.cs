@@ -32,13 +32,13 @@ public sealed class TryParse
     {
         // Act
         TriageVerdict? verdict = TriageVerdict.TryParse(Json(
-            """{"outcome":"needs_input","kind":"bug","questions":[{"question":"Which endpoint?","context":"Two match."}]}"""));
+            """{"outcome":"needs_input","kind":"bug","questions":[{"question":"Which endpoint?","context":"Two match.","recommendation":"The v2 one."}]}"""));
 
         // Assert
         TriageVerdict.NeedsInput needsInput = verdict.ShouldBeOfType<TriageVerdict.NeedsInput>();
         needsInput.ShouldSatisfyAllConditions(
             () => needsInput.Kind.ShouldBe(TriageIssueKind.Bug),
-            () => needsInput.Questions.ShouldBe([new RunVerdictQuestion("Which endpoint?", "Two match.")]));
+            () => needsInput.Questions.ShouldBe([new RunVerdictQuestion("Which endpoint?", "Two match.", "The v2 one.")]));
     }
 
     [Theory]

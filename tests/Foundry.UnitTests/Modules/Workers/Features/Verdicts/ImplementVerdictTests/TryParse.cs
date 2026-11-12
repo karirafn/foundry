@@ -74,7 +74,7 @@ public sealed class TryParse
     {
         // Act
         ImplementVerdict? verdict = ImplementVerdict.TryParse(Json(
-            """{"outcome":"needs_input","questions":[{"question":"Which database?","context":"Both are named."},{"question":"Keep v1?","context":""}]}"""));
+            """{"outcome":"needs_input","questions":[{"question":"Which database?","context":"Both are named.","recommendation":"Postgres."},{"question":"Keep v1?","context":"","recommendation":"Yes."}]}"""));
 
         // Assert
         verdict.ShouldNotBeNull().ShouldSatisfyAllConditions(
@@ -82,8 +82,8 @@ public sealed class TryParse
             () => verdict!.PullRequest.ShouldBeNull(),
             () => verdict!.Questions.ShouldBe(
             [
-                new RunVerdictQuestion("Which database?", "Both are named."),
-                new RunVerdictQuestion("Keep v1?", string.Empty),
+                new RunVerdictQuestion("Which database?", "Both are named.", "Postgres."),
+                new RunVerdictQuestion("Keep v1?", string.Empty, "Yes."),
             ]));
     }
 

@@ -7,7 +7,7 @@
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["question", "context"],
+        "required": ["question", "context", "recommendation"],
         "properties": {
           "question": {
             "description": "One question, answerable on its own.",
@@ -17,6 +17,11 @@
           "context": {
             "description": "What you found that raises the question, and the options you see.",
             "type": "string"
+          },
+          "recommendation": {
+            "description": "The one option you recommend, with its reason.",
+            "type": "string",
+            "minLength": 1
           }
         }
       }
