@@ -730,8 +730,8 @@ internal static partial class SystemPromptBuilder
             }
 
             // The newest comment was counted in sizeOmittedCount since no comment fit;
-            // remove it because we are now showing a truncated version.
-            if (sizeOmittedCount > 0)
+            // remove it only when a cut version of it is now shown.
+            if (candidateComments.Count > 0)
             {
                 sizeOmittedCount--;
             }

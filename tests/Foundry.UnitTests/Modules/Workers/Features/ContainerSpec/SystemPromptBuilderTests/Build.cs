@@ -2412,8 +2412,82 @@ public sealed class Build
             () => input.ShouldStartWith(rendered[..^TruncationMarker.Length]));
     }
 
+    [Fact]
+    public void WhenTheBudgetCannotHoldEvenTheCutMarker_NoteCountsEveryOmittedComment()
+    {
+        // Arrange
+        int budgetBelowMarker = 5;
+
+        // Act
+        string prompt = BuildRevisionWithCommentBudget(budgetBelowMarker, commentCount: 3);
+
+        // Assert
+        prompt.ShouldSatisfyAllConditions(
+            () => prompt.ShouldContain("3 further comment(s) were omitted to fit the prompt size budget"),
+            () => prompt.ShouldNotContain(TruncationMarker));
+    }
+
+    [Fact]
+    public void WhenTheBudgetHoldsExactlyTheCutMarker_ShowsTheMarkerAndCountsTheRest()
+    {
+        // Arrange
+        int budgetForPrefixMarkerAndNewline = "- ".Length + TruncationMarker.Length + 1;
+
+        // Act
+        string prompt = BuildRevisionWithCommentBudget(budgetForPrefixMarkerAndNewline, commentCount: 3);
+
+        // Assert
+        prompt.ShouldSatisfyAllConditions(
+            () => prompt.ShouldContain($"- {TruncationMarker}"),
+            () => prompt.ShouldContain("2 further comment(s) were omitted to fit the prompt size budget"));
+    }
+
+    [Fact]
+    public void WhenTheBudgetHoldsPartOfTheNewestComment_ShowsItCutAndCountsTheRest()
+    {
+        // Arrange
+        int budgetWithRoomForBody = 100;
+
+        // Act
+        string prompt = BuildRevisionWithCommentBudget(budgetWithRoomForBody, commentCount: 3);
+
+        // Assert
+        prompt.ShouldSatisfyAllConditions(
+            () => prompt.ShouldContain($"aaaa{TruncationMarker}"),
+            () => prompt.ShouldContain("2 further comment(s) were omitted to fit the prompt size budget"));
+    }
+
     private const string TruncationMarker = " [truncated]";
     private const int OmissionNoteReserveBytes = 512;
+
+    // Sizes the template so the room left for comments equals the requested budget, measured off a prompt whose
+    // comments are one byte each ("- c\n" = 4 bytes per line).
+    private static string BuildRevisionWithCommentBudget(int commentBudgetBytes, int commentCount)
+    {
+        const int measuredLineBytes = 4;
+        DispatchContext.Revision Revision(string body) => new(
+            "feat/1-fix",
+            "https://github.com/org/repo/pull/1",
+            new RevisionTrigger.ReviewFeedback(
+                Enumerable.Range(0, commentCount).Select(_ => new ReviewComment(body)).ToList(),
+                0,
+                null));
+        Result<string> measured = SystemPromptBuilder.Build(
+            Principles,
+            1, "x", Revision("c"),
+            Issue, timeoutMinutes: 120, installsDocker: false, installsDotnet: false);
+        int measuredBytes = Encoding.UTF8.GetByteCount(measured.ShouldBeOfType<Result<string>.Success>().Value);
+        int fixedBytes = measuredBytes - (commentCount * measuredLineBytes);
+        string template = "x" + new string(
+            'y',
+            SystemPromptBuilder.MaxSystemPromptBytes - fixedBytes - OmissionNoteReserveBytes - commentBudgetBytes);
+
+        Result<string> built = SystemPromptBuilder.Build(
+            Principles,
+            1, template, Revision(new string('a', 1_000)),
+            Issue, timeoutMinutes: 120, installsDocker: false, installsDotnet: false);
+        return built.ShouldBeOfType<Result<string>.Success>().Value;
+    }
 
     // The builder keeps one byte under the exclusive ceiling plus a reserve for the omission note.
     private static int MaxFittingPromptBytes => SystemPromptBuilder.MaxSystemPromptBytes - 1 - OmissionNoteReserveBytes;
