@@ -16,7 +16,11 @@ public sealed class BuildRestricted
 {
     private const string Principles = "PRINCIPLES_MARKER Engineering principles.";
     private const string Template = "You are triaging issue #{issueNumber}.\n\n{issueContent}\n\nJudge it.";
+    private const string TruncationMarker = " [truncated]";
+    private const int OmissionNoteReserveBytes = 512;
     private static readonly DateTimeOffset CreatedAt = new(2026, 6, 1, 10, 0, 0, TimeSpan.Zero);
+
+    private static readonly IssueContent EmptyBodyIssue = new("Add retry", string.Empty, []);
 
     private static IssueContent Issue(params IssueContentComment[] comments) =>
         new("Add retry", "Retry webhook delivery.", comments);
@@ -43,6 +47,20 @@ public sealed class BuildRestricted
     }
 
     private static int ByteCount(string prompt) => Encoding.UTF8.GetByteCount(prompt);
+
+    private static List<string> RenderedInputs(string prompt) =>
+        prompt.Split("<input>")
+            .Skip(1)
+            .Select(section => section[..section.IndexOf("</input>", StringComparison.Ordinal)])
+            .ToList();
+
+    // The builder keeps one byte under the exclusive ceiling plus a reserve for the omission note.
+    private static int MaxFittingPromptBytes => SystemPromptBuilder.MaxSystemPromptBytes - 1 - OmissionNoteReserveBytes;
+
+    // The input length whose prompt lands exactly on the budget, measured off the prompt with an empty answered input.
+    // The body is empty so it has no room to give back: the input is the only text the budget can squeeze.
+    private static int ExactFitInputLength() =>
+        MaxFittingPromptBytes - ByteCount(BuildPrompt(EmptyBodyIssue, Round(string.Empty, CreatedAt)));
 
     [Fact]
     public void WhenBuilt_RendersTheIssueTitleBodyAndCommentsAsIssueContent()
@@ -271,16 +289,19 @@ public sealed class BuildRestricted
             Round(newest, CreatedAt.AddDays(2)));
 
         // Assert
+        List<string> inputs = RenderedInputs(prompt);
         prompt.ShouldSatisfyAllConditions(
             () => ByteCount(prompt).ShouldBeLessThan(SystemPromptBuilder.MaxSystemPromptBytes),
-            () => prompt.ShouldContain("<input> [truncated]</input>"),
-            () => prompt.ShouldContain(" [truncated]</input>"),
-            () => prompt.ShouldNotContain(middle),
+            () => inputs.Count.ShouldBe(3),
+            () => inputs[0].ShouldBe(TruncationMarker),
+            () => inputs[1].ShouldEndWith(TruncationMarker),
+            () => inputs[1].Length.ShouldBeGreaterThan(TruncationMarker.Length),
+            () => middle.ShouldStartWith(inputs[1][..^TruncationMarker.Length]),
+            () => inputs[2].ShouldBe(newest),
             () => prompt.ShouldContain("<question>OLDEST question?</question>"),
             () => prompt.ShouldContain("<context>OLDEST context</context>"),
             () => prompt.ShouldContain("<question>MIDDLE question?</question>"),
             () => prompt.ShouldContain("<context>MIDDLE context</context>"),
-            () => prompt.ShouldContain($"<input>{newest}</input>"),
             () => prompt.ShouldContain("Retry webhook delivery."));
     }
 
@@ -316,12 +337,47 @@ public sealed class BuildRestricted
         string prompt = BuildPrompt(issue, Round(input, CreatedAt));
 
         // Assert
+        string rendered = RenderedInputs(prompt).ShouldHaveSingleItem();
+        string cutStem = rendered[..^TruncationMarker.Length];
         prompt.ShouldSatisfyAllConditions(
             () => ByteCount(prompt).ShouldBeLessThan(SystemPromptBuilder.MaxSystemPromptBytes),
             () => prompt.ShouldContain("<issue-body>\n [truncated]\n</issue-body>"),
             () => prompt.ShouldContain("1 earlier comment(s) were omitted to fit the prompt size budget"),
-            () => prompt.ShouldContain(" [truncated]</input>"),
-            () => prompt.ShouldNotContain(input));
+            () => rendered.ShouldEndWith(TruncationMarker),
+            () => cutStem.ShouldNotBeEmpty(),
+            () => input.ShouldStartWith(cutStem));
+    }
+
+    [Fact]
+    public void WhenAnInputFillsTheRoomUpToTheBudgetExactly_RendersItWholeWithNoMarker()
+    {
+        // Arrange
+        string input = new('x', ExactFitInputLength());
+
+        // Act
+        string prompt = BuildPrompt(EmptyBodyIssue, Round(input, CreatedAt));
+
+        // Assert
+        prompt.ShouldSatisfyAllConditions(
+            () => ByteCount(prompt).ShouldBe(MaxFittingPromptBytes),
+            () => RenderedInputs(prompt).ShouldHaveSingleItem().ShouldBe(input));
+    }
+
+    [Fact]
+    public void WhenAnInputIsOneByteOverTheRoomTheBudgetLeaves_CutsItAndMarksIt()
+    {
+        // Arrange
+        string input = new('x', ExactFitInputLength() + 1);
+
+        // Act
+        string prompt = BuildPrompt(EmptyBodyIssue, Round(input, CreatedAt));
+
+        // Assert
+        string rendered = RenderedInputs(prompt).ShouldHaveSingleItem();
+        prompt.ShouldSatisfyAllConditions(
+            () => ByteCount(prompt).ShouldBeLessThanOrEqualTo(MaxFittingPromptBytes),
+            () => rendered.ShouldEndWith(TruncationMarker),
+            () => input.ShouldStartWith(rendered[..^TruncationMarker.Length]));
     }
 
     [Theory]

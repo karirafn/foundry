@@ -2347,4 +2347,84 @@ public sealed class Build
             () => prompt[open..close].ShouldContain(longComment),
             () => prompt[open..close].ShouldNotContain("[truncated]"));
     }
+
+    [Fact]
+    public void WhenTheRevisionPayloadAndTheLogBothOverflow_ShedsThePayloadBeforeCuttingAnyInput()
+    {
+        // Arrange
+        string olderInput = new string('o', 100_000);
+        string newestInput = new string('n', 20_000);
+        string feedbackBody = new string('f', 40_000);
+        List<ReviewComment> comments = Enumerable.Range(1, 3)
+            .Select(i => new ReviewComment($"Feedback {i}: {feedbackBody}"))
+            .ToList();
+        DispatchContext.Revision revision = new(
+            "feat/1-fix",
+            "https://github.com/org/repo/pull/1",
+            new RevisionTrigger.ReviewFeedback(comments, 0, null));
+
+        // Act
+        string prompt = BuildWithLog(Issue, [Round(olderInput), Round(newestInput, 1)], revision);
+
+        // Assert
+        List<string> inputs = RenderedInputs(prompt);
+        prompt.ShouldSatisfyAllConditions(
+            () => Encoding.UTF8.GetByteCount(prompt).ShouldBeLessThan(SystemPromptBuilder.MaxSystemPromptBytes),
+            () => prompt.ShouldNotContain("Feedback 1:"),
+            () => prompt.ShouldNotContain("Feedback 2:"),
+            () => prompt.ShouldNotContain("Feedback 3:"),
+            () => prompt.ShouldContain("further comment(s) were omitted to fit the prompt size budget"),
+            () => inputs.Count.ShouldBe(2),
+            () => inputs[0].ShouldEndWith(TruncationMarker),
+            () => olderInput.ShouldStartWith(inputs[0][..^TruncationMarker.Length]),
+            () => inputs[1].ShouldBe(newestInput));
+    }
+
+    [Fact]
+    public void WhenAnInputFillsTheRoomUpToTheBudgetExactly_RendersItWholeWithNoMarker()
+    {
+        // Arrange
+        string input = new string('x', ExactFitInputLength());
+
+        // Act
+        string prompt = BuildWithLog(Issue, [Round(input)]);
+
+        // Assert
+        prompt.ShouldSatisfyAllConditions(
+            () => Encoding.UTF8.GetByteCount(prompt).ShouldBe(MaxFittingPromptBytes),
+            () => RenderedInputs(prompt).ShouldHaveSingleItem().ShouldBe(input));
+    }
+
+    [Fact]
+    public void WhenAnInputIsOneByteOverTheRoomTheBudgetLeaves_CutsItAndMarksIt()
+    {
+        // Arrange
+        string input = new string('x', ExactFitInputLength() + 1);
+
+        // Act
+        string prompt = BuildWithLog(Issue, [Round(input)]);
+
+        // Assert
+        string rendered = RenderedInputs(prompt).ShouldHaveSingleItem();
+        prompt.ShouldSatisfyAllConditions(
+            () => Encoding.UTF8.GetByteCount(prompt).ShouldBeLessThanOrEqualTo(MaxFittingPromptBytes),
+            () => rendered.ShouldEndWith(TruncationMarker),
+            () => input.ShouldStartWith(rendered[..^TruncationMarker.Length]));
+    }
+
+    private const string TruncationMarker = " [truncated]";
+    private const int OmissionNoteReserveBytes = 512;
+
+    // The builder keeps one byte under the exclusive ceiling plus a reserve for the omission note.
+    private static int MaxFittingPromptBytes => SystemPromptBuilder.MaxSystemPromptBytes - 1 - OmissionNoteReserveBytes;
+
+    // The input length whose prompt lands exactly on the budget, measured off the prompt with an empty answered input.
+    private static int ExactFitInputLength() =>
+        MaxFittingPromptBytes - Encoding.UTF8.GetByteCount(BuildWithLog(Issue, [Round(string.Empty)]));
+
+    private static List<string> RenderedInputs(string prompt) =>
+        prompt.Split("<input>")
+            .Skip(1)
+            .Select(section => section[..section.IndexOf("</input>", StringComparison.Ordinal)])
+            .ToList();
 }
