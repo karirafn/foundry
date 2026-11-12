@@ -27,6 +27,10 @@ set -eu
 
 HANDOFF_DIR="${FOUNDRY_HANDOFF_DIR:-/handoff}"
 WORK_DIR="${FOUNDRY_WORK_DIR:-/work}"
+# Foundry's own secret-scanner configuration (the image copies gitleaks.toml there); FOUNDRY_GITLEAKS_CONFIG
+# redirects it for the bats suite only.
+GITLEAKS_CONFIG_FILE="${FOUNDRY_GITLEAKS_CONFIG:-/etc/foundry/gitleaks.toml}"
+ZERO_SHA=0000000000000000000000000000000000000000
 
 # Never inherit git configuration: a system or global file could add hooks, an fsmonitor, a credential
 # helper or a url.*.insteadOf rewrite that runs or redirects with the token present.
@@ -35,6 +39,8 @@ GIT_CONFIG_GLOBAL=/dev/null
 GIT_TERMINAL_PROMPT=0
 export GIT_CONFIG_NOSYSTEM GIT_CONFIG_GLOBAL GIT_TERMINAL_PROMPT
 unset GIT_CONFIG GIT_CONFIG_PARAMETERS GIT_CONFIG_COUNT GIT_DIR GIT_WORK_TREE GIT_ASKPASS SSH_ASKPASS
+# The scanner reads its configuration from these before any repository file; only --config may choose it.
+unset GITLEAKS_CONFIG GITLEAKS_CONFIG_TOML
 
 # ---------------------------------------------------------------------------
 # fail <detail>
@@ -200,13 +206,17 @@ prepare() {
 # Stdout carries, last, exactly one result line Foundry parses:
 #   FOUNDRY_PUBLISH result=published head=<sha> commits=<n>
 #   FOUNDRY_PUBLISH result=nothing_to_publish
+#   FOUNDRY_PUBLISH result=secret_detected findings=<n>
 #   FOUNDRY_PUBLISH result=diverged branch=<branch> side_branch=<side> head=<sha>[ reason=force-push-protected]
 #   FOUNDRY_PUBLISH result=failed kind=permanent|transient reason=<one line; the last field, may hold spaces>
 # preceded, for published and diverged, by one line per pushed Run commit, oldest first (Foundry's own
-# merge commit excluded):
+# merge and revert commits excluded), then one line per file the Diff gate reverted:
 #   FOUNDRY_RUN_COMMIT <sha> <subject>
+#   FOUNDRY_REVERTED_FILE reason=binary|oversized size=<bytes> path=<path>
+# and, for secret_detected, by one line per finding, with nothing pushed:
+#   FOUNDRY_SECRET_FINDING commit=<sha> line=<n> rule=<rule id> path=<path>
 # <n> counts the commits on the pushed branch beyond the default branch. Diagnostics go to stderr.
-# Exit status: 0 for published, nothing_to_publish and diverged; 1 for failed.
+# Exit status: 0 for published, nothing_to_publish, diverged and secret_detected; 1 for failed.
 # ===========================================================================
 
 # redact — copies stdin to stdout with every occurrence of $GIT_PAT masked.
@@ -246,6 +256,7 @@ publish_nothing() {
 publish_published() {
     commits="$(scratch_git rev-list --count "$1" --not refs/foundry/default)"
     cat "$run_commit_lines"
+    cat "$reverted_lines"
     printf 'FOUNDRY_PUBLISH result=published head=%s commits=%s\n' "$1" "$commits"
     exit 0
 }
@@ -257,6 +268,7 @@ publish_diverged() {
         fail_push "pushing the side branch $side_branch failed"
     fi
     cat "$run_commit_lines"
+    cat "$reverted_lines"
     if [ -n "${2:-}" ]; then
         printf 'FOUNDRY_PUBLISH result=diverged branch=%s side_branch=%s head=%s reason=%s\n' "$run_branch" "$side_branch" "$1" "$2"
     else
@@ -423,6 +435,175 @@ map_sha() {
     awk -v old="$1" '$1 == old { print $2; exit }' "$commit_map"
 }
 
+
+# ===========================================================================
+# Diff gate (#788, ADR 0100)
+#
+# Runs on the rewritten Run commits before anything is pushed:
+#   - a secret anywhere in the content they add blocks the push (scan_secrets);
+#   - a file they added or changed that is binary by git's detection, or larger than
+#     DIFF_GATE_MAX_FILE_BYTES, is restored by one code-authored commit (revert_blocked_files).
+# CI/CD files are not treated specially: human review of the pull request is their gate.
+# ===========================================================================
+
+# The largest file a run may add or change; a larger one is reverted.
+DIFF_GATE_MAX_FILE_BYTES=5242880
+
+DIFF_GATE_REVERT_SUBJECT="chore: revert files blocked by the Foundry diff gate"
+
+# The exit status the scanner is told to use for findings, so a finding is never confused with an error (1).
+SCANNER_FINDINGS_EXIT=3
+
+# scan_secrets — scans the content added by the Run commits (new_tip --not <base> <D>) with Foundry's own
+# scanner configuration. Findings end the publish with nothing pushed:
+#   FOUNDRY_SECRET_FINDING commit=<sha> line=<n> rule=<rule id> path=<path; the last field, may hold spaces>
+#   FOUNDRY_PUBLISH result=secret_detected findings=<n>
+# The matched value is never printed: the report template has no field for it, and the scanner redacts its logs.
+scan_secrets() {
+    printf '%s\n' \
+        '{{ range . }}FOUNDRY_SECRET_FINDING commit={{ .Commit }} line={{ .StartLine }} rule={{ .RuleID }} path={{ .File }}' \
+        '{{ end }}' > "$scan_template"
+
+    # --text scans every file as text, so an attribute marking it binary cannot hide content; the repository's
+    # ignore file and inline allow comments are never honoured, because the agent can write them.
+    gitleaks git \
+        --no-banner --no-color --log-level error --redact \
+        --config "$GITLEAKS_CONFIG_FILE" \
+        --gitleaks-ignore-path /dev/null \
+        --ignore-gitleaks-allow \
+        --exit-code "$SCANNER_FINDINGS_EXIT" \
+        --report-format template --report-template "$scan_template" --report-path "$scan_report" \
+        --log-opts "--text --no-ext-diff --no-textconv $new_tip --not $base $base_default" \
+        "$REPO_DIR" > /dev/null 2> "$scan_err" && status=0 || status=$?
+
+    # The scanner reports its own errors on stderr and may still exit 0, so only a silent zero exit is clean.
+    if [ "$status" -eq 0 ] && ! grep -q . "$scan_err"; then
+        echo "The secret scan found nothing" >&2
+        return 0
+    fi
+
+    grep '^FOUNDRY_SECRET_FINDING commit=[0-9a-f]* line=[0-9]* rule=[A-Za-z0-9._-]* path=.' "$scan_report" \
+        2> /dev/null | sort -u > "$scan_findings" || true
+    if [ "$status" -ne "$SCANNER_FINDINGS_EXIT" ] || [ ! -s "$scan_findings" ]; then
+        publish_failed transient "the secret scan failed: $(grep -v '^[[:space:]]*$' "$scan_err" | tail -n 1)"
+    fi
+
+    echo "The secret scan found $(grep -c . "$scan_findings") possible secret(s); nothing is pushed" >&2
+    cat "$scan_findings"
+    printf 'FOUNDRY_PUBLISH result=secret_detected findings=%s\n' "$(grep -c . "$scan_findings")"
+    exit 0
+}
+
+# list_run_paths — writes to $gate_paths, one per line, every path the Run commits added, changed or deleted
+# (a merge commit counts only for what it changed beyond all its parents, so default-branch work merged in is
+# not the run's). A path holding a line break fails the publish: it cannot be reported on one line.
+list_run_paths() {
+    : > "$gate_paths_raw"
+    while read -r old_sha; do
+        scratch_git diff-tree -r --root --no-renames --no-commit-id --name-only -z --cc "$(map_sha "$old_sha")" \
+            >> "$gate_paths_raw" 2> "$git_err" \
+            || publish_failed transient "listing the files of run commit $old_sha failed: $(last_error)"
+    done < "$run_commit_list"
+
+    if [ "$(tr -cd '\n\r' < "$gate_paths_raw" | wc -c)" -ne 0 ]; then
+        publish_invalid "a run commit adds a path that holds a line break"
+    fi
+    tr '\0' '\n' < "$gate_paths_raw" | sed '/^$/d' | sort -u > "$gate_paths"
+}
+
+# tree_entry <commit> <path> — "<mode> <type> <sha>" of exactly <path> in <commit>, or nothing.
+tree_entry() {
+    scratch_git --literal-pathspecs ls-tree -z --full-tree "$1" -- "$2" | tr '\000' '\n' \
+        | GATE_PATH="$2" awk -F '\t' '$2 == ENVIRON["GATE_PATH"] { print $1; exit }'
+}
+
+# is_binary_blob <sha> — whether git's own detection (a NUL byte in the first 8000 bytes) finds <sha> binary.
+# Repository attributes are switched off, so an agent-written .gitattributes cannot decide it.
+is_binary_blob() {
+    scratch_git cat-file blob "$1" | head -c 8000 > "$gate_sample"
+    [ "$(tr -d '\000' < "$gate_sample" | wc -c)" -ne "$(wc -c < "$gate_sample")" ]
+}
+
+# revert_blocked_files — restores every binary or oversized file the Run commits added or changed to its content
+# before them, in one commit on top of new_tip, and sets publish_tip to it (new_tip when nothing is blocked). The
+# content before the run is <D> for a rebased tip and <base> otherwise: restoring a rebased tip to <base> would undo
+# the default branch's own change to the path. A file that did not exist there is deleted; a deletion is never
+# gated. Each reverted file is listed for the result:
+#   FOUNDRY_REVERTED_FILE reason=binary|oversized size=<bytes> path=<path; the last field, may hold spaces>
+revert_blocked_files() {
+    publish_tip="$new_tip"
+    : > "$reverted_lines"
+    if [ "$tip_kind" = rebased ]; then
+        restore_point="$base_default"
+    else
+        restore_point="$base"
+    fi
+
+    list_run_paths
+    : > "$gate_index_info"
+    while IFS= read -r path; do
+        entry="$(tree_entry "$new_tip" "$path")"
+        # Deleted at the tip, or not a file (a submodule, or a path that became a directory).
+        case "$entry" in
+            "") continue ;;
+        esac
+        # shellcheck disable=SC2086 # entry is "<mode> <type> <sha>".
+        set -- $entry
+        [ "$2" = blob ] || continue
+        blob="$3"
+        before="$(tree_entry "$restore_point" "$path")"
+        # Unchanged from the content before the run (changed, then changed back).
+        if [ -n "$before" ] && [ "${before##* }" = "$blob" ]; then
+            continue
+        fi
+
+        size="$(scratch_git cat-file -s "$blob")"
+        if is_binary_blob "$blob"; then
+            reason=binary
+        elif [ "$size" -gt "$DIFF_GATE_MAX_FILE_BYTES" ]; then
+            reason=oversized
+        else
+            continue
+        fi
+
+        printf 'FOUNDRY_REVERTED_FILE reason=%s size=%s path=%s\n' "$reason" "$size" "$path" >> "$reverted_lines"
+        # shellcheck disable=SC2086 # before is "<mode> <type> <sha>".
+        set -- $before
+        if [ "${2:-}" = blob ]; then
+            printf '%s %s\t%s\000' "$1" "$3" "$path" >> "$gate_index_info"
+        else
+            printf '0 %s\t%s\000' "$ZERO_SHA" "$path" >> "$gate_index_info"
+        fi
+    done < "$gate_paths"
+
+    if [ ! -s "$reverted_lines" ]; then
+        return 0
+    fi
+
+    gate_index="$gate_dir/index"
+    rm -f "$gate_index"
+    GIT_INDEX_FILE="$gate_index" scratch_git read-tree "$new_tip" 2> "$git_err" \
+        || publish_failed transient "reading the run tip for the revert failed: $(last_error)"
+    GIT_INDEX_FILE="$gate_index" scratch_git update-index -z --index-info < "$gate_index_info" 2> "$git_err" \
+        || publish_failed transient "restoring the blocked files failed: $(last_error)"
+    revert_tree="$(GIT_INDEX_FILE="$gate_index" scratch_git write-tree 2> "$git_err")" \
+        || publish_failed transient "writing the revert tree failed: $(last_error)"
+
+    {
+        printf '%s\n\n' "$DIFF_GATE_REVERT_SUBJECT"
+        printf '%s\n\n' "Foundry's diff gate restored these files to their content before the run:"
+        sed 's/^FOUNDRY_REVERTED_FILE reason=\([a-z]*\) size=\([0-9]*\) path=\(.*\)$/- \3 (\1, \2 bytes)/' "$reverted_lines"
+    } > "$gate_message"
+
+    # Dated like the run tip, so publishing the same Run bundle again builds the same commit.
+    tip_date="$(scratch_git show -s --format=%cd --date=raw "$new_tip")"
+    publish_tip="$(GIT_AUTHOR_NAME="$AUTHOR_NAME" GIT_AUTHOR_EMAIL="$AUTHOR_EMAIL" GIT_AUTHOR_DATE="$tip_date" \
+        GIT_COMMITTER_NAME="$AUTHOR_NAME" GIT_COMMITTER_EMAIL="$AUTHOR_EMAIL" GIT_COMMITTER_DATE="$tip_date" \
+        scratch_git commit-tree "$revert_tree" -p "$new_tip" -F "$gate_message" 2> "$git_err")" \
+        || publish_failed transient "creating the revert commit failed: $(last_error)"
+    echo "Reverted $(grep -c . "$reverted_lines") file(s) blocked by the diff gate in $publish_tip" >&2
+}
+
 publish() {
     NEWLINE='
 '
@@ -467,7 +648,18 @@ publish() {
     rewritten_object="$(mktemp)"
     run_commit_list="$(mktemp)"
     run_commit_lines="$(mktemp)"
-    trap 'rm -f "$ASKPASS_FILE" "$git_err" "$commit_map" "$commit_object" "$rewritten_object" "$run_commit_list" "$run_commit_lines"' EXIT
+    reverted_lines="$(mktemp)"
+    gate_dir="$(mktemp -d)"
+    gate_paths_raw="$gate_dir/paths.raw"
+    gate_paths="$gate_dir/paths"
+    gate_sample="$gate_dir/sample"
+    gate_index_info="$gate_dir/index-info"
+    gate_message="$gate_dir/message"
+    scan_template="$gate_dir/scan.tmpl"
+    scan_report="$gate_dir/scan.report"
+    scan_findings="$gate_dir/scan.findings"
+    scan_err="$gate_dir/scan.err"
+    trap 'rm -rf "$ASKPASS_FILE" "$git_err" "$commit_map" "$commit_object" "$rewritten_object" "$run_commit_list" "$run_commit_lines" "$reverted_lines" "$gate_dir"' EXIT
     printf '%s\n' "#!/bin/sh" "$(make_askpass_script)" > "$ASKPASS_FILE"
     chmod 700 "$ASKPASS_FILE"
 
@@ -565,11 +757,15 @@ publish() {
     [ -n "$new_tip" ] || publish_failed transient "the rewritten run tip is missing"
     echo "Rewrote $(grep -c . "$run_commit_list") run commit(s); new tip $new_tip" >&2
 
+    # --- Diff gate: a secret pushes nothing; binary and oversized files are reverted ------------------
+    scan_secrets
+    revert_blocked_files
+
     # --- Push ----------------------------------------------------------------------------------------
     remote_head="$(scratch_git rev-parse --verify --quiet "refs/foundry/remote-branch^{commit}" || true)"
 
     # Already on the branch (a retried publish whose result was lost): nothing to push.
-    if [ -n "$remote_head" ] && scratch_git merge-base --is-ancestor "$new_tip" "$remote_head"; then
+    if [ -n "$remote_head" ] && scratch_git merge-base --is-ancestor "$publish_tip" "$remote_head"; then
         echo "The run is already on $run_branch" >&2
         publish_published "$remote_head"
     fi
@@ -577,41 +773,41 @@ publish() {
     if [ "$tip_kind" = rebased ]; then
         if [ "$remote_head" != "$base_branch" ]; then
             echo "$run_branch moved since Prepare; a rebased run is never merged" >&2
-            publish_diverged "$new_tip"
+            publish_diverged "$publish_tip"
         fi
-        if push_ref "$new_tip" "$run_branch" "$base_branch"; then
-            publish_published "$new_tip"
+        if push_ref "$publish_tip" "$run_branch" "$base_branch"; then
+            publish_published "$publish_tip"
         fi
         if grep -q '\[remote rejected\]' "$git_err"; then
-            publish_diverged "$new_tip" force-push-protected
+            publish_diverged "$publish_tip" force-push-protected
         fi
         if grep -q '\[rejected\]' "$git_err"; then
-            publish_diverged "$new_tip"
+            publish_diverged "$publish_tip"
         fi
         fail_git "pushing $run_branch failed"
     fi
 
     # A forward tip. An absent remote branch (a Fresh run, or a branch deleted during the run) is
     # created; a branch still at the run's base (or at any other ancestor of the tip) is fast-forwarded.
-    if [ -z "$remote_head" ] || scratch_git merge-base --is-ancestor "$remote_head" "$new_tip"; then
-        push_ref "$new_tip" "$run_branch" || fail_push "pushing $run_branch failed"
-        publish_published "$new_tip"
+    if [ -z "$remote_head" ] || scratch_git merge-base --is-ancestor "$remote_head" "$publish_tip"; then
+        push_ref "$publish_tip" "$run_branch" || fail_push "pushing $run_branch failed"
+        publish_published "$publish_tip"
     fi
 
     # The remote branch moved since Prepare (someone pushed during the run): merge it with the run.
     echo "$run_branch moved since Prepare; merging it with the run" >&2
-    if merge_tree="$(scratch_git merge-tree --write-tree --no-messages "$new_tip" "$remote_head" 2> "$git_err")"; then
+    if merge_tree="$(scratch_git merge-tree --write-tree --no-messages "$publish_tip" "$remote_head" 2> "$git_err")"; then
         merge_tree="$(printf '%s\n' "$merge_tree" | sed -n 1p)"
         merge_sha="$(GIT_AUTHOR_NAME="$AUTHOR_NAME" GIT_AUTHOR_EMAIL="$AUTHOR_EMAIL" \
             GIT_COMMITTER_NAME="$AUTHOR_NAME" GIT_COMMITTER_EMAIL="$AUTHOR_EMAIL" \
-            scratch_git commit-tree "$merge_tree" -p "$new_tip" -p "$remote_head" \
+            scratch_git commit-tree "$merge_tree" -p "$publish_tip" -p "$remote_head" \
                 -m "Merge remote-tracking branch 'origin/$run_branch' into $run_branch" 2> "$git_err")" \
             || publish_failed transient "creating the merge commit failed: $(last_error)"
         push_ref "$merge_sha" "$run_branch" || fail_push "pushing $run_branch failed"
         publish_published "$merge_sha"
     fi
     echo "The merge conflicts" >&2
-    publish_diverged "$new_tip"
+    publish_diverged "$publish_tip"
 }
 
 case "${1:-}" in
