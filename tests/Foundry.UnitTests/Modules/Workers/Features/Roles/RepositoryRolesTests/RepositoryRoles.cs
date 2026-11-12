@@ -111,11 +111,7 @@ public sealed class RepositoryRoles
         // Act
         string[] offenders =
         [
-            .. catalog.Roles
-                .Where(role => role.VerdictSchema is not null)
-                .SelectMany(role => ForbiddenTopLevelKeywords
-                    .Where(keyword => JsonNode.Parse(role.VerdictSchema!)!.AsObject().ContainsKey(keyword))
-                    .Select(keyword => $"{role.Role.Name}: {keyword}")),
+            .. catalog.Roles.SelectMany(role => ForbiddenTopLevelKeywordsIn(role)),
         ];
 
         // Assert
@@ -290,6 +286,20 @@ public sealed class RepositoryRoles
 
         // Assert
         verdict.Status.ShouldBe(expected);
+    }
+
+    private static IEnumerable<string> ForbiddenTopLevelKeywordsIn(WorkerRoleDefinition role)
+    {
+        if (role.VerdictSchema is not { } verdictSchema)
+        {
+            return [];
+        }
+
+        JsonObject schema = JsonNode.Parse(verdictSchema).ShouldNotBeNull().AsObject();
+
+        return ForbiddenTopLevelKeywords
+            .Where(schema.ContainsKey)
+            .Select(keyword => $"{role.Role.Name}: {keyword}");
     }
 
     private static JsonObject ReadJsonObject(string path) =>
