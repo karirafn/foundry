@@ -36,7 +36,8 @@ internal sealed class WorkerRunCompletedHandler(
             }
 
             // The run's work is on a side branch, not the issue branch, so nothing the run did can move the issue on
-            // until a person merges it (ADR 0100); divergence wins over the verdict and the merge state.
+            // until a person brings it into the issue branch (ADR 0100); divergence wins over the verdict and the merge state.
+            // An event recorded before the reason was kept carries none: its branch moved (ADR 0101).
             if (@event.Publish?.DivergedSideBranch is { } sideBranchName)
             {
                 if (@event.BranchName is null)
@@ -50,6 +51,7 @@ internal sealed class WorkerRunCompletedHandler(
                 BranchDivergedIssue diverged = inProgress.MarkBranchDiverged(
                     @event.BranchName,
                     sideBranchName,
+                    @event.Publish.DivergenceReason ?? BranchDivergenceReason.BranchMoved,
                     @event.Publish.PullRequestUrl
                         ?? (@event.MergeState == WorkerRunMergeState.Open ? @event.PullRequestUrl : null));
                 await db.TransitionAsync(inProgress, diverged, domainEventDispatcher, cancellationToken);
@@ -140,7 +142,9 @@ internal sealed class WorkerRunCompletedHandler(
 
             if (@event.Publish?.DivergedSideBranch is { } revisionSideBranchName)
             {
-                BranchDivergedIssue revisionDiverged = revisionInProgress.MarkBranchDiverged(revisionSideBranchName);
+                BranchDivergedIssue revisionDiverged = revisionInProgress.MarkBranchDiverged(
+                    revisionSideBranchName,
+                    @event.Publish.DivergenceReason ?? BranchDivergenceReason.BranchMoved);
                 await db.TransitionAsync(revisionInProgress, revisionDiverged, domainEventDispatcher, cancellationToken);
                 return;
             }

@@ -189,13 +189,17 @@ public sealed class IssueBuilder
     public PublishBlockedIssue PublishBlockedFromRevision() =>
         RevisionInProgress().MarkPublishBlocked(_failedAt);
 
-    /// <summary>An implement run whose work went to <paramref name="sideBranchName"/> because merging it conflicted.</summary>
-    public BranchDivergedIssue BranchDiverged(string sideBranchName = "feat/1-test-run-1") =>
-        InProgress().MarkBranchDiverged(_branchName, sideBranchName, pullRequestUrl: null);
+    /// <summary>An implement run whose work went to <paramref name="sideBranchName"/> for <paramref name="reason"/>.</summary>
+    public BranchDivergedIssue BranchDiverged(
+        string sideBranchName = "feat/1-test-run-1",
+        BranchDivergenceReason reason = BranchDivergenceReason.BranchMoved) =>
+        InProgress().MarkBranchDiverged(_branchName, sideBranchName, reason, pullRequestUrl: null);
 
-    /// <summary>A revision run whose work went to <paramref name="sideBranchName"/> because merging it conflicted.</summary>
-    public BranchDivergedIssue BranchDivergedFromRevision(string sideBranchName = "feat/1-test-run-1") =>
-        RevisionInProgress().MarkBranchDiverged(sideBranchName);
+    /// <summary>A revision run whose work went to <paramref name="sideBranchName"/> for <paramref name="reason"/>.</summary>
+    public BranchDivergedIssue BranchDivergedFromRevision(
+        string sideBranchName = "feat/1-test-run-1",
+        BranchDivergenceReason reason = BranchDivergenceReason.BranchMoved) =>
+        RevisionInProgress().MarkBranchDiverged(sideBranchName, reason);
 
     public RebasePendingIssue RebasePending() =>
         InProgress().MarkRebasePending(_branchName, _pullRequestUrl, _feedbackCutoffAt);

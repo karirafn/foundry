@@ -3654,6 +3654,12 @@
               "null",
               "string"
             ]
+          },
+          "divergenceReason": {
+            "type": [
+              "null",
+              "string"
+            ]
           }
         }
       },

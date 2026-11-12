@@ -56,8 +56,13 @@ public sealed class ContinuationQueuedIssue : QueuedIssue
         ContinuationQueuedIssue queued = new(source.Id);
         queued.CopySharedPropertiesFrom(source);
         queued.BranchName = source.BranchName;
-        string reason =
-            $"The previous run's work conflicted with commits pushed to {source.BranchName} during the run and was pushed to {source.SideBranchName} instead.";
+        string reason = source.DivergenceReason switch
+        {
+            BranchDivergenceReason.ForcePushProtected =>
+                $"The previous run rebased {source.BranchName} onto the default branch, but {source.BranchName} is protected from force pushes, so the run's work was pushed to {source.SideBranchName} instead.",
+            _ =>
+                $"The previous run's work could not join commits pushed to {source.BranchName} during the run and was pushed to {source.SideBranchName} instead.",
+        };
         queued.FailureReason = reason.Length > FailureReasonMaxLength ? reason[..FailureReasonMaxLength] : reason;
         return queued;
     }

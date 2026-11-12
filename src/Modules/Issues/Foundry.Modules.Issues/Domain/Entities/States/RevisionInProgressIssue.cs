@@ -87,12 +87,12 @@ public sealed class RevisionInProgressIssue : Issue
     }
 
     /// <summary>
-    /// The revision's work could not be merged into the branch someone pushed to during the run, so it went to
-    /// <paramref name="sideBranchName"/> (ADR 0100).
+    /// The revision's work could not go to its branch, so it went to <paramref name="sideBranchName"/> for
+    /// <paramref name="divergenceReason"/> (ADR 0100, ADR 0101).
     /// </summary>
-    public BranchDivergedIssue MarkBranchDiverged(string sideBranchName)
+    public BranchDivergedIssue MarkBranchDiverged(string sideBranchName, BranchDivergenceReason divergenceReason)
     {
-        BranchDivergedIssue diverged = BranchDivergedIssue.FromRevisionInProgress(this, sideBranchName);
+        BranchDivergedIssue diverged = BranchDivergedIssue.FromRevisionInProgress(this, sideBranchName, divergenceReason);
         AddDomainEvent(new Events.IssueBranchDiverged(Id, MonitoredRepositoryId));
         return diverged;
     }

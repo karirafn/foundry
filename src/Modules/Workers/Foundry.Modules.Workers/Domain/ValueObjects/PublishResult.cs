@@ -1,3 +1,4 @@
+using Foundry.Modules.Workers.Contracts;
 using Foundry.Shared;
 
 namespace Foundry.Modules.Workers.Domain.ValueObjects;
@@ -23,14 +24,16 @@ public abstract record PublishResult
     public sealed record NothingToPublish : PublishResult;
 
     /// <summary>
-    /// Someone pushed to the run's branch during the run and merging the run's work conflicted, so the run's work went
-    /// to <paramref name="SideBranch"/> instead.
+    /// The run's work went to <paramref name="SideBranch"/> instead of <paramref name="Branch"/>, for
+    /// <paramref name="Reason"/>: someone pushed to the branch during the run and the work could not join it, or the
+    /// provider refused the lease push of a rebased tip (ADR 0101).
     /// </summary>
     /// <param name="RevertedFiles">The files the Diff gate reverted before the push (#788).</param>
     public sealed record Diverged(
         BranchName Branch,
         BranchName SideBranch,
         CommitSha Head,
+        BranchDivergenceReason Reason,
         IReadOnlyList<RevertedFile> RevertedFiles) : PublishResult;
 
     /// <summary>

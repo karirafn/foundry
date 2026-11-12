@@ -1,3 +1,4 @@
+using Foundry.Modules.Workers.Contracts;
 using Foundry.Modules.Workers.Domain.ValueObjects;
 using Foundry.Modules.Workers.Features.Publisher;
 using Foundry.Shared;
@@ -55,6 +56,45 @@ public sealed class Parse
         result.ShouldBeOfType<PublishResult.Diverged>().ShouldSatisfyAllConditions(
             diverged => diverged.Branch.ShouldBe(BranchName.From("feat/42-x")),
             diverged => diverged.SideBranch.ShouldBe(BranchName.From("feat/42-x-run-abc")));
+    }
+
+    [Fact]
+    public void ADivergedLineWithoutAReason_IsABranchThatMoved()
+    {
+        // Act
+        PublishResult result = PublishOutputParser.Parse(
+            0,
+            $"FOUNDRY_PUBLISH result=diverged branch=feat/42-x side_branch=feat/42-x-run-abc head={Sha}\n");
+
+        // Assert
+        result.ShouldBeOfType<PublishResult.Diverged>().Reason.ShouldBe(BranchDivergenceReason.BranchMoved);
+    }
+
+    // ADR 0101: the provider refused the lease push of a rebased tip because the branch is protected from force pushes.
+    [Fact]
+    public void ADivergedLineWithTheForcePushProtectedReason_KeepsTheReason()
+    {
+        // Act
+        PublishResult result = PublishOutputParser.Parse(
+            0,
+            $"FOUNDRY_PUBLISH result=diverged branch=feat/42-x side_branch=feat/42-x-run-abc head={Sha} reason=force-push-protected\n");
+
+        // Assert
+        result.ShouldBeOfType<PublishResult.Diverged>().ShouldSatisfyAllConditions(
+            diverged => diverged.SideBranch.ShouldBe(BranchName.From("feat/42-x-run-abc")),
+            diverged => diverged.Reason.ShouldBe(BranchDivergenceReason.ForcePushProtected));
+    }
+
+    [Fact]
+    public void ADivergedLineWithAnUnknownReason_IsNotAResult()
+    {
+        // Act
+        PublishResult result = PublishOutputParser.Parse(
+            0,
+            $"FOUNDRY_PUBLISH result=diverged branch=feat/42-x side_branch=feat/42-x-run-abc head={Sha} reason=something-else\n");
+
+        // Assert
+        result.ShouldBeOfType<PublishResult.Failed>().Reason.ShouldBe(PublishOutputParser.MissingResultMessage);
     }
 
     [Theory]

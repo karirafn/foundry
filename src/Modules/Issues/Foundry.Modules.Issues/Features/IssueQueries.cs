@@ -852,7 +852,8 @@ internal sealed class IssueQueries(
                 TransientRetry: null,
                 BranchUrl: ProviderBranchUrl.For(diverged.Url, diverged.BranchName),
                 SideBranchName: diverged.SideBranchName,
-                SideBranchUrl: ProviderBranchUrl.For(diverged.Url, diverged.SideBranchName)),
+                SideBranchUrl: ProviderBranchUrl.For(diverged.Url, diverged.SideBranchName),
+                DivergenceReason: BranchDivergenceReasonTokens.ToToken(diverged.DivergenceReason)),
 
             _ => null
         };

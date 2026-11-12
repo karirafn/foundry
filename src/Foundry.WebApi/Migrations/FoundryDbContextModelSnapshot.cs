@@ -613,6 +613,12 @@ namespace Foundry.WebApi.Migrations
                         .HasColumnType("TEXT")
                         .HasColumnName("diverged_side_branch");
 
+                    b.Property<string>("DivergenceReason")
+                        .HasMaxLength(30)
+                        .IsUnicode(false)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("divergence_reason");
+
                     b.Property<string>("Image")
                         .HasMaxLength(500)
                         .IsUnicode(false)
@@ -953,6 +959,13 @@ namespace Foundry.WebApi.Migrations
                         .IsUnicode(false)
                         .HasColumnType("TEXT")
                         .HasColumnName("branch_name");
+
+                    b.Property<string>("DivergenceReason")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .IsUnicode(false)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("divergence_reason");
 
                     b.Property<bool>("FromRevision")
                         .HasColumnType("INTEGER")
