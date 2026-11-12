@@ -67,7 +67,7 @@ public sealed class GetOpenIssuesAsync
     }
 
     [Fact]
-    public async Task WhenReading_RequestsOneNewestFirstPageOfOpenIssuesWithoutALabelFilter()
+    public async Task WhenReading_RequestsOnlyNonConfidentialIssuesNewestFirstWithoutALabelFilter()
     {
         // Arrange
         FakeHandler handler = new(HttpStatusCode.OK, DocsExampleWithADerivedSecondIssue);
@@ -77,9 +77,11 @@ public sealed class GetOpenIssuesAsync
         await ReadIndexAsync(sut);
 
         // Assert
+        // confidential is a boolean filter on "List project issues" (docs.gitlab.com/api/issues); false keeps
+        // confidential issues out of a run whose output is posted publicly.
         handler.AllRequests.Select(request => request.RequestUri!.PathAndQuery).ShouldBe(
         [
-            "/api/v4/projects/group%2Fproject/issues?state=opened&order_by=created_at&sort=desc&per_page=100",
+            "/api/v4/projects/group%2Fproject/issues?state=opened&confidential=false&order_by=created_at&sort=desc&per_page=100",
         ]);
     }
 

@@ -145,6 +145,22 @@ public sealed class GetTrackerContextAsync : IAsyncDisposable
     }
 
     [Fact]
+    public async Task WhenAReferencedIssueIsConfidential_ListsItByNumberOnlyAsUnreadable()
+    {
+        // Arrange
+        IssueContent content = new IssueContentBuilder().WithBody("See #9.").Build();
+        _provider.ReferencedIssues[9] = Result<ProviderReferencedIssue>.Fail(TrackerReadErrors.Confidential());
+
+        // Act
+        TrackerContext context = await ReadAsync(content: content);
+
+        // Assert
+        context.ShouldSatisfyAllConditions(
+            () => context.ReferencedIssues.ShouldBeEmpty(),
+            () => context.UnreadableIssueNumbers.ShouldBe([9]));
+    }
+
+    [Fact]
     public async Task WhenAReferenceIsNotAnIssue_LeavesItOutWithoutListingItAsUnreadable()
     {
         // Arrange

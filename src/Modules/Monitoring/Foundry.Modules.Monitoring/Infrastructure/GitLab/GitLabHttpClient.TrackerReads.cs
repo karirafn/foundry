@@ -96,7 +96,7 @@ internal sealed partial class GitLabHttpClient
 
         string encodedPath = Uri.EscapeDataString(slug.FullPath);
         string relativePath =
-            $"projects/{encodedPath}/issues?state=opened&order_by=created_at&sort=desc&per_page={OpenIssuesPerPage}";
+            $"projects/{encodedPath}/issues?state=opened&confidential=false&order_by=created_at&sort=desc&per_page={OpenIssuesPerPage}";
         Uri requestUri = new(EnsureTrailingSlash(apiBaseUrl), relativePath);
 
         using HttpRequestMessage request = new(HttpMethod.Get, requestUri);
@@ -142,6 +142,11 @@ internal sealed partial class GitLabHttpClient
         if (issueResult is not Result<GitLabReferencedIssueDto>.Success issueSuccess)
         {
             return Result<ProviderReferencedIssue>.Fail(((Result<GitLabReferencedIssueDto>.Failure)issueResult).Error);
+        }
+
+        if (issueSuccess.Value.Confidential)
+        {
+            return Result<ProviderReferencedIssue>.Fail(TrackerReadErrors.Confidential());
         }
 
         Result<List<GitLabClosingMergeRequestDto>> closedByResult =
@@ -240,7 +245,8 @@ internal sealed partial class GitLabHttpClient
         string Title,
         string? Description,
         string State,
-        IReadOnlyList<string>? Labels);
+        IReadOnlyList<string>? Labels,
+        bool Confidential = false);
 
     private sealed record GitLabClosingMergeRequestDto(string State);
 }

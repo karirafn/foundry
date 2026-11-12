@@ -154,6 +154,24 @@ public sealed class GetReferencedIssueAsync
     }
 
     [Fact]
+    public async Task WhenTheIssueIsConfidential_FailsTheReadAsConfidentialWithoutReadingClosedBy()
+    {
+        // Arrange
+        // Derived: the docs "Retrieve a project issue" example with its confidential field set to true.
+        string issueBody =
+            """{"iid":1,"title":"Secret","description":"Hidden","state":"opened","labels":["s"],"confidential":true}""";
+        FakeHandler handler = HandlerWith(issueBody, DocsClosedBy);
+
+        // Act
+        Result<ProviderReferencedIssue> result = await ReadResultAsync(handler);
+
+        // Assert
+        Error error = result.ShouldBeOfType<Result<ProviderReferencedIssue>.Failure>().Error;
+        error.Code.ShouldBe(TrackerReadErrors.ConfidentialCode);
+        handler.AllRequests.ShouldNotContain(request => request.RequestUri!.AbsolutePath.EndsWith(ClosedByPathSuffix));
+    }
+
+    [Fact]
     public async Task WhenReading_RequestsTheIssueAndItsClosedByAndNeverRelatedMergeRequests()
     {
         // Arrange

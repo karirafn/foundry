@@ -11,6 +11,11 @@ internal static class TrackerReadErrors
 
     public const string ReadThrewCode = "TrackerRead.Threw";
 
+    public const string ConfidentialCode = "TrackerRead.Confidential";
+
+    public static Error Confidential() =>
+        new(ConfidentialCode, "The issue is confidential, so its content is not read.");
+
     public static Error NotAnIssue() =>
         new(NotAnIssueCode, "The number names something other than an issue, such as a pull request.");
 
