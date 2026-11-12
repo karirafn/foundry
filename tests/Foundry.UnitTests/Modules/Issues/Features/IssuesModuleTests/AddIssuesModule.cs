@@ -117,6 +117,18 @@ public sealed class AddIssuesModule : IAsyncDisposable
     }
 
     [Fact]
+    public void WhenServicesRegistered_BlockerLinkFailedHandlerResolvable()
+    {
+        // Arrange & Act
+        using IServiceScope scope = _serviceProvider.CreateScope();
+
+        // Assert
+        IIntegrationEventHandler<BlockerLinkFailed> handler =
+            scope.ServiceProvider.GetRequiredService<IIntegrationEventHandler<BlockerLinkFailed>>();
+        handler.ShouldBeOfType<BlockerLinkFailedHandler>();
+    }
+
+    [Fact]
     public void WhenServicesRegistered_WorkerCapacityAvailableHandlerResolvable()
     {
         // Arrange & Act
@@ -210,6 +222,18 @@ public sealed class AddIssuesModule : IAsyncDisposable
         IDomainEventHandler<IssueTriageBlocked> handler =
             scope.ServiceProvider.GetRequiredService<IDomainEventHandler<IssueTriageBlocked>>();
         handler.ShouldBeOfType<IssueStateChangedAdapter<IssueTriageBlocked>>();
+    }
+
+    [Fact]
+    public void WhenServicesRegistered_TriageBlockersNamedHandlerResolvable()
+    {
+        // Arrange & Act
+        using IServiceScope scope = _serviceProvider.CreateScope();
+
+        // Assert
+        IEnumerable<IDomainEventHandler<TriageBlockersNamed>> handlers =
+            scope.ServiceProvider.GetServices<IDomainEventHandler<TriageBlockersNamed>>();
+        handlers.ShouldContain(handler => handler is TriageBlockersFoundBridge);
     }
 
     [Fact]

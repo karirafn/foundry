@@ -151,7 +151,7 @@ public sealed class GetIssueDetailAsync : IAsyncDisposable
         IssueDetail detail = result.ShouldBeOfType<Result<IssueDetail>.Success>().Value;
         detail.State.ShouldBe("blocked");
         IssueStateDetails stateDetails = detail.StateDetails.ShouldNotBeNull();
-        stateDetails.BlockedBy.ShouldBe([2, 3]);
+        stateDetails.BlockedBy.ShouldNotBeNull().Select(b => b.IssueNumber).ShouldBe([2, 3]);
     }
 
     [Fact]

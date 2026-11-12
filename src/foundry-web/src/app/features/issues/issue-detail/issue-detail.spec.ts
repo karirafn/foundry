@@ -2280,7 +2280,7 @@ describe('IssueDetailComponent — triage (#772)', () => {
     const { el } = setup(
       issue('blocked', {
         kind: { source: 'labelled', kind: 'bug', conflictingTriageKind: null },
-        stateDetails: { ...mockStateDetails, branchName: null, completedAt: null, blockedBy: [12, 14] },
+        stateDetails: { ...mockStateDetails, branchName: null, completedAt: null, blockedBy: [{ issueNumber: 12, reason: null }, { issueNumber: 14, reason: 'waits on the schema' }] },
       }),
     );
 
@@ -2389,7 +2389,7 @@ describe('IssueDetailComponent — triage (#772)', () => {
     // Arrange / Act
     const { el } = setup(
       issue('triage_blocked', {
-        stateDetails: { ...mockStateDetails, branchName: null, completedAt: null, blockedBy: [12, 14] },
+        stateDetails: { ...mockStateDetails, branchName: null, completedAt: null, blockedBy: [{ issueNumber: 12, reason: null }, { issueNumber: 14, reason: 'waits on the schema' }] },
       }),
     );
 
@@ -2404,7 +2404,7 @@ describe('IssueDetailComponent — triage (#772)', () => {
     // Arrange / Act
     const { el } = setup(
       issue('triage_blocked', {
-        stateDetails: { ...mockStateDetails, branchName: null, completedAt: null, blockedBy: [12, 14] },
+        stateDetails: { ...mockStateDetails, branchName: null, completedAt: null, blockedBy: [{ issueNumber: 12, reason: null }, { issueNumber: 14, reason: 'waits on the schema' }] },
       }),
     );
 

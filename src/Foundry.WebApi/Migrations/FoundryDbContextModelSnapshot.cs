@@ -1998,6 +1998,11 @@ namespace Foundry.WebApi.Migrations
                 {
                     b.HasBaseType("Foundry.Modules.Issues.Domain.Entities.Issue");
 
+                    b.Property<Guid?>("WorkerRunId")
+                        .ValueGeneratedOnUpdateSometimes()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("worker_run_id");
+
                     b.ToTable(t =>
                         {
                             t.HasCheckConstraint("ck_issues_awaiting_input_fields", "state <> 'awaiting_input' OR (worker_run_id IS NOT NULL AND resume_target IS NOT NULL AND question_post IS NOT NULL)");

@@ -542,6 +542,11 @@ internal sealed class IssueQueries(
                 needsInput.Kind.Value,
                 [.. needsInput.Questions.Select(q => q.Question)],
                 needsInput.DecidedAt),
+            TriageVerdict.Blocked blocked => new TriageVerdictDetails(
+                TriageVerdictDetails.BlockedOutcome,
+                blocked.Kind.Value,
+                [],
+                blocked.DecidedAt),
             _ => null,
         };
 
@@ -583,6 +588,12 @@ internal sealed class IssueQueries(
                 ResumeTargetName(issue.ResumeTarget)),
         };
 
+    private static List<BlockerDetails> BlockersOf(Issue issue)
+    {
+        TriageVerdict.Blocked? verdict = issue.TriageVerdict as TriageVerdict.Blocked;
+        return [.. issue.BlockedBy.Select(number => new BlockerDetails(number, verdict?.ReasonFor(number)))];
+    }
+
     private static IssueStateDetails? BuildStateDetails(Issue issue, TransientRetryDetails? transientRetry) =>
         issue switch
         {
@@ -593,7 +604,7 @@ internal sealed class IssueQueries(
                 FailureReason: null,
                 FailedAt: null,
                 CompletedAt: null,
-                BlockedBy: blocked.BlockedBy,
+                BlockedBy: BlockersOf(blocked),
                 TransientRetry: null),
 
             TriageBlockedIssue triageBlocked => new IssueStateDetails(
@@ -603,7 +614,7 @@ internal sealed class IssueQueries(
                 FailureReason: null,
                 FailedAt: null,
                 CompletedAt: null,
-                BlockedBy: triageBlocked.BlockedBy,
+                BlockedBy: BlockersOf(triageBlocked),
                 TransientRetry: null),
 
             InProgressIssue inProgress => new IssueStateDetails(

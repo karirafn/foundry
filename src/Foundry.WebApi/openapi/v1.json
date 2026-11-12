@@ -2779,6 +2779,29 @@
           }
         }
       },
+      "BlockerDetails": {
+        "required": [
+          "issueNumber",
+          "reason"
+        ],
+        "type": "object",
+        "properties": {
+          "issueNumber": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "reason": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
       "BranchRulesOutcome": {
         "required": [
           "kind"
@@ -3540,12 +3563,7 @@
               "array"
             ],
             "items": {
-              "pattern": "^-?(?:0|[1-9]\\d*)$",
-              "type": [
-                "integer",
-                "string"
-              ],
-              "format": "int32"
+              "$ref": "#/components/schemas/BlockerDetails"
             }
           },
           "transientRetry": {

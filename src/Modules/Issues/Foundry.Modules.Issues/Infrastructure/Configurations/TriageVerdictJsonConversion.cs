@@ -15,9 +15,10 @@ internal static class TriageVerdictJsonConversion
 {
     private const string ReadyOutcome = "ready";
     private const string NeedsInputOutcome = "needs_input";
+    private const string BlockedOutcome = "blocked";
 
-    public static ValueConverter<TriageVerdict, string> Converter { get; } = new(
-        verdict => Serialize(verdict),
+    public static ValueConverter<TriageVerdict?, string> Converter { get; } = new(
+        verdict => Serialize(verdict!),
         json => Deserialize(json));
 
     public static ValueComparer<TriageVerdict> Comparer { get; } = new(
@@ -29,25 +30,50 @@ internal static class TriageVerdictJsonConversion
     {
         TriageVerdictDto dto = verdict switch
         {
-            TriageVerdict.Ready ready => new TriageVerdictDto(ReadyOutcome, ready.Kind.Value, null, ready.DecidedAt),
+            TriageVerdict.Ready ready => new TriageVerdictDto(ReadyOutcome, ready.Kind.Value, null, null, ready.DecidedAt),
             TriageVerdict.NeedsInput needsInput => new TriageVerdictDto(
                 NeedsInputOutcome,
                 needsInput.Kind.Value,
                 [.. needsInput.Questions.Select(q => new QuestionDto(q.Question, q.Context, q.Recommendation))],
+                null,
                 needsInput.DecidedAt),
+            TriageVerdict.Blocked blocked => new TriageVerdictDto(
+                BlockedOutcome,
+                blocked.Kind.Value,
+                null,
+                [.. blocked.BlockedBy.Select(b => new BlockedByDto(b.IssueNumber, b.Reason))],
+                blocked.DecidedAt),
             _ => throw new UnreachableException($"Unknown TriageVerdict variant: {verdict.GetType().Name}"),
         };
 
         return JsonSerializer.Serialize(dto, (JsonSerializerOptions?)null);
     }
 
-    private static TriageVerdict Deserialize(string json)
+    // A row that cannot form a verdict reads as no verdict: this converter runs while a repository's issues
+    // materialise together, so a throw here would make every one of them unreadable, and an EF value converter has no
+    // logger to report through. The stored text stays in the column until the issue's next state change, which copies
+    // the null verdict into a new row and so drops the unreadable text. A SQL filter on TriageVerdict == null does not
+    // match such a row, because the column itself is not NULL.
+    private static TriageVerdict? Deserialize(string json)
     {
-        TriageVerdictDto dto = JsonSerializer.Deserialize<TriageVerdictDto>(json, (JsonSerializerOptions?)null)
-            ?? throw new UnreachableException("Stored triage_verdict JSON deserialised to null.");
+        try
+        {
+            return Parse(json);
+        }
+        catch (Exception exception) when (exception is JsonException or ArgumentException)
+        {
+            return null;
+        }
+    }
 
-        IssueKind kind = IssueKind.FromLabel(dto.Kind)
-            ?? throw new UnreachableException($"Stored triage verdict kind '{dto.Kind}' is not a known issue kind.");
+    private static TriageVerdict? Parse(string json)
+    {
+        TriageVerdictDto? dto = JsonSerializer.Deserialize<TriageVerdictDto>(json, (JsonSerializerOptions?)null);
+
+        if (dto is null || IssueKind.FromLabel(dto.Kind) is not IssueKind kind)
+        {
+            return null;
+        }
 
         return dto.Outcome switch
         {
@@ -56,15 +82,26 @@ internal static class TriageVerdictJsonConversion
                 kind,
                 [.. (dto.Questions ?? []).Select(q => new InputQuestion(q.Question, q.Context, q.Recommendation))],
                 dto.DecidedAt),
-            _ => throw new UnreachableException($"Unknown triage verdict outcome: '{dto.Outcome}'"),
+            BlockedOutcome => new TriageVerdict.Blocked(
+                kind,
+                [.. (dto.BlockedBy ?? []).Select(b => new TriageBlocker(b.Issue, b.Reason))],
+                dto.DecidedAt),
+            _ => null,
         };
     }
 
     private sealed record TriageVerdictDto(
         [property: JsonPropertyName("outcome")] string Outcome,
         [property: JsonPropertyName("kind")] string Kind,
-        [property: JsonPropertyName("questions")] IReadOnlyList<QuestionDto>? Questions,
+        [property: JsonPropertyName("questions"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        IReadOnlyList<QuestionDto>? Questions,
+        [property: JsonPropertyName("blockedBy"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        IReadOnlyList<BlockedByDto>? BlockedBy,
         [property: JsonPropertyName("decidedAt")] DateTimeOffset DecidedAt);
+
+    private sealed record BlockedByDto(
+        [property: JsonPropertyName("issue")] int Issue,
+        [property: JsonPropertyName("reason")] string Reason);
 
     private sealed record QuestionDto(
         [property: JsonPropertyName("question")] string Question,

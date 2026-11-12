@@ -100,6 +100,11 @@ export interface TriageVerdictDetails {
   decidedAt: string;
 }
 
+export interface BlockerDetails {
+  issueNumber: number;
+  reason: string | null;
+}
+
 export interface IssueStateDetails {
   workerRunId: string | null;
   branchName: string | null;
@@ -107,7 +112,7 @@ export interface IssueStateDetails {
   failureReason: string | null;
   failedAt: string | null;
   completedAt: string | null;
-  blockedBy: number[] | null;
+  blockedBy: BlockerDetails[] | null;
   violations: EligibilityViolation[] | null;
   transientRetry: TransientRetryDetails | null;
   checksOutcome?: string | null;

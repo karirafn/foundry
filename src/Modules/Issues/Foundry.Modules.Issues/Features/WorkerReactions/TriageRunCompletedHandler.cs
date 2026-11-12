@@ -3,6 +3,7 @@ using System.Diagnostics;
 using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Issues.Domain.Entities;
 using Foundry.Modules.Issues.Domain.Entities.States;
+using Foundry.Modules.Issues.Domain.Services;
 using Foundry.Modules.Issues.Domain.ValueObjects;
 using Foundry.Modules.Workers.Contracts;
 using Foundry.Shared;
@@ -15,12 +16,15 @@ namespace Foundry.Modules.Issues.Features.WorkerReactions;
 
 /// <summary>
 /// Moves a triaged issue on by its verdict (ADR 0097): <c>ready</c> through the dependency check to the queue or
-/// blocked, <c>needs_input</c> to awaiting input with a re-triage resume target. Replay-safe: an issue no longer in
-/// triage with this run (a redelivery, or the issue moved on) is left as it is.
+/// blocked, <c>needs_input</c> to awaiting input with a re-triage resume target, <c>blocked</c> to waiting untriaged
+/// on the blockers it names, or to failure (<c>blocker_cycle</c>) when a named blocker would close a dependency cycle
+/// through the stored edges of other issues. Replay-safe: an issue no longer in triage with this run (a redelivery,
+/// or the issue moved on) is left as it is.
 /// </summary>
 [IntegrationEventHandlerIdentity("Issues.TriageRunCompleted")]
 internal sealed class TriageRunCompletedHandler(
     DbContext db,
+    IIssueQueries issueQueries,
     IDomainEventDispatcher domainEventDispatcher,
     ILogger<TriageRunCompletedHandler> logger) : IIntegrationEventHandler<TriageRunCompleted>
 {
@@ -46,10 +50,36 @@ internal sealed class TriageRunCompletedHandler(
             TriageResult.Ready ready => triaging.MarkReady(new TriageVerdict.Ready(ToIssueKind(ready.Kind), @event.DecidedAt)),
             TriageResult.NeedsInput needsInput => triaging.MarkNeedsInput(
                 new TriageVerdict.NeedsInput(ToIssueKind(needsInput.Kind), needsInput.Questions, @event.DecidedAt)),
+            TriageResult.Blocked blocked => await RouteBlockedAsync(triaging, blocked, @event.DecidedAt, cancellationToken),
             _ => throw new UnreachableException($"Unhandled triage result: {@event.Result.GetType().Name}"),
         };
 
         await db.TransitionAsync(triaging, next, domainEventDispatcher, cancellationToken);
+    }
+
+    private async Task<Issue> RouteBlockedAsync(
+        TriageInProgressIssue triaging,
+        TriageResult.Blocked blocked,
+        DateTimeOffset decidedAt,
+        CancellationToken cancellationToken)
+    {
+        if (TriageVerdict.Blocked.RejectionOf(blocked.BlockedBy) is string rejection)
+        {
+            return triaging.MarkFailed(rejection, FailureCategory.VerdictInvalid, decidedAt);
+        }
+
+        IReadOnlyList<DependencyEdge> storedEdges = await issueQueries.GetDependencyGraphAsync(
+            triaging.MonitoredRepositoryId,
+            cancellationToken);
+
+        DependencyCycle? cycle = DependencyCycleDetector.FindFirstCycleClosedBy(
+            storedEdges,
+            triaging.IssueNumber,
+            [.. blocked.BlockedBy.Select((TriageBlocker blocker) => blocker.IssueNumber)]);
+
+        return cycle is null
+            ? triaging.MarkBlocked(new TriageVerdict.Blocked(ToIssueKind(blocked.Kind), blocked.BlockedBy, decidedAt))
+            : triaging.FailOnBlockerCycle(cycle, decidedAt);
     }
 
     private static IssueKind ToIssueKind(TriageKind kind) => kind switch

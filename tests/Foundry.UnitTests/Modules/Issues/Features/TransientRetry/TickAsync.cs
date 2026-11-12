@@ -168,6 +168,35 @@ public sealed class TickAsync : IAsyncDisposable
         persisted.ShouldBeOfType<TriageFailedIssue>();
     }
 
+    public static TheoryData<FailureCategory> BlockerFailureCategories =>
+        [FailureCategory.BlockerCycle, FailureCategory.BlockerLinkFailed];
+
+    [Theory]
+    [MemberData(nameof(BlockerFailureCategories))]
+    public async Task WhenATriageFailureIsABlockerFailure_ItIsNeverAutoRetried(FailureCategory category)
+    {
+        // Arrange
+        DateTimeOffset now = DateTimeOffset.UtcNow;
+        TriageFailedIssue failed = new IssueBuilder()
+            .WithIssueNumber(22)
+            .WithFailureCategory(category)
+            .WithFailedAt(now.AddHours(-2))
+            .TriageFailed();
+        _dbContext.Set<Issue>().Add(failed);
+        await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+        _dbContext.ChangeTracker.Clear();
+        TransientRetryService sut = BuildSut(workerRunQueries: new StubWorkerRunQueries(count: 0), now: now);
+
+        // Act
+        await sut.TickForTest(CancellationToken.None);
+
+        // Assert
+        _dbContext.ChangeTracker.Clear();
+        Issue? persisted = await _dbContext.Set<Issue>()
+            .FirstOrDefaultAsync(i => i.Id == failed.Id, TestContext.Current.CancellationToken);
+        persisted.ShouldBeOfType<TriageFailedIssue>();
+    }
+
     [Fact]
     public async Task WhenTransientFailedIssueIsAtCap_StaysInFailedState()
     {

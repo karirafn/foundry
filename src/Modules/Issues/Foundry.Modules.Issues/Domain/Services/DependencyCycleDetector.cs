@@ -1,4 +1,6 @@
 using Foundry.Modules.Issues.Contracts;
+using Foundry.Modules.Issues.Domain.ValueObjects;
+using Foundry.Shared;
 
 namespace Foundry.Modules.Issues.Domain.Services;
 
@@ -28,6 +30,84 @@ public static class DependencyCycleDetector
         }
 
         return cycles;
+    }
+
+    /// <summary>
+    /// The shortest cycle closed by the first of <paramref name="blockerNumbers"/>, in the given order, that would
+    /// close one when linked as a blocker of <paramref name="issueNumber"/>, as the path issue → blocker → … → issue;
+    /// null when no blocker is the issue itself or can reach it through <paramref name="storedEdges"/>.
+    /// </summary>
+    public static DependencyCycle? FindFirstCycleClosedBy(
+        IReadOnlyList<DependencyEdge> storedEdges,
+        int issueNumber,
+        IReadOnlyList<int> blockerNumbers)
+    {
+        Dictionary<int, List<int>> adjacency = BuildAdjacency(storedEdges);
+
+        foreach (int blockerNumber in blockerNumbers)
+        {
+            DependencyCycle? cycle = FindCycleClosedBy(adjacency, issueNumber, blockerNumber);
+
+            if (cycle is not null)
+            {
+                return cycle;
+            }
+        }
+
+        return null;
+    }
+
+    private static DependencyCycle? FindCycleClosedBy(
+        Dictionary<int, List<int>> adjacency,
+        int issueNumber,
+        int blockerNumber)
+    {
+        if (blockerNumber == issueNumber)
+        {
+            return CycleOf([issueNumber, issueNumber]);
+        }
+
+        Dictionary<int, int> predecessors = [];
+        Queue<int> queue = new([blockerNumber]);
+        HashSet<int> visited = [blockerNumber];
+
+        while (queue.Count > 0 && !visited.Contains(issueNumber))
+        {
+            int current = queue.Dequeue();
+
+            foreach (int neighbour in adjacency.GetValueOrDefault(current, []))
+            {
+                if (visited.Add(neighbour))
+                {
+                    predecessors[neighbour] = current;
+                    queue.Enqueue(neighbour);
+                }
+            }
+        }
+
+        if (!visited.Contains(issueNumber))
+        {
+            return null;
+        }
+
+        List<int> pathToBlocker = [issueNumber];
+
+        while (pathToBlocker[^1] != blockerNumber)
+        {
+            pathToBlocker.Add(predecessors[pathToBlocker[^1]]);
+        }
+
+        pathToBlocker.Reverse();
+
+        return CycleOf([issueNumber, .. pathToBlocker]);
+    }
+
+    private static DependencyCycle CycleOf(IReadOnlyList<int> path)
+    {
+        return DependencyCycle.Create(path).Match<DependencyCycle>(
+            (DependencyCycle cycle) => cycle,
+            (Error error) => throw new InvalidOperationException(
+                $"The detector built an invalid dependency cycle: {error.Message}"));
     }
 
     private static void DfsIterative(
