@@ -76,9 +76,9 @@ internal sealed class TrackerContextReader(
                 referencedIssues.Add(new ReferencedIssue(
                     reference.Number,
                     reference.Relation,
-                    issue.Title,
+                    TrackerTextLimits.CapText(issue.Title),
                     issue.IsOpen,
-                    issue.Labels,
+                    TrackerTextLimits.CapLabels(issue.Labels),
                     issue.ClosingMergeRequest,
                     issue.Body));
             }
@@ -160,7 +160,8 @@ internal sealed class TrackerContextReader(
         [
             .. success.Value
                 .Where(openIssue => openIssue.Number != issueNumber)
-                .Take(MaxOpenIssues),
+                .Take(MaxOpenIssues)
+                .Select(openIssue => openIssue with { Title = TrackerTextLimits.CapText(openIssue.Title) }),
         ];
     }
 }

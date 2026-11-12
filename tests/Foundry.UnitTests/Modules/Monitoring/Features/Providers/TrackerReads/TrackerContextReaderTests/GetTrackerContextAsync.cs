@@ -144,6 +144,76 @@ public sealed class GetTrackerContextAsync : IAsyncDisposable
             () => context.OpenIssues.ShouldNotBeNull().Select(openIssue => openIssue.Number).ShouldBe([30]));
     }
 
+    [Theory]
+    [InlineData(20, 20)]
+    [InlineData(21, 20)]
+    public async Task WhenAReferencedIssueHasManyLabels_KeepsTheFirstTwenty(int labelCount, int expectedCount)
+    {
+        // Arrange
+        List<string> labels = [.. Enumerable.Range(1, labelCount).Select(number => $"label-{number}")];
+        _provider.ReferencedIssues[9] = Result<ProviderReferencedIssue>.Ok(
+            new ProviderReferencedIssue("Mentioned", true, labels, ClosingMergeRequestState.None, "Body"));
+        IssueContent content = new IssueContentBuilder().WithBody("See #9.").Build();
+
+        // Act
+        TrackerContext context = await ReadAsync(content: content);
+
+        // Assert
+        context.ReferencedIssues.Single().Labels.ShouldBe(labels.Take(expectedCount));
+    }
+
+    [Theory]
+    [InlineData(256, 256)]
+    [InlineData(257, 256)]
+    public async Task WhenAReferencedIssueHasALongTitleAndLabel_CutsEachToTwoHundredFiftySixCharacters(
+        int length,
+        int expectedLength)
+    {
+        // Arrange
+        string text = new('a', length);
+        _provider.ReferencedIssues[9] = Result<ProviderReferencedIssue>.Ok(
+            new ProviderReferencedIssue(text, true, [text], ClosingMergeRequestState.None, "Body"));
+        IssueContent content = new IssueContentBuilder().WithBody("See #9.").Build();
+
+        // Act
+        TrackerContext context = await ReadAsync(content: content);
+
+        // Assert
+        ReferencedIssue issue = context.ReferencedIssues.Single();
+        (issue.Title.Length, issue.Labels.Single().Length).ShouldBe((expectedLength, expectedLength));
+    }
+
+    [Fact]
+    public async Task WhenTheCutFallsInsideASurrogatePair_DropsTheWholePair()
+    {
+        // Arrange
+        string title = new string('a', 255) + "\U0001F600";
+        _provider.ReferencedIssues[9] = Result<ProviderReferencedIssue>.Ok(
+            new ProviderReferencedIssue(title, true, [], ClosingMergeRequestState.None, "Body"));
+        IssueContent content = new IssueContentBuilder().WithBody("See #9.").Build();
+
+        // Act
+        TrackerContext context = await ReadAsync(content: content);
+
+        // Assert
+        context.ReferencedIssues.Single().Title.ShouldBe(new string('a', 255));
+    }
+
+    [Theory]
+    [InlineData(256, 256)]
+    [InlineData(257, 256)]
+    public async Task WhenAnOpenIssueHasALongTitle_CutsItToTwoHundredFiftySixCharacters(int length, int expectedLength)
+    {
+        // Arrange
+        _provider.OpenIssues = Result<IReadOnlyList<OpenIssue>>.Ok([new OpenIssue(30, new string('a', length))]);
+
+        // Act
+        TrackerContext context = await ReadAsync();
+
+        // Assert
+        context.OpenIssues.ShouldNotBeNull().Single().Title.Length.ShouldBe(expectedLength);
+    }
+
     [Fact]
     public async Task WhenAReferencedIssueIsConfidential_ListsItByNumberOnlyAsUnreadable()
     {
