@@ -52,7 +52,7 @@ public sealed class BuildRestricted
     {
         // Arrange
         Clarification answered = new(
-            [new InputQuestion("Which webhooks?", "Two kinds exist.")],
+            [new InputQuestion("Which webhooks?", "Two kinds exist.", "Both kinds.")],
             "Only <outgoing> ones.",
             CreatedAt,
             CreatedAt.AddHours(1));

@@ -191,8 +191,13 @@ public sealed class RepositoryRoles
             () => questions["type"]!.GetValue<string>().ShouldBe("array"),
             () => questions["minItems"]!.GetValue<int>().ShouldBe(1),
             () => items["additionalProperties"]!.GetValue<bool>().ShouldBeFalse(),
-            () => itemRequired.ShouldBe([VerdictQuestionsReader.QuestionProperty, VerdictQuestionsReader.ContextProperty]),
-            () => items["properties"]![VerdictQuestionsReader.QuestionProperty]!["minLength"]!.GetValue<int>().ShouldBe(1));
+            () => itemRequired.ShouldBe([
+                VerdictQuestionsReader.QuestionProperty,
+                VerdictQuestionsReader.ContextProperty,
+                VerdictQuestionsReader.RecommendationProperty]),
+            () => items["properties"]![VerdictQuestionsReader.QuestionProperty]!["minLength"]!.GetValue<int>().ShouldBe(1),
+            () => items["properties"]![VerdictQuestionsReader.RecommendationProperty]!["type"]!.GetValue<string>().ShouldBe("string"),
+            () => items["properties"]![VerdictQuestionsReader.RecommendationProperty]!["minLength"]!.GetValue<int>().ShouldBe(1));
     }
 
     [Theory]
@@ -229,7 +234,7 @@ public sealed class RepositoryRoles
     [Theory]
     [InlineData("""{"outcome":"done","pullRequest":{"summary":"add retry to webhook delivery","body":"Adds retry."}}""", RunVerdictStatus.Done)]
     [InlineData("""{"outcome":"done"}""", RunVerdictStatus.Invalid)]
-    [InlineData("""{"outcome":"needs_input","questions":[{"question":"Which database?","context":"The issue names two."}]}""", RunVerdictStatus.NeedsInput)]
+    [InlineData("""{"outcome":"needs_input","questions":[{"question":"Which database?","context":"The issue names two.","recommendation":"Postgres."}]}""", RunVerdictStatus.NeedsInput)]
     public void ASampleMatchingTheImplementVerdictSchema_ParsesWithTheImplementVerdictParser(string sample, RunVerdictStatus expected)
     {
         // Act
@@ -278,7 +283,7 @@ public sealed class RepositoryRoles
 
     [Theory]
     [InlineData("""{"outcome":"ready","kind":"documentation"}""", RunVerdictStatus.Done)]
-    [InlineData("""{"outcome":"needs_input","kind":"bug","questions":[{"question":"Which page?","context":"None is named."}]}""", RunVerdictStatus.NeedsInput)]
+    [InlineData("""{"outcome":"needs_input","kind":"bug","questions":[{"question":"Which page?","context":"None is named.","recommendation":"The home page."}]}""", RunVerdictStatus.NeedsInput)]
     public void ASampleMatchingTheTriageVerdictSchema_ParsesWithTheTriageVerdictParser(string sample, RunVerdictStatus expected)
     {
         // Act

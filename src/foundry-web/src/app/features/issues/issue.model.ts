@@ -64,6 +64,7 @@ export type { RevisionTriggerKind } from '../../shared/utils/revision-trigger-ki
 export interface InputQuestion {
   question: string;
   context: string;
+  recommendation?: string | null;
 }
 
 export type QuestionPostStatus = 'pending' | 'posted' | 'failed';

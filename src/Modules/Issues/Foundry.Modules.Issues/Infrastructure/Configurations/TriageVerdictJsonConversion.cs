@@ -33,7 +33,7 @@ internal static class TriageVerdictJsonConversion
             TriageVerdict.NeedsInput needsInput => new TriageVerdictDto(
                 NeedsInputOutcome,
                 needsInput.Kind.Value,
-                [.. needsInput.Questions.Select(q => new QuestionDto(q.Question, q.Context))],
+                [.. needsInput.Questions.Select(q => new QuestionDto(q.Question, q.Context, q.Recommendation))],
                 needsInput.DecidedAt),
             _ => throw new UnreachableException($"Unknown TriageVerdict variant: {verdict.GetType().Name}"),
         };
@@ -54,7 +54,7 @@ internal static class TriageVerdictJsonConversion
             ReadyOutcome => new TriageVerdict.Ready(kind, dto.DecidedAt),
             NeedsInputOutcome => new TriageVerdict.NeedsInput(
                 kind,
-                [.. (dto.Questions ?? []).Select(q => new InputQuestion(q.Question, q.Context))],
+                [.. (dto.Questions ?? []).Select(q => new InputQuestion(q.Question, q.Context, q.Recommendation))],
                 dto.DecidedAt),
             _ => throw new UnreachableException($"Unknown triage verdict outcome: '{dto.Outcome}'"),
         };
@@ -68,5 +68,6 @@ internal static class TriageVerdictJsonConversion
 
     private sealed record QuestionDto(
         [property: JsonPropertyName("question")] string Question,
-        [property: JsonPropertyName("context")] string Context);
+        [property: JsonPropertyName("context")] string Context,
+        [property: JsonPropertyName("recommendation")] string? Recommendation);
 }

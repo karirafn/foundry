@@ -25,7 +25,7 @@ public sealed class NeedsInput : IAsyncDisposable
     private const string PullRequestUrl = "https://github.com/owner/repo/pull/10";
 
     private static readonly IReadOnlyList<InputQuestion> Questions =
-        [new InputQuestion("Which database?", "Two are configured.")];
+        [new InputQuestion("Which database?", "Two are configured.", "Postgres.")];
 
     private readonly SqliteConnection _connection;
     private readonly FoundryDbContext _dbContext;

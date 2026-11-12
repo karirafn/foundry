@@ -31,7 +31,7 @@ public sealed class RunVerdictCapture : WorkerDispatchServiceTestBase
     private const string NeedsInputLog =
         """
         {"type":"system","subtype":"init","model":"claude-test"}
-        {"type":"result","subtype":"success","is_error":false,"result":"Blocked","structured_output":{"outcome":"needs_input","questions":[{"question":"Which database?","context":"The issue names two."}]}}
+        {"type":"result","subtype":"success","is_error":false,"result":"Blocked","structured_output":{"outcome":"needs_input","questions":[{"question":"Which database?","context":"The issue names two.","recommendation":"Postgres."}]}}
         """;
 
     private const string DoneLog =
@@ -96,7 +96,7 @@ public sealed class RunVerdictCapture : WorkerDispatchServiceTestBase
         // Assert
         await using FoundryDbContext assertDb = CreateDbContext();
         WorkerRun run = await assertDb.Set<WorkerRun>().SingleAsync(TestContext.Current.CancellationToken);
-        run.VerdictQuestions.ShouldBe([new RunVerdictQuestion("Which database?", "The issue names two.")]);
+        run.VerdictQuestions.ShouldBe([new RunVerdictQuestion("Which database?", "The issue names two.", "Postgres.")]);
     }
 
     [Theory]

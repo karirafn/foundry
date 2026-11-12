@@ -8,6 +8,13 @@ namespace Foundry.Modules.Monitoring.Features.AwaitingInput;
 /// <summary>The comment Foundry posts to ask an awaiting-input issue's questions (ADR 0096), and the link to it.</summary>
 internal static class QuestionComment
 {
+    private const string AcceptRecommendationsClosing =
+        "Reply **ok** to accept every recommendation, or answer by number where you choose differently. The work resumes once replies have been quiet for two minutes.";
+
+    // Questions stored before runs returned recommendations have nothing for "ok" to accept.
+    private const string ReplyClosing =
+        "Reply in a comment on this thread. The work resumes once replies have been quiet for two minutes.";
+
     public static string Compose(IReadOnlyList<InputQuestion> questions)
     {
         StringBuilder body = new();
@@ -16,16 +23,24 @@ internal static class QuestionComment
 
         for (int i = 0; i < questions.Count; i++)
         {
-            body.Append(i + 1).Append(". **").Append(questions[i].Question.Trim()).AppendLine("**");
+            InputQuestion question = questions[i];
+            body.Append(i + 1).Append(". **").Append(question.Question.Trim()).AppendLine("**");
 
-            if (!string.IsNullOrWhiteSpace(questions[i].Context))
+            if (!string.IsNullOrWhiteSpace(question.Context))
             {
-                body.Append("   ").AppendLine(questions[i].Context.Trim().ReplaceLineEndings(" "));
+                body.Append("   ").AppendLine(question.Context.Trim().ReplaceLineEndings(" "));
+            }
+
+            if (!string.IsNullOrWhiteSpace(question.Recommendation))
+            {
+                body.Append("   **Recommended:** ").AppendLine(question.Recommendation.Trim().ReplaceLineEndings(" "));
             }
         }
 
         body.AppendLine();
-        body.Append("Reply in a comment on this thread. The work resumes once replies have been quiet for two minutes.");
+        body.Append(questions.All(q => !string.IsNullOrWhiteSpace(q.Recommendation))
+            ? AcceptRecommendationsClosing
+            : ReplyClosing);
         return body.ToString();
     }
 

@@ -20,7 +20,7 @@ public sealed class MarkNeedsInput
         // Arrange
         WorkerRunId workerRunId = WorkerRunId.New();
         TriageInProgressIssue triaging = new IssueBuilder().WithWorkerRunId(workerRunId).TriageInProgress();
-        IReadOnlyList<InputQuestion> questions = [new InputQuestion("Which API?", "Two exist.")];
+        IReadOnlyList<InputQuestion> questions = [new InputQuestion("Which API?", "Two exist.", "The public one.")];
         TriageVerdict.NeedsInput verdict = new(IssueKind.Feature, questions, DecidedAt);
 
         // Act

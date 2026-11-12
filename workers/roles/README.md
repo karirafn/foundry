@@ -63,9 +63,16 @@ before cloning.
 Shared definitions:
 
 - `questions`: questions a person must answer before the work can continue. An array of at least one
-  `{"question": string, "context": string}` object, with a non-empty `question` and no other
-  properties. Every role that asks questions references this one definition
-  (`{"$ref": "#/$defs/questions"}`), and Foundry reads it with `VerdictQuestionsReader`.
+  `{"question": string, "context": string, "recommendation": string}` object, with a non-empty
+  `question` and `recommendation` and no other properties. `recommendation` is the one option the
+  run recommends, with its reason. Every role that asks questions references this one definition
+  (`{"$ref": "#/$defs/questions"}`), and Foundry reads it with `VerdictQuestionsReader`, which
+  rejects a question without a recommendation.
+
+  Reply rule: a reply that leaves a question unaddressed accepts its recommendation, so a bare "ok"
+  accepts them all and a reply answering some questions by number accepts the rest. Foundry does not
+  apply recommendations in code; the next run reads the reply and the recommendations together from
+  the clarification log, whose lead sentence states the rule.
 
 For a run that exits 0, Foundry records the verdict's status on the worker run: `done`,
 `needs_input` (with its questions), `missing` (no `structured_output`, e.g. a run that hit

@@ -430,6 +430,15 @@
   flex-direction: column;
 }
 
+.issue-detail__question-recommendation {
+  margin-top: var(--fd-spacing-xs);
+}
+
+.issue-detail__question-recommendation-label {
+  color: var(--fd-text-primary);
+  font-weight: 600;
+}
+
 .issue-detail__question-post--failed {
   color: var(--fd-text-warning);
 }
