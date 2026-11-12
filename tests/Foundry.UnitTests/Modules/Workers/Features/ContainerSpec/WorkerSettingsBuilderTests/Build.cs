@@ -60,6 +60,8 @@ public sealed class Build
             "Bash(git push --delete:*)",
             "Bash(git push * HEAD:*)",
             "Bash(git push * :*)",
+            "Bash(git merge:*)",
+            "Bash(git pull:*)",
         ]);
     }
 
@@ -134,10 +136,10 @@ public sealed class Build
         // Assert
         string[] rules = DenyRules(json);
 
-        rules.Length.ShouldBe(12);
-        rules[9].ShouldBe("Bash(git push * :*)");
-        rules[10].ShouldBe("Bash(rm -rf:*)");
-        rules[11].ShouldBe("Bash(curl:*)");
+        rules.Length.ShouldBe(14);
+        rules[11].ShouldBe("Bash(git pull:*)");
+        rules[12].ShouldBe("Bash(rm -rf:*)");
+        rules[13].ShouldBe("Bash(curl:*)");
     }
 
     [Fact]
@@ -186,6 +188,24 @@ public sealed class Build
             () => rules.ShouldContain("Bash(git push --delete:*)"));
     }
 
+    // ADR 0101: the branch catches up with the default branch only by rebase, so a merge commit never reaches the pull request.
+    [Fact]
+    public void WhenCalled_BaseDenyListContainsMergeAndPullRules()
+    {
+        // Arrange
+        RunInput snapshot = Snapshot();
+
+        // Act
+        string json = WorkerSettingsBuilder.Build(snapshot.ClaudeCode, snapshot.Model);
+
+        // Assert
+        string[] rules = DenyRules(json);
+
+        rules.ShouldSatisfyAllConditions(
+            () => rules.ShouldContain("Bash(git merge:*)"),
+            () => rules.ShouldContain("Bash(git pull:*)"));
+    }
+
     [Fact]
     public void WhenModelAndRulesAllSet_ProducesCorrectJson()
     {
@@ -204,10 +224,10 @@ public sealed class Build
 
         string[] rules = DenyRules(json);
 
-        rules.Length.ShouldBe(11);
+        rules.Length.ShouldBe(13);
         rules.ShouldContain("Bash(git push --force:*)");
         rules.ShouldContain("Bash(npx -y:*)");
-        rules[10].ShouldBe("Bash(rm -rf:*)");
+        rules[12].ShouldBe("Bash(rm -rf:*)");
     }
 
     [Theory]

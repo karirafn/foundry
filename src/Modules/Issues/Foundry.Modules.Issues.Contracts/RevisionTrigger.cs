@@ -32,9 +32,9 @@ public abstract record RevisionTrigger
     }
 
     /// <summary>
-    /// The post-run rebase of the worker branch onto the default branch conflicted (ADR 0087): the worker merges
-    /// the default branch into the branch and resolves the conflicts in a merge commit. Payload-free — the worker
-    /// discovers the conflicting paths from <c>git merge</c>.
+    /// The post-run rebase of the worker branch onto the default branch conflicted (ADR 0087): the worker rebases the
+    /// branch onto the default branch and resolves the conflicts at each stop (ADR 0101). Payload-free — the worker
+    /// discovers the conflicting paths from <c>git rebase</c>.
     /// </summary>
     public sealed record RebaseConflict : RevisionTrigger
     {

@@ -19,6 +19,9 @@ internal static class WorkerSettingsBuilder
         "Bash(git push --delete:*)",
         "Bash(git push * HEAD:*)",
         "Bash(git push * :*)",
+        // ADR 0101: the branch catches up only by rebase; a merge commit leaves a rebase-only repository's pull request unmergeable.
+        "Bash(git merge:*)",
+        "Bash(git pull:*)",
     ];
 
     private static readonly JsonSerializerOptions SerializerOptions = new()

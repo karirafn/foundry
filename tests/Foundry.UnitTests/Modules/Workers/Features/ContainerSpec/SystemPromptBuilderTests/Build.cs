@@ -2099,7 +2099,7 @@ public sealed class Build
     }
 
     [Fact]
-    public void WhenBuiltForRebaseConflictTrigger_AppendsConflictSectionWithMergeInstructions()
+    public void WhenBuiltForRebaseConflictTrigger_AppendsConflictSectionWithRebaseInstructions()
     {
         // Act
         string result = BuildRebaseConflictPrompt();
@@ -2111,12 +2111,25 @@ public sealed class Build
         section.ShouldSatisfyAllConditions(
             () => section.ShouldContain("<branch-name>feat/42-fix</branch-name>"),
             () => section.ShouldContain("Check out that existing branch"),
-            () => section.ShouldContain("1. Merge the default branch into it with `git merge origin/HEAD`."),
-            () => section.ShouldContain("preserving both the branch's intent and the default branch's changes"),
-            () => section.ShouldContain("3. Run the tests, fix anything the merge broke, and commit the fixes."),
+            () => section.ShouldContain("1. Rebase the branch onto the default branch with `git rebase origin/HEAD`."),
+            () => section.ShouldContain("resolve every conflict, preserving both the branch's intent and the default branch's changes"),
+            () => section.ShouldContain("continue with `git rebase --continue`"),
+            () => section.ShouldContain("3. Run the tests, fix anything the rebase broke, and commit the fixes."),
             () => section.ShouldNotContain("git fetch origin"),
-            () => section.ShouldNotContain("push", Case.Insensitive),
-            () => section.ShouldContain("Do not rebase: resolve the conflicts in a merge commit only."));
+            () => section.ShouldNotContain("push", Case.Insensitive));
+    }
+
+    [Fact]
+    public void WhenBuiltForRebaseConflictTrigger_ConflictSectionNeverMentionsMerging()
+    {
+        // Act
+        string result = BuildRebaseConflictPrompt();
+
+        // Assert
+        string section = result[result.IndexOf(SystemPromptBuilder.RebaseConflictSectionMarker, StringComparison.Ordinal)..];
+        section.ShouldSatisfyAllConditions(
+            () => section.ShouldNotContain("git merge", Case.Insensitive),
+            () => section.ShouldNotContain("merg", Case.Insensitive));
     }
 
     [Fact]

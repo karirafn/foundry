@@ -745,6 +745,40 @@ HOOK
     [ "$(remote_sha "$RUN_BRANCH")" = "$BASE_BRANCH_SHA" ]
 }
 
+@test "publish: a run tip on an existing branch that descends from neither its base nor the default branch fails as invalid" {
+    add_remote_branch "$RUN_BRANCH_NAME"
+    seed_commit main main1.txt one "main moved"
+    start_run
+    wgit switch --quiet --orphan unrelated
+    wcommit a.txt a "unrelated history"
+    worker_bundle
+
+    publish
+
+    [ "$status" -eq 1 ]
+    [ "$(result_line)" = "FOUNDRY_PUBLISH result=failed kind=permanent reason=invalid: run tip does not descend from the run's base" ]
+    [ -z "$(push_lines)" ]
+    [ "$(remote_sha "$RUN_BRANCH")" = "$BASE_BRANCH_SHA" ]
+}
+
+# Every conflict resolved by taking the default branch: the rebase drops every branch commit, so the
+# tip is the default branch itself and the bundle holds only default-branch commits.
+@test "publish: a rebase that drops every run commit is nothing to publish and leaves the branch alone" {
+    add_remote_branch "$RUN_BRANCH_NAME"
+    seed_commit main main1.txt one "main moved"
+    start_run
+    wgit rebase --quiet --onto origin/HEAD HEAD
+    mkdir -p "$FOUNDRY_HANDOFF_DIR/out"
+    wgit bundle create --quiet "$FOUNDRY_HANDOFF_DIR/out/run.bundle" HEAD --not "origin/$RUN_BRANCH"
+
+    publish
+
+    [ "$status" -eq 0 ]
+    [ "$(result_line)" = "FOUNDRY_PUBLISH result=nothing_to_publish" ]
+    [ -z "$(push_lines)" ]
+    [ "$(remote_sha "$RUN_BRANCH")" = "$BASE_BRANCH_SHA" ]
+}
+
 @test "publish: publishing the same run bundle again is idempotent" {
     start_run
     wcommit a.txt a "first"
