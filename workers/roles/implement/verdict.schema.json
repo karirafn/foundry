@@ -33,24 +33,14 @@
       }
     }
   },
-  "allOf": [
-    {
-      "if": {
-        "properties": { "outcome": { "const": "needs_input" } },
-        "required": ["outcome"]
-      },
-      "then": {
-        "required": ["questions"]
-      }
-    },
-    {
-      "if": {
-        "properties": { "outcome": { "const": "done" } },
-        "required": ["outcome"]
-      },
-      "then": {
-        "required": ["pullRequest"]
-      }
-    }
-  ]
+  "if": {
+    "properties": { "outcome": { "const": "needs_input" } },
+    "required": ["outcome"]
+  },
+  "then": {
+    "required": ["questions"]
+  },
+  "else": {
+    "required": ["pullRequest"]
+  }
 }
