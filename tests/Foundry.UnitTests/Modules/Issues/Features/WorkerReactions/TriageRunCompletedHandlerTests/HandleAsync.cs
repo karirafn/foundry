@@ -2,7 +2,10 @@ using Foundry.Modules.Issues.Domain.Entities;
 using Foundry.Modules.Issues.Domain.Entities.States;
 using Foundry.Modules.Issues.Domain.Events;
 using Foundry.Modules.Issues.Domain.ValueObjects;
+using Foundry.Modules.Issues.Features;
+using Foundry.Modules.Issues.Features.Claiming;
 using Foundry.Modules.Issues.Features.WorkerReactions;
+using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Workers.Contracts;
 using Foundry.Shared;
 using Foundry.Testing;
@@ -39,7 +42,17 @@ public sealed class HandleAsync : IAsyncDisposable
         _dbContext = new FoundryDbContext(options);
         _dbContext.Database.EnsureCreated();
         _dispatcher = new CapturingDomainEventDispatcher();
-        _sut = new TriageRunCompletedHandler(_dbContext, _dispatcher, NullLogger<TriageRunCompletedHandler>.Instance);
+        _sut = new TriageRunCompletedHandler(
+            _dbContext,
+            new IssueQueries(
+                _dbContext,
+                new NullRepositorySlugQueries(),
+                new NullRepositoryEligibilityQuery(),
+                new NullWorkerRunQueries(),
+                new InFlightWorkerCountQuery(_dbContext),
+                new NullGlobalSettingsQueries()),
+            _dispatcher,
+            NullLogger<TriageRunCompletedHandler>.Instance);
     }
 
     async ValueTask IAsyncDisposable.DisposeAsync()
@@ -54,6 +67,18 @@ public sealed class HandleAsync : IAsyncDisposable
         _dbContext.SaveChanges();
         _dbContext.ChangeTracker.Clear();
         return issue;
+    }
+
+    private void SeedBlockedBy(MonitoredRepositoryId repositoryId, int issueNumber, IReadOnlyList<int> blockedBy)
+    {
+        TriageQueuedIssue other = new IssueBuilder()
+            .WithMonitoredRepositoryId(repositoryId)
+            .WithIssueNumber(issueNumber)
+            .TriageQueued();
+        other.SetBlockedBy(blockedBy);
+        _dbContext.Set<Issue>().Add(other);
+        _dbContext.SaveChanges();
+        _dbContext.ChangeTracker.Clear();
     }
 
     private async Task<Issue> ReloadAsync(Issue issue)
@@ -128,6 +153,96 @@ public sealed class HandleAsync : IAsyncDisposable
             () => awaiting.Questions.ShouldBe(questions),
             () => awaiting.TriageVerdict.ShouldBeOfType<TriageVerdict.NeedsInput>().Questions.ShouldBe(questions),
             () => _dispatcher.DispatchedEvents.OfType<IssueAwaitingInput>().ShouldHaveSingleItem());
+    }
+
+    [Fact]
+    public async Task WhenBlockedWithoutACycle_TheIssueWaitsUntriagedAndTheBlockersAreNamed()
+    {
+        // Arrange
+        WorkerRunId workerRunId = WorkerRunId.New();
+        TriageInProgressIssue triaging = Seed(new IssueBuilder()
+            .WithWorkerRunId(workerRunId)
+            .WithIssueNumber(10)
+            .TriageInProgress());
+        TriageBlocker blocker = new(15, "Needs its schema.");
+
+        // Act
+        await _sut.HandleAsync(
+            new TriageRunCompleted(
+                triaging.Id.Value,
+                workerRunId,
+                new TriageResult.Blocked(TriageKind.Feature, [blocker]),
+                DecidedAt),
+            CancellationToken.None);
+
+        // Assert
+        TriageBlockedIssue blocked = (await ReloadAsync(triaging)).ShouldBeOfType<TriageBlockedIssue>();
+        blocked.ShouldSatisfyAllConditions(
+            () => blocked.BlockedBy.ShouldBe([15]),
+            () => _dispatcher.DispatchedEvents.OfType<TriageBlockersNamed>().ShouldHaveSingleItem().Blockers.ShouldBe([blocker]));
+    }
+
+    [Fact]
+    public async Task WhenOnlyTheSecondNamedBlockerClosesACycle_TheIssueFailsOnThatCycle()
+    {
+        // Arrange
+        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
+        WorkerRunId workerRunId = WorkerRunId.New();
+        TriageInProgressIssue triaging = Seed(new IssueBuilder()
+            .WithMonitoredRepositoryId(repositoryId)
+            .WithWorkerRunId(workerRunId)
+            .WithIssueNumber(10)
+            .TriageInProgress());
+        SeedBlockedBy(repositoryId, issueNumber: 20, blockedBy: [10]);
+
+        // Act
+        await _sut.HandleAsync(
+            new TriageRunCompleted(
+                triaging.Id.Value,
+                workerRunId,
+                new TriageResult.Blocked(
+                    TriageKind.Feature,
+                    [new TriageBlocker(15, "Needs its schema."), new TriageBlocker(20, "Needs its client.")]),
+                DecidedAt),
+            CancellationToken.None);
+
+        // Assert
+        TriageFailedIssue failed = (await ReloadAsync(triaging)).ShouldBeOfType<TriageFailedIssue>();
+        failed.ShouldSatisfyAllConditions(
+            () => failed.FailureCategory.ShouldBe(FailureCategory.BlockerCycle),
+            () => failed.FailedAt.ShouldBe(DecidedAt),
+            () => failed.FailureReason.ShouldContain("#20"),
+            () => _dispatcher.DispatchedEvents.OfType<TriageBlockersNamed>().ShouldBeEmpty());
+    }
+
+    [Fact]
+    public async Task WhenSeveralNamedBlockersCloseACycle_TheFirstInVerdictOrderIsReported()
+    {
+        // Arrange
+        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
+        WorkerRunId workerRunId = WorkerRunId.New();
+        TriageInProgressIssue triaging = Seed(new IssueBuilder()
+            .WithMonitoredRepositoryId(repositoryId)
+            .WithWorkerRunId(workerRunId)
+            .WithIssueNumber(10)
+            .TriageInProgress());
+        SeedBlockedBy(repositoryId, issueNumber: 20, blockedBy: [10]);
+        SeedBlockedBy(repositoryId, issueNumber: 30, blockedBy: [10]);
+
+        // Act
+        await _sut.HandleAsync(
+            new TriageRunCompleted(
+                triaging.Id.Value,
+                workerRunId,
+                new TriageResult.Blocked(
+                    TriageKind.Feature,
+                    [new TriageBlocker(30, "Needs its client."), new TriageBlocker(20, "Needs its schema.")]),
+                DecidedAt),
+            CancellationToken.None);
+
+        // Assert
+        TriageFailedIssue failed = (await ReloadAsync(triaging)).ShouldBeOfType<TriageFailedIssue>();
+        failed.FailureReason.ShouldContain("#30");
     }
 
     [Fact]
