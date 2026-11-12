@@ -135,8 +135,11 @@ prepare_role_plugins() {
 # schema (the role's own $defs win on a name clash) so the CLI receives one
 # self-contained schema, compacted to a single line.
 #
-# Fails closed: a schema (or the shared definitions) that is not a JSON object
-# emits the bootstrap-failure sentinel (stage=role) and returns non-zero.
+# Fails closed: a schema (or the shared definitions) that is not a JSON object, or
+# a schema with a top-level allOf, anyOf or oneOf, emits the bootstrap-failure
+# sentinel (stage=role) and returns non-zero. The CLI sends the schema to the API
+# as a tool input_schema, which rejects those keywords at the top level (nested
+# ones are accepted).
 # ---------------------------------------------------------------------------
 prepare_role_verdict_schema() {
     local roles_dir="$1"
@@ -166,6 +169,14 @@ prepare_role_verdict_schema() {
         ' "$schema_file" 2>/dev/null)"; then
         echo "ERROR: $schema_file is not a JSON object." >&2
         fail_bootstrap "role" "verdict schema $schema_file is not a JSON object; rebuild the worker image"
+        return 1
+    fi
+
+    local forbidden
+    forbidden="$(jq -r '[keys[] | select(. == "allOf" or . == "anyOf" or . == "oneOf")] | join(", ")' <<<"$schema")"
+    if [[ -n "$forbidden" ]]; then
+        echo "ERROR: $schema_file has a top-level $forbidden." >&2
+        fail_bootstrap "role" "verdict schema $schema_file has a top-level $forbidden, which the Claude API rejects in a tool input_schema; express conditions with a top-level if/then/else and rebuild the worker image"
         return 1
     fi
 

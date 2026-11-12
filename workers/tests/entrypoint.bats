@@ -2298,6 +2298,48 @@ expected_verdict_schema() {
     [ ! -f "$BATS_TEST_TMPDIR/claude_called" ]
 }
 
+assert_top_level_combinator_fails_bootstrap() {
+    local keyword="$1"
+    local schema_file="$FOUNDRY_ROLES_DIR/implement/verdict.schema.json"
+    set_required_env
+    make_fake_git
+    make_fake_claude
+    printf '{"type":"object","required":["outcome"],"%s":[{"required":["outcome"]}]}\n' "$keyword" > "$schema_file"
+
+    run bash "$ENTRYPOINT"
+
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"FOUNDRY_BOOTSTRAP_FAILED stage=role"* ]]
+    [[ "$output" == *"$schema_file has a top-level $keyword"* ]]
+    [ ! -f "$BATS_TEST_TMPDIR/claude_called" ]
+    [ ! -d "$FOUNDRY_WORKSPACE_DIR" ]
+}
+
+@test "verdict: a nested allOf under a top-level if/then/else passes to claude unchanged" {
+    set_required_env
+    make_fake_git
+    make_fake_claude_record_args
+    local schema='{"type":"object","required":["outcome"],"properties":{"outcome":{"allOf":[{"enum":["done","needs_input"]}]}},"if":{"properties":{"outcome":{"const":"needs_input"}},"required":["outcome"]},"then":{"required":["questions"]},"else":{"required":["pullRequest"]}}'
+    printf '%s\n' "$schema" > "$FOUNDRY_ROLES_DIR/implement/verdict.schema.json"
+
+    run bash "$ENTRYPOINT"
+
+    [ "$status" -eq 0 ]
+    [[ "$(head -n 1 "$BATS_TEST_TMPDIR/claude_args")" == *"--json-schema $schema"* ]]
+}
+
+@test "verdict: a verdict schema with a top-level allOf fails bootstrap at stage=role before cloning" {
+    assert_top_level_combinator_fails_bootstrap allOf
+}
+
+@test "verdict: a verdict schema with a top-level anyOf fails bootstrap at stage=role before cloning" {
+    assert_top_level_combinator_fails_bootstrap anyOf
+}
+
+@test "verdict: a verdict schema with a top-level oneOf fails bootstrap at stage=role before cloning" {
+    assert_top_level_combinator_fails_bootstrap oneOf
+}
+
 # ---------------------------------------------------------------------------
 # Capability profile tests (ADR 0098)
 #
