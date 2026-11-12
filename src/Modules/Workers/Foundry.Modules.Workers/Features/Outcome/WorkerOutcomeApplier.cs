@@ -306,7 +306,8 @@ internal sealed class WorkerOutcomeApplier(
         TriageVerdict.NeedsInput needsInput => new TriageResult.NeedsInput(
             ToTriageKind(needsInput.Kind),
             [.. needsInput.Questions.Select(q => new InputQuestion(q.Question, q.Context, q.Recommendation))]),
-        _ => throw new UnreachableException($"Unhandled triage verdict: {verdict.GetType().Name}"),
+        TriageVerdict.Blocked blocked => new TriageResult.Blocked(ToTriageKind(blocked.Kind), blocked.BlockedBy),
+        _ => throw new UnreachableException($"Unhandled triage verdict:{verdict.GetType().Name}"),
     };
 
     private static TriageKind ToTriageKind(TriageIssueKind kind) => kind switch

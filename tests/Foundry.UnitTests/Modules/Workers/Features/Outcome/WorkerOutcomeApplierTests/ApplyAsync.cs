@@ -219,6 +219,32 @@ public sealed class ApplyAsync : WorkerDispatchServiceTestBase
     }
 
     [Fact]
+    public async Task WhenABlockedTriageRunCompletes_PublishesTriageRunCompletedWithItsBlockers()
+    {
+        // Arrange
+        SeedActiveRun(ContainerId, Branch);
+        CapturingIntegrationEventDispatcher dispatcher = new();
+        RecordingOrchestrator orchestrator = new();
+        await using FoundryDbContext db = CreateDbContext();
+        ActiveRun activeRun = await db.Set<ActiveRun>().SingleAsync(TestContext.Current.CancellationToken);
+        WorkerOutcomeApplier sut = BuildApplier(db, orchestrator, dispatcher);
+        WorkerOutcome outcome = new WorkerOutcome.TriageCompleted(
+            new TriageVerdict.Blocked(TriageIssueKind.Bug, [new TriageBlocker(15, "Needs the auth module.")]),
+            ContainerOutput: null,
+            Summary: null);
+
+        // Act
+        await sut.ApplyAsync(outcome, activeRun, TestContext.Current.CancellationToken);
+
+        // Assert
+        TriageRunCompleted completed = dispatcher.Captured.OfType<TriageRunCompleted>().ShouldHaveSingleItem();
+        TriageResult.Blocked blocked = completed.Result.ShouldBeOfType<TriageResult.Blocked>();
+        blocked.ShouldSatisfyAllConditions(
+            () => blocked.Kind.ShouldBe(TriageKind.Bug),
+            () => blocked.BlockedBy.ShouldBe([new TriageBlocker(15, "Needs the auth module.")]));
+    }
+
+    [Fact]
     public async Task WhenOutcomeIsIndeterminate_ThrowsWithoutTouchingContainer()
     {
         // Arrange

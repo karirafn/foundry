@@ -1,5 +1,6 @@
 using System.Text.Json.Nodes;
 
+using Foundry.Modules.Workers.Contracts;
 using Foundry.Modules.Workers.Domain.ValueObjects;
 using Foundry.Modules.Workers.Features.Verdicts;
 
@@ -39,6 +40,47 @@ public sealed class TryParse
         needsInput.ShouldSatisfyAllConditions(
             () => needsInput.Kind.ShouldBe(TriageIssueKind.Bug),
             () => needsInput.Questions.ShouldBe([new RunVerdictQuestion("Which endpoint?", "Two match.", "The v2 one.")]));
+    }
+
+    [Fact]
+    public void WhenOutcomeIsBlockedWithBlockers_ParsesTheKindAndBlockers()
+    {
+        // Act
+        TriageVerdict? verdict = TriageVerdict.TryParse(Json(
+            """{"outcome":"blocked","kind":"feature","blockedBy":[{"issue":15,"reason":"Needs the auth module."},{"issue":16,"reason":"Needs the schema."}]}"""));
+
+        // Assert
+        verdict.ShouldBe(new TriageVerdict.Blocked(
+            TriageIssueKind.Feature,
+            [new TriageBlocker(15, "Needs the auth module."), new TriageBlocker(16, "Needs the schema.")]));
+    }
+
+    [Theory]
+    [InlineData("""{"outcome":"blocked","kind":"feature"}""")]
+    [InlineData("""{"outcome":"blocked","kind":"feature","blockedBy":[]}""")]
+    [InlineData("""{"outcome":"blocked","kind":"feature","blockedBy":null}""")]
+    [InlineData("""{"outcome":"blocked","kind":"feature","blockedBy":{"issue":15,"reason":"x"}}""")]
+    [InlineData("""{"outcome":"blocked","kind":"feature","blockedBy":[15]}""")]
+    [InlineData("""{"outcome":"blocked","kind":"feature","blockedBy":["x"]}""")]
+    [InlineData("""{"outcome":"blocked","kind":"feature","blockedBy":[{"issue":"15","reason":"x"}]}""")]
+    [InlineData("""{"outcome":"blocked","kind":"feature","blockedBy":[{"issue":15.5,"reason":"x"}]}""")]
+    [InlineData("""{"outcome":"blocked","kind":"feature","blockedBy":[{"issue":null,"reason":"x"}]}""")]
+    [InlineData("""{"outcome":"blocked","kind":"feature","blockedBy":[{"issue":15,"reason":""}]}""")]
+    [InlineData("""{"outcome":"blocked","kind":"feature","blockedBy":[{"issue":15,"reason":7}]}""")]
+    [InlineData("""{"outcome":"blocked","kind":"feature","blockedBy":[{"issue":15}]}""")]
+    [InlineData("""{"outcome":"blocked","kind":"feature","blockedBy":[{"reason":"x"}]}""")]
+    [InlineData("""{"outcome":"blocked","kind":"feature","blockedBy":[{"issue":15,"reason":"x","extra":1}]}""")]
+    [InlineData("""{"outcome":"blocked","kind":"feature","blockedBy":[{"issue":15,"reason":"x"},{"issue":16}]}""")]
+    [InlineData("""{"outcome":"ready","kind":"feature","blockedBy":[]}""")]
+    [InlineData("""{"outcome":"ready","kind":"feature","blockedBy":[{"issue":15}]}""")]
+    [InlineData("""{"outcome":"needs_input","kind":"feature","questions":[{"question":"Q?","context":"c","recommendation":"r"}],"blockedBy":"x"}""")]
+    public void WhenTheBlockedVerdictBreaksTheSchema_ReturnsNull(string json)
+    {
+        // Act
+        TriageVerdict? verdict = TriageVerdict.TryParse(Json(json));
+
+        // Assert
+        verdict.ShouldBeNull();
     }
 
     [Theory]

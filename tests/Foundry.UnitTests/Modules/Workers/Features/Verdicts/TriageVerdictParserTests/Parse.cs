@@ -44,6 +44,17 @@ public sealed class Parse
     }
 
     [Fact]
+    public void WhenTheIssueIsBlocked_RecordsADoneVerdict()
+    {
+        // Act
+        RunVerdict verdict = _sut.Parse(Json(
+            """{"outcome":"blocked","kind":"feature","blockedBy":[{"issue":15,"reason":"Needs the auth module."}]}"""));
+
+        // Assert
+        verdict.ShouldBe(RunVerdict.Done());
+    }
+
+    [Fact]
     public void WhenTheOutputBreaksTheSchema_RecordsAnInvalidVerdict()
     {
         // Act
