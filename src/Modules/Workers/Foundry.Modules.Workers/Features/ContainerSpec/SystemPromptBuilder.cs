@@ -68,8 +68,10 @@ internal static partial class SystemPromptBuilder
     /// <summary>
     /// Builds the system prompt of a <see cref="Domain.ValueObjects.WorkerCapability.Full"/> run. The issue read at
     /// dispatch is rendered into <c>{issueContent}</c> as XML-encoded untrusted data (ADR 0100), so the agent never
-    /// reads it from the provider. The issue body is always kept. When the prompt exceeds the size budget, content is
-    /// shed in this order, each only as far as needed: the oldest whole comments, behind an omission note; then the
+    /// reads it from the provider, followed by the Tracker Context. The issue body is always kept. When the prompt
+    /// exceeds the size budget, content is shed in this order, each only as far as needed: the bodies of the Referenced
+    /// Issues, last selected first, each element keeping its attributes and title behind one omission note; then the
+    /// Open-Issue Index, behind an omission note; then the oldest whole comments, behind an omission note; then the
     /// revision's own payload, which is the failing checks with their job logs or the reviewers' comments; then the
     /// input of older clarification rounds, oldest round first; then the input of the newest answered round. A cut
     /// input ends in <c>[truncated]</c>, and a round's questions and context are never cut.
@@ -102,7 +104,8 @@ internal static partial class SystemPromptBuilder
             string issueContent,
             IReadOnlyList<Clarification> fittedLog,
             DispatchContext dispatchContext,
-            IReadOnlyList<FailingJobLog> jobLogs)
+            IReadOnlyList<FailingJobLog> jobLogs,
+            TrackerFit trackerFit)
         {
             string clarificationSection = fittedLog.Count > 0
                 ? "\n\n" + BuildClarificationSection(fittedLog)
@@ -112,7 +115,7 @@ internal static partial class SystemPromptBuilder
                 .Replace(RolePromptPlaceholders.IssueNumber, issueNumberStr, StringComparison.Ordinal)
                 .Replace(
                     RolePromptPlaceholders.IssueContent,
-                    WithTrackerContext(issueContent, trackerContext),
+                    WithTrackerContext(issueContent, trackerContext, trackerFit),
                     StringComparison.Ordinal);
 
             string prompt = SafetyPreamble + "\n\n" + PrinciplesBlock(principles) + basePrompt + "\n\n" + TaskListInstruction
@@ -144,7 +147,8 @@ internal static partial class SystemPromptBuilder
                 RenderIssueContent(FullIssueContentLead, encodedTitle, encodedBody, [], 0),
                 minimalLog,
                 WithoutPayload(context),
-                [])));
+                [],
+                TrackerFit.Minimal)));
 
         // The issue thread gets only the room the rest of the prompt leaves, so a revision's feedback outranks it.
         // One byte under the ceiling, as the check below is exclusive; the reserve holds the omission note.
@@ -152,21 +156,25 @@ internal static partial class SystemPromptBuilder
             RenderIssueContent(FullIssueContentLead, encodedTitle, encodedBody, [], 0),
             fittedLog,
             context,
-            resolvedJobLogs));
+            resolvedJobLogs,
+            TrackerFit.Minimal));
         List<string> admitted = AdmitNewestComments(
             issue.Comments,
             MaxSystemPromptBytes - 1 - scaffoldBytes - OmissionNoteReservedBytes);
 
-        string normalised = Assemble(
-            RenderIssueContent(
-                FullIssueContentLead,
-                encodedTitle,
-                encodedBody,
-                admitted,
-                issue.Comments.Count - admitted.Count),
-            fittedLog,
-            context,
-            resolvedJobLogs);
+        string admittedIssueContent = RenderIssueContent(
+            FullIssueContentLead,
+            encodedTitle,
+            encodedBody,
+            admitted,
+            issue.Comments.Count - admitted.Count);
+
+        // The Tracker Context ranks last, so it gets only what the comments, the payload and the log leave.
+        int trackerSlackBytes = MaxSystemPromptBytes - 1 - OmissionNoteReservedBytes - Encoding.UTF8.GetByteCount(
+            Assemble(admittedIssueContent, fittedLog, context, resolvedJobLogs, TrackerFit.Minimal));
+        TrackerFit trackerFit = AllotTrackerContext(trackerContext, ref trackerSlackBytes);
+
+        string normalised = Assemble(admittedIssueContent, fittedLog, context, resolvedJobLogs, trackerFit);
 
         int byteCount = Encoding.UTF8.GetByteCount(normalised);
 
@@ -226,7 +234,7 @@ internal static partial class SystemPromptBuilder
                     .Replace(RolePromptPlaceholders.IssueNumber, issueNumberStr, StringComparison.Ordinal)
                     .Replace(
                         RolePromptPlaceholders.IssueContent,
-                        WithTrackerContext(issueContent, trackerContext),
+                        WithTrackerContext(issueContent, trackerContext, TrackerFit.Whole),
                         StringComparison.Ordinal)
                 + "\n\n" + TaskListInstruction + csharpLspSection
                 + (fittedLog.Count > 0 ? "\n\n" + BuildClarificationSection(fittedLog) : string.Empty))

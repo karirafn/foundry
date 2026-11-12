@@ -21,13 +21,73 @@ internal static partial class SystemPromptBuilder
     private const string LinksUnreadableNote =
         "Note: this issue's links could not be read from the tracker, so linked issues may be missing.";
 
-    private static string WithTrackerContext(string renderedIssueContent, TrackerContext? trackerContext)
+    private const string OpenIssuesOmittedNote =
+        "Note: the open-issue list was omitted to fit the prompt size budget.";
+
+    /// <summary>What of the Tracker Context stays in the prompt: the first <paramref name="BodiesKept"/> bodies and, or not, the index.</summary>
+    private sealed record TrackerFit(int BodiesKept, bool IndexKept)
     {
-        string tracker = RenderTrackerContext(trackerContext);
+        // Every referenced issue keeps its attributes and title, and every note stays.
+        internal static TrackerFit Minimal { get; } = new(0, false);
+
+        internal static TrackerFit Whole { get; } = new(int.MaxValue, true);
+    }
+
+    private static string WithTrackerContext(string renderedIssueContent, TrackerContext? trackerContext, TrackerFit fit)
+    {
+        string tracker = RenderTrackerContext(trackerContext, fit);
         return tracker.Length == 0 ? renderedIssueContent : renderedIssueContent + "\n\n" + tracker;
     }
 
-    private static string RenderTrackerContext(TrackerContext? trackerContext)
+    // The Tracker Context is the last thing to keep: it takes only the room the rest of the prompt leaves under the
+    // ceiling, less the reserve, so a revision payload that budgets against the floor is never shrunk by it.
+    // The index outranks the bodies; bodies are kept in selection order until one does not fit. Each cost is the byte
+    // difference of two full renders, so the count in the omission note is accounted for exactly.
+    private static TrackerFit AllotTrackerContext(TrackerContext? trackerContext, ref int slackBytes)
+    {
+        if (trackerContext is null || !HasAnythingToRender(trackerContext))
+        {
+            return TrackerFit.Whole;
+        }
+
+        TrackerFit fit = TrackerFit.Minimal;
+        int fittedBytes = TrackerBytes(trackerContext, fit);
+
+        if (trackerContext.OpenIssues is { Count: > 0 })
+        {
+            TrackerFit withIndex = fit with { IndexKept = true };
+            int cost = TrackerBytes(trackerContext, withIndex) - fittedBytes;
+
+            if (cost <= slackBytes)
+            {
+                fit = withIndex;
+                fittedBytes += cost;
+                slackBytes -= cost;
+            }
+        }
+
+        for (int kept = 1; kept <= trackerContext.ReferencedIssues.Count; kept++)
+        {
+            TrackerFit withBody = fit with { BodiesKept = kept };
+            int cost = TrackerBytes(trackerContext, withBody) - fittedBytes;
+
+            if (cost > slackBytes)
+            {
+                break;
+            }
+
+            fit = withBody;
+            fittedBytes += cost;
+            slackBytes -= cost;
+        }
+
+        return fit;
+    }
+
+    private static int TrackerBytes(TrackerContext trackerContext, TrackerFit fit) =>
+        Encoding.UTF8.GetByteCount(RenderTrackerContext(trackerContext, fit));
+
+    private static string RenderTrackerContext(TrackerContext? trackerContext, TrackerFit fit)
     {
         if (trackerContext is null || !HasAnythingToRender(trackerContext))
         {
@@ -38,7 +98,15 @@ internal static partial class SystemPromptBuilder
 
         if (trackerContext.ReferencedIssues.Count > 0)
         {
-            parts.Add(RenderReferencedIssues(trackerContext.ReferencedIssues));
+            parts.Add(RenderReferencedIssues(trackerContext.ReferencedIssues, fit.BodiesKept));
+        }
+
+        int droppedBodies = Math.Max(0, trackerContext.ReferencedIssues.Count - fit.BodiesKept);
+        if (droppedBodies > 0)
+        {
+            parts.Add(string.Create(
+                CultureInfo.InvariantCulture,
+                $"Note: the bodies of {droppedBodies} referenced issue(s) were omitted to fit the prompt size budget."));
         }
 
         foreach (int number in trackerContext.UnreadableIssueNumbers)
@@ -57,10 +125,14 @@ internal static partial class SystemPromptBuilder
         {
             parts.Add(OpenIssuesUnreadableNote);
         }
-        else if (trackerContext.OpenIssues.Count > 0)
+        else if (trackerContext.OpenIssues.Count > 0 && fit.IndexKept)
         {
             parts.Add(OpenIssuesLead);
             parts.Add(RenderOpenIssues(trackerContext.OpenIssues));
+        }
+        else if (trackerContext.OpenIssues.Count > 0)
+        {
+            parts.Add(OpenIssuesOmittedNote);
         }
 
         return string.Join('\n', parts);
@@ -89,8 +161,11 @@ internal static partial class SystemPromptBuilder
             OpenIssuesLead,
             WrapOpenIssues([RenderOpenIssueElement("{openIssueNumber}", "{openIssueTitle}")]));
 
-    private static string RenderReferencedIssues(IReadOnlyList<ReferencedIssue> referencedIssues) =>
-        WrapReferencedIssues(referencedIssues.Select(RenderReferencedIssue).ToList());
+    private static string RenderReferencedIssues(IReadOnlyList<ReferencedIssue> referencedIssues, int bodiesKept) =>
+        WrapReferencedIssues(
+            referencedIssues
+                .Select((referencedIssue, index) => RenderReferencedIssue(referencedIssue, index < bodiesKept))
+                .ToList());
 
     private static string WrapReferencedIssues(IReadOnlyList<string> elements)
     {
@@ -104,7 +179,7 @@ internal static partial class SystemPromptBuilder
         return sb.Append("</referenced-issues>").ToString();
     }
 
-    private static string RenderReferencedIssue(ReferencedIssue referencedIssue) =>
+    private static string RenderReferencedIssue(ReferencedIssue referencedIssue, bool keepBody) =>
         RenderReferencedIssueElement(
             referencedIssue.Number.ToString(CultureInfo.InvariantCulture),
             RelationName(referencedIssue.Relation),
@@ -112,8 +187,9 @@ internal static partial class SystemPromptBuilder
             ClosingMergeRequestName(referencedIssue.ClosingMergeRequest),
             EncodeForXmlAttribute(string.Join(", ", referencedIssue.Labels)),
             EncodeForXmlData(referencedIssue.Title),
-            EncodeForXmlData(CapReferencedIssueBody(referencedIssue.Body)));
+            keepBody ? EncodeForXmlData(CapReferencedIssueBody(referencedIssue.Body)) : null);
 
+    // A null body leaves the element with its attributes and title only.
     private static string RenderReferencedIssueElement(
         string number,
         string relation,
@@ -121,11 +197,11 @@ internal static partial class SystemPromptBuilder
         string closingMergeRequest,
         string labels,
         string title,
-        string body) =>
+        string? body) =>
         $"<referenced-issue number=\"{number}\" relation=\"{relation}\" state=\"{state}\" " +
         $"closing-merge-request=\"{closingMergeRequest}\" labels=\"{labels}\">\n" +
         $"<title>{title}</title>\n" +
-        $"<body>\n{body}\n</body>\n" +
+        (body is null ? string.Empty : $"<body>\n{body}\n</body>\n") +
         "</referenced-issue>";
 
     private static string CapReferencedIssueBody(string body)
