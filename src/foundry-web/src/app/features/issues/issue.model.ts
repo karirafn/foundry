@@ -93,7 +93,7 @@ export interface IssueKindClassification {
 }
 
 export interface TriageVerdictDetails {
-  outcome: 'ready' | 'needs_input';
+  outcome: 'ready' | 'needs_input' | 'blocked';
   kind: IssueKind;
   questions: string[];
   /** ISO-8601. */

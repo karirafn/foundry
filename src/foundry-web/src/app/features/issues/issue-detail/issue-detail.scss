@@ -207,6 +207,11 @@
     }
   }
 
+  &__cancel-hint {
+    color: var(--fd-text-secondary);
+    font-size: 0.8125rem;
+  }
+
   &__cancel-note {
     color: var(--fd-text-secondary);
     font-size: 0.875rem;
@@ -233,6 +238,11 @@
       border-color: var(--fd-text-success);
       color: var(--fd-text-success);
     }
+
+    &--neutral {
+      border-color: var(--fd-text-secondary);
+      color: var(--fd-text-secondary);
+    }
   }
 
   &__kind-differs,
@@ -241,8 +251,11 @@
   }
 
   // A classified kind reads as primary text; Unclassified keeps the secondary field-value colour.
-  // A blocker number reads as primary text too; its monospace face comes from the field-value class.
-  &__kind-value--known,
+  &__kind-value--known {
+    color: var(--fd-text-primary);
+  }
+
+  // The monospace face comes from the field-value class.
   &__blocker-number {
     color: var(--fd-text-primary);
   }
@@ -265,9 +278,7 @@
     border-top: 1px solid var(--fd-border-muted);
   }
 
-  // The Blocked By rows reuse the failing-check list's reset and row shape.
-  &__failing-list,
-  &__blockers {
+  &__failing-list {
     list-style: none;
     margin: var(--fd-spacing-sm) 0 0;
     padding: 0;
@@ -276,8 +287,7 @@
     gap: var(--fd-spacing-sm);
   }
 
-  &__failing-item,
-  &__blocker {
+  &__failing-item {
     display: flex;
     align-items: center;
     flex-wrap: wrap;
@@ -285,15 +295,24 @@
   }
 
   &__blockers {
+    list-style: none;
     margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
     gap: var(--fd-spacing-xs);
   }
 
   &__blocker {
+    display: flex;
     align-items: baseline;
+    flex-wrap: wrap;
+    gap: var(--fd-spacing-sm);
   }
 
   &__blocker-reason {
+    color: var(--fd-text-secondary);
+    font-size: 0.8125rem;
     overflow-wrap: anywhere;
   }
 
@@ -349,9 +368,7 @@
     margin-bottom: var(--fd-spacing-sm);
   }
 
-  &__cancel-hint,
-  &__failure-summary,
-  &__blocker-reason {
+  &__failure-summary {
     color: var(--fd-text-secondary);
     font-size: 0.8125rem;
   }

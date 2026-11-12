@@ -22,6 +22,7 @@ import { Observable } from 'rxjs';
 import {
   IssueDetail,
   IssueKindClassification,
+  TriageVerdictDetails,
   IssueStateDetails,
 } from '../issue.model';
 import { SafeHrefPipe } from '../../../shared/pipes/safe-href.pipe';
@@ -54,6 +55,12 @@ const KIND_LABELS: Readonly<Record<string, string>> = {
   refactor: 'Refactor',
   documentation: 'Documentation',
 };
+
+const TRIAGE_OUTCOME_LABELS = {
+  ready: 'Ready',
+  needs_input: 'Needs input',
+  blocked: 'Blocked',
+} as const satisfies Record<TriageVerdictDetails['outcome'], string>;
 
 const KIND_SOURCE_NOTES: Readonly<Record<IssueKindClassification['source'], string>> = {
   labelled: 'From label',
@@ -464,9 +471,13 @@ interface TriageCallout {
                       class="badge issue-detail__chip"
                       [class.issue-detail__chip--success]="t.outcome === 'ready'"
                       [class.issue-detail__chip--warning]="t.outcome === 'needs_input'"
-                    >{{ t.outcome === 'ready' ? 'Ready' : 'Needs input' }}</span>
+                      [class.issue-detail__chip--neutral]="t.outcome === 'blocked'"
+                    >{{ _triageOutcomeLabels[t.outcome] }}</span>
                     <span class="issue-detail__field-value">{{ _kindLabel(t.kind) }}</span>
                     <span class="issue-detail__field-value issue-detail__triage-message">Triaged {{ t.decidedAt | date: 'medium' }}</span>
+                    @if (t.outcome === 'blocked') {
+                      <span class="issue-detail__field-value issue-detail__triage-message">Triage found open issues this depends on.</span>
+                    }
                     @if (t.outcome === 'needs_input') {
                       <span class="issue-detail__field-value issue-detail__triage-message">{{ _questionsAsked(t.questions.length) }}</span>
                     }
@@ -1105,7 +1116,8 @@ export class IssueDetailComponent {
     if (TRIAGE_WAITING_STATES.has(d.state)) {
       return { kind: 'waiting', tint: 'neutral' };
     }
-    // Before the verdict check: an untriaged issue waiting on blockers has no verdict to show (ADR 0102).
+    // Before the verdict check: while triage_blocked, the blockers and their reasons carry the detail,
+    // and a stored blocked verdict can be stale once the blockers close or a new one is linked (ADR 0102).
     if (d.state === 'triage_blocked') {
       return { kind: 'waiting_on_blockers', tint: 'neutral' };
     }
@@ -1127,6 +1139,7 @@ export class IssueDetailComponent {
     return null;
   }
 
+  protected readonly _triageOutcomeLabels = TRIAGE_OUTCOME_LABELS;
   protected readonly _maxChecksFixAttempts = MAX_CHECKS_FIX_ATTEMPTS;
   protected readonly _maxRebaseConflictAttempts = MAX_REBASE_CONFLICT_ATTEMPTS;
 

@@ -2603,6 +2603,44 @@ describe('IssueDetailComponent — triage (#772)', () => {
     expect(text(region())).toContain(phrase);
   });
 
+  it('should show a BLOCKED verdict as a neutral chip with its kind and decision time', () => {
+    // Arrange / Act
+    const { region } = setup(issue('queued', { triage: verdict({ outcome: 'blocked', kind: 'refactor' }) }));
+
+    // Assert
+    const chip = region().querySelector('.issue-detail__chip');
+    expect(text(chip)).toBe('Blocked');
+    expect(chip?.classList.contains('issue-detail__chip--neutral')).toBe(true);
+    expect(text(region())).toContain('Refactor');
+    expect(text(region())).toMatch(/Triaged Nov 6, 2026/);
+  });
+
+  it('should explain a BLOCKED verdict as depending on open issues', () => {
+    // Arrange / Act
+    const { region } = setup(issue('queued', { triage: verdict({ outcome: 'blocked' }) }));
+
+    // Assert
+    expect(text(region())).toContain('Triage found open issues this depends on.');
+  });
+
+  it.each(['ready', 'needs_input'] as const)('should not explain open issues for a %s verdict', (outcome) => {
+    // Arrange / Act
+    const { region } = setup(issue('queued', { triage: verdict({ outcome }) }));
+
+    // Assert
+    expect(text(region())).not.toContain('Triage found open issues');
+    expect(region().querySelector('.issue-detail__chip--neutral')).toBeNull();
+  });
+
+  it('should keep the waiting-on-blockers callout over a stored BLOCKED verdict while triage_blocked', () => {
+    // Arrange / Act
+    const { region } = setup(issue('triage_blocked', { triage: verdict({ outcome: 'blocked' }) }));
+
+    // Assert
+    expect(text(region())).toContain('Waiting for its blockers to close. Triage runs once they do.');
+    expect(region().querySelector('.issue-detail__chip')).toBeNull();
+  });
+
   it.each(['triage_queued', 'triage_in_progress', 'triage_failed'])(
     'should hide a stale verdict while the issue is %s',
     (state) => {
