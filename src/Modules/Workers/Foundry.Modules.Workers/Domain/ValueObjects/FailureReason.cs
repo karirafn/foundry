@@ -68,7 +68,8 @@ public abstract record FailureReason
 
     public string Summary => this switch
     {
-        NonZeroExit nonZeroExit => $"Non-zero exit code: {nonZeroExit.ExitCode}",
+        NonZeroExit { Detail: null } nonZeroExit => $"Non-zero exit code: {nonZeroExit.ExitCode}",
+        NonZeroExit nonZeroExit => $"Non-zero exit code: {nonZeroExit.ExitCode}: {nonZeroExit.Detail}",
         TimedOut => "Worker run timed out",
         ContainerError containerError => $"Container error: {containerError.Message}",
         UsageLimited => "Usage limit reached",
@@ -88,7 +89,11 @@ public abstract record FailureReason
         _ => throw new UnreachableException($"Unknown {nameof(FailureReason)} variant: {GetType().Name}"),
     };
 
-    public sealed record NonZeroExit(int ExitCode) : FailureReason;
+    /// <summary>
+    /// The container exited non-zero. <see cref="Detail"/> carries what the CLI reported in an <c>is_error</c>
+    /// result line, so the failure names its cause; reasons persisted before it existed have none.
+    /// </summary>
+    public sealed record NonZeroExit(int ExitCode, string? Detail = null) : FailureReason;
 
     public sealed record TimedOut : FailureReason;
 

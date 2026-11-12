@@ -1246,9 +1246,9 @@ public sealed partial class ResolveAsync
     }
 
     [Fact]
-    public async Task WhenKilledWithOpenMr_ReturnsReview()
+    public async Task WhenKilledWithOpenMr_ReturnsContinuableFailure()
     {
-        // Arrange — the MR-first check runs before any kill classification
+        // Arrange — an open MR does not turn a killed run into a review
         IPostExitProviderQueries queries = new ScriptedProviderQueries(
             commitsResult: Result<bool>.Ok(true),
             fallbackMrResult: Result<MergeRequestByBranch>.Ok(new MergeRequestByBranch(MergeRequestPresence.Open, PrUrl)));
@@ -1262,7 +1262,8 @@ public sealed partial class ResolveAsync
             TestContext.Current.CancellationToken);
 
         // Assert
-        outcome.ShouldBeOfType<WorkerOutcome.Review>();
+        WorkerOutcome.ContinuableFailure failure = outcome.ShouldBeOfType<WorkerOutcome.ContinuableFailure>();
+        failure.FailureReason.ShouldBe(new FailureReason.ContainerError(WorkerOutcomeResolver.OutOfMemoryMessage));
     }
 
     // -------------------------------------------------------------------------

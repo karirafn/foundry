@@ -24,6 +24,19 @@ public sealed class Summary
     }
 
     [Fact]
+    public void WhenNonZeroExitHasDetail_SummaryAppendsDetail()
+    {
+        // Arrange
+        FailureReason reason = new FailureReason.NonZeroExit(ExitCode: 1, Detail: "API Error: 400 bad request");
+
+        // Act
+        string summary = reason.Summary;
+
+        // Assert
+        summary.ShouldBe("Non-zero exit code: 1: API Error: 400 bad request");
+    }
+
+    [Fact]
     public void WhenTimedOut_SummaryDescribesTimeout()
     {
         // Arrange
