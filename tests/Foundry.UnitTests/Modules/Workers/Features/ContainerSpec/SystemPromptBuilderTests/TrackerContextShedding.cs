@@ -200,6 +200,32 @@ public sealed class TrackerContextShedding
     }
 
     [Fact]
+    public void Build_WhenTheCommentsOverflowTheBudget_DropsTheOldestCommentOnlyOnceTheTrackerContextIsMinimal()
+    {
+        // Arrange
+        // The filler differs from every body's character, so a body run never matches inside a comment. The two
+        // comments that fit leave more room than a body costs, which the dropped comment must not hand to the tracker.
+        IssueContent issue = new(
+            "Fix the bug",
+            "The bug body.",
+            Enumerable.Range(1, 3)
+                .Select(i => new IssueContentComment(i, "bob", $"COMMENT_{i} " + new string('z', 45_000), CreatedAt.AddHours(i)))
+                .ToList());
+        TrackerContext trackerContext = ContextWithReferencedIssues(ReferencedIssueCount, OpenIssues(100, 200));
+
+        // Act
+        string prompt = Build(issue, trackerContext);
+
+        // Assert
+        prompt.ShouldSatisfyAllConditions(
+            () => Encoding.UTF8.GetByteCount(prompt).ShouldBeLessThan(SystemPromptBuilder.MaxSystemPromptBytes),
+            () => prompt.ShouldNotContain("COMMENT_1 "),
+            () => prompt.ShouldContain("COMMENT_3 "),
+            () => KeptBodyCount(prompt).ShouldBe(0),
+            () => prompt.ShouldNotContain("<open-issues>"));
+    }
+
+    [Fact]
     public void Build_WhenReviewFeedbackAndTheTrackerContextOverflow_RendersTheFeedbackWholeWhileShedding()
     {
         // Arrange
