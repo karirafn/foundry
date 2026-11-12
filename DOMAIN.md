@@ -995,6 +995,8 @@ Foundry derives each run's outcome via `WorkerOutcomeResolver` — a pure functi
 `ActiveRun` carries the `BranchName` — set at activation from the dispatch payload's pre-created branch name, propagated to `FailedRun` and `CompletedRun`.
 Every run state carries the publish facts (`PublishedHead`, `PublishedBranchCommitCount`, `DivergedSideBranch`) once it was published — see Branch Commit Count below.
 
+**Supplied open issues.** `SuppliedOpenIssueNumbers` (column `supplied_open_issues`) records the open issues the run's prompt offered: the open referenced issues, then the open-issue index. Foundry records it at dispatch from the full tracker context, before prompt fitting sheds any of it, and every transition carries it forward. A triage run's `blocked` verdict may name only these issues. `TriageVerdict.Blocked.RejectionAgainst` runs in `WorkerOutcomeResolver` and rejects an issue outside the set, a duplicate or an over-cap list as `FailureReason.VerdictInvalid`; the consumer side is under [Triage Verdict](#triage-verdict) and [TriageInProgressIssue](#triageinprogressissue).
+
 **`StartingRun` bounded lifetime.**
 `StartingRun` is the state a worker run occupies between row creation (in `IssueClaimedHandler`) and container start (`StartAsync`).
 This window exists because the row must be committed before the Docker API is called — a crash or daemon failure in that gap would otherwise leave the issue in `in_progress` with no recovery path.
