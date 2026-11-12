@@ -22,8 +22,8 @@ import { Observable } from 'rxjs';
 import {
   IssueDetail,
   IssueKindClassification,
-  TriageVerdictDetails,
   IssueStateDetails,
+  TriageVerdictDetails,
 } from '../issue.model';
 import { SafeHrefPipe } from '../../../shared/pipes/safe-href.pipe';
 import { IssueService, TriageAction } from '../issue.service';
@@ -49,7 +49,9 @@ import {
   WORKING_STATES,
 } from '../../../shared/utils/issue-state';
 
-const KIND_LABELS: Readonly<Record<string, string>> = {
+let nextBlockersLabelId = 0;
+
+const KIND_LABELS:Readonly<Record<string, string>> = {
   feature: 'Feature',
   bug: 'Bug',
   refactor: 'Refactor',
@@ -191,8 +193,8 @@ interface TriageCallout {
 
             @if (s.blockedBy?.length) {
               <div class="issue-detail__field issue-detail__field--full-width">
-                <span class="issue-detail__field-key">Blocked By</span>
-                <ul class="issue-detail__blockers" role="list" aria-label="Blocked by">
+                <span class="issue-detail__field-key" [id]="_blockersLabelId">Blocked By</span>
+                <ul class="issue-detail__blockers" role="list" [attr.aria-labelledby]="_blockersLabelId">
                   @for (b of s.blockedBy; track b.issueNumber) {
                     <li class="issue-detail__blocker">
                       <span class="issue-detail__field-value issue-detail__blocker-number">#{{ b.issueNumber }}</span>
@@ -472,7 +474,7 @@ interface TriageCallout {
                       [class.issue-detail__chip--success]="t.outcome === 'ready'"
                       [class.issue-detail__chip--warning]="t.outcome === 'needs_input'"
                       [class.issue-detail__chip--neutral]="t.outcome === 'blocked'"
-                    >{{ _triageOutcomeLabels[t.outcome] }}</span>
+                    >{{ _triageOutcomeLabel(t.outcome) }}</span>
                     <span class="issue-detail__field-value">{{ _kindLabel(t.kind) }}</span>
                     <span class="issue-detail__field-value issue-detail__triage-message">Triaged {{ t.decidedAt | date: 'medium' }}</span>
                     @if (t.outcome === 'blocked') {
@@ -782,6 +784,11 @@ export class IssueDetailComponent {
   readonly loading: InputSignal<boolean> = input.required<boolean>();
   readonly error: InputSignal<string | null> = input.required<string | null>();
   readonly retry: OutputEmitterRef<void> = output<void>();
+
+  protected readonly _maxChecksFixAttempts = MAX_CHECKS_FIX_ATTEMPTS;
+  protected readonly _maxRebaseConflictAttempts = MAX_REBASE_CONFLICT_ATTEMPTS;
+  // The side pane can render two details at once, so the id cannot be a fixed string.
+  protected readonly _blockersLabelId = `issue-detail-blockers-label-${nextBlockersLabelId++}`;
 
   protected readonly _issueService = inject(IssueService);
   private readonly _workerRunService = inject(WorkerRunService);
@@ -1139,9 +1146,6 @@ export class IssueDetailComponent {
     return null;
   }
 
-  protected readonly _triageOutcomeLabels = TRIAGE_OUTCOME_LABELS;
-  protected readonly _maxChecksFixAttempts = MAX_CHECKS_FIX_ATTEMPTS;
-  protected readonly _maxRebaseConflictAttempts = MAX_REBASE_CONFLICT_ATTEMPTS;
 
   protected _isWorking(state: string): boolean {
     return WORKING_STATES.has(state as IssueState);
@@ -1157,6 +1161,13 @@ export class IssueDetailComponent {
 
   protected _rebaseOutcomeLabel(s: IssueStateDetails): string | null {
     return rebaseOutcomeLabel(s.rebaseOutcome, s.rebaseSkippedReason);
+  }
+
+  // The outcome arrives as a server string, so an outcome added later renders as itself.
+  protected _triageOutcomeLabel(outcome: string): string {
+    return Object.prototype.hasOwnProperty.call(TRIAGE_OUTCOME_LABELS, outcome)
+      ? TRIAGE_OUTCOME_LABELS[outcome as TriageVerdictDetails['outcome']]
+      : outcome;
   }
 
   protected _failureCategoryLabel(category: string): string {

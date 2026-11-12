@@ -2415,7 +2415,19 @@ describe('IssueDetailComponent — triage (#772)', () => {
     expect(reasons).toEqual([null, 'Triage: waits on the schema']);
   });
 
-  it('should expose the blockers as a labelled list', () => {
+  it('should show no triage reason for a blocker whose reason is empty', () => {
+    // Arrange / Act
+    const { el } = setup(
+      issue('triage_blocked', {
+        stateDetails: { ...mockStateDetails, branchName: null, completedAt: null, blockedBy: [{ issueNumber: 12, reason: '' }] },
+      }),
+    );
+
+    // Assert
+    expect(el.querySelector('.issue-detail__blocker-reason')).toBeNull();
+  });
+
+  it('should expose the blockers as a list', () => {
     // Arrange / Act
     const { el } = setup(
       issue('triage_blocked', {
@@ -2424,8 +2436,35 @@ describe('IssueDetailComponent — triage (#772)', () => {
     );
 
     // Assert
-    const list = el.querySelector('ul.issue-detail__blockers');
-    expect([list?.getAttribute('role'), list?.getAttribute('aria-label')]).toEqual(['list', 'Blocked by']);
+    expect(el.querySelector('ul.issue-detail__blockers')?.getAttribute('role')).toBe('list');
+  });
+
+  it('should name the blockers list by the visible Blocked By key', () => {
+    // Arrange / Act
+    const { el } = setup(
+      issue('triage_blocked', {
+        stateDetails: { ...mockStateDetails, branchName: null, completedAt: null, blockedBy: [{ issueNumber: 12, reason: null }] },
+      }),
+    );
+
+    // Assert
+    const labelId = el.querySelector('ul.issue-detail__blockers')?.getAttribute('aria-labelledby');
+    expect(text(labelId ? el.querySelector(`[id="${labelId}"]`) : null)).toBe('Blocked By');
+  });
+
+  it('should give each component instance its own blockers label id', () => {
+    // Arrange / Act
+    const blocked = issue('triage_blocked', {
+      stateDetails: { ...mockStateDetails, branchName: null, completedAt: null, blockedBy: [{ issueNumber: 12, reason: null }] },
+    });
+    const idOf = (el: HTMLElement): string | null | undefined =>
+      el.querySelector('ul.issue-detail__blockers')?.getAttribute('aria-labelledby');
+    const firstId = idOf(setup(blocked).el);
+    const secondId = idOf(setup(blocked).el);
+
+    // Assert
+    expect([firstId, secondId].every((id) => id != null && id !== '')).toBe(true);
+    expect(firstId).not.toBe(secondId);
   });
 
   it('should span the Blocked By field across the full width', () => {
@@ -2603,16 +2642,44 @@ describe('IssueDetailComponent — triage (#772)', () => {
     expect(text(region())).toContain(phrase);
   });
 
-  it('should show a BLOCKED verdict as a neutral chip with its kind and decision time', () => {
+  it('should label a BLOCKED verdict chip "Blocked"', () => {
+    // Arrange / Act
+    const { region } = setup(issue('queued', { triage: verdict({ outcome: 'blocked' }) }));
+
+    // Assert
+    expect(text(region().querySelector('.issue-detail__chip'))).toBe('Blocked');
+  });
+
+  it('should tint a BLOCKED verdict chip neutral', () => {
+    // Arrange / Act
+    const { region } = setup(issue('queued', { triage: verdict({ outcome: 'blocked' }) }));
+
+    // Assert
+    expect(region().querySelector('.issue-detail__chip')?.classList.contains('issue-detail__chip--neutral')).toBe(true);
+  });
+
+  it('should show the kind beside a BLOCKED verdict chip', () => {
     // Arrange / Act
     const { region } = setup(issue('queued', { triage: verdict({ outcome: 'blocked', kind: 'refactor' }) }));
 
     // Assert
-    const chip = region().querySelector('.issue-detail__chip');
-    expect(text(chip)).toBe('Blocked');
-    expect(chip?.classList.contains('issue-detail__chip--neutral')).toBe(true);
     expect(text(region())).toContain('Refactor');
+  });
+
+  it('should show when a BLOCKED verdict was decided', () => {
+    // Arrange / Act
+    const { region } = setup(issue('queued', { triage: verdict({ outcome: 'blocked', decidedAt: '2026-11-06T14:14:03Z' }) }));
+
+    // Assert
     expect(text(region())).toMatch(/Triaged Nov 6, 2026/);
+  });
+
+  it('should fall back to the raw outcome for a verdict outcome it has no label for', () => {
+    // Arrange / Act
+    const { region } = setup(issue('queued', { triage: verdict({ outcome: 'future_outcome' as 'ready' }) }));
+
+    // Assert
+    expect(text(region().querySelector('.issue-detail__chip'))).toBe('future_outcome');
   });
 
   it('should explain a BLOCKED verdict as depending on open issues', () => {

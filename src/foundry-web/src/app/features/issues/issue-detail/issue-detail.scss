@@ -6,7 +6,8 @@
 // Only the state modifiers this template renders (the failure-chip fallback and the
 // failure-category / revision chips) are emitted, to stay within the style budget. The publish
 // chips render inside fd-publish-status, so their outlined modifiers are left out here. The blocker
-// failure categories belong to the issue's state badge, never to a run's failure chip.
+// failure categories are recorded on the issue when triage fails, never on a worker run, and this
+// template renders failure chips only for worker runs, so no chip here can carry them.
 @include badge($states: (failed, usage-limited, revision-in-progress), $exclude-outlined: (publishing, branch-diverged, reverted-oversized, reverted-binary, failure-blocker-link-failed, failure-blocker-cycle));
 
 @keyframes shimmer {
@@ -62,6 +63,11 @@
 
     &:hover {
       text-decoration: underline;
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--fd-text-link);
+      outline-offset: 2px;
     }
   }
 
@@ -144,6 +150,11 @@
       background: var(--fd-bg-card-hover);
       border-color: var(--fd-text-secondary);
     }
+
+    &:focus-visible {
+      outline: 2px solid var(--fd-text-link);
+      outline-offset: 2px;
+    }
   }
 
   &__violations {
@@ -191,16 +202,7 @@
       color: var(--fd-text-tertiary);
       border-color: var(--fd-text-tertiary);
     }
-  }
 
-  // Every link and button in this template shares one keyboard focus ring.
-  &__issue-link,
-  &__error-retry,
-  &__cancel-btn,
-  &__retry-fresh-btn,
-  &__retry-btn,
-  &__secondary-btn,
-  &__failing-link {
     &:focus-visible {
       outline: 2px solid var(--fd-text-link);
       outline-offset: 2px;
@@ -255,8 +257,8 @@
     color: var(--fd-text-primary);
   }
 
-  // The monospace face comes from the field-value class.
   &__blocker-number {
+    font-family: var(--fd-font-mono);
     color: var(--fd-text-primary);
   }
 
@@ -344,6 +346,11 @@
 
     &:hover {
       text-decoration: underline;
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--fd-text-link);
+      outline-offset: 2px;
     }
   }
 
