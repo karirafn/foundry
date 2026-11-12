@@ -91,6 +91,31 @@ public sealed class GetChecksAsync
     }
 
     [Fact]
+    public async Task WhenHeadPipelineFailed_KeepsTheDocumentedJobNamesAndWebUrlsUnchanged()
+    {
+        // Arrange
+        FakeHandler handler = FailedPipelineHandler(GitLabJobsByPipelineExample.Response);
+        GitLabHttpClient sut = BuildSut(handler);
+
+        // Act
+        Result<ProviderChecks> result = await sut.GetChecksAsync(
+            ValidBaseUrl,
+            ValidSlug,
+            ValidMrUrl,
+            token: "glpat_token",
+            CancellationToken.None);
+
+        // Assert
+        Result<ProviderChecks>.Success success = result.ShouldBeOfType<Result<ProviderChecks>.Success>();
+        ProviderChecks.Red red = success.Value.ShouldBeOfType<ProviderChecks.Red>();
+        red.FailingChecks.ShouldBe(
+            [
+                new FailingCheck("rspec:other", "failed", "https://example.com/foo/bar/-/jobs/6"),
+                new FailingCheck("teaspoon", "failed", "https://example.com/foo/bar/-/jobs/7"),
+            ]);
+    }
+
+    [Fact]
     public async Task WhenHeadPipelineFailed_ReadsFailedJobsOfThatPipelineInOneRequest()
     {
         // Arrange
@@ -152,6 +177,164 @@ public sealed class GetChecksAsync
         Result<ProviderChecks>.Success success = result.ShouldBeOfType<Result<ProviderChecks>.Success>();
         ProviderChecks.Red red = success.Value.ShouldBeOfType<ProviderChecks.Red>();
         red.FailingChecks.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task WhenJobsBodyIsNotJson_FailsTheChecksReadNamingOnlyTheExceptionTypeAndPipeline()
+    {
+        // Arrange
+        FakeHandler handler = FailedPipelineHandler("<html>Bad gateway</html>");
+        GitLabHttpClient sut = BuildSut(handler);
+
+        // Act
+        Result<ProviderChecks> result = await sut.GetChecksAsync(
+            ValidBaseUrl,
+            ValidSlug,
+            ValidMrUrl,
+            token: "glpat_token",
+            CancellationToken.None);
+
+        // Assert
+        Result<ProviderChecks>.Failure failure = result.ShouldBeOfType<Result<ProviderChecks>.Failure>();
+        (failure.Error.Code, failure.Error.Message).ShouldBe(
+            ("GitLab.ProviderError", "The GitLab jobs read for pipeline 6 could not complete: JsonException."));
+    }
+
+    [Fact]
+    public async Task WhenAFailedJobHasNoName_LeavesItOut()
+    {
+        // Arrange
+        string jobs = """
+            [
+              { "status": "failed", "allow_failure": false, "web_url": "https://example.com/jobs/1" },
+              { "name": "lint", "status": "failed", "allow_failure": false, "web_url": "https://example.com/jobs/2" }
+            ]
+            """;
+        GitLabHttpClient sut = BuildSut(FailedPipelineHandler(jobs));
+
+        // Act
+        Result<ProviderChecks> result = await sut.GetChecksAsync(
+            ValidBaseUrl,
+            ValidSlug,
+            ValidMrUrl,
+            token: "glpat_token",
+            CancellationToken.None);
+
+        // Assert
+        Result<ProviderChecks>.Success success = result.ShouldBeOfType<Result<ProviderChecks>.Success>();
+        ProviderChecks.Red red = success.Value.ShouldBeOfType<ProviderChecks.Red>();
+        red.FailingChecks.ShouldBe([new FailingCheck("lint", "failed", "https://example.com/jobs/2")]);
+    }
+
+    [Fact]
+    public async Task WhenAFailedJobNameIsLongerThanTheCap_CapsItAt255Characters()
+    {
+        // Arrange
+        string jobs = $$"""[{ "name": "{{new string('n', 300)}}", "status": "failed", "allow_failure": false }]""";
+        GitLabHttpClient sut = BuildSut(FailedPipelineHandler(jobs));
+
+        // Act
+        Result<ProviderChecks> result = await sut.GetChecksAsync(
+            ValidBaseUrl,
+            ValidSlug,
+            ValidMrUrl,
+            token: "glpat_token",
+            CancellationToken.None);
+
+        // Assert
+        Result<ProviderChecks>.Success success = result.ShouldBeOfType<Result<ProviderChecks>.Success>();
+        ProviderChecks.Red red = success.Value.ShouldBeOfType<ProviderChecks.Red>();
+        red.FailingChecks.ShouldBe([new FailingCheck(new string('n', 255), "failed", null)]);
+    }
+
+    [Fact]
+    public async Task WhenAFailedJobWebUrlIsLongerThanTheCap_DropsTheUrl()
+    {
+        // Arrange
+        string webUrl = "https://example.com/" + new string('u', 2040);
+        string jobs = $$"""[{ "name": "lint", "status": "failed", "allow_failure": false, "web_url": "{{webUrl}}" }]""";
+        GitLabHttpClient sut = BuildSut(FailedPipelineHandler(jobs));
+
+        // Act
+        Result<ProviderChecks> result = await sut.GetChecksAsync(
+            ValidBaseUrl,
+            ValidSlug,
+            ValidMrUrl,
+            token: "glpat_token",
+            CancellationToken.None);
+
+        // Assert
+        Result<ProviderChecks>.Success success = result.ShouldBeOfType<Result<ProviderChecks>.Success>();
+        ProviderChecks.Red red = success.Value.ShouldBeOfType<ProviderChecks.Red>();
+        red.FailingChecks.ShouldBe([new FailingCheck("lint", "failed", null)]);
+    }
+
+    [Fact]
+    public async Task WhenAFailedJobNameHoldsControlCharacters_ReplacesEachWithASpaceAndTrims()
+    {
+        // Arrange
+        string jobs = """[{ "name": "\n lint\r\nunit\ttests\n", "status": "fail\ned", "allow_failure": false }]""";
+        GitLabHttpClient sut = BuildSut(FailedPipelineHandler(jobs));
+
+        // Act
+        Result<ProviderChecks> result = await sut.GetChecksAsync(
+            ValidBaseUrl,
+            ValidSlug,
+            ValidMrUrl,
+            token: "glpat_token",
+            CancellationToken.None);
+
+        // Assert
+        Result<ProviderChecks>.Success success = result.ShouldBeOfType<Result<ProviderChecks>.Success>();
+        ProviderChecks.Red red = success.Value.ShouldBeOfType<ProviderChecks.Red>();
+        red.FailingChecks.ShouldBe([new FailingCheck("lint  unit tests", "fail ed", null)]);
+    }
+
+    [Fact]
+    public async Task WhenTheJobsPageIsFull_LogsAWarningNamingTheRepositoryAndPipeline()
+    {
+        // Arrange
+        string jobs = "[" + string.Join(
+            ",",
+            Enumerable.Range(0, 100).Select(index => $$"""{ "name": "job{{index}}", "status": "failed", "allow_failure": false }""")) + "]";
+        CapturingLogger<GitLabHttpClient> logger = new();
+        GitLabHttpClient sut = BuildSut(FailedPipelineHandler(jobs), logger);
+
+        // Act
+        await sut.GetChecksAsync(
+            ValidBaseUrl,
+            ValidSlug,
+            ValidMrUrl,
+            token: "glpat_token",
+            CancellationToken.None);
+
+        // Assert
+        logger.Entries.ShouldContain(entry =>
+            entry.Level == LogLevel.Warning
+            && entry.Message.Contains("group/project", StringComparison.Ordinal)
+            && entry.Message.Contains("pipeline 6", StringComparison.Ordinal)
+            && entry.Message.Contains("unnamed", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task WhenPipelineChecksBaseUrlIsNotHttps_FailsWithoutSendingTheToken()
+    {
+        // Arrange
+        FakeHandler handler = FailedPipelineHandler("[]");
+        GitLabHttpClient sut = BuildSut(handler);
+
+        // Act
+        Result<ProviderChecks> result = await sut.GetPipelineChecksAsync(
+            new Uri("http://gitlab.example/api/v4"),
+            ValidSlug,
+            GitLabJobsByPipelineExample.PipelineId,
+            "failed",
+            token: "glpat_token",
+            CancellationToken.None);
+
+        // Assert
+        Result<ProviderChecks>.Failure failure = result.ShouldBeOfType<Result<ProviderChecks>.Failure>();
+        (failure.Error, handler.AllRequests.Count).ShouldBe((GitLabErrors.InvalidBaseUrl, 0));
     }
 
     [Theory]
@@ -338,7 +521,7 @@ public sealed class GetChecksAsync
         GitLabHttpClient sut = BuildSut(handler);
 
         // Act
-        Result<ProviderChecks> result = await sut.GetChecksAsync(
+        await sut.GetChecksAsync(
             ValidBaseUrl,
             ValidSlug,
             ValidMrUrl,
@@ -368,7 +551,8 @@ public sealed class GetChecksAsync
         // Assert
         Result<ProviderChecks>.Success success = result.ShouldBeOfType<Result<ProviderChecks>.Success>();
         ProviderChecks.Red red = success.Value.ShouldBeOfType<ProviderChecks.Red>();
-        (red.FailingChecks.Count, handler.AllRequests.Count).ShouldBe((0, 1));
+        red.FailingChecks.ShouldBeEmpty();
+        handler.AllRequests.Count.ShouldBe(1);
     }
 
     [Fact]

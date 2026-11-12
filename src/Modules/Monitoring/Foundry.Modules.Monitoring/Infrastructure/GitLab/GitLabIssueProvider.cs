@@ -28,7 +28,7 @@ internal sealed partial class GitLabIssueProvider(
     // its failed jobs are read when GetChecksAsync consumes the verdict, so status reads never pay for them.
     // Each entry is consumed once, so a verdict is never served from an earlier pass. The provider is
     // scoped to one poll tick.
-    private readonly Dictionary<string, MergeRequestSnapshot> _checksReadWithStatus = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, MergeRequestSnapshot> _snapshotsReadWithStatus = new(StringComparer.Ordinal);
 
     public Task<Result<IssueListing>> GetIssuesAsync(
         RepositorySlug slug,
@@ -67,11 +67,12 @@ internal sealed partial class GitLabIssueProvider(
 
         if (snapshot is not Result<MergeRequestSnapshot>.Success success)
         {
-            _checksReadWithStatus.Remove(pullRequestUrl);
+            _snapshotsReadWithStatus.Remove(pullRequestUrl);
             return Result<PullRequestStatus>.Fail(((Result<MergeRequestSnapshot>.Failure)snapshot).Error);
         }
 
-        _checksReadWithStatus[pullRequestUrl] = success.Value;        return Result<PullRequestStatus>.Ok(success.Value.Status);
+        _snapshotsReadWithStatus[pullRequestUrl] = success.Value;
+        return Result<PullRequestStatus>.Ok(success.Value.Status);
     }
 
     public async Task<Result<ReviewFeedback>> GetReviewFeedbackAsync(
@@ -327,7 +328,7 @@ internal sealed partial class GitLabIssueProvider(
         string pullRequestUrl,
         CancellationToken cancellationToken)
     {
-        if (_checksReadWithStatus.Remove(pullRequestUrl, out MergeRequestSnapshot? snapshot))
+        if (_snapshotsReadWithStatus.Remove(pullRequestUrl, out MergeRequestSnapshot? snapshot))
         {
             return httpClient.GetPipelineChecksAsync(
                 apiBaseUrl,
