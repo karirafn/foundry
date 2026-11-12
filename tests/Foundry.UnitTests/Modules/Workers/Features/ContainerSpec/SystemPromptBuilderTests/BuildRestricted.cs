@@ -25,6 +25,25 @@ public sealed class BuildRestricted
         SystemPromptBuilder.BuildRestricted(Principles, 42, Template, issue, installsDotnet)
             .ShouldBeOfType<Result<string>.Success>().Value;
 
+    private static string BuildPrompt(IssueContent issue, params Clarification[] log) =>
+        SystemPromptBuilder.BuildRestricted(Principles, 42, Template, issue, installsDotnet: false, log)
+            .ShouldBeOfType<Result<string>.Success>().Value;
+
+    private static Clarification Round(
+        string? input,
+        DateTimeOffset askedAt,
+        string question = "Which webhooks?",
+        string context = "Two kinds exist.")
+    {
+        InputQuestion[] questions = [new InputQuestion(question, context, null)];
+
+        return input is null
+            ? Clarification.Ask(questions, askedAt)
+            : new Clarification(questions, input, askedAt, askedAt.AddHours(1));
+    }
+
+    private static int ByteCount(string prompt) => Encoding.UTF8.GetByteCount(prompt);
+
     [Fact]
     public void WhenBuilt_RendersTheIssueTitleBodyAndCommentsAsIssueContent()
     {
@@ -51,11 +70,7 @@ public sealed class BuildRestricted
     public void WhenTheIssueHasAClarificationLog_RendersItForTheRetriage()
     {
         // Arrange
-        Clarification answered = new(
-            [new InputQuestion("Which webhooks?", "Two kinds exist.", "Both kinds.")],
-            "Only <outgoing> ones.",
-            CreatedAt,
-            CreatedAt.AddHours(1));
+        Clarification answered = Round("Only <outgoing> ones.", CreatedAt, "Which webhooks?", "Two kinds exist.");
 
         // Act
         string prompt = SystemPromptBuilder.BuildRestricted(Principles, 42, Template, Issue(), installsDotnet: false, [answered])
@@ -212,5 +227,172 @@ public sealed class BuildRestricted
             () => Encoding.UTF8.GetByteCount(prompt).ShouldBeLessThan(SystemPromptBuilder.MaxSystemPromptBytes),
             () => prompt.ShouldContain("[truncated]"),
             () => prompt.ShouldContain("1 earlier comment(s) were omitted to fit the prompt size budget"));
+    }
+
+    [Fact]
+    public void WhenTheCommentsAloneOverflowAndALogIsPresent_DropsCommentsAndKeepsEveryInputAndTheBodyWhole()
+    {
+        // Arrange
+        string large = new('x', 30_000);
+        string input = new('i', 5_000);
+        IssueContent issue = Issue(
+            new IssueContentComment(1, "a", "FIRST " + large, CreatedAt),
+            new IssueContentComment(2, "b", "SECOND " + large, CreatedAt.AddHours(1)),
+            new IssueContentComment(3, "c", "THIRD " + large, CreatedAt.AddHours(2)),
+            new IssueContentComment(4, "d", "FOURTH " + large, CreatedAt.AddHours(3)));
+
+        // Act
+        string prompt = BuildPrompt(issue, Round(input, CreatedAt), Round(input + "2", CreatedAt.AddDays(1)));
+
+        // Assert
+        prompt.ShouldSatisfyAllConditions(
+            () => ByteCount(prompt).ShouldBeLessThan(SystemPromptBuilder.MaxSystemPromptBytes),
+            () => prompt.ShouldNotContain("FIRST "),
+            () => prompt.ShouldContain("Retry webhook delivery."),
+            () => prompt.ShouldContain($"<input>{input}</input>"),
+            () => prompt.ShouldContain($"<input>{input}2</input>"),
+            () => prompt.ShouldNotContain("[truncated]"));
+    }
+
+    [Fact]
+    public void WhenTheLogStillOverflowsAfterTheCommentsAreGone_CutsTheOldestOlderInputFirstAndKeepsTheNewestWhole()
+    {
+        // Arrange
+        string oldest = new('a', 60_000);
+        string middle = new('b', 80_000);
+        string newest = new('n', 40_000);
+        IssueContent issue = Issue(new IssueContentComment(1, "a", "A comment", CreatedAt));
+
+        // Act
+        string prompt = BuildPrompt(
+            issue,
+            Round(oldest, CreatedAt, "OLDEST question?", "OLDEST context"),
+            Round(middle, CreatedAt.AddDays(1), "MIDDLE question?", "MIDDLE context"),
+            Round(newest, CreatedAt.AddDays(2)));
+
+        // Assert
+        prompt.ShouldSatisfyAllConditions(
+            () => ByteCount(prompt).ShouldBeLessThan(SystemPromptBuilder.MaxSystemPromptBytes),
+            () => prompt.ShouldContain("<input> [truncated]</input>"),
+            () => prompt.ShouldContain(" [truncated]</input>"),
+            () => prompt.ShouldNotContain(middle),
+            () => prompt.ShouldContain("<question>OLDEST question?</question>"),
+            () => prompt.ShouldContain("<context>OLDEST context</context>"),
+            () => prompt.ShouldContain("<question>MIDDLE question?</question>"),
+            () => prompt.ShouldContain("<context>MIDDLE context</context>"),
+            () => prompt.ShouldContain($"<input>{newest}</input>"),
+            () => prompt.ShouldContain("Retry webhook delivery."));
+    }
+
+    [Fact]
+    public void WhenTheOlderInputsAreExhausted_CutsTheBodyAndKeepsTheNewestInputWhole()
+    {
+        // Arrange
+        string newest = new('n', 40_000);
+        IssueContent issue = new("Huge", new string('B', 200_000), []);
+
+        // Act
+        string prompt = BuildPrompt(
+            issue,
+            Round(new string('o', 60_000), CreatedAt),
+            Round(newest, CreatedAt.AddDays(1)));
+
+        // Assert
+        prompt.ShouldSatisfyAllConditions(
+            () => ByteCount(prompt).ShouldBeLessThan(SystemPromptBuilder.MaxSystemPromptBytes),
+            () => prompt.ShouldContain("<input> [truncated]</input>"),
+            () => prompt.ShouldContain(" [truncated]\n</issue-body>"),
+            () => prompt.ShouldContain($"<input>{newest}</input>"));
+    }
+
+    [Fact]
+    public void WhenASingleRoundsInputAloneExceedsTheCeiling_BuildsWithTheBodyAtItsMarkerAndTheInputCut()
+    {
+        // Arrange
+        string input = new('z', SystemPromptBuilder.MaxSystemPromptBytes + 10_000);
+        IssueContent issue = Issue(new IssueContentComment(1, "a", "A comment", CreatedAt));
+
+        // Act
+        string prompt = BuildPrompt(issue, Round(input, CreatedAt));
+
+        // Assert
+        prompt.ShouldSatisfyAllConditions(
+            () => ByteCount(prompt).ShouldBeLessThan(SystemPromptBuilder.MaxSystemPromptBytes),
+            () => prompt.ShouldContain("<issue-body>\n [truncated]\n</issue-body>"),
+            () => prompt.ShouldContain("1 earlier comment(s) were omitted to fit the prompt size budget"),
+            () => prompt.ShouldContain(" [truncated]</input>"),
+            () => prompt.ShouldNotContain(input));
+    }
+
+    [Theory]
+    [InlineData("&", "&amp;")]
+    [InlineData("<", "&lt;")]
+    [InlineData("é", "é")]
+    [InlineData("😀", "😀")]
+    public void WhenTheCutFallsInsideARuneOrAnEncodedCharacter_LeavesNoPartialSequenceBeforeTheMarker(
+        string unit,
+        string encodedUnit)
+    {
+        // Arrange
+        string input = string.Concat(Enumerable.Repeat(unit, SystemPromptBuilder.MaxSystemPromptBytes));
+
+        // Act
+        string prompt = BuildPrompt(Issue(), Round(input, CreatedAt));
+
+        // Assert
+        const string Start = "<input>";
+        const string End = " [truncated]</input>";
+        int from = prompt.IndexOf(Start, StringComparison.Ordinal) + Start.Length;
+        int to = prompt.IndexOf(End, StringComparison.Ordinal);
+        string cut = prompt[from..to];
+        cut.ShouldSatisfyAllConditions(
+            () => to.ShouldBeGreaterThan(from),
+            () => cut.Replace(encodedUnit, string.Empty, StringComparison.Ordinal).ShouldBeEmpty());
+    }
+
+    [Fact]
+    public void WhenAnOlderRoundIsUnanswered_RendersTheNoteAndSheddingMovesOnToTheNextRound()
+    {
+        // Arrange
+        string middle = new('b', 80_000);
+        string newest = new('n', 40_000);
+
+        // Act
+        string prompt = BuildPrompt(
+            Issue(),
+            Round(null, CreatedAt, "OPEN question?"),
+            Round(middle, CreatedAt.AddDays(1)),
+            Round(newest, CreatedAt.AddDays(2)));
+
+        // Assert
+        prompt.ShouldSatisfyAllConditions(
+            () => ByteCount(prompt).ShouldBeLessThan(SystemPromptBuilder.MaxSystemPromptBytes),
+            () => prompt.ShouldContain("<question>OPEN question?</question>"),
+            () => prompt.ShouldContain(SystemPromptBuilder.UnansweredClarificationNote),
+            () => prompt.ShouldNotContain(middle),
+            () => prompt.ShouldContain(" [truncated]</input>"),
+            () => prompt.ShouldContain($"<input>{newest}</input>"));
+    }
+
+    [Fact]
+    public void WhenTheLastRoundIsUnanswered_ProtectsTheNewestAnsweredRoundAheadOfTheBody()
+    {
+        // Arrange
+        string answered = new('b', 100_000);
+        IssueContent issue = new("Huge", new string('B', 200_000), []);
+
+        // Act
+        string prompt = BuildPrompt(
+            issue,
+            Round(new string('a', 5_000), CreatedAt),
+            Round(answered, CreatedAt.AddDays(1)),
+            Round(null, CreatedAt.AddDays(2)));
+
+        // Assert
+        prompt.ShouldSatisfyAllConditions(
+            () => ByteCount(prompt).ShouldBeLessThan(SystemPromptBuilder.MaxSystemPromptBytes),
+            () => prompt.ShouldContain($"<input>{answered}</input>"),
+            () => prompt.ShouldContain(" [truncated]\n</issue-body>"),
+            () => prompt.ShouldContain(SystemPromptBuilder.UnansweredClarificationNote));
     }
 }

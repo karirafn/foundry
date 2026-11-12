@@ -160,7 +160,10 @@ internal static partial class SystemPromptBuilder
     /// safety rules, the Worker Principles, the role prompt with <paramref name="issue"/> rendered into
     /// <c>{issueContent}</c> as XML-encoded untrusted data, the task-list instruction and, on .NET images, the C# code
     /// navigation section. None of the implement-only sections (pre-PR, publishing, fresh, revision, continuation) appear.
-    /// When the issue does not fit the size budget, the oldest whole comments are dropped first, then the body is cut.
+    /// When the prompt does not fit the size budget, content is shed in this order, each step only as far as needed:
+    /// the oldest whole comments are dropped; the input of older clarification rounds is cut, oldest round first; the
+    /// issue body is cut; the input of the newest answered round is cut. A cut text ends in <c>[truncated]</c>, and a
+    /// round's questions and context are never cut.
     /// </summary>
     /// <param name="principles">The role's assembled Worker Principles; empty when the role selects no section.</param>
     public static Result<string> BuildRestricted(
@@ -178,34 +181,59 @@ internal static partial class SystemPromptBuilder
         string csharpLspSection = installsDotnet ? "\n\n" + BuildCSharpLspSection() : string.Empty;
 
         // A re-triage after answered questions (ADR 0097) reads the clarification log, as an implement run does.
-        string clarificationSection = clarifications is { Count: > 0 }
-            ? "\n\n" + BuildClarificationSection(clarifications)
-            : string.Empty;
+        IReadOnlyList<Clarification> log = clarifications ?? [];
 
-        string Assemble(string issueContent) =>
+        string Assemble(string issueContent, IReadOnlyList<Clarification> fittedLog) =>
             (RestrictedSafetyPreamble + "\n\n" + PrinciplesBlock(principles)
                 + systemPromptTemplate
                     .Replace(RolePromptPlaceholders.IssueNumber, issueNumberStr, StringComparison.Ordinal)
                     .Replace(RolePromptPlaceholders.IssueContent, issueContent, StringComparison.Ordinal)
-                + "\n\n" + TaskListInstruction + csharpLspSection + clarificationSection)
+                + "\n\n" + TaskListInstruction + csharpLspSection
+                + (fittedLog.Count > 0 ? "\n\n" + BuildClarificationSection(fittedLog) : string.Empty))
             .Replace("\r\n", "\n", StringComparison.Ordinal);
 
         string encodedTitle = EncodeForXmlData(issue.Title);
-        int scaffoldBytes = Encoding.UTF8.GetByteCount(
-            Assemble(RenderIssueContent(RestrictedIssueContentLead, encodedTitle, string.Empty, [], 0)));
+        int scaffoldBytes = Encoding.UTF8.GetByteCount(Assemble(
+            RenderIssueContent(
+                RestrictedIssueContentLead,
+                encodedTitle,
+                EncodeForXmlData(MinimalForm(issue.Body)),
+                [],
+                0),
+            WithInputs(log, log.Select(round => round.Input is { } input ? MinimalForm(input) : null).ToList())));
 
         // One byte under the ceiling, as Build's check is exclusive; the reserve holds the omission note.
-        int budget = MaxSystemPromptBytes - 1 - scaffoldBytes - OmissionNoteReservedBytes;
+        int slackBytes = MaxSystemPromptBytes - 1 - scaffoldBytes - OmissionNoteReservedBytes;
 
-        string encodedBody = FitEncodedBody(issue.Body, budget);
-        List<string> admitted = AdmitNewestComments(issue.Comments, budget - Encoding.UTF8.GetByteCount(encodedBody));
+        // Keep-priority: the newest answered input, then the body, then older inputs newest first, then the comments.
+        string?[] fittedInputs = new string?[log.Count];
+        int newestAnswered = FindNewestAnswered(log);
 
-        string prompt = Assemble(RenderIssueContent(
-            RestrictedIssueContentLead,
-            encodedTitle,
-            encodedBody,
-            admitted,
-            issue.Comments.Count - admitted.Count));
+        if (newestAnswered >= 0)
+        {
+            fittedInputs[newestAnswered] = Allot(log[newestAnswered].Input!, ref slackBytes);
+        }
+
+        string encodedBody = EncodeForXmlData(Allot(issue.Body, ref slackBytes));
+
+        for (int i = log.Count - 1; i >= 0; i--)
+        {
+            if (i != newestAnswered && log[i].Input is { } input)
+            {
+                fittedInputs[i] = Allot(input, ref slackBytes);
+            }
+        }
+
+        List<string> admitted = AdmitNewestComments(issue.Comments, slackBytes);
+
+        string prompt = Assemble(
+            RenderIssueContent(
+                RestrictedIssueContentLead,
+                encodedTitle,
+                encodedBody,
+                admitted,
+                issue.Comments.Count - admitted.Count),
+            WithInputs(log, fittedInputs));
         int byteCount = Encoding.UTF8.GetByteCount(prompt);
 
         if (byteCount >= MaxSystemPromptBytes)
@@ -291,35 +319,82 @@ internal static partial class SystemPromptBuilder
             + $"{EncodeForXmlData(comment.Body.Replace("\r\n", "\n", StringComparison.Ordinal))}\n</issue-comment>\n";
     }
 
-    // Truncates the raw body before encoding so no partial entity can appear; encoding only expands, so the raw cut
-    // shrinks until the encoded form fits.
-    private static string FitEncodedBody(string body, int budgetBytes)
-    {
-        const string Marker = " [truncated]";
-        string normalised = body.Replace("\r\n", "\n", StringComparison.Ordinal);
-        string encoded = EncodeForXmlData(normalised);
+    private const string TruncationMarker = " [truncated]";
 
-        if (Encoding.UTF8.GetByteCount(encoded) <= budgetBytes)
+    private static int EncodedByteCount(string raw) => Encoding.UTF8.GetByteCount(EncodeForXmlData(raw));
+
+    // Returns the raw text whole when its encoded form fits, otherwise a raw cut plus the marker. The cut happens
+    // before encoding so no partial entity can appear; encoding only expands, so the raw cut shrinks until the
+    // encoded form fits.
+    private static string FitToEncodedBytes(string raw, int budgetBytes)
+    {
+        string normalised = raw.Replace("\r\n", "\n", StringComparison.Ordinal);
+
+        if (EncodedByteCount(normalised) <= budgetBytes)
         {
-            return encoded;
+            return normalised;
         }
 
-        int quota = Math.Max(0, budgetBytes - Encoding.UTF8.GetByteCount(Marker));
-        string raw = TruncateToUtf8Bytes(normalised, quota);
+        int quota = Math.Max(0, budgetBytes - Encoding.UTF8.GetByteCount(TruncationMarker));
+        string cut = TruncateToUtf8Bytes(normalised, quota);
 
         while (true)
         {
-            encoded = EncodeForXmlData(raw);
-            int encodedBytes = Encoding.UTF8.GetByteCount(encoded);
+            int encodedBytes = EncodedByteCount(cut);
 
-            if (encodedBytes <= quota || raw.Length == 0)
+            if (encodedBytes <= quota || cut.Length == 0)
             {
-                return encoded + Marker;
+                return cut + TruncationMarker;
             }
 
             // Scale the raw cut by how much encoding expanded it; the target is always smaller, so this ends.
-            raw = TruncateToUtf8Bytes(raw, (int)((long)Encoding.UTF8.GetByteCount(raw) * quota / encodedBytes));
+            cut = TruncateToUtf8Bytes(cut, (int)((long)Encoding.UTF8.GetByteCount(cut) * quota / encodedBytes));
         }
+    }
+
+    // The least a text can shrink to: nothing for an empty text, otherwise the marker alone. Measuring the scaffold
+    // with every sheddable text at this floor keeps the sum of the cuts under the ceiling.
+    private static string MinimalForm(string raw) => FitToEncodedBytes(raw, 0);
+
+    // Fits the text into its minimal form plus whatever slack remains, then spends that slack.
+    private static string Allot(string raw, ref int slackBytes)
+    {
+        int minimalBytes = EncodedByteCount(MinimalForm(raw));
+        string fitted = FitToEncodedBytes(raw, minimalBytes + Math.Max(0, slackBytes));
+        slackBytes -= Math.Max(0, EncodedByteCount(fitted) - minimalBytes);
+        return fitted;
+    }
+
+    // The newest answered round is the one a re-run acts on, so it is the last to be cut; an unanswered round has no
+    // input to cut and is skipped.
+    private static int FindNewestAnswered(IReadOnlyList<Clarification> log)
+    {
+        for (int i = log.Count - 1; i >= 0; i--)
+        {
+            if (log[i].Input is not null)
+            {
+                return i;
+            }
+        }
+
+        return -1;
+    }
+
+    // Copies each round with its fitted input; questions and context pass through untouched.
+    private static List<Clarification> WithInputs(IReadOnlyList<Clarification> log, IReadOnlyList<string?> fittedInputs)
+    {
+        List<Clarification> fitted = [];
+
+        for (int i = 0; i < log.Count; i++)
+        {
+            Clarification round = log[i];
+            fitted.Add(
+                fittedInputs[i] is { } input
+                    ? new Clarification(round.Questions, input, round.AskedAt, round.AnsweredAt)
+                    : round);
+        }
+
+        return fitted;
     }
 
     /// <summary>
