@@ -101,6 +101,35 @@ public sealed class GetIssueDetailAsync_TriageBlocked : IAsyncDisposable
     }
 
     [Fact]
+    public async Task WhenBlockedBySkippingTriageAfterARejectedBlockerLink_ServesTheVerdictsReasons()
+    {
+        // Arrange
+        TriageVerdict.Blocked verdict = new(
+            IssueKind.Feature,
+            [new TriageBlocker(3, "Needs the retry queue."), new TriageBlocker(5, "Needs the schema.")],
+            DateTimeOffset.UtcNow);
+        TriageFailedIssue failed = new IssueBuilder()
+            .WithMonitoredRepositoryId(RepositoryId)
+            .TriageBlockedFromTriage(verdict)
+            .FailBlockerLink(WorkerRunId.New(), 3, "issue is locked", DateTimeOffset.UtcNow);
+        BlockedIssue blocked = failed.SkipTriage().ShouldBeOfType<BlockedIssue>();
+        _dbContext.Set<Issue>().Add(blocked);
+        await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+        _dbContext.ChangeTracker.Clear();
+
+        // Act
+        Result<IssueDetail> result = await _sut.GetIssueDetailAsync(blocked.Id, TestContext.Current.CancellationToken);
+
+        // Assert
+        IReadOnlyList<BlockerDetails> blockers = result
+            .ShouldBeOfType<Result<IssueDetail>.Success>()
+            .Value.StateDetails.ShouldNotBeNull()
+            .BlockedBy.ShouldNotBeNull();
+        blockers.Select(b => (b.IssueNumber, b.Reason)).ShouldBe(
+            [(3, "Needs the retry queue."), (5, "Needs the schema.")]);
+    }
+
+    [Fact]
     public async Task WhenBlockedAfterAReadyVerdict_ServesNoReasons()
     {
         // Arrange
