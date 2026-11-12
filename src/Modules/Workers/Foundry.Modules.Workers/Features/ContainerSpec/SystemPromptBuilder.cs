@@ -85,7 +85,8 @@ internal static partial class SystemPromptBuilder
         bool installsDocker,
         bool installsDotnet,
         IReadOnlyList<FailingJobLog>? failingJobLogs = null,
-        IReadOnlyList<Clarification>? clarifications = null)
+        IReadOnlyList<Clarification>? clarifications = null,
+        TrackerContext? trackerContext = null)
     {
         ArgumentNullException.ThrowIfNull(principles);
         ArgumentNullException.ThrowIfNull(issue);
@@ -109,7 +110,10 @@ internal static partial class SystemPromptBuilder
 
             string basePrompt = systemPromptTemplate
                 .Replace(RolePromptPlaceholders.IssueNumber, issueNumberStr, StringComparison.Ordinal)
-                .Replace(RolePromptPlaceholders.IssueContent, issueContent, StringComparison.Ordinal);
+                .Replace(
+                    RolePromptPlaceholders.IssueContent,
+                    WithTrackerContext(issueContent, trackerContext),
+                    StringComparison.Ordinal);
 
             string prompt = SafetyPreamble + "\n\n" + PrinciplesBlock(principles) + basePrompt + "\n\n" + TaskListInstruction
                 + csharpLspSection + prePrSection + "\n\n" + BuildPublishingSection(timeoutMinutes) + clarificationSection;
@@ -204,7 +208,8 @@ internal static partial class SystemPromptBuilder
         string systemPromptTemplate,
         IssueContent issue,
         bool installsDotnet,
-        IReadOnlyList<Clarification>? clarifications = null)
+        IReadOnlyList<Clarification>? clarifications = null,
+        TrackerContext? trackerContext = null)
     {
         ArgumentNullException.ThrowIfNull(principles);
         ArgumentNullException.ThrowIfNull(issue);
@@ -219,7 +224,10 @@ internal static partial class SystemPromptBuilder
             (RestrictedSafetyPreamble + "\n\n" + PrinciplesBlock(principles)
                 + systemPromptTemplate
                     .Replace(RolePromptPlaceholders.IssueNumber, issueNumberStr, StringComparison.Ordinal)
-                    .Replace(RolePromptPlaceholders.IssueContent, issueContent, StringComparison.Ordinal)
+                    .Replace(
+                        RolePromptPlaceholders.IssueContent,
+                        WithTrackerContext(issueContent, trackerContext),
+                        StringComparison.Ordinal)
                 + "\n\n" + TaskListInstruction + csharpLspSection
                 + (fittedLog.Count > 0 ? "\n\n" + BuildClarificationSection(fittedLog) : string.Empty))
             .Replace("\r\n", "\n", StringComparison.Ordinal);
