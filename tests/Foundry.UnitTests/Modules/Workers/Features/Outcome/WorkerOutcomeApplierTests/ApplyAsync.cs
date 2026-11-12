@@ -105,6 +105,31 @@ public sealed class ApplyAsync : WorkerDispatchServiceTestBase
     }
 
     [Fact]
+    public async Task WhenAFailureCarriesItsOwnVerdict_RecordsItInPlaceOfTheOneGiven()
+    {
+        // Arrange
+        SeedActiveRun(ContainerId, Branch);
+        await using FoundryDbContext db = CreateDbContext();
+        ActiveRun activeRun = await db.Set<ActiveRun>().SingleAsync(TestContext.Current.CancellationToken);
+        WorkerOutcomeApplier sut = BuildApplier(db, new RecordingOrchestrator());
+        WorkerOutcome outcome = new WorkerOutcome.Failure(
+            FailureReason.VerdictInvalid.BlockersExceedCap(1),
+            ContainerOutput: null,
+            Summary: null,
+            Verdict: RunVerdict.Invalid());
+
+        // Act
+        await sut.ApplyAsync(outcome, activeRun, RunVerdict.Done(), TestContext.Current.CancellationToken);
+
+        // Assert
+        await using FoundryDbContext assertDb = CreateDbContext();
+        WorkerRun run = await assertDb.Set<WorkerRun>().SingleAsync(TestContext.Current.CancellationToken);
+        run.ShouldSatisfyAllConditions(
+            () => run.ShouldBeOfType<FailedRun>(),
+            () => run.VerdictStatus.ShouldBe(RunVerdictStatus.Invalid));
+    }
+
+    [Fact]
     public async Task WhenNoVerdictIsGiven_RecordsNone()
     {
         // Arrange
@@ -216,6 +241,32 @@ public sealed class ApplyAsync : WorkerDispatchServiceTestBase
             () => ((TriageResult.NeedsInput)completed.Result).Questions.ShouldBe([new InputQuestion("Which module?", "Two are named.", "Issues.")]),
             () => dispatcher.Captured.OfType<WorkerRunCompleted>().ShouldBeEmpty(),
             () => orchestrator.StopAndRemoveCalls.ShouldBe([ContainerId]));
+    }
+
+    [Fact]
+    public async Task WhenABlockedTriageRunCompletes_PublishesTriageRunCompletedWithItsBlockers()
+    {
+        // Arrange
+        SeedActiveRun(ContainerId, Branch);
+        CapturingIntegrationEventDispatcher dispatcher = new();
+        RecordingOrchestrator orchestrator = new();
+        await using FoundryDbContext db = CreateDbContext();
+        ActiveRun activeRun = await db.Set<ActiveRun>().SingleAsync(TestContext.Current.CancellationToken);
+        WorkerOutcomeApplier sut = BuildApplier(db, orchestrator, dispatcher);
+        WorkerOutcome outcome = new WorkerOutcome.TriageCompleted(
+            new TriageVerdict.Blocked(TriageIssueKind.Bug, [new TriageBlocker(15, "Needs the auth module.")]),
+            ContainerOutput: null,
+            Summary: null);
+
+        // Act
+        await sut.ApplyAsync(outcome, activeRun, TestContext.Current.CancellationToken);
+
+        // Assert
+        TriageRunCompleted completed = dispatcher.Captured.OfType<TriageRunCompleted>().ShouldHaveSingleItem();
+        TriageResult.Blocked blocked = completed.Result.ShouldBeOfType<TriageResult.Blocked>();
+        blocked.ShouldSatisfyAllConditions(
+            () => blocked.Kind.ShouldBe(TriageKind.Bug),
+            () => blocked.BlockedBy.ShouldBe([new TriageBlocker(15, "Needs the auth module.")]));
     }
 
     [Fact]

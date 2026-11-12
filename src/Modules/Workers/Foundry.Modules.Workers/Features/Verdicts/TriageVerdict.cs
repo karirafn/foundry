@@ -1,5 +1,6 @@
 using System.Text.Json.Nodes;
 
+using Foundry.Modules.Workers.Contracts;
 using Foundry.Modules.Workers.Domain.ValueObjects;
 
 namespace Foundry.Modules.Workers.Features.Verdicts;
@@ -15,14 +16,17 @@ internal enum TriageIssueKind
 
 /// <summary>
 /// The triage role's typed verdict, mirroring <c>workers/roles/triage/verdict.schema.json</c>:
-/// <c>{"outcome": "ready" | "needs_input", "kind": "feature" | "bug" | "refactor" | "documentation", "questions": [...]}</c>,
-/// with <c>kind</c> always required and <c>questions</c> required for <c>needs_input</c>.
+/// <c>{"outcome": "ready" | "needs_input" | "blocked", "kind": "feature" | "bug" | "refactor" | "documentation", "questions": [...], "blockedBy": [{"issue": 15, "reason": "..."}]}</c>,
+/// with <c>kind</c> always required, <c>questions</c> required for <c>needs_input</c>, and <c>blockedBy</c> required
+/// for <c>blocked</c>. A malformed <c>questions</c> or <c>blockedBy</c> breaks the verdict under any outcome.
 /// </summary>
 internal abstract record TriageVerdict(TriageIssueKind Kind)
 {
     internal const string OutcomeProperty = "outcome";
     internal const string KindProperty = "kind";
     internal const string QuestionsProperty = "questions";
+    internal const string BlockedByProperty = "blockedBy";
+    internal const string BlockedToken = "blocked";
     internal const string ReadyToken = "ready";
     internal const string NeedsInputToken = "needs_input";
 
@@ -42,14 +46,78 @@ internal abstract record TriageVerdict(TriageIssueKind Kind)
     /// <summary>The issue cannot be implemented without answers from a person.</summary>
     internal sealed record NeedsInput(TriageIssueKind Kind, IReadOnlyList<RunVerdictQuestion> Questions) : TriageVerdict(Kind);
 
-    /// <summary>Returns the verdict, or <see langword="null"/> when <paramref name="output"/> breaks the schema.</summary>
+    /// <summary>The issue cannot start until the open issues it depends on close.</summary>
+    internal sealed record Blocked(TriageIssueKind Kind, IReadOnlyList<TriageBlocker> BlockedBy) : TriageVerdict(Kind)
+    {
+        /// <summary>
+        /// Why this verdict cannot stand for a run that was supplied <paramref name="suppliedOpenIssueNumbers"/>, or
+        /// <see langword="null"/> when it can: a blocker must be one of the supplied open issues. A run with no recorded
+        /// set (<see langword="null"/>, dispatched before the set was recorded) rejects every blocked verdict.
+        /// </summary>
+        public FailureReason.VerdictInvalid? RejectionAgainst(IReadOnlyCollection<int>? suppliedOpenIssueNumbers)
+        {
+            if (BlockedBy.Count > TriageResult.Blocked.MaxBlockers)
+            {
+                return FailureReason.VerdictInvalid.BlockersExceedCap(TriageResult.Blocked.MaxBlockers);
+            }
+
+            if (suppliedOpenIssueNumbers is null)
+            {
+                return new FailureReason.VerdictInvalid(FailureReason.VerdictInvalid.NoSuppliedSetDetail);
+            }
+
+            HashSet<int> named = [];
+
+            foreach (TriageBlocker blocker in BlockedBy)
+            {
+                if (blocker.Reason.Length > TriageBlocker.ReasonMaxLength)
+                {
+                    return FailureReason.VerdictInvalid.BlockerReasonTooLong(blocker.IssueNumber, TriageBlocker.ReasonMaxLength);
+                }
+
+                if (!named.Add(blocker.IssueNumber))
+                {
+                    return FailureReason.VerdictInvalid.BlockerDuplicated(blocker.IssueNumber);
+                }
+
+                if (!suppliedOpenIssueNumbers.Contains(blocker.IssueNumber))
+                {
+                    return FailureReason.VerdictInvalid.BlockerNotSupplied(blocker.IssueNumber);
+                }
+            }
+
+            return null;
+        }
+
+        public bool Equals(Blocked? other) =>
+            other is not null && Kind == other.Kind && BlockedBy.SequenceEqual(other.BlockedBy);
+
+        public override int GetHashCode()
+        {
+            HashCode hash = new();
+            hash.Add(Kind);
+
+            foreach (TriageBlocker blocker in BlockedBy)
+            {
+                hash.Add(blocker);
+            }
+
+            return hash.ToHashCode();
+        }
+    }
+
+    /// <summary>
+    /// Returns the verdict, or <see langword="null"/> when <paramref name="output"/> breaks the schema. A well-formed
+    /// <c>blockedBy</c> beside a <c>ready</c> or <c>needs_input</c> outcome is ignored, as <c>questions</c> is
+    /// beside the other outcomes; a malformed one breaks the verdict under any outcome.
+    /// </summary>
     public static TriageVerdict? TryParse(JsonObject output)
     {
         ArgumentNullException.ThrowIfNull(output);
 
         foreach (KeyValuePair<string, JsonNode?> property in output)
         {
-            if (property.Key is not (OutcomeProperty or KindProperty or QuestionsProperty))
+            if (property.Key is not (OutcomeProperty or KindProperty or QuestionsProperty or BlockedByProperty))
             {
                 return null;
             }
@@ -73,17 +141,30 @@ internal abstract record TriageVerdict(TriageIssueKind Kind)
             questions = read;
         }
 
+        IReadOnlyList<TriageBlocker> blockers = [];
+
+        if (output.ContainsKey(BlockedByProperty))
+        {
+            if (VerdictBlockersReader.TryRead(output[BlockedByProperty]) is not { } readBlockers)
+            {
+                return null;
+            }
+
+            blockers = readBlockers;
+        }
+
         return VerdictQuestionsReader.ReadString(output[OutcomeProperty]) switch
         {
             ReadyToken => new Ready(kind),
             NeedsInputToken when questions.Count > 0 => new NeedsInput(kind, questions),
+            BlockedToken when blockers.Count > 0 => new Blocked(kind, blockers),
             _ => null,
         };
     }
 }
 
 /// <summary>
-/// Records a triage verdict: <c>ready</c> as <see cref="RunVerdictStatus.Done"/>, <c>needs_input</c> with its questions.
+/// Records a triage verdict: <c>ready</c> and <c>blocked</c> as <see cref="RunVerdictStatus.Done"/>, <c>needs_input</c> with its questions.
 /// The run's outcome comes from the typed <see cref="TriageVerdict"/> itself (ADR 0097).
 /// </summary>
 internal sealed class TriageVerdictParser : IWorkerVerdictParser
@@ -93,7 +174,7 @@ internal sealed class TriageVerdictParser : IWorkerVerdictParser
     public RunVerdict Parse(JsonObject structuredOutput) =>
         TriageVerdict.TryParse(structuredOutput) switch
         {
-            TriageVerdict.Ready => RunVerdict.Done(),
+            TriageVerdict.Ready or TriageVerdict.Blocked => RunVerdict.Done(),
             TriageVerdict.NeedsInput needsInput => RunVerdict.NeedsInput(needsInput.Questions),
             _ => RunVerdict.Invalid(),
         };

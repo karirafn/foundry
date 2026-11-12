@@ -94,7 +94,7 @@ public sealed class ActiveRun : WorkerRun, ITerminableRun
             DateTimeOffset.UtcNow,
             starting.Role,
             starting.Image);
-        active.RecordBase(starting.Base);
+        active.CarryDispatchFactsFrom(starting);
         return active;
     }
 

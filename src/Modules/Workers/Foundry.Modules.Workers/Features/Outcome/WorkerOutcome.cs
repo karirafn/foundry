@@ -40,12 +40,14 @@ internal abstract record WorkerOutcome
         RunResultSummary? Summary) : WorkerOutcome;
 
     /// <summary>
-    /// The run failed with no recoverable commits.
+    /// The run failed with no recoverable commits. <see cref="Verdict"/> is the verdict to record in place of the
+    /// one read at exit, for a failure that voids it; <see langword="null"/> keeps the one read at exit.
     /// </summary>
     internal sealed record Failure(
         FailureReason FailureReason,
         string? ContainerOutput,
-        RunResultSummary? Summary) : WorkerOutcome;
+        RunResultSummary? Summary,
+        RunVerdict? Verdict = null) : WorkerOutcome;
 
     /// <summary>
     /// The container exited cleanly with no commits — the issue is unchanged.

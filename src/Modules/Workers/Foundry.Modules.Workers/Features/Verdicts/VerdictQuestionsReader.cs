@@ -45,6 +45,22 @@ internal static class VerdictQuestionsReader
         return questions;
     }
 
-    internal static string? ReadString(JsonNode? node) =>
-        node is not null && node.GetValueKind() == JsonValueKind.String ? node.GetValue<string>() : null;
+    // A JSON string escaping a lone surrogate (such as "\ud800") parses, but reading it as text throws, so it reads
+    // as not-a-string and the verdict fails the schema instead of faulting the run.
+    internal static string? ReadString(JsonNode? node)
+    {
+        if (node is null || node.GetValueKind() != JsonValueKind.String)
+        {
+            return null;
+        }
+
+        try
+        {
+            return node.GetValue<string>();
+        }
+        catch (InvalidOperationException)
+        {
+            return null;
+        }
+    }
 }

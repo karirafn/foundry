@@ -4,9 +4,9 @@
   "required": ["outcome", "kind"],
   "properties": {
     "outcome": {
-      "description": "ready when a person could implement the issue as written; needs_input when it cannot be implemented without answers from a person.",
+      "description": "ready when a person could implement the issue as written; needs_input when it cannot be implemented without answers from a person; blocked when the work needs one or more open issues to land first.",
       "type": "string",
-      "enum": ["ready", "needs_input"]
+      "enum": ["ready", "needs_input", "blocked"]
     },
     "kind": {
       "description": "What kind of change the issue asks for.",
@@ -15,6 +15,29 @@
     },
     "questions": {
       "$ref": "#/$defs/questions"
+    },
+    "blockedBy": {
+      "description": "The open issues that must land first, each with the reason the work needs it. Required when outcome is blocked.",
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 50,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["issue", "reason"],
+        "properties": {
+          "issue": {
+            "description": "The number of an open issue shown in the referenced issues or the open-issue list.",
+            "type": "integer"
+          },
+          "reason": {
+            "description": "Why the work needs this issue to land first.",
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          }
+        }
+      }
     }
   },
   "if": {

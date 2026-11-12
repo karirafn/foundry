@@ -34,6 +34,19 @@ file static class WorkerRunValueConverters
     internal static readonly ValueConverter<MonitoredRepositoryId, Guid> MonitoredRepositoryIdConverter = new(
         id => id.Value,
         value => MonitoredRepositoryId.From(value));
+
+    internal static readonly ValueConverter<IReadOnlyList<int>?, string> SuppliedOpenIssuesConverter = new(
+        numbers => JsonSerializer.Serialize(numbers, JsonSerializerOptions.Default),
+        json => DeserializeSuppliedOpenIssues(json));
+
+    internal static readonly ValueComparer<IReadOnlyList<int>?> SuppliedOpenIssuesComparer = new(
+        (left, right) => left == null ? right == null : right != null && left.SequenceEqual(right),
+        numbers => numbers == null ? 0 : numbers.Aggregate(0, (hash, number) => HashCode.Combine(hash, number)),
+        numbers => numbers == null ? null : numbers.ToList());
+
+    private static List<int> DeserializeSuppliedOpenIssues(string json) =>
+        JsonSerializer.Deserialize<List<int>>(json, JsonSerializerOptions.Default)
+            ?? throw new InvalidOperationException("Failed to deserialize the supplied open issues.");
 }
 
 file static class RunVerdictValueConverters
@@ -151,6 +164,17 @@ public sealed class WorkerRunConfiguration : IEntityTypeConfiguration<WorkerRun>
             .HasMaxLength(int.MaxValue)
             .HasColumnType("TEXT")
             .HasColumnName("verdict_questions");
+
+        // The stored list is bounded by what Foundry supplies at dispatch: at most the open-issue index cap
+        // (TrackerContextReader.MaxOpenIssues) plus the referenced-issue cap
+        // (ReferencedIssueSelection.MaxReferencedIssues), never anything the model returns.
+        builder.Property(r => r.SuppliedOpenIssueNumbers)
+            .HasConversion(
+                WorkerRunValueConverters.SuppliedOpenIssuesConverter,
+                WorkerRunValueConverters.SuppliedOpenIssuesComparer)
+            .HasMaxLength(int.MaxValue)
+            .HasColumnType("TEXT")
+            .HasColumnName("supplied_open_issue_numbers");
 
         builder.Ignore(r => r.Verdict);
 

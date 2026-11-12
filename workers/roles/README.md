@@ -89,5 +89,11 @@ is still decided from facts (merge request, commits, exit code).
 `outcome` is `needs_input`, and `pullRequest` otherwise (`done`), expressed as one top-level
 `if`/`then`/`else`.
 
-`triage/verdict.schema.json` requires `outcome` (`ready` or `needs_input`) and `kind` (`feature`, `bug`, `refactor` or
-`documentation`), and `questions` when `outcome` is `needs_input`. Foundry records `ready` as `done`.
+`triage/verdict.schema.json` requires `outcome` (`ready`, `needs_input` or `blocked`) and `kind` (`feature`, `bug`,
+`refactor` or `documentation`), and `questions` when `outcome` is `needs_input`. A `blocked` verdict carries `blockedBy`:
+one to 50 `{issue, reason}` objects naming open issues that must land first, each with a reason of 1 to 500 characters.
+The schema's conditional stays flat (`needs_input` requires `questions`); the typed parser requires a non-empty
+`blockedBy` for `blocked`, collapses each reason to one line without format characters (a reason blank after that
+breaks the verdict), and the resolver rejects an issue outside the run's supplied open issues, a duplicate or an
+over-cap list as `verdict_invalid`. Foundry records `ready` and `blocked` as `done`. A `blocked` verdict the resolver
+rejects is recorded as `invalid`.

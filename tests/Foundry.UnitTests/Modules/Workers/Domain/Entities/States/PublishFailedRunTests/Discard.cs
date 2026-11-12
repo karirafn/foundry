@@ -27,4 +27,18 @@ public sealed class Discard
             () => discarded.BranchName.ShouldBe(PublishingRunFixture.Branch),
             () => failed.DomainEvents.ShouldHaveSingleItem());
     }
+
+    [Fact]
+    public void WhenDiscarded_CarriesTheRunBaseForward()
+    {
+        // Arrange
+        PublishFailedRun failed = PublishingRunFixture.Publishing()
+            .FailPublish("refused", transient: false, PublishingRunFixture.ExitedAt);
+
+        // Act
+        FailedRun discarded = failed.Discard();
+
+        // Assert
+        discarded.Base.ShouldBe(failed.Base);
+    }
 }

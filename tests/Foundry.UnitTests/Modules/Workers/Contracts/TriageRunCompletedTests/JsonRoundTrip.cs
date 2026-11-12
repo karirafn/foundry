@@ -22,7 +22,7 @@ public sealed class JsonRoundTrip
         string json = JsonSerializer.Serialize(result);
 
         // Assert
-        JsonDocument.Parse(json).RootElement.GetProperty("$type").GetString().ShouldBe("blocked");
+        JsonElement.Parse(json).GetProperty("$type").GetString().ShouldBe("blocked");
     }
 
     [Fact]

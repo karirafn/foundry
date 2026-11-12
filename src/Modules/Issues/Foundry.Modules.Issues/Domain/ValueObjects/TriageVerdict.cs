@@ -70,11 +70,11 @@ public abstract record TriageVerdict
             BlockedBy = [.. blockers];
         }
 
-        // GitHub limits dependencies to 50 per direction; an issue records no more blockers than that.
-        public const int MaxBlockers = 50;
+        /// <summary>The producer enforces the same cap, so both modules read the contract's value.</summary>
+        public const int MaxBlockers = TriageResult.Blocked.MaxBlockers;
 
-        /// <summary>The longest reason a blocker may carry; it is stored, relayed and later shown in a public comment.</summary>
-        public const int ReasonMaxLength = 500;
+        /// <summary>The longest reason a blocker may carry; the producer enforces the same cap.</summary>
+        public const int ReasonMaxLength = TriageBlocker.ReasonMaxLength;
 
         /// <summary>
         /// Why <paramref name="blockers"/> cannot form a blocked verdict, or <c>null</c> when they can. An issue records
