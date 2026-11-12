@@ -238,6 +238,11 @@
       border-color: var(--fd-text-success);
       color: var(--fd-text-success);
     }
+
+    &--neutral {
+      border-color: var(--fd-text-secondary);
+      color: var(--fd-text-secondary);
+    }
   }
 
   &__kind-differs,
@@ -247,6 +252,11 @@
 
   // A classified kind reads as primary text; Unclassified keeps the secondary field-value colour.
   &__kind-value--known {
+    color: var(--fd-text-primary);
+  }
+
+  &__blocker-number {
+    font-family: var(--fd-font-mono);
     color: var(--fd-text-primary);
   }
 
@@ -282,6 +292,28 @@
     align-items: center;
     flex-wrap: wrap;
     gap: var(--fd-spacing-sm);
+  }
+
+  &__blockers {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: var(--fd-spacing-xs);
+  }
+
+  &__blocker {
+    display: flex;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: var(--fd-spacing-sm);
+  }
+
+  &__blocker-reason {
+    color: var(--fd-text-secondary);
+    font-size: 0.8125rem;
+    overflow-wrap: anywhere;
   }
 
   &__failing-name {

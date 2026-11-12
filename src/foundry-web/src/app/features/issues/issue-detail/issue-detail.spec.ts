@@ -2385,7 +2385,22 @@ describe('IssueDetailComponent — triage (#772)', () => {
     expect(region().classList.contains('issue-detail__triage-live-region--empty')).toBe(false);
   });
 
-  it('should show a triage_blocked issue its blockers', () => {
+  it('should render each blocker as its own list item with its number', () => {
+    // Arrange / Act
+    const { el } = setup(
+      issue('triage_blocked', {
+        stateDetails: { ...mockStateDetails, branchName: null, completedAt: null, blockedBy: [{ issueNumber: 12, reason: null }, { issueNumber: 14, reason: null }] },
+      }),
+    );
+
+    // Assert
+    const numbers = Array.from(el.querySelectorAll('ul.issue-detail__blockers > li')).map((li) =>
+      text(li.querySelector('.issue-detail__blocker-number')),
+    );
+    expect(numbers).toEqual(['#12', '#14']);
+  });
+
+  it('should show the triage reason only on the blockers that have one', () => {
     // Arrange / Act
     const { el } = setup(
       issue('triage_blocked', {
@@ -2394,10 +2409,90 @@ describe('IssueDetailComponent — triage (#772)', () => {
     );
 
     // Assert
-    const blockedBy = Array.from(el.querySelectorAll('.issue-detail__field')).find(
-      (field) => text(field.querySelector('.issue-detail__field-key')) === 'Blocked By',
+    const reasons = Array.from(el.querySelectorAll('ul.issue-detail__blockers > li')).map((li) =>
+      li.querySelector('.issue-detail__blocker-reason') === null ? null : text(li.querySelector('.issue-detail__blocker-reason')),
     );
-    expect(text(blockedBy?.querySelector('.issue-detail__field-value') ?? null)).toBe('12, 14');
+    expect(reasons).toEqual([null, 'Triage: waits on the schema']);
+  });
+
+  it('should show no triage reason for a blocker whose reason is empty', () => {
+    // Arrange / Act
+    const { el } = setup(
+      issue('triage_blocked', {
+        stateDetails: { ...mockStateDetails, branchName: null, completedAt: null, blockedBy: [{ issueNumber: 12, reason: '' }] },
+      }),
+    );
+
+    // Assert
+    expect(el.querySelector('.issue-detail__blocker-reason')).toBeNull();
+  });
+
+  it('should expose the blockers as a list', () => {
+    // Arrange / Act
+    const { el } = setup(
+      issue('triage_blocked', {
+        stateDetails: { ...mockStateDetails, branchName: null, completedAt: null, blockedBy: [{ issueNumber: 12, reason: null }] },
+      }),
+    );
+
+    // Assert
+    expect(el.querySelector('ul.issue-detail__blockers')?.getAttribute('role')).toBe('list');
+  });
+
+  it('should name the blockers list by the visible Blocked By key', () => {
+    // Arrange / Act
+    const { el } = setup(
+      issue('triage_blocked', {
+        stateDetails: { ...mockStateDetails, branchName: null, completedAt: null, blockedBy: [{ issueNumber: 12, reason: null }] },
+      }),
+    );
+
+    // Assert
+    const labelId = el.querySelector('ul.issue-detail__blockers')?.getAttribute('aria-labelledby');
+    expect(text(labelId ? el.querySelector(`[id="${labelId}"]`) : null)).toBe('Blocked By');
+  });
+
+  it('should give each component instance its own blockers label id', () => {
+    // Arrange / Act
+    const blocked = issue('triage_blocked', {
+      stateDetails: { ...mockStateDetails, branchName: null, completedAt: null, blockedBy: [{ issueNumber: 12, reason: null }] },
+    });
+    const idOf = (el: HTMLElement): string | null | undefined =>
+      el.querySelector('ul.issue-detail__blockers')?.getAttribute('aria-labelledby');
+    const firstId = idOf(setup(blocked).el);
+    const secondId = idOf(setup(blocked).el);
+
+    // Assert
+    expect([firstId, secondId].every((id) => id != null && id !== '')).toBe(true);
+    expect(firstId).not.toBe(secondId);
+  });
+
+  it('should span the Blocked By field across the full width', () => {
+    // Arrange / Act
+    const { el } = setup(
+      issue('triage_blocked', {
+        stateDetails: { ...mockStateDetails, branchName: null, completedAt: null, blockedBy: [{ issueNumber: 12, reason: null }] },
+      }),
+    );
+
+    // Assert
+    const field = el.querySelector('ul.issue-detail__blockers')?.closest('.issue-detail__field');
+    expect(field?.classList.contains('issue-detail__field--full-width')).toBe(true);
+  });
+
+  it.each([
+    ['null', null],
+    ['empty', []],
+  ])('should hide the Blocked By field when blockedBy is %s', (_label, blockedBy) => {
+    // Arrange / Act
+    const { el } = setup(
+      issue('triage_blocked', {
+        stateDetails: { ...mockStateDetails, branchName: null, completedAt: null, blockedBy },
+      }),
+    );
+
+    // Assert
+    expect(el.querySelector('ul.issue-detail__blockers')).toBeNull();
   });
 
   it('should offer no operator actions for a triage_blocked issue', () => {
@@ -2545,6 +2640,72 @@ describe('IssueDetailComponent — triage (#772)', () => {
     expect(chip?.classList.contains('issue-detail__chip--warning')).toBe(true);
     expect(text(region())).toContain('Bug');
     expect(text(region())).toContain(phrase);
+  });
+
+  it('should label a BLOCKED verdict chip "Blocked"', () => {
+    // Arrange / Act
+    const { region } = setup(issue('queued', { triage: verdict({ outcome: 'blocked' }) }));
+
+    // Assert
+    expect(text(region().querySelector('.issue-detail__chip'))).toBe('Blocked');
+  });
+
+  it('should tint a BLOCKED verdict chip neutral', () => {
+    // Arrange / Act
+    const { region } = setup(issue('queued', { triage: verdict({ outcome: 'blocked' }) }));
+
+    // Assert
+    expect(region().querySelector('.issue-detail__chip')?.classList.contains('issue-detail__chip--neutral')).toBe(true);
+  });
+
+  it('should show the kind beside a BLOCKED verdict chip', () => {
+    // Arrange / Act
+    const { region } = setup(issue('queued', { triage: verdict({ outcome: 'blocked', kind: 'refactor' }) }));
+
+    // Assert
+    expect(text(region())).toContain('Refactor');
+  });
+
+  it('should show when a BLOCKED verdict was decided', () => {
+    // Arrange / Act
+    const { region } = setup(issue('queued', { triage: verdict({ outcome: 'blocked', decidedAt: '2026-11-06T14:14:03Z' }) }));
+
+    // Assert
+    expect(text(region())).toMatch(/Triaged Nov 6, 2026/);
+  });
+
+  it('should fall back to the raw outcome for a verdict outcome it has no label for', () => {
+    // Arrange / Act
+    const { region } = setup(issue('queued', { triage: verdict({ outcome: 'future_outcome' as 'ready' }) }));
+
+    // Assert
+    expect(text(region().querySelector('.issue-detail__chip'))).toBe('future_outcome');
+  });
+
+  it('should explain a BLOCKED verdict as depending on open issues', () => {
+    // Arrange / Act
+    const { region } = setup(issue('queued', { triage: verdict({ outcome: 'blocked' }) }));
+
+    // Assert
+    expect(text(region())).toContain('Triage found open issues this depends on.');
+  });
+
+  it.each(['ready', 'needs_input'] as const)('should not explain open issues for a %s verdict', (outcome) => {
+    // Arrange / Act
+    const { region } = setup(issue('queued', { triage: verdict({ outcome }) }));
+
+    // Assert
+    expect(text(region())).not.toContain('Triage found open issues');
+    expect(region().querySelector('.issue-detail__chip--neutral')).toBeNull();
+  });
+
+  it('should keep the waiting-on-blockers callout over a stored BLOCKED verdict while triage_blocked', () => {
+    // Arrange / Act
+    const { region } = setup(issue('triage_blocked', { triage: verdict({ outcome: 'blocked' }) }));
+
+    // Assert
+    expect(text(region())).toContain('Waiting for its blockers to close. Triage runs once they do.');
+    expect(region().querySelector('.issue-detail__chip')).toBeNull();
   });
 
   it.each(['triage_queued', 'triage_in_progress', 'triage_failed'])(

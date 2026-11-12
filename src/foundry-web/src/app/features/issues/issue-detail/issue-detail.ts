@@ -23,6 +23,7 @@ import {
   IssueDetail,
   IssueKindClassification,
   IssueStateDetails,
+  TriageVerdictDetails,
 } from '../issue.model';
 import { SafeHrefPipe } from '../../../shared/pipes/safe-href.pipe';
 import { IssueService, TriageAction } from '../issue.service';
@@ -48,12 +49,20 @@ import {
   WORKING_STATES,
 } from '../../../shared/utils/issue-state';
 
+let nextBlockersLabelId = 0;
+
 const KIND_LABELS: Readonly<Record<string, string>> = {
   feature: 'Feature',
   bug: 'Bug',
   refactor: 'Refactor',
   documentation: 'Documentation',
 };
+
+const TRIAGE_OUTCOME_LABELS = {
+  ready: 'Ready',
+  needs_input: 'Needs input',
+  blocked: 'Blocked',
+} as const satisfies Record<TriageVerdictDetails['outcome'], string>;
 
 const KIND_SOURCE_NOTES: Readonly<Record<IssueKindClassification['source'], string>> = {
   labelled: 'From label',
@@ -183,9 +192,18 @@ interface TriageCallout {
             }
 
             @if (s.blockedBy?.length) {
-              <div class="issue-detail__field">
-                <span class="issue-detail__field-key">Blocked By</span>
-                <span class="issue-detail__field-value">{{ _blockerNumbers() }}</span>
+              <div class="issue-detail__field issue-detail__field--full-width">
+                <span class="issue-detail__field-key" [id]="_blockersLabelId">Blocked By</span>
+                <ul class="issue-detail__blockers" role="list" [attr.aria-labelledby]="_blockersLabelId">
+                  @for (b of s.blockedBy; track b.issueNumber) {
+                    <li class="issue-detail__blocker">
+                      <span class="issue-detail__field-value issue-detail__blocker-number">#{{ b.issueNumber }}</span>
+                      @if (b.reason) {
+                        <span class="issue-detail__blocker-reason">Triage: {{ b.reason }}</span>
+                      }
+                    </li>
+                  }
+                </ul>
               </div>
             }
 
@@ -455,9 +473,13 @@ interface TriageCallout {
                       class="badge issue-detail__chip"
                       [class.issue-detail__chip--success]="t.outcome === 'ready'"
                       [class.issue-detail__chip--warning]="t.outcome === 'needs_input'"
-                    >{{ t.outcome === 'ready' ? 'Ready' : 'Needs input' }}</span>
+                      [class.issue-detail__chip--neutral]="t.outcome === 'blocked'"
+                    >{{ _triageOutcomeLabel(t.outcome) }}</span>
                     <span class="issue-detail__field-value">{{ _kindLabel(t.kind) }}</span>
                     <span class="issue-detail__field-value issue-detail__triage-message">Triaged {{ t.decidedAt | date: 'medium' }}</span>
+                    @if (t.outcome === 'blocked') {
+                      <span class="issue-detail__field-value issue-detail__triage-message">Triage found open issues this depends on.</span>
+                    }
                     @if (t.outcome === 'needs_input') {
                       <span class="issue-detail__field-value issue-detail__triage-message">{{ _questionsAsked(t.questions.length) }}</span>
                     }
@@ -763,6 +785,9 @@ export class IssueDetailComponent {
   readonly error: InputSignal<string | null> = input.required<string | null>();
   readonly retry: OutputEmitterRef<void> = output<void>();
 
+  // The side pane can render two details at once, so the id cannot be a fixed string.
+  protected readonly _blockersLabelId = `issue-detail-blockers-label-${nextBlockersLabelId++}`;
+
   protected readonly _issueService = inject(IssueService);
   private readonly _workerRunService = inject(WorkerRunService);
   private readonly _workerSignalR = inject(WorkerSignalRService);
@@ -786,10 +811,6 @@ export class IssueDetailComponent {
 
   protected readonly _triagePending: Signal<TriageAction | null> = computed(() =>
     this._issueService.triageActionPending(),
-  );
-
-  protected readonly _blockerNumbers: Signal<string> = computed(() =>
-    (this.detail()?.stateDetails?.blockedBy ?? []).map((blocker) => blocker.issueNumber).join(', '),
   );
 
   private readonly _injector = inject(Injector);
@@ -1100,7 +1121,8 @@ export class IssueDetailComponent {
     if (TRIAGE_WAITING_STATES.has(d.state)) {
       return { kind: 'waiting', tint: 'neutral' };
     }
-    // Before the verdict check: an untriaged issue waiting on blockers has no verdict to show (ADR 0102).
+    // Before the verdict check: while triage_blocked, the blockers and their reasons carry the detail,
+    // and a stored blocked verdict can be stale once the blockers close or a new one is linked (ADR 0102).
     if (d.state === 'triage_blocked') {
       return { kind: 'waiting_on_blockers', tint: 'neutral' };
     }
@@ -1139,6 +1161,13 @@ export class IssueDetailComponent {
 
   protected _rebaseOutcomeLabel(s: IssueStateDetails): string | null {
     return rebaseOutcomeLabel(s.rebaseOutcome, s.rebaseSkippedReason);
+  }
+
+  // The outcome arrives as a server string, so an outcome added later renders as itself.
+  protected _triageOutcomeLabel(outcome: string): string {
+    return Object.prototype.hasOwnProperty.call(TRIAGE_OUTCOME_LABELS, outcome)
+      ? TRIAGE_OUTCOME_LABELS[outcome as TriageVerdictDetails['outcome']]
+      : outcome;
   }
 
   protected _failureCategoryLabel(category: string): string {
