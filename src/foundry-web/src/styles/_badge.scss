@@ -40,6 +40,8 @@ $badge-outlined-variants: (
   failure-timed-out: (var(--fd-text-warning), var(--fd-text-warning)),
   failure-container-error: (var(--fd-state-failed), var(--fd-text-error)),
   failure-provider-error: (var(--fd-text-link), var(--fd-text-link)),
+  // An outage at the provider, not a fault in the run, so the warning outline rather than the failed one.
+  failure-provider-unreachable: (var(--fd-text-warning), var(--fd-text-warning)),
   failure-bootstrap: (var(--fd-state-failed), var(--fd-text-error)),
   failure-cancelled: (var(--fd-text-secondary), var(--fd-text-secondary)),
   failure-credits-exhausted: (var(--fd-text-warning), var(--fd-text-warning)),

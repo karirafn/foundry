@@ -95,6 +95,52 @@ public sealed class Parse
     }
 
     [Fact]
+    public void WhenNonZeroWithTheUnreachableSentinel_FailsAsProviderUnreachableWithGitsError()
+    {
+        // Act
+        PrepareOutcome outcome = PrepareOutputParser.Parse(
+            1,
+            "Provider unreachable on attempt 1 of 4; retrying in 5s\n"
+            + "2026-11-13T10:00:00Z FOUNDRY_BOOTSTRAP_FAILED stage=unreachable detail=could not reach the repository: "
+            + "fatal: unable to access 'https://gitlab.com/o/r.git/': Could not resolve host: gitlab.com\n",
+            expectsRunBranch: false);
+
+        // Assert
+        outcome.ShouldBe(new PrepareOutcome.Failed(new FailureReason.ProviderUnreachable(
+            "fatal: unable to access 'https://gitlab.com/o/r.git/': Could not resolve host: gitlab.com")));
+    }
+
+    [Fact]
+    public void WhenTheUnreachableSentinelCarriesASecret_ItIsRedacted()
+    {
+        // Act
+        PrepareOutcome outcome = PrepareOutputParser.Parse(
+            1,
+            "FOUNDRY_BOOTSTRAP_FAILED stage=unreachable detail=could not reach the repository: "
+            + "fatal: unable to access 'https://ghp_abcdefghijklmnopqrstuvwxyz0123456789@github.com/o/r.git'\n",
+            expectsRunBranch: false);
+
+        // Assert
+        FailureReason reason = outcome.ShouldBeOfType<PrepareOutcome.Failed>().Reason;
+        reason.ShouldBeOfType<FailureReason.ProviderUnreachable>().Detail
+            .ShouldNotContain("ghp_abcdefghijklmnopqrstuvwxyz0123456789");
+    }
+
+    [Fact]
+    public void WhenTheCloneSentinelNamesAnUnreachableHost_StillFailsTheBootstrap()
+    {
+        // Act
+        PrepareOutcome outcome = PrepareOutputParser.Parse(
+            1,
+            "FOUNDRY_BOOTSTRAP_FAILED stage=clone detail=could not reach the repository: fatal: Authentication failed\n",
+            expectsRunBranch: false);
+
+        // Assert
+        outcome.ShouldBe(new PrepareOutcome.Failed(new FailureReason.WorkerBootstrapFailed(
+            "FOUNDRY_BOOTSTRAP_FAILED stage=clone detail=could not reach the repository: fatal: Authentication failed")));
+    }
+
+    [Fact]
     public void WhenTheSentinelCarriesASecret_ItIsRedacted()
     {
         // Act

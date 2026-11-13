@@ -640,7 +640,7 @@ internal sealed partial class ContainerOutputParser(ILogger<ContainerOutputParse
     // Anchored to the start of a line (after the optional Docker timestamp), so text that merely quotes
     // the marker, such as a shell command echoing it, is not the entrypoint emitting it.
     [GeneratedRegex(
-        @"^(?:\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2}) )?(?<marker>FOUNDRY_BOOTSTRAP_FAILED stage=(?:clone|auth|branch|managed-settings|role)[^\n]*)",
+        @"^(?:\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2}) )?(?<marker>FOUNDRY_BOOTSTRAP_FAILED stage=(?:clone|unreachable|auth|branch|managed-settings|role)[^\n]*)",
         RegexOptions.ExplicitCapture | RegexOptions.Multiline,
         matchTimeoutMilliseconds: 1000)]
     private static partial Regex BootstrapSentinelPattern();

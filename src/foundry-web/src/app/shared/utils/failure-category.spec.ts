@@ -118,6 +118,22 @@ describe('failure-category', () => {
     expect(display?.cssClass).toBe('badge--failure-provider-error');
   });
 
+  it('should map provider_unreachable to "PROVIDER UNREACHABLE"', () => {
+    // Arrange / Act
+    const display = getFailureCategoryDisplay('provider_unreachable');
+
+    // Assert
+    expect(display?.label).toBe('PROVIDER UNREACHABLE');
+  });
+
+  it('should return badge--failure-provider-unreachable cssClass for provider_unreachable', () => {
+    // Arrange / Act
+    const display = getFailureCategoryDisplay('provider_unreachable');
+
+    // Assert
+    expect(display?.cssClass).toBe('badge--failure-provider-unreachable');
+  });
+
   it('should return display for credits_exhausted', () => {
     // Arrange / Act
     const display = getFailureCategoryDisplay('credits_exhausted');
