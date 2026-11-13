@@ -9,15 +9,20 @@
   border-radius: var(--fd-radius-sm);
 }
 
-// Amber callout surface: tinted background, full warning border with a thicker leading edge.
-// Callers lay out the icon and lead text, and colour them with --fd-text-warning.
-@mixin warning-callout($padding: var(--fd-spacing-xs) var(--fd-spacing-md)) {
-  background: var(--fd-bg-warning-subtle);
-  border: 1px solid var(--fd-border-warning);
+// Tinted callout surface: a tinted background and a full border with a thicker leading edge.
+// Callers lay out the content and choose the text colours.
+@mixin tone-callout($bg, $border, $padding: var(--fd-spacing-xs) var(--fd-spacing-md)) {
+  background: $bg;
+  border: 1px solid $border;
   border-inline-start-width: 4px;
   border-radius: var(--fd-radius-sm);
   color: var(--fd-text-primary);
   font-size: 0.8125rem;
   overflow-wrap: anywhere;
   padding: $padding;
+}
+
+// Amber callout surface. Callers lay out the icon and lead text, and colour them with --fd-text-warning.
+@mixin warning-callout($padding: var(--fd-spacing-xs) var(--fd-spacing-md)) {
+  @include tone-callout(var(--fd-bg-warning-subtle), var(--fd-border-warning), $padding);
 }

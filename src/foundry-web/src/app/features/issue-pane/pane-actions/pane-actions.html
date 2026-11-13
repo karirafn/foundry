@@ -1,0 +1,180 @@
+@let d = detail();
+@if (actions().length > 0) {
+  <div class="pane-actions">
+    @for (action of actions(); track action; let first = $first) {
+      @switch (action) {
+        @case ('stop_worker') {
+          <button
+            type="button"
+            [class]="buttonClass(first)"
+            [disabled]="!canCancel()"
+            [attr.aria-label]="'Stop worker for issue #' + d.issueNumber"
+            [attr.aria-describedby]="cancelHint() ? hintId : null"
+            (click)="openCancelConfirm()"
+          >{{ cancelling() ? 'Stopping…' : 'Stop worker' }}</button>
+          @if (cancelHint(); as hint) {
+            <span class="pane-actions__hint" [id]="hintId">{{ hint }}</span>
+          }
+        }
+        @case ('retry_publish') {
+          <button
+            type="button"
+            [class]="buttonClass(first)"
+            [disabled]="publishRetryPending() || discardPending()"
+            [attr.aria-label]="'Retry publishing for issue #' + d.issueNumber"
+            (click)="openPublishRetryConfirm()"
+          >{{ publishRetryPending() ? 'Retrying publish…' : 'Retry publish' }}</button>
+        }
+        @case ('discard_run') {
+          <button
+            type="button"
+            [class]="buttonClass(first)"
+            [disabled]="discardPending() || publishRetryPending()"
+            [attr.aria-label]="'Discard run for issue #' + d.issueNumber"
+            (click)="openDiscardConfirm()"
+          >{{ discardPending() ? 'Discarding…' : 'Discard run' }}</button>
+        }
+        @case ('retry_issue') {
+          <button
+            type="button"
+            [class]="buttonClass(first)"
+            [disabled]="issueService.retrying()"
+            [attr.aria-label]="'Retry issue #' + d.issueNumber"
+            (click)="retryIssue()"
+          >{{ issueService.retrying() ? 'Retrying issue…' : 'Retry issue' }}</button>
+        }
+        @case ('retry_fresh') {
+          <button
+            type="button"
+            [class]="buttonClass(first)"
+            [disabled]="issueService.retrying()"
+            [attr.aria-label]="'Retry issue #' + d.issueNumber + ' from a fresh branch'"
+            (click)="confirmRetryFreshOpen.set(true)"
+          >Retry fresh</button>
+        }
+        @case ('retry_triage') {
+          <button
+            type="button"
+            [class]="buttonClass(first)"
+            [disabled]="triagePending() !== null"
+            [attr.aria-label]="'Retry triage for issue #' + d.issueNumber"
+            (click)="retryTriage()"
+          >{{ triagePending() === 'retry_triage' ? 'Retrying triage…' : 'Retry triage' }}</button>
+        }
+        @case ('skip_triage') {
+          <button
+            type="button"
+            [class]="buttonClass(first)"
+            [disabled]="triagePending() !== null"
+            [attr.aria-label]="'Skip triage for issue #' + d.issueNumber"
+            (click)="confirmSkipTriageOpen.set(true)"
+          >{{ triagePending() === 'skip_triage' ? 'Skipping triage…' : 'Skip triage' }}</button>
+        }
+        @case ('retriage') {
+          <button
+            type="button"
+            [class]="buttonClass(first)"
+            [disabled]="triagePending() !== null"
+            [attr.aria-label]="'Re-triage issue #' + d.issueNumber"
+            (click)="confirmRetriageOpen.set(true)"
+          >{{ triagePending() === 'retriage' ? 'Re-triaging…' : 'Re-triage' }}</button>
+        }
+      }
+    }
+  </div>
+}
+
+<span class="pane-actions__error" role="alert">{{ error() ?? '' }}</span>
+
+@if (offers('stop_worker')) {
+  <fd-confirm-dialog
+    [open]="confirmCancelOpen()"
+    [title]="d.state === 'triage_in_progress' ? 'Stop the triage worker?' : 'Stop the worker?'"
+    [message]="
+      d.state === 'triage_in_progress'
+        ? 'The issue moves to Triage failed, where you can retry or skip triage.'
+        : implementCancelMessage
+    "
+    confirmLabel="Stop worker"
+    cancelLabel="Keep running"
+    [destructive]="true"
+    (confirmed)="confirmCancel()"
+    (dismissed)="confirmCancelOpen.set(false)"
+  />
+}
+@if (offers('retry_publish')) {
+  <!-- Not destructive, but pushing triggers CI with repository secrets, so confirm first. -->
+  <fd-confirm-dialog
+    [open]="confirmPublishRetryOpen()"
+    title="Retry publishing?"
+    [message]="publishRetryMessage()"
+    confirmLabel="Retry publish"
+    cancelLabel="Not now"
+    [destructive]="false"
+    (confirmed)="confirmPublishRetry()"
+    (dismissed)="confirmPublishRetryOpen.set(false)"
+  />
+}
+@if (offers('discard_run')) {
+  <fd-confirm-dialog
+    [open]="confirmDiscardOpen()"
+    title="Discard this run?"
+    [message]="discardMessage()"
+    confirmLabel="Discard run"
+    cancelLabel="Keep run"
+    [destructive]="true"
+    (confirmed)="confirmDiscard()"
+    (dismissed)="confirmDiscardOpen.set(false)"
+  />
+}
+@if (offers('retry_fresh')) {
+  <fd-confirm-dialog
+    [open]="confirmRetryFreshOpen()"
+    title="Retry from a fresh branch?"
+    message="The branch and all of its commits will be deleted on the provider, and any open pull request for it closed. The next worker starts over from the default branch. This cannot be undone."
+    confirmLabel="Discard branch and retry"
+    cancelLabel="Keep branch"
+    [destructive]="true"
+    (confirmed)="confirmRetryFresh()"
+    (dismissed)="confirmRetryFreshOpen.set(false)"
+  />
+}
+@if (offers('skip_triage')) {
+  <fd-confirm-dialog
+    [open]="confirmSkipTriageOpen()"
+    [title]="'Skip triage for #' + d.issueNumber + '?'"
+    message="The issue is queued without a readiness check. If it has open blockers, it waits as Blocked first. Its kind stays as it is now."
+    confirmLabel="Skip triage"
+    cancelLabel="Cancel"
+    [destructive]="false"
+    (confirmed)="confirmSkipTriage()"
+    (dismissed)="confirmSkipTriageOpen.set(false)"
+  />
+}
+@if (offers('retriage')) {
+  <fd-confirm-dialog
+    [open]="confirmRetriageOpen()"
+    [title]="'Triage #' + d.issueNumber + ' again?'"
+    [message]="retriageMessage()"
+    confirmLabel="Re-triage"
+    cancelLabel="Cancel"
+    [destructive]="false"
+    (confirmed)="confirmRetriage()"
+    (dismissed)="confirmRetriageOpen.set(false)"
+  />
+}
+
+<!-- Outside the action rows: a successful action reloads the detail into a state without its
+     button, and the announcement must survive that. -->
+<span class="pane-actions__success pane-actions__success--retry sr-only" aria-live="polite" aria-atomic="true">{{
+  issueService.retrySuccess() ?? ''
+}}</span>
+<span class="pane-actions__success pane-actions__success--triage sr-only" aria-live="polite" aria-atomic="true">{{
+  issueService.triageActionSuccess() ?? ''
+}}</span>
+<span class="pane-actions__success pane-actions__success--publish-retry sr-only" aria-live="polite" aria-atomic="true">{{
+  publishRetrySuccess() ?? ''
+}}</span>
+<span class="pane-actions__success pane-actions__success--discard sr-only" aria-live="polite" aria-atomic="true">{{
+  discardSuccess() ?? ''
+}}</span>

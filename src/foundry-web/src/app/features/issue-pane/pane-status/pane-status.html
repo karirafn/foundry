@@ -1,0 +1,135 @@
+<!-- Always mounted, and filled only when the callout title changes: the visible callout holds buttons,
+     so an atomic live region around it would replay them. -->
+<span class="sr-only" role="status" aria-live="polite" aria-atomic="true">{{ announcement() }}</span>
+
+@if (error() !== null) {
+  <div class="pane-status__error" role="alert">
+    <span>Failed to load issue details</span>
+    <button type="button" class="pane-status__retry" (click)="retry.emit()">Retry</button>
+  </div>
+} @else if (view(); as v) {
+  <div class="pane-status__line">
+    @if (stageLabel(); as stage) {
+      <span class="pane-status__stage">{{ stage }}</span>
+    }
+    <fd-state-badge
+      [state]="v.detail.state"
+      [failureClassification]="summary()?.failureClassification"
+      [publishPhase]="summary()?.publishPhase ?? null"
+      [revisionTriggerKind]="v.detail.stateDetails?.revisionTriggerKind"
+    />
+    @if (stepChip(); as chip) {
+      <fd-step-chip [label]="chip.label" [tone]="chip.tone" />
+    }
+  </div>
+
+  @let c = v.callout;
+  <div class="pane-callout" [class]="'pane-callout--' + c.tone">
+    <div class="pane-callout__head">
+      <h3 #calloutTitle class="pane-callout__title" tabindex="-1">{{ c.title }}</h3>
+      @if (c.chip; as chip) {
+        <span
+          class="badge"
+          [class]="chip.cssClass"
+          [attr.role]="chip.ariaLabel ? 'img' : null"
+          [attr.aria-label]="chip.ariaLabel"
+        >{{ chip.label }}</span>
+      }
+    </div>
+
+    @for (line of c.lines; track $index) {
+      <p class="pane-callout__line">{{ line }}</p>
+    }
+
+    @if (c.list; as list) {
+      <h4 class="pane-callout__list-heading" [id]="listHeadingId">{{ list.heading }}</h4>
+      <ul class="pane-callout__list" [attr.aria-labelledby]="listHeadingId">
+        @for (entry of list.items; track $index) {
+          <li class="pane-callout__item">
+            <span class="pane-callout__item-text">{{ entry.text }}</span>
+            @if (entry.badge; as badge) {
+              <span class="pane-callout__item-badge" role="img" [attr.aria-label]="'Conclusion: ' + badge">{{ badge }}</span>
+            }
+            @if (entry.link; as link) {
+              @if (link.href | safeHref; as href) {
+                <a
+                  class="pane-callout__link"
+                  [href]="href"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  [attr.aria-label]="link.ariaLabel"
+                >{{ link.label }}</a>
+              }
+            }
+            @if (entry.detail) {
+              <span class="pane-callout__item-detail">{{ entry.detail }}</span>
+            }
+            @if (entry.recommendation) {
+              <span class="pane-callout__item-detail"><strong>Recommended:</strong> {{ entry.recommendation }}</span>
+            }
+          </li>
+        }
+      </ul>
+    }
+
+    @if (c.secretFindings; as findings) {
+      <fd-secret-findings [findings]="findings" [headingId]="findingsHeadingId" />
+    }
+
+    @if (c.rows.length > 0) {
+      <dl class="pane-callout__rows">
+        @for (r of c.rows; track r.key) {
+          <dt>{{ r.key }}</dt>
+          <dd [class.pane-callout__mono]="r.mono">
+            @if (r.href | safeHref; as href) {
+              <a
+                class="pane-callout__link"
+                [href]="href"
+                target="_blank"
+                rel="noopener noreferrer"
+                [attr.aria-label]="r.ariaLabel"
+              >{{ r.value }}</a>
+            } @else {
+              {{ r.value }}
+            }
+          </dd>
+        }
+      </dl>
+    }
+
+    @for (note of c.notes; track $index) {
+      <p class="pane-callout__line pane-callout__note">{{ note }}</p>
+    }
+
+    @if (c.links.length > 0) {
+      <div class="pane-callout__links">
+        @for (link of c.links; track link.label) {
+          @if (link.href | safeHref; as href) {
+            <a
+              class="pane-callout__link"
+              [href]="href"
+              target="_blank"
+              rel="noopener noreferrer"
+              [attr.aria-label]="link.ariaLabel"
+            >{{ link.label }}</a>
+          }
+        }
+      </div>
+    }
+
+    <fd-pane-actions
+      [detail]="v.detail"
+      [run]="run()"
+      [actions]="c.actions"
+      [providerType]="summary()?.providerType ?? ''"
+      (succeeded)="onActionSucceeded($event)"
+    />
+  </div>
+} @else {
+  <div class="pane-status__skeleton" aria-busy="true">
+    <span class="sr-only">Loading issue details…</span>
+    <span class="pane-status__bar" aria-hidden="true"></span>
+    <span class="pane-status__bar" aria-hidden="true"></span>
+    <span class="pane-status__bar pane-status__bar--short" aria-hidden="true"></span>
+  </div>
+}

@@ -18,7 +18,6 @@ function ruleBody(css: string, selector: string): string {
 
 describe('issue-detail stylesheet badge chips', () => {
   const issueDetailPath = 'src/app/features/issues/issue-detail/issue-detail.scss';
-  const stateBadgePath = 'src/app/shared/components/state-badge/state-badge.scss';
 
   it('gives the base .badge class its pill shape and typography', () => {
     // Act
@@ -29,35 +28,27 @@ describe('issue-detail stylesheet badge chips', () => {
     expect(body).toContain('font-size: 11px');
     expect(body).toContain('text-transform: uppercase');
   });
+});
 
-  it.each(['.badge--retrying', '.badge--revision-in-progress', '.badge--retry-exhausted'])(
-    'styles the %s chip variant identically to fd-state-badge',
+describe('callout chip styles (#862)', () => {
+  const paneStatusPath = 'src/app/features/issue-pane/pane-status/pane-status.scss';
+  const stateBadgePath = 'src/app/shared/components/state-badge/state-badge.scss';
+
+  it.each(['.badge--retrying', '.badge--retry-exhausted', '.badge--failure-timed-out', '.badge--failed'])(
+    'styles the %s chip in the callout identically to fd-state-badge',
     (selector) => {
       // Act
-      const issueDetailBody = ruleBody(compiledCss(issueDetailPath), selector);
+      const paneStatusBody = ruleBody(compiledCss(paneStatusPath), selector);
       const stateBadgeBody = ruleBody(compiledCss(stateBadgePath), selector);
 
       // Assert
-      expect(issueDetailBody).toBe(stateBadgeBody);
+      expect(paneStatusBody).toBe(stateBadgeBody);
     },
   );
 });
 
 describe('publish badge styles (#787)', () => {
-  const publishStatusPath = 'src/app/features/issues/publish-status/publish-status.scss';
   const stateBadgePath = 'src/app/shared/components/state-badge/state-badge.scss';
-
-  it.each(['.badge--publishing', '.badge--retrying', '.badge--retry-exhausted', '.badge--branch-diverged'])(
-    'styles the %s chip in fd-publish-status identically to fd-state-badge',
-    (selector) => {
-      // Act
-      const publishStatusBody = ruleBody(compiledCss(publishStatusPath), selector);
-      const stateBadgeBody = ruleBody(compiledCss(stateBadgePath), selector);
-
-      // Assert
-      expect(publishStatusBody).toBe(stateBadgeBody);
-    },
-  );
 
   it('outlines the publishing chip in the working accent with activity text', () => {
     // Act
