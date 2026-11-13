@@ -15,11 +15,13 @@
 #               FOUNDRY_BOOTSTRAP_FAILED stage=clone detail=<detail>
 #   publish — push the worker's Run bundle (<handoff>/out/run.bundle) from a fresh repository; see
 #             publish() below for the steps and the FOUNDRY_PUBLISH result line.
+#   probe   — one ls-remote HEAD, to tell whether the provider can be reached (a host pause's probe); see
+#             probe() below for its FOUNDRY_PROBE line.
 #
-# Environment (both modes):
+# Environment (every mode):
 #   CLONE_URL   — the repository's https clone URL (required)
 #   GIT_PAT     — the provider token, delivered to git only through GIT_ASKPASS (required)
-#   RUN_BRANCH  — the run's branch (prepare: existing branches only; publish: required)
+#   RUN_BRANCH  — the run's branch (prepare: existing branches only; publish: required; probe: unused)
 # Publish mode only:
 #   RUN_ID           — the worker run's id, [a-zA-Z0-9-]+ (names the side branch <branch>-run-<id>)
 #   BASE_DEFAULT_SHA — the default-branch head recorded at Prepare (D)
@@ -872,11 +874,60 @@ publish() {
     publish_diverged "$publish_tip"
 }
 
+# ===========================================================================
+# Probe mode (host pause)
+#
+# Tells whether the provider can be reached now: one ls-remote HEAD against CLONE_URL, with the token offered only
+# through GIT_ASKPASS, exactly as Prepare offers it. Prints one stdout line:
+#   FOUNDRY_PROBE result=reachable|unreachable detail=<one line>
+# unreachable is exactly classify_error's unreachable; every other outcome, success or failure (a refused token, a
+# missing repository), is reachable: the provider answered. There is no retry here; Foundry's probe schedule is the
+# retry. Exit status: 0 whenever the line was printed; non-zero, with no line, for invalid input.
+# ===========================================================================
+probe() {
+    : "${CLONE_URL:?CLONE_URL is required}"
+    : "${GIT_PAT:?GIT_PAT is required}"
+
+    if ! auth_url="$(make_clone_url "$CLONE_URL")"; then
+        echo "CLONE_URL must be an https:// URL" >&2
+        exit 1
+    fi
+
+    ASKPASS_FILE="$(mktemp)"
+    git_err="$(mktemp)"
+    trap 'rm -f "$ASKPASS_FILE" "$git_err"' EXIT
+    printf '%s\n' "#!/bin/sh" "$(make_askpass_script)" > "$ASKPASS_FILE"
+    chmod 700 "$ASKPASS_FILE"
+
+    # ls-remote runs in a fresh, template-free scratch repository, as Prepare's does, so no ambient repository
+    # configuration applies.
+    REPO_DIR="$WORK_DIR/repo"
+    rm -rf "$REPO_DIR"
+    if ! git init --quiet --bare --template= "$REPO_DIR" 2> "$git_err"; then
+        echo "could not create the scratch repository: $(last_error)" >&2
+        exit 1
+    fi
+    git -C "$REPO_DIR" config core.hooksPath /dev/null
+
+    if provider_git ls-remote "$auth_url" HEAD > /dev/null 2> "$git_err"; then
+        printf 'FOUNDRY_PROBE result=reachable detail=%s\n' "the provider answered ls-remote"
+        exit 0
+    fi
+
+    result=reachable
+    if [ "$(classify_error "$(cat "$git_err")")" = unreachable ]; then
+        result=unreachable
+    fi
+    printf 'FOUNDRY_PROBE result=%s detail=%s\n' "$result" "$(one_line "$(last_error)")"
+    exit 0
+}
+
 case "${1:-}" in
     prepare) prepare ;;
     publish) publish ;;
+    probe) probe ;;
     *)
-        echo "usage: publisher.sh prepare|publish" >&2
+        echo "usage: publisher.sh prepare|publish|probe" >&2
         exit 64
         ;;
 esac

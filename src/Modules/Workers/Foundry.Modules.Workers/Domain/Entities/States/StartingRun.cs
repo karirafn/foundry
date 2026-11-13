@@ -31,11 +31,14 @@ public sealed class StartingRun : WorkerRun
         return new StartingRun(workerRunId, issueId, DateTimeOffset.UtcNow, role ?? WorkerRole.Implement, image);
     }
 
-    /// <summary>Records the base the Publisher prepared for the run (ADR 0100); later states carry it.</summary>
-    public void RecordPreparedBase(RunBase runBase)
+    /// <summary>
+    /// Records the base the Publisher prepared for the run (ADR 0100) from <paramref name="repositoryId"/>; later states
+    /// carry both.
+    /// </summary>
+    public void RecordPreparedBase(RunBase runBase, MonitoredRepositoryId repositoryId)
     {
         ArgumentNullException.ThrowIfNull(runBase);
-        RecordBase(runBase);
+        RecordBase(runBase, repositoryId);
     }
 
     /// <summary>Records the open issues Foundry supplied in the run's Tracker Context before prompt fitting; later states carry them.</summary>

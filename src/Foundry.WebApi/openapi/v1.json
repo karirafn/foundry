@@ -3205,7 +3205,8 @@
           "memoryLimitMb",
           "cpuLimit",
           "pidsLimit",
-          "additionalDenyRules"
+          "additionalDenyRules",
+          "pausedHosts"
         ],
         "type": "object",
         "properties": {
@@ -3333,6 +3334,12 @@
             "type": "array",
             "items": {
               "type": "string"
+            }
+          },
+          "pausedHosts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PausedHost"
             }
           },
           "webhookPublicBaseUrl": {
@@ -3845,6 +3852,36 @@
               "null",
               "string"
             ]
+          }
+        }
+      },
+      "PausedHost": {
+        "required": [
+          "host",
+          "pausedAt",
+          "probeAttempts",
+          "nextProbeAt"
+        ],
+        "type": "object",
+        "properties": {
+          "host": {
+            "type": "string"
+          },
+          "pausedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "probeAttempts": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "nextProbeAt": {
+            "type": "string",
+            "format": "date-time"
           }
         }
       },

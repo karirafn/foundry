@@ -61,11 +61,13 @@ public sealed class ClaimSkippedHandleAsync : IAsyncDisposable
                 new Uri("https://github.com/owner/repo.git"),
                 "GITHUB_PAT",
                 new WorkerProvider.GitHub(),
-                "https://api.github.com/repos/owner/repo/issues")),
+                "https://api.github.com/repos/owner/repo/issues",
+                "github.com")),
             repositoryEligibilityQuery ?? new AllEligibleRepositoryEligibilityQuery(),
             new InFlightWorkerCountQuery(_dbContext),
             new StubIssueBlockerQueries(),
             IssueDependencyApplierFactory.Create(_dbContext, new NullDomainEventDispatcher()),
+            new NullGlobalSettingsQueries(),
             NullLogger<DispatchCandidateSelector>.Instance);
 
         IssueClaimer claimer = new(
@@ -187,7 +189,7 @@ public sealed class ClaimSkippedHandleAsync : IAsyncDisposable
         CapturingIntegrationEventDispatcher capturingDispatcher = new();
         WorkerCapacityAvailableHandler sut = BuildHandler(
             repositoryEligibilityQuery: new StubRepositoryEligibilityQuery(
-                [new EligibleRepository(repositoryId.Value, Position: 0, MaxConcurrentWorkers: 1)]),
+                [new EligibleRepository(repositoryId.Value, Position: 0, MaxConcurrentWorkers: 1, Host: "github.com")]),
             integrationEventDispatcher: capturingDispatcher);
 
         WorkerRunId workerRunId = WorkerRunId.New();
@@ -287,7 +289,7 @@ public sealed class ClaimSkippedHandleAsync : IAsyncDisposable
             CancellationToken cancellationToken)
         {
             IReadOnlyList<EligibleRepository> eligible = repositoryIds
-                .Select(id => new EligibleRepository(id, Position: 0, MaxConcurrentWorkers: 1))
+                .Select(id => new EligibleRepository(id, Position: 0, MaxConcurrentWorkers: 1, Host: "github.com"))
                 .ToList();
             return Task.FromResult(eligible);
         }

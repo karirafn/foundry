@@ -90,7 +90,7 @@ public sealed class ImageBuildGate : WorkerDispatchServiceTestBase
 
 
         public Task<DispatchPauseState> GetDispatchPauseStateAsync(CancellationToken cancellationToken)
-            => Task.FromResult(new DispatchPauseState(null, false, true));
+            => Task.FromResult(new DispatchPauseState(null, false, true, []));
 
         public Task<ImageBuildStatus> GetImageBuildStatusAsync(CancellationToken cancellationToken)
             => Task.FromResult(imageBuildStatus);

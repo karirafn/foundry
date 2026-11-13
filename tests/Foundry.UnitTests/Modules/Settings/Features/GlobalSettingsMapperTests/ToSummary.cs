@@ -18,6 +18,27 @@ public sealed class ToSummary
     }
 
     [Fact]
+    public void WhenAHostIsPaused_SummaryCarriesItsPausedHost()
+    {
+        // Arrange
+        DateTimeOffset pausedAt = new(2026, 11, 13, 7, 39, 0, TimeSpan.Zero);
+        GlobalSettings settings = CreateDefaultSettings();
+        settings.PauseHost("gitlab.com", pausedAt);
+
+        // Act
+        GlobalSettingsSummary result = GlobalSettingsMapper.ToSummary(settings);
+
+        // Assert
+        result.PausedHosts.ShouldBe([new PausedHost("gitlab.com", pausedAt, 0, pausedAt.AddMinutes(1))]);
+    }
+
+    [Fact]
+    public void WhenNoHostIsPaused_SummaryHasNoPausedHosts()
+    {
+        GlobalSettingsMapper.ToSummary(CreateDefaultSettings()).PausedHosts.ShouldBeEmpty();
+    }
+
+    [Fact]
     public void WhenDefaultSettings_WorkerImageFlagsAreAllFalse()
     {
         // Arrange

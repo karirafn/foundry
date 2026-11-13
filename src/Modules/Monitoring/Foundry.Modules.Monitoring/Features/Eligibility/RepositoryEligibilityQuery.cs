@@ -52,7 +52,7 @@ internal sealed class RepositoryEligibilityQuery(DbContext db) : IRepositoryElig
             .AsNoTracking()
             .Where(r => typedIds.Contains(r.Id))
             .Where(r => r.EligibilityStatus == EligibleStatus)
-            .Select(r => new EligibleRepository(r.Id.Value, r.Position, r.MaxConcurrentWorkers))
+            .Select(r => new EligibleRepository(r.Id.Value, r.Position, r.MaxConcurrentWorkers, r.Host))
             .ToListAsync(cancellationToken);
 
         return eligibleRepositories;

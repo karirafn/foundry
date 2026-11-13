@@ -1,4 +1,5 @@
 using Foundry.Modules.Issues.Contracts;
+using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Workers.Contracts;
 using Foundry.Modules.Workers.Domain.ValueObjects;
 using Foundry.Shared;
@@ -57,6 +58,13 @@ public abstract class WorkerRun : AggregateRoot<WorkerRunId>, IStateMachine<Work
     /// </summary>
     public RunBase? Base => BaseDefaultBranchHead is { } defaultBranchHead ? new RunBase(defaultBranchHead, BaseRunBranchHead) : null;
 
+    /// <summary>
+    /// The repository the Publisher prepared the run's base from; <see langword="null"/> for a run that never reached a
+    /// successful Prepare (or was recorded before this was kept). A host-pause probe tries the most recently prepared
+    /// repositories on a host first.
+    /// </summary>
+    public MonitoredRepositoryId? PreparedRepositoryId { get; private set; }
+
     /// <summary>The branch head Foundry pushed when it published the run (ADR 0100); <see langword="null"/> when it pushed nothing.</summary>
     public CommitSha? PublishedHead { get; private set; }
 
@@ -107,17 +115,18 @@ public abstract class WorkerRun : AggregateRoot<WorkerRunId>, IStateMachine<Work
         RevertedFiles = revertedFiles;
     }
 
-    protected void RecordBase(RunBase? runBase)
+    protected void RecordBase(RunBase? runBase, MonitoredRepositoryId? preparedRepositoryId)
     {
         BaseDefaultBranchHead = runBase?.DefaultBranchHead;
         BaseRunBranchHead = runBase?.RunBranchHead;
+        PreparedRepositoryId = preparedRepositoryId;
     }
 
     protected void CarryDispatchFactsFrom(WorkerRun source)
     {
         ArgumentNullException.ThrowIfNull(source);
 
-        RecordBase(source.Base);
+        RecordBase(source.Base, source.PreparedRepositoryId);
         StoreSuppliedOpenIssueNumbers(source.SuppliedOpenIssueNumbers);
     }
 

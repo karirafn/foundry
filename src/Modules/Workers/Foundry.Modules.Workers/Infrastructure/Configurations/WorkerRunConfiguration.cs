@@ -199,6 +199,10 @@ public sealed class WorkerRunConfiguration : IEntityTypeConfiguration<WorkerRun>
             .IsUnicode(false)
             .HasColumnName("base_run_branch_head");
 
+        builder.Property(r => r.PreparedRepositoryId)
+            .HasConversion(WorkerRunValueConverters.MonitoredRepositoryIdConverter)
+            .HasColumnName("prepared_repository_id");
+
         builder.Ignore(r => r.Base);
 
         builder.Property(r => r.PublishedHead)

@@ -60,6 +60,7 @@ internal sealed class RepositoryDispatchQueries(
             new Uri(credential.BaseUrl.Value, $"{repo.Slug}.git"),
             present.Value,
             provider,
-            issueApiUrlBase);
+            issueApiUrlBase,
+            repo.Host);
     }
 }

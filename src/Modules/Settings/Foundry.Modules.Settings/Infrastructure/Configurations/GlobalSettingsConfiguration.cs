@@ -55,6 +55,21 @@ internal sealed class GlobalSettingsConfiguration : IEntityTypeConfiguration<Glo
         builder.Property(s => s.AutoResumeOnUsageReset)
             .HasColumnName("auto_resume_on_usage_reset");
 
+        ValueConverter<IReadOnlyList<HostPause>, string> hostPausesConverter = new(
+            pauses => SerializeHostPauses(pauses),
+            json => DeserializeHostPauses(json));
+
+        ValueComparer<IReadOnlyList<HostPause>> hostPausesComparer = new(
+            (a, b) => a != null && b != null && a.SequenceEqual(b),
+            pauses => pauses.Aggregate(0, (hash, p) => HashCode.Combine(hash, p.GetHashCode())),
+            pauses => pauses.ToList());
+
+        // One JSON TEXT column: a handful of hosts at most, always read and written with the rest of the settings.
+        builder.Property(s => s.HostPauses)
+            .HasConversion(hostPausesConverter, hostPausesComparer)
+            .HasColumnType("TEXT")
+            .HasColumnName("host_pauses");
+
         ValueConverter<WorkerImageConfiguration, string> workerImageConfigConverter = new(
             config => SerializeWorkerImageConfiguration(config),
             json => DeserializeWorkerImageConfiguration(json));
@@ -131,6 +146,14 @@ internal sealed class GlobalSettingsConfiguration : IEntityTypeConfiguration<Glo
             .HasColumnName("updated_at");
     }
 
+    private static string SerializeHostPauses(IReadOnlyList<HostPause> pauses)
+        => JsonSerializer.Serialize(pauses.Select(p => new StoredHostPause(p.Host, p.PausedAt, p.ProbeAttempts, p.NextProbeAt)));
+
+    private static List<HostPause> DeserializeHostPauses(string json)
+        => (JsonSerializer.Deserialize<List<StoredHostPause>>(json) ?? [])
+            .Select(p => HostPause.Restore(p.Host, p.PausedAt, p.ProbeAttempts, p.NextProbeAt))
+            .ToList();
+
     private static string SerializeAllowedProviderHosts(IReadOnlyList<string> hosts)
         => JsonSerializer.Serialize(hosts);
 
@@ -196,4 +219,7 @@ internal sealed class GlobalSettingsConfiguration : IEntityTypeConfiguration<Glo
     private static ImageBuildState DeserializeImageBuildState(string json)
         => JsonSerializer.Deserialize<ImageBuildState>(json, ImageBuildStateOptions)
             ?? throw new InvalidOperationException($"Failed to deserialize ImageBuildState from JSON: {json}");
+
+    // The stored shape, kept apart from HostPause so the column format never follows a domain refactor.
+    private sealed record StoredHostPause(string Host, DateTimeOffset PausedAt, int ProbeAttempts, DateTimeOffset NextProbeAt);
 }

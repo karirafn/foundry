@@ -60,14 +60,27 @@ internal sealed class GlobalSettingsQueries(DbContext dbContext) : IGlobalSettin
 
     public async Task<DispatchPauseState> GetDispatchPauseStateAsync(CancellationToken cancellationToken)
     {
-        return await dbContext.Set<GlobalSettings>()
+        var row = await dbContext.Set<GlobalSettings>()
             .AsNoTracking()
-            .Select(s => new DispatchPauseState(
+            .Select(s => new
+            {
                 s.UsageLimitResetsAt,
                 s.IsDispatchPaused,
-                s.AutoResumeOnUsageReset))
-            .FirstOrDefaultAsync(cancellationToken)
-            ?? new DispatchPauseState(null, false, true);
+                s.AutoResumeOnUsageReset,
+                s.HostPauses,
+            })
+            .FirstOrDefaultAsync(cancellationToken);
+
+        if (row is null)
+        {
+            return new DispatchPauseState(null, false, true, []);
+        }
+
+        return new DispatchPauseState(
+            row.UsageLimitResetsAt,
+            row.IsDispatchPaused,
+            row.AutoResumeOnUsageReset,
+            [.. row.HostPauses.Select(HostPauseMapper.ToPausedHost)]);
     }
 
     public async Task<ImageBuildStatus> GetImageBuildStatusAsync(CancellationToken cancellationToken)

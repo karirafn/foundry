@@ -71,6 +71,7 @@ public sealed class ConsumesReservation : IAsyncDisposable
             StubRepositoryDispatchQueries.WithToken("ghp_test_token"),
             new StubIssueContentQueries(),
             new StubTrackerContextQueries(),
+            new CapturingSystemNotificationBroadcaster(),
             NullLogger<IssueClaimedHandler>.Instance);
     }
 
@@ -282,7 +283,7 @@ public sealed class ConsumesReservation : IAsyncDisposable
 
 
         public Task<DispatchPauseState> GetDispatchPauseStateAsync(CancellationToken cancellationToken)
-            => Task.FromResult(new DispatchPauseState(null, false, true));
+            => Task.FromResult(new DispatchPauseState(null, false, true, []));
 
         public Task<ImageBuildStatus> GetImageBuildStatusAsync(CancellationToken cancellationToken)
             => Task.FromResult(ImageBuildStatus.Idle);

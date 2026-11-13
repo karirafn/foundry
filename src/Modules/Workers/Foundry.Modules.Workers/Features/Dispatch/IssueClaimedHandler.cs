@@ -6,11 +6,13 @@ using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Contracts.Queries;
 using Foundry.Modules.Settings.Contracts;
 using Foundry.Modules.Settings.Contracts.Queries;
+using Foundry.Modules.Settings.Domain.Entities;
 using Foundry.Modules.Workers.Contracts;
 using Foundry.Modules.Workers.Domain.Entities;
 using Foundry.Modules.Workers.Domain.Entities.States;
 using Foundry.Modules.Workers.Domain.ValueObjects;
 using Foundry.Modules.Workers.Features.ContainerSpec;
+using Foundry.Modules.Workers.Features.HostPauses;
 using Foundry.Modules.Workers.Features.Orchestration;
 using Foundry.Modules.Workers.Features.Publisher;
 using Foundry.Modules.Workers.Features.Roles;
@@ -36,6 +38,7 @@ internal sealed class IssueClaimedHandler(
     IRepositoryDispatchQueries repositoryDispatchQueries,
     IIssueContentQueries issueContentQueries,
     ITrackerContextQueries trackerContextQueries,
+    ISystemNotificationBroadcaster broadcaster,
     ILogger<IssueClaimedHandler> logger) : IIntegrationEventHandler<IssueClaimed>
 {
     private static readonly Error EmptyGitPatError =
@@ -138,7 +141,10 @@ internal sealed class IssueClaimedHandler(
             }
         }
 
-        string? gitPat = await ResolveGitPatAsync(claimed, cancellationToken);
+        RepositoryDispatchInfo? dispatchInfo = await repositoryDispatchQueries.GetDispatchInfoAsync(
+            claimed.MonitoredRepositoryId,
+            cancellationToken);
+        string? gitPat = GitPatOf(dispatchInfo);
         Result<WorkerContainerSpec> specResult = gitPat is null
             ? Result<WorkerContainerSpec>.Fail(EmptyGitPatError)
             : await BuildSpecAsync(startingRun, claimed, catalog, issueContent, trackerContext, cancellationToken);
@@ -176,6 +182,11 @@ internal sealed class IssueClaimedHandler(
 
         if (prepareOutcome is PrepareOutcome.Failed prepareFailure)
         {
+            // Staged before the transition so the host pause commits in the run's failure save.
+            string? pausedHost = prepareFailure.Reason is FailureReason.ProviderUnreachable && dispatchInfo is not null
+                ? await StageHostPauseAsync(dispatchInfo.Host, cancellationToken)
+                : null;
+
             FailedRun failedRun = startingRun.Fail(prepareFailure.Reason);
             await dbContext.TransitionAsync(startingRun, failedRun, domainEventDispatcher, cancellationToken);
 
@@ -184,10 +195,19 @@ internal sealed class IssueClaimedHandler(
                 startingRun.Id,
                 claimed.IssueNumber,
                 prepareFailure.Reason.Summary);
+
+            if (pausedHost is not null)
+            {
+                logger.LogWarning(
+                    "Dispatch to {Host} is paused: its provider is unreachable. A probe re-checks it and resumes dispatch.",
+                    pausedHost);
+                await HostPauseBroadcast.SendAsync(broadcaster, hostPaused: true, logger, cancellationToken);
+            }
+
             return;
         }
 
-        startingRun.RecordPreparedBase(((PrepareOutcome.Prepared)prepareOutcome).Base);
+        startingRun.RecordPreparedBase(((PrepareOutcome.Prepared)prepareOutcome).Base, claimed.MonitoredRepositoryId);
         startingRun.RecordSuppliedOpenIssues(trackerContext);
 
         Result<ContainerId> startResult = await orchestrator.StartAsync(spec, cancellationToken);
@@ -294,13 +314,24 @@ internal sealed class IssueClaimedHandler(
     }
 
     // Resolved at use time rather than carried on the event: outbox payloads are plaintext, the stored token is not.
-    private async Task<string?> ResolveGitPatAsync(ClaimedIssueDispatch claimed, CancellationToken cancellationToken)
-    {
-        RepositoryDispatchInfo? dispatchInfo = await repositoryDispatchQueries.GetDispatchInfoAsync(
-            claimed.MonitoredRepositoryId,
-            cancellationToken);
+    private static string? GitPatOf(RepositoryDispatchInfo? dispatchInfo) =>
+        dispatchInfo?.AccountToken is { Length: > 0 } gitPat ? gitPat : null;
 
-        return dispatchInfo?.AccountToken is { Length: > 0 } gitPat ? gitPat : null;
+    /// <summary>
+    /// Pauses <paramref name="host"/> on the tracked settings, unsaved. Returns the host when this added its pause;
+    /// <see langword="null"/> when it was already paused (its backoff is left alone) or no settings row exists.
+    /// </summary>
+    private async Task<string?> StageHostPauseAsync(string host, CancellationToken cancellationToken)
+    {
+        GlobalSettings? settings = await dbContext.Set<GlobalSettings>().FirstOrDefaultAsync(cancellationToken);
+
+        if (settings is null)
+        {
+            logger.LogWarning("The provider host {Host} is unreachable, but no GlobalSettings row exists to pause it on.", host);
+            return null;
+        }
+
+        return settings.PauseHost(host, DateTimeOffset.UtcNow) ? host : null;
     }
 
     // A Continuation or Revision resumes the branch's earlier work, so its branch goes into the base bundle. A Fresh

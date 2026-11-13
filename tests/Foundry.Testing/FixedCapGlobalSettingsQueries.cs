@@ -27,7 +27,7 @@ public sealed class FixedCapGlobalSettingsQueries(int maxConcurrent) : IGlobalSe
 
 
     public Task<DispatchPauseState> GetDispatchPauseStateAsync(CancellationToken cancellationToken)
-        => Task.FromResult(new DispatchPauseState(null, false, false));
+        => Task.FromResult(new DispatchPauseState(null, false, false, []));
 
     public Task<ImageBuildStatus> GetImageBuildStatusAsync(CancellationToken cancellationToken)
         => Task.FromResult(ImageBuildStatus.Idle);

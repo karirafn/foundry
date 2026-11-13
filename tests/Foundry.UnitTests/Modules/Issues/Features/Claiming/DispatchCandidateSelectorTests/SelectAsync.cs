@@ -4,6 +4,8 @@ using Foundry.Modules.Issues.Domain.Events;
 using Foundry.Modules.Issues.Features.Claiming;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Contracts.Queries;
+using Foundry.Modules.Settings.Contracts;
+using Foundry.Modules.Settings.Contracts.Queries;
 using Foundry.Testing;
 using Foundry.WebApi.Persistence;
 
@@ -28,7 +30,8 @@ public sealed class SelectAsync : IAsyncDisposable
         new Uri("https://github.com/owner/repo.git"),
         "GITHUB_PAT",
         new WorkerProvider.GitHub(),
-        "https://api.github.com/repos/owner/repo/issues");
+        "https://api.github.com/repos/owner/repo/issues",
+        "github.com");
 
     public SelectAsync()
     {
@@ -52,7 +55,8 @@ public sealed class SelectAsync : IAsyncDisposable
     private DispatchCandidateSelector BuildSelector(
         IRepositoryEligibilityQuery? repositoryEligibilityQuery = null,
         IRepositoryDispatchQueries? repositoryDispatchQueries = null,
-        IIssueBlockerQueries? issueBlockerQueries = null)
+        IIssueBlockerQueries? issueBlockerQueries = null,
+        IGlobalSettingsQueries? settingsQueries = null)
     {
         return new DispatchCandidateSelector(
             _dbContext,
@@ -61,6 +65,7 @@ public sealed class SelectAsync : IAsyncDisposable
             new InFlightWorkerCountQuery(_dbContext),
             issueBlockerQueries ?? new StubIssueBlockerQueries(),
             IssueDependencyApplierFactory.Create(_dbContext, _domainEventDispatcher),
+            settingsQueries ?? new NullGlobalSettingsQueries(),
             NullLogger<DispatchCandidateSelector>.Instance);
     }
 
@@ -104,7 +109,7 @@ public sealed class SelectAsync : IAsyncDisposable
 
         DispatchCandidateSelector sut = BuildSelector(
             repositoryEligibilityQuery: new StubRepositoryEligibilityQuery(
-                [new EligibleRepository(repositoryId.Value, Position: 0, MaxConcurrentWorkers: 1)]));
+                [new EligibleRepository(repositoryId.Value, Position: 0, MaxConcurrentWorkers: 1, Host: "github.com")]));
 
         // Act
         SelectionOutcome outcome = await sut.SelectAsync(CancellationToken.None);
@@ -161,7 +166,7 @@ public sealed class SelectAsync : IAsyncDisposable
 
         DispatchCandidateSelector sut = BuildSelector(
             repositoryEligibilityQuery: new StubRepositoryEligibilityQuery(
-                [new EligibleRepository(repoId.Value, Position: 0, MaxConcurrentWorkers: 2)]),
+                [new EligibleRepository(repoId.Value, Position: 0, MaxConcurrentWorkers: 2, Host: "github.com")]),
             repositoryDispatchQueries: new StubRepositoryDispatchQueries(null));
 
         // Act
@@ -191,8 +196,8 @@ public sealed class SelectAsync : IAsyncDisposable
         DispatchCandidateSelector sut = BuildSelector(
             repositoryEligibilityQuery: new StubRepositoryEligibilityQuery(
             [
-                new EligibleRepository(unresolvableRepoId.Value, Position: 0, MaxConcurrentWorkers: 1),
-                new EligibleRepository(resolvableRepoId.Value, Position: 0, MaxConcurrentWorkers: 1),
+                new EligibleRepository(unresolvableRepoId.Value, Position: 0, MaxConcurrentWorkers: 1, Host: "github.com"),
+                new EligibleRepository(resolvableRepoId.Value, Position: 0, MaxConcurrentWorkers: 1, Host: "github.com"),
             ]),
             repositoryDispatchQueries: new SelectiveDispatchQueries(
                 resolvable: resolvableRepoId,
@@ -222,7 +227,7 @@ public sealed class SelectAsync : IAsyncDisposable
 
         DispatchCandidateSelector sut = BuildSelector(
             repositoryEligibilityQuery: new StubRepositoryEligibilityQuery(
-                [new EligibleRepository(unresolvableRepoId.Value, Position: 0, MaxConcurrentWorkers: 1)]),
+                [new EligibleRepository(unresolvableRepoId.Value, Position: 0, MaxConcurrentWorkers: 1, Host: "github.com")]),
             repositoryDispatchQueries: countingQueries);
 
         // Act
@@ -254,7 +259,7 @@ public sealed class SelectAsync : IAsyncDisposable
 
         DispatchCandidateSelector sut = BuildSelector(
             repositoryEligibilityQuery: new StubRepositoryEligibilityQuery(
-                [new EligibleRepository(repoId.Value, Position: 0, MaxConcurrentWorkers: 1)]));
+                [new EligibleRepository(repoId.Value, Position: 0, MaxConcurrentWorkers: 1, Host: "github.com")]));
 
         // Act
         SelectionOutcome outcome = await sut.SelectAsync(CancellationToken.None);
@@ -291,7 +296,7 @@ public sealed class SelectAsync : IAsyncDisposable
 
         DispatchCandidateSelector sut = BuildSelector(
             repositoryEligibilityQuery: new StubRepositoryEligibilityQuery(
-                [new EligibleRepository(repoId.Value, Position: 0, MaxConcurrentWorkers: 1)]));
+                [new EligibleRepository(repoId.Value, Position: 0, MaxConcurrentWorkers: 1, Host: "github.com")]));
 
         // Act
         SelectionOutcome outcome = await sut.SelectAsync(CancellationToken.None);
@@ -331,7 +336,7 @@ public sealed class SelectAsync : IAsyncDisposable
 
         DispatchCandidateSelector sut = BuildSelector(
             repositoryEligibilityQuery: new StubRepositoryEligibilityQuery(
-                [new EligibleRepository(repoId.Value, Position: 0, MaxConcurrentWorkers: 1)]),
+                [new EligibleRepository(repoId.Value, Position: 0, MaxConcurrentWorkers: 1, Host: "github.com")]),
             issueBlockerQueries: blockerQueries);
 
         // Act
@@ -387,8 +392,8 @@ public sealed class SelectAsync : IAsyncDisposable
         DispatchCandidateSelector sut = BuildSelector(
             repositoryEligibilityQuery: new StubRepositoryEligibilityQuery(
             [
-                new EligibleRepository(failingRepoId.Value, Position: 0, MaxConcurrentWorkers: 1),
-                new EligibleRepository(otherRepoId.Value, Position: 1, MaxConcurrentWorkers: 1),
+                new EligibleRepository(failingRepoId.Value, Position: 0, MaxConcurrentWorkers: 1, Host: "github.com"),
+                new EligibleRepository(otherRepoId.Value, Position: 1, MaxConcurrentWorkers: 1, Host: "github.com"),
             ]),
             issueBlockerQueries: blockerQueries);
 
@@ -423,6 +428,77 @@ public sealed class SelectAsync : IAsyncDisposable
             Unresolvable: 0,
             Blocked: 0,
             BlockerReadFailed: 1));
+    }
+
+    private static PausedHost PausedHostFor(string host) =>
+        new(host, DateTimeOffset.UtcNow, ProbeAttempts: 0, DateTimeOffset.UtcNow.AddMinutes(1));
+
+    [Fact]
+    public async Task WhenEveryQueuedIssueIsOnAPausedHost_ReturnsNoCandidates()
+    {
+        // Arrange
+        MonitoredRepositoryId repoId = MonitoredRepositoryId.New();
+        SeedQueuedIssue(repoId);
+
+        DispatchCandidateSelector sut = BuildSelector(
+            repositoryEligibilityQuery: new StubRepositoryEligibilityQuery(
+                [new EligibleRepository(repoId.Value, Position: 0, MaxConcurrentWorkers: 1, Host: "gitlab.com")]),
+            settingsQueries: new PausedHostsGlobalSettingsQueries(PausedHostFor("gitlab.com")));
+
+        // Act
+        SelectionOutcome outcome = await sut.SelectAsync(CancellationToken.None);
+
+        // Assert
+        outcome.ShouldBeOfType<SelectionOutcome.NoCandidates>();
+    }
+
+    [Fact]
+    public async Task WhenOneHostIsPaused_SelectsAnIssueOnAnotherHost()
+    {
+        // Arrange — the paused host's repository has the higher priority, so only the gate keeps it from winning.
+        MonitoredRepositoryId pausedRepoId = MonitoredRepositoryId.New();
+        MonitoredRepositoryId otherRepoId = MonitoredRepositoryId.New();
+        SeedQueuedIssue(pausedRepoId, issueNumber: 1);
+        FreshQueuedIssue other = SeedQueuedIssue(otherRepoId, issueNumber: 2);
+
+        DispatchCandidateSelector sut = BuildSelector(
+            repositoryEligibilityQuery: new StubRepositoryEligibilityQuery(
+            [
+                new EligibleRepository(pausedRepoId.Value, Position: 0, MaxConcurrentWorkers: 1, Host: "gitlab.com"),
+                new EligibleRepository(otherRepoId.Value, Position: 1, MaxConcurrentWorkers: 1, Host: "github.com"),
+            ]),
+            settingsQueries: new PausedHostsGlobalSettingsQueries(PausedHostFor("gitlab.com")));
+
+        // Act
+        SelectionOutcome outcome = await sut.SelectAsync(CancellationToken.None);
+
+        // Assert
+        outcome.ShouldBeOfType<SelectionOutcome.Selected>().Candidate.Issue.Id.ShouldBe(other.Id);
+    }
+
+    [Fact]
+    public async Task WhenARevisionIsQueuedOnAPausedHost_ReturnsNoCandidates()
+    {
+        // Arrange
+        MonitoredRepositoryId repoId = MonitoredRepositoryId.New();
+        RevisionQueuedIssue revision = new IssueBuilder()
+            .WithMonitoredRepositoryId(repoId)
+            .WithIssueNumber(3)
+            .RevisionQueued();
+        _dbContext.Set<Issue>().Add(revision);
+        await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+        _dbContext.ChangeTracker.Clear();
+
+        DispatchCandidateSelector sut = BuildSelector(
+            repositoryEligibilityQuery: new StubRepositoryEligibilityQuery(
+                [new EligibleRepository(repoId.Value, Position: 0, MaxConcurrentWorkers: 1, Host: "gitlab.com")]),
+            settingsQueries: new PausedHostsGlobalSettingsQueries(PausedHostFor("GitLab.com")));
+
+        // Act
+        SelectionOutcome outcome = await sut.SelectAsync(CancellationToken.None);
+
+        // Assert
+        outcome.ShouldBeOfType<SelectionOutcome.NoCandidates>();
     }
 
     [Fact]
@@ -525,7 +601,7 @@ public sealed class SelectAsync : IAsyncDisposable
 
         DispatchCandidateSelector sut = BuildSelector(
             repositoryEligibilityQuery: new StubRepositoryEligibilityQuery(
-                [new EligibleRepository(repoId.Value, Position: 0, MaxConcurrentWorkers: 1)]),
+                [new EligibleRepository(repoId.Value, Position: 0, MaxConcurrentWorkers: 1, Host: "github.com")]),
             issueBlockerQueries: blockerQueries);
 
         // Act
@@ -625,7 +701,7 @@ public sealed class SelectAsync : IAsyncDisposable
             CancellationToken cancellationToken)
         {
             IReadOnlyList<EligibleRepository> eligible = repositoryIds
-                .Select(id => new EligibleRepository(id, Position: 0, MaxConcurrentWorkers: 1))
+                .Select(id => new EligibleRepository(id, Position: 0, MaxConcurrentWorkers: 1, Host: "github.com"))
                 .ToList();
             return Task.FromResult(eligible);
         }

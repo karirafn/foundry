@@ -70,6 +70,12 @@ public sealed class GlobalSettings : AggregateRoot<GlobalSettingsId>
 
     public bool IsDispatchPaused { get; private set; }
 
+    /// <summary>
+    /// The provider hosts dispatch is held for because a Publisher found them unreachable, one pause per host. A pause
+    /// reason beside <see cref="IsDispatchPaused"/> and <see cref="UsageLimitResetsAt"/>, but it holds only its host.
+    /// </summary>
+    public IReadOnlyList<HostPause> HostPauses { get; private set; } = [];
+
     public bool AutoResumeOnUsageReset { get; private set; }
 
     public WorkerImageConfiguration WorkerImageConfiguration { get; private set; } = null!;
@@ -101,14 +107,62 @@ public sealed class GlobalSettings : AggregateRoot<GlobalSettingsId>
     }
 
     /// <summary>
-    /// Clears every dispatch-pause reason — the operator's manual pause and the usage-limit
-    /// pause — for the manual "Resume All" action.
+    /// Clears every dispatch-pause reason — the operator's manual pause, the usage-limit
+    /// pause and every host pause — for the manual "Resume All" action.
     /// </summary>
     public void ResumeAllDispatch()
     {
         IsDispatchPaused = false;
         UsageLimitResetsAt = null;
+        HostPauses = [];
         UpdatedAt = DateTimeOffset.UtcNow;
+    }
+
+    /// <summary>
+    /// Holds dispatch to <paramref name="host"/> from <paramref name="now"/>. A host already paused keeps its pause
+    /// as it is, so concurrent failures on one host never reset its probe backoff. Returns <c>true</c> when a pause
+    /// was added.
+    /// </summary>
+    public bool PauseHost(string host, DateTimeOffset now)
+    {
+        if (FindHostPause(host) is not null)
+        {
+            return false;
+        }
+
+        HostPauses = [.. HostPauses, HostPause.Start(host, now)];
+        UpdatedAt = DateTimeOffset.UtcNow;
+        return true;
+    }
+
+    /// <summary>
+    /// Records that a probe at <paramref name="now"/> found <paramref name="host"/> still unreachable, pushing its
+    /// next probe out on the backoff. Returns <c>false</c> when the host is not paused (Resume All cleared it).
+    /// </summary>
+    public bool RecordProbeUnreachable(string host, DateTimeOffset now)
+    {
+        if (FindHostPause(host) is not { } pause)
+        {
+            return false;
+        }
+
+        HostPause advanced = pause.AfterUnreachableProbe(now);
+        HostPauses = [.. HostPauses.Select(p => ReferenceEquals(p, pause) ? advanced : p)];
+        UpdatedAt = DateTimeOffset.UtcNow;
+        return true;
+    }
+
+    /// <summary>Lifts the pause on <paramref name="host"/>. Returns <c>false</c> when the host was not paused.</summary>
+    public bool ClearHostPause(string host)
+    {
+        if (FindHostPause(host) is not { } pause)
+        {
+            return false;
+        }
+
+        HostPauses = [.. HostPauses.Where(p => !ReferenceEquals(p, pause))];
+        UpdatedAt = DateTimeOffset.UtcNow;
+        return true;
     }
 
     /// <summary>
@@ -339,4 +393,6 @@ public sealed class GlobalSettings : AggregateRoot<GlobalSettingsId>
         UpdatedAt = DateTimeOffset.UtcNow;
         return Result.Ok();
     }
+
+    private HostPause? FindHostPause(string host) => HostPauses.FirstOrDefault(p => p.IsFor(host));
 }

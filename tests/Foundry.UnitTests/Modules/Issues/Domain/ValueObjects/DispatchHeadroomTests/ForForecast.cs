@@ -17,7 +17,7 @@ public sealed class ForForecast
     private static readonly MonitoredRepositoryId RepoC = MonitoredRepositoryId.New();
 
     private static EligibleRepository Repo(MonitoredRepositoryId id, int maxConcurrentWorkers, int position = 0) =>
-        new(id.Value, position, maxConcurrentWorkers);
+        new(id.Value, position, maxConcurrentWorkers, "github.com");
 
     // Cycle 1a (Tracer): Under saturation, in-flight repo gets max(0, Max - (inFlight - 1)).
     [Fact]

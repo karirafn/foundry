@@ -491,6 +491,11 @@ namespace Foundry.WebApi.Migrations
                         .HasColumnType("TEXT")
                         .HasColumnName("created_at");
 
+                    b.Property<string>("HostPauses")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("host_pauses");
+
                     b.Property<string>("ImageBuildState")
                         .IsRequired()
                         .HasColumnType("TEXT")
@@ -628,6 +633,10 @@ namespace Foundry.WebApi.Migrations
                     b.Property<Guid>("IssueId")
                         .HasColumnType("TEXT")
                         .HasColumnName("issue_id");
+
+                    b.Property<Guid?>("PreparedRepositoryId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("prepared_repository_id");
 
                     b.Property<int?>("PublishedBranchCommitCount")
                         .HasColumnType("INTEGER")
