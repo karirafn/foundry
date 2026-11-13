@@ -10,7 +10,8 @@ namespace Foundry.Modules.Issues.Domain.Entities.States;
 /// <summary>
 /// The Diff gate found possible secrets in the run's commits, so nothing was pushed (#788). The run is not terminal: its
 /// unpublished work waits in its Hand-off volume until an operator discards the run or the volume's time to live does.
-/// There is no way to publish it anyway, and Retry Issue is not offered until the run is discarded.
+/// An operator can also confirm the findings as false positives (#899), which publishes the run with exactly those
+/// findings suppressed. Retry Issue is not offered until the run is discarded.
 /// </summary>
 public sealed class PublishBlockedIssue : Issue
 {
@@ -75,6 +76,24 @@ public sealed class PublishBlockedIssue : Issue
         blocked.RebaseConflictAttempts = source.RebaseConflictAttempts;
         blocked.BlockedAt = blockedAt;
         return blocked;
+    }
+
+    /// <summary>
+    /// An operator confirmed the run's findings as false positives (#899): the same run publishes again, so the issue
+    /// returns to the work-in-progress state it left.
+    /// </summary>
+    public Issue ConfirmFalsePositives(DateTimeOffset transitionedAt)
+    {
+        if (Trigger is { } trigger)
+        {
+            RevisionInProgressIssue revision = RevisionInProgressIssue.FromPublishBlocked(this, trigger, transitionedAt);
+            AddDomainEvent(new Events.IssueRevisionInProgress(Id, MonitoredRepositoryId));
+            return revision;
+        }
+
+        InProgressIssue inProgress = InProgressIssue.FromPublishBlocked(this, transitionedAt);
+        AddDomainEvent(new Events.IssueInProgress(Id, MonitoredRepositoryId));
+        return inProgress;
     }
 
     /// <summary>

@@ -34,6 +34,8 @@ internal sealed partial record PullRequestText(string Title, string Body)
     private const string RevertedFilesExplanation =
         "Foundry's diff gate reverted these files in a separate commit before pushing, because binary files and files over its size limit are not published. Add them yourself if they belong in the change.";
 
+    private const string ConfirmedFindingsHeading = "## Secret findings confirmed as false positives";
+
     public static PullRequestText Build(
         PullRequestKind kind,
         PullRequestSummary? summary,
@@ -41,14 +43,15 @@ internal sealed partial record PullRequestText(string Title, string Body)
         string issueTitle,
         int issueNumber,
         IReadOnlyList<string> commitSubjects,
-        IReadOnlyList<RevertedFile> revertedFiles)
+        IReadOnlyList<RevertedFile> revertedFiles,
+        FalsePositiveConfirmation? confirmation = null)
     {
         ArgumentNullException.ThrowIfNull(issueTitle);
         ArgumentNullException.ThrowIfNull(commitSubjects);
         ArgumentNullException.ThrowIfNull(revertedFiles);
 
         string title = $"{TypeOf(kind)}: {summary?.Value ?? SummaryFromIssueTitle(issueTitle, issueNumber)}";
-        string body = SummaryComment(description, commitSubjects, revertedFiles)
+        string body = SummaryComment(description, commitSubjects, revertedFiles, confirmation)
             + "\n\nCloses #" + issueNumber.ToString(CultureInfo.InvariantCulture);
 
         return new PullRequestText(title, body);
@@ -56,19 +59,31 @@ internal sealed partial record PullRequestText(string Title, string Body)
 
     /// <summary>
     /// The body of the summary comment posted on an existing pull request after a later run: the description, or the
-    /// commit-subject fallback, then the files the Diff gate reverted. It carries no closing keyword, as the pull request
-    /// body already links the issue.
+    /// commit-subject fallback, then the files the Diff gate reverted, then the findings an operator confirmed as false
+    /// positives. It carries no closing keyword, as the pull request body already links the issue.
     /// </summary>
     public static string SummaryComment(
         PullRequestDescription? description,
         IReadOnlyList<string> commitSubjects,
-        IReadOnlyList<RevertedFile> revertedFiles)
+        IReadOnlyList<RevertedFile> revertedFiles,
+        FalsePositiveConfirmation? confirmation = null)
     {
         ArgumentNullException.ThrowIfNull(commitSubjects);
         ArgumentNullException.ThrowIfNull(revertedFiles);
 
-        string summary = description?.Value ?? BodyFromCommitSubjects(commitSubjects);
-        return revertedFiles.Count == 0 ? summary : summary + "\n\n" + RevertedFilesSection(revertedFiles);
+        StringBuilder comment = new(description?.Value ?? BodyFromCommitSubjects(commitSubjects));
+
+        if (revertedFiles.Count > 0)
+        {
+            comment.Append("\n\n").Append(RevertedFilesSection(revertedFiles));
+        }
+
+        if (confirmation is not null)
+        {
+            comment.Append("\n\n").Append(ConfirmedFindingsSection(confirmation));
+        }
+
+        return comment.ToString();
     }
 
     private static string TypeOf(PullRequestKind kind) => kind switch
@@ -156,6 +171,31 @@ internal sealed partial record PullRequestText(string Title, string Body)
                 .Append(" (")
                 .Append(FileSize(file.SizeBytes))
                 .Append(')');
+        }
+
+        return section.ToString();
+    }
+
+    // The pull request is the lasting record that a person, not the scanner, let these findings through (#899). It names
+    // where and which rule only, because a finding never holds a matched value.
+    private static string ConfirmedFindingsSection(FalsePositiveConfirmation confirmation)
+    {
+        string confirmedAt = confirmation.ConfirmedAt.UtcDateTime.ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture);
+
+        StringBuilder section = new(ConfirmedFindingsHeading);
+        section.Append("\n\n")
+            .Append("Foundry's diff gate flagged these lines as possible secrets. An operator confirmed them as false positives on ")
+            .Append(confirmedAt)
+            .Append(" UTC, so Foundry published them.\n");
+
+        foreach (SecretFinding finding in confirmation.Findings)
+        {
+            section.Append("\n- ")
+                .Append(CodeSpan(finding.Path))
+                .Append(" line ")
+                .Append(finding.Line.ToString(CultureInfo.InvariantCulture))
+                .Append(": rule ")
+                .Append(CodeSpan(finding.RuleId));
         }
 
         return section.ToString();

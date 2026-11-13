@@ -5,7 +5,8 @@ namespace Foundry.Modules.Workers.Domain.Entities.States;
 /// <summary>
 /// A run whose publish the Diff gate blocked because it found possible secrets in the Run commits (#788): nothing was
 /// pushed. Its unpublished work waits in its Hand-off volume until an operator discards the run or the volume's time to
-/// live does. There is no way to publish it anyway.
+/// live does, or an operator confirms its findings as false positives (#899) and it publishes with exactly those findings
+/// suppressed.
 /// </summary>
 public sealed class PublishBlockedRun : UnpublishedRun, IDiscardableRun
 {
@@ -33,6 +34,12 @@ public sealed class PublishBlockedRun : UnpublishedRun, IDiscardableRun
             SecretFindings = findings,
             PublishBlockedAt = blockedAt,
         };
+
+    /// <summary>
+    /// An operator confirmed every finding as a false positive (#899): the run publishes again with exactly the confirmed
+    /// findings suppressed. Any other finding blocks it again.
+    /// </summary>
+    public PublishingRun ConfirmFalsePositives(DateTimeOffset now) => PublishingRun.FromPublishBlocked(this, now);
 
     public FailedRun Discard() => DiscardWith(new FailureReason.PublishExpired());
 

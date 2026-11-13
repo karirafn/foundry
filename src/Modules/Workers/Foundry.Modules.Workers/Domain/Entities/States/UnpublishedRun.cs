@@ -170,5 +170,6 @@ public abstract class UnpublishedRun : WorkerRun, IResolvableRun
         CarryDispatchFactsFrom(source);
         RecordVerdict(source.Verdict);
         RecordPublishFacts(source.PublishedHead, source.PublishedBranchCommitCount, source.Divergence, source.RevertedFiles);
+        CarryConfirmationFrom(source);
     }
 }

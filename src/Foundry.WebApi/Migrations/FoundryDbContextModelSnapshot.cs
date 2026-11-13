@@ -613,6 +613,14 @@ namespace Foundry.WebApi.Migrations
                         .HasColumnType("TEXT")
                         .HasColumnName("base_run_branch_head");
 
+                    b.Property<string>("ConfirmedFindings")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(2147483647)
+                        .HasColumnType("TEXT")
+                        .HasDefaultValue("[]")
+                        .HasColumnName("confirmed_findings");
+
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("TEXT")
                         .HasColumnName("created_at");
@@ -628,6 +636,10 @@ namespace Foundry.WebApi.Migrations
                         .IsUnicode(false)
                         .HasColumnType("TEXT")
                         .HasColumnName("divergence_reason");
+
+                    b.Property<DateTimeOffset?>("FalsePositivesConfirmedAt")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("false_positives_confirmed_at");
 
                     b.Property<string>("Image")
                         .HasMaxLength(500)

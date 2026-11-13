@@ -1,5 +1,8 @@
+using System.Globalization;
+
 using Foundry.Modules.Settings.Contracts;
 using Foundry.Modules.Workers.Contracts;
+using Foundry.Modules.Workers.Domain.ValueObjects;
 using Foundry.Modules.Workers.Features.ContainerSpec;
 
 namespace Foundry.Modules.Workers.Features.Publisher;
@@ -53,8 +56,19 @@ internal static class PublisherContainerSpec
             environment["BASE_BRANCH_SHA"] = runBranchHead.Value;
         }
 
+        if (request.ConfirmedFindings.Count > 0)
+        {
+            environment["CONFIRMED_FINDINGS"] = string.Join('\n', request.ConfirmedFindings.Select(GitleaksFingerprint));
+        }
+
         return Build(request.RunId, environment, "publish", request.Limits);
     }
+
+    // gitleaks' own ignore-file form, so publisher.sh can pass the lines to --gitleaks-ignore-path unchanged.
+    private static string GitleaksFingerprint(SecretFinding finding) =>
+        string.Create(
+            CultureInfo.InvariantCulture,
+            $"{finding.Commit.Value}:{finding.Path}:{finding.RuleId}:{finding.Line}");
 
     /// <summary>
     /// A probe needs no Hand-off volume and no run: one <c>ls-remote</c> under the same hardening as Prepare, with
