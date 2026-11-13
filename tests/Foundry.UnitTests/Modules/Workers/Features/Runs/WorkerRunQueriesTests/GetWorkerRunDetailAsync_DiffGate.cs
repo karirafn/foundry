@@ -110,6 +110,49 @@ public sealed class GetWorkerRunDetailAsync_DiffGate : IAsyncDisposable
         detail.RevertedFiles.ShouldBeEmpty();
     }
 
+    [Fact]
+    public async Task ABlockedRun_ShowsWhenItWasBlockedAndHasNoConfirmation()
+    {
+        // Arrange
+        DateTimeOffset blockedAt = PublishingRunFixture.ExitedAt.AddMinutes(1);
+        PublishBlockedRun blocked = PublishingRunFixture.Publishing().BlockPublish(
+            [new SecretFinding("src/appsettings.json", 14, Head, "aws-access-token")],
+            blockedAt);
+        await SeedAsync(blocked);
+
+        // Act
+        WorkerRunDetail detail = await GetDetailAsync(blocked.Id);
+
+        // Assert
+        detail.ShouldSatisfyAllConditions(
+            () => detail.PublishBlockedAt.ShouldBe(blockedAt),
+            () => detail.FalsePositivesConfirmedAt.ShouldBeNull(),
+            () => detail.ConfirmedFindings.ShouldBeEmpty());
+    }
+
+    [Fact]
+    public async Task AConfirmedRun_ShowsTheConfirmedFindingsAndTimeButNoBlockTime()
+    {
+        // Arrange
+        DateTimeOffset confirmedAt = PublishingRunFixture.ExitedAt.AddHours(1);
+        PublishingRun confirmed = PublishingRunFixture.Publishing()
+            .BlockPublish([new SecretFinding("src/store.ts", 3, Head, "generic-api-key")], PublishingRunFixture.ExitedAt)
+            .ConfirmFalsePositives(confirmedAt);
+        await SeedAsync(confirmed);
+
+        // Act
+        WorkerRunDetail detail = await GetDetailAsync(confirmed.Id);
+
+        // Assert
+        detail.ShouldSatisfyAllConditions(
+            () => detail.State.ShouldBe("publishing"),
+            () => detail.PublishBlockedAt.ShouldBeNull(),
+            () => detail.FalsePositivesConfirmedAt.ShouldBe(confirmedAt),
+            () => detail.ConfirmedFindings.ShouldBe([new WorkerRunConfirmedFinding("src/store.ts", 3, "generic-api-key")]),
+            () => typeof(WorkerRunConfirmedFinding).GetProperties().Select(property => property.Name)
+                .ShouldBe(["Path", "Line", "RuleId"], ignoreOrder: true));
+    }
+
     private async Task SeedAsync(WorkerRun run)
     {
         _dbContext.Set<WorkerRun>().Add(run);

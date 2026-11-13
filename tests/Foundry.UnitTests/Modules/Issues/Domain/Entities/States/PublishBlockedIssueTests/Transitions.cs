@@ -1,5 +1,6 @@
 using Foundry.Modules.Issues.Domain.Entities;
 using Foundry.Modules.Issues.Domain.Entities.States;
+using Foundry.Modules.Issues.Domain.Events;
 using Foundry.Modules.Workers.Contracts;
 using Foundry.Testing;
 
@@ -78,5 +79,47 @@ public sealed class Transitions
 
         // Assert
         failed.ShouldBeOfType<RevisionFailedIssue>().FailureCategory.ShouldBe(FailureCategory.RunDiscarded);
+    }
+
+    [Fact]
+    public void AnImplementRunsFindingsConfirmed_ReturnsToInProgressWithTheSameRun()
+    {
+        // Arrange
+        PublishBlockedIssue blocked = new IssueBuilder().PublishBlocked();
+
+        // Act
+        Issue next = blocked.ConfirmFalsePositives(DiscardedAt);
+
+        // Assert
+        InProgressIssue inProgress = next.ShouldBeOfType<InProgressIssue>();
+        blocked.DomainEvents.ShouldHaveSingleItem().ShouldBeOfType<IssueInProgress>();
+        inProgress.ShouldSatisfyAllConditions(
+            () => inProgress.Id.ShouldBe(blocked.Id),
+            () => inProgress.WorkerRunId.ShouldBe(blocked.WorkerRunId),
+            () => inProgress.EnteredStateAt.ShouldBe(DiscardedAt));
+    }
+
+    [Fact]
+    public void ARevisionsFindingsConfirmed_ReturnsToRevisionInProgressWithItsContext()
+    {
+        // Arrange
+        PublishBlockedIssue blocked = new IssueBuilder()
+            .WithBranchName("feat/2-fix")
+            .WithPullRequestUrl("https://github.com/owner/repo/pull/2")
+            .PublishBlockedFromRevision();
+
+        // Act
+        Issue next = blocked.ConfirmFalsePositives(DiscardedAt);
+
+        // Assert
+        RevisionInProgressIssue revision = next.ShouldBeOfType<RevisionInProgressIssue>();
+        blocked.DomainEvents.ShouldHaveSingleItem().ShouldBeOfType<IssueRevisionInProgress>();
+        revision.ShouldSatisfyAllConditions(
+            () => revision.WorkerRunId.ShouldBe(blocked.WorkerRunId),
+            () => revision.BranchName.ShouldBe("feat/2-fix"),
+            () => revision.PullRequestUrl.ShouldBe("https://github.com/owner/repo/pull/2"),
+            () => revision.Trigger.ShouldBe(blocked.Trigger),
+            () => revision.ChecksFixAttempts.ShouldBe(blocked.ChecksFixAttempts),
+            () => revision.RebaseConflictAttempts.ShouldBe(blocked.RebaseConflictAttempts));
     }
 }

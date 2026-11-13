@@ -90,6 +90,7 @@ public sealed class FailedRun : WorkerRun
 
         failed.RecordVerdict(verdict);
         failed.CarryDispatchFactsFrom(unpublished);
+        failed.CarryConfirmationFrom(unpublished);
         failed.RecordPublishFacts(
             unpublished.PublishedHead,
             unpublished.PublishedBranchCommitCount,

@@ -236,6 +236,19 @@ public sealed class WorkerRunConfiguration : IEntityTypeConfiguration<WorkerRun>
             .HasDefaultValue(Array.Empty<RevertedFile>())
             .HasColumnName("reverted_files");
 
+        builder.Property(r => r.ConfirmedFindings)
+            .HasConversion(DiffGateValueConverters.SecretFindingsConverter, DiffGateValueConverters.SecretFindingsComparer)
+            .HasMaxLength(int.MaxValue)
+            .HasColumnType("TEXT")
+            .IsRequired()
+            .HasDefaultValue(Array.Empty<SecretFinding>())
+            .HasColumnName("confirmed_findings");
+
+        builder.Property(r => r.FalsePositivesConfirmedAt)
+            .HasColumnName("false_positives_confirmed_at");
+
+        builder.Ignore(r => r.FalsePositiveConfirmation);
+
         builder.HasDiscriminator<string>("state")
             .HasValue<StartingRun>("starting")
             .HasValue<ActiveRun>("active")

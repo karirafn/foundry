@@ -52,6 +52,7 @@ public static class IssuesModule
         services.AddIntegrationEventHandler<WorkerRunFailed, WorkerRunFailedHandler>();
         services.AddIntegrationEventHandler<WorkerRunPublishRetryRequested, WorkerRunPublishRetryRequestedHandler>();
         services.AddIntegrationEventHandler<WorkerRunPublishBlocked, WorkerRunPublishBlockedHandler>();
+        services.AddIntegrationEventHandler<WorkerRunFalsePositivesConfirmed, WorkerRunFalsePositivesConfirmedHandler>();
         services.AddIntegrationEventHandler<WorkerRunPublishPhaseChanged, WorkerRunPublishPhaseChangedHandler>();
         services.AddIntegrationEventHandler<TriageRunCompleted, TriageRunCompletedHandler>();
         services.AddIntegrationEventHandler<ProviderIssueClosed, ProviderIssueClosedHandler>();

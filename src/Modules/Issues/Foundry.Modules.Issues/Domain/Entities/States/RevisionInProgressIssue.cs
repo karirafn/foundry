@@ -57,6 +57,22 @@ public sealed class RevisionInProgressIssue : Issue
         return revisionInProgress;
     }
 
+    internal static RevisionInProgressIssue FromPublishBlocked(
+        PublishBlockedIssue source,
+        RevisionTrigger trigger,
+        DateTimeOffset transitionedAt)
+    {
+        RevisionInProgressIssue revisionInProgress = new(source.Id, transitionedAt);
+        revisionInProgress.CopySharedPropertiesFrom(source);
+        revisionInProgress.WorkerRunId = source.WorkerRunId;
+        revisionInProgress.BranchName = source.BranchName;
+        revisionInProgress.PullRequestUrl = source.PullRequestUrl;
+        revisionInProgress.Trigger = trigger;
+        revisionInProgress.ChecksFixAttempts = source.ChecksFixAttempts;
+        revisionInProgress.RebaseConflictAttempts = source.RebaseConflictAttempts;
+        return revisionInProgress;
+    }
+
     internal static RevisionInProgressIssue FromPublishFailed(
         PublishFailedIssue source,
         RevisionTrigger trigger,

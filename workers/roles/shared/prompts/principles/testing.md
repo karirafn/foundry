@@ -6,3 +6,4 @@ Testing (where a test runner exists):
 - Assertions check values the code under test produced, never values the test supplied.
 - A change that turns an existing test red is wrong until shown otherwise.
 - A value only an external system produces (a status, an enum value, an error code, an id format) is copied into a test from a captured real response, and the test names where it was captured; it is never written from memory.
+- A credential-shaped value in a test (an API key, token, password, connection string, or a random high-entropy string under a key-, secret- or token-like name) is assembled at runtime by concatenation, `printf` of parts, or a generator, never written as one literal: the push is scanned for secrets, and a matching literal blocks it.

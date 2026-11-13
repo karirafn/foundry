@@ -25,4 +25,19 @@ internal static class WorkerRunErrors
 
     internal static Error NotHoldingUnpublishedWork(WorkerRunId id) =>
         new(NotHoldingUnpublishedWorkCode, $"Worker run '{id.Value}' is not holding unpublished work that waits for an operator.");
+
+    internal const string NotPublishBlockedCode = "WorkerRun.NotPublishBlocked";
+
+    internal static Error NotPublishBlocked(WorkerRunId id) =>
+        new(NotPublishBlockedCode, $"Worker run '{id.Value}' is not blocked by secret findings.");
+
+    internal const string FindingsChangedCode = "WorkerRun.FindingsChanged";
+
+    internal static Error FindingsChanged(WorkerRunId id) =>
+        new(FindingsChangedCode, $"Worker run '{id.Value}' was blocked at a different time than the confirmation names, so its findings may have changed.");
+
+    internal const string PublishBlockedAtRequiredCode = "WorkerRun.PublishBlockedAtRequired";
+
+    internal static Error PublishBlockedAtRequired() =>
+        new(PublishBlockedAtRequiredCode, "The confirmation must echo the run's publishBlockedAt.");
 }
