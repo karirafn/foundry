@@ -1,5 +1,7 @@
 import { TestBed } from '@angular/core/testing';
 import { provideHttpClient } from '@angular/common/http';
+import { provideLocationMocks } from '@angular/common/testing';
+import { provideRouter, Router } from '@angular/router';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { Signal, WritableSignal, computed, signal } from '@angular/core';
 import { NEVER } from 'rxjs';
@@ -91,6 +93,8 @@ function setupComponent() {
       WorkerSignalRService,
       provideHttpClient(),
       provideHttpClientTesting(),
+      provideRouter([]),
+      provideLocationMocks(),
       { provide: IssueSignalRService, useValue: mockIssueSignalRService },
       { provide: SystemSignalRService, useValue: mockSystemSignalR },
       { provide: WORKER_HUB_FACTORY, useValue: () => mockWorkerHub },
@@ -377,59 +381,9 @@ describe('IssueListComponent', () => {
     expect(statusNode?.textContent?.trim()).toBe('');
   });
 
-  // Cycle 6: detail wrapper has stable id for aria-controls
-  it('should give the detail wrapper an id matching the issue id', () => {
-    // Arrange
-    const { fixture, httpMock } = setupComponent();
-    fixture.detectChanges();
-    flushInit(httpMock, [mockSummary]);
-    fixture.detectChanges();
-
-    // Assert — wrapper is always present in the DOM so aria-controls is always valid
-    const el = fixture.nativeElement as HTMLElement;
-    const wrapper = el.querySelector('.issue-list__detail-wrapper') as HTMLElement;
-    expect(wrapper?.getAttribute('id')).toBe('detail-abc123');
-  });
-
-  it('should keep the detail wrapper in the DOM when the card is collapsed', () => {
-    // Arrange
-    const { fixture, httpMock } = setupComponent();
-    fixture.detectChanges();
-    flushInit(httpMock, [mockSummary]);
-    fixture.detectChanges();
-
-    // Assert — wrapper is present before any expansion
-    const el = fixture.nativeElement as HTMLElement;
-    const wrapper = el.querySelector('.issue-list__detail-wrapper');
-    expect(wrapper).toBeTruthy();
-  });
-
-  it('should hide the detail wrapper with [hidden] when card is collapsed', () => {
-    // Arrange
-    const { fixture, httpMock } = setupComponent();
-    fixture.detectChanges();
-    flushInit(httpMock, [mockSummary]);
-    fixture.detectChanges();
-
-    // Assert — wrapper is hidden when not expanded
-    const el = fixture.nativeElement as HTMLElement;
-    const wrapper = el.querySelector('.issue-list__detail-wrapper') as HTMLElement;
-    expect(wrapper.hasAttribute('hidden')).toBe(true);
-  });
-
-  it('should not hide the detail wrapper when card is expanded', () => {
-    // Arrange
-    const { fixture, httpMock } = setupComponent();
-    fixture.detectChanges();
-    flushInit(httpMock, [mockSummary]);
-    fixture.detectChanges();
-
-    // Act - expand the card
-    const el = fixture.nativeElement as HTMLElement;
-    const card = el.querySelector('.issue-card') as HTMLElement;
-    card.click();
-    fixture.detectChanges();
-    httpMock.expectOne('/api/issues/abc123').flush({
+  // Cycle 6: cards open the shared issue pane instead of expanding inline
+  describe('issue pane', () => {
+    const mockDetail = {
       ...mockSummary,
       body: null,
       author: 'dev',
@@ -443,12 +397,149 @@ describe('IssueListComponent', () => {
         completedAt: null,
         blockedBy: null,
       },
-    });
-    fixture.detectChanges();
+    };
 
-    // Assert
-    const wrapper = el.querySelector('.issue-list__detail-wrapper') as HTMLElement;
-    expect(wrapper.hasAttribute('hidden')).toBe(false);
+    async function render(fixture: { detectChanges: () => void; whenStable: () => Promise<unknown> }) {
+      fixture.detectChanges();
+      await fixture.whenStable();
+      fixture.detectChanges();
+    }
+
+    async function loadedList() {
+      const { fixture, httpMock } = setupComponent();
+      document.body.appendChild(fixture.nativeElement);
+      fixture.detectChanges();
+      flushInit(httpMock, [mockSummary]);
+      await render(fixture);
+      return { fixture, httpMock, el: fixture.nativeElement as HTMLElement };
+    }
+
+    afterEach(() => {
+      document.body.innerHTML = '';
+    });
+
+    it('hosts no issue detail inline in the list', async () => {
+      // Act
+      const { el } = await loadedList();
+
+      // Assert
+      expect(el.querySelector('.issue-list__item fd-issue-detail')).toBeNull();
+      expect(el.querySelector('.issue-list__detail-wrapper')).toBeNull();
+    });
+
+    it('opens the issue detail in a dialog headed by the issue when a card is activated', async () => {
+      // Arrange
+      const { fixture, httpMock, el } = await loadedList();
+
+      // Act
+      (el.querySelector('.issue-card__toggle') as HTMLButtonElement).click();
+      await render(fixture);
+      httpMock.expectOne('/api/issues/abc123').flush(mockDetail);
+      await render(fixture);
+
+      // Assert
+      const dialog = el.querySelector('[role="dialog"]')!;
+      expect(dialog.getAttribute('aria-labelledby')).toBe('issue-pane-title');
+      expect(dialog.querySelector('h2#issue-pane-title')?.textContent?.trim()).toBe('#42 Enable dark mode');
+      expect(dialog.querySelector('fd-issue-detail')).not.toBeNull();
+      expect(el.querySelector('.issue-list__item fd-issue-detail')).toBeNull();
+    });
+
+    it('puts the opened issue in the URL', async () => {
+      // Arrange
+      const { fixture, httpMock, el } = await loadedList();
+
+      // Act
+      (el.querySelector('.issue-card__toggle') as HTMLButtonElement).click();
+      await render(fixture);
+      httpMock.expectOne('/api/issues/abc123').flush(mockDetail);
+
+      // Assert
+      expect(TestBed.inject(Router).url).toBe('/?issue=abc123');
+    });
+
+    it('keeps the pane open when another card is pointed at, so the card can swap it', async () => {
+      // Arrange
+      const { fixture, httpMock, el } = await loadedList();
+      (el.querySelector('.issue-card__toggle') as HTMLButtonElement).click();
+      await render(fixture);
+      httpMock.expectOne('/api/issues/abc123').flush(mockDetail);
+      await render(fixture);
+
+      // Act
+      el.querySelector('[data-issue-id="abc123"] .issue-card__toggle')!
+        .dispatchEvent(new Event('pointerdown', { bubbles: true }));
+      await render(fixture);
+
+      // Assert
+      expect(el.querySelector('[role="dialog"]')).not.toBeNull();
+    });
+  });
+
+  describe('issue pane deep links', () => {
+    async function deepLink(url: string) {
+      const { fixture, httpMock } = setupComponent();
+      const router = TestBed.inject(Router);
+      await router.navigateByUrl(url);
+      document.body.appendChild(fixture.nativeElement);
+      fixture.detectChanges();
+      flushInit(httpMock, [mockSummary]);
+      fixture.detectChanges();
+      await fixture.whenStable();
+      fixture.detectChanges();
+      return { fixture, httpMock, router, el: fixture.nativeElement as HTMLElement };
+    }
+
+    afterEach(() => {
+      document.body.innerHTML = '';
+    });
+
+    it('opens the pane for a linked issue once its detail loads', async () => {
+      // Arrange
+      const { fixture, httpMock, el, router } = await deepLink('/?issue=abc123');
+
+      // Act
+      httpMock.expectOne('/api/issues/abc123').flush({
+        ...mockSummary,
+        author: 'dev',
+        labels: [],
+        stateDetails: null,
+      });
+      fixture.detectChanges();
+      await fixture.whenStable();
+      fixture.detectChanges();
+
+      // Assert
+      expect(el.querySelector('[role="dialog"] h2#issue-pane-title')?.textContent?.trim()).toBe(
+        '#42 Enable dark mode',
+      );
+      expect(router.url).toBe('/?issue=abc123');
+    });
+
+    it('removes a linked id that is not a valid issue id and opens nothing', async () => {
+      // Act
+      const { el, router, httpMock } = await deepLink('/?issue=bad%2Fid');
+
+      // Assert
+      httpMock.expectNone((r) => r.url.startsWith('/api/issues/bad'));
+      expect(el.querySelector('[role="dialog"]')).toBeNull();
+      expect(router.url).toBe('/');
+    });
+
+    it('removes a linked id whose detail is not found and opens nothing', async () => {
+      // Arrange
+      const { fixture, httpMock, el, router } = await deepLink('/?issue=gone');
+
+      // Act
+      httpMock.expectOne('/api/issues/gone').flush('Not Found', { status: 404, statusText: 'Not Found' });
+      fixture.detectChanges();
+      await fixture.whenStable();
+      fixture.detectChanges();
+
+      // Assert
+      expect(el.querySelector('[role="dialog"]')).toBeNull();
+      expect(router.url).toBe('/');
+    });
   });
 
   // Cycle 7: load error is shown with retry
@@ -660,43 +751,6 @@ describe('IssueListComponent', () => {
     // Assert — service exposes a per-run lookup; unknown run returns null
     const workerSignalR = TestBed.inject(WorkerSignalRService);
     expect(workerSignalR.activityFor('unknown-run-id')).toBeNull();
-  });
-
-  // Cycle 11: expand/collapse wiring - fd-issue-detail appears when card is expanded
-  it('should show fd-issue-detail for the expanded issue after card toggle', () => {
-    // Arrange
-    const { fixture, httpMock } = setupComponent();
-    fixture.detectChanges();
-    flushInit(httpMock, [mockSummary]);
-    fixture.detectChanges();
-
-    // Act - click the card to toggle expand
-    const el = fixture.nativeElement as HTMLElement;
-    const card = el.querySelector('.issue-card') as HTMLElement;
-    card.click();
-    fixture.detectChanges();
-
-    // Flush the detail request
-    httpMock.expectOne('/api/issues/abc123').flush({
-      ...mockSummary,
-      body: 'Body text',
-      author: 'dev',
-      labels: [],
-      stateDetails: {
-        workerRunId: null,
-        branchName: null,
-        feedbackCutoffAt: null,
-        failureReason: null,
-        failedAt: null,
-        completedAt: null,
-        blockedBy: null,
-      },
-    });
-    fixture.detectChanges();
-
-    // Assert
-    const detail = el.querySelector('fd-issue-detail');
-    expect(detail).toBeTruthy();
   });
 
   // Cycle 12: skeleton cards shown during initial load
@@ -2062,7 +2116,8 @@ interface StubIssueService {
   activeBandIssues: WritableSignal<IssueSummary[]>;
   liveIssueCount: WritableSignal<number>;
   loadError: WritableSignal<string | null>;
-  expandedIssueId: WritableSignal<string | null>;
+  selectedIssueId: WritableSignal<string | null>;
+  detailMissing: WritableSignal<boolean>;
   issueDetail: WritableSignal<null>;
   detailLoading: WritableSignal<boolean>;
   detailError: WritableSignal<null>;
@@ -2087,7 +2142,7 @@ interface StubIssueService {
   nextUpAnnouncement: WritableSignal<string>;
   loadIssues: () => void;
   loadCounts: () => void;
-  toggleExpand: (id: string) => void;
+  selectIssue: (id: string | null) => void;
   toggleGroup: (id: StateGroupId) => void;
   loadMoreResolved: () => void;
   retryResolvedFetch: () => void;
@@ -2114,7 +2169,8 @@ function makeStubIssueService(issues: IssueSummary[] = []): StubIssueService {
     activeBandIssues,
     liveIssueCount: signal(0),
     loadError: signal(null),
-    expandedIssueId: signal(null),
+    selectedIssueId: signal(null),
+    detailMissing: signal(false),
     issueDetail: signal(null),
     detailLoading: signal(false),
     detailError: signal(null),
@@ -2139,7 +2195,7 @@ function makeStubIssueService(issues: IssueSummary[] = []): StubIssueService {
     nextUpAnnouncement: signal(''),
     loadIssues: () => {},
     loadCounts: () => {},
-    toggleExpand: () => {},
+    selectIssue: () => {},
     toggleGroup: () => {},
     loadMoreResolved: () => {},
     retryResolvedFetch: () => {},
@@ -2170,6 +2226,8 @@ function setupStubComponent(stub: StubIssueService) {
       { provide: WorkerRunTotalsService, useValue: mockRunTotalsService },
       provideHttpClient(),
       provideHttpClientTesting(),
+      provideRouter([]),
+      provideLocationMocks(),
       { provide: IssueSignalRService, useValue: mockIssueSignalRService },
       { provide: SystemSignalRService, useValue: mockSystemSignalR },
       { provide: WORKER_HUB_FACTORY, useValue: () => mockWorkerHub },

@@ -14,8 +14,8 @@ import {
 } from '@angular/core';
 import { DOCUMENT } from '@angular/common';
 import { SideSheetComponent } from '../../../shared/components/side-sheet/side-sheet';
-import { IssueDetailComponent } from '../../issues/issue-detail/issue-detail';
-import { IssueSummary } from '../../issues/issue.model';
+import { IssuePaneComponent, ISSUE_PANE_TITLE_ID } from '../../issue-pane/issue-pane';
+import { IssueSelection, provideIssueSelection } from '../../issue-pane/issue-selection';
 import { IssueService } from '../../issues/issue.service';
 import { BoardColumnComponent, CardOpened } from '../board-column/board-column';
 import { BoardStateService } from '../board-state.service';
@@ -30,8 +30,8 @@ const STALE_QUEUE_MESSAGE = 'Queue order may be out of date';
 /** The landing page: active issues by stage, with a Needs-you row and a pane for one issue's detail. */
 @Component({
   selector: 'fd-board-page',
-  imports: [BoardSummaryComponent, BoardColumnComponent, SideSheetComponent, IssueDetailComponent],
-  providers: [BoardStateService],
+  imports: [BoardSummaryComponent, BoardColumnComponent, SideSheetComponent, IssuePaneComponent],
+  providers: [BoardStateService, provideIssueSelection('board')],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './board-page.html',
   styleUrl: './board-page.scss',
@@ -40,29 +40,19 @@ export class BoardPageComponent implements OnInit {
   protected readonly issueService = inject(IssueService);
   protected readonly board = inject(BoardStateService);
   private readonly _host: HTMLElement = inject(ElementRef<HTMLElement>).nativeElement;
+  protected readonly selection = inject(IssueSelection);
   private readonly _document = inject(DOCUMENT);
   private readonly _heading = viewChild.required<ElementRef<HTMLElement>>('heading');
 
   protected readonly stageCount = STAGES.length;
   protected readonly triggerLabel = TRIGGER_LABEL;
 
-  protected readonly selectedId: WritableSignal<string | null> = signal(null);
-  private readonly _openedIssue: WritableSignal<IssueSummary | null> = signal(null);
-  private _invoker: HTMLElement | null = null;
-
-  /** The open issue's latest summary; once it leaves the board (completed), the one it was opened with. */
-  protected readonly selectedIssue: Signal<IssueSummary | null> = computed(() => {
-    const id = this.selectedId();
-    if (id === null) {
-      return null;
-    }
-    return this.issueService.issues().find((i) => i.id === id) ?? this._openedIssue();
-  });
+  protected readonly paneTitleId = ISSUE_PANE_TITLE_ID;
 
   private readonly _narrow: WritableSignal<boolean> = signal(false);
   /** On narrow screens the sheet covers the board, so the board leaves the tab order. */
   protected readonly sheetCoversBoard: Signal<boolean> = computed(
-    () => this._narrow() && this.selectedId() !== null,
+    () => this._narrow() && this.selection.isOpen(),
   );
 
   protected readonly loading: Signal<boolean> = this.issueService.initialLoading;
@@ -84,11 +74,6 @@ export class BoardPageComponent implements OnInit {
   constructor() {
     effect(() => this.board.sheetCoversBoard.set(this.sheetCoversBoard()));
     this._watchNarrow();
-    inject(DestroyRef).onDestroy(() => {
-      if (this.selectedId() !== null) {
-        this.issueService.selectIssue(null);
-      }
-    });
   }
 
   ngOnInit(): void {
@@ -96,27 +81,7 @@ export class BoardPageComponent implements OnInit {
   }
 
   protected openCard(opened: CardOpened): void {
-    this._invoker = opened.invoker;
-    this._openedIssue.set(this.issueService.issues().find((i) => i.id === opened.id) ?? null);
-    this.selectedId.set(opened.id);
-    this.issueService.selectIssue(opened.id);
-  }
-
-  protected closeSheet(): void {
-    const id = this.selectedId();
-    if (id === null) {
-      return;
-    }
-    this.selectedId.set(null);
-    this.issueService.selectIssue(null);
-    this._returnFocus(id);
-  }
-
-  protected reloadDetail(): void {
-    const id = this.selectedId();
-    if (id !== null) {
-      this.issueService.loadDetail(id);
-    }
+    this.selection.open(opened.id, opened.invoker);
   }
 
   protected retryLoad(): void {
@@ -132,24 +97,6 @@ export class BoardPageComponent implements OnInit {
     }
     button.focus();
     button.scrollIntoView({ block: 'nearest' });
-  }
-
-  // The invoker may have re-rendered in another cell while the sheet was open; then its card's new
-  // button takes focus, and the heading when the card left the board.
-  private _returnFocus(id: string): void {
-    const invoker = this._invoker;
-    this._invoker = null;
-    const target =
-      (invoker?.isConnected ? invoker : null) ??
-      this._host.querySelector<HTMLElement>(`[data-issue-card="${id}"] button`) ??
-      this._heading().nativeElement;
-    target.focus({ preventScroll: this._inView(target) });
-  }
-
-  private _inView(element: HTMLElement): boolean {
-    const rect = element.getBoundingClientRect();
-    const height = this._document.defaultView?.innerHeight ?? 0;
-    return rect.top >= 0 && rect.bottom <= height;
   }
 
   private _watchNarrow(): void {

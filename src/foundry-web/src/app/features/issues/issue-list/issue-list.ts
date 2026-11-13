@@ -4,7 +4,9 @@ import { IssueSignalRService } from '../../../core/services/issue-signalr.servic
 import { WorkerSignalRService } from '../../../core/services/worker-signalr.service';
 import { IssueCardComponent } from '../issue-card/issue-card';
 import { IssueCardSkeletonComponent } from '../issue-card/issue-card-skeleton';
-import { IssueDetailComponent } from '../issue-detail/issue-detail';
+import { SideSheetComponent } from '../../../shared/components/side-sheet/side-sheet';
+import { IssuePaneComponent, ISSUE_PANE_TITLE_ID } from '../../issue-pane/issue-pane';
+import { IssueSelection, provideIssueSelection } from '../../issue-pane/issue-selection';
 import { ConnectionIndicatorComponent } from '../../../shared/components/connection-indicator/connection-indicator';
 import { DispatchControlsComponent } from '../../board/dispatch-controls/dispatch-controls';
 import { IssueGroupFilterComponent } from '../issue-group-filter/issue-group-filter';
@@ -25,10 +27,12 @@ const SECTION_HEADING_ID_PREFIX = 'issue-section-heading-';
   selector: 'fd-issue-list',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
+  providers: [provideIssueSelection('history')],
   imports: [
     IssueCardComponent,
     IssueCardSkeletonComponent,
-    IssueDetailComponent,
+    SideSheetComponent,
+    IssuePaneComponent,
     ConnectionIndicatorComponent,
     DispatchControlsComponent,
     IssueGroupFilterComponent,
@@ -149,31 +153,15 @@ const SECTION_HEADING_ID_PREFIX = 'issue-section-heading-';
                       >Not dispatchable<span class="sr-only"> — queued issues from repositories that are currently not dispatchable follow. Check repository settings to make them eligible.</span></p>
                     </div>
                   }
-                  <div class="issue-list__item">
+                  <div class="issue-list__item" [attr.data-issue-id]="issue.id">
                     <fd-issue-card
                       [issue]="issue"
-                      [expanded]="issueService.expandedIssueId() === issue.id"
                       [lastActivityAt]="isLiveIssue(issue.state) ? workerSignalR.activityForIssue(issue.id) : null"
                       [agentActivity]="isLiveIssue(issue.state) ? workerSignalR.agentActivityForIssue(issue.id) : null"
                       [isNextUp]="issueService.nextUpIssueId() === issue.id"
                       [queuePosition]="issueService.queuePositions().get(issue.id) ?? null"
-                      (toggle)="issueService.toggleExpand(issue.id)"
+                      (open)="selection.open(issue.id, $event)"
                     />
-
-                    <div
-                      class="issue-list__detail-wrapper"
-                      [id]="'detail-' + issue.id"
-                      [hidden]="issueService.expandedIssueId() !== issue.id"
-                    >
-                      @if (issueService.expandedIssueId() === issue.id) {
-                        <fd-issue-detail
-                          [detail]="issueService.issueDetail()"
-                          [loading]="issueService.detailLoading()"
-                          [error]="issueService.detailError()"
-                          (retry)="issueService.loadDetail(issueService.expandedIssueId()!)"
-                        />
-                      }
-                    </div>
                   </div>
                 }
               </div>
@@ -208,27 +196,11 @@ const SECTION_HEADING_ID_PREFIX = 'issue-section-heading-';
               } @else {
                 <div class="issue-list__resolved-band">
                   @for (issue of issueService.resolvedIssues(); track issue.id) {
-                    <div class="issue-list__item">
+                    <div class="issue-list__item" [attr.data-issue-id]="issue.id">
                       <fd-issue-card
                         [issue]="issue"
-                        [expanded]="issueService.expandedIssueId() === issue.id"
-                        (toggle)="issueService.toggleExpand(issue.id)"
+                        (open)="selection.open(issue.id, $event)"
                       />
-
-                      <div
-                        class="issue-list__detail-wrapper"
-                        [id]="'detail-' + issue.id"
-                        [hidden]="issueService.expandedIssueId() !== issue.id"
-                      >
-                        @if (issueService.expandedIssueId() === issue.id) {
-                          <fd-issue-detail
-                            [detail]="issueService.issueDetail()"
-                            [loading]="issueService.detailLoading()"
-                            [error]="issueService.detailError()"
-                            (retry)="issueService.loadDetail(issueService.expandedIssueId()!)"
-                          />
-                        }
-                      </div>
                     </div>
                   }
                 </div>
@@ -275,6 +247,19 @@ const SECTION_HEADING_ID_PREFIX = 'issue-section-heading-';
           >{{ issueService.nextUpAnnouncement() }}</span>
         </div>
       </div>
+
+      <fd-side-sheet
+        [open]="selection.isOpen()"
+        [labelledBy]="paneTitleId"
+        [closeButton]="false"
+        (dismissed)="selection.close()"
+      >
+        <ng-template>
+          @if (selection.paneId(); as id) {
+            <fd-issue-pane [issueId]="id" [summary]="selection.summary()" (closed)="selection.close()" />
+          }
+        </ng-template>
+      </fd-side-sheet>
     </div>
   `,
   styleUrl: './issue-list.scss',
@@ -283,6 +268,7 @@ export class IssueListComponent implements OnInit {
   protected readonly issueService = inject(IssueService);
   protected readonly signalR = inject(IssueSignalRService);
   protected readonly workerSignalR = inject(WorkerSignalRService);
+  protected readonly selection = inject(IssueSelection);
   private readonly _settingsService = inject(SettingsService);
   private readonly _runTotalsService = inject(WorkerRunTotalsService);
 
@@ -294,6 +280,7 @@ export class IssueListComponent implements OnInit {
   protected readonly emptyResolvedMessage = EMPTY_RESOLVED_MESSAGE;
   protected readonly resolvedHeadingId = RESOLVED_HEADING_ID;
   protected readonly ineligibleQueueHeadingId = INELIGIBLE_QUEUE_HEADING_ID;
+  protected readonly paneTitleId = ISSUE_PANE_TITLE_ID;
 
   /**
    * Id of the first rendered ineligible queued issue — the "Not dispatchable" sub-divider renders

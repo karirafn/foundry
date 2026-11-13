@@ -15,6 +15,10 @@
   width: min(36rem, 100vw);
   z-index: 20;
 
+  @media (width >= 1600px) {
+    width: min(40rem, 100vw);
+  }
+
   &--enter {
     animation: fd-pane-in var(--fd-motion-enter) var(--fd-ease-enter);
   }

@@ -81,25 +81,15 @@
   <div class="sr-only" role="status">{{ staleQueueAnnouncement() }}</div>
 
   <fd-side-sheet
-    [open]="selectedId() !== null"
-    labelledBy="board-sheet-title"
-    closeLabel="Close issue details"
-    (dismissed)="closeSheet()"
+    [open]="selection.isOpen()"
+    [labelledBy]="paneTitleId"
+    [closeButton]="false"
+    (dismissed)="selection.close()"
   >
     <ng-template>
-      <h2 id="board-sheet-title" class="board-page__sheet-title" tabindex="-1">
-        @if (selectedIssue(); as issue) {
-          #{{ issue.issueNumber }} {{ issue.title }}
-        } @else {
-          Issue details
-        }
-      </h2>
-      <fd-issue-detail
-        [detail]="issueService.issueDetail()"
-        [loading]="issueService.detailLoading()"
-        [error]="issueService.detailError()"
-        (retry)="reloadDetail()"
-      />
+      @if (selection.paneId(); as id) {
+        <fd-issue-pane [issueId]="id" [summary]="selection.summary()" (closed)="selection.close()" />
+      }
     </ng-template>
   </fd-side-sheet>
 </section>

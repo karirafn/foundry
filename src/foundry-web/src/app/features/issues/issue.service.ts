@@ -84,7 +84,8 @@ const TRIAGE_ACTIONS: Readonly<Record<TriageAction, TriageActionCopy>> = {
     error: 'Failed to re-triage the issue.',
   },
 };
-const SAFE_ID_RE = /^[\w-]+$/;
+// Issue ids are GUID-like; anything else (from the wire or a URL) is rejected before use.
+export const SAFE_ID_RE = /^[\w-]+$/;
 const COUNTS_DEBOUNCE_MS = 300;
 // Safety-net interval for queue-order reconcile — covers order inputs that raise no IssueUpdated
 // event (e.g. repository Position changes in Settings). ADR 0067: bounded staleness is acceptable
@@ -143,7 +144,7 @@ export class IssueService {
   private readonly _destroyRef = inject(DestroyRef);
 
   readonly issues: WritableSignal<IssueSummary[]> = signal([]);
-  readonly expandedIssueId: WritableSignal<string | null> = signal(null);
+  readonly selectedIssueId: WritableSignal<string | null> = signal(null);
   readonly issueDetail: WritableSignal<IssueDetail | null> = signal(null);
   readonly detailLoading: WritableSignal<boolean> = signal(false);
   readonly initialLoading: WritableSignal<boolean> = signal(true);
@@ -154,6 +155,10 @@ export class IssueService {
 
   private readonly _detailErrorSignal: WritableSignal<string | null> = signal(null);
   readonly detailError: Signal<string | null> = this._detailErrorSignal.asReadonly();
+
+  // True when the selected issue's detail answered 404: the issue is not tracked (or no longer is).
+  private readonly _detailMissingSignal: WritableSignal<boolean> = signal(false);
+  readonly detailMissing: Signal<boolean> = this._detailMissingSignal.asReadonly();
 
   private readonly _retryErrorSignal: WritableSignal<string | null> = signal(null);
   readonly retryError: Signal<string | null> = this._retryErrorSignal.asReadonly();
@@ -420,33 +425,31 @@ export class IssueService {
     this.detailLoading.set(true);
     this._detailSub = this._http.get<IssueDetail>(`/api/issues/${encodeURIComponent(id)}`).subscribe({
       next: (detail) => {
-        const expanded = this.expandedIssueId();
-        if (expanded !== null && expanded !== id) {
+        const selected = this.selectedIssueId();
+        if (selected !== null && selected !== id) {
           return;
         }
         this.issueDetail.set(detail);
         this.detailLoading.set(false);
         this._detailErrorSignal.set(null);
+        this._detailMissingSignal.set(false);
       },
       error: (err: HttpErrorResponse) => {
-        const expanded = this.expandedIssueId();
-        if (expanded !== null && expanded !== id) {
+        const selected = this.selectedIssueId();
+        if (selected !== null && selected !== id) {
           return;
         }
         console.error(err);
         this.detailLoading.set(false);
         this._detailErrorSignal.set(LOAD_DETAIL_ERROR);
+        this._detailMissingSignal.set(err.status === 404);
       },
     });
   }
 
-  toggleExpand(id: string): void {
-    this.selectIssue(this.expandedIssueId() === id ? null : id);
-  }
-
   /**
-   * Opens the detail of the issue with `id`, or closes it for `null`. Unlike toggleExpand, selecting
-   * the open issue again keeps it open (and reloads its detail).
+   * Opens the detail of the issue with `id`, or closes it for `null`. Selecting the open issue again
+   * keeps it open (and reloads its detail).
    */
   selectIssue(id: string | null): void {
     this._retryErrorSignal.set(null);
@@ -455,16 +458,17 @@ export class IssueService {
     this._triageActionPendingSignal.set(null);
     this._triageActionErrorSignal.set(null);
     this._triageActionSuccessSignal.set(null);
+    this._detailMissingSignal.set(false);
 
     if (id === null) {
-      this.expandedIssueId.set(null);
+      this.selectedIssueId.set(null);
       this.issueDetail.set(null);
       return;
     }
 
     this.issueDetail.set(null);
     this.detailLoading.set(true);
-    this.expandedIssueId.set(id);
+    this.selectedIssueId.set(id);
     this.loadDetail(id);
   }
 
@@ -578,7 +582,7 @@ export class IssueService {
       this._removeFromResolved(updated.id);
     }
 
-    if (this.expandedIssueId() === updated.id) {
+    if (this.selectedIssueId() === updated.id) {
       this.loadDetail(updated.id);
     }
 

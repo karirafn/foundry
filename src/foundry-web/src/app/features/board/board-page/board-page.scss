@@ -101,18 +101,6 @@
   text-transform: uppercase;
 }
 
-.board-page__sheet-title {
-  color: var(--fd-text-primary);
-  font-size: 1rem;
-  font-weight: 600;
-  margin: 0 0 var(--fd-spacing-lg);
-  overflow-wrap: anywhere;
-  padding-inline-end: 2.75rem;
-
-  &:focus-visible {
-    @include focus-ring;
-  }
-}
 
 @media (width < $board-breakpoint) {
   .board {

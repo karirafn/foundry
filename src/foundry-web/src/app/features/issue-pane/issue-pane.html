@@ -1,0 +1,52 @@
+<header class="issue-pane__header">
+  @if (heading(); as issue) {
+    <h2 [id]="titleId" class="issue-pane__title" tabindex="-1" [attr.title]="issue.title">
+      <span class="issue-pane__number">#{{ issue.issueNumber }}</span>&ngsp;<span
+        class="issue-pane__title-text"
+        >{{ issue.title }}</span
+      >
+    </h2>
+  } @else {
+    <h2 [id]="titleId" class="issue-pane__title" tabindex="-1" aria-busy="true">
+      <span class="sr-only">Loading issue…</span>
+      <span class="issue-pane__bar issue-pane__bar--short" aria-hidden="true"></span>
+      <span class="issue-pane__bar" aria-hidden="true"></span>
+    </h2>
+  }
+  <button
+    type="button"
+    class="issue-pane__close"
+    aria-label="Close issue details"
+    (click)="closed.emit()"
+  >
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="2"
+      stroke-linecap="round"
+      aria-hidden="true"
+      focusable="false"
+    >
+      <path d="M18 6 6 18M6 6l12 12" />
+    </svg>
+  </button>
+</header>
+
+@for (id of [issueId()]; track id) {
+  <div class="issue-pane__body" animate.enter="issue-pane__body--enter">
+    @if (untracked()) {
+      <p class="issue-pane__untracked">This issue is no longer tracked.</p>
+    } @else {
+      <fd-issue-detail
+        [detail]="issueService.issueDetail()"
+        [loading]="issueService.detailLoading()"
+        [error]="issueService.detailError()"
+        (retry)="retry()"
+      />
+    }
+  </div>
+}

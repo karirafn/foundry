@@ -6,11 +6,13 @@ import { SideSheetComponent } from './side-sheet';
   imports: [SideSheetComponent],
   template: `
     <button type="button" data-issue-card="a" class="card">Card</button>
+    <div data-issue-id="b"><button type="button" class="list-card">List card</button></div>
     <button type="button" class="outside">Outside</button>
     <fd-side-sheet
       [open]="open()"
       labelledBy="sheet-title"
       closeLabel="Close issue details"
+      [closeButton]="closeButton()"
       (dismissed)="dismissals = dismissals + 1"
     >
       <ng-template>
@@ -23,6 +25,7 @@ import { SideSheetComponent } from './side-sheet';
 })
 class HostComponent {
   readonly open = signal(false);
+  readonly closeButton = signal(true);
   dismissals = 0;
 }
 
@@ -136,6 +139,30 @@ describe('SideSheetComponent', () => {
 
     // Assert
     expect(host.dismissals).toBe(0);
+  });
+
+  it('ignores a pointer down on an issue list card, which swaps its content instead', async () => {
+    // Arrange
+    const { el, host } = await setup();
+
+    // Act
+    el.querySelector('.list-card')!.dispatchEvent(new Event('pointerdown', { bubbles: true }));
+
+    // Assert
+    expect(host.dismissals).toBe(0);
+  });
+
+  it('leaves the close button to content that renders its own', async () => {
+    // Arrange
+    const { fixture, el } = await setup();
+
+    // Act
+    fixture.componentInstance.closeButton.set(false);
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    // Assert
+    expect(el.querySelector('.side-sheet__close')).toBeNull();
   });
 
   it('ignores pointer downs while closed', async () => {

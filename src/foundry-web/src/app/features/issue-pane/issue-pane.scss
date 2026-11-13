@@ -1,0 +1,117 @@
+@use '../../../styles/controls' as *;
+
+:host {
+  display: block;
+}
+
+// Sticks to the top of the scrolling sheet; the negative offset cancels the sheet's padding.
+.issue-pane__header {
+  align-items: flex-start;
+  background: var(--fd-bg-card);
+  display: flex;
+  gap: var(--fd-spacing-md);
+  margin: calc(var(--fd-spacing-xl) * -1) calc(var(--fd-spacing-xl) * -1) var(--fd-spacing-lg);
+  padding: var(--fd-spacing-xl) var(--fd-spacing-xl) var(--fd-spacing-sm);
+  position: sticky;
+  top: calc(var(--fd-spacing-xl) * -1);
+  z-index: 1;
+}
+
+.issue-pane__title {
+  color: var(--fd-text-primary);
+  flex: 1;
+  font-size: 1.125rem;
+  font-weight: 600;
+  line-height: 1.35;
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+
+  &:focus-visible {
+    @include focus-ring;
+  }
+}
+
+.issue-pane__number {
+  color: var(--fd-text-secondary);
+  display: block;
+  font-family: var(--fd-font-mono);
+  font-size: 0.875rem;
+  font-weight: 400;
+  margin-bottom: var(--fd-spacing-xs);
+}
+
+.issue-pane__title-text {
+  -webkit-box-orient: vertical;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+  overflow: hidden;
+}
+
+.issue-pane__bar {
+  animation: fd-skeleton-shimmer 1.5s ease-in-out infinite;
+  background: linear-gradient(
+    90deg,
+    var(--fd-border-default) 0%,
+    var(--fd-bg-card-hover) 50%,
+    var(--fd-border-default) 100%
+  );
+  background-size: 200% 100%;
+  border-radius: var(--fd-radius-sm);
+  display: block;
+  height: 1.125rem;
+  margin-top: var(--fd-spacing-xs);
+  width: 80%;
+
+  &--short {
+    height: 0.875rem;
+    width: 4rem;
+  }
+}
+
+.issue-pane__close {
+  align-items: center;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--fd-radius-sm);
+  color: var(--fd-text-secondary);
+  cursor: pointer;
+  display: inline-flex;
+  flex: none;
+  height: 32px;
+  justify-content: center;
+  width: 32px;
+
+  &:hover {
+    border-color: var(--fd-border-default);
+    color: var(--fd-text-primary);
+  }
+
+  &:focus-visible {
+    @include focus-ring;
+  }
+
+  @media (any-pointer: coarse) {
+    height: 44px;
+    width: 44px;
+  }
+}
+
+.issue-pane__untracked {
+  color: var(--fd-text-secondary);
+  font-size: 0.875rem;
+  margin: 0;
+}
+
+.issue-pane__body--enter {
+  animation: fd-fade-in var(--fd-motion-fade) ease both;
+}
+
+// The global reduced-motion rule shortens every animation; the swap is already a fade, so it keeps
+// its duration.
+@media (prefers-reduced-motion: reduce) {
+  .issue-pane__body--enter {
+    animation-duration: 160ms !important;
+  }
+}
