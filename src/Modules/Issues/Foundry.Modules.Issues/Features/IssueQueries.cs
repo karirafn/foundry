@@ -339,6 +339,7 @@ internal sealed class IssueQueries(
         IReadOnlyDictionary<Guid, WorkerRunPublishPhase> publishPhases)
     {
         RebaseOutcome? rebaseOutcome = GetRebaseOutcome(issue);
+        string? publishPhase = PublishPhaseName(issue, publishPhases);
 
         return new IssueSummary(
             Id: issue.Id.Value,
@@ -353,14 +354,40 @@ internal sealed class IssueQueries(
             RunStats: runAggregates.TryGetValue(issue.Id.Value, out RunAggregate? aggregate)
                 ? MapRunStats(aggregate)
                 : null,
+            Stage: StageName(issue.Stage),
+            NeedsAction: issue.NeedsAction,
+            AwaitsDispatch: issue.AwaitsDispatch,
+            CodeStep: CodeStepName(issue.CodeStep, publishPhase),
             ChecksOutcome: GetChecksOutcomeDiscriminator(issue),
             PullRequestUrl: issue.LinkedPullRequestUrl,
             RebaseOutcome: rebaseOutcome?.Discriminator,
             RebaseSkippedReason: (rebaseOutcome as RebaseOutcome.Skipped)?.Reason,
             ProviderType: displayInfo?.ProviderType,
             RevisionTriggerKind: GetRevisionTriggerKind(issue),
-            PublishPhase: PublishPhaseName(issue, publishPhases));
+            PublishPhase: publishPhase);
     }
+
+    private static string StageName(IssueStage stage) =>
+        stage switch
+        {
+            IssueStage.Triage => IssueSummary.TriageStage,
+            IssueStage.Implement => IssueSummary.ImplementStage,
+            IssueStage.AwaitingReview => IssueSummary.AwaitingReviewStage,
+            IssueStage.Done => IssueSummary.DoneStage,
+            _ => throw new InvalidOperationException($"Unknown issue stage: {stage}"),
+        };
+
+    // Publishing is a phase of the run, so a working issue's step comes from its run rather than its state.
+    private static string? CodeStepName(IssueCodeStep? codeStep, string? publishPhase) =>
+        (codeStep, publishPhase) switch
+        {
+            (IssueCodeStep.Rebasing, _) => IssueSummary.RebasingStep,
+            (IssueCodeStep.Checks, _) => IssueSummary.ChecksStep,
+            (null, IssueSummary.PublishingPhase) => IssueSummary.PublishingStep,
+            (null, IssueSummary.RetryingPhase) => IssueSummary.PublishRetryingStep,
+            (null, _) => null,
+            _ => throw new InvalidOperationException($"Unknown code step: {codeStep}"),
+        };
 
     private static string? GetFailureCategory(Issue issue) =>
         issue switch

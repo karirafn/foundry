@@ -31,6 +31,16 @@ public sealed class AwaitingInputIssue : Issue
     public override string? LinkedPullRequestUrl =>
         ResumeTarget is ResumeTarget.Revision revision ? revision.PullRequestUrl : null;
 
+    // The stage is the one the answer resumes: a re-triage waits in Triage, every other target in Implement.
+    public override IssueStage Stage =>
+        ResumeTarget is ResumeTarget.Retriage ? IssueStage.Triage : IssueStage.Implement;
+
+    public override bool NeedsAction => true;
+
+    public override bool AwaitsDispatch => false;
+
+    public override IssueCodeStep? CodeStep => null;
+
     /// <summary>The questions waiting for input: the open round of the clarification log.</summary>
     public IReadOnlyList<InputQuestion> Questions => OpenClarification?.Questions ?? [];
 

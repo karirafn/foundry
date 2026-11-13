@@ -23,6 +23,10 @@ const mockSummary: IssueSummary = {
   providerType: 'github',
   detectedAt: '2026-01-01T00:00:00Z',
   url: 'https://github.com/owner/repo/issues/42',
+  stage: 'triage',
+  needsAction: false,
+  awaitsDispatch: true,
+  codeStep: null,
 };
 
 function setupWithCapturingSignalR(callbacks: Record<string, (data: IssueSummary) => void>, reconnectCallbacks: Array<() => void>) {
@@ -1262,6 +1266,10 @@ describe('IssueService (band transitions + counts debounce)', () => {
     repositorySlug: 'owner/repo',
     detectedAt: '2026-01-01T00:00:00Z',
     url: 'https://github.com/owner/repo/issues/10',
+    stage: 'triage',
+    needsAction: false,
+    awaitsDispatch: true,
+    codeStep: null,
   };
 
   const resolvedSummary: IssueSummary = {
@@ -1272,6 +1280,10 @@ describe('IssueService (band transitions + counts debounce)', () => {
     repositorySlug: 'owner/repo',
     detectedAt: '2026-01-01T00:00:00Z',
     url: 'https://github.com/owner/repo/issues/20',
+    stage: 'done',
+    needsAction: false,
+    awaitsDispatch: false,
+    codeStep: null,
   };
 
   beforeEach(() => {
@@ -1466,6 +1478,10 @@ describe('IssueService (resolved paging)', () => {
     repositorySlug: 'owner/repo',
     detectedAt: '2026-01-01T00:00:00Z',
     url: 'https://github.com/owner/repo/issues/101',
+    stage: 'done',
+    needsAction: false,
+    awaitsDispatch: false,
+    codeStep: null,
   };
 
   beforeEach(() => {
@@ -1963,6 +1979,10 @@ describe('IssueService (dispatch-order queue grouping)', () => {
     repositorySlug: 'owner/repo',
     detectedAt: '2026-01-01T00:00:00Z',
     url: 'https://github.com/owner/repo/issues/1',
+    stage: 'implement',
+    needsAction: false,
+    awaitsDispatch: true,
+    codeStep: null,
   };
 
   beforeEach(() => {
@@ -2196,6 +2216,10 @@ describe('IssueService (queue-order reconcile)', () => {
     repositorySlug: 'owner/low-repo',
     detectedAt: '2026-01-01T00:00:00Z',
     url: 'https://github.com/owner/low-repo/issues/1',
+    stage: 'implement',
+    needsAction: false,
+    awaitsDispatch: true,
+    codeStep: null,
     repositoryEligibilityStatus: null,
   };
 
@@ -2207,6 +2231,10 @@ describe('IssueService (queue-order reconcile)', () => {
     repositorySlug: 'owner/high-repo',
     detectedAt: '2026-06-01T00:00:00Z',
     url: 'https://github.com/owner/high-repo/issues/2',
+    stage: 'implement',
+    needsAction: false,
+    awaitsDispatch: true,
+    codeStep: null,
     repositoryEligibilityStatus: null,
   };
 
@@ -2877,6 +2905,10 @@ describe('IssueService (queuePositions)', () => {
     repositorySlug: 'owner/repo',
     detectedAt: '2026-01-01T00:00:00Z',
     url: 'https://github.com/owner/repo/issues/1',
+    stage: 'implement',
+    needsAction: false,
+    awaitsDispatch: true,
+    codeStep: null,
     repositoryEligibilityStatus: null,
   };
 
@@ -3218,6 +3250,10 @@ describe('IssueService (nextUpAnnouncement)', () => {
     repositorySlug: 'owner/repo',
     detectedAt: '2026-01-01T00:00:00Z',
     url: 'https://github.com/owner/repo/issues/42',
+    stage: 'implement',
+    needsAction: false,
+    awaitsDispatch: true,
+    codeStep: null,
     repositoryEligibilityStatus: null,
   };
 
@@ -3493,5 +3529,142 @@ describe('IssueService (triage actions)', () => {
     // Assert
     expect(service.triageActionSuccess()).toBeNull();
     httpMock.expectOne('/api/issues/abc123').flush({ ...mockSummary });
+  });
+});
+
+describe('IssueService board placement (#851)', () => {
+  const placedItem = {
+    id: 'p1',
+    issueNumber: 7,
+    title: 'Placed',
+    state: 'checks_pending',
+    repositorySlug: 'owner/repo',
+    detectedAt: '2026-01-01T00:00:00Z',
+    url: 'https://github.com/owner/repo/issues/7',
+    failureClassification: null,
+    repositoryEligibilityStatus: null,
+    runStats: null,
+    stage: 'implement',
+    needsAction: false,
+    awaitsDispatch: false,
+    codeStep: 'checks',
+    checksOutcome: null,
+  };
+
+  function setup() {
+    const callbacks: Record<string, (data: IssueSummary) => void> = {};
+    const { svc, http } = setupWithCapturingSignalR(callbacks, []);
+    return { svc, http, callbacks };
+  }
+
+  afterEach(() => vi.restoreAllMocks());
+
+  it('maps the placement fields from the issues response', () => {
+    // Arrange
+    const { svc, http } = setup();
+
+    // Act
+    svc.loadIssues();
+    http.expectOne('/api/issues').flush({ items: [placedItem], nextCursor: null });
+
+    // Assert
+    expect(svc.issues()[0]).toMatchObject({
+      stage: 'implement',
+      needsAction: false,
+      awaitsDispatch: false,
+      codeStep: 'checks',
+    });
+  });
+
+  it('maps the checks outcome so the board can tell red checks from a ready pull request', () => {
+    // Arrange
+    const { svc, http } = setup();
+
+    // Act
+    svc.loadIssues();
+    http.expectOne('/api/issues').flush({
+      items: [{ ...placedItem, state: 'review', stage: 'awaiting_review', codeStep: null, checksOutcome: 'still_failing' }],
+      nextCursor: null,
+    });
+
+    // Assert
+    expect(svc.issues()[0].checksOutcome).toBe('still_failing');
+  });
+
+  it('narrows an unknown stage to null', () => {
+    // Arrange
+    const { svc, http } = setup();
+
+    // Act
+    svc.loadIssues();
+    http.expectOne('/api/issues').flush({ items: [{ ...placedItem, stage: 'review' }], nextCursor: null });
+
+    // Assert
+    expect(svc.issues()[0].stage).toBeNull();
+  });
+
+  it('narrows an unknown code step to null', () => {
+    // Arrange
+    const { svc, http } = setup();
+
+    // Act
+    svc.loadIssues();
+    http.expectOne('/api/issues').flush({ items: [{ ...placedItem, codeStep: 'deploying' }], nextCursor: null });
+
+    // Assert
+    expect(svc.issues()[0].codeStep).toBeNull();
+  });
+
+  it('narrows the placement of an IssueUpdated payload', () => {
+    // Arrange
+    const { svc, http, callbacks } = setup();
+    svc.loadIssues();
+    http.expectOne('/api/issues').flush({ items: [], nextCursor: null });
+
+    // Act
+    callbacks['IssueUpdated']({ ...placedItem, codeStep: 'deploying' } as unknown as IssueSummary);
+
+    // Assert
+    expect(svc.issues()[0]).toMatchObject({ stage: 'implement', codeStep: null });
+  });
+
+  it('selectIssue opens the issue and loads its detail', () => {
+    // Arrange
+    const { svc, http } = setup();
+
+    // Act
+    svc.selectIssue('p1');
+
+    // Assert
+    expect(svc.expandedIssueId()).toBe('p1');
+    http.expectOne('/api/issues/p1').flush({ ...placedItem });
+  });
+
+  it('selectIssue keeps the issue open when selected again', () => {
+    // Arrange
+    const { svc, http } = setup();
+    svc.selectIssue('p1');
+    http.expectOne('/api/issues/p1').flush({ ...placedItem });
+
+    // Act
+    svc.selectIssue('p1');
+
+    // Assert
+    expect(svc.expandedIssueId()).toBe('p1');
+    http.expectOne('/api/issues/p1').flush({ ...placedItem });
+  });
+
+  it('selectIssue(null) clears the selection and the detail', () => {
+    // Arrange
+    const { svc, http } = setup();
+    svc.selectIssue('p1');
+    http.expectOne('/api/issues/p1').flush({ ...placedItem });
+
+    // Act
+    svc.selectIssue(null);
+
+    // Assert
+    expect(svc.expandedIssueId()).toBeNull();
+    expect(svc.issueDetail()).toBeNull();
   });
 });

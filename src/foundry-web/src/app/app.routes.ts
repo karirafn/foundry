@@ -2,7 +2,13 @@ import { Routes } from '@angular/router';
 import { setupGuard } from './features/setup/setup.guard';
 
 export const routes: Routes = [
-  { path: '', redirectTo: 'issues', pathMatch: 'full' },
+  {
+    path: '',
+    pathMatch: 'full',
+    canActivate: [setupGuard],
+    loadChildren: () =>
+      import('./features/board/board.routes').then((m) => m.BOARD_ROUTES),
+  },
   {
     path: 'issues',
     canActivate: [setupGuard],

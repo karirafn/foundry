@@ -1136,6 +1136,10 @@ export interface components {
             failureClassification: null | string;
             repositoryEligibilityStatus: null | string;
             runStats: null | components["schemas"]["RunStats"];
+            stage: string;
+            needsAction: boolean;
+            awaitsDispatch: boolean;
+            codeStep: null | string;
             checksOutcome?: null | string;
             pullRequestUrl?: null | string;
             rebaseOutcome?: null | string;

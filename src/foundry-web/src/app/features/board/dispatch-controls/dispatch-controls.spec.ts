@@ -2,7 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import { signal } from '@angular/core';
 import { vi } from 'vitest';
 import { DispatchControlsComponent } from './dispatch-controls';
-import { DispatchService } from '../../../../core/services/dispatch.service';
+import { DispatchService } from '../../../core/services/dispatch.service';
 
 interface DispatchServiceOverrides {
   isDispatchPaused?: boolean;
@@ -57,25 +57,25 @@ function getToggleBtn(fixture: { nativeElement: HTMLElement }): HTMLButtonElemen
 }
 
 describe('DispatchControlsComponent', () => {
-  it('should show "Pause All" when dispatch is active', () => {
+  it('should show "Pause all" when dispatch is active', () => {
     // Arrange / Act
     const { fixture } = setup();
 
     // Assert
     const btn = getToggleBtn(fixture);
-    expect(btn.textContent?.trim()).toBe('Pause All');
+    expect(btn.textContent?.trim()).toBe('Pause all');
   });
 
-  it('should show "Resume All" when dispatch is paused', () => {
+  it('should show "Resume all" when dispatch is paused', () => {
     // Arrange / Act
     const { fixture } = setup({ isDispatchPaused: true });
 
     // Assert
     const btn = getToggleBtn(fixture);
-    expect(btn.textContent?.trim()).toBe('Resume All');
+    expect(btn.textContent?.trim()).toBe('Resume all');
   });
 
-  it('should show "Resume All" when usage limit is active', () => {
+  it('should show "Resume all" when usage limit is active', () => {
     // Arrange
     const futureDate = new Date(Date.now() + 60_000).toISOString();
 
@@ -84,7 +84,7 @@ describe('DispatchControlsComponent', () => {
 
     // Assert
     const btn = getToggleBtn(fixture);
-    expect(btn.textContent?.trim()).toBe('Resume All');
+    expect(btn.textContent?.trim()).toBe('Resume all');
   });
 
   it('should call pauseDispatch when clicked in active state', () => {
@@ -111,24 +111,24 @@ describe('DispatchControlsComponent', () => {
     expect(mockDispatch.pauseDispatch).not.toHaveBeenCalled();
   });
 
-  it('should show "Pausing..." and disable while pausing', () => {
+  it('should show "Pausing…" and disable while pausing', () => {
     // Arrange / Act
     const { fixture } = setup({ pausing: true });
 
     // Assert
     const btn = getToggleBtn(fixture);
     expect(btn.disabled).toBe(true);
-    expect(btn.textContent?.trim()).toBe('Pausing...');
+    expect(btn.textContent?.trim()).toBe('Pausing…');
   });
 
-  it('should show "Resuming..." and disable while resuming', () => {
+  it('should show "Resuming…" and disable while resuming', () => {
     // Arrange / Act
     const { fixture } = setup({ isDispatchPaused: true, resuming: true });
 
     // Assert
     const btn = getToggleBtn(fixture);
     expect(btn.disabled).toBe(true);
-    expect(btn.textContent?.trim()).toBe('Resuming...');
+    expect(btn.textContent?.trim()).toBe('Resuming…');
   });
 
   it('should apply resume modifier class when paused', () => {

@@ -40,6 +40,10 @@ const mockSummary: IssueSummary = {
   providerType: 'github',
   detectedAt: '2026-01-01T00:00:00Z',
   url: 'https://github.com/owner/repo/issues/42',
+  stage: 'triage',
+  needsAction: false,
+  awaitsDispatch: true,
+  codeStep: null,
 };
 
 const mockSettingsResponse: GlobalSettingsResponse = {

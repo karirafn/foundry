@@ -1,0 +1,234 @@
+@use '../../../../styles/controls' as *;
+
+:host {
+  display: block;
+  min-height: 0;
+}
+
+// One tone sets the card's edge and the reason pill's border and text.
+[data-tone='running'] {
+  --fd-tone: var(--fd-accent-working);
+}
+[data-tone='error'] {
+  --fd-tone: var(--fd-state-failed);
+  --fd-tone-text: var(--fd-text-error);
+}
+[data-tone='warning'] {
+  --fd-tone: var(--fd-text-warning);
+  --fd-tone-text: var(--fd-text-warning);
+}
+[data-tone='ready'],
+[data-tone='completed'] {
+  --fd-tone: var(--fd-accent-ready);
+  --fd-tone-text: var(--fd-text-success);
+}
+[data-tone='neutral'] {
+  --fd-tone: var(--fd-border-control);
+  --fd-tone-text: var(--fd-text-secondary);
+}
+
+.board-card {
+  --fd-card-base: var(--fd-bg-card);
+  --fd-card-accent: var(--fd-tone, transparent);
+
+  background: color-mix(in srgb, var(--fd-card-accent) 6%, var(--fd-card-base));
+  border: 1px solid var(--fd-border-default);
+  border-radius: var(--fd-radius-md);
+  color: inherit;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  font: inherit;
+  min-height: 44px;
+  overflow: hidden;
+  padding: var(--fd-spacing-sm) var(--fd-spacing-md) var(--fd-spacing-sm)
+    calc(var(--fd-spacing-md) + 3px);
+  position: relative;
+  text-align: start;
+  transition:
+    background 150ms ease,
+    border-color 150ms ease;
+  width: 100%;
+
+  &::before,
+  &::after {
+    content: '';
+    inset-inline-start: 0;
+    pointer-events: none;
+    position: absolute;
+    width: 3px;
+  }
+
+  &::before {
+    background: var(--fd-card-accent);
+    inset-block: 0;
+  }
+
+  &:hover,
+  &:focus-visible {
+    --fd-card-base: var(--fd-bg-card-hover);
+    border-color: #484f58;
+  }
+
+  &:focus-visible {
+    @include focus-ring;
+  }
+
+  &--running::after {
+    animation: fd-board-running-edge 2.8s linear infinite;
+    background: linear-gradient(to bottom, transparent, rgba(255, 255, 255, 0.55), transparent);
+    height: 40%;
+    top: 0;
+  }
+
+  &--arrived {
+    animation: fd-board-needs-pulse 900ms ease-out 1;
+  }
+
+  &--moved {
+    animation: fd-fade-in 200ms ease both;
+  }
+}
+
+.board-card__line {
+  align-items: baseline;
+  display: flex;
+  gap: var(--fd-spacing-xs);
+  min-width: 0;
+}
+
+.board-card__slug,
+.board-card__number,
+.board-card__position {
+  font-family: var(--fd-font-mono);
+}
+
+.board-card__slug {
+  color: var(--fd-text-secondary);
+  font-size: 0.8125rem;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.board-card__number {
+  color: var(--fd-text-primary);
+  flex-shrink: 0;
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+
+.board-card__position {
+  color: var(--fd-text-secondary);
+  flex-shrink: 0;
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  margin-inline-start: auto;
+
+  &--next {
+    color: var(--fd-text-success);
+  }
+}
+
+.board-card__title {
+  color: var(--fd-text-primary);
+  font-size: 0.875rem;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.board-card__markers {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--fd-spacing-xs);
+  margin-top: var(--fd-spacing-xs);
+
+  &--done {
+    animation: fd-fade-in var(--fd-motion-fade) ease both;
+    color: var(--fd-text-success);
+    font-size: 0.75rem;
+    font-weight: 600;
+  }
+}
+
+.board-card__reason,
+.board-card__ineligible {
+  align-items: center;
+  border: 1px solid;
+  border-radius: 9999px;
+  display: inline-flex;
+  font-size: 11px;
+  font-weight: 600;
+  gap: 4px;
+  padding: 1px 8px;
+  white-space: nowrap;
+}
+
+.board-card__reason {
+  border-color: var(--fd-tone);
+  color: var(--fd-tone-text);
+}
+
+.board-card__ineligible {
+  background: var(--fd-bg-warning-subtle);
+  border-color: var(--fd-border-warning);
+  color: var(--fd-text-warning);
+}
+
+.board-card__muted {
+  color: var(--fd-text-secondary);
+  font-size: 0.75rem;
+}
+
+// A pulse after a glide waits for the card to land.
+:host-context(.board--glided) .board-card--arrived {
+  animation-delay: var(--fd-motion-glide);
+}
+
+// Stale: dashed and desaturated edge, every loop paused. Text keeps its contrast (no opacity).
+:host-context(.board--stale) .board-card {
+  --fd-card-accent: color-mix(in srgb, var(--fd-tone, transparent) 40%, transparent);
+
+  border-style: dashed;
+
+  &::before {
+    filter: saturate(0.5);
+  }
+
+  &::after {
+    animation-play-state: paused;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .board-card--running::after {
+    display: none;
+  }
+
+  // Outranks the global 0.01ms rule, so a moved card still fades.
+  .board-card--moved {
+    animation-duration: 200ms !important;
+  }
+
+  .board-card--arrived {
+    animation: none;
+
+    &::after {
+      animation: fd-board-needs-glow 900ms ease 1;
+      animation-duration: 900ms !important;
+      background: var(--fd-card-accent);
+      height: auto;
+      inset: 0;
+      width: auto;
+    }
+  }
+
+  .board-card__markers--done {
+    animation: none;
+  }
+}

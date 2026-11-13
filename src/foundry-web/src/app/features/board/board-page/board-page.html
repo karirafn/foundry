@@ -1,0 +1,105 @@
+<section class="board-page" aria-labelledby="board-heading">
+  <header class="board-page__header" [attr.inert]="sheetCoversBoard() ? '' : null">
+    <h1 #heading id="board-heading" class="board-page__heading" tabindex="-1">Board</h1>
+    <fd-board-summary
+      [waitingCount]="board.waitingCount()"
+      [needsCount]="board.needsCount()"
+      (needsYou)="focusFirstNeedsCard()"
+    />
+  </header>
+
+  @if (board.stale()) {
+    <p class="board-page__note board-page__note--stale">
+      Connection lost — showing last known state
+    </p>
+  }
+
+  @if (issueService.queueOrderStale()) {
+    <p class="board-page__note">
+      <svg
+        xmlns="http://www.w3.org/2000/svg"
+        width="16"
+        height="16"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        aria-hidden="true"
+        focusable="false"
+      >
+        <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+        <path d="M3 3v5h5" />
+        <path d="M12 7v5l4 2" />
+      </svg>
+      Queue order may be out of date
+    </p>
+  }
+
+  @if (issueService.loadError()) {
+    <div class="board-page__error" role="alert">
+      <span>Failed to load issues</span>
+      <button type="button" class="board-page__retry" (click)="retryLoad()">Retry</button>
+    </div>
+  } @else if (empty()) {
+    <p class="board-page__empty">
+      Nothing is in flight. Add the <code>{{ triggerLabel }}</code> label to an issue to start work.
+    </p>
+  } @else {
+    <div
+      class="board"
+      [class.board--stale]="board.stale()"
+      [class.board--glided]="board.glided()"
+      [style.--fd-board-stages]="stageCount"
+      [attr.inert]="sheetCoversBoard() ? '' : null"
+      [attr.role]="loading() ? 'status' : null"
+      [attr.aria-busy]="loading() || null"
+    >
+      @if (loading()) {
+        <span class="sr-only">Loading the board…</span>
+      }
+      <div class="board__needs-band" aria-hidden="true">
+        @if (!loading()) {
+          <span class="board__needs-caption">Needs you · {{ board.needsCount() }}</span>
+        }
+      </div>
+      @for (column of board.columns(); track column.stage.id; let i = $index) {
+        <fd-board-column
+          [column]="column"
+          [position]="i + 1"
+          [loading]="loading()"
+          (open)="openCard($event)"
+        />
+      }
+    </div>
+  }
+
+  <div class="sr-only" role="status">{{ board.announcement() }}</div>
+  <div class="sr-only" role="status">{{ issueService.nextUpAnnouncement() }}</div>
+  <div class="sr-only" role="status">{{ emptyAnnouncement() }}</div>
+  <div class="sr-only" role="status">{{ staleQueueAnnouncement() }}</div>
+
+  <fd-side-sheet
+    [open]="selectedId() !== null"
+    labelledBy="board-sheet-title"
+    closeLabel="Close issue details"
+    (dismissed)="closeSheet()"
+  >
+    <ng-template>
+      <h2 id="board-sheet-title" class="board-page__sheet-title" tabindex="-1">
+        @if (selectedIssue(); as issue) {
+          #{{ issue.issueNumber }} {{ issue.title }}
+        } @else {
+          Issue details
+        }
+      </h2>
+      <fd-issue-detail
+        [detail]="issueService.issueDetail()"
+        [loading]="issueService.detailLoading()"
+        [error]="issueService.detailError()"
+        (retry)="reloadDetail()"
+      />
+    </ng-template>
+  </fd-side-sheet>
+</section>

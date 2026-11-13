@@ -3668,7 +3668,11 @@
           "url",
           "failureClassification",
           "repositoryEligibilityStatus",
-          "runStats"
+          "runStats",
+          "stage",
+          "needsAction",
+          "awaitsDispatch",
+          "codeStep"
         ],
         "type": "object",
         "properties": {
@@ -3720,6 +3724,21 @@
               {
                 "$ref": "#/components/schemas/RunStats"
               }
+            ]
+          },
+          "stage": {
+            "type": "string"
+          },
+          "needsAction": {
+            "type": "boolean"
+          },
+          "awaitsDispatch": {
+            "type": "boolean"
+          },
+          "codeStep": {
+            "type": [
+              "null",
+              "string"
             ]
           },
           "checksOutcome": {

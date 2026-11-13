@@ -7,6 +7,14 @@ namespace Foundry.Modules.Issues.Domain.Entities.States;
 
 public sealed class DetectedIssue : Issue
 {
+    public override IssueStage Stage => IssueStage.Triage;
+
+    public override bool NeedsAction => false;
+
+    public override bool AwaitsDispatch => true;
+
+    public override IssueCodeStep? CodeStep => null;
+
     // Private parameterless constructor for EF Core materialization.
     private DetectedIssue()
     {

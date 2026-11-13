@@ -14,6 +14,14 @@ namespace Foundry.Modules.Issues.Domain.Entities.States;
 /// </summary>
 public sealed class RebasePendingIssue : Issue
 {
+    public override IssueStage Stage => IssueStage.Implement;
+
+    public override bool NeedsAction => false;
+
+    public override bool AwaitsDispatch => false;
+
+    public override IssueCodeStep? CodeStep => IssueCodeStep.Rebasing;
+
     /// <summary>
     /// Maximum number of consecutive <see cref="RevisionTrigger.RebaseConflict"/> revisions Foundry dispatches before a
     /// further conflict fails open to checks-pending with <see cref="RebaseOutcome.Conflict"/>.

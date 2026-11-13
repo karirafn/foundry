@@ -1,0 +1,85 @@
+:host {
+  display: inline-flex;
+  min-width: 0;
+}
+
+@keyframes fd-step-chip-sweep {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(260%);
+  }
+}
+
+@keyframes fd-step-chip-dot {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+
+.step-chip {
+  align-items: center;
+  background: var(--fd-bg-working-subtle);
+  border: 1px solid var(--fd-accent-working);
+  border-radius: 9999px;
+  color: var(--fd-text-activity);
+  display: inline-flex;
+  font-size: 11px;
+  font-weight: 600;
+  gap: 5px;
+  line-height: 1.5;
+  overflow: hidden;
+  padding: 1px 8px;
+  position: relative;
+  white-space: nowrap;
+
+  &::after {
+    animation: fd-step-chip-sweep 1.6s linear infinite;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.14), transparent);
+    content: '';
+    inset-block: 0;
+    inset-inline-start: 0;
+    pointer-events: none;
+    position: absolute;
+    width: 60%;
+  }
+
+  &--warning {
+    background: var(--fd-bg-warning-subtle);
+    border-color: var(--fd-border-warning);
+    color: var(--fd-text-warning);
+  }
+}
+
+.step-chip__dot {
+  animation: fd-step-chip-dot 1.6s ease-in-out infinite;
+  background: currentColor;
+  border-radius: 50%;
+  flex-shrink: 0;
+  height: 6px;
+  width: 6px;
+}
+
+// A stale board pauses every loop; the chip sits inside .board--stale.
+:host-context(.board--stale) {
+  .step-chip::after,
+  .step-chip__dot {
+    animation-play-state: paused;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .step-chip::after {
+    animation: none;
+    display: none;
+  }
+
+  .step-chip__dot {
+    animation: none;
+  }
+}

@@ -1,0 +1,72 @@
+<h2 class="board-column__header" [id]="headingId()">
+  <span class="board-column__name">{{ label() }}</span>
+  @if (!loading()) {
+    <span class="board-column__count" aria-hidden="true">{{ column().count }}</span>
+    <span class="sr-only">{{ countText() }}</span>
+  }
+</h2>
+
+@if (loading()) {
+  <div class="board-column__cell board-column__cell--flow" aria-hidden="true">
+    @for (skeleton of skeletons; track skeleton) {
+      <div class="board-column__skeleton"></div>
+    }
+  </div>
+} @else {
+  @if (column().stage.hasQueue && column().queue.length > 0) {
+    <div class="board-column__cell board-column__cell--queue">
+      <p class="board-column__caption" aria-hidden="true">Queue</p>
+      <ol class="board-column__list" [attr.aria-label]="label() + ' queue'">
+        @for (card of column().queue; track card.issue.id) {
+          <li
+            class="board-column__item"
+            [class.board-column__item--collapse]="card.phase === 'collapse'"
+          >
+            <fd-board-card
+              [card]="card"
+              (open)="open.emit({ id: card.issue.id, invoker: $event })"
+            />
+          </li>
+        }
+      </ol>
+    </div>
+  }
+
+  @if (column().flow.length > 0) {
+    <div class="board-column__cell board-column__cell--flow">
+      <p class="board-column__caption" aria-hidden="true">In flow</p>
+      <ul class="board-column__list" [attr.aria-label]="label() + ' in flow'">
+        @for (card of column().flow; track card.issue.id) {
+          <li
+            class="board-column__item"
+            [class.board-column__item--collapse]="card.phase === 'collapse'"
+          >
+            <fd-board-card
+              [card]="card"
+              (open)="open.emit({ id: card.issue.id, invoker: $event })"
+            />
+          </li>
+        }
+      </ul>
+    </div>
+  }
+
+  @if (column().needs.length > 0) {
+    <div class="board-column__cell board-column__cell--needs">
+      <p class="board-column__caption board-column__caption--needs" aria-hidden="true">Needs you</p>
+      <ul class="board-column__list" [attr.aria-label]="label() + ': needs you'">
+        @for (card of column().needs; track card.issue.id) {
+          <li
+            class="board-column__item"
+            [class.board-column__item--collapse]="card.phase === 'collapse'"
+          >
+            <fd-board-card
+              [card]="card"
+              (open)="open.emit({ id: card.issue.id, invoker: $event })"
+            />
+          </li>
+        }
+      </ul>
+    </div>
+  }
+}

@@ -1,0 +1,83 @@
+<button
+  #button
+  type="button"
+  class="board-card"
+  aria-haspopup="dialog"
+  [attr.data-tone]="tone()"
+  [class.board-card--running]="live() && card().running"
+  [class.board-card--arrived]="card().arrived"
+  [class.board-card--moved]="card().moved"
+  (click)="open.emit(button)"
+>
+  <span class="board-card__line">
+    <span class="board-card__slug">{{ card().issue.repositorySlug }}</span>
+    <span class="board-card__number">#{{ card().issue.issueNumber }}</span>
+    @if (card().ineligible) {
+      <span class="board-card__position" aria-hidden="true">—</span>
+    } @else if (card().position; as position) {
+      <span class="board-card__position" [class.board-card__position--next]="position === 1"
+        ><span class="sr-only">, queue position </span>#{{ position }} next</span
+      >
+    }
+  </span>
+  <span class="board-card__title" [attr.title]="card().issue.title">{{ card().issue.title }}</span>
+  @if (!live()) {
+    <span class="board-card__markers board-card__markers--done">
+      <svg
+        xmlns="http://www.w3.org/2000/svg"
+        width="12"
+        height="12"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="3"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        aria-hidden="true"
+        focusable="false"
+      >
+        <path d="M20 6 9 17l-5-5" />
+      </svg>
+      <span class="sr-only">, </span>Completed
+    </span>
+  } @else if (hasMarkers()) {
+    <span class="board-card__markers">
+      @if (card().nextRole; as role) {
+        <fd-role-tag [role]="role" />
+      }
+      @if (step(); as step) {
+        <fd-step-chip [label]="step.label" [tone]="step.tone" />
+      }
+      @if (card().reason; as reason) {
+        <span class="board-card__reason" [attr.data-tone]="reason.tone">{{ reason.label }}</span>
+      }
+      @if (card().ineligible) {
+        <span class="board-card__ineligible">
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="12"
+            height="12"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+            focusable="false"
+          >
+            <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3" />
+            <path d="M12 9v4M12 17h.01" />
+          </svg>
+          Repo ineligible
+        </span>
+      }
+      @if (card().queueMarker; as marker) {
+        <span class="board-card__muted">{{ marker }}</span>
+      }
+    </span>
+  }
+  @if (live() && card().running) {
+    <span class="sr-only">, worker running</span>
+  }
+</button>

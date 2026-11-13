@@ -323,6 +323,22 @@ Two states deserve explicit note:
 - `awaiting_input` is Needs-attention (label "Awaiting input") because it advances only when a person answers the posted questions.
 - `triage_failed` is Needs-attention (label "Triage failed"): a transient failure retries itself, anything else waits for Retry triage or Skip triage ([ADR 0014](docs/adr/0014-remove-immediate-requeue-always-pause.md)).
 
+### Issue Stage
+
+The part of the lifecycle that currently owns an issue — **Triage**, **Implement**, **Awaiting review** (an open pull request waiting for a person), or **Done**. Declared by each state type (`Issue.Stage`), so a new state cannot compile without one. `awaiting_input` follows its resume target: a re-triage is in Triage, every other target in Implement. The board (`/`) shows one column per stage except Done; a completed issue leaves the board. Served on `IssueSummary.Stage` as `triage | implement | awaiting_review | done`.
+
+### Needs action
+
+True when the issue progresses only after a person acts (`Issue.NeedsAction`). The same set as the Needs attention display group, plus `publish_blocked`. A Needs-action issue sits in its stage's Needs-you row on the board.
+
+### Awaits dispatch
+
+True when the issue is waiting for a worker run to be dispatched — queued, or detected or blocked before it can be queued (`detected`, `triage_queued`, `triage_blocked`, `queued`, `blocked`, `revision_queued`, `continuation_queued`). An awaiting-dispatch issue sits in its stage's queue section on the board.
+
+### Code step
+
+The step Foundry's own code is running for the issue, with no worker involved — **publishing** (or **retrying a publish**), **rebasing** (`rebase_pending`), or waiting for CI **checks** (`checks_pending`). Rebasing and checks are declared by the state type (`Issue.CodeStep`); publishing is a phase of the issue's run, so `IssueSummary.CodeStep` reads it from the run's publish phase (`publishing | publish_retrying | rebasing | checks`, or null).
+
 ## TriageQueuedIssue
 
 `triage_queued`: an issue waiting for a worker to triage it ([ADR 0097](docs/adr/0097-every-new-issue-is-triaged-before-dispatch.md)). A [Queued Issue](#queued-issue) with `TierRank = 2`, between continuation and fresh. Display group: Waiting, label "Triage queued".

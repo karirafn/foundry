@@ -8,7 +8,7 @@
 .app-header {
   display: flex;
   align-items: center;
-  height: 48px;
+  height: var(--fd-app-header-height);
   padding: 0 var(--fd-spacing-xl);
   border-bottom: 1px solid var(--fd-border-default);
   background: var(--fd-bg-card);
@@ -22,6 +22,13 @@
   font-weight: 600;
   color: var(--fd-text-primary);
   letter-spacing: 0.02em;
+  text-decoration: none;
+  border-radius: var(--fd-radius-sm);
+
+  &:focus-visible {
+    outline: 2px solid var(--fd-text-link);
+    outline-offset: 2px;
+  }
 }
 
 .app-header__nav {

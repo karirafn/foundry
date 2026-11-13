@@ -11,6 +11,14 @@ namespace Foundry.Modules.Issues.Domain.Entities.States;
 
 public sealed class ChecksPendingIssue : Issue
 {
+    public override IssueStage Stage => IssueStage.Implement;
+
+    public override bool NeedsAction => false;
+
+    public override bool AwaitsDispatch => false;
+
+    public override IssueCodeStep? CodeStep => IssueCodeStep.Checks;
+
     /// <summary>
     /// Maximum number of FailedChecks revision containers Foundry will dispatch across the lifetime
     /// of an issue before transitioning it back to review instead of retrying.

@@ -2,7 +2,9 @@ import { Injectable, inject } from '@angular/core';
 import { Title } from '@angular/platform-browser';
 import { TitleStrategy, RouterStateSnapshot } from '@angular/router';
 
-const TITLE_SUFFIX = ' — Foundry Settings';
+const SETTINGS_SUFFIX = ' — Foundry Settings';
+const APP_SUFFIX = ' — Foundry';
+const SETTINGS_URL = /^\/settings(?:[/?#]|$)/;
 
 @Injectable()
 export class SettingsTitleStrategy extends TitleStrategy {
@@ -11,7 +13,8 @@ export class SettingsTitleStrategy extends TitleStrategy {
   override updateTitle(snapshot: RouterStateSnapshot): void {
     const pageTitle = this.buildTitle(snapshot);
     if (pageTitle !== undefined) {
-      this._title.setTitle(`${pageTitle}${TITLE_SUFFIX}`);
+      const suffix = SETTINGS_URL.test(snapshot.url) ? SETTINGS_SUFFIX : APP_SUFFIX;
+      this._title.setTitle(`${pageTitle}${suffix}`);
     }
   }
 }

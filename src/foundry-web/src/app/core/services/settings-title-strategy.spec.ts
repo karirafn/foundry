@@ -3,9 +3,9 @@ import { Title } from '@angular/platform-browser';
 import { RouterStateSnapshot } from '@angular/router';
 import { SettingsTitleStrategy } from './settings-title-strategy';
 
-function buildSnapshot(): RouterStateSnapshot {
+function buildSnapshot(url = '/settings/dispatch'): RouterStateSnapshot {
   return {
-    url: '/settings/dispatch',
+    url,
     root: {},
   } as unknown as RouterStateSnapshot;
 }
@@ -63,5 +63,44 @@ describe('SettingsTitleStrategy', () => {
     // Assert
     const called = (titleService.setTitle as ReturnType<typeof vi.spyOn>).mock.calls[0][0] as string;
     expect(called.endsWith(' — Foundry Settings')).toBe(true);
+  });
+
+  it('uses the plain Foundry suffix outside settings', () => {
+    // Arrange
+    const snapshot = buildSnapshot('/');
+    vi.spyOn(strategy, 'buildTitle').mockReturnValue('Board');
+    vi.spyOn(titleService, 'setTitle');
+
+    // Act
+    strategy.updateTitle(snapshot);
+
+    // Assert
+    expect(titleService.setTitle).toHaveBeenCalledWith('Board — Foundry');
+  });
+
+  it('does not read a path that merely starts with "settings" as a settings page', () => {
+    // Arrange
+    const snapshot = buildSnapshot('/settingsx');
+    vi.spyOn(strategy, 'buildTitle').mockReturnValue('Other');
+    vi.spyOn(titleService, 'setTitle');
+
+    // Act
+    strategy.updateTitle(snapshot);
+
+    // Assert
+    expect(titleService.setTitle).toHaveBeenCalledWith('Other — Foundry');
+  });
+
+  it('keeps the settings suffix for the settings root', () => {
+    // Arrange
+    const snapshot = buildSnapshot('/settings');
+    vi.spyOn(strategy, 'buildTitle').mockReturnValue('Settings');
+    vi.spyOn(titleService, 'setTitle');
+
+    // Act
+    strategy.updateTitle(snapshot);
+
+    // Assert
+    expect(titleService.setTitle).toHaveBeenCalledWith('Settings — Foundry Settings');
   });
 });

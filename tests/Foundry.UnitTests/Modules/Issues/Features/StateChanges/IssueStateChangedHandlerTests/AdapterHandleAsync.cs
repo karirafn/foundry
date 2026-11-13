@@ -33,7 +33,11 @@ public sealed class AdapterHandleAsync
             Url: "https://github.com/owner/repo/issues/7",
             FailureClassification: null,
             RepositoryEligibilityStatus: null,
-            RunStats: null);
+            RunStats: null,
+            Stage: "implement",
+            NeedsAction: false,
+            AwaitsDispatch: true,
+            CodeStep: null);
         issueQueries.SetSummary(issueId, expectedSummary);
 
         IssueQueued @event = new(issueId, MonitoredRepositoryId.New());
@@ -65,7 +69,11 @@ public sealed class AdapterHandleAsync
             Url: "https://github.com/owner/repo/issues/3",
             FailureClassification: null,
             RepositoryEligibilityStatus: null,
-            RunStats: null);
+            RunStats: null,
+            Stage: "implement",
+            NeedsAction: false,
+            AwaitsDispatch: true,
+            CodeStep: null);
         issueQueries.SetSummary(issueId, expectedSummary);
 
         IssueQueued @event = new(issueId, MonitoredRepositoryId.New());

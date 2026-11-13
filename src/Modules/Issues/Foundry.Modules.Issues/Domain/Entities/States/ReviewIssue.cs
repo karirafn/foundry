@@ -8,6 +8,14 @@ namespace Foundry.Modules.Issues.Domain.Entities.States;
 
 public sealed class ReviewIssue : Issue
 {
+    public override IssueStage Stage => IssueStage.AwaitingReview;
+
+    public override bool NeedsAction => true;
+
+    public override bool AwaitsDispatch => false;
+
+    public override IssueCodeStep? CodeStep => null;
+
     // Private parameterless constructor for EF Core materialization.
     private ReviewIssue()
     {

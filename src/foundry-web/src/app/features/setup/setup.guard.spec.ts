@@ -115,4 +115,18 @@ describe('app routes', () => {
     expect(settingsRoute?.canActivate).toBeDefined();
     expect(settingsRoute?.canActivate).toContain(setupGuard);
   });
+
+  it('should open the board at the root instead of redirecting', async () => {
+    // Arrange
+    const rootRoute = routes.find((r) => r.path === '');
+
+    // Act
+    const children = (await rootRoute?.loadChildren?.()) as { path?: string; title?: string }[];
+
+    // Assert
+    expect(rootRoute?.redirectTo).toBeUndefined();
+    expect(rootRoute?.pathMatch).toBe('full');
+    expect(rootRoute?.canActivate).toContain(setupGuard);
+    expect(children[0].title).toBe('Board');
+  });
 });

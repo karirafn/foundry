@@ -6,6 +6,14 @@ namespace Foundry.Modules.Issues.Domain.Entities.States;
 
 public sealed class BlockedIssue : Issue
 {
+    public override IssueStage Stage => IssueStage.Implement;
+
+    public override bool NeedsAction => false;
+
+    public override bool AwaitsDispatch => true;
+
+    public override IssueCodeStep? CodeStep => null;
+
     // Private parameterless constructor for EF Core materialization.
     private BlockedIssue()
     {

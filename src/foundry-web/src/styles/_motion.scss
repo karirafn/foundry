@@ -1,0 +1,129 @@
+// Motion for the board (#851): tokens, shared keyframes and the View Transition rules. The
+// ::view-transition-* pseudo-elements can't be styled from emulated-encapsulation component styles,
+// so they live here.
+
+:root {
+  --fd-motion-glide: 300ms;
+  --fd-ease-glide: cubic-bezier(0.2, 0, 0, 1);
+  --fd-motion-enter: 240ms;
+  --fd-ease-enter: cubic-bezier(0.05, 0.7, 0.1, 1);
+  --fd-motion-exit: 180ms;
+  --fd-ease-exit: cubic-bezier(0.3, 0, 0.8, 0.15);
+  --fd-motion-fade: 160ms;
+
+  // No root snapshot: the unnamed page stays live while named cards glide.
+  view-transition-name: none;
+}
+
+@keyframes fd-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes fd-fade-out {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes fd-board-glide-lift {
+  0% {
+    filter: none;
+  }
+  50% {
+    filter: drop-shadow(0 8px 18px rgba(0, 0, 0, 0.45));
+  }
+  100% {
+    filter: none;
+  }
+}
+
+@keyframes fd-board-card-in {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+// Clicks pass through the animating snapshots to the live page underneath.
+::view-transition {
+  pointer-events: none;
+}
+
+::view-transition-group(*.fd-card) {
+  animation-duration: var(--fd-motion-glide);
+  animation-timing-function: var(--fd-ease-glide);
+}
+
+::view-transition-old(*.fd-card) {
+  animation: fd-fade-out var(--fd-motion-glide) var(--fd-ease-glide) both;
+}
+
+::view-transition-new(*.fd-card) {
+  animation:
+    fd-fade-in var(--fd-motion-glide) var(--fd-ease-glide) both,
+    fd-board-glide-lift var(--fd-motion-glide) var(--fd-ease-glide);
+}
+
+// A card that only exists after the change enters; one that only existed before it leaves.
+::view-transition-new(*.fd-card):only-child {
+  animation: fd-board-card-in var(--fd-motion-enter) var(--fd-ease-enter) both;
+}
+
+::view-transition-old(*.fd-card):only-child {
+  animation: fd-fade-out var(--fd-motion-exit) var(--fd-ease-exit) both;
+}
+
+// The pane holds still, so gliding cards pass under it.
+::view-transition-group(fd-side-sheet) {
+  animation: none;
+}
+
+// The board never starts a transition under reduced motion; this is the safety net.
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-group(*),
+  ::view-transition-old(*),
+  ::view-transition-new(*) {
+    animation: none !important;
+  }
+}
+
+// Board card loops and pulses, kept here to hold the card stylesheet inside its style budget.
+@keyframes fd-board-running-edge {
+  from {
+    transform: translateY(-100%);
+  }
+  to {
+    transform: translateY(250%);
+  }
+}
+
+@keyframes fd-board-needs-pulse {
+  from {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--fd-card-accent) 55%, transparent);
+  }
+  to {
+    box-shadow: 0 0 0 8px transparent;
+  }
+}
+
+@keyframes fd-board-needs-glow {
+  0%,
+  100% {
+    opacity: 0;
+  }
+  50% {
+    opacity: 0.18;
+  }
+}

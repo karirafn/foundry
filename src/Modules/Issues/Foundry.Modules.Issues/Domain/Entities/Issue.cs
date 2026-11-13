@@ -77,6 +77,21 @@ public abstract class Issue : AggregateRoot<IssueId>, IStateMachine<Issue>
     /// </summary>
     public virtual string? LinkedPullRequestUrl => null;
 
+    /// <summary>The part of the lifecycle that currently owns the issue.</summary>
+    public abstract IssueStage Stage { get; }
+
+    /// <summary>True when the issue progresses only after a person acts.</summary>
+    public abstract bool NeedsAction { get; }
+
+    /// <summary>
+    /// True when the issue is waiting for a worker run to be dispatched: queued, or detected or blocked before it can
+    /// be queued.
+    /// </summary>
+    public abstract bool AwaitsDispatch { get; }
+
+    /// <summary>The step Foundry's own code is running for the issue, or <see langword="null"/> when none is.</summary>
+    public abstract IssueCodeStep? CodeStep { get; }
+
     private protected static string? NullIfEmpty(string value) =>
         string.IsNullOrEmpty(value) ? null : value;
 

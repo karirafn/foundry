@@ -1,0 +1,146 @@
+@use '../../../../styles/board-breakpoints' as *;
+@use '../../../../styles/controls' as *;
+
+.side-sheet {
+  background: var(--fd-bg-card);
+  border-inline-start: 1px solid var(--fd-border-default);
+  box-shadow: var(--fd-shadow-pane);
+  inset-block: var(--fd-app-header-height) 0;
+  inset-inline-end: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: var(--fd-spacing-xl);
+  position: fixed;
+  view-transition-name: fd-side-sheet;
+  width: min(36rem, 100vw);
+  z-index: 20;
+
+  &--enter {
+    animation: fd-pane-in var(--fd-motion-enter) var(--fd-ease-enter);
+  }
+
+  &--leave {
+    animation: fd-pane-out var(--fd-motion-exit) var(--fd-ease-exit) forwards;
+  }
+}
+
+.side-sheet__close {
+  align-items: center;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--fd-radius-sm);
+  color: var(--fd-text-secondary);
+  cursor: pointer;
+  display: inline-flex;
+  height: 32px;
+  inset-block-start: var(--fd-spacing-lg);
+  inset-inline-end: var(--fd-spacing-lg);
+  justify-content: center;
+  position: absolute;
+  width: 32px;
+
+  &:hover {
+    border-color: var(--fd-border-default);
+    color: var(--fd-text-primary);
+  }
+
+  &:focus-visible {
+    @include focus-ring;
+  }
+
+  @media (any-pointer: coarse) {
+    height: 44px;
+    width: 44px;
+  }
+}
+
+.side-sheet__scrim {
+  display: none;
+}
+
+@keyframes fd-pane-in {
+  from {
+    opacity: 0.6;
+    transform: translateX(100%);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes fd-pane-out {
+  from {
+    opacity: 1;
+    transform: translateX(0);
+  }
+  to {
+    opacity: 0.6;
+    transform: translateX(100%);
+  }
+}
+
+@keyframes fd-sheet-in {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+@keyframes fd-sheet-out {
+  from {
+    transform: translateY(0);
+  }
+  to {
+    transform: translateY(100%);
+  }
+}
+
+@media (width < $board-breakpoint) {
+  .side-sheet {
+    inset: var(--fd-app-header-height) 0 0 0;
+    width: 100%;
+
+    &--enter {
+      animation-name: fd-sheet-in;
+    }
+
+    &--leave {
+      animation-name: fd-sheet-out;
+    }
+  }
+
+  .side-sheet__scrim {
+    background: var(--fd-bg-backdrop);
+    display: block;
+    inset: var(--fd-app-header-height) 0 0 0;
+    position: fixed;
+    z-index: 19;
+
+    &--enter {
+      animation: fd-fade-in var(--fd-motion-enter) var(--fd-ease-enter);
+    }
+
+    &--leave {
+      animation: fd-fade-out var(--fd-motion-exit) var(--fd-ease-exit) forwards;
+    }
+  }
+}
+
+// The global reduced-motion rule shortens every animation to 0.01ms; the class selectors below
+// outrank it, so the sheet still fades.
+@media (prefers-reduced-motion: reduce) {
+  .side-sheet--enter,
+  .side-sheet__scrim--enter {
+    animation: fd-fade-in 160ms ease both;
+    animation-duration: 160ms !important;
+  }
+
+  .side-sheet--leave,
+  .side-sheet__scrim--leave {
+    animation: fd-fade-out 160ms ease forwards;
+    animation-duration: 160ms !important;
+  }
+}

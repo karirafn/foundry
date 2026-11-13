@@ -28,7 +28,11 @@ public sealed class BroadcastAsync
             Url: "https://github.com/owner/repo/issues/1",
             FailureClassification: null,
             RepositoryEligibilityStatus: null,
-            RunStats: null);
+            RunStats: null,
+            Stage: "triage",
+            NeedsAction: false,
+            AwaitsDispatch: true,
+            CodeStep: null);
 
         // Act
         await sut.BroadcastAsync(summary, TestContext.Current.CancellationToken);
@@ -37,6 +41,41 @@ public sealed class BroadcastAsync
         hubContext.SentMethod.ShouldBe("IssueUpdated");
         hubContext.SentArgs.ShouldHaveSingleItem();
         hubContext.SentArgs[0].ShouldBe(summary);
+    }
+
+    [Fact]
+    public async Task WhenStateChanges_IssueUpdatedPayloadCarriesTheNewPlacement()
+    {
+        // Arrange
+        SpyHubContext hubContext = new();
+        SignalRIssueBroadcaster sut = new(hubContext);
+
+        IssueSummary summary = new(
+            Id: Guid.NewGuid(),
+            IssueNumber: 1,
+            Title: "Test Issue",
+            State: "review",
+            RepositorySlug: "owner/repo",
+            DetectedAt: DateTimeOffset.UtcNow,
+            Url: "https://github.com/owner/repo/issues/1",
+            FailureClassification: null,
+            RepositoryEligibilityStatus: null,
+            RunStats: null,
+            Stage: "awaiting_review",
+            NeedsAction: true,
+            AwaitsDispatch: false,
+            CodeStep: null);
+
+        // Act
+        await sut.BroadcastAsync(summary, TestContext.Current.CancellationToken);
+
+        // Assert
+        IssueSummary sent = hubContext.SentArgs.ShouldHaveSingleItem().ShouldBeOfType<IssueSummary>();
+        sent.ShouldSatisfyAllConditions(
+            () => sent.Stage.ShouldBe("awaiting_review"),
+            () => sent.NeedsAction.ShouldBeTrue(),
+            () => sent.AwaitsDispatch.ShouldBeFalse(),
+            () => sent.CodeStep.ShouldBeNull());
     }
 
     private sealed class SpyHubContext : IHubContext<IssueHub>
