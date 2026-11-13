@@ -43,7 +43,7 @@
     border: 1px solid var(--fd-border-muted);
     border-radius: var(--fd-radius-sm);
     margin-top: var(--fd-spacing-xs);
-    max-height: 400px;
+    max-height: var(--fd-log-view-max-height, 400px);
     overflow-y: auto;
     padding: var(--fd-spacing-md);
   }
