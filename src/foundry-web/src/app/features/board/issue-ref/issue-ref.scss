@@ -1,0 +1,22 @@
+:host {
+  align-items: baseline;
+  color: var(--fd-text-secondary);
+  display: flex;
+  font-family: var(--fd-font-mono);
+  gap: var(--fd-spacing-xs);
+  max-width: 100%;
+  min-width: 0;
+  white-space: nowrap;
+}
+
+.issue-ref__name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.issue-ref__number {
+  color: var(--fd-text-primary);
+  flex-shrink: 0;
+  font-weight: 600;
+}

@@ -6,17 +6,11 @@
 >
   <div class="worker-card__meta" [id]="idBase() + '-meta'">
     <fd-role-tag [role]="role()" />
-    <span class="worker-card__repo" [attr.title]="item().issue.repositorySlug"
-      >{{ item().issue.repositorySlug }} <strong>#{{ item().issue.issueNumber }}</strong></span
-    >
-    @if (live()) {
-      <span class="worker-card__elapsed"
-        ><span class="sr-only">Running for </span><span aria-hidden="true">running </span
-        >{{ elapsed() }}</span
-      >
-    } @else {
-      <span class="worker-card__completed">Completed</span>
-    }
+    <fd-issue-ref
+      class="worker-card__ref"
+      [slug]="item().issue.repositorySlug"
+      [issueNumber]="item().issue.issueNumber"
+    />
   </div>
   <button
     #button
@@ -34,30 +28,43 @@
     <fd-worker-activity [panel]="panel()" [taskLineId]="idBase() + '-task'" />
   }
   <div class="worker-card__footer">
-    @if (lastEvent(); as event) {
-      <span class="worker-card__event" [class.worker-card__event--silent]="event.silent">
-        @if (event.silent) {
-          <svg
-            class="worker-card__warning"
-            xmlns="http://www.w3.org/2000/svg"
-            width="14"
-            height="14"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            aria-hidden="true"
-            focusable="false"
-          >
-            <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3" />
-            <path d="M12 9v4M12 17h.01" />
-          </svg>
+    <p class="worker-card__status" [id]="idBase() + '-status'">
+      @if (live()) {
+        <span class="worker-card__elapsed"
+          ><span class="sr-only">Running for </span><span aria-hidden="true">running </span
+          >{{ elapsed() }}</span
+        >
+        @if (lastEvent(); as event) {
+          <span class="worker-card__sep" aria-hidden="true">·</span><span class="sr-only">, </span>
+          <span class="worker-card__event" [class.worker-card__event--silent]="event.silent">
+            @if (event.silent) {
+              <svg
+                class="worker-card__warning"
+                xmlns="http://www.w3.org/2000/svg"
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+                focusable="false"
+              >
+                <path
+                  d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"
+                />
+                <path d="M12 9v4M12 17h.01" />
+              </svg>
+            }
+            {{ event.text }}
+          </span>
         }
-        {{ event.text }}
-      </span>
-    }
+      } @else {
+        <span class="worker-card__completed">Completed</span>
+      }
+    </p>
     <a class="worker-card__floor" routerLink="/floor" [fragment]="laneFragment()">Watch on Floor</a>
   </div>
 </div>
