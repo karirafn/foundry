@@ -6,6 +6,7 @@ using Foundry.Modules.Monitoring.Features.Providers.Checks;
 using Foundry.Modules.Monitoring.Features.Providers.Comments;
 using ProviderChecks = Foundry.Modules.Monitoring.Features.Providers.Checks.Checks;
 using Foundry.Modules.Monitoring.Features.Providers.Feedback;
+using Foundry.Modules.Monitoring.Features.Providers.Merge;
 using Foundry.Modules.Monitoring.Features.Providers.Rebase;
 using Foundry.Modules.Monitoring.Features.Providers.TrackerReads;
 using Foundry.Shared;
@@ -296,4 +297,22 @@ internal interface IIssueProvider
         string expectedHeadSha,
         CancellationToken cancellationToken)
         => Task.FromResult(Result<RebaseRequestOutcome>.Ok(new RebaseRequestOutcome.Unsupported()));
+
+    /// <summary>
+    /// Merges the pull request Foundry opened, pinned to <paramref name="expectedHeadSha"/>, the head its checks
+    /// gate verified (ADR 0105). A <c>Result</c> failure is transient (5xx, timeout, rate limit) and retried;
+    /// every <see cref="MergeRequestOutcome"/> is a definite answer.
+    /// </summary>
+    /// <remarks>Providers without a merge implementation keep this default, which answers
+    /// <see cref="MergeRequestOutcome.Unsupported"/> without any provider call.</remarks>
+    /// <exception cref="ArgumentException"><paramref name="expectedHeadSha"/> is null or blank.</exception>
+    Task<Result<MergeRequestOutcome>> MergePullRequestAsync(
+        RepositorySlug slug,
+        string pullRequestUrl,
+        string expectedHeadSha,
+        CancellationToken cancellationToken)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(expectedHeadSha);
+        return Task.FromResult(Result<MergeRequestOutcome>.Ok(new MergeRequestOutcome.Unsupported()));
+    }
 }

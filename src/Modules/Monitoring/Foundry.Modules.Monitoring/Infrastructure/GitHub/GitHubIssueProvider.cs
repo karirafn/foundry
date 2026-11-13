@@ -9,6 +9,7 @@ using Foundry.Modules.Monitoring.Features.Providers.Checks;
 using Foundry.Modules.Monitoring.Features.Providers.Comments;
 using ProviderChecks = Foundry.Modules.Monitoring.Features.Providers.Checks.Checks;
 using Foundry.Modules.Monitoring.Features.Providers.Feedback;
+using Foundry.Modules.Monitoring.Features.Providers.Merge;
 using Foundry.Modules.Monitoring.Features.Providers.Publishing;
 using Foundry.Modules.Monitoring.Features.Providers.Rebase;
 using Foundry.Modules.Monitoring.Features.Providers.TrackerReads;
@@ -434,6 +435,15 @@ internal sealed partial class GitHubIssueProvider(
         CancellationToken cancellationToken)
     {
         return httpClient.RequestRebaseAsync(apiBaseUrl, pullRequestId, expectedHeadSha, token, cancellationToken);
+    }
+
+    public Task<Result<MergeRequestOutcome>> MergePullRequestAsync(
+        RepositorySlug slug,
+        string pullRequestUrl,
+        string expectedHeadSha,
+        CancellationToken cancellationToken)
+    {
+        return httpClient.MergePullRequestAsync(apiBaseUrl, slug, pullRequestUrl, expectedHeadSha, token, cancellationToken);
     }
 
     private async Task<Result<string>> FindOpenPullRequestAsync(
