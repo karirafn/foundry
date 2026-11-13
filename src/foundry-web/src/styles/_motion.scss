@@ -118,6 +118,16 @@
   }
 }
 
+// The sheen across a worker card's current task segment.
+@keyframes fd-board-segment-sheen {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(100%);
+  }
+}
+
 // A completed card's list item folds away; its child needs `min-height: 0`.
 .fd-board-collapse {
   animation: fd-board-card-collapse var(--fd-motion-exit) var(--fd-ease-exit) forwards;

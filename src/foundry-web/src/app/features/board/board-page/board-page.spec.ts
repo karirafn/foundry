@@ -11,6 +11,7 @@ import {
   IssueSignalRService,
 } from '../../../core/services/issue-signalr.service';
 import { WorkerSignalRService } from '../../../core/services/worker-signalr.service';
+import { AgentActivity, InFlightTool } from '../../../core/models/agent-activity.model';
 import { DispatchService } from '../../../core/services/dispatch.service';
 import { DispatchCapacityService } from '../../floor/dispatch-capacity.service';
 import { AccountService } from '../../settings/accounts/account.service';
@@ -55,6 +56,8 @@ interface Harness {
     freeSlots: number;
   } | null>;
   capacityError: WritableSignal<string | null>;
+  activities: WritableSignal<ReadonlyMap<string, AgentActivity>>;
+  tools: WritableSignal<ReadonlyMap<string, readonly InFlightTool[]>>;
   render: () => Promise<void>;
 }
 
@@ -67,6 +70,8 @@ async function setup(url = '/'): Promise<Harness> {
     freeSlots: number;
   } | null>(null);
   const capacityError = signal<string | null>(null);
+  const activities = signal<ReadonlyMap<string, AgentActivity>>(new Map());
+  const tools = signal<ReadonlyMap<string, readonly InFlightTool[]>>(new Map());
   TestBed.configureTestingModule({
     imports: [BoardPageComponent],
     providers: [
@@ -88,7 +93,8 @@ async function setup(url = '/'): Promise<Harness> {
         useValue: {
           activeAgentCount: signal(0),
           activityForIssue: () => null,
-          agentActivityForIssue: () => null,
+          agentActivityForIssue: (id: string) => activities().get(id) ?? null,
+          recentToolsForRun: (runId: string) => tools().get(runId) ?? [],
         },
       },
       {
@@ -136,6 +142,8 @@ async function setup(url = '/'): Promise<Harness> {
     repositories,
     capacity,
     capacityError,
+    activities,
+    tools,
     render,
   };
 }
@@ -159,6 +167,23 @@ function idsIn(el: HTMLElement, selector: string): string[] {
 
 function minutesAgo(minutes: number): string {
   return new Date(Date.now() - minutes * 60_000).toISOString();
+}
+
+function activity(issueId: string, overrides: Partial<AgentActivity> = {}): AgentActivity {
+  return {
+    workerRunId: `run-${issueId}`,
+    issueId,
+    role: 'implement',
+    lastEventAt: null,
+    tasks: [],
+    currentTask: null,
+    completedTaskCount: 0,
+    subagents: [],
+    activeSkill: null,
+    inFlightTool: null,
+    tokens: { inputTokens: 0, outputTokens: 0 },
+    ...overrides,
+  };
 }
 
 describe('BoardPageComponent', () => {
@@ -414,6 +439,155 @@ describe('BoardPageComponent', () => {
       const link = card.querySelector('a')!;
       expect(text(link)).toBe('Watch on Floor');
       expect(link.getAttribute('href')).toBe('/floor#floor-lane-w');
+    });
+
+    describe('worker activity', () => {
+      const current = {
+        id: '2',
+        subject: 'Run tests',
+        activeForm: 'Running tests',
+        status: 'in_progress',
+      };
+      const running = (): AgentActivity =>
+        activity('w', {
+          lastEventAt: minutesAgo(2.5),
+          tasks: [
+            { id: '1', subject: 'Plan', activeForm: null, status: 'completed' },
+            current,
+            { id: '3', subject: 'Write docs', activeForm: null, status: 'pending' },
+          ],
+          currentTask: current,
+          completedTaskCount: 1,
+        });
+
+      it('shows the starting state before the first activity event', async () => {
+        // Act
+        const { el } = await loaded([item('w', 3)]);
+
+        // Assert
+        const panel = el.querySelector('fd-worker-activity')!;
+        expect(text(panel.querySelector('.worker-activity__task'))).toBe('Starting…');
+        expect(text(panel.querySelector('.worker-activity__tool'))).toBe(
+          "Waiting for the agent's first event",
+        );
+        expect(el.querySelector('.worker-card__event')).toBeNull();
+      });
+
+      it('shows the current task, its position on a hidden segmented bar, and the latest tool', async () => {
+        // Arrange
+        const h = await loaded([item('w', 3)]);
+
+        // Act
+        h.activities.set(new Map([['w', running()]]));
+        h.tools.set(
+          new Map([
+            ['run-w', [{ name: 'Bash', summary: 'npm test -- --watch=false', startedAt: null }]],
+          ]),
+        );
+        await h.render();
+
+        // Assert
+        const panel = h.el.querySelector('fd-worker-activity')!;
+        expect(text(panel.querySelector('.worker-activity__task'))).toBe('Running tests');
+        expect(text(panel.querySelector('.worker-activity__progress'))).toBe('task 2 of 3');
+        const bar = panel.querySelector('.worker-activity__bar')!;
+        expect(bar.getAttribute('aria-hidden')).toBe('true');
+        expect(
+          [...bar.querySelectorAll('.worker-activity__segment')].map((s) => s.className),
+        ).toEqual([
+          'worker-activity__segment worker-activity__segment--done',
+          'worker-activity__segment worker-activity__segment--current',
+          'worker-activity__segment',
+        ]);
+        const tool = panel.querySelector('.worker-activity__tool')!;
+        expect(text(tool)).toBe('Bash npm test -- --watch=false');
+        expect(tool.getAttribute('title')).toBe('Bash npm test -- --watch=false');
+      });
+
+      it('has no bar without a task list', async () => {
+        // Arrange
+        const h = await loaded([item('w', 3)]);
+
+        // Act
+        h.activities.set(new Map([['w', activity('w')]]));
+        await h.render();
+
+        // Assert
+        const panel = h.el.querySelector('fd-worker-activity')!;
+        expect(panel.querySelector('.worker-activity__bar')).toBeNull();
+        expect(text(panel.querySelector('.worker-activity__task'))).toBe('Working');
+        expect(text(panel.querySelector('.worker-activity__tool'))).toBe('No tool calls yet');
+      });
+
+      it('describes the card button with the task line, without a live region', async () => {
+        // Arrange
+        const h = await loaded([item('w', 3)]);
+
+        // Act
+        h.activities.set(new Map([['w', running()]]));
+        await h.render();
+
+        // Assert
+        const button = h.el.querySelector('.worker-card__title')!;
+        const ids = button.getAttribute('aria-describedby')!.split(' ');
+        expect(ids.map((id) => text(h.el.querySelector(`[id="${id}"]`)))).toContain(
+          'Running tests',
+        );
+        const card = h.el.querySelector('fd-worker-card')!;
+        expect(card.querySelector('[aria-live], [role="status"]')).toBeNull();
+      });
+
+      it('says when the last event was', async () => {
+        // Arrange
+        const h = await loaded([item('w', 3)]);
+
+        // Act
+        h.activities.set(new Map([['w', running()]]));
+        await h.render();
+
+        // Assert
+        const event = h.el.querySelector('.worker-card__event')!;
+        expect(text(event)).toBe('last event 2m ago');
+        expect(h.el.querySelector('.worker-card--silent')).toBeNull();
+      });
+
+      it('turns the card silent at the silence threshold', async () => {
+        // Arrange
+        const h = await loaded([item('w', 3)]);
+
+        // Act
+        h.activities.set(
+          new Map([
+            [
+              'w',
+              activity('w', {
+                lastEventAt: minutesAgo(6.5),
+                inFlightTool: { name: 'Bash', summary: null, startedAt: null },
+              }),
+            ],
+          ]),
+        );
+        await h.render();
+
+        // Assert
+        const event = h.el.querySelector('.worker-card__event')!;
+        expect(text(event)).toBe('silent 6m · Bash running');
+        expect(event.classList).toContain('worker-card__event--silent');
+        expect(event.querySelector('svg[aria-hidden="true"]')).not.toBeNull();
+        expect(h.el.querySelector('.worker-card--silent')).not.toBeNull();
+      });
+
+      it("takes the role from the run's activity once it arrives", async () => {
+        // Arrange
+        const h = await loaded([item('w', 3)]);
+
+        // Act
+        h.activities.set(new Map([['w', activity('w', { role: 'revise' })]]));
+        await h.render();
+
+        // Assert
+        expect(text(h.el.querySelector('fd-worker-card fd-role-tag'))).toBe('Role: revise');
+      });
     });
 
     it('lists the steps Foundry runs under their own heading', async () => {

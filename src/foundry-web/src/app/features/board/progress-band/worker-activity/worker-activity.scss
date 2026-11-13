@@ -1,0 +1,113 @@
+:host {
+  display: block;
+  min-width: 0;
+}
+
+// Inset on the page background, so it reads as a live readout rather than more card copy.
+.worker-activity {
+  background: var(--fd-bg-page);
+  border: 1px solid var(--fd-border-muted);
+  border-radius: var(--fd-radius-sm);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  padding: var(--fd-spacing-sm);
+}
+
+.worker-activity__task,
+.worker-activity__tool {
+  margin: 0;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.worker-activity__task {
+  color: var(--fd-text-primary);
+  font-size: 0.8125rem;
+  font-weight: 500;
+}
+
+.worker-activity__steps {
+  align-items: center;
+  display: flex;
+  gap: var(--fd-spacing-sm);
+  min-width: 0;
+}
+
+.worker-activity__bar {
+  display: flex;
+  flex: 1 1 auto;
+  gap: 3px;
+  min-width: 0;
+}
+
+// The same vocabulary as the In progress heading's slot pips.
+.worker-activity__segment {
+  background: var(--fd-progress-track);
+  border-radius: 2px;
+  flex: 1 1 0;
+  height: 6px;
+  max-width: 2rem;
+  min-width: 3px;
+  overflow: hidden;
+  position: relative;
+
+  &--done,
+  &--current {
+    background: var(--fd-accent-working);
+  }
+
+  &--current::after {
+    animation: fd-board-segment-sheen 1.8s linear infinite;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.45), transparent);
+    content: '';
+    inset: 0;
+    position: absolute;
+  }
+}
+
+.worker-activity__progress {
+  color: var(--fd-text-secondary);
+  flex-shrink: 0;
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.worker-activity__tool {
+  color: var(--fd-text-secondary);
+  font-family: var(--fd-font-mono);
+  font-size: 0.75rem;
+  // Above the card's stretched button, so the full text in `title` can be hovered.
+  position: relative;
+  z-index: 1;
+}
+
+.worker-activity--starting .worker-activity__task {
+  color: var(--fd-text-secondary);
+}
+
+// A stale board pauses every loop.
+:host-context(.board--stale) .worker-activity__segment--current::after {
+  animation-play-state: paused;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .worker-activity__segment--current::after {
+    animation: none;
+    display: none;
+  }
+}
+
+@media (forced-colors: active) {
+  .worker-activity__segment {
+    border: 1px solid CanvasText;
+
+    &--done,
+    &--current {
+      background: Highlight;
+    }
+  }
+}

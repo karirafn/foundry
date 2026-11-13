@@ -18,7 +18,10 @@
   min-width: 0;
   padding: var(--fd-spacing-md);
   position: relative;
-  transition: background 150ms ease;
+  // The global reduced-motion rule makes the edge change instant.
+  transition:
+    background 150ms ease,
+    border-inline-start-color 200ms ease;
 
   &:hover {
     background: var(--fd-bg-card-hover);
@@ -30,6 +33,10 @@
 
   &--done {
     border-inline-start-color: var(--fd-accent-ready);
+  }
+
+  &--silent {
+    border-inline-start-color: var(--fd-text-warning);
   }
 }
 
@@ -100,15 +107,41 @@
   }
 }
 
+.worker-card__footer {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--fd-spacing-xs) var(--fd-spacing-md);
+  justify-content: space-between;
+  margin-top: auto;
+  min-width: 0;
+}
+
+.worker-card__event {
+  align-items: center;
+  color: var(--fd-text-secondary);
+  display: inline-flex;
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+  gap: var(--fd-spacing-xs);
+
+  &--silent {
+    color: var(--fd-text-warning);
+    font-weight: 600;
+  }
+}
+
+.worker-card__warning {
+  flex-shrink: 0;
+}
+
 // Sits above the stretched button, so links never nest inside it.
 .worker-card__floor {
   align-items: center;
-  align-self: flex-start;
   border-radius: var(--fd-radius-sm);
   color: var(--fd-text-link);
   display: inline-flex;
   font-size: 0.8125rem;
-  margin-top: auto;
   min-height: 32px;
   position: relative;
   z-index: 1;

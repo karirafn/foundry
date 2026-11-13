@@ -12,7 +12,9 @@ import {
   untracked,
 } from '@angular/core';
 import { DOCUMENT } from '@angular/common';
+import { AGENT_SILENCE_THRESHOLD_MINUTES } from '../../core/models/agent-activity.model';
 import { IssueSignalRService } from '../../core/services/issue-signalr.service';
+import { WorkerSignalRService } from '../../core/services/worker-signalr.service';
 import { IssueSummary } from '../issues/issue.model';
 import { IssueService } from '../issues/issue.service';
 import { RepositorySummary } from '../settings/repositories/repository.model';
@@ -32,6 +34,7 @@ import {
   buildBoardBands,
   repoName,
 } from './board.model';
+import { silenceEpisode } from './progress-band/worker-activity/worker-activity.model';
 
 /** `confirm` shows a completed card's check mark; `collapse` folds it away before removal. */
 export type CardPhase = 'live' | 'confirm' | 'collapse';
@@ -78,6 +81,8 @@ const MOVED_FADE_MS = 200;
 const MAX_GLIDING_CARDS = 12;
 // A transition whose update never renders would hold the board; the browser times it out anyway.
 const RENDER_WAIT_MS = 1000;
+// The shared clock behind "last event 12s ago", "running 3m" and silence; one tick for every card.
+const CLOCK_INTERVAL_MS = 1000;
 
 type ViewTransitionDocument = Document & {
   startViewTransition?: (update: () => Promise<void>) => ViewTransition;
@@ -116,6 +121,7 @@ export class BoardStateService {
   private readonly _issueService = inject(IssueService);
   private readonly _repositoryService = inject(RepositoryService);
   private readonly _signalR = inject(IssueSignalRService);
+  private readonly _workerSignalR = inject(WorkerSignalRService);
   private readonly _injector = inject(Injector);
   private readonly _document = inject(DOCUMENT) as ViewTransitionDocument;
 
@@ -125,6 +131,10 @@ export class BoardStateService {
   private readonly _moved: WritableSignal<ReadonlySet<string>> = signal(new Set());
   private readonly _announcement: WritableSignal<string> = signal('');
   private readonly _glided: WritableSignal<boolean> = signal(false);
+  private readonly _now: WritableSignal<number> = signal(Date.now());
+
+  /** The current time, in epoch ms, ticking every second; the board's one shared clock. */
+  readonly now: Signal<number> = this._now.asReadonly();
 
   /** Set by the page while the narrow sheet covers the board: a glide under it is never seen. */
   readonly sheetCoversBoard: WritableSignal<boolean> = signal(false);
@@ -191,6 +201,8 @@ export class BoardStateService {
   private readonly _timers = new Set<ReturnType<typeof setTimeout>>();
   private readonly _pendingCompletions: string[] = [];
   private readonly _warnedIds = new Set<string>();
+  // Silence episodes already announced, so each is announced once.
+  private _silentEpisodes: ReadonlySet<string> = new Set();
   private readonly _onIssueUpdated = (updated: IssueSummary): void =>
     this._recordCompletion(updated);
 
@@ -211,10 +223,26 @@ export class BoardStateService {
       }
     });
 
+    effect(() => {
+      const now = this._now();
+      const silent = new Map<string, number>();
+      for (const item of this._rendered().workers) {
+        const activity = this._workerSignalR.agentActivityForIssue(item.issue.id);
+        const episode = activity === null ? null : silenceEpisode(activity, now);
+        if (episode !== null) {
+          silent.set(episode, item.issue.issueNumber);
+        }
+      }
+      untracked(() => this._announceSilence(silent));
+    });
+
     this._signalR.on<IssueSummary>('IssueUpdated', this._onIssueUpdated);
+
+    const clock = setInterval(() => this._now.set(Date.now()), CLOCK_INTERVAL_MS);
 
     inject(DestroyRef).onDestroy(() => {
       this._destroyed = true;
+      clearInterval(clock);
       this._signalR.off<IssueSummary>('IssueUpdated', this._onIssueUpdated);
       this._clearBatchTimers();
       for (const handle of this._timers) {
@@ -379,6 +407,20 @@ export class BoardStateService {
     ];
     if (parts.length > 0) {
       this._announcement.set(parts.join('. '));
+    }
+  }
+
+  /** Announces each run that went silent since the last check; task ticks are never announced. */
+  private _announceSilence(silent: ReadonlyMap<string, number>): void {
+    const fresh = [...silent]
+      .filter(([episode]) => !this._silentEpisodes.has(episode))
+      .map(
+        ([, issueNumber]) =>
+          `#${issueNumber} worker silent for ${AGENT_SILENCE_THRESHOLD_MINUTES} minutes`,
+      );
+    this._silentEpisodes = new Set(silent.keys());
+    if (fresh.length > 0) {
+      this._announcement.set(fresh.join('. '));
     }
   }
 

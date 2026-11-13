@@ -103,6 +103,9 @@
   --fd-border-next-row: rgba(63, 185, 80, 0.45);      /* light: rgba(26, 127, 55, 0.45) — its leading rule */
   --fd-nav-indicator: #58a6ff;                         /* light: #0969da — active nav underline, 6.85:1 on --fd-bg-card */
 
+  /* Worker activity (#895) */
+  --fd-progress-track: #2d333b;                        /* empty task-bar segment; decorative, no contrast minimum */
+
   /* Card queue-position gutter — fixed track width so 1–2 digit ordinals never reflow the body */
   --fd-card-gutter-width: 1.75rem;
 
