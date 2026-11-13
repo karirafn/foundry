@@ -53,18 +53,7 @@
 }
 
 .board-row__repo {
-  color: var(--fd-text-secondary);
-  font-family: var(--fd-font-mono);
   font-size: 0.8125rem;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.board-row__number {
-  color: var(--fd-text-primary);
-  font-weight: 600;
 }
 
 .board-row__title {

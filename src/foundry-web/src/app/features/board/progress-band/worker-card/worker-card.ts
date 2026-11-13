@@ -16,6 +16,7 @@ import { RoleTagComponent } from '../../../../shared/components/role-tag/role-ta
 import { formatElapsed } from '../../../../shared/utils/agent-activity-format';
 import { ItemView } from '../../board-state.service';
 import { WorkerItem } from '../../board.model';
+import { IssueRefComponent } from '../../issue-ref/issue-ref';
 import { WorkerActivityComponent } from '../worker-activity/worker-activity';
 import {
   ActivityPanel,
@@ -30,7 +31,7 @@ import {
  */
 @Component({
   selector: 'fd-worker-card',
-  imports: [RoleTagComponent, RouterLink, WorkerActivityComponent],
+  imports: [IssueRefComponent, RoleTagComponent, RouterLink, WorkerActivityComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: {
     '[attr.data-issue-id]': 'item().issue.id',
@@ -54,9 +55,10 @@ export class WorkerCardComponent {
   protected readonly label: Signal<string> = computed(
     () => `${this.item().issue.title}, #${this.item().issue.issueNumber}`,
   );
-  protected readonly describedBy: Signal<string> = computed(() =>
-    this.live() ? `${this.idBase()}-meta ${this.idBase()}-task` : `${this.idBase()}-meta`,
-  );
+  protected readonly describedBy: Signal<string> = computed(() => {
+    const base = this.idBase();
+    return this.live() ? `${base}-meta ${base}-task ${base}-status` : `${base}-meta ${base}-status`;
+  });
   /** The Floor lane heading's id, which the Floor scrolls to and focuses. */
   protected readonly laneFragment: Signal<string> = computed(
     () => `floor-lane-${this.item().issue.id}`,
