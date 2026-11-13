@@ -1784,6 +1784,12 @@ namespace Foundry.WebApi.Migrations
                         .HasColumnType("TEXT")
                         .HasColumnName("rebase_outcome");
 
+                    b.Property<string>("VerifiedHeadSha")
+                        .HasMaxLength(64)
+                        .IsUnicode(false)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("verified_head_sha");
+
                     b.Property<Guid>("WorkerRunId")
                         .ValueGeneratedOnUpdateSometimes()
                         .HasColumnType("TEXT")

@@ -64,7 +64,7 @@ internal sealed class ChecksVerdictResolvedHandler(
                 @event.IssueNumber);
         }
 
-        ReviewIssue reviewIssue = checksPendingIssue.ToReview(outcome, timeProvider.GetUtcNow());
+        ReviewIssue reviewIssue = checksPendingIssue.ToReview(outcome, @event.HeadSha, timeProvider.GetUtcNow());
         await db.TransitionAsync(checksPendingIssue, reviewIssue, domainEventDispatcher, cancellationToken);
     }
 }

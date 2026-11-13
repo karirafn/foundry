@@ -783,7 +783,12 @@ A lifecycle state for an issue whose worker completed successfully and produced 
 Carries `WorkerRunId`, `BranchName`, `PullRequestUrl`, and `FeedbackCutoffAt` — all non-nullable.
 Awaits human review of the PR. The monitoring service polls the provider for PR/issue status and review feedback.
 `FeedbackCutoffAt` filters stale feedback — only review comments created after this timestamp are considered actionable. Tracks consumed feedback: set to the worker run's start time on first entry to review; updated to the newest consumed comment's timestamp on re-entry after a revision cycle. In steady state the cutoff never uses the worker run's completion time.
-Transitions: `Revise()` → `RevisionQueuedIssue` (feedback detected); `Complete()` → `CompletedIssue` (issue closed); `Fail()` → `ContinuableFailedIssue` (PR closed without merge — branch exists).
+Transitions: `Revise()` → `RevisionQueuedIssue` (feedback detected); `RecheckAfterHeadMoved()` → `ChecksPendingIssue` via `ChecksPendingIssue.FromReview` (the [Verified Head](#verified-head) no longer matches the PR's head; fix budget reset to 0; raises `IssueChecksPending`); `Complete()` → `CompletedIssue` (issue closed); `Fail()` → `ContinuableFailedIssue` (PR closed without merge — branch exists).
+
+### Verified Head
+
+**Verified Head** — the head commit of a pull request, as read by the PR status read in the poll that resolved its checks verdict. It is stored on `ReviewIssue` (`VerifiedHeadSha`) and carried on `ChecksVerdictResolved.HeadSha` for every outcome. When the review pass reads a different head, or the stored value is null (rows that predate the field), the issue returns to `checks_pending`. Because the status read runs before the checks read, the stored commit always equals or precedes the commit the verdict actually describes, so a mismatch errs toward re-checking.
+
 
 ## Unchanged Issue
 

@@ -103,6 +103,56 @@ public sealed class GetPullRequestStatusAsync
     }
 
     [Fact]
+    public async Task WhenResponseCarriesSha_ReturnsItAsHeadSha()
+    {
+        // Arrange — field shape per GitLab's single merge request API ("sha": the source branch head).
+        string json = """
+            {
+              "iid": 1,
+              "state": "opened",
+              "sha": "8888888888888888888888888888888888888888",
+              "head_pipeline": { "id": 77, "status": "failed" }
+            }
+            """;
+        FakeHandler handler = new(HttpStatusCode.OK, json);
+        using HttpClient httpClient = new(handler);
+        GitLabHttpClient sut = new(httpClient, NullLogger<GitLabHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))), new InMemoryProviderRateBudget(), TimeProvider.System);
+
+        // Act
+        Result<PullRequestStatus> result = await sut.GetPullRequestStatusAsync(
+            ValidBaseUrl,
+            ValidSlug,
+            pullRequestUrl: ValidMrUrl,
+            token: "glpat_token",
+            CancellationToken.None);
+
+        // Assert
+        result.ShouldBeOfType<Result<PullRequestStatus>.Success>()
+            .Value.HeadSha.ShouldBe("8888888888888888888888888888888888888888");
+    }
+
+    [Fact]
+    public async Task WhenResponseLacksSha_ReturnsNullHeadSha()
+    {
+        // Arrange
+        string json = """{ "iid": 1, "state": "opened" }""";
+        FakeHandler handler = new(HttpStatusCode.OK, json);
+        using HttpClient httpClient = new(handler);
+        GitLabHttpClient sut = new(httpClient, NullLogger<GitLabHttpClient>.Instance, new DefaultBranchCache(new MemoryCache(Options.Create(new MemoryCacheOptions()))), new InMemoryProviderRateBudget(), TimeProvider.System);
+
+        // Act
+        Result<PullRequestStatus> result = await sut.GetPullRequestStatusAsync(
+            ValidBaseUrl,
+            ValidSlug,
+            pullRequestUrl: ValidMrUrl,
+            token: "glpat_token",
+            CancellationToken.None);
+
+        // Assert
+        result.ShouldBeOfType<Result<PullRequestStatus>.Success>().Value.HeadSha.ShouldBeNull();
+    }
+
+    [Fact]
     public async Task WhenMrUrlCannotBeParsed_ReturnsInvalidUrlError()
     {
         // Arrange

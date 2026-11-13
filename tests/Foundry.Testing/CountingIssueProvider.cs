@@ -85,7 +85,7 @@ internal sealed class CountingIssueProvider : IIssueProvider
         TotalCalls++;
         GetPullRequestStatusCallCount++;
         return Task.FromResult(
-            Result<PullRequestStatus>.Ok(new PullRequestStatus(IsClosed: false, IsMerged: false)));
+            Result<PullRequestStatus>.Ok(new PullRequestStatus(IsClosed: false, IsMerged: false, HeadSha: null)));
     }
 
     public Task<Result<ReviewFeedback>> GetReviewFeedbackAsync(

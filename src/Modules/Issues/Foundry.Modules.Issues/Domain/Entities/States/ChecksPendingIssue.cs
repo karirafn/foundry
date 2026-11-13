@@ -78,9 +78,32 @@ public sealed class ChecksPendingIssue : Issue
         return checksPending;
     }
 
-    public ReviewIssue ToReview(ChecksOutcome checksOutcome, DateTimeOffset transitionedAt)
+    /// <summary>
+    /// New commits reached a review issue's pull request: the checks gate starts over with a fresh fix budget,
+    /// because every new budget follows a person's push, the same rule review feedback follows.
+    /// </summary>
+    internal static ChecksPendingIssue FromReview(ReviewIssue source, DateTimeOffset transitionedAt)
     {
-        ReviewIssue review = ReviewIssue.FromChecksPending(this, checksOutcome, transitionedAt);
+        ChecksPendingIssue checksPending = new(source.Id, transitionedAt);
+        checksPending.CopySharedPropertiesFrom(source);
+        checksPending.WorkerRunId = source.WorkerRunId;
+        checksPending.BranchName = source.BranchName;
+        checksPending.PullRequestUrl = source.PullRequestUrl;
+        checksPending.EnteredChecksPendingAt = transitionedAt;
+        checksPending.FeedbackCutoffAt = source.FeedbackCutoffAt;
+        checksPending.ChecksFixAttempts = 0;
+        checksPending.RebaseConflictAttempts = source.RebaseConflictAttempts;
+        checksPending.RebaseOutcome = source.RebaseOutcome;
+        return checksPending;
+    }
+
+    /// <summary>
+    /// Resolves the gate to review. <paramref name="verifiedHeadSha"/> is the head commit the status read returned
+    /// in the poll that resolved <paramref name="checksOutcome"/>, or <see langword="null"/> when it is unknown.
+    /// </summary>
+    public ReviewIssue ToReview(ChecksOutcome checksOutcome, string? verifiedHeadSha, DateTimeOffset transitionedAt)
+    {
+        ReviewIssue review = ReviewIssue.FromChecksPending(this, checksOutcome, verifiedHeadSha, transitionedAt);
         AddDomainEvent(new Events.IssueInReview(Id, MonitoredRepositoryId));
         return review;
     }

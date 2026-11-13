@@ -19,7 +19,7 @@ public sealed class Map
     // 30 is checks-pending on MR 31; 40 awaits input on its own thread; 50 awaits input on MR 51.
     private static readonly WebhookTrackingContext Tracked = new(
         new HashSet<int> { 10, 20, 30, 40, 50 },
-        [new ReviewIssueInfo(20, "https://gitlab.com/group/sub/project/-/merge_requests/21", At)],
+        [new ReviewIssueInfo(20, "https://gitlab.com/group/sub/project/-/merge_requests/21", At, null)],
         [new ChecksPendingIssueInfo(30, "https://gitlab.com/group/sub/project/-/merge_requests/31", At, At)],
         new HashSet<int> { 77 },
         [

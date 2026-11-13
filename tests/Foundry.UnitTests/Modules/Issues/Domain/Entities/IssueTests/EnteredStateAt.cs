@@ -149,7 +149,7 @@ public sealed class EnteredStateAt
         ChecksPendingIssue checksPending = Builder().ChecksPending();
 
         // Act
-        ReviewIssue review = checksPending.ToReview(new ChecksOutcome.Passed(), Later);
+        ReviewIssue review = checksPending.ToReview(new ChecksOutcome.Passed(), "0a1b2c3d", Later);
 
         // Assert
         review.EnteredStateAt.ShouldBe(Later);

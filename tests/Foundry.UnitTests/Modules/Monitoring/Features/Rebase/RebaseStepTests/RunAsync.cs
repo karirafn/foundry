@@ -601,7 +601,7 @@ public sealed class RunAsync : IAsyncDisposable
     {
         // Arrange
         MonitoredRepository repository = SeedRepository();
-        _provider.PullRequestStatus = new PullRequestStatus(IsClosed: true, IsMerged: false);
+        _provider.PullRequestStatus = new PullRequestStatus(IsClosed: true, IsMerged: false, HeadSha: null);
 
         // Act
         await BuildSut().RunAsync(repository, _provider, null, Now, TestContext.Current.CancellationToken);
@@ -632,7 +632,7 @@ public sealed class RunAsync : IAsyncDisposable
     {
         // Arrange
         MonitoredRepository repository = SeedRepository();
-        _provider.PullRequestStatus = new PullRequestStatus(IsClosed: true, IsMerged: true);
+        _provider.PullRequestStatus = new PullRequestStatus(IsClosed: true, IsMerged: true, HeadSha: null);
 
         // Act
         await BuildSut().RunAsync(repository, _provider, null, Now, TestContext.Current.CancellationToken);
@@ -770,7 +770,7 @@ public sealed class RunAsync : IAsyncDisposable
 
         public bool IssueClosed { get; set; }
 
-        public PullRequestStatus PullRequestStatus { get; set; } = new(IsClosed: false, IsMerged: false);
+        public PullRequestStatus PullRequestStatus { get; set; } = new(IsClosed: false, IsMerged: false, HeadSha: null);
 
         public Exception? ThrowOnState { get; set; }
 

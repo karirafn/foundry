@@ -144,7 +144,7 @@ public sealed class OutboxHarvestPollAsync : IAsyncDisposable
         ReviewIssueInfo reviewIssue = new(
             IssueNumber: 42,
             PullRequestUrl: "https://github.com/owner/repo/pull/99",
-            FeedbackCutoffAt: Now);
+            FeedbackCutoffAt: Now, VerifiedHeadSha: null);
 
         RepositoryPoller sut = new(
             new PassThroughIssueQueries(reviewIssues: [reviewIssue]),
@@ -333,7 +333,7 @@ public sealed class OutboxHarvestPollAsync : IAsyncDisposable
             RepositorySlug slug,
             string pullRequestUrl,
             CancellationToken cancellationToken)
-            => Task.FromResult(Result<PullRequestStatus>.Ok(new PullRequestStatus(IsClosed: false, IsMerged: false)));
+            => Task.FromResult(Result<PullRequestStatus>.Ok(new PullRequestStatus(IsClosed: false, IsMerged: false, HeadSha: null)));
 
         public Task<Result<ReviewFeedback>> GetReviewFeedbackAsync(
             RepositorySlug slug,

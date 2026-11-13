@@ -47,9 +47,17 @@ public sealed class ReviewIssue : Issue
     /// </summary>
     public RebaseOutcome? RebaseOutcome { get; private set; }
 
+    /// <summary>
+    /// The Verified Head: the pull request's head commit as read by the status read in the poll that resolved
+    /// the checks verdict. <see langword="null"/> for rows that predate the field or verdicts recorded before it
+    /// was carried; the review pass treats null as moved, so such an issue is re-checked once.
+    /// </summary>
+    public string? VerifiedHeadSha { get; private set; }
+
     internal static ReviewIssue FromChecksPending(
         ChecksPendingIssue source,
         ChecksOutcome checksOutcome,
+        string? verifiedHeadSha,
         DateTimeOffset transitionedAt)
     {
         ReviewIssue review = new(source.Id, transitionedAt);
@@ -61,7 +69,23 @@ public sealed class ReviewIssue : Issue
         review.ChecksOutcome = checksOutcome;
         review.RebaseOutcome = source.RebaseOutcome;
         review.RebaseConflictAttempts = source.RebaseConflictAttempts;
+        review.VerifiedHeadSha = verifiedHeadSha;
         return review;
+    }
+
+    /// <summary>
+    /// New commits reached the pull request after its checks verdict: the issue goes back to the checks gate,
+    /// which reads the verdict again against the new head.
+    /// </summary>
+    public ChecksPendingIssue RecheckAfterHeadMoved(DateTimeOffset transitionedAt)
+    {
+        ChecksPendingIssue checksPending = ChecksPendingIssue.FromReview(this, transitionedAt);
+        AddDomainEvent(new Events.IssueChecksPending(
+            Id,
+            MonitoredRepositoryId,
+            checksPending.IssueNumber,
+            checksPending.EnteredChecksPendingAt));
+        return checksPending;
     }
 
     public RevisionQueuedIssue Revise(

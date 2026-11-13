@@ -77,7 +77,7 @@ public sealed class GetReviewIssuesAsync : IAsyncDisposable
         ChecksPendingIssue checksPending = rebasePending.MarkChecksPending(new RebaseOutcome.UpToDate(), DateTimeOffset.UtcNow);
         await _dbContext.TransitionAsync(rebasePending, checksPending, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
 
-        ReviewIssue review = checksPending.ToReview(new ChecksOutcome.Passed(), DateTimeOffset.UtcNow);
+        ReviewIssue review = checksPending.ToReview(new ChecksOutcome.Passed(), "0a1b2c3d", DateTimeOffset.UtcNow);
         await _dbContext.TransitionAsync(checksPending, review, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
 
         return review;

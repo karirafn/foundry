@@ -53,6 +53,8 @@ public sealed class HandleAsync : IAsyncDisposable
         await _connection.DisposeAsync();
     }
 
+    private const string VerifiedHead = "9e8d7c6b5a4f3e2d1c0b9a8f7e6d5c4b3a291807";
+
     private static readonly IReadOnlyList<FailingCheck> DefaultFailingChecks =
     [
         new FailingCheck("ci/build", "FAILURE", "https://github.com/owner/repo/actions/runs/1"),
@@ -131,7 +133,8 @@ public sealed class HandleAsync : IAsyncDisposable
             RepositoryId: repositoryId,
             IssueNumber: 1,
             Outcome: "passed",
-            FailingChecks: []);
+            FailingChecks: [],
+            HeadSha: VerifiedHead);
 
         // Act
         await _sut.HandleAsync(@event, CancellationToken.None);
@@ -157,7 +160,8 @@ public sealed class HandleAsync : IAsyncDisposable
             RepositoryId: repositoryId,
             IssueNumber: 1,
             Outcome: "none_detected",
-            FailingChecks: []);
+            FailingChecks: [],
+            HeadSha: VerifiedHead);
 
         // Act
         await _sut.HandleAsync(@event, CancellationToken.None);
@@ -183,7 +187,8 @@ public sealed class HandleAsync : IAsyncDisposable
             RepositoryId: repositoryId,
             IssueNumber: 1,
             Outcome: "unfinished",
-            FailingChecks: []);
+            FailingChecks: [],
+            HeadSha: VerifiedHead);
 
         // Act
         await _sut.HandleAsync(@event, CancellationToken.None);
@@ -215,7 +220,8 @@ public sealed class HandleAsync : IAsyncDisposable
             RepositoryId: repositoryId,
             IssueNumber: 1,
             Outcome: "still_failing",
-            FailingChecks: failingChecks);
+            FailingChecks: failingChecks,
+            HeadSha: VerifiedHead);
 
         // Act
         await _sut.HandleAsync(@event, CancellationToken.None);
@@ -252,7 +258,8 @@ public sealed class HandleAsync : IAsyncDisposable
             RepositoryId: repositoryId,
             IssueNumber: 1,
             Outcome: "still_failing",
-            FailingChecks: failingChecks);
+            FailingChecks: failingChecks,
+            HeadSha: VerifiedHead);
 
         // Act
         await _sut.HandleAsync(@event, CancellationToken.None);
@@ -281,7 +288,8 @@ public sealed class HandleAsync : IAsyncDisposable
             RepositoryId: repositoryId,
             IssueNumber: 1,
             Outcome: "still_failing",
-            FailingChecks: []);
+            FailingChecks: [],
+            HeadSha: VerifiedHead);
 
         // Act
         await _sut.HandleAsync(@event, CancellationToken.None);
@@ -308,7 +316,8 @@ public sealed class HandleAsync : IAsyncDisposable
             RepositoryId: repositoryId,
             IssueNumber: 7,
             Outcome: "still_failing",
-            FailingChecks: []);
+            FailingChecks: [],
+            HeadSha: VerifiedHead);
 
         // Act
         await _sut.HandleAsync(@event, CancellationToken.None);
@@ -333,7 +342,8 @@ public sealed class HandleAsync : IAsyncDisposable
             RepositoryId: repositoryId,
             IssueNumber: 1,
             Outcome: "still_failing",
-            FailingChecks: DefaultFailingChecks);
+            FailingChecks: DefaultFailingChecks,
+            HeadSha: VerifiedHead);
 
         // Act
         await _sut.HandleAsync(@event, CancellationToken.None);
@@ -353,7 +363,8 @@ public sealed class HandleAsync : IAsyncDisposable
             RepositoryId: repositoryId,
             IssueNumber: 1,
             Outcome: "still_failing",
-            FailingChecks: DefaultFailingChecks);
+            FailingChecks: DefaultFailingChecks,
+            HeadSha: VerifiedHead);
 
         // Act
         await _sut.HandleAsync(@event, CancellationToken.None);
@@ -375,7 +386,8 @@ public sealed class HandleAsync : IAsyncDisposable
             RepositoryId: repositoryId,
             IssueNumber: 1,
             Outcome: "unreadable",
-            FailingChecks: []);
+            FailingChecks: [],
+            HeadSha: VerifiedHead);
 
         // Act
         await _sut.HandleAsync(@event, CancellationToken.None);
@@ -402,7 +414,8 @@ public sealed class HandleAsync : IAsyncDisposable
             RepositoryId: repositoryId,
             IssueNumber: 1,
             Outcome: "passed",
-            FailingChecks: []);
+            FailingChecks: [],
+            HeadSha: VerifiedHead);
 
         // Act
         await _sut.HandleAsync(@event, CancellationToken.None);
@@ -428,7 +441,8 @@ public sealed class HandleAsync : IAsyncDisposable
             RepositoryId: repositoryId,
             IssueNumber: 1,
             Outcome: "passed",
-            FailingChecks: []);
+            FailingChecks: [],
+            HeadSha: VerifiedHead);
 
         // Act
         await _sut.HandleAsync(@event, CancellationToken.None);
@@ -450,7 +464,8 @@ public sealed class HandleAsync : IAsyncDisposable
             RepositoryId: repositoryId,
             IssueNumber: 2,
             Outcome: "passed",
-            FailingChecks: []);
+            FailingChecks: [],
+            HeadSha: VerifiedHead);
 
         // Act
         Task act = _sut.HandleAsync(@event, CancellationToken.None);
@@ -476,7 +491,8 @@ public sealed class HandleAsync : IAsyncDisposable
             RepositoryId: repositoryId,
             IssueNumber: 3,
             Outcome: "passed",
-            FailingChecks: []);
+            FailingChecks: [],
+            HeadSha: VerifiedHead);
 
         // Act
         Task act = _sut.HandleAsync(@event, CancellationToken.None);
@@ -491,6 +507,62 @@ public sealed class HandleAsync : IAsyncDisposable
         issue.ShouldBeOfType<ReviewIssue>();
     }
 
+    [Theory]
+    [InlineData("passed")]
+    [InlineData("none_detected")]
+    [InlineData("unfinished")]
+    [InlineData("unreadable")]
+    public async Task WhenChecksPendingTransitionsToReview_StoresHeadShaAsVerifiedHead(string outcome)
+    {
+        // Arrange
+        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
+        SeedChecksPendingIssue(repositoryId, issueNumber: 1);
+
+        ChecksVerdictResolved @event = new(
+            RepositoryId: repositoryId,
+            IssueNumber: 1,
+            Outcome: outcome,
+            FailingChecks: [],
+            HeadSha: VerifiedHead);
+
+        // Act
+        await _sut.HandleAsync(@event, CancellationToken.None);
+
+        // Assert
+        _dbContext.ChangeTracker.Clear();
+        Issue? issue = await _dbContext.Set<Issue>()
+            .FirstOrDefaultAsync(
+                i => i.MonitoredRepositoryId == repositoryId,
+                TestContext.Current.CancellationToken);
+        issue.ShouldBeOfType<ReviewIssue>().VerifiedHeadSha.ShouldBe(VerifiedHead);
+    }
+
+    [Fact]
+    public async Task WhenEventPredatesHeadSha_StoresNullVerifiedHead()
+    {
+        // Arrange
+        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
+        SeedChecksPendingIssue(repositoryId, issueNumber: 1);
+
+        ChecksVerdictResolved @event = new(
+            RepositoryId: repositoryId,
+            IssueNumber: 1,
+            Outcome: "passed",
+            FailingChecks: [],
+            HeadSha: null);
+
+        // Act
+        await _sut.HandleAsync(@event, CancellationToken.None);
+
+        // Assert
+        _dbContext.ChangeTracker.Clear();
+        Issue? issue = await _dbContext.Set<Issue>()
+            .FirstOrDefaultAsync(
+                i => i.MonitoredRepositoryId == repositoryId,
+                TestContext.Current.CancellationToken);
+        issue.ShouldBeOfType<ReviewIssue>().VerifiedHeadSha.ShouldBeNull();
+    }
+
     [Fact]
     public async Task WhenIssueNotFound_SilentlyIgnores()
     {
@@ -501,7 +573,8 @@ public sealed class HandleAsync : IAsyncDisposable
             RepositoryId: unknownRepositoryId,
             IssueNumber: 999,
             Outcome: "passed",
-            FailingChecks: []);
+            FailingChecks: [],
+            HeadSha: VerifiedHead);
 
         // Act
         Task act = _sut.HandleAsync(@event, CancellationToken.None);

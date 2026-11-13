@@ -238,6 +238,58 @@ public sealed class ChecksPendingPollAsync : IAsyncDisposable
             () => resolved.FailingChecks.ShouldBeEmpty());
     }
 
+    // --- Every verdict carries the head commit from the same poll's status read ---
+
+    public static TheoryData<string, string> VerdictOutcomes => new()
+    {
+        { "green", "passed" },
+        { "red", "still_failing" },
+        { "none_detected", "none_detected" },
+        { "unfinished", "unfinished" },
+        { "unreadable", "unreadable" },
+    };
+
+    [Theory]
+    [MemberData(nameof(VerdictOutcomes))]
+    public async Task WhenVerdictResolves_CarriesHeadShaFromStatusRead(string verdict, string expectedOutcome)
+    {
+        // Arrange — elapsed 10 min, past the none-detected grace window
+        const string headSha = "3d5f7b9e1a2c4e6a8c0e2b4d6f8a0c1e3a5c7e9b";
+        MonitoredRepository repository = SeedRepository();
+        ChecksPendingIssueInfo issue = BuildChecksPendingIssue();
+        StubChecksPendingIssueQueries issueQueries = new([issue]);
+        Checks checks = verdict switch
+        {
+            "green" => new Checks.Green(),
+            "red" => new Checks.Red([new FailingCheck("CI / build", "failure", "https://github.com/owner/repo/actions/runs/1")]),
+            "none_detected" => new Checks.NoneDetected(),
+            "unfinished" => new Checks.Unfinished(),
+            _ => new Checks.Unreadable(),
+        };
+        StubIssueProvider provider = new(
+            checksResults: new Dictionary<string, Result<Checks>>
+            {
+                [issue.PullRequestUrl] = Result<Checks>.Ok(checks),
+            },
+            pullRequestStatusResults: new Dictionary<string, Result<PullRequestStatus>>
+            {
+                [issue.PullRequestUrl] = Result<PullRequestStatus>.Ok(
+                    new PullRequestStatus(IsClosed: false, IsMerged: false, HeadSha: headSha)),
+            });
+        RepositoryPoller sut = BuildPoller(issueQueries);
+
+        // Act
+        await sut.RunChecksPassAsync(repository, provider, issueNumber: 42, Now, CancellationToken.None);
+
+        // Assert
+        ChecksVerdictResolved resolved = _dispatcher.DispatchedEvents
+            .OfType<ChecksVerdictResolved>()
+            .ShouldHaveSingleItem();
+        resolved.ShouldSatisfyAllConditions(
+            () => resolved.Outcome.ShouldBe(expectedOutcome),
+            () => resolved.HeadSha.ShouldBe(headSha));
+    }
+
     // --- NoneDetected within grace window → no event ---
 
     [Fact]
@@ -464,7 +516,7 @@ public sealed class ChecksPendingPollAsync : IAsyncDisposable
             },
             pullRequestStatusResults: new Dictionary<string, Result<PullRequestStatus>>
             {
-                [prUrl] = Result<PullRequestStatus>.Ok(new PullRequestStatus(IsClosed: true, IsMerged: false)),
+                [prUrl] = Result<PullRequestStatus>.Ok(new PullRequestStatus(IsClosed: true, IsMerged: false, HeadSha: null)),
             });
         RepositoryPoller sut = BuildPoller(issueQueries);
 
@@ -497,7 +549,7 @@ public sealed class ChecksPendingPollAsync : IAsyncDisposable
             },
             pullRequestStatusResults: new Dictionary<string, Result<PullRequestStatus>>
             {
-                [prUrl] = Result<PullRequestStatus>.Ok(new PullRequestStatus(IsClosed: true, IsMerged: true)),
+                [prUrl] = Result<PullRequestStatus>.Ok(new PullRequestStatus(IsClosed: true, IsMerged: true, HeadSha: null)),
             });
         RepositoryPoller sut = BuildPoller(issueQueries);
 
@@ -664,7 +716,7 @@ public sealed class ChecksPendingPollAsync : IAsyncDisposable
                 return Task.FromResult(result);
             }
 
-            return Task.FromResult(Result<PullRequestStatus>.Ok(new PullRequestStatus(IsClosed: false, IsMerged: false)));
+            return Task.FromResult(Result<PullRequestStatus>.Ok(new PullRequestStatus(IsClosed: false, IsMerged: false, HeadSha: null)));
         }
 
         public Task<Result<ReviewFeedback>> GetReviewFeedbackAsync(

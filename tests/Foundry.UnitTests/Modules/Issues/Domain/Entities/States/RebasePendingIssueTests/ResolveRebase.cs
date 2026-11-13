@@ -156,7 +156,7 @@ public sealed class ResolveRebase
         RebasePendingIssue rebasePendingAgain = revisionInProgress.MarkUnchangedRebasePending(DateTimeOffset.UtcNow, DateTimeOffset.UtcNow);
         ChecksPendingIssue checksPending = rebasePendingAgain.ResolveRebase(new RebaseOutcome.Disabled(), DateTimeOffset.UtcNow)
             .ShouldBeOfType<ChecksPendingIssue>();
-        ReviewIssue review = checksPending.ToReview(new ChecksOutcome.Passed(), DateTimeOffset.UtcNow);
+        ReviewIssue review = checksPending.ToReview(new ChecksOutcome.Passed(), "0a1b2c3d", DateTimeOffset.UtcNow);
 
         // Assert
         new[]
@@ -203,7 +203,7 @@ public sealed class ResolveRebase
         // Act
         RevisionQueuedIssue fixChecks = checksPending.FixChecks([new FailingCheck("ci/build", "failure", null)], DateTimeOffset.UtcNow);
         RevisionQueuedIssue revise = checksPending.Revise([new ReviewComment("Fix it.")], DateTimeOffset.UtcNow);
-        RevisionQueuedIssue fromReview = checksPending.ToReview(new ChecksOutcome.Passed(), DateTimeOffset.UtcNow)
+        RevisionQueuedIssue fromReview = checksPending.ToReview(new ChecksOutcome.Passed(), "0a1b2c3d", DateTimeOffset.UtcNow)
             .Revise([new ReviewComment("Fix it.")], DateTimeOffset.UtcNow);
 
         // Assert

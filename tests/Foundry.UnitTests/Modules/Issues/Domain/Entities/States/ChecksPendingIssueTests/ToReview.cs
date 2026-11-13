@@ -20,7 +20,7 @@ public sealed class ToReview
         ChecksOutcome outcome = new ChecksOutcome.Passed();
 
         // Act
-        ReviewIssue review = checksPending.ToReview(outcome, DateTimeOffset.UtcNow);
+        ReviewIssue review = checksPending.ToReview(outcome, "0a1b2c3d", DateTimeOffset.UtcNow);
 
         // Assert
         review.Id.ShouldBe(checksPending.Id);
@@ -34,7 +34,7 @@ public sealed class ToReview
         ChecksOutcome outcome = new ChecksOutcome.NoneDetected();
 
         // Act
-        ReviewIssue review = checksPending.ToReview(outcome, DateTimeOffset.UtcNow);
+        ReviewIssue review = checksPending.ToReview(outcome, "0a1b2c3d", DateTimeOffset.UtcNow);
 
         // Assert
         review.ChecksOutcome.ShouldBe(outcome);
@@ -51,10 +51,39 @@ public sealed class ToReview
         ChecksOutcome outcome = new ChecksOutcome.Passed();
 
         // Act
-        ReviewIssue review = checksPending.ToReview(outcome, DateTimeOffset.UtcNow);
+        ReviewIssue review = checksPending.ToReview(outcome, "0a1b2c3d", DateTimeOffset.UtcNow);
 
         // Assert
         review.FeedbackCutoffAt.ShouldBe(checksPending.FeedbackCutoffAt);
+    }
+
+    [Fact]
+    public void WhenTransitionedToReview_StoresVerifiedHeadSha()
+    {
+        // Arrange
+        ChecksPendingIssue checksPending = new IssueBuilder().ChecksPending();
+
+        // Act
+        ReviewIssue review = checksPending.ToReview(
+            new ChecksOutcome.Passed(),
+            "7c1e5b9d3f2a4c6e8b0d1f3a5c7e9b2d4f6a8c0e",
+            DateTimeOffset.UtcNow);
+
+        // Assert
+        review.VerifiedHeadSha.ShouldBe("7c1e5b9d3f2a4c6e8b0d1f3a5c7e9b2d4f6a8c0e");
+    }
+
+    [Fact]
+    public void WhenTransitionedToReviewWithoutHead_StoresNullVerifiedHeadSha()
+    {
+        // Arrange
+        ChecksPendingIssue checksPending = new IssueBuilder().ChecksPending();
+
+        // Act
+        ReviewIssue review = checksPending.ToReview(new ChecksOutcome.Passed(), null, DateTimeOffset.UtcNow);
+
+        // Assert
+        review.VerifiedHeadSha.ShouldBeNull();
     }
 
     [Fact]
@@ -68,7 +97,7 @@ public sealed class ToReview
         ChecksOutcome outcome = new ChecksOutcome.Passed();
 
         // Act
-        checksPending.ToReview(outcome, DateTimeOffset.UtcNow);
+        checksPending.ToReview(outcome, "0a1b2c3d", DateTimeOffset.UtcNow);
 
         // Assert
         IssueInReview domainEvent = checksPending.DomainEvents
