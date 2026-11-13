@@ -151,9 +151,15 @@ export class PaneActionsComponent {
     });
 
     effect(() => {
-      const success = this.issueService.retrySuccess() ?? this.issueService.triageActionSuccess();
+      const retrySuccess = this.issueService.retrySuccess();
+      const triageSuccess = this.issueService.triageActionSuccess();
       const action = untracked(() => this._serviceAction);
-      if (success !== null && action !== null) {
+      if (action === null) {
+        return;
+      }
+      // Only the signal of the started action counts; the other may still hold an earlier success.
+      const success = RETRY_ACTIONS.has(action) ? retrySuccess : triageSuccess;
+      if (success !== null) {
         this._serviceAction = null;
         this.succeeded.emit(action);
       }

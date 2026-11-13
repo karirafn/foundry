@@ -417,6 +417,23 @@ describe('PaneActionsComponent', () => {
       expect(error()).toBe('Failed to retry triage.');
     });
 
+    it('reports a triage action as succeeded while an earlier retry success is still shown', () => {
+      // Arrange
+      const { button, render, confirm, service, succeeded } = setup('queued', ['retriage']);
+      service.retrySuccess.set('Retry queued. Issue status is updating.');
+      render();
+      button('Re-triage')!.click();
+      render();
+      confirm();
+
+      // Act
+      service.triageActionSuccess.set('Re-triage queued. Issue status is updating.');
+      render();
+
+      // Assert
+      expect(succeeded).toEqual(['retriage']);
+    });
+
     it('keeps the triage success announcement once the actions are gone', () => {
       // Arrange
       const { fixture, el, button, render, service, succeeded } = setup('triage_failed', ['retry_triage', 'skip_triage']);
