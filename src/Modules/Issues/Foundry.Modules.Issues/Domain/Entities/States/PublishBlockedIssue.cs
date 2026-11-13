@@ -20,6 +20,8 @@ public sealed class PublishBlockedIssue : Issue
 
     public override bool AwaitsDispatch => false;
 
+    public override bool WaitsOnBlockers => false;
+
     public override IssueCodeStep? CodeStep => null;
 
     // Private parameterless constructor for EF Core materialization.
@@ -27,7 +29,7 @@ public sealed class PublishBlockedIssue : Issue
     {
     }
 
-    private PublishBlockedIssue(IssueId id) : base(id)
+    private PublishBlockedIssue(IssueId id, DateTimeOffset enteredStateAt) : base(id, enteredStateAt)
     {
     }
 
@@ -53,7 +55,7 @@ public sealed class PublishBlockedIssue : Issue
 
     internal static PublishBlockedIssue FromInProgress(InProgressIssue source, string branchName, DateTimeOffset blockedAt)
     {
-        PublishBlockedIssue blocked = new(source.Id);
+        PublishBlockedIssue blocked = new(source.Id, blockedAt);
         blocked.CopySharedPropertiesFrom(source);
         blocked.WorkerRunId = source.WorkerRunId;
         blocked.BranchName = branchName;
@@ -63,7 +65,7 @@ public sealed class PublishBlockedIssue : Issue
 
     internal static PublishBlockedIssue FromRevisionInProgress(RevisionInProgressIssue source, DateTimeOffset blockedAt)
     {
-        PublishBlockedIssue blocked = new(source.Id);
+        PublishBlockedIssue blocked = new(source.Id, blockedAt);
         blocked.CopySharedPropertiesFrom(source);
         blocked.WorkerRunId = source.WorkerRunId;
         blocked.BranchName = source.BranchName;

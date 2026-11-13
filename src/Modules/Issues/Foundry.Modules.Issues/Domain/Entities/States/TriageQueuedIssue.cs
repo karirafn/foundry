@@ -19,6 +19,8 @@ public sealed class TriageQueuedIssue : QueuedIssue
 
     public override bool AwaitsDispatch => true;
 
+    public override bool WaitsOnBlockers => false;
+
     public override IssueCodeStep? CodeStep => null;
 
     // Private parameterless constructor for EF Core materialization.
@@ -26,7 +28,7 @@ public sealed class TriageQueuedIssue : QueuedIssue
     {
     }
 
-    private TriageQueuedIssue(IssueId id) : base(id)
+    private TriageQueuedIssue(IssueId id, DateTimeOffset enteredStateAt) : base(id, enteredStateAt)
     {
     }
 
@@ -37,41 +39,49 @@ public sealed class TriageQueuedIssue : QueuedIssue
 
     public override DispatchContext Context => new DispatchContext.Triage();
 
-    internal static TriageQueuedIssue FromDetected(DetectedIssue source) => CarryingBlockers(source);
+    internal static TriageQueuedIssue FromDetected(DetectedIssue source, DateTimeOffset transitionedAt) =>
+        CarryingBlockers(source, transitionedAt);
 
-    internal static TriageQueuedIssue FromTriageFailed(TriageFailedIssue source) => CarryingBlockers(source);
+    internal static TriageQueuedIssue FromTriageFailed(TriageFailedIssue source, DateTimeOffset transitionedAt) =>
+        CarryingBlockers(source, transitionedAt);
 
-    internal static TriageQueuedIssue FromTriageBlocked(TriageBlockedIssue source) => CarryingBlockers(source);
+    internal static TriageQueuedIssue FromTriageBlocked(TriageBlockedIssue source, DateTimeOffset transitionedAt) =>
+        CarryingBlockers(source, transitionedAt);
 
     /// <summary>An operator's Re-triage of a queued or blocked issue.</summary>
-    internal static TriageQueuedIssue FromRetriage(Issue source) => CarryingBlockers(source);
+    internal static TriageQueuedIssue FromRetriage(Issue source, DateTimeOffset transitionedAt) =>
+        CarryingBlockers(source, transitionedAt);
 
-    internal static TriageQueuedIssue FromAwaitingInput(AwaitingInputIssue source, string input, DateTimeOffset answeredAt)
+    internal static TriageQueuedIssue FromAwaitingInput(
+        AwaitingInputIssue source,
+        string input,
+        DateTimeOffset answeredAt,
+        DateTimeOffset transitionedAt)
     {
-        TriageQueuedIssue queued = CarryingBlockers(source);
+        TriageQueuedIssue queued = CarryingBlockers(source, transitionedAt);
         queued.AnswerClarification(input, answeredAt);
         return queued;
     }
 
-    private static TriageQueuedIssue CarryingBlockers(Issue source)
+    private static TriageQueuedIssue CarryingBlockers(Issue source, DateTimeOffset enteredStateAt)
     {
-        TriageQueuedIssue queued = new(source.Id);
+        TriageQueuedIssue queued = new(source.Id, enteredStateAt);
         queued.CopySharedPropertiesFrom(source);
         queued.SetBlockedBy(source.BlockedBy);
         return queued;
     }
 
-    public override TriageInProgressIssue Claim(WorkerRunId workerRunId)
+    public override TriageInProgressIssue Claim(WorkerRunId workerRunId, DateTimeOffset claimedAt)
     {
-        TriageInProgressIssue inProgress = TriageInProgressIssue.FromTriageQueued(this, workerRunId);
+        TriageInProgressIssue inProgress = TriageInProgressIssue.FromTriageQueued(this, workerRunId, claimedAt);
         AddDomainEvent(new Events.IssueTriageInProgress(Id, MonitoredRepositoryId));
         return inProgress;
     }
 
     /// <summary>Open <paramref name="blockers"/> hold the issue untriaged until they close (ADR 0102).</summary>
-    public TriageBlockedIssue Block(IReadOnlyList<int> blockers)
+    public TriageBlockedIssue Block(IReadOnlyList<int> blockers, DateTimeOffset transitionedAt)
     {
-        TriageBlockedIssue blocked = TriageBlockedIssue.Untriaged(this, blockers);
+        TriageBlockedIssue blocked = TriageBlockedIssue.Untriaged(this, blockers, transitionedAt);
         AddDomainEvent(new Events.IssueTriageBlocked(Id, MonitoredRepositoryId));
         return blocked;
     }

@@ -19,7 +19,7 @@ public sealed class RetryTriage
         TriageFailedIssue failed = new IssueBuilder().TriageFailed();
 
         // Act
-        TriageQueuedIssue queued = failed.RetryTriage();
+        TriageQueuedIssue queued = failed.RetryTriage(DateTimeOffset.UtcNow);
 
         // Assert
         queued.ShouldSatisfyAllConditions(
@@ -40,7 +40,7 @@ public sealed class RetryTriage
             .FailBlockerLink(WorkerRunId.New(), 15, "issue is locked", DateTimeOffset.UnixEpoch);
 
         // Act
-        TriageQueuedIssue queued = failed.RetryTriage();
+        TriageQueuedIssue queued = failed.RetryTriage(DateTimeOffset.UtcNow);
 
         // Assert
         queued.ShouldSatisfyAllConditions(

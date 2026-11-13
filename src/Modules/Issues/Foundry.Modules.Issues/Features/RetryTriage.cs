@@ -21,6 +21,7 @@ internal static class RetryTriage
     internal sealed class Handler(
         DbContext db,
         IDomainEventDispatcher domainEventDispatcher,
+        TimeProvider timeProvider,
         IIssueQueries issueQueries)
         : ICommandHandler<Command, IssueDetail>
     {
@@ -38,7 +39,7 @@ internal static class RetryTriage
 
             Issue? next = issue switch
             {
-                TriageFailedIssue triageFailed => triageFailed.RetryTriage(),
+                TriageFailedIssue triageFailed => triageFailed.RetryTriage(timeProvider.GetUtcNow()),
                 _ => null,
             };
 

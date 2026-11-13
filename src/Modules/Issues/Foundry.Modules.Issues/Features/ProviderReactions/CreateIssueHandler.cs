@@ -14,6 +14,7 @@ namespace Foundry.Modules.Issues.Features.ProviderReactions;
 internal sealed class CreateIssueHandler(
     DbContext db,
     IDomainEventDispatcher domainEventDispatcher,
+    TimeProvider timeProvider,
     ILogger<CreateIssueHandler> logger) : IIntegrationEventHandler<IssueDetected>
 {
     public async Task HandleAsync(IssueDetected @event, CancellationToken cancellationToken)
@@ -57,7 +58,7 @@ internal sealed class CreateIssueHandler(
             KindClassification.FromKindLabel(@event.IssueKindLabel));
 
         // Every new issue is triaged before its first implement run, and before the dependency check (ADR 0097).
-        TriageQueuedIssue triageQueued = detected.QueueTriage();
+        TriageQueuedIssue triageQueued = detected.QueueTriage(timeProvider.GetUtcNow());
 
         db.Set<Issue>().Add(triageQueued);
         await db.SaveChangesAsync(cancellationToken);

@@ -22,7 +22,8 @@ namespace Foundry.Modules.Issues.Features.Dependencies;
 internal sealed class IssueDependencyApplier(
     DbContext db,
     IIssueQueries issueQueries,
-    IDomainEventDispatcher dispatcher)
+    IDomainEventDispatcher dispatcher,
+    TimeProvider timeProvider)
 {
     /// <summary>
     /// Applies <paramref name="blockedBy"/> to the tracked <paramref name="issue"/> and commits
@@ -53,6 +54,7 @@ internal sealed class IssueDependencyApplier(
         // Apply the new BlockedBy value. From this point there is a single
         // save or transition — no intermediate SaveChangesAsync beforehand.
         issue.SetBlockedBy(blockedBy);
+        DateTimeOffset now = timeProvider.GetUtcNow();
 
         switch (issue)
         {
@@ -60,42 +62,42 @@ internal sealed class IssueDependencyApplier(
             // against the code they wrote (ADR 0102); without blockers it goes straight to triage.
             case DetectedIssue detected when issue.BlockedBy.Count > 0:
             {
-                TriageBlockedIssue triageBlocked = detected.BlockTriage(issue.BlockedBy);
+                TriageBlockedIssue triageBlocked = detected.BlockTriage(issue.BlockedBy, now);
                 await db.TransitionAsync(detected, triageBlocked, dispatcher, cancellationToken);
                 break;
             }
 
             case DetectedIssue detected:
             {
-                TriageQueuedIssue triageQueued = detected.QueueTriage();
+                TriageQueuedIssue triageQueued = detected.QueueTriage(now);
                 await db.TransitionAsync(detected, triageQueued, dispatcher, cancellationToken);
                 break;
             }
 
             case TriageQueuedIssue triageQueued when issue.BlockedBy.Count > 0:
             {
-                TriageBlockedIssue triageBlocked = triageQueued.Block(issue.BlockedBy);
+                TriageBlockedIssue triageBlocked = triageQueued.Block(issue.BlockedBy, now);
                 await db.TransitionAsync(triageQueued, triageBlocked, dispatcher, cancellationToken);
                 break;
             }
 
             case TriageBlockedIssue triageBlocked when issue.BlockedBy.Count == 0:
             {
-                TriageQueuedIssue triageQueued = triageBlocked.Unblock();
+                TriageQueuedIssue triageQueued = triageBlocked.Unblock(now);
                 await db.TransitionAsync(triageBlocked, triageQueued, dispatcher, cancellationToken);
                 break;
             }
 
             case FreshQueuedIssue queued when issue.BlockedBy.Count > 0:
             {
-                BlockedIssue blocked = queued.Block(issue.BlockedBy);
+                BlockedIssue blocked = queued.Block(issue.BlockedBy, now);
                 await db.TransitionAsync(queued, blocked, dispatcher, cancellationToken);
                 break;
             }
 
             case BlockedIssue blocked when issue.BlockedBy.Count == 0:
             {
-                FreshQueuedIssue queued = blocked.Unblock();
+                FreshQueuedIssue queued = blocked.Unblock(now);
                 await db.TransitionAsync(blocked, queued, dispatcher, cancellationToken);
                 break;
             }

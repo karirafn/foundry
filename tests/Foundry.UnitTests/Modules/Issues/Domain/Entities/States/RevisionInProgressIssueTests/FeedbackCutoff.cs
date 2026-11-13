@@ -49,8 +49,8 @@ public sealed class FeedbackCutoff
     {
         // Arrange
         AwaitingInputIssue awaiting = new IssueBuilder().AwaitingInputPosted(RunStartedAt.AddHours(-2));
-        RevisionInProgressIssue revisionInProgress = ((RevisionQueuedIssue)awaiting.ProvideInput("Use Postgres.", RunStartedAt.AddHours(-1)))
-            .Claim(WorkerRunId.New());
+        RevisionInProgressIssue revisionInProgress = ((RevisionQueuedIssue)awaiting.ProvideInput("Use Postgres.", RunStartedAt.AddHours(-1), DateTimeOffset.UtcNow))
+            .Claim(WorkerRunId.New(), DateTimeOffset.UtcNow);
 
         // Act
         DateTimeOffset cutoff = Complete(revisionInProgress, transition);
@@ -125,8 +125,8 @@ public sealed class FeedbackCutoff
     {
         RevisionInProgressIssue revisionInProgress = new IssueBuilder()
             .ChecksPending()
-            .FixChecks([new FailingCheck("ci/build", "failure", "https://github.com/owner/repo/actions/runs/1")])
-            .Claim(WorkerRunId.New());
+            .FixChecks([new FailingCheck("ci/build", "failure", "https://github.com/owner/repo/actions/runs/1")], DateTimeOffset.UtcNow)
+            .Claim(WorkerRunId.New(), DateTimeOffset.UtcNow);
         revisionInProgress.Trigger.ShouldBeOfType<RevisionTrigger.FailedChecks>();
         return revisionInProgress;
     }
@@ -135,8 +135,8 @@ public sealed class FeedbackCutoff
     {
         RevisionInProgressIssue revisionInProgress = new IssueBuilder()
             .RebasePending()
-            .ResolveConflict()
-            .Claim(WorkerRunId.New());
+            .ResolveConflict(DateTimeOffset.UtcNow)
+            .Claim(WorkerRunId.New(), DateTimeOffset.UtcNow);
         revisionInProgress.Trigger.ShouldBeOfType<RevisionTrigger.RebaseConflict>();
         return revisionInProgress;
     }
@@ -144,11 +144,13 @@ public sealed class FeedbackCutoff
     private static DateTimeOffset Complete(RevisionInProgressIssue revisionInProgress, string transition) =>
         transition switch
         {
-            nameof(RevisionInProgressIssue.MarkInReview) => revisionInProgress.MarkInReview(RunStartedAt).FeedbackCutoffAt,
-            nameof(RevisionInProgressIssue.MarkUnchanged) => revisionInProgress.MarkUnchanged(RunStartedAt).FeedbackCutoffAt,
-            nameof(RevisionInProgressIssue.MarkRebasePending) => revisionInProgress.MarkRebasePending(RunStartedAt).FeedbackCutoffAt,
+            nameof(RevisionInProgressIssue.MarkInReview) => revisionInProgress.MarkInReview(RunStartedAt, DateTimeOffset.UtcNow).FeedbackCutoffAt,
+            nameof(RevisionInProgressIssue.MarkUnchanged) => revisionInProgress.MarkUnchanged(RunStartedAt,
+            DateTimeOffset.UtcNow).FeedbackCutoffAt,
+            nameof(RevisionInProgressIssue.MarkRebasePending) => revisionInProgress.MarkRebasePending(RunStartedAt,
+            DateTimeOffset.UtcNow).FeedbackCutoffAt,
             nameof(RevisionInProgressIssue.MarkUnchangedRebasePending) =>
-                revisionInProgress.MarkUnchangedRebasePending(RunStartedAt).FeedbackCutoffAt,
+                revisionInProgress.MarkUnchangedRebasePending(RunStartedAt, DateTimeOffset.UtcNow).FeedbackCutoffAt,
             _ => throw new ArgumentOutOfRangeException(nameof(transition), transition, null),
         };
 }

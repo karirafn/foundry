@@ -20,7 +20,7 @@ public sealed class Claim
         WorkerRunId workerRunId = WorkerRunId.New();
 
         // Act
-        TriageInProgressIssue inProgress = queued.Claim(workerRunId);
+        TriageInProgressIssue inProgress = queued.Claim(workerRunId, DateTimeOffset.UtcNow);
 
         // Assert
         inProgress.ShouldSatisfyAllConditions(

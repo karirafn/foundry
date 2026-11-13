@@ -52,6 +52,7 @@ public sealed class HandleAsync : IAsyncDisposable
                 new InFlightWorkerCountQuery(_dbContext),
                 new NullGlobalSettingsQueries()),
             _dispatcher,
+            TimeProvider.System,
             NullLogger<TriageRunCompletedHandler>.Instance);
     }
 

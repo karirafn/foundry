@@ -12,6 +12,11 @@ namespace Foundry.Modules.Issues.Contracts;
 /// <see cref="PublishingStep"/>, <see cref="PublishRetryingStep"/>, <see cref="RebasingStep"/> or
 /// <see cref="ChecksStep"/>, or <see langword="null"/> when Foundry's own code runs no step for the issue.
 /// </para>
+/// <para>
+/// <paramref name="RepositoryId"/> is the monitored repository's id: the same id as <c>RepositorySummary.Id</c> and the
+/// repository settings route. <paramref name="WaitsOnBlockers"/> is true while the issue waits for its open blockers
+/// to close, and <paramref name="EnteredStateAt"/> is when it entered its current state (#892).
+/// </para>
 /// </summary>
 public sealed record IssueSummary(
     Guid Id,
@@ -28,6 +33,9 @@ public sealed record IssueSummary(
     bool NeedsAction,
     bool AwaitsDispatch,
     string? CodeStep,
+    Guid RepositoryId,
+    bool WaitsOnBlockers,
+    DateTimeOffset EnteredStateAt,
     string? ChecksOutcome = null,
     string? PullRequestUrl = null,
     string? RebaseOutcome = null,

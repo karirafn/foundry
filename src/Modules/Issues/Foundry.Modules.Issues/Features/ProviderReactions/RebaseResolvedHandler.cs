@@ -19,6 +19,7 @@ namespace Foundry.Modules.Issues.Features.ProviderReactions;
 internal sealed class RebaseResolvedHandler(
     DbContext db,
     IDomainEventDispatcher domainEventDispatcher,
+    TimeProvider timeProvider,
     ILogger<RebaseResolvedHandler> logger) : IIntegrationEventHandler<RebaseResolved>
 {
     public async Task HandleAsync(RebaseResolved @event, CancellationToken cancellationToken)
@@ -41,7 +42,7 @@ internal sealed class RebaseResolvedHandler(
         RebaseOutcome outcome = RebaseOutcome.FromDiscriminator(@event.Outcome, @event.Reason)
             ?? new RebaseOutcome.Skipped($"unknown-outcome:{@event.Outcome}");
 
-        Issue next = rebasePendingIssue.ResolveRebase(outcome);
+        Issue next = rebasePendingIssue.ResolveRebase(outcome, timeProvider.GetUtcNow());
         await db.TransitionAsync(rebasePendingIssue, next, domainEventDispatcher, cancellationToken);
     }
 }

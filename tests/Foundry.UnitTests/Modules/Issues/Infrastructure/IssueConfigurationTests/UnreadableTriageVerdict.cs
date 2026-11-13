@@ -94,7 +94,7 @@ public sealed class UnreadableTriageVerdict : IAsyncDisposable
         // Act
         await _dbContext.TransitionAsync(
             loaded,
-            loaded.Unblock(),
+            loaded.Unblock(DateTimeOffset.UtcNow),
             new CapturingDomainEventDispatcher(),
             TestContext.Current.CancellationToken);
 

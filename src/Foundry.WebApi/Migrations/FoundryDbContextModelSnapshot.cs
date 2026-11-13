@@ -100,6 +100,11 @@ namespace Foundry.WebApi.Migrations
                         .HasColumnType("TEXT")
                         .HasColumnName("detected_at");
 
+                    b.Property<string>("EnteredStateAt")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("entered_state_at");
+
                     b.Property<int>("IssueNumber")
                         .HasColumnType("INTEGER")
                         .HasColumnName("issue_number");

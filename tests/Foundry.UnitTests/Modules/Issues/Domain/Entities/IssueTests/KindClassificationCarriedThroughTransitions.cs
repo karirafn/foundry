@@ -58,7 +58,7 @@ public sealed class KindClassificationCarriedThroughTransitions
     {
         nameof(IssueBuilder.FreshQueued) => builder.FreshQueued(),
         "Blocked" => builder.Detected().Block([42]),
-        "Unblocked" => builder.Detected().Block([42]).Unblock(),
+        "Unblocked" => builder.Detected().Block([42]).Unblock(DateTimeOffset.UtcNow),
         nameof(IssueBuilder.InProgress) => builder.InProgress(),
         nameof(IssueBuilder.Review) => builder.Review(),
         nameof(IssueBuilder.RevisionQueued) => builder.RevisionQueued(),
@@ -75,12 +75,13 @@ public sealed class KindClassificationCarriedThroughTransitions
         nameof(IssueBuilder.ReviewFromChecksPending) => builder.ReviewFromChecksPending(),
         nameof(IssueBuilder.Unchanged) => builder.Unchanged(),
         nameof(IssueBuilder.Completed) => builder.Completed(),
-        "BlockedFromQueued" => builder.FreshQueued().Block([42]),
-        "RetriedFromFailed" => builder.Failed().Retry(),
-        "ContinuationQueued" => builder.ContinuableFailed().Retry(),
-        "RetriedFreshFromContinuableFailed" => builder.ContinuableFailed().RetryFresh(),
-        "RetriedFromUnchanged" => builder.Unchanged().Retry(),
-        "RetriedFromRevisionFailed" => builder.RevisionFailed().Retry(),
+        "BlockedFromQueued" => builder.FreshQueued().Block([42],
+        DateTimeOffset.UtcNow),
+        "RetriedFromFailed" => builder.Failed().Retry(DateTimeOffset.UtcNow),
+        "ContinuationQueued" => builder.ContinuableFailed().Retry(DateTimeOffset.UtcNow),
+        "RetriedFreshFromContinuableFailed" => builder.ContinuableFailed().RetryFresh(DateTimeOffset.UtcNow),
+        "RetriedFromUnchanged" => builder.Unchanged().Retry(DateTimeOffset.UtcNow),
+        "RetriedFromRevisionFailed" => builder.RevisionFailed().Retry(DateTimeOffset.UtcNow),
         _ => throw new ArgumentOutOfRangeException(nameof(terminal), terminal, null),
     };
 }

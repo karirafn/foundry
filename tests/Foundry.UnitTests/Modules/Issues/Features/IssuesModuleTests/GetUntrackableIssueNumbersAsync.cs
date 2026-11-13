@@ -95,7 +95,7 @@ public sealed class GetUntrackableIssueNumbersAsync : IAsyncDisposable
             .WithIssueNumber(issueNumber)
             .WithDetectedAt(Now)
             .FreshQueued()
-            .Block([99]);
+            .Block([99], DateTimeOffset.UtcNow);
         _dbContext.Set<Issue>().Add(blocked);
         _dbContext.SaveChanges();
         return blocked;
@@ -159,7 +159,7 @@ public sealed class GetUntrackableIssueNumbersAsync : IAsyncDisposable
             .WithIssueNumber(issueNumber)
             .WithDetectedAt(Now)
             .ContinuableFailed()
-            .Retry();
+            .Retry(DateTimeOffset.UtcNow);
         _dbContext.Set<Issue>().Add(continuationQueued);
         _dbContext.SaveChanges();
         return continuationQueued;

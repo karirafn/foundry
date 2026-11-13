@@ -13,6 +13,8 @@ public sealed class RevisionInProgressIssue : Issue
 
     public override bool AwaitsDispatch => false;
 
+    public override bool WaitsOnBlockers => false;
+
     public override IssueCodeStep? CodeStep => null;
 
     // Private parameterless constructor for EF Core materialization.
@@ -20,7 +22,7 @@ public sealed class RevisionInProgressIssue : Issue
     {
     }
 
-    private RevisionInProgressIssue(IssueId id) : base(id)
+    private RevisionInProgressIssue(IssueId id, DateTimeOffset enteredStateAt) : base(id, enteredStateAt)
     {
     }
 
@@ -39,9 +41,12 @@ public sealed class RevisionInProgressIssue : Issue
 
     public int RebaseConflictAttempts { get; private set; }
 
-    internal static RevisionInProgressIssue FromRevisionQueued(RevisionQueuedIssue source, WorkerRunId workerRunId)
+    internal static RevisionInProgressIssue FromRevisionQueued(
+        RevisionQueuedIssue source,
+        WorkerRunId workerRunId,
+        DateTimeOffset claimedAt)
     {
-        RevisionInProgressIssue revisionInProgress = new(source.Id);
+        RevisionInProgressIssue revisionInProgress = new(source.Id, claimedAt);
         revisionInProgress.CopySharedPropertiesFrom(source);
         revisionInProgress.WorkerRunId = workerRunId;
         revisionInProgress.BranchName = source.BranchName;
@@ -52,9 +57,12 @@ public sealed class RevisionInProgressIssue : Issue
         return revisionInProgress;
     }
 
-    internal static RevisionInProgressIssue FromPublishFailed(PublishFailedIssue source, RevisionTrigger trigger)
+    internal static RevisionInProgressIssue FromPublishFailed(
+        PublishFailedIssue source,
+        RevisionTrigger trigger,
+        DateTimeOffset transitionedAt)
     {
-        RevisionInProgressIssue revisionInProgress = new(source.Id);
+        RevisionInProgressIssue revisionInProgress = new(source.Id, transitionedAt);
         revisionInProgress.CopySharedPropertiesFrom(source);
         revisionInProgress.WorkerRunId = source.WorkerRunId;
         revisionInProgress.BranchName = source.BranchName;
@@ -90,9 +98,16 @@ public sealed class RevisionInProgressIssue : Issue
     /// The revision's work could not go to its branch, so it went to <paramref name="sideBranchName"/> for
     /// <paramref name="divergenceReason"/> (ADR 0100, ADR 0101).
     /// </summary>
-    public BranchDivergedIssue MarkBranchDiverged(string sideBranchName, BranchDivergenceReason divergenceReason)
+    public BranchDivergedIssue MarkBranchDiverged(
+        string sideBranchName,
+        BranchDivergenceReason divergenceReason,
+        DateTimeOffset transitionedAt)
     {
-        BranchDivergedIssue diverged = BranchDivergedIssue.FromRevisionInProgress(this, sideBranchName, divergenceReason);
+        BranchDivergedIssue diverged = BranchDivergedIssue.FromRevisionInProgress(
+            this,
+            sideBranchName,
+            divergenceReason,
+            transitionedAt);
         AddDomainEvent(new Events.IssueBranchDiverged(Id, MonitoredRepositoryId));
         return diverged;
     }
@@ -104,18 +119,18 @@ public sealed class RevisionInProgressIssue : Issue
     // reported, which preserves the semantic distinction in logs and domain events without diverging the cutoff
     // logic. Do NOT merge them into one method.
 
-    public ReviewIssue MarkInReview(DateTimeOffset runStartedAt)
+    public ReviewIssue MarkInReview(DateTimeOffset runStartedAt, DateTimeOffset transitionedAt)
     {
         DateTimeOffset feedbackCutoffAt = FeedbackCutoffAt(runStartedAt);
-        ReviewIssue review = ReviewIssue.FromRevisionInProgress(this, feedbackCutoffAt);
+        ReviewIssue review = ReviewIssue.FromRevisionInProgress(this, feedbackCutoffAt, transitionedAt);
         AddDomainEvent(new Events.IssueInReview(Id, MonitoredRepositoryId));
         return review;
     }
 
-    public ReviewIssue MarkUnchanged(DateTimeOffset runStartedAt)
+    public ReviewIssue MarkUnchanged(DateTimeOffset runStartedAt, DateTimeOffset transitionedAt)
     {
         DateTimeOffset feedbackCutoffAt = FeedbackCutoffAt(runStartedAt);
-        ReviewIssue review = ReviewIssue.FromRevisionInProgress(this, feedbackCutoffAt);
+        ReviewIssue review = ReviewIssue.FromRevisionInProgress(this, feedbackCutoffAt, transitionedAt);
         AddDomainEvent(new Events.IssueInReview(Id, MonitoredRepositoryId));
         return review;
     }
@@ -127,10 +142,10 @@ public sealed class RevisionInProgressIssue : Issue
     // The semantic distinction is preserved in logs and events without diverging the cutoff logic.
     // Do NOT merge them into one method.
 
-    public RebasePendingIssue MarkRebasePending(DateTimeOffset runStartedAt)
+    public RebasePendingIssue MarkRebasePending(DateTimeOffset runStartedAt, DateTimeOffset transitionedAt)
     {
         DateTimeOffset feedbackCutoffAt = FeedbackCutoffAt(runStartedAt);
-        RebasePendingIssue rebasePending = RebasePendingIssue.FromRevisionInProgress(this, feedbackCutoffAt);
+        RebasePendingIssue rebasePending = RebasePendingIssue.FromRevisionInProgress(this, feedbackCutoffAt, transitionedAt);
         AddDomainEvent(new Events.IssueRebasePending(
             Id,
             MonitoredRepositoryId,
@@ -139,10 +154,10 @@ public sealed class RevisionInProgressIssue : Issue
         return rebasePending;
     }
 
-    public RebasePendingIssue MarkUnchangedRebasePending(DateTimeOffset runStartedAt)
+    public RebasePendingIssue MarkUnchangedRebasePending(DateTimeOffset runStartedAt, DateTimeOffset transitionedAt)
     {
         DateTimeOffset feedbackCutoffAt = FeedbackCutoffAt(runStartedAt);
-        RebasePendingIssue rebasePending = RebasePendingIssue.FromRevisionInProgress(this, feedbackCutoffAt);
+        RebasePendingIssue rebasePending = RebasePendingIssue.FromRevisionInProgress(this, feedbackCutoffAt, transitionedAt);
         AddDomainEvent(new Events.IssueRebasePending(
             Id,
             MonitoredRepositoryId,
@@ -162,9 +177,12 @@ public sealed class RevisionInProgressIssue : Issue
             : runStartedAt;
 
     /// <summary>The revision run stopped to ask a person (ADR 0096): its pull request is open, so input resumes a revision.</summary>
-    public AwaitingInputIssue MarkAwaitingInput(IReadOnlyList<InputQuestion> questions, DateTimeOffset askedAt)
+    public AwaitingInputIssue MarkAwaitingInput(
+        IReadOnlyList<InputQuestion> questions,
+        DateTimeOffset askedAt,
+        DateTimeOffset transitionedAt)
     {
-        AwaitingInputIssue awaiting = AwaitingInputIssue.FromRevisionInProgress(this, questions, askedAt);
+        AwaitingInputIssue awaiting = AwaitingInputIssue.FromRevisionInProgress(this, questions, askedAt, transitionedAt);
         AddDomainEvent(new Events.IssueAwaitingInput(Id, MonitoredRepositoryId, IssueNumber));
         return awaiting;
     }

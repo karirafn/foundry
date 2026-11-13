@@ -30,7 +30,7 @@ public sealed class TierRank
     public void WhenContinuationQueued_TierRankIsOne()
     {
         // Arrange
-        ContinuationQueuedIssue continuationQueued = new IssueBuilder().ContinuableFailed().Retry();
+        ContinuationQueuedIssue continuationQueued = new IssueBuilder().ContinuableFailed().Retry(DateTimeOffset.UtcNow);
 
         // Act
         int tierRank = continuationQueued.TierRank;

@@ -22,7 +22,7 @@ public sealed class RetryFresh
             .ContinuableFailed();
 
         // Act
-        FreshQueuedIssue queued = failed.RetryFresh();
+        FreshQueuedIssue queued = failed.RetryFresh(DateTimeOffset.UtcNow);
 
         // Assert
         queued.ShouldSatisfyAllConditions(
@@ -40,7 +40,7 @@ public sealed class RetryFresh
         ContinuableFailedIssue failed = new IssueBuilder().WithMonitoredRepositoryId(repositoryId).ContinuableFailed();
 
         // Act
-        failed.RetryFresh();
+        failed.RetryFresh(DateTimeOffset.UtcNow);
 
         // Assert
         IssueQueued domainEvent = failed.DomainEvents.ShouldHaveSingleItem().ShouldBeOfType<IssueQueued>();

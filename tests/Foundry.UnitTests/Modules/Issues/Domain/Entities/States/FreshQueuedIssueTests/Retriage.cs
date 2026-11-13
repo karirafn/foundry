@@ -17,7 +17,7 @@ public sealed class Retriage
         FreshQueuedIssue queued = new IssueBuilder().FreshQueued();
 
         // Act
-        TriageQueuedIssue triageQueued = queued.Retriage();
+        TriageQueuedIssue triageQueued = queued.Retriage(DateTimeOffset.UtcNow);
 
         // Assert
         triageQueued.ShouldSatisfyAllConditions(

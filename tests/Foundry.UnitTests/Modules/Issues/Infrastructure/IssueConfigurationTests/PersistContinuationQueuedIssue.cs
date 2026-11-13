@@ -52,7 +52,7 @@ public sealed class PersistContinuationQueuedIssue : IAsyncDisposable
             .WithFailureReason("Container OOM")
             .WithFailureCategory(FailureCategory.NonZeroExit)
             .ContinuableFailed()
-            .Retry();
+            .Retry(DateTimeOffset.UtcNow);
 
         _dbContext.Set<Issue>().Add(continuationQueued);
         await _dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);

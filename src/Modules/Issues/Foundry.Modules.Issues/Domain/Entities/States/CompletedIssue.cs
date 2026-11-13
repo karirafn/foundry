@@ -12,6 +12,8 @@ public sealed class CompletedIssue : Issue
 
     public override bool AwaitsDispatch => false;
 
+    public override bool WaitsOnBlockers => false;
+
     public override IssueCodeStep? CodeStep => null;
 
     // Private parameterless constructor for EF Core materialization.
@@ -19,7 +21,7 @@ public sealed class CompletedIssue : Issue
     {
     }
 
-    private CompletedIssue(IssueId id) : base(id)
+    private CompletedIssue(IssueId id, DateTimeOffset enteredStateAt) : base(id, enteredStateAt)
     {
     }
 
@@ -33,7 +35,7 @@ public sealed class CompletedIssue : Issue
 
     internal static CompletedIssue FromReview(ReviewIssue source, DateTimeOffset completedAt)
     {
-        CompletedIssue completed = new(source.Id);
+        CompletedIssue completed = new(source.Id, completedAt);
         completed.CopySharedPropertiesFrom(source);
         completed.BranchName = source.BranchName;
         completed.PullRequestUrl = source.PullRequestUrl;
@@ -43,7 +45,7 @@ public sealed class CompletedIssue : Issue
 
     internal static CompletedIssue FromRebasePending(RebasePendingIssue source, DateTimeOffset completedAt)
     {
-        CompletedIssue completed = new(source.Id);
+        CompletedIssue completed = new(source.Id, completedAt);
         completed.CopySharedPropertiesFrom(source);
         completed.BranchName = source.BranchName;
         completed.PullRequestUrl = source.PullRequestUrl;
@@ -53,7 +55,7 @@ public sealed class CompletedIssue : Issue
 
     internal static CompletedIssue FromChecksPending(ChecksPendingIssue source, DateTimeOffset completedAt)
     {
-        CompletedIssue completed = new(source.Id);
+        CompletedIssue completed = new(source.Id, completedAt);
         completed.CopySharedPropertiesFrom(source);
         completed.BranchName = source.BranchName;
         completed.PullRequestUrl = source.PullRequestUrl;
@@ -63,7 +65,7 @@ public sealed class CompletedIssue : Issue
 
     internal static CompletedIssue FromAwaitingInput(AwaitingInputIssue source, DateTimeOffset completedAt)
     {
-        CompletedIssue completed = new(source.Id);
+        CompletedIssue completed = new(source.Id, completedAt);
         completed.CopySharedPropertiesFrom(source);
         (completed.BranchName, completed.PullRequestUrl) = source.ResumeTarget switch
         {
@@ -81,7 +83,7 @@ public sealed class CompletedIssue : Issue
         string pullRequestUrl,
         DateTimeOffset completedAt)
     {
-        CompletedIssue completed = new(source.Id);
+        CompletedIssue completed = new(source.Id, completedAt);
         completed.CopySharedPropertiesFrom(source);
         completed.BranchName = branchName;
         completed.PullRequestUrl = pullRequestUrl;

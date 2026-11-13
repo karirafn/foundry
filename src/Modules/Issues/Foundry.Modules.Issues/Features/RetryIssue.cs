@@ -20,6 +20,7 @@ internal static class RetryIssue
     internal sealed class Handler(
         DbContext db,
         IDomainEventDispatcher domainEventDispatcher,
+        TimeProvider timeProvider,
         IIssueQueries issueQueries)
         : ICommandHandler<Command, IssueDetail>
     {
@@ -37,11 +38,11 @@ internal static class RetryIssue
 
             Issue? next = issue switch
             {
-                FailedIssue failed => failed.Retry(),
-                ContinuableFailedIssue continuableFailed => continuableFailed.Retry(),
-                RevisionFailedIssue revisionFailed => revisionFailed.Retry(),
-                UnchangedIssue unchanged => unchanged.Retry(),
-                BranchDivergedIssue diverged => diverged.Retry(),
+                FailedIssue failed => failed.Retry(timeProvider.GetUtcNow()),
+                ContinuableFailedIssue continuableFailed => continuableFailed.Retry(timeProvider.GetUtcNow()),
+                RevisionFailedIssue revisionFailed => revisionFailed.Retry(timeProvider.GetUtcNow()),
+                UnchangedIssue unchanged => unchanged.Retry(timeProvider.GetUtcNow()),
+                BranchDivergedIssue diverged => diverged.Retry(timeProvider.GetUtcNow()),
                 _ => null,
             };
 

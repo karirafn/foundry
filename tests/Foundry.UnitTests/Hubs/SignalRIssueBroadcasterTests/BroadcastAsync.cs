@@ -32,7 +32,10 @@ public sealed class BroadcastAsync
             Stage: "triage",
             NeedsAction: false,
             AwaitsDispatch: true,
-            CodeStep: null);
+            CodeStep: null,
+            RepositoryId: Guid.NewGuid(),
+            WaitsOnBlockers: false,
+            EnteredStateAt: DateTimeOffset.UtcNow);
 
         // Act
         await sut.BroadcastAsync(summary, TestContext.Current.CancellationToken);
@@ -64,7 +67,10 @@ public sealed class BroadcastAsync
             Stage: "awaiting_review",
             NeedsAction: true,
             AwaitsDispatch: false,
-            CodeStep: null);
+            CodeStep: null,
+            RepositoryId: Guid.NewGuid(),
+            WaitsOnBlockers: false,
+            EnteredStateAt: DateTimeOffset.UtcNow);
 
         // Act
         await sut.BroadcastAsync(summary, TestContext.Current.CancellationToken);

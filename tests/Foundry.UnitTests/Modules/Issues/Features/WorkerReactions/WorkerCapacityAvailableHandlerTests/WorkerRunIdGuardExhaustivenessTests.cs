@@ -429,7 +429,8 @@ public sealed class WorkerRunIdGuardExhaustivenessTests : IAsyncDisposable
         IssueClaimer claimer = new(
             _dbContext,
             integrationEventDispatcher ?? new NullIntegrationEventDispatcher(),
-            _domainEventDispatcher);
+            _domainEventDispatcher,
+            TimeProvider.System);
 
         return new WorkerCapacityAvailableHandler(
             _dbContext,

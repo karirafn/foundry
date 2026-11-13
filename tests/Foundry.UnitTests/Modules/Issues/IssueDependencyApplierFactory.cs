@@ -24,5 +24,5 @@ internal static class IssueDependencyApplierFactory
                 new NullWorkerRunQueries(),
                 new InFlightWorkerCountQuery(db),
                 new NullGlobalSettingsQueries()),
-            dispatcher);
+            dispatcher, TimeProvider.System);
 }

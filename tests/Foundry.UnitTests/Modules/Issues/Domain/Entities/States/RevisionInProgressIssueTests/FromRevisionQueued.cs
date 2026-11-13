@@ -25,7 +25,7 @@ public sealed class FromRevisionQueued
         WorkerRunId workerRunId = WorkerRunId.New();
 
         // Act
-        RevisionInProgressIssue revisionInProgress = revisionQueued.Claim(workerRunId);
+        RevisionInProgressIssue revisionInProgress = revisionQueued.Claim(workerRunId, DateTimeOffset.UtcNow);
 
         // Assert
         revisionInProgress.Id.ShouldBe(revisionQueued.Id);
@@ -43,7 +43,7 @@ public sealed class FromRevisionQueued
         WorkerRunId workerRunId = WorkerRunId.New();
 
         // Act
-        RevisionInProgressIssue revisionInProgress = revisionQueued.Claim(workerRunId);
+        RevisionInProgressIssue revisionInProgress = revisionQueued.Claim(workerRunId, DateTimeOffset.UtcNow);
 
         // Assert
         RevisionTrigger.ReviewFeedback rfClaim = revisionInProgress.Trigger.ShouldBeOfType<RevisionTrigger.ReviewFeedback>();
@@ -70,7 +70,7 @@ public sealed class FromRevisionQueued
             .RevisionQueued();
 
         // Act
-        revisionQueued.Claim(WorkerRunId.New());
+        revisionQueued.Claim(WorkerRunId.New(), DateTimeOffset.UtcNow);
 
         // Assert
         IssueRevisionInProgress domainEvent = revisionQueued.DomainEvents.ShouldHaveSingleItem().ShouldBeOfType<IssueRevisionInProgress>();

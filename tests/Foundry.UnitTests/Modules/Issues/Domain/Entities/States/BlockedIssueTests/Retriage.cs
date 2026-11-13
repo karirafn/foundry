@@ -17,7 +17,7 @@ public sealed class Retriage
         BlockedIssue blocked = new IssueBuilder().Detected().Block([4, 6]);
 
         // Act
-        TriageQueuedIssue triageQueued = blocked.Retriage();
+        TriageQueuedIssue triageQueued = blocked.Retriage(DateTimeOffset.UtcNow);
 
         // Assert
         triageQueued.ShouldSatisfyAllConditions(

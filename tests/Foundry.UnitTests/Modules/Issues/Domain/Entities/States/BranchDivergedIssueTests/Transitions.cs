@@ -25,7 +25,8 @@ public sealed class Transitions
             "feat/1-test",
             "feat/1-test-run-abc",
             BranchDivergenceReason.BranchMoved,
-            "https://github.com/owner/repo/pull/1");
+            "https://github.com/owner/repo/pull/1",
+            DateTimeOffset.UtcNow);
 
         // Assert
         IssueBranchDiverged domainEvent = inProgress.DomainEvents.ShouldHaveSingleItem().ShouldBeOfType<IssueBranchDiverged>();
@@ -52,7 +53,8 @@ public sealed class Transitions
             "feat/1-test",
             "feat/1-test-run-abc",
             BranchDivergenceReason.BranchMoved,
-            pullRequestUrl: null);
+            pullRequestUrl: null,
+            DateTimeOffset.UtcNow);
 
         // Assert
         diverged.LinkedPullRequestUrl.ShouldBeNull();
@@ -68,7 +70,7 @@ public sealed class Transitions
             .RevisionInProgress();
 
         // Act
-        BranchDivergedIssue diverged = revision.MarkBranchDiverged("feat/2-fix-run-abc", BranchDivergenceReason.ForcePushProtected);
+        BranchDivergedIssue diverged = revision.MarkBranchDiverged("feat/2-fix-run-abc", BranchDivergenceReason.ForcePushProtected, DateTimeOffset.UtcNow);
 
         // Assert
         revision.DomainEvents.ShouldHaveSingleItem().ShouldBeOfType<IssueBranchDiverged>();
@@ -92,7 +94,7 @@ public sealed class Transitions
             .BranchDiverged("feat/1-test-run-abc");
 
         // Act
-        ContinuationQueuedIssue queued = diverged.Retry();
+        ContinuationQueuedIssue queued = diverged.Retry(DateTimeOffset.UtcNow);
 
         // Assert
         IssueContinuationQueued domainEvent = diverged.DomainEvents.ShouldHaveSingleItem().ShouldBeOfType<IssueContinuationQueued>();
@@ -114,7 +116,7 @@ public sealed class Transitions
             .BranchDiverged("feat/1-test-run-abc", BranchDivergenceReason.ForcePushProtected);
 
         // Act
-        ContinuationQueuedIssue queued = diverged.Retry();
+        ContinuationQueuedIssue queued = diverged.Retry(DateTimeOffset.UtcNow);
 
         // Assert
         string? failureReason = queued.Context.ShouldBeOfType<DispatchContext.Continuation>().FailureReason;

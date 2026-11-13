@@ -18,6 +18,8 @@ public sealed class TriageInProgressIssue : Issue
 
     public override bool AwaitsDispatch => false;
 
+    public override bool WaitsOnBlockers => false;
+
     public override IssueCodeStep? CodeStep => null;
 
     // Private parameterless constructor for EF Core materialization.
@@ -25,15 +27,18 @@ public sealed class TriageInProgressIssue : Issue
     {
     }
 
-    private TriageInProgressIssue(IssueId id) : base(id)
+    private TriageInProgressIssue(IssueId id, DateTimeOffset enteredStateAt) : base(id, enteredStateAt)
     {
     }
 
     public WorkerRunId WorkerRunId { get; private set; }
 
-    internal static TriageInProgressIssue FromTriageQueued(TriageQueuedIssue source, WorkerRunId workerRunId)
+    internal static TriageInProgressIssue FromTriageQueued(
+        TriageQueuedIssue source,
+        WorkerRunId workerRunId,
+        DateTimeOffset claimedAt)
     {
-        TriageInProgressIssue inProgress = new(source.Id);
+        TriageInProgressIssue inProgress = new(source.Id, claimedAt);
         inProgress.CopySharedPropertiesFrom(source);
         inProgress.SetBlockedBy(source.BlockedBy);
         inProgress.WorkerRunId = workerRunId;
@@ -44,19 +49,19 @@ public sealed class TriageInProgressIssue : Issue
     /// Triage judged the issue ready: it records the verdict and goes through the dependency check, queued when it has
     /// no open blockers and blocked otherwise.
     /// </summary>
-    public Issue MarkReady(TriageVerdict.Ready verdict)
+    public Issue MarkReady(TriageVerdict.Ready verdict, DateTimeOffset transitionedAt)
     {
         ArgumentNullException.ThrowIfNull(verdict);
 
-        return ReleaseThroughDependencyCheck(verdict);
+        return ReleaseThroughDependencyCheck(verdict, transitionedAt);
     }
 
     /// <summary>Triage needs answers first: it records the verdict and waits for input, then triages again.</summary>
-    public AwaitingInputIssue MarkNeedsInput(TriageVerdict.NeedsInput verdict)
+    public AwaitingInputIssue MarkNeedsInput(TriageVerdict.NeedsInput verdict, DateTimeOffset transitionedAt)
     {
         ArgumentNullException.ThrowIfNull(verdict);
 
-        AwaitingInputIssue awaiting = AwaitingInputIssue.FromTriageInProgress(this, verdict);
+        AwaitingInputIssue awaiting = AwaitingInputIssue.FromTriageInProgress(this, verdict, transitionedAt);
         AddDomainEvent(new Events.IssueAwaitingInput(Id, MonitoredRepositoryId, IssueNumber));
         return awaiting;
     }
@@ -65,11 +70,11 @@ public sealed class TriageInProgressIssue : Issue
     /// Triage found open issues that must land first: it records the verdict and waits untriaged on the blockers it
     /// named, then on any already recorded.
     /// </summary>
-    public TriageBlockedIssue MarkBlocked(TriageVerdict.Blocked verdict)
+    public TriageBlockedIssue MarkBlocked(TriageVerdict.Blocked verdict, DateTimeOffset transitionedAt)
     {
         ArgumentNullException.ThrowIfNull(verdict);
 
-        TriageBlockedIssue blocked = TriageBlockedIssue.FromTriageInProgress(this, verdict);
+        TriageBlockedIssue blocked = TriageBlockedIssue.FromTriageInProgress(this, verdict, transitionedAt);
         AddDomainEvent(new Events.IssueTriageBlocked(Id, MonitoredRepositoryId));
         AddDomainEvent(new Events.TriageBlockersNamed(
             Id,

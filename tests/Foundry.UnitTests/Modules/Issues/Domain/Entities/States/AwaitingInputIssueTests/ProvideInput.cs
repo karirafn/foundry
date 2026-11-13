@@ -26,7 +26,7 @@ public sealed class ProvideInput
         AwaitingInputIssue awaiting = builder.AwaitingInputPosted(PostedAt);
 
         // Act
-        QueuedIssue queued = awaiting.ProvideInput("Use Postgres.", AnsweredAt);
+        QueuedIssue queued = awaiting.ProvideInput("Use Postgres.", AnsweredAt, DateTimeOffset.UtcNow);
 
         // Assert
         RevisionQueuedIssue revision = queued.ShouldBeOfType<RevisionQueuedIssue>();
@@ -44,7 +44,7 @@ public sealed class ProvideInput
         AwaitingInputIssue awaiting = new IssueBuilder().WithBranchName("feat/1-test").AwaitingInputPosted(PostedAt, withPullRequest: false);
 
         // Act
-        QueuedIssue queued = awaiting.ProvideInput("Use Postgres.", AnsweredAt);
+        QueuedIssue queued = awaiting.ProvideInput("Use Postgres.", AnsweredAt, DateTimeOffset.UtcNow);
 
         // Assert
         ContinuationQueuedIssue continuation = queued.ShouldBeOfType<ContinuationQueuedIssue>();
@@ -61,7 +61,7 @@ public sealed class ProvideInput
         awaiting.RecordQuestionPosted(1, PostedAt, commentUrl: null);
 
         // Act
-        QueuedIssue queued = awaiting.ProvideInput("Use the v2 API.", AnsweredAt);
+        QueuedIssue queued = awaiting.ProvideInput("Use the v2 API.", AnsweredAt, DateTimeOffset.UtcNow);
 
         // Assert
         TriageQueuedIssue triageQueued = queued.ShouldBeOfType<TriageQueuedIssue>();
@@ -79,7 +79,7 @@ public sealed class ProvideInput
         awaiting.RecordQuestionPosted(1, PostedAt, commentUrl: null);
 
         // Act
-        QueuedIssue queued = awaiting.ProvideInput("Use Postgres.", AnsweredAt);
+        QueuedIssue queued = awaiting.ProvideInput("Use Postgres.", AnsweredAt, DateTimeOffset.UtcNow);
 
         // Assert
         queued.ShouldBeOfType<FreshQueuedIssue>();
@@ -92,7 +92,7 @@ public sealed class ProvideInput
         AwaitingInputIssue awaiting = new IssueBuilder().AwaitingInputPosted(PostedAt);
 
         // Act
-        QueuedIssue queued = awaiting.ProvideInput("Use Postgres.", AnsweredAt);
+        QueuedIssue queued = awaiting.ProvideInput("Use Postgres.", AnsweredAt, DateTimeOffset.UtcNow);
 
         // Assert
         Clarification round = queued.Clarifications.ShouldHaveSingleItem();
@@ -110,7 +110,7 @@ public sealed class ProvideInput
         AwaitingInputIssue awaiting = new IssueBuilder().AwaitingInput();
 
         // Act + Assert
-        Should.Throw<InvalidOperationException>(() => awaiting.ProvideInput("Use Postgres.", AnsweredAt));
+        Should.Throw<InvalidOperationException>(() => awaiting.ProvideInput("Use Postgres.", AnsweredAt, DateTimeOffset.UtcNow));
     }
 
     [Fact]
@@ -118,10 +118,10 @@ public sealed class ProvideInput
     {
         // Arrange
         AwaitingInputIssue awaiting = new IssueBuilder().AwaitingInputPosted(PostedAt);
-        RevisionQueuedIssue queued = (RevisionQueuedIssue)awaiting.ProvideInput("Use Postgres.", AnsweredAt);
+        RevisionQueuedIssue queued = (RevisionQueuedIssue)awaiting.ProvideInput("Use Postgres.", AnsweredAt, DateTimeOffset.UtcNow);
 
         // Act
-        RevisionInProgressIssue inProgress = queued.Claim(Foundry.Modules.Workers.Contracts.WorkerRunId.New());
+        RevisionInProgressIssue inProgress = queued.Claim(Foundry.Modules.Workers.Contracts.WorkerRunId.New(), DateTimeOffset.UtcNow);
 
         // Assert
         inProgress.Clarifications.ShouldBe(queued.Clarifications);

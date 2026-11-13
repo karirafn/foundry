@@ -10,7 +10,8 @@ namespace Foundry.UnitTests.Modules.Issues.Domain.Entities.IssueTests;
 
 /// <summary>
 /// Every state type declares where it sits in the lifecycle: its stage, whether it needs a person, whether it waits for a
-/// worker run to be dispatched, and the code step Foundry runs for it (#851).
+/// worker run to be dispatched (#851), whether it waits for its open blockers to close (#892), and the code step Foundry
+/// runs for it (#851).
 /// </summary>
 public sealed class Placement
 {
@@ -22,9 +23,9 @@ public sealed class Placement
         ["triage_in_progress"] = () => new IssueBuilder().TriageInProgress(),
         ["triage_failed"] = () => new IssueBuilder().TriageFailed(),
         ["queued"] = () => new IssueBuilder().FreshQueued(),
-        ["blocked"] = () => new IssueBuilder().WithBlockedBy([2]).TriageFailed().SkipTriage(),
+        ["blocked"] = () => new IssueBuilder().WithBlockedBy([2]).TriageFailed().SkipTriage(DateTimeOffset.UtcNow),
         ["revision_queued"] = () => new IssueBuilder().RevisionQueued(),
-        ["continuation_queued"] = () => new IssueBuilder().ContinuableFailed().Retry(),
+        ["continuation_queued"] = () => new IssueBuilder().ContinuableFailed().Retry(DateTimeOffset.UtcNow),
         ["in_progress"] = () => new IssueBuilder().InProgress(),
         ["revision_in_progress"] = () => new IssueBuilder().RevisionInProgress(),
         ["rebase_pending"] = () => new IssueBuilder().RebasePending(),
@@ -44,34 +45,34 @@ public sealed class Placement
         ["completed"] = () => new IssueBuilder().Completed(),
     };
 
-    private static readonly IReadOnlyList<(string State, IssueStage Stage, bool NeedsAction, bool AwaitsDispatch, IssueCodeStep? CodeStep)> Expected =
+    private static readonly IReadOnlyList<(string State, IssueStage Stage, bool NeedsAction, bool AwaitsDispatch, bool WaitsOnBlockers, IssueCodeStep? CodeStep)> Expected =
     [
-        ("detected", IssueStage.Triage, false, true, null),
-        ("triage_queued", IssueStage.Triage, false, true, null),
-        ("triage_blocked", IssueStage.Triage, false, true, null),
-        ("triage_in_progress", IssueStage.Triage, false, false, null),
-        ("triage_failed", IssueStage.Triage, true, false, null),
-        ("queued", IssueStage.Implement, false, true, null),
-        ("blocked", IssueStage.Implement, false, true, null),
-        ("revision_queued", IssueStage.Implement, false, true, null),
-        ("continuation_queued", IssueStage.Implement, false, true, null),
-        ("in_progress", IssueStage.Implement, false, false, null),
-        ("revision_in_progress", IssueStage.Implement, false, false, null),
-        ("rebase_pending", IssueStage.Implement, false, false, IssueCodeStep.Rebasing),
-        ("checks_pending", IssueStage.Implement, false, false, IssueCodeStep.Checks),
-        ("failed", IssueStage.Implement, true, false, null),
-        ("continuable_failed", IssueStage.Implement, true, false, null),
-        ("revision_failed", IssueStage.Implement, true, false, null),
-        ("unchanged", IssueStage.Implement, true, false, null),
-        ("publish_failed", IssueStage.Implement, true, false, null),
-        ("publish_blocked", IssueStage.Implement, true, false, null),
-        ("branch_diverged", IssueStage.Implement, true, false, null),
-        ("awaiting_input (retriage)", IssueStage.Triage, true, false, null),
-        ("awaiting_input (revision)", IssueStage.Implement, true, false, null),
-        ("awaiting_input (continuation)", IssueStage.Implement, true, false, null),
-        ("awaiting_input (fresh)", IssueStage.Implement, true, false, null),
-        ("review", IssueStage.AwaitingReview, true, false, null),
-        ("completed", IssueStage.Done, false, false, null),
+        ("detected", IssueStage.Triage, false, true, false, null),
+        ("triage_queued", IssueStage.Triage, false, true, false, null),
+        ("triage_blocked", IssueStage.Triage, false, true, true, null),
+        ("triage_in_progress", IssueStage.Triage, false, false, false, null),
+        ("triage_failed", IssueStage.Triage, true, false, false, null),
+        ("queued", IssueStage.Implement, false, true, false, null),
+        ("blocked", IssueStage.Implement, false, true, true, null),
+        ("revision_queued", IssueStage.Implement, false, true, false, null),
+        ("continuation_queued", IssueStage.Implement, false, true, false, null),
+        ("in_progress", IssueStage.Implement, false, false, false, null),
+        ("revision_in_progress", IssueStage.Implement, false, false, false, null),
+        ("rebase_pending", IssueStage.Implement, false, false, false, IssueCodeStep.Rebasing),
+        ("checks_pending", IssueStage.Implement, false, false, false, IssueCodeStep.Checks),
+        ("failed", IssueStage.Implement, true, false, false, null),
+        ("continuable_failed", IssueStage.Implement, true, false, false, null),
+        ("revision_failed", IssueStage.Implement, true, false, false, null),
+        ("unchanged", IssueStage.Implement, true, false, false, null),
+        ("publish_failed", IssueStage.Implement, true, false, false, null),
+        ("publish_blocked", IssueStage.Implement, true, false, false, null),
+        ("branch_diverged", IssueStage.Implement, true, false, false, null),
+        ("awaiting_input (retriage)", IssueStage.Triage, true, false, false, null),
+        ("awaiting_input (revision)", IssueStage.Implement, true, false, false, null),
+        ("awaiting_input (continuation)", IssueStage.Implement, true, false, false, null),
+        ("awaiting_input (fresh)", IssueStage.Implement, true, false, false, null),
+        ("review", IssueStage.AwaitingReview, true, false, false, null),
+        ("completed", IssueStage.Done, false, false, false, null),
     ];
 
     public static TheoryData<string, IssueStage> Stages => new(Expected.Select(e => (e.State, e.Stage)));
@@ -79,6 +80,8 @@ public sealed class Placement
     public static TheoryData<string, bool> NeedsActions => new(Expected.Select(e => (e.State, e.NeedsAction)));
 
     public static TheoryData<string, bool> AwaitsDispatches => new(Expected.Select(e => (e.State, e.AwaitsDispatch)));
+
+    public static TheoryData<string, bool> WaitsOnBlockersByState => new(Expected.Select(e => (e.State, e.WaitsOnBlockers)));
 
     public static TheoryData<string, IssueCodeStep?> CodeSteps => new(Expected.Select(e => (e.State, e.CodeStep)));
 
@@ -122,6 +125,20 @@ public sealed class Placement
 
         // Assert
         actual.ShouldBe(awaitsDispatch);
+    }
+
+    [Theory]
+    [MemberData(nameof(WaitsOnBlockersByState))]
+    public void WhenInState_DeclaresWhetherItWaitsOnBlockers(string state, bool waitsOnBlockers)
+    {
+        // Arrange
+        Issue issue = States[state]();
+
+        // Act
+        bool actual = issue.WaitsOnBlockers;
+
+        // Assert
+        actual.ShouldBe(waitsOnBlockers);
     }
 
     [Theory]

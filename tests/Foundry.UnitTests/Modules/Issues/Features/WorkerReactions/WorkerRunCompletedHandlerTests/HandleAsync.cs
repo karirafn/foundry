@@ -41,6 +41,7 @@ public sealed class HandleAsync : IAsyncDisposable
         _sut = new WorkerRunCompletedHandler(
             _dbContext,
             _dispatcher,
+            TimeProvider.System,
             NullLogger<WorkerRunCompletedHandler>.Instance);
     }
 
@@ -359,11 +360,11 @@ public sealed class HandleAsync : IAsyncDisposable
         RevisionInProgressIssue revisionInProgress = triggerKind switch
         {
             nameof(RevisionTrigger.FailedChecks) => builder.ChecksPending()
-                .FixChecks([new FailingCheck("ci/build", "failure", null)])
-                .Claim(WorkerRunId.New()),
+                .FixChecks([new FailingCheck("ci/build", "failure", null)], DateTimeOffset.UtcNow)
+                .Claim(WorkerRunId.New(), DateTimeOffset.UtcNow),
             nameof(RevisionTrigger.RebaseConflict) => builder.RebasePending()
-                .ResolveConflict()
-                .Claim(WorkerRunId.New()),
+                .ResolveConflict(DateTimeOffset.UtcNow)
+                .Claim(WorkerRunId.New(), DateTimeOffset.UtcNow),
             _ => throw new ArgumentOutOfRangeException(nameof(triggerKind), triggerKind, null),
         };
         _dbContext.Set<Issue>().Add(revisionInProgress);

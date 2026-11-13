@@ -17,7 +17,7 @@ public sealed class AwaitingInputIssue : Issue
     {
     }
 
-    private AwaitingInputIssue(IssueId id) : base(id)
+    private AwaitingInputIssue(IssueId id, DateTimeOffset enteredStateAt) : base(id, enteredStateAt)
     {
     }
 
@@ -39,6 +39,8 @@ public sealed class AwaitingInputIssue : Issue
 
     public override bool AwaitsDispatch => false;
 
+    public override bool WaitsOnBlockers => false;
+
     public override IssueCodeStep? CodeStep => null;
 
     /// <summary>The questions waiting for input: the open round of the clarification log.</summary>
@@ -48,9 +50,10 @@ public sealed class AwaitingInputIssue : Issue
         InProgressIssue source,
         ResumeTarget resumeTarget,
         IReadOnlyList<InputQuestion> questions,
-        DateTimeOffset askedAt)
+        DateTimeOffset askedAt,
+        DateTimeOffset transitionedAt)
     {
-        AwaitingInputIssue awaiting = new(source.Id);
+        AwaitingInputIssue awaiting = new(source.Id, transitionedAt);
         awaiting.CopySharedPropertiesFrom(source);
         awaiting.Enter(source.WorkerRunId, resumeTarget, questions, askedAt);
         return awaiting;
@@ -59,9 +62,10 @@ public sealed class AwaitingInputIssue : Issue
     internal static AwaitingInputIssue FromRevisionInProgress(
         RevisionInProgressIssue source,
         IReadOnlyList<InputQuestion> questions,
-        DateTimeOffset askedAt)
+        DateTimeOffset askedAt,
+        DateTimeOffset transitionedAt)
     {
-        AwaitingInputIssue awaiting = new(source.Id);
+        AwaitingInputIssue awaiting = new(source.Id, transitionedAt);
         awaiting.CopySharedPropertiesFrom(source);
         awaiting.Enter(
             source.WorkerRunId,
@@ -75,9 +79,12 @@ public sealed class AwaitingInputIssue : Issue
     /// Triage needs answers before the first implement run (ADR 0097): the verdict is recorded, its questions open a
     /// clarification round, and input sends the issue back to triage.
     /// </summary>
-    internal static AwaitingInputIssue FromTriageInProgress(TriageInProgressIssue source, TriageVerdict.NeedsInput verdict)
+    internal static AwaitingInputIssue FromTriageInProgress(
+        TriageInProgressIssue source,
+        TriageVerdict.NeedsInput verdict,
+        DateTimeOffset transitionedAt)
     {
-        AwaitingInputIssue awaiting = new(source.Id);
+        AwaitingInputIssue awaiting = new(source.Id, transitionedAt);
         awaiting.CopySharedPropertiesFrom(source);
         awaiting.SetBlockedBy(source.BlockedBy);
         awaiting.RecordTriageVerdict(verdict);
@@ -123,7 +130,7 @@ public sealed class AwaitingInputIssue : Issue
     /// Closes the open clarification round with <paramref name="input"/> and resumes along the
     /// <see cref="ResumeTarget"/>. Input is only read once the question is posted.
     /// </summary>
-    public QueuedIssue ProvideInput(string input, DateTimeOffset answeredAt)
+    public QueuedIssue ProvideInput(string input, DateTimeOffset answeredAt, DateTimeOffset transitionedAt)
     {
         if (QuestionPost is not QuestionPost.Posted)
         {
@@ -133,7 +140,12 @@ public sealed class AwaitingInputIssue : Issue
         switch (ResumeTarget)
         {
             case ResumeTarget.Revision revision:
-                RevisionQueuedIssue revisionQueued = RevisionQueuedIssue.FromAwaitingInput(this, revision, input, answeredAt);
+                RevisionQueuedIssue revisionQueued = RevisionQueuedIssue.FromAwaitingInput(
+                    this,
+                    revision,
+                    input,
+                    answeredAt,
+                    transitionedAt);
                 AddDomainEvent(new Events.IssueRevisionQueued(Id, MonitoredRepositoryId));
                 return revisionQueued;
 
@@ -142,17 +154,18 @@ public sealed class AwaitingInputIssue : Issue
                     this,
                     continuation,
                     input,
-                    answeredAt);
+                    answeredAt,
+                    transitionedAt);
                 AddDomainEvent(new Events.IssueContinuationQueued(Id, MonitoredRepositoryId));
                 return continuationQueued;
 
             case ResumeTarget.Retriage:
-                TriageQueuedIssue triageQueued = TriageQueuedIssue.FromAwaitingInput(this, input, answeredAt);
+                TriageQueuedIssue triageQueued = TriageQueuedIssue.FromAwaitingInput(this, input, answeredAt, transitionedAt);
                 AddDomainEvent(new Events.IssueTriageQueued(Id, MonitoredRepositoryId));
                 return triageQueued;
 
             default:
-                FreshQueuedIssue freshQueued = FreshQueuedIssue.FromAwaitingInput(this, input, answeredAt);
+                FreshQueuedIssue freshQueued = FreshQueuedIssue.FromAwaitingInput(this, input, answeredAt, transitionedAt);
                 AddDomainEvent(new Events.IssueQueued(Id, MonitoredRepositoryId));
                 return freshQueued;
         }

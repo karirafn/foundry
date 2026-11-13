@@ -11,11 +11,11 @@ namespace Foundry.Modules.Issues.Domain.Entities;
 public abstract class QueuedIssue : Issue
 {
     // Private parameterless constructor for EF Core materialization.
-    private protected QueuedIssue() : base(IssueId.New())
+    private protected QueuedIssue()
     {
     }
 
-    protected QueuedIssue(IssueId id) : base(id)
+    protected QueuedIssue(IssueId id, DateTimeOffset enteredStateAt) : base(id, enteredStateAt)
     {
     }
 
@@ -35,7 +35,7 @@ public abstract class QueuedIssue : Issue
     public abstract DispatchContext Context { get; }
 
     /// <summary>
-    /// Transitions the issue to its in-progress state, assigning the given worker run.
+    /// Transitions the issue to its in-progress state at <paramref name="claimedAt"/>, assigning the given worker run.
     /// </summary>
-    public abstract Issue Claim(WorkerRunId workerRunId);
+    public abstract Issue Claim(WorkerRunId workerRunId, DateTimeOffset claimedAt);
 }

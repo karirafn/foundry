@@ -190,6 +190,14 @@ public sealed class IssueConfiguration : IEntityTypeConfiguration<Issue>
             .HasColumnType("TEXT")
             .HasColumnName("detected_at");
 
+        builder.Property(i => i.EnteredStateAt)
+            .HasConversion(
+                dto => dto.UtcDateTime.ToString("O"),
+                s => DateTimeOffset.Parse(s, null, DateTimeStyles.RoundtripKind))
+            .HasColumnType("TEXT")
+            .IsRequired()
+            .HasColumnName("entered_state_at");
+
         ValueConverter<IssueKind, string> issueKindConverter = new(
             kind => kind.Value,
             value => ParseStoredIssueKind(value));

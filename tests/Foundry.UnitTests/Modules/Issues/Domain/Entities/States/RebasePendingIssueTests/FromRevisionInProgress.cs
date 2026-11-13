@@ -23,7 +23,7 @@ public sealed class FromRevisionInProgress
             .RevisionInProgress();
 
         // Act
-        RebasePendingIssue rebasePending = revisionInProgress.MarkRebasePending(RunStartedAt);
+        RebasePendingIssue rebasePending = revisionInProgress.MarkRebasePending(RunStartedAt, DateTimeOffset.UtcNow);
 
         // Assert
         rebasePending.ShouldSatisfyAllConditions(
@@ -46,7 +46,7 @@ public sealed class FromRevisionInProgress
             .RevisionInProgress();
 
         // Act
-        RebasePendingIssue rebasePending = revisionInProgress.MarkRebasePending(RunStartedAt);
+        RebasePendingIssue rebasePending = revisionInProgress.MarkRebasePending(RunStartedAt, DateTimeOffset.UtcNow);
 
         // Assert
         rebasePending.ShouldSatisfyAllConditions(
@@ -67,7 +67,7 @@ public sealed class FromRevisionInProgress
             .RevisionInProgress();
 
         // Act
-        RebasePendingIssue rebasePending = revisionInProgress.MarkRebasePending(RunStartedAt);
+        RebasePendingIssue rebasePending = revisionInProgress.MarkRebasePending(RunStartedAt, DateTimeOffset.UtcNow);
 
         // Assert
         rebasePending.FeedbackCutoffAt.ShouldBe(newestConsumedCommentAt);
@@ -83,7 +83,7 @@ public sealed class FromRevisionInProgress
             .RevisionInProgress();
 
         // Act
-        RebasePendingIssue rebasePending = revisionInProgress.MarkRebasePending(RunStartedAt);
+        RebasePendingIssue rebasePending = revisionInProgress.MarkRebasePending(RunStartedAt, DateTimeOffset.UtcNow);
 
         // Assert
         rebasePending.FeedbackCutoffAt.ShouldBe(RunStartedAt);
@@ -100,7 +100,7 @@ public sealed class FromRevisionInProgress
         DateTimeOffset before = DateTimeOffset.UtcNow;
 
         // Act
-        RebasePendingIssue rebasePending = revisionInProgress.MarkRebasePending(RunStartedAt);
+        RebasePendingIssue rebasePending = revisionInProgress.MarkRebasePending(RunStartedAt, DateTimeOffset.UtcNow);
 
         // Assert
         DateTimeOffset after = DateTimeOffset.UtcNow;
@@ -117,7 +117,7 @@ public sealed class FromRevisionInProgress
             .RevisionInProgress();
 
         // Act
-        revisionInProgress.MarkRebasePending(RunStartedAt);
+        revisionInProgress.MarkRebasePending(RunStartedAt, DateTimeOffset.UtcNow);
 
         // Assert
         IssueRebasePending domainEvent = revisionInProgress.DomainEvents
@@ -138,7 +138,7 @@ public sealed class FromRevisionInProgress
             .RevisionInProgress();
 
         // Act
-        RebasePendingIssue rebasePending = revisionInProgress.MarkUnchangedRebasePending(RunStartedAt);
+        RebasePendingIssue rebasePending = revisionInProgress.MarkUnchangedRebasePending(RunStartedAt, DateTimeOffset.UtcNow);
 
         // Assert
         rebasePending.ShouldSatisfyAllConditions(
@@ -158,7 +158,7 @@ public sealed class FromRevisionInProgress
             .RevisionInProgress();
 
         // Act
-        revisionInProgress.MarkUnchangedRebasePending(RunStartedAt);
+        revisionInProgress.MarkUnchangedRebasePending(RunStartedAt, DateTimeOffset.UtcNow);
 
         // Assert
         IssueRebasePending domainEvent = revisionInProgress.DomainEvents

@@ -19,7 +19,7 @@ public sealed class MarkUnchanged
         InProgressIssue inProgress = new IssueBuilder().WithMonitoredRepositoryId(repositoryId).InProgress();
 
         // Act
-        UnchangedIssue unchanged = inProgress.MarkUnchanged();
+        UnchangedIssue unchanged = inProgress.MarkUnchanged(DateTimeOffset.UtcNow);
 
         // Assert
         unchanged.Id.ShouldBe(inProgress.Id);
@@ -33,7 +33,7 @@ public sealed class MarkUnchanged
         InProgressIssue inProgress = new IssueBuilder().WithMonitoredRepositoryId(repositoryId).InProgress();
 
         // Act
-        inProgress.MarkUnchanged();
+        inProgress.MarkUnchanged(DateTimeOffset.UtcNow);
 
         // Assert
         IssueUnchanged domainEvent = inProgress.DomainEvents.ShouldHaveSingleItem().ShouldBeOfType<IssueUnchanged>();
@@ -50,7 +50,7 @@ public sealed class MarkUnchanged
         InProgressIssue inProgress = new IssueBuilder().WithMonitoredRepositoryId(repositoryId).InProgress();
 
         // Act
-        UnchangedIssue unchanged = inProgress.MarkUnchanged();
+        UnchangedIssue unchanged = inProgress.MarkUnchanged(DateTimeOffset.UtcNow);
 
         // Assert
         unchanged.ShouldSatisfyAllConditions(

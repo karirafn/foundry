@@ -125,7 +125,7 @@ public sealed class GetActiveIssueSummariesAsync_QueueOrdering : IAsyncDisposabl
             .WithFailureCategory(FailureCategory.NonZeroExit)
             .WithFailedAt(Now)
             .ContinuableFailed();
-        ContinuationQueuedIssue continuationQueued = continuableFailed.Retry();
+        ContinuationQueuedIssue continuationQueued = continuableFailed.Retry(DateTimeOffset.UtcNow);
         _dbContext.Set<Issue>().Add(continuationQueued);
         _dbContext.SaveChanges();
         _dbContext.ChangeTracker.Clear();

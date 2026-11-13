@@ -13,6 +13,8 @@ public sealed class UnchangedIssue : Issue
 
     public override bool AwaitsDispatch => false;
 
+    public override bool WaitsOnBlockers => false;
+
     public override IssueCodeStep? CodeStep => null;
 
     // Private parameterless constructor for EF Core materialization.
@@ -20,23 +22,23 @@ public sealed class UnchangedIssue : Issue
     {
     }
 
-    private UnchangedIssue(IssueId id) : base(id)
+    private UnchangedIssue(IssueId id, DateTimeOffset enteredStateAt) : base(id, enteredStateAt)
     {
     }
 
     public WorkerRunId WorkerRunId { get; private set; }
 
-    internal static UnchangedIssue FromInProgress(InProgressIssue source)
+    internal static UnchangedIssue FromInProgress(InProgressIssue source, DateTimeOffset transitionedAt)
     {
-        UnchangedIssue unchanged = new(source.Id);
+        UnchangedIssue unchanged = new(source.Id, transitionedAt);
         unchanged.CopySharedPropertiesFrom(source);
         unchanged.WorkerRunId = source.WorkerRunId;
         return unchanged;
     }
 
-    public FreshQueuedIssue Retry()
+    public FreshQueuedIssue Retry(DateTimeOffset transitionedAt)
     {
-        FreshQueuedIssue queued = FreshQueuedIssue.FromRetry(this);
+        FreshQueuedIssue queued = FreshQueuedIssue.FromRetry(this, transitionedAt);
         AddDomainEvent(new Events.IssueQueued(Id, MonitoredRepositoryId));
         return queued;
     }

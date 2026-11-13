@@ -45,6 +45,7 @@ public sealed class HandleAsync : IAsyncDisposable
         _sut = new RetryIssueFresh.Handler(
             _dbContext,
             _dispatcher,
+            TimeProvider.System,
             new StubIssueQueries(),
             _branchCommands,
             NullLogger<RetryIssueFresh.Handler>.Instance);

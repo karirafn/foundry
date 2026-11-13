@@ -25,7 +25,7 @@ public sealed class QueueTriage
             .Detected();
 
         // Act
-        TriageQueuedIssue queued = detected.QueueTriage();
+        TriageQueuedIssue queued = detected.QueueTriage(DateTimeOffset.UtcNow);
 
         // Assert
         queued.ShouldSatisfyAllConditions(
@@ -45,7 +45,7 @@ public sealed class QueueTriage
         DetectedIssue detected = new IssueBuilder().WithMonitoredRepositoryId(repositoryId).Detected();
 
         // Act
-        detected.QueueTriage();
+        detected.QueueTriage(DateTimeOffset.UtcNow);
 
         // Assert
         IssueTriageQueued domainEvent = detected.DomainEvents.ShouldHaveSingleItem().ShouldBeOfType<IssueTriageQueued>();
@@ -62,7 +62,7 @@ public sealed class QueueTriage
         detected.SetBlockedBy([3, 5]);
 
         // Act
-        TriageQueuedIssue queued = detected.QueueTriage();
+        TriageQueuedIssue queued = detected.QueueTriage(DateTimeOffset.UtcNow);
 
         // Assert
         queued.BlockedBy.ShouldBe([3, 5]);

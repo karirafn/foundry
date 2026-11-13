@@ -13,6 +13,8 @@ public sealed class InProgressIssue : Issue
 
     public override bool AwaitsDispatch => false;
 
+    public override bool WaitsOnBlockers => false;
+
     public override IssueCodeStep? CodeStep => null;
 
     // Private parameterless constructor for EF Core materialization.
@@ -20,15 +22,15 @@ public sealed class InProgressIssue : Issue
     {
     }
 
-    private InProgressIssue(IssueId id) : base(id)
+    private InProgressIssue(IssueId id, DateTimeOffset enteredStateAt) : base(id, enteredStateAt)
     {
     }
 
     public WorkerRunId WorkerRunId { get; private set; }
 
-    internal static InProgressIssue FromQueued(FreshQueuedIssue queued, WorkerRunId workerRunId)
+    internal static InProgressIssue FromQueued(FreshQueuedIssue queued, WorkerRunId workerRunId, DateTimeOffset claimedAt)
     {
-        InProgressIssue inProgress = new(queued.Id);
+        InProgressIssue inProgress = new(queued.Id, claimedAt);
         inProgress.CopySharedPropertiesFrom(queued);
         inProgress.WorkerRunId = workerRunId;
         return inProgress;
@@ -37,9 +39,15 @@ public sealed class InProgressIssue : Issue
     public ReviewIssue MarkInReview(
         string branchName,
         string pullRequestUrl,
-        DateTimeOffset feedbackCutoffAt)
+        DateTimeOffset feedbackCutoffAt,
+        DateTimeOffset transitionedAt)
     {
-        ReviewIssue review = ReviewIssue.FromInProgress(this, branchName, pullRequestUrl, feedbackCutoffAt);
+        ReviewIssue review = ReviewIssue.FromInProgress(
+            this,
+            branchName,
+            pullRequestUrl,
+            feedbackCutoffAt,
+            transitionedAt);
         AddDomainEvent(new Events.IssueInReview(Id, MonitoredRepositoryId));
         return review;
     }
@@ -51,13 +59,15 @@ public sealed class InProgressIssue : Issue
     public RebasePendingIssue MarkRebasePending(
         string branchName,
         string pullRequestUrl,
-        DateTimeOffset feedbackCutoffAt)
+        DateTimeOffset feedbackCutoffAt,
+        DateTimeOffset transitionedAt)
     {
         RebasePendingIssue rebasePending = RebasePendingIssue.FromInProgress(
             this,
             branchName,
             pullRequestUrl,
-            feedbackCutoffAt);
+            feedbackCutoffAt,
+            transitionedAt);
         AddDomainEvent(new Events.IssueRebasePending(
             Id,
             MonitoredRepositoryId,
@@ -75,20 +85,22 @@ public sealed class InProgressIssue : Issue
         string? pullRequestUrl,
         bool branchHasCommits,
         IReadOnlyList<InputQuestion> questions,
-        DateTimeOffset askedAt)
+        DateTimeOffset askedAt,
+        DateTimeOffset transitionedAt)
     {
         AwaitingInputIssue awaiting = AwaitingInputIssue.FromInProgress(
             this,
             ResumeTarget.FromRunFacts(branchName, pullRequestUrl, branchHasCommits),
             questions,
-            askedAt);
+            askedAt,
+            transitionedAt);
         AddDomainEvent(new Events.IssueAwaitingInput(Id, MonitoredRepositoryId, IssueNumber));
         return awaiting;
     }
 
-    public UnchangedIssue MarkUnchanged()
+    public UnchangedIssue MarkUnchanged(DateTimeOffset transitionedAt)
     {
-        UnchangedIssue unchanged = UnchangedIssue.FromInProgress(this);
+        UnchangedIssue unchanged = UnchangedIssue.FromInProgress(this, transitionedAt);
         AddDomainEvent(new Events.IssueUnchanged(Id, MonitoredRepositoryId));
         return unchanged;
     }
@@ -158,29 +170,34 @@ public sealed class InProgressIssue : Issue
         string branchName,
         string sideBranchName,
         BranchDivergenceReason divergenceReason,
-        string? pullRequestUrl)
+        string? pullRequestUrl,
+        DateTimeOffset transitionedAt)
     {
         BranchDivergedIssue diverged = BranchDivergedIssue.FromInProgress(
             this,
             branchName,
             sideBranchName,
             divergenceReason,
-            pullRequestUrl);
+            pullRequestUrl,
+            transitionedAt);
         AddDomainEvent(new Events.IssueBranchDiverged(Id, MonitoredRepositoryId));
         return diverged;
     }
 
-    internal static InProgressIssue FromPublishFailed(PublishFailedIssue source)
+    internal static InProgressIssue FromPublishFailed(PublishFailedIssue source, DateTimeOffset transitionedAt)
     {
-        InProgressIssue inProgress = new(source.Id);
+        InProgressIssue inProgress = new(source.Id, transitionedAt);
         inProgress.CopySharedPropertiesFrom(source);
         inProgress.WorkerRunId = source.WorkerRunId;
         return inProgress;
     }
 
-    internal static InProgressIssue FromContinuationQueued(ContinuationQueuedIssue source, WorkerRunId workerRunId)
+    internal static InProgressIssue FromContinuationQueued(
+        ContinuationQueuedIssue source,
+        WorkerRunId workerRunId,
+        DateTimeOffset claimedAt)
     {
-        InProgressIssue inProgress = new(source.Id);
+        InProgressIssue inProgress = new(source.Id, claimedAt);
         inProgress.CopySharedPropertiesFrom(source);
         inProgress.WorkerRunId = workerRunId;
         return inProgress;

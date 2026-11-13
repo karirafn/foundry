@@ -18,6 +18,7 @@ namespace Foundry.Modules.Issues.Features.AwaitingInput;
 internal sealed class AwaitingInputArrivedHandler(
     DbContext db,
     IDomainEventDispatcher domainEventDispatcher,
+    TimeProvider timeProvider,
     ILogger<AwaitingInputArrivedHandler> logger) : IIntegrationEventHandler<AwaitingInputArrived>
 {
     public async Task HandleAsync(AwaitingInputArrived @event, CancellationToken cancellationToken)
@@ -38,7 +39,7 @@ internal sealed class AwaitingInputArrivedHandler(
             return;
         }
 
-        QueuedIssue queued = awaiting.ProvideInput(@event.Input, @event.ArrivedAt);
+        QueuedIssue queued = awaiting.ProvideInput(@event.Input, @event.ArrivedAt, timeProvider.GetUtcNow());
         await db.TransitionAsync(awaiting, queued, domainEventDispatcher, cancellationToken);
     }
 }

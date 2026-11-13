@@ -146,11 +146,11 @@ internal sealed class TransientRetryService : PeriodicBackgroundService
 
             Issue next = live switch
             {
-                FailedIssue failed => failed.Retry(),
-                ContinuableFailedIssue continuableFailed => continuableFailed.Retry(),
+                FailedIssue failed => failed.Retry(now),
+                ContinuableFailedIssue continuableFailed => continuableFailed.Retry(now),
                 // A transient triage failure retries triage, never skips it (ADR 0097).
-                TriageFailedIssue triageFailed => triageFailed.RetryTriage(),
-                RevisionFailedIssue revisionFailed => revisionFailed.Retry(),
+                TriageFailedIssue triageFailed => triageFailed.RetryTriage(now),
+                RevisionFailedIssue revisionFailed => revisionFailed.Retry(now),
                 _ => throw new UnreachableException($"Unexpected issue state after guard: {live.GetType().Name}"),
             };
 

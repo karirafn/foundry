@@ -26,11 +26,13 @@ internal sealed class TriageRunCompletedHandler(
     DbContext db,
     IIssueQueries issueQueries,
     IDomainEventDispatcher domainEventDispatcher,
+    TimeProvider timeProvider,
     ILogger<TriageRunCompletedHandler> logger) : IIntegrationEventHandler<TriageRunCompleted>
 {
     public async Task HandleAsync(TriageRunCompleted @event, CancellationToken cancellationToken)
     {
         IssueId issueId = IssueId.From(@event.IssueId);
+        DateTimeOffset now = timeProvider.GetUtcNow();
 
         Issue? issue = await db.Set<Issue>()
             .FirstOrDefaultAsync(i => i.Id == issueId, cancellationToken);
@@ -47,10 +49,13 @@ internal sealed class TriageRunCompletedHandler(
 
         Issue next = @event.Result switch
         {
-            TriageResult.Ready ready => triaging.MarkReady(new TriageVerdict.Ready(ToIssueKind(ready.Kind), @event.DecidedAt)),
+            TriageResult.Ready ready => triaging.MarkReady(
+                new TriageVerdict.Ready(ToIssueKind(ready.Kind), @event.DecidedAt),
+                now),
             TriageResult.NeedsInput needsInput => triaging.MarkNeedsInput(
-                new TriageVerdict.NeedsInput(ToIssueKind(needsInput.Kind), needsInput.Questions, @event.DecidedAt)),
-            TriageResult.Blocked blocked => await RouteBlockedAsync(triaging, blocked, @event.DecidedAt, cancellationToken),
+                new TriageVerdict.NeedsInput(ToIssueKind(needsInput.Kind), needsInput.Questions, @event.DecidedAt),
+                now),
+            TriageResult.Blocked blocked => await RouteBlockedAsync(triaging, blocked, @event.DecidedAt, now, cancellationToken),
             _ => throw new UnreachableException($"Unhandled triage result: {@event.Result.GetType().Name}"),
         };
 
@@ -61,6 +66,7 @@ internal sealed class TriageRunCompletedHandler(
         TriageInProgressIssue triaging,
         TriageResult.Blocked blocked,
         DateTimeOffset decidedAt,
+        DateTimeOffset transitionedAt,
         CancellationToken cancellationToken)
     {
         if (TriageVerdict.Blocked.RejectionOf(blocked.BlockedBy) is string rejection)
@@ -78,7 +84,7 @@ internal sealed class TriageRunCompletedHandler(
             [.. blocked.BlockedBy.Select((TriageBlocker blocker) => blocker.IssueNumber)]);
 
         return cycle is null
-            ? triaging.MarkBlocked(new TriageVerdict.Blocked(ToIssueKind(blocked.Kind), blocked.BlockedBy, decidedAt))
+            ? triaging.MarkBlocked(new TriageVerdict.Blocked(ToIssueKind(blocked.Kind), blocked.BlockedBy, decidedAt), transitionedAt)
             : triaging.FailOnBlockerCycle(cycle, decidedAt);
     }
 

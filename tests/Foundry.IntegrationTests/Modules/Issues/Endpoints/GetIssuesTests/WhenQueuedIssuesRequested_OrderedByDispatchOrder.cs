@@ -160,7 +160,7 @@ public sealed class WhenQueuedIssuesRequested_OrderedByDispatchOrder : IAsyncDis
             .WithFailedAt(detectedAt.AddHours(1))
             .ContinuableFailed();
 
-        ContinuationQueuedIssue continuationQueued = continuableFailed.Retry();
+        ContinuationQueuedIssue continuationQueued = continuableFailed.Retry(DateTimeOffset.UtcNow);
 
         dbContext.Set<Issue>().Add(continuationQueued);
         await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);

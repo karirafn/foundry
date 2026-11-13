@@ -21,6 +21,7 @@ internal static class SkipTriage
     internal sealed class Handler(
         DbContext db,
         IDomainEventDispatcher domainEventDispatcher,
+        TimeProvider timeProvider,
         IIssueQueries issueQueries)
         : ICommandHandler<Command, IssueDetail>
     {
@@ -38,7 +39,7 @@ internal static class SkipTriage
 
             Issue? next = issue switch
             {
-                TriageFailedIssue triageFailed => triageFailed.SkipTriage(),
+                TriageFailedIssue triageFailed => triageFailed.SkipTriage(timeProvider.GetUtcNow()),
                 _ => null,
             };
 

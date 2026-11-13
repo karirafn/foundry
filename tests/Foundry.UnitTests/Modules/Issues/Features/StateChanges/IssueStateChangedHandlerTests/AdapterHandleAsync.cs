@@ -37,7 +37,10 @@ public sealed class AdapterHandleAsync
             Stage: "implement",
             NeedsAction: false,
             AwaitsDispatch: true,
-            CodeStep: null);
+            CodeStep: null,
+            RepositoryId: Guid.NewGuid(),
+            WaitsOnBlockers: false,
+            EnteredStateAt: DateTimeOffset.UtcNow);
         issueQueries.SetSummary(issueId, expectedSummary);
 
         IssueQueued @event = new(issueId, MonitoredRepositoryId.New());
@@ -73,7 +76,10 @@ public sealed class AdapterHandleAsync
             Stage: "implement",
             NeedsAction: false,
             AwaitsDispatch: true,
-            CodeStep: null);
+            CodeStep: null,
+            RepositoryId: Guid.NewGuid(),
+            WaitsOnBlockers: false,
+            EnteredStateAt: DateTimeOffset.UtcNow);
         issueQueries.SetSummary(issueId, expectedSummary);
 
         IssueQueued @event = new(issueId, MonitoredRepositoryId.New());

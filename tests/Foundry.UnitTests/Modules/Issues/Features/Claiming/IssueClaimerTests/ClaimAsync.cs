@@ -58,7 +58,8 @@ public sealed class ClaimAsync : IAsyncDisposable
         return new IssueClaimer(
             _dbContext,
             integrationEventDispatcher ?? _integrationEventDispatcher,
-            _domainEventDispatcher);
+            _domainEventDispatcher,
+            TimeProvider.System);
     }
 
     private FreshQueuedIssue SeedQueuedIssue(MonitoredRepositoryId repositoryId, int issueNumber = 1, string title = "Add Health Check")
@@ -102,7 +103,7 @@ public sealed class ClaimAsync : IAsyncDisposable
             .WithFailureReason("Non-zero exit code: 1")
             .WithFailureCategory(FailureCategory.NonZeroExit)
             .ContinuableFailed();
-        ContinuationQueuedIssue continuationQueued = continuableFailed.Retry();
+        ContinuationQueuedIssue continuationQueued = continuableFailed.Retry(DateTimeOffset.UtcNow);
         _dbContext.Set<Issue>().Add(continuationQueued);
         _dbContext.SaveChanges();
         _dbContext.ChangeTracker.Clear();

@@ -24,6 +24,7 @@ public sealed class FromInProgress
         RebasePendingIssue rebasePending = inProgress.MarkRebasePending(
             "feat/1-test",
             "https://github.com/owner/repo/pull/1",
+            DateTimeOffset.UtcNow,
             DateTimeOffset.UtcNow);
 
         // Assert
@@ -52,6 +53,7 @@ public sealed class FromInProgress
         RebasePendingIssue rebasePending = inProgress.MarkRebasePending(
             branchName,
             pullRequestUrl,
+            DateTimeOffset.UtcNow,
             DateTimeOffset.UtcNow);
 
         // Assert
@@ -75,7 +77,8 @@ public sealed class FromInProgress
         RebasePendingIssue rebasePending = inProgress.MarkRebasePending(
             "feat/1-test",
             "https://github.com/owner/repo/pull/1",
-            feedbackCutoffAt);
+            feedbackCutoffAt,
+            DateTimeOffset.UtcNow);
 
         // Assert
         rebasePending.FeedbackCutoffAt.ShouldBe(feedbackCutoffAt);
@@ -95,6 +98,7 @@ public sealed class FromInProgress
         RebasePendingIssue rebasePending = inProgress.MarkRebasePending(
             "feat/1-test",
             "https://github.com/owner/repo/pull/1",
+            DateTimeOffset.UtcNow,
             DateTimeOffset.UtcNow);
 
         // Assert
@@ -115,6 +119,7 @@ public sealed class FromInProgress
         inProgress.MarkRebasePending(
             "feat/1-test",
             "https://github.com/owner/repo/pull/1",
+            DateTimeOffset.UtcNow,
             DateTimeOffset.UtcNow);
 
         // Assert

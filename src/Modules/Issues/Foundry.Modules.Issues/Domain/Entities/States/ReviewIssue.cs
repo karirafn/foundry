@@ -14,6 +14,8 @@ public sealed class ReviewIssue : Issue
 
     public override bool AwaitsDispatch => false;
 
+    public override bool WaitsOnBlockers => false;
+
     public override IssueCodeStep? CodeStep => null;
 
     // Private parameterless constructor for EF Core materialization.
@@ -21,7 +23,7 @@ public sealed class ReviewIssue : Issue
     {
     }
 
-    private ReviewIssue(IssueId id) : base(id)
+    private ReviewIssue(IssueId id, DateTimeOffset enteredStateAt) : base(id, enteredStateAt)
     {
     }
 
@@ -49,9 +51,10 @@ public sealed class ReviewIssue : Issue
         InProgressIssue source,
         string branchName,
         string pullRequestUrl,
-        DateTimeOffset feedbackCutoffAt)
+        DateTimeOffset feedbackCutoffAt,
+        DateTimeOffset transitionedAt)
     {
-        ReviewIssue review = new(source.Id);
+        ReviewIssue review = new(source.Id, transitionedAt);
         review.CopySharedPropertiesFrom(source);
         review.WorkerRunId = source.WorkerRunId;
         review.BranchName = branchName;
@@ -63,9 +66,10 @@ public sealed class ReviewIssue : Issue
 
     internal static ReviewIssue FromRevisionInProgress(
         RevisionInProgressIssue source,
-        DateTimeOffset feedbackCutoffAt)
+        DateTimeOffset feedbackCutoffAt,
+        DateTimeOffset transitionedAt)
     {
-        ReviewIssue review = new(source.Id);
+        ReviewIssue review = new(source.Id, transitionedAt);
         review.CopySharedPropertiesFrom(source);
         review.WorkerRunId = source.WorkerRunId;
         review.BranchName = source.BranchName;
@@ -78,9 +82,10 @@ public sealed class ReviewIssue : Issue
 
     internal static ReviewIssue FromChecksPending(
         ChecksPendingIssue source,
-        ChecksOutcome checksOutcome)
+        ChecksOutcome checksOutcome,
+        DateTimeOffset transitionedAt)
     {
-        ReviewIssue review = new(source.Id);
+        ReviewIssue review = new(source.Id, transitionedAt);
         review.CopySharedPropertiesFrom(source);
         review.WorkerRunId = source.WorkerRunId;
         review.BranchName = source.BranchName;
@@ -94,6 +99,7 @@ public sealed class ReviewIssue : Issue
 
     public RevisionQueuedIssue Revise(
         IReadOnlyList<ReviewComment> comments,
+        DateTimeOffset transitionedAt,
         int omittedCommentCount = 0,
         DateTimeOffset? newestCommentAt = null)
     {
@@ -101,7 +107,8 @@ public sealed class ReviewIssue : Issue
             this,
             comments,
             omittedCommentCount,
-            newestCommentAt);
+            newestCommentAt,
+            transitionedAt);
         AddDomainEvent(new Events.IssueRevisionQueued(Id, MonitoredRepositoryId));
         return revisionQueued;
     }

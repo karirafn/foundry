@@ -100,7 +100,7 @@ public sealed class OutboxHarvestTransitionAsync : IAsyncDisposable
         dbContext.Add(detected);
         await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
 
-        TriageQueuedIssue queued = detected.QueueTriage();
+        TriageQueuedIssue queued = detected.QueueTriage(DateTimeOffset.UtcNow);
 
         // Act
         await dbContext.TransitionAsync(detected, queued, domainEventDispatcher, TestContext.Current.CancellationToken);
@@ -131,7 +131,7 @@ public sealed class OutboxHarvestTransitionAsync : IAsyncDisposable
         await dbContext.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         IssueId issueId = detected.Id;
-        TriageQueuedIssue queued = detected.QueueTriage();
+        TriageQueuedIssue queued = detected.QueueTriage(DateTimeOffset.UtcNow);
 
         // Act — should propagate the exception
         await Should.ThrowAsync<InvalidOperationException>(async () =>
@@ -171,7 +171,7 @@ public sealed class OutboxHarvestTransitionAsync : IAsyncDisposable
 
         // Call QueueTriage() to get the TriageQueuedIssue, then clear domain events so the dispatcher
         // receives an empty list — the harvest save must still be a no-op for the outbox.
-        TriageQueuedIssue queued = detected.QueueTriage();
+        TriageQueuedIssue queued = detected.QueueTriage(DateTimeOffset.UtcNow);
         detected.ClearDomainEvents();
 
         // Act

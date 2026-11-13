@@ -21,7 +21,7 @@ public sealed class Revise
         IReadOnlyList<ReviewComment> comments = [new ReviewComment("Please fix the formatting.")];
 
         // Act
-        RevisionQueuedIssue revisionQueued = review.Revise(comments);
+        RevisionQueuedIssue revisionQueued = review.Revise(comments, DateTimeOffset.UtcNow);
 
         // Assert
         revisionQueued.Id.ShouldBe(review.Id);
@@ -36,7 +36,7 @@ public sealed class Revise
         IReadOnlyList<ReviewComment> comments = [new ReviewComment("Please fix the formatting.")];
 
         // Act
-        review.Revise(comments);
+        review.Revise(comments, DateTimeOffset.UtcNow);
 
         // Assert
         IssueRevisionQueued domainEvent = review.DomainEvents.ShouldHaveSingleItem().ShouldBeOfType<IssueRevisionQueued>();
@@ -58,7 +58,7 @@ public sealed class Revise
         ];
 
         // Act
-        RevisionQueuedIssue revisionQueued = review.Revise(comments);
+        RevisionQueuedIssue revisionQueued = review.Revise(comments, DateTimeOffset.UtcNow);
 
         // Assert
         RevisionTrigger.ReviewFeedback rfRevise = revisionQueued.Trigger.ShouldBeOfType<RevisionTrigger.ReviewFeedback>();
@@ -79,7 +79,7 @@ public sealed class Revise
         IReadOnlyList<ReviewComment> comments = [new ReviewComment("Fix this.")];
 
         // Act
-        RevisionQueuedIssue revisionQueued = review.Revise(comments, omittedCommentCount: 3);
+        RevisionQueuedIssue revisionQueued = review.Revise(comments, DateTimeOffset.UtcNow, omittedCommentCount: 3);
 
         // Assert
         revisionQueued.Trigger.ShouldBeOfType<RevisionTrigger.ReviewFeedback>().OmittedCommentCount.ShouldBe(3);
@@ -94,7 +94,7 @@ public sealed class Revise
         DateTimeOffset newestCommentAt = new DateTimeOffset(2026, 9, 1, 12, 0, 0, TimeSpan.Zero);
 
         // Act
-        RevisionQueuedIssue revisionQueued = review.Revise(comments, newestCommentAt: newestCommentAt);
+        RevisionQueuedIssue revisionQueued = review.Revise(comments, DateTimeOffset.UtcNow, newestCommentAt: newestCommentAt);
 
         // Assert
         revisionQueued.Trigger.ShouldBeOfType<RevisionTrigger.ReviewFeedback>().NewestConsumedCommentAt.ShouldBe(newestCommentAt);
@@ -108,7 +108,7 @@ public sealed class Revise
         IReadOnlyList<ReviewComment> comments = [new ReviewComment("Fix this.")];
 
         // Act
-        RevisionQueuedIssue revisionQueued = review.Revise(comments);
+        RevisionQueuedIssue revisionQueued = review.Revise(comments, DateTimeOffset.UtcNow);
 
         // Assert
         RevisionTrigger.ReviewFeedback rf = revisionQueued.Trigger.ShouldBeOfType<RevisionTrigger.ReviewFeedback>();
