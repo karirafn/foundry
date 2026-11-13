@@ -15,6 +15,7 @@ public sealed record FailureCategory
     public const string WorkerBootstrapFailedToken = "worker_bootstrap_failed";
     public const string AuthInvalidToken = "auth_invalid";
     public const string ProviderErrorToken = "provider_error";
+    public const string ProviderUnreachableToken = "provider_unreachable";
     public const string TransientApiErrorToken = "transient_api_error";
     public const string CreditsExhaustedToken = "credits_exhausted";
     public const string ModelUnavailableToken = "model_unavailable";
@@ -35,6 +36,10 @@ public sealed record FailureCategory
     public static readonly FailureCategory WorkerBootstrapFailed = new(WorkerBootstrapFailedToken);
     public static readonly FailureCategory AuthInvalid = new(AuthInvalidToken);
     public static readonly FailureCategory ProviderError = new(ProviderErrorToken);
+
+    /// <summary>The Publisher could not reach the git provider (DNS, connection, HTTP 429 or 5xx) after every retry.</summary>
+    public static readonly FailureCategory ProviderUnreachable = new(ProviderUnreachableToken);
+
     public static readonly FailureCategory TransientApiError = new(TransientApiErrorToken);
     public static readonly FailureCategory CreditsExhausted = new(CreditsExhaustedToken);
     public static readonly FailureCategory ModelUnavailable = new(ModelUnavailableToken);
@@ -68,6 +73,7 @@ public sealed record FailureCategory
             { WorkerBootstrapFailedToken, WorkerBootstrapFailed },
             { AuthInvalidToken, AuthInvalid },
             { ProviderErrorToken, ProviderError },
+            { ProviderUnreachableToken, ProviderUnreachable },
             { TransientApiErrorToken, TransientApiError },
             { CreditsExhaustedToken, CreditsExhausted },
             { ModelUnavailableToken, ModelUnavailable },

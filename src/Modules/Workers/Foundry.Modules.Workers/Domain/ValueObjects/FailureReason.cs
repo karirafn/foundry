@@ -13,6 +13,7 @@ namespace Foundry.Modules.Workers.Domain.ValueObjects;
 [JsonDerivedType(typeof(WorkerBootstrapFailed), typeDiscriminator: FailureReason.WorkerBootstrapFailedToken)]
 [JsonDerivedType(typeof(AuthInvalid), typeDiscriminator: FailureReason.AuthInvalidToken)]
 [JsonDerivedType(typeof(ProviderError), typeDiscriminator: FailureReason.ProviderErrorToken)]
+[JsonDerivedType(typeof(ProviderUnreachable), typeDiscriminator: FailureReason.ProviderUnreachableToken)]
 [JsonDerivedType(typeof(TransientApiError), typeDiscriminator: FailureReason.TransientApiErrorToken)]
 [JsonDerivedType(typeof(CreditsExhausted), typeDiscriminator: FailureReason.CreditsExhaustedToken)]
 [JsonDerivedType(typeof(ModelUnavailable), typeDiscriminator: FailureReason.ModelUnavailableToken)]
@@ -31,6 +32,7 @@ public abstract record FailureReason
     public const string WorkerBootstrapFailedToken = FailureCategory.WorkerBootstrapFailedToken;
     public const string AuthInvalidToken = FailureCategory.AuthInvalidToken;
     public const string ProviderErrorToken = FailureCategory.ProviderErrorToken;
+    public const string ProviderUnreachableToken = FailureCategory.ProviderUnreachableToken;
     public const string TransientApiErrorToken = FailureCategory.TransientApiErrorToken;
     public const string CreditsExhaustedToken = FailureCategory.CreditsExhaustedToken;
     public const string ModelUnavailableToken = FailureCategory.ModelUnavailableToken;
@@ -54,6 +56,7 @@ public abstract record FailureReason
         WorkerBootstrapFailed => WorkerBootstrapFailedToken,
         AuthInvalid => AuthInvalidToken,
         ProviderError => ProviderErrorToken,
+        ProviderUnreachable => ProviderUnreachableToken,
         TransientApiError => TransientApiErrorToken,
         CreditsExhausted => CreditsExhaustedToken,
         ModelUnavailable => ModelUnavailableToken,
@@ -76,6 +79,7 @@ public abstract record FailureReason
         WorkerBootstrapFailed bootstrapFailed => $"Worker bootstrap failed: {bootstrapFailed.Detail}",
         AuthInvalid => "Worker authentication failed",
         ProviderError providerError => providerError.Message,
+        ProviderUnreachable providerUnreachable => $"Could not reach the git provider: {providerUnreachable.Detail}",
         TransientApiError => "Transient Anthropic API fault",
         CreditsExhausted => "Credits exhausted",
         ModelUnavailable modelUnavailable =>
@@ -106,6 +110,12 @@ public abstract record FailureReason
     public sealed record AuthInvalid : FailureReason;
 
     public sealed record ProviderError(string Message) : FailureReason;
+
+    /// <summary>
+    /// The Publisher could not reach the git provider (a DNS failure, a refused or timed-out connection, HTTP 429 or 5xx)
+    /// on any of its attempts. <see cref="Detail"/> carries git's last error, redacted.
+    /// </summary>
+    public sealed record ProviderUnreachable(string Detail) : FailureReason;
 
     public sealed record TransientApiError : FailureReason;
 

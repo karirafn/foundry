@@ -271,6 +271,31 @@ public sealed class HandleAsync : IAsyncDisposable
     }
 
     [Fact]
+    public async Task WhenRevisionRunCouldNotReachTheProvider_FailureCategoryIsProviderUnreachable()
+    {
+        // Arrange
+        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
+        RevisionInProgressIssue revisionInProgress = SeedRevisionInProgressIssue(repositoryId);
+
+        WorkerRunFailed @event = new(
+            WorkerRunId: revisionInProgress.WorkerRunId,
+            IssueId: revisionInProgress.Id.Value,
+            ReasonDescription: "Could not reach the git provider: Could not resolve host: gitlab.com",
+            Category: FailureCategory.ProviderUnreachableToken);
+
+        // Act
+        await _sut.HandleAsync(@event, CancellationToken.None);
+
+        // Assert
+        _dbContext.ChangeTracker.Clear();
+        Issue? issue = await _dbContext.Set<Issue>()
+            .FirstOrDefaultAsync(
+                i => i.MonitoredRepositoryId == repositoryId,
+                TestContext.Current.CancellationToken);
+        issue.ShouldBeOfType<RevisionFailedIssue>().FailureCategory.ShouldBe(FailureCategory.ProviderUnreachable);
+    }
+
+    [Fact]
     public async Task WhenUnknownCategoryReceived_FallsBackToNonZeroExitAndStillTransitionsToFailed()
     {
         // Arrange

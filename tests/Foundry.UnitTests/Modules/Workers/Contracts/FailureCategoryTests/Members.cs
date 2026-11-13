@@ -93,6 +93,18 @@ public sealed class Members
     }
 
     [Fact]
+    public void ProviderUnreachable_ValueIsProviderUnreachable()
+    {
+        // Arrange
+
+        // Act
+        FailureCategory category = FailureCategory.ProviderUnreachable;
+
+        // Assert
+        category.Value.ShouldBe("provider_unreachable");
+    }
+
+    [Fact]
     public void TransientApiError_ValueMatchesToken()
     {
         // Arrange

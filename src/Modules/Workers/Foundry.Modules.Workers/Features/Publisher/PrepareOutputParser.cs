@@ -22,7 +22,7 @@ internal static partial class PrepareOutputParser
         if (exitCode != 0)
         {
             return ContainerOutputParser.FindBootstrapSentinel(text) is { } sentinel
-                ? new PrepareOutcome.Failed(new FailureReason.WorkerBootstrapFailed(SecretRedactor.Redact(sentinel)))
+                ? new PrepareOutcome.Failed(BootstrapFailure(SecretRedactor.Redact(sentinel)))
                 : new PrepareOutcome.Failed(new FailureReason.ContainerError(string.Create(
                     CultureInfo.InvariantCulture,
                     $"The Publisher exited with code {exitCode} before preparing the run's base.")));
@@ -36,6 +36,19 @@ internal static partial class PrepareOutputParser
         }
 
         return new PrepareOutcome.Prepared(runBase);
+    }
+
+    /// <summary>
+    /// The Publisher retried an unreachable provider itself before printing <c>stage=unreachable</c>, so that sentinel
+    /// is its own reason; every other sentinel is a bootstrap failure.
+    /// </summary>
+    private static FailureReason BootstrapFailure(string sentinel)
+    {
+        Match unreachable = UnreachableSentinelPattern().Match(sentinel);
+
+        return unreachable.Success
+            ? new FailureReason.ProviderUnreachable(unreachable.Groups["detail"].Value)
+            : new FailureReason.WorkerBootstrapFailed(sentinel);
     }
 
     private static RunBase? ReadBase(string fields, bool expectsRunBranch)
@@ -80,4 +93,10 @@ internal static partial class PrepareOutputParser
         RegexOptions.ExplicitCapture | RegexOptions.Multiline,
         matchTimeoutMilliseconds: 1000)]
     private static partial Regex BaseLinePattern();
+
+    [GeneratedRegex(
+        @"^FOUNDRY_BOOTSTRAP_FAILED stage=unreachable detail=(?:could not reach the repository: )?(?<detail>.*)$",
+        RegexOptions.ExplicitCapture,
+        matchTimeoutMilliseconds: 1000)]
+    private static partial Regex UnreachableSentinelPattern();
 }

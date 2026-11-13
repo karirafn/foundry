@@ -37,6 +37,67 @@ setup() {
     REMOTE="$BATS_TEST_TMPDIR/remote.git"
     make_remote main
     make_git_wrapper
+    make_sleep_stub
+}
+
+# Git's stderr for each way a transfer can fail, captured from git 2.39.5 on 2026-11-13 with
+# GIT_TERMINAL_PROMPT=0 git ls-remote <url> HEAD against the URLs in issue #881's notes (and httpbin.org/status/500,
+# 429 and 403 for the other statuses), with the URL, host and port swapped for the test's.
+GIT_DNS_FAILURE="fatal: unable to access '$AUTH_URL/': Could not resolve host: git.example.test"
+GIT_CONNECTION_REFUSED="fatal: unable to access '$AUTH_URL/': Failed to connect to git.example.test port 443 after 0 ms: Couldn't connect to server"
+GIT_HTTP_503="fatal: unable to access '$AUTH_URL/': The requested URL returned error: 503"
+GIT_HTTP_500="fatal: unable to access '$AUTH_URL/': The requested URL returned error: 500"
+GIT_HTTP_429="fatal: unable to access '$AUTH_URL/': The requested URL returned error: 429"
+GIT_HTTP_403="fatal: unable to access '$AUTH_URL/': The requested URL returned error: 403"
+GIT_NO_CREDENTIALS="fatal: could not read Username for 'https://git.example.test': terminal prompts disabled"
+
+# provider_errors <stderr>... — the next git transfers with the provider each fail with one <stderr> line, in order;
+# transfers after them reach the remote.
+provider_errors() {
+    printf '%s\n' "$@" >> "$BATS_TEST_TMPDIR/provider_errors"
+}
+
+# A sleep that records its argument and returns at once, so retries cost the suite no time.
+make_sleep_stub() {
+    cat > "$FAKE_BIN_DIR/sleep" <<EOF
+#!/bin/sh
+printf '%s\n' "\$*" >> "$BATS_TEST_TMPDIR/sleeps"
+EOF
+    chmod +x "$FAKE_BIN_DIR/sleep"
+}
+
+sleeps() {
+    cat "$BATS_TEST_TMPDIR/sleeps" 2> /dev/null || true
+}
+
+ls_remote_count() {
+    grep -c ' ls-remote ' "$BATS_TEST_TMPDIR/git_args" || true
+}
+
+# prepare_gives_up_unreachable <stderr> — Prepare meets <stderr> on every attempt, retries it on the 5s, 15s, 40s
+# schedule, then fails at stage=unreachable carrying it.
+prepare_gives_up_unreachable() {
+    provider_errors "$1" "$1" "$1" "$1"
+
+    run sh "$PUBLISHER" prepare
+
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"FOUNDRY_BOOTSTRAP_FAILED stage=unreachable detail=could not reach the repository: $1"* ]]
+    [ "$(ls_remote_count)" -eq 4 ]
+    [ "$(sleeps)" = "$(printf '5\n15\n40')" ]
+    [ ! -e "$FOUNDRY_HANDOFF_DIR/in/base.bundle" ]
+}
+
+# prepare_fails_without_retry <stderr> — Prepare fails at stage=clone on its first attempt, carrying <stderr>.
+prepare_fails_without_retry() {
+    provider_errors "$1"
+
+    run sh "$PUBLISHER" prepare
+
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"FOUNDRY_BOOTSTRAP_FAILED stage=clone detail=could not reach the repository: $1"* ]]
+    [ "$(ls_remote_count)" -eq 1 ]
+    [ -z "$(sleeps)" ]
 }
 
 # make_remote <default_branch> — a bare remote whose default branch has one commit.
@@ -66,6 +127,11 @@ fi
 args=()
 for arg in "\$@"; do
     if [ "\$arg" = "$AUTH_URL" ]; then
+        if [ -s "$BATS_TEST_TMPDIR/provider_errors" ]; then
+            head -n 1 "$BATS_TEST_TMPDIR/provider_errors" >&2
+            sed -i 1d "$BATS_TEST_TMPDIR/provider_errors"
+            exit 128
+        fi
         if [ -n "\${FAKE_GIT_UNREACHABLE:-}" ]; then
             echo "fatal: unable to access '$AUTH_URL': Could not resolve host: git.example.test" >&2
             exit 128
@@ -182,13 +248,95 @@ bundle_heads() {
     [ ! -e "$FOUNDRY_HANDOFF_DIR/in/base.bundle" ]
 }
 
-@test "an unreachable provider fails at stage=clone carrying git's error" {
+@test "an unreachable provider is retried, then fails at stage=unreachable carrying git's last error" {
     export FAKE_GIT_UNREACHABLE=1
 
     run sh "$PUBLISHER" prepare
 
     [ "$status" -ne 0 ]
-    [[ "$output" == *"FOUNDRY_BOOTSTRAP_FAILED stage=clone detail=could not reach the repository: fatal: unable to access"* ]]
+    [[ "$output" == *"FOUNDRY_BOOTSTRAP_FAILED stage=unreachable detail=could not reach the repository: fatal: unable to access"* ]]
+    [ "$(ls_remote_count)" -eq 4 ]
+}
+
+@test "a DNS failure is retried after 5s, 15s and 40s, then fails at stage=unreachable" {
+    prepare_gives_up_unreachable "$GIT_DNS_FAILURE"
+}
+
+@test "a refused connection is retried, then fails at stage=unreachable" {
+    prepare_gives_up_unreachable "$GIT_CONNECTION_REFUSED"
+}
+
+@test "an HTTP 503 is retried, then fails at stage=unreachable" {
+    prepare_gives_up_unreachable "$GIT_HTTP_503"
+}
+
+@test "an HTTP 500 is retried, then fails at stage=unreachable" {
+    prepare_gives_up_unreachable "$GIT_HTTP_500"
+}
+
+@test "an HTTP 429 is retried, then fails at stage=unreachable" {
+    prepare_gives_up_unreachable "$GIT_HTTP_429"
+}
+
+@test "an HTTP 403 is not retried and fails at stage=clone" {
+    prepare_fails_without_retry "$GIT_HTTP_403"
+}
+
+@test "git finding no credentials is not retried and fails at stage=clone" {
+    prepare_fails_without_retry "$GIT_NO_CREDENTIALS"
+}
+
+@test "a rate limit without git's transport prefix is not retried and fails at stage=clone" {
+    prepare_fails_without_retry "remote: API rate limit exceeded"
+}
+
+@test "an authentication failure is not retried and fails at stage=clone" {
+    export FAKE_GIT_AUTH_FAILED=1
+
+    run sh "$PUBLISHER" prepare
+
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"FOUNDRY_BOOTSTRAP_FAILED stage=clone detail=could not reach the repository: fatal: Authentication failed"* ]]
+    [ "$(ls_remote_count)" -eq 1 ]
+    [ -z "$(sleeps)" ]
+}
+
+@test "each retry prints one stderr line naming its attempt and sleep, and no sentinel" {
+    provider_errors "$GIT_DNS_FAILURE" "$GIT_DNS_FAILURE"
+
+    run --separate-stderr sh "$PUBLISHER" prepare
+
+    [ "$status" -eq 0 ]
+    [ "$(grep -c 'retrying' <<< "$stderr")" -eq 2 ]
+    grep -q 'attempt 1 of 4.*retrying in 5s' <<< "$stderr"
+    grep -q 'attempt 2 of 4.*retrying in 15s' <<< "$stderr"
+    [[ "$stderr" != *"FOUNDRY_"* ]]
+}
+
+@test "a provider reached on a retry prepares the run as if the first attempt had succeeded" {
+    add_remote_branch feat/7-work
+    export RUN_BRANCH="feat/7-work"
+    provider_errors "$GIT_HTTP_503" "$GIT_DNS_FAILURE"
+
+    run --separate-stderr sh "$PUBLISHER" prepare
+
+    [ "$status" -eq 0 ]
+    [ "$output" = "FOUNDRY_BASE default_branch=main default_sha=$(remote_sha main) branch_sha=$(remote_sha feat/7-work)" ]
+    [[ "$stderr" != *"FOUNDRY_BOOTSTRAP_FAILED"* ]]
+    bundle_heads | grep -qx "$(remote_sha feat/7-work) refs/heads/feat/7-work"
+    [ "$(sleeps)" = "$(printf '5\n15')" ]
+}
+
+@test "a permanent failure on a retry ends the retries at stage=clone" {
+    provider_errors "$GIT_DNS_FAILURE" "$GIT_HTTP_403"
+
+    run sh "$PUBLISHER" prepare
+
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"FOUNDRY_BOOTSTRAP_FAILED stage=clone detail=could not reach the repository: $GIT_HTTP_403"* ]]
+    [[ "$output" != *"stage=unreachable"* ]]
+    [ "$(ls_remote_count)" -eq 2 ]
+    [ "$(sleeps)" = "5" ]
 }
 
 @test "the token reaches git only through GIT_ASKPASS, never an argument or the output" {
@@ -818,6 +966,55 @@ HOOK
 
     [ "$status" -eq 1 ]
     [[ "$(result_line)" == "FOUNDRY_PUBLISH result=failed kind=permanent reason="*"Authentication failed"* ]]
+}
+
+@test "publish: an unreachable provider fails transient at once, without retrying in the script" {
+    start_run
+    wcommit a.txt a "first"
+    worker_bundle
+    provider_errors "$GIT_HTTP_503"
+
+    publish
+
+    [ "$status" -eq 1 ]
+    [ "$(result_line)" = "FOUNDRY_PUBLISH result=failed kind=transient reason=could not reach the repository: $GIT_HTTP_503" ]
+    [ -z "$(sleeps)" ]
+}
+
+@test "publish: an HTTP 429 is a transient failure" {
+    start_run
+    wcommit a.txt a "first"
+    worker_bundle
+    provider_errors "$GIT_HTTP_429"
+
+    publish
+
+    [ "$status" -eq 1 ]
+    [[ "$(result_line)" == "FOUNDRY_PUBLISH result=failed kind=transient reason="*"returned error: 429" ]]
+}
+
+@test "publish: an HTTP 403 behind git's transport prefix is a permanent failure" {
+    start_run
+    wcommit a.txt a "first"
+    worker_bundle
+    provider_errors "$GIT_HTTP_403"
+
+    publish
+
+    [ "$status" -eq 1 ]
+    [[ "$(result_line)" == "FOUNDRY_PUBLISH result=failed kind=permanent reason="*"returned error: 403" ]]
+}
+
+@test "publish: a rate limit without git's transport prefix is a transient failure" {
+    start_run
+    wcommit a.txt a "first"
+    worker_bundle
+    provider_errors "remote: API rate limit exceeded"
+
+    publish
+
+    [ "$status" -eq 1 ]
+    [[ "$(result_line)" == "FOUNDRY_PUBLISH result=failed kind=transient reason="*"rate limit exceeded" ]]
 }
 
 @test "publish: the token reaches git only through GIT_ASKPASS and the scratch repository has hooks off" {

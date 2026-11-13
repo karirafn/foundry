@@ -8,7 +8,10 @@
 #             them to <handoff>/in/base.bundle, create <handoff>/out writable for the worker, then
 #             print the run's base on one stdout line:
 #               FOUNDRY_BASE default_branch=<name> default_sha=<sha> [branch_sha=<sha>]
-#             Every failure prints the bootstrap-failure sentinel Foundry already classifies, on stderr:
+#             An ls-remote that cannot reach the provider is retried after each of UNREACHABLE_RETRY_DELAYS,
+#             with one stderr line per retry. Every failure prints the bootstrap-failure sentinel on stderr:
+#               FOUNDRY_BOOTSTRAP_FAILED stage=unreachable detail=could not reach the repository: <git's error>
+#             when every attempt found the provider unreachable, and otherwise
 #               FOUNDRY_BOOTSTRAP_FAILED stage=clone detail=<detail>
 #   publish — push the worker's Run bundle (<handoff>/out/run.bundle) from a fresh repository; see
 #             publish() below for the steps and the FOUNDRY_PUBLISH result line.
@@ -32,6 +35,10 @@ WORK_DIR="${FOUNDRY_WORK_DIR:-/work}"
 GITLEAKS_CONFIG_FILE="${FOUNDRY_GITLEAKS_CONFIG:-/etc/foundry/gitleaks.toml}"
 ZERO_SHA=0000000000000000000000000000000000000000
 
+# Prepare retries an ls-remote that cannot reach the provider (see classify_error), sleeping these seconds before
+# each retry: 4 attempts in all, spanning about a minute so a short DNS or network outage passes.
+UNREACHABLE_RETRY_DELAYS="5 15 40"
+
 # Never inherit git configuration: a system or global file could add hooks, an fsmonitor, a credential
 # helper or a url.*.insteadOf rewrite that runs or redirects with the token present.
 GIT_CONFIG_NOSYSTEM=1
@@ -43,15 +50,21 @@ unset GIT_CONFIG GIT_CONFIG_PARAMETERS GIT_CONFIG_COUNT GIT_DIR GIT_WORK_TREE GI
 unset GITLEAKS_CONFIG GITLEAKS_CONFIG_TOML
 
 # ---------------------------------------------------------------------------
-# fail <detail>
+# fail_at <stage> <detail>
 #
 # Prints the bootstrap-failure sentinel (collapsed to one line, so Foundry's line-oriented scan finds it
-# whole) and exits non-zero.
+# whole) and exits non-zero. Foundry reads stage=unreachable as the provider being unreachable and every
+# other stage as a bootstrap failure.
 # ---------------------------------------------------------------------------
-fail() {
-    detail="$(printf '%s' "$1" | tr '\n' ' ')"
-    printf 'FOUNDRY_BOOTSTRAP_FAILED stage=clone detail=%s\n' "$detail" >&2
+fail_at() {
+    detail="$(printf '%s' "$2" | tr '\n' ' ')"
+    printf 'FOUNDRY_BOOTSTRAP_FAILED stage=%s detail=%s\n' "$1" "$detail" >&2
     exit 1
+}
+
+# fail <detail> — fails Prepare at stage=clone.
+fail() {
+    fail_at clone "$1"
 }
 
 # ---------------------------------------------------------------------------
@@ -110,6 +123,40 @@ provider_git() {
     GIT_ASKPASS="$ASKPASS_FILE" git -C "$REPO_DIR" -c core.hooksPath=/dev/null -c credential.helper= "$@"
 }
 
+# ls_remote_heads — the remote's HEAD (and the run's branch, when set). ls-remote prints
+# "ref: refs/heads/<default><TAB>HEAD", then "<sha><TAB><ref>" lines.
+ls_remote_heads() {
+    if [ -n "$run_branch" ]; then
+        provider_git ls-remote --symref "$auth_url" HEAD "refs/heads/$run_branch"
+    else
+        provider_git ls-remote --symref "$auth_url" HEAD
+    fi
+}
+
+# list_remote_refs — sets $refs from ls_remote_heads. A provider that cannot be reached is retried after each of
+# UNREACHABLE_RETRY_DELAYS, then fails at stage=unreachable; any other failure ends Prepare at stage=clone at once.
+list_remote_refs() {
+    # shellcheck disable=SC2086 # split the schedule into its delays, to count them.
+    set -- $UNREACHABLE_RETRY_DELAYS
+    attempts=$(($# + 1))
+
+    attempt=1
+    for delay in $UNREACHABLE_RETRY_DELAYS ""; do
+        if refs="$(ls_remote_heads 2> "$git_err")"; then
+            return 0
+        fi
+        if [ "$(classify_error "$(cat "$git_err")")" != unreachable ]; then
+            fail "could not reach the repository: $(last_error)"
+        fi
+        if [ -z "$delay" ]; then
+            fail_at unreachable "could not reach the repository: $(last_error)"
+        fi
+        echo "The provider is unreachable (attempt $attempt of $attempts); retrying in ${delay}s: $(last_error)" >&2
+        sleep "$delay"
+        attempt=$((attempt + 1))
+    done
+}
+
 prepare() {
     : "${CLONE_URL:?CLONE_URL is required}"
     : "${GIT_PAT:?GIT_PAT is required}"
@@ -134,14 +181,7 @@ prepare() {
         || fail "could not create the scratch repository: $(last_error)"
     git -C "$REPO_DIR" config core.hooksPath /dev/null
 
-    # ls-remote prints "ref: refs/heads/<default><TAB>HEAD", then "<sha><TAB><ref>" lines.
-    if [ -n "$run_branch" ]; then
-        refs="$(provider_git ls-remote --symref "$auth_url" HEAD "refs/heads/$run_branch" 2> "$git_err")" \
-            || fail "could not reach the repository: $(last_error)"
-    else
-        refs="$(provider_git ls-remote --symref "$auth_url" HEAD 2> "$git_err")" \
-            || fail "could not reach the repository: $(last_error)"
-    fi
+    list_remote_refs
 
     default_branch="$(printf '%s\n' "$refs" \
         | awk -F '\t' '$2 == "HEAD" && sub(/^ref: refs\/heads\//, "", $1) { print $1; exit }')"
@@ -277,12 +317,29 @@ publish_diverged() {
     exit 0
 }
 
-# classify_error <text> — "transient" or "permanent" for a git transfer failure. Unknown failures are
-# transient, so Foundry's bounded retry gets a chance before the run needs attention.
+# classify_error <text> — "unreachable", "permanent" or "transient" for a git transfer failure, checked in
+# that order:
+#   unreachable — git's libcurl transport prefix ("unable to access") with no HTTP status, or with 429 or a
+#                 5xx: DNS, a refused or timed-out connection, or the provider shedding load. Keyed on git's own
+#                 prefix and the status rather than curl's wording, which changes between curl versions.
+#   permanent   — the provider refused the credentials or the repository.
+#   transient   — everything else, so Foundry's bounded retry gets a chance before the run needs attention.
+# Prepare retries unreachable itself; publish reports it as transient.
 classify_error() {
     lower="$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]')"
     case "$lower" in
-        *"rate limit"*|*"returned error: 429"*) echo transient ;;
+        *"unable to access"*)
+            http_status="$(printf '%s\n' "$lower" | sed -n 's/.*returned error: \([0-9][0-9][0-9]\).*/\1/p' | head -n 1)"
+            case "$http_status" in
+                ""|429|5??)
+                    echo unreachable
+                    return 0
+                    ;;
+            esac
+            ;;
+    esac
+    case "$lower" in
+        *"rate limit"*) echo transient ;;
         *"authentication failed"*|*"invalid username or password"*|*"invalid username or token"*|*"returned error: 401"*|*"returned error: 403"*|*"http 401"*|*"http 403"*|*"repository not found"*|*"returned error: 404"*|*"not our ref"*|*"invalid input"*|*"permission denied"*|*"access denied"*)
             echo permanent ;;
         *) echo transient ;;
@@ -291,7 +348,12 @@ classify_error() {
 
 # fail_git <context> — fails with the last git error, classified.
 fail_git() {
-    publish_failed "$(classify_error "$(cat "$git_err" 2> /dev/null)")" "$1: $(last_error)"
+    kind="$(classify_error "$(cat "$git_err" 2> /dev/null)")"
+    # Publish has no unreachable kind: Foundry's publish retry handles an unreachable provider as transient.
+    if [ "$kind" = unreachable ]; then
+        kind=transient
+    fi
+    publish_failed "$kind" "$1: $(last_error)"
 }
 
 # fail_push <context> — fails after a push: a provider refusal (a protected branch, a hook) is
