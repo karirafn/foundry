@@ -24,10 +24,12 @@ export class FakeHubTransport implements HubTransport {
   startCount = 0;
   /** What the next `start()` returns; replace it to make the start fail or stay pending. */
   startResult: () => Promise<void> = () => Promise.resolve();
+  /** Every `invoke` call, in order. */
+  readonly invocations: Array<{ readonly methodName: string; readonly args: readonly unknown[] }> = [];
+  /** What `invoke` returns; replace it to answer a hub method or make it fail. */
+  invokeResult: (methodName: string, ...args: unknown[]) => Promise<unknown> = () => Promise.resolve(undefined);
 
   private readonly _handlers = new Map<string, HubHandler[]>();
-  private readonly _reconnecting: Array<() => void> = [];
-  private readonly _reconnected: Array<() => void> = [];
   private readonly _closed: Array<() => void> = [];
 
   on(methodName: string, method: HubHandler): void {
@@ -44,17 +46,14 @@ export class FakeHubTransport implements HubTransport {
     return stream;
   }
 
+  invoke<T>(methodName: string, ...args: unknown[]): Promise<T> {
+    this.invocations.push({ methodName, args });
+    return this.invokeResult(methodName, ...args) as Promise<T>;
+  }
+
   start(): Promise<void> {
     this.startCount++;
     return this.startResult();
-  }
-
-  onreconnecting(callback: () => void): void {
-    this._reconnecting.push(callback);
-  }
-
-  onreconnected(callback: () => void): void {
-    this._reconnected.push(callback);
   }
 
   onclose(callback: () => void): void {
@@ -72,17 +71,7 @@ export class FakeHubTransport implements HubTransport {
     }
   }
 
-  /** The established connection drops and SignalR starts reconnecting. */
-  reconnecting(): void {
-    this._reconnecting.forEach((callback) => callback());
-  }
-
-  /** SignalR re-establishes a dropped connection. */
-  reconnected(): void {
-    this._reconnected.forEach((callback) => callback());
-  }
-
-  /** The connection closes for good. */
+  /** The established connection drops; the shared connection then retries on its schedule. */
   close(): void {
     this._closed.forEach((callback) => callback());
   }

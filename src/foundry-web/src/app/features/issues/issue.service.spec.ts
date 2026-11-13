@@ -87,6 +87,21 @@ describe('IssueService', () => {
     expect(service.issues()).toMatchObject(mockIssues);
   });
 
+  it('should report the issues load as loaded, or failed when the request fails', async () => {
+    // Arrange
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    // Act
+    const loaded = service.loadIssues();
+    httpMock.expectOne('/api/issues').flush({ items: [mockSummary], nextCursor: null });
+    const failed = service.loadIssues();
+    httpMock.expectOne('/api/issues').flush('boom', { status: 500, statusText: 'Server Error' });
+
+    // Assert
+    expect(await loaded).toBe('loaded');
+    expect(await failed).toBe('failed');
+  });
+
   it('should carry pullRequestUrl and providerType through loadIssues so the card can word its PR link', () => {
     // Arrange
     const gitlabSummary: IssueSummary = {

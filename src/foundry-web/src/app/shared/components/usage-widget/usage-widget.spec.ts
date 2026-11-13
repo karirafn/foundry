@@ -4,6 +4,7 @@ import { UsageWidgetComponent } from './usage-widget';
 import { UsageService } from '../../../core/services/usage.service';
 import { UsageRefreshState, UsageSnapshot } from '../../../core/models/usage.model';
 import { vi } from 'vitest';
+import { FakeConnectionGate, provideFakeConnectionGate } from '../../../core/testing/fake-connection-gate';
 
 function buildSnapshot(overrides: Partial<UsageSnapshot> = {}): UsageSnapshot {
   return {
@@ -42,12 +43,13 @@ function createMockUsageService(snapshot: UsageSnapshot | null = null) {
   };
 }
 
-function setup(snapshot: UsageSnapshot | null = null) {
+function setup(snapshot: UsageSnapshot | null = null, gate = new FakeConnectionGate()) {
   TestBed.resetTestingModule();
   TestBed.configureTestingModule({
     imports: [UsageWidgetComponent],
     providers: [
       { provide: UsageService, useValue: createMockUsageService(snapshot) },
+      provideFakeConnectionGate(gate),
     ],
   });
   const fixture = TestBed.createComponent(UsageWidgetComponent);
@@ -57,6 +59,52 @@ function setup(snapshot: UsageSnapshot | null = null) {
 
 describe('UsageWidgetComponent', () => {
   afterEach(() => TestBed.resetTestingModule());
+
+  describe('while the connection gate is up', () => {
+    function gatedSetup() {
+      const gate = new FakeConnectionGate();
+      gate.phase.set('reconnecting');
+      const fixture = setup(buildSnapshot(), gate);
+      return { fixture, el: fixture.nativeElement as HTMLElement };
+    }
+
+    it('shows a placeholder image with dashes instead of the figures', () => {
+      // Arrange / Act
+      const { el } = gatedSetup();
+
+      // Assert
+      const placeholder = el.querySelector('.usage-widget__placeholder');
+      expect(placeholder?.getAttribute('role')).toBe('img');
+      expect(placeholder?.getAttribute('aria-label')).toBe('Usage unavailable while reconnecting');
+      expect([...el.querySelectorAll('.usage-widget__inline .usage-meter__percent')].map((p) => p.textContent?.trim())).toEqual(['—', '—']);
+      expect(el.textContent).not.toContain('42%');
+    });
+
+    it('leaves the tab order and offers no popover', () => {
+      // Arrange / Act
+      const { el } = gatedSetup();
+
+      // Assert
+      expect(el.querySelector('button, a, [tabindex]')).toBeNull();
+      expect(el.querySelector('[popover]')).toBeNull();
+    });
+
+    it('shows the figures again once the gate is live', () => {
+      // Arrange
+      const gate = new FakeConnectionGate();
+      gate.phase.set('reloading');
+      const fixture = setup(buildSnapshot(), gate);
+
+      // Act
+      gate.phase.set('live');
+      fixture.detectChanges();
+
+      // Assert
+      const el = fixture.nativeElement as HTMLElement;
+      expect(el.querySelector('.usage-widget__placeholder')).toBeNull();
+      expect(el.querySelector('.usage-widget__trigger')).not.toBeNull();
+    });
+  });
 
   // Cycle a — rendering gate: widget emits no DOM when snapshot is null
   it('should emit no DOM when snapshot is null', () => {
@@ -791,7 +839,7 @@ describe('UsageWidgetComponent', () => {
       mock.refreshState.set(refreshState);
       TestBed.configureTestingModule({
         imports: [UsageWidgetComponent],
-        providers: [{ provide: UsageService, useValue: mock }],
+        providers: [provideFakeConnectionGate(), { provide: UsageService, useValue: mock }],
       });
       const fixture = TestBed.createComponent(UsageWidgetComponent);
       fixture.detectChanges();
@@ -966,7 +1014,7 @@ describe('UsageWidgetComponent', () => {
       const mock = createMockUsageService(buildUnavailable());
       TestBed.configureTestingModule({
         imports: [UsageWidgetComponent],
-        providers: [{ provide: UsageService, useValue: mock }],
+        providers: [provideFakeConnectionGate(), { provide: UsageService, useValue: mock }],
       });
       const fixture = TestBed.createComponent(UsageWidgetComponent);
       fixture.detectChanges();
@@ -1245,7 +1293,7 @@ describe('UsageWidgetComponent', () => {
       TestBed.resetTestingModule();
       TestBed.configureTestingModule({
         imports: [UsageWidgetComponent],
-        providers: [{ provide: UsageService, useValue: createMockUsageService(buildSnapshot()) }],
+        providers: [provideFakeConnectionGate(), { provide: UsageService, useValue: createMockUsageService(buildSnapshot()) }],
       });
       const fixture = TestBed.createComponent(UsageWidgetComponent);
       document.createElement('nav').appendChild(fixture.nativeElement as HTMLElement);

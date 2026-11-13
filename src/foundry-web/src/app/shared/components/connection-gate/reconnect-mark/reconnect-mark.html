@@ -1,0 +1,26 @@
+<svg
+  class="reconnect-mark"
+  [class.reconnect-mark--settled]="settled()"
+  viewBox="0 0 120 100"
+  role="img"
+  [attr.aria-label]="label()"
+>
+  @if (settled()) {
+    <circle
+      class="reconnect-mark__ring"
+      [attr.cx]="baseX"
+      [attr.cy]="baseY"
+      [attr.r]="ringRadius"
+    />
+  }
+  @for (arc of arcs(); track arc.hub) {
+    <path
+      class="reconnect-mark__arc"
+      [class.reconnect-mark__arc--lit]="arc.lit"
+      [attr.data-hub]="arc.hub"
+      [style.animation-delay.ms]="arc.delayMs"
+      [attr.d]="arc.path"
+    />
+  }
+  <circle class="reconnect-mark__base" [attr.cx]="baseX" [attr.cy]="baseY" r="5" />
+</svg>

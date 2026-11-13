@@ -1,5 +1,6 @@
 import { afterNextRender, ChangeDetectionStrategy, Component, computed, ElementRef, inject, OnDestroy, signal } from '@angular/core';
 import { NgClass } from '@angular/common';
+import { ConnectionGateService } from '../../../core/services/connection-gate.service';
 import { UsageService } from '../../../core/services/usage.service';
 import { UsageExtraCredits, UsageSnapshot } from '../../../core/models/usage.model';
 
@@ -287,6 +288,9 @@ export class UsageWidgetComponent implements OnDestroy {
   readonly isCreditsHidden = signal(false);
 
   readonly refreshState = this._usageService.refreshState;
+
+  /** The connection gate is up: the figures may be out of date, so a placeholder stands in. */
+  readonly unavailable = inject(ConnectionGateService).up;
 
   readonly refreshStatusText = computed<string>(() => {
     switch (this.refreshState()) {

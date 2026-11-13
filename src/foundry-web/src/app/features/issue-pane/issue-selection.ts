@@ -37,6 +37,11 @@ export function provideIssueSelection(scope: IssueSelectionScope): Provider[] {
 
 type Verdict = 'wait' | 'accept' | 'reject';
 
+/** Whether the open pane survived a reload; when it did not, the number of the issue it showed. */
+export type PaneRecheck =
+  | { readonly closed: false }
+  | { readonly closed: true; readonly issueNumber: number | null };
+
 /**
  * The page's selected issue, kept in the `?issue=<id>` query parameter in both directions.
  *
@@ -148,6 +153,26 @@ export class IssueSelection {
       return;
     }
     this._navigate(null, true);
+  }
+
+  /**
+   * After the page reloaded its issues: keeps the pane open when its issue is still on the page, and
+   * otherwise closes it, removing `?issue=` without a history entry.
+   */
+  recheck(): PaneRecheck {
+    const id = this._openId();
+    if (id === null || this._scope !== 'board' || this._issueService.issues().some((i) => i.id === id)) {
+      return { closed: false };
+    }
+    const issueNumber = this.summary()?.issueNumber ?? null;
+    this._invoker = null;
+    this._pushed = false;
+    this._openId.set(null);
+    if (this._issueService.selectedIssueId() !== null) {
+      this._issueService.selectIssue(null);
+    }
+    this._navigate(null, true);
+    return { closed: true, issueNumber };
   }
 
   private _onParam(param: string | null): void {

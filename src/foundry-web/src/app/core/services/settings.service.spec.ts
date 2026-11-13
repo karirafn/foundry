@@ -114,6 +114,22 @@ describe('SettingsService', () => {
     expect(service.loadError()).toBeNull();
   });
 
+  it('should report the settings load as loaded, or failed when a request fails', async () => {
+    // Arrange
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    // Act
+    const loaded = service.loadSettings();
+    flushLoadSettings(httpMock);
+    const failed = service.loadSettings();
+    httpMock.expectOne('/api/settings').flush('boom', { status: 500, statusText: 'Server Error' });
+    httpMock.match('/api/credentials');
+
+    // Assert
+    expect(await loaded).toBe('loaded');
+    expect(await failed).toBe('failed');
+  });
+
   // Cycle 2: loadSettings populates authSettings signal
   it('should populate authSettings after loadSettings succeeds', () => {
     // Arrange

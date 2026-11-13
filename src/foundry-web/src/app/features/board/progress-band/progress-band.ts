@@ -77,9 +77,9 @@ export class ProgressBandComponent {
     effect(() => {
       void this._workerSignalR.activeAgentCount();
       void this._issueService.liveIssueCount();
-      untracked(() => this._capacityService.load());
+      untracked(() => void this._capacityService.load());
     });
-    const handle = setInterval(() => this._capacityService.load(), CAPACITY_REFRESH_MS);
+    const handle = setInterval(() => void this._capacityService.load(), CAPACITY_REFRESH_MS);
     inject(DestroyRef).onDestroy(() => clearInterval(handle));
   }
 }

@@ -44,7 +44,7 @@ const ISSUE: IssueSummary = {
   enteredStateAt: '2026-01-01T00:00:00Z',
 };
 
-function render(lane: Partial<FloorLane> = {}, stale = false) {
+function render(lane: Partial<FloorLane> = {}) {
   TestBed.configureTestingModule({ imports: [FloorLaneComponent] });
   const fixture = TestBed.createComponent(FloorLaneComponent);
   fixture.componentRef.setInput('lane', {
@@ -55,7 +55,6 @@ function render(lane: Partial<FloorLane> = {}, stale = false) {
     ...lane,
   });
   fixture.componentRef.setInput('now', NOW);
-  fixture.componentRef.setInput('stale', stale);
   fixture.detectChanges();
   return { fixture, el: fixture.nativeElement as HTMLElement };
 }
@@ -224,12 +223,4 @@ describe('FloorLaneComponent', () => {
     expect(live?.textContent).toBe(before);
   });
 
-  it('should show stale styling while disconnected', () => {
-    // Act
-    const { el } = render({}, true);
-
-    // Assert
-    expect(el.querySelector('.floor-lane--stale')).not.toBeNull();
-    expect(el.querySelector('.floor-lane__stale-note')).not.toBeNull();
-  });
 });

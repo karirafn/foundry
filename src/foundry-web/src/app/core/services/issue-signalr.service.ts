@@ -25,6 +25,6 @@ export class IssueSignalRService {
   }
 
   onReconnected(callback: () => void): void {
-    this._connection.onReconnected(callback);
+    this._connection.onConnected(callback);
   }
 }

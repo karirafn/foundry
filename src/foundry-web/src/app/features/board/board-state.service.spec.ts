@@ -3,9 +3,10 @@ import { WritableSignal, computed, signal } from '@angular/core';
 import { vi } from 'vitest';
 import { IssueSummary } from '../issues/issue.model';
 import { IssueService } from '../issues/issue.service';
-import { ConnectionStatus, IssueSignalRService } from '../../core/services/issue-signalr.service';
 import { WorkerSignalRService } from '../../core/services/worker-signalr.service';
 import { AgentActivity } from '../../core/models/agent-activity.model';
+import { IssueSignalRService } from '../../core/services/issue-signalr.service';
+import { FakeConnectionGate, provideFakeConnectionGate } from '../../core/testing/fake-connection-gate';
 import { RepositorySummary } from '../settings/repositories/repository.model';
 import { RepositoryService } from '../settings/repositories/repository.service';
 import { BoardBandsView, BoardStateService } from './board-state.service';
@@ -41,7 +42,7 @@ interface Harness {
   service: BoardStateService;
   issues: WritableSignal<IssueSummary[]>;
   initialLoading: WritableSignal<boolean>;
-  status: WritableSignal<ConnectionStatus>;
+  gate: FakeConnectionGate;
   hubHandlers: Map<string, (data: IssueSummary) => void>;
   repositories: WritableSignal<RepositorySummary[]>;
   activities: WritableSignal<ReadonlyMap<string, AgentActivity>>;
@@ -68,7 +69,7 @@ function setup(): Harness {
   const issues = signal<IssueSummary[]>([]);
   const activities = signal<ReadonlyMap<string, AgentActivity>>(new Map());
   const initialLoading = signal(true);
-  const status = signal<ConnectionStatus>('connected');
+  const gate = new FakeConnectionGate();
   const hubHandlers = new Map<string, (data: IssueSummary) => void>();
   const repositories = signal<RepositorySummary[]>([]);
   const issueService = {
@@ -81,6 +82,7 @@ function setup(): Harness {
   TestBed.configureTestingModule({
     providers: [
       BoardStateService,
+      provideFakeConnectionGate(gate),
       { provide: IssueService, useValue: issueService },
       { provide: RepositoryService, useValue: { repositories } },
       {
@@ -90,7 +92,6 @@ function setup(): Harness {
       {
         provide: IssueSignalRService,
         useValue: {
-          connectionStatus: status,
           on: (method: string, cb: (data: IssueSummary) => void) => hubHandlers.set(method, cb),
           off: (method: string) => hubHandlers.delete(method),
         },
@@ -101,7 +102,7 @@ function setup(): Harness {
     service: TestBed.inject(BoardStateService),
     issues,
     initialLoading,
-    status,
+    gate,
     hubHandlers,
     repositories,
     activities,
@@ -289,49 +290,71 @@ describe('BoardStateService', () => {
     expect(idsIn(h.service.bands(), 'needs')).toEqual(['a']);
   });
 
-  it('snaps without a transition while the connection is lost', async () => {
+  it('snaps without a transition or arrival while the gate is not live', async () => {
     // Arrange
     const h = setup();
     load(h, [buildIssue({ id: 'a' })]);
     const start = stubViewTransition();
-    h.status.set('reconnecting');
+    h.gate.phase.set('reloading');
     TestBed.tick();
 
     // Act
     change(h, [buildIssue({ id: 'a', needsAction: true, state: 'failed' })]);
-    await vi.advanceTimersByTimeAsync(150);
 
-    // Assert
+    // Assert: applied at once, before any debounce.
     expect(start).not.toHaveBeenCalled();
+    expect(idsIn(h.service.bands(), 'needs')).toEqual(['a']);
+    expect(h.service.bands().needs[0].arrived).toBe(false);
+    expect(h.service.glided()).toBe(false);
   });
 
-  it('snaps the first batch after a reconnect', async () => {
+  it('announces nothing for a batch applied while the gate is not live', async () => {
+    // Arrange
+    const h = setup();
+    load(h, [buildIssue({ id: 'a' })]);
+    h.gate.phase.set('reloading');
+    TestBed.tick();
+
+    // Act
+    change(h, [buildIssue({ id: 'a', needsAction: true, state: 'failed' })]);
+
+    // Assert
+    expect(h.service.announcement()).toBe('');
+  });
+
+  it('glides again once the gate is live', async () => {
     // Arrange
     const h = setup();
     load(h, [buildIssue({ id: 'a' })]);
     const start = stubViewTransition();
-    h.status.set('reconnecting');
+    h.gate.phase.set('reloading');
     TestBed.tick();
-    h.status.set('connected');
+    change(h, [buildIssue({ id: 'a', needsAction: true, state: 'failed' })]);
+    h.gate.phase.set('live');
     TestBed.tick();
 
     // Act
-    change(h, [buildIssue({ id: 'a', needsAction: true, state: 'failed' })]);
+    change(h, [buildIssue({ id: 'a' })]);
     await vi.advanceTimersByTimeAsync(150);
 
     // Assert
-    expect(start).not.toHaveBeenCalled();
+    expect(start).toHaveBeenCalledTimes(1);
   });
 
-  it('reports the connection as stale while it is not connected', () => {
+  it('renders the latest data at once on resync, without waiting for its effects', () => {
     // Arrange
     const h = setup();
+    load(h, [buildIssue({ id: 'a' })]);
+    const start = stubViewTransition();
 
     // Act
-    h.status.set('disconnected');
+    h.issues.set([buildIssue({ id: 'a', needsAction: true, state: 'failed' })]);
+    h.service.resync();
 
     // Assert
-    expect(h.service.stale()).toBe(true);
+    expect(start).not.toHaveBeenCalled();
+    expect(idsIn(h.service.bands(), 'needs')).toEqual(['a']);
+    expect(h.service.bands().needs[0].arrived).toBe(false);
   });
 
   it('marks a card that starts needing a person as arrived', async () => {

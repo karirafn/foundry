@@ -10,16 +10,19 @@ const STATUS_LABELS: Record<ConnectionStatus, string> = {
 @Component({
   selector: 'fd-connection-indicator',
   standalone: true,
+  // Nothing to say while connected: only a lost connection is worth the space.
   template: `
-    <div
-      class="connection-indicator"
-      role="status"
-      [attr.aria-label]="ariaLabel()"
-      [attr.title]="ariaLabel()"
-    >
-      <span class="connection-indicator__dot" [class]="dotClass()"></span>
-      <span class="connection-indicator__label">{{ label() }}</span>
-    </div>
+    @if (status() !== 'connected') {
+      <div
+        class="connection-indicator"
+        role="status"
+        [attr.aria-label]="ariaLabel()"
+        [attr.title]="ariaLabel()"
+      >
+        <span class="connection-indicator__dot" [class]="dotClass()"></span>
+        <span class="connection-indicator__label">{{ label() }}</span>
+      </div>
+    }
   `,
   styleUrl: './connection-indicator.scss',
 })

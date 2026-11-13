@@ -109,7 +109,7 @@ describe('SystemSignalRService', () => {
     // Act
     await Promise.resolve();
     const afterStart = status();
-    hub.reconnecting();
+    hub.close();
 
     // Assert
     expect(hub.startCount).toBe(1);
@@ -118,17 +118,21 @@ describe('SystemSignalRService', () => {
   });
 
   // Cycle 6: firing the reconnect callback emits on reconnected observable
-  it('should emit on reconnected observable when the hub reconnects', () => {
+  it('should emit on reconnected observable when the hub reconnects', async () => {
     // Arrange
+    vi.useFakeTimers();
     const { svc, hub } = setup();
+    await vi.advanceTimersByTimeAsync(0);
     let emitCount = 0;
     svc.reconnected.subscribe(() => emitCount++);
+    hub.close();
 
     // Act
-    hub.reconnected();
+    await vi.advanceTimersByTimeAsync(0);
 
     // Assert
     expect(emitCount).toBe(1);
+    vi.useRealTimers();
   });
 
   // Cycle 7: reconnected is an Observable, not a writable Subject

@@ -32,6 +32,39 @@ describe('DispatchCapacityService', () => {
     expect(svc.loadError()).toBeNull();
   });
 
+  it('should report a load as loaded, or failed when the request fails', async () => {
+    // Arrange
+    const { svc, httpMock } = setup();
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    // Act
+    const first = svc.load();
+    httpMock.expectOne('/api/workers/capacity').flush({ maxConcurrent: 3, occupiedSlots: 1, freeSlots: 2 });
+    const second = svc.load();
+    httpMock.expectOne('/api/workers/capacity').flush(null, { status: 500, statusText: 'Server Error' });
+
+    // Assert
+    expect(await first).toBe('loaded');
+    expect(await second).toBe('failed');
+  });
+
+  it('should report an overtaken load with the outcome of the newer one', async () => {
+    // Arrange
+    const { svc, httpMock } = setup();
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const overtaken = svc.load();
+    const latest = svc.load();
+    const [first, second] = httpMock.match('/api/workers/capacity');
+
+    // Act
+    first.flush({ maxConcurrent: 3, occupiedSlots: 0, freeSlots: 3 });
+    second.flush(null, { status: 500, statusText: 'Server Error' });
+
+    // Assert
+    expect(await latest).toBe('failed');
+    expect(await overtaken).toBe('failed');
+  });
+
   it('should ignore a stale response that resolves after a newer request', () => {
     // Arrange
     const { svc, httpMock } = setup();

@@ -17,8 +17,8 @@ import {
 import { ActivatedRoute } from '@angular/router';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { WorkerSignalRService } from '../../../core/services/worker-signalr.service';
-import { ConnectionStatus } from '../../../core/services/issue-signalr.service';
-import { ConnectionIndicatorComponent } from '../../../shared/components/connection-indicator/connection-indicator';
+import { LoadOutcome, combineOutcomes } from '../../../core/models/load-outcome';
+import { ConnectionGateComponent } from '../../../shared/components/connection-gate/connection-gate';
 import { IssueService } from '../../issues/issue.service';
 import { IssueSummary } from '../../issues/issue.model';
 import { DispatchCapacity, DispatchCapacityService } from '../dispatch-capacity.service';
@@ -35,7 +35,7 @@ const CAPACITY_REFRESH_MS = 30_000;
 /** The Floor: one lane per active run, free dispatch slots, and the next queued issues. */
 @Component({
   selector: 'fd-floor-page',
-  imports: [FloorLaneComponent, ConnectionIndicatorComponent, RoleTagComponent, SafeHrefPipe],
+  imports: [ConnectionGateComponent, FloorLaneComponent, RoleTagComponent, SafeHrefPipe],
   templateUrl: './floor-page.html',
   styleUrl: './floor-page.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -54,8 +54,17 @@ export class FloorPageComponent implements OnInit {
   private readonly _nowSignal: WritableSignal<number> = signal(Date.now());
   protected readonly now: Signal<number> = this._nowSignal.asReadonly();
 
-  protected readonly connectionStatus: Signal<ConnectionStatus> = this._workerSignalR.connectionStatus;
-  protected readonly stale: Signal<boolean> = computed(() => this.connectionStatus() !== 'connected');
+  /** What the Floor shows, refetched after a reconnect: the connection gate waits on it. */
+  protected readonly reload = async (): Promise<LoadOutcome> =>
+    combineOutcomes(
+      await Promise.all([
+        this._workerSignalR.loadActivity(),
+        this._issueService.loadIssues(),
+        this._capacityService.load(),
+      ]),
+    );
+
+  protected readonly upToDate = (): string => 'Floor is up to date.';
 
   protected readonly lanes: Signal<FloorLane[]> = computed(() =>
     buildFloorLanes(
@@ -112,13 +121,13 @@ export class FloorPageComponent implements OnInit {
     effect(() => {
       void this._workerSignalR.activeAgentCount();
       void this._issueService.liveIssueCount();
-      untracked(() => this._capacityService.load());
+      untracked(() => void this._capacityService.load());
     });
 
     this._focusLaneFromFragment();
 
     const clockHandle = setInterval(() => this._nowSignal.set(Date.now()), CLOCK_INTERVAL_MS);
-    const capacityHandle = setInterval(() => this._capacityService.load(), CAPACITY_REFRESH_MS);
+    const capacityHandle = setInterval(() => void this._capacityService.load(), CAPACITY_REFRESH_MS);
     this._destroyRef.onDestroy(() => {
       clearInterval(clockHandle);
       clearInterval(capacityHandle);
@@ -126,7 +135,7 @@ export class FloorPageComponent implements OnInit {
   }
 
   ngOnInit(): void {
-    this._issueService.loadIssues();
+    void this._issueService.loadIssues();
   }
 
   /**

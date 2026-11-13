@@ -36,6 +36,23 @@
   }
 }
 
+// ─── Placeholder while the connection gate is up ────────────────────────────
+
+.usage-widget__placeholder {
+  align-items: center;
+  border: 1px dashed var(--fd-border-placeholder);
+  border-radius: var(--fd-radius-sm);
+  display: inline-flex;
+  font-size: 0.75rem;
+  height: 28px;
+  padding: var(--fd-spacing-xs) var(--fd-spacing-sm);
+
+  .usage-meter__label,
+  .usage-meter__percent {
+    color: var(--fd-text-placeholder);
+  }
+}
+
 // ─── Inline meters (wide layout) ────────────────────────────────────────────
 
 // Shared `label | bar | %` grid so the Session and Weekly bars and percentages

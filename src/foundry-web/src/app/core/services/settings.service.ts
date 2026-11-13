@@ -23,6 +23,7 @@ import {
 import { DispatchService } from './dispatch.service';
 import { AccountPresenceService } from './account-presence.service';
 import { SystemSignalRService } from './system-signalr.service';
+import { LoadOutcome } from '../models/load-outcome';
 
 const LOAD_SETTINGS_ERROR = 'Failed to load settings';
 const SAVE_SETTINGS_ERROR = 'Failed to save settings';
@@ -212,9 +213,9 @@ export class SettingsService {
   private readonly _startLoginErrorSignal: WritableSignal<string | null> = signal(null);
   readonly startLoginError: Signal<string | null> = this._startLoginErrorSignal.asReadonly();
 
-  loadSettings(): Promise<void> {
-    return new Promise<void>((resolve) => {
-      this._fetchSettings().subscribe({ next: resolve, error: resolve });
+  loadSettings(): Promise<LoadOutcome> {
+    return new Promise<LoadOutcome>((resolve) => {
+      this._fetchSettings().subscribe({ next: () => resolve('loaded'), error: () => resolve('failed') });
     });
   }
 

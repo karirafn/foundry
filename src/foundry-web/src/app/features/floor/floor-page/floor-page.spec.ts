@@ -5,6 +5,7 @@ import { HttpTestingController, provideHttpClientTesting } from '@angular/common
 import { AgentActivity, AgentActivityEnded } from '../../../core/models/agent-activity.model';
 import { IssueSignalRService } from '../../../core/services/issue-signalr.service';
 import { FakeHubTransport, provideFakeHubs } from '../../../core/testing/fake-hub-transport';
+import { FakeConnectionGate, provideFakeConnectionGate } from '../../../core/testing/fake-connection-gate';
 import { FloorPageComponent } from './floor-page';
 import { ActivatedRoute } from '@angular/router';
 import { of } from 'rxjs';
@@ -43,12 +44,14 @@ function issueItem(id: string, issueNumber: number, state: string) {
 
 async function setup(fragment: string | null = null) {
   const hub = new FakeHubTransport();
+  const gate = new FakeConnectionGate();
   TestBed.configureTestingModule({
     imports: [FloorPageComponent],
     providers: [
       provideHttpClient(),
       provideHttpClientTesting(),
       provideFakeHubs({ workers: hub }),
+      provideFakeConnectionGate(gate),
       { provide: ActivatedRoute, useValue: { fragment: of(fragment) } },
       {
         provide: IssueSignalRService,
@@ -60,7 +63,7 @@ async function setup(fragment: string | null = null) {
   const httpMock = TestBed.inject(HttpTestingController);
   await Promise.resolve();
   fixture.detectChanges();
-  return { fixture, httpMock, hub, el: fixture.nativeElement as HTMLElement };
+  return { fixture, httpMock, hub, gate, el: fixture.nativeElement as HTMLElement };
 }
 
 function flushIssues(httpMock: HttpTestingController, items: unknown[]): void {
@@ -239,20 +242,58 @@ describe('FloorPageComponent', () => {
     expect(el.querySelector('.floor__queue')?.textContent).toContain('The queue is empty.');
   });
 
-  it('should mark lanes stale while the worker hub is reconnecting', async () => {
+  it('should refetch the current activity, the issues and capacity when the gate reloads it', async () => {
     // Arrange
-    const { fixture, httpMock, hub, el } = await setup();
+    const { httpMock, hub, gate } = await setup();
+    flushIssues(httpMock, []);
+    flushCapacity(httpMock, 2);
+    // Let the load the hub starts on connect settle first.
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    hub.invocations.length = 0;
+    hub.invokeResult = () => Promise.resolve({ workerActivities: [], agentActivities: [] });
+
+    // Act
+    const reloading = gate.registered!();
+    flushIssues(httpMock, []);
+    flushCapacity(httpMock, 2);
+
+    // Assert
+    expect(await reloading).toBe('loaded');
+    expect(hub.invocations.map((i) => i.methodName)).toEqual(['GetCurrentActivity']);
+  });
+
+  it('should report a failed reload when the current activity does not load', async () => {
+    // Arrange
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const { httpMock, hub, gate } = await setup();
+    flushIssues(httpMock, []);
+    flushCapacity(httpMock, 2);
+    hub.invokeResult = () => Promise.reject(new Error('down'));
+
+    // Act
+    const reloading = gate.registered!();
+    flushIssues(httpMock, []);
+    flushCapacity(httpMock, 2);
+
+    // Assert
+    expect(await reloading).toBe('failed');
+  });
+
+  it('should hide the lanes behind the reconnect screen while the gate is up', async () => {
+    // Arrange
+    const { fixture, httpMock, hub, gate, el } = await setup();
     flushIssues(httpMock, [issueItem('issue-1', 1, 'in_progress')]);
     hub.emit('AgentActivity', buildActivity('run-1', 'issue-1'));
     fixture.detectChanges();
-    flushCapacity(httpMock, 2);
 
     // Act
-    hub.reconnecting();
+    gate.phase.set('reconnecting');
     fixture.detectChanges();
 
     // Assert
-    expect(el.querySelector('.floor-lane--stale')).not.toBeNull();
+    expect(el.querySelector('fd-floor-lane')).toBeNull();
+    expect(el.querySelector('.floor')).toBeNull();
+    expect(el.querySelector('.connection-gate__heading')?.textContent).toContain('Reconnecting to Foundry');
   });
 
   // Publishing slots (#787)

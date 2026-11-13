@@ -1,0 +1,41 @@
+@if (showContent()) {
+  <ng-container [ngTemplateOutlet]="content()" />
+} @else {
+  <section class="connection-gate" role="region" [attr.aria-labelledby]="headingId">
+    <fd-reconnect-mark
+      class="connection-gate__mark"
+      [connected]="gate.connectedHubs()"
+      [settled]="phase() === 'reloading'"
+    />
+    <h1 #gateHeading class="connection-gate__heading" [id]="headingId" tabindex="-1">
+      {{ heading() }}
+    </h1>
+    @switch (phase()) {
+      @case ('reconnecting') {
+        <p class="connection-gate__status">Next attempt in {{ seconds() }} s</p>
+      }
+      @case ('trying') {
+        <p class="connection-gate__status">Trying now…</p>
+      }
+      @case ('reload-failed') {
+        <p class="connection-gate__status">Retrying in {{ seconds() }} s.</p>
+      }
+    }
+    @if (phase() !== 'reloading') {
+      @if (phase() !== 'reload-failed') {
+        <p class="connection-gate__hint">
+          Live data stays hidden until the connection is back, so nothing on screen is out of date.
+        </p>
+      }
+      <button
+        type="button"
+        class="connection-gate__try"
+        [disabled]="phase() === 'trying'"
+        (click)="gate.tryNow()"
+      >
+        {{ phase() === 'trying' ? 'Trying…' : 'Try now' }}
+      </button>
+    }
+  </section>
+}
+<div class="sr-only" role="status" aria-live="polite">{{ announcement() }}</div>

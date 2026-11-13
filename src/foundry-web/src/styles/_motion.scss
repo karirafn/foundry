@@ -10,6 +10,8 @@
   --fd-motion-exit: 180ms;
   --fd-ease-exit: cubic-bezier(0.3, 0, 0.8, 0.15);
   --fd-motion-fade: 160ms;
+  // One sweep of a reconnect-mark arc that is still down.
+  --fd-motion-reconnect: 1800ms;
 
   // No root snapshot: the unnamed page stays live while named cards glide.
   view-transition-name: none;
@@ -150,5 +152,29 @@
   .fd-board-collapse {
     animation: fd-fade-out 200ms ease forwards;
     animation-duration: 200ms !important;
+  }
+}
+
+// The reconnect mark (#894): an arc that is still down sweeps between dim and mid-blue; once every
+// hub is back, a ring expands from the base until the page has reloaded. Component styles are
+// emulated-encapsulation, so the keyframes live here.
+@keyframes fd-reconnect-sweep {
+  0%,
+  100% {
+    stroke: var(--fd-border-default);
+  }
+  50% {
+    stroke: color-mix(in srgb, var(--fd-text-link) 55%, var(--fd-border-default));
+  }
+}
+
+@keyframes fd-reconnect-ring {
+  from {
+    opacity: 0.8;
+    transform: scale(0.2);
+  }
+  to {
+    opacity: 0;
+    transform: scale(1);
   }
 }
