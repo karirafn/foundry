@@ -1,6 +1,7 @@
 using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Issues.Domain.Entities;
 using Foundry.Modules.Issues.Domain.Entities.States;
+using Foundry.Modules.Issues.Domain.ValueObjects;
 using Foundry.Modules.Issues.Features;
 using Foundry.Modules.Issues.Features.Claiming;
 using Foundry.Modules.Monitoring.Contracts;
@@ -70,8 +71,14 @@ public sealed class GetReviewIssuesAsync : IAsyncDisposable
         InProgressIssue inProgress = queued.Claim(WorkerRunId.New(), DateTimeOffset.UtcNow);
         await _dbContext.TransitionAsync(queued, inProgress, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
 
-        ReviewIssue review = inProgress.MarkInReview($"feat/issue-{issueNumber}", pullRequestUrl, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow);
-        await _dbContext.TransitionAsync(inProgress, review, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
+        RebasePendingIssue rebasePending = inProgress.MarkRebasePending($"feat/issue-{issueNumber}", pullRequestUrl, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow);
+        await _dbContext.TransitionAsync(inProgress, rebasePending, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
+
+        ChecksPendingIssue checksPending = rebasePending.MarkChecksPending(new RebaseOutcome.UpToDate(), DateTimeOffset.UtcNow);
+        await _dbContext.TransitionAsync(rebasePending, checksPending, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
+
+        ReviewIssue review = checksPending.ToReview(new ChecksOutcome.Passed(), DateTimeOffset.UtcNow);
+        await _dbContext.TransitionAsync(checksPending, review, new NullDomainEventDispatcher(), TestContext.Current.CancellationToken);
 
         return review;
     }

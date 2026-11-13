@@ -43,42 +43,9 @@ public sealed class ReviewIssue : Issue
 
     /// <summary>
     /// How the post-run rebase resolved, carried from checks-pending (ADR 0087). <see langword="null"/> when the
-    /// issue reached review without a rebase step.
+    /// issue entered checks-pending before the rebase step existed.
     /// </summary>
     public RebaseOutcome? RebaseOutcome { get; private set; }
-
-    internal static ReviewIssue FromInProgress(
-        InProgressIssue source,
-        string branchName,
-        string pullRequestUrl,
-        DateTimeOffset feedbackCutoffAt,
-        DateTimeOffset transitionedAt)
-    {
-        ReviewIssue review = new(source.Id, transitionedAt);
-        review.CopySharedPropertiesFrom(source);
-        review.WorkerRunId = source.WorkerRunId;
-        review.BranchName = branchName;
-        review.PullRequestUrl = pullRequestUrl;
-        review.FeedbackCutoffAt = feedbackCutoffAt;
-        review.ChecksOutcome = new ChecksOutcome.Passed();
-        return review;
-    }
-
-    internal static ReviewIssue FromRevisionInProgress(
-        RevisionInProgressIssue source,
-        DateTimeOffset feedbackCutoffAt,
-        DateTimeOffset transitionedAt)
-    {
-        ReviewIssue review = new(source.Id, transitionedAt);
-        review.CopySharedPropertiesFrom(source);
-        review.WorkerRunId = source.WorkerRunId;
-        review.BranchName = source.BranchName;
-        review.PullRequestUrl = source.PullRequestUrl;
-        review.FeedbackCutoffAt = feedbackCutoffAt;
-        review.ChecksOutcome = new ChecksOutcome.Passed();
-        review.RebaseConflictAttempts = source.RebaseConflictAttempts;
-        return review;
-    }
 
     internal static ReviewIssue FromChecksPending(
         ChecksPendingIssue source,
