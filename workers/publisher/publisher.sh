@@ -250,7 +250,7 @@ prepare() {
 #   FOUNDRY_PUBLISH result=nothing_to_publish
 #   FOUNDRY_PUBLISH result=secret_detected findings=<n>
 #   FOUNDRY_PUBLISH result=diverged branch=<branch> side_branch=<side> head=<sha>[ reason=force-push-protected]
-#   FOUNDRY_PUBLISH result=failed kind=permanent|transient reason=<one line; the last field, may hold spaces>
+#   FOUNDRY_PUBLISH result=failed kind=permanent|transient|unreachable reason=<one line; the last field, may hold spaces>
 # preceded, for published and diverged, by one line per pushed Run commit, oldest first (Foundry's own
 # merge and revert commits excluded), then one line per file the Diff gate reverted:
 #   FOUNDRY_RUN_COMMIT <sha> <subject>
@@ -326,7 +326,8 @@ publish_diverged() {
 #                 prefix and the status rather than curl's wording, which changes between curl versions.
 #   permanent   — the provider refused the credentials or the repository.
 #   transient   — everything else, so Foundry's bounded retry gets a chance before the run needs attention.
-# Prepare retries unreachable itself; publish reports it as transient.
+# Prepare retries unreachable itself; publish reports it as kind=unreachable, which Foundry retries like transient
+# and which also pauses the provider host until a probe reaches it.
 classify_error() {
     lower="$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]')"
     case "$lower" in
@@ -351,10 +352,6 @@ classify_error() {
 # fail_git <context> — fails with the last git error, classified.
 fail_git() {
     kind="$(classify_error "$(cat "$git_err" 2> /dev/null)")"
-    # Publish has no unreachable kind: Foundry's publish retry handles an unreachable provider as transient.
-    if [ "$kind" = unreachable ]; then
-        kind=transient
-    fi
     publish_failed "$kind" "$1: $(last_error)"
 }
 

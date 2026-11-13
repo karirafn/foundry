@@ -98,9 +98,10 @@ public sealed class Parse
     }
 
     [Theory]
-    [InlineData("transient", true)]
-    [InlineData("permanent", false)]
-    public void AFailedLine_KeepsItsKindAndTheWholeReason(string kind, bool transient)
+    [InlineData("transient", PublishFailureKind.Transient)]
+    [InlineData("permanent", PublishFailureKind.Permanent)]
+    [InlineData("unreachable", PublishFailureKind.Unreachable)]
+    public void AFailedLine_KeepsItsKindAndTheWholeReason(string kind, PublishFailureKind expected)
     {
         // Act
         PublishResult result = PublishOutputParser.Parse(
@@ -109,8 +110,35 @@ public sealed class Parse
 
         // Assert
         result.ShouldBeOfType<PublishResult.Failed>().ShouldSatisfyAllConditions(
-            failed => failed.Transient.ShouldBe(transient),
+            failed => failed.Kind.ShouldBe(expected),
             failed => failed.Reason.ShouldBe("could not reach the repository: timed out"));
+    }
+
+    // An unreachable provider is retried like any transient failure, and is also what pauses its host (#885).
+    [Fact]
+    public void AnUnreachableFailure_IsTransientAndMarkedUnreachable()
+    {
+        // Act
+        PublishResult result = PublishOutputParser.Parse(
+            1,
+            "FOUNDRY_PUBLISH result=failed kind=unreachable reason=could not reach the repository: Could not resolve host\n");
+
+        // Assert
+        result.ShouldBeOfType<PublishResult.Failed>().ShouldSatisfyAllConditions(
+            failed => failed.Transient.ShouldBeTrue(),
+            failed => failed.Unreachable.ShouldBeTrue());
+    }
+
+    [Theory]
+    [InlineData("transient")]
+    [InlineData("permanent")]
+    public void AnyOtherFailure_IsNotMarkedUnreachable(string kind)
+    {
+        // Act
+        PublishResult result = PublishOutputParser.Parse(1, $"FOUNDRY_PUBLISH result=failed kind={kind} reason=x\n");
+
+        // Assert
+        result.ShouldBeOfType<PublishResult.Failed>().Unreachable.ShouldBeFalse();
     }
 
     [Fact]

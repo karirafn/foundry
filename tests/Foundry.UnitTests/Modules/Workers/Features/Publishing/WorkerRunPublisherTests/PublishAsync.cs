@@ -1,5 +1,6 @@
 using Foundry.Modules.Issues.Contracts;
 using Foundry.Modules.Monitoring.Contracts;
+using Foundry.Modules.Settings.Domain.Entities;
 using Foundry.Modules.Workers.Contracts;
 using Foundry.Modules.Workers.Domain.Entities;
 using Foundry.Modules.Workers.Domain.Entities.States;
@@ -42,6 +43,8 @@ public sealed class PublishAsync : WorkerDispatchServiceTestBase
     private readonly RecordingRunPublishingCommands _commands = new();
 
     private readonly FakeWorkerOrchestrator _orchestrator = new();
+
+    private readonly CapturingSystemNotificationBroadcaster _broadcaster = new();
 
     [Fact]
     public async Task ARunThatFinishedWithNoPullRequest_GetsOneOpenedByCode()
@@ -124,7 +127,7 @@ public sealed class PublishAsync : WorkerDispatchServiceTestBase
     {
         // Arrange
         SeedPublishingRun(new RunExit(0, OomKilled: false, RunStopReason.Exited, DateTimeOffset.UtcNow));
-        FakePublisher publisher = new FakePublisher().WithPublishResults(new PublishResult.Failed("provider down", Transient: true));
+        FakePublisher publisher = new FakePublisher().WithPublishResults(new PublishResult.Failed("provider down", PublishFailureKind.Transient));
 
         // Act
         await RunPublisherAsync(publisher, new StubPostExitProviderQueries());
@@ -144,7 +147,7 @@ public sealed class PublishAsync : WorkerDispatchServiceTestBase
         // Arrange
         SeedPublishingRun(new RunExit(0, OomKilled: false, RunStopReason.Exited, DateTimeOffset.UtcNow));
         FakePublisher publisher = new FakePublisher().WithPublishResults(
-            new PublishResult.Failed("invalid: run tip does not descend from the run's base", Transient: false));
+            new PublishResult.Failed("invalid: run tip does not descend from the run's base", PublishFailureKind.Permanent));
 
         // Act
         await RunPublisherAsync(publisher, new StubPostExitProviderQueries());
@@ -272,6 +275,84 @@ public sealed class PublishAsync : WorkerDispatchServiceTestBase
         _commands.Summaries.ShouldHaveSingleItem().Body.ShouldContain("## Files reverted by Foundry");
     }
 
+    [Fact]
+    public async Task AnUnreachableProvider_PausesTheRunsHostAndWaitsToRetry()
+    {
+        // Arrange
+        SeedGlobalSettings();
+        SeedPublishingRun(new RunExit(0, OomKilled: false, RunStopReason.Exited, DateTimeOffset.UtcNow));
+        FakePublisher publisher = new FakePublisher().WithPublishResults(
+            new PublishResult.Failed("could not reach the repository: Could not resolve host", PublishFailureKind.Unreachable));
+
+        // Act
+        await RunPublisherAsync(publisher, new StubPostExitProviderQueries());
+
+        // Assert
+        await using FoundryDbContext db = CreateDbContext();
+        (await db.Set<WorkerRun>().SingleAsync(TestContext.Current.CancellationToken))
+            .ShouldBeOfType<PublishFailedRun>().IsExhausted.ShouldBeFalse();
+        GlobalSettings settings = await db.Set<GlobalSettings>().SingleAsync(TestContext.Current.CancellationToken);
+        settings.HostPauses.ShouldHaveSingleItem().Host.ShouldBe("github.com");
+        _broadcaster.SentNotifications.ShouldHaveSingleItem().ShouldSatisfyAllConditions(
+            notification => notification.Category.ShouldBe("dispatch"),
+            notification => notification.IsActive.ShouldBeTrue());
+    }
+
+    [Fact]
+    public async Task AnUnreachableProvider_OnAnAlreadyPausedHost_LeavesThePauseAsItWas()
+    {
+        // Arrange
+        DateTimeOffset pausedAt = DateTimeOffset.UtcNow.AddMinutes(-10);
+        SeedGlobalSettings(settings =>
+        {
+            settings.PauseHost("github.com", pausedAt);
+            settings.RecordProbeUnreachable("github.com", pausedAt.AddMinutes(1));
+        });
+        SeedPublishingRun(new RunExit(0, OomKilled: false, RunStopReason.Exited, DateTimeOffset.UtcNow));
+        FakePublisher publisher = new FakePublisher().WithPublishResults(
+            new PublishResult.Failed("could not reach the repository", PublishFailureKind.Unreachable));
+
+        // Act
+        await RunPublisherAsync(publisher, new StubPostExitProviderQueries());
+
+        // Assert
+        await using FoundryDbContext db = CreateDbContext();
+        GlobalSettings settings = await db.Set<GlobalSettings>().SingleAsync(TestContext.Current.CancellationToken);
+        settings.HostPauses.ShouldHaveSingleItem().ShouldSatisfyAllConditions(
+            pause => pause.PausedAt.ShouldBe(pausedAt),
+            pause => pause.ProbeAttempts.ShouldBe(1));
+        _broadcaster.SentNotifications.ShouldBeEmpty();
+    }
+
+    [Theory]
+    [InlineData(PublishFailureKind.Transient)]
+    [InlineData(PublishFailureKind.Permanent)]
+    public async Task AFailureThatReachedTheProvider_DoesNotPauseTheHost(PublishFailureKind kind)
+    {
+        // Arrange
+        SeedGlobalSettings();
+        SeedPublishingRun(new RunExit(0, OomKilled: false, RunStopReason.Exited, DateTimeOffset.UtcNow));
+        FakePublisher publisher = new FakePublisher().WithPublishResults(
+            new PublishResult.Failed("the remote branch moved during publish", kind));
+
+        // Act
+        await RunPublisherAsync(publisher, new StubPostExitProviderQueries());
+
+        // Assert
+        await using FoundryDbContext db = CreateDbContext();
+        (await db.Set<GlobalSettings>().SingleAsync(TestContext.Current.CancellationToken)).HostPauses.ShouldBeEmpty();
+        _broadcaster.SentNotifications.ShouldBeEmpty();
+    }
+
+    private void SeedGlobalSettings(Action<GlobalSettings>? configure = null)
+    {
+        using FoundryDbContext db = CreateDbContext();
+        GlobalSettings settings = GlobalSettings.Create();
+        configure?.Invoke(settings);
+        db.Set<GlobalSettings>().Add(settings);
+        db.SaveChanges();
+    }
+
     private void SeedPublishingRun(RunExit exit)
     {
         using FoundryDbContext db = CreateDbContext();
@@ -313,6 +394,7 @@ public sealed class PublishAsync : WorkerDispatchServiceTestBase
             _orchestrator,
             _events,
             domainEvents,
+            _broadcaster,
             TimeProvider.System,
             NullLogger<WorkerRunPublisher>.Instance);
 

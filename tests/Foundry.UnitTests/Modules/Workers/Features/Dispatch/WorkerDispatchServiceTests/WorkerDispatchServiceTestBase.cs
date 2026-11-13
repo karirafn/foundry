@@ -153,6 +153,7 @@ public abstract class WorkerDispatchServiceTestBase : IAsyncDisposable
         services.AddScoped<WorkerOutcomeApplier>();
         services.AddScoped<WorkerRunMonitor>();
         services.AddScoped<WorkerRunPublisher>();
+        services.AddSingleton<ISystemNotificationBroadcaster>(new CapturingSystemNotificationBroadcaster());
         services.AddScoped<IPublisher>(_ => publisher ?? new FakePublisher());
         services.AddScoped<IRepositoryDispatchQueries>(_ => StubRepositoryDispatchQueries.WithToken("ghp_test"));
         services.AddScoped<IRunPublishingCommands>(_ => runPublishingCommands ?? new RecordingRunPublishingCommands());

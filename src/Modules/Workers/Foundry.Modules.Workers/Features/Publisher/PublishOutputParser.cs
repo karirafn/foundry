@@ -27,10 +27,10 @@ internal static partial class PublishOutputParser
         if (results.Count != 1 || ReadResult(results[0].Groups["fields"].Value, text) is not { } result)
         {
             return exitCode == 0
-                ? new PublishResult.Failed(MissingResultMessage, Transient: false)
+                ? new PublishResult.Failed(MissingResultMessage, PublishFailureKind.Permanent)
                 : new PublishResult.Failed(
                     string.Create(CultureInfo.InvariantCulture, $"The Publisher exited with code {exitCode} without a publish result."),
-                    Transient: true);
+                    PublishFailureKind.Transient);
         }
 
         return result;
@@ -131,14 +131,15 @@ internal static partial class PublishOutputParser
 
     private static PublishResult.Failed? ReadFailed(Dictionary<string, string> values)
     {
-        bool? transient = values.GetValueOrDefault("kind") switch
+        PublishFailureKind? kind = values.GetValueOrDefault("kind") switch
         {
-            "transient" => true,
-            "permanent" => false,
+            "transient" => PublishFailureKind.Transient,
+            "permanent" => PublishFailureKind.Permanent,
+            "unreachable" => PublishFailureKind.Unreachable,
             _ => null,
         };
 
-        if (transient is null)
+        if (kind is not { } knownKind)
         {
             return null;
         }
@@ -153,7 +154,7 @@ internal static partial class PublishOutputParser
             reason = reason[..MaxReasonLength];
         }
 
-        return new PublishResult.Failed(reason, transient.Value);
+        return new PublishResult.Failed(reason, knownKind);
     }
 
     // The reason is the last field and may hold spaces, so it takes the rest of the line.

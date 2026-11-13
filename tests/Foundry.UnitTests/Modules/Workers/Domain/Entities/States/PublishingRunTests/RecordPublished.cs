@@ -57,7 +57,7 @@ public sealed class RecordPublished
 
         // Act & Assert
         Should.Throw<ArgumentException>(
-            () => run.RecordPublished(new PublishResult.Failed("x", Transient: true), PublishingRunFixture.ExitedAt));
+            () => run.RecordPublished(new PublishResult.Failed("x", PublishFailureKind.Transient), PublishingRunFixture.ExitedAt));
     }
 
     [Fact]

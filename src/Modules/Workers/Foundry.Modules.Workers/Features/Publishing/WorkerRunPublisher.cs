@@ -8,6 +8,7 @@ using Foundry.Modules.Workers.Contracts;
 using Foundry.Modules.Workers.Domain.Entities;
 using Foundry.Modules.Workers.Domain.Entities.States;
 using Foundry.Modules.Workers.Domain.ValueObjects;
+using Foundry.Modules.Workers.Features.HostPauses;
 using Foundry.Modules.Workers.Features.Orchestration;
 using Foundry.Modules.Workers.Features.Outcome;
 using Foundry.Modules.Workers.Features.Publisher;
@@ -41,6 +42,7 @@ internal sealed class WorkerRunPublisher(
     IWorkerOrchestrator orchestrator,
     IIntegrationEventDispatcher integrationEventDispatcher,
     IDomainEventDispatcher domainEventDispatcher,
+    ISystemNotificationBroadcaster broadcaster,
     TimeProvider timeProvider,
     ILogger<WorkerRunPublisher> logger)
 {
@@ -129,6 +131,12 @@ internal sealed class WorkerRunPublisher(
         PublishResult result = await publisher.PublishAsync(
             new PublishRequest(run.Id, dispatchInfo.CloneUrl, gitPat, run.BranchName, runBase, identity, limits),
             cancellationToken);
+
+        if (result is PublishResult.Failed { Unreachable: true } unreachable)
+        {
+            await FailUnreachablePublishAsync(run, unreachable.Reason, dispatchInfo.Host, cancellationToken);
+            return false;
+        }
 
         if (result is PublishResult.Failed failed)
         {
@@ -352,6 +360,30 @@ internal sealed class WorkerRunPublisher(
             "Publishing worker run {WorkerRunId} was blocked: the diff gate found {FindingCount} possible secret(s), so nothing was pushed.",
             run.Id,
             findings.Count);
+    }
+
+    /// <summary>
+    /// The Publisher could not reach the provider: the attempt fails transiently, and the run's host is paused in the
+    /// same save, as a Prepare <c>provider_unreachable</c> pauses it. Until a probe clears the pause, the publishing loop
+    /// holds this run's retry and every other publish to the host, so an outage spends no attempts (#885).
+    /// </summary>
+    private async Task FailUnreachablePublishAsync(
+        PublishingRun run,
+        string reason,
+        string host,
+        CancellationToken cancellationToken)
+    {
+        bool paused = await HostPauseStaging.StageAsync(dbContext, host, timeProvider.GetUtcNow(), logger, cancellationToken);
+
+        await FailPublishAsync(run, reason, transient: true, cancellationToken);
+
+        if (paused)
+        {
+            logger.LogWarning(
+                "Dispatch and publishing to {Host} are paused: its provider is unreachable. A probe re-checks it and resumes them.",
+                host);
+            await HostPauseBroadcast.SendAsync(broadcaster, hostPaused: true, logger, cancellationToken);
+        }
     }
 
     private async Task FailPublishAsync(PublishingRun run, string reason, bool transient, CancellationToken cancellationToken)

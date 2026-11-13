@@ -43,8 +43,15 @@ public abstract record PublishResult
     public sealed record SecretDetected(IReadOnlyList<SecretFinding> Findings) : PublishResult;
 
     /// <summary>
-    /// Publishing failed. A <paramref name="Transient"/> failure (network, provider outage) is retried with backoff;
-    /// a permanent one (an invalid bundle, a refused token) is not.
+    /// Publishing failed. A transient failure (network, provider outage) is retried with backoff; a permanent one (an
+    /// invalid bundle, a refused token) is not. An unreachable provider is transient and also pauses its host (#885).
     /// </summary>
-    public sealed record Failed(string Reason, bool Transient) : PublishResult;
+    public sealed record Failed(string Reason, PublishFailureKind Kind) : PublishResult
+    {
+        /// <summary>Whether a retry may succeed, so the failure is retried with backoff.</summary>
+        public bool Transient => Kind is not PublishFailureKind.Permanent;
+
+        /// <summary>Whether the provider could not be reached, which pauses the run's provider host.</summary>
+        public bool Unreachable => Kind is PublishFailureKind.Unreachable;
+    }
 }

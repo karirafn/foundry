@@ -11,6 +11,8 @@ internal sealed class DispatchAndPublishTicker(WorkerDispatchService dispatch, R
 {
     public WorkerDispatchService Dispatch => dispatch;
 
+    public RunPublishingService Publishing => publishing;
+
     public async Task ExecuteTickAsync(CancellationToken cancellationToken)
     {
         await dispatch.ExecuteTickAsync(cancellationToken);
