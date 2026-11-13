@@ -283,7 +283,8 @@ describe('BoardPageComponent', () => {
       h.httpMock.expectOne('/api/issues/f');
       const dialog = h.el.querySelector('[role="dialog"]')!;
       expect(dialog.querySelector('h2')?.textContent?.trim()).toBe('#142 Add retry');
-      expect(dialog.querySelector('fd-issue-detail')).not.toBeNull();
+      // The status layer leads the pane and shows its skeleton until the detail lands (#862).
+      expect(dialog.querySelector('fd-pane-status')).not.toBeNull();
     });
 
     it('moves focus into the pane when it opens', async () => {

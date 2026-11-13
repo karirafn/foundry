@@ -2,6 +2,7 @@ import { Component, signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
+import { of } from 'rxjs';
 import { IssueSignalRService } from '../../core/services/issue-signalr.service';
 import { WorkerSignalRService } from '../../core/services/worker-signalr.service';
 import { IssueSummary } from '../issues/issue.model';
@@ -22,7 +23,46 @@ const summary: IssueSummary = {
   codeStep: null,
 };
 
-const detail = { ...summary, author: 'dev', labels: [], stateDetails: null };
+// The detail as the API sends it: it carries none of the summary's placement or provider fields.
+const detail = {
+  id: 'f',
+  issueNumber: 142,
+  title: 'Add retry to the webhook relay',
+  state: 'in_progress',
+  repositorySlug: 'acme/api',
+  detectedAt: '2026-01-01T00:00:00Z',
+  url: 'https://github.com/acme/api/issues/142',
+  author: 'dev',
+  labels: [],
+  stateDetails: null,
+  kind: { source: 'labelled', kind: 'feature', conflictingTriageKind: null },
+  triage: null,
+};
+
+const runningRun = {
+  workerRunId: 'run-1',
+  issueId: 'f',
+  role: 'implement',
+  state: 'running',
+  failureCategory: null,
+  failureSummary: null,
+  resultText: null,
+  subtype: null,
+  isError: null,
+  durationMs: null,
+  numTurns: null,
+  totalCostUsd: null,
+  inputTokens: null,
+  outputTokens: null,
+  lastActivityAt: null,
+  hasStoredLog: false,
+  cancelRequestedAt: null,
+  publish: { headSha: 'abc1234', headCommitUrl: null, pullRequestUrl: 'https://github.com/acme/api/pull/9', branchCommitCount: 1 },
+  publishRetry: null,
+  discardsAt: null,
+  secretFindings: [],
+  revertedFiles: [],
+};
 
 @Component({
   imports: [IssuePaneComponent],
@@ -52,6 +92,7 @@ async function setup(withSummary = true) {
           agentActivityForIssue: () => null,
           activityFor: () => null,
           logStreamFor: () => null,
+          streamLog: () => of(),
         },
       },
     ],
@@ -99,6 +140,64 @@ describe('IssuePaneComponent', () => {
 
     // Assert
     expect(el.querySelector('fd-issue-detail')).not.toBeNull();
+  });
+
+  it('renders the header, then the status, then the remaining detail', async () => {
+    // Arrange
+    const { el, httpMock, render } = await setup();
+
+    // Act
+    httpMock.expectOne('/api/issues/f').flush(detail);
+    await render();
+
+    // Assert
+    const layers = Array.from(el.querySelectorAll('fd-pane-header, fd-pane-status, fd-issue-detail')).map((n) =>
+      n.tagName.toLowerCase());
+    expect(layers).toEqual(['fd-pane-header', 'fd-pane-status', 'fd-issue-detail']);
+    expect(el.querySelector('.pane-callout__title')?.textContent?.trim()).toBe('Implementing');
+  });
+
+  it('shows the status skeleton while the detail loads, under a header from the summary', async () => {
+    // Act
+    const { el, httpMock } = await setup();
+
+    // Assert
+    httpMock.expectOne('/api/issues/f');
+    expect(el.querySelector('fd-pane-status [aria-busy="true"]')).not.toBeNull();
+    expect(el.querySelector('fd-issue-detail')).toBeNull();
+  });
+
+  it('shows a load failure in the status with a Retry that reloads the detail', async () => {
+    // Arrange
+    const { el, httpMock, render } = await setup();
+    httpMock.expectOne('/api/issues/f').flush('boom', { status: 500, statusText: 'Server Error' });
+    await render();
+
+    // Act
+    (el.querySelector('fd-pane-status [role="alert"] button') as HTMLButtonElement).click();
+
+    // Assert
+    httpMock.expectOne('/api/issues/f');
+    expect(el.querySelector('fd-pane-status [role="alert"]')?.textContent).toContain('Failed to load issue details');
+  });
+
+  it('loads the worker run for the status and links its pull request in the header', async () => {
+    // Arrange
+    const { el, httpMock, render } = await setup();
+
+    // Act
+    httpMock.expectOne('/api/issues/f').flush({ ...detail, stateDetails: {
+      workerRunId: 'run-1', branchName: null, feedbackCutoffAt: null, failureReason: null, failedAt: null,
+      completedAt: null, blockedBy: null, violations: null, transientRetry: null,
+    } });
+    await render();
+    httpMock.expectOne('/api/workers/runs/run-1').flush(runningRun);
+    await render();
+
+    // Assert
+    expect(el.querySelector('fd-pane-actions button')?.textContent?.trim()).toBe('Stop worker');
+    const pr = Array.from(el.querySelectorAll('.pane-header__links a')).find((a) => a.textContent?.trim() === 'View PR');
+    expect(pr?.getAttribute('href')).toBe('https://github.com/acme/api/pull/9');
   });
 
   it('shows a busy heading without a summary until the detail lands', async () => {

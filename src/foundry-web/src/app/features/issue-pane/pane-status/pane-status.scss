@@ -1,0 +1,205 @@
+@use '../../../../styles/controls' as *;
+@use '../../../../styles/badge' as *;
+
+// Only the chips a callout renders: failure categories and retries. The state badge styles itself.
+@include badge($states: (failed), $exclude-outlined: (publishing, branch-diverged, reverted-oversized, reverted-binary));
+
+:host {
+  display: block;
+  margin-bottom: var(--fd-spacing-xl);
+}
+
+.pane-status__line {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--fd-spacing-sm);
+  margin-bottom: var(--fd-spacing-md);
+}
+
+.pane-status__stage {
+  color: var(--fd-text-secondary);
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+
+.pane-status__error {
+  align-items: center;
+  color: var(--fd-text-error);
+  display: flex;
+  flex-wrap: wrap;
+  font-size: 0.875rem;
+  gap: var(--fd-spacing-md);
+}
+
+.pane-status__retry {
+  background: transparent;
+  border: 1px solid var(--fd-border-default);
+  border-radius: var(--fd-radius-sm);
+  color: var(--fd-text-primary);
+  cursor: pointer;
+  min-height: 32px;
+  padding: 0 var(--fd-spacing-md);
+
+  &:focus-visible {
+    @include focus-ring;
+  }
+
+  @media (any-pointer: coarse) {
+    min-height: 44px;
+  }
+}
+
+.pane-status__skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: var(--fd-spacing-sm);
+}
+
+.pane-status__bar {
+  animation: fd-skeleton-shimmer 1.5s ease-in-out infinite;
+  background: linear-gradient(
+    90deg,
+    var(--fd-border-default) 0%,
+    var(--fd-bg-card-hover) 50%,
+    var(--fd-border-default) 100%
+  );
+  background-size: 200% 100%;
+  border-radius: var(--fd-radius-sm);
+  display: block;
+  height: 1rem;
+  width: 100%;
+
+  &--short {
+    width: 40%;
+  }
+}
+
+.pane-callout {
+  font-size: 0.875rem;
+  transition: background-color 200ms ease, border-color 200ms ease;
+
+  &--neutral {
+    @include tone-callout(var(--fd-bg-card-hover), var(--fd-border-default), var(--fd-spacing-md));
+  }
+
+  &--working {
+    @include tone-callout(var(--fd-bg-working-subtle), var(--fd-accent-working), var(--fd-spacing-md));
+  }
+
+  &--warning {
+    @include warning-callout(var(--fd-spacing-md));
+  }
+
+  &--error {
+    @include tone-callout(var(--fd-bg-error-subtle), var(--fd-state-failed), var(--fd-spacing-md));
+  }
+
+  &--success {
+    @include tone-callout(var(--fd-bg-success-subtle), var(--fd-accent-ready), var(--fd-spacing-md));
+  }
+}
+
+.pane-callout__head {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--fd-spacing-sm);
+}
+
+.pane-callout__title {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  margin: 0;
+
+  &:focus-visible {
+    @include focus-ring;
+  }
+}
+
+.pane-callout__line {
+  font-size: 0.875rem;
+  margin: var(--fd-spacing-xs) 0 0;
+}
+
+.pane-callout__list-heading {
+  color: var(--fd-text-secondary);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  margin: var(--fd-spacing-md) 0 var(--fd-spacing-xs);
+}
+
+.pane-callout__list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--fd-spacing-sm);
+  margin: 0;
+  padding-inline-start: var(--fd-spacing-lg);
+}
+
+.pane-callout__item {
+  font-size: 0.875rem;
+}
+
+.pane-callout__item-text {
+  margin-inline-end: var(--fd-spacing-sm);
+}
+
+.pane-callout__item-badge {
+  border: 1px solid var(--fd-state-failed);
+  border-radius: 9999px;
+  color: var(--fd-text-error);
+  font-size: 11px;
+  font-weight: 600;
+  margin-inline-end: var(--fd-spacing-sm);
+  padding: 0 6px;
+  text-transform: uppercase;
+}
+
+.pane-callout__item-detail {
+  color: var(--fd-text-secondary);
+  display: block;
+  font-size: 0.8125rem;
+}
+
+.pane-callout__rows {
+  display: grid;
+  font-size: 0.8125rem;
+  gap: var(--fd-spacing-xs) var(--fd-spacing-md);
+  grid-template-columns: max-content 1fr;
+  margin: var(--fd-spacing-md) 0 0;
+
+  dt {
+    color: var(--fd-text-secondary);
+  }
+
+  dd {
+    margin: 0;
+    overflow-wrap: anywhere;
+  }
+}
+
+.pane-callout__mono {
+  font-family: var(--fd-font-mono);
+}
+
+.pane-callout__links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--fd-spacing-md);
+  margin-top: var(--fd-spacing-sm);
+}
+
+.pane-callout__link {
+  color: var(--fd-text-link);
+  font-size: 0.8125rem;
+  text-decoration: none;
+
+  &:hover {
+    text-decoration: underline;
+  }
+
+  &:focus-visible {
+    @include focus-ring;
+  }
+}

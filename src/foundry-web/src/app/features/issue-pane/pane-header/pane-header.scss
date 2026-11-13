@@ -1,0 +1,147 @@
+@use '../../../../styles/controls' as *;
+
+// The header sticks to the top of the scrolling sheet; the negative offset cancels the sheet's padding.
+:host {
+  display: block;
+  margin: calc(var(--fd-spacing-xl) * -1) calc(var(--fd-spacing-xl) * -1) var(--fd-spacing-xl);
+  position: sticky;
+  top: calc(var(--fd-spacing-xl) * -1);
+  z-index: 1;
+}
+
+.pane-header {
+  align-items: flex-start;
+  background: var(--fd-bg-card);
+  border-bottom: 1px solid transparent;
+  display: flex;
+  gap: var(--fd-spacing-md);
+  padding: var(--fd-spacing-xl) var(--fd-spacing-xl) var(--fd-spacing-md);
+}
+
+.pane-header--scrolled {
+  border-bottom-color: var(--fd-border-muted);
+}
+
+.pane-header__main {
+  flex: 1;
+  min-width: 0;
+}
+
+.pane-header__title {
+  color: var(--fd-text-primary);
+  font-size: 1.125rem;
+  font-weight: 600;
+  line-height: 1.35;
+  margin: 0;
+  overflow-wrap: anywhere;
+
+  &:focus-visible {
+    @include focus-ring;
+  }
+}
+
+.pane-header__number {
+  color: var(--fd-text-secondary);
+  display: block;
+  font-family: var(--fd-font-mono);
+  font-size: 0.875rem;
+  font-weight: 400;
+  margin-bottom: var(--fd-spacing-xs);
+}
+
+.pane-header__title-text {
+  -webkit-box-orient: vertical;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+  overflow: hidden;
+}
+
+.pane-header__repo {
+  color: var(--fd-text-secondary);
+  font-family: var(--fd-font-mono);
+  font-size: 0.8125rem;
+  margin: var(--fd-spacing-xs) 0 0;
+  overflow-wrap: anywhere;
+}
+
+.pane-header__links {
+  display: flex;
+  flex-wrap: wrap;
+  font-size: 0.8125rem;
+  gap: var(--fd-spacing-md);
+  margin-top: var(--fd-spacing-sm);
+
+  &:empty {
+    display: none;
+  }
+}
+
+.pane-header__link {
+  align-items: center;
+  color: var(--fd-text-link);
+  display: inline-flex;
+  gap: var(--fd-spacing-xs);
+  text-decoration: none;
+
+  &:hover {
+    text-decoration: underline;
+  }
+
+  &:focus-visible {
+    @include focus-ring;
+  }
+}
+
+.pane-header__icon {
+  flex: none;
+}
+
+.pane-header__bar {
+  animation: fd-skeleton-shimmer 1.5s ease-in-out infinite;
+  background: linear-gradient(
+    90deg,
+    var(--fd-border-default) 0%,
+    var(--fd-bg-card-hover) 50%,
+    var(--fd-border-default) 100%
+  );
+  background-size: 200% 100%;
+  border-radius: var(--fd-radius-sm);
+  display: block;
+  height: 1.125rem;
+  margin-top: var(--fd-spacing-xs);
+  width: 80%;
+
+  &--short {
+    height: 0.875rem;
+    width: 4rem;
+  }
+}
+
+.pane-header__close {
+  align-items: center;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--fd-radius-sm);
+  color: var(--fd-text-secondary);
+  cursor: pointer;
+  display: inline-flex;
+  flex: none;
+  height: 32px;
+  justify-content: center;
+  width: 32px;
+
+  &:hover {
+    border-color: var(--fd-border-default);
+    color: var(--fd-text-primary);
+  }
+
+  &:focus-visible {
+    @include focus-ring;
+  }
+
+  @media (any-pointer: coarse) {
+    height: 44px;
+    width: 44px;
+  }
+}
