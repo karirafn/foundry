@@ -147,7 +147,12 @@ export interface IssueStateDetails {
   /** Set when the state is branch_diverged: the side branch Foundry pushed the run's work to. */
   sideBranchName?: string | null;
   sideBranchUrl?: string | null;
+  /** Set when the state is branch_diverged: why the run's work went to the side branch (ADR 0101). */
+  divergenceReason?: DivergenceReason | null;
 }
+
+/** Why the Publisher pushed a run's work to a side branch: the branch moved during the run, or it is protected from force pushes. */
+export type DivergenceReason = 'branch-moved' | 'force-push-protected';
 
 export interface IssueDetail extends IssueSummary {
   author: string;

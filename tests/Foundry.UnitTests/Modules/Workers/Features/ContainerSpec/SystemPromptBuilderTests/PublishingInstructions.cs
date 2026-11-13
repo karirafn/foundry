@@ -97,6 +97,30 @@ public sealed class PublishingInstructions
             () => prompt.ShouldContain("Foundry pushes the branch and opens or updates the pull request"));
     }
 
+    // ADR 0101: a merge commit leaves the pull request unmergeable on a rebase-only or linear-history repository.
+    [Theory]
+    [MemberData(nameof(Variants))]
+    public void WhenAnyImplementPromptIsBuilt_ItTellsTheAgentToCatchUpOnlyByRebase(string variant)
+    {
+        // Act
+        string prompt = BuildPrompt(variant);
+
+        // Assert
+        prompt.ShouldContain(
+            "Catch the branch up with the default branch only by `git rebase origin/HEAD`, never by merging it.");
+    }
+
+    [Theory]
+    [MemberData(nameof(Variants))]
+    public void WhenAnyImplementPromptIsBuilt_ItNoLongerForbidsRebasing(string variant)
+    {
+        // Act
+        string prompt = BuildPrompt(variant);
+
+        // Assert
+        prompt.ShouldNotContain("do not rebase", Case.Insensitive);
+    }
+
     [Fact]
     public void WhenBuilt_ThePreambleKeepsOnlyTheScopeRestriction()
     {

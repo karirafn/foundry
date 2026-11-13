@@ -97,6 +97,15 @@ public sealed class WorkerRunConfiguration : IEntityTypeConfiguration<WorkerRun>
     private const int ImageMaxLength = 500;
     private const int VerdictStatusMaxLength = 20;
     private const int CommitShaMaxLength = 64;
+    private const int DivergenceReasonMaxLength = 30;
+
+    private static readonly ValueConverter<BranchDivergenceReason, string> DivergenceReasonConverter = new(
+        reason => BranchDivergenceReasonTokens.ToToken(reason),
+        token => DivergenceReasonFromStored(token));
+
+    private static BranchDivergenceReason DivergenceReasonFromStored(string token) =>
+        BranchDivergenceReasonTokens.FromToken(token)
+            ?? throw new InvalidOperationException($"Unknown stored divergence reason: {token}");
 
     public void Configure(EntityTypeBuilder<WorkerRun> builder)
     {
@@ -206,6 +215,14 @@ public sealed class WorkerRunConfiguration : IEntityTypeConfiguration<WorkerRun>
             .HasMaxLength(WorkerRunValueConverters.BranchNameMaxLength)
             .IsUnicode(false)
             .HasColumnName("diverged_side_branch");
+
+        builder.Property(r => r.DivergenceReason)
+            .HasConversion(DivergenceReasonConverter)
+            .HasMaxLength(DivergenceReasonMaxLength)
+            .IsUnicode(false)
+            .HasColumnName("divergence_reason");
+
+        builder.Ignore(r => r.Divergence);
 
         builder.Property(r => r.RevertedFiles)
             .HasConversion(DiffGateValueConverters.RevertedFilesConverter, DiffGateValueConverters.RevertedFilesComparer)

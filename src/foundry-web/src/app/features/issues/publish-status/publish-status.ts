@@ -100,8 +100,13 @@ let nextId = 0;
             @case ('diverged') {
               <span class="badge publish-status__chip badge--branch-diverged">Branch diverged</span>
               <span class="publish-status__message">
-                Someone pushed to the issue branch while the worker ran, and merging the run's work conflicted.
-                Foundry pushed the run's work to a separate branch instead.
+                @if (forcePushProtected()) {
+                  The worker rebased the issue branch onto the default branch, but {{ providerName() }} protects the
+                  issue branch from force pushes. Foundry pushed the run's work to a separate branch instead.
+                } @else {
+                  Someone pushed to the issue branch while the worker ran, and the run's work could not join it.
+                  Foundry pushed the run's work to a separate branch instead.
+                }
               </span>
             }
           }
@@ -155,8 +160,14 @@ let nextId = 0;
             </div>
           </div>
           <p class="publish-status__message publish-status__guidance">
-            Merge the run's branch into the issue branch on {{ providerName() }}. Foundry continues
-            automatically once the merge lands, or use Retry Issue.
+            @if (forcePushProtected()) {
+              <!-- The run's work is rebased: merging it into the issue branch would duplicate the branch's commits. -->
+              Replace the issue branch with the run's branch on {{ providerName() }}, allowing a force push for it.
+              Foundry continues automatically once the issue branch holds the run's work, or use Retry Issue.
+            } @else {
+              Merge the run's branch into the issue branch on {{ providerName() }}. Foundry continues
+              automatically once the merge lands, or use Retry Issue.
+            }
           </p>
         }
       }
@@ -210,6 +221,9 @@ export class PublishStatusComponent {
   });
 
   protected readonly branchName: Signal<string | null> = computed(() => this.stateDetails().branchName);
+
+  protected readonly forcePushProtected: Signal<boolean> = computed(
+    () => this.stateDetails().divergenceReason === 'force-push-protected');
 
   protected readonly providerName: Signal<string> = computed(() => providerDisplayName(this.providerType()));
 

@@ -66,6 +66,18 @@ public abstract class WorkerRun : AggregateRoot<WorkerRunId>, IStateMachine<Work
     /// <summary>The side branch the run's work went to because its own branch diverged; <see langword="null"/> otherwise.</summary>
     public BranchName? DivergedSideBranch { get; private set; }
 
+    /// <summary>
+    /// Why the run's work went to <see cref="DivergedSideBranch"/>; <see langword="null"/> when it did not diverge, or for a run
+    /// recorded before the reason was kept (read as <see cref="BranchDivergenceReason.BranchMoved"/>).
+    /// </summary>
+    public BranchDivergenceReason? DivergenceReason { get; private set; }
+
+    /// <summary>The side branch the run's work went to and why; <see langword="null"/> when it went to its own branch.</summary>
+    public BranchDivergence? Divergence =>
+        DivergedSideBranch is { } sideBranch
+            ? new BranchDivergence(sideBranch, DivergenceReason ?? BranchDivergenceReason.BranchMoved)
+            : null;
+
     /// <summary>The files the Diff gate reverted before it pushed the run (#788); empty when it reverted none.</summary>
     public IReadOnlyList<RevertedFile> RevertedFiles { get; private set; } = [];
 
@@ -83,14 +95,15 @@ public abstract class WorkerRun : AggregateRoot<WorkerRunId>, IStateMachine<Work
     protected void RecordPublishFacts(
         CommitSha? pushedHead,
         int? branchCommitCount,
-        BranchName? divergedSideBranch,
+        BranchDivergence? divergence,
         IReadOnlyList<RevertedFile> revertedFiles)
     {
         ArgumentNullException.ThrowIfNull(revertedFiles);
 
         PublishedHead = pushedHead;
         PublishedBranchCommitCount = branchCommitCount;
-        DivergedSideBranch = divergedSideBranch;
+        DivergedSideBranch = divergence?.SideBranch;
+        DivergenceReason = divergence?.Reason;
         RevertedFiles = revertedFiles;
     }
 

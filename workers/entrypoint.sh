@@ -564,6 +564,9 @@ fi
 BOOTSTRAP_STAGE="git-identity"
 git config --global user.name "Foundry Worker"
 git config --global user.email foundry-worker@foundry.invalid
+# The agent catches the branch up by rebase (ADR 0101); without a terminal, `git rebase --continue`
+# would wait forever on the editor it opens for each commit message.
+export GIT_EDITOR=true
 
 # Disarm the bootstrap ERR trap — failures beyond this point (rootless-dockerd
 # startup, claude invocation) are out of scope for bootstrap classification.

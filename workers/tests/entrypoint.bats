@@ -616,6 +616,31 @@ EOF
     [ "$(git config --global user.email)" = "foundry-worker@foundry.invalid" ]
 }
 
+# Write a fake claude that records GIT_EDITOR as claude sees it ("<unset>" when it is not set).
+make_fake_claude_record_git_editor() {
+    local git_editor_file="$BATS_TEST_TMPDIR/claude_git_editor"
+    cat > "$FAKE_BIN_DIR/claude" <<EOF
+#!/bin/bash
+printf '%s' "\${GIT_EDITOR-<unset>}" > "${git_editor_file}"
+exit 0
+EOF
+    chmod +x "$FAKE_BIN_DIR/claude"
+}
+
+# ADR 0101: the agent catches up by rebase, and `git rebase --continue` opens an editor for each commit
+# message; a container has no terminal for one, so the rebase would hang until the run times out.
+@test "git identity: bootstrap exports GIT_EDITOR=true so git rebase --continue never waits on an editor" {
+    set_required_env
+    make_fake_git_real_global_config
+    make_fake_claude_record_git_editor
+    unset GIT_CONFIG_GLOBAL GH_TOKEN GITLAB_TOKEN GIT_EDITOR
+
+    run bash "$ENTRYPOINT"
+
+    [ "$status" -eq 0 ]
+    [ "$(cat "$BATS_TEST_TMPDIR/claude_git_editor")" = "true" ]
+}
+
 @test "git identity: a failing git config emits FOUNDRY_BOOTSTRAP_FAILED stage=git-identity and claude never runs" {
     set_required_env
     make_fake_git_global_config_fail

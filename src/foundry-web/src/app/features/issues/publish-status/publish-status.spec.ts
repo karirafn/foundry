@@ -203,7 +203,7 @@ describe('PublishStatusComponent', () => {
       expect(chip?.textContent?.trim()).toBe('Branch diverged');
       expect(chip?.classList.contains('badge--branch-diverged')).toBe(true);
       expect(text()).toContain(
-        "Someone pushed to the issue branch while the worker ran, and merging the run's work conflicted. "
+        "Someone pushed to the issue branch while the worker ran, and the run's work could not join it. "
         + "Foundry pushed the run's work to a separate branch instead.",
       );
       expect(region.classList.contains('publish-status--warning')).toBe(true);
@@ -246,6 +246,34 @@ describe('PublishStatusComponent', () => {
       expect(gitlab.text()).toContain(
         "Merge the run's branch into the issue branch on GitLab. Foundry continues automatically once the merge lands, or use Retry Issue.",
       );
+    });
+
+    describe('on a branch protected from force pushes (ADR 0101)', () => {
+      const protectedDetails: IssueStateDetails = { ...divergedDetails, divergenceReason: 'force-push-protected' };
+
+      it('should say the provider refused the rebased branch because it is protected from force pushes', () => {
+        // Arrange / Act
+        const { text } = render('branch_diverged', run('completed'), protectedDetails);
+
+        // Assert
+        expect(text()).toContain(
+          'The worker rebased the issue branch onto the default branch, but GitHub protects the issue branch from '
+          + "force pushes. Foundry pushed the run's work to a separate branch instead.",
+        );
+        expect(text()).not.toContain('Someone pushed to the issue branch');
+      });
+
+      it('should guide replacing the issue branch rather than merging the rebased work into it', () => {
+        // Arrange / Act
+        const { text } = render('branch_diverged', run('completed'), protectedDetails, 'gitlab');
+
+        // Assert
+        expect(text()).toContain(
+          "Replace the issue branch with the run's branch on GitLab, allowing a force push for it. Foundry "
+          + "continues automatically once the issue branch holds the run's work, or use Retry Issue.",
+        );
+        expect(text()).not.toContain("Merge the run's branch into the issue branch");
+      });
     });
   });
 

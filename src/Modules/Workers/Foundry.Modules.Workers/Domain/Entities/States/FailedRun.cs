@@ -93,7 +93,7 @@ public sealed class FailedRun : WorkerRun
         failed.RecordPublishFacts(
             unpublished.PublishedHead,
             unpublished.PublishedBranchCommitCount,
-            unpublished.DivergedSideBranch,
+            unpublished.Divergence,
             unpublished.RevertedFiles);
         return failed;
     }

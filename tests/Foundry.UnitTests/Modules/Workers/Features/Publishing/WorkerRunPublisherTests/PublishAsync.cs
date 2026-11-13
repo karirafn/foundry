@@ -168,6 +168,7 @@ public sealed class PublishAsync : WorkerDispatchServiceTestBase
             BranchName.From(Branch),
             BranchName.From($"{Branch}-run-1"),
             Head,
+            BranchDivergenceReason.BranchMoved,
             []));
 
         // Act
@@ -177,6 +178,33 @@ public sealed class PublishAsync : WorkerDispatchServiceTestBase
         _commands.Opened.ShouldBeEmpty();
         _events.Captured.OfType<WorkerRunCompletedEvent>().ShouldHaveSingleItem()
             .Publish.ShouldNotBeNull().DivergedSideBranch.ShouldBe($"{Branch}-run-1");
+    }
+
+    // ADR 0101: a refused force push is a divergence, never a failed publish: a retry would hit the same refusal.
+    [Fact]
+    public async Task ARefusedForcePush_CompletesWithTheSideBranchAndItsReason()
+    {
+        // Arrange
+        SeedPublishingRun(new RunExit(0, OomKilled: false, RunStopReason.Exited, DateTimeOffset.UtcNow));
+        FakePublisher publisher = new FakePublisher().WithPublishResults(new PublishResult.Diverged(
+            BranchName.From(Branch),
+            BranchName.From($"{Branch}-run-1"),
+            Head,
+            BranchDivergenceReason.ForcePushProtected,
+            []));
+
+        // Act
+        await RunPublisherAsync(publisher, new StubPostExitProviderQueries());
+
+        // Assert
+        await using FoundryDbContext db = CreateDbContext();
+        WorkerRun run = await db.Set<WorkerRun>().SingleAsync(TestContext.Current.CancellationToken);
+        RunPublishFacts facts = _events.Captured.OfType<WorkerRunCompletedEvent>().ShouldHaveSingleItem().Publish.ShouldNotBeNull();
+        facts.ShouldSatisfyAllConditions(
+            () => facts.DivergedSideBranch.ShouldBe($"{Branch}-run-1"),
+            () => facts.DivergenceReason.ShouldBe(BranchDivergenceReason.ForcePushProtected),
+            () => run.Divergence.ShouldBe(
+                new BranchDivergence(BranchName.From($"{Branch}-run-1"), BranchDivergenceReason.ForcePushProtected)));
     }
 
     [Fact]

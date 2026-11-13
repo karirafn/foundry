@@ -60,6 +60,7 @@ The entrypoint writes it to `/home/node/.claude/settings.json` before Claude Cod
 - `Bash(git push --delete:*)`
 - `Bash(git push * HEAD:*)`
 - `Bash(git push * :*)`
+- `Bash(git merge:*)` and `Bash(git pull:*)` — a worker catches its branch up with the default branch only by `git rebase origin/HEAD` (ADR 0101)
 
 The additional deny rules are managed on the Claude Code settings page in the dashboard and stored in Global Settings. The model is set per Worker Role in Settings → Worker roles, chosen from Default (the account default), the Claude Code aliases and the models the Anthropic Models API lists for the workers' credential.
 

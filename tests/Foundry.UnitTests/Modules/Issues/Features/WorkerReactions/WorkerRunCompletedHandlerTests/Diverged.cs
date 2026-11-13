@@ -83,6 +83,7 @@ public sealed class Diverged : IAsyncDisposable
             () => diverged.WorkerRunId.ShouldBe(inProgress.WorkerRunId),
             () => diverged.BranchName.ShouldBe("feat/1-test"),
             () => diverged.SideBranchName.ShouldBe("feat/1-test-run-abc"),
+            () => diverged.DivergenceReason.ShouldBe(BranchDivergenceReason.BranchMoved),
             () => diverged.FromRevision.ShouldBeFalse());
     }
 
@@ -132,6 +133,57 @@ public sealed class Diverged : IAsyncDisposable
             () => diverged.BranchName.ShouldBe("feat/2-fix"),
             () => diverged.SideBranchName.ShouldBe("feat/2-fix-run-abc"),
             () => diverged.FromRevision.ShouldBeTrue());
+    }
+
+    // ADR 0101: the provider refused the lease push of a rebased tip, so the run's work went to a side branch.
+    [Fact]
+    public async Task WhenImplementRunDivergedOnAForcePushProtectedBranch_KeepsTheReason()
+    {
+        // Arrange
+        InProgressIssue inProgress = Seed(new IssueBuilder().InProgress());
+        WorkerRunCompleted @event = new(
+            WorkerRunId: inProgress.WorkerRunId,
+            IssueId: inProgress.Id.Value,
+            BranchName: "feat/1-test",
+            PullRequestUrl: null,
+            MergeState: WorkerRunMergeState.None,
+            Publish: new RunPublishFacts(null, null, "feat/1-test-run-abc", 0, BranchDivergenceReason.ForcePushProtected));
+
+        // Act
+        await _sut.HandleAsync(@event, TestContext.Current.CancellationToken);
+
+        // Assert
+        (await ReloadAsync(inProgress)).ShouldBeOfType<BranchDivergedIssue>()
+            .DivergenceReason.ShouldBe(BranchDivergenceReason.ForcePushProtected);
+    }
+
+    [Fact]
+    public async Task WhenRevisionRunDivergedOnAForcePushProtectedBranch_KeepsTheReason()
+    {
+        // Arrange
+        RevisionInProgressIssue revision = Seed(new IssueBuilder()
+            .WithBranchName("feat/2-fix")
+            .WithPullRequestUrl("https://github.com/owner/repo/pull/2")
+            .RevisionInProgress());
+        WorkerRunCompleted @event = new(
+            WorkerRunId: revision.WorkerRunId,
+            IssueId: revision.Id.Value,
+            BranchName: "feat/2-fix",
+            PullRequestUrl: "https://github.com/owner/repo/pull/2",
+            MergeState: WorkerRunMergeState.Open,
+            Publish: new RunPublishFacts(
+                null,
+                "https://github.com/owner/repo/pull/2",
+                "feat/2-fix-run-abc",
+                3,
+                BranchDivergenceReason.ForcePushProtected));
+
+        // Act
+        await _sut.HandleAsync(@event, TestContext.Current.CancellationToken);
+
+        // Assert
+        (await ReloadAsync(revision)).ShouldBeOfType<BranchDivergedIssue>()
+            .DivergenceReason.ShouldBe(BranchDivergenceReason.ForcePushProtected);
     }
 
     [Fact]

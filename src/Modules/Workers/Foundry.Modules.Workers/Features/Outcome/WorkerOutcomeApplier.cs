@@ -296,8 +296,9 @@ internal sealed class WorkerOutcomeApplier(
             ? new RunPublishFacts(
                 unpublished.PublishedHead?.Value,
                 pullRequestUrl,
-                unpublished.DivergedSideBranch?.Value,
-                unpublished.PublishedBranchCommitCount ?? 0)
+                unpublished.Divergence?.SideBranch.Value,
+                unpublished.PublishedBranchCommitCount ?? 0,
+                unpublished.Divergence?.Reason)
             : null;
 
     private static TriageResult ToTriageResult(TriageVerdict verdict) => verdict switch
