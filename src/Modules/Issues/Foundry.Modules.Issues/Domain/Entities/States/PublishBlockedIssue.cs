@@ -78,6 +78,18 @@ public sealed class PublishBlockedIssue : Issue
     }
 
     /// <summary>
+    /// The provider issue closed, so the run's unpublished work will never be published: the issue completes and the
+    /// run is discarded.
+    /// </summary>
+    public CompletedIssue Complete(DateTimeOffset completedAt)
+    {
+        CompletedIssue completed = CompletedIssue.FromPublishBlocked(this, completedAt);
+        AddDomainEvent(new Events.IssueCompleted(Id, MonitoredRepositoryId));
+        AddDomainEvent(new Events.IssueClosedWithUnpublishedRun(Id, MonitoredRepositoryId, WorkerRunId));
+        return completed;
+    }
+
+    /// <summary>
     /// The run ended without publishing: an operator discarded it, or its time to live did. Retry Issue then starts a
     /// new run from whatever the branch holds.
     /// </summary>

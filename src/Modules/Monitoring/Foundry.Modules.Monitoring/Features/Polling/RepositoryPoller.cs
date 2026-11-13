@@ -157,9 +157,10 @@ internal sealed class RepositoryPoller(
     }
 
     /// <summary>
-    /// The listing pass on its own (nudged by <c>issues</c> deliveries): detection, detail change and the
-    /// complete-listing untrack guard. Unlike a scheduled poll it does not stamp <c>LastPolledAt</c>, so
-    /// the scheduled cadence is unaffected. Returns whether a webhook-mapped change was found.
+    /// The listing pass on its own (nudged by <c>issues</c> deliveries): detection, detail change, and the
+    /// complete-listing untrack guard and close check for issues whose run holds unpublished work. Unlike a
+    /// scheduled poll it does not stamp <c>LastPolledAt</c>, so the scheduled cadence is unaffected. Returns
+    /// whether a webhook-mapped change was found.
     /// </summary>
     public Task<Result<bool>> RunListingPassAsync(
         MonitoredRepository repository,
@@ -293,6 +294,7 @@ internal sealed class RepositoryPoller(
         bool detected = DetectNewIssues(repository, fetchedIssues, knownNumbers, now);
         bool detailsChanged = await DetectDetailChangesAsync(repository, fetchedIssues, knownNumbers, cancellationToken);
         bool untracked = false;
+        bool closed = false;
 
         // Only run the untrack pass when the listing is provably complete. An incomplete listing
         // (IsComplete: false, pagination cap reached) cannot distinguish a missing issue from one
@@ -308,6 +310,19 @@ internal sealed class RepositoryPoller(
                 cancellationToken);
 
             untracked = DetectUntrackedIssues(repository, untrackableNumbers, fetchedNumbers);
+
+            // Absence alone cannot tell a closed issue from a removed trigger label, so a missing issue whose run
+            // holds unpublished work asks the provider; it completes only when the issue is closed.
+            IReadOnlySet<int> unpublishedRunNumbers = await issueQueries.GetUnpublishedRunIssueNumbersAsync(
+                repository.Id,
+                cancellationToken);
+
+            closed = await DetectClosedUnpublishedRunIssuesAsync(
+                repository,
+                provider,
+                unpublishedRunNumbers,
+                fetchedNumbers,
+                cancellationToken);
         }
         else
         {
@@ -335,7 +350,39 @@ internal sealed class RepositoryPoller(
         await domainEventDispatcher.DispatchAsync(repository.DomainEvents, cancellationToken);
         repository.ClearDomainEvents();
 
-        return Result<bool>.Ok(detected || detailsChanged || untracked);
+        return Result<bool>.Ok(detected || detailsChanged || untracked || closed);
+    }
+
+    private static async Task<bool> DetectClosedUnpublishedRunIssuesAsync(
+        MonitoredRepository repository,
+        IIssueProvider provider,
+        IReadOnlySet<int> unpublishedRunNumbers,
+        HashSet<int> fetchedNumbers,
+        CancellationToken cancellationToken)
+    {
+        bool closed = false;
+
+        foreach (int issueNumber in unpublishedRunNumbers)
+        {
+            if (fetchedNumbers.Contains(issueNumber))
+            {
+                continue;
+            }
+
+            Result<bool> isClosedResult = await provider.IsIssueClosedAsync(
+                repository.Slug,
+                issueNumber,
+                cancellationToken);
+
+            // A failed check records nothing; the next complete listing pass asks again.
+            if (isClosedResult is Result<bool>.Success { Value: true })
+            {
+                repository.RecordIntegrationEvent(new ProviderIssueClosed(repository.Id, issueNumber));
+                closed = true;
+            }
+        }
+
+        return closed;
     }
 
     private static async Task DetectDependenciesAsync(

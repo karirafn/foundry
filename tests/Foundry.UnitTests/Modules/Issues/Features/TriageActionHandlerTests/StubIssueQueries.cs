@@ -70,6 +70,9 @@ internal sealed class StubIssueQueries : IIssueQueries
         CancellationToken cancellationToken)
         => Task.FromResult<IReadOnlyList<DependencyEdge>>([]);
 
+    public Task<IReadOnlySet<int>> GetUnpublishedRunIssueNumbersAsync(MonitoredRepositoryId repositoryId, CancellationToken cancellationToken) =>
+        Task.FromResult<IReadOnlySet<int>>(new HashSet<int>());
+
     public Task<IReadOnlySet<int>> GetUntrackableIssueNumbersAsync(
         MonitoredRepositoryId repositoryId,
         CancellationToken cancellationToken)

@@ -823,7 +823,7 @@ Terminal lifecycle state — the issue is resolved via a merged PR.
 Carries `BranchName`, `PullRequestUrl`, and `CompletedAt` — all non-nullable.
 Created two ways:
 
-- **Provider issue closed** (`ProviderIssueClosed`) — from `ReviewIssue`, `ChecksPendingIssue`, `RebasePendingIssue`, or `AwaitingInputIssue` via each state's `Complete()`.
+- **Provider issue closed** (`ProviderIssueClosed`) — from `ReviewIssue`, `ChecksPendingIssue`, `RebasePendingIssue`, `AwaitingInputIssue`, `PublishBlockedIssue`, or `PublishFailedIssue` via each state's `Complete()`. A publish-blocked or publish-failed issue keeps its branch and its pull request (empty for an implement run, the revised pull request for a revision), and its completion also raises `IssueClosedWithUnpublishedRun` carrying its `WorkerRunId`, so Workers discards the run.
 - **Pull request already merged when the run ends** — from `InProgressIssue.MarkCompleted()`, when the worker outcome resolver reads the run's merge request as merged ([ADR 0060](docs/adr/0060-mr-state-first-outcome-resolution.md)).
 
 Preserved when the issue is subsequently untracked (completion wins over provider closure).
@@ -995,8 +995,8 @@ Suppression clears automatically on the first later cycle whose listing is compl
 The `ProviderIssueUntrackedHandler` hard-deletes tracked records in resting states (`Issue.IsRestingState()`): `detected`, `triage_queued`, `queued`, `revision_queued`, `continuation_queued`, `blocked`, `triage_blocked`, `failed`, `triage_failed`, `continuable_failed`, `revision_failed`, `branch_diverged`, and `unchanged`.
 `completed` is preserved — completion wins over provider closure.
 `triage_in_progress`, `in_progress`, and `revision_in_progress` are preserved — a live worker is running. Untracking never stops a worker; stopping one is an explicit user action (see Run Cancellation).
-`review`, `checks_pending`, `rebase_pending`, and `awaiting_input` are preserved — each asks the provider whether the issue is closed (`ProviderIssueClosed`) and completes when it is.
-`publish_failed` and `publish_blocked` are preserved — their run's unpublished work waits in its Hand-off volume, and the issue leaves only when the run is discarded or the volume's time to live expires.
+`review`, `checks_pending`, `rebase_pending`, `awaiting_input`, `publish_failed`, and `publish_blocked` are preserved — each asks the provider whether the issue is closed (`ProviderIssueClosed`) and completes when it is.
+For `publish_failed` and `publish_blocked` that close check runs in the listing pass, and only for an issue missing from a complete listing: absence alone cannot tell a closed issue from a removed trigger label, and an issue still in the listing is not asked about. Their completion raises `IssueClosedWithUnpublishedRun`, and Workers discards the run and deletes its Hand-off volume. Until then their run's unpublished work waits in that volume, and an issue still open leaves only when the run is discarded or the volume's time to live expires.
 An issue closed on the provider and later reopened with the trigger label is re-detected as a new issue.
 
 ## Provider Issue

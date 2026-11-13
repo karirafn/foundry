@@ -1,4 +1,5 @@
 using Foundry.Modules.Issues.Contracts;
+using Foundry.Modules.Workers.Contracts;
 using Foundry.Modules.Issues.Domain.Entities;
 using Foundry.Modules.Issues.Domain.Entities.States;
 using Foundry.Modules.Issues.Domain.Events;
@@ -200,6 +201,77 @@ public sealed class HandleAsync : IAsyncDisposable
                 i => i.MonitoredRepositoryId == repositoryId,
                 TestContext.Current.CancellationToken);
         issue.ShouldBeOfType<FreshQueuedIssue>();
+    }
+
+    public static TheoryData<string> UnpublishedRunStates => ["publish_blocked", "publish_blocked_revision", "publish_failed", "publish_failed_revision"];
+
+    private Issue SeedUnpublishedRunIssue(string state, MonitoredRepositoryId repositoryId, int issueNumber)
+    {
+        IssueBuilder builder = new IssueBuilder()
+            .WithMonitoredRepositoryId(repositoryId)
+            .WithIssueNumber(issueNumber)
+            .WithBranchName("feat/8-test")
+            .WithPullRequestUrl("https://github.com/owner/repo/pull/3");
+        Issue issue = state switch
+        {
+            "publish_blocked" => builder.PublishBlocked(),
+            "publish_blocked_revision" => builder.PublishBlockedFromRevision(),
+            "publish_failed" => builder.PublishFailed(),
+            "publish_failed_revision" => builder.PublishFailedFromRevision(),
+            _ => throw new ArgumentOutOfRangeException(nameof(state), state, null),
+        };
+        _dbContext.Set<Issue>().Add(issue);
+        _dbContext.SaveChanges();
+        _dbContext.ChangeTracker.Clear();
+        return issue;
+    }
+
+    [Theory]
+    [MemberData(nameof(UnpublishedRunStates))]
+    public async Task WhenIssueHoldsAnUnpublishedRun_CompletesKeepingItsBranchAndPullRequest(string state)
+    {
+        // Arrange
+        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
+        SeedUnpublishedRunIssue(state, repositoryId, issueNumber: 8);
+        string expectedPullRequestUrl = state.EndsWith("_revision", StringComparison.Ordinal)
+            ? "https://github.com/owner/repo/pull/3"
+            : string.Empty;
+
+        // Act
+        await _sut.HandleAsync(new ProviderIssueClosed(repositoryId, 8), CancellationToken.None);
+
+        // Assert
+        _dbContext.ChangeTracker.Clear();
+        Issue? issue = await _dbContext.Set<Issue>()
+            .FirstOrDefaultAsync(i => i.MonitoredRepositoryId == repositoryId, TestContext.Current.CancellationToken);
+        CompletedIssue completed = issue.ShouldBeOfType<CompletedIssue>();
+        completed.ShouldSatisfyAllConditions(
+            () => completed.BranchName.ShouldBe("feat/8-test"),
+            () => completed.PullRequestUrl.ShouldBe(expectedPullRequestUrl));
+    }
+
+    [Theory]
+    [MemberData(nameof(UnpublishedRunStates))]
+    public async Task WhenIssueHoldsAnUnpublishedRun_DispatchesIssueClosedWithUnpublishedRunForItsRun(string state)
+    {
+        // Arrange
+        MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
+        Issue seeded = SeedUnpublishedRunIssue(state, repositoryId, issueNumber: 9);
+        WorkerRunId runId = seeded switch
+        {
+            PublishBlockedIssue blocked => blocked.WorkerRunId,
+            PublishFailedIssue failed => failed.WorkerRunId,
+            _ => throw new InvalidOperationException(seeded.GetType().Name),
+        };
+
+        // Act
+        await _sut.HandleAsync(new ProviderIssueClosed(repositoryId, 9), CancellationToken.None);
+
+        // Assert
+        _dispatcher.ShouldSatisfyAllConditions(
+            () => _dispatcher.DispatchedEvents.OfType<IssueCompleted>().ShouldHaveSingleItem(),
+            () => _dispatcher.DispatchedEvents.OfType<IssueClosedWithUnpublishedRun>().ShouldHaveSingleItem()
+                .WorkerRunId.ShouldBe(runId));
     }
 
     [Fact]

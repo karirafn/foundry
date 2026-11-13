@@ -107,6 +107,18 @@ public sealed class PublishFailedIssue : Issue
     }
 
     /// <summary>
+    /// The provider issue closed, so the run's unpublished work will never be published: the issue completes and the
+    /// run is discarded.
+    /// </summary>
+    public CompletedIssue Complete(DateTimeOffset completedAt)
+    {
+        CompletedIssue completed = CompletedIssue.FromPublishFailed(this, completedAt);
+        AddDomainEvent(new Events.IssueCompleted(Id, MonitoredRepositoryId));
+        AddDomainEvent(new Events.IssueClosedWithUnpublishedRun(Id, MonitoredRepositoryId, WorkerRunId));
+        return completed;
+    }
+
+    /// <summary>
     /// The run ended without publishing (its unpublished work was discarded). Retry Issue then resumes from whatever
     /// the branch holds.
     /// </summary>

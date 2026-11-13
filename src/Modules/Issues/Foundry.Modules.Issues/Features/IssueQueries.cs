@@ -113,6 +113,20 @@ internal sealed class IssueQueries(
         return numbers.ToHashSet();
     }
 
+    public async Task<IReadOnlySet<int>> GetUnpublishedRunIssueNumbersAsync(
+        MonitoredRepositoryId repositoryId,
+        CancellationToken cancellationToken)
+    {
+        List<int> numbers = await db.Set<Issue>()
+            .AsNoTracking()
+            .Where(i => i.MonitoredRepositoryId == repositoryId)
+            .Where(i => i is PublishBlockedIssue || i is PublishFailedIssue)
+            .Select(i => i.IssueNumber)
+            .ToListAsync(cancellationToken);
+
+        return numbers.ToHashSet();
+    }
+
     public async Task<IReadOnlyList<ReviewIssueInfo>> GetReviewIssuesAsync(
         MonitoredRepositoryId repositoryId,
         CancellationToken cancellationToken)

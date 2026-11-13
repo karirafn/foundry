@@ -579,6 +579,9 @@ public sealed class ExecuteTickAsync : IAsyncDisposable
             return Task.FromResult(Result<IssueDetail>.Fail(IssueErrors.NotFound(issueId)));
         }
 
+        public Task<IReadOnlySet<int>> GetUnpublishedRunIssueNumbersAsync(MonitoredRepositoryId repositoryId, CancellationToken cancellationToken) =>
+            Task.FromResult<IReadOnlySet<int>>(new HashSet<int>());
+
         public Task<IReadOnlySet<int>> GetUntrackableIssueNumbersAsync(
             MonitoredRepositoryId repositoryId,
             CancellationToken cancellationToken)

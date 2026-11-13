@@ -279,6 +279,9 @@ public sealed class PollCallInvariance : IAsyncDisposable
             CancellationToken cancellationToken)
             => Task.FromResult<IReadOnlyList<ChecksPendingIssueInfo>>([]);
 
+        public Task<IReadOnlySet<int>> GetUnpublishedRunIssueNumbersAsync(MonitoredRepositoryId repositoryId, CancellationToken cancellationToken) =>
+            Task.FromResult<IReadOnlySet<int>>(new HashSet<int>());
+
         public Task<IReadOnlySet<int>> GetUntrackableIssueNumbersAsync(
             MonitoredRepositoryId repositoryId,
             CancellationToken cancellationToken)

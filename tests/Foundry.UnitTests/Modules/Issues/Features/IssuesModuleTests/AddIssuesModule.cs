@@ -237,6 +237,18 @@ public sealed class AddIssuesModule : IAsyncDisposable
     }
 
     [Fact]
+    public void WhenServicesRegistered_IssueClosedWithUnpublishedRunHandlerResolvable()
+    {
+        // Arrange & Act
+        using IServiceScope scope = _serviceProvider.CreateScope();
+
+        // Assert
+        IEnumerable<IDomainEventHandler<IssueClosedWithUnpublishedRun>> handlers =
+            scope.ServiceProvider.GetServices<IDomainEventHandler<IssueClosedWithUnpublishedRun>>();
+        handlers.ShouldContain(handler => handler is IssueClosedWithUnpublishedRunBridge);
+    }
+
+    [Fact]
     public void WhenServicesRegistered_IssueCompletedHandlerResolvable()
     {
         // Arrange & Act

@@ -102,6 +102,9 @@ internal sealed class StubIssueQueries(int issueNumber = 42, string title = "Add
     public Task<IReadOnlyList<AwaitingInputIssueInfo>> GetAwaitingInputIssuesAsync(MonitoredRepositoryId repositoryId, CancellationToken cancellationToken) =>
         throw new NotSupportedException();
 
+    public Task<IReadOnlySet<int>> GetUnpublishedRunIssueNumbersAsync(MonitoredRepositoryId repositoryId, CancellationToken cancellationToken) =>
+        Task.FromResult<IReadOnlySet<int>>(new HashSet<int>());
+
     public Task<IReadOnlySet<int>> GetUntrackableIssueNumbersAsync(MonitoredRepositoryId repositoryId, CancellationToken cancellationToken) =>
         throw new NotSupportedException();
 

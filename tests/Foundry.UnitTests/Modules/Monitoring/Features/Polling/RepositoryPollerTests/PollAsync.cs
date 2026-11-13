@@ -1500,6 +1500,118 @@ public sealed class PollAsync : IAsyncDisposable
         repository.UntrackSuppressedSince.ShouldBeNull();
     }
 
+    private RepositoryPoller PollerWithUnpublishedRuns(params int[] unpublishedRunNumbers)
+    {
+        StubIssueQueries issueQueries = new(
+            knownNumbers: unpublishedRunNumbers.ToHashSet(),
+            snapshots: new Dictionary<int, IssueSnapshot>(),
+            dispatchCandidateNumbers: null,
+            reviewIssues: null,
+            untrackableNumbers: null,
+            unpublishedRunNumbers: unpublishedRunNumbers.ToHashSet());
+        return new RepositoryPoller(issueQueries, _dbContext, new NullDomainEventDispatcher(), _dispatcher, _eligibilityEvaluator, _nudgeQueue, new PostedCommentRegistry(_dbContext), NullLogger<RepositoryPoller>.Instance);
+    }
+
+    [Fact]
+    public async Task WhenUnpublishedRunIssueIsMissingFromCompleteListingAndClosed_RaisesProviderIssueClosed()
+    {
+        // Arrange
+        MonitoredRepository repository = SeedRepository();
+        RepositoryPoller sut = PollerWithUnpublishedRuns(7);
+        StubIssueProvider provider = new([], isClosedResults: new Dictionary<int, Result<bool>> { [7] = Result<bool>.Ok(true) });
+
+        // Act
+        Result<bool> result = await sut.RunListingPassAsync(repository, provider, Now, CancellationToken.None);
+
+        // Assert
+        result.ShouldBeOfType<Result<bool>.Success>().Value.ShouldBeTrue();
+        ProviderIssueClosed closed = _dispatcher.DispatchedEvents.OfType<ProviderIssueClosed>().ShouldHaveSingleItem();
+        closed.ShouldSatisfyAllConditions(
+            () => closed.RepositoryId.ShouldBe(repository.Id),
+            () => closed.IssueNumber.ShouldBe(7));
+    }
+
+    [Fact]
+    public async Task WhenUnpublishedRunIssueIsMissingFromCompleteListingButStillOpen_RaisesNoEvent()
+    {
+        // Arrange
+        MonitoredRepository repository = SeedRepository();
+        RepositoryPoller sut = PollerWithUnpublishedRuns(7);
+        StubIssueProvider provider = new([], isClosedResults: new Dictionary<int, Result<bool>> { [7] = Result<bool>.Ok(false) });
+
+        // Act
+        Result<bool> result = await sut.RunListingPassAsync(repository, provider, Now, CancellationToken.None);
+
+        // Assert
+        result.ShouldBeOfType<Result<bool>.Success>().Value.ShouldBeFalse();
+        provider.IsIssueClosedCalls.ShouldBe([7]);
+        _dispatcher.DispatchedEvents.OfType<ProviderIssueClosed>().ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task WhenCloseCheckForUnpublishedRunIssueFails_RaisesNoEventAndAsksAgainOnTheNextPass()
+    {
+        // Arrange
+        MonitoredRepository repository = SeedRepository();
+        RepositoryPoller sut = PollerWithUnpublishedRuns(7);
+        StubIssueProvider provider = new(
+            [],
+            isClosedResults: new Dictionary<int, Result<bool>>
+            {
+                [7] = Result<bool>.Fail(new Error("Provider.Unavailable", "down")),
+            });
+
+        // Act
+        await sut.RunListingPassAsync(repository, provider, Now, CancellationToken.None);
+        await sut.RunListingPassAsync(repository, provider, Now, CancellationToken.None);
+
+        // Assert
+        provider.IsIssueClosedCalls.ShouldBe([7, 7]);
+        _dispatcher.DispatchedEvents.OfType<ProviderIssueClosed>().ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task WhenListingIsIncomplete_MakesNoCloseCheckForUnpublishedRunIssues()
+    {
+        // Arrange
+        MonitoredRepository repository = SeedRepository();
+        RepositoryPoller sut = PollerWithUnpublishedRuns(7);
+        StubIssueProvider provider = new(
+            [],
+            isClosedResults: new Dictionary<int, Result<bool>> { [7] = Result<bool>.Ok(true) },
+            isComplete: false);
+
+        // Act
+        await sut.RunListingPassAsync(repository, provider, Now, CancellationToken.None);
+
+        // Assert
+        provider.IsIssueClosedCalls.ShouldBeEmpty();
+        _dispatcher.DispatchedEvents.OfType<ProviderIssueClosed>().ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task WhenUnpublishedRunIssueIsPresentInListing_MakesNoCloseCheckForIt()
+    {
+        // Arrange
+        MonitoredRepository repository = SeedRepository();
+        RepositoryPoller sut = PollerWithUnpublishedRuns(7);
+        ProviderIssue present = new(
+            Number: 7,
+            Title: "Blocked",
+            Author: "octocat",
+            Url: "https://github.com/owner/repo/issues/7",
+            Labels: ["foundry"],
+            IssueKindLabel: "feature");
+        StubIssueProvider provider = new([present]);
+
+        // Act
+        await sut.RunListingPassAsync(repository, provider, Now, CancellationToken.None);
+
+        // Assert
+        provider.IsIssueClosedCalls.ShouldBeEmpty();
+        _dispatcher.DispatchedEvents.OfType<ProviderIssueClosed>().ShouldBeEmpty();
+    }
+
     [Fact]
     public async Task WhenReviewFeedbackHoldsCommentsBackByQuietPeriod_SchedulesReviewNudgeAtHeldBackUntil()
     {
@@ -1601,6 +1713,8 @@ public sealed class PollAsync : IAsyncDisposable
 
         public PostedCommentIds? LastPostedComments { get; private set; }
 
+        public List<int> IsIssueClosedCalls { get; } = [];
+
         public Task<Result<IssueListing>> GetIssuesAsync(
             RepositorySlug slug,
             CancellationToken cancellationToken)
@@ -1626,6 +1740,8 @@ public sealed class PollAsync : IAsyncDisposable
             int issueNumber,
             CancellationToken cancellationToken)
         {
+            IsIssueClosedCalls.Add(issueNumber);
+
             if (isClosedResults is not null && isClosedResults.TryGetValue(issueNumber, out Result<bool>? result))
             {
                 return Task.FromResult(result);
@@ -1828,6 +1944,7 @@ public sealed class PollAsync : IAsyncDisposable
         private readonly IReadOnlyDictionary<int, IssueSnapshot> _snapshots;
         private readonly IReadOnlyList<ReviewIssueInfo> _reviewIssues;
         private readonly IReadOnlySet<int> _untrackableNumbers;
+        private readonly IReadOnlySet<int> _unpublishedRunNumbers;
         private readonly IReadOnlySet<int> _dispatchCandidateNumbers;
 
         public StubIssueQueries()
@@ -1845,13 +1962,15 @@ public sealed class PollAsync : IAsyncDisposable
             IReadOnlyDictionary<int, IssueSnapshot> snapshots,
             IReadOnlySet<int>? dispatchCandidateNumbers,
             IReadOnlyList<ReviewIssueInfo>? reviewIssues = null,
-            IReadOnlySet<int>? untrackableNumbers = null)
+            IReadOnlySet<int>? untrackableNumbers = null,
+            IReadOnlySet<int>? unpublishedRunNumbers = null)
         {
             _knownNumbers = knownNumbers;
             _snapshots = snapshots;
             _dispatchCandidateNumbers = dispatchCandidateNumbers ?? new HashSet<int>();
             _reviewIssues = reviewIssues ?? [];
             _untrackableNumbers = untrackableNumbers ?? new HashSet<int>();
+            _unpublishedRunNumbers = unpublishedRunNumbers ?? new HashSet<int>();
         }
 
         public Task<IReadOnlySet<int>> GetKnownIssueNumbersAsync(
@@ -1899,6 +2018,11 @@ public sealed class PollAsync : IAsyncDisposable
         {
             return Task.FromResult(_untrackableNumbers);
         }
+
+        public Task<IReadOnlySet<int>> GetUnpublishedRunIssueNumbersAsync(
+            MonitoredRepositoryId repositoryId,
+            CancellationToken cancellationToken)
+            => Task.FromResult(_unpublishedRunNumbers);
 
         public Task<IReadOnlySet<int>> GetDispatchCandidateIssueNumbersAsync(
             MonitoredRepositoryId repositoryId,
