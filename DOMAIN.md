@@ -821,7 +821,11 @@ Transitions: `MarkInReview()` → `ReviewIssue` (worker pushed changes); `MarkUn
 
 Terminal lifecycle state — the issue is resolved via a merged PR.
 Carries `BranchName`, `PullRequestUrl`, and `CompletedAt` — all non-nullable.
-Created from `ReviewIssue.Complete()` when the provider-side issue is closed.
+Created two ways:
+
+- **Provider issue closed** (`ProviderIssueClosed`) — from `ReviewIssue`, `ChecksPendingIssue`, `RebasePendingIssue`, or `AwaitingInputIssue` via each state's `Complete()`.
+- **Pull request already merged when the run ends** — from `InProgressIssue.MarkCompleted()`, when the worker outcome resolver reads the run's merge request as merged ([ADR 0060](docs/adr/0060-mr-state-first-outcome-resolution.md)).
+
 Preserved when the issue is subsequently untracked (completion wins over provider closure).
 
 ## Failed Issue
