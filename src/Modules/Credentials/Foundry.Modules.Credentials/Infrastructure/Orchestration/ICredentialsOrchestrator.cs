@@ -31,9 +31,13 @@ internal interface ICredentialsOrchestrator
     /// Used by the startup reaper — safe to call before any session is active.</summary>
     Task<IReadOnlyList<string>> ListTransientContainersAsync(CancellationToken cancellationToken);
 
-    /// <summary>Returns IDs of transient containers that are NOT running (exited, dead, created).
-    /// Used by the periodic reaper to avoid killing the active login session.</summary>
-    Task<IReadOnlyList<string>> ListExitedTransientContainersAsync(CancellationToken cancellationToken);
+    /// <summary>Returns IDs of transient containers that are NOT running (exited, dead, created)
+    /// and were created before <paramref name="createdBefore"/>.
+    /// Used by the periodic reaper to avoid killing the active login session, or a younger
+    /// container whose owner may still be starting or reading it.</summary>
+    Task<IReadOnlyList<string>> ListExitedTransientContainersAsync(
+        DateTimeOffset createdBefore,
+        CancellationToken cancellationToken);
 
     /// <summary>
     /// Runs a short-lived transient container to probe whether the configured credentials

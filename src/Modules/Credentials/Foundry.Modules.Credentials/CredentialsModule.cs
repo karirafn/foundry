@@ -52,6 +52,7 @@ public static class CredentialsModule
         services.AddSingleton<ILoginSuccessCommitter, LoginSuccessCommitter>();
         services.AddSingleton<LoginSessionService>();
         services.AddSingleton<ILoginSessionState>(sp => sp.GetRequiredService<LoginSessionService>());
+        services.TryAddSingleton(TimeProvider.System);
         services.AddHostedService<TransientContainerReaper>();
 
         services.AddSingleton<CreditProbeCoordinator>();

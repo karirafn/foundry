@@ -868,7 +868,7 @@ public sealed class TryRunProbeAsync : IAsyncDisposable
         public Task<IReadOnlyList<string>> ListTransientContainersAsync(CancellationToken cancellationToken)
             => Task.FromResult<IReadOnlyList<string>>([]);
 
-        public Task<IReadOnlyList<string>> ListExitedTransientContainersAsync(CancellationToken cancellationToken)
+        public Task<IReadOnlyList<string>> ListExitedTransientContainersAsync(DateTimeOffset createdBefore, CancellationToken cancellationToken)
             => Task.FromResult<IReadOnlyList<string>>([]);
 
         public Task<Result<string>> RunUsageReportAsync(
