@@ -34,10 +34,10 @@
   border-radius: var(--fd-radius-md);
   display: flex;
   flex-direction: column;
-  gap: var(--fd-spacing-xs);
+  gap: var(--fd-spacing-sm);
   height: 100%;
   min-width: 0;
-  padding: var(--fd-spacing-md);
+  padding: var(--fd-spacing-lg);
   position: relative;
   transition: background 150ms ease;
 
@@ -73,18 +73,8 @@
   white-space: nowrap;
 }
 
-.needs-card__repo {
-  color: var(--fd-text-secondary);
-  font-family: var(--fd-font-mono);
+.needs-card__ref {
   font-size: 0.75rem;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-
-  strong {
-    color: var(--fd-text-primary);
-  }
 }
 
 .needs-card__title {

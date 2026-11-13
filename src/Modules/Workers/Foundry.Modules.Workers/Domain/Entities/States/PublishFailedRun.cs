@@ -82,4 +82,7 @@ public sealed class PublishFailedRun : UnpublishedRun, IDiscardableRun
 
         return DiscardWith(new FailureReason.RunDiscarded());
     }
+
+    /// <remarks>Even while retries remain: once the issue is closed, a later attempt would publish work nobody wants.</remarks>
+    public FailedRun DiscardOnIssueClosed() => DiscardWith(new FailureReason.IssueClosed());
 }

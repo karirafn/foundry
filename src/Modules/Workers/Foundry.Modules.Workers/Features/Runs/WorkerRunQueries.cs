@@ -131,6 +131,7 @@ internal sealed class WorkerRunQueries(DbContext db) : IWorkerRunQueries
             {
                 SecretFindings = [.. blocked.SecretFindings.Select(finding =>
                     new WorkerRunSecretFinding(finding.Path, finding.Line, finding.Commit.Value, finding.RuleId))],
+                PublishBlockedAt = blocked.PublishBlockedAt,
             },
             CompletedRun completed => MapCompleted(completed) with { Publish = PublishOf(completed, completed.PullRequestUrl?.Value) },
             FailedRun failed => MapFailed(failed) with { Publish = PublishOf(failed, pullRequestUrl: null) },
@@ -138,7 +139,13 @@ internal sealed class WorkerRunQueries(DbContext db) : IWorkerRunQueries
             _ => throw new UnreachableException($"Unknown {nameof(WorkerRun)} subtype: {run.GetType().Name}"),
         };
 
-        return detail with { RevertedFiles = [.. run.RevertedFiles.Select(RevertedFileOf)] };
+        return detail with
+        {
+            RevertedFiles = [.. run.RevertedFiles.Select(RevertedFileOf)],
+            FalsePositivesConfirmedAt = run.FalsePositivesConfirmedAt,
+            ConfirmedFindings = [.. run.ConfirmedFindings.Select(finding =>
+                new WorkerRunConfirmedFinding(finding.Path, finding.Line, finding.RuleId))],
+        };
     }
 
     private static WorkerRunRevertedFile RevertedFileOf(RevertedFile file) =>

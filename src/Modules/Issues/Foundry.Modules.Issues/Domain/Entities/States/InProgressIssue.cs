@@ -36,22 +36,6 @@ public sealed class InProgressIssue : Issue
         return inProgress;
     }
 
-    public ReviewIssue MarkInReview(
-        string branchName,
-        string pullRequestUrl,
-        DateTimeOffset feedbackCutoffAt,
-        DateTimeOffset transitionedAt)
-    {
-        ReviewIssue review = ReviewIssue.FromInProgress(
-            this,
-            branchName,
-            pullRequestUrl,
-            feedbackCutoffAt,
-            transitionedAt);
-        AddDomainEvent(new Events.IssueInReview(Id, MonitoredRepositoryId));
-        return review;
-    }
-
     /// <summary>
     /// The run left an open pull request: Foundry rebases its branch onto the default branch before the
     /// checks gate reads any verdict (ADR 0087).
@@ -182,6 +166,14 @@ public sealed class InProgressIssue : Issue
             transitionedAt);
         AddDomainEvent(new Events.IssueBranchDiverged(Id, MonitoredRepositoryId));
         return diverged;
+    }
+
+    internal static InProgressIssue FromPublishBlocked(PublishBlockedIssue source, DateTimeOffset transitionedAt)
+    {
+        InProgressIssue inProgress = new(source.Id, transitionedAt);
+        inProgress.CopySharedPropertiesFrom(source);
+        inProgress.WorkerRunId = source.WorkerRunId;
+        return inProgress;
     }
 
     internal static InProgressIssue FromPublishFailed(PublishFailedIssue source, DateTimeOffset transitionedAt)

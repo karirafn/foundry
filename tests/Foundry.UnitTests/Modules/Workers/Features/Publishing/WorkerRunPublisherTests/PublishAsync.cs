@@ -353,6 +353,74 @@ public sealed class PublishAsync : WorkerDispatchServiceTestBase
         db.SaveChanges();
     }
 
+    [Fact]
+    public async Task AConfirmedRun_PassesItsConfirmedFindingsToThePush()
+    {
+        // Arrange
+        SecretFinding finding = new("src/store.ts", 3, Head, "generic-api-key");
+        SeedConfirmedPublishingRun(finding);
+        FakePublisher publisher = new();
+
+        // Act
+        await RunPublisherAsync(publisher, new StubPostExitProviderQueries());
+
+        // Assert
+        publisher.PublishRequests.ShouldHaveSingleItem().ConfirmedFindings.ShouldBe([finding]);
+    }
+
+    [Fact]
+    public async Task AConfirmedRun_ListsItsConfirmedFindingsInTheOpenedPullRequest()
+    {
+        // Arrange
+        SeedConfirmedPublishingRun(new SecretFinding("src/store.ts", 3, Head, "generic-api-key"));
+        FakePublisher publisher = new FakePublisher().WithPublishResults(
+            new PublishResult.Published(Head, 2, ["feat: add retry"], []));
+
+        // Act
+        await RunPublisherAsync(publisher, new StubPostExitProviderQueries(hasCommits: true));
+
+        // Assert
+        _commands.Opened.ShouldHaveSingleItem().Body.ShouldContain("- `src/store.ts` line 3: rule `generic-api-key`");
+    }
+
+    [Fact]
+    public async Task AConfirmedRevision_ListsItsConfirmedFindingsInTheSummaryComment()
+    {
+        // Arrange
+        SeedConfirmedPublishingRun(new SecretFinding("src/store.ts", 3, Head, "generic-api-key"));
+        FakePublisher publisher = new FakePublisher().WithPublishResults(new PublishResult.Published(Head, 3, ["fix: b"], []));
+        StubPostExitProviderQueries provider = new(
+            hasCommits: true,
+            mergeRequest: new MergeRequestByBranch(MergeRequestPresence.Open, "https://github.com/owner/repo/pull/7"));
+
+        // Act
+        await RunPublisherAsync(publisher, provider);
+
+        // Assert
+        _commands.Summaries.ShouldHaveSingleItem().Body.ShouldContain("## Secret findings confirmed as false positives");
+    }
+
+    [Fact]
+    public async Task AConfirmedRunThatFindsOtherFindings_IsBlockedAgainOnTheNewFindings()
+    {
+        // Arrange
+        SecretFinding confirmed = new("src/store.ts", 3, Head, "generic-api-key");
+        SecretFinding other = new("src/other.ts", 9, Head, "generic-api-key");
+        SeedConfirmedPublishingRun(confirmed);
+        FakePublisher publisher = new FakePublisher().WithPublishResults(new PublishResult.SecretDetected([other]));
+
+        // Act
+        await RunPublisherAsync(publisher, new StubPostExitProviderQueries(hasCommits: true));
+
+        // Assert
+        await using FoundryDbContext db = CreateDbContext();
+        PublishBlockedRun blocked = (await db.Set<WorkerRun>().SingleAsync(TestContext.Current.CancellationToken))
+            .ShouldBeOfType<PublishBlockedRun>();
+        blocked.ShouldSatisfyAllConditions(
+            () => blocked.SecretFindings.ShouldBe([other]),
+            () => blocked.ConfirmedFindings.ShouldBe([confirmed]));
+    }
+
     private void SeedPublishingRun(RunExit exit)
     {
         using FoundryDbContext db = CreateDbContext();
@@ -365,6 +433,21 @@ public sealed class PublishAsync : WorkerDispatchServiceTestBase
             exit.FinishedCleanly ? RunVerdict.Done() : null,
             new RunPullRequestText("Add retry", "Adds retry with backoff."));
         db.Set<WorkerRun>().Add(publishing);
+        db.SaveChanges();
+    }
+
+    private void SeedConfirmedPublishingRun(SecretFinding finding)
+    {
+        using FoundryDbContext db = CreateDbContext();
+        StartingRun starting = StartingRun.Begin(IssueId.New(), WorkerRunId.New());
+        starting.RecordPreparedBase(Base, MonitoredRepositoryId.New());
+        ActiveRun active = starting.Activate(ContainerId.From("container-1"), BranchName.From(Branch), MonitoredRepositoryId.New());
+        RunExit exit = new(0, OomKilled: false, RunStopReason.Exited, DateTimeOffset.UtcNow);
+        PublishingRun confirmed = active
+            .BeginPublishing(exit, containerOutput: null, RunVerdict.Done(), new RunPullRequestText("Add retry", "Adds retry."))
+            .BlockPublish([finding], DateTimeOffset.UtcNow)
+            .ConfirmFalsePositives(DateTimeOffset.UtcNow);
+        db.Set<WorkerRun>().Add(confirmed);
         db.SaveChanges();
     }
 

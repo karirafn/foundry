@@ -10,7 +10,7 @@ import {
 } from '@angular/core';
 import { IssueSummary } from '../../issues/issue.model';
 import { CardPhase } from '../board-state.service';
-import { repoName } from '../board.model';
+import { IssueRefComponent } from '../issue-ref/issue-ref';
 
 /**
  * A compact one-line issue row: a projected `[rowLead]` (position and role, or a step chip), the
@@ -19,6 +19,7 @@ import { repoName } from '../board.model';
  */
 @Component({
   selector: 'fd-board-row',
+  imports: [IssueRefComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: {
     '[attr.data-issue-id]': 'issue().id',
@@ -37,7 +38,6 @@ export class BoardRowComponent {
   /** Emits the row's button, so focus can return to it when the pane closes. */
   readonly open: OutputEmitterRef<HTMLElement> = output<HTMLElement>();
 
-  protected readonly name: Signal<string> = computed(() => repoName(this.issue().repositorySlug));
   protected readonly idBase: Signal<string> = computed(() => `board-row-${this.issue().id}`);
   protected readonly label: Signal<string> = computed(
     () => `${this.issue().title}, #${this.issue().issueNumber}`,

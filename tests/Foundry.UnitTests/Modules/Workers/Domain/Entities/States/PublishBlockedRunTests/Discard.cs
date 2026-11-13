@@ -45,4 +45,21 @@ public sealed class Discard
         // Assert
         discarded.Reason.CategoryToken.ShouldBe(FailureCategory.PublishExpiredToken);
     }
+
+    [Fact]
+    public void AnIssueClosedOnTheProvider_DiscardsTheRunAsIssueClosed()
+    {
+        // Arrange
+        PublishBlockedRun blocked = Blocked();
+
+        // Act
+        FailedRun discarded = blocked.DiscardOnIssueClosed();
+
+        // Assert
+        discarded.ShouldSatisfyAllConditions(
+            () => discarded.Reason.ShouldBeOfType<FailureReason.IssueClosed>(),
+            () => discarded.Reason.CategoryToken.ShouldBe(FailureCategory.IssueClosedToken),
+            () => discarded.BranchName.ShouldBe(PublishingRunFixture.Branch),
+            () => blocked.DomainEvents.ShouldHaveSingleItem());
+    }
 }

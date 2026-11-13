@@ -1936,6 +1936,88 @@
         }
       }
     },
+    "/api/workers/runs/{workerRunId}/confirm-false-positives": {
+      "post": {
+        "tags": [
+          "Workers"
+        ],
+        "summary": "Confirms a publish-blocked run's secret findings as false positives and publishes it",
+        "operationId": "RequestWorkerRunFalsePositiveConfirmation",
+        "parameters": [
+          {
+            "name": "workerRunId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RequestFalsePositiveConfirmationRequestBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "description": "Accepted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RequestFalsePositiveConfirmationResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/workers/run-totals": {
       "get": {
         "tags": [
@@ -4264,6 +4346,33 @@
           }
         }
       },
+      "RequestFalsePositiveConfirmationRequestBody": {
+        "required": [
+          "publishBlockedAt"
+        ],
+        "type": "object",
+        "properties": {
+          "publishBlockedAt": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
+          }
+        }
+      },
+      "RequestFalsePositiveConfirmationResponse": {
+        "required": [
+          "workerRunId"
+        ],
+        "type": "object",
+        "properties": {
+          "workerRunId": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      },
       "RequestPublishRetryResponse": {
         "required": [
           "workerRunId"
@@ -5380,6 +5489,30 @@
           }
         }
       },
+      "WorkerRunConfirmedFinding": {
+        "required": [
+          "path",
+          "line",
+          "ruleId"
+        ],
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string"
+          },
+          "line": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "ruleId": {
+            "type": "string"
+          }
+        }
+      },
       "WorkerRunDetail": {
         "required": [
           "workerRunId",
@@ -5545,6 +5678,26 @@
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/WorkerRunRevertedFile"
+            }
+          },
+          "publishBlockedAt": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
+          },
+          "falsePositivesConfirmedAt": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
+          },
+          "confirmedFindings": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WorkerRunConfirmedFinding"
             }
           }
         }

@@ -1,4 +1,5 @@
 using Foundry.Modules.Issues.Contracts;
+using Foundry.Modules.Issues.Contracts.Events;
 using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Settings.Contracts;
 using Foundry.Modules.Workers.Contracts;
@@ -42,6 +43,7 @@ public static class WorkersModule
         services.AddScoped<IWorkerLogStream, WorkerLogStream>();
         services.AddCommandHandler<RequestRunCancellation.Command, RequestRunCancellation.Response, RequestRunCancellation.Handler>();
         services.AddCommandHandler<RequestPublishRetry.Command, RequestPublishRetry.Response, RequestPublishRetry.Handler>();
+        services.AddCommandHandler<RequestFalsePositiveConfirmation.Command, RequestFalsePositiveConfirmation.Response, RequestFalsePositiveConfirmation.Handler>();
         services.AddCommandHandler<RequestRunDiscard.Command, RequestRunDiscard.Response, RequestRunDiscard.Handler>();
         services.AddSingleton<AgentActivityStore>();
         services.AddSingleton<IAgentActivityQueries>(sp => sp.GetRequiredService<AgentActivityStore>());
@@ -76,6 +78,7 @@ public static class WorkersModule
 
         services.AddIntegrationEventHandler<IssueClaimed, IssueClaimedHandler>();
         services.AddIntegrationEventHandler<ClaimSkipped, ClaimSkippedHandler>();
+        services.AddIntegrationEventHandler<IssueClosedWithUnpublishedRun, IssueClosedWithUnpublishedRunHandler>();
         services.AddIntegrationEventHandler<WorkerImageSettingsChanged, WorkerImageSettingsChangedHandler>();
         services.AddIntegrationEventHandler<DispatchPaused, DispatchPausedBroadcastHandler>();
         services.AddIntegrationEventHandler<DispatchResumed, DispatchResumedBroadcastHandler>();

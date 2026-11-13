@@ -1320,6 +1320,142 @@ SCANNER
     [[ "$args" == *"--not $BASE_DEFAULT_SHA $BASE_DEFAULT_SHA"* ]]
 }
 
+# ---------------------------------------------------------------------------
+# Confirmed false positives (#899): CONFIRMED_FINDINGS suppresses exactly the
+# findings an operator confirmed, by gitleaks fingerprint.
+# ---------------------------------------------------------------------------
+
+OTHER_GITHUB_PAT="ghp_$(printf '%s' 3kWq9ZtR7mXc2VbN5aLs8DfG4hJy1PoU6eIr)"
+
+# fingerprints — the gitleaks fingerprint (<commit>:<path>:<rule>:<line>) of every finding the last publish reported.
+fingerprints() {
+    secret_findings | sed -n 's/^FOUNDRY_SECRET_FINDING commit=\([0-9a-f]*\) line=\([0-9]*\) rule=\([^ ]*\) path=\(.*\)$/\1:\4:\3:\2/p'
+}
+
+# confirm_and_publish_again <fingerprints> — publishes the same Run bundle again with <fingerprints> confirmed.
+confirm_and_publish_again() {
+    export CONFIRMED_FINDINGS="$1"
+    : > "$BATS_TEST_TMPDIR/git_args"
+    publish
+}
+
+@test "publish: a confirmed finding is suppressed and the run publishes" {
+    start_run
+    wcommit app.env "TOKEN=$GITHUB_PAT" "add config"
+    worker_bundle
+    publish
+    [ "$(result_line)" = "FOUNDRY_PUBLISH result=secret_detected findings=1" ]
+
+    confirm_and_publish_again "$(fingerprints)"
+
+    [ "$status" -eq 0 ]
+    [ "$(result_line)" = "FOUNDRY_PUBLISH result=published head=$(remote_sha "$RUN_BRANCH") commits=1" ]
+    [ -z "$(secret_findings)" ]
+    [ -n "$(push_lines)" ]
+}
+
+@test "publish: a finding that was not confirmed still blocks the push and is the only one reported" {
+    start_run
+    wcommit a.env "TOKEN=$GITHUB_PAT" "first"
+    wcommit b.env "KEY=$AWS_KEY_ID" "second"
+    worker_bundle
+    publish
+    [ "$(result_line)" = "FOUNDRY_PUBLISH result=secret_detected findings=2" ]
+
+    confirm_and_publish_again "$(fingerprints | grep ':a\.env:github-pat:')"
+
+    [ "$status" -eq 0 ]
+    [ "$(result_line)" = "FOUNDRY_PUBLISH result=secret_detected findings=1" ]
+    [ "$(secret_findings | wc -l)" -eq 1 ]
+    secret_findings | grep -qE ' rule=aws-access-token path=b\.env$'
+    [ -z "$(push_lines)" ]
+}
+
+@test "publish: a confirmed fingerprint does not suppress the same path, rule and line in another commit" {
+    start_run
+    wcommit app.env "TOKEN=$GITHUB_PAT" "placeholder"
+    wcommit app.env "TOKEN=$OTHER_GITHUB_PAT" "real key"
+    worker_bundle
+    publish
+    [ "$(result_line)" = "FOUNDRY_PUBLISH result=secret_detected findings=2" ]
+    local placeholder fingerprint
+    while IFS= read -r fingerprint; do
+        if [ "$("$REAL_GIT" -C "$FOUNDRY_WORK_DIR/repo" log -1 --format=%s "${fingerprint%%:*}")" = placeholder ]; then
+            placeholder="$fingerprint"
+        fi
+    done <<< "$(fingerprints)"
+    [ -n "$placeholder" ]
+
+    confirm_and_publish_again "$placeholder"
+
+    [ "$status" -eq 0 ]
+    [ "$(result_line)" = "FOUNDRY_PUBLISH result=secret_detected findings=1" ]
+    secret_findings | grep -qE ' line=1 rule=github-pat path=app\.env$'
+    [ "$(secret_findings | wc -l)" -eq 1 ]
+    [[ "$(secret_findings)" != *"commit=${placeholder%%:*} "* ]]
+    [ -z "$(push_lines)" ]
+}
+
+@test "publish: an empty CONFIRMED_FINDINGS suppresses nothing" {
+    start_run
+    wcommit app.env "TOKEN=$GITHUB_PAT" "add config"
+    worker_bundle
+    export CONFIRMED_FINDINGS=""
+
+    publish
+
+    [ "$status" -eq 0 ]
+    [ "$(result_line)" = "FOUNDRY_PUBLISH result=secret_detected findings=1" ]
+    [ -z "$(push_lines)" ]
+}
+
+@test "publish: an unset or empty CONFIRMED_FINDINGS scans with no ignore file, as before" {
+    start_run
+    wcommit a.txt a "first"
+    worker_bundle
+    cat > "$FAKE_BIN_DIR/gitleaks" <<SCANNER
+#!/bin/sh
+printf '%s\n' "\$*" >> "$BATS_TEST_TMPDIR/gitleaks_args"
+exec "$(command -v gitleaks)" "\$@"
+SCANNER
+    chmod +x "$FAKE_BIN_DIR/gitleaks"
+
+    publish
+    export CONFIRMED_FINDINGS=""
+    publish
+
+    [ "$status" -eq 0 ]
+    [ "$(grep -c -- '--gitleaks-ignore-path /dev/null' "$BATS_TEST_TMPDIR/gitleaks_args")" -eq 2 ]
+}
+
+@test "publish: a confirmed finding in a path holding a space is suppressed" {
+    start_run
+    mkdir -p "$WORKER/my fixtures"
+    wcommit "my fixtures/app.env" "TOKEN=$GITHUB_PAT" "add fixture"
+    worker_bundle
+    publish
+    [ "$(result_line)" = "FOUNDRY_PUBLISH result=secret_detected findings=1" ]
+
+    confirm_and_publish_again "$(fingerprints)"
+
+    [ "$status" -eq 0 ]
+    [[ "$(result_line)" == "FOUNDRY_PUBLISH result=published "* ]]
+}
+
+# Observed with gitleaks 8.30.1 on 2026-11-13: an ignore entry whose path holds ':' still matches its finding.
+@test "publish: a confirmed finding in a path holding a colon is suppressed" {
+    start_run
+    wcommit "a:b.env" "TOKEN=$GITHUB_PAT" "add fixture"
+    worker_bundle
+    publish
+    [ "$(result_line)" = "FOUNDRY_PUBLISH result=secret_detected findings=1" ]
+
+    confirm_and_publish_again "$(fingerprints)"
+
+    [ "$status" -eq 0 ]
+    [[ "$(result_line)" == "FOUNDRY_PUBLISH result=published "* ]]
+}
+
 @test "publish: a binary file the run added is removed by one code-authored revert commit and listed" {
     start_run
     write_binary assets/logo.png

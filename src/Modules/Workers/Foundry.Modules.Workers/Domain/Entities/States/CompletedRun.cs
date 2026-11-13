@@ -82,6 +82,7 @@ public sealed class CompletedRun : WorkerRun
 
         completed.RecordVerdict(verdict);
         completed.CarryDispatchFactsFrom(publishing);
+        completed.CarryConfirmationFrom(publishing);
         completed.RecordPublishFacts(
             publishing.PublishedHead,
             publishing.PublishedBranchCommitCount,

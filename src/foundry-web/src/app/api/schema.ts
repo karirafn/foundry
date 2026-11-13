@@ -603,6 +603,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/workers/runs/{workerRunId}/confirm-false-positives": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Confirms a publish-blocked run's secret findings as false positives and publishes it */
+        post: operations["RequestWorkerRunFalsePositiveConfirmation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/workers/run-totals": {
         parameters: {
             query?: never;
@@ -1264,6 +1281,14 @@ export interface components {
         RepositoryWebhookSecret: {
             secret: string;
         };
+        RequestFalsePositiveConfirmationRequestBody: {
+            /** Format: date-time */
+            publishBlockedAt: null | string;
+        };
+        RequestFalsePositiveConfirmationResponse: {
+            /** Format: uuid */
+            workerRunId: string;
+        };
         RequestPublishRetryResponse: {
             /** Format: uuid */
             workerRunId: string;
@@ -1520,6 +1545,12 @@ export interface components {
             role: string;
             model: string;
         };
+        WorkerRunConfirmedFinding: {
+            path: string;
+            /** Format: int32 */
+            line: number | string;
+            ruleId: string;
+        };
         WorkerRunDetail: {
             /** Format: uuid */
             workerRunId: string;
@@ -1553,6 +1584,11 @@ export interface components {
             discardsAt?: null | string;
             secretFindings?: components["schemas"]["WorkerRunSecretFinding"][];
             revertedFiles?: components["schemas"]["WorkerRunRevertedFile"][];
+            /** Format: date-time */
+            publishBlockedAt?: null | string;
+            /** Format: date-time */
+            falsePositivesConfirmedAt?: null | string;
+            confirmedFindings?: components["schemas"]["WorkerRunConfirmedFinding"][];
         };
         WorkerRunPublishDetail: {
             headSha: string;
@@ -3031,6 +3067,68 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RequestRunDiscardResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    RequestWorkerRunFalsePositiveConfirmation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workerRunId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RequestFalsePositiveConfirmationRequestBody"];
+            };
+        };
+        responses: {
+            /** @description Accepted */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RequestFalsePositiveConfirmationResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
             };
             /** @description Not Found */
