@@ -25,7 +25,7 @@ public sealed class MarkBlocked
             DecidedAt);
 
         // Act
-        TriageBlockedIssue blocked = triaging.MarkBlocked(verdict);
+        TriageBlockedIssue blocked = triaging.MarkBlocked(verdict, DateTimeOffset.UtcNow);
 
         // Assert
         blocked.ShouldSatisfyAllConditions(
@@ -39,15 +39,15 @@ public sealed class MarkBlocked
         // Arrange
         TriageInProgressIssue triaging = new IssueBuilder()
             .TriageBlocked([31, 15])
-            .Unblock()
-            .Claim(WorkerRunId.New());
+            .Unblock(DateTimeOffset.UtcNow)
+            .Claim(WorkerRunId.New(), DateTimeOffset.UtcNow);
         TriageVerdict.Blocked verdict = new(
             IssueKind.Feature,
             [new TriageBlocker(15, "Needs the retry policy."), new TriageBlocker(42, "Needs the queue.")],
             DecidedAt);
 
         // Act
-        TriageBlockedIssue blocked = triaging.MarkBlocked(verdict);
+        TriageBlockedIssue blocked = triaging.MarkBlocked(verdict, DateTimeOffset.UtcNow);
 
         // Assert
         blocked.BlockedBy.ShouldBe([15, 42, 31]);
@@ -65,7 +65,7 @@ public sealed class MarkBlocked
             DecidedAt);
 
         // Act
-        triaging.MarkBlocked(verdict);
+        triaging.MarkBlocked(verdict, DateTimeOffset.UtcNow);
 
         // Assert
         triaging.DomainEvents.OfType<IssueTriageBlocked>().ShouldHaveSingleItem();

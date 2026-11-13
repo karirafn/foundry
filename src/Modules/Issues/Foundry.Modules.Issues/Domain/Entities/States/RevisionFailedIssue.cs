@@ -15,6 +15,8 @@ public sealed class RevisionFailedIssue : Issue, IAutoRetryableFailedState
 
     public override bool AwaitsDispatch => false;
 
+    public override bool WaitsOnBlockers => false;
+
     public override IssueCodeStep? CodeStep => null;
 
     // Private parameterless constructor for EF Core materialization.
@@ -22,7 +24,7 @@ public sealed class RevisionFailedIssue : Issue, IAutoRetryableFailedState
     {
     }
 
-    private RevisionFailedIssue(IssueId id) : base(id)
+    private RevisionFailedIssue(IssueId id, DateTimeOffset enteredStateAt) : base(id, enteredStateAt)
     {
     }
 
@@ -53,7 +55,7 @@ public sealed class RevisionFailedIssue : Issue, IAutoRetryableFailedState
         FailureCategoryVO failureCategory,
         DateTimeOffset failedAt)
     {
-        RevisionFailedIssue failed = new(source.Id);
+        RevisionFailedIssue failed = new(source.Id, failedAt);
         failed.CopySharedPropertiesFrom(source);
         failed.WorkerRunId = source.WorkerRunId;
         failed.BranchName = source.BranchName;
@@ -74,7 +76,7 @@ public sealed class RevisionFailedIssue : Issue, IAutoRetryableFailedState
         FailureCategoryVO failureCategory,
         DateTimeOffset failedAt)
     {
-        RevisionFailedIssue failed = new(source.Id);
+        RevisionFailedIssue failed = new(source.Id, failedAt);
         failed.CopySharedPropertiesFrom(source);
         failed.WorkerRunId = source.WorkerRunId;
         failed.BranchName = source.BranchName;
@@ -95,7 +97,7 @@ public sealed class RevisionFailedIssue : Issue, IAutoRetryableFailedState
         FailureCategoryVO failureCategory,
         DateTimeOffset failedAt)
     {
-        RevisionFailedIssue failed = new(source.Id);
+        RevisionFailedIssue failed = new(source.Id, failedAt);
         failed.CopySharedPropertiesFrom(source);
         failed.WorkerRunId = source.WorkerRunId;
         failed.BranchName = source.BranchName;
@@ -109,9 +111,9 @@ public sealed class RevisionFailedIssue : Issue, IAutoRetryableFailedState
         return failed;
     }
 
-    public RevisionQueuedIssue Retry()
+    public RevisionQueuedIssue Retry(DateTimeOffset transitionedAt)
     {
-        RevisionQueuedIssue revisionQueued = RevisionQueuedIssue.FromRevisionFailed(this);
+        RevisionQueuedIssue revisionQueued = RevisionQueuedIssue.FromRevisionFailed(this, transitionedAt);
         AddDomainEvent(new Events.IssueRevisionQueued(Id, MonitoredRepositoryId));
         return revisionQueued;
     }

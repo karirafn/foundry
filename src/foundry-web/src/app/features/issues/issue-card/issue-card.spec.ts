@@ -48,7 +48,10 @@ const mockIssue: IssueSummary = {
   stage: 'implement',
   needsAction: false,
   awaitsDispatch: false,
+  waitsOnBlockers: false,
   codeStep: null,
+  repositoryId: 'repo-1',
+  enteredStateAt: '2026-01-01T00:00:00Z',
 };
 
 function createComponent(issue: IssueSummary = mockIssue, lastActivityAt: string | null = null, isNextUp = false, queuePosition: number | null = null) {

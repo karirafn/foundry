@@ -17,11 +17,11 @@ public sealed class Claim
     {
         // Arrange
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
-        ContinuationQueuedIssue continuationQueued = new IssueBuilder().WithMonitoredRepositoryId(repositoryId).ContinuableFailed().Retry();
+        ContinuationQueuedIssue continuationQueued = new IssueBuilder().WithMonitoredRepositoryId(repositoryId).ContinuableFailed().Retry(DateTimeOffset.UtcNow);
         WorkerRunId workerRunId = WorkerRunId.New();
 
         // Act
-        InProgressIssue inProgress = continuationQueued.Claim(workerRunId);
+        InProgressIssue inProgress = continuationQueued.Claim(workerRunId, DateTimeOffset.UtcNow);
 
         // Assert
         inProgress.ShouldSatisfyAllConditions(
@@ -35,11 +35,11 @@ public sealed class Claim
     {
         // Arrange
         MonitoredRepositoryId repositoryId = MonitoredRepositoryId.New();
-        ContinuationQueuedIssue continuationQueued = new IssueBuilder().WithMonitoredRepositoryId(repositoryId).ContinuableFailed().Retry();
+        ContinuationQueuedIssue continuationQueued = new IssueBuilder().WithMonitoredRepositoryId(repositoryId).ContinuableFailed().Retry(DateTimeOffset.UtcNow);
         WorkerRunId workerRunId = WorkerRunId.New();
 
         // Act
-        continuationQueued.Claim(workerRunId);
+        continuationQueued.Claim(workerRunId, DateTimeOffset.UtcNow);
 
         // Assert
         IssueInProgress domainEvent = continuationQueued.DomainEvents.ShouldHaveSingleItem().ShouldBeOfType<IssueInProgress>();

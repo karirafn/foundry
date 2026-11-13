@@ -22,7 +22,7 @@ public sealed class MarkReady
         TriageVerdict.Ready verdict = new(IssueKind.Refactor, DecidedAt);
 
         // Act
-        Issue next = triaging.MarkReady(verdict);
+        Issue next = triaging.MarkReady(verdict, DateTimeOffset.UtcNow);
 
         // Assert
         FreshQueuedIssue queued = next.ShouldBeOfType<FreshQueuedIssue>();
@@ -38,11 +38,11 @@ public sealed class MarkReady
         // Arrange
         TriageQueuedIssue queued = new IssueBuilder().TriageQueued();
         queued.SetBlockedBy([3]);
-        TriageInProgressIssue triaging = queued.Claim(Foundry.Modules.Workers.Contracts.WorkerRunId.New());
+        TriageInProgressIssue triaging = queued.Claim(Foundry.Modules.Workers.Contracts.WorkerRunId.New(), DateTimeOffset.UtcNow);
         TriageVerdict.Ready verdict = new(IssueKind.Feature, DecidedAt);
 
         // Act
-        Issue next = triaging.MarkReady(verdict);
+        Issue next = triaging.MarkReady(verdict, DateTimeOffset.UtcNow);
 
         // Assert
         BlockedIssue blocked = next.ShouldBeOfType<BlockedIssue>();
@@ -61,7 +61,7 @@ public sealed class MarkReady
             .TriageInProgress();
 
         // Act
-        Issue next = triaging.MarkReady(new TriageVerdict.Ready(IssueKind.Bug, DecidedAt));
+        Issue next = triaging.MarkReady(new TriageVerdict.Ready(IssueKind.Bug, DecidedAt), DateTimeOffset.UtcNow);
 
         // Assert
         next.KindClassification.ShouldBe(new KindClassification.Triaged(IssueKind.Bug));
@@ -76,7 +76,7 @@ public sealed class MarkReady
             .TriageInProgress();
 
         // Act
-        Issue next = triaging.MarkReady(new TriageVerdict.Ready(IssueKind.Refactor, DecidedAt));
+        Issue next = triaging.MarkReady(new TriageVerdict.Ready(IssueKind.Refactor, DecidedAt), DateTimeOffset.UtcNow);
 
         // Assert
         next.ShouldSatisfyAllConditions(

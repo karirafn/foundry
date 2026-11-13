@@ -22,6 +22,8 @@ public sealed class TriageBlockedIssue : Issue
 
     public override bool AwaitsDispatch => true;
 
+    public override bool WaitsOnBlockers => true;
+
     public override IssueCodeStep? CodeStep => null;
 
     /// <summary>The longest failure reason the failed issue stores; the provider's text is cut to fit.</summary>
@@ -34,7 +36,7 @@ public sealed class TriageBlockedIssue : Issue
     {
     }
 
-    private TriageBlockedIssue(IssueId id) : base(id)
+    private TriageBlockedIssue(IssueId id, DateTimeOffset enteredStateAt) : base(id, enteredStateAt)
     {
     }
 
@@ -44,22 +46,25 @@ public sealed class TriageBlockedIssue : Issue
     /// </summary>
     public WorkerRunId? WorkerRunId { get; private set; }
 
-    internal static TriageBlockedIssue Untriaged(Issue source, IReadOnlyList<int> blockers)
+    internal static TriageBlockedIssue Untriaged(Issue source, IReadOnlyList<int> blockers, DateTimeOffset transitionedAt)
     {
         if (blockers.Count == 0)
         {
             throw new InvalidOperationException("Cannot block an issue without specifying at least one blocker.");
         }
 
-        TriageBlockedIssue blocked = new(source.Id);
+        TriageBlockedIssue blocked = new(source.Id, transitionedAt);
         blocked.CopySharedPropertiesFrom(source);
         blocked.SetBlockedBy(blockers);
         return blocked;
     }
 
-    internal static TriageBlockedIssue FromTriageInProgress(TriageInProgressIssue source, TriageVerdict.Blocked verdict)
+    internal static TriageBlockedIssue FromTriageInProgress(
+        TriageInProgressIssue source,
+        TriageVerdict.Blocked verdict,
+        DateTimeOffset transitionedAt)
     {
-        TriageBlockedIssue blocked = new(source.Id);
+        TriageBlockedIssue blocked = new(source.Id, transitionedAt);
         blocked.CopySharedPropertiesFrom(source);
         blocked.RecordTriageVerdict(verdict);
         blocked.WorkerRunId = source.WorkerRunId;
@@ -73,9 +78,9 @@ public sealed class TriageBlockedIssue : Issue
         return [.. named, .. recorded.Except(named)];
     }
 
-    public TriageQueuedIssue Unblock()
+    public TriageQueuedIssue Unblock(DateTimeOffset transitionedAt)
     {
-        TriageQueuedIssue queued = TriageQueuedIssue.FromTriageBlocked(this);
+        TriageQueuedIssue queued = TriageQueuedIssue.FromTriageBlocked(this, transitionedAt);
         AddDomainEvent(new Events.IssueTriageQueued(Id, MonitoredRepositoryId));
         return queued;
     }

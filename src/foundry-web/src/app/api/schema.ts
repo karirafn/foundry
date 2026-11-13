@@ -1142,6 +1142,11 @@ export interface components {
             needsAction: boolean;
             awaitsDispatch: boolean;
             codeStep: null | string;
+            /** Format: uuid */
+            repositoryId: string;
+            waitsOnBlockers: boolean;
+            /** Format: date-time */
+            enteredStateAt: string;
             checksOutcome?: null | string;
             pullRequestUrl?: null | string;
             rebaseOutcome?: null | string;

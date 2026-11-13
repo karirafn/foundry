@@ -71,7 +71,7 @@ public sealed class OfTypeQueuedIssue : IAsyncDisposable
             .WithFailureReason("Container OOM")
             .WithFailureCategory(FailureCategory.NonZeroExit)
             .ContinuableFailed()
-            .Retry();
+            .Retry(DateTimeOffset.UtcNow);
         _dbContext.Set<Issue>().Add(continuationQueued);
 
         // Seed InProgressIssue (non-claimable)

@@ -40,6 +40,7 @@ public sealed class HandleAsync : IAsyncDisposable
         _sut = new DispatchResumedHandler(
             _dbContext,
             _dispatcher,
+            TimeProvider.System,
             NullLogger<DispatchResumedHandler>.Instance);
     }
 

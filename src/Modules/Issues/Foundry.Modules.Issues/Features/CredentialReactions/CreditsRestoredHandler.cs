@@ -13,6 +13,7 @@ namespace Foundry.Modules.Issues.Features.CredentialReactions;
 internal sealed class CreditsRestoredHandler(
     DbContext db,
     IDomainEventDispatcher domainEventDispatcher,
+    TimeProvider timeProvider,
     ILogger<CreditsRestoredHandler> logger) : IIntegrationEventHandler<CreditsRestored>
 {
     public async Task HandleAsync(CreditsRestored @event, CancellationToken cancellationToken)
@@ -27,7 +28,7 @@ internal sealed class CreditsRestoredHandler(
 
         foreach (FailedIssue failed in failedIssues)
         {
-            FreshQueuedIssue queued = failed.Retry();
+            FreshQueuedIssue queued = failed.Retry(timeProvider.GetUtcNow());
             await db.TransitionAsync(failed, queued, domainEventDispatcher, cancellationToken);
 
             logger.LogInformation(
@@ -37,7 +38,7 @@ internal sealed class CreditsRestoredHandler(
 
         foreach (ContinuableFailedIssue continuableFailed in continuableFailedIssues)
         {
-            ContinuationQueuedIssue continuationQueued = continuableFailed.Retry();
+            ContinuationQueuedIssue continuationQueued = continuableFailed.Retry(timeProvider.GetUtcNow());
             await db.TransitionAsync(
                 continuableFailed,
                 continuationQueued,

@@ -63,7 +63,7 @@ public sealed class HandleAsync : IAsyncDisposable
     {
         // Arrange
         TriageFailedIssue failed = await SeedAsync(new IssueBuilder().TriageFailed());
-        RetryTriage.Handler sut = new(_dbContext, _dispatcher, _issueQueries);
+        RetryTriage.Handler sut = new(_dbContext, _dispatcher, TimeProvider.System, _issueQueries);
 
         // Act
         Result<IssueDetail> result = await sut.HandleAsync(new RetryTriage.Command(failed.Id), CancellationToken.None);
@@ -78,7 +78,7 @@ public sealed class HandleAsync : IAsyncDisposable
     {
         // Arrange
         FailedIssue failed = await SeedAsync(new IssueBuilder().Failed());
-        RetryTriage.Handler sut = new(_dbContext, _dispatcher, _issueQueries);
+        RetryTriage.Handler sut = new(_dbContext, _dispatcher, TimeProvider.System, _issueQueries);
 
         // Act
         Result<IssueDetail> result = await sut.HandleAsync(new RetryTriage.Command(failed.Id), CancellationToken.None);
@@ -94,7 +94,7 @@ public sealed class HandleAsync : IAsyncDisposable
         TriageFailedIssue failed = await SeedAsync(new IssueBuilder()
             .WithKindClassification(KindClassification.Unclassified)
             .TriageFailed());
-        SkipTriage.Handler sut = new(_dbContext, _dispatcher, _issueQueries);
+        SkipTriage.Handler sut = new(_dbContext, _dispatcher, TimeProvider.System, _issueQueries);
 
         // Act
         Result<IssueDetail> result = await sut.HandleAsync(new SkipTriage.Command(failed.Id), CancellationToken.None);
@@ -110,7 +110,7 @@ public sealed class HandleAsync : IAsyncDisposable
     {
         // Arrange
         TriageQueuedIssue queued = await SeedAsync(new IssueBuilder().TriageQueued());
-        SkipTriage.Handler sut = new(_dbContext, _dispatcher, _issueQueries);
+        SkipTriage.Handler sut = new(_dbContext, _dispatcher, TimeProvider.System, _issueQueries);
 
         // Act
         Result<IssueDetail> result = await sut.HandleAsync(new SkipTriage.Command(queued.Id), CancellationToken.None);
@@ -124,7 +124,7 @@ public sealed class HandleAsync : IAsyncDisposable
     {
         // Arrange
         FreshQueuedIssue queued = await SeedAsync(new IssueBuilder().FreshQueued());
-        Retriage.Handler sut = new(_dbContext, _dispatcher, _issueQueries);
+        Retriage.Handler sut = new(_dbContext, _dispatcher, TimeProvider.System, _issueQueries);
 
         // Act
         Result<IssueDetail> result = await sut.HandleAsync(new Retriage.Command(queued.Id), CancellationToken.None);
@@ -139,7 +139,7 @@ public sealed class HandleAsync : IAsyncDisposable
     {
         // Arrange
         BlockedIssue blocked = await SeedAsync(new IssueBuilder().Detected().Block([2]));
-        Retriage.Handler sut = new(_dbContext, _dispatcher, _issueQueries);
+        Retriage.Handler sut = new(_dbContext, _dispatcher, TimeProvider.System, _issueQueries);
 
         // Act
         Result<IssueDetail> result = await sut.HandleAsync(new Retriage.Command(blocked.Id), CancellationToken.None);
@@ -154,7 +154,7 @@ public sealed class HandleAsync : IAsyncDisposable
     {
         // Arrange
         InProgressIssue inProgress = await SeedAsync(new IssueBuilder().InProgress());
-        Retriage.Handler sut = new(_dbContext, _dispatcher, _issueQueries);
+        Retriage.Handler sut = new(_dbContext, _dispatcher, TimeProvider.System, _issueQueries);
 
         // Act
         Result<IssueDetail> result = await sut.HandleAsync(new Retriage.Command(inProgress.Id), CancellationToken.None);

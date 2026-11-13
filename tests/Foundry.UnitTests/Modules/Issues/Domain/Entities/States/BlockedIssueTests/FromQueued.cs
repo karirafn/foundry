@@ -19,7 +19,7 @@ public sealed class FromQueued
         IReadOnlyList<int> blockers = [7];
 
         // Act
-        BlockedIssue blocked = BlockedIssue.FromQueued(queued, blockers);
+        BlockedIssue blocked = BlockedIssue.FromQueued(queued, blockers, DateTimeOffset.UtcNow);
 
         // Assert
         blocked.Id.ShouldBe(queued.Id);
@@ -34,7 +34,7 @@ public sealed class FromQueued
         IReadOnlyList<int> blockers = [7];
 
         // Act
-        BlockedIssue blocked = BlockedIssue.FromQueued(queued, blockers);
+        BlockedIssue blocked = BlockedIssue.FromQueued(queued, blockers, DateTimeOffset.UtcNow);
 
         // Assert
         blocked.ShouldSatisfyAllConditions(
@@ -56,7 +56,7 @@ public sealed class FromQueued
         IReadOnlyList<int> blockers = [7, 13];
 
         // Act
-        BlockedIssue blocked = BlockedIssue.FromQueued(queued, blockers);
+        BlockedIssue blocked = BlockedIssue.FromQueued(queued, blockers, DateTimeOffset.UtcNow);
 
         // Assert
         blocked.BlockedBy.ShouldBe(blockers);

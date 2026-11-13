@@ -20,6 +20,8 @@ public sealed class BranchDivergedIssue : Issue
 
     public override bool AwaitsDispatch => false;
 
+    public override bool WaitsOnBlockers => false;
+
     public override IssueCodeStep? CodeStep => null;
 
     // Private parameterless constructor for EF Core materialization.
@@ -27,7 +29,7 @@ public sealed class BranchDivergedIssue : Issue
     {
     }
 
-    private BranchDivergedIssue(IssueId id) : base(id)
+    private BranchDivergedIssue(IssueId id, DateTimeOffset enteredStateAt) : base(id, enteredStateAt)
     {
     }
 
@@ -50,9 +52,10 @@ public sealed class BranchDivergedIssue : Issue
         string branchName,
         string sideBranchName,
         BranchDivergenceReason divergenceReason,
-        string? pullRequestUrl)
+        string? pullRequestUrl,
+        DateTimeOffset transitionedAt)
     {
-        BranchDivergedIssue diverged = new(source.Id);
+        BranchDivergedIssue diverged = new(source.Id, transitionedAt);
         diverged.CopySharedPropertiesFrom(source);
         diverged.WorkerRunId = source.WorkerRunId;
         diverged.BranchName = branchName;
@@ -65,9 +68,10 @@ public sealed class BranchDivergedIssue : Issue
     internal static BranchDivergedIssue FromRevisionInProgress(
         RevisionInProgressIssue source,
         string sideBranchName,
-        BranchDivergenceReason divergenceReason)
+        BranchDivergenceReason divergenceReason,
+        DateTimeOffset transitionedAt)
     {
-        BranchDivergedIssue diverged = new(source.Id);
+        BranchDivergedIssue diverged = new(source.Id, transitionedAt);
         diverged.CopySharedPropertiesFrom(source);
         diverged.WorkerRunId = source.WorkerRunId;
         diverged.BranchName = source.BranchName;
@@ -82,9 +86,9 @@ public sealed class BranchDivergedIssue : Issue
     /// Continues on the issue branch. Used both by Retry Issue and when the side branch has been merged into the issue
     /// branch.
     /// </summary>
-    public ContinuationQueuedIssue Retry()
+    public ContinuationQueuedIssue Retry(DateTimeOffset transitionedAt)
     {
-        ContinuationQueuedIssue queued = ContinuationQueuedIssue.FromBranchDiverged(this);
+        ContinuationQueuedIssue queued = ContinuationQueuedIssue.FromBranchDiverged(this, transitionedAt);
         AddDomainEvent(new Events.IssueContinuationQueued(Id, MonitoredRepositoryId));
         return queued;
     }

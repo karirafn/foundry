@@ -72,7 +72,7 @@ public sealed class Transitions
         PublishFailedIssue publishFailed = new IssueBuilder().PublishFailed();
 
         // Act
-        Issue next = publishFailed.RetryPublish();
+        Issue next = publishFailed.RetryPublish(DateTimeOffset.UtcNow);
 
         // Assert
         InProgressIssue inProgress = next.ShouldBeOfType<InProgressIssue>();
@@ -92,7 +92,7 @@ public sealed class Transitions
         PublishFailedIssue publishFailed = builder.PublishFailedFromRevision();
 
         // Act
-        Issue next = publishFailed.RetryPublish();
+        Issue next = publishFailed.RetryPublish(DateTimeOffset.UtcNow);
 
         // Assert
         RevisionInProgressIssue revision = next.ShouldBeOfType<RevisionInProgressIssue>();

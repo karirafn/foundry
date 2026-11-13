@@ -17,6 +17,8 @@ public sealed class RevisionQueuedIssue : QueuedIssue
 
     public override bool AwaitsDispatch => true;
 
+    public override bool WaitsOnBlockers => false;
+
     public override IssueCodeStep? CodeStep => null;
 
     // Private parameterless constructor for EF Core materialization.
@@ -24,7 +26,7 @@ public sealed class RevisionQueuedIssue : QueuedIssue
     {
     }
 
-    private RevisionQueuedIssue(IssueId id) : base(id)
+    private RevisionQueuedIssue(IssueId id, DateTimeOffset enteredStateAt) : base(id, enteredStateAt)
     {
     }
 
@@ -51,10 +53,11 @@ public sealed class RevisionQueuedIssue : QueuedIssue
     internal static RevisionQueuedIssue FromReview(
         ReviewIssue source,
         IReadOnlyList<ReviewComment> comments,
-        int omittedCommentCount = 0,
-        DateTimeOffset? newestCommentAt = null)
+        int omittedCommentCount,
+        DateTimeOffset? newestCommentAt,
+        DateTimeOffset transitionedAt)
     {
-        RevisionQueuedIssue revisionQueued = new(source.Id);
+        RevisionQueuedIssue revisionQueued = new(source.Id, transitionedAt);
         revisionQueued.CopySharedPropertiesFrom(source);
         revisionQueued.BranchName = source.BranchName;
         revisionQueued.PullRequestUrl = source.PullRequestUrl;
@@ -67,10 +70,11 @@ public sealed class RevisionQueuedIssue : QueuedIssue
     internal static RevisionQueuedIssue FromChecksPending(
         ChecksPendingIssue source,
         IReadOnlyList<ReviewComment> comments,
-        int omittedCommentCount = 0,
-        DateTimeOffset? newestCommentAt = null)
+        int omittedCommentCount,
+        DateTimeOffset? newestCommentAt,
+        DateTimeOffset transitionedAt)
     {
-        RevisionQueuedIssue revisionQueued = new(source.Id);
+        RevisionQueuedIssue revisionQueued = new(source.Id, transitionedAt);
         revisionQueued.CopySharedPropertiesFrom(source);
         revisionQueued.BranchName = source.BranchName;
         revisionQueued.PullRequestUrl = source.PullRequestUrl;
@@ -82,9 +86,10 @@ public sealed class RevisionQueuedIssue : QueuedIssue
 
     internal static RevisionQueuedIssue FromChecksPendingFix(
         ChecksPendingIssue source,
-        IReadOnlyList<FailingCheck> failingChecks)
+        IReadOnlyList<FailingCheck> failingChecks,
+        DateTimeOffset transitionedAt)
     {
-        RevisionQueuedIssue revisionQueued = new(source.Id);
+        RevisionQueuedIssue revisionQueued = new(source.Id, transitionedAt);
         revisionQueued.CopySharedPropertiesFrom(source);
         revisionQueued.BranchName = source.BranchName;
         revisionQueued.PullRequestUrl = source.PullRequestUrl;
@@ -94,9 +99,9 @@ public sealed class RevisionQueuedIssue : QueuedIssue
         return revisionQueued;
     }
 
-    internal static RevisionQueuedIssue FromRebaseConflict(RebasePendingIssue source)
+    internal static RevisionQueuedIssue FromRebaseConflict(RebasePendingIssue source, DateTimeOffset transitionedAt)
     {
-        RevisionQueuedIssue revisionQueued = new(source.Id);
+        RevisionQueuedIssue revisionQueued = new(source.Id, transitionedAt);
         revisionQueued.CopySharedPropertiesFrom(source);
         revisionQueued.BranchName = source.BranchName;
         revisionQueued.PullRequestUrl = source.PullRequestUrl;
@@ -106,9 +111,9 @@ public sealed class RevisionQueuedIssue : QueuedIssue
         return revisionQueued;
     }
 
-    internal static RevisionQueuedIssue FromRevisionFailed(RevisionFailedIssue source)
+    internal static RevisionQueuedIssue FromRevisionFailed(RevisionFailedIssue source, DateTimeOffset transitionedAt)
     {
-        RevisionQueuedIssue revisionQueued = new(source.Id);
+        RevisionQueuedIssue revisionQueued = new(source.Id, transitionedAt);
         revisionQueued.CopySharedPropertiesFrom(source);
         revisionQueued.BranchName = source.BranchName;
         revisionQueued.PullRequestUrl = source.PullRequestUrl;
@@ -122,9 +127,10 @@ public sealed class RevisionQueuedIssue : QueuedIssue
         AwaitingInputIssue source,
         ResumeTarget.Revision target,
         string input,
-        DateTimeOffset answeredAt)
+        DateTimeOffset answeredAt,
+        DateTimeOffset transitionedAt)
     {
-        RevisionQueuedIssue revisionQueued = new(source.Id);
+        RevisionQueuedIssue revisionQueued = new(source.Id, transitionedAt);
         revisionQueued.CopySharedPropertiesFrom(source);
         revisionQueued.AnswerClarification(input, answeredAt);
         revisionQueued.BranchName = target.BranchName;
@@ -135,9 +141,12 @@ public sealed class RevisionQueuedIssue : QueuedIssue
         return revisionQueued;
     }
 
-    public override RevisionInProgressIssue Claim(WorkerRunId workerRunId)
+    public override RevisionInProgressIssue Claim(WorkerRunId workerRunId, DateTimeOffset claimedAt)
     {
-        RevisionInProgressIssue revisionInProgress = RevisionInProgressIssue.FromRevisionQueued(this, workerRunId);
+        RevisionInProgressIssue revisionInProgress = RevisionInProgressIssue.FromRevisionQueued(
+            this,
+            workerRunId,
+            claimedAt);
         AddDomainEvent(new Events.IssueRevisionInProgress(Id, MonitoredRepositoryId));
         return revisionInProgress;
     }

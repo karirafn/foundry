@@ -19,7 +19,7 @@ public sealed class Unblock
         BlockedIssue blocked = new IssueBuilder().WithMonitoredRepositoryId(repositoryId).Detected().Block([5]);
 
         // Act
-        FreshQueuedIssue queued = blocked.Unblock();
+        FreshQueuedIssue queued = blocked.Unblock(DateTimeOffset.UtcNow);
 
         // Assert
         queued.Id.ShouldBe(blocked.Id);
@@ -33,7 +33,7 @@ public sealed class Unblock
         BlockedIssue blocked = new IssueBuilder().WithMonitoredRepositoryId(repositoryId).Detected().Block([5]);
 
         // Act
-        blocked.Unblock();
+        blocked.Unblock(DateTimeOffset.UtcNow);
 
         // Assert
         IssueQueued domainEvent = blocked.DomainEvents.ShouldHaveSingleItem().ShouldBeOfType<IssueQueued>();
@@ -50,7 +50,7 @@ public sealed class Unblock
         BlockedIssue blocked = new IssueBuilder().WithMonitoredRepositoryId(repositoryId).Detected().Block([5]);
 
         // Act
-        FreshQueuedIssue queued = blocked.Unblock();
+        FreshQueuedIssue queued = blocked.Unblock(DateTimeOffset.UtcNow);
 
         // Assert
         queued.BlockedBy.ShouldBeEmpty();

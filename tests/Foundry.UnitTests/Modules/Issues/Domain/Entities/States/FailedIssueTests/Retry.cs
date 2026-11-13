@@ -19,7 +19,7 @@ public sealed class Retry
         FailedIssue failed = new IssueBuilder().WithMonitoredRepositoryId(repositoryId).Failed();
 
         // Act
-        FreshQueuedIssue queued = failed.Retry();
+        FreshQueuedIssue queued = failed.Retry(DateTimeOffset.UtcNow);
 
         // Assert
         queued.Id.ShouldBe(failed.Id);
@@ -33,7 +33,7 @@ public sealed class Retry
         FailedIssue failed = new IssueBuilder().WithMonitoredRepositoryId(repositoryId).Failed();
 
         // Act
-        failed.Retry();
+        failed.Retry(DateTimeOffset.UtcNow);
 
         // Assert
         IssueQueued domainEvent = failed.DomainEvents.ShouldHaveSingleItem().ShouldBeOfType<IssueQueued>();
@@ -50,7 +50,7 @@ public sealed class Retry
         FailedIssue failed = new IssueBuilder().WithMonitoredRepositoryId(repositoryId).Failed();
 
         // Act
-        FreshQueuedIssue queued = failed.Retry();
+        FreshQueuedIssue queued = failed.Retry(DateTimeOffset.UtcNow);
 
         // Assert
         queued.ShouldSatisfyAllConditions(

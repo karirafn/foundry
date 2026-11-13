@@ -18,6 +18,7 @@ namespace Foundry.Modules.Issues.Features.WorkerReactions;
 internal sealed class WorkerRunPublishRetryRequestedHandler(
     DbContext db,
     IDomainEventDispatcher domainEventDispatcher,
+    TimeProvider timeProvider,
     ILogger<WorkerRunPublishRetryRequestedHandler> logger) : IIntegrationEventHandler<WorkerRunPublishRetryRequested>
 {
     public async Task HandleAsync(WorkerRunPublishRetryRequested @event, CancellationToken cancellationToken)
@@ -37,7 +38,7 @@ internal sealed class WorkerRunPublishRetryRequestedHandler(
             return;
         }
 
-        Issue next = publishFailed.RetryPublish();
+        Issue next = publishFailed.RetryPublish(timeProvider.GetUtcNow());
         await db.TransitionAsync(publishFailed, next, domainEventDispatcher, cancellationToken);
     }
 }

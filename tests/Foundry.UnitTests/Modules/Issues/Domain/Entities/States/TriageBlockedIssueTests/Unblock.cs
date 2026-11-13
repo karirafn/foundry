@@ -18,7 +18,7 @@ public sealed class Unblock
         TriageBlockedIssue blocked = new IssueBuilder().TriageBlocked([5]);
 
         // Act
-        TriageQueuedIssue queued = blocked.Unblock();
+        TriageQueuedIssue queued = blocked.Unblock(DateTimeOffset.UtcNow);
 
         // Assert
         queued.Id.ShouldBe(blocked.Id);
@@ -31,7 +31,7 @@ public sealed class Unblock
         TriageBlockedIssue blocked = new IssueBuilder().TriageBlocked([5, 8]);
 
         // Act
-        TriageQueuedIssue queued = blocked.Unblock();
+        TriageQueuedIssue queued = blocked.Unblock(DateTimeOffset.UtcNow);
 
         // Assert
         queued.BlockedBy.ShouldBe([5, 8]);
@@ -45,7 +45,7 @@ public sealed class Unblock
         TriageBlockedIssue blocked = new IssueBuilder().WithMonitoredRepositoryId(repositoryId).TriageBlocked([5]);
 
         // Act
-        blocked.Unblock();
+        blocked.Unblock(DateTimeOffset.UtcNow);
 
         // Assert
         IssueTriageQueued domainEvent = blocked.DomainEvents.ShouldHaveSingleItem().ShouldBeOfType<IssueTriageQueued>();
@@ -61,7 +61,7 @@ public sealed class Unblock
         TriageBlockedIssue blocked = new IssueBuilder().TriageBlocked([5]);
 
         // Act
-        TriageQueuedIssue queued = blocked.Unblock();
+        TriageQueuedIssue queued = blocked.Unblock(DateTimeOffset.UtcNow);
 
         // Assert
         queued.TriageVerdict.ShouldBeNull();

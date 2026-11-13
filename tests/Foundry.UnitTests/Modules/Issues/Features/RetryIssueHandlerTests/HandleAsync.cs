@@ -38,7 +38,7 @@ public sealed class HandleAsync : IAsyncDisposable
         _dbContext.Database.EnsureCreated();
         _dispatcher = new CapturingDomainEventDispatcher();
         _issueQueries = new StubIssueQueries();
-        _sut = new RetryIssue.Handler(_dbContext, _dispatcher, _issueQueries);
+        _sut = new RetryIssue.Handler(_dbContext, _dispatcher, TimeProvider.System, _issueQueries);
     }
 
     async ValueTask IAsyncDisposable.DisposeAsync()

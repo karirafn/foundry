@@ -12,6 +12,7 @@ namespace Foundry.Modules.Issues.Features.DispatchReactions;
 internal sealed class DispatchResumedHandler(
     DbContext db,
     IDomainEventDispatcher domainEventDispatcher,
+    TimeProvider timeProvider,
     ILogger<DispatchResumedHandler> logger) : IIntegrationEventHandler<DispatchResumed>
 {
     public async Task HandleAsync(DispatchResumed @event, CancellationToken cancellationToken)
@@ -26,7 +27,7 @@ internal sealed class DispatchResumedHandler(
 
         foreach (FailedIssue failed in failedIssues)
         {
-            FreshQueuedIssue queued = failed.Retry();
+            FreshQueuedIssue queued = failed.Retry(timeProvider.GetUtcNow());
             await db.TransitionAsync(failed, queued, domainEventDispatcher, cancellationToken);
 
             logger.LogInformation(
@@ -37,7 +38,7 @@ internal sealed class DispatchResumedHandler(
 
         foreach (ContinuableFailedIssue continuableFailed in continuableFailedIssues)
         {
-            ContinuationQueuedIssue continuationQueued = continuableFailed.Retry();
+            ContinuationQueuedIssue continuationQueued = continuableFailed.Retry(timeProvider.GetUtcNow());
             await db.TransitionAsync(continuableFailed, continuationQueued, domainEventDispatcher, cancellationToken);
 
             logger.LogInformation(

@@ -13,6 +13,8 @@ public sealed class DetectedIssue : Issue
 
     public override bool AwaitsDispatch => true;
 
+    public override bool WaitsOnBlockers => false;
+
     public override IssueCodeStep? CodeStep => null;
 
     // Private parameterless constructor for EF Core materialization.
@@ -20,7 +22,7 @@ public sealed class DetectedIssue : Issue
     {
     }
 
-    private DetectedIssue(IssueId id) : base(id)
+    private DetectedIssue(IssueId id, DateTimeOffset enteredStateAt) : base(id, enteredStateAt)
     {
     }
 
@@ -34,7 +36,7 @@ public sealed class DetectedIssue : Issue
         DateTimeOffset detectedAt,
         KindClassification kindClassification)
     {
-        DetectedIssue issue = new(IssueId.New());
+        DetectedIssue issue = new(IssueId.New(), detectedAt);
         issue.SetSharedProperties(
             monitoredRepositoryId,
             issueNumber,
@@ -51,17 +53,17 @@ public sealed class DetectedIssue : Issue
     /// Every new issue is triaged before its first implement run (ADR 0097), but not before its blockers close: an
     /// issue with open blockers waits untriaged, so triage judges it against the code they wrote (ADR 0102).
     /// </summary>
-    public TriageQueuedIssue QueueTriage()
+    public TriageQueuedIssue QueueTriage(DateTimeOffset transitionedAt)
     {
-        TriageQueuedIssue queued = TriageQueuedIssue.FromDetected(this);
+        TriageQueuedIssue queued = TriageQueuedIssue.FromDetected(this, transitionedAt);
         AddDomainEvent(new Events.IssueTriageQueued(Id, MonitoredRepositoryId));
         return queued;
     }
 
     /// <summary>A new issue with open <paramref name="blockers"/> waits untriaged until they close (ADR 0102).</summary>
-    public TriageBlockedIssue BlockTriage(IReadOnlyList<int> blockers)
+    public TriageBlockedIssue BlockTriage(IReadOnlyList<int> blockers, DateTimeOffset transitionedAt)
     {
-        TriageBlockedIssue blocked = TriageBlockedIssue.Untriaged(this, blockers);
+        TriageBlockedIssue blocked = TriageBlockedIssue.Untriaged(this, blockers, transitionedAt);
         AddDomainEvent(new Events.IssueTriageBlocked(Id, MonitoredRepositoryId));
         return blocked;
     }

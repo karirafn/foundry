@@ -20,7 +20,7 @@ public sealed class ToReview
         ChecksOutcome outcome = new ChecksOutcome.Passed();
 
         // Act
-        ReviewIssue review = checksPending.ToReview(outcome);
+        ReviewIssue review = checksPending.ToReview(outcome, DateTimeOffset.UtcNow);
 
         // Assert
         review.Id.ShouldBe(checksPending.Id);
@@ -34,7 +34,7 @@ public sealed class ToReview
         ChecksOutcome outcome = new ChecksOutcome.NoneDetected();
 
         // Act
-        ReviewIssue review = checksPending.ToReview(outcome);
+        ReviewIssue review = checksPending.ToReview(outcome, DateTimeOffset.UtcNow);
 
         // Assert
         review.ChecksOutcome.ShouldBe(outcome);
@@ -51,7 +51,7 @@ public sealed class ToReview
         ChecksOutcome outcome = new ChecksOutcome.Passed();
 
         // Act
-        ReviewIssue review = checksPending.ToReview(outcome);
+        ReviewIssue review = checksPending.ToReview(outcome, DateTimeOffset.UtcNow);
 
         // Assert
         review.FeedbackCutoffAt.ShouldBe(checksPending.FeedbackCutoffAt);
@@ -68,7 +68,7 @@ public sealed class ToReview
         ChecksOutcome outcome = new ChecksOutcome.Passed();
 
         // Act
-        checksPending.ToReview(outcome);
+        checksPending.ToReview(outcome, DateTimeOffset.UtcNow);
 
         // Assert
         IssueInReview domainEvent = checksPending.DomainEvents

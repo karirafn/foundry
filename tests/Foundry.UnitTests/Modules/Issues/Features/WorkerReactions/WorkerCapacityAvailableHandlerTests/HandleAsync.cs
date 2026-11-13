@@ -73,7 +73,8 @@ public sealed class HandleAsync : IAsyncDisposable
         IssueClaimer claimer = new(
             _dbContext,
             integrationEventDispatcher ?? new NullIntegrationEventDispatcher(),
-            _domainEventDispatcher);
+            _domainEventDispatcher,
+            TimeProvider.System);
 
         return new WorkerCapacityAvailableHandler(
             _dbContext,
@@ -1260,7 +1261,7 @@ public sealed class HandleAsync : IAsyncDisposable
             .WithIssueNumber(10)
             .WithDetectedAt(detectedAt)
             .ContinuableFailed()
-            .Retry();
+            .Retry(DateTimeOffset.UtcNow);
         _dbContext.Set<Issue>().Add(continuationQueued);
         _dbContext.SaveChanges();
         _dbContext.ChangeTracker.Clear();
@@ -1278,7 +1279,7 @@ public sealed class HandleAsync : IAsyncDisposable
             .WithDetectedAt(detectedAt ?? DateTimeOffset.UtcNow)
             .WithBranchName(branchName)
             .ContinuableFailed()
-            .Retry();
+            .Retry(DateTimeOffset.UtcNow);
         _dbContext.Set<Issue>().Add(continuationQueued);
         _dbContext.SaveChanges();
         _dbContext.ChangeTracker.Clear();

@@ -21,7 +21,7 @@ public sealed class Claim
         WorkerRunId workerRunId = WorkerRunId.New();
 
         // Act
-        InProgressIssue inProgress = queued.Claim(workerRunId);
+        InProgressIssue inProgress = queued.Claim(workerRunId, DateTimeOffset.UtcNow);
 
         // Assert
         inProgress.Id.ShouldBe(queued.Id);
@@ -35,7 +35,7 @@ public sealed class Claim
         FreshQueuedIssue queued = new IssueBuilder().WithMonitoredRepositoryId(repositoryId).FreshQueued();
 
         // Act
-        queued.Claim(WorkerRunId.New());
+        queued.Claim(WorkerRunId.New(), DateTimeOffset.UtcNow);
 
         // Assert
         IssueInProgress domainEvent = queued.DomainEvents.ShouldHaveSingleItem().ShouldBeOfType<IssueInProgress>();
@@ -52,7 +52,7 @@ public sealed class Claim
         FreshQueuedIssue queued = new IssueBuilder().WithMonitoredRepositoryId(repositoryId).FreshQueued();
 
         // Act
-        InProgressIssue inProgress = queued.Claim(WorkerRunId.New());
+        InProgressIssue inProgress = queued.Claim(WorkerRunId.New(), DateTimeOffset.UtcNow);
 
         // Assert
         inProgress.ShouldSatisfyAllConditions(
@@ -71,7 +71,7 @@ public sealed class Claim
         WorkerRunId workerRunId = WorkerRunId.New();
 
         // Act
-        InProgressIssue inProgress = queued.Claim(workerRunId);
+        InProgressIssue inProgress = queued.Claim(workerRunId, DateTimeOffset.UtcNow);
 
         // Assert
         inProgress.WorkerRunId.ShouldBe(workerRunId);

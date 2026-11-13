@@ -20,6 +20,8 @@ public sealed class RebasePendingIssue : Issue
 
     public override bool AwaitsDispatch => false;
 
+    public override bool WaitsOnBlockers => false;
+
     public override IssueCodeStep? CodeStep => IssueCodeStep.Rebasing;
 
     /// <summary>
@@ -33,7 +35,7 @@ public sealed class RebasePendingIssue : Issue
     {
     }
 
-    private RebasePendingIssue(IssueId id) : base(id)
+    private RebasePendingIssue(IssueId id, DateTimeOffset enteredStateAt) : base(id, enteredStateAt)
     {
     }
 
@@ -62,9 +64,10 @@ public sealed class RebasePendingIssue : Issue
         InProgressIssue source,
         string branchName,
         string pullRequestUrl,
-        DateTimeOffset feedbackCutoffAt)
+        DateTimeOffset feedbackCutoffAt,
+        DateTimeOffset transitionedAt)
     {
-        RebasePendingIssue rebasePending = new(source.Id);
+        RebasePendingIssue rebasePending = new(source.Id, transitionedAt);
         rebasePending.CopySharedPropertiesFrom(source);
         rebasePending.WorkerRunId = source.WorkerRunId;
         rebasePending.BranchName = branchName;
@@ -78,9 +81,10 @@ public sealed class RebasePendingIssue : Issue
 
     internal static RebasePendingIssue FromRevisionInProgress(
         RevisionInProgressIssue source,
-        DateTimeOffset feedbackCutoffAt)
+        DateTimeOffset feedbackCutoffAt,
+        DateTimeOffset transitionedAt)
     {
-        RebasePendingIssue rebasePending = new(source.Id);
+        RebasePendingIssue rebasePending = new(source.Id, transitionedAt);
         rebasePending.CopySharedPropertiesFrom(source);
         rebasePending.WorkerRunId = source.WorkerRunId;
         rebasePending.BranchName = source.BranchName;
@@ -97,15 +101,15 @@ public sealed class RebasePendingIssue : Issue
     /// <see cref="MaxRebaseConflictAttempts"/> queues a conflict-resolution revision; anything else (including a
     /// conflict at the cap, which fails open) moves on to the checks gate.
     /// </summary>
-    public Issue ResolveRebase(RebaseOutcome rebaseOutcome) =>
+    public Issue ResolveRebase(RebaseOutcome rebaseOutcome, DateTimeOffset transitionedAt) =>
         rebaseOutcome is RebaseOutcome.Conflict && RebaseConflictAttempts < MaxRebaseConflictAttempts
-            ? ResolveConflict()
-            : MarkChecksPending(rebaseOutcome);
+            ? ResolveConflict(transitionedAt)
+            : MarkChecksPending(rebaseOutcome, transitionedAt);
 
     /// <summary>
     /// The rebase conflicted: queues a <see cref="RevisionTrigger.RebaseConflict"/> revision and counts the attempt.
     /// </summary>
-    public RevisionQueuedIssue ResolveConflict()
+    public RevisionQueuedIssue ResolveConflict(DateTimeOffset transitionedAt)
     {
         if (RebaseConflictAttempts >= MaxRebaseConflictAttempts)
         {
@@ -113,7 +117,7 @@ public sealed class RebasePendingIssue : Issue
                 $"Rebase conflict attempts ({RebaseConflictAttempts}) already reached the cap ({MaxRebaseConflictAttempts}).");
         }
 
-        RevisionQueuedIssue revisionQueued = RevisionQueuedIssue.FromRebaseConflict(this);
+        RevisionQueuedIssue revisionQueued = RevisionQueuedIssue.FromRebaseConflict(this, transitionedAt);
         AddDomainEvent(new Events.IssueRevisionQueued(Id, MonitoredRepositoryId));
         return revisionQueued;
     }
@@ -122,9 +126,9 @@ public sealed class RebasePendingIssue : Issue
     /// The rebase step resolved with <paramref name="rebaseOutcome"/>: the issue moves on to the checks gate,
     /// which now reads checks against the (possibly rebased) head.
     /// </summary>
-    public ChecksPendingIssue MarkChecksPending(RebaseOutcome rebaseOutcome)
+    public ChecksPendingIssue MarkChecksPending(RebaseOutcome rebaseOutcome, DateTimeOffset transitionedAt)
     {
-        ChecksPendingIssue checksPending = ChecksPendingIssue.FromRebasePending(this, rebaseOutcome);
+        ChecksPendingIssue checksPending = ChecksPendingIssue.FromRebasePending(this, rebaseOutcome, transitionedAt);
         AddDomainEvent(new Events.IssueChecksPending(
             Id,
             MonitoredRepositoryId,

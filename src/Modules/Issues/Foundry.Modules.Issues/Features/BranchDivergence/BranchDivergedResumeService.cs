@@ -21,15 +21,18 @@ internal sealed class BranchDivergedResumeService : PeriodicBackgroundService
 
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly ILogger<BranchDivergedResumeService> _log;
+    private readonly TimeProvider _timeProvider;
 
     // Explicit constructor required — PeriodicBackgroundService has a protected constructor,
     // so primary constructors are not available here.
     public BranchDivergedResumeService(
         IServiceScopeFactory scopeFactory,
+        TimeProvider timeProvider,
         ILogger<BranchDivergedResumeService> logger) : base(logger)
     {
         _scopeFactory = scopeFactory;
         _log = logger;
+        _timeProvider = timeProvider;
     }
 
     protected override TimeSpan TickInterval => CheckInterval;
@@ -84,7 +87,7 @@ internal sealed class BranchDivergedResumeService : PeriodicBackgroundService
                 return;
             }
 
-            ContinuationQueuedIssue queued = liveDiverged.Retry();
+            ContinuationQueuedIssue queued = liveDiverged.Retry(_timeProvider.GetUtcNow());
             await db.TransitionAsync(liveDiverged, queued, domainEventDispatcher, cancellationToken);
         }
         catch (DbUpdateConcurrencyException)

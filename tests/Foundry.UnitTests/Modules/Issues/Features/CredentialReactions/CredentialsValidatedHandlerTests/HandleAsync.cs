@@ -40,6 +40,7 @@ public sealed class HandleAsync : IAsyncDisposable
         _sut = new CredentialsValidatedHandler(
             _dbContext,
             _dispatcher,
+            TimeProvider.System,
             NullLogger<CredentialsValidatedHandler>.Instance);
     }
 

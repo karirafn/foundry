@@ -20,7 +20,7 @@ public sealed class Revise
         IReadOnlyList<ReviewComment> comments = [new ReviewComment("Please add tests.")];
 
         // Act
-        RevisionQueuedIssue revisionQueued = checksPending.Revise(comments);
+        RevisionQueuedIssue revisionQueued = checksPending.Revise(comments, DateTimeOffset.UtcNow);
 
         // Assert
         revisionQueued.Id.ShouldBe(checksPending.Id);
@@ -37,7 +37,7 @@ public sealed class Revise
         IReadOnlyList<ReviewComment> comments = [new ReviewComment("Please add tests.")];
 
         // Act
-        RevisionQueuedIssue revisionQueued = checksPending.Revise(comments);
+        RevisionQueuedIssue revisionQueued = checksPending.Revise(comments, DateTimeOffset.UtcNow);
 
         // Assert
         revisionQueued.ShouldSatisfyAllConditions(
@@ -57,7 +57,7 @@ public sealed class Revise
         ];
 
         // Act
-        RevisionQueuedIssue revisionQueued = checksPending.Revise(comments);
+        RevisionQueuedIssue revisionQueued = checksPending.Revise(comments, DateTimeOffset.UtcNow);
 
         // Assert
         revisionQueued.Trigger.ShouldBeOfType<RevisionTrigger.ReviewFeedback>().Comments.Count.ShouldBe(2);
@@ -72,7 +72,7 @@ public sealed class Revise
         DateTimeOffset newestCommentAt = new DateTimeOffset(2026, 6, 1, 12, 0, 0, TimeSpan.Zero);
 
         // Act
-        RevisionQueuedIssue revisionQueued = checksPending.Revise(comments, omittedCommentCount: 3, newestCommentAt: newestCommentAt);
+        RevisionQueuedIssue revisionQueued = checksPending.Revise(comments, DateTimeOffset.UtcNow, omittedCommentCount: 3, newestCommentAt: newestCommentAt);
 
         // Assert
         RevisionTrigger.ReviewFeedback rf = revisionQueued.Trigger.ShouldBeOfType<RevisionTrigger.ReviewFeedback>();
@@ -92,7 +92,7 @@ public sealed class Revise
         IReadOnlyList<ReviewComment> comments = [new ReviewComment("Please add tests.")];
 
         // Act
-        checksPending.Revise(comments);
+        checksPending.Revise(comments, DateTimeOffset.UtcNow);
 
         // Assert
         IssueRevisionQueued domainEvent = checksPending.DomainEvents

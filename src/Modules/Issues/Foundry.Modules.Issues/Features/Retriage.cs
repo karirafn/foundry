@@ -21,6 +21,7 @@ internal static class Retriage
     internal sealed class Handler(
         DbContext db,
         IDomainEventDispatcher domainEventDispatcher,
+        TimeProvider timeProvider,
         IIssueQueries issueQueries)
         : ICommandHandler<Command, IssueDetail>
     {
@@ -38,8 +39,8 @@ internal static class Retriage
 
             Issue? next = issue switch
             {
-                FreshQueuedIssue queued => queued.Retriage(),
-                BlockedIssue blocked => blocked.Retriage(),
+                FreshQueuedIssue queued => queued.Retriage(timeProvider.GetUtcNow()),
+                BlockedIssue blocked => blocked.Retriage(timeProvider.GetUtcNow()),
                 _ => null,
             };
 

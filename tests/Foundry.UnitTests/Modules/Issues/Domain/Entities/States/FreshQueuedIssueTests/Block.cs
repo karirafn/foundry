@@ -20,7 +20,7 @@ public sealed class Block
         IReadOnlyList<int> blockers = [10];
 
         // Act
-        BlockedIssue blocked = queued.Block(blockers);
+        BlockedIssue blocked = queued.Block(blockers, DateTimeOffset.UtcNow);
 
         // Assert
         blocked.Id.ShouldBe(queued.Id);
@@ -35,7 +35,7 @@ public sealed class Block
         IReadOnlyList<int> blockers = [10];
 
         // Act
-        queued.Block(blockers);
+        queued.Block(blockers, DateTimeOffset.UtcNow);
 
         // Assert
         IssueBlocked domainEvent = queued.DomainEvents.ShouldHaveSingleItem().ShouldBeOfType<IssueBlocked>();
@@ -53,7 +53,7 @@ public sealed class Block
         IReadOnlyList<int> blockers = [10, 20];
 
         // Act
-        BlockedIssue blocked = queued.Block(blockers);
+        BlockedIssue blocked = queued.Block(blockers, DateTimeOffset.UtcNow);
 
         // Assert
         blocked.BlockedBy.ShouldBe(blockers);
@@ -68,6 +68,6 @@ public sealed class Block
         IReadOnlyList<int> blockers = [];
 
         // Act & Assert
-        Should.Throw<InvalidOperationException>(() => queued.Block(blockers));
+        Should.Throw<InvalidOperationException>(() => queued.Block(blockers, DateTimeOffset.UtcNow));
     }
 }

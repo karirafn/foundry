@@ -39,6 +39,7 @@ public sealed class HandleAsync : IAsyncDisposable
         _sut = new AwaitingInputArrivedHandler(
             _dbContext,
             new CapturingDomainEventDispatcher(),
+            TimeProvider.System,
             NullLogger<AwaitingInputArrivedHandler>.Instance);
     }
 

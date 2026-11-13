@@ -18,7 +18,7 @@ public sealed class Block
         TriageQueuedIssue queued = new IssueBuilder().TriageQueued();
 
         // Act
-        TriageBlockedIssue blocked = queued.Block([7]);
+        TriageBlockedIssue blocked = queued.Block([7], DateTimeOffset.UtcNow);
 
         // Assert
         blocked.ShouldSatisfyAllConditions(
@@ -34,7 +34,7 @@ public sealed class Block
         TriageQueuedIssue queued = new IssueBuilder().WithMonitoredRepositoryId(repositoryId).TriageQueued();
 
         // Act
-        queued.Block([7]);
+        queued.Block([7], DateTimeOffset.UtcNow);
 
         // Assert
         IssueTriageBlocked domainEvent = queued.DomainEvents.ShouldHaveSingleItem().ShouldBeOfType<IssueTriageBlocked>();
@@ -50,7 +50,7 @@ public sealed class Block
         TriageQueuedIssue queued = new IssueBuilder().TriageQueued();
 
         // Act
-        Action act = () => queued.Block([]);
+        Action act = () => queued.Block([], DateTimeOffset.UtcNow);
 
         // Assert
         act.ShouldThrow<InvalidOperationException>();

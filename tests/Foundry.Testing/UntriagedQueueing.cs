@@ -26,8 +26,8 @@ public static class UntriagedQueueing
     }
 
     private static Foundry.Modules.Issues.Domain.Entities.Issue SkipTriage(DetectedIssue detected) =>
-        detected.QueueTriage()
-            .Claim(WorkerRunId.New())
+        detected.QueueTriage(detected.DetectedAt)
+            .Claim(WorkerRunId.New(), detected.DetectedAt)
             .MarkFailed("Skipped in test", FailureCategory.NonZeroExit, DateTimeOffset.UnixEpoch)
-            .SkipTriage();
+            .SkipTriage(detected.DetectedAt);
 }

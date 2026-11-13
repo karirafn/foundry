@@ -20,6 +20,8 @@ public sealed class PublishFailedIssue : Issue
 
     public override bool AwaitsDispatch => false;
 
+    public override bool WaitsOnBlockers => false;
+
     public override IssueCodeStep? CodeStep => null;
 
     // Private parameterless constructor for EF Core materialization.
@@ -27,7 +29,7 @@ public sealed class PublishFailedIssue : Issue
     {
     }
 
-    private PublishFailedIssue(IssueId id) : base(id)
+    private PublishFailedIssue(IssueId id, DateTimeOffset enteredStateAt) : base(id, enteredStateAt)
     {
     }
 
@@ -59,7 +61,7 @@ public sealed class PublishFailedIssue : Issue
         string failureReason,
         DateTimeOffset failedAt)
     {
-        PublishFailedIssue publishFailed = new(source.Id);
+        PublishFailedIssue publishFailed = new(source.Id, failedAt);
         publishFailed.CopySharedPropertiesFrom(source);
         publishFailed.WorkerRunId = source.WorkerRunId;
         publishFailed.BranchName = branchName;
@@ -73,7 +75,7 @@ public sealed class PublishFailedIssue : Issue
         string failureReason,
         DateTimeOffset failedAt)
     {
-        PublishFailedIssue publishFailed = new(source.Id);
+        PublishFailedIssue publishFailed = new(source.Id, failedAt);
         publishFailed.CopySharedPropertiesFrom(source);
         publishFailed.WorkerRunId = source.WorkerRunId;
         publishFailed.BranchName = source.BranchName;
@@ -90,16 +92,16 @@ public sealed class PublishFailedIssue : Issue
     /// An operator retried the publish: the same run publishes again, so the issue returns to the work-in-progress
     /// state it left.
     /// </summary>
-    public Issue RetryPublish()
+    public Issue RetryPublish(DateTimeOffset transitionedAt)
     {
         if (Trigger is { } trigger)
         {
-            RevisionInProgressIssue revision = RevisionInProgressIssue.FromPublishFailed(this, trigger);
+            RevisionInProgressIssue revision = RevisionInProgressIssue.FromPublishFailed(this, trigger, transitionedAt);
             AddDomainEvent(new Events.IssueRevisionInProgress(Id, MonitoredRepositoryId));
             return revision;
         }
 
-        InProgressIssue inProgress = InProgressIssue.FromPublishFailed(this);
+        InProgressIssue inProgress = InProgressIssue.FromPublishFailed(this, transitionedAt);
         AddDomainEvent(new Events.IssueInProgress(Id, MonitoredRepositoryId));
         return inProgress;
     }

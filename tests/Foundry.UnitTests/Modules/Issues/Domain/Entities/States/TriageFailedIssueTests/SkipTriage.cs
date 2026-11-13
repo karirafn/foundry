@@ -22,7 +22,7 @@ public sealed class SkipTriage
             .TriageFailed();
 
         // Act
-        Issue next = failed.SkipTriage();
+        Issue next = failed.SkipTriage(DateTimeOffset.UtcNow);
 
         // Assert
         FreshQueuedIssue queued = next.ShouldBeOfType<FreshQueuedIssue>();
@@ -39,11 +39,11 @@ public sealed class SkipTriage
         // Arrange
         TriageQueuedIssue queued = new IssueBuilder().TriageQueued();
         queued.SetBlockedBy([9]);
-        TriageFailedIssue failed = queued.Claim(WorkerRunId.New())
+        TriageFailedIssue failed = queued.Claim(WorkerRunId.New(), DateTimeOffset.UtcNow)
             .MarkFailed("boom", FailureCategory.NonZeroExit, DateTimeOffset.UnixEpoch);
 
         // Act
-        Issue next = failed.SkipTriage();
+        Issue next = failed.SkipTriage(DateTimeOffset.UtcNow);
 
         // Assert
         next.ShouldBeOfType<BlockedIssue>().BlockedBy.ShouldBe([9]);
@@ -62,7 +62,7 @@ public sealed class SkipTriage
             .FailBlockerLink(WorkerRunId.New(), 15, "issue is locked", DateTimeOffset.UnixEpoch);
 
         // Act
-        Issue next = failed.SkipTriage();
+        Issue next = failed.SkipTriage(DateTimeOffset.UtcNow);
 
         // Assert
         next.ShouldBeOfType<BlockedIssue>().BlockedBy.ShouldBe([15, 31]);

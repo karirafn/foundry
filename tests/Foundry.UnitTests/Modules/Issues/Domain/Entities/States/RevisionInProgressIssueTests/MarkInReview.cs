@@ -24,7 +24,7 @@ public sealed class MarkInReview
             .RevisionInProgress();
 
         // Act
-        ReviewIssue review = revisionInProgress.MarkInReview(RunStartedAt);
+        ReviewIssue review = revisionInProgress.MarkInReview(RunStartedAt, DateTimeOffset.UtcNow);
 
         // Assert
         review.Id.ShouldBe(revisionInProgress.Id);
@@ -40,7 +40,7 @@ public sealed class MarkInReview
             .RevisionInProgress();
 
         // Act
-        revisionInProgress.MarkInReview(RunStartedAt);
+        revisionInProgress.MarkInReview(RunStartedAt, DateTimeOffset.UtcNow);
 
         // Assert
         IssueInReview domainEvent = revisionInProgress.DomainEvents.ShouldHaveSingleItem().ShouldBeOfType<IssueInReview>();
@@ -61,7 +61,7 @@ public sealed class MarkInReview
             .RevisionInProgress();
 
         // Act
-        ReviewIssue review = revisionInProgress.MarkInReview(RunStartedAt);
+        ReviewIssue review = revisionInProgress.MarkInReview(RunStartedAt, DateTimeOffset.UtcNow);
 
         // Assert
         review.ShouldSatisfyAllConditions(
@@ -85,7 +85,7 @@ public sealed class MarkInReview
             .RevisionInProgress();
 
         // Act
-        ReviewIssue review = revisionInProgress.MarkInReview(RunStartedAt);
+        ReviewIssue review = revisionInProgress.MarkInReview(RunStartedAt, DateTimeOffset.UtcNow);
 
         // Assert
         review.FeedbackCutoffAt.ShouldBe(RunStartedAt);

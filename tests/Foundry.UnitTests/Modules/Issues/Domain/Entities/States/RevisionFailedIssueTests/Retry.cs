@@ -30,7 +30,7 @@ public sealed class Retry
             .RevisionFailed();
 
         // Act
-        RevisionQueuedIssue revisionQueued = failed.Retry();
+        RevisionQueuedIssue revisionQueued = failed.Retry(DateTimeOffset.UtcNow);
 
         // Assert
         revisionQueued.Id.ShouldBe(failed.Id);
@@ -47,7 +47,7 @@ public sealed class Retry
             .RevisionFailed();
 
         // Act
-        failed.Retry();
+        failed.Retry(DateTimeOffset.UtcNow);
 
         // Assert
         IssueRevisionQueued domainEvent = failed.DomainEvents.ShouldHaveSingleItem().ShouldBeOfType<IssueRevisionQueued>();
@@ -67,7 +67,7 @@ public sealed class Retry
             .RevisionFailed();
 
         // Act
-        RevisionQueuedIssue revisionQueued = failed.Retry();
+        RevisionQueuedIssue revisionQueued = failed.Retry(DateTimeOffset.UtcNow);
 
         // Assert
         RevisionTrigger.ReviewFeedback rfRetry = revisionQueued.Trigger.ShouldBeOfType<RevisionTrigger.ReviewFeedback>();
@@ -95,7 +95,7 @@ public sealed class Retry
             .RevisionFailed();
 
         // Act
-        RevisionInProgressIssue revisionInProgress = failed.Retry().Claim(runId);
+        RevisionInProgressIssue revisionInProgress = failed.Retry(DateTimeOffset.UtcNow).Claim(runId, DateTimeOffset.UtcNow);
 
         // Assert — NewestConsumedCommentAt is now carried via Trigger; both must be ReviewFeedback
         RevisionTrigger.ReviewFeedback rfInProgress = revisionInProgress.Trigger.ShouldBeOfType<RevisionTrigger.ReviewFeedback>();

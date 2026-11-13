@@ -27,7 +27,7 @@ public sealed class FixChecks
             .ChecksPending();
 
         // Act
-        Action act = () => checksPending.FixChecks([]);
+        Action act = () => checksPending.FixChecks([], DateTimeOffset.UtcNow);
 
         // Assert
         ArgumentException exception = Should.Throw<ArgumentException>(act);
@@ -43,7 +43,7 @@ public sealed class FixChecks
             .ChecksPending();
 
         // Act
-        RevisionQueuedIssue revisionQueued = checksPending.FixChecks(FailingChecks);
+        RevisionQueuedIssue revisionQueued = checksPending.FixChecks(FailingChecks, DateTimeOffset.UtcNow);
 
         // Assert
         revisionQueued.Id.ShouldBe(checksPending.Id);
@@ -59,7 +59,7 @@ public sealed class FixChecks
             .ChecksPending();
 
         // Act
-        checksPending.FixChecks(FailingChecks);
+        checksPending.FixChecks(FailingChecks, DateTimeOffset.UtcNow);
 
         // Assert
         IssueRevisionQueued domainEvent = checksPending.DomainEvents.ShouldHaveSingleItem().ShouldBeOfType<IssueRevisionQueued>();
@@ -76,7 +76,7 @@ public sealed class FixChecks
             .ChecksPending();
 
         // Act
-        RevisionQueuedIssue revisionQueued = checksPending.FixChecks(FailingChecks);
+        RevisionQueuedIssue revisionQueued = checksPending.FixChecks(FailingChecks, DateTimeOffset.UtcNow);
 
         // Assert
         RevisionTrigger.FailedChecks trigger = revisionQueued.Trigger.ShouldBeOfType<RevisionTrigger.FailedChecks>();
@@ -94,7 +94,7 @@ public sealed class FixChecks
             .ChecksPending();
 
         // Act
-        RevisionQueuedIssue revisionQueued = checksPending.FixChecks(FailingChecks);
+        RevisionQueuedIssue revisionQueued = checksPending.FixChecks(FailingChecks, DateTimeOffset.UtcNow);
 
         // Assert
         revisionQueued.ChecksFixAttempts.ShouldBe(1);
@@ -109,7 +109,7 @@ public sealed class FixChecks
             .ChecksPendingFromFixChecks();
 
         // Act
-        RevisionQueuedIssue revisionQueued = checksPending.FixChecks(FailingChecks);
+        RevisionQueuedIssue revisionQueued = checksPending.FixChecks(FailingChecks, DateTimeOffset.UtcNow);
 
         // Assert
         revisionQueued.ChecksFixAttempts.ShouldBe(2);
@@ -127,7 +127,7 @@ public sealed class FixChecks
             .ChecksPending();
 
         // Act
-        RevisionQueuedIssue revisionQueued = checksPending.FixChecks(FailingChecks);
+        RevisionQueuedIssue revisionQueued = checksPending.FixChecks(FailingChecks, DateTimeOffset.UtcNow);
 
         // Assert
         revisionQueued.ShouldSatisfyAllConditions(

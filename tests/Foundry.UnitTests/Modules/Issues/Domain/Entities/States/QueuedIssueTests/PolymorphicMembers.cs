@@ -61,7 +61,7 @@ public sealed class PolymorphicMembers
             .WithIssueNumber(42)
             .WithTitle("Add retry logic")
             .ContinuableFailed()
-            .Retry();
+            .Retry(DateTimeOffset.UtcNow);
 
         // Act
         int tierRank = continuationQueued.TierRank;
@@ -126,7 +126,7 @@ public sealed class PolymorphicMembers
         ContinuationQueuedIssue continuationQueued = new IssueBuilder()
             .WithMonitoredRepositoryId(repositoryId)
             .ContinuableFailed()
-            .Retry();
+            .Retry(DateTimeOffset.UtcNow);
         BranchName expected = BranchName.From(continuationQueued.BranchName);
 
         // Act
@@ -214,7 +214,7 @@ public sealed class PolymorphicMembers
             .WithMonitoredRepositoryId(repositoryId)
             .Review();
         RevisionQueuedIssue revisionQueued = review.Revise(
-            [new ReviewComment("Fix this.")],
+            [new ReviewComment("Fix this.")], DateTimeOffset.UtcNow,
             omittedCommentCount: 12);
 
         // Act
@@ -233,7 +233,7 @@ public sealed class PolymorphicMembers
         ContinuationQueuedIssue continuationQueued = new IssueBuilder()
             .WithMonitoredRepositoryId(repositoryId)
             .ContinuableFailed()
-            .Retry();
+            .Retry(DateTimeOffset.UtcNow);
 
         // Act
         DispatchContext context = continuationQueued.Context;
@@ -277,7 +277,7 @@ public sealed class PolymorphicMembers
     public void WhenContinuationQueuedIssue_ContextRoleIsImplement()
     {
         // Arrange
-        ContinuationQueuedIssue continuationQueued = new IssueBuilder().ContinuableFailed().Retry();
+        ContinuationQueuedIssue continuationQueued = new IssueBuilder().ContinuableFailed().Retry(DateTimeOffset.UtcNow);
 
         // Act
         DispatchRole role = continuationQueued.Context.Role;
@@ -297,7 +297,7 @@ public sealed class PolymorphicMembers
         WorkerRunId workerRunId = WorkerRunId.New();
 
         // Act
-        Issue claimed = queued.Claim(workerRunId);
+        Issue claimed = queued.Claim(workerRunId, DateTimeOffset.UtcNow);
 
         // Assert
         claimed.ShouldBeOfType<InProgressIssue>();
@@ -311,7 +311,7 @@ public sealed class PolymorphicMembers
         FreshQueuedIssue queued = new IssueBuilder().WithMonitoredRepositoryId(repositoryId).FreshQueued();
 
         // Act
-        queued.Claim(WorkerRunId.New());
+        queued.Claim(WorkerRunId.New(), DateTimeOffset.UtcNow);
 
         // Assert
         queued.DomainEvents.ShouldContain(e => e is IssueInProgress);
@@ -328,7 +328,7 @@ public sealed class PolymorphicMembers
         WorkerRunId workerRunId = WorkerRunId.New();
 
         // Act
-        Issue claimed = revisionQueued.Claim(workerRunId);
+        Issue claimed = revisionQueued.Claim(workerRunId, DateTimeOffset.UtcNow);
 
         // Assert
         claimed.ShouldBeOfType<RevisionInProgressIssue>();
@@ -344,7 +344,7 @@ public sealed class PolymorphicMembers
             .RevisionQueued();
 
         // Act
-        revisionQueued.Claim(WorkerRunId.New());
+        revisionQueued.Claim(WorkerRunId.New(), DateTimeOffset.UtcNow);
 
         // Assert
         revisionQueued.DomainEvents.ShouldContain(e => e is IssueRevisionInProgress);
@@ -358,11 +358,11 @@ public sealed class PolymorphicMembers
         ContinuationQueuedIssue continuationQueued = new IssueBuilder()
             .WithMonitoredRepositoryId(repositoryId)
             .ContinuableFailed()
-            .Retry();
+            .Retry(DateTimeOffset.UtcNow);
         WorkerRunId workerRunId = WorkerRunId.New();
 
         // Act
-        Issue claimed = continuationQueued.Claim(workerRunId);
+        Issue claimed = continuationQueued.Claim(workerRunId, DateTimeOffset.UtcNow);
 
         // Assert
         claimed.ShouldBeOfType<InProgressIssue>();
@@ -376,10 +376,10 @@ public sealed class PolymorphicMembers
         ContinuationQueuedIssue continuationQueued = new IssueBuilder()
             .WithMonitoredRepositoryId(repositoryId)
             .ContinuableFailed()
-            .Retry();
+            .Retry(DateTimeOffset.UtcNow);
 
         // Act
-        continuationQueued.Claim(WorkerRunId.New());
+        continuationQueued.Claim(WorkerRunId.New(), DateTimeOffset.UtcNow);
 
         // Assert
         continuationQueued.DomainEvents.ShouldContain(e => e is IssueInProgress);
