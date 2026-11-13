@@ -290,6 +290,7 @@ public sealed class OutboxHarvestDispatch : IAsyncDisposable
         services.AddSingleton(TimeProvider.System);
         services.AddScoped<WorkerOutcomeApplier>();
         services.AddScoped<WorkerRunPublisher>();
+        services.AddSingleton<ISystemNotificationBroadcaster>(new CapturingSystemNotificationBroadcaster());
         services.AddScoped<IPublisher>(_ => new FakePublisher());
         services.AddScoped<IRepositoryDispatchQueries>(_ => StubRepositoryDispatchQueries.WithToken("ghp_test"));
         services.AddScoped<IRunPublishingCommands>(_ => new RecordingRunPublishingCommands());

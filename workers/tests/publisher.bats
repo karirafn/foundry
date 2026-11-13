@@ -942,7 +942,7 @@ HOOK
     [ "$(result_line)" = "$first" ]
 }
 
-@test "publish: an unreachable provider is a transient failure that never shows the token" {
+@test "publish: an unreachable provider is an unreachable failure that never shows the token" {
     start_run
     wcommit a.txt a "first"
     worker_bundle
@@ -951,7 +951,7 @@ HOOK
     publish
 
     [ "$status" -eq 1 ]
-    [[ "$(result_line)" == "FOUNDRY_PUBLISH result=failed kind=transient reason="*"Could not resolve host"* ]]
+    [[ "$(result_line)" == "FOUNDRY_PUBLISH result=failed kind=unreachable reason="*"Could not resolve host"* ]]
     [[ "$output" != *"ghp_publisher_token"* ]]
     [[ "$stderr" != *"ghp_publisher_token"* ]]
 }
@@ -968,7 +968,7 @@ HOOK
     [[ "$(result_line)" == "FOUNDRY_PUBLISH result=failed kind=permanent reason="*"Authentication failed"* ]]
 }
 
-@test "publish: an unreachable provider fails transient at once, without retrying in the script" {
+@test "publish: an unreachable provider fails unreachable at once, without retrying in the script" {
     start_run
     wcommit a.txt a "first"
     worker_bundle
@@ -977,11 +977,11 @@ HOOK
     publish
 
     [ "$status" -eq 1 ]
-    [ "$(result_line)" = "FOUNDRY_PUBLISH result=failed kind=transient reason=could not reach the repository: $GIT_HTTP_503" ]
+    [ "$(result_line)" = "FOUNDRY_PUBLISH result=failed kind=unreachable reason=could not reach the repository: $GIT_HTTP_503" ]
     [ -z "$(sleeps)" ]
 }
 
-@test "publish: an HTTP 429 is a transient failure" {
+@test "publish: an HTTP 429 is an unreachable failure" {
     start_run
     wcommit a.txt a "first"
     worker_bundle
@@ -990,7 +990,7 @@ HOOK
     publish
 
     [ "$status" -eq 1 ]
-    [[ "$(result_line)" == "FOUNDRY_PUBLISH result=failed kind=transient reason="*"returned error: 429" ]]
+    [[ "$(result_line)" == "FOUNDRY_PUBLISH result=failed kind=unreachable reason="*"returned error: 429" ]]
 }
 
 @test "publish: an HTTP 403 behind git's transport prefix is a permanent failure" {
