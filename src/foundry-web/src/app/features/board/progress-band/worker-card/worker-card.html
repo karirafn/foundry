@@ -1,0 +1,33 @@
+<div
+  class="worker-card"
+  [class.worker-card--done]="item().phase !== 'live'"
+  [class.fd-board-moved]="item().moved"
+>
+  <div class="worker-card__meta" [id]="idBase() + '-meta'">
+    <fd-role-tag [role]="item().role" />
+    <span class="worker-card__repo" [attr.title]="item().issue.repositorySlug"
+      >{{ item().issue.repositorySlug }} <strong>#{{ item().issue.issueNumber }}</strong></span
+    >
+    @if (item().phase === 'live') {
+      <span class="worker-card__elapsed"
+        ><span class="sr-only">Running for </span><span aria-hidden="true">running </span
+        >{{ elapsed() }}</span
+      >
+    } @else {
+      <span class="worker-card__completed">Completed</span>
+    }
+  </div>
+  <button
+    #button
+    type="button"
+    class="worker-card__title"
+    aria-haspopup="dialog"
+    [attr.aria-label]="label()"
+    [attr.aria-describedby]="idBase() + '-meta'"
+    [attr.title]="item().issue.title"
+    (click)="open.emit(button)"
+  >
+    {{ item().issue.title }}
+  </button>
+  <a class="worker-card__floor" routerLink="/floor" [fragment]="laneFragment()">Watch on Floor</a>
+</div>

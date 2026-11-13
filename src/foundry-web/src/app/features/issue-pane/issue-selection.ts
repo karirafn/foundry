@@ -247,16 +247,20 @@ export class IssueSelection {
     );
   }
 
-  // The invoker may have re-rendered elsewhere while the pane was open; then its card's button takes
-  // focus, and the page heading when the card left the page.
+  // The invoker may have re-rendered elsewhere while the pane was open (the card changed band); then
+  // the card's button takes focus, or its band heading when the card sits in a collapsed list, and
+  // the page heading when the card left the page.
   private _returnFocus(id: string): void {
     const invoker = this._invoker;
     this._invoker = null;
+    const card = this._host.querySelector<HTMLElement>(
+      `[data-issue-card="${id}"], [data-issue-id="${id}"]`,
+    );
+    const button = card?.querySelector<HTMLElement>('button') ?? null;
     const target =
       (invoker?.isConnected ? invoker : null) ??
-      this._host.querySelector<HTMLElement>(
-        `[data-issue-card="${id}"] button, [data-issue-id="${id}"] button`,
-      ) ??
+      (button !== null && button.closest('[hidden]') === null ? button : null) ??
+      card?.closest('section')?.querySelector<HTMLElement>('[data-band-heading]') ??
       this._host.querySelector<HTMLElement>('h1');
     target?.focus({ preventScroll: this._inView(target) });
   }

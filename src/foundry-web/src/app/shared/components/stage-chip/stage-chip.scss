@@ -1,0 +1,45 @@
+:host {
+  display: inline-flex;
+  min-width: 0;
+}
+
+.stage-chip {
+  align-items: center;
+  background: var(--fd-border-muted);
+  border-radius: 4px;
+  color: var(--fd-text-secondary);
+  display: inline-flex;
+  font-size: 11px;
+  font-weight: 500;
+  gap: 6px;
+  line-height: 1.5;
+  padding: 1px 8px 1px 6px;
+  white-space: nowrap;
+}
+
+.stage-chip__pips {
+  display: inline-flex;
+  gap: 2px;
+}
+
+.stage-chip__pip {
+  border: 1px solid var(--fd-border-control);
+  border-radius: 50%;
+  height: 5px;
+  width: 5px;
+
+  &[data-pip='past'] {
+    background: var(--fd-border-control);
+  }
+
+  &[data-pip='current'] {
+    background: var(--fd-text-primary);
+    border-color: var(--fd-text-primary);
+  }
+}
+
+@media (forced-colors: active) {
+  .stage-chip__pip[data-pip='current'] {
+    background: CanvasText;
+  }
+}

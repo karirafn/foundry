@@ -1,0 +1,25 @@
+// The board's two list shapes, shared by its bands.
+
+// Cards: as many 20rem columns as fit, never wider than the band.
+@mixin card-grid {
+  display: grid;
+  gap: var(--fd-spacing-md);
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 20rem), 1fr));
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+// Rows: one bordered list, each row separated by a rule.
+@mixin row-list {
+  border: 1px solid var(--fd-border-default);
+  border-radius: var(--fd-radius-md);
+  list-style: none;
+  margin: 0;
+  overflow: hidden;
+  padding: 0;
+
+  > li + li {
+    border-top: 1px solid var(--fd-border-muted);
+  }
+}

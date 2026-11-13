@@ -165,47 +165,24 @@ describe('DispatchControlsComponent', () => {
     expect(btn.classList.contains('dispatch-controls__toggle-btn--resume')).toBe(false);
   });
 
-  it('should show "Dispatch paused — usage limit" status when usage limit is active', () => {
-    // Arrange
-    const futureDate = new Date(Date.now() + 60_000).toISOString();
-
-    // Act
-    const { fixture } = setup({ usageLimitResetsAt: futureDate });
-    const el = fixture.nativeElement as HTMLElement;
-
-    // Assert
-    const status = el.querySelector('.dispatch-controls__status') as HTMLElement;
-    expect(status?.textContent?.trim()).toBe('Dispatch paused — usage limit');
-  });
-
-  it('should show "Dispatch paused" status when manually paused', () => {
+  it('should state no dispatch status, which the global banners own', () => {
     // Arrange / Act
     const { fixture } = setup({ isDispatchPaused: true, usageLimitResetsAt: null });
     const el = fixture.nativeElement as HTMLElement;
 
     // Assert
-    const status = el.querySelector('.dispatch-controls__status') as HTMLElement;
-    expect(status?.textContent?.trim()).toBe('Dispatch paused');
-  });
-
-  it('should show empty status text when dispatch is active', () => {
-    // Arrange / Act
-    const { fixture } = setup();
-    const el = fixture.nativeElement as HTMLElement;
-
-    // Assert
-    const status = el.querySelector('.dispatch-controls__status') as HTMLElement;
-    expect(status?.textContent?.trim()).toBe('');
+    expect(el.querySelector('[role="status"]')).toBeNull();
+    expect(el.textContent?.trim()).toBe('Resume all');
   });
 
   it('should display error message when pauseResumeError is set', () => {
     // Arrange / Act
-    const { fixture } = setup({ pauseResumeError: 'Failed to pause dispatch' });
+    const { fixture } = setup({ pauseResumeError: "Couldn't pause dispatch. Try again." });
     const el = fixture.nativeElement as HTMLElement;
 
     // Assert
     const errorSpan = el.querySelector('.dispatch-controls__error');
-    expect(errorSpan?.textContent?.trim()).toBe('Failed to pause dispatch');
+    expect(errorSpan?.textContent?.trim()).toBe("Couldn't pause dispatch. Try again.");
   });
 
   it('should not display error span when pauseResumeError is null', () => {

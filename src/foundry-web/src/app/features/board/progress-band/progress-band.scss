@@ -1,0 +1,71 @@
+@use '../../../../styles/board-lists' as *;
+
+:host {
+  display: block;
+}
+
+.progress-band__slots {
+  align-items: center;
+  color: var(--fd-text-secondary);
+  display: inline-flex;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  gap: var(--fd-spacing-sm);
+}
+
+.progress-band__pips {
+  display: inline-flex;
+  gap: 3px;
+}
+
+.progress-band__pip {
+  border: 1px solid var(--fd-border-control);
+  border-radius: 2px;
+  height: 8px;
+  width: 8px;
+
+  &--busy {
+    background: var(--fd-accent-working);
+    border-color: var(--fd-accent-working);
+  }
+}
+
+.progress-band__empty {
+  color: var(--fd-text-secondary);
+  font-size: 0.875rem;
+  margin: 0;
+}
+
+.progress-band__cards {
+  @include card-grid;
+}
+
+.progress-band__item {
+  min-width: 0;
+}
+
+.progress-band__subheading {
+  color: var(--fd-text-secondary);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  margin: var(--fd-spacing-lg) 0 var(--fd-spacing-sm);
+
+  &:first-child {
+    margin-top: 0;
+  }
+}
+
+.progress-band__rows {
+  @include row-list;
+}
+
+.progress-band__step {
+  grid-column: 1 / -1;
+}
+
+@media (forced-colors: active) {
+  .progress-band__pip--busy {
+    background: Highlight;
+    border-color: Highlight;
+  }
+}

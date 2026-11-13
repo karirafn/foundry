@@ -1,0 +1,79 @@
+<fd-board-band bandId="pipeline" label="Pipeline">
+  <span bandCount class="pipeline-band__count"
+    ><span aria-hidden="true">·</span><span class="sr-only">,</span>
+    {{ items().length }} queued</span
+  >
+  @if (orderStale()) {
+    <p bandAside class="pipeline-band__stale">
+      <svg
+        xmlns="http://www.w3.org/2000/svg"
+        width="14"
+        height="14"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        aria-hidden="true"
+        focusable="false"
+      >
+        <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+        <path d="M3 3v5h5" />
+        <path d="M12 7v5l4 2" />
+      </svg>
+      Queue order may be out of date
+    </p>
+  }
+
+  <ol class="pipeline-band__rows" id="board-pipeline-list" aria-label="Pipeline in dispatch order">
+    @for (item of shown(); track item.issue.id) {
+      <li [class.fd-board-collapse]="item.phase === 'collapse'">
+        <fd-board-row
+          [issue]="item.issue"
+          [next]="isNext(item)"
+          [phase]="item.phase"
+          [moved]="item.moved"
+          (open)="open.emit({ id: item.issue.id, invoker: $event })"
+        >
+          <span
+            rowLead
+            class="pipeline-band__position"
+            [class.pipeline-band__position--next]="isNext(item)"
+            [attr.aria-hidden]="item.slot.kind === 'ineligible' ? 'true' : null"
+          >
+            @if (item.slot.kind === 'position') {
+              <span class="sr-only">Position </span>#{{ item.slot.position
+              }}{{ isNext(item) ? ' next' : '' }}
+            } @else if (item.slot.kind === 'ineligible') {
+              —
+            }
+          </span>
+          <fd-role-tag rowLead [role]="item.role" />
+          <span rowMarker [class.pipeline-band__ineligible]="item.slot.kind === 'ineligible'">
+            @switch (item.slot.kind) {
+              @case ('detected') {
+                Detected<span class="sr-only">, no position yet</span>
+              }
+              @case ('ineligible') {
+                Repo ineligible
+              }
+            }
+          </span>
+        </fd-board-row>
+      </li>
+    }
+  </ol>
+
+  @if (items().length > preview) {
+    <button
+      type="button"
+      class="pipeline-band__more"
+      aria-controls="board-pipeline-list"
+      [attr.aria-expanded]="showAll()"
+      (click)="showAll.set(!showAll())"
+    >
+      {{ showAll() ? 'Show first ' + preview : 'Show all ' + items().length }}
+    </button>
+  }
+</fd-board-band>

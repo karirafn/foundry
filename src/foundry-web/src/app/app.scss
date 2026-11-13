@@ -1,3 +1,5 @@
+@use '../styles/breakpoints' as *;
+
 :host {
   display: flex;
   flex-direction: column;
@@ -8,6 +10,7 @@
 .app-header {
   display: flex;
   align-items: center;
+  gap: var(--fd-spacing-xl);
   height: var(--fd-app-header-height);
   padding: 0 var(--fd-spacing-xl);
   border-bottom: 1px solid var(--fd-border-default);
@@ -32,6 +35,43 @@
 }
 
 .app-header__nav {
+  align-items: stretch;
+  align-self: stretch;
+  display: flex;
+  flex: 0 0 auto;
+  gap: var(--fd-spacing-xs);
+}
+
+.app-header__nav-link {
+  align-items: center;
+  border-radius: var(--fd-radius-sm) var(--fd-radius-sm) 0 0;
+  color: var(--fd-text-secondary);
+  display: inline-flex;
+  font-size: 0.875rem;
+  font-weight: 500;
+  justify-content: center;
+  min-height: 44px;
+  padding: 0 var(--fd-spacing-md);
+  text-decoration: none;
+
+  &:hover {
+    color: var(--fd-text-primary);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--fd-text-link);
+    outline-offset: -2px;
+  }
+
+  &--active {
+    box-shadow: inset 0 -2px 0 var(--fd-nav-indicator);
+    color: var(--fd-text-primary);
+  }
+}
+
+// The status cluster; the agents chip, usage widget and account chip size themselves to this
+// container (`app-header-nav`, its name from before the cluster left the nav).
+.app-header__status {
   display: flex;
   flex: 1 1 auto;
   min-width: 0;
@@ -69,4 +109,34 @@
 .app-content {
   flex: 1;
   overflow-y: auto;
+}
+
+// Two rows: logo and status first, then the three nav links as equal 44px tabs.
+@media (width < $compact-breakpoint) {
+  .app-header {
+    align-content: flex-start;
+    column-gap: var(--fd-spacing-md);
+    flex-wrap: wrap;
+    padding: 0 var(--fd-spacing-md);
+    row-gap: 0;
+  }
+
+  .app-header__logo,
+  .app-header__status {
+    height: 48px;
+  }
+
+  .app-header__nav {
+    align-self: auto;
+    box-shadow: inset 0 1px 0 var(--fd-border-muted);
+    flex: 1 0 100%;
+    gap: 0;
+    order: 3;
+  }
+
+  .app-header__nav-link {
+    border-radius: 0;
+    flex: 1 1 0;
+    height: 44px;
+  }
 }

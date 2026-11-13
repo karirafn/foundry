@@ -319,9 +319,9 @@ The lifecycle splits into two partitions defined by `IssueStateRegistry` (server
 
 The dashboard shows each issue in one of four display groups. They come from the placement the server declares ([Issue Stage](#issue-stage), [Needs action](#needs-action), [Awaits dispatch](#awaits-dispatch)), not from a frontend list of states:
 
-- **Needs you** — Active with [Needs action](#needs-action): it progresses only after a person acts (`review`, `awaiting_input`, `unchanged`, `failed`, `continuable_failed`, `revision_failed`, `triage_failed`, `publish_failed`, `publish_blocked`, `branch_diverged`). On the board (`/`) it sits in the Needs-you row of its stage's column.
-- **Queued** — Active, [Awaits dispatch](#awaits-dispatch) and no Needs action: waiting for a worker run to be dispatched (`detected`, `triage_queued`, `triage_blocked`, `queued`, `blocked`, `revision_queued`, `continuation_queued`). It sits in its stage's queue section.
-- **In flow** — every other Active issue: a worker is running (`in_progress`, `revision_in_progress`, `triage_in_progress`, exactly `LIVE_STATES`) or Foundry's own code is on a [Code step](#code-step) (`rebase_pending`, `checks_pending`). It sits in its stage's in-flow cell.
+- **Needs you** — Active with [Needs action](#needs-action): it progresses only after a person acts (`review`, `awaiting_input`, `unchanged`, `failed`, `continuable_failed`, `revision_failed`, `triage_failed`, `publish_failed`, `publish_blocked`, `branch_diverged`). On the board (`/`) it sits in the Needs you band, first on the page, with a stage chip naming the stage where it stopped.
+- **Queued** — Active, [Awaits dispatch](#awaits-dispatch) and no Needs action: waiting for a worker run to be dispatched (`detected`, `triage_queued`, `triage_blocked`, `queued`, `blocked`, `revision_queued`, `continuation_queued`). It sits in the board's Pipeline band in global dispatch order, or in the Blocked band when it [Waits on blockers](#waits-on-blockers).
+- **In flow** — every other Active issue: a worker is running (`in_progress`, `revision_in_progress`, `triage_in_progress`, exactly `LIVE_STATES`) or Foundry's own code is on a [Code step](#code-step) (`rebase_pending`, `checks_pending`). It sits in the board's In progress band: a worker card while a worker runs, a step row on a Code step.
 - **Resolved** — stage Done (`completed`). It leaves the board and is listed on Resolved history (`/issues`), newest first, next to the run statistics.
 
 A few states deserve explicit note:
@@ -334,15 +334,15 @@ A few states deserve explicit note:
 
 ### Issue Stage
 
-The part of the lifecycle that currently owns an issue — **Triage**, **Implement**, **Awaiting review** (an open pull request waiting for a person), or **Done**. Declared by each state type (`Issue.Stage`), so a new state cannot compile without one. `awaiting_input` follows its resume target: a re-triage is in Triage, every other target in Implement. The board (`/`) shows one column per stage except Done; a completed issue leaves the board. Served on `IssueSummary.Stage` as `triage | implement | awaiting_review | done`.
+The part of the lifecycle that currently owns an issue — **Triage**, **Implement**, **Awaiting review** (an open pull request waiting for a person), or **Done**. Declared by each state type (`Issue.Stage`), so a new state cannot compile without one. `awaiting_input` follows its resume target: a re-triage is in Triage, every other target in Implement. The board (`/`) shows the stage as a stage chip on each card outside its stage, so where an issue stopped stays visible; a completed issue leaves the board. Served on `IssueSummary.Stage` as `triage | implement | awaiting_review | done`.
 
 ### Needs action
 
-True when the issue progresses only after a person acts (`Issue.NeedsAction`). A Needs-action issue is in the Needs you display group: it sits in its stage's Needs-you row on the board.
+True when the issue progresses only after a person acts (`Issue.NeedsAction`). A Needs-action issue is in the Needs you display group: it sits in the Needs you band at the top of the board, whatever its other facts, with a stage chip naming its stage.
 
 ### Awaits dispatch
 
-True when the issue is waiting for a worker run to be dispatched — queued, or detected or blocked before it can be queued (`detected`, `triage_queued`, `triage_blocked`, `queued`, `blocked`, `revision_queued`, `continuation_queued`). An awaiting-dispatch issue sits in its stage's queue section on the board.
+True when the issue is waiting for a worker run to be dispatched — queued, or detected or blocked before it can be queued (`detected`, `triage_queued`, `triage_blocked`, `queued`, `blocked`, `revision_queued`, `continuation_queued`). An awaiting-dispatch issue sits in the board's Pipeline band, one list in global dispatch order across stages, unless it [Waits on blockers](#waits-on-blockers): then it sits in the Blocked band.
 
 ### Waits on blockers
 

@@ -4,7 +4,9 @@ import { vi } from 'vitest';
 import { IssueSummary } from '../issues/issue.model';
 import { IssueService } from '../issues/issue.service';
 import { ConnectionStatus, IssueSignalRService } from '../../core/services/issue-signalr.service';
-import { BoardColumnView, BoardStateService } from './board-state.service';
+import { RepositorySummary } from '../settings/repositories/repository.model';
+import { RepositoryService } from '../settings/repositories/repository.service';
+import { BoardBandsView, BoardStateService } from './board-state.service';
 
 function buildIssue(overrides: Partial<IssueSummary> = {}): IssueSummary {
   return {
@@ -39,6 +41,7 @@ interface Harness {
   initialLoading: WritableSignal<boolean>;
   status: WritableSignal<ConnectionStatus>;
   hubHandlers: Map<string, (data: IssueSummary) => void>;
+  repositories: WritableSignal<RepositorySummary[]>;
 }
 
 function setup(): Harness {
@@ -46,6 +49,7 @@ function setup(): Harness {
   const initialLoading = signal(true);
   const status = signal<ConnectionStatus>('connected');
   const hubHandlers = new Map<string, (data: IssueSummary) => void>();
+  const repositories = signal<RepositorySummary[]>([]);
   const issueService = {
     issues,
     initialLoading,
@@ -57,6 +61,7 @@ function setup(): Harness {
     providers: [
       BoardStateService,
       { provide: IssueService, useValue: issueService },
+      { provide: RepositoryService, useValue: { repositories } },
       {
         provide: IssueSignalRService,
         useValue: {
@@ -73,6 +78,7 @@ function setup(): Harness {
     initialLoading,
     status,
     hubHandlers,
+    repositories,
   };
 }
 
@@ -87,8 +93,11 @@ function change(h: Harness, issues: IssueSummary[]): void {
   TestBed.tick();
 }
 
-function idsIn(columns: readonly BoardColumnView[], cell: 'queue' | 'flow' | 'needs'): string[] {
-  return columns.flatMap((c) => c[cell].map((card) => card.issue.id));
+function idsIn(
+  bands: BoardBandsView,
+  band: 'needs' | 'workers' | 'steps' | 'pipeline' | 'blocked',
+): string[] {
+  return bands[band].map((item) => item.issue.id);
 }
 
 function stubViewTransition(make: () => FakeTransition = resolvedTransition) {
@@ -125,7 +134,7 @@ describe('BoardStateService', () => {
     load(h, [buildIssue({ id: 'a' })]);
 
     // Assert
-    expect(idsIn(h.service.columns(), 'flow')).toEqual(['a']);
+    expect(idsIn(h.service.bands(), 'workers')).toEqual(['a']);
   });
 
   it('renders nothing while the first load is pending', () => {
@@ -137,7 +146,7 @@ describe('BoardStateService', () => {
     TestBed.tick();
 
     // Assert
-    expect(idsIn(h.service.columns(), 'flow')).toEqual([]);
+    expect(idsIn(h.service.bands(), 'workers')).toEqual([]);
   });
 
   it('holds a later change until the batching window closes', () => {
@@ -150,7 +159,7 @@ describe('BoardStateService', () => {
     vi.advanceTimersByTime(149);
 
     // Assert
-    expect(idsIn(h.service.columns(), 'needs')).toEqual([]);
+    expect(idsIn(h.service.bands(), 'needs')).toEqual([]);
   });
 
   it('applies a change 150 ms after the last one', async () => {
@@ -163,7 +172,7 @@ describe('BoardStateService', () => {
     await vi.advanceTimersByTimeAsync(150);
 
     // Assert
-    expect(idsIn(h.service.columns(), 'needs')).toEqual(['a']);
+    expect(idsIn(h.service.bands(), 'needs')).toEqual(['a']);
   });
 
   it('applies a burst of changes no later than 500 ms after the first', async () => {
@@ -178,7 +187,7 @@ describe('BoardStateService', () => {
     }
 
     // Assert
-    expect(h.service.columns()[1].flow[0].issue.title).toBe('t4');
+    expect(h.service.bands().workers[0].issue.title).toBe('t4');
   });
 
   it('runs the placement changes of one window as one view transition', async () => {
@@ -200,7 +209,7 @@ describe('BoardStateService', () => {
 
     // Assert
     expect(start).toHaveBeenCalledTimes(1);
-    expect(idsIn(h.service.columns(), 'needs')).toEqual(['a', 'b']);
+    expect(idsIn(h.service.bands(), 'needs')).toEqual(['a', 'b']);
   });
 
   it('applies a change that moves no card without a view transition', async () => {
@@ -215,7 +224,7 @@ describe('BoardStateService', () => {
 
     // Assert
     expect(start).not.toHaveBeenCalled();
-    expect(h.service.columns()[1].flow[0].issue.title).toBe('Renamed');
+    expect(h.service.bands().workers[0].issue.title).toBe('Renamed');
   });
 
   it('applies changes without animation when the browser has no view transitions', async () => {
@@ -230,7 +239,7 @@ describe('BoardStateService', () => {
     await vi.advanceTimersByTimeAsync(150);
 
     // Assert
-    expect(idsIn(h.service.columns(), 'needs')).toEqual(['a']);
+    expect(idsIn(h.service.bands(), 'needs')).toEqual(['a']);
   });
 
   it('catches the AbortError of a skipped transition', async () => {
@@ -251,7 +260,7 @@ describe('BoardStateService', () => {
 
     // Assert
     expect(error).not.toHaveBeenCalled();
-    expect(idsIn(h.service.columns(), 'needs')).toEqual(['a']);
+    expect(idsIn(h.service.bands(), 'needs')).toEqual(['a']);
   });
 
   it('snaps without a transition while the connection is lost', async () => {
@@ -309,7 +318,7 @@ describe('BoardStateService', () => {
     await vi.advanceTimersByTimeAsync(150);
 
     // Assert
-    expect(h.service.columns()[1].needs[0].arrived).toBe(true);
+    expect(h.service.bands().needs[0].arrived).toBe(true);
   });
 
   it('clears the arrival after 1300 ms', async () => {
@@ -323,7 +332,7 @@ describe('BoardStateService', () => {
     await vi.advanceTimersByTimeAsync(1300);
 
     // Assert
-    expect(h.service.columns()[1].needs[0].arrived).toBe(false);
+    expect(h.service.bands().needs[0].arrived).toBe(false);
   });
 
   it('does not mark cards that already needed a person on the first load', () => {
@@ -334,7 +343,7 @@ describe('BoardStateService', () => {
     load(h, [buildIssue({ id: 'a', needsAction: true, state: 'failed' })]);
 
     // Assert
-    expect(h.service.columns()[1].needs[0].arrived).toBe(false);
+    expect(h.service.bands().needs[0].arrived).toBe(false);
   });
 
   it('announces a card that starts needing a person', async () => {
@@ -414,7 +423,7 @@ describe('BoardStateService', () => {
       await vi.advanceTimersByTimeAsync(150);
 
       // Assert
-      const needs = h.service.columns()[2].needs;
+      const needs = h.service.bands().needs;
       expect(needs.map((c) => [c.issue.id, c.phase])).toEqual([
         ['z', 'live'],
         ['a', 'confirm'],
@@ -437,7 +446,7 @@ describe('BoardStateService', () => {
       await vi.advanceTimersByTimeAsync(1200);
 
       // Assert
-      expect(h.service.columns()[2].needs[0].phase).toBe('collapse');
+      expect(h.service.bands().needs[0].phase).toBe('collapse');
     });
 
     it('removes the card once the collapse has run', async () => {
@@ -456,7 +465,7 @@ describe('BoardStateService', () => {
       await vi.advanceTimersByTimeAsync(1200 + 180);
 
       // Assert
-      expect(h.service.columns()[2].needs).toEqual([]);
+      expect(h.service.bands().needs).toEqual([]);
     });
 
     it('announces the completion', async () => {
@@ -489,7 +498,7 @@ describe('BoardStateService', () => {
       await vi.advanceTimersByTimeAsync(150);
 
       // Assert
-      expect(idsIn(h.service.columns(), 'flow')).toEqual([]);
+      expect(idsIn(h.service.bands(), 'workers')).toEqual([]);
     });
   });
 
@@ -502,34 +511,172 @@ describe('BoardStateService', () => {
     load(h, [buildIssue({ id: 'a', stage: null })]);
 
     // Assert
-    expect(idsIn(h.service.columns(), 'flow')).toEqual([]);
+    expect(idsIn(h.service.bands(), 'workers')).toEqual([]);
     expect(warn).toHaveBeenCalled();
   });
 
-  it('counts the cards waiting in the queues', () => {
+  it('counts every alert and item on the board', () => {
     // Arrange
     const h = setup();
 
     // Act
     load(h, [
-      buildIssue({ id: 'a', awaitsDispatch: true, state: 'queued' }),
-      buildIssue({ id: 'b', awaitsDispatch: true, state: 'triage_queued', stage: 'triage' }),
+      buildIssue({
+        id: 'a',
+        awaitsDispatch: true,
+        state: 'queued',
+        repositoryEligibilityStatus: 'ineligible',
+      }),
+      buildIssue({ id: 'b', needsAction: true, state: 'failed' }),
       buildIssue({ id: 'c' }),
     ]);
 
     // Assert
-    expect(h.service.waitingCount()).toBe(2);
+    expect(h.service.itemCount()).toBe(4);
   });
 
-  it('counts the cards that need a person', () => {
+  it('places the issues in their bands', () => {
     // Arrange
     const h = setup();
 
     // Act
-    load(h, [buildIssue({ id: 'a', needsAction: true, state: 'failed' }), buildIssue({ id: 'b' })]);
+    load(h, [
+      buildIssue({ id: 'n', needsAction: true, state: 'failed' }),
+      buildIssue({ id: 'w' }),
+      buildIssue({ id: 's', state: 'checks_pending', codeStep: 'checks' }),
+      buildIssue({ id: 'p', state: 'queued', awaitsDispatch: true }),
+      buildIssue({ id: 'b', state: 'blocked', awaitsDispatch: true, waitsOnBlockers: true }),
+    ]);
 
     // Assert
-    expect(h.service.needsCount()).toBe(1);
+    const bands = h.service.bands();
+    expect([
+      idsIn(bands, 'needs'),
+      idsIn(bands, 'workers'),
+      idsIn(bands, 'steps'),
+      idsIn(bands, 'pipeline'),
+      idsIn(bands, 'blocked'),
+    ]).toEqual([['n'], ['w'], ['s'], ['p'], ['b']]);
+  });
+
+  it('applies a pipeline renumbering without a view transition', async () => {
+    // Arrange
+    const h = setup();
+    const a = buildIssue({ id: 'a', state: 'queued', awaitsDispatch: true });
+    const b = buildIssue({ id: 'b', state: 'queued', awaitsDispatch: true });
+    load(h, [a, b]);
+    const start = stubViewTransition();
+
+    // Act
+    change(h, [b, a]);
+    await vi.advanceTimersByTimeAsync(150);
+
+    // Assert
+    expect(start).not.toHaveBeenCalled();
+    expect(idsIn(h.service.bands(), 'pipeline')).toEqual(['b', 'a']);
+  });
+
+  it('glides a band change even while the pipeline renumbers', async () => {
+    // Arrange
+    const h = setup();
+    const queued = Array.from({ length: 20 }, (_, i) =>
+      buildIssue({ id: `q${i}`, state: 'queued', awaitsDispatch: true }),
+    );
+    load(h, [buildIssue({ id: 'w' }), ...queued]);
+    const start = stubViewTransition();
+
+    // Act
+    change(h, [buildIssue({ id: 'w', needsAction: true, state: 'failed' }), ...queued.reverse()]);
+    await vi.advanceTimersByTimeAsync(150);
+
+    // Assert
+    expect(start).toHaveBeenCalledTimes(1);
+  });
+
+  it('snaps when more than 12 cards change band', async () => {
+    // Arrange
+    const h = setup();
+    const running = Array.from({ length: 13 }, (_, i) => buildIssue({ id: `w${i}` }));
+    load(h, running);
+    const start = stubViewTransition();
+
+    // Act
+    change(
+      h,
+      running.map((i) => ({ ...i, needsAction: true, state: 'failed' as const })),
+    );
+    await vi.advanceTimersByTimeAsync(150);
+
+    // Assert
+    expect(start).not.toHaveBeenCalled();
+    expect(h.service.bands().needs).toHaveLength(13);
+  });
+
+  it('announces a worker that starts', async () => {
+    // Arrange
+    const h = setup();
+    load(h, [buildIssue({ id: 'a', issueNumber: 7, state: 'queued', awaitsDispatch: true })]);
+
+    // Act
+    change(h, [buildIssue({ id: 'a', issueNumber: 7, state: 'in_progress' })]);
+    await vi.advanceTimersByTimeAsync(150);
+
+    // Assert
+    expect(h.service.announcement()).toBe('#7 started: implement');
+  });
+
+  it('announces a repository that newly holds issues', async () => {
+    // Arrange
+    const h = setup();
+    load(h, [
+      buildIssue({ id: 'a', state: 'queued', awaitsDispatch: true, repositorySlug: 'acme/web' }),
+    ]);
+
+    // Act
+    change(h, [
+      buildIssue({
+        id: 'a',
+        state: 'queued',
+        awaitsDispatch: true,
+        repositorySlug: 'acme/web',
+        repositoryEligibilityStatus: 'ineligible',
+      }),
+    ]);
+    await vi.advanceTimersByTimeAsync(150);
+
+    // Assert
+    expect(h.service.announcement()).toBe("web can't be worked on");
+  });
+
+  it('fills an alert from the repository list once it loads', async () => {
+    // Arrange
+    const h = setup();
+    load(h, [
+      buildIssue({
+        id: 'a',
+        state: 'queued',
+        awaitsDispatch: true,
+        repositoryEligibilityStatus: 'ineligible',
+      }),
+    ]);
+
+    // Act
+    h.repositories.set([
+      {
+        id: 'repo-1',
+        slug: 'acme/api',
+        eligibility: {
+          status: 'ineligible',
+          violations: [{ rule: 'r', description: 'Require pull requests' }],
+          reason: null,
+        },
+      } as RepositorySummary,
+    ]);
+    TestBed.tick();
+    await vi.advanceTimersByTimeAsync(150);
+
+    // Assert
+    expect(h.service.bands().alerts[0].firstViolation).toBe('Require pull requests');
   });
 
   it('stops listening to the hub when destroyed', () => {

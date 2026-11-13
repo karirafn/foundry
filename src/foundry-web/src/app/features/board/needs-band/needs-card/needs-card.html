@@ -1,0 +1,47 @@
+<div
+  class="needs-card"
+  [attr.data-tone]="tone()"
+  [class.needs-card--arrived]="item().arrived"
+  [class.fd-board-moved]="item().moved"
+>
+  <div class="needs-card__meta" [id]="idBase() + '-meta'">
+    @if (live()) {
+      <span class="needs-card__reason">{{ item().reason.label }}</span>
+    } @else {
+      <span class="needs-card__reason">Completed</span>
+    }
+    <fd-stage-chip [label]="stageLabel()" [step]="stageStep()" [steps]="stageCount" />
+    <span class="needs-card__repo" [attr.title]="item().issue.repositorySlug"
+      >{{ item().issue.repositorySlug }} <strong>#{{ item().issue.issueNumber }}</strong></span
+    >
+  </div>
+  <button
+    #button
+    type="button"
+    class="needs-card__title"
+    aria-haspopup="dialog"
+    [attr.aria-label]="label()"
+    [attr.aria-describedby]="idBase() + '-meta ' + idBase() + '-why ' + idBase() + '-age'"
+    (click)="open.emit(button)"
+  >
+    {{ item().issue.title }}
+  </button>
+  <p class="needs-card__why" [id]="idBase() + '-why'">{{ item().explanation }}</p>
+  <div class="needs-card__foot">
+    <time
+      class="needs-card__age"
+      [id]="idBase() + '-age'"
+      [attr.datetime]="item().issue.enteredStateAt"
+      [attr.title]="item().issue.enteredStateAt | date: 'medium'"
+      >waiting {{ waiting() }}</time
+    >
+    @if (reviewLink(); as link) {
+      @if (link.href | safeHref; as href) {
+        <a class="needs-card__link" [href]="href" target="_blank" rel="noopener noreferrer"
+          >{{ link.label }} <span aria-hidden="true">↗</span
+          ><span class="sr-only">{{ link.hint }}</span></a
+        >
+      }
+    }
+  </div>
+</div>

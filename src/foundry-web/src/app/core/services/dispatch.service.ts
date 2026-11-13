@@ -2,8 +2,8 @@ import { Injectable, Signal, WritableSignal, inject, signal } from '@angular/cor
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { GlobalSettingsResponse, PausedHost } from '../models/settings.model';
 
-const PAUSE_DISPATCH_ERROR = 'Failed to pause dispatch';
-const RESUME_DISPATCH_ERROR = 'Failed to resume dispatch';
+const PAUSE_DISPATCH_ERROR = "Couldn't pause dispatch. Try again.";
+const RESUME_DISPATCH_ERROR = "Couldn't resume dispatch. Try again.";
 
 @Injectable({ providedIn: 'root' })
 export class DispatchService {

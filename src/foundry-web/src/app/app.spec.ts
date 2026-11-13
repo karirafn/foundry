@@ -326,7 +326,7 @@ describe('App', () => {
     // Arrange — provide a non-null snapshot so the widget renders
     const { fixture } = setupApp(false, buildTestSnapshot());
     const compiled = fixture.nativeElement as HTMLElement;
-    const nav = compiled.querySelector('.app-header__nav');
+    const nav = compiled.querySelector('.app-header__status');
 
     // Assert
     expect(nav).not.toBeNull();
@@ -363,7 +363,7 @@ describe('App', () => {
       const compiled = fixture.nativeElement as HTMLElement;
 
       // Act
-      const nav = compiled.querySelector('.app-header__nav');
+      const nav = compiled.querySelector('.app-header__status');
       const navChildren = Array.from(nav?.children ?? []);
       const agentsChip = nav?.querySelector('fd-agents-chip');
       const link = agentsChip?.querySelector('a');

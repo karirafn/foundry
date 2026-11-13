@@ -99,16 +99,8 @@
   }
 }
 
-// Board card loops and pulses, kept here to hold the card stylesheet inside its style budget.
-@keyframes fd-board-running-edge {
-  from {
-    transform: translateY(-100%);
-  }
-  to {
-    transform: translateY(250%);
-  }
-}
-
+// Board card pulses and list-item motion, kept here to hold the card stylesheets inside their style
+// budget.
 @keyframes fd-board-needs-pulse {
   from {
     box-shadow: 0 0 0 0 color-mix(in srgb, var(--fd-card-accent) 55%, transparent);
@@ -118,12 +110,35 @@
   }
 }
 
-@keyframes fd-board-needs-glow {
-  0%,
-  100% {
+@keyframes fd-board-card-collapse {
+  to {
+    grid-template-rows: 0fr;
+    margin-block: 0;
     opacity: 0;
   }
-  50% {
-    opacity: 0.18;
+}
+
+// A completed card's list item folds away; its child needs `min-height: 0`.
+.fd-board-collapse {
+  animation: fd-board-card-collapse var(--fd-motion-exit) var(--fd-ease-exit) forwards;
+  display: grid;
+  grid-template-rows: 1fr;
+  overflow: hidden;
+}
+
+// A card that changed band without a glide (reduced motion) fades in.
+.fd-board-moved {
+  animation: fd-fade-in 200ms ease both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  // Outrank the global 0.01ms rule, so these stay opacity fades.
+  .fd-board-moved {
+    animation-duration: 200ms !important;
+  }
+
+  .fd-board-collapse {
+    animation: fd-fade-out 200ms ease forwards;
+    animation-duration: 200ms !important;
   }
 }

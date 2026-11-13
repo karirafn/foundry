@@ -1,0 +1,48 @@
+@use '../../../../styles/board-lists' as *;
+
+:host {
+  display: block;
+}
+
+.needs-band__count {
+  background: var(--fd-text-warning);
+  border-radius: 9999px;
+  color: var(--fd-bg-page);
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  line-height: 1.5;
+  min-width: 1.5rem;
+  padding: 0 var(--fd-spacing-sm);
+  text-align: center;
+}
+
+.needs-band__empty {
+  align-items: center;
+  color: var(--fd-text-secondary);
+  display: flex;
+  font-size: 0.875rem;
+  gap: var(--fd-spacing-sm);
+  margin: 0;
+
+  svg {
+    color: var(--fd-text-success);
+  }
+}
+
+.needs-band__alerts {
+  list-style: none;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--fd-spacing-sm);
+  margin: 0 0 var(--fd-spacing-md);
+}
+
+.needs-band__cards {
+  @include card-grid;
+}
+
+.needs-band__item {
+  min-width: 0;
+}

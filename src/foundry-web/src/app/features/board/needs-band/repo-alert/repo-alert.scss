@@ -1,0 +1,58 @@
+@use '../../../../../styles/controls' as *;
+
+:host {
+  display: block;
+}
+
+.repo-alert {
+  @include warning-callout(var(--fd-spacing-sm) var(--fd-spacing-md));
+
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--fd-spacing-xs) var(--fd-spacing-md);
+}
+
+.repo-alert__icon {
+  color: var(--fd-text-warning);
+  flex-shrink: 0;
+}
+
+.repo-alert__body {
+  flex: 1 1 16rem;
+  min-width: 0;
+}
+
+.repo-alert__lead,
+.repo-alert__violation {
+  margin: 0;
+}
+
+.repo-alert__repo {
+  color: var(--fd-text-warning);
+  font-family: var(--fd-font-mono);
+  font-weight: 600;
+}
+
+.repo-alert__violation {
+  color: var(--fd-text-secondary);
+  margin-top: 2px;
+}
+
+.repo-alert__link {
+  align-items: center;
+  border-radius: var(--fd-radius-sm);
+  color: var(--fd-text-link);
+  display: inline-flex;
+  font-weight: 500;
+  min-height: 32px;
+  white-space: nowrap;
+
+  &:focus-visible {
+    @include focus-ring;
+  }
+
+  @media (any-pointer: coarse) {
+    min-height: 44px;
+  }
+}

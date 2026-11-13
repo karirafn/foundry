@@ -1,76 +1,58 @@
 <section class="board-page" aria-labelledby="board-heading">
   <header class="board-page__header" [attr.inert]="sheetCoversBoard() ? '' : null">
     <h1 #heading id="board-heading" class="board-page__heading" tabindex="-1">Board</h1>
-    <fd-board-summary
-      [waitingCount]="board.waitingCount()"
-      [needsCount]="board.needsCount()"
-      (needsYou)="focusFirstNeedsCard()"
-    />
+    <fd-dispatch-controls />
   </header>
 
   @if (board.stale()) {
-    <p class="board-page__note board-page__note--stale">
-      Connection lost — showing last known state
-    </p>
-  }
-
-  @if (issueService.queueOrderStale()) {
-    <p class="board-page__note">
-      <svg
-        xmlns="http://www.w3.org/2000/svg"
-        width="16"
-        height="16"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        stroke-width="2"
-        stroke-linecap="round"
-        stroke-linejoin="round"
-        aria-hidden="true"
-        focusable="false"
-      >
-        <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
-        <path d="M3 3v5h5" />
-        <path d="M12 7v5l4 2" />
-      </svg>
-      Queue order may be out of date
-    </p>
+    <p class="board-page__note">Connection lost — showing last known state</p>
   }
 
   @if (issueService.loadError()) {
     <div class="board-page__error" role="alert">
-      <span>Failed to load issues</span>
+      <span>Couldn't load the board.</span>
       <button type="button" class="board-page__retry" (click)="retryLoad()">Retry</button>
     </div>
   } @else if (empty()) {
     <p class="board-page__empty">
       Nothing is in flight. Add the <code>{{ triggerLabel }}</code> label to an issue to start work.
     </p>
+  } @else if (loading()) {
+    <div class="board" role="status" aria-busy="true">
+      <span class="sr-only">Loading the board…</span>
+      <div class="board-page__skeleton" aria-hidden="true"></div>
+      <div class="board-page__skeleton" aria-hidden="true"></div>
+    </div>
   } @else {
+    @let bands = board.bands();
     <div
       class="board"
       [class.board--stale]="board.stale()"
       [class.board--glided]="board.glided()"
-      [style.--fd-board-stages]="stageCount"
       [attr.inert]="sheetCoversBoard() ? '' : null"
-      [attr.role]="loading() ? 'status' : null"
-      [attr.aria-busy]="loading() || null"
     >
-      @if (loading()) {
-        <span class="sr-only">Loading the board…</span>
-      }
-      <div class="board__needs-band" aria-hidden="true">
-        @if (!loading()) {
-          <span class="board__needs-caption">Needs you · {{ board.needsCount() }}</span>
-        }
-      </div>
-      @for (column of board.columns(); track column.stage.id; let i = $index) {
-        <fd-board-column
-          [column]="column"
-          [position]="i + 1"
-          [loading]="loading()"
+      <fd-needs-band
+        [alerts]="bands.alerts"
+        [items]="bands.needs"
+        [now]="now()"
+        (open)="openCard($event)"
+      />
+      <fd-progress-band
+        [workers]="bands.workers"
+        [steps]="bands.steps"
+        [queuedCount]="bands.pipeline.length"
+        [now]="now()"
+        (open)="openCard($event)"
+      />
+      @if (bands.pipeline.length > 0) {
+        <fd-pipeline-band
+          [items]="bands.pipeline"
+          [orderStale]="issueService.queueOrderStale()"
           (open)="openCard($event)"
         />
+      }
+      @if (bands.blocked.length > 0) {
+        <fd-blocked-band [items]="bands.blocked" (open)="openCard($event)" />
       }
     </div>
   }
@@ -88,7 +70,11 @@
   >
     <ng-template>
       @if (selection.paneId(); as id) {
-        <fd-issue-pane [issueId]="id" [summary]="selection.summary()" (closed)="selection.close()" />
+        <fd-issue-pane
+          [issueId]="id"
+          [summary]="selection.summary()"
+          (closed)="selection.close()"
+        />
       }
     </ng-template>
   </fd-side-sheet>

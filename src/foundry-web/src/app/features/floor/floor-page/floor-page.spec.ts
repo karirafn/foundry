@@ -6,6 +6,9 @@ import { AgentActivity, AgentActivityEnded } from '../../../core/models/agent-ac
 import { IssueSignalRService } from '../../../core/services/issue-signalr.service';
 import { FakeHubTransport, provideFakeHubs } from '../../../core/testing/fake-hub-transport';
 import { FloorPageComponent } from './floor-page';
+import { ActivatedRoute } from '@angular/router';
+import { of } from 'rxjs';
+import { vi } from 'vitest';
 
 function buildActivity(workerRunId: string, issueId: string): AgentActivity {
   return {
@@ -38,7 +41,7 @@ function issueItem(id: string, issueNumber: number, state: string) {
   };
 }
 
-async function setup() {
+async function setup(fragment: string | null = null) {
   const hub = new FakeHubTransport();
   TestBed.configureTestingModule({
     imports: [FloorPageComponent],
@@ -46,6 +49,7 @@ async function setup() {
       provideHttpClient(),
       provideHttpClientTesting(),
       provideFakeHubs({ workers: hub }),
+      { provide: ActivatedRoute, useValue: { fragment: of(fragment) } },
       {
         provide: IssueSignalRService,
         useValue: { on: () => {}, onReconnected: () => {}, connectionStatus: signal('connected') },
@@ -71,6 +75,51 @@ function flushCapacity(httpMock: HttpTestingController, freeSlots: number, maxCo
 
 describe('FloorPageComponent', () => {
   afterEach(() => TestBed.resetTestingModule());
+
+  describe('fragment', () => {
+    afterEach(() => {
+      vi.restoreAllMocks();
+      document.body.innerHTML = '';
+    });
+
+    it('scrolls to and focuses the lane heading the fragment names', async () => {
+      // Arrange
+      const scroll = vi.fn();
+      Element.prototype.scrollIntoView = scroll;
+      const { fixture, httpMock, hub, el } = await setup('floor-lane-issue-2');
+      document.body.appendChild(el);
+      flushIssues(httpMock, [issueItem('issue-1', 1, 'in_progress'), issueItem('issue-2', 2, 'in_progress')]);
+
+      // Act
+      hub.emit('AgentActivity', buildActivity('run-1', 'issue-1'));
+      hub.emit('AgentActivity', buildActivity('run-2', 'issue-2'));
+      fixture.detectChanges();
+      await fixture.whenStable();
+
+      // Assert
+      expect(document.activeElement?.id).toBe('floor-lane-issue-2');
+      expect(document.activeElement?.getAttribute('tabindex')).toBe('-1');
+      expect(scroll).toHaveBeenCalledWith({ block: 'start' });
+    });
+
+    it('ignores a fragment that names no lane', async () => {
+      // Arrange
+      const scroll = vi.fn();
+      Element.prototype.scrollIntoView = scroll;
+      const { fixture, httpMock, hub, el } = await setup('floor-lane-gone');
+      document.body.appendChild(el);
+      flushIssues(httpMock, [issueItem('issue-1', 1, 'in_progress')]);
+
+      // Act
+      hub.emit('AgentActivity', buildActivity('run-1', 'issue-1'));
+      fixture.detectChanges();
+      await fixture.whenStable();
+
+      // Assert
+      expect(scroll).not.toHaveBeenCalled();
+      expect(document.activeElement).toBe(document.body);
+    });
+  });
 
   it('should render one lane per active run and free slots from server capacity', async () => {
     // Arrange

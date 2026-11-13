@@ -1,0 +1,32 @@
+<div
+  class="board-row"
+  [class.board-row--next]="next()"
+  [class.board-row--done]="phase() !== 'live'"
+  [class.fd-board-moved]="moved()"
+>
+  <span class="board-row__lead" [id]="idBase() + '-lead'"><ng-content select="[rowLead]" /></span>
+  <span class="board-row__repo" [id]="idBase() + '-repo'" [attr.title]="issue().repositorySlug"
+    ><span aria-hidden="true">{{ name() }}</span
+    ><span class="sr-only">{{ issue().repositorySlug }}</span>
+    <span class="board-row__number">#{{ issue().issueNumber }}</span></span
+  >
+  <button
+    #button
+    type="button"
+    class="board-row__title"
+    aria-haspopup="dialog"
+    [attr.aria-label]="label()"
+    [attr.aria-describedby]="describedBy()"
+    [attr.title]="issue().title"
+    (click)="open.emit(button)"
+  >
+    {{ issue().title }}
+  </button>
+  <span class="board-row__marker" [id]="idBase() + '-marker'">
+    @if (phase() !== 'live') {
+      <span class="board-row__completed">Completed</span>
+    } @else {
+      <ng-content select="[rowMarker]" />
+    }
+  </span>
+</div>

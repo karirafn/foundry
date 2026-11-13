@@ -1,5 +1,5 @@
 import { ChangeDetectionStrategy, Component, Signal, WritableSignal, effect, inject, signal, untracked } from '@angular/core';
-import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
+import { IsActiveMatchOptions, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { SystemBannerComponent } from './shared/components/system-banner/system-banner';
 import { ForgeOverlayComponent } from './shared/components/forge-overlay/forge-overlay';
 import { ToastHostComponent } from './shared/components/toast-host/toast-host';
@@ -18,6 +18,14 @@ import { AccountService } from './features/settings/accounts/account.service';
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class App {
+  /** Board is the root path, so it is active only there; the open-issue query keeps it active. */
+  protected readonly boardMatch: IsActiveMatchOptions = {
+    paths: 'exact',
+    queryParams: 'ignored',
+    matrixParams: 'ignored',
+    fragment: 'ignored',
+  };
+
   private readonly _settingsService = inject(SettingsService);
   private readonly _accountService = inject(AccountService);
   private readonly _workerSignalR = inject(WorkerSignalRService);

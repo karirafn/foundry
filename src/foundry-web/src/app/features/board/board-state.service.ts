@@ -15,35 +15,47 @@ import { DOCUMENT } from '@angular/common';
 import { IssueSignalRService } from '../../core/services/issue-signalr.service';
 import { IssueSummary } from '../issues/issue.model';
 import { IssueService } from '../issues/issue.service';
+import { RepositorySummary } from '../settings/repositories/repository.model';
+import { RepositoryService } from '../settings/repositories/repository.service';
 import {
-  BoardCard,
-  BoardCell,
-  BoardColumn,
+  BlockedItem,
+  BoardBand,
+  BoardBands,
+  BoardItem,
   CODE_STEP_LABELS,
-  buildBoardColumns,
+  ITEM_BANDS,
+  NeedsItem,
+  PipelineItem,
+  RepoAlert,
+  StepItem,
+  WorkerItem,
+  buildBoardBands,
+  repoName,
 } from './board.model';
 
 /** `confirm` shows a completed card's check mark; `collapse` folds it away before removal. */
 export type CardPhase = 'live' | 'confirm' | 'collapse';
 
-export interface BoardCardView extends BoardCard {
+/** An item as the board renders it, with its motion state. */
+export type ItemView<T extends BoardItem = BoardItem> = T & {
   readonly phase: CardPhase;
   /** The card just started needing a person; it pulses once. */
   readonly arrived: boolean;
-  /** The card moved without a glide (reduced motion); it fades in instead. */
+  /** The card changed band without a glide (reduced motion); it fades in instead. */
   readonly moved: boolean;
-}
+};
 
-export interface BoardColumnView {
-  readonly stage: BoardColumn['stage'];
-  readonly queue: readonly BoardCardView[];
-  readonly flow: readonly BoardCardView[];
-  readonly needs: readonly BoardCardView[];
-  readonly count: number;
+export interface BoardBandsView {
+  readonly alerts: readonly RepoAlert[];
+  readonly needs: readonly ItemView<NeedsItem>[];
+  readonly workers: readonly ItemView<WorkerItem>[];
+  readonly steps: readonly ItemView<StepItem>[];
+  readonly pipeline: readonly ItemView<PipelineItem>[];
+  readonly blocked: readonly ItemView<BlockedItem>[];
 }
 
 interface Ghost {
-  readonly card: BoardCard;
+  readonly item: BoardItem;
   readonly index: number;
   readonly phase: 'confirm' | 'collapse';
 }
@@ -51,6 +63,7 @@ interface Ghost {
 interface Batch {
   readonly issues: readonly IssueSummary[];
   readonly queueIds: readonly string[];
+  readonly repositories: readonly RepositorySummary[];
 }
 
 const DEBOUNCE_MS = 150;
@@ -59,44 +72,30 @@ const ARRIVAL_MS = 1300;
 const CONFIRM_MS = 1200;
 // Matches --fd-motion-exit in styles/_motion.scss.
 const COLLAPSE_MS = 180;
-// Matches the reduced-motion fade on .board-card--moved.
+// Matches the reduced-motion fade on a moved card.
 const MOVED_FADE_MS = 200;
-// A reload that moves this many cards snaps: a glide that busy reads as noise, not progress.
+// A reload that moves this many cards between bands snaps: a glide that busy reads as noise.
 const MAX_GLIDING_CARDS = 12;
 // A transition whose update never renders would hold the board; the browser times it out anyway.
 const RENDER_WAIT_MS = 1000;
-const CELLS: readonly BoardCell[] = ['queue', 'flow', 'needs'];
 
 type ViewTransitionDocument = Document & {
   startViewTransition?: (update: () => Promise<void>) => ViewTransition;
 };
 
-function emptyColumns(): BoardColumn[] {
-  return buildBoardColumns([], []);
+const EMPTY_BANDS: BoardBands = buildBoardBands([], [], []);
+
+function itemsOf(bands: BoardBands): BoardItem[] {
+  return ITEM_BANDS.flatMap((band) => bands[band] as readonly BoardItem[]);
 }
 
-function placementKeys(columns: readonly BoardColumn[]): Map<string, string> {
-  const keys = new Map<string, string>();
-  for (const column of columns) {
-    for (const cell of CELLS) {
-      column[cell].forEach((card, index) =>
-        keys.set(card.issue.id, `${column.stage.id}|${cell}|${index}`),
-      );
-    }
-  }
-  return keys;
+// Keyed by band only: a pipeline row that is renumbered has not moved.
+function placementKeys(bands: BoardBands): Map<string, BoardBand> {
+  return new Map(itemsOf(bands).map((item) => [item.issue.id, item.band]));
 }
 
-function cardsOf(columns: readonly BoardColumn[]): Map<string, BoardCard> {
-  const cards = new Map<string, BoardCard>();
-  for (const column of columns) {
-    for (const cell of CELLS) {
-      for (const card of column[cell]) {
-        cards.set(card.issue.id, card);
-      }
-    }
-  }
-  return cards;
+function itemsById(bands: BoardBands): Map<string, BoardItem> {
+  return new Map(itemsOf(bands).map((item) => [item.issue.id, item]));
 }
 
 // A skipped transition rejects its promises with AbortError; that is expected, anything else is not.
@@ -108,18 +107,19 @@ function ignoreAbort(error: unknown): void {
 }
 
 /**
- * Owns what the board shows: a snapshot of the issues that changes in batches, each batch one View
- * Transition so moved cards glide between cells, plus completion ghosts, needs-you arrivals and the
- * announcements that go with them. Provided per board page.
+ * Owns what the board shows: a snapshot of the bands that changes in batches, each batch one View
+ * Transition so a card that changes band glides there, plus completion ghosts, needs-you arrivals
+ * and the announcements that go with them. Provided per board page.
  */
 @Injectable()
 export class BoardStateService {
   private readonly _issueService = inject(IssueService);
+  private readonly _repositoryService = inject(RepositoryService);
   private readonly _signalR = inject(IssueSignalRService);
   private readonly _injector = inject(Injector);
   private readonly _document = inject(DOCUMENT) as ViewTransitionDocument;
 
-  private readonly _rendered: WritableSignal<readonly BoardColumn[]> = signal(emptyColumns());
+  private readonly _rendered: WritableSignal<BoardBands> = signal(EMPTY_BANDS);
   private readonly _ghosts: WritableSignal<ReadonlyMap<string, Ghost>> = signal(new Map());
   private readonly _arrived: WritableSignal<ReadonlySet<string>> = signal(new Set());
   private readonly _moved: WritableSignal<ReadonlySet<string>> = signal(new Set());
@@ -139,45 +139,47 @@ export class BoardStateService {
   /** Joined `#142 needs you: Failed. #139 completed` for the latest batch; for a polite live region. */
   readonly announcement: Signal<string> = this._announcement.asReadonly();
 
-  readonly columns: Signal<readonly BoardColumnView[]> = computed(() => {
+  readonly bands: Signal<BoardBandsView> = computed(() => {
+    const rendered = this._rendered();
     const ghosts = this._ghosts();
     const arrived = this._arrived();
     const moved = this._moved();
-    const view = (card: BoardCard, phase: CardPhase): BoardCardView => ({
-      ...card,
+    const view = <T extends BoardItem>(item: T, phase: CardPhase): ItemView<T> => ({
+      ...item,
       phase,
-      arrived: phase === 'live' && arrived.has(card.issue.id),
-      moved: moved.has(card.issue.id),
+      arrived: phase === 'live' && arrived.has(item.issue.id),
+      moved: moved.has(item.issue.id),
     });
-
-    return this._rendered().map((column) => {
-      const cells = {} as Record<BoardCell, BoardCardView[]>;
-      for (const cell of CELLS) {
-        const cards = column[cell].map((card) => {
-          const ghost = ghosts.get(card.issue.id);
-          return ghost === undefined ? view(card, 'live') : view(ghost.card, ghost.phase);
-        });
-        for (const [id, ghost] of ghosts) {
-          const placed = cards.some((c) => c.issue.id === id);
-          if (!placed && ghost.card.stage === column.stage.id && ghost.card.cell === cell) {
-            cards.splice(Math.min(ghost.index, cards.length), 0, view(ghost.card, ghost.phase));
-          }
+    const list = <T extends BoardItem>(items: readonly T[], band: BoardBand): ItemView<T>[] => {
+      const views = items.map((item) => {
+        const ghost = ghosts.get(item.issue.id);
+        // A ghost keeps the item it completed from; it is the same band, so the same type.
+        return ghost === undefined ? view(item, 'live') : view(ghost.item as T, ghost.phase);
+      });
+      for (const [id, ghost] of ghosts) {
+        const placed = views.some((v) => v.issue.id === id);
+        if (!placed && ghost.item.band === band) {
+          views.splice(Math.min(ghost.index, views.length), 0, view(ghost.item as T, ghost.phase));
         }
-        cells[cell] = cards;
       }
-      return { stage: column.stage, ...cells, count: column.count };
-    });
+      return views;
+    };
+
+    return {
+      alerts: rendered.alerts,
+      needs: list(rendered.needs, 'needs'),
+      workers: list(rendered.workers, 'workers'),
+      steps: list(rendered.steps, 'steps'),
+      pipeline: list(rendered.pipeline, 'pipeline'),
+      blocked: list(rendered.blocked, 'blocked'),
+    };
   });
 
-  readonly cardCount: Signal<number> = computed(() =>
-    this._rendered().reduce((sum, c) => sum + c.count, 0),
-  );
-  readonly waitingCount: Signal<number> = computed(() =>
-    this._rendered().reduce((sum, c) => sum + c.queue.length, 0),
-  );
-  readonly needsCount: Signal<number> = computed(() =>
-    this._rendered().reduce((sum, c) => sum + c.needs.length, 0),
-  );
+  /** Every alert and item on the board. */
+  readonly itemCount: Signal<number> = computed(() => {
+    const rendered = this._rendered();
+    return rendered.alerts.length + itemsOf(rendered).length;
+  });
 
   private _firstApplied = false;
   private _snapNext = false;
@@ -196,10 +198,11 @@ export class BoardStateService {
     effect(() => {
       const issues = this._issueService.issues();
       const queueIds = this._issueService.eligibleQueuedIssues().map((i) => i.id);
+      const repositories = this._repositoryService.repositories();
       if (this._issueService.initialLoading()) {
         return;
       }
-      untracked(() => this._enqueue({ issues, queueIds }));
+      untracked(() => this._enqueue({ issues, queueIds, repositories }));
     });
 
     effect(() => {
@@ -258,21 +261,14 @@ export class BoardStateService {
 
     const before = placementKeys(previous);
     const after = placementKeys(next);
-    const moved = [...after].filter(([id, key]) => before.get(id) !== key).map(([id]) => id);
+    const moved = [...after].filter(([id, band]) => before.get(id) !== band).map(([id]) => id);
     const left = [...before.keys()].filter((id) => !after.has(id) && !this._ghosts().has(id));
 
-    const previousCards = cardsOf(previous);
-    const nextCards = [...cardsOf(next).values()];
-    const arrivals = nextCards.filter(
-      (card) => card.cell === 'needs' && previousCards.get(card.issue.id)?.cell !== 'needs',
+    const previousItems = itemsById(previous);
+    const arrivals = next.needs.filter(
+      (item) => previousItems.get(item.issue.id)?.band !== 'needs',
     );
-    const steps = nextCards.flatMap((card) => {
-      const step = card.issue.codeStep;
-      const changed = step !== null && previousCards.get(card.issue.id)?.issue.codeStep !== step;
-      return changed ? [`#${card.issue.issueNumber} ${CODE_STEP_LABELS[step]}`] : [];
-    });
-
-    this._announce(arrivals, steps);
+    this._announce(previous, next, previousItems, arrivals);
 
     const placementChanged = moved.length > 0 || left.length > 0;
     const snap = this._snapNext;
@@ -303,16 +299,17 @@ export class BoardStateService {
     }
   }
 
-  private _build(batch: Batch): BoardColumn[] {
-    for (const issue of batch.issues) {
-      if (issue.stage === null && !this._warnedIds.has(issue.id)) {
+  private _build(batch: Batch): BoardBands {
+    const bands = buildBoardBands(batch.issues, batch.queueIds, batch.repositories);
+    for (const issue of bands.unplaced) {
+      if (!this._warnedIds.has(issue.id)) {
         this._warnedIds.add(issue.id);
         console.warn(
-          `Board: left out issue #${issue.issueNumber}, whose stage this dashboard does not know`,
+          `Board: left out issue #${issue.issueNumber}, whose placement this dashboard does not know`,
         );
       }
     }
-    return buildBoardColumns(batch.issues, batch.queueIds);
+    return bands;
   }
 
   private _canGlide(): boolean {
@@ -355,12 +352,29 @@ export class BoardStateService {
     );
   }
 
-  private _announce(arrivals: readonly BoardCard[], steps: readonly string[]): void {
+  private _announce(
+    previous: BoardBands,
+    next: BoardBands,
+    previousItems: ReadonlyMap<string, BoardItem>,
+    arrivals: readonly NeedsItem[],
+  ): void {
+    const steps = itemsOf(next).flatMap((item) => {
+      const step = item.issue.codeStep;
+      const changed = step !== null && previousItems.get(item.issue.id)?.issue.codeStep !== step;
+      return changed ? [`#${item.issue.issueNumber} ${CODE_STEP_LABELS[step]}`] : [];
+    });
+    const started = next.workers
+      .filter((item) => previousItems.get(item.issue.id)?.band !== 'workers')
+      .map((item) => `#${item.issue.issueNumber} started: ${item.role}`);
+    const alerted = new Set(previous.alerts.map((alert) => alert.repositoryId));
+    const alerts = next.alerts
+      .filter((alert) => !alerted.has(alert.repositoryId))
+      .map((alert) => `${repoName(alert.slug)} can't be worked on`);
     const parts = [
+      ...alerts,
       ...steps,
-      ...arrivals.map(
-        (card) => `#${card.issue.issueNumber} needs you: ${card.reason?.label ?? 'Needs you'}`,
-      ),
+      ...started,
+      ...arrivals.map((item) => `#${item.issue.issueNumber} needs you: ${item.reason.label}`),
       ...this._pendingCompletions.splice(0),
     ];
     if (parts.length > 0) {
@@ -368,11 +382,11 @@ export class BoardStateService {
     }
   }
 
-  private _markArrivals(arrivals: readonly BoardCard[]): void {
+  private _markArrivals(arrivals: readonly NeedsItem[]): void {
     if (arrivals.length === 0) {
       return;
     }
-    const ids = arrivals.map((card) => card.issue.id);
+    const ids = arrivals.map((item) => item.issue.id);
     this._arrived.update((current) => new Set([...current, ...ids]));
     this._after(ARRIVAL_MS, () =>
       this._arrived.update((current) => new Set([...current].filter((id) => !ids.includes(id)))),
@@ -388,21 +402,21 @@ export class BoardStateService {
     if (updated.state !== 'completed' || this._ghosts().has(updated.id)) {
       return;
     }
-    for (const column of this._rendered()) {
-      for (const cell of CELLS) {
-        const index = column[cell].findIndex((card) => card.issue.id === updated.id);
-        if (index < 0) {
-          continue;
-        }
-        const card = column[cell][index];
-        this._setGhost(updated.id, { card, index, phase: 'confirm' });
-        this._pendingCompletions.push(`#${card.issue.issueNumber} completed`);
-        this._after(CONFIRM_MS, () => {
-          this._setGhost(updated.id, { card, index, phase: 'collapse' });
-          this._after(COLLAPSE_MS, () => this._setGhost(updated.id, null));
-        });
-        return;
+    const rendered = this._rendered();
+    for (const band of ITEM_BANDS) {
+      const items = rendered[band] as readonly BoardItem[];
+      const index = items.findIndex((item) => item.issue.id === updated.id);
+      if (index < 0) {
+        continue;
       }
+      const item = items[index];
+      this._setGhost(updated.id, { item, index, phase: 'confirm' });
+      this._pendingCompletions.push(`#${item.issue.issueNumber} completed`);
+      this._after(CONFIRM_MS, () => {
+        this._setGhost(updated.id, { item, index, phase: 'collapse' });
+        this._after(COLLAPSE_MS, () => this._setGhost(updated.id, null));
+      });
+      return;
     }
   }
 
