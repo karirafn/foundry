@@ -34,7 +34,7 @@ internal static class WorkerRunErrors
     internal const string FindingsChangedCode = "WorkerRun.FindingsChanged";
 
     internal static Error FindingsChanged(WorkerRunId id) =>
-        new(FindingsChangedCode, $"Worker run '{id.Value}' was blocked again on findings the confirmation did not see.");
+        new(FindingsChangedCode, $"Worker run '{id.Value}' was blocked at a different time than the confirmation names, so its findings may have changed.");
 
     internal const string PublishBlockedAtRequiredCode = "WorkerRun.PublishBlockedAtRequired";
 
