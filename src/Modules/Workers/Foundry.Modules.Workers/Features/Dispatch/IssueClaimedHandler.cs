@@ -6,7 +6,6 @@ using Foundry.Modules.Monitoring.Contracts;
 using Foundry.Modules.Monitoring.Contracts.Queries;
 using Foundry.Modules.Settings.Contracts;
 using Foundry.Modules.Settings.Contracts.Queries;
-using Foundry.Modules.Settings.Domain.Entities;
 using Foundry.Modules.Workers.Contracts;
 using Foundry.Modules.Workers.Domain.Entities;
 using Foundry.Modules.Workers.Domain.Entities.States;
@@ -323,15 +322,8 @@ internal sealed class IssueClaimedHandler(
     /// </summary>
     private async Task<string?> StageHostPauseAsync(string host, CancellationToken cancellationToken)
     {
-        GlobalSettings? settings = await dbContext.Set<GlobalSettings>().FirstOrDefaultAsync(cancellationToken);
-
-        if (settings is null)
-        {
-            logger.LogWarning("The provider host {Host} is unreachable, but no GlobalSettings row exists to pause it on.", host);
-            return null;
-        }
-
-        return settings.PauseHost(host, DateTimeOffset.UtcNow) ? host : null;
+        bool added = await HostPauseStaging.StageAsync(dbContext, host, DateTimeOffset.UtcNow, logger, cancellationToken);
+        return added ? host : null;
     }
 
     // A Continuation or Revision resumes the branch's earlier work, so its branch goes into the base bundle. A Fresh

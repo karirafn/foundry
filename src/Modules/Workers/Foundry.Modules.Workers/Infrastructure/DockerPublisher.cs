@@ -75,7 +75,7 @@ internal sealed class DockerPublisher(IDockerContainerRuntime runtime, ILogger<D
             {
                 return new PublishResult.Failed(
                     $"The Publisher did not publish the run within {PublishTimeout.TotalMinutes:0} minutes.",
-                    Transient: true);
+                    PublishFailureKind.Transient);
             }
 
             string? log = await runtime.GetAllLogsAsync(containerId, cancellationToken);
@@ -85,7 +85,7 @@ internal sealed class DockerPublisher(IDockerContainerRuntime runtime, ILogger<D
         {
             return new PublishResult.Failed(
                 $"The Publisher could not run: {DockerWorkerOrchestrator.RedactDockerError(ex.Message)}",
-                Transient: true);
+                PublishFailureKind.Transient);
         }
         finally
         {
