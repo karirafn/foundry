@@ -102,6 +102,7 @@ export class BoardPageComponent implements OnInit {
 
   // Set by a reload that closed the pane; said with the up-to-date announcement.
   private _paneNote = '';
+  private _destroyed = false;
 
   /** What the board shows, refetched after a reconnect: the connection gate waits on it. */
   protected readonly reload = async (): Promise<LoadOutcome> => {
@@ -113,7 +114,8 @@ export class BoardPageComponent implements OnInit {
         this._repositories.reload(),
       ]),
     );
-    if (outcome === 'loaded') {
+    // The page may have been left while it loaded; its pane must not navigate then.
+    if (outcome === 'loaded' && !this._destroyed) {
       this.board.resync();
       const pane = this.selection.recheck();
       this._paneNote = pane.closed ? goneMessage(pane.issueNumber) : '';
@@ -140,6 +142,7 @@ export class BoardPageComponent implements OnInit {
   constructor() {
     effect(() => this.board.sheetCoversBoard.set(this.sheetCoversBoard()));
     this._watchNarrow();
+    inject(DestroyRef).onDestroy(() => (this._destroyed = true));
   }
 
   ngOnInit(): void {

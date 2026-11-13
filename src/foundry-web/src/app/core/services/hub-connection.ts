@@ -11,6 +11,12 @@ export type ConnectionStatus = 'connected' | 'reconnecting' | 'disconnected';
 /** The SignalR hubs the dashboard connects to; each is served at `/hubs/{name}`. */
 export type HubName = 'issues' | 'system' | 'workers';
 
+/**
+ * A connection made on a retry that drops sooner than this counts as another failure, so a server
+ * that accepts and then closes at once is retried on the backoff rather than in a tight loop.
+ */
+export const STABLE_CONNECTION_MS = 10_000;
+
 export const HUB_NAMES: readonly HubName[] = ['issues', 'system', 'workers'];
 
 /**
@@ -62,6 +68,8 @@ export class SharedHubConnection {
   private _firstStart: Promise<void> | null = null;
   private _failures = 0;
   private _recovering = false;
+  private _connectedOnRetry = false;
+  private _connectedAt = 0;
   private _timer: ReturnType<typeof setTimeout> | null = null;
   private _disposed = false;
 
@@ -137,7 +145,8 @@ export class SharedHubConnection {
 
   private _onConnected(): void {
     this._attempting.set(false);
-    this._failures = 0;
+    this._connectedAt = Date.now();
+    this._connectedOnRetry = this._recovering;
     this._status.set('connected');
     if (!this._recovering) {
       return;
@@ -161,10 +170,11 @@ export class SharedHubConnection {
     if (this._attempting()) {
       return;
     }
+    const flapped = this._connectedOnRetry && Date.now() - this._connectedAt < STABLE_CONNECTION_MS;
+    this._failures = flapped ? this._failures + 1 : 0;
     this._recovering = true;
-    this._failures = 0;
     this._status.set('reconnecting');
-    this._schedule(retryDelayMs(0));
+    this._schedule(retryDelayMs(this._failures));
   }
 
   private _schedule(delayMs: number): void {

@@ -334,6 +334,11 @@ export class BoardStateService {
   // Renders the batch as it is, dropping any motion and announcements still pending.
   private _snapTo(batch: Batch): void {
     this._clearBatchTimers();
+    // Ghost and arrival timers would bring back what the snap just cleared.
+    for (const handle of this._timers) {
+      clearTimeout(handle);
+    }
+    this._timers.clear();
     this._pending = null;
     this._pendingCompletions.length = 0;
     this._glided.set(false);

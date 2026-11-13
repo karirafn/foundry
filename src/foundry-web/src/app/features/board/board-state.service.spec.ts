@@ -341,6 +341,21 @@ describe('BoardStateService', () => {
     expect(start).toHaveBeenCalledTimes(1);
   });
 
+  it('does not bring a cleared completion ghost back after a snap', async () => {
+    // Arrange
+    const h = setup();
+    load(h, [buildIssue({ id: 'a' }), buildIssue({ id: 'b' })]);
+    h.hubHandlers.get('IssueUpdated')!(buildIssue({ id: 'a', state: 'completed' }));
+    h.issues.set([buildIssue({ id: 'b' })]);
+    h.service.resync();
+
+    // Act
+    await vi.advanceTimersByTimeAsync(1_200);
+
+    // Assert
+    expect(idsIn(h.service.bands(), 'workers')).toEqual(['b']);
+  });
+
   it('renders the latest data at once on resync, without waiting for its effects', () => {
     // Arrange
     const h = setup();

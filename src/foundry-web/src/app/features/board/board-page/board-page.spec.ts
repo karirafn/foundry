@@ -1,4 +1,4 @@
-import { TestBed } from '@angular/core/testing';
+import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { WritableSignal, signal } from '@angular/core';
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
@@ -60,6 +60,7 @@ interface Harness {
   activities: WritableSignal<ReadonlyMap<string, AgentActivity>>;
   tools: WritableSignal<ReadonlyMap<string, readonly InFlightTool[]>>;
   render: () => Promise<void>;
+  fixture: ComponentFixture<BoardPageComponent>;
 }
 
 async function setup(url = '/'): Promise<Harness> {
@@ -149,6 +150,7 @@ async function setup(url = '/'): Promise<Harness> {
     activities,
     tools,
     render,
+    fixture,
   };
 }
 
@@ -961,6 +963,26 @@ describe('BoardPageComponent', () => {
       h.httpMock.match('/api/issues/f');
       expect(TestBed.inject(Router).url).toBe('/?issue=f');
       expect(h.el.querySelector('[role="dialog"]')).not.toBeNull();
+    });
+
+    it('leaves the URL alone when the board is left while it reloads', async () => {
+      // Arrange
+      const h = await loaded([item('f', 142), item('g', 7)], '/?issue=f');
+      h.httpMock.match('/api/issues/f');
+      h.gate.phase.set('reconnecting');
+      await h.render();
+      h.gate.phase.set('reloading');
+      await h.render();
+      const reloading = h.gate.registered!();
+      const navigate = vi.spyOn(TestBed.inject(Router), 'navigate');
+
+      // Act
+      h.fixture.destroy();
+      h.httpMock.expectOne('/api/issues').flush({ items: [item('g', 7)], nextCursor: null });
+      await reloading;
+
+      // Assert
+      expect(navigate).not.toHaveBeenCalled();
     });
 
     it('closes the pane and says so when its issue left the board', async () => {

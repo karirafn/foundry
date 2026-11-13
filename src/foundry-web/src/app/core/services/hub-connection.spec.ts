@@ -1,12 +1,16 @@
 import { TestBed } from '@angular/core/testing';
 import { HubConnection, HubConnectionBuilder } from '@microsoft/signalr';
-import { HUB_TRANSPORT_FACTORY, HubConnections } from './hub-connection';
+import { HUB_TRANSPORT_FACTORY, HubConnections, STABLE_CONNECTION_MS } from './hub-connection';
 import { FakeHubTransport, provideFakeHubs } from '../testing/fake-hub-transport';
 
 function setup(hub = new FakeHubTransport()) {
   TestBed.resetTestingModule();
   TestBed.configureTestingModule({ providers: [provideFakeHubs({ issues: hub })] });
   return { connection: TestBed.inject(HubConnections).get('issues'), hub };
+}
+
+function accept(hub: FakeHubTransport): void {
+  hub.startResult = () => Promise.resolve();
 }
 
 function failingStarts(hub: FakeHubTransport): void {
@@ -206,6 +210,58 @@ describe('SharedHubConnection', () => {
     expect(gaps.slice(0, 6)).toEqual([0, 1_000, 2_000, 5_000, 10_000, 30_000]);
     expect(gaps.length).toBe(25);
     expect(gaps.slice(5).every((gap) => gap === 30_000)).toBe(true);
+  });
+
+  it('should keep backing off when a connection made on a retry drops at once', async () => {
+    // Arrange
+    vi.useFakeTimers();
+    vi.spyOn(Math, 'random').mockReturnValue(0.5);
+    const { connection, hub } = setup();
+    await connection.start();
+    let connects = 0;
+    hub.startResult = () => {
+      connects++;
+      // Every attempt connects, and the server closes the connection straight away.
+      setTimeout(() => hub.close(), 0);
+      return Promise.resolve();
+    };
+
+    // Act
+    hub.close();
+    const times: number[] = [];
+    const begin = Date.now();
+    const connect = hub.startResult;
+    hub.startResult = () => {
+      times.push(Date.now() - begin);
+      return connect();
+    };
+    await vi.advanceTimersByTimeAsync(9_000);
+
+    // Assert: at once, then 1, 2 and 5 s apart, not a 0 ms loop.
+    // Each close lands a timer tick (1 ms) after its connect.
+    expect(times.map((t) => Math.round(t / 1_000) * 1_000)).toEqual([0, 1_000, 3_000, 8_000]);
+    expect(connects).toBe(4);
+  });
+
+  it('should retry at once again after a connection made on a retry stayed up', async () => {
+    // Arrange
+    vi.useFakeTimers();
+    const { connection, hub } = setup();
+    await connection.start();
+    failingStarts(hub);
+    hub.close();
+    await vi.advanceTimersByTimeAsync(0);
+    accept(hub);
+    await vi.advanceTimersByTimeAsync(1_000);
+    await vi.advanceTimersByTimeAsync(STABLE_CONNECTION_MS);
+    const before = hub.startCount;
+
+    // Act
+    hub.close();
+    await vi.advanceTimersByTimeAsync(0);
+
+    // Assert
+    expect(hub.startCount).toBe(before + 1);
   });
 
   it('should jitter the steady 30 s retry by up to 20 %', async () => {
