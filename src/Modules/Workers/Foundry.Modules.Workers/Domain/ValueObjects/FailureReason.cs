@@ -23,6 +23,7 @@ namespace Foundry.Modules.Workers.Domain.ValueObjects;
 [JsonDerivedType(typeof(PublishFailed), typeDiscriminator: FailureReason.PublishFailedToken)]
 [JsonDerivedType(typeof(PublishExpired), typeDiscriminator: FailureReason.PublishExpiredToken)]
 [JsonDerivedType(typeof(RunDiscarded), typeDiscriminator: FailureReason.RunDiscardedToken)]
+[JsonDerivedType(typeof(IssueClosed), typeDiscriminator: FailureReason.IssueClosedToken)]
 public abstract record FailureReason
 {
     public const string NonZeroExitToken = FailureCategory.NonZeroExitToken;
@@ -42,6 +43,7 @@ public abstract record FailureReason
     public const string PublishFailedToken = FailureCategory.PublishFailedToken;
     public const string PublishExpiredToken = FailureCategory.PublishExpiredToken;
     public const string RunDiscardedToken = FailureCategory.RunDiscardedToken;
+    public const string IssueClosedToken = FailureCategory.IssueClosedToken;
 
     private FailureReason()
     {
@@ -66,6 +68,7 @@ public abstract record FailureReason
         PublishFailed => PublishFailedToken,
         PublishExpired => PublishExpiredToken,
         RunDiscarded => RunDiscardedToken,
+        IssueClosed => IssueClosedToken,
         _ => throw new UnreachableException($"Unknown {nameof(FailureReason)} variant: {GetType().Name}"),
     };
 
@@ -90,6 +93,8 @@ public abstract record FailureReason
         PublishFailed publishFailed => $"Publishing the run's commits failed: {publishFailed.Detail}",
         PublishExpired => "The run's unpublished commits were discarded: they were not published within the Hand-off volume's time to live",
         RunDiscarded => "The run was discarded: its unpublished commits were deleted and nothing was pushed",
+        IssueClosed =>
+            "The issue was closed on the provider before the run's work was published: its unpublished commits were deleted and nothing was pushed",
         _ => throw new UnreachableException($"Unknown {nameof(FailureReason)} variant: {GetType().Name}"),
     };
 
@@ -174,4 +179,10 @@ public abstract record FailureReason
 
     /// <summary>An operator discarded a run holding unpublished work: its commits were deleted and nothing was pushed.</summary>
     public sealed record RunDiscarded : FailureReason;
+
+    /// <summary>
+    /// The run's issue was closed on the provider while its work waited unpublished (#909): the work can never be
+    /// published, so its commits were deleted and nothing was pushed.
+    /// </summary>
+    public sealed record IssueClosed : FailureReason;
 }

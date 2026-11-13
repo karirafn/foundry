@@ -37,4 +37,6 @@ public sealed class PublishBlockedRun : UnpublishedRun, IDiscardableRun
     public FailedRun Discard() => DiscardWith(new FailureReason.PublishExpired());
 
     public FailedRun DiscardOnRequest() => DiscardWith(new FailureReason.RunDiscarded());
+
+    public FailedRun DiscardOnIssueClosed() => DiscardWith(new FailureReason.IssueClosed());
 }

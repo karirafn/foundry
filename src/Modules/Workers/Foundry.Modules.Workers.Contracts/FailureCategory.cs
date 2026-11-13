@@ -28,6 +28,7 @@ public sealed record FailureCategory
     public const string RunDiscardedToken = "run_discarded";
     public const string BlockerCycleToken = "blocker_cycle";
     public const string BlockerLinkFailedToken = "blocker_link_failed";
+    public const string IssueClosedToken = "issue_closed";
 
     public static readonly FailureCategory NonZeroExit = new(NonZeroExitToken);
     public static readonly FailureCategory TimedOut = new(TimedOutToken);
@@ -73,6 +74,9 @@ public sealed record FailureCategory
     /// <summary>The provider refused to link a blocker triage named.</summary>
     public static readonly FailureCategory BlockerLinkFailed = new(BlockerLinkFailedToken);
 
+    /// <summary>The issue closed on the provider before the run's unpublished work was published (#909), so the run was discarded.</summary>
+    public static readonly FailureCategory IssueClosed = new(IssueClosedToken);
+
     private static readonly FrozenDictionary<string, FailureCategory> KnownCategories =
         new Dictionary<string, FailureCategory>(StringComparer.Ordinal)
         {
@@ -96,6 +100,7 @@ public sealed record FailureCategory
             { RunDiscardedToken, RunDiscarded },
             { BlockerCycleToken, BlockerCycle },
             { BlockerLinkFailedToken, BlockerLinkFailed },
+            { IssueClosedToken, IssueClosed },
         }.ToFrozenDictionary(StringComparer.Ordinal);
 
     /// <summary>Every category that retries automatically: exactly those with an <see cref="AutomaticRetry"/> schedule.</summary>
