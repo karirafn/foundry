@@ -36,7 +36,7 @@ internal sealed class FakeCredentialsOrchestrator(IEnumerable<string>? logLines 
         Result<OAuthSessionStatus>.Ok(new OAuthSessionStatus.Active());
     private Func<Task>? _onSessionCheck;
     private IReadOnlyList<string> _runningTransientContainerIds = [];
-    private IReadOnlyList<string> _exitedTransientContainerIds = [];
+    private List<(string Id, DateTimeOffset CreatedAt)> _exitedTransientContainers = [];
     private Exception? _listTransientException;
 
     // When true, StreamLogsAsync yields _logLines then blocks until cancellation (does not close).
@@ -179,10 +179,18 @@ internal sealed class FakeCredentialsOrchestrator(IEnumerable<string>? logLines 
     }
 
     /// <summary>Scripts <see cref="ListExitedTransientContainersAsync"/> and <see cref="ListTransientContainersAsync"/>
-    /// to include the given exited (orphaned) container IDs.</summary>
+    /// to include the given exited (orphaned) container IDs, created long before any cutoff.</summary>
     public FakeCredentialsOrchestrator WithOrphanedTransientContainers(params string[] containerIds)
     {
-        _exitedTransientContainerIds = [.. containerIds];
+        _exitedTransientContainers = [.. containerIds.Select(id => (id, DateTimeOffset.MinValue))];
+        return this;
+    }
+
+    /// <summary>Adds one exited transient container created at <paramref name="createdAt"/>;
+    /// <see cref="ListExitedTransientContainersAsync"/> returns it only when it was created before the cutoff.</summary>
+    public FakeCredentialsOrchestrator WithExitedTransientContainer(string containerId, DateTimeOffset createdAt)
+    {
+        _exitedTransientContainers.Add((containerId, createdAt));
         return this;
     }
 
@@ -312,18 +320,22 @@ internal sealed class FakeCredentialsOrchestrator(IEnumerable<string>? logLines 
             return Task.FromException<IReadOnlyList<string>>(_listTransientException);
         }
 
-        IReadOnlyList<string> all = [.. _runningTransientContainerIds, .. _exitedTransientContainerIds];
+        IReadOnlyList<string> all = [.. _runningTransientContainerIds, .. _exitedTransientContainers.Select(c => c.Id)];
         return Task.FromResult(all);
     }
 
-    public Task<IReadOnlyList<string>> ListExitedTransientContainersAsync(CancellationToken cancellationToken)
+    public Task<IReadOnlyList<string>> ListExitedTransientContainersAsync(
+        DateTimeOffset createdBefore,
+        CancellationToken cancellationToken)
     {
         if (_listTransientException is not null)
         {
             return Task.FromException<IReadOnlyList<string>>(_listTransientException);
         }
 
-        return Task.FromResult(_exitedTransientContainerIds);
+        IReadOnlyList<string> old =
+            [.. _exitedTransientContainers.Where(c => c.CreatedAt < createdBefore).Select(c => c.Id)];
+        return Task.FromResult(old);
     }
 
     public async Task<Result<OAuthSessionStatus>> CheckOAuthSessionAsync(CancellationToken cancellationToken)

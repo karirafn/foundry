@@ -161,7 +161,9 @@ internal sealed class CredentialsOrchestrator(IDockerContainerRuntime runtime) :
         return results;
     }
 
-    public async Task<IReadOnlyList<string>> ListExitedTransientContainersAsync(CancellationToken cancellationToken)
+    public async Task<IReadOnlyList<string>> ListExitedTransientContainersAsync(
+        DateTimeOffset createdBefore,
+        CancellationToken cancellationToken)
     {
         ContainersListParameters parameters = new()
         {
@@ -181,7 +183,7 @@ internal sealed class CredentialsOrchestrator(IDockerContainerRuntime runtime) :
 
         foreach (ContainerListResponse container in containers)
         {
-            if (container.State != "running")
+            if (container.State != "running" && AsUtc(container.Created) < createdBefore)
             {
                 results.Add(container.ID);
             }
@@ -189,6 +191,13 @@ internal sealed class CredentialsOrchestrator(IDockerContainerRuntime runtime) :
 
         return results;
     }
+
+    // Docker reports creation as Unix seconds, so a time with no stated kind is UTC; treating it
+    // as local would shift every container's age by the host's offset.
+    private static DateTimeOffset AsUtc(DateTime created) =>
+        created.Kind == DateTimeKind.Local
+            ? new DateTimeOffset(created.ToUniversalTime(), TimeSpan.Zero)
+            : new DateTimeOffset(DateTime.SpecifyKind(created, DateTimeKind.Utc), TimeSpan.Zero);
 
     public async Task<Result<string>> RunCreditProbeAsync(
         CreditProbeSpec spec,

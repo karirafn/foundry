@@ -260,7 +260,7 @@ public sealed class PollAsync : IAsyncDisposable
         public Task<IReadOnlyList<string>> ListTransientContainersAsync(CancellationToken cancellationToken)
             => Task.FromResult<IReadOnlyList<string>>([]);
 
-        public Task<IReadOnlyList<string>> ListExitedTransientContainersAsync(CancellationToken cancellationToken)
+        public Task<IReadOnlyList<string>> ListExitedTransientContainersAsync(DateTimeOffset createdBefore, CancellationToken cancellationToken)
             => Task.FromResult<IReadOnlyList<string>>([]);
 
         public Task<Result<OAuthSessionStatus>> CheckOAuthSessionAsync(CancellationToken cancellationToken)
@@ -698,7 +698,7 @@ public sealed class PollAsync : IAsyncDisposable
         public Task<IReadOnlyList<string>> ListTransientContainersAsync(CancellationToken cancellationToken)
             => Task.FromResult<IReadOnlyList<string>>([]);
 
-        public Task<IReadOnlyList<string>> ListExitedTransientContainersAsync(CancellationToken cancellationToken)
+        public Task<IReadOnlyList<string>> ListExitedTransientContainersAsync(DateTimeOffset createdBefore, CancellationToken cancellationToken)
             => Task.FromResult<IReadOnlyList<string>>([]);
 
         public Task<Result<OAuthSessionStatus>> CheckOAuthSessionAsync(CancellationToken cancellationToken)

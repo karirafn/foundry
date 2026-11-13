@@ -13,6 +13,10 @@ public sealed class ListExitedTransientContainersAsync
 {
     private const string TransientLabelFilter = "foundry.transient=true";
 
+    private static readonly DateTimeOffset Cutoff = new(2026, 11, 13, 12, 0, 0, TimeSpan.Zero);
+    private static readonly DateTime YoungerThanCutoff = Cutoff.UtcDateTime.AddSeconds(1);
+    private static readonly DateTime OlderThanCutoff = Cutoff.UtcDateTime.AddSeconds(-1);
+
     private static CredentialsOrchestrator BuildSut(FakeDockerContainerRuntime runtime) =>
         new(runtime);
 
@@ -25,7 +29,7 @@ public sealed class ListExitedTransientContainersAsync
         CredentialsOrchestrator sut = BuildSut(runtime);
 
         // Act
-        IReadOnlyList<string> result = await sut.ListExitedTransientContainersAsync(CancellationToken.None);
+        IReadOnlyList<string> result = await sut.ListExitedTransientContainersAsync(Cutoff, CancellationToken.None);
 
         // Assert
         result.ShouldBeEmpty();
@@ -45,7 +49,7 @@ public sealed class ListExitedTransientContainersAsync
         CredentialsOrchestrator sut = BuildSut(runtime);
 
         // Act
-        IReadOnlyList<string> result = await sut.ListExitedTransientContainersAsync(CancellationToken.None);
+        IReadOnlyList<string> result = await sut.ListExitedTransientContainersAsync(Cutoff, CancellationToken.None);
 
         // Assert
         result.Count.ShouldBe(2);
@@ -67,7 +71,7 @@ public sealed class ListExitedTransientContainersAsync
         CredentialsOrchestrator sut = BuildSut(runtime);
 
         // Act
-        IReadOnlyList<string> result = await sut.ListExitedTransientContainersAsync(CancellationToken.None);
+        IReadOnlyList<string> result = await sut.ListExitedTransientContainersAsync(Cutoff, CancellationToken.None);
 
         // Assert
         result.ShouldNotContain("active-login");
@@ -87,7 +91,7 @@ public sealed class ListExitedTransientContainersAsync
         CredentialsOrchestrator sut = BuildSut(runtime);
 
         // Act
-        IReadOnlyList<string> result = await sut.ListExitedTransientContainersAsync(CancellationToken.None);
+        IReadOnlyList<string> result = await sut.ListExitedTransientContainersAsync(Cutoff, CancellationToken.None);
 
         // Assert
         result.ShouldBeEmpty();
@@ -102,7 +106,7 @@ public sealed class ListExitedTransientContainersAsync
         CredentialsOrchestrator sut = BuildSut(runtime);
 
         // Act
-        await sut.ListExitedTransientContainersAsync(CancellationToken.None);
+        await sut.ListExitedTransientContainersAsync(Cutoff, CancellationToken.None);
 
         // Assert — filter key must be "foundry.transient=true" (key=value), not just "foundry.transient"
         ContainersListParameters capturedParams = runtime.LastListParameters.ShouldNotBeNull();
@@ -119,10 +123,71 @@ public sealed class ListExitedTransientContainersAsync
         CredentialsOrchestrator sut = BuildSut(runtime);
 
         // Act
-        await sut.ListExitedTransientContainersAsync(CancellationToken.None);
+        await sut.ListExitedTransientContainersAsync(Cutoff, CancellationToken.None);
 
         // Assert
         ContainersListParameters capturedParams = runtime.LastListParameters.ShouldNotBeNull();
         capturedParams.All.ShouldBe(true);
+    }
+
+    [Theory]
+    [InlineData("created")]
+    [InlineData("exited")]
+    public async Task WhenNonRunningContainerWasCreatedAfterTheCutoff_ExcludesIt(string state)
+    {
+        // Arrange — a Publisher or helper its owner may still be starting or reading
+        IList<ContainerListResponse> containers =
+        [
+            new() { ID = "young", State = state, Created = YoungerThanCutoff },
+        ];
+        FakeDockerContainerRuntime runtime = new FakeDockerContainerRuntime()
+            .WithListResponse(containers);
+        CredentialsOrchestrator sut = BuildSut(runtime);
+
+        // Act
+        IReadOnlyList<string> result = await sut.ListExitedTransientContainersAsync(Cutoff, CancellationToken.None);
+
+        // Assert
+        result.ShouldBeEmpty();
+    }
+
+    [Theory]
+    [InlineData("created")]
+    [InlineData("exited")]
+    public async Task WhenNonRunningContainerWasCreatedBeforeTheCutoff_ReturnsIt(string state)
+    {
+        // Arrange — an orphan left by a Foundry crash, including one whose start call failed
+        IList<ContainerListResponse> containers =
+        [
+            new() { ID = "old", State = state, Created = OlderThanCutoff },
+        ];
+        FakeDockerContainerRuntime runtime = new FakeDockerContainerRuntime()
+            .WithListResponse(containers);
+        CredentialsOrchestrator sut = BuildSut(runtime);
+
+        // Act
+        IReadOnlyList<string> result = await sut.ListExitedTransientContainersAsync(Cutoff, CancellationToken.None);
+
+        // Assert
+        result.ShouldBe(["old"]);
+    }
+
+    [Fact]
+    public async Task WhenRunningContainerWasCreatedBeforeTheCutoff_ExcludesIt()
+    {
+        // Arrange
+        IList<ContainerListResponse> containers =
+        [
+            new() { ID = "old-running", State = "running", Created = OlderThanCutoff.AddDays(-1) },
+        ];
+        FakeDockerContainerRuntime runtime = new FakeDockerContainerRuntime()
+            .WithListResponse(containers);
+        CredentialsOrchestrator sut = BuildSut(runtime);
+
+        // Act
+        IReadOnlyList<string> result = await sut.ListExitedTransientContainersAsync(Cutoff, CancellationToken.None);
+
+        // Assert
+        result.ShouldBeEmpty();
     }
 }
