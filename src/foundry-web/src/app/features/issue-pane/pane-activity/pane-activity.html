@@ -1,0 +1,51 @@
+<section class="pane-activity" [attr.aria-labelledby]="headingId">
+  <h3 class="pane-activity__heading" [id]="headingId">
+    <span class="pane-activity__title">Activity</span>
+    @if (elapsed(); as e) {
+      <span class="pane-activity__elapsed" [class.pane-activity__elapsed--silent]="e.silent">{{ e.text }}</span>
+    }
+  </h3>
+
+  <!-- Always mounted; its text changes on step changes only. -->
+  <p class="sr-only pane-activity__announcer" aria-live="polite" aria-atomic="true">{{ announcement() }}</p>
+
+  @if (stale()) {
+    <p class="pane-activity__stale">Connection lost — showing last known state</p>
+  }
+
+  @if (step(); as s) {
+    <p class="pane-activity__step-line">
+      <span class="pane-activity__step">{{ s.text }}</span>
+      @if (s.ordinal) {
+        <span class="pane-activity__ordinal">{{ s.ordinal }}</span>
+      }
+    </p>
+    @if (progress(); as width) {
+      <div class="pane-activity__bar" aria-hidden="true">
+        <div class="pane-activity__fill" [style.width]="width"></div>
+      </div>
+    }
+    @for (t of tool() ? [tool()!] : []; track t.key) {
+      <p class="pane-activity__tool">
+        <span class="pane-activity__tool-name">{{ t.name }}</span>
+        @if (t.summary) {
+          &ngsp;<span class="pane-activity__tool-summary">{{ t.summary }}</span>
+        }
+      </p>
+    }
+  } @else {
+    <p class="pane-activity__waiting">Waiting for the first agent event.</p>
+  }
+
+  <!-- Mounted for the whole run, so lines stream in before the log is opened. -->
+  @for (id of runId() ? [runId()] : []; track id) {
+    <fd-log-view
+      style="--fd-log-view-max-height: 16rem"
+      mode="stream"
+      [logStream]="logStream()"
+      label="Hide log"
+      collapsedLabel="Show log"
+      [expanded]="false"
+    />
+  }
+</section>
