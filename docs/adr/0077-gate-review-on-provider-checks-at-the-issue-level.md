@@ -1,5 +1,7 @@
 # Gate Review on Provider Checks at the Issue Level
 
+> **2026-11-13 — Amended:** the Decision clause that every verdict leads to `ReviewIssue` recording a `ChecksOutcome` is extended by [ADR 0106](0106-a-checks-verdict-is-bound-to-the-head-commit-it-was-read-against.md): the verdict also records the head commit it was read against, and a `review` issue whose pull request head moves returns to `checks_pending`. The omission existed from the start; no outcome here was ever tied to a commit.
+
 ## Context
 
 A worker exits once it has pushed and opened a PR, and `WorkerOutcomeResolver` maps any open PR to `Review` regardless of CI status ([ADR 0060](0060-mr-state-first-outcome-resolution.md)). Waiting for CI was left to whatever the operator-editable worker prompt says, so a worker that skipped it, ran out of turns, or used a different template delivered a red PR into review with no signal.
